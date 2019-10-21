@@ -13,11 +13,14 @@
 
 #define SUITE community_id
 
+#include "vast/community_id.hpp"
+
 #include "vast/test/test.hpp"
 
-#include "vast/community_id.hpp"
 #include "vast/concept/parseable/to.hpp"
 #include "vast/concept/parseable/vast/address.hpp"
+
+#include <caf/test/dsl.hpp>
 
 using namespace vast;
 using namespace community_id;

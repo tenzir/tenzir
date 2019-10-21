@@ -15,10 +15,6 @@
 
 #include "vast/test/test.hpp"
 
-// CAF 0.17.2 added a test DSL macro named `inject`, which conflicts with
-// `range_map::inject`
-#undef inject
-
 #include "vast/detail/range_map.hpp"
 #include "vast/load.hpp"
 #include "vast/save.hpp"

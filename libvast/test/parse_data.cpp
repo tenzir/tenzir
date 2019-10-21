@@ -11,11 +11,14 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
+#define SUITE parseable
+
+#include "vast/test/test.hpp"
+
 #include "vast/concept/parseable/to.hpp"
 #include "vast/concept/parseable/vast/data.hpp"
 
-#define SUITE parseable
-#include "vast/test/test.hpp"
+#include <caf/test/dsl.hpp>
 
 using namespace vast;
 using namespace std::string_literals;

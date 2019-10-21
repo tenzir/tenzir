@@ -21,10 +21,11 @@
 #include <sstream>
 #include <string>
 
-// FIXME: workaround for actor-framework/actor-framework#940
+// FIXME: Workaround for actor-framework/actor-framework#940
+//        Remove this declaration when updating to CAF >0.17.2
 namespace caf {
 std::string to_string(pec x);
-}
+} // namespace caf
 
 namespace vast {
 namespace {

@@ -17,6 +17,8 @@
 
 #include "vast/test/test.hpp"
 
+#include <caf/test/dsl.hpp>
+
 using namespace std::string_literals;
 using namespace vast;
 
