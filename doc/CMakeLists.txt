@@ -30,13 +30,15 @@ if (MD2MAN_FOUND)
     if (MD2MAN_FOUND)
       set(man_source ${CMAKE_CURRENT_SOURCE_DIR}/${man_page})
       set(man_generated ${CMAKE_CURRENT_BINARY_DIR}/${man_page})
-      month_day_year(MAN_DATE) # bottom-center date in man page
-      execute_process(
-        COMMAND vast manual
-        ERROR_VARIABLE MAN_CONTENT)
-      configure_file(${man_source}.md ${man_generated}.md @ONLY)
       file(WRITE ${CMAKE_CURRENT_BINARY_DIR}/make_man_${man_page}.cmake
-        "execute_process(
+        "set(CMAKE_MODULE_PATH ${CMAKE_SOURCE_DIR}/cmake)
+        include(Helpers)
+        execute_process(
+          COMMAND ${CMAKE_BINARY_DIR}/bin/vast manual
+          ERROR_VARIABLE MAN_CONTENT)
+        month_day_year(MAN_DATE)
+        configure_file(${man_source}.md ${man_generated}.md @ONLY)
+        execute_process(
            COMMAND md2man-roff ${man_generated}.md
            OUTPUT_FILE ${man_generated})")
       add_custom_target(vast-man-make-${man_page}

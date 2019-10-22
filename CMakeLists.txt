@@ -672,13 +672,17 @@ foreach (x ${schema_files})
                      COMMENT "Linking schema ${x}")
 endforeach ()
 
-add_subdirectory(doc)
 add_subdirectory(libvast)
 if (NOT CMAKE_CROSS_COMPILING)
   add_subdirectory(libvast_test)
 endif ()
 add_subdirectory(tools)
 add_subdirectory(vast)
+add_subdirectory(doc)
+if (NOT vast_is_subproject)
+  add_dependencies(vast-man-make-vast.1 vast)
+  add_dependencies(vast-man-replace-vast.1 vast)
+endif ()
 
 # ------------------------------------------------------------------------------
 # Additional Installations
