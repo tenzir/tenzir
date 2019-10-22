@@ -13,16 +13,17 @@
 
 #include "vast/detail/make_io_stream.hpp"
 
-#include <caf/config_value.hpp>
-#include <caf/settings.hpp>
-
-#include <fstream>
-
 #include "vast/defaults.hpp"
 #include "vast/detail/fdinbuf.hpp"
 #include "vast/detail/fdostream.hpp"
 #include "vast/detail/posix.hpp"
 #include "vast/error.hpp"
+#include "vast/filesystem.hpp"
+
+#include <caf/config_value.hpp>
+#include <caf/settings.hpp>
+
+#include <fstream>
 
 namespace vast {
 namespace detail {
@@ -54,6 +55,8 @@ make_input_stream(const std::string& input, bool is_uds) {
     auto sb = std::make_unique<fdinbuf>(0); // stdin
     return std::make_unique<owning_istream>(std::move(sb));
   }
+  if (!exists(input))
+    return make_error(ec::filesystem_error, "file does not exist at", input);
   auto fb = std::make_unique<std::filebuf>();
   fb->open(input, std::ios_base::binary | std::ios_base::in);
   return std::make_unique<owning_istream>(std::move(fb));
