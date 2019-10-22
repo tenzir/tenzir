@@ -24,7 +24,6 @@ endif ()
 # man pages
 if (MD2MAN_FOUND)
   add_custom_target(vast-man)
-  add_custom_target(vast-man-replace)
   foreach(man_page vast.1)
     install(FILES ${man_page} DESTINATION share/man/man1)
     if (MD2MAN_FOUND)
@@ -44,20 +43,11 @@ if (MD2MAN_FOUND)
       add_custom_target(vast-man-make-${man_page}
         ${CMAKE_COMMAND} -P make_man_${man_page}.cmake
         COMMENT "Generating man page ${man_page}")
-      add_custom_target(vast-man-replace-${man_page}
-        ${CMAKE_COMMAND} -E copy ${man_generated} ${man_source}
-        DEPENDS man-make-${man_page}
-        COMMENT "Replacing man page ${man_page}")
       add_dependencies(vast-man vast-man-make-${man_page})
-      add_dependencies(vast-man-replace vast-man-replace-${man_page})
     endif ()
   endforeach()
   if (NOT TARGET man)
     add_custom_target(man)
   endif ()
-  if (NOT TARGET man-replace)
-    add_custom_target(man-replace)
-  endif ()
   add_dependencies(man vast-man)
-  add_dependencies(man-replace vast-man-replace)
 endif ()
