@@ -247,12 +247,6 @@ void helptext(const command& cmd, std::ostream& out);
 /// Returns the helptext for `cmd`.
 std::string helptext(const command& cmd);
 
-/// Prints the documentationtext for `cmd` to `out`.
-void documentationtext(const command& cmd, std::ostream& out);
-
-/// Returns the documentationtext for `cmd`.
-std::string documentationtext(const command& cmd);
-
 /// Applies `fun` to `cmd` and each of its children, recursively.
 template <class F>
 void for_each(const command& cmd, F fun) {

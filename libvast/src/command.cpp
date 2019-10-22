@@ -197,13 +197,21 @@ void render_parse_error(const command& cmd,
   }
 }
 
-void manualtext(const command& cmd, std::ostream& os,
-                std::string::size_type depth) {
+// Prints Markdown-formatted documentation for the taraget command.
+void doctext(const command& cmd, std::ostream& out) {
+  // TODO render with proper framing.
+  out << std::left << cmd.documentation;
+}
+
+// Prints Markdown-formatted documentation for the target command and all its
+// subcommands with headers of increasing depth.
+void mantext(const command& cmd, std::ostream& os,
+             std::string::size_type depth) {
   auto header_prefix = std::string(depth, '#');
   os << header_prefix << ' ' << cmd.name << "\n\n";
-  documentationtext(cmd, os);
+  doctext(cmd, os);
   for (const auto& subcmd : cmd.children)
-    manualtext(*subcmd, os, depth + 1);
+    mantext(*subcmd, os, depth + 1);
   os << '\n';
 }
 
@@ -325,11 +333,11 @@ parse(const command& root, command::argument_iterator first,
     return caf::no_error;
   }
   if (get_or(result.options, "documentation", false)) {
-    documentationtext(*target, std::cerr);
+    doctext(*target, std::cerr);
     return caf::no_error;
   }
   if (get_or(result.options, "manual", false)) {
-    manualtext(*target, std::cerr, 3);
+    mantext(*target, std::cerr, 3);
     return caf::no_error;
   }
   return result;
@@ -478,17 +486,6 @@ void helptext(const command& cmd, std::ostream& out) {
 std::string helptext(const command& cmd) {
   std::ostringstream oss;
   helptext(cmd, oss);
-  return oss.str();
-}
-
-void documentationtext(const command& cmd, std::ostream& out) {
-  // TODO render with proper framing.
-  out << std::left << cmd.documentation;
-}
-
-std::string documentationtext(const command& cmd) {
-  std::ostringstream oss;
-  documentationtext(cmd, oss);
   return oss.str();
 }
 
