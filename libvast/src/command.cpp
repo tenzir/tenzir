@@ -201,9 +201,6 @@ void manualtext(const command& cmd, std::ostream& os,
                 std::string::size_type depth) {
   auto header_prefix = std::string(depth, '#');
   os << header_prefix << ' ' << cmd.name << "\n\n";
-  // FIXME the helptext is improperly formatted for md2man-roff
-  // helptext(cmd, os);
-  // os << '\n';
   documentationtext(cmd, os);
   for (const auto& subcmd : cmd.children)
     manualtext(*subcmd, os, depth + 1);
@@ -243,11 +240,7 @@ std::string command::full_name() const {
 }
 
 caf::config_option_set command::opts() {
-  return caf::config_option_set{}
-    .add<bool>("help,h?", "prints the help text")
-    .add<bool>("documentation", "prints the Markdown-formatted documentation")
-    .add<bool>("manual", "prints the Markdown-formatted manual page for the "
-                         "command and all its subcommands");
+  return caf::config_option_set{}.add<bool>("help,h?", "prints the help text");
 }
 
 command::opts_builder command::opts(std::string_view category) {
@@ -335,8 +328,6 @@ parse(const command& root, command::argument_iterator first,
     documentationtext(*target, std::cerr);
     return caf::no_error;
   }
-  // Print the manual -- aka the helptext and documentationtext for every
-  // command available.
   if (get_or(result.options, "manual", false)) {
     manualtext(*target, std::cerr, 3);
     return caf::no_error;
