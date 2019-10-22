@@ -11,10 +11,7 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#include <fstream>
-#include <iomanip>
-
-#include <caf/none.hpp>
+#include "vast/format/zeek.hpp"
 
 #include "vast/concept/parseable/vast/port.hpp"
 #include "vast/concept/printable/numeric.hpp"
@@ -24,14 +21,18 @@
 #include "vast/concept/printable/vast/view.hpp"
 #include "vast/detail/assert.hpp"
 #include "vast/detail/escapers.hpp"
-#include "vast/detail/fdoutbuf.hpp"
+#include "vast/detail/fdostream.hpp"
 #include "vast/detail/string.hpp"
 #include "vast/error.hpp"
 #include "vast/event.hpp"
-#include "vast/format/zeek.hpp"
 #include "vast/logger.hpp"
 #include "vast/table_slice.hpp"
 #include "vast/table_slice_builder.hpp"
+
+#include <caf/none.hpp>
+
+#include <fstream>
+#include <iomanip>
 
 namespace vast::format::zeek {
 
@@ -571,8 +572,7 @@ caf::error writer::write(const table_slice& slice) {
   if (dir_.empty()) {
     if (writers_.empty()) {
       VAST_DEBUG(this, "creates a new stream for STDOUT");
-      auto sb = std::make_unique<detail::fdoutbuf>(1);
-      auto out = std::make_unique<std::ostream>(sb.release());
+      auto out = std::make_unique<detail::fdostream>(1);
       writers_.emplace(slice.layout().name(),
                        std::make_unique<writer_child>(std::move(out)));
     }
