@@ -23,6 +23,8 @@
 #include "vast/concept/parseable/vast/port.hpp"
 #include "vast/port.hpp"
 
+#include <caf/test/dsl.hpp>
+
 using namespace vast;
 
 namespace {

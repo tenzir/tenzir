@@ -13,13 +13,6 @@
 
 #include "vast/system/index.hpp"
 
-#include <chrono>
-#include <deque>
-#include <unordered_set>
-
-#include <caf/all.hpp>
-#include <caf/detail/unordered_flat_map.hpp>
-
 #include "vast/concept/parseable/to.hpp"
 #include "vast/concept/printable/to_string.hpp"
 #include "vast/concept/printable/vast/bitmap.hpp"
@@ -28,7 +21,9 @@
 #include "vast/concept/printable/vast/uuid.hpp"
 #include "vast/defaults.hpp"
 #include "vast/detail/assert.hpp"
+#include "vast/detail/cache.hpp"
 #include "vast/detail/fill_status_map.hpp"
+#include "vast/detail/narrow.hpp"
 #include "vast/detail/notifying_stream_manager.hpp"
 #include "vast/event.hpp"
 #include "vast/expression_visitors.hpp"
@@ -37,17 +32,21 @@
 #include "vast/load.hpp"
 #include "vast/logger.hpp"
 #include "vast/save.hpp"
-#include "vast/system/evaluator.hpp"
-#include "vast/table_slice.hpp"
-
 #include "vast/system/accountant.hpp"
-#include "vast/system/query_supervisor.hpp"
+#include "vast/system/evaluator.hpp"
 #include "vast/system/index.hpp"
 #include "vast/system/partition.hpp"
+#include "vast/system/query_supervisor.hpp"
 #include "vast/system/spawn_indexer.hpp"
 #include "vast/system/task.hpp"
+#include "vast/table_slice.hpp"
 
-#include "vast/detail/cache.hpp"
+#include <caf/all.hpp>
+#include <caf/detail/unordered_flat_map.hpp>
+
+#include <chrono>
+#include <deque>
+#include <unordered_set>
 
 using namespace caf;
 using namespace std::chrono;
@@ -456,7 +455,8 @@ behavior index(stateful_actor<index_state>* self, const path& dir,
         query_id = uuid::nil();
         st.pending.erase(iter);
       }
-      return {std::move(query_id), hits, scheduled};
+      return {std::move(query_id), detail::narrow<uint32_t>(hits),
+              detail::narrow<uint32_t>(scheduled)};
     },
     [=](const uuid& query_id, uint32_t num_partitions) {
       auto& st = self->state;

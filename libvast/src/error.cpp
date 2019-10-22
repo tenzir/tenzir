@@ -11,13 +11,21 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#include <sstream>
+#include "vast/error.hpp"
+
+#include "vast/detail/assert.hpp"
 
 #include <caf/pec.hpp>
 #include <caf/sec.hpp>
 
-#include "vast/detail/assert.hpp"
-#include "vast/error.hpp"
+#include <sstream>
+#include <string>
+
+// FIXME: Workaround for actor-framework/actor-framework#940
+//        Remove this declaration when updating to CAF >0.17.2
+namespace caf {
+std::string to_string(pec x);
+} // namespace caf
 
 namespace vast {
 namespace {

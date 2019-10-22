@@ -15,13 +15,6 @@
 
 #include "vast/test/test.hpp"
 
-#include <array>
-#include <map>
-#include <string>
-#include <type_traits>
-#include <utility>
-#include <vector>
-
 #include "vast/address.hpp"
 #include "vast/concept/parseable/core.hpp"
 #include "vast/concept/parseable/numeric.hpp"
@@ -33,6 +26,15 @@
 #include "vast/concept/parseable/vast/si.hpp"
 #include "vast/concept/parseable/vast/time.hpp"
 #include "vast/si_literals.hpp"
+
+#include <caf/test/dsl.hpp>
+
+#include <array>
+#include <map>
+#include <string>
+#include <type_traits>
+#include <utility>
+#include <vector>
 
 using namespace std::string_literals;
 using namespace std::string_view_literals;

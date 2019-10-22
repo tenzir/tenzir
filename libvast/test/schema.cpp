@@ -13,14 +13,10 @@
 
 #define SUITE schema
 
+#include "vast/schema.hpp"
+
 #include "vast/test/test.hpp"
 
-#include "type_test.hpp"
-
-#include "vast/json.hpp"
-#include "vast/load.hpp"
-#include "vast/save.hpp"
-#include "vast/schema.hpp"
 #include "vast/concept/parseable/to.hpp"
 #include "vast/concept/parseable/vast/schema.hpp"
 #include "vast/concept/printable/stream.hpp"
@@ -28,6 +24,13 @@
 #include "vast/concept/printable/vast/error.hpp"
 #include "vast/concept/printable/vast/json.hpp"
 #include "vast/concept/printable/vast/schema.hpp"
+#include "vast/json.hpp"
+#include "vast/load.hpp"
+#include "vast/save.hpp"
+
+#include <caf/test/dsl.hpp>
+
+#include "type_test.hpp"
 
 using namespace vast;
 
