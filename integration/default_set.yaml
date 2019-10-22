@@ -78,6 +78,8 @@ tests:
       - command: -N import zeek
         input: data/zeek/dns.log.gz
       - command: -N export ascii 'resp_h == 192.168.1.104'
+      - command: -N export zeek 'resp_h == 192.168.1.104'
+        transformation: awk '!/^#(open|close)/'
   Node Zeek http log:
     tags: [node, import-export, zeek]
     steps:
