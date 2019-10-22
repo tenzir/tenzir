@@ -126,10 +126,24 @@ struct source_state {
   measurement measurement_;
 
   void send_report() {
-    if (accountant && measurement_.events > 0) {
+    if (measurement_.events > 0) {
       auto r = performance_report{{{std::string{name}, measurement_}}};
+#if VAST_LOG_LEVEL >= CAF_LOG_LEVEL_INFO
+      for (const auto& [key, m] : r) {
+        auto rate = m.duration.count() > 0
+                      ? m.events * decltype(m.duration)::period::den
+                          / m.duration.count()
+                      : std::numeric_limits<double>::quiet_NaN();
+        if (std::isfinite(rate))
+          VAST_INFO(self, "produced", m.events, "events at a rate of",
+                    static_cast<uint64_t>(rate), "events/sec");
+        else
+          VAST_INFO(self, "produced", m.events, "events");
+      }
+#endif
       measurement_ = measurement{};
-      self->send(accountant, std::move(r));
+      if (accountant)
+        self->send(accountant, std::move(r));
     }
   }
 };
@@ -174,7 +188,6 @@ source(caf::stateful_actor<source_state<Reader>>* self, Reader reader,
         VAST_ASSERT(*st.remaining >= produced);
         *st.remaining -= produced;
       }
-      VAST_INFO(self, "produced", produced, "events");
       auto finish = [&] {
         done = true;
         st.send_report();
