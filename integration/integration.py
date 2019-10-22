@@ -206,7 +206,7 @@ def run_step(basecmd, step_id, step, work_dir, baseline_dir, update_baseline):
                     stdin=out_handle,
                     stdout=subprocess.PIPE,
                     timeout=STEP_TIMEOUT,
-                    shell=True).stdout
+                    shell=True).stdout.decode('utf8')
             else:
                 out = out_handle.read()
             diff = None
@@ -228,10 +228,8 @@ def run_step(basecmd, step_id, step, work_dir, baseline_dir, update_baseline):
             else:
                 # ascii
                 output_lines = out.splitlines(keepends=True)
-                # We sort ascii output for determinism, but only if there is no
-                # explicit transformation.
-                if not step.transformation:
-                    output_lines = sorted(output_lines)
+                # We sort ascii output for determinism
+                output_lines = sorted(output_lines)
                 if update_baseline:
                     with open(baseline, 'w') as ref_handle:
                         for line in output_lines:
