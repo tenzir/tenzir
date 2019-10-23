@@ -1,0 +1,88 @@
+/******************************************************************************
+ *                    _   _____   __________                                  *
+ *                   | | / / _ | / __/_  __/     Visibility                   *
+ *                   | |/ / __ |_\ \  / /          Across                     *
+ *                   |___/_/ |_/___/ /_/       Space and Time                 *
+ *                                                                            *
+ * This file is part of VAST. It is subject to the license terms in the       *
+ * LICENSE file found in the top-level directory of this distribution and at  *
+ * http://vast.io/license. No part of VAST, including this file, may be       *
+ * copied, modified, propagated, or distributed except according to the terms *
+ * contained in the LICENSE file.                                             *
+ ******************************************************************************/
+
+#pragma once
+
+#include "vast/expression.hpp"
+#include "vast/fwd.hpp"
+#include "vast/system/node.hpp"
+#include "vast/type.hpp"
+
+#include <caf/actor.hpp>
+#include <caf/fwd.hpp>
+
+#include <string>
+#include <unordered_map>
+#include <unordered_set>
+
+namespace vast::system {
+
+struct pivoter_state {
+  // -- member types -----------------------------------------------------------
+
+  // -- constants --------------------------------------------------------------
+
+  static inline constexpr const char* name = "pivoter";
+
+  // -- constructors, destructors, and assignment operators --------------------
+
+  pivoter_state(caf::event_based_actor* self);
+
+  // -- member variables -------------------------------------------------------
+
+  std::string target;
+
+  /// The original query.
+  /// TODO: Extract predicates that apply to the target type and extend the
+  ///       generated queries with them. This depends on ECS support.
+  expression expr;
+
+  /// Keeps a record of the generic ids that were already queried, for the
+  /// purpose of deduplication.
+  /// TODO: We only need to query for membership, so this could be made more
+  ///       efficient by storing the hash itself. Additionally, it is possible
+  ///       for the field that represents the edge to be of another type than
+  ///       string.
+  std::unordered_set<std::string> requested_ids;
+
+  /// A cache for the connections between a source type and the target type,
+  /// to avoid multiple computations of those.
+  mutable std::unordered_map<record_type, caf::optional<record_field>> cache;
+
+  /// A tracking counter of spawned exporters. Used for lifetime management.
+  size_t outstanding_requests = 0;
+
+  /// Flag that stores if the input source is done sending table slices. Used
+  /// for lifetime management.
+  bool initial_completed = false;
+
+  /// Pointer to the parent actor.
+  caf::stateful_actor<pivoter_state>* self;
+
+  /// A handle to the parent node for spawning new EXPORTERs.
+  caf::actor node;
+
+  /// A handle to the sink of that shall be used for the final
+  caf::actor sink;
+};
+
+/// The PIVOTER receives table slices and constructs new queries for the target
+/// type
+/// @param self The actor handle.
+/// @param node The node actor to spawn exporters in.
+/// @param target The type filter for the subsequent queries.
+/// @param expression The query of the original command.
+caf::behavior pivoter(caf::stateful_actor<pivoter_state>* self, caf::actor node,
+                      std::string target, expression expr);
+
+} // namespace vast::system

@@ -103,6 +103,7 @@ set(libvast_sources
     src/system/infer_command.cpp
     src/system/node.cpp
     src/system/partition.cpp
+    src/system/pivoter.cpp
     src/system/profiler.cpp
     src/system/query_processor.cpp
     src/system/query_supervisor.cpp
@@ -292,6 +293,7 @@ set(tests
     test/system/indexer_stage_driver.cpp
     test/system/key_value_store.cpp
     test/system/partition.cpp
+    test/system/pivoter.cpp
     test/system/queries.cpp
     test/system/query_processor.cpp
     test/system/query_supervisor.cpp
