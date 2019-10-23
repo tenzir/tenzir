@@ -10,6 +10,13 @@ Every entry has a category for which we use the following visual abbreviations:
 
 ## [Unreleased]
 
+- 🎁 The new `pivot` command allows retrieval of related data from the results
+  of a search query. A typical use case for this is to make use of the rich
+  data model provided by an IDS like Suricata or Zeek for a search to export
+  the network traffic that generated these high level events. This feature is
+  currently implemented for Suricata eve.log, Zeek logs and PCAP, and requires
+  the `community_id` field to be available in the former.
+
 - 🎁 The new `infer` command performs schema inference of input data. The
   command can deduce the input format and creates a schema definition that is
   sutable to use with the supplied data. Supported input types include Zeek TSV
