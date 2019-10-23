@@ -38,8 +38,9 @@ using namespace std::chrono_literals;
 
 namespace vast::system {
 
-caf::expected<std::string> read_query(const command::invocation& invocation,
-                                      std::string_view option_name) {
+caf::expected<std::string>
+read_query(const command::invocation& invocation, std::string_view option_name,
+           size_t argument_offset) {
   VAST_TRACE(invocation, option_name);
   std::string result;
   auto assign_query = [&](std::istream& in) {
@@ -65,7 +66,7 @@ caf::expected<std::string> read_query(const command::invocation& invocation,
     assign_query(std::cin);
   } else {
     // Assemble expression from all remaining arguments.
-    result = detail::join(invocation.arguments.begin(),
+    result = detail::join(invocation.arguments.begin() + argument_offset,
                           invocation.arguments.end(), " ");
   }
   if (result.empty())

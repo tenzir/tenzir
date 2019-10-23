@@ -21,6 +21,7 @@ namespace vast::system {
 
 /// Reads query from input file, STDIN or CLI arguments.
 caf::expected<std::string>
-read_query(const command::invocation& invocation, std::string_view option_name);
+read_query(const command::invocation& invocation, std::string_view option_name,
+           size_t argument_offset = 0);
 
 } // namespace vast::system
