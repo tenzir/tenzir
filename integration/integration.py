@@ -4,13 +4,11 @@
 """
 
 import argparse
-import coloredlogs
 import difflib
 import filecmp
 import gzip
 import itertools
 import json
-import jsondiff
 import logging
 import os
 import shlex
@@ -24,8 +22,10 @@ from datetime import datetime
 from enum import Enum
 from pathlib import Path
 from string import Template
-from typing import Callable, List, NamedTuple, Optional, TypeVar
+from typing import Callable, List, NamedTuple, Optional, TypeVar, Union
 
+import coloredlogs
+import jsondiff
 import packages.wait as wait
 import schema
 import yaml
@@ -44,11 +44,14 @@ class Step(NamedTuple):
     input: Optional[Path]
     transformation : Optional[str]
 
+class Condition(NamedTuple):
+    subcommand: str
+
 class Test(NamedTuple):
     tags: Optional[str]
-    condition: Optional[str]
+    condition: Optional[Condition]
     fixture: Optional[str]
-    steps: List[Step]
+    steps: List[Union[Step, Condition]]
 
 def signal_subprocs(signum):
     """send signal recieved to subprocesses"""
@@ -324,13 +327,27 @@ class Tester:
         with suppress(OSError):
             self.test_dir.rmdir()
 
+    def check_condition(self, condition):
+        check = spawn(self.app + ' ' + condition.subcommand, shell=True)
+        ret = check.wait(STEP_TIMEOUT)
+        return ret
+
     def check_skip(self, test):
         """Checks if a test should run if a condition is defined"""
         if test.condition:
-            check = spawn(self.app + ' ' + test.condition, shell=True)
-            ret = check.wait(STEP_TIMEOUT)
-            return ret
+            return self.check_condition(test.condition)
         return False
+
+    def check_guards(self, steps):
+        result = []
+        for step in steps:
+            if isinstance(step, Condition):
+                if self.check_condition(step):
+                    LOGGER.debug('guard condition false, skipping steps')
+                    return result
+            else:
+                result.append(step)
+        return result
 
     def run(self, test_name, test):
         """Runs a single test"""
@@ -387,6 +404,8 @@ def validate(data, set_dir):
         return Fixture(**data)
     def to_step(data):
         return Step(**data)
+    def guard_to_condition(guard):
+        return Condition(guard['guard'])
     def to_test(data):
         return Test(**data)
     def absolute_path(path):
@@ -411,12 +430,13 @@ def validate(data, set_dir):
             schema.And(schema.Use(absolute_path), is_file),
             schema.Optional('transformation', default=None): str
         }, schema.Use(to_step)))
+    guard = schema.Schema(schema.And( {'guard': str}, schema.Use(guard_to_condition)))
     test = schema.Schema(
         schema.And({
             schema.Optional('tags', default=None): [str],
-            schema.Optional('condition', default=None): str,
+            schema.Optional('condition', default=None): schema.Use(Condition),
             schema.Optional('fixture', default=None): str,
-            'steps': [step]
+            'steps': [schema.Or(step, guard)]
         }, schema.Use(to_test)))
     tests = schema.Schema({schema.And(str, len): test})
     sch = schema.Schema({
@@ -449,6 +469,8 @@ def run(args, test_dec):
                 if tester.check_skip(definition):
                     LOGGER.debug(f'skipping test {name}')
                     continue
+                # Check and remove guards from the list of steps
+                definition = definition._replace(steps=tester.check_guards(definition.steps))
                 if not tester.run(name, definition):
                     result = False
             return result
