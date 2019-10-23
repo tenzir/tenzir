@@ -1,0 +1,11 @@
+#empty_field	(empty)
+#fields	ts	uid	id.orig_h	id.orig_p	id.resp_h	id.resp_p	proto	service	duration	orig_bytes	resp_bytes	conn_state	local_orig	local_resp	missed_bytes	history	orig_pkts	orig_ip_bytes	resp_pkts	resp_ip_bytes	tunnel_parents	community_id
+#path	conn
+#separator 	
+#set_separator	,
+#types	time	string	addr	port	addr	port	string	string	interval	count	count	string	bool	bool	count	string	count	count	count	count	set[string]	string
+#unset_field	-
+1540889987.0898350	CPWqXM3DsYjHkrX69j	192.168.168.100	61257	17.253.55.211	80	tcp	http	0.0386950	288	4080	SF	-	-	0	ShADadFf	7	664	6	4400	-	1:UY9rhotoYM0Z0HYmZjBZwc/GhcA=
+1540890546.0221070	ClKkVB2KudjVql07B3	192.168.168.100	61290	17.253.55.204	80	tcp	http	0.0417320	291	4102	SF	-	-	0	ShADadFf	7	667	6	4422	-	1:+PG4ulcu1wtMyigJpD3ohP1Jj7E=
+1540892385.713592	C8lgDb4MIhArhlh0J	192.168.168.100	61364	72.247.178.26	80	tcp	http	175.651356	604	768	SF	-	-	0	ShADadFf	24	1672	21	1868	-	1:J5wBtNOAIoy1IBWBRFpAeuM/zqg=
+1540892602.519541	C6OJP11NPTa6teXh6b	192.168.168.100	61427	72.247.178.26	80	tcp	http	115.448450	302	384	SF	-	-	0	ShADadFf	17	1066	15	1172	-	1:9a4Fl8C3ce0tZxYivPMIMH6RcWc=
