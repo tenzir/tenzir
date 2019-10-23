@@ -103,6 +103,7 @@ set(libvast_sources
     src/system/infer_command.cpp
     src/system/node.cpp
     src/system/partition.cpp
+    src/system/pivot_command.cpp
     src/system/pivoter.cpp
     src/system/profiler.cpp
     src/system/query_processor.cpp
