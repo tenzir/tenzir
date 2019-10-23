@@ -172,13 +172,13 @@ auto make_import_command() {
 }
 
 auto make_kill_command() {
-  return std::make_unique<command>("kill", "terminates a component", "",
-                                   opts());
+  return std::make_unique<command>("kill", "terminates a component", "", opts(),
+                                   false);
 }
 
 auto make_peer_command() {
   return std::make_unique<command>("peer", "peers with another node", "",
-                                   opts());
+                                   opts(), false);
 }
 
 auto make_send_command() {
