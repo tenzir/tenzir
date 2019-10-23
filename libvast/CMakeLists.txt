@@ -123,6 +123,7 @@ set(libvast_sources
     src/system/spawn_indexer.cpp
     src/system/spawn_node.cpp
     src/system/spawn_or_connect_to_node.cpp
+    src/system/spawn_pivoter.cpp
     src/system/spawn_profiler.cpp
     src/system/spawn_sink.cpp
     src/system/spawn_source.cpp
