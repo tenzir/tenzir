@@ -14,6 +14,7 @@
 #pragma once
 
 #include "vast/concept/parseable/vast/json.hpp"
+#include "vast/defaults.hpp"
 #include "vast/detail/line_range.hpp"
 #include "vast/error.hpp"
 #include "vast/event.hpp"
@@ -31,6 +32,8 @@ namespace vast::format::json {
 
 class writer : public ostream_writer {
 public:
+  using defaults = vast::defaults::export_::json;
+
   using super = ostream_writer;
 
   using super::super;
