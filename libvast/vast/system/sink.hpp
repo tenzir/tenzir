@@ -43,6 +43,7 @@ struct sink_state {
   uint64_t processed = 0;
   uint64_t max_events = 0;
   caf::event_based_actor* self;
+  caf::actor statistics;
   accountant_type accountant;
   vast::system::measurement measurement;
   Writer writer;
@@ -53,10 +54,13 @@ struct sink_state {
   }
 
   void send_report() {
-    if (accountant && measurement.events > 0) {
+    if (measurement.events > 0) {
       auto r = performance_report{{{std::string{name}, measurement}}};
       measurement = {};
-      self->send(accountant, std::move(r));
+      if (statistics)
+        self->send(statistics, r);
+      if (accountant)
+        self->send(accountant, r);
     }
   }
 };
@@ -92,6 +96,7 @@ caf::behavior sink(caf::stateful_actor<sink_state<Writer>>* self,
         VAST_INFO(self, "reached max_events:", st.max_events, "events");
         st.writer.flush();
         st.send_report();
+        self->quit();
       };
       // Drop excess elements.
       auto remaining = st.max_events - st.processed;
@@ -119,11 +124,6 @@ caf::behavior sink(caf::stateful_actor<sink_state<Writer>>* self,
         st.send_report();
       }
     },
-    [=](std::string name, query_status query) {
-      VAST_INFO(name, "processed", query.processed, "candidates in",
-                to_string(query.runtime), "and shipped", query.shipped,
-                "results");
-    },
     [=](limit_atom, uint64_t max) {
       VAST_DEBUG(self, "caps event export at", max, "events");
       if (self->state.processed < max)
@@ -137,6 +137,10 @@ caf::behavior sink(caf::stateful_actor<sink_state<Writer>>* self,
       auto& st = self->state;
       st.accountant = std::move(accountant);
       self->send(st.accountant, announce_atom::value, st.name);
+    },
+    [=](statistics_atom, const caf::actor& statistics) {
+      VAST_DEBUG(self, "sets statistics to", statistics);
+      self->state.statistics = statistics;
     },
   };
 }

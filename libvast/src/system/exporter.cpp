@@ -11,7 +11,7 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#include <caf/all.hpp>
+#include "vast/system/exporter.hpp"
 
 #include "vast/concept/printable/std/chrono.hpp"
 #include "vast/concept/printable/to_string.hpp"
@@ -27,9 +27,11 @@
 #include "vast/logger.hpp"
 #include "vast/system/archive.hpp"
 #include "vast/system/atoms.hpp"
-#include "vast/system/exporter.hpp"
+#include "vast/system/query_status.hpp"
 #include "vast/table_slice.hpp"
 #include "vast/to_events.hpp"
+
+#include <caf/all.hpp>
 
 using namespace std::chrono;
 using namespace std::string_literals;
@@ -71,9 +73,8 @@ void ship_results(stateful_actor<exporter_state>* self) {
 
 void report_statistics(stateful_actor<exporter_state>* self) {
   auto& st = self->state;
-  VAST_INFO(self, "processed", st.query.processed, "candidates in",
-            vast::to_string(st.query.runtime), "and shipped", st.query.shipped,
-            "results");
+  if (st.statistics)
+    self->send(st.statistics, st.name, st.query);
   if (st.accountant) {
     auto hits = rank(st.hits);
     auto processed = st.query.processed;
@@ -173,13 +174,12 @@ behavior exporter(stateful_actor<exporter_state>* self, expression expr,
     [=](const exit_msg& msg) {
       VAST_DEBUG(self, "received exit from", msg.source, "with reason:", msg.reason);
       auto& st = self->state;
-      self->send(st.sink, st.name, st.query);
+      if (msg.reason != exit_reason::kill)
+        report_statistics(self);
       // Sending 0 to the index means dropping further results.
       self->send<message_priority::high>(st.index, st.id, 0);
       self->send(st.sink, sys_atom::value, delete_atom::value);
       self->quit(msg.reason);
-      if (msg.reason != exit_reason::kill)
-        report_statistics(self);
     }
   );
   self->set_down_handler(
@@ -393,6 +393,10 @@ behavior exporter(stateful_actor<exporter_state>* self, expression expr,
           shutdown(self, e);
         }
       );
+    },
+    [=](statistics_atom, const actor& statistics) {
+      VAST_DEBUG(self, "registers statistics sink", statistics);
+      self->state.statistics = statistics;
     },
     [=](caf::stream<table_slice_ptr> in) {
       return self->make_sink(
