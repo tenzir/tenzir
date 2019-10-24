@@ -8,6 +8,7 @@ endfunction()
 
 # Retrives a textual representation of the current month.
 macro(month result)
+  cmake_policy(SET CMP0007 NEW)
   set(months ";January;February;March;April;May;June;July;August;September;October;November;December")
   string(TIMESTAMP m "%m")
   list(GET months "${m}" ${result})

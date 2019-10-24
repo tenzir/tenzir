@@ -32,6 +32,7 @@
 
 #include <functional>
 #include <numeric>
+#include <string>
 
 namespace vast {
 
@@ -196,6 +197,24 @@ void render_parse_error(const command& cmd,
   }
 }
 
+// Prints Markdown-formatted documentation for the taraget command.
+void doctext(const command& cmd, std::ostream& out) {
+  // TODO render with proper framing.
+  out << std::left << cmd.documentation;
+}
+
+// Prints Markdown-formatted documentation for the target command and all its
+// subcommands with headers of increasing depth.
+void mantext(const command& cmd, std::ostream& os,
+             std::string::size_type depth) {
+  auto header_prefix = std::string(depth, '#');
+  os << header_prefix << ' ' << cmd.name << "\n\n";
+  doctext(cmd, os);
+  for (const auto& subcmd : cmd.children)
+    mantext(*subcmd, os, depth + 1);
+  os << '\n';
+}
+
 } // namespace
 
 command::command(std::string_view name, std::string_view description,
@@ -229,9 +248,7 @@ std::string command::full_name() const {
 }
 
 caf::config_option_set command::opts() {
-  return caf::config_option_set{}
-    .add<bool>("help,h?", "prints the help text")
-    .add<bool>("documentation?", "prints the Markdown-formatted documentation");
+  return caf::config_option_set{}.add<bool>("help,h?", "prints the help text");
 }
 
 command::opts_builder command::opts(std::string_view category) {
@@ -250,6 +267,8 @@ caf::error parse_impl(command::invocation& result, const command& cmd,
   if (get_or(result.options, "help", false))
     return caf::none;
   if (get_or(result.options, "documentation", false))
+    return caf::none;
+  if (get_or(result.options, "manual", false))
     return caf::none;
   bool has_subcommand;
   switch (state) {
@@ -273,6 +292,11 @@ caf::error parse_impl(command::invocation& result, const command& cmd,
   // Check for docomentation option.
   if (has_subcommand && *position == "documentation") {
     put(result.options, "documentation", true);
+    return caf::none;
+  }
+  // Check for manual option.
+  if (has_subcommand && *position == "manual") {
+    put(result.options, "manual", true);
     return caf::none;
   }
   if (!has_subcommand)
@@ -309,7 +333,11 @@ parse(const command& root, command::argument_iterator first,
     return caf::no_error;
   }
   if (get_or(result.options, "documentation", false)) {
-    documentationtext(*target, std::cerr);
+    doctext(*target, std::cerr);
+    return caf::no_error;
+  }
+  if (get_or(result.options, "manual", false)) {
+    mantext(*target, std::cerr, 3);
     return caf::no_error;
   }
   return result;
@@ -458,17 +486,6 @@ void helptext(const command& cmd, std::ostream& out) {
 std::string helptext(const command& cmd) {
   std::ostringstream oss;
   helptext(cmd, oss);
-  return oss.str();
-}
-
-void documentationtext(const command& cmd, std::ostream& out) {
-  // TODO render with proper framing.
-  out << std::left << cmd.documentation;
-}
-
-std::string documentationtext(const command& cmd) {
-  std::ostringstream oss;
-  documentationtext(cmd, oss);
   return oss.str();
 }
 
