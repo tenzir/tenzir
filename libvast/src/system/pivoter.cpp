@@ -29,6 +29,8 @@ namespace vast::system {
 
 namespace {
 
+/// Returns the field that shall be used to extract values from for
+/// the pivot membership query.
 caf::optional<record_field>
 common_field(const pivoter_state& st, const record_type& indicator) {
   auto f = st.cache.find(indicator);
@@ -46,6 +48,8 @@ common_field(const pivoter_state& st, const record_type& indicator) {
     }
   }
 #else
+  // This is a heuristic to find the field for pivoting until a runtime
+  // updated type registry is available to feed the algorithm above.
   std::string edge;
   VAST_TRACE(st.self, VAST_ARG(st.target), VAST_ARG(indicator.name()));
   if (detail::starts_with(st.target, "suricata") || st.target == "pcap.packet")
