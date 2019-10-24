@@ -114,6 +114,7 @@ pivot_command(const command::invocation& invocation, caf::actor_system& sys) {
                  ? caf::get<caf::actor>(node_opt)
                  : caf::get<scope_linked_actor>(node_opt).get();
   VAST_ASSERT(node != nullptr);
+  // TODO(ch9412): Factor guard into a function.
   // Start signal monitor.
   std::thread sig_mon_thread;
   auto guard = signal_monitor::run_guarded(sig_mon_thread, sys, 750ms, self);
