@@ -73,8 +73,8 @@ void ship_results(stateful_actor<exporter_state>* self) {
 
 void report_statistics(stateful_actor<exporter_state>* self) {
   auto& st = self->state;
-  if (st.statistics)
-    self->send(st.statistics, st.name, st.query);
+  if (st.statistics_subscriber)
+    self->send(st.statistics_subscriber, st.name, st.query);
   if (st.accountant) {
     auto hits = rank(st.hits);
     auto processed = st.query.processed;
@@ -394,9 +394,10 @@ behavior exporter(stateful_actor<exporter_state>* self, expression expr,
         }
       );
     },
-    [=](statistics_atom, const actor& statistics) {
-      VAST_DEBUG(self, "registers statistics sink", statistics);
-      self->state.statistics = statistics;
+    [=](statistics_atom, const actor& statistics_subscriber) {
+      VAST_DEBUG(self, "registers statistics subscriber",
+                 statistics_subscriber);
+      self->state.statistics_subscriber = statistics_subscriber;
     },
     [=](caf::stream<table_slice_ptr> in) {
       return self->make_sink(

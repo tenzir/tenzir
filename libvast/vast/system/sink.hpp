@@ -43,7 +43,7 @@ struct sink_state {
   uint64_t processed = 0;
   uint64_t max_events = 0;
   caf::event_based_actor* self;
-  caf::actor statistics;
+  caf::actor statistics_subscriber;
   accountant_type accountant;
   vast::system::measurement measurement;
   Writer writer;
@@ -57,8 +57,8 @@ struct sink_state {
     if (measurement.events > 0) {
       auto r = performance_report{{{std::string{name}, measurement}}};
       measurement = {};
-      if (statistics)
-        self->send(statistics, r);
+      if (statistics_subscriber)
+        self->send(statistics_subscriber, r);
       if (accountant)
         self->send(accountant, r);
     }
@@ -138,9 +138,9 @@ caf::behavior sink(caf::stateful_actor<sink_state<Writer>>* self,
       st.accountant = std::move(accountant);
       self->send(st.accountant, announce_atom::value, st.name);
     },
-    [=](statistics_atom, const caf::actor& statistics) {
-      VAST_DEBUG(self, "sets statistics to", statistics);
-      self->state.statistics = statistics;
+    [=](statistics_atom, const caf::actor& statistics_subscriber) {
+      VAST_DEBUG(self, "sets statistics subscriber to", statistics_subscriber);
+      self->state.statistics_subscriber = statistics_subscriber;
     },
   };
 }
