@@ -430,7 +430,7 @@ def validate(data, set_dir):
             schema.And(schema.Use(absolute_path), is_file),
             schema.Optional('transformation', default=None): str
         }, schema.Use(to_step)))
-    guard = schema.Schema(schema.And( {'guard': str}, schema.Use(guard_to_condition)))
+    guard = schema.Schema(schema.And({'guard': str}, schema.Use(guard_to_condition)))
     test = schema.Schema(
         schema.And({
             schema.Optional('tags', default=None): [str],
