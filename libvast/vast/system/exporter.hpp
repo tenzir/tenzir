@@ -50,6 +50,10 @@ struct exporter_state {
   /// Stores a handle to the SINK that processes results.
   caf::actor sink;
 
+  /// Stores a handle to the STATISTICS_SUBSCRIBER that periodically prints
+  /// statistics.
+  caf::actor statistics_subscriber;
+
   /// Stores a handle to the ACCOUNTANT that collects various statistics.
   accountant_type accountant;
 

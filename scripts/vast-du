@@ -1,0 +1,23 @@
+#! /bin/sh
+
+# A script to get a quick overview of performance rates, latency and disk usage.
+
+# Usage examples:
+#   vast-du -N import zeek -r libvast_test/artifacts/logs/zeek/conn.log
+#	vast-du -N export ascii '#type ~ /zeek.*/'
+
+set -e
+
+if ! command -v vast >/dev/null 2>&1; then
+	echo "vast not found"
+	exit 1
+fi
+
+if command -v gdu >/dev/null 2>&1; then
+	DU="gdu"
+else
+	DU="du"
+fi
+
+vast "${@}" 2>&1 >/dev/null | grep "rate\|latency"
+${DU} -csb vast.db/archive vast.db/index

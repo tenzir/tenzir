@@ -43,6 +43,7 @@ struct sink_state {
   uint64_t processed = 0;
   uint64_t max_events = 0;
   caf::event_based_actor* self;
+  caf::actor statistics_subscriber;
   accountant_type accountant;
   vast::system::measurement measurement;
   Writer writer;
@@ -53,10 +54,13 @@ struct sink_state {
   }
 
   void send_report() {
-    if (accountant && measurement.events > 0) {
+    if (measurement.events > 0) {
       auto r = performance_report{{{std::string{name}, measurement}}};
       measurement = {};
-      self->send(accountant, std::move(r));
+      if (statistics_subscriber)
+        self->send(statistics_subscriber, r);
+      if (accountant)
+        self->send(accountant, r);
     }
   }
 };
@@ -88,10 +92,19 @@ caf::behavior sink(caf::stateful_actor<sink_state<Writer>>* self,
       VAST_DEBUG(self, "got:", slice->rows(), "events from",
                  self->current_sender());
       auto& st = self->state;
+      auto now = steady_clock::now();
+      auto time_since_flush = now - st.last_flush;
+#if VAST_LOG_LEVEL >= CAF_LOG_LEVEL_INFO
+      if (st.processed == 0) {
+        VAST_INFO(st.name, "received first result with a latency of",
+                  to_string(time_since_flush));
+      }
+#endif
       auto reached_max_events = [&] {
         VAST_INFO(self, "reached max_events:", st.max_events, "events");
         st.writer.flush();
         st.send_report();
+        self->quit();
       };
       // Drop excess elements.
       auto remaining = st.max_events - st.processed;
@@ -112,17 +125,11 @@ caf::behavior sink(caf::stateful_actor<sink_state<Writer>>* self,
       if (st.processed >= st.max_events)
         return reached_max_events();
       // Force flush if necessary.
-      auto now = steady_clock::now();
-      if (now - st.last_flush > st.flush_interval) {
+      if (time_since_flush > st.flush_interval) {
         st.writer.flush();
         st.last_flush = now;
         st.send_report();
       }
-    },
-    [=](std::string name, query_status query) {
-      VAST_INFO(name, "processed", query.processed, "candidates in",
-                to_string(query.runtime), "and shipped", query.shipped,
-                "results");
     },
     [=](limit_atom, uint64_t max) {
       VAST_DEBUG(self, "caps event export at", max, "events");
@@ -137,6 +144,10 @@ caf::behavior sink(caf::stateful_actor<sink_state<Writer>>* self,
       auto& st = self->state;
       st.accountant = std::move(accountant);
       self->send(st.accountant, announce_atom::value, st.name);
+    },
+    [=](statistics_atom, const caf::actor& statistics_subscriber) {
+      VAST_DEBUG(self, "sets statistics subscriber to", statistics_subscriber);
+      self->state.statistics_subscriber = statistics_subscriber;
     },
   };
 }

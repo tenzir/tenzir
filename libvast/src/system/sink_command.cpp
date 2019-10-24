@@ -23,6 +23,7 @@
 #include "vast/logger.hpp"
 #include "vast/scope_linked.hpp"
 #include "vast/system/accountant.hpp"
+#include "vast/system/query_status.hpp"
 #include "vast/system/read_query.hpp"
 #include "vast/system/signal_monitor.hpp"
 #include "vast/system/spawn_or_connect_to_node.hpp"
@@ -118,12 +119,17 @@ caf::message sink_command(const command::invocation& invocation,
   // Start the exporter.
   self->send(exp, system::sink_atom::value, snk);
   self->send(exp, system::run_atom::value);
+  // Register self as the statistics actor.
+  self->send(exp, system::statistics_atom::value, self);
+  self->send(snk, system::statistics_atom::value, self);
   self->monitor(snk);
   self->monitor(exp);
+  auto waiting_for_final_report = false;
   auto stop = false;
   self
     ->do_receive(
       [&](down_msg& msg) {
+        stop = true;
         if (msg.source == node) {
           VAST_DEBUG_ANON(__func__, "received DOWN from node");
           self->send_exit(snk, exit_reason::user_shutdown);
@@ -134,6 +140,8 @@ caf::message sink_command(const command::invocation& invocation,
         } else if (msg.source == snk) {
           VAST_DEBUG(invocation.full_name, "received DOWN from sink");
           self->send_exit(exp, exit_reason::user_shutdown);
+          stop = false;
+          waiting_for_final_report = true;
         } else {
           VAST_ASSERT(!"received DOWN from inexplicable actor");
         }
@@ -142,7 +150,39 @@ caf::message sink_command(const command::invocation& invocation,
                        self->system().render(msg.reason));
           err = std::move(msg.reason);
         }
-        stop = true;
+      },
+      [&](performance_report report) {
+        // Log a set of named measurements.
+        VAST_DEBUG(invocation.full_name, "received performance report");
+#if VAST_LOG_LEVEL >= CAF_LOG_LEVEL_INFO
+        for (const auto& [name, measurement] : report) {
+          if (auto rate = measurement.rate_per_sec(); std::isfinite(rate))
+            VAST_INFO(name, "processed", measurement.events,
+                      "events at a rate of", static_cast<uint64_t>(rate),
+                      "events/sec in", to_string(measurement.duration));
+          else
+            VAST_INFO(name, "processed", measurement.events, "events");
+        }
+#endif
+      },
+      [&](std::string name, query_status query) {
+        // Log the query status.
+        VAST_DEBUG(invocation.full_name, "received query status from", name);
+#if VAST_LOG_LEVEL >= CAF_LOG_LEVEL_INFO
+        if (auto rate
+            = measurement{query.runtime, query.processed}.rate_per_sec();
+            std::isfinite(rate))
+          VAST_INFO(name, "processed", query.processed,
+                    "candidates at a rate of", static_cast<uint64_t>(rate),
+                    "candidates/sec and shipped", query.shipped, "results in",
+                    to_string(query.runtime));
+        else
+          VAST_INFO(name, "processed", query.processed, "candidates",
+                    "and shipped", query.shipped, "results in",
+                    to_string(query.runtime));
+#endif
+        if (waiting_for_final_report)
+          stop = true;
       },
       [&](system::signal_atom, int signal) {
         VAST_DEBUG(invocation.full_name, "got " << ::strsignal(signal));

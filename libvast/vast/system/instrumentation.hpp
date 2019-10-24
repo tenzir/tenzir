@@ -13,14 +13,15 @@
 
 #pragma once
 
-#include <caf/meta/type_name.hpp>
-
 #include "vast/config.hpp"
 #include "vast/detail/operators.hpp"
 #include "vast/time.hpp"
 
+#include <caf/meta/type_name.hpp>
+
 #include <atomic>
 #include <chrono>
+#include <cmath>
 #ifdef VAST_MEASUREMENT_MUTEX_WORKAROUND
 #  include <mutex>
 #endif
@@ -43,6 +44,15 @@ struct measurement : public detail::addable<measurement> {
     duration += next.duration;
     events += next.events;
     return *this;
+  }
+
+  /// Returns the rate of events per second in the current measurement.
+  double rate_per_sec() const noexcept {
+    if (duration.count() > 0)
+      return std::round(static_cast<double>(events)
+                        * decltype(duration)::period::den / duration.count());
+    else
+      return std::numeric_limits<double>::quiet_NaN();
   }
 };
 

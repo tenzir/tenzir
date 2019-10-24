@@ -30,7 +30,6 @@
 #include <cmath>
 #include <iomanip>
 #include <ios>
-#include <locale>
 
 namespace vast {
 namespace system {
@@ -100,14 +99,6 @@ void record(accountant_actor* self, const std::string& key, time x,
   record(self, key, ms, ts);
 }
 
-// Calculate rate in seconds resolution from nanosecond duration.
-double calc_rate(const measurement& m) {
-  if (m.duration.count() > 0)
-    return m.events * 1'000'000'000 / m.duration.count();
-  else
-    return std::numeric_limits<double>::quiet_NaN();
-}
-
 } // namespace <anonymous>
 
 accountant_state::accountant_state(accountant_actor* self) : self{self} {
@@ -115,21 +106,11 @@ accountant_state::accountant_state(accountant_actor* self) : self{self} {
 }
 
 void accountant_state::command_line_heartbeat() {
-  auto logger = caf::logger::current_logger();
-  if (logger && logger->verbosity() >= CAF_LOG_LEVEL_INFO
-      && accumulator.events > 0) {
-    std::ostringstream oss;
-    try {
-      oss.imbue(std::locale(""));
-    } catch (const std::exception& e) {
-      VAST_DEBUG(self,
-                 "failed to set the locale for statistics output:", e.what());
-    }
-    auto node_rate = std::round(calc_rate(accumulator));
-    oss << "ingested " << accumulator.events << " events at a rate of "
-        << node_rate << " events/sec";
-    VAST_INFO_ANON(oss.str());
-  }
+#if VAST_LOG_LEVEL >= CAF_LOG_LEVEL_INFO
+  if (auto rate = accumulator.rate_per_sec(); std::isfinite(rate))
+    VAST_INFO(self, "ingested", accumulator.events, "events at a rate of",
+              static_cast<uint64_t>(rate) << "events/sec");
+#endif
   accumulator = {};
 }
 
@@ -211,7 +192,7 @@ accountant_type::behavior_type accountant(accountant_actor* self) {
             for (const auto& [key, value] : r) {
               record(self, key + ".events", value.events, ts);
               record(self, key + ".duration", value.duration, ts);
-              auto rate = calc_rate(value);
+              auto rate = value.rate_per_sec();
               if (std::isfinite(rate))
                 record(self, key + ".rate", static_cast<uint64_t>(rate), ts);
               else {
