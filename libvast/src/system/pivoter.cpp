@@ -105,7 +105,7 @@ caf::behavior pivoter(caf::stateful_actor<pivoter_state>* self, caf::actor node,
             auto column = slice->column(pivot_field_name);
             std::stringstream sstr;
             sstr << "#type == \"" << st.target << "\" && " << pivot_field_name
-                 << " in [\"";
+                 << " in {\"";
             size_t request_size = 0;
             for (size_t i = 0; i < column->rows(); ++i) {
               auto data = materialize((*column)[i]);
@@ -125,7 +125,7 @@ caf::behavior pivoter(caf::stateful_actor<pivoter_state>* self, caf::actor node,
             VAST_DEBUG(self, "queries for", request_size, pivot_field_name);
             if (!request_size)
               return;
-            sstr << "\"]";
+            sstr << "\"}";
             VAST_DEBUG(self, "spawns new exporter with query", sstr.str());
             auto exporter_invocation
               = command::invocation{{}, "spawn exporter", {sstr.str()}};

@@ -130,13 +130,13 @@ TEST(count IP point query without candidate check) {
   CHECK_EQUAL(
     node_state.invocs[0].arguments[0],
     "#type == \"pcap.packet\" && community_id in "
-    "[\"1:aWZfLIquYlCxKGuJ62fQGlgFzAI=\", "
+    "{\"1:aWZfLIquYlCxKGuJ62fQGlgFzAI=\", "
     "\"1:fLbpXGtS1VgDhqUW+WYaP0v+NuA=\", \"1:BY/pbReW8Oa+xSY2fNZPZUB1Nnk=\", "
     "\"1:tShwwbRwEMd3S8SvqZxGyvKm+1c=\", \"1:4iHhzk49NeoFdK6VHSCw4ruRbsw=\", "
     "\"1:+igyiyVnNTFDre/V6pYx89+Lgr8=\", \"1:5NWtNjiw4JPUO4fMM0WobJPFeU8=\", "
     "\"1:oG55uQUH+XuHYHOFV0c+yOutW8E=\", \"1:FVMx3YawO69eZmiaMJJbrs6447E=\", "
     "\"1:79fDvfGNCWV1JBYjXCE5Ov1FuMM=\", \"1:aGi0Bt5ApW6HEEO7wfz+PwvniIU=\", "
-    "\"1:JoBDvaK4Tt6BfWSKWPKaJTELr2M=\"]");
+    "\"1:JoBDvaK4Tt6BfWSKWPKaJTELr2M=\"}");
 }
 
 FIXTURE_SCOPE_END()
