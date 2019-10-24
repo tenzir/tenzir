@@ -130,15 +130,13 @@ struct source_state {
       auto r = performance_report{{{std::string{name}, measurement_}}};
 #if VAST_LOG_LEVEL >= CAF_LOG_LEVEL_INFO
       for (const auto& [key, m] : r) {
-        auto rate = m.duration.count() > 0
-                      ? m.events * decltype(m.duration)::period::den
-                          / m.duration.count()
-                      : std::numeric_limits<double>::quiet_NaN();
-        if (std::isfinite(rate))
+        if (auto rate = m.rate_per_sec(); std::isfinite(rate))
           VAST_INFO(self, "produced", m.events, "events at a rate of",
-                    static_cast<uint64_t>(rate), "events/sec");
+                    static_cast<uint64_t>(rate), "events/sec in",
+                    to_string(m.duration));
         else
-          VAST_INFO(self, "produced", m.events, "events");
+          VAST_INFO(self, "produced", m.events, "events in",
+                    to_string(m.duration));
       }
 #endif
       measurement_ = measurement{};
