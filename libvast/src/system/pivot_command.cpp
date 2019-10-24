@@ -177,6 +177,8 @@ pivot_command(const command::invocation& invocation, caf::actor_system& sys) {
   self->monitor(piv);
   // Start the exporter.
   self->send(exp, system::sink_atom::value, piv);
+  // (Ab)use query_statistics as done message.
+  self->send(exp, system::statistics_atom::value, piv);
   self->send(piv, system::sink_atom::value, writer);
   self->send(exp, system::run_atom::value);
   auto stop = false;
