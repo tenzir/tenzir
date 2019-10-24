@@ -40,6 +40,7 @@ struct pivoter_state {
 
   // -- member variables -------------------------------------------------------
 
+  /// The name of the type that we are pivoting to.
   std::string target;
 
   /// The original query.
@@ -72,12 +73,12 @@ struct pivoter_state {
   /// A handle to the parent node for spawning new EXPORTERs.
   caf::actor node;
 
-  /// A handle to the sink of that shall be used for the final
+  /// A handle to the sink for the resulting table silces.
   caf::actor sink;
 };
 
 /// The PIVOTER receives table slices and constructs new queries for the target
-/// type
+/// type.
 /// @param self The actor handle.
 /// @param node The node actor to spawn exporters in.
 /// @param target The type filter for the subsequent queries.
