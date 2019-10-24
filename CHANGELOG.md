@@ -10,12 +10,18 @@ Every entry has a category for which we use the following visual abbreviations:
 
 ## [Unreleased]
 
-- 🎁 The new `pivot` command allows retrieval of related data from the results
-  of a search query. A typical use case for this is to make use of the rich
-  data model provided by an IDS like Suricata or Zeek for a search to export
-  the network traffic that generated these high level events. This feature is
-  currently implemented for Suricata eve.log, Zeek logs and PCAP, and requires
-  the `community_id` field to be available in the former.
+- 🎁 The new `pivot` command retrieves data of a related type. It inspects each
+  event in a query result to find an event of the requested type. If a common
+  field exists in the schema definition of the requested type, VAST will
+  dynamically create a new query to fetch the contextual data according to the
+  type relationship. For example, if two records `T` and `U` share the same
+  field `x`, and the user requests to pivot via `T.x == 42`, then VAST will
+  fetch all data for `U.x == 42`. An example use case would be to pivot from a
+  Zeek or Suricata log entry to the corresponding PCAP packets.
+  VAST uses the field `community_id` to pivot between the logs and the packets.
+  Pivoting is currently implemented for Suricata, Zeek (with [community ID
+  computation](https://github.com/corelight/bro-community-id) enabled), and
+  PCAP.
 
 - 🎁 The new `infer` command performs schema inference of input data. The
   command can deduce the input format and creates a schema definition that is
