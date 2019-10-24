@@ -83,7 +83,7 @@ caf::behavior pivoter(caf::stateful_actor<pivoter_state>* self, caf::actor node,
   st.target = std::move(target);
   auto quit_if_done = [=]() {
     auto& st = self->state;
-    if (st.initial_completed && st.running_exporters == 0)
+    if (st.initial_query_completed && st.running_exporters == 0)
       self->quit();
   };
   self->set_down_handler([=](const caf::down_msg& msg) {
@@ -142,7 +142,7 @@ caf::behavior pivoter(caf::stateful_actor<pivoter_state>* self, caf::actor node,
           },
           [=](std::string name, query_status) {
             VAST_DEBUG(self, "received final status from", name);
-            self->state.initial_completed = true;
+            self->state.initial_query_completed = true;
             quit_if_done();
           },
           [=](sink_atom, const caf::actor& sink) {

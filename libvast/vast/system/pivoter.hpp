@@ -64,7 +64,7 @@ struct pivoter_state {
 
   /// Flag that stores if the input source is done sending table slices. Used
   /// for lifetime management.
-  bool initial_completed = false;
+  bool initial_query_completed = false;
 
   /// Pointer to the parent actor.
   caf::stateful_actor<pivoter_state>* self;
