@@ -34,7 +34,7 @@ maybe_actor
 spawn_counter(system::node_actor* self, system::spawn_arguments& args) {
   VAST_TRACE(VAST_ARG(args));
   // Parse given expression.
-  VAST_UNBOX_VAR(expr, system::normalized_and_valided(args));
+  VAST_UNBOX_VAR(expr, system::normalized_and_validated(args));
   // Get INDEX and ARCHIVE.
   caf::error err;
   caf::actor index;

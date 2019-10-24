@@ -31,7 +31,7 @@ namespace vast::system {
 maybe_actor spawn_exporter(node_actor* self, spawn_arguments& args) {
   VAST_TRACE(VAST_ARG(args));
   // Parse given expression.
-  VAST_UNBOX_VAR(expr, normalized_and_valided(args));
+  VAST_UNBOX_VAR(expr, normalized_and_validated(args));
   // Parse query options.
   auto query_opts = no_query_options;
   if (get_or(args.invocation.options, "export.continuous", false))

@@ -43,11 +43,11 @@ struct spawn_arguments {
 
 /// Attempts to parse `[args.first, args.last)` as ::expression and returns a
 /// normalized and validated version of that expression on success.
-caf::expected<expression> normalized_and_valided(const spawn_arguments& args);
+caf::expected<expression> normalized_and_validated(const spawn_arguments& args);
 
 caf::expected<expression>
-normalized_and_valided(std::vector<std::string>::const_iterator begin,
-                       std::vector<std::string>::const_iterator end);
+normalized_and_validated(std::vector<std::string>::const_iterator begin,
+                         std::vector<std::string>::const_iterator end);
 
 /// Attemps to read a schema file and parse its content. Can either 1) return
 /// nothing if the user didn't specifiy a schema file in `args.options`, 2)

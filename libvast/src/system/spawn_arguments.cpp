@@ -32,8 +32,8 @@
 namespace vast::system {
 
 caf::expected<expression>
-normalized_and_valided(std::vector<std::string>::const_iterator begin,
-                       std::vector<std::string>::const_iterator end) {
+normalized_and_validated(std::vector<std::string>::const_iterator begin,
+                         std::vector<std::string>::const_iterator end) {
   if (begin == end)
     return make_error(ec::syntax_error, "no query expression given");
   if (auto e = to<expression>(caf::join(begin, end, " ")))
@@ -42,9 +42,10 @@ normalized_and_valided(std::vector<std::string>::const_iterator begin,
     return std::move(e.error());
 }
 
-caf::expected<expression> normalized_and_valided(const spawn_arguments& args) {
+caf::expected<expression>
+normalized_and_validated(const spawn_arguments& args) {
   auto& arguments = args.invocation.arguments;
-  return normalized_and_valided(arguments.begin(), arguments.end());
+  return normalized_and_validated(arguments.begin(), arguments.end());
 }
 
 caf::expected<caf::optional<schema>> read_schema(const spawn_arguments& args) {
