@@ -1,4 +1,4 @@
-#! /usr/bin/env sh
+#! /bin/sh
 
 # A script to get a quick overview of performance rates, latency and disk usage.
 
@@ -10,7 +10,7 @@ set -e
 
 if ! command -v vast >/dev/null 2>&1; then
 	echo "vast not found"
-	exit
+	exit 1
 fi
 
 if command -v gdu >/dev/null 2>&1; then
