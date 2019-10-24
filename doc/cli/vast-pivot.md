@@ -8,5 +8,6 @@ vast pivot [options] <type> <expr>
 ```
 
 VAST uses the field `community_id` to pivot between logs and packets. Pivoting
-is currently implemented for Suricata, Zeek (with [community ID computation]
-(https://github.com/corelight/bro-community-id) enabled), and PCAP.
+is currently implemented for Suricata, Zeek (with
+[community ID computation] (https://github.com/corelight/bro-community-id)
+enabled), and PCAP.
