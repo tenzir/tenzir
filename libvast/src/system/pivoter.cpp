@@ -105,10 +105,9 @@ caf::behavior pivoter(caf::stateful_actor<pivoter_state>* self, caf::actor node,
               return;
             VAST_DEBUG(self, "uses", *pivot_field, "to extract", st.target,
                        "events");
-            auto pivot_field_name = pivot_field->name;
-            auto column = slice->column(pivot_field_name);
+            auto column = slice->column(pivot_field->name);
             std::stringstream sstr;
-            sstr << "#type == \"" << st.target << "\" && " << pivot_field_name
+            sstr << "#type == \"" << st.target << "\" && " << pivot_field->name
                  << " in {\"";
             size_t request_size = 0;
             for (size_t i = 0; i < column->rows(); ++i) {
@@ -126,7 +125,7 @@ caf::behavior pivoter(caf::stateful_actor<pivoter_state>* self, caf::actor node,
               st.requested_ids.insert(*x);
               request_size++;
             }
-            VAST_DEBUG(self, "queries for", request_size, pivot_field_name);
+            VAST_DEBUG(self, "queries for", request_size, pivot_field->name);
             if (!request_size)
               return;
             sstr << "\"}";
