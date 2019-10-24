@@ -13,32 +13,21 @@
 
 #include "vast/system/spawn_pivoter.hpp"
 
-#include "vast/defaults.hpp"
 #include "vast/detail/unbox_var.hpp"
-#include "vast/error.hpp"
-#include "vast/event_types.hpp"
 #include "vast/logger.hpp"
-#include "vast/query_options.hpp"
-#include "vast/system/node.hpp"
 #include "vast/system/pivoter.hpp"
 #include "vast/system/spawn_arguments.hpp"
-
-#include <caf/actor.hpp>
-#include <caf/expected.hpp>
-#include <caf/send.hpp>
-#include <caf/settings.hpp>
 
 namespace vast::system {
 
 maybe_actor spawn_pivoter(node_actor* self, spawn_arguments& args) {
   VAST_TRACE(VAST_ARG(args));
-  auto target_name = args.invocation.arguments[0];
+  auto& arguments = args.invocation.arguments;
+  auto target_name = arguments[0];
   // Parse given expression.
-  VAST_UNBOX_VAR(
-    expr, normalized_and_valided(std::next(args.invocation.arguments.begin()),
-                                 args.invocation.arguments.end()));
-  auto piv = self->spawn(pivoter, self, target_name, std::move(expr));
-  return piv;
+  auto query_begin = std::next(arguments.begin());
+  VAST_UNBOX_VAR(expr, normalized_and_validated(query_begin, arguments.end()));
+  return self->spawn(pivoter, self, target_name, std::move(expr));
 }
 
 } // namespace vast::system
