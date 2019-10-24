@@ -29,9 +29,8 @@
 #include <caf/event_based_actor.hpp>
 #include <caf/stateful_actor.hpp>
 
-using invocation = vast::command::invocation;
-using vast::expression;
-using vast::table_slice_ptr;
+using namespace vast;
+using invocation = command::invocation;
 
 namespace {
 
@@ -61,15 +60,15 @@ const auto zeek_conn_m57_head = R"__(#separator \x09
 template <class Reader>
 std::vector<table_slice_ptr> inhale(const char* data) {
   auto input = std::make_unique<std::istringstream>(data);
-  Reader reader{vast::defaults::system::table_slice_type, caf::settings{},
+  Reader reader{defaults::system::table_slice_type, caf::settings{},
                 std::move(input)};
   std::vector<table_slice_ptr> slices;
   auto add_slice
     = [&](table_slice_ptr ptr) { slices.emplace_back(std::move(ptr)); };
   auto [err, produced] = reader.read(std::numeric_limits<size_t>::max(),
-                                     vast::defaults::system::table_slice_size,
+                                     defaults::system::table_slice_size,
                                      add_slice);
-  if (err != caf::none && err != vast::ec::end_of_input) {
+  if (err != caf::none && err != ec::end_of_input) {
     auto str = to_string(err);
     FAIL("reader returned an error: " << str);
   }
@@ -101,13 +100,13 @@ struct fixture : fixtures::deterministic_actor_system {
   }
 
   void spawn_aut(expression expr, std::string target_type) {
-    aut = sys.spawn(vast::system::pivoter, node, std::move(target_type),
+    aut = sys.spawn(system::pivoter, node, std::move(target_type),
                     std::move(expr));
     run();
   }
 
   const std::vector<table_slice_ptr> slices
-    = inhale<vast::format::zeek::reader>(zeek_conn_m57_head);
+    = inhale<format::zeek::reader>(zeek_conn_m57_head);
 
   caf::actor node;
   caf::actor aut;
@@ -119,7 +118,7 @@ FIXTURE_SCOPE(pivoter_tests, fixture)
 
 TEST(count IP point query without candidate check) {
   MESSAGE("build expression");
-  auto expr = unbox(vast::to<expression>("proto == udp && orig_bytes < 600"));
+  auto expr = unbox(to<expression>("proto == udp && orig_bytes < 600"));
   MESSAGE("spawn the pivoter with the target type pcap");
   spawn_aut(expr, "pcap.packet");
   MESSAGE("send a table slice");
