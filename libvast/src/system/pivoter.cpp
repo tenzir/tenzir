@@ -83,15 +83,15 @@ caf::behavior pivoter(caf::stateful_actor<pivoter_state>* self, caf::actor node,
   st.target = std::move(target);
   auto quit_if_done = [=]() {
     auto& st = self->state;
-    if (st.initial_completed && st.outstanding_requests == 0)
+    if (st.initial_completed && st.running_exporters == 0)
       self->quit();
   };
   self->set_down_handler([=](const caf::down_msg& msg) {
     // Only the spawned EXPORTERs are expected to send down messages.
     auto& st = self->state;
-    st.outstanding_requests--;
+    st.running_exporters--;
     VAST_DEBUG(self, "received DOWN from", msg.source,
-               "outstanding requests:", st.outstanding_requests);
+               "outstanding requests:", st.running_exporters);
     quit_if_done();
   });
   return {[=](vast::table_slice_ptr slice) {
@@ -131,7 +131,7 @@ caf::behavior pivoter(caf::stateful_actor<pivoter_state>* self, caf::actor node,
             auto exporter_invocation
               = command::invocation{{}, "spawn exporter", {sstr.str()}};
             self->send(st.node, exporter_invocation);
-            st.outstanding_requests++;
+            st.running_exporters++;
           },
           [=](caf::actor exp) {
             VAST_DEBUG(self, "registers exporter", exp);

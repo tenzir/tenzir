@@ -60,7 +60,7 @@ struct pivoter_state {
   mutable std::unordered_map<record_type, caf::optional<record_field>> cache;
 
   /// A tracking counter of spawned exporters. Used for lifetime management.
-  size_t outstanding_requests = 0;
+  size_t running_exporters = 0;
 
   /// Flag that stores if the input source is done sending table slices. Used
   /// for lifetime management.
