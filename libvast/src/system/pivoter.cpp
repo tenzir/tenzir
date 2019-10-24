@@ -127,7 +127,7 @@ caf::behavior pivoter(caf::stateful_actor<pivoter_state>* self, caf::actor node,
               return;
             }
             sstr << "\"]";
-            VAST_DEBUG(self, "sends query", sstr.str());
+            VAST_DEBUG(self, "spawns new exporter with query", sstr.str());
             auto exporter_invocation
               = command::invocation{{}, "spawn exporter", {sstr.str()}};
             self->send(st.node, exporter_invocation);
