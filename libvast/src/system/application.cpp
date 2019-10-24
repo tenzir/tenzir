@@ -184,7 +184,7 @@ auto make_peer_command() {
 
 auto make_pivot_command() {
   auto pivot = std::make_unique<command>(
-    "pivot", "", "",
+    "pivot", "extracts related events of a given type", "",
     opts("?pivot")
       .add<std::string>("write,w", "path to write events to")
       .add<bool>("uds,d", "treat -w as UNIX domain socket to connect to")
