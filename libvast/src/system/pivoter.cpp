@@ -123,9 +123,8 @@ caf::behavior pivoter(caf::stateful_actor<pivoter_state>* self, caf::actor node,
               request_size++;
             }
             VAST_DEBUG(self, "queries for", request_size, pivot_field_name);
-            if (!request_size) {
+            if (!request_size)
               return;
-            }
             sstr << "\"]";
             VAST_DEBUG(self, "spawns new exporter with query", sstr.str());
             auto exporter_invocation
