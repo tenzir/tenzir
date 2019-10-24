@@ -14,15 +14,15 @@
 #include "vast/system/pivoter.hpp"
 
 #include "vast/command.hpp"
-#include "vast/concept/parseable/to.hpp"
-#include "vast/concept/parseable/vast/expression.hpp"
+#include "vast/concept/printable/to_string.hpp"
+#include "vast/concept/printable/vast/expression.hpp"
 #include "vast/detail/string.hpp"
 #include "vast/expression.hpp"
 #include "vast/logger.hpp"
+#include "vast/system/atoms.hpp"
 #include "vast/system/exporter.hpp"
 #include "vast/table_slice.hpp"
 
-#include <caf/atom.hpp>
 #include <caf/event_based_actor.hpp>
 
 namespace vast::system {
@@ -106,10 +106,7 @@ caf::behavior pivoter(caf::stateful_actor<pivoter_state>* self, caf::actor node,
             VAST_DEBUG(self, "uses", *pivot_field, "to extract", st.target,
                        "events");
             auto column = slice->column(pivot_field->name);
-            std::stringstream sstr;
-            sstr << "#type == \"" << st.target << "\" && " << pivot_field->name
-                 << " in {\"";
-            size_t request_size = 0;
+            auto xs = set{};
             for (size_t i = 0; i < column->rows(); ++i) {
               auto data = materialize((*column)[i]);
               auto x = caf::get_if<std::string>(&data);
@@ -119,19 +116,24 @@ caf::behavior pivoter(caf::stateful_actor<pivoter_state>* self, caf::actor node,
               // Skip if id was already requested
               if (st.requested_ids.count(*x) > 0)
                 continue;
-              if (request_size != 0)
-                sstr << "\", \"";
-              sstr << *x;
+              xs.insert(*x);
               st.requested_ids.insert(*x);
-              request_size++;
             }
-            VAST_DEBUG(self, "queries for", request_size, pivot_field->name);
-            if (!request_size)
+            if (xs.empty()) {
+              VAST_DEBUG(self, "already queried for all", pivot_field->name);
               return;
-            sstr << "\"}";
-            VAST_DEBUG(self, "spawns new exporter with query", sstr.str());
+            }
+            auto expr = conjunction{
+              predicate{attribute_extractor{type_atom::value}, equal,
+                        data{st.target}},
+              predicate{key_extractor{pivot_field->name}, in, data{xs}}};
+            // TODO(ch9411): Drop the conversion to a string when node actors can
+            //               be spawned without going through an invocation.
+            auto query = to_string(expr);
+            VAST_DEBUG(self, "queries for", xs.size(), pivot_field->name);
+            VAST_TRACE(self, "spawns new exporter with query", query);
             auto exporter_invocation
-              = command::invocation{{}, "spawn exporter", {sstr.str()}};
+              = command::invocation{{}, "spawn exporter", {query}};
             self->send(st.node, exporter_invocation);
             st.running_exporters++;
           },
