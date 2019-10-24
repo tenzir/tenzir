@@ -114,7 +114,7 @@ caf::behavior pivoter(caf::stateful_actor<pivoter_state>* self, caf::actor node,
               if (!x)
                 continue;
               // Skip if id was already requested
-              if (st.requested_ids.count(*x))
+              if (st.requested_ids.count(*x) > 0)
                 continue;
               if (request_size != 0)
                 sstr << "\", \"";
