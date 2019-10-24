@@ -92,6 +92,16 @@ caf::behavior sink(caf::stateful_actor<sink_state<Writer>>* self,
       VAST_DEBUG(self, "got:", slice->rows(), "events from",
                  self->current_sender());
       auto& st = self->state;
+      auto now = steady_clock::now();
+      auto time_since_flush = now - st.last_flush;
+#if VAST_LOG_LEVEL >= CAF_LOG_LEVEL_INFO
+      static bool did_print_latency = false;
+      if (!did_print_latency) {
+        VAST_INFO(st.name, "received first result with a latency of",
+                  to_string(time_since_flush));
+        did_print_latency = true;
+      }
+#endif
       auto reached_max_events = [&] {
         VAST_INFO(self, "reached max_events:", st.max_events, "events");
         st.writer.flush();
@@ -117,8 +127,7 @@ caf::behavior sink(caf::stateful_actor<sink_state<Writer>>* self,
       if (st.processed >= st.max_events)
         return reached_max_events();
       // Force flush if necessary.
-      auto now = steady_clock::now();
-      if (now - st.last_flush > st.flush_interval) {
+      if (time_since_flush > st.flush_interval) {
         st.writer.flush();
         st.last_flush = now;
         st.send_report();
