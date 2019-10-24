@@ -90,7 +90,7 @@ caf::behavior pivoter(caf::stateful_actor<pivoter_state>* self, caf::actor node,
     if (st.initial_query_completed && st.running_exporters == 0)
       self->quit();
   };
-  self->set_down_handler([=](const caf::down_msg& msg) {
+  self->set_down_handler([=]([[maybe_unused]] const caf::down_msg& msg) {
     // Only the spawned EXPORTERs are expected to send down messages.
     auto& st = self->state;
     st.running_exporters--;
@@ -144,7 +144,7 @@ caf::behavior pivoter(caf::stateful_actor<pivoter_state>* self, caf::actor node,
             self->send(exp, system::sink_atom::value, st.sink);
             self->send(exp, system::run_atom::value);
           },
-          [=](std::string name, query_status) {
+          [=]([[maybe_unused]] std::string name, query_status) {
             VAST_DEBUG(self, "received final status from", name);
             self->state.initial_query_completed = true;
             quit_if_done();
@@ -153,10 +153,6 @@ caf::behavior pivoter(caf::stateful_actor<pivoter_state>* self, caf::actor node,
             VAST_DEBUG(self, "registers sink", sink);
             auto& st = self->state;
             st.sink = sink;
-          },
-          [=](const uuid& id, const query_status&) {
-            VAST_IGNORE_UNUSED(id);
-            VAST_INFO(self, "got query statistics from", id);
           }};
 }
 
