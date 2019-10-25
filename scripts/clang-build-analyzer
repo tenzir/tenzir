@@ -1,0 +1,39 @@
+#! /bin/bash
+
+# This script runs ClangBuildAanlyzer on a clean build of VAST
+#   Usage: ./scripts/clang-build-analyzer [<additional-configure-flags>]
+
+set -e
+
+# Create temporary directory
+WORKING_DIR=$(mktemp -d)
+pushd ${WORKING_DIR}
+
+# Build ClangBuildAnalyzer
+git clone https://github.com/aras-p/ClangBuildAnalyzer.git
+pushd "ClangBuildAnalyzer"
+make -f projects/make/Makefile
+CBA="${WORKING_DIR}/ClangBuildAnalyzer/build/ClangBuildAnalyzer"
+popd || exit 1
+
+# Create VAST build directory
+mkdir "VAST"
+popd || exit 1
+
+# Configure VAST build
+./configure "${@}" --build-dir="${WORKING_DIR}/VAST" --extra-flags="-ftime-trace"
+
+# Start the build capture
+${CBA} --start "${WORKING_DIR}/VAST"
+
+# Build VAST
+cmake --build "${WORKING_DIR}/VAST" -j | grep -v "Time trace\|tracing"
+
+# Stop the build capture
+${CBA} --stop "${WORKING_DIR}/VAST" "${WORKING_DIR}/time-trace.json"
+
+# Run the build analysis
+${CBA} --analyze "${WORKING_DIR}/time-trace.json" | tee "time-trace-$(date +%s).txt"
+
+# Delete the working directory
+rm -rf "${WORKING_DIR}"
