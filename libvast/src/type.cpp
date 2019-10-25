@@ -627,16 +627,22 @@ caf::error replace_if_congruent(std::initializer_list<type*> xs,
 }
 
 bool compatible(const type& lhs, relational_operator op, const type& rhs) {
+  auto string_and_pattern = [](auto& x, auto& y) {
+    return (holds_alternative<string_type>(x)
+            && holds_alternative<pattern_type>(y))
+           || (holds_alternative<pattern_type>(x)
+               && holds_alternative<string_type>(y));
+  };
   switch (op) {
     default:
       return false;
     case match:
     case not_match:
-      return holds_alternative<string_type>(lhs)
-             && holds_alternative<pattern_type>(rhs);
+      return string_and_pattern(lhs, rhs);
     case equal:
     case not_equal:
-      return !lhs || !rhs || congruent(lhs, rhs);
+      return !lhs || !rhs || string_and_pattern(lhs, rhs)
+             || congruent(lhs, rhs);
     case less:
     case less_equal:
     case greater:
@@ -659,16 +665,21 @@ bool compatible(const type& lhs, relational_operator op, const type& rhs) {
 }
 
 bool compatible(const type& lhs, relational_operator op, const data& rhs) {
+  auto string_and_pattern = [](auto& x, auto& y) {
+    return (holds_alternative<string_type>(x) && holds_alternative<pattern>(y))
+           || (holds_alternative<pattern_type>(x)
+               && holds_alternative<std::string>(y));
+  };
   switch (op) {
     default:
       return false;
     case match:
     case not_match:
-      return holds_alternative<string_type>(lhs)
-             && holds_alternative<pattern>(rhs);
+      return string_and_pattern(lhs, rhs);
     case equal:
     case not_equal:
-      return !lhs || holds_alternative<caf::none_t>(rhs) || congruent(lhs, rhs);
+      return !lhs || holds_alternative<caf::none_t>(rhs)
+             || string_and_pattern(lhs, rhs) || congruent(lhs, rhs);
     case less:
     case less_equal:
     case greater:
