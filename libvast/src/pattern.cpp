@@ -116,6 +116,22 @@ bool operator<(const pattern& lhs, const pattern& rhs) {
   return lhs.str_ < rhs.str_;
 }
 
+bool operator==(const pattern& lhs, std::string_view rhs) {
+  return lhs.match(rhs);
+}
+
+bool operator!=(const pattern& lhs, std::string_view rhs) {
+  return !(lhs == rhs);
+}
+
+bool operator==(std::string_view lhs, const pattern& rhs) {
+  return rhs.match(lhs);
+}
+
+bool operator!=(std::string_view lhs, const pattern& rhs) {
+  return !(lhs == rhs);
+}
+
 bool convert(const pattern& p, json& j) {
   j = to_string(p);
   return true;

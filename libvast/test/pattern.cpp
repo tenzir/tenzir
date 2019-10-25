@@ -22,6 +22,7 @@
 
 using namespace vast;
 using namespace std::string_literals;
+using namespace std::string_view_literals;
 
 TEST(functionality) {
   std::string str = "1";
@@ -41,6 +42,12 @@ TEST(functionality) {
   p = pattern("(\\w+ )");
   CHECK(!p.match(str));
   CHECK(p.search(str));
+}
+
+TEST(comparison with string) {
+  auto rx = pattern{"foo.*baz"};
+  CHECK("foobarbaz"sv == rx);
+  CHECK(rx == "foobarbaz"sv);
 }
 
 TEST(composition) {

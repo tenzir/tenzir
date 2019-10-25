@@ -80,6 +80,13 @@ public:
   friend bool operator==(const pattern& lhs, const pattern& rhs);
   friend bool operator<(const pattern& lhs, const pattern& rhs);
 
+  // We are not using detail::equality_comparable here because it takes both
+  // arguments by const reference. Here, string_view is taken by value.
+  friend bool operator==(const pattern& lhs, std::string_view rhs);
+  friend bool operator!=(const pattern& lhs, std::string_view rhs);
+  friend bool operator==(std::string_view lhs, const pattern& rhs);
+  friend bool operator!=(std::string_view lhs, const pattern& rhs);
+
   template <class Inspector>
   friend auto inspect(Inspector& f, pattern& p) {
     return f(p.str_);
@@ -92,4 +99,3 @@ private:
 };
 
 } // namespace vast
-
