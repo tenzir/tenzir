@@ -184,6 +184,12 @@ TEST(evaluation) {
   CHECK(evaluate(lhs, not_equal, rhs));
 }
 
+TEST(evaluation - pattern matching) {
+  CHECK(evaluate(pattern{"f.*o"}, equal, "foo"));
+  CHECK(evaluate("foo", equal, pattern{"f.*o"}));
+  CHECK(evaluate("foo", match, pattern{"f.*o"}));
+}
+
 TEST(serialization) {
   set xs;
   xs.emplace(port{80, port::tcp});

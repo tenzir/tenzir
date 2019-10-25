@@ -178,7 +178,20 @@ bool operator<(const data& lhs, const data& rhs) {
 }
 
 bool evaluate(const data& lhs, relational_operator op, const data& rhs) {
-  auto check_match = [](const auto& x, const auto& y) {
+  auto eval_string_and_pattern = [](const auto& x, const auto& y) {
+    return caf::visit(detail::overload(
+      [](const auto&, const auto&) -> caf::optional<bool> {
+        return caf::none;
+      },
+      [](const std::string& lhs, const pattern& rhs) -> caf::optional<bool> {
+        return rhs.match(lhs);
+      },
+      [](const pattern& lhs, const std::string& rhs) -> caf::optional<bool> {
+        return lhs.match(rhs);
+      }
+    ), x, y);
+  };
+  auto eval_match = [](const auto& x, const auto& y) {
     return caf::visit(detail::overload(
       [](const auto&, const auto&) {
         return false;
@@ -188,7 +201,7 @@ bool evaluate(const data& lhs, relational_operator op, const data& rhs) {
       }
     ), x, y);
   };
-  auto check_in = [](const auto& x, const auto& y) {
+  auto eval_in = [](const auto& x, const auto& y) {
     return caf::visit(detail::overload(
       [](const auto&, const auto&) {
         return false;
@@ -218,20 +231,24 @@ bool evaluate(const data& lhs, relational_operator op, const data& rhs) {
       VAST_ASSERT(!"missing case");
       return false;
     case match:
-      return check_match(lhs, rhs);
+      return eval_match(lhs, rhs);
     case not_match:
-      return !check_match(lhs, rhs);
+      return !eval_match(lhs, rhs);
     case in:
-      return check_in(lhs, rhs);
+      return eval_in(lhs, rhs);
     case not_in:
-      return !check_in(lhs, rhs);
+      return !eval_in(lhs, rhs);
     case ni:
-      return check_in(rhs, lhs);
+      return eval_in(rhs, lhs);
     case not_ni:
-      return !check_in(rhs, lhs);
+      return !eval_in(rhs, lhs);
     case equal:
+      if (auto x = eval_string_and_pattern(lhs, rhs))
+        return *x;
       return lhs == rhs;
     case not_equal:
+      if (auto x = eval_string_and_pattern(lhs, rhs))
+        return !*x;
       return lhs != rhs;
     case less:
       return lhs < rhs;
