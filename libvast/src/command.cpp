@@ -86,17 +86,24 @@ void parameters_helptext(const command& cmd, std::ostream& out) {
   }
 }
 
+// Prints the description for a command if there is any
+void description(const command& cmd, std::ostream& out) {
+  if (!cmd.description.empty())
+    out << cmd.description << "\n\n";
+}
+
 // Prints the helptext for a command without children.
 void flat_helptext(const command& cmd, std::ostream& out) {
   // A trivial command without parameters prints its name and description.
   if (cmd.options.empty()) {
-    out << "usage: " << cmd.full_name() << "\n\n" << cmd.description << "\n\n";
+    out << "usage: " << cmd.full_name() << "\n\n";
+    description(cmd, out);
     return;
   }
   // A command with parameters prints 1) its name, 2) a description, and 3) a
   // list of available parameters.
-  out << "usage: " << cmd.full_name() << " [<parameters>]\n\n"
-      << cmd.description << "\n\n";
+  out << "usage: " << cmd.full_name() << " [<parameters>]\n\n";
+  description(cmd, out);
   parameters_helptext(cmd, out);
 }
 
@@ -118,14 +125,13 @@ void nested_helptext(const command& cmd, std::ostream& out) {
   // children.
   if (cmd.options.empty()) {
     out << "usage: " << cmd.full_name() << " <command>"
-        << "\n\n"
-        << cmd.description << "\n\n";
+        << "\n\n";
+    description(cmd, out);
     subcommand_helptext(cmd, out);
     return;
   }
   out << "usage: " << cmd.full_name() << " [<parameters>] <command>"
-      << "\n\n"
-      << cmd.description << "\n\n";
+      << "\n\n";
   parameters_helptext(cmd, out);
   out << '\n';
   subcommand_helptext(cmd, out);
