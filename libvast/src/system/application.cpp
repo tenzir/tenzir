@@ -61,7 +61,7 @@ auto make_root_command(std::string_view path) {
   path.remove_prefix(std::min(path.find_last_of('/') + 1, path.size()));
   // For documentation, we use the complete man-page formatted as Markdown
   return std::make_unique<command>(
-    path, "manages a VAST deployment", documentation::vast,
+    path, "", documentation::vast,
     opts("?system")
       .add<std::string>("config-file", "path to a configuration file")
       .add<caf::atom_value>("verbosity,v", "output verbosity level on the "
