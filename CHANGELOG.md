@@ -10,6 +10,11 @@ Every entry has a category for which we use the following visual abbreviations:
 
 ## [Unreleased]
 
+- 🔄 The query language has been extended to support expression of the form
+  `X == /pattern/`, where `X` is a compatible LHS extractor. Previously,
+  patterns only supports the match operator `~`. The two operators have the
+  same semantics when one operand is a pattern.
+
 - 🎁 The new `pivot` command retrieves data of a related type. It inspects each
   event in a query result to find an event of the requested type. If a common
   field exists in the schema definition of the requested type, VAST will
