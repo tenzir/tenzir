@@ -19,5 +19,13 @@ else
 	DU="du"
 fi
 
+# Run vast and filter for rate and latency results
 vast "${@}" 2>&1 >/dev/null | grep "rate\|latency"
+# Query vast for average node throughput rate
+if [[ "$*" == *import* ]]; then
+	NODE_THROUGHPUT="$(vast -N export json '#type == "vast.account" && key == "node_throughput.rate"' 2>/dev/null \
+		| jq -s 'map(.value | tonumber) as $rates | $rates | add / ($rates | length)')"
+	printf "node throughput rate is %.2f events/sec\n" "${NODE_THROUGHPUT}"
+fi
+# Print archive and index disk usage
 ${DU} -csb vast.db/archive vast.db/index
