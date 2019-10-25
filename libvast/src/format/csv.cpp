@@ -25,7 +25,6 @@
 #include "vast/concept/printable/to_string.hpp"
 #include "vast/concept/printable/vast/type.hpp"
 #include "vast/concept/printable/vast/view.hpp"
-#include "vast/defaults.hpp"
 #include "vast/detail/type_traits.hpp"
 #include "vast/error.hpp"
 #include "vast/logger.hpp"
@@ -76,7 +75,7 @@ caf::error render(output_iterator& out, ForwardIterator first,
   if (auto err = render(out, *first))
     return err;
   for (++first; first != last; ++first) {
-    for (auto c : defaults::export_::csv::set_separator)
+    for (auto c : writer::defaults::set_separator)
       *out++ = c;
     if (auto err = render(out, *first))
       return err;
@@ -105,7 +104,7 @@ caf::error render(output_iterator& out, const view<data>& x) {
 } // namespace
 
 caf::error writer::write(const table_slice& x) {
-  constexpr char separator = defaults::export_::csv::separator;
+  constexpr char separator = writer::defaults::separator;
   // Print a new header each time we encounter a new layout.
   if (last_layout_ != x.layout().name()) {
     last_layout_ = x.layout().name();

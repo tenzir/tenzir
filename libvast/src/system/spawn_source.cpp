@@ -42,7 +42,7 @@ namespace {
 template <class Reader, class... Ts>
 maybe_actor spawn_generic_source(caf::local_actor* self, spawn_arguments& args,
                                  Ts&&... ctor_args) {
-  VAST_UNBOX_VAR(expr, normalized_and_valided(args));
+  VAST_UNBOX_VAR(expr, normalized_and_validated(args));
   VAST_UNBOX_VAR(sch, read_schema(args));
   auto table_slice_type = defaults::import::table_slice_type(
     self->system(), args.invocation.options);

@@ -83,7 +83,7 @@ freebsd_task:
       - BUILD_TYPE: Debug
         CONFIGURE_FLAGS: -DENABLE_ADDRESS_SANITIZER:BOOL=ON
   setup_script:
-    - env ASSUME_ALWAYS_YES=YES pkg install git cmake ninja lang/python3 lang/python py36-pip base64 jq
+    - env ASSUME_ALWAYS_YES=YES pkg install git cmake ninja lang/python3 lang/python py36-pip base64 jq tcpdump
   <<: *build_definition
 
 macos_task:
@@ -97,5 +97,5 @@ macos_task:
     PATH: /usr/local/opt/python/libexec/bin:$PATH
     DESTDIR: $PWD
   setup_script:
-    - HOMEBREW_NO_AUTO_UPDATE=1 brew install openssl cmake git ninja python libpcap jq
+    - HOMEBREW_NO_AUTO_UPDATE=1 brew install openssl cmake git ninja python libpcap jq tcpdump
   <<: *build_definition

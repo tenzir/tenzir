@@ -13,20 +13,17 @@
 
 #pragma once
 
-#include "vast/command.hpp"
+#include "vast/aliases.hpp"
+#include "vast/system/fwd.hpp"
 
 #include <caf/fwd.hpp>
 
 namespace vast::system {
 
-/// Reads query from input file, STDIN or CLI arguments.
-/// @param invocation The command line in parsed form.
-/// @param file_option The option name that is used to pass the query by file
-///                    instead of as command line argument(s).
-/// @param argument_offset The number of argumetns to skip before the query.
-/// @returns The query string or an error.
-caf::expected<std::string>
-read_query(const command::invocation& invocation, std::string_view file_option,
-           size_t argument_offset = 0);
+/// Tries to spawn a new PIVOTER.
+/// @param self Points to the parent actor.
+/// @param args Configures the new actor.
+/// @returns a handle to the spawned actor on success, an error otherwise
+maybe_actor spawn_pivoter(node_actor* self, spawn_arguments& args);
 
 } // namespace vast::system

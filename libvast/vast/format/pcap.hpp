@@ -16,6 +16,7 @@
 #include "vast/address.hpp"
 #include "vast/concept/hashable/hash_append.hpp"
 #include "vast/concept/hashable/xxhash.hpp"
+#include "vast/defaults.hpp"
 #include "vast/detail/operators.hpp"
 #include "vast/flow.hpp"
 #include "vast/format/reader.hpp"
@@ -110,6 +111,8 @@ private:
 /// A PCAP writer.
 class writer : public format::writer {
 public:
+  using defaults = vast::defaults::export_::pcap;
+
   writer() = default;
 
   /// Constructs a PCAP writer.

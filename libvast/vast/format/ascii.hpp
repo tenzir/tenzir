@@ -13,12 +13,15 @@
 
 #pragma once
 
+#include "vast/defaults.hpp"
 #include "vast/format/ostream_writer.hpp"
 
 namespace vast::format::ascii {
 
 class writer : public format::ostream_writer {
 public:
+  using defaults = vast::defaults::export_::ascii;
+
   using super = format::ostream_writer;
 
   using super::super;

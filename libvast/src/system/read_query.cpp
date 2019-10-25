@@ -38,15 +38,16 @@ using namespace std::chrono_literals;
 
 namespace vast::system {
 
-caf::expected<std::string> read_query(const command::invocation& invocation,
-                                      std::string_view option_name) {
-  VAST_TRACE(invocation, option_name);
+caf::expected<std::string>
+read_query(const command::invocation& invocation, std::string_view file_option,
+           size_t argument_offset) {
+  VAST_TRACE(invocation, file_option);
   std::string result;
   auto assign_query = [&](std::istream& in) {
     result.assign(std::istreambuf_iterator<char>{in},
                   std::istreambuf_iterator<char>{});
   };
-  if (auto fname = caf::get_if<std::string>(&invocation.options, option_name)) {
+  if (auto fname = caf::get_if<std::string>(&invocation.options, file_option)) {
     // Sanity check.
     if (!invocation.arguments.empty())
       return make_error(ec::parse_error, "got a query on the command line "
@@ -65,7 +66,7 @@ caf::expected<std::string> read_query(const command::invocation& invocation,
     assign_query(std::cin);
   } else {
     // Assemble expression from all remaining arguments.
-    result = detail::join(invocation.arguments.begin(),
+    result = detail::join(invocation.arguments.begin() + argument_offset,
                           invocation.arguments.end(), " ");
   }
   if (result.empty())

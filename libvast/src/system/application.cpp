@@ -29,6 +29,7 @@
 #include "vast/system/count_command.hpp"
 #include "vast/system/generator_command.hpp"
 #include "vast/system/infer_command.hpp"
+#include "vast/system/pivot_command.hpp"
 #include "vast/system/raft.hpp"
 #include "vast/system/reader_command.hpp"
 #include "vast/system/remote_command.hpp"
@@ -44,6 +45,14 @@
 namespace vast::system {
 
 namespace {
+
+auto make_pcap_options(std::string_view category) {
+  return opts(category)
+    .add<std::string>("write,w", "path to write events to")
+    .add<bool>("uds,d", "treat -w as UNIX domain socket to connect to")
+    .add<size_t>("flush-interval,f", "flush to disk after this many "
+                                     "packets");
+}
 
 auto make_root_command(std::string_view path) {
   // We're only interested in the application name, not in its path. For
@@ -89,25 +98,20 @@ auto make_export_command() {
       .add<std::string>("read,r", "path for reading the query"));
   export_->add_subcommand("zeek", "exports query results in Zeek format",
                           documentation::vast_export_zeek,
-                          sink_opts("?export->zeek"));
+                          sink_opts("?export.zeek"));
   export_->add_subcommand("csv", "exports query results in CSV format",
                           documentation::vast_export_csv,
-                          sink_opts("?export->csv"));
+                          sink_opts("?export.csv"));
   export_->add_subcommand("ascii", "exports query results in ASCII format",
                           documentation::vast_export_ascii,
-                          sink_opts("?export->ascii"));
+                          sink_opts("?export.ascii"));
   export_->add_subcommand("json", "exports query results in JSON format",
                           documentation::vast_export_json,
-                          sink_opts("?export->json"));
+                          sink_opts("?export.json"));
 #ifdef VAST_HAVE_PCAP
-  export_->add_subcommand(
-    "pcap", "exports query results in PCAP format",
-    documentation::vast_export_pcap,
-    opts("?export")
-      .add<std::string>("write,w", "path to write events to")
-      .add<bool>("uds,d", "treat -w as UNIX domain socket to connect to")
-      .add<size_t>("flush-interval,f", "flush to disk after this many "
-                                       "packets"));
+  export_->add_subcommand("pcap", "exports query results in PCAP format",
+                          documentation::vast_export_pcap,
+                          make_pcap_options("?export.pcap"));
 #endif
   return export_;
 }
@@ -179,6 +183,13 @@ auto make_kill_command() {
 auto make_peer_command() {
   return std::make_unique<command>("peer", "peers with another node", "",
                                    opts(), false);
+}
+
+auto make_pivot_command() {
+  auto pivot = std::make_unique<command>(
+    "pivot", "extracts related events of a given type",
+    documentation::vast_pivot, make_pcap_options("?pivot"));
+  return pivot;
 }
 
 auto make_send_command() {
@@ -330,6 +341,7 @@ auto make_command_factory() {
      reader_command<format::zeek::reader, defaults::import::zeek>},
     {"kill", remote_command},
     {"peer", remote_command},
+    {"pivot", pivot_command},
     {"send", remote_command},
     {"spawn accountant", remote_command},
     {"spawn archive", remote_command},
@@ -365,6 +377,7 @@ make_application(std::string_view path) {
   root->add_subcommand(make_import_command());
   root->add_subcommand(make_kill_command());
   root->add_subcommand(make_peer_command());
+  root->add_subcommand(make_pivot_command());
   root->add_subcommand(make_send_command());
   root->add_subcommand(make_spawn_command());
   root->add_subcommand(make_start_command());
@@ -421,6 +434,6 @@ command::opts_builder sink_opts(std::string_view category) {
 
 command::opts_builder opts(std::string_view category) {
   return command::opts(category);
-};
+}
 
 } // namespace vast::system

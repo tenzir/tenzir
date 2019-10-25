@@ -19,6 +19,7 @@
 #include "vast/concept/parseable/vast/address.hpp"
 #include "vast/concept/parseable/vast/subnet.hpp"
 #include "vast/data.hpp"
+#include "vast/defaults.hpp"
 #include "vast/detail/line_range.hpp"
 #include "vast/detail/string.hpp"
 #include "vast/filesystem.hpp"
@@ -279,6 +280,8 @@ private:
 /// A Zeek writer.
 class writer : public format::writer {
 public:
+  using defaults = vast::defaults::export_::zeek;
+
   writer() = default;
 
   writer(writer&&) = default;

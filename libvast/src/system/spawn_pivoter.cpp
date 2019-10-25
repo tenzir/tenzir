@@ -11,22 +11,23 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#pragma once
+#include "vast/system/spawn_pivoter.hpp"
 
-#include "vast/command.hpp"
-
-#include <caf/fwd.hpp>
+#include "vast/detail/unbox_var.hpp"
+#include "vast/logger.hpp"
+#include "vast/system/pivoter.hpp"
+#include "vast/system/spawn_arguments.hpp"
 
 namespace vast::system {
 
-/// Reads query from input file, STDIN or CLI arguments.
-/// @param invocation The command line in parsed form.
-/// @param file_option The option name that is used to pass the query by file
-///                    instead of as command line argument(s).
-/// @param argument_offset The number of argumetns to skip before the query.
-/// @returns The query string or an error.
-caf::expected<std::string>
-read_query(const command::invocation& invocation, std::string_view file_option,
-           size_t argument_offset = 0);
+maybe_actor spawn_pivoter(node_actor* self, spawn_arguments& args) {
+  VAST_TRACE(VAST_ARG(args));
+  auto& arguments = args.invocation.arguments;
+  auto target_name = arguments[0];
+  // Parse given expression.
+  auto query_begin = std::next(arguments.begin());
+  VAST_UNBOX_VAR(expr, normalized_and_validated(query_begin, arguments.end()));
+  return self->spawn(pivoter, self, target_name, std::move(expr));
+}
 
 } // namespace vast::system

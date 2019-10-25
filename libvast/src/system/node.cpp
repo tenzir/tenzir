@@ -35,6 +35,7 @@
 #include "vast/system/spawn_index.hpp"
 #include "vast/system/spawn_node.hpp"
 #include "vast/system/spawn_or_connect_to_node.hpp"
+#include "vast/system/spawn_pivoter.hpp"
 #include "vast/system/spawn_profiler.hpp"
 #include "vast/system/spawn_sink.hpp"
 #include "vast/system/spawn_source.hpp"
@@ -253,6 +254,7 @@ auto make_component_factory() {
     {"spawn importer", lift_component_factory<spawn_importer>()},
     {"spawn index", lift_component_factory<spawn_index>()},
     {"spawn consensus", lift_component_factory<spawn_consensus>()},
+    {"spawn pivoter", lift_component_factory<spawn_pivoter>()},
     {"spawn profiler", lift_component_factory<spawn_profiler>()},
     {"spawn source pcap", lift_component_factory<spawn_pcap_source>()},
     {"spawn source zeek", lift_component_factory<spawn_zeek_source>()},
@@ -280,6 +282,7 @@ auto make_command_factory() {
     {"spawn exporter", node_state::spawn_command},
     {"spawn importer", node_state::spawn_command},
     {"spawn index", node_state::spawn_command},
+    {"spawn pivoter", node_state::spawn_command},
     {"spawn sink ascii", node_state::spawn_command},
     {"spawn sink csv", node_state::spawn_command},
     {"spawn sink json", node_state::spawn_command},

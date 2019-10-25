@@ -13,20 +13,20 @@
 
 #pragma once
 
-#include <caf/fwd.hpp>
-#include <caf/none.hpp>
-
-#include "vast/config.hpp"
-
 #include "vast/concept/parseable/core/rule.hpp"
 #include "vast/concept/printable/core.hpp"
 #include "vast/concept/printable/numeric.hpp"
 #include "vast/concept/printable/string.hpp"
 #include "vast/concept/printable/vast/data.hpp"
+#include "vast/config.hpp"
+#include "vast/defaults.hpp"
 #include "vast/detail/line_range.hpp"
 #include "vast/format/ostream_writer.hpp"
 #include "vast/format/single_layout_reader.hpp"
 #include "vast/schema.hpp"
+
+#include <caf/fwd.hpp>
+#include <caf/none.hpp>
 
 namespace vast::format::csv {
 
@@ -38,6 +38,8 @@ struct options {
 
 class writer : public format::ostream_writer {
 public:
+  using defaults = vast::defaults::export_::csv;
+
   using super = format::ostream_writer;
 
   using super::super;

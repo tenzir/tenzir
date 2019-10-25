@@ -160,8 +160,6 @@ caf::settings exporter_state::status() {
 
 behavior exporter(stateful_actor<exporter_state>* self, expression expr,
                   query_options options) {
-  auto eu = self->system().dummy_execution_unit();
-  self->state.sink = actor_pool::make(eu, actor_pool::broadcast());
   if (auto a = self->system().registry().get(accountant_atom::value)) {
     self->state.accountant = actor_cast<accountant_type>(a);
     self->send(self->state.accountant, announce_atom::value, self->name());
@@ -178,7 +176,6 @@ behavior exporter(stateful_actor<exporter_state>* self, expression expr,
         report_statistics(self);
       // Sending 0 to the index means dropping further results.
       self->send<message_priority::high>(st.index, st.id, 0);
-      self->send(st.sink, sys_atom::value, delete_atom::value);
       self->quit(msg.reason);
     }
   );
@@ -363,7 +360,7 @@ behavior exporter(stateful_actor<exporter_state>* self, expression expr,
     },
     [=](sink_atom, const actor& sink) {
       VAST_DEBUG(self, "registers sink", sink);
-      self->send(self->state.sink, sys_atom::value, put_atom::value, sink);
+      self->state.sink = sink;
       self->monitor(self->state.sink);
     },
     [=](importer_atom, const std::vector<actor>& importers) {
