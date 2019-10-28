@@ -23,16 +23,18 @@ popd || exit 1
 # Configure VAST build
 ./configure "${@}" --build-dir="${WORKING_DIR}/VAST" --extra-flags="-ftime-trace"
 
-# Start the build capture
-${CBA} --start "${WORKING_DIR}/VAST"
+# When not on master, build first, then touch the changed files
+if [ "$(git rev-parse --abbrev-ref HEAD)" != "master" ]; then
+  cmake --build "${WORKING_DIR}/VAST" -j | grep -v "Time trace\|tracing"
+  git diff --name-only "$(git merge-base origin/master HEAD)" | xargs touch
+fi
 
-# Build VAST
+# Start the build capture and build VAST
+${CBA} --start "${WORKING_DIR}/VAST"
 cmake --build "${WORKING_DIR}/VAST" -j | grep -v "Time trace\|tracing"
 
-# Stop the build capture
+# Stop the build capture and analyze the build
 ${CBA} --stop "${WORKING_DIR}/VAST" "${WORKING_DIR}/time-trace.json"
-
-# Run the build analysis
 ${CBA} --analyze "${WORKING_DIR}/time-trace.json" | tee "time-trace-$(date +%s).txt"
 
 # Delete the working directory
