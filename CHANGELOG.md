@@ -10,6 +10,9 @@ Every entry has a category for which we use the following visual abbreviations:
 
 ## [Unreleased]
 
+- 🎁 The `export null` command retrieves data, but never prints anything. Its
+  main purpose is to make benchmarking VAST easier and faster.
+
 - 🔄 The query language has been extended to support expression of the form
   `X == /pattern/`, where `X` is a compatible LHS extractor. Previously,
   patterns only supports the match operator `~`. The two operators have the

@@ -23,6 +23,7 @@
 #include "vast/format/json.hpp"
 #include "vast/format/json/suricata.hpp"
 #include "vast/format/mrt.hpp"
+#include "vast/format/null.hpp"
 #include "vast/format/test.hpp"
 #include "vast/format/zeek.hpp"
 #include "vast/system/configuration.hpp"
@@ -108,6 +109,10 @@ auto make_export_command() {
   export_->add_subcommand("json", "exports query results in JSON format",
                           documentation::vast_export_json,
                           sink_opts("?export.json"));
+  export_->add_subcommand("null",
+                          "exports query without printing them (debug option)",
+                          documentation::vast_export_null,
+                          sink_opts("?export.null"));
 #ifdef VAST_HAVE_PCAP
   export_->add_subcommand("pcap", "exports query results in PCAP format",
                           documentation::vast_export_pcap,
@@ -317,6 +322,8 @@ auto make_command_factory() {
     {"export csv", writer_command<format::csv::writer, defaults::export_::csv>},
     {"export json",
      writer_command<format::json::writer, defaults::export_::json>},
+    {"export null",
+     writer_command<format::null::writer, defaults::export_::null>},
 #ifdef VAST_HAVE_PCAP
     {"export pcap", pcap_writer_command},
 #endif

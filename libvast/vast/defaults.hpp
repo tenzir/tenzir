@@ -208,6 +208,15 @@ struct json {
   static constexpr auto write = shared::write;
 };
 
+/// Contains settings for the null subcommand.
+struct null {
+  /// Nested category in config files for this subcommand.
+  static constexpr const char* category = "export.null";
+
+  /// Path for writing query results.
+  static constexpr auto write = shared::write;
+};
+
 /// Contains settings for the pcap subcommand.
 struct pcap {
   /// Nested category in config files for this subcommand.
