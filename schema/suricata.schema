@@ -94,7 +94,7 @@ type suricata.dns = record{
   dns: record{
     type: enum{answer, query},
     id: count,
-    flags: count,
+    flags: string,
     rrname: string,
     rrtype: string,
     rcode: string,
@@ -201,6 +201,31 @@ type suricata.netflow = record{
     age: count
   },
   app_proto: string
+}
+
+type suricata.smtp =record{
+  timestamp: time #timestamp,
+  flow_id: count,
+  pcap_cnt: count,
+  src_ip: addr,
+  src_port: port,
+  dest_ip: addr,
+  dest_port: port,
+  proto: string,
+  community_id: string,
+  tx_id: count,
+  smtp: record{
+    helo: string,
+    mail_from: string,
+    rcpt_to: vector<string>
+  },
+  email: record{
+    status: string,
+    from: string,
+    to: vector<string>,
+    attachment: vector<string>,
+	url:  vector<string>
+  }
 }
 
 type suricata.tls = record{
