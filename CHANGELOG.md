@@ -10,6 +10,9 @@ Every entry has a category for which we use the following visual abbreviations:
 
 ## [Unreleased]
 
+- 🎁 The default schema for Suricata has been updated to support the new
+  `suricata.smtp` event type in Suricata 5.
+
 - 🎁 The `export null` command retrieves data, but never prints anything. Its
   main purpose is to make benchmarking VAST easier and faster.
 
