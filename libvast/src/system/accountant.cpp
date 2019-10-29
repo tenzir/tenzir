@@ -106,10 +106,10 @@ accountant_state::accountant_state(accountant_actor* self) : self{self} {
 }
 
 void accountant_state::command_line_heartbeat() {
-#if VAST_LOG_LEVEL >= CAF_LOG_LEVEL_INFO
+#if VAST_LOG_LEVEL >= CAF_LOG_LEVEL_DEBUG
   if (auto rate = accumulator.rate_per_sec(); std::isfinite(rate))
-    VAST_INFO(self, "ingested", accumulator.events, "events at a rate of",
-              static_cast<uint64_t>(rate) << "events/sec");
+    VAST_DEBUG(self, "registered", accumulator.events, "events at a rate of",
+               static_cast<uint64_t>(rate) << "events/sec");
 #endif
   accumulator = {};
 }
