@@ -13,14 +13,16 @@
 
 #include "vast/system/remote_command.hpp"
 
-#include <caf/scoped_actor.hpp>
-
-#include <iostream>
-
 #include "vast/detail/narrow.hpp"
 #include "vast/error.hpp"
 #include "vast/logger.hpp"
-#include "vast/system/connect_to_node.hpp"
+#include "vast/scope_linked.hpp"
+#include "vast/system/spawn_or_connect_to_node.hpp"
+
+#include <caf/actor.hpp>
+#include <caf/scoped_actor.hpp>
+
+#include <iostream>
 
 using namespace std::chrono_literals;
 
@@ -32,10 +34,13 @@ remote_command(const command::invocation& invocation, caf::actor_system& sys) {
   // Get a convenient and blocking way to interact with actors.
   caf::scoped_actor self{sys};
   // Get VAST node.
-  auto node_opt = connect_to_node(self, invocation.options);
-  if (!node_opt)
-    return caf::make_message(std::move(node_opt.error()));
-  auto node = std::move(*node_opt);
+  auto node_opt
+    = spawn_or_connect_to_node(self, invocation.options, content(sys.config()));
+  if (auto err = caf::get_if<caf::error>(&node_opt))
+    return caf::make_message(std::move(*err));
+  auto& node = caf::holds_alternative<caf::actor>(node_opt)
+                 ? caf::get<caf::actor>(node_opt)
+                 : caf::get<scope_linked_actor>(node_opt).get();
   self->monitor(node);
   // Delegate invocation to node.
   caf::error err;
