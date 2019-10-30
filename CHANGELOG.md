@@ -10,6 +10,8 @@ Every entry has a category for which we use the following visual abbreviations:
 
 ## [Unreleased]
 
+## [0.2] - 2019-10-30
+
 - 🎁 The default schema for Suricata has been updated to support the new
   `suricata.smtp` event type in Suricata 5.
 
@@ -220,3 +222,4 @@ Every entry has a category for which we use the following visual abbreviations:
 This is the first official release.
 
 [0.1]: https://github.com/vast-io/vast/releases/tag/0.1
+[0.2]: https://github.com/vast-io/vast/releases/tag/0.2
