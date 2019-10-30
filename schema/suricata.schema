@@ -7,6 +7,7 @@ type suricata.component.common = record{
   dest_ip: addr,
   dest_port: port,
   proto: string,
+  event_type: string,
   community_id: string
 }
 
@@ -36,6 +37,7 @@ type suricata.alert = record{
   dest_ip: addr,
   dest_port: port,
   proto: string,
+  event_type: string,
   community_id: string,
   alert: record{
     app_proto: string,
@@ -66,6 +68,7 @@ type suricata.dhcp = record{
   dest_ip: addr,
   dest_port: port,
   proto: string,
+  event_type: string,
   community_id: string,
   dhcp: record{
     type: string,
@@ -90,6 +93,7 @@ type suricata.dns = record{
   dest_ip: addr,
   dest_port: port,
   proto: string,
+  event_type: string,
   community_id: string,
   dns: record{
     type: enum{answer, query},
@@ -113,6 +117,7 @@ type suricata.http = record{
   dest_ip: addr,
   dest_port: port,
   proto: string,
+  event_type: string,
   community_id: string,
   http: record{
     hostname: string,
@@ -139,6 +144,7 @@ type suricata.fileinfo = record{
   dest_ip: addr,
   dest_port: port,
   proto: string,
+  event_type: string,
   community_id: string,
   fileinfo: record{
     filename: string,
@@ -178,6 +184,7 @@ type suricata.flow = record{
   dest_ip: addr,
   dest_port: port,
   proto: string,
+  event_type: string,
   community_id: string,
   flow: suricata.component.flow,
   app_proto: string
@@ -192,6 +199,7 @@ type suricata.netflow = record{
   dest_ip: addr,
   dest_port: port,
   proto: string,
+  event_type: string,
   community_id: string,
   netflow: record{
     pkts: count,
@@ -212,6 +220,7 @@ type suricata.smtp =record{
   dest_ip: addr,
   dest_port: port,
   proto: string,
+  event_type: string,
   community_id: string,
   tx_id: count,
   smtp: record{
@@ -237,6 +246,7 @@ type suricata.tls = record{
   dest_ip: addr,
   dest_port: port,
   proto: string,
+  event_type: string,
   community_id: string,
   tls: record{
     subject: string,
