@@ -69,6 +69,7 @@ set(libvast_sources
     src/format/test.cpp
     src/format/writer.cpp
     src/format/zeek.cpp
+    src/hash_index.cpp
     src/http.cpp
     src/icmp.cpp
     src/ids.cpp
@@ -274,6 +275,7 @@ set(tests
     test/format/writer.cpp
     test/format/zeek.cpp
     test/hash.cpp
+    test/hash_index.cpp
     test/http.cpp
     test/ids.cpp
     test/iterator.cpp

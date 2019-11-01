@@ -88,15 +88,19 @@ public:
 
   virtual caf::error deserialize(caf::deserializer& source);
 
+protected:
+  const ewah_bitmap& mask() const;
+  const ewah_bitmap& none() const;
+
 private:
   virtual bool append_impl(data_view x, id pos) = 0;
 
   virtual caf::expected<ids>
   lookup_impl(relational_operator op, data_view x) const = 0;
 
-  ewah_bitmap mask_;
-  ewah_bitmap none_;
-  const vast::type type_;
+  ewah_bitmap mask_;      ///< The position of all values, including nil.
+  ewah_bitmap none_;      ///< The positions of nil values.
+  const vast::type type_; ///< The type of this value index.
 };
 
 /// @relates value_index

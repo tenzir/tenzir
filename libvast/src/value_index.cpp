@@ -79,6 +79,14 @@ caf::error value_index::deserialize(caf::deserializer& source) {
   return source(mask_, none_);
 }
 
+const ewah_bitmap& value_index::mask() const {
+  return mask_;
+}
+
+const ewah_bitmap& value_index::none() const {
+  return none_;
+}
+
 caf::error inspect(caf::serializer& sink, const value_index& x) {
   return x.serialize(sink);
 }

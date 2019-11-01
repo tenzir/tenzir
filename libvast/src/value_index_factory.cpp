@@ -13,16 +13,17 @@
 
 #include "vast/value_index_factory.hpp"
 
-#include <caf/optional.hpp>
-
 #include "vast/attribute.hpp"
 #include "vast/base.hpp"
 #include "vast/concept/parseable/numeric/integral.hpp"
 #include "vast/concept/parseable/to.hpp"
 #include "vast/concept/parseable/vast/base.hpp"
 #include "vast/detail/type_traits.hpp"
+#include "vast/hash_index.hpp"
 #include "vast/type.hpp"
 #include "vast/value_index.hpp"
+
+#include <caf/optional.hpp>
 
 namespace vast {
 namespace {
@@ -75,6 +76,18 @@ auto add_arithmetic_index_factory() {
   return factory<value_index>::add(T{}, make_arithmetic<T>);
 }
 
+auto add_string_index_factory() {
+  static auto f = [](type x) -> value_index_ptr {
+    if (has_attribute(x, "id"))
+      // TODO: make the number of hash digest bytes configurable. At this point
+      // we use 40 bits, which produces collisions after ~2^20 elements.
+      return std::make_unique<hash_index>(std::move(x), 5);
+    auto max_size = extract_max_size(x);
+    return std::make_unique<string_index>(std::move(x), max_size);
+  };
+  return factory<value_index>::add(string_type{}, f);
+}
+
 template <class T, class Index>
 auto add_container_index_factory() {
   static auto f = [](type x) -> value_index_ptr {
@@ -97,7 +110,7 @@ void factory_traits<value_index>::initialize() {
   add_value_index_factory<address_type, address_index>();
   add_value_index_factory<subnet_type, subnet_index>();
   add_value_index_factory<port_type, port_index>();
-  add_container_index_factory<string_type, string_index>();
+  add_string_index_factory();
   add_container_index_factory<vector_type, sequence_index>();
   add_container_index_factory<set_type, sequence_index>();
 }
