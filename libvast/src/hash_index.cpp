@@ -59,18 +59,12 @@ bool hash_index::append_impl(data_view x, id) {
 
 caf::expected<ids>
 hash_index::lookup_impl(relational_operator op, data_view x) const {
+  VAST_ASSERT(rank(this->mask()) == num_digests_);
   if (!(op == equal || op == not_equal))
     return make_error(ec::unsupported_operator, op);
   auto digest = hash(x);
   ewah_bitmap result;
-  // FIXME: getting the IDs for all non-nil values is a bit expensive at the
-  // momement, because the ID sets in the base class are not disjoint. Hence,
-  // we need to perform unnecessary computation here to get the ID set for
-  // all non-nil values. Ideally, the base class provides this ID set without
-  // the need for extra computation.
-  auto not_nil = this->mask() - this->none();
-  VAST_ASSERT(rank(not_nil) == num_digests_);
-  auto rng = select(not_nil);
+  auto rng = select(this->mask());
   if (rng.done())
     return result;
   for (size_t i = 0, last_match = 0; i < num_digests_; ++i) {

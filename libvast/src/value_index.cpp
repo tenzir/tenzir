@@ -33,38 +33,51 @@ caf::expected<void> value_index::append(data_view x) {
 }
 
 caf::expected<void> value_index::append(data_view x, id pos) {
-  auto off = mask_.size();
+  auto off = offset();
   if (pos < off)
     // Can only append at the end
     return make_error(ec::unspecified, pos, '<', off);
   if (caf::holds_alternative<caf::none_t>(x)) {
     none_.append_bits(false, pos - none_.size());
     none_.append_bit(true);
-  } else if (!append_impl(x, pos)) {
-    return make_error(ec::unspecified, "append_impl");
+    return caf::no_error;
   }
-  mask_.append_bits(false, pos - off);
+  // TODO: let append_impl return caf::error
+  if (!append_impl(x, pos))
+    return make_error(ec::unspecified, "append_impl");
+  mask_.append_bits(false, pos - mask_.size());
   mask_.append_bit(true);
-  return {};
+  return caf::no_error;
 }
 
 caf::expected<ids>
 value_index::lookup(relational_operator op, data_view x) const {
   if (caf::holds_alternative<caf::none_t>(x)) {
-    if (op == equal)
-      return none_ & mask_;
-    if (op == not_equal)
-      return ~none_ & mask_;
+    if (op == equal) {
+      auto result = none_;
+      if (result.size() < mask_.size())
+        result.append_bits(false, mask_.size() - result.size());
+      return result;
+    }
+    if (op == not_equal) {
+      auto result = ~none_;
+      if (result.size() < mask_.size())
+        result.append_bits(true, mask_.size() - result.size());
+      return result;
+    }
     return make_error(ec::unsupported_operator, op);
   }
   auto result = lookup_impl(op, x);
   if (!result)
     return result;
-  return (*result - none_) & mask_;
+  *result &= mask_;
+  if (none_.size() > mask_.size())
+    result->append_bits(false, none_.size() - mask_.size());
+  return std::move(*result);
 }
 
 value_index::size_type value_index::offset() const {
-  return mask_.size();
+  return std::max(none_.size(), mask_.size());
 }
 
 const type& value_index::type() const {
