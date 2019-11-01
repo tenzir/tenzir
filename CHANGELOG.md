@@ -10,6 +10,12 @@ Every entry has a category for which we use the following visual abbreviations:
 
 ## [Unreleased]
 
+- 🎁 When a record field of type `string` has the `#index=hash` attribute,
+  VAST will choose an optimized index implementation. This new index type only
+  supports (in)equality queries and is therefore intended to be used with
+  opaque types, such as unique identifiers or random strings.
+  [#632](https://github.com/tenzir/vast/pull/632)
+
 - 🐞 A race condition in the index logic was able to lead to incomplete or empty
   result sets for `vast export`. [#703](https://github.com/tenzir/vast/pull/703)
 
