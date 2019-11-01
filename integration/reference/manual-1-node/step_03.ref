@@ -1,0 +1,7 @@
+{
+  "layouts": {
+    "pcap.packet": {
+      "count": 1000
+    }
+  }
+}
