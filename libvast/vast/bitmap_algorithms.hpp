@@ -478,10 +478,13 @@ public:
     rng_.template select<Bit>();
   }
 
+  void next(size_t k) {
+    rng_.template select<Bit>(k);
+  }
+
   void next_from(id x) {
     rng_.template select_from<Bit>(x);
   }
-
 
 private:
   bitwise_range<BitRange> rng_;
