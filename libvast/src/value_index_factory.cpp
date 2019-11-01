@@ -29,17 +29,19 @@ namespace {
 
 template <class T>
 size_t extract_max_size(const T& x, size_t default_value = 1024) {
-  if (auto a = extract_attribute(x, "max_size"))
-    if (auto max_size = to<size_t>(*a))
-      return *max_size;
+  if (auto a = find_attribute(x, "max_size"))
+    if (auto value = a->value)
+      if (auto max_size = to<size_t>(*value))
+        return *max_size;
   return default_value;
 }
 
 template <class T>
 optional<base> parse_base(const T& x) {
-  if (auto a = extract_attribute(x, "base")) {
-    if (auto b = to<base>(*a))
-      return *b;
+  if (auto a = find_attribute(x, "base")) {
+    if (auto value = a->value)
+      if (auto b = to<base>(*value))
+        return *b;
     return {};
   }
   // Use base 8 by default, as it yields the best performance on average for
