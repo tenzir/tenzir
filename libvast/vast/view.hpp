@@ -90,6 +90,11 @@ public:
   bool search(std::string_view x) const;
   std::string_view string() const;
 
+  template <class Hasher>
+  friend void hash_append(Hasher& h, pattern_view x) {
+    hash_append(h, x.pattern_);
+  }
+
 private:
   std::string_view pattern_;
 };
@@ -217,6 +222,18 @@ public:
 
   bool empty() const {
     return size() == 0;
+  }
+
+  template <class Hasher>
+  friend void hash_append(Hasher& h, container_view_handle xs) {
+    if (!xs) {
+      hash_append(h, false);
+      return;
+    }
+    hash_append(h, true);
+    for (auto x : *xs)
+      hash_append(h, x);
+    hash_append(h, xs->size());
   }
 
 private:

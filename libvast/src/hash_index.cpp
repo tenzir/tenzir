@@ -27,10 +27,7 @@ namespace vast {
 namespace {
 
 auto hash(data_view x) {
-  // FIXME: Support all data types, not just strings.
-  auto str = caf::get_if<std::string_view>(&x);
-  VAST_ASSERT(str);
-  return uhash<xxhash64>{}(*str);
+  return uhash<xxhash64>{}(x);
 }
 
 } // namespace
