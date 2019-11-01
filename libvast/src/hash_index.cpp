@@ -13,9 +13,9 @@
 
 #include "vast/hash_index.hpp"
 
-#include "vast/detail/assert.hpp"
 #include "vast/concept/hashable/uhash.hpp"
 #include "vast/concept/hashable/xxhash.hpp"
+#include "vast/detail/assert.hpp"
 
 #include <caf/deserializer.hpp>
 #include <caf/serializer.hpp>
@@ -33,7 +33,7 @@ auto hash(data_view x) {
 } // namespace
 
 hash_index::hash_index(vast::type t, size_t digest_bytes)
-    : value_index{std::move(t)}, digest_bytes_{digest_bytes} {
+  : value_index{std::move(t)}, digest_bytes_{digest_bytes} {
   VAST_ASSERT(digest_bytes > 0);
   VAST_ASSERT(digest_bytes <= 8);
 }
