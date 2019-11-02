@@ -25,6 +25,8 @@
 
 #include <caf/optional.hpp>
 
+using namespace std::string_view_literals;
+
 namespace vast {
 namespace {
 
@@ -78,10 +80,13 @@ auto add_arithmetic_index_factory() {
 
 auto add_string_index_factory() {
   static auto f = [](type x) -> value_index_ptr {
-    if (has_attribute(x, "id"))
-      // TODO: make the number of hash digest bytes configurable. At this point
-      // we use 40 bits, which produces collisions after ~2^20 elements.
-      return std::make_unique<hash_index>(std::move(x), 5);
+    if (auto a = find_attribute(x, "index"))
+      if (auto value = a->value)
+        if (*value == "hash"sv)
+          // TODO: make the number of hash digest bytes configurable. At this
+          // point we use 40 bits, which produces collisions after ~2^20
+          // elements.
+          return std::make_unique<hash_index<5>>(std::move(x));
     auto max_size = extract_max_size(x);
     return std::make_unique<string_index>(std::move(x), max_size);
   };
