@@ -40,12 +40,15 @@ hash_index::hash_index(vast::type t, size_t digest_bytes)
 
 caf::error hash_index::serialize(caf::serializer& sink) const {
   return caf::error::eval([&] { return value_index::serialize(sink); },
-                          [&] { return sink(digests_); });
+                          [&] {
+                            return sink(digests_, digest_bytes_, num_digests_);
+                          });
 }
 
 caf::error hash_index::deserialize(caf::deserializer& source) {
-  return caf::error::eval([&] { return value_index::deserialize(source); },
-                          [&] { return source(digests_); });
+  return caf::error::eval(
+    [&] { return value_index::deserialize(source); },
+    [&] { return source(digests_, digest_bytes_, num_digests_); });
 }
 
 bool hash_index::append_impl(data_view x, id) {
