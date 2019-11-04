@@ -87,7 +87,7 @@ macos_task:
     DESTDIR: "$PWD"
     PREFIX: /usr/local/opt/tenzir
   setup_script:
-    - HOMEBREW_NO_AUTO_UPDATE=1 brew install openssl cmake git ninja python libpcap jq tcpdump rsync pandoc
+    - HOMEBREW_NO_AUTO_UPDATE=1 brew install openssl cmake git ninja python libpcap jq tcpdump rsync pandoc apache-arrow
   <<: *build_definition
 
 release_task:

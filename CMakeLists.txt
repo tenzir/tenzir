@@ -610,6 +610,22 @@ if (GPERFTOOLS_FOUND)
   endif ()
 endif ()
 
+if (NOT ARROW_ROOT_DIR AND VAST_PREFIX)
+    set(ARROW_ROOT_DIR ${VAST_PREFIX})
+endif ()
+find_package(arrow QUIET)
+find_package(plasma QUIET)
+if (ARROW_FOUND AND PLASMA_FOUND)
+  set(VAST_HAVE_ARROW true)
+  if (NOT BUILD_SHARED_LIBS)
+    provide_find_module(arrow)
+    provide_find_module(plasma)
+    string(APPEND VAST_FIND_DEPENDENCY_LIST
+           "\nfind_package(arrow REQUIRED QUIET)"
+           "\nfind_package(plasma REQUIRED QUIET)")
+  endif ()
+endif ()
+
 find_package(Doxygen QUIET)
 find_package(Pandoc QUIET)
 
@@ -654,6 +670,7 @@ file(
        python3 -m venv \"$env_dir\"
      fi
      . \"$env_dir/bin/activate\"
+     pip install --upgrade pip
      pip install -r \"$base_dir/requirements.txt\"
      python \"$base_dir/integration.py\" --app \"$app\" -d vast-integration-test"
   )
@@ -773,6 +790,12 @@ endif ()
 
 display(CAF_FOUND "${caf_dir}" caf_summary)
 display(BROKER_FOUND "${broker_dir}" broker_summary)
+<<<<<<< HEAD
+=======
+display(ARROW_FOUND "${ARROW_INCLUDE_DIR}" arrow_summary)
+display(PLASMA_FOUND "${PLASMA_INCLUDE_DIR}" plasma_summary)
+display(SNAPPY_FOUND "${SNAPPY_INCLUDE_DIR}" snappy_summary)
+>>>>>>> Add arrow and plasma to CMake
 display(PCAP_FOUND "${PCAP_INCLUDE_DIR}" pcap_summary)
 display(GPERFTOOLS_FOUND "${GPERFTOOLS_INCLUDE_DIR}" perftools_summary)
 display(DOXYGEN_FOUND yes doxygen_summary)
@@ -810,6 +833,8 @@ set(
   "\nLDFLAGS:             ${LDFLAGS}"
   "\n"
   "\nCAF:                 ${caf_summary}"
+  "\nArrow:               ${arrow_summary}"
+  "\nPlasma:              ${plasma_summary}"
   "\nBroker:              ${broker_summary}"
   "\nPCAP:                ${pcap_summary}"
   "\nGperftools:          ${perftools_summary}"

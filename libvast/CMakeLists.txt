@@ -178,6 +178,13 @@ if (VAST_ENABLE_ASSERTIONS)
   target_link_libraries(libvast PUBLIC ${Backtrace_LIBRARIES})
 endif ()
 
+if (VAST_HAVE_ARROW)
+  target_include_directories(libvast PUBLIC ${ARROW_INCLUDE_DIR})
+  target_include_directories(libvast PUBLIC ${PLASMA_INCLUDE_DIR})
+  target_link_libraries(libvast PUBLIC ${ARROW_SHARED_LIB})
+  target_link_libraries(libvast PUBLIC ${PLASMA_SHARED_LIB})
+endif ()
+
 if (PCAP_FOUND)
   target_link_libraries(libvast PRIVATE pcap::pcap)
 endif ()
