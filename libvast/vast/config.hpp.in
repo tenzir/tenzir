@@ -3,6 +3,7 @@
 #cmakedefine VAST_ENABLE_ASSERTIONS
 #cmakedefine VAST_HAVE_GPERFTOOLS
 #cmakedefine VAST_HAVE_PCAP
+#cmakedefine VAST_HAVE_ARROW
 #cmakedefine VAST_HAVE_BROCCOLI
 #cmakedefine VAST_MEASUREMENT_MUTEX_WORKAROUND
 #cmakedefine VAST_USE_TCMALLOC

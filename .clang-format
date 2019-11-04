@@ -33,8 +33,10 @@ IncludeCategories:
     Priority:        2
   - Regex:           '^<caf/'
     Priority:        3
-  - Regex:           '<[[:alnum:]_.]+>'
+  - Regex:           '^<arrow/'
     Priority:        4
+  - Regex:           '<[[:alnum:]_.]+>'
+    Priority:        5
 IndentCaseLabels: true
 IndentPPDirectives: AfterHash
 IndentWidth: 2

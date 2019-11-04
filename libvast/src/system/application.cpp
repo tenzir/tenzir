@@ -39,6 +39,10 @@
 #include "vast/system/version_command.hpp"
 #include "vast/system/writer_command.hpp"
 
+#ifdef VAST_HAVE_ARROW
+#  include "vast/format/arrow.hpp"
+#endif
+
 #ifdef VAST_HAVE_PCAP
 #  include "vast/system/pcap_writer_command.hpp"
 #endif
@@ -111,6 +115,12 @@ auto make_export_command() {
                           "exports query without printing them (debug option)",
                           documentation::vast_export_null,
                           sink_opts("?export.null"));
+#ifdef VAST_HAVE_ARROW
+  // TODO add documentation
+  export_->add_subcommand("arrow", "exports query results in Arrow format", "",
+                          sink_opts("?export.arrow"));
+
+#endif
 #ifdef VAST_HAVE_PCAP
   export_->add_subcommand("pcap", "exports query results in PCAP format",
                           documentation::vast_export_pcap,
@@ -318,6 +328,10 @@ auto make_command_factory() {
      writer_command<format::json::writer, defaults::export_::json>},
     {"export null",
      writer_command<format::null::writer, defaults::export_::null>},
+#ifdef VAST_HAVE_ARROW
+    {"export arrow",
+     writer_command<format::arrow::writer, defaults::export_::arrow>},
+#endif
 #ifdef VAST_HAVE_PCAP
     {"export pcap", pcap_writer_command},
 #endif
