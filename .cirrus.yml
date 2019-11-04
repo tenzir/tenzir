@@ -40,8 +40,8 @@ style_task:
   integration_test_script: >
     if ! cmake --build build --target integration; then
       tar -czf $(cat ARTIFACT_NAME).tar.gz -C build vast-integration-test
-      scp -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -i upload_key \
-        $(cat ARTIFACT_NAME).tar.gz mule@tenzir.dfn-cert.de:integration/vast/
+      rsync --archive --compress --rsh "ssh -i upload_key -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null" \
+        --progress $(cat ARTIFACT_NAME).tar.gz mule@tenzir.dfn-cert.de:/home/mule/integration/vast/
       echo "Download with: \`scp tenzir.dfn-cert.de:/home/mule/integration/vast/$(cat ARTIFACT_NAME).tar.gz .\`"
       false
     fi
@@ -51,7 +51,8 @@ style_task:
     - cmake --build build --target package
   upload_script: >
     if [ "$CIRRUS_BRANCH" = "master" ]; then
-      scp -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -i upload_key build/$(cat PACKAGE_NAME).tar.gz mule@tenzir.dfn-cert.de:artifacts/
+      rsync --archive --compress --rsh "ssh -i upload_key -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null" \
+        --progress build/$(cat PACKAGE_NAME).tar.gz mule@tenzir.dfn-cert.de:/home/mule/artifacts/
     fi
 
 debian_task:
