@@ -59,7 +59,7 @@ debian_task:
   name: Debian
   container:
     dockerfile: .ci/debian/Dockerfile
-    cpu: 8
+    cpu: 6
     memory: 24G
   env:
     CC: gcc-8
@@ -74,7 +74,7 @@ freebsd_task:
   name: FreeBSD
   freebsd_instance:
     image: freebsd-12-0-release-amd64
-    cpu: 8
+    cpu: 6
     memory: 24G
   env:
     CC: cc
