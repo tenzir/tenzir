@@ -99,8 +99,14 @@ if ("${CMAKE_GENERATOR}" STREQUAL "Ninja" AND VAST_COLOR_NINJA)
 endif ()
 
 # Extract VERSION
-file(STRINGS "${CMAKE_CURRENT_SOURCE_DIR}/VERSION" VAST_VERSION LIMIT_COUNT 1)
-string(REPLACE "." " " version_numbers ${VAST_VERSION})
+execute_process(COMMAND "git" "describe" "--tags" "--long" "--dirty"
+  RESULT_VARIABLE git_describe_result
+  OUTPUT_VARIABLE VAST_VERSION
+  OUTPUT_STRIP_TRAILING_WHITESPACE)
+if (git_describe_result)
+  set(VAST_VERSION "0.0")
+endif ()
+string(REGEX REPLACE "\\.|-" " " version_numbers ${VAST_VERSION})
 separate_arguments(version_numbers)
 list(GET version_numbers 0 VERSION_MAJOR)
 list(GET version_numbers 1 VERSION_MINOR)
