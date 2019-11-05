@@ -34,11 +34,11 @@ style_task:
       -DCMAKE_BUILD_TYPE="$BUILD_TYPE" -DCPACK_GENERATOR=TGZ
       -DCPACK_PACKAGE_FILE_NAME="$(cat PACKAGE_NAME)"
       -DCPACK_SET_DESTDIR=ON "$CONFIGURE_FLAGS" -G Ninja
-    - cmake --build build --target all --parallel
+    - cmake --build build --target all
   unit_test_script:
-    - cmake --build build --target test --parallel
+    - cmake --build build --target test
   integration_test_script: >
-    if ! cmake --build build --target integration --parallel; then
+    if ! cmake --build build --target integration; then
       tar -czf "$(cat ARTIFACT_NAME).tar.gz" -C build vast-integration-test
       rsync --archive --compress --rsh "ssh -i upload_key -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null" \
         --progress "$(cat ARTIFACT_NAME).tar.gz" mule@tenzir.dfn-cert.de:/home/mule/integration/vast/
@@ -46,9 +46,9 @@ style_task:
       false
     fi
   install_script:
-    - cmake --build build --target install --parallel
+    - cmake --build build --target install
   package_script:
-    - cmake --build build --target package --parallel
+    - cmake --build build --target package
   upload_script: >
     if [ "$CIRRUS_BRANCH" = "master" ]; then
       rsync --archive --compress --rsh "ssh -i upload_key -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null" \
