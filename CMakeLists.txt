@@ -790,12 +790,8 @@ endif ()
 
 display(CAF_FOUND "${caf_dir}" caf_summary)
 display(BROKER_FOUND "${broker_dir}" broker_summary)
-<<<<<<< HEAD
-=======
 display(ARROW_FOUND "${ARROW_INCLUDE_DIR}" arrow_summary)
 display(PLASMA_FOUND "${PLASMA_INCLUDE_DIR}" plasma_summary)
-display(SNAPPY_FOUND "${SNAPPY_INCLUDE_DIR}" snappy_summary)
->>>>>>> Add arrow and plasma to CMake
 display(PCAP_FOUND "${PCAP_INCLUDE_DIR}" pcap_summary)
 display(GPERFTOOLS_FOUND "${GPERFTOOLS_INCLUDE_DIR}" perftools_summary)
 display(DOXYGEN_FOUND yes doxygen_summary)

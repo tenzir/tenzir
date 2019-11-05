@@ -413,8 +413,10 @@ def validate(data, set_dir):
         if not absolute.is_absolute():
             absolute = (set_dir / path).resolve()
         return absolute
+    def replace_path(raw_command):
+        return raw_command.replace('@.', str(set_dir))
     def to_command(raw_command):
-        return shlex.split(raw_command.replace('@.', str(set_dir)))
+        return shlex.split(replace_path(raw_command))
     fixture = schema.Schema(
         schema.And({
             'enter': schema.And(str, len),
@@ -428,7 +430,8 @@ def validate(data, set_dir):
                 schema.Const(schema.And(str, len)), schema.Use(to_command)),
             schema.Optional('input', default=None):
             schema.And(schema.Use(absolute_path), is_file),
-            schema.Optional('transformation', default=None): str
+            schema.Optional('transformation', default=None): 
+                schema.Use(replace_path)
         }, schema.Use(to_step)))
     guard = schema.Schema(schema.And({'guard': str}, schema.Use(guard_to_condition)))
     test = schema.Schema(
