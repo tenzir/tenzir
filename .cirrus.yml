@@ -20,7 +20,7 @@ style_task:
     - echo "$PACKAGE_NAME" > PACKAGE_NAME
     - export ARTIFACT_NAME="VAST-$CIRRUS_PR-$(uname -s)-$BUILD_TYPE-$CIRRUS_CHANGE_IN_REPO"
     - echo "$ARTIFACT_NAME" > ARTIFACT_NAME
-    - echo $UPLOAD_KEY | base64 --decode > upload_key && chmod 600 upload_key
+    - echo "$UPLOAD_KEY" | base64 --decode > upload_key && chmod 600 upload_key
     - cat PACKAGE_NAME
     - cmake --version
     - ${CXX} --version
@@ -30,18 +30,18 @@ style_task:
     - git submodule update --init aux/broker/broker
     - git -C aux/broker/broker submodule update --init 3rdparty
   build_script:
-    - cmake -Bbuild -H. -DCMAKE_INSTALL_PREFIX=$PREFIX
-      -DCMAKE_BUILD_TYPE=$BUILD_TYPE -DCPACK_GENERATOR=TGZ
+    - cmake -Bbuild -H. -DCMAKE_INSTALL_PREFIX="$PREFIX"
+      -DCMAKE_BUILD_TYPE="$BUILD_TYPE" -DCPACK_GENERATOR=TGZ
       -DCPACK_PACKAGE_FILE_NAME="$(cat PACKAGE_NAME)"
-      -DCPACK_SET_DESTDIR=ON $CONFIGURE_FLAGS -G Ninja
+      -DCPACK_SET_DESTDIR=ON "$CONFIGURE_FLAGS" -G Ninja
     - cmake --build build --target all
   unit_test_script:
     - cmake --build build --target test
   integration_test_script: >
     if ! cmake --build build --target integration; then
-      tar -czf $(cat ARTIFACT_NAME).tar.gz -C build vast-integration-test
+      tar -czf "$(cat ARTIFACT_NAME).tar.gz" -C build vast-integration-test
       rsync --archive --compress --rsh "ssh -i upload_key -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null" \
-        --progress $(cat ARTIFACT_NAME).tar.gz mule@tenzir.dfn-cert.de:/home/mule/integration/vast/
+        --progress "$(cat ARTIFACT_NAME).tar.gz" mule@tenzir.dfn-cert.de:/home/mule/integration/vast/
       echo "Download with: \`scp tenzir.dfn-cert.de:/home/mule/integration/vast/$(cat ARTIFACT_NAME).tar.gz .\`"
       false
     fi
@@ -52,7 +52,7 @@ style_task:
   upload_script: >
     if [ "$CIRRUS_BRANCH" = "master" ]; then
       rsync --archive --compress --rsh "ssh -i upload_key -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null" \
-        --progress build/$(cat PACKAGE_NAME).tar.gz mule@tenzir.dfn-cert.de:/home/mule/artifacts/
+        --progress "build/$(cat PACKAGE_NAME).tar.gz" mule@tenzir.dfn-cert.de:/home/mule/artifacts/
     fi
 
 debian_task:
@@ -96,7 +96,7 @@ macos_task:
     CXX: c++
     BUILD_TYPE: Release
     PATH: /usr/local/opt/python/libexec/bin:$PATH
-    DESTDIR: $PWD
+    DESTDIR: "$PWD"
   setup_script:
     - HOMEBREW_NO_AUTO_UPDATE=1 brew install openssl cmake git ninja python libpcap jq tcpdump
   <<: *build_definition
