@@ -116,8 +116,8 @@ auto make_export_command() {
                           documentation::vast_export_null,
                           sink_opts("?export.null"));
 #ifdef VAST_HAVE_ARROW
-  // TODO add documentation
-  export_->add_subcommand("arrow", "exports query results in Arrow format", "",
+  export_->add_subcommand("arrow", "exports query results in Arrow format",
+                          documentation::vast_export_arrow,
                           sink_opts("?export.arrow"));
 
 #endif
