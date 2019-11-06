@@ -11,21 +11,25 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#include <netinet/in.h>
-
-#include <thread>
-#include <utility>
+#include "vast/format/pcap.hpp"
 
 #include "vast/community_id.hpp"
+#include "vast/defaults.hpp"
 #include "vast/detail/assert.hpp"
 #include "vast/detail/byte_swap.hpp"
 #include "vast/error.hpp"
 #include "vast/event.hpp"
 #include "vast/filesystem.hpp"
-#include "vast/format/pcap.hpp"
 #include "vast/logger.hpp"
 #include "vast/table_slice.hpp"
 #include "vast/table_slice_builder.hpp"
+
+#include <caf/settings.hpp>
+
+#include <thread>
+#include <utility>
+
+#include <netinet/in.h>
 
 namespace vast {
 namespace format {
@@ -47,18 +51,27 @@ auto const pcap_packet_type = make_packet_type();
 
 } // namespace <anonymous>
 
-reader::reader(caf::atom_value id, const caf::settings& /*options*/,
-               std::string input, uint64_t cutoff, size_t max_flows,
-               size_t max_age, size_t expire_interval, int64_t pseudo_realtime)
-  : super(id),
-    packet_type_{pcap_packet_type},
-    cutoff_{cutoff},
-    max_flows_{max_flows},
-    max_age_{max_age},
-    expire_interval_{expire_interval},
-    pseudo_realtime_{pseudo_realtime},
-    input_{std::move(input)} {
-  // nop
+reader::reader(caf::atom_value id, const caf::settings& options,
+               std::unique_ptr<std::istream>)
+  : super(id), packet_type_{pcap_packet_type} {
+  using defaults_t = vast::defaults::import::pcap;
+  using caf::get_or;
+  std::string category = defaults_t::category;
+  input_ = get_or(options, category + ".read", defaults_t::read);
+  cutoff_ = get_or(options, category + ".cutoff", defaults_t::cutoff);
+  max_flows_ = get_or(options, category + ".max-flows", defaults_t::max_flows);
+  max_age_
+    = get_or(options, category + ".max-flow-age", defaults_t::max_flow_age);
+  expire_interval_
+    = get_or(options, category + ".flow-expiry", defaults_t::flow_expiry);
+  pseudo_realtime_ = get_or(options, category + ".pseudo-realtime-factor",
+                            defaults_t::pseudo_realtime_factor);
+}
+
+void reader::reset(std::unique_ptr<std::istream>) {
+  // This function intentionally does nothing, as libpcap expects a filename
+  // instead of an input stream. It only exists for compatibility with our
+  // reader abstraction.
 }
 
 reader::~reader() {

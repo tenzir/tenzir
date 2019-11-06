@@ -62,21 +62,10 @@ maybe_actor spawn_pcap_source([[maybe_unused]] caf::local_actor* self,
 #ifndef VAST_HAVE_PCAP
   return make_error(ec::unspecified, "not compiled with pcap support");
 #else // VAST_HAVE_PCAP
-  auto opt = [&](caf::string_view key, auto default_value) {
-    return caf::get_or(args.invocation.options, key, default_value);
-  };
   using defaults_t = defaults::import::pcap;
-  std::string category = defaults_t::category;
-  return spawn_generic_source<
-    format::pcap::reader>(self, args, opt(category + ".read", defaults_t::read),
-                          opt(category + ".cutoff", defaults_t::cutoff),
-                          opt(category + ".max-flows", defaults_t::max_flows),
-                          opt(category + ".max-flow-age",
-                              defaults_t::max_flow_age),
-                          opt(category + ".flow-expiry",
-                              defaults_t::flow_expiry),
-                          opt(category + ".pseudo-realtime-factor",
-                              defaults_t::pseudo_realtime_factor));
+  VAST_UNBOX_VAR(
+    in, detail::make_input_stream<defaults_t>(args.invocation.options));
+  return spawn_generic_source<format::pcap::reader>(self, args, std::move(in));
 #endif // VAST_HAVE_PCAP
 }
 

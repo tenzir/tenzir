@@ -150,8 +150,8 @@ set(libvast_sources
     src/wah_bitmap.cpp)
 
 if (PCAP_FOUND)
-  set(libvast_sources ${libvast_sources} src/system/pcap_reader_command.cpp
-                      src/system/pcap_writer_command.cpp src/format/pcap.cpp)
+  set(libvast_sources ${libvast_sources}
+    src/system/pcap_writer_command.cpp src/format/pcap.cpp)
 endif ()
 
 add_library(libvast ${libvast_sources} ${libvast_headers})
