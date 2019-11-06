@@ -57,9 +57,10 @@ public:
   ///                        example, if 5, then for two packets spaced *t*
   ///                        seconds apart, the source will sleep for *t/5*
   ///                        seconds.
-  reader(caf::atom_value id, const caf::settings& options, std::string input,
-         uint64_t cutoff = -1, size_t max_flows = 100000, size_t max_age = 60,
-         size_t expire_interval = 10, int64_t pseudo_realtime = 0);
+  reader(caf::atom_value id, const caf::settings& options,
+         std::unique_ptr<std::istream> in = nullptr);
+
+  void reset(std::unique_ptr<std::istream> in);
 
   ~reader();
 

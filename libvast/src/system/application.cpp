@@ -24,6 +24,7 @@
 #include "vast/format/json/suricata.hpp"
 #include "vast/format/mrt.hpp"
 #include "vast/format/null.hpp"
+#include "vast/format/pcap.hpp"
 #include "vast/format/test.hpp"
 #include "vast/format/zeek.hpp"
 #include "vast/system/configuration.hpp"
@@ -39,7 +40,6 @@
 #include "vast/system/writer_command.hpp"
 
 #ifdef VAST_HAVE_PCAP
-#  include "vast/system/pcap_reader_command.hpp"
 #  include "vast/system/pcap_writer_command.hpp"
 #endif
 
@@ -166,7 +166,7 @@ auto make_import_command() {
   import_->add_subcommand(
     "pcap", "imports PCAP logs from STDIN or file",
     documentation::vast_import_pcap,
-    opts("?import")
+    opts("?import.pcap")
       .add<std::string>("read,r", "path to input where to read events from")
       .add<std::string>("schema,s", "path to alternate schema")
       .add<bool>("uds,d", "treat -r as listening UNIX domain socket")
@@ -337,7 +337,8 @@ auto make_command_factory() {
      reader_command<format::json::reader<>, defaults::import::json>},
     {"import mrt", reader_command<format::mrt::reader, defaults::import::mrt>},
 #ifdef VAST_HAVE_PCAP
-    {"import pcap", pcap_reader_command},
+    {"import pcap",
+     reader_command<format::pcap::reader, defaults::import::pcap>},
 #endif
     {"import suricata",
      reader_command<format::json::reader<format::json::suricata>,
