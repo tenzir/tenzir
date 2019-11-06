@@ -22,7 +22,7 @@
 namespace vast::system {
 
 caf::message version_command(const command::invocation&, caf::actor_system&) {
-  std::cout << VAST_VERSION_LONG << std::endl;
+  std::cout << VAST_VERSION << std::endl;
   return caf::none;
 }
 

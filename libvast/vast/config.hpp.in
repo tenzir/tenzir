@@ -10,11 +10,10 @@
 #cmakedefine VAST_USE_OPENCL
 #cmakedefine VAST_USE_OPENSSL
 #define VAST_INSTALL_PREFIX "@CMAKE_INSTALL_PREFIX@"
+#define VAST_VERSION "@VAST_VERSION"
 
 #include <caf/config.hpp>
 
-#define VAST_VERSION_LONG "@VAST_VERSION@"
-#define VAST_VERSION "@VERSION_MAJ_MIN@"
 #define VAST_LOG_LEVEL CAF_LOG_LEVEL_@VAST_LOG_LEVEL@
 
 #if defined(CAF_CLANG)
