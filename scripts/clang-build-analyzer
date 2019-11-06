@@ -7,35 +7,34 @@ set -e
 
 # Create temporary directory
 WORKING_DIR=$(mktemp -d)
-pushd ${WORKING_DIR}
 
 # Build ClangBuildAnalyzer
-git clone https://github.com/aras-p/ClangBuildAnalyzer.git
-pushd "ClangBuildAnalyzer"
-make -f projects/make/Makefile
-CBA="${WORKING_DIR}/ClangBuildAnalyzer/build/ClangBuildAnalyzer"
-popd || exit 1
+git clone "https://github.com/aras-p/ClangBuildAnalyzer.git" \
+  "${WORKING_DIR}/CBA"
+pushd "${WORKING_DIR}/CBA"
+make -f "projects/make/Makefile"
+popd
+CBA="${WORKING_DIR}/CBA/build/ClangBuildAnalyzer"
 
-# Create VAST build directory
-mkdir "VAST"
-popd || exit 1
-
-# Configure VAST build
-./configure "${@}" --build-dir="${WORKING_DIR}/VAST" --extra-flags="-ftime-trace"
+# Configure VAST to build with time-traces enabled
+./configure "${@}" --build-dir="${WORKING_DIR}/VAST" \
+  --extra-flags="-ftime-trace"
 
 # When not on master, build first, then touch the changed files
 if [ "$(git rev-parse --abbrev-ref HEAD)" != "master" ]; then
-  cmake --build "${WORKING_DIR}/VAST" -j | grep -v "Time trace\|tracing"
-  git diff --name-only "$(git merge-base origin/master HEAD)" | xargs touch
+  cmake --build "${WORKING_DIR}/VAST" -j \
+    | grep -v "Time trace\|tracing"
+  git diff --name-only "$(git merge-base origin/master HEAD)" \
+    | xargs touch
 fi
 
-# Start the build capture and build VAST
+# Build VAST, capture the time traces, then analyze them
 ${CBA} --start "${WORKING_DIR}/VAST"
-cmake --build "${WORKING_DIR}/VAST" -j | grep -v "Time trace\|tracing"
-
-# Stop the build capture and analyze the build
+CCACHE_DISABLE=1 cmake --build "${WORKING_DIR}/VAST" -j \
+  | grep -v "Time trace\|tracing"
 ${CBA} --stop "${WORKING_DIR}/VAST" "${WORKING_DIR}/time-trace.json"
-${CBA} --analyze "${WORKING_DIR}/time-trace.json" | tee "time-trace-$(date +%s).txt"
+${CBA} --analyze "${WORKING_DIR}/time-trace.json" \
+  | tee "time-trace-$(date +%s).txt"
 
 # Delete the working directory
 rm -rf "${WORKING_DIR}"
