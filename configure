@@ -170,11 +170,7 @@ while [ $# -ne 0 ]; do
       append_cache_entry Doxygen_ROOT_DIR PATH "$optarg"
       ;;
     --dev-mode)
-      append_cache_entry CMAKE_BUILD_TYPE STRING Debug
-      append_cache_entry VAST_LOG_LEVEL STRING TRACE
-      append_cache_entry ENABLE_ADDRESS_SANITIZER BOOL true
-      # TODO: eventually, we also want to enable --more-warnings
-      # append_cache_entry MORE_WARNINGS BOOL yes
+      append_cache_entry VAST_DEV_MODE BOOL true
       ;;
     *)
       echo "Invalid option '$1'.  Try $0 --help to see available options."

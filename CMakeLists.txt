@@ -13,6 +13,13 @@ else()
 endif()
 unset(_parent)
 
+option(VAST_DEV_MODE "Build in developer debug configuration" OFF)
+if (VAST_DEV_MODE)
+  set(CMAKE_BUILD_TYPE "Debug")
+  set(ENABLE_ADDRESS_SANITIZER ON)
+  # TODO: eventually, we also want to enable --more-warnings
+  #set(MORE_WARNINGS ON)
+endif ()
 option(ENABLE_ZEEK_TO_VAST "Build zeek-to-vast" ON)
 option(VAST_STATIC_EXECUTABLE "Link VAST statically")
 option(VAST_RELOCATEABLE_INSTALL "Make the installation relocateable" OFF)
@@ -176,24 +183,26 @@ if (CMAKE_GENERATOR STREQUAL "Ninja")
   set(EXTRA_FLAGS "${EXTRA_FLAGS} -fdiagnostics-color")
 endif ()
 
+set(CMAKE_CXX_STANDARD 17)
+
+# Build-type specific flags.
+string(APPEND CMAKE_CXX_FLAGS_DEBUG " -O0")
+string(APPEND CMAKE_CXX_FLAGS_RELEASE " -msse3 -mssse3 -msse4.1 -msse4.2")
+string(APPEND CMAKE_CXX_FLAGS_RELWITHDEBINFO " -fno-omit-frame-pointer")
+if (NOT VAST_DEV_MODE)
+  string(APPEND CMAKE_CXX_FLAGS_DEBUG " -g1")
+  string(APPEND CMAKE_CXX_FLAGS_RELWITHDEBINFO " -g1")
+endif ()
+
 # To give the user full control, we don't mess with with CXX_FLAGS if provided.
 # This is a deliberate decision but contrasts to many other packages that append
 # flags to the user-provide environment variable.
 if (NOT CMAKE_CXX_FLAGS)
   # Our default flags.
-  set(EXTRA_FLAGS "${EXTRA_FLAGS} -std=c++17 -Wall -Wextra -pedantic")
-  set(PERFORMANCE_FLAGS "-msse3 -mssse3 -msse4.1 -msse4.2")
+  set(EXTRA_FLAGS "${EXTRA_FLAGS} -Wall -Wextra -pedantic")
   # Increase maximum number of template instantiations, for all that template-
   # heavy code.
-  set(EXTRA_FLAGS "${EXTRA_FLAGS} -ftemplate-depth=512")
-  # Reduce the number of template instantiations shown in backtrace to keep the
-  # already insane error messages readable.
   set(EXTRA_FLAGS "${EXTRA_FLAGS} -ftemplate-backtrace-limit=0")
-  # Build-type specific flags.
-  set(CMAKE_CXX_FLAGS_DEBUG "-O0 -g")
-  set(CMAKE_CXX_FLAGS_MINSIZEREL "-Os")
-  set(CMAKE_CXX_FLAGS_RELEASE "-O3 ${PERFORMANCE_FLAGS}")
-  set(CMAKE_CXX_FLAGS_RELWITHDEBINFO "-O2 -g -fno-omit-frame-pointer")
 endif ()
 
 # Enable more (most) warnings when requested by the user.
