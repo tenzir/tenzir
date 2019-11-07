@@ -14,17 +14,18 @@ style_task:
   env:
     PREFIX: /opt/tenzir
     UPLOAD_KEY: "ENCRYPTED[b9aebb47f0f45d1af07797a742e7469835cac15ceb40ca1e5a82fe32c27435944990f7918a9ac0e9bbdcb7d9267a1e6d]"
-  fingerprint_script:
+  init_script:
     - git fetch origin
     - export PACKAGE_NAME="$(date +%Y-%m-%d)-VAST-$(git describe)-$(uname -s)-$BUILD_TYPE"
     - echo "$PACKAGE_NAME" > PACKAGE_NAME
     - export ARTIFACT_NAME="VAST-$CIRRUS_PR-$(uname -s)-$BUILD_TYPE-$CIRRUS_CHANGE_IN_REPO"
     - echo "$ARTIFACT_NAME" > ARTIFACT_NAME
     - echo "$UPLOAD_KEY" | base64 --decode > upload_key && chmod 600 upload_key
-    - cat PACKAGE_NAME
     - cmake --version
     - ${CXX} --version
     - python --version
+  fingerprint_script:
+    - cat PACKAGE_NAME
   submodule_script:
     - git submodule update --init aux/caf
     - git submodule update --init aux/broker/broker
