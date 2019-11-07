@@ -175,13 +175,6 @@ void compressedbuf::compress() {
                         compressed_.data(), compressed_.size());
       break;
     }
-#ifdef VAST_HAVE_SNAPPY
-    case compression::snappy: {
-      compressed_.resize(snappy::compress_bound(uncompressed_.size()));
-      n = snappy::compress(pbase(), uncompressed_.size(), compressed_.data());
-      break;
-    }
-#endif // VAST_HAVE_SNAPPY
   }
   compressed_.resize(n);
   uncompressed_.resize(block_size_);
@@ -200,15 +193,6 @@ void compressedbuf::uncompress() {
                           uncompressed_.data(), uncompressed_.size());
       break;
     }
-#ifdef VAST_HAVE_SNAPPY
-    case compression::snappy: {
-      auto success = snappy::uncompress(compressed_.data(), compressed_.size(),
-                                        uncompressed_.data());
-      VAST_ASSERT(success);
-      n = snappy::uncompress_bound(compressed_.data(), compressed_.size());
-      break;
-    }
-#endif // VAST_HAVE_SNAPPY
   }
   VAST_ASSERT(n > 0);
   uncompressed_.resize(n);

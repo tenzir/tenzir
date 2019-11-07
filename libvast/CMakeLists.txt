@@ -177,10 +177,6 @@ if (VAST_ENABLE_ASSERTIONS)
   target_link_libraries(libvast PUBLIC ${Backtrace_LIBRARIES})
 endif ()
 
-if (SNAPPY_FOUND)
-  target_link_libraries(libvast PRIVATE snappy::snappy)
-endif ()
-
 if (PCAP_FOUND)
   target_link_libraries(libvast PRIVATE pcap::pcap)
 endif ()

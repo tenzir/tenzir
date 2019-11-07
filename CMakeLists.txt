@@ -585,19 +585,6 @@ if (ENABLE_ZEEK_TO_VAST)
   endif ()
 endif ()
 
-if (NOT SNAPPY_ROOT_DIR AND VAST_PREFIX)
-  set(SNAPPY_ROOT_DIR ${VAST_PREFIX})
-endif ()
-find_package(SNAPPY QUIET)
-if (SNAPPY_FOUND)
-  set(VAST_HAVE_SNAPPY true)
-  if (NOT BUILD_SHARED_LIBS)
-    provide_find_module(SNAPPY)
-    string(APPEND VAST_FIND_DEPENDENCY_LIST
-           "\nfind_package(SNAPPY REQUIRED QUIET)")
-  endif ()
-endif ()
-
 if (NOT PCAP_ROOT_DIR AND VAST_PREFIX)
   set(PCAP_ROOT_DIR ${VAST_PREFIX})
 endif ()
@@ -786,7 +773,6 @@ endif ()
 
 display(CAF_FOUND "${caf_dir}" caf_summary)
 display(BROKER_FOUND "${broker_dir}" broker_summary)
-display(SNAPPY_FOUND "${SNAPPY_INCLUDE_DIR}" snappy_summary)
 display(PCAP_FOUND "${PCAP_INCLUDE_DIR}" pcap_summary)
 display(GPERFTOOLS_FOUND "${GPERFTOOLS_INCLUDE_DIR}" perftools_summary)
 display(DOXYGEN_FOUND yes doxygen_summary)
@@ -825,7 +811,6 @@ set(
   "\n"
   "\nCAF:                 ${caf_summary}"
   "\nBroker:              ${broker_summary}"
-  "\nSnappy               ${snappy_summary}"
   "\nPCAP:                ${pcap_summary}"
   "\nGperftools:          ${perftools_summary}"
   "\nDoxygen:             ${doxygen_summary}"

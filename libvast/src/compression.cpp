@@ -18,10 +18,6 @@
 #include "vast/compression.hpp"
 #include "vast/die.hpp"
 
-#ifdef VAST_HAVE_SNAPPY
-#include <snappy.h>
-#endif
-
 namespace vast {
 namespace lz4 {
 
@@ -39,32 +35,4 @@ size_t uncompress(const char* in, size_t in_size, char* out, size_t out_size) {
 }
 
 } // namespace lz4
-
-#ifdef VAST_HAVE_SNAPPY
-namespace snappy {
-
-size_t compress_bound(size_t size) {
-  return ::snappy::MaxCompressedLength(size);
-}
-
-size_t uncompress_bound(const char* data, size_t size) {
-  size_t n;
-  if (!::snappy::GetUncompressedLength(data, size, &n))
-    return 0;
-  return n;
-}
-
-size_t compress(const char* in, size_t in_size, char* out) {
-  size_t n;
-  ::snappy::RawCompress(in, in_size, out, &n);
-  return n;
-}
-
-bool uncompress(const char* in, size_t in_size, char* out) {
-  return ::snappy::RawUncompress(in, in_size, out);
-}
-
-} // namespace snappy
-#endif // VAST_HAVE_SNAPPY
-
 } // namespace vast
