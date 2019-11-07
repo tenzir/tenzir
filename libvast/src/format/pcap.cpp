@@ -24,6 +24,7 @@
 #include "vast/table_slice.hpp"
 #include "vast/table_slice_builder.hpp"
 
+#include <caf/config_value.hpp>
 #include <caf/settings.hpp>
 
 #include <thread>
@@ -55,8 +56,10 @@ reader::reader(caf::atom_value id, const caf::settings& options,
                std::unique_ptr<std::istream>)
   : super(id), packet_type_{pcap_packet_type} {
   using defaults_t = vast::defaults::import::pcap;
-  using caf::get_or;
+  using caf::get_if;
   std::string category = defaults_t::category;
+  if (auto interface = get_if<std::string>(&options, category + ".interface"))
+    interface_ = *interface;
   input_ = get_or(options, category + ".read", defaults_t::read);
   cutoff_ = get_or(options, category + ".cutoff", defaults_t::cutoff);
   max_flows_ = get_or(options, category + ".max-flows", defaults_t::max_flows);
@@ -110,29 +113,20 @@ caf::error reader::read_impl(size_t max_events, size_t max_slice_size,
   // Initialize PCAP if needed.
   if (!pcap_) {
     // Determine interfaces.
-    pcap_if_t* iface;
-    if (::pcap_findalldevs(&iface, buf) == -1)
-      return make_error(ec::format_error,
-                        "failed to enumerate interfaces: ", buf);
-    for (auto i = iface; i != nullptr; i = i->next)
-      if (input_ == i->name) {
-        pcap_ = ::pcap_open_live(i->name, 65535, 1, 1000, buf);
-        if (!pcap_) {
-          ::pcap_freealldevs(iface);
-          return make_error(ec::format_error, "failed to open interface ",
-                            input_, ": ", buf);
-        }
-        if (pseudo_realtime_ > 0) {
-          pseudo_realtime_ = 0;
-          VAST_WARNING(this, "ignores pseudo-realtime in live mode");
-        }
-        VAST_DEBUG(this, "listens on interface " << i->name);
-        break;
+    if (interface_) {
+      pcap_ = ::pcap_open_live(interface_->c_str(), 65535, 1, 1000, buf);
+      if (!pcap_) {
+        return make_error(ec::format_error, "failed to open interface",
+                          *interface_, ":", buf);
       }
-    ::pcap_freealldevs(iface);
-    if (!pcap_) {
-      if (input_ != "-" && !exists(input_))
-        return make_error(ec::format_error, "no such file: ", input_);
+      if (pseudo_realtime_ > 0) {
+        pseudo_realtime_ = 0;
+        VAST_WARNING(this, "ignores pseudo-realtime in live mode");
+      }
+      VAST_DEBUG(this, "listens on interface", *interface_);
+    } else if (input_ != "-" && !exists(input_)) {
+      return make_error(ec::format_error, "no such file: ", input_);
+    } else {
 #ifdef PCAP_TSTAMP_PRECISION_NANO
       pcap_ = ::
         pcap_open_offline_with_tstamp_precision(input_.c_str(),

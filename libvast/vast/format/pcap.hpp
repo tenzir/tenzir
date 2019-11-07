@@ -28,6 +28,7 @@
 #include "vast/time.hpp"
 
 #include <caf/expected.hpp>
+#include <caf/optional.hpp>
 
 #include <chrono>
 #include <pcap.h>
@@ -107,6 +108,7 @@ private:
   time last_timestamp_ = time::min();
   int64_t pseudo_realtime_;
   std::string input_;
+  caf::optional<std::string> interface_;
 };
 
 /// A PCAP writer.
