@@ -30,10 +30,6 @@ struct compression_printer : printer<compression_printer> {
         return str.print(out, "null");
       case compression::lz4:
         return str.print(out, "lz4");
-#ifdef VAST_HAVE_SNAPPY
-      case compression::snappy:
-        return str.print(out, "snappy");
-#endif
     }
     return false;
   }

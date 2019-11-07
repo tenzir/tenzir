@@ -48,7 +48,6 @@ Usage: $0 [OPTION]... [VAR=VALUE]...
 
   Optional packages in non-standard locations:
     --with-broker=PATH      path to Broker install root
-    --with-snappy=PATH      path to Snappy install root
     --with-openssl=PATH     path to OpenSSL install root
     --with-pcap=PATH        path to libpcap install root
     --with-perftools=PATH   path to gperftools install root
@@ -153,9 +152,6 @@ while [ $# -ne 0 ]; do
       ;;
     --with-broker=*)
       append_cache_entry BROKER_ROOT_DIR PATH "$optarg"
-      ;;
-    --with-snappy=*)
-      append_cache_entry SNAPPY_ROOT_DIR PATH "$optarg"
       ;;
     --with-openssl=*)
       append_cache_entry OPENSSL_ROOT_DIR PATH "$optarg"
