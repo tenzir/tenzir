@@ -48,11 +48,9 @@ namespace vast::system {
 namespace {
 
 auto make_pcap_options(std::string_view category) {
-  return opts(category)
-    .add<std::string>("write,w", "path to write events to")
-    .add<bool>("uds,d", "treat -w as UNIX domain socket to connect to")
-    .add<size_t>("flush-interval,f", "flush to disk after this many "
-                                     "packets");
+  return sink_opts(category).add<size_t>("flush-interval,f",
+                                         "flush to disk after this many "
+                                         "packets");
 }
 
 auto make_root_command(std::string_view path) {
@@ -155,21 +153,16 @@ auto make_import_command() {
   import_->add_subcommand("suricata", "imports suricata eve json",
                           documentation::vast_import_suricata,
                           source_opts("?import.suricata"));
-  import_->add_subcommand(
-    "test", "imports random data for testing or benchmarking",
-    documentation::vast_import_test,
-    opts("?import.test")
-      .add<size_t>("seed", "the random seed")
-      .add<std::string>("schema-file,s", "path to alternate schema")
-      .add<std::string>("schema,S", "alternate schema as string"));
+  import_->add_subcommand("test",
+                          "imports random data for testing or benchmarking",
+                          documentation::vast_import_test,
+                          opts("?import.test"));
 #ifdef VAST_HAVE_PCAP
   import_->add_subcommand(
     "pcap", "imports PCAP logs from STDIN or file",
     documentation::vast_import_pcap,
-    opts("?import.pcap")
-      .add<std::string>("read,r", "path to input where to read events from")
-      .add<std::string>("schema,s", "path to alternate schema")
-      .add<bool>("uds,d", "treat -r as listening UNIX domain socket")
+    source_opts("?import.pcap")
+      .add<std::string>("interface,i", "network interface to read packets from")
       .add<size_t>("cutoff,c", "skip flow packets after this many bytes")
       .add<size_t>("max-flows,m", "number of concurrent flows to track")
       .add<size_t>("max-flow-age,a", "max flow lifetime before eviction")

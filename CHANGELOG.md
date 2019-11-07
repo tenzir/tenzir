@@ -10,6 +10,10 @@ Every entry has a category for which we use the following visual abbreviations:
 
 ## [Unreleased]
 
+- 🔄 The `import pcap` command no longer takes interface names via `--read,-r`,
+  but instead from a separate option named `--interface,-i`. This change has
+  been made for consistency with other tools. (#641)
+
 ## [0.2] - 2019-10-30
 
 - 🎁 The default schema for Suricata has been updated to support the new
