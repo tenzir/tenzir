@@ -1,0 +1,14 @@
+#!/bin/sh
+
+# error on unset variables
+set -u
+
+# configure build via environment variables
+cmake -Bbuild -H. -DCMAKE_INSTALL_PREFIX="$PREFIX" \
+  -DCMAKE_BUILD_TYPE="$BUILD_TYPE" \
+  -DCPACK_GENERATOR=TGZ \
+  -DCPACK_PACKAGE_FILE_NAME="$PACKAGE_NAME" \
+  -DCPACK_SET_DESTDIR=ON "${CONFIGURE_FLAGS:-}" -G Ninja
+
+# execute specific cmake target
+cmake --build build --target "$TARGET"

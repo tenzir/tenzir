@@ -1,0 +1,6 @@
+#!/bin/sh
+
+# ensure git submodules
+git submodule update --init aux/caf
+git submodule update --init aux/broker/broker
+git -C aux/broker/broker submodule update --init 3rdparty
