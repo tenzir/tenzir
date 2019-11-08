@@ -69,6 +69,7 @@ reader::reader(caf::atom_value id, const caf::settings& options,
     = get_or(options, category + ".flow-expiry", defaults_t::flow_expiry);
   pseudo_realtime_ = get_or(options, category + ".pseudo-realtime-factor",
                             defaults_t::pseudo_realtime_factor);
+  snaplen_ = get_or(options, category + ".snaplen", defaults_t::snaplen);
 }
 
 void reader::reset(std::unique_ptr<std::istream>) {
@@ -114,7 +115,7 @@ caf::error reader::read_impl(size_t max_events, size_t max_slice_size,
   if (!pcap_) {
     // Determine interfaces.
     if (interface_) {
-      pcap_ = ::pcap_open_live(interface_->c_str(), 65535, 1, 1000, buf);
+      pcap_ = ::pcap_open_live(interface_->c_str(), snaplen_, 1, 1000, buf);
       if (!pcap_) {
         return make_error(ec::format_error, "failed to open interface",
                           *interface_, ":", buf);
@@ -350,8 +351,9 @@ void reader::shrink_to_max_size() {
   }
 }
 
-writer::writer(std::string trace, size_t flush_interval)
+writer::writer(std::string trace, size_t flush_interval, size_t snaplen)
   : flush_interval_{flush_interval},
+    snaplen_{snaplen},
     trace_{std::move(trace)} {
 }
 
@@ -365,10 +367,10 @@ writer::~writer() {
 caf::error writer::write(const table_slice& slice) {
   if (!pcap_) {
 #ifdef PCAP_TSTAMP_PRECISION_NANO
-    pcap_ = ::pcap_open_dead_with_tstamp_precision(DLT_RAW, 65535,
+    pcap_ = ::pcap_open_dead_with_tstamp_precision(DLT_RAW, snaplen_,
                                                    PCAP_TSTAMP_PRECISION_NANO);
 #else
-    pcap_ = ::pcap_open_dead(DLT_RAW, 65535);
+    pcap_ = ::pcap_open_dead(DLT_RAW, snaplen_);
 #endif
     if (!pcap_)
       return make_error(ec::format_error, "failed to open pcap handle");

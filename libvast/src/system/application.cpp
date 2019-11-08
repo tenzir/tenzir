@@ -168,7 +168,8 @@ auto make_import_command() {
       .add<size_t>("max-flow-age,a", "max flow lifetime before eviction")
       .add<size_t>("flow-expiry,e", "flow table expiration interval")
       .add<size_t>("pseudo-realtime-factor,p", "factor c delaying packets by "
-                                               "1/c"));
+                                               "1/c")
+      .add<size_t>("snaplen", "snapshot length in bytes"));
 #endif
   return import_;
 }

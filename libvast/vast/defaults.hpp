@@ -141,6 +141,13 @@ struct pcap {
   /// Inverse factor by which to delay packets. For example, if 5, then for two
   /// packets spaced *t* seconds apart, the source will sleep for *t/5* seconds.
   static constexpr int64_t pseudo_realtime_factor = 0;
+
+  /// If the snapshot length is set to snaplen, and snaplen is less than the
+  /// size of a packet that is captured, only the first snaplen bytes of that
+  /// packet will be captured and provided as packet data. A snapshot length
+  /// of 65535 should be sufficient, on most if not all networks, to capture all
+  /// the data available from the packet.
+  static constexpr size_t snaplen = 65535;
 };
 
 } // namespace import
