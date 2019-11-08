@@ -1,0 +1,54 @@
+#! /bin/bash
+
+# This script runs ClangBuildAanlyzer on a clean build of vast
+#   Usage: ./scripts/clang-build-analyzer [<additional-configure-flags>]
+
+set -e
+
+declare -a on_exit=()
+trap '{
+  for (( i = 0; i < ${#on_exit[@]}; i++ )); do
+    eval "${on_exit[$i]}"
+  done
+}' INT TERM EXIT
+
+# Create temporary directory
+WORKING_DIR=$(mktemp -d)
+on_exit=('rm -rf ${WORKING_DIR}' "${on_exit[@]}")
+
+# Setup VAST in a temporary worktree
+git -c submodule.recurse= worktree add "${WORKING_DIR}"
+on_exit=('git worktree remove --force ${WORKING_DIR}' "${on_exit[@]}")
+
+# Configure and build ClangBuildAnalyzer
+git clone "https://github.com/aras-p/ClangBuildAnalyzer.git" \
+  "${WORKING_DIR}/clang-build-analyzer"
+pushd "${WORKING_DIR}/clang-build-analyzer"
+make -f "projects/make/Makefile"; popd
+CBA="${WORKING_DIR}/clang-build-analyzer/build/ClangBuildAnalyzer"
+
+git -C "${WORKING_DIR}" submodule update --init --recursive
+git diff | git -C "${WORKING_DIR}" apply
+
+
+# Configure VAST to build with time-traces enabled
+pushd "${WORKING_DIR}"
+on_exit=('popd' "${on_exit[@]}")
+./configure "${@}" --build-dir="${WORKING_DIR}/build" \
+  --extra-flags="-ftime-trace"
+
+# When not on master, build first, then touch the changed files
+if [ "$(git rev-parse --abbrev-ref HEAD)" != "master" ]; then
+  cmake --build "${WORKING_DIR}/build" -j \
+    | grep -v "Time trace\|tracing"
+  git diff --name-only "$(git merge-base origin/master "${CBA_BASE:-HEAD}")" \
+    | xargs touch
+fi
+
+# Build vast, capture the time traces, then analyze them
+${CBA} --start "${WORKING_DIR}/build"
+CCACHE_DISABLE=1 cmake --build "${WORKING_DIR}/build" -j \
+  | grep -v "Time trace\|tracing"
+${CBA} --stop "${WORKING_DIR}/build" "${WORKING_DIR}/time-trace.json"
+${CBA} --analyze "${WORKING_DIR}/time-trace.json" \
+  | tee "time-trace-$(date +%s).txt"
