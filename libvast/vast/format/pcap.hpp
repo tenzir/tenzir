@@ -47,17 +47,7 @@ public:
   /// Constructs a PCAP reader.
   /// @param id The ID for table slice type to build.
   /// @param options Additional options.
-  /// @param input The name of the interface or trace file.
-  /// @param cutoff The number of bytes to keep per flow.
-  /// @param max_flows The maximum number of flows to keep state for.
-  /// @param max_age The number of seconds to wait since the last seen packet
-  ///                before evicting the corresponding flow.
-  /// @param expire_interval The number of seconds between successive expire
-  ///                        passes over the flow table.
-  /// @param pseudo_realtime The inverse factor by which to delay packets. For
-  ///                        example, if 5, then for two packets spaced *t*
-  ///                        seconds apart, the source will sleep for *t/5*
-  ///                        seconds.
+  /// @param in Input stream (unused). Pass filename via options instead.
   reader(caf::atom_value id, const caf::settings& options,
          std::unique_ptr<std::istream> in = nullptr);
 
@@ -99,6 +89,8 @@ private:
   pcap_t* pcap_ = nullptr;
   type packet_type_;
   std::unordered_map<flow, flow_state> flows_;
+  std::string input_;
+  caf::optional<std::string> interface_;
   uint64_t cutoff_;
   size_t max_flows_;
   std::mt19937 generator_;
@@ -107,8 +99,7 @@ private:
   uint64_t last_expire_ = 0;
   time last_timestamp_ = time::min();
   int64_t pseudo_realtime_;
-  std::string input_;
-  caf::optional<std::string> interface_;
+  size_t snaplen_;
 };
 
 /// A PCAP writer.
@@ -121,7 +112,8 @@ public:
   /// Constructs a PCAP writer.
   /// @param trace The path where to write the trace file.
   /// @param flush_interval The number of packets after which to flush to disk.
-  writer(std::string trace, size_t flush_interval = -1);
+  /// @param snaplen The snapshot length in bytes.
+  writer(std::string trace, size_t flush_interval = -1, size_t snaplen = 65535);
 
   ~writer();
 
@@ -136,6 +128,7 @@ public:
 private:
   vast::schema schema_;
   size_t flush_interval_ = 0;
+  size_t snaplen_ = 65535;
   size_t total_packets_ = 0;
   pcap_t* pcap_ = nullptr;
   pcap_dumper_t* dumper_ = nullptr;
