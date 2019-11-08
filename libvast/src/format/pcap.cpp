@@ -352,9 +352,7 @@ void reader::shrink_to_max_size() {
 }
 
 writer::writer(std::string trace, size_t flush_interval, size_t snaplen)
-  : flush_interval_{flush_interval},
-    snaplen_{snaplen},
-    trace_{std::move(trace)} {
+  : flush_interval_{flush_interval}, snaplen_{snaplen}, trace_{std::move(trace)} {
 }
 
 writer::~writer() {
