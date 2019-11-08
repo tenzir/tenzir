@@ -25,7 +25,8 @@ This document describes the steps for creating a new VAST release.
   - Set the version number in `VERSION` to the desired number.
 
 
-3. Push an annotated git tag. The tag has to be named with the new VAST version that is to be released. The annotation text is a free-text description for the release:
+3. Push an annotated git tag. The tag has to be named with the new VAST version that is to be released.
+  The annotation text is a free-text description for the release:
 
     ``` sh
     git tag -a -m “This is a new release …” 0.5
@@ -33,7 +34,8 @@ This document describes the steps for creating a new VAST release.
     ```
     The build will be run via cirrus-ci: https://cirrus-ci.com/github/tenzir/vast
 
-4. Trigger the cirrus `release-task`. This is manual action, that requires `repo`-permissions. You can trigger the task as follows:
+4. Trigger the cirrus `release-task`. This is manual action, that requires `repo`-permissions.
+  You can trigger the task as follows:
 
     - On the cirrus web-view.
     - On the github-checks page.
@@ -51,4 +53,5 @@ This document describes the steps for creating a new VAST release.
 # Versioning
 
 - Version numbers for releases shall be of the form `MAJOR.MINOR`.
-- Version numbers for intermediate builds append the output of `git describe` to the `MAJOR.MINOR` version number.
+- Version numbers for intermediate builds append the output of `git describe` to the `MAJOR.MINOR`
+  version number.
