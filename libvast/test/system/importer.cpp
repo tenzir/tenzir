@@ -71,9 +71,9 @@ struct importer_fixture : Base {
   importer_fixture(size_t table_slice_size) : slice_size(table_slice_size) {
     MESSAGE("spawn importer + store");
     this->directory /= "importer";
-    importer = this->self->spawn(system::importer, this->directory, slice_size);
     store = this->self->spawn(system::data_store<std::string, data>);
-    this->self->send(importer, store);
+    importer
+      = this->self->spawn(system::importer, this->directory, store, slice_size);
   }
 
   ~importer_fixture() {

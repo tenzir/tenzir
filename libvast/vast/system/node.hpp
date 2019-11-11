@@ -13,18 +13,20 @@
 
 #pragma once
 
-#include <map>
-#include <string>
+#include "vast/aliases.hpp"
+#include "vast/command.hpp"
+#include "vast/error.hpp"
+#include "vast/filesystem.hpp"
+#include "vast/system/consensus.hpp"
+#include "vast/system/spawn_arguments.hpp"
+#include "vast/system/tracker.hpp"
 
 #include <caf/actor.hpp>
 #include <caf/event_based_actor.hpp>
 #include <caf/stateful_actor.hpp>
 
-#include "vast/aliases.hpp"
-#include "vast/command.hpp"
-#include "vast/filesystem.hpp"
-#include "vast/system/spawn_arguments.hpp"
-#include "vast/system/tracker.hpp"
+#include <map>
+#include <string>
 
 namespace vast::system {
 
@@ -71,6 +73,9 @@ struct node_state {
 
   /// Points to the node itself.
   caf::event_based_actor* self;
+
+  /// Handle to the consensus module.
+  consensus_type consensus;
 
   /// Maps command names (including parent command) to spawn functions.
   inline static named_component_factory component_factory = {};

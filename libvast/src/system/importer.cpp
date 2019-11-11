@@ -284,10 +284,12 @@ auto make_importer_stage(importer_actor* self) {
 
 } // namespace <anonymous>
 
-behavior importer(stateful_actor<importer_state>* self, path dir,
+behavior importer(importer_actor* self, path dir, consensus_type consensus,
                   size_t max_table_slice_size) {
   VAST_TRACE(VAST_ARG(dir), VAST_ARG(max_table_slice_size));
   self->state.dir = dir;
+  self->monitor(consensus);
+  self->state.consensus = std::move(consensus);
   self->state.last_replenish = steady_clock::time_point::min();
   self->state.max_table_slice_size = static_cast<int32_t>(max_table_slice_size);
   auto err = self->state.read_state();
