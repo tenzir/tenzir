@@ -42,11 +42,13 @@ Usage: $0 [OPTION]... [VAR=VALUE]...
 
   Optional features:
     --enable-tcmalloc       link against tcmalloc (requires gperftools)
+    --disable-arrow         disable Apache Arrow integration
 
   Required packages in non-standard locations:
     --with-caf=PATH         path to CAF install root or build directory
 
   Optional packages in non-standard locations:
+    --with-arrow=PATH       path to Apache Arrow install root
     --with-broker=PATH      path to Broker install root
     --with-openssl=PATH     path to OpenSSL install root
     --with-pcap=PATH        path to libpcap install root
@@ -146,6 +148,12 @@ while [ $# -ne 0 ]; do
       ;;
     --enable-tcmalloc)
       append_cache_entry VAST_USE_TCMALLOC BOOL true
+      ;;
+    --disable-arrow)
+      append_cache_entry VAST_NO_ARROW BOOL true
+      ;;
+    --with-arrow=*)
+      append_cache_entry ARROW_ROOT_DIR PATH "$optarg"
       ;;
     --with-caf=*)
       append_cache_entry CAF_ROOT_DIR PATH "$optarg"
