@@ -9,7 +9,7 @@ prints it back in a readable format batch by batch.
 #! /usr/bin/env python
 
 # Example usage:
-# vast -N export arrow '#type ~ /suricata.*/' | ./scripts/print_arrow.py
+# vast -N export arrow '#type ~ /suricata.*/' | ./scripts/print-arrow.py
 
 import sys
 import pyarrow

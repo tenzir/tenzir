@@ -1,7 +1,10 @@
 #! /usr/bin/env python3
 
+# NOTE: This script is also embedded in doc/cli/vast-export-arrow.md.
+# When updating this file, please also update the embedded snippet.
+
 # Example usage:
-# vast -N export arrow '#type ~ /suricata.*/' | ./scripts/print_arrow.py
+# vast -N export arrow '#type ~ /suricata.*/' | ./scripts/print-arrow.py
 
 import sys
 import pyarrow
