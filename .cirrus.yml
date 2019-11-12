@@ -15,7 +15,8 @@ style_task:
     PREFIX: /opt/tenzir
     MULE_SSH_KEY: "ENCRYPTED[b9aebb47f0f45d1af07797a742e7469835cac15ceb40ca1e5a82fe32c27435944990f7918a9ac0e9bbdcb7d9267a1e6d]"
   init_script:
-    - .ci/scripts/initialize-env
+    - git fetch origin
+    - . .ci/scripts/initialize-env
   submodule_script:
     - .ci/scripts/submodule-update
   fingerprint_script:

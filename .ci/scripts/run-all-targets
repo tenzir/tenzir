@@ -1,9 +1,10 @@
 #!/bin/sh
 
 . .ci/scripts/initialize-env
+.ci/scripts/submodule-update
 
-TARGET=all .ci/scripts/build-target
-TARGET=test .ci/scripts/build-target
-TARGET=integration .ci/scripts/build-target
-TARGET=install .ci/scripts/build-target
-TARGET=package .ci/scripts/build-target
+TARGET="all" .ci/scripts/build-target
+TARGET="test" .ci/scripts/build-target
+TARGET="integration" .ci/scripts/build-target
+TARGET="install" .ci/scripts/build-target
+TARGET="package" .ci/scripts/build-target

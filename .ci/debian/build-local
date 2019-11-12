@@ -1,0 +1,15 @@
+#!/bin/sh
+
+
+# Execute this script from the toplevel directory: `vast~:   .ci/debian/build-local`
+# you can pass an optional branch name as argument: `vast~: .ci/debian/build-local story/ch1234`
+
+IMAGE=tenzir-vast-local-ci-debian:latest
+docker build -f .ci/debian/Dockerfile . -t "$IMAGE"
+
+BRANCH="${1:-master}"
+
+docker run --rm -t "$IMAGE" sh -c "git clone --branch=$BRANCH https://github.com/tenzir/vast.git && \
+  cd vast && \
+  ls -lah . && \
+  sh .ci/scripts/run-all-targets"

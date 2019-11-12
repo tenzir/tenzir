@@ -1,7 +1,11 @@
 #!/bin/sh
 
-# error on unset variables
-set -u
+# e - non-interactive terminals will exit on failures immediately
+# x - print commands before exiting
+# u - error on unset variables
+set -exu
+
+PACKAGE_NAME="${PACKAGE_NAME:-$(cat PACKAGE_NAME)}"
 
 # configure build via environment variables
 cmake -Bbuild -H. -DCMAKE_INSTALL_PREFIX="$PREFIX" \

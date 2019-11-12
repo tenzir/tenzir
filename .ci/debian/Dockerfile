@@ -11,6 +11,3 @@ RUN apt-get -qq update && apt-get -qqy install \
 RUN update-alternatives --install /usr/bin/python python /usr/bin/python2.7 1 && \
     update-alternatives --install /usr/bin/python python /usr/bin/python3.7 2 && \
     update-alternatives --install /usr/bin/clang-format clang-format /usr/bin/clang-format-7 100
-
-
-COPY ./ .
