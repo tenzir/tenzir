@@ -92,7 +92,7 @@ caf::message source_command(const command::invocation& invocation,
       // Assign IMPORTER to SOURCE and start streaming.
       er = reg.components[id].equal_range("importer");
       if (er.first == er.second) {
-        err = make_error(ec::no_importer);
+        err = make_error(ec::missing_component, "importer");
       } else if (reg.components[id].count("importer") > 1) {
         err = make_error(ec::unimplemented,
                          "multiple IMPORTER actors currently not supported");
