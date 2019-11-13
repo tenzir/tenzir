@@ -1,10 +1,10 @@
 #!/bin/sh
 
-. .ci/scripts/initialize-env
-.ci/scripts/submodule-update
+. "$(dirname "$0")"/initialize-env
+"$(dirname "$0")"/submodule-update
 
-TARGET="all" .ci/scripts/build-target
-TARGET="test" .ci/scripts/build-target
-TARGET="integration" .ci/scripts/build-target
-TARGET="install" .ci/scripts/build-target
-TARGET="package" .ci/scripts/build-target
+TARGET="all" "$(dirname "$0")"/build-target
+TARGET="test" "$(dirname "$0")"/build-target
+TARGET="integration" "$(dirname "$0")"/build-target
+TARGET="install" "$(dirname "$0")"/build-target
+TARGET="package" "$(dirname "$0")"/build-target

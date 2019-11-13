@@ -1,9 +1,10 @@
 #!/bin/sh
 
+export CC=${CC:-"gcc-8"}
+export CXX=${CXX:-"g++"}
 export BUILD_TYPE=${BUILD_TYPE:-"Local"}
 export PACKAGE_NAME=${PACKAGE_NAME:-"VAST-$(git describe)-$(uname -s)-$BUILD_TYPE"}
 export PREFIX=${PREFIX:-"/opt/tenzir"}
-export CXX=${CXX:-"g++"}
 
 if [ -n "$CIRRUS_CI" ]; then
   echo Preparing for Cirrus-CI
