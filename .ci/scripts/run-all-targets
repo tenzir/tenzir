@@ -1,10 +1,10 @@
 #!/bin/sh
 
+set -ex
+
 . "$(dirname "$0")"/initialize-env
 "$(dirname "$0")"/submodule-update
 
-TARGET="all" "$(dirname "$0")"/build-target
-TARGET="test" "$(dirname "$0")"/build-target
-TARGET="integration" "$(dirname "$0")"/build-target
-TARGET="install" "$(dirname "$0")"/build-target
-TARGET="package" "$(dirname "$0")"/build-target
+for target in all test integration install package; do
+  TARGET="$target" "$(dirname "$(readlink -f "$0")")/build-target"
+done
