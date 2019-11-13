@@ -13,53 +13,32 @@ style_task:
     - style
   env:
     PREFIX: /opt/tenzir
-    UPLOAD_KEY: "ENCRYPTED[b9aebb47f0f45d1af07797a742e7469835cac15ceb40ca1e5a82fe32c27435944990f7918a9ac0e9bbdcb7d9267a1e6d]"
+    MULE_SSH_KEY: "ENCRYPTED[b9aebb47f0f45d1af07797a742e7469835cac15ceb40ca1e5a82fe32c27435944990f7918a9ac0e9bbdcb7d9267a1e6d]"
   init_script:
     - git fetch origin
-    - export PACKAGE_NAME="VAST-$(git describe)-$(uname -s)-$BUILD_TYPE"
-    - echo "$PACKAGE_NAME" > PACKAGE_NAME
-    - export ARTIFACT_NAME="VAST-$CIRRUS_PR-$(uname -s)-$BUILD_TYPE-$CIRRUS_CHANGE_IN_REPO"
-    - echo "$ARTIFACT_NAME" > ARTIFACT_NAME
-    - echo "$UPLOAD_KEY" | base64 --decode > upload_key && chmod 600 upload_key
-    - cmake --version
-    - ${CXX} --version
-    - python --version
+    - . .ci/scripts/initialize-env
+  submodule_script:
+    - .ci/scripts/submodule-update
   fingerprint_script:
     - cat PACKAGE_NAME
-  submodule_script:
-    - git submodule update --init aux/caf
-    - git submodule update --init aux/broker/broker
-    - git -C aux/broker/broker submodule update --init 3rdparty
   build_script:
-    - cmake -Bbuild -H. -DCMAKE_INSTALL_PREFIX="$PREFIX"
-      -DCMAKE_BUILD_TYPE="$BUILD_TYPE" -DCPACK_GENERATOR=TGZ
-      -DCPACK_PACKAGE_FILE_NAME="$(cat PACKAGE_NAME)"
-      -DCPACK_SET_DESTDIR=ON "$CONFIGURE_FLAGS" -G Ninja
-    - cmake --build build --target all
+    - TARGET=all .ci/scripts/build-target
   unit_test_script:
-    - cmake --build build --target test
+    - TARGET=test .ci/scripts/build-target
   integration_test_script: >
-    if ! cmake --build build --target integration; then
+    if ! TARGET=integration .ci/scripts/build-target; then
       tar -czf "$(cat ARTIFACT_NAME).tar.gz" -C build vast-integration-test
-      while ! rsync --archive --compress --rsh "ssh -i upload_key -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null" \
-          --progress --partial "$(cat ARTIFACT_NAME).tar.gz" mule@tenzir.dfn-cert.de:/home/mule/integration/vast/ ; do
-        sleep 15
-        echo "Warning: rsync failure. Retrying ..."
-      done
+      .ci/scripts/transfer-file "$(cat ARTIFACT_NAME).tar.gz" mule@tenzir.dfn-cert.de:/home/mule/integration/vast/
       echo "Download with: \`scp tenzir.dfn-cert.de:/home/mule/integration/vast/$(cat ARTIFACT_NAME).tar.gz .\`"
       false
     fi
   install_script:
-    - cmake --build build --target install
+    - TARGET=install .ci/scripts/build-target
   package_script:
-    - cmake --build build --target package
+    - TARGET=package .ci/scripts/build-target
   upload_script: >
     if [ "$CIRRUS_BRANCH" = "master" ]; then
-      while ! rsync --archive --compress --rsh "ssh -i upload_key -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null" \
-          --progress --partial "build/$(cat PACKAGE_NAME).tar.gz" mule@tenzir.dfn-cert.de:/home/mule/artifacts/ ; do
-        sleep 15
-        echo "Warning: rsync failure. Retrying ..."
-      done
+      .ci/scripts/transfer-file "build/$(cat PACKAGE_NAME).tar.gz" mule@tenzir.dfn-cert.de:/home/mule/artifacts/
     fi
 
 debian_task:
@@ -116,7 +95,7 @@ release_task:
     - FreeBSD
     - macOS Release
   env:
-    DOWNLOAD_KEY: ENCRYPTED[b9aebb47f0f45d1af07797a742e7469835cac15ceb40ca1e5a82fe32c27435944990f7918a9ac0e9bbdcb7d9267a1e6d]
+    MULE_SSH_KEY: ENCRYPTED[b9aebb47f0f45d1af07797a742e7469835cac15ceb40ca1e5a82fe32c27435944990f7918a9ac0e9bbdcb7d9267a1e6d]
     GITHUB_TOKEN: ENCRYPTED[2cf0740e2a8de7138c76b376bda7d702c1211fe61b25a19c4a4b10a512856f8d1468f6345b2de487b15a294117dad391]
   only_if: $CIRRUS_TAG != "" && $GITHUB_TOKEN != ""
   container:
@@ -124,6 +103,6 @@ release_task:
     cpu: 1
     memory: 1G
   setup_script:
-    - echo "$DOWNLOAD_KEY" | base64 --decode > download_key && chmod 600 download_key
+    - echo "$MULE_SSH_KEY" | base64 --decode > mule_ssh_key && chmod 600 mule_ssh_key
   script:
-    - ./.ci/conditional-release.sh
+    - ./.ci/scripts/conditional-release

@@ -1,0 +1,23 @@
+#!/bin/sh
+
+export CC=${CC:-"gcc-8"}
+export CXX=${CXX:-"g++"}
+export BUILD_TYPE=${BUILD_TYPE:-"Local"}
+export PACKAGE_NAME=${PACKAGE_NAME:-"VAST-$(git describe)-$(uname -s)-$BUILD_TYPE"}
+export PREFIX=${PREFIX:-"/opt/tenzir"}
+
+if [ -n "$CIRRUS_CI" ]; then
+  echo Preparing for Cirrus-CI
+  echo "$PACKAGE_NAME" > PACKAGE_NAME
+  ARTIFACT_NAME="VAST-$CIRRUS_PR-$(uname -s)-$BUILD_TYPE-$CIRRUS_CHANGE_IN_REPO"
+  export ARTIFACT_NAME
+  echo "$ARTIFACT_NAME" > ARTIFACT_NAME
+  echo "$MULE_SSH_KEY" | base64 --decode > mule_ssh_key && chmod 600 mule_ssh_key
+fi
+
+# print versions
+echo Build type: "$BUILD_TYPE"
+echo Package name: "$PACKAGE_NAME"
+cmake --version
+${CXX} --version
+python --version

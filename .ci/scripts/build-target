@@ -1,0 +1,18 @@
+#!/bin/sh
+
+# e - non-interactive terminals will exit on failures immediately
+# x - print commands before exiting
+# u - error on unset variables
+set -exu
+
+PACKAGE_NAME="${PACKAGE_NAME:-$(cat PACKAGE_NAME)}"
+
+# configure build via environment variables
+cmake -Bbuild -H. -DCMAKE_INSTALL_PREFIX="$PREFIX" \
+  -DCMAKE_BUILD_TYPE="$BUILD_TYPE" \
+  -DCPACK_GENERATOR=TGZ \
+  -DCPACK_PACKAGE_FILE_NAME="$PACKAGE_NAME" \
+  -DCPACK_SET_DESTDIR=ON "${CONFIGURE_FLAGS:-}" -G Ninja
+
+# execute specific cmake target
+cmake --build build --target "$TARGET"

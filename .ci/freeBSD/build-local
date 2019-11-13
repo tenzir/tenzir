@@ -1,0 +1,11 @@
+#!/bin/sh
+
+
+# A script to builds the entire VAST ci pipeline locally on freeBSD. That includes an install, so be careful.
+
+export CC=cc
+export CXX=c++
+
+CI_FOLDER="$(dirname "$(dirname "$(readlink -f "$0")")")"
+
+sh "$CI_FOLDER/scripts/run-all-targets"
