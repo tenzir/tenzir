@@ -26,8 +26,7 @@ style_task:
   unit_test_script:
     - TARGET=test .ci/scripts/build-target
   integration_test_script: >
-    export TARGET=integration
-    if ! .ci/scripts/build-target; then
+    if ! TARGET=integration .ci/scripts/build-target; then
       tar -czf "$(cat ARTIFACT_NAME).tar.gz" -C build vast-integration-test
       .ci/scripts/transfer-file "$(cat ARTIFACT_NAME).tar.gz" mule@tenzir.dfn-cert.de:/home/mule/integration/vast/
       echo "Download with: \`scp tenzir.dfn-cert.de:/home/mule/integration/vast/$(cat ARTIFACT_NAME).tar.gz .\`"
