@@ -23,10 +23,10 @@
 #include "vast/logger.hpp"
 #include "vast/scope_linked.hpp"
 #include "vast/system/accountant.hpp"
+#include "vast/system/node_control.hpp"
 #include "vast/system/query_status.hpp"
 #include "vast/system/read_query.hpp"
 #include "vast/system/signal_monitor.hpp"
-#include "vast/system/spawn_at_node.hpp"
 #include "vast/system/spawn_or_connect_to_node.hpp"
 #include "vast/system/tracker.hpp"
 
@@ -88,26 +88,17 @@ caf::message sink_command(const command::invocation& invocation,
   auto spawn_exporter
     = command::invocation{invocation.options, "spawn exporter", {*query}};
   VAST_DEBUG(&invocation, "spawns exporter with parameters:", spawn_exporter);
-  auto exp = spawn_at(self, node, spawn_exporter);
+  auto exp = spawn_at_node(self, node, spawn_exporter);
   if (!exp)
     return caf::make_message(std::move(exp.error()));
   // Register the accountant at the Sink.
-  caf::error err;
-  self->request(node, infinite, get_atom::value)
-    .receive(
-      [&](const std::string& id, system::registry& reg) {
-        // Assign accountant to sink.
-        VAST_DEBUG(invocation.full_name, "assigns accountant from node", id,
-                   "to new sink");
-        auto er = reg.components[id].find("accountant");
-        if (er != reg.components[id].end()) {
-          auto accountant = er->second.actor;
-          self->send(snk, actor_cast<accountant_type>(accountant));
-        }
-      },
-      [&](error& e) { err = std::move(e); });
-  if (err) {
-    return caf::make_message(std::move(err));
+  auto components = get_node_component<accountant_atom>(self, node);
+  if (!components)
+    return caf::make_message(std::move(components.error()));
+  auto& [accountant] = *components;
+  if (accountant) {
+    VAST_DEBUG(invocation.full_name, "assigns accountant to new sink");
+    self->send(snk, actor_cast<accountant_type>(*accountant));
   }
   // Start the exporter.
   self->send(*exp, system::sink_atom::value, snk);
@@ -118,6 +109,7 @@ caf::message sink_command(const command::invocation& invocation,
   self->monitor(snk);
   self->monitor(*exp);
   guard.disable();
+  caf::error err;
   auto waiting_for_final_report = false;
   auto stop = false;
   self
@@ -181,7 +173,7 @@ caf::message sink_command(const command::invocation& invocation,
       [&](system::signal_atom, int signal) {
         VAST_DEBUG(invocation.full_name, "got " << ::strsignal(signal));
         if (signal == SIGINT || signal == SIGTERM) {
-          self->send_exit(exp, exit_reason::user_shutdown);
+          self->send_exit(*exp, exit_reason::user_shutdown);
           self->send_exit(snk, exit_reason::user_shutdown);
         }
       })
