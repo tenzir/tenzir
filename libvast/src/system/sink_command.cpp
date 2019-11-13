@@ -26,6 +26,7 @@
 #include "vast/system/query_status.hpp"
 #include "vast/system/read_query.hpp"
 #include "vast/system/signal_monitor.hpp"
+#include "vast/system/spawn_at_node.hpp"
 #include "vast/system/spawn_or_connect_to_node.hpp"
 #include "vast/system/tracker.hpp"
 
@@ -48,6 +49,10 @@ namespace vast::system {
 
 caf::message sink_command(const command::invocation& invocation,
                           actor_system& sys, caf::actor snk) {
+  // Get a convenient and blocking way to interact with actors.
+  scoped_actor self{sys};
+  auto guard = caf::detail::make_scope_guard(
+    [&] { self->send_exit(snk, exit_reason::user_shutdown); });
   // Read query from input file, STDIN or CLI arguments.
   auto query = read_query(invocation, "export.read");
   if (!query)
@@ -67,8 +72,6 @@ caf::message sink_command(const command::invocation& invocation,
     *query = to_string(ast);
     VAST_DEBUG(&invocation, "transformed expression to", *query);
   }
-  // Get a convenient and blocking way to interact with actors.
-  scoped_actor self{sys};
   // Get VAST node.
   auto node_opt
     = spawn_or_connect_to_node(self, invocation.options, content(sys.config()));
@@ -80,25 +83,16 @@ caf::message sink_command(const command::invocation& invocation,
   VAST_ASSERT(node != nullptr);
   // Start signal monitor.
   std::thread sig_mon_thread;
-  auto guard = signal_monitor::run_guarded(sig_mon_thread, sys, 750ms, self);
-  // Spawn exporter at the node.
-  actor exp;
-  auto node_invocation
+  auto signal_guard
+    = signal_monitor::run_guarded(sig_mon_thread, sys, 750ms, self);
+  auto spawn_exporter
     = command::invocation{invocation.options, "spawn exporter", {*query}};
-  VAST_DEBUG(&invocation, "spawns exporter with parameters:", node_invocation);
-  error err;
-  self->request(node, infinite, std::move(node_invocation))
-    .receive(
-      [&](actor& a) {
-        exp = std::move(a);
-        if (!exp)
-          err = make_error(ec::invalid_result, "remote spawn returned nullptr");
-      },
-      [&](error& e) { err = std::move(e); });
-  if (err) {
-    self->send_exit(snk, exit_reason::user_shutdown);
-    return caf::make_message(std::move(err));
-  }
+  VAST_DEBUG(&invocation, "spawns exporter with parameters:", spawn_exporter);
+  auto exp = spawn_at(self, node, spawn_exporter);
+  if (!exp)
+    return caf::make_message(std::move(exp.error()));
+  // Register the accountant at the Sink.
+  caf::error err;
   self->request(node, infinite, get_atom::value)
     .receive(
       [&](const std::string& id, system::registry& reg) {
@@ -113,17 +107,17 @@ caf::message sink_command(const command::invocation& invocation,
       },
       [&](error& e) { err = std::move(e); });
   if (err) {
-    self->send_exit(snk, exit_reason::user_shutdown);
     return caf::make_message(std::move(err));
   }
   // Start the exporter.
-  self->send(exp, system::sink_atom::value, snk);
-  self->send(exp, system::run_atom::value);
+  self->send(*exp, system::sink_atom::value, snk);
+  self->send(*exp, system::run_atom::value);
   // Register self as the statistics actor.
-  self->send(exp, system::statistics_atom::value, self);
+  self->send(*exp, system::statistics_atom::value, self);
   self->send(snk, system::statistics_atom::value, self);
   self->monitor(snk);
-  self->monitor(exp);
+  self->monitor(*exp);
+  guard.disable();
   auto waiting_for_final_report = false;
   auto stop = false;
   self
@@ -133,13 +127,13 @@ caf::message sink_command(const command::invocation& invocation,
         if (msg.source == node) {
           VAST_DEBUG_ANON(__func__, "received DOWN from node");
           self->send_exit(snk, exit_reason::user_shutdown);
-          self->send_exit(exp, exit_reason::user_shutdown);
-        } else if (msg.source == exp) {
+          self->send_exit(*exp, exit_reason::user_shutdown);
+        } else if (msg.source == *exp) {
           VAST_DEBUG(invocation.full_name, "received DOWN from exporter");
           self->send_exit(snk, exit_reason::user_shutdown);
         } else if (msg.source == snk) {
           VAST_DEBUG(invocation.full_name, "received DOWN from sink");
-          self->send_exit(exp, exit_reason::user_shutdown);
+          self->send_exit(*exp, exit_reason::user_shutdown);
           stop = false;
           waiting_for_final_report = true;
         } else {
