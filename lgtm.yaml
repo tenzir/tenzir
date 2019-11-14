@@ -18,12 +18,12 @@ extraction:
     configure:
       command:
         - pip3 install cmake
-        - /opt/work/.local/lib/python3.6/site-packages/cmake/data/bin/cmake --version
+        - $(python3 -m site --user-site)/cmake/data/bin/cmake --version
         - git submodule update --init aux/caf
         - git submodule update --init aux/broker/broker
         - git -C aux/broker/broker submodule update --init 3rdparty
-        - /opt/work/.local/lib/python3.6/site-packages/cmake/data/bin/cmake -Bbuild -H. -DCMAKE_INSTALL_PREFIX="$PREFIX"
+        - $(python3 -m site --user-site)/cmake/data/bin/cmake -Bbuild -H. -DCMAKE_INSTALL_PREFIX="$PREFIX"
           -DCMAKE_BUILD_TYPE=$BUILD_TYPE -G Ninja
     index:
       build_command:
-        - /opt/work/.local/lib/python3.6/site-packages/cmake/data/bin/cmake --build build --target all --parallel
+        - $(python3 -m site --user-site)/cmake/data/bin/cmake --build build --target all --parallel
