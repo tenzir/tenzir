@@ -52,8 +52,12 @@ debian_task:
     CXX: g++-8
     matrix:
       - BUILD_TYPE: Release
+      - BUILD_TYPE: Release
+        CONFIGURE_FLAGS: -DBUILD_SHARED_LIBS:BOOL=OFF
       - BUILD_TYPE: Debug
         CONFIGURE_FLAGS: -DENABLE_ADDRESS_SANITIZER:BOOL=ON
+      - BUILD_TYPE: Debug
+        CONFIGURE_FLAGS: -DENABLE_ADDRESS_SANITIZER:BOOL=ON -DBUILD_SHARED_LIBS:BOOL=OFF
   <<: *build_definition
 
 freebsd_task:
