@@ -1,6 +1,13 @@
 path_classifiers:
+  docs:
+    - doc
+    - exclude: doc/cli
   test:
     - libvast_test
+    - integration
+    - libvast/test
+  template:
+    - scripts
 extraction:
   cpp:
     prepare:
