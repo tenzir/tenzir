@@ -1,0 +1,36 @@
+path_classifiers:
+  docs:
+    - doc
+    - exclude: doc/cli
+  test:
+    - libvast_test
+    - integration
+    - libvast/test
+  template:
+    - scripts
+extraction:
+  cpp:
+    prepare:
+      packages:
+        - libssl-dev
+        - python-pip
+    after_prepare:
+      - mkdir -p $LGTM_WORKSPACE/latest-gcc-symlinks
+      - ln -s /usr/bin/g++-8 $LGTM_WORKSPACE/latest-gcc-symlinks/g++
+      - ln -s /usr/bin/gcc-8 $LGTM_WORKSPACE/latest-gcc-symlinks/gcc
+      - export BUILD_TYPE=Release
+      - export GIT=true
+      - export PATH=$LGTM_WORKSPACE/latest-gcc-symlinks:$PATH
+      - export PREFIX=/opt/tenzir
+    configure:
+      command:
+        - pip3 install cmake
+        - $(python3 -m site --user-site)/cmake/data/bin/cmake --version
+        - git submodule update --init aux/caf
+        - git submodule update --init aux/broker/broker
+        - git -C aux/broker/broker submodule update --init 3rdparty
+        - $(python3 -m site --user-site)/cmake/data/bin/cmake -Bbuild -H. -DCMAKE_INSTALL_PREFIX="$PREFIX"
+          -DCMAKE_BUILD_TYPE=$BUILD_TYPE -G Ninja
+    index:
+      build_command:
+        - $(python3 -m site --user-site)/cmake/data/bin/cmake --build build --target all --parallel
