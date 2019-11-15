@@ -13,26 +13,26 @@
 
 #include "vast/system/source_command.hpp"
 
-#include <csignal>
+#include "vast/concept/parseable/to.hpp"
+#include "vast/concept/parseable/vast/expression.hpp"
+#include "vast/detail/string.hpp"
+#include "vast/error.hpp"
+#include "vast/expression.hpp"
+#include "vast/logger.hpp"
+#include "vast/scope_linked.hpp"
+#include "vast/system/accountant.hpp"
+#include "vast/system/atoms.hpp"
+#include "vast/system/node_control.hpp"
+#include "vast/system/signal_monitor.hpp"
+#include "vast/system/spawn_or_connect_to_node.hpp"
+#include "vast/system/tracker.hpp"
 
 #include <caf/actor_cast.hpp>
 #include <caf/config_value.hpp>
 #include <caf/scoped_actor.hpp>
 #include <caf/settings.hpp>
 
-#include "vast/detail/string.hpp"
-#include "vast/error.hpp"
-#include "vast/expression.hpp"
-#include "vast/logger.hpp"
-#include "vast/scope_linked.hpp"
-
-#include "vast/concept/parseable/to.hpp"
-#include "vast/concept/parseable/vast/expression.hpp"
-
-#include "vast/system/accountant.hpp"
-#include "vast/system/signal_monitor.hpp"
-#include "vast/system/spawn_or_connect_to_node.hpp"
-#include "vast/system/tracker.hpp"
+#include <csignal>
 
 namespace vast::system {
 
@@ -75,47 +75,30 @@ caf::message source_command(const command::invocation& invocation,
   // Start signal monitor.
   std::thread sig_mon_thread;
   auto guard = signal_monitor::run_guarded(sig_mon_thread, sys, 750ms, self);
-  // Set defaults.
-  caf::error err;
-  // Connect source to importers.
-  caf::actor importer;
-  self->request(node, infinite, get_atom::value).receive(
-    [&](const std::string& id, system::registry& reg) {
-      // Assign accountant to source.
-      VAST_DEBUG(invocation.full_name, "assigns accountant from node", id,
-                 "to new source");
-      auto er = reg.components[id].equal_range("accountant");
-      if (er.first != er.second) {
-        auto accountant = er.first->second.actor;
-        self->send(src, actor_cast<accountant_type>(accountant));
-      }
-      // Assign IMPORTER to SOURCE and start streaming.
-      er = reg.components[id].equal_range("importer");
-      if (er.first == er.second) {
-        err = make_error(ec::missing_component, "importer");
-      } else if (reg.components[id].count("importer") > 1) {
-        err = make_error(ec::unimplemented,
-                         "multiple IMPORTER actors currently not supported");
-      } else {
-        VAST_DEBUG(invocation.full_name, "connects to importer");
-        importer = er.first->second.actor;
-        self->send(src, system::sink_atom::value, importer);
-      }
-    },
-    [&](error& e) {
-      err = std::move(e);
-    }
-  );
-  if (err)
-    return make_message(std::move(err));
+  // Get node components.
+  auto components
+    = get_node_component<accountant_atom, importer_atom>(self, node);
+  if (!components)
+    return make_message(components.error());
+  if (auto& accountant = (*components)[0]) {
+    VAST_DEBUG(invocation.full_name, "assigns accountant to source");
+    self->send(src, actor_cast<accountant_type>(*accountant));
+  }
+  // Connect source to importer.
+  auto& importer = (*components)[1];
+  if (!importer)
+    return make_message(importer.error());
+  VAST_DEBUG(invocation.full_name, "connects to importer");
+  self->send(src, system::sink_atom::value, *importer);
   // Start the source.
+  caf::error err;
   bool stop = false;
   self->monitor(src);
-  self->monitor(importer);
+  self->monitor(*importer);
   // clang-format off
   self->do_receive(
     [&](const down_msg& msg) {
-      if (msg.source == importer)  {
+      if (msg.source == *importer)  {
         VAST_DEBUG(invocation.full_name, "received DOWN from node importer");
         self->send_exit(src, exit_reason::user_shutdown);
         err = ec::remote_node_down;
@@ -123,7 +106,7 @@ caf::message source_command(const command::invocation& invocation,
       } else if (msg.source == src) {
         VAST_DEBUG(invocation.full_name, "received DOWN from source");
         if (caf::get_or(invocation.options, "import.blocking", false))
-          self->send(importer, subscribe_atom::value, flush_atom::value, self);
+          self->send(*importer, subscribe_atom::value, flush_atom::value, self);
         else
           stop = true;
       } else {
