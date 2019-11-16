@@ -19,6 +19,7 @@
 #include "vast/detail/assert.hpp"
 #include "vast/detail/byte_swap.hpp"
 #include "vast/error.hpp"
+#include "vast/ether_type.hpp"
 #include "vast/event.hpp"
 #include "vast/filesystem.hpp"
 #include "vast/logger.hpp"
@@ -99,6 +100,59 @@ const char* reader::name() const {
   return "pcap-reader";
 }
 
+namespace {
+
+enum class frame_type : char {
+  chap_none = '\x00',
+  chap_challenge = '\x01',
+  chap_response = '\x02',
+  chap_both = '\x03',
+  ethernet = '\x01',
+  vlan = '\x02',
+  mpls = '\x03',
+  pppoe = '\x04',
+  ppp = '\x05',
+  chap = '\x06',
+  ipv4 = '\x07',
+  udp = '\x08',
+  radius = '\x09',
+  radavp = '\x0a',
+  l2tp = '\x0b',
+  l2avp = '\x0c',
+  ospfv2 = '\x0d',
+  ospf_md5 = '\x0e',
+  tcp = '\x0f',
+  ip_md5 = '\x10',
+  unknown = '\x11',
+  gre = '\x12',
+  gtp = '\x13',
+  vxlan = '\x14'
+};
+
+// Strips all data from a frame until the IP layer is reached. The frame type
+// distinguisher exists for future recursive stripping.
+span<const byte> decapsulate(span<const byte> frame, frame_type type) {
+  switch (type) {
+    default:
+      return {};
+    case frame_type::ethernet: {
+      constexpr size_t ethernet_header_size = 14;
+      if (frame.size() < ethernet_header_size)
+        return {}; // need at least 2 MAC addresses and the 2-byte EtherType.
+      switch (as_ether_type(frame.subspan<12, 2>())) {
+        default:
+          return frame;
+        case ether_type::ieee_802_1aq:
+          return frame.subspan<4>(); // One 32-bit VLAN tag
+        case ether_type::ieee_802_1q_db:
+          return frame.subspan<2 * 4>(); // Two 32-bit VLAN tags
+      }
+    }
+  }
+}
+
+} // namespace
+
 caf::error reader::read_impl(size_t max_events, size_t max_slice_size,
                              consumer& f) {
   // Sanity checks.
@@ -154,13 +208,12 @@ caf::error reader::read_impl(size_t max_events, size_t max_slice_size,
     VAST_DEBUG(this, "expires flow table every", expire_interval_ << "s");
   }
   for (size_t produced = 0; produced < max_events; ++produced) {
+    // Attempt to fetch next packet.
     const u_char* data;
     pcap_pkthdr* header;
     auto r = ::pcap_next_ex(pcap_, &header, &data);
-    if (r == 0) {
-      // Attempt to fetch next packet timed out.
-      return finish(f, caf::none);
-    }
+    if (r == 0)
+      return finish(f, caf::none); // timed out
     if (r == -2)
       return finish(f, make_error(ec::end_of_input, "reached end of trace"));
     if (r == -1) {
@@ -170,21 +223,23 @@ caf::error reader::read_impl(size_t max_events, size_t max_slice_size,
       return finish(f, make_error(ec::format_error,
                                   "failed to get next packet: ", err));
     }
-    // Parse packet.
+    // Parse frame.
     span<const byte> frame{reinterpret_cast<const byte*>(data), header->len};
-    auto layer2_type = *reinterpret_cast<const uint16_t*>(
-      std::launder(data + 12));
+    frame = decapsulate(frame, frame_type::ethernet);
+    if (frame.empty())
+      return make_error(ec::format_error, "failed to decapsulate frame");
     constexpr size_t ethernet_header_size = 14;
-    auto layer3 = frame.subspan(ethernet_header_size);
+    auto layer3 = frame.subspan<ethernet_header_size>();
     span<const byte> layer4;
     uint8_t layer4_proto = 0;
     flow conn;
     // Parse layer 3.
-    switch (detail::to_host_order(layer2_type)) {
-      default:
-        // Skip all non-IP packets.
+    switch (as_ether_type(frame.subspan<12, 2>())) {
+      default: {
+        VAST_DEBUG(this, "skips non-IP packet");
         continue;
-      case 0x0800: {
+      }
+      case ether_type::ipv4: {
         constexpr size_t ipv4_header_size = 20;
         if (header->len < ethernet_header_size + ipv4_header_size)
           return make_error(ec::format_error, "IPv4 header too short");
@@ -202,7 +257,7 @@ caf::error reader::read_impl(size_t max_events, size_t max_slice_size,
         layer4 = layer3.subspan(header_size);
         break;
       }
-      case 0x86dd: {
+      case ether_type::ipv6: {
         if (header->len < ethernet_header_size + 40)
           return make_error(ec::format_error, "IPv6 header too short");
         auto orig_h
