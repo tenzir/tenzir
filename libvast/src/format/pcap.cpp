@@ -13,6 +13,7 @@
 
 #include "vast/format/pcap.hpp"
 
+#include "vast/byte.hpp"
 #include "vast/community_id.hpp"
 #include "vast/defaults.hpp"
 #include "vast/detail/assert.hpp"
@@ -21,6 +22,7 @@
 #include "vast/event.hpp"
 #include "vast/filesystem.hpp"
 #include "vast/logger.hpp"
+#include "vast/span.hpp"
 #include "vast/table_slice.hpp"
 #include "vast/table_slice_builder.hpp"
 
@@ -152,7 +154,7 @@ caf::error reader::read_impl(size_t max_events, size_t max_slice_size,
     VAST_DEBUG(this, "expires flow table every", expire_interval_ << "s");
   }
   for (size_t produced = 0; produced < max_events; ++produced) {
-    const uint8_t* data;
+    const u_char* data;
     pcap_pkthdr* header;
     auto r = ::pcap_next_ex(pcap_, &header, &data);
     if (r == 0) {
@@ -169,80 +171,82 @@ caf::error reader::read_impl(size_t max_events, size_t max_slice_size,
                                   "failed to get next packet: ", err));
     }
     // Parse packet.
-    flow conn;
-    auto packet_size = header->len - 14;
-    auto layer3 = data + 14;
-    const uint8_t* layer4 = nullptr;
-    uint8_t layer4_proto = 0;
+    span<const byte> frame{reinterpret_cast<const byte*>(data), header->len};
     auto layer2_type = *reinterpret_cast<const uint16_t*>(
       std::launder(data + 12));
-    uint64_t payload_size = packet_size;
+    constexpr size_t ethernet_header_size = 14;
+    auto layer3 = frame.subspan(ethernet_header_size);
+    span<const byte> layer4;
+    uint8_t layer4_proto = 0;
+    flow conn;
+    // Parse layer 3.
     switch (detail::to_host_order(layer2_type)) {
       default:
         // Skip all non-IP packets.
         continue;
       case 0x0800: {
-        if (header->len < 14 + 20)
+        constexpr size_t ipv4_header_size = 20;
+        if (header->len < ethernet_header_size + ipv4_header_size)
           return make_error(ec::format_error, "IPv4 header too short");
-        size_t header_size = (*layer3 & 0x0f) * 4;
-        if (header_size < 20)
+        size_t header_size = (to_integer<uint8_t>(layer3[0]) & 0x0f) * 4;
+        if (header_size < ipv4_header_size)
           return make_error(ec::format_error,
                             "IPv4 header too short: ", header_size, " bytes");
-        auto orig_h = reinterpret_cast<const uint32_t*>(
-          std::launder(layer3 + 12));
-        auto resp_h = reinterpret_cast<const uint32_t*>(
-          std::launder(layer3 + 16));
+        auto orig_h
+          = reinterpret_cast<const uint32_t*>(std::launder(layer3.data() + 12));
+        auto resp_h
+          = reinterpret_cast<const uint32_t*>(std::launder(layer3.data() + 16));
         conn.src_addr = {orig_h, address::ipv4, address::network};
         conn.dst_addr = {resp_h, address::ipv4, address::network};
-        layer4_proto = *(layer3 + 9);
-        layer4 = layer3 + header_size;
-        payload_size -= header_size;
+        layer4_proto = to_integer<uint8_t>(layer3[9]);
+        layer4 = layer3.subspan(header_size);
         break;
       }
       case 0x86dd: {
-        if (header->len < 14 + 40)
+        if (header->len < ethernet_header_size + 40)
           return make_error(ec::format_error, "IPv6 header too short");
-        auto orig_h = reinterpret_cast<const uint32_t*>(
-          std::launder(layer3 + 8));
-        auto resp_h = reinterpret_cast<const uint32_t*>(
-          std::launder(layer3 + 24));
+        auto orig_h
+          = reinterpret_cast<const uint32_t*>(std::launder(layer3.data() + 8));
+        auto resp_h
+          = reinterpret_cast<const uint32_t*>(std::launder(layer3.data() + 24));
         conn.src_addr = {orig_h, address::ipv4, address::network};
         conn.dst_addr = {resp_h, address::ipv4, address::network};
-        layer4_proto = *(layer3 + 6);
-        layer4 = layer3 + 40;
-        payload_size -= 40;
+        layer4_proto = to_integer<uint8_t>(layer3[6]);
+        layer4 = layer3.subspan(40);
         break;
       }
     }
+    // Parse layer 4.
+    auto payload_size = layer4.size();
     if (layer4_proto == IPPROTO_TCP) {
-      VAST_ASSERT(layer4);
-      auto orig_p = *reinterpret_cast<const uint16_t*>(std::launder(layer4));
-      auto resp_p = *reinterpret_cast<const uint16_t*>(
-        std::launder(layer4 + 2));
+      VAST_ASSERT(!layer4.empty());
+      auto orig_p
+        = *reinterpret_cast<const uint16_t*>(std::launder(layer4.data()));
+      auto resp_p
+        = *reinterpret_cast<const uint16_t*>(std::launder(layer4.data() + 2));
       orig_p = detail::to_host_order(orig_p);
       resp_p = detail::to_host_order(resp_p);
       conn.src_port = {orig_p, port::tcp};
       conn.dst_port = {resp_p, port::tcp};
-      auto data_offset = *reinterpret_cast<const uint8_t*>(
-                           std::launder(layer4 + 12))
-                         >> 4;
+      auto data_offset
+        = *reinterpret_cast<const uint8_t*>(std::launder(layer4.data() + 12))
+          >> 4;
       payload_size -= data_offset * 4;
     } else if (layer4_proto == IPPROTO_UDP) {
-      VAST_ASSERT(layer4);
-      auto orig_p = *reinterpret_cast<const uint16_t*>(std::launder(layer4));
-      auto resp_p = *reinterpret_cast<const uint16_t*>(
-        std::launder(layer4 + 2));
+      VAST_ASSERT(!layer4.empty());
+      auto orig_p
+        = *reinterpret_cast<const uint16_t*>(std::launder(layer4.data()));
+      auto resp_p
+        = *reinterpret_cast<const uint16_t*>(std::launder(layer4.data() + 2));
       orig_p = detail::to_host_order(orig_p);
       resp_p = detail::to_host_order(resp_p);
       conn.src_port = {orig_p, port::udp};
       conn.dst_port = {resp_p, port::udp};
       payload_size -= 8;
     } else if (layer4_proto == IPPROTO_ICMP) {
-      VAST_ASSERT(layer4);
-      auto message_type = *reinterpret_cast<const uint8_t*>(
-        std::launder(layer4));
-      auto message_code = *reinterpret_cast<const uint8_t*>(
-        std::launder(layer4 + 1));
+      VAST_ASSERT(!layer4.empty());
+      auto message_type = to_integer<uint8_t>(layer4[0]);
+      auto message_code = to_integer<uint8_t>(layer4[1]);
       conn.src_port = {message_type, port::icmp};
       conn.dst_port = {message_code, port::icmp};
       payload_size -= 8; // TODO: account for variable-size data.
@@ -267,14 +271,13 @@ caf::error reader::read_impl(size_t max_events, size_t max_slice_size,
     ts += microseconds(header->ts.tv_usec);
 #endif
     // Assemble packet.
-    // We start with the network layer and skip the link layer.
-    auto str = reinterpret_cast<const char*>(std::launder(data + 14));
+    auto layer3_ptr = reinterpret_cast<const char*>(layer3.data());
+    auto packet = std::string_view{std::launder(layer3_ptr), layer3.size()};
     auto& cid = state(conn).community_id;
     if (!(builder_->add(ts) && builder_->add(conn.src_addr)
           && builder_->add(conn.dst_addr) && builder_->add(conn.src_port)
           && builder_->add(conn.dst_port)
-          && builder_->add(std::string_view{cid})
-          && builder_->add(std::string_view{str, packet_size}))) {
+          && builder_->add(std::string_view{cid}) && builder_->add(packet))) {
       return make_error(ec::parse_error, "unable to fill row");
     }
     if (pseudo_realtime_ > 0) {
