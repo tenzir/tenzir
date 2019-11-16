@@ -42,13 +42,11 @@ spawn_consensus_raft(caf::local_actor* self, spawn_arguments& args) {
     caf::anon_send(consensus, id_atom::value, id);
   anon_send(consensus, run_atom::value);
   // Spawn the store on top.
-  auto s = self->spawn(replicated_store<std::string, data>, consensus);
-  s->attach_functor(
-    [=](const error&) {
-      anon_send_exit(consensus, caf::exit_reason::user_shutdown);
-    }
-  );
-  return s;
+  auto store = self->spawn(replicated_store<std::string, data>, consensus);
+  store->attach_functor([=](const error&) {
+    anon_send_exit(consensus, caf::exit_reason::user_shutdown);
+  });
+  return store;
 }
 
 caf::expected<consensus_type>
