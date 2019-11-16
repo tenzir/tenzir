@@ -153,9 +153,12 @@ using importer_actor = caf::stateful_actor<importer_state>;
 /// Spawns an IMPORTER.
 /// @param self The actor handle.
 /// @param dir The directory for persistent state.
+/// @param archive A handle to the ARCHIVE.
 /// @param consensus A handle to the consensus module.
+/// @param index A handle to the INDEX.
 /// @param batch_size The initial number of IDs to request when replenishing.
-caf::behavior importer(importer_actor* self, path dir, consensus_type consensus,
+caf::behavior importer(importer_actor* self, path dir, archive_type archive,
+                       consensus_type consensus, caf::actor index,
                        size_t max_table_slice_size);
 
 } // namespace vast::system

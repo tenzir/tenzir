@@ -34,9 +34,14 @@ maybe_actor spawn_importer(node_actor* self, spawn_arguments& args) {
                                 "system.table-slice-size",
                                 defaults::system::table_slice_size);
   auto& st = self->state;
+  if (!st.archive)
+    return make_error(ec::missing_component, "archive");
   if (!st.consensus)
     return make_error(ec::missing_component, "consensus");
-  return self->spawn(importer, args.dir / args.label, st.consensus, slice_size);
+  if (!st.index)
+    return make_error(ec::missing_component, "index");
+  return self->spawn(importer, args.dir / args.label, st.archive, st.consensus,
+                     st.index, slice_size);
 }
 
 } // namespace vast::system

@@ -69,11 +69,13 @@ behavior dummy_sink(event_based_actor* self, size_t num_events, actor overseer) 
 template <class Base>
 struct importer_fixture : Base {
   importer_fixture(size_t table_slice_size) : slice_size(table_slice_size) {
+    using vast::system::archive_type;
     MESSAGE("spawn importer + store");
     this->directory /= "importer";
     store = this->self->spawn(system::data_store<std::string, data>);
-    importer
-      = this->self->spawn(system::importer, this->directory, store, slice_size);
+    importer = this->self->spawn(system::importer, this->directory,
+                                 archive_type{}, store, caf::actor{},
+                                 slice_size);
   }
 
   ~importer_fixture() {
