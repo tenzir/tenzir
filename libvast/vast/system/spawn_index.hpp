@@ -24,6 +24,6 @@ namespace vast::system {
 /// @param self Points to the parent actor.
 /// @param args Configures the new actor.
 /// @returns a handle to the spawned actor on success, an error otherwise
-maybe_actor spawn_index(caf::local_actor* self, spawn_arguments& args);
+maybe_actor spawn_index(node_actor* self, spawn_arguments& args);
 
 } // namespace vast::system

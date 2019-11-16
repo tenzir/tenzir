@@ -17,6 +17,7 @@
 #include "vast/command.hpp"
 #include "vast/error.hpp"
 #include "vast/filesystem.hpp"
+#include "vast/system/archive.hpp"
 #include "vast/system/consensus.hpp"
 #include "vast/system/spawn_arguments.hpp"
 #include "vast/system/tracker.hpp"
@@ -76,6 +77,12 @@ struct node_state {
 
   /// Handle to the consensus module.
   consensus_type consensus;
+
+  /// Handle to the ARCHIVE.
+  archive_type archive;
+
+  /// Handle to the INDEX.
+  caf::actor index;
 
   /// Maps command names (including parent command) to spawn functions.
   inline static named_component_factory component_factory = {};
