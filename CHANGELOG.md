@@ -10,6 +10,11 @@ Every entry has a category for which we use the following visual abbreviations:
 
 ## [Unreleased]
 
+- 🐞 PCAP ingestion failed for traces containing VLAN tags. VAST now strips
+  [IEEE 802.1Q](https://en.wikipedia.org/wiki/IEEE_802.1Q) headers instead of
+  skipping VLAN-tagged packets.
+  [#650](https://github.com/tenzir/vast/pull/650)
+
 - 🎁 The `import pcap` command now takes an optional snapshot length via
   `--snaplen`.  If the snapshot length is set to snaplen, and snaplen is less
   than the size of a packet that is captured, only the first snaplen bytes of
