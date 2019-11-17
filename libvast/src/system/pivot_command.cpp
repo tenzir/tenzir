@@ -24,6 +24,7 @@
 #include "vast/logger.hpp"
 #include "vast/scope_linked.hpp"
 #include "vast/system/atoms.hpp"
+#include "vast/system/node_control.hpp"
 #include "vast/system/read_query.hpp"
 #include "vast/system/signal_monitor.hpp"
 #include "vast/system/sink.hpp"
@@ -105,6 +106,8 @@ pivot_command(const command::invocation& invocation, caf::actor_system& sys) {
                                                       "implemented for pcap, "
                                                       "suricata and zeek"));
   caf::scoped_actor self{sys};
+  auto writer_guard = caf::detail::make_scope_guard(
+    [&] { self->send_exit(writer, caf::exit_reason::user_shutdown); });
   // Get VAST node.
   auto node_opt
     = spawn_or_connect_to_node(self, invocation.options, content(sys.config()));
@@ -117,87 +120,56 @@ pivot_command(const command::invocation& invocation, caf::actor_system& sys) {
   // TODO(ch9412): Factor guard into a function.
   // Start signal monitor.
   std::thread sig_mon_thread;
-  auto guard = signal_monitor::run_guarded(sig_mon_thread, sys, 750ms, self);
+  auto signal_guard
+    = signal_monitor::run_guarded(sig_mon_thread, sys, 750ms, self);
   // Spawn exporter at the node.
-  caf::actor exp;
-  auto exporter_invocation
+  auto spawn_exporter
     = command::invocation{invocation.options, "spawn exporter", {*query}};
-  VAST_DEBUG(invocation.full_name,
-             "spawns exporter with parameters:", exporter_invocation);
-  error err;
-  self->request(node, caf::infinite, std::move(exporter_invocation))
-    .receive(
-      [&](caf::actor& a) {
-        exp = std::move(a);
-        if (!exp)
-          err = make_error(ec::invalid_result, "remote spawn returned nullptr");
-      },
-      [&](error& e) { err = std::move(e); });
-  if (err) {
-    self->send_exit(writer, caf::exit_reason::user_shutdown);
-    return caf::make_message(std::move(err));
-  }
+  VAST_DEBUG(&invocation, "spawns exporter with parameters:", spawn_exporter);
+  auto exp = spawn_at_node(self, node, spawn_exporter);
+  if (!exp)
+    return caf::make_message(std::move(exp.error()));
+  auto exp_guard = caf::detail::make_scope_guard(
+    [&] { self->send_exit(*exp, caf::exit_reason::user_shutdown); });
   // Spawn pivoter at the node.
-  caf::actor piv;
-  auto pivoter_invocation = command::invocation{
+  auto spawn_pivoter = command::invocation{
     invocation.options, "spawn pivoter", {invocation.arguments[0], *query}};
-  VAST_DEBUG(invocation.full_name,
-             "spawns exporter with parameters:", pivoter_invocation);
-  self->request(node, caf::infinite, std::move(pivoter_invocation))
-    .receive(
-      [&](caf::actor& a) {
-        piv = std::move(a);
-        if (!piv)
-          err = make_error(ec::invalid_result, "remote spawn returned nullptr");
-      },
-      [&](error& e) { err = std::move(e); });
-  if (err) {
-    self->send_exit(exp, caf::exit_reason::user_shutdown);
-    self->send_exit(writer, caf::exit_reason::user_shutdown);
-    return caf::make_message(std::move(err));
+  VAST_DEBUG(&invocation, "spawns pivoter with parameters:", spawn_pivoter);
+  auto piv = spawn_at_node(self, node, spawn_pivoter);
+  if (!piv)
+    return caf::make_message(std::move(piv.error()));
+  auto piv_guard = caf::detail::make_scope_guard(
+    [&] { self->send_exit(*piv, caf::exit_reason::user_shutdown); });
+  // Register the accountant at the Sink.
+  auto components = get_node_component<accountant_atom>(self, node);
+  if (!components)
+    return caf::make_message(std::move(components.error()));
+  auto& [accountant] = *components;
+  if (accountant) {
+    VAST_DEBUG(invocation.full_name, "assigns accountant to writer");
+    self->send(writer, caf::actor_cast<accountant_type>(*accountant));
   }
-  self->request(node, caf::infinite, get_atom::value)
-    .receive(
-      [&](const std::string& id, system::registry& reg) {
-        // Assign accountant to sink.
-        VAST_DEBUG(invocation.full_name, "assigns accountant from node", id,
-                   "to new sink");
-        auto er = reg.components[id].find("accountant");
-        if (er != reg.components[id].end()) {
-          auto accountant = er->second.actor;
-          self->send(writer, caf::actor_cast<accountant_type>(accountant));
-        }
-      },
-      [&](error& e) { err = std::move(e); });
-  if (err) {
-    self->send_exit(writer, caf::exit_reason::user_shutdown);
-    return caf::make_message(std::move(err));
-  }
+  caf::error err;
   self->monitor(writer);
-  self->monitor(piv);
+  self->monitor(*piv);
   // Start the exporter.
-  self->send(exp, system::sink_atom::value, piv);
+  self->send(*exp, system::sink_atom::value, *piv);
   // (Ab)use query_statistics as done message.
-  self->send(exp, system::statistics_atom::value, piv);
-  self->send(piv, system::sink_atom::value, writer);
-  self->send(exp, system::run_atom::value);
+  self->send(*exp, system::statistics_atom::value, *piv);
+  self->send(*piv, system::sink_atom::value, writer);
+  self->send(*exp, system::run_atom::value);
   auto stop = false;
   self
     ->do_receive(
       [&](caf::down_msg& msg) {
         if (msg.source == node) {
-          VAST_DEBUG_ANON(__func__, "received DOWN from node");
-          self->send_exit(writer, caf::exit_reason::user_shutdown);
-          self->send_exit(exp, caf::exit_reason::user_shutdown);
-          self->send_exit(piv, caf::exit_reason::user_shutdown);
-        } else if (msg.source == piv) {
+          VAST_DEBUG(invocation.full_name, "received DOWN from node");
+        } else if (msg.source == *piv) {
           VAST_DEBUG(invocation.full_name, "received DOWN from pivoter");
-          self->send_exit(exp, caf::exit_reason::user_shutdown);
-          self->send_exit(writer, caf::exit_reason::user_shutdown);
+          piv_guard.disable();
         } else if (msg.source == writer) {
           VAST_DEBUG(invocation.full_name, "received DOWN from sink");
-          self->send_exit(exp, caf::exit_reason::user_shutdown);
-          self->send_exit(piv, caf::exit_reason::user_shutdown);
+          writer_guard.disable();
         } else {
           VAST_ASSERT(!"received DOWN from inexplicable actor");
         }
@@ -211,9 +183,7 @@ pivot_command(const command::invocation& invocation, caf::actor_system& sys) {
       [&](system::signal_atom, int signal) {
         VAST_DEBUG(invocation.full_name, "got " << ::strsignal(signal));
         if (signal == SIGINT || signal == SIGTERM) {
-          self->send_exit(exp, caf::exit_reason::user_shutdown);
-          self->send_exit(piv, caf::exit_reason::user_shutdown);
-          self->send_exit(writer, caf::exit_reason::user_shutdown);
+          stop = true;
         }
       })
     .until([&] { return stop; });
