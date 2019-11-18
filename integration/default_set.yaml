@@ -227,6 +227,15 @@ tests:
       - command: peer 'localhost:42124'
       - command: status
 
+  Importing VLAN traffic:
+    condition: 'import -h 2>&1 | grep -q pcap'
+    tags: [import, pcap]
+    steps:
+      - command: -N import pcap
+        input: data/pcap/vlan.pcap.gz
+      - command: -N status
+        transformation: jq '.node.index.statistics'
+
   Multi addr query:
     tags: [import-export, zeek]
     steps:

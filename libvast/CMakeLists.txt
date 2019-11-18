@@ -48,6 +48,7 @@ set(libvast_sources
     src/detail/terminal.cpp
     src/die.cpp
     src/error.cpp
+    src/ether_type.cpp
     src/event.cpp
     src/event_types.cpp
     src/ewah_bitmap.cpp
