@@ -13,17 +13,24 @@
 
 #pragma once
 
-#include <caf/fwd.hpp>
+#include <array>
+#include <utility>
 
-#include "vast/aliases.hpp"
-#include "vast/system/fwd.hpp"
+namespace vast::detail {
 
-namespace vast::system {
+namespace impl {
 
-/// Tries to spawn a new INDEX.
-/// @param self Points to the parent actor.
-/// @param args Configures the new actor.
-/// @returns a handle to the spawned actor on success, an error otherwise
-maybe_actor spawn_index(node_actor* self, spawn_arguments& args);
+template <typename T, std::size_t... Is>
+constexpr std::array<T, sizeof...(Is)>
+generate_array(const T& value, std::index_sequence<Is...>) {
+  return {{(static_cast<void>(Is), value)...}};
+}
 
-} // namespace vast::system
+} // namespace impl
+
+template <std::size_t N, typename T>
+constexpr std::array<T, N> generate_array(const T& value) {
+  return impl::generate_array(value, std::make_index_sequence<N>());
+}
+
+} // namespace vast::detail

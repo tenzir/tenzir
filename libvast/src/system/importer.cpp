@@ -284,10 +284,13 @@ auto make_importer_stage(importer_actor* self) {
 
 } // namespace <anonymous>
 
-behavior importer(stateful_actor<importer_state>* self, path dir,
+behavior importer(importer_actor* self, path dir, archive_type archive,
+                  consensus_type consensus, caf::actor index,
                   size_t max_table_slice_size) {
   VAST_TRACE(VAST_ARG(dir), VAST_ARG(max_table_slice_size));
   self->state.dir = dir;
+  self->monitor(consensus);
+  self->state.consensus = std::move(consensus);
   self->state.last_replenish = steady_clock::time_point::min();
   self->state.max_table_slice_size = static_cast<int32_t>(max_table_slice_size);
   auto err = self->state.read_state();
@@ -309,6 +312,12 @@ behavior importer(stateful_actor<importer_state>* self, path dir,
       self->quit(msg.reason);
     });
   self->state.stg = make_importer_stage(self);
+  if (archive)
+    self->state.stg->add_outbound_path(archive);
+  if (index) {
+    self->state.index_actors.emplace_back(index);
+    self->state.stg->add_outbound_path(index);
+  }
   return {
     [=](const consensus_type& c) {
       VAST_DEBUG(self, "registers consensus module");

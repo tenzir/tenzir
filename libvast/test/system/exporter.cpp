@@ -63,8 +63,8 @@ struct fixture : fixture_base {
   }
 
   void spawn_importer() {
-    importer = self->spawn(system::importer, directory / "importer",
-                           slice_size);
+    importer = self->spawn(system::importer, directory / "importer", archive,
+                           consensus, index, slice_size);
   }
 
   void spawn_consensus() {
@@ -80,14 +80,10 @@ struct fixture : fixture_base {
       spawn_index();
     if (!archive)
       spawn_archive();
-    if (!importer)
-      spawn_importer();
     if (!consensus)
       spawn_consensus();
-    run();
-    send(importer, archive);
-    send(importer, system::index_atom::value, index);
-    send(importer, consensus);
+    if (!importer)
+      spawn_importer();
     run();
   }
 

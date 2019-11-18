@@ -13,6 +13,13 @@
 
 #include "vast/system/spawn_archive.hpp"
 
+#include "vast/defaults.hpp"
+#include "vast/filesystem.hpp"
+#include "vast/si_literals.hpp"
+#include "vast/system/archive.hpp"
+#include "vast/system/node.hpp"
+#include "vast/system/spawn_arguments.hpp"
+
 #include <caf/actor.hpp>
 #include <caf/actor_cast.hpp>
 #include <caf/config_value.hpp>
@@ -20,17 +27,11 @@
 #include <caf/local_actor.hpp>
 #include <caf/settings.hpp>
 
-#include "vast/defaults.hpp"
-#include "vast/filesystem.hpp"
-#include "vast/si_literals.hpp"
-#include "vast/system/archive.hpp"
-#include "vast/system/spawn_arguments.hpp"
-
 using namespace vast::binary_byte_literals;
 
 namespace vast::system {
 
-maybe_actor spawn_archive(caf::local_actor* self, spawn_arguments& args) {
+maybe_actor spawn_archive(node_actor* self, spawn_arguments& args) {
   namespace sd = vast::defaults::system;
   if (!args.empty())
     return unexpected_arguments(args);
@@ -39,6 +40,7 @@ maybe_actor spawn_archive(caf::local_actor* self, spawn_arguments& args) {
              * get_or(args.invocation.options, "max-segment-size",
                       sd::max_segment_size);
   auto a = self->spawn(archive, args.dir / args.label, segments, mss);
+  self->state.archive = a;
   return caf::actor_cast<caf::actor>(a);
 }
 

@@ -89,6 +89,7 @@ using write_atom = caf::atom_constant<caf::atom("write")>;
 
 // Actor roles
 using accountant_atom = caf::atom_constant<caf::atom("accountant")>;
+using archive_atom = caf::atom_constant<caf::atom("archive")>;
 using candidate_atom = caf::atom_constant<caf::atom("candidate")>;
 using consensus_atom = caf::atom_constant<caf::atom("consensus")>;
 using identifier_atom = caf::atom_constant<caf::atom("identifier")>;

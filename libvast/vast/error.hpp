@@ -66,8 +66,8 @@ enum class ec : uint8_t {
   invalid_subcommand,
   /// A command failed, because the command line failed to select a subcommand.
   missing_subcommand,
-  /// A command failed because it was unable to connect to an importer.
-  no_importer,
+  /// A command failed because a component is missing.
+  missing_component,
   /// Encountered a currently unimplemented code path or missing feature.
   unimplemented,
 };

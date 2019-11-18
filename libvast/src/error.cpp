@@ -47,7 +47,7 @@ const char* descriptions[] = {
   "unrecognized_option",
   "invalid_subcommand",
   "missing_subcommand",
-  "no_importer",
+  "missing_component",
   "unimplemented",
 };
 

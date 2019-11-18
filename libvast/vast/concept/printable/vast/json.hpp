@@ -138,11 +138,11 @@ struct json_printer : printer<json_printer<TreePolicy, Indent, Padding>> {
         return false;
       if (begin == end)
         return str.print(out_, "[]");
-      if (!any.print(out_, '['))
+      if (!printers::any.print(out_, '['))
         return false;
       if (tree) {
         ++depth_;
-        any.print(out_, '\n');
+        printers::any.print(out_, '\n');
       }
       while (begin != end) {
         if (!indent())
@@ -156,10 +156,10 @@ struct json_printer : printer<json_printer<TreePolicy, Indent, Padding>> {
       }
       if (tree) {
         --depth_;
-        if (!any.print(out_, '\n') || !indent())
+        if (!printers::any.print(out_, '\n') || !indent())
           return false;
       }
-      return any.print(out_, ']');
+      return printers::any.print(out_, ']');
     }
 
     bool operator()(const json::array& xs) {
@@ -182,11 +182,11 @@ struct json_printer : printer<json_printer<TreePolicy, Indent, Padding>> {
         return false;
       if (begin == end)
         return str.print(out_, "{}");
-      if (!any.print(out_, '{'))
+      if (!printers::any.print(out_, '{'))
         return false;
       if (tree) {
         ++depth_;
-        if (!any.print(out_, '\n'))
+        if (!printers::any.print(out_, '\n'))
           return false;
       }
       while (begin != end) {
@@ -205,12 +205,12 @@ struct json_printer : printer<json_printer<TreePolicy, Indent, Padding>> {
       }
       if (tree) {
         --depth_;
-        if (!any.print(out_, '\n'))
+        if (!printers::any.print(out_, '\n'))
           return false;
         if (!indent())
           return false;
       }
-      return any.print(out_, '}');
+      return printers::any.print(out_, '}');
     }
 
     bool operator()(const json::object& xs) {

@@ -45,7 +45,7 @@ TEST(to_string) {
   CHECK_EQUAL(str(ec::unrecognized_option), "unrecognized_option"s);
   CHECK_EQUAL(str(ec::invalid_subcommand), "invalid_subcommand"s);
   CHECK_EQUAL(str(ec::missing_subcommand), "missing_subcommand"s);
-  CHECK_EQUAL(str(ec::no_importer), "no_importer"s);
+  CHECK_EQUAL(str(ec::missing_component), "missing_component"s);
   CHECK_EQUAL(str(ec::unimplemented), "unimplemented"s);
 }
 

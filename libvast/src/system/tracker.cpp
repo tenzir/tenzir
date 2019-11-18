@@ -139,12 +139,6 @@ void register_component(scheduled_actor* self, tracker_state& st,
     for (auto& a : actors("sink"))
       anon_send(component, sink_atom::value, a);
   } else if (type == "importer") {
-    for (auto& a : actors("consensus"))
-      anon_send(component, actor_cast<consensus_type>(a));
-    for (auto& a : actors("archive"))
-      anon_send(component, actor_cast<archive_type>(a));
-    for (auto& a : actors("index"))
-      anon_send(component, index_atom::value, a);
     for (auto& a : actors("source"))
       anon_send(a, sink_atom::value, component);
   } else if (type == "source") {
