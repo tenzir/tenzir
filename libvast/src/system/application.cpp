@@ -420,7 +420,8 @@ void render_error(const command& root, const caf::error& err,
 
 command::opts_builder source_opts(std::string_view category) {
   return command::opts(category)
-    .add<std::string>("listen,l", "the port number to listen on")
+    .add<std::string>("listen,l", "the endpoint to listen on "
+                                  "([host]:port/type)")
     .add<std::string>("read,r", "path to input where to read events from")
     .add<std::string>("schema-file,s", "path to alternate schema")
     .add<std::string>("schema,S", "alternate schema as string")
