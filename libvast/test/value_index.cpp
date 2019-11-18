@@ -516,7 +516,7 @@ TEST(none values) {
   CHECK_EQUAL(to_string(unbox(bm)), "01100010000001110001100");
   // NB: not same as !(x == 42)
   bm = idx->lookup(not_equal, make_data_view("foo"));
-  CHECK_EQUAL(to_string(unbox(bm)), "00000001100000001110000");
+  CHECK_EQUAL(to_string(unbox(bm)), "10011101111110001110011");
   bm = idx->lookup(equal, make_data_view(caf::none));
   CHECK_EQUAL(to_string(unbox(bm)), "10011100011110000000011");
   bm = idx->lookup(not_equal, make_data_view(caf::none));
