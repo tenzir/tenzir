@@ -226,8 +226,6 @@ class extent_type {
 public:
   using index_type = size_t;
 
-  static_assert(Ext >= 0, "A fixed-size span must be >= 0 in size.");
-
   constexpr extent_type() noexcept {
   }
 
@@ -514,10 +512,10 @@ private:
   span<element_type, dynamic_extent>
   make_subspan(index_type offset, index_type count,
                subspan_selector<dynamic_extent>) const {
-    VAST_ASSERT(offset >= 0 && size() - offset >= 0);
+    VAST_ASSERT(size() - offset >= 0);
     if (count == dynamic_extent)
       return {KnownNotNull{data() + offset}, size() - offset};
-    VAST_ASSERT(count >= 0 && size() - offset >= count);
+    VAST_ASSERT(size() - offset >= count);
     return {KnownNotNull{data() + offset}, count};
   }
 };
