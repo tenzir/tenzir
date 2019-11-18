@@ -8,6 +8,8 @@ path_classifiers:
     - libvast/test
   template:
     - scripts
+  library:
+    - aux
 extraction:
   cpp:
     prepare:
