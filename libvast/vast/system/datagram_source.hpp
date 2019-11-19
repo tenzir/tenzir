@@ -146,6 +146,12 @@ caf::behavior datagram_source(datagram_source_actor<Reader>* self,
       if (st.done)
         st.send_report();
     },
+    [=](accountant_type accountant) {
+      VAST_DEBUG(self, "sets accountant to", accountant);
+      self->state.accountant = std::move(accountant);
+      self->send(self->state.accountant, announce_atom::value,
+                 self->state.name);
+    },
     [=](sink_atom, const actor& sink) {
       // TODO: Currently, we use a broadcast downstream manager. We need to
       //       implement an anycast downstream manager and use it for the

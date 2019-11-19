@@ -10,6 +10,12 @@ Every entry has a category for which we use the following visual abbreviations:
 
 ## [Unreleased]
 
+- 🐞 Importing events over UDP with `vast import <format> --listen :<port>/udp`
+  failed to register the accountant component. This caused an unexpected
+  message warning to be printed on startup and resulted in losing import
+  statistics. VAST now correctly registers the accountant.
+  [#655](https://github.com/tenzir/vast/pull/655)
+
 - 🐞 PCAP ingestion failed for traces containing VLAN tags. VAST now strips
   [IEEE 802.1Q](https://en.wikipedia.org/wiki/IEEE_802.1Q) headers instead of
   skipping VLAN-tagged packets.
@@ -17,7 +23,7 @@ Every entry has a category for which we use the following visual abbreviations:
 
 - 🐞 In some cases it was possible that a source would connect to a node before
   it was fully initialized, resulting in a hanging `vast import` process. The
-  bug has been fixed.
+  bug has been fixed. [#647](https://github.com/tenzir/vast/pull/647)
 
 - 🎁 The `import pcap` command now takes an optional snapshot length via
   `--snaplen`.  If the snapshot length is set to snaplen, and snaplen is less
