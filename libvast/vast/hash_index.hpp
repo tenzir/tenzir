@@ -164,6 +164,9 @@ private:
   }
 
   bool append_impl(data_view x, id) override {
+    // After we deserialize the index, we can no longer append data.
+    if (immutable())
+      return false;
     auto digest = make_digest(x);
     if (!digest)
       return false;
@@ -196,6 +199,10 @@ private:
     };
     op == equal ? f(std::equal_to{}) : f(std::not_equal_to{});
     return result;
+  }
+
+  bool immutable() const {
+    return unique_digests_.empty() && !digests_.empty();
   }
 
   std::vector<digest_type> digests_;

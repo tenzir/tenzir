@@ -58,6 +58,8 @@ TEST(serialization) {
   REQUIRE(load(nullptr, buf, y) == caf::none);
   auto result = y.lookup(not_equal, make_data_view("bar"));
   CHECK_EQUAL(to_string(unbox(result)), "101");
+  // Cannot append after deserialization.
+  CHECK(!y.append(make_data_view("foo")));
 }
 
 // The attribute #index=hash selects the hash_index implementation.
