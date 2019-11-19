@@ -479,14 +479,7 @@ TEST(set) {
   CHECK_EQUAL(to_string(*idx2->lookup(ni, make_data_view(42))), "1001");
 }
 
-// Attention
-// =========
-// !(x == 42) is no the same as x != 42 because nil values never participate in
-// a lookup. This may seem counter-intuitive first, but the rationale
-// comes from consistency. For x != 42 it may seem natural to include nil
-// values because they are not 42, but for <, <=, >=, > it becomes less clear:
-// should nil be less or great than any other value in the domain?
-TEST(none values) {
+TEST(none values - string) {
   auto idx = factory<value_index>::make(string_type{});
   REQUIRE_NOT_EQUAL(idx, nullptr);
   REQUIRE(idx->append(make_data_view(caf::none)));
@@ -514,13 +507,26 @@ TEST(none values) {
   REQUIRE(idx->append(make_data_view(caf::none)));
   auto bm = idx->lookup(equal, make_data_view("foo"));
   CHECK_EQUAL(to_string(unbox(bm)), "01100010000001110001100");
-  // NB: not same as !(x == 42)
   bm = idx->lookup(not_equal, make_data_view("foo"));
   CHECK_EQUAL(to_string(unbox(bm)), "10011101111110001110011");
   bm = idx->lookup(equal, make_data_view(caf::none));
   CHECK_EQUAL(to_string(unbox(bm)), "10011100011110000000011");
   bm = idx->lookup(not_equal, make_data_view(caf::none));
   CHECK_EQUAL(to_string(unbox(bm)), "01100011100001111111100");
+}
+
+TEST(none values - arithmetic) {
+  auto idx = factory<value_index>::make(count_type{});
+  REQUIRE_NOT_EQUAL(idx, nullptr);
+  REQUIRE(idx->append(make_data_view(caf::none)));
+  REQUIRE(idx->append(make_data_view(42)));
+  REQUIRE(idx->append(make_data_view(43)));
+  REQUIRE(idx->append(make_data_view(caf::none)));
+  REQUIRE(idx->append(make_data_view(caf::none)));
+  auto bm = idx->lookup(less, make_data_view(50));
+  CHECK_EQUAL(to_string(unbox(bm)), "01100");
+  bm = idx->lookup(greater, make_data_view(42));
+  CHECK_EQUAL(to_string(unbox(bm)), "00100");
 }
 
 // This test uncovered a regression that ocurred when computing the rank of a
