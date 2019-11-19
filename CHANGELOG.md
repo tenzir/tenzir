@@ -10,9 +10,10 @@ Every entry has a category for which we use the following visual abbreviations:
 
 ## [Unreleased]
 
-- 🐞 Importing over UDP with `vast import <format> --listen :<port>/udp` failed
-  to register the accountant for internal logging, causing a unexpected message
-  warning to be printed when starting the source. This has now been fixed.
+- 🐞 Importing events over UDP with `vast import <format> --listen :<port>/udp`
+  failed to register the accountant component. This caused an unexpected
+  message warning to be printed on startup and resulted in losing import
+  statistics. VAST now correctly registers the accountant.
   [#655](https://github.com/tenzir/vast/pull/655)
 
 - 🐞 PCAP ingestion failed for traces containing VLAN tags. VAST now strips
