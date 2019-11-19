@@ -690,8 +690,8 @@ void bitvector<Block, Allocator>::append_blocks(InputIterator first,
   } else {
     while (first != last) {
       auto x = *first;
-      auto& last = blocks_.back();
-      last = (last & word_type::lsb_mask(p)) | (x << p);
+      auto& last_block = blocks_.back();
+      last_block = (last_block & word_type::lsb_mask(p)) | (x << p);
       blocks_.push_back(x >> (word_type::width - p));
       size_ += word_type::width;
       ++first;
