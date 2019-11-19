@@ -92,23 +92,9 @@ public:
   }
 
 private:
-  static bool compare(digest_type x, digest_type y) {
-    // The default equality operator may use element-wise comparison; this is
-    // faster.
-    return std::memcmp(x.data(), y.data(), x.size()) == 0;
-  }
-
   struct key {
-    friend bool operator==(key x, key y) {
-      return compare(x.bytes, y.bytes);
-    }
-
-    friend bool operator!=(key x, key y) {
-      return !(x == y);
-    }
-
     friend bool operator==(key x, digest_type y) {
-      return compare(x.bytes, y);
+      return std::memcmp(x.bytes.data(), y.data(), y.size()) == 0;
     }
 
     friend bool operator!=(key x, digest_type y) {
@@ -116,10 +102,18 @@ private:
     }
 
     friend bool operator==(digest_type x, key y) {
-      return compare(x, y.bytes);
+      return y == x;
     }
 
     friend bool operator!=(digest_type x, key y) {
+      return !(x == y);
+    }
+
+    friend bool operator==(key x, key y) {
+      return x == y.bytes;
+    }
+
+    friend bool operator!=(key x, key y) {
       return !(x == y);
     }
 
