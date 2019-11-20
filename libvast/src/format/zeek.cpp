@@ -99,7 +99,7 @@ caf::expected<type> parse_type(std::string_view zeek_type) {
 struct zeek_type_printer {
   template <class T>
   std::string operator()(const T& x) const {
-    return to_string(x);
+    return kind(x);
   }
 
   std::string operator()(const real_type&) {
@@ -112,6 +112,10 @@ struct zeek_type_printer {
 
   std::string operator()(const duration_type&) {
     return "interval";
+  }
+
+  std::string operator()(const address_type&) {
+    return "addr";
   }
 
   std::string operator()(const vector_type& t) const {
