@@ -174,7 +174,8 @@ void add_hash_index_attribute(record_type& layout) {
   // consider, such as zeek.x509.id (instead of uid).
   auto pred = [&](auto& field) {
     return caf::holds_alternative<string_type>(field.type)
-           && (field.name == "uid" || field.name == "fuid");
+           && (field.name == "uid" || field.name == "fuid"
+               || field.name == "community_id");
   };
   auto& fields = layout.fields;
   auto find = [&](auto i) { return std::find_if(i, fields.end(), pred); };
