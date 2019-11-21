@@ -25,18 +25,17 @@ endif ()
 if (MD2MAN_FOUND)
   add_custom_target(vast-man)
   foreach(man_page vast.1)
-    install(FILES ${man_page} DESTINATION share/man/man1)
+    install(FILES "${CMAKE_CURRENT_BINARY_DIR}/${man_page}" DESTINATION share/man/man1)
     if (MD2MAN_FOUND)
-      set(man_source ${CMAKE_CURRENT_SOURCE_DIR}/${man_page})
-      set(man_generated ${CMAKE_CURRENT_BINARY_DIR}/${man_page})
+      set(man_generated "${CMAKE_CURRENT_BINARY_DIR}/${man_page}")
       file(WRITE ${CMAKE_CURRENT_BINARY_DIR}/make_man_${man_page}.cmake
         "set(CMAKE_MODULE_PATH ${CMAKE_SOURCE_DIR}/cmake)
         include(Helpers)
         execute_process(
           COMMAND ${CMAKE_BINARY_DIR}/bin/vast manual
-          ERROR_VARIABLE MAN_CONTENT)
+          ERROR_FILE ${man_generated}.md)
         month_day_year(MAN_DATE)
-        configure_file(${man_source}.md ${man_generated}.md @ONLY)
+        configure_file(${man_generated}.md ${man_generated}.md @ONLY)
         execute_process(
            COMMAND md2man-roff ${man_generated}.md
            OUTPUT_FILE ${man_generated})")
