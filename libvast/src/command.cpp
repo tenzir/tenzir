@@ -217,7 +217,8 @@ void mantext(const command& cmd, std::ostream& os,
   os << header_prefix << ' ' << cmd.name << "\n\n";
   doctext(cmd, os);
   for (const auto& subcmd : cmd.children)
-    mantext(*subcmd, os, depth + 1);
+    if (subcmd->visible)
+      mantext(*subcmd, os, depth + 1);
   os << '\n';
 }
 
