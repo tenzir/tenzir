@@ -240,6 +240,7 @@ set(tests
     test/detail/base64.cpp
     test/detail/column_iterator.cpp
     test/detail/flat_lru_cache.cpp
+    test/detail/flat_map.cpp
     test/detail/operators.cpp
     test/detail/set_operations.cpp
     test/endpoint.cpp
