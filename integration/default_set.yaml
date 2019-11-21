@@ -135,7 +135,7 @@ tests:
       - command: status
         transformation: jq '.node.index.statistics.layouts | del(."vast.account".count)'
   Server Basic bgpdump:
-    tags: [server, import-export, bgpdump]
+    tags: [server, import-export, bgpdump, disabled]
     fixture: ServerTester
     steps:
       - command: import -b bgpdump
