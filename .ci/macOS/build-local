@@ -3,6 +3,7 @@
 
 # A script to builds the entire VAST ci pipeline locally on macOS. That includes an install, so be careful.
 
+unset CPPFLAGS CFLAGS CXXFLAGS LDFLAGS ARFLAGS
 export CC=cc
 export CXX=c++
 

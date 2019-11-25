@@ -12,7 +12,6 @@ style_task:
   depends_on:
     - style
   env:
-    PREFIX: /opt/tenzir
     MULE_SSH_KEY: "ENCRYPTED[b9aebb47f0f45d1af07797a742e7469835cac15ceb40ca1e5a82fe32c27435944990f7918a9ac0e9bbdcb7d9267a1e6d]"
   init_script:
     - git fetch origin
@@ -50,6 +49,7 @@ debian_task:
   env:
     CC: gcc-8
     CXX: g++-8
+    PREFIX: /opt/tenzir
     matrix:
       - BUILD_TYPE: Release
       - BUILD_TYPE: Debug
@@ -65,6 +65,7 @@ freebsd_task:
   env:
     CC: cc
     CXX: c++
+    PREFIX: /opt/tenzir
     matrix:
       - BUILD_TYPE: Release
       - BUILD_TYPE: Debug
@@ -83,6 +84,7 @@ macos_task:
     BUILD_TYPE: Release
     PATH: /usr/local/opt/python/libexec/bin:$PATH
     DESTDIR: "$PWD"
+    PREFIX: /usr/local/opt/tenzir
   setup_script:
     - HOMEBREW_NO_AUTO_UPDATE=1 brew install openssl cmake git ninja python libpcap jq tcpdump rsync
   <<: *build_definition
@@ -97,6 +99,7 @@ release_task:
   env:
     MULE_SSH_KEY: ENCRYPTED[b9aebb47f0f45d1af07797a742e7469835cac15ceb40ca1e5a82fe32c27435944990f7918a9ac0e9bbdcb7d9267a1e6d]
     GITHUB_TOKEN: ENCRYPTED[2cf0740e2a8de7138c76b376bda7d702c1211fe61b25a19c4a4b10a512856f8d1468f6345b2de487b15a294117dad391]
+    PREFIX: /opt/tenzir
   only_if: $CIRRUS_TAG != "" && $GITHUB_TOKEN != ""
   container:
     dockerfile: .ci/debian/Dockerfile
