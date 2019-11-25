@@ -10,6 +10,11 @@ Every entry has a category for which we use the following visual abbreviations:
 
 ## [Unreleased]
 
+- 🐞 The import process did not print statistics when importing events over UDP.
+  This has been fixed.  Additionally, warnings about dropped UDP packets are no
+  longer shown per packet, but rather periodically reported in a readable
+  format.  [#662](https://github.com/tenzir/vast/pull/662)
+
 - 🐞 Importing events over UDP with `vast import <format> --listen :<port>/udp`
   failed to register the accountant component. This caused an unexpected
   message warning to be printed on startup and resulted in losing import

@@ -62,6 +62,12 @@ struct datagram_source_state : source_state<Reader, caf::io::broker> {
 
   /// Shuts down the stream manager when `true`.
   bool done = false;
+
+  /// Containes the amount of dropped packets since the last heartbeat.
+  size_t dropped_packets = 0;
+
+  /// Timestamp when the source was started.
+  caf::timestamp start_time;
 };
 
 template <class Reader>
@@ -93,22 +99,13 @@ caf::behavior datagram_source(datagram_source_actor<Reader>* self,
   // Spin up the stream manager for the source.
   self->state.mgr = self->make_continuous_source(
     // init
-    [=](caf::unit_t&) {
-      timestamp now = system_clock::now();
-      self->send(self->state.accountant, "source.start", now);
-    },
+    [=](caf::unit_t&) { self->state.start_time = system_clock::now(); },
     // get next element
     [](caf::unit_t&, downstream<table_slice_ptr>&, size_t) {
       // nop, new slices are generated in the new_datagram_msg handler
     },
     // done?
-    [=](const caf::unit_t&) {
-      return self->state.done;
-    }
-  );
-  if (self->state.accountant) {
-    self->delayed_send(self, defs::telemetry_rate, telemetry_atom::value);
-  }
+    [=](const caf::unit_t&) { return self->state.done; });
   return {
     [=](caf::io::new_datagram_msg& msg) {
       // Check whether we can buffer more slices in the stream.
@@ -117,7 +114,7 @@ caf::behavior datagram_source(datagram_source_actor<Reader>* self,
       auto t = timer::start(st.measurement_);
       auto capacity = st.mgr->out().capacity();
       if (capacity == 0) {
-        VAST_WARNING(self, "has no capacity left in stream, dropping input!");
+        st.dropped_packets++;
         return;
       }
       // Extract events until the source has exhausted its input or until
@@ -148,9 +145,12 @@ caf::behavior datagram_source(datagram_source_actor<Reader>* self,
     },
     [=](accountant_type accountant) {
       VAST_DEBUG(self, "sets accountant to", accountant);
-      self->state.accountant = std::move(accountant);
-      self->send(self->state.accountant, announce_atom::value,
-                 self->state.name);
+      auto& st = self->state;
+      st.accountant = std::move(accountant);
+      self->send(st.accountant, "source.start", st.start_time);
+      self->send(st.accountant, announce_atom::value, st.name);
+      // Start the heartbeat loop
+      self->delayed_send(self, defs::telemetry_rate, telemetry_atom::value);
     },
     [=](sink_atom, const actor& sink) {
       // TODO: Currently, we use a broadcast downstream manager. We need to
@@ -174,8 +174,15 @@ caf::behavior datagram_source(datagram_source_actor<Reader>* self,
       self->state.filter = std::move(expr);
     },
     [=](telemetry_atom) {
-      self->state.send_report();
-      self->delayed_send(self, defs::telemetry_rate, telemetry_atom::value);
+      auto& st = self->state;
+      st.send_report();
+      if (st.dropped_packets > 0) {
+        VAST_WARNING(self, "has no capacity left in stream and dropped",
+                     st.dropped_packets, "packets");
+        st.dropped_packets = 0;
+      }
+      if (!st.done)
+        self->delayed_send(self, defs::telemetry_rate, telemetry_atom::value);
     }};
 }
 
