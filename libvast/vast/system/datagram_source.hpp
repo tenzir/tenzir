@@ -65,6 +65,9 @@ struct datagram_source_state : source_state<Reader, caf::io::broker> {
 
   /// Containes the amount of dropped packets since the last heartbeat.
   size_t dropped_packets = 0;
+
+  /// Timestamp when the source was started.
+  caf::timestamp start_time;
 };
 
 template <class Reader>
@@ -96,11 +99,7 @@ caf::behavior datagram_source(datagram_source_actor<Reader>* self,
   // Spin up the stream manager for the source.
   self->state.mgr = self->make_continuous_source(
     // init
-    [=](caf::unit_t&) {
-      timestamp now = system_clock::now();
-      if (self->state.accountant)
-        self->send(self->state.accountant, "source.start", now);
-    },
+    [=](caf::unit_t&) { self->state.start_time = system_clock::now(); },
     // get next element
     [](caf::unit_t&, downstream<table_slice_ptr>&, size_t) {
       // nop, new slices are generated in the new_datagram_msg handler
@@ -146,9 +145,12 @@ caf::behavior datagram_source(datagram_source_actor<Reader>* self,
     },
     [=](accountant_type accountant) {
       VAST_DEBUG(self, "sets accountant to", accountant);
-      self->state.accountant = std::move(accountant);
-      self->send(self->state.accountant, announce_atom::value,
-                 self->state.name);
+      auto& st = self->state;
+      st.accountant = std::move(accountant);
+      self->send(st.accountant, "source.start", st.start_time);
+      self->send(st.accountant, announce_atom::value, st.name);
+      // Start the heartbeat loop
+      self->delayed_send(self, defs::telemetry_rate, telemetry_atom::value);
     },
     [=](sink_atom, const actor& sink) {
       // TODO: Currently, we use a broadcast downstream manager. We need to
@@ -158,8 +160,6 @@ caf::behavior datagram_source(datagram_source_actor<Reader>* self,
       VAST_DEBUG(self, "registers sink", sink);
       // Start streaming.
       self->state.mgr->add_outbound_path(sink);
-      // Start the heartbeat loop
-      self->delayed_send(self, defs::telemetry_rate, telemetry_atom::value);
     },
     [=](get_atom, schema_atom) -> result<schema> {
       return self->state.reader.schema();
@@ -181,7 +181,8 @@ caf::behavior datagram_source(datagram_source_actor<Reader>* self,
                      st.dropped_packets, "packets");
         st.dropped_packets = 0;
       }
-      self->delayed_send(self, defs::telemetry_rate, telemetry_atom::value);
+      if (!st.done)
+        self->delayed_send(self, defs::telemetry_rate, telemetry_atom::value);
     }};
 }
 
