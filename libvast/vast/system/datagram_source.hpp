@@ -62,6 +62,9 @@ struct datagram_source_state : source_state<Reader, caf::io::broker> {
 
   /// Shuts down the stream manager when `true`.
   bool done = false;
+
+  /// Containes the amount of dropped packets since the last heartbeat.
+  size_t dropped_packets = 0;
 };
 
 template <class Reader>
@@ -95,20 +98,15 @@ caf::behavior datagram_source(datagram_source_actor<Reader>* self,
     // init
     [=](caf::unit_t&) {
       timestamp now = system_clock::now();
-      self->send(self->state.accountant, "source.start", now);
+      if (self->state.accountant)
+        self->send(self->state.accountant, "source.start", now);
     },
     // get next element
     [](caf::unit_t&, downstream<table_slice_ptr>&, size_t) {
       // nop, new slices are generated in the new_datagram_msg handler
     },
     // done?
-    [=](const caf::unit_t&) {
-      return self->state.done;
-    }
-  );
-  if (self->state.accountant) {
-    self->delayed_send(self, defs::telemetry_rate, telemetry_atom::value);
-  }
+    [=](const caf::unit_t&) { return self->state.done; });
   return {
     [=](caf::io::new_datagram_msg& msg) {
       // Check whether we can buffer more slices in the stream.
@@ -116,8 +114,12 @@ caf::behavior datagram_source(datagram_source_actor<Reader>* self,
       auto& st = self->state;
       auto t = timer::start(st.measurement_);
       auto capacity = st.mgr->out().capacity();
+      // VAST_INFO(self, "has a capacity of", capacity,
+      //           "left in stream of a maximum capacity of",
+      //           st.mgr->out().max_capacity());
       if (capacity == 0) {
-        VAST_WARNING(self, "has no capacity left in stream, dropping input!");
+        st.dropped_packets++;
+        // VAST_WARNING(self, "has no capacity left in stream, dropping input!");
         return;
       }
       // Extract events until the source has exhausted its input or until
@@ -160,6 +162,8 @@ caf::behavior datagram_source(datagram_source_actor<Reader>* self,
       VAST_DEBUG(self, "registers sink", sink);
       // Start streaming.
       self->state.mgr->add_outbound_path(sink);
+      // Start the heartbeat loop
+      self->delayed_send(self, defs::telemetry_rate, telemetry_atom::value);
     },
     [=](get_atom, schema_atom) -> result<schema> {
       return self->state.reader.schema();
@@ -174,7 +178,13 @@ caf::behavior datagram_source(datagram_source_actor<Reader>* self,
       self->state.filter = std::move(expr);
     },
     [=](telemetry_atom) {
-      self->state.send_report();
+      auto& st = self->state;
+      st.send_report();
+      if (st.dropped_packets > 0) {
+        VAST_WARNING(self, "has no capacity left in stream and dropped",
+                     st.dropped_packets, "packets");
+        st.dropped_packets = 0;
+      }
       self->delayed_send(self, defs::telemetry_rate, telemetry_atom::value);
     }};
 }
