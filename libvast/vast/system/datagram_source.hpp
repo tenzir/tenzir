@@ -114,12 +114,8 @@ caf::behavior datagram_source(datagram_source_actor<Reader>* self,
       auto& st = self->state;
       auto t = timer::start(st.measurement_);
       auto capacity = st.mgr->out().capacity();
-      // VAST_INFO(self, "has a capacity of", capacity,
-      //           "left in stream of a maximum capacity of",
-      //           st.mgr->out().max_capacity());
       if (capacity == 0) {
         st.dropped_packets++;
-        // VAST_WARNING(self, "has no capacity left in stream, dropping input!");
         return;
       }
       // Extract events until the source has exhausted its input or until
