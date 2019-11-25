@@ -25,7 +25,8 @@ endif ()
 if (MD2MAN_FOUND)
   add_custom_target(vast-man)
   foreach(man_page vast.1)
-    install(FILES "${CMAKE_CURRENT_BINARY_DIR}/${man_page}" DESTINATION share/man/man1)
+    install(FILES "${CMAKE_CURRENT_BINARY_DIR}/${man_page}" 
+      DESTINATION share/man/man1 OPTIONAL)
     if (MD2MAN_FOUND)
       set(man_generated "${CMAKE_CURRENT_BINARY_DIR}/${man_page}")
       file(WRITE ${CMAKE_CURRENT_BINARY_DIR}/make_man_${man_page}.cmake
