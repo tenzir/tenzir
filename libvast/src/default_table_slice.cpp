@@ -57,7 +57,7 @@ table_slice_ptr default_table_slice::make(record_type layout,
   default_table_slice_builder builder{std::move(layout)};
   for (auto& row : rows)
     for (auto& item : row)
-      builder.add(make_view(item));
+      static_cast<void>(builder.add(make_view(item)));
   auto result = builder.finish();
   VAST_ASSERT(result != nullptr);
   return result;
