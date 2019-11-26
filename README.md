@@ -60,7 +60,7 @@ Optional dependencies:
 - [libpcap](http://www.tcpdump.org)
 - [gperftools](http://code.google.com/p/google-perftools)
 - [Doxygen](http://www.doxygen.org)
-- [md2man](https://github.com/sunaku/md2man)
+- [Pandoc](https://github.com/jgm/pandoc)
 
 ### Source Build
 

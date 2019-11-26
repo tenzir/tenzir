@@ -22,12 +22,12 @@ if (DOXYGEN_FOUND)
 endif ()
 
 # man pages
-if (MD2MAN_FOUND)
+if (PANDOC_FOUND)
   add_custom_target(vast-man)
   foreach(man_page vast.1)
-    install(FILES "${CMAKE_CURRENT_BINARY_DIR}/${man_page}" 
+    install(FILES "${CMAKE_CURRENT_BINARY_DIR}/${man_page}"
       DESTINATION share/man/man1 OPTIONAL)
-    if (MD2MAN_FOUND)
+    if (PANDOC_FOUND)
       set(man_generated "${CMAKE_CURRENT_BINARY_DIR}/${man_page}")
       file(WRITE ${CMAKE_CURRENT_BINARY_DIR}/make_man_${man_page}.cmake
         "set(CMAKE_MODULE_PATH ${CMAKE_SOURCE_DIR}/cmake)
@@ -38,7 +38,7 @@ if (MD2MAN_FOUND)
         month_day_year(MAN_DATE)
         configure_file(${man_generated}.md ${man_generated}.md @ONLY)
         execute_process(
-           COMMAND md2man-roff ${man_generated}.md
+           COMMAND pandoc -s -f markdown -t man ${man_generated}.md
            OUTPUT_FILE ${man_generated})")
       add_custom_target(vast-man-make-${man_page}
         ${CMAKE_COMMAND} -P make_man_${man_page}.cmake

@@ -611,7 +611,7 @@ if (GPERFTOOLS_FOUND)
 endif ()
 
 find_package(Doxygen QUIET)
-find_package(Md2man QUIET)
+find_package(Pandoc QUIET)
 
 # ------------------------------------------------------------------------------
 # Build Setup
@@ -776,7 +776,7 @@ display(BROKER_FOUND "${broker_dir}" broker_summary)
 display(PCAP_FOUND "${PCAP_INCLUDE_DIR}" pcap_summary)
 display(GPERFTOOLS_FOUND "${GPERFTOOLS_INCLUDE_DIR}" perftools_summary)
 display(DOXYGEN_FOUND yes doxygen_summary)
-display(MD2MAN_FOUND yes md2man_summary)
+display(PANDOC_FOUND yes pandoc_summary)
 display(VAST_USE_TCMALLOC yes tcmalloc_summary)
 display(VAST_USE_OPENSSL yes openssl_summary)
 display(NO_UNIT_TESTS no build_tests_summary)
@@ -814,7 +814,7 @@ set(
   "\nPCAP:                ${pcap_summary}"
   "\nGperftools:          ${perftools_summary}"
   "\nDoxygen:             ${doxygen_summary}"
-  "\nmd2man:              ${md2man_summary}"
+  "\npandoc:              ${pandoc_summary}"
   "\n"
   "\ntcmalloc:            ${tcmalloc_summary}"
   "\nOpenSSL:             ${openssl_summary}"
