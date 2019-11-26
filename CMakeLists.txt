@@ -685,8 +685,8 @@ endif ()
 add_subdirectory(tools)
 add_subdirectory(vast)
 add_subdirectory(doc)
-if (NOT vast_is_subproject AND TARGET vast-man-make-vast.1)
-  add_dependencies(vast-man-make-vast.1 vast)
+if (NOT vast_is_subproject AND TARGET man)
+  add_dependencies(man vast)
 endif ()
 
 # ------------------------------------------------------------------------------
