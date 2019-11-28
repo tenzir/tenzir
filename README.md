@@ -61,9 +61,9 @@ Required dependencies:
 
 - A C++17 compiler:
   - GCC >= 8
-  - Clang >= 5
+  - Clang >= 6
   - Apple Clang >= 9.1
-- [CMake](http://www.cmake.org)
+- [CMake](http://www.cmake.org) >= 3.11
 
 Optional dependencies:
 
