@@ -83,7 +83,7 @@ The `doc` target builds the API documentation locally:
 
 ## Docker
 
-The source ships with the convenience script `docker_build.sh`, which will
+The source ships with the convenience script `scripts/docker-build`, which will
 create the Docker images and save them as `tar.gz` archives (when invoked
 without arguments).
 
