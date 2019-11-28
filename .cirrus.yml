@@ -21,6 +21,7 @@ style_task:
   fingerprint_script:
     - cat PACKAGE_NAME
   build_script:
+    - .ci/scripts/generate-build-tree
     - TARGET=all .ci/scripts/build-target
   unit_test_script:
     - TARGET=test .ci/scripts/build-target
