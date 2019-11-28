@@ -95,13 +95,6 @@ The `doc` target builds the API documentation locally:
 cmake --build build --target doc
 ```
 
-The man-page can be generated as an optional build step:
-
-```sh
-# Make sure to run this before the install target to also install the man-page.
-cmake --build build --target man
-```
-
 ## Docker
 
 The source ships with the convenience script `scripts/docker-build`, which will
