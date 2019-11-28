@@ -70,6 +70,8 @@ enum class ec : uint8_t {
   missing_component,
   /// Encountered a currently unimplemented code path or missing feature.
   unimplemented,
+  /// An error that shall print nothing in the render function.
+  silent,
 };
 
 /// @relates ec

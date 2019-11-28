@@ -333,7 +333,7 @@ parse(const command& root, command::argument_iterator first,
   const command* target = nullptr;
   if (auto err = parse_impl(result, root, first, last, &target)) {
     render_parse_error(*target, result, err, std::cerr);
-    return caf::no_error;
+    return ec::silent;
   }
   if (get_or(result.options, "help", false)) {
     helptext(*target, std::cerr);
