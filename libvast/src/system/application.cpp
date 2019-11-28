@@ -162,6 +162,8 @@ auto make_import_command() {
   import_->add_subcommand("suricata", "imports suricata eve json",
                           documentation::vast_import_suricata,
                           source_opts("?import.suricata"));
+  // TODO: hook syslog reader into CLI here by adding a new subcommand. The
+  //       documentation goes into doc/cli/vast-import-syslog.md
   import_->add_subcommand("test",
                           "imports random data for testing or benchmarking",
                           documentation::vast_import_test,
@@ -351,6 +353,8 @@ auto make_command_factory() {
     {"import suricata",
      reader_command<format::json::reader<format::json::suricata>,
                     defaults::import::suricata>},
+    // TODO: hook syslog reader into CLI here by registering the command
+    //       callback. The defaults go into livvast/vast/defaults.hpp.
     {"import test",
      generator_command<format::test::reader, defaults::import::test>},
     {"import zeek",
