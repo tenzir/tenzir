@@ -21,6 +21,7 @@ style_task:
   fingerprint_script:
     - cat PACKAGE_NAME
   build_script:
+    - .ci/scripts/generate-build-tree
     - TARGET=all .ci/scripts/build-target
   unit_test_script:
     - TARGET=test .ci/scripts/build-target
@@ -86,7 +87,7 @@ macos_task:
     DESTDIR: "$PWD"
     PREFIX: /usr/local/opt/tenzir
   setup_script:
-    - HOMEBREW_NO_AUTO_UPDATE=1 brew install openssl cmake git ninja python libpcap jq tcpdump rsync
+    - HOMEBREW_NO_AUTO_UPDATE=1 brew install openssl cmake git ninja python libpcap jq tcpdump rsync pandoc
   <<: *build_definition
 
 release_task:
