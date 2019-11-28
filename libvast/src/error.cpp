@@ -49,6 +49,7 @@ const char* descriptions[] = {
   "missing_subcommand",
   "missing_component",
   "unimplemented",
+  "silent",
 };
 
 void render_default_ctx(std::ostringstream& oss, const caf::message& ctx) {
@@ -72,6 +73,8 @@ std::string render(caf::error err) {
   using caf::atom_uint;
   std::ostringstream oss;
   auto category = err.category();
+  if (atom_uint(category) == atom_uint("vast") && err == ec::silent)
+    return "";
   oss << "!! ";
   switch (atom_uint(category)) {
     default:
