@@ -340,9 +340,9 @@ query_map index_state::launch_evaluators(lookup_state& lookup,
       part = lru_partitions.get_or_add(partition_id).get();
     auto eval = part->eval(lookup.expr);
     if (eval.empty()) {
-      VAST_WARNING(self, "identified partition", partition_id,
-                   "as candidate in the meta index, but it didn't produce an "
-                   "evaluation map");
+      VAST_DEBUG(self, "identified partition", partition_id,
+                 "as candidate in the meta index, but it didn't produce an "
+                 "evaluation map");
       return;
     }
     std::vector<caf::actor> xs{
