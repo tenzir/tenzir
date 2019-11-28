@@ -17,26 +17,36 @@ in various formats.
 
 Start a VAST node:
 
-    vast start
+```sh
+vast start
+```
 
 Ingest a bunch of [Zeek](http://www.zeek.org) logs:
 
-    zcat *.log.gz | vast import zeek
+```sh
+zcat *.log.gz | vast import zeek
+```
 
 Run a query over the last hour, rendered as JSON:
 
-    vast export json '#timestamp > 1 hour ago && (6.6.6.6 || 5353/udp)'
+```sh
+vast export json '#timestamp > 1 hour ago && (6.6.6.6 || 5353/udp)'
+```
 
 Ingest a [PCAP](https://en.wikipedia.org/wiki/Pcap) trace with a 1024-byte
 flow cut-off:
 
-    vast import pcap -c 1024 < trace.pcap
+```sh
+vast import pcap -c 1024 < trace.pcap
+```
 
 Run a query over PCAP data, sort the packets, and feed them into `tcpdump`:
 
-    vast export pcap "sport > 60000/tcp && src !in 10.0.0.0/8" \
-      | ipsumdump --collate -w - \
-      | tcpdump -r - -nl
+```sh
+vast export pcap "sport > 60000/tcp && src !in 10.0.0.0/8" \
+  | ipsumdump --collate -w - \
+  | tcpdump -r - -nl
+```
 
 ## Resources
 
@@ -51,9 +61,9 @@ Required dependencies:
 
 - A C++17 compiler:
   - GCC >= 8
-  - Clang >= 5
+  - Clang >= 6
   - Apple Clang >= 9.1
-- [CMake](http://www.cmake.org)
+- [CMake](http://www.cmake.org) >= 3.11
 
 Optional dependencies:
 
@@ -66,51 +76,57 @@ Optional dependencies:
 
 Building VAST involves the following steps:
 
-    git submodule update --recursive --init
-    ./configure
-    make
-    make test
-    make install
+```sh
+git submodule update --recursive --init
+./configure
+cmake --build build
+cmake --build build --target test
+cmake --build build --target install
+```
 
 The `configure` script is a small wrapper that passes build-related variables
-to CMake. For example, to use [ninja](https://ninja-build.org) as build
+to CMake. For example, to use [Ninja](https://ninja-build.org) as build
 generator, add `--generator=Ninja` to the command line. Passing `--help` shows
 all available options.
 
 The `doc` target builds the API documentation locally:
 
-    make doc
+```sh
+cmake --build build --target doc
+```
 
 ## Docker
 
-The source ships with the convenience script `docker_build.sh`, which will
+The source ships with the convenience script `scripts/docker-build`, which will
 create the Docker images and save them as `tar.gz` archives (when invoked
 without arguments).
 
 To run the container, you need to provide a volume to the mountpoint `/data`.
 The default command will print the help message:
 
-``` sh
+```sh
 docker run -v /tmp/vast:/data vast-io/vast
 ```
 
 Create a Docker network since we'll be running multiple containers which
 connect to each other:
 
-``` sh
+```sh
 docker network create -d bridge --subnet 172.42.0.0/16 vast_nw
 ```
 
 Use detach and publish the default port to start a VAST node:
 
-``` sh
-docker run --network=vast_nw --name=vast_node --ip="172.42.0.2" -d -v /tmp/vast:/data vast-io/vast start
+```sh
+docker run --network=vast_nw --name=vast_node --ip="172.42.0.2" -d -v \
+  /tmp/vast:/data vast-io/vast start
 ```
 
 Import a Zeek conn log to the detached server instance:
 
-``` sh
-docker run --network=vast_nw -i -v /tmp/vast:/data vast-io/vast -e '172.42.0.2' import zeek < zeek_conn.log
+```sh
+docker run --network=vast_nw -i -v /tmp/vast:/data vast-io/vast -e '172.42.0.2' \
+  import zeek < zeek_conn.log
 ```
 
 Other subcommands, like `export` and `status`, can be used just like the
