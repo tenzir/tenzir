@@ -73,8 +73,7 @@ std::string render(caf::error err) {
   using caf::atom_uint;
   std::ostringstream oss;
   auto category = err.category();
-  if (atom_uint(category) == atom_uint("vast")
-      && static_cast<vast::ec>(err.code()) == ec::silent)
+  if (atom_uint(category) == atom_uint("vast") && err == ec::silent)
     return "";
   oss << "!! ";
   switch (atom_uint(category)) {
