@@ -4,6 +4,7 @@
 set -x
 
 PACKAGE_NAME="${PACKAGE_NAME:-$(cat PACKAGE_NAME)}"
+CONFIGURE_FLAGS="${CONFIGURE_FLAGS:-$(cat CONFIGURE_FLAGS)}"
 
 # configure build via environment variables
 cmake -Bbuild -H. -DCMAKE_INSTALL_PREFIX="$PREFIX" \
