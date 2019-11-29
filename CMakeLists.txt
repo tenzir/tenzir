@@ -677,6 +677,9 @@ set(LIBRARY_OUTPUT_PATH
     ${CMAKE_CURRENT_BINARY_DIR}/lib
     CACHE PATH "Single directory for all libraries")
 
+if (VAST_HAVE_ARROW)
+  set(REQUIREMENT_PYARROW "pip install pyarrow")
+endif ()
 file(
   GENERATE
   OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/integration_$<CONFIG>.sh"
@@ -692,6 +695,7 @@ file(
      . \"$env_dir/bin/activate\"
      pip install --upgrade pip
      pip install -r \"$base_dir/requirements.txt\"
+     ${REQUIREMENT_PYARROW}
      python \"$base_dir/integration.py\" --app \"$app\" -d vast-integration-test"
   )
 

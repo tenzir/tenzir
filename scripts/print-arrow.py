@@ -1,1 +1,1 @@
-../integration/misc/scripts/print_arrow.py
+../integration/misc/scripts/print-arrow.py

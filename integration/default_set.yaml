@@ -275,4 +275,4 @@ tests:
       - command: -N import zeek
         input: data/zeek/conn.log.gz
       - command: -N export -n 10 arrow '#type == "zeek.conn"'
-        transformation: python @./misc/scripts/print_arrow.py
+        transformation: python @./misc/scripts/print-arrow.py
