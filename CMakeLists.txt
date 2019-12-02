@@ -23,6 +23,7 @@ endif ()
 option(ENABLE_ZEEK_TO_VAST "Build zeek-to-vast" ON)
 option(VAST_STATIC_EXECUTABLE "Link VAST statically")
 option(VAST_RELOCATEABLE_INSTALL "Make the installation relocateable" OFF)
+option(VAST_NO_ARROW "Build without Apache Arrow" OFF)
 set(BUILD_SHARED_LIBS_DEFAULT ON)
 if (VAST_STATIC_EXECUTABLE)
   set(BUILD_SHARED_LIBS_DEFAULT OFF)
@@ -610,6 +611,41 @@ if (GPERFTOOLS_FOUND)
   endif ()
 endif ()
 
+if (NOT VAST_NO_ARROW)
+  if (NOT ARROW_ROOT_DIR AND VAST_PREFIX)
+      set(ARROW_ROOT_DIR ${VAST_PREFIX})
+  endif ()
+  find_package(Arrow REQUIRED)
+  find_package(Plasma REQUIRED)
+  set(VAST_HAVE_ARROW true)
+  if (NOT BUILD_SHARED_LIBS)
+    set(modules_not_provided Brotli DoubleConversion uriparser Snappy glog Lz4
+      ZSTD Thrift Arrow Plasma)
+    set(modules ZLIB)
+    foreach (module ${modules_not_provided})
+      provide_find_module("${module}")
+      list(APPEND modules "${module}")
+    endforeach ()
+    foreach (module ${modules})
+      find_package("${module}" REQUIRED QUIET)
+      string(APPEND VAST_FIND_DEPENDENCY_LIST
+        "\nfind_package(${module} REQUIRED QUIET)")
+    endforeach ()
+    set(Boost_USE_STATIC_LIBS ON)
+    set(Boost_USE_MULTITHREADED ON)
+    set(Boost_NO_BOOST_CMAKE ON)
+    unset(Boost_INCLUDE_DIR CACHE)
+    unset(Boost_LIBRARY_DIRS CACHE)
+    find_package(Boost REQUIRED QUIET COMPONENTS filesystem system regex)
+    string(APPEND VAST_FIND_DEPENDENCY_LIST
+      "\nfind_package(Boost REQUIRED QUIET COMPONENTS filesystem system regex)")
+    set(ARROW_LIBRARIES
+      "${ARROW_STATIC_LIB};${PLASMA_STATIC_LIB};double-conversion::double-conversion;uriparser::uriparser;Brotli::brotlienc;Brotli::brotlidec;Brotli::brotlicommon;LZ4::lz4;snappy::snappy;ZLIB::ZLIB;ZSTD::zstd;GLOG::glog;Boost::system;Boost::filesystem;Boost::regex;Threads::Threads")
+  else ()
+    set(ARROW_LIBRARIES "${ARROW_SHARED_LIB};${PLASMA_SHARED_LIB}")
+  endif ()
+endif ()
+
 find_package(Doxygen QUIET)
 find_package(Pandoc QUIET)
 
@@ -641,6 +677,9 @@ set(LIBRARY_OUTPUT_PATH
     ${CMAKE_CURRENT_BINARY_DIR}/lib
     CACHE PATH "Single directory for all libraries")
 
+if (VAST_HAVE_ARROW)
+  set(REQUIREMENT_PYARROW "pip install pyarrow")
+endif ()
 file(
   GENERATE
   OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/integration_$<CONFIG>.sh"
@@ -654,7 +693,9 @@ file(
        python3 -m venv \"$env_dir\"
      fi
      . \"$env_dir/bin/activate\"
+     pip install --upgrade pip
      pip install -r \"$base_dir/requirements.txt\"
+     ${REQUIREMENT_PYARROW}
      python \"$base_dir/integration.py\" --app \"$app\" -d vast-integration-test"
   )
 
@@ -773,6 +814,7 @@ endif ()
 
 display(CAF_FOUND "${caf_dir}" caf_summary)
 display(BROKER_FOUND "${broker_dir}" broker_summary)
+display(ARROW_FOUND "${ARROW_INCLUDE_DIRECTORIES}" arrow_summary)
 display(PCAP_FOUND "${PCAP_INCLUDE_DIR}" pcap_summary)
 display(GPERFTOOLS_FOUND "${GPERFTOOLS_INCLUDE_DIR}" perftools_summary)
 display(DOXYGEN_FOUND yes doxygen_summary)
@@ -810,6 +852,7 @@ set(
   "\nLDFLAGS:             ${LDFLAGS}"
   "\n"
   "\nCAF:                 ${caf_summary}"
+  "\nArrow:               ${arrow_summary}"
   "\nBroker:              ${broker_summary}"
   "\nPCAP:                ${pcap_summary}"
   "\nGperftools:          ${perftools_summary}"

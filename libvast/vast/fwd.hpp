@@ -22,6 +22,8 @@ namespace vast {
 
 class abstract_type;
 class address;
+class arrow_table_slice;
+class arrow_table_slice_builder;
 class bitmap;
 class chunk;
 class column_index;

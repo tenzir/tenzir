@@ -224,6 +224,13 @@ struct null {
   static constexpr auto write = shared::write;
 };
 
+struct arrow {
+  /// Nested category in config files for this subcommand.
+  static constexpr const char* category = "export.arrow";
+  /// Path for writing query results.
+  static constexpr auto write = vast::defaults::export_::shared::write;
+};
+
 /// Contains settings for the pcap subcommand.
 struct pcap {
   /// Nested category in config files for this subcommand.
@@ -266,8 +273,17 @@ constexpr std::string_view node_id = "node";
 /// Path to persistent state.
 constexpr std::string_view directory = "vast.db";
 
-/// The default table slice type.
+#ifdef VAST_HAVE_ARROW
+
+/// The default table slice type when arrow is available.
+constexpr caf::atom_value table_slice_type = caf::atom("arrow");
+
+#else // VAST_HAVE_ARROW
+
+/// The default table slice type when arrow is unavailable.
 constexpr caf::atom_value table_slice_type = caf::atom("default");
+
+#endif // VAST_HAVE_ARROW
 
 /// Maximum size for sources that generate table slices.
 constexpr size_t table_slice_size = 100;

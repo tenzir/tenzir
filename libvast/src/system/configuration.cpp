@@ -40,6 +40,11 @@
 #include "vast/value_index.hpp"
 #include "vast/value_index_factory.hpp"
 
+#ifdef VAST_HAVE_ARROW
+#  include "vast/arrow_table_slice.hpp"
+#  include "vast/arrow_table_slice_builder.hpp"
+#endif
+
 using namespace caf;
 
 namespace vast::system {
@@ -75,6 +80,11 @@ configuration::configuration() {
                  "maximum size for sources that generate table slices");
   initialize_factories<synopsis, table_slice, table_slice_builder,
                        value_index>();
+#ifdef VAST_HAVE_ARROW
+  factory<vast::table_slice>::add<arrow_table_slice>();
+  factory<vast::table_slice_builder>::add<arrow_table_slice_builder>(
+    arrow_table_slice::class_id);
+#endif
 }
 
 caf::error configuration::parse(int argc, char** argv) {

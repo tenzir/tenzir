@@ -150,6 +150,14 @@ set(libvast_sources
     src/view.cpp
     src/wah_bitmap.cpp)
 
+if (VAST_HAVE_ARROW)
+  set(libvast_sources ${libvast_sources}
+    src/arrow_table_slice.cpp
+    src/arrow_table_slice_builder.cpp
+    src/format/arrow.cpp
+  )
+endif ()
+
 if (PCAP_FOUND)
   set(libvast_sources ${libvast_sources}
     src/system/pcap_writer_command.cpp src/format/pcap.cpp)
@@ -176,6 +184,11 @@ endif ()
 if (VAST_ENABLE_ASSERTIONS)
   target_include_directories(libvast PUBLIC ${Backtrace_INCLUDE_DIRECTORIES})
   target_link_libraries(libvast PUBLIC ${Backtrace_LIBRARIES})
+endif ()
+
+if (VAST_HAVE_ARROW)
+  target_include_directories(libvast PUBLIC ${ARROW_INCLUDE_DIR})
+  target_link_libraries(libvast PUBLIC ${ARROW_LIBRARIES})
 endif ()
 
 if (PCAP_FOUND)
@@ -313,6 +326,13 @@ set(tests
     test/vector_set.cpp
     test/view.cpp
     test/word.cpp)
+
+if (VAST_HAVE_ARROW)
+  set(tests ${tests}
+    test/format/arrow.cpp
+    test/arrow_table_slice.cpp
+  )
+endif ()
 
 if (PCAP_FOUND)
   set(tests ${tests} test/format/pcap.cpp)

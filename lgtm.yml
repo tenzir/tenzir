@@ -31,8 +31,11 @@ extraction:
         - git submodule update --init aux/caf
         - git submodule update --init aux/broker/broker
         - git -C aux/broker/broker submodule update --init 3rdparty
-        - $(python3 -m site --user-site)/cmake/data/bin/cmake -Bbuild -H. -DCMAKE_INSTALL_PREFIX="$PREFIX"
-          -DCMAKE_BUILD_TYPE=$BUILD_TYPE -G Ninja
+        - $(python3 -m site --user-site)/cmake/data/bin/cmake -Bbuild -H.
+          -DCMAKE_INSTALL_PREFIX="$PREFIX"
+          -DCMAKE_BUILD_TYPE=$BUILD_TYPE
+          -DVAST_NO_ARROW:BOOL=ON
+          -G Ninja
     index:
       build_command:
         - $(python3 -m site --user-site)/cmake/data/bin/cmake --build build --target all --parallel

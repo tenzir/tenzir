@@ -1,0 +1,1 @@
+../integration/misc/scripts/print-arrow.py

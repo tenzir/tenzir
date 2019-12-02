@@ -14,6 +14,7 @@ if [ -n "$CIRRUS_CI" ]; then
   export ARTIFACT_NAME
   echo "$ARTIFACT_NAME" > ARTIFACT_NAME
   echo "$MULE_SSH_KEY" | base64 --decode > mule_ssh_key && chmod 600 mule_ssh_key
+  echo "$CONFIGURE_FLAGS" > CONFIGURE_FLAGS
 fi
 
 # print versions
