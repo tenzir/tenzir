@@ -37,6 +37,10 @@ mark_as_advanced(
   PCAP_LIBRARIES
   PCAP_INCLUDE_DIR)
 
+if (PCAP_FOUND)
+  message(STATUS "Found libpcap: ${PCAP_LIBRARIES}")
+endif ()
+
 # create IMPORTED target for libpcap dependency
 if (PCAP_FOUND AND NOT TARGET pcap::pcap)
   add_library(pcap::pcap UNKNOWN IMPORTED GLOBAL)
@@ -56,7 +60,6 @@ if (NOT BUILD_SHARED_LIBS)
   endif ()
 endif ()
 
-message(STATUS "PCAP_HAVE_SNF = ${PCAP_HAVE_SNF}")
 if (PCAP_HAVE_SNF)
   if (NOT SNF_ROOT_DIR)
     set(SNF_ROOT_DIR ${PCAP_ROOT_DIR})
@@ -65,7 +68,7 @@ if (PCAP_HAVE_SNF)
     NAMES libsnf.a
     HINTS ${SNF_ROOT_DIR}/lib)
 
-  message(STATUS "SNF_LIBRARIES = ${SNF_LIBRARIES}")
+  message(STATUS "Found Myricom SNF library: ${SNF_LIBRARIES}")
   if (SNF_LIBRARIES)
     if (NOT TARGET aria::snf)
       add_library(aria::snf STATIC IMPORTED GLOBAL)
