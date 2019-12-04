@@ -37,9 +37,46 @@ mark_as_advanced(
   PCAP_LIBRARIES
   PCAP_INCLUDE_DIR)
 
+if (PCAP_FOUND)
+  message(STATUS "Found libpcap: ${PCAP_LIBRARIES}")
+endif ()
+
 # create IMPORTED target for libpcap dependency
 if (PCAP_FOUND AND NOT TARGET pcap::pcap)
   add_library(pcap::pcap UNKNOWN IMPORTED GLOBAL)
   set_target_properties(pcap::pcap PROPERTIES
     IMPORTED_LOCATION ${PCAP_LIBRARIES})
+endif()
+
+# TODO: Replace this with pkg_check_modules from the PkgConfig package, in case
+# we add support for more vendor specific libpcap implementations.
+if (NOT BUILD_SHARED_LIBS)
+  execute_process(COMMAND "/bin/sh" "-c" "nm ${PCAP_LIBRARIES} | grep -q snf_init"
+    RESULT_VARIABLE _result)
+  if (NOT _result)
+    set(PCAP_HAVE_SNF TRUE)
+  else ()
+    set(PCAP_HAVE_SNF FALSE)
+  endif ()
+endif ()
+
+if (PCAP_HAVE_SNF)
+  if (NOT SNF_ROOT_DIR)
+    set(SNF_ROOT_DIR ${PCAP_ROOT_DIR})
+  endif()
+  find_library(SNF_LIBRARIES
+    NAMES libsnf.a
+    HINTS ${SNF_ROOT_DIR}/lib)
+
+  message(STATUS "Found Myricom SNF library: ${SNF_LIBRARIES}")
+  if (SNF_LIBRARIES)
+    if (NOT TARGET aria::snf)
+      add_library(aria::snf STATIC IMPORTED GLOBAL)
+      set_target_properties(aria::snf PROPERTIES
+        IMPORTED_LOCATION ${SNF_LIBRARIES})
+    endif()
+
+    set_target_properties(pcap::pcap PROPERTIES
+      INTERFACE_LINK_LIBRARIES "aria::snf")
+  endif()
 endif()
