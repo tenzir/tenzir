@@ -1,0 +1,96 @@
+name: "Build"
+on: push
+env:
+  PREFIX: /opt/tenzir
+  DEBIAN_FRONTEND: noninteractive
+jobs:
+  build:
+    strategy:
+      matrix:
+        os: [macos-latest, ubuntu-latest]
+        configure: ["", "--dev-mode"]
+    runs-on: ${{ matrix.os }}
+    env:
+      CC: ${{ matrix.os == 'macos-latest' && 'clang' || 'gcc-8' }}
+      CXX: ${{ matrix.os == 'macos-latest' && 'clang++' || 'g++-8' }}
+    steps:
+      - uses: actions/checkout@v1
+        with:
+          submodules: recursive
+          ref: ${{ github.ref }}
+      - uses: actions/setup-python@v1
+        with:
+          python-version: "3.8"
+
+      - name: Install Ubuntu dependencies
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          sudo apt-get -qq update && sudo apt-get -qqy install \
+          gcc-8 g++-8 ninja-build libbenchmark-dev libpcap-dev libssl-dev \
+          libatomic1
+          pip3 install --upgrade pip
+          pip3 install --upgrade cmake
+          which cmake
+          cmake --version
+
+      - name: Install macOS dependencies
+        if: matrix.os == 'macos-latest'
+        run: |
+          brew install openssl cmake git ninja python libpcap jq tcpdump rsync pandoc apache-arrow
+      - name: Create PACKAGE_NAME
+        id: create_package_name
+        run: |
+          PACKAGE_NAME="VAST-$(git describe)-$(uname -s)-${{ matrix.configure == '' && 'Release' || 'Debug' }}"
+          echo "$PACKAGE_NAME"
+          echo "::set-output name=package_name::${PACKAGE_NAME}"
+
+      - name: Configure
+        run: |
+          python3 --version
+          "$CC" --version
+          "$CXX" --version
+          ./configure \
+            --generator=Ninja \
+            --prefix="${PWD}/opt/vast" \
+            --package-name=${{ steps.create_package_name.outputs.package_name }} \
+            ${{ matrix.os == 'macos-latest' && '' || '--disable-arrow' }} \
+            ${{ matrix.configure }}
+
+      - name: Build
+        run: |
+          cmake --build build --target all
+
+      - name: Run Unit Tests
+        run: |
+          cmake --build build --target test
+
+      - name: Run Integration Tests
+        run: |
+          if ! cmake --build build --target integration; then
+            tar -czf "${{ steps.create_package_name.outputs.package_name }}.tar.gz" -C build vast-integration-test
+            exit 1
+          fi
+
+      - name: Upload artifact if integration tests failed
+        if: failure()
+        uses: actions/upload-artifact@v1
+        with:
+          name: "${{ steps.create_package_name.outputs.package_name }}.tar.gz"
+          path: "${{ steps.create_package_name.outputs.package_name }}.tar.gz"
+
+      - name: Install
+        run: |
+          cmake --build build --target install
+
+      - name: Package
+        env:
+          DESTDIR: $PWD
+          PREFIX: ${{ matrix.os == 'macos-latest' && '/usr/local/opt/tenzir' || '/opt/tenzir' }}
+        run: |
+          cmake --build build --target package
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v1
+        with:
+          name: "${{ steps.create_package_name.outputs.package_name }}.tar.gz"
+          path: "build/${{ steps.create_package_name.outputs.package_name }}.tar.gz"

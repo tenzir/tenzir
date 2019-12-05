@@ -7,10 +7,10 @@ export PACKAGE_NAME=${PACKAGE_NAME:-"VAST-$(git describe)-$(uname -s)-$BUILD_TYP
 export PREFIX=${PREFIX:-"./opt/tenzir"}
 mkdir -p "$PREFIX"
 
-if [ -n "$CIRRUS_CI" ]; then
-  echo Preparing for Cirrus-CI
+if [ -n "$GITHUB_ACTION" ]; then
+  echo Preparing for CI build...
   echo "$PACKAGE_NAME" > PACKAGE_NAME
-  ARTIFACT_NAME="VAST-$CIRRUS_PR-$(uname -s)-$BUILD_TYPE-$CIRRUS_CHANGE_IN_REPO"
+  ARTIFACT_NAME="VAST-${GITHUB_REF#refs/heads/}-$(uname -s)-$BUILD_TYPE-$(git rev-parse --short HEAD)"
   export ARTIFACT_NAME
   echo "$ARTIFACT_NAME" > ARTIFACT_NAME
   echo "$MULE_SSH_KEY" | base64 --decode > mule_ssh_key && chmod 600 mule_ssh_key
