@@ -17,6 +17,13 @@ jobs:
       run: |
         git diff -U0 --no-color $(git merge-base origin/master HEAD) |
           scripts/clang-format-diff.py -p1
+    - name: CMake Format
+      run: |
+        pip install --upgrade pip
+        pip install --upgrade cmake_format
+        git ls-files -- "**CMakelists.txt" "**.cmake" |
+          xargs cmake-format --in-place
+        git diff --exit-code
 
   build:
     name: Build
@@ -52,8 +59,8 @@ jobs:
           sudo apt-get -qq update && sudo apt-get -qqy install \
           gcc-8 g++-8 ninja-build libbenchmark-dev libpcap-dev libssl-dev \
           libatomic1
-          pip3 install --upgrade pip
-          pip3 install --upgrade cmake
+          pip install --upgrade pip
+          pip install --upgrade cmake
           which cmake
           cmake --version
 
