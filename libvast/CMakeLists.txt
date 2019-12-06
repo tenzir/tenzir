@@ -151,29 +151,29 @@ set(libvast_sources
     src/wah_bitmap.cpp)
 
 if (VAST_HAVE_ARROW)
-  set(libvast_sources ${libvast_sources}
-    src/arrow_table_slice.cpp
-    src/arrow_table_slice_builder.cpp
-    src/format/arrow.cpp
-  )
+  set(libvast_sources ${libvast_sources} src/arrow_table_slice.cpp
+                      src/arrow_table_slice_builder.cpp src/format/arrow.cpp)
 endif ()
 
 if (PCAP_FOUND)
-  set(libvast_sources ${libvast_sources}
-    src/system/pcap_writer_command.cpp src/format/pcap.cpp)
+  set(libvast_sources ${libvast_sources} src/system/pcap_writer_command.cpp
+                      src/format/pcap.cpp)
 endif ()
 
 add_library(libvast ${libvast_sources} ${libvast_headers})
-set_target_properties(libvast
-                      PROPERTIES SOVERSION ${VERSION_MAJOR} VERSION
-                                 ${VERSION_MAJOR}.${VERSION_MINOR} OUTPUT_NAME
-                                 vast)
+set_target_properties(
+  libvast
+  PROPERTIES
+    SOVERSION ${VERSION_MAJOR} VERSION ${VERSION_MAJOR}.${VERSION_MINOR}
+
+    OUTPUT_NAME vast)
 
 target_include_directories(
   libvast
-  PUBLIC $<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}>
-         $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
-         $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>)
+  PUBLIC
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}>
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
+    $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>)
 target_include_directories(libvast PRIVATE "${PROJECT_SOURCE_DIR}/aux")
 add_dependencies(libvast vast-schema)
 target_link_libraries(libvast PUBLIC caf::core caf::io)
@@ -210,21 +210,24 @@ if (HAVE_CXX_ATOMICS_WITH_LIB)
 endif ()
 
 # Install libvast in PREFIX/lib and headers in PREFIX/include/vast.
-install(TARGETS libvast
-        EXPORT VASTTargets
-        ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
-        LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
-        RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
-install(DIRECTORY vast
-        DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
-        FILES_MATCHING
-        PATTERN "*.hpp")
+install(
+  TARGETS libvast
+  EXPORT VASTTargets
+  ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
+  LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
+  RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
+install(
+  DIRECTORY vast
+  DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
+  FILES_MATCHING
+  PATTERN "*.hpp")
 
 # Install generated config header.
-install(DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/vast"
-        DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
-        FILES_MATCHING
-        PATTERN "*.hpp")
+install(
+  DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/vast"
+  DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
+  FILES_MATCHING
+  PATTERN "*.hpp")
 
 add_library(vast::libvast ALIAS libvast)
 
@@ -328,10 +331,7 @@ set(tests
     test/word.cpp)
 
 if (VAST_HAVE_ARROW)
-  set(tests ${tests}
-    test/format/arrow.cpp
-    test/arrow_table_slice.cpp
-  )
+  set(tests ${tests} test/format/arrow.cpp test/arrow_table_slice.cpp)
 endif ()
 
 if (PCAP_FOUND)
@@ -351,7 +351,16 @@ if (NOT NO_UNIT_TESTS)
   macro (make_test suite)
     string(REPLACE " " "_" test_name ${suite})
     set(vast_test ${EXECUTABLE_OUTPUT_PATH}/vast-test)
-    add_test(${test_name} ${vast_test} -v 3 -r 600 -s "^${suite}$" ${ARGN})
+    add_test(
+      ${test_name}
+      ${vast_test}
+      -v
+      3
+      -r
+      600
+      -s
+      "^${suite}$"
+      ${ARGN})
   endmacro ()
   # Find all test suites.
   foreach (test ${tests})

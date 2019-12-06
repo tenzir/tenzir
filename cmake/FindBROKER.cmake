@@ -2,30 +2,28 @@
 #
 # Usage of this module as follows:
 #
-#     find_package(Broker)
+# find_package(Broker)
 #
 # Variables used by this module, they can change the default behaviour and need
 # to be set before calling find_package:
 #
-#  BROKER_ROOT_DIR           Set this variable to the root installation of
-#                            Broker if the module has problems finding the
-#                            proper installation path.
+# BROKER_ROOT_DIR           Set this variable to the root installation of Broker
+# if the module has problems finding the proper installation path.
 #
 # Variables defined by this module:
 #
-#  BROKER_FOUND              System has Broker library
-#  BROKER_LIBRARY            The broker library
-#  BROKER_INCLUDE_DIRS       The broker headers
+# BROKER_FOUND              System has Broker library BROKER_LIBRARY The broker
+# library BROKER_INCLUDE_DIRS       The broker headers
 
-find_library(BROKER_LIBRARY
+find_library(
+  BROKER_LIBRARY
   NAMES broker
-  HINTS ${BROKER_ROOT_DIR}/lib
-        ${BROKER_ROOT_DIR})
+  HINTS ${BROKER_ROOT_DIR}/lib ${BROKER_ROOT_DIR})
 
-find_path(BROKER_INCLUDE_DIRS
+find_path(
+  BROKER_INCLUDE_DIRS
   NAMES broker/broker.hh
-  HINTS ${BROKER_ROOT_DIR}/include
-        ${BROKER_ROOT_DIR}/..
+  HINTS ${BROKER_ROOT_DIR}/include ${BROKER_ROOT_DIR}/..
         ${BROKER_ROOT_DIR}/../..)
 
 if (BROKER_INCLUDE_DIRS)
@@ -40,22 +38,18 @@ if (BROKER_INCLUDE_DIRS)
 endif ()
 
 include(FindPackageHandleStandardArgs)
-find_package_handle_standard_args(
-  BROKER
-  DEFAULT_MSG
-  BROKER_LIBRARY
-  BROKER_INCLUDE_DIRS)
+find_package_handle_standard_args(BROKER DEFAULT_MSG BROKER_LIBRARY
+                                  BROKER_INCLUDE_DIRS)
 
-mark_as_advanced(
-  BROKER_ROOT_DIR
-  BROKER_LIBRARY
-  BROKER_INCLUDE_DIRS)
+mark_as_advanced(BROKER_ROOT_DIR BROKER_LIBRARY BROKER_INCLUDE_DIRS)
 
 # create IMPORTED target
 if (BROKER_FOUND AND NOT TARGET zeek::broker)
   add_library(zeek::broker UNKNOWN IMPORTED GLOBAL)
-  set_target_properties(zeek::broker PROPERTIES
-    IMPORTED_LOCATION ${BROKER_LIBRARY}
-    INTERFACE_INCLUDE_DIRECTORIES "${BROKER_INCLUDE_DIRS}"
-    INTERFACE_LINK_LIBRARIES "caf::core;caf::io;caf::openssl")
-endif()
+  set_target_properties(
+    zeek::broker
+    PROPERTIES
+      IMPORTED_LOCATION ${BROKER_LIBRARY}
+      INTERFACE_INCLUDE_DIRECTORIES "${BROKER_INCLUDE_DIRS}"
+      INTERFACE_LINK_LIBRARIES "caf::core;caf::io;caf::openssl")
+endif ()
