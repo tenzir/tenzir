@@ -1,0 +1,125 @@
+name: "VAST"
+on: push
+env:
+  DEBIAN_FRONTEND: noninteractive
+jobs:
+  style:
+    name: Style Check
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v1
+      with:
+        ref: ${{ github.ref }}
+    - uses: actions/setup-python@v1
+      with:
+        python-version: '3.8'
+    - name: Clang Format
+      run: |
+        git diff -U0 --no-color $(git merge-base origin/master HEAD) |
+          scripts/clang-format-diff.py -p1
+
+  build:
+    name: Build
+    needs: style
+    strategy:
+      matrix:
+        os: [macos-latest, ubuntu-latest]
+        configure: ["", "--dev-mode"]
+    runs-on: ${{ matrix.os }}
+    env:
+      CC: ${{ matrix.os == 'macos-latest' && 'clang' || 'gcc-8' }}
+      CXX: ${{ matrix.os == 'macos-latest' && 'clang++' || 'g++-8' }}
+      BUILD_DIR: build
+    steps:
+      - uses: actions/checkout@v1
+        with:
+          submodules: recursive
+          ref: ${{ github.ref }}
+      - uses: actions/setup-python@v1
+        with:
+          python-version: "3.8"
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v1
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: eu-central-1
+
+      - name: Install Ubuntu Dependencies
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          sudo apt-get -qq update && sudo apt-get -qqy install \
+          gcc-8 g++-8 ninja-build libbenchmark-dev libpcap-dev libssl-dev \
+          libatomic1
+          pip3 install --upgrade pip
+          pip3 install --upgrade cmake
+          which cmake
+          cmake --version
+
+      - name: Install macOS Dependencies
+        if: matrix.os == 'macos-latest'
+        run: |
+          brew install openssl cmake git ninja python libpcap jq tcpdump rsync pandoc apache-arrow awscli
+      - name: Create Paths
+        id: create_paths
+        run: |
+          PACKAGE_NAME="VAST-$(git describe)-$(uname -s)-${{ matrix.configure == '' && 'Release' || 'Debug' }}"
+          echo "::set-output name=package_name::${PACKAGE_NAME}"
+          BUILD_DIR="build"
+          echo "::set-output name=build_dir::${BUILD_DIR}"
+
+      - name: Configure
+        run: |
+          python3 --version
+          "$CC" --version
+          "$CXX" --version
+          ./configure \
+            --generator=Ninja \
+            --prefix="${PWD}/opt/vast" \
+            --build-dir=${{ steps.create_paths.outputs.build_dir }} \
+            --package-name=${{ steps.create_paths.outputs.package_name }} \
+            ${{ matrix.os == 'macos-latest' && '' || '--disable-arrow' }} \
+            ${{ matrix.configure }}
+
+      - name: Compile All Targets
+        run: |
+          cmake --build ${{ steps.create_paths.outputs.build_dir }} --target all
+
+      - name: Run Unit Tests
+        run: |
+          cmake --build ${{ steps.create_paths.outputs.build_dir }} --target test
+
+      - name: Run Integration Tests
+        run: |
+          if ! cmake --build ${{ steps.create_paths.outputs.build_dir }} --target integration; then
+            tar -czf "${{ steps.create_paths.outputs.package_name }}.tar.gz" -C build vast-integration-test
+            exit 1
+          fi
+
+      - name: Upload Integration Test Logs on Failure
+        if: failure()
+        uses: actions/upload-artifact@v1
+        with:
+          name: "${{ steps.create_paths.outputs.package_name }}.tar.gz"
+          path: "${{ steps.create_paths.outputs.package_name }}.tar.gz"
+
+      - name: Install
+        run: |
+          cmake --build ${{ steps.create_paths.outputs.build_dir }} --target install
+
+      - name: Package
+        env:
+          DESTDIR: $PWD
+        run: |
+          cmake --build ${{ steps.create_paths.outputs.build_dir }} --target package
+
+      - name: Upload Artifact to Github
+        uses: actions/upload-artifact@v1
+        with:
+          name: "${{ steps.create_paths.outputs.package_name }}.tar.gz"
+          path: "${{ steps.create_paths.outputs.build_dir }}/${{ steps.create_paths.outputs.package_name }}.tar.gz"
+
+      - name: Upload Artifact to S3
+        run: |
+          aws s3 cp "${{ steps.create_paths.outputs.build_dir }}/${{ steps.create_paths.outputs.package_name }}.tar.gz" ${{ secrets.AWS_ARTIFACT_BUCKET }}

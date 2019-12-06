@@ -1,7 +1,0 @@
-#!/bin/sh
-
-# x - print every command before execution
-set -x
-
-# execute specific cmake target
-cmake --build build --target "$TARGET"

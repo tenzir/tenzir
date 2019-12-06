@@ -2,6 +2,8 @@
 # Convenience wrapper for easily viewing/setting options that
 # the project's CMake scripts will recognize
 
+set -e
+
 type cmake > /dev/null 2>&1 || {
   echo "\
 This package requires CMake, please install it first, then you may
@@ -32,6 +34,7 @@ Usage: $0 [OPTION]... [VAR=VALUE]...
     --no-auto-libc++        do not automatically use libc++ with Clang
     --more-warnings         enables most warnings on GCC and Clang
     --disable-tests         build without unit tests
+    --package-name          sets the name of the produced package
 
   Debugging:
     --log-level=LEVEL       maximum compile-time log level
@@ -175,6 +178,11 @@ while [ $# -ne 0 ]; do
       ;;
     --dev-mode)
       append_cache_entry VAST_DEV_MODE BOOL true
+      ;;
+    --package-name=*)
+      append_cache_entry CPACK_PACKAGE_FILE_NAME STRING "$optarg"
+      append_cache_entry CPACK_SET_DEST_DIR BOOL true
+      append_cache_entry CPACK_GENERATOR STRING TGZ
       ;;
     *)
       echo "Invalid option '$1'.  Try $0 --help to see available options."
