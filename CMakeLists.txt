@@ -6,19 +6,19 @@ cmake_minimum_required(VERSION 3.11...3.15 FATAL_ERROR)
 project(VAST C CXX)
 
 get_directory_property(_parent PARENT_DIRECTORY)
-if(_parent)
+if (_parent)
   set(vast_is_subproject ON)
-else()
+else ()
   set(vast_is_subproject OFF)
-endif()
+endif ()
 unset(_parent)
 
 option(VAST_DEV_MODE "Build in developer debug configuration" OFF)
 if (VAST_DEV_MODE)
   set(CMAKE_BUILD_TYPE "Debug")
   set(ENABLE_ADDRESS_SANITIZER ON)
-  # TODO: eventually, we also want to enable --more-warnings
-  #set(MORE_WARNINGS ON)
+  # TODO: eventually, we also want to enable --more-warnings set(MORE_WARNINGS
+  # ON)
 endif ()
 option(ENABLE_ZEEK_TO_VAST "Build zeek-to-vast" ON)
 option(VAST_STATIC_EXECUTABLE "Link VAST statically")
@@ -49,8 +49,10 @@ endif ()
 
 # Support Clang tools such as clang-tidy
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
-add_custom_target(link_target ALL
-  COMMAND ${CMAKE_COMMAND} -E create_symlink
+add_custom_target(
+  link_target ALL
+  COMMAND
+    ${CMAKE_COMMAND} -E create_symlink
     ${CMAKE_BINARY_DIR}/compile_commands.json
     ${CMAKE_SOURCE_DIR}/compile_commands.json)
 
@@ -79,9 +81,11 @@ endif ()
 
 # Prohibit in-source builds
 if ("${CMAKE_SOURCE_DIR}" STREQUAL "${CMAKE_BINARY_DIR}")
-  message(FATAL_ERROR "In-source builds are not allowed. Please use "
-                      "./configure to choose a build directory and "
-                      "initialize the build configuration.")
+  message(
+    FATAL_ERROR
+      "In-source builds are not allowed. Please use "
+      "./configure to choose a build directory and "
+      "initialize the build configuration.")
 endif ()
 
 # Keep make output sane
@@ -90,7 +94,8 @@ set(CMAKE_VERBOSE_MAKEFILE
     CACHE STRING "Show all outputs including compiler lines." FORCE)
 
 # Force colored output for the Ninja generator
-option(VAST_COLOR_NINJA "Enable ANSI-colored output for the Ninja generator." ON)
+option(VAST_COLOR_NINJA "Enable ANSI-colored output for the Ninja generator."
+       ON)
 if ("${CMAKE_GENERATOR}" STREQUAL "Ninja" AND VAST_COLOR_NINJA)
   if ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "GNU")
     add_compile_options(-fdiagnostics-color=always)
@@ -100,7 +105,8 @@ if ("${CMAKE_GENERATOR}" STREQUAL "Ninja" AND VAST_COLOR_NINJA)
 endif ()
 
 # Extract VERSION
-execute_process(COMMAND "git" "describe" "--tags" "--long" "--dirty"
+execute_process(
+  COMMAND "git" "describe" "--tags" "--long" "--dirty"
   RESULT_VARIABLE git_describe_result
   OUTPUT_VARIABLE VAST_VERSION
   OUTPUT_STRIP_TRAILING_WHITESPACE)
@@ -116,7 +122,10 @@ else ()
 endif ()
 
 # Generate C++ header from Markdown documentation.
-file(GLOB doc_files RELATIVE "${CMAKE_CURRENT_SOURCE_DIR}" "doc/cli/*.md")
+file(
+  GLOB doc_files
+  RELATIVE "${CMAKE_CURRENT_SOURCE_DIR}"
+  "doc/cli/*.md")
 file(STRINGS "${CMAKE_CURRENT_SOURCE_DIR}/BANNER" doc_header NEWLINE_CONSUME)
 set(doc_header "${doc_header}\n#pragma once\n")
 set(doc_header "${doc_header}\nnamespace vast::documentation {\n")
@@ -217,33 +226,35 @@ endif ()
 # Enable more (most) warnings when requested by the user.
 if (MORE_WARNINGS)
   if (CMAKE_CXX_COMPILER_ID MATCHES "Clang")
-    set(WFLAGS "-Weverything -Wno-c++98-compat -Wno-padded "
-               "-Wno-documentation-unknown-command -Wno-exit-time-destructors "
-               "-Wno-global-constructors -Wno-missing-prototypes "
-               "-Wno-c++98-compat-pedantic -Wno-unused-member-function "
-               "-Wno-unused-const-variable -Wno-switch-enum "
-               "-Wno-abstract-vbase-init "
-               "-Wno-missing-noreturn -Wno-covered-switch-default")
+    set(WFLAGS
+        "-Weverything -Wno-c++98-compat -Wno-padded "
+        "-Wno-documentation-unknown-command -Wno-exit-time-destructors "
+        "-Wno-global-constructors -Wno-missing-prototypes "
+        "-Wno-c++98-compat-pedantic -Wno-unused-member-function "
+        "-Wno-unused-const-variable -Wno-switch-enum "
+        "-Wno-abstract-vbase-init "
+        "-Wno-missing-noreturn -Wno-covered-switch-default")
   elseif (CMAKE_CXX_COMPILER_ID MATCHES "GNU")
-    set(WFLAGS "-Waddress -Wall -Warray-bounds "
-               "-Wattributes -Wbuiltin-macro-redefined -Wcast-align "
-               "-Wcast-qual -Wchar-subscripts -Wclobbered -Wcomment "
-               "-Wconversion -Wconversion-null -Wcoverage-mismatch "
-               "-Wcpp -Wdelete-non-virtual-dtor -Wdeprecated "
-               "-Wdeprecated-declarations -Wdiv-by-zero -Wdouble-promotion "
-               "-Wempty-body -Wendif-labels -Wenum-compare -Wextra "
-               "-Wfloat-equal -Wformat -Wfree-nonheap-object "
-               "-Wignored-qualifiers -Winit-self "
-               "-Winline -Wint-to-pointer-cast -Winvalid-memory-model "
-               "-Winvalid-offsetof -Wlogical-op -Wmain -Wmaybe-uninitialized "
-               "-Wmissing-braces -Wmultichar "
-               "-Wnarrowing -Wnoexcept -Wnon-template-friend "
-               "-Wnon-virtual-dtor -Wnonnull -Woverflow "
-               "-Woverlength-strings -Wparentheses "
-               "-Wpmf-conversions -Wpointer-arith -Wreorder "
-               "-Wreturn-type -Wsequence-point "
-               "-Wsign-compare -Wswitch -Wtype-limits -Wundef "
-               "-Wuninitialized -Wunused -Wvla -Wwrite-strings")
+    set(WFLAGS
+        "-Waddress -Wall -Warray-bounds "
+        "-Wattributes -Wbuiltin-macro-redefined -Wcast-align "
+        "-Wcast-qual -Wchar-subscripts -Wclobbered -Wcomment "
+        "-Wconversion -Wconversion-null -Wcoverage-mismatch "
+        "-Wcpp -Wdelete-non-virtual-dtor -Wdeprecated "
+        "-Wdeprecated-declarations -Wdiv-by-zero -Wdouble-promotion "
+        "-Wempty-body -Wendif-labels -Wenum-compare -Wextra "
+        "-Wfloat-equal -Wformat -Wfree-nonheap-object "
+        "-Wignored-qualifiers -Winit-self "
+        "-Winline -Wint-to-pointer-cast -Winvalid-memory-model "
+        "-Winvalid-offsetof -Wlogical-op -Wmain -Wmaybe-uninitialized "
+        "-Wmissing-braces -Wmultichar "
+        "-Wnarrowing -Wnoexcept -Wnon-template-friend "
+        "-Wnon-virtual-dtor -Wnonnull -Woverflow "
+        "-Woverlength-strings -Wparentheses "
+        "-Wpmf-conversions -Wpointer-arith -Wreorder "
+        "-Wreturn-type -Wsequence-point "
+        "-Wsign-compare -Wswitch -Wtype-limits -Wundef "
+        "-Wuninitialized -Wunused -Wvla -Wwrite-strings")
   endif ()
   # convert CMake list to a single string, erasing the ";" separators
   string(REPLACE ";" "" WFLAGS_STR ${WFLAGS})
@@ -337,40 +348,47 @@ if (ENABLE_GCOV)
   endif ()
   # Create a CMake script that removes all *.gcda files. We'll call this below
   # in the custom target.
-  file(WRITE ${CMAKE_CURRENT_BINARY_DIR}/remove_gcda.cmake
-       "file(GLOB_RECURSE GCDA_FILES \"${CMAKE_CURRENT_BINARY_DIR}/*.gcda\")\n"
-       "if(NOT GCDA_FILES STREQUAL \"\")\n" "  file(REMOVE \${GCDA_FILES})\n"
-       "endif()")
+  file(
+    WRITE ${CMAKE_CURRENT_BINARY_DIR}/remove_gcda.cmake
+    "file(GLOB_RECURSE GCDA_FILES \"${CMAKE_CURRENT_BINARY_DIR}/*.gcda\")\n"
+    "if(NOT GCDA_FILES STREQUAL \"\")\n" "  file(REMOVE \${GCDA_FILES})\n"
+    "endif()")
   file(GLOB_RECURSE GCOV_SOURCES "${CMAKE_CURRENT_SOURCE_DIR}/libvast/*")
   set(GCOV_OUTPUT_DIR "${CMAKE_CURRENT_BINARY_DIR}/coverage")
   # Add new target that invokes the unit test suite followed by gcov.
-  add_custom_target(gcov
-                    # Reset coverage counters.
-                    COMMAND ${CMAKE_COMMAND} -P
-                            ${CMAKE_CURRENT_BINARY_DIR}/remove_gcda.cmake
-                            # Run unit tests.
-                    COMMAND ${CMAKE_CTEST_COMMAND} --output-on-failure
-                            # Invoke gcov.
-                    COMMAND ${CMAKE_COMMAND} -DGCOV_SOURCES="${GCOV_SOURCES}"
-                            -DGCOV_OUTPUT_DIR="${GCOV_OUTPUT_DIR}" -P
-                            ${CMAKE_CURRENT_SOURCE_DIR}/cmake/GenerateGcov.cmake
-                    COMMENT "Generating gcov output")
+  add_custom_target(
+    gcov
+    # Reset coverage counters.
+    COMMAND
+      ${CMAKE_COMMAND} -P ${CMAKE_CURRENT_BINARY_DIR}/remove_gcda.cmake
+
+      # Run unit tests.
+    COMMAND ${CMAKE_CTEST_COMMAND} --output-on-failure
+            # Invoke gcov.
+    COMMAND
+      ${CMAKE_COMMAND} -DGCOV_SOURCES="${GCOV_SOURCES}"
+      -DGCOV_OUTPUT_DIR="${GCOV_OUTPUT_DIR}" -P
+      ${CMAKE_CURRENT_SOURCE_DIR}/cmake/GenerateGcov.cmake
+    COMMENT "Generating gcov output")
   # Add gcovr targets to generate various output files.
-  add_custom_target(gcovr-txt
-                    COMMAND gcovr -k -g -r .. -e libvast/test
-                            --object-directory=${GCOV_OUTPUT_DIR} -o
-                            coverage.txt
-                    COMMENT "Creating gcov text summary")
-  add_custom_target(gcovr-xml
-                    COMMAND gcovr -k -g -r .. -e libvast/test
-                            --object-directory=${GCOV_OUTPUT_DIR} -x -o
-                            coverage.xml
-                    COMMENT "Creating gcov XML summary")
-  add_custom_target(gcovr-html
-                    COMMAND gcovr -k -g -r .. -e libvast/test
-                            --object-directory=${GCOV_OUTPUT_DIR} --html
-                            --html-details -o coverage.html
-                    COMMENT "Creating gcov HTML summary")
+  add_custom_target(
+    gcovr-txt
+    COMMAND
+      gcovr -k -g -r .. -e libvast/test --object-directory=${GCOV_OUTPUT_DIR} -o
+      coverage.txt
+    COMMENT "Creating gcov text summary")
+  add_custom_target(
+    gcovr-xml
+    COMMAND
+      gcovr -k -g -r .. -e libvast/test --object-directory=${GCOV_OUTPUT_DIR} -x
+      -o coverage.xml
+    COMMENT "Creating gcov XML summary")
+  add_custom_target(
+    gcovr-html
+    COMMAND
+      gcovr -k -g -r .. -e libvast/test --object-directory=${GCOV_OUTPUT_DIR}
+      --html --html-details -o coverage.html
+    COMMENT "Creating gcov HTML summary")
   # Target that runs gcov and generates all summaries.
   add_custom_target(coverage)
   add_dependencies(coverage gcov)
@@ -392,7 +410,8 @@ include(CheckLibraryExists)
 function (check_working_cxx_atomics128 varname)
   set(OLD_CMAKE_REQUIRED_FLAGS ${CMAKE_REQUIRED_FLAGS})
   set(CMAKE_REQUIRED_FLAGS "-std=c++11 ${CMAKE_REQUIRED_FLAGS}")
-  check_cxx_source_compiles("
+  check_cxx_source_compiles(
+    "
 #include <atomic>
 #include <cstdint>
 struct sixteen {
@@ -405,7 +424,8 @@ int main()
   auto v = x.load(std::memory_order_relaxed);
   return std::atomic_is_lock_free(&x);
 }
-" ${varname})
+"
+    ${varname})
   set(CMAKE_REQUIRED_FLAGS ${OLD_CMAKE_REQUIRED_FLAGS})
 endfunction (check_working_cxx_atomics128)
 
@@ -450,9 +470,10 @@ endif ()
 macro (provide_find_module name)
   configure_file(cmake/Find${name}.cmake ${CMAKE_BINARY_DIR} COPYONLY)
 
-  install(FILES "${CMAKE_BINARY_DIR}/Find${name}.cmake"
-          DESTINATION ${INSTALL_VAST_CMAKEDIR}
-          COMPONENT dev)
+  install(
+    FILES "${CMAKE_BINARY_DIR}/Find${name}.cmake"
+    DESTINATION ${INSTALL_VAST_CMAKEDIR}
+    COMPONENT dev)
 endmacro ()
 
 find_package(Threads)
@@ -482,7 +503,8 @@ if (APPLE)
   endif ()
 endif ()
 
-if (NOT CAF_ROOT_DIR AND EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/aux/caf/CMakeLists.txt)
+if (NOT CAF_ROOT_DIR AND EXISTS
+                         ${CMAKE_CURRENT_SOURCE_DIR}/aux/caf/CMakeLists.txt)
   set(CAF_NO_AUTO_LIBCPP TRUE)
   set(CAF_NO_OPENCL TRUE)
   set(CAF_NO_EXAMPLES TRUE)
@@ -497,66 +519,79 @@ if (NOT CAF_ROOT_DIR AND EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/aux/caf/CMakeLists.t
     set(CAF_BUILD_STATIC_ONLY TRUE)
   endif ()
   add_subdirectory(aux/caf)
-  set_target_properties(libcaf_core_${_linkage_suffix}
-    PROPERTIES EXPORT_NAME core)
+  set_target_properties(libcaf_core_${_linkage_suffix} PROPERTIES EXPORT_NAME
+                                                                  core)
   add_library(caf::core ALIAS libcaf_core_${_linkage_suffix})
-  set_target_properties(libcaf_io_${_linkage_suffix}
-    PROPERTIES EXPORT_NAME io)
+  set_target_properties(libcaf_io_${_linkage_suffix} PROPERTIES EXPORT_NAME io)
   add_library(caf::io ALIAS libcaf_io_${_linkage_suffix})
-  install(TARGETS libcaf_core_${_linkage_suffix} libcaf_io_${_linkage_suffix}
-      EXPORT CAFTargets
-          ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
-          LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
-          RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
+  install(
+    TARGETS libcaf_core_${_linkage_suffix} libcaf_io_${_linkage_suffix}
+    EXPORT CAFTargets
+    ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
+    LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
+    RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
   if (TARGET libcaf_openssl_${_linkage_suffix})
     target_include_directories(
       libcaf_openssl_${_linkage_suffix}
-      PUBLIC $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/aux/caf/libcaf_openssl>
-             $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>)
+      PUBLIC
+        $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/aux/caf/libcaf_openssl>
+        $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>)
     set_target_properties(libcaf_openssl_${_linkage_suffix}
-      PROPERTIES EXPORT_NAME openssl)
+                          PROPERTIES EXPORT_NAME openssl)
     add_library(caf::openssl ALIAS libcaf_openssl_${_linkage_suffix})
-    install(TARGETS libcaf_openssl_${_linkage_suffix}
-        EXPORT CAFTargets
-            ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
-            LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
-            RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
+    install(
+      TARGETS libcaf_openssl_${_linkage_suffix}
+      EXPORT CAFTargets
+      ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
+      LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
+      RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
     set(VAST_USE_OPENSSL true)
   endif ()
   add_library(libcaf_test INTERFACE)
   target_link_libraries(libcaf_test INTERFACE caf::core)
-  target_include_directories(libcaf_test
+  target_include_directories(
+    libcaf_test
     INTERFACE $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/aux/caf/libcaf_test>
               $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>)
-  set_target_properties(libcaf_test
-    PROPERTIES EXPORT_NAME test)
+  set_target_properties(libcaf_test PROPERTIES EXPORT_NAME test)
   add_library(caf::test ALIAS libcaf_test)
-  install(TARGETS libcaf_test
-      EXPORT CAFTargets
-          ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
-          LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
-          RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
+  install(
+    TARGETS libcaf_test
+    EXPORT CAFTargets
+    ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
+    LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
+    RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
   set(caf_dir ${CMAKE_CURRENT_SOURCE_DIR}/aux/caf)
-  export(EXPORT CAFTargets FILE CAFTargets.cmake NAMESPACE caf::)
-  install(EXPORT CAFTargets
-          DESTINATION "${INSTALL_VAST_CMAKEDIR}"
-          NAMESPACE caf::)
+  export(
+    EXPORT CAFTargets
+    FILE CAFTargets.cmake
+    NAMESPACE caf::)
+  install(
+    EXPORT CAFTargets
+    DESTINATION "${INSTALL_VAST_CMAKEDIR}"
+    NAMESPACE caf::)
   string(APPEND VAST_CAF_TARGETS_FILE
-    "include(\"\${CMAKE_CURRENT_LIST_DIR}/CAFTargets.cmake\")")
+         "include(\"\${CMAKE_CURRENT_LIST_DIR}/CAFTargets.cmake\")")
 else ()
   if (NOT CAF_ROOT_DIR AND VAST_PREFIX)
     set(CAF_ROOT_DIR ${VAST_PREFIX})
   endif ()
   if (CAF_ROOT_DIR)
     # Try to find the required CAF components first...
-    find_package(CAF COMPONENTS core io test REQUIRED QUIET)
+    find_package(
+      CAF
+      COMPONENTS core io test
+      REQUIRED QUIET)
     message(STATUS "Found CAF")
     provide_find_module(CAF)
     string(APPEND VAST_FIND_DEPENDENCY_LIST
            "\nfind_package(CAF COMPONENTS core io test REQUIRED QUIET)")
     set(CAF_FOUND_SAVE ${CAF_FOUND})
     # ...and then optional components.
-    find_package(CAF COMPONENTS openssl QUIET)
+    find_package(
+      CAF
+      COMPONENTS openssl
+      QUIET)
     if (CAF_LIBRARY_OPENSSL)
       message(STATUS "Found CAF's OpenSSL module, enabling OpenSSL support")
       set(VAST_USE_OPENSSL true)
@@ -565,12 +600,16 @@ else ()
     endif ()
     set(CAF_FOUND ${CAF_FOUND_SAVE})
   else ()
-    message(FATAL_ERROR "CAF not found, either use -DCAF_ROOT_DIR=... or initialize the aux/caf submodule")
+    message(
+      FATAL_ERROR
+        "CAF not found, either use -DCAF_ROOT_DIR=... or initialize the aux/caf submodule"
+    )
   endif ()
 endif ()
 
 if (ENABLE_ZEEK_TO_VAST)
-  if (NOT BROKER_ROOT_DIR AND EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/aux/broker/broker/CMakeLists.txt)
+  if (NOT BROKER_ROOT_DIR
+      AND EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/aux/broker/broker/CMakeLists.txt)
     add_subdirectory(aux/broker)
     set(VAST_HAVE_BROKER true)
   else ()
@@ -581,7 +620,10 @@ if (ENABLE_ZEEK_TO_VAST)
       find_package(BROKER REQUIRED)
       set(VAST_HAVE_BROKER true)
     else ()
-      message(FATAL_ERROR "Broker not found, either use -DBROKER_ROOT_DIR=... or initialize the aux/broker submodule")
+      message(
+        FATAL_ERROR
+          "Broker not found, either use -DBROKER_ROOT_DIR=... or initialize the aux/broker submodule"
+      )
     endif ()
   endif ()
 endif ()
@@ -594,7 +636,8 @@ if (PCAP_FOUND)
   set(VAST_HAVE_PCAP true)
   if (NOT BUILD_SHARED_LIBS)
     provide_find_module(PCAP)
-    string(APPEND VAST_FIND_DEPENDENCY_LIST "\nfind_package(PCAP REQUIRED QUIET)")
+    string(APPEND VAST_FIND_DEPENDENCY_LIST
+           "\nfind_package(PCAP REQUIRED QUIET)")
   endif ()
 endif ()
 
@@ -613,14 +656,23 @@ endif ()
 
 if (NOT VAST_NO_ARROW)
   if (NOT ARROW_ROOT_DIR AND VAST_PREFIX)
-      set(ARROW_ROOT_DIR ${VAST_PREFIX})
+    set(ARROW_ROOT_DIR ${VAST_PREFIX})
   endif ()
   find_package(Arrow REQUIRED)
   find_package(Plasma REQUIRED)
   set(VAST_HAVE_ARROW true)
   if (NOT BUILD_SHARED_LIBS)
-    set(modules_not_provided Brotli DoubleConversion uriparser Snappy glog Lz4
-      ZSTD Thrift Arrow Plasma)
+    set(modules_not_provided
+        Brotli
+        DoubleConversion
+        uriparser
+        Snappy
+        glog
+        Lz4
+        ZSTD
+        Thrift
+        Arrow
+        Plasma)
     set(modules ZLIB)
     foreach (module ${modules_not_provided})
       provide_find_module("${module}")
@@ -629,7 +681,7 @@ if (NOT VAST_NO_ARROW)
     foreach (module ${modules})
       find_package("${module}" REQUIRED QUIET)
       string(APPEND VAST_FIND_DEPENDENCY_LIST
-        "\nfind_package(${module} REQUIRED QUIET)")
+             "\nfind_package(${module} REQUIRED QUIET)")
     endforeach ()
     set(Boost_USE_STATIC_LIBS ON)
     set(Boost_USE_MULTITHREADED ON)
@@ -637,10 +689,12 @@ if (NOT VAST_NO_ARROW)
     unset(Boost_INCLUDE_DIR CACHE)
     unset(Boost_LIBRARY_DIRS CACHE)
     find_package(Boost REQUIRED QUIET COMPONENTS filesystem system regex)
-    string(APPEND VAST_FIND_DEPENDENCY_LIST
+    string(
+      APPEND VAST_FIND_DEPENDENCY_LIST
       "\nfind_package(Boost REQUIRED QUIET COMPONENTS filesystem system regex)")
     set(ARROW_LIBRARIES
-      "${ARROW_STATIC_LIB};${PLASMA_STATIC_LIB};double-conversion::double-conversion;uriparser::uriparser;Brotli::brotlienc;Brotli::brotlidec;Brotli::brotlicommon;LZ4::lz4;snappy::snappy;ZLIB::ZLIB;ZSTD::zstd;GLOG::glog;Boost::system;Boost::filesystem;Boost::regex;Threads::Threads")
+        "${ARROW_STATIC_LIB};${PLASMA_STATIC_LIB};double-conversion::double-conversion;uriparser::uriparser;Brotli::brotlienc;Brotli::brotlidec;Brotli::brotlicommon;LZ4::lz4;snappy::snappy;ZLIB::ZLIB;ZSTD::zstd;GLOG::glog;Boost::system;Boost::filesystem;Boost::regex;Threads::Threads"
+    )
   else ()
     set(ARROW_LIBRARIES "${ARROW_SHARED_LIB};${PLASMA_SHARED_LIB}")
   endif ()
@@ -656,9 +710,9 @@ find_package(Pandoc QUIET)
 # make uninstall
 configure_file("${CMAKE_CURRENT_SOURCE_DIR}/cmake/cmake_uninstall.cmake.in"
                "${CMAKE_CURRENT_BINARY_DIR}/cmake_uninstall.cmake" @ONLY)
-add_custom_target(uninstall_vast
-                  COMMAND ${CMAKE_COMMAND} -P
-                          ${CMAKE_CURRENT_BINARY_DIR}/cmake_uninstall.cmake)
+add_custom_target(
+  uninstall_vast COMMAND ${CMAKE_COMMAND} -P
+                         ${CMAKE_CURRENT_BINARY_DIR}/cmake_uninstall.cmake)
 if (NOT TARGET uninstall)
   add_custom_target(uninstall)
 endif ()
@@ -697,26 +751,31 @@ file(
      pip install -r \"$base_dir/requirements.txt\"
      ${REQUIREMENT_PYARROW}
      python \"$base_dir/integration.py\" --app \"$app\" -d vast-integration-test"
-  )
+)
 
-add_custom_target(integration
-                  COMMAND /bin/sh
-                          "${CMAKE_CURRENT_BINARY_DIR}/integration_$<CONFIG>.sh"
-                          USES_TERMINAL)
+add_custom_target(
+  integration
+  COMMAND /bin/sh "${CMAKE_CURRENT_BINARY_DIR}/integration_$<CONFIG>.sh"
+  USES_TERMINAL)
 
-add_custom_target(vast-schema
-                  COMMAND ${CMAKE_COMMAND} -E make_directory
-                          "${CMAKE_BINARY_DIR}/share/vast/schema"
-                  COMMENT "Linking schema directory")
+add_custom_target(
+  vast-schema
+  COMMAND ${CMAKE_COMMAND} -E make_directory
+          "${CMAKE_BINARY_DIR}/share/vast/schema"
+  COMMENT "Linking schema directory")
 
-file(GLOB schema_files RELATIVE "${CMAKE_CURRENT_SOURCE_DIR}" "schema/*.schema")
+file(
+  GLOB schema_files
+  RELATIVE "${CMAKE_CURRENT_SOURCE_DIR}"
+  "schema/*.schema")
 foreach (x ${schema_files})
-  add_custom_command(TARGET vast-schema
-                     PRE_BUILD
-                     COMMAND ${CMAKE_COMMAND} -E create_symlink
-                             "${CMAKE_CURRENT_SOURCE_DIR}/${x}"
-                             "${CMAKE_BINARY_DIR}/share/vast/${x}"
-                     COMMENT "Linking schema ${x}")
+  add_custom_command(
+    TARGET vast-schema
+    PRE_BUILD
+    COMMAND
+      ${CMAKE_COMMAND} -E create_symlink "${CMAKE_CURRENT_SOURCE_DIR}/${x}"
+      "${CMAKE_BINARY_DIR}/share/vast/${x}"
+    COMMENT "Linking schema ${x}")
 endforeach ()
 
 add_subdirectory(libvast)
@@ -734,17 +793,23 @@ endif ()
 # Additional Installations
 # ------------------------------------------------------------------------------
 
-if (VAST_RELOCATEABLE_INSTALL AND BUILD_SHARED_LIBS AND CAF_LIBRARY_CORE)
+if (VAST_RELOCATEABLE_INSTALL
+    AND BUILD_SHARED_LIBS
+    AND CAF_LIBRARY_CORE)
   # Copy CAF libraries to installation directory
   get_filename_component(CAF_LIBDIR ${CAF_LIBRARY_CORE} PATH)
   install(DIRECTORY "${CAF_LIBDIR}/" DESTINATION "${CMAKE_INSTALL_LIBDIR}/")
 endif ()
 
-export(EXPORT VASTTargets FILE VASTTargets.cmake NAMESPACE vast::)
+export(
+  EXPORT VASTTargets
+  FILE VASTTargets.cmake
+  NAMESPACE vast::)
 
-install(EXPORT VASTTargets
-        DESTINATION "${INSTALL_VAST_CMAKEDIR}"
-        NAMESPACE vast::)
+install(
+  EXPORT VASTTargets
+  DESTINATION "${INSTALL_VAST_CMAKEDIR}"
+  NAMESPACE vast::)
 
 include(CMakePackageConfigHelpers)
 write_basic_package_version_file(
@@ -757,9 +822,10 @@ configure_package_config_file(
   "${CMAKE_CURRENT_BINARY_DIR}/VASTConfig.cmake" INSTALL_DESTINATION
   "${INSTALL_VAST_CMAKEDIR}")
 
-install(FILES "${CMAKE_CURRENT_BINARY_DIR}/VASTConfig.cmake"
-              "${CMAKE_CURRENT_BINARY_DIR}/VASTConfigVersion.cmake"
-        DESTINATION "${INSTALL_VAST_CMAKEDIR}")
+install(
+  FILES "${CMAKE_CURRENT_BINARY_DIR}/VASTConfig.cmake"
+        "${CMAKE_CURRENT_BINARY_DIR}/VASTConfigVersion.cmake"
+  DESTINATION "${INSTALL_VAST_CMAKEDIR}")
 
 install(DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/schema"
         DESTINATION "${CMAKE_INSTALL_DATADIR}/vast")
@@ -767,9 +833,10 @@ install(DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/schema"
 install(DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/integration"
         DESTINATION "${CMAKE_INSTALL_DATADIR}/vast")
 
-install(FILES "${CMAKE_CURRENT_SOURCE_DIR}/vast.conf"
-        DESTINATION "${CMAKE_INSTALL_DATADIR}/vast/"
-        RENAME "vast.conf.example")
+install(
+  FILES "${CMAKE_CURRENT_SOURCE_DIR}/vast.conf"
+  DESTINATION "${CMAKE_INSTALL_DATADIR}/vast/"
+  RENAME "vast.conf.example")
 install(FILES "${CMAKE_CURRENT_SOURCE_DIR}/vast.conf"
         DESTINATION "${CMAKE_INSTALL_SYSCONFDIR}/vast/")
 
@@ -825,46 +892,45 @@ display(NO_UNIT_TESTS no build_tests_summary)
 display(VAST_RELOCATEABLE_INSTALL yes relocatable_install_summary)
 
 string(TOUPPER "${CMAKE_BUILD_TYPE}" build_type)
-set(
-  summary
-  "====================|  Build Summary  |===================="
-  "\n"
-  "\nVersion:             ${VAST_VERSION}"
-  "\n"
-  "\nSource directory:    ${CMAKE_SOURCE_DIR}"
-  "\nBuild directory:     ${CMAKE_BINARY_DIR}"
-  "\nInstall prefix:      ${CMAKE_INSTALL_PREFIX}"
-  "\n"
-  "\nBuild type:          ${CMAKE_BUILD_TYPE}"
-  "\nBuild unit tests:    ${build_tests_summary}"
-  "\nLog level:           ${VAST_LOG_LEVEL}"
-  "\nShow time report:    ${time_report_summary}"
-  "\nAssertions:          ${assertions_summary}"
-  "\nAddressSanitizer:    ${asan_summary}"
-  "\ngcov:                ${gcov_summary}"
-  "\n"
-  "\nC compiler:          ${CMAKE_C_COMPILER_ID} ${CMAKE_C_COMPILER_VERSION}"
-  "\nC++ compiler:        ${CMAKE_CXX_COMPILER_ID} ${CMAKE_CXX_COMPILER_VERSION}"
-  "\n"
-  "\nCC:                  ${CMAKE_C_COMPILER}"
-  "\nCXX:                 ${CMAKE_CXX_COMPILER}"
-  "\nCXXFLAGS:            ${CMAKE_CXX_FLAGS} ${CMAKE_CXX_FLAGS_${build_type}}"
-  "\nLDFLAGS:             ${LDFLAGS}"
-  "\n"
-  "\nCAF:                 ${caf_summary}"
-  "\nArrow:               ${arrow_summary}"
-  "\nBroker:              ${broker_summary}"
-  "\nPCAP:                ${pcap_summary}"
-  "\nGperftools:          ${perftools_summary}"
-  "\nDoxygen:             ${doxygen_summary}"
-  "\npandoc:              ${pandoc_summary}"
-  "\n"
-  "\ntcmalloc:            ${tcmalloc_summary}"
-  "\nOpenSSL:             ${openssl_summary}"
-  "\n"
-  "\nRelocatable install: ${relocatable_install_summary}"
-  "\n"
-  "\n===========================================================")
+set(summary
+    "====================|  Build Summary  |===================="
+    "\n"
+    "\nVersion:             ${VAST_VERSION}"
+    "\n"
+    "\nSource directory:    ${CMAKE_SOURCE_DIR}"
+    "\nBuild directory:     ${CMAKE_BINARY_DIR}"
+    "\nInstall prefix:      ${CMAKE_INSTALL_PREFIX}"
+    "\n"
+    "\nBuild type:          ${CMAKE_BUILD_TYPE}"
+    "\nBuild unit tests:    ${build_tests_summary}"
+    "\nLog level:           ${VAST_LOG_LEVEL}"
+    "\nShow time report:    ${time_report_summary}"
+    "\nAssertions:          ${assertions_summary}"
+    "\nAddressSanitizer:    ${asan_summary}"
+    "\ngcov:                ${gcov_summary}"
+    "\n"
+    "\nC compiler:          ${CMAKE_C_COMPILER_ID} ${CMAKE_C_COMPILER_VERSION}"
+    "\nC++ compiler:        ${CMAKE_CXX_COMPILER_ID} ${CMAKE_CXX_COMPILER_VERSION}"
+    "\n"
+    "\nCC:                  ${CMAKE_C_COMPILER}"
+    "\nCXX:                 ${CMAKE_CXX_COMPILER}"
+    "\nCXXFLAGS:            ${CMAKE_CXX_FLAGS} ${CMAKE_CXX_FLAGS_${build_type}}"
+    "\nLDFLAGS:             ${LDFLAGS}"
+    "\n"
+    "\nCAF:                 ${caf_summary}"
+    "\nArrow:               ${arrow_summary}"
+    "\nBroker:              ${broker_summary}"
+    "\nPCAP:                ${pcap_summary}"
+    "\nGperftools:          ${perftools_summary}"
+    "\nDoxygen:             ${doxygen_summary}"
+    "\npandoc:              ${pandoc_summary}"
+    "\n"
+    "\ntcmalloc:            ${tcmalloc_summary}"
+    "\nOpenSSL:             ${openssl_summary}"
+    "\n"
+    "\nRelocatable install: ${relocatable_install_summary}"
+    "\n"
+    "\n===========================================================")
 
 message("\n" ${summary} "\n")
 file(WRITE ${CMAKE_CURRENT_BINARY_DIR}/config.summary ${summary})

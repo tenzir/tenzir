@@ -13,10 +13,26 @@ jobs:
     - uses: actions/setup-python@v1
       with:
         python-version: '3.8'
+
     - name: Clang Format
       run: |
         git diff -U0 --no-color $(git merge-base origin/master HEAD) |
           scripts/clang-format-diff.py -p1
+
+    - name: CMake Format
+      run: |
+        pip install --upgrade pip cmake_format
+        git diff --name-only --no-color --diff-filter=ACM $(git merge-base origin/master HEAD) -- "**CMakelists.txt" "**.cmake" |
+            xargs cmake-format --in-place
+        git diff --exit-code
+
+    - name: Black
+      run: |
+        pip install --upgrade pip black
+        # Note: black fails when it doesn't have to do anything.
+        git diff --name-only --no-color --diff-filter=ACM $(git merge-base origin/master HEAD) |
+            2>/dev/null xargs black || true
+        git diff --exit-code
 
   build:
     name: Build
@@ -52,8 +68,8 @@ jobs:
           sudo apt-get -qq update && sudo apt-get -qqy install \
           gcc-8 g++-8 ninja-build libbenchmark-dev libpcap-dev libssl-dev \
           libatomic1
-          pip3 install --upgrade pip
-          pip3 install --upgrade cmake
+          pip install --upgrade pip
+          pip install --upgrade cmake
           which cmake
           cmake --version
 

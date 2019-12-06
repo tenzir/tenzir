@@ -1,10 +1,10 @@
-# A simple script that invokes Gcov in the current, inspired by a much
-# elaborate version from https://github.com/JoakimSoderberg/coveralls-cmake.
+# A simple script that invokes Gcov in the current, inspired by a much elaborate
+# version from https://github.com/JoakimSoderberg/coveralls-cmake.
 #
 # This scripts expects the following variables:
 #
-# - GCOV_SOURCES: a list of files to generate coverage data for.
-# - GCOV_OUTPUT_DIR: the directory where to write the *.gcov files to.
+# * GCOV_SOURCES: a list of files to generate coverage data for.
+# * GCOV_OUTPUT_DIR: the directory where to write the *.gcov files to.
 
 # Validate variables passed with -D.
 if (NOT GCOV_SOURCES)
@@ -21,14 +21,13 @@ if (NOT EXISTS ${GCOV_OUTPUT_DIR})
   file(MAKE_DIRECTORY ${GCOV_OUTPUT_DIR})
 endif ()
 message(STATUS "Generating *.gcov from *.gcda files")
-foreach(GCDA ${GCDA_FILES})
-	get_filename_component(GCDA_DIR ${GCDA} PATH)
-	execute_process(
-		COMMAND ${GCOV} -p -o ${GCDA_DIR} ${GCDA}
+foreach (GCDA ${GCDA_FILES})
+  get_filename_component(GCDA_DIR ${GCDA} PATH)
+  execute_process(
+    COMMAND ${GCOV} -p -o ${GCDA_DIR} ${GCDA}
     WORKING_DIRECTORY "${GCOV_OUTPUT_DIR}"
-    OUTPUT_QUIET
-	)
-endforeach()
+    OUTPUT_QUIET)
+endforeach ()
 
 message(STATUS "Weeding out unneeded *.gcov files")
 file(GLOB GCOV_FILES "${GCOV_OUTPUT_DIR}/*.gcov")
@@ -41,5 +40,5 @@ foreach (GCOV_FILE ${GCOV_FILES})
   list(FIND GCOV_SOURCES ${SRC_FILE} FOUND)
   if (FOUND EQUAL -1)
     file(REMOVE ${GCOV_FILE}) # only keep relevant *.gcov files
-	endif()
+  endif ()
 endforeach ()

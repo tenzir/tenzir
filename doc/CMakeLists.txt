@@ -3,14 +3,24 @@ if (DOXYGEN_FOUND)
   set(doxyfile ${CMAKE_CURRENT_BINARY_DIR}/Doxyfile)
   set(api_site "www.icir.org:vast/api")
   configure_file(${CMAKE_CURRENT_SOURCE_DIR}/Doxyfile.in ${doxyfile} @ONLY)
-  add_custom_target(vast-doc
-      ${DOXYGEN_EXECUTABLE} ${doxyfile}
-      WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
-      COMMENT "generating API documentation with Doxygen" VERBATIM)
-  add_custom_target(vast-doc-www
-      rsync -az -e ssh --delete ${CMAKE_CURRENT_BINARY_DIR}/html ${api_site}
-      WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
-      COMMENT "syncing documentation with project site" VERBATIM)
+  add_custom_target(
+    vast-doc
+    ${DOXYGEN_EXECUTABLE} ${doxyfile}
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+    COMMENT "generating API documentation with Doxygen"
+    VERBATIM)
+  add_custom_target(
+    vast-doc-www
+    rsync
+    -az
+    -e
+    ssh
+    --delete
+    ${CMAKE_CURRENT_BINARY_DIR}/html
+    ${api_site}
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+    COMMENT "syncing documentation with project site"
+    VERBATIM)
   if (NOT TARGET doc)
     add_custom_target(doc)
   endif ()
@@ -24,12 +34,15 @@ endif ()
 # man pages
 if (PANDOC_FOUND)
   add_custom_target(vast-man)
-  foreach(man_page vast.1)
-    install(FILES "${CMAKE_CURRENT_BINARY_DIR}/${man_page}"
-      DESTINATION share/man/man1 OPTIONAL)
+  foreach (man_page vast.1)
+    install(
+      FILES "${CMAKE_CURRENT_BINARY_DIR}/${man_page}"
+      DESTINATION share/man/man1
+      OPTIONAL)
     if (PANDOC_FOUND)
       set(man_generated "${CMAKE_CURRENT_BINARY_DIR}/${man_page}")
-      file(WRITE ${CMAKE_CURRENT_BINARY_DIR}/make_man_${man_page}.cmake
+      file(
+        WRITE ${CMAKE_CURRENT_BINARY_DIR}/make_man_${man_page}.cmake
         "set(CMAKE_MODULE_PATH ${CMAKE_SOURCE_DIR}/cmake)
         include(Helpers)
         execute_process(
@@ -40,12 +53,13 @@ if (PANDOC_FOUND)
         execute_process(
            COMMAND pandoc -s -f markdown -t man ${man_generated}.md
            OUTPUT_FILE ${man_generated})")
-      add_custom_target(vast-man-make-${man_page}
+      add_custom_target(
+        vast-man-make-${man_page}
         ${CMAKE_COMMAND} -P make_man_${man_page}.cmake
         COMMENT "Generating man page ${man_page}")
       add_dependencies(vast-man vast-man-make-${man_page})
     endif ()
-  endforeach()
+  endforeach ()
   if (NOT TARGET man)
     add_custom_target(man ALL)
   endif ()
