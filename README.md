@@ -164,8 +164,8 @@ VAST comes with a [3-clause BSD licence][license-url].
 [mailing-list-commits]: http://mailman.icsi.berkeley.edu/mailman/listinfo/vast-commits
 [chat-badge]: https://img.shields.io/badge/gitter-chat-brightgreen.svg
 [chat-url]: https://gitter.im/tenzir/chat
-[ci-url]: https://cirrus-ci.com/github/tenzir/vast
-[ci-badge]: https://img.shields.io/cirrus/github/tenzir/vast
+[ci-url]: https://github.com/tenzir/vast/actions?query=branch%3Amaster
+[ci-badge]: https://github.com/tenzir/vast/workflows/VAST/badge.svg?branch=master
 [license-badge]: https://img.shields.io/badge/license-BSD-blue.svg
 [license-url]: https://raw.github.com/vast-io/vast/master/COPYING
 [changelog-badge]: https://img.shields.io/badge/view-changelog-green.svg
