@@ -1,10 +1,27 @@
-name: "Build"
+name: "VAST"
 on: push
 env:
   PREFIX: /opt/tenzir
   DEBIAN_FRONTEND: noninteractive
 jobs:
+  style:
+    name: Style Check
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v1
+      with:
+        ref: ${{ github.ref }}
+    - uses: actions/setup-python@v1
+      with:
+        python-version: '3.8'
+    - name: Clang Format
+      run: |
+        git diff -U0 --no-color $(git merge-base origin/master HEAD) |
+          scripts/clang-format-diff.py -p1
+
   build:
+    name: Build
+    needs: style
     strategy:
       matrix:
         os: [macos-latest, ubuntu-latest]
