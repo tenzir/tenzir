@@ -1,7 +1,6 @@
 name: "VAST"
 on: push
 env:
-  PREFIX: /opt/tenzir
   DEBIAN_FRONTEND: noninteractive
 jobs:
   style:
@@ -40,6 +39,13 @@ jobs:
         with:
           python-version: "3.8"
 
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v1
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: eu-central-1
+
       - name: Install Ubuntu Dependencies
         if: matrix.os == 'ubuntu-latest'
         run: |
@@ -54,7 +60,7 @@ jobs:
       - name: Install macOS Dependencies
         if: matrix.os == 'macos-latest'
         run: |
-          brew install openssl cmake git ninja python libpcap jq tcpdump rsync pandoc apache-arrow
+          brew install openssl cmake git ninja python libpcap jq tcpdump rsync pandoc apache-arrow awscli
       - name: Create Paths
         id: create_paths
         run: |
@@ -105,12 +111,15 @@ jobs:
       - name: Package
         env:
           DESTDIR: $PWD
-          PREFIX: ${{ matrix.os == 'macos-latest' && '/usr/local/opt/tenzir' || '/opt/tenzir' }}
         run: |
           cmake --build ${{ steps.create_paths.outputs.build_dir }} --target package
 
-      - name: Upload Artifact
+      - name: Upload Artifact to Github
         uses: actions/upload-artifact@v1
         with:
           name: "${{ steps.create_paths.outputs.package_name }}.tar.gz"
           path: "${{ steps.create_paths.outputs.build_dir }}/${{ steps.create_paths.outputs.package_name }}.tar.gz"
+
+      - name: Upload Artifact to S3
+        run: |
+          aws s3 cp "${{ steps.create_paths.outputs.build_dir }}/${{ steps.create_paths.outputs.package_name }}.tar.gz" ${{ secrets.AWS_ARTIFACT_BUCKET }}
