@@ -21,7 +21,7 @@ jobs:
       run: |
         pip install --upgrade pip
         pip install --upgrade cmake_format
-        git ls-files -- "**CMakelists.txt" "**.cmake" |
+        git diff --name-only --no-color -- "**CMakelists.txt" "**.cmake" |
           xargs cmake-format --in-place
         git diff --exit-code
 
