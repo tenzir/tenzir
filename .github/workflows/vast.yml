@@ -137,5 +137,6 @@ jobs:
           path: "${{ steps.create_paths.outputs.build_dir }}/${{ steps.create_paths.outputs.package_name }}.tar.gz"
 
       - name: Upload Artifact to S3
+        if: github.ref == 'refs/heads/master'
         run: |
           aws s3 cp "${{ steps.create_paths.outputs.build_dir }}/${{ steps.create_paths.outputs.package_name }}.tar.gz" ${{ secrets.AWS_ARTIFACT_BUCKET }}
