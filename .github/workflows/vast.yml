@@ -23,7 +23,7 @@ jobs:
       run: |
         pip install --upgrade pip cmake_format
         git diff --name-only --no-color --diff-filter=ACM $(git merge-base origin/master HEAD) -- "**CMakelists.txt" "**.cmake" |
-            xargs cmake-format --in-place
+          xargs cmake-format --in-place
         git diff --exit-code
 
     - name: Black
@@ -31,7 +31,8 @@ jobs:
         pip install --upgrade pip black
         # Note: black fails when it doesn't have to do anything.
         git diff --name-only --no-color --diff-filter=ACM $(git merge-base origin/master HEAD) |
-            2>/dev/null xargs black || true
+          grep -v '.json$' |
+          2>/dev/null xargs black || true
         git diff --exit-code
 
   build:
