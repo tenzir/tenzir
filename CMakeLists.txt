@@ -22,7 +22,7 @@ if (VAST_DEV_MODE)
 endif ()
 option(ENABLE_ZEEK_TO_VAST "Build zeek-to-vast" ON)
 option(VAST_STATIC_EXECUTABLE "Link VAST statically")
-option(VAST_RELOCATEABLE_INSTALL "Make the installation relocateable" OFF)
+option(VAST_RELOCATABLE_INSTALL "Make the installation relocatable" OFF)
 option(VAST_NO_ARROW "Build without Apache Arrow" OFF)
 set(BUILD_SHARED_LIBS_DEFAULT ON)
 if (VAST_STATIC_EXECUTABLE)
@@ -42,7 +42,7 @@ endif ()
 if (APPLE AND NOT DEFINED CMAKE_MACOSX_RPATH)
   set(CMAKE_SKIP_BUILD_RPATH FALSE)
   set(CMAKE_BUILD_WITH_INSTALL_RPATH FALSE)
-  if (NOT VAST_RELOCATEABLE_INSTALL)
+  if (NOT VAST_RELOCATABLE_INSTALL)
     set(CMAKE_INSTALL_RPATH_USE_LINK_PATH TRUE)
   endif ()
 endif ()
@@ -70,7 +70,7 @@ set(CMAKE_INSTALL_CMAKEDIR
     CACHE PATH "Base directory for installing cmake specific artifacts")
 set(INSTALL_VAST_CMAKEDIR "${CMAKE_INSTALL_CMAKEDIR}/vast")
 
-if (VAST_RELOCATEABLE_INSTALL)
+if (VAST_RELOCATABLE_INSTALL)
   if (APPLE)
     list(APPEND CMAKE_INSTALL_RPATH
                 "@executable_path/../${CMAKE_INSTALL_LIBDIR}")
@@ -793,7 +793,7 @@ endif ()
 # Additional Installations
 # ------------------------------------------------------------------------------
 
-if (VAST_RELOCATEABLE_INSTALL
+if (VAST_RELOCATABLE_INSTALL
     AND BUILD_SHARED_LIBS
     AND CAF_LIBRARY_CORE)
   # Copy CAF libraries to installation directory
@@ -889,7 +889,7 @@ display(PANDOC_FOUND yes pandoc_summary)
 display(VAST_USE_TCMALLOC yes tcmalloc_summary)
 display(VAST_USE_OPENSSL yes openssl_summary)
 display(NO_UNIT_TESTS no build_tests_summary)
-display(VAST_RELOCATEABLE_INSTALL yes relocatable_install_summary)
+display(VAST_RELOCATABLE_INSTALL yes relocatable_install_summary)
 
 string(TOUPPER "${CMAKE_BUILD_TYPE}" build_type)
 set(summary

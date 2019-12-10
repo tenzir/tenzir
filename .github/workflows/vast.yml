@@ -94,6 +94,7 @@ jobs:
           ./configure \
             --generator=Ninja \
             --prefix="${PWD}/opt/vast" \
+            --relocatable \
             --build-dir=${{ steps.create_paths.outputs.build_dir }} \
             --package-name=${{ steps.create_paths.outputs.package_name }} \
             ${{ matrix.os == 'macos-latest' && '' || '--disable-arrow' }} \
