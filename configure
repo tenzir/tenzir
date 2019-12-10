@@ -24,6 +24,7 @@ Usage: $0 [OPTION]... [VAR=VALUE]...
 
   Installation directories:
     --prefix=PREFIX         installation directory [/usr/local]
+    --relocatable           enable relocatable installations
 
   Build options:
     --generator=GENERATOR   CMake generator to use (see cmake --help)
@@ -109,6 +110,9 @@ while [ $# -ne 0 ]; do
     --prefix=*)
       append_cache_entry VAST_PREFIX PATH "$optarg"
       append_cache_entry CMAKE_INSTALL_PREFIX PATH "$optarg"
+      ;;
+    --relocatable)
+      append_cache_entry VAST_RELOCATABLE_INSTALL BOOL true
       ;;
     --generator=*)
       CMakeGenerator="$optarg"
