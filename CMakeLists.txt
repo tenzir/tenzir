@@ -514,6 +514,7 @@ if (NOT CAF_ROOT_DIR AND EXISTS
                                                                   core)
   add_library(caf::core ALIAS libcaf_core_${_linkage_suffix})
   set_target_properties(libcaf_io_${_linkage_suffix} PROPERTIES EXPORT_NAME io)
+  target_link_libraries(libcaf_io_${_linkage_suffix} Threads::Threads)
   add_library(caf::io ALIAS libcaf_io_${_linkage_suffix})
   install(
     TARGETS libcaf_core_${_linkage_suffix} libcaf_io_${_linkage_suffix}

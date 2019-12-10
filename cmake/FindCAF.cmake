@@ -124,7 +124,7 @@ if (CAF_io_FOUND AND NOT TARGET caf::io)
     PROPERTIES
       IMPORTED_LOCATION "${CAF_LIBRARY_IO}"
       INTERFACE_INCLUDE_DIRECTORIES "${CAF_INCLUDE_DIR_IO}"
-      INTERFACE_LINK_LIBRARIES "caf::core")
+      INTERFACE_LINK_LIBRARIES "caf::core;Threads::Threads")
 endif ()
 if (CAF_openssl_FOUND AND NOT TARGET caf::openssl)
   add_library(caf::openssl UNKNOWN IMPORTED GLOBAL)
