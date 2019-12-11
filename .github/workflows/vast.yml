@@ -81,7 +81,7 @@ jobs:
       - name: Create Paths
         id: create_paths
         run: |
-          PACKAGE_NAME="VAST-$(git describe)-$(uname -s)-${{ matrix.configure == '' && 'Release' || 'Debug' }}"
+          PACKAGE_NAME="$(echo "vast-$(git describe)-$(uname -s)-${{ matrix.configure == '' && 'Release' || 'Debug' }}" | awk '{ print tolower($0) }')"
           echo "::set-output name=package_name::${PACKAGE_NAME}"
           BUILD_DIR="build"
           echo "::set-output name=build_dir::${BUILD_DIR}"
