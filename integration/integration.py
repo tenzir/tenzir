@@ -30,22 +30,26 @@ import packages.wait as wait
 import schema
 import yaml
 
-LOGGER = logging.getLogger('VAST')
+LOGGER = logging.getLogger("VAST")
 VAST_PORT = 42024
 STEP_TIMEOUT = 30
 CURRENT_SUBPROCS: List[subprocess.Popen] = []
+
 
 class Fixture(NamedTuple):
     enter: str
     exit: str
 
+
 class Step(NamedTuple):
     command: List[str]
     input: Optional[Path]
-    transformation : Optional[str]
+    transformation: Optional[str]
+
 
 class Condition(NamedTuple):
     subcommand: str
+
 
 class Test(NamedTuple):
     tags: Optional[str]
@@ -53,23 +57,27 @@ class Test(NamedTuple):
     fixture: Optional[str]
     steps: List[Union[Step, Condition]]
 
+
 def signal_subprocs(signum):
     """send signal recieved to subprocesses"""
     for proc in reversed(CURRENT_SUBPROCS):
         if proc.poll() is None:
-            LOGGER.debug(f'sending signal {signum} to {proc.args}')
+            LOGGER.debug(f"sending signal {signum} to {proc.args}")
             proc.send_signal(signum)
+
 
 def handle_exit_signal(signum, _frame):
     """send signal recieved to subprocesses and exit"""
-    LOGGER.warning(f'got signal {signum}, shutting down')
+    LOGGER.warning(f"got signal {signum}, shutting down")
     signal_subprocs(signum)
     sys.exit(1)
+
 
 def timeout_handler(_signum, frame):
     """Terminate subprocs and raise"""
     signal_subprocs(signal.SIGTERM)
-    raise OSError('Timeout reached')
+    raise OSError("Timeout reached")
+
 
 signal.signal(signal.SIGINT, handle_exit_signal)
 signal.signal(signal.SIGTERM, handle_exit_signal)
@@ -84,38 +92,43 @@ def spawn(*popenargs, **kwargs):
     CURRENT_SUBPROCS.append(proc)
     return proc
 
+
 def try_wait(process, timeout):
     """Wait for a specified time or terminate the process"""
     try:
         if process.wait(timeout) is not 0:
-            LOGGER.error(f'{process.args} returned {process.returncode}')
+            LOGGER.error(f"{process.args} returned {process.returncode}")
             return Result.ERROR
         return Result.SUCCESS
     except subprocess.TimeoutExpired:
-        LOGGER.error(f'timeout reached, terminating process')
+        LOGGER.error(f"timeout reached, terminating process")
         process.terminate()
         return Result.ERROR
 
+
 def run_flamegraph(args, svg_file):
     """Perform instrumentation and produce an output svg"""
-    LOGGER.debug(f'writing flamegraph {args} to {svg_file}')
+    LOGGER.debug(f"writing flamegraph {args} to {svg_file}")
     flamegraph = Path(args.flamegraph_path).resolve()
-    with open(svg_file, 'w') as svg:
+    with open(svg_file, "w") as svg:
         # refresh sudo credential cache in a blocking call to be sure to catch
         # the entire test run
-        subprocess.run(['sudo', '-v'])
-        return spawn([flamegraph, '-s', str(args.timeout)],
-                     stdout=svg,
-                     cwd=args.directory)
+        subprocess.run(["sudo", "-v"])
+        return spawn(
+            [flamegraph, "-s", str(args.timeout)], stdout=svg, cwd=args.directory
+        )
+
 
 def now():
     # return time.clock_gettime(time.CLOCK_MONOTONIC)
     return time.process_time()
 
+
 class Result(Enum):
     SUCCESS = 1  # Baseline comparison succeded.
     FAILURE = 2  # Baseline mismatch.
-    ERROR = 3    # Crashes or returns with non-zero exit code.
+    ERROR = 3  # Crashes or returns with non-zero exit code.
+
 
 class TestSummary:
     """Stats keeper"""
@@ -127,7 +140,7 @@ class TestSummary:
         self.errors = 0
 
     def __repr__(self):
-        return f'({self.step_count}/{self.succeeded}/{self.failed})'
+        return f"({self.step_count}/{self.succeeded}/{self.failed})"
 
     def count(self, result):
         """Count step result"""
@@ -143,6 +156,7 @@ class TestSummary:
     def successful(self):
         return self.step_count == self.succeeded
 
+
 def empty(iterable):
     try:
         first = next(iterable)
@@ -150,73 +164,76 @@ def empty(iterable):
         return True
     return False
 
+
 def deduce_format(command):
-    positionals = list(filter(lambda x: x[0] != '-', command))
-    if positionals[0] == 'export':
-        if positionals[1] == 'json':
+    positionals = list(filter(lambda x: x[0] != "-", command))
+    if positionals[0] == "export":
+        if positionals[1] == "json":
             # Pythons JSON parser does not handle ldjson, so we fall back to ascii
-            return 'ascii'
-    if positionals[0] == 'status':
-        return 'json'
-    return 'ascii'
+            return "ascii"
+    if positionals[0] == "status":
+        return "json"
+    return "ascii"
+
 
 def run_step(basecmd, step_id, step, work_dir, baseline_dir, update_baseline):
     try:
-        stdout = work_dir / f'{step_id}.out'
-        stderr = work_dir / f'{step_id}.err'
+        stdout = work_dir / f"{step_id}.out"
+        stderr = work_dir / f"{step_id}.err"
         cmd = basecmd + step.command
-        info_string = ' '.join(map(str, cmd))
+        info_string = " ".join(map(str, cmd))
         client = spawn(
             basecmd + step.command,
             stdin=subprocess.PIPE,
-            stdout=open(stdout, 'w+'),
-            stderr=open(stderr, 'w'),
-            cwd=work_dir)
+            stdout=open(stdout, "w+"),
+            stderr=open(stderr, "w"),
+            cwd=work_dir,
+        )
         start_time = now()
         # Invoking process.
         if step.input:
             incmd = []
-            if str(step.input).endswith('gz'):
-                incmd += ['gunzip', '-c', str(step.input)]
+            if str(step.input).endswith("gz"):
+                incmd += ["gunzip", "-c", str(step.input)]
             else:
-                incmd += ['cat', str(step.input)]
-            info_string = ' '.join(incmd) + ' | ' + info_string
+                incmd += ["cat", str(step.input)]
+            info_string = " ".join(incmd) + " | " + info_string
             input_p = spawn(incmd, stdout=client.stdin)
-            result = try_wait(
-                input_p, timeout=STEP_TIMEOUT - (now() - start_time))
+            result = try_wait(input_p, timeout=STEP_TIMEOUT - (now() - start_time))
             client.stdin.close()
         result = try_wait(client, timeout=STEP_TIMEOUT - (now() - start_time))
         if result is Result.ERROR:
-            LOGGER.debug('standard error:')
+            LOGGER.debug("standard error:")
             for line in open(stderr).readlines()[-100:]:
-                LOGGER.debug(f'    {line}')
+                LOGGER.debug(f"    {line}")
             return result
         # Perform baseline update or comparison.
-        baseline = baseline_dir / f'{step_id}.ref'
+        baseline = baseline_dir / f"{step_id}.ref"
         output_format = deduce_format(step.command)
         if update_baseline:
-            LOGGER.info('updating baseline')
+            LOGGER.info("updating baseline")
             if not baseline_dir.exists():
                 baseline_dir.mkdir(parents=True)
         else:
-            LOGGER.debug('comparing step output to baseline')
+            LOGGER.debug("comparing step output to baseline")
         with open(stdout) as out_handle:
             out = None
             if step.transformation:
-                LOGGER.debug(f'transforming output with `{step.transformation}`')
+                LOGGER.debug(f"transforming output with `{step.transformation}`")
                 out = subprocess.run(
                     [step.transformation],
                     stdin=out_handle,
                     stdout=subprocess.PIPE,
                     timeout=STEP_TIMEOUT,
-                    shell=True).stdout.decode('utf8')
+                    shell=True,
+                ).stdout.decode("utf8")
             else:
                 out = out_handle.read()
             diff = None
-            if output_format == 'json':
+            if output_format == "json":
                 output_object = json.loads(out)
                 if update_baseline:
-                    json.dump(output_object, open(baseline, 'w'))
+                    json.dump(output_object, open(baseline, "w"))
                     return Result.SUCCESS
                 if not baseline.exists():
                     diff = jsondiff.diff({}, output_object)
@@ -227,27 +244,29 @@ def run_step(basecmd, step_id, step, work_dir, baseline_dir, update_baseline):
                 if diff == {}:
                     diff = []
                 else:
-                    diff = str(diff) + '\n'
+                    diff = str(diff) + "\n"
             else:
                 # ascii
                 output_lines = out.splitlines(keepends=True)
                 # We sort ascii output for determinism
                 output_lines = sorted(output_lines)
                 if update_baseline:
-                    with open(baseline, 'w') as ref_handle:
+                    with open(baseline, "w") as ref_handle:
                         for line in output_lines:
                             ref_handle.write(line)
                     return Result.SUCCESS
                 baseline_lines = []
                 if baseline.exists():
                     baseline_lines = open(baseline).readlines()
-                diff = difflib.unified_diff(baseline_lines,
-                                            output_lines,
-                                            fromfile=str(baseline),
-                                            tofile=str(stdout))
+                diff = difflib.unified_diff(
+                    baseline_lines,
+                    output_lines,
+                    fromfile=str(baseline),
+                    tofile=str(stdout),
+                )
             delta = list(diff)
             if delta:
-                LOGGER.error('baseline comparison failed')
+                LOGGER.error("baseline comparison failed")
                 sys.stdout.writelines(delta)
                 return Result.FAILURE
     except subprocess.CalledProcessError as err:
@@ -255,59 +274,64 @@ def run_step(basecmd, step_id, step, work_dir, baseline_dir, update_baseline):
         return Result.ERROR
     return result
 
+
 class Server:
     """Server fixture implementation details
     """
 
-    def __init__(self,
-                 app,
-                 args,
-                 work_dir,
-                 name='node',
-                 port=VAST_PORT,
-                 config_file=None,
-                 **kwargs):
+    def __init__(
+        self,
+        app,
+        args,
+        work_dir,
+        name="node",
+        port=VAST_PORT,
+        config_file=None,
+        **kwargs,
+    ):
         self.app = app
-        self.config_arg = f'--config-file={config_file}'
+        self.config_arg = f"--config-file={config_file}"
         self.name = name
         self.cwd = work_dir / self.name
         self.port = port
-        LOGGER.debug('starting server fixture')
-        LOGGER.debug(f'waiting for port {self.port} to be available')
+        LOGGER.debug("starting server fixture")
+        LOGGER.debug(f"waiting for port {self.port} to be available")
         if not wait.tcp.closed(self.port, timeout=5):
-            raise RuntimeError(
-                'Port is blocked by another process.\nAborting tests...')
+            raise RuntimeError("Port is blocked by another process.\nAborting tests...")
         self.cwd.mkdir(parents=True)
-        out = open(self.cwd / 'out', 'w')
-        err = open(self.cwd / 'err', 'w')
+        out = open(self.cwd / "out", "w")
+        err = open(self.cwd / "err", "w")
         self.process = spawn(
             [self.app, self.config_arg] + args,
             cwd=self.cwd,
             stdout=out,
             stderr=err,
-            **kwargs)
-        LOGGER.debug(f'waiting for server to listen on port {self.port}')
+            **kwargs,
+        )
+        LOGGER.debug(f"waiting for server to listen on port {self.port}")
         if not wait.tcp.open(self.port, timeout=5):
-            raise RuntimeError(
-                'Server could not aquire port.\nAborting tests')
+            raise RuntimeError("Server could not aquire port.\nAborting tests")
 
     def stop(self):
         """Stops the server"""
-        LOGGER.debug('stopping server fixture')
-        stop_out = open(self.cwd / 'stop.out', 'w')
-        stop_err = open(self.cwd / 'stop.err', 'w')
+        LOGGER.debug("stopping server fixture")
+        stop_out = open(self.cwd / "stop.out", "w")
+        stop_err = open(self.cwd / "stop.err", "w")
         stop = 0
         try:
-            stop = spawn([self.app, self.config_arg, '-e', f':{self.port}', 'stop'],
-                         cwd=self.cwd,
-                         stdout=stop_out,
-                         stderr=stop_err).wait(STEP_TIMEOUT)
+            stop = spawn(
+                [self.app, self.config_arg, "-e", f":{self.port}", "stop"],
+                cwd=self.cwd,
+                stdout=stop_out,
+                stderr=stop_err,
+            ).wait(STEP_TIMEOUT)
         except:
             stop.kill()
         try:
             self.process.wait(STEP_TIMEOUT)
         except:
             self.process.kill()
+
 
 class Tester:
     """Test runner
@@ -330,7 +354,7 @@ class Tester:
             self.test_dir.rmdir()
 
     def check_condition(self, condition):
-        check = spawn(self.app + ' ' + condition.subcommand, shell=True)
+        check = spawn(self.app + " " + condition.subcommand, shell=True)
         ret = check.wait(STEP_TIMEOUT)
         return ret
 
@@ -345,7 +369,7 @@ class Tester:
         for step in steps:
             if isinstance(step, Condition):
                 if self.check_condition(step):
-                    LOGGER.debug('guard condition false, skipping steps')
+                    LOGGER.debug("guard condition false, skipping steps")
                     return result
             else:
                 result.append(step)
@@ -353,111 +377,135 @@ class Tester:
 
     def run(self, test_name, test):
         """Runs a single test"""
-        LOGGER.info(f'running test: {test_name}')
-        normalized_test_name = test_name.replace(' ', '-').lower()
-        baseline_dir = self.args.set.parent / 'reference' / normalized_test_name
+        LOGGER.info(f"running test: {test_name}")
+        normalized_test_name = test_name.replace(" ", "-").lower()
+        baseline_dir = self.args.set.parent / "reference" / normalized_test_name
         work_dir = self.test_dir / normalized_test_name
         if work_dir.exists():
-            LOGGER.debug(f'removing existing work directory {work_dir}')
+            LOGGER.debug(f"removing existing work directory {work_dir}")
             shutil.rmtree(work_dir)
         work_dir.mkdir(parents=True)
         summary = TestSummary(len(test.steps))
         step_i = 0
         # Locate fixture.
-        dummy_fixture = Fixture('pass', 'pass')
-        fixture = dummy_fixture if not test.fixture else self.fixtures.get(
-            test.fixture)
+        dummy_fixture = Fixture("pass", "pass")
+        fixture = dummy_fixture if not test.fixture else self.fixtures.get(test.fixture)
         cmd = [self.cmd]
         if self.config_file:
-            cmd.append(f'--config-file={self.config_file}')
+            cmd.append(f"--config-file={self.config_file}")
         fenter = Template(fixture.enter).substitute(locals())
         fexit = Template(fixture.exit).substitute(locals())
         # Invoke test.
         exec(fenter)
         if self.args.flamegraph:
-            svg_file = work_dir / f'{normalized_test_name}.svg'
+            svg_file = work_dir / f"{normalized_test_name}.svg"
             run_flamegraph(self.args, svg_file)
         for step in test.steps:
-            step_id = 'step_{:02d}'.format(step_i)
-            LOGGER.info(f'running step {step_i}: {step.command}')
-            result = run_step(cmd, step_id, step, work_dir, baseline_dir,
-                              self.update)
+            step_id = "step_{:02d}".format(step_i)
+            LOGGER.info(f"running step {step_i}: {step.command}")
+            result = run_step(cmd, step_id, step, work_dir, baseline_dir, self.update)
             summary.count(result)
             if result is Result.ERROR:
-                LOGGER.error('skipping remaining steps after error')
+                LOGGER.error("skipping remaining steps after error")
                 break
             step_i += 1
         exec(fexit)
         # Summarize result.
         if not self.args.keep and summary.successful():
-            LOGGER.debug(f'removing working directory {work_dir}')
+            LOGGER.debug(f"removing working directory {work_dir}")
             shutil.rmtree(work_dir)
         if summary.successful():
-            LOGGER.debug(f'ran all {summary.step_count} steps successfully')
+            LOGGER.debug(f"ran all {summary.step_count} steps successfully")
         else:
-            LOGGER.warning(f'ran {summary.succeeded}/{summary.step_count} '
-                           'steps successfully')
+            LOGGER.warning(
+                f"ran {summary.succeeded}/{summary.step_count} " "steps successfully"
+            )
         return summary.successful()
+
 
 def validate(data, set_dir):
     def is_file(path):
         return path.is_file()
+
     def to_fixture(data):
         return Fixture(**data)
+
     def to_step(data):
         return Step(**data)
+
     def guard_to_condition(guard):
-        return Condition(guard['guard'])
+        return Condition(guard["guard"])
+
     def to_test(data):
         return Test(**data)
+
     def absolute_path(path):
         absolute = Path(os.path.expanduser(path))
         if not absolute.is_absolute():
             absolute = (set_dir / path).resolve()
         return absolute
+
     def replace_path(raw_command):
-        return raw_command.replace('@.', str(set_dir))
+        return raw_command.replace("@.", str(set_dir))
+
     def to_command(raw_command):
         return shlex.split(replace_path(raw_command))
+
     fixture = schema.Schema(
-        schema.And({
-            'enter': schema.And(str, len),
-            'exit': schema.And(str, len)
-        }, schema.Use(to_fixture)))
+        schema.And(
+            {"enter": schema.And(str, len), "exit": schema.And(str, len)},
+            schema.Use(to_fixture),
+        )
+    )
     fixtures = schema.Schema({schema.And(str, len): fixture})
     step = schema.Schema(
-        schema.And({
-            'command':
-            schema.And(
-                schema.Const(schema.And(str, len)), schema.Use(to_command)),
-            schema.Optional('input', default=None):
-            schema.And(schema.Use(absolute_path), is_file),
-            schema.Optional('transformation', default=None): 
-                schema.Use(replace_path)
-        }, schema.Use(to_step)))
-    guard = schema.Schema(schema.And({'guard': str}, schema.Use(guard_to_condition)))
+        schema.And(
+            {
+                "command": schema.And(
+                    schema.Const(schema.And(str, len)), schema.Use(to_command)
+                ),
+                schema.Optional("input", default=None): schema.And(
+                    schema.Use(absolute_path), is_file
+                ),
+                schema.Optional("transformation", default=None): schema.Use(
+                    replace_path
+                ),
+            },
+            schema.Use(to_step),
+        )
+    )
+    guard = schema.Schema(schema.And({"guard": str}, schema.Use(guard_to_condition)))
     test = schema.Schema(
-        schema.And({
-            schema.Optional('tags', default=None): [str],
-            schema.Optional('condition', default=None): schema.Use(Condition),
-            schema.Optional('fixture', default=None): str,
-            'steps': [schema.Or(step, guard)]
-        }, schema.Use(to_test)))
+        schema.And(
+            {
+                schema.Optional("tags", default=None): [str],
+                schema.Optional("condition", default=None): schema.Use(Condition),
+                schema.Optional("fixture", default=None): str,
+                "steps": [schema.Or(step, guard)],
+            },
+            schema.Use(to_test),
+        )
+    )
     tests = schema.Schema({schema.And(str, len): test})
-    sch = schema.Schema({
-        schema.Optional('config-file', default=None): schema.Use(absolute_path),
-        schema.Optional('fixtures', default=None): fixtures,
-        'tests': tests})
+    sch = schema.Schema(
+        {
+            schema.Optional("config-file", default=None): schema.Use(absolute_path),
+            schema.Optional("fixtures", default=None): fixtures,
+            "tests": tests,
+        }
+    )
     return sch.validate(data)
+
 
 def tagselect(tags, tests):
     if not tags:
-        return {k: t for k, t in tests.items() if 'disabled' not in t.tags}
+        return {k: t for k, t in tests.items() if "disabled" not in t.tags}
     tagset = set(tags)
     return {k: t for k, t in tests.items() if tagset & set(t.tags)}
 
+
 def run(args, test_dec):
-    tests = test_dec['tests']
+    tests = test_dec["tests"]
     selected_tests = {}
     explicit_tests = {}
     if args.test:
@@ -467,15 +515,17 @@ def run(args, test_dec):
         selected_tests = tagselect(args.tag, tests)
     tests = dict(selected_tests, **explicit_tests)
     try:
-        with Tester(args, test_dec['fixtures'], test_dec['config-file']) as tester:
+        with Tester(args, test_dec["fixtures"], test_dec["config-file"]) as tester:
             result = True
             for name, definition in tests.items():
                 # Skip the test if the condition is not fulfilled
                 if tester.check_skip(definition):
-                    LOGGER.debug(f'skipping test {name}')
+                    LOGGER.debug(f"skipping test {name}")
                     continue
                 # Check and remove guards from the list of steps
-                definition = definition._replace(steps=tester.check_guards(definition.steps))
+                definition = definition._replace(
+                    steps=tester.check_guards(definition.steps)
+                )
                 if not tester.run(name, definition):
                     result = False
             return result
@@ -483,72 +533,70 @@ def run(args, test_dec):
         signal_subprocs(signal.SIGTERM)
         raise err
 
+
 def main():
     """The main function"""
     parser = argparse.ArgumentParser(
-        description='Test runner',
-        formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+        description="Test runner",
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter,
+    )
     parser.add_argument(
-        '--app',
-        default='./core',
-        help='Path to the executable (vast/core)')
+        "--app", default="./core", help="Path to the executable (vast/core)"
+    )
     parser.add_argument(
-        '-s',
-        '--set',
+        "-s",
+        "--set",
         type=Path,
-        help='Run the testset from this test definition YAML file')
+        help="Run the testset from this test definition YAML file",
+    )
     parser.add_argument(
-        '-T', '--tag', nargs='+', help='The tag for which tests will be run')
+        "-T", "--tag", nargs="+", help="The tag for which tests will be run"
+    )
     parser.add_argument(
-        '-t',
-        '--test',
-        nargs='+',
-        help='The test(s) to run (runs all tests if unset)')
+        "-t", "--test", nargs="+", help="The test(s) to run (runs all tests if unset)"
+    )
     parser.add_argument(
-        '-u',
-        '--update',
-        action='store_true',
-        help='Update baseline for tests')
+        "-u", "--update", action="store_true", help="Update baseline for tests"
+    )
     parser.add_argument(
-        '-d',
-        '--directory',
-        default='run_<current_ISO_timestamp>',
+        "-d",
+        "--directory",
+        default="run_<current_ISO_timestamp>",
         type=Path,
-        help='The basedir for the test runs')
+        help="The basedir for the test runs",
+    )
     parser.add_argument(
-        '-K',
-        '--keep',
-        action='store_true',
-        help='Keep artifacts of successful runs')
+        "-K", "--keep", action="store_true", help="Keep artifacts of successful runs"
+    )
     parser.add_argument(
-        '--timeout',
-        type=int,
-        default=0,
-        help='Test timeout in seconds')
+        "--timeout", type=int, default=0, help="Test timeout in seconds"
+    )
     parser.add_argument(
-        '-l',
-        '--list',
-        nargs='*',
-        help='Return a list of available tests optionally filtered with tags')
+        "-l",
+        "--list",
+        nargs="*",
+        help="Return a list of available tests optionally filtered with tags",
+    )
     parser.add_argument(
-        '-L',
-        '--list-tags',
-        action='store_true',
-        help='Return a list of all available tags')
+        "-L",
+        "--list-tags",
+        action="store_true",
+        help="Return a list of all available tags",
+    )
     parser.add_argument(
-        '--flamegraph',
-        action='store_true',
-        help='Generate a flamegraph of the test run')
+        "--flamegraph",
+        action="store_true",
+        help="Generate a flamegraph of the test run",
+    )
     parser.add_argument(
-        '--flamegraph_path',
-        default='scripts/flamegraph',
+        "--flamegraph_path",
+        default="scripts/flamegraph",
         type=Path,
-        help='Path to flamegraph script')
+        help="Path to flamegraph script",
+    )
     parser.add_argument(
-        '-v',
-        '--verbosity',
-        default='DEBUG',
-        help='Set the logging verbosity')
+        "-v", "--verbosity", default="DEBUG", help="Set the logging verbosity"
+    )
     args = parser.parse_args()
     # Setup logging.
     LOGGER.setLevel(args.verbosity)
@@ -566,36 +614,36 @@ def main():
             logging.shutdown()
             signal_subprocs(signal.SIGTERM)
             sys.exit(1)
+
     # Register this handler with log level CRITICAL (which equals to 50).
     sh = ShutdownHandler(level=50)
     sh.setFormatter(formatter)
     LOGGER.addHandler(sh)
     # Load test set.
     if not args.set:
-        args.set = Path(__file__).resolve().parent / 'default_set.yaml'
+        args.set = Path(__file__).resolve().parent / "default_set.yaml"
     args.set = args.set.resolve()
-    LOGGER.debug(f'resolved test set path to {args.set}')
-    test_file = open(args.set, 'r')
+    LOGGER.debug(f"resolved test set path to {args.set}")
+    test_file = open(args.set, "r")
     test_dict = yaml.full_load(test_file)
     test_dec = validate(test_dict, args.set.parent)
     # Print tests.
     if args.list is not None:
-        selection = tagselect(args.list, test_dec['tests'])
+        selection = tagselect(args.list, test_dec["tests"])
         for test in selection.keys():
             print(test)
         return
     # Print test tags.
     if args.list_tags:
-        tags = set().union(
-            *[set(t.tags) for _, t in test_dec['tests'].items()])
+        tags = set().union(*[set(t.tags) for _, t in test_dec["tests"].items()])
         for tag in tags:
             print(tag)
         return
     # Create working directory.
-    if args.directory.name == 'run_<current_ISO_timestamp>':
-        timestamp = datetime.now().isoformat(timespec='seconds')
-        args.directory = Path(f'run_{timestamp}')
-    LOGGER.debug(f'keeping state in {args.directory}')
+    if args.directory.name == "run_<current_ISO_timestamp>":
+        timestamp = datetime.now().isoformat(timespec="seconds")
+        args.directory = Path(f"run_{timestamp}")
+    LOGGER.debug(f"keeping state in {args.directory}")
     if not args.directory.exists():
         args.directory.mkdir(parents=True)
     # Setup signal handlers and run.
@@ -607,5 +655,6 @@ def main():
     retcode = 0 if success else 1
     sys.exit(retcode)
 
-if __name__ == '__main__':
+
+if __name__ == "__main__":
     main()
