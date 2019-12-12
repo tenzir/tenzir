@@ -265,8 +265,10 @@ class Server:
                  work_dir,
                  name='node',
                  port=VAST_PORT,
+                 config_file=None,
                  **kwargs):
         self.app = app
+        self.config_arg = f'--config-file={config_file}'
         self.name = name
         self.cwd = work_dir / self.name
         self.port = port
@@ -279,7 +281,7 @@ class Server:
         out = open(self.cwd / 'out', 'w')
         err = open(self.cwd / 'err', 'w')
         self.process = spawn(
-            [self.app] + args,
+            [self.app, self.config_arg] + args,
             cwd=self.cwd,
             stdout=out,
             stderr=err,
@@ -296,7 +298,7 @@ class Server:
         stop_err = open(self.cwd / 'stop.err', 'w')
         stop = 0
         try:
-            stop = spawn([self.app, '-e', f':{self.port}', 'stop'],
+            stop = spawn([self.app, self.config_arg, '-e', f':{self.port}', 'stop'],
                          cwd=self.cwd,
                          stdout=stop_out,
                          stderr=stop_err).wait(STEP_TIMEOUT)
