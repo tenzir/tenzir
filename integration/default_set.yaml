@@ -4,14 +4,14 @@ fixtures:
   BiTopologyTester:
     enter: | # python
       node0 = Server(self.cmd,
-                     [f'--config-file={self.config_file}',
-                      '-e', f':{VAST_PORT}', '-i', 'node0', 'start'],
-                     work_dir, name='node0', port=VAST_PORT)
+                     ['-e', f':{VAST_PORT}', '-i', 'node0', 'start'],
+                     work_dir, name='node0', port=VAST_PORT,
+                     config_file=f'{self.config_file}')
       node1 = Server(self.cmd,
-                     [f'--config-file={self.config_file}',
-                      '-e', ':42124',
+                     ['-e', ':42124',
                       '-i', 'node1', 'start'],
-                     work_dir, name='node1', port=42124)
+                     work_dir, name='node1', port=42124,
+                     config_file=f'{self.config_file}')
       cmd += ['-e', f':{VAST_PORT}']
 
     exit: | # python
@@ -21,9 +21,9 @@ fixtures:
   ServerTester:
     enter: | # python
       node = Server(self.cmd,
-                    [f'--config-file={self.config_file}',
-                     '-e', f':{VAST_PORT}', '-i', 'node', 'start'],
-                    work_dir, name='node', port=VAST_PORT)
+                    ['-e', f':{VAST_PORT}', '-i', 'node', 'start'],
+                    work_dir, name='node', port=VAST_PORT,
+                    config_file=f'{self.config_file}')
       cmd += ['-e', f':{VAST_PORT}']
 
 
