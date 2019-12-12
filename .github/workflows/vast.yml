@@ -78,13 +78,17 @@ jobs:
         if: matrix.os == 'macos-latest'
         run: |
           brew install openssl cmake git ninja python libpcap jq tcpdump rsync pandoc apache-arrow awscli
-      - name: Create Paths
-        id: create_paths
+
+      - name: Configure Environment
+        id: configure_env
         run: |
           PACKAGE_NAME="$(echo "vast-$(git describe)-$(uname -s)-${{ matrix.configure == '' && 'Release' || 'Debug' }}" | awk '{ print tolower($0) }')"
-          echo "::set-output name=package_name::${PACKAGE_NAME}"
           BUILD_DIR="build"
-          echo "::set-output name=build_dir::${BUILD_DIR}"
+          ## the upload artifact action cannot resolve environment variables
+          echo "::set-output name=package_name::$PACKAGE_NAME"
+          echo "::set-output name=build_dir::$BUILD_DIR"
+          echo "::set-env name=PACKAGE_NAME::$PACKAGE_NAME"
+          echo "::set-env name=BUILD_DIR::$BUILD_DIR"
 
       - name: Configure
         run: |
@@ -95,23 +99,23 @@ jobs:
             --generator=Ninja \
             --prefix="${PWD}/opt/vast" \
             --relocatable \
-            --build-dir=${{ steps.create_paths.outputs.build_dir }} \
-            --package-name=${{ steps.create_paths.outputs.package_name }} \
+            --build-dir="$BUILD_DIR" \
+            --package-name="$PACKAGE_NAME" \
             ${{ matrix.os == 'macos-latest' && '' || '--disable-arrow' }} \
             ${{ matrix.configure }}
 
       - name: Compile All Targets
         run: |
-          cmake --build ${{ steps.create_paths.outputs.build_dir }} --target all
+          cmake --build "$BUILD_DIR" --target all
 
       - name: Run Unit Tests
         run: |
-          cmake --build ${{ steps.create_paths.outputs.build_dir }} --target test
+          cmake --build "$BUILD_DIR" --target test
 
       - name: Run Integration Tests
         run: |
-          if ! cmake --build ${{ steps.create_paths.outputs.build_dir }} --target integration; then
-            tar -czf "${{ steps.create_paths.outputs.package_name }}.tar.gz" -C build vast-integration-test
+          if ! cmake --build "$BUILD_DIR" --target integration; then
+            tar -czf "$PACKAGE_NAME.tar.gz" -C build vast-integration-test
             exit 1
           fi
 
@@ -119,26 +123,26 @@ jobs:
         if: failure()
         uses: actions/upload-artifact@v1
         with:
-          name: "${{ steps.create_paths.outputs.package_name }}.tar.gz"
-          path: "${{ steps.create_paths.outputs.package_name }}.tar.gz"
+          name: "${{ steps.configure_env.outputs.package_name }}.tar.gz"
+          path: "${{ steps.configure_env.outputs.package_name }}.tar.gz"
 
       - name: Install
         run: |
-          cmake --build ${{ steps.create_paths.outputs.build_dir }} --target install
+          cmake --build "$BUILD_DIR" --target install
 
       - name: Package
         env:
           DESTDIR: $PWD
         run: |
-          cmake --build ${{ steps.create_paths.outputs.build_dir }} --target package
+          cmake --build "$BUILD_DIR" --target package
 
       - name: Upload Artifact to Github
         uses: actions/upload-artifact@v1
         with:
-          name: "${{ steps.create_paths.outputs.package_name }}.tar.gz"
-          path: "${{ steps.create_paths.outputs.build_dir }}/${{ steps.create_paths.outputs.package_name }}.tar.gz"
+          name: "${{ steps.configure_env.outputs.package_name }}.tar.gz"
+          path: "${{ steps.configure_env.outputs.build_dir }}/${{ steps.configure_env.outputs.package_name }}.tar.gz"
 
       - name: Upload Artifact to S3
         if: github.ref == 'refs/heads/master'
         run: |
-          aws s3 cp "${{ steps.create_paths.outputs.build_dir }}/${{ steps.create_paths.outputs.package_name }}.tar.gz" ${{ secrets.AWS_ARTIFACT_BUCKET }}
+          aws s3 cp "$BUILD_DIR/$PACKAGE_NAME.tar.gz" ${{ secrets.AWS_ARTIFACT_BUCKET }}
