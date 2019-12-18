@@ -881,7 +881,7 @@ endif ()
 
 display(CAF_FOUND "${caf_dir}" caf_summary)
 display(BROKER_FOUND "${broker_dir}" broker_summary)
-display(ARROW_FOUND "${ARROW_INCLUDE_DIRECTORIES}" arrow_summary)
+display(ARROW_FOUND "${ARROW_INCLUDE_DIR}" arrow_summary)
 display(PCAP_FOUND "${PCAP_INCLUDE_DIR}" pcap_summary)
 display(GPERFTOOLS_FOUND "${GPERFTOOLS_INCLUDE_DIR}" perftools_summary)
 display(DOXYGEN_FOUND yes doxygen_summary)
