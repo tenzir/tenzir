@@ -572,6 +572,7 @@ if (NOT CAF_ROOT_DIR AND EXISTS
     NAMESPACE caf::)
   string(APPEND VAST_CAF_TARGETS_FILE
          "include(\"\${CMAKE_CURRENT_LIST_DIR}/CAFTargets.cmake\")")
+  set(CAF_FOUND true)
 else ()
   if (NOT CAF_ROOT_DIR AND VAST_PREFIX)
     set(CAF_ROOT_DIR ${VAST_PREFIX})
