@@ -66,7 +66,7 @@ auto make_root_command(std::string_view path) {
   return std::make_unique<command>(
     path, "", documentation::vast,
     opts("?system")
-      .add<std::string>("config", "path to a configuration file")
+      .add<std::string>("config,c", "path to a configuration file")
       .add<caf::atom_value>("verbosity,v", "output verbosity level on the "
                                            "console")
       .add<std::vector<std::string>>(
