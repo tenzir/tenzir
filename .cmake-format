@@ -88,7 +88,7 @@ bullet_char = '*'
 enum_char = '.'
 
 # enable comment markup parsing and reflow
-enable_markup = True
+enable_markup = False
 
 # If comment markup is enabled, don't reflow the first comment block in each
 # listfile. Use this to preserve formatting of your copyright/license
