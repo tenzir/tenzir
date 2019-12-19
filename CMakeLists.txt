@@ -894,7 +894,7 @@ display(VAST_RELOCATABLE_INSTALL yes relocatable_install_summary)
 
 string(TOUPPER "${CMAKE_BUILD_TYPE}" build_type)
 set(summary
-    "====================|  Build Summary  |===================="
+    "====================|  VAST Build Summary  |===================="
     "\n"
     "\nVersion:             ${VAST_VERSION}"
     "\n"
@@ -903,8 +903,9 @@ set(summary
     "\nInstall prefix:      ${CMAKE_INSTALL_PREFIX}"
     "\n"
     "\nBuild type:          ${CMAKE_BUILD_TYPE}"
-    "\nBuild unit tests:    ${build_tests_summary}"
     "\nLog level:           ${VAST_LOG_LEVEL}"
+    "\nRelocatable install: ${relocatable_install_summary}"
+    "\nBuild unit tests:    ${build_tests_summary}"
     "\nShow time report:    ${time_report_summary}"
     "\nAssertions:          ${assertions_summary}"
     "\nAddressSanitizer:    ${asan_summary}"
@@ -928,8 +929,6 @@ set(summary
     "\n"
     "\ntcmalloc:            ${tcmalloc_summary}"
     "\nOpenSSL:             ${openssl_summary}"
-    "\n"
-    "\nRelocatable install: ${relocatable_install_summary}"
     "\n"
     "\n===========================================================")
 
