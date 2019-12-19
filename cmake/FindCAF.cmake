@@ -99,8 +99,11 @@ endif ()
 include(FindPackageHandleStandardArgs)
 find_package_handle_standard_args(
   CAF
-  FOUND_VAR CAF_FOUND
-  REQUIRED_VARS CAF_LIBRARIES CAF_INCLUDE_DIRS
+  FOUND_VAR
+  CAF_FOUND
+  REQUIRED_VARS
+  CAF_LIBRARIES
+  CAF_INCLUDE_DIRS
   HANDLE_COMPONENTS)
 
 # final step to tell CMake we're done
