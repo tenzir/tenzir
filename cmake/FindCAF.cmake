@@ -12,9 +12,10 @@
 #
 # Variables defined by this module:
 #
-# CAF_FOUND              System has CAF headers and library CAF_LIBRARIES List
-# of library files  for all components CAF_INCLUDE_DIRS       List of include
-# paths for all components CAF_LIBRARY_$C         Library file for component $C
+# CAF_FOUND              System has CAF headers and library
+# CAF_LIBRARIES          List of library files for all components
+# CAF_INCLUDE_DIRS       List of include paths for all components
+# CAF_LIBRARY_$C         Library file for component $C
 # CAF_INCLUDE_DIR_$C     Include path for component $C
 
 if (CAF_FIND_COMPONENTS STREQUAL "")
@@ -98,11 +99,8 @@ endif ()
 include(FindPackageHandleStandardArgs)
 find_package_handle_standard_args(
   CAF
-  FOUND_VAR
-  CAF_FOUND
-  REQUIRED_VARS
-  CAF_LIBRARIES
-  CAF_INCLUDE_DIRS
+  FOUND_VAR CAF_FOUND
+  REQUIRED_VARS CAF_LIBRARIES CAF_INCLUDE_DIRS
   HANDLE_COMPONENTS)
 
 # final step to tell CMake we're done
