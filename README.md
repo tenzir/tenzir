@@ -12,6 +12,7 @@ in various formats.
 [![License][license-badge]][license-url]
 [![Changelog][changelog-badge]][changelog-url]
 [![Latest Release][latest-release-badge]][latest-release-url]
+[![LGTM Score C++][lgtm-badge]][lgtm-url]
 
 ## Synopsis
 
@@ -173,6 +174,8 @@ VAST comes with a [3-clause BSD licence][license-url].
 [contributing-url]: https://github.com/tenzir/.github/blob/master/contributing.md
 [latest-release-badge]: https://img.shields.io/github/commits-since/tenzir/vast/latest.svg?color=green
 [latest-release-url]: https://github.com/tenzir/vast/releases
+[lgtm-badge]: https://img.shields.io/lgtm/grade/cpp/github/tenzir/vast.svg?logo=lgtm
+[lgtm-url]: https://lgtm.com/projects/g/tenzir/vast/context:cpp
 
 [vast-paper]: https://www.usenix.org/system/files/conference/nsdi16/nsdi16-paper-vallentin.pdf
 [nsdi-proceedings]: https://www.usenix.org/conference/nsdi16/technical-sessions
