@@ -928,7 +928,7 @@ set(summary
     "\ntcmalloc:            ${tcmalloc_summary}"
     "\nOpenSSL:             ${openssl_summary}"
     "\n"
-    "\n===========================================================")
+    "\n================================================================")
 
 message("\n" ${summary} "\n")
 file(WRITE ${CMAKE_CURRENT_BINARY_DIR}/config.summary ${summary})
