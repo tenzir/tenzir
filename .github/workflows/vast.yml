@@ -16,6 +16,7 @@ jobs:
 
     - name: Clang Format
       run: |
+        pip install --upgrade pip clang-format
         git diff -U0 --no-color $(git merge-base origin/master HEAD) |
           scripts/clang-format-diff.py -p1
 
