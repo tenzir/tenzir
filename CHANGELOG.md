@@ -10,6 +10,10 @@ Every entry has a category for which we use the following visual abbreviations:
 
 ## [Unreleased]
 
+- 🎁 The long option `--config`, which sets an explicit path to the VAST
+- configuration file, now also has the short option `-c`.
+  [#689](https://github.com/tenzir/vast/pull/689)
+
 - 🎁 Added *Apache Arrow* as new export format. This allows users to export
   query results as Apache Arrow record batches for processing the results
   downstream, e.g., in Python or Spark.
