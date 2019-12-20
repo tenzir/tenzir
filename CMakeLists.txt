@@ -359,10 +359,8 @@ if (ENABLE_GCOV)
   add_custom_target(
     gcov
     # Reset coverage counters.
-    COMMAND
-      ${CMAKE_COMMAND} -P ${CMAKE_CURRENT_BINARY_DIR}/remove_gcda.cmake
-
-      # Run unit tests.
+    COMMAND ${CMAKE_COMMAND} -P ${CMAKE_CURRENT_BINARY_DIR}/remove_gcda.cmake
+            # Run unit tests.
     COMMAND ${CMAKE_CTEST_COMMAND} --output-on-failure
             # Invoke gcov.
     COMMAND
