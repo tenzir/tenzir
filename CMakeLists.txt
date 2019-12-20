@@ -359,10 +359,8 @@ if (ENABLE_GCOV)
   add_custom_target(
     gcov
     # Reset coverage counters.
-    COMMAND
-      ${CMAKE_COMMAND} -P ${CMAKE_CURRENT_BINARY_DIR}/remove_gcda.cmake
-
-      # Run unit tests.
+    COMMAND ${CMAKE_COMMAND} -P ${CMAKE_CURRENT_BINARY_DIR}/remove_gcda.cmake
+            # Run unit tests.
     COMMAND ${CMAKE_CTEST_COMMAND} --output-on-failure
             # Invoke gcov.
     COMMAND
@@ -572,6 +570,7 @@ if (NOT CAF_ROOT_DIR AND EXISTS
     NAMESPACE caf::)
   string(APPEND VAST_CAF_TARGETS_FILE
          "include(\"\${CMAKE_CURRENT_LIST_DIR}/CAFTargets.cmake\")")
+  set(CAF_FOUND true)
 else ()
   if (NOT CAF_ROOT_DIR AND VAST_PREFIX)
     set(CAF_ROOT_DIR ${VAST_PREFIX})
@@ -893,7 +892,7 @@ display(VAST_RELOCATABLE_INSTALL yes relocatable_install_summary)
 
 string(TOUPPER "${CMAKE_BUILD_TYPE}" build_type)
 set(summary
-    "====================|  Build Summary  |===================="
+    "====================|  VAST Build Summary  |===================="
     "\n"
     "\nVersion:             ${VAST_VERSION}"
     "\n"
@@ -902,8 +901,9 @@ set(summary
     "\nInstall prefix:      ${CMAKE_INSTALL_PREFIX}"
     "\n"
     "\nBuild type:          ${CMAKE_BUILD_TYPE}"
-    "\nBuild unit tests:    ${build_tests_summary}"
     "\nLog level:           ${VAST_LOG_LEVEL}"
+    "\nRelocatable install: ${relocatable_install_summary}"
+    "\nBuild unit tests:    ${build_tests_summary}"
     "\nShow time report:    ${time_report_summary}"
     "\nAssertions:          ${assertions_summary}"
     "\nAddressSanitizer:    ${asan_summary}"
@@ -928,9 +928,7 @@ set(summary
     "\ntcmalloc:            ${tcmalloc_summary}"
     "\nOpenSSL:             ${openssl_summary}"
     "\n"
-    "\nRelocatable install: ${relocatable_install_summary}"
-    "\n"
-    "\n===========================================================")
+    "\n================================================================")
 
 message("\n" ${summary} "\n")
 file(WRITE ${CMAKE_CURRENT_BINARY_DIR}/config.summary ${summary})

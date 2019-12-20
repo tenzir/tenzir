@@ -12,9 +12,10 @@
 #
 # Variables defined by this module:
 #
-# CAF_FOUND              System has CAF headers and library CAF_LIBRARIES List
-# of library files  for all components CAF_INCLUDE_DIRS       List of include
-# paths for all components CAF_LIBRARY_$C         Library file for component $C
+# CAF_FOUND              System has CAF headers and library
+# CAF_LIBRARIES          List of library files for all components
+# CAF_INCLUDE_DIRS       List of include paths for all components
+# CAF_LIBRARY_$C         Library file for component $C
 # CAF_INCLUDE_DIR_$C     Include path for component $C
 
 if (CAF_FIND_COMPONENTS STREQUAL "")
