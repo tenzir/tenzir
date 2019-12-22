@@ -24,6 +24,8 @@
 #include "vast/format/json/suricata.hpp"
 #include "vast/format/mrt.hpp"
 #include "vast/format/null.hpp"
+#include "vast/format/pcap.hpp"
+#include "vast/format/syslog.hpp"
 #include "vast/format/test.hpp"
 #include "vast/format/zeek.hpp"
 #include "vast/system/configuration.hpp"
@@ -162,8 +164,9 @@ auto make_import_command() {
   import_->add_subcommand("suricata", "imports suricata eve json",
                           documentation::vast_import_suricata,
                           source_opts("?import.suricata"));
-  // TODO: hook syslog reader into CLI here by adding a new subcommand. The
-  //       documentation goes into doc/cli/vast-import-syslog.md
+  import_->add_subcommand("syslog", "imports syslog messages",
+                          documentation::vast_import_syslog,
+                          source_opts("?import.syslog"));
   import_->add_subcommand("test",
                           "imports random data for testing or benchmarking",
                           documentation::vast_import_test,
@@ -233,6 +236,8 @@ auto make_spawn_source_command() {
                                  .add<size_t>("events,n", "number of events to "
                                                           "generate"));
   spawn_source->add_subcommand("zeek", "creates a new Zeek source", "", opts());
+  spawn_source->add_subcommand("syslog", "creates a new Syslog source", "",
+                               opts());
   spawn_source->add_subcommand("bgpdump", "creates a new BGPdump source", "",
                                opts());
   spawn_source->add_subcommand("mrt", "creates a new MRT source", "", opts());
@@ -353,6 +358,8 @@ auto make_command_factory() {
     {"import suricata",
      reader_command<format::json::reader<format::json::suricata>,
                     defaults::import::suricata>},
+    {"import syslog",
+     reader_command<format::syslog::reader, defaults::import::syslog>},
     // TODO: hook syslog reader into CLI here by registering the command
     //       callback. The defaults go into livvast/vast/defaults.hpp.
     {"import test",
@@ -427,8 +434,7 @@ void render_error(const command& root, const caf::error& err,
           auto name = ctx.get_as<std::string>(1);
           if (auto cmd = resolve(root, name))
             helptext(*cmd, os);
-        }
-        else {
+        } else {
           VAST_ASSERT("User visible error contexts must consist of strings!");
         }
         break;

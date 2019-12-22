@@ -26,6 +26,12 @@ namespace vast::system {
 /// @returns a handle to the spawned actor on success, an error otherwise
 maybe_actor spawn_pcap_source(caf::local_actor* self, spawn_arguments& args);
 
+/// Tries to spawn a new SOURCE for the Syslog format.
+/// @param self Points to the parent actor.
+/// @param args Configures the new actor.
+/// @returns a handle to the spawned actor on success, an error otherwise
+maybe_actor spawn_syslog_source(caf::local_actor* self, spawn_arguments& args);
+
 /// Tries to spawn a new SOURCE for generating random data.
 /// @param self Points to the parent actor.
 /// @param args Configures the new actor.

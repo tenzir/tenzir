@@ -66,7 +66,7 @@ set(libvast_sources
     src/format/ostream_writer.cpp
     src/format/reader.cpp
     src/format/single_layout_reader.cpp
-    # TODO: add src/formaat/syslog.cpp here
+    src/format/syslog.cpp
     src/format/test.cpp
     src/format/writer.cpp
     src/format/zeek.cpp
