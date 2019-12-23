@@ -2,10 +2,14 @@
   <img src="./doc/assets/vast.svg" width="75%" alt="VAST">
 </p>
 
-**Visibility Across Space and Time (VAST)** is a scalable foundation for
-a security operations center (SOC): a rich data model for security data,
-high-throughput ingestion of telemetry, low-latency search, and flexible export
-in various formats.
+<h1 align="center">
+  VAST &mdash; Visibility Across Space and Time
+</h1>
+<h4 align="center">
+
+A scalable foundation for a security operations center (SOC): a rich
+data model for security data, high-throughput ingestion of telemetry,
+low-latency search, and flexible export in various formats.
 
 [![Build Status][ci-badge]][ci-url]
 [![Chat][chat-badge]][chat-url]
@@ -14,7 +18,15 @@ in various formats.
 [![Latest Release][latest-release-badge]][latest-release-url]
 [![LGTM Score C++][lgtm-badge]][lgtm-url]
 
-## Synopsis
+[_Getting Started_](#getting-started) &mdash;
+[_Documentation_][docs] &mdash;
+[_Development_][contributing-url] &mdash;
+[_Chat_][chat-url] &mdash;
+[_Changelog_][changelog-url] &mdash;
+[_License and Scientific Use_](#license-and-scientific-use)
+
+
+## Getting Started
 
 Start a VAST node:
 
@@ -48,13 +60,6 @@ vast export pcap "sport > 60000/tcp && src !in 10.0.0.0/8" \
   | ipsumdump --collate -w - \
   | tcpdump -r - -nl
 ```
-
-## Resources
-
-- [Chat][chat-url]
-- [Documentation][docs]
-- [Contribution guidelines][contributing-url]
-- [Changelog][changelog-url]
 
 ## Installation
 
@@ -133,7 +138,9 @@ docker run --network=vast_nw -i -v /tmp/vast:/data vast-io/vast -e '172.42.0.2' 
 Other subcommands, like `export` and `status`, can be used just like the
 `import` command shown above.
 
-## Scientific Use
+## License and Scientific Use
+
+VAST comes with a [3-clause BSD licence][license-url].
 
 When referring to VAST in a scientific context, please use the following
 citation:
@@ -151,10 +158,6 @@ citation:
 
 You can [download the paper][vast-paper] from the [NSDI '16
 proceedings][nsdi-proceedings].
-
-## License
-
-VAST comes with a [3-clause BSD licence][license-url].
 
 <p align="center">
   Developed with ❤️ by <strong><a href="https://tenzir.com">Tenzir</a></strong>

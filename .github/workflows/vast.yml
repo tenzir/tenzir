@@ -1,5 +1,8 @@
 name: "VAST"
-on: push
+on:
+  push:
+    paths-ignore:
+    - README.md
 env:
   DEBIAN_FRONTEND: noninteractive
 jobs:
