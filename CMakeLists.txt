@@ -467,7 +467,6 @@ endif ()
 # linkage is PUBLIC or INTERFACE.
 macro (provide_find_module name)
   configure_file(cmake/Find${name}.cmake ${CMAKE_BINARY_DIR} COPYONLY)
-
   install(
     FILES "${CMAKE_BINARY_DIR}/Find${name}.cmake"
     DESTINATION ${INSTALL_VAST_CMAKEDIR}
@@ -838,6 +837,9 @@ install(
   RENAME "vast.conf.example")
 install(FILES "${CMAKE_CURRENT_SOURCE_DIR}/vast.conf"
         DESTINATION "${CMAKE_INSTALL_SYSCONFDIR}/vast/")
+
+install(FILES "${CMAKE_CURRENT_SOURCE_DIR}/scripts/corelight-cat"
+        DESTINATION ${CMAKE_INSTALL_BINDIR})
 
 # ------------------------------------------------------------------------------
 # Build Summary
