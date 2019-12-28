@@ -839,6 +839,20 @@ install(
 install(FILES "${CMAKE_CURRENT_SOURCE_DIR}/vast.conf"
         DESTINATION "${CMAKE_INSTALL_SYSCONFDIR}/vast/")
 
+# Install rc.d script on FreeBSD into PREFIX/etc/rc.d.
+if (${CMAKE_SYSTEM_NAME} MATCHES "FreeBSD")
+  file(STRINGS "${CMAKE_CURRENT_SOURCE_DIR}/scripts/freebsd-rc-vast"
+       rc_template NEWLINE_CONSUME)
+  string(REPLACE "%%PREFIX%%" ${CMAKE_INSTALL_PREFIX} rc_content ${rc_template})
+  set(rc_file "${CMAKE_CURRENT_BINARY_DIR}/freebsd-rc-vast")
+  file(WRITE ${rc_file} ${rc_content})
+  install(
+    FILES "${rc_file}"
+    DESTINATION "${CMAKE_INSTALL_PREFIX}/etc/rc.d"
+    RENAME "vast"
+    PERMISSIONS OWNER_READ OWNER_WRITE GROUP_READ WORLD_EXECUTE)
+endif ()
+
 # ------------------------------------------------------------------------------
 # Build Summary
 # ------------------------------------------------------------------------------
