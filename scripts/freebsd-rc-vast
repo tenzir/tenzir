@@ -1,0 +1,33 @@
+#!/bin/sh
+#
+
+# PROVIDE: vast
+# REQUIRE: NETWORKING
+# REQUIRE: LOGIN FILESYSTEMS
+# KEYWORD: shutdown
+
+# Add these lines to /etc/rc.conf.local or /etc/rc.conf
+# to enable this service:
+#
+# vast_enable (bool): Set to YES to enable VAST
+#                     Default: NO
+# vast_config (path): Path to the VAST configuratio file
+#                     Default: %%PREFIX%%/etc/vast/vast.conf
+
+. /etc/rc.subr
+
+name="vast"
+desc="Visibility Across Space and Time"
+rcvar="vast_enable"
+vast_command="/opt/tenzir/bin/${name}"
+pidfile="/var/run/${name}.pid"
+
+load_rc_config $name
+: ${vast_enable:=NO}
+: ${vast_config:=/opt/tenzir/etc/${name}/${name}.conf}
+
+command="/usr/sbin/daemon"
+command_args="-P ${pidfile} -r -f ${vast_command} -c ${vast_config} start"
+echo $command_args
+
+run_rc_command "$1"
