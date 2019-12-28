@@ -10,8 +10,13 @@ Every entry has a category for which we use the following visual abbreviations:
 
 ## [Unreleased]
 
+- 🎁 On FreeBSD, a VAST installation now includes an rc.d script that
+  simpliefies spinning up a VAST node. CMake installs the script at
+  `PREFIX/etc/rc.d/vast`.
+  [#693](https://github.com/tenzir/vast/pull/693)
+
 - 🎁 The long option `--config`, which sets an explicit path to the VAST
-- configuration file, now also has the short option `-c`.
+  configuration file, now also has the short option `-c`.
   [#689](https://github.com/tenzir/vast/pull/689)
 
 - 🎁 Added *Apache Arrow* as new export format. This allows users to export
