@@ -19,12 +19,12 @@
 name="vast"
 desc="Visibility Across Space and Time"
 rcvar="vast_enable"
-vast_command="/opt/tenzir/bin/${name}"
+vast_command="%%PREFIX%%/bin/${name}"
 pidfile="/var/run/${name}.pid"
 
 load_rc_config $name
 : ${vast_enable:=NO}
-: ${vast_config:=/opt/tenzir/etc/${name}/${name}.conf}
+: ${vast_config:=%%PREFIX%%/etc/${name}/${name}.conf}
 
 command="/usr/sbin/daemon"
 command_args="-P ${pidfile} -r -f ${vast_command} -c ${vast_config} start"
