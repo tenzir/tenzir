@@ -28,6 +28,5 @@ load_rc_config $name
 
 command="/usr/sbin/daemon"
 command_args="-P ${pidfile} -r -f ${vast_command} -c ${vast_config} start"
-echo $command_args
 
 run_rc_command "$1"
