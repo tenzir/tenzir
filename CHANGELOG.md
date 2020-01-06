@@ -10,8 +10,11 @@ Every entry has a category for which we use the following visual abbreviations:
 
 ## [Unreleased]
 
-- 🔄 Installations are now relocatable by default. This change can be reverted
-  by configuring with `--disable-relocatable`.
+- 🔄 Build configuration defaults have been adapated for a better user
+  experience. Installations are now relocatable by default, which can be
+  reverted by configuring with `--disable-relocatable`. Additionally, new sets
+  of defaults named `--release` and `--debug` (renamed from `--dev-mode`) have
+  been added. [#695](https://github.com/tenzir/vast/pull/695)
 
 - 🎁 On FreeBSD, a VAST installation now includes an rc.d script that
   simpliefies spinning up a VAST node. CMake installs the script at

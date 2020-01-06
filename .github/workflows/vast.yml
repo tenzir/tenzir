@@ -46,7 +46,7 @@ jobs:
     strategy:
       matrix:
         os: [macos-latest, ubuntu-latest]
-        configure: ["", "--dev-mode"]
+        configure: ["--release", "--debug"]
     runs-on: ${{ matrix.os }}
     env:
       CC: ${{ matrix.os == 'macos-latest' && 'clang' || 'gcc-8' }}

@@ -13,13 +13,6 @@ else ()
 endif ()
 unset(_parent)
 
-option(VAST_DEV_MODE "Build in developer debug configuration" OFF)
-if (VAST_DEV_MODE)
-  set(CMAKE_BUILD_TYPE "Debug")
-  set(ENABLE_ADDRESS_SANITIZER ON)
-  # TODO: eventually, we also want to enable --more-warnings set(MORE_WARNINGS
-  # ON)
-endif ()
 option(VAST_RELOCATABLE_INSTALL "Enable relocatable installations" ON)
 option(ENABLE_ZEEK_TO_VAST "Build zeek-to-vast" ON)
 option(VAST_STATIC_EXECUTABLE "Link VAST statically")

@@ -26,6 +26,11 @@ Usage: $0 [OPTION]... [VAR=VALUE]...
     --prefix=PREFIX         installation directory [/usr/local]
     --disable-relocatable   disable relocatable installations
 
+  Convenience options:
+    --debug                 sets --build-type=Debug, --log-level=trace,
+                            and --enable-asan
+    --release               sets --build-type=Release
+
   Build options:
     --generator=GENERATOR   CMake generator to use (see cmake --help)
     --build-type=DIR        CMake build type [RelWithDebInfo]
@@ -58,10 +63,6 @@ Usage: $0 [OPTION]... [VAR=VALUE]...
     --with-pcap=PATH        path to libpcap install root
     --with-perftools=PATH   path to gperftools install root
     --with-doxygen=PATH     path to Doxygen install root
-
-  Convenience options:
-    --dev-mode              sets --build-type=debug, --log-level=trace,
-                            and --enable-asan
 
   Influential Environment Variables (only on first invocation):
     CXX                     C++ compiler command
@@ -180,8 +181,13 @@ while [ $# -ne 0 ]; do
     --with-doxygen=*)
       append_cache_entry Doxygen_ROOT_DIR PATH "$optarg"
       ;;
-    --dev-mode)
-      append_cache_entry VAST_DEV_MODE BOOL true
+    --debug)
+      append_cache_entry CMAKE_BUILD_TYPE STRING Debug
+      append_cache_entry ENABLE_ADDRESS_SANITIZER BOOL yes
+      # TODO: eventually, we also want to enable MORE_WARNINGS
+      ;;
+    --release)
+      append_cache_entry CMAKE_BUILD_TYPE STRING Release
       ;;
     --package-name=*)
       append_cache_entry CPACK_PACKAGE_FILE_NAME STRING "$optarg"
