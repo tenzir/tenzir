@@ -65,6 +65,7 @@ commands:
 ./configure
 cmake --build build
 cmake --build build --target test
+cmake --build build --target integration
 cmake --build build --target install
 ```
 
