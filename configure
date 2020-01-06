@@ -85,8 +85,8 @@ builddir=build
 CMakeCacheEntries=""
 append_cache_entry CMAKE_INSTALL_PREFIX   PATH      /usr/local
 append_cache_entry CMAKE_BUILD_TYPE       STRING    RelWithDebInfo
-append_cache_entry VAST_ENABLE_ASSERTIONS BOOL      true
-append_cache_entry VAST_USE_TCMALLOC      BOOL      false
+append_cache_entry VAST_ENABLE_ASSERTIONS BOOL      yes
+append_cache_entry VAST_USE_TCMALLOC      BOOL      no
 
 # Parse custom environment variable to initialize CMakeGenerator.
 if [ -n "$CMAKE_GENERATOR" ]; then
@@ -128,7 +128,7 @@ while [ $# -ne 0 ]; do
       append_cache_entry EXTRA_FLAGS STRING "$optarg"
       ;;
     --show-time-report)
-      append_cache_entry SHOW_TIME_REPORT BOOL true
+      append_cache_entry SHOW_TIME_REPORT BOOL yes
       ;;
     --no-auto-libc++)
       append_cache_entry NO_AUTO_LIBCPP BOOL yes
@@ -143,22 +143,22 @@ while [ $# -ne 0 ]; do
       append_cache_entry VAST_LOG_LEVEL STRING "$optarg"
       ;;
     --disable-assertions)
-      append_cache_entry VAST_ENABLE_ASSERTIONS BOOL false
+      append_cache_entry VAST_ENABLE_ASSERTIONS BOOL no
       ;;
     --disable-exceptions)
-      append_cache_entry NO_EXCEPTIONS BOOL true
+      append_cache_entry NO_EXCEPTIONS BOOL yes
       ;;
     --enable-asan)
-      append_cache_entry ENABLE_ADDRESS_SANITIZER BOOL true
+      append_cache_entry ENABLE_ADDRESS_SANITIZER BOOL yes
       ;;
     --enable-gcov)
-      append_cache_entry ENABLE_GCOV BOOL true
+      append_cache_entry ENABLE_GCOV BOOL yes
       ;;
     --enable-tcmalloc)
-      append_cache_entry VAST_USE_TCMALLOC BOOL true
+      append_cache_entry VAST_USE_TCMALLOC BOOL yes
       ;;
     --disable-arrow)
-      append_cache_entry VAST_NO_ARROW BOOL true
+      append_cache_entry VAST_NO_ARROW BOOL yes
       ;;
     --with-arrow=*)
       append_cache_entry ARROW_ROOT_DIR PATH "$optarg"
@@ -191,7 +191,7 @@ while [ $# -ne 0 ]; do
       ;;
     --package-name=*)
       append_cache_entry CPACK_PACKAGE_FILE_NAME STRING "$optarg"
-      append_cache_entry CPACK_SET_DEST_DIR BOOL true
+      append_cache_entry CPACK_SET_DEST_DIR BOOL yes
       append_cache_entry CPACK_GENERATOR STRING TGZ
       ;;
     *)
