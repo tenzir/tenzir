@@ -1,0 +1,25 @@
+#!/bin/sh
+#
+# Script to concatenate Corelight logs exported via TCP. A Corelight sensor
+# creates multiple TCP connections, which this script demultiples into a single
+# stream on standard output.
+
+usage() {
+  echo "$0 <port>"
+  echo
+  echo "port: the TCP port where to the Corelight sensor exports logs"
+}
+
+if ! which socat > /dev/null 2>&1; then
+  echo socat not found in PATH
+  exit 1
+fi
+
+if [ -z "$1" ]; then
+  usage
+  exit 1
+fi
+
+port=$1
+
+socat - TCP-LISTEN:$port,fork,reuseaddr
