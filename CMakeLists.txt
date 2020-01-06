@@ -189,6 +189,10 @@ endmacro ()
 set(LDFLAGS "$ENV{LDFLAGS}")
 set(ARFLAGS "$ENV{ARFLAGS}")
 
+<<<<<<< HEAD
+=======
+
+>>>>>>> Respect extra flags set by the users env
 set(CMAKE_CXX_STANDARD 17)
 
 # Build-type specific flags.
