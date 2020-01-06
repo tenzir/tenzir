@@ -10,6 +10,9 @@ Every entry has a category for which we use the following visual abbreviations:
 
 ## [Unreleased]
 
+- 🔄 Installations are now relocatable by default. This change can be reverted
+  by configuring with `--disable-relocatable`.
+
 - 🎁 On FreeBSD, a VAST installation now includes an rc.d script that
   simpliefies spinning up a VAST node. CMake installs the script at
   `PREFIX/etc/rc.d/vast`.

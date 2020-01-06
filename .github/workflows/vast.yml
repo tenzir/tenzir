@@ -103,7 +103,6 @@ jobs:
           ./configure \
             --generator=Ninja \
             --prefix="${PWD}/opt/vast" \
-            --relocatable \
             --build-dir="$BUILD_DIR" \
             --package-name="$PACKAGE_NAME" \
             ${{ matrix.os == 'macos-latest' && '' || '--disable-arrow' }} \
