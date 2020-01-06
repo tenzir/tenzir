@@ -7,7 +7,7 @@
 </h1>
 <h4 align="center">
 
-The highly scalable foundation for a security operations center (SOC).
+The network telemetry engine for data-driven security investigations.
 
 [![Build Status][ci-badge]][ci-url]
 [![LGTM Score C++][lgtm-badge]][lgtm-url]
@@ -27,31 +27,38 @@ Chat with us on [Gitter][chat-url].
 
 ## Key Features
 
-VAST is a network telemetry engine that greatly speeds up the workflow to
-investigate and react on complex cyber attacks.
+- **High-Throughput Ingestion**: import numerous log formats over 100k
+  events/second, including [Zeek](https://www.zeek.org/),
+  [Suricata](https://suricata-ids.org/), JSON, and CSV.
 
-- __High-throughput ingestion__ VAST can import various log formats from [Zeek](https://www.zeek.org/)
-  or [Suricata](https://suricata-ids.org/), and supports high-throughput
-  ingestion of up to 100k events per second.
-- __Interactive queries__ VAST's multi-level indexing approach effortlessly
-  handles terrabytes of data and delivers sub-second response times.
-- __Built for network forensics__ VAST's data store is purpose-built to support
-  common queries in the domain, such as checking indicators over the entire time
-  spectrum, without restrictions.
-- __Pivot between PCAP and logs__ VAST provides the missing link to pivot from IDS
-  logs to the corresponding PCAP data and vice versa.
-- __Flexible export__ VAST supports export to common text formats, like JSON and
-  CSV, export of PCAP files, and [Apache Arrow](https://arrow.apache.org/).
+- **Low-Latency Queries**: sub-second response times over the
+  entire data lake, thanks to multi-level bitmap indexing and actor model
+  concurrency. Particularly helpful for instant indicator checking over the
+  entire dataset.
+
+- **Flexible Export**: access data in common text formats (ASCII, JSON, CSV),
+  in binary form (MRT, PCAP), or via zero-copy relay through
+  [Apache Arrow](https://arrow.apache.org/) for arbitrary downstream analysis.
+
+- **Powerful Data Model and Query Language**: the generic semi-structured data
+  model allows for expressing complex data in a typed fashion. An intuitive
+  query language that feels like grep and awk at scale enables powerful
+  subsetting of data with domain-specific operations, such as top-*k* prefix
+  search for IP addresses and subset relationships.
+
+- **Schema Pivoting**: the missing link to navigate between related events,
+  e.g., extracting a PCAP for a given IDS alert, or locating all related logs
+  for a given query.
 
 ## Getting Started
 
-The `master` branch always reflects to most recent code of VAST.
+Clone the `master` branch to get the most recent version of VAST.
 
 ```sh
 git clone --recursive https://github.com/tenzir/vast
 ```
 
-Once you have all dependencies in place, simply build VAST with the following
+Once you have all dependencies in place, build VAST with the following
 commands:
 
 ```sh
@@ -61,8 +68,8 @@ cmake --build build --target test
 cmake --build build --target install
 ```
 
-Make sure to check out the [installation guide][installation-url] for more
-detailed instructions on how to setup VAST.
+The [installation guide][installation-url] contains more detailed and
+platform-specific instructions on how to build and install VAST.
 
 **Start a VAST node**:
 
@@ -83,13 +90,14 @@ vast export json '#timestamp > 1 hour ago && (6.6.6.6 || 5353/udp)'
 ```
 
 **Ingest a [PCAP](https://en.wikipedia.org/wiki/Pcap) trace with a 1024-byte
-flow cut-off**:
+flow cutoff**:
 
 ```sh
 vast import pcap -c 1024 < trace.pcap
 ```
 
-**Run a query over PCAP data, sort the packets, and feed them into** `tcpdump`:
+**Run a query over PCAP data, sort the packets by time, and feed them into**
+`tcpdump`:
 
 ```sh
 vast export pcap "sport > 60000/tcp && src !in 10.0.0.0/8" \
@@ -99,10 +107,8 @@ vast export pcap "sport > 60000/tcp && src !in 10.0.0.0/8" \
 
 ## License and Scientific Use
 
-VAST comes with a [3-clause BSD license][license-url].
-
-When referring to VAST in a scientific context, please use the following
-citation:
+VAST comes with a [3-clause BSD license][license-url]. When referring to VAST
+in a scientific context, please use the following citation:
 
 ```bibtex
 @InProceedings{nsdi16:vast,
