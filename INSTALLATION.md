@@ -55,7 +55,29 @@ TODO
 
 #### Docker
 
-TODO
+There are pre-built images available on [dockerhub.com/tenzir](https://hub.docker.com/repository/docker/tenzir/vast).
+Alternatively, you can build the image as follows:
+
+```sh
+docker build -t tenzir/vast:<TAG> --build-arg BRANCH=<master|tag>
+```
+
+There also exists a build script, that will tag and exported the Docker images
+as `tag.gz` files. The script accepts an optional parameter to build a specific
+branch or tag.
+
+```sh
+./scripts/docker-build <BRANCH>
+```
+
+Start VAST in a container and detach it to the background. When you mount a
+directory for persistent data, make sure the `tenzir` user inside the container
+can write to it.
+
+```sh
+mkdir -p /var/db/vast
+docker run -dt --name=vast --rm -p 42000:42000 -v /var/db/vast:/data tenzir/vast:latest start
+```
 
 ### macOS
 

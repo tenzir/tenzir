@@ -1,75 +1,57 @@
-# VAST
-#
-# VERSION               0.1
-
 FROM debian:buster-slim as builder
-LABEL maintainer="tobias.mayer@tenzir.com"
+LABEL maintainer="engineering@tenzir.com"
 LABEL builder=true
 
-
 ENV PREFIX /usr/local
-ENV CC clang-7
-ENV CXX clang++-7
+ENV CC gcc-8
+ENV CXX g++-8
 ENV BUILD_TYPE Release
 ENV BUILD_DIR /tmp/src
+ENV DEBIAN_FRONTEND noninteractive
+ARG BRANCH
+ENV BRANCH master
 
 # Compiler and dependency setup
 RUN apt-get -qq update && apt-get -qqy install \
-    clang-7 libc++-dev libc++abi-dev cmake git-core \
-    libpcap-dev libssl-dev libatomic1
-
-# By placing the ADD directive at this point, we build both CAF and VAST
-# every time. This ensures that the CI integration will always fetch a fresh
-# CAF tree, regardless of the Docker cache. The correct way to handle this
-# would be to provide a CAF docker image and use it in the FROM directive.
-ADD . $BUILD_DIR/vast
-
-# CAF
-WORKDIR $BUILD_DIR
-RUN git clone https://github.com/actor-framework/actor-framework.git caf
-WORKDIR caf
-RUN ./configure --prefix=$PREFIX --build-type=$BUILD_TYPE \
-    --no-examples --no-opencl --no-unit-tests --no-python && \
-    make -C build all install
-
-# Broker
-#WORKDIR $BUILD_DIR
-#RUN git clone --recurse-submodules https://github.com/zeek/broker.git
-#WORKDIR broker
-#RUN ./configure --prefix=$PREFIX --with-caf=$PREFIX --build-type=$BUILD_TYPE \
-#    --disable-python --disable-docs --disable-tests && \
-#    make -C build all install
+  build-essential gcc-8 g++-8 ninja-build libbenchmark-dev libpcap-dev \
+  libssl-dev libatomic1 python3-dev python3-pip python3-venv git-core jq tcpdump
+RUN pip3 install --upgrade pip && pip install --upgrade cmake && \
+  cmake --version
 
 # VAST
+RUN git clone --recursive https://github.com/tenzir/vast $BUILD_DIR/vast
 WORKDIR $BUILD_DIR/vast
+RUN git checkout ${BRANCH}
 RUN ./configure \
-       --prefix=$PREFIX \
-       --build-type=$BUILD_TYPE \
-       --log-level=INFO && \
-    make -C build all test install
+    --prefix=$PREFIX \
+    --build-type=$BUILD_TYPE \
+    --log-level=INFO \
+    --generator=Ninja \
+    --without-arrow
+RUN cmake --build build && \
+  cmake --build build --target test && \
+  cmake --build build --target integration && \
+  cmake --build build --target install
 
-# Stage 2: copy application
+
+# Production image: copy application
 FROM debian:buster-slim
-LABEL maintainer="tobias.mayer@tenzir.com"
-LABEL builder=false
+LABEL maintainer="engineering@tenzir.com"
 
 ENV PREFIX /usr/local
-ENV LD_LIBRARY_PATH $PREFIX/lib
 
 COPY --from=builder $PREFIX/ $PREFIX/
 COPY --from=builder /usr/lib/x86_64-linux-gnu/libatomic.so.1 /usr/lib/x86_64-linux-gnu/libatomic.so.1
-VOLUME ["/data"]
-RUN apt-get -qq update && apt-get -qq install -y \
-      libc++1 \
-      libc++abi1 \
-      libpcap0.8 \
-      openssl && \
-    echo "Adding tenzir user" && \
-    groupadd --gid 20354 tenzir && useradd --system --uid 20354 --gid tenzir tenzir
+RUN apt-get -qq update && apt-get -qq install -y libc++1 libc++abi1 libpcap0.8 \
+  openssl
+RUN echo "Adding tenzir user" && \
+  groupadd --gid 20097 tenzir && useradd --system --uid 20097 --gid tenzir tenzir
 
 EXPOSE 42000/tcp
+WORKDIR /data
+RUN chown -R tenzir:tenzir /data
+VOLUME ["/data"]
 
 USER tenzir:tenzir
-WORKDIR /data
 ENTRYPOINT ["/usr/local/bin/vast"]
 CMD ["--help"]
