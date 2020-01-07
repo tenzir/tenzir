@@ -40,7 +40,7 @@ public:
   counter_state(caf::event_based_actor* self);
 
   void init(expression expr, caf::actor index, system::archive_type archive,
-            bool skip_candidate_check);
+            bool skip_candidate_check, bool timeframe);
 
 protected:
   // -- implementation hooks ---------------------------------------------------
@@ -76,6 +76,6 @@ private:
 
 caf::behavior counter(caf::stateful_actor<counter_state>* self, expression expr,
                       caf::actor index, system::archive_type archive,
-                      bool skip_candidate_check);
+                      bool skip_candidate_check, bool timeframe);
 
 } // namespace vast::system

@@ -64,9 +64,10 @@ spawn_counter(system::node_actor* self, system::spawn_arguments& args) {
     return err;
   VAST_ASSERT(index != nullptr);
   VAST_ASSERT(archive != nullptr);
-  return self->spawn(counter, std::move(expr), index, archive,
-                     caf::get_or(args.invocation.options,
-                                 "count.skip-candidate-checks", false));
+  return self->spawn(
+    counter, std::move(expr), index, archive,
+    caf::get_or(args.invocation.options, "count.skip-candidate-checks", false),
+    caf::get_or(args.invocation.options, "count.timeframe", false));
 }
 
 } // namespace vast::system

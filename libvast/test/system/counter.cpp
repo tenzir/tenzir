@@ -88,11 +88,12 @@ struct fixture : fixtures::deterministic_actor_system_and_events {
   }
 
   // @pre index != nullptr
-  void spawn_aut(std::string_view query, bool skip_candidate_check) {
+  void
+  spawn_aut(std::string_view query, bool skip_candidate_check, bool timeframe) {
     if (index == nullptr)
       FAIL("cannot start AUT without INDEX");
     aut = sys.spawn(counter, unbox(to<expression>(query)), index, archive,
-                    skip_candidate_check);
+                    skip_candidate_check, timeframe);
     run();
     anon_send(aut, run_atom::value, client);
     sched.run_once();
@@ -110,7 +111,7 @@ FIXTURE_SCOPE(counter_tests, fixture)
 
 TEST(count IP point query without candidate check) {
   MESSAGE("spawn the COUNTER for query ':addr == 192.168.1.104'");
-  spawn_aut(":addr == 192.168.1.104", true);
+  spawn_aut(":addr == 192.168.1.104", true, false);
   // Once started, the COUNTER reaches out to the INDEX.
   expect((expression), from(aut).to(index));
   run();
@@ -126,7 +127,7 @@ TEST(count IP point query without candidate check) {
 
 TEST(count IP point query with candidate check) {
   MESSAGE("spawn the COUNTER for query ':addr == 192.168.1.104'");
-  spawn_aut(":addr == 192.168.1.104", false);
+  spawn_aut(":addr == 192.168.1.104", false, false);
   // Once started, the COUNTER reaches out to the INDEX.
   expect((expression), from(aut).to(index));
   run();

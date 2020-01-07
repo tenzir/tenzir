@@ -15,8 +15,12 @@
 
 #include "vast/concept/parseable/to.hpp"
 #include "vast/concept/parseable/vast/expression.hpp"
+#include "vast/concept/printable/std/chrono.hpp"
+#include "vast/concept/printable/to_string.hpp"
+#include "vast/concept/printable/vast/json.hpp"
 #include "vast/defaults.hpp"
 #include "vast/error.hpp"
+#include "vast/json.hpp"
 #include "vast/logger.hpp"
 #include "vast/scope_linked.hpp"
 #include "vast/system/atoms.hpp"
@@ -34,7 +38,6 @@
 
 #include <chrono>
 
-using namespace caf;
 using namespace std::chrono_literals;
 
 namespace vast::system {
@@ -78,6 +81,7 @@ count_command(const command::invocation& invocation, caf::actor_system& sys) {
   if (err)
     return caf::make_message(std::move(err));
   self->send(cnt, system::run_atom::value, self);
+  time first, last;
   bool counting = true;
   uint64_t result = 0;
   self->receive_while
@@ -85,8 +89,28 @@ count_command(const command::invocation& invocation, caf::actor_system& sys) {
     (counting)
     // Message handlers.
     ([&](uint64_t x) { result += x; },
-     [&](system::done_atom) { counting = false; });
-  std::cout << result << std::endl;
+     [&](system::done_atom, time f, time l) {
+       counting = false;
+       first = f;
+       last = l;
+     });
+  if (caf::get_or(invocation.options, "count.json", false)) {
+    // json::object o;
+    // o["count"] = result;
+    // if (caf::get_or(invocation.options, "count.timeframe", false)) {
+    //  o["first"] = first;
+    //  o["last"] = last;
+    //}
+    // std::string print_buffer;
+    // printers::json<policy::tree>(print_buffer, json{o});
+    // std::cout << print_buffer << std::endl;
+  } else {
+    std::cout << result << std::endl;
+    if (caf::get_or(invocation.options, "count.timeframe", false)) {
+      std::cout << "first: " << to_string(first) << std::endl;
+      std::cout << "last: " << to_string(last) << std::endl;
+    }
+  }
   return caf::none;
 }
 

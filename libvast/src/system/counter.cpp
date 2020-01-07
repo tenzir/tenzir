@@ -29,7 +29,7 @@ counter_state::counter_state(caf::event_based_actor* self) : super(self) {
 
 void counter_state::init(expression expr, caf::actor index,
                          system::archive_type archive,
-                         bool skip_candidate_check) {
+                         bool skip_candidate_check, bool timeframe) {
   skip_candidate_check_ = skip_candidate_check;
   expr_ = std::move(expr);
   archive_ = std::move(archive);
@@ -103,15 +103,15 @@ void counter_state::process_end_of_hits() {
   }
   // The COUNTER runs only once. Hence, we call quit() after sending a final
   // 'done' atom to the client for end-of-results signaling.
-  self_->send(client_, system::done_atom::value);
+  self_->send(client_, system::done_atom::value, time{}, time{});
   self_->quit();
 }
 
 caf::behavior counter(caf::stateful_actor<counter_state>* self, expression expr,
                       caf::actor index, system::archive_type archive,
-                      bool skip_candidate_check) {
+                      bool skip_candidate_check, bool timeframe) {
   self->state.init(std::move(expr), std::move(index), std::move(archive),
-                   skip_candidate_check);
+                   skip_candidate_check, timeframe);
   return self->state.behavior();
 }
 
