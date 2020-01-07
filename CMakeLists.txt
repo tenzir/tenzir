@@ -105,21 +105,21 @@ if ("${CMAKE_GENERATOR}" STREQUAL "Ninja" AND VAST_COLOR_NINJA)
 endif ()
 
 # Extract VERSION
-execute_process(
-  COMMAND "git" "describe" "--tags" "--long" "--dirty"
-  RESULT_VARIABLE git_describe_result
-  OUTPUT_VARIABLE VAST_VERSION
-  OUTPUT_STRIP_TRAILING_WHITESPACE)
-if (git_describe_result)
-  set(VAST_VERSION "unknown")
-  set(VERSION_MAJOR 0)
-  set(VERSION_MINOR 0)
-else ()
-  string(REGEX REPLACE "\\.|-" " " version_numbers ${VAST_VERSION})
-  separate_arguments(version_numbers)
-  list(GET version_numbers 0 VERSION_MAJOR)
-  list(GET version_numbers 1 VERSION_MINOR)
+if (NOT VAST_VERSION)
+  execute_process(
+    COMMAND "git" "describe" "--tags" "--long" "--dirty"
+    RESULT_VARIABLE git_describe_result
+    OUTPUT_VARIABLE VAST_VERSION
+    OUTPUT_STRIP_TRAILING_WHITESPACE)
+  # Fallback if the return value is not 0:
+  if (NOT git_describe_result EQUAL 0)
+    set(VAST_VERSION "0.0-unknown")
+  endif ()
 endif ()
+string(REGEX REPLACE "\\.|-" " " version_numbers ${VAST_VERSION})
+separate_arguments(version_numbers)
+list(GET version_numbers 0 VERSION_MAJOR)
+list(GET version_numbers 1 VERSION_MINOR)
 
 # Generate C++ header from Markdown documentation.
 file(
@@ -812,7 +812,7 @@ install(
 include(CMakePackageConfigHelpers)
 write_basic_package_version_file(
   "${CMAKE_CURRENT_BINARY_DIR}/VASTConfigVersion.cmake"
-  VERSION ${VAST_VERSION}
+  VERSION ${VERSION_MAJOR}.${VERSION_MINOR}
   COMPATIBILITY ExactVersion)
 
 configure_package_config_file(
