@@ -7,6 +7,15 @@
 cmake_minimum_required(VERSION 3.11...3.16 FATAL_ERROR)
 project(VAST C CXX)
 
+# Prohibit in-source builds
+if ("${CMAKE_SOURCE_DIR}" STREQUAL "${CMAKE_BINARY_DIR}")
+  message(
+    FATAL_ERROR
+      "In-source builds are not allowed. Please use "
+      "./configure to choose a build directory and "
+      "initialize the build configuration.")
+endif ()
+
 get_directory_property(_parent PARENT_DIRECTORY)
 if (_parent)
   set(vast_is_subproject ON)
@@ -39,6 +48,22 @@ cmake_dependent_option(BUILD_SHARED_LIBS "Build shared libraries instead of stat
 cmake_dependent_option(NO_UNIT_TESTS "Don't build unit tests" OFF "NOT CMAKE_CROSS_COMPILING" ON)
 cmake_dependent_option(VAST_NO_ARROW "Build without Apache Arrow" OFF "NOT ${CMAKE_SYSTEM_NAME} STREQUAL \"FreeBSD\"" ON)
 
+# Keep make output sane
+set(CMAKE_VERBOSE_MAKEFILE
+    false
+    CACHE STRING "Show all outputs including compiler lines." FORCE)
+
+# Force colored output for the Ninja generator
+option(VAST_COLOR_NINJA "Enable ANSI-colored output for the Ninja generator."
+       ON)
+if ("${CMAKE_GENERATOR}" STREQUAL "Ninja" AND VAST_COLOR_NINJA)
+  if ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "GNU")
+    add_compile_options(-fdiagnostics-color=always)
+  elseif ("${CMAKE_CXX_COMPILER_ID}" MATCHES "Clang")
+    add_compile_options(-fcolor-diagnostics)
+  endif ()
+endif ()
+
 if (VAST_STATIC_EXECUTABLE AND BUILD_SHARED_LIBS)
   message(FATAL_ERROR "Cannot create static binary with dynamic libraries")
 endif ()
@@ -67,31 +92,6 @@ if (VAST_RELOCATABLE_INSTALL)
                 "@executable_path/../${CMAKE_INSTALL_LIBDIR}")
   else ()
     list(APPEND CMAKE_INSTALL_RPATH "$ORIGIN/../${CMAKE_INSTALL_LIBDIR}")
-  endif ()
-endif ()
-
-# Prohibit in-source builds
-if ("${CMAKE_SOURCE_DIR}" STREQUAL "${CMAKE_BINARY_DIR}")
-  message(
-    FATAL_ERROR
-      "In-source builds are not allowed. Please use "
-      "./configure to choose a build directory and "
-      "initialize the build configuration.")
-endif ()
-
-# Keep make output sane
-set(CMAKE_VERBOSE_MAKEFILE
-    false
-    CACHE STRING "Show all outputs including compiler lines." FORCE)
-
-# Force colored output for the Ninja generator
-option(VAST_COLOR_NINJA "Enable ANSI-colored output for the Ninja generator."
-       ON)
-if ("${CMAKE_GENERATOR}" STREQUAL "Ninja" AND VAST_COLOR_NINJA)
-  if ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "GNU")
-    add_compile_options(-fdiagnostics-color=always)
-  elseif ("${CMAKE_CXX_COMPILER_ID}" MATCHES "Clang")
-    add_compile_options(-fcolor-diagnostics)
   endif ()
 endif ()
 
