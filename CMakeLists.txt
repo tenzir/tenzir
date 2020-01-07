@@ -196,11 +196,6 @@ endmacro ()
 set(LDFLAGS "$ENV{LDFLAGS}")
 set(ARFLAGS "$ENV{ARFLAGS}")
 
-# Ninja doesn't colorize compiler diagnostics by default.
-if (CMAKE_GENERATOR STREQUAL "Ninja")
-  set(EXTRA_FLAGS "${EXTRA_FLAGS} -fdiagnostics-color")
-endif ()
-
 set(CMAKE_CXX_STANDARD 17)
 
 # Build-type specific flags.
@@ -221,6 +216,14 @@ if (NOT CMAKE_CXX_FLAGS)
   # Increase maximum number of template instantiations, for all that template-
   # heavy code.
   set(EXTRA_FLAGS "${EXTRA_FLAGS} -ftemplate-backtrace-limit=0")
+  # Ninja doesn't colorize compiler diagnostics by default.
+  if (CMAKE_GENERATOR STREQUAL "Ninja")
+    set(EXTRA_FLAGS "${EXTRA_FLAGS} -fdiagnostics-color")
+  endif ()
+  # Relocate debug/file/macro paths to a common prefix for CCache users that
+  # work from multiple worktrees.
+  set(EXTRA_FLAGS
+    "${EXTRA_FLAGS} -fdebug-prefix-map=${CMAKE_CURRENT_SOURCE_DIR}=.")
 endif ()
 
 # Enable more (most) warnings when requested by the user.
