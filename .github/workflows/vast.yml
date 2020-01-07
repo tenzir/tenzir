@@ -105,7 +105,7 @@ jobs:
             --prefix="${PWD}/opt/vast" \
             --build-dir="$BUILD_DIR" \
             --package-name="$PACKAGE_NAME" \
-            ${{ matrix.os == 'macos-latest' && '' || '--disable-arrow' }} \
+            ${{ matrix.os == 'macos-latest' && '' || '--without-arrow' }} \
             ${{ matrix.configure }}
 
       - name: Compile All Targets

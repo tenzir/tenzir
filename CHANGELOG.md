@@ -12,7 +12,7 @@ Every entry has a category for which we use the following visual abbreviations:
 
 - 🔄 Build configuration defaults have been adapated for a better user
   experience. Installations are now relocatable by default, which can be
-  reverted by configuring with `--disable-relocatable`. Additionally, new sets
+  reverted by configuring with `--without-relocatable`. Additionally, new sets
   of defaults named `--release` and `--debug` (renamed from `--dev-mode`) have
   been added. [#695](https://github.com/tenzir/vast/pull/695)
 
