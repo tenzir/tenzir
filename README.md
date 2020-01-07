@@ -2,46 +2,103 @@
   <img src="./doc/assets/vast.svg" width="75%" alt="VAST">
 </p>
 
-**Visibility Across Space and Time (VAST)** is a scalable foundation for
-a security operations center (SOC): a rich data model for security data,
-high-throughput ingestion of telemetry, low-latency search, and flexible export
-in various formats.
+<h1 align="center">
+  VAST &mdash; Visibility Across Space and Time
+</h1>
+<h4 align="center">
+
+The network telemetry engine for data-driven security investigations.
 
 [![Build Status][ci-badge]][ci-url]
-[![Chat][chat-badge]][chat-url]
-[![License][license-badge]][license-url]
+[![LGTM Score C++][lgtm-badge]][lgtm-url]
 [![Changelog][changelog-badge]][changelog-url]
 [![Latest Release][latest-release-badge]][latest-release-url]
-[![LGTM Score C++][lgtm-badge]][lgtm-url]
+[![Chat][chat-badge]][chat-url]
+[![License][license-badge]][license-url]
 
-## Synopsis
+[_Getting Started_](#getting-started) &mdash;
+[_Documentation_][docs] &mdash;
+[_Development_][contributing-url] &mdash;
+[_Changelog_][changelog-url] &mdash;
+[_License and Scientific Use_](#license-and-scientific-use)
 
-Start a VAST node:
+Chat with us on [Gitter][chat-url].
+</h4>
+
+## Key Features
+
+- **High-Throughput Ingestion**: import numerous log formats over 100k
+  events/second, including [Zeek](https://www.zeek.org/),
+  [Suricata](https://suricata-ids.org/), JSON, and CSV.
+
+- **Low-Latency Queries**: sub-second response times over the
+  entire data lake, thanks to multi-level bitmap indexing and actor model
+  concurrency. Particularly helpful for instant indicator checking over the
+  entire dataset.
+
+- **Flexible Export**: access data in common text formats (ASCII, JSON, CSV),
+  in binary form (MRT, PCAP), or via zero-copy relay through
+  [Apache Arrow](https://arrow.apache.org/) for arbitrary downstream analysis.
+
+- **Powerful Data Model and Query Language**: the generic semi-structured data
+  model allows for expressing complex data in a typed fashion. An intuitive
+  query language that feels like grep and awk at scale enables powerful
+  subsetting of data with domain-specific operations, such as top-*k* prefix
+  search for IP addresses and subset relationships.
+
+- **Schema Pivoting**: the missing link to navigate between related events,
+  e.g., extracting a PCAP for a given IDS alert, or locating all related logs
+  for a given query.
+
+## Getting Started
+
+Clone the `master` branch to get the most recent version of VAST.
+
+```sh
+git clone --recursive https://github.com/tenzir/vast
+```
+
+Once you have all dependencies in place, build VAST with the following
+commands:
+
+```sh
+./configure
+cmake --build build
+cmake --build build --target test
+cmake --build build --target integration
+cmake --build build --target install
+```
+
+The [installation guide][installation-url] contains more detailed and
+platform-specific instructions on how to build and install VAST.
+
+**Start a VAST node**:
 
 ```sh
 vast start
 ```
 
-Ingest a bunch of [Zeek](http://www.zeek.org) logs:
+**Ingest [Zeek](http://www.zeek.org) logs of various kinds**:
 
 ```sh
 zcat *.log.gz | vast import zeek
 ```
 
-Run a query over the last hour, rendered as JSON:
+**Run a query over the last hour, rendered as JSON**:
 
 ```sh
 vast export json '#timestamp > 1 hour ago && (6.6.6.6 || 5353/udp)'
 ```
 
-Ingest a [PCAP](https://en.wikipedia.org/wiki/Pcap) trace with a 1024-byte
-flow cut-off:
+**Ingest a [PCAP](https://en.wikipedia.org/wiki/Pcap) trace with a 1024-byte
+flow cutoff**:
 
 ```sh
 vast import pcap -c 1024 < trace.pcap
 ```
 
-Run a query over PCAP data, sort the packets, and feed them into `tcpdump`:
+**Run a query over PCAP data, sort the packets by time, and feed them into**
+`tcpdump`:
 
 ```sh
 vast export pcap "sport > 60000/tcp && src !in 10.0.0.0/8" \
@@ -49,94 +106,10 @@ vast export pcap "sport > 60000/tcp && src !in 10.0.0.0/8" \
   | tcpdump -r - -nl
 ```
 
-## Resources
+## License and Scientific Use
 
-- [Chat][chat-url]
-- [Documentation][docs]
-- [Contribution guidelines][contributing-url]
-- [Changelog][changelog-url]
-
-## Installation
-
-Required dependencies:
-
-- A C++17 compiler:
-  - GCC >= 8
-  - Clang >= 6
-  - Apple Clang >= 9.1
-- [CMake](http://www.cmake.org) >= 3.11
-
-Optional dependencies:
-
-- [libpcap](http://www.tcpdump.org)
-- [gperftools](http://code.google.com/p/google-perftools)
-- [Doxygen](http://www.doxygen.org)
-- [Pandoc](https://github.com/jgm/pandoc)
-
-### Source Build
-
-Building VAST involves the following steps:
-
-```sh
-git submodule update --recursive --init
-./configure
-cmake --build build
-cmake --build build --target test
-cmake --build build --target install
-```
-
-The `configure` script is a small wrapper that passes build-related variables
-to CMake. For example, to use [Ninja](https://ninja-build.org) as build
-generator, add `--generator=Ninja` to the command line. Passing `--help` shows
-all available options.
-
-The `doc` target builds the API documentation locally:
-
-```sh
-cmake --build build --target doc
-```
-
-## Docker
-
-The source ships with the convenience script `scripts/docker-build`, which will
-create the Docker images and save them as `tar.gz` archives (when invoked
-without arguments).
-
-To run the container, you need to provide a volume to the mountpoint `/data`.
-The default command will print the help message:
-
-```sh
-docker run -v /tmp/vast:/data vast-io/vast
-```
-
-Create a Docker network since we'll be running multiple containers which
-connect to each other:
-
-```sh
-docker network create -d bridge --subnet 172.42.0.0/16 vast_nw
-```
-
-Use detach and publish the default port to start a VAST node:
-
-```sh
-docker run --network=vast_nw --name=vast_node --ip="172.42.0.2" -d -v \
-  /tmp/vast:/data vast-io/vast start
-```
-
-Import a Zeek conn log to the detached server instance:
-
-```sh
-docker run --network=vast_nw -i -v /tmp/vast:/data vast-io/vast -e '172.42.0.2' \
-  import zeek < zeek_conn.log
-```
-
-Other subcommands, like `export` and `status`, can be used just like the
-`import` command shown above.
-
-## Scientific Use
-
-When referring to VAST in a scientific context, please use the following
-citation:
+VAST comes with a [3-clause BSD license][license-url]. When referring to VAST
+in a scientific context, please use the following citation:
 
 ```bibtex
 @InProceedings{nsdi16:vast,
@@ -151,10 +124,6 @@ citation:
 
 You can [download the paper][vast-paper] from the [NSDI '16
 proceedings][nsdi-proceedings].
-
-## License
-
-VAST comes with a [3-clause BSD licence][license-url].
 
 <p align="center">
   Developed with ❤️ by <strong><a href="https://tenzir.com">Tenzir</a></strong>
@@ -174,6 +143,7 @@ VAST comes with a [3-clause BSD licence][license-url].
 [contributing-url]: https://github.com/tenzir/.github/blob/master/contributing.md
 [latest-release-badge]: https://img.shields.io/github/commits-since/tenzir/vast/latest.svg?color=green
 [latest-release-url]: https://github.com/tenzir/vast/releases
+[installation-url]: INSTALLATION.md
 [lgtm-badge]: https://img.shields.io/lgtm/grade/cpp/github/tenzir/vast.svg?logo=lgtm
 [lgtm-url]: https://lgtm.com/projects/g/tenzir/vast/context:cpp
 

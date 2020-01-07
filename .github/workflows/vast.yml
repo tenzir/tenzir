@@ -1,5 +1,9 @@
 name: "VAST"
-on: push
+on:
+  push:
+    paths-ignore:
+    - '**.md'
+    - '!doc/**.md'
 env:
   DEBIAN_FRONTEND: noninteractive
 jobs:
