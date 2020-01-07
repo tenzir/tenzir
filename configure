@@ -41,6 +41,7 @@ Usage: $0 [OPTION]... [VAR=VALUE]...
     --no-auto-libc++        do not automatically use libc++ with Clang
     --more-warnings         enables most warnings on GCC and Clang
     --without-tests         build without unit tests
+    --without-zeek-to-vast  build without zeek-to-vast
 
   Debugging:
     --log-level=LEVEL       maximum compile-time log level
@@ -55,7 +56,8 @@ Usage: $0 [OPTION]... [VAR=VALUE]...
     --with-caf=PATH         path to CAF install root or build directory
 
   Optional packages:
-    --with-broker=PATH      path to Broker install root
+    --with-broker=PATH      path to Broker install root (required for
+                            zeek-to-vast)
     --with-doxygen=PATH     path to Doxygen install root
     --with-openssl=PATH     path to OpenSSL install root
     --with-pcap=PATH        path to libpcap install root
@@ -152,6 +154,9 @@ while [ $# -ne 0 ]; do
       ;;
     --without-tests)
       append_cache_entry NO_UNIT_TESTS BOOL yes
+      ;;
+    --without-zeek-to-vast)
+      append_cache_entry ENABLE_ZEEK_TO_VAST BOOL no
       ;;
 # -- Debugging -----------------------------------------------------------------
     --log-level=*)
