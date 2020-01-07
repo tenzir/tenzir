@@ -2,7 +2,9 @@
 # Project Setup
 # ------------------------------------------------------------------------------
 
-cmake_minimum_required(VERSION 3.11...3.15 FATAL_ERROR)
+# Initial scaffold
+
+cmake_minimum_required(VERSION 3.11...3.16 FATAL_ERROR)
 project(VAST C CXX)
 
 get_directory_property(_parent PARENT_DIRECTORY)
@@ -13,22 +15,32 @@ else ()
 endif ()
 unset(_parent)
 
+include(CTest)
+if (NOT CPack_CMake_INCLUDED)
+  include(CPack)
+endif ()
+include(GNUInstallDirs)
+include(CMakeDependentOption)
+set(CMAKE_INSTALL_CMAKEDIR
+    "${CMAKE_INSTALL_LIBDIR}/cmake"
+    CACHE PATH "Base directory for installing cmake specific artifacts")
+set(INSTALL_VAST_CMAKEDIR "${CMAKE_INSTALL_CMAKEDIR}/vast")
+
+set(CMAKE_MODULE_PATH ${CMAKE_CURRENT_SOURCE_DIR}/cmake)
+include(Helpers)
+include(MacDependencyPaths)
+
+# Build configuration
+
 option(VAST_RELOCATABLE_INSTALL "Enable relocatable installations" ON)
 option(ENABLE_ZEEK_TO_VAST "Build zeek-to-vast" ON)
 option(VAST_STATIC_EXECUTABLE "Link VAST statically")
-option(VAST_NO_ARROW "Build without Apache Arrow" OFF)
-set(BUILD_SHARED_LIBS_DEFAULT ON)
-if (VAST_STATIC_EXECUTABLE)
-  set(BUILD_SHARED_LIBS_DEFAULT OFF)
-endif ()
-option(BUILD_SHARED_LIBS "" ${BUILD_SHARED_LIBS_DEFAULT})
+cmake_dependent_option(BUILD_SHARED_LIBS "Build shared libraries instead of static" ON "NOT VAST_STATIC_EXECUTABLE" OFF)
+cmake_dependent_option(NO_UNIT_TESTS "Don't build unit tests" OFF "NOT CMAKE_CROSS_COMPILING" ON)
+cmake_dependent_option(VAST_NO_ARROW "Build without Apache Arrow" OFF "NOT ${CMAKE_SYSTEM_NAME} STREQUAL \"FreeBSD\"" ON)
+
 if (VAST_STATIC_EXECUTABLE AND BUILD_SHARED_LIBS)
   message(FATAL_ERROR "Cannot create static binary with dynamic libraries")
-endif ()
-if (CMAKE_CROSS_COMPILING)
-  option(NO_UNIT_TESTS ON)
-else ()
-  option(NO_UNIT_TESTS OFF)
 endif ()
 
 # Silence warning CMP0042
@@ -48,20 +60,6 @@ add_custom_target(
     ${CMAKE_COMMAND} -E create_symlink
     ${CMAKE_BINARY_DIR}/compile_commands.json
     ${CMAKE_SOURCE_DIR}/compile_commands.json)
-
-set(CMAKE_MODULE_PATH ${CMAKE_CURRENT_SOURCE_DIR}/cmake)
-include(CTest)
-include(Helpers)
-include(MacDependencyPaths)
-
-if (NOT CPack_CMake_INCLUDED)
-  include(CPack)
-endif ()
-include(GNUInstallDirs)
-set(CMAKE_INSTALL_CMAKEDIR
-    "${CMAKE_INSTALL_LIBDIR}/cmake"
-    CACHE PATH "Base directory for installing cmake specific artifacts")
-set(INSTALL_VAST_CMAKEDIR "${CMAKE_INSTALL_CMAKEDIR}/vast")
 
 if (VAST_RELOCATABLE_INSTALL)
   if (APPLE)

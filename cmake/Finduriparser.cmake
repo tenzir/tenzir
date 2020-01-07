@@ -13,7 +13,10 @@
 # License for the specific language governing permissions and limitations under
 # the License.
 
-pkg_check_modules(uriparser_PC liburiparser)
+if (PKG_CONFIG_FOUND AND NOT ${uriparser_ROOT})
+  pkg_check_modules(uriparser_PC liburiparser)
+endif ()
+
 if (uriparser_PC_FOUND)
   set(uriparser_INCLUDE_DIR "${uriparser_PC_INCLUDEDIR}")
 
