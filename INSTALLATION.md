@@ -57,7 +57,22 @@ TODO
 
 ### macOS
 
-TODO
+A current version of VAST can be installed using Homebrew.
+
+Install VAST from tenzir/tenzir tap (current master):
+```sh
+brew install --HEAD tenzir/tenzir/vast
+```
+
+Install VAST from tenzir/tenzir tap (current release):
+```sh
+brew install tenzir/tenzir/vast
+```
+
+Run VAST server as a launchd service:
+```sh
+brew services start vast
+```
 
 ### FreeBSD
 
