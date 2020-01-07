@@ -45,7 +45,7 @@ COPY --from=builder /usr/lib/x86_64-linux-gnu/libatomic.so.1 /usr/lib/x86_64-lin
 RUN apt-get -qq update && apt-get -qq install -y libc++1 libc++abi1 libpcap0.8 \
   openssl
 RUN echo "Adding tenzir user" && \
-  groupadd --gid 20354 tenzir && useradd --system --uid 20354 --gid tenzir tenzir
+  groupadd --gid 20097 tenzir && useradd --system --uid 20097 --gid tenzir tenzir
 
 EXPOSE 42000/tcp
 WORKDIR /data

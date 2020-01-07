@@ -70,10 +70,13 @@ branch or tag.
 ./scripts/docker-build <BRANCH>
 ```
 
-Start VAST in a container and detach it to the background.
+Start VAST in a container and detach it to the background. When you mount a
+directory for persistent data, make sure the `tenzir` user inside the container
+can write to it.
 
 ```sh
-docker run -dt --name=vast --rm -p 42000:42000 tenzir/vast:latest start
+mkdir -p /var/db/vast
+docker run -dt --name=vast --rm -p 42000:42000 -v /var/db/vast:/data tenzir/vast:latest start
 ```
 
 ### macOS
