@@ -22,46 +22,47 @@ sourcedir="$(cd "$(dirname "$0")" && pwd)"
 usage="\
 Usage: $0 [OPTION]... [VAR=VALUE]...
 
-  Installation directories:
+  Installation options:
     --prefix=PREFIX         installation directory [/usr/local]
-    --relocatable           enable relocatable installations
+    --without-relocatable   disable relocatable installations
+    --package-name          sets the name of the produced package
+
+  Convenience options:
+    --debug                 sets --build-type=Debug, --log-level=trace,
+                            and --with-asan
+    --release               sets --build-type=Release
 
   Build options:
     --generator=GENERATOR   CMake generator to use (see cmake --help)
+    --build-dir=DIR         directory where to perform build [build]
     --build-type=DIR        CMake build type [RelWithDebInfo]
     --extra-flags=STRING    additional compiler flags
-    --build-dir=DIR         directory where to perform build [build]
     --show-time-report      show where the compiler spends its time
     --no-auto-libc++        do not automatically use libc++ with Clang
     --more-warnings         enables most warnings on GCC and Clang
-    --disable-tests         build without unit tests
-    --package-name          sets the name of the produced package
+    --without-tests         build without unit tests
+    --without-zeek-to-vast  build without zeek-to-vast
 
   Debugging:
     --log-level=LEVEL       maximum compile-time log level
-    --disable-assertions    disable assertions
-    --disable-exceptions    disable C++ exceptions
-    --enable-asan           enable AddressSanitizer
-    --enable-gcov           enable GCOV
+    --without-assertions    disable assertions
+    --without-exceptions    disable C++ exceptions
+    --with-asan             enable AddressSanitizer
+    --with-gcov             enable GCOV
 
-  Optional features:
-    --enable-tcmalloc       link against tcmalloc (requires gperftools)
-    --disable-arrow         disable Apache Arrow integration
-
-  Required packages in non-standard locations:
+  Required packages:
+    --with-arrow=PATH       path to Apache Arrow install root
+    --without-arrow         explicitly disable Apache Arrow integration
     --with-caf=PATH         path to CAF install root or build directory
 
-  Optional packages in non-standard locations:
-    --with-arrow=PATH       path to Apache Arrow install root
-    --with-broker=PATH      path to Broker install root
+  Optional packages:
+    --with-broker=PATH      path to Broker install root (required for
+                            zeek-to-vast)
+    --with-doxygen=PATH     path to Doxygen install root
     --with-openssl=PATH     path to OpenSSL install root
     --with-pcap=PATH        path to libpcap install root
     --with-perftools=PATH   path to gperftools install root
-    --with-doxygen=PATH     path to Doxygen install root
-
-  Convenience options:
-    --dev-mode              sets --build-type=debug, --log-level=trace,
-                            and --enable-asan
+    --with-tcmalloc         link against tcmalloc (requires gperftools)
 
   Influential Environment Variables (only on first invocation):
     CXX                     C++ compiler command
@@ -84,8 +85,8 @@ builddir=build
 CMakeCacheEntries=""
 append_cache_entry CMAKE_INSTALL_PREFIX   PATH      /usr/local
 append_cache_entry CMAKE_BUILD_TYPE       STRING    RelWithDebInfo
-append_cache_entry VAST_ENABLE_ASSERTIONS BOOL      true
-append_cache_entry VAST_USE_TCMALLOC      BOOL      false
+append_cache_entry VAST_ENABLE_ASSERTIONS BOOL      yes
+append_cache_entry VAST_USE_TCMALLOC      BOOL      no
 
 # Parse custom environment variable to initialize CMakeGenerator.
 if [ -n "$CMAKE_GENERATOR" ]; then
@@ -107,13 +108,29 @@ while [ $# -ne 0 ]; do
       echo "${usage}" 1>&2
       exit 1
       ;;
+# -- Installation options ------------------------------------------------------
     --prefix=*)
       append_cache_entry VAST_PREFIX PATH "$optarg"
       append_cache_entry CMAKE_INSTALL_PREFIX PATH "$optarg"
       ;;
-    --relocatable)
-      append_cache_entry VAST_RELOCATABLE_INSTALL BOOL true
+    --without-relocatable)
+      append_cache_entry VAST_RELOCATABLE_INSTALL BOOL no
       ;;
+    --package-name=*)
+      append_cache_entry CPACK_PACKAGE_FILE_NAME STRING "$optarg"
+      append_cache_entry CPACK_SET_DEST_DIR BOOL yes
+      append_cache_entry CPACK_GENERATOR STRING TGZ
+      ;;
+# -- Convenience options -------------------------------------------------------
+    --debug)
+      append_cache_entry CMAKE_BUILD_TYPE STRING Debug
+      append_cache_entry ENABLE_ADDRESS_SANITIZER BOOL yes
+      # TODO: eventually, we also want to enable MORE_WARNINGS
+      ;;
+    --release)
+      append_cache_entry CMAKE_BUILD_TYPE STRING Release
+      ;;
+# -- Build options -------------------------------------------------------------
     --generator=*)
       CMakeGenerator="$optarg"
       ;;
@@ -127,7 +144,7 @@ while [ $# -ne 0 ]; do
       append_cache_entry EXTRA_FLAGS STRING "$optarg"
       ;;
     --show-time-report)
-      append_cache_entry SHOW_TIME_REPORT BOOL true
+      append_cache_entry SHOW_TIME_REPORT BOOL yes
       ;;
     --no-auto-libc++)
       append_cache_entry NO_AUTO_LIBCPP BOOL yes
@@ -135,38 +152,44 @@ while [ $# -ne 0 ]; do
     --more-warnings)
       append_cache_entry MORE_WARNINGS BOOL yes
       ;;
-    --no-unit-tests)
+    --without-tests)
       append_cache_entry NO_UNIT_TESTS BOOL yes
       ;;
+    --without-zeek-to-vast)
+      append_cache_entry ENABLE_ZEEK_TO_VAST BOOL no
+      ;;
+# -- Debugging -----------------------------------------------------------------
     --log-level=*)
       append_cache_entry VAST_LOG_LEVEL STRING "$optarg"
       ;;
-    --disable-assertions)
-      append_cache_entry VAST_ENABLE_ASSERTIONS BOOL false
+    --without-assertions)
+      append_cache_entry VAST_ENABLE_ASSERTIONS BOOL no
       ;;
-    --disable-exceptions)
-      append_cache_entry NO_EXCEPTIONS BOOL true
+    --without-exceptions)
+      append_cache_entry NO_EXCEPTIONS BOOL yes
       ;;
-    --enable-asan)
-      append_cache_entry ENABLE_ADDRESS_SANITIZER BOOL true
+    --with-asan)
+      append_cache_entry ENABLE_ADDRESS_SANITIZER BOOL yes
       ;;
-    --enable-gcov)
-      append_cache_entry ENABLE_GCOV BOOL true
+    --with-gcov)
+      append_cache_entry ENABLE_GCOV BOOL yes
       ;;
-    --enable-tcmalloc)
-      append_cache_entry VAST_USE_TCMALLOC BOOL true
-      ;;
-    --disable-arrow)
-      append_cache_entry VAST_NO_ARROW BOOL true
-      ;;
+# -- Required packages ---------------------------------------------------------
     --with-arrow=*)
       append_cache_entry ARROW_ROOT_DIR PATH "$optarg"
+      ;;
+    --without-arrow)
+      append_cache_entry VAST_NO_ARROW BOOL yes
       ;;
     --with-caf=*)
       append_cache_entry CAF_ROOT_DIR PATH "$optarg"
       ;;
+# -- Optional packages ---------------------------------------------------------
     --with-broker=*)
       append_cache_entry BROKER_ROOT_DIR PATH "$optarg"
+      ;;
+    --with-doxygen=*)
+      append_cache_entry Doxygen_ROOT_DIR PATH "$optarg"
       ;;
     --with-openssl=*)
       append_cache_entry OPENSSL_ROOT_DIR PATH "$optarg"
@@ -177,16 +200,8 @@ while [ $# -ne 0 ]; do
     --with-perftools=*)
       append_cache_entry Gperftools_ROOT_DIR PATH "$optarg"
       ;;
-    --with-doxygen=*)
-      append_cache_entry Doxygen_ROOT_DIR PATH "$optarg"
-      ;;
-    --dev-mode)
-      append_cache_entry VAST_DEV_MODE BOOL true
-      ;;
-    --package-name=*)
-      append_cache_entry CPACK_PACKAGE_FILE_NAME STRING "$optarg"
-      append_cache_entry CPACK_SET_DEST_DIR BOOL true
-      append_cache_entry CPACK_GENERATOR STRING TGZ
+    --with-tcmalloc)
+      append_cache_entry VAST_USE_TCMALLOC BOOL yes
       ;;
     *)
       echo "Invalid option '$1'.  Try $0 --help to see available options."

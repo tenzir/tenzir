@@ -46,7 +46,7 @@ jobs:
     strategy:
       matrix:
         os: [macos-latest, ubuntu-latest]
-        configure: ["", "--dev-mode"]
+        configure: ["--release", "--debug"]
     runs-on: ${{ matrix.os }}
     env:
       CC: ${{ matrix.os == 'macos-latest' && 'clang' || 'gcc-8' }}
@@ -103,10 +103,9 @@ jobs:
           ./configure \
             --generator=Ninja \
             --prefix="${PWD}/opt/vast" \
-            --relocatable \
             --build-dir="$BUILD_DIR" \
             --package-name="$PACKAGE_NAME" \
-            ${{ matrix.os == 'macos-latest' && '' || '--disable-arrow' }} \
+            ${{ matrix.os == 'macos-latest' && '' || '--without-arrow' }} \
             ${{ matrix.configure }}
 
       - name: Compile All Targets

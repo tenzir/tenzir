@@ -13,16 +13,9 @@ else ()
 endif ()
 unset(_parent)
 
-option(VAST_DEV_MODE "Build in developer debug configuration" OFF)
-if (VAST_DEV_MODE)
-  set(CMAKE_BUILD_TYPE "Debug")
-  set(ENABLE_ADDRESS_SANITIZER ON)
-  # TODO: eventually, we also want to enable --more-warnings set(MORE_WARNINGS
-  # ON)
-endif ()
+option(VAST_RELOCATABLE_INSTALL "Enable relocatable installations" ON)
 option(ENABLE_ZEEK_TO_VAST "Build zeek-to-vast" ON)
 option(VAST_STATIC_EXECUTABLE "Link VAST statically")
-option(VAST_RELOCATABLE_INSTALL "Make the installation relocatable" OFF)
 option(VAST_NO_ARROW "Build without Apache Arrow" OFF)
 set(BUILD_SHARED_LIBS_DEFAULT ON)
 if (VAST_STATIC_EXECUTABLE)
@@ -659,45 +652,49 @@ if (NOT VAST_NO_ARROW)
   if (NOT ARROW_ROOT_DIR AND VAST_PREFIX)
     set(ARROW_ROOT_DIR ${VAST_PREFIX})
   endif ()
-  find_package(Arrow REQUIRED)
-  find_package(Plasma REQUIRED)
-  set(VAST_HAVE_ARROW true)
-  if (NOT BUILD_SHARED_LIBS)
-    set(modules_not_provided
-        Brotli
-        DoubleConversion
-        uriparser
-        Snappy
-        glog
-        Lz4
-        ZSTD
-        Thrift
-        Arrow
-        Plasma)
-    set(modules ZLIB)
-    foreach (module ${modules_not_provided})
-      provide_find_module("${module}")
-      list(APPEND modules "${module}")
-    endforeach ()
-    foreach (module ${modules})
-      find_package("${module}" REQUIRED QUIET)
-      string(APPEND VAST_FIND_DEPENDENCY_LIST
-             "\nfind_package(${module} REQUIRED QUIET)")
-    endforeach ()
-    set(Boost_USE_STATIC_LIBS ON)
-    set(Boost_USE_MULTITHREADED ON)
-    set(Boost_NO_BOOST_CMAKE ON)
-    unset(Boost_INCLUDE_DIR CACHE)
-    unset(Boost_LIBRARY_DIRS CACHE)
-    find_package(Boost REQUIRED QUIET COMPONENTS filesystem system regex)
-    string(
-      APPEND VAST_FIND_DEPENDENCY_LIST
-      "\nfind_package(Boost REQUIRED QUIET COMPONENTS filesystem system regex)")
-    set(ARROW_LIBRARIES
-        "${ARROW_STATIC_LIB};${PLASMA_STATIC_LIB};double-conversion::double-conversion;uriparser::uriparser;Brotli::brotlienc;Brotli::brotlidec;Brotli::brotlicommon;LZ4::lz4;snappy::snappy;ZLIB::ZLIB;ZSTD::zstd;GLOG::glog;Boost::system;Boost::filesystem;Boost::regex;Threads::Threads"
-    )
+  find_package(Arrow REQUIRED QUIET)
+  find_package(Plasma REQUIRED QUIET)
+  if (ARROW_FOUND AND PLASMA_FOUND)
+    set(VAST_HAVE_ARROW true)
+    if (NOT BUILD_SHARED_LIBS)
+      set(modules_not_provided
+          Brotli
+          DoubleConversion
+          uriparser
+          Snappy
+          glog
+          Lz4
+          ZSTD
+          Thrift
+          Arrow
+          Plasma)
+      set(modules ZLIB)
+      foreach (module ${modules_not_provided})
+        provide_find_module("${module}")
+        list(APPEND modules "${module}")
+      endforeach ()
+      foreach (module ${modules})
+        find_package("${module}" REQUIRED QUIET)
+        string(APPEND VAST_FIND_DEPENDENCY_LIST
+              "\nfind_package(${module} REQUIRED QUIET)")
+      endforeach ()
+      set(Boost_USE_STATIC_LIBS ON)
+      set(Boost_USE_MULTITHREADED ON)
+      set(Boost_NO_BOOST_CMAKE ON)
+      unset(Boost_INCLUDE_DIR CACHE)
+      unset(Boost_LIBRARY_DIRS CACHE)
+      find_package(Boost REQUIRED QUIET COMPONENTS filesystem system regex)
+      string(
+        APPEND VAST_FIND_DEPENDENCY_LIST
+        "\nfind_package(Boost REQUIRED QUIET COMPONENTS filesystem system regex)")
+      set(ARROW_LIBRARIES
+          "${ARROW_STATIC_LIB};${PLASMA_STATIC_LIB};double-conversion::double-conversion;uriparser::uriparser;Brotli::brotlienc;Brotli::brotlidec;Brotli::brotlicommon;LZ4::lz4;snappy::snappy;ZLIB::ZLIB;ZSTD::zstd;GLOG::glog;Boost::system;Boost::filesystem;Boost::regex;Threads::Threads"
+      )
+    else ()
+      set(ARROW_LIBRARIES "${ARROW_SHARED_LIB};${PLASMA_SHARED_LIB}")
+    endif ()
   else ()
-    set(ARROW_LIBRARIES "${ARROW_SHARED_LIB};${PLASMA_SHARED_LIB}")
+    message(FATAL_ERROR "Please install Apache Arrow / Plasma")
   endif ()
 endif ()
 
