@@ -2,7 +2,8 @@ name: "VAST"
 on:
   push:
     paths-ignore:
-    - README.md
+    - '**.md'
+    - '!doc/**.md'
 env:
   DEBIAN_FRONTEND: noninteractive
 jobs:
