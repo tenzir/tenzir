@@ -23,7 +23,9 @@
 include(FindPkgConfig)
 include(GNUInstallDirs)
 
-if (PKG_CONFIG_FOUND AND "$ENV{ARROW_HOME}" STREQUAL "" AND NOT "${ARROW_HOME}")
+if (PKG_CONFIG_FOUND
+    AND "$ENV{ARROW_HOME}" STREQUAL ""
+    AND NOT "${ARROW_HOME}")
   pkg_check_modules(ARROW arrow)
   if (ARROW_FOUND)
     pkg_get_variable(ARROW_SO_VERSION arrow so_version)
@@ -63,10 +65,8 @@ else ()
 
   find_path(
     ARROW_INCLUDE_DIR arrow/array.h
-    PATHS
-      ${ARROW_SEARCH_HEADER_PATHS}
-
-      # make sure we don't accidentally pick up a different version
+    PATHS ${ARROW_SEARCH_HEADER_PATHS}
+          # make sure we don't accidentally pick up a different version
     NO_DEFAULT_PATH)
 endif ()
 

@@ -44,9 +44,13 @@ include(MacDependencyPaths)
 option(VAST_RELOCATABLE_INSTALL "Enable relocatable installations" ON)
 option(ENABLE_ZEEK_TO_VAST "Build zeek-to-vast" ON)
 option(VAST_STATIC_EXECUTABLE "Link VAST statically")
-cmake_dependent_option(BUILD_SHARED_LIBS "Build shared libraries instead of static" ON "NOT VAST_STATIC_EXECUTABLE" OFF)
-cmake_dependent_option(NO_UNIT_TESTS "Don't build unit tests" OFF "NOT CMAKE_CROSS_COMPILING" ON)
-cmake_dependent_option(VAST_NO_ARROW "Build without Apache Arrow" OFF "NOT ${CMAKE_SYSTEM_NAME} STREQUAL \"FreeBSD\"" ON)
+cmake_dependent_option(
+  BUILD_SHARED_LIBS "Build shared libraries instead of static" ON
+  "NOT VAST_STATIC_EXECUTABLE" OFF)
+cmake_dependent_option(NO_UNIT_TESTS "Don't build unit tests" OFF
+                       "NOT CMAKE_CROSS_COMPILING" ON)
+cmake_dependent_option(VAST_NO_ARROW "Build without Apache Arrow" OFF
+                       "NOT ${CMAKE_SYSTEM_NAME} STREQUAL \"FreeBSD\"" ON)
 
 # Keep make output sane
 set(CMAKE_VERBOSE_MAKEFILE
@@ -214,7 +218,7 @@ if (NOT CMAKE_CXX_FLAGS)
   # Relocate debug/file/macro paths to a common prefix for CCache users that
   # work from multiple worktrees.
   set(EXTRA_FLAGS
-    "${EXTRA_FLAGS} -fdebug-prefix-map=${CMAKE_CURRENT_SOURCE_DIR}=.")
+      "${EXTRA_FLAGS} -fdebug-prefix-map=${CMAKE_CURRENT_SOURCE_DIR}=.")
 endif ()
 
 # Enable more (most) warnings when requested by the user.
@@ -674,7 +678,7 @@ if (NOT VAST_NO_ARROW)
       foreach (module ${modules})
         find_package("${module}" REQUIRED QUIET)
         string(APPEND VAST_FIND_DEPENDENCY_LIST
-              "\nfind_package(${module} REQUIRED QUIET)")
+               "\nfind_package(${module} REQUIRED QUIET)")
       endforeach ()
       set(Boost_USE_STATIC_LIBS ON)
       set(Boost_USE_MULTITHREADED ON)
@@ -683,8 +687,10 @@ if (NOT VAST_NO_ARROW)
       unset(Boost_LIBRARY_DIRS CACHE)
       find_package(Boost REQUIRED QUIET COMPONENTS filesystem system regex)
       string(
-        APPEND VAST_FIND_DEPENDENCY_LIST
-        "\nfind_package(Boost REQUIRED QUIET COMPONENTS filesystem system regex)")
+        APPEND
+        VAST_FIND_DEPENDENCY_LIST
+        "\nfind_package(Boost REQUIRED QUIET COMPONENTS filesystem system regex)"
+      )
       set(ARROW_LIBRARIES
           "${ARROW_STATIC_LIB};${PLASMA_STATIC_LIB};double-conversion::double-conversion;uriparser::uriparser;Brotli::brotlienc;Brotli::brotlidec;Brotli::brotlicommon;LZ4::lz4;snappy::snappy;ZLIB::ZLIB;ZSTD::zstd;GLOG::glog;Boost::system;Boost::filesystem;Boost::regex;Threads::Threads"
       )
@@ -857,7 +863,7 @@ endif ()
 # Build Summary
 # ------------------------------------------------------------------------------
 
-macro (display test desc summary)
+macro (display TEST desc summary)
   if (${test})
     set(${summary} ${desc})
   else ()

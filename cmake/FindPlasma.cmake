@@ -22,7 +22,9 @@
 
 include(FindPkgConfig)
 
-if (PKG_CONFIG_FOUND AND "$ENV{ARROW_HOME}" STREQUAL "" AND NOT "${ARROW_HOME}")
+if (PKG_CONFIG_FOUND
+    AND "$ENV{ARROW_HOME}" STREQUAL ""
+    AND NOT "${ARROW_HOME}")
   pkg_check_modules(PLASMA plasma)
   if (PLASMA_FOUND)
     pkg_get_variable(PLASMA_EXECUTABLE plasma executable)
@@ -58,10 +60,8 @@ else ()
 
   find_path(
     PLASMA_INCLUDE_DIR plasma/client.h
-    PATHS
-      ${PLASMA_SEARCH_HEADER_PATHS}
-
-      # make sure we don't accidentally pick up a different version
+    PATHS ${PLASMA_SEARCH_HEADER_PATHS}
+          # make sure we don't accidentally pick up a different version
     NO_DEFAULT_PATH)
 endif ()
 
