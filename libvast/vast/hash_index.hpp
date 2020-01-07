@@ -17,6 +17,7 @@
 #include "vast/concept/hashable/xxhash.hpp"
 #include "vast/data.hpp"
 #include "vast/detail/assert.hpp"
+#include "vast/detail/type_traits.hpp"
 #include "vast/value_index.hpp"
 #include "vast/view.hpp"
 
@@ -177,17 +178,15 @@ private:
   caf::expected<ids>
   lookup_impl(relational_operator op, data_view x) const override {
     VAST_ASSERT(rank(this->mask()) == digests_.size());
-    if (!(op == equal || op == not_equal))
-      return make_error(ec::unsupported_operator, op);
-    auto digest = find_digest(x);
-    ewah_bitmap result;
-    // Build candidate set of IDs.
-    auto rng = select(this->mask());
-    if (rng.done())
-      return result;
-    auto f = [&](auto predicate) {
+    // Implementation of the one-pass search algorithm that computes the
+    // resulting ID set. The predicate depends on the operator and RHS.
+    auto scan = [&](auto predicate) -> ids {
+      ewah_bitmap result;
+      auto rng = select(this->mask());
+      if (rng.done())
+        return result;
       for (size_t i = 0, last_match = 0; i < digests_.size(); ++i) {
-        if (predicate(digests_[i], digest)) {
+        if (predicate(digests_[i])) {
           auto digests_since_last_match = i - last_match;
           if (digests_since_last_match > 0)
             rng.next(digests_since_last_match);
@@ -196,9 +195,45 @@ private:
           last_match = i;
         }
       }
+      return result;
     };
-    op == equal ? f(std::equal_to{}) : f(std::not_equal_to{});
-    return result;
+    if (op == equal || op == not_equal) {
+      auto k = find_digest(x);
+      auto eq = [=](const digest_type& digest) { return k == digest; };
+      auto ne = [=](const digest_type& digest) { return k != digest; };
+      return op == equal ? scan(eq) : scan(ne);
+    }
+    if (op == in || op == not_in) {
+      // Ensure that the RHS is a list of strings.
+      auto keys = caf::visit(
+        detail::overload([&](auto xs) -> caf::expected<std::vector<key>> {
+          using view_type = decltype(xs);
+          if constexpr (detail::is_any_v<view_type, view<set>, view<vector>>) {
+            std::vector<key> result;
+            result.reserve(xs.size());
+            for (auto x : xs)
+              result.emplace_back(find_digest(x));
+            return result;
+          } else {
+            return make_error(ec::type_clash, "expected set or vector on RHS",
+                              materialize(x));
+          }
+        }),
+        x);
+      if (!keys)
+        return keys.error();
+      // We're good to go with: create the set predicates an run the scan.
+      auto in_pred = [&](const digest_type& digest) {
+        auto cmp = [=](auto& k) { return k == digest; };
+        return std::any_of(keys->begin(), keys->end(), cmp);
+      };
+      auto not_in_pred = [&](const digest_type& digest) {
+        auto cmp = [=](auto& k) { return k == digest; };
+        return std::none_of(keys->begin(), keys->end(), cmp);
+      };
+      return op == in ? scan(in_pred) : scan(not_in_pred);
+    }
+    return make_error(ec::unsupported_operator, op);
   }
 
   bool immutable() const {
