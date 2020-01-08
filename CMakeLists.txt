@@ -2,8 +2,19 @@
 # Project Setup
 # ------------------------------------------------------------------------------
 
-cmake_minimum_required(VERSION 3.11...3.15 FATAL_ERROR)
+# Initial scaffold
+
+cmake_minimum_required(VERSION 3.11...3.16 FATAL_ERROR)
 project(VAST C CXX)
+
+# Prohibit in-source builds
+if ("${CMAKE_SOURCE_DIR}" STREQUAL "${CMAKE_BINARY_DIR}")
+  message(
+    FATAL_ERROR
+      "In-source builds are not allowed. Please use "
+      "./configure to choose a build directory and "
+      "initialize the build configuration.")
+endif ()
 
 get_directory_property(_parent PARENT_DIRECTORY)
 if (_parent)
@@ -13,22 +24,52 @@ else ()
 endif ()
 unset(_parent)
 
+include(CTest)
+if (NOT CPack_CMake_INCLUDED)
+  include(CPack)
+endif ()
+include(GNUInstallDirs)
+include(CMakeDependentOption)
+set(CMAKE_INSTALL_CMAKEDIR
+    "${CMAKE_INSTALL_LIBDIR}/cmake"
+    CACHE PATH "Base directory for installing cmake specific artifacts")
+set(INSTALL_VAST_CMAKEDIR "${CMAKE_INSTALL_CMAKEDIR}/vast")
+
+set(CMAKE_MODULE_PATH ${CMAKE_CURRENT_SOURCE_DIR}/cmake)
+include(Helpers)
+include(MacDependencyPaths)
+
+# Build configuration
+
 option(VAST_RELOCATABLE_INSTALL "Enable relocatable installations" ON)
 option(ENABLE_ZEEK_TO_VAST "Build zeek-to-vast" ON)
 option(VAST_STATIC_EXECUTABLE "Link VAST statically")
-option(VAST_NO_ARROW "Build without Apache Arrow" OFF)
-set(BUILD_SHARED_LIBS_DEFAULT ON)
-if (VAST_STATIC_EXECUTABLE)
-  set(BUILD_SHARED_LIBS_DEFAULT OFF)
+cmake_dependent_option(
+  BUILD_SHARED_LIBS "Build shared libraries instead of static" ON
+  "NOT VAST_STATIC_EXECUTABLE" OFF)
+cmake_dependent_option(NO_UNIT_TESTS "Don't build unit tests" OFF
+                       "NOT CMAKE_CROSS_COMPILING" ON)
+cmake_dependent_option(VAST_NO_ARROW "Build without Apache Arrow" OFF
+                       "NOT ${CMAKE_SYSTEM_NAME} STREQUAL \"FreeBSD\"" ON)
+
+# Keep make output sane
+set(CMAKE_VERBOSE_MAKEFILE
+    false
+    CACHE STRING "Show all outputs including compiler lines." FORCE)
+
+# Force colored output for the Ninja generator
+option(VAST_COLOR_NINJA "Enable ANSI-colored output for the Ninja generator."
+       ON)
+if ("${CMAKE_GENERATOR}" STREQUAL "Ninja" AND VAST_COLOR_NINJA)
+  if ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "GNU")
+    add_compile_options(-fdiagnostics-color=always)
+  elseif ("${CMAKE_CXX_COMPILER_ID}" MATCHES "Clang")
+    add_compile_options(-fcolor-diagnostics)
+  endif ()
 endif ()
-option(BUILD_SHARED_LIBS "" ${BUILD_SHARED_LIBS_DEFAULT})
+
 if (VAST_STATIC_EXECUTABLE AND BUILD_SHARED_LIBS)
   message(FATAL_ERROR "Cannot create static binary with dynamic libraries")
-endif ()
-if (CMAKE_CROSS_COMPILING)
-  option(NO_UNIT_TESTS ON)
-else ()
-  option(NO_UNIT_TESTS OFF)
 endif ()
 
 # Silence warning CMP0042
@@ -49,51 +90,12 @@ add_custom_target(
     ${CMAKE_BINARY_DIR}/compile_commands.json
     ${CMAKE_SOURCE_DIR}/compile_commands.json)
 
-set(CMAKE_MODULE_PATH ${CMAKE_CURRENT_SOURCE_DIR}/cmake)
-include(CTest)
-include(Helpers)
-include(MacDependencyPaths)
-
-if (NOT CPack_CMake_INCLUDED)
-  include(CPack)
-endif ()
-include(GNUInstallDirs)
-set(CMAKE_INSTALL_CMAKEDIR
-    "${CMAKE_INSTALL_LIBDIR}/cmake"
-    CACHE PATH "Base directory for installing cmake specific artifacts")
-set(INSTALL_VAST_CMAKEDIR "${CMAKE_INSTALL_CMAKEDIR}/vast")
-
 if (VAST_RELOCATABLE_INSTALL)
   if (APPLE)
     list(APPEND CMAKE_INSTALL_RPATH
                 "@executable_path/../${CMAKE_INSTALL_LIBDIR}")
   else ()
     list(APPEND CMAKE_INSTALL_RPATH "$ORIGIN/../${CMAKE_INSTALL_LIBDIR}")
-  endif ()
-endif ()
-
-# Prohibit in-source builds
-if ("${CMAKE_SOURCE_DIR}" STREQUAL "${CMAKE_BINARY_DIR}")
-  message(
-    FATAL_ERROR
-      "In-source builds are not allowed. Please use "
-      "./configure to choose a build directory and "
-      "initialize the build configuration.")
-endif ()
-
-# Keep make output sane
-set(CMAKE_VERBOSE_MAKEFILE
-    false
-    CACHE STRING "Show all outputs including compiler lines." FORCE)
-
-# Force colored output for the Ninja generator
-option(VAST_COLOR_NINJA "Enable ANSI-colored output for the Ninja generator."
-       ON)
-if ("${CMAKE_GENERATOR}" STREQUAL "Ninja" AND VAST_COLOR_NINJA)
-  if ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "GNU")
-    add_compile_options(-fdiagnostics-color=always)
-  elseif ("${CMAKE_CXX_COMPILER_ID}" MATCHES "Clang")
-    add_compile_options(-fcolor-diagnostics)
   endif ()
 endif ()
 
@@ -209,14 +211,10 @@ if (NOT CMAKE_CXX_FLAGS)
   # Increase maximum number of template instantiations, for all that template-
   # heavy code.
   set(EXTRA_FLAGS "${EXTRA_FLAGS} -ftemplate-backtrace-limit=0")
-  # Ninja doesn't colorize compiler diagnostics by default.
-  if (CMAKE_GENERATOR STREQUAL "Ninja")
-    set(EXTRA_FLAGS "${EXTRA_FLAGS} -fdiagnostics-color")
-  endif ()
   # Relocate debug/file/macro paths to a common prefix for CCache users that
   # work from multiple worktrees.
   set(EXTRA_FLAGS
-    "${EXTRA_FLAGS} -fdebug-prefix-map=${CMAKE_CURRENT_SOURCE_DIR}=.")
+      "${EXTRA_FLAGS} -fdebug-prefix-map=${CMAKE_CURRENT_SOURCE_DIR}=.")
 endif ()
 
 # Enable more (most) warnings when requested by the user.
@@ -676,7 +674,7 @@ if (NOT VAST_NO_ARROW)
       foreach (module ${modules})
         find_package("${module}" REQUIRED QUIET)
         string(APPEND VAST_FIND_DEPENDENCY_LIST
-              "\nfind_package(${module} REQUIRED QUIET)")
+               "\nfind_package(${module} REQUIRED QUIET)")
       endforeach ()
       set(Boost_USE_STATIC_LIBS ON)
       set(Boost_USE_MULTITHREADED ON)
@@ -685,8 +683,10 @@ if (NOT VAST_NO_ARROW)
       unset(Boost_LIBRARY_DIRS CACHE)
       find_package(Boost REQUIRED QUIET COMPONENTS filesystem system regex)
       string(
-        APPEND VAST_FIND_DEPENDENCY_LIST
-        "\nfind_package(Boost REQUIRED QUIET COMPONENTS filesystem system regex)")
+        APPEND
+        VAST_FIND_DEPENDENCY_LIST
+        "\nfind_package(Boost REQUIRED QUIET COMPONENTS filesystem system regex)"
+      )
       set(ARROW_LIBRARIES
           "${ARROW_STATIC_LIB};${PLASMA_STATIC_LIB};double-conversion::double-conversion;uriparser::uriparser;Brotli::brotlienc;Brotli::brotlidec;Brotli::brotlicommon;LZ4::lz4;snappy::snappy;ZLIB::ZLIB;ZSTD::zstd;GLOG::glog;Boost::system;Boost::filesystem;Boost::regex;Threads::Threads"
       )
@@ -859,7 +859,7 @@ endif ()
 # Build Summary
 # ------------------------------------------------------------------------------
 
-macro (display test desc summary)
+macro (display TEST desc summary)
   if (${test})
     set(${summary} ${desc})
   else ()

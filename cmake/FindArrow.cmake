@@ -23,7 +23,9 @@
 include(FindPkgConfig)
 include(GNUInstallDirs)
 
-if ("$ENV{ARROW_HOME}" STREQUAL "")
+if (PKG_CONFIG_FOUND
+    AND "$ENV{ARROW_HOME}" STREQUAL ""
+    AND NOT "${ARROW_HOME}")
   pkg_check_modules(ARROW arrow)
   if (ARROW_FOUND)
     pkg_get_variable(ARROW_SO_VERSION arrow so_version)
@@ -47,16 +49,24 @@ if ("$ENV{ARROW_HOME}" STREQUAL "")
     set(ARROW_SEARCH_LIB_PATH ${ARROW_LIBRARY_DIRS})
   endif ()
 else ()
-  set(ARROW_HOME "$ENV{ARROW_HOME}")
+  if (NOT "${ARROW_HOME}")
+    if (NOT "$ENV{ARROW_HOME}" STREQUAL "")
+      set(ARROW_HOME "$ENV{ARROW_HOME}")
+    else ()
+      if (APPLE)
+        set(ARROW_HOME "/usr/local/opt/apache-arrow")
+      elseif (${CMAKE_SYSTEM_NAME} MATCHES "Linux")
+        set(ARROW_HOME "/usr")
+      endif ()
+    endif ()
+  endif ()
   set(ARROW_SEARCH_HEADER_PATHS ${ARROW_HOME}/include)
   set(ARROW_SEARCH_LIB_PATH ${ARROW_HOME}/lib)
 
   find_path(
     ARROW_INCLUDE_DIR arrow/array.h
-    PATHS
-      ${ARROW_SEARCH_HEADER_PATHS}
-
-      # make sure we don't accidentally pick up a different version
+    PATHS ${ARROW_SEARCH_HEADER_PATHS}
+          # make sure we don't accidentally pick up a different version
     NO_DEFAULT_PATH)
 endif ()
 

@@ -41,7 +41,9 @@ if (ZSTD_ROOT)
 
 else ()
   # Second, find via pkg_check_modules
-  pkg_check_modules(ZSTD_PC libzstd)
+  if (PKG_CONFIG_FOUND)
+    pkg_check_modules(ZSTD_PC libzstd)
+  endif ()
   if (ZSTD_PC_FOUND)
     set(ZSTD_INCLUDE_DIR "${ZSTD_PC_INCLUDEDIR}")
 

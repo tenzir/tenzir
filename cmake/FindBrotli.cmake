@@ -42,32 +42,7 @@ set(BROTLI_DEC_LIB_NAMES
     ${CMAKE_SHARED_LIBRARY_PREFIX}brotlidec${CMAKE_SHARED_LIBRARY_SUFFIX}
     ${CMAKE_STATIC_LIBRARY_PREFIX}brotlidec${CMAKE_STATIC_LIBRARY_SUFFIX})
 
-if (BROTLI_ROOT)
-  find_library(
-    BROTLI_COMMON_LIBRARY
-    NAMES ${BROTLI_COMMON_LIB_NAMES}
-    PATHS ${BROTLI_ROOT}
-    PATH_SUFFIXES ${LIB_PATH_SUFFIXES}
-    NO_DEFAULT_PATH)
-  find_library(
-    BROTLI_ENC_LIBRARY
-    NAMES ${BROTLI_ENC_LIB_NAMES}
-    PATHS ${BROTLI_ROOT}
-    PATH_SUFFIXES ${LIB_PATH_SUFFIXES}
-    NO_DEFAULT_PATH)
-  find_library(
-    BROTLI_DEC_LIBRARY
-    NAMES ${BROTLI_DEC_LIB_NAMES}
-    PATHS ${BROTLI_ROOT}
-    PATH_SUFFIXES ${LIB_PATH_SUFFIXES}
-    NO_DEFAULT_PATH)
-  find_path(
-    BROTLI_INCLUDE_DIR
-    NAMES brotli/decode.h
-    PATHS ${BROTLI_ROOT}
-    PATH_SUFFIXES ${INCLUDE_PATH_SUFFIXES}
-    NO_DEFAULT_PATH)
-else ()
+if (PKG_CONFIG_FOUND AND NOT BROTLI_ROOT)
   pkg_check_modules(BROTLI_PC libbrotlicommon libbrotlienc libbrotlidec)
   if (BROTLI_PC_FOUND)
     set(BROTLI_INCLUDE_DIR "${BROTLI_PC_libbrotlicommon_INCLUDEDIR}")
@@ -114,6 +89,38 @@ else ()
       NAMES brotli/decode.h
       PATH_SUFFIXES ${INCLUDE_PATH_SUFFIXES})
   endif ()
+else ()
+  if (NOT BROTLI_ROOT)
+    if (APPLE)
+      set(BROTLI_ROOT "/usr/local/opt/brotli")
+    else ()
+      set(BROTLI_ROOT "/usr")
+    endif ()
+  endif ()
+  find_library(
+    BROTLI_COMMON_LIBRARY
+    NAMES ${BROTLI_COMMON_LIB_NAMES}
+    PATHS ${BROTLI_ROOT}
+    PATH_SUFFIXES ${LIB_PATH_SUFFIXES}
+    NO_DEFAULT_PATH)
+  find_library(
+    BROTLI_ENC_LIBRARY
+    NAMES ${BROTLI_ENC_LIB_NAMES}
+    PATHS ${BROTLI_ROOT}
+    PATH_SUFFIXES ${LIB_PATH_SUFFIXES}
+    NO_DEFAULT_PATH)
+  find_library(
+    BROTLI_DEC_LIBRARY
+    NAMES ${BROTLI_DEC_LIB_NAMES}
+    PATHS ${BROTLI_ROOT}
+    PATH_SUFFIXES ${LIB_PATH_SUFFIXES}
+    NO_DEFAULT_PATH)
+  find_path(
+    BROTLI_INCLUDE_DIR
+    NAMES brotli/decode.h
+    PATHS ${BROTLI_ROOT}
+    PATH_SUFFIXES ${INCLUDE_PATH_SUFFIXES}
+    NO_DEFAULT_PATH)
 endif ()
 
 find_package_handle_standard_args(

@@ -22,7 +22,9 @@
 
 include(FindPkgConfig)
 
-if ("$ENV{ARROW_HOME}" STREQUAL "")
+if (PKG_CONFIG_FOUND
+    AND "$ENV{ARROW_HOME}" STREQUAL ""
+    AND NOT "${ARROW_HOME}")
   pkg_check_modules(PLASMA plasma)
   if (PLASMA_FOUND)
     pkg_get_variable(PLASMA_EXECUTABLE plasma executable)
@@ -36,7 +38,19 @@ if ("$ENV{ARROW_HOME}" STREQUAL "")
     set(PLASMA_SEARCH_LIB_PATH ${PLASMA_LIBRARY_DIRS})
   endif ()
 else ()
-  set(PLASMA_HOME "$ENV{ARROW_HOME}")
+  if (NOT "${PLASMA_HOME}")
+    if (ARROW_HOME)
+      set(PLAMA_HOME ${ARROW_HOME})
+    elseif (NOT "$ENV{ARROW_HOME}" STREQUAL "")
+      set(PLASMA_HOME "$ENV{ARROW_HOME}")
+    else ()
+      if (APPLE)
+        set(PLASMA_HOME "/usr/local/opt/apache-arrow")
+      elseif (${CMAKE_SYSTEM_NAME} MATCHES "Linux")
+        set(PLASMA_HOME "/usr")
+      endif ()
+    endif ()
+  endif ()
 
   set(PLASMA_EXECUTABLE ${PLASMA_HOME}/bin/plasma-store-server)
 
@@ -46,10 +60,8 @@ else ()
 
   find_path(
     PLASMA_INCLUDE_DIR plasma/client.h
-    PATHS
-      ${PLASMA_SEARCH_HEADER_PATHS}
-
-      # make sure we don't accidentally pick up a different version
+    PATHS ${PLASMA_SEARCH_HEADER_PATHS}
+          # make sure we don't accidentally pick up a different version
     NO_DEFAULT_PATH)
 endif ()
 
