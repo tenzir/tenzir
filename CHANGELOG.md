@@ -10,6 +10,9 @@ Every entry has a category for which we use the following visual abbreviations:
 
 ## [Unreleased]
 
+- 🐞 A race condition in the index logic was able to lead to incomplete or empty
+  result sets for `vast export`. [#703](https://github.com/tenzir/vast/pull/703)
+
 - 🔄 Build configuration defaults have been adapated for a better user
   experience. Installations are now relocatable by default, which can be
   reverted by configuring with `--without-relocatable`. Additionally, new sets
@@ -31,9 +34,9 @@ Every entry has a category for which we use the following visual abbreviations:
   [#633](https://github.com/tenzir/vast/pull/633)
 
 - 🐞 The import process did not print statistics when importing events over UDP.
-  This has been fixed.  Additionally, warnings about dropped UDP packets are no
-  longer shown per packet, but rather periodically reported in a readable
-  format.  [#662](https://github.com/tenzir/vast/pull/662)
+  Additionally, warnings about dropped UDP packets are no longer shown per
+  packet, but rather periodically reported in a readable format.
+  [#662](https://github.com/tenzir/vast/pull/662)
 
 - 🐞 Importing events over UDP with `vast import <format> --listen :<port>/udp`
   failed to register the accountant component. This caused an unexpected
@@ -47,8 +50,8 @@ Every entry has a category for which we use the following visual abbreviations:
   [#650](https://github.com/tenzir/vast/pull/650)
 
 - 🐞 In some cases it was possible that a source would connect to a node before
-  it was fully initialized, resulting in a hanging `vast import` process. The
-  bug has been fixed. [#647](https://github.com/tenzir/vast/pull/647)
+  it was fully initialized, resulting in a hanging `vast import` process.
+  [#647](https://github.com/tenzir/vast/pull/647)
 
 - 🎁 The `import pcap` command now takes an optional snapshot length via
   `--snaplen`.  If the snapshot length is set to snaplen, and snaplen is less
