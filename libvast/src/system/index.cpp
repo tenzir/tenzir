@@ -403,32 +403,44 @@ behavior index(stateful_actor<index_state>* self, const path& dir,
   // simply waits for a worker).
   self->set_default_handler(caf::skip);
   self->state.has_worker.assign(
-    [=](expression& expr) -> result<uuid, uint32_t, uint32_t> {
-      auto& st = self->state;
+    [=](expression& expr) {
+      auto respond = [&](auto&&... xs) {
+        auto mid = self->current_message_id();
+        unsafe_response(self, self->current_sender(), {}, mid.response_id(),
+                        std::forward<decltype(xs)>(xs)...);
+      };
       // Sanity check.
       if (self->current_sender() == nullptr) {
         VAST_ERROR(self, "got an anonymous query (ignored)");
-        return sec::invalid_argument;
+        respond(sec::invalid_argument);
       }
+      auto& st = self->state;
+      auto client = caf::actor_cast<caf::actor>(self->current_sender());
       // Convenience function for dropping out without producing hits. Makes
       // sure that clients always receive a 'done' message.
       auto no_result = [&] {
-        auto client = caf::actor_cast<caf::actor>(self->current_sender());
-        auto rp = self->make_response_promise<uuid, uint32_t, uint32_t>();
-        rp.deliver(uuid::nil(), uint32_t{0}, uint32_t{0});
-        self->send(caf::actor_cast<caf::actor>(client), done_atom::value);
-        return rp;
+        respond(uuid::nil(), uint32_t{0}, uint32_t{0});
+        self->send(client, done_atom::value);
       };
       // Get all potentially matching partitions.
       auto candidates = st.meta_idx.lookup(expr);
       // Report no result if no candidates are found.
       if (candidates.empty()) {
         VAST_DEBUG(self, "returns without result: no partitions qualify");
-        return no_result();
+        no_result();
       }
       // Allows the client to query further results after initial taste.
       auto query_id = uuid::random();
       using ls = index_state::lookup_state;
+      auto hits = candidates.size();
+      auto scheduling = std::min(taste_partitions, hits);
+      // Notify the client that we don't have more hits.
+      if (scheduling == hits)
+        query_id = uuid::nil();
+      respond(query_id, detail::narrow<uint32_t>(hits),
+              detail::narrow<uint32_t>(scheduling));
+      // TODO:
+      // Refactor to avoid inserting into the pending map if we don't have to.
       auto [iter, added] = st.pending.emplace(query_id,
                                               ls{expr, std::move(candidates)});
       VAST_ASSERT(added);
@@ -438,25 +450,18 @@ behavior index(stateful_actor<index_state>* self, const path& dir,
         VAST_ASSERT(iter->second.partitions.empty());
         st.pending.erase(iter);
         VAST_DEBUG(self, "returns without result: no partitions qualify");
-        return no_result();
+        no_result();
       }
       // Delegate to query supervisor (uses up this worker) and report
       // query ID + some stats to the client.
-      auto scheduled = qm.size();
-      size_t hits = iter->second.partitions.size() + scheduled;
-      VAST_DEBUG(self, "schedules", scheduled, "/", hits,
+      VAST_DEBUG(self, "schedules", qm.size(), "/", hits,
                  "partitions for query", iter->first);
-      self->send(st.next_worker(), std::move(expr), std::move(qm),
-                 actor_cast<actor>(self->current_sender()));
+      self->send(st.next_worker(), std::move(expr), std::move(qm), client);
       if (!st.worker_available())
         self->unbecome();
       // Cleanup early if we could exhaust the query with the taste.
-      if (iter->second.partitions.empty()) {
-        query_id = uuid::nil();
+      if (iter->second.partitions.empty())
         st.pending.erase(iter);
-      }
-      return {std::move(query_id), detail::narrow<uint32_t>(hits),
-              detail::narrow<uint32_t>(scheduled)};
     },
     [=](const uuid& query_id, uint32_t num_partitions) {
       auto& st = self->state;
