@@ -81,6 +81,10 @@ struct index_state {
     std::vector<uuid> partitions;
   };
 
+  /// Stores evaluation metadata for pending partitions.
+  using pending_query_map
+    = caf::detail::unordered_flat_map<uuid, evaluation_map>;
+
   /// Accumulates statistics for a given layout.
   struct layout_statistics {
     uint64_t count; ///< Number of events indexed.
@@ -148,12 +152,14 @@ struct index_state {
   ///          partition matches.
   partition* find_unpersisted(const uuid& id);
 
-  /// Locates all INDEXER actors in range [first, last) and spawns one
-  /// evaluator per identified INDEXER set.
+  /// Prepares a subset of partitions from the lookup_state for evaluation.
+  pending_query_map
+  build_query_map(lookup_state& lookup, uint32_t num_partitions);
+
+  /// Spawns one evaluator for each partition.
   /// @returns a query map for passing to INDEX workers over the spawned
   ///          EVALUATOR actors.
-  /// @pre num_partitions > 0
-  query_map launch_evaluators(lookup_state& lookup, uint32_t num_partitions);
+  query_map launch_evaluators(pending_query_map pqm, expression expr);
 
   void send_report();
 
