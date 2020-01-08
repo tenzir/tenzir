@@ -85,4 +85,47 @@ TODO
 
 ### FreeBSD
 
-TODO
+Installation on FreeBSD currently requries a source build because a VAST port
+does not exist (yet).
+
+#### Service Management
+
+FreeBSD uses the [rc(8)][rc] system of startup scripts during system
+initialization and for managing services. VAST ships with an rc script
+(similar to the ones in `/etc/rc.d` and `/usr/local/etc/rc.d`) that allows
+[service(8)][service] to manage a `vast` process with the `start`, `stop`, and
+`restart` options. The rc script uses [daemon(8)][daemon] to manage the `vast`
+process.
+
+The following steps install VAST as a persistent service:
+
+1. Copy the rc script to `/usr/local/etc/rc.d`.
+
+   **Note**: this happens automatically when invoking the `install` target,
+   e.g., via `cmake --build build --target install`.
+
+2. Add the following line to `/etc/rc.conf`:
+
+        vast_enable="YES"
+
+3. Start the service:
+
+        service vast start
+
+   During the first start, the rc script checks whether a `vast` user and
+   group exist already. These are necessary so that [daemon(8)][daemon] can
+   start VAST in an unprivileged context.
+
+You can now verify that [daemon(8)][daemon] brought the `vast` process up:
+
+    service vast status
+
+For more fine-grained information about the running VAST instance, you can use
+VAST's builtin `status` command:
+
+    vast status
+
+
+[rc]: https://www.freebsd.org/cgi/man.cgi?query=rc&sektion=8
+[service]: https://www.freebsd.org/cgi/man.cgi?query=service&sektion=8
+[daemon]: https://www.freebsd.org/cgi/man.cgi?query=daemon&sektion=8
