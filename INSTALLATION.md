@@ -59,12 +59,12 @@ TODO
 
 A current version of VAST can be installed using Homebrew.
 
-Install VAST from tenzir/tenzir tap (current master):
+Install the *current master* from tenzir/tenzir tap:
 ```sh
 brew install --HEAD tenzir/tenzir/vast
 ```
 
-Install VAST from tenzir/tenzir tap (current release):
+Install the *latest release* from tenzir/tenzir tap:
 ```sh
 brew install tenzir/tenzir/vast
 ```
