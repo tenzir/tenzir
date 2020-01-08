@@ -431,7 +431,6 @@ behavior index(stateful_actor<index_state>* self, const path& dir,
       }
       // Allows the client to query further results after initial taste.
       auto query_id = uuid::random();
-      using ls = index_state::lookup_state;
       auto hits = candidates.size();
       auto scheduling = std::min(taste_partitions, hits);
       // Notify the client that we don't have more hits.
@@ -439,29 +438,25 @@ behavior index(stateful_actor<index_state>* self, const path& dir,
         query_id = uuid::nil();
       respond(query_id, detail::narrow<uint32_t>(hits),
               detail::narrow<uint32_t>(scheduling));
-      // TODO:
-      // Refactor to avoid inserting into the pending map if we don't have to.
-      auto [iter, added] = st.pending.emplace(query_id,
-                                              ls{expr, std::move(candidates)});
-      VAST_ASSERT(added);
-      VAST_IGNORE_UNUSED(added);
-      auto qm = st.launch_evaluators(iter->second, st.taste_partitions);
+      auto lookup = index_state::lookup_state{expr, std::move(candidates)};
+      auto qm = st.launch_evaluators(lookup, st.taste_partitions);
       if (qm.empty()) {
-        VAST_ASSERT(iter->second.partitions.empty());
-        st.pending.erase(iter);
+        VAST_ASSERT(lookup.partitions.empty());
         VAST_DEBUG(self, "returns without result: no partitions qualify");
         no_result();
       }
+      VAST_DEBUG(self, "scheduled", qm.size(), "/", hits,
+                 "partitions for query", expr);
+      if (!lookup.partitions.empty()) {
+        [[maybe_unused]] auto result
+          = st.pending.emplace(query_id, std::move(lookup));
+        VAST_ASSERT(result.second);
+      }
       // Delegate to query supervisor (uses up this worker) and report
       // query ID + some stats to the client.
-      VAST_DEBUG(self, "schedules", qm.size(), "/", hits,
-                 "partitions for query", iter->first);
       self->send(st.next_worker(), std::move(expr), std::move(qm), client);
       if (!st.worker_available())
         self->unbecome();
-      // Cleanup early if we could exhaust the query with the taste.
-      if (iter->second.partitions.empty())
-        st.pending.erase(iter);
     },
     [=](const uuid& query_id, uint32_t num_partitions) {
       auto& st = self->state;
