@@ -174,6 +174,18 @@ struct view_trait<data> {
   using type = data_view;
 };
 
+// -- operators ----------------------------------------------------------------
+
+// FIXME: we cannot use operator == and != here because data has a non-explicit
+// constructor, which results in error all over the code base. Therefore, we
+// work around this by giving this function a name.
+
+bool is_equal(const data& x, const data_view& y);
+
+bool is_equal(const data_view& x, const data& y);
+
+// -- containers ---------------------------------------------------------------
+
 template <class T>
 struct container_view;
 
@@ -419,6 +431,8 @@ public:
 private:
   const map& xs_;
 };
+
+// -- factories ----------------------------------------------------------------
 
 /// Creates a view from a specific type.
 /// @relates view_trait

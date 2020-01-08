@@ -13,11 +13,12 @@
 
 #include "vast/view.hpp"
 
-#include <regex>
-
 #include "vast/detail/narrow.hpp"
 #include "vast/detail/overload.hpp"
 #include "vast/type.hpp"
+
+#include <algorithm>
+#include <regex>
 
 namespace vast {
 
@@ -51,6 +52,40 @@ bool operator==(pattern_view x, pattern_view y) noexcept {
 
 bool operator<(pattern_view x, pattern_view y) noexcept {
   return x.string() < y.string();
+}
+
+bool is_equal(const data& x, const data_view& y) {
+  auto pred
+    = [](const auto& lhs, const auto& rhs) { return is_equal(lhs, rhs); };
+  auto f = detail::overload(
+    [&](const auto& lhs, const auto& rhs) {
+      using lhs_type = std::decay_t<decltype(lhs)>;
+      using rhs_type = std::decay_t<decltype(rhs)>;
+      if constexpr (std::is_same_v<view<lhs_type>, rhs_type>)
+        return lhs == rhs;
+      else
+        return false;
+    },
+    [&](const pattern& lhs, const view<pattern>& rhs) {
+      return lhs.string() == rhs.string();
+    },
+    [&](const vector& lhs, const view<vector>& rhs) {
+      return std::equal(lhs.begin(), lhs.end(), rhs.begin(), rhs.end(), pred);
+    },
+    [&](const set& lhs, const view<set>& rhs) {
+      return std::equal(lhs.begin(), lhs.end(), rhs.begin(), rhs.end(), pred);
+    },
+    [&](const map& lhs, const view<map>& rhs) {
+      auto f = [](const auto& xs, const auto& ys) {
+        return is_equal(xs.first, ys.first) && is_equal(xs.second, ys.second);
+      };
+      return std::equal(lhs.begin(), lhs.end(), rhs.begin(), rhs.end(), f);
+    });
+  return caf::visit(f, x, y);
+}
+
+bool is_equal(const data_view& x, const data& y) {
+  return is_equal(y, x);
 }
 
 // -- default_vector_view -----------------------------------------------------
