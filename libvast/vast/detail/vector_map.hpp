@@ -225,13 +225,15 @@ public:
     return x.xs_ == y.xs_;
   }
 
-  explicit operator const vector_type() const {
-    return xs_;
-  }
+  // -- non-standard API -----------------------------------------------------
 
   template <class Inspector>
   friend auto inspect(Inspector&f, vector_map& xs) {
     return f(xs.xs_);
+  }
+
+  friend const vector_type& as_vector(const vector_map& xs) {
+    return xs.xs_;
   }
 
 private:

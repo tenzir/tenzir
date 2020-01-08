@@ -384,7 +384,7 @@ operator()(const key_extractor& ex, const data& d) {
       connective.emplace_back(predicate{std::move(x), op_, d});
     }
   // Second, try to interpret the key as the name of a single type.
-  } else if (ex.key[0] == type_.name()) {
+  } else if (ex.key == type_.name()) {
     if (!compatible(type_, op_, d))
       return make_error(ec::type_clash, type_, op_, d);
     auto x = data_extractor{type_, {}};

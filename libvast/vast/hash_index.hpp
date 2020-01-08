@@ -17,6 +17,7 @@
 #include "vast/concept/hashable/xxhash.hpp"
 #include "vast/data.hpp"
 #include "vast/detail/assert.hpp"
+#include "vast/detail/steady_map.hpp"
 #include "vast/detail/type_traits.hpp"
 #include "vast/value_index.hpp"
 #include "vast/view.hpp"
@@ -26,11 +27,11 @@
 #include <caf/optional.hpp>
 #include <caf/serializer.hpp>
 
+#include <algorithm>
 #include <array>
 #include <cstring>
 #include <string>
 #include <type_traits>
-#include <unordered_map>
 #include <unordered_set>
 #include <vector>
 
@@ -129,6 +130,13 @@ private:
     }
   };
 
+  // TODO: remove this function as of C++20.
+  auto find_seed(data_view x) const {
+    auto pred = [&](const auto& xs) { return is_equal(xs.first, x); };
+    auto& xs = as_vector(seeds_);
+    return std::find_if(xs.begin(), xs.end(), pred);
+  }
+
   // Retrieves the unique digest for a given input or generates a new one.
   caf::optional<key> make_digest(data_view x) {
     size_t i = 0;
@@ -147,9 +155,7 @@ private:
       };
       // If we have seen the digest, check whether we also have a known
       // preimage.
-      // FIXME: do not materialize every time, but this requires the ability to
-      // use key equivalence (C++20).
-      if (auto it = seeds_.find(materialize(x)); it != seeds_.end())
+      if (auto it = find_seed(x); it != seeds_.end())
         return key{hash(x, it->second)};
       // Try the next hash function.
       ++i;
@@ -159,8 +165,7 @@ private:
 
   /// Locates the digest for a given input.
   key find_digest(data_view x) const {
-    // FIXME: see above note on materialization.
-    auto i = seeds_.find(materialize(x));
+    auto i = find_seed(x);
     return key{i != seeds_.end() ? hash(x, i->second) : hash(x, 0)};
   }
 
@@ -242,7 +247,10 @@ private:
 
   std::vector<digest_type> digests_;
   std::unordered_set<key, key_hasher> unique_digests_;
-  std::unordered_map<data, size_t> seeds_;
+
+  // TODO: Once we can use C++20 and have a standard library that implements
+  // key equivalcne properly, we can switch to std::unordered_map.
+  detail::steady_map<data, size_t> seeds_;
 };
 
 } // namespace vast
