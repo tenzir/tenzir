@@ -16,7 +16,7 @@ jobs:
         ref: ${{ github.ref }}
     - uses: actions/setup-python@v1
       with:
-        python-version: '3.8'
+        python-version: '3.7'
 
     - name: Clang Format
       run: |
@@ -41,16 +41,30 @@ jobs:
         git diff --exit-code
 
   build:
-    name: Build
+    name: ${{ matrix.os.tag }} ${{ matrix.configure.tag }}
     needs: style
     strategy:
       matrix:
-        os: [macos-latest, ubuntu-latest]
-        configure: ["--release", "--debug"]
-    runs-on: ${{ matrix.os }}
+        os:
+        - tag: macOS
+          name: macos-latest
+          cc: clang
+          cxx: clang++
+          extra-flags:
+        - tag: Ubuntu
+          name: ubuntu-latest
+          cc: gcc-8
+          cxx: g++-8
+          extra-flags: --without-arrow
+        configure:
+        - tag: Release
+          flags: --release
+        - tag: Debug
+          flags: --debug
+    runs-on: ${{ matrix.os.name }}
     env:
-      CC: ${{ matrix.os == 'macos-latest' && 'clang' || 'gcc-8' }}
-      CXX: ${{ matrix.os == 'macos-latest' && 'clang++' || 'g++-8' }}
+      CC: ${{ matrix.os.cc }}
+      CXX: ${{ matrix.os.cxx }}
       BUILD_DIR: build
     steps:
       - uses: actions/checkout@v1
@@ -59,7 +73,7 @@ jobs:
           ref: ${{ github.ref }}
       - uses: actions/setup-python@v1
         with:
-          python-version: "3.8"
+          python-version: '3.7'
 
       - name: Configure AWS Credentials
         uses: aws-actions/configure-aws-credentials@v1
@@ -69,7 +83,7 @@ jobs:
           aws-region: eu-central-1
 
       - name: Install Ubuntu Dependencies
-        if: matrix.os == 'ubuntu-latest'
+        if: matrix.os.tag == 'Ubuntu'
         run: |
           sudo apt-get -qq update && sudo apt-get -qqy install \
           gcc-8 g++-8 ninja-build libbenchmark-dev libpcap-dev libssl-dev \
@@ -80,14 +94,19 @@ jobs:
           cmake --version
 
       - name: Install macOS Dependencies
-        if: matrix.os == 'macos-latest'
+        if: matrix.os.tag == 'macOS'
+        env:
+          HOMEBREW_GITHUB_API_TOKEN: ${{ github.token }}
+          HOMEBREW_NO_ANALYTICS: 1
+          HOMEBREW_NO_INSTALL_CLEANUP: 1
+          HOMEBREW_NO_AUTO_UPDATE: 1
         run: |
-          brew install openssl cmake git ninja python libpcap jq tcpdump rsync pandoc apache-arrow awscli
+          brew install openssl cmake git ninja python libpcap jq tcpdump rsync pandoc apache-arrow awscli pkg-config
 
       - name: Configure Environment
         id: configure_env
         run: |
-          PACKAGE_NAME="$(echo "vast-$(git describe)-$(uname -s)-${{ matrix.configure == '' && 'Release' || 'Debug' }}" | awk '{ print tolower($0) }')"
+          PACKAGE_NAME="$(echo "vast-$(git describe)-$(uname -s)-${{ matrix.configure.tag }}" | awk '{ print tolower($0) }')"
           BUILD_DIR="build"
           ## the upload artifact action cannot resolve environment variables
           echo "::set-output name=package_name::$PACKAGE_NAME"
@@ -97,7 +116,8 @@ jobs:
 
       - name: Configure
         run: |
-          python3 --version
+          python --version
+          pip --version
           "$CC" --version
           "$CXX" --version
           ./configure \
@@ -105,8 +125,8 @@ jobs:
             --prefix="${PWD}/opt/vast" \
             --build-dir="$BUILD_DIR" \
             --package-name="$PACKAGE_NAME" \
-            ${{ matrix.os == 'macos-latest' && '' || '--without-arrow' }} \
-            ${{ matrix.configure }}
+            ${{ matrix.os.extra-flags }} \
+            ${{ matrix.configure.flags }}
 
       - name: Compile All Targets
         run: |
