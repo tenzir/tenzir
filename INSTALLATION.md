@@ -81,7 +81,22 @@ docker run -dt --name=vast --rm -p 42000:42000 -v /var/db/vast:/data tenzir/vast
 
 ### macOS
 
-TODO
+A current version of VAST can be installed using Homebrew.
+
+Install the *current master* from tenzir/tenzir tap:
+```sh
+brew install --HEAD tenzir/tenzir/vast
+```
+
+Install the *latest release* from tenzir/tenzir tap:
+```sh
+brew install tenzir/tenzir/vast
+```
+
+Run VAST server as a launchd service:
+```sh
+brew services start vast
+```
 
 ### FreeBSD
 
