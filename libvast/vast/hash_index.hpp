@@ -48,8 +48,16 @@ namespace vast {
 /// to append further values when deserializing an existing index.
 template <size_t Bytes>
 class hash_index : public value_index {
-  static_assert(Bytes > 0);
-  static_assert(Bytes <= 8);
+  static_assert(Bytes > 0, "cannot use 0 bytes to store a digest");
+
+  // We're chopping off the actual hash digest such that it fits into a 64-bit
+  // integeger. Hence, we do not support more than 8 bytes at this point. This
+  // is not a fundamental limitation, but we don't need more than 8 bytes
+  // either. The reason is that 64 bits allow this index to store sqrt(2^64) =
+  // 2^32 unique values before collisions are expected. In other words, 64 bits
+  // support ~4B unique values efficiently, which is roughly an order of
+  // magnitude less than our typical partition size.
+  static_assert(Bytes <= 8, "digests > 8 bytes not supported");
 
   /// The maximum number of hash rounds to try to find a new digest.
   static constexpr size_t max_hash_rounds = 32;
@@ -58,7 +66,7 @@ public:
   using hasher_type = xxhash64;
   using digest_type = std::array<byte, Bytes>;
 
-  static_assert(sizeof(hasher_type::result_type) >= sizeof(digest_type),
+  static_assert(sizeof(hasher_type::result_type) >= Bytes,
                 "number of chosen bytes exceeds underlying digest size");
 
   /// Computes a chopped digest from arbitrary data.
