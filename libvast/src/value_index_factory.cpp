@@ -13,7 +13,6 @@
 
 #include "vast/value_index_factory.hpp"
 
-#include "vast/attribute.hpp"
 #include "vast/base.hpp"
 #include "vast/concept/parseable/numeric/integral.hpp"
 #include "vast/concept/parseable/to.hpp"
