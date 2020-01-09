@@ -139,8 +139,7 @@ private:
 
   // Retrieves the unique digest for a given input or generates a new one.
   caf::optional<key> make_digest(data_view x) {
-    size_t i = 0;
-    do {
+    for (size_t i = 0; i < max_hash_rounds; ++i) {
       // Compute a hash digest.
       auto digest = hash(x, i);
       auto k = key{digest};
@@ -157,9 +156,7 @@ private:
       // preimage.
       if (auto it = find_seed(x); it != seeds_.end())
         return key{hash(x, it->second)};
-      // Try the next hash function.
-      ++i;
-    } while (i < max_hash_rounds);
+    }
     return caf::none;
   }
 
