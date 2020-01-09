@@ -246,7 +246,7 @@ private:
   std::unordered_set<key, key_hasher> unique_digests_;
 
   // TODO: Once we can use C++20 and have a standard library that implements
-  // key equivalcne properly, we can switch to std::unordered_map.
+  // key equivalence properly, we can switch to std::unordered_map.
   detail::steady_map<data, size_t> seeds_;
 };
 

@@ -176,7 +176,7 @@ struct view_trait<data> {
 
 // -- operators ----------------------------------------------------------------
 
-// FIXME: we cannot use operator == and != here because data has a non-explicit
+// TODO: we cannot use operator == and != here because data has a non-explicit
 // constructor, which results in error all over the code base. Therefore, we
 // work around this by giving this function a name.
 

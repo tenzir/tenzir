@@ -98,7 +98,7 @@ private:
   virtual caf::expected<ids>
   lookup_impl(relational_operator op, data_view x) const = 0;
 
-  ewah_bitmap mask_;      ///< The position of all values, including nil.
+  ewah_bitmap mask_;      ///< The position of all values excluding nil.
   ewah_bitmap none_;      ///< The positions of nil values.
   const vast::type type_; ///< The type of this value index.
 };

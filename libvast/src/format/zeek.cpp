@@ -461,7 +461,7 @@ caf::error reader::parse_header() {
                std::distance(layout_.fields.begin(), i), "as event timestamp");
     i->type.attributes({{"timestamp"}});
   }
-  // Add #index=hash attributefor fields where it makes sense.
+  // Add #index=hash attribute for fields where it makes sense.
   add_hash_index_attribute(layout_);
   // After having modified layout attributes, we no longer make changes to the
   // type and can now safely copy it.
