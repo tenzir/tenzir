@@ -102,19 +102,19 @@ struct zeek_type_printer {
     return kind(x);
   }
 
-  std::string operator()(const real_type&) {
+  std::string operator()(const real_type&) const {
     return "double";
   }
 
-  std::string operator()(const time_type&) {
+  std::string operator()(const time_type&) const {
     return "time";
   }
 
-  std::string operator()(const duration_type&) {
+  std::string operator()(const duration_type&) const {
     return "interval";
   }
 
-  std::string operator()(const address_type&) {
+  std::string operator()(const address_type&) const {
     return "addr";
   }
 
