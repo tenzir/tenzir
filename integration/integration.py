@@ -290,7 +290,7 @@ class Server:
         **kwargs,
     ):
         self.app = app
-        self.config_arg = f"--config-file={config_file}"
+        self.config_arg = f"--config={config_file}"
         self.name = name
         self.cwd = work_dir / self.name
         self.port = port
@@ -392,7 +392,7 @@ class Tester:
         fixture = dummy_fixture if not test.fixture else self.fixtures.get(test.fixture)
         cmd = [self.cmd]
         if self.config_file:
-            cmd.append(f"--config-file={self.config_file}")
+            cmd.append(f"--config={self.config_file}")
         fenter = Template(fixture.enter).substitute(locals())
         fexit = Template(fixture.exit).substitute(locals())
         # Invoke test.

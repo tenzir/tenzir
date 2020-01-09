@@ -91,10 +91,19 @@ caf::error configuration::parse(int argc, char** argv) {
   VAST_ASSERT(argc > 0);
   VAST_ASSERT(argv != nullptr);
   command_line.assign(argv + 1, argv + argc);
+  // We need to convert our config file option to the format caf expects,
+  // e.g. "--config-file=<path>".
+  auto shortconfig = std::find(command_line.begin(), command_line.end(), "-c");
+  if (shortconfig != command_line.end()
+      && std::next(shortconfig) != command_line.end()) {
+    auto path = std::next(shortconfig);
+    *shortconfig = "--config=" + *path;
+    command_line.erase(path, std::next(path));
+  }
   // Move CAF options to the end of the command line, parse them, and then
   // remove them.
   auto is_vast_opt = [](auto& x) {
-    return !(starts_with(x, "--caf#") || starts_with(x, "--config-file"));
+    return !(starts_with(x, "--caf#") || starts_with(x, "--config="));
   };
   auto caf_opt = std::stable_partition(command_line.begin(),
                                        command_line.end(), is_vast_opt);
@@ -102,9 +111,12 @@ caf::error configuration::parse(int argc, char** argv) {
   std::move(caf_opt, command_line.end(), std::back_inserter(caf_args));
   command_line.erase(caf_opt, command_line.end());
   // Remove caf# prefix for CAF parser.
-  for (auto& arg : caf_args)
+  for (auto& arg : caf_args) {
     if (starts_with(arg, "--caf#"))
       arg.erase(2, 4);
+    if (starts_with(arg, "--config="))
+      arg.replace(8, 0, "-file");
+  }
   return actor_system_config::parse(std::move(caf_args));
 }
 
