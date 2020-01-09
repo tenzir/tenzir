@@ -3,7 +3,7 @@
 #path	dns
 #separator 	
 #set_separator	,
-#types	time	string	addr	port	addr	port	string	count	string	count	string	count	string	count	string	bool	bool	bool	bool	count	vector[string]	vector[duration]	bool
+#types	time	string	addr	port	addr	port	string	count	string	count	string	count	string	count	string	bool	bool	bool	bool	count	vector[string]	vector[interval]	bool
 #unset_field	-
 1258595263.846715	ZkQj2rioZO8	192.168.1.1	137	192.168.1.104	137	udp	32812	-	-	-	-	-	-	-	F	F	F	F	0	-	-	F
 1258595988.322488	QI0zlQ5bASk	192.168.1.1	137	192.168.1.104	137	udp	32821	-	-	-	-	-	-	-	F	F	F	F	0	-	-	F
