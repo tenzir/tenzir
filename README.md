@@ -17,6 +17,7 @@ The network telemetry engine for data-driven security investigations.
 [![License][license-badge]][license-url]
 
 [_Getting Started_](#getting-started) &mdash;
+[_Installation_][installation-url] &mdash;
 [_Documentation_][docs] &mdash;
 [_Development_][contributing-url] &mdash;
 [_Changelog_][changelog-url] &mdash;
