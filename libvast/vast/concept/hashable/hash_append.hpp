@@ -193,17 +193,21 @@ template <class Hasher, class T, size_t N>
 std::enable_if_t<!detail::is_contiguously_hashable<T, Hasher>{}>
 hash_append(Hasher& h, T (&a)[N]) noexcept;
 
-template <class Hasher, class CharT, class Traits, class Alloc>
+template <class Hasher, class CharT, class Traits>
 std::enable_if_t<!detail::is_contiguously_hashable<CharT, Hasher>{}>
-hash_append(Hasher& h, const std::basic_string<CharT, Traits, Alloc>& s) noexcept;
+hash_append(Hasher& h, std::basic_string_view<CharT, Traits> s) noexcept;
+
+template <class Hasher, class CharT, class Traits>
+std::enable_if_t<detail::is_contiguously_hashable<CharT, Hasher>{}>
+hash_append(Hasher& h, std::basic_string_view<CharT, Traits> s) noexcept;
 
 template <class Hasher, class CharT, class Traits, class Alloc>
-std::enable_if_t<detail::is_contiguously_hashable<CharT, Hasher>{}>
-hash_append(Hasher& h, const std::basic_string<CharT, Traits, Alloc>& s) noexcept;
+void hash_append(Hasher& h,
+                 const std::basic_string<CharT, Traits, Alloc>& s) noexcept;
 
 template <class Hasher, class T, class U>
 std::enable_if_t<!detail::is_contiguously_hashable<std::pair<T, U>, Hasher>{}>
-hash_append (Hasher& h, const std::pair<T, U>& p) noexcept;
+hash_append(Hasher& h, const std::pair<T, U>& p) noexcept;
 
 template <class Hasher, class T, size_t N>
 std::enable_if_t<!detail::is_contiguously_hashable<std::array<T, N>, Hasher>{}>
@@ -249,21 +253,25 @@ hash_append(Hasher& h, T (&a)[N]) noexcept {
 
 // -- string ------------------------------------------------------------------
 
-template <class Hasher, class CharT, class Traits, class Alloc>
-std::enable_if_t<!detail::is_contiguously_hashable<CharT, Hasher>{} >
-hash_append(Hasher& h,
-            const std::basic_string<CharT, Traits, Alloc>& s) noexcept {
+template <class Hasher, class CharT, class Traits>
+std::enable_if_t<!detail::is_contiguously_hashable<CharT, Hasher>{}>
+hash_append(Hasher& h, std::basic_string_view<CharT, Traits> s) noexcept {
   for (auto c : s)
     hash_append(h, c);
   hash_append(h, s.size());
 }
 
-template <class Hasher, class CharT, class Traits, class Alloc>
+template <class Hasher, class CharT, class Traits>
 std::enable_if_t<detail::is_contiguously_hashable<CharT, Hasher>{}>
-hash_append(Hasher& h,
-            const std::basic_string<CharT, Traits, Alloc>& s) noexcept {
+hash_append(Hasher& h, std::basic_string_view<CharT, Traits> s) noexcept {
   h(s.data(), s.size() * sizeof(CharT));
   hash_append(h, s.size());
+}
+
+template <class Hasher, class CharT, class Traits, class Alloc>
+void hash_append(Hasher& h,
+                 const std::basic_string<CharT, Traits, Alloc>& s) noexcept {
+  hash_append(h, std::basic_string_view<CharT, Traits>{s});
 }
 
 // -- pair --------------------------------------------------------------------

@@ -13,33 +13,37 @@
 
 #include "vast/value_index_factory.hpp"
 
-#include <caf/optional.hpp>
-
-#include "vast/attribute.hpp"
 #include "vast/base.hpp"
 #include "vast/concept/parseable/numeric/integral.hpp"
 #include "vast/concept/parseable/to.hpp"
 #include "vast/concept/parseable/vast/base.hpp"
 #include "vast/detail/type_traits.hpp"
+#include "vast/hash_index.hpp"
 #include "vast/type.hpp"
 #include "vast/value_index.hpp"
+
+#include <caf/optional.hpp>
+
+using namespace std::string_view_literals;
 
 namespace vast {
 namespace {
 
 template <class T>
 size_t extract_max_size(const T& x, size_t default_value = 1024) {
-  if (auto a = extract_attribute(x, "max_size"))
-    if (auto max_size = to<size_t>(*a))
-      return *max_size;
+  if (auto a = find_attribute(x, "max_size"))
+    if (auto value = a->value)
+      if (auto max_size = to<size_t>(*value))
+        return *max_size;
   return default_value;
 }
 
 template <class T>
 optional<base> parse_base(const T& x) {
-  if (auto a = extract_attribute(x, "base")) {
-    if (auto b = to<base>(*a))
-      return *b;
+  if (auto a = find_attribute(x, "base")) {
+    if (auto value = a->value)
+      if (auto b = to<base>(*value))
+        return *b;
     return {};
   }
   // Use base 8 by default, as it yields the best performance on average for
@@ -73,6 +77,21 @@ auto add_arithmetic_index_factory() {
   return factory<value_index>::add(T{}, make_arithmetic<T>);
 }
 
+auto add_string_index_factory() {
+  static auto f = [](type x) -> value_index_ptr {
+    if (auto a = find_attribute(x, "index"))
+      if (auto value = a->value)
+        if (*value == "hash"sv)
+          // TODO: make the number of hash digest bytes configurable. At this
+          // point we use 40 bits, which produces collisions after ~2^20
+          // elements.
+          return std::make_unique<hash_index<5>>(std::move(x));
+    auto max_size = extract_max_size(x);
+    return std::make_unique<string_index>(std::move(x), max_size);
+  };
+  return factory<value_index>::add(string_type{}, f);
+}
+
 template <class T, class Index>
 auto add_container_index_factory() {
   static auto f = [](type x) -> value_index_ptr {
@@ -95,7 +114,7 @@ void factory_traits<value_index>::initialize() {
   add_value_index_factory<address_type, address_index>();
   add_value_index_factory<subnet_type, subnet_index>();
   add_value_index_factory<port_type, port_index>();
-  add_container_index_factory<string_type, string_index>();
+  add_string_index_factory();
   add_container_index_factory<vector_type, sequence_index>();
   add_container_index_factory<set_type, sequence_index>();
 }

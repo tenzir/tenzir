@@ -99,19 +99,23 @@ caf::expected<type> parse_type(std::string_view zeek_type) {
 struct zeek_type_printer {
   template <class T>
   std::string operator()(const T& x) const {
-    return to_string(x);
+    return kind(x);
   }
 
-  std::string operator()(const real_type&) {
+  std::string operator()(const real_type&) const {
     return "double";
   }
 
-  std::string operator()(const time_type&) {
+  std::string operator()(const time_type&) const {
     return "time";
   }
 
-  std::string operator()(const duration_type&) {
+  std::string operator()(const duration_type&) const {
     return "interval";
+  }
+
+  std::string operator()(const address_type&) const {
+    return "addr";
   }
 
   std::string operator()(const vector_type& t) const {
@@ -165,6 +169,24 @@ void print_header(const type& t, std::ostream& out) {
   for (auto& e : record_type::each{r})
     out << separator << to_zeek_string(e.trace.back()->type);
   out << '\n';
+}
+
+void add_hash_index_attribute(record_type& layout) {
+  // TODO: do more than this simple heuristic. For example, also consider
+  // zeek.files.conn_uids, which is a set of strings. The inner index needs to
+  // have the #index=hash tag. There are a lot more cases that we need to
+  // consider, such as zeek.x509.id (instead of uid).
+  auto pred = [&](auto& field) {
+    return caf::holds_alternative<string_type>(field.type)
+           && (field.name == "uid" || field.name == "fuid"
+               || field.name == "community_id");
+  };
+  auto& fields = layout.fields;
+  auto find = [&](auto i) { return std::find_if(i, fields.end(), pred); };
+  for (auto i = find(fields.begin()); i != fields.end(); i = find(i + 1)) {
+    VAST_DEBUG_ANON("using hash index for field", i->name);
+    i->type.attributes({{"index", "hash"}});
+  }
 }
 
 } // namespace
@@ -439,6 +461,8 @@ caf::error reader::parse_header() {
                std::distance(layout_.fields.begin(), i), "as event timestamp");
     i->type.attributes({{"timestamp"}});
   }
+  // Add #index=hash attribute for fields where it makes sense.
+  add_hash_index_attribute(layout_);
   // After having modified layout attributes, we no longer make changes to the
   // type and can now safely copy it.
   type_ = layout_;

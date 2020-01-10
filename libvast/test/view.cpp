@@ -133,6 +133,22 @@ TEST(make_data_view) {
   CHECK_EQUAL(xs, materialize(v));
 }
 
+TEST(comparison with data) {
+  auto x = data{true};
+  auto y = make_view(x);
+  CHECK(is_equal(x, y));
+  CHECK(is_equal(y, x));
+  y = make_data_view(false);
+  CHECK(!is_equal(x, y));
+  y = caf::none;
+  CHECK(!is_equal(x, y));
+  x = caf::none;
+  CHECK(is_equal(x, y));
+  x = set{1, "foo", 4.2};
+  y = make_view(x);
+  CHECK(is_equal(x, y));
+}
+
 TEST(increment decrement container_view_iterator) {
   auto xs = vector{42, true, "foo", 4.2};
   auto v = make_view(xs);

@@ -274,6 +274,7 @@ set(tests
     test/format/writer.cpp
     test/format/zeek.cpp
     test/hash.cpp
+    test/hash_index.cpp
     test/http.cpp
     test/ids.cpp
     test/iterator.cpp
