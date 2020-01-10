@@ -15,6 +15,10 @@ Every entry has a category for which we use the following visual abbreviations:
   was removed from the allowed characters of schema type names.
   [#706](https://github.com/tenzir/vast/pull/706
 
+- 🐞 The example configuration file contained an invalid section `vast`.
+   This has been changed to the correct name `system`.
+  [#705](https://github.com/tenzir/vast/pull/705
+
 - 🎁 When a record field of type `string` has the `#index=hash` attribute,
   VAST will choose an optimized index implementation. This new index type only
   supports (in)equality queries and is therefore intended to be used with
