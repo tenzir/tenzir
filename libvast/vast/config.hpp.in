@@ -23,7 +23,8 @@
 #  define VAST_DIAGNOSTIC_IGNORE_DEPRECATED                                 \
      _Pragma("clang diagnostic ignored \"-Wdeprecated\"")
 #  define VAST_DIAGNOSTIC_IGNORE_VLA_EXTENSION                              \
-     _Pragma("clang diagnostic ignored \"-Wvla-extension\"")
+     _Pragma("clang diagnostic ignored \"-Wvla-extension\"")                \
+     _Pragma("clang diagnostic ignored \"-Wgnu-folding-constant\"")
 #elif defined(CAF_GCC)
 #  define VAST_GCC
 #  define VAST_DIAGNOSTIC_PUSH  _Pragma("GCC diagnostic push")

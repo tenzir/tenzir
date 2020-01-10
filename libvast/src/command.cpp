@@ -452,8 +452,11 @@ caf::expected<caf::message>
 run(const command::invocation& invocation, caf::actor_system& sys,
     const command::factory& fact) {
   if (auto search_result = fact.find(invocation.full_name);
-      search_result != fact.end())
-    return std::invoke(search_result->second, invocation, sys);
+      search_result != fact.end()) {
+    auto merged_invocation = invocation;
+    merged_invocation.options = content(sys.config());
+    return std::invoke(search_result->second, merged_invocation, sys);
+  }
   // No callback was registered for this command
   return make_error(ec::missing_subcommand, invocation.full_name, "");
 }
