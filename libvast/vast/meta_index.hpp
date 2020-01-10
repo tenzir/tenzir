@@ -46,7 +46,7 @@ public:
 
   /// Gets the options for the synopsis factory.
   /// @returns A reference to the synopsis options.
-  synopsis_options& factory_options();
+  options& factory_options();
 
   // -- concepts ---------------------------------------------------------------
 
@@ -68,7 +68,7 @@ private:
   std::unordered_map<uuid, partition_synopsis> partition_synopses_;
 
   /// The factory function to construct a synopsis structure for a type.
-  synopsis_options synopsis_options_;
+  options synopsis_options_;
 };
 
 } // namespace vast

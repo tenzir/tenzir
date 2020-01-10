@@ -40,7 +40,7 @@ TEST(min-max synopsis) {
   using vast::time;
   using namespace nft;
   factory<synopsis>::initialize();
-  auto x = factory<synopsis>::make(time_type{}, synopsis_options{});
+  auto x = factory<synopsis>::make(time_type{}, options{});
   REQUIRE_NOT_EQUAL(x, nullptr);
   x->add(time{epoch + 4s});
   x->add(time{epoch + 7s});
@@ -86,10 +86,9 @@ FIXTURE_SCOPE(synopsis_tests, fixtures::deterministic_actor_system)
 
 TEST(serialization) {
   factory<synopsis>::initialize();
-  synopsis_options empty;
   CHECK_ROUNDTRIP(synopsis_ptr{});
-  CHECK_ROUNDTRIP_DEREF(factory<synopsis>::make(bool_type{}, empty));
-  CHECK_ROUNDTRIP_DEREF(factory<synopsis>::make(time_type{}, empty));
+  CHECK_ROUNDTRIP_DEREF(factory<synopsis>::make(bool_type{}, options{}));
+  CHECK_ROUNDTRIP_DEREF(factory<synopsis>::make(time_type{}, options{}));
 }
 
 FIXTURE_SCOPE_END()

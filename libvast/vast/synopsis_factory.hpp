@@ -27,7 +27,7 @@ template <>
 struct factory_traits<synopsis> {
   using result_type = synopsis_ptr;
   using key_type = std::type_index;
-  using signature = result_type (*)(type, const synopsis_options&);
+  using signature = result_type (*)(type, const options&);
 
   static void initialize();
 
@@ -55,8 +55,8 @@ struct factory_traits<synopsis> {
   ///       Therefore, the type *x* should be sufficient to fully create a
   ///       valid synopsis instance.
   template <class T>
-  static result_type make(type x, const synopsis_options& opts) {
-    if constexpr (std::is_constructible_v<T, type, const synopsis_options&>)
+  static result_type make(type x, const options& opts) {
+    if constexpr (std::is_constructible_v<T, type, const options&>)
       return caf::make_counted<T>(std::move(x), opts);
     else
       return caf::make_counted<T>(std::move(x));
