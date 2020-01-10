@@ -10,6 +10,11 @@ Every entry has a category for which we use the following visual abbreviations:
 
 ## [Unreleased]
 
+- 🔄 Two minor modifications were done in the parsing framework: (i) the parsers
+  for enums and records now allow trailing separators, and (ii) the dash (`-`)
+  was removed from the allowed characters of schema type names.
+  [#706](https://github.com/tenzir/vast/pull/706
+
 - 🎁 When a record field of type `string` has the `#index=hash` attribute,
   VAST will choose an optimized index implementation. This new index type only
   supports (in)equality queries and is therefore intended to be used with
