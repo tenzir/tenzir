@@ -117,8 +117,8 @@ struct type_parser : parser<type_parser> {
     };
     static auto enum_type_parser
       = ("enum" >> skp >> '{'
-      >> (skp >> parsers::identifier >> skp) % ','
-      >> skp >> '}' >> attr_list) ->* to_enum
+      >> ((skp >> parsers::identifier >> skp) % ',') >> ~(',' >> skp)
+      >> '}' >> attr_list) ->* to_enum
       ;
     // Compound types
     rule<Iterator, type> type_type;
@@ -172,7 +172,7 @@ struct type_parser : parser<type_parser> {
       ;
     auto record_type_parser
       = ("record" >> skp >> '{'
-      >> (skp >> field >> skp) % ',' >> skp
+      >> ((skp >> field >> skp) % ',') >> ~(',' >> skp)
       >> '}' >> attr_list) ->* to_record;
       ;
     // Complete type
