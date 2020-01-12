@@ -866,12 +866,8 @@ display(ENABLE_GCOV yes gcov_summary)
 # Figure out whether we point to a build directory or a prefix.
 if (NOT caf_dir)
   set(caf_dir ${CAF_LIBRARY_CORE})
-  get_filename_component(caf_dir ${caf_dir} PATH)
-  if (EXISTS "${caf_dir}/../libcaf_core")
-    get_filename_component(caf_dir ${caf_dir} PATH)
-  else ()
-    set(caf_dir ${CAF_INCLUDE_DIR_CORE})
-  endif ()
+  get_filename_component(caf_dir ${caf_dir} DIRECTORY)
+  get_filename_component(caf_dir ${caf_dir} DIRECTORY)
 endif ()
 
 # Figure out whether we point to a build directory or a prefix.
