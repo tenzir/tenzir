@@ -153,7 +153,7 @@ while [ $# -ne 0 ]; do
       append_cache_entry MORE_WARNINGS BOOL yes
       ;;
     --without-tests)
-      append_cache_entry NO_UNIT_TESTS BOOL yes
+      append_cache_entry BUILD_UNIT_TESTS BOOL no
       ;;
     --without-zeek-to-vast)
       append_cache_entry ENABLE_ZEEK_TO_VAST BOOL no

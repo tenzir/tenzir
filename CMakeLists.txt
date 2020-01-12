@@ -70,8 +70,8 @@ option(VAST_STATIC_EXECUTABLE "Link VAST statically")
 cmake_dependent_option(
   BUILD_SHARED_LIBS "Build shared libraries instead of static" ON
   "NOT VAST_STATIC_EXECUTABLE" OFF)
-cmake_dependent_option(NO_UNIT_TESTS "Don't build unit tests" OFF
-                       "NOT CMAKE_CROSS_COMPILING" ON)
+cmake_dependent_option(BUILD_UNIT_TESTS "Build unit tests" ON
+                       "NOT CMAKE_CROSS_COMPILING" OFF)
 cmake_dependent_option(VAST_NO_ARROW "Build without Apache Arrow" OFF
                        "NOT ${CMAKE_SYSTEM_NAME} STREQUAL \"FreeBSD\"" ON)
 
@@ -909,7 +909,7 @@ display(DOXYGEN_FOUND yes doxygen_summary)
 display(PANDOC_FOUND yes pandoc_summary)
 display(VAST_USE_TCMALLOC yes tcmalloc_summary)
 display(VAST_USE_OPENSSL yes openssl_summary)
-display(NO_UNIT_TESTS no build_tests_summary)
+display(BUILD_UNIT_TESTS yes build_tests_summary)
 display(VAST_RELOCATABLE_INSTALL yes relocatable_install_summary)
 
 string(TOUPPER "${CMAKE_BUILD_TYPE}" build_type)
