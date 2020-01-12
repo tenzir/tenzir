@@ -59,9 +59,9 @@ private:
       | parsers::tf
       | parsers::qqstr
       | parsers::pattern
-      | '[' >> ~(x % ',') >> ']'
-      | '{' >> (('-' >> &'}'_p) | as<map>(kvp % ',')) >> '}'
-      | '{' >> ~as<set>(x % ',') >> '}'
+      | '[' >> ~(x % ',') >> ~(',' >> ws) >> ']'
+      | '{' >> (('-' >> &'}'_p) | as<map>(kvp % ',')) >> ~(',' >> ws) >> '}'
+      | '{' >> ~as<set>(x % ',') >> ~(',' >> ws) >> '}'
       | as<caf::none_t>("nil"_p)
       ;
     // clang-format on
