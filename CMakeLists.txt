@@ -5,7 +5,30 @@
 # Initial scaffold
 
 cmake_minimum_required(VERSION 3.11...3.16 FATAL_ERROR)
-project(VAST C CXX)
+
+# Extract VERSION
+if (NOT VAST_VERSION_TAG)
+  execute_process(
+    COMMAND "git" "describe" "--tags" "--long" "--dirty"
+    RESULT_VARIABLE git_describe_result
+    OUTPUT_VARIABLE VAST_VERSION_TAG
+    OUTPUT_STRIP_TRAILING_WHITESPACE)
+  # Fallback if the return value is not 0:
+  if (NOT git_describe_result EQUAL 0)
+    set(VAST_VERSION_TAG "0.0-unknown")
+  endif ()
+endif ()
+string(REGEX REPLACE "\\.|-" " " version_numbers ${VAST_VERSION_TAG})
+separate_arguments(version_numbers)
+list(GET version_numbers 0 VERSION_MAJOR)
+list(GET version_numbers 1 VERSION_MINOR)
+unset(version_numbers)
+
+project(
+  VAST
+  VERSION ${VERSION_MAJOR}.${VERSION_MINOR}
+  DESCRIPTION "Visibility Across Space and Time"
+  LANGUAGES C CXX)
 
 # Prohibit in-source builds
 if ("${CMAKE_SOURCE_DIR}" STREQUAL "${CMAKE_BINARY_DIR}")
@@ -98,23 +121,6 @@ if (VAST_RELOCATABLE_INSTALL)
     list(APPEND CMAKE_INSTALL_RPATH "$ORIGIN/../${CMAKE_INSTALL_LIBDIR}")
   endif ()
 endif ()
-
-# Extract VERSION
-if (NOT VAST_VERSION)
-  execute_process(
-    COMMAND "git" "describe" "--tags" "--long" "--dirty"
-    RESULT_VARIABLE git_describe_result
-    OUTPUT_VARIABLE VAST_VERSION
-    OUTPUT_STRIP_TRAILING_WHITESPACE)
-  # Fallback if the return value is not 0:
-  if (NOT git_describe_result EQUAL 0)
-    set(VAST_VERSION "0.0-unknown")
-  endif ()
-endif ()
-string(REGEX REPLACE "\\.|-" " " version_numbers ${VAST_VERSION})
-separate_arguments(version_numbers)
-list(GET version_numbers 0 VERSION_MAJOR)
-list(GET version_numbers 1 VERSION_MINOR)
 
 # Generate C++ header from Markdown documentation.
 file(
