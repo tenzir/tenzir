@@ -851,7 +851,7 @@ endif ()
 # ------------------------------------------------------------------------------
 
 macro (display TEST desc summary)
-  if (${test})
+  if (${TEST})
     set(${summary} ${desc})
   else ()
     set(${summary} no)
