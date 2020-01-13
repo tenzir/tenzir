@@ -42,7 +42,7 @@ indexer_state::~indexer_state() {
 
 caf::error
 indexer_state::init(event_based_actor* self, path filename, type column_type,
-                    options index_opts, size_t column, caf::actor index,
+                    caf::settings index_opts, size_t column, caf::actor index,
                     uuid partition_id, atomic_measurement* m) {
   this->index = std::move(index);
   this->partition_id = partition_id;
@@ -53,7 +53,7 @@ indexer_state::init(event_based_actor* self, path filename, type column_type,
 }
 
 behavior indexer(stateful_actor<indexer_state>* self, path dir,
-                 type column_type, options index_opts, size_t column,
+                 type column_type, caf::settings index_opts, size_t column,
                  caf::actor index, uuid partition_id, atomic_measurement* m) {
   VAST_TRACE(VAST_ARG(dir), VAST_ARG(column_type), VAST_ARG(column));
   VAST_DEBUG(self, "operates for column", column, "of type", column_type);

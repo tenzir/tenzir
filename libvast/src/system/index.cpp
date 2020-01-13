@@ -285,8 +285,8 @@ caf::actor index_state::make_indexer(path dir, type column_type, size_t column,
                                      uuid partition_id, atomic_measurement* m) {
   VAST_TRACE(VAST_ARG(dir), VAST_ARG(column_type), VAST_ARG(column),
              VAST_ARG(index), VAST_ARG(partition_id));
-  options index_opts;
-  caf::put(index_opts, "cardinality", max_partition_size);
+  caf::settings index_opts;
+  index_opts["cardinality"] = max_partition_size;
   return factory(self, std::move(dir), std::move(column_type),
                  std::move(index_opts), column, self, partition_id, m);
 }

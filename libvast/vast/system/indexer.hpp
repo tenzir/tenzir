@@ -35,7 +35,7 @@ struct indexer_state {
   ~indexer_state();
 
   caf::error init(caf::event_based_actor* self, path filename, type column_type,
-                  options index_opts, size_t column, caf::actor index,
+                  caf::settings index_opts, size_t column, caf::actor index,
                   uuid partition_id, atomic_measurement* m);
 
   // -- member variables -------------------------------------------------------
@@ -64,7 +64,7 @@ struct indexer_state {
 /// @returns the initial behavior of the INDEXER.
 caf::behavior
 indexer(caf::stateful_actor<indexer_state>* self, path dir, type column_type,
-        options index_opts, size_t column, caf::actor index, uuid partition_id,
-        atomic_measurement* m);
+        caf::settings index_opts, size_t column, caf::actor index,
+        uuid partition_id, atomic_measurement* m);
 
 } // namespace vast::system

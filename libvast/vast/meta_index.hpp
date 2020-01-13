@@ -13,18 +13,19 @@
 
 #pragma once
 
-#include <functional>
-#include <unordered_set>
-#include <unordered_map>
-#include <string>
-#include <vector>
-
-#include <caf/fwd.hpp>
-
 #include "vast/fwd.hpp"
 #include "vast/synopsis.hpp"
 #include "vast/type.hpp"
 #include "vast/uuid.hpp"
+
+#include <caf/fwd.hpp>
+#include <caf/settings.hpp>
+
+#include <functional>
+#include <string>
+#include <unordered_map>
+#include <unordered_set>
+#include <vector>
 
 namespace vast {
 
@@ -46,7 +47,7 @@ public:
 
   /// Gets the options for the synopsis factory.
   /// @returns A reference to the synopsis options.
-  options& factory_options();
+  caf::settings& factory_options();
 
   // -- concepts ---------------------------------------------------------------
 
@@ -68,7 +69,7 @@ private:
   std::unordered_map<uuid, partition_synopsis> partition_synopses_;
 
   /// The factory function to construct a synopsis structure for a type.
-  options synopsis_options_;
+  caf::settings synopsis_options_;
 };
 
 } // namespace vast

@@ -34,8 +34,9 @@ namespace vast::system {
 /// @param m A pointer to the measuring probe used for perfomance data
 ///        accumulation.
 /// @returns the new INDEXER actor.
-caf::actor spawn_indexer(caf::local_actor* parent, path dir, type column_type,
-                         options index_opts, size_t column, caf::actor index,
-                         uuid partition_id, atomic_measurement* m);
+caf::actor
+spawn_indexer(caf::local_actor* parent, path dir, type column_type,
+              caf::settings index_opts, size_t column, caf::actor index,
+              uuid partition_id, atomic_measurement* m);
 
 } // namespace vast::system

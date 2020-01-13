@@ -135,7 +135,7 @@ caf::error inspect(caf::deserializer& source, value_index_ptr& x) {
     x = nullptr;
     return caf::none;
   }
-  x = factory<value_index>::make(std::move(t), options{});
+  x = factory<value_index>::make(std::move(t), caf::settings{});
   if (x == nullptr)
     return make_error(ec::unspecified, "failed to construct value index");
   return x->deserialize(source);
@@ -532,7 +532,7 @@ port_index::lookup_impl(relational_operator op, data_view d) const {
 
 // -- sequence_index -----------------------------------------------------------
 
-sequence_index::sequence_index(vast::type t, options opts)
+sequence_index::sequence_index(vast::type t, caf::settings opts)
   : value_index{std::move(t)}, opts_{std::move(opts)} {
   max_size_
     = caf::get_or(opts_, "max-size", defaults::index::max_container_elements);

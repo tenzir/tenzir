@@ -25,6 +25,7 @@
 #include "vast/value_index.hpp"
 
 #include <caf/optional.hpp>
+#include <caf/settings.hpp>
 
 #include <cmath>
 
@@ -56,12 +57,12 @@ optional<base> parse_base(const T& x) {
 }
 
 template <class T>
-value_index_ptr make(type x, const options&) {
+value_index_ptr make(type x, const caf::settings&) {
   return std::make_unique<T>(std::move(x));
 }
 
 template <class T>
-value_index_ptr make_arithmetic(type x, const options&) {
+value_index_ptr make_arithmetic(type x, const caf::settings&) {
   static_assert(detail::is_any_v<T, integer_type, count_type, enumeration_type,
                                  real_type, duration_type, time_type>);
   using concrete_data = type_to_data<T>;
@@ -83,7 +84,7 @@ auto add_arithmetic_index_factory() {
 }
 
 auto add_string_index_factory() {
-  static auto f = [](type x, const options& opts) -> value_index_ptr {
+  static auto f = [](type x, const caf::settings& opts) -> value_index_ptr {
     if (auto a = find_attribute(x, "index"))
       if (auto value = a->value)
         if (*value == "hash"sv) {
@@ -138,7 +139,7 @@ auto add_string_index_factory() {
 
 template <class T, class Index>
 auto add_container_index_factory() {
-  static auto f = [](type x, const options& opts) -> value_index_ptr {
+  static auto f = [](type x, const caf::settings& opts) -> value_index_ptr {
     return std::make_unique<Index>(std::move(x), opts);
   };
   return factory<value_index>::add(T{}, f);

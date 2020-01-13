@@ -26,7 +26,7 @@ namespace vast {
 
 caf::expected<column_index_ptr>
 make_column_index(caf::actor_system& sys, path filename, type column_type,
-                  options index_opts, size_t column) {
+                  caf::settings index_opts, size_t column) {
   auto result = std::make_unique<column_index>(sys, std::move(column_type),
                                                std::move(index_opts),
                                                std::move(filename), column);
@@ -38,7 +38,8 @@ make_column_index(caf::actor_system& sys, path filename, type column_type,
 // -- constructors, destructors, and assignment operators ----------------------
 
 column_index::column_index(caf::actor_system& sys, type index_type,
-                           options index_opts, path filename, size_t column)
+                           caf::settings index_opts, path filename,
+                           size_t column)
   : col_(column),
     has_skip_attribute_(vast::has_skip_attribute(index_type)),
     index_type_(std::move(index_type)),

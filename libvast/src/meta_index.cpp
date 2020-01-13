@@ -183,7 +183,7 @@ std::vector<uuid> meta_index::lookup(const expression& expr) const {
   return caf::visit(f, expr);
 }
 
-options& meta_index::factory_options() {
+caf::settings& meta_index::factory_options() {
   return synopsis_options_;
 }
 

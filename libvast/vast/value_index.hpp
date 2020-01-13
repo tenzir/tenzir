@@ -30,6 +30,7 @@
 #include <caf/error.hpp>
 #include <caf/expected.hpp>
 #include <caf/serializer.hpp>
+#include <caf/settings.hpp>
 
 #include <algorithm>
 #include <memory>
@@ -406,7 +407,7 @@ public:
   /// Constructs a sequence index of a given type.
   /// @param t The sequence type.
   /// @param opts Runtime options for element type construction.
-  explicit sequence_index(vast::type t, options opts = {});
+  explicit sequence_index(vast::type t, caf::settings opts = {});
 
   /// The bitmap index holding the sequence size.
   using size_bitmap_index =
@@ -426,7 +427,7 @@ private:
   size_t max_size_;
   size_bitmap_index size_;
   vast::type value_type_;
-  options opts_;
+  caf::settings opts_;
 };
 
 } // namespace vast

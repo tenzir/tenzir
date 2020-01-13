@@ -68,7 +68,7 @@ TEST(serialization) {
 TEST(value_index) {
   auto t = string_type{}.attributes({{"index", "hash"}});
   factory<value_index>::initialize();
-  options opts;
+  caf::settings opts;
   MESSAGE("test cardinality that is a power of 2");
   caf::put(opts, "cardinality", 1_Ki);
   auto idx = factory<value_index>::make(t, opts);
