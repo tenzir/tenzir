@@ -456,8 +456,10 @@ TEST(vector) {
 }
 
 TEST(set) {
-  auto t = set_type{integer_type{}}.attributes({{"max_size", "2"}});
-  auto idx = factory<value_index>::make(t, options{});
+  auto t = set_type{integer_type{}};
+  options opts;
+  opts["max-size"] = 2;
+  auto idx = factory<value_index>::make(t, opts);
   REQUIRE_NOT_EQUAL(idx, nullptr);
   auto xs = set{42, 43, 44};
   REQUIRE(idx->append(make_data_view(xs)));

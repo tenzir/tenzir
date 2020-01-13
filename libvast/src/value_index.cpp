@@ -11,10 +11,14 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#include <cmath>
+#include "vast/value_index.hpp"
 
 #include "vast/base.hpp"
-#include "vast/value_index.hpp"
+#include "vast/defaults.hpp"
+
+#include <caf/settings.hpp>
+
+#include <cmath>
 
 namespace vast {
 
@@ -528,10 +532,10 @@ port_index::lookup_impl(relational_operator op, data_view d) const {
 
 // -- sequence_index -----------------------------------------------------------
 
-sequence_index::sequence_index(vast::type t, size_t max_size)
-  : value_index{std::move(t)},
-    max_size_{max_size},
-    size_{base::uniform(10, std::log10(max_size) + !!(max_size % 10))} {
+sequence_index::sequence_index(vast::type t, options opts)
+  : value_index{std::move(t)}, opts_{std::move(opts)} {
+  max_size_
+    = caf::get_or(opts_, "max-size", defaults::index::max_container_elements);
   auto f = [](const auto& x) -> vast::type {
     using concrete_type = std::decay_t<decltype(x)>;
     if constexpr (detail::is_any_v<concrete_type, vector_type, set_type>)
@@ -548,18 +552,15 @@ sequence_index::sequence_index(vast::type t, size_t max_size)
 }
 
 caf::error sequence_index::serialize(caf::serializer& sink) const {
-  return caf::error::eval([&] { return value_index::serialize(sink); },
-                          [&] {
-                            return sink(elements_, size_, max_size_,
-                                        value_type_);
-                          });
+  return caf::error::eval(
+    [&] { return value_index::serialize(sink); },
+    [&] { return sink(elements_, size_, max_size_, value_type_, opts_); });
 }
 
 caf::error sequence_index::deserialize(caf::deserializer& source) {
   return caf::error::eval(
     [&] { return value_index::deserialize(source); },
-    [&] { return source(elements_, size_, max_size_, value_type_); }
-  );
+    [&] { return source(elements_, size_, max_size_, value_type_, opts_); });
 }
 
 bool sequence_index::append_impl(data_view x, id pos) {
@@ -571,9 +572,7 @@ bool sequence_index::append_impl(data_view x, id pos) {
         auto old = elements_.size();
         elements_.resize(seq_size);
         for (auto i = old; i < elements_.size(); ++i) {
-          // TODO: we need a way to pass options from the parent context into
-          // here, e.g., by storing options as member.
-          elements_[i] = factory<value_index>::make(value_type_, options{});
+          elements_[i] = factory<value_index>::make(value_type_, opts_);
           VAST_ASSERT(elements_[i]);
         }
       }

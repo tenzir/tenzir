@@ -138,10 +138,8 @@ auto add_string_index_factory() {
 
 template <class T, class Index>
 auto add_container_index_factory() {
-  static auto f = [](type x, const options&) -> value_index_ptr {
-    // TODO: Take max-size from options instead of type information.
-    auto max_size = extract_max_size(x);
-    return std::make_unique<Index>(std::move(x), max_size);
+  static auto f = [](type x, const options& opts) -> value_index_ptr {
+    return std::make_unique<Index>(std::move(x), opts);
   };
   return factory<value_index>::add(T{}, f);
 }

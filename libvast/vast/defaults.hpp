@@ -261,6 +261,17 @@ struct infer {
 
 // -- constants for the entire system ------------------------------------------
 
+/// Contains constants for value index parameterization.
+namespace index {
+
+/// The maximum number elements an index for a container type (set, vector,
+/// or table).
+constexpr size_t max_container_elements = 256;
+
+} // namespace index
+
+// -- constants for the entire system ------------------------------------------
+
 /// Contains system-wide constants.
 namespace system {
 

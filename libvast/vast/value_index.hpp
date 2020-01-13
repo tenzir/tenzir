@@ -405,9 +405,8 @@ class sequence_index : public value_index {
 public:
   /// Constructs a sequence index of a given type.
   /// @param t The sequence type.
-  /// @param max_size The maximum number of elements permitted per sequence.
-  ///                 Longer sequences will be trimmed at the end.
-  explicit sequence_index(vast::type t, size_t max_size = 128);
+  /// @param opts Runtime options for element type construction.
+  explicit sequence_index(vast::type t, options opts = {});
 
   /// The bitmap index holding the sequence size.
   using size_bitmap_index =
@@ -427,6 +426,7 @@ private:
   size_t max_size_;
   size_bitmap_index size_;
   vast::type value_type_;
+  options opts_;
 };
 
 } // namespace vast
