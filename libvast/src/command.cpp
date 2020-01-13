@@ -408,7 +408,7 @@ bool init_config(caf::actor_system_config& cfg, const command::invocation& from,
       error_output << "Warning: desired log level " << to_string(*value)
                    << " exceeds the maximum log level for this software"
                       " version. Falling back to the maximum level ("
-                   << log_level_name[level] << ").\n";
+                   << log_level_name[VAST_LOG_LEVEL] << ").\n";
     }
     cfg.set("logger.console-verbosity", *value);
   }
