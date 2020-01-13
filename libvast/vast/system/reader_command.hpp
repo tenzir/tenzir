@@ -71,7 +71,7 @@ reader_command(const command::invocation& invocation, caf::actor_system& sys) {
     auto p = schema->find(*type);
     if (p == nullptr)
       return caf::make_message(
-        make_error(ec::unrecognized_option, "type not found", *type));
+        make_error(ec::lookup_error, "type not found", *type));
     auto selected_type = *p;
     schema->clear();
     schema->add(selected_type);
