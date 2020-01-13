@@ -30,6 +30,11 @@ project(
   DESCRIPTION "Visibility Across Space and Time"
   LANGUAGES C CXX)
 
+# Avoid CMake warning in subprojects due to CMAKE_POLICY_0048
+unset(PROJECT_VERSION)
+unset(PROJECT_VERSION_MAJOR)
+unset(PROJECT_VERSION_MINOR)
+
 # Prohibit in-source builds
 if ("${CMAKE_SOURCE_DIR}" STREQUAL "${CMAKE_BINARY_DIR}")
   message(
