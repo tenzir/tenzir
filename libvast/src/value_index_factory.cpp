@@ -17,12 +17,16 @@
 #include "vast/concept/parseable/numeric/integral.hpp"
 #include "vast/concept/parseable/to.hpp"
 #include "vast/concept/parseable/vast/base.hpp"
+#include "vast/detail/bit.hpp"
 #include "vast/detail/type_traits.hpp"
 #include "vast/hash_index.hpp"
+#include "vast/logger.hpp"
 #include "vast/type.hpp"
 #include "vast/value_index.hpp"
 
 #include <caf/optional.hpp>
+
+#include <cmath>
 
 using namespace std::string_view_literals;
 
@@ -52,16 +56,17 @@ optional<base> parse_base(const T& x) {
 }
 
 template <class T>
-value_index_ptr make(type x) {
+value_index_ptr make(type x, const options&) {
   return std::make_unique<T>(std::move(x));
 }
 
 template <class T>
-value_index_ptr make_arithmetic(type x) {
+value_index_ptr make_arithmetic(type x, const options&) {
   static_assert(detail::is_any_v<T, integer_type, count_type, enumeration_type,
                                  real_type, duration_type, time_type>);
   using concrete_data = type_to_data<T>;
   using value_index_type = arithmetic_index<concrete_data>;
+  // TODO: consider options instead relying on type attributes.
   if (auto base = parse_base(x))
     return std::make_unique<value_index_type>(std::move(x), std::move(*base));
   return nullptr;
@@ -78,14 +83,53 @@ auto add_arithmetic_index_factory() {
 }
 
 auto add_string_index_factory() {
-  static auto f = [](type x) -> value_index_ptr {
+  static auto f = [](type x, const options& opts) -> value_index_ptr {
     if (auto a = find_attribute(x, "index"))
       if (auto value = a->value)
-        if (*value == "hash"sv)
-          // TODO: make the number of hash digest bytes configurable. At this
-          // point we use 40 bits, which produces collisions after ~2^20
-          // elements.
-          return std::make_unique<hash_index<5>>(std::move(x));
+        if (*value == "hash"sv) {
+          auto i = opts.find("cardinality");
+          if (i == opts.end())
+            // Default to a 40-bit hash value -> good for 2^20 unique digests.
+            return std::make_unique<hash_index<5>>(std::move(x));
+          using int_type = caf::config_value::integer;
+          if (auto cardinality = caf::get_if<int_type>(&i->second)) {
+            if (!detail::ispow2(*cardinality))
+              VAST_WARNING_ANON(__func__, "cardinality not a power of 2");
+            // For 2^n unique values, we expect collisions after sqrt(2^n).
+            // Thus, we use 2n bits as digest size.
+            size_t digest_bits = detail::ispow2(*cardinality)
+                                   ? (detail::log2p1(*cardinality) - 1) * 2
+                                   : detail::log2p1(*cardinality) * 2;
+            auto digest_bytes = digest_bits / 8;
+            if (digest_bits % 8 > 0)
+              ++digest_bytes;
+            VAST_DEBUG_ANON(__func__, "creating hash index with a digest of",
+                            digest_bytes, "bytes");
+            switch (digest_bytes) {
+              default:
+                VAST_ERROR_ANON(__func__, "invalid digest size", *cardinality);
+                return nullptr;
+              case 1:
+                return std::make_unique<hash_index<1>>(std::move(x));
+              case 2:
+                return std::make_unique<hash_index<2>>(std::move(x));
+              case 3:
+                return std::make_unique<hash_index<3>>(std::move(x));
+              case 4:
+                return std::make_unique<hash_index<4>>(std::move(x));
+              case 5:
+                return std::make_unique<hash_index<5>>(std::move(x));
+              case 6:
+                return std::make_unique<hash_index<6>>(std::move(x));
+              case 7:
+                return std::make_unique<hash_index<7>>(std::move(x));
+              case 8:
+                return std::make_unique<hash_index<8>>(std::move(x));
+            }
+          }
+          VAST_ERROR_ANON(__func__, "invalid cardinality option type");
+          return nullptr;
+        }
     auto max_size = extract_max_size(x);
     return std::make_unique<string_index>(std::move(x), max_size);
   };
@@ -94,7 +138,8 @@ auto add_string_index_factory() {
 
 template <class T, class Index>
 auto add_container_index_factory() {
-  static auto f = [](type x) -> value_index_ptr {
+  static auto f = [](type x, const options&) -> value_index_ptr {
+    // TODO: Take max-size from options instead of type information.
     auto max_size = extract_max_size(x);
     return std::make_unique<Index>(std::move(x), max_size);
   };

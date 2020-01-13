@@ -131,7 +131,7 @@ caf::error inspect(caf::deserializer& source, value_index_ptr& x) {
     x = nullptr;
     return caf::none;
   }
-  x = factory<value_index>::make(std::move(t));
+  x = factory<value_index>::make(std::move(t), options{});
   if (x == nullptr)
     return make_error(ec::unspecified, "failed to construct value index");
   return x->deserialize(source);
@@ -571,7 +571,9 @@ bool sequence_index::append_impl(data_view x, id pos) {
         auto old = elements_.size();
         elements_.resize(seq_size);
         for (auto i = old; i < elements_.size(); ++i) {
-          elements_[i] = factory<value_index>::make(value_type_);
+          // TODO: we need a way to pass options from the parent context into
+          // here, e.g., by storing options as member.
+          elements_[i] = factory<value_index>::make(value_type_, options{});
           VAST_ASSERT(elements_[i]);
         }
       }

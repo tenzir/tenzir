@@ -41,8 +41,8 @@ namespace {
 
 struct fixture : fixtures::deterministic_actor_system_and_events {
   void init(type col_type) {
-    indexer = system::spawn_indexer(self.ptr(), directory, col_type, 0, self,
-                                    partition_id, &m);
+    indexer = system::spawn_indexer(self.ptr(), directory, col_type, options{},
+                                    0, self, partition_id, &m);
     run();
   }
 

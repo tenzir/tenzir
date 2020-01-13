@@ -64,7 +64,7 @@ behavior dummy_sink(event_based_actor* self) {
 }
 
 caf::actor spawn_sink(caf::local_actor* self, [[maybe_unused]] path dir,
-                      [[maybe_unused]] type t, size_t, caf::actor,
+                      [[maybe_unused]] type t, options, size_t, caf::actor,
                       [[maybe_unused]] uuid partition_id, atomic_measurement*) {
   VAST_TRACE(VAST_ARG(dir), VAST_ARG("t", t.name()), VAST_ARG(partition_id));
   auto result = self->spawn(dummy_sink);

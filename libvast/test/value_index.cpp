@@ -48,7 +48,7 @@ struct fixture : fixtures::events {
 FIXTURE_SCOPE(value_index_tests, fixture)
 
 TEST(bool) {
-  auto idx = factory<value_index>::make(bool_type{});
+  auto idx = factory<value_index>::make(bool_type{}, options{});
   REQUIRE_NOT_EQUAL(idx, nullptr);
   MESSAGE("append");
   REQUIRE(idx->append(make_data_view(true)));
@@ -78,7 +78,7 @@ TEST(bool) {
 
 TEST(integer) {
   auto t = integer_type{}.attributes({{"base", "uniform(10,20)"}});
-  auto idx = factory<value_index>::make(t);
+  auto idx = factory<value_index>::make(t, options{});
   REQUIRE_NOT_EQUAL(idx, nullptr);
   MESSAGE("append");
   REQUIRE(idx->append(make_data_view(-7)));
@@ -457,7 +457,7 @@ TEST(vector) {
 
 TEST(set) {
   auto t = set_type{integer_type{}}.attributes({{"max_size", "2"}});
-  auto idx = factory<value_index>::make(t);
+  auto idx = factory<value_index>::make(t, options{});
   REQUIRE_NOT_EQUAL(idx, nullptr);
   auto xs = set{42, 43, 44};
   REQUIRE(idx->append(make_data_view(xs)));
@@ -480,7 +480,7 @@ TEST(set) {
 }
 
 TEST(none values - string) {
-  auto idx = factory<value_index>::make(string_type{});
+  auto idx = factory<value_index>::make(string_type{}, options{});
   REQUIRE_NOT_EQUAL(idx, nullptr);
   REQUIRE(idx->append(make_data_view(caf::none)));
   REQUIRE(idx->append(make_data_view("foo")));
@@ -516,7 +516,7 @@ TEST(none values - string) {
 }
 
 TEST(none values - arithmetic) {
-  auto idx = factory<value_index>::make(count_type{});
+  auto idx = factory<value_index>::make(count_type{}, options{});
   REQUIRE_NOT_EQUAL(idx, nullptr);
   REQUIRE(idx->append(make_data_view(caf::none)));
   REQUIRE(idx->append(make_data_view(42)));
@@ -666,8 +666,8 @@ TEST(regression - zeek conn log service http) {
   slice_stats.reserve(slices.size());
   size_t row_id = 0;
   for (auto& slice : slices) {
-    slice_stats.emplace_back(factory<value_index>::make(string_type{}),
-                             ids(row_id, false));
+    slice_stats.emplace_back(
+      factory<value_index>::make(string_type{}, options{}), ids(row_id, false));
     auto& [idx, expected] = slice_stats.back();
     for (size_t row = 0; row < slice->rows(); ++row) {
       // Column 7 is service.

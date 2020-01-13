@@ -40,28 +40,27 @@ indexer_state::~indexer_state() {
   col.~column_index();
 }
 
-caf::error indexer_state::init(event_based_actor* self, path filename,
-                               type column_type, size_t column,
-                               caf::actor index, uuid partition_id,
-                               atomic_measurement* m) {
+caf::error
+indexer_state::init(event_based_actor* self, path filename, type column_type,
+                    options index_opts, size_t column, caf::actor index,
+                    uuid partition_id, atomic_measurement* m) {
   this->index = std::move(index);
   this->partition_id = partition_id;
   this->measurement = m;
   new (&col) column_index(self->system(), std::move(column_type),
-                          std::move(filename), column);
+                          std::move(index_opts), std::move(filename), column);
   return col.init();
 }
 
 behavior indexer(stateful_actor<indexer_state>* self, path dir,
-                 type column_type, size_t column, caf::actor index,
-                 uuid partition_id, atomic_measurement* m) {
+                 type column_type, options index_opts, size_t column,
+                 caf::actor index, uuid partition_id, atomic_measurement* m) {
   VAST_TRACE(VAST_ARG(dir), VAST_ARG(column_type), VAST_ARG(column));
   VAST_DEBUG(self, "operates for column", column, "of type", column_type);
-  if (auto err = self->state.init(self,
-                                  std::move(dir) / "fields"
-                                      / std::to_string(column),
-                                  std::move(column_type), column,
-                                  std::move(index), partition_id, m)) {
+  if (auto err = self->state.init(
+        self, std::move(dir) / "fields" / std::to_string(column),
+        std::move(column_type), std::move(index_opts), column, std::move(index),
+        partition_id, m)) {
     self->quit(std::move(err));
     return {};
   }

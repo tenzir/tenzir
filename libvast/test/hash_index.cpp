@@ -21,11 +21,13 @@
 #include "vast/concept/printable/vast/bitmap.hpp"
 #include "vast/load.hpp"
 #include "vast/save.hpp"
+#include "vast/si_literals.hpp"
 
 #include <caf/test/dsl.hpp>
 
 using namespace vast;
 using namespace std::string_literals;
+using namespace vast::si_literals;
 
 TEST(string) {
   // This one-byte parameterization creates a collision for "foo" and "bar".
@@ -66,12 +68,15 @@ TEST(serialization) {
 TEST(value_index) {
   auto t = string_type{}.attributes({{"index", "hash"}});
   factory<value_index>::initialize();
-  auto idx = factory<value_index>::make(t);
-  // FIXME: we can't know the concrete the parameterization here. This test
-  using concrete_type = hash_index<5>;
-  auto ptr = dynamic_cast<concrete_type*>(idx.get());
-  CHECK(ptr != nullptr);
-  idx = factory<value_index>::make(string_type{});
-  ptr = dynamic_cast<concrete_type*>(idx.get());
-  CHECK(ptr == nullptr);
+  options opts;
+  MESSAGE("test cardinality that is a power of 2");
+  caf::put(opts, "cardinality", 1_Ki);
+  auto idx = factory<value_index>::make(t, opts);
+  auto ptr3 = dynamic_cast<hash_index<3>*>(idx.get()); // 20 bits in 3 bytes
+  CHECK(ptr3 != nullptr);
+  MESSAGE("test cardinality that is not a power of 2");
+  caf::put(opts, "cardinality", 1_Mi + 7);
+  idx = factory<value_index>::make(t, opts);
+  auto ptr6 = dynamic_cast<hash_index<6>*>(idx.get()); // 41 bits in 6 bytes
+  CHECK(ptr6 != nullptr);
 }
