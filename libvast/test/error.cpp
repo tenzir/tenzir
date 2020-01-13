@@ -37,6 +37,7 @@ TEST(to_string) {
   CHECK_EQUAL(str(ec::end_of_input), "end_of_input"s);
   CHECK_EQUAL(str(ec::version_error), "version_error"s);
   CHECK_EQUAL(str(ec::syntax_error), "syntax_error"s);
+  CHECK_EQUAL(str(ec::lookup_error), "lookup_error"s);
   CHECK_EQUAL(str(ec::invalid_table_slice_type), "invalid_table_slice_type"s);
   CHECK_EQUAL(str(ec::invalid_synopsis_type), "invalid_synopsis_type"s);
   CHECK_EQUAL(str(ec::remote_node_down), "remote_node_down"s);

@@ -39,6 +39,7 @@ const char* descriptions[] = {
   "end_of_input",
   "version_error",
   "syntax_error",
+  "lookup_error",
   "invalid_table_slice_type",
   "invalid_synopsis_type",
   "remote_node_down",
