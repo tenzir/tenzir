@@ -37,7 +37,7 @@ arrow_table_slice::arrow_table_slice(table_slice_header header,
 }
 
 table_slice_ptr arrow_table_slice::make(table_slice_header header) {
-  return table_slice_ptr{new arrow_table_slice(std::move(header))};
+  return table_slice_ptr{new arrow_table_slice(std::move(header)), false};
 }
 
 arrow_table_slice* arrow_table_slice::copy() const {
