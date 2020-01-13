@@ -187,7 +187,8 @@ if (VAST_ENABLE_ASSERTIONS)
 endif ()
 
 if (VAST_HAVE_ARROW)
-  target_include_directories(libvast PUBLIC ${ARROW_INCLUDE_DIR})
+  # We use SYSTEM here to silence warnings we have no control about
+  target_include_directories(libvast SYSTEM PUBLIC ${ARROW_INCLUDE_DIR})
   target_link_libraries(libvast PUBLIC ${ARROW_LIBRARIES})
 endif ()
 
