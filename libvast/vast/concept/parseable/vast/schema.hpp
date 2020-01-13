@@ -31,7 +31,6 @@ struct schema_parser : parser<schema_parser> {
   static constexpr auto id
     = +( parsers::alnum
        | parsers::ch<'_'>
-       | parsers::ch<'-'>
        | parsers::ch<'.'>
        );
   // clang-format on

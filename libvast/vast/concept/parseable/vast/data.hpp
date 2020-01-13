@@ -45,7 +45,7 @@ private:
     using namespace parser_literals;
     rule<Iterator, data> p;
     auto ws = ignore(*parsers::space);
-    auto x = ws >> p >> ws;
+    auto x = ws >> ref(p) >> ws;
     auto kvp = x >> "->" >> x;
     // clang-format off
     p = parsers::time
@@ -59,9 +59,9 @@ private:
       | parsers::tf
       | parsers::qqstr
       | parsers::pattern
-      | '[' >> ~(x % ',') >> ']'
-      | '{' >> (('-' >> &'}'_p) | as<map>(kvp % ',')) >> '}'
-      | '{' >> ~as<set>(x % ',') >> '}'
+      | '[' >> ~(x % ',') >> ~(',' >> ws) >> ']'
+      | '{' >> (('-' >> &'}'_p) | as<map>(kvp % ',')) >> ~(',' >> ws) >> '}'
+      | '{' >> ~as<set>(x % ',') >> ~(',' >> ws) >> '}'
       | as<caf::none_t>("nil"_p)
       ;
     // clang-format on
