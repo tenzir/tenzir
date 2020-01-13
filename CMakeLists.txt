@@ -5,7 +5,30 @@
 # Initial scaffold
 
 cmake_minimum_required(VERSION 3.11...3.16 FATAL_ERROR)
-project(VAST C CXX)
+
+# Extract VERSION
+if (NOT VAST_VERSION_TAG)
+  execute_process(
+    COMMAND "git" "describe" "--tags" "--long" "--dirty"
+    RESULT_VARIABLE git_describe_result
+    OUTPUT_VARIABLE VAST_VERSION_TAG
+    OUTPUT_STRIP_TRAILING_WHITESPACE)
+  # Fallback if the return value is not 0:
+  if (NOT git_describe_result EQUAL 0)
+    set(VAST_VERSION_TAG "0.0-unknown")
+  endif ()
+endif ()
+string(REGEX REPLACE "\\.|-" " " version_numbers ${VAST_VERSION_TAG})
+separate_arguments(version_numbers)
+list(GET version_numbers 0 VERSION_MAJOR)
+list(GET version_numbers 1 VERSION_MINOR)
+unset(version_numbers)
+
+project(
+  VAST
+  VERSION ${VERSION_MAJOR}.${VERSION_MINOR}
+  DESCRIPTION "Visibility Across Space and Time"
+  LANGUAGES C CXX)
 
 # Prohibit in-source builds
 if ("${CMAKE_SOURCE_DIR}" STREQUAL "${CMAKE_BINARY_DIR}")
@@ -47,8 +70,8 @@ option(VAST_STATIC_EXECUTABLE "Link VAST statically")
 cmake_dependent_option(
   BUILD_SHARED_LIBS "Build shared libraries instead of static" ON
   "NOT VAST_STATIC_EXECUTABLE" OFF)
-cmake_dependent_option(NO_UNIT_TESTS "Don't build unit tests" OFF
-                       "NOT CMAKE_CROSS_COMPILING" ON)
+cmake_dependent_option(BUILD_UNIT_TESTS "Build unit tests" ON
+                       "NOT CMAKE_CROSS_COMPILING" OFF)
 cmake_dependent_option(VAST_NO_ARROW "Build without Apache Arrow" OFF
                        "NOT ${CMAKE_SYSTEM_NAME} STREQUAL \"FreeBSD\"" ON)
 
@@ -98,23 +121,6 @@ if (VAST_RELOCATABLE_INSTALL)
     list(APPEND CMAKE_INSTALL_RPATH "$ORIGIN/../${CMAKE_INSTALL_LIBDIR}")
   endif ()
 endif ()
-
-# Extract VERSION
-if (NOT VAST_VERSION)
-  execute_process(
-    COMMAND "git" "describe" "--tags" "--long" "--dirty"
-    RESULT_VARIABLE git_describe_result
-    OUTPUT_VARIABLE VAST_VERSION
-    OUTPUT_STRIP_TRAILING_WHITESPACE)
-  # Fallback if the return value is not 0:
-  if (NOT git_describe_result EQUAL 0)
-    set(VAST_VERSION "0.0-unknown")
-  endif ()
-endif ()
-string(REGEX REPLACE "\\.|-" " " version_numbers ${VAST_VERSION})
-separate_arguments(version_numbers)
-list(GET version_numbers 0 VERSION_MAJOR)
-list(GET version_numbers 1 VERSION_MINOR)
 
 # Generate C++ header from Markdown documentation.
 file(
@@ -281,21 +287,6 @@ elseif ("${CMAKE_CXX_COMPILER_ID}" MATCHES "Clang")
   else ()
     message(STATUS "Using third-party Clang not from XCode")
     check_compiler_version(${CLANG_MINIMUM_VERSION})
-  endif ()
-  # Standard library selection: check if libc++ is available, and if so, use it.
-  # Otherwise fall back to libstdc++.
-  if (NOT NO_AUTO_LIBCPP)
-    set(CXXFLAGS_BACKUP "${CMAKE_CXX_FLAGS}")
-    set(CMAKE_CXX_FLAGS "-std=c++17 -stdlib=libc++")
-    try_run(program_result compilation_succeeded "${CMAKE_BINARY_DIR}"
-            "${CMAKE_CURRENT_SOURCE_DIR}/cmake/get_compiler_version.cpp")
-    set(CMAKE_CXX_FLAGS "${CXXFLAGS_BACKUP}")
-    if (NOT compilation_succeeded)
-      message(STATUS "Using libstdc++ as standard library")
-    else ()
-      message(STATUS "Automatically adding -stdlib=libc++ flag")
-      set(EXTRA_FLAGS "${EXTRA_FLAGS} -stdlib=libc++")
-    endif ()
   endif ()
 else ()
   message(FATAL_ERROR "Unsupported compiler: ${CMAKE_CXX_COMPILER_ID}")
@@ -860,7 +851,7 @@ endif ()
 # ------------------------------------------------------------------------------
 
 macro (display TEST desc summary)
-  if (${test})
+  if (${TEST})
     set(${summary} ${desc})
   else ()
     set(${summary} no)
@@ -875,12 +866,8 @@ display(ENABLE_GCOV yes gcov_summary)
 # Figure out whether we point to a build directory or a prefix.
 if (NOT caf_dir)
   set(caf_dir ${CAF_LIBRARY_CORE})
-  get_filename_component(caf_dir ${caf_dir} PATH)
-  if (EXISTS "${caf_dir}/../libcaf_core")
-    get_filename_component(caf_dir ${caf_dir} PATH)
-  else ()
-    set(caf_dir ${CAF_INCLUDE_DIR_CORE})
-  endif ()
+  get_filename_component(caf_dir ${caf_dir} DIRECTORY)
+  get_filename_component(caf_dir ${caf_dir} DIRECTORY)
 endif ()
 
 # Figure out whether we point to a build directory or a prefix.
@@ -903,7 +890,7 @@ display(DOXYGEN_FOUND yes doxygen_summary)
 display(PANDOC_FOUND yes pandoc_summary)
 display(VAST_USE_TCMALLOC yes tcmalloc_summary)
 display(VAST_USE_OPENSSL yes openssl_summary)
-display(NO_UNIT_TESTS no build_tests_summary)
+display(BUILD_UNIT_TESTS yes build_tests_summary)
 display(VAST_RELOCATABLE_INSTALL yes relocatable_install_summary)
 
 string(TOUPPER "${CMAKE_BUILD_TYPE}" build_type)
