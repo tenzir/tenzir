@@ -19,8 +19,6 @@
 
 #include <caf/fwd.hpp>
 
-#include <vector>
-
 namespace vast::system {
 
 /// Spawns an INDEXER actor.
