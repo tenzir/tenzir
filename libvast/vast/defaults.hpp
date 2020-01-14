@@ -264,6 +264,9 @@ struct infer {
 /// Contains constants for value index parameterization.
 namespace index {
 
+/// The maximum length of a string before the default string index chops it off.
+constexpr size_t max_string_size = 1024;
+
 /// The maximum number elements an index for a container type (set, vector,
 /// or table).
 constexpr size_t max_container_elements = 256;

@@ -24,7 +24,7 @@ template <>
 struct factory_traits<value_index> {
   using result_type = value_index_ptr;
   using key_type = type;
-  using signature = result_type (*)(type, const caf::settings&);
+  using signature = result_type (*)(type, caf::settings);
 
   static void initialize();
 

@@ -24,7 +24,8 @@ namespace vast {
 
 // -- value_index --------------------------------------------------------------
 
-value_index::value_index(vast::type t) : type_{std::move(t)} {
+value_index::value_index(vast::type t, caf::settings opts)
+  : type_{std::move(t)}, opts_{std::move(opts)} {
   // nop
 }
 
@@ -95,6 +96,10 @@ const type& value_index::type() const {
   return type_;
 }
 
+const caf::settings& value_index::options() const {
+  return opts_;
+}
+
 caf::error value_index::serialize(caf::serializer& sink) const {
   return sink(mask_, none_);
 }
@@ -123,7 +128,7 @@ caf::error inspect(caf::serializer& sink, const value_index_ptr& x) {
   static auto nullptr_type = type{};
   if (x == nullptr)
     return sink(nullptr_type);
-  return caf::error::eval([&] { return sink(x->type()); },
+  return caf::error::eval([&] { return sink(x->type(), x->options()); },
                           [&] { return x->serialize(sink); });
 }
 
@@ -135,7 +140,10 @@ caf::error inspect(caf::deserializer& source, value_index_ptr& x) {
     x = nullptr;
     return caf::none;
   }
-  x = factory<value_index>::make(std::move(t), caf::settings{});
+  caf::settings opts;
+  if (auto err = source(opts))
+    return err;
+  x = factory<value_index>::make(std::move(t), std::move(opts));
   if (x == nullptr)
     return make_error(ec::unspecified, "failed to construct value index");
   return x->deserialize(source);
@@ -143,10 +151,12 @@ caf::error inspect(caf::deserializer& source, value_index_ptr& x) {
 
 // -- string_index -------------------------------------------------------------
 
-string_index::string_index(vast::type t, size_t max_length)
-  : value_index{std::move(t)},
-    max_length_{max_length},
-    length_{base::uniform(10, std::log10(max_length) + !!(max_length % 10))} {
+string_index::string_index(vast::type t, caf::settings opts)
+  : value_index{std::move(t), std::move(opts)} {
+  max_length_
+    = caf::get_or(options(), "max-size", defaults::index::max_string_size);
+  auto b = base::uniform(10, std::log10(max_length_) + !!(max_length_ % 10));
+  length_ = length_bitmap_index{std::move(b)};
 }
 
 caf::error string_index::serialize(caf::serializer& sink) const {
@@ -249,8 +259,8 @@ string_index::lookup_impl(relational_operator op, data_view x) const {
 
 // -- enumeration_index --------------------------------------------------------
 
-enumeration_index::enumeration_index(vast::type t)
-  : value_index{std::move(t)},
+enumeration_index::enumeration_index(vast::type t, caf::settings opts)
+  : value_index{std::move(t), std::move(opts)},
     index_{std::numeric_limits<enumeration>::max() + 1} {
   // nop
 }
@@ -293,6 +303,11 @@ enumeration_index::lookup_impl(relational_operator op, data_view d) const {
 
 // -- address_index ------------------------------------------------------------
 
+address_index::address_index(vast::type t, caf::settings opts)
+  : value_index{std::move(t), std::move(opts)} {
+  bytes_.fill(byte_index{8});
+}
+
 caf::error address_index::serialize(caf::serializer& sink) const {
   return caf::error::eval([&] { return value_index::serialize(sink); },
                           [&] { return sink(bytes_, v4_); });
@@ -301,10 +316,6 @@ caf::error address_index::serialize(caf::serializer& sink) const {
 caf::error address_index::deserialize(caf::deserializer& source) {
   return caf::error::eval([&] { return value_index::deserialize(source); },
                           [&] { return source(bytes_, v4_); });
-}
-
-address_index::address_index(vast::type t) : value_index{std::move(t)} {
-  bytes_.fill(byte_index{8});
 }
 
 bool address_index::append_impl(data_view x, id pos) {
@@ -375,8 +386,10 @@ address_index::lookup_impl(relational_operator op, data_view d) const {
 
 // -- subnet_index -------------------------------------------------------------
 
-subnet_index::subnet_index(vast::type x)
-  : value_index{std::move(x)}, network_{address_type{}}, length_{128 + 1} {
+subnet_index::subnet_index(vast::type x, caf::settings opts)
+  : value_index{std::move(x), std::move(opts)},
+    network_{address_type{}},
+    length_{128 + 1} {
   // nop
 }
 
@@ -479,8 +492,8 @@ subnet_index::lookup_impl(relational_operator op, data_view d) const {
 
 // -- port_index ---------------------------------------------------------------
 
-port_index::port_index(vast::type t)
-  : value_index{std::move(t)},
+port_index::port_index(vast::type t, caf::settings opts)
+  : value_index{std::move(t), std::move(opts)},
     num_{base::uniform(10, 5)}, // [0, 2^16)
     proto_{256}                 // 8-bit proto/next-header field
 {
@@ -533,9 +546,9 @@ port_index::lookup_impl(relational_operator op, data_view d) const {
 // -- sequence_index -----------------------------------------------------------
 
 sequence_index::sequence_index(vast::type t, caf::settings opts)
-  : value_index{std::move(t)}, opts_{std::move(opts)} {
-  max_size_
-    = caf::get_or(opts_, "max-size", defaults::index::max_container_elements);
+  : value_index{std::move(t), std::move(opts)} {
+  max_size_ = caf::get_or(options(), "max-size",
+                          defaults::index::max_container_elements);
   auto f = [](const auto& x) -> vast::type {
     using concrete_type = std::decay_t<decltype(x)>;
     if constexpr (detail::is_any_v<concrete_type, vector_type, set_type>)
@@ -554,13 +567,13 @@ sequence_index::sequence_index(vast::type t, caf::settings opts)
 caf::error sequence_index::serialize(caf::serializer& sink) const {
   return caf::error::eval(
     [&] { return value_index::serialize(sink); },
-    [&] { return sink(elements_, size_, max_size_, value_type_, opts_); });
+    [&] { return sink(elements_, size_, max_size_, value_type_); });
 }
 
 caf::error sequence_index::deserialize(caf::deserializer& source) {
   return caf::error::eval(
     [&] { return value_index::deserialize(source); },
-    [&] { return source(elements_, size_, max_size_, value_type_, opts_); });
+    [&] { return source(elements_, size_, max_size_, value_type_); });
 }
 
 bool sequence_index::append_impl(data_view x, id pos) {
@@ -572,7 +585,7 @@ bool sequence_index::append_impl(data_view x, id pos) {
         auto old = elements_.size();
         elements_.resize(seq_size);
         for (auto i = old; i < elements_.size(); ++i) {
-          elements_[i] = factory<value_index>::make(value_type_, opts_);
+          elements_[i] = factory<value_index>::make(value_type_, options());
           VAST_ASSERT(elements_[i]);
         }
       }

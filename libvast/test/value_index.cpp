@@ -109,7 +109,7 @@ TEST(integer) {
 
 TEST(floating-point with custom binner) {
   using index_type = arithmetic_index<real, precision_binner<6, 2>>;
-  auto idx = index_type{real_type{}, base::uniform<64>(10)};
+  auto idx = index_type{real_type{}, caf::settings{}, base::uniform<64>(10)};
   MESSAGE("append");
   REQUIRE(idx.append(make_data_view(-7.8)));
   REQUIRE(idx.append(make_data_view(42.123)));
@@ -130,7 +130,7 @@ TEST(floating-point with custom binner) {
   MESSAGE("serialization");
   std::vector<char> buf;
   CHECK_EQUAL(save(nullptr, buf, idx), caf::none);
-  auto idx2 = index_type{real_type{}, base::uniform<64>(10)};
+  auto idx2 = index_type{real_type{}, caf::settings{}, base::uniform<64>(10)};
   REQUIRE_EQUAL(load(nullptr, buf, idx2), caf::none);
   result = idx2.lookup(not_equal, make_data_view(4711.14));
   CHECK_EQUAL(to_string(unbox(result)), "1110111");
@@ -139,7 +139,7 @@ TEST(floating-point with custom binner) {
 TEST(duration) {
   using namespace std::chrono;
   // Default binning gives granularity of seconds.
-  auto idx = arithmetic_index<vast::duration>{duration_type{},
+  auto idx = arithmetic_index<vast::duration>{duration_type{}, caf::settings{},
                                               base::uniform<64>(10)};
   MESSAGE("append");
   REQUIRE(idx.append(make_data_view(milliseconds(1000))));
@@ -166,7 +166,8 @@ TEST(duration) {
 }
 
 TEST(time) {
-  arithmetic_index<vast::time> idx{time_type{}, base::uniform<64>(10)};
+  arithmetic_index<vast::time> idx{time_type{}, caf::settings{},
+                                   base::uniform<64>(10)};
   auto ts = to<vast::time>("2014-01-16+05:30:15");
   MESSAGE("append");
   REQUIRE(idx.append(make_data_view(unbox(ts))));
@@ -193,14 +194,17 @@ TEST(time) {
   MESSAGE("serialization");
   std::vector<char> buf;
   CHECK_EQUAL(save(nullptr, buf, idx), caf::none);
-  arithmetic_index<vast::time> idx2{time_type{}, base::uniform<64>(10)};
+  arithmetic_index<vast::time> idx2{time_type{}, caf::settings{},
+                                    base::uniform<64>(10)};
   CHECK_EQUAL(load(nullptr, buf, idx2), caf::none);
   eighteen = idx2.lookup(greater_equal, make_data_view(unbox(ts)));
   CHECK(to_string(*eighteen) == "000101");
 }
 
 TEST(string) {
-  string_index idx{string_type{}, 100};
+  caf::settings opts;
+  opts["max-size"] = 100;
+  string_index idx{string_type{}, opts};
   MESSAGE("append");
   REQUIRE(idx.append(make_data_view("foo")));
   REQUIRE(idx.append(make_data_view("bar")));
