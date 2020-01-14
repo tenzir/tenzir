@@ -455,6 +455,8 @@ run(const command::invocation& invocation, caf::actor_system& sys,
       search_result != fact.end()) {
     auto merged_invocation = invocation;
     merged_invocation.options = content(sys.config());
+    for (const auto& [key, value] : invocation.options)
+      merged_invocation.options.insert_or_assign(key, value);
     return std::invoke(search_result->second, merged_invocation, sys);
   }
   // No callback was registered for this command
