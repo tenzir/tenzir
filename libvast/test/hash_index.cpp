@@ -70,13 +70,17 @@ TEST(value_index) {
   factory<value_index>::initialize();
   caf::settings opts;
   MESSAGE("test cardinality that is a power of 2");
-  caf::put(opts, "cardinality", 1_Ki);
+  opts["cardinality"] = 1_Ki;
   auto idx = factory<value_index>::make(t, opts);
   auto ptr3 = dynamic_cast<hash_index<3>*>(idx.get()); // 20 bits in 3 bytes
   CHECK(ptr3 != nullptr);
   MESSAGE("test cardinality that is not a power of 2");
-  caf::put(opts, "cardinality", 1_Mi + 7);
+  opts["cardinality"] = 1_Mi + 7;
   idx = factory<value_index>::make(t, opts);
   auto ptr6 = dynamic_cast<hash_index<6>*>(idx.get()); // 41 bits in 6 bytes
   CHECK(ptr6 != nullptr);
+  MESSAGE("no options");
+  idx = factory<value_index>::make(t, caf::settings{});
+  auto ptr5 = dynamic_cast<hash_index<5>*>(idx.get());
+  CHECK(ptr5 != nullptr);
 }

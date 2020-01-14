@@ -94,6 +94,14 @@ auto add_string_index_factory() {
             return std::make_unique<hash_index<5>>(std::move(x));
           using int_type = caf::config_value::integer;
           if (auto cardinality = caf::get_if<int_type>(&i->second)) {
+            // caf::settings doesn't support unsigned integers, but the
+            // cardinality, so we may get -1 if someone enters
+            // numeric_limits<size_t>::max().
+            if (*cardinality == -1) {
+              VAST_WARNING_ANON(__func__, "got an explicit cardinality of 2^64"
+                                          ", using max digest size of 8 bytes");
+              return std::make_unique<hash_index<8>>(std::move(x));
+            }
             if (!detail::ispow2(*cardinality))
               VAST_WARNING_ANON(__func__, "cardinality not a power of 2");
             // For 2^n unique values, we expect collisions after sqrt(2^n).
@@ -106,6 +114,12 @@ auto add_string_index_factory() {
               ++digest_bytes;
             VAST_DEBUG_ANON(__func__, "creating hash index with a digest of",
                             digest_bytes, "bytes");
+            if (digest_bytes > 8) {
+              VAST_WARNING_ANON(__func__,
+                                "expected cardinality exceeds "
+                                "maximum digest size, capping at 8 bytes");
+              digest_bytes = 8;
+            }
             switch (digest_bytes) {
               default:
                 VAST_ERROR_ANON(__func__, "invalid digest size", *cardinality);
