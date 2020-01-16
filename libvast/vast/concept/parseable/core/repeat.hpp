@@ -23,9 +23,9 @@
 namespace vast {
 namespace detail {
 
-template <class Parser, class Iterator, class Attribute>
+template <class Parser, class Iterator, class Attribute, class T, class U>
 bool parse_repeat(Parser& p, Iterator& f, const Iterator& l, Attribute& a,
-                  int min, int max) {
+                  const T& min, const U& max) {
   if (max == 0)
     return true; // If we have nothing todo, we're succeeding.
   auto save = f;
@@ -64,9 +64,11 @@ private:
   Parser parser_;
 };
 
-template <class Parser, class T>
-class dynamic_repeat_parser : public parser<dynamic_repeat_parser<Parser, T>> {
+template <class Parser, class T, class U = T>
+class dynamic_repeat_parser
+  : public parser<dynamic_repeat_parser<Parser, T, U>> {
   static_assert(std::is_integral_v<T>, "T must be an an integral type");
+  static_assert(std::is_integral_v<U>, "U must be an an integral type");
 
 public:
   using container = detail::container<typename Parser::attribute>;
@@ -87,7 +89,7 @@ public:
 private:
   Parser parser_;
   const T& min_;
-  const T& max_;
+  const U& max_;
 };
 
 template <int Min, int Max = Min, class Parser>
@@ -100,9 +102,9 @@ auto repeat(const Parser& p, const T& n) {
   return dynamic_repeat_parser<Parser, T>{p, n, n};
 }
 
-template <class Parser, class T>
-auto repeat(const Parser& p, const T& min, const T& max) {
-  return dynamic_repeat_parser<Parser, T>{p, min, max};
+template <class Parser, class T, class U>
+auto repeat(const Parser& p, const T& min, const U& max) {
+  return dynamic_repeat_parser<Parser, T, U>{p, min, max};
 }
 
 namespace parsers {
@@ -117,8 +119,8 @@ auto rep(const Parser& p, const T& n) {
   return repeat(p, n);
 }
 
-template <class Parser, class T>
-auto rep(const Parser& p, const T& min, const T& max) {
+template <class Parser, class T, class U>
+auto rep(const Parser& p, const T& min, const U& max) {
   return repeat(p, min, max);
 }
 
