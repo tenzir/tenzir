@@ -313,6 +313,10 @@ constexpr size_t initially_requested_ids = 128;
 constexpr std::chrono::milliseconds telemetry_rate = std::chrono::milliseconds{
   1000};
 
+// Interval between checks whether a signal occured.
+constexpr std::chrono::milliseconds signal_monitoring_interval
+  = std::chrono::milliseconds{750};
+
 } // namespace system
 
 } // namespace vast::defaults

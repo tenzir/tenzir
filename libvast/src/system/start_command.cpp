@@ -88,7 +88,8 @@ caf::message start_command_impl(start_command_extra_steps extra_steps,
       return caf::make_message(std::move(err));
   // Start signal monitor.
   std::thread sig_mon_thread;
-  auto guard = signal_monitor::run_guarded(sig_mon_thread, sys, 750ms, self);
+  auto guard = system::signal_monitor::run_guarded(
+    sig_mon_thread, sys, defaults::system::signal_monitoring_interval, self);
   // Run main loop.
   caf::error err;
   auto stop = false;

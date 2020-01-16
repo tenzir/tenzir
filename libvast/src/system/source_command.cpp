@@ -15,6 +15,7 @@
 
 #include "vast/concept/parseable/to.hpp"
 #include "vast/concept/parseable/vast/expression.hpp"
+#include "vast/defaults.hpp"
 #include "vast/detail/string.hpp"
 #include "vast/error.hpp"
 #include "vast/expression.hpp"
@@ -74,7 +75,8 @@ caf::message source_command(const command::invocation& invocation,
   VAST_DEBUG(invocation.full_name, "got node");
   // Start signal monitor.
   std::thread sig_mon_thread;
-  auto guard = signal_monitor::run_guarded(sig_mon_thread, sys, 750ms, self);
+  auto guard = system::signal_monitor::run_guarded(
+    sig_mon_thread, sys, defaults::system::signal_monitoring_interval, self);
   // Get node components.
   auto components
     = get_node_component<accountant_atom, importer_atom>(self, node);
