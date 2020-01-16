@@ -60,8 +60,8 @@ count_command(const command::invocation& invocation, caf::actor_system& sys) {
   VAST_ASSERT(node != nullptr);
   // Start signal monitor.
   std::thread sig_mon_thread;
-  auto guard
-    = system::signal_monitor::run_guarded(sig_mon_thread, sys, 750ms, self);
+  auto guard = system::signal_monitor::run_guarded(
+    sig_mon_thread, sys, defaults::system::signal_monitoring_interval, self);
   // Spawn COUNTER at the node.
   caf::actor cnt;
   auto args = command::invocation{options, "spawn counter", {*query}};

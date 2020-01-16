@@ -17,6 +17,7 @@
 #include "vast/concept/parseable/vast/expression.hpp"
 #include "vast/concept/printable/to_string.hpp"
 #include "vast/concept/printable/vast/expression.hpp"
+#include "vast/defaults.hpp"
 #include "vast/detail/assert.hpp"
 #include "vast/error.hpp"
 #include "vast/expression.hpp"
@@ -83,8 +84,8 @@ caf::message sink_command(const command::invocation& invocation,
   VAST_ASSERT(node != nullptr);
   // Start signal monitor.
   std::thread sig_mon_thread;
-  auto signal_guard
-    = signal_monitor::run_guarded(sig_mon_thread, sys, 750ms, self);
+  auto signal_guard = system::signal_monitor::run_guarded(
+    sig_mon_thread, sys, defaults::system::signal_monitoring_interval, self);
   auto spawn_exporter
     = command::invocation{invocation.options, "spawn exporter", {*query}};
   VAST_DEBUG(&invocation, "spawns exporter with parameters:", spawn_exporter);

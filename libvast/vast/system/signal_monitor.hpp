@@ -38,7 +38,7 @@ public:
   static void run(std::chrono::milliseconds monitoring_interval,
                   caf::actor receiver);
 
-  /// Run the singal monitor loop in thread `t`, stopping it at scope exit with
+  /// Run the signal monitor loop in thread `t`, stopping it at scope exit with
   /// the returned scope guard.
   static auto run_guarded(std::thread& t,
                           [[maybe_unused]] caf::actor_system& sys,
