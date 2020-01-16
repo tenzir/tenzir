@@ -13,11 +13,11 @@ Every entry has a category for which we use the following visual abbreviations:
 - 🔄 Two minor modifications were done in the parsing framework: (i) the parsers
   for enums and records now allow trailing separators, and (ii) the dash (`-`)
   was removed from the allowed characters of schema type names.
-  [#706](https://github.com/tenzir/vast/pull/706
+  [#706](https://github.com/tenzir/vast/pull/706)
 
 - 🐞 The example configuration file contained an invalid section `vast`.
    This has been changed to the correct name `system`.
-  [#705](https://github.com/tenzir/vast/pull/705
+  [#705](https://github.com/tenzir/vast/pull/705)
 
 - 🎁 When a record field of type `string` has the `#index=hash` attribute,
   VAST will choose an optimized index implementation. This new index type only
