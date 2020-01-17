@@ -45,7 +45,7 @@ KeepEmptyLinesAtTheStartOfBlocks: false
 Language: Cpp
 MaxEmptyLinesToKeep: 1
 NamespaceIndentation: None
-PenaltyBreakAssignment: 10
+PenaltyBreakAssignment: 0
 PenaltyBreakBeforeFirstCallParameter: 30
 PenaltyBreakString: 50
 PenaltyExcessCharacter: 100
