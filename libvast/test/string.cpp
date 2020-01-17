@@ -42,7 +42,7 @@ TEST(string byte escaping) {
   CHECK_EQUAL(byte_escape_all("foo"), "\\x66\\x6F\\x6F");
   CHECK_EQUAL(byte_unescape("\\x66\\x6f\\x6F"), "foo");
 
-  CHECK_EQUAL(byte_unescape("foo\\"), ""); // Invalid '/' at end of string.
+  CHECK_EQUAL(byte_unescape("foo\\"), ""); // Invalid '\' at end of string.
 }
 
 TEST(JSON string escaping) {
@@ -57,6 +57,7 @@ TEST(JSON string escaping) {
   CHECK_EQUAL(json_unescape("\"\\r\\n\""), "\r\n");
   CHECK_EQUAL(json_unescape("\"\\begin\""), "\begin");
   CHECK_EQUAL(json_unescape("\"end\\n\""), "end\n");
+  CHECK_EQUAL(json_unescape("\"end\\\\\""), "end\\");
   CHECK_EQUAL(json_unescape("\"end\\uaaaa\""), "end\\uaaaa");
 
   CHECK_EQUAL(json_escape("foo\"bar"), "\"foo\\\"bar\"");
