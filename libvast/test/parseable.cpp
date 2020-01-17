@@ -225,6 +225,12 @@ TEST(quoted string - missing trailing quote after escaped quote) {
   CHECK_EQUAL(attr, "foobar'");
 }
 
+TEST(quoted string - trailing quote after escaped escape) {
+  std::string attr;
+  CHECK(parsers::qstr("'foobar\\\\'", attr));
+  CHECK_EQUAL(attr, "foobar\\");
+}
+
 TEST(symbol table) {
   symbol_table<int> sym{{"foo", 42}, {"bar", 84}, {"foobar", 1337}};
   int i;
