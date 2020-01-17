@@ -29,8 +29,10 @@ public:
 
   static constexpr auto esc = ignore(parsers::ch<Esc>);
   static constexpr auto quote = ignore(parsers::ch<Quote>);
+  static constexpr auto esc_esc = esc >> parsers::ch<Esc>;
   static constexpr auto esc_quote = esc >> parsers::ch<Quote>;
-  static constexpr auto str_chr = esc_quote | (parsers::print - quote);
+  static constexpr auto str_chr
+    = esc_esc | esc_quote | (parsers::print - quote);
   static constexpr auto quoted_str = quote >> *str_chr >> quote;
 
   template <class Iterator, class Attribute>
