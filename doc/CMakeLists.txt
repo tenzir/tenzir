@@ -33,35 +33,38 @@ endif ()
 
 # man pages
 if (PANDOC_FOUND)
-  add_custom_target(vast-man)
-  foreach (man_page vast.1)
-    install(
-      FILES "${CMAKE_CURRENT_BINARY_DIR}/${man_page}"
-      DESTINATION share/man/man1
-      OPTIONAL)
-    if (PANDOC_FOUND)
-      set(man_generated "${CMAKE_CURRENT_BINARY_DIR}/${man_page}")
-      file(
-        WRITE ${CMAKE_CURRENT_BINARY_DIR}/make_man_${man_page}.cmake
-        "set(CMAKE_MODULE_PATH ${CMAKE_SOURCE_DIR}/cmake)
-        include(Helpers)
-        execute_process(
-          COMMAND ${CMAKE_BINARY_DIR}/bin/vast manual
-          ERROR_FILE ${man_generated}.md)
-        month_day_year(MAN_DATE)
-        configure_file(${man_generated}.md ${man_generated}.md @ONLY)
-        execute_process(
-           COMMAND pandoc -s -f markdown -t man ${man_generated}.md
-           OUTPUT_FILE ${man_generated})")
-      add_custom_target(
-        vast-man-make-${man_page}
-        ${CMAKE_COMMAND} -P make_man_${man_page}.cmake
-        COMMENT "Generating man page ${man_page}")
-      add_dependencies(vast-man vast-man-make-${man_page})
+  set(man_page vast.1)
+  set(man_generated "${CMAKE_CURRENT_BINARY_DIR}/${man_page}")
+  file(
+    WRITE ${CMAKE_CURRENT_BINARY_DIR}/make_man_${man_page}.cmake
+    "set(CMAKE_MODULE_PATH ${CMAKE_SOURCE_DIR}/cmake)
+    include(Helpers)
+    execute_process(
+      COMMAND ${CMAKE_BINARY_DIR}/bin/vast manual
+      ERROR_FILE ${man_generated}.md.in)
+    month_day_year(MAN_DATE)
+    configure_file(${man_generated}.md.in ${man_generated}.md.tmp @ONLY)
+    set(changed TRUE)
+    if (EXISTS ${man_generated}.md)
+      file(SHA3_224 ${man_generated}.md incumbent)
+      file(SHA3_224 ${man_generated}.md.tmp challenger)
+      if (incumbent STREQUAL challenger)
+        set(changed FALSE)
+      endif ()
     endif ()
-  endforeach ()
-  if (NOT TARGET man)
-    add_custom_target(man ALL)
-  endif ()
-  add_dependencies(man vast-man)
+    if (changed)
+      file(RENAME ${man_generated}.md.tmp ${man_generated}.md)
+      execute_process(
+         COMMAND pandoc -s -f markdown -t man ${man_generated}.md
+         OUTPUT_FILE ${man_generated})
+    endif()")
+  add_custom_command(
+    OUTPUT ${man_generated}
+    MAIN_DEPENDENCY vast
+    COMMAND ${CMAKE_COMMAND} -P make_man_${man_page}.cmake
+    COMMENT "Generating man page ${man_page}")
+  install(
+    FILES "${man_generated}"
+    DESTINATION share/man/man1
+    OPTIONAL)
 endif ()
