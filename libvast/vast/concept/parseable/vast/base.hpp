@@ -23,22 +23,33 @@ namespace vast {
 struct base_parser : parser<base_parser> {
   using attribute = base;
 
+  template <size_t Bits>
+  static base to_uniform_base(size_t b) {
+    return base::uniform<Bits>(b);
+  }
+
   template <class Iterator, class Attribute>
   bool parse(Iterator& f, const Iterator& l, Attribute& a) const {
     using namespace parser_literals;
     auto num = parsers::integral<size_t>;
     auto to_base = [](std::vector<size_t> xs) { return base{xs}; };
-    auto to_uniform_base = [](std::tuple<size_t, optional<size_t>> tuple) {
-      auto b = std::get<0>(tuple);
-      auto n = std::get<1>(tuple);
-      return base::uniform(b, n ? *n : 0);
+    auto to_explicit_uniform_base = [](std::tuple<size_t, size_t> xs) {
+      return base::uniform(std::get<0>(xs), std::get<1>(xs));
     };
     auto ws = ignore(*parsers::space);
     auto delim = ws >> ',' >> ws;
-    auto uniform = "uniform("_p >> num >> -(delim >> num) >> ')';
-    auto regular = '['_p >> (num % delim) >> ']';
-    auto p = uniform ->* to_uniform_base
-           | regular ->* to_base;
+    auto uniform8 = "uniform8("_p >> num >> ')';
+    auto uniform16 = "uniform16("_p >> num >> ')';
+    auto uniform32 = "uniform32("_p >> num >> ')';
+    auto uniform64 = "uniform64("_p >> num >> ')';
+    auto uniform = "uniform("_p >> num >> delim >> num >> ')';
+    auto direct = '['_p >> (num % delim) >> ']';
+    auto p = uniform ->* to_explicit_uniform_base
+           | uniform8 ->* to_uniform_base<8>
+           | uniform16 ->* to_uniform_base<16>
+           | uniform32 ->* to_uniform_base<32>
+           | uniform64 ->* to_uniform_base<64>
+           | direct ->* to_base;
     return p(f, l, a);
   }
 };
@@ -50,9 +61,7 @@ struct parser_registry<base> {
 
 namespace parsers {
 
-static auto const base = make_parser<vast::base>();
+static auto const base = base_parser{};
 
 } // namespace parsers
 } // namespace vast
-
-

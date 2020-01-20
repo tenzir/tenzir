@@ -15,7 +15,6 @@
 
 #include "vast/base.hpp"
 #include "vast/concept/parseable/numeric/integral.hpp"
-#include "vast/concept/parseable/to.hpp"
 #include "vast/concept/parseable/vast/base.hpp"
 #include "vast/detail/bit.hpp"
 #include "vast/detail/type_traits.hpp"
@@ -35,34 +34,28 @@ namespace vast {
 namespace {
 
 template <class T>
-optional<base> parse_base(const T& x) {
-  if (auto a = find_attribute(x, "base")) {
-    if (auto value = a->value)
-      if (auto b = to<base>(*value))
-        return *b;
-    return {};
-  }
-  // Use base 8 by default, as it yields the best performance on average for
-  // VAST's indexing.
-  return base::uniform<64>(8);
-}
-
-template <class T>
 value_index_ptr make(type x, caf::settings opts) {
+  using int_type = caf::config_value::integer;
+  // The cardinality must be an integer.
+  if (auto i = opts.find("cardinality"); i != opts.end()) {
+    if (!caf::holds_alternative<int_type>(i->second)) {
+      VAST_ERROR_ANON(__func__, "invalid cardinality type");
+      return nullptr;
+    }
+  }
+  // The base specification has its own grammar.
+  if (auto i = opts.find("base"); i != opts.end()) {
+    auto str = caf::get_if<caf::config_value::string>(&i->second);
+    if (!str) {
+      VAST_ERROR_ANON(__func__, "invalid base type (string type needed)");
+      return nullptr;
+    }
+    if (!parsers::base(*str)) {
+      VAST_ERROR_ANON(__func__, "invalid base specification");
+      return nullptr;
+    }
+  }
   return std::make_unique<T>(std::move(x), std::move(opts));
-}
-
-template <class T>
-value_index_ptr make_arithmetic(type x, caf::settings opts) {
-  static_assert(detail::is_any_v<T, integer_type, count_type, enumeration_type,
-                                 real_type, duration_type, time_type>);
-  using concrete_data = type_to_data<T>;
-  using value_index_type = arithmetic_index<concrete_data>;
-  // TODO: consider options instead relying on type attributes.
-  if (auto base = parse_base(x))
-    return std::make_unique<value_index_type>(std::move(x), std::move(opts),
-                                              std::move(*base));
-  return nullptr;
 }
 
 template <class T, class Index>
@@ -72,7 +65,10 @@ auto add_value_index_factory() {
 
 template <class T>
 auto add_arithmetic_index_factory() {
-  return factory<value_index>::add(T{}, make_arithmetic<T>);
+  static_assert(detail::is_any_v<T, integer_type, count_type, enumeration_type,
+                                 real_type, duration_type, time_type>);
+  using concrete_data = type_to_data<T>;
+  return add_value_index_factory<T, arithmetic_index<concrete_data>>();
 }
 
 auto add_string_index_factory() {
@@ -86,10 +82,7 @@ auto add_string_index_factory() {
             // Default to a 40-bit hash value -> good for 2^20 unique digests.
             return std::make_unique<hash_index<5>>(std::move(x));
           auto cardinality = caf::get_if<int_type>(&i->second);
-          if (cardinality == nullptr) {
-            VAST_ERROR_ANON(__func__, "invalid cardinality option type");
-            return nullptr;
-          }
+          VAST_ASSERT(cardinality); // checked in make(x, opts)
           // caf::settings doesn't support unsigned integers, but the
           // cardinality is a size_t, so we may get -1 if someone provides
           // numeric_limits<size_t>::max().

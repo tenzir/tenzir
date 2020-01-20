@@ -14,6 +14,8 @@
 #pragma once
 
 #include "vast/bitmap_index.hpp"
+#include "vast/concept/parseable/to.hpp"
+#include "vast/concept/parseable/vast/base.hpp"
 #include "vast/concept/printable/vast/data.hpp"
 #include "vast/concept/printable/vast/operator.hpp"
 #include "vast/detail/assert.hpp"
@@ -191,11 +193,13 @@ public:
   static_assert(!std::is_same_v<value_type, std::false_type>,
                 "invalid type T for arithmetic_index");
 
+  using multi_level_range_coder = multi_level_coder<range_coder<ids>>;
+
   // clang-format off
   using coder_type = std::conditional_t<
     std::is_same_v<T, bool>,
     singleton_coder<ids>,
-    multi_level_coder<range_coder<ids>>
+    multi_level_range_coder
   >;
   // clang-format on
 
@@ -206,7 +210,7 @@ public:
       // Choose a space-efficient binner if none specified.
       std::conditional_t<
         detail::is_any_v<T, time, duration>,
-      decimal_binner<9>, // nanoseconds -> seconds
+        decimal_binner<9>, // nanoseconds -> seconds
         std::conditional_t<
           std::is_same_v<T, real>,
           precision_binner<10>, // no fractional part
@@ -219,11 +223,24 @@ public:
 
   using bitmap_index_type = bitmap_index<value_type, coder_type, binner_type>;
 
-  template <class... Ts, class = std::enable_if_t<
-                           std::is_constructible<bitmap_index_type, Ts...>{}>>
-  arithmetic_index(vast::type t, caf::settings opts, Ts&&... xs)
-    : value_index{std::move(t), std::move(opts)}, bmi_{std::forward<Ts>(xs)...} {
-    // nop
+  /// Constructs an arithmetic index.
+  /// @param t An arithmetic type.
+  /// @param opts Runtime context for index parameterization.
+  explicit arithmetic_index(vast::type t, caf::settings opts = {})
+    : value_index{std::move(t), std::move(opts)} {
+    if constexpr (std::is_same_v<coder_type, multi_level_range_coder>) {
+      auto i = opts.find("base");
+      if (i == opts.end()) {
+        // Some early experiments found that 8 yields the best average
+        // performance, presumably because it's a power of 2.
+        bmi_ = bitmap_index_type{base::uniform<64>(8)};
+      } else {
+        auto str = caf::get<caf::config_value::string>(i->second);
+        auto b = to<base>(str);
+        VAST_ASSERT(b != nullptr); // pre-condition is that this was validated
+        bmi_ = bitmap_index_type{base{std::move(*b)}};
+      }
+    }
   }
 
   caf::error serialize(caf::serializer& sink) const override {
