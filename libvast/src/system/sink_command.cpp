@@ -93,13 +93,13 @@ caf::message sink_command(const command::invocation& invocation,
   if (!exp)
     return caf::make_message(std::move(exp.error()));
   // Register the accountant at the Sink.
-  auto components = get_node_component<accountant_atom>(self, node);
+  auto components = get_node_components(self, node, {"accountant"});
   if (!components)
     return caf::make_message(std::move(components.error()));
   auto& [accountant] = *components;
   if (accountant) {
     VAST_DEBUG(invocation.full_name, "assigns accountant to new sink");
-    self->send(snk, actor_cast<accountant_type>(*accountant));
+    self->send(snk, actor_cast<accountant_type>(accountant));
   }
   // Start the exporter.
   self->send(*exp, system::sink_atom::value, snk);

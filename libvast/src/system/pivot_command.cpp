@@ -140,13 +140,13 @@ pivot_command(const command::invocation& invocation, caf::actor_system& sys) {
   auto piv_guard = caf::detail::make_scope_guard(
     [&] { self->send_exit(*piv, caf::exit_reason::user_shutdown); });
   // Register the accountant at the Sink.
-  auto components = get_node_component<accountant_atom>(self, node);
+  auto components = get_node_components(self, node, {"accountant"});
   if (!components)
     return caf::make_message(std::move(components.error()));
   auto& [accountant] = *components;
   if (accountant) {
     VAST_DEBUG(invocation.full_name, "assigns accountant to writer");
-    self->send(writer, caf::actor_cast<accountant_type>(*accountant));
+    self->send(writer, caf::actor_cast<accountant_type>(accountant));
   }
   caf::error err;
   self->monitor(writer);
