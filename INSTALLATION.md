@@ -51,7 +51,14 @@ Building VAST involves the following steps:
 
 ### Linux
 
-TODO
+Installing on Linux currently requires a build from source as described in
+the section above.
+
+On `.deb`/`.rpm`/`slackware`-based distributions `checkinstall` can
+be used as an alternative for step (5) above to create a proper
+binary package for the installation:
+
+    sudo checkinstall --pkgname=vast
 
 #### Docker
 
