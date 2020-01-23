@@ -10,6 +10,10 @@ Every entry has a category for which we use the following visual abbreviations:
 
 ## [Unreleased]
 
+- 🎁 An Experimental Python module was implemented. It exposes a an API to query
+  a VAST node using the regular query language and delivers the results as
+  `pyarrow` tables.
+
 - 🐞 A bug in the quoted string parser that could result into a parsing
   failure if an escaping character was in the last position.
 
