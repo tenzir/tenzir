@@ -163,7 +163,8 @@ caf::error reader<Selector>::read_impl(size_t max_events, size_t max_slice_size,
     auto& line = lines_->get();
     vast::json j;
     if (!parsers::json(line, j)) {
-      VAST_WARNING(this, "failed to parse", line);
+      VAST_WARNING(this, "failed to parse line", lines_->line_number(), ":",
+                   line);
       continue;
     }
     auto xs = caf::get_if<vast::json::object>(&j);
