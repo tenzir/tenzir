@@ -39,10 +39,11 @@ auto inspect(Inspector& f, component_state& cs) {
 }
 
 /// Maps a component type ("archive", "index", etc.) to its state.
-using component_state_map = std::multimap<std::string, component_state>;
+using component_state_map
+  = std::multimap<std::string, component_state, std::less<>>;
 
 /// Maps node names to component state.
-using component_map = std::map<std::string, component_state_map>;
+using component_map = std::map<std::string, component_state_map, std::less<>>;
 
 /// An entry of the `component_map`.
 using component_map_entry = std::pair<std::string, component_state_map>;

@@ -33,22 +33,23 @@ spawn_at_node(caf::scoped_actor& self, caf::actor node, Arguments&&... xs) {
   return result;
 }
 
-template <typename... Atoms>
-auto get_node_component(caf::scoped_actor& self, caf::actor node) {
-  auto result = caf::expected{
-    detail::generate_array<sizeof...(Atoms), caf::expected<caf::actor>>(
-      caf::no_error)};
+template <size_t N>
+caf::expected<std::array<caf::actor, N>>
+get_node_components(caf::scoped_actor& self, caf::actor node,
+                    const char* const (&names)[N]) {
+  auto result = caf::expected{std::array<caf::actor, N>{}};
   self->request(node, caf::infinite, get_atom::value)
     .receive(
       [&](const std::string& id, system::registry& reg) {
-        auto find_actor = [&](auto atom) -> caf::expected<caf::actor> {
-          auto er = reg.components[id].find(to_string(atom));
-          if (er == reg.components[id].end())
-            return make_error(ec::missing_component, to_string(atom));
-          return er->second.actor;
+        auto find_actor = [&](std::string_view name) -> caf::actor {
+          if (auto er = reg.components[id].find(name);
+              er != reg.components[id].end())
+            return er->second.actor;
+          return nullptr;
         };
-        size_t i = 0;
-        (..., void((*result)[i++] = find_actor(Atoms{})));
+        for (size_t i = 0; i < N; ++i) {
+          result->at(i) = find_actor(names[i]);
+        }
       },
       [&](caf::error& e) { result = std::move(e); });
   return result;

@@ -78,29 +78,28 @@ caf::message source_command(const command::invocation& invocation,
   auto guard = system::signal_monitor::run_guarded(
     sig_mon_thread, sys, defaults::system::signal_monitoring_interval, self);
   // Get node components.
-  auto components
-    = get_node_component<accountant_atom, importer_atom>(self, node);
+  auto components = get_node_components(self, node, {"accountant", "importer"});
   if (!components)
     return make_message(components.error());
   if (auto& accountant = (*components)[0]) {
     VAST_DEBUG(invocation.full_name, "assigns accountant to source");
-    self->send(src, actor_cast<accountant_type>(*accountant));
+    self->send(src, actor_cast<accountant_type>(accountant));
   }
   // Connect source to importer.
   auto& importer = (*components)[1];
   if (!importer)
-    return make_message(importer.error());
+    return make_message(make_error(ec::missing_component, "importer"));
   VAST_DEBUG(invocation.full_name, "connects to importer");
-  self->send(src, system::sink_atom::value, *importer);
+  self->send(src, system::sink_atom::value, importer);
   // Start the source.
   caf::error err;
   bool stop = false;
   self->monitor(src);
-  self->monitor(*importer);
+  self->monitor(importer);
   // clang-format off
   self->do_receive(
     [&](const down_msg& msg) {
-      if (msg.source == *importer)  {
+      if (msg.source == importer)  {
         VAST_DEBUG(invocation.full_name, "received DOWN from node importer");
         self->send_exit(src, exit_reason::user_shutdown);
         err = ec::remote_node_down;
@@ -108,7 +107,7 @@ caf::message source_command(const command::invocation& invocation,
       } else if (msg.source == src) {
         VAST_DEBUG(invocation.full_name, "received DOWN from source");
         if (caf::get_or(invocation.options, "import.blocking", false))
-          self->send(*importer, subscribe_atom::value, flush_atom::value, self);
+          self->send(importer, subscribe_atom::value, flush_atom::value, self);
         else
           stop = true;
       } else {
