@@ -30,9 +30,9 @@ vast pivot pcap.packet 'src_ip == 192.168.1.103' | tcpdump -nl -r -
 # Jupyter Notebook with pandas
 
 Setup with NIX:
-
 ```sh
-nix-shell -I nixpkgs=$HOME/projects/nixpkgs -p "python3.withPackages(ps: [ps.notebook ps.numpy ps.matplotlib ps.pandas ps.pyarrow ps.networkx])"
+nix-shell -I nixpkgs="https://github.com/NixOS/nixpkgs-channels/archive/cc6cf0a96a627e678ffc996a8f9d1416200d6c81.tar.gz" \
+ -p "python3.withPackages(ps: [ps.notebook ps.numpy ps.matplotlib ps.pandas ps.pyarrow ps.networkx])"
 ```
 
 Setup with Homebrew:
