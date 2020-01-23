@@ -13,13 +13,16 @@ Every entry has a category for which we use the following visual abbreviations:
 - 🎁 An Experimental Python module was implemented. It exposes a an API to query
   a VAST node using the regular query language and delivers the results as
   `pyarrow` tables.
+  [#685](https://github.com/tenzir/vast/pull/685)
 
 - 🐞 A bug in the quoted string parser that could result into a parsing
   failure if an escaping character was in the last position.
+  [#685](https://github.com/tenzir/vast/pull/685)
 
 - 🔄 Record field names can now be entered as quoted strings in the schema
   and expression languages. This lifts a restriction where JSON fields
   with whitespaces or special characters could not be ingested.
+  [#685](https://github.com/tenzir/vast/pull/685)
 
 - 🔄 Two minor modifications were done in the parsing framework: (i) the parsers
   for enums and records now allow trailing separators, and (ii) the dash (`-`)
@@ -302,4 +305,4 @@ Every entry has a category for which we use the following visual abbreviations:
 This is the first official release.
 
 [0.1]: https://github.com/vast-io/vast/releases/tag/0.1
-[0.2]: https://github.com/vast-io/vast/releases/tag/0.2
+
