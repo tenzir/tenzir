@@ -19,7 +19,7 @@ vast import pcap -r data/PCAP/M57-2009-day11-18.trace
 # Pivot to Zeek Logs and PCAP Flows
 
 ```sh
-# This is a sample of the original data from suricata
+# This is a sample of the original data from Suricata
 vast export -n 10 json 'src_ip == 192.168.1.103'
 # Pivot to Zeek conn logs
 vast pivot zeek.conn 'src_ip == 192.168.1.103' | head -n 20
