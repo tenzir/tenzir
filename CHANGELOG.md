@@ -10,6 +10,13 @@ Every entry has a category for which we use the following visual abbreviations:
 
 ## [Unreleased]
 
+- 🐞 A bug in the quoted string parser that could result into a parsing
+  failure if an escaping character was in the last position.
+
+- 🔄 Record field names can now be entered as quoted strings in the schema
+  and expression languages. This lifts a restriction where JSON fields
+  with whitespaces or special characters could not be ingested.
+
 - 🔄 Two minor modifications were done in the parsing framework: (i) the parsers
   for enums and records now allow trailing separators, and (ii) the dash (`-`)
   was removed from the allowed characters of schema type names.
