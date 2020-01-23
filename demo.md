@@ -48,4 +48,6 @@ Then:
 jupyter notebook
 ```
 
--> Browser Tab opens -> Open vast-connections.ipynb
+A Browser Tab should open automatically with a listing of the current directory.
+You should now be able to click `vast-connections.ipynb` to open the prepared
+notebook.
