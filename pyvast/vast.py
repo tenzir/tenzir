@@ -8,7 +8,7 @@ Example:
     > from pyvast import VAST
     > vast = VAST(app="/opt/tenzir/bin/vast")
     Test if the connector works:
-    > await vast.try_connect()
+    > await vast.connect()
     Extract some Data:
     > data = await vast.query(":addr == 192.168.1.104")
 
@@ -45,7 +45,7 @@ class VAST:
         table = reader.read_all()
         return table
 
-    async def try_connect(self):
+    async def connect(self):
         """Checks if the endpoint can be connected to"""
         proc = await spawn(self.app, "status")
         await proc.communicate()
