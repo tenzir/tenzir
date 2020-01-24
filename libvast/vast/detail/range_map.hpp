@@ -206,7 +206,7 @@ public:
   void erase_value(const Value& x) {
     auto i = map_.begin();
     while (i != map_.end()) {
-      if (i->second == x)
+      if (i->second.second == x)
         i = map_.erase(i);
       else
         ++i;
