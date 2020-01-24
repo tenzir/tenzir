@@ -38,12 +38,14 @@ segment_ptr segment::make(chunk_ptr chunk) {
     VAST_ERROR_ANON(__func__, "failed to deserialize segment meta data");
     return nullptr;
   }
-  if (result->magic != magic) {
-    VAST_ERROR_ANON(__func__, "got invalid segment magic", result->magic);
+  if (result->header_.magic != magic) {
+    VAST_ERROR_ANON(__func__, "got invalid segment magic",
+                    result->header_.magic, "instead of", magic);
     return nullptr;
   }
-  if (result->version > version) {
-    VAST_ERROR_ANON(__func__, "got newer segment version", result->version);
+  if (result->header_.version > version) {
+    VAST_ERROR_ANON(__func__, "got newer segment version",
+                    result->header_.version, "instead of", version);
     return nullptr;
   }
   // Skip meta data. Since the buffer following the chunk meta data was
