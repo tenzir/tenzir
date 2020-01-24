@@ -54,6 +54,10 @@ struct unused_type : detail::equality_comparable<unused_type>,
   const unused_type& operator/=(T&&) const {
     return *this;
   }
+
+  [[deprecated]] friend inline bool operator==(unused_type, unused_type) {
+    return true;
+  }
 };
 
 static auto unused = unused_type{};
@@ -69,10 +73,6 @@ inline unused_type operator-(unused_type) {
 //
 // Binary
 //
-
-inline bool operator==(unused_type, unused_type) {
-  return true;
-}
 
 template <class T>
 using is_unused_type = std::is_same<T, unused_type>;
