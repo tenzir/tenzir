@@ -19,9 +19,6 @@ install(
   FILES_MATCHING
   PATTERN "*.hh")
 
-set_source_files_properties(3rdparty/sqlite3.c PROPERTIES COMPILE_FLAGS
-                            -DSQLITE_OMIT_LOAD_EXTENSION)
-
 configure_file(${CMAKE_CURRENT_SOURCE_DIR}/broker/include/broker/config.hh.in
                ${CMAKE_CURRENT_BINARY_DIR}/include/broker/config.hh)
 install(FILES ${CMAKE_CURRENT_BINARY_DIR}/include/broker/config.hh
@@ -75,12 +72,10 @@ endif ()
 
 add_library(broker ${BROKER_SRC})
 target_include_directories(
-  broker PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/broker/include
-                ${CMAKE_CURRENT_BINARY_DIR}/include)
-target_include_directories(broker
-                           PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/broker/3rdparty)
-target_compile_options(broker PRIVATE -Wno-unused-parameter
-                                      -Wno-unused-variable)
+  broker SYSTEM
+  PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/broker/include
+         ${CMAKE_CURRENT_BINARY_DIR}/include
+  PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/broker/3rdparty)
 set_target_properties(
   broker
   PROPERTIES
@@ -89,6 +84,8 @@ set_target_properties(
     VERSION ${BROKER_VERSION_MAJOR}.${BROKER_VERSION_MINOR}
     MACOSX_RPATH true
     OUTPUT_NAME broker)
+target_compile_definitions(broker PRIVATE SQLITE_OMIT_LOAD_EXTENSION)
+target_compile_options(broker PRIVATE -Wno-implicit-int-float-conversion)
 target_link_libraries(broker PUBLIC caf::core caf::io caf::openssl)
 install(TARGETS broker DESTINATION ${INSTALL_LIB_DIR})
 
