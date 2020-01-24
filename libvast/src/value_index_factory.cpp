@@ -84,9 +84,9 @@ auto add_string_index_factory() {
           auto cardinality = caf::get_if<int_type>(&i->second);
           VAST_ASSERT(cardinality); // checked in make(x, opts)
           // caf::settings doesn't support unsigned integers, but the
-          // cardinality is a size_t, so we may get -1 if someone provides
-          // numeric_limits<size_t>::max().
-          if (*cardinality == -1) {
+          // cardinality is a size_t, so we may get negative values if someone
+          // provides an uint64_t value, e.g., numeric_limits<size_t>::max().
+          if (*cardinality < 0) {
             VAST_WARNING_ANON(__func__, "got an explicit cardinality of 2^64"
                                         ", using max digest size of 8 bytes");
             return std::make_unique<hash_index<8>>(std::move(x));
