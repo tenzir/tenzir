@@ -65,9 +65,9 @@ TEST(serialization) {
 }
 
 // The attribute #index=hash selects the hash_index implementation.
-TEST(value_index) {
-  auto t = string_type{}.attributes({{"index", "hash"}});
+TEST(string value_index) {
   factory<value_index>::initialize();
+  auto t = string_type{}.attributes({{"index", "hash"}});
   caf::settings opts;
   MESSAGE("test cardinality that is a power of 2");
   opts["cardinality"] = 1_Ki;
@@ -83,4 +83,21 @@ TEST(value_index) {
   idx = factory<value_index>::make(t, caf::settings{});
   auto ptr5 = dynamic_cast<hash_index<5>*>(idx.get());
   CHECK(ptr5 != nullptr);
+}
+
+TEST(integer value_index) {
+  factory<value_index>::initialize();
+  auto t = integer_type{}.attributes({{"index", "hash"}});
+  caf::settings opts;
+  MESSAGE("test cardinality that is a power of 2");
+  opts["cardinality"] = 1_Ki;
+  auto idx = factory<value_index>::make(t, opts);
+  REQUIRE(idx != nullptr);
+  auto ptr = dynamic_cast<hash_index<3>*>(idx.get());
+  REQUIRE(ptr != nullptr);
+  CHECK(idx->append(make_data_view(42)));
+  CHECK(idx->append(make_data_view(43)));
+  CHECK(idx->append(make_data_view(44)));
+  auto result = idx->lookup(not_equal, make_data_view(42));
+  CHECK_EQUAL(to_string(unbox(result)), "011");
 }
