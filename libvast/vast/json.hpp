@@ -102,6 +102,18 @@ public:
     return x.data_ < y.data_;
   }
 
+  template <typename T,
+            typename = std::enable_if_t<std::is_constructible_v<json, T>>>
+  friend bool operator==(const json& x, const T& y) {
+    return operator==(x, json{y});
+  }
+
+  template <typename T,
+            typename = std::enable_if_t<std::is_constructible_v<json, T>>>
+  friend bool operator==(const T& x, const json& y) {
+    return operator==(json{x}, y);
+  }
+
   template <class... Ts>
   static json::array make_array(Ts&&... xs) {
     return json::array{json{std::forward<Ts>(xs)}...};
