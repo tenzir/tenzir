@@ -54,8 +54,15 @@ public:
 
   friend caf::error inspect(caf::deserializer&, meta_index&);
 
+  friend bool operator==(const meta_index& lhs, const meta_index& rhs) {
+    return std::tie(lhs.synopsis_options_, lhs.partition_synopses_,
+                    lhs.blacklisted_layouts_)
+           == std::tie(rhs.synopsis_options_, rhs.partition_synopses_,
+                       rhs.blacklisted_layouts_);
+  }
+
 private:
-  // Synopsis structures for a givn layout.
+  // Synopsis structures for a given layout.
   using table_synopsis = std::vector<synopsis_ptr>;
 
   /// Contains synopses per table layout.

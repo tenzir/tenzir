@@ -68,24 +68,34 @@ public:
   /// Loads the contents for this slice from `source`.
   virtual caf::error deserialize(caf::deserializer& source) = 0;
 
+  /// @relates synopsis
+  friend inline bool operator==(const synopsis& x, const synopsis& y) {
+    return x.equals(y);
+  }
+
+  /// @relates synopsis
+  friend inline bool operator!=(const synopsis& x, const synopsis& y) {
+    return !(x == y);
+  }
+
 private:
   vast::type type_;
 };
-
-/// @relates synopsis
-inline bool operator==(const synopsis& x, const synopsis& y) {
-  return x.equals(y);
-}
-
-/// @relates synopsis
-inline bool operator!=(const synopsis& x, const synopsis& y) {
-  return !(x == y);
-}
 
 /// @relates synopsis
 caf::error inspect(caf::serializer& sink, synopsis_ptr& ptr);
 
 /// @relates synopsis
 caf::error inspect(caf::deserializer& source, synopsis_ptr& ptr);
+
+/// @relates synopsis
+static inline bool
+operator==(const synopsis_ptr& lhs, const synopsis_ptr& rhs) {
+  if (!lhs && !rhs)
+    return true;
+  if (!lhs || !rhs)
+    return false;
+  return *lhs == *rhs;
+}
 
 } // namespace vast

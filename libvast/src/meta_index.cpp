@@ -188,11 +188,13 @@ synopsis_options& meta_index::factory_options() {
 }
 
 caf::error inspect(caf::serializer& sink, const meta_index& x) {
-  return sink(x.synopsis_options_, x.partition_synopses_);
+  return sink(x.synopsis_options_, x.partition_synopses_,
+              x.blacklisted_layouts_);
 }
 
 caf::error inspect(caf::deserializer& source, meta_index& x) {
-  return source(x.synopsis_options_, x.partition_synopses_);
+  return source(x.synopsis_options_, x.partition_synopses_,
+                x.blacklisted_layouts_);
 }
 
 } // namespace vast
