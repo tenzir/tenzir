@@ -10,6 +10,10 @@ Every entry has a category for which we use the following visual abbreviations:
 
 ## [Unreleased]
 
+- 🔄 Hash indexes previously only worked with data of type `string`. They now
+  support all data types.
+  [#726](https://github.com/tenzir/vast/pull/726)
+
 - 🎁 An experimental new Python module enables querying VAST and processing
   results as [pyarrow](https://arrow.apache.org/docs/python/) tables.
   [#685](https://github.com/tenzir/vast/pull/685)
