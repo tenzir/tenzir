@@ -94,7 +94,7 @@ TEST(PCAP read/write 1) {
   CHECK_EQUAL(src, unbox(to<address>("192.168.1.1")));
   auto community_id_column = unbox(slice->column("community_id"));
   for (size_t row = 0; row < 44; ++row)
-    CHECK_EQUAL(community_id_column[row], community_ids[row]);
+    CHECK_VARIANT_EQUAL(community_id_column[row], community_ids[row]);
   MESSAGE("write out read packets");
   auto file = "vast-unit-test-nmap-vsn.pcap";
   format::pcap::writer writer{file};

@@ -21,26 +21,27 @@ using namespace std::literals;
 
 TEST(copying views) {
   MESSAGE("calling view directly");
-  CHECK_EQUAL(view<caf::none_t>{caf::none}, caf::none);
-  CHECK_EQUAL(view<bool>{true}, true);
-  CHECK_EQUAL(view<integer>{42}, 42);
-  CHECK_EQUAL(view<count>{42}, 42u);
-  CHECK_EQUAL(view<real>{4.2}, 4.2);
-  CHECK_EQUAL(view<port>(53, port::udp), port(53, port::udp));
+  CHECK_VARIANT_EQUAL(view<caf::none_t>{caf::none}, caf::none);
+  CHECK_VARIANT_EQUAL(view<bool>{true}, true);
+  CHECK_VARIANT_EQUAL(view<integer>{42}, 42);
+  CHECK_VARIANT_EQUAL(view<count>{42}, 42u);
+  CHECK_VARIANT_EQUAL(view<real>{4.2}, 4.2);
+  CHECK_VARIANT_EQUAL(view<port>(53, port::udp), port(53, port::udp));
   MESSAGE("using make_view");
-  CHECK_EQUAL(make_view(caf::none), caf::none);
-  CHECK_EQUAL(make_view(true), true);
-  CHECK_EQUAL(make_view(42), integer(42));
-  CHECK_EQUAL(make_view(42u), count(42u));
-  CHECK_EQUAL(make_view(4.2), real(4.2));
-  CHECK_EQUAL(make_view(port(53, port::udp)), port(53, port::udp));
+  CHECK_VARIANT_EQUAL(make_view(caf::none), caf::none);
+  CHECK_VARIANT_EQUAL(make_view(true), true);
+  CHECK_VARIANT_EQUAL(make_view(42), integer(42));
+  CHECK_VARIANT_EQUAL(make_view(42u), count(42u));
+  CHECK_VARIANT_EQUAL(make_view(4.2), real(4.2));
+  CHECK_VARIANT_EQUAL(make_view(port(53, port::udp)), port(53, port::udp));
   MESSAGE("copying from temporary data");
-  CHECK_EQUAL(make_view(data{caf::none}), caf::none);
-  CHECK_EQUAL(make_view(data{true}), true);
-  CHECK_EQUAL(make_view(data{42}), integer(42));
-  CHECK_EQUAL(make_view(data{42u}), count(42u));
-  CHECK_EQUAL(make_view(data{4.2}), real(4.2));
-  CHECK_EQUAL(make_view(data(port(53, port::udp))), port(53, port::udp));
+  CHECK_VARIANT_EQUAL(make_view(data{caf::none}), caf::none);
+  CHECK_VARIANT_EQUAL(make_view(data{true}), true);
+  CHECK_VARIANT_EQUAL(make_view(data{42}), integer(42));
+  CHECK_VARIANT_EQUAL(make_view(data{42u}), count(42u));
+  CHECK_VARIANT_EQUAL(make_view(data{4.2}), real(4.2));
+  CHECK_VARIANT_EQUAL(make_view(data(port(53, port::udp))),
+                      port(53, port::udp));
 }
 
 TEST(string literal view) {
@@ -127,9 +128,9 @@ TEST(make_data_view) {
   REQUIRE(caf::holds_alternative<view<vector>>(x));
   auto v = caf::get<view<vector>>(x);
   REQUIRE_EQUAL(v->size(), 3u);
-  CHECK_EQUAL(v->at(0), integer{42});
-  CHECK_EQUAL(v->at(1), true);
-  CHECK_EQUAL(v->at(2), "foo"sv);
+  CHECK_VARIANT_EQUAL(v->at(0), integer{42});
+  CHECK_VARIANT_EQUAL(v->at(1), true);
+  CHECK_VARIANT_EQUAL(v->at(2), "foo"sv);
   CHECK_EQUAL(xs, materialize(v));
 }
 

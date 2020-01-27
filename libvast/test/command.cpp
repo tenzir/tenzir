@@ -111,8 +111,8 @@ TEST(flat command invocation) {
   CHECK(is_error(exec("--flag bar", factory)));
   CHECK_EQUAL(get_or(invocation.options, "flag", false), false);
   CHECK_EQUAL(get_or(invocation.options, "value", 0), 0);
-  CHECK_EQUAL(exec("bar", factory), "bar"s);
-  CHECK_EQUAL(exec("foo --flag -v 42", factory), "foo"s);
+  CHECK_VARIANT_EQUAL(exec("bar", factory), "bar"s);
+  CHECK_VARIANT_EQUAL(exec("foo --flag -v 42", factory), "foo"s);
   CHECK_EQUAL(get_or(invocation.options, "flag", false), true);
   CHECK_EQUAL(get_or(invocation.options, "value", 0), 42);
 }
@@ -134,23 +134,23 @@ TEST(nested command invocation) {
   CHECK(is_error(exec("nop", factory)));
   CHECK(is_error(exec("bar --flag -v 42", factory)));
   CHECK(is_error(exec("foo --flag -v 42 --other-flag", factory)));
-  CHECK_EQUAL(exec("foo --flag -v 42", factory), "foo"s);
+  CHECK_VARIANT_EQUAL(exec("foo --flag -v 42", factory), "foo"s);
   CHECK_EQUAL(get_or(invocation.options, "flag", false), true);
   CHECK_EQUAL(get_or(invocation.options, "value", 0), 42);
-  CHECK_EQUAL(exec("foo --flag -v 42 bar", factory), "bar"s);
+  CHECK_VARIANT_EQUAL(exec("foo --flag -v 42 bar", factory), "bar"s);
   CHECK_EQUAL(get_or(invocation.options, "flag", false), true);
   CHECK_EQUAL(get_or(invocation.options, "value", 0), 42);
   // Setting the command function to nullptr prohibits calling it directly.
   factory.erase(fptr->full_name());
   CHECK(is_error(exec("foo --flag -v 42", factory)));
   // Subcommands of course still work.
-  CHECK_EQUAL(exec("foo --flag -v 42 bar", factory), "bar"s);
+  CHECK_VARIANT_EQUAL(exec("foo --flag -v 42 bar", factory), "bar"s);
 }
 
 TEST(version command) {
   command::factory factory{{"version", system::version_command}};
   root.add_subcommand("version", "", "", command::opts());
-  CHECK_EQUAL(exec("version", factory), caf::none);
+  CHECK_VARIANT_EQUAL(exec("version", factory), caf::none);
 }
 
 FIXTURE_SCOPE_END()

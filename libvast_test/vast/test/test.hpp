@@ -22,6 +22,52 @@
 
 #include <caf/test/unit_test.hpp>
 
+namespace vast::test::detail {
+
+struct equality_compare {
+  template <class T1, class T2>
+  bool operator()(const T1& t1, const T2& t2) {
+    return t1 == t2;
+  }
+};
+
+struct inequality_compare {
+  template <class T1, class T2>
+  bool operator()(const T1& t1, const T2& t2) {
+    return t1 != t2;
+  }
+};
+
+struct greater_compare {
+  template <class T1, class T2>
+  bool operator()(const T1& t1, const T2& t2) {
+    return t1 > t2;
+  }
+};
+
+struct greater_equal_compare {
+  template <class T1, class T2>
+  bool operator()(const T1& t1, const T2& t2) {
+    return t1 >= t2;
+  }
+};
+
+struct less_compare {
+  template <class T1, class T2>
+  bool operator()(const T1& t1, const T2& t2) {
+    return t1 < t2;
+  }
+};
+
+struct less_equal_compare {
+  template <class T1, class T2>
+  bool operator()(const T1& t1, const T2& t2) {
+    return t1 <= t2;
+  }
+};
+
+} // end namespace vast::test::detail
+
 // -- logging macros -----------------------------------------------------------
 
 #define ERROR CAF_TEST_PRINT_ERROR
@@ -38,22 +84,43 @@
 
 // -- macros for checking results ----------------------------------------------
 
+// Checks that abort the current test on failure
 #define REQUIRE CAF_REQUIRE
-#define REQUIRE_EQUAL CAF_REQUIRE_EQUAL
-#define REQUIRE_NOT_EQUAL CAF_REQUIRE_NOT_EQUAL
-#define REQUIRE_LESS CAF_REQUIRE_LESS
-#define REQUIRE_LESS_EQUAL CAF_REQUIRE_LESS_EQUAL
-#define REQUIRE_GREATER CAF_REQUIRE_GREATER
-#define REQUIRE_GREATER_EQUAL CAF_REQUIRE_GREATER_EQUAL
-#define CHECK CAF_CHECK
-#define CHECK_EQUAL CAF_CHECK_EQUAL
-#define CHECK_NOT_EQUAL CAF_CHECK_NOT_EQUAL
-#define CHECK_LESS CAF_CHECK_LESS
-#define CHECK_LESS_EQUAL CAF_CHECK_LESS_OR_EQUAL
-#define CHECK_GREATER CAF_CHECK_GREATER
-#define CHECK_GREATER_EQUAL CAF_CHECK_GREATER_OR_EQUAL
-#define CHECK_FAIL CAF_CHECK_FAIL
+#define REQUIRE_EQUAL(x, y)                                                    \
+  CAF_REQUIRE_FUNC(vast::test::detail::equality_compare, (x), (y))
+#define REQUIRE_NOT_EQUAL(x, y)                                                \
+  CAF_REQUIRE_FUNC(vast::test::detail::inequality_compare, (x), (y))
+#define REQUIRE_LESS(x, y)                                                     \
+  CAF_REQUIRE_FUNC(vast::test::detail::less_compare, (x), (y))
+#define REQUIRE_LESS_EQUAL(x, y)                                               \
+  CAF_REQUIRE_FUNC(vast::test::detail::less_equal_compare, (x), (y))
+#define REQUIRE_GREATER(x, y)                                                  \
+  CAF_REQUIRE_FUNC(vast::test::detail::greater_compare, (x), (y))
+#define REQUIRE_GREATER_EQUAL(x, y)                                            \
+  CAF_REQUIRE_FUNC(vast::test::detail::greater_equal_compare, (x), (y))
 #define FAIL CAF_FAIL
+// Checks that continue with the current test on failure
+#define CHECK CAF_CHECK
+#define CHECK_EQUAL(x, y)                                                      \
+  CAF_CHECK_FUNC(vast::test::detail::equality_compare, (x), (y))
+#define CHECK_NOT_EQUAL(x, y)                                                  \
+  CAF_CHECK_FUNC(vast::test::detail::inequality_compare, (x), (y))
+#define CHECK_LESS(x, y)                                                       \
+  CAF_CHECK_FUNC(vast::test::detail::less_compare, (x), (y))
+#define CHECK_LESS_EQUAL(x, y)                                                 \
+  CAF_CHECK_FUNC(vast::test::detail::less_equal_compare, (x), (y))
+#define CHECK_GREATER(x, y)                                                    \
+  CAF_CHECK_FUNC(vast::test::detail::greater_compare, (x), (y))
+#define CHECK_GREATER_EQUAL(x, y)                                              \
+  CAF_CHECK_FUNC(vast::test::detail::greater_equal_compare, (x), (y))
+#define CHECK_FAIL CAF_CHECK_FAIL
+// Checks that automagically handle caf::variant types.
+#define CHECK_VARIANT_EQUAL CAF_CHECK_EQUAL
+#define CHECK_VARIANT_NOT_EQUAL CAF_CHECK_NOT_EQUAL
+#define CHECK_VARIANT_LESS CAF_CHECK_LESS
+#define CHECK_VARIANT_LESS_EQUAL CAF_CHECK_LESS_OR_EQUAL
+#define CHECK_VARIANT_GREATER CAF_CHECK_GREATER
+#define CHECK_VARIANT_GREATER_EQUAL CAF_CHECK_GREATER_OR_EQUAL
 
 // -- convenience macros for common check categories ---------------------------
 
