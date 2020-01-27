@@ -10,13 +10,12 @@ Every entry has a category for which we use the following visual abbreviations:
 
 ## [Unreleased]
 
-- 🎁 An Experimental Python module was implemented. It exposes a an API to query
-  a VAST node using the regular query language and delivers the results as
-  `pyarrow` tables.
+- 🎁 An experimental new Python module enables querying VAST and processing
+  results as [pyarrow](https://arrow.apache.org/docs/python/) tables.
   [#685](https://github.com/tenzir/vast/pull/685)
 
-- 🐞 A bug in the quoted string parser that could result into a parsing
-  failure if an escaping character was in the last position.
+- 🐞 A bug in the quoted string parser caused a parsing failure if an escape
+  character occurred in the last position.
   [#685](https://github.com/tenzir/vast/pull/685)
 
 - 🔄 Record field names can now be entered as quoted strings in the schema
