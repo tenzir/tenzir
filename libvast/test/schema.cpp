@@ -63,23 +63,29 @@ TEST(offset finding) {
   CHECK_EQUAL(at(foo_record, 3).name(), "middle");
   CHECK_EQUAL(at(foo_record, 3, 0), integer_type{});
   CHECK_EQUAL(at(foo_record, 3, 1).name(), "inner");
-  CHECK_EQUAL(at(foo_record, 3, 1, 0).name(), integer_type{});
-  CHECK_EQUAL(at(foo_record, 3, 1, 1).name(), real_type{});
+  CHECK_EQUAL(at(foo_record, 3, 1, 0), integer_type{});
+  CHECK_EQUAL(at(foo_record, 3, 1, 1), real_type{});
 }
 
 TEST(combining) {
   auto x = unbox(to<schema>(R"__(
-    type a = int
     type b = real
+    type int_custom = int
+    type a = int_custom
   )__"));
   auto y = unbox(to<schema>(R"__(
-    type a = count
     type c = addr
+    type d = pattern
   )__"));
   auto z = schema::combine(x, y);
-  CHECK_EQUAL(z.find("a"), count_type{}.name("a"));
-  CHECK_EQUAL(z.find("b"), real_type{}.name("b"));
-  CHECK_EQUAL(z.find("c"), address_type{}.name("c"));
+  std::cerr << to_string(x) << std::endl;
+  std::cerr << to_string(y) << std::endl;
+  std::cerr << to_string(z) << std::endl;
+  CHECK(unbox(z.find("a")) == integer_type{}.name("a"));
+  CHECK(unbox(z.find("b")) == real_type{}.name("b"));
+  CHECK(unbox(z.find("c")) == address_type{}.name("c"));
+  CHECK(unbox(z.find("d")) == pattern_type{}.name("d"));
+  CHECK(unbox(z.find("int_custom")) == integer_type{}.name("int_custom"));
 }
 
 TEST(merging) {
@@ -145,7 +151,7 @@ TEST(parseable - toplevel comments) {
 
 TEST(parseable - inline comments) {
   std::string_view str = R"__(
-    type foo = record{  // so 
+    type foo = record{  // so
       ts: time,         // much
       uid: string       // more
     }                   // detail,
