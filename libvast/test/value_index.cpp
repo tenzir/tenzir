@@ -320,14 +320,14 @@ TEST(address) {
   x = *to<address>("192.168.0.2");
   CHECK(idx.append(make_data_view(x), 42));
   x = *to<address>("192.168.0.2");
-  auto str = "01000100000"s + std::string('0', 42) + '1';
-  CHECK_EQUAL(idx.lookup(equal, make_data_view(x)), str);
+  auto str = "01000100000"s + std::string(42 - 11, '0') + '1';
+  CHECK_EQUAL(to_string(unbox(idx.lookup(equal, make_data_view(x)))), str);
   MESSAGE("serialization");
   std::vector<char> buf;
   CHECK_EQUAL(save(nullptr, buf, idx), caf::none);
   address_index idx2{address_type{}};
   CHECK_EQUAL(load(nullptr, buf, idx2), caf::none);
-  CHECK_EQUAL(idx2.lookup(equal, make_data_view(x)), str);
+  CHECK_EQUAL(to_string(unbox(idx2.lookup(equal, make_data_view(x)))), str);
 }
 
 TEST(subnet) {

@@ -11,11 +11,16 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#include "vast/concept/parseable/to.hpp"
 #include "vast/concept/parseable/vast/time.hpp"
+
+#include "vast/concept/parseable/to.hpp"
 #include "vast/concept/printable/std/chrono.hpp"
 #include "vast/concept/printable/to_string.hpp"
 #include "vast/time.hpp"
+
+#include <chrono>
+#include <cstdlib>
+#include <ctime>
 
 #define SUITE time
 #include "vast/test/test.hpp"
@@ -83,6 +88,13 @@ TEST(compound durations) {
   CHECK(!p("-10m-8ms1ns"));
 }
 
+bool verify_date(vast::time ts, int y, int m, int d) {
+  auto time = system_clock::to_time_t(ts);
+  std::tm tm = {};
+  gmtime_r(&time, &tm);
+  return tm.tm_year + 1900 == y && tm.tm_mon + 1 == m && tm.tm_mday == d;
+}
+
 vast::duration to_hours(vast::duration ts) {
   return duration_cast<hours>(ts) % 24;
 }
@@ -105,7 +117,7 @@ TEST(ymdshms time parser) {
   CHECK(parsers::time("2012-08-12+23:55:04.001234+01", ts));
   auto sd = floor<days>(ts);
   auto t = ts - sd;
-  CHECK(sd == years{2012} / 8 / 13);
+  CHECK(verify_date(sd, 2012, 8, 13));
   CHECK(to_hours(t) == hours{0});
   CHECK(to_minutes(t) == minutes{55});
   CHECK(to_seconds(t) == seconds{4});
@@ -114,7 +126,7 @@ TEST(ymdshms time parser) {
   CHECK(parsers::time("2012-08-12+23:55:04.001234", ts));
   sd = floor<days>(ts);
   t = ts - sd;
-  CHECK(sd == years{2012} / 8 / 12);
+  CHECK(verify_date(sd, 2012, 8, 12));
   CHECK(to_hours(t) == hours{23});
   CHECK(to_minutes(t) == minutes{55});
   CHECK(to_seconds(t) == seconds{4});
@@ -123,7 +135,7 @@ TEST(ymdshms time parser) {
   CHECK(parsers::time("2012-08-12+23:55:04-00:30", ts));
   sd = floor<days>(ts);
   t = ts - sd;
-  CHECK(sd == years{2012} / 8 / 12);
+  CHECK(verify_date(sd, 2012, 8, 12));
   CHECK_EQUAL(to_hours(t), hours{23});
   CHECK_EQUAL(to_minutes(t), minutes{25});
   CHECK(to_seconds(t) == seconds{4});
@@ -131,7 +143,7 @@ TEST(ymdshms time parser) {
   CHECK(parsers::time("2012-08-12+23:55:04", ts));
   sd = floor<days>(ts);
   t = ts - sd;
-  CHECK(sd == years{2012} / 8 / 12);
+  CHECK(verify_date(sd, 2012, 8, 12));
   CHECK(to_hours(t) == hours{23});
   CHECK(to_minutes(t) == minutes{55});
   CHECK(to_seconds(t) == seconds{4});
@@ -140,7 +152,7 @@ TEST(ymdshms time parser) {
   CHECK(parsers::time("2012-08-12+23:55+0130", ts));
   sd = floor<days>(ts);
   t = ts - sd;
-  CHECK(sd == years{2012} / 8 / 13);
+  CHECK(verify_date(sd, 2012, 8, 13));
   CHECK_EQUAL(to_hours(t), hours{1});
   CHECK_EQUAL(to_minutes(t), minutes{25});
   CHECK(to_seconds(t) == seconds{0});
@@ -148,7 +160,7 @@ TEST(ymdshms time parser) {
   CHECK(parsers::time("2012-08-12+23:55", ts));
   sd = floor<days>(ts);
   t = ts - sd;
-  CHECK(sd == years{2012} / 8 / 12);
+  CHECK(verify_date(sd, 2012, 8, 12));
   CHECK(to_hours(t) == hours{23});
   CHECK(to_minutes(t) == minutes{55});
   CHECK(to_seconds(t) == seconds{0});
@@ -156,7 +168,7 @@ TEST(ymdshms time parser) {
   CHECK(parsers::time("2012-08-12+23", ts));
   sd = floor<days>(ts);
   t = ts - sd;
-  CHECK(sd == years{2012} / 8 / 12);
+  CHECK(verify_date(sd, 2012, 8, 12));
   CHECK(to_hours(t) == hours{23});
   CHECK(to_minutes(t) == minutes{0});
   CHECK(to_seconds(t) == seconds{0});
@@ -164,7 +176,7 @@ TEST(ymdshms time parser) {
   CHECK(parsers::time("2012-08-12", ts));
   sd = floor<days>(ts);
   t = ts - sd;
-  CHECK(sd == years{2012} / 8 / 12);
+  CHECK(verify_date(sd, 2012, 8, 12));
   CHECK(to_hours(t) == hours{0});
   CHECK(to_minutes(t) == minutes{0});
   CHECK(to_seconds(t) == seconds{0});
@@ -172,7 +184,7 @@ TEST(ymdshms time parser) {
   CHECK(parsers::time("2012-08", ts));
   sd = floor<days>(ts);
   t = ts - sd;
-  CHECK(sd == years{2012} / 8 / 1);
+  CHECK(verify_date(sd, 2012, 8, 1));
   CHECK(to_hours(t) == hours{0});
   CHECK(to_minutes(t) == minutes{0});
   CHECK(to_seconds(t) == seconds{0});

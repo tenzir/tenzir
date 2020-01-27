@@ -82,7 +82,8 @@ TEST(construction) {
   CHECK(get<data>(p0->rhs) == data{42});
   auto p1 = caf::get_if<predicate>(&c->at(1));
   REQUIRE(p1);
-  CHECK(get<attribute_extractor>(p1->lhs).attr == attribute{"foo"});
+  CHECK(attribute{caf::to_string(get<attribute_extractor>(p1->lhs).attr)}
+        == attribute{"foo"});
   CHECK_EQUAL(p1->op, equal);
   CHECK(get<data>(p1->rhs) == data{true});
 }
@@ -157,7 +158,8 @@ TEST(normalization) {
   REQUIRE(normalized);
   CHECK_EQUAL(normalize(*expr), *normalized);
   MESSAGE("performing all normalizations in one shot");
-  expr = to<expression>("a > 42 && 42 < a && ! (\"foo\" in bar || ! x == 1337)");
+  expr = to<expression>("a > 42 && 42 < a && "
+                        "! (\"foo\" in bar || ! x == 1337)");
   normalized = to<expression>("a > 42 && bar !ni \"foo\" && x == 1337");
   REQUIRE(expr);
   REQUIRE(normalized);
@@ -177,7 +179,7 @@ TEST(extractors) {
     MESSAGE("type extractor - distribution");
     auto expr = unbox(to<expression>(":addr in 192.168.0.0/24"));
     auto resolved = caf::visit(type_resolver(r), expr);
-    CHECK_EQUAL(resolved, &normalized);
+    CHECK_EQUAL(resolved, normalized);
     MESSAGE("key extractor - distribution");
     expr = unbox(to<expression>("host in 192.168.0.0/24"));
     resolved = unbox(caf::visit(type_resolver(r), expr));
@@ -190,7 +192,7 @@ TEST(extractors) {
     MESSAGE("type extractor - distribution with negation");
     auto expr = unbox(to<expression>(":addr !in 192.168.0.0/24"));
     auto resolved = caf::visit(type_resolver(r), expr);
-    CHECK_EQUAL(resolved, &normalized);
+    CHECK_EQUAL(resolved, normalized);
     MESSAGE("key extractor - distribution with negation");
     expr = unbox(to<expression>("host !in 192.168.0.0/24"));
     resolved = unbox(caf::visit(type_resolver(r), expr));
