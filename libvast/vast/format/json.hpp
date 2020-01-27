@@ -162,8 +162,11 @@ caf::error reader<Selector>::read_impl(size_t max_events, size_t max_slice_size,
       return finish(cons, make_error(ec::end_of_input, "input exhausted"));
     auto& line = lines_->get();
     vast::json j;
-    if (!parsers::json(line, j))
-      return make_error(ec::parse_error, "unable to parse json");
+    if (!parsers::json(line, j)) {
+      VAST_WARNING(this, "failed to parse line", lines_->line_number(), ":",
+                   line);
+      continue;
+    }
     auto xs = caf::get_if<vast::json::object>(&j);
     if (!xs)
       return make_error(ec::type_clash, "not a json object");

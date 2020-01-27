@@ -167,7 +167,8 @@ struct type_parser : parser<type_parser> {
       return record_type{std::move(fields)}.attributes(std::move(attrs));
     };
     auto field
-      = (parsers::identifier >> skp >> ':' >> skp >> ref(type_type))
+      = ((parsers::identifier | parsers::qqstr) >> skp >> ':' >> skp
+      >> ref(type_type))
       ->* to_field
       ;
     auto record_type_parser

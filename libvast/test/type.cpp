@@ -13,15 +13,10 @@
 
 #define SUITE type
 
-#include "vast/test/test.hpp"
-#include "type_test.hpp"
-#include "vast/test/fixtures/actor_system.hpp"
-
-#include "vast/data.hpp"
-#include "vast/json.hpp"
-#include "vast/load.hpp"
-#include "vast/save.hpp"
 #include "vast/type.hpp"
+
+#include "vast/test/fixtures/actor_system.hpp"
+#include "vast/test/test.hpp"
 
 #include "vast/concept/hashable/uhash.hpp"
 #include "vast/concept/hashable/xxhash.hpp"
@@ -31,12 +26,21 @@
 #include "vast/concept/printable/vast/json.hpp"
 #include "vast/concept/printable/vast/offset.hpp"
 #include "vast/concept/printable/vast/type.hpp"
+#include "vast/data.hpp"
+#include "vast/json.hpp"
+#include "vast/load.hpp"
+#include "vast/save.hpp"
+
+#include <string_view>
+
+#include "type_test.hpp"
 
 using caf::get;
 using caf::get_if;
 using caf::holds_alternative;
 
 using namespace std::string_literals;
+using namespace std::string_view_literals;
 using namespace vast;
 
 FIXTURE_SCOPE(type_tests, fixtures::deterministic_actor_system)
@@ -581,11 +585,21 @@ TEST(parseable) {
   CHECK(t == type{set_type{port_type{}}});
   CHECK(parsers::type("map<count, bool>", t));
   CHECK(t == type{map_type{count_type{}, bool_type{}}});
-  MESSAGE("recursive");
-  auto str = "record{r: record{a: addr, i: record{b: bool}}}"s;
+  MESSAGE("record");
+  auto str = R"__(record{"a b": addr, b: bool})__"sv;
   CHECK(parsers::type(str, t));
   // clang-format off
   auto r = record_type{
+    {"a b", address_type{}},
+    {"b", bool_type{}}
+  };
+  // clang-format on
+  CHECK_EQUAL(t, r);
+  MESSAGE("recursive");
+  str = "record{r: record{a: addr, i: record{b: bool}}}"sv;
+  CHECK(parsers::type(str, t));
+  // clang-format off
+  r = record_type{
     {"r", record_type{
       {"a", address_type{}},
       {"i", record_type{{"b", bool_type{}}}}
