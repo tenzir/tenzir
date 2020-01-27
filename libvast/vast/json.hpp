@@ -49,7 +49,7 @@ public:
   using array = std::vector<json>;
 
   /// A JSON object.
-  using object = detail::steady_map<std::string, json>;
+  using object = detail::steady_map<string, json>;
 
   /// The sum type of all possible JSON types.
   using types = caf::detail::type_list<

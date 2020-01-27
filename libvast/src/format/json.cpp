@@ -11,16 +11,14 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#include <caf/detail/pretty_type_name.hpp>
-#include <caf/expected.hpp>
-#include <caf/none.hpp>
+#include "vast/concept/parseable/vast/json.hpp"
 
 #include "vast/concept/parseable/vast/address.hpp"
-#include "vast/concept/parseable/vast/json.hpp"
 #include "vast/concept/parseable/vast/port.hpp"
 #include "vast/concept/parseable/vast/subnet.hpp"
 #include "vast/concept/parseable/vast/time.hpp"
 #include "vast/concept/printable/to_string.hpp"
+#include "vast/concept/printable/vast/data.hpp"
 #include "vast/concept/printable/vast/json.hpp"
 #include "vast/data.hpp"
 #include "vast/detail/unbox_var.hpp"
@@ -31,6 +29,10 @@
 #include "vast/table_slice_builder.hpp"
 #include "vast/type.hpp"
 #include "vast/view.hpp"
+
+#include <caf/detail/pretty_type_name.hpp>
+#include <caf/expected.hpp>
+#include <caf/none.hpp>
 
 namespace vast::format::json {
 namespace {
@@ -126,7 +128,8 @@ struct convert {
     map xs;
     xs.reserve(o.size());
     for (auto& [k, v] : o) {
-      VAST_UNBOX_VAR(key, this->operator()(k, m.key_type));
+      // TODO properly unwrap the key type
+      VAST_UNBOX_VAR(key, caf::visit(*this, json{k}, m.key_type));
       VAST_UNBOX_VAR(val, caf::visit(*this, v, m.value_type));
       xs[key] = val;
     }
@@ -138,7 +141,7 @@ struct convert {
     VAST_ERROR_ANON("json-reader cannot convert from",
                     caf::detail::pretty_type_name(typeid(T)), "to",
                     caf::detail::pretty_type_name(typeid(U)));
-    return false;
+    return make_error(ec::syntax_error, "invalid json type");
   }
 };
 

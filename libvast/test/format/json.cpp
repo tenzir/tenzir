@@ -118,11 +118,11 @@ TEST(json to data) {
   format::json::add(builder, xs, flat);
   auto ptr = builder.finish();
   REQUIRE(ptr);
-  CHECK(ptr->at(0, 10) == enumeration{2});
+  CHECK(ptr->at(0, 11) == data{enumeration{2}});
   auto reference = map{};
-  reference[1] = "FOO";
-  reference[1024] = "BAR!";
-  CHECK(ptr->at(0, 16) == reference);
+  reference[count{1}] = data{"FOO"};
+  reference[count{1024}] = data{"BAR!"};
+  CHECK_EQUAL(materialize(ptr->at(0, 18)), data{reference});
 }
 
 TEST(json reader) {
@@ -159,7 +159,7 @@ TEST_DISABLED(suricata) {
   REQUIRE_EQUAL(num, 2u);
   CHECK_EQUAL(slices[0]->columns(), 36u);
   CHECK_EQUAL(slices[0]->rows(), 2u);
-  CHECK(slices[0]->at(0, 19) == view<count>{4520});
+  CHECK(slices[0]->at(0, 19) == data{count{4520}});
 }
 
 FIXTURE_SCOPE_END()
