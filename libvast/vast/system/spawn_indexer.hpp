@@ -13,12 +13,11 @@
 
 #pragma once
 
-#include <vector>
-
-#include <caf/fwd.hpp>
-
+#include "vast/aliases.hpp"
 #include "vast/fwd.hpp"
 #include "vast/system/fwd.hpp"
+
+#include <caf/fwd.hpp>
 
 namespace vast::system {
 
@@ -26,14 +25,16 @@ namespace vast::system {
 /// @param parent The parent actor.
 /// @param dir Base directory for persistent state.
 /// @param column_type The type of the indexed field.
+/// @param index_opts Runtime options to parameterize the value index.
 /// @param column The column ID for the indexed field.
 /// @param index A handle to the index actor.
 /// @param partition_id The partition ID that this INDEXER belongs to.
 /// @param m A pointer to the measuring probe used for perfomance data
 ///        accumulation.
 /// @returns the new INDEXER actor.
-caf::actor spawn_indexer(caf::local_actor* parent, path dir, type column_type,
-                         size_t column, caf::actor index, uuid partition_id,
-                         atomic_measurement* m);
+caf::actor
+spawn_indexer(caf::local_actor* parent, path dir, type column_type,
+              caf::settings index_opts, size_t column, caf::actor index,
+              uuid partition_id, atomic_measurement* m);
 
 } // namespace vast::system

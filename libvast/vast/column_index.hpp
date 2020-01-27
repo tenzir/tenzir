@@ -13,11 +13,6 @@
 
 #pragma once
 
-#include <memory>
-
-#include <caf/expected.hpp>
-#include <caf/fwd.hpp>
-
 #include "vast/bitmap.hpp"
 #include "vast/event.hpp"
 #include "vast/expression.hpp"
@@ -25,16 +20,21 @@
 #include "vast/type.hpp"
 #include "vast/value_index.hpp"
 
+#include <caf/expected.hpp>
+#include <caf/fwd.hpp>
+#include <caf/settings.hpp>
+
+#include <memory>
+
 namespace vast {
 
 // -- free functions -----------------------------------------------------------
 
 /// Creates a single colum for a value at column `col`.
 /// @relates column_index
-caf::expected<column_index_ptr> make_column_index(caf::actor_system& sys,
-                                                  path filename,
-                                                  type column_type,
-                                                  size_t column);
+caf::expected<column_index_ptr>
+make_column_index(caf::actor_system& sys, path filename, type column_type,
+                  caf::settings index_opts, size_t column);
 
 // -- class definition ---------------------------------------------------------
 
@@ -44,8 +44,8 @@ class column_index {
 public:
   // -- constructors, destructors, and assignment operators --------------------
 
-  column_index(caf::actor_system& sys, type index_type, path filename,
-               size_t column);
+  column_index(caf::actor_system& sys, type index_type,
+               caf::settings index_opts, path filename, size_t column);
 
   ~column_index();
 
@@ -112,6 +112,7 @@ protected:
   size_t col_;
   bool has_skip_attribute_;
   type index_type_;
+  caf::settings index_opts_;
   path filename_;
   value_index::size_type last_flush_ = 0;
   caf::actor_system& sys_;

@@ -14,6 +14,8 @@
 #pragma once
 
 #include "vast/bitmap_index.hpp"
+#include "vast/concept/parseable/to.hpp"
+#include "vast/concept/parseable/vast/base.hpp"
 #include "vast/concept/printable/vast/data.hpp"
 #include "vast/concept/printable/vast/operator.hpp"
 #include "vast/detail/assert.hpp"
@@ -30,6 +32,7 @@
 #include <caf/error.hpp>
 #include <caf/expected.hpp>
 #include <caf/serializer.hpp>
+#include <caf/settings.hpp>
 
 #include <algorithm>
 #include <memory>
@@ -45,7 +48,7 @@ using value_index_ptr = std::unique_ptr<value_index>;
 /// and an explit query for nil, e.g., `x != 42 || x == nil`.
 class value_index {
 public:
-  value_index(vast::type x);
+  value_index(vast::type x, caf::settings opts);
 
   virtual ~value_index();
 
@@ -79,8 +82,11 @@ public:
   /// @returns The largest ID in the index.
   size_type offset() const;
 
-  /// @returns the type of the value index.
+  /// @returns the type of the index.
   const vast::type& type() const;
+
+  /// @returns the options of the index.
+  const caf::settings& options() const;
 
   // -- persistence -----------------------------------------------------------
 
@@ -98,9 +104,10 @@ private:
   virtual caf::expected<ids>
   lookup_impl(relational_operator op, data_view x) const = 0;
 
-  ewah_bitmap mask_;      ///< The position of all values excluding nil.
-  ewah_bitmap none_;      ///< The positions of nil values.
-  const vast::type type_; ///< The type of this value index.
+  ewah_bitmap mask_;         ///< The position of all values excluding nil.
+  ewah_bitmap none_;         ///< The positions of nil values.
+  const vast::type type_;    ///< The type of this index.
+  const caf::settings opts_; ///< Runtime context with additional parameters.
 };
 
 /// @relates value_index
@@ -186,9 +193,15 @@ public:
   static_assert(!std::is_same_v<value_type, std::false_type>,
                 "invalid type T for arithmetic_index");
 
-  using coder_type = std::conditional_t<std::is_same_v<T, bool>,
-                                        singleton_coder<ids>,
-                                        multi_level_coder<range_coder<ids>>>;
+  using multi_level_range_coder = multi_level_coder<range_coder<ids>>;
+
+  // clang-format off
+  using coder_type = std::conditional_t<
+    std::is_same_v<T, bool>,
+    singleton_coder<ids>,
+    multi_level_range_coder
+  >;
+  // clang-format on
 
   // clang-format off
   using binner_type =
@@ -197,7 +210,7 @@ public:
       // Choose a space-efficient binner if none specified.
       std::conditional_t<
         detail::is_any_v<T, time, duration>,
-      decimal_binner<9>, // nanoseconds -> seconds
+        decimal_binner<9>, // nanoseconds -> seconds
         std::conditional_t<
           std::is_same_v<T, real>,
           precision_binner<10>, // no fractional part
@@ -210,14 +223,24 @@ public:
 
   using bitmap_index_type = bitmap_index<value_type, coder_type, binner_type>;
 
-  template <
-    class... Ts,
-    class = std::enable_if_t<std::is_constructible<bitmap_index_type, Ts...>{}>
-  >
-  explicit arithmetic_index(vast::type t, Ts&&... xs)
-    : value_index{std::move(t)},
-      bmi_{std::forward<Ts>(xs)...} {
-    // nop
+  /// Constructs an arithmetic index.
+  /// @param t An arithmetic type.
+  /// @param opts Runtime context for index parameterization.
+  explicit arithmetic_index(vast::type t, caf::settings opts = {})
+    : value_index{std::move(t), std::move(opts)} {
+    if constexpr (std::is_same_v<coder_type, multi_level_range_coder>) {
+      auto i = opts.find("base");
+      if (i == opts.end()) {
+        // Some early experiments found that 8 yields the best average
+        // performance, presumably because it's a power of 2.
+        bmi_ = bitmap_index_type{base::uniform<64>(8)};
+      } else {
+        auto str = caf::get<caf::config_value::string>(i->second);
+        auto b = to<base>(str);
+        VAST_ASSERT(b != nullptr); // pre-condition is that this was validated
+        bmi_ = bitmap_index_type{base{std::move(*b)}};
+      }
+    }
   }
 
   caf::error serialize(caf::serializer& sink) const override {
@@ -280,9 +303,8 @@ class string_index : public value_index {
 public:
   /// Constructs a string index.
   /// @param t An instance of `string_type`.
-  /// @param max_length The maximum string length to support. Longer strings
-  ///                   will be chopped to this size.
-  explicit string_index(vast::type t, size_t max_length = 1024);
+  /// @param opts Runtime context for index parameterization.
+  explicit string_index(vast::type t, caf::settings opts = {});
 
   caf::error serialize(caf::serializer& sink) const override;
 
@@ -311,7 +333,7 @@ class enumeration_index : public value_index {
 public:
   using index = bitmap_index<enumeration, equality_coder<ewah_bitmap>>;
 
-  explicit enumeration_index(vast::type t);
+  explicit enumeration_index(vast::type t, caf::settings opts = {});
 
   caf::error serialize(caf::serializer& sink) const override;
 
@@ -332,7 +354,7 @@ public:
   using byte_index = bitmap_index<uint8_t, bitslice_coder<ewah_bitmap>>;
   using type_index = bitmap_index<bool, singleton_coder<ewah_bitmap>>;
 
-  explicit address_index(vast::type t);
+  explicit address_index(vast::type t, caf::settings opts = {});
 
   caf::error serialize(caf::serializer& sink) const override;
 
@@ -353,7 +375,7 @@ class subnet_index : public value_index {
 public:
   using prefix_index = bitmap_index<uint8_t, equality_coder<ewah_bitmap>>;
 
-  explicit subnet_index(vast::type t);
+  explicit subnet_index(vast::type t, caf::settings opts = {});
 
   caf::error serialize(caf::serializer& sink) const override;
 
@@ -384,7 +406,7 @@ public:
       equality_coder<ewah_bitmap>
     >;
 
-  explicit port_index(vast::type t);
+  explicit port_index(vast::type t, caf::settings opts = {});
 
   caf::error serialize(caf::serializer& sink) const override;
 
@@ -405,9 +427,8 @@ class sequence_index : public value_index {
 public:
   /// Constructs a sequence index of a given type.
   /// @param t The sequence type.
-  /// @param max_size The maximum number of elements permitted per sequence.
-  ///                 Longer sequences will be trimmed at the end.
-  explicit sequence_index(vast::type t, size_t max_size = 128);
+  /// @param opts Runtime options for element type construction.
+  explicit sequence_index(vast::type t, caf::settings opts = {});
 
   /// The bitmap index holding the sequence size.
   using size_bitmap_index =

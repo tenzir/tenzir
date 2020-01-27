@@ -62,7 +62,7 @@ caf::error inspect(caf::deserializer& source, synopsis_ptr& ptr) {
     return caf::none;
   }
   // Deserialize into a new instance.
-  auto new_ptr = factory<synopsis>::make(std::move(t), synopsis_options{});
+  auto new_ptr = factory<synopsis>::make(std::move(t), caf::settings{});
   if (!new_ptr)
     return ec::invalid_synopsis_type;
   if (auto err = new_ptr->deserialize(source))

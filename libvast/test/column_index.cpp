@@ -45,8 +45,10 @@ FIXTURE_SCOPE(column_index_tests, fixture)
 TEST(skip attribute) {
   auto foo_type = integer_type{}.name("foo");
   auto bar_type = integer_type{}.attributes({{"skip"}}).name("bar");
-  auto foo = unbox(make_column_index(sys, directory, foo_type, 0));
-  auto bar = unbox(make_column_index(sys, directory, bar_type, 1));
+  auto foo
+    = unbox(make_column_index(sys, directory, foo_type, caf::settings{}, 0));
+  auto bar
+    = unbox(make_column_index(sys, directory, bar_type, caf::settings{}, 1));
   CHECK_EQUAL(foo->has_skip_attribute(), false);
   CHECK_EQUAL(bar->has_skip_attribute(), true);
 }
@@ -55,7 +57,8 @@ TEST(integer values) {
   MESSAGE("ingest integer values");
   integer_type column_type;
   record_type layout{{"value", column_type}};
-  auto col = unbox(make_column_index(sys, directory, column_type, 0));
+  auto col
+    = unbox(make_column_index(sys, directory, column_type, caf::settings{}, 0));
   auto rows = make_rows(1, 2, 3, 1, 2, 3, 1, 2, 3);
   auto slice = default_table_slice::make(layout, rows);
   col->add(slice);
@@ -74,7 +77,8 @@ TEST(integer values) {
   MESSAGE("persist and reload from disk");
   col->flush_to_disk();
   col.reset();
-  col = unbox(make_column_index(sys, directory, column_type, 0));
+  col
+    = unbox(make_column_index(sys, directory, column_type, caf::settings{}, 0));
   MESSAGE("verify column index again");
   CHECK_EQUAL(lookup(col, is1), make_ids({0, 3, 6}, slice_size));
   CHECK_EQUAL(lookup(col, is2), make_ids({1, 4, 7}, slice_size));
@@ -89,7 +93,8 @@ TEST(zeek conn log) {
   auto col_type = row_type.at(col_offset);
   auto col_index = unbox(row_type.flat_index_at(col_offset));
   REQUIRE_EQUAL(col_index, 2u); // 3rd column
-  auto col = unbox(make_column_index(sys, directory, *col_type, col_index));
+  auto col = unbox(
+    make_column_index(sys, directory, *col_type, caf::settings{}, col_index));
   for (auto slice : zeek_conn_log_slices)
     col->add(slice);
   MESSAGE("verify column index");
@@ -100,7 +105,8 @@ TEST(zeek conn log) {
   col->flush_to_disk();
   col.reset();
   MESSAGE("verify column index again");
-  col = unbox(make_column_index(sys, directory, *col_type, col_index));
+  col = unbox(
+    make_column_index(sys, directory, *col_type, caf::settings{}, col_index));
   CHECK_EQUAL(lookup(col, pred), expected_result);
 }
 

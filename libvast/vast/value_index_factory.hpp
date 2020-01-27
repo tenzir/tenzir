@@ -16,13 +16,15 @@
 #include "vast/factory.hpp"
 #include "vast/fwd.hpp"
 
+#include <caf/fwd.hpp>
+
 namespace vast {
 
 template <>
 struct factory_traits<value_index> {
   using result_type = value_index_ptr;
   using key_type = type;
-  using signature = result_type (*)(type);
+  using signature = result_type (*)(type, caf::settings);
 
   static void initialize();
 

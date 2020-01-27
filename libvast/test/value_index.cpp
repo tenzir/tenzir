@@ -48,7 +48,7 @@ struct fixture : fixtures::events {
 FIXTURE_SCOPE(value_index_tests, fixture)
 
 TEST(bool) {
-  auto idx = factory<value_index>::make(bool_type{});
+  auto idx = factory<value_index>::make(bool_type{}, caf::settings{});
   REQUIRE_NOT_EQUAL(idx, nullptr);
   MESSAGE("append");
   REQUIRE(idx->append(make_data_view(true)));
@@ -77,8 +77,9 @@ TEST(bool) {
 }
 
 TEST(integer) {
-  auto t = integer_type{}.attributes({{"base", "uniform(10,20)"}});
-  auto idx = factory<value_index>::make(t);
+  caf::settings opts;
+  opts["base"] = "uniform(10, 20)";
+  auto idx = factory<value_index>::make(integer_type{}, std::move(opts));
   REQUIRE_NOT_EQUAL(idx, nullptr);
   MESSAGE("append");
   REQUIRE(idx->append(make_data_view(-7)));
@@ -109,7 +110,9 @@ TEST(integer) {
 
 TEST(floating-point with custom binner) {
   using index_type = arithmetic_index<real, precision_binner<6, 2>>;
-  auto idx = index_type{real_type{}, base::uniform<64>(10)};
+  caf::settings opts;
+  opts["base"] = "uniform64(10)";
+  auto idx = index_type{real_type{}, opts};
   MESSAGE("append");
   REQUIRE(idx.append(make_data_view(-7.8)));
   REQUIRE(idx.append(make_data_view(42.123)));
@@ -130,7 +133,7 @@ TEST(floating-point with custom binner) {
   MESSAGE("serialization");
   std::vector<char> buf;
   CHECK_EQUAL(save(nullptr, buf, idx), caf::none);
-  auto idx2 = index_type{real_type{}, base::uniform<64>(10)};
+  auto idx2 = index_type{real_type{}, opts};
   REQUIRE_EQUAL(load(nullptr, buf, idx2), caf::none);
   result = idx2.lookup(not_equal, make_data_view(4711.14));
   CHECK_EQUAL(to_string(unbox(result)), "1110111");
@@ -138,9 +141,10 @@ TEST(floating-point with custom binner) {
 
 TEST(duration) {
   using namespace std::chrono;
+  caf::settings opts;
+  opts["base"] = "uniform64(10)";
   // Default binning gives granularity of seconds.
-  auto idx = arithmetic_index<vast::duration>{duration_type{},
-                                              base::uniform<64>(10)};
+  auto idx = arithmetic_index<vast::duration>{duration_type{}, opts};
   MESSAGE("append");
   REQUIRE(idx.append(make_data_view(milliseconds(1000))));
   REQUIRE(idx.append(make_data_view(milliseconds(2000))));
@@ -166,7 +170,9 @@ TEST(duration) {
 }
 
 TEST(time) {
-  arithmetic_index<vast::time> idx{time_type{}, base::uniform<64>(10)};
+  caf::settings opts;
+  opts["base"] = "uniform64(10)";
+  arithmetic_index<vast::time> idx{time_type{}, opts};
   auto ts = to<vast::time>("2014-01-16+05:30:15");
   MESSAGE("append");
   REQUIRE(idx.append(make_data_view(unbox(ts))));
@@ -193,14 +199,16 @@ TEST(time) {
   MESSAGE("serialization");
   std::vector<char> buf;
   CHECK_EQUAL(save(nullptr, buf, idx), caf::none);
-  arithmetic_index<vast::time> idx2{time_type{}, base::uniform<64>(10)};
+  arithmetic_index<vast::time> idx2{time_type{}, opts};
   CHECK_EQUAL(load(nullptr, buf, idx2), caf::none);
   eighteen = idx2.lookup(greater_equal, make_data_view(unbox(ts)));
   CHECK(to_string(*eighteen) == "000101");
 }
 
 TEST(string) {
-  string_index idx{string_type{}, 100};
+  caf::settings opts;
+  opts["max-size"] = 100;
+  string_index idx{string_type{}, opts};
   MESSAGE("append");
   REQUIRE(idx.append(make_data_view("foo")));
   REQUIRE(idx.append(make_data_view("bar")));
@@ -456,8 +464,10 @@ TEST(vector) {
 }
 
 TEST(set) {
-  auto t = set_type{integer_type{}}.attributes({{"max_size", "2"}});
-  auto idx = factory<value_index>::make(t);
+  auto t = set_type{integer_type{}};
+  caf::settings opts;
+  opts["max-size"] = 2;
+  auto idx = factory<value_index>::make(t, opts);
   REQUIRE_NOT_EQUAL(idx, nullptr);
   auto xs = set{42, 43, 44};
   REQUIRE(idx->append(make_data_view(xs)));
@@ -480,7 +490,7 @@ TEST(set) {
 }
 
 TEST(none values - string) {
-  auto idx = factory<value_index>::make(string_type{});
+  auto idx = factory<value_index>::make(string_type{}, caf::settings{});
   REQUIRE_NOT_EQUAL(idx, nullptr);
   REQUIRE(idx->append(make_data_view(caf::none)));
   REQUIRE(idx->append(make_data_view("foo")));
@@ -516,7 +526,7 @@ TEST(none values - string) {
 }
 
 TEST(none values - arithmetic) {
-  auto idx = factory<value_index>::make(count_type{});
+  auto idx = factory<value_index>::make(count_type{}, caf::settings{});
   REQUIRE_NOT_EQUAL(idx, nullptr);
   REQUIRE(idx->append(make_data_view(caf::none)));
   REQUIRE(idx->append(make_data_view(42)));
@@ -666,7 +676,8 @@ TEST(regression - zeek conn log service http) {
   slice_stats.reserve(slices.size());
   size_t row_id = 0;
   for (auto& slice : slices) {
-    slice_stats.emplace_back(factory<value_index>::make(string_type{}),
+    slice_stats.emplace_back(factory<value_index>::make(string_type{},
+                                                        caf::settings{}),
                              ids(row_id, false));
     auto& [idx, expected] = slice_stats.back();
     for (size_t row = 0; row < slice->rows(); ++row) {

@@ -22,8 +22,6 @@
 #include <vector>
 
 #include <caf/fwd.hpp>
-#include <caf/dictionary.hpp>
-#include <caf/config_value.hpp>
 
 #include "vast/fwd.hpp"
 
@@ -74,9 +72,6 @@ using cli_argument_iterator = std::vector<std::string>::const_iterator;
 /// Convenience alias for function return types that either return an actor or
 /// an error.
 using maybe_actor = caf::expected<caf::actor>;
-
-/// Additional runtime information to pass to the synopsis factory.
-using synopsis_options = caf::dictionary<caf::config_value>;
 
 /// Bundles an offset into an expression under evaluation to the curried
 /// representation of the ::predicate at that position in the expression and

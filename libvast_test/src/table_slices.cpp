@@ -182,7 +182,7 @@ void table_slices::test_load_from_chunk() {
 
 void table_slices::test_append_column_to_index() {
   MESSAGE(">> test append_column_to_index");
-  auto idx = factory<value_index>::make(integer_type{});
+  auto idx = factory<value_index>::make(integer_type{}, caf::settings{});
   REQUIRE_NOT_EQUAL(idx, nullptr);
   auto slice = make_slice();
   slice->append_column_to_index(1, *idx);

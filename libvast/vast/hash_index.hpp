@@ -26,6 +26,7 @@
 #include <caf/expected.hpp>
 #include <caf/optional.hpp>
 #include <caf/serializer.hpp>
+#include <caf/settings.hpp>
 
 #include <algorithm>
 #include <array>
@@ -82,8 +83,9 @@ public:
 
   /// Constructs a hash index for a particular type and digest cutoff.
   /// @param t The type associated with this index.
-  /// @param digest_bytes The number of bytes to keep of a hash digest.
-  explicit hash_index(vast::type t) : value_index{std::move(t)} {
+  /// @param opts Runtime context for index parameterization.
+  explicit hash_index(vast::type t, caf::settings opts = {})
+    : value_index{std::move(t), std::move(opts)} {
   }
 
   caf::error serialize(caf::serializer& sink) const override {

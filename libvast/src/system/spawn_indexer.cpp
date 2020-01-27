@@ -13,23 +13,28 @@
 
 #include "vast/system/spawn_indexer.hpp"
 
-#include <caf/actor.hpp>
-#include <caf/local_actor.hpp>
-
 #include "vast/filesystem.hpp"
 #include "vast/logger.hpp"
 #include "vast/system/indexer.hpp"
 #include "vast/system/instrumentation.hpp"
 #include "vast/type.hpp"
 
+#include <caf/actor.hpp>
+#include <caf/local_actor.hpp>
+#include <caf/settings.hpp>
+
 namespace vast::system {
 
-caf::actor spawn_indexer(caf::local_actor* parent, path dir, type column_type,
-                         size_t column, caf::actor index, uuid partition_id, atomic_measurement* m) {
-  VAST_TRACE(VAST_ARG(dir), VAST_ARG(column_type), VAST_ARG(column),
-             VAST_ARG(index), VAST_ARG(partition_id), VAST_ARG(*m));
+caf::actor
+spawn_indexer(caf::local_actor* parent, path dir, type column_type,
+              caf::settings index_opts, size_t column, caf::actor index,
+              uuid partition_id, atomic_measurement* m) {
+  VAST_TRACE(VAST_ARG(dir), VAST_ARG(column_type), VAST_ARG(index_opts),
+             VAST_ARG(column), VAST_ARG(index), VAST_ARG(partition_id),
+             VAST_ARG(*m));
   return parent->spawn<caf::lazy_init>(indexer, std::move(dir),
-                                       std::move(column_type), column,
+                                       std::move(column_type),
+                                       std::move(index_opts), column,
                                        std::move(index), partition_id, m);
 }
 

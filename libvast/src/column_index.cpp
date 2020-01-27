@@ -24,11 +24,11 @@ namespace vast {
 
 // -- free functions -----------------------------------------------------------
 
-caf::expected<column_index_ptr> make_column_index(caf::actor_system& sys,
-                                                  path filename,
-                                                  type column_type,
-                                                  size_t column) {
+caf::expected<column_index_ptr>
+make_column_index(caf::actor_system& sys, path filename, type column_type,
+                  caf::settings index_opts, size_t column) {
   auto result = std::make_unique<column_index>(sys, std::move(column_type),
+                                               std::move(index_opts),
                                                std::move(filename), column);
   if (auto err = result->init())
     return err;
@@ -38,10 +38,12 @@ caf::expected<column_index_ptr> make_column_index(caf::actor_system& sys,
 // -- constructors, destructors, and assignment operators ----------------------
 
 column_index::column_index(caf::actor_system& sys, type index_type,
-                           path filename, size_t column)
+                           caf::settings index_opts, path filename,
+                           size_t column)
   : col_(column),
     has_skip_attribute_(vast::has_skip_attribute(index_type)),
     index_type_(std::move(index_type)),
+    index_opts_(std::move(index_opts)),
     filename_(std::move(filename)),
     sys_(sys) {
   // nop
@@ -66,7 +68,7 @@ caf::error column_index::init() {
     return caf::none;
   }
   // Otherwise construct a new one.
-  idx_ = factory<value_index>::make(index_type_);
+  idx_ = factory<value_index>::make(index_type_, index_opts_);
   if (idx_ == nullptr) {
     VAST_ERROR(this, "failed to construct index");
     return make_error(ec::unspecified, "failed to construct index");
