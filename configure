@@ -57,6 +57,7 @@ Usage: $0 [OPTION]... [VAR=VALUE]...
     --with-arrow=PATH       path to Apache Arrow install root
     --without-arrow         explicitly disable Apache Arrow integration
     --with-caf=PATH         path to CAF install root or build directory
+    --with-flatbuffers=PATH path to flatbuffers install root
 
   Optional packages:
     --with-broker=PATH      path to Broker install root (required for
@@ -192,6 +193,9 @@ while [ $# -ne 0 ]; do
       ;;
     --with-caf=*)
       append_cache_entry CAF_ROOT_DIR PATH "$optarg"
+      ;;
+    --with-flatbuffers=*)
+      append_cache_entry FLATBUFFERS_ROOT_DIR PATH "$optarg"
       ;;
 # -- Optional packages ---------------------------------------------------------
     --with-broker=*)
