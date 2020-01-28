@@ -8,6 +8,7 @@ Required dependencies:
   - Clang >= 6
   - Apple Clang >= 9.1
 - [CMake](http://www.cmake.org) >= 3.11
+- [flatbuffers](https://google.github.io/flatbuffers/) >= 1.11.0
 - [Apache Arrow](https://arrow.apache.org/) >= 0.16
   - Apache Arrow support can be explicitly disabled by configuring with
     `--without-arrow`. Note that this changes the default behavior of VAST.
