@@ -128,7 +128,7 @@ struct convert {
     map xs;
     xs.reserve(o.size());
     for (auto& [k, v] : o) {
-      // TODO properly unwrap the key type
+      // TODO: Properly unwrap the key type instead of wrapping is in json.
       VAST_UNBOX_VAR(key, caf::visit(*this, json{k}, m.key_type));
       VAST_UNBOX_VAR(val, caf::visit(*this, v, m.value_type));
       xs[key] = val;

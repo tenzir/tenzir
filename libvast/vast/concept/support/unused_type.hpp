@@ -55,7 +55,7 @@ struct unused_type : detail::equality_comparable<unused_type>,
     return *this;
   }
 
-  [[deprecated]] friend inline bool operator==(unused_type, unused_type) {
+  friend inline bool operator==(unused_type, unused_type) {
     return true;
   }
 };

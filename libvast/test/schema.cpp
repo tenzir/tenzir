@@ -78,9 +78,6 @@ TEST(combining) {
     type d = pattern
   )__"));
   auto z = schema::combine(x, y);
-  std::cerr << to_string(x) << std::endl;
-  std::cerr << to_string(y) << std::endl;
-  std::cerr << to_string(z) << std::endl;
   CHECK(unbox(z.find("a")) == integer_type{}.name("a"));
   CHECK(unbox(z.find("b")) == real_type{}.name("b"));
   CHECK(unbox(z.find("c")) == address_type{}.name("c"));

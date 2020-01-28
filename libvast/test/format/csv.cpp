@@ -152,7 +152,6 @@ TEST(csv reader - pattern) {
   auto l1_pattern = record_type{{"ptn", pattern_type{}}}.name("l1");
   REQUIRE_EQUAL(slices[0]->layout(), l1_pattern);
   CHECK(slices[0]->at(0, 0) == data{pattern{"hello"}});
-  ;
 }
 
 std::string_view l1_log0 = R"__(s,ptn,set
@@ -333,7 +332,7 @@ TEST(csv reader - reordered layout) {
   auto m = map{};
   m[1u] = data{"FOO"};
   m[1024u] = data{"BAR!"};
-  // FIXME this is broken.
+  // FIXME: Parsing maps in csv is broken, see ch12358.
   // CHECK_EQUAL(materialize(slices[0]->at(0, 14)), data{m});
 }
 

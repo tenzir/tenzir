@@ -176,9 +176,10 @@ struct view_trait<data> {
 
 // -- operators ----------------------------------------------------------------
 
-// TODO: we cannot use operator == and != here because data has a non-explicit
+// We cannot use operator== and operator!= here because data has a non-explicit
 // constructor, which results in error all over the code base. Therefore, we
-// work around this by giving this function a name.
+// work around this by giving this function a name, and calling it from a
+// templated friend operator== and operator!= in data.
 
 bool is_equal(const data& x, const data_view& y);
 

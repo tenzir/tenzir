@@ -57,7 +57,7 @@ TEST(MRT) {
   /// - # state changes: grep STATE_CHANGE plain.txt | grep -v "Subtype" | wc
   /// - # withdrawals: grep "Withdrawn Routes: " plain.txt | wc
   /// - # announcements: grep "NLRI: " plain.txt | wc
-  // FIXME These tests are horribly broken.
+  // FIXME: Parsing MRT currently returns unexpected output, see ch12357.
   // CHECK(events["mrt.bgp4mp.state_change"] == 46u);
   // CHECK(events["mrt.bgp4mp.update.withdrawn"] == 2105);
   // CHECK(events["mrt.bgp4mp.update.announcement"] == 24328u);
