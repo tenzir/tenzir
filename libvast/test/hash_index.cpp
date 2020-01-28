@@ -65,9 +65,9 @@ TEST(serialization) {
 }
 
 // The attribute #index=hash selects the hash_index implementation.
-TEST(value_index) {
-  auto t = string_type{}.attributes({{"index", "hash"}});
+TEST(factory construction and parameterization) {
   factory<value_index>::initialize();
+  auto t = string_type{}.attributes({{"index", "hash"}});
   caf::settings opts;
   MESSAGE("test cardinality that is a power of 2");
   opts["cardinality"] = 1_Ki;
@@ -83,4 +83,38 @@ TEST(value_index) {
   idx = factory<value_index>::make(t, caf::settings{});
   auto ptr5 = dynamic_cast<hash_index<5>*>(idx.get());
   CHECK(ptr5 != nullptr);
+}
+
+TEST(hash index for integer) {
+  factory<value_index>::initialize();
+  auto t = integer_type{}.attributes({{"index", "hash"}});
+  caf::settings opts;
+  opts["cardinality"] = 1_Ki;
+  auto idx = factory<value_index>::make(t, opts);
+  REQUIRE(idx != nullptr);
+  auto ptr = dynamic_cast<hash_index<3>*>(idx.get());
+  REQUIRE(ptr != nullptr);
+  CHECK(idx->append(make_data_view(42)));
+  CHECK(idx->append(make_data_view(43)));
+  CHECK(idx->append(make_data_view(44)));
+  auto result = idx->lookup(not_equal, make_data_view(42));
+  CHECK_EQUAL(to_string(unbox(result)), "011");
+}
+
+TEST(hash index for set) {
+  factory<value_index>::initialize();
+  auto t = set_type{address_type{}}.attributes({{"index", "hash"}});
+  auto idx = factory<value_index>::make(t, caf::settings{});
+  REQUIRE(idx != nullptr);
+  auto xs = set{1, 2, 3};
+  auto ys = set{7, 5, 4};
+  auto zs = set{0, 0, 0};
+  CHECK(idx->append(make_data_view(xs)));
+  CHECK(idx->append(make_data_view(xs)));
+  CHECK(idx->append(make_data_view(zs)));
+  auto result = idx->lookup(equal, make_data_view(zs));
+  CHECK_EQUAL(to_string(unbox(result)), "001");
+  result = idx->lookup(ni, make_data_view(1));
+  REQUIRE(!result);
+  CHECK(result.error() == ec::unsupported_operator);
 }

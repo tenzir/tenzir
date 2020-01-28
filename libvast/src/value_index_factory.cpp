@@ -55,6 +55,64 @@ value_index_ptr make(type x, caf::settings opts) {
       return nullptr;
     }
   }
+  if (auto a = find_attribute(x, "index")) {
+    if (auto value = a->value)
+      if (*value == "hash"sv) {
+        auto i = opts.find("cardinality");
+        if (i == opts.end())
+          // Default to a 40-bit hash value -> good for 2^20 unique digests.
+          return std::make_unique<hash_index<5>>(std::move(x));
+        auto cardinality = caf::get_if<int_type>(&i->second);
+        VAST_ASSERT(cardinality); // checked in make(x, opts)
+        // caf::settings doesn't support unsigned integers, but the
+        // cardinality is a size_t, so we may get negative values if someone
+        // provides an uint64_t value, e.g., numeric_limits<size_t>::max().
+        if (*cardinality < 0) {
+          VAST_WARNING_ANON(__func__, "got an explicit cardinality of 2^64"
+                                      ", using max digest size of 8 bytes");
+          return std::make_unique<hash_index<8>>(std::move(x));
+        }
+        if (!detail::ispow2(*cardinality))
+          VAST_WARNING_ANON(__func__, "cardinality not a power of 2");
+        // For 2^n unique values, we expect collisions after sqrt(2^n).
+        // Thus, we use 2n bits as digest size.
+        size_t digest_bits = detail::ispow2(*cardinality)
+                               ? (detail::log2p1(*cardinality) - 1) * 2
+                               : detail::log2p1(*cardinality) * 2;
+        auto digest_bytes = digest_bits / 8;
+        if (digest_bits % 8 > 0)
+          ++digest_bytes;
+        VAST_DEBUG_ANON(__func__, "creating hash index with a digest of",
+                        digest_bytes, "bytes");
+        if (digest_bytes > 8) {
+          VAST_WARNING_ANON(__func__,
+                            "expected cardinality exceeds "
+                            "maximum digest size, capping at 8 bytes");
+          digest_bytes = 8;
+        }
+        switch (digest_bytes) {
+          default:
+            VAST_ERROR_ANON(__func__, "invalid digest size", *cardinality);
+            return nullptr;
+          case 1:
+            return std::make_unique<hash_index<1>>(std::move(x));
+          case 2:
+            return std::make_unique<hash_index<2>>(std::move(x));
+          case 3:
+            return std::make_unique<hash_index<3>>(std::move(x));
+          case 4:
+            return std::make_unique<hash_index<4>>(std::move(x));
+          case 5:
+            return std::make_unique<hash_index<5>>(std::move(x));
+          case 6:
+            return std::make_unique<hash_index<6>>(std::move(x));
+          case 7:
+            return std::make_unique<hash_index<7>>(std::move(x));
+          case 8:
+            return std::make_unique<hash_index<8>>(std::move(x));
+        }
+      }
+  }
   return std::make_unique<T>(std::move(x), std::move(opts));
 }
 
@@ -71,79 +129,6 @@ auto add_arithmetic_index_factory() {
   return add_value_index_factory<T, arithmetic_index<concrete_data>>();
 }
 
-auto add_string_index_factory() {
-  using int_type = caf::config_value::integer;
-  static auto f = [](type x, caf::settings opts) -> value_index_ptr {
-    if (auto a = find_attribute(x, "index"))
-      if (auto value = a->value)
-        if (*value == "hash"sv) {
-          auto i = opts.find("cardinality");
-          if (i == opts.end())
-            // Default to a 40-bit hash value -> good for 2^20 unique digests.
-            return std::make_unique<hash_index<5>>(std::move(x));
-          auto cardinality = caf::get_if<int_type>(&i->second);
-          VAST_ASSERT(cardinality); // checked in make(x, opts)
-          // caf::settings doesn't support unsigned integers, but the
-          // cardinality is a size_t, so we may get negative values if someone
-          // provides an uint64_t value, e.g., numeric_limits<size_t>::max().
-          if (*cardinality < 0) {
-            VAST_WARNING_ANON(__func__, "got an explicit cardinality of 2^64"
-                                        ", using max digest size of 8 bytes");
-            return std::make_unique<hash_index<8>>(std::move(x));
-          }
-          if (!detail::ispow2(*cardinality))
-            VAST_WARNING_ANON(__func__, "cardinality not a power of 2");
-          // For 2^n unique values, we expect collisions after sqrt(2^n).
-          // Thus, we use 2n bits as digest size.
-          size_t digest_bits = detail::ispow2(*cardinality)
-                                 ? (detail::log2p1(*cardinality) - 1) * 2
-                                 : detail::log2p1(*cardinality) * 2;
-          auto digest_bytes = digest_bits / 8;
-          if (digest_bits % 8 > 0)
-            ++digest_bytes;
-          VAST_DEBUG_ANON(__func__, "creating hash index with a digest of",
-                          digest_bytes, "bytes");
-          if (digest_bytes > 8) {
-            VAST_WARNING_ANON(__func__,
-                              "expected cardinality exceeds "
-                              "maximum digest size, capping at 8 bytes");
-            digest_bytes = 8;
-          }
-          switch (digest_bytes) {
-            default:
-              VAST_ERROR_ANON(__func__, "invalid digest size", *cardinality);
-              return nullptr;
-            case 1:
-              return std::make_unique<hash_index<1>>(std::move(x));
-            case 2:
-              return std::make_unique<hash_index<2>>(std::move(x));
-            case 3:
-              return std::make_unique<hash_index<3>>(std::move(x));
-            case 4:
-              return std::make_unique<hash_index<4>>(std::move(x));
-            case 5:
-              return std::make_unique<hash_index<5>>(std::move(x));
-            case 6:
-              return std::make_unique<hash_index<6>>(std::move(x));
-            case 7:
-              return std::make_unique<hash_index<7>>(std::move(x));
-            case 8:
-              return std::make_unique<hash_index<8>>(std::move(x));
-          }
-        }
-    return std::make_unique<string_index>(std::move(x), std::move(opts));
-  };
-  return factory<value_index>::add(string_type{}, f);
-}
-
-template <class T, class Index>
-auto add_container_index_factory() {
-  static auto f = [](type x, caf::settings opts) -> value_index_ptr {
-    return std::make_unique<Index>(std::move(x), std::move(opts));
-  };
-  return factory<value_index>::add(T{}, f);
-}
-
 } // namespace <anonymous>
 
 void factory_traits<value_index>::initialize() {
@@ -157,9 +142,9 @@ void factory_traits<value_index>::initialize() {
   add_value_index_factory<address_type, address_index>();
   add_value_index_factory<subnet_type, subnet_index>();
   add_value_index_factory<port_type, port_index>();
-  add_string_index_factory();
-  add_container_index_factory<vector_type, sequence_index>();
-  add_container_index_factory<set_type, sequence_index>();
+  add_value_index_factory<string_type, string_index>();
+  add_value_index_factory<vector_type, sequence_index>();
+  add_value_index_factory<set_type, sequence_index>();
 }
 
 factory_traits<value_index>::key_type
