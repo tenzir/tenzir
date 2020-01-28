@@ -1,0 +1,27 @@
+include "table_slice.fbs";
+
+namespace vast.fbs;
+
+/// The version of the segment structure. If the structure of the segment or
+/// any contained tables changes, the version has to be bumped.
+enum SegmentVersion : short {
+  v1,
+}
+
+/// A bundled sequence of table slices.
+table Segment {
+  /// The version of this segment.
+  version: SegmentVersion;
+
+  /// A UUID that identifies this segment.
+  uuid: [ubyte];
+
+  /// The table slices in this segment.
+  data: [TableSlice];
+}
+
+root_type Segment;
+
+// FIXME: adding this causes the verification to fail! For details, see
+// https://groups.google.com/forum/#!topic/flatbuffers/ejHGnepW8qM.
+//file_identifier "VAST";

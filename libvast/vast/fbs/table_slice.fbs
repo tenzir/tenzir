@@ -1,0 +1,28 @@
+namespace vast.fbs;
+
+/// The format of the binary table slice data.
+enum Encoding : byte {
+  Arrow,
+  CAF,
+  MessagePack,
+}
+
+/// A subset of rows of a table.
+table TableSlice {
+  /// The offset in the 2^64 ID event space.
+  offset: ulong;
+
+  /// The number of events (= rows).
+  rows: ulong;
+
+  /// The schema of the data.
+  layout: [ubyte]; // TODO: currently CAF binary; make this a separate table
+
+  /// The format of the data.
+  encoding: Encoding;
+
+  /// The binary data.
+  data: [ubyte];
+}
+
+root_type TableSlice;
