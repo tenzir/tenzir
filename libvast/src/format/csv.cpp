@@ -13,12 +13,6 @@
 
 #include "vast/format/csv.hpp"
 
-#include <ostream>
-#include <string_view>
-#include <type_traits>
-
-#include <caf/settings.hpp>
-
 #include "vast/concept/parseable/core.hpp"
 #include "vast/concept/parseable/string.hpp"
 #include "vast/concept/parseable/vast.hpp"
@@ -31,6 +25,12 @@
 #include "vast/schema.hpp"
 #include "vast/table_slice.hpp"
 #include "vast/table_slice_builder.hpp"
+
+#include <caf/settings.hpp>
+
+#include <ostream>
+#include <string_view>
+#include <type_traits>
 
 namespace vast::format::csv {
 
@@ -216,6 +216,7 @@ struct container_parser_builder {
 
   template <class T>
   result_type operator()(const T& t) const {
+    auto ws = ignore(*parsers::space);
     if constexpr (std::is_same_v<T, string_type>) {
       // clang-format off
       return +(parsers::any - opt_.set_separator - opt_.kvp_separator) ->* [](std::string x) {
@@ -250,7 +251,7 @@ struct container_parser_builder {
                ->* set_insert;
     } else if constexpr (std::is_same_v<T, vector_type>) {
       auto vector_insert = [](std::vector<Attribute> xs) { return xs; };
-      return ('[' >> (caf::visit(*this, t.value_type) % opt_.set_separator) >> ']')
+      return ('[' >> ~(caf::visit(*this, t.value_type) % opt_.set_separator) >> ']')
                ->* vector_insert;
       // clang-format on
     } else if constexpr (std::is_same_v<T, map_type>) {
@@ -260,8 +261,8 @@ struct container_parser_builder {
       };
       // clang-format off
       auto kvp =
-        caf::visit(*this, t.key_type) >> opt_.kvp_separator >> caf::visit(*this, t.value_type);
-      return ('{'_p >> (kvp % opt_.set_separator) >> '}') ->* map_insert;
+        caf::visit(*this, t.key_type) >> ws >> opt_.kvp_separator >> ws >> caf::visit(*this, t.value_type);
+      return (ws >> '{' >> ws >> (kvp % (ws >> opt_.set_separator >> ws)) >> ws >> '}' >> ws) ->* map_insert;
     } else if constexpr (has_parser_v<type_to_data<T>>) {
       using value_type = type_to_data<T>;
       auto ws = ignore(*parsers::space);
@@ -270,7 +271,7 @@ struct container_parser_builder {
       };
       // clang-format on
     } else {
-      VAST_ERROR_ANON("csv parser builder faild to fetch a parser for type",
+      VAST_ERROR_ANON("csv parser builder failed to fetch a parser for type",
                       caf::detail::pretty_type_name(typeid(T)));
       return {};
     }
