@@ -48,7 +48,6 @@
 #include <deque>
 #include <unordered_set>
 
-using namespace caf;
 using namespace std::chrono;
 
 namespace vast::system {
@@ -103,7 +102,7 @@ caf::error index_state::init(const path& dir, size_t max_partition_size,
   this->taste_partitions = taste_partitions;
   if (auto a = self->system().registry().get(accountant_atom::value)) {
     namespace defs = defaults::system;
-    this->accountant = actor_cast<accountant_type>(a);
+    this->accountant = caf::actor_cast<accountant_type>(a);
     self->send(this->accountant, announce_atom::value, "index");
     self->delayed_send(self, defs::telemetry_rate, telemetry_atom::value);
   }
@@ -418,9 +417,9 @@ void index_state::notify_flush_listeners() {
   flush_listeners.clear();
 }
 
-behavior index(stateful_actor<index_state>* self, const path& dir,
-               size_t max_partition_size, size_t in_mem_partitions,
-               size_t taste_partitions, size_t num_workers) {
+caf::behavior index(caf::stateful_actor<index_state>* self, const path& dir,
+                    size_t max_partition_size, size_t in_mem_partitions,
+                    size_t taste_partitions, size_t num_workers) {
   VAST_TRACE(VAST_ARG(dir), VAST_ARG(max_partition_size),
              VAST_ARG(in_mem_partitions), VAST_ARG(taste_partitions),
              VAST_ARG(num_workers));
@@ -433,7 +432,7 @@ behavior index(stateful_actor<index_state>* self, const path& dir,
     self->quit(std::move(err));
     return {};
   }
-  self->set_exit_handler([=](const exit_msg& msg) {
+  self->set_exit_handler([=](const caf::exit_msg& msg) {
     VAST_DEBUG(self, "received exit from", msg.source,
                "with reason:", msg.reason);
     self->state.send_report();
@@ -455,7 +454,7 @@ behavior index(stateful_actor<index_state>* self, const path& dir,
       // Sanity check.
       if (self->current_sender() == nullptr) {
         VAST_ERROR(self, "got an anonymous query (ignored)");
-        respond(sec::invalid_argument);
+        respond(caf::sec::invalid_argument);
         return;
       }
       auto& st = self->state;
@@ -518,7 +517,7 @@ behavior index(stateful_actor<index_state>* self, const path& dir,
         VAST_ERROR(self, "got an anonymous query (ignored)");
         return;
       }
-      auto client = actor_cast<actor>(self->current_sender());
+      auto client = caf::actor_cast<caf::actor>(self->current_sender());
       auto iter = st.pending.find(query_id);
       if (iter == st.pending.end()) {
         VAST_WARNING(self, "got a request for unknown query ID", query_id);
@@ -562,13 +561,13 @@ behavior index(stateful_actor<index_state>* self, const path& dir,
       namespace defs = defaults::system;
       self->delayed_send(self, defs::telemetry_rate, telemetry_atom::value);
     },
-    [=](subscribe_atom, flush_atom, actor& listener) {
+    [=](subscribe_atom, flush_atom, caf::actor& listener) {
       self->state.add_flush_listener(std::move(listener));
     });
   return {[=](worker_atom, caf::actor& worker) {
             auto& st = self->state;
             st.idle_workers.emplace_back(std::move(worker));
-            self->become(keep_behavior, st.has_worker);
+            self->become(caf::keep_behavior, st.has_worker);
           },
           [=](done_atom, uuid partition_id) {
             self->state.decrement_indexer_count(partition_id);
@@ -586,7 +585,7 @@ behavior index(stateful_actor<index_state>* self, const path& dir,
             self->delayed_send(self, defs::telemetry_rate,
                                telemetry_atom::value);
           },
-          [=](subscribe_atom, flush_atom, actor& listener) {
+          [=](subscribe_atom, flush_atom, caf::actor& listener) {
             self->state.add_flush_listener(std::move(listener));
           }};
 }
