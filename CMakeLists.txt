@@ -486,6 +486,11 @@ if (VAST_ENABLE_ASSERTIONS)
   endif ()
 endif ()
 
+find_package(FlatBuffers)
+if (NOT FLATBUFFERS_FOUND)
+  message(FATAL_ERROR "Could not find flatbuffers")
+endif ()
+
 # On macOS, Homebrew is commonly used to install OpenSSL.
 if (APPLE AND NOT OPENSSL_ROOT_DIR)
   find_program(HOMEBREW brew)
@@ -890,6 +895,7 @@ if (BROKER_FOUND)
   endif ()
 endif ()
 
+display(FLATBUFFERS_FOUND "${FLATBUFFERS_INCLUDE_DIR}" flatbuffers_summary)
 display(CAF_FOUND "${caf_dir}" caf_summary)
 display(BROKER_FOUND "${broker_dir}" broker_summary)
 display(ARROW_FOUND "${ARROW_INCLUDE_DIR}" arrow_summary)
@@ -929,6 +935,7 @@ set(summary
     "\nCXXFLAGS:            ${CMAKE_CXX_FLAGS} ${CMAKE_CXX_FLAGS_${build_type}}"
     "\nLDFLAGS:             ${LDFLAGS}"
     "\n"
+    "\nflatbuffers:         ${flatbuffers_summary}"
     "\nCAF:                 ${caf_summary}"
     "\nArrow:               ${arrow_summary}"
     "\nBroker:              ${broker_summary}"
