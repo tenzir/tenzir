@@ -10,8 +10,11 @@ Every entry has a category for which we use the following visual abbreviations:
 
 ## [Unreleased]
 
-- 🔄 Hash indexes previously only worked with data of type `string`. They now
-  support all data types.
+- 🎁 When a record field has the `#index=hash` attribute, VAST will choose an
+  optimized index implementation. This new index type only supports
+  (in)equality queries and is therefore intended to be used with opaque types,
+  such as unique identifiers or random strings.
+  [#632](https://github.com/tenzir/vast/pull/632),
   [#726](https://github.com/tenzir/vast/pull/726)
 
 - 🎁 An experimental new Python module enables querying VAST and processing
@@ -35,12 +38,6 @@ Every entry has a category for which we use the following visual abbreviations:
 - 🐞 The example configuration file contained an invalid section `vast`.
    This has been changed to the correct name `system`.
   [#705](https://github.com/tenzir/vast/pull/705)
-
-- 🎁 When a record field of type `string` has the `#index=hash` attribute,
-  VAST will choose an optimized index implementation. This new index type only
-  supports (in)equality queries and is therefore intended to be used with
-  opaque types, such as unique identifiers or random strings.
-  [#632](https://github.com/tenzir/vast/pull/632)
 
 - 🐞 A race condition in the index logic was able to lead to incomplete or empty
   result sets for `vast export`. [#703](https://github.com/tenzir/vast/pull/703)
