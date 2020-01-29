@@ -229,8 +229,8 @@ public:
   explicit arithmetic_index(vast::type t, caf::settings opts = {})
     : value_index{std::move(t), std::move(opts)} {
     if constexpr (std::is_same_v<coder_type, multi_level_range_coder>) {
-      auto i = opts.find("base");
-      if (i == opts.end()) {
+      auto i = options().find("base");
+      if (i == options().end()) {
         // Some early experiments found that 8 yields the best average
         // performance, presumably because it's a power of 2.
         bmi_ = bitmap_index_type{base::uniform<64>(8)};
