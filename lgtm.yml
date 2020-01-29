@@ -10,6 +10,8 @@ path_classifiers:
     - scripts
   library:
     - aux
+queries:
+  - exclude: cpp/fixme-comment
 extraction:
   cpp:
     prepare:
