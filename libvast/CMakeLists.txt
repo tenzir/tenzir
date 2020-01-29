@@ -100,7 +100,9 @@ set(libvast_sources
     src/system/exporter.cpp
     src/system/importer.cpp
     src/system/index.cpp
+    src/system/index_common.cpp
     src/system/indexer.cpp
+    src/system/indexer_downstream_manager.cpp
     src/system/indexer_stage_driver.cpp
     src/system/infer_command.cpp
     src/system/node.cpp

@@ -41,8 +41,8 @@ namespace {
 
 struct fixture : fixtures::deterministic_actor_system_and_events {
   void init(type col_type) {
-    indexer = system::spawn_indexer(self.ptr(), directory, col_type,
-                                    caf::settings{}, 0, self, partition_id, &m);
+    indexer = system::spawn_indexer(self.ptr(), directory / "indexer", col_type,
+                                    caf::settings{}, self, partition_id, &m);
     run();
   }
 
@@ -54,7 +54,12 @@ struct fixture : fixtures::deterministic_actor_system_and_events {
     VAST_ASSERT(std::all_of(slices.begin(), slices.end(), [&](auto& slice) {
       return slice->layout() == layout;
     }));
-    vast::detail::spawn_container_source(sys, std::move(slices), indexer);
+    std::vector<table_slice_column> slice_columns;
+    for (auto& slice : slices) {
+      slice_columns.push_back(table_slice_column{slice, 0u});
+    }
+    vast::detail::spawn_container_source(sys, std::move(slice_columns),
+                                         indexer);
     run();
     check_done();
   }
@@ -127,6 +132,7 @@ TEST(integer rows) {
   run();
   MESSAGE("reload INDEXER from disk");
   init(layout.fields[0].type);
+  // TODO(ch9680)
   MESSAGE("verify table index again");
   verify();
 }

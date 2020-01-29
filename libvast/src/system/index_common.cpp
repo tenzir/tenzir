@@ -11,29 +11,39 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#pragma once
+#include "vast/system/index_common.hpp"
 
-#include "vast/aliases.hpp"
-#include "vast/fwd.hpp"
-#include "vast/system/fwd.hpp"
+#include "vast/concept/hashable/uhash.hpp"
+#include "vast/concept/hashable/xxhash.hpp"
 
-#include <caf/fwd.hpp>
+namespace vast {
 
-namespace vast::system {
+vast::record_field fully_qualified_leaf_field::to_record_field() const {
+  return {name, type};
+}
 
-/// Spawns an INDEXER actor.
-/// @param parent The parent actor.
-/// @param filename File for persistent state.
-/// @param column_type The type of the indexed field.
-/// @param index_opts Runtime options to parameterize the value index.
-/// @param index A handle to the index actor.
-/// @param partition_id The partition ID that this INDEXER belongs to.
-/// @param m A pointer to the measuring probe used for perfomance data
-///        accumulation.
-/// @returns the new INDEXER actor.
-caf::actor
-spawn_indexer(caf::local_actor* parent, path filename, type column_type,
-              caf::settings index_opts, caf::actor index, uuid partition_id,
-              atomic_measurement* m);
+fully_qualified_leaf_field
+to_fully_qualified(const std::string& tn, const record_field& field) {
+  return {tn + "." + field.name, field.type};
+}
 
-} // namespace vast::system
+bool operator==(const fully_qualified_leaf_field& x,
+                const fully_qualified_leaf_field& y) {
+  return x.name == y.name && x.type == y.type;
+}
+
+bool operator<(const fully_qualified_leaf_field& x,
+               const fully_qualified_leaf_field& y) {
+  return std::tie(x.name, x.type) < std::tie(y.name, y.type);
+}
+
+} // namespace vast
+
+namespace std {
+
+size_t hash<vast::fully_qualified_leaf_field>::operator()(
+  const vast::fully_qualified_leaf_field& x) const {
+  return vast::uhash<vast::xxhash64>{}(x);
+}
+
+} // namespace std

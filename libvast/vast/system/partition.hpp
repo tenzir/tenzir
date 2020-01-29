@@ -1,5 +1,5 @@
 /******************************************************************************
- *                    _   _____   __________                                  *
+
  *                   | | / / _ | / __/_  __/     Visibility                   *
  *                   | |/ / __ |_\ \  / /          Across                     *
  *                   |___/_/ |_/___/ /_/       Space and Time                 *
@@ -13,22 +13,30 @@
 
 #pragma once
 
-#include <functional>
-
-#include <caf/detail/unordered_flat_map.hpp>
-#include <caf/event_based_actor.hpp>
-#include <caf/fwd.hpp>
-
 #include "vast/aliases.hpp"
+#include "vast/concept/printable/to_string.hpp"
+#include "vast/concept/printable/vast/type.hpp"
 #include "vast/detail/assert.hpp"
 #include "vast/fwd.hpp"
+#include "vast/ids.hpp"
 #include "vast/system/fwd.hpp"
+#include "vast/system/index_common.hpp"
+#include "vast/system/indexer_stage_driver.hpp"
+#include "vast/system/instrumentation.hpp"
 #include "vast/system/spawn_indexer.hpp"
 #include "vast/system/table_indexer.hpp"
 #include "vast/type.hpp"
 #include "vast/uuid.hpp"
 
+#include <caf/detail/unordered_flat_map.hpp>
+#include <caf/event_based_actor.hpp>
+#include <caf/stream_slot.hpp>
+
+#include <unordered_map>
+
 namespace vast::system {
+
+class indexer_downstream_manager;
 
 /// The horizontal data scaling unit of the index. A partition represents a
 /// slice of indexes for a specific ID interval.
@@ -40,18 +48,36 @@ public:
   struct meta_data {
     /// Maps type digests (used as directory names) to layouts (i.e. record
     /// types).
-    caf::detail::unordered_flat_map<std::string, record_type> types;
+    std::unordered_map<std::string, record_type> types;
 
-    /// Stores whether we modified `types` after loading it.
+    /// Maps type names to ids.
+    std::unordered_map<std::string, ids> type_ids;
+
+    /// Stores whether the partition has been mutated in memory.
     bool dirty = false;
+  };
+
+  /// A path that connects the incoming stream of table slices to an indexer.
+  struct wrapped_indexer {
+    caf::actor indexer;
+
+    /// Only used during ingestion.
+    caf::stream_slot slot;
+
+    /// The message queue of the downstream indexer.
+    /// Only used during ingestion.
+    caf::outbound_path* outbound;
+
+    /// A buffer to avoid overloading the indexer.
+    /// Only used during ingestion.
+    std::vector<table_slice_column> buf;
   };
 
   // -- constructors, destructors, and assignment operators --------------------
 
   /// @param self The parent actor.
-  /// @param base_dir The base directory for all partition. This partition will
-  ///                 save to and load from `base_dir / to_string(id)`.
   /// @param id Unique identifier for this partition.
+  /// @param max_capacity The amount of events this partition can hold.
   /// @pre `self != nullptr`
   /// @pre `factory != nullptr`
   partition(index_state* state, uuid id, size_t max_capacity);
@@ -70,11 +96,6 @@ public:
 
   // -- properties -------------------------------------------------------------
 
-  /// @returns whether the meta data was changed.
-  auto dirty() const noexcept {
-    return meta_data_.dirty;
-  }
-
   /// @returns the unique ID of the partition.
   auto& id() const noexcept {
     return id_;
@@ -90,18 +111,9 @@ public:
     return capacity_;
   }
 
-  /// Decreases the remaining capacity by `x`.
-  /// @pre `capacity() >= x`
-  auto reduce_capacity(size_t x) noexcept {
-    VAST_ASSERT(capacity_ >= x);
-    capacity_ -= x;
-  }
-
-  /// @returns all INDEXER actors of all matching layouts.
-  evaluation_map eval(const expression& expr);
-
-  /// @returns all layouts in this partition.
-  std::vector<record_type> layouts() const;
+  /// @returns a record type containing all columns of this partition.
+  // TODO: Should this be renamed to layout()?
+  record_type combined_type() const;
 
   /// @returns the directory for persistent state.
   path base_dir() const;
@@ -109,28 +121,36 @@ public:
   /// @returns the file name for saving or loading the ::meta_data.
   path meta_file() const;
 
+  indexer_downstream_manager& out() const;
+
+  /// @moves a slice into the partition.
+  void add(table_slice_ptr slice);
+
   /// @returns The corresponding table indexer for a given type.
   caf::expected<std::pair<table_indexer&, bool>>
   get_or_add(const record_type& key);
 
+  /// @returns the file name for `column`.
+  path column_file(const fully_qualified_leaf_field& field) const;
+
   // -- operations -------------------------------------------------------------
 
-  /// Iterates over all INDEXER actors that are managed by this partition.
-  template <class F>
-  void for_each_indexer(F f) {
-    for (auto& kvp : table_indexers_) {
-      kvp.second.spawn_indexers();
-      kvp.second.for_each_indexer(f);
-    }
-  }
+  void finalize();
 
-private:
-  /// Called from the INDEXER manager whenever a new layout gets added during
-  /// ingestion.
-  void add_layout(const std::string& digest, const record_type& t) {
-    if (meta_data_.types.emplace(digest, t).second && !meta_data_.dirty)
-      meta_data_.dirty = true;
-  }
+  caf::expected<std::pair<caf::actor, bool>> get(const record_field& field);
+
+  caf::actor& indexer_at(size_t position);
+
+  caf::actor fetch_indexer(const data_extractor& dx, relational_operator op,
+                           const data& x);
+
+  caf::actor fetch_indexer(const attribute_extractor& ex,
+                           relational_operator op, const data& x);
+
+  /// @returns all INDEXER actors required for a query.
+  evaluation_triples eval(const expression& expr);
+
+  // -- members ----------------------------------------------------------------
 
   /// State of the INDEX actor that owns this partition.
   index_state* state_;
@@ -147,10 +167,20 @@ private:
   /// Stores one table indexer per layout that in turn manages INDEXER actors.
   table_indexer_map table_indexers_;
 
+  /// A map to the indexers
+  caf::detail::unordered_flat_map<fully_qualified_leaf_field, wrapped_indexer>
+    indexers_;
+
+  /// Instrumentation data store, one entry for each INDEXER.
+  std::unordered_map<size_t, atomic_measurement> measurements_;
+
   /// Remaining capacity in this partition.
   size_t capacity_;
 
-  friend struct index_state;
+  std::vector<table_slice_ptr> inbound;
+
+  friend class index_state;
+  friend class indexer_downstream_manager;
 };
 
 // -- related types ------------------------------------------------------------
@@ -163,7 +193,7 @@ using partition_ptr = std::unique_ptr<partition>;
 /// @relates partition::meta_data
 template <class Inspector>
 auto inspect(Inspector& f, partition::meta_data& x) {
-  return f(x.types);
+  return f(x.types, x.type_ids);
 }
 
 } // namespace vast::system

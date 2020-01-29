@@ -13,10 +13,6 @@
 
 #include "vast/system/indexer.hpp"
 
-#include <new>
-
-#include <caf/all.hpp>
-
 #include "vast/concept/printable/stream.hpp"
 #include "vast/concept/printable/vast/expression.hpp"
 #include "vast/detail/assert.hpp"
@@ -27,6 +23,11 @@
 #include "vast/system/instrumentation.hpp"
 #include "vast/table_slice.hpp"
 #include "vast/view.hpp"
+
+#include <caf/all.hpp>
+#include <caf/attach_stream_sink.hpp>
+
+#include <new>
 
 namespace vast::system {
 
@@ -40,34 +41,33 @@ indexer_state::~indexer_state() {
 
 caf::error indexer_state::init(caf::event_based_actor* self, path filename,
                                type column_type, caf::settings index_opts,
-                               size_t column, caf::actor index,
-                               uuid partition_id, atomic_measurement* m) {
+                               caf::actor index, uuid partition_id,
+                               atomic_measurement* m) {
   this->index = std::move(index);
   this->partition_id = partition_id;
   this->measurement = m;
   new (&col) column_index(self->system(), std::move(column_type),
-                          std::move(index_opts), std::move(filename), column);
+                          std::move(index_opts), std::move(filename));
   return col.init();
 }
 
 caf::behavior
-indexer(caf::stateful_actor<indexer_state>* self, path dir, type column_type,
-        caf::settings index_opts, size_t column, caf::actor index,
+indexer(caf::stateful_actor<indexer_state>* self, path filename,
+        type column_type, caf::settings index_opts, caf::actor index,
         uuid partition_id, atomic_measurement* m) {
-  VAST_TRACE(VAST_ARG(dir), VAST_ARG(column_type), VAST_ARG(column));
-  VAST_DEBUG(self, "operates for column", column, "of type", column_type);
-  if (auto err = self->state.init(
-        self, std::move(dir) / "fields" / std::to_string(column),
-        std::move(column_type), std::move(index_opts), column, std::move(index),
-        partition_id, m)) {
+  VAST_TRACE(VAST_ARG(filename), VAST_ARG(column_type));
+  VAST_DEBUG(self, "operates for column of type", column_type);
+  if (auto err = self->state.init(self, std::move(filename),
+                                  std::move(column_type), std::move(index_opts),
+                                  std::move(index), partition_id, m)) {
     self->quit(std::move(err));
     return {};
   }
-  auto handle_batch = [=](const std::vector<table_slice_ptr>& xs) {
+  auto handle_batch = [=](const std::vector<table_slice_column>& xs) {
     auto t = atomic_timer::start(*self->state.measurement);
     auto events = uint64_t{0};
     for (auto& x : xs) {
-      events += x->rows();
+      events += x.slice->rows();
       self->state.col.add(x);
     }
     t.stop(events);
@@ -82,13 +82,13 @@ indexer(caf::stateful_actor<indexer_state>* self, path dir, type column_type,
         return err;
       return caf::unit;
     },
-    [=](caf::stream<table_slice_ptr> in) {
+    [=](caf::stream<table_slice_column> in) {
       self->make_sink(
         in,
         [](caf::unit_t&) {
           // nop
         },
-        [=](caf::unit_t&, const std::vector<table_slice_ptr>& xs) {
+        [=](caf::unit_t&, const std::vector<table_slice_column>& xs) {
           handle_batch(xs);
         },
         [=](caf::unit_t&, const error& err) {
@@ -103,8 +103,12 @@ indexer(caf::stateful_actor<indexer_state>* self, path dir, type column_type,
           self->send(st.index, done_atom::value, st.partition_id);
         });
     },
-    [=](const std::vector<table_slice_ptr>& xs) { handle_batch(xs); },
-    [=](shutdown_atom) { self->quit(caf::exit_reason::user_shutdown); },
+    [=](const std::vector<table_slice_column>& xs) {
+      handle_batch(xs); // clang-format fix
+    },
+    [=](shutdown_atom) {
+      self->quit(caf::exit_reason::user_shutdown); // clang-format fix
+    },
   };
 }
 

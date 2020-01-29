@@ -13,31 +13,56 @@
 
 #pragma once
 
-#include <caf/broadcast_downstream_manager.hpp>
+#include "vast/fwd.hpp"
+#include "vast/logger.hpp"
+#include "vast/system/fwd.hpp"
+#include "vast/system/index_common.hpp"
+#include "vast/system/indexer.hpp"
+#include "vast/system/indexer_downstream_manager.hpp"
+
+#include <caf/outbound_path.hpp>
 #include <caf/stream_stage_driver.hpp>
 
-#include "vast/fwd.hpp"
-#include "vast/system/fwd.hpp"
+#include <cstddef>
+#include <unordered_map>
+#include <unordered_set>
+
+/// The indexer_stage_driver is responsible to receive a stream of table slices
+/// and demultiplex it into streams of table slice columns that are relayed to
+/// the to indexer actors in the target partition. This happens in 2 steps:
+/// First, the table id offset is used to determine the target partition.
+/// The partition is created if it did not exists beforehand. Second, the
+/// layout is used to retrieve the set of downstream slots that the slice shall
+/// be passed on to. If the table entry is missing, it is created by retrieving
+/// the indexer actors from the target partition and associating them to their
+/// matching fields from the layout.
+///
+///  Example for a partition containing 2 types foo and bar with the layouts:
+///
+///     field name: field type # ID (hash of record_field)
+///  type foo = record {
+///     a:          int,       # A
+///     b:          string,    # B
+///     c:          string,    # C
+///     d:          address    # D
+///  }
+///  type bar = record {
+///     a:          int,       # A
+///     b:          domain,    # B'
+///     c:          enum,      # C'
+///     d:          address    # D
+///  }
+///
+///  inbound stream
+///        |                              table_slice{ bar }
+///        v         table_slice{ foo }--    /   |   |    |
+///                     |  ~|~~~~~\ ~~~~~\ ~~    |   |    |
+///                     |/  \      ----   ----  /    |    |
+///                     v    ---v      v      v      v    v
+///   Indexers:         A       B      C      D      B'   C'
+///
 
 namespace vast::system {
-
-/// @relates indexer_stage_driver
-/// Filter type for dispatching slices to INDEXER actors.
-using indexer_stage_filter = type;
-
-/// @relates indexer_stage_driver
-/// Selects an INDEXER actor based on its filter.
-struct indexer_stage_selector {
-  bool operator()(const indexer_stage_filter& f,
-                  const table_slice_ptr& x) const;
-};
-
-/// @relates indexer_stage_driver
-/// A downstream manager type for dispatching data to INDEXER actors.
-using indexer_downstream_manager
-  = caf::broadcast_downstream_manager<table_slice_ptr,
-                                      indexer_stage_filter,
-                                      indexer_stage_selector>;
 
 /// A stream stage for dispatching slices to INDEXER actors. One set of INDEXER
 /// actors is used per partition.
@@ -67,7 +92,7 @@ public:
 
   // -- interface implementation -----------------------------------------------
 
-  void process(downstream_type& out, batch_type& slices) override;
+  void process(downstream_type&, batch_type& slices) override;
 
   // -- properties -------------------------------------------------------------
 

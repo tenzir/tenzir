@@ -13,11 +13,8 @@
 
 #include "vast/system/partition.hpp"
 
-#include <caf/event_based_actor.hpp>
-#include <caf/local_actor.hpp>
-#include <caf/make_counted.hpp>
-#include <caf/stateful_actor.hpp>
-
+#include "vast/aliases.hpp"
+#include "vast/concept/hashable/xxhash.hpp"
 #include "vast/concept/printable/to_string.hpp"
 #include "vast/concept/printable/vast/expression.hpp"
 #include "vast/concept/printable/vast/uuid.hpp"
@@ -30,9 +27,18 @@
 #include "vast/save.hpp"
 #include "vast/system/atoms.hpp"
 #include "vast/system/index.hpp"
+#include "vast/system/index_common.hpp"
+#include "vast/system/indexer_stage_driver.hpp"
 #include "vast/system/spawn_indexer.hpp"
 #include "vast/system/table_indexer.hpp"
+#include "vast/table_slice.hpp"
 #include "vast/time.hpp"
+#include "vast/type.hpp"
+
+#include <caf/event_based_actor.hpp>
+#include <caf/local_actor.hpp>
+#include <caf/make_counted.hpp>
+#include <caf/stateful_actor.hpp>
 
 using namespace std::chrono;
 using namespace caf;
@@ -54,22 +60,43 @@ partition::~partition() noexcept {
 
 // -- persistence --------------------------------------------------------------
 
+indexer_downstream_manager& partition::out() const {
+  return state_->stage->out();
+}
+
 caf::error partition::init() {
   VAST_TRACE("");
   auto file_path = meta_file();
   if (!exists(file_path))
     return ec::no_such_file;
-  if (auto err = load(nullptr, file_path , meta_data_))
+  auto partition_type = record_type{};
+  if (auto err = load(nullptr, file_path, meta_data_, partition_type))
     return err;
   VAST_DEBUG(state_->self, "loaded partition", id_, "from disk with",
-             meta_data_.types.size(), "layouts");
+             meta_data_.types.size(), "layouts and",
+             partition_type.fields.size(), "columns");
+  for (auto& f : partition_type.fields) {
+    fully_qualified_leaf_field fqf{f.name, f.type};
+    indexers_.container().emplace_back(std::move(fqf), wrapped_indexer{});
+  }
   return caf::none;
+}
+
+void partition::finalize() {
+  // this->out().unregister(this);
+  // auto& out = this->out();
+  // auto silent = false; // Send shutdown signal on the stream
+  // for (auto& ind : indexers_)
+  //  out.remove_path(ind.second.slot, caf::none, silent);
+  for (auto& wi : indexers_) {
+    wi.second.buf.clear();
+  }
 }
 
 caf::error partition::flush_to_disk() {
   if (meta_data_.dirty) {
     // Write all layouts to disk.
-    if (auto err = save(nullptr, meta_file(), meta_data_))
+    if (auto err = save(nullptr, meta_file(), meta_data_, combined_type()))
       return err;
     meta_data_.dirty = false;
   }
@@ -80,16 +107,69 @@ caf::error partition::flush_to_disk() {
   return caf::none;
 }
 
+caf::actor& partition::indexer_at(size_t position) {
+  VAST_ASSERT(position < indexers_.size());
+  auto& [fqf, ip] = indexers_.container()[position];
+  if (!ip.indexer) {
+    ip.indexer = state().make_indexer(column_file(fqf), fqf.type, id(),
+                                      &measurements_[position]);
+    VAST_ASSERT(ip.indexer != nullptr);
+  }
+  return ip.indexer;
+}
+
 // -- properties ---------------------------------------------------------------
 
-namespace {
+void partition::add(table_slice_ptr slice) {
+  VAST_ASSERT(slice != nullptr);
+  VAST_TRACE(VAST_ARG(slice));
+  meta_data_.dirty = true;
+  auto first = slice->offset();
+  auto last = slice->offset() + slice->rows();
+  auto& layout = slice->layout();
+  bool is_new = meta_data_.types.emplace(to_digest(layout), layout).second;
+  auto it = meta_data_.type_ids.emplace(layout.name(), vast::ids{}).first;
+  auto& ids = it->second;
+  VAST_ASSERT(first >= ids.size());
+  ids.append_bits(false, first - ids.size());
+  ids.append_bits(true, last - first);
+  if (is_new) {
+    // Insert new type.
+    for (size_t idx = 0; idx < layout.fields.size(); ++idx) {
+      auto& field = layout.fields[idx];
+      auto fqf = to_fully_qualified(layout.name(), field);
+      auto j = indexers_.find(fqf);
+      if (j == indexers_.end()) {
+        // Spawn a new indexer.
+        auto k = indexers_.emplace(fqf, wrapped_indexer{});
+        auto& ip = k.first->second;
+        auto pos = std::distance(indexers_.begin(), k.first);
+        ip.indexer = state().make_indexer(column_file(fqf), fqf.type, id(),
+                                          &measurements_[pos]);
+        state_->active_partition_indexers++;
+        ip.slot
+          = out().parent()->add_unchecked_outbound_path<table_slice_column>(
+            ip.indexer);
+        ip.outbound = out().paths().rbegin()->second.get();
+      }
+    }
+  }
+  capacity_ -= slice->rows();
+  inbound.push_back(std::move(slice));
+}
 
-using eval_mapping = evaluation_map::mapped_type;
+record_type partition::combined_type() const {
+  record_type result;
+  for (auto& kvp : indexers_) {
+    result.fields.push_back(kvp.first.to_record_field());
+  }
+  return result;
+}
 
-caf::actor fetch_indexer(table_indexer& tbl, const data_extractor& dx,
-                         [[maybe_unused]] relational_operator op,
-                         [[maybe_unused]] const data& x) {
-  VAST_TRACE(VAST_ARG(tbl), VAST_ARG(dx), VAST_ARG(op), VAST_ARG(x));
+caf::actor partition::fetch_indexer(const data_extractor& dx,
+                                    [[maybe_unused]] relational_operator op,
+                                    [[maybe_unused]] const data& x) {
+  VAST_TRACE(VAST_ARG(dx), VAST_ARG(op), VAST_ARG(x));
   // Sanity check.
   if (dx.offset.empty())
     return nullptr;
@@ -98,35 +178,36 @@ caf::actor fetch_indexer(table_indexer& tbl, const data_extractor& dx,
   VAST_ASSERT(k);
   auto index = r.flat_index_at(dx.offset);
   if (!index) {
-    VAST_DEBUG(tbl.state().self, "got invalid offset for record type", dx.type);
+    VAST_DEBUG(state_->self, "got invalid offset for record type", dx.type);
     return nullptr;
   }
-  return tbl.indexer_at(*index);
+  return indexer_at(*index);
 }
 
-caf::actor fetch_indexer(table_indexer& tbl, const attribute_extractor& ex,
-                         relational_operator op, const data& x) {
-  VAST_TRACE(VAST_ARG(tbl), VAST_ARG(ex), VAST_ARG(op), VAST_ARG(x));
-  auto& layout = tbl.layout();
+caf::actor partition::fetch_indexer(const attribute_extractor& ex,
+                                    relational_operator op, const data& x) {
+  VAST_TRACE(VAST_ARG(ex), VAST_ARG(op), VAST_ARG(x));
   if (ex.attr == system::type_atom::value) {
-    // Doesn't apply if the query name doesn't match our type.
-    if (!evaluate(layout.name(), op, x))
-      return nullptr;
     // We know the answer immediately: all IDs that are part of the table.
     // However, we still have to "lift" this result into an actor for the
     // EVALUATOR.
+    ids row_ids;
+    for (auto& [name, ids] : meta_data_.type_ids) {
+      if (evaluate(name, op, x)) {
+        row_ids |= ids;
+      }
+    }
     // TODO: Spawning a one-shot actor is quite expensive. Maybe the
-    //       table_indexer could instead maintain this actor lazily.
-    auto row_ids = tbl.row_ids();
-    return tbl.state().self->spawn([row_ids]() -> caf::behavior {
+    //       partition could instead maintain this actor lazily.
+    return state_->self->spawn([row_ids]() -> caf::behavior {
       return [=](const curried_predicate&) { return row_ids; };
     });
   }
   if (ex.attr == system::timestamp_atom::value) {
     if (!caf::holds_alternative<timestamp>(x)) {
-      VAST_WARNING(tbl.state().self,
-                   "expected a timestamp as time extractor attribute , got:",
-                   x);
+      VAST_WARNING(
+        state_->self,
+        "expected a timestamp as time extractor attribute , got:", x);
       return nullptr;
     }
     // Find the column with attribute 'time'.
@@ -134,6 +215,7 @@ caf::actor fetch_indexer(table_indexer& tbl, const attribute_extractor& ex,
       return caf::holds_alternative<time_type>(x.type)
              && has_attribute(x.type, "timestamp");
     };
+    auto layout = combined_type();
     auto& fs = layout.fields;
     auto i = std::find_if(fs.begin(), fs.end(), pred);
     if (i == fs.end())
@@ -141,63 +223,37 @@ caf::actor fetch_indexer(table_indexer& tbl, const attribute_extractor& ex,
     // Redirect to "ordinary data lookup".
     auto pos = static_cast<size_t>(std::distance(fs.begin(), i));
     data_extractor dx{layout, vast::offset{pos}};
-    return fetch_indexer(tbl, dx, op, x);
+    return fetch_indexer(dx, op, x);
   }
-  VAST_WARNING(tbl.state().self, "got unsupported attribute:", ex.attr);
+  VAST_WARNING(state_->self, "got unsupported attribute:", ex.attr);
   return nullptr;
 }
 
-} // namespace
-
-evaluation_map partition::eval(const expression& expr) {
-  evaluation_map result;
-  // Step #1: use the expression to select matching layouts.
-  for (auto layout : layouts()) {
-    // Step #2: Split the resolved expression into its predicates and select
-    // all matching INDEXER actors per predicate.
-    auto resolved = resolve(expr, layout);
-    // Skip any layout that we cannot resolve.
-    if (resolved.empty())
-      continue;
-    // Add triples (offset, curried predicate, and INDEXER) to evaluation map.
-    evaluation_map::mapped_type triples;
-    for (auto& kvp: resolved) {
-      auto& pred = kvp.second;
-      auto get_indexer_handle = [&](const auto& ext, const data& x) {
-        if (auto i = get_or_add(layout))
-          return fetch_indexer(i->first, ext, pred.op, x);
-        VAST_ERROR(state_->self,
-                   "failed to initialize table_indexer for layout", layout,
-                   "-> query will not execute on the full data set");
-        return caf::actor{};
-      };
-      auto v = detail::overload(
-        [&](const attribute_extractor& ex, const data& x) {
-          return get_indexer_handle(ex, x); // clang-format fix
-        },
-        [&](const data_extractor& dx, const data& x) {
-          return get_indexer_handle(dx, x);
-        },
-        [](const auto&, const auto&) {
-          return caf::actor{}; // clang-format fix
-        });
-      auto hdl = caf::visit(v, pred.lhs, pred.rhs);
-      if (hdl != nullptr) {
-        triples.emplace_back(kvp.first, curried(pred), std::move(hdl));
-      }
+evaluation_triples partition::eval(const expression& expr) {
+  evaluation_triples result;
+  // Step #1: Pretend the partition is a table.
+  // TODO(ch9680): resolve might not work with multiple fields with the same name?
+  auto resolved = resolve(expr, combined_type());
+  for (auto& kvp : resolved) {
+    auto& pred = kvp.second;
+    auto get_indexer_handle = [&](const auto& ext, const data& x) {
+      return fetch_indexer(ext, pred.op, x);
+    };
+    auto v = detail::overload(
+      [&](const attribute_extractor& ex, const data& x) {
+        return get_indexer_handle(ex, x);
+      },
+      [&](const data_extractor& dx, const data& x) {
+        return get_indexer_handle(dx, x);
+      },
+      [](const auto&, const auto&) {
+        return caf::actor{}; // clang-format fix
+      });
+    auto hdl = caf::visit(v, pred.lhs, pred.rhs);
+    if (hdl != nullptr) {
+      result.emplace_back(kvp.first, curried(pred), std::move(hdl));
     }
-    if (!triples.empty())
-      result.emplace(layout, std::move(triples));
   }
-  return result;
-}
-
-std::vector<record_type> partition::layouts() const {
-  std::vector<record_type> result;
-  auto& ts = meta_data_.types;
-  result.reserve(ts.size());
-  std::transform(ts.begin(), ts.end(), std::back_inserter(result),
-                 [](auto& kvp) { return kvp.second; });
   return result;
 }
 
@@ -209,20 +265,8 @@ path partition::meta_file() const {
   return base_dir() / "meta";
 }
 
-caf::expected<std::pair<table_indexer&, bool>>
-partition::get_or_add(const record_type& key) {
-  VAST_TRACE(VAST_ARG(key));
-  auto i = table_indexers_.find(key);
-  if (i != table_indexers_.end())
-    return std::pair<table_indexer&, bool>{i->second, false};
-  auto digest = to_digest(key);
-  add_layout(digest, key);
-  auto ti = table_indexer::make(this, key);
-  if (!ti)
-    return ti.error();
-  auto result = table_indexers_.emplace(key, std::move(*ti));
-  VAST_ASSERT(result.second == true);
-  return std::pair<table_indexer&, bool>{result.first->second, true};
+path partition::column_file(const fully_qualified_leaf_field& field) const {
+  return base_dir() / (field.name + "-" + to_digest(field.type));
 }
 
 } // namespace vast::system

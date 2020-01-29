@@ -13,18 +13,19 @@
 
 #pragma once
 
-#include <unordered_map>
-#include <vector>
+#include "vast/aliases.hpp"
+#include "vast/expression.hpp"
+#include "vast/ids.hpp"
+#include "vast/offset.hpp"
+#include "vast/system/index_common.hpp"
+#include "vast/uuid.hpp"
 
 #include <caf/actor.hpp>
 #include <caf/fwd.hpp>
 #include <caf/typed_response_promise.hpp>
 
-#include "vast/aliases.hpp"
-#include "vast/expression.hpp"
-#include "vast/ids.hpp"
-#include "vast/offset.hpp"
-#include "vast/uuid.hpp"
+#include <unordered_map>
+#include <vector>
 
 namespace vast::system {
 
@@ -83,6 +84,6 @@ struct evaluator_state {
 /// actors, re-evaluates the expression and relays new hits to its sinks.
 /// @pre `!eval.empty()`
 caf::behavior evaluator(caf::stateful_actor<evaluator_state>* self,
-                        expression expr, evaluation_map eval);
+                        expression expr, evaluation_triples eval);
 
 } // namespace vast::system

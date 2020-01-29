@@ -285,6 +285,8 @@ void index_state::reset_active_partition() {
   // Persist meta data and the state of all INDEXER actors when the active
   // partition gets replaced becomes full.
   if (active != nullptr) {
+    stage->out().unregister(active.get());
+    active->finalize();
     if (auto err = active->flush_to_disk())
       VAST_ERROR(self, "failed to persist active partition");
     // Store this partition as unpersisted to make sure we're not attempting
@@ -299,7 +301,14 @@ void index_state::reset_active_partition() {
   if (auto err = flush_statistics())
     VAST_ERROR(self, "failed to persist the statistics");
   active = make_partition();
+  stage->out().register_partition(active.get());
   active_partition_indexers = 0;
+}
+
+partition* index_state::get_or_add_partition(const table_slice_ptr& slice) {
+  if (!active || active->capacity() < slice->rows())
+    reset_active_partition();
+  return active.get();
 }
 
 partition_ptr index_state::make_partition() {
@@ -311,14 +320,14 @@ partition_ptr index_state::make_partition(uuid id) {
   return std::make_unique<partition>(this, std::move(id), max_partition_size);
 }
 
-caf::actor index_state::make_indexer(path dir, type column_type, size_t column,
+caf::actor index_state::make_indexer(path filename, type column_type,
                                      uuid partition_id, atomic_measurement* m) {
-  VAST_TRACE(VAST_ARG(dir), VAST_ARG(column_type), VAST_ARG(column),
-             VAST_ARG(index), VAST_ARG(partition_id));
+  VAST_TRACE(VAST_ARG(dir), VAST_ARG(column_type), VAST_ARG(index),
+             VAST_ARG(partition_id));
   caf::settings index_opts;
   index_opts["cardinality"] = max_partition_size;
-  return factory(self, std::move(dir), std::move(column_type),
-                 std::move(index_opts), column, self, partition_id, m);
+  return factory(self, std::move(filename), std::move(column_type),
+                 std::move(index_opts), self, partition_id, m);
 }
 
 void index_state::decrement_indexer_count(uuid partition_id) {
@@ -345,9 +354,7 @@ partition* index_state::find_unpersisted(const uuid& id) {
   return i != unpersisted.end() ? i->first.get() : nullptr;
 }
 
-using pending_query_map = caf::detail::unordered_flat_map<uuid, evaluation_map>;
-
-pending_query_map
+index_state::pending_query_map
 index_state::build_query_map(lookup_state& lookup, uint32_t num_partitions) {
   VAST_TRACE(VAST_ARG(lookup), VAST_ARG(num_partitions));
   if (num_partitions == 0 || lookup.partitions.empty())

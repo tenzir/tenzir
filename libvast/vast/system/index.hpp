@@ -13,23 +13,23 @@
 
 #pragma once
 
-#include <unordered_map>
-#include <vector>
-
-#include <caf/fwd.hpp>
-
+#include "vast/detail/flat_lru_cache.hpp"
+#include "vast/detail/flat_set.hpp"
 #include "vast/expression.hpp"
 #include "vast/fwd.hpp"
 #include "vast/meta_index.hpp"
 #include "vast/system/accountant.hpp"
+#include "vast/system/index_common.hpp"
 #include "vast/system/indexer_stage_driver.hpp"
 #include "vast/system/partition.hpp"
 #include "vast/system/query_supervisor.hpp"
 #include "vast/system/spawn_indexer.hpp"
 #include "vast/uuid.hpp"
 
-#include "vast/detail/flat_lru_cache.hpp"
-#include "vast/detail/flat_set.hpp"
+#include <caf/fwd.hpp>
+
+#include <unordered_map>
+#include <vector>
 
 namespace vast::system {
 
@@ -83,7 +83,7 @@ struct index_state {
 
   /// Stores evaluation metadata for pending partitions.
   using pending_query_map
-    = caf::detail::unordered_flat_map<uuid, evaluation_map>;
+    = caf::detail::unordered_flat_map<uuid, evaluation_triples>;
 
   /// Accumulates statistics for a given layout.
   struct layout_statistics {
@@ -141,6 +141,8 @@ struct index_state {
   /// Creates a new partition owned by the INDEX (stored as `active`).
   void reset_active_partition();
 
+  partition* get_or_add_partition(const table_slice_ptr& slice);
+
   /// @returns a new partition with random ID.
   partition_ptr make_partition();
 
@@ -148,8 +150,8 @@ struct index_state {
   partition_ptr make_partition(uuid id);
 
   /// @returns a new INDEXER actor.
-  caf::actor make_indexer(path dir, type column_type, size_t column,
-                          uuid partition_id, atomic_measurement* m);
+  caf::actor make_indexer(path filename, type column_type, uuid partition_id,
+                          atomic_measurement* m);
 
   /// Decrements the indexer count for a partition.
   void decrement_indexer_count(uuid pid);

@@ -17,6 +17,7 @@
 #include "vast/event.hpp"
 #include "vast/expression.hpp"
 #include "vast/filesystem.hpp"
+#include "vast/system/index_common.hpp"
 #include "vast/type.hpp"
 #include "vast/value_index.hpp"
 
@@ -34,7 +35,7 @@ namespace vast {
 /// @relates column_index
 caf::expected<column_index_ptr>
 make_column_index(caf::actor_system& sys, path filename, type column_type,
-                  caf::settings index_opts, size_t column);
+                  caf::settings index_opts);
 
 // -- class definition ---------------------------------------------------------
 
@@ -45,7 +46,7 @@ public:
   // -- constructors, destructors, and assignment operators --------------------
 
   column_index(caf::actor_system& sys, type index_type,
-               caf::settings index_opts, path filename, size_t column);
+               caf::settings index_opts, path filename);
 
   ~column_index();
 
@@ -63,7 +64,7 @@ public:
 
   /// Adds an event to the index.
   /// @pre `init()` was called previously.
-  void add(const table_slice_ptr& x);
+  void add(const table_slice_column& x);
 
   /// Queries event IDs that fulfill the given predicate.
   /// @pre `init()` was called previously.
@@ -96,11 +97,6 @@ public:
     return has_skip_attribute_;
   }
 
-  /// Returns the position of this column in the layout.
-  size_t position() const noexcept {
-    return col_;
-  }
-
   /// Returns whether the column index has unpersisted changes.
   /// @pre `init()` was called and returned no error
   bool dirty() const noexcept;
@@ -109,7 +105,6 @@ protected:
   // -- member variables -------------------------------------------------------
 
   value_index_ptr idx_;
-  size_t col_;
   bool has_skip_attribute_;
   type index_type_;
   caf::settings index_opts_;
