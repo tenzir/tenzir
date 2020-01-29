@@ -197,4 +197,50 @@ caf::error inspect(caf::deserializer& source, meta_index& x) {
                 x.blacklisted_layouts_);
 }
 
+// Perform a deep equality comparison for meta indices. This is slow and we only
+// need it to test serializer / deserializer roundtrips.
+bool deep_equals(const meta_index& lhs, const meta_index& rhs) {
+  // Fail early when the trivial comparisons are false.
+  if (lhs.synopsis_options_ != rhs.synopsis_options_
+      || lhs.blacklisted_layouts_ != rhs.blacklisted_layouts_)
+    return false;
+  auto to_map = [](const auto& unordered) {
+    // TODO: Use the deduction guide of std::map directly once we update to a
+    // newer version of libc++ for testing.
+    using unordered_map = std::decay_t<decltype(unordered)>;
+    using map = std::map<typename unordered_map::key_type,
+                         typename unordered_map::mapped_type>;
+    return map{unordered.begin(), unordered.end()};
+  };
+  auto deep_equals = [](const auto& lhs, const auto& rhs) {
+    if (lhs == rhs)
+      return true;
+    if (!lhs || !rhs)
+      return false;
+    return *lhs == *rhs;
+  };
+  // Perform a deep comparison of the underlying synopsis pointers.
+  auto lhs_ps_sorted = to_map(lhs.partition_synopses_);
+  auto rhs_ps_sorted = to_map(rhs.partition_synopses_);
+  return std::equal(
+    lhs_ps_sorted.begin(), lhs_ps_sorted.end(), rhs_ps_sorted.begin(),
+    rhs_ps_sorted.end(), [&](const auto& lhs, const auto& rhs) {
+      // first is uuid, second is partition_synopsis
+      auto lhs_ts_sorted = to_map(lhs.second);
+      auto rhs_ts_sorted = to_map(rhs.second);
+      return lhs.first == rhs.first
+             && std::equal(lhs_ts_sorted.begin(), lhs_ts_sorted.end(),
+                           rhs_ts_sorted.begin(), rhs_ts_sorted.end(),
+                           [&](const auto& lhs, const auto& rhs) {
+                             // first is record_type, second is table_synopsis
+                             return lhs.first == rhs.first
+                                    && std::equal(lhs.second.begin(),
+                                                  lhs.second.end(),
+                                                  rhs.second.begin(),
+                                                  rhs.second.end(),
+                                                  deep_equals);
+                           });
+    });
+}
+
 } // namespace vast

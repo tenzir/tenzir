@@ -88,14 +88,4 @@ caf::error inspect(caf::serializer& sink, synopsis_ptr& ptr);
 /// @relates synopsis
 caf::error inspect(caf::deserializer& source, synopsis_ptr& ptr);
 
-/// @relates synopsis
-static inline bool
-operator==(const synopsis_ptr& lhs, const synopsis_ptr& rhs) {
-  if (!lhs && !rhs)
-    return true;
-  if (!lhs || !rhs)
-    return false;
-  return *lhs == *rhs;
-}
-
 } // namespace vast

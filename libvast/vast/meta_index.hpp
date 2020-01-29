@@ -54,12 +54,18 @@ public:
 
   friend caf::error inspect(caf::deserializer&, meta_index&);
 
-  friend bool operator==(const meta_index& lhs, const meta_index& rhs) {
-    return std::tie(lhs.synopsis_options_, lhs.partition_synopses_,
-                    lhs.blacklisted_layouts_)
-           == std::tie(rhs.synopsis_options_, rhs.partition_synopses_,
-                       rhs.blacklisted_layouts_);
+  // Allow debug printing meta_index instances.
+  template <class Inspector,
+            class = std::enable_if_t<std::negation_v<
+              std::disjunction<std::is_same<Inspector, caf::serializer>,
+                               std::is_same<Inspector, caf::deserializer>>>>>
+  friend auto inspect(Inspector& f, const meta_index& x) {
+    return f(x.synopsis_options_, x.partition_synopses_,
+             x.blacklisted_layouts_);
   }
+
+  // Deep equality comparison
+  friend bool deep_equals(const meta_index&, const meta_index&);
 
 private:
   // Synopsis structures for a given layout.
