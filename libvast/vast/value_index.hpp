@@ -237,7 +237,7 @@ public:
       } else {
         auto str = caf::get<caf::config_value::string>(i->second);
         auto b = to<base>(str);
-        VAST_ASSERT(b != nullptr); // pre-condition is that this was validated
+        VAST_ASSERT(b); // pre-condition is that this was validated
         bmi_ = bitmap_index_type{base{std::move(*b)}};
       }
     }
