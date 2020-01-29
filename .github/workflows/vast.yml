@@ -173,3 +173,12 @@ jobs:
         if: github.ref == 'refs/heads/master'
         run: |
           gsutil -m cp "$BUILD_DIR/$PACKAGE_NAME.tar.gz" "gs://${{ secrets.GCS_BUCKET }}"
+
+      - name: Publish Docker Image
+        if: github.ref == 'refs/heads/master' && matrix.os.tag == 'ubuntu' && matrix.configure.tag == 'Release'
+        uses: elgohr/Publish-Docker-Github-Action@2.12
+        with:
+          name: tenzir/vast
+          username: ${{ secrets.DOCKERHUB_USER }}
+          password: ${{ secrets.DOCKERHUB_PASSWORD }}
+          dockerfile: Dockerfile_prebuilt
