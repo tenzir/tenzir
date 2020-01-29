@@ -78,12 +78,12 @@ jobs:
         with:
           python-version: '3.7'
 
-      - name: Configure AWS Credentials
-        uses: aws-actions/configure-aws-credentials@v1
+      - name: Configure GCloud Credentials
+        uses: GoogleCloudPlatform/github-actions/setup-gcloud@master
         with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: eu-central-1
+          version: '275.0.0'
+          service_account_email: ${{ secrets.GCP_SA_EMAIL }}
+          service_account_key: ${{ secrets.GCP_SA_KEY }}
 
       - name: Install Ubuntu Dependencies
         if: matrix.os.tag == 'Ubuntu'
@@ -104,7 +104,7 @@ jobs:
           HOMEBREW_NO_INSTALL_CLEANUP: 1
           HOMEBREW_NO_AUTO_UPDATE: 1
         run: |
-          brew install openssl cmake git ninja python libpcap jq tcpdump rsync pandoc apache-arrow awscli pkg-config
+          brew install openssl cmake git ninja python libpcap jq tcpdump rsync pandoc apache-arrow pkg-config
 
       - name: Configure Environment
         id: configure_env
@@ -169,7 +169,7 @@ jobs:
           name: "${{ steps.configure_env.outputs.package_name }}.tar.gz"
           path: "${{ steps.configure_env.outputs.build_dir }}/${{ steps.configure_env.outputs.package_name }}.tar.gz"
 
-      - name: Upload Artifact to S3
+      - name: Upload Artifact to GCS
         if: github.ref == 'refs/heads/master'
         run: |
-          aws s3 cp "$BUILD_DIR/$PACKAGE_NAME.tar.gz" ${{ secrets.AWS_ARTIFACT_BUCKET }}
+          gsutil -m cp "$BUILD_DIR/$PACKAGE_NAME.tar.gz" "gs://${{ secrets.GCS_BUCKET }}"
