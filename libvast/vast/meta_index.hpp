@@ -55,8 +55,21 @@ public:
 
   friend caf::error inspect(caf::deserializer&, meta_index&);
 
+  // Allow debug printing meta_index instances.
+  template <class Inspector,
+            class = std::enable_if_t<std::negation_v<
+              std::disjunction<std::is_same<Inspector, caf::serializer>,
+                               std::is_same<Inspector, caf::deserializer>>>>>
+  friend auto inspect(Inspector& f, const meta_index& x) {
+    return f(x.synopsis_options_, x.partition_synopses_,
+             x.blacklisted_layouts_);
+  }
+
+  // Deep equality comparison
+  friend bool deep_equals(const meta_index&, const meta_index&);
+
 private:
-  // Synopsis structures for a givn layout.
+  // Synopsis structures for a given layout.
   using table_synopsis = std::vector<synopsis_ptr>;
 
   /// Contains synopses per table layout.

@@ -179,14 +179,14 @@ struct type_parser : parser<type_parser> {
     // Complete type
     if (symbol_type)
       type_type
-        = *symbol_type
-        | basic_type_parser
+        = basic_type_parser
         | enum_type_parser
         | vector_type_parser
         | set_type_parser
         | map_type_parser
         | record_type_parser
-        ;
+        | *symbol_type; // The *symbol_type parser must MUST be last as it
+                        // greedily checks for prefixes in the symbol table.
     else // As above, just without the symbol table.
       type_type
         = basic_type_parser
@@ -194,8 +194,7 @@ struct type_parser : parser<type_parser> {
         | vector_type_parser
         | set_type_parser
         | map_type_parser
-        | record_type_parser
-        ;
+        | record_type_parser;
     return type_type(f, l, a);
     // clang-format on
   }

@@ -150,7 +150,9 @@ TEST(spawning sinks automatically) {
                                                   index);
   run();
   CHECK_EQUAL(all_sinks.size(), expected_sink_count);
-  CHECK_EQUAL(sorted(test_slices), all_slices);
+  auto sorted_slices = sorted(test_slices);
+  CHECK(
+    std::equal(sorted_slices.begin(), sorted_slices.end(), all_slices.begin()));
 }
 
 /*

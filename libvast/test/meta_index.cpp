@@ -35,6 +35,12 @@ using namespace vast;
 
 using std::literals::operator""s;
 
+namespace vast {
+bool operator==(const meta_index& lhs, const meta_index& rhs) {
+  return deep_equals(lhs, rhs);
+}
+} // namespace vast
+
 namespace {
 
 constexpr size_t num_partitions = 4;

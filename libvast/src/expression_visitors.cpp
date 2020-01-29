@@ -248,14 +248,14 @@ caf::expected<void> validator::operator()(const predicate& p) {
 
 caf::expected<void> validator::
 operator()(const attribute_extractor& ex, const data& d) {
-  if (ex.attr == system::type_atom::value
+  if (ex.attr == system::type_atom::get_value()
       && !(caf::holds_alternative<std::string>(d)
            || caf::holds_alternative<pattern>(d)))
     return make_error(ec::syntax_error,
                       "type attribute extractor requires string or pattern "
                       "operand",
                       ex.attr, op_, d);
-  else if (ex.attr == system::timestamp_atom::value
+  else if (ex.attr == system::timestamp_atom::get_value()
            && !caf::holds_alternative<time>(d))
     return make_error(ec::syntax_error,
                       "time attribute extractor requires timestamp operand",
@@ -510,9 +510,9 @@ bool event_evaluator::operator()(const predicate& p) {
 bool event_evaluator::operator()(const attribute_extractor& e, const data& d) {
   // FIXME: perform a transformation on the AST that replaces the attribute
   // with the corresponding function object.
-  if (e.attr == system::type_atom::value)
+  if (e.attr == system::type_atom::get_value())
     return evaluate(event_.type().name(), op_, d);
-  if (e.attr == system::timestamp_atom::value)
+  if (e.attr == system::timestamp_atom::get_value())
     return evaluate(event_.timestamp(), op_, d);
   return false;
 }
@@ -575,9 +575,9 @@ bool table_slice_row_evaluator::operator()(const attribute_extractor& e,
                                            const data& d) {
   // FIXME: perform a transformation on the AST that replaces the attribute
   // with the corresponding function object.
-  if (e.attr == system::type_atom::value)
+  if (e.attr == system::type_atom::get_value())
     return evaluate(slice_.layout().name(), op_, d);
-  if (e.attr == system::timestamp_atom::value) {
+  if (e.attr == system::timestamp_atom::get_value()) {
     auto pred = [](auto& x) {
       return caf::holds_alternative<time_type>(x.type)
              && has_attribute(x.type, "timestamp");
@@ -657,10 +657,10 @@ bool matcher::operator()(const predicate& p) {
 }
 
 bool matcher::operator()(const attribute_extractor& e, const data& d) {
-  if (e.attr == system::type_atom::value) {
+  if (e.attr == system::type_atom::get_value()) {
     VAST_ASSERT(caf::holds_alternative<std::string>(d));
     return evaluate(d, op_, type_.name());
-  } else if (e.attr == system::timestamp_atom::value) {
+  } else if (e.attr == system::timestamp_atom::get_value()) {
     return true; // Every event has a timestamp.
   }
   return false;

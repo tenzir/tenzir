@@ -158,6 +158,30 @@ public:
   friend bool operator==(const data& lhs, const data& rhs);
   friend bool operator<(const data& lhs, const data& rhs);
 
+  // These operators need to be templates so they're instantiated at a later
+  // point in time, because there'd be a cyclic dependency otherwise.
+  // caf::variant<Ts...> is just a placeholder for vast::data_view here.
+
+  template <class... Ts>
+  friend bool operator==(const data& lhs, const caf::variant<Ts...>& rhs) {
+    return is_equal(lhs, rhs);
+  }
+
+  template <class... Ts>
+  friend bool operator==(const caf::variant<Ts...>& lhs, const data& rhs) {
+    return is_equal(lhs, rhs);
+  }
+
+  template <class... Ts>
+  friend bool operator!=(const data& lhs, const caf::variant<Ts...>& rhs) {
+    return !is_equal(lhs, rhs);
+  }
+
+  template <class... Ts>
+  friend bool operator!=(const caf::variant<Ts...>& lhs, const data& rhs) {
+    return !is_equal(lhs, rhs);
+  }
+
   /// @cond PRIVATE
 
   variant& get_data() {

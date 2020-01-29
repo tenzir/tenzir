@@ -49,7 +49,7 @@ public:
   using array = std::vector<json>;
 
   /// A JSON object.
-  using object = detail::steady_map<std::string, json>;
+  using object = detail::steady_map<string, json>;
 
   /// The sum type of all possible JSON types.
   using types = caf::detail::type_list<
@@ -100,6 +100,18 @@ public:
 
   friend bool operator<(const json& x, const json& y) {
     return x.data_ < y.data_;
+  }
+
+  template <typename T,
+            typename = std::enable_if_t<std::is_constructible_v<json, T>>>
+  friend bool operator==(const json& x, const T& y) {
+    return operator==(x, json{y});
+  }
+
+  template <typename T,
+            typename = std::enable_if_t<std::is_constructible_v<json, T>>>
+  friend bool operator==(const T& x, const json& y) {
+    return operator==(json{x}, y);
   }
 
   template <class... Ts>

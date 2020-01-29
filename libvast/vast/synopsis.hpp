@@ -68,19 +68,19 @@ public:
   /// Loads the contents for this slice from `source`.
   virtual caf::error deserialize(caf::deserializer& source) = 0;
 
+  /// @relates synopsis
+  friend inline bool operator==(const synopsis& x, const synopsis& y) {
+    return x.equals(y);
+  }
+
+  /// @relates synopsis
+  friend inline bool operator!=(const synopsis& x, const synopsis& y) {
+    return !(x == y);
+  }
+
 private:
   vast::type type_;
 };
-
-/// @relates synopsis
-inline bool operator==(const synopsis& x, const synopsis& y) {
-  return x.equals(y);
-}
-
-/// @relates synopsis
-inline bool operator!=(const synopsis& x, const synopsis& y) {
-  return !(x == y);
-}
 
 /// @relates synopsis
 caf::error inspect(caf::serializer& sink, synopsis_ptr& ptr);

@@ -11,17 +11,19 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
+#include "vast/expression.hpp"
 #define SUITE expression
-
-#include "vast/concept/parseable/vast/expression.hpp"
 
 #include "vast/test/test.hpp"
 
 #include "vast/concept/parseable/to.hpp"
+#include "vast/concept/parseable/vast/expression.hpp"
 #include "vast/concept/printable/stream.hpp"
 #include "vast/concept/printable/to_string.hpp"
 #include "vast/concept/printable/vast/expression.hpp"
 #include "vast/system/atoms.hpp"
+
+#include <caf/sum_type.hpp>
 
 using namespace vast;
 using namespace std::string_literals;
@@ -34,49 +36,64 @@ TEST(parseable/printable - predicate) {
   // LHS: schema, RHS: data
   std::string str = "x.y.z == 42";
   CHECK(parsers::predicate(str, pred));
-  CHECK(pred.lhs == key_extractor{"x.y.z"});
+  CHECK(caf::holds_alternative<key_extractor>(pred.lhs));
+  CHECK(caf::holds_alternative<data>(pred.rhs));
+  CHECK(caf::get<key_extractor>(pred.lhs) == key_extractor{"x.y.z"});
   CHECK(pred.op == equal);
-  CHECK(pred.rhs == data{42u});
+  CHECK(caf::get<data>(pred.rhs) == data{42u});
   CHECK_EQUAL(to_string(pred), str);
   // LHS: data, RHS: data
   str = "42 in {21, 42, 84}";
   CHECK(parsers::predicate(str, pred));
-  CHECK(pred.lhs == data{42u});
+  CHECK(caf::holds_alternative<data>(pred.lhs));
+  CHECK(caf::holds_alternative<data>(pred.rhs));
+  CHECK(caf::get<data>(pred.lhs) == data{42u});
   CHECK(pred.op == in);
-  CHECK(pred.rhs == data{set{21u, 42u, 84u}});
+  CHECK(caf::get<data>(pred.rhs) == data{set{21u, 42u, 84u}});
   CHECK_EQUAL(to_string(pred), str);
   // LHS: type, RHS: data
   str = "#type != \"foo\"";
   CHECK(parsers::predicate(str, pred));
-  CHECK(pred.lhs == attribute_extractor{type_atom::value});
+  CHECK(caf::holds_alternative<attribute_extractor>(pred.lhs));
+  CHECK(caf::holds_alternative<data>(pred.rhs));
+  CHECK(caf::get<attribute_extractor>(pred.lhs)
+        == attribute_extractor{type_atom::value});
   CHECK(pred.op == not_equal);
-  CHECK(pred.rhs == data{"foo"});
+  CHECK(caf::get<data>(pred.rhs) == data{"foo"});
   CHECK_EQUAL(to_string(pred), str);
   // LHS: data, RHS: type
   str = "10.0.0.0/8 ni :addr";
   CHECK(parsers::predicate(str, pred));
-  CHECK(pred.lhs == data{*to<subnet>("10.0.0.0/8")});
+  CHECK(caf::holds_alternative<data>(pred.lhs));
+  CHECK(caf::holds_alternative<type_extractor>(pred.rhs));
+  CHECK(caf::get<data>(pred.lhs) == data{*to<subnet>("10.0.0.0/8")});
   CHECK(pred.op == ni);
-  CHECK(pred.rhs == type_extractor{address_type{}});
+  CHECK(caf::get<type_extractor>(pred.rhs) == type_extractor{address_type{}});
   CHECK_EQUAL(to_string(pred), str);
   // LHS: type, RHS: data
   str = ":real >= -4.8";
   CHECK(parsers::predicate(str, pred));
-  CHECK(pred.lhs == type_extractor{real_type{}});
+  CHECK(caf::holds_alternative<type_extractor>(pred.lhs));
+  CHECK(caf::holds_alternative<data>(pred.rhs));
+  CHECK(caf::get<type_extractor>(pred.lhs) == type_extractor{real_type{}});
   CHECK(pred.op == greater_equal);
-  CHECK(pred.rhs == data{-4.8});
+  CHECK(caf::get<data>(pred.rhs) == data{-4.8});
   CHECK_EQUAL(to_string(pred), str);
   // LHS: data, RHS: time
   str = "now > #timestamp";
   CHECK(parsers::predicate(str, pred));
   CHECK(caf::holds_alternative<data>(pred.lhs));
+  CHECK(caf::holds_alternative<attribute_extractor>(pred.rhs));
   CHECK(pred.op == greater);
-  CHECK(pred.rhs == attribute_extractor{timestamp_atom::value});
+  CHECK(caf::get<attribute_extractor>(pred.rhs)
+        == attribute_extractor{timestamp_atom::value});
   str = "x.a_b == y.c_d";
   CHECK(parsers::predicate(str, pred));
-  CHECK(pred.lhs == key_extractor{"x.a_b"});
+  CHECK(caf::holds_alternative<key_extractor>(pred.lhs));
+  CHECK(caf::holds_alternative<key_extractor>(pred.rhs));
+  CHECK(caf::get<key_extractor>(pred.lhs) == key_extractor{"x.a_b"});
   CHECK(pred.op == equal);
-  CHECK(pred.rhs == key_extractor{"y.c_d"});
+  CHECK(caf::get<key_extractor>(pred.rhs) == key_extractor{"y.c_d"});
   CHECK_EQUAL(to_string(pred), str);
   // Invalid type name.
   CHECK(!parsers::predicate(":foo == -42"));
@@ -134,6 +151,7 @@ TEST(parseable - data expression) {
   auto extractor = caf::get_if<type_extractor>(&pred->lhs);
   REQUIRE(extractor != nullptr);
   CHECK(caf::holds_alternative<count_type>(extractor->type));
+  CHECK(caf::holds_alternative<data>(pred->rhs));
   CHECK_EQUAL(pred->op, equal);
-  CHECK(pred->rhs == data{42u});
+  CHECK(caf::get<data>(pred->rhs) == data{42u});
 }
