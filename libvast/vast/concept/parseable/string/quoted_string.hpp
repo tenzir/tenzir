@@ -27,16 +27,26 @@ class quoted_string_parser : public parser<quoted_string_parser<Quote, Esc>> {
 public:
   using attribute = std::string;
 
-  static constexpr auto esc = ignore(parsers::ch<Esc>);
-  static constexpr auto quote = ignore(parsers::ch<Quote>);
-  static constexpr auto esc_esc = esc >> parsers::ch<Esc>;
-  static constexpr auto esc_quote = esc >> parsers::ch<Quote>;
-  static constexpr auto str_chr
-    = esc_esc | esc_quote | (parsers::print - quote);
-  static constexpr auto quoted_str = quote >> *str_chr >> quote;
+  static constexpr auto quote = parsers::ch<Quote>;
+  static constexpr auto ignore_esc = ignore(parsers::ch<Esc>);
+  static constexpr auto ignore_quote = ignore(parsers::ch<Quote>);
+  static constexpr auto esc_quote = ignore_esc >> quote;
 
   template <class Iterator, class Attribute>
   bool parse(Iterator& f, const Iterator& l, Attribute& x) const {
+    auto esc_esc = [&]() {
+      // clang-format off
+      if constexpr (std::is_same_v<unused_type, Attribute>)
+        return ignore_esc >> ignore_esc;
+      else
+        // The kleene_parser will append exactly one char per invocation to the
+        // output string, so if we returned nothing from this lambda it would
+        // append a default-initialized null byte.
+        return (ignore_esc >> ignore_esc) ->* [&] { x.push_back(Esc); return Esc; };
+      // clang-format on
+    }();
+    auto str_chr = esc_quote | esc_esc | (parsers::print - quote);
+    auto quoted_str = ignore_quote >> *str_chr >> ignore_quote;
     return quoted_str(f, l, x);
   }
 };
