@@ -4,6 +4,8 @@ on:
     paths-ignore:
     - '**.md'
     - '!doc/**.md'
+  release:
+    types: published
 env:
   DEBIAN_FRONTEND: noninteractive
 jobs:
@@ -182,3 +184,14 @@ jobs:
           username: ${{ secrets.DOCKERHUB_USER }}
           password: ${{ secrets.DOCKERHUB_PASSWORD }}
           dockerfile: Dockerfile_prebuilt
+
+      - name: Publish to GitHub Release
+        if: github.event.action == 'published'
+        uses: actions/upload-release-asset@v1.0.1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ github.event.release.upload_url }}
+          asset_path: "${{ steps.configure_env.outputs.build_dir }}/${{ steps.configure_env.outputs.package_name }}.tar.gz"
+          asset_name: "${{ steps.configure_env.outputs.package_name }}.tar.gz"
+          asset_content_type: application/gzip
