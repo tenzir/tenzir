@@ -22,6 +22,24 @@
 
 namespace vast {
 
+/// Parser for a string surrounded by a pair of quote characters.
+///
+/// @note The parser has two template arguments `Esc` and `Quote`, specifying
+/// the escape and quote characters used. Inside the string, the escape sequence
+/// `Esc Quote` can be used to represent a literal quote character, and the
+/// escape sequence `Esc Esc` can be used to represent a sequence of two
+/// escape characters. All other occurences of the escape character are
+/// interpreted as character literals.
+///
+/// For example, using backslash as escape character and double quote as quote
+/// character:
+///
+///    "foo\n"     denotes the string ['f', 'o', 'o', '\', 'n']
+///    "C:\sys32"  denotes the string ['C', ':', '\', 's', 'y', 's', '3', '2']
+///    "\\"        denotes the string ['\', '\']
+///    "\""        denotes the string ['"']
+///    "\\""       denotes the string ['\', '\'], with a final " left unparsed
+///    "\\\"       is an invalid string (unterminated)
 template <char Quote, char Esc>
 class quoted_string_parser : public parser<quoted_string_parser<Quote, Esc>> {
 public:
