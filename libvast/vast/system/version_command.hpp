@@ -13,11 +13,15 @@
 
 #pragma once
 
+#include "vast/command.hpp"
+#include "vast/json.hpp"
+
 #include <caf/fwd.hpp>
 
-#include "vast/command.hpp"
-
 namespace vast::system {
+
+/// Prints the version information to stdout.
+void print_version(const json::object& extra_content = {});
 
 /// Displays the software version to the user.
 caf::message

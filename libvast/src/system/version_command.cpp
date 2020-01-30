@@ -13,16 +13,61 @@
 
 #include "vast/system/version_command.hpp"
 
-#include <iostream>
-
-#include <caf/message.hpp>
-
+#include "vast/concept/printable/to_string.hpp"
+#include "vast/concept/printable/vast/json.hpp"
 #include "vast/config.hpp"
+#include "vast/json.hpp"
+#include "vast/logger.hpp"
+
+#ifdef VAST_HAVE_ARROW
+#  include <arrow/util/config.h>
+#endif
+
+#ifdef VAST_HAVE_PCAP
+#  include <pcap/pcap.h>
+#endif
+
+#include <iostream>
+#include <sstream>
 
 namespace vast::system {
 
-caf::message version_command(const command::invocation&, caf::actor_system&) {
-  std::cout << VAST_VERSION << std::endl;
+namespace {
+
+json::object retrieve_versions() {
+  json::object result;
+  result["VAST"] = VAST_VERSION;
+  std::ostringstream caf_v;
+  caf_v << CAF_MAJOR_VERSION << '.' << CAF_MINOR_VERSION << '.'
+        << CAF_PATCH_VERSION;
+  result["CAF"] = caf_v.str();
+#ifdef VAST_HAVE_ARROW
+  std::ostringstream arrow_v;
+  arrow_v << ARROW_VERSION_MAJOR << '.' << ARROW_VERSION_MINOR << '.'
+          << ARROW_VERSION_PATCH;
+  result["ARROW"] = arrow_v.str();
+#else
+  result["ARROW"] = json{};
+#endif
+#ifdef VAST_HAVE_PCAP
+  result["PCAP"] = pcap_lib_version();
+#else
+  result["PCAP"] = json{};
+#endif
+  return result;
+}
+
+} // namespace
+
+void print_version(const json::object& extra_content) {
+  auto version = retrieve_versions();
+  std::cout << to_string(combine(extra_content, version)) << std::endl;
+}
+
+caf::message
+version_command(const command::invocation& invocation, caf::actor_system&) {
+  VAST_TRACE(invocation);
+  print_version();
   return caf::none;
 }
 
