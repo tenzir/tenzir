@@ -232,6 +232,8 @@ json to_json(const T& x, Opts&&... opts) {
   return {};
 }
 
+json::object combine(const json::object& lhs, const json::object& rhs);
+
 } // namespace vast
 
 namespace caf {

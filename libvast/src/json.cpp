@@ -37,4 +37,11 @@ bool convert(const caf::config_value& x, json& j) {
     }, x);
 }
 
+json::object combine(const json::object& lhs, const json::object& rhs) {
+  auto result = lhs;
+  for (const auto& field : rhs)
+    result.insert(field);
+  return result;
+}
+
 } // namespace vast

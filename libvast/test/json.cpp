@@ -198,6 +198,15 @@ TEST(printable) {
   CHECK_EQUAL(str, json_tree);
 }
 
+TEST(combination) {
+  auto o1 = json::object{{"a", json{"foo"}}, {"b", json{"bar"}}};
+  auto o2 = json::object{{"b", json{"baz"}}, {"c", json{"char"}}};
+  auto c = combine(o1, o2);
+  auto r
+    = json::object{{"a", json{"foo"}}, {"b", json{"bar"}}, {"c", json{"char"}}};
+  CHECK_EQUAL(c, r);
+}
+
 TEST(conversion) {
   using namespace std::chrono;
   auto since_epoch = vast::duration{1258532203657267968ll};
