@@ -648,10 +648,9 @@ private:
   template <class C>
   auto decode(const std::vector<C>& coders, relational_operator op,
               value_type x) const
-  -> std::enable_if_t<
-    is_equality_coder<C>{} || is_bitslice_coder<C>{},
-    bitmap_type
-  > {
+    -> std::enable_if_t<
+      std::disjunction_v<is_equality_coder<C>, is_bitslice_coder<C>>,
+      bitmap_type> {
     VAST_ASSERT(op == equal || op == not_equal);
     base_.decompose(x, xs_);
     auto result = coders[0].decode(equal, xs_[0]);
