@@ -1,2 +1,5 @@
 { pkgs ? import <nixpkgs> {} }:
-pkgs.callPackage nix/vast.nix { }
+let
+  nix-gitDescribe = pkgs.callPackage ./nix/gitDescribe.nix { };
+in
+pkgs.callPackage nix/vast.nix { inherit nix-gitDescribe; }

@@ -1,4 +1,4 @@
-{ stdenv, lib, nix-gitignore, runCommand
+{ stdenv, lib, nix-gitignore, nix-gitDescribe
 , cmake, pkgconfig, git, pandoc
 , caf, libpcap, arrow-cpp
 , python3Packages, jq, tcpdump
@@ -16,12 +16,6 @@ let
   ]);
 
   src = nix-gitignore.gitignoreSource [ "/nix" ] ../.;
-
-  nix-gitDescribe = src:
-    runCommand "gitDescribe.out" {} ''
-      cd ${src}
-      echo -n "$(${git}/bin/git describe --tags --long --dirty)" > $out
-    '';
 
   version = stdenv.lib.fileContents (nix-gitDescribe src);
 in
