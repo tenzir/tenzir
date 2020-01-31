@@ -35,10 +35,9 @@ inline auto as_printer(std::string str) {
 
 template <class T>
 auto as_printer(T x)
--> std::enable_if_t<
-     std::is_arithmetic_v<T> && !std::is_same_v<T, bool>,
-     literal_printer
-   > {
+  -> std::enable_if_t<std::conjunction_v<std::is_arithmetic<T>,
+                                         std::negation<std::is_same<T, bool>>>,
+                      literal_printer> {
   return literal_printer{x};
 }
 

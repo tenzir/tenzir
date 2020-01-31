@@ -39,10 +39,9 @@ auto to(From&& from, Opts&&... opts)
 
 template <class To, class From, class... Opts>
 auto to_string(From&& from, Opts&&... opts)
-  -> std::enable_if_t<
-       std::is_same<To, std::string>{}
-        && is_convertible<std::decay_t<From>, To>{}, To
-     > {
+  -> std::enable_if_t<std::conjunction_v<std::is_same<To, std::string>,
+                                         is_convertible<std::decay_t<From>, To>>,
+                      To> {
   std::string str;
   if (convert(from, str, std::forward<Opts>(opts)...))
     return str;

@@ -88,17 +88,13 @@ struct expression_printer : printer<expression_printer> {
   };
 
   template <class Iterator, class T>
-  auto print(Iterator& out, const T& x) const
-    -> std::enable_if_t<
-         std::is_same_v<T, attribute_extractor>
-         || std::is_same_v<T, key_extractor>
-         || std::is_same_v<T, data_extractor>
-         || std::is_same_v<T, predicate>
-         || std::is_same_v<T, conjunction>
-         || std::is_same_v<T, disjunction>
-         || std::is_same_v<T, negation>,
-         bool
-       > {
+  auto print(Iterator& out, const T& x) const -> std::enable_if_t<
+    std::disjunction_v<std::is_same<T, attribute_extractor>,
+                       std::is_same<T, key_extractor>,
+                       std::is_same<T, data_extractor>,
+                       std::is_same<T, predicate>, std::is_same<T, conjunction>,
+                       std::is_same<T, disjunction>, std::is_same<T, negation>>,
+    bool> {
     return visitor<Iterator>{out}(x);
   }
 
@@ -110,18 +106,11 @@ struct expression_printer : printer<expression_printer> {
 
 template <class T>
 struct printer_registry<
-  T,
-  std::enable_if_t<
-    std::is_same_v<T, attribute_extractor>
-    || std::is_same_v<T, key_extractor>
-    || std::is_same_v<T, data_extractor>
-    || std::is_same_v<T, predicate>
-    || std::is_same_v<T, conjunction>
-    || std::is_same_v<T, disjunction>
-    || std::is_same_v<T, negation>
-    || std::is_same_v<T, expression>
-  >
-> {
+  T, std::enable_if_t<std::disjunction_v<
+       std::is_same<T, attribute_extractor>, std::is_same<T, key_extractor>,
+       std::is_same<T, data_extractor>, std::is_same<T, predicate>,
+       std::is_same<T, conjunction>, std::is_same<T, disjunction>,
+       std::is_same<T, negation>, std::is_same<T, expression>>>> {
   using type = expression_printer;
 };
 
