@@ -160,10 +160,11 @@ void reader::reset(std::unique_ptr<std::istream> in) {
 }
 
 caf::error reader::schema(vast::schema s) {
-  schema_ = std::move(s);
   for (auto& t : s) {
     if (auto r = caf::get_if<record_type>(&t))
       schema_.add(flatten(*r));
+    else
+      schema_.add(t);
   }
   return caf::none;
 }
@@ -216,7 +217,6 @@ struct container_parser_builder {
 
   template <class T>
   result_type operator()(const T& t) const {
-    auto ws = ignore(*parsers::space);
     if constexpr (std::is_same_v<T, string_type>) {
       // clang-format off
       return +(parsers::any - opt_.set_separator - opt_.kvp_separator) ->* [](std::string x) {
@@ -255,6 +255,7 @@ struct container_parser_builder {
                ->* vector_insert;
       // clang-format on
     } else if constexpr (std::is_same_v<T, map_type>) {
+      auto ws = ignore(*parsers::space);
       auto map_insert = [](std::vector<std::pair<Attribute, Attribute>> xs) {
         return map(std::make_move_iterator(xs.begin()),
                    std::make_move_iterator(xs.end()));
