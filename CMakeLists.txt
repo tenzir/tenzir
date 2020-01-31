@@ -22,7 +22,7 @@ string(REGEX REPLACE "\\.|-" " " version_numbers ${VAST_VERSION_TAG})
 separate_arguments(version_numbers)
 list(GET version_numbers 0 VERSION_YEAR)
 list(GET version_numbers 1 VERSION_MONTH)
-list(GET version_numbers 1 VERSION_DAY)
+list(GET version_numbers 2 VERSION_DAY)
 unset(version_numbers)
 
 project(
