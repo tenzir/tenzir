@@ -267,7 +267,7 @@ tests:
       - command: -N import pcap
         input: data/pcap/example.pcap.gz
       - command: -N pivot pcap.packet 'dest_ip == 72.247.178.18'
-        transformation: tcpdump -tt -r -
+        transformation: tcpdump -n -tt -r -
   Arrow:
     condition: 'export -h 2>&1 | grep -q arrow'
     tags: [export, arrow]
