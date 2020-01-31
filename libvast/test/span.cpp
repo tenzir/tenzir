@@ -28,16 +28,16 @@ using namespace vast;
 TEST(string) {
   auto foo = "foo"s;
   auto x = span<char>{foo};
-  CHECK_EQUAL(x.size(), 3);
+  CHECK_EQUAL(x.size(), 3u);
 }
 
 TEST(byte) {
   auto b = byte{0b0000'1100};
   auto x = span<byte>{&b, 1};
-  CHECK_EQUAL(x.size(), 1);
+  CHECK_EQUAL(x.size(), 1u);
   auto foo = "foo"s;
   x = span<byte>(reinterpret_cast<byte*>(foo.data()), foo.size());
-  CHECK_EQUAL(x.size(), 3);
+  CHECK_EQUAL(x.size(), 3u);
   CHECK_EQUAL(x[0], byte{'f'});
 }
 
@@ -45,7 +45,7 @@ TEST(subspan) {
   auto xs = std::vector<int>{1, 2, 3, 4, 5, 6, 7};
   auto ys = span<int>{xs};
   auto zs = ys.subspan(2, 3);
-  REQUIRE_EQUAL(zs.size(), 3);
+  REQUIRE_EQUAL(zs.size(), 3u);
   CHECK_EQUAL(zs[0], 3);
   CHECK_EQUAL(zs[1], 4);
   CHECK_EQUAL(zs[2], 5);
@@ -53,7 +53,7 @@ TEST(subspan) {
 
 TEST(construct from empty array) {
   std::array<int, 42> xs;
-  CHECK_EQUAL(span<int>{xs}.size(), 42);
+  CHECK_EQUAL(span<int>{xs}.size(), 42u);
 }
 
 TEST(byte span utility) {
