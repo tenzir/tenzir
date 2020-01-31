@@ -8,7 +8,7 @@ Every entry has a category for which we use the following visual abbreviations:
 - 🔄 = change
 - 🐞 = bugfix
 
-## [Unreleased]
+## [2020.01.31]
 
 - 🔄 VAST is switching to a calendar-based versioning scheme starting with this
 - release.
