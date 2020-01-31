@@ -35,8 +35,8 @@ add_library(
 target_compile_definitions(
   libvast_test
   PUBLIC
-  $<BUILD_INTERFACE:VAST_TEST_PATH=\"${CMAKE_CURRENT_SOURCE_DIR}/\">
-  $<INSTALL_INTERFACE:VAST_TEST_PATH=\"\${_IMPORT_PREFIX}/${CMAKE_INSTALL_DATADIR}/vast/test/\">
+    $<BUILD_INTERFACE:VAST_TEST_PATH=\"${CMAKE_CURRENT_SOURCE_DIR}/\">
+    $<INSTALL_INTERFACE:VAST_TEST_PATH=\"\${_IMPORT_PREFIX}/${CMAKE_INSTALL_DATADIR}/vast/test/\">
 )
 target_include_directories(
   libvast_test PUBLIC $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
@@ -48,13 +48,13 @@ set(isExe $<STREQUAL:$<TARGET_PROPERTY:TYPE>,EXECUTABLE>)
 target_sources(
   libvast_test
   INTERFACE
-  "$<${isExe}:$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/src/main.cpp>>"
-  "$<${isExe}:$<INSTALL_INTERFACE:$<INSTALL_PREFIX>/${CMAKE_INSTALL_DATADIR}/vast/test/main.cpp>>"
+    "$<${isExe}:$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/src/main.cpp>>"
+    "$<${isExe}:$<INSTALL_INTERFACE:$<INSTALL_PREFIX>/${CMAKE_INSTALL_DATADIR}/vast/test/main.cpp>>"
 )
 set_target_properties(
   libvast_test
   PROPERTIES
-    SOVERSION "${VERSION_MAJOR}" VERSION "${VERSION_MAJOR}.${VERSION_MINOR}"
+    SOVERSION "${VERSION_YEAR}" VERSION "${VERSION_YEAR}.${VERSION_MONTH}"
 
     OUTPUT_NAME vast_test EXPORT_NAME test)
 add_library(vast::test ALIAS libvast_test)
