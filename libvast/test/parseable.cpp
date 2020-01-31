@@ -228,7 +228,7 @@ TEST(quoted string - missing trailing quote after escaped quote) {
 TEST(quoted string - trailing quote after escaped escape) {
   std::string attr;
   CHECK(parsers::qstr("'foobar\\\\'", attr));
-  CHECK_EQUAL(attr, "foobar\\");
+  CHECK_EQUAL(attr, "foobar\\\\");
 }
 
 TEST(symbol table) {
