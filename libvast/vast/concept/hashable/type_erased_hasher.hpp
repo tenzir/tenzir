@@ -13,7 +13,10 @@
 
 #pragma once
 
+#include "vast/detail/endian.hpp"
+
 #include <cstddef>
+#include <functional>
 #include <type_traits>
 
 namespace vast {
