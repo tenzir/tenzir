@@ -34,7 +34,8 @@ inline auto to_parser(std::string str) {
 
 template <class T>
 constexpr auto to_parser(T x)
-  -> std::enable_if_t<std::is_arithmetic_v<T> && !std::is_same_v<T, bool>,
+  -> std::enable_if_t<std::conjunction_v<std::is_arithmetic<T>,
+                                         std::negation<std::is_same<T, bool>>>,
                       decltype(ignore(string_parser{""}))> {
   return ignore(parsers::str{std::to_string(x)});
 }

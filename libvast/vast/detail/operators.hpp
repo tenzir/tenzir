@@ -78,11 +78,10 @@ struct totally_ordered : equality_comparable<T, U>,
     }                                                                          \
                                                                                \
     template <class Lhs, class Rhs>                                            \
-    friend auto operator OP(const Rhs& y, const Lhs& x)                        \
-    -> std::enable_if_t<std::is_same_v<Lhs, T>                                 \
-                          && std::is_same_v<Rhs, U>                            \
-                          && !std::is_same_v<Lhs, Rhs>,                        \
-                        Lhs> {                                                 \
+    friend auto operator OP(const Rhs& y, const Lhs& x) -> std::enable_if_t<   \
+      std::conjunction_v<std::is_same<Lhs, T>, std::is_same<Rhs, U>,           \
+                         std::negation<std::is_same<Lhs, Rhs>>>,               \
+      Lhs> {                                                                   \
       static_assert(std::is_constructible_v<Lhs, Rhs>,                         \
                     "LHS must be constructible from RHS");                     \
       Lhs result(y);                                                           \

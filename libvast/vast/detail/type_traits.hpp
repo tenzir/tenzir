@@ -110,13 +110,9 @@ struct is_contiguous_byte_container : std::false_type {};
 
 template <class T>
 struct is_contiguous_byte_container<
-  T,
-  std::enable_if_t<
-    std::is_same_v<T, std::string>
-      || std::is_same_v<T, std::vector<char>>
-      || std::is_same_v<T, std::vector<unsigned char>>
-  >
-> : std::true_type {};
+  T, std::enable_if_t<std::disjunction_v<
+       std::is_same<T, std::string>, std::is_same<T, std::vector<char>>,
+       std::is_same<T, std::vector<unsigned char>>>>> : std::true_type {};
 
 template <class T>
 constexpr bool is_contiguous_byte_container_v
