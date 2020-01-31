@@ -25,6 +25,16 @@ list(GET version_numbers 1 VERSION_MONTH)
 list(GET version_numbers 1 VERSION_DAY)
 unset(version_numbers)
 
+set(CMAKE_CXX_FLAGS_DEBUG
+    "_UNSET"
+    CACHE STRING "")
+set(CMAKE_CXX_FLAGS_RELEASE
+    "_UNSET"
+    CACHE STRING "")
+set(CMAKE_CXX_FLAGS_RELWITHDEBINFO
+    "_UNSET"
+    CACHE STRING "")
+
 project(
   VAST
   VERSION ${VERSION_YEAR}.${VERSION_MONTH}.${VERSION_DAY}
@@ -208,13 +218,30 @@ set(ARFLAGS "$ENV{ARFLAGS}")
 
 set(CMAKE_CXX_STANDARD 17)
 
-# Build-type specific flags.
-string(APPEND CMAKE_CXX_FLAGS_DEBUG " -O0")
-string(APPEND CMAKE_CXX_FLAGS_RELEASE " -msse3 -mssse3 -msse4.1 -msse4.2")
-string(APPEND CMAKE_CXX_FLAGS_RELWITHDEBINFO " -fno-omit-frame-pointer")
-if (NOT VAST_DEV_MODE)
-  string(APPEND CMAKE_CXX_FLAGS_DEBUG " -g1")
-  string(APPEND CMAKE_CXX_FLAGS_RELWITHDEBINFO " -g1")
+# We only use -g1 by default to not waste excessive space on debug symbols for
+# CI builds. Developers who need a higher level than that can alwas manually
+# override their `CMAKE_CXX_FLAGS` or the build-type specific flags.
+set(VAST_DEFAULT_CXX_FLAGS_DEBUG "-O0 -g1")
+set(VAST_DEFAULT_CXX_FLAGS_RELEASE "-O3 -msse3 -mssse3 -msse4.1 -msse4.2")
+set(VAST_DEFAULT_CXX_FLAGS_RELWITHDEBINFO
+    "-O2 -g1 -DNDEBUG -fno-omit-frame-pointer")
+
+# Change build-type specific flags unless they were manually set by the user.
+# Cf.: https://stackoverflow.com/questions/28732209
+if (${CMAKE_CXX_FLAGS_DEBUG} STREQUAL "_UNSET")
+  set(CMAKE_CXX_FLAGS_DEBUG
+      ${VAST_DEFAULT_CXX_FLAGS_DEBUG}
+      CACHE STRING "" FORCE)
+endif ()
+if (${CMAKE_CXX_FLAGS_RELEASE} STREQUAL "_UNSET")
+  set(CMAKE_CXX_FLAGS_RELEASE
+      ${VAST_DEFAULT_CXX_FLAGS_RELEASE}
+      CACHE STRING "" FORCE)
+endif ()
+if (${CMAKE_CXX_FLAGS_RELWITHDEBINFO} STREQUAL "_UNSET")
+  set(CMAKE_CXX_FLAGS_RELWITHDEBINFO
+      ${VAST_DEFAULT_CXX_FLAGS_RELWITHDEBINFO}
+      CACHE STRING "" FORCE)
 endif ()
 
 # To give the user full control, we don't mess with with CXX_FLAGS if provided.
