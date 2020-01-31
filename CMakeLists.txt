@@ -20,13 +20,14 @@ if (NOT VAST_VERSION_TAG)
 endif ()
 string(REGEX REPLACE "\\.|-" " " version_numbers ${VAST_VERSION_TAG})
 separate_arguments(version_numbers)
-list(GET version_numbers 0 VERSION_MAJOR)
-list(GET version_numbers 1 VERSION_MINOR)
+list(GET version_numbers 0 VERSION_YEAR)
+list(GET version_numbers 1 VERSION_MONTH)
+list(GET version_numbers 1 VERSION_DAY)
 unset(version_numbers)
 
 project(
   VAST
-  VERSION ${VERSION_MAJOR}.${VERSION_MINOR}
+  VERSION ${VERSION_YEAR}.${VERSION_MONTH}.${VERSION_DAY}
   DESCRIPTION "Visibility Across Space and Time"
   LANGUAGES C CXX)
 
@@ -34,6 +35,7 @@ project(
 unset(PROJECT_VERSION)
 unset(PROJECT_VERSION_MAJOR)
 unset(PROJECT_VERSION_MINOR)
+unset(PROJECT_VERSION_PATCH)
 
 # Prohibit in-source builds
 if ("${CMAKE_SOURCE_DIR}" STREQUAL "${CMAKE_BINARY_DIR}")
@@ -810,7 +812,7 @@ install(
 include(CMakePackageConfigHelpers)
 write_basic_package_version_file(
   "${CMAKE_CURRENT_BINARY_DIR}/VASTConfigVersion.cmake"
-  VERSION ${VERSION_MAJOR}.${VERSION_MINOR}
+  VERSION ${VERSION_YEAR}.${VERSION_MONTH}.${VERSION_DAY}
   COMPATIBILITY ExactVersion)
 
 configure_package_config_file(

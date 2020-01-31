@@ -164,7 +164,7 @@ add_library(libvast ${libvast_sources} ${libvast_headers})
 set_target_properties(
   libvast
   PROPERTIES
-    SOVERSION ${VERSION_MAJOR} VERSION ${VERSION_MAJOR}.${VERSION_MINOR}
+    SOVERSION "${VERSION_YEAR}" VERSION "${VERSION_YEAR}.${VERSION_MONTH}"
 
     OUTPUT_NAME vast)
 
