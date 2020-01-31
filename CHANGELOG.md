@@ -11,7 +11,7 @@ Every entry has a category for which we use the following visual abbreviations:
 ## [2020.01.31]
 
 - 🔄 VAST is switching to a calendar-based versioning scheme starting with this
-- release.
+  release.
   [#739](https://github.com/tenzir/vast/pull/739)
 
 - 🎁 When a record field has the `#index=hash` attribute, VAST will choose an
