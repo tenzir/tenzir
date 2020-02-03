@@ -142,14 +142,17 @@ jobs:
           cmake --build "$BUILD_DIR" --target test
 
       - name: Run Integration Tests
+        id: integration_test_step
         run: |
+          echo "::set-output name=status::'true'"
           if ! cmake --build "$BUILD_DIR" --target integration; then
             tar -czf "$PACKAGE_NAME.tar.gz" -C build vast-integration-test
+            echo "::set-output name=status::'false'"
             exit 1
           fi
 
       - name: Upload Integration Test Logs on Failure
-        if: failure()
+        if: failure() && steps.integration_test_step.status == 'false'
         uses: actions/upload-artifact@v1
         with:
           name: "${{ steps.configure_env.outputs.package_name }}.tar.gz"
