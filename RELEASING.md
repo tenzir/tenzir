@@ -7,12 +7,18 @@ This document describes the steps for creating a new VAST release.
   - The documentation in `README.md` , the man page (`doc/vast.1.md` and
     `doc/cli`), and the [docs website](https://docs.tenzir.com) are up to date.
 
-2. Create a draft release on GitHub. Prepare the release notes.
+2. Create a _gpg-signed_ and _annotated_ tag locally, and push it:
+  ```sh
+  git tag -s "$(date '+%Y-%m-%d')" -m "$(date '+%Y-%m-%d')"
+  git push --follow-tags
+  ```
 
-3. Publish the draft release. That will trigger a GitHub action run and build
+3. Draft a release on GitHub, and attach it to the tag.
+
+4. Publish the draft release. That will trigger a GitHub action run and build
   the project.
-  
-4. Verify that the release CI action completed successfully. The GitHub action
+
+5. Verify that the release CI action completed successfully. The GitHub action
   should upload all created artifacts and attach them to the published release.
 
 [ci-url]: https://github.com/tenzir/vast/actions?query=branch%3Amaster
