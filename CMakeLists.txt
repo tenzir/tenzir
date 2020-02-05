@@ -494,8 +494,30 @@ if (APPLE)
   endif ()
 endif ()
 
-if (NOT CAF_ROOT_DIR AND EXISTS
-                         ${CMAKE_CURRENT_SOURCE_DIR}/aux/caf/CMakeLists.txt)
+# Try to find the required CAF components first...
+find_package(
+  CAF 0.17.3 EXACT
+  COMPONENTS core io test
+  QUIET)
+if (CAF_FOUND)
+  message(STATUS "Found CAF")
+  provide_find_module(CAF)
+  string(APPEND VAST_FIND_DEPENDENCY_LIST
+         "\nfind_package(CAF COMPONENTS core io test REQUIRED QUIET)")
+  set(CAF_FOUND_SAVE ${CAF_FOUND})
+  # ...and then optional components.
+  find_package(
+    CAF
+    COMPONENTS openssl
+    QUIET)
+  if (CAF_LIBRARY_OPENSSL)
+    message(STATUS "Found CAF's OpenSSL module, enabling OpenSSL support")
+    set(VAST_USE_OPENSSL true)
+    string(APPEND VAST_FIND_DEPENDENCY_LIST
+           "\nfind_package(CAF COMPONENTS openssl REQUIRED QUIET)")
+  endif ()
+  set(CAF_FOUND ${CAF_FOUND_SAVE})
+elseif (EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/aux/caf/CMakeLists.txt)
   set(CAF_NO_AUTO_LIBCPP TRUE)
   set(CAF_NO_OPENCL TRUE)
   set(CAF_NO_EXAMPLES TRUE)
@@ -566,38 +588,10 @@ if (NOT CAF_ROOT_DIR AND EXISTS
          "include(\"\${CMAKE_CURRENT_LIST_DIR}/CAFTargets.cmake\")")
   set(CAF_FOUND true)
 else ()
-  if (NOT CAF_ROOT_DIR AND VAST_PREFIX)
-    set(CAF_ROOT_DIR ${VAST_PREFIX})
-  endif ()
-  if (CAF_ROOT_DIR)
-    # Try to find the required CAF components first...
-    find_package(
-      CAF
-      COMPONENTS core io test
-      REQUIRED QUIET)
-    message(STATUS "Found CAF")
-    provide_find_module(CAF)
-    string(APPEND VAST_FIND_DEPENDENCY_LIST
-           "\nfind_package(CAF COMPONENTS core io test REQUIRED QUIET)")
-    set(CAF_FOUND_SAVE ${CAF_FOUND})
-    # ...and then optional components.
-    find_package(
-      CAF
-      COMPONENTS openssl
-      QUIET)
-    if (CAF_LIBRARY_OPENSSL)
-      message(STATUS "Found CAF's OpenSSL module, enabling OpenSSL support")
-      set(VAST_USE_OPENSSL true)
-      string(APPEND VAST_FIND_DEPENDENCY_LIST
-             "\nfind_package(CAF COMPONENTS openssl REQUIRED QUIET)")
-    endif ()
-    set(CAF_FOUND ${CAF_FOUND_SAVE})
-  else ()
-    message(
-      FATAL_ERROR
-        "CAF not found, either use -DCAF_ROOT_DIR=... or initialize the aux/caf submodule"
-    )
-  endif ()
+  message(
+    FATAL_ERROR
+      "CAF not found, either use -DCAF_ROOT_DIR=... or initialize the aux/caf submodule"
+  )
 endif ()
 
 if (ENABLE_ZEEK_TO_VAST)
