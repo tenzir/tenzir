@@ -8,6 +8,18 @@ Every entry has a category for which we use the following visual abbreviations:
 - 🔄 = change
 - 🐞 = bugfix
 
+## [Unreleased]
+
+- 🎁 For users of the [Nix](https://nixos.org/nix/) package manager, expressions
+  have been added to generate reproducible development environments with
+  `nix-shell`.
+  [#740](https://github.com/tenzir/vast/pull/740)
+
+- 🔄 The build system will from now on try use the CAF library from the system,
+  if one is provided. If it is not found, the CAF submodule will be used as a
+  fallback.
+  [#740](https://github.com/tenzir/vast/pull/740)
+
 ## [2020.01.31]
 
 - 🔄 VAST is switching to a calendar-based versioning scheme starting with this
