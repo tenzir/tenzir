@@ -13,7 +13,10 @@
 
 #pragma once
 
+#include "vast/detail/endian.hpp"
+
 #include <cstddef>
+#include <functional>
 #include <type_traits>
 
 namespace vast {
@@ -32,14 +35,9 @@ public:
 
   template <
     class Hasher,
-    class = std::enable_if_t<
-      std::is_constructible_v<function, Hasher>
-        && std::is_same_v<
-             typename std::decay_t<Hasher>::result_type,
-             result_type
-           >
-      >
-    >
+    class = std::enable_if_t<std::conjunction_v<
+      std::is_constructible<function, Hasher>,
+      std::is_same<typename std::decay_t<Hasher>::result_type, result_type>>>>
   explicit type_erased_hasher(Hasher&& h)
     : hasher_(std::forward<Hasher>(h)),
       convert_(convert<std::decay_t<Hasher>>) {

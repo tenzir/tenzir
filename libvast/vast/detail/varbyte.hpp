@@ -62,7 +62,8 @@ constexpr size_t max_size() {
 /// @param sink the output buffer to write into.
 /// @returns The number of bytes written into *sink*.
 template <class T>
-std::enable_if_t<std::is_integral<T>{} && std::is_unsigned<T>{}, size_t>
+std::enable_if_t<std::conjunction_v<std::is_integral<T>, std::is_unsigned<T>>,
+                 size_t>
 encode(T x, void* sink) {
   auto out = reinterpret_cast<uint8_t*>(sink);
   while (x > 0x7f) {
@@ -79,7 +80,8 @@ encode(T x, void* sink) {
 /// @param x The result of the decoding.
 /// @returns The number of bytes read from *source*.
 template <class T>
-std::enable_if_t<std::is_integral<T>{} && std::is_unsigned<T>{}, size_t>
+std::enable_if_t<std::conjunction_v<std::is_integral<T>, std::is_unsigned<T>>,
+                 size_t>
 decode(T& x, const void* source) {
   auto in = reinterpret_cast<const uint8_t*>(source);
   size_t i = 0;

@@ -175,9 +175,9 @@ public:
   }
 
   template <class RHS>
-  auto operator=(RHS&& rhs)
-    -> std::enable_if_t<is_parser_v<std::decay_t<
-                          RHS>> && !detail::is_same_or_derived_v<rule, RHS>> {
+  auto operator=(RHS&& rhs) -> std::enable_if_t<
+    std::conjunction_v<is_parser<std::decay_t<RHS>>,
+                       std::negation<detail::is_same_or_derived<rule, RHS>>>> {
     make_parser<RHS>(std::forward<RHS>(rhs));
   }
 

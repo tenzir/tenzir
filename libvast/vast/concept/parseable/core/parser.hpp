@@ -121,6 +121,12 @@ constexpr bool has_parser_v
 
 /// Checks whether a given type is-a parser, i.e., derived from ::vast::parser.
 template <class T>
+using is_parser = std::is_base_of<parser<T>, T>;
+
+template <class T>
+using is_parser_t = typename is_parser<T>::type;
+
+template <class T>
 constexpr bool is_parser_v = std::is_base_of<parser<T>, T>::value;
 
 } // namespace vast
