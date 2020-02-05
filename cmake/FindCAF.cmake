@@ -56,6 +56,20 @@ foreach (comp ${CAF_FIND_COMPONENTS})
     set(CAF_${comp}_FOUND true)
     # check for CMake-generated build header for the core component
     if ("${comp}" STREQUAL "core")
+      # read content of config.hpp
+      file(READ "${CAF_INCLUDE_DIR_CORE}/caf/config.hpp" CONFIG_HPP)
+      # get line containing the version
+      string(REGEX MATCH "#define CAF_VERSION [0-9]+" VERSION_LINE
+                   "${CONFIG_HPP}")
+      # extract version number from line
+      string(REGEX MATCH "[0-9]+" VERSION_INT "${VERSION_LINE}")
+      # calculate major, minor, and patch version
+      math(EXPR CAF_VERSION_MAJOR "${VERSION_INT} / 10000")
+      math(EXPR CAF_VERSION_MINOR "( ${VERSION_INT} / 100) % 100")
+      math(EXPR CAF_VERSION_PATCH "${VERSION_INT} % 100")
+      # create full version string
+      set(CAF_VERSION
+          "${CAF_VERSION_MAJOR}.${CAF_VERSION_MINOR}.${CAF_VERSION_PATCH}")
       find_path(
         caf_build_header_path
         NAMES caf/detail/build_config.hpp
@@ -99,66 +113,74 @@ endif ()
 include(FindPackageHandleStandardArgs)
 find_package_handle_standard_args(
   CAF
-  FOUND_VAR
-  CAF_FOUND
   REQUIRED_VARS
   CAF_LIBRARIES
   CAF_INCLUDE_DIRS
+  VERSION_VAR
+  CAF_VERSION
   HANDLE_COMPONENTS)
+
+if (NOT CAF_FOUND)
+  unset(CAF_LIBRARIES)
+  unset(CAF_INCLUDE_DIRS)
+endif ()
 
 # final step to tell CMake we're done
 mark_as_advanced(CAF_ROOT_DIR CAF_LIBRARIES CAF_INCLUDE_DIRS)
 
-if (CAF_core_FOUND AND NOT TARGET caf::core)
-  add_library(caf::core UNKNOWN IMPORTED GLOBAL)
-  set_target_properties(
-    caf::core
-    PROPERTIES
-      IMPORTED_LOCATION "${CAF_LIBRARY_CORE}" INTERFACE_INCLUDE_DIRECTORIES
-                                              "${CAF_INCLUDE_DIR_CORE}")
-endif ()
-if (CAF_io_FOUND AND NOT TARGET caf::io)
-  add_library(caf::io UNKNOWN IMPORTED GLOBAL)
-  set_target_properties(
-    caf::io
-    PROPERTIES
-      IMPORTED_LOCATION "${CAF_LIBRARY_IO}"
-      INTERFACE_INCLUDE_DIRECTORIES "${CAF_INCLUDE_DIR_IO}"
-      INTERFACE_LINK_LIBRARIES "caf::core")
-endif ()
-if (CAF_openssl_FOUND AND NOT TARGET caf::openssl)
-  add_library(caf::openssl UNKNOWN IMPORTED GLOBAL)
-  set_target_properties(
-    caf::openssl
-    PROPERTIES
-      IMPORTED_LOCATION "${CAF_LIBRARY_OPENSSL}"
-      INTERFACE_INCLUDE_DIRECTORIES "${CAF_INCLUDE_DIR_OPENSSL}"
-      INTERFACE_LINK_LIBRARIES "caf::core;caf::io")
-  if (NOT BUILD_SHARED_LIBS)
-    include(CMakeFindDependencyMacro)
-    set(OPENSSL_USE_STATIC_LIBS TRUE)
-    find_dependency(OpenSSL)
-    set_property(
-      TARGET caf::openssl
-      APPEND
-      PROPERTY INTERFACE_LINK_LIBRARIES "OpenSSL::SSL")
+if (CAF_FOUND)
+  message(STATUS "CREATING CAF TARGETS")
+  if (CAF_core_FOUND AND NOT TARGET caf::core)
+    add_library(caf::core UNKNOWN IMPORTED GLOBAL)
+    set_target_properties(
+      caf::core
+      PROPERTIES
+        IMPORTED_LOCATION "${CAF_LIBRARY_CORE}" INTERFACE_INCLUDE_DIRECTORIES
+                                                "${CAF_INCLUDE_DIR_CORE}")
   endif ()
-endif ()
-if (CAF_opencl_FOUND AND NOT TARGET caf::opencl)
-  add_library(caf::opencl UNKNOWN IMPORTED GLOBAL)
-  set_target_properties(
-    caf::opencl
-    PROPERTIES
-      IMPORTED_LOCATION "${CAF_LIBRARY_OPENCL}"
-      INTERFACE_INCLUDE_DIRECTORIES "${CAF_INCLUDE_DIR_OPENCL}"
-      INTERFACE_LINK_LIBRARIES "caf::core")
-endif ()
-if (CAF_test_FOUND AND NOT TARGET caf::test)
-  add_library(caf::test INTERFACE IMPORTED GLOBAL)
-  set_target_properties(
-    caf::test
-    PROPERTIES
-      INTERFACE_INCLUDE_DIRECTORIES "${CAF_INCLUDE_DIR_TEST}"
+  if (CAF_io_FOUND AND NOT TARGET caf::io)
+    add_library(caf::io UNKNOWN IMPORTED GLOBAL)
+    set_target_properties(
+      caf::io
+      PROPERTIES
+        IMPORTED_LOCATION "${CAF_LIBRARY_IO}"
+        INTERFACE_INCLUDE_DIRECTORIES "${CAF_INCLUDE_DIR_IO}"
+        INTERFACE_LINK_LIBRARIES "caf::core;Threads::Threads")
+  endif ()
+  if (CAF_openssl_FOUND AND NOT TARGET caf::openssl)
+    add_library(caf::openssl UNKNOWN IMPORTED GLOBAL)
+    set_target_properties(
+      caf::openssl
+      PROPERTIES
+        IMPORTED_LOCATION "${CAF_LIBRARY_OPENSSL}"
+        INTERFACE_INCLUDE_DIRECTORIES "${CAF_INCLUDE_DIR_OPENSSL}"
+        INTERFACE_LINK_LIBRARIES "caf::core;caf::io")
+    if (NOT BUILD_SHARED_LIBS)
+      include(CMakeFindDependencyMacro)
+      set(OPENSSL_USE_STATIC_LIBS TRUE)
+      find_dependency(OpenSSL)
+      set_property(
+        TARGET caf::openssl
+        APPEND
+        PROPERTY INTERFACE_LINK_LIBRARIES "OpenSSL::SSL")
+    endif ()
+  endif ()
+  if (CAF_opencl_FOUND AND NOT TARGET caf::opencl)
+    add_library(caf::opencl UNKNOWN IMPORTED GLOBAL)
+    set_target_properties(
+      caf::opencl
+      PROPERTIES
+        IMPORTED_LOCATION "${CAF_LIBRARY_OPENCL}"
+        INTERFACE_INCLUDE_DIRECTORIES "${CAF_INCLUDE_DIR_OPENCL}"
+        INTERFACE_LINK_LIBRARIES "caf::core")
+  endif ()
+  if (CAF_test_FOUND AND NOT TARGET caf::test)
+    add_library(caf::test INTERFACE IMPORTED GLOBAL)
+    set_target_properties(
+      caf::test
+      PROPERTIES
+        INTERFACE_INCLUDE_DIRECTORIES "${CAF_INCLUDE_DIR_TEST}"
 
-      INTERFACE_LINK_LIBRARIES "caf::core")
+        INTERFACE_LINK_LIBRARIES "caf::core")
+  endif ()
 endif ()
