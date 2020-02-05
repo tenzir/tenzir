@@ -120,7 +120,7 @@ type suricata.http = record{
   event_type: string,
   community_id: string #index=hash,
   http: record{
-    hostname: string,
+    hostname: string #ioc,
     url: string,
     http_port: count,
     http_user_agent: string,
