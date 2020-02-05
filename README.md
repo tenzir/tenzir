@@ -10,7 +10,6 @@
 The network telemetry engine for data-driven security investigations.
 
 [![Build Status][ci-badge]][ci-url]
-[![LGTM Score C++][lgtm-badge]][lgtm-url]
 [![Changelog][changelog-badge]][changelog-url]
 [![Latest Release][latest-release-badge]][latest-release-url]
 [![Chat][chat-badge]][chat-url]
@@ -145,8 +144,6 @@ proceedings][nsdi-proceedings].
 [latest-release-badge]: https://img.shields.io/github/commits-since/tenzir/vast/latest.svg?color=green
 [latest-release-url]: https://github.com/tenzir/vast/releases
 [installation-url]: INSTALLATION.md
-[lgtm-badge]: https://img.shields.io/lgtm/grade/cpp/github/tenzir/vast.svg?logo=lgtm
-[lgtm-url]: https://lgtm.com/projects/g/tenzir/vast/context:cpp
 
 [vast-paper]: https://www.usenix.org/system/files/conference/nsdi16/nsdi16-paper-vallentin.pdf
 [nsdi-proceedings]: https://www.usenix.org/conference/nsdi16/technical-sessions
