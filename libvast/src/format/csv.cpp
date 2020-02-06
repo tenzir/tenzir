@@ -189,10 +189,11 @@ reader::make_layout(const std::vector<std::string>& names) {
           else
             return caf::none;
         }
-        return record_type{std::move(result_raw)};
+        return record_type{std::move(result_raw)}.name(r->name()).attributes(
+          r->attributes());
       };
       if (auto result = select_fields())
-        return result->name(r->name());
+        return result;
     } else if (names.size() == 1 && names[0] == t.name()) {
       // Hoist naked type into record.
       return record_type{{t.name(), t}}.name(t.name());
