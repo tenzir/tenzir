@@ -53,8 +53,12 @@ TEST(arrow batch) {
   // Create a writer with a buffered output stream.
   format::arrow::writer writer;
   std::shared_ptr<arrow::io::BufferOutputStream> stream;
-  REQUIRE_OK(arrow::io::BufferOutputStream::Create(
-    1024, arrow::default_memory_pool(), &stream));
+  {
+    auto res = arrow::io::BufferOutputStream::Create(
+      1024, arrow::default_memory_pool());
+    REQUIRE_OK(res);
+    stream = *res;
+  }
   writer.out(stream);
   // Write conn log slices (as record batches) to the stream.
   for (auto& slice : zeek_conn_log_slices)
@@ -64,10 +68,14 @@ TEST(arrow batch) {
   // Deserialize record batches, store them in arrow_table_slice objects, and
   // compare to the original slices.
   std::shared_ptr<arrow::Buffer> buf;
-  REQUIRE_OK(stream->Finish(&buf));
-  arrow::io::BufferReader input_straem{buf};
+  {
+    auto res = stream->Finish();
+    REQUIRE_OK(res);
+    buf = *res;
+  }
+  arrow::io::BufferReader input_stream{buf};
   std::shared_ptr<arrow::ipc::RecordBatchReader> reader;
-  REQUIRE_OK(arrow::ipc::RecordBatchStreamReader::Open(&input_straem, &reader));
+  REQUIRE_OK(arrow::ipc::RecordBatchStreamReader::Open(&input_stream, &reader));
   auto layout = zeek_conn_log_slices[0]->layout();
   auto arrow_schema = arrow_table_slice_builder::make_arrow_schema(layout);
   size_t slice_id = 0;
