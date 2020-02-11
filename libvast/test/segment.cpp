@@ -58,14 +58,12 @@ TEST(serialization) {
   REQUIRE_EQUAL(save(nullptr, buf, x), caf::none);
   REQUIRE_EQUAL(load(nullptr, buf, y), caf::none);
   REQUIRE_NOT_EQUAL(y, nullptr);
-  CHECK_EQUAL(y->num_slices(), 1u);
-  CHECK(std::equal(x->chunk()->begin(), x->chunk()->end(),
-                   y->chunk()->begin(), y->chunk()->end()));
+  CHECK_EQUAL(x->ids(), y->ids());
+  CHECK_EQUAL(x->num_slices(), y->num_slices());
   MESSAGE("load segment from chunk");
-  auto z = segment::make(chunk::make(std::move(buf)));
-  REQUIRE(z);
-  CHECK(std::equal(x->chunk()->begin(), x->chunk()->end(),
-                   z->chunk()->begin(), z->chunk()->end()));
+  chunk_ptr chk;
+  REQUIRE_EQUAL(load(nullptr, buf, chk), caf::none);
+  REQUIRE(segment::make(chk));
 }
 
 FIXTURE_SCOPE_END()

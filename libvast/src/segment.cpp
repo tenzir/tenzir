@@ -13,17 +13,21 @@
 
 #include "vast/segment.hpp"
 
-#include <caf/binary_deserializer.hpp>
-
 #include "vast/bitmap.hpp"
 #include "vast/bitmap_algorithms.hpp"
 #include "vast/detail/assert.hpp"
 #include "vast/detail/byte_swap.hpp"
 #include "vast/detail/narrow.hpp"
+#include "vast/error.hpp"
+#include "vast/fbs/segment.hpp"
+#include "vast/fbs/utils.hpp"
+#include "vast/filesystem.hpp"
 #include "vast/ids.hpp"
 #include "vast/logger.hpp"
 #include "vast/si_literals.hpp"
 #include "vast/table_slice.hpp"
+
+#include <caf/binary_deserializer.hpp>
 
 namespace vast {
 
@@ -31,94 +35,95 @@ using namespace binary_byte_literals;
 
 segment_ptr segment::make(chunk_ptr chunk) {
   VAST_ASSERT(chunk != nullptr);
-  // Setup a CAF deserializer
-  caf::binary_deserializer source{nullptr, chunk->data(), chunk->size()};
-  auto result = segment_ptr{new segment, false};
-  if (auto error = source(result->header_, result->meta_)) {
-    VAST_ERROR_ANON(__func__, "failed to deserialize segment meta data");
+  // Verify flatbuffer integrity.
+  auto data = reinterpret_cast<const uint8_t*>(chunk->data());
+  auto verifier = flatbuffers::Verifier{data, chunk->size()};
+  if (!fbs::VerifySegmentBuffer(verifier)) {
+    VAST_ERROR_ANON(__func__, "failed to verify segment buffer");
     return nullptr;
   }
-  if (result->header_.magic != magic) {
-    VAST_ERROR_ANON(__func__, "got invalid segment magic",
-                    result->header_.magic, "instead of", magic);
+  // Perform version check.
+  auto ptr = fbs::GetSegment(chunk->data());
+  if (ptr->version() != fbs::SegmentVersion::v1) {
+    VAST_ERROR_ANON(__func__, "unsupported segment version");
     return nullptr;
   }
-  if (result->header_.version > version) {
-    VAST_ERROR_ANON(__func__, "got newer segment version",
-                    result->header_.version, "instead of", version);
-    return nullptr;
+  return segment_ptr{new segment{std::move(chunk)}, false};
+}
+
+uuid segment::id() const {
+  auto ptr = fbs::GetSegment(chunk_->data());
+  auto data = span<const uint8_t, 16>(ptr->uuid()->Data(), 16);
+  return uuid{as_bytes(data)};
+}
+vast::ids segment::ids() const {
+  vast::ids result;
+  auto ptr = fbs::GetSegment(chunk_->data());
+  for (auto flat_slice : *ptr->data()) {
+    result.append_bits(false, flat_slice->offset() - result.size());
+    result.append_bits(true, flat_slice->rows());
   }
-  // Skip meta data. Since the buffer following the chunk meta data was
-  // previously serialized as chunk pointer (uint32_t size + data), we have
-  // to add add sizeof(uint32_t) bytes to directly jump to the table slice
-  // data.
-  using detail::narrow_cast;
-  auto bytes_read = chunk->size() - source.remaining();
-  VAST_ASSERT(bytes_read < chunk->size());
-  result->chunk_ = chunk->slice(bytes_read + sizeof(uint32_t));
   return result;
 }
 
-const uuid& segment::id() const {
-  return header_.id;
+size_t segment::num_slices() const {
+  return fbs::GetSegment(chunk_->data())->data()->size();
 }
 
 chunk_ptr segment::chunk() const {
   return chunk_;
 }
 
-size_t segment::num_slices() const {
-  return meta_.slices.size();
-}
-
 caf::expected<std::vector<table_slice_ptr>>
-segment::lookup(const ids& xs) const {
+segment::lookup(const vast::ids& xs) const {
   std::vector<table_slice_ptr> result;
-  auto f = [](auto& slice) {
-    return std::pair{slice.offset, slice.offset + slice.size};
+  auto f = [](auto flat_slice) {
+    return std::pair{flat_slice->offset(),
+                     flat_slice->offset() + flat_slice->rows()};
   };
-  auto g = [&](auto& slice) -> caf::error {
-    auto x = make_slice(slice);
-    if (!x)
-      return x.error();
-    result.push_back(*x);
+  auto g = [&](auto flat_slice) -> caf::error {
+    // TODO: bind the lifetime of the table slice to the segment chunk.
+    result.push_back(fbs::make_table_slice(*flat_slice));
     return caf::none;
   };
-  auto begin = meta_.slices.begin();
-  auto end = meta_.slices.end();
+  auto ptr = fbs::GetSegment(chunk_->data());
+#if 0
+  auto verifier = flatbuffers::Verifier{
+    reinterpret_cast<const uint8_t*>(chunk_->data()), chunk_->size()};
+  VAST_ASSERT(fbs::VerifySegmentBuffer(verifier));
+#endif
+  auto begin = ptr->data()->begin();
+  auto end = ptr->data()->end();
   if (auto error = select_with(xs, begin, end, f, g))
     return error;
   return result;
 }
-
-caf::expected<table_slice_ptr>
-segment::make_slice(const table_slice_synopsis& slice) const {
-  auto slice_size = detail::narrow_cast<size_t>(slice.end - slice.start);
-  caf::binary_deserializer source{nullptr, chunk_->data() + slice.start,
-                                  slice_size};
-  table_slice_ptr result;
-  if (auto error = source(result))
-    return error;
-  return result;
-}
-
 caf::error inspect(caf::serializer& sink, const segment_ptr& x) {
   VAST_ASSERT(x != nullptr);
-  return sink(x->header_, x->meta_, x->chunk_);
+  return sink(x->chunk_);
 }
 
 caf::error inspect(caf::deserializer& source, segment_ptr& x) {
   x.reset(new segment, false);
-  return source(x->header_, x->meta_, x->chunk_);
+  return source(x->chunk_);
 }
 
-ids flat_slice_ids(const segment::meta_data& x) {
-  ids result;
-  for (auto& synopsis : x.slices) {
-    result.append_bits(false, synopsis.offset - result.size());
-    result.append_bits(true, synopsis.size);
-  }
-  return result;
+caf::error save(const path& filename, const segment_ptr& x) {
+  VAST_ASSERT(x != nullptr);
+  return write(filename, x->chunk());
+}
+
+caf::error load(const path& filename, segment_ptr& x) {
+  auto chk = chunk::mmap(filename);
+  if (!chk)
+    return make_error(ec::filesystem_error, "failed to mmap chunk", filename);
+  x = segment::make(chk);
+  if (!x)
+    return make_error(ec::unspecified, "failed to construct segment");
+  return caf::none;
+}
+
+segment::segment(chunk_ptr chk) : chunk_{std::move(chk)} {
 }
 
 } // namespace vast

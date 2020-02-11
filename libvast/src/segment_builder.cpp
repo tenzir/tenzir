@@ -13,17 +13,18 @@
 
 #include "vast/segment_builder.hpp"
 
-#include <caf/binary_serializer.hpp>
-
+#include "vast/detail/assert.hpp"
+#include "vast/detail/byte_swap.hpp"
+#include "vast/detail/narrow.hpp"
 #include "vast/error.hpp"
+#include "vast/fbs/segment.hpp"
+#include "vast/fbs/utils.hpp"
 #include "vast/ids.hpp"
 #include "vast/logger.hpp"
 #include "vast/segment.hpp"
 #include "vast/table_slice.hpp"
 
-#include "vast/detail/assert.hpp"
-#include "vast/detail/byte_swap.hpp"
-#include "vast/detail/narrow.hpp"
+#include <caf/binary_serializer.hpp>
 
 namespace vast {
 
@@ -34,38 +35,42 @@ segment_builder::segment_builder() {
 caf::error segment_builder::add(table_slice_ptr x) {
   if (x->offset() < min_table_slice_offset_)
     return make_error(ec::unspecified, "slice offsets not increasing");
-  auto before = table_slice_buffer_.size();
-  caf::binary_serializer sink{nullptr, table_slice_buffer_};
-  if (auto error = sink(x)) {
-    table_slice_buffer_.resize(before);
-    return error;
-  }
-  auto after = table_slice_buffer_.size();
-  VAST_ASSERT(before < after);
-  meta_.slices.push_back({
-    detail::narrow_cast<int64_t>(before),
-    detail::narrow_cast<int64_t>(after),
-    x->offset(), x->rows()});
-  min_table_slice_offset_ = x->offset() + x->rows();
+  auto slice = fbs::create_table_slice(builder_, x);
+  if (!slice)
+    return slice.error();
+  table_slices_.push_back(*slice);
   slices_.push_back(x);
   return caf::none;
 }
 
 segment_ptr segment_builder::finish() {
-  if (meta_.slices.empty())
+  if (table_slices_.empty())
     return nullptr;
-  auto result = segment_ptr{new segment, false};
-  result->meta_ = std::move(meta_);
-  result->chunk_ = chunk::make(std::move(table_slice_buffer_));
-  result->header_.magic = segment::magic;
-  result->header_.version = segment::version;
-  result->header_.id = id_;
+  auto table_slices_offset = builder_.CreateVector(table_slices_);
+  auto uuid_offset = fbs::create_bytes(builder_, id_);
+  fbs::SegmentBuilder segment_builder{builder_};
+  segment_builder.add_data(table_slices_offset);
+  segment_builder.add_uuid(uuid_offset);
+  segment_builder.add_version(fbs::SegmentVersion::v1);
+  auto segment_offset = segment_builder.Finish();
+  builder_.Finish(segment_offset);
+  size_t offset;
+  size_t size;
+  auto ptr = builder_.ReleaseRaw(size, offset);
+#if 0
+  VAST_ASSERT(size > offset);
+  auto verifier = flatbuffers::Verifier{ptr + offset, size - offset};
+  VAST_ASSERT(fbs::VerifySegmentBuffer(verifier));
+#endif
+  auto deleter = [=]() { flatbuffers::DefaultAllocator::dealloc(ptr, size); };
+  auto chk = chunk::make(size - offset, ptr + offset, deleter);
+  auto result = segment_ptr{new segment{std::move(chk)}, false};
   reset();
   return result;
 }
 
 caf::expected<std::vector<table_slice_ptr>>
-segment_builder::lookup(const ids& xs) const {
+segment_builder::lookup(const vast::ids& xs) const {
   std::vector<table_slice_ptr> result;
   auto f = [](auto& slice) {
     return std::pair{slice->offset(), slice->offset() + slice->rows()};
@@ -83,15 +88,28 @@ const uuid& segment_builder::id() const {
   return id_;
 }
 
+vast::ids segment_builder::ids() const {
+  vast::ids result;
+  for (auto x : slices_) {
+    result.append_bits(false, x->offset() - result.size());
+    result.append_bits(true, x->rows());
+  }
+  return result;
+}
+
 size_t segment_builder::table_slice_bytes() const {
-  return table_slice_buffer_.size();
+  return builder_.GetSize();
+}
+
+const std::vector<table_slice_ptr>& segment_builder::table_slices() const {
+  return slices_;
 }
 
 void segment_builder::reset() {
-  min_table_slice_offset_ = 0;
-  meta_ = {};
   id_ = uuid::random();
-  table_slice_buffer_ = {};
+  min_table_slice_offset_ = 0;
+  builder_.Clear();
+  table_slices_.clear();
   slices_.clear();
 }
 
