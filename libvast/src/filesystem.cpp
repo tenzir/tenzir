@@ -470,6 +470,9 @@ caf::expected<std::string> load_contents(const path& p) {
   caf::containerbuf<std::string> obuf{contents};
   std::ostream out{&obuf};
   std::ifstream in{p.str()};
+  if (!in)
+    return make_error(ec::filesystem_error,
+                      "failed to read from file " + p.str());
   out << in.rdbuf();
   return contents;
 }

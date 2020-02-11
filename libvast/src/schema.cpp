@@ -251,8 +251,7 @@ caf::expected<schema> get_schema(const caf::settings& options,
   }();
   if (!update) {
     if (update.error() != caf::no_error)
-      return make_error(ec::invalid_configuration,
-                        "failed to parse provided schema");
+      return update.error();
     else
       return schema;
   }
