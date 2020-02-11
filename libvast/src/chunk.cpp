@@ -11,21 +11,22 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#include <fcntl.h>
-#include <unistd.h>
-#include <sys/mman.h>
-#include <sys/stat.h>
+#include "vast/chunk.hpp"
 
-#include <tuple>
+#include "vast/detail/narrow.hpp"
+#include "vast/error.hpp"
+#include "vast/filesystem.hpp"
 
 #include <caf/deserializer.hpp>
 #include <caf/make_counted.hpp>
 #include <caf/serializer.hpp>
 
-#include "vast/chunk.hpp"
-#include "vast/filesystem.hpp"
+#include <fcntl.h>
+#include <tuple>
+#include <unistd.h>
 
-#include "vast/detail/narrow.hpp"
+#include <sys/mman.h>
+#include <sys/stat.h>
 
 namespace vast {
 
@@ -101,6 +102,42 @@ chunk::chunk(void* ptr, size_type size, deleter_type deleter)
     size_{size},
     deleter_{deleter} {
   VAST_ASSERT(deleter_);
+}
+
+span<const byte> as_bytes(const chunk_ptr& x) {
+  if (!x)
+    return {};
+  auto ptr = reinterpret_cast<const byte*>(x->data());
+  return span<const byte>{ptr, x->size()};
+}
+
+caf::error write(const path& filename, const chunk_ptr& x) {
+  file f{filename};
+  if (!f.open(file::write_only))
+    return make_error(ec::filesystem_error, "failed open file");
+  size_t bytes_written;
+  if (!f.write(x->data(), x->size(), &bytes_written))
+    return make_error(ec::filesystem_error, "failed to write chunk");
+  if (bytes_written != x->size())
+    return make_error(ec::filesystem_error, "incomplete write");
+  return caf::none;
+}
+
+caf::error read(const path& filename, chunk_ptr& x) {
+  auto size = file_size(filename);
+  if (!size)
+    return size.error();
+  file f{filename};
+  if (!f.open(file::read_only))
+    return make_error(ec::filesystem_error, "failed open file");
+  x = chunk::make(*size);
+  size_t bytes_read;
+  auto ptr = const_cast<char*>(x->data()); // okay, we just created it.
+  if (!f.read(ptr, x->size(), &bytes_read))
+    return make_error(ec::filesystem_error, "failed to read chunk");
+  if (bytes_read != x->size())
+    return make_error(ec::filesystem_error, "incomplete read");
+  return caf::none;
 }
 
 caf::error inspect(caf::serializer& sink, const chunk_ptr& x) {

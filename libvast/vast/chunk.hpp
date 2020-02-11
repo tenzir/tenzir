@@ -13,20 +13,21 @@
 
 #pragma once
 
+#include "vast/byte.hpp"
+#include "vast/detail/assert.hpp"
+#include "vast/detail/operators.hpp"
+#include "vast/detail/type_traits.hpp"
+#include "vast/fwd.hpp"
+#include "vast/span.hpp"
+
+#include <caf/fwd.hpp>
+#include <caf/intrusive_ptr.hpp>
+#include <caf/ref_counted.hpp>
+
 #include <cstddef>
 #include <functional>
 #include <string>
 #include <utility>
-
-#include <caf/fwd.hpp>
-#include <caf/ref_counted.hpp>
-#include <caf/intrusive_ptr.hpp>
-
-#include "vast/fwd.hpp"
-
-#include "vast/detail/assert.hpp"
-#include "vast/detail/operators.hpp"
-#include "vast/detail/type_traits.hpp"
 
 namespace vast {
 
@@ -65,10 +66,8 @@ public:
   /// @param xs The container of bytes.
   /// @returns A chunk pointer or `nullptr` on failure.
   /// @pre `std::size(xs) != 0`
-  template <
-    class Container,
-    class = std::enable_if_t<detail::is_container<Container>>
-  >
+  template <class Container,
+            class = std::enable_if_t<detail::is_container<Container>>>
   static chunk_ptr make(Container xs) {
     static_assert(sizeof(typename Container::value_type) == 1,
                   "chunks only support byte containers");
@@ -86,8 +85,8 @@ public:
   /// @param size The number of bytes to map. If 0, map the entire file.
   /// @param offset Where to start in terms of number of bytes from the start.
   /// @returns A chunk pointer or `nullptr` on failure.
-  static chunk_ptr mmap(const path& filename,
-                        size_type size = 0, size_type offset = 0);
+  static chunk_ptr
+  mmap(const path& filename, size_type size = 0, size_type offset = 0);
 
   /// Destroys the chunk and releases owned memory via the deleter.
   ~chunk();
@@ -147,6 +146,18 @@ public:
     deleter_ = std::move(g);
   }
 
+  // -- concepts --------------------------------------------------------------
+
+  friend span<const byte> as_bytes(const chunk_ptr& x);
+
+  friend caf::error write(const path& filename, const chunk_ptr& x);
+
+  friend caf::error read(const path& filename, chunk_ptr& x);
+
+  friend caf::error inspect(caf::serializer& sink, const chunk_ptr& x);
+
+  friend caf::error inspect(caf::deserializer& source, chunk_ptr& x);
+
 private:
   chunk(void* ptr, size_type size, deleter_type deleter);
 
@@ -154,16 +165,5 @@ private:
   size_type size_;
   deleter_type deleter_;
 };
-
-/// A pointer to a chunk.
-/// @relates chunk
-using chunk_ptr = caf::intrusive_ptr<chunk>;
-
-/// @relates chunk
-/// @pre `x != nullptr`
-caf::error inspect(caf::serializer& sink, const chunk_ptr& x);
-
-/// @relates chunk
-caf::error inspect(caf::deserializer& source, chunk_ptr& x);
 
 } // namespace vast
