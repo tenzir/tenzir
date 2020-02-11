@@ -36,8 +36,6 @@ maybe_actor spawn_exporter(node_actor* self, spawn_arguments& args) {
   auto query_opts = no_query_options;
   if (get_or(args.invocation.options, "export.continuous", false))
     query_opts = query_opts + continuous;
-  if (get_or(args.invocation.options, "export.historical", false))
-    query_opts = query_opts + historical;
   if (get_or(args.invocation.options, "export.unified", false))
     query_opts = unified;
   // Default to historical if no options provided.

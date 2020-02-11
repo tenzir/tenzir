@@ -10,6 +10,9 @@ Every entry has a category for which we use the following visual abbreviations:
 
 ## [Unreleased]
 
+- 🔄 The option `--historical` for export commands has been removed, as it was
+  the default already. [#754](https://github.com/tenzir/vast/pull/754)
+
 - 🎁 For users of the [Nix](https://nixos.org/nix/) package manager, expressions
   have been added to generate reproducible development environments with
   `nix-shell`.
