@@ -22,6 +22,4 @@ table Segment {
 
 root_type Segment;
 
-// FIXME: adding this causes the verification to fail! For details, see
-// https://groups.google.com/forum/#!topic/flatbuffers/ejHGnepW8qM.
-//file_identifier "VAST";
+file_identifier "VAST";
