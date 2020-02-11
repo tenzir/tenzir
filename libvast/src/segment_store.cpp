@@ -13,26 +13,25 @@
 
 #include "vast/segment_store.hpp"
 
-#include <caf/config_value.hpp>
-#include <caf/dictionary.hpp>
-#include <caf/settings.hpp>
-
 #include "vast/bitmap_algorithms.hpp"
+#include "vast/concept/printable/to_string.hpp"
+#include "vast/concept/printable/vast/error.hpp"
+#include "vast/concept/printable/vast/filesystem.hpp"
+#include "vast/concept/printable/vast/uuid.hpp"
 #include "vast/error.hpp"
 #include "vast/event.hpp"
+#include "vast/fbs/segment.hpp"
 #include "vast/ids.hpp"
 #include "vast/load.hpp"
 #include "vast/logger.hpp"
 #include "vast/save.hpp"
 #include "vast/segment_store.hpp"
-
-#include "vast/concept/printable/to_string.hpp"
-#include "vast/concept/printable/vast/error.hpp"
-#include "vast/concept/printable/vast/filesystem.hpp"
-#include "vast/concept/printable/vast/uuid.hpp"
-
 #include "vast/table_slice.hpp"
 #include "vast/to_events.hpp"
+
+#include <caf/config_value.hpp>
+#include <caf/dictionary.hpp>
+#include <caf/settings.hpp>
 
 namespace vast {
 
@@ -79,7 +78,7 @@ caf::error segment_store::flush() {
   if (x == nullptr)
     return make_error(ec::unspecified, "failed to build segment");
   auto filename = segment_path() / to_string(x->id());
-  if (auto err = save(nullptr, filename, x))
+  if (auto err = save(filename, x))
     return err;
   // Keep new segment in the cache.
   cache_.emplace(x->id(), x);
@@ -91,9 +90,10 @@ caf::error segment_store::flush() {
 caf::expected<segment_ptr> segment_store::load_segment(uuid id) const {
   auto filename = segment_path() / to_string(id);
   VAST_DEBUG(this, "loads segment from", filename);
-  if (auto chk = chunk::mmap(filename))
-    return segment::make(std::move(chk));
-  return make_error(ec::filesystem_error, "failed to mmap chunk", filename);
+  segment_ptr result;
+  if (auto err = load(filename, result))
+    return err;
+  return result;
 }
 
 std::unique_ptr<store::lookup> segment_store::extract(const ids& xs) const {
@@ -191,7 +191,7 @@ caf::error segment_store::erase(const ids& xs) {
     auto segment_id = seg.id();
     // Get all slices in the segment and generate a new segment that contains
     // only what's left after dropping the selection.
-    auto segment_ids = flat_slice_ids(seg.meta());
+    auto segment_ids = seg.ids();
     // Check whether we can drop the entire segment.
     if (is_subset_of_xs(segment_ids)) {
       erased_events += drop(seg);
@@ -263,7 +263,7 @@ caf::error segment_store::erase(const ids& xs) {
     if constexpr (std::is_same_v<decltype(seg), segment&>) {
       auto new_segment = builder->finish();
       auto filename = segment_path() / to_string(new_segment->id());
-      if (auto err = save(nullptr, filename, new_segment))
+      if (auto err = save(filename, new_segment))
         VAST_ERROR(this, "failed to persist the new segment");
       auto stale_filename = segment_path() / to_string(segment_id);
       // Schedule deletion of the segment file when releasing the chunk.
@@ -387,8 +387,12 @@ caf::error segment_store::select_segments(const ids& selection,
 uint64_t segment_store::drop(segment& x) {
   uint64_t erased_events = 0;
   auto segment_id = x.id();
-  for (auto& slices_data : x.meta().slices)
-    erased_events += slices_data.size;
+  // TODO: discuss whether we want to allow accessing a segment through the
+  // flatbuffers API. The (heavy-weight) altnerative here would be to create a
+  // custom iterator so that a segment can be iterated as a list of table_slice
+  // instances.
+  for (auto flat_slice : *fbs::GetSegment(x.chunk()->data())->data())
+    erased_events += flat_slice->rows();
   VAST_INFO(this, "erases entire segment", segment_id);
   // Schedule deletion of the segment file when releasing the chunk.
   auto filename = segment_path() / to_string(segment_id);
@@ -400,9 +404,9 @@ uint64_t segment_store::drop(segment& x) {
 uint64_t segment_store::drop(segment_builder& x) {
   uint64_t erased_events = 0;
   auto segment_id = x.id();
-  for (auto& slices_data : x.meta().slices)
-    erased_events += slices_data.size;
-  VAST_INFO(this, "erases entire segment", segment_id);
+  for (auto& slice : x.table_slices())
+    erased_events += slice->rows();
+  VAST_INFO(this, "erases segment under construction", segment_id);
   x.reset();
   segments_.erase_value(segment_id);
   return erased_events;
