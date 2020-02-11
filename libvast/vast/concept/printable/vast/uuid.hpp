@@ -13,26 +13,25 @@
 
 #pragma once
 
-#include "vast/access.hpp"
-#include "vast/uuid.hpp"
 #include "vast/concept/printable/core.hpp"
 #include "vast/concept/printable/string/any.hpp"
 #include "vast/concept/printable/string/char.hpp"
 #include "vast/detail/coding.hpp"
+#include "vast/uuid.hpp"
 
 namespace vast {
 
-template <>
-struct access::printer<uuid> : vast::printer<access::printer<uuid>> {
+struct uuid_printer : vast::printer<uuid_printer> {
   using attribute = uuid;
 
+  static constexpr auto hexbyte = printers::any << printers::any;
+
   template <class Iterator>
-  bool print(Iterator& out, const uuid& u) const {
-    static auto byte = printers::any << printers::any;
+  bool print(Iterator& out, const uuid& x) const {
     for (size_t i = 0; i < 16; ++i) {
-      auto hi = detail::byte_to_char((u.id_[i] >> 4) & 0x0f);
-      auto lo = detail::byte_to_char(u.id_[i] & 0x0f);
-      if (!byte(out, hi, lo))
+      auto hi = detail::byte_to_char((x[i] >> 4) & byte{0x0f});
+      auto lo = detail::byte_to_char(x[i] & byte{0x0f});
+      if (!hexbyte(out, hi, lo))
         return false;
       if (i == 3 || i == 5 || i == 7 || i == 9)
         if (!printers::chr<'-'>(out))
@@ -44,7 +43,7 @@ struct access::printer<uuid> : vast::printer<access::printer<uuid>> {
 
 template <>
 struct printer_registry<uuid> {
-  using type = access::printer<uuid>;
+  using type = uuid_printer;
 };
 
 } // namespace vast

@@ -13,25 +13,23 @@
 
 #pragma once
 
-#include <array>
+#include "vast/byte.hpp"
+#include "vast/detail/operators.hpp"
+#include "vast/span.hpp"
 
 #include <caf/meta/hex_formatted.hpp>
 
-#include "vast/detail/operators.hpp"
+#include <array>
 
 namespace vast {
 
-struct access;
-
 /// A universally unique identifier (UUID).
 class uuid : detail::totally_ordered<uuid> {
-  friend access;
-
 public:
   /// The number of bytes in a UUID;
-  static constexpr int num_bytes = 16;
+  static constexpr size_t num_bytes = 16;
 
-  using value_type = uint8_t;
+  using value_type = byte;
   using reference = value_type&;
   using const_reference = const value_type&;
   using iterator = value_type*;
@@ -41,25 +39,35 @@ public:
   static uuid random();
   static uuid nil();
 
+  /// Constructs an uninitialized UUID.
   uuid() = default;
 
+  /// Constructs a UUID from 16 bytes.
+  /// @param bytes The data to interpret as UUID.
+  explicit uuid(span<const byte, num_bytes> bytes);
+
+  /// Accesses a specific byte.
   reference operator[](size_t i);
   const_reference operator[](size_t i) const;
 
+  // Container interface.
   iterator begin();
   iterator end();
   const_iterator begin() const;
   const_iterator end() const;
   size_type size() const;
 
-  void swap(uuid& other);
-
   friend bool operator==(const uuid& x, const uuid& y);
   friend bool operator<(const uuid& x, const uuid& y);
 
+  /// @returns the binary data.
+  friend span<const byte, num_bytes> as_bytes(const uuid& x) {
+    return span<const byte, num_bytes>{x.id_};
+  }
+
   template <class Inspector>
-  friend auto inspect(Inspector& f, uuid& u) {
-    return f(caf::meta::hex_formatted(), u.id_);
+  friend auto inspect(Inspector& f, uuid& x) {
+    return f(caf::meta::hex_formatted(), x.id_);
   }
 
 private:
@@ -83,4 +91,3 @@ struct hash<vast::uuid> {
 };
 
 } // namespace std
-

@@ -13,6 +13,9 @@
 
 #include "vast/uuid.hpp"
 
+#include "vast/detail/narrow.hpp"
+
+#include <cstring>
 #include <random>
 
 namespace vast {
@@ -29,24 +32,24 @@ public:
   }
 
   uuid operator()() {
-    uuid u;
+    uuid result;
     auto r = unif_(rd_);
     int i = 0;
-    for (auto& byte : u) {
+    for (auto& x : result) {
       if (i == sizeof(number_type)) {
         r = unif_(rd_);
         i = 0;
       }
-      byte = (r >> (i * 8)) & 0xff;
+      x = detail::narrow_cast<byte>((r >> (i * 8)) & 0xff);
       ++i;
     }
     // Set variant to 0b10xxxxxx.
-    u[8] &= 0xbf;
-    u[8] |= 0x80;
+    result[8] &= byte{0xbf};
+    result[8] |= byte{0x80};
     // Set version to 0b0100xxxx.
-    u[6] &= 0x4f; // 0b01001111
-    u[6] |= 0x40; // 0b01000000
-    return u;
+    result[6] &= byte{0x4f}; // 0b01001111
+    result[6] |= byte{0x40}; // 0b01000000
+    return result;
   }
 
 private:
@@ -54,7 +57,7 @@ private:
   distribution unif_;
 };
 
-} // namespace <anonymous>
+} // namespace
 
 uuid uuid::random() {
   return random_generator{}();
@@ -62,8 +65,12 @@ uuid uuid::random() {
 
 uuid uuid::nil() {
   uuid u;
-  u.id_.fill(0);
+  u.id_.fill(byte{0});
   return u;
+}
+
+uuid::uuid(span<const byte, num_bytes> bytes) {
+  std::memcpy(id_.data(), bytes.data(), bytes.size());
 }
 
 uuid::reference uuid::operator[](size_t i) {
@@ -92,10 +99,6 @@ uuid::const_iterator uuid::end() const {
 
 uuid::size_type uuid::size() const {
   return num_bytes;
-}
-
-void uuid::swap(uuid& other) {
-  std::swap_ranges(begin(), end(), other.begin());
 }
 
 bool operator==(const uuid& x, const uuid& y) {

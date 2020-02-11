@@ -37,7 +37,7 @@ struct uuid_parser : parser<uuid_parser> {
       c = *f++;
     }
     auto with_dashes = false;
-    for (auto i = 0; i < uuid::num_bytes; ++i) {
+    for (size_t i = 0; i < uuid::num_bytes; ++i) {
       if (i != 0) {
         if (f == l)
           return false;
@@ -72,13 +72,13 @@ struct uuid_parser : parser<uuid_parser> {
     return true;
   }
 
-  static uint8_t lookup(char c) {
+  static byte lookup(char c) {
     static constexpr auto digits = "0123456789abcdefABCDEF";
     static constexpr uint8_t values[]
       = {0,  1,  2,  3,  4,  5,  6,  7,  8,  9,  10,  11,
          12, 13, 14, 15, 10, 11, 12, 13, 14, 15, 0xff};
     // TODO: use a static table as opposed to searching in the vector.
-    return values[std::find(digits, digits + 22, c) - digits];
+    return byte{values[std::find(digits, digits + 22, c) - digits]};
   }
 };
 
