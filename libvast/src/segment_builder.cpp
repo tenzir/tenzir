@@ -51,7 +51,7 @@ segment segment_builder::finish() {
   segment_builder.add_uuid(uuid_offset);
   segment_builder.add_version(fbs::SegmentVersion::v1);
   auto segment_offset = segment_builder.Finish();
-  builder_.Finish(segment_offset);
+  fbs::FinishSegmentBuffer(builder_, segment_offset);
   size_t offset;
   size_t size;
   auto ptr = builder_.ReleaseRaw(size, offset);

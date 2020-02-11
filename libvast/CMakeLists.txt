@@ -281,7 +281,7 @@ foreach (schema ${flatbuffers_schemas})
   add_custom_command(
     OUTPUT ${desired_file}
     COMMAND
-      ${FLATBUFFERS_EXECUTABLE} --cpp --scoped-enums -I
+      ${FLATBUFFERS_EXECUTABLE} -b --cpp --scoped-enums -I
       ${CMAKE_CURRENT_SOURCE_DIR}/flatbuffers -o ${flatbuffers_output_path}
       ${schema}
     COMMAND
