@@ -44,11 +44,10 @@ chunk_ptr chunk::make(size_type size, void* data, deleter_type deleter) {
 chunk_ptr chunk::mmap(const path& filename, size_type size, size_type offset) {
   // Figure out the file size if not provided.
   if (size == 0) {
-    struct stat st;
-    auto result = ::stat(filename.str().c_str(), &st);
-    if (result == -1)
-      return {};
-    size = st.st_size;
+    auto s = file_size(filename);
+    if (!s)
+      return nullptr;
+    size = *s;
   }
   // Open and memory-map the file.
   auto fd = ::open(filename.str().c_str(), O_RDONLY, 0644);

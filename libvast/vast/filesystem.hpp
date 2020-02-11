@@ -24,6 +24,7 @@
 
 #include <caf/expected.hpp>
 
+#include <cstdint>
 #include <functional>
 #include <string>
 #include <vector>
@@ -323,6 +324,11 @@ bool rm(const path& p);
 /// @returns `true` on success or if *p* exists already.
 caf::expected<void> mkdir(const path& p);
 
+/// Determines the size of a file.
+/// @param p The path pointint to a file.
+/// @returns The size of *p* or an error upon failure.
+caf::expected<std::uintmax_t> file_size(const path& p) noexcept;
+
 // Loads file contents into a string.
 // @param p The path of the file to load.
 // @returns The contents of the file *p*.
@@ -340,4 +346,3 @@ struct hash<vast::path> {
 };
 
 } // namespace std
-
