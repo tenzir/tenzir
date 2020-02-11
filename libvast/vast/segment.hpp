@@ -17,13 +17,10 @@
 #include "vast/chunk.hpp"
 #include "vast/fwd.hpp"
 #include "vast/ids.hpp"
-#include "vast/segment_header.hpp"
 #include "vast/uuid.hpp"
 
 #include <caf/expected.hpp>
 #include <caf/fwd.hpp>
-#include <caf/intrusive_ptr.hpp>
-#include <caf/ref_counted.hpp>
 
 #include <cstdint>
 #include <iterator>
@@ -32,14 +29,8 @@
 
 namespace vast {
 
-/// @relates segment
-using segment_ptr = caf::intrusive_ptr<segment>;
-
-// TODO: remove the reference semantics and make this a plain value. The
-// intrusive pointer is not longer needed since the segment only wraps a
-// reference-counted pointer now.
 /// A sequence of table slices.
-class segment : public caf::ref_counted {
+class segment {
   friend segment_builder;
 
 public:
@@ -49,7 +40,7 @@ public:
   /// Constructs a segment.
   /// @param header The header of the segment.
   /// @param chunk The chunk holding the segment data.
-  static segment_ptr make(chunk_ptr chunk);
+  static caf::expected<segment> make(chunk_ptr chunk);
 
   /// @returns The unique ID of this segment.
   uuid id() const;
@@ -67,18 +58,6 @@ public:
   /// @param xs The IDs to lookup.
   /// @returns The table slices according to *xs*.
   caf::expected<std::vector<table_slice_ptr>> lookup(const vast::ids& xs) const;
-
-  // -- concepts --------------------------------------------------------------
-
-  /// @pre `x != nullptr`
-  friend caf::error inspect(caf::serializer& sink, const segment_ptr& x);
-
-  friend caf::error inspect(caf::deserializer& source, segment_ptr& x);
-
-  /// @pre `x != nullptr`
-  friend caf::error save(const path& filename, const segment_ptr& x);
-
-  friend caf::error load(const path& filename, segment_ptr& x);
 
 private:
   segment() = default;

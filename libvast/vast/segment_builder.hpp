@@ -42,7 +42,7 @@ public:
 
   /// Constructs a segment from previously added table slices.
   /// @post The builder can now be reused to contruct a new segment.
-  segment_ptr finish();
+  segment finish();
 
   /// Locates previously added table slices for a given set of IDs.
   /// @param xs The IDs to lookup.
