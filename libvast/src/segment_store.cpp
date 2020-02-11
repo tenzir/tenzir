@@ -75,25 +75,23 @@ caf::error segment_store::flush() {
   if (!dirty())
     return caf::none;
   auto x = builder_.finish();
-  if (x == nullptr)
-    return make_error(ec::unspecified, "failed to build segment");
-  auto filename = segment_path() / to_string(x->id());
-  if (auto err = save(filename, x))
+  auto filename = segment_path() / to_string(x.id());
+  if (auto err = write(filename, x.chunk()))
     return err;
   // Keep new segment in the cache.
-  cache_.emplace(x->id(), x);
+  cache_.emplace(x.id(), x);
   VAST_DEBUG(this, "wrote new segment to", filename.trim(-3));
   VAST_DEBUG(this, "saves segment meta data");
   return save(nullptr, meta_path(), segments_);
 }
 
-caf::expected<segment_ptr> segment_store::load_segment(uuid id) const {
+caf::expected<segment> segment_store::load_segment(uuid id) const {
   auto filename = segment_path() / to_string(id);
-  VAST_DEBUG(this, "loads segment from", filename);
-  segment_ptr result;
-  if (auto err = load(filename, result))
-    return err;
-  return result;
+  VAST_DEBUG(this, "mmaps segment from", filename);
+  auto chk = chunk::mmap(filename);
+  if (!chk)
+    return make_error(ec::filesystem_error, "failed to mmap chunk", filename);
+  return segment::make(std::move(chk));
 }
 
 std::unique_ptr<store::lookup> segment_store::extract(const ids& xs) const {
@@ -129,21 +127,17 @@ std::unique_ptr<store::lookup> segment_store::extract(const ids& xs) const {
         VAST_DEBUG(this, "looks into the active segement", cand);
         return store_.builder_.lookup(xs_);
       }
-      segment_ptr seg_ptr = nullptr;
       auto i = store_.cache_.find(cand);
       if (i != store_.cache_.end()) {
         VAST_DEBUG(this, "got cache hit for segment", cand);
-        seg_ptr = i->second;
-      } else {
-        VAST_DEBUG(this, "got cache miss for segment", cand);
-        if(auto seg_ptr_ = store_.load_segment(cand))
-          seg_ptr = *seg_ptr_;
-        else
-          return seg_ptr_.error();
-        i = store_.cache_.emplace(cand, seg_ptr).first;
+        return i->second.lookup(xs_);
       }
-      VAST_ASSERT(seg_ptr != nullptr);
-      return seg_ptr->lookup(xs_);
+      VAST_DEBUG(this, "got cache miss for segment", cand);
+      auto s = store_.load_segment(cand);
+      if (!s)
+        return s.error();
+      store_.cache_.emplace(cand, *s);
+      return s->lookup(xs_);
     }
 
     const segment_store& store_;
@@ -262,8 +256,8 @@ caf::error segment_store::erase(const ids& xs) {
     // Flush the new segment and remove the previous segment.
     if constexpr (std::is_same_v<decltype(seg), segment&>) {
       auto new_segment = builder->finish();
-      auto filename = segment_path() / to_string(new_segment->id());
-      if (auto err = save(filename, new_segment))
+      auto filename = segment_path() / to_string(new_segment.id());
+      if (auto err = write(filename, new_segment.chunk()))
         VAST_ERROR(this, "failed to persist the new segment");
       auto stale_filename = segment_path() / to_string(segment_id);
       // Schedule deletion of the segment file when releasing the chunk.
@@ -276,14 +270,14 @@ caf::error segment_store::erase(const ids& xs) {
     auto j = cache_.find(candidate);
     if (j != cache_.end()) {
       VAST_DEBUG(this, "erases from the cached segement", candidate);
-      impl(*j->second);
+      impl(j->second);
       cache_.erase(j);
     } else if (candidate == builder_.id()) {
       VAST_DEBUG(this, "erases from the active segement", candidate);
       impl(builder_);
-    } else if (auto sptr = load_segment(candidate)) {
+    } else if (auto s = load_segment(candidate)) {
       VAST_DEBUG(this, "erases from the segement", candidate);
-      impl(**sptr);
+      impl(*s);
     }
   }
   if (erased_events > 0) {
@@ -314,21 +308,18 @@ caf::expected<std::vector<table_slice_ptr>> segment_store::get(const ids& xs) {
       VAST_DEBUG(this, "looks into the active segement", id);
       slices = builder_.lookup(xs);
     } else {
-      segment_ptr seg_ptr = nullptr;
       auto i = cache_.find(id);
-      if (i != cache_.end()) {
-        VAST_DEBUG(this, "got cache hit for segment", id);
-      } else {
+      if (i == cache_.end()) {
         VAST_DEBUG(this, "got cache miss for segment", id);
         auto x = load_segment(id);
         if (!x)
           return x.error();
         i = cache_.emplace(id, std::move(*x)).first;
+      } else {
+        VAST_DEBUG(this, "got cache hit for segment", id);
       }
-      seg_ptr = i->second;
-      VAST_ASSERT(seg_ptr != nullptr);
       VAST_DEBUG(this, "looks into segment", id);
-      slices = seg_ptr->lookup(xs);
+      slices = i->second.lookup(xs);
     }
     if (!slices)
       return slices.error();

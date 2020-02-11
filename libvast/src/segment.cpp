@@ -33,22 +33,19 @@ namespace vast {
 
 using namespace binary_byte_literals;
 
-segment_ptr segment::make(chunk_ptr chunk) {
+caf::expected<segment> segment::make(chunk_ptr chunk) {
   VAST_ASSERT(chunk != nullptr);
   // Verify flatbuffer integrity.
   auto data = reinterpret_cast<const uint8_t*>(chunk->data());
   auto verifier = flatbuffers::Verifier{data, chunk->size()};
-  if (!fbs::VerifySegmentBuffer(verifier)) {
-    VAST_ERROR_ANON(__func__, "failed to verify segment buffer");
-    return nullptr;
-  }
+  if (!fbs::VerifySegmentBuffer(verifier))
+    return make_error(ec::format_error, "flatbuffer integrity check failed");
   // Perform version check.
   auto ptr = fbs::GetSegment(chunk->data());
-  if (ptr->version() != fbs::SegmentVersion::v1) {
-    VAST_ERROR_ANON(__func__, "unsupported segment version");
-    return nullptr;
-  }
-  return segment_ptr{new segment{std::move(chunk)}, false};
+  if (ptr->version() != fbs::SegmentVersion::v1)
+    return make_error(ec::version_error, "unsupported segment version",
+                      ptr->version());
+  return segment{std::move(chunk)};
 }
 
 uuid segment::id() const {
@@ -56,6 +53,7 @@ uuid segment::id() const {
   auto data = span<const uint8_t, 16>(ptr->uuid()->Data(), 16);
   return uuid{as_bytes(data)};
 }
+
 vast::ids segment::ids() const {
   vast::ids result;
   auto ptr = fbs::GetSegment(chunk_->data());
@@ -97,30 +95,6 @@ segment::lookup(const vast::ids& xs) const {
   if (auto error = select_with(xs, begin, end, f, g))
     return error;
   return result;
-}
-caf::error inspect(caf::serializer& sink, const segment_ptr& x) {
-  VAST_ASSERT(x != nullptr);
-  return sink(x->chunk_);
-}
-
-caf::error inspect(caf::deserializer& source, segment_ptr& x) {
-  x.reset(new segment, false);
-  return source(x->chunk_);
-}
-
-caf::error save(const path& filename, const segment_ptr& x) {
-  VAST_ASSERT(x != nullptr);
-  return write(filename, x->chunk());
-}
-
-caf::error load(const path& filename, segment_ptr& x) {
-  auto chk = chunk::mmap(filename);
-  if (!chk)
-    return make_error(ec::filesystem_error, "failed to mmap chunk", filename);
-  x = segment::make(chk);
-  if (!x)
-    return make_error(ec::unspecified, "failed to construct segment");
-  return caf::none;
 }
 
 segment::segment(chunk_ptr chk) : chunk_{std::move(chk)} {
