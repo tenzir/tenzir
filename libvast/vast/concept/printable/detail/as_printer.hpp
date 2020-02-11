@@ -34,7 +34,7 @@ inline auto as_printer(std::string str) {
 }
 
 template <class T>
-auto as_printer(T x)
+constexpr auto as_printer(T x)
   -> std::enable_if_t<std::conjunction_v<std::is_arithmetic<T>,
                                          std::negation<std::is_same<T, bool>>>,
                       literal_printer> {
@@ -42,7 +42,7 @@ auto as_printer(T x)
 }
 
 template <class T>
-auto as_printer(T x) -> std::enable_if_t<is_printer_v<T>, T> {
+constexpr auto as_printer(T x) -> std::enable_if_t<is_printer_v<T>, T> {
   return x; // A good compiler will elide the copy.
 }
 
@@ -86,17 +86,10 @@ using make_binary_printer =
     >
   >;
 
-template <
-  template <class, class> class Binaryprinter,
-  class T,
-  class U
->
+template <template <class, class> class Binaryprinter, class T, class U>
 make_binary_printer<
-  Binaryprinter,
-  decltype(as_printer(std::declval<T&>())),
-  decltype(as_printer(std::declval<U&>()))
->
-as_printer(T&& x, U&& y) {
+  Binaryprinter, decltype(as_printer(std::declval<T&>())),
+  decltype(as_printer(std::declval<U&>()))> constexpr as_printer(T&& x, U&& y) {
   return {as_printer(std::forward<T>(x)), as_printer(std::forward<U>(y))};
 }
 

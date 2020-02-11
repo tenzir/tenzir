@@ -64,7 +64,7 @@ public:
       >
     >;
 
-  choice_printer(Lhs lhs, Rhs rhs)
+  constexpr choice_printer(Lhs lhs, Rhs rhs)
     : lhs_{std::move(lhs)}, rhs_{std::move(rhs)} {
   }
 
