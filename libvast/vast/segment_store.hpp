@@ -102,7 +102,7 @@ public:
 private:
   // -- utility functions ------------------------------------------------------
 
-  caf::expected<segment_ptr> load_segment(uuid id) const;
+  caf::expected<segment> load_segment(uuid id) const;
 
   /// Fills `candidates` with all segments that qualify for `selection`.
   caf::error select_segments(const ids& selection,
@@ -131,7 +131,7 @@ private:
   detail::range_map<id, uuid> segments_;
 
   /// Optimizes access times into segments by keeping some segments in memory.
-  mutable detail::cache<uuid, segment_ptr> cache_;
+  mutable detail::cache<uuid, segment> cache_;
 
   /// Serializes table slices into contiguous chunks of memory.
   segment_builder builder_;
