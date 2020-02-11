@@ -353,20 +353,22 @@ if (NOT NO_UNIT_TESTS)
   add_executable(vast-test ${tests})
   target_link_libraries(vast-test libvast_test libvast
                         ${CMAKE_THREAD_LIBS_INIT})
+  add_test(
+    NAME build_vast_test
+    COMMAND
+      "${CMAKE_COMMAND}" --build "${CMAKE_BINARY_DIR}" --config "$<CONFIG>"
+      --target vast-test)
+  set_tests_properties(build_vast_test PROPERTIES FIXTURES_SETUP
+                                                  vast_unit_test_fixture)
   # Helper macro to construct a CMake test from a VAST test suite.
   macro (make_test suite)
     string(REPLACE " " "_" test_name ${suite})
-    set(vast_test ${EXECUTABLE_OUTPUT_PATH}/vast-test)
     add_test(
-      ${test_name}
-      ${vast_test}
-      -v
-      3
-      -r
-      600
-      -s
-      "^${suite}$"
-      ${ARGN})
+      NAME ${test_name}
+      COMMAND
+        vast-test -v 3 -r 600 -s "^${suite}$" ${ARGN})
+    set_tests_properties(${test_name} PROPERTIES FIXTURES_REQUIRED
+                                                 vast_unit_test_fixture)
   endmacro ()
   # Find all test suites.
   foreach (test ${tests})
@@ -380,7 +382,6 @@ if (NOT NO_UNIT_TESTS)
   endforeach ()
   list(REMOVE_DUPLICATES suites)
   # Enable unit testing via CMake/CTest and add all test suites.
-  enable_testing()
   foreach (suite ${suites})
     make_test("${suite}")
   endforeach ()
