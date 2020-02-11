@@ -43,9 +43,7 @@ caf::error segment_builder::add(table_slice_ptr x) {
   return caf::none;
 }
 
-segment_ptr segment_builder::finish() {
-  if (table_slices_.empty())
-    return nullptr;
+segment segment_builder::finish() {
   auto table_slices_offset = builder_.CreateVector(table_slices_);
   auto uuid_offset = fbs::create_bytes(builder_, id_);
   fbs::SegmentBuilder segment_builder{builder_};
@@ -57,16 +55,15 @@ segment_ptr segment_builder::finish() {
   size_t offset;
   size_t size;
   auto ptr = builder_.ReleaseRaw(size, offset);
+  auto deleter = [=]() { flatbuffers::DefaultAllocator::dealloc(ptr, size); };
+  auto chk = chunk::make(size - offset, ptr + offset, deleter);
 #if 0
   VAST_ASSERT(size > offset);
   auto verifier = flatbuffers::Verifier{ptr + offset, size - offset};
   VAST_ASSERT(fbs::VerifySegmentBuffer(verifier));
 #endif
-  auto deleter = [=]() { flatbuffers::DefaultAllocator::dealloc(ptr, size); };
-  auto chk = chunk::make(size - offset, ptr + offset, deleter);
-  auto result = segment_ptr{new segment{std::move(chk)}, false};
   reset();
-  return result;
+  return segment{std::move(chk)};
 }
 
 caf::expected<std::vector<table_slice_ptr>>
