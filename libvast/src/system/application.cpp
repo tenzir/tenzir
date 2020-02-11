@@ -95,7 +95,6 @@ auto make_export_command() {
     documentation::vast_export,
     opts("?export")
       .add<bool>("continuous,c", "marks a query as continuous")
-      .add<bool>("historical,h", "marks a query as historical")
       .add<bool>("unified,u", "marks a query as unified")
       .add<size_t>("max-events,n", "maximum number of results")
       .add<std::string>("read,r", "path for reading the query"));
@@ -266,7 +265,6 @@ auto make_spawn_command() {
     "exporter", "creates a new exporter", "",
     opts()
       .add<bool>("continuous,c", "marks a query as continuous")
-      .add<bool>("historical,h", "marks a query as historical")
       .add<bool>("unified,u", "marks a query as unified")
       .add<uint64_t>("events,e", "maximum number of results"));
   spawn->add_subcommand("importer", "creates a new importer", "",
