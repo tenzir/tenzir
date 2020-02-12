@@ -396,7 +396,8 @@ caf::error reader::parse_header() {
                         prefixes[i]);
     pos = line.find(separator_);
     if (pos == std::string::npos)
-      return make_error(ec::format_error, "invalid separator in header line");
+      return make_error(ec::format_error, "invalid separator in header line",
+                        line);
     if (pos + separator_.size() >= line.size())
       return make_error(ec::format_error, "missing header content:", line);
     header[i] = line.substr(pos + separator_.size());
