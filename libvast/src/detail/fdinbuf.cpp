@@ -11,24 +11,36 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#include <unistd.h>
+#include "vast/detail/fdinbuf.hpp"
+
+#include "vast/detail/assert.hpp"
 
 #include <cstdio>
 #include <cstring>
+#include <unistd.h>
 
-#include "vast/detail/assert.hpp"
-#include "vast/detail/fdinbuf.hpp"
+#include <sys/poll.h>
 
 namespace vast {
 namespace detail {
 
 fdinbuf::fdinbuf(int fd, size_t buffer_size)
-  : fd_{fd},
-    buffer_(buffer_size) {
+  : fd_{fd}, buffer_(buffer_size), timeout_fail_(false) {
   VAST_ASSERT(buffer_size > putback_area_size);
   setg(buffer_.data() + putback_area_size,  // beginning of putback area
        buffer_.data() + putback_area_size,  // read position
        buffer_.data() + putback_area_size); // end position
+}
+
+// Note that to implement non-blocking reads we cannot simply switch the
+// file descriptor to non-blocking mode because it might refer to stdin, and
+// putting stdin into non-blocking mode will automatically do the same for stdout.
+std::optional<std::chrono::milliseconds>& fdinbuf::read_timeout() {
+  return read_timeout_;
+}
+
+bool fdinbuf::timed_out() const {
+  return timeout_fail_;
 }
 
 fdinbuf::int_type fdinbuf::underflow() {
@@ -42,9 +54,25 @@ fdinbuf::int_type fdinbuf::underflow() {
   // Copy over previously read characters from the putback area.
   std::memmove(buffer_.data() + (putback_area_size - num_putback),
                gptr() - num_putback, num_putback);
+  // Ensure we have data to read if a read timeout was set.
+  if (read_timeout_) {
+    struct pollfd pfd {
+      fd_, POLLIN, 0
+    };
+    int res;
+    while ((res = ::poll(&pfd, 1, read_timeout_->count())) == -1)
+      if (errno != EINTR)
+        break;
+    if (res == 0)
+      timeout_fail_ = true;
+    // poll failure (memory/file descriptor limit exceeded; or no readable data)
+    if (res < 1 || !((pfd.revents & POLLIN) || (pfd.events & POLLHUP)))
+      return traits_type::eof();
+  }
+  timeout_fail_ = false;
   // Read new characters.
-  auto n = ::read(fd_, buffer_.data() + putback_area_size,
-                  buffer_.size() - putback_area_size);
+  ssize_t n = ::read(fd_, buffer_.data() + putback_area_size,
+                     buffer_.size() - putback_area_size);
   if (n == 0)
     return traits_type::eof();
   if (n < 0) {

@@ -13,14 +13,19 @@
 
 #include "vast/format/zeek.hpp"
 
-#define SUITE format
+#include <istream>
+#include <sstream>
+#include <thread>
+#include <unistd.h>
 
-#include "vast/test/test.hpp"
+#define SUITE format
 
 #include "vast/test/fixtures/actor_system.hpp"
 #include "vast/test/fixtures/events.hpp"
+#include "vast/test/test.hpp"
 
 #include "vast/concept/parseable/to.hpp"
+#include "vast/detail/fdinbuf.hpp"
 #include "vast/event.hpp"
 
 using namespace vast;
@@ -53,6 +58,26 @@ std::string_view capture_loss_10_events = R"__(#separator \x09
 1258539453.914415	900.000001	bro	0	0	0.0
 1258540374.060134	920.145719	bro	0	0	0.0
 #close	2019-06-07-14-31-01)__";
+
+std::string_view conn_log_10_events = R"__(#separator \x09
+#set_separator	,
+#empty_field	(empty)
+#unset_field	-
+#path	conn
+#open	2014-05-23-18-02-04
+#fields	ts	uid	id.orig_h	id.orig_p	id.resp_h	id.resp_p	proto	service	duration	orig_bytes	resp_bytes	conn_state	local_orig	missed_bytes	history	orig_pkts	orig_ip_bytes	resp_pkts	resp_ip_bytes	tunnel_parents
+#types	time	string	addr	port	addr	port	enum	string	interval	count	count	string	bool	count	string	count	count	count	count	table[string]
+1258531221.486539	Pii6cUUq1v4	192.168.1.102	68	192.168.1.1	67	udp	-	0.163820	301	300	SF	-	0	Dd	1	329	1	328	(empty)
+1258531680.237254	nkCxlvNN8pi	192.168.1.103	137	192.168.1.255	137	udp	dns	3.780125	350	0	S0	-	0	D	7	546	0	0	(empty)
+1258531693.816224	9VdICMMnxQ7	192.168.1.102	137	192.168.1.255	137	udp	dns	3.748647	350	0	S0	-	0	D	7	546	0	0	(empty)
+1258531635.800933	bEgBnkI31Vf	192.168.1.103	138	192.168.1.255	138	udp	-	46.725380	560	0	S0	-	0	D	3	644	0	0	(empty)
+1258531693.825212	Ol4qkvXOksc	192.168.1.102	138	192.168.1.255	138	udp	-	2.248589	348	0	S0	-	0	D	2	404	0	0	(empty)
+1258531803.872834	kmnBNBtl96d	192.168.1.104	137	192.168.1.255	137	udp	dns	3.748893	350	0	S0	-	0	D	7	546	0	0	(empty)
+1258531747.077012	CFIX6YVTFp2	192.168.1.104	138	192.168.1.255	138	udp	-	59.052898	549	0	S0	-	0	D	3	633	0	0	(empty)
+1258531924.321413	KlF6tbPUSQ1	192.168.1.103	68	192.168.1.1	67	udp	-	0.044779	303	300	SF	-	0	Dd	1	331	1	328	(empty)
+1258531939.613071	tP3DM6npTdj	192.168.1.102	138	192.168.1.255	138	udp	-	-	-	-	S0	-	0	D	1	229	0	0	(empty)
+1258532046.693816	Jb4jIDToo77	192.168.1.104	68	192.168.1.1	67	udp	-	0.002103	311	300	SF	-	0	Dd	1	339	1	328	(empty)
+)__";
 
 std::string_view conn_log_100_events = R"__(#separator \x09
 #set_separator	,
@@ -165,24 +190,32 @@ std::string_view conn_log_100_events = R"__(#separator \x09
 #close	2014-05-23-18-02-35)__";
 
 struct fixture : fixtures::deterministic_actor_system {
-  std::vector<table_slice_ptr> read(std::string_view input, size_t slice_size,
-                                    size_t num_events) {
+  std::vector<table_slice_ptr>
+  read(std::unique_ptr<std::istream> input, size_t slice_size,
+       size_t num_events, bool expect_eof) {
     using reader_type = format::zeek::reader;
     reader_type reader{defaults::system::table_slice_type, caf::settings{},
-                       std::make_unique<std::istringstream>(
-                         std::string{input})};
+                       std::move(input)};
     std::vector<table_slice_ptr> slices;
     auto add_slice = [&](table_slice_ptr ptr) {
       slices.emplace_back(std::move(ptr));
     };
     auto [err, num] = reader.read(std::numeric_limits<size_t>::max(),
                                   slice_size, add_slice);
-    if (err != ec::end_of_input)
+    if (expect_eof && err != ec::end_of_input)
+      FAIL("Zeek reader did not exhaust input: " << sys.render(err));
+    if (!expect_eof && err)
       FAIL("Zeek reader failed to parse input: " << sys.render(err));
     if (num != num_events)
       FAIL("Zeek reader only produced " << num << " events, expected "
                                         << num_events);
     return slices;
+  }
+
+  std::vector<table_slice_ptr> read(std::string_view input, size_t slice_size,
+                                    size_t num_events, bool expect_eof = true) {
+    return read(std::make_unique<std::istringstream>(std::string{input}),
+                slice_size, num_events, expect_eof);
   }
 };
 
@@ -229,6 +262,30 @@ TEST(zeek reader - conn log) {
   CHECK_EQUAL(slices.size(), 5u);
   for (auto& slice : slices)
     CHECK_EQUAL(slice->rows(), 20u);
+}
+
+TEST(zeek reader - continous stream with partial slice) {
+  int pipefds[2];
+  auto result = ::pipe(pipefds);
+  REQUIRE_EQUAL(result, 0);
+  auto [read_end, write_end] = pipefds;
+  detail::fdinbuf buf(read_end);
+  std::vector<table_slice_ptr> slices;
+  std::thread t([&] {
+    bool expect_eof = false;
+    slices = read(std::make_unique<std::istream>(&buf), 100, 10, expect_eof);
+  });
+  // Write less than one full slice, leaving the pipe open.
+  result
+    = ::write(write_end, &conn_log_10_events[0], conn_log_10_events.size());
+  REQUIRE_EQUAL(result, conn_log_10_events.size());
+  // Expect that we will see the results before the test times out.
+  t.join();
+  CHECK_EQUAL(slices.size(), 1u);
+  for (auto& slice : slices)
+    CHECK_EQUAL(slice->rows(), 10u);
+  ::close(pipefds[0]);
+  ::close(pipefds[1]);
 }
 
 FIXTURE_SCOPE_END()

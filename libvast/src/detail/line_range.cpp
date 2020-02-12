@@ -11,8 +11,9 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#include "vast/detail/assert.hpp"
 #include "vast/detail/line_range.hpp"
+
+#include "vast/detail/fdinbuf.hpp"
 
 namespace vast {
 namespace detail {
@@ -28,12 +29,31 @@ const std::string& line_range::get() const {
 void line_range::next() {
   VAST_ASSERT(!done());
   line_.clear();
+  if (!input_)
+    return;
   // Get the next non-empty line.
   while (line_.empty())
     if (std::getline(input_, line_))
       ++line_number_;
     else
       break;
+}
+
+bool line_range::next_timeout(std::chrono::milliseconds timeout) {
+  auto* p = dynamic_cast<fdinbuf*>(input_.rdbuf());
+  if (p)
+    p->read_timeout() = timeout;
+  // Try to read next line.
+  next();
+  bool timed_out = false;
+  if (p) {
+    timed_out = p->timed_out();
+    p->read_timeout() = std::nullopt;
+    // Clear error state if the read timed out
+    if (!input_ && timed_out)
+      input_.clear();
+  }
+  return timed_out;
 }
 
 bool line_range::done() const {

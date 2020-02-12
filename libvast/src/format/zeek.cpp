@@ -21,6 +21,7 @@
 #include "vast/concept/printable/vast/view.hpp"
 #include "vast/detail/assert.hpp"
 #include "vast/detail/escapers.hpp"
+#include "vast/detail/fdinbuf.hpp"
 #include "vast/detail/fdostream.hpp"
 #include "vast/detail/string.hpp"
 #include "vast/error.hpp"
@@ -276,8 +277,19 @@ caf::error reader::read_impl(size_t max_events, size_t max_slice_size,
   size_t produced = 0;
   // Loop until reaching EOF or the configured limit of records.
   while (produced < max_events) {
-    // Advance line range and check for EOF.
-    lines_->next();
+    // Advance line range and check for EOF. (In the first iteration, the
+    // current line is the last line of the header)
+    // If we already have some events, set a read timeout to ensure downstream
+    // sees them even if there are currently no further events in the stream.
+    if (builder_->rows() > 0) {
+      using namespace std::chrono_literals;
+      bool timeout = lines_->next_timeout(
+        vast::defaults::import::zeek::partial_slice_read_timeout);
+      if (timeout)
+        return finish(f);
+    } else {
+      lines_->next();
+    }
     if (lines_->done())
       return finish(f, make_error(ec::end_of_input, "input exhausted"));
     // Parse curent line.
