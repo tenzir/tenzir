@@ -31,6 +31,8 @@ Usage: $0 [OPTION]... [VAR=VALUE]...
     --debug                 sets --build-type=Debug, --log-level=trace,
                             and --with-asan
     --release               sets --build-type=Release
+    --ci-build              sets --build-type=Release, --log-level=trace,
+                            and --with-asan
 
   Build options:
     --generator=GENERATOR   CMake generator to use (see cmake --help)
@@ -129,6 +131,11 @@ while [ $# -ne 0 ]; do
       ;;
     --release)
       append_cache_entry CMAKE_BUILD_TYPE STRING Release
+      ;;
+    --ci-build)
+      append_cache_entry CMAKE_BUILD_TYPE STRING Release
+      append_cache_entry VAST_LOG_LEVEL STRING TRACE
+      append_cache_entry ENABLE_ADDRESS_SANITIZER BOOL yes
       ;;
 # -- Build options -------------------------------------------------------------
     --generator=*)
