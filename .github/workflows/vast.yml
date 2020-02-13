@@ -64,8 +64,7 @@ jobs:
         configure:
         - tag: Release
           flags: --release
-        - tag: Debug
-          flags: --debug
+          ci-flags: --ci-build
     runs-on: ${{ matrix.os.name }}
     env:
       CC: ${{ matrix.os.cc }}
@@ -131,7 +130,7 @@ jobs:
             --build-dir="$BUILD_DIR" \
             --package-name="$PACKAGE_NAME" \
             ${{ matrix.os.extra-flags }} \
-            ${{ matrix.configure.flags }}
+            ${{ github.event.action == 'published' && matrix.configure.flags || matrix.configure.ci-flags }}
 
       - name: Compile All Targets
         run: |
