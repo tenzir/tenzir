@@ -1,6 +1,13 @@
 name: "VAST"
 on:
   push:
+    branches:
+    - master
+    paths-ignore:
+    - '**.md'
+    - '!doc/**.md'
+  pull_request:
+    types: [opened, synchronize]
     paths-ignore:
     - '**.md'
     - '!doc/**.md'
@@ -13,9 +20,13 @@ jobs:
     name: Style Check
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v1
-      with:
-        ref: ${{ github.ref }}
+
+    - uses: actions/checkout@v2
+
+    - name: Fetch Master
+      run: |
+        git fetch origin master
+
     - uses: actions/setup-python@v1
       with:
         python-version: '3.7'
@@ -72,10 +83,17 @@ jobs:
       CXX: ${{ matrix.os.cxx }}
       BUILD_DIR: build
     steps:
-      - uses: actions/checkout@v1
+      - uses: actions/checkout@v2
         with:
-          submodules: recursive
-          ref: ${{ github.ref }}
+          fetch-depth: 0
+
+      - name: Fetch Submodules and Tags
+        run: |
+          auth_header="$(git config --local --get http.https://github.com/.extraheader)"
+          git submodule sync --recursive
+          git -c "http.extraheader=$auth_header" -c protocol.version=2 submodule update --init --force --recursive
+          git fetch --depth=1 origin +refs/tags/*:refs/tags/*
+
       - uses: actions/setup-python@v1
         with:
           python-version: '3.7'
