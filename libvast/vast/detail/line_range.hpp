@@ -13,22 +13,28 @@
 
 #pragma once
 
+#include "vast/detail/range.hpp"
+
+#include <chrono>
 #include <cstdint>
 #include <istream>
 #include <string>
-
-#include "vast/detail/range.hpp"
 
 namespace vast::detail {
 
 // A range of non-empty lines, extracted via `std::getline`.
 class line_range : range_facade<line_range> {
 public:
-  line_range(std::istream& input);
+  explicit line_range(std::istream& input);
 
   const std::string& get() const;
 
   void next();
+
+  // This is only supported if input_ uses a detail::fdinbuf as its streambuf,
+  // otherwise the timeout is ignored. The returned bool only indicates if a
+  // timeout occurred, other errors still need to be checked by `done()`.
+  [[nodiscard]] bool next_timeout(std::chrono::milliseconds timeout);
 
   bool done() const;
 

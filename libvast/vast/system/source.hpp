@@ -71,7 +71,7 @@ struct source_state {
 
   // -- constructors, destructors, and assignment operators --------------------
 
-  source_state(Self* selfptr) : self(selfptr), initialized(false) {
+  explicit source_state(Self* selfptr) : self(selfptr), initialized(false) {
     // nop
   }
 
@@ -178,9 +178,10 @@ source(caf::stateful_actor<source_state<Reader>>* self, Reader reader,
       auto events = detail::opt_min(st.remaining, num * table_slice_size);
       auto [err, produced] = st.reader.read(events, table_slice_size,
                                             push_slice);
-      // TODO: if the source is unable to generate new events (returns 0)
-      //       then we should trigger CAF to poll the source after a
-      //       predefined interval of time again, e.g., via delayed_send
+      // TODO: If the source is unable to generate new events (returns 0),
+      //       the source will stall and never be polled again. We should
+      //       trigger CAF to poll the source after a predefined interval of
+      //       time again, e.g., via delayed_send.
       t.stop(produced);
       if (st.remaining) {
         VAST_ASSERT(*st.remaining >= produced);
