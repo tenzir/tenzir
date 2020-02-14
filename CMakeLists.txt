@@ -496,7 +496,7 @@ endif ()
 
 # Try to find the required CAF components first...
 find_package(
-  CAF 0.17.3 EXACT
+  CAF 0.17.4 EXACT
   COMPONENTS core io test
   QUIET)
 if (CAF_FOUND)
