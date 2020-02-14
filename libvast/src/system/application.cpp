@@ -24,7 +24,6 @@
 #include "vast/format/json/suricata.hpp"
 #include "vast/format/mrt.hpp"
 #include "vast/format/null.hpp"
-#include "vast/format/pcap.hpp"
 #include "vast/format/test.hpp"
 #include "vast/format/zeek.hpp"
 #include "vast/system/configuration.hpp"
@@ -44,6 +43,7 @@
 #endif
 
 #ifdef VAST_HAVE_PCAP
+#  include "vast/format/pcap.hpp"
 #  include "vast/system/pcap_writer_command.hpp"
 #endif
 
