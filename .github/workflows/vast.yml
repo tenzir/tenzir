@@ -161,9 +161,9 @@ jobs:
       - name: Run Integration Tests
         id: integration_test_step
         run: |
-          echo "::set-output name=status::'true'"
+          echo "::set-output name=status::true"
           if ! cmake --build "$BUILD_DIR" --target integration; then
-            echo "::set-output name=status::'false'"
+            echo "::set-output name=status::false"
             tar -czf "$PACKAGE_NAME.tar.gz" -C build vast-integration-test
             exit 1
           fi
