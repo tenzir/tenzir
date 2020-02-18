@@ -289,7 +289,10 @@ constexpr std::string_view endpoint = ":42000/tcp";
 constexpr std::string_view node_id = "node";
 
 /// Path to persistent state.
-constexpr std::string_view directory = "vast.db";
+constexpr std::string_view db_directory = "vast.db";
+
+/// Path to log files.
+constexpr std::string_view log_directory = "vast.log";
 
 #ifdef VAST_HAVE_ARROW
 

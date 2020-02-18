@@ -10,10 +10,10 @@ Every entry has a category for which we use the following visual abbreviations:
 
 ## [Unreleased]
 
-- 🎁 A new option `--log-directory` has been added, which allows storing the log
-  separate from the persistent state. If unset, this option falls back to using
-  the persistent state directory set using `--directory`.
-  [#758](https://github.com/tenzir/vast/pull/758)
+- 🔄 The option `--directory` has been replaced by `--db-directory` and
+  `log-directory`, which set directories for persistent state and log files
+  respectively. The default log file path has changed from `vast.db/log` to
+  `vast.log`. [#758](https://github.com/tenzir/vast/pull/758)
 
 - 🔄 VAST now supports (and requires) Apache Arrow >= 0.16.
   [#751](https://github.com/tenzir/vast/pull/751)
