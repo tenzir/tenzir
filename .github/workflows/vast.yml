@@ -91,7 +91,7 @@ jobs:
           auth_header="$(git config --local --get http.https://github.com/.extraheader)"
           git submodule sync --recursive
           git -c "http.extraheader=$auth_header" -c protocol.version=2 submodule update --init --force --recursive
-          git fetch --depth=1 origin +refs/tags/*:refs/tags/*
+          git fetch origin +refs/tags/*:refs/tags/*
 
       - uses: actions/setup-python@v1
         with:
