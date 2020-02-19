@@ -49,4 +49,8 @@ create_table_slice(flatbuffers::FlatBufferBuilder& builder, table_slice_ptr x);
 
 table_slice_ptr make_table_slice(const TableSlice& x);
 
+caf::expected<flatbuffers::Offset<TableSliceBuffer>>
+create_table_slice_buffer(flatbuffers::FlatBufferBuilder& builder,
+                          table_slice_ptr x);
+
 } // namespace vast::fbs
