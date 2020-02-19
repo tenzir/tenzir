@@ -382,8 +382,8 @@ uint64_t segment_store::drop(segment& x) {
   // flatbuffers API. The (heavy-weight) altnerative here would be to create a
   // custom iterator so that a segment can be iterated as a list of table_slice
   // instances.
-  for (auto flat_slice : *fbs::GetSegment(x.chunk()->data())->data())
-    erased_events += flat_slice->rows();
+  for (auto buffer : *fbs::GetSegment(x.chunk()->data())->slices())
+    erased_events += buffer->data_nested_root()->rows();
   VAST_INFO(this, "erases entire segment", segment_id);
   // Schedule deletion of the segment file when releasing the chunk.
   auto filename = segment_path() / to_string(segment_id);

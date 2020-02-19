@@ -17,7 +17,7 @@ table Segment {
   uuid: [ubyte];
 
   /// The table slices in this segment.
-  data: [TableSlice];
+  slices: [TableSliceBuffer];
 }
 
 root_type Segment;

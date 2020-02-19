@@ -57,15 +57,16 @@ uuid segment::id() const {
 vast::ids segment::ids() const {
   vast::ids result;
   auto ptr = fbs::GetSegment(chunk_->data());
-  for (auto flat_slice : *ptr->data()) {
-    result.append_bits(false, flat_slice->offset() - result.size());
-    result.append_bits(true, flat_slice->rows());
+  for (auto buffer : *ptr->slices()) {
+    auto slice = buffer->data_nested_root();
+    result.append_bits(false, slice->offset() - result.size());
+    result.append_bits(true, slice->rows());
   }
   return result;
 }
 
 size_t segment::num_slices() const {
-  return fbs::GetSegment(chunk_->data())->data()->size();
+  return fbs::GetSegment(chunk_->data())->slices()->size();
 }
 
 chunk_ptr segment::chunk() const {
@@ -75,13 +76,16 @@ chunk_ptr segment::chunk() const {
 caf::expected<std::vector<table_slice_ptr>>
 segment::lookup(const vast::ids& xs) const {
   std::vector<table_slice_ptr> result;
-  auto f = [](auto flat_slice) {
-    return std::pair{flat_slice->offset(),
-                     flat_slice->offset() + flat_slice->rows()};
+  auto f = [](auto buffer) {
+    auto slice = buffer->data_nested_root();
+    return std::pair{slice->offset(), slice->offset() + slice->rows()};
   };
-  auto g = [&](auto flat_slice) -> caf::error {
-    // TODO: bind the lifetime of the table slice to the segment chunk.
-    result.push_back(fbs::make_table_slice(*flat_slice));
+  auto g = [&](auto buffer) -> caf::error {
+    // TODO: bind the lifetime of the table slice to the segment chunk. This
+    // requires that table slices will be constructable from a chunk. Until
+    // then, we stupidly deserialize the data into a new table slice.
+    auto slice = buffer->data_nested_root();
+    result.push_back(fbs::make_table_slice(*slice));
     return caf::none;
   };
   auto ptr = fbs::GetSegment(chunk_->data());
@@ -90,8 +94,8 @@ segment::lookup(const vast::ids& xs) const {
     reinterpret_cast<const uint8_t*>(chunk_->data()), chunk_->size()};
   VAST_ASSERT(fbs::VerifySegmentBuffer(verifier));
 #endif
-  auto begin = ptr->data()->begin();
-  auto end = ptr->data()->end();
+  auto begin = ptr->slices()->begin();
+  auto end = ptr->slices()->end();
   if (auto error = select_with(xs, begin, end, f, g))
     return error;
   return result;
