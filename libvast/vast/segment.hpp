@@ -60,8 +60,6 @@ public:
   caf::expected<std::vector<table_slice_ptr>> lookup(const vast::ids& xs) const;
 
 private:
-  segment() = default;
-
   explicit segment(chunk_ptr chk);
 
   chunk_ptr chunk_;
