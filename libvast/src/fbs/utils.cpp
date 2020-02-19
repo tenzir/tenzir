@@ -33,22 +33,15 @@ caf::expected<Encoding> create_encoding(caf::atom_value x) {
   return make_error(ec::unspecified, "unsupported table slice type", x);
 }
 
-caf::atom_value make_encoding(Encoding x) {
-  switch (x) {
-    case Encoding::CAF:
-      return caf::atom("default");
-    case Encoding::Arrow:
-      return caf::atom("arrow");
-    case Encoding::MessagePack:
-      return caf::atom("msgpack");
-  }
-}
-
 // TODO: this function will boil down to accessing the chunk inside the table
 // slice and then calling GetTableSlice(buf). But until we touch the table
 // slice internals, we use this helper.
-caf::expected<flatbuffers::Offset<TableSlice>>
-create_table_slice(flatbuffers::FlatBufferBuilder& builder, table_slice_ptr x) {
+caf::expected<flatbuffers::Offset<TableSliceBuffer>>
+create_table_slice_buffer(flatbuffers::FlatBufferBuilder& builder,
+                          table_slice_ptr x) {
+  // This local builder instance will vanish once we can access the underlying
+  // chunk of a table slice.
+  flatbuffers::FlatBufferBuilder local_builder;
   std::vector<char> layout_buffer;
   caf::binary_serializer sink1{nullptr, layout_buffer};
   if (auto error = sink1(x->layout()))
@@ -61,16 +54,36 @@ create_table_slice(flatbuffers::FlatBufferBuilder& builder, table_slice_ptr x) {
   if (!encoding)
     return encoding.error();
   auto layout_ptr = reinterpret_cast<const uint8_t*>(layout_buffer.data());
-  auto layout = builder.CreateVector(layout_ptr, layout_buffer.size());
+  auto layout = local_builder.CreateVector(layout_ptr, layout_buffer.size());
   auto data_ptr = reinterpret_cast<const uint8_t*>(data_buffer.data());
-  auto data = builder.CreateVector(data_ptr, data_buffer.size());
-  TableSliceBuilder table_slice_builder{builder};
+  auto data = local_builder.CreateVector(data_ptr, data_buffer.size());
+  TableSliceBuilder table_slice_builder{local_builder};
   table_slice_builder.add_offset(x->offset());
   table_slice_builder.add_rows(x->rows());
   table_slice_builder.add_layout(layout);
   table_slice_builder.add_encoding(*encoding);
   table_slice_builder.add_data(data);
-  return table_slice_builder.Finish();
+  auto flat_slice = table_slice_builder.Finish();
+  local_builder.Finish(flat_slice);
+  auto buffer = span<const uint8_t>{local_builder.GetBufferPointer(),
+                                    local_builder.GetSize()};
+  // This is the only code that will remain. All the stuff above will move into
+  // the respective table slice builders.
+  auto bytes = builder.CreateVector(buffer.data(), buffer.size());
+  TableSliceBufferBuilder table_slice_buffer_builder{builder};
+  table_slice_buffer_builder.add_data(bytes);
+  return table_slice_buffer_builder.Finish();
+}
+
+caf::atom_value make_encoding(Encoding x) {
+  switch (x) {
+    case Encoding::CAF:
+      return caf::atom("default");
+    case Encoding::Arrow:
+      return caf::atom("arrow");
+    case Encoding::MessagePack:
+      return caf::atom("msgpack");
+  }
 }
 
 // TODO: The dual to the note above applies here.
