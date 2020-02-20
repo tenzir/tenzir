@@ -246,7 +246,8 @@ add_library(vast::libvast ALIAS libvast)
 # flattbuffers
 # ----------------------------------------------------------------------------
 
-file(GLOB flatbuffers_schemas ${CMAKE_CURRENT_SOURCE_DIR}/vast/fbs/*.fbs)
+file(GLOB flatbuffers_schemas CONFIGURE_DEPENDS
+  ${CMAKE_CURRENT_SOURCE_DIR}/vast/fbs/*.fbs)
 set(flatbuffers_output_path ${CMAKE_CURRENT_BINARY_DIR}/vast/fbs)
 
 add_custom_target(flatbuffers)
