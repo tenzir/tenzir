@@ -486,7 +486,7 @@ if (VAST_ENABLE_ASSERTIONS)
   endif ()
 endif ()
 
-find_package(FlatBuffers)
+find_package(FlatBuffers 1.11.0 REQUIRED)
 if (NOT FLATBUFFERS_FOUND)
   message(FATAL_ERROR "Could not find flatbuffers")
 endif ()
