@@ -60,10 +60,8 @@ public:
     return arrow::Status::OK();
   }
 
-  arrow::Status Tell(int64_t* position) const override {
-    VAST_ASSERT(position != nullptr);
-    *position = detail::narrow_cast<int64_t>(sink_.write_pos());
-    return arrow::Status::OK();
+  arrow::Result<int64_t> Tell() const override {
+    return detail::narrow_cast<int64_t>(sink_.write_pos());
   }
 
   arrow::Status Write(const void* data, int64_t nbytes) override {
@@ -91,28 +89,21 @@ public:
     return arrow::Status::OK();
   }
 
-  arrow::Status Tell(int64_t* position) const override {
-    if (position != nullptr)
-      *position = position_;
-    return arrow::Status::OK();
+  arrow::Result<int64_t> Tell() const override {
+    return position_;
   }
 
-  arrow::Status Read(int64_t nbytes, int64_t* bytes_read, void* out) override {
+  arrow::Result<int64_t> Read(int64_t nbytes, void* out) override {
     if (auto err = source_.apply_raw(detail::narrow_cast<size_t>(nbytes), out))
       return arrow::Status::IOError("Past end of stream");
-    if (bytes_read)
-      *bytes_read = nbytes;
-    return arrow::Status::OK();
+    return nbytes;
   }
 
-  arrow::Status
-  Read(int64_t nbytes, std::shared_ptr<arrow::Buffer>* out) override {
-    VAST_ASSERT(out != nullptr);
-    if (auto code = arrow::AllocateBuffer(nbytes, out); !code.ok())
-      return code;
-    VAST_ASSERT(out != nullptr);
-    return Read(nbytes, nullptr,
-                reinterpret_cast<void*>((*out)->mutable_data()));
+  arrow::Result<std::shared_ptr<arrow::Buffer>> Read(int64_t nbytes) override {
+    std::shared_ptr<arrow::Buffer> out;
+    ARROW_RETURN_NOT_OK(arrow::AllocateBuffer(nbytes, &out));
+    ARROW_RETURN_NOT_OK(Read(nbytes, out->mutable_data()));
+    return out;
   }
 
 private:

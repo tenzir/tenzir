@@ -10,6 +10,9 @@ Every entry has a category for which we use the following visual abbreviations:
 
 ## [Unreleased]
 
+- 🔄 VAST now supports (and requires) Apache Arrow >= 0.16.
+  [#751](https://github.com/tenzir/vast/pull/751)
+
 - 🔄 The option `--historical` for export commands has been removed, as it was
   the default already. [#754](https://github.com/tenzir/vast/pull/754)
 
