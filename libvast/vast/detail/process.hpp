@@ -23,17 +23,6 @@ namespace vast::detail {
 ///             mmaped region in order to succeed.
 /// @returns The filesystem path to the library or executable mapped at address
 ///          addr, or error if the resolution fails.
-caf::expected<path> objectpath(const void* addr);
-
-/// Locates the path of a shared library or executable.
-/// @returns The filesystem path to the library or executable of the caller of
-///          this function, or error if the resolution fails.
-inline caf::expected<path> objectpath() {
-  struct dummy {
-    static void fn() {
-    }
-  };
-  return objectpath(reinterpret_cast<const void*>(&dummy::fn));
-}
+caf::expected<path> objectpath(const void* addr = nullptr);
 
 } // namespace vast::detail
