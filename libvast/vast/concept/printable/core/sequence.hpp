@@ -66,7 +66,7 @@ public:
       >
     >;
 
-  sequence_printer(Lhs lhs, Rhs rhs)
+  constexpr sequence_printer(Lhs lhs, Rhs rhs)
     : lhs_{std::move(lhs)}, rhs_{std::move(rhs)} {
   }
 

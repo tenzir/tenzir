@@ -15,11 +15,11 @@
 
 #include "vast/chunk.hpp"
 
+#include "vast/test/fixtures/filesystem.hpp"
 #include "vast/test/test.hpp"
 
 #include "vast/load.hpp"
 #include "vast/save.hpp"
-
 #include "vast/span.hpp"
 
 using namespace vast;
@@ -65,3 +65,26 @@ TEST(serialization) {
   REQUIRE_NOT_EQUAL(y, nullptr);
   CHECK(std::equal(x->begin(), x->end(), y->begin(), y->end()));
 }
+
+TEST(as_bytes) {
+  std::string_view str = "foobarbaz";
+  auto bytes = as_bytes(span{str.data(), str.size()});
+  auto x = chunk::make(bytes);
+  CHECK_EQUAL(bytes, as_bytes(x));
+}
+
+FIXTURE_SCOPE(chunk_tests, fixtures::filesystem)
+
+TEST(read / write) {
+  std::string_view str = "foobarbaz";
+  auto x = chunk::make(str);
+  auto filename = directory / "chunk";
+  auto err = write(filename, x);
+  CHECK_EQUAL(err, caf::none);
+  chunk_ptr y;
+  err = read(filename, y);
+  CHECK_EQUAL(err, caf::none);
+  CHECK_EQUAL(as_bytes(x), as_bytes(y));
+}
+
+FIXTURE_SCOPE_END()

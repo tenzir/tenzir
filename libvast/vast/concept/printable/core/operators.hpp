@@ -13,9 +13,9 @@
 
 #pragma once
 
-#include <type_traits>
-
 #include "vast/concept/printable/detail/as_printer.hpp"
+
+#include <type_traits>
 
 namespace vast {
 
@@ -49,77 +49,64 @@ class choice_printer;
 // -- unary ------------------------------------------------------------------
 
 template <class T>
-auto operator&(T&& x)
--> std::enable_if_t<
-     is_printer_v<std::decay_t<T>>,
-     and_printer<std::decay_t<T>>
-   > {
+auto operator&(T&& x) -> std::enable_if_t<is_printer_v<std::decay_t<T>>,
+                                          and_printer<std::decay_t<T>>> {
   return and_printer<std::decay_t<T>>{std::forward<T>(x)};
 }
 
 template <class T>
-auto operator!(T&& x)
--> std::enable_if_t<
-     is_printer_v<std::decay_t<T>>,
-     not_printer<std::decay_t<T>>
-   > {
+constexpr auto operator!(T&& x)
+  -> std::enable_if_t<is_printer_v<std::decay_t<T>>,
+                      not_printer<std::decay_t<T>>> {
   return not_printer<std::decay_t<T>>{std::forward<T>(x)};
 }
 
 template <class T>
-auto operator-(T&& x)
--> std::enable_if_t<
-     is_printer_v<std::decay_t<T>>,
-     optional_printer<std::decay_t<T>>
-   > {
+constexpr auto operator-(T&& x)
+  -> std::enable_if_t<is_printer_v<std::decay_t<T>>,
+                      optional_printer<std::decay_t<T>>> {
   return optional_printer<std::decay_t<T>>{std::forward<T>(x)};
 }
 
 template <class T>
-auto operator*(T&& x)
--> std::enable_if_t<
-     is_printer_v<std::decay_t<T>>,
-     kleene_printer<std::decay_t<T>>
-   > {
+constexpr auto operator*(T&& x)
+  -> std::enable_if_t<is_printer_v<std::decay_t<T>>,
+                      kleene_printer<std::decay_t<T>>> {
   return kleene_printer<std::decay_t<T>>{std::forward<T>(x)};
 }
 
 template <class T>
-auto operator+(T&& x)
--> std::enable_if_t<
-     is_printer_v<std::decay_t<T>>,
-     plus_printer<std::decay_t<T>>
-   > {
+constexpr auto operator+(T&& x)
+  -> std::enable_if_t<is_printer_v<std::decay_t<T>>,
+                      plus_printer<std::decay_t<T>>> {
   return plus_printer<std::decay_t<T>>{std::forward<T>(x)};
 }
 
 template <class T>
-auto operator~(T&& x)
--> std::enable_if_t<
-     is_printer_v<std::decay_t<T>>,
-     maybe_printer<std::decay_t<T>>
-   > {
+constexpr auto operator~(T&& x)
+  -> std::enable_if_t<is_printer_v<std::decay_t<T>>,
+                      maybe_printer<std::decay_t<T>>> {
   return maybe_printer<std::decay_t<T>>{std::forward<T>(x)};
 }
 
 // -- binary -----------------------------------------------------------------
 
 template <class LHS, class RHS>
-auto operator%(LHS&& lhs, RHS&& rhs)
+constexpr auto operator%(LHS&& lhs, RHS&& rhs)
   -> decltype(detail::as_printer<list_printer>(lhs, rhs)) {
   return {detail::as_printer(std::forward<LHS>(lhs)),
           detail::as_printer(std::forward<RHS>(rhs))};
 }
 
 template <class LHS, class RHS>
-auto operator<<(LHS&& lhs, RHS&& rhs)
+constexpr auto operator<<(LHS&& lhs, RHS&& rhs)
   -> decltype(detail::as_printer<sequence_printer>(lhs, rhs)) {
   return {detail::as_printer(std::forward<LHS>(lhs)),
           detail::as_printer(std::forward<RHS>(rhs))};
 }
 
 template <class LHS, class RHS>
-auto operator|(LHS&& lhs, RHS&& rhs)
+constexpr auto operator|(LHS&& lhs, RHS&& rhs)
   -> decltype(detail::as_printer<choice_printer>(lhs, rhs)) {
   return {detail::as_printer(std::forward<LHS>(lhs)),
           detail::as_printer(std::forward<RHS>(rhs))};

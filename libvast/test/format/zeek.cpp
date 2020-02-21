@@ -278,7 +278,7 @@ TEST(zeek reader - continous stream with partial slice) {
   // Write less than one full slice, leaving the pipe open.
   result
     = ::write(write_end, &conn_log_10_events[0], conn_log_10_events.size());
-  REQUIRE_EQUAL(result, conn_log_10_events.size());
+  REQUIRE_EQUAL(static_cast<size_t>(result), conn_log_10_events.size());
   // Expect that we will see the results before the test times out.
   t.join();
   CHECK_EQUAL(slices.size(), 1u);

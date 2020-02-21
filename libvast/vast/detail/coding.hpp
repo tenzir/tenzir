@@ -38,7 +38,8 @@ namespace vast::detail {
 template <class T>
 constexpr char byte_to_char(T b) {
   static_assert(std::is_integral_v<T> || sizeof(T) == 1);
-  return b < 10 ? '0' + b : 'a' + b - 10;
+  auto c = static_cast<char>(b);
+  return c < 10 ? '0' + c : 'a' + c - 10;
 }
 
 /// Converts a byte value into a hex value with a given alphabet.

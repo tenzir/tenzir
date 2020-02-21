@@ -465,6 +465,15 @@ caf::expected<void> mkdir(const path& p) {
   return {};
 }
 
+caf::expected<std::uintmax_t> file_size(const path& p) noexcept {
+  struct stat st;
+  if (::lstat(p.str().data(), &st) < 0)
+    return make_error(ec::filesystem_error, "file does not exist");
+  // TODO: before returning, we may want to check whether we're dealing with a
+  // regular file.
+  return st.st_size;
+}
+
 caf::expected<std::string> load_contents(const path& p) {
   std::string contents;
   caf::containerbuf<std::string> obuf{contents};
