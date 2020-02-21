@@ -1,0 +1,9 @@
+namespace vast.fbs;
+
+/// The global version of the persistent state. If any tables or contained data
+/// structures experience changes that are incompatible to a previous version,
+/// the version should get bumped.
+enum Version : short {
+  v0,
+}
+
