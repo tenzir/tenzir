@@ -10,18 +10,18 @@ type argus.record = record{
   // Standard fields that are always present.
   StartTime: time #timestamp,     // stime
   Flgs: string,                   // flgs
-  Proto: string #index=hash,      // proto
+  Proto: string #id,              // proto
   SrcAddr: string,                // saddr (MAC or IP)
   Sport: count,                   // sport (TODO: switch to port type)
-  Dir: string #index=hash,        // dir
+  Dir: string #id,                // dir
   DstAddr: string,                // daddr (MAC or IP)
   Dport: count,                   // dport (TODO: switch to port type)
   TotPkts: count,                 // pkts
   TotBytes: count,                // bytes
-  State: string #index=hash,      // state
+  State: string #id,              // state
   // Optional fields that are present when invoking ra(1) with -s +F where F is
   // the field name from the man page of ra(1).
-  SrcId: string #index=hash,      // srcid
+  SrcId: string #id,              // srcid
   Rank: count,                    // rank
   LastTime: time,                 // ltime
   Trans: count,                   // trans
@@ -42,17 +42,17 @@ type argus.record = record{
   dTos: count,                    // dtos
   sDSb: string,                   // sdsb
   dDSb: string,                   // ddsb
-  sCo: string #index=hash,        // sco
-  dCo: string #index=hash,        // dco
+  sCo: string #id,                // sco
+  dCo: string #id,                // dco
   sTtl: count #max=255,           // sttl
   dTtl: count #max=255,           // dttl
   sHops: count,                   // shops
   dHops: count,                   // dhops
-  sIpId: string #index=hash #hex, // sipid
-  dIpId: string #index=hash #hex, // dipid
-  sMpls: string #index=hash,      // smpls
-  dMpls: string #index=hash,      // dmpls
-  AutoId: string #index=hash,     // autoid
+  sIpId: string #id #hex,         // sipid
+  dIpId: string #id #hex,         // dipid
+  sMpls: string #id,              // smpls
+  dMpls: string #id,              // dmpls
+  AutoId: string #id,             // autoid
   sAS: count,                     // sas
   dAS: count,                     // das
   iAS: count,                     // ias
@@ -115,12 +115,12 @@ type argus.record = record{
   dstUdata: string,               // duser
   SrcWin: count,                  // swin
   DstWin: count,                  // dwin
-  sVlan: string #index=hash,      // svlan
-  dVlan: string #index=hash,      // dvlan
-  sVid: string #index=hash,       // svid
-  dVid: string #index=hash,       // dvid
-  sVpri: string #index=hash,      // svpri
-  dVpri: string #index=hash,      // dvpri
+  sVlan: string #id,              // svlan
+  dVlan: string #id,              // dvlan
+  sVid: string #id,               // svid
+  dVid: string #id,               // dvid
+  sVpri: string #id,              // svpri
+  dVpri: string #id,              // dvpri
   SRange: time,                   // srng
   ERange: time,                   // srng
   SrcTCPBase: count,              // stcpb
@@ -154,5 +154,5 @@ type argus.record = record{
   LDelay: duration #unit=s,       // ldelay
   sEnc: string,                   // senc
   dEnc: string,                   // denc
-  IcmpId: string #index=hash      // icmpid
+  IcmpId: string #id              // icmpid
 }
