@@ -42,7 +42,7 @@ caf::expected<segment> segment::make(chunk_ptr chunk) {
     return make_error(ec::format_error, "flatbuffer integrity check failed");
   // Perform version check.
   auto ptr = fbs::GetSegment(chunk->data());
-  if (ptr->version() != fbs::SegmentVersion::v1)
+  if (ptr->version() != fbs::Version::v0)
     return make_error(ec::version_error, "unsupported segment version",
                       ptr->version());
   return segment{std::move(chunk)};
