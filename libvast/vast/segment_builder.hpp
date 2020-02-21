@@ -14,6 +14,7 @@
 #pragma once
 
 #include "vast/aliases.hpp"
+#include "vast/fbs/segment.hpp"
 #include "vast/fbs/table_slice.hpp"
 #include "vast/segment.hpp"
 #include "vast/uuid.hpp"
@@ -69,6 +70,7 @@ private:
   vast::id min_table_slice_offset_;
   flatbuffers::FlatBufferBuilder builder_;
   std::vector<flatbuffers::Offset<fbs::TableSliceBuffer>> table_slices_;
+  std::vector<fbs::Interval> intervals_;
   // For queries to an unfinished segment.
   // TODO: work on flatbufferized slices directly.
   std::vector<table_slice_ptr> slices_;
