@@ -17,7 +17,6 @@
 #include "vast/detail/byte_swap.hpp"
 #include "vast/detail/narrow.hpp"
 #include "vast/error.hpp"
-#include "vast/fbs/segment.hpp"
 #include "vast/fbs/utils.hpp"
 #include "vast/ids.hpp"
 #include "vast/logger.hpp"
@@ -39,17 +38,25 @@ caf::error segment_builder::add(table_slice_ptr x) {
   if (!slice)
     return slice.error();
   table_slices_.push_back(*slice);
+  // This works only with monotonically increasing IDs.
+  if (!intervals_.empty() && intervals_.back().end() == x->offset())
+    intervals_.back()
+      = {intervals_.back().begin(), intervals_.back().end() + x->rows()};
+  else
+    intervals_.emplace_back(x->offset(), x->offset() + x->rows());
   slices_.push_back(x);
   return caf::none;
 }
 
 segment segment_builder::finish() {
+  auto ids_offset = builder_.CreateVectorOfStructs(intervals_);
   auto table_slices_offset = builder_.CreateVector(table_slices_);
   auto uuid_offset = fbs::create_bytes(builder_, id_);
   fbs::SegmentBuilder segment_builder{builder_};
-  segment_builder.add_slices(table_slices_offset);
+  segment_builder.add_version(fbs::Version::v0);
   segment_builder.add_uuid(uuid_offset);
-  segment_builder.add_version(fbs::SegmentVersion::v1);
+  segment_builder.add_ids(ids_offset);
+  segment_builder.add_slices(table_slices_offset);
   auto segment_offset = segment_builder.Finish();
   fbs::FinishSegmentBuffer(builder_, segment_offset);
   size_t offset;
@@ -107,6 +114,7 @@ void segment_builder::reset() {
   min_table_slice_offset_ = 0;
   builder_.Clear();
   table_slices_.clear();
+  intervals_.clear();
   slices_.clear();
 }
 
