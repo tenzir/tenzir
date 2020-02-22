@@ -416,9 +416,8 @@ bool init_config(caf::actor_system_config& cfg, const command::invocation& from,
   auto default_fn = caf::defaults::logger::file_name;
   if (caf::get_or(cfg, "logger.file-name", default_fn) == default_fn) {
     // Get proper directory path.
-    path base_dir = get_or(cfg, "system.directory",
-                           defaults::system::directory);
-    auto log_dir = base_dir / "log";
+    path log_dir
+      = get_or(cfg, "system.log-directory", defaults::system::log_directory);
     log_dir /= caf::deep_to_string(caf::make_timestamp()) + '#'
                + std::to_string(detail::process_id());
     // Create the log directory first, which we need to create the symlink

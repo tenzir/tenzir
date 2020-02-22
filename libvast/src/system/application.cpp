@@ -72,7 +72,8 @@ auto make_root_command(std::string_view path) {
       .add<std::vector<std::string>>(
         "schema-paths", "list of paths to look for schema files "
                         "([" VAST_INSTALL_PREFIX "/share/vast/schema])")
-      .add<std::string>("directory,d", "directory for persistent state")
+      .add<std::string>("db-directory,d", "directory for persistent state")
+      .add<std::string>("log-directory,l", "directory for log files")
       .add<std::string>("endpoint,e", "node endpoint")
       .add<std::string>("node-id,i", "the unique ID of this node")
       .add<bool>("node,N", "spawn a node instead of connecting to one")

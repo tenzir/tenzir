@@ -33,8 +33,9 @@ spawn_node(caf::scoped_actor& self, const caf::settings& opts) {
   // Fetch values from config.
   auto accounting = !get_or(opts, "system.disable-accounting", false);
   auto id = get_or(opts, "system.node-id", defaults::system::node_id);
-  auto dir = get_or(opts, "system.directory", defaults::system::directory);
-  auto abs_dir = path{dir}.complete();
+  auto db_dir
+    = get_or(opts, "system.db-directory", defaults::system::db_directory);
+  auto abs_dir = path{db_dir}.complete();
   VAST_DEBUG_ANON(__func__, "spawns local node:", id);
   // Pointer to the root command to system::node.
   scope_linked_actor node{self->spawn(system::node, id, abs_dir)};
