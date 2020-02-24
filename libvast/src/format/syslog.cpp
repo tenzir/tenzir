@@ -43,7 +43,7 @@ type make_syslog_msg_type() {
     //   map_type{string_type{}.name("key"), string_type{}.name("value")}.name("params")},
     // },
     {"message", string_type{}},
-  }}.name("syslog::msg");
+  }}.name("syslog");
   // clang-format on
 }
 

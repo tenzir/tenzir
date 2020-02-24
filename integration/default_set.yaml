@@ -26,10 +26,8 @@ fixtures:
                     config_file=f'{self.config_file}')
       cmd += ['-e', f':{VAST_PORT}']
 
-
     exit: | # python
       node.stop()
-
 
 tests:
   JSON schema inference:
@@ -282,4 +280,9 @@ tests:
       - command: -N import -n 1 test
       - command: -N status
         transformation: jq '.node."type-registry".statistics'
-
+  Import syslog:
+    tags: [syslog]
+    steps:
+      - command: -N import syslog
+        input: data/syslog/syslog.log.gz
+      - command: -N export ascii '#type == "syslog"'
