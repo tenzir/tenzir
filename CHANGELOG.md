@@ -10,6 +10,9 @@ Every entry has a category for which we use the following visual abbreviations:
 
 ## [Unreleased]
 
+- 🔄 Hash indices have been disabled again due to a performance regression.
+  [#765](https://github.com/tenzir/vast/pull/765)
+
 - 🔄 The option `--directory` has been replaced by `--db-directory` and
   `log-directory`, which set directories for persistent state and log files
   respectively. The default log file path has changed from `vast.db/log` to
