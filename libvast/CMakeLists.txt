@@ -284,7 +284,7 @@ set(tests
     test/format/csv.cpp
     test/format/json.cpp
     test/format/mrt.cpp
-    # TODO: add test/format/syslog.cpp here.
+    test/format/syslog.cpp
     test/format/writer.cpp
     test/format/zeek.cpp
     test/hash.cpp
