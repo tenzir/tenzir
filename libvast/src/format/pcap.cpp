@@ -46,8 +46,7 @@ inline type make_packet_type() {
                      {"dst", address_type{}},
                      {"sport", port_type{}},
                      {"dport", port_type{}},
-                     {"community_id",
-                      string_type{}.attributes({{"index", "hash"}})},
+                     {"community_id", string_type{}},
                      {"payload", string_type{}.attributes({{"skip"}})}}
     .name("pcap.packet");
 }
