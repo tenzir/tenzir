@@ -21,8 +21,8 @@
 #include "vast/concept/parseable/vast/time.hpp"
 #include "vast/defaults.hpp"
 #include "vast/detail/line_range.hpp"
+#include "vast/format/multi_layout_reader.hpp"
 #include "vast/format/reader.hpp"
-#include "vast/format/single_layout_reader.hpp"
 #include "vast/fwd.hpp"
 #include "vast/logger.hpp"
 #include "vast/schema.hpp"
@@ -221,7 +221,6 @@ using message_content = std::string;
 // The message_content_parser parses the message component of a Syslog message
 struct message_content_parser : parser<message_content_parser> {
   using attribute = message_content;
-
   template <class Iterator, class Attribute>
   bool parse(Iterator& f, const Iterator& l, Attribute& x) const {
     using namespace parsers;
@@ -258,9 +257,9 @@ struct message_parser : parser<message_parser> {
 };
 
 // A reader for Syslog messages.
-class reader : public single_layout_reader {
+class reader : public multi_layout_reader {
 public:
-  using super = single_layout_reader;
+  using super = multi_layout_reader;
 
   /// Constructs a Syslog reader.
   /// @param table_slice_type The ID for table slice type to build.
@@ -291,6 +290,7 @@ protected:
 private:
   std::unique_ptr<std::istream> input_;
   std::unique_ptr<detail::line_range> lines_;
-  type syslog_msg_type_;
+  type syslog_rfc5424_type_;
+  type syslog_unkown_type_;
 };
 }; // namespace vast::format::syslog

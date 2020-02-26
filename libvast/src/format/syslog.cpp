@@ -27,7 +27,7 @@ namespace {
 
 // At the moment map_type cannot be indexed, therefore it is not part of the
 // schema for now
-type make_syslog_msg_type() {
+type make_rfc5424_type() {
   // clang-format off
   return record_type{{
     {"facility", count_type{}},
@@ -43,7 +43,15 @@ type make_syslog_msg_type() {
     //   map_type{string_type{}.name("key"), string_type{}.name("value")}.name("params")},
     // },
     {"message", string_type{}},
-  }}.name("syslog");
+  }}.name("syslog.rfc5424");
+  // clang-format on
+}
+
+type make_unknown_type() {
+  // clang-format off
+  return record_type{{
+    {"syslog_message", string_type{}}
+  }}.name("syslog.unknown");
   // clang-format on
 }
 
@@ -52,18 +60,26 @@ type make_syslog_msg_type() {
 reader::reader(caf::atom_value table_slice_type,
                [[maybe_unused]] const caf::settings& options,
                std::unique_ptr<std::istream> in)
-  : super(table_slice_type), syslog_msg_type_{make_syslog_msg_type()} {
+  : super(table_slice_type),
+    syslog_rfc5424_type_{make_rfc5424_type()},
+    syslog_unkown_type_{make_unknown_type()} {
   if (in != nullptr)
     reset(std::move(in));
 }
 
 caf::error reader::schema(vast::schema x) {
-  return replace_if_congruent({&syslog_msg_type_}, x);
+  // clang-format off
+  return replace_if_congruent({
+    &syslog_rfc5424_type_,
+    &syslog_unkown_type_
+  }, x);
+  // clang-format on
 }
 
 vast::schema reader::schema() const {
   vast::schema sch;
-  sch.add(syslog_msg_type_);
+  sch.add(syslog_rfc5424_type_);
+  sch.add(syslog_unkown_type_);
   return sch;
 }
 
@@ -79,14 +95,6 @@ const char* reader::name() const {
 
 caf::error
 reader::read_impl(size_t max_events, size_t max_slice_size, consumer& f) {
-  if (builder_ == nullptr) {
-    if (auto r = caf::get_if<record_type>(&syslog_msg_type_)) {
-      reset_builder(*r);
-    } else {
-      return finish(f, make_error(ec::format_error, "failed to get record type "
-                                                    "for builder"));
-    }
-  }
   size_t produced = 0;
   while (produced < max_events) {
     if (lines_->done())
@@ -96,24 +104,48 @@ reader::read_impl(size_t max_events, size_t max_slice_size, consumer& f) {
     message sys_msg;
     auto parser = message_parser{};
     if (!parser(line, sys_msg)) {
-      return finish(f, make_error(ec::parse_error, "failed to parse syslog "
-                                                   "message"));
-    }
-    // until map_types are supported, the structured data of a message won't be
-    // stored
-    if (!builder_->add(sys_msg.header.facility, sys_msg.header.severity,
-                       sys_msg.header.version, sys_msg.header.ts,
-                       sys_msg.header.hostname, sys_msg.header.app_name,
-                       sys_msg.header.process_id, sys_msg.header.msg_id,
-                       /*sys_msg.data,*/ sys_msg.msg)) {
-      return finish(f, make_error(ec::format_error,
-                                  "failed to produce table slice row for "
-                                    + builder_->layout().name()));
-    }
-    if (builder_->rows() >= max_slice_size) {
-      if (auto err = finish(f)) {
-        return err;
+      auto unknown_builder = builder(syslog_unkown_type_);
+      if (!unknown_builder) {
+        return finish(f, make_error(ec::format_error,
+                                    "failed to get create table "
+                                    "slice builder for type "
+                                      + syslog_unkown_type_.name()));
+      }
+      if (!unknown_builder->add(line)) {
+        return finish(f, make_error(ec::format_error,
+                                    "failed to produce table slice row for "
+                                      + unknown_builder->layout().name()));
       };
+      if (unknown_builder->rows() >= max_slice_size) {
+        if (auto err = finish(f)) {
+          return err;
+        };
+      }
+    } else {
+      auto rfc5424_builder = builder(syslog_rfc5424_type_);
+      if (!rfc5424_builder) {
+        return finish(f, make_error(ec::format_error,
+                                    "failed to get create table "
+                                    "slice builder for type "
+                                      + syslog_rfc5424_type_.name()));
+      }
+      // until map_types are supported, the structured data of a message won't
+      // be stored
+      if (!rfc5424_builder->add(
+            sys_msg.header.facility, sys_msg.header.severity,
+            sys_msg.header.version, sys_msg.header.ts, sys_msg.header.hostname,
+            sys_msg.header.app_name, sys_msg.header.process_id,
+            sys_msg.header.msg_id,
+            /*sys_msg.data,*/ sys_msg.msg)) {
+        return finish(f, make_error(ec::format_error,
+                                    "failed to produce table slice row for "
+                                      + rfc5424_builder->layout().name()));
+      }
+      if (rfc5424_builder->rows() >= max_slice_size) {
+        if (auto err = finish(f)) {
+          return err;
+        };
+      }
     }
     ++produced;
     lines_->next();

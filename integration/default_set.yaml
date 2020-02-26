@@ -281,8 +281,8 @@ tests:
       - command: -N status
         transformation: jq '.node."type-registry".statistics'
   Import syslog:
-    tags: [syslog]
+    tags: [syslog, import]
     steps:
       - command: -N import syslog
-        input: data/syslog/syslog.log.gz
-      - command: -N export ascii '#type == "syslog"'
+        input: data/syslog/syslog.log
+      - command: -N export ascii '#type == /syslog.*/'
