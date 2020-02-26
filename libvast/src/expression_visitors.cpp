@@ -11,7 +11,7 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#include <algorithm>
+#include "vast/expression_visitors.hpp"
 
 #include "vast/concept/parseable/to.hpp"
 #include "vast/concept/parseable/vast/data.hpp"
@@ -24,13 +24,15 @@
 #include "vast/detail/assert.hpp"
 #include "vast/die.hpp"
 #include "vast/event.hpp"
-#include "vast/expression_visitors.hpp"
 #include "vast/ids.hpp"
 #include "vast/logger.hpp"
 #include "vast/system/atoms.hpp"
 #include "vast/table_slice.hpp"
 #include "vast/type.hpp"
 #include "vast/view.hpp"
+
+#include <algorithm>
+#include <regex>
 
 namespace vast {
 
@@ -243,6 +245,16 @@ caf::expected<void> validator::operator()(const negation& n) {
 
 caf::expected<void> validator::operator()(const predicate& p) {
   op_ = p.op;
+  // If rhs is a pattern, validate early that it is a valid regular expression.
+  if (auto dat = caf::get_if<data>(&p.rhs))
+    if (auto pat = caf::get_if<pattern>(dat))
+      try {
+        [[maybe_unused]] auto r = std::regex{pat->string()};
+      } catch (const std::regex_error& err) {
+        return make_error(ec::syntax_error,
+                          "failed to create regular expression from pattern",
+                          pat->string(), err.what());
+      }
   return caf::visit(*this, p.lhs, p.rhs);
 }
 
