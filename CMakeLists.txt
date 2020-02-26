@@ -791,7 +791,9 @@ if (VAST_RELOCATABLE_INSTALL
     AND CAF_LIBRARY_CORE)
   # Copy CAF libraries to installation directory
   get_filename_component(CAF_LIBDIR ${CAF_LIBRARY_CORE} PATH)
-  install(DIRECTORY "${CAF_LIBDIR}/" DESTINATION "${CMAKE_INSTALL_LIBDIR}/")
+  file(GLOB CAF_INSTALLED_LIBRARIES "${CAF_LIBDIR}/libcaf*.so")
+  install(FILES ${CAF_INSTALLED_LIBRARIES}
+          DESTINATION "${CMAKE_INSTALL_LIBDIR}/")
 endif ()
 
 export(
