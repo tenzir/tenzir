@@ -10,6 +10,14 @@ Every entry has a category for which we use the following visual abbreviations:
 
 ## [Unreleased]
 
+- 🐞 Continuously importing events from a Zeek process with a low rate of
+  emitted events resulted in a long delay until the data would be included
+  in the result set of queries. This is because the import process would
+  buffer up to 10,000 events before sending them to the server as a batch.
+  The algorithm has been tuned to flush its buffers if no data is available
+  for more than 500 milliseconds.
+  [#750](https://github.com/tenzir/vast/pull/750)
+
 - 🔄 Hash indices have been disabled again due to a performance regression.
   [#765](https://github.com/tenzir/vast/pull/765)
 
