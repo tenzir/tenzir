@@ -10,6 +10,8 @@ Every entry has a category for which we use the following visual abbreviations:
 
 ## [Unreleased]
 
+## [2020.02.27]
+
 - 🐞 Continuously importing events from a Zeek process with a low rate of
   emitted events resulted in a long delay until the data would be included
   in the result set of queries. This is because the import process would
@@ -131,7 +133,7 @@ Every entry has a category for which we use the following visual abbreviations:
   been made for consistency with other tools.
   [#641](https://github.com/tenzir/vast/pull/641)
 
-## [0.2] - 2019-10-30
+## [0.2] - 2019.10.30
 
 - 🎁 The default schema for Suricata has been updated to support the new
   `suricata.smtp` event type in Suricata 5.
@@ -338,9 +340,11 @@ Every entry has a category for which we use the following visual abbreviations:
   for the operations `!in` and `!~`.
 
 
-## [0.1] - 2019-02-28
+## [0.1] - 2019.02.28
 
 This is the first official release.
 
-[0.1]: https://github.com/vast-io/vast/releases/tag/0.1
-
+[0.1]: https://github.com/tenzir/vast/releases/tag/0.1
+[0.2]: https://github.com/tenzir/vast/releases/tag/0.2
+[2020.01.31]: https://github.com/tenzir/vast/releases/tag/2020.01.31
+[2020.02.27]: https://github.com/tenzir/vast/releases/tag/2020.02.27
