@@ -9,7 +9,7 @@ This document describes the steps for creating a new VAST release.
 
 2. Create a _gpg-signed_ and _annotated_ tag locally, and push it:
   ```sh
-  git tag -s "$(date '+%Y-%m-%d')" -m "$(date '+%Y-%m-%d')"
+  git tag -s "$(date '+%Y.%m.%d')" -m "$(date '+%Y.%m.%d')"
   git push --follow-tags
   ```
 
