@@ -22,7 +22,7 @@ class skip_parser : public parser<skip_parser> {
 public:
   using attribute = unused_type;
 
-  explicit skip_parser(const size_t& n) : n_{n} {
+  explicit skip_parser(size_t n) : n_{n} {
   }
 
   template <class Iterator>
@@ -34,12 +34,12 @@ public:
   }
 
 private:
-  const size_t& n_;
+  size_t n_;
 };
 
 namespace parsers {
 
-inline auto skip(const size_t& n) {
+inline auto skip(size_t n) {
   return skip_parser{n};
 }
 

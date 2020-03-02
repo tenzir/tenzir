@@ -25,7 +25,7 @@ namespace detail {
 
 template <class Parser, class Iterator, class Attribute, class T, class U>
 bool parse_repeat(Parser& p, Iterator& f, const Iterator& l, Attribute& a,
-                  const T& min, const U& max) {
+                  T min, U max) {
   if (max == 0)
     return true; // If we have nothing todo, we're succeeding.
   auto save = f;
@@ -74,10 +74,8 @@ public:
   using container = detail::container<typename Parser::attribute>;
   using attribute = typename container::attribute;
 
-  dynamic_repeat_parser(Parser p, const T& min, const T& max)
-    : parser_{std::move(p)},
-      min_{min},
-      max_{max} {
+  dynamic_repeat_parser(Parser p, T min, U max)
+    : parser_{std::move(p)}, min_{min}, max_{max} {
     VAST_ASSERT(min <= max);
   }
 
@@ -88,8 +86,8 @@ public:
 
 private:
   Parser parser_;
-  const T& min_;
-  const U& max_;
+  T min_;
+  U max_;
 };
 
 template <int Min, int Max = Min, class Parser>
@@ -98,12 +96,12 @@ auto repeat(const Parser& p) {
 }
 
 template <class Parser, class T>
-auto repeat(const Parser& p, const T& n) {
+auto repeat(const Parser& p, T n) {
   return dynamic_repeat_parser<Parser, T>{p, n, n};
 }
 
 template <class Parser, class T, class U>
-auto repeat(const Parser& p, const T& min, const U& max) {
+auto repeat(const Parser& p, T min, U max) {
   return dynamic_repeat_parser<Parser, T, U>{p, min, max};
 }
 
@@ -115,12 +113,12 @@ auto rep(const Parser& p) {
 }
 
 template <class Parser, class T>
-auto rep(const Parser& p, const T& n) {
+auto rep(const Parser& p, T n) {
   return repeat(p, n);
 }
 
 template <class Parser, class T, class U>
-auto rep(const Parser& p, const T& min, const U& max) {
+auto rep(const Parser& p, T min, U max) {
   return repeat(p, min, max);
 }
 
