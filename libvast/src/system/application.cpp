@@ -360,8 +360,6 @@ auto make_command_factory() {
                     defaults::import::suricata>},
     {"import syslog",
      reader_command<format::syslog::reader, defaults::import::syslog>},
-    // TODO: hook syslog reader into CLI here by registering the command
-    //       callback. The defaults go into livvast/vast/defaults.hpp.
     {"import test",
      generator_command<format::test::reader, defaults::import::test>},
     {"import zeek",

@@ -10,6 +10,10 @@ Every entry has a category for which we use the following visual abbreviations:
 
 ## [Unreleased]
 
+- 🎁 The new `vast import syslog` command allows importing Syslog messages
+  as defined in [RFC5424](https://tools.ietf.org/html/rfc5424).
+  [#770](https://github.com/knapperzbusch/vast/pull/770)
+
 - 🎁 The hash index has been re-enabled after it was outfitted with a new
   [high-performance hash map](https://github.com/Tessil/robin-map/) implementation
   that increased performance to the point where it is on par with the regular

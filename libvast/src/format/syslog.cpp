@@ -25,8 +25,6 @@ namespace syslog {
 
 namespace {
 
-// At the moment map_type cannot be indexed, therefore it is not part of the
-// schema for now
 type make_rfc5424_type() {
   // clang-format off
   return record_type{{
@@ -37,7 +35,9 @@ type make_rfc5424_type() {
     {"hostname", string_type{}},
     {"app_name", string_type{}},
     {"process_id", string_type{}},
-    {"message_id", string_type{}},  
+    {"message_id", string_type{}},
+    // TODO: The index is currently incapable of handling map_type. Hence, the
+    // structured_data is disabled.
     // {"structered_data", map_type{
     //   string_type{}.name("id"),
     //   map_type{string_type{}.name("key"), string_type{}.name("value")}.name("params")},
@@ -99,29 +99,10 @@ reader::read_impl(size_t max_events, size_t max_slice_size, consumer& f) {
   while (produced < max_events) {
     if (lines_->done())
       return finish(f, make_error(ec::end_of_input, "input exhausted"));
-    // Parse curent line.
     auto& line = lines_->get();
     message sys_msg;
     auto parser = message_parser{};
-    if (!parser(line, sys_msg)) {
-      auto unknown_builder = builder(syslog_unkown_type_);
-      if (!unknown_builder) {
-        return finish(f, make_error(ec::format_error,
-                                    "failed to get create table "
-                                    "slice builder for type "
-                                      + syslog_unkown_type_.name()));
-      }
-      if (!unknown_builder->add(line)) {
-        return finish(f, make_error(ec::format_error,
-                                    "failed to produce table slice row for "
-                                      + unknown_builder->layout().name()));
-      };
-      if (unknown_builder->rows() >= max_slice_size) {
-        if (auto err = finish(f)) {
-          return err;
-        };
-      }
-    } else {
+    if (parser(line, sys_msg)) {
       auto rfc5424_builder = builder(syslog_rfc5424_type_);
       if (!rfc5424_builder) {
         return finish(f, make_error(ec::format_error,
@@ -129,23 +110,33 @@ reader::read_impl(size_t max_events, size_t max_slice_size, consumer& f) {
                                     "slice builder for type "
                                       + syslog_rfc5424_type_.name()));
       }
-      // until map_types are supported, the structured data of a message won't
-      // be stored
-      if (!rfc5424_builder->add(
-            sys_msg.header.facility, sys_msg.header.severity,
-            sys_msg.header.version, sys_msg.header.ts, sys_msg.header.hostname,
-            sys_msg.header.app_name, sys_msg.header.process_id,
-            sys_msg.header.msg_id,
-            /*sys_msg.data,*/ sys_msg.msg)) {
+      // TODO: The index is currently incapable of handling map_type. Hence, the
+      // structured_data is disabled.
+      if (!rfc5424_builder->add(sys_msg.hdr.facility, sys_msg.hdr.severity,
+                                sys_msg.hdr.version, sys_msg.hdr.ts,
+                                sys_msg.hdr.hostname, sys_msg.hdr.app_name,
+                                sys_msg.hdr.process_id, sys_msg.hdr.msg_id,
+                                /*sys_msg.data,*/ sys_msg.msg))
         return finish(f, make_error(ec::format_error,
                                     "failed to produce table slice row for "
                                       + rfc5424_builder->layout().name()));
-      }
-      if (rfc5424_builder->rows() >= max_slice_size) {
-        if (auto err = finish(f)) {
+      if (rfc5424_builder->rows() >= max_slice_size)
+        if (auto err = finish(f))
           return err;
-        };
-      }
+    } else {
+      auto unknown_builder = builder(syslog_unkown_type_);
+      if (!unknown_builder)
+        return finish(f, make_error(ec::format_error,
+                                    "failed to get create table "
+                                    "slice builder for type "
+                                      + syslog_unkown_type_.name()));
+      if (!unknown_builder->add(line))
+        return finish(f, make_error(ec::format_error,
+                                    "failed to produce table slice row for "
+                                      + unknown_builder->layout().name()));
+      if (unknown_builder->rows() >= max_slice_size)
+        if (auto err = finish(f))
+          return err;
     }
     ++produced;
     lines_->next();

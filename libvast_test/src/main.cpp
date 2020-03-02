@@ -56,8 +56,10 @@ const char* updates20150505
 } // namespace mrt
 
 namespace syslog {
+
 const char* syslog_msgs
   = VAST_TEST_PATH "artifacts/logs/syslog/syslog-test.txt";
+
 } // namespace syslog
 } // namespace logs
 

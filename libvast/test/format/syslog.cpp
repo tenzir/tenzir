@@ -67,7 +67,7 @@ TEST(syslog header parser) {
 
 TEST(syslog structured data element parser) {
   format::syslog::structured_data_element attr;
-  auto p = format::syslog::structured_data__element_parser{};
+  auto p = format::syslog::structured_data_element_parser{};
   CHECK(p("[exampleSDID@32473 iut=\"3\" eventSource=\"App\\]lication\" "
           "eventID=\"1011\"]",
           attr));
