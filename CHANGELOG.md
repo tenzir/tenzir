@@ -10,6 +10,10 @@ Every entry has a category for which we use the following visual abbreviations:
 
 ## [Unreleased]
 
+- 🎁 The option `--disable-community-id` has been added to the `vast import
+  pcap` command for disabling the automatic computation of Community IDs.
+  [#777](https://github.com/tenzir/pull/777)
+
 ## [2020.02.27]
 
 - 🐞 Continuously importing events from a Zeek process with a low rate of
