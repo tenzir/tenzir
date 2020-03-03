@@ -57,29 +57,29 @@ jobs:
         git diff --exit-code
 
   build:
-    name: ${{ matrix.os.tag }} ${{ matrix.configure.tag }}
+    name: ${{ matrix.os.tag }} ${{ matrix.compiler.tag }} ${{ matrix.configure.tag }}
     needs: style
     strategy:
       matrix:
         os:
-        - tag: macOS
-          name: macos-latest
-          cc: clang
-          cxx: clang++
-          extra-flags:
         - tag: Ubuntu
           name: ubuntu-latest
-          cc: gcc-8
-          cxx: g++-8
-          extra-flags: --without-arrow
+          extra-flags:
+        compiler:
+        - tag: Clang
+          cc: clang-9
+          cxx: clang++-9
+        - tag: GCC
+          cc: gcc-9
+          cxx: g++-9
         configure:
         - tag: Release
           flags: --release
           ci-flags: --ci-build
     runs-on: ${{ matrix.os.name }}
     env:
-      CC: ${{ matrix.os.cc }}
-      CXX: ${{ matrix.os.cxx }}
+      CC: ${{ matrix.compiler.cc }}
+      CXX: ${{ matrix.compiler.cxx }}
       BUILD_DIR: build
     steps:
       - uses: actions/checkout@v2
@@ -107,29 +107,18 @@ jobs:
       - name: Install Ubuntu Dependencies
         if: matrix.os.tag == 'Ubuntu'
         run: |
-          sudo apt-get -qq update && sudo apt-get -qqy install \
-          gcc-8 g++-8 ninja-build libbenchmark-dev libpcap-dev libssl-dev \
-          libatomic1
-          pip install --upgrade pip
-          pip install --upgrade cmake
-          which cmake
-          cmake --version
-
-      - name: Install macOS Dependencies
-        if: matrix.os.tag == 'macOS'
-        env:
-          HOMEBREW_GITHUB_API_TOKEN: ${{ github.token }}
-          HOMEBREW_NO_ANALYTICS: 1
-          HOMEBREW_NO_INSTALL_CLEANUP: 1
-          HOMEBREW_NO_AUTO_UPDATE: 1
-        run: |
-          brew --version
-          brew install openssl cmake git ninja python libpcap jq tcpdump rsync pandoc apache-arrow pkg-config
+          sudo apt-get -qq update
+          sudo apt-get -qqy install ninja-build libpcap-dev libssl-dev libatomic1 lsb-release
+          # Install Apache Arrow (c.f. https://arrow.apache.org/install/)
+          wget https://apache.bintray.com/arrow/$(lsb_release --id --short | tr 'A-Z' 'a-z')/apache-arrow-archive-keyring-latest-$(lsb_release --codename --short).deb
+          sudo apt-get -qqy install ./apache-arrow-archive-keyring-latest-$(lsb_release --codename --short).deb
+          sudo apt-get -qq update
+          sudo apt-get -qqy install libarrow-dev
 
       - name: Configure Environment
         id: configure_env
         run: |
-          PACKAGE_NAME="$(echo "vast-$(git describe)-$(uname -s)-${{ matrix.configure.tag }}" | awk '{ print tolower($0) }')"
+          PACKAGE_NAME="$(echo "vast-$(git describe)-$(uname -s)-${{ matrix.configure.tag }}-${{ matrix.compiler.tag }}" | awk '{ print tolower($0) }')"
           BUILD_DIR="build"
           ## the upload artifact action cannot resolve environment variables
           echo "::set-output name=package_name::$PACKAGE_NAME"
@@ -198,7 +187,7 @@ jobs:
           gsutil -m cp "$BUILD_DIR/$PACKAGE_NAME.tar.gz" "gs://${{ secrets.GCS_BUCKET }}"
 
       - name: Publish Docker Image
-        if: ( github.ref == 'refs/heads/master' || startsWith(github.ref, 'refs/tags') ) && matrix.os.tag == 'ubuntu' && matrix.configure.tag == 'Release'
+        if: ( github.ref == 'refs/heads/master' || startsWith(github.ref, 'refs/tags') ) && matrix.os.tag == 'Ubuntu' && matrix.compiler.tag == 'GCC' && matrix.configure.tag == 'Release'
         uses: elgohr/Publish-Docker-Github-Action@2.12
         with:
           name: tenzir/vast
