@@ -87,7 +87,6 @@ private:
   void shrink_to_max_size();
 
   pcap_t* pcap_ = nullptr;
-  type packet_type_;
   std::unordered_map<flow, flow_state> flows_;
   std::string input_;
   caf::optional<std::string> interface_;
@@ -100,6 +99,8 @@ private:
   time last_timestamp_ = time::min();
   int64_t pseudo_realtime_;
   size_t snaplen_;
+  bool community_id_;
+  type packet_type_;
 };
 
 /// A PCAP writer.

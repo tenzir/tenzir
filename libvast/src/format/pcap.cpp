@@ -40,24 +40,27 @@ namespace format {
 namespace pcap {
 namespace {
 
-inline type make_packet_type() {
+template <class... RecordFields>
+inline type make_packet_type(RecordFields&&... record_fields) {
   return record_type{{"time", time_type{}.attributes({{"timestamp"}})},
                      {"src", address_type{}},
                      {"dst", address_type{}},
                      {"sport", port_type{}},
                      {"dport", port_type{}},
-                     {"community_id", string_type{}},
+                     std::forward<RecordFields>(record_fields)...,
                      {"payload", string_type{}.attributes({{"skip"}})}}
     .name("pcap.packet");
 }
 
-auto const pcap_packet_type = make_packet_type();
+inline const auto pcap_packet_type = make_packet_type();
+inline const auto pcap_packet_type_community_id
+  = make_packet_type(record_field{"community_id", string_type{}});
 
 } // namespace <anonymous>
 
 reader::reader(caf::atom_value id, const caf::settings& options,
                std::unique_ptr<std::istream>)
-  : super(id), packet_type_{pcap_packet_type} {
+  : super(id) {
   using defaults_t = vast::defaults::import::pcap;
   using caf::get_if;
   std::string category = defaults_t::category;
@@ -73,6 +76,9 @@ reader::reader(caf::atom_value id, const caf::settings& options,
   pseudo_realtime_ = get_or(options, category + ".pseudo-realtime-factor",
                             defaults_t::pseudo_realtime_factor);
   snaplen_ = get_or(options, category + ".snaplen", defaults_t::snaplen);
+  community_id_ = !get_or(options, category + ".disable-community-id", false);
+  packet_type_
+    = community_id_ ? pcap_packet_type_community_id : pcap_packet_type;
 }
 
 void reader::reset(std::unique_ptr<std::istream>) {
@@ -332,7 +338,8 @@ caf::error reader::read_impl(size_t max_events, size_t max_slice_size,
     if (!(builder_->add(ts) && builder_->add(conn.src_addr)
           && builder_->add(conn.dst_addr) && builder_->add(conn.src_port)
           && builder_->add(conn.dst_port)
-          && builder_->add(std::string_view{cid}) && builder_->add(packet))) {
+          && (!community_id_ || builder_->add(std::string_view{cid}))
+          && builder_->add(packet))) {
       return make_error(ec::parse_error, "unable to fill row");
     }
     if (pseudo_realtime_ > 0) {
@@ -434,7 +441,8 @@ caf::error writer::write(const table_slice& slice) {
     if (!dumper_)
       return make_error(ec::format_error, "failed to open pcap dumper");
   }
-  if (!congruent(slice.layout(), pcap_packet_type))
+  if (!congruent(slice.layout(), pcap_packet_type)
+      && !congruent(slice.layout(), pcap_packet_type_community_id))
     return make_error(ec::format_error, "invalid pcap packet type");
   // TODO: consider iterating in natural order for the slice.
   for (size_t row = 0; row < slice.rows(); ++row) {
