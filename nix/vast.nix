@@ -31,7 +31,8 @@ stdenv.mkDerivation rec {
   '';
 
   nativeBuildInputs = [ cmake pkgconfig pandoc ];
-  buildInputs = [ arrow-cpp caf libpcap ];
+  buildInputs = [ libpcap ];
+  propagatedBuildInputs = [ arrow-cpp caf ];
 
   cmakeFlags = [
     "-DCAF_ROOT_DIR=${caf}"
