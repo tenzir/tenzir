@@ -1,23 +1,36 @@
-{ stdenv, lib, nix-gitignore, nix-gitDescribe
-, cmake, pkgconfig, git, pandoc
-, caf, libpcap, arrow-cpp
-, python3Packages, jq, tcpdump
+{ stdenv
+, lib
+, nix-gitignore
+, nix-gitDescribe
+, cmake
+, pkgconfig
+, git
+, pandoc
+, caf
+, libpcap
+, arrow-cpp
+, python3Packages
+, jq
+, tcpdump
 , static ? stdenv.hostPlatform.isMusl
+, versionOverride ? null
 }:
 let
   isCross = stdenv.buildPlatform != stdenv.hostPlatform;
 
-  python = python3Packages.python.withPackages( ps: with ps; [
-    coloredlogs
-    jsondiff
-    pyarrow
-    pyyaml
-    schema
-  ]);
+  python = python3Packages.python.withPackages (
+    ps: with ps; [
+      coloredlogs
+      jsondiff
+      pyarrow
+      pyyaml
+      schema
+    ]
+  );
 
   src = nix-gitignore.gitignoreSource [ "/nix" ] ../.;
 
-  version = stdenv.lib.fileContents (nix-gitDescribe src);
+  version = if (versionOverride != null) then versionOverride else stdenv.lib.fileContents (nix-gitDescribe src);
 in
 
 stdenv.mkDerivation rec {
@@ -30,10 +43,11 @@ stdenv.mkDerivation rec {
       --replace nm "''${NM}"
   '';
 
-  nativeBuildInputs = [ cmake pkgconfig pandoc ];
+  nativeBuildInputs = [ cmake ];
+  propagatedNativeBuildInputs = [ pkgconfig pandoc ];
   buildInputs = [ libpcap ];
   propagatedBuildInputs = [ arrow-cpp caf ];
-
+  
   cmakeFlags = [
     "-DCAF_ROOT_DIR=${caf}"
     "-DVAST_RELOCATABLE_INSTALL=OFF"

@@ -10,6 +10,14 @@ Every entry has a category for which we use the following visual abbreviations:
 
 ## [Unreleased]
 
+- 🐞 Continuous export processes can now be stopped correctly. Before this
+  change, the node showed an error message and the exporting process exited with
+  a non-zero exit code. [#779](https://github.com/tenzir/pull/779)
+
+- 🎁 The option `--disable-community-id` has been added to the `vast import
+  pcap` command for disabling the automatic computation of Community IDs.
+  [#777](https://github.com/tenzir/pull/777)
+
 ## [2020.02.27]
 
 - 🐞 Continuously importing events from a Zeek process with a low rate of

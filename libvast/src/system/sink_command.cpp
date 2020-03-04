@@ -132,7 +132,7 @@ caf::message sink_command(const command::invocation& invocation,
         } else {
           VAST_ASSERT(!"received DOWN from inexplicable actor");
         }
-        if (msg.reason) {
+        if (msg.reason && msg.reason != exit_reason::user_shutdown) {
           VAST_WARNING(invocation.full_name, "received error message:",
                        self->system().render(msg.reason));
           err = std::move(msg.reason);

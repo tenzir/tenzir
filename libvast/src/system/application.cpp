@@ -52,9 +52,8 @@ namespace vast::system {
 namespace {
 
 auto make_pcap_options(std::string_view category) {
-  return sink_opts(category).add<size_t>("flush-interval,f",
-                                         "flush to disk after this many "
-                                         "packets");
+  return sink_opts(category).add<size_t>(
+    "flush-interval,f", "flush to disk after this many packets");
 }
 
 auto make_root_command(std::string_view path) {
@@ -179,7 +178,9 @@ auto make_import_command() {
       .add<size_t>("flow-expiry,e", "flow table expiration interval")
       .add<size_t>("pseudo-realtime-factor,p", "factor c delaying packets by "
                                                "1/c")
-      .add<size_t>("snaplen", "snapshot length in bytes"));
+      .add<size_t>("snaplen", "snapshot length in bytes")
+      .add<bool>("disable-community-id", "disable computation of community id "
+                                         "for every packet"));
 #endif
   return import_;
 }

@@ -460,6 +460,7 @@ endif ()
 # Find modules are needed by the consumer in case of a static build, or if the
 # linkage is PUBLIC or INTERFACE.
 macro (provide_find_module name)
+  message(STATUS "Providing cmake module for ${name}")
   configure_file(cmake/Find${name}.cmake ${CMAKE_BINARY_DIR} COPYONLY)
   install(
     FILES "${CMAKE_BINARY_DIR}/Find${name}.cmake"
@@ -645,51 +646,31 @@ if (NOT VAST_NO_ARROW)
   if (NOT ARROW_ROOT_DIR AND VAST_PREFIX)
     set(ARROW_ROOT_DIR ${VAST_PREFIX})
   endif ()
-  find_package(Arrow REQUIRED QUIET)
-  find_package(Plasma REQUIRED QUIET)
-  if (ARROW_FOUND AND PLASMA_FOUND)
-    set(VAST_HAVE_ARROW true)
-    if (NOT BUILD_SHARED_LIBS)
-      set(modules_not_provided
-          Brotli
-          DoubleConversion
-          uriparser
-          Snappy
-          glog
-          Lz4
-          ZSTD
-          Thrift
-          Arrow
-          Plasma)
-      set(modules ZLIB)
-      foreach (module ${modules_not_provided})
+  if (NOT BUILD_SHARED_LIBS)
+    set(dependencies_module ZLIB Brotli Lz4 ZSTD)
+    foreach (module ${dependencies_module})
+      find_package("${module}" MODULE REQUIRED QUIET)
+      string(APPEND VAST_FIND_DEPENDENCY_LIST
+             "\nfind_package(${module} REQUIRED QUIET)")
+      if (EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/cmake/Find${module}.cmake")
         provide_find_module("${module}")
-        list(APPEND modules "${module}")
-      endforeach ()
-      foreach (module ${modules})
-        find_package("${module}" REQUIRED QUIET)
-        string(APPEND VAST_FIND_DEPENDENCY_LIST
-               "\nfind_package(${module} REQUIRED QUIET)")
-      endforeach ()
-      set(Boost_USE_STATIC_LIBS ON)
-      set(Boost_USE_MULTITHREADED ON)
-      set(Boost_NO_BOOST_CMAKE ON)
-      unset(Boost_INCLUDE_DIR CACHE)
-      unset(Boost_LIBRARY_DIRS CACHE)
-      find_package(Boost REQUIRED QUIET COMPONENTS filesystem system regex)
-      string(
-        APPEND
-        VAST_FIND_DEPENDENCY_LIST
-        "\nfind_package(Boost REQUIRED QUIET COMPONENTS filesystem system regex)"
-      )
-      set(ARROW_LIBRARIES
-          "${ARROW_STATIC_LIB};${PLASMA_STATIC_LIB};double-conversion::double-conversion;uriparser::uriparser;Brotli::brotlienc;Brotli::brotlidec;Brotli::brotlicommon;LZ4::lz4;snappy::snappy;ZLIB::ZLIB;ZSTD::zstd;GLOG::glog;Boost::system;Boost::filesystem;Boost::regex;Threads::Threads"
-      )
-    else ()
-      set(ARROW_LIBRARIES "${ARROW_SHARED_LIB};${PLASMA_SHARED_LIB}")
-    endif ()
+      endif ()
+    endforeach ()
+    set(dependencies_config Snappy GLOG Thrift)
+    foreach (dep ${dependencies_config})
+      find_package("${dep}" REQUIRED QUIET CONFIG)
+      string(APPEND VAST_FIND_DEPENDENCY_LIST
+            "\nfind_package(${dep} REQUIRED QUIET CONFIG)")
+    endforeach ()
+  endif ()
+  find_package(Arrow REQUIRED QUIET CONFIG)
+  string(APPEND VAST_FIND_DEPENDENCY_LIST
+         "\nfind_package(Arrow REQUIRED QUIET CONFIG)")
+  set(VAST_HAVE_ARROW true)
+  if (BUILD_SHARED_LIBS)
+    set(ARROW_LIBRARIES arrow_shared)
   else ()
-    message(FATAL_ERROR "Please install Apache Arrow / Plasma")
+    set(ARROW_LIBRARIES arrow_static)
   endif ()
 endif ()
 
