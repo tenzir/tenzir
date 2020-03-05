@@ -45,8 +45,9 @@ stdenv.mkDerivation rec {
 
   nativeBuildInputs = [ cmake ];
   propagatedNativeBuildInputs = [ pkgconfig pandoc ];
-  buildInputs = [ arrow-cpp caf libpcap ];
-
+  buildInputs = [ libpcap ];
+  propagatedBuildInputs = [ arrow-cpp caf ];
+  
   cmakeFlags = [
     "-DCAF_ROOT_DIR=${caf}"
     "-DVAST_RELOCATABLE_INSTALL=OFF"
