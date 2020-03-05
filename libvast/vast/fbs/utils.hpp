@@ -44,9 +44,6 @@ caf::expected<Encoding> create_encoding(caf::atom_value x);
 
 caf::atom_value make_encoding(Encoding x);
 
-caf::expected<flatbuffers::Offset<TableSlice>>
-create_table_slice(flatbuffers::FlatBufferBuilder& builder, table_slice_ptr x);
-
 table_slice_ptr make_table_slice(const TableSlice& x);
 
 caf::expected<flatbuffers::Offset<TableSliceBuffer>>
