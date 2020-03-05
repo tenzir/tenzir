@@ -10,6 +10,11 @@ Every entry has a category for which we use the following visual abbreviations:
 
 ## [Unreleased]
 
+- 🐞 The short option `-c` for setting the configuration file has been removed.
+  The long option `--config` must now be used instead. This fixed a bug that did
+  not allow for `-c` to be used for continuous exports.
+  [#781](https://github.com/tenzir/pull/781)
+
 - 🐞 Continuous export processes can now be stopped correctly. Before this
   change, the node showed an error message and the exporting process exited with
   a non-zero exit code. [#779](https://github.com/tenzir/pull/779)
