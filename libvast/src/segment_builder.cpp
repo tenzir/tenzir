@@ -34,7 +34,7 @@ segment_builder::segment_builder() {
 caf::error segment_builder::add(table_slice_ptr x) {
   if (x->offset() < min_table_slice_offset_)
     return make_error(ec::unspecified, "slice offsets not increasing");
-  auto slice = fbs::create_table_slice_buffer(builder_, x);
+  auto slice = fbs::pack(builder_, x);
   if (!slice)
     return slice.error();
   table_slices_.push_back(*slice);
@@ -51,7 +51,7 @@ caf::error segment_builder::add(table_slice_ptr x) {
 segment segment_builder::finish() {
   auto ids_offset = builder_.CreateVectorOfStructs(intervals_);
   auto table_slices_offset = builder_.CreateVector(table_slices_);
-  auto uuid_offset = fbs::create_bytes(builder_, id_);
+  auto uuid_offset = fbs::pack_bytes(builder_, id_);
   fbs::SegmentBuilder segment_builder{builder_};
   segment_builder.add_version(fbs::Version::v0);
   segment_builder.add_uuid(uuid_offset);

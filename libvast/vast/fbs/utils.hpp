@@ -28,26 +28,23 @@
 namespace vast::fbs {
 
 // The utility functions in this header have the following naming convention:
-// - `create_*` are functions to convert from VAST to flatbuffers
-// - `make_*` are functions to convert from flatbuffers to VAST
+// - `pack*` are functions to convert from VAST to flatbuffers
+// - `unpack*` are functions to convert from flatbuffers to VAST
 
 template <class T, class Byte = uint8_t>
 flatbuffers::Offset<flatbuffers::Vector<Byte>>
-create_bytes(flatbuffers::FlatBufferBuilder& builder, const T& x) {
+pack_bytes(flatbuffers::FlatBufferBuilder& builder, const T& x) {
   static_assert(detail::is_any_v<Byte, int8_t, uint8_t>);
   auto bytes = as_bytes(x);
   auto data = reinterpret_cast<const Byte*>(bytes.data());
   return builder.CreateVector(data, bytes.size());
 }
 
-caf::expected<Encoding> create_encoding(caf::atom_value x);
-
-caf::atom_value make_encoding(Encoding x);
-
-table_slice_ptr make_table_slice(const TableSlice& x);
-
 caf::expected<flatbuffers::Offset<TableSliceBuffer>>
-create_table_slice_buffer(flatbuffers::FlatBufferBuilder& builder,
-                          table_slice_ptr x);
+pack(flatbuffers::FlatBufferBuilder& builder, table_slice_ptr x);
+
+caf::atom_value unpack(Encoding x);
+
+table_slice_ptr unpack(const TableSlice& x);
 
 } // namespace vast::fbs
