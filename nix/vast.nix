@@ -9,6 +9,7 @@
 , caf
 , libpcap
 , arrow-cpp
+, flatbuffers
 , python3Packages
 , jq
 , tcpdump
@@ -45,7 +46,7 @@ stdenv.mkDerivation rec {
 
   nativeBuildInputs = [ cmake ];
   propagatedNativeBuildInputs = [ pkgconfig pandoc ];
-  buildInputs = [ libpcap ];
+  buildInputs = [ libpcap flatbuffers ];
   propagatedBuildInputs = [ arrow-cpp caf ];
 
   cmakeFlags = [
