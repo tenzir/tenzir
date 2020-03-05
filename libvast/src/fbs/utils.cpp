@@ -23,7 +23,11 @@
 
 namespace vast::fbs {
 
-caf::expected<Encoding> create_encoding(caf::atom_value x) {
+namespace {
+
+// This function will eventually vanish, because the respective builders will
+// be the only components that write a (hardcoded) instance of Encoding.
+caf::expected<Encoding> transform(caf::atom_value x) {
   if (x == caf::atom("default"))
     return Encoding::CAF;
   if (x == caf::atom("arrow"))
@@ -33,12 +37,13 @@ caf::expected<Encoding> create_encoding(caf::atom_value x) {
   return make_error(ec::unspecified, "unsupported table slice type", x);
 }
 
+} // namespace
+
 // TODO: this function will boil down to accessing the chunk inside the table
 // slice and then calling GetTableSlice(buf). But until we touch the table
 // slice internals, we use this helper.
 caf::expected<flatbuffers::Offset<TableSliceBuffer>>
-create_table_slice_buffer(flatbuffers::FlatBufferBuilder& builder,
-                          table_slice_ptr x) {
+pack(flatbuffers::FlatBufferBuilder& builder, table_slice_ptr x) {
   // This local builder instance will vanish once we can access the underlying
   // chunk of a table slice.
   flatbuffers::FlatBufferBuilder local_builder;
@@ -50,7 +55,7 @@ create_table_slice_buffer(flatbuffers::FlatBufferBuilder& builder,
   caf::binary_serializer sink2{nullptr, data_buffer};
   if (auto error = sink2(x))
     return error;
-  auto encoding = create_encoding(x->implementation_id());
+  auto encoding = transform(x->implementation_id());
   if (!encoding)
     return encoding.error();
   auto layout_ptr = reinterpret_cast<const uint8_t*>(layout_buffer.data());
@@ -75,7 +80,7 @@ create_table_slice_buffer(flatbuffers::FlatBufferBuilder& builder,
   return table_slice_buffer_builder.Finish();
 }
 
-caf::atom_value make_encoding(Encoding x) {
+caf::atom_value unpack(Encoding x) {
   switch (x) {
     case Encoding::CAF:
       return caf::atom("default");
@@ -87,7 +92,7 @@ caf::atom_value make_encoding(Encoding x) {
 }
 
 // TODO: The dual to the note above applies here.
-table_slice_ptr make_table_slice(const TableSlice& x) {
+table_slice_ptr unpack(const TableSlice& x) {
   table_slice_ptr result;
   auto ptr = reinterpret_cast<const char*>(x.data()->Data());
   caf::binary_deserializer source{nullptr, ptr, x.data()->size()};
