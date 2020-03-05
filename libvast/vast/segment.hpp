@@ -34,9 +34,6 @@ class segment {
   friend segment_builder;
 
 public:
-  using value_type = table_slice_ptr;
-  using size_type = size_t;
-
   /// Constructs a segment.
   /// @param header The header of the segment.
   /// @param chunk The chunk holding the segment data.
@@ -48,7 +45,7 @@ public:
   /// @returns the event IDs of all contained table slice.
   vast::ids ids() const;
 
-  // Alias for size().
+  // @returns The number of table slices in this segment.
   size_t num_slices() const;
 
   /// @returns The underlying chunk.
