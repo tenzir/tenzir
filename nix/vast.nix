@@ -1,6 +1,6 @@
 { stdenv, lib, nix-gitignore, nix-gitDescribe
 , cmake, pkgconfig, git, pandoc
-, caf, libpcap, arrow-cpp
+, caf, libpcap, arrow-cpp, flatbuffers
 , python3Packages, jq, tcpdump
 , static ? stdenv.hostPlatform.isMusl
 }:
@@ -31,7 +31,7 @@ stdenv.mkDerivation rec {
   '';
 
   nativeBuildInputs = [ cmake pkgconfig pandoc ];
-  buildInputs = [ arrow-cpp caf libpcap ];
+  buildInputs = [ arrow-cpp caf libpcap flatbuffers ];
 
   cmakeFlags = [
     "-DCAF_ROOT_DIR=${caf}"
