@@ -45,15 +45,6 @@ public:
 
   ~segment_store();
 
-  /// @cond PRIVATE
-
-  segment_store(path dir, uint64_t max_segment_size, size_t in_memory_segments);
-
-  /// @endcond
-
-  /// Scans the directory for segments a
-  caf::error scan_segments();
-
   // -- properties -------------------------------------------------------------
 
   /// @returns the path for storing the segments.
@@ -98,6 +89,8 @@ public:
   void inspect_status(caf::settings& dict) override;
 
 private:
+  segment_store(path dir, uint64_t max_segment_size, size_t in_memory_segments);
+
   // -- utility functions ------------------------------------------------------
 
   caf::error register_segments();
