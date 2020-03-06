@@ -91,19 +91,11 @@ caf::error configuration::parse(int argc, char** argv) {
   VAST_ASSERT(argc > 0);
   VAST_ASSERT(argv != nullptr);
   command_line.assign(argv + 1, argv + argc);
-  // We need to convert our config file option to the format caf expects,
-  // e.g. "--config-file=<path>".
-  auto shortconfig = std::find(command_line.begin(), command_line.end(), "-c");
-  if (shortconfig != command_line.end()
-      && std::next(shortconfig) != command_line.end()) {
-    auto path = std::next(shortconfig);
-    *shortconfig = "--config=" + *path;
-    command_line.erase(path, std::next(path));
-  }
   // Move CAF options to the end of the command line, parse them, and then
   // remove them.
   auto is_vast_opt = [](auto& x) {
-    return !(starts_with(x, "--caf#") || starts_with(x, "--config="));
+    return !(starts_with(x, "--caf#") || starts_with(x, "--config=")
+             || starts_with(x, "--config-file="));
   };
   auto caf_opt = std::stable_partition(command_line.begin(),
                                        command_line.end(), is_vast_opt);
