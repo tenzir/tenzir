@@ -73,10 +73,4 @@ caf::expected<caf::atom_value> unpack(Encoding x);
 
 caf::expected<table_slice_ptr> unpack(const TableSlice& x);
 
-// -- access utilities -------------------------------------------------------
-
-caf::atom_value make_encoding(Encoding x);
-
-table_slice_ptr make_table_slice(const TableSlice& x);
-
 } // namespace vast::fbs
