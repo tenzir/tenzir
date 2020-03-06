@@ -77,6 +77,17 @@ jobs:
           sudo apt-get -qq update
           sudo apt-get -qqy install libarrow-dev
 
+      - name: Compile flatbuffers
+        if: matrix.os.tag == 'Ubuntu'
+        run: |
+          cd $(mktemp -d)
+          curl -LO https://github.com/google/flatbuffers/archive/v1.11.0.tar.gz
+          tar xzf v1.11.0.tar.gz
+          cd flatbuffers-1.11.0
+          cmake -B build-dir -DFLATBUFFERS_BUILD_TESTS=OFF -DFLATBUFFERS_BUILD_GRPCTEST=OFF
+          cmake --build build-dir --target all --parallel
+          sudo cmake --build build-dir --target install
+
       - name: Configure Environment
         id: configure_env
         run: |

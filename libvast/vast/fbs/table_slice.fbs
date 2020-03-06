@@ -1,0 +1,37 @@
+namespace vast.fbs;
+
+/// The format of the binary table slice data.
+enum Encoding : byte {
+  Arrow,
+  CAF,
+  MessagePack,
+}
+
+/// A subset of rows of a table.
+table TableSlice {
+  /// The offset in the 2^64 ID event space.
+  offset: ulong;
+
+  /// The number of events (= rows).
+  rows: ulong;
+
+  /// The schema of the data.
+  layout: [ubyte]; // TODO: currently CAF binary; make this a separate table
+
+  /// The format of the data.
+  encoding: Encoding;
+
+  /// The binary data.
+  data: [ubyte];
+}
+
+/// A vector of bytes that wraps a table slice.
+/// The extra wrapping makes it possible to append existing table slices as
+/// blobs to a segment builder. For example, this happens when the archive
+/// receives a stream of table slices. Without the wrapping, we'd have to go
+/// through a new table slice builder for every slice.
+table TableSliceBuffer {
+  data: [ubyte] (nested_flatbuffer: "TableSlice");
+}
+
+root_type TableSlice;
