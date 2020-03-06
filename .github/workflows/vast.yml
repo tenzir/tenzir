@@ -145,6 +145,8 @@ jobs:
           cmake --build "$BUILD_DIR" --target all
 
       - name: Run Unit Tests
+        env:
+          CTEST_OUTPUT_ON_FAILURE: YES
         run: |
           cmake --build "$BUILD_DIR" --target test
 
