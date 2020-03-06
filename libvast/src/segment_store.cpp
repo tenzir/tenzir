@@ -41,8 +41,8 @@ segment_store_ptr segment_store::make(path dir, size_t max_segment_size,
   VAST_TRACE(VAST_ARG(dir), VAST_ARG(max_segment_size),
              VAST_ARG(in_memory_segments));
   VAST_ASSERT(max_segment_size > 0);
-  auto result = std::make_unique<segment_store>(
-    std::move(dir), max_segment_size, in_memory_segments);
+  auto result = segment_store_ptr{
+    new segment_store{std::move(dir), max_segment_size, in_memory_segments}};
   if (auto err = result->register_segments())
     return nullptr;
   return result;
