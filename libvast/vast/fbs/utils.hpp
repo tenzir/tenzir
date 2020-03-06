@@ -49,7 +49,7 @@ caf::error check_version(Version given, Version expected);
 /// @returns A byte span of *xs*.
 template <size_t Extent = dynamic_extent, class T>
 span<const byte, Extent> as_bytes(const flatbuffers::Vector<T>& xs) {
-  static_assert(sizeof(T) == 1, "only byte vectors supporte");
+  static_assert(sizeof(T) == 1, "only byte vectors supported");
   VAST_ASSERT(xs.size() <= Extent);
   auto data = reinterpret_cast<const byte*>(xs.data());
   return span<const byte, Extent>(data, Extent);
