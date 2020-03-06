@@ -43,8 +43,8 @@ pack_bytes(flatbuffers::FlatBufferBuilder& builder, const T& x) {
 caf::expected<flatbuffers::Offset<TableSliceBuffer>>
 pack(flatbuffers::FlatBufferBuilder& builder, table_slice_ptr x);
 
-caf::atom_value unpack(Encoding x);
+caf::expected<caf::atom_value> unpack(Encoding x);
 
-table_slice_ptr unpack(const TableSlice& x);
+caf::expected<table_slice_ptr> unpack(const TableSlice& x);
 
 } // namespace vast::fbs
