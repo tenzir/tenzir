@@ -112,6 +112,12 @@ struct index_state {
   caf::error load_from_disk();
 
   /// Persists the state to disk.
+  caf::error flush_meta_index();
+
+  /// Persists the state to disk.
+  caf::error flush_statistics();
+
+  /// Persists the state to disk.
   caf::error flush_to_disk();
 
   // -- convenience functions --------------------------------------------------
