@@ -80,7 +80,7 @@ pack(flatbuffers::FlatBufferBuilder& builder, table_slice_ptr x) {
   return table_slice_buffer_builder.Finish();
 }
 
-caf::atom_value unpack(Encoding x) {
+caf::expected<caf::atom_value> unpack(Encoding x) {
   switch (x) {
     case Encoding::CAF:
       return caf::atom("default");
@@ -89,15 +89,16 @@ caf::atom_value unpack(Encoding x) {
     case Encoding::MessagePack:
       return caf::atom("msgpack");
   }
+  return make_error(ec::unspecified, "unsupported Encoding", x);
 }
 
 // TODO: The dual to the note above applies here.
-table_slice_ptr unpack(const TableSlice& x) {
+caf::expected<table_slice_ptr> unpack(const TableSlice& x) {
   table_slice_ptr result;
   auto ptr = reinterpret_cast<const char*>(x.data()->Data());
   caf::binary_deserializer source{nullptr, ptr, x.data()->size()};
   if (auto error = source(result))
-    return nullptr;
+    return error;
   return result;
 }
 
