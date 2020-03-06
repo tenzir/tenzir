@@ -85,7 +85,10 @@ segment::lookup(const vast::ids& xs) const {
     // requires that table slices will be constructable from a chunk. Until
     // then, we stupidly deserialize the data into a new table slice.
     auto slice = buffer->data_nested_root();
-    result.push_back(fbs::unpack(*slice));
+    if (auto x = fbs::unpack(*slice))
+      result.push_back(std::move(*x));
+    else
+      return x.error();
     return caf::none;
   };
   auto ptr = fbs::GetSegment(chunk_->data());
