@@ -24,6 +24,7 @@
 #include <caf/atom.hpp>
 #include <caf/attach_stream_sink.hpp>
 #include <caf/expected.hpp>
+#include <caf/optional.hpp>
 #include <caf/settings.hpp>
 
 namespace vast::system {
@@ -42,12 +43,20 @@ caf::dictionary<caf::config_value> type_registry_state::status() const {
   return result;
 }
 
-vast::path type_registry_state::filename() const {
-  return dir / "type-registry";
+vast::path type_registry_state::data_filename() const {
+  return dir / "data";
+}
+
+vast::path type_registry_state::pivot_graph_filename() const {
+  return dir / "pivot-graph";
 }
 
 caf::error type_registry_state::save_to_disk() const {
-  return vast::save(&self->system(), filename(), data);
+  return caf::error::eval(
+    [&] { return vast::save(&self->system(), data_filename(), data); },
+    [&] {
+      return vast::save(&self->system(), pivot_graph_filename(), pivot_graph);
+    });
 }
 
 caf::error type_registry_state::load_from_disk() {
@@ -56,25 +65,47 @@ caf::error type_registry_state::load_from_disk() {
     VAST_DEBUG(self, "found no directory to load from");
     return caf::none;
   }
-  if (auto fname = filename(); exists(fname)) {
+  if (auto fname = data_filename(); exists(fname)) {
     if (auto err = load(&self->system(), fname, data))
       return err;
-    VAST_DEBUG(self, "loaded state from disk");
+    VAST_DEBUG(self, "loaded data from disk");
+  }
+  if (auto fname = pivot_graph_filename(); exists(fname)) {
+    if (auto err = load(&self->system(), fname, pivot_graph))
+      return err;
+    VAST_DEBUG(self, "loaded pivot graph from disk");
   }
   return caf::none;
 }
 
 void type_registry_state::insert(vast::record_type layout) {
+  for (const auto& field : layout.fields) {
+    for (const auto& attribute : field.type.attributes()) {
+      if (attribute.key == "pivot") {
+        [[maybe_unused]] auto [hint, success]
+          = pivot_graph[attribute.value.value_or(field.name)].insert(layout);
+        if (success)
+          VAST_WARNING(self, "registered field", hint->name(),
+                       "for pivoting over", field);
+      }
+    }
+  }
   [[maybe_unused]] auto [hint, success]
     = data[layout.name()].insert(std::move(layout));
   if (success)
-    VAST_DEBUG(self, "registered", *hint);
+    VAST_DEBUG(self, "registered field", hint->name());
 }
 
 std::unordered_set<vast::type>
-type_registry_state::lookup(std::string key) const {
-  if (auto it = data.find(std::move(key)); it != data.end())
+type_registry_state::lookup(std::string name) const {
+  if (auto it = data.find(std::move(name)); it != data.end())
     return it->second;
+  return {};
+}
+
+std::unordered_set<vast::record_type>
+type_registry_state::lookup(vast::record_type source) const {
+  // TODO: NYI.
   return {};
 }
 
@@ -102,30 +133,35 @@ type_registry(type_registry_actor self, const path& dir) {
         self, "failed to persist state to disk:", self->system().render(err));
     self->quit(msg.reason);
   });
-  return {[=](telemetry_atom) {
-            // Send out a heartbeat.
-            self->send(self->state.accountant, self->state.telemetry());
-            self->delayed_send(self, defaults::system::telemetry_rate,
-                               telemetry_atom::value);
-          },
-          [=](status_atom) {
-            // Send out a status report.
-            return self->state.status();
-          },
-          [=](caf::stream<table_slice_ptr> in) {
-            // Store layout of every incoming table slice.
-            caf::attach_stream_sink(
-              self, in,
-              [=](caf::unit_t&) { VAST_DEBUG(self, "initialized stream"); },
-              [=](caf::unit_t&, table_slice_ptr x) {
-                VAST_TRACE(self, "received new table slice");
-                self->state.insert(std::move(x->layout()));
-              });
-          },
-          [=](std::string name) {
-            // Retrieve a list of known states for a name.
-            return self->state.lookup(name);
-          }};
+  return {
+    [=](telemetry_atom) {
+      // Send out a heartbeat.
+      self->send(self->state.accountant, self->state.telemetry());
+      self->delayed_send(self, defaults::system::telemetry_rate,
+                         telemetry_atom::value);
+    },
+    [=](status_atom) {
+      // Send out a status report.
+      return self->state.status();
+    },
+    [=](caf::stream<table_slice_ptr> in) {
+      // Store layout of every incoming table slice.
+      caf::attach_stream_sink(
+        self, in, [=](caf::unit_t&) { VAST_DEBUG(self, "initialized stream"); },
+        [=](caf::unit_t&, table_slice_ptr x) {
+          VAST_TRACE(self, "received new table slice");
+          self->state.insert(std::move(x->layout()));
+        });
+    },
+    [=](std::string name) {
+      // Retrieve a list of known states for a name.
+      return self->state.lookup(std::move(name));
+    },
+    [=](vast::record_type source) {
+      // retrieve a list of types that can be pivoted to from a given type.
+      return self->state.lookup(source);
+    },
+  };
 }
 
 } // namespace vast::system

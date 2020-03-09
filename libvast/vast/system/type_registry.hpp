@@ -33,7 +33,8 @@ using type_registry_type = caf::typed_actor<
   caf::reacts_to<telemetry_atom>,
   caf::replies_to<status_atom>::with<caf::dictionary<caf::config_value>>,
   caf::reacts_to<caf::stream<table_slice_ptr>>,
-  caf::replies_to<std::string>::with<std::unordered_set<vast::type>>
+  caf::replies_to<std::string>::with<std::unordered_set<vast::type>>,
+  caf::replies_to<vast::record_type>::with<std::unordered_set<vast::record_type>>
 >;
 // clang-format on
 
@@ -55,7 +56,10 @@ struct type_registry_state {
   caf::dictionary<caf::config_value> status() const;
 
   /// Create the path that the type-registry is persisted at on disk.
-  vast::path filename() const;
+  vast::path data_filename() const;
+
+  /// Create the path that the pivot-graph is persisted at on disk.
+  vast::path pivot_graph_filename() const;
 
   /// Save the type-registry to disk.
   caf::error save_to_disk() const;
@@ -66,12 +70,16 @@ struct type_registry_state {
   /// Store a new layout in the registry.
   void insert(vast::record_type layout);
 
-  /// Get a list of known types from the registry.
-  std::unordered_set<vast::type> lookup(std::string key) const;
+  /// Get a list of known types for a given name from the registry.
+  std::unordered_set<vast::record_type> lookup(vast::record_type source) const;
+
+  /// Get a list of types that can be pivoted to from a given type.
+  std::unordered_set<vast::type> lookup(std::string name) const;
 
   type_registry_actor self = {};
   accountant_type accountant = {};
   std::map<std::string, std::unordered_set<vast::type>> data = {};
+  std::map<std::string, std::unordered_set<vast::record_type>> pivot_graph = {};
   vast::path dir = {};
 };
 
