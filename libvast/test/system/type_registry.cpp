@@ -24,17 +24,34 @@ using namespace vast;
 
 namespace {
 
-const vast::record_type mock_layout = vast::record_type{
-  {"string", vast::string_type{}},
-  {"count", vast::count_type{}},
-  {"real", vast::real_type{}},
+const vast::record_type mock_layout_a = vast::record_type{
+  {"a", vast::string_type{}},
+  {"b", vast::count_type{}},
+  {"c", vast::real_type{}},
 }.name("mock");
 
-vast::table_slice_ptr make_data(std::string a, vast::count b, vast::real c) {
-  vast::default_table_slice_builder builder(mock_layout);
+vast::table_slice_ptr make_data_a(std::string a, vast::count b, vast::real c) {
+  vast::default_table_slice_builder builder(mock_layout_a);
   builder.append(a);
   builder.append(b);
   builder.append(c);
+  return builder.finish();
+}
+
+const vast::record_type mock_layout_b = vast::record_type{
+  {"a", vast::string_type{}},
+  {"b", vast::count_type{}},
+  {"c", vast::real_type{}},
+  {"d", vast::string_type{}},
+}.name("mock");
+
+vast::table_slice_ptr
+make_data_b(std::string a, vast::count b, vast::real c, std::string d) {
+  vast::default_table_slice_builder builder(mock_layout_b);
+  builder.append(a);
+  builder.append(b);
+  builder.append(c);
+  builder.append(d);
   return builder.finish();
 }
 
@@ -74,8 +91,10 @@ FIXTURE_SCOPE(type_registry_tests, fixture)
 TEST(type_registry) {
   MESSAGE("importing mock data");
   {
-    auto slices = std::vector{1000, make_data("1", 2u, 3.0)};
-    vast::detail::spawn_container_source(sys, std::move(slices), aut);
+    auto slices_a = std::vector{1000, make_data_a("1", 2u, 3.0)};
+    auto slices_b = std::vector{1000, make_data_b("1", 2u, 3.0, "4")};
+    vast::detail::spawn_container_source(sys, std::move(slices_a), aut);
+    vast::detail::spawn_container_source(sys, std::move(slices_b), aut);
     run();
     CHECK_EQUAL(state().data.size(), 1);
   }
@@ -92,7 +111,7 @@ TEST(type_registry) {
         done = true;
       })
       .until(done);
-    CHECK_EQUAL(size, 1);
+    CHECK_EQUAL(size, 2);
   }
   self->send_exit(aut, caf::exit_reason::user_shutdown);
 }
