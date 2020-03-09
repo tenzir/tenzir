@@ -68,7 +68,7 @@ void type_registry_state::insert(vast::record_type layout) {
   [[maybe_unused]] auto [hint, success]
     = data[layout.name()].insert(std::move(layout));
   if (success)
-    VAST_WARNING(self, "registered", *hint);
+    VAST_DEBUG(self, "registered", *hint);
 }
 
 std::unordered_set<vast::type>
