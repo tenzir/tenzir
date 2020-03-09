@@ -41,7 +41,7 @@ constexpr std::chrono::seconds overview_delay(3);
 
 void init(accountant_actor* self) {
   auto& st = self->state;
-#if VAST_LOG_LEVEL >= CAF_LOG_LEVEL_INFO
+#if VAST_LOG_LEVEL >= VAST_LOG_LEVEL_INFO
   VAST_DEBUG(self, "animates heartbeat loop");
   self->delayed_send(self, overview_delay, telemetry_atom::value);
 #endif
@@ -106,7 +106,7 @@ accountant_state::accountant_state(accountant_actor* self) : self{self} {
 }
 
 void accountant_state::command_line_heartbeat() {
-#if VAST_LOG_LEVEL >= CAF_LOG_LEVEL_DEBUG
+#if VAST_LOG_LEVEL >= VAST_LOG_LEVEL_DEBUG
   if (auto rate = accumulator.rate_per_sec(); std::isfinite(rate))
     VAST_DEBUG(self, "received", accumulator.events, "events at a rate of",
                static_cast<uint64_t>(rate) << "events/sec");
@@ -199,9 +199,9 @@ accountant_type::behavior_type accountant(accountant_actor* self) {
                 using namespace std::string_view_literals;
                 record(self, key + ".rate", "NaN"sv, ts);
               }
-#if VAST_LOG_LEVEL >= CAF_LOG_LEVEL_INFO
+#if VAST_LOG_LEVEL >= VAST_LOG_LEVEL_INFO
               auto logger = caf::logger::current_logger();
-              if (logger && logger->verbosity() >= CAF_LOG_LEVEL_INFO)
+              if (logger && logger->verbosity() >= VAST_LOG_LEVEL_INFO)
                 if (key == "node_throughput")
                   self->state.accumulator += value;
 #endif

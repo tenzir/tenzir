@@ -263,7 +263,7 @@ struct infer {
   static constexpr size_t buffer_size = 8'192;
 };
 
-// -- constants for the entire system ------------------------------------------
+// -- constants for the index --------------------------------------------------
 
 /// Contains constants for value index parameterization.
 namespace index {
@@ -276,6 +276,15 @@ constexpr size_t max_string_size = 1024;
 constexpr size_t max_container_elements = 256;
 
 } // namespace index
+
+// -- constants for the logger -------------------------------------------------
+namespace logger {
+
+constexpr const caf::atom_value console_verbosity = caf::atom("info");
+
+constexpr const caf::atom_value file_verbosity = caf::atom("verbose");
+
+} // namespace logger
 
 // -- constants for the entire system ------------------------------------------
 

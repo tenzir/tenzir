@@ -102,10 +102,11 @@ caf::error configuration::parse(int argc, char** argv) {
   std::vector<std::string> caf_args;
   std::move(caf_opt, command_line.end(), std::back_inserter(caf_args));
   command_line.erase(caf_opt, command_line.end());
-  // Remove caf. prefix for CAF parser.
   for (auto& arg : caf_args) {
+    // Remove caf. prefix for CAF parser.
     if (starts_with(arg, "--caf."))
       arg.erase(2, 4);
+    // Rewrite --config= option to CAF's expexted format.
     if (starts_with(arg, "--config="))
       arg.replace(8, 0, "-file");
   }

@@ -155,9 +155,9 @@ file(WRITE ${CMAKE_CURRENT_BINARY_DIR}/libvast/vast/documentation.hpp
 
 # Choose a deafult log level based on build type.
 if (CMAKE_BUILD_TYPE STREQUAL Release)
-  set(VAST_LOG_LEVEL_DEFAULT "INFO")
+  set(VAST_LOG_LEVEL_DEFAULT "VERBOSE")
 elseif (CMAKE_BUILD_TYPE STREQUAL MinSizeRel)
-  set(VAST_LOG_LEVEL_DEFAULT "INFO")
+  set(VAST_LOG_LEVEL_DEFAULT "VERBOSE")
 elseif (CMAKE_BUILD_TYPE STREQUAL RelWithDebInfo)
   set(VAST_LOG_LEVEL_DEFAULT "DEBUG")
 else ()
@@ -179,7 +179,7 @@ elseif (NOT VAST_LOG_LEVEL STREQUAL "$CACHE{VAST_LOG_LEVEL}")
 endif ()
 
 # Raise an error for invalid log levels.
-set(validLogLevels QUIET ERROR WARNING INFO DEBUG TRACE)
+set(validLogLevels QUIET ERROR WARNING INFO VERBOSE DEBUG TRACE)
 list(FIND validLogLevels "${VAST_LOG_LEVEL}" logLevelIndex)
 if (logLevelIndex LESS 0)
   message(FATAL_ERROR "Invalid log level: \"${VAST_LOG_LEVEL}\"")

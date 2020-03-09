@@ -128,7 +128,7 @@ struct source_state {
   void send_report() {
     if (measurement_.events > 0) {
       auto r = performance_report{{{std::string{name}, measurement_}}};
-#if VAST_LOG_LEVEL >= CAF_LOG_LEVEL_INFO
+#if VAST_LOG_LEVEL >= VAST_LOG_LEVEL_INFO
       for (const auto& [key, m] : r) {
         if (auto rate = m.rate_per_sec(); std::isfinite(rate))
           VAST_INFO(self, "produced", m.events, "events at a rate of",

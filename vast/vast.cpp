@@ -68,6 +68,7 @@ int main(int argc, char** argv) {
   if (!init_config(cfg, *invocation, std::cerr))
     return EXIT_FAILURE;
   caf::actor_system sys{cfg};
+  fixup_logger(cfg);
   // Get filesystem path to the executable.
   auto binary = detail::objectpath();
   if (!binary) {

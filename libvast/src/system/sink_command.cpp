@@ -141,7 +141,7 @@ caf::message sink_command(const command::invocation& invocation,
       [&](performance_report report) {
         // Log a set of named measurements.
         VAST_DEBUG(invocation.full_name, "received performance report");
-#if VAST_LOG_LEVEL >= CAF_LOG_LEVEL_INFO
+#if VAST_LOG_LEVEL >= VAST_LOG_LEVEL_INFO
         for (const auto& [name, measurement] : report) {
           if (auto rate = measurement.rate_per_sec(); std::isfinite(rate))
             VAST_INFO(name, "processed", measurement.events,
@@ -155,7 +155,7 @@ caf::message sink_command(const command::invocation& invocation,
       [&](std::string name, query_status query) {
         // Log the query status.
         VAST_DEBUG(invocation.full_name, "received query status from", name);
-#if VAST_LOG_LEVEL >= CAF_LOG_LEVEL_INFO
+#if VAST_LOG_LEVEL >= VAST_LOG_LEVEL_INFO
         if (auto rate
             = measurement{query.runtime, query.processed}.rate_per_sec();
             std::isfinite(rate))
