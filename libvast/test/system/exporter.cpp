@@ -54,6 +54,11 @@ struct fixture : fixture_base {
     run();
   }
 
+  void spawn_type_registry() {
+    type_registry
+      = self->spawn(system::type_registry, directory / "type-registry");
+  }
+
   void spawn_index() {
     index = self->spawn(system::index, directory / "index", 10000, 5, 5, 1);
   }
@@ -63,8 +68,8 @@ struct fixture : fixture_base {
   }
 
   void spawn_importer() {
-    importer = self->spawn(system::importer, directory / "importer", archive,
-                           consensus, index, slice_size);
+    importer = self->spawn(system::importer, directory / "importer", slice_size,
+                           archive, consensus, index, type_registry);
   }
 
   void spawn_consensus() {
@@ -76,6 +81,8 @@ struct fixture : fixture_base {
   }
 
   void importer_setup() {
+    if (!type_registry)
+      spawn_type_registry();
     if (!index)
       spawn_index();
     if (!archive)
@@ -117,6 +124,7 @@ struct fixture : fixture_base {
     return result;
   }
 
+  system::type_registry_type type_registry;
   actor index;
   system::archive_type archive;
   actor importer;

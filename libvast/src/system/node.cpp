@@ -39,6 +39,7 @@
 #include "vast/system/spawn_profiler.hpp"
 #include "vast/system/spawn_sink.hpp"
 #include "vast/system/spawn_source.hpp"
+#include "vast/system/spawn_type_registry.hpp"
 
 #include <caf/all.hpp>
 #include <caf/io/all.hpp>
@@ -252,6 +253,7 @@ auto make_component_factory() {
     {"spawn counter", lift_component_factory<spawn_counter>()},
     {"spawn exporter", lift_component_factory<spawn_exporter>()},
     {"spawn importer", lift_component_factory<spawn_importer>()},
+    {"spawn type-registry", lift_component_factory<spawn_type_registry>()},
     {"spawn index", lift_component_factory<spawn_index>()},
     {"spawn consensus", lift_component_factory<spawn_consensus>()},
     {"spawn pivoter", lift_component_factory<spawn_pivoter>()},
@@ -281,6 +283,7 @@ auto make_command_factory() {
     {"spawn counter", node_state::spawn_command},
     {"spawn exporter", node_state::spawn_command},
     {"spawn importer", node_state::spawn_command},
+    {"spawn type-registry", node_state::spawn_command},
     {"spawn index", node_state::spawn_command},
     {"spawn pivoter", node_state::spawn_command},
     {"spawn sink ascii", node_state::spawn_command},

@@ -15,8 +15,8 @@
 
 #include "vast/system/importer.hpp"
 
-#include "vast/test/test.hpp"
 #include "vast/test/fixtures/actor_system_and_events.hpp"
+#include "vast/test/test.hpp"
 
 #include "vast/concept/printable/stream.hpp"
 #include "vast/concept/printable/vast/event.hpp"
@@ -29,6 +29,7 @@
 #include "vast/system/archive.hpp"
 #include "vast/system/data_store.hpp"
 #include "vast/system/source.hpp"
+#include "vast/system/type_registry.hpp"
 #include "vast/table_slice.hpp"
 #include "vast/to_events.hpp"
 
@@ -73,9 +74,9 @@ struct importer_fixture : Base {
     MESSAGE("spawn importer + store");
     this->directory /= "importer";
     store = this->self->spawn(system::data_store<std::string, data>);
-    importer = this->self->spawn(system::importer, this->directory,
+    importer = this->self->spawn(system::importer, this->directory, slice_size,
                                  archive_type{}, store, caf::actor{},
-                                 slice_size);
+                                 vast::system::type_registry_type{});
   }
 
   ~importer_fixture() {

@@ -13,11 +13,6 @@
 
 #include "vast/system/importer.hpp"
 
-#include <fstream>
-
-#include <caf/config_value.hpp>
-#include <caf/dictionary.hpp>
-
 #include "vast/concept/printable/to_string.hpp"
 #include "vast/concept/printable/vast/error.hpp"
 #include "vast/concept/printable/vast/filesystem.hpp"
@@ -26,7 +21,13 @@
 #include "vast/detail/notifying_stream_manager.hpp"
 #include "vast/logger.hpp"
 #include "vast/system/atoms.hpp"
+#include "vast/system/type_registry.hpp"
 #include "vast/table_slice.hpp"
+
+#include <caf/config_value.hpp>
+#include <caf/dictionary.hpp>
+
+#include <fstream>
 
 using namespace std::chrono;
 using namespace std::chrono_literals;
@@ -284,9 +285,9 @@ auto make_importer_stage(importer_actor* self) {
 
 } // namespace <anonymous>
 
-behavior importer(importer_actor* self, path dir, archive_type archive,
-                  consensus_type consensus, caf::actor index,
-                  size_t max_table_slice_size) {
+behavior importer(importer_actor* self, path dir, size_t max_table_slice_size,
+                  archive_type archive, consensus_type consensus,
+                  caf::actor index, type_registry_type type_registry) {
   VAST_TRACE(VAST_ARG(dir), VAST_ARG(max_table_slice_size));
   self->state.dir = dir;
   self->monitor(consensus);
@@ -312,6 +313,8 @@ behavior importer(importer_actor* self, path dir, archive_type archive,
       self->quit(msg.reason);
     });
   self->state.stg = make_importer_stage(self);
+  if (type_registry)
+    self->state.stg->add_outbound_path(type_registry);
   if (archive)
     self->state.stg->add_outbound_path(archive);
   if (index) {

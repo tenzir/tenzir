@@ -276,3 +276,10 @@ tests:
         input: data/zeek/conn.log.gz
       - command: -N export -n 10 arrow '#type == "zeek.conn"'
         transformation: python @./misc/scripts/print-arrow.py
+  Type Registry:
+    tags: [import]
+    steps:
+      - command: -N import -n 1 test
+      - command: -N status
+        transformation: jq '.node."type-registry".statistics'
+
