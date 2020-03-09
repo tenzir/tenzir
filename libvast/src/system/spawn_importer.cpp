@@ -40,8 +40,10 @@ maybe_actor spawn_importer(node_actor* self, spawn_arguments& args) {
     return make_error(ec::missing_component, "consensus");
   if (!st.index)
     return make_error(ec::missing_component, "index");
-  return self->spawn(importer, args.dir / args.label, st.archive, st.consensus,
-                     st.index, slice_size);
+  if (!st.type_registry)
+    return make_error(ec::missing_component, "type-registry");
+  return self->spawn(importer, args.dir / args.label, slice_size, st.archive,
+                     st.consensus, st.index, st.type_registry);
 }
 
 } // namespace vast::system

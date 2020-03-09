@@ -33,6 +33,7 @@ node::node() {
   test_node = self->spawn(system::node, "test", directory / "node");
   run();
   MESSAGE("spawning components");
+  spawn_component("type-registry");
   spawn_component("consensus");
   spawn_component("archive");
   spawn_component("index");

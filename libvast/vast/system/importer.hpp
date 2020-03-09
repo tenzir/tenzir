@@ -13,20 +13,20 @@
 
 #pragma once
 
-#include <chrono>
-#include <vector>
-
-#include <caf/event_based_actor.hpp>
-#include <caf/stateful_actor.hpp>
-
 #include "vast/aliases.hpp"
 #include "vast/data.hpp"
 #include "vast/filesystem.hpp"
-
 #include "vast/system/accountant.hpp"
 #include "vast/system/archive.hpp"
 #include "vast/system/consensus.hpp"
 #include "vast/system/instrumentation.hpp"
+#include "vast/system/type_registry.hpp"
+
+#include <caf/event_based_actor.hpp>
+#include <caf/stateful_actor.hpp>
+
+#include <chrono>
+#include <vector>
 
 namespace vast::system {
 
@@ -153,12 +153,15 @@ using importer_actor = caf::stateful_actor<importer_state>;
 /// Spawns an IMPORTER.
 /// @param self The actor handle.
 /// @param dir The directory for persistent state.
+/// @param max_table_slice_size The suggested maximum size for table slices.
 /// @param archive A handle to the ARCHIVE.
 /// @param consensus A handle to the consensus module.
 /// @param index A handle to the INDEX.
 /// @param batch_size The initial number of IDs to request when replenishing.
-caf::behavior importer(importer_actor* self, path dir, archive_type archive,
-                       consensus_type consensus, caf::actor index,
-                       size_t max_table_slice_size);
+/// @param type_registry A handle to the type-registry module.
+caf::behavior
+importer(importer_actor* self, path dir, size_t max_table_slice_size,
+         archive_type archive, consensus_type consensus, caf::actor index,
+         type_registry_type type_registry);
 
 } // namespace vast::system

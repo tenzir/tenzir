@@ -21,6 +21,7 @@
 #include "vast/system/consensus.hpp"
 #include "vast/system/spawn_arguments.hpp"
 #include "vast/system/tracker.hpp"
+#include "vast/system/type_registry.hpp"
 
 #include <caf/actor.hpp>
 #include <caf/event_based_actor.hpp>
@@ -80,6 +81,9 @@ struct node_state {
 
   /// Handle to the ARCHIVE.
   archive_type archive;
+
+  /// Handle to the schema-store module.
+  type_registry_type type_registry;
 
   /// Handle to the INDEX.
   caf::actor index;
