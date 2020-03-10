@@ -13,3 +13,4 @@ __pycache__/
 /vast.ini
 /vast.db/
 /vast*.log
+/vast-unit-test/
