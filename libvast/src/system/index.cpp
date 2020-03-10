@@ -261,8 +261,15 @@ void index_state::send_report() {
     append_report(*active);
   for (auto& p : unpersisted)
     append_report(*p.first);
-  if (min.events > 0)
+  if (min.events > 0) {
+#if VAST_LOG_LEVEL >= CAF_LOG_LEVEL_INFO
+    // TODO: Print on VERBOSE log level.
+    VAST_INFO(self, "handled", min.events, "events at a minimum rate of",
+              static_cast<uint64_t>(min_rate), "events/sec in",
+              to_string(min.duration));
+#endif
     r.push_back({"index", min});
+  }
   if (!r.empty())
     self->send(accountant, std::move(r));
 }
