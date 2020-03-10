@@ -10,6 +10,12 @@ Every entry has a category for which we use the following visual abbreviations:
 
 ## [Unreleased]
 
+- 🐞 Expressions must now be parsed to the end of input. This fixes a bug that
+  caused malformed queries to be evaluated until the parser failed. For example,
+  the query `#type == "suricata.http" && .dest_port == 80` was erroneously
+  evaluated as `#type == "suricata.http"` instead.
+  [#791](https://github.com/tenzir/pull/791)
+
 - 🔄 The internal statistics event type `vast.account` has been renamed to
   `vast.statistics` for clarity. [#789](https://github.com/tenzir/pull/789)
 
