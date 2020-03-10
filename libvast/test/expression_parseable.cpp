@@ -105,16 +105,16 @@ TEST(parseable - expression) {
   predicate p2{type_extractor{port_type{}}, equal, data{port{53, port::udp}}};
   predicate p3{key_extractor{"a"}, greater, key_extractor{"b"}};
   MESSAGE("conjunction");
-  CHECK(parsers::expr("x == 42 && :port == 53/udp", expr));
+  CHECK(parsers::expr("x == 42 && :port == 53/udp"s, expr));
   CHECK_EQUAL(expr, expression(conjunction{p1, p2}));
-  CHECK(parsers::expr("x == 42 && :port == 53/udp && x == 42", expr));
+  CHECK(parsers::expr("x == 42 && :port == 53/udp && x == 42"s, expr));
   CHECK_EQUAL(expr, expression(conjunction{p1, p2, p1}));
-  CHECK(parsers::expr("x == 42 && ! :port == 53/udp && x == 42", expr));
+  CHECK(parsers::expr("x == 42 && ! :port == 53/udp && x == 42"s, expr));
   CHECK_EQUAL(expr, expression(conjunction{p1, negation{p2}, p1}));
-  CHECK(parsers::expr("x > 0 && x < 42 && a.b == x.y", expr));
-  CHECK(parsers::expr("#timestamp > 2018-07-04+12:00:00.0 "
-                      "&& #timestamp < 2018-07-04+23:55:04.0",
-                      expr));
+  CHECK(parsers::expr("x > 0 && x < 42 && a.b == x.y"s, expr));
+  CHECK(parsers::expr(
+    "#timestamp > 2018-07-04+12:00:00.0 && #timestamp < 2018-07-04+23:55:04.0"s,
+    expr));
   auto x = caf::get_if<conjunction>(&expr);
   REQUIRE(x);
   REQUIRE_EQUAL(x->size(), 2u);
@@ -123,29 +123,34 @@ TEST(parseable - expression) {
   CHECK(caf::holds_alternative<attribute_extractor>(x0->lhs));
   CHECK(caf::holds_alternative<attribute_extractor>(x1->lhs));
   MESSAGE("disjunction");
-  CHECK(parsers::expr("x == 42 || :port == 53/udp || x == 42", expr));
+  CHECK(parsers::expr("x == 42 || :port == 53/udp || x == 42"s, expr));
   CHECK_EQUAL(expr, expression(disjunction{p1, p2, p1}));
-  CHECK(parsers::expr("a==b || b==c || c==d", expr));
+  CHECK(parsers::expr("a==b || b==c || c==d"s, expr));
   MESSAGE("negation");
-  CHECK(parsers::expr("! x == 42", expr));
+  CHECK(parsers::expr("! x == 42"s, expr));
   CHECK_EQUAL(expr, expression(negation{p1}));
-  CHECK(parsers::expr("!(x == 42 || :port == 53/udp)", expr));
+  CHECK(parsers::expr("!(x == 42 || :port == 53/udp)"s, expr));
   CHECK_EQUAL(expr, expression(negation{disjunction{p1, p2}}));
   MESSAGE("parentheses");
-  CHECK(parsers::expr("(x == 42)", expr));
+  CHECK(parsers::expr("(x == 42)"s, expr));
   CHECK_EQUAL(expr, p1);
-  CHECK(parsers::expr("((x == 42))", expr));
+  CHECK(parsers::expr("((x == 42))"s, expr));
   CHECK_EQUAL(expr, p1);
-  CHECK(parsers::expr("x == 42 && (x == 42 || a > b)", expr));
+  CHECK(parsers::expr("x == 42 && (x == 42 || a > b)"s, expr));
   CHECK_EQUAL(expr, expression(conjunction{p1, disjunction{p1, p3}}));
-  CHECK(parsers::expr("x == 42 && x == 42 || a > b && x == 42", expr));
+  CHECK(parsers::expr("x == 42 && x == 42 || a > b && x == 42"s, expr));
   expression expected = disjunction{conjunction{p1, p1}, conjunction{p3, p1}};
   CHECK_EQUAL(expr, expected);
+  MESSAGE("stray dot regression");
+  // This should fail to parse because of the stray dot.
+  CHECK(!parsers::expr(
+    "#type == \"suricata.http\" && .community_id == \"1:Y3MTSbNCzFAT3I5+i6xzSgrL59k=\""s,
+    expr));
 }
 
 TEST(parseable - data expression) {
   expression expr;
-  CHECK(parsers::expr("42", expr));
+  CHECK(parsers::expr("42"s, expr));
   auto pred = caf::get_if<predicate>(&expr);
   REQUIRE(pred != nullptr);
   auto extractor = caf::get_if<type_extractor>(&pred->lhs);

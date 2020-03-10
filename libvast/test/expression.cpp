@@ -336,4 +336,14 @@ TEST(resolve) {
   CHECK_EQUAL(xs, expected);
 }
 
+TEST(parse print roundtrip) {
+  MESSAGE("simple roundtrip");
+  {
+    auto str
+      = "((x == 5 && :bool == T) || (foo ~ /foo/ && ! (x == 5 || #type ~ /bar/)))"s;
+    auto expr = to_expr(str);
+    CHECK_EQUAL(str, to_string(expr));
+  }
+}
+
 FIXTURE_SCOPE_END()

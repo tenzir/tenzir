@@ -165,7 +165,8 @@ struct expression_parser : parser<expression_parser> {
       | "&&"_p  ->* [] { return logical_and; }
       ;
     expr
-      = (group >> *(ws >> and_or >> ws >> group)) ->* to_expr
+      = ((group >> *(ws >> and_or >> ws >> group)) ->* to_expr)
+      >> ws >> parsers::eoi
       ;
     // clang-format on
     return expr;
