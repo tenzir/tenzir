@@ -713,6 +713,10 @@ file(
   OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/integration_$<CONFIG>.sh"
   CONTENT
     "#!/bin/sh
+     if ! command -v jq >/dev/null 2>&1; then
+       >&2 echo 'failed to find jq in $PATH'
+       exit 1
+     fi
      base_dir=\"${CMAKE_CURRENT_SOURCE_DIR}/integration\"
      env_dir=\"${CMAKE_CURRENT_BINARY_DIR}/integration_env\"
      app=\"${EXECUTABLE_OUTPUT_PATH}/vast\"
