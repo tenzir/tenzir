@@ -23,7 +23,7 @@ fi
 vast "${@}" 2>&1 >/dev/null | grep "rate\|latency"
 # Query vast for average node throughput rate
 if [[ "$*" == *import* ]]; then
-	vast -N export json '#type == "vast.account" && key == "node_throughput.rate"' 2>/dev/null \
+	vast -N export json '#type == "vast.statistics" && key == "node_throughput.rate"' 2>/dev/null \
 		| jq -rs 'map(.value | tonumber) | sort as $rates | $rates
 			| "node throughput: min: \(first)" 
 							+ " max: \(last)"
