@@ -141,6 +141,11 @@ TEST(parseable - expression) {
   CHECK(parsers::expr("x == 42 && x == 42 || a > b && x == 42", expr));
   expression expected = disjunction{conjunction{p1, p1}, conjunction{p3, p1}};
   CHECK_EQUAL(expr, expected);
+  MESSAGE("stray dot regression");
+  // This should fail to parse because of the stray dot.
+  CHECK(!parsers::expr(
+    R"__(#type == "suricata.http" && .community_id == "1:Y3MTSbNCzFAT3I5+i6xzSgrL59k=")__",
+    expr));
 }
 
 TEST(parseable - data expression) {
