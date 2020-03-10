@@ -10,6 +10,9 @@ Every entry has a category for which we use the following visual abbreviations:
 
 ## [Unreleased]
 
+- 🔄 The internal statistics event type `vast.account` has been renamed to
+  `vast.statistics` for clarity. [#789](https://github.com/tenzir/pull/789)
+
 - 🐞 The short option `-c` for setting the configuration file has been removed.
   The long option `--config` must now be used instead. This fixed a bug that did
   not allow for `-c` to be used for continuous exports.
