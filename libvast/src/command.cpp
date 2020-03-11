@@ -74,7 +74,7 @@ void parameters_helptext(const command& cmd, std::ostream& out) {
     }
     lst += "--";
     lst.insert(lst.end(), opt.long_name().begin(), opt.long_name().end());
-    lst += ']';
+    lst += "=]";
     auto tname = opt.type_name();
     if (tname != "bool") {
       lst += " <";
