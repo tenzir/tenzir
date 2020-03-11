@@ -14,7 +14,6 @@
 #include "vast/segment_store.hpp"
 
 #include "vast/bitmap_algorithms.hpp"
-#include "vast/concept/printable/stream.hpp"
 #include "vast/concept/printable/to_string.hpp"
 #include "vast/concept/printable/vast/error.hpp"
 #include "vast/concept/printable/vast/filesystem.hpp"
@@ -357,6 +356,9 @@ caf::error segment_store::register_segment(const path& filename) {
   if (!chk)
     return make_error(ec::filesystem_error, "failed to mmap chunk", filename);
   auto s = fbs::GetSegment(chk->data());
+  auto verifier = fbs::make_verifier(chk);
+  if (!fbs::VerifySegmentBuffer(verifier))
+    return make_error(ec::format_error, "flatbuffer integrity check failed");
   num_events_ += s->events();
   auto segment_uuid = uuid{fbs::as_bytes<16>(*s->uuid())};
   VAST_DEBUG(this, "found segment", segment_uuid);

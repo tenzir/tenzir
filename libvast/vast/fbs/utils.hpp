@@ -37,6 +37,11 @@ namespace vast::fbs {
 /// @returns The buffer of *builder*.
 chunk_ptr release(flatbuffers::FlatBufferBuilder& builder);
 
+/// Creates a verifier for a chunk.
+/// @chk The chk to initialize the verifier with.
+/// @param A verifier that is ready to use.
+flatbuffers::Verifier make_verifier(chunk_ptr chk);
+
 /// Performs a check whether two given versions are equal and returns an error
 /// if not.
 /// @param given The provided version to check.

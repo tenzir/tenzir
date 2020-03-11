@@ -48,6 +48,13 @@ chunk_ptr release(flatbuffers::FlatBufferBuilder& builder) {
   return chunk::make(size - offset, ptr + offset, deleter);
 }
 
+flatbuffers::Verifier make_verifier(chunk_ptr chk) {
+  VAST_ASSERT(chk != nullptr);
+  auto data = reinterpret_cast<const uint8_t*>(chk->data());
+  auto size = chk->size();
+  return flatbuffers::Verifier{data, size};
+}
+
 caf::error check_version(Version given, Version expected) {
   if (given == expected)
     return caf::none;
