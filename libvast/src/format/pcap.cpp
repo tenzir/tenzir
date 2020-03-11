@@ -53,8 +53,8 @@ inline type make_packet_type(RecordFields&&... record_fields) {
 }
 
 inline const auto pcap_packet_type = make_packet_type();
-inline const auto pcap_packet_type_community_id
-  = make_packet_type(record_field{"community_id", string_type{}});
+inline const auto pcap_packet_type_community_id = make_packet_type(
+  record_field{"community_id", string_type{}.attributes({{"index", "hash"}})});
 
 } // namespace <anonymous>
 
