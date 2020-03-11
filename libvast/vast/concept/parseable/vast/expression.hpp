@@ -18,11 +18,10 @@
 #include "vast/concept/parseable/vast/data.hpp"
 #include "vast/concept/parseable/vast/type.hpp"
 #include "vast/data.hpp"
-#include "vast/expression.hpp"
-#include "vast/type.hpp"
-
 #include "vast/detail/assert.hpp"
 #include "vast/detail/string.hpp"
+#include "vast/expression.hpp"
+#include "vast/type.hpp"
 
 namespace vast {
 
@@ -165,23 +164,16 @@ struct expression_parser : parser<expression_parser> {
       | "&&"_p  ->* [] { return logical_and; }
       ;
     expr
-      = ((group >> *(ws >> and_or >> ws >> group)) ->* to_expr)
-      >> ws >> parsers::eoi
+      = (group >> *(ws >> and_or >> ws >> group) >> ws) ->* to_expr
       ;
     // clang-format on
-    return expr;
+    return expr >> parsers::eoi;
   }
 
-  template <class Iterator>
-  bool parse(Iterator& f, const Iterator& l, unused_type) const {
+  template <class Iterator, class Attribute>
+  bool parse(Iterator& f, const Iterator& l, Attribute& x) const {
     static auto p = make<Iterator>();
-    return p(f, l, unused);
-  }
-
-  template <class Iterator>
-  bool parse(Iterator& f, const Iterator& l, expression& a) const {
-    static auto p = make<Iterator>();
-    return p(f, l, a);
+    return p(f, l, x);
   }
 };
 
