@@ -359,7 +359,7 @@ caf::error segment_store::register_segment(const path& filename) {
   auto s = fbs::GetSegment(chk->data());
   num_events_ += s->events();
   auto segment_uuid = uuid{fbs::as_bytes<16>(*s->uuid())};
-  VAST_DEBUG_ANON(__func__, "found segment", segment_uuid);
+  VAST_DEBUG(this, "found segment", segment_uuid);
   for (auto interval : *s->ids())
     if (!segments_.inject(interval->begin(), interval->end(), segment_uuid))
       return make_error(ec::unspecified, "failed to update range_map");
