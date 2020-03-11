@@ -36,8 +36,7 @@ using namespace binary_byte_literals;
 caf::expected<segment> segment::make(chunk_ptr chunk) {
   VAST_ASSERT(chunk != nullptr);
   // Verify flatbuffer integrity.
-  auto data = reinterpret_cast<const uint8_t*>(chunk->data());
-  auto verifier = flatbuffers::Verifier{data, chunk->size()};
+  auto verifier = fbs::make_verifier(chunk);
   if (!fbs::VerifySegmentBuffer(verifier))
     return make_error(ec::format_error, "flatbuffer integrity check failed");
   // Perform version check.
@@ -91,11 +90,6 @@ segment::lookup(const vast::ids& xs) const {
     return caf::none;
   };
   auto ptr = fbs::GetSegment(chunk_->data());
-#if 0
-  auto verifier = flatbuffers::Verifier{
-    reinterpret_cast<const uint8_t*>(chunk_->data()), chunk_->size()};
-  VAST_ASSERT(fbs::VerifySegmentBuffer(verifier));
-#endif
   auto begin = ptr->slices()->begin();
   auto end = ptr->slices()->end();
   if (auto error = select_with(xs, begin, end, f, g))
