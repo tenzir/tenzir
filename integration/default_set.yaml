@@ -61,7 +61,7 @@ tests:
       - command: -N export ascii 'orig_bytes > 1k && orig_bytes < 1Ki'
       - command: -N export ascii ':string == "OrfTtuI5G4e" || :port == 67/udp'
       - command: -N export ascii '#type == "zeek.conn" && resp_h == 192.168.1.104'
-      - command: -N export ascii '#type != "zeek.conn"'
+      - command: -N export ascii '#type != "zeek.conn" && \#type != "vast.statistics"'
       - command: -N export ascii '#type != "foobar" && resp_h == 192.168.1.104'
   Node Zeek multiple imports:
     tags: [node, import-export, zeek]
