@@ -13,6 +13,7 @@
 
 #include "vast/fbs/utils.hpp"
 
+#include "vast/chunk.hpp"
 #include "vast/error.hpp"
 #include "vast/table_slice.hpp"
 #include "vast/table_slice_factory.hpp"
@@ -38,6 +39,28 @@ caf::expected<Encoding> transform(caf::atom_value x) {
 }
 
 } // namespace
+
+chunk_ptr release(flatbuffers::FlatBufferBuilder& builder) {
+  size_t offset;
+  size_t size;
+  auto ptr = builder.ReleaseRaw(size, offset);
+  auto deleter = [=]() { flatbuffers::DefaultAllocator::dealloc(ptr, size); };
+  return chunk::make(size - offset, ptr + offset, deleter);
+}
+
+flatbuffers::Verifier make_verifier(chunk_ptr chk) {
+  VAST_ASSERT(chk != nullptr);
+  auto data = reinterpret_cast<const uint8_t*>(chk->data());
+  auto size = chk->size();
+  return flatbuffers::Verifier{data, size};
+}
+
+caf::error check_version(Version given, Version expected) {
+  if (given == expected)
+    return caf::none;
+  return make_error(ec::version_error, "unsupported version;", "got", given,
+                    ", expected", expected);
+}
 
 // TODO: this function will boil down to accessing the chunk inside the table
 // slice and then calling GetTableSlice(buf). But until we touch the table

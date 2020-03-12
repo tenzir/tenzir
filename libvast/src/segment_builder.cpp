@@ -37,38 +37,31 @@ caf::error segment_builder::add(table_slice_ptr x) {
   auto slice = fbs::pack(builder_, x);
   if (!slice)
     return slice.error();
-  table_slices_.push_back(*slice);
+  flat_slices_.push_back(*slice);
   // This works only with monotonically increasing IDs.
   if (!intervals_.empty() && intervals_.back().end() == x->offset())
     intervals_.back()
       = {intervals_.back().begin(), intervals_.back().end() + x->rows()};
   else
     intervals_.emplace_back(x->offset(), x->offset() + x->rows());
+  num_events_ += x->rows();
   slices_.push_back(x);
   return caf::none;
 }
 
 segment segment_builder::finish() {
-  auto ids_offset = builder_.CreateVectorOfStructs(intervals_);
-  auto table_slices_offset = builder_.CreateVector(table_slices_);
+  auto table_slices_offset = builder_.CreateVector(flat_slices_);
   auto uuid_offset = fbs::pack_bytes(builder_, id_);
+  auto ids_offset = builder_.CreateVectorOfStructs(intervals_);
   fbs::SegmentBuilder segment_builder{builder_};
   segment_builder.add_version(fbs::Version::v0);
+  segment_builder.add_slices(table_slices_offset);
   segment_builder.add_uuid(uuid_offset);
   segment_builder.add_ids(ids_offset);
-  segment_builder.add_slices(table_slices_offset);
+  segment_builder.add_events(num_events_);
   auto segment_offset = segment_builder.Finish();
   fbs::FinishSegmentBuffer(builder_, segment_offset);
-  size_t offset;
-  size_t size;
-  auto ptr = builder_.ReleaseRaw(size, offset);
-  auto deleter = [=]() { flatbuffers::DefaultAllocator::dealloc(ptr, size); };
-  auto chk = chunk::make(size - offset, ptr + offset, deleter);
-#if 0
-  VAST_ASSERT(size > offset);
-  auto verifier = flatbuffers::Verifier{ptr + offset, size - offset};
-  VAST_ASSERT(fbs::VerifySegmentBuffer(verifier));
-#endif
+  auto chk = fbs::release(builder_);
   reset();
   return segment{std::move(chk)};
 }
@@ -112,8 +105,9 @@ const std::vector<table_slice_ptr>& segment_builder::table_slices() const {
 void segment_builder::reset() {
   id_ = uuid::random();
   min_table_slice_offset_ = 0;
+  num_events_ = 0;
   builder_.Clear();
-  table_slices_.clear();
+  flat_slices_.clear();
   intervals_.clear();
   slices_.clear();
 }
