@@ -35,7 +35,7 @@ public:
 
   // -- configuration options --------------------------------------------------
 
-  /// The program command line, without --caf# arguments.
+  /// The program command line, without --caf. arguments.
   std::vector<std::string> command_line;
 };
 
