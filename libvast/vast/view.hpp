@@ -239,11 +239,8 @@ public:
 
   template <class Hasher>
   friend void hash_append(Hasher& h, container_view_handle xs) {
-    if (!xs) {
-      hash_append(h, false);
-      return;
-    }
-    hash_append(h, true);
+    if (!xs)
+      return hash_append(h, caf::none);
     for (auto x : *xs)
       hash_append(h, x);
     hash_append(h, xs->size());

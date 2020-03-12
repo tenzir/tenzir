@@ -183,3 +183,22 @@ TEST(container comparison) {
   CHECK(make_data_view(zs) < make_view(xs));
   CHECK(!(make_view(xs) < make_data_view(zs)));
 }
+
+TEST(hashing views) {
+  data i = 1;
+  data c = "chars";
+  data st = "string"s;
+  data p = pattern{"x"};
+  data v = vector{42, true, "foo", 4.2};
+  data s = set{true, 42, "foo"};
+  data m = map{{42, true}, {84, false}};
+
+  using hash = vast::uhash<vast::xxhash>;
+  CHECK_EQUAL(hash{}(i), hash{}(make_view(i)));
+  CHECK_EQUAL(hash{}(c), hash{}(make_view(c)));
+  CHECK_EQUAL(hash{}(st), hash{}(make_view(st)));
+  CHECK_EQUAL(hash{}(p), hash{}(make_view(p)));
+  CHECK_EQUAL(hash{}(v), hash{}(make_view(v)));
+  CHECK_EQUAL(hash{}(s), hash{}(make_view(s)));
+  CHECK_EQUAL(hash{}(m), hash{}(make_view(m)));
+}
