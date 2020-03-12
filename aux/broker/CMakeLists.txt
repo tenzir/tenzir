@@ -19,7 +19,7 @@ install(
   FILES_MATCHING
   PATTERN "*.hh")
 
-configure_file(${CMAKE_CURRENT_SOURCE_DIR}/broker/include/broker/config.hh.in
+configure_file(${CMAKE_CURRENT_SOURCE_DIR}/broker/src/config.hh.in
                ${CMAKE_CURRENT_BINARY_DIR}/include/broker/config.hh)
 install(FILES ${CMAKE_CURRENT_BINARY_DIR}/include/broker/config.hh
         DESTINATION include/broker)
@@ -79,7 +79,7 @@ target_include_directories(
 set_target_properties(
   broker
   PROPERTIES
-    CXX_STANDARD 11
+    CXX_STANDARD 17
     SOVERSION ${BROKER_SOVERSION}
     VERSION ${BROKER_VERSION_MAJOR}.${BROKER_VERSION_MINOR}
     MACOSX_RPATH true
