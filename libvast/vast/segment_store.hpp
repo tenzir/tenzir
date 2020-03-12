@@ -45,18 +45,7 @@ public:
 
   ~segment_store();
 
-  /// @cond PRIVATE
-
-  segment_store(path dir, uint64_t max_segment_size, size_t in_memory_segments);
-
-  /// @endcond
-
   // -- properties -------------------------------------------------------------
-
-  /// @returns the path for storing meta information such as segment UUIDs.
-  path meta_path() const {
-    return dir_ / "meta";
-  }
 
   /// @returns the path for storing the segments.
   path segment_path() const {
@@ -100,7 +89,13 @@ public:
   void inspect_status(caf::settings& dict) override;
 
 private:
+  segment_store(path dir, uint64_t max_segment_size, size_t in_memory_segments);
+
   // -- utility functions ------------------------------------------------------
+
+  caf::error register_segments();
+
+  caf::error register_segment(const path& filename);
 
   caf::expected<segment> load_segment(uuid id) const;
 
@@ -121,11 +116,13 @@ private:
 
   // -- member variables -------------------------------------------------------
 
-  /// Identifies the base directory for our ::meta_path and ::segment_path.
+  /// Identifies the base directory for segments.
   path dir_;
 
   /// Configures the limit each segment until we seal and flush it.
   uint64_t max_segment_size_;
+
+  uint64_t num_events_ = 0;
 
   /// Maps event IDs to candidate segments.
   detail::range_map<id, uuid> segments_;
