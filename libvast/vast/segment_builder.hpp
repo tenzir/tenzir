@@ -68,12 +68,11 @@ public:
 private:
   uuid id_;
   vast::id min_table_slice_offset_;
+  uint64_t num_events_;
   flatbuffers::FlatBufferBuilder builder_;
-  std::vector<flatbuffers::Offset<fbs::TableSliceBuffer>> table_slices_;
+  std::vector<flatbuffers::Offset<fbs::TableSliceBuffer>> flat_slices_;
+  std::vector<table_slice_ptr> slices_; // For queries to an unfinished segment.
   std::vector<fbs::Interval> intervals_;
-  // For queries to an unfinished segment.
-  // TODO: work on flatbufferized slices directly.
-  std::vector<table_slice_ptr> slices_;
 };
 
 } // namespace vast

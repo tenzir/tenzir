@@ -15,10 +15,13 @@
 
 #include "vast/byte.hpp"
 #include "vast/detail/type_traits.hpp"
+#include "vast/error.hpp"
 #include "vast/fbs/table_slice.hpp"
+#include "vast/fbs/version.hpp"
 #include "vast/fwd.hpp"
 #include "vast/span.hpp"
 
+#include <caf/error.hpp>
 #include <caf/expected.hpp>
 
 #include <cstdint>
@@ -27,9 +30,37 @@
 
 namespace vast::fbs {
 
-// The utility functions in this header have the following naming convention:
-// - `pack*` are functions to convert from VAST to flatbuffers
-// - `unpack*` are functions to convert from flatbuffers to VAST
+// -- general helpers --------------------------------------------------------
+
+/// Releases the buffer of finished builder in the form of a chunk.
+/// @param builder The finished builder.
+/// @returns The buffer of *builder*.
+chunk_ptr release(flatbuffers::FlatBufferBuilder& builder);
+
+/// Creates a verifier for a chunk.
+/// @chk The chk to initialize the verifier with.
+/// @param A verifier that is ready to use.
+flatbuffers::Verifier make_verifier(chunk_ptr chk);
+
+/// Performs a check whether two given versions are equal and returns an error
+/// if not.
+/// @param given The provided version to check.
+/// @param expected The version that *given* should be.
+/// @returns An error iff *given* does not match *expected*.
+caf::error check_version(Version given, Version expected);
+
+/// Converts a flatbuffer vector of [u]int8_t into a byte span.
+/// @param xs The flatbuffer to convert.
+/// @returns A byte span of *xs*.
+template <size_t Extent = dynamic_extent, class T>
+span<const byte, Extent> as_bytes(const flatbuffers::Vector<T>& xs) {
+  static_assert(sizeof(T) == 1, "only byte vectors supported");
+  VAST_ASSERT(xs.size() <= Extent);
+  auto data = reinterpret_cast<const byte*>(xs.data());
+  return span<const byte, Extent>(data, Extent);
+}
+
+// -- builder utilities ------------------------------------------------------
 
 template <class T, class Byte = uint8_t>
 flatbuffers::Offset<flatbuffers::Vector<Byte>>
