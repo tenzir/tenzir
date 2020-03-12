@@ -94,7 +94,7 @@ caf::error configuration::parse(int argc, char** argv) {
   // Move CAF options to the end of the command line, parse them, and then
   // remove them.
   auto is_vast_opt = [](auto& x) {
-    return !(starts_with(x, "--caf#") || starts_with(x, "--config=")
+    return !(starts_with(x, "--caf.") || starts_with(x, "--config=")
              || starts_with(x, "--config-file="));
   };
   auto caf_opt = std::stable_partition(command_line.begin(),
@@ -102,9 +102,9 @@ caf::error configuration::parse(int argc, char** argv) {
   std::vector<std::string> caf_args;
   std::move(caf_opt, command_line.end(), std::back_inserter(caf_args));
   command_line.erase(caf_opt, command_line.end());
-  // Remove caf# prefix for CAF parser.
+  // Remove caf. prefix for CAF parser.
   for (auto& arg : caf_args) {
-    if (starts_with(arg, "--caf#"))
+    if (starts_with(arg, "--caf."))
       arg.erase(2, 4);
     if (starts_with(arg, "--config="))
       arg.replace(8, 0, "-file");
