@@ -660,7 +660,7 @@ if (NOT VAST_NO_ARROW)
     foreach (dep ${dependencies_config})
       find_package("${dep}" REQUIRED QUIET CONFIG)
       string(APPEND VAST_FIND_DEPENDENCY_LIST
-            "\nfind_package(${dep} REQUIRED QUIET CONFIG)")
+             "\nfind_package(${dep} REQUIRED QUIET CONFIG)")
     endforeach ()
   endif ()
   find_package(Arrow REQUIRED QUIET CONFIG)
