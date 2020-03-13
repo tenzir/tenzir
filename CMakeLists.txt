@@ -674,6 +674,8 @@ if (NOT VAST_NO_ARROW)
   endif ()
 endif ()
 
+add_subdirectory(aux/robin-map)
+
 find_package(Doxygen QUIET)
 find_package(Pandoc QUIET)
 
