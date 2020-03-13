@@ -77,6 +77,8 @@ void fixup_logger(const system::configuration& cfg) {
   // Reset the logger so we can support the VERBOSE level
   namespace lg = defaults::logger;
   auto logger = caf::logger::current_logger();
+  // A workaround for the lack of an accessor function for logger.cfg_,
+  // see https://github.com/actor-framework/actor-framework/issues/1066.
   auto& cfg_ = logger->*stowed<logger_cfg>::value;
   auto verbosity = caf::get_if<caf::atom_value>(&cfg, "system.verbosity");
   auto file_verbosity = verbosity ? *verbosity : lg::file_verbosity;
