@@ -178,7 +178,11 @@ target_include_directories(
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
     $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>)
 target_include_directories(libvast PRIVATE "${PROJECT_SOURCE_DIR}/aux")
+
 add_dependencies(libvast vast-schema)
+
+target_link_libraries(libvast PUBLIC tsl::robin_map)
+
 target_link_libraries(libvast PUBLIC caf::core caf::io)
 if (VAST_USE_OPENSSL)
   target_link_libraries(libvast PUBLIC caf::openssl)

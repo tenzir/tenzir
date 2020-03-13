@@ -674,7 +674,12 @@ if (NOT VAST_NO_ARROW)
   endif ()
 endif ()
 
+# Add robin_map
 add_subdirectory(aux/robin-map)
+export(
+  EXPORT tsl-robin-mapTargets
+  FILE tsl-robin-mapTargets.cmake
+  NAMESPACE tsl::)
 
 find_package(Doxygen QUIET)
 find_package(Pandoc QUIET)

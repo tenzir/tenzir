@@ -36,6 +36,8 @@
 #include <unordered_set>
 #include <vector>
 
+#include <tsl/robin_map.h>
+
 namespace vast {
 
 /// An index that only supports equality lookup by hashing its data. The
@@ -140,13 +142,6 @@ private:
     }
   };
 
-  // TODO: remove this function as of C++20.
-  auto find_seed(data_view x) const {
-    auto pred = [&](const auto& xs) { return is_equal(xs.first, x); };
-    auto& xs = as_vector(seeds_);
-    return std::find_if(xs.begin(), xs.end(), pred);
-  }
-
   // Retrieves the unique digest for a given input or generates a new one.
   caf::optional<key> make_digest(data_view x) {
     for (size_t i = 0; i < max_hash_rounds; ++i) {
@@ -156,15 +151,16 @@ private:
       // If we have never seen this digest before, we're adding it to the list
       // of seen digests and are done.
       if (unique_digests_.count(k) == 0) {
-        auto materialized = materialize(x);
-        VAST_ASSERT(seeds_.count(materialized) == 0);
-        seeds_.emplace(std::move(materialized), i);
+        // TODO: It should be possible to avoid the `materialize()` here if
+        // `seeds_` could be changed to use `data_view` as key type.
+        auto result = seeds_.emplace(materialize(x), i);
+        VAST_ASSERT(result.second);
         unique_digests_.insert(k);
         return k;
       };
       // If we have seen the digest, check whether we also have a known
       // preimage.
-      if (auto it = find_seed(x); it != seeds_.end())
+      if (auto it = seeds_.find(x); it != seeds_.end())
         return key{hash(x, it->second)};
     }
     return caf::none;
@@ -172,7 +168,7 @@ private:
 
   /// Locates the digest for a given input.
   key find_digest(data_view x) const {
-    auto i = find_seed(x);
+    auto i = seeds_.find(x);
     return key{i != seeds_.end() ? hash(x, i->second) : hash(x, 0)};
   }
 
@@ -255,9 +251,36 @@ private:
   std::vector<digest_type> digests_;
   std::unordered_set<key, key_hasher> unique_digests_;
 
-  // TODO: Once we can use C++20 and have a standard library that implements
-  // key equivalence properly, we can switch to std::unordered_map.
-  detail::steady_map<data, size_t> seeds_;
+  struct data_hash {
+    size_t operator()(const data& x) const {
+      // The default hash computation for `data` and `data_view` is subtly
+      // different: For `data_view` a hash of the contents of the view is
+      // created (so that the same data compares equal whether it's stored
+      // in a default/msgpack/arrow view), but for `data` the hashing is
+      // forwarded to the actual container classes, which can define their own
+      // hash functions.
+      // To ensure the same method is used consistently, we create a view here.
+      return vast::uhash<vast::xxhash>{}(make_view(x));
+    };
+    size_t operator()(const data_view& x) const {
+      return vast::uhash<vast::xxhash>{}(x);
+    };
+  };
+
+  struct data_equal {
+    using is_transparent = void; // Opt-in to heterogenous lookups.
+
+    template <typename L, typename R>
+    bool operator()(const L& x, const R& y) const {
+      static_assert(std::is_same_v<L, data> || std::is_same_v<L, data_view>);
+      static_assert(std::is_same_v<R, data> || std::is_same_v<R, data_view>);
+      return x == y;
+    }
+  };
+
+  // We use a robin_map here because it supports heterogenous lookup, which
+  // has a major performance impact for `seeds_`, see ch13760.
+  tsl::robin_map<data, size_t, data_hash, data_equal> seeds_;
 };
 
 } // namespace vast
