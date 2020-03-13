@@ -35,7 +35,6 @@ To add a new repository **foo** at location `REMOTE` (e.g.,
 2. Add the repository as a subtree:
 
        git subtree add --prefix=aux/foo --squash REMOTE master
-       git commit -a -m 'Add 3rd-party library foo'
 
 Synchronize an Existing Repository
 ----------------------------------
