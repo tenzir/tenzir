@@ -1,0 +1,11 @@
+include "type.fbs";
+
+namespace vast.fbs;
+
+table Layout {
+  name: string;
+  record: RecordType;
+  attributes: [Attribute];
+}
+
+root_type Layout;
