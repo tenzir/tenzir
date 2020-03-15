@@ -73,6 +73,7 @@ set(libvast_sources
     src/icmp.cpp
     src/ids.cpp
     src/json.cpp
+    src/logger.cpp
     src/meta_index.cpp
     src/null_bitmap.cpp
     src/operator.cpp

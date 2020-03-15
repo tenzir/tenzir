@@ -13,11 +13,23 @@
 
 #pragma once
 
-#include <caf/logger.hpp>
-
 #include "vast/config.hpp"
 #include "vast/detail/pp.hpp"
 #include "vast/detail/type_traits.hpp"
+
+#include <caf/logger.hpp>
+
+namespace vast {
+
+namespace system {
+
+class configuration;
+
+}
+
+void fixup_logger(const system::configuration& cfg);
+
+} // namespace vast
 
 // -- VAST logging macros ------------------------------------------------------
 
@@ -54,10 +66,10 @@ namespace vast::detail {
 
 template <class T>
 auto id_or_name(T&& x) {
-  static_assert(
-    !std::is_same_v<const char*, std::remove_reference<T>>,
-    "const char* is not allowed for the first argument in a logging statement. "
-    "Supply a component or use VAST_[ERROR|WARNING|INFO|DEBUG]_ANON instead.");
+  static_assert(!std::is_same_v<const char*, std::remove_reference<T>>,
+                "const char* is not allowed for the first argument in a "
+                "logging statement. Supply a component or use "
+                "VAST_[ERROR|WARNING|INFO|VERBOSE|DEBUG]_ANON instead.");
   if constexpr (std::is_pointer_v<T>) {
     using value_type = std::remove_pointer_t<T>;
     if constexpr (has_ostream_operator<value_type>)
@@ -81,51 +93,63 @@ auto id_or_name(T&& x) {
 #define VAST_LOG_COMPONENT(lvl, m, ...)                                        \
   VAST_LOG(lvl, ::vast::detail::id_or_name(m), __VA_ARGS__)
 
-#if VAST_LOG_LEVEL >= CAF_LOG_LEVEL_TRACE
+#  if VAST_LOG_LEVEL >= VAST_LOG_LEVEL_TRACE
 
-#define VAST_TRACE(...)                                                        \
-  VAST_LOG(CAF_LOG_LEVEL_TRACE, "ENTRY", __VA_ARGS__);                         \
-  auto CAF_UNIFYN(vast_log_trace_guard_) = ::caf::detail::make_scope_guard(    \
-    [=] { VAST_LOG(CAF_LOG_LEVEL_TRACE, "EXIT"); })
+#    define VAST_TRACE(...)                                                    \
+      VAST_LOG(VAST_LOG_LEVEL_TRACE, "ENTRY", __VA_ARGS__);                    \
+      auto CAF_UNIFYN(vast_log_trace_guard_)                                   \
+        = ::caf::detail::make_scope_guard(                                     \
+          [=] { VAST_LOG(VAST_LOG_LEVEL_TRACE, "EXIT"); })
 
-#else // VAST_LOG_LEVEL > CAF_LOG_LEVEL_TRACE
+#  else // VAST_LOG_LEVEL > VAST_LOG_LEVEL_TRACE
 
-#define VAST_TRACE(...) CAF_VOID_STMT
+#    define VAST_TRACE(...) CAF_VOID_STMT
 
-#endif // VAST_LOG_LEVEL > CAF_LOG_LEVEL_TRACE
+#  endif // VAST_LOG_LEVEL > VAST_LOG_LEVEL_TRACE
 
-#if VAST_LOG_LEVEL >= CAF_LOG_LEVEL_ERROR
-#define VAST_ERROR(...) VAST_LOG_COMPONENT(CAF_LOG_LEVEL_ERROR, __VA_ARGS__)
-#define VAST_ERROR_ANON(...) VAST_LOG(CAF_LOG_LEVEL_ERROR, __VA_ARGS__)
-#else
-#define VAST_ERROR(...) CAF_VOID_STMT
-#define VAST_ERROR_ANON(...) CAF_VOID_STMT
-#endif
+#  if VAST_LOG_LEVEL >= VAST_LOG_LEVEL_ERROR
+#    define VAST_ERROR(...)                                                    \
+      VAST_LOG_COMPONENT(VAST_LOG_LEVEL_ERROR, __VA_ARGS__)
+#    define VAST_ERROR_ANON(...) VAST_LOG(VAST_LOG_LEVEL_ERROR, __VA_ARGS__)
+#  else
+#    define VAST_ERROR(...) CAF_VOID_STMT
+#    define VAST_ERROR_ANON(...) CAF_VOID_STMT
+#  endif
 
+#  if VAST_LOG_LEVEL >= VAST_LOG_LEVEL_WARNING
+#    define VAST_WARNING(...)                                                  \
+      VAST_LOG_COMPONENT(VAST_LOG_LEVEL_WARNING, __VA_ARGS__)
+#    define VAST_WARNING_ANON(...) VAST_LOG(VAST_LOG_LEVEL_WARNING, __VA_ARGS__)
+#  else
+#    define VAST_WARNING(...) CAF_VOID_STMT
+#    define VAST_WARNING_ANON(...) CAF_VOID_STMT
+#  endif
 
-#if VAST_LOG_LEVEL >= CAF_LOG_LEVEL_WARNING
-#define VAST_WARNING(...) VAST_LOG_COMPONENT(CAF_LOG_LEVEL_WARNING, __VA_ARGS__)
-#define VAST_WARNING_ANON(...) VAST_LOG(CAF_LOG_LEVEL_WARNING, __VA_ARGS__)
-#else
-#define VAST_WARNING(...) CAF_VOID_STMT
-#define VAST_WARNING_ANON(...) CAF_VOID_STMT
-#endif
+#  if VAST_LOG_LEVEL >= VAST_LOG_LEVEL_INFO
+#    define VAST_INFO(...) VAST_LOG_COMPONENT(VAST_LOG_LEVEL_INFO, __VA_ARGS__)
+#    define VAST_INFO_ANON(...) VAST_LOG(VAST_LOG_LEVEL_INFO, __VA_ARGS__)
+#  else
+#    define VAST_INFO(...) CAF_VOID_STMT
+#    define VAST_INFO_ANON(...) CAF_VOID_STMT
+#  endif
 
-#if VAST_LOG_LEVEL >= CAF_LOG_LEVEL_INFO
-#define VAST_INFO(...) VAST_LOG_COMPONENT(CAF_LOG_LEVEL_INFO, __VA_ARGS__)
-#define VAST_INFO_ANON(...) VAST_LOG(CAF_LOG_LEVEL_INFO, __VA_ARGS__)
-#else
-#define VAST_INFO(...) CAF_VOID_STMT
-#define VAST_INFO_ANON(...) CAF_VOID_STMT
-#endif
+#  if VAST_LOG_LEVEL >= VAST_LOG_LEVEL_VERBOSE
+#    define VAST_VERBOSE(...)                                                  \
+      VAST_LOG_COMPONENT(VAST_LOG_LEVEL_VERBOSE, __VA_ARGS__)
+#    define VAST_VERBOSE_ANON(...) VAST_LOG(VAST_LOG_LEVEL_VERBOSE, __VA_ARGS__)
+#  else
+#    define VAST_VERBOSE(...) CAF_VOID_STMT
+#    define VAST_VERBOSE_ANON(...) CAF_VOID_STMT
+#  endif
 
-#if VAST_LOG_LEVEL >= CAF_LOG_LEVEL_DEBUG
-#define VAST_DEBUG(...) VAST_LOG_COMPONENT(CAF_LOG_LEVEL_DEBUG, __VA_ARGS__)
-#define VAST_DEBUG_ANON(...) VAST_LOG(CAF_LOG_LEVEL_DEBUG, __VA_ARGS__)
-#else
-#define VAST_DEBUG(...) CAF_VOID_STMT
-#define VAST_DEBUG_ANON(...) CAF_VOID_STMT
-#endif
+#  if VAST_LOG_LEVEL >= VAST_LOG_LEVEL_DEBUG
+#    define VAST_DEBUG(...)                                                    \
+      VAST_LOG_COMPONENT(VAST_LOG_LEVEL_DEBUG, __VA_ARGS__)
+#    define VAST_DEBUG_ANON(...) VAST_LOG(VAST_LOG_LEVEL_DEBUG, __VA_ARGS__)
+#  else
+#    define VAST_DEBUG(...) CAF_VOID_STMT
+#    define VAST_DEBUG_ANON(...) CAF_VOID_STMT
+#  endif
 
 #else // defined(VAST_LOG_LEVEL)
 
@@ -144,8 +168,11 @@ auto id_or_name(T&& x) {
 #define VAST_INFO(...) CAF_VOID_STMT
 #define VAST_INFO_ANON(...) CAF_VOID_STMT
 
-#define VAST_DEBUG(...) CAF_VOID_STMT
-#define VAST_DEBUG_ANON(...) CAF_VOID_STMT
+#  define VAST_VERBOSE(...) CAF_VOID_STMT
+#  define VAST_VERBOSE_ANON(...) CAF_VOID_STMT
+
+#  define VAST_DEBUG(...) CAF_VOID_STMT
+#  define VAST_DEBUG_ANON(...) CAF_VOID_STMT
 
 #endif // defined(VAST_LOG_LEVEL)
 

@@ -10,6 +10,11 @@ Every entry has a category for which we use the following visual abbreviations:
 
 ## [Unreleased]
 
+- 🔄 The VERBOSE log level has been added between INFO and DEBUG. This level
+  is enabled at build time for all build types, making it possible to get more
+  detailed logging output from release builds.
+  [#787](https://github.com/tenzir/pull/787)
+
 - 🔄 The command line options prefix for changing CAF options was changed from
   `--caf#` to `--caf.`. [#797](https://github.com/tenzir/pull/797)
 

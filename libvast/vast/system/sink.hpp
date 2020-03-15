@@ -94,7 +94,7 @@ caf::behavior sink(caf::stateful_actor<sink_state<Writer>>* self,
       auto& st = self->state;
       auto now = steady_clock::now();
       auto time_since_flush = now - st.last_flush;
-#if VAST_LOG_LEVEL >= CAF_LOG_LEVEL_INFO
+#if VAST_LOG_LEVEL >= VAST_LOG_LEVEL_INFO
       if (st.processed == 0) {
         VAST_INFO(st.name, "received first result with a latency of",
                   to_string(time_since_flush));
