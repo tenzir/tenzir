@@ -585,7 +585,7 @@ elseif (EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/aux/caf/CMakeLists.txt)
     EXPORT CAFTargets
     DESTINATION "${INSTALL_VAST_CMAKEDIR}"
     NAMESPACE caf::)
-  string(APPEND VAST_CAF_TARGETS_FILE
+  string(APPEND VAST_EXTRA_TARGETS_FILES
          "include(\"\${CMAKE_CURRENT_LIST_DIR}/CAFTargets.cmake\")")
   set(CAF_FOUND true)
 else ()
@@ -680,6 +680,8 @@ export(
   EXPORT tsl-robin-mapTargets
   FILE tsl-robin-mapTargets.cmake
   NAMESPACE tsl::)
+string(APPEND VAST_EXTRA_TARGETS_FILES
+        "include(\"\${CMAKE_CURRENT_LIST_DIR}/tsl-robin-mapTargets.cmake\")")
 
 find_package(Doxygen QUIET)
 find_package(Pandoc QUIET)
