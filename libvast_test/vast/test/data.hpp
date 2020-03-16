@@ -28,6 +28,13 @@ extern const char* bview;
 extern const char* updates20150505;
 
 } // namespace mrt
+
+namespace syslog {
+
+extern const char* syslog_msgs;
+
+} // namespace syslog
+
 } // namespace logs
 
 namespace traces {

@@ -40,27 +40,34 @@ const char* ssl = VAST_TEST_PATH "artifacts/logs/zeek/ssl.log";
 
 namespace bgpdump {
 
-const char* updates20140821 = VAST_TEST_PATH
-  "artifacts/logs/bgpdump/updates20140821.txt";
-const char* updates20180124 = VAST_TEST_PATH
-  "artifacts/logs/bgpdump/updates20180124.txt";
+const char* updates20140821
+  = VAST_TEST_PATH "artifacts/logs/bgpdump/updates20140821.txt";
+const char* updates20180124
+  = VAST_TEST_PATH "artifacts/logs/bgpdump/updates20180124.txt";
 
 } // namespace bgpdump
 
 namespace mrt {
 
 const char* bview = VAST_TEST_PATH "artifacts/logs/mrt/bview.20161024.0800";
-const char* updates20150505 = VAST_TEST_PATH
-  "artifacts/logs/mrt/updates20150505.0";
+const char* updates20150505
+  = VAST_TEST_PATH "artifacts/logs/mrt/updates20150505.0";
 
 } // namespace mrt
+
+namespace syslog {
+
+const char* syslog_msgs
+  = VAST_TEST_PATH "artifacts/logs/syslog/syslog-test.txt";
+
+} // namespace syslog
 } // namespace logs
 
 namespace traces {
 
 const char* nmap_vsn = VAST_TEST_PATH "artifacts/traces/nmap_vsn.pcap";
-const char* workshop_2011_browse = VAST_TEST_PATH
-  "artifacts/traces/workshop_2011_browse.pcap";
+const char* workshop_2011_browse
+  = VAST_TEST_PATH "artifacts/traces/workshop_2011_browse.pcap";
 
 } // namespace traces
 } // namespace artifacts
@@ -88,9 +95,11 @@ int main(int argc, char** argv) {
     }
   }
   if (start != argc) {
-    auto res = caf::message_builder(argv + start, argv + argc).extract_opts({
-      {"gperftools,g", "enable gperftools profiler for actor tests"},
-    });
+    auto res
+      = caf::message_builder(argv + start, argv + argc)
+          .extract_opts({
+            {"gperftools,g", "enable gperftools profiler for actor tests"},
+          });
     if (!res.error.empty()) {
       std::cout << res.error << std::endl;
       return 1;

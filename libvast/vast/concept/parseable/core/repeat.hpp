@@ -13,12 +13,11 @@
 
 #pragma once
 
-#include <vector>
-
 #include "vast/concept/parseable/core/parser.hpp"
 #include "vast/concept/parseable/detail/container.hpp"
-
 #include "vast/detail/assert.hpp"
+
+#include <vector>
 
 namespace vast {
 namespace detail {
@@ -124,4 +123,3 @@ auto rep(const Parser& p, T min, U max) {
 
 } // namespace parsers
 } // namespace vast
-

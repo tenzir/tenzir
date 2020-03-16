@@ -13,23 +13,24 @@
 
 #include "vast/system/spawn_source.hpp"
 
-#include <string>
-
-#include <caf/actor.hpp>
-#include <caf/expected.hpp>
-#include <caf/local_actor.hpp>
-
 #include "vast/config.hpp"
 #include "vast/defaults.hpp"
 #include "vast/detail/make_io_stream.hpp"
 #include "vast/detail/unbox_var.hpp"
 #include "vast/format/bgpdump.hpp"
-#include "vast/format/zeek.hpp"
 #include "vast/format/mrt.hpp"
+#include "vast/format/syslog.hpp"
 #include "vast/format/test.hpp"
+#include "vast/format/zeek.hpp"
 #include "vast/system/node.hpp"
 #include "vast/system/source.hpp"
 #include "vast/system/spawn_arguments.hpp"
+
+#include <caf/actor.hpp>
+#include <caf/expected.hpp>
+#include <caf/local_actor.hpp>
+
+#include <string>
 
 #ifdef VAST_HAVE_PCAP
 #include "vast/format/pcap.hpp"
@@ -67,6 +68,15 @@ maybe_actor spawn_pcap_source([[maybe_unused]] caf::local_actor* self,
     in, detail::make_input_stream<defaults_t>(args.invocation.options));
   return spawn_generic_source<format::pcap::reader>(self, args, std::move(in));
 #endif // VAST_HAVE_PCAP
+}
+
+maybe_actor spawn_syslog_source([[maybe_unused]] caf::local_actor* self,
+                                [[maybe_unused]] spawn_arguments& args) {
+  using defaults_t = defaults::import::syslog;
+  VAST_UNBOX_VAR(
+    in, detail::make_input_stream<defaults_t>(args.invocation.options));
+  return spawn_generic_source<format::syslog::reader>(self, args,
+                                                      std::move(in));
 }
 
 maybe_actor spawn_test_source(caf::local_actor* self, spawn_arguments& args) {

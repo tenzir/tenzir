@@ -1,0 +1,5 @@
+<34>1 2003-10-11T22:14:15.003Z mymachineexamplecom su asd ID47 [exampleSDID@32473 iut="3" eventSource="App\]lication" eventID="1011"] BOM'su root' failed for lonvick on /dev/pts/8
+<34>2 2003-10-11T22:14:15.003Z mymachineexamplecom su - ID47 - BOM'su root' failed for lonvick on /dev/pts/8
+<165>3 - 192.0.2.1 myproc 8710 - - %% It's time to make the do-nuts.
+<165>4 2003-10-11T22:14:15.003Z mymachineexamplecom evntslog - ID47 [exampleSDID@32473 iut="4" eventSource="Applic\"ation" eventID="1011"] BOMAn application event log entry...
+<165>5 2003-10-11T22:14:15.003Z mymachineexamplecom evntslog - ID47 [exampleSDID@32473 iut="5" eventSource="Applic\\ation" eventID="1011"][examplePriority@32473 class="high"]

@@ -66,6 +66,7 @@ set(libvast_sources
     src/format/ostream_writer.cpp
     src/format/reader.cpp
     src/format/single_layout_reader.cpp
+    src/format/syslog.cpp
     src/format/test.cpp
     src/format/writer.cpp
     src/format/zeek.cpp
@@ -283,6 +284,7 @@ set(tests
     test/format/csv.cpp
     test/format/json.cpp
     test/format/mrt.cpp
+    test/format/syslog.cpp
     test/format/writer.cpp
     test/format/zeek.cpp
     test/hash.cpp
