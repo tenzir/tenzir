@@ -267,20 +267,15 @@ void index_state::send_report() {
   for (auto& p : unpersisted)
     append_report(*p.first);
   if (min.events > 0) {
-#if VAST_LOG_LEVEL >= CAF_LOG_LEVEL_INFO
-    // TODO: Print on VERBOSE log level.
-    VAST_INFO(self, "handled", min.events, "events at a minimum rate of",
-              static_cast<uint64_t>(min_rate), "events/sec in",
-              to_string(min.duration));
-#endif
+    VAST_VERBOSE(self, "handled", min.events, "events at a minimum rate of",
+                 static_cast<uint64_t>(min_rate), "events/sec in",
+                 to_string(min.duration));
     r.push_back({"index.min", min});
   }
   if (max.events > 0) {
-#if VAST_LOG_LEVEL >= CAF_LOG_LEVEL_DEBUG
     VAST_DEBUG(self, "handled", max.events, "events at a maximum rate of",
                static_cast<uint64_t>(max_rate), "events/sec in",
                to_string(max.duration));
-#endif
     r.push_back({"index.max", max});
   }
   if (!r.empty())

@@ -42,16 +42,15 @@ namespace vast::system {
 void archive_state::send_report() {
   if (measurement.events > 0) {
     auto r = performance_report{{{std::string{name}, measurement}}};
-#if VAST_LOG_LEVEL >= CAF_LOG_LEVEL_INFO
-    // TODO: Print on VERBOSE log level.
+#if VAST_LOG_LEVEL >= VAST_LOG_LEVEL_VERBOSE
     for (const auto& [key, m] : r) {
       if (auto rate = m.rate_per_sec(); std::isfinite(rate))
-        VAST_INFO(self, "handled", m.events, "events at a rate of",
-                  static_cast<uint64_t>(rate), "events/sec in",
-                  to_string(m.duration));
+        VAST_VERBOSE(self, "handled", m.events, "events at a rate of",
+                     static_cast<uint64_t>(rate), "events/sec in",
+                     to_string(m.duration));
       else
-        VAST_INFO(self, "handled", m.events, "events in",
-                  to_string(m.duration));
+        VAST_VERBOSE(self, "handled", m.events, "events in",
+                     to_string(m.duration));
     }
 #endif
     measurement = vast::system::measurement{};
