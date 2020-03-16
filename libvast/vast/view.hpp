@@ -82,7 +82,7 @@ class pattern_view : detail::totally_ordered<pattern_view> {
 public:
   static pattern glob(std::string_view x);
 
-  pattern_view(const pattern& x);
+  explicit pattern_view(const pattern& x);
 
   explicit pattern_view(std::string_view str);
 
@@ -205,7 +205,7 @@ public:
 
   container_view_handle() = default;
 
-  container_view_handle(Pointer ptr) : ptr_{ptr} {
+  explicit container_view_handle(Pointer ptr) : ptr_{ptr} {
     // nop
   }
 
@@ -239,11 +239,8 @@ public:
 
   template <class Hasher>
   friend void hash_append(Hasher& h, container_view_handle xs) {
-    if (!xs) {
-      hash_append(h, false);
-      return;
-    }
-    hash_append(h, true);
+    if (!xs)
+      return hash_append(h, caf::none);
     for (auto x : *xs)
       hash_append(h, x);
     hash_append(h, xs->size());
@@ -332,7 +329,7 @@ struct container_view
   using iterator = detail::container_view_iterator<T>;
   using const_iterator = iterator;
 
-  virtual ~container_view() = default;
+  ~container_view() override = default;
 
   iterator begin() const {
     return {this, 0};
@@ -391,7 +388,7 @@ class default_vector_view
   : public container_view<data_view>,
     detail::totally_ordered<default_vector_view> {
 public:
-  default_vector_view(const vector& xs);
+  explicit default_vector_view(const vector& xs);
 
   value_type at(size_type i) const override;
 
@@ -407,7 +404,7 @@ class default_set_view
   : public container_view<data_view>,
     detail::totally_ordered<default_set_view> {
 public:
-  default_set_view(const set& xs);
+  explicit default_set_view(const set& xs);
 
   value_type at(size_type i) const override;
 
@@ -423,7 +420,7 @@ class default_map_view
   : public container_view<std::pair<data_view, data_view>>,
     detail::totally_ordered<default_map_view> {
 public:
-  default_map_view(const map& xs);
+  explicit default_map_view(const map& xs);
 
   value_type at(size_type i) const override;
 
@@ -439,17 +436,22 @@ private:
 /// @relates view_trait
 template <class T>
 view<T> make_view(const T& x) {
-  constexpr auto directly_constructible = detail::is_any_v<
-    T, caf::none_t, bool, integer, count, real, duration, time, std::string,
-    pattern, address, subnet, port, enumeration>;
+  constexpr auto directly_constructible
+    = detail::is_any_v<T, caf::none_t, bool, integer, count, real, duration,
+                       time, std::string, address, subnet, port, enumeration>;
   if constexpr (directly_constructible) {
     return x;
+  } else if constexpr (std::is_same_v<T, pattern>) {
+    return pattern_view{x};
   } else if constexpr (std::is_same_v<T, vector>) {
-    return vector_view_ptr{caf::make_counted<default_vector_view>(x)};
+    return vector_view_handle{
+      vector_view_ptr{caf::make_counted<default_vector_view>(x)}};
   } else if constexpr (std::is_same_v<T, set>) {
-    return set_view_ptr{caf::make_counted<default_set_view>(x)};
+    return set_view_handle{
+      set_view_ptr{caf::make_counted<default_set_view>(x)}};
   } else if constexpr (std::is_same_v<T, map>) {
-    return map_view_ptr{caf::make_counted<default_map_view>(x)};
+    return map_view_handle{
+      map_view_ptr{caf::make_counted<default_map_view>(x)}};
   } else {
     VAST_ASSERT(!"missing branch");
     return {};

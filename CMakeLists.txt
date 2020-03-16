@@ -660,7 +660,7 @@ if (NOT VAST_NO_ARROW)
     foreach (dep ${dependencies_config})
       find_package("${dep}" REQUIRED QUIET CONFIG)
       string(APPEND VAST_FIND_DEPENDENCY_LIST
-            "\nfind_package(${dep} REQUIRED QUIET CONFIG)")
+             "\nfind_package(${dep} REQUIRED QUIET CONFIG)")
     endforeach ()
   endif ()
   find_package(Arrow REQUIRED QUIET CONFIG)
@@ -673,6 +673,13 @@ if (NOT VAST_NO_ARROW)
     set(ARROW_LIBRARIES arrow_static)
   endif ()
 endif ()
+
+# Add robin_map
+add_subdirectory(aux/robin-map)
+export(
+  EXPORT tsl-robin-mapTargets
+  FILE tsl-robin-mapTargets.cmake
+  NAMESPACE tsl::)
 
 find_package(Doxygen QUIET)
 find_package(Pandoc QUIET)

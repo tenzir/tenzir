@@ -13,6 +13,7 @@ Repositories
 
 ### subtrees
 - [lz4](https://github.com/lz4/lz4): git@github.com:lz4/lz4.git
+- [robin-map](https://github.com/Tessil/robin-map/): git@github.com:Tessil/robin-map.git
 - [xxHash](https://github.com/Cyan4973/xxHash): git@github.com:Cyan4973/xxHash.git
 
 Adding a New Repository
@@ -34,7 +35,6 @@ To add a new repository **foo** at location `REMOTE` (e.g.,
 2. Add the repository as a subtree:
 
        git subtree add --prefix=aux/foo --squash REMOTE master
-       git commit -a -m 'Add 3rd-party library foo'
 
 Synchronize an Existing Repository
 ----------------------------------

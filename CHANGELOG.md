@@ -10,6 +10,11 @@ Every entry has a category for which we use the following visual abbreviations:
 
 ## [Unreleased]
 
+- 🎁 The hash index has been re-enabled after it was outfitted with a new
+  [high-performance hash map](https://github.com/Tessil/robin-map/) implementation
+  that increased performance to the point where it is on par with the regular
+  index.
+
 - 🔄 The VERBOSE log level has been added between INFO and DEBUG. This level
   is enabled at build time for all build types, making it possible to get more
   detailed logging output from release builds.
