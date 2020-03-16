@@ -233,8 +233,9 @@ caf::dictionary<caf::config_value> index_state::status() const {
 
 void index_state::send_report() {
   performance_report r;
-  measurement min;
+  measurement min, max;
   auto min_rate = std::numeric_limits<double>::infinity();
+  auto max_rate = -std::numeric_limits<double>::infinity();
   auto append_report = [&](partition& p) {
     for (auto& [layout, ti] : p.table_indexers_) {
       for (size_t i = 0; i < ti.measurements_.size(); ++i) {
@@ -253,6 +254,10 @@ void index_state::send_report() {
             min_rate = rate;
             min = tmp;
           }
+          if (rate > max_rate) {
+            max_rate = rate;
+            max = tmp;
+          }
         }
       }
     }
@@ -261,8 +266,18 @@ void index_state::send_report() {
     append_report(*active);
   for (auto& p : unpersisted)
     append_report(*p.first);
-  if (min.events > 0)
-    r.push_back({"index", min});
+  if (min.events > 0) {
+    VAST_VERBOSE(self, "handled", min.events, "events at a minimum rate of",
+                 static_cast<uint64_t>(min_rate), "events/sec in",
+                 to_string(min.duration));
+    r.push_back({"index.min", min});
+  }
+  if (max.events > 0) {
+    VAST_DEBUG(self, "handled", max.events, "events at a maximum rate of",
+               static_cast<uint64_t>(max_rate), "events/sec in",
+               to_string(max.duration));
+    r.push_back({"index.max", max});
+  }
   if (!r.empty())
     self->send(accountant, std::move(r));
 }

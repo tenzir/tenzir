@@ -13,7 +13,9 @@
 
 #include "vast/system/archive.hpp"
 
+#include "vast/concept/printable/std/chrono.hpp"
 #include "vast/concept/printable/stream.hpp"
+#include "vast/concept/printable/to_string.hpp"
 #include "vast/defaults.hpp"
 #include "vast/detail/assert.hpp"
 #include "vast/detail/fill_status_map.hpp"
@@ -39,8 +41,18 @@ namespace vast::system {
 
 void archive_state::send_report() {
   if (measurement.events > 0) {
-    using namespace std::string_literals;
-    performance_report r = {{{"archive"s, measurement}}};
+    auto r = performance_report{{{std::string{name}, measurement}}};
+#if VAST_LOG_LEVEL >= VAST_LOG_LEVEL_VERBOSE
+    for (const auto& [key, m] : r) {
+      if (auto rate = m.rate_per_sec(); std::isfinite(rate))
+        VAST_VERBOSE(self, "handled", m.events, "events at a rate of",
+                     static_cast<uint64_t>(rate), "events/sec in",
+                     to_string(m.duration));
+      else
+        VAST_VERBOSE(self, "handled", m.events, "events in",
+                     to_string(m.duration));
+    }
+#endif
     measurement = vast::system::measurement{};
     self->send(accountant, std::move(r));
   }
