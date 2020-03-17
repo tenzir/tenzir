@@ -40,39 +40,7 @@ if(${CMAKE_VERSION} VERSION_GREATER "3.2")
                 DESTINATION "${CMAKE_INSTALL_DATAROOTDIR}")
     endif()
 
-
-
-    ## Create and install tsl-robin-mapConfig.cmake
-    configure_package_config_file("${CMAKE_CURRENT_SOURCE_DIR}/cmake/tsl-robin-mapConfig.cmake.in"
-                                  "${CMAKE_CURRENT_BINARY_DIR}/tsl-robin-mapConfig.cmake"
-                                  INSTALL_DESTINATION "${CMAKE_INSTALL_DATAROOTDIR}/cmake/tsl-robin-map")
-
-    install(FILES "${CMAKE_CURRENT_BINARY_DIR}/tsl-robin-mapConfig.cmake"
-            DESTINATION "${CMAKE_INSTALL_DATAROOTDIR}/cmake/tsl-robin-map")
-
-
-
     ## Create and install tsl-robin-mapTargets.cmake
     install(TARGETS robin_map
             EXPORT tsl-robin-mapTargets)
-
-    install(EXPORT tsl-robin-mapTargets
-            NAMESPACE tsl::
-            DESTINATION "${CMAKE_INSTALL_DATAROOTDIR}/cmake/tsl-robin-map")
-
-
-
-    ## Create and install tsl-robin-mapConfigVersion.cmake
-    # tsl-robin-map is header-only and does not depend on the architecture.
-    # Remove CMAKE_SIZEOF_VOID_P from tsl-robin-mapConfigVersion.cmake so that a
-    # tsl-robin-mapConfig.cmake generated for a 64 bit target can be used for 32 bit
-    # targets and vice versa.
-    set(CMAKE_SIZEOF_VOID_P_BACKUP ${CMAKE_SIZEOF_VOID_P})
-    unset(CMAKE_SIZEOF_VOID_P)
-    write_basic_package_version_file("${CMAKE_CURRENT_BINARY_DIR}/tsl-robin-mapConfigVersion.cmake"
-                                     COMPATIBILITY SameMajorVersion)
-    set(CMAKE_SIZEOF_VOID_P ${CMAKE_SIZEOF_VOID_P_BACKUP})
-
-    install(FILES "${CMAKE_CURRENT_BINARY_DIR}/tsl-robin-mapConfigVersion.cmake"
-            DESTINATION "${CMAKE_INSTALL_DATAROOTDIR}/cmake/tsl-robin-map")
 endif()
