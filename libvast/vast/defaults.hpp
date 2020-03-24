@@ -291,7 +291,9 @@ namespace logger {
 
 constexpr const caf::atom_value console_verbosity = caf::atom("info");
 
-constexpr const caf::atom_value file_verbosity = caf::atom("verbose");
+constexpr const caf::atom_value file_verbosity = caf::atom("quiet");
+
+constexpr const caf::atom_value server_file_verbosity = caf::atom("debug");
 
 } // namespace logger
 
@@ -308,9 +310,6 @@ constexpr std::string_view node_id = "node";
 
 /// Path to persistent state.
 constexpr std::string_view db_directory = "vast.db";
-
-/// Path to log files.
-constexpr std::string_view log_directory = "vast.log";
 
 #ifdef VAST_HAVE_ARROW
 
