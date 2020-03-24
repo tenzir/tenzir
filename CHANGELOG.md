@@ -10,6 +10,11 @@ Every entry has a category for which we use the following visual abbreviations:
 
 ## [Unreleased]
 
+- 🔄 The log folder `vast.log/` in the current directory will not be created
+  by default any more. Users must explicitly set the `system.file-verbosity`
+  option if they wish to keep the old behavior.
+  [#803](https://github.com/tenzir/vast/pull/803)
+
 - 🎁 The new `vast import syslog` command allows importing Syslog messages
   as defined in [RFC5424](https://tools.ietf.org/html/rfc5424).
   [#770](https://github.com/knapperzbusch/vast/pull/770)

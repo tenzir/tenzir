@@ -23,28 +23,6 @@ namespace vast {
 
 namespace {
 
-/// Converts a verbosity atom to its integer counterpart.
-unsigned to_level_int(caf::atom_value x) {
-  switch (atom_uint(to_lowercase(x))) {
-    default:
-      return VAST_LOG_LEVEL_QUIET;
-    case caf::atom_uint("quiet"):
-      return VAST_LOG_LEVEL_QUIET;
-    case caf::atom_uint("error"):
-      return VAST_LOG_LEVEL_ERROR;
-    case caf::atom_uint("warning"):
-      return VAST_LOG_LEVEL_WARNING;
-    case caf::atom_uint("info"):
-      return VAST_LOG_LEVEL_INFO;
-    case caf::atom_uint("verbose"):
-      return VAST_LOG_LEVEL_VERBOSE;
-    case caf::atom_uint("debug"):
-      return VAST_LOG_LEVEL_DEBUG;
-    case caf::atom_uint("trace"):
-      return VAST_LOG_LEVEL_TRACE;
-  }
-}
-
 // A trick that uses explicit template instantiation of a static member
 // as explained here: https://gist.github.com/dabrahams/1528856
 template <class Tag>
@@ -73,6 +51,27 @@ template struct stow_private<logger_cfg, &caf::logger::cfg_>;
 
 } // namespace
 
+int loglevel_to_int(caf::atom_value x, int default_value) {
+  switch (caf::atom_uint(to_lowercase(x))) {
+    default:
+      return default_value;
+    case caf::atom_uint("quiet"):
+      return VAST_LOG_LEVEL_QUIET;
+    case caf::atom_uint("error"):
+      return VAST_LOG_LEVEL_ERROR;
+    case caf::atom_uint("warning"):
+      return VAST_LOG_LEVEL_WARNING;
+    case caf::atom_uint("info"):
+      return VAST_LOG_LEVEL_INFO;
+    case caf::atom_uint("verbose"):
+      return VAST_LOG_LEVEL_VERBOSE;
+    case caf::atom_uint("debug"):
+      return VAST_LOG_LEVEL_DEBUG;
+    case caf::atom_uint("trace"):
+      return VAST_LOG_LEVEL_TRACE;
+  }
+}
+
 void fixup_logger(const system::configuration& cfg) {
   // Reset the logger so we can support the VERBOSE level
   namespace lg = defaults::logger;
@@ -86,8 +85,8 @@ void fixup_logger(const system::configuration& cfg) {
   file_verbosity = get_or(cfg, "system.file-verbosity", file_verbosity);
   console_verbosity
     = caf::get_or(cfg, "system.console-verbosity", console_verbosity);
-  cfg_.file_verbosity = to_level_int(file_verbosity);
-  cfg_.console_verbosity = to_level_int(console_verbosity);
+  cfg_.file_verbosity = loglevel_to_int(file_verbosity);
+  cfg_.console_verbosity = loglevel_to_int(console_verbosity);
   cfg_.verbosity = std::max(cfg_.file_verbosity, cfg_.console_verbosity);
 }
 

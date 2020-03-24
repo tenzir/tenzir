@@ -31,9 +31,9 @@ default_configuration::default_configuration() {
   set("logger.component-blacklist",
       caf::make_config_value_list(atom("caf"), atom("caf_flow"),
                                   atom("caf_stream")));
-  set("logger.console-verbosity", atom("INFO"));
+  set("logger.console-verbosity", defaults::logger::console_verbosity);
   set("logger.console", atom("COLORED"));
-  set("logger.file-verbosity", atom("DEBUG"));
+  set("logger.file-verbosity", defaults::logger::file_verbosity);
   // Allow VAST clusters to form a mesh.
   set("middleman.enable-automatic-connections", true);
 }

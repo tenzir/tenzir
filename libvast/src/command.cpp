@@ -352,6 +352,10 @@ parse(const command& root, command::argument_iterator first,
 
 bool init_config(caf::actor_system_config& cfg, const command::invocation& from,
                  std::ostream& error_output) {
+  // Adjust default file verbosity for commands starting a node,
+  // i.e., `vast start` and `vast -N ...`.
+  if (from.name() == "start" || caf::get_or(from.options, "system.node", false))
+    cfg.set("logger.file-verbosity", defaults::logger::server_file_verbosity);
   // Utility function for merging settings.
   std::function<void(const caf::settings&, caf::settings&)> merge_settings;
   merge_settings = [&](const caf::settings& src, caf::settings& dst) {
@@ -369,33 +373,7 @@ bool init_config(caf::actor_system_config& cfg, const command::invocation& from,
   if (auto value = caf::get_if<caf::atom_value>(&from.options,
                                                 "system.verbosity")) {
     // Verify user input.
-    int level;
-    using caf::atom_uint;
-    switch (atom_uint(to_lowercase(*value))) {
-      default:
-        level = -1;
-        break;
-      case atom_uint("quiet"):
-        level = VAST_LOG_LEVEL_QUIET;
-        break;
-      case atom_uint("error"):
-        level = VAST_LOG_LEVEL_ERROR;
-        break;
-      case atom_uint("warn"):
-        level = VAST_LOG_LEVEL_WARNING;
-        break;
-      case atom_uint("info"):
-        level = VAST_LOG_LEVEL_INFO;
-        break;
-      case atom_uint("verbose"):
-        level = VAST_LOG_LEVEL_VERBOSE;
-        break;
-      case atom_uint("debug"):
-        level = VAST_LOG_LEVEL_DEBUG;
-        break;
-      case atom_uint("trace"):
-        level = VAST_LOG_LEVEL_TRACE;
-    }
+    auto level = loglevel_to_int(caf::to_lowercase(*value), -1);
     if (level == -1) {
       error_output << "Invalid log level: " << to_string(*value) << ".\n"
                    << "Expected: quiet, error, warn, info, debug, or trace.\n";
@@ -426,10 +404,14 @@ bool init_config(caf::actor_system_config& cfg, const command::invocation& from,
   fixup_verbose_mode("file-verbosity");
   // Adjust logger file name unless the user overrides the default.
   auto default_fn = caf::defaults::logger::file_name;
-  if (caf::get_or(cfg, "logger.file-name", default_fn) == default_fn) {
+  auto file_verbosity = caf::get_or(cfg, "system.file-verbosity",
+                                    defaults::logger::file_verbosity);
+  if (caf::get_or(cfg, "logger.file-name", default_fn) == default_fn
+      && loglevel_to_int(file_verbosity) > VAST_LOG_LEVEL_QUIET) {
     // Get proper directory path.
+    auto default_logdir = get_or(cfg, "system.db-directory", defaults::system::db_directory) + "/logs";
     path log_dir
-      = get_or(cfg, "system.log-directory", defaults::system::log_directory);
+      = get_or(cfg, "system.log-directory", default_logdir);
     log_dir /= caf::deep_to_string(caf::make_timestamp()) + '#'
                + std::to_string(detail::process_id());
     // Create the log directory first, which we need to create the symlink

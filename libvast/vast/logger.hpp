@@ -27,6 +27,11 @@ class configuration;
 
 }
 
+/// Converts a verbosity atom to its integer counterpart. For unknown atoms,
+/// the `default_value` parameter will be returned.
+int loglevel_to_int(caf::atom_value ll, int default_value
+                                        = VAST_LOG_LEVEL_QUIET);
+
 void fixup_logger(const system::configuration& cfg);
 
 } // namespace vast
