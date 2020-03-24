@@ -26,6 +26,7 @@
 #include <caf/actor_system.hpp>
 #include <caf/atom.hpp>
 #include <caf/io/middleman.hpp>
+#include <caf/settings.hpp>
 #include <caf/timestamp.hpp>
 
 #include <cstdlib>
@@ -69,16 +70,19 @@ int main(int argc, char** argv) {
     return EXIT_FAILURE;
   caf::actor_system sys{cfg};
   fixup_logger(cfg);
-  // Get filesystem path to the executable.
-  auto binary = detail::objectpath();
-  if (!binary) {
-    VAST_ERROR_ANON("failed to get program path");
-    return EXIT_FAILURE;
-  }
-  auto vast_share = binary->parent().parent() / "share" / "vast";
-  // Load event types.
-  auto default_dirs = std::vector{vast_share / "schema"};
   using string_list = std::vector<std::string>;
+  std::vector<vast::path> default_dirs;
+  if (!caf::get_or(cfg, "system.no-default-schema", false)) {
+    // Get filesystem path to the executable.
+    auto binary = detail::objectpath();
+    if (!binary) {
+      VAST_ERROR_ANON("failed to get program path");
+      return EXIT_FAILURE;
+    }
+    auto vast_share = binary->parent().parent() / "share" / "vast";
+    // Load event types.
+    default_dirs = {vast_share / "schema"};
+  }
   if (auto user_dirs = caf::get_if<string_list>(&cfg, "system.schema-paths"))
     default_dirs.insert(default_dirs.end(), user_dirs->begin(),
                         user_dirs->end());
