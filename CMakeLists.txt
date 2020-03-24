@@ -210,7 +210,7 @@ set(CMAKE_CXX_STANDARD 17)
 
 # Build-type specific flags.
 string(APPEND CMAKE_CXX_FLAGS_DEBUG " -O0")
-string(APPEND CMAKE_CXX_FLAGS_RELEASE " -msse3 -mssse3 -msse4.1 -msse4.2")
+string(APPEND CMAKE_CXX_FLAGS_RELEASE " -msse3 -mssse3 -msse4.1 -msse4.2 -fno-omit-frame-pointer")
 string(APPEND CMAKE_CXX_FLAGS_RELWITHDEBINFO " -fno-omit-frame-pointer")
 if (NOT VAST_DEV_MODE)
   string(APPEND CMAKE_CXX_FLAGS_DEBUG " -g1")
