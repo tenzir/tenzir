@@ -390,7 +390,10 @@ bool init_config(caf::actor_system_config& cfg, const command::invocation& from,
     }
     cfg.set("logger.console-verbosity", *value);
   }
-
+  // Allow users to use `system.log-file` to set log filename
+  if (auto fn = caf::get_if<std::string>(&cfg, "system.log-file"))
+    cfg.set("logger.file-name", *fn);
+  // Allow users to specify `verbose` log level.
   auto fixup_verbose_mode = [&](const std::string& option) {
     auto logopt = "logger." + option;
     if (auto verbosity = caf::get_if<caf::atom_value>(&cfg, logopt)) {
@@ -408,34 +411,18 @@ bool init_config(caf::actor_system_config& cfg, const command::invocation& from,
                                     defaults::logger::file_verbosity);
   if (caf::get_or(cfg, "logger.file-name", default_fn) == default_fn
       && loglevel_to_int(file_verbosity) > VAST_LOG_LEVEL_QUIET) {
-    // Get proper directory path.
-    auto default_logdir = get_or(cfg, "system.db-directory", defaults::system::db_directory) + "/logs";
-    path log_dir
-      = get_or(cfg, "system.log-directory", default_logdir);
-    log_dir /= caf::deep_to_string(caf::make_timestamp()) + '#'
-               + std::to_string(detail::process_id());
-    // Create the log directory first, which we need to create the symlink
-    // afterwards.
+    if (caf::get_if<std::string>(&cfg, "system.log-directory"))
+      error_output << "Config option 'system.log-directory' is deprecated and"
+                      " ignored, use 'system.log-file' instead\n";
+    path log_dir = caf::get_or(cfg, "system.db-directory",
+                                     defaults::system::db_directory);
     if (!exists(log_dir))
       if (auto res = mkdir(log_dir); !res) {
         error_output << "Unable to create directory: " << log_dir.str() << "\n";
         return false;
       }
-    // Create user-friendly symlink to current log directory.
-    auto link_dir = log_dir.chop(-1) / "current";
-    if (exists(link_dir))
-      if (!rm(link_dir)) {
-        error_output << "Cannot remove log symlink: " << link_dir.str() << "\n";
-        return false;
-      }
-    auto src_dir = log_dir.trim(-1);
-    if (auto err = create_symlink(src_dir, link_dir)) {
-      error_output << "Cannot create symlink: " << src_dir.str() << " -> "
-                   << link_dir.str() << "\n";
-      return false;
-    }
     // Store full path to the log file in config.
-    auto log_file = log_dir / from.full_name + ".log";
+    auto log_file = log_dir / "server.log";
     cfg.set("logger.file-name", log_file.str());
   }
   return true;

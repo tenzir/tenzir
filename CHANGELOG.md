@@ -10,6 +10,11 @@ Every entry has a category for which we use the following visual abbreviations:
 
 ## [Unreleased]
 
+- 🔄 The config option `system.log-directory` was deprecated and replaced
+  by the new option `system.log-file`. All logs will now be written to a
+  single file.
+  [#806](https://github.com/tenzir/vast/pull/803)
+
 - 🔄 The log folder `vast.log/` in the current directory will not be created
   by default any more. Users must explicitly set the `system.file-verbosity`
   option if they wish to keep the old behavior.
