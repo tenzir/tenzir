@@ -48,10 +48,10 @@ RUN echo "Adding tenzir user" && \
   groupadd --gid 20097 tenzir && useradd --system --uid 20097 --gid tenzir tenzir
 
 EXPOSE 42000/tcp
-WORKDIR /data
-RUN chown -R tenzir:tenzir /data
-VOLUME ["/data"]
+WORKDIR $PREFIX/var/db/vast
+RUN chown -R tenzir:tenzir $PREFIX/var/db/vast
+VOLUME ["$PREFIX/var/db/vast"]
 
 USER tenzir:tenzir
-ENTRYPOINT ["/usr/local/bin/vast"]
+ENTRYPOINT ["vast"]
 CMD ["--help"]
