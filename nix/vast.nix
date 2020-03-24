@@ -47,7 +47,7 @@ stdenv.mkDerivation rec {
   propagatedNativeBuildInputs = [ pkgconfig pandoc ];
   buildInputs = [ libpcap ];
   propagatedBuildInputs = [ arrow-cpp caf ];
-  
+
   cmakeFlags = [
     "-DCAF_ROOT_DIR=${caf}"
     "-DVAST_RELOCATABLE_INSTALL=OFF"
@@ -61,7 +61,7 @@ stdenv.mkDerivation rec {
   doCheck = false;
   checkTarget = "test";
 
-  dontStrip = isCross;
+  dontStrip = true;
   postFixup = lib.optionalString isCross ''
     ${stdenv.cc.targetPrefix}strip -s $out/bin/vast
     ${stdenv.cc.targetPrefix}strip -s $out/bin/zeek-to-vast
