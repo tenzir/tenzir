@@ -36,7 +36,6 @@ struct events {
   static std::vector<event> zeek_conn_log;
   static std::vector<event> zeek_dns_log;
   static std::vector<event> zeek_http_log;
-  static std::vector<event> bgpdump_txt;
   static std::vector<event> random;
 
   static std::vector<table_slice_ptr> zeek_conn_log_slices;
@@ -45,7 +44,6 @@ struct events {
   //       at the moment (cf. #3215), so we can't fix it until then.
   static std::vector<table_slice_ptr> zeek_http_log_slices;
   static std::vector<table_slice_ptr> zeek_dns_log_slices;
-  static std::vector<table_slice_ptr> bgpdump_txt_slices;
   // static std::vector<table_slice_ptr> random_slices;
 
   static std::vector<table_slice_ptr> zeek_full_conn_log_slices;

@@ -18,11 +18,9 @@
 #include "vast/detail/assert.hpp"
 #include "vast/documentation.hpp"
 #include "vast/format/ascii.hpp"
-#include "vast/format/bgpdump.hpp"
 #include "vast/format/csv.hpp"
 #include "vast/format/json.hpp"
 #include "vast/format/json/suricata.hpp"
-#include "vast/format/mrt.hpp"
 #include "vast/format/null.hpp"
 #include "vast/format/pcap.hpp"
 #include "vast/format/syslog.hpp"
@@ -149,12 +147,6 @@ auto make_import_command() {
   import_->add_subcommand("zeek", "imports Zeek logs from STDIN or file",
                           documentation::vast_import_zeek,
                           source_opts("?import.zeek"));
-  import_->add_subcommand("mrt", "import MRT logs from STDIN or file",
-                          documentation::vast_import_mrt,
-                          source_opts("?import.mrt"));
-  import_->add_subcommand("bgpdump", "imports BGPdump logs from STDIN or file",
-                          documentation::vast_import_bgpdump,
-                          source_opts("?import.bgpdump"));
   import_->add_subcommand("csv", "imports CSV logs from STDIN or file",
                           documentation::vast_import_csv,
                           source_opts("?import.csv"));
@@ -238,9 +230,6 @@ auto make_spawn_source_command() {
   spawn_source->add_subcommand("zeek", "creates a new Zeek source", "", opts());
   spawn_source->add_subcommand("syslog", "creates a new Syslog source", "",
                                opts());
-  spawn_source->add_subcommand("bgpdump", "creates a new BGPdump source", "",
-                               opts());
-  spawn_source->add_subcommand("mrt", "creates a new MRT source", "", opts());
   return spawn_source;
 }
 
@@ -345,12 +334,9 @@ auto make_command_factory() {
     {"export zeek",
      writer_command<format::zeek::writer, defaults::export_::zeek>},
     {"infer", infer_command},
-    {"import bgpdump",
-     reader_command<format::bgpdump::reader, defaults::import::bgpdump>},
     {"import csv", reader_command<format::csv::reader, defaults::import::csv>},
     {"import json",
      reader_command<format::json::reader<>, defaults::import::json>},
-    {"import mrt", reader_command<format::mrt::reader, defaults::import::mrt>},
 #ifdef VAST_HAVE_PCAP
     {"import pcap",
      reader_command<format::pcap::reader, defaults::import::pcap>},
@@ -380,8 +366,6 @@ auto make_command_factory() {
     {"spawn sink json", remote_command},
     {"spawn sink pcap", remote_command},
     {"spawn sink zeek", remote_command},
-    {"spawn source bgpdump", remote_command},
-    {"spawn source mrt", remote_command},
     {"spawn source pcap", remote_command},
     {"spawn source test", remote_command},
     {"spawn source zeek", remote_command},

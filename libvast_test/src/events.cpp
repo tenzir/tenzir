@@ -15,7 +15,6 @@
 
 #include "vast/default_table_slice_builder.hpp"
 #include "vast/defaults.hpp"
-#include "vast/format/bgpdump.hpp"
 #include "vast/format/test.hpp"
 #include "vast/format/zeek.hpp"
 #include "vast/table_slice_builder.hpp"
@@ -111,13 +110,11 @@ size_t events::slice_size = 8;
 std::vector<event> events::zeek_conn_log;
 std::vector<event> events::zeek_dns_log;
 std::vector<event> events::zeek_http_log;
-std::vector<event> events::bgpdump_txt;
 std::vector<event> events::random;
 
 std::vector<table_slice_ptr> events::zeek_conn_log_slices;
 std::vector<table_slice_ptr> events::zeek_dns_log_slices;
 std::vector<table_slice_ptr> events::zeek_http_log_slices;
-std::vector<table_slice_ptr> events::bgpdump_txt_slices;
 // std::vector<table_slice_ptr> events::random_slices;
 
 std::vector<table_slice_ptr> events::zeek_full_conn_log_slices;
@@ -218,9 +215,6 @@ events::events() {
   REQUIRE_EQUAL(zeek_dns_log.size(), 32u);
   zeek_http_log = inhale<format::zeek::reader>(artifacts::logs::zeek::http);
   REQUIRE_EQUAL(zeek_http_log.size(), 40u);
-  bgpdump_txt = inhale<format::bgpdump::reader>(
-    artifacts::logs::bgpdump::updates20180124);
-  REQUIRE_EQUAL(bgpdump_txt.size(), 100u);
   vast::format::test::reader rd{defaults::system::table_slice_type, 42, 1000};
   random = extract(rd);
   REQUIRE_EQUAL(random.size(), 1000u);
@@ -263,8 +257,6 @@ events::events() {
   zeek_dns_log_slices = assign_ids_and_slice_up(zeek_dns_log);
   allocate_id_block(1000); // cause an artificial gap in the ID sequence
   zeek_http_log_slices = assign_ids_and_slice_up(zeek_http_log);
-  bgpdump_txt_slices = assign_ids_and_slice_up(bgpdump_txt);
-  // random_slices = slice_up(random);
   ascending_integers_slices = assign_ids_and_slice_up(ascending_integers);
   alternating_integers_slices = assign_ids_and_slice_up(alternating_integers);
   auto sort_by_id = [](std::vector<event>& v) {
@@ -298,7 +290,6 @@ events::events() {
   SANITY_CHECK(zeek_conn_log, zeek_conn_log_slices);
   SANITY_CHECK(zeek_dns_log, zeek_dns_log_slices);
   SANITY_CHECK(zeek_http_log, zeek_http_log_slices);
-  SANITY_CHECK(bgpdump_txt, bgpdump_txt_slices);
   // SANITY_CHECK(random, const_random_slices);
   // Read the full Zeek conn.log.
   caf::binary_deserializer src{nullptr, artifacts::logs::zeek::conn_buf,

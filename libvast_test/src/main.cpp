@@ -38,23 +38,6 @@ const char* ssl = VAST_TEST_PATH "artifacts/logs/zeek/ssl.log";
 
 } // namespace zeek
 
-namespace bgpdump {
-
-const char* updates20140821
-  = VAST_TEST_PATH "artifacts/logs/bgpdump/updates20140821.txt";
-const char* updates20180124
-  = VAST_TEST_PATH "artifacts/logs/bgpdump/updates20180124.txt";
-
-} // namespace bgpdump
-
-namespace mrt {
-
-const char* bview = VAST_TEST_PATH "artifacts/logs/mrt/bview.20161024.0800";
-const char* updates20150505
-  = VAST_TEST_PATH "artifacts/logs/mrt/updates20150505.0";
-
-} // namespace mrt
-
 namespace syslog {
 
 const char* syslog_msgs

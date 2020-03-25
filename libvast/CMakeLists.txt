@@ -57,10 +57,8 @@ set(libvast_sources
     src/filesystem.cpp
     src/flow.cpp
     src/format/ascii.cpp
-    src/format/bgpdump.cpp
     src/format/csv.cpp
     src/format/json.cpp
-    src/format/mrt.cpp
     src/format/multi_layout_reader.cpp
     src/format/null.cpp
     src/format/ostream_writer.cpp
@@ -283,7 +281,6 @@ set(tests
     test/flow.cpp
     test/format/csv.cpp
     test/format/json.cpp
-    test/format/mrt.cpp
     test/format/syslog.cpp
     test/format/writer.cpp
     test/format/zeek.cpp

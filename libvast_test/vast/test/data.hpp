@@ -15,20 +15,6 @@ extern const char* ssl;
 
 } // namespace zeek
 
-namespace bgpdump {
-
-extern const char* updates20140821;
-extern const char* updates20180124;
-
-} // namespace bgpdump
-
-namespace mrt {
-
-extern const char* bview;
-extern const char* updates20150505;
-
-} // namespace mrt
-
 namespace syslog {
 
 extern const char* syslog_msgs;
