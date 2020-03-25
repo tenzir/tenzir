@@ -10,6 +10,12 @@ Every entry has a category for which we use the following visual abbreviations:
 
 ## [Unreleased]
 
+- 🐞 An under-the-hood change to our parser-combinator framework makes sure that
+  we do not discard possibly invalid input data up the the end of input. This
+  uncovered a bug in our MRT/bgpdump integrations, which have thus been disabled
+  (for now), and will be fixed at a later point in time.
+  [#808](https://github.com/tenzir/vast/pull/808)
+
 - 🔄 The config option `system.log-directory` was deprecated and replaced
   by the new option `system.log-file`. All logs will now be written to a
   single file.
