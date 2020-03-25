@@ -60,7 +60,7 @@ struct parser {
   -> decltype(std::begin(r), std::end(r), bool()) {
     auto f = std::begin(r);
     auto l = std::end(r);
-    return derived().parse(f, l, a);
+    return derived().parse(f, l, a) && f == l;
   }
 
   // FIXME: don't ignore ADL.

@@ -40,7 +40,10 @@ auto to(Range&& rng)
   using std::end;
   auto f = begin(rng);
   auto l = end(rng);
-  return to<To>(f, l);
+  auto res = to<To>(f, l);
+  if (res && f != l)
+    return make_error(ec::parse_error);
+  return res;
 }
 
 template <class To, size_t N>
