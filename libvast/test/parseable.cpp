@@ -41,6 +41,16 @@ using namespace std::string_view_literals;
 using namespace vast;
 using namespace vast::parser_literals;
 
+namespace {
+
+template <class Parser>
+auto skip_to_eoi(Parser&& parser) {
+  // For range-based input, ignore that EOI may have not been reached.
+  return std::forward<Parser>(parser) >> ignore(*parsers::any);
+}
+
+} // namespace
+
 // -- core --------------------------------------------------------------------
 
 TEST(choice - LHS and RHS) {
@@ -75,7 +85,7 @@ TEST(choice triple) {
          | i32
          | eps ->* [&] { fired = true; };
   caf::variant<char, int32_t> x;
-  CHECK(p("foobar", x));
+  CHECK(skip_to_eoi(p)("foobar", x));
   CHECK(fired);
 }
 
@@ -464,27 +474,29 @@ TEST(bool) {
   MESSAGE("unused type");
   i = f;
   CHECK(p0(i, l, unused));
-  CHECK(p0(str));
+  CHECK(skip_to_eoi(p0)(str));
 }
 
 TEST(signed integral) {
+  using namespace parsers;
   auto p = integral_parser<int>{};
   int x;
   CHECK(p("-1024", x));
   CHECK_EQUAL(x, -1024);
   CHECK(p("1024", x));
   CHECK_EQUAL(x, 1024);
-  CHECK(p("12.34", x));
+  CHECK(skip_to_eoi(p)("12.34", x));
   CHECK_EQUAL(x, 12);
 }
 
 TEST(unsigned integral) {
+  using namespace parsers;
   auto p = integral_parser<unsigned>{};
   unsigned x;
   CHECK(!p("-1024"));
   CHECK(p("1024", x));
   CHECK_EQUAL(x, 1024u);
-  CHECK(p("12.34", x));
+  CHECK(skip_to_eoi(p)("12.34", x));
   CHECK_EQUAL(x, 12u);
 }
 
@@ -685,17 +697,17 @@ TEST(dynamic bytes) {
   using namespace parsers;
   std::string foo;
   auto three = 3;
-  CHECK(nbytes<char>(three)("foobar"s, foo));
+  CHECK(skip_to_eoi(nbytes<char>(three))("foobar"s, foo));
   CHECK_EQUAL(foo, "foo"s);
   MESSAGE("input too short");
   foo.clear();
   auto two = 2;
-  CHECK(nbytes<char>(two)("foobar"s, foo));
+  CHECK(skip_to_eoi(nbytes<char>(two))("foobar"s, foo));
   CHECK_EQUAL(foo, "fo"s);
   MESSAGE("input too large");
   foo.clear();
   auto seven = 7;
-  CHECK(!nbytes<char>(seven)("foobar"s, foo));
+  CHECK(!skip_to_eoi(nbytes<char>(seven))("foobar"s, foo));
   CHECK_EQUAL(foo, "foobar"s);
 }
 
