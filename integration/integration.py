@@ -103,7 +103,7 @@ def try_wait(process, timeout):
     except subprocess.TimeoutExpired:
         LOGGER.error(f"timeout reached, terminating process")
         process.terminate()
-        return Result.ERROR
+        return Result.TIMEOUT
 
 
 def run_flamegraph(args, svg_file):
@@ -128,6 +128,7 @@ class Result(Enum):
     SUCCESS = 1  # Baseline comparison succeded.
     FAILURE = 2  # Baseline mismatch.
     ERROR = 3  # Crashes or returns with non-zero exit code.
+    TIMEOUT = 4 # Command timed out
 
 
 class TestSummary:
@@ -138,6 +139,7 @@ class TestSummary:
         self.succeeded = 0
         self.failed = 0
         self.errors = 0
+        self.timeouts = 0
 
     def __repr__(self):
         return f"({self.step_count}/{self.succeeded}/{self.failed})"
@@ -150,8 +152,20 @@ class TestSummary:
             self.failed += 1
         elif result is Result.ERROR:
             self.errors += 1
+        elif result is Result.TIMEOUT:
+            self.timeouts += 1
         else:
             pass
+
+    def dominant_state(self):
+        """Reduce to a single Result"""
+        if self.errors > 0:
+            return Result.ERROR
+        if self.timeouts > 0:
+            return Result.TIMEOUT
+        if self.failed > 0:
+            return Result.FAILURE
+        return Result.SUCCESS
 
     def successful(self):
         return self.step_count == self.succeeded
@@ -220,13 +234,17 @@ def run_step(basecmd, step_id, step, work_dir, baseline_dir, update_baseline):
             out = None
             if step.transformation:
                 LOGGER.debug(f"transforming output with `{step.transformation}`")
-                out = subprocess.run(
-                    [step.transformation],
-                    stdin=out_handle,
-                    stdout=subprocess.PIPE,
-                    timeout=STEP_TIMEOUT,
-                    shell=True,
-                ).stdout.decode("utf8")
+                try:
+                    out = subprocess.run(
+                        [step.transformation],
+                        stdin=out_handle,
+                        stdout=subprocess.PIPE,
+                        timeout=STEP_TIMEOUT,
+                        shell=True,
+                    ).stdout.decode("utf8")
+                except subprocess.TimeoutExpired:
+                    LOGGER.error(f"timeout reached, terminating transformation")
+                    return Result.TIMEOUT
             else:
                 out = out_handle.read()
             diff = None
@@ -405,22 +423,22 @@ class Tester:
             LOGGER.info(f"running step {step_i}: {step.command}")
             result = run_step(cmd, step_id, step, work_dir, baseline_dir, self.update)
             summary.count(result)
-            if result is Result.ERROR:
+            if result in [Result.ERROR, Result.TIMEOUT]:
                 LOGGER.error("skipping remaining steps after error")
                 break
             step_i += 1
         exec(fexit)
         # Summarize result.
-        if not self.args.keep and summary.successful():
-            LOGGER.debug(f"removing working directory {work_dir}")
-            shutil.rmtree(work_dir)
         if summary.successful():
             LOGGER.debug(f"ran all {summary.step_count} steps successfully")
-        else:
-            LOGGER.warning(
-                f"ran {summary.succeeded}/{summary.step_count} " "steps successfully"
-            )
-        return summary.successful()
+            if not self.args.keep:
+                LOGGER.debug(f"removing working directory {work_dir}")
+                shutil.rmtree(work_dir)
+            return Result.SUCCESS
+        LOGGER.warning(
+            f"ran {summary.succeeded}/{summary.step_count} " "steps successfully"
+        )
+        return summary.dominant_state()
 
 
 def validate(data, set_dir):
@@ -526,8 +544,19 @@ def run(args, test_dec):
                 definition = definition._replace(
                     steps=tester.check_guards(definition.steps)
                 )
-                if not tester.run(name, definition):
-                    result = False
+                test_result = Result.FAILURE
+                for i in range(0, args.repetitions):
+                    test_result = tester.run(name, definition)
+                    if test_result is Result.TIMEOUT:
+                        if i < args.repetitions - 1:
+                            # try again
+                            LOGGER.warning(
+                                f"Re-running test {name} {i+2}/{args.repetitions}")
+                            continue
+                    if test_result is not Result.SUCCESS:
+                        result = False
+                    # Only timeouts trigger repetitions
+                    break
             return result
     except Exception as err:
         signal_subprocs(signal.SIGTERM)
@@ -570,6 +599,12 @@ def main():
     )
     parser.add_argument(
         "--timeout", type=int, default=0, help="Test timeout in seconds"
+    )
+    parser.add_argument(
+        "-r",
+        "--repetitions",
+        default=3,
+        help="Repeat count for tests that timed out",
     )
     parser.add_argument(
         "-l",
