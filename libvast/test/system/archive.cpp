@@ -82,8 +82,6 @@ TEST(archiving and querying) {
   push_to_archive(zeek_dns_log_slices);
   MESSAGE("import HTTP logs to archive");
   push_to_archive(zeek_http_log_slices);
-  MESSAGE("import BGP dump logs to archive");
-  push_to_archive(bgpdump_txt_slices);
   MESSAGE("query events");
   auto ids = make_ids({{24, 56}, {1076, 1096}});
   auto result = query(ids);

@@ -90,23 +90,6 @@ tests:
       - command: -N import zeek
         input: data/zeek/snmp.log.gz
       - command: -N export ascii 'duration >= 3s'
-  # Ground truth established via
-  #     zcat < input | bgpdump -m -  \
-  #       | awk -F '|' '$6 ~ /^103\.11\./ { print $6 }'
-  # ...plus some piping to sort and uniq.
-  Node Basic mrt:
-    tags: [node, import-export, mrt, disabled]
-    steps:
-      - command: -N import mrt
-        input: data/mrt/updates.20180530.0000.gz
-      # This prefix occurs 93 times.
-      - command: -N export ascii 'prefix == 120.50.4.0/23'
-      # There are 53 entries for 103.11.0.0/24. All of them should include the
-      # IP address 103.11.0.42.
-      - command: -N export ascii '103.11.0.42 in prefix'
-      # Historical component for query in issue #201. No results.
-      - command: -N export ascii '114.215.46.175 in prefix'
-      - command: -N export ascii 'mrt.bgp4mp.update.announcement.prefix == 120.50.4.0/23'
   Export json:
     tags: [json, zeek]
     steps:
@@ -132,14 +115,6 @@ tests:
         input: data/zeek/conn.log.gz
       - command: status
         transformation: jq '.node.index.statistics.layouts | del(."vast.statistics".count)'
-  Server Basic bgpdump:
-    tags: [server, import-export, bgpdump, disabled]
-    fixture: ServerTester
-    steps:
-      - command: import -b bgpdump
-        input: data/bgpdump/updates.20180530.bgpdump.gz
-      - command: export ascii '114.215.46.175 in prefix'
-      - command: export ascii '103.111.8.42 in prefix'
   Query Operators:
     tags: [server, operator]
     fixture: ServerTester

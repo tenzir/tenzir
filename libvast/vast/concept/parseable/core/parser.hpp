@@ -54,13 +54,22 @@ struct parser {
     return guard_parser<Derived, Guard>{derived(), fun};
   }
 
+  template <size_t N, class Attribute = unused_type>
+  bool operator()(const char (&r)[N], Attribute& a = unused) const {
+    // Because there exists overload of std::begin / std::end for char arrays,
+    // we must have this overload and strip the NUL byte at the end.
+    auto f = r;
+    auto l = r + N - 1; // No NUL byte.
+    return derived().parse(f, l, a) && f == l;
+  }
+
   // FIXME: don't ignore ADL.
   template <class Range, class Attribute = unused_type>
   auto operator()(Range&& r, Attribute& a = unused) const
   -> decltype(std::begin(r), std::end(r), bool()) {
     auto f = std::begin(r);
     auto l = std::end(r);
-    return derived().parse(f, l, a);
+    return derived().parse(f, l, a) && f == l;
   }
 
   // FIXME: don't ignore ADL.

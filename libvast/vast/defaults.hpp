@@ -57,24 +57,6 @@ struct zeek {
   static constexpr auto read = shared::read;
 };
 
-/// Contains settings for the mrt subcommand.
-struct mrt {
-  /// Nested category in config files for this subcommand.
-  static constexpr const char* category = "import.mrt";
-
-  /// Path for reading input events.
-  static constexpr auto read = shared::read;
-};
-
-/// Contains settings for the bgpdump subcommand.
-struct bgpdump {
-  /// Nested category in config files for this subcommand.
-  static constexpr const char* category = "import.bgpdump";
-
-  /// Path for reading input events.
-  static constexpr auto read = shared::read;
-};
-
 /// Contains settings for the csv subcommand.
 struct csv {
   /// Nested category in config files for this subcommand.
