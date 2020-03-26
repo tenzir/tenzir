@@ -30,12 +30,12 @@ Every entry has a category for which we use the following visual abbreviations:
 
 - 🎁 The new `vast import syslog` command allows importing Syslog messages
   as defined in [RFC5424](https://tools.ietf.org/html/rfc5424).
-  [#770](https://github.com/knapperzbusch/vast/pull/770)
+  [#770](https://github.com/tenzir/vast/pull/770)
 
 - 🎁 The hash index has been re-enabled after it was outfitted with a new
-  [high-performance hash map](https://github.com/Tessil/robin-map/) implementation
-  that increased performance to the point where it is on par with the regular
-  index.
+  [high-performance hash map](https://github.com/Tessil/robin-map/)
+  implementation that increased performance to the point where it is on par with
+  the regular index. [#796](https://github.com/tenzir/vast/796)
 
 - 🔄 The VERBOSE log level has been added between INFO and DEBUG. This level
   is enabled at build time for all build types, making it possible to get more
