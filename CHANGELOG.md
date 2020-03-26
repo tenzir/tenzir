@@ -8,7 +8,9 @@ Every entry has a category for which we use the following visual abbreviations:
 - 🔄 = change
 - 🐞 = bugfix
 
-## [Unreleased]
+<!-- ## Unreleased -->
+
+## [2020.03.26]
 
 - 🔄 The config option `system.log-directory` was deprecated and replaced
   by the new option `system.log-file`. All logs will now be written to a
@@ -397,3 +399,4 @@ This is the first official release.
 [0.2]: https://github.com/tenzir/vast/releases/tag/0.2
 [2020.01.31]: https://github.com/tenzir/vast/releases/tag/2020.01.31
 [2020.02.27]: https://github.com/tenzir/vast/releases/tag/2020.02.27
+[2020.03.26]: https://github.com/tenzir/vast/releases/tag/2020.03.26
