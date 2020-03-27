@@ -175,14 +175,24 @@ void collect_component_status(node_actor* self,
   }
 }
 
-caf::message status_command(const command::invocation&, caf::actor_system&) {
+caf::message
+status_command(const command::invocation&, caf::actor_system& sys) {
   auto self = this_node;
   auto rp = self->make_response_promise();
-  self->request(self->state.tracker, infinite, get_atom::value).then(
-    [=](registry& reg) mutable {
-      collect_component_status(self, std::move(rp), reg);
-    }
-  );
+  caf::error err;
+  self
+    ->request(self->state.tracker, defaults::system::initial_request_timeout,
+              get_atom::value)
+    .then(
+      [=](registry& reg) mutable {
+        collect_component_status(self, std::move(rp), reg);
+      },
+      [&](caf::error& status_err) { err = status_err; });
+  if (err) {
+    VAST_ERROR(__func__,
+               "failed to receive status before timeout:", sys.render(err));
+    return caf::make_message(std::move(err));
+  }
   return caf::none;
 }
 

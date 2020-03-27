@@ -67,16 +67,22 @@ connect_to_node(scoped_actor& self, const caf::settings& opts) {
     node_endpoint.host = "127.0.0.1";
   VAST_INFO(self, "connects to",
             node_endpoint.host << ':' << to_string(node_endpoint.port));
-  if (use_encryption) {
+  auto result = [&] {
+    if (use_encryption) {
 #ifdef VAST_USE_OPENSSL
-    return openssl::remote_actor(self->system(), node_endpoint.host,
-                                 node_endpoint.port.number());
+      return openssl::remote_actor(self->system(), node_endpoint.host,
+                                   node_endpoint.port.number());
 #else
-    return make_error(ec::unspecified, "not compiled with OpenSSL support");
+      return make_error(ec::unspecified, "not compiled with OpenSSL support");
 #endif
-  }
-  auto& mm = self->system().middleman();
-  return mm.remote_actor(node_endpoint.host, node_endpoint.port.number());
+    }
+    auto& mm = self->system().middleman();
+    return mm.remote_actor(node_endpoint.host, node_endpoint.port.number());
+  }();
+  if (result)
+    VAST_VERBOSE(self, "successfully connected to",
+                 node_endpoint.host << ':' << to_string(node_endpoint.port));
+  return result;
 }
 
 } // namespace vast::system
