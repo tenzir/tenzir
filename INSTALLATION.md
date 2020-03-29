@@ -47,6 +47,15 @@ Building VAST involves the following steps:
   cmake --build build --target install
   ```
 
+## Nix
+
+Nix expressions to create a localized build environment with dependencies are
+available. To use it, run `nix-shell` in the top-level directory.
+
+The same scaffold can also be used to build and install VAST directly into the
+Nix Store and add it to the Nix profile. Invoke `nix-env -f default.nix -i`
+in the top-level directory to do so.
+
 ## OS-specific Guides
 
 ### Linux
