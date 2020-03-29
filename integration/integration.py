@@ -436,7 +436,7 @@ class Tester:
                 shutil.rmtree(work_dir)
             return Result.SUCCESS
         LOGGER.warning(
-            f"ran {summary.succeeded}/{summary.step_count} " "steps successfully"
+            f"ran {summary.succeeded}/{summary.step_count} steps successfully"
         )
         return summary.dominant_state()
 
@@ -549,13 +549,13 @@ def run(args, test_dec):
                     test_result = tester.run(name, definition)
                     if test_result is Result.TIMEOUT:
                         if i < args.repetitions - 1:
-                            # try again
+                            # Try again.
                             LOGGER.warning(
                                 f"Re-running test {name} {i+2}/{args.repetitions}")
                             continue
                     if test_result is not Result.SUCCESS:
                         result = False
-                    # Only timeouts trigger repetitions
+                    # Only timeouts trigger repetitions.
                     break
             return result
     except Exception as err:
