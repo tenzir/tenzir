@@ -189,8 +189,7 @@ status_command(const command::invocation&, caf::actor_system& sys) {
       },
       [&](caf::error& status_err) { err = status_err; });
   if (err) {
-    VAST_ERROR(__func__,
-               "failed to receive status before timeout:", sys.render(err));
+    VAST_ERROR(__func__, "failed to receive status:", sys.render(err));
     return caf::make_message(std::move(err));
   }
   return caf::none;
