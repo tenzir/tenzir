@@ -19,7 +19,6 @@ Example:
 
 import asyncio
 import logging
-import pyarrow
 
 
 class VAST:
@@ -32,10 +31,15 @@ class VAST:
         self.call_stack = []
         self.logger.debug(f"VAST client configured to use endpoint {self.endpoint}")
 
-    async def __spawn(self, *args):
+    async def __spawn(self, *args, stdin=None):
         """Spawns a process asynchronously."""
         return await asyncio.create_subprocess_exec(
-            self.binary, "-e", self.endpoint, *args, stdout=asyncio.subprocess.PIPE
+            self.binary,
+            "-e",
+            self.endpoint,
+            *args,
+            stdin=stdin,
+            stdout=asyncio.subprocess.PIPE,
         )
 
     async def test_connection(self):
@@ -44,17 +48,24 @@ class VAST:
         stdout, stderr = await proc.communicate()
         return proc.returncode == 0
 
-    async def exec(self):
-        print(f"Call stack: {self.call_stack}")
-        result = await self.__spawn(*self.call_stack)
+    async def exec(self, stdin=None):
+        self.logger.debug(f"Executing call stack: {self.call_stack}")
+        if not stdin:
+            proc = await self.__spawn(*self.call_stack)
+        else:
+            self.logger.debug(f"Forwarding stdin {stdin}")
+            proc = await self.__spawn(*self.call_stack, stdin=asyncio.subprocess.PIPE)
+            proc.stdin.write(str(stdin).encode())
+            await proc.stdin.drain()
+            proc.stdin.close()
         self.call_stack = []
-        return result
+        return await proc.communicate()
 
     def __getattr__(self, name, **kwargs):
         """Chains every unknown method call to the internal call stack."""
+        self.call_stack.append(name)
 
         def method(*args, **kwargs):
-            self.call_stack.append(name)
             if kwargs:
                 for k, v in kwargs.items():
                     self.call_stack.append(f"--{k.replace('_','-')}={v}")
