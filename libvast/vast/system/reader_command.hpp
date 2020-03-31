@@ -116,10 +116,13 @@ reader_command(const command::invocation& invocation, caf::actor_system& sys) {
     auto in = detail::make_input_stream(*file, uds);
     if (!in)
       return caf::make_message(std::move(in.error()));
+    if (*file == "-")
+      VAST_INFO_ANON("reader-command spawns reader for stdin");
+    else
+      VAST_INFO_ANON("reader-command spawns reader for file", *file);
     Reader reader{slice_type, options, std::move(*in)};
     if (schema)
       reader.schema(*schema);
-    VAST_INFO(reader, "reads data from", *file);
     src = sys.spawn(source<Reader>, std::move(reader), slice_size, max_events);
   }
   return source_command(invocation, sys, std::move(src));
