@@ -2,7 +2,7 @@ import aiounittest
 import unittest
 
 import asyncio
-from vast import VAST
+from pyvast import VAST
 import json
 
 

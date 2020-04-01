@@ -39,7 +39,6 @@ and the analogous `pyvast` commands.
   print(stdout)
   ```
 
-
 ## Testing
 
 The tests are written with the python
@@ -50,4 +49,14 @@ Install the `requirements.txt` first to run the tests.
 ```sh
 pip install --user -r requirements.txt
 python -m unittest discover .
+```
+
+## Installation
+
+Use the `setup.py` for installation or development setup.
+
+```sh
+virtualenv --system-site-packages venv # create a virtual env
+source venv/bin/activate
+python setup.py develop # or python setup.py install
 ```
