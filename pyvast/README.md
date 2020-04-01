@@ -39,6 +39,26 @@ and the analogous `pyvast` commands.
   print(stdout)
   ```
 
+#### Full Example
+
+The following example shows a minimalistic working example with all required
+import statements.
+
+```py
+#!/usr/bin/env python3
+
+import asyncio
+from pyvast import VAST
+
+vast = VAST(binary="/opt/tenzir/bin/vast")
+asyncio.run(vast.test_connection())
+
+stdout, stderr = asyncio.run(vast.export(max_events=10).json("192.167.1.102").exec())
+print(stdout)
+```
+
+See also the `example` folder for a demo using `pyarrow` for data export.
+
 ## Testing
 
 The tests are written with the python
