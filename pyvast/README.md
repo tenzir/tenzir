@@ -35,7 +35,7 @@ and the analogous `pyvast` commands.
   ```
   ```py
   # python wrapper
-  stdout, stderr = vast._import().zeek(read="/path/to/file").exec()
+  stdout, stderr = vast.import_().zeek(read="/path/to/file").exec()
   print(stdout)
   ```
 

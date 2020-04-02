@@ -63,16 +63,16 @@ class VAST:
 
     def __getattr__(self, name, **kwargs):
         """Chains every unknown method call to the internal call stack."""
-        if name.startswith("_"):
-            # trim leading underscores to overcome the 'import' keyword
-            name = name[1:]
+        if name.endswith("_"):
+            # trim trailing underscores to overcome the 'import' keyword
+            name = name[:-1]
         self.call_stack.append(name)
 
         def method(*args, **kwargs):
             if kwargs:
                 for k, v in kwargs.items():
                     if v is True:
-                        self.call_stack.append(f"--{k.replace('_','-')}")                    
+                        self.call_stack.append(f"--{k.replace('_','-')}")
                     else:
                         self.call_stack.append(f"--{k.replace('_','-')}={v}")
             if args:

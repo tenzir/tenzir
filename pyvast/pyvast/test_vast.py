@@ -20,16 +20,24 @@ class TestCallStackCreation(unittest.TestCase):
 
     def test_call_chaining(self):
         self.assertEqual(self.vast.call_stack, [])
+        query = "#timestamp < 1 hour ago"
+        self.vast.export().arrow(query)
+        self.assertEqual(
+            self.vast.call_stack, ["export", "arrow", query]
+        )
+
+    def test_boolean_flag_handling(self):
+        self.assertEqual(self.vast.call_stack, [])
         query = ":addr == 192.168.1.104 && #timestamp < 1 hour ago"
         self.vast.export(continuous=True).json(query)
         self.assertEqual(
-            self.vast.call_stack, ["export", "--continuous=True", "json", query]
+            self.vast.call_stack, ["export", "--continuous", "json", query]
         )
 
     def test_import_keyword(self):
         self.assertEqual(self.vast.call_stack, [])
         path = "/some/file"
-        self.vast._import().pcap(read=path)
+        self.vast.import_().pcap(read=path)
         self.assertEqual(self.vast.call_stack, ["import", "pcap", f"--read={path}"])
 
     def test_underscore_replacement(self):
