@@ -71,7 +71,10 @@ class VAST:
         def method(*args, **kwargs):
             if kwargs:
                 for k, v in kwargs.items():
-                    self.call_stack.append(f"--{k.replace('_','-')}={v}")
+                    if v is True:
+                        self.call_stack.append(f"--{k.replace('_','-')}")                    
+                    else:
+                        self.call_stack.append(f"--{k.replace('_','-')}={v}")
             if args:
                 self.call_stack.extend(args)
             return self
