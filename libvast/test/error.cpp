@@ -48,6 +48,8 @@ TEST(to_string) {
   CHECK_EQUAL(str(ec::missing_subcommand), "missing_subcommand"s);
   CHECK_EQUAL(str(ec::missing_component), "missing_component"s);
   CHECK_EQUAL(str(ec::unimplemented), "unimplemented"s);
+  CHECK_EQUAL(str(ec::silent), "silent"s);
+  CHECK_EQUAL(str(ec::out_of_memory), "out_of_memory"s);
 }
 
 TEST(render) {

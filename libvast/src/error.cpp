@@ -51,6 +51,7 @@ const char* descriptions[] = {
   "missing_component",
   "unimplemented",
   "silent",
+  "out_of_memory",
 };
 
 void render_default_ctx(std::ostringstream& oss, const caf::message& ctx) {
