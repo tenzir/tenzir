@@ -74,13 +74,14 @@ void parameters_helptext(const command& cmd, std::ostream& out) {
     }
     lst += "--";
     lst.insert(lst.end(), opt.long_name().begin(), opt.long_name().end());
-    lst += "=]";
     auto tname = opt.type_name();
-    if (tname != "bool") {
+    if (tname != "boolean") {
+      lst += "=]";
       lst += " <";
       lst.insert(lst.end(), tname.begin(), tname.end());
       lst += '>';
-    }
+    } else
+      lst += ']';
     out.width(fs);
     out << lst << "  " << opt.description() << '\n';
   }
