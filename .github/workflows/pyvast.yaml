@@ -39,14 +39,14 @@ jobs:
       run: |
         make clean build
 
-    - name: Package Application and Plugins
+    - name: Package Application
       working-directory: pyvast
       run: |
         make clean dist
 
   egg-release:
     name: Egg Release
-    #if: github.event.action == 'published'
+    if: github.event.action == 'published'
     needs: egg-install
     runs-on: ubuntu-latest
     env:
@@ -68,7 +68,7 @@ jobs:
         python -m pip install --upgrade pip
         python -m pip install wheel setuptools twine
 
-    - name: Package Application and Plugins
+    - name: Package Application
       working-directory: pyvast
       run: |
         make clean dist
