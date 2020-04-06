@@ -12,6 +12,16 @@ this minimalistic implementation. Please refer to the
 [vast documentation](https://docs.tenzir.com/) for details about valid `vast`
 commands.
 
+## Installation
+
+Use `pip` to install the package.
+
+```sh
+virtualenv --system-site-packages venv
+source venv/bin/activate
+pip install pyvast
+```
+
 ## Usage
 
 Commands are simply chained via `.`-notation. Parameters can be passed as python
@@ -71,9 +81,9 @@ pip install --user -r requirements.txt
 python -m unittest discover .
 ```
 
-## Installation
+## Development
 
-Use the `setup.py` for installation or development setup.
+Use the `setup.py` for local installation of a development setup.
 
 ```sh
 virtualenv --system-site-packages venv # create a virtual env
