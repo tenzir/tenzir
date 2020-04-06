@@ -228,9 +228,9 @@ TEST(zeek conn log http slices) {
   MESSAGE("scrutinize each zeek conn log slice individually");
   // Pre-computed via:
   //
-  //  bro-cut service < test/logs/zeek/conn.log \
-  //    | awk '{ if ($1 == "http") ++n; if (NR % 100 == 0) { print n; n = 0 } }\
-  //           END { print n }' \
+  //  bro-cut service < test/logs/zeek/conn.log
+  //    | awk '{ if ($1 == "http") ++n; if (NR % 100 == 0) { print n; n = 0 } }
+  //           END { print n }'
   //    | paste -s -d , -
   //
   // The full list of results is:
