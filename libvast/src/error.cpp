@@ -54,6 +54,9 @@ const char* descriptions[] = {
   "out_of_memory",
 };
 
+static_assert(ec{std::size(descriptions)} == ec::ec_count,
+              "Mismatch between number of error codes and descriptions");
+
 void render_default_ctx(std::ostringstream& oss, const caf::message& ctx) {
   size_t size = ctx.size();
   if (size > 0) {

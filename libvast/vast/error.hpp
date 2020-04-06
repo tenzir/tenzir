@@ -76,6 +76,8 @@ enum class ec : uint8_t {
   silent,
   /// Insufficient memory.
   out_of_memory,
+  /// No error; number of error codes.
+  ec_count,
 };
 
 /// @relates ec
