@@ -237,7 +237,7 @@ TEST(list) {
   CHECK(p(str, xs));
   CHECK_EQUAL(str, "1");
   xs.clear();
-  CHECK(!p(str, xs)); // need at least one element
+  CHECK(p(str, xs));
 }
 
 TEST(optional) {

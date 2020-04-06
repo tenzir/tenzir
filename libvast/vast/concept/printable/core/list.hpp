@@ -38,7 +38,9 @@ public:
     using std::end;
     auto f = begin(a);
     auto l = end(a);
-    if (f == l || !lhs_.print(out, *f))
+    if (f == l)
+      return true;
+    if (!lhs_.print(out, *f))
       return false;
     for (++f; f != l; ++f)
       if (!(rhs_.print(out, unused) && lhs_.print(out, *f)))
