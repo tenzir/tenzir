@@ -74,6 +74,10 @@ enum class ec : uint8_t {
   unimplemented,
   /// An error that shall print nothing in the render function.
   silent,
+  /// Insufficient memory.
+  out_of_memory,
+  /// No error; number of error codes.
+  ec_count,
 };
 
 /// @relates ec
