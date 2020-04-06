@@ -22,9 +22,7 @@ class TestCallStackCreation(unittest.TestCase):
         self.assertEqual(self.vast.call_stack, [])
         query = "#timestamp < 1 hour ago"
         self.vast.export().arrow(query)
-        self.assertEqual(
-            self.vast.call_stack, ["export", "arrow", query]
-        )
+        self.assertEqual(self.vast.call_stack, ["export", "arrow", query])
 
     def test_boolean_flag_handling(self):
         self.assertEqual(self.vast.call_stack, [])

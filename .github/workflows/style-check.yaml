@@ -1,0 +1,44 @@
+name: "Style Check"
+on: push
+env:
+  DEBIAN_FRONTEND: noninteractive
+jobs:
+  style:
+    name: Style Check
+    runs-on: ubuntu-latest
+    steps:
+
+    - uses: actions/checkout@v2
+
+    - name: Fetch Master
+      run: |
+        git fetch origin master
+
+    - uses: actions/setup-python@v1
+      with:
+        python-version: '3.7'
+
+    - name: Clang Format
+      run: |
+        set -x
+        pip install --upgrade pip clang-format
+        git diff -U0 --no-color $(git merge-base origin/master HEAD) |
+          scripts/clang-format-diff.py -p1
+
+    - name: CMake Format
+      run: |
+        set -x
+        pip install --upgrade pip "cmake_format==0.6.5"
+        git diff --name-only --no-color --diff-filter=ACM $(git merge-base origin/master HEAD) -- "**CMakelists.txt" "**.cmake" |
+          xargs cmake-format --in-place
+        git diff --exit-code
+
+    - name: Black
+      run: |
+        set -x
+        pip install --upgrade pip black
+        # Note: black fails when it doesn't have to do anything.
+        git diff --name-only --no-color --diff-filter=ACM $(git merge-base origin/master HEAD) |
+          grep -v '\(\.json\|\.ipynb\|\.hpp\.in\|\.ref\)$' |
+          2>/dev/null xargs black || true
+        git diff --exit-code

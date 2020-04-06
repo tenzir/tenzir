@@ -12,7 +12,9 @@ Example script to showcase the VAST CLI wrapper.
 Prerequisites: VAST must be running.
     0. Install VAST
     1. Go to another terminal
-    2. `vast start`
+    2. `vast start` (start a vast node)
+    3. Go to another terminal
+    4. `python -m pip install -r requirements.txt` (install requirements)
 """
 
 vast = VAST(binary="/opt/tenzir/bin/vast")

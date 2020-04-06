@@ -14,3 +14,13 @@ __pycache__/
 /vast.db/
 /vast*.log
 /vast-unit-test/
+
+# PyVAST build artifacts
+/pyvast/build/
+/pyvast/dist/
+/pyvast/env/
+/pyvast/venv/
+/pyvast/**/__pycache__/
+/pyvast/*.egg-info/
+/pyvast/*tar.gz
+
