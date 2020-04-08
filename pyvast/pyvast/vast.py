@@ -40,12 +40,13 @@ class VAST:
             *args,
             stdin=stdin,
             stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
         )
 
     async def test_connection(self):
         """Checks if the configured endpoint is reachable"""
         proc = await self.__spawn("status")
-        stdout, stderr = await proc.communicate()
+        await proc.wait()
         return proc.returncode == 0
 
     async def exec(self, stdin=None):
@@ -59,7 +60,7 @@ class VAST:
             await proc.stdin.drain()
             proc.stdin.close()
         self.call_stack = []
-        return await proc.communicate()
+        return proc
 
     def __getattr__(self, name, **kwargs):
         """Chains every unknown method call to the internal call stack."""
