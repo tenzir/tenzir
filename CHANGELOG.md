@@ -8,7 +8,12 @@ Every entry has a category for which we use the following visual abbreviations:
 - 🔄 = change
 - 🐞 = bugfix
 
-<!-- ## Unreleased -->
+## Unreleased
+
+- 🐞 Archive lookups are now interruptible. This change fixes an issue that
+  caused consecutive exports to slow down the node, which improves the overall
+  performance for larger databases considerably.
+  [#825](https://github.com/tenzir/vast/pull/825)
 
 ## [2020.03.26]
 
