@@ -84,6 +84,7 @@ union TypeVariant {
   address: AddressType,
   subnet: SubnetType,
   port: PortType,
+  enumeration: EnumerationType,
   vector: VectorType,
   set: SetType,
   map: MapType,
