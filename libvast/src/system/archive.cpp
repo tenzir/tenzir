@@ -68,8 +68,7 @@ void archive_state::next_session() {
   // Start working on the next ids for the next requester.
   auto& next_ids = it->second.front();
   session = store->extract(next_ids);
-  self->send(self, next_ids, current_requester,
-             detail::bit_cast<uintptr_t>(session.get()));
+  self->send(self, next_ids, current_requester, ++session_id);
   it->second.pop();
 }
 
@@ -142,7 +141,7 @@ archive(archive_type::stateful_pointer<archive_state> self, path dir,
       if (!st.session)
         st.next_session();
     },
-    [=](const ids& xs, receiver_type requester, uintptr_t session_addr) {
+    [=](const ids& xs, receiver_type requester, size_t session_id) {
       auto& st = self->state;
       // If the export has since shut down, we need to invalidate the session.
       if (st.active_exporters.count(requester->address()) == 0) {
@@ -150,8 +149,7 @@ archive(archive_type::stateful_pointer<archive_state> self, path dir,
         st.next_session();
         return;
       }
-      if (!st.session
-          || session_addr != detail::bit_cast<uintptr_t>(st.session.get())) {
+      if (!st.session || st.session_id != session_id) {
         VAST_DEBUG(self, "considers extraction finished for invalidated "
                          "session");
         self->send(requester, done_atom::value, make_error(ec::no_error));
@@ -172,7 +170,7 @@ archive(archive_type::stateful_pointer<archive_state> self, path dir,
       for (auto& sub_slice : select(*slice, xs))
         self->send(requester, sub_slice);
       // Continue working on the current session.
-      self->send(self, xs, requester, session_addr);
+      self->send(self, xs, requester, session_id);
     },
     [=](stream<table_slice_ptr> in) {
       self->make_sink(
