@@ -155,22 +155,27 @@ void collect_component_status(node_actor* self,
         req_state->pending -= 1;
         continue;
       }
-      self->request(comp_state.actor, infinite, status_atom::value).then(
-        [=, lbl = comp_state.label, nn = node_name]
-        (caf::config_value::dictionary& xs) mutable {
-          auto& st = *req_state;
-          st.content[nn].as_dictionary().emplace(std::move(lbl), std::move(xs));
-          if (--st.pending == 0)
-            st.rp.deliver(to_string(to_json(st.content)));
-        },
-        [=, lbl = comp_state.label, nn = node_name](caf::error& err) mutable {
-          auto& st = *req_state;
-          auto& dict = st.content[nn].as_dictionary();
-          dict.emplace(std::move(lbl), self->system().render(err));
-          if (--st.pending == 0)
-            st.rp.deliver(to_string(to_json(st.content)));
-        }
-      );
+      self
+        ->request(comp_state.actor, defaults::system::initial_request_timeout,
+                  status_atom::value)
+        .then(
+          [=, lbl = comp_state.label,
+           nn = node_name](caf::config_value::dictionary& xs) mutable {
+            auto& st = *req_state;
+            st.content[nn].as_dictionary().emplace(std::move(lbl),
+                                                   std::move(xs));
+            if (--st.pending == 0)
+              st.rp.deliver(to_string(to_json(st.content)));
+          },
+          [=, lbl = comp_state.label, nn = node_name](caf::error& err) mutable {
+            VAST_WARNING(self, "failed to retrieve", lbl,
+                         "status:", self->system().render(err));
+            auto& st = *req_state;
+            auto& dict = st.content[nn].as_dictionary();
+            dict.emplace(std::move(lbl), self->system().render(err));
+            if (--st.pending == 0)
+              st.rp.deliver(to_string(to_json(st.content)));
+          });
     }
   }
 }
