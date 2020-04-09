@@ -50,7 +50,7 @@ using archive_type = caf::typed_actor<
   caf::reacts_to<exporter_atom, caf::actor>,
   caf::reacts_to<ids>,
   caf::reacts_to<ids, receiver_type>,
-  caf::reacts_to<ids, receiver_type, size_t>,
+  caf::reacts_to<ids, receiver_type, uint64_t>,
   caf::replies_to<status_atom>::with<caf::dictionary<caf::config_value>>,
   caf::reacts_to<telemetry_atom>,
   caf::reacts_to<erase_atom, ids>
@@ -64,7 +64,7 @@ struct archive_state {
   archive_type::stateful_pointer<archive_state> self;
   std::unique_ptr<vast::store> store;
   std::unique_ptr<vast::store::lookup> session;
-  size_t session_id;
+  uint64_t session_id = 0;
   std::queue<receiver_type> requesters;
   std::unordered_map<caf::actor_addr, std::queue<ids>> unhandled_ids;
   std::unordered_set<caf::actor_addr> active_exporters;

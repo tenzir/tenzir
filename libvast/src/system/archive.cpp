@@ -141,7 +141,7 @@ archive(archive_type::stateful_pointer<archive_state> self, path dir,
       if (!st.session)
         st.next_session();
     },
-    [=](const ids& xs, receiver_type requester, size_t session_id) {
+    [=](const ids& xs, receiver_type requester, uint64_t session_id) {
       auto& st = self->state;
       // If the export has since shut down, we need to invalidate the session.
       if (st.active_exporters.count(requester->address()) == 0) {
