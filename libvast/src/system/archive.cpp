@@ -18,6 +18,7 @@
 #include "vast/concept/printable/to_string.hpp"
 #include "vast/defaults.hpp"
 #include "vast/detail/assert.hpp"
+#include "vast/detail/bit_cast.hpp"
 #include "vast/detail/fill_status_map.hpp"
 #include "vast/event.hpp"
 #include "vast/logger.hpp"
@@ -38,6 +39,38 @@ using std::chrono::steady_clock;
 using namespace caf;
 
 namespace vast::system {
+
+void archive_state::next_session() {
+  // No requester means no work to do.
+  if (requesters.empty()) {
+    VAST_TRACE(self, "has no requesters");
+    session = nullptr;
+    return;
+  }
+  // Find the work queue for our current requester.
+  const auto& current_requester = requesters.front();
+  auto it = unhandled_ids.find(current_requester->address());
+  // There is no ids queue for our current requester. Let's dismiss the
+  // requester and try again.
+  if (it == unhandled_ids.end()) {
+    VAST_TRACE(self, "could not find an ids queue for the current requester");
+    requesters.pop();
+    return next_session();
+  }
+  // There is a work queue for our current requester, but it is empty. Let's
+  // clean house, dismiss the requester and try again.
+  if (it->second.empty()) {
+    VAST_TRACE(self, "found an empty ids queue for the current requester");
+    unhandled_ids.erase(it);
+    requesters.pop();
+    return next_session();
+  }
+  // Start working on the next ids for the next requester.
+  auto& next_ids = it->second.front();
+  session = store->extract(next_ids);
+  self->send(self, next_ids, current_requester, ++session_id);
+  it->second.pop();
+}
 
 void archive_state::send_report() {
   if (measurement.events > 0) {
@@ -85,86 +118,108 @@ archive(archive_type::stateful_pointer<archive_state> self, path dir,
     self->send(self->state.accountant, announce_atom::value, self->name());
     self->delayed_send(self, defs::telemetry_rate, telemetry_atom::value);
   }
-  return {[=](const ids& xs) -> caf::result<done_atom, caf::error> {
-            VAST_ASSERT(rank(xs) > 0);
-            VAST_DEBUG(self, "got query for", rank(xs),
-                       "events in range [" << select(xs, 1) << ','
-                                           << (select(xs, -1) + 1) << ')');
-            if (self->state.active_exporters.count(
-                  self->current_sender()->address())
-                == 0) {
-              VAST_DEBUG(self, "dismisses query for inactive sender");
-              return make_error(ec::no_error);
+  return {
+    [=](const ids& xs) {
+      VAST_ASSERT(rank(xs) > 0);
+      VAST_DEBUG(self, "got query for", rank(xs),
+                 "events in range [" << select(xs, 1) << ','
+                                     << (select(xs, -1) + 1) << ')');
+      if (auto requester
+          = caf::actor_cast<receiver_type>(self->current_sender()))
+        self->send(self, xs, requester);
+      else
+        VAST_ERROR(self, "dismisses query for unconforming sender");
+    },
+    [=](const ids& xs, receiver_type requester) {
+      auto& st = self->state;
+      if (st.active_exporters.count(requester->address()) == 0) {
+        VAST_DEBUG(self, "dismisses query for inactive sender");
+        return;
+      }
+      st.requesters.push(requester);
+      st.unhandled_ids[requester->address()].push(xs);
+      if (!st.session)
+        st.next_session();
+    },
+    [=](const ids& xs, receiver_type requester, uint64_t session_id) {
+      auto& st = self->state;
+      // If the export has since shut down, we need to invalidate the session.
+      if (st.active_exporters.count(requester->address()) == 0) {
+        VAST_DEBUG(self, "invalidates running query session for", requester);
+        st.next_session();
+        return;
+      }
+      if (!st.session || st.session_id != session_id) {
+        VAST_DEBUG(self, "considers extraction finished for invalidated "
+                         "session");
+        self->send(requester, done_atom::value, make_error(ec::no_error));
+        st.next_session();
+        return;
+      }
+      // Extract the next slice.
+      auto slice = st.session->next();
+      if (!slice) {
+        auto err
+          = slice.error() ? std::move(slice.error()) : make_error(ec::no_error);
+        VAST_DEBUG(self, "finished extraction from the current session:", err);
+        self->send(requester, done_atom::value, std::move(err));
+        st.next_session();
+        return;
+      }
+      // The slice may contain entries that are not selected by xs.
+      for (auto& sub_slice : select(*slice, xs))
+        self->send(requester, sub_slice);
+      // Continue working on the current session.
+      self->send(self, xs, requester, session_id);
+    },
+    [=](stream<table_slice_ptr> in) {
+      self->make_sink(
+        in,
+        [](unit_t&) {
+          // nop
+        },
+        [=](unit_t&, std::vector<table_slice_ptr>& batch) {
+          VAST_DEBUG(self, "got", batch.size(), "table slices");
+          auto t = timer::start(self->state.measurement);
+          uint64_t events = 0;
+          for (auto& slice : batch) {
+            if (auto error = self->state.store->put(slice)) {
+              VAST_ERROR(self, "failed to add table slice to store",
+                         self->system().render(error));
+              self->quit(error);
+              break;
             }
-            using receiver_type = caf::typed_actor<
-              caf::reacts_to<table_slice_ptr>>;
-            auto requester = caf::actor_cast<receiver_type>(
-              self->current_sender());
-            auto session = self->state.store->extract(xs);
-            while (true) {
-              auto slice = session->next();
-              if (!slice) {
-                if (!slice.error()) // Either we are done ...
-                  break;
-                // ... or an error occured.
-                return {done_atom::value, std::move(slice.error())};
-              }
-              // The slice may contain entries that are not selected by xs.
-              for (auto& sub_slice : select(*slice, xs))
-                self->send(requester, sub_slice);
-            }
-            return {done_atom::value, make_error(ec::no_error)};
-          },
-          [=](stream<table_slice_ptr> in) {
-            self->make_sink(
-              in,
-              [](unit_t&) {
-                // nop
-              },
-              [=](unit_t&, std::vector<table_slice_ptr>& batch) {
-                VAST_DEBUG(self, "got", batch.size(), "table slices");
-                auto t = timer::start(self->state.measurement);
-                uint64_t events = 0;
-                for (auto& slice : batch) {
-                  if (auto error = self->state.store->put(slice)) {
-                    VAST_ERROR(self, "failed to add table slice to store",
-                               self->system().render(error));
-                    self->quit(error);
-                    break;
-                  }
-                  events += slice->rows();
-                }
-                t.stop(events);
-              },
-              [=](unit_t&, const error& err) {
-                if (err) {
-                  VAST_ERROR(self,
-                             "got a stream error:", self->system().render(err));
-                }
-              });
-          },
-          [=](exporter_atom, const actor& exporter) {
-            auto sender_addr = self->current_sender()->address();
-            self->state.active_exporters.insert(sender_addr);
-            self->monitor<caf::message_priority::high>(exporter);
-          },
-          [=](status_atom) {
-            caf::dictionary<caf::config_value> result;
-            detail::fill_status_map(result, self);
-            self->state.store->inspect_status(put_dictionary(result, "store"));
-            return result;
-          },
-          [=](telemetry_atom) {
-            self->state.send_report();
-            namespace defs = defaults::system;
-            self->delayed_send(self, defs::telemetry_rate,
-                               telemetry_atom::value);
-          },
-          [=](erase_atom, const ids& xs) {
-            if (auto err = self->state.store->erase(xs))
-              VAST_ERROR(self,
-                         "failed to erase events:", self->system().render(err));
-          }};
+            events += slice->rows();
+          }
+          t.stop(events);
+        },
+        [=](unit_t&, const error& err) {
+          if (err) {
+            VAST_ERROR(self, "got a stream error:", self->system().render(err));
+          }
+        });
+    },
+    [=](exporter_atom, const actor& exporter) {
+      auto sender_addr = self->current_sender()->address();
+      self->state.active_exporters.insert(sender_addr);
+      self->monitor<caf::message_priority::high>(exporter);
+    },
+    [=](status_atom) {
+      caf::dictionary<caf::config_value> result;
+      detail::fill_status_map(result, self);
+      self->state.store->inspect_status(put_dictionary(result, "store"));
+      return result;
+    },
+    [=](telemetry_atom) {
+      self->state.send_report();
+      namespace defs = defaults::system;
+      self->delayed_send(self, defs::telemetry_rate, telemetry_atom::value);
+    },
+    [=](erase_atom, const ids& xs) {
+      if (auto err = self->state.store->erase(xs))
+        VAST_ERROR(self, "failed to erase events:", self->system().render(err));
+    },
+  };
 }
 
 } // namespace vast::system
