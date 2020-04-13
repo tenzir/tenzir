@@ -6,6 +6,8 @@ on:
     paths-ignore:
     - '**.md'
     - '!doc/**.md'
+    - examples
+    - pyvast
   pull_request:
     types: [opened, synchronize]
     paths-ignore:

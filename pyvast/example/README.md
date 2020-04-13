@@ -2,24 +2,14 @@ PyVAST Example
 ==============
 
 This example demonstrates how to interact with vast via the python bridge.
-Install the `requirements.txt` first, before executing the script.
+Follow the steps below to setup a local `vast` node and ingest some demo data.
 
-```sh
-virtualenv --system-site-packages venv
-source venv/bin/activate
-pip install -r requirements.txt
-```
-
-Next, a running `vast` instance is required. Follow the [installation
-instructions](https://github.com/tenzir/vast/blob/master/INSTALLATION.md) in
-case you haven't done so already. Then start `vast` and import some data.
-
-```sh
-vast start
-```
-
-Run the `example.py` in another terminal.
-
-```py
-python example.py
-```
+1. [Install VAST](https://github.com/tenzir/vast/blob/master/INSTALLATION.md)
+2. `vast start` (start a vast node)
+3. Go to another terminal, navigate to the `pyvast` folder
+4. `curl -L -o - https://github.com/tenzir/vast/raw/master/integration/data/zeek/conn.log.gz | gunzip | vast import zeek` (ingest an example Zeek log)
+5. `virtualenv --system-site-packages venv` (create a virtual env)
+6. `source venv/bin/activate` (use the virtual env)
+7. `python -m pip install -r example/requirements.txt` (install requirements for this example)
+8. `python setup.py develop` (setup pyvast locally)
+9. `python examples/exmaple.py` (run the example)

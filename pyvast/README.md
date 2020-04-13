@@ -35,7 +35,8 @@ and the analogous `pyvast` commands.
   ```
   ```py
   # python wrapper
-  stdout, stderr = vast.export(max_events=10).json("192.167.1.102").exec()
+  proc = await vast.export(max_events=10).json("192.167.1.102").exec()
+  stdout, stderr = await proc.communicate()
   print(stdout)
   ```
 - Import a Zeek log file
@@ -45,7 +46,8 @@ and the analogous `pyvast` commands.
   ```
   ```py
   # python wrapper
-  stdout, stderr = vast.import_().zeek(read="/path/to/file").exec()
+  proc = await vast.import_().zeek(read="/path/to/file").exec()
+  stdout, stderr = await proc.communicate()
   print(stdout)
   ```
 
@@ -60,14 +62,19 @@ import statements.
 import asyncio
 from pyvast import VAST
 
-vast = VAST(binary="/opt/tenzir/bin/vast")
-asyncio.run(vast.test_connection())
+async def example():
+  vast = VAST(binary="/opt/tenzir/bin/vast")
+  await vast.test_connection()
 
-stdout, stderr = asyncio.run(vast.export(max_events=10).json("192.167.1.102").exec())
-print(stdout)
+  proc = await vast.export(max_events=10).json("192.168.1.103").exec()
+  stdout, stderr = await proc.communicate()
+  print(stdout)
+
+asyncio.run(example())
 ```
 
-See also the `example` folder for a demo using `pyarrow` for data export.
+See also the `example` folder for a demo using `pyarrow` for data export and a
+demo for continuous queries.
 
 ## Testing
 

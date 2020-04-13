@@ -24,3 +24,6 @@ __pycache__/
 /pyvast/*.egg-info/
 /pyvast/*tar.gz
 
+# VAST example artifacts
+/examples/**/venv/
+/examples/**/.ipynb_checkpoints/

@@ -4,3 +4,4 @@ networkx>=2.4
 numpy>=1.18
 pandas>=1.0
 pyarrow>=0.16
+scipy>=1.4.1
