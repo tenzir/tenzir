@@ -487,11 +487,17 @@ if (VAST_ENABLE_ASSERTIONS)
   endif ()
 endif ()
 
-# On macOS, Homebrew installs OpenSSL into /usr/local/opt. We'll use this when
-# it's present.
-if (APPLE)
-  if (NOT OPENSSL_ROOT_DIR AND EXISTS /usr/local/opt/openssl)
-    set(OPENSSL_ROOT_DIR /usr/local/opt/openssl)
+# On macOS, Homebrew is commonly used to install OpenSSL.
+if (APPLE AND NOT OPENSSL_ROOT_DIR)
+  find_program(HOMEBREW brew)
+  if (HOMEBREW)
+    execute_process(
+      COMMAND ${HOMEBREW} --prefix openssl
+      OUTPUT_VARIABLE OPENSSL_ROOT_DIR ERROR_QUIET
+                      OUTPUT_STRIP_TRAILING_WHITESPACE)
+    if (OPENSSL_ROOT_DIR)
+      message(STATUS "Using OpenSSL from Homebrew: ${OPENSSL_ROOT_DIR}")
+    endif ()
   endif ()
 endif ()
 
