@@ -15,7 +15,7 @@
 
 #include "vast/defaults.hpp"
 #include "vast/fwd.hpp"
-#include "vast/system/accountant.hpp"
+#include "vast/system/report.hpp"
 #include "vast/table_slice.hpp"
 
 #include <caf/error.hpp>

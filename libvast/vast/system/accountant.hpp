@@ -15,7 +15,7 @@
 
 #include "vast/fwd.hpp"
 #include "vast/system/atoms.hpp"
-#include "vast/system/instrumentation.hpp"
+#include "vast/system/report.hpp"
 #include "vast/time.hpp"
 
 #include <caf/broadcast_downstream_manager.hpp>
@@ -28,30 +28,6 @@
 #include <string>
 
 namespace vast::system {
-
-struct data_point {
-  std::string key;
-  caf::variant<std::string, duration, time, int64_t, uint64_t, double> value;
-};
-
-template <class Inspector>
-typename Inspector::result_type inspect(Inspector& f, data_point& s) {
-  return f(caf::meta::type_name("data_point"), s.key, s.value);
-}
-
-using report = std::vector<data_point>;
-
-struct performance_sample {
-  std::string key;
-  measurement value;
-};
-
-template <class Inspector>
-typename Inspector::result_type inspect(Inspector& f, performance_sample& s) {
-  return f(caf::meta::type_name("performance_sample"), s.key, s.value);
-}
-
-using performance_report = std::vector<performance_sample>;
 
 // clang-format off
 /// @relates accountant
