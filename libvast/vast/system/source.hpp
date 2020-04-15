@@ -127,10 +127,8 @@ struct source_state {
 
   void send_report() {
     // Send the reader-specific status report to the accountant.
-    if (auto status = reader.status(); !status.empty()) {
-      if (accountant)
-        self->send(accountant, std::move(status));
-    }
+    if (auto status = reader.status(); !status.empty() && accountant)
+      self->send(accountant, std::move(status));
     // Send the source-specific performance metrics to the accountant.
     if (measurement_.events > 0) {
       auto r = performance_report{{{std::string{name}, measurement_}}};
