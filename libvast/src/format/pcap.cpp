@@ -77,6 +77,8 @@ reader::reader(caf::atom_value id, const caf::settings& options,
   pseudo_realtime_ = get_or(options, category + ".pseudo-realtime-factor",
                             defaults_t::pseudo_realtime_factor);
   snaplen_ = get_or(options, category + ".snaplen", defaults_t::snaplen);
+  drop_rate_threshold_
+    = get_or(options, category + ".drop-rate-threshold", 0.05);
   community_id_ = !get_or(options, category + ".disable-community-id", false);
   packet_type_
     = community_id_ ? pcap_packet_type_community_id : pcap_packet_type;
@@ -116,14 +118,15 @@ vast::system::report reader::status() const {
   uint64_t recv = stats.ps_recv - last_stats_.ps_recv;
   uint64_t drop = stats.ps_drop - last_stats_.ps_drop;
   uint64_t ifdrop = stats.ps_ifdrop - last_stats_.ps_ifdrop;
-  // Warn if at least 5% were dropped since the last report.
-  if ((drop + ifdrop) * 20 >= recv)
+  double drop_rate = static_cast<double>(drop + ifdrop) / recv;
+  if (drop_rate >= drop_rate_threshold_)
     VAST_WARNING(this, "has dropped", drop + ifdrop, "of", recv,
                  "recent packets");
   auto res = system::report{
     {name() + ".recv"s, recv},
     {name() + ".drop"s, drop},
     {name() + ".ifdrop"s, ifdrop},
+    {name() + ".drop-rate"s, drop_rate},
   };
   last_stats_ = std::move(stats);
   return res;

@@ -103,6 +103,7 @@ private:
   size_t snaplen_;
   bool community_id_;
   type packet_type_;
+  double drop_rate_threshold_;
   mutable pcap_stat last_stats_;
 };
 
