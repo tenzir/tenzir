@@ -126,6 +126,12 @@ struct source_state {
   measurement measurement_;
 
   void send_report() {
+    // Send the reader-specific status report to the accountant.
+    if (auto status = reader.status(); !status.empty()) {
+      if (accountant)
+        self->send(accountant, std::move(status));
+    }
+    // Send the source-specific performance metrics to the accountant.
     if (measurement_.events > 0) {
       auto r = performance_report{{{std::string{name}, measurement_}}};
 #if VAST_LOG_LEVEL >= VAST_LOG_LEVEL_INFO
