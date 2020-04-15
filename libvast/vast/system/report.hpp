@@ -11,24 +11,42 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#include "vast/format/reader.hpp"
+#pragma once
 
-namespace vast::format {
+#include "vast/fwd.hpp"
+#include "vast/system/instrumentation.hpp"
+#include "vast/time.hpp"
 
-reader::consumer::~consumer() {
-  // nop
+#include <caf/fwd.hpp>
+#include <caf/variant.hpp>
+
+#include <cstdint>
+#include <string>
+
+namespace vast::system {
+
+struct data_point {
+  std::string key;
+  caf::variant<std::string, duration, time, int64_t, uint64_t, double> value;
+};
+
+template <class Inspector>
+typename Inspector::result_type inspect(Inspector& f, data_point& s) {
+  return f(caf::meta::type_name("data_point"), s.key, s.value);
 }
-reader::reader(caf::atom_value table_slice_type)
-  : table_slice_type_(table_slice_type) {
-  // nop
+
+using report = std::vector<data_point>;
+
+struct performance_sample {
+  std::string key;
+  measurement value;
+};
+
+template <class Inspector>
+typename Inspector::result_type inspect(Inspector& f, performance_sample& s) {
+  return f(caf::meta::type_name("performance_sample"), s.key, s.value);
 }
 
-reader::~reader() {
-  // nop
-}
+using performance_report = std::vector<performance_sample>;
 
-vast::system::report reader::status() const {
-  return {};
-}
-
-} // namespace vast::format
+} // namespace vast::system

@@ -176,6 +176,8 @@ auto make_import_command() {
       .add<size_t>("pseudo-realtime-factor,p", "factor c delaying packets by "
                                                "1/c")
       .add<size_t>("snaplen", "snapshot length in bytes")
+      .add<double>("drop-rate-threshold", "drop rate that must be exceeded for "
+                                          "warnings to occur")
       .add<bool>("disable-community-id", "disable computation of community id "
                                          "for every packet"));
 #endif

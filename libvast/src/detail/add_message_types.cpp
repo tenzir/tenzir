@@ -21,9 +21,9 @@
 #include "vast/operator.hpp"
 #include "vast/query_options.hpp"
 #include "vast/schema.hpp"
-#include "vast/system/accountant.hpp"
 #include "vast/system/query_status.hpp"
 #include "vast/system/replicated_store.hpp"
+#include "vast/system/report.hpp"
 #include "vast/system/tracker.hpp"
 #include "vast/table_slice.hpp"
 #include "vast/type.hpp"
@@ -64,6 +64,7 @@ void add_message_types(caf::actor_system_config& cfg) {
   cfg.add_message_type<system::component_map_entry>(
     "vast::system::component_map_entry");
   cfg.add_message_type<system::registry>("vast::system::registry");
+  cfg.add_message_type<system::report>("vast::system::report");
   cfg.add_message_type<system::performance_report>("vast::system::performance_"
                                                    "report");
   cfg.add_message_type<system::query_status>("vast::system::query_status");
