@@ -10,6 +10,9 @@ Every entry has a category for which we use the following visual abbreviations:
 
 ## Unreleased
 
+- 🔄 The default bind address has been changed from `::` to `localhost`.
+  [#828](https://github.com/tenzir/vast/pull/828)
+
 - 🐞 Archive lookups are now interruptible. This change fixes an issue that
   caused consecutive exports to slow down the node, which improves the overall
   performance for larger databases considerably.

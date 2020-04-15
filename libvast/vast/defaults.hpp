@@ -285,7 +285,7 @@ constexpr const caf::atom_value server_file_verbosity = caf::atom("debug");
 namespace system {
 
 /// Hostname or IP address and port of a remote node.
-constexpr std::string_view endpoint = ":42000/tcp";
+constexpr std::string_view endpoint = "localhost:42000/tcp";
 
 /// The unique ID of this node.
 constexpr std::string_view node_id = "node";
