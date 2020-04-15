@@ -10,6 +10,12 @@ Every entry has a category for which we use the following visual abbreviations:
 
 ## Unreleased
 
+- 🎁 Packet drop statistics are now reported to the accountant for the
+  pcap-reader, and are available using the keys `pcap-reader.recv`,
+  `pcap-reader.drop`, and `pcap-reader.ifdrop`. If the number of dropped packets
+  exceeds 5% of the total packets, VAST additionally reports the packet drop on
+  the command line. [#827](https://github.com/tenzir/pull/827)
+
 - 🔄 The default bind address has been changed from `::` to `localhost`.
   [#828](https://github.com/tenzir/vast/pull/828)
 
