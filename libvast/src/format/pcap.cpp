@@ -30,6 +30,7 @@
 #include <caf/config_value.hpp>
 #include <caf/settings.hpp>
 
+#include <string>
 #include <thread>
 #include <utility>
 
@@ -79,6 +80,7 @@ reader::reader(caf::atom_value id, const caf::settings& options,
   community_id_ = !get_or(options, category + ".disable-community-id", false);
   packet_type_
     = community_id_ ? pcap_packet_type_community_id : pcap_packet_type;
+  last_stats_ = {};
 }
 
 void reader::reset(std::unique_ptr<std::istream>) {
@@ -104,6 +106,27 @@ schema reader::schema() const {
 
 const char* reader::name() const {
   return "pcap-reader";
+}
+
+vast::system::report reader::status() const {
+  using namespace std::string_literals;
+  auto stats = pcap_stat{};
+  if (auto res = pcap_stats(pcap_, &stats); res != 0)
+    return {};
+  uint64_t recv = stats.ps_recv - last_stats_.ps_recv;
+  uint64_t drop = stats.ps_drop - last_stats_.ps_drop;
+  uint64_t ifdrop = stats.ps_ifdrop - last_stats_.ps_ifdrop;
+  // Warn if at least 5% were dropped since the last report.
+  if ((drop + ifdrop) * 20 >= recv)
+    VAST_WARNING(this, "has dropped", drop + ifdrop, "of", recv,
+                 "recent packets");
+  auto res = system::report{
+    {name() + ".recv"s, recv},
+    {name() + ".drop"s, drop},
+    {name() + ".ifdrop"s, ifdrop},
+  };
+  last_stats_ = std::move(stats);
+  return res;
 }
 
 namespace {

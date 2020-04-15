@@ -61,6 +61,8 @@ public:
 
   const char* name() const override;
 
+  vast::system::report status() const override;
+
 protected:
   caf::error read_impl(size_t max_events, size_t max_slice_size,
                        consumer& f) override;
@@ -101,6 +103,7 @@ private:
   size_t snaplen_;
   bool community_id_;
   type packet_type_;
+  mutable pcap_stat last_stats_;
 };
 
 /// A PCAP writer.
