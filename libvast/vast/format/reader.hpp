@@ -13,16 +13,17 @@
 
 #pragma once
 
-#include <cstddef>
-#include <string_view>
+#include "vast/defaults.hpp"
+#include "vast/fwd.hpp"
+#include "vast/system/accountant.hpp"
+#include "vast/table_slice.hpp"
 
 #include <caf/error.hpp>
 #include <caf/expected.hpp>
 #include <caf/fwd.hpp>
 
-#include "vast/defaults.hpp"
-#include "vast/fwd.hpp"
-#include "vast/table_slice.hpp"
+#include <cstddef>
+#include <string_view>
 
 namespace vast::format {
 
@@ -98,6 +99,9 @@ public:
 
   /// @returns The name of the reader type.
   virtual const char* name() const = 0;
+
+  /// @returns A report for the accountant.
+  virtual vast::system::report status() const;
 
 protected:
   virtual caf::error read_impl(size_t max_events, size_t max_slice_size,

@@ -27,4 +27,9 @@ reader::~reader() {
   // nop
 }
 
+/// @returns A report for the accountant.
+vast::system::report reader::status() const {
+  return {};
+}
+
 } // namespace vast::format
