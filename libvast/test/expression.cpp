@@ -23,7 +23,7 @@
 #include "vast/concept/parseable/vast/time.hpp"
 #include "vast/concept/printable/to_string.hpp"
 #include "vast/concept/printable/vast/expression.hpp"
-#include "vast/detail/steady_map.hpp"
+#include "vast/detail/stable_map.hpp"
 #include "vast/event.hpp"
 #include "vast/expression_visitors.hpp"
 #include "vast/load.hpp"
@@ -274,7 +274,7 @@ TEST(labeler) {
     = "(x == 5 && :bool == T) || (foo ~ /foo/ && !(x == 5 || #type ~ /bar/))"s;
   auto expr = to_expr(str);
   // Create a visitor that records all offsets in order.
-  detail::steady_map<expression, offset> offset_map;
+  detail::stable_map<expression, offset> offset_map;
   auto visitor = labeler{
     [&](const auto& x, const offset& o) {
       offset_map.emplace(x, o);

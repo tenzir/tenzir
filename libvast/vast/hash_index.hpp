@@ -17,7 +17,7 @@
 #include "vast/concept/hashable/xxhash.hpp"
 #include "vast/data.hpp"
 #include "vast/detail/assert.hpp"
-#include "vast/detail/steady_map.hpp"
+#include "vast/detail/stable_map.hpp"
 #include "vast/detail/type_traits.hpp"
 #include "vast/value_index.hpp"
 #include "vast/view.hpp"
