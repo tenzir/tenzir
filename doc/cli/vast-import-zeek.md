@@ -1,5 +1,5 @@
-The [Zeek](https://zeek.org) import format consumes Zeek logs in tab-separated
-value (TSV) style.
+The `import zeek` command consumes [Zeek](https://zeek.org) logs in
+tab-separated value (TSV) style.
 
 Here's an example of a typical Zeek `conn.log`:
 
@@ -33,6 +33,5 @@ produces compressed batches of `*.tar.gz` regularly. Ingesting a compressed
 batch involves unpacking and concatenating the input before sending it to VAST:
 
 ```
-zcat *.gz | vast import zeek
+gunzip -c *.gz | vast import zeek
 ```
-

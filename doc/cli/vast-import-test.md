@@ -1,2 +1,2 @@
-The `test` format exists primarily for testing and benchmarking purposes. It
-generates random data for a given schema.
+The `import test` command exists primarily for testing and benchmarking
+purposes. It generates and ingests random data for a given schema.
