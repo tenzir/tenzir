@@ -30,7 +30,6 @@
 #include "vast/system/index_common.hpp"
 #include "vast/system/indexer_stage_driver.hpp"
 #include "vast/system/spawn_indexer.hpp"
-#include "vast/system/table_indexer.hpp"
 #include "vast/table_slice.hpp"
 #include "vast/time.hpp"
 #include "vast/type.hpp"
@@ -100,10 +99,6 @@ caf::error partition::flush_to_disk() {
       return err;
     meta_data_.dirty = false;
   }
-  // Write state for each layout to disk.
-  for (auto& kvp : table_indexers_)
-    if (auto err = kvp.second.flush_to_disk())
-      return err;
   return caf::none;
 }
 

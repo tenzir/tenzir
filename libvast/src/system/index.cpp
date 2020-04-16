@@ -166,7 +166,7 @@ caf::error index_state::flush_to_disk() {
       if (auto err = active->flush_to_disk())
         return err;
     // Flush all unpersisted partitions. This only writes the meta state of
-    // each table_indexer. For actually writing the contents of each INDEXER we
+    // each partition. For actually writing the contents of each INDEXER we
     // need to rely on messaging.
     for (auto& kvp : unpersisted)
       if (auto err = kvp.first->flush_to_disk())
@@ -236,27 +236,25 @@ void index_state::send_report() {
   auto min_rate = std::numeric_limits<double>::infinity();
   auto max_rate = -std::numeric_limits<double>::infinity();
   auto append_report = [&](partition& p) {
-    for (auto& [layout, ti] : p.table_indexers_) {
-      for (size_t i = 0; i < ti.measurements_.size(); ++i) {
+    for (size_t i = 0; i < p.measurements_.size(); ++i) {
 #ifdef VAST_MEASUREMENT_MUTEX_WORKAROUND
-        ti.measurements_[i].mutex.lock();
-        auto tmp = static_cast<measurement>(ti.measurements_[i]);
-        ti.measurements_[i].reset();
-        ti.measurements_[i].mutex.unlock();
+      p.measurements_[i].mutex.lock();
+      auto tmp = static_cast<measurement>(p.measurements_[i]);
+      p.measurements_[i].reset();
+      p.measurements_[i].mutex.unlock();
 #else
-        auto tmp = std::atomic_exchange(&(ti.measurements_[i]), measurement{});
+      auto tmp = std::atomic_exchange(&(p.measurements_[i]), measurement{});
 #endif
-        if (tmp.events > 0) {
-          r.push_back({layout.name() + "." + layout.fields[i].name, tmp});
-          double rate = tmp.events * 1'000'000'000.0 / tmp.duration.count();
-          if (rate < min_rate) {
-            min_rate = rate;
-            min = tmp;
-          }
-          if (rate > max_rate) {
-            max_rate = rate;
-            max = tmp;
-          }
+      if (tmp.events > 0) {
+        r.push_back({p.indexers_.container()[i].first.name, tmp});
+        double rate = tmp.events * 1'000'000'000.0 / tmp.duration.count();
+        if (rate < min_rate) {
+          min_rate = rate;
+          min = tmp;
+        }
+        if (rate > max_rate) {
+          max_rate = rate;
+          max = tmp;
         }
       }
     }

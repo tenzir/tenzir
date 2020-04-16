@@ -134,7 +134,6 @@ set(libvast_sources
     src/system/spawn_source.cpp
     src/system/spawn_type_registry.cpp
     src/system/start_command.cpp
-    src/system/table_indexer.cpp
     src/system/task.cpp
     src/system/tracker.cpp
     src/system/type_registry.cpp
@@ -331,7 +330,6 @@ set(tests
     test/system/replicated_store.cpp
     test/system/sink.cpp
     test/system/source.cpp
-    test/system/table_indexer.cpp
     test/system/task.cpp
     test/system/type_registry.cpp
     test/table_slice.cpp

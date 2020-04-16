@@ -13,18 +13,11 @@
 
 #pragma once
 
-#include "vast/aliases.hpp"
-#include "vast/concept/printable/to_string.hpp"
-#include "vast/concept/printable/vast/type.hpp"
-#include "vast/detail/assert.hpp"
 #include "vast/fwd.hpp"
 #include "vast/ids.hpp"
 #include "vast/system/fwd.hpp"
 #include "vast/system/index_common.hpp"
-#include "vast/system/indexer_stage_driver.hpp"
 #include "vast/system/instrumentation.hpp"
-#include "vast/system/spawn_indexer.hpp"
-#include "vast/system/table_indexer.hpp"
 #include "vast/type.hpp"
 #include "vast/uuid.hpp"
 
@@ -126,10 +119,6 @@ public:
   /// @moves a slice into the partition.
   void add(table_slice_ptr slice);
 
-  /// @returns The corresponding table indexer for a given type.
-  caf::expected<std::pair<table_indexer&, bool>>
-  get_or_add(const record_type& key);
-
   /// @returns the file name for `column`.
   path column_file(const fully_qualified_leaf_field& field) const;
 
@@ -160,12 +149,6 @@ public:
 
   /// Uniquely identifies this partition.
   uuid id_;
-
-  using table_indexer_map = caf::detail::unordered_flat_map<record_type,
-                                                            table_indexer>;
-
-  /// Stores one table indexer per layout that in turn manages INDEXER actors.
-  table_indexer_map table_indexers_;
 
   /// A map to the indexers
   caf::detail::unordered_flat_map<fully_qualified_leaf_field, wrapped_indexer>
