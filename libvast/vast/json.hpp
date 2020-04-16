@@ -13,8 +13,11 @@
 
 #pragma once
 
-#include <string>
-#include <vector>
+#include "vast/concept/printable/to.hpp"
+#include "vast/detail/narrow.hpp"
+#include "vast/detail/operators.hpp"
+#include "vast/detail/stable_map.hpp"
+#include "vast/detail/type_traits.hpp"
 
 #include <caf/detail/type_list.hpp>
 #include <caf/dictionary.hpp>
@@ -22,11 +25,8 @@
 #include <caf/none.hpp>
 #include <caf/variant.hpp>
 
-#include "vast/concept/printable/to.hpp"
-#include "vast/detail/narrow.hpp"
-#include "vast/detail/operators.hpp"
-#include "vast/detail/steady_map.hpp"
-#include "vast/detail/type_traits.hpp"
+#include <string>
+#include <vector>
 
 namespace vast {
 
@@ -49,7 +49,7 @@ public:
   using array = std::vector<json>;
 
   /// A JSON object.
-  using object = detail::steady_map<string, json>;
+  using object = detail::stable_map<string, json>;
 
   /// The sum type of all possible JSON types.
   using types = caf::detail::type_list<

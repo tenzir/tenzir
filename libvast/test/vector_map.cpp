@@ -11,10 +11,10 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
+#include "vast/detail/stable_map.hpp"
+
 #include <string>
 #include <string_view>
-
-#include "vast/detail/steady_map.hpp"
 
 #define SUITE detail
 #include "vast/test/test.hpp"
@@ -26,7 +26,7 @@ using namespace vast;
 
 namespace {
 
-using map = detail::steady_map<std::string, int>;
+using map = detail::stable_map<std::string, int>;
 
 struct fixture {
   fixture() {
@@ -40,16 +40,16 @@ struct fixture {
 
 } // namespace <anonymous>
 
-FIXTURE_SCOPE(steady_map_tests, fixture)
+FIXTURE_SCOPE(stable_map_tests, fixture)
 
-TEST(steady_map membership) {
+TEST(stable_map membership) {
   CHECK(xs.find("qux") == xs.end());
   CHECK(xs.find("foo") != xs.end());
   CHECK_EQUAL(xs.count("baz"), 1u);
 }
 
 #ifndef VAST_NO_EXCEPTIONS
-TEST(steady_map at) {
+TEST(stable_map at) {
   CHECK_EQUAL(xs.at("foo"), 42);
   auto exception = std::out_of_range{""};
   try {
@@ -61,21 +61,21 @@ TEST(steady_map at) {
 }
 #endif // VAST_NO_EXCEPTIONS
 
-TEST(steady_map insert) {
+TEST(stable_map insert) {
   auto i = xs.insert({"qux", 1});
   CHECK(i.second);
   CHECK_EQUAL(i.first->second, 1);
   CHECK_EQUAL(xs.size(), 4u);
 }
 
-TEST(steady_map duplicates) {
+TEST(stable_map duplicates) {
   auto i = xs.insert({"foo", 666});
   CHECK(!i.second);
   CHECK_EQUAL(i.first->second, 42);
   CHECK_EQUAL(xs.size(), 3u);
 }
 
-TEST(steady_map erase) {
+TEST(stable_map erase) {
   CHECK_EQUAL(xs.erase("qux"), 0u);
   CHECK_EQUAL(xs.erase("baz"), 1u);
   REQUIRE_EQUAL(xs.size(), 2u);
@@ -86,7 +86,7 @@ TEST(steady_map erase) {
   CHECK_EQUAL(last->first, "bar");
 }
 
-TEST(steady_map comparison) {
+TEST(stable_map comparison) {
   CHECK(xs == map{{"foo", 42}, {"baz", 1337}, {"bar", 4711}});
   CHECK(xs != map{{"foo", 42}, {"bar", 4711}, {"baz", 1337}});
 }

@@ -12,7 +12,7 @@
  ******************************************************************************/
 
 #include "vast/detail/flat_set.hpp"
-#include "vast/detail/steady_set.hpp"
+#include "vast/detail/stable_set.hpp"
 
 #define SUITE detail
 #include "vast/test/test.hpp"
@@ -62,15 +62,15 @@ struct fixture {
 
 } // namespace <anonymous>
 
-FIXTURE_SCOPE(steady_set_tests, fixture<steady_set<int>>)
+FIXTURE_SCOPE(stable_set_tests, fixture<stable_set<int>>)
 
-TEST(steady_set) {
+TEST(stable_set) {
   test();
 }
 
-TEST(steady_set comparison) {
-  auto xs = steady_set<int>{1, 2, 3};
-  auto ys = steady_set<int>{2, 1, 3};
+TEST(stable_set comparison) {
+  auto xs = stable_set<int>{1, 2, 3};
+  auto ys = stable_set<int>{2, 1, 3};
   CHECK_NOT_EQUAL(xs, ys);
 }
 

@@ -13,19 +13,14 @@
 
 #pragma once
 
-#include <algorithm>
-#include <functional>
-#include <memory>
-#include <utility>
-
-#include "vast/detail/vector_set.hpp"
+#include "vast/detail/vector_map.hpp"
 
 namespace vast::detail {
 
-struct steady_set_policy {
+struct stable_map_policy {
   template <class Ts, class T>
   static auto add(Ts& xs, T&& x) {
-    auto i = lookup(xs, x);
+    auto i = lookup(xs, x.first);
     if (i == xs.end())
       return std::make_pair(xs.insert(i, std::forward<T>(x)), true);
     else
@@ -34,13 +29,15 @@ struct steady_set_policy {
 
   template <class Ts, class T>
   static auto lookup(Ts&& xs, const T& x) {
-    return std::find(xs.begin(), xs.end(), x);
+    auto pred = [&](auto& p) { return p.first == x; };
+    return std::find_if(xs.begin(), xs.end(), pred);
   }
 };
 
-/// A set abstraction over an unsorted `std::vector`.
-template <class T, class Allocator = std::allocator<T>>
-using steady_set = vector_set<T, Allocator, steady_set_policy>;
+/// A map abstraction over an unsorted `std::vector`.
+template <class Key, class T,
+          class Allocator = std::allocator<std::pair<Key, T>>>
+using stable_map = vector_map<Key, T, Allocator, stable_map_policy>;
 
 } // namespace vast::detail
 

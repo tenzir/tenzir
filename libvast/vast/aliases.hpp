@@ -13,6 +13,12 @@
 
 #pragma once
 
+#include "vast/detail/stable_map.hpp"
+#include "vast/detail/stable_set.hpp"
+#include "vast/fwd.hpp"
+
+#include <caf/fwd.hpp>
+
 #include <cstdint>
 #include <limits>
 #include <map>
@@ -20,13 +26,6 @@
 #include <tuple>
 #include <utility>
 #include <vector>
-
-#include <caf/fwd.hpp>
-
-#include "vast/fwd.hpp"
-
-#include "vast/detail/steady_map.hpp"
-#include "vast/detail/steady_set.hpp"
 
 namespace vast {
 
@@ -46,10 +45,10 @@ using enumeration = uint8_t;
 using vector = std::vector<data>;
 
 /// A mathematical set where each element is ::data.
-using set = detail::steady_set<data>;
+using set = detail::stable_set<data>;
 
 /// An associative array with ::data as both key and value.
-using map = detail::steady_map<data, data>;
+using map = detail::stable_map<data, data>;
 
 /// Default bitstream implementation.
 using default_bitstream = ewah_bitstream;
