@@ -52,16 +52,18 @@ void counter_state::init(expression expr, caf::actor index,
   behaviors_[collect_hits] = base.or_else(
     [this](table_slice_ptr slice) {
       // Construct a candidate checker if we don't have one for this type.
-      auto& checker = checkers_[slice->layout()];
-      if (caf::holds_alternative<caf::none_t>(checker)) {
+      auto it = checkers_.find(slice->layout());
+      if (it == checkers_.end()) {
         if (auto x = tailor(expr_, slice->layout())) {
-          checker = std::move(*x);
+          std::tie(it, std::ignore) = checkers_.emplace(
+            vast::record_type{slice->layout()}, std::move(*x));
         } else {
           VAST_ERROR(self_, "failed to tailor expression:",
                      self_->system().render(x.error()));
           return;
         }
       }
+      auto& checker = it->second;
       // Performance candidate checks for all selected rows.
       uint64_t num_hits = 0;
       auto candidates = to_events(*slice, hits_);

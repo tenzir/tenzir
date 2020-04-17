@@ -213,4 +213,20 @@ TEST(continuous query with importer) {
   CHECK_EQUAL(results.back().id(), 19u);
 }
 
+TEST(continuous query with mismatching importer) {
+  MESSAGE("prepare importer");
+  importer_setup();
+  MESSAGE("prepare exporter for continous query");
+  expr = unbox(to<expression>("foo.bar == \"baz\""));
+  exporter_setup(continuous);
+  send(importer, system::exporter_atom::value, exporter);
+  MESSAGE("ingest conn.log via importer");
+  // Again: copy because we musn't mutate static test data.
+  vast::detail::spawn_container_source(sys, zeek_conn_log_slices, importer);
+  run();
+  MESSAGE("fetch results");
+  auto results = fetch_results();
+  CHECK_EQUAL(results.size(), 0u);
+}
+
 FIXTURE_SCOPE_END()
