@@ -13,15 +13,14 @@
 
 #pragma once
 
+#include "vast/detail/stable_map.hpp"
 #include "vast/fwd.hpp"
 #include "vast/ids.hpp"
-#include "vast/system/fwd.hpp"
 #include "vast/system/index_common.hpp"
 #include "vast/system/instrumentation.hpp"
 #include "vast/type.hpp"
 #include "vast/uuid.hpp"
 
-#include <caf/detail/unordered_flat_map.hpp>
 #include <caf/event_based_actor.hpp>
 #include <caf/stream_slot.hpp>
 
@@ -52,7 +51,8 @@ public:
 
   /// A path that connects the incoming stream of table slices to an indexer.
   struct wrapped_indexer {
-    caf::actor indexer;
+    /// Mutable because it can be initalized layzily.
+    mutable caf::actor indexer;
 
     /// Only used during ingestion.
     caf::stream_slot slot;
@@ -116,15 +116,15 @@ public:
 
   indexer_downstream_manager& out() const;
 
-  /// @moves a slice into the partition.
-  void add(table_slice_ptr slice);
-
   /// @returns the file name for `column`.
   path column_file(const fully_qualified_leaf_field& field) const;
 
   // -- operations -------------------------------------------------------------
 
   void finalize();
+
+  /// @moves a slice into the partition.
+  void add(table_slice_ptr slice);
 
   caf::expected<std::pair<caf::actor, bool>> get(const record_field& field);
 
@@ -151,8 +151,7 @@ public:
   uuid id_;
 
   /// A map to the indexers
-  caf::detail::unordered_flat_map<fully_qualified_leaf_field, wrapped_indexer>
-    indexers_;
+  detail::stable_map<fully_qualified_leaf_field, wrapped_indexer> indexers_;
 
   /// Instrumentation data store, one entry for each INDEXER.
   std::unordered_map<size_t, atomic_measurement> measurements_;

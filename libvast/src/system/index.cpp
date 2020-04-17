@@ -246,7 +246,7 @@ void index_state::send_report() {
       auto tmp = std::atomic_exchange(&(p.measurements_[i]), measurement{});
 #endif
       if (tmp.events > 0) {
-        r.push_back({p.indexers_.container()[i].first.name, tmp});
+        r.push_back({as_vector(p.indexers_)[i].first.name, tmp});
         double rate = tmp.events * 1'000'000'000.0 / tmp.duration.count();
         if (rate < min_rate) {
           min_rate = rate;

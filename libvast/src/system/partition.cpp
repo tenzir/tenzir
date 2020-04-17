@@ -76,7 +76,7 @@ caf::error partition::init() {
              partition_type.fields.size(), "columns");
   for (auto& f : partition_type.fields) {
     fully_qualified_leaf_field fqf{f.name, f.type};
-    indexers_.container().emplace_back(std::move(fqf), wrapped_indexer{});
+    indexers_.emplace(std::move(fqf), wrapped_indexer{});
   }
   return caf::none;
 }
@@ -104,7 +104,7 @@ caf::error partition::flush_to_disk() {
 
 caf::actor& partition::indexer_at(size_t position) {
   VAST_ASSERT(position < indexers_.size());
-  auto& [fqf, ip] = indexers_.container()[position];
+  auto& [fqf, ip] = as_vector(indexers_)[position];
   if (!ip.indexer) {
     ip.indexer = state().make_indexer(column_file(fqf), fqf.type, id(),
                                       &measurements_[position]);
