@@ -64,7 +64,7 @@ connect_to_node(scoped_actor& self, const caf::settings& opts) {
                         || !sys_cfg.openssl_cafile.empty();
   auto host = node_endpoint.host;
   if (node_endpoint.host.empty())
-    node_endpoint.host = "127.0.0.1";
+    node_endpoint.host = "localhost";
   VAST_INFO(self, "connects to",
             node_endpoint.host << ':' << to_string(node_endpoint.port));
   auto result = [&] {
