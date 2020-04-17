@@ -78,6 +78,7 @@ set(libvast_sources
     src/operator.cpp
     src/pattern.cpp
     src/port.cpp
+    src/qualified_record_field.cpp
     src/schema.cpp
     src/segment.cpp
     src/segment_builder.cpp
@@ -100,7 +101,6 @@ set(libvast_sources
     src/system/exporter.cpp
     src/system/importer.cpp
     src/system/index.cpp
-    src/system/index_common.cpp
     src/system/indexer.cpp
     src/system/indexer_downstream_manager.cpp
     src/system/indexer_stage_driver.cpp

@@ -75,7 +75,7 @@ caf::error partition::init() {
              meta_data_.types.size(), "layouts and",
              partition_type.fields.size(), "columns");
   for (auto& f : partition_type.fields) {
-    fully_qualified_leaf_field fqf{f.name, f.type};
+    qualified_record_field fqf{f.name, f.type};
     indexers_.emplace(std::move(fqf), wrapped_indexer{});
   }
   return caf::none;
@@ -260,7 +260,7 @@ path partition::meta_file() const {
   return base_dir() / "meta";
 }
 
-path partition::column_file(const fully_qualified_leaf_field& field) const {
+path partition::column_file(const qualified_record_field& field) const {
   return base_dir() / (field.name + "-" + to_digest(field.type));
 }
 

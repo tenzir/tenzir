@@ -24,36 +24,42 @@
 
 namespace vast {
 
-namespace system {
-
-class index_state;
-class partition;
-using partition_ptr = std::unique_ptr<partition>;
-
-} // namespace system
-
-struct table_slice_column {
-  table_slice_column() {
-  }
-
-  table_slice_column(table_slice_ptr slice_, size_t column_)
-    : slice{std::move(slice_)}, column{column_} {
+/// A standalone field of an event type, used to address an index column.
+/// Example: { "zeek.conn.id.orig_h", address_type{} }
+struct qualified_record_field
+  : detail::totally_ordered<qualified_record_field> {
+  qualified_record_field(std::string name_, type type_)
+    : name{std::move(name_)}, type{std::move(type_)} {
     // nop
   }
-  table_slice_ptr slice;
-  size_t column;
+
+  vast::record_field to_record_field() const;
+
+  std::string name; ///< The name of the field.
+  vast::type type;  ///< The type of the field.
+
+  friend bool
+  operator==(const qualified_record_field& x, const qualified_record_field& y);
+
+  friend bool
+  operator<(const qualified_record_field& x, const qualified_record_field& y);
 
   template <class Inspector>
-  friend auto inspect(Inspector& f, table_slice_column& x) {
-    return f(x.slice, x.column);
+  friend auto inspect(Inspector& f, qualified_record_field& x) {
+    return f(x.name, x.type);
   }
 };
 
-/// Bundles an offset into an expression under evaluation to the curried
-/// representation of the ::predicate at that position in the expression and
-/// the INDEXER actor responsible for answering the (curried) predicate.
-using evaluation_triple = std::tuple<offset, curried_predicate, caf::actor>;
-
-using evaluation_triples = std::vector<evaluation_triple>;
+qualified_record_field
+to_fully_qualified(const std::string& tn, const record_field& field);
 
 } // namespace vast
+
+namespace std {
+
+template <>
+struct hash<vast::qualified_record_field> {
+  size_t operator()(const vast::qualified_record_field& f) const;
+};
+
+} // namespace std

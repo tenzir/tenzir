@@ -11,29 +11,29 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#include "vast/system/index_common.hpp"
+#include "vast/qualified_record_field.hpp"
 
 #include "vast/concept/hashable/uhash.hpp"
 #include "vast/concept/hashable/xxhash.hpp"
 
 namespace vast {
 
-vast::record_field fully_qualified_leaf_field::to_record_field() const {
+vast::record_field qualified_record_field::to_record_field() const {
   return {name, type};
 }
 
-fully_qualified_leaf_field
+qualified_record_field
 to_fully_qualified(const std::string& tn, const record_field& field) {
   return {tn + "." + field.name, field.type};
 }
 
-bool operator==(const fully_qualified_leaf_field& x,
-                const fully_qualified_leaf_field& y) {
+bool operator==(const qualified_record_field& x,
+                const qualified_record_field& y) {
   return x.name == y.name && x.type == y.type;
 }
 
-bool operator<(const fully_qualified_leaf_field& x,
-               const fully_qualified_leaf_field& y) {
+bool operator<(const qualified_record_field& x,
+               const qualified_record_field& y) {
   return std::tie(x.name, x.type) < std::tie(y.name, y.type);
 }
 
@@ -41,8 +41,8 @@ bool operator<(const fully_qualified_leaf_field& x,
 
 namespace std {
 
-size_t hash<vast::fully_qualified_leaf_field>::operator()(
-  const vast::fully_qualified_leaf_field& x) const {
+size_t hash<vast::qualified_record_field>::operator()(
+  const vast::qualified_record_field& x) const {
   return vast::uhash<vast::xxhash64>{}(x);
 }
 

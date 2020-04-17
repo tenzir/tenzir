@@ -16,6 +16,7 @@
 #include "vast/detail/stable_map.hpp"
 #include "vast/fwd.hpp"
 #include "vast/ids.hpp"
+#include "vast/qualified_record_field.hpp"
 #include "vast/system/index_common.hpp"
 #include "vast/system/instrumentation.hpp"
 #include "vast/type.hpp"
@@ -117,7 +118,7 @@ public:
   indexer_downstream_manager& out() const;
 
   /// @returns the file name for `column`.
-  path column_file(const fully_qualified_leaf_field& field) const;
+  path column_file(const qualified_record_field& field) const;
 
   // -- operations -------------------------------------------------------------
 
@@ -151,7 +152,7 @@ public:
   uuid id_;
 
   /// A map to the indexers
-  detail::stable_map<fully_qualified_leaf_field, wrapped_indexer> indexers_;
+  detail::stable_map<qualified_record_field, wrapped_indexer> indexers_;
 
   /// Instrumentation data store, one entry for each INDEXER.
   std::unordered_map<size_t, atomic_measurement> measurements_;
