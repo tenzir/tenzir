@@ -184,7 +184,7 @@ using partition_ptr = std::unique_ptr<partition>;
 /// @relates partition::meta_data
 template <class Inspector>
 auto inspect(Inspector& f, partition::meta_data& x) {
-  return f(x.types, x.type_ids);
+  return f(x.layouts, x.type_ids);
 }
 
 } // namespace vast::system
