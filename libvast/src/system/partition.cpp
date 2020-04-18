@@ -30,7 +30,7 @@
 #include "vast/system/index_common.hpp"
 #include "vast/system/indexer_stage_driver.hpp"
 #include "vast/system/spawn_indexer.hpp"
-#include "vast/table_slice.hpp"
+#include "vast/table_slice_column.hpp"
 #include "vast/time.hpp"
 #include "vast/type.hpp"
 

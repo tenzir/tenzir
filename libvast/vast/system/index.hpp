@@ -19,7 +19,6 @@
 #include "vast/fwd.hpp"
 #include "vast/meta_index.hpp"
 #include "vast/system/accountant.hpp"
-#include "vast/system/index_common.hpp"
 #include "vast/system/indexer_stage_driver.hpp"
 #include "vast/system/partition.hpp"
 #include "vast/system/query_supervisor.hpp"

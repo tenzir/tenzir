@@ -21,7 +21,7 @@
 #include "vast/logger.hpp"
 #include "vast/system/atoms.hpp"
 #include "vast/system/instrumentation.hpp"
-#include "vast/table_slice.hpp"
+#include "vast/table_slice_column.hpp"
 #include "vast/view.hpp"
 
 #include <caf/all.hpp>

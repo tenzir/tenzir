@@ -13,15 +13,16 @@
 
 #define SUITE column_index
 
-#include "vast/test/test.hpp"
-#include "vast/test/fixtures/actor_system_and_events.hpp"
-
 #include "vast/column_index.hpp"
+
+#include "vast/test/fixtures/actor_system_and_events.hpp"
+#include "vast/test/test.hpp"
+
 #include "vast/concept/parseable/to.hpp"
 #include "vast/concept/parseable/vast/expression.hpp"
 #include "vast/default_table_slice.hpp"
-#include "vast/table_slice.hpp"
 #include "vast/table_slice_builder.hpp"
+#include "vast/table_slice_column.hpp"
 #include "vast/type.hpp"
 
 using namespace vast;

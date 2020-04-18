@@ -17,7 +17,6 @@
 #include "vast/event.hpp"
 #include "vast/expression.hpp"
 #include "vast/filesystem.hpp"
-#include "vast/system/index_common.hpp"
 #include "vast/type.hpp"
 #include "vast/value_index.hpp"
 
@@ -28,6 +27,8 @@
 #include <memory>
 
 namespace vast {
+
+struct table_slice_column;
 
 // -- free functions -----------------------------------------------------------
 

@@ -18,6 +18,7 @@
 #include "vast/ids.hpp"
 #include "vast/offset.hpp"
 #include "vast/system/index_common.hpp"
+#include "vast/table_slice_column.hpp"
 #include "vast/uuid.hpp"
 
 #include <caf/actor.hpp>

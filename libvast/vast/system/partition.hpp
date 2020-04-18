@@ -17,8 +17,8 @@
 #include "vast/fwd.hpp"
 #include "vast/ids.hpp"
 #include "vast/qualified_record_field.hpp"
-#include "vast/system/index_common.hpp"
 #include "vast/system/instrumentation.hpp"
+#include "vast/table_slice_column.hpp"
 #include "vast/type.hpp"
 #include "vast/uuid.hpp"
 

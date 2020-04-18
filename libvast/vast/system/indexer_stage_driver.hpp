@@ -16,7 +16,6 @@
 #include "vast/fwd.hpp"
 #include "vast/logger.hpp"
 #include "vast/system/fwd.hpp"
-#include "vast/system/index_common.hpp"
 #include "vast/system/indexer.hpp"
 #include "vast/system/indexer_downstream_manager.hpp"
 

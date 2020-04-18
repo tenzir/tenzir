@@ -15,7 +15,7 @@
 
 #include "vast/detail/assert.hpp"
 #include "vast/system/fwd.hpp"
-#include "vast/system/index_common.hpp"
+#include "vast/table_slice_column.hpp"
 
 #include <caf/downstream_manager_base.hpp>
 

@@ -15,7 +15,6 @@
 
 #include "vast/detail/assert.hpp"
 #include "vast/logger.hpp"
-#include "vast/system/index_common.hpp"
 #include "vast/system/partition.hpp"
 #include "vast/table_slice.hpp"
 

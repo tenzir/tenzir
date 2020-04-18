@@ -13,16 +13,40 @@
 
 #pragma once
 
-#include "vast/expression.hpp"
+#include "vast/detail/operators.hpp"
 #include "vast/fwd.hpp"
-#include "vast/offset.hpp"
-
-#include <caf/actor.hpp>
+#include "vast/table_slice.hpp"
+#include "vast/type.hpp"
 
 #include <tuple>
 #include <vector>
 
 namespace vast {
+
+namespace system {
+
+class index_state;
+class partition;
+using partition_ptr = std::unique_ptr<partition>;
+
+} // namespace system
+
+struct table_slice_column {
+  table_slice_column() {
+  }
+
+  table_slice_column(table_slice_ptr slice_, size_t column_)
+    : slice{std::move(slice_)}, column{column_} {
+    // nop
+  }
+  table_slice_ptr slice;
+  size_t column;
+
+  template <class Inspector>
+  friend auto inspect(Inspector& f, table_slice_column& x) {
+    return f(x.slice, x.column);
+  }
+};
 
 /// Bundles an offset into an expression under evaluation to the curried
 /// representation of the ::predicate at that position in the expression and
