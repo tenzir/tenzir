@@ -72,7 +72,7 @@ caf::error partition::init() {
   if (auto err = load(nullptr, file_path, meta_data_, partition_type))
     return err;
   VAST_DEBUG(state_->self, "loaded partition", id_, "from disk with",
-             meta_data_.types.size(), "layouts and",
+             meta_data_.layouts.size(), "layouts and",
              partition_type.fields.size(), "columns");
   for (auto& f : partition_type.fields) {
     qualified_record_field fqf{f.name, f.type};
@@ -122,7 +122,7 @@ void partition::add(table_slice_ptr slice) {
   auto first = slice->offset();
   auto last = slice->offset() + slice->rows();
   auto& layout = slice->layout();
-  bool is_new = meta_data_.types.emplace(to_digest(layout), layout).second;
+  bool is_new = meta_data_.layouts.emplace(layout).second;
   auto it = meta_data_.type_ids.emplace(layout.name(), vast::ids{}).first;
   auto& ids = it->second;
   VAST_ASSERT(first >= ids.size());
@@ -150,7 +150,7 @@ void partition::add(table_slice_ptr slice) {
     }
   }
   capacity_ -= slice->rows();
-  inbound.push_back(std::move(slice));
+  inbound_.push_back(std::move(slice));
 }
 
 record_type partition::combined_type() const {
@@ -226,10 +226,12 @@ caf::actor partition::fetch_indexer(const attribute_extractor& ex,
 
 evaluation_triples partition::eval(const expression& expr) {
   evaluation_triples result;
-  // Step #1: Pretend the partition is a table.
-  // TODO(ch9680): resolve might not work with multiple fields with the same name?
+  // Pretend the partition is a table, and return fitted predicates for the
+  // partitions layout.
   auto resolved = resolve(expr, combined_type());
   for (auto& kvp : resolved) {
+    // For each fitted predicate, look up the corresponding INDEXER according
+    // to the specified type of extractor.
     auto& pred = kvp.second;
     auto get_indexer_handle = [&](const auto& ext, const data& x) {
       return fetch_indexer(ext, pred.op, x);
@@ -245,10 +247,13 @@ evaluation_triples partition::eval(const expression& expr) {
         return caf::actor{}; // clang-format fix
       });
     auto hdl = caf::visit(v, pred.lhs, pred.rhs);
+    // Package the predicate, its position in the query and the required
+    // INDEXER as a "job description".
     if (hdl != nullptr) {
       result.emplace_back(kvp.first, curried(pred), std::move(hdl));
     }
   }
+  // Return the list of jobs, to be used by the EVALUATOR.
   return result;
 }
 

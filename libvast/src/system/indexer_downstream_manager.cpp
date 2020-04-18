@@ -40,7 +40,7 @@ size_t indexer_downstream_manager::buffered(partition& p) const noexcept {
   for (auto& ip : p.indexers_) {
     max_path_buf = std::max(max_path_buf, ip.second.buf.size());
   }
-  return p.inbound.size() + max_path_buf;
+  return p.inbound_.size() + max_path_buf;
 }
 
 /// Returns the number of buffered elements for this specific slot, ignoring
@@ -168,7 +168,7 @@ void indexer_downstream_manager::emit_batches_impl(bool force_underfull) {
       }
       continue;
     }
-    auto& buf = pptr->inbound;
+    auto& buf = pptr->inbound_;
     chunk = std::min(chunk, buf.size());
     // If this partition has any inbound slices to handle:
     if (chunk != 0u) {

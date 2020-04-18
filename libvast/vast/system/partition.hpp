@@ -39,18 +39,18 @@ public:
 
   /// Persistent meta state for the partition.
   struct meta_data {
-    /// Maps type digests (used as directory names) to layouts (i.e. record
-    /// types).
-    std::unordered_map<std::string, record_type> types;
+    /// Keeps a list of already added layouts so we don't have to check if
+    /// additional columns have to be spawned for each added slice.
+    std::unordered_set<record_type> layouts;
 
-    /// Maps type names to ids.
+    /// Maps type names to ids. Used the answer #type queries.
     std::unordered_map<std::string, ids> type_ids;
 
     /// Stores whether the partition has been mutated in memory.
     bool dirty = false;
   };
 
-  /// A path that connects the incoming stream of table slices to an indexer.
+  /// An indexer combined withs streaming support structures.
   struct wrapped_indexer {
     /// Mutable because it can be initalized layzily.
     mutable caf::actor indexer;
@@ -124,20 +124,28 @@ public:
 
   void finalize();
 
-  /// @moves a slice into the partition.
+  /// Adds a slice to the partition.
   void add(table_slice_ptr slice);
 
-  caf::expected<std::pair<caf::actor, bool>> get(const record_field& field);
-
+  /// Gets the INDEXER at position in the layout.
   caf::actor& indexer_at(size_t position);
 
+  /// Retrieves an INDEXER for a predicate with a data extractor.
+  /// @param dx The extractor.
+  /// @param op The operator (only used to precompute ids for type queries.
+  /// @param x The literal side of the predicate.
   caf::actor fetch_indexer(const data_extractor& dx, relational_operator op,
                            const data& x);
 
+  /// Retrieves an INDEXER for a predicate with an attribute extractor.
+  /// @param dx The extractor.
+  /// @param op The operator (only used to precompute ids for type queries.
+  /// @param x The literal side of the predicate.
   caf::actor fetch_indexer(const attribute_extractor& ex,
                            relational_operator op, const data& x);
 
-  /// @returns all INDEXER actors required for a query.
+  /// @returns all INDEXER actors required for a query, together with tailored
+  /// predicates their offsets in the expression. Used by the EVALUATOR.
   evaluation_triples eval(const expression& expr);
 
   // -- members ----------------------------------------------------------------
@@ -151,7 +159,7 @@ public:
   /// Uniquely identifies this partition.
   uuid id_;
 
-  /// A map to the indexers
+  /// A map to the indexers.
   detail::stable_map<qualified_record_field, wrapped_indexer> indexers_;
 
   /// Instrumentation data store, one entry for each INDEXER.
@@ -160,7 +168,7 @@ public:
   /// Remaining capacity in this partition.
   size_t capacity_;
 
-  std::vector<table_slice_ptr> inbound;
+  std::vector<table_slice_ptr> inbound_;
 
   friend class index_state;
   friend class indexer_downstream_manager;
