@@ -36,7 +36,8 @@
 /// the indexer actors from the target partition and associating them to their
 /// matching fields from the layout.
 ///
-///  Example for a partition containing 2 types foo and bar with the layouts:
+///  Example for a partition containing 2 types foo and foo (updated) with the
+///  layouts:
 ///
 ///     field name: field type # ID (hash of record_field)
 ///  type foo = record {
@@ -45,7 +46,7 @@
 ///     c:          string,    # C
 ///     d:          address    # D
 ///  }
-///  type bar = record {
+///  type foo = record {
 ///     a:          int,       # A
 ///     b:          domain,    # B'
 ///     c:          enum,      # C'
@@ -53,7 +54,7 @@
 ///  }
 ///
 ///  inbound stream
-///        |                              table_slice{ bar }
+///        |                              table_slice{ foo }
 ///        v         table_slice{ foo }--    /   |   |    |
 ///                     |  ~|~~~~~\ ~~~~~\ ~~    |   |    |
 ///                     |/  \      ----   ----  /    |    |
