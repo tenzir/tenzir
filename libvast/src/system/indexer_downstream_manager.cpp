@@ -78,10 +78,13 @@ bool indexer_downstream_manager::unregister(partition* p) {
   auto it = partitions.find(p);
   if (it == partitions.end())
     return false;
-  if (buffered(**it) == 0u)
-    cleanup_partition(it);
-  else
+  if (buffered(**it) == 0u) {
+    cleanup_partition(**it);
+    partitions.erase(it);
+  } else {
+    VAST_DEBUG(self(), "inserts partition", p->id(), "into pending set");
     pending_partitions.insert(p);
+  }
   return true;
 }
 
@@ -101,11 +104,14 @@ indexer_downstream_manager::buffer_type& indexer_downstream_manager::buf() {
   return buf_;
 }
 
-void indexer_downstream_manager::cleanup_partition(set_type::iterator& it) {
-  VAST_DEBUG(self(), "clears stream paths of partition", (*it)->id());
+void indexer_downstream_manager::cleanup_partition(partition& p) {
+  // This is all about managing the paths_ array, just do nothing if it is
+  // already empty.
+  if (paths_.empty())
+    return;
+  VAST_DEBUG(self(), "clears stream paths of partition", p.id());
   auto f = paths_.begin();
-  for (auto& wi : (*it)->indexers_) {
-    about_to_erase(wi.second.outbound, false, nullptr);
+  for (auto& wi : p.indexers_) {
     while (f != paths_.end() && wi.second.slot != f->first)
       ++f;
     if (f == paths_.end()) {
@@ -115,15 +121,15 @@ void indexer_downstream_manager::cleanup_partition(set_type::iterator& it) {
       if (f == paths_.end()) {
         VAST_WARNING(self(), "tries to delete a non-existing outbound path");
         // We could just exit now, but maybe something unforseen happened to
-        // that one INDEXER while the rest of the partiton is ok, so we rather
+        // that one INDEXER while the rest of the partiton is ok, so we better
         // try to clean up the others.
         f = paths_.begin();
         continue;
       }
     }
+    about_to_erase(f->second.get(), false, nullptr);
     f = paths_.erase(f);
   }
-  it = partitions.erase(it);
 }
 
 static size_t chunk_size(const partition& p) {
@@ -140,16 +146,17 @@ static size_t chunk_size(const partition& p) {
   return chunk_size;
 }
 
-void indexer_downstream_manager::try_remove_partition(set_type::iterator& it) {
+indexer_downstream_manager::set_type::iterator
+indexer_downstream_manager::try_remove_partition(set_type::iterator it) {
   auto pit = pending_partitions.find(*it);
   if (pit != pending_partitions.end()) {
     if (buffered(**it) == 0u) {
-      cleanup_partition(it);
+      cleanup_partition(**it);
       pending_partitions.erase(pit);
-      return;
+      return partitions.erase(it);
     }
   }
-  ++it;
+  return std::next(it);
 }
 
 void indexer_downstream_manager::emit_batches_impl(bool force_underfull) {
@@ -201,7 +208,7 @@ void indexer_downstream_manager::emit_batches_impl(bool force_underfull) {
                                       force_underfull
                                         || x.second.outbound->closing);
     }
-    try_remove_partition(it);
+    it = try_remove_partition(it);
   }
 }
 

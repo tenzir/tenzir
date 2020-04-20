@@ -284,7 +284,8 @@ void index_state::reset_active_partition() {
   // Persist meta data and the state of all INDEXER actors when the active
   // partition gets replaced becomes full.
   if (active != nullptr) {
-    stage->out().unregister(active.get());
+    if (!stage->out().unregister(active.get()))
+      VAST_ERROR(self, "tried to unregister unknown partition");
     if (auto err = active->flush_to_disk())
       VAST_ERROR(self, "failed to persist active partition");
     // Store this partition as unpersisted to make sure we're not attempting

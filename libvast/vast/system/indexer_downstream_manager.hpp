@@ -82,9 +82,9 @@ protected:
   buffer_type buf_;
 
 private:
-  void cleanup_partition(set_type::iterator& it);
+  void cleanup_partition(partition& p);
 
-  void try_remove_partition(set_type::iterator& it);
+  set_type::iterator try_remove_partition(set_type::iterator it);
 
   void emit_batches_impl(bool force_underfull);
 
