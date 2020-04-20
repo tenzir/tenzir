@@ -44,14 +44,10 @@ void indexer_stage_driver::process(downstream_type&, batch_type& slices) {
   VAST_ASSERT(!slices.empty());
   auto& st = self_->state;
   for (auto& slice : slices) {
-    // Update statistics.
     auto& layout = slice->layout();
     st.stats.layouts[layout.name()].count += slice->rows();
-    // Select the destination.
     auto part = st.get_or_add_partition(slice);
-    // Inform the meta index.
     st.meta_idx.add(part->id(), *slice);
-    // Ship it to the partition.
     part->add(std::move(slice));
   }
 }
