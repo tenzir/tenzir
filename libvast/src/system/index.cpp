@@ -85,7 +85,8 @@ index_state::index_state(caf::stateful_actor<index_state>* self)
 
 index_state::~index_state() {
   VAST_VERBOSE(self, "tearing down");
-  stage->out().unregister(active.get());
+  if (active != nullptr)
+    stage->out().unregister(active.get());
   flush_to_disk();
 }
 
