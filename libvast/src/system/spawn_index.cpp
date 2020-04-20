@@ -32,11 +32,12 @@ maybe_actor spawn_index(node_actor* self, spawn_arguments& args) {
     return get_or(args.invocation.options, key, default_value);
   };
   namespace sd = vast::defaults::system;
-  auto result = self->spawn(index, args.dir / args.label,
-                            opt("max-events", sd::max_partition_size),
-                            opt("max-parts", sd::max_in_mem_partitions),
-                            opt("taste-parts", sd::taste_partitions),
-                            opt("max_queries", sd::num_query_supervisors));
+  auto result = self->spawn(
+    index, args.dir / args.label,
+    opt("system.max-partition-size", sd::max_partition_size),
+    opt("system.max-resident-partitions", sd::max_in_mem_partitions),
+    opt("system.max-taste-partitions", sd::taste_partitions),
+    opt("system.max-queries", sd::num_query_supervisors));
   self->state.index = result;
   return result;
 }

@@ -56,29 +56,44 @@ auto make_pcap_options(std::string_view category) {
     "flush-interval,f", "flush to disk after this many packets");
 }
 
+command::opts_builder add_index_opts(command::opts_builder ob) {
+  return std::move(ob)
+    .add<size_t>("max-partition-size", "maximum number of events in a "
+                                       "partition")
+    .add<size_t>("max-resident-partitions", "maximum number of in-memory "
+                                            "partitions")
+    .add<size_t>("max-taste-partitions", "maximum number of immediately "
+                                         "scheduled partitions")
+    .add<size_t>("max-queries,q", "maximum number of concurrent queries");
+}
+
 auto make_root_command(std::string_view path) {
   // We're only interested in the application name, not in its path. For
   // example, argv[0] might contain "./build/release/bin/vast" and we are only
   // interested in "vast".
   path.remove_prefix(std::min(path.find_last_of('/') + 1, path.size()));
   // For documentation, we use the complete man-page formatted as Markdown
-  return std::make_unique<command>(
-    path, "", documentation::vast,
-    opts("?system")
-      .add<std::string>("config", "path to a configuration file")
-      .add<caf::atom_value>("verbosity,v", "output verbosity level on the "
-                                           "console")
-      .add<std::vector<std::string>>(
-        "schema-paths", "list of paths to look for schema files "
-                        "([" VAST_INSTALL_PREFIX "/share/vast/schema])")
-      .add<std::string>("db-directory,d", "directory for persistent state")
-      .add<std::string>("log-file", "log filename")
-      .add<std::string>("endpoint,e", "node endpoint")
-      .add<std::string>("node-id,i", "the unique ID of this node")
-      .add<bool>("node,N", "spawn a node instead of connecting to one")
-      .add<bool>("disable-accounting", "don't run the accountant")
-      .add<bool>("no-default-schema", "don't load the default schema "
-                                      "definitions"));
+  auto ob
+    = opts("?system")
+        .add<std::string>("config", "path to a configuration file")
+        .add<caf::atom_value>("verbosity,v", "output verbosity level on the "
+                                             "console")
+        .add<std::vector<std::string>>("schema-paths",
+                                       "list of paths to look for schema files "
+                                       "([" VAST_INSTALL_PREFIX
+                                       "/share/vast/schema])")
+        .add<std::string>("db-directory,d", "directory for persistent state")
+        .add<std::string>("log-file", "log filename")
+        .add<std::string>("endpoint,e", "node endpoint")
+        .add<std::string>("node-id,i", "the unique ID of this node")
+        .add<bool>("node,N", "spawn a node instead of connecting to one")
+        .add<bool>("disable-accounting", "don't run the accountant")
+        .add<bool>("no-default-schema", "don't load the default schema "
+                                        "definitions")
+        .add<size_t>("max-partition-size", "maximum number of events in a "
+                                           "partition");
+  return std::make_unique<command>(path, "", documentation::vast,
+                                   add_index_opts(std::move(ob)));
 }
 
 auto make_count_command() {
@@ -270,14 +285,8 @@ auto make_spawn_command() {
   spawn->add_subcommand("importer", "creates a new importer", "",
                         opts().add<size_t>("ids,n", "number of initial IDs to "
                                                     "request (deprecated)"));
-  spawn->add_subcommand(
-    "index", "creates a new index", "",
-    opts()
-      .add<size_t>("max-events,e", "maximum events per partition")
-      .add<size_t>("max-parts,p", "maximum number of in-memory partitions")
-      .add<size_t>("taste-parts,t", "number of immediately scheduled "
-                                    "partitions")
-      .add<size_t>("max-queries,q", "maximum number of concurrent queries"));
+  spawn->add_subcommand("index", "creates a new index", "",
+                        add_index_opts(opts()));
   spawn->add_subcommand("consensus", "creates a new consensus", "",
                         opts().add<raft::server_id>("id,i", "the server ID of "
                                                             "the consensus "
