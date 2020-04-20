@@ -139,7 +139,11 @@ void partition::add(table_slice_ptr slice) {
       }
     }
   }
-  capacity_ -= slice->rows();
+  // Make sure the capacity does not wrap around.
+  if (slice->rows() > capacity_)
+    capacity_ = 0;
+  else
+    capacity_ -= slice->rows();
   inbound_.push_back(std::move(slice));
 }
 
