@@ -24,6 +24,7 @@
 #include "vast/ids.hpp"
 #include "vast/load.hpp"
 #include "vast/logger.hpp"
+#include "vast/qualified_record_field.hpp"
 #include "vast/save.hpp"
 #include "vast/system/atoms.hpp"
 #include "vast/system/index.hpp"
@@ -121,7 +122,7 @@ void partition::add(table_slice_ptr slice) {
     // Insert new type.
     for (size_t idx = 0; idx < layout.fields.size(); ++idx) {
       auto& field = layout.fields[idx];
-      auto fqf = to_fully_qualified(layout.name(), field);
+      auto fqf = qualified_record_field{layout.name(), field};
       auto j = indexers_.find(fqf);
       if (j == indexers_.end()) {
         // Spawn a new indexer.
@@ -251,7 +252,7 @@ path partition::meta_file() const {
 }
 
 path partition::column_file(const qualified_record_field& field) const {
-  return base_dir() / (field.name + "-" + to_digest(field.type));
+  return base_dir() / (field.fqn + "-" + to_digest(field.type));
 }
 
 } // namespace vast::system

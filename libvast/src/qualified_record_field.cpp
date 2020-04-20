@@ -19,22 +19,17 @@
 namespace vast {
 
 vast::record_field qualified_record_field::to_record_field() const {
-  return {name, type};
-}
-
-qualified_record_field
-to_fully_qualified(const std::string& tn, const record_field& field) {
-  return {tn + "." + field.name, field.type};
+  return {fqn, type};
 }
 
 bool operator==(const qualified_record_field& x,
                 const qualified_record_field& y) {
-  return x.name == y.name && x.type == y.type;
+  return x.fqn == y.fqn && x.type == y.type;
 }
 
 bool operator<(const qualified_record_field& x,
                const qualified_record_field& y) {
-  return std::tie(x.name, x.type) < std::tie(y.name, y.type);
+  return std::tie(x.fqn, x.type) < std::tie(y.fqn, y.type);
 }
 
 } // namespace vast

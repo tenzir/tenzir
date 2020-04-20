@@ -144,7 +144,7 @@ struct fixture : fixtures::dummy_index {
       auto& layout = slice->layout();
       for (size_t column = 0; column < layout.fields.size(); ++column) {
         auto& field = layout.fields[column];
-        auto fqf = to_fully_qualified(layout.name(), field);
+        auto fqf = qualified_record_field{layout.name(), field};
         auto ix = put->indexers_.find(fqf);
         auto sc = table_slice_column{slice, column};
         anon_send(ix->second.indexer, std::vector{sc});

@@ -28,15 +28,21 @@ namespace vast {
 /// Example: { "zeek.conn.id.orig_h", address_type{} }
 struct qualified_record_field
   : detail::totally_ordered<qualified_record_field> {
-  qualified_record_field(std::string name_, type type_)
-    : name{std::move(name_)}, type{std::move(type_)} {
+  qualified_record_field(std::string full_name, type field_type)
+    : fqn{std::move(full_name)}, type{std::move(field_type)} {
+    // nop
+  }
+
+  qualified_record_field(const std::string& layout_name,
+                         const record_field& field)
+    : fqn{layout_name + "." + field.name}, type{field.type} {
     // nop
   }
 
   vast::record_field to_record_field() const;
 
-  std::string name; ///< The name of the field.
-  vast::type type;  ///< The type of the field.
+  std::string fqn; ///< The field name prepended with the record type name.
+  vast::type type; ///< The type of the field.
 
   friend bool
   operator==(const qualified_record_field& x, const qualified_record_field& y);
@@ -46,12 +52,9 @@ struct qualified_record_field
 
   template <class Inspector>
   friend auto inspect(Inspector& f, qualified_record_field& x) {
-    return f(x.name, x.type);
+    return f(x.fqn, x.type);
   }
 };
-
-qualified_record_field
-to_fully_qualified(const std::string& tn, const record_field& field);
 
 } // namespace vast
 

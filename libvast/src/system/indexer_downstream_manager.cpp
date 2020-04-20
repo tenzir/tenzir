@@ -15,6 +15,7 @@
 
 #include "vast/detail/assert.hpp"
 #include "vast/logger.hpp"
+#include "vast/qualified_record_field.hpp"
 #include "vast/system/partition.hpp"
 #include "vast/table_slice.hpp"
 
@@ -178,12 +179,12 @@ void indexer_downstream_manager::emit_batches_impl(bool force_underfull) {
         auto& layout = slice->layout();
         // Split the slice into co-owning columns.
         for (size_t i = 0; i < layout.fields.size(); ++i) {
-          // Look up the destination INDEXER for the column.
-          auto fqf = to_fully_qualified(layout.name(), layout.fields[i]);
+          // Look up qualified_record_field{ for the column.
+          auto fqf = qualified_record_field{layout.name(), layout.fields[i]};
           auto destination = pptr->indexers_.find(fqf);
           if (destination == pptr->indexers_.end()) {
             VAST_WARNING(this, "could not find the target indexer for",
-                         fqf.name);
+                         fqf.fqn);
             continue;
           }
           // Place the column into the selected INDEXERs stream queue.
