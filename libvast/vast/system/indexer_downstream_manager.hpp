@@ -81,10 +81,6 @@ public:
 protected:
   buffer_type buf_;
 
-  // TODO(ch9680): We always erase the paths to an entire partition.
-  // void about_to_erase(caf::outbound_path* ptr, bool silent,
-  //                    caf::error* reason) override;
-
 private:
   void cleanup_partition(set_type::iterator& it);
 

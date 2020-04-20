@@ -122,8 +122,6 @@ public:
 
   // -- operations -------------------------------------------------------------
 
-  void finalize();
-
   /// Adds a slice to the partition.
   void add(table_slice_ptr slice);
 

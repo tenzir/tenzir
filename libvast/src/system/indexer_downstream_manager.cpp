@@ -36,9 +36,8 @@ size_t indexer_downstream_manager::buffered(partition& p) const noexcept {
   // We have a central buffer, but also an additional buffer at each path. We
   // return the maximum size to reflect the current worst case.
   size_t max_path_buf = 0;
-  for (auto& ip : p.indexers_) {
+  for (auto& ip : p.indexers_)
     max_path_buf = std::max(max_path_buf, ip.second.buf.size());
-  }
   return p.inbound_.size() + max_path_buf;
 }
 
@@ -69,10 +68,12 @@ int32_t indexer_downstream_manager::max_capacity() const noexcept {
 
 // std::pair<std::unordered_set<partition>::iterator, bool>
 void indexer_downstream_manager::register_partition(partition* p) {
+  VAST_DEBUG(self(), "registers partition", p->id());
   partitions.insert(p);
 }
 
 bool indexer_downstream_manager::unregister(partition* p) {
+  VAST_DEBUG(self(), "unregisters partition", p->id());
   auto it = partitions.find(p);
   if (it == partitions.end())
     return false;
@@ -99,29 +100,28 @@ indexer_downstream_manager::buffer_type& indexer_downstream_manager::buf() {
   return buf_;
 }
 
-// TODO(ch9680): We always erase the paths to an entire partition.
-#if 0
-  void indexer_downstream_manager::about_to_erase(caf::outbound_path* ptr, bool silent,
-                      caf::error* reason) {
-    CAF_ASSERT(ptr != nullptr);
-    CAF_LOG_TRACE(CAF_ARG2("slot", ptr->slots.sender)
-                  << CAF_ARG(silent) << CAF_ARG(reason));
-    auto& pths = this->paths_.container();
-    auto p
-      = std::find_if(pths.rbegin(), pths.rend(), [&](const auto& slt_conn) {
-          return slt_conn.second.get() == ptr;
-        });
-    VAST_ASSERT(p != pths.rend());
-    auto offset = std::distance(pths.begin(), p.base());
-    std::cerr << "erasing buf at " << offset << std::endl;
-    state_map_.erase(ptr->slots.sender);
-    selector_.erase(offset);
-    super::about_to_erase(ptr, silent, reason);
-  }
-#endif
-
 void indexer_downstream_manager::cleanup_partition(set_type::iterator& it) {
-  (*it)->finalize();
+  VAST_DEBUG(self(), "clears stream paths of partition", (*it)->id());
+  auto f = paths_.begin();
+  for (auto& wi : (*it)->indexers_) {
+    about_to_erase(wi.second.outbound, false, nullptr);
+    while (f != paths_.end() && wi.second.slot != f->first)
+      ++f;
+    if (f == paths_.end()) {
+      // Wrap around should not happen but we should check in front of the
+      // previous column as well to make sure.
+      f = paths_.find(wi.second.slot);
+      if (f == paths_.end()) {
+        VAST_WARNING(self(), "tries to delete a non-existing outbound path");
+        // We could just exit now, but maybe something unforseen happened to
+        // that one INDEXER while the rest of the partiton is ok, so we rather
+        // try to clean up the others.
+        f = paths_.begin();
+        continue;
+      }
+    }
+    f = paths_.erase(f);
+  }
   it = partitions.erase(it);
 }
 

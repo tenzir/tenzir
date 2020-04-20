@@ -81,17 +81,6 @@ caf::error partition::init() {
   return caf::none;
 }
 
-void partition::finalize() {
-  // this->out().unregister(this);
-  // auto& out = this->out();
-  // auto silent = false; // Send shutdown signal on the stream
-  // for (auto& ind : indexers_)
-  //  out.remove_path(ind.second.slot, caf::none, silent);
-  for (auto& wi : indexers_) {
-    wi.second.buf.clear();
-  }
-}
-
 caf::error partition::flush_to_disk() {
   if (meta_data_.dirty) {
     // Write all layouts to disk.

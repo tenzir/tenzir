@@ -86,6 +86,7 @@ index_state::index_state(caf::stateful_actor<index_state>* self)
 
 index_state::~index_state() {
   VAST_VERBOSE(self, "tearing down");
+  stage->out().unregister(active.get());
   flush_to_disk();
 }
 
@@ -284,7 +285,6 @@ void index_state::reset_active_partition() {
   // partition gets replaced becomes full.
   if (active != nullptr) {
     stage->out().unregister(active.get());
-    active->finalize();
     if (auto err = active->flush_to_disk())
       VAST_ERROR(self, "failed to persist active partition");
     // Store this partition as unpersisted to make sure we're not attempting
