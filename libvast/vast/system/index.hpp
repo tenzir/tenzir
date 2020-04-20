@@ -14,7 +14,7 @@
 #pragma once
 
 #include "vast/detail/flat_lru_cache.hpp"
-#include "vast/detail/flat_set.hpp"
+#include "vast/detail/stable_map.hpp"
 #include "vast/expression.hpp"
 #include "vast/fwd.hpp"
 #include "vast/meta_index.hpp"
@@ -81,8 +81,7 @@ struct index_state {
   };
 
   /// Stores evaluation metadata for pending partitions.
-  using pending_query_map
-    = caf::detail::unordered_flat_map<uuid, evaluation_triples>;
+  using pending_query_map = detail::stable_map<uuid, evaluation_triples>;
 
   /// Accumulates statistics for a given layout.
   struct layout_statistics {

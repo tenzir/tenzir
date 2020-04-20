@@ -42,7 +42,6 @@
 #include "vast/table_slice.hpp"
 
 #include <caf/all.hpp>
-#include <caf/detail/unordered_flat_map.hpp>
 
 #include <chrono>
 #include <deque>
