@@ -176,11 +176,9 @@ caf::actor partition::fetch_indexer(const attribute_extractor& ex,
     // However, we still have to "lift" this result into an actor for the
     // EVALUATOR.
     ids row_ids;
-    for (auto& [name, ids] : meta_data_.type_ids) {
-      if (evaluate(name, op, x)) {
+    for (auto& [name, ids] : meta_data_.type_ids)
+      if (evaluate(name, op, x))
         row_ids |= ids;
-      }
-    }
     // TODO: Spawning a one-shot actor is quite expensive. Maybe the
     //       partition could instead maintain this actor lazily.
     return state_->self->spawn([row_ids]() -> caf::behavior {
@@ -235,12 +233,10 @@ evaluation_triples partition::eval(const expression& expr) {
       [](const auto&, const auto&) {
         return caf::actor{}; // clang-format fix
       });
-    auto hdl = caf::visit(v, pred.lhs, pred.rhs);
     // Package the predicate, its position in the query and the required
     // INDEXER as a "job description".
-    if (hdl != nullptr) {
+    if (auto hdl = caf::visit(v, pred.lhs, pred.rhs))
       result.emplace_back(kvp.first, curried(pred), std::move(hdl));
-    }
   }
   // Return the list of jobs, to be used by the EVALUATOR.
   return result;

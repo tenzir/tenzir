@@ -55,11 +55,12 @@ public:
     /// Mutable because it can be initalized layzily.
     mutable caf::actor indexer;
 
-    /// Only used during ingestion.
+    /// The slot is used by the indexer_downstream_manager during ingestion.
     caf::stream_slot slot;
 
     /// The message queue of the downstream indexer.
-    /// Only used during ingestion.
+    /// This is used by the indexer_downstream_manager, the pointed-to object is
+    /// removed when the partition is removed from said manager.
     caf::outbound_path* outbound;
 
     /// A buffer to avoid overloading the indexer.
