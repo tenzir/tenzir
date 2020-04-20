@@ -39,18 +39,17 @@
 ///  Example for a partition containing 2 types foo and foo (updated) with the
 ///  layouts:
 ///
-///     field name: field type # ID (hash of record_field)
 ///  type foo = record {
-///     a:          int,       # A
-///     b:          string,    # B
-///     c:          string,    # C
-///     d:          address    # D
+///     a:          int,       // A
+///     b:          string,    // B
+///     c:          string,    // C
+///     d:          address    // D
 ///  }
 ///  type foo = record {
-///     a:          int,       # A
-///     b:          domain,    # B'
-///     c:          enum,      # C'
-///     d:          address    # D
+///     a:          int,       // A
+///     b:          domain,    // B'
+///     c:          enum,      // C'
+///     d:          address    // D
 ///  }
 ///
 ///  inbound stream
