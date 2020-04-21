@@ -16,7 +16,7 @@ Every entry has a category for which we use the following visual abbreviations:
 
 - 🔄 The index specific options `max-partition-size`, `max-resident-partitions`,
   `max-taste-partitions`, and `max-queries` can now be specified on the command
-  line when starting a Node.
+  line when starting a node.
   [#728](https://github.com/tenzir/vast/pull/728)
 
 - 🎁 Packet drop statistics are now reported to the accountant for PCAP import,
