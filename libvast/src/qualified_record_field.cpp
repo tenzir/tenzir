@@ -18,10 +18,6 @@
 
 namespace vast {
 
-vast::record_field qualified_record_field::to_record_field() const {
-  return {fqn, type};
-}
-
 bool operator==(const qualified_record_field& x,
                 const qualified_record_field& y) {
   return x.fqn == y.fqn && x.type == y.type;
@@ -30,6 +26,10 @@ bool operator==(const qualified_record_field& x,
 bool operator<(const qualified_record_field& x,
                const qualified_record_field& y) {
   return std::tie(x.fqn, x.type) < std::tie(y.fqn, y.type);
+}
+
+record_field as_record_field(const qualified_record_field& qf) {
+  return {qf.fqn, qf.type};
 }
 
 } // namespace vast

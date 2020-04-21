@@ -39,8 +39,6 @@ struct qualified_record_field
     // nop
   }
 
-  vast::record_field to_record_field() const;
-
   std::string fqn; ///< The field name prepended with the record type name.
   vast::type type; ///< The type of the field.
 
@@ -55,6 +53,8 @@ struct qualified_record_field
     return f(x.fqn, x.type);
   }
 };
+
+record_field as_record_field(const qualified_record_field& qf);
 
 } // namespace vast
 

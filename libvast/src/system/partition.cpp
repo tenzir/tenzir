@@ -150,7 +150,7 @@ void partition::add(table_slice_ptr slice) {
 record_type partition::combined_type() const {
   record_type result;
   for (auto& kvp : indexers_) {
-    result.fields.push_back(kvp.first.to_record_field());
+    result.fields.push_back(as_record_field(kvp.first));
   }
   return result;
 }
