@@ -33,6 +33,8 @@ spawn_at_node(caf::scoped_actor& self, caf::actor node, Arguments&&... xs) {
   return result;
 }
 
+/// Look up components by category. Returns the first actor of each
+/// category name passed in `names`.
 template <size_t N>
 caf::expected<std::array<caf::actor, N>>
 get_node_components(caf::scoped_actor& self, caf::actor node,
@@ -52,6 +54,25 @@ get_node_components(caf::scoped_actor& self, caf::actor node,
         }
       },
       [&](caf::error& e) { result = std::move(e); });
+  return result;
+}
+
+/// Look up a node component by component type and label
+inline caf::expected<caf::actor>
+get_node_component(caf::scoped_actor& self, caf::actor node, const std::string& type, const std::string& label) {
+  caf::expected<caf::actor> result = vast::make_error(ec::missing_component);
+  self->request(node, caf::infinite, get_atom::value)
+    .receive(
+      [&](const std::string& id, system::registry& reg) {
+          auto [begin, end] = reg.components[id].equal_range(type);
+          for (; begin != end; ++begin) {
+            if (begin->second.label == label) {
+              result = begin->second.actor;
+              break;
+            }
+          }
+        },
+      [&](caf::error& e) { result = e; });
   return result;
 }
 
