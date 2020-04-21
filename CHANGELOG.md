@@ -10,6 +10,10 @@ Every entry has a category for which we use the following visual abbreviations:
 
 ## Unreleased
 
+- 🎁 Bash autocompletion for vast is now available via the autocomplete
+  script located at `scripts/vast-completions.bash` in the VAST source tree.
+  [#833](https://github.com/tenzir/vast/pull/833)
+
 - 🎁 Packet drop statistics are now reported to the accountant for PCAP import,
   and are available using the keys `pcap-reader.recv`, `pcap-reader.drop`, and
   `pcap-reader.ifdrop` in the `vast.statistics` event. If the number of dropped
