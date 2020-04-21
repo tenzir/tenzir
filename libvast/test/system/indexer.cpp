@@ -132,7 +132,6 @@ TEST(integer rows) {
   run();
   MESSAGE("reload INDEXER from disk");
   init(layout.fields[0].type);
-  // TODO(ch9680)
   MESSAGE("verify table index again");
   verify();
 }

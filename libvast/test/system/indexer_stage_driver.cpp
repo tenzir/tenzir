@@ -156,30 +156,4 @@ TEST(spawning sinks automatically) {
     std::equal(sorted_slices.begin(), sorted_slices.end(), all_slices.begin()));
 }
 
-/* TODO(ch9680)
-TEST(creating zeek conn log partitions automatically) {
-  MESSAGE("spawn the stage");
-  auto stg = sys.spawn(test_stage, &pindex,
-                       partition_factory(sys, state_dir, &partition_count),
-                       slice_size);
-  MESSAGE("spawn the source and run");
-  auto src = vast::detail::spawn_container_source(self->system(),
-                                                  zeek_conn_log_slices, stg);
-  run();
-  CHECK_EQUAL(bufs->size(), zeek_conn_log_slices.size());
-  MESSAGE("flatten all partitions into one buffer");
-  event_buffer xs;
-  for (auto& buf : *bufs)
-    xs.insert(xs.end(), buf->begin(), buf->end());
-  CHECK_EQUAL(zeek_conn_log.size(), xs.size());
-  std::sort(xs.begin(), xs.end());
-  auto ys = zeek_conn_log;
-  std::sort(ys.begin(), ys.end());
-  REQUIRE_EQUAL(xs.size(), ys.size());
-  for (size_t i = 0; i < xs.size(); ++i)
-    CHECK_EQUAL(xs[i], flatten(ys[i]));
-  anon_send_exit(stg, exit_reason::user_shutdown);
-}
-*/
-
 FIXTURE_SCOPE_END()
