@@ -34,8 +34,9 @@ size_t indexer_downstream_manager::buffered() const noexcept {
 }
 
 size_t indexer_downstream_manager::buffered(partition& p) const noexcept {
-  // We have a central buffer, but also an additional buffer at each path. We
-  // return the maximum size to reflect the current worst case.
+  // We have a buffered table slices in the partition, but also an additional
+  // buffer at each path. We return the maximum size to reflect the current
+  // worst case.
   size_t max_path_buf = 0;
   for (auto& ip : p.indexers_)
     max_path_buf = std::max(max_path_buf, ip.second.buf.size());
