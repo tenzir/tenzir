@@ -35,8 +35,8 @@ struct table_slice_column {
   table_slice_column() {
   }
 
-  table_slice_column(table_slice_ptr slice_, size_t column_)
-    : slice{std::move(slice_)}, column{column_} {
+  table_slice_column(table_slice_ptr slice, size_t col)
+    : slice{std::move(slice)}, column{col} {
     // nop
   }
   table_slice_ptr slice;

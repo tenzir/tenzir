@@ -55,9 +55,8 @@ struct fixture : fixtures::deterministic_actor_system_and_events {
       return slice->layout() == layout;
     }));
     std::vector<table_slice_column> slice_columns;
-    for (auto& slice : slices) {
+    for (auto& slice : slices)
       slice_columns.push_back(table_slice_column{slice, 0u});
-    }
     vast::detail::spawn_container_source(sys, std::move(slice_columns),
                                          indexer);
     run();
