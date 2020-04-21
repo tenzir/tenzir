@@ -78,6 +78,7 @@ set(libvast_sources
     src/operator.cpp
     src/pattern.cpp
     src/port.cpp
+    src/qualified_record_field.cpp
     src/schema.cpp
     src/segment.cpp
     src/segment_builder.cpp
@@ -101,6 +102,7 @@ set(libvast_sources
     src/system/importer.cpp
     src/system/index.cpp
     src/system/indexer.cpp
+    src/system/indexer_downstream_manager.cpp
     src/system/indexer_stage_driver.cpp
     src/system/infer_command.cpp
     src/system/node.cpp
@@ -132,7 +134,6 @@ set(libvast_sources
     src/system/spawn_source.cpp
     src/system/spawn_type_registry.cpp
     src/system/start_command.cpp
-    src/system/table_indexer.cpp
     src/system/task.cpp
     src/system/tracker.cpp
     src/system/type_registry.cpp
@@ -329,7 +330,6 @@ set(tests
     test/system/replicated_store.cpp
     test/system/sink.cpp
     test/system/source.cpp
-    test/system/table_indexer.cpp
     test/system/task.cpp
     test/system/type_registry.cpp
     test/table_slice.cpp

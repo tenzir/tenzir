@@ -51,22 +51,22 @@ thread_local std::vector<caf::actor> all_sinks;
 thread_local std::set<table_slice_ptr> all_slices;
 
 behavior dummy_sink(event_based_actor* self) {
-  return {[=](stream<table_slice_ptr> in) {
-    self->make_sink(in,
-                    [=](unit_t&) {
-                      // nop
-                    },
-                    [=](unit_t&, table_slice_ptr slice) {
-                      all_slices.emplace(std::move(slice));
-                    });
+  return {[=](stream<table_slice_column> in) {
+    self->make_sink(
+      in,
+      [=](unit_t&) {
+        // nop
+      },
+      [=](unit_t&, table_slice_column tsc) {
+        all_slices.emplace(std::move(tsc.slice));
+      });
     self->unbecome();
   }};
 }
 
-caf::actor
-spawn_sink(caf::local_actor* self, [[maybe_unused]] path dir,
-           [[maybe_unused]] type t, caf::settings, size_t, caf::actor,
-           [[maybe_unused]] uuid partition_id, atomic_measurement*) {
+caf::actor spawn_sink(caf::local_actor* self, [[maybe_unused]] path dir,
+                      [[maybe_unused]] type t, caf::settings, caf::actor,
+                      [[maybe_unused]] uuid partition_id, atomic_measurement*) {
   VAST_TRACE(VAST_ARG(dir), VAST_ARG("t", t.name()), VAST_ARG(partition_id));
   auto result = self->spawn(dummy_sink);
   all_sinks.emplace_back(result);
@@ -150,35 +150,10 @@ TEST(spawning sinks automatically) {
                                                   index);
   run();
   CHECK_EQUAL(all_sinks.size(), expected_sink_count);
+  CHECK_EQUAL(all_slices.size(), test_slices.size());
   auto sorted_slices = sorted(test_slices);
   CHECK(
     std::equal(sorted_slices.begin(), sorted_slices.end(), all_slices.begin()));
 }
-
-/*
-TEST(creating zeek conn log partitions automatically) {
-  MESSAGE("spawn the stage");
-  auto stg = sys.spawn(test_stage, &pindex,
-                       partition_factory(sys, state_dir, &partition_count),
-                       slice_size);
-  MESSAGE("spawn the source and run");
-  auto src = vast::detail::spawn_container_source(self->system(),
-                                                  zeek_conn_log_slices, stg);
-  run();
-  CHECK_EQUAL(bufs->size(), zeek_conn_log_slices.size());
-  MESSAGE("flatten all partitions into one buffer");
-  event_buffer xs;
-  for (auto& buf : *bufs)
-    xs.insert(xs.end(), buf->begin(), buf->end());
-  CHECK_EQUAL(zeek_conn_log.size(), xs.size());
-  std::sort(xs.begin(), xs.end());
-  auto ys = zeek_conn_log;
-  std::sort(ys.begin(), ys.end());
-  REQUIRE_EQUAL(xs.size(), ys.size());
-  for (size_t i = 0; i < xs.size(); ++i)
-    CHECK_EQUAL(xs[i], flatten(ys[i]));
-  anon_send_exit(stg, exit_reason::user_shutdown);
-}
-*/
 
 FIXTURE_SCOPE_END()

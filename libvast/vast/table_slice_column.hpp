@@ -13,44 +13,46 @@
 
 #pragma once
 
-#include <iterator>
-#include <vector>
+#include "vast/detail/operators.hpp"
+#include "vast/fwd.hpp"
+#include "vast/table_slice.hpp"
+#include "vast/type.hpp"
 
-#include "vast/concept/printable/core/printer.hpp"
-#include "vast/concept/support/detail/attr_fold.hpp"
+#include <tuple>
+#include <vector>
 
 namespace vast {
 
-template <class Lhs, class Rhs>
-class list_printer : public printer<list_printer<Lhs, Rhs>> {
-public:
-  using lhs_attribute = typename Lhs::attribute;
-  using rhs_attribute = typename Rhs::attribute;
-  using attribute = detail::attr_fold_t<std::vector<lhs_attribute>>;
+namespace system {
 
-  list_printer(Lhs lhs, Rhs rhs) : lhs_{std::move(lhs)}, rhs_{std::move(rhs)} {
+class index_state;
+class partition;
+using partition_ptr = std::unique_ptr<partition>;
+
+} // namespace system
+
+struct table_slice_column {
+  table_slice_column() {
+  }
+
+  table_slice_column(table_slice_ptr slice, size_t col)
+    : slice{std::move(slice)}, column{col} {
     // nop
   }
+  table_slice_ptr slice;
+  size_t column;
 
-  template <class Iterator, class Attribute>
-  bool print(Iterator& out, const Attribute& a) const {
-    using std::begin;
-    using std::end;
-    auto f = begin(a);
-    auto l = end(a);
-    if (f == l)
-      return true;
-    if (!lhs_.print(out, *f))
-      return false;
-    for (++f; f != l; ++f)
-      if (!(rhs_.print(out, unused) && lhs_.print(out, *f)))
-        return false;
-    return true;
+  template <class Inspector>
+  friend auto inspect(Inspector& f, table_slice_column& x) {
+    return f(x.slice, x.column);
   }
-
-private:
-  Lhs lhs_;
-  Rhs rhs_;
 };
+
+/// Bundles an offset into an expression under evaluation to the curried
+/// representation of the ::predicate at that position in the expression and
+/// the INDEXER actor responsible for answering the (curried) predicate.
+using evaluation_triple = std::tuple<offset, curried_predicate, caf::actor>;
+
+using evaluation_triples = std::vector<evaluation_triple>;
 
 } // namespace vast

@@ -13,14 +13,15 @@
 
 #include "vast/system/evaluator.hpp"
 
+#include "vast/expression_visitors.hpp"
+#include "vast/logger.hpp"
+#include "vast/system/atoms.hpp"
+#include "vast/system/index_common.hpp"
+
 #include <caf/actor.hpp>
 #include <caf/behavior.hpp>
 #include <caf/event_based_actor.hpp>
 #include <caf/stateful_actor.hpp>
-
-#include "vast/expression_visitors.hpp"
-#include "vast/logger.hpp"
-#include "vast/system/atoms.hpp"
 
 namespace vast::system {
 
@@ -154,7 +155,7 @@ evaluator_state::hits_for(const offset& position) {
 }
 
 caf::behavior evaluator(caf::stateful_actor<evaluator_state>* self,
-                        expression expr, evaluation_map eval) {
+                        expression expr, evaluation_triples eval) {
   VAST_TRACE(VAST_ARG(expr), VAST_ARG(eval));
   VAST_ASSERT(!eval.empty());
   using std::get;
@@ -162,20 +163,19 @@ caf::behavior evaluator(caf::stateful_actor<evaluator_state>* self,
   return {[=, expr{move(expr)}, eval{move(eval)}](caf::actor client) {
     auto& st = self->state;
     st.init(client, move(expr), self->make_response_promise());
-    for (auto& [layout, triples] : eval) {
-      st.pending_responses += triples.size();
-      for (auto& triple : triples) {
-        // No strucutured bindings available due to subsequent lambda. :-/
-        auto& pos = get<0>(triple);
-        auto& curried_pred = get<1>(triple);
-        auto& indexer = get<2>(triple);
-        st.predicate_hits[pos].first += 1;
-        self->request(indexer, caf::infinite, curried_pred)
-          .then([=](const ids& hits) { self->state.handle_result(pos, hits); },
-                [=](const caf::error& err) {
-                  self->state.handle_missing_result(pos, err);
-                });
-      }
+    st.pending_responses += eval.size();
+    for (auto& triple : eval) {
+      // No strucutured bindings available due to subsequent lambda. :-/
+      // TODO: C++20
+      auto& pos = get<0>(triple);
+      auto& curried_pred = get<1>(triple);
+      auto& indexer = get<2>(triple);
+      ++st.predicate_hits[pos].first;
+      self->request(indexer, caf::infinite, curried_pred)
+        .then([=](const ids& hits) { self->state.handle_result(pos, hits); },
+              [=](const caf::error& err) {
+                self->state.handle_missing_result(pos, err);
+              });
     }
     if (st.pending_responses == 0) {
       VAST_DEBUG(self, "has nothing to evaluate for expression");

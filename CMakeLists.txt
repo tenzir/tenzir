@@ -71,6 +71,12 @@ include(MacDependencyPaths)
 
 # Build configuration
 
+set(VAST_ENABLE_ASSERTIONS_DEFAULT ON)
+if (CMAKE_BUILD_TYPE STREQUAL Release)
+  set(VAST_ENABLE_ASSERTIONS_DEFAULT OFF)
+endif ()
+
+option(VAST_ENABLE_ASSERTIONS "Enable Assertions" "${VAST_ENABLE_ASSERTIONS_DEFAULT}")
 option(VAST_RELOCATABLE_INSTALL "Enable relocatable installations" ON)
 option(ENABLE_ZEEK_TO_VAST "Build zeek-to-vast" ON)
 option(VAST_STATIC_EXECUTABLE "Link VAST statically")
@@ -471,13 +477,6 @@ endmacro ()
 find_package(Threads)
 if (NOT Threads_FOUND)
   message(FATAL_ERROR "Could not find system threading libraries")
-endif ()
-
-if (CMAKE_BUILD_TYPE STREQUAL "Release")
-  if (VAST_ENABLE_ASSERTIONS)
-    message(STATUS "Automatically disabling assertions for Release build")
-    set(VAST_ENABLE_ASSERTIONS false)
-  endif ()
 endif ()
 
 if (VAST_ENABLE_ASSERTIONS)

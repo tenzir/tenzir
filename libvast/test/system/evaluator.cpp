@@ -11,6 +11,7 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
+#include "vast/system/index_common.hpp"
 #define SUITE evaluator
 
 #include "vast/system/evaluator.hpp"
@@ -93,8 +94,7 @@ struct fixture : fixtures::deterministic_actor_system_and_events {
 
   ids query(std::string_view expr_str) {
     auto expr = unbox(to<expression>(expr_str));
-    evaluation_map qm;
-    auto& triples = qm[layout];
+    evaluation_triples triples;
     auto resolved = resolve(expr, layout);
     VAST_ASSERT(resolved.size() > 0);
     for (auto& [expr_position, pred]: resolved) {
@@ -105,7 +105,7 @@ struct fixture : fixtures::deterministic_actor_system_and_events {
       for (auto& x : xs)
         triples.emplace_back(expr_position, curried(pred), x);
     }
-    auto eval = sys.spawn(system::evaluator, expr, std::move(qm));
+    auto eval = sys.spawn(system::evaluator, expr, std::move(triples));
     self->send(eval, self);
     run();
     ids result;

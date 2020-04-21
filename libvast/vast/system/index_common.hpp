@@ -11,35 +11,24 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#include "vast/system/spawn_index.hpp"
+#pragma once
+
+#include "vast/expression.hpp"
+#include "vast/fwd.hpp"
+#include "vast/offset.hpp"
 
 #include <caf/actor.hpp>
-#include <caf/expected.hpp>
-#include <caf/settings.hpp>
 
-#include "vast/defaults.hpp"
-#include "vast/detail/unbox_var.hpp"
-#include "vast/system/index.hpp"
-#include "vast/system/node.hpp"
-#include "vast/system/spawn_arguments.hpp"
+#include <tuple>
+#include <vector>
 
-namespace vast::system {
+namespace vast {
 
-maybe_actor spawn_index(node_actor* self, spawn_arguments& args) {
-  if (!args.empty())
-    return unexpected_arguments(args);
-  auto opt = [&](caf::string_view key, auto default_value) {
-    return get_or(args.invocation.options, key, default_value);
-  };
-  namespace sd = vast::defaults::system;
-  auto result = self->spawn(
-    index, args.dir / args.label,
-    opt("system.max-partition-size", sd::max_partition_size),
-    opt("system.max-resident-partitions", sd::max_in_mem_partitions),
-    opt("system.max-taste-partitions", sd::taste_partitions),
-    opt("system.max-queries", sd::num_query_supervisors));
-  self->state.index = result;
-  return result;
-}
+/// Bundles an offset into an expression under evaluation to the curried
+/// representation of the ::predicate at that position in the expression and
+/// the INDEXER actor responsible for answering the (curried) predicate.
+using evaluation_triple = std::tuple<offset, curried_predicate, caf::actor>;
 
-} // namespace vast::system
+using evaluation_triples = std::vector<evaluation_triple>;
+
+} // namespace vast

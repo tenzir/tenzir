@@ -13,15 +13,16 @@
 
 #define SUITE column_index
 
-#include "vast/test/test.hpp"
-#include "vast/test/fixtures/actor_system_and_events.hpp"
-
 #include "vast/column_index.hpp"
+
+#include "vast/test/fixtures/actor_system_and_events.hpp"
+#include "vast/test/test.hpp"
+
 #include "vast/concept/parseable/to.hpp"
 #include "vast/concept/parseable/vast/expression.hpp"
 #include "vast/default_table_slice.hpp"
-#include "vast/table_slice.hpp"
 #include "vast/table_slice_builder.hpp"
+#include "vast/table_slice_column.hpp"
 #include "vast/type.hpp"
 
 using namespace vast;
@@ -46,9 +47,9 @@ TEST(skip attribute) {
   auto foo_type = integer_type{}.name("foo");
   auto bar_type = integer_type{}.attributes({{"skip"}}).name("bar");
   auto foo
-    = unbox(make_column_index(sys, directory, foo_type, caf::settings{}, 0));
+    = unbox(make_column_index(sys, directory, foo_type, caf::settings{}));
   auto bar
-    = unbox(make_column_index(sys, directory, bar_type, caf::settings{}, 1));
+    = unbox(make_column_index(sys, directory, bar_type, caf::settings{}));
   CHECK_EQUAL(foo->has_skip_attribute(), false);
   CHECK_EQUAL(bar->has_skip_attribute(), true);
 }
@@ -58,10 +59,11 @@ TEST(integer values) {
   integer_type column_type;
   record_type layout{{"value", column_type}};
   auto col
-    = unbox(make_column_index(sys, directory, column_type, caf::settings{}, 0));
+    = unbox(make_column_index(sys, directory, column_type, caf::settings{}));
   auto rows = make_rows(1, 2, 3, 1, 2, 3, 1, 2, 3);
   auto slice = default_table_slice::make(layout, rows);
-  col->add(slice);
+  auto column = table_slice_column{slice, 0};
+  col->add(column);
   REQUIRE_EQUAL(slice->rows(), rows.size());
   auto slice_size = rows.size();
   MESSAGE("generate test queries");
@@ -77,8 +79,7 @@ TEST(integer values) {
   MESSAGE("persist and reload from disk");
   col->flush_to_disk();
   col.reset();
-  col
-    = unbox(make_column_index(sys, directory, column_type, caf::settings{}, 0));
+  col = unbox(make_column_index(sys, directory, column_type, caf::settings{}));
   MESSAGE("verify column index again");
   CHECK_EQUAL(lookup(col, is1), make_ids({0, 3, 6}, slice_size));
   CHECK_EQUAL(lookup(col, is2), make_ids({1, 4, 7}, slice_size));
@@ -93,10 +94,10 @@ TEST(zeek conn log) {
   auto col_type = row_type.at(col_offset);
   auto col_index = unbox(row_type.flat_index_at(col_offset));
   REQUIRE_EQUAL(col_index, 2u); // 3rd column
-  auto col = unbox(
-    make_column_index(sys, directory, *col_type, caf::settings{}, col_index));
+  auto col
+    = unbox(make_column_index(sys, directory, *col_type, caf::settings{}));
   for (auto slice : zeek_conn_log_slices)
-    col->add(slice);
+    col->add({slice, col_index});
   MESSAGE("verify column index");
   auto pred = curried(unbox(to<predicate>(":addr == 192.168.1.103")));
   auto expected_result = make_ids({1, 3, 7, 14, 16}, zeek_conn_log.size());
@@ -105,8 +106,7 @@ TEST(zeek conn log) {
   col->flush_to_disk();
   col.reset();
   MESSAGE("verify column index again");
-  col = unbox(
-    make_column_index(sys, directory, *col_type, caf::settings{}, col_index));
+  col = unbox(make_column_index(sys, directory, *col_type, caf::settings{}));
   CHECK_EQUAL(lookup(col, pred), expected_result);
 }
 

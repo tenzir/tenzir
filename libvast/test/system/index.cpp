@@ -155,18 +155,19 @@ TEST(one-shot integer query result) {
 }
 
 TEST(iterable integer query result) {
-  MESSAGE("fill first " << (taste_count * 3) << " partitions");
-  auto slices = first_n(alternating_integers_slices, taste_count * 3);
+  auto partitions = taste_count * 3;
+  MESSAGE("fill first " << partitions << " partitions");
+  auto slices = first_n(alternating_integers_slices, partitions);
   auto src = detail::spawn_container_source(sys, slices, index);
   run();
   MESSAGE("query half of the values");
   auto [query_id, hits, scheduled] = query(":int == 1");
   CHECK_NOT_EQUAL(query_id, uuid::nil());
-  CHECK_EQUAL(hits, taste_count * 3);
+  CHECK_EQUAL(hits, partitions);
   CHECK_EQUAL(scheduled, taste_count);
   ids expected_result;
   expected_result.append_bits(false, alternating_integers[0].id());
-  for (size_t i = 0; i < (slice_size * taste_count * 3) / 2; ++i) {
+  for (size_t i = 0; i < (slice_size * partitions) / 2; ++i) {
     expected_result.append_bit(false);
     expected_result.append_bit(true);
   }

@@ -35,8 +35,8 @@ struct indexer_state {
   ~indexer_state();
 
   caf::error init(caf::event_based_actor* self, path filename, type column_type,
-                  caf::settings index_opts, size_t column, caf::actor index,
-                  uuid partition_id, atomic_measurement* m);
+                  caf::settings index_opts, caf::actor index, uuid partition_id,
+                  atomic_measurement* m);
 
   // -- member variables -------------------------------------------------------
 
@@ -53,18 +53,17 @@ struct indexer_state {
 
 /// Indexes a single column of table slices.
 /// @param self The actor handle.
-/// @param dir The directory where to store the indexes in.
+/// @param filename The file in which to store the index column.
 /// @param column_type The type of the indexed column.
 /// @param index_opts Runtime options to parameterize the value index.
-/// @param column The indexed column.
 /// @param index A handle to the index actor.
 /// @param partition_id The partition ID that this INDEXER belongs to.
 /// @param m A pointer to the measuring probe used for perfomance data
 ///        accumulation.
 /// @returns the initial behavior of the INDEXER.
 caf::behavior
-indexer(caf::stateful_actor<indexer_state>* self, path dir, type column_type,
-        caf::settings index_opts, size_t column, caf::actor index,
+indexer(caf::stateful_actor<indexer_state>* self, path filename,
+        type column_type, caf::settings index_opts, caf::actor index,
         uuid partition_id, atomic_measurement* m);
 
 } // namespace vast::system

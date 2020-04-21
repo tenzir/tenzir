@@ -88,7 +88,6 @@ builddir=build
 CMakeCacheEntries=""
 append_cache_entry CMAKE_INSTALL_PREFIX   PATH      /usr/local
 append_cache_entry CMAKE_BUILD_TYPE       STRING    RelWithDebInfo
-append_cache_entry VAST_ENABLE_ASSERTIONS BOOL      yes
 append_cache_entry VAST_USE_TCMALLOC      BOOL      no
 
 # Parse custom environment variable to initialize CMakeGenerator.

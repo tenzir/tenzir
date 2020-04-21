@@ -26,16 +26,15 @@
 namespace vast::system {
 
 caf::actor
-spawn_indexer(caf::local_actor* parent, path dir, type column_type,
-              caf::settings index_opts, size_t column, caf::actor index,
-              uuid partition_id, atomic_measurement* m) {
-  VAST_TRACE(VAST_ARG(dir), VAST_ARG(column_type), VAST_ARG(index_opts),
-             VAST_ARG(column), VAST_ARG(index), VAST_ARG(partition_id),
-             VAST_ARG(*m));
-  return parent->spawn<caf::lazy_init>(indexer, std::move(dir),
+spawn_indexer(caf::local_actor* parent, path filename, type column_type,
+              caf::settings index_opts, caf::actor index, uuid partition_id,
+              atomic_measurement* m) {
+  VAST_TRACE(VAST_ARG(filename), VAST_ARG(column_type), VAST_ARG(index_opts),
+             VAST_ARG(index), VAST_ARG(partition_id), VAST_ARG(*m));
+  return parent->spawn<caf::lazy_init>(indexer, std::move(filename),
                                        std::move(column_type),
-                                       std::move(index_opts), column,
-                                       std::move(index), partition_id, m);
+                                       std::move(index_opts), std::move(index),
+                                       partition_id, m);
 }
 
 } // namespace vast::system
