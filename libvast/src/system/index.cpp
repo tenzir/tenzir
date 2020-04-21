@@ -238,14 +238,7 @@ void index_state::send_report() {
   auto max_rate = -std::numeric_limits<double>::infinity();
   auto append_report = [&](partition& p) {
     for (size_t i = 0; i < p.measurements_.size(); ++i) {
-#ifdef VAST_MEASUREMENT_MUTEX_WORKAROUND
-      p.measurements_[i].mutex.lock();
-      auto tmp = static_cast<measurement>(p.measurements_[i]);
-      p.measurements_[i].reset();
-      p.measurements_[i].mutex.unlock();
-#else
-      auto tmp = std::atomic_exchange(&(p.measurements_[i]), measurement{});
-#endif
+      auto tmp = collect(p.measurements_[i]);
       if (tmp.events > 0) {
         r.push_back({as_vector(p.indexers_)[i].first.fqn, tmp});
         double rate = tmp.events * 1'000'000'000.0 / tmp.duration.count();
