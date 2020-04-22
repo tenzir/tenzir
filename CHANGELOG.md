@@ -17,7 +17,7 @@ Every entry has a category for which we use the following visual abbreviations:
   `80/udp` and `80/?`, but also `8080/tcp`.
   [#834](https://github.com/tenzir/vast/pull/834)
 
-- 🎁 Bash autocompletion for vast is now available via the autocomplete
+- 🎁 Bash autocompletion for `vast` is now available via the autocomplete
   script located at `scripts/vast-completions.bash` in the VAST source tree.
   [#833](https://github.com/tenzir/vast/pull/833)
 
