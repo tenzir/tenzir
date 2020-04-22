@@ -419,6 +419,11 @@ TEST(port) {
   port http{80, port::tcp};
   auto bm = idx.lookup(equal, make_data_view(http));
   CHECK(to_string(unbox(bm)) == "100001000");
+  bm = idx.lookup(not_equal, make_data_view(http));
+  CHECK_EQUAL(to_string(unbox(bm)), "011110111");
+  port port80{80, port::unknown};
+  bm = idx.lookup(not_equal, make_data_view(port80));
+  CHECK_EQUAL(to_string(unbox(bm)), "011110001");
   port priv{1024, port::unknown};
   bm = idx.lookup(less_equal, make_data_view(priv));
   CHECK(to_string(unbox(bm)) == "111101110");

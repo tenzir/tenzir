@@ -534,8 +534,12 @@ port_index::lookup_impl(relational_operator op, data_view d) const {
         auto result = num_.lookup(op, x.number());
         if (all<0>(result))
           return ids{offset(), false};
-        if (x.type() != port::unknown)
-          result &= proto_.lookup(equal, x.type());
+        if (x.type() != port::unknown) {
+          if (op == not_equal)
+            result |= proto_.lookup(not_equal, x.type());
+          else
+            result &= proto_.lookup(equal, x.type());
+        }
         return result;
       },
       [&](view<vector> xs) { return detail::container_lookup(*this, op, xs); },
