@@ -159,13 +159,15 @@ caf::error reader<Selector>::read_impl(size_t max_events, size_t max_slice_size,
   table_slice_builder_ptr bptr = nullptr;
   bool timeout = false;
   auto next_line = [&] {
-    if (!bptr || bptr->rows() == 0)
+    if (!bptr || bptr->rows() == 0) {
       lines_->next();
-    else
-      timeout = lines_->next_timeout(
+      return false;
+    } else {
+      return lines_->next_timeout(
         vast::defaults::import::shared::partial_slice_read_timeout);
+    }
   };
-  for (; produced < max_events; next_line()) {
+  for (; produced < max_events; timeout = next_line()) {
     if (timeout) {
       VAST_DEBUG(this, "reached input timeout at line", lines_->line_number());
       return finish(cons);

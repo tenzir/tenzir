@@ -98,13 +98,15 @@ reader::read_impl(size_t max_events, size_t max_slice_size, consumer& f) {
   bool timeout = false;
   table_slice_builder_ptr bptr = nullptr;
   auto next_line = [&] {
-    if (!bptr || bptr->rows() == 0)
+    if (!bptr || bptr->rows() == 0) {
       lines_->next();
-    else
-      timeout = lines_->next_timeout(
+      return false;
+    } else {
+      return lines_->next_timeout(
         vast::defaults::import::shared::partial_slice_read_timeout);
+    }
   };
-  for (size_t produced = 0; produced < max_events; next_line()) {
+  for (size_t produced = 0; produced < max_events; timeout = next_line()) {
     if (timeout) {
       VAST_DEBUG(this, "reached input timeout at line", lines_->line_number());
       return finish(f);
