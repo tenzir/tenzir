@@ -10,6 +10,10 @@ Every entry has a category for which we use the following visual abbreviations:
 
 ## Unreleased
 
+- 🐞 Continuously importing JSON, CSV, and Syslog events now properly works at
+  low rates (e.g., when batched over the network).
+  [#835](https://github.com/tenzir/vast/pull/835)
+
 - 🐞 Queries of the form `x != 80/tcp` were falsely evaluated as
   `x != 80/? && x != ?/tcp`. (The syntax in the second predicate does not yet
   exist; it only illustrates the bug.) Port inequality queries now correctly
