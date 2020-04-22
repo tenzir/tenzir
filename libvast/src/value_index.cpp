@@ -531,12 +531,12 @@ port_index::lookup_impl(relational_operator op, data_view d) const {
       [&](view<port> x) -> caf::expected<ids> {
         if (op == in || op == not_in)
           return make_error(ec::unsupported_operator, op);
-        auto n = num_.lookup(op, x.number());
-        if (all<0>(n))
+        auto result = num_.lookup(op, x.number());
+        if (all<0>(result))
           return ids{offset(), false};
         if (x.type() != port::unknown)
-          n &= proto_.lookup(equal, x.type());
-        return n;
+          result &= proto_.lookup(equal, x.type());
+        return result;
       },
       [&](view<vector> xs) { return detail::container_lookup(*this, op, xs); },
       [&](view<set> xs) { return detail::container_lookup(*this, op, xs); }),
