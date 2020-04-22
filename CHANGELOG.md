@@ -10,7 +10,14 @@ Every entry has a category for which we use the following visual abbreviations:
 
 ## Unreleased
 
-- 🎁 Bash autocompletion for vast is now available via the autocomplete
+- 🐞 Queries of the form `x != 80/tcp` were falsely evaluated as
+  `x != 80/? && x != ?/tcp`. (The syntax in the second predicate does not yet
+  exist; it only illustrates the bug.) Port inequality queries now correctly
+  evaluate `x != 80/? || x != ?/tcp`. E.g., the result now contains values like
+  `80/udp` and `80/?`, but also `8080/tcp`.
+  [#834](https://github.com/tenzir/vast/pull/834)
+
+- 🎁 Bash autocompletion for `vast` is now available via the autocomplete
   script located at `scripts/vast-completions.bash` in the VAST source tree.
   [#833](https://github.com/tenzir/vast/pull/833)
 
