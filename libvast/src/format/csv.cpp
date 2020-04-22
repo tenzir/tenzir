@@ -410,6 +410,14 @@ caf::error reader::read_impl(size_t max_events, size_t max_slice_size,
                              consumer& callback) {
   VAST_ASSERT(max_events > 0);
   VAST_ASSERT(max_slice_size > 0);
+  bool timeout = false;
+  auto next_line = [&] {
+    if (!builder_ || builder_->rows() == 0)
+      lines_->next();
+    else
+      timeout = lines_->next_timeout(
+        vast::defaults::import::shared::partial_slice_read_timeout);
+  };
   if (!parser_) {
     auto p = read_header(lines_->get());
     if (!p)
@@ -417,9 +425,12 @@ caf::error reader::read_impl(size_t max_events, size_t max_slice_size,
     parser_ = *std::move(p);
   }
   auto& p = *parser_;
-  size_t produced = 0;
-  lines_->next();
-  for (; produced < max_events; lines_->next()) {
+  next_line();
+  for (size_t produced = 0; produced < max_events; next_line()) {
+    if (timeout) {
+      VAST_DEBUG(this, "reached input timeout at line", lines_->line_number());
+      return finish(callback);
+    }
     // EOF check.
     if (lines_->done())
       return finish(callback, make_error(ec::end_of_input, "input exhausted"));
