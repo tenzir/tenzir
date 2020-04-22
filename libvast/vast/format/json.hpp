@@ -163,7 +163,7 @@ caf::error reader<Selector>::read_impl(size_t max_events, size_t max_slice_size,
       lines_->next();
     else
       timeout = lines_->next_timeout(
-        vast::defaults::import::json::partial_slice_read_timeout);
+        vast::defaults::import::shared::partial_slice_read_timeout);
   };
   for (; produced < max_events; next_line()) {
     if (timeout) {

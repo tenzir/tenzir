@@ -283,7 +283,7 @@ caf::error reader::read_impl(size_t max_events, size_t max_slice_size,
     // sees them even if there are currently no further events in the stream.
     if (builder_->rows() > 0) {
       bool timeout = lines_->next_timeout(
-        vast::defaults::import::zeek::partial_slice_read_timeout);
+        vast::defaults::import::shared::partial_slice_read_timeout);
       if (timeout)
         return finish(f);
     } else {
