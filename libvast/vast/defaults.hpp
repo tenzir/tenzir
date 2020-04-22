@@ -49,7 +49,7 @@ struct zeek {
   /// Nested category in config files for this subcommand.
   static constexpr const char* category = "import.zeek";
 
-  // Time that the reader waits for new data before it finishes a partial slice.
+  /// Time that the reader waits for new data before it finishes a partial slice.
   static constexpr std::chrono::milliseconds partial_slice_read_timeout
     = std::chrono::milliseconds{500};
 
@@ -77,6 +77,10 @@ struct csv {
 struct json {
   /// Nested category in config files for this subcommand.
   static constexpr const char* category = "import.json";
+
+  /// Time that the reader waits for new data before it finishes a partial slice.
+  static constexpr std::chrono::milliseconds partial_slice_read_timeout
+    = std::chrono::milliseconds{500};
 
   /// Path for reading input events.
   static constexpr auto read = shared::read;
