@@ -17,6 +17,7 @@
 #include "vast/load.hpp"
 #include "vast/logger.hpp"
 #include "vast/save.hpp"
+#include "vast/table_slice.hpp"
 #include "vast/table_slice_column.hpp"
 #include "vast/value_index_factory.hpp"
 

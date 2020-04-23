@@ -77,6 +77,8 @@ using maybe_actor = caf::expected<caf::actor>;
 /// the INDEXER actor responsible for answering the (curried) predicate.
 using evaluation_triple = std::tuple<offset, curried_predicate, caf::actor>;
 
+using evaluation_triples = std::vector<evaluation_triple>;
+
 /// Maps layouts to a list of evaluation triples.
 using evaluation_map = std::map<type, std::vector<evaluation_triple>>;
 

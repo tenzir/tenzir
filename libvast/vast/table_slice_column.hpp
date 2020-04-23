@@ -13,23 +13,12 @@
 
 #pragma once
 
-#include "vast/detail/operators.hpp"
 #include "vast/fwd.hpp"
 #include "vast/table_slice.hpp"
-#include "vast/type.hpp"
 
-#include <tuple>
-#include <vector>
+#include <cstdint>
 
 namespace vast {
-
-namespace system {
-
-class index_state;
-class partition;
-using partition_ptr = std::unique_ptr<partition>;
-
-} // namespace system
 
 struct table_slice_column {
   table_slice_column() {
@@ -47,12 +36,5 @@ struct table_slice_column {
     return f(x.slice, x.column);
   }
 };
-
-/// Bundles an offset into an expression under evaluation to the curried
-/// representation of the ::predicate at that position in the expression and
-/// the INDEXER actor responsible for answering the (curried) predicate.
-using evaluation_triple = std::tuple<offset, curried_predicate, caf::actor>;
-
-using evaluation_triples = std::vector<evaluation_triple>;
 
 } // namespace vast

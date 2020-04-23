@@ -24,6 +24,8 @@
 
 namespace vast::system {
 
+class partition;
+
 class indexer_downstream_manager : public caf::downstream_manager_base {
 public:
   // -- member types -----------------------------------------------------------
