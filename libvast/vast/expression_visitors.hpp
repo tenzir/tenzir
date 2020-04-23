@@ -49,7 +49,7 @@ struct aligner {
 
 /// Pushes negations down to the predicate level and removes double negations.
 struct denegator {
-  denegator(bool negate = false);
+  explicit denegator(bool negate = false);
 
   expression operator()(caf::none_t) const;
   expression operator()(const conjunction& c) const;
@@ -101,7 +101,7 @@ struct validator {
 /// Transforms all ::key_extractor and ::type_extractor predicates into
 /// ::data_extractor instances according to a given type.
 struct type_resolver {
-  type_resolver(const type& t);
+  explicit type_resolver(const type& t);
 
   caf::expected<expression> operator()(caf::none_t);
   caf::expected<expression> operator()(const conjunction& c);
@@ -125,7 +125,7 @@ struct type_resolver {
 // Tailors an expression to a specific type by pruning all unecessary branches
 // and resolving keys into the corresponding data extractors.
 struct type_pruner {
-  type_pruner(const type& event_type);
+  explicit type_pruner(const type& event_type);
 
   expression operator()(caf::none_t);
   expression operator()(const conjunction& c);
@@ -139,7 +139,7 @@ struct type_pruner {
 
 /// Evaluates an event over a [resolved](@ref type_extractor) expression.
 struct event_evaluator {
-  event_evaluator(const event& e);
+  explicit event_evaluator(const event& e);
 
   bool operator()(caf::none_t);
   bool operator()(const conjunction& c);
@@ -251,7 +251,7 @@ class labeler {
   // TODO: we could add a static_assert that the return type of Function must
   // be void.
 public:
-  labeler(Function f) : f_{f} {
+  explicit labeler(Function f) : f_{f} {
     push();
   }
 
