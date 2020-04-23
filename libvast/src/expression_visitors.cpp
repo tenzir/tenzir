@@ -347,29 +347,29 @@ caf::expected<expression> type_resolver::operator()(const predicate& p) {
   return caf::visit(*this, p.lhs, p.rhs);
 }
 
-caf::expected<expression> type_resolver::
-operator()(const type_extractor& ex, const data& d) {
-  std::vector<expression> connective;
-  if (auto r = caf::get_if<record_type>(&type_)) {
-    for (auto& f : record_type::each{*r}) {
-      auto& value_type = f.trace.back()->type;
-      if (congruent(value_type, ex.type)) {
-        auto x = data_extractor{type_, f.offset};
-        connective.emplace_back(predicate{std::move(x), op_, d});
-      }
-    }
-  } else if (congruent(type_, ex.type)) {
-    auto x = data_extractor{type_, offset{}};
-    connective.emplace_back(predicate{std::move(x), op_, d});
+caf::expected<expression>
+type_resolver::operator()(const attribute_extractor& ex, const data& d) {
+  if (ex.attr == system::timestamp_atom::get_value()) {
+    // Perform a basic type check. We could make it a pre-condition that this
+    // should have been tested earlier.
+    if (!caf::holds_alternative<time>(d))
+      return make_error(ec::type_clash, ex.attr, op_, d);
+  } else {
+    // We're leaving all other attributes alone, because they may operate at a
+    // different granularity (e.g., #type).
+    return predicate{ex, op_, d};
   }
-  if (connective.empty())
-    return expression{}; // did not resolve
-  if (connective.size() == 1)
-    return {std::move(connective[0])};
-  if (op_ == not_equal || op_ == not_match || op_ == not_in || op_ == not_ni)
-    return {conjunction{std::move(connective)}};
-  else
-    return {disjunction{std::move(connective)}};
+  // Perform the attribute extraction for timestamps.
+  // TODO: Generalize to all type attributes.
+  auto has_timestamp_attribute
+    = [&](const type& t) { return has_attribute(t, "timestamp"); };
+  return resolve_extractor(has_timestamp_attribute, d);
+}
+
+caf::expected<expression>
+type_resolver::operator()(const type_extractor& ex, const data& d) {
+  auto is_congruent = [&](const type& t) { return congruent(t, ex.type); };
+  return resolve_extractor(is_congruent, d);
 }
 
 caf::expected<expression> type_resolver::

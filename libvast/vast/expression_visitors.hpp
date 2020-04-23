@@ -101,6 +101,9 @@ struct validator {
 /// Transforms all ::key_extractor and ::type_extractor predicates into
 /// ::data_extractor instances according to a given type.
 struct type_resolver {
+  // TODO: This function still assumes that we can pass types that are no
+  // records. This is an overly generic assumption and only adds complexity at
+  // this point. We should condense the scope of this visitor to record types.
   explicit type_resolver(const type& t);
 
   caf::expected<expression> operator()(caf::none_t);
@@ -108,6 +111,8 @@ struct type_resolver {
   caf::expected<expression> operator()(const disjunction& d);
   caf::expected<expression> operator()(const negation& n);
   caf::expected<expression> operator()(const predicate& p);
+  caf::expected<expression>
+  operator()(const attribute_extractor& ex, const data& d);
   caf::expected<expression> operator()(const type_extractor& ex, const data& d);
   caf::expected<expression> operator()(const data& d, const type_extractor& ex);
   caf::expected<expression> operator()(const key_extractor& ex, const data& d);
@@ -116,6 +121,31 @@ struct type_resolver {
   template <class T, class U>
   caf::expected<expression> operator()(const T& lhs, const U& rhs) {
     return {predicate{lhs, op_, rhs}};
+  }
+
+  // Attempts to resolve all extractors that fulfil a given property.
+  // provided property is a function that returns an error
+  template <class Function>
+  caf::expected<expression> resolve_extractor(Function f, const data& x) const {
+    std::vector<expression> connective;
+    auto make_predicate = [&](offset off) {
+      return predicate{data_extractor{type_, off}, op_, x};
+    };
+    if (auto r = caf::get_if<record_type>(&type_)) {
+      for (auto& i : record_type::each{*r})
+        if (f(i.trace.back()->type))
+          connective.emplace_back(make_predicate(i.offset));
+    } else if (f(type_)) {
+      connective.emplace_back(make_predicate(offset{}));
+    }
+    if (connective.empty())
+      return expression{}; // did not resolve
+    if (connective.size() == 1)
+      return {std::move(connective[0])}; // hoist expression
+    if (op_ == not_equal || op_ == not_match || op_ == not_in || op_ == not_ni)
+      return {conjunction{std::move(connective)}};
+    else
+      return {disjunction{std::move(connective)}};
   }
 
   relational_operator op_;
