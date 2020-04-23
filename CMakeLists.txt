@@ -746,7 +746,7 @@ file(
      pip install --upgrade pip
      pip install -r \"$base_dir/requirements.txt\"
      ${REQUIREMENT_PYARROW}
-     python \"$base_dir/integration.py\" --app \"$app\" -d vast-integration-test"
+     python \"$base_dir/integration.py\" --app \"$app\" -d vast-integration-test \"$@\""
 )
 
 add_custom_target(
