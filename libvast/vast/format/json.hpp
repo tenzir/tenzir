@@ -156,7 +156,22 @@ caf::error reader<Selector>::read_impl(size_t max_events, size_t max_slice_size,
   VAST_ASSERT(max_events > 0);
   VAST_ASSERT(max_slice_size > 0);
   size_t produced = 0;
-  for (; produced < max_events; lines_->next()) {
+  table_slice_builder_ptr bptr = nullptr;
+  bool timeout = false;
+  auto next_line = [&] {
+    if (!bptr || bptr->rows() == 0) {
+      lines_->next();
+      return false;
+    } else {
+      return lines_->next_timeout(
+        vast::defaults::import::shared::partial_slice_read_timeout);
+    }
+  };
+  for (; produced < max_events; timeout = next_line()) {
+    if (timeout) {
+      VAST_DEBUG(this, "reached input timeout at line", lines_->line_number());
+      return finish(cons);
+    }
     // EOF check.
     if (lines_->done())
       return finish(cons, make_error(ec::end_of_input, "input exhausted"));
@@ -173,7 +188,7 @@ caf::error reader<Selector>::read_impl(size_t max_events, size_t max_slice_size,
     auto layout = selector_(*xs);
     if (!layout)
       continue;
-    auto bptr = builder(*layout);
+    bptr = builder(*layout);
     if (bptr == nullptr)
       return make_error(ec::parse_error, "unable to get a builder");
     if (auto err = add(*bptr, *xs, *layout)) {

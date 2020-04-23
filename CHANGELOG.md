@@ -10,6 +10,13 @@ Every entry has a category for which we use the following visual abbreviations:
 
 ## Unreleased
 
+- 🐞 Fixed a bug that could cause stalled input streams not to forward events to
+  the index and archive components for the JSON, CSV, and Syslog readers, when
+  the input stopped arriving but no EOF was sent. This is a follow-up to
+  [#750](https://github.com/tenzir/vast/pull/750). A timeout now ensures that
+  that the readers continue when some events were already handled, but the input
+  appears to be stalled. [#835](https://github.com/tenzir/vast/pull/835)
+
 - 🐞 Queries of the form `x != 80/tcp` were falsely evaluated as
   `x != 80/? && x != ?/tcp`. (The syntax in the second predicate does not yet
   exist; it only illustrates the bug.) Port inequality queries now correctly

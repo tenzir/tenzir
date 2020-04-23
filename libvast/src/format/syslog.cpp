@@ -95,16 +95,30 @@ const char* reader::name() const {
 
 caf::error
 reader::read_impl(size_t max_events, size_t max_slice_size, consumer& f) {
-  size_t produced = 0;
-  while (produced < max_events) {
+  bool timeout = false;
+  table_slice_builder_ptr bptr = nullptr;
+  auto next_line = [&] {
+    if (!bptr || bptr->rows() == 0) {
+      lines_->next();
+      return false;
+    } else {
+      return lines_->next_timeout(
+        vast::defaults::import::shared::partial_slice_read_timeout);
+    }
+  };
+  for (size_t produced = 0; produced < max_events; timeout = next_line()) {
+    if (timeout) {
+      VAST_DEBUG(this, "reached input timeout at line", lines_->line_number());
+      return finish(f);
+    }
     if (lines_->done())
       return finish(f, make_error(ec::end_of_input, "input exhausted"));
     auto& line = lines_->get();
     message sys_msg;
     auto parser = message_parser{};
     if (parser(line, sys_msg)) {
-      auto rfc5424_builder = builder(syslog_rfc5424_type_);
-      if (!rfc5424_builder) {
+      bptr = builder(syslog_rfc5424_type_);
+      if (!bptr) {
         return finish(f, make_error(ec::format_error,
                                     "failed to get create table "
                                     "slice builder for type "
@@ -112,34 +126,33 @@ reader::read_impl(size_t max_events, size_t max_slice_size, consumer& f) {
       }
       // TODO: The index is currently incapable of handling map_type. Hence, the
       // structured_data is disabled.
-      if (!rfc5424_builder->add(sys_msg.hdr.facility, sys_msg.hdr.severity,
-                                sys_msg.hdr.version, sys_msg.hdr.ts,
-                                sys_msg.hdr.hostname, sys_msg.hdr.app_name,
-                                sys_msg.hdr.process_id, sys_msg.hdr.msg_id,
-                                /*sys_msg.data,*/ sys_msg.msg))
+      if (!bptr->add(sys_msg.hdr.facility, sys_msg.hdr.severity,
+                     sys_msg.hdr.version, sys_msg.hdr.ts, sys_msg.hdr.hostname,
+                     sys_msg.hdr.app_name, sys_msg.hdr.process_id,
+                     sys_msg.hdr.msg_id,
+                     /*sys_msg.data,*/ sys_msg.msg))
         return finish(f, make_error(ec::format_error,
                                     "failed to produce table slice row for "
-                                      + rfc5424_builder->layout().name()));
-      if (rfc5424_builder->rows() >= max_slice_size)
+                                      + bptr->layout().name()));
+      if (bptr->rows() >= max_slice_size)
         if (auto err = finish(f))
           return err;
     } else {
-      auto unknown_builder = builder(syslog_unkown_type_);
-      if (!unknown_builder)
+      bptr = builder(syslog_unkown_type_);
+      if (!bptr)
         return finish(f, make_error(ec::format_error,
                                     "failed to get create table "
                                     "slice builder for type "
                                       + syslog_unkown_type_.name()));
-      if (!unknown_builder->add(line))
+      if (!bptr->add(line))
         return finish(f, make_error(ec::format_error,
                                     "failed to produce table slice row for "
-                                      + unknown_builder->layout().name()));
-      if (unknown_builder->rows() >= max_slice_size)
+                                      + bptr->layout().name()));
+      if (bptr->rows() >= max_slice_size)
         if (auto err = finish(f))
           return err;
     }
     ++produced;
-    lines_->next();
   }
   return caf::none;
 }

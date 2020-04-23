@@ -282,9 +282,8 @@ caf::error reader::read_impl(size_t max_events, size_t max_slice_size,
     // If we already have some events, set a read timeout to ensure downstream
     // sees them even if there are currently no further events in the stream.
     if (builder_->rows() > 0) {
-      using namespace std::chrono_literals;
       bool timeout = lines_->next_timeout(
-        vast::defaults::import::zeek::partial_slice_read_timeout);
+        vast::defaults::import::shared::partial_slice_read_timeout);
       if (timeout)
         return finish(f);
     } else {
