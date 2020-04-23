@@ -206,9 +206,7 @@ caf::expected<expression> tailor(const expression& expr, const type& t) {
   auto x = caf::visit(type_resolver{t}, expr);
   if (!x)
     return x.error();
-  *x = caf::visit(type_pruner{t}, *x);
-  VAST_ASSERT(!caf::holds_alternative<caf::none_t>(*x));
-  return std::move(*x);
+  return caf::visit(type_pruner{t}, *x);
 }
 
 namespace {

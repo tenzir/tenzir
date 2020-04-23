@@ -10,6 +10,9 @@ Every entry has a category for which we use the following visual abbreviations:
 
 ## Unreleased
 
+- 🐞 Fixed an crash when importing data while a continous export was running for
+  unrelated data. [#830](https://github.com/tenzir/vast/pull/830)
+
 - 🐞 Fixed a bug that could cause stalled input streams not to forward events to
   the index and archive components for the JSON, CSV, and Syslog readers, when
   the input stopped arriving but no EOF was sent. This is a follow-up to

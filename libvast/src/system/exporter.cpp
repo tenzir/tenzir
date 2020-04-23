@@ -199,8 +199,8 @@ behavior exporter(stateful_actor<exporter_state>* self, expression expr,
     auto sender = self->current_sender();
     // Construct a candidate checker if we don't have one for this type.
     type t = slice->layout();
-    auto& checker = st.checkers[t];
-    if (caf::holds_alternative<caf::none_t>(checker)) {
+    auto it = st.checkers.find(t);
+    if (it == st.checkers.end()) {
       auto x = tailor(st.expr, t);
       if (!x) {
         VAST_ERROR(self, "failed to tailor expression:",
@@ -209,9 +209,11 @@ behavior exporter(stateful_actor<exporter_state>* self, expression expr,
         shutdown(self);
         return;
       }
-      checker = std::move(*x);
-      VAST_DEBUG(self, "tailored AST to", t, ':', checker);
+      VAST_DEBUG(self, "tailored AST to", t, ':', x);
+      std::tie(it, std::ignore)
+        = st.checkers.emplace(type{slice->layout()}, std::move(*x));
     }
+    auto& checker = it->second;
     // Perform candidate check, splitting the slice into subsets if needed.
     auto selection = evaluate(*slice, checker);
     auto selection_size = rank(selection);
