@@ -29,6 +29,7 @@
 
 namespace vast::system {
 
+struct index_state;
 class indexer_downstream_manager;
 
 /// The horizontal data scaling unit of the index. A partition represents a
@@ -169,7 +170,7 @@ public:
 
   std::vector<table_slice_ptr> inbound_;
 
-  friend class index_state;
+  friend struct index_state;
   friend class indexer_downstream_manager;
 };
 

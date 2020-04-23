@@ -62,7 +62,7 @@ struct fixture : fixtures::deterministic_actor_system_and_events {
     MESSAGE("spawning AUT");
     aut = spawn_aut();
     REQUIRE(aut);
-    CHECK_EQUAL(state().data.size(), 0);
+    CHECK_EQUAL(state().data.size(), 0u);
   }
 
   ~fixture() {
@@ -96,7 +96,7 @@ TEST(type_registry) {
     vast::detail::spawn_container_source(sys, std::move(slices_a), aut);
     vast::detail::spawn_container_source(sys, std::move(slices_b), aut);
     run();
-    CHECK_EQUAL(state().data.size(), 1);
+    CHECK_EQUAL(state().data.size(), 1u);
   }
   MESSAGE("retrieving layouts");
   {

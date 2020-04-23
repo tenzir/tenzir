@@ -157,8 +157,6 @@ struct fixture : fixtures::dummy_index {
     ingest(std::vector{slice});
   }
 
-  static constexpr size_t total_noskip_fields = 4;
-
   /// Directory where the manager is supposed to persist its state.
   path state_dir = directory / "indexer-manager";
 

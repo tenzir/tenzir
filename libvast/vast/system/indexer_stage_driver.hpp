@@ -63,6 +63,8 @@
 
 namespace vast::system {
 
+struct index_state;
+
 /// A stream stage for dispatching slices to INDEXER actors. One set of INDEXER
 /// actors is used per partition.
 class indexer_stage_driver
