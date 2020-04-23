@@ -77,6 +77,7 @@ std::vector<uuid> meta_index::lookup(const expression& expr) const {
                    partition_synopses_.end(),
                    std::back_inserter(result),
                    [](auto& x) { return x.first; });
+    // TODO: It is unclear why we need to sort here.
     std::sort(result.begin(), result.end());
     return result;
   };
@@ -85,21 +86,25 @@ std::vector<uuid> meta_index::lookup(const expression& expr) const {
       VAST_ASSERT(!x.empty());
       auto i = x.begin();
       auto result = lookup(*i);
+      std::sort(result.begin(), result.end());
       if (!result.empty())
         for (++i; i != x.end(); ++i) {
           auto xs = lookup(*i);
           if (xs.empty())
             return xs; // short-circuit
+          std::sort(xs.begin(), xs.end());
           detail::inplace_intersect(result, xs);
         }
       return result;
     },
     [&](const disjunction& x) -> result_type {
       result_type result;
+      std::sort(result.begin(), result.end());
       for (auto& op : x) {
         auto xs = lookup(op);
         if (xs.size() == partition_synopses_.size())
           return xs; // short-circuit
+        std::sort(xs.begin(), xs.end());
         detail::inplace_unify(result, xs);
       }
       return result;
@@ -123,12 +128,15 @@ std::vector<uuid> meta_index::lookup(const expression& expr) const {
         // We factor the nested loop into a lambda so that we can abort
         // the iteration more easily with a return statement.
         auto lookup = [&](auto& part_id, auto& part_syn) {
+          VAST_DEBUG_ANON("meta_index checks", part_id, "at predicate", x);
           for (auto& [layout, table_syn] : part_syn)
             for (size_t i = 0; i < table_syn.size(); ++i)
               if (table_syn[i] && match(layout.fields[i])) {
                 found_matching_synopsis = true;
                 auto opt = table_syn[i]->lookup(x.op, make_view(rhs));
                 if (!opt || *opt) {
+                  VAST_DEBUG_ANON("meta_index selects", part_id, "at predicate",
+                                  x);
                   result.push_back(part_id);
                   return;
                 }
@@ -136,7 +144,6 @@ std::vector<uuid> meta_index::lookup(const expression& expr) const {
         };
         for (auto& [part_id, part_syn] : partition_synopses_)
           lookup(part_id, part_syn);
-        std::sort(result.begin(), result.end());
         return found_matching_synopsis ? result : all_partitions();
       };
       auto extract_expr = detail::overload(
