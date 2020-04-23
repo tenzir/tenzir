@@ -25,6 +25,7 @@
 #include "vast/concept/parseable/vast/offset.hpp"
 #include "vast/concept/parseable/vast/si.hpp"
 #include "vast/concept/parseable/vast/time.hpp"
+#include "vast/detail/narrow.hpp"
 #include "vast/si_literals.hpp"
 
 #include <caf/test/dsl.hpp>
@@ -768,18 +769,19 @@ TEST(si count) {
 
 TEST(si int) {
   auto to_int = to_si<integer>;
+  auto as_int = [](auto x) { return detail::narrow_cast<integer>(x); };
   using namespace si_literals;
   CHECK_EQUAL(to_int("-42"), -42);
-  CHECK_EQUAL(to_int("-1k"), -1_k);
-  CHECK_EQUAL(to_int("-2M"), -2_M);
-  CHECK_EQUAL(to_int("-3G"), -3_G);
-  CHECK_EQUAL(to_int("-4T"), -4_T);
-  CHECK_EQUAL(to_int("-5E"), -5_E);
-  CHECK_EQUAL(to_int("-6Ki"), -6_Ki);
-  CHECK_EQUAL(to_int("-7Mi"), -7_Mi);
-  CHECK_EQUAL(to_int("-8Gi"), -8_Gi);
-  CHECK_EQUAL(to_int("-9Ti"), -9_Ti);
-  CHECK_EQUAL(to_int("-10Ei"), -10_Ei);
+  CHECK_EQUAL(to_int("-1k"), -as_int(1_k));
+  CHECK_EQUAL(to_int("-2M"), -as_int(2_M));
+  CHECK_EQUAL(to_int("-3G"), -as_int(3_G));
+  CHECK_EQUAL(to_int("-4T"), -as_int(4_T));
+  CHECK_EQUAL(to_int("-5E"), -as_int(5_E));
+  CHECK_EQUAL(to_int("-6Ki"), -as_int(6_Ki));
+  CHECK_EQUAL(to_int("-7Mi"), -as_int(7_Mi));
+  CHECK_EQUAL(to_int("-8Gi"), -as_int(8_Gi));
+  CHECK_EQUAL(to_int("-9Ti"), -as_int(9_Ti));
+  CHECK_EQUAL(to_int("-10Ei"), -as_int(10_Ei));
 }
 
 // -- API ---------------------------------------------------------------------
