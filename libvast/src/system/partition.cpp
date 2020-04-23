@@ -190,28 +190,6 @@ caf::actor partition::fetch_indexer(const attribute_extractor& ex,
       return [=](const curried_predicate&) { return row_ids; };
     });
   }
-  if (ex.attr == system::timestamp_atom::value) {
-    if (!caf::holds_alternative<timestamp>(x)) {
-      VAST_WARNING(
-        state_->self,
-        "expected a timestamp as time extractor attribute , got:", x);
-      return nullptr;
-    }
-    // Find the column with attribute 'time'.
-    auto pred = [](auto& x) {
-      return caf::holds_alternative<time_type>(x.type)
-             && has_attribute(x.type, "timestamp");
-    };
-    auto layout = combined_type();
-    auto& fs = layout.fields;
-    auto i = std::find_if(fs.begin(), fs.end(), pred);
-    if (i == fs.end())
-      return nullptr;
-    // Redirect to "ordinary data lookup".
-    auto pos = static_cast<size_t>(std::distance(fs.begin(), i));
-    data_extractor dx{layout, vast::offset{pos}};
-    return fetch_indexer(dx, op, x);
-  }
   VAST_WARNING(state_->self, "got unsupported attribute:", ex.attr);
   return nullptr;
 }
