@@ -29,9 +29,6 @@ namespace vast::system {
 maybe_actor spawn_type_registry(node_actor* self, spawn_arguments& args) {
   if (!args.empty())
     return unexpected_arguments(args);
-  auto opt = [&](caf::string_view key, auto default_value) {
-    return get_or(args.invocation.options, key, default_value);
-  };
   self->state.type_registry = self->spawn(type_registry, args.dir / args.label);
   return caf::actor_cast<caf::actor>(self->state.type_registry);
 }
