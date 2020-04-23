@@ -111,7 +111,7 @@ TEST(type_registry) {
         done = true;
       })
       .until(done);
-    CHECK_EQUAL(size, 2);
+    CHECK_EQUAL(size, 2u);
   }
   self->send_exit(aut, caf::exit_reason::user_shutdown);
 }
