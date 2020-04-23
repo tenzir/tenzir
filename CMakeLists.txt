@@ -80,6 +80,7 @@ option(VAST_ENABLE_ASSERTIONS "Enable Assertions" "${VAST_ENABLE_ASSERTIONS_DEFA
 option(VAST_RELOCATABLE_INSTALL "Enable relocatable installations" ON)
 option(ENABLE_ZEEK_TO_VAST "Build zeek-to-vast" ON)
 option(VAST_STATIC_EXECUTABLE "Link VAST statically")
+option(VAST_ENABLE_ASSERTIONS "Enable assertions" ON)
 cmake_dependent_option(
   BUILD_SHARED_LIBS "Build shared libraries instead of static" ON
   "NOT VAST_STATIC_EXECUTABLE" OFF)
