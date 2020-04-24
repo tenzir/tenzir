@@ -10,6 +10,11 @@ Every entry has a category for which we use the following visual abbreviations:
 
 ## Unreleased
 
+- 🐞 For some queries, the index evaluated only a subset of all relevant
+  partitions in a non-deterministic manner. Fixing a violated evaluation
+  invariant now guarantees deterministic execution.
+  [#842](https://github.com/tenzir/vast/pull/842)
+
 - 🐞 Fixed a crash when importing data while a continuous export was running for
   unrelated events. [#830](https://github.com/tenzir/vast/pull/830)
 
