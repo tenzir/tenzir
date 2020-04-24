@@ -76,15 +76,16 @@ std::vector<uuid> meta_index::lookup(const expression& expr) const {
   // we return an assembled set must ensure the post-condition of returning a
   // sorted list.
   using result_type = std::vector<uuid>;
+  result_type memoized_partitions;
   auto all_partitions = [&] {
-    result_type result;
-    result.reserve(partition_synopses_.size());
-    std::transform(partition_synopses_.begin(),
-                   partition_synopses_.end(),
-                   std::back_inserter(result),
+    if (!memoized_partitions.empty() || partition_synopses_.empty())
+      return memoized_partitions;
+    memoized_partitions.reserve(partition_synopses_.size());
+    std::transform(partition_synopses_.begin(), partition_synopses_.end(),
+                   std::back_inserter(memoized_partitions),
                    [](auto& x) { return x.first; });
-    std::sort(result.begin(), result.end());
-    return result;
+    std::sort(memoized_partitions.begin(), memoized_partitions.end());
+    return memoized_partitions;
   };
   auto f = detail::overload(
     [&](const conjunction& x) -> result_type {
