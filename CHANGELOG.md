@@ -10,7 +10,7 @@ Every entry has a category for which we use the following visual abbreviations:
 
 ## Unreleased
 
-- 🔄 The option `--skip-candidate-checks` / `-s` for the `vast count` command
+- 🔄 The option `--skip-candidate-checks` / `-s` for the `count` command
   was renamed to `--estimate` / `-e`.
   [#843](https://github.com/tenzir/vast/pull/843)
 
