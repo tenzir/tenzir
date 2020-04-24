@@ -68,17 +68,24 @@ std::vector<uuid> meta_index::lookup(const expression& expr) const {
   VAST_ASSERT(!caf::holds_alternative<caf::none_t>(expr));
   // TODO: we could consider a flat_set<uuid> here, which would then have
   // overloads for inplace intersection/union and simplify the implementation
-  // of this function a bit.
+  // of this function a bit. This would also simplify the maintainance of a
+  // critical invariant: partition UUIDs must be sorted. Otherwise the
+  // invariants of the inplace union and intersection algorithms are violated,
+  // leading to wrong results. This invariant is easily violated because we
+  // currently just append results to the candidate vector, so all places where
+  // we return an assembled set must ensure the post-condition of returning a
+  // sorted list.
   using result_type = std::vector<uuid>;
+  result_type memoized_partitions;
   auto all_partitions = [&] {
-    result_type result;
-    result.reserve(partition_synopses_.size());
-    std::transform(partition_synopses_.begin(),
-                   partition_synopses_.end(),
-                   std::back_inserter(result),
+    if (!memoized_partitions.empty() || partition_synopses_.empty())
+      return memoized_partitions;
+    memoized_partitions.reserve(partition_synopses_.size());
+    std::transform(partition_synopses_.begin(), partition_synopses_.end(),
+                   std::back_inserter(memoized_partitions),
                    [](auto& x) { return x.first; });
-    std::sort(result.begin(), result.end());
-    return result;
+    std::sort(memoized_partitions.begin(), memoized_partitions.end());
+    return memoized_partitions;
   };
   auto f = detail::overload(
     [&](const conjunction& x) -> result_type {
@@ -91,6 +98,7 @@ std::vector<uuid> meta_index::lookup(const expression& expr) const {
           if (xs.empty())
             return xs; // short-circuit
           detail::inplace_intersect(result, xs);
+          VAST_ASSERT(std::is_sorted(result.begin(), result.end()));
         }
       return result;
     },
@@ -98,9 +106,11 @@ std::vector<uuid> meta_index::lookup(const expression& expr) const {
       result_type result;
       for (auto& op : x) {
         auto xs = lookup(op);
+        VAST_ASSERT(std::is_sorted(xs.begin(), xs.end()));
         if (xs.size() == partition_synopses_.size())
           return xs; // short-circuit
         detail::inplace_unify(result, xs);
+        VAST_ASSERT(std::is_sorted(result.begin(), result.end()));
       }
       return result;
     },
@@ -123,12 +133,14 @@ std::vector<uuid> meta_index::lookup(const expression& expr) const {
         // We factor the nested loop into a lambda so that we can abort
         // the iteration more easily with a return statement.
         auto lookup = [&](auto& part_id, auto& part_syn) {
+          VAST_DEBUG(this, "checks", part_id, "at predicate", x);
           for (auto& [layout, table_syn] : part_syn)
             for (size_t i = 0; i < table_syn.size(); ++i)
               if (table_syn[i] && match(layout.fields[i])) {
                 found_matching_synopsis = true;
                 auto opt = table_syn[i]->lookup(x.op, make_view(rhs));
                 if (!opt || *opt) {
+                  VAST_DEBUG(this, "selects", part_id, "at predicate", x);
                   result.push_back(part_id);
                   return;
                 }
@@ -136,6 +148,7 @@ std::vector<uuid> meta_index::lookup(const expression& expr) const {
         };
         for (auto& [part_id, part_syn] : partition_synopses_)
           lookup(part_id, part_syn);
+        // Re-establish potentially violated invariant.
         std::sort(result.begin(), result.end());
         return found_matching_synopsis ? result : all_partitions();
       };
@@ -154,6 +167,8 @@ std::vector<uuid> meta_index::lookup(const expression& expr) const {
                   result.push_back(part_id);
                   break;
                 }
+            // Re-establish potentially violated invariant.
+            std::sort(result.begin(), result.end());
             return result;
           }
           VAST_WARNING(this, "cannot process attribute extractor:", lhs.attr);
