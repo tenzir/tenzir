@@ -10,6 +10,10 @@ Every entry has a category for which we use the following visual abbreviations:
 
 ## Unreleased
 
+- 🔄 The option `--skip-candidate-checks` / `-s` for the `count` command
+  was renamed to `--estimate` / `-e`.
+  [#843](https://github.com/tenzir/vast/pull/843)
+
 - 🐞 For some queries, the index evaluated only a subset of all relevant
   partitions in a non-deterministic manner. Fixing a violated evaluation
   invariant now guarantees deterministic execution.

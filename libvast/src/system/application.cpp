@@ -99,9 +99,8 @@ auto make_root_command(std::string_view path) {
 auto make_count_command() {
   return std::make_unique<command>(
     "count", "count hits for a query without exporting data", "",
-    opts("?count").add<bool>("skip-candidate-checks,s",
-                             "estimate an upper bound by "
-                             "skipping candidate checks"));
+    opts("?count").add<bool>("estimate,e", "estimate an upper bound by "
+                                           "skipping candidate checks"));
 }
 
 auto make_export_command() {
