@@ -68,7 +68,13 @@ std::vector<uuid> meta_index::lookup(const expression& expr) const {
   VAST_ASSERT(!caf::holds_alternative<caf::none_t>(expr));
   // TODO: we could consider a flat_set<uuid> here, which would then have
   // overloads for inplace intersection/union and simplify the implementation
-  // of this function a bit.
+  // of this function a bit. This would also simplify the maintainance of a
+  // critical invariant: partition UUIDs must be sorted. Otherwise the
+  // invariants of the inplace union and intersection algorithms are violated,
+  // leading to wrong results. This invariant is easily violated because we
+  // currently just append results to the candidate vector, so all places where
+  // we return an assembled set must ensure the post-condition of returning a
+  // sorted list.
   using result_type = std::vector<uuid>;
   auto all_partitions = [&] {
     result_type result;
@@ -77,7 +83,6 @@ std::vector<uuid> meta_index::lookup(const expression& expr) const {
                    partition_synopses_.end(),
                    std::back_inserter(result),
                    [](auto& x) { return x.first; });
-    // TODO: It is unclear why we need to sort here.
     std::sort(result.begin(), result.end());
     return result;
   };
@@ -86,26 +91,25 @@ std::vector<uuid> meta_index::lookup(const expression& expr) const {
       VAST_ASSERT(!x.empty());
       auto i = x.begin();
       auto result = lookup(*i);
-      std::sort(result.begin(), result.end());
       if (!result.empty())
         for (++i; i != x.end(); ++i) {
           auto xs = lookup(*i);
           if (xs.empty())
             return xs; // short-circuit
-          std::sort(xs.begin(), xs.end());
           detail::inplace_intersect(result, xs);
+          VAST_ASSERT(std::is_sorted(result.begin(), result.end()));
         }
       return result;
     },
     [&](const disjunction& x) -> result_type {
       result_type result;
-      std::sort(result.begin(), result.end());
       for (auto& op : x) {
         auto xs = lookup(op);
+        VAST_ASSERT(std::is_sorted(xs.begin(), xs.end()));
         if (xs.size() == partition_synopses_.size())
           return xs; // short-circuit
-        std::sort(xs.begin(), xs.end());
         detail::inplace_unify(result, xs);
+        VAST_ASSERT(std::is_sorted(result.begin(), result.end()));
       }
       return result;
     },
@@ -144,6 +148,8 @@ std::vector<uuid> meta_index::lookup(const expression& expr) const {
         };
         for (auto& [part_id, part_syn] : partition_synopses_)
           lookup(part_id, part_syn);
+        // Re-establish potentially violated invariant.
+        std::sort(result.begin(), result.end());
         return found_matching_synopsis ? result : all_partitions();
       };
       auto extract_expr = detail::overload(
@@ -161,6 +167,8 @@ std::vector<uuid> meta_index::lookup(const expression& expr) const {
                   result.push_back(part_id);
                   break;
                 }
+            // Re-establish potentially violated invariant.
+            std::sort(result.begin(), result.end());
             return result;
           }
           VAST_WARNING(this, "cannot process attribute extractor:", lhs.attr);
