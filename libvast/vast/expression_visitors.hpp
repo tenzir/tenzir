@@ -49,7 +49,7 @@ struct aligner {
 
 /// Pushes negations down to the predicate level and removes double negations.
 struct denegator {
-  denegator(bool negate = false);
+  explicit denegator(bool negate = false);
 
   expression operator()(caf::none_t) const;
   expression operator()(const conjunction& c) const;
@@ -101,13 +101,18 @@ struct validator {
 /// Transforms all ::key_extractor and ::type_extractor predicates into
 /// ::data_extractor instances according to a given type.
 struct type_resolver {
-  type_resolver(const type& t);
+  // TODO: This function still assumes that we can pass types that are no
+  // records. This is an overly generic assumption and only adds complexity at
+  // this point. We should condense the scope of this visitor to record types.
+  explicit type_resolver(const type& t);
 
   caf::expected<expression> operator()(caf::none_t);
   caf::expected<expression> operator()(const conjunction& c);
   caf::expected<expression> operator()(const disjunction& d);
   caf::expected<expression> operator()(const negation& n);
   caf::expected<expression> operator()(const predicate& p);
+  caf::expected<expression>
+  operator()(const attribute_extractor& ex, const data& d);
   caf::expected<expression> operator()(const type_extractor& ex, const data& d);
   caf::expected<expression> operator()(const data& d, const type_extractor& ex);
   caf::expected<expression> operator()(const key_extractor& ex, const data& d);
@@ -118,6 +123,31 @@ struct type_resolver {
     return {predicate{lhs, op_, rhs}};
   }
 
+  // Attempts to resolve all extractors that fulfil a given property.
+  // provided property is a function that returns an error
+  template <class Function>
+  caf::expected<expression> resolve_extractor(Function f, const data& x) const {
+    std::vector<expression> connective;
+    auto make_predicate = [&](offset off) {
+      return predicate{data_extractor{type_, off}, op_, x};
+    };
+    if (auto r = caf::get_if<record_type>(&type_)) {
+      for (auto& i : record_type::each{*r})
+        if (f(i.trace.back()->type))
+          connective.emplace_back(make_predicate(i.offset));
+    } else if (f(type_)) {
+      connective.emplace_back(make_predicate(offset{}));
+    }
+    if (connective.empty())
+      return expression{}; // did not resolve
+    if (connective.size() == 1)
+      return {std::move(connective[0])}; // hoist expression
+    if (op_ == not_equal || op_ == not_match || op_ == not_in || op_ == not_ni)
+      return {conjunction{std::move(connective)}};
+    else
+      return {disjunction{std::move(connective)}};
+  }
+
   relational_operator op_;
   const type& type_;
 };
@@ -125,7 +155,7 @@ struct type_resolver {
 // Tailors an expression to a specific type by pruning all unecessary branches
 // and resolving keys into the corresponding data extractors.
 struct type_pruner {
-  type_pruner(const type& event_type);
+  explicit type_pruner(const type& event_type);
 
   expression operator()(caf::none_t);
   expression operator()(const conjunction& c);
@@ -139,7 +169,7 @@ struct type_pruner {
 
 /// Evaluates an event over a [resolved](@ref type_extractor) expression.
 struct event_evaluator {
-  event_evaluator(const event& e);
+  explicit event_evaluator(const event& e);
 
   bool operator()(caf::none_t);
   bool operator()(const conjunction& c);
@@ -251,7 +281,7 @@ class labeler {
   // TODO: we could add a static_assert that the return type of Function must
   // be void.
 public:
-  labeler(Function f) : f_{f} {
+  explicit labeler(Function f) : f_{f} {
     push();
   }
 
