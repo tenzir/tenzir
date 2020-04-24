@@ -133,15 +133,14 @@ std::vector<uuid> meta_index::lookup(const expression& expr) const {
         // We factor the nested loop into a lambda so that we can abort
         // the iteration more easily with a return statement.
         auto lookup = [&](auto& part_id, auto& part_syn) {
-          VAST_DEBUG_ANON("meta_index checks", part_id, "at predicate", x);
+          VAST_DEBUG(this, "checks", part_id, "at predicate", x);
           for (auto& [layout, table_syn] : part_syn)
             for (size_t i = 0; i < table_syn.size(); ++i)
               if (table_syn[i] && match(layout.fields[i])) {
                 found_matching_synopsis = true;
                 auto opt = table_syn[i]->lookup(x.op, make_view(rhs));
                 if (!opt || *opt) {
-                  VAST_DEBUG_ANON("meta_index selects", part_id, "at predicate",
-                                  x);
+                  VAST_DEBUG(this, "selects", part_id, "at predicate", x);
                   result.push_back(part_id);
                   return;
                 }
