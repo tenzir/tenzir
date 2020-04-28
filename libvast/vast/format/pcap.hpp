@@ -105,6 +105,7 @@ private:
   type packet_type_;
   double drop_rate_threshold_;
   mutable pcap_stat last_stats_;
+  mutable size_t discard_count_;
 };
 
 /// A PCAP writer.
