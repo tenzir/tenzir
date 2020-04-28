@@ -45,11 +45,14 @@ Every entry has a category for which we use the following visual abbreviations:
   line when starting a node.
   [#728](https://github.com/tenzir/vast/pull/728)
 
-- 🎁 Packet drop statistics are now reported to the accountant for PCAP import,
-  and are available using the keys `pcap-reader.recv`, `pcap-reader.drop`, and
-  `pcap-reader.ifdrop` in the `vast.statistics` event. If the number of dropped
-  packets exceeds a configurable threshold, VAST additionally warns about packet
-  drops on the command line. [#827](https://github.com/tenzir/pull/827)
+- 🎁 Packet drop and discard statistics are now reported to the accountant for
+  PCAP import, and are available using the keys `pcap-reader.recv`,
+  `pcap-reader.drop`, `pcap-reader.ifdrop`, `pcap-reader.discard`, and
+  `pcap-reader.discard-rate ` in the `vast.statistics` event. If the number of
+  dropped packets exceeds a configurable threshold, VAST additionally warns
+  about packet drops on the command line.
+  [#827](https://github.com/tenzir/pull/827)
+  [#844](https://github.com/tenzir/pull/844)
 
 - 🔄 The default bind address has been changed from `::` to `localhost`.
   [#828](https://github.com/tenzir/vast/pull/828)
