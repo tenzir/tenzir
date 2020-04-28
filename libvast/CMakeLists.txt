@@ -134,6 +134,7 @@ set(libvast_sources
     src/system/spawn_source.cpp
     src/system/spawn_type_registry.cpp
     src/system/start_command.cpp
+    src/system/stop_command.cpp
     src/system/task.cpp
     src/system/tracker.cpp
     src/system/type_registry.cpp
