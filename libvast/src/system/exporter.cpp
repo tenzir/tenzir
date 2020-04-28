@@ -195,8 +195,9 @@ behavior exporter(stateful_actor<exporter_state>* self, expression expr,
   auto handle_batch = [=](table_slice_ptr slice) {
     VAST_ASSERT(slice != nullptr);
     auto& st = self->state;
-    VAST_DEBUG(self, "got batch of", slice->rows(), "events");
-    auto sender = self->current_sender();
+    VAST_DEBUG(self, "got batch of", slice->rows(), "events:",
+               "["s + to_string(slice->offset()) + ','
+                 + to_string(slice->offset() + slice->rows()) + ')');
     // Construct a candidate checker if we don't have one for this type.
     type t = slice->layout();
     auto it = st.checkers.find(t);
@@ -216,12 +217,10 @@ behavior exporter(stateful_actor<exporter_state>* self, expression expr,
     auto& checker = it->second;
     // Perform candidate check, splitting the slice into subsets if needed.
     auto selection = evaluate(*slice, checker);
-    auto selection_size = rank(selection);
-    if (selection_size == 0) {
-      // No rows qualify.
-      return;
-    }
-    st.query.cached += selection_size;
+    auto num_results = rank(selection);
+    if (num_results == 0)
+      return; // No rows qualify.
+    st.query.cached += num_results;
     select(st.results, slice, selection);
     // Ship slices to connected SINKs.
     st.query.processed += slice->rows();
