@@ -103,6 +103,8 @@ public:
 
   const char* name() const override;
 
+  vast::system::report status() const override;
+
 protected:
   caf::error read_impl(size_t max_events, size_t max_slice_size,
                        consumer& f) override;
@@ -115,6 +117,8 @@ private:
   std::unique_ptr<detail::line_range> lines_;
   caf::optional<size_t> proto_field_;
   std::vector<size_t> port_fields_;
+  mutable size_t num_invalid_lines = 0;
+  mutable size_t num_unknown_layouts_ = 0;
 };
 
 // -- implementation ----------------------------------------------------------
@@ -151,6 +155,19 @@ const char* reader<Selector>::name() const {
 }
 
 template <class Selector>
+vast::system::report reader<Selector>::status() const {
+  using namespace std::string_literals;
+  uint64_t invalid_line = num_invalid_lines;
+  uint64_t unknown_layout = num_unknown_layouts_;
+  num_invalid_lines = 0;
+  num_unknown_layouts_ = 0;
+  return {
+    {name() + ".invalid-line"s, invalid_line},
+    {name() + ".unknown_layout"s, unknown_layout},
+  };
+}
+
+template <class Selector>
 caf::error reader<Selector>::read_impl(size_t max_events, size_t max_slice_size,
                                        consumer& cons) {
   VAST_ASSERT(max_events > 0);
@@ -178,6 +195,7 @@ caf::error reader<Selector>::read_impl(size_t max_events, size_t max_slice_size,
     auto& line = lines_->get();
     vast::json j;
     if (!parsers::json(line, j)) {
+      ++num_invalid_lines;
       VAST_WARNING(this, "failed to parse line", lines_->line_number(), ":",
                    line);
       continue;
@@ -186,8 +204,10 @@ caf::error reader<Selector>::read_impl(size_t max_events, size_t max_slice_size,
     if (!xs)
       return make_error(ec::type_clash, "not a json object");
     auto layout = selector_(*xs);
-    if (!layout)
+    if (!layout) {
+      ++num_unknown_layouts_;
       continue;
+    }
     bptr = builder(*layout);
     if (bptr == nullptr)
       return make_error(ec::parse_error, "unable to get a builder");
