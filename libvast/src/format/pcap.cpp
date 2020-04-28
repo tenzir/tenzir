@@ -351,8 +351,8 @@ caf::error reader::read_impl(size_t max_events, size_t max_slice_size,
     if (last_expire_ == 0)
       last_expire_ = packet_time;
     if (!update_flow(conn, packet_time, payload_size)) {
-      // Skip cut off packets.
       ++discard_count_;
+      VAST_DEBUG(this, "skips cut off packet");
       continue;
     }
     evict_inactive(packet_time);
