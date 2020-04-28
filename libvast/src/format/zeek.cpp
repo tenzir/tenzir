@@ -445,18 +445,22 @@ caf::error reader::parse_header() {
   VAST_DEBUG(this, "    #unset_field", unset_field_);
   VAST_DEBUG(this, "    #path", path);
   VAST_DEBUG(this, "    #fields:");
-  for (auto i = 0u; i < layout_.fields.size(); ++i)
-    VAST_DEBUG(this, "     ", i << ')',
-               layout_.fields[i].name << ':', layout_.fields[i].type);
   // If a congruent type exists in the schema, we give the schema type
   // precedence.
-  if (auto t = schema_.find(path))
-    if (t->name() == path) {
-      if (congruent(type_, *t))
-        type_ = *t;
-      else
-        return make_error(ec::format_error, "incongruent types in schema");
+  if (auto t = schema_.find(layout_.name())) {
+    auto r = caf::get_if<record_type>(t);
+    if (!r)
+      return make_error(ec::format_error, "record_type required");
+    auto flat = flatten(*r);
+    for (auto& f : flat.fields) {
+      if (!f.type.attributes().empty()) {
+        auto i = std::find_if(layout_.fields.begin(), layout_.fields.end(),
+                              [&](auto& hf) { return hf.name == f.name; });
+        if (i != layout_.fields.end())
+          i->type.attributes(f.type.attributes());
+      }
     }
+  } // We still do attribute inference for the user provided layouts.
   // Determine the timestamp field.
   auto ts_pred = [&](auto& field) {
     if (field.name != "ts")
@@ -475,6 +479,9 @@ caf::error reader::parse_header() {
   }
   // Add #index=hash attribute for fields where it makes sense.
   add_hash_index_attribute(layout_);
+  for (auto i = 0u; i < layout_.fields.size(); ++i)
+    VAST_DEBUG(this, "     ", i << ')', layout_.fields[i].name << ':',
+               layout_.fields[i].type);
   // After having modified layout attributes, we no longer make changes to the
   // type and can now safely copy it.
   type_ = layout_;
