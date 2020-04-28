@@ -83,6 +83,7 @@ reader::reader(caf::atom_value id, const caf::settings& options,
   packet_type_
     = community_id_ ? pcap_packet_type_community_id : pcap_packet_type;
   last_stats_ = {};
+  discard_count_ = 0;
 }
 
 void reader::reset(std::unique_ptr<std::istream>) {
@@ -116,20 +117,26 @@ vast::system::report reader::status() const {
   if (auto res = pcap_stats(pcap_, &stats); res != 0)
     return {};
   uint64_t recv = stats.ps_recv - last_stats_.ps_recv;
+  if (recv == 0)
+    return {};
   uint64_t drop = stats.ps_drop - last_stats_.ps_drop;
   uint64_t ifdrop = stats.ps_ifdrop - last_stats_.ps_ifdrop;
   double drop_rate = static_cast<double>(drop + ifdrop) / recv;
+  uint64_t discard = discard_count_;
+  double discard_rate = static_cast<double>(discard) / recv;
+  // Clean up for next delta.
+  last_stats_ = std::move(stats);
+  discard_count_ = 0;
   if (drop_rate >= drop_rate_threshold_)
     VAST_WARNING(this, "has dropped", drop + ifdrop, "of", recv,
                  "recent packets");
-  auto res = system::report{
-    {name() + ".recv"s, recv},
-    {name() + ".drop"s, drop},
-    {name() + ".ifdrop"s, ifdrop},
-    {name() + ".drop-rate"s, drop_rate},
+  if (discard > 0)
+    VAST_WARNING(this, "has discarded", discard, "of", recv, "recent packets");
+  return {
+    {name() + ".recv"s, recv},       {name() + ".drop"s, drop},
+    {name() + ".ifdrop"s, ifdrop},   {name() + ".drop-rate"s, drop_rate},
+    {name() + ".discard"s, discard}, {name() + ".discard-rate"s, discard_rate},
   };
-  last_stats_ = std::move(stats);
-  return res;
 }
 
 namespace {
@@ -268,6 +275,7 @@ caf::error reader::read_impl(size_t max_events, size_t max_slice_size,
     // Parse layer 3.
     switch (as_ether_type(frame.subspan<12, 2>())) {
       default: {
+        ++discard_count_;
         VAST_DEBUG(this, "skips non-IP packet");
         continue;
       }
@@ -343,7 +351,8 @@ caf::error reader::read_impl(size_t max_events, size_t max_slice_size,
     if (last_expire_ == 0)
       last_expire_ = packet_time;
     if (!update_flow(conn, packet_time, payload_size)) {
-      // Skip cut off packets.
+      ++discard_count_;
+      VAST_DEBUG(this, "skips cut off packet");
       continue;
     }
     evict_inactive(packet_time);
