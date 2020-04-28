@@ -159,7 +159,7 @@ void register_component(scheduled_actor* self, tracker_state& st,
 
 // Checks whether a component can be spawned at most once.
 bool is_singleton(const std::string& component) {
-  const char* singletons[] = {"archive", "index", "consensus"};
+  const char* singletons[] = {"archive", "consensus", "importer", "index"};
   auto pred = [&](const char* lhs) { return lhs == component; };
   return std::any_of(std::begin(singletons), std::end(singletons), pred);
 }

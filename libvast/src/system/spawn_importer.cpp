@@ -42,8 +42,11 @@ maybe_actor spawn_importer(node_actor* self, spawn_arguments& args) {
     return make_error(ec::missing_component, "index");
   if (!st.type_registry)
     return make_error(ec::missing_component, "type-registry");
-  return self->spawn(importer, args.dir / args.label, slice_size, st.archive,
-                     st.consensus, st.index, st.type_registry);
+  auto importer_actor
+    = self->spawn(importer, args.dir / args.label, slice_size, st.archive,
+                  st.consensus, st.index, st.type_registry);
+  st.importer = importer_actor;
+  return importer_actor;
 }
 
 } // namespace vast::system
