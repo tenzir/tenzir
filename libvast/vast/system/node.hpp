@@ -88,6 +88,9 @@ struct node_state {
   /// Handle to the INDEX.
   caf::actor index;
 
+  /// Handle to the IMPORTER.
+  caf::actor importer;
+
   /// Maps command names (including parent command) to spawn functions.
   inline static named_component_factory component_factory = {};
 
