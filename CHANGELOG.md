@@ -8,7 +8,9 @@ Every entry has a category for which we use the following visual abbreviations:
 - 🔄 = change
 - 🐞 = bugfix
 
-## Unreleased
+<!-- ## Unreleased -->
+
+# [2020.04.29]
 
 - 🐞 The `stop` command always returned immediately, regardless of whether it
   succeeded. It now blocks until the remote node shut down properly or returns
@@ -463,3 +465,4 @@ This is the first official release.
 [2020.01.31]: https://github.com/tenzir/vast/releases/tag/2020.01.31
 [2020.02.27]: https://github.com/tenzir/vast/releases/tag/2020.02.27
 [2020.03.26]: https://github.com/tenzir/vast/releases/tag/2020.03.26
+[2020.04.29]: https://github.com/tenzir/vast/releases/tag/2020.04.29
