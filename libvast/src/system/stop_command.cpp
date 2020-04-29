@@ -30,8 +30,8 @@ stop_command(const command::invocation& invocation, caf::actor_system& sys) {
   VAST_TRACE(invocation);
   // Bail out early for bogus invocations.
   if (caf::get_or(invocation.options, "system.node", false))
-    return caf::make_message(
-      make_error(ec::parse_error, "cannot start and immediately stop a node"));
+    return caf::make_message(make_error(
+      ec::invalid_configuration, "cannot start and immediately stop a node"));
   // Obtain VAST node.
   caf::scoped_actor self{sys};
   auto node = connect_to_node(self, content(sys.config()));
