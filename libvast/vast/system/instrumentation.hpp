@@ -98,7 +98,7 @@ inline measurement collect(atomic_measurement& am) {
 #ifdef VAST_MEASUREMENT_MUTEX_WORKAROUND
   std::unique_lock<std::mutex> lock{am.mutex};
   auto result = static_cast<measurement>(am);
-  p.measurements_[i].reset();
+  am.reset();
   return result;
 #else
   return std::atomic_exchange(&am, measurement{});
