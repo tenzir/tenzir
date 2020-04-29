@@ -35,6 +35,7 @@
 #include "vast/system/reader_command.hpp"
 #include "vast/system/remote_command.hpp"
 #include "vast/system/start_command.hpp"
+#include "vast/system/stop_command.hpp"
 #include "vast/system/version_command.hpp"
 #include "vast/system/writer_command.hpp"
 
@@ -381,7 +382,7 @@ auto make_command_factory() {
     {"spawn source zeek", remote_command},
     {"start", start_command},
     {"status", remote_command},
-    {"stop", remote_command},
+    {"stop", stop_command},
     {"version", version_command},
   };
 }

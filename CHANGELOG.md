@@ -10,6 +10,11 @@ Every entry has a category for which we use the following visual abbreviations:
 
 ## Unreleased
 
+- 🐞 The `stop` command always returned immediately, regardless of whether it
+  succeeded. It now blocks until the remote node shut down properly or returns
+  an error exit code upon failure.
+  [#849](https://github.com/tenzir/vast/pull/849)
+
 - 🔄 The option `--skip-candidate-checks` / `-s` for the `count` command
   was renamed to `--estimate` / `-e`.
   [#843](https://github.com/tenzir/vast/pull/843)

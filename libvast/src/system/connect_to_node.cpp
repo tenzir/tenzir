@@ -47,9 +47,10 @@ connect_to_node(scoped_actor& self, const caf::settings& opts) {
     = get_or(opts, "system.db-directory", defaults::system::db_directory);
   auto abs_dir = path{db_dir}.complete();
   endpoint node_endpoint;
-  auto str = get_or(opts, "system.endpoint", defaults::system::endpoint);
-  if (!parsers::endpoint(str, node_endpoint))
-    return make_error(ec::parse_error, "invalid endpoint", str);
+  auto endpoint_str
+    = get_or(opts, "system.endpoint", defaults::system::endpoint);
+  if (!parsers::endpoint(endpoint_str, node_endpoint))
+    return make_error(ec::parse_error, "invalid endpoint", endpoint_str);
   if (node_endpoint.port.type() == port::port_type::unknown)
     node_endpoint.port.type(port::tcp);
   if (node_endpoint.port.type() != port::port_type::tcp)
@@ -65,8 +66,7 @@ connect_to_node(scoped_actor& self, const caf::settings& opts) {
   auto host = node_endpoint.host;
   if (node_endpoint.host.empty())
     node_endpoint.host = "localhost";
-  VAST_INFO(self, "connects to",
-            node_endpoint.host << ':' << to_string(node_endpoint.port));
+  VAST_INFO_ANON("connecting to VAST node", endpoint_str);
   auto result = [&] {
     if (use_encryption) {
 #ifdef VAST_USE_OPENSSL

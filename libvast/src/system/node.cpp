@@ -63,14 +63,6 @@ auto make_error_msg(ec code, std::string msg) {
   return caf::make_message(make_error(code, std::move(msg)));
 }
 
-// Stop the node and exit the process.
-caf::message stop_command(const command::invocation&, caf::actor_system&) {
-  // We cannot use this_node->send() here because it triggers
-  // an illegal instruction interrupt.
-  caf::anon_send_exit(this_node, exit_reason::user_shutdown);
-  return caf::none;
-}
-
 // Sends an atom to a registered actor. Blocks until the actor responds.
 caf::message
 send_command(const command::invocation& invocation, caf::actor_system& sys) {
@@ -309,7 +301,6 @@ auto make_command_factory() {
     {"spawn source test", node_state::spawn_command},
     {"spawn source zeek", node_state::spawn_command},
     {"status", status_command},
-    {"stop", stop_command},
   };
 }
 

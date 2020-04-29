@@ -43,6 +43,10 @@ caf::message start_command_impl(start_command_extra_steps extra_steps,
                                 const command::invocation& invocation,
                                 caf::actor_system& sys) {
   VAST_TRACE(invocation);
+  // Bail out early for bogus invocations.
+  if (caf::get_or(invocation.options, "system.node", false))
+    return caf::make_message(make_error(ec::parse_error, "cannot start a local "
+                                                         "node"));
   // Fetch SSL settings from config.
   auto& sys_cfg = sys.config();
   auto use_encryption = !sys_cfg.openssl_certificate.empty()
