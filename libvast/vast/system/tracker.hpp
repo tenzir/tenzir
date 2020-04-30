@@ -23,7 +23,6 @@
 #include "vast/optional.hpp"
 
 #include "vast/system/atoms.hpp"
-#include "vast/detail/radix_tree.hpp"
 
 namespace vast::system {
 
