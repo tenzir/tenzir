@@ -13,6 +13,7 @@
 
 #include "vast/format/zeek.hpp"
 
+#include "vast/attribute.hpp"
 #include "vast/concept/parseable/vast/port.hpp"
 #include "vast/concept/printable/numeric.hpp"
 #include "vast/concept/printable/to_string.hpp"
@@ -29,6 +30,7 @@
 #include "vast/logger.hpp"
 #include "vast/table_slice.hpp"
 #include "vast/table_slice_builder.hpp"
+#include "vast/type.hpp"
 
 #include <caf/none.hpp>
 
@@ -172,6 +174,24 @@ void print_header(const type& t, std::ostream& out) {
   out << '\n';
 }
 
+// TODO: Find a better place for this function, ideally we want to modify type
+// attributes in place.
+bool insert_attribute(type& t, attribute a, bool overwrite = false) {
+  std::vector<attribute> attrs = t.attributes();
+  auto guard
+    = caf::detail::make_scope_guard([&]() { t.attributes(std::move(attrs)); });
+  auto i = std::find_if(attrs.begin(), attrs.end(),
+                        [&](const auto& x) { return x.key == a.key; });
+  if (i == attrs.end()) {
+    attrs.push_back(std::move(a));
+    return true;
+  }
+  if (!overwrite)
+    return false;
+  i->value = std::move(a.value);
+  return true;
+};
+
 void add_hash_index_attribute(record_type& layout) {
   // TODO: do more than this simple heuristic. For example, also consider
   // zeek.files.conn_uids, which is a set of strings. The inner index needs to
@@ -186,7 +206,7 @@ void add_hash_index_attribute(record_type& layout) {
   auto find = [&](auto i) { return std::find_if(i, fields.end(), pred); };
   for (auto i = find(fields.begin()); i != fields.end(); i = find(i + 1)) {
     VAST_DEBUG_ANON("using hash index for field", i->name);
-    i->type.attributes({{"index", "hash"}});
+    insert_attribute(i->type, {"index", "hash"}, false);
   }
 }
 
@@ -453,11 +473,16 @@ caf::error reader::parse_header() {
       return make_error(ec::format_error, "record_type required");
     auto flat = flatten(*r);
     for (auto& f : flat.fields) {
-      if (!f.type.attributes().empty()) {
-        auto i = std::find_if(layout_.fields.begin(), layout_.fields.end(),
-                              [&](auto& hf) { return hf.name == f.name; });
-        if (i != layout_.fields.end())
+      auto i = std::find_if(layout_.fields.begin(), layout_.fields.end(),
+                            [&](auto& hf) { return hf.name == f.name; });
+      if (i != layout_.fields.end()) {
+        if (!congruent(i->type, f.type))
+          VAST_WARNING(
+            this, "encountered a type mismatch between the schema definition (",
+            f, ") and the input data (", *i, ")");
+        else if (!f.type.attributes().empty()) {
           i->type.attributes(f.type.attributes());
+        }
       }
     }
   } // We still do attribute inference for the user provided layouts.
@@ -475,7 +500,7 @@ caf::error reader::parse_header() {
   if (i != layout_.fields.end()) {
     VAST_DEBUG(this, "auto-detected field",
                std::distance(layout_.fields.begin(), i), "as event timestamp");
-    i->type.attributes({{"timestamp"}});
+    insert_attribute(i->type, {"timestamp"});
   }
   // Add #index=hash attribute for fields where it makes sense.
   add_hash_index_attribute(layout_);
