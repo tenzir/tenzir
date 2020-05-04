@@ -154,6 +154,7 @@ set(libvast_sources
     src/system/explore_command.cpp
     src/system/explorer.cpp
     src/system/exporter.cpp
+    src/system/get_command.cpp
     src/system/importer.cpp
     src/system/index.cpp
     src/system/indexer.cpp

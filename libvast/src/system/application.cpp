@@ -30,6 +30,7 @@
 #include "vast/system/count_command.hpp"
 #include "vast/system/explore_command.hpp"
 #include "vast/system/import_command.hpp"
+#include "vast/system/get_command.hpp"
 #include "vast/system/infer_command.hpp"
 #include "vast/system/pivot_command.hpp"
 #include "vast/system/remote_command.hpp"
@@ -171,6 +172,12 @@ auto make_export_command() {
                           make_pcap_options("?vast.export.pcap"));
 #endif
   return export_;
+}
+
+auto make_get_command() {
+  return std::make_unique<command>(
+    "get", "extracts the events assiciated with ids", "TODO",
+    opts("?get").add<std::string>("format,f", "how to format the output"));
 }
 
 auto make_infer_command() {
@@ -409,6 +416,7 @@ auto make_command_factory() {
     {"export pcap", pcap_writer_command},
 #endif
     {"export zeek", writer_command<format::zeek::writer>},
+    {"get", get_command},
     {"infer", infer_command},
     {"import csv", import_command<format::csv::reader, defaults::import::csv>},
     {"import json", import_command<format::json::reader<>,
@@ -466,6 +474,7 @@ make_application(std::string_view path) {
   root->add_subcommand(make_count_command());
   root->add_subcommand(make_export_command());
   root->add_subcommand(make_explore_command());
+  root->add_subcommand(make_get_command());
   root->add_subcommand(make_infer_command());
   root->add_subcommand(make_import_command());
   root->add_subcommand(make_kill_command());
