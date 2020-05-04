@@ -361,6 +361,17 @@ if (NOT NO_UNIT_TESTS)
   add_executable(vast-test ${tests})
   target_link_libraries(vast-test libvast_test libvast
                         ${CMAKE_THREAD_LIBS_INIT})
+
+  if (VAST_HAVE_ARROW)
+    # We use SYSTEM here to silence warnings we have no control about
+    target_include_directories(vast-test SYSTEM ${ARROW_INCLUDE_DIR})
+    target_link_libraries(vast-test ${ARROW_LIBRARIES})
+  endif ()
+
+  if (PCAP_FOUND)
+    target_link_libraries(vast-test pcap::pcap)
+  endif ()
+
   add_test(
     NAME build_vast_test
     COMMAND
