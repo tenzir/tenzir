@@ -20,7 +20,6 @@
 namespace vast::system {
 
 /// Gets events by ID.
-caf::message
-get_command(const command::invocation& invocation, caf::actor_system& sys);
+caf::message get_command(const invocation& invocation, caf::actor_system& sys);
 
 } // namespace vast::system
