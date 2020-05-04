@@ -30,7 +30,6 @@ struct si_parser : parser<si_parser<T>> {
 
   template <class Iterator, class Attribute>
   bool parse(Iterator& f, const Iterator& l, Attribute& a) const {
-    using namespace parser_literals;
     using namespace si_literals;
     auto num = make_parser<T>{};
     // clang-format off
