@@ -470,7 +470,8 @@ caf::error reader::parse_header() {
   if (auto t = schema_.find(layout_.name())) {
     auto r = caf::get_if<record_type>(t);
     if (!r)
-      return make_error(ec::format_error, "record_type required");
+      return make_error(ec::format_error, "the zeek reader expects records for "
+                                          "the top level types in the schema");
     auto flat = flatten(*r);
     for (auto& f : flat.fields) {
       auto i = std::find_if(layout_.fields.begin(), layout_.fields.end(),
