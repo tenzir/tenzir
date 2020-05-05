@@ -1,0 +1,594 @@
+type zeek.conn_id = record{
+  orig_h: addr,
+  orig_p: port,
+  resp_h: addr,
+  resp_p: port
+}
+
+type zeek.capture_loss = record{
+  _path: string,
+  _write_ts: time,
+  ts: time #timestamp,
+  ts_delta: duration,
+  peer: string,
+  gaps: count,
+  acks: count,
+  percent_lost: real
+}
+
+type zeek.conn = record{
+  _path: string,
+  _write_ts: time,
+  ts: time #timestamp,
+  uid: string #index=hash,
+  id: zeek.conn_id,
+  proto: string,
+  service: string,
+  duration: duration,
+  orig_bytes: count,
+  resp_bytes: count,
+  conn_state: string,
+  local_orig: bool,
+  local_resp: bool,
+  missed_bytes: count,
+  history: string,
+  orig_pkts: count,
+  orig_ip_bytes: count,
+  resp_pkts: count,
+  resp_ip_bytes: count,
+  tunnel_parents: set<string>,
+  community_id: string
+}
+
+type zeek.dce_rpc = record{
+  _path: string,
+  _write_ts: time,
+  ts: time #timestamp,
+  uid: string #index=hash,
+  id: zeek.conn_id,
+  rtt: duration,
+  named_pipe: string,
+  endpoint: string,
+  operation: string
+}
+
+type zeek.dhcp = record{
+  _path: string,
+  _write_ts: time,
+  ts: time #timestamp,
+  uids: set<string>,
+  client_addr: addr,
+  server_addr: addr,
+  mac: string,
+  host_name: string,
+  client_fqdn: string,
+  domain: string,
+  requested_addr: addr,
+  assigned_addr: addr,
+  lease_time: duration,
+  client_message: string,
+  server_message: string,
+  msg_types: vector<string>,
+  duration: duration,
+  trans_id: count
+}
+
+type zeek.dnp3 = record{
+  _path: string,
+  _write_ts: time,
+  ts: time,
+  uid: string #index=hash,
+  id: zeek.conn_id,
+  fc_reply: string,
+  iin: count
+}
+
+type zeek.dns = record{
+  _path: string,
+  _write_ts: time,
+  ts: time #timestamp,
+  uid: string #index=hash,
+  id: zeek.conn_id,
+  proto: string,
+  trans_id: count,
+  rtt: duration,
+  query: string,
+  qclass: count,
+  qclass_name: string,
+  qtype: count,
+  qtype_name: string,
+  rcode: count,
+  rcode_name: string,
+  AA: bool,
+  TC: bool,
+  RD: bool,
+  RA: bool,
+  Z: count,
+  answers: vector<string>,
+  TTLs: vector<duration>,
+  rejected: bool
+}
+
+type zeek.dpd = record{
+  _path: string,
+  _write_ts: time,
+  ts: time #timestamp,
+  uid: string #index=hash,
+  id: zeek.conn_id,
+  proto: string,
+  analyzer: string,
+  failure_reason: string
+}
+
+type zeek.files = record{
+  _path: string,
+  _write_ts: time,
+  ts: time #timestamp,
+  fuid: string,
+  tx_hosts: set<addr>,
+  rx_hosts: set<addr>,
+  conn_uids: set<string>,
+  source: string,
+  depth: count,
+  analyzers: set<string>,
+  mime_type: string,
+  filename: string,
+  duration: duration,
+  local_orig: bool,
+  is_orig: bool,
+  seen_bytes: count,
+  total_bytes: count,
+  missing_bytes: count,
+  overflow_bytes: count,
+  timedout: bool,
+  parent_fuid: string,
+  md5: string,
+  sha1: string,
+  sha256: string,
+  extracted: string,
+  extracted_cutoff: bool,
+  extracted_size: count
+}
+
+type zeek.ftp = record{
+  _path: string,
+  _write_ts: time,
+  ts: time #timestamp,
+  uid: string #index=hash,
+  id: zeek.conn_id,
+  user: string,
+  password: string,
+  command: string,
+  arg: string,
+  mime_type: string,
+  file_size: count,
+  reply_code: count,
+  reply_msg: string,
+  data_channel: record{
+    passive: bool,
+    orig_h: addr,
+    resp_h: addr,
+    resp_p: port
+  },
+  fuid: string
+}
+
+type zeek.http = record{
+  _path: string,
+  _write_ts: time,
+  ts: time #timestamp,
+  uid: string #index=hash,
+  id: zeek.conn_id,
+  trans_depth: count,
+  method: string,
+  host: string,
+  uri: string,
+  referrer: string,
+  version: string,
+  user_agent: string,
+  request_body_len: count,
+  response_body_len: count,
+  status_code: count,
+  status_msg: string,
+  info_code: count,
+  info_msg: string,
+  tags: set<string>,
+  username: string,
+  password: string,
+  proxied: set<string>,
+  orig_fuids: vector<string>,
+  orig_filenames: vector<string>,
+  orig_mime_types: vector<string>,
+  resp_fuids: vector<string>,
+  resp_filenames: vector<string>,
+  resp_mime_types: vector<string>
+}
+
+type zeek.intel = record{
+  _path: string,
+  _write_ts: time,
+  ts: time,
+  uid: string #index=hash,
+  id: zeek.conn_id,
+  seen: record{
+    indicator: string,
+    indicator_type: string,
+    where: string
+  },
+  matched: vector<string>,
+  sources: vector<string>
+}
+
+type zeek.irc = record{
+  _path: string,
+  _write_ts: time,
+  ts: time #timestamp,
+  uid: string #index=hash,
+  id: zeek.conn_id,
+  nick: string,
+  user: string,
+  command: string,
+  value: string,
+  addl: string,
+  dcc_file_name: string,
+  dcc_file_size: count,
+  dcc_mime_type: string,
+  fuid: string
+}
+
+type zeek.loaded_scripts = record{
+  _path: string,
+  _write_ts: time,
+  name: string
+}
+
+type zeek.notice = record{
+  _path: string,
+  _write_ts: time,
+  ts: time #timestamp,
+  uid: string #index=hash,
+  id: zeek.conn_id,
+  fuid: string,
+  file_mime_type: string,
+  file_desc: string,
+  proto: string,
+  note: string,
+  msg: string,
+  sub: string,
+  src: addr,
+  dst: addr,
+  p: port,
+  n: count,
+  peer_descr: string,
+  actions: set<string>,
+  suppress_for: duration,
+  dropped: bool,
+  remote_location: record{
+    country_code: string,
+    region: string,
+    city: string,
+    latitude: real,
+    longitude: real
+  }
+}
+
+type zeek.ntlm = record{
+  _path: string,
+  _write_ts: time,
+  ts: time #timestamp,
+  uid: string #index=hash,
+  id: zeek.conn_id,
+  username: string,
+  hostname: string,
+  domainname: string,
+  server_nb_computer_name: string,
+  server_dns_computer_name: string,
+  server_tree_name: string,
+  success: bool,
+  status: string
+}
+
+type zeek.packet_filter = record{
+  _path: string,
+  _write_ts: time,
+  ts: time #timestamp,
+  node: string,
+  filter: string,
+  init: bool,
+  success: bool
+}
+
+type zeek.pe = record{
+  _path: string,
+  _write_ts: time,
+  ts: time #timestamp,
+  id: string,
+  machine: string,
+  compile_ts: time,
+  os: string,
+  subsystem: string,
+  is_exe: bool,
+  is_64bit: bool,
+  uses_aslr: bool,
+  uses_dep: bool,
+  uses_code_integrity: bool,
+  uses_seh: bool,
+  has_import_table: bool,
+  has_export_table: bool,
+  has_cert_table: bool,
+  has_debug_data: bool,
+  section_names: vector<string>
+}
+
+type zeek.radius = record{
+  _path: string,
+  _write_ts: time,
+  ts: time #timestamp,
+  uid: string #index=hash,
+  id: zeek.conn_id,
+  username: string,
+  result: string
+}
+
+type zeek.rdp = record{
+  _path: string,
+  _write_ts: time,
+  ts: time #timestamp,
+  uid: string #index=hash,
+  id: zeek.conn_id,
+  cookie: string,
+  result: string,
+  security_protocol: string,
+  keyboard_layout: string,
+  client_build: string,
+  client_name: string,
+  client_dig_product_id: string,
+  desktop_width: count,
+  desktop_height: count,
+  requested_color_depth: string,
+  cert_type: string,
+  cert_count: count,
+  cert_permanent: bool,
+  encryption_level: string,
+  encryption_method: string
+}
+
+type zeek.reporter = record{
+  _path: string,
+  _write_ts: time,
+  ts: time #timestamp,
+  level: string,
+  message: string,
+  location: string
+}
+
+type zeek.sip = record{
+  _path: string,
+  _write_ts: time,
+  ts: time #timestamp,
+  uid: string #index=hash,
+  id: zeek.conn_id,
+  trans_depth: count,
+  method: string,
+  uri: string,
+  date: string,
+  request_from: string,
+  request_to: string,
+  response_from: string,
+  response_to: string,
+  reply_to: string,
+  call_id: string,
+  seq: string,
+  subject: string,
+  request_path: vector<string>,
+  response_path: vector<string>,
+  user_agent: string,
+  status_code: count,
+  status_msg: string,
+  warning: string,
+  request_body_len: count,
+  response_body_len: count,
+  content_type: string
+}
+
+type zeek.smb = record{
+  _path: string,
+  _write_ts: time,
+  ts: time,
+  uid: string #index=hash,
+  id: zeek.conn_id,
+  action: string,
+  name: string,
+  size: real,
+  path: string,
+  service: string,
+  share_type: string
+}
+
+type zeek.smtp = record{
+  _path: string,
+  _write_ts: time,
+  ts: time #timestamp,
+  uid: string #index=hash,
+  id: zeek.conn_id,
+  trans_depth: count,
+  helo: string,
+  mailfrom: string,
+  rcptto: set<string>,
+  date: string,
+  from: string,
+  to: set<string>,
+  cc: set<string>,
+  reply_to: string,
+  msg_id: string,
+  in_reply_to: string,
+  subject: string,
+  x_originating_ip: addr,
+  first_received: string,
+  second_received: string,
+  last_reply: string,
+  path: vector<addr>,
+  user_agent: string,
+  tls: bool,
+  fuids: vector<string>,
+  is_webmail: bool
+}
+
+type zeek.snmp = record{
+  _path: string,
+  _write_ts: time,
+  ts: time #timestamp,
+  uid: string #index=hash,
+  id: zeek.conn_id,
+  duration: duration,
+  version: string,
+  community: string,
+  get_requests: count,
+  get_bulk_requests: count,
+  get_responses: count,
+  set_requests: count,
+  display_string: string,
+  up_since: time
+}
+
+type zeek.software = record{
+  _path: string,
+  _write_ts: time,
+  ts: time,
+  host: addr,
+  software_type: string,
+  name: string,
+  version: record{
+    major: count,
+    minor: real
+  },
+  unparsed_version: string
+}
+
+type zeek.ssh = record{
+  _path: string,
+  _write_ts: time,
+  ts: time #timestamp,
+  uid: string #index=hash,
+  id: zeek.conn_id,
+  version: count,
+  auth_success: bool,
+  auth_attempts: count,
+  direction: string,
+  client: string,
+  server: string,
+  cipher_alg: string,
+  mac_alg: string,
+  compression_alg: string,
+  kex_alg: string,
+  host_key_alg: string,
+  host_key: string
+}
+
+type zeek.ssl = record{
+  _path: string,
+  _write_ts: time,
+  ts: time #timestamp,
+  uid: string #index=hash,
+  id: zeek.conn_id,
+  version: string,
+  cipher: string,
+  curve: string,
+  server_name: string,
+  resumed: bool,
+  last_alert: string,
+  next_protocol: string,
+  established: bool,
+  cert_chain_fuids: vector<string>,
+  client_cert_chain_fuids: vector<string>,
+  subject: string,
+  issuer: string,
+  client_subject: string,
+  client_issuer: string,
+  validation_status: string,
+  ja3: string
+}
+
+type zeek.stats = record{
+  _path: string,
+  _write_ts: time,
+  ts: time #timestamp,
+  peer: string,
+  mem: count,
+  pkts_proc: count,
+  bytes_recv: count,
+  pkts_dropped: count,
+  pkts_link: count,
+  pkt_lag: duration,
+  events_proc: count,
+  events_queued: count,
+  active_tcp_conns: count,
+  active_udp_conns: count,
+  active_icmp_conns: count,
+  tcp_conns: count,
+  udp_conns: count,
+  icmp_conns: count,
+  timers: count,
+  active_timers: count,
+  files: count,
+  active_files: count,
+  dns_requests: count,
+  active_dns_requests: count,
+  reassem_tcp_size: count,
+  reassem_file_size: count,
+  reassem_frag_size: count,
+  reassem_unknown_size: count
+}
+
+type zeek.tunnel = record{
+  _path: string,
+  _write_ts: time,
+  ts: time,
+  uid: string #index=hash,
+  id: zeek.conn_id,
+  tunnel_type: string,
+  action: string
+}
+
+type zeek.weird = record{
+  _path: string,
+  _write_ts: time,
+  ts: time #timestamp,
+  uid: string #index=hash,
+  id: zeek.conn_id,
+  name: string,
+  addl: string,
+  notice: bool,
+  peer: string
+}
+
+type zeek.x509 = record{
+  _path: string,
+  _write_ts: time,
+  ts: time #timestamp,
+  id: string,
+  certificate: record{
+    version: count,
+    serial: string,
+    subject: string,
+    issuer: string,
+    not_valid_before: time,
+    not_valid_after: time,
+    key_alg: string,
+    sig_alg: string,
+    key_type: string,
+    key_length: count,
+    exponent: string,
+    curve: string
+  },
+  san: record{
+    dns: vector<string>,
+    uri: vector<string>,
+    email: vector<string>,
+    ip: vector<addr>
+  },
+  basic_constraints: record{
+    ca: bool,
+    path_len: count
+  }
+}

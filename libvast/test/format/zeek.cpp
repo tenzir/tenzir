@@ -13,6 +13,8 @@
 
 #include "vast/format/zeek.hpp"
 
+#include "vast/type.hpp"
+
 #include <istream>
 #include <sstream>
 #include <thread>
@@ -25,6 +27,8 @@
 #include "vast/test/test.hpp"
 
 #include "vast/concept/parseable/to.hpp"
+#include "vast/concept/parseable/vast/schema.hpp"
+#include "vast/concept/parseable/vast/type.hpp"
 #include "vast/detail/fdinbuf.hpp"
 #include "vast/event.hpp"
 
@@ -262,6 +266,53 @@ TEST(zeek reader - conn log) {
   CHECK_EQUAL(slices.size(), 5u);
   for (auto& slice : slices)
     CHECK_EQUAL(slice->rows(), 20u);
+}
+
+TEST(zeek reader - custom schema) {
+  std::string custom = R"__(
+    type zeek.conn = record{
+      ts: time #test,
+      uid: string #index=string, // clashing user attribute
+      id: record {orig_h: addr, orig_p: port, resp_h: addr, resp_p: port},
+      proto: string #foo=bar, // user attribute
+      service: count, // type mismatch
+      community_id: string // not present in the data
+    }
+  )__";
+  auto sch = unbox(to<schema>(custom));
+  std::string eref = R"__(record{
+      ts: time #test #timestamp,
+      uid: string #index=string,
+      id: record {orig_h: addr, orig_p: port, resp_h: addr, resp_p: port},
+      proto: string #foo=bar,
+      service: string,
+      duration: duration,
+      orig_bytes: count,
+      resp_bytes: count,
+      conn_state: string,
+      local_orig: bool,
+      //local_resp: bool,
+      missed_bytes: count,
+      history: string,
+      orig_pkts: count,
+      orig_ip_bytes: count,
+      resp_pkts: count,
+      resp_ip_bytes: count,
+      tunnel_parents: set<string>,
+    })__";
+  auto expected = flatten(unbox(to<type>(eref)).name("zeek.conn"));
+  using reader_type = format::zeek::reader;
+  reader_type reader{
+    defaults::system::table_slice_type, caf::settings{},
+    std::make_unique<std::istringstream>(std::string{conn_log_100_events})};
+  reader.schema(sch);
+  std::vector<table_slice_ptr> slices;
+  auto add_slice
+    = [&](table_slice_ptr ptr) { slices.emplace_back(std::move(ptr)); };
+  auto [err, num] = reader.read(20, 20, add_slice);
+  CHECK_EQUAL(slices.size(), 1u);
+  CHECK_EQUAL(slices[0]->rows(), 20u);
+  CHECK_EQUAL(slices[0]->layout(), expected);
 }
 
 TEST(zeek reader - continous stream with partial slice) {

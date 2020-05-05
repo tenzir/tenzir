@@ -13,6 +13,7 @@
 
 #include "vast/format/zeek.hpp"
 
+#include "vast/attribute.hpp"
 #include "vast/concept/parseable/vast/port.hpp"
 #include "vast/concept/printable/numeric.hpp"
 #include "vast/concept/printable/to_string.hpp"
@@ -29,6 +30,7 @@
 #include "vast/logger.hpp"
 #include "vast/table_slice.hpp"
 #include "vast/table_slice_builder.hpp"
+#include "vast/type.hpp"
 
 #include <caf/none.hpp>
 
@@ -172,6 +174,24 @@ void print_header(const type& t, std::ostream& out) {
   out << '\n';
 }
 
+// TODO: Find a better place for this function, ideally we want to modify type
+// attributes in place.
+bool insert_attribute(type& t, attribute a, bool overwrite = false) {
+  std::vector<attribute> attrs = t.attributes();
+  auto guard
+    = caf::detail::make_scope_guard([&]() { t.attributes(std::move(attrs)); });
+  auto i = std::find_if(attrs.begin(), attrs.end(),
+                        [&](const auto& x) { return x.key == a.key; });
+  if (i == attrs.end()) {
+    attrs.push_back(std::move(a));
+    return true;
+  }
+  if (!overwrite)
+    return false;
+  i->value = std::move(a.value);
+  return true;
+};
+
 void add_hash_index_attribute(record_type& layout) {
   // TODO: do more than this simple heuristic. For example, also consider
   // zeek.files.conn_uids, which is a set of strings. The inner index needs to
@@ -186,7 +206,7 @@ void add_hash_index_attribute(record_type& layout) {
   auto find = [&](auto i) { return std::find_if(i, fields.end(), pred); };
   for (auto i = find(fields.begin()); i != fields.end(); i = find(i + 1)) {
     VAST_DEBUG_ANON("using hash index for field", i->name);
-    i->type.attributes({{"index", "hash"}});
+    insert_attribute(i->type, {"index", "hash"}, false);
   }
 }
 
@@ -445,18 +465,28 @@ caf::error reader::parse_header() {
   VAST_DEBUG(this, "    #unset_field", unset_field_);
   VAST_DEBUG(this, "    #path", path);
   VAST_DEBUG(this, "    #fields:");
-  for (auto i = 0u; i < layout_.fields.size(); ++i)
-    VAST_DEBUG(this, "     ", i << ')',
-               layout_.fields[i].name << ':', layout_.fields[i].type);
   // If a congruent type exists in the schema, we give the schema type
   // precedence.
-  if (auto t = schema_.find(path))
-    if (t->name() == path) {
-      if (congruent(type_, *t))
-        type_ = *t;
-      else
-        return make_error(ec::format_error, "incongruent types in schema");
+  if (auto t = schema_.find(layout_.name())) {
+    auto r = caf::get_if<record_type>(t);
+    if (!r)
+      return make_error(ec::format_error, "the zeek reader expects records for "
+                                          "the top level types in the schema");
+    auto flat = flatten(*r);
+    for (auto& f : flat.fields) {
+      auto i = std::find_if(layout_.fields.begin(), layout_.fields.end(),
+                            [&](auto& hf) { return hf.name == f.name; });
+      if (i != layout_.fields.end()) {
+        if (!congruent(i->type, f.type))
+          VAST_WARNING(
+            this, "encountered a type mismatch between the schema definition (",
+            f, ") and the input data (", *i, ")");
+        else if (!f.type.attributes().empty()) {
+          i->type.attributes(f.type.attributes());
+        }
+      }
     }
+  } // We still do attribute inference for the user provided layouts.
   // Determine the timestamp field.
   auto ts_pred = [&](auto& field) {
     if (field.name != "ts")
@@ -471,10 +501,13 @@ caf::error reader::parse_header() {
   if (i != layout_.fields.end()) {
     VAST_DEBUG(this, "auto-detected field",
                std::distance(layout_.fields.begin(), i), "as event timestamp");
-    i->type.attributes({{"timestamp"}});
+    insert_attribute(i->type, {"timestamp"});
   }
   // Add #index=hash attribute for fields where it makes sense.
   add_hash_index_attribute(layout_);
+  for (auto i = 0u; i < layout_.fields.size(); ++i)
+    VAST_DEBUG(this, "     ", i << ')', layout_.fields[i].name << ':',
+               layout_.fields[i].type);
   // After having modified layout attributes, we no longer make changes to the
   // type and can now safely copy it.
   type_ = layout_;
