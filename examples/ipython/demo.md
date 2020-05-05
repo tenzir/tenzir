@@ -5,6 +5,20 @@ This demo provides two Jupyter notebooks to showcase how VAST can be used for
 data analytics, using the python bridge `pyvast`. Follow the instructions below
 to setup a VAST instance with demo data and install dependencies.
 
+## Prepare the environment
+
+This demo assumes that `vast` is available in `PATH` in all involved shells,
+specifically also the one used to start the Jupyter Notebook later. Add it
+with the following command:
+
+##### Bash/Zsh
+```sh
+export PATH=$(git rev-parse --show-toplevel)/build/bin:$PATH
+```
+##### Fish
+```sh
+set -gx PATH (git rev-parse --show-toplevel)/build/bin $PATH
+```
 
 ## Start a VAST Node
 
@@ -45,29 +59,30 @@ the Jupyter notebook for local interaction as follows.
     nix-shell -I nixpkgs="https://github.com/NixOS/nixpkgs-channels/archive/cc6cf0a96a627e678ffc996a8f9d1416200d6c81.tar.gz" \
     -p "python3.withPackages(ps: [ps.notebook ps.numpy ps.matplotlib ps.pandas ps.pyarrow ps.networkx])"
     ```
-- With Homebrew
+- With `venv`
     ```sh
-    brew install jupyter numpy matplotlib pandas apache-arrow networkx
-    ```
-- Via Virtual Env
-    ```sh
-    virtualenv --system-site-packages venv
+    python3 -m venv venv
     source venv/bin/activate
-    python3 -m pip install -r requirements.txt
+    # Verify that the python from venv is used:
+    which python
+    python -m pip install -r requirements.txt
+    ipython kernel install --user --name=venv
     ```
 
-Next, install `pyvast` with the following command. That can also be done in a
-virtual env.
+As long as the demo is started from this directory, the step of installing
+`pyvast` can be skipped, because the working tree copy is available locally.
+If you want to install `pyvast` nonethelesss, run the following command:
 
 ```sh
 cd pyvast
-python3 setup.py install
+python setup.py install
 cd ..
 ```
 
 ### Startup
 
-While in the current directory of this demo, start the notebook on localhost via
+While in the current directory of this demo (and inside of the `venv`, if that
+is used for the setup), start the notebook on localhost via
 
 ```sh
 jupyter notebook
