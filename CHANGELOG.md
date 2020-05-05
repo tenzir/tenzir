@@ -11,7 +11,7 @@ Every entry has a category for which we use the following visual abbreviations:
 ## Unreleased
 
 - 🐞 The parser for Zeek tsv data used to ignore attributes that were defined
-  for the zeek specific types in the schema files. It has been modified to
+  for the Zeek-specific types in the schema files. It has been modified to
   respect and prefer the specified attributes for the fields that are present
   in the input data. [#847](https://github.com/tenzir/vast/pull/847)
 
