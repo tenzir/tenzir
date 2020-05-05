@@ -22,7 +22,6 @@
 #include "vast/format/json.hpp"
 #include "vast/format/json/suricata.hpp"
 #include "vast/format/null.hpp"
-#include "vast/format/pcap.hpp"
 #include "vast/format/syslog.hpp"
 #include "vast/format/test.hpp"
 #include "vast/format/zeek.hpp"

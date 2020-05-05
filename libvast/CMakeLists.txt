@@ -195,9 +195,7 @@ if (VAST_ENABLE_ASSERTIONS)
 endif ()
 
 if (VAST_HAVE_ARROW)
-  # We use SYSTEM here to silence warnings we have no control about
-  target_include_directories(libvast SYSTEM PUBLIC ${ARROW_INCLUDE_DIR})
-  target_link_libraries(libvast PUBLIC ${ARROW_LIBRARIES})
+  target_link_libraries(libvast PUBLIC ${ARROW_LIBRARY})
 endif ()
 
 if (PCAP_FOUND)
@@ -361,6 +359,15 @@ if (NOT NO_UNIT_TESTS)
   add_executable(vast-test ${tests})
   target_link_libraries(vast-test libvast_test libvast
                         ${CMAKE_THREAD_LIBS_INIT})
+
+  if (VAST_HAVE_ARROW)
+    target_link_libraries(vast-test ${ARROW_LIBRARY})
+  endif ()
+
+  if (PCAP_FOUND)
+    target_link_libraries(vast-test pcap::pcap)
+  endif ()
+
   add_test(
     NAME build_vast_test
     COMMAND
