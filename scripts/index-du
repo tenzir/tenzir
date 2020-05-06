@@ -1,0 +1,32 @@
+#!/bin/sh
+
+# Print the disk usage of the index by column.
+
+# Abort on error
+set -e
+
+usage() {
+  printf "usage: %s <path/to/vast.db>\n" $(basename $0)
+}
+
+if [ "$#" -ne 1 ]; then
+  usage
+  exit 1
+fi
+
+find $1 -path "*/index/*" -type f -printf "%f %s\n" | awk '
+{
+  # Remove the last name component after "-":
+  n = split($1, parts, "-")
+  s = parts[1]
+  if (n > 1)
+    for (i = 2; i < n; i++)
+      s = s "-" parts[i]
+
+  sizes[s] += $2
+}
+END {
+  for (field in sizes)
+    printf "%s\t%d\n", field, sizes[field]
+}
+' | sort -nk 2 | column -t
