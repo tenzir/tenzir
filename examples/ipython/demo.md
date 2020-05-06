@@ -65,6 +65,7 @@ the Jupyter notebook for local interaction as follows.
     source venv/bin/activate
     # Verify that the python from venv is used:
     which python
+    python -m pip install wheel
     python -m pip install -r requirements.txt
     ipython kernel install --user --name=venv
     ```
