@@ -16,6 +16,7 @@
 #include "vast/byte.hpp"
 #include "vast/detail/type_traits.hpp"
 #include "vast/error.hpp"
+#include "vast/fbs/meta_index.hpp"
 #include "vast/fbs/table_slice.hpp"
 #include "vast/fbs/version.hpp"
 #include "vast/fwd.hpp"
@@ -77,5 +78,8 @@ pack(flatbuffers::FlatBufferBuilder& builder, table_slice_ptr x);
 caf::expected<caf::atom_value> unpack(Encoding x);
 
 caf::expected<table_slice_ptr> unpack(const TableSlice& x);
+
+caf::expected<flatbuffers::Offset<MetaIndex>>
+pack(flatbuffers::FlatBufferBuilder& builder, const meta_index& x);
 
 } // namespace vast::fbs
