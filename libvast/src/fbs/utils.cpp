@@ -15,6 +15,7 @@
 
 #include "vast/chunk.hpp"
 #include "vast/error.hpp"
+#include "vast/meta_index.hpp"
 #include "vast/table_slice.hpp"
 #include "vast/table_slice_factory.hpp"
 #include "vast/table_slice_header.hpp"
@@ -123,6 +124,20 @@ caf::expected<table_slice_ptr> unpack(const TableSlice& x) {
   if (auto error = source(result))
     return error;
   return result;
+}
+
+caf::expected<flatbuffers::Offset<MetaIndex>>
+pack(flatbuffers::FlatBufferBuilder& builder, const meta_index& x) {
+  std::vector<char> buffer;
+  caf::binary_serializer sink{nullptr, buffer};
+  if (auto error = sink(x))
+    return error;
+  auto data_ptr = reinterpret_cast<const uint8_t*>(buffer.data());
+  auto data = builder.CreateVector(data_ptr, buffer.size());
+  MetaIndexBuilder meta_index_builder{builder};
+  meta_index_builder.add_version(Version::v0);
+  meta_index_builder.add_state(data);
+  return meta_index_builder.Finish();
 }
 
 } // namespace vast::fbs

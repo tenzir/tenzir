@@ -6,4 +6,3 @@ namespace vast.fbs;
 enum Version : short {
   v0,
 }
-
