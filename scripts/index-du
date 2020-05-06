@@ -5,6 +5,11 @@
 # Abort on error
 set -e
 
+# Make the script work on FreeBSD and macOS iff gnu-findutils is installed.
+if command -v gfind >/dev/null 2>&1; then
+  alias find=gfind
+fi
+
 usage() {
   printf "usage: %s <path/to/vast.db>\n" $(basename $0)
 }
