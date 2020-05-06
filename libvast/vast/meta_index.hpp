@@ -81,7 +81,7 @@ private:
   /// Maps a partition ID to the synopses for that partition.
   std::unordered_map<uuid, partition_synopsis> partition_synopses_;
 
-  /// The factory function to construct a synopsis structure for a type.
+  /// Settings for the synopsis factory.
   caf::settings synopsis_options_;
 };
 
