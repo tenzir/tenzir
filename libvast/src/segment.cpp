@@ -35,12 +35,10 @@ using namespace binary_byte_literals;
 
 caf::expected<segment> segment::make(chunk_ptr chunk) {
   VAST_ASSERT(chunk != nullptr);
-  // Verify flatbuffer integrity.
-  auto verifier = fbs::make_verifier(chunk);
-  if (!fbs::VerifySegmentBuffer(verifier))
-    return make_error(ec::format_error, "flatbuffer integrity check failed");
+  auto ptr = fbs::as_flatbuffer<fbs::Segment>(as_bytes(chunk));
+  if (ptr == nullptr)
+    return make_error(ec::format_error, "segment integrity check failed");
   // Perform version check.
-  auto ptr = fbs::GetSegment(chunk->data());
   if (auto err = fbs::check_version(ptr->version(), fbs::Version::v0))
     return err;
   return segment{std::move(chunk)};

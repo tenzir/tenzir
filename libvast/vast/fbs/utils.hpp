@@ -37,12 +37,6 @@ namespace vast::fbs {
 chunk_ptr release(flatbuffers::FlatBufferBuilder& builder);
 
 /// Creates a verifier for a byte buffer.
-/// @chk The chk to initialize the verifier with.
-/// @param A verifier that is ready to use.
-[[deprecated("use make_verifier(as_bytes(xs)) instead")]] flatbuffers::Verifier
-make_verifier(chunk_ptr chk);
-
-/// Creates a verifier for a byte buffer.
 /// @xs The buffer to create a verifier for.
 /// @param A verifier that is ready to use.
 flatbuffers::Verifier make_verifier(span<const byte> xs);
@@ -129,4 +123,13 @@ caf::error unwrap(span<const byte, Extent> xs, T& x) {
     return unpack(*flatbuf, x);
   return make_error(ec::unspecified, "flatbuffer verification failed");
 }
+
+template <class Flatbuffer, size_t Extent = dynamic_extent, class T>
+caf::expected<T> unwrap(span<const byte, Extent> xs) {
+  T result;
+  if (auto err = unwrap(xs, result))
+    return err;
+  return result;
+}
+
 } // namespace vast::fbs
