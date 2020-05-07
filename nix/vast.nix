@@ -10,6 +10,7 @@
 , libpcap
 , arrow-cpp
 , zstd
+, jemalloc
 , python3Packages
 , jq
 , tcpdump
@@ -46,13 +47,14 @@ stdenv.mkDerivation rec {
 
   nativeBuildInputs = [ cmake ];
   propagatedNativeBuildInputs = [ pkgconfig pandoc ];
-  buildInputs = [ libpcap ];
+  buildInputs = [ libpcap jemalloc ];
   propagatedBuildInputs = [ arrow-cpp caf ];
 
   cmakeFlags = [
     "-DCAF_ROOT_DIR=${caf}"
     "-DVAST_RELOCATABLE_INSTALL=OFF"
     "-DVAST_VERSION_TAG=${version}"
+    "-DVAST_USE_JEMALLOC=ON"
     # gen-table-slices runs at build time
     "-DCMAKE_SKIP_BUILD_RPATH=OFF"
   ] ++ lib.optionals static [

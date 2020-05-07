@@ -27,6 +27,10 @@
 #  include <pcap/pcap.h>
 #endif
 
+#if VAST_USE_JEMALLOC
+#  include <jemalloc/jemalloc.h>
+#endif
+
 #include <iostream>
 #include <sstream>
 
@@ -53,6 +57,11 @@ json::object retrieve_versions() {
   result["PCAP"] = pcap_lib_version();
 #else
   result["PCAP"] = json{};
+#endif
+#if VAST_USE_JEMALLOC
+  result["JEMALLOC"] = JEMALLOC_VERSION;
+#else
+  result["JEMALLOC"] = json{};
 #endif
   return result;
 }

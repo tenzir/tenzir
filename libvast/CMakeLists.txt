@@ -204,6 +204,10 @@ if (PCAP_FOUND)
   target_link_libraries(libvast PRIVATE pcap::pcap)
 endif ()
 
+if (VAST_USE_JEMALLOC)
+  target_link_libraries(libvast PRIVATE JeMalloc::JeMalloc)
+endif ()
+
 # Always link with -lprofile if we have Gperftools.
 if (GPERFTOOLS_FOUND)
   target_link_libraries(libvast PRIVATE gperftools::profiler)

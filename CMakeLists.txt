@@ -81,6 +81,7 @@ option(VAST_RELOCATABLE_INSTALL "Enable relocatable installations" ON)
 option(VAST_USE_BUNDLED_CAF "Always use the CAF submodule" OFF)
 option(ENABLE_ZEEK_TO_VAST "Build zeek-to-vast" ON)
 option(VAST_STATIC_EXECUTABLE "Link VAST statically")
+option(VAST_USE_JEMALLOC "Use jemalloc instead of libc malloc" OFF)
 cmake_dependent_option(
   BUILD_SHARED_LIBS "Build shared libraries instead of static" ON
   "NOT VAST_STATIC_EXECUTABLE" OFF)
@@ -616,6 +617,18 @@ if (ENABLE_ZEEK_TO_VAST)
   endif ()
 endif ()
 
+if (VAST_USE_JEMALLOC)
+  find_package(JeMalloc REQUIRED QUIET)
+  if (JeMalloc_FOUND)
+    set(VAST_HAVE_JEMALLOC true)
+    if (NOT BUILD_SHARED_LIBS)
+      provide_find_module(JeMalloc)
+      string(APPEND VAST_FIND_DEPENDENCY_LIST
+             "\nfind_package(JeMalloc REQUIRED QUIET)")
+    endif ()
+  endif ()
+endif ()
+
 if (NOT PCAP_ROOT_DIR AND VAST_PREFIX)
   set(PCAP_ROOT_DIR ${VAST_PREFIX})
 endif ()
@@ -897,6 +910,7 @@ display(PCAP_FOUND "${PCAP_INCLUDE_DIR}" pcap_summary)
 display(GPERFTOOLS_FOUND "${GPERFTOOLS_INCLUDE_DIR}" perftools_summary)
 display(DOXYGEN_FOUND yes doxygen_summary)
 display(PANDOC_FOUND yes pandoc_summary)
+display(VAST_USE_JEMALLOC "${JeMalloc_INCLUDE_DIR}" jemalloc_summary)
 display(VAST_USE_TCMALLOC yes tcmalloc_summary)
 display(VAST_USE_OPENSSL yes openssl_summary)
 display(BUILD_UNIT_TESTS yes build_tests_summary)
@@ -937,6 +951,7 @@ set(summary
     "\nDoxygen:             ${doxygen_summary}"
     "\npandoc:              ${pandoc_summary}"
     "\n"
+    "\njemalloc:            ${jemalloc_summary}"
     "\ntcmalloc:            ${tcmalloc_summary}"
     "\nOpenSSL:             ${openssl_summary}"
     "\n"
