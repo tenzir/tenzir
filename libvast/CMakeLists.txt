@@ -72,6 +72,8 @@ set(libvast_sources
     src/http.cpp
     src/icmp.cpp
     src/ids.cpp
+    src/io/read.cpp
+    src/io/write.cpp
     src/json.cpp
     src/logger.cpp
     src/meta_index.cpp
