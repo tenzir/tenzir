@@ -147,10 +147,8 @@ caf::error index_state::load_from_disk() {
       return buffer.error();
     }
     auto bytes = span<const byte>{*buffer};
-    if (auto instance = fbs::unwrap<fbs::MetaIndex>(bytes))
-      meta_idx = std::move(*instance);
-    else
-      return instance.error();
+    if (auto err = fbs::unwrap<fbs::MetaIndex>(bytes, meta_idx))
+      return err;
     VAST_DEBUG(self, "loaded meta index");
   }
   return caf::none;

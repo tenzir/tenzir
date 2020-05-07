@@ -34,7 +34,7 @@ segment_builder::segment_builder() {
 caf::error segment_builder::add(table_slice_ptr x) {
   if (x->offset() < min_table_slice_offset_)
     return make_error(ec::unspecified, "slice offsets not increasing");
-  auto slice = fbs::pack(builder_, x);
+  auto slice = pack(builder_, x);
   if (!slice)
     return slice.error();
   flat_slices_.push_back(*slice);

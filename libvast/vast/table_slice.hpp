@@ -13,10 +13,11 @@
 
 #pragma once
 
-#include <cstddef>
-#include <limits>
-#include <string_view>
-#include <vector>
+#include "vast/fbs/table_slice.hpp"
+#include "vast/fwd.hpp"
+#include "vast/table_slice_header.hpp"
+#include "vast/type.hpp"
+#include "vast/view.hpp"
 
 #include <caf/allowed_unsafe_message_type.hpp>
 #include <caf/fwd.hpp>
@@ -24,10 +25,10 @@
 #include <caf/optional.hpp>
 #include <caf/ref_counted.hpp>
 
-#include "vast/fwd.hpp"
-#include "vast/table_slice_header.hpp"
-#include "vast/type.hpp"
-#include "vast/view.hpp"
+#include <cstddef>
+#include <limits>
+#include <string_view>
+#include <vector>
 
 namespace vast {
 
@@ -206,6 +207,19 @@ protected:
 };
 
 // -- free functions -----------------------------------------------------------
+
+/// Packs a table slice into a flatbuffer.
+/// @param builder The builder to pack *x* into.
+/// @param x The table slice to pack.
+/// @returns The flatbuffer offset in *builder*.
+caf::expected<flatbuffers::Offset<fbs::TableSliceBuffer>>
+pack(flatbuffers::FlatBufferBuilder& builder, table_slice_ptr x);
+
+/// Unpacks a table slice from a flatbuffer.
+/// @param x The flatbuffer to unpack.
+/// @param y The target to unpack *x* into.
+/// @returns An error iff the operation fails.
+caf::error unpack(const fbs::TableSlice& x, table_slice_ptr& y);
 
 /// Constructs table slices filled with random content for testing purposes.
 /// @param num_slices The number of table slices to generate.

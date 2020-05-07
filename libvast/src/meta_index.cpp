@@ -24,6 +24,9 @@
 #include "vast/table_slice.hpp"
 #include "vast/time.hpp"
 
+#include <caf/binary_deserializer.hpp>
+#include <caf/binary_serializer.hpp>
+
 namespace vast {
 
 void meta_index::add(const uuid& partition, const table_slice& slice) {
@@ -256,6 +259,25 @@ bool deep_equals(const meta_index& lhs, const meta_index& rhs) {
                                                   deep_equals);
                            });
     });
+}
+
+caf::expected<flatbuffers::Offset<fbs::MetaIndex>>
+pack(flatbuffers::FlatBufferBuilder& builder, const meta_index& x) {
+  std::vector<char> buffer;
+  caf::binary_serializer sink{nullptr, buffer};
+  if (auto error = sink(x))
+    return error;
+  auto data_ptr = reinterpret_cast<const uint8_t*>(buffer.data());
+  auto data = builder.CreateVector(data_ptr, buffer.size());
+  fbs::MetaIndexBuilder meta_index_builder{builder};
+  meta_index_builder.add_state(data);
+  return meta_index_builder.Finish();
+}
+
+caf::error unpack(const fbs::MetaIndex& x, meta_index& y) {
+  auto ptr = reinterpret_cast<const char*>(x.state()->Data());
+  caf::binary_deserializer source{nullptr, ptr, x.state()->size()};
+  return source(y);
 }
 
 } // namespace vast
