@@ -30,11 +30,6 @@ chunk_ptr release(flatbuffers::FlatBufferBuilder& builder) {
   return chunk::make(size - offset, ptr + offset, deleter);
 }
 
-flatbuffers::Verifier make_verifier(chunk_ptr chk) {
-  VAST_ASSERT(chk != nullptr);
-  return make_verifier(as_bytes(chk));
-}
-
 flatbuffers::Verifier make_verifier(span<const byte> xs) {
   auto data = reinterpret_cast<const uint8_t*>(xs.data());
   return flatbuffers::Verifier{data, xs.size()};
