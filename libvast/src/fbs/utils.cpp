@@ -51,9 +51,12 @@ chunk_ptr release(flatbuffers::FlatBufferBuilder& builder) {
 
 flatbuffers::Verifier make_verifier(chunk_ptr chk) {
   VAST_ASSERT(chk != nullptr);
-  auto data = reinterpret_cast<const uint8_t*>(chk->data());
-  auto size = chk->size();
-  return flatbuffers::Verifier{data, size};
+  return make_verifier(as_bytes(chk));
+}
+
+flatbuffers::Verifier make_verifier(span<const byte> xs) {
+  auto data = reinterpret_cast<const uint8_t*>(xs.data());
+  return flatbuffers::Verifier{data, xs.size()};
 }
 
 caf::error check_version(Version given, Version expected) {
@@ -61,6 +64,12 @@ caf::error check_version(Version given, Version expected) {
     return caf::none;
   return make_error(ec::version_error, "unsupported version;", "got", given,
                     ", expected", expected);
+}
+
+span<const byte> as_bytes(const flatbuffers::FlatBufferBuilder& builder) {
+  auto data = reinterpret_cast<const byte*>(builder.GetBufferPointer());
+  auto size = builder.GetSize();
+  return {data, size};
 }
 
 // TODO: this function will boil down to accessing the chunk inside the table
@@ -138,6 +147,15 @@ pack(flatbuffers::FlatBufferBuilder& builder, const meta_index& x) {
   meta_index_builder.add_version(Version::v0);
   meta_index_builder.add_state(data);
   return meta_index_builder.Finish();
+}
+
+caf::expected<meta_index> unpack(const MetaIndex& x) {
+  meta_index result;
+  auto ptr = reinterpret_cast<const char*>(x.state()->Data());
+  caf::binary_deserializer source{nullptr, ptr, x.state()->size()};
+  if (auto error = source(result))
+    return error;
+  return result;
 }
 
 } // namespace vast::fbs
