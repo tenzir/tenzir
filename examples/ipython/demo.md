@@ -77,7 +77,7 @@ If you want to install `pyvast` nonethelesss, run the following command:
 ```sh
 cd "$(git rev-parse --show-toplevel)/pyvast"
 python setup.py install
-cd ..
+cd -
 ```
 
 ### Startup
