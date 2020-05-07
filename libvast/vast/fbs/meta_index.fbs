@@ -1,5 +1,3 @@
-include "version.fbs";
-
 namespace vast.fbs;
 
 /// The persistent state of the meta index.

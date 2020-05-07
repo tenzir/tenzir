@@ -82,11 +82,10 @@ segment::lookup(const vast::ids& xs) const {
     // TODO: bind the lifetime of the table slice to the segment chunk. This
     // requires that table slices will be constructable from a chunk. Until
     // then, we stupidly deserialize the data into a new table slice.
-    auto slice = buffer->data_nested_root();
-    if (auto x = fbs::unpack(*slice))
-      result.push_back(std::move(*x));
-    else
-      return x.error();
+    table_slice_ptr slice;
+    if (auto err = unpack(*buffer->data_nested_root(), slice))
+      return err;
+    result.push_back(std::move(slice));
     return caf::none;
   };
   auto ptr = fbs::GetSegment(chunk_->data());

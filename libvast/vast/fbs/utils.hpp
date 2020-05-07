@@ -16,8 +16,6 @@
 #include "vast/byte.hpp"
 #include "vast/detail/type_traits.hpp"
 #include "vast/error.hpp"
-#include "vast/fbs/meta_index.hpp"
-#include "vast/fbs/table_slice.hpp"
 #include "vast/fbs/version.hpp"
 #include "vast/fwd.hpp"
 #include "vast/span.hpp"
@@ -71,20 +69,6 @@ span<const byte, Extent> as_bytes(const flatbuffers::Vector<T>& xs) {
 /// @returns A span of bytes of the buffer of *builder*.
 span<const byte> as_bytes(const flatbuffers::FlatBufferBuilder& builder);
 
-// -- VAST-specific (un)packing ----------------------------------------------
-
-caf::expected<flatbuffers::Offset<TableSliceBuffer>>
-pack(flatbuffers::FlatBufferBuilder& builder, table_slice_ptr x);
-
-caf::expected<caf::atom_value> unpack(Encoding x);
-
-caf::expected<table_slice_ptr> unpack(const TableSlice& x);
-
-caf::expected<flatbuffers::Offset<MetaIndex>>
-pack(flatbuffers::FlatBufferBuilder& builder, const meta_index& x);
-
-caf::expected<meta_index> unpack(const MetaIndex& x);
-
 // -- generic (un)packing ----------------------------------------------------
 
 /// Adds a byte vector to builder for a type that is convertible to a byte
@@ -131,7 +115,6 @@ const Flatbuffer* as_flatbuffer(span<const byte, Extent> xs) {
 template <class T>
 caf::expected<chunk_ptr>
 wrap(T const& x, const char* file_identifier = nullptr) {
-  using fbs::pack;
   flatbuffers::FlatBufferBuilder builder;
   auto root = pack(builder, x);
   if (!root)
@@ -140,14 +123,10 @@ wrap(T const& x, const char* file_identifier = nullptr) {
   return release(builder);
 }
 
-/// Unwraps an objects from a flatbuffer.
-template <class Flatbuffer, size_t Extent = dynamic_extent>
-decltype(unpack(std::declval<const Flatbuffer&>()))
-unwrap(span<const byte, Extent> xs) {
-  using fbs::unpack;
+template <class Flatbuffer, size_t Extent = dynamic_extent, class T>
+caf::error unwrap(span<const byte, Extent> xs, T& x) {
   if (auto flatbuf = as_flatbuffer<Flatbuffer>(xs))
-    return unpack(*flatbuf);
+    return unpack(*flatbuf, x);
   return make_error(ec::unspecified, "flatbuffer verification failed");
 }
-
 } // namespace vast::fbs
