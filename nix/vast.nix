@@ -16,6 +16,7 @@
 , tcpdump
 , static ? stdenv.hostPlatform.isMusl
 , versionOverride ? null
+, disableTests ? true
 }:
 let
   isCross = stdenv.buildPlatform != stdenv.hostPlatform;
@@ -60,7 +61,7 @@ stdenv.mkDerivation rec {
   ] ++ lib.optionals static [
     "-DVAST_STATIC_EXECUTABLE:BOOL=ON"
     "-DZSTD_ROOT=${zstd}"
-  ];
+  ] ++ lib.optional disableTests "-DBUILD_UNIT_TESTS=OFF";
 
   hardeningDisable = lib.optional static "pic";
 
