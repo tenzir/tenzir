@@ -144,7 +144,6 @@ pack(flatbuffers::FlatBufferBuilder& builder, const meta_index& x) {
   auto data_ptr = reinterpret_cast<const uint8_t*>(buffer.data());
   auto data = builder.CreateVector(data_ptr, buffer.size());
   MetaIndexBuilder meta_index_builder{builder};
-  meta_index_builder.add_version(Version::v0);
   meta_index_builder.add_state(data);
   return meta_index_builder.Finish();
 }
