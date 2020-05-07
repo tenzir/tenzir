@@ -61,8 +61,7 @@ public:
               std::disjunction<std::is_same<Inspector, caf::serializer>,
                                std::is_same<Inspector, caf::deserializer>>>>>
   friend auto inspect(Inspector& f, const meta_index& x) {
-    return f(x.synopsis_options_, x.partition_synopses_,
-             x.blacklisted_layouts_);
+    return f(x.synopsis_options_, x.partition_synopses_);
   }
 
   // Deep equality comparison
