@@ -69,10 +69,6 @@ stdenv.mkDerivation rec {
   checkTarget = "test";
 
   dontStrip = true;
-  postFixup = lib.optionalString isCross ''
-    ${stdenv.cc.targetPrefix}strip -s $out/bin/vast
-    ${stdenv.cc.targetPrefix}strip -s $out/bin/zeek-to-vast
-  '';
 
   doInstallCheck = true;
   installCheckInputs = [ python jq tcpdump ];
