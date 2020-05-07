@@ -75,7 +75,7 @@ As long as the demo is started from this directory, the step of installing
 If you want to install `pyvast` nonethelesss, run the following command:
 
 ```sh
-cd pyvast
+cd "$(git rev-parse --show-toplevel)/pyvast"
 python setup.py install
 cd ..
 ```
