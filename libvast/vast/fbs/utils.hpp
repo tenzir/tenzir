@@ -29,6 +29,15 @@
 
 namespace vast::fbs {
 
+/// The flatbuffer file_identifier. Defining this identifier here is
+/// workaround for the lack of traits for generated flatbuffer classes. The
+/// only way to get a flatbuffer identifier is by calling MyTypeIdentifier().
+/// Because this prevents use of generic programming, we use one global file
+/// identifier for VAST flatbuffers. When wrapping objects into flatbuffers,
+/// use this value. When unwrapping objects, it's fortunately possible to
+/// figure out the existance of file identifier at runtime.
+constexpr const char* file_identifier = "VAST";
+
 // -- general helpers --------------------------------------------------------
 
 /// Releases the buffer of finished builder in the form of a chunk.
@@ -87,12 +96,6 @@ pack_bytes(flatbuffers::FlatBufferBuilder& builder, const T& x) {
 /// @relates unverified_unpack
 template <class Flatbuffer, size_t Extent = dynamic_extent>
 const Flatbuffer* as_flatbuffer(span<const byte, Extent> xs) {
-  /// The flatbuffer file_identifier. Defining this identifier here is
-  /// workaround for the lack of traits for generated flatbuffer classes. The
-  /// only way to get a flatbuffer identifier is by calling MyTypeIdentifier().
-  /// Because this prevents use of generic programming, we only use one global
-  /// file identifier for VAST flatbuffers.
-  constexpr const char* file_identifier = "VAST";
   // Verify the buffer.
   auto data = reinterpret_cast<const uint8_t*>(xs.data());
   auto size = xs.size();
@@ -105,7 +108,18 @@ const Flatbuffer* as_flatbuffer(span<const byte, Extent> xs) {
   return flatbuffers::GetRoot<Flatbuffer>(data);
 }
 
-/// Wraps an object into a flatbuffer.
+/// Wraps an object into a flatbuffer. This function requires existance of an
+/// overload `pack(flatbuffers::FlatBufferBuilder&, const T&)` that can be
+/// found via ADL. While *packing* incrementally adds objects to a builder,
+/// whereas *wrapping* produces the final buffer for use in subsequent
+/// operations.
+/// @param x The object to wrap.
+/// @param file_identifier The identifier of the generated flatbuffer.
+///        This is necessary because it's impossible to figure out via type
+///        introspection whether a flatbuffer root type has a file_identifier.
+///        See the documentation for `vast::fbs::file_identifier` for details.
+/// @returns The buffer containing the flatbuffer of *x*.
+/// @relates file_identifier
 template <class T>
 caf::expected<chunk_ptr>
 wrap(T const& x, const char* file_identifier = nullptr) {
@@ -117,6 +131,12 @@ wrap(T const& x, const char* file_identifier = nullptr) {
   return release(builder);
 }
 
+/// Unwraps a flatbuffer into an object. This function requires existance of an
+/// overload `unpack(const T&, const U&` where `T` is a generated flatbuffer
+/// type and `U` the VAST type.
+/// @param xs The byte buffer that contains the flatbuffer.
+/// @param x The object to unpack *xs* into.
+/// @returns An error iff the operation failed.
 template <class Flatbuffer, size_t Extent = dynamic_extent, class T>
 caf::error unwrap(span<const byte, Extent> xs, T& x) {
   if (auto flatbuf = as_flatbuffer<Flatbuffer>(xs))
@@ -124,6 +144,9 @@ caf::error unwrap(span<const byte, Extent> xs, T& x) {
   return make_error(ec::unspecified, "flatbuffer verification failed");
 }
 
+/// Unwraps a flatbuffer and returns a new object. This function works as the
+/// corresponding two-argument overload, but returns the unwrapped object
+/// instead of taking it as argument.
 template <class Flatbuffer, size_t Extent = dynamic_extent, class T>
 caf::expected<T> unwrap(span<const byte, Extent> xs) {
   T result;
