@@ -156,7 +156,7 @@ caf::error index_state::load_from_disk() {
 
 caf::error index_state::flush_meta_index() {
   VAST_VERBOSE(self, "writes meta index to", meta_index_filename());
-  auto flatbuf = fbs::wrap(meta_idx, fbs::MetaIndexIdentifier());
+  auto flatbuf = fbs::wrap(meta_idx, fbs::file_identifier);
   if (!flatbuf)
     return flatbuf.error();
   return io::write(meta_index_filename(), as_bytes(*flatbuf));
