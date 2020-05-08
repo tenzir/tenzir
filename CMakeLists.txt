@@ -911,7 +911,7 @@ string(TOUPPER "${CMAKE_BUILD_TYPE}" build_type)
 set(summary
     "====================|  VAST Build Summary  |===================="
     "\n"
-    "\nVersion:             ${VAST_VERSION}"
+    "\nVersion:             ${VAST_VERSION_TAG}"
     "\n"
     "\nSource directory:    ${CMAKE_SOURCE_DIR}"
     "\nBuild directory:     ${CMAKE_BINARY_DIR}"
