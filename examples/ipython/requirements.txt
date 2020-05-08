@@ -1,3 +1,4 @@
+ipykernel>=5.0
 jupyter>=1.0
 matplotlib>=3.2
 networkx>=2.4
