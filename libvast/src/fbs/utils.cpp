@@ -15,10 +15,6 @@
 
 #include "vast/chunk.hpp"
 #include "vast/error.hpp"
-#include "vast/meta_index.hpp"
-#include "vast/table_slice.hpp"
-#include "vast/table_slice_factory.hpp"
-#include "vast/table_slice_header.hpp"
 
 namespace vast::fbs {
 
