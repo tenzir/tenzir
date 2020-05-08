@@ -1,0 +1,46 @@
+[Unit]
+Description=VAST - Visibility Across Space and Time
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+# TODO: move to Type=notify as soon as VAST supports native init systems.
+Type=simple
+
+# user + privileges
+User=tenzir
+Group=tenzir
+NoNewPrivileges=yes
+PrivateUsers=yes
+
+# capabilities
+RestrictNamespaces=yes
+RestrictAddressFamilies=
+CapabilityBoundingSet=
+AmbientCapabilities=
+RestrictSUIDSGID=yes
+
+# system access
+ProtectSystem=strict
+ReadWritePaths=/var/db/vast
+ReadWritePaths=/var/log/vast
+PrivateTmp=yes
+ProtectHome=yes
+PrivateDevices=yes
+ProtectKernelTunables=yes
+ProtectControlGroups=yes
+ProtectKernelModules=yes
+ProtectKernelLogs=yes
+
+SystemCallFilter=@system-service
+SystemCallErrorNumber=EPERM
+
+# service specifics
+WorkingDirectory=/var/db/vast
+ExecStart=/opt/tenzir/bin/vast --db-directory=/var/db/vast --log-file=/var/db/vast/vast.log start
+ExecStop=/opt/tenzir/bin/vast stop
+TimeoutStopSec=600
+
+[Install]
+WantedBy=multi-user.target
+
