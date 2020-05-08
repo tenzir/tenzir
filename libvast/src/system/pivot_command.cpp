@@ -19,7 +19,6 @@
 #include "vast/error.hpp"
 #include "vast/format/csv.hpp"
 #include "vast/format/json.hpp"
-#include "vast/format/pcap.hpp"
 #include "vast/format/zeek.hpp"
 #include "vast/logger.hpp"
 #include "vast/scope_linked.hpp"
@@ -31,6 +30,10 @@
 #include "vast/system/sink_command.hpp"
 #include "vast/system/spawn_or_connect_to_node.hpp"
 #include "vast/system/tracker.hpp"
+
+#ifdef VAST_HAVE_PCAP
+#  include "vast/format/pcap.hpp"
+#endif
 
 #include <caf/event_based_actor.hpp>
 #include <caf/scoped_actor.hpp>
@@ -84,6 +87,7 @@ pivot_command(const command::invocation& invocation, caf::actor_system& sys) {
     = get_or(options, "export.max-events", defaults::export_::max_events);
   caf::actor writer;
   if (detail::starts_with(target, "pcap")) {
+#ifdef VAST_HAVE_PCAP
     using defaults_t = defaults::export_::pcap;
     std::string category = defaults_t::category;
     auto output = get_or(options, category + ".write", defaults_t::write);
@@ -91,6 +95,10 @@ pivot_command(const command::invocation& invocation, caf::actor_system& sys) {
                         defaults_t::flush_interval);
     format::pcap::writer w{output, flush};
     writer = sys.spawn(sink<format::pcap::writer>, std::move(w), limit);
+#else
+    return make_message(make_error(ec::invalid_configuration, "pcap support "
+                                                              "unavailable"));
+#endif
   } else if (detail::starts_with(target, "suricata")) {
     auto w = make_writer<format::json::writer>(sys, invocation.options);
     if (!w)
