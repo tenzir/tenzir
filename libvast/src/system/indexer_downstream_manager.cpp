@@ -192,7 +192,7 @@ void indexer_downstream_manager::emit_batches_impl(bool force_underfull) {
           auto destination = pptr->indexers_.find(fqf);
           if (destination == pptr->indexers_.end()) {
             VAST_WARNING(this, "could not find the target indexer for",
-                         fqf.fqn);
+                         fqf.fqn());
             continue;
           }
           // Place the column into the selected INDEXERs stream queue.

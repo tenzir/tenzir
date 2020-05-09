@@ -14,6 +14,7 @@
 #pragma once
 
 #include "vast/fwd.hpp"
+#include "vast/qualified_record_field.hpp"
 #include "vast/synopsis.hpp"
 #include "vast/type.hpp"
 #include "vast/uuid.hpp"
@@ -51,37 +52,21 @@ public:
 
   // -- concepts ---------------------------------------------------------------
 
-  friend caf::error inspect(caf::serializer&, const meta_index&);
-
-  friend caf::error inspect(caf::deserializer&, meta_index&);
-
   // Allow debug printing meta_index instances.
-  template <class Inspector,
-            class = std::enable_if_t<std::negation_v<
-              std::disjunction<std::is_same<Inspector, caf::serializer>,
-                               std::is_same<Inspector, caf::deserializer>>>>>
-  friend auto inspect(Inspector& f, const meta_index& x) {
-    return f(x.synopsis_options_, x.partition_synopses_,
-             x.blacklisted_layouts_);
+  template <class Inspector>
+  friend auto inspect(Inspector& f, meta_index& x) {
+    return f(x.synopsis_options_, x.synopses_);
   }
 
-  // Deep equality comparison
-  friend bool deep_equals(const meta_index&, const meta_index&);
-
 private:
-  // Synopsis structures for a given layout.
-  using table_synopsis = std::vector<synopsis_ptr>;
-
-  /// Contains synopses per table layout.
-  using partition_synopsis = std::unordered_map<record_type, table_synopsis>;
-
-  /// Layouts for which we cannot generate a synopsis structure.
-  std::unordered_set<record_type> blacklisted_layouts_;
+  /// Contains one synopsis per partition column.
+  using partition_synopsis
+    = std::unordered_map<qualified_record_field, synopsis_ptr>;
 
   /// Maps a partition ID to the synopses for that partition.
-  std::unordered_map<uuid, partition_synopsis> partition_synopses_;
+  std::unordered_map<uuid, partition_synopsis> synopses_;
 
-  /// The factory function to construct a synopsis structure for a type.
+  /// Settings for the synopsis factory.
   caf::settings synopsis_options_;
 };
 

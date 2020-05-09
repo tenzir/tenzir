@@ -35,12 +35,6 @@ using namespace vast;
 
 using std::literals::operator""s;
 
-namespace vast {
-bool operator==(const meta_index& lhs, const meta_index& rhs) {
-  return deep_equals(lhs, rhs);
-}
-} // namespace vast
-
 namespace {
 
 constexpr size_t num_partitions = 4;
@@ -218,19 +212,10 @@ TEST(attribute extractor - type) {
 
 FIXTURE_SCOPE_END()
 
-FIXTURE_SCOPE(metaidx_serialization_tests, fixtures::deterministic_actor_system)
-
-TEST(serialization) {
-  meta_index meta_idx;
-  auto part = mock_partition{"foo", uuid::random(), 42};
-  meta_idx.add(part.id, *part.slice);
-  CHECK_ROUNDTRIP(meta_idx);
-}
-
 TEST(meta index with bool synopsis) {
   MESSAGE("generate slice data and add it to the meta index");
   meta_index meta_idx;
-  auto layout = record_type{{"x", bool_type{}}};
+  auto layout = record_type{{"x", bool_type{}}}.name("test");
   auto builder = default_table_slice_builder::make(layout);
   CHECK(builder->add(make_data_view(true)));
   auto slice = builder->finish();
@@ -270,8 +255,6 @@ TEST(meta index with bool synopsis) {
   CHECK_EQUAL(lookup("y != F"), all);
   CHECK_EQUAL(lookup("y == F"), all);
   CHECK_EQUAL(lookup("y != T"), all);
-  MESSAGE("perform serialization");
-  CHECK_ROUNDTRIP(meta_idx);
 }
 
 TEST(option setting and retrieval) {
@@ -281,5 +264,3 @@ TEST(option setting and retrieval) {
   auto x = caf::get_if<caf::config_value::integer>(&opts["foo"]);
   CHECK_EQUAL(unbox(x), 42);
 }
-
-FIXTURE_SCOPE_END()
