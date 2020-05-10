@@ -13,6 +13,7 @@
 
 #pragma once
 
+#include "vast/fbs/meta_index.hpp"
 #include "vast/fwd.hpp"
 #include "vast/qualified_record_field.hpp"
 #include "vast/synopsis.hpp"
@@ -69,5 +70,12 @@ private:
   /// Settings for the synopsis factory.
   caf::settings synopsis_options_;
 };
+
+// -- flatbuffer ---------------------------------------------------------------
+
+caf::expected<flatbuffers::Offset<fbs::MetaIndex>>
+pack(flatbuffers::FlatBufferBuilder& builder, const meta_index& x);
+
+caf::error unpack(const fbs::MetaIndex& x, meta_index& y);
 
 } // namespace vast

@@ -355,10 +355,9 @@ caf::error segment_store::register_segment(const path& filename) {
   auto chk = chunk::mmap(filename);
   if (!chk)
     return make_error(ec::filesystem_error, "failed to mmap chunk", filename);
-  auto verifier = fbs::make_verifier(chk);
-  if (!fbs::VerifySegmentBuffer(verifier))
-    return make_error(ec::format_error, "flatbuffer integrity check failed");
-  auto s = fbs::GetSegment(chk->data());
+  auto s = fbs::as_flatbuffer<fbs::Segment>(as_bytes(chk));
+  if (s == nullptr)
+    return make_error(ec::format_error, "segment integrity check failed");
   num_events_ += s->events();
   auto segment_uuid = uuid{fbs::as_bytes<16>(*s->uuid())};
   VAST_DEBUG(this, "found segment", segment_uuid);

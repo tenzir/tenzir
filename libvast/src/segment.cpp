@@ -35,12 +35,10 @@ using namespace binary_byte_literals;
 
 caf::expected<segment> segment::make(chunk_ptr chunk) {
   VAST_ASSERT(chunk != nullptr);
-  // Verify flatbuffer integrity.
-  auto verifier = fbs::make_verifier(chunk);
-  if (!fbs::VerifySegmentBuffer(verifier))
-    return make_error(ec::format_error, "flatbuffer integrity check failed");
+  auto ptr = fbs::as_flatbuffer<fbs::Segment>(as_bytes(chunk));
+  if (ptr == nullptr)
+    return make_error(ec::format_error, "segment integrity check failed");
   // Perform version check.
-  auto ptr = fbs::GetSegment(chunk->data());
   if (auto err = fbs::check_version(ptr->version(), fbs::Version::v0))
     return err;
   return segment{std::move(chunk)};
@@ -82,11 +80,10 @@ segment::lookup(const vast::ids& xs) const {
     // TODO: bind the lifetime of the table slice to the segment chunk. This
     // requires that table slices will be constructable from a chunk. Until
     // then, we stupidly deserialize the data into a new table slice.
-    auto slice = buffer->data_nested_root();
-    if (auto x = fbs::unpack(*slice))
-      result.push_back(std::move(*x));
-    else
-      return x.error();
+    table_slice_ptr slice;
+    if (auto err = unpack(*buffer->data_nested_root(), slice))
+      return err;
+    result.push_back(std::move(slice));
     return caf::none;
   };
   auto ptr = fbs::GetSegment(chunk_->data());
