@@ -1,0 +1,58 @@
+include "uuid.fbs";
+include "version.fbs";
+
+namespace vast.fbs;
+
+table ValueIndex {
+  /// The type of the index.
+  type: string; // TODO: use the Type flatbuffer once available.
+
+  /// The serialized `vast::value_index`.
+  data: [ubyte];
+}
+
+table QualifiedValueIndex {
+  /// The full-qualified field name, e.g., "zeek.conn.id.orig_h".
+  qualified_field_name: string;
+
+  /// The value index for the given field.
+  index: ValueIndex;
+}
+
+/// Stores the ids of a given type in the current partition.
+/// Used to answer queries like `#type == "foo"`.
+table TypeIds {
+  /// The type name.
+  name: string;
+
+  /// The serialized `vast::ids`.
+  ids: [ubyte];
+}
+
+/// The persistent state of the meta index.
+table Partition {
+  version: Version;
+
+  /// The UUID of this partition.
+  uuid: UUID;
+
+  /// The first ID in the partition.
+  offset: uint64;
+
+  /// The number of contained events.
+  events: uint64;
+
+  /// The available layouts in this partition.
+  /// TODO: Use the layout type once available.
+  combined_layout: [ubyte];
+
+  /// A map storing the mapping from type name -> ids
+  type_ids: [TypeIds];
+
+  /// The contained value indexes.
+  indexes: [QualifiedValueIndex];
+}
+
+root_type Partition;
+
+file_identifier "VAST";

@@ -1,0 +1,33 @@
+include "meta_index.fbs";
+include "partition.fbs";
+include "uuid.fbs";
+include "version.fbs";
+
+namespace vast.fbs;
+
+table LayoutStatistics {
+  /// Name of the layout.
+  name: string;
+
+  /// Number of events of that type.
+  count: uint64;
+}
+
+/// The persistent state of the index.
+table Index {
+  /// The version of the index state.
+  version: Version;
+
+  /// Synopsis structures for the contained partitions.
+  meta_index: MetaIndex;
+
+  /// The contained partition UUIDs.
+  partitions: [UUID];
+
+  /// The index statistics
+  stats: [LayoutStatistics];
+}
+
+root_type Index;
+
+file_identifier "VAST";

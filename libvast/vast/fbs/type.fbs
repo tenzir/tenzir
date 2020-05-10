@@ -67,7 +67,6 @@ table RecordType {
 
 /// A type with a name.
 table AliasType {
-  name: string;
   type: Type;
 }
 
@@ -101,6 +100,7 @@ table Attribute {
 /// The top-level type.
 table Type {
   type: TypeVariant;
+  name: string;
   attributes: [Attribute];
 }
 
