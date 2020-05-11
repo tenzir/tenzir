@@ -149,7 +149,7 @@ std::vector<uuid> meta_index::lookup(const expression& expr) const {
             // We don't have to look into the synopses for type queries, just
             // at the layout names.
             result_type result;
-            for (auto& [part_id, part_syn] : synopses_)
+            for (auto& [part_id, part_syn] : synopses_) {
               for (auto& pair : part_syn) {
                 // TODO: provide an overload for view of evaluate() so that
                 // we can use string_view here. Fortunately type names are
@@ -161,6 +161,7 @@ std::vector<uuid> meta_index::lookup(const expression& expr) const {
                   break;
                 }
               }
+            }
             // Re-establish potentially violated invariant.
             std::sort(result.begin(), result.end());
             return result;
