@@ -33,7 +33,6 @@ void meta_index::add(const uuid& partition, const table_slice& slice) {
              : factory<synopsis>::make(field.type, synopsis_options_);
   };
   auto& part_syn = synopses_[partition];
-  auto add_to_blacklist = true;
   for (size_t col = 0; col < slice.columns(); ++col) {
     // Locate the relevant synopsis.
     auto& field = slice.layout().fields[col];
@@ -44,7 +43,6 @@ void meta_index::add(const uuid& partition, const table_slice& slice) {
       it = part_syn.emplace(std::move(key), make_synopsis(field)).first;
     // If there exists a synopsis for a field, add the entire column.
     if (auto& syn = it->second) {
-      add_to_blacklist = false;
       for (size_t row = 0; row < slice.rows(); ++row) {
         auto view = slice.at(row, col);
         if (!caf::holds_alternative<caf::none_t>(view))
