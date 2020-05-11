@@ -13,15 +13,10 @@
 
 #include "vast/system/default_configuration.hpp"
 
-#include <caf/defaults.hpp>
-#include <caf/timestamp.hpp>
-
-#include "vast/config.hpp"
 #include "vast/defaults.hpp"
-#include "vast/detail/system.hpp"
-#include "vast/error.hpp"
-#include "vast/filesystem.hpp"
-#include "vast/system/application.hpp"
+
+#include <caf/atom.hpp>
+#include <caf/config_value.hpp>
 
 namespace vast::system {
 
@@ -31,8 +26,9 @@ default_configuration::default_configuration() {
   set("logger.component-blacklist",
       caf::make_config_value_list(atom("caf"), atom("caf_flow"),
                                   atom("caf_stream")));
-  set("logger.console-verbosity", defaults::logger::console_verbosity);
   set("logger.console", atom("COLORED"));
+  set("logger.console-format", defaults::logger::console_format);
+  set("logger.console-verbosity", defaults::logger::console_verbosity);
   set("logger.file-verbosity", defaults::logger::file_verbosity);
   // Allow VAST clusters to form a mesh.
   set("middleman.enable-automatic-connections", true);

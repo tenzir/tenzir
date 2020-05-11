@@ -13,10 +13,6 @@
 
 #pragma once
 
-#include <string>
-
-#include <caf/expected.hpp>
-
 #include "vast/fwd.hpp"
 #include "vast/system/configuration.hpp"
 
