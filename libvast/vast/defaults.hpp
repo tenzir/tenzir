@@ -13,12 +13,14 @@
 
 #pragma once
 
-#include <chrono>
-#include <cstdint>
-#include <string_view>
+#include "vast/config.hpp" // Needed for VAST_HAVE_ARROW
 
 #include <caf/atom.hpp>
 #include <caf/fwd.hpp>
+
+#include <chrono>
+#include <cstdint>
+#include <string_view>
 
 namespace vast::defaults {
 
