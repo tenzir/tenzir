@@ -10,6 +10,9 @@ Every entry has a category for which we use the following visual abbreviations:
 
 ## Unreleased
 
+- 🎁 All input parsers now support mixed `\n` and `\r\n` line endings.
+  [#865](https://github.com/tenzir/vast/pull/847)
+
 - 🐞 Fixed a bug that caused `vast import` processes to produce `'default'`
   table slices, despite having the `'arrow'` type as the default.
   [#866](https://github.com/tenzir/vast/pull/866)

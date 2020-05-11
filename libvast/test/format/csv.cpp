@@ -344,4 +344,17 @@ TEST(csv reader - reordered layout) {
   // CHECK_EQUAL(materialize(slices[0]->at(0, 14)), data{m});
 }
 
+std::string_view l2_line_endings = "d,d2\r\n42s,5days\n10s,1days\r\n";
+
+TEST(csv reader - line endings) {
+  auto slices = run(l2_line_endings, 2, 2);
+  auto l2_duration
+    = record_type{{"d", duration_type{}}, {"d2", duration_type{}}}.name("l2");
+  REQUIRE_EQUAL(slices[0]->layout(), l2_duration);
+  CHECK(slices[0]->at(0, 0) == data{unbox(to<duration>("42s"))});
+  CHECK(slices[0]->at(0, 1) == data{unbox(to<duration>("5days"))});
+  CHECK(slices[0]->at(1, 0) == data{unbox(to<duration>("10s"))});
+  CHECK(slices[0]->at(1, 1) == data{unbox(to<duration>("1days"))});
+}
+
 FIXTURE_SCOPE_END()
