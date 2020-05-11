@@ -50,12 +50,12 @@ auto field_size(const command::children_list& xs) {
 // Returns the field size for printing all names in `xs`.
 auto field_size(const caf::config_option_set& xs) {
   return accumulate(xs.begin(), xs.end(), size_t{0}, [](size_t x, auto& y) {
-    // We print parameters in the form "[-h | -? | --help] <type>" (but we omit
-    // the type for boolean). So, "[]" adds 2 characters, each short name adds
+    // We print parameters in the form "[-h | -? | --help=] <type>" (but we omit
+    // the type for boolean). So, "[=]" adds 3 characters, each short name adds
     // 5 characters with "-X | ", the long name gets the 2 character prefix
     // "--", and finally we add an extra space plus the type name.
     auto tname = y.type_name();
-    auto tname_size = tname == "bool" ? 0u : tname.size() + 3;
+    auto tname_size = tname == "bool" ? 0u : tname.size() + 4;
     return std::max(x, 4 + (y.short_names().size() * 5) + y.long_name().size()
                          + tname_size);
   });
