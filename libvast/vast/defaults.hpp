@@ -273,9 +273,7 @@ namespace logger {
 
 constexpr const caf::atom_value console_verbosity = caf::atom("info");
 
-constexpr const caf::atom_value file_verbosity = caf::atom("quiet");
-
-constexpr const caf::atom_value server_file_verbosity = caf::atom("debug");
+constexpr const caf::atom_value file_verbosity = caf::atom("debug");
 
 } // namespace logger
 

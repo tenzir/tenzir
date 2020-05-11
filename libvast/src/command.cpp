@@ -353,10 +353,11 @@ parse(const command& root, command::argument_iterator first,
 
 bool init_config(caf::actor_system_config& cfg, const command::invocation& from,
                  std::ostream& error_output) {
-  // Adjust default file verbosity for commands starting a node,
+  // Disable file logging for all commands that don't start a node,
   // i.e., `vast start` and `vast -N ...`.
-  if (from.name() == "start" || caf::get_or(from.options, "system.node", false))
-    cfg.set("logger.file-verbosity", defaults::logger::server_file_verbosity);
+  if (!(from.name() == "start"
+        || caf::get_or(from.options, "system.node", false)))
+    cfg.set("logger.file-verbosity", caf::atom("quiet"));
   // Utility function for merging settings.
   std::function<void(const caf::settings&, caf::settings&)> merge_settings;
   merge_settings = [&](const caf::settings& src, caf::settings& dst) {
