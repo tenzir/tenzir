@@ -103,6 +103,8 @@ reader_command(const command::invocation& invocation, caf::actor_system& sys) {
                              max_events);
     };
     VAST_INFO(reader, "listens for data on", ep.host, ", port", ep.port);
+    VAST_VERBOSE(reader, "produes", slice_type, "table slices of", slice_size,
+                 "events");
     switch (ep.port.type()) {
       default:
         return caf::make_message(
@@ -121,6 +123,8 @@ reader_command(const command::invocation& invocation, caf::actor_system& sys) {
     else
       VAST_INFO_ANON("reader-command spawns reader for file", *file);
     Reader reader{slice_type, options, std::move(*in)};
+    VAST_VERBOSE(reader, "produes", slice_type, "table slices of", slice_size,
+                 "events");
     if (schema)
       reader.schema(*schema);
     src = sys.spawn(source<Reader>, std::move(reader), slice_size, max_events);
