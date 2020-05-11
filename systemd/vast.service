@@ -8,8 +8,8 @@ After=network-online.target
 Type=simple
 
 # user + privileges
-User=tenzir
-Group=tenzir
+User=vast
+Group=vast
 NoNewPrivileges=yes
 PrivateUsers=yes
 
@@ -36,11 +36,10 @@ SystemCallFilter=@system-service
 SystemCallErrorNumber=EPERM
 
 # service specifics
-WorkingDirectory=/var/db/vast
-ExecStart=/opt/tenzir/bin/vast --db-directory=/var/db/vast --log-file=/var/db/vast/vast.log start
-ExecStop=/opt/tenzir/bin/vast stop
 TimeoutStopSec=600
+WorkingDirectory=/var/db/vast
+ExecStop=/opt/tenzir/bin/vast stop
+ExecStart=/opt/tenzir/bin/vast --config=/opt/tenzir/vast.conf start
 
 [Install]
 WantedBy=multi-user.target
-
