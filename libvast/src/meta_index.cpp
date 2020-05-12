@@ -154,7 +154,7 @@ std::vector<uuid> meta_index::lookup(const expression& expr) const {
                 // short, so we're probably not hitting the allocator due to
                 // SSO.
                 auto type_name = data{pair.first.layout_name};
-                if (evaluate(std::move(type_name), x.op, d)) {
+                if (evaluate(type_name, x.op, d)) {
                   result.push_back(part_id);
                   break;
                 }
