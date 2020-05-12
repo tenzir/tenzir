@@ -32,8 +32,8 @@
 #include "vast/system/sink.hpp"
 #include "vast/system/spawn_arguments.hpp"
 
-#ifdef VAST_HAVE_PCAP
-#include "vast/format/pcap.hpp"
+#if VAST_HAVE_PCAP
+#  include "vast/format/pcap.hpp"
 #endif // VAST_HAVE_PCAP
 
 namespace vast::system {
@@ -56,7 +56,7 @@ maybe_actor spawn_pcap_sink([[maybe_unused]] caf::local_actor* self,
                             [[maybe_unused]] spawn_arguments& args) {
   using defaults_t = defaults::export_::pcap;
   std::string category = defaults_t::category;
-#ifndef VAST_HAVE_PCAP
+#if !VAST_HAVE_PCAP
   return make_error(ec::unspecified, "not compiled with pcap support");
 #else // VAST_HAVE_PCAP
   if (!args.empty())

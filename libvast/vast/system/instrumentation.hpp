@@ -22,7 +22,7 @@
 #include <atomic>
 #include <chrono>
 #include <cmath>
-#ifdef VAST_MEASUREMENT_MUTEX_WORKAROUND
+#if VAST_MEASUREMENT_MUTEX_WORKAROUND
 #  include <mutex>
 #endif
 
@@ -83,7 +83,7 @@ private:
 
 // Atomic variants
 //
-#ifdef VAST_MEASUREMENT_MUTEX_WORKAROUND
+#if VAST_MEASUREMENT_MUTEX_WORKAROUND
 struct atomic_measurement : public measurement {
   std::mutex mutex;
   void reset() {
@@ -95,7 +95,7 @@ using atomic_measurement = std::atomic<measurement>;
 #endif
 
 inline measurement collect(atomic_measurement& am) {
-#ifdef VAST_MEASUREMENT_MUTEX_WORKAROUND
+#if VAST_MEASUREMENT_MUTEX_WORKAROUND
   std::unique_lock<std::mutex> lock{am.mutex};
   auto result = static_cast<measurement>(am);
   am.reset();
@@ -117,7 +117,7 @@ struct atomic_timer {
   void stop(uint64_t events) {
     auto stop = stopwatch::now();
     auto elapsed = std::chrono::duration_cast<duration>(stop - start_);
-#ifdef VAST_MEASUREMENT_MUTEX_WORKAROUND
+#if VAST_MEASUREMENT_MUTEX_WORKAROUND
     std::unique_lock<std::mutex> lock{m_.mutex};
     m_ += measurement{elapsed, events};
 #else

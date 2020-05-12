@@ -15,9 +15,9 @@
 
 #include "vast/config.hpp"
 
-#ifdef VAST_HAVE_GPERFTOOLS
-#include <gperftools/profiler.h>
-#include <gperftools/heap-profiler.h>
+#if VAST_HAVE_GPERFTOOLS
+#  include <gperftools/heap-profiler.h>
+#  include <gperftools/profiler.h>
 #endif
 
 #include "vast/concept/printable/vast/error.hpp"
@@ -33,7 +33,7 @@ using namespace caf;
 namespace vast {
 namespace system {
 
-#ifdef VAST_HAVE_GPERFTOOLS
+#if VAST_HAVE_GPERFTOOLS
 behavior profiler(stateful_actor<profiler_state>* self, path dir,
                   std::chrono::seconds secs) {
   auto prepare = [=]() -> caf::expected<void> {
@@ -72,7 +72,7 @@ behavior profiler(stateful_actor<profiler_state>* self, path dir,
       }
     },
     [=](start_atom, heap_atom) {
-#ifdef VAST_USE_PERFTOOLS_HEAP_PROFILER
+#  if VAST_USE_PERFTOOLS_HEAP_PROFILER
       if (IsHeapProfilerRunning()) {
         VAST_WARNING(self, "ignores request to start enabled heap profiler");
       } else if (prepare()) {
@@ -80,13 +80,13 @@ behavior profiler(stateful_actor<profiler_state>* self, path dir,
         auto filename = (dir / "perftools.heap").str();
         HeapProfilerStart(filename.c_str());
       }
-#else
+#  else
       VAST_WARNING(self, "cannot start heap profiler",
                    "(not linked against tcmalloc)");
-#endif
+#  endif
     },
     [=](stop_atom, heap_atom) {
-#ifdef VAST_USE_PERFTOOLS_HEAP_PROFILER
+#  if VAST_USE_PERFTOOLS_HEAP_PROFILER
       if (!IsHeapProfilerRunning()) {
         VAST_WARNING(self, "ignores request to stop disabled heap profiler");
       } else {
@@ -94,10 +94,10 @@ behavior profiler(stateful_actor<profiler_state>* self, path dir,
         HeapProfilerDump("cleanup");
         HeapProfilerStop();
       }
-#else
+#  else
       VAST_WARNING(self, "cannot stop heap profiler",
                    "(not linked against tcmalloc)");
-#endif
+#  endif
     },
     [=](flush_atom) {
       ProfilerState ps;

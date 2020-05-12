@@ -96,7 +96,7 @@ protected:
   }
 
 // FIXME: Why doesn't GCC like the above friend declaration?
-#ifdef VAST_GCC
+#if VAST_GCC
 public:
 #endif
   decltype(auto) dereference() const {

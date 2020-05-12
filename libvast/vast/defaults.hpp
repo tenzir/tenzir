@@ -13,12 +13,14 @@
 
 #pragma once
 
-#include <chrono>
-#include <cstdint>
-#include <string_view>
+#include "vast/config.hpp" // Needed for VAST_HAVE_ARROW
 
 #include <caf/atom.hpp>
 #include <caf/fwd.hpp>
+
+#include <chrono>
+#include <cstdint>
+#include <string_view>
 
 namespace vast::defaults {
 
@@ -271,11 +273,14 @@ constexpr size_t max_container_elements = 256;
 // -- constants for the logger -------------------------------------------------
 namespace logger {
 
+// CAF uses its own string_view that does not come with conversion operators
+// from std::string_view, so we use const char* instead.
+// TODO: Revisit when updating to CAF 0.18.
+constexpr const char* console_format = "%d %m";
+
 constexpr const caf::atom_value console_verbosity = caf::atom("info");
 
-constexpr const caf::atom_value file_verbosity = caf::atom("quiet");
-
-constexpr const caf::atom_value server_file_verbosity = caf::atom("debug");
+constexpr const caf::atom_value file_verbosity = caf::atom("debug");
 
 } // namespace logger
 
@@ -293,7 +298,7 @@ constexpr std::string_view node_id = "node";
 /// Path to persistent state.
 constexpr std::string_view db_directory = "vast.db";
 
-#ifdef VAST_HAVE_ARROW
+#if VAST_HAVE_ARROW
 
 /// The default table slice type when arrow is available.
 constexpr caf::atom_value table_slice_type = caf::atom("arrow");

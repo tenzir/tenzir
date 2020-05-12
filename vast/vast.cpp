@@ -31,7 +31,7 @@
 
 #include <cstdlib>
 
-#ifdef VAST_USE_OPENSSL
+#if VAST_USE_OPENSSL
 #  include <caf/openssl/manager.hpp>
 #endif
 

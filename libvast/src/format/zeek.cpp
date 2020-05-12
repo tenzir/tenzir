@@ -190,7 +190,7 @@ bool insert_attribute(type& t, attribute a, bool overwrite = false) {
     return false;
   i->value = std::move(a.value);
   return true;
-};
+}
 
 void add_hash_index_attribute(record_type& layout) {
   // TODO: do more than this simple heuristic. For example, also consider

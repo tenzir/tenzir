@@ -10,6 +10,13 @@ Every entry has a category for which we use the following visual abbreviations:
 
 ## Unreleased
 
+- 🐞 Fixed a bug that caused `vast import` processes to produce `'default'`
+  table slices, despite having the `'arrow'` type as the default.
+  [#866](https://github.com/tenzir/vast/pull/866)
+
+- 🐞 Fixed a bug where setting the `logger.file-verbosity` in the config file
+  would not have an effect. [#866](https://github.com/tenzir/vast/pull/866)
+
 - 🐞 The parser for Zeek tsv data used to ignore attributes that were defined
   for the Zeek-specific types in the schema files. It has been modified to
   respect and prefer the specified attributes for the fields that are present

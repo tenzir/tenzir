@@ -48,7 +48,7 @@ TEST(stable_map membership) {
   CHECK_EQUAL(xs.count("baz"), 1u);
 }
 
-#ifndef VAST_NO_EXCEPTIONS
+#if !VAST_NO_EXCEPTIONS
 TEST(stable_map at) {
   CHECK_EQUAL(xs.at("foo"), 42);
   auto exception = std::out_of_range{""};

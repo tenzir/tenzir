@@ -29,7 +29,7 @@ namespace vast::system {
 
 maybe_actor spawn_profiler([[maybe_unused]] caf::local_actor* self,
                            [[maybe_unused]] spawn_arguments& args) {
-#ifndef VAST_HAVE_GPERFTOOLS
+#if VAST_HAVE_GPERFTOOLS
   return make_error(ec::unspecified, "not compiled with gperftools");
 #else // VAST_HAVE_GPERFTOOLS
   if (!args.empty())

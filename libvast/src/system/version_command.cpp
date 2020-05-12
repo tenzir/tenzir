@@ -19,11 +19,11 @@
 #include "vast/json.hpp"
 #include "vast/logger.hpp"
 
-#ifdef VAST_HAVE_ARROW
+#if VAST_HAVE_ARROW
 #  include <arrow/util/config.h>
 #endif
 
-#ifdef VAST_HAVE_PCAP
+#if VAST_HAVE_PCAP
 #  include <pcap/pcap.h>
 #endif
 
@@ -41,7 +41,7 @@ json::object retrieve_versions() {
   caf_v << CAF_MAJOR_VERSION << '.' << CAF_MINOR_VERSION << '.'
         << CAF_PATCH_VERSION;
   result["CAF"] = caf_v.str();
-#ifdef VAST_HAVE_ARROW
+#if VAST_HAVE_ARROW
   std::ostringstream arrow_v;
   arrow_v << ARROW_VERSION_MAJOR << '.' << ARROW_VERSION_MINOR << '.'
           << ARROW_VERSION_PATCH;
@@ -49,7 +49,7 @@ json::object retrieve_versions() {
 #else
   result["ARROW"] = json{};
 #endif
-#ifdef VAST_HAVE_PCAP
+#if VAST_HAVE_PCAP
   result["PCAP"] = pcap_lib_version();
 #else
   result["PCAP"] = json{};
