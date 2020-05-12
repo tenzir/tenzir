@@ -129,7 +129,7 @@ proceedings][nsdi-proceedings].
   Developed with ❤️ by <strong><a href="https://tenzir.com">Tenzir</a></strong>
 </p>
 
-[docs]: https://docs.tenzir.com
+[docs]: https://docs.tenzir.com/vast
 [mailing-list]: http://mailman.icsi.berkeley.edu/mailman/listinfo/vast
 [mailing-list-commits]: http://mailman.icsi.berkeley.edu/mailman/listinfo/vast-commits
 [chat-badge]: https://img.shields.io/badge/gitter-chat-brightgreen.svg
