@@ -168,6 +168,7 @@ auto make_import_command() {
     "import", "imports data from STDIN or file", documentation::vast_import,
     opts("?import")
       .add<caf::atom_value>("table-slice-type,t", "table slice type")
+      .add<size_t>("table-slice-size,s", "the suggested size for table slices")
       .add<bool>("blocking,b", "block until the IMPORTER forwarded all data")
       .add<size_t>("max-events,n", "the maximum number of events to "
                                    "import")

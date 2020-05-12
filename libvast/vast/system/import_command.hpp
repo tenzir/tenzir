@@ -92,7 +92,7 @@ import_command(const command::invocation& invocation, caf::actor_system& sys) {
   auto uds = get_or(options, category + ".uds", false);
   auto type = caf::get_if<std::string>(&options, category + ".type");
   auto slice_type = defaults::import::table_slice_type(sys, options);
-  auto slice_size = get_or(options, "system.table-slice-size",
+  auto slice_size = get_or(options, "import.table-slice-size",
                            defaults::system::table_slice_size);
   // Parse schema local to the import command.
   auto schema = get_schema(options, category);
