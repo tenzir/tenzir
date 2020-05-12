@@ -130,8 +130,6 @@ proceedings][nsdi-proceedings].
 </p>
 
 [docs]: https://docs.tenzir.com/vast
-[mailing-list]: http://mailman.icsi.berkeley.edu/mailman/listinfo/vast
-[mailing-list-commits]: http://mailman.icsi.berkeley.edu/mailman/listinfo/vast-commits
 [chat-badge]: https://img.shields.io/badge/gitter-chat-brightgreen.svg
 [chat-url]: https://gitter.im/tenzir/chat
 [ci-url]: https://github.com/tenzir/vast/actions?query=branch%3Amaster
