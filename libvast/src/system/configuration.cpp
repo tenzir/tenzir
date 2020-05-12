@@ -20,11 +20,11 @@
 
 #include <caf/message_builder.hpp>
 #include <caf/io/middleman.hpp>
-#ifdef VAST_USE_OPENCL
-#include <caf/opencl/manager.hpp>
+#if VAST_USE_OPENCL
+#  include <caf/opencl/manager.hpp>
 #endif
-#ifdef VAST_USE_OPENSSL
-#include <caf/openssl/manager.hpp>
+#if VAST_USE_OPENSSL
+#  include <caf/openssl/manager.hpp>
 #endif
 
 #include "vast/detail/add_error_categories.hpp"
@@ -40,7 +40,7 @@
 #include "vast/value_index.hpp"
 #include "vast/value_index_factory.hpp"
 
-#ifdef VAST_HAVE_ARROW
+#if VAST_HAVE_ARROW
 #  include "vast/arrow_table_slice.hpp"
 #  include "vast/arrow_table_slice_builder.hpp"
 #endif
@@ -72,7 +72,7 @@ configuration::configuration() {
   // Load I/O module.
   load<io::middleman>();
   // GPU acceleration.
-#ifdef VAST_USE_OPENCL
+#if VAST_USE_OPENCL
   load<opencl::manager>();
 #endif
   opt_group{custom_options_, "system"}
@@ -80,7 +80,7 @@ configuration::configuration() {
                  "maximum size for sources that generate table slices");
   initialize_factories<synopsis, table_slice, table_slice_builder,
                        value_index>();
-#ifdef VAST_HAVE_ARROW
+#if VAST_HAVE_ARROW
   factory<vast::table_slice>::add<arrow_table_slice>();
   factory<vast::table_slice_builder>::add<arrow_table_slice_builder>(
     arrow_table_slice::class_id);

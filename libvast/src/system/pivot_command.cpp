@@ -31,7 +31,7 @@
 #include "vast/system/spawn_or_connect_to_node.hpp"
 #include "vast/system/tracker.hpp"
 
-#ifdef VAST_HAVE_PCAP
+#if VAST_HAVE_PCAP
 #  include "vast/format/pcap.hpp"
 #endif
 
@@ -87,7 +87,7 @@ pivot_command(const command::invocation& invocation, caf::actor_system& sys) {
     = get_or(options, "export.max-events", defaults::export_::max_events);
   caf::actor writer;
   if (detail::starts_with(target, "pcap")) {
-#ifdef VAST_HAVE_PCAP
+#if VAST_HAVE_PCAP
     using defaults_t = defaults::export_::pcap;
     std::string category = defaults_t::category;
     auto output = get_or(options, category + ".write", defaults_t::write);

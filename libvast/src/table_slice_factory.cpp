@@ -18,7 +18,7 @@
 #include "vast/default_table_slice.hpp"
 #include "vast/logger.hpp"
 
-#ifdef VAST_HAVE_ARROW
+#if VAST_HAVE_ARROW
 #  include "vast/arrow_table_slice.hpp"
 #endif
 
@@ -28,7 +28,7 @@ namespace vast {
 
 void factory_traits<table_slice>::initialize() {
   factory<table_slice>::add<default_table_slice>();
-#ifdef VAST_HAVE_ARROW
+#if VAST_HAVE_ARROW
   factory<table_slice>::add<arrow_table_slice>();
 #endif
 }

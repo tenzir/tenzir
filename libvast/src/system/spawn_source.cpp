@@ -30,8 +30,8 @@
 
 #include <string>
 
-#ifdef VAST_HAVE_PCAP
-#include "vast/format/pcap.hpp"
+#if VAST_HAVE_PCAP
+#  include "vast/format/pcap.hpp"
 #endif // VAST_HAVE_PCAP
 
 namespace vast::system {
@@ -58,7 +58,7 @@ maybe_actor spawn_generic_source(caf::local_actor* self, spawn_arguments& args,
 
 maybe_actor spawn_pcap_source([[maybe_unused]] caf::local_actor* self,
                               [[maybe_unused]] spawn_arguments& args) {
-#ifndef VAST_HAVE_PCAP
+#if !VAST_HAVE_PCAP
   return make_error(ec::unspecified, "not compiled with pcap support");
 #else // VAST_HAVE_PCAP
   using defaults_t = defaults::import::pcap;

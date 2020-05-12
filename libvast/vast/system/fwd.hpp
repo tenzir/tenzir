@@ -38,7 +38,7 @@ class start_command;
 
 // -- structs ------------------------------------------------------------------
 
-#ifdef VAST_MEASUREMENT_MUTEX_WORKAROUND
+#if VAST_MEASUREMENT_MUTEX_WORKAROUND
 struct atomic_measurement;
 #endif
 struct measurement;
@@ -48,7 +48,7 @@ struct spawn_arguments;
 
 // -- aliases ------------------------------------------------------------------
 
-#ifndef VAST_MEASUREMENT_MUTEX_WORKAROUND
+#if !VAST_MEASUREMENT_MUTEX_WORKAROUND
 using atomic_measurement = std::atomic<measurement>;
 #endif
 using node_actor = caf::stateful_actor<node_state>;

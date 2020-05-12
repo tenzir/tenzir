@@ -30,7 +30,7 @@
 
 namespace vast::detail {
 
-#ifndef VAST_NO_EXCEPTIONS
+#if !VAST_NO_EXCEPTIONS
 /// @relates narrow
 struct narrowing_error : std::runtime_error {
   using super = std::runtime_error;

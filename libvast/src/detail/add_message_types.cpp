@@ -69,7 +69,7 @@ void add_message_types(caf::actor_system_config& cfg) {
                                                    "report");
   cfg.add_message_type<system::query_status>("vast::system::query_status");
   cfg.add_message_type<system::actor_identity>("vast::system::actor_identity");
-#ifdef VAST_USE_OPENCL
+#if VAST_USE_OPENCL
   cfg.add_message_type<std::vector<uint32_t>>("std::vector<uint32_t>");
 #endif
 }

@@ -298,7 +298,7 @@ constexpr std::string_view node_id = "node";
 /// Path to persistent state.
 constexpr std::string_view db_directory = "vast.db";
 
-#ifdef VAST_HAVE_ARROW
+#if VAST_HAVE_ARROW
 
 /// The default table slice type when arrow is available.
 constexpr caf::atom_value table_slice_type = caf::atom("arrow");

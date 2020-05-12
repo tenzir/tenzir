@@ -1,14 +1,14 @@
 #pragma once
 
-#cmakedefine VAST_ENABLE_ASSERTIONS
-#cmakedefine VAST_HAVE_GPERFTOOLS
-#cmakedefine VAST_HAVE_PCAP
-#cmakedefine VAST_HAVE_ARROW
-#cmakedefine VAST_HAVE_BROCCOLI
-#cmakedefine VAST_MEASUREMENT_MUTEX_WORKAROUND
-#cmakedefine VAST_USE_TCMALLOC
-#cmakedefine VAST_USE_OPENCL
-#cmakedefine VAST_USE_OPENSSL
+#cmakedefine01 VAST_ENABLE_ASSERTIONS
+#cmakedefine01 VAST_HAVE_GPERFTOOLS
+#cmakedefine01 VAST_HAVE_PCAP
+#cmakedefine01 VAST_HAVE_ARROW
+#cmakedefine01 VAST_HAVE_BROCCOLI
+#cmakedefine01 VAST_MEASUREMENT_MUTEX_WORKAROUND
+#cmakedefine01 VAST_USE_TCMALLOC
+#cmakedefine01 VAST_USE_OPENCL
+#cmakedefine01 VAST_USE_OPENSSL
 #define VAST_INSTALL_PREFIX "@CMAKE_INSTALL_PREFIX@"
 #define VAST_VERSION "@VAST_VERSION_TAG@"
 
@@ -25,7 +25,7 @@
 #define VAST_LOG_LEVEL VAST_LOG_LEVEL_@VAST_LOG_LEVEL@
 
 #if defined(CAF_CLANG)
-#  define VAST_CLANG
+#  define VAST_CLANG 1
 #  define VAST_DIAGNOSTIC_PUSH  _Pragma("clang diagnostic push")
 #  define VAST_DIAGNOSTIC_POP   _Pragma("clang diagnostic pop")
 #  define VAST_DIAGNOSTIC_IGNORE_DEPRECATED                                 \
@@ -34,7 +34,7 @@
      _Pragma("clang diagnostic ignored \"-Wvla-extension\"")                \
      _Pragma("clang diagnostic ignored \"-Wgnu-folding-constant\"")
 #elif defined(CAF_GCC)
-#  define VAST_GCC
+#  define VAST_GCC 1
 #  define VAST_DIAGNOSTIC_PUSH  _Pragma("GCC diagnostic push")
 #  define VAST_DIAGNOSTIC_POP   _Pragma("GCC diagnostic pop")
 #  define VAST_DIAGNOSTIC_IGNORE_DEPRECATED                                 \
@@ -44,22 +44,22 @@
 #endif
 
 #if defined(CAF_MACOS)
-#  define VAST_MACOS
+#  define VAST_MACOS 1
 #elif defined(CAF_LINUX)
-#  define VAST_LINUX
+#  define VAST_LINUX 1
 #elif defined(CAF_BSD)
-#  define VAST_BSD
+#  define VAST_BSD 1
 #elif defined(CAF_WINDOWS)
-#  define VAST_WINDOWS
+#  define VAST_WINDOWS 1
 #else
 #  error platform not supported
 #endif
 #ifdef CAF_POSIX
-#  define VAST_POSIX
+#  define VAST_POSIX 1
 #endif
 
 #ifdef CAF_NO_EXCEPTIONS
-#define VAST_NO_EXCEPTIONS
+#define VAST_NO_EXCEPTIONS 1
 #endif
 
 // Convenience macros

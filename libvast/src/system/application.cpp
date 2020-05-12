@@ -38,11 +38,11 @@
 #include "vast/system/version_command.hpp"
 #include "vast/system/writer_command.hpp"
 
-#ifdef VAST_HAVE_ARROW
+#if VAST_HAVE_ARROW
 #  include "vast/format/arrow.hpp"
 #endif
 
-#ifdef VAST_HAVE_PCAP
+#if VAST_HAVE_PCAP
 #  include "vast/format/pcap.hpp"
 #  include "vast/system/pcap_writer_command.hpp"
 #endif
@@ -128,13 +128,13 @@ auto make_export_command() {
                           "exports query without printing them (debug option)",
                           documentation::vast_export_null,
                           sink_opts("?export.null"));
-#ifdef VAST_HAVE_ARROW
+#if VAST_HAVE_ARROW
   export_->add_subcommand("arrow", "exports query results in Arrow format",
                           documentation::vast_export_arrow,
                           sink_opts("?export.arrow"));
 
 #endif
-#ifdef VAST_HAVE_PCAP
+#if VAST_HAVE_PCAP
   export_->add_subcommand("pcap", "exports query results in PCAP format",
                           documentation::vast_export_pcap,
                           make_pcap_options("?export.pcap"));
@@ -177,7 +177,7 @@ auto make_import_command() {
                           "imports random data for testing or benchmarking",
                           documentation::vast_import_test,
                           opts("?import.test"));
-#ifdef VAST_HAVE_PCAP
+#if VAST_HAVE_PCAP
   import_->add_subcommand(
     "pcap", "imports PCAP logs from STDIN or file",
     documentation::vast_import_pcap,
@@ -325,29 +325,32 @@ auto make_version_command() {
 auto make_command_factory() {
   // When updating this list, remember to update its counterpart in node.cpp as
   // well iff necessary
+  // clang-format off
   return command::factory{
     {"count", count_command},
     {"export ascii",
      writer_command<format::ascii::writer, defaults::export_::ascii>},
-    {"export csv", writer_command<format::csv::writer, defaults::export_::csv>},
+    {"export csv",
+     writer_command<format::csv::writer, defaults::export_::csv>},
     {"export json",
      writer_command<format::json::writer, defaults::export_::json>},
     {"export null",
      writer_command<format::null::writer, defaults::export_::null>},
-#ifdef VAST_HAVE_ARROW
+#if VAST_HAVE_ARROW
     {"export arrow",
      writer_command<format::arrow::writer, defaults::export_::arrow>},
 #endif
-#ifdef VAST_HAVE_PCAP
+#if VAST_HAVE_PCAP
     {"export pcap", pcap_writer_command},
 #endif
     {"export zeek",
      writer_command<format::zeek::writer, defaults::export_::zeek>},
     {"infer", infer_command},
-    {"import csv", reader_command<format::csv::reader, defaults::import::csv>},
+    {"import csv",
+     reader_command<format::csv::reader, defaults::import::csv>},
     {"import json",
      reader_command<format::json::reader<>, defaults::import::json>},
-#ifdef VAST_HAVE_PCAP
+#if VAST_HAVE_PCAP
     {"import pcap",
      reader_command<format::pcap::reader, defaults::import::pcap>},
 #endif
@@ -384,6 +387,7 @@ auto make_command_factory() {
     {"stop", stop_command},
     {"version", version_command},
   };
+  // clang-format on
 }
 
 } // namespace
