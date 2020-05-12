@@ -13,16 +13,24 @@
 
 #include "vast/table_slice_factory.hpp"
 
-#include <caf/binary_deserializer.hpp>
-
 #include "vast/chunk.hpp"
+#include "vast/config.hpp"
 #include "vast/default_table_slice.hpp"
 #include "vast/logger.hpp"
+
+#ifdef VAST_HAVE_ARROW
+#  include "vast/arrow_table_slice.hpp"
+#endif
+
+#include <caf/binary_deserializer.hpp>
 
 namespace vast {
 
 void factory_traits<table_slice>::initialize() {
   factory<table_slice>::add<default_table_slice>();
+#ifdef VAST_HAVE_ARROW
+  factory<table_slice>::add<arrow_table_slice>();
+#endif
 }
 
 table_slice_ptr factory_traits<table_slice>::make(chunk_ptr chunk) {
