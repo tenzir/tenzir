@@ -89,9 +89,7 @@ auto make_root_command(std::string_view path) {
         .add<bool>("node,N", "spawn a node instead of connecting to one")
         .add<bool>("disable-accounting", "don't run the accountant")
         .add<bool>("no-default-schema", "don't load the default schema "
-                                        "definitions")
-        .add<size_t>("max-partition-size", "maximum number of events in a "
-                                           "partition");
+                                        "definitions");
   return std::make_unique<command>(path, "", documentation::vast,
                                    add_index_opts(std::move(ob)));
 }
