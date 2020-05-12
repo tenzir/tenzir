@@ -8,6 +8,8 @@ After=network-online.target
 Type=simple
 
 # user + privileges
+# We explicitly don't use DynamicUser because that can lead to recursive `chown`s.
+# Doing that is pretty slow on some file systems (e.g., xfs).
 User=vast
 Group=vast
 NoNewPrivileges=yes

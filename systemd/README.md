@@ -10,9 +10,7 @@ A user and group called `vast` are required for running the service. On Linux
 machines you can create one as follows.
 
 ```sh
-sudo useradd -u 1337 vast   # create a new user called 'vast' with user ID 1337
-sudo groupadd vast          # create a new group called 'vast'
-sudo usermod -aG vast vast  # add the 'vast' user to the 'vast' group
+sudo useradd --system --user-group vast
 ```
 
 Make sure that you don't grant any special rights to this user, i.e., do not
