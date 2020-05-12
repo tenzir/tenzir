@@ -42,7 +42,7 @@ table_slices::table_slices() {
     {"i", address_type{}},        {"j", subnet_type{}},
     {"k", port_type{}},           {"l", vector_type{count_type{}}},
     {"m", set_type{bool_type{}}}, {"n", map_type{count_type{}, bool_type{}}},
-  };
+  }.name("test");
   // Initialize test data.
   auto rows = std::vector<std::string>{
     "[T, +7, 42, 4.2, 1337ms, 2018-12-24, \"foo\", /foo.*bar/, 127.0.0.1,"

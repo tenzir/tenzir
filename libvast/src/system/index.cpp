@@ -242,7 +242,7 @@ void index_state::send_report() {
     for (size_t i = 0; i < p.measurements_.size(); ++i) {
       auto tmp = collect(p.measurements_[i]);
       if (tmp.events > 0) {
-        r.push_back({as_vector(p.indexers_)[i].first.fqn, tmp});
+        r.push_back({as_vector(p.indexers_)[i].first.fqn(), tmp});
         double rate = tmp.events * 1'000'000'000.0 / tmp.duration.count();
         if (rate < min_rate) {
           min_rate = rate;

@@ -75,10 +75,11 @@ caf::error partition::init() {
   VAST_DEBUG(state_->self, "loaded partition", id_, "from disk with",
              meta_data_.layouts.size(), "layouts and",
              partition_type.fields.size(), "columns");
-  for (auto& f : partition_type.fields) {
-    qualified_record_field fqf{f.name, f.type};
-    indexers_.emplace(std::move(fqf), wrapped_indexer{});
-  }
+  for (auto& layout : meta_data_.layouts)
+    for (auto& field : layout.fields) {
+      qualified_record_field fqf{layout.name(), field};
+      indexers_.emplace(std::move(fqf), wrapped_indexer{});
+    }
   return caf::none;
 }
 
@@ -120,8 +121,7 @@ void partition::add(table_slice_ptr slice) {
   ids.append_bits(true, last - first);
   if (is_new) {
     // Insert new type.
-    for (size_t idx = 0; idx < layout.fields.size(); ++idx) {
-      auto& field = layout.fields[idx];
+    for (auto& field : layout.fields) {
       auto fqf = qualified_record_field{layout.name(), field};
       auto j = indexers_.find(fqf);
       if (j == indexers_.end()) {
@@ -234,7 +234,7 @@ path partition::meta_file() const {
 }
 
 path partition::column_file(const qualified_record_field& field) const {
-  return base_dir() / (field.fqn + "-" + to_digest(field.type));
+  return base_dir() / (field.fqn() + "-" + to_digest(field.type));
 }
 
 } // namespace vast::system

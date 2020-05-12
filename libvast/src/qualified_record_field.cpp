@@ -20,16 +20,18 @@ namespace vast {
 
 bool operator==(const qualified_record_field& x,
                 const qualified_record_field& y) {
-  return x.fqn == y.fqn && x.type == y.type;
+  return x.layout_name == y.layout_name && x.field_name == y.field_name
+         && x.type == y.type;
 }
 
 bool operator<(const qualified_record_field& x,
                const qualified_record_field& y) {
-  return std::tie(x.fqn, x.type) < std::tie(y.fqn, y.type);
+  return std::tie(x.layout_name, x.field_name, x.type)
+         < std::tie(y.layout_name, y.field_name, y.type);
 }
 
 record_field as_record_field(const qualified_record_field& qf) {
-  return {qf.fqn, qf.type};
+  return {qf.fqn(), qf.type};
 }
 
 } // namespace vast
