@@ -30,6 +30,7 @@
 #include "vast/system/spawn_arguments.hpp"
 #include "vast/system/spawn_consensus.hpp"
 #include "vast/system/spawn_counter.hpp"
+#include "vast/system/spawn_explorer.hpp"
 #include "vast/system/spawn_exporter.hpp"
 #include "vast/system/spawn_importer.hpp"
 #include "vast/system/spawn_index.hpp"
@@ -258,6 +259,7 @@ auto make_component_factory() {
     {"spawn archive", lift_component_factory<spawn_archive>()},
     {"spawn counter", lift_component_factory<spawn_counter>()},
     {"spawn exporter", lift_component_factory<spawn_exporter>()},
+    {"spawn explorer", lift_component_factory<spawn_explorer>()},
     {"spawn importer", lift_component_factory<spawn_importer>()},
     {"spawn type-registry", lift_component_factory<spawn_type_registry>()},
     {"spawn index", lift_component_factory<spawn_index>()},
@@ -286,6 +288,7 @@ auto make_command_factory() {
     {"spawn archive", node_state::spawn_command},
     {"spawn consensus", node_state::spawn_command},
     {"spawn counter", node_state::spawn_command},
+    {"spawn explorer", node_state::spawn_command},
     {"spawn exporter", node_state::spawn_command},
     {"spawn importer", node_state::spawn_command},
     {"spawn type-registry", node_state::spawn_command},
@@ -323,7 +326,7 @@ node_state::spawn_command(const command::invocation& invocation,
   } else {
     label = comp_name;
     const char* multi_instance[]
-      = {"importer", "exporter", "pivoter", "source", "sink"};
+      = {"importer", "explorer", "exporter", "pivoter", "source", "sink"};
     if (std::count(begin(multi_instance), end(multi_instance), label) != 0) {
       // Create a new label and update our counter in the map.
       auto n = ++this_node->state.labels[label];

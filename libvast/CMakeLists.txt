@@ -98,6 +98,8 @@ set(libvast_sources
     src/system/default_configuration.cpp
     src/system/dummy_consensus.cpp
     src/system/evaluator.cpp
+    src/system/explore_command.cpp
+    src/system/explorer.cpp
     src/system/exporter.cpp
     src/system/importer.cpp
     src/system/index.cpp
@@ -122,6 +124,7 @@ set(libvast_sources
     src/system/spawn_arguments.cpp
     src/system/spawn_consensus.cpp
     src/system/spawn_counter.cpp
+    src/system/spawn_explorer.cpp
     src/system/spawn_exporter.cpp
     src/system/spawn_importer.cpp
     src/system/spawn_index.cpp
