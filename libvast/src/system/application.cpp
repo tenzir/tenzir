@@ -87,7 +87,7 @@ auto make_root_command(std::string_view path) {
         .add<std::string>("endpoint,e", "node endpoint")
         .add<std::string>("node-id,i", "the unique ID of this node")
         .add<bool>("node,N", "spawn a node instead of connecting to one")
-        .add<bool>("disable-accounting", "don't run the accountant")
+        .add<bool>("disable-metrics", "don't keep track of performance metrics")
         .add<bool>("no-default-schema", "don't load the default schema "
                                         "definitions");
   return std::make_unique<command>(path, "", documentation::vast,
