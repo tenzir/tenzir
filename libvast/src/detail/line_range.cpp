@@ -14,6 +14,7 @@
 #include "vast/detail/line_range.hpp"
 
 #include "vast/detail/fdinbuf.hpp"
+#include "vast/detail/getline_generic.hpp"
 
 namespace vast {
 namespace detail {
@@ -33,7 +34,7 @@ void line_range::next() {
     return;
   // Get the next non-empty line.
   while (line_.empty())
-    if (std::getline(input_, line_))
+    if (detail::getline_generic(input_, line_))
       ++line_number_;
     else
       break;
