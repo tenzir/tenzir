@@ -47,9 +47,9 @@ RUN apt-get -qq update && apt-get -qq install -y libc++1 libc++abi1 libpcap0.8 \
 RUN echo "Adding vast user" && useradd --system --user-group vast
 
 EXPOSE 42000/tcp
-WORKDIR $PREFIX/var/db/vast
-RUN chown -R vast:vast $PREFIX/var/db/vast
-VOLUME ["$PREFIX/var/db/vast"]
+WORKDIR /var/db/vast
+RUN chown -R vast:vast /var/db/vast
+VOLUME ["/var/db/vast"]
 
 USER vast:vast
 ENTRYPOINT ["vast"]
