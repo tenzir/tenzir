@@ -44,14 +44,13 @@ COPY --from=builder $PREFIX/ $PREFIX/
 COPY --from=builder /usr/lib/x86_64-linux-gnu/libatomic.so.1 /usr/lib/x86_64-linux-gnu/libatomic.so.1
 RUN apt-get -qq update && apt-get -qq install -y libc++1 libc++abi1 libpcap0.8 \
   openssl
-RUN echo "Adding tenzir user" && \
-  groupadd --gid 20097 tenzir && useradd --system --uid 20097 --gid tenzir tenzir
+RUN echo "Adding vast user" && useradd --system --user-group vast
 
 EXPOSE 42000/tcp
 WORKDIR $PREFIX/var/db/vast
-RUN chown -R tenzir:tenzir $PREFIX/var/db/vast
+RUN chown -R vast:vast $PREFIX/var/db/vast
 VOLUME ["$PREFIX/var/db/vast"]
 
-USER tenzir:tenzir
+USER vast:vast
 ENTRYPOINT ["vast"]
 CMD ["--help"]
