@@ -19,14 +19,13 @@ COPY opt/vast /opt/vast
 
 RUN rsync -avh /opt/vast/* $PREFIX
 
-RUN echo "Adding tenzir user" && \
-  groupadd --gid 20097 tenzir && useradd --system --uid 20097 --gid tenzir tenzir
+RUN echo "Adding vast user" && useradd --system --user-group vast
 
 EXPOSE 42000/tcp
-WORKDIR $PREFIX/var/db/vast
-RUN chown -R tenzir:tenzir $PREFIX/var/db/vast
-VOLUME ["$PREFIX/var/db/vast"]
+WORKDIR /var/db/vast
+RUN chown -R vast:vast /var/db/vast
+VOLUME ["/var/db/vast"]
 
-USER tenzir:tenzir
+USER vast:vast
 ENTRYPOINT ["vast"]
 CMD ["--help"]
