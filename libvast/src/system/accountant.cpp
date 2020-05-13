@@ -74,7 +74,7 @@ void record(accountant_actor* self, const std::string& key, T x,
                               {"actor_name", string_type{}},
                               {"key", string_type{}},
                               {"value", string_type{}}}
-                    .name("vast.statistics");
+                    .name("vast.metrics");
 
     auto slice_type = get_or(sys.config(), "system.table-slice-type",
                              defaults::system::table_slice_type);

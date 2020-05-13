@@ -10,6 +10,11 @@ Every entry has a category for which we use the following visual abbreviations:
 
 ## Unreleased
 
+- 🔄 The command line flag for disabling the accountant has been renamed to
+  `--disable-metrics` to more accurately reflect it's intended purpose. The
+  internal `vast.statistics` event has been renamed to `vast.metrics`.
+  [#870](https://github.com/tenzir/vast/pull/870)
+
 - 🎁 All input parsers now support mixed `\n` and `\r\n` line endings.
   [#865](https://github.com/tenzir/vast/pull/847)
 

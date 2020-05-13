@@ -31,7 +31,7 @@ caf::expected<scope_linked_actor>
 spawn_node(caf::scoped_actor& self, const caf::settings& opts) {
   using namespace std::string_literals;
   // Fetch values from config.
-  auto accounting = !get_or(opts, "system.disable-accounting", false);
+  auto accounting = !get_or(opts, "system.disable-metrics", false);
   auto id = get_or(opts, "system.node-id", defaults::system::node_id);
   auto db_dir
     = get_or(opts, "system.db-directory", defaults::system::db_directory);
