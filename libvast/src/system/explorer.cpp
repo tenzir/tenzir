@@ -16,12 +16,15 @@
 #include "vast/command.hpp"
 #include "vast/concept/printable/to_string.hpp"
 #include "vast/concept/printable/vast/expression.hpp"
+#include "vast/defaults.hpp"
 #include "vast/detail/string.hpp"
 #include "vast/expression.hpp"
 #include "vast/logger.hpp"
 #include "vast/system/atoms.hpp"
 #include "vast/system/exporter.hpp"
 #include "vast/table_slice.hpp"
+#include "vast/table_slice_builder.hpp"
+#include "vast/table_slice_builder_factory.hpp"
 
 #include <caf/event_based_actor.hpp>
 
@@ -34,8 +37,31 @@ explorer_state::explorer_state(caf::event_based_actor*) {
 }
 
 void explorer_state::forward_results(vast::table_slice_ptr slice) {
-  // FIXME: Filter out duplicates.
-  self->send(sink, slice);
+  // Check which of the ids in this slice were already sent to the sink
+  // and forward those that were not.
+  vast::bitmap unseen;
+  for (int i = 0; i < slice->rows(); ++i) {
+    auto id = slice->offset() + i;
+    auto [_, new_] = returned_ids.insert(id);
+    if (new_) {
+      vast::ids tmp;
+      tmp.append_bits(false, id);
+      tmp.append_bits(true, 1);
+      unseen |= tmp;
+    }
+  }
+  if (unseen.empty())
+    return;
+  if (unseen.size() == slice->rows()) {
+    self->send(sink, slice);
+    return;
+  }
+  // If a slice was partially known, divide it up and forward only those
+  // ids that the source hasn't received yet.
+  auto slices = vast::select(slice, unseen);
+  for (auto slice : slices) {
+    self->send(sink, slice);
+  }
   return;
 }
 
