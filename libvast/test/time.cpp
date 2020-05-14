@@ -149,6 +149,14 @@ TEST(ymdshms time parser) {
   CHECK(to_hours(t) == hours{23});
   CHECK(to_minutes(t) == minutes{55});
   CHECK(to_seconds(t) == seconds{4});
+  MESSAGE("YYYY-MM-DD HH:MM:SS"); // space as delimiter; needed for Sysmon
+  CHECK(parsers::time("2012-08-12 23:55:04", ts));
+  sd = floor<days>(ts);
+  t = ts - sd;
+  CHECK(verify_date(sd, 2012, 8, 12));
+  CHECK(to_hours(t) == hours{23});
+  CHECK(to_minutes(t) == minutes{55});
+  CHECK(to_seconds(t) == seconds{4});
   // TODO: Fix timezone offset without divider
   MESSAGE("YYYY-MM-DD+HH:MM+HHMM");
   CHECK(parsers::time("2012-08-12+23:55+0130", ts));

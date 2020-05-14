@@ -161,7 +161,7 @@ struct ymdhms_parser : vast::parser<ymdhms_parser> {
       [](auto x) { return x >= 0 && x <= 59; });
     auto sec = parsers::real_opt_dot.with(
       [](auto x) { return x >= 0.0 && x <= 60.0; });
-    auto time_divider = '+'_p | 'T';
+    auto time_divider = '+'_p | 'T' | ' ';
     // clang-format off
     auto sign = '+'_p ->* [] { return 1; }
               | '-'_p ->* [] { return -1; };
