@@ -61,6 +61,7 @@ using ping_atom = caf::atom_constant<caf::atom("ping")>;
 using pong_atom = caf::atom_constant<caf::atom("pong")>;
 using progress_atom = caf::atom_constant<caf::atom("progress")>;
 using prompt_atom = caf::atom_constant<caf::atom("prompt")>;
+using provision_atom = caf::atom_constant<caf::atom("provision")>;
 using publish_atom = caf::atom_constant<caf::atom("publish")>;
 using query_atom = caf::atom_constant<caf::atom("query")>;
 using read_atom = caf::atom_constant<caf::atom("read")>;
