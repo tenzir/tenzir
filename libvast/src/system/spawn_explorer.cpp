@@ -11,25 +11,35 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#include "vast/system/spawn_pivoter.hpp"
+#include "vast/system/spawn_explorer.hpp"
 
-#include "vast/detail/unbox_var.hpp"
-#include "vast/logger.hpp"
-#include "vast/system/pivoter.hpp"
+#include "vast/defaults.hpp"
+#include "vast/filesystem.hpp"
+#include "vast/si_literals.hpp"
+#include "vast/system/explorer.hpp"
+#include "vast/system/node.hpp"
 #include "vast/system/spawn_arguments.hpp"
+
+#include <caf/actor.hpp>
+#include <caf/actor_cast.hpp>
+#include <caf/config_value.hpp>
+#include <caf/expected.hpp>
+#include <caf/local_actor.hpp>
+#include <caf/settings.hpp>
+
+using namespace std::chrono_literals;
 
 namespace vast::system {
 
-maybe_actor spawn_pivoter(node_actor* self, spawn_arguments& args) {
-  VAST_DEBUG_ANON(VAST_ARG(args));
-  auto& arguments = args.invocation.arguments;
-  if (arguments.size() < 2)
+maybe_actor spawn_explorer(node_actor* self, spawn_arguments& args) {
+  if (!args.empty())
     return unexpected_arguments(args);
-  auto target_name = arguments[0];
-  // Parse given expression.
-  auto query_begin = std::next(arguments.begin());
-  VAST_UNBOX_VAR(expr, normalized_and_validated(query_begin, arguments.end()));
-  return self->spawn(pivoter, self, target_name, std::move(expr));
+  auto before
+    = get_or(args.invocation.options, "explore.before", vast::duration{0s});
+  auto after
+    = get_or(args.invocation.options, "explore.after", vast::duration{0s});
+  auto expl = self->spawn(explorer, self, before, after);
+  return expl;
 }
 
 } // namespace vast::system

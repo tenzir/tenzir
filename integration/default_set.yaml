@@ -277,3 +277,28 @@ tests:
       - command: -N import syslog
         input: data/syslog/syslog.log
       - command: -N export ascii '#type == /syslog.*/'
+  Explore Zeek:
+    tags: [explore, zeek]
+    fixture: ServerTester
+    steps:
+      - command: import zeek
+        input: data/zeek/conn.log.gz
+      - command: explore --after=3min 'uid == "Yaix3QBP3Xg"'
+  # These are a stress tests for the deduplication: The query selects every
+  # event, and the huge timebox ensures that every event is included in
+  # the context of every other event.
+  Explore Suricata With Overlap:
+    tags: [explore, suricata]
+    steps:
+      - command: -N import suricata
+        input: data/suricata/eve.json
+      - command: -N explore --before=10000h --after=10000h '#type == /suricata.*/'
+        transformation: wc -l
+  # TODO(ch15579): Re-enable this test once the slow zeek export is fixed.
+  # Explore Zeek With Overlap:
+  #   tags: [explore, zeek]
+  #   steps:
+  #     - command: -N import zeek
+  #       input: data/zeek/conn.log.gz
+  #     - command: -N explore --before=10000h --after=10000h '#type == /zeek.*/'
+  #       transformation: wc -l

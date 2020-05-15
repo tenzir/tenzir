@@ -11,25 +11,16 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#include "vast/system/spawn_pivoter.hpp"
+#pragma once
 
-#include "vast/detail/unbox_var.hpp"
-#include "vast/logger.hpp"
-#include "vast/system/pivoter.hpp"
-#include "vast/system/spawn_arguments.hpp"
+#include "vast/command.hpp"
+
+#include <caf/fwd.hpp>
 
 namespace vast::system {
 
-maybe_actor spawn_pivoter(node_actor* self, spawn_arguments& args) {
-  VAST_DEBUG_ANON(VAST_ARG(args));
-  auto& arguments = args.invocation.arguments;
-  if (arguments.size() < 2)
-    return unexpected_arguments(args);
-  auto target_name = arguments[0];
-  // Parse given expression.
-  auto query_begin = std::next(arguments.begin());
-  VAST_UNBOX_VAR(expr, normalized_and_validated(query_begin, arguments.end()));
-  return self->spawn(pivoter, self, target_name, std::move(expr));
-}
+/// Returns context around the results of a VAST query.
+caf::message
+explore_command(const command::invocation& invocation, caf::actor_system& sys);
 
 } // namespace vast::system

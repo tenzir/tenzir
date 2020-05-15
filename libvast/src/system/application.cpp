@@ -27,6 +27,7 @@
 #include "vast/format/zeek.hpp"
 #include "vast/system/configuration.hpp"
 #include "vast/system/count_command.hpp"
+#include "vast/system/explore_command.hpp"
 #include "vast/system/generator_command.hpp"
 #include "vast/system/infer_command.hpp"
 #include "vast/system/pivot_command.hpp"
@@ -99,6 +100,17 @@ auto make_count_command() {
     "count", "count hits for a query without exporting data", "",
     opts("?count").add<bool>("estimate,e", "estimate an upper bound by "
                                            "skipping candidate checks"));
+}
+
+auto make_explore_command() {
+  return std::make_unique<command>(
+    "explore", "explore context around query results",
+    documentation::vast_explore,
+    opts("?explore")
+      .add<vast::duration>("after,A", "include all records up to this much"
+                                      " time after each result")
+      .add<vast::duration>("before,B", "include all records up to this much"
+                                       " time before each result"));
 }
 
 auto make_export_command() {
@@ -274,6 +286,11 @@ auto make_spawn_command() {
       .add<size_t>("segments,s", "number of cached segments")
       .add<size_t>("max-segment-size,m", "maximum segment size in MB"));
   spawn->add_subcommand(
+    "explorer", "creates a new explorer", "",
+    opts()
+      .add<vast::duration>("after,A", "timebox after each result")
+      .add<vast::duration>("before,B", "timebox before each result"));
+  spawn->add_subcommand(
     "exporter", "creates a new exporter", "",
     opts()
       .add<bool>("continuous,c", "marks a query as continuous")
@@ -326,6 +343,7 @@ auto make_command_factory() {
   // clang-format off
   return command::factory{
     {"count", count_command},
+    {"explore", explore_command},
     {"export ascii",
      writer_command<format::ascii::writer, defaults::export_::ascii>},
     {"export csv",
@@ -369,6 +387,7 @@ auto make_command_factory() {
     {"spawn archive", remote_command},
     {"spawn consensus", remote_command},
     {"spawn exporter", remote_command},
+    {"spawn explorer", remote_command},
     {"spawn importer", remote_command},
     {"spawn type-registry", remote_command},
     {"spawn index", remote_command},
@@ -395,6 +414,7 @@ make_application(std::string_view path) {
   auto root = make_root_command(path);
   root->add_subcommand(make_count_command());
   root->add_subcommand(make_export_command());
+  root->add_subcommand(make_explore_command());
   root->add_subcommand(make_infer_command());
   root->add_subcommand(make_import_command());
   root->add_subcommand(make_kill_command());

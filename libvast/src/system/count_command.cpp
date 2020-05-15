@@ -41,7 +41,7 @@ namespace vast::system {
 
 caf::message
 count_command(const command::invocation& invocation, caf::actor_system& sys) {
-  VAST_TRACE(invocation);
+  VAST_DEBUG_ANON(invocation);
   const auto& options = invocation.options;
   // Read query from input file, STDIN or CLI arguments.
   auto query = read_query(invocation, "count.read");
