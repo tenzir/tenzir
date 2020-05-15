@@ -322,7 +322,8 @@ node_state::spawn_command(const command::invocation& invocation,
     label = *label_ptr;
   } else {
     label = comp_name;
-    const char* multi_instance[] = {"importer", "exporter", "source", "sink"};
+    const char* multi_instance[]
+      = {"importer", "exporter", "pivoter", "source", "sink"};
     if (std::count(begin(multi_instance), end(multi_instance), label) != 0) {
       // Create a new label and update our counter in the map.
       auto n = ++this_node->state.labels[label];
