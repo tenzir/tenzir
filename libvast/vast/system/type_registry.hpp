@@ -33,7 +33,9 @@ using type_registry_type = caf::typed_actor<
   caf::reacts_to<telemetry_atom>,
   caf::replies_to<status_atom>::with<caf::dictionary<caf::config_value>>,
   caf::reacts_to<caf::stream<table_slice_ptr>>,
-  caf::replies_to<std::string>::with<std::unordered_set<vast::type>>
+  caf::reacts_to<put_atom, vast::type>,
+  caf::replies_to<get_atom>::with<std::unordered_set<vast::type>>,
+  caf::replies_to<get_atom, std::string>::with<std::unordered_set<vast::type>>
 >;
 // clang-format on
 
@@ -64,10 +66,13 @@ struct type_registry_state {
   caf::error load_from_disk();
 
   /// Store a new layout in the registry.
-  void insert(vast::record_type layout);
+  void insert(vast::type layout);
 
   /// Get a list of known types from the registry.
-  std::unordered_set<vast::type> lookup(std::string key) const;
+  std::unordered_set<vast::type> types() const;
+
+  /// Get a list of known types from the registry for a name.
+  std::unordered_set<vast::type> types(std::string key) const;
 
   type_registry_actor self = {};
   accountant_type accountant = {};
