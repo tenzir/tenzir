@@ -19,7 +19,7 @@ every result of the query. For example, this invocation shows all events that
 happened up to five minutes after each connection to 192.168.1.10:
 
 ```bash
-vast explore -A 5mins 'zeek.conn.id.resp_h == 192.168.1.10'
+vast explore -A 5min 'zeek.conn.id.resp_h == 192.168.1.10'
 ```
 
 The `--for` option restricts the result set to specific types. Note that
@@ -28,7 +28,7 @@ selection options. For example, this invocation shows all DNS requests captured
 by Zeek up to 60 seconds after a connection to 192.168.1.10:
 
 ```bash
-vast explore -A 60secs --for=zeek.dns 'zeek.conn.id.resp_h == 192.168.1.10'
+vast explore -A 60s --for=zeek.dns 'zeek.conn.id.resp_h == 192.168.1.10'
 ```
 
 The `--by` option takes a field name as argument and restricts the set of
@@ -40,7 +40,7 @@ For example, to select all outgoing connections from some address up to five
 minutes after a connection to host 192.168.1.10 was made from that address:
 
 ```bash
-vast explore -A 5mins --by=orig_h 'zeek.conn.id.resp_h == 192.168.1.10'
+vast explore -A 5min --by=orig_h 'zeek.conn.id.resp_h == 192.168.1.10'
 ```
 
 The `--where` option specifies a dynamic filter expression that restricts the
