@@ -110,7 +110,8 @@ auto make_explore_command() {
       .add<vast::duration>("after,A", "include all records up to this much"
                                       " time after each result")
       .add<vast::duration>("before,B", "include all records up to this much"
-                                       " time before each result"));
+                                       " time before each result")
+      .add<std::string>("by", "perform an equijoin on the given field"));
 }
 
 auto make_export_command() {

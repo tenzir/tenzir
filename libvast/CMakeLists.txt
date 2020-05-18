@@ -318,6 +318,7 @@ set(tests
     test/system/datagram_source.cpp
     test/system/dummy_consensus.cpp
     test/system/evaluator.cpp
+    test/system/explorer.cpp
     test/system/exporter.cpp
     test/system/importer.cpp
     test/system/index.cpp

@@ -29,6 +29,9 @@
 #include <caf/event_based_actor.hpp>
 
 #include <algorithm>
+#include <optional>
+
+using namespace std::chrono_literals;
 
 namespace vast::system {
 
@@ -40,7 +43,7 @@ void explorer_state::forward_results(vast::table_slice_ptr slice) {
   // Check which of the ids in this slice were already sent to the sink
   // and forward those that were not.
   vast::bitmap unseen;
-  for (int i = 0; i < slice->rows(); ++i) {
+  for (size_t i = 0; i < slice->rows(); ++i) {
     auto id = slice->offset() + i;
     auto [_, new_] = returned_ids.insert(id);
     if (new_) {
@@ -67,12 +70,21 @@ void explorer_state::forward_results(vast::table_slice_ptr slice) {
 
 caf::behavior
 explorer(caf::stateful_actor<explorer_state>* self, caf::actor node,
-         vast::duration before, vast::duration after) {
+         std::optional<vast::duration> before,
+         std::optional<vast::duration> after, std::optional<std::string> by) {
   auto& st = self->state;
   st.self = self;
   st.node = node;
+  // If none of 'before' and 'after' a given we assume an infinite timebox
+  // around each result, but if one of them is given the interval should be
+  // finite on both sides.
+  if (before && !after)
+    after = vast::duration{0s};
+  if (after && !before)
+    before = vast::duration{0s};
   st.before = before;
   st.after = after;
+  st.by = by;
   auto quit_if_done = [=]() {
     auto& st = self->state;
     if (st.initial_query_completed && st.running_exporters == 0)
@@ -104,6 +116,18 @@ explorer(caf::stateful_actor<explorer_state>* self, caf::actor node,
         VAST_DEBUG(self, "could not find timestamp field in", layout);
         return;
       }
+      std::optional<table_slice::column_view> by_column;
+      if (st.by) {
+        // Need to pivot from caf::optional to std::optional here, as the
+        // former doesnt support emplace or value assignment.
+        if (auto vopt = slice->column(*st.by))
+          by_column.emplace(*vopt);
+        if (!by_column) {
+          VAST_TRACE("skipping slice with", layout, "because it has no column",
+                     *st.by);
+          return;
+        }
+      }
       VAST_DEBUG(self, "uses", it->name, "to construct timebox");
       auto column = slice->column(it->name);
       VAST_ASSERT(column);
@@ -122,16 +146,37 @@ explorer(caf::stateful_actor<explorer_state>* self, caf::actor node,
         if (st.after)
           after_expr = predicate{attribute_extractor{timestamp_atom::value},
                                  less_equal, data{*x + *st.after}};
-        expression expr;
-        if (after_expr && before_expr) {
-          expr = conjunction{*before_expr, *after_expr};
-        } else if (after_expr) {
-          expr = *after_expr;
-        } else if (before_expr) {
-          expr = *before_expr;
+        std::optional<vast::expression> by_expr;
+        if (st.by) {
+          VAST_ASSERT(by_column); // Should have been checked above.
+          auto ci = (*by_column)[i];
+          if (caf::get_if<caf::none_t>(&ci))
+            continue;
+          // TODO: Make `predicate` accept a data_view as well to save
+          // the call to `materialize()`.
+          by_expr = predicate{key_extractor{*st.by}, equal, materialize(ci)};
         }
-        VAST_TRACE(self, "constructed expression", expr);
-        auto query = to_string(expr);
+        auto build_conjunction
+          = [](std::optional<expression>&& lhs,
+               std::optional<expression>&& rhs) -> std::optional<expression> {
+          if (lhs && rhs)
+            return conjunction{std::move(*lhs), std::move(*rhs)};
+          if (lhs)
+            return std::move(lhs);
+          if (rhs)
+            return std::move(rhs);
+          return std::nullopt;
+        };
+        auto temporal_expr
+          = build_conjunction(std::move(before_expr), std::move(after_expr));
+        auto spatial_expr = std::move(by_expr);
+        auto expr = build_conjunction(std::move(temporal_expr),
+                                      std::move(spatial_expr));
+        // We should have checked during argument parsing that `expr` has at
+        // least one constraint.
+        VAST_ASSERT(expr);
+        VAST_TRACE(self, "constructed expression", *expr);
+        auto query = to_string(*expr);
         VAST_TRACE(self, "spawns new exporter with query", query);
         auto exporter_invocation
           = command::invocation{{}, "spawn exporter", {query}};
@@ -144,7 +189,6 @@ explorer(caf::stateful_actor<explorer_state>* self, caf::actor node,
     },
     [=](caf::actor exp) {
       VAST_DEBUG(self, "registers exporter", exp);
-      auto& st = self->state;
       self->monitor(exp);
       self->send(exp, system::sink_atom::value, self);
       self->send(exp, system::run_atom::value);
