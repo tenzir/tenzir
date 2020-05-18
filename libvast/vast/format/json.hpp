@@ -58,6 +58,8 @@ struct default_selector {
   }
 
   caf::error schema(vast::schema sch) {
+    if (sch.empty())
+      return make_error(ec::invalid_configuration, "no schema provided");
     auto entry = *sch.begin();
     if (!caf::holds_alternative<record_type>(entry))
       return make_error(ec::invalid_configuration,
