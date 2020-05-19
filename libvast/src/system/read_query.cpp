@@ -32,6 +32,8 @@
 #include <caf/stateful_actor.hpp>
 
 #include <chrono>
+#include <cstdio>
+#include <unistd.h>
 
 using namespace caf;
 using namespace std::chrono_literals;
@@ -63,9 +65,15 @@ read_query(const command::invocation& invocation, std::string_view file_option,
     }
   } else if (invocation.arguments.empty()) {
     // Read query from STDIN.
+    if (::isatty(::fileno(stdout)))
+      std::cerr << "please enter a query and confirm with CTRL-D: "
+                << std::flush;
     assign_query(std::cin);
   } else {
     // Assemble expression from all remaining arguments.
+    VAST_WARNING_ANON("spreading a query over multiple arguments is "
+                      "deprecated; please pass it as a single string instead.");
+    VAST_VERBOSE_ANON("(hint: use a heredoc if you run into quoting issues.)");
     result = detail::join(invocation.arguments.begin() + argument_offset,
                           invocation.arguments.end(), " ");
   }

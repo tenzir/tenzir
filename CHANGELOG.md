@@ -10,6 +10,14 @@ Every entry has a category for which we use the following visual abbreviations:
 
 ## Unreleased
 
+- 🎁 VAST now prints a message when it is waiting for user input to read
+  a query from a terminal.
+  [#878](https://github.com/tenzir/vast/pull/878)
+
+- 🔄 Spreading a query over multiple command line arguments in commands
+  like explore/export/pivot/etc. has been deprecated.
+  [#878](https://github.com/tenzir/vast/pull/878)
+
 - 🎁 (experimental) Added a new 'explore' command to VAST that can be used to
   show data records within a certain time from the results of a query.
   [#873](https://github.com/tenzir/vast/pull/873)
