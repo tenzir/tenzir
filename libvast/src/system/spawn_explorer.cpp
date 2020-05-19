@@ -13,6 +13,8 @@
 
 #include "vast/system/spawn_explorer.hpp"
 
+#include "vast/concept/parseable/to.hpp"
+#include "vast/concept/parseable/vast.hpp"
 #include "vast/defaults.hpp"
 #include "vast/filesystem.hpp"
 #include "vast/si_literals.hpp"
@@ -34,18 +36,32 @@ using namespace std::chrono_literals;
 namespace vast::system {
 
 caf::error explorer_validate_args(const caf::settings& args) {
-  auto before_arg = caf::get_if<caf::timespan>(&args, "explore.before");
-  auto after_arg = caf::get_if<caf::timespan>(&args, "explore.after");
+  auto before_arg = caf::get_if<std::string>(&args, "explore.before");
+  auto after_arg = caf::get_if<std::string>(&args, "explore.after");
   auto by_arg = caf::get_if(&args, "explore.by");
   if (!before_arg && !after_arg && !by_arg)
     return make_error(ec::invalid_configuration, "At least one of '--before', "
                                                  "'--after', or '--by' must be "
                                                  "present.");
+  vast::duration before = vast::duration{0s};
+  vast::duration after = vast::duration{0s};
+  if (before_arg) {
+    auto d = to<vast::duration>(*before_arg);
+    if (!d)
+      return make_error(ec::invalid_argument, "Could not parse", *before_arg,
+                        "as duration.");
+    before = *d;
+  }
+  if (after_arg) {
+    auto d = to<vast::duration>(*after_arg);
+    if (!d)
+      return make_error(ec::invalid_argument, "Could not parse", *after_arg,
+                        "as duration.");
+    after = *d;
+  }
   if (!by_arg) {
-    auto before = before_arg ? *before_arg : vast::duration{0s};
-    auto after = after_arg ? *after_arg : vast::duration{0s};
     if (before <= 0s && after <= 0s)
-      return make_error(ec::invalid_configuration,
+      return make_error(ec::invalid_argument,
                         "At least one of '--before' or '--after' must be "
                         "greater than 0 "
                         "if no spatial constraint was specified.");
@@ -58,10 +74,19 @@ maybe_actor spawn_explorer(node_actor* self, spawn_arguments& args) {
     return unexpected_arguments(args);
   if (auto error = explorer_validate_args(args.invocation.options))
     return error;
-  std::optional<vast::duration> before = to_std(
-    caf::get_if<caf::timespan>(&args.invocation.options, "explore.before"));
-  std::optional<vast::duration> after = to_std(
-    caf::get_if<caf::timespan>(&args.invocation.options, "explore.after"));
+  auto maybe_parse
+    = [](caf::optional<std::string>&& str) -> std::optional<vast::duration> {
+    if (!str)
+      return std::nullopt;
+    auto parsed = to<vast::duration>(*str);
+    if (!parsed)
+      return std::nullopt;
+    return *parsed;
+  };
+  auto before = maybe_parse(
+    caf::get_if<std::string>(&args.invocation.options, "explore.before"));
+  auto after = maybe_parse(
+    caf::get_if<std::string>(&args.invocation.options, "explore.after"));
   std::optional<std::string> by
     = to_std(caf::get_if<std::string>(&args.invocation.options, "explore.by"));
   auto expl = self->spawn(explorer, self, before, after, by);

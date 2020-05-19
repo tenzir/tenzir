@@ -292,7 +292,7 @@ tests:
     steps:
       - command: -N import suricata
         input: data/suricata/eve.json
-      - command: -N explore --before=10000h --after=10000h '#type == /suricata.*/'
+      - command: -N explore --before=10years --after=10years '#type == /suricata.*/'
   # TODO(ch15579): Re-enable this test once the slow zeek export is fixed.
   # Explore Zeek With Overlap:
   #   tags: [explore, zeek]

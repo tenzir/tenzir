@@ -34,10 +34,10 @@ TEST(explorer config) {
     MESSAGE("Specifying only time is allowed, as long as it is > 0.");
     caf::settings settings;
     auto& explore = settings["explore"].as_dictionary();
-    explore["before"] = vast::duration{0s};
-    explore["after"] = vast::duration{0s};
+    explore["before"] = "0s";
+    explore["after"] = "0s";
     CHECK_NOT_EQUAL(vast::system::explorer_validate_args(settings), caf::none);
-    explore["after"] = vast::duration{10s};
+    explore["after"] = "10s";
     std::cerr << caf::to_string(settings) << std::endl;
     CHECK_EQUAL(vast::system::explorer_validate_args(settings), caf::none);
   }
@@ -46,8 +46,16 @@ TEST(explorer config) {
     MESSAGE("Specifying only 'by' is allowed.");
     caf::settings settings;
     auto& explore = settings["explore"].as_dictionary();
-    explore["by"] = vast::duration{0s};
+    explore["by"] = "0s";
     CHECK_EQUAL(vast::system::explorer_validate_args(settings), caf::none);
+  }
+
+  {
+    MESSAGE("Malformed input is not allowed.");
+    caf::settings settings;
+    auto& explore = settings["after"].as_dictionary();
+    explore["by"] = "MIP = RE";
+    CHECK_NOT_EQUAL(vast::system::explorer_validate_args(settings), caf::none);
   }
 
   {
