@@ -17,14 +17,17 @@ table Segment {
   /// The version of the segment.
   version: Version;
 
+  /// The contained table slices.
+  slices: [TableSliceBuffer];
+
   /// A unique identifier.
   uuid: [ubyte];
 
   /// The ID intervals this segment covers.
   ids: [Interval];
 
-  /// The contained table slices.
-  slices: [TableSliceBuffer];
+  /// The number of events in the store.
+  events: ulong;
 }
 
 root_type Segment;
