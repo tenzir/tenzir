@@ -71,9 +71,13 @@ read_query(const command::invocation& invocation, std::string_view file_option,
     assign_query(std::cin);
   } else {
     // Assemble expression from all remaining arguments.
-    VAST_WARNING_ANON("spreading a query over multiple arguments is "
-                      "deprecated; please pass it as a single string instead.");
-    VAST_VERBOSE_ANON("(hint: use a heredoc if you run into quoting issues.)");
+    if (invocation.arguments.size() > 1) {
+      VAST_WARNING_ANON("spreading a query over multiple arguments is "
+                        "deprecated; please pass it as a single string "
+                        "instead.");
+      VAST_VERBOSE_ANON("(hint: use a heredoc if you run into quoting "
+                        "issues.)");
+    }
     result = detail::join(invocation.arguments.begin() + argument_offset,
                           invocation.arguments.end(), " ");
   }
