@@ -20,28 +20,36 @@ env:
 jobs:
 
   build:
-    name: ${{ matrix.os.tag }} ${{ matrix.compiler.tag }} ${{ matrix.configure.tag }}
+    name: ${{ matrix.os.tag }} ${{ matrix.os.compiler }} ${{ matrix.configure.tag }}
     strategy:
       matrix:
         os:
         - tag: Ubuntu
           name: ubuntu-latest
           extra-flags:
-        compiler:
-        - tag: Clang
-          cc: clang-9
-          cxx: clang++-9
-        - tag: GCC
+          compiler: GCC
           cc: gcc-9
           cxx: g++-9
+        - tag: Ubuntu
+          name: ubuntu-latest
+          extra-flags:
+          compiler: Clang
+          cc: clang-9
+          cxx: clang++-9
+        - tag: macOS
+          name: macOS-latest
+          extra-flags:
+          compiler: AppleClang
+          cc: clang
+          cxx: clang++
         configure:
         - tag: Release
           flags: --release
           ci-flags: --ci-build
     runs-on: ${{ matrix.os.name }}
     env:
-      CC: ${{ matrix.compiler.cc }}
-      CXX: ${{ matrix.compiler.cxx }}
+      CC: ${{ matrix.os.cc }}
+      CXX: ${{ matrix.os.cxx }}
       BUILD_DIR: build
     steps:
       - uses: actions/checkout@v2
@@ -60,6 +68,7 @@ jobs:
           python-version: '3.7'
 
       - name: Configure GCloud Credentials
+        if: matrix.os.tag != 'macOS'
         uses: GoogleCloudPlatform/github-actions/setup-gcloud@master
         with:
           version: '275.0.0'
@@ -77,10 +86,21 @@ jobs:
           sudo apt-get -qq update
           sudo apt-get -qqy install libarrow-dev
 
+      - name: Install macOS Dependencies
+        if: matrix.os.tag == 'macOS'
+        env:
+          HOMEBREW_GITHUB_API_TOKEN: ${{ github.token }}
+          HOMEBREW_NO_ANALYTICS: 1
+          HOMEBREW_NO_INSTALL_CLEANUP: 1
+          HOMEBREW_NO_AUTO_UPDATE: 1
+        run: |
+          brew --version
+          brew install libpcap tcpdump rsync pandoc apache-arrow pkg-config ninja
+
       - name: Configure Environment
         id: configure_env
         run: |
-          PACKAGE_NAME="$(echo "vast-$(git describe)-$(uname -s)-${{ matrix.configure.tag }}-${{ matrix.compiler.tag }}" | awk '{ print tolower($0) }')"
+          PACKAGE_NAME="$(echo "vast-$(git describe)-$(uname -s)-${{ matrix.configure.tag }}-${{ matrix.os.compiler }}" | awk '{ print tolower($0) }')"
           BUILD_DIR="build"
           ## the upload artifact action cannot resolve environment variables
           echo "::set-output name=package_name::$PACKAGE_NAME"
@@ -146,12 +166,12 @@ jobs:
           path: "${{ steps.configure_env.outputs.build_dir }}/${{ steps.configure_env.outputs.package_name }}.tar.gz"
 
       - name: Upload Artifact to GCS
-        if: github.ref == 'refs/heads/master' || startsWith(github.ref, 'refs/tags')
+        if: matrix.os.tag != 'macOS' && github.ref == 'refs/heads/master' || startsWith(github.ref, 'refs/tags')
         run: |
           gsutil -m cp "$BUILD_DIR/$PACKAGE_NAME.tar.gz" "gs://${{ secrets.GCS_BUCKET }}"
 
       - name: Publish Docker Image
-        if: ( github.ref == 'refs/heads/master' || startsWith(github.ref, 'refs/tags') ) && matrix.os.tag == 'Ubuntu' && matrix.compiler.tag == 'GCC' && matrix.configure.tag == 'Release'
+        if: ( github.ref == 'refs/heads/master' || startsWith(github.ref, 'refs/tags') ) && matrix.os.tag == 'Ubuntu' && matrix.os.compiler == 'GCC' && matrix.configure.tag == 'Release'
         uses: elgohr/Publish-Docker-Github-Action@2.12
         with:
           name: tenzir/vast
