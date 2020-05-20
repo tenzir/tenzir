@@ -83,14 +83,18 @@ maybe_actor spawn_explorer(node_actor* self, spawn_arguments& args) {
       return std::nullopt;
     return *parsed;
   };
-  auto before = maybe_parse(
-    caf::get_if<std::string>(&args.invocation.options, "explore.before"));
-  auto after = maybe_parse(
-    caf::get_if<std::string>(&args.invocation.options, "explore.after"));
+  const auto& options = args.invocation.options;
+  auto before
+    = maybe_parse(caf::get_if<std::string>(&options, "explore.before"));
+  auto after = maybe_parse(caf::get_if<std::string>(&options, "explore.after"));
   std::optional<std::string> by
-    = to_std(caf::get_if<std::string>(&args.invocation.options, "explore.by"));
-  auto expl = self->spawn(explorer, self, before, after, by);
-  return expl;
+    = to_std(caf::get_if<std::string>(&options, "explore.by"));
+  explorer_state::event_limits limits;
+  limits.total
+    = caf::get_or(options, "explore.max-events", defaults::explore::max_events);
+  limits.per_result
+    = caf::get_or(options, "explore.limit2", defaults::explore::limit2);
+  return self->spawn(explorer, self, limits, before, after, by);
 }
 
 } // namespace vast::system

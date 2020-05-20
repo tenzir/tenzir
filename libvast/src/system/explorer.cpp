@@ -55,26 +55,45 @@ void explorer_state::forward_results(vast::table_slice_ptr slice) {
   }
   if (unseen.empty())
     return;
+  std::vector<table_slice_ptr> slices;
   if (unseen.size() == slice->rows()) {
-    self->send(sink, slice);
-    return;
+    slices.push_back(slice);
+  } else {
+    // If a slice was partially known, divide it up and forward only those
+    // ids that the source hasn't received yet.
+    slices = vast::select(slice, unseen);
   }
-  // If a slice was partially known, divide it up and forward only those
-  // ids that the source hasn't received yet.
-  auto slices = vast::select(slice, unseen);
+  // Send out the prepared slices up to the configured limit.
   for (auto slice : slices) {
-    self->send(sink, slice);
+    VAST_WARNING(self, "limit", limits.total, "sent", sent);
+    if (!limits.total) {
+      self->send(sink, slice);
+      continue;
+    }
+    if (sent == limits.total)
+      break;
+    if (sent + slice->rows() <= limits.total) {
+      self->send(sink, slice);
+      sent += slice->rows();
+    } else {
+      auto truncated = truncate(slice, limits.total - sent);
+      self->send(sink, truncated);
+      sent += truncated->rows();
+    }
   }
   return;
 }
 
 caf::behavior
 explorer(caf::stateful_actor<explorer_state>* self, caf::actor node,
+         explorer_state::event_limits limits,
          std::optional<vast::duration> before,
          std::optional<vast::duration> after, std::optional<std::string> by) {
   auto& st = self->state;
   st.self = self;
   st.node = node;
+  st.limits = limits;
+  st.sent = 0;
   // If none of 'before' and 'after' a given we assume an infinite timebox
   // around each result, but if one of them is given the interval should be
   // finite on both sides.
@@ -107,6 +126,9 @@ explorer(caf::stateful_actor<explorer_state>* self, caf::actor node,
         st.forward_results(slice);
         return;
       }
+      // Dont bother making new queries if we'd discard all results anyways.
+      if (st.limits.total && st.sent >= st.limits.total)
+        return;
       auto& layout = slice->layout();
       auto it = std::find_if(layout.fields.begin(), layout.fields.end(),
                              [](const record_field& field) {
@@ -180,6 +202,10 @@ explorer(caf::stateful_actor<explorer_state>* self, caf::actor node,
         VAST_TRACE(self, "spawns new exporter with query", query);
         auto exporter_invocation
           = command::invocation{{}, "spawn exporter", {query}};
+        VAST_WARNING(self, st.limits.per_result);
+        if (st.limits.per_result)
+          exporter_invocation.options["export"].as_dictionary()["max-events"]
+            = st.limits.per_result;
         self->send(st.node, exporter_invocation);
         ++st.running_exporters;
       }

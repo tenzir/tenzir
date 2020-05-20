@@ -111,7 +111,10 @@ auto make_explore_command() {
                                    " time after each result")
       .add<std::string>("before,B", "include all records up to this much"
                                     " time before each result")
-      .add<std::string>("by", "perform an equijoin on the given field"));
+      .add<std::string>("by", "perform an equijoin on the given field")
+      .add<count>("max-events,n", "maximum number of results")
+      .add<count>("limit1", "maximum results for initial query")
+      .add<count>("limit2", "maximum results per exploration"));
 }
 
 auto make_export_command() {
