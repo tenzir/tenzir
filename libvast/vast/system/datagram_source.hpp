@@ -83,9 +83,6 @@ caf::behavior datagram_source(datagram_source_actor<Reader>* self,
                               uint16_t udp_listening_port, Reader reader,
                               size_t table_slice_size,
                               caf::optional<size_t> max_events) {
-  using namespace caf;
-  using namespace std::chrono;
-  namespace defs = defaults::system;
   // Try to open requested UDP port.
   auto udp_res = self->add_udp_datagram_servant(udp_listening_port);
   if (!udp_res) {
@@ -95,13 +92,16 @@ caf::behavior datagram_source(datagram_source_actor<Reader>* self,
   }
   VAST_DEBUG(self, "starts listening at port", udp_res->second);
   // Initialize state.
-  self->state.init(std::move(reader), std::move(max_events));
+  // TODO fix his
+  self->state.init(std::move(reader), std::move(max_events), {}, {}, {}, {});
   // Spin up the stream manager for the source.
   self->state.mgr = self->make_continuous_source(
     // init
-    [=](caf::unit_t&) { self->state.start_time = system_clock::now(); },
+    [=](caf::unit_t&) {
+      self->state.start_time = std::chrono::system_clock::now();
+    },
     // get next element
-    [](caf::unit_t&, downstream<table_slice_ptr>&, size_t) {
+    [](caf::unit_t&, caf::downstream<table_slice_ptr>&, size_t) {
       // nop, new slices are generated in the new_datagram_msg handler
     },
     // done?
@@ -111,7 +111,7 @@ caf::behavior datagram_source(datagram_source_actor<Reader>* self,
       // Check whether we can buffer more slices in the stream.
       VAST_DEBUG(self, "got a new datagram of size", msg.buf.size());
       auto& st = self->state;
-      auto t = timer::start(st.measurement_);
+      auto t = timer::start(st.metrics);
       auto capacity = st.mgr->out().capacity();
       if (capacity == 0) {
         st.dropped_packets++;
@@ -150,9 +150,14 @@ caf::behavior datagram_source(datagram_source_actor<Reader>* self,
       self->send(st.accountant, "source.start", st.start_time);
       self->send(st.accountant, announce_atom::value, st.name);
       // Start the heartbeat loop
-      self->delayed_send(self, defs::telemetry_rate, telemetry_atom::value);
+      self->delayed_send(self, defaults::system::telemetry_rate,
+                         telemetry_atom::value);
     },
-    [=](sink_atom, const actor& sink) {
+    [=](type_registry_type type_registry) {
+      // TODO adapt
+      VAST_DEBUG(self, "sets type-registry to", type_registry);
+    },
+    [=](sink_atom, const caf::actor& sink) {
       // TODO: Currently, we use a broadcast downstream manager. We need to
       //       implement an anycast downstream manager and use it for the
       //       source, because we mustn't duplicate data.
@@ -161,10 +166,10 @@ caf::behavior datagram_source(datagram_source_actor<Reader>* self,
       // Start streaming.
       self->state.mgr->add_outbound_path(sink);
     },
-    [=](get_atom, schema_atom) -> result<schema> {
+    [=](get_atom, schema_atom) -> caf::result<schema> {
       return self->state.reader.schema();
     },
-    [=](put_atom, schema& sch) -> result<void> {
+    [=](put_atom, schema& sch) -> caf::result<void> {
       if (auto err = self->state.reader.schema(std::move(sch)))
         return err;
       return caf::unit;
@@ -182,8 +187,10 @@ caf::behavior datagram_source(datagram_source_actor<Reader>* self,
         st.dropped_packets = 0;
       }
       if (!st.done)
-        self->delayed_send(self, defs::telemetry_rate, telemetry_atom::value);
-    }};
+        self->delayed_send(self, defaults::system::telemetry_rate,
+                           telemetry_atom::value);
+    },
+  };
 }
 
 } // namespace vast::system

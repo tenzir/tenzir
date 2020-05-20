@@ -36,6 +36,7 @@
 #include "vast/system/source.hpp"
 #include "vast/system/spawn_or_connect_to_node.hpp"
 #include "vast/system/tracker.hpp"
+#include "vast/system/type_registry.hpp"
 #include "vast/table_slice_builder.hpp"
 
 #include <caf/actor_cast.hpp>
@@ -92,20 +93,10 @@ import_command(const command::invocation& invocation, caf::actor_system& sys) {
   auto slice_type = defaults::import::table_slice_type(sys, options);
   auto slice_size = get_or(options, "system.table-slice-size",
                            defaults::system::table_slice_size);
-  // Parse schema.
-  // TODO: Get the schema from the type-registry instead.
+  // Parse schema local to the import command.
   auto schema = get_schema(options, category);
   if (!schema)
     return caf::make_message(schema.error());
-  if (type) {
-    auto p = schema->find(*type);
-    if (p == nullptr)
-      return caf::make_message(
-        make_error(ec::lookup_error, "type not found", *type));
-    auto selected_type = *p;
-    schema->clear();
-    schema->add(selected_type);
-  }
   if constexpr (std::is_same_v<Policy, vast::policy::source_generator>) {
     if (!max_events)
       return caf::make_message(make_error(ec::invalid_configuration,
@@ -113,8 +104,6 @@ import_command(const command::invocation& invocation, caf::actor_system& sys) {
                                           "to be set"));
     auto seed = Defaults::seed(options);
     reader = std::make_unique<Reader>(slice_type, seed, *max_events);
-    if (auto err = reader->schema(*schema))
-      return caf::make_message(err);
   } else if constexpr (std::is_same_v<Policy, vast::policy::source_reader>) {
     // Discern the input source (file, stream, or socket).
     if (uri && file)
@@ -144,8 +133,6 @@ import_command(const command::invocation& invocation, caf::actor_system& sys) {
         }
       }
       reader = std::make_unique<Reader>(slice_type, options);
-      if (schema)
-        reader->schema(*schema);
       auto run = [&](auto&& source) {
         auto& mm = sys.middleman();
         return mm.spawn_broker(std::forward<decltype(source)>(source),
@@ -170,8 +157,6 @@ import_command(const command::invocation& invocation, caf::actor_system& sys) {
       else
         VAST_INFO_ANON("source-command spawns reader for file", *file);
       reader = std::make_unique<Reader>(slice_type, options, std::move(*in));
-      if (schema)
-        reader->schema(*schema);
     }
   } else {
     static_assert(detail::always_false_v<Policy>, "unsupported policy");
@@ -181,15 +166,6 @@ import_command(const command::invocation& invocation, caf::actor_system& sys) {
                                                             "reader"));
   VAST_VERBOSE(*reader, "produces", slice_type, "table slices of", slice_size,
                "events");
-  src = sys.spawn(source<Reader>, std::move(*reader), slice_size, max_events);
-  // Attempt to parse the remainder as an expression.
-  if (!invocation.arguments.empty()) {
-    auto expr = parse_expression(invocation.arguments.begin(),
-                                 invocation.arguments.end());
-    if (!expr)
-      return make_message(std::move(expr.error()));
-    self->send(src, std::move(*expr));
-  }
   // Get VAST node.
   auto node_opt
     = spawn_or_connect_to_node(self, invocation.options, content(sys.config()));
@@ -204,53 +180,71 @@ import_command(const command::invocation& invocation, caf::actor_system& sys) {
   auto guard = system::signal_monitor::run_guarded(
     sig_mon_thread, sys, defaults::system::signal_monitoring_interval, self);
   // Get node components.
-  auto components = get_node_components(self, node, {"accountant", "importer"});
+  auto components = get_node_components(
+    self, node, {"accountant", "type-registry", "importer"});
   if (!components)
     return make_message(components.error());
-  if (auto& accountant = (*components)[0]) {
-    VAST_DEBUG(invocation.full_name, "assigns accountant to source");
-    self->send(src, caf::actor_cast<accountant_type>(accountant));
+  auto accountant = caf::actor_cast<accountant_type>((*components)[0]);
+  auto type_registry = caf::actor_cast<type_registry_type>((*components)[1]);
+  if (!type_registry)
+    return make_message(make_error(ec::missing_component, "type-registry"));
+  // Spawn the source.
+  if (!src)
+    src = sys.spawn(source<Reader>, std::move(*reader), slice_size, max_events,
+                    type_registry, schema ? std::move(*schema) : vast::schema{},
+                    type ? vast::data{std::move(*type)} : vast::data{},
+                    accountant);
+  // Attempt to parse the remainder as an expression.
+  if (!invocation.arguments.empty()) {
+    auto expr = parse_expression(invocation.arguments.begin(),
+                                 invocation.arguments.end());
+    if (!expr)
+      return make_message(std::move(expr.error()));
+    self->send(src, std::move(*expr));
   }
   // Connect source to importer.
-  auto& importer = (*components)[1];
+  auto& importer = (*components)[2];
   if (!importer)
     return make_message(make_error(ec::missing_component, "importer"));
-  VAST_DEBUG(invocation.full_name, "connects to importer");
+  VAST_DEBUG(invocation.full_name, "connects to",
+             VAST_ARG("importer", importer));
   self->send(src, system::sink_atom::value, importer);
   // Start the source.
   bool stop = false;
   self->monitor(src);
   self->monitor(importer);
-  // clang-format off
-  self->do_receive(
-    [&](const caf::down_msg& msg) {
-      if (msg.source == importer)  {
-        VAST_DEBUG(invocation.full_name, "received DOWN from node importer");
-        self->send_exit(src, caf::exit_reason::user_shutdown);
-        err = ec::remote_node_down;
-        stop = true;
-      } else if (msg.source == src) {
-        VAST_DEBUG(invocation.full_name, "received DOWN from source");
-        if (caf::get_or(invocation.options, "import.blocking", false))
-          self->send(importer, subscribe_atom::value, flush_atom::value, self);
-        else
+  self
+    ->do_receive(
+      [&](const caf::down_msg& msg) {
+        if (msg.source == importer) {
+          VAST_DEBUG(invocation.full_name, "received DOWN from node importer");
+          self->send_exit(src, caf::exit_reason::user_shutdown);
+          err = ec::remote_node_down;
           stop = true;
-      } else {
-        VAST_DEBUG(invocation.full_name, "received unexpected DOWN from", msg.source);
-        VAST_ASSERT(!"unexpected DOWN message");
-      }
-    },
-    [&](flush_atom) {
-      VAST_DEBUG(invocation.full_name, "received flush from IMPORTER");
-      stop = true;
-    },
-    [&](system::signal_atom, int signal) {
-      VAST_DEBUG(invocation.full_name, "got " << ::strsignal(signal));
-      if (signal == SIGINT || signal == SIGTERM)
-        self->send_exit(src, caf::exit_reason::user_shutdown);
-    }
-  ).until(stop);
-  // clang-format on
+        } else if (msg.source == src) {
+          VAST_DEBUG(invocation.full_name, "received DOWN from source");
+          if (caf::get_or(invocation.options, "import.blocking", false))
+            self->send(importer, subscribe_atom::value, flush_atom::value,
+                       self);
+          else
+            stop = true;
+        } else {
+          VAST_DEBUG(invocation.full_name, "received unexpected DOWN from",
+                     msg.source);
+          VAST_ASSERT(!"unexpected DOWN message");
+        }
+      },
+      [&](flush_atom) {
+        VAST_DEBUG(invocation.full_name, "received flush from IMPORTER");
+        stop = true;
+      },
+      [&](system::signal_atom, int signal) {
+        VAST_DEBUG(invocation.full_name, "received signal",
+                   ::strsignal(signal));
+        if (signal == SIGINT || signal == SIGTERM)
+          self->send_exit(src, caf::exit_reason::user_shutdown);
+      })
+    .until(stop);
   if (err)
     return make_message(std::move(err));
   return caf::none;
