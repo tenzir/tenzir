@@ -1,7 +1,1 @@
-{
-  "layouts": {
-    "pcap.packet": {
-      "count": 1000
-    }
-  }
-}
+{"layouts": {"pcap.packet": {"count": 1000}}}
