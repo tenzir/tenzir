@@ -38,9 +38,16 @@ class TestCallStackCreation(unittest.TestCase):
         self.vast.import_().pcap(read=path)
         self.assertEqual(self.vast.call_stack, ["import", "pcap", f"--read={path}"])
 
-    def test_underscore_replacement(self):
+    def test_underscore_replacement_in_parameters(self):
         self.assertEqual(self.vast.call_stack, [])
         self.vast.export(max_events=10).json("192.168.1.104")
         self.assertEqual(
             self.vast.call_stack, ["export", "--max-events=10", "json", "192.168.1.104"]
+        )
+
+    def test_underscore_replacement_in_subcommands(self):
+        self.assertEqual(self.vast.call_stack, [])
+        self.vast.matcher().ioc_remove(name='foo', ioc='bar')
+        self.assertEqual(
+            self.vast.call_stack, ["matcher", "ioc-remove", "--name=foo", "--ioc=bar"]
         )

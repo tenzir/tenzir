@@ -67,7 +67,7 @@ class VAST:
         if name.endswith("_"):
             # trim trailing underscores to overcome the 'import' keyword
             name = name[:-1]
-        self.call_stack.append(name)
+        self.call_stack.append(name.replace('_', '-'))
 
         def method(*args, **kwargs):
             if kwargs:
