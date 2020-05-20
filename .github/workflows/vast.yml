@@ -13,6 +13,8 @@ on:
     paths-ignore:
     - '**.md'
     - '!doc/**.md'
+    - examples
+    - pyvast
   release:
     types: published
 env:
