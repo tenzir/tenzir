@@ -28,11 +28,10 @@
 #include "vast/system/configuration.hpp"
 #include "vast/system/count_command.hpp"
 #include "vast/system/explore_command.hpp"
-#include "vast/system/generator_command.hpp"
+#include "vast/system/import_command.hpp"
 #include "vast/system/infer_command.hpp"
 #include "vast/system/pivot_command.hpp"
 #include "vast/system/raft.hpp"
-#include "vast/system/reader_command.hpp"
 #include "vast/system/remote_command.hpp"
 #include "vast/system/start_command.hpp"
 #include "vast/system/stop_command.hpp"
@@ -360,26 +359,25 @@ auto make_command_factory() {
 #if VAST_HAVE_PCAP
     {"export pcap", pcap_writer_command},
 #endif
-    {"export zeek",
-     writer_command<format::zeek::writer, defaults::export_::zeek>},
+    {"export zeek", writer_command<format::zeek::writer,
+      defaults::export_::zeek>},
     {"infer", infer_command},
-    {"import csv",
-     reader_command<format::csv::reader, defaults::import::csv>},
-    {"import json",
-     reader_command<format::json::reader<>, defaults::import::json>},
+    {"import csv", import_command<policy::source_reader,
+      format::csv::reader, defaults::import::csv>},
+    {"import json", import_command<policy::source_reader,
+      format::json::reader<>, defaults::import::json>},
 #if VAST_HAVE_PCAP
-    {"import pcap",
-     reader_command<format::pcap::reader, defaults::import::pcap>},
+    {"import pcap", import_command<policy::source_reader,
+      format::pcap::reader, defaults::import::pcap>},
 #endif
-    {"import suricata",
-     reader_command<format::json::reader<format::json::suricata>,
-                    defaults::import::suricata>},
-    {"import syslog",
-     reader_command<format::syslog::reader, defaults::import::syslog>},
-    {"import test",
-     generator_command<format::test::reader, defaults::import::test>},
-    {"import zeek",
-     reader_command<format::zeek::reader, defaults::import::zeek>},
+    {"import suricata", import_command<policy::source_reader,
+      format::json::reader<format::json::suricata>, defaults::import::suricata>},
+    {"import syslog", import_command<policy::source_reader,
+      format::syslog::reader, defaults::import::syslog>},
+    {"import test", import_command<policy::source_generator,
+      format::test::reader, defaults::import::test>},
+    {"import zeek", import_command<policy::source_reader,
+      format::zeek::reader, defaults::import::zeek>},
     {"kill", remote_command},
     {"peer", remote_command},
     {"pivot", pivot_command},
@@ -450,7 +448,7 @@ void render_error(const command& root, const caf::error& err,
           if (auto cmd = resolve(root, name))
             helptext(*cmd, os);
         } else {
-          VAST_ASSERT("User visible error contexts must consist of strings!");
+          VAST_ASSERT(!"User visible error contexts must consist of strings!");
         }
         break;
       }
