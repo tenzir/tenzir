@@ -21,6 +21,7 @@ Every entry has a category for which we use the following visual abbreviations:
 - 🎁 (experimental) Added a new 'explore' command to VAST that can be used to
   show data records within a certain time from the results of a query.
   [#873](https://github.com/tenzir/vast/pull/873)
+  [#877](https://github.com/tenzir/vast/pull/877)
 
 - 🔄 The command line flag for disabling the accountant has been renamed to
   `--disable-metrics` to more accurately reflect it's intended purpose. The

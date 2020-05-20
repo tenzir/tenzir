@@ -26,6 +26,7 @@
 #include "vast/system/read_query.hpp"
 #include "vast/system/signal_monitor.hpp"
 #include "vast/system/sink.hpp"
+#include "vast/system/spawn_explorer.hpp"
 #include "vast/system/spawn_or_connect_to_node.hpp"
 #include "vast/system/start_command.hpp"
 #include "vast/system/tracker.hpp"
@@ -48,14 +49,8 @@ caf::message
 explore_command(const command::invocation& invocation, caf::actor_system& sys) {
   VAST_DEBUG_ANON(invocation);
   const auto& options = invocation.options;
-  auto before = caf::get_or(options, "explore.before", vast::duration{0s});
-  auto after = caf::get_or(options, "explore.after", vast::duration{0s});
-  // TODO: Add some way for users to pass "infinity" for either value.
-  if (before == 0s && after == 0s)
-    return caf::make_message(make_error(ec::invalid_configuration,
-                                        "Either the '--before' or the "
-                                        "'--after' option must "
-                                        "be present and non-zero."));
+  if (auto error = explorer_validate_args(invocation.options))
+    return make_message(error);
   // Read query from input file, STDIN or CLI arguments.
   auto query = read_query(invocation, "export.read", 0);
   if (!query)
@@ -103,9 +98,6 @@ explore_command(const command::invocation& invocation, caf::actor_system& sys) {
   });
   // Spawn explorer at the node.
   auto explorer_options = invocation.options;
-  auto& explore_dict = explorer_options["explore"].as_dictionary();
-  explore_dict["before"] = before;
-  explore_dict["after"] = after;
   auto spawn_explorer = command::invocation{explorer_options, "spawn explorer"};
   VAST_DEBUG(&invocation, "spawns explorer with parameters:", spawn_explorer);
   auto explorer = spawn_at_node(self, node, spawn_explorer);

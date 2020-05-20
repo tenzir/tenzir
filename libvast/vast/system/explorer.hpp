@@ -41,6 +41,9 @@ struct explorer_state {
   /// Size of the timespan after each event.
   std::optional<vast::duration> after;
 
+  /// Field by which to restrict the result set for each event.
+  std::optional<std::string> by;
+
   /// Keeps a record of the ids that were already returned to the sink,
   /// for the purpose of deduplication.
   std::unordered_set<size_t> returned_ids;
@@ -71,11 +74,10 @@ struct explorer_state {
 /// @param node The node actor to spawn exporters in.
 /// @param before Size of the time box prior to each result.
 /// @param after Size of the time box after each result.
-//  TODO:  The functionality is very close to what the pivoter already does. It
-//         should be possible to make a slightly more generic actor that can
-//         handle both use cases.
+/// @param by Field by which to restrict the result set for each element.
 caf::behavior
 explorer(caf::stateful_actor<explorer_state>* self, caf::actor node,
-         vast::duration before, vast::duration after);
+         std::optional<vast::duration> before,
+         std::optional<vast::duration> after, std::optional<std::string> by);
 
 } // namespace vast::system

@@ -58,6 +58,8 @@ enum class ec : uint8_t {
   invalid_synopsis_type,
   /// A command failed, because the remote node failed.
   remote_node_down,
+  /// A command failed because it received an invalid argument.
+  invalid_argument,
   /// A command failed because it received an invalid result.
   invalid_result,
   /// A command failed because its configuration was invalid.

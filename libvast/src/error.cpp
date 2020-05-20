@@ -43,6 +43,7 @@ const char* descriptions[] = {
   "invalid_table_slice_type",
   "invalid_synopsis_type",
   "remote_node_down",
+  "invalid_argument",
   "invalid_result",
   "invalid_configuration",
   "unrecognized_option",
