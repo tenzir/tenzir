@@ -71,7 +71,7 @@ caf::error type_registry_state::load_from_disk() {
 
 void type_registry_state::insert(vast::type layout) {
   [[maybe_unused]] auto [hint, success]
-    = data[layout.name()].insert(std::move(layout));
+    = data[layout.name()].insert(flatten(std::move(layout)));
   if (success)
     VAST_VERBOSE(self, "registered", hint->name());
 }
