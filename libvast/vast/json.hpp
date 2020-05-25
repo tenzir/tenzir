@@ -16,6 +16,7 @@
 #include "vast/concept/printable/to.hpp"
 #include "vast/detail/narrow.hpp"
 #include "vast/detail/operators.hpp"
+#include "vast/detail/overload.hpp"
 #include "vast/detail/stable_map.hpp"
 #include "vast/detail/type_traits.hpp"
 
@@ -233,6 +234,44 @@ json to_json(const T& x, Opts&&... opts) {
 }
 
 json::object combine(const json::object& lhs, const json::object& rhs);
+
+namespace detail {
+
+template <class F>
+void each_field_impl(const json& x, F f, std::string& prefix) {
+  caf::visit(
+    // This comment exists merely for clang-format.
+    detail::overload(
+      // For json objects we recurse deeper.
+      [&](const json::object& obj) {
+        for (const auto& [k, v] : obj) {
+          auto cutoff = k.size();
+          if (!prefix.empty()) {
+            prefix += '.';
+            cutoff += 1;
+          }
+          prefix += k;
+          each_field_impl(v, f, prefix);
+          prefix.resize(prefix.size() - cutoff);
+        }
+      },
+      // For everything else, we have reached a leaf and invoke the functor.
+      [&](const auto& j) { std::invoke(std::move(f), prefix, json{j}); }),
+    x);
+}
+
+} // namespace detail
+
+/// Invoke a functor for each leaf field of the JSON object, carrying along a
+/// list of prefixes that reflect the parent objects keys.
+/// @relates json
+template <class F>
+void each_field(const json& x, F f) {
+  static_assert(std::is_invocable_v<F, std::string&, const json&>,
+                "f does not match the required signature");
+  auto prefix = std::string{};
+  detail::each_field_impl(x, std::move(f), prefix);
+}
 
 } // namespace vast
 
