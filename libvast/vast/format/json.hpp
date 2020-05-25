@@ -13,9 +13,12 @@
 
 #pragma once
 
+#include "vast/concept/hashable/hash_append.hpp"
+#include "vast/concept/hashable/xxhash.hpp"
 #include "vast/concept/parseable/vast/json.hpp"
 #include "vast/defaults.hpp"
 #include "vast/detail/line_range.hpp"
+#include "vast/detail/stable_map.hpp"
 #include "vast/error.hpp"
 #include "vast/event.hpp"
 #include "vast/format/multi_layout_reader.hpp"
@@ -53,25 +56,39 @@ caf::error add(table_slice_builder& builder, const vast::json::object& xs,
 
 /// @relates reader
 struct default_selector {
-  caf::optional<record_type> operator()(const vast::json::object&) {
-    return layout;
+  caf::optional<record_type> operator()(const vast::json::object& obj) const {
+    std::vector<std::string> cache_entry;
+    auto build_cache_entry
+      = [&cache_entry](const std::string& prefix, const vast::json&) {
+          cache_entry.emplace_back(prefix);
+        };
+    each_field(vast::json{obj}, build_cache_entry);
+    std::sort(cache_entry.begin(), cache_entry.end());
+    if (auto search_result = type_cache.find(cache_entry);
+        search_result != type_cache.end())
+      return search_result->second;
+    return caf::none;
   }
 
   caf::error schema(vast::schema sch) {
     if (sch.empty())
       return make_error(ec::invalid_configuration, "no schema provided");
-    auto entry = *sch.begin();
-    if (!caf::holds_alternative<record_type>(entry))
-      return make_error(ec::invalid_configuration,
-                        "only record_types supported for json schema");
-    layout = flatten(caf::get<record_type>(entry));
+    for (auto& entry : sch) {
+      VAST_ASSERT(caf::holds_alternative<record_type>(entry));
+      auto layout = flatten(caf::get<record_type>(entry));
+      std::vector<std::string> cache_entry;
+      for (auto& [k, v] : layout.fields)
+        cache_entry.emplace_back(k);
+      std::sort(cache_entry.begin(), cache_entry.end());
+      type_cache[cache_entry] = layout;
+    }
     return caf::none;
   }
 
   vast::schema schema() const {
     vast::schema result;
-    if (layout)
-      result.add(*layout);
+    for (const auto& [k, v] : type_cache)
+      result.add(v);
     return result;
   }
 
@@ -79,7 +96,7 @@ struct default_selector {
     return "json-reader";
   }
 
-  caf::optional<record_type> layout = caf::none;
+  detail::stable_map<std::vector<std::string>, record_type> type_cache = {};
 };
 
 /// A reader for JSON data. It operates with a *selector* to determine the
