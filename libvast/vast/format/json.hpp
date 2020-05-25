@@ -58,10 +58,9 @@ caf::error add(table_slice_builder& builder, const vast::json::object& xs,
 struct default_selector {
   caf::optional<record_type> operator()(const vast::json::object& obj) const {
     std::vector<std::string> cache_entry;
-    auto build_cache_entry
-      = [&cache_entry](const std::string& prefix, const vast::json&) {
-          cache_entry.emplace_back(prefix);
-        };
+    auto build_cache_entry = [&cache_entry](auto& prefix, const vast::json&) {
+      cache_entry.emplace_back(detail::join(prefix.begin(), prefix.end(), "."));
+    };
     each_field(vast::json{obj}, build_cache_entry);
     std::sort(cache_entry.begin(), cache_entry.end());
     if (auto search_result = type_cache.find(cache_entry);
@@ -72,9 +71,11 @@ struct default_selector {
 
   caf::error schema(vast::schema sch) {
     if (sch.empty())
-      return make_error(ec::invalid_configuration, "no schema provided");
+      return make_error(ec::invalid_configuration, "no schema provided or type "
+                                                   "too restricted");
     for (auto& entry : sch) {
-      VAST_ASSERT(caf::holds_alternative<record_type>(entry));
+      if (!caf::holds_alternative<record_type>(entry))
+        continue;
       auto layout = flatten(caf::get<record_type>(entry));
       std::vector<std::string> cache_entry;
       for (auto& [k, v] : layout.fields)

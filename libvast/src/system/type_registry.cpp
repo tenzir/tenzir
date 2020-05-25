@@ -120,11 +120,10 @@ type_registry(type_registry_actor self, const path& dir) {
   // Load existing state from disk if possible.
   if (auto err = self->state.load_from_disk())
     self->quit(std::move(err));
-  // Load already known types from the event_types singleton.
+  // Load loaded schema types from the singleton.
   auto schema = vast::event_types::get();
-  VAST_ASSERT(schema);
-  for (auto& type : *schema)
-    self->send(self, put_atom::value, type);
+  if (schema)
+    self->send(self, put_atom::value, *schema);
   // The behavior of the type-registry.
   return {
     [=](telemetry_atom) {
@@ -152,6 +151,11 @@ type_registry(type_registry_actor self, const path& dir) {
     [=](put_atom, vast::type x) {
       VAST_TRACE(self, "tries to add", VAST_ARG("type", x.name()));
       self->state.insert(std::move(x));
+    },
+    [=](put_atom, vast::schema x) {
+      VAST_TRACE(self, "tries to add", VAST_ARG("schema", x));
+      for (auto& type : x)
+        self->state.insert(std::move(type));
     },
     [=](get_atom) {
       VAST_TRACE(self, "retrieves a list of all known types");

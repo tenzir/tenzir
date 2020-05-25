@@ -74,7 +74,7 @@ struct source_state {
   // -- constructors, destructors, and assignment operators --------------------
 
   explicit source_state(Self* selfptr)
-    : self(selfptr), reader_initialized(false) {
+    : self{selfptr}, reader_initialized{false} {
     // nop
   }
 
@@ -118,9 +118,6 @@ struct source_state {
   /// The import-local schema.
   vast::schema local_schema;
 
-  /// The import type restriction.
-  vast::data type_restriction;
-
   /// Stores whether `reader` is constructed.
   bool reader_initialized;
 
@@ -130,49 +127,52 @@ struct source_state {
   // -- utility functions ------------------------------------------------------
 
   /// Initializes the state.
-  void init(Reader rd, caf::optional<size_t> max_events,
+  template <class T>
+  void init(T* selfptr, Reader rd, caf::optional<size_t> max_events,
             type_registry_type type_registry, vast::schema sch,
-            vast::data type_restr, accountant_type acc) {
+            std::string type_filter, accountant_type acc) {
     // Create the reader.
+    self = selfptr;
     name = reader.name();
     new (&reader) Reader(std::move(rd));
     reader_initialized = true;
     remaining = std::move(max_events);
     local_schema = std::move(sch);
-    type_restriction = std::move(type_restr);
-    // Set accountant.
     accountant = std::move(acc);
+    // Register with the accountant.
     self->send(accountant, announce_atom::value, name);
     // Figure out which schemas we need.
     if (type_registry) {
       self->request(type_registry, caf::infinite, get_atom::value)
         .await([=](std::unordered_set<vast::type> types) {
+          auto& st = selfptr->state;
           auto is_valid = [&](const auto& layout) {
-            return caf::holds_alternative<caf::none_t>(type_restriction)
-                   || detail::starts_with(
-                     layout.name(), caf::get<std::string>(type_restriction));
+            return detail::starts_with(layout.name(), type_filter);
           };
           // First, merge and de-duplicate the local schema with types from the
           // type-registry.
-          types.insert(std::make_move_iterator(local_schema.begin()),
-                       std::make_move_iterator(local_schema.end()));
-          local_schema.clear();
+          types.insert(std::make_move_iterator(st.local_schema.begin()),
+                       std::make_move_iterator(st.local_schema.end()));
+          st.local_schema.clear();
           // Second, filter valid types from all available record types.
           for (auto& type : types)
             if (auto layout = caf::get_if<vast::record_type>(&type))
               if (is_valid(*layout))
-                local_schema.add(std::move(*layout));
+                st.local_schema.add(std::move(*layout));
+          // Third, try to set the new schema.
+          if (auto err = reader.schema(std::move(st.local_schema));
+              err && err != caf::no_error)
+            VAST_ERROR(self, "failed to set schema", err);
         });
     } else {
       // We usually expect to have the type registry at the ready, but if we
       // don't we fall back to only using the schemas from disk.
       VAST_WARNING(self, "failed to retrieve registered types and only "
                          "considers types local to the import command");
+      if (auto err = reader.schema(std::move(local_schema));
+          err && err != caf::no_error)
+        VAST_ERROR(self, "failed to set schema", err);
     }
-    // Third, try to set the new schema.
-    if (auto err = reader.schema(std::move(local_schema));
-        err && err != caf::no_error)
-      VAST_ERROR(self, "failed to set schema", err);
   }
 
   void send_report() {
@@ -208,26 +208,25 @@ struct source_state {
 /// @param max_events The optional maximum amount of events to import.
 /// @param type_registry The actor handle for the type-registry component.
 /// @oaram local_schema Additional local schemas to consider.
-/// @param type_restriction Restriction for considered types.
+/// @param type_filter Restriction for considered types.
 /// @param accountant_type The actor handle for the accountant component.
 template <class Reader>
 caf::behavior
 source(caf::stateful_actor<source_state<Reader>>* self, Reader reader,
        size_t table_slice_size, caf::optional<size_t> max_events,
        type_registry_type type_registry, vast::schema local_schema,
-       vast::data type_restriction, accountant_type accountant) {
-  using namespace std::chrono;
+       std::string type_filter, accountant_type accountant) {
   // Initialize state.
   auto& st = self->state;
-  st.init(std::move(reader), std::move(max_events), std::move(type_registry),
-          std::move(local_schema), std::move(type_restriction),
-          std::move(accountant));
+  st.init(self, std::move(reader), std::move(max_events),
+          std::move(type_registry), std::move(local_schema),
+          std::move(type_filter), std::move(accountant));
   // Spin up the stream manager for the source.
   st.mgr = self->make_continuous_source(
     // init
     [=](bool& done) {
       done = false;
-      caf::timestamp now = system_clock::now();
+      caf::timestamp now = std::chrono::system_clock::now();
       self->send(self->state.accountant, "source.start", now);
     },
     // get next element
@@ -270,7 +269,7 @@ source(caf::stateful_actor<source_state<Reader>>* self, Reader reader,
   return {
     [=](get_atom, schema_atom) { return self->state.reader.schema(); },
     [=](put_atom, schema sch) -> caf::result<void> {
-      VAST_VERBOSE(self, "received", VAST_ARG("schema", sch));
+      VAST_DEBUG(self, "received", VAST_ARG("schema", sch));
       auto& st = self->state;
       if (auto err = self->state.reader.schema(std::move(sch));
           err && err != caf::no_error)
@@ -280,7 +279,7 @@ source(caf::stateful_actor<source_state<Reader>>* self, Reader reader,
     [=](expression& expr) {
       VAST_INFO(self, "sets filter expression to", expr);
       auto& st = self->state;
-      self->state.filter = std::move(expr);
+      st.filter = std::move(expr);
     },
     [=](sink_atom, const caf::actor& sink) {
       VAST_ASSERT(sink);
@@ -298,12 +297,12 @@ source(caf::stateful_actor<source_state<Reader>>* self, Reader reader,
       self->delayed_send(self, defaults::system::telemetry_rate,
                          telemetry_atom::value);
       // Start streaming.
-      self->state.mgr->add_outbound_path(st.sink);
+      st.mgr->add_outbound_path(st.sink);
     },
     [=](telemetry_atom) {
       auto& st = self->state;
       st.send_report();
-      if (!self->state.mgr->done())
+      if (!st.mgr->done())
         self->delayed_send(self, defaults::system::telemetry_rate,
                            telemetry_atom::value);
     },
@@ -316,7 +315,9 @@ caf::behavior default_source(caf::stateful_actor<source_state<Reader>>* self,
                              Reader reader) {
   auto slice_size = get_or(self->system().config(), "system.table-slice-size",
                            defaults::system::table_slice_size);
-  return source(self, std::move(reader), slice_size, caf::none, {}, {}, {}, {});
+  //  The last five arguments are optional, and not required for the minimum
+  //  behavior of the "default" source.
+  return source(self, std::move(reader), slice_size, {}, {}, {}, {}, {});
 }
 
 } // namespace vast::system

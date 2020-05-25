@@ -14,6 +14,7 @@
 #pragma once
 
 #include "vast/filesystem.hpp"
+#include "vast/schema.hpp"
 #include "vast/system/accountant.hpp"
 #include "vast/system/atoms.hpp"
 #include "vast/type.hpp"
@@ -34,6 +35,7 @@ using type_registry_type = caf::typed_actor<
   caf::replies_to<status_atom>::with<caf::dictionary<caf::config_value>>,
   caf::reacts_to<caf::stream<table_slice_ptr>>,
   caf::reacts_to<put_atom, vast::type>,
+  caf::reacts_to<put_atom, vast::schema>,
   caf::replies_to<get_atom>::with<std::unordered_set<vast::type>>,
   caf::replies_to<get_atom, std::string>::with<std::unordered_set<vast::type>>
 >;

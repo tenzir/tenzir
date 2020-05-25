@@ -77,12 +77,21 @@ using datagram_source_actor = caf::stateful_actor<datagram_source_state<Reader>,
 /// An event producer.
 /// @tparam Reader The concrete source implementation.
 /// @param self The actor handle.
+/// @param udp_listening_port The requested port.
 /// @param reader The reader instance.
+/// @param table_slice_size The maximum size for a table slice.
+/// @param max_events The optional maximum amount of events to import.
+/// @param type_registry The actor handle for the type-registry component.
+/// @oaram local_schema Additional local schemas to consider.
+/// @param type_filter Restriction for considered types.
+/// @param accountant_type The actor handle for the accountant component.
 template <class Reader>
-caf::behavior datagram_source(datagram_source_actor<Reader>* self,
-                              uint16_t udp_listening_port, Reader reader,
-                              size_t table_slice_size,
-                              caf::optional<size_t> max_events) {
+caf::behavior
+datagram_source(datagram_source_actor<Reader>* self,
+                uint16_t udp_listening_port, Reader reader,
+                size_t table_slice_size, caf::optional<size_t> max_events,
+                type_registry_type type_registry, vast::schema local_schema,
+                std::string type_filter, accountant_type accountant) {
   // Try to open requested UDP port.
   auto udp_res = self->add_udp_datagram_servant(udp_listening_port);
   if (!udp_res) {
@@ -92,10 +101,12 @@ caf::behavior datagram_source(datagram_source_actor<Reader>* self,
   }
   VAST_DEBUG(self, "starts listening at port", udp_res->second);
   // Initialize state.
-  // TODO fix his
-  self->state.init(std::move(reader), std::move(max_events), {}, {}, {}, {});
+  auto& st = self->state;
+  st.init(self, std::move(reader), std::move(max_events),
+          std::move(type_registry), std::move(local_schema),
+          std::move(type_filter), std::move(accountant));
   // Spin up the stream manager for the source.
-  self->state.mgr = self->make_continuous_source(
+  st.mgr = self->make_continuous_source(
     // init
     [=](caf::unit_t&) {
       self->state.start_time = std::chrono::system_clock::now();
@@ -163,8 +174,9 @@ caf::behavior datagram_source(datagram_source_actor<Reader>* self,
       //       source, because we mustn't duplicate data.
       VAST_ASSERT(sink != nullptr);
       VAST_DEBUG(self, "registers sink", sink);
+      auto& st = self->state;
       // Start streaming.
-      self->state.mgr->add_outbound_path(sink);
+      st.mgr->add_outbound_path(sink);
     },
     [=](get_atom, schema_atom) -> caf::result<schema> {
       return self->state.reader.schema();
