@@ -15,8 +15,6 @@ The `infer` command also supports schema inference for JSON data. For example,
 this would be the time to annotate fields with additional attributes, such as
 `#timestamp` or `#skip`.
 
-If no type is specified using `--type` / `-t`, or multiple types match based on
-the prefix passed using the option, an exact match based on the field names is
-used to automatically deduce the event type for every line in the input. This
-allows for importing most JSON-formatted data without explicitly specifying the
-event type on the command line.
+If no type prefix is specified with `--type` / `-t`, or multiple types match
+based on the prefix, VAST uses an exact match based on the field names to
+automatically deduce the event type for every line in the input.

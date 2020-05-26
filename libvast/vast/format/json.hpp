@@ -17,8 +17,8 @@
 #include "vast/concept/hashable/xxhash.hpp"
 #include "vast/concept/parseable/vast/json.hpp"
 #include "vast/defaults.hpp"
+#include "vast/detail/flat_map.hpp"
 #include "vast/detail/line_range.hpp"
-#include "vast/detail/stable_map.hpp"
 #include "vast/detail/string.hpp"
 #include "vast/error.hpp"
 #include "vast/event.hpp"
@@ -61,7 +61,7 @@ struct default_selector {
     if (type_cache.empty())
       return caf::none;
     // Iff there is only one type in the type cache, allow the JSON reader to
-    // use it despite it not being a perfect fit.
+    // use it despite not being an exact match.
     if (type_cache.size() == 1)
       return type_cache.begin()->second;
     std::vector<std::string> cache_entry;
@@ -104,7 +104,7 @@ struct default_selector {
     return "json-reader";
   }
 
-  detail::stable_map<std::vector<std::string>, record_type> type_cache = {};
+  detail::flat_map<std::vector<std::string>, record_type> type_cache = {};
 };
 
 /// A reader for JSON data. It operates with a *selector* to determine the
