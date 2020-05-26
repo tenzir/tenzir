@@ -58,6 +58,12 @@ caf::error add(table_slice_builder& builder, const vast::json::object& xs,
 /// @relates reader
 struct default_selector {
   caf::optional<record_type> operator()(const vast::json::object& obj) const {
+    if (type_cache.empty())
+      return caf::none;
+    // Iff there is only one type in the type cache, allow the JSON reader to
+    // use it despite it not being a perfect fit.
+    if (type_cache.size() == 1)
+      return type_cache.begin()->second;
     std::vector<std::string> cache_entry;
     auto build_cache_entry = [&cache_entry](auto& prefix, const vast::json&) {
       cache_entry.emplace_back(detail::join(prefix.begin(), prefix.end(), "."));

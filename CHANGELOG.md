@@ -21,7 +21,9 @@ Every entry has a category for which we use the following visual abbreviations:
   object keys in the data. VAST selects a type _iff_ the set of fields match a
   known type. The `--type` / `-t` option to the `import` command restricts the
   matching to the set of types that share the provided prefix. Omitting `-t`
-  attempts to match JSON against all known types.
+  attempts to match JSON against all known types. If only a single variant of a
+  type is matched, the import falls back to the old behavior and fills in `nil`
+  for mismatched keys.
   [#875](https://github.com/tenzir/vast/pull/875)
 
 - 🎁 VAST now prints a message when it is waiting for user input to read

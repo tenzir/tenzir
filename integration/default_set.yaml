@@ -169,7 +169,7 @@ tests:
   Node json zeek conn:
     tags: [node, import-export, zeek, json]
     steps:
-      - command: -N import json -s @./misc/schema/zeek-conn.schema -t zeek.conn
+      - command: -N import json -s @./misc/schema/zeek-conn.schema -t zeek.conn.custom
         input: data/json/conn.log.json.gz
       - command: -N export ascii 'duration > 6s'
       - command: -N export ascii '#timestamp >= 2011-08-15T03:48'
