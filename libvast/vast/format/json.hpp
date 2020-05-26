@@ -19,6 +19,7 @@
 #include "vast/defaults.hpp"
 #include "vast/detail/line_range.hpp"
 #include "vast/detail/stable_map.hpp"
+#include "vast/detail/string.hpp"
 #include "vast/error.hpp"
 #include "vast/event.hpp"
 #include "vast/format/multi_layout_reader.hpp"
