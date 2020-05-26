@@ -223,6 +223,23 @@ void mantext(const command& cmd, std::ostream& os,
   os << '\n';
 }
 
+/// Merge settings of `src` into `dst`, overwriting existing values
+/// from `dst` if necessary.
+void merge_settings(const caf::settings& src, caf::settings& dst,
+                    size_t depth = 0) {
+  if (depth > 100) {
+    VAST_ERROR_ANON("Exceeded maximum nesting depth in settings.");
+    return;
+  }
+  for (auto& [key, value] : src) {
+    if (caf::holds_alternative<caf::settings>(value))
+      merge_settings(caf::get<caf::settings>(value), dst[key].as_dictionary(),
+                     depth + 1);
+    else
+      dst.insert_or_assign(key, value);
+  }
+}
+
 } // namespace
 
 command::command(std::string_view name, std::string_view description,
@@ -358,17 +375,6 @@ bool init_config(caf::actor_system_config& cfg, const command::invocation& from,
   if (!(from.name() == "start"
         || caf::get_or(from.options, "system.node", false)))
     cfg.set("logger.file-verbosity", caf::atom("quiet"));
-  // Utility function for merging settings.
-  std::function<void(const caf::settings&, caf::settings&)> merge_settings;
-  merge_settings = [&](const caf::settings& src, caf::settings& dst) {
-    for (auto& [key, value] : src)
-      if (caf::holds_alternative<caf::settings>(value)) {
-        merge_settings(caf::get<caf::settings>(value),
-                       dst[key].as_dictionary());
-      } else {
-        dst.insert_or_assign(key, value);
-      }
-  };
   // Merge all CLI settings into the actor_system settings.
   merge_settings(from.options, cfg.content);
   // Allow users to use `system.verbosity` to configure console verbosity.
@@ -435,10 +441,12 @@ run(const command::invocation& invocation, caf::actor_system& sys,
     const command::factory& fact) {
   if (auto search_result = fact.find(invocation.full_name);
       search_result != fact.end()) {
+    // When coming from `main`, the original `sys.config()` was already merged
+    // with the invocation options and this is a no-op, but when coming e.g.
+    // from a remote_command we still need to do it here.
     auto merged_invocation = invocation;
     merged_invocation.options = content(sys.config());
-    for (const auto& [key, value] : invocation.options)
-      merged_invocation.options.insert_or_assign(key, value);
+    merge_settings(invocation.options, merged_invocation.options);
     return std::invoke(search_result->second, merged_invocation, sys);
   }
   // No callback was registered for this command
