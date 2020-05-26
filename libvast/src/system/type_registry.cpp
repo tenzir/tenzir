@@ -16,6 +16,7 @@
 #include "vast/defaults.hpp"
 #include "vast/detail/fill_status_map.hpp"
 #include "vast/error.hpp"
+#include "vast/event_types.hpp"
 #include "vast/load.hpp"
 #include "vast/logger.hpp"
 #include "vast/save.hpp"
@@ -35,15 +36,19 @@ report type_registry_state::telemetry() const {
 
 caf::dictionary<caf::config_value> type_registry_state::status() const {
   caf::dictionary<caf::config_value> result;
-  // TODO: Add some useful information here for the status command.
-  caf::put_dictionary(result, "statistics")
-    .emplace("count", self->state.data.size());
+  // Sorted list of all keys.
+  auto keys = std::vector<std::string>(data.size());
+  std::transform(data.begin(), data.end(), keys.begin(),
+                 [](const auto& x) { return x.first; });
+  std::sort(keys.begin(), keys.end());
+  caf::put(result, "types", keys);
+  // The usual per-component status.
   detail::fill_status_map(result, self);
   return result;
 }
 
 vast::path type_registry_state::filename() const {
-  return dir / "type-registry";
+  return dir / name;
 }
 
 caf::error type_registry_state::save_to_disk() const {
@@ -64,15 +69,26 @@ caf::error type_registry_state::load_from_disk() {
   return caf::none;
 }
 
-void type_registry_state::insert(vast::record_type layout) {
+void type_registry_state::insert(vast::type layout) {
   [[maybe_unused]] auto [hint, success]
-    = data[layout.name()].insert(std::move(layout));
+    = data[layout.name()].insert(flatten(std::move(layout)));
   if (success)
     VAST_VERBOSE(self, "registered", hint->name());
 }
 
+std::unordered_set<vast::type> type_registry_state::types() const {
+  auto result = std::unordered_set<vast::type>{};
+  // TODO: Replace merging logic once libc++ implements unordered_set::merge.
+  // for ([[maybe_unused]] auto& [key, value] : data)
+  //   result.merge(value);
+  for ([[maybe_unused]] auto& [k, v] : data)
+    for (auto& x : v)
+      result.insert(x);
+  return result;
+}
+
 std::unordered_set<vast::type>
-type_registry_state::lookup(std::string key) const {
+type_registry_state::types(std::string key) const {
   if (auto it = data.find(std::move(key)); it != data.end())
     return it->second;
   return {};
@@ -82,6 +98,7 @@ type_registry_behavior
 type_registry(type_registry_actor self, const path& dir) {
   self->state.self = self;
   self->state.dir = dir;
+  // Register with the accountant.
   if (auto accountant = self->system().registry().get(accountant_atom::value)) {
     VAST_DEBUG(self, "connects to", VAST_ARG(accountant));
     self->state.accountant = caf::actor_cast<accountant_type>(accountant);
@@ -89,9 +106,7 @@ type_registry(type_registry_actor self, const path& dir) {
     self->delayed_send(self, defaults::system::telemetry_rate,
                        telemetry_atom::value);
   }
-  // Load from disk if possible.
-  if (auto err = self->state.load_from_disk())
-    self->quit(std::move(err));
+  // Register the exit handler.
   self->set_exit_handler([=](const caf::exit_msg& msg) {
     VAST_DEBUG(self, "received exit from", msg.source,
                "with reason:", msg.reason);
@@ -102,30 +117,56 @@ type_registry(type_registry_actor self, const path& dir) {
         self, "failed to persist state to disk:", self->system().render(err));
     self->quit(msg.reason);
   });
-  return {[=](telemetry_atom) {
-            // Send out a heartbeat.
-            self->send(self->state.accountant, self->state.telemetry());
-            self->delayed_send(self, defaults::system::telemetry_rate,
-                               telemetry_atom::value);
-          },
-          [=](status_atom) {
-            // Send out a status report.
-            return self->state.status();
-          },
-          [=](caf::stream<table_slice_ptr> in) {
-            // Store layout of every incoming table slice.
-            caf::attach_stream_sink(
-              self, in,
-              [=](caf::unit_t&) { VAST_DEBUG(self, "initialized stream"); },
-              [=](caf::unit_t&, table_slice_ptr x) {
-                VAST_TRACE(self, "received new table slice");
-                self->state.insert(std::move(x->layout()));
-              });
-          },
-          [=](std::string name) {
-            // Retrieve a list of known states for a name.
-            return self->state.lookup(name);
-          }};
+  // Load existing state from disk if possible.
+  if (auto err = self->state.load_from_disk())
+    self->quit(std::move(err));
+  // Load loaded schema types from the singleton.
+  auto schema = vast::event_types::get();
+  if (schema)
+    self->send(self, put_atom::value, *schema);
+  // The behavior of the type-registry.
+  return {
+    [=](telemetry_atom) {
+      VAST_TRACE(self, "sends out a telemetry report to the",
+                 VAST_ARG("accountant", self->state.accountant));
+      self->send(self->state.accountant, self->state.telemetry());
+      self->delayed_send(self, defaults::system::telemetry_rate,
+                         telemetry_atom::value);
+    },
+    [=](status_atom) {
+      VAST_TRACE(self, "sends out a status report");
+      return self->state.status();
+    },
+    [=](caf::stream<table_slice_ptr> in) {
+      VAST_TRACE(self, "attaches to", VAST_ARG("stream", in));
+      caf::attach_stream_sink(
+        self, in,
+        [=](caf::unit_t&) {
+          // nop
+        },
+        [=](caf::unit_t&, table_slice_ptr x) {
+          self->state.insert(std::move(x->layout()));
+        });
+    },
+    [=](put_atom, vast::type x) {
+      VAST_TRACE(self, "tries to add", VAST_ARG("type", x.name()));
+      self->state.insert(std::move(x));
+    },
+    [=](put_atom, vast::schema x) {
+      VAST_TRACE(self, "tries to add", VAST_ARG("schema", x));
+      for (auto& type : x)
+        self->state.insert(std::move(type));
+    },
+    [=](get_atom) {
+      VAST_TRACE(self, "retrieves a list of all known types");
+      return self->state.types();
+    },
+    [=](get_atom, std::string name) {
+      VAST_TRACE(self, "retrieves a list of all known types for",
+                 VAST_ARG(name));
+      return self->state.types(name);
+    },
+  };
 }
 
 } // namespace vast::system

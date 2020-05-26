@@ -102,7 +102,7 @@ TEST(type_registry) {
   {
     size_t size = -1;
     std::string name = "mock";
-    self->send(aut, name);
+    self->send(aut, system::get_atom::value, name);
     run();
     bool done = false;
     self

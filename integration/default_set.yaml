@@ -169,7 +169,7 @@ tests:
   Node json zeek conn:
     tags: [node, import-export, zeek, json]
     steps:
-      - command: -N import json -s @./misc/schema/zeek-conn.schema -t zeek.conn
+      - command: -N import json -s @./misc/schema/zeek-conn.schema -t zeek.conn.custom
         input: data/json/conn.log.json.gz
       - command: -N export ascii 'duration > 6s'
       - command: -N export ascii '#timestamp >= 2011-08-15T03:48'
@@ -265,12 +265,6 @@ tests:
         input: data/zeek/conn.log.gz
       - command: -N export -n 10 arrow '#type == "zeek.conn"'
         transformation: python @./misc/scripts/print-arrow.py
-  Type Registry:
-    tags: [import]
-    steps:
-      - command: -N import -n 1 test
-      - command: -N status
-        transformation: jq '.node."type-registry".statistics'
   Import syslog:
     tags: [syslog, import]
     steps:

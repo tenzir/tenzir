@@ -52,6 +52,8 @@ enum class ec : uint8_t {
   syntax_error,
   /// A dictionary or table lookup failed to return a value.
   lookup_error,
+  /// An error caused by wrong internal application logic.
+  logic_error,
   /// Deserialization failed because an unknown implementation type was found.
   invalid_table_slice_type,
   /// Deserialization failed because an unknown implementation type was found.

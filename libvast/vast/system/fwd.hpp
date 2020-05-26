@@ -29,11 +29,10 @@ class default_application;
 class export_command;
 class import_command;
 class node_command;
-class pcap_reader_command;
 class pcap_writer_command;
 class remote_command;
 class sink_command;
-class source_command;
+class import_command;
 class start_command;
 
 // -- structs ------------------------------------------------------------------

@@ -119,7 +119,6 @@ set(libvast_sources
     src/system/remote_command.cpp
     src/system/signal_monitor.cpp
     src/system/sink_command.cpp
-    src/system/source_command.cpp
     src/system/spawn_archive.cpp
     src/system/spawn_arguments.cpp
     src/system/spawn_consensus.cpp

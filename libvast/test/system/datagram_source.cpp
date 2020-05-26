@@ -73,8 +73,10 @@ TEST(zeek conn source) {
   auto hdl = caf::io::datagram_handle::from_int(1);
   auto& mm = sys.middleman();
   mpx.provide_datagram_servant(8080, hdl);
-  auto src = mm.spawn_broker(datagram_source<bf::reader>, uint16_t{8080},
-                             std::move(reader), 100u, caf::none);
+  auto src
+    = mm.spawn_broker(datagram_source<bf::reader>, uint16_t{8080},
+                      std::move(reader), 100u, caf::none, type_registry_type{},
+                      vast::schema{}, std::string{}, accountant_type{});
   run();
   MESSAGE("start sink and initialize stream");
   auto snk = self->spawn(test_sink, src);

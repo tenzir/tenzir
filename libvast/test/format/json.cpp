@@ -125,26 +125,6 @@ TEST(json to data) {
   CHECK_EQUAL(materialize(ptr->at(0, 18)), data{reference});
 }
 
-TEST(json reader) {
-  using reader_type = format::json::reader<format::json::default_selector>;
-  reader_type reader{defaults::system::table_slice_type, caf::settings{},
-                     std::make_unique<std::istringstream>(
-                       std::string{http_log})};
-  schema s;
-  REQUIRE(s.add(http));
-  reader.schema(s);
-  std::vector<table_slice_ptr> slices;
-  auto add_slice = [&](table_slice_ptr ptr) {
-    slices.emplace_back(std::move(ptr));
-  };
-  auto [err, num] = reader.read(9, 5, add_slice);
-  CHECK_EQUAL(err, caf::none);
-  CHECK_EQUAL(num, 9u);
-  CHECK(slices[1]->at(0, 0)
-        == data{unbox(to<vast::time>("2011-08-12T14:59:11.994970Z"))});
-  CHECK(slices[1]->at(0, 18) == vector{data{"text/html"}});
-}
-
 TEST_DISABLED(suricata) {
   using reader_type = format::json::reader<format::json::suricata>;
   auto input = std::make_unique<std::istringstream>(std::string{eve_log});

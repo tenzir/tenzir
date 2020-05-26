@@ -40,6 +40,7 @@ const char* descriptions[] = {
   "version_error",
   "syntax_error",
   "lookup_error",
+  "logic_error",
   "invalid_table_slice_type",
   "invalid_synopsis_type",
   "remote_node_down",

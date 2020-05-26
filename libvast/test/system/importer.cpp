@@ -109,7 +109,9 @@ struct importer_fixture : Base {
     bf::reader reader{vast::defaults::system::table_slice_type, caf::settings{},
                       std::move(stream)};
     return this->self->spawn(system::source<bf::reader>, std::move(reader),
-                             slice_size, caf::none);
+                             slice_size, caf::none,
+                             vast::system::type_registry_type{}, vast::schema{},
+                             std::string{}, vast::system::accountant_type{});
   }
 
   // Checks whether two event buffers are equal.
