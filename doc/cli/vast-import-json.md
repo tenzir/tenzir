@@ -10,7 +10,13 @@ to get a differentiated view of the data.
 
 The `infer` command also supports schema inference for JSON data. For example,
 `head data.json | vast infer` will print a raw schema that can be supplied to
-`--schema-file`/`-s` as file or to `--schema`/`-S` as string. However, after
+`--schema-file` / `-s` as file or to `--schema` / `-S` as string. However, after
 `infer` dumps the schema, the generic type name should still be adjusted and
 this would be the time to annotate fields with additional attributes, such as
 `#timestamp` or `#skip`.
+
+If no type is specified using `--type` / `-t`, or multiple types match based on
+the prefix passed using the option, an exact match based on the field names is
+used to automatically deduce the event type for every line in the input. This
+allows for importing most JSON-formatted data without explicitly specifying the
+event type on the command line.

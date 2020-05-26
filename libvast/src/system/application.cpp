@@ -463,7 +463,7 @@ command::opts_builder source_opts(std::string_view category) {
     .add<std::string>("read,r", "path to input where to read events from")
     .add<std::string>("schema-file,s", "path to alternate schema")
     .add<std::string>("schema,S", "alternate schema as string")
-    .add<std::string>("type,t", "type the data should be parsed as")
+    .add<std::string>("type,t", "filter event type based on prefix matching")
     .add<bool>("uds,d", "treat -r as listening UNIX domain socket");
 }
 
