@@ -87,10 +87,12 @@ set_target_properties(
 target_compile_definitions(broker PRIVATE SQLITE_OMIT_LOAD_EXTENSION)
 # For Clang 10, we need to additionally silence -Wimplicit-int-float-conversion,
 # since it is not included in the ignored warnings list for -isystem yet.
-# TODO The options below should be removed at a later point when this bug is
-# fixed in Clang 10.
-target_compile_options(broker PRIVATE -Wno-implicit-int-float-conversion
-                                      -Wno-unknown-warning-option)
+target_compile_options(broker PRIVATE 
+  -Wno-implicit-int-float-conversion
+  -Wno-missing-field-initializers
+  -Wno-unknown-warning-option
+  -Wno-unused-parameter
+  -Wno-unused-variable)
 target_link_libraries(broker PUBLIC caf::core caf::io caf::openssl)
 install(TARGETS broker DESTINATION ${INSTALL_LIB_DIR})
 

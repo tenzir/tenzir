@@ -98,7 +98,8 @@ explore_command(const command::invocation& invocation, caf::actor_system& sys) {
   });
   // Spawn explorer at the node.
   auto explorer_options = invocation.options;
-  auto spawn_explorer = command::invocation{explorer_options, "spawn explorer"};
+  auto spawn_explorer
+    = command::invocation{explorer_options, "spawn explorer", {}};
   VAST_DEBUG(&invocation, "spawns explorer with parameters:", spawn_explorer);
   auto explorer = spawn_at_node(self, node, spawn_explorer);
   if (!explorer)
