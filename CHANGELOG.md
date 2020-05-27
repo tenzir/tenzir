@@ -4,9 +4,10 @@ This changelog documents all notable user-facing changes of VAST.
 
 Every entry has a category for which we use the following visual abbreviations:
 
-- 🎁 = feature
-- 🔄 = change
-- 🐞 = bugfix
+- 🎁 feature
+- 🧬  experimental feature
+- 🔄 change
+- 🐞 bugfix
 
 ## Unreleased
 
@@ -34,7 +35,7 @@ Every entry has a category for which we use the following visual abbreviations:
   like explore/export/pivot/etc. has been deprecated.
   [#878](https://github.com/tenzir/vast/pull/878)
 
-- 🎁 (experimental) Added a new 'explore' command to VAST that can be used to
+- 🧬 Added a new `explore` command to VAST that can be used to
   show data records within a certain time from the results of a query.
   [#873](https://github.com/tenzir/vast/pull/873)
   [#877](https://github.com/tenzir/vast/pull/877)
