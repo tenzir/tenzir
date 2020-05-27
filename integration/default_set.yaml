@@ -118,7 +118,7 @@ tests:
       - command: import -b zeek
         input: data/zeek/conn.log.gz
       - command: status
-        transformation: jq '.node.index.statistics.layouts | del(."vast.metrics".count)'
+        transformation: jq '.node.index.statistics.layouts | del(."vast.metrics")'
   Server Zeek multiple imports:
     tags: [server, import-export, zeek]
     fixture: ServerTester
@@ -308,4 +308,4 @@ tests:
       - command: -N import json
         input: data/json/sysmon.json
       - command: -N status
-        transformation: jq '.node.index.statistics.layouts | del(."vast.metrics".count)'
+        transformation: jq '.node.index.statistics.layouts | del(."vast.metrics")'
