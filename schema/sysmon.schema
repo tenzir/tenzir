@@ -1,0 +1,560 @@
+// The process creation event provides extended information about a newly
+// created process. The full command line provides context on the process
+// execution. The ProcessGUID field is a unique value for this process across a
+// domain to make event correlation easier. The hash is a full hash of the file
+// with the algorithms in the HashType field.
+type sysmon.ProcessCreation = record {
+    // custom tag mapped to event. i.e ATT&CK technique ID
+    RuleName: string,
+    // Time in UTC when event was created
+    UtcTime: time #timestamp,
+    // Process Guid of the process that got spawned/created (child)
+    ProcessGuid: string,
+    // Process ID used by the os to identify the created process (child)
+    ProcessId: string,
+    // File path of the process being spawned/created. Considered also the child or source process
+    Image: string,
+    // Version of the image associated with the main process (child)
+    FileVersion: string,
+    // Description of the image associated with the main process (child)
+    Description: string,
+    // Product name the image associated with the main process (child) belongs to
+    Product: string,
+    // Company name the image associated with the main process (child) belongs to
+    Company: string,
+    // original file name
+    OriginalFileName: string,
+    // Arguments which were passed to the executable associated with the main process
+    CommandLine: string,
+    // The path without the name of the image associated with the process
+    CurrentDirectory: string,
+    // Name of the account who created the process (child) . It usually contains domain name and user name (Parsed to show only username without the domain)
+    User: string,
+    // Logon GUID of the user who created the new process. Value that can help you correlate this event with others that contain the same Logon GUID (Sysmon Events)
+    LogonGuid: string,
+    // Login ID of the user who created the new process. Value that can help you correlate this event with others that contain the same Logon ID
+    LogonId: string,
+    // ID of the session the user belongs to
+    TerminalSessionId: string,
+    // Integrity label assigned to a process
+    IntegrityLevel: string,
+    // Hashes captured by sysmon driver
+    Hashes: string,
+    // ProcessGUID of the process that spawned/created the main process (child)
+    ParentProcessGuid: string,
+    // Process ID of the process that spawned/created the main process (child)
+    ParentProcessId: string,
+    // File path that spawned/created the main process
+    ParentImage: string,
+    // Arguments which were passed to the executable associated with the parent process
+    ParentCommandLine: string,
+}
+
+// The process accessed event reports when a process opens another process, an
+// operation that's often followed by information queries or reading and writing
+// the address space of the target process. This enables detection of hacking
+// tools that read the memory contents of processes like Local Security
+// Authority (Lsass.exe) in order to steal credentials for use in Pass-the-Hash
+// attacks. Enabling it can generate significant amounts of logging if there are
+// diagnostic utilities active that repeatedly open processes to query their
+// state, so it generally should only be done so with filters that remove
+// expected accesses.
+type sysmon.ProcessAccess = record {
+    // custom tag mapped to event. i.e ATT&CK technique ID
+    RuleName: string,
+    // Time in UTC when event was created
+    UtcTime: time #timestamp,
+    // Process Guid of the source process that opened another process. It is derived from a truncated part of the machine GUID, the process start-time and the process token ID.
+    SourceProcessGuid: string,
+    // Process ID used by the os to identify the source process that opened another process. Derived partially from the EPROCESS kernel structure
+    SourceProcessId: string,
+    // ID of the specific thread inside of the source process that opened another process
+    SourceThreadId: string,
+    // File path of the source process that created a thread in another process
+    SourceImage: string,
+    // Process Guid of the target process
+    TargetProcessGuid: string,
+    // Process ID used by the os to identify the target process
+    TargetProcessId: string,
+    // File path of the target process
+    TargetImage: string,
+    // The access flags (bitmask) associated with the process rights requested for the target process
+    GrantedAccess: string,
+    // Stack trace of where open process is called. Included is the DLL and the relative virtual address of the functions in the call stack right before the open process call
+    CallTrace: string,
+}
+
+// File create operations are logged when a file is created or overwritten. This
+// event is useful for monitoring autostart locations, like the Startup folder,
+// as well as temporary and download directories, which are common places
+// malware drops during initial infection.
+type sysmon.FileCreate = record {
+    // custom tag mapped to event. i.e ATT&CK technique ID
+    RuleName: string,
+    // Time in UTC when event was created
+    UtcTime: time #timestamp,
+    // Process Guid of the process that created the file
+    ProcessGuid: string,
+    // Process ID used by the os to identify the process that created the file (child)
+    ProcessId: string,
+    // File path of the process that created the file
+    Image: string,
+    // Name of the file
+    TargetFilename: string,
+    // File creation time
+    CreationUtcTime: time #timestamp,
+}
+
+// Registry key and value create and delete operations map to this event type,
+// which can be useful for monitoring for changes to Registry autostart
+// locations, or specific malware registry modifications.
+type sysmon.RegistryEventObjectCreateAndDelete = record {
+    // custom tag mapped to event. i.e ATT&CK technique ID
+    RuleName: string,
+    // registry event. Either Create or Delete
+    EventType: string,
+    // Time in UTC when event was created
+    UtcTime: time #timestamp,
+    // Process Guid of the process that created or deleted a registry key
+    ProcessGuid: string,
+    // Process ID used by the os to identify the process that created or deleted a registry key
+    ProcessId: string,
+    // File path of the process that created or deleted a registry key
+    Image: string,
+    // complete path of the registry key
+    TargetObject: string,
+}
+
+// This Registry event type identifies Registry value modifications. The event
+// records the value written for Registry values of type DWORD and QWORD.
+type sysmon.RegistryEventValueSet = record {
+    // custom tag mapped to event. i.e ATT&CK technique ID
+    RuleName: string,
+    // registry event. Registry values modifications
+    EventType: string,
+    // Time in UTC when event was created
+    UtcTime: time #timestamp,
+    // Process Guid of the process that modified a registry value
+    ProcessGuid: string,
+    // Process ID used by the os to identify the process that that modified a registry value
+    ProcessId: string,
+    // File path of the process that that modified a registry value
+    Image: string,
+    // complete path of the registry key
+    TargetObject: string,
+    // Details added to the registry key
+    Details: string,
+}
+
+// Registry key and value rename operations map to this event type, recording
+// the new name of the key or value that was renamed.
+type sysmon.RegistryEventKeyAndValueRename = record {
+    // custom tag mapped to event. i.e ATT&CK technique ID
+    RuleName: string,
+    // registry event. Registry key and value renamed
+    EventType: string,
+    // Time in UTC when event was created
+    UtcTime: time #timestamp,
+    // Process Guid of the process that renamed a registry value and key
+    ProcessGuid: string,
+    // Process ID used by the os to identify the process that renamed a registry value and key
+    ProcessId: string,
+    // File path of the process that renamed a registry value and key
+    Image: string,
+    // complete path of the registry key
+    TargetObject: string,
+    // new name of the registry key
+    NewName: string,
+}
+
+// This event logs when a named file stream is created, and it generates events
+// that log the hash of the contents of the file to which the stream is assigned
+// (the unnamed stream), as well as the contents of the named stream. There are
+// malware variants that drop their executables or configuration settings via
+// browser downloads, and this event is aimed at capturing that based on the
+// browser attaching a Zone.Identifier "mark of the web" stream.
+type sysmon.FileCreateStreamHash = record {
+    // custom tag mapped to event. i.e ATT&CK technique ID
+    RuleName: string,
+    // Time in UTC when event was created
+    UtcTime: time #timestamp,
+    // Process Guid of the process that created the named file stream
+    ProcessGuid: string,
+    // Process ID used by the os to identify the process that created the named file stream
+    ProcessId: string,
+    // File path of the process that created the named file stream
+    Image: string,
+    // Name of the file
+    TargetFilename: string,
+    // File download time
+    CreationUtcTime: time #timestamp,
+    // hash is a full hash of the file with the algorithms in the HashType field
+    Hash: string,
+}
+
+// This event logs when the local sysmon configuration is updated.
+type sysmon.SysmonConfigStateChanged = record {
+    // Time in UTC when event was created
+    UtcTime: time #timestamp,
+    // name of the sysmon config file being updated
+    Configuration: string,
+    // hash (SHA1) of the sysmon config file being updated
+    ConfigurationFileHash: string,
+}
+
+// This event generates when a named pipe is created. Malware often uses named
+// pipes for interprocess communication.
+type sysmon.PipeCreated = record {
+    // TBD
+    EventType: string,
+    // custom tag mapped to event. i.e ATT&CK technique ID
+    RuleName: string,
+    // Time in UTC when event was created
+    UtcTime: time #timestamp,
+    // Process Guid of the process that created the pipe
+    ProcessGuid: string,
+    // Process ID used by the os to identify the process that created the pipe
+    ProcessId: string,
+    // Name of the pipe created
+    PipeName: string,
+    // File path of the process that created the pipe
+    Image: string,
+}
+
+// This event logs when a named pipe connection is made between a client and a
+// server.
+type sysmon.PipeConnected = record {
+    // TBD
+    EventType: string,
+    // custom tag mapped to event. i.e ATT&CK technique ID
+    RuleName: string,
+    // Time in UTC when event was created
+    UtcTime: time #timestamp,
+    // Process Guid of the process that connected the pipe
+    ProcessGuid: string,
+    // Process ID used by the os to identify the process that connected the pipe
+    ProcessId: string,
+    // Name of the pipe connecged
+    PipeName: string,
+    // File path of the process that connected the pipe
+    Image: string,
+}
+
+// When a WMI event filter is registered, which is a method used by malware to
+// execute, this event logs the WMI namespace, filter name and filter
+// expression.
+type sysmon.WmiEventFilter = record {
+    // custom tag mapped to event. i.e ATT&CK technique ID
+    RuleName: string,
+    // wmievent type
+    EventType: string,
+    // Time in UTC when event was created
+    UtcTime: time #timestamp,
+    // wmievent filter operation
+    Operation: string,
+    // user that created the wmi filter
+    User: string,
+    // event namespace where the wmi clas
+    EventNamespace: string,
+    // Wmi filter name being created
+    Name: string,
+    // wmi filter query
+    Query: string,
+}
+
+// The change file creation time event is registered when a file creation time
+// is explicitly modified by a process. This event helps tracking the real
+// creation time of a file. Attackers may change the file creation time of a
+// backdoor to make it look like it was installed with the operating system.
+// Note that many processes legitimately change the creation time of a file; it
+// does not necessarily indicate malicious activity.
+type sysmon.ProcessChangedFileCreationTime = record {
+    // custom tag mapped to event. i.e ATT&CK technique ID
+    RuleName: string,
+    // Time in UTC when event was created
+    UtcTime: time #timestamp,
+    // Process Guid of the process that changed the file creation time
+    ProcessGuid: string,
+    // Process ID used by the os to identify the process changing the file creation time
+    ProcessId: string,
+    // File path of the process that changed the file creation time
+    Image: string,
+    // full path name of the file
+    TargetFilename: string,
+    // new creation time of the file
+    CreationUtcTime: time #timestamp,
+    // previous creation time of the file
+    PreviousCreationUtcTime: time #timestamp,
+}
+
+// This event logs the registration of WMI consumers, recording the consumer
+// name, log, and destination.
+type sysmon.WmiEventConsumer = record {
+    // custom tag mapped to event. i.e ATT&CK technique ID
+    RuleName: string,
+    // wmievent type
+    EventType: string,
+    // Time in UTC when event was created
+    UtcTime: time #timestamp,
+    // wmievent filter operation
+    Operation: string,
+    // user that created the wmi  consumer
+    User: string,
+    // name of the consumer created
+    Name: string,
+    // Type of wmi consumer
+    Type: string,
+    // command of consumer
+    Destination: string,
+}
+
+// When a consumer binds to a filter, this event logs the consumer name and
+// filter path.
+type sysmon.WmiEventConsumerToFilter = record {
+    // custom tag mapped to event. i.e ATT&CK technique ID
+    RuleName: string,
+    // wmievent type
+    EventType: string,
+    // Time in UTC when event was created
+    UtcTime: time #timestamp,
+    // wmievent filter operation
+    Operation: string,
+    // user that created the wmi filter
+    User: string,
+    // Consumer created to bind
+    Consumer: string,
+    // Filter created to bind
+    Filter: string,
+}
+
+// This event generates when a process executes a DNS query, whether the result
+// is successful or fails, cached or not.
+type sysmon.DNSQuery = record {
+    // custom tag mapped to event. i.e ATT&CK technique ID
+    RuleName: string,
+    // Time in UTC when event was created
+    UtcTime: time #timestamp,
+    // Process Guid of the process that executed the DNS query
+    ProcessGuid: string,
+    // Process id of the process that executed the DNS query
+    ProcessId: string,
+    // DNS query name
+    QueryName: string,
+    // DNS query status
+    QueryStatus: string,
+    // DNS query results
+    QueryResults: string,
+    // The full path related to the process that executed the DNS query
+    Image: string,
+}
+
+// This event logs when a file is deleted by a process.
+type sysmon.FileDelete = record {
+    // custom tag mapped to event. i.e ATT&CK technique ID
+    RuleName: string,
+    // Time in UTC when event was created
+    UtcTime: time #timestamp,
+    // Process Guid of the process that deleted the file
+    ProcessGuid: string,
+    // Process ID used by the os to identify the process that deleted the file
+    ProcessId: string,
+    // File path of the process that deleted the file
+    Image: string,
+    // Name of the account who deleted the file.
+    User: string,
+    // full path name of the deleted file
+    TargetFilename: string,
+    // Hashes captured by sysmon driver of the deleted file
+    Hashes: string,
+    // TBD
+    IsExecutable: string,
+    // States if the file was archived when deleted
+    Archived: string,
+}
+
+// The network connection event logs TCP/UDP connections on the machine. It is
+// disabled by default. Each connection is linked to a process through the
+// ProcessId and ProcessGUID fields. The event also contains the source and
+// destination host names IP addresses, port numbers and IPv6 status.
+type sysmon.NetworkConnection = record {
+    // custom tag mapped to event. i.e ATT&CK technique ID
+    RuleName: string,
+    // Time in UTC when event was created
+    UtcTime: time #timestamp,
+    // Process Guid of the process that made the network connection
+    ProcessGuid: string,
+    // Process ID used by the os to identify the process that made the network connection
+    ProcessId: string,
+    // File path of the process that made the network connection
+    Image: string,
+    // Name of the account who made the network connection. It usually containes domain name and user name
+    User: string,
+    // Protocol being used for the network connection
+    Protocol: string,
+    // Indicated process initiated tcp connection
+    Initiated: string,
+    // is the source ip an Ipv6
+    SourceIsIpv6: string,
+    // source ip address that made the network connection
+    SourceIp: addr,
+    // name of the host that made the network connection
+    SourceHostname: string,
+    // source port number
+    SourcePort: string,
+    // name of the source port being used (i.e. netbios-dgm)
+    SourcePortName: string,
+    // is the destination ip an Ipv6
+    DestinationIsIpv6: string,
+    // ip address destination
+    DestinationIp: addr,
+    // name of the host that received the network connection
+    DestinationHostname: string,
+    // destination port number
+    DestinationPort: string,
+    // name of the destination port
+    DestinationPortName: string,
+}
+
+// The service state change event reports the state of the Sysmon service
+// (started or stopped).
+type sysmon.SysmonServiceStateChanged = record {
+    // Time in UTC when event was created
+    UtcTime: time #timestamp,
+    // sysmon service state (i.e. stopped)
+    State: string,
+    // sysmon version
+    Version: string,
+    // sysmon config schema version
+    SchemaVersion: string,
+}
+
+// The process terminate event reports when a process terminates. It provides
+// the UtcTime, ProcessGuid and ProcessId of the process.
+type sysmon.ProcessTerminated = record {
+    // custom tag mapped to event. i.e ATT&CK technique ID
+    RuleName: string,
+    // Time in UTC when event was created
+    UtcTime: time #timestamp,
+    // Process Guid of the process that terminated
+    ProcessGuid: string,
+    // Process ID used by the os to identify the process that terminated
+    ProcessId: string,
+    // File path of the process that terminated
+    Image: string,
+}
+
+// The driver loaded events provides information about a driver being loaded on
+// the system. The configured hashes are provided as well as signature
+// information. The signature is created asynchronously for performance reasons
+// and indicates if the file was removed after loading.
+type sysmon.DriverLoaded = record {
+    // custom tag mapped to event. i.e ATT&CK technique ID
+    RuleName: string,
+    // Time in UTC when event was created
+    UtcTime: time #timestamp,
+    // full path of the driver loaded
+    ImageLoaded: string,
+    // Hashes captured by sysmon driver
+    Hashes: string,
+    // is the driver loaded signed
+    Signed: string,
+    // The signer
+    Signature: string,
+    // status of the signature (i.e valid)
+    SignatureStatus: string,
+}
+
+// The image loaded event logs when a module is loaded in a specific process.
+// This event is disabled by default and needs to be configured with the -l
+// option. It indicates the process in which the module is loaded, hashes and
+// signature information. The signature is created asynchronously for
+// performance reasons and indicates if the file was removed after loading. This
+// event should be configured carefully, as monitoring all image load events
+// will generate a large number of events.
+type sysmon.ImageLoaded = record {
+    // custom tag mapped to event. i.e ATT&CK technique ID
+    RuleName: string,
+    // Time in UTC when event was created
+    UtcTime: time #timestamp,
+    // Process Guid of the process that loaded the image
+    ProcessGuid: string,
+    // Process ID used by the os to identify the process that loaded the image
+    ProcessId: string,
+    // File path of the process that loaded the image
+    Image: string,
+    // full path of the image loaded
+    ImageLoaded: string,
+    // Version of the image loaded
+    FileVersion: string,
+    // Description of the image loaded
+    Description: string,
+    // Product name the image loaded belongs to
+    Product: string,
+    // Company name the image loaded belongs to
+    Company: string,
+    // original file name
+    OriginalFileName: string,
+    // hash is a full hash of the file with the algorithms in the HashType field
+    Hashes: string,
+    // is the image loaded signed
+    Signed: string,
+    // The signer
+    Signature: string,
+    // status of the signature (i.e valid)
+    SignatureStatus: string,
+}
+
+// The CreateRemoteThread event detects when a process creates a thread in
+// another process. This technique is used by malware to inject code and hide in
+// other processes. The event indicates the source and target process. It gives
+// information on the code that will be run in the new thread: StartAddress,
+// StartModule and StartFunction. Note that StartModule and StartFunction fields
+// are inferred, they might be empty if the starting address is outside loaded
+// modules or known exported functions.
+type sysmon.CreateRemoteThread = record {
+    // custom tag mapped to event. i.e ATT&CK technique ID
+    RuleName: string,
+    // Time in UTC when event was created
+    UtcTime: time #timestamp,
+    // Process Guid of the source process that created a thread in another process
+    SourceProcessGuid: string,
+    // Process ID used by the os to identify the source process that created a thread in another process
+    SourceProcessId: string,
+    // File path of the source process that created a thread in another process
+    SourceImage: string,
+    // Process Guid of the target process
+    TargetProcessGuid: string,
+    // Process ID used by the os to identify the target process
+    TargetProcessId: string,
+    // File path of the target process
+    TargetImage: string,
+    // Id of the new thread created in the target process
+    NewThreadId: string,
+    // New thread start address
+    StartAddress: string,
+    // Start module determined from thread start address mapping to PEB loaded module list
+    StartModule: string,
+    // Start function is reported if exact match to function in image export table
+    StartFunction: string,
+}
+
+// The RawAccessRead event detects when a process conducts reading operations
+// from the drive using the .\ denotation. This technique is often used by
+// malware for data exfiltration of files that are locked for reading, as well
+// as to avoid file access auditing tools. The event indicates the source
+// process and target device.
+type sysmon.RawAccessRead = record {
+    // custom tag mapped to event. i.e ATT&CK technique ID
+    RuleName: string,
+    // Time in UTC when event was created
+    UtcTime: time #timestamp,
+    // Process Guid of the process that conducted reading operations from the drive
+    ProcessGuid: string,
+    // Process ID used by the os to identify the process that conducted reading operations from the drive
+    ProcessId: string,
+    // File path of the process that conducted reading operations from the drive
+    Image: string,
+    // Target device
+    Device: string,
+}
+

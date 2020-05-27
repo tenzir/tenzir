@@ -271,7 +271,7 @@ source(caf::stateful_actor<source_state<Reader>>* self, Reader reader,
     [=](put_atom, schema sch) -> caf::result<void> {
       VAST_DEBUG(self, "received", VAST_ARG("schema", sch));
       auto& st = self->state;
-      if (auto err = self->state.reader.schema(std::move(sch));
+      if (auto err = st.reader.schema(std::move(sch));
           err && err != caf::no_error)
         return err;
       return caf::unit;
