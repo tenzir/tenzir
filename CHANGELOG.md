@@ -6,7 +6,7 @@ Every entry has a category for which we use the following visual abbreviations:
 
 - 🎁 feature
 - 🧬  experimental feature
-- 🔄 change
+- ⚠️ change
 - 🐞 bugfix
 
 ## Unreleased
@@ -31,7 +31,7 @@ Every entry has a category for which we use the following visual abbreviations:
   a query from a terminal.
   [#878](https://github.com/tenzir/vast/pull/878)
 
-- 🔄 Spreading a query over multiple command line arguments in commands
+- ⚠️ Spreading a query over multiple command line arguments in commands
   like explore/export/pivot/etc. has been deprecated.
   [#878](https://github.com/tenzir/vast/pull/878)
 
@@ -40,7 +40,7 @@ Every entry has a category for which we use the following visual abbreviations:
   [#873](https://github.com/tenzir/vast/pull/873)
   [#877](https://github.com/tenzir/vast/pull/877)
 
-- 🔄 The command line flag for disabling the accountant has been renamed to
+- ⚠️ The command line flag for disabling the accountant has been renamed to
   `--disable-metrics` to more accurately reflect its intended purpose. The
   internal `vast.statistics` event has been renamed to `vast.metrics`.
   [#870](https://github.com/tenzir/vast/pull/870)
@@ -67,7 +67,7 @@ Every entry has a category for which we use the following visual abbreviations:
   an error exit code upon failure.
   [#849](https://github.com/tenzir/vast/pull/849)
 
-- 🔄 The option `--skip-candidate-checks` / `-s` for the `count` command
+- ⚠️ The option `--skip-candidate-checks` / `-s` for the `count` command
   was renamed to `--estimate` / `-e`.
   [#843](https://github.com/tenzir/vast/pull/843)
 
@@ -97,7 +97,7 @@ Every entry has a category for which we use the following visual abbreviations:
   script located at `scripts/vast-completions.bash` in the VAST source tree.
   [#833](https://github.com/tenzir/vast/pull/833)
 
-- 🔄 The index specific options `max-partition-size`, `max-resident-partitions`,
+- ⚠️ The index specific options `max-partition-size`, `max-resident-partitions`,
   `max-taste-partitions`, and `max-queries` can now be specified on the command
   line when starting a node.
   [#728](https://github.com/tenzir/vast/pull/728)
@@ -111,7 +111,7 @@ Every entry has a category for which we use the following visual abbreviations:
   [#827](https://github.com/tenzir/pull/827)
   [#844](https://github.com/tenzir/pull/844)
 
-- 🔄 The default bind address has been changed from `::` to `localhost`.
+- ⚠️ The default bind address has been changed from `::` to `localhost`.
   [#828](https://github.com/tenzir/vast/pull/828)
 
 - 🐞 Archive lookups are now interruptible. This change fixes an issue that
@@ -127,12 +127,12 @@ Every entry has a category for which we use the following visual abbreviations:
   (for now), and will be fixed at a later point in time.
   [#808](https://github.com/tenzir/vast/pull/808)
 
-- 🔄 The config option `system.log-directory` was deprecated and replaced
+- ⚠️ The config option `system.log-directory` was deprecated and replaced
   by the new option `system.log-file`. All logs will now be written to a
   single file.
   [#806](https://github.com/tenzir/vast/pull/803)
 
-- 🔄 The log folder `vast.log/` in the current directory will not be created
+- ⚠️ The log folder `vast.log/` in the current directory will not be created
   by default any more. Users must explicitly set the `system.file-verbosity`
   option if they wish to keep the old behavior.
   [#803](https://github.com/tenzir/vast/pull/803)
@@ -146,12 +146,12 @@ Every entry has a category for which we use the following visual abbreviations:
   implementation that increased performance to the point where it is on par with
   the regular index. [#796](https://github.com/tenzir/vast/796)
 
-- 🔄 The VERBOSE log level has been added between INFO and DEBUG. This level
+- ⚠️ The VERBOSE log level has been added between INFO and DEBUG. This level
   is enabled at build time for all build types, making it possible to get more
   detailed logging output from release builds.
   [#787](https://github.com/tenzir/pull/787)
 
-- 🔄 The command line options prefix for changing CAF options was changed from
+- ⚠️ The command line options prefix for changing CAF options was changed from
   `--caf#` to `--caf.`. [#797](https://github.com/tenzir/pull/797)
 
 - 🐞 Expressions must now be parsed to the end of input. This fixes a bug that
@@ -160,7 +160,7 @@ Every entry has a category for which we use the following visual abbreviations:
   evaluated as `#type == "suricata.http"` instead.
   [#791](https://github.com/tenzir/pull/791)
 
-- 🔄 The internal statistics event type `vast.account` has been renamed to
+- ⚠️ The internal statistics event type `vast.account` has been renamed to
   `vast.statistics` for clarity. [#789](https://github.com/tenzir/pull/789)
 
 - 🐞 The short option `-c` for setting the configuration file has been removed.
@@ -186,18 +186,18 @@ Every entry has a category for which we use the following visual abbreviations:
   for more than 500 milliseconds.
   [#750](https://github.com/tenzir/vast/pull/750)
 
-- 🔄 Hash indices have been disabled again due to a performance regression.
+- ⚠️ Hash indices have been disabled again due to a performance regression.
   [#765](https://github.com/tenzir/vast/pull/765)
 
-- 🔄 The option `--directory` has been replaced by `--db-directory` and
+- ⚠️ The option `--directory` has been replaced by `--db-directory` and
   `log-directory`, which set directories for persistent state and log files
   respectively. The default log file path has changed from `vast.db/log` to
   `vast.log`. [#758](https://github.com/tenzir/vast/pull/758)
 
-- 🔄 VAST now supports (and requires) Apache Arrow >= 0.16.
+- ⚠️ VAST now supports (and requires) Apache Arrow >= 0.16.
   [#751](https://github.com/tenzir/vast/pull/751)
 
-- 🔄 The option `--historical` for export commands has been removed, as it was
+- ⚠️ The option `--historical` for export commands has been removed, as it was
   the default already. [#754](https://github.com/tenzir/vast/pull/754)
 
 - 🎁 For users of the [Nix](https://nixos.org/nix/) package manager, expressions
@@ -205,14 +205,14 @@ Every entry has a category for which we use the following visual abbreviations:
   `nix-shell`.
   [#740](https://github.com/tenzir/vast/pull/740)
 
-- 🔄 The build system will from now on try use the CAF library from the system,
+- ⚠️ The build system will from now on try use the CAF library from the system,
   if one is provided. If it is not found, the CAF submodule will be used as a
   fallback.
   [#740](https://github.com/tenzir/vast/pull/740)
 
 ## [2020.01.31]
 
-- 🔄 VAST is switching to a calendar-based versioning scheme starting with this
+- ⚠️ VAST is switching to a calendar-based versioning scheme starting with this
   release.
   [#739](https://github.com/tenzir/vast/pull/739)
 
@@ -231,12 +231,12 @@ Every entry has a category for which we use the following visual abbreviations:
   character occurred in the last position.
   [#685](https://github.com/tenzir/vast/pull/685)
 
-- 🔄 Record field names can now be entered as quoted strings in the schema
+- ⚠️ Record field names can now be entered as quoted strings in the schema
   and expression languages. This lifts a restriction where JSON fields
   with whitespaces or special characters could not be ingested.
   [#685](https://github.com/tenzir/vast/pull/685)
 
-- 🔄 Two minor modifications were done in the parsing framework: (i) the parsers
+- ⚠️ Two minor modifications were done in the parsing framework: (i) the parsers
   for enums and records now allow trailing separators, and (ii) the dash (`-`)
   was removed from the allowed characters of schema type names.
   [#706](https://github.com/tenzir/vast/pull/706)
@@ -248,7 +248,7 @@ Every entry has a category for which we use the following visual abbreviations:
 - 🐞 A race condition in the index logic was able to lead to incomplete or empty
   result sets for `vast export`. [#703](https://github.com/tenzir/vast/pull/703)
 
-- 🔄 Build configuration defaults have been adapated for a better user
+- ⚠️ Build configuration defaults have been adapated for a better user
   experience. Installations are now relocatable by default, which can be
   reverted by configuring with `--without-relocatable`. Additionally, new sets
   of defaults named `--release` and `--debug` (renamed from `--dev-mode`) have
@@ -294,7 +294,7 @@ Every entry has a category for which we use the following visual abbreviations:
   that packet will be captured and provided as packet data.
   [#642](https://github.com/tenzir/vast/pull/642)
 
-- 🔄 The `import pcap` command no longer takes interface names via `--read,-r`,
+- ⚠️ The `import pcap` command no longer takes interface names via `--read,-r`,
   but instead from a separate option named `--interface,-i`. This change has
   been made for consistency with other tools.
   [#641](https://github.com/tenzir/vast/pull/641)
@@ -307,7 +307,7 @@ Every entry has a category for which we use the following visual abbreviations:
 - 🎁 The `export null` command retrieves data, but never prints anything. Its
   main purpose is to make benchmarking VAST easier and faster.
 
-- 🔄 The query language has been extended to support expression of the form
+- ⚠️ The query language has been extended to support expression of the form
   `X == /pattern/`, where `X` is a compatible LHS extractor. Previously,
   patterns only supports the match operator `~`. The two operators have the
   same semantics when one operand is a pattern.
@@ -342,12 +342,12 @@ Every entry has a category for which we use the following visual abbreviations:
 - 🎁 Commands now support a `--documentation` option, which returns
   Markdown-formatted documentation text.
 
-- 🔄 CAF and Broker are no longer required to be installed prior to building
+- ⚠️ CAF and Broker are no longer required to be installed prior to building
   VAST. These dependencies are now tracked as git submodules to ensure version
   compatibility. Specifying a custom build is still possible via the CMake
   variables `CAF_ROOT_DIR` and `BROKER_ROOT_DIR`.
 
-- 🔄 When exporting data in `pcap` format, it is no longer necessary to
+- ⚠️ When exporting data in `pcap` format, it is no longer necessary to
   manually restrict the query by adding the predicate `#type == "pcap.packet"`
   to the expression. This now happens automatically because only this type
   contains the raw packet data.
@@ -367,7 +367,7 @@ Every entry has a category for which we use the following visual abbreviations:
 - 🎁 A new schema for Argus CSV output has been added. It parses the output of
   `ra(1)`, which produces CSV output when invoked with `-L 0 -c ,`.
 
-- 🔄 When defining schema attributes in key-value pair form, the value no
+- ⚠️ When defining schema attributes in key-value pair form, the value no
   longer requires double-quotes. For example, `#foo=x` is now the same as
   `#foo="x"`. The form without double-quotes consumes the input until the next
   space and does not support escaping. In case an attribute value contains
@@ -377,7 +377,7 @@ Every entry has a category for which we use the following visual abbreviations:
   comment. Comments last until the end of the line, i.e., until a newline
   character (`\n`).
 
-- 🔄 The PCAP packet type gained the additional field `community_id` that
+- ⚠️ The PCAP packet type gained the additional field `community_id` that
   contains the [Community ID](https://github.com/corelight/community-id-spec)
   flow hash. This identifier facilitates pivoting to a specific flow from data
   sources with connnection-level information, such Zeek or Suricata logs.
@@ -399,7 +399,7 @@ Every entry has a category for which we use the following visual abbreviations:
   by creating cycling references. All recursive parsers have been updated to
   break such cycles and thus no longer leak memory.
 
-- 🔄 Log files generally have some notion of timestamp for recorded events. To
+- ⚠️ Log files generally have some notion of timestamp for recorded events. To
   make the query language more intuitive, the syntax for querying time points
   thus changed from `#time` to `#timestamp`. For example,
   `#time > 2019-07-02+12:00:00` now reads `#timestamp > 2019-07-02+12:00:00`.
@@ -430,16 +430,16 @@ Every entry has a category for which we use the following visual abbreviations:
 - 🎁 The `accountant` object in the output from `vast status` has a new field
   `log-file` that points to the filesystem path of the accountant log file.
 
-- 🔄 Default schema definitions for certain `import` formats changed from
+- ⚠️ Default schema definitions for certain `import` formats changed from
   hard-coded to runtime-evaluated. The default location of the schema
   definition files is `$(dirname vast-executable)`/../share/vast/schema.
   Currently this is used for the Suricata JSON log reader.
 
-- 🔄 The default directory name for persistent state changed from `vast` to
+- ⚠️ The default directory name for persistent state changed from `vast` to
   `vast.db`. This makes it possible to run `./vast` in the current directory
   without having to specify a different state directory on the command line.
 
-- 🔄 Nested types are from now on accessed by the `.`-syntax. This means
+- ⚠️ Nested types are from now on accessed by the `.`-syntax. This means
   VAST now has a unified syntax to select nested types and fields.
   For example, what used to be `zeek::http` is now just `zeek.http`.
 
@@ -474,14 +474,14 @@ Every entry has a category for which we use the following visual abbreviations:
   internal timestamp value. Both fields have been removed from the output,
   bringing it into line with the other output formats.
 
-- 🔄 The (internal) option `--node` for the `import` and `export` commands
+- ⚠️ The (internal) option `--node` for the `import` and `export` commands
   has been renamed from `-n` to `-N`, to allow usage of `-n` for
   `--max-events`.
 
 - 🎁 For symmetry to the `export` command, the `import` command gained the
   `--max-events,n` option to limit the number of events that will be imported.
 
-- 🔄 To make the export option to limit the number of events to be exported
+- ⚠️ To make the export option to limit the number of events to be exported
   more idiomatic, it has been renamed from `--events,e` to `--max-events,n`.
   Now `vast export -n 42` generates at most 42 events.
 
