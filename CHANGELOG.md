@@ -9,7 +9,9 @@ Every entry has a category for which we use the following visual abbreviations:
 - ⚠️ change
 - 🐞 bugfix
 
-## Unreleased
+<!-- ## Unreleased -->
+
+## [2020.05.28]
 
 - 🎁 VAST now ships with a schema suitable for Sysmon import.
   [#886](https://github.com/tenzir/vast/pull/886)
@@ -519,3 +521,4 @@ This is the first official release.
 [2020.02.27]: https://github.com/tenzir/vast/releases/tag/2020.02.27
 [2020.03.26]: https://github.com/tenzir/vast/releases/tag/2020.03.26
 [2020.04.29]: https://github.com/tenzir/vast/releases/tag/2020.04.29
+[2020.05.28]: https://github.com/tenzir/vast/releases/tag/2020.05.28
