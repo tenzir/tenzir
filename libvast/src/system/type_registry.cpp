@@ -79,8 +79,7 @@ void type_registry_state::insert(vast::type layout) {
 std::unordered_set<vast::type> type_registry_state::types() const {
   auto result = std::unordered_set<vast::type>{};
   // TODO: Replace merging logic once libc++ implements unordered_set::merge.
-  // for ([[maybe_unused]] auto& [key, value] : data)
-  //   result.merge(value);
+  //   result.merge(data);
   for ([[maybe_unused]] auto& [k, v] : data)
     for (auto& x : v)
       result.insert(x);
