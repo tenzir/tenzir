@@ -41,7 +41,7 @@ Every entry has a category for which we use the following visual abbreviations:
   [#877](https://github.com/tenzir/vast/pull/877)
 
 - 🔄 The command line flag for disabling the accountant has been renamed to
-  `--disable-metrics` to more accurately reflect it's intended purpose. The
+  `--disable-metrics` to more accurately reflect its intended purpose. The
   internal `vast.statistics` event has been renamed to `vast.metrics`.
   [#870](https://github.com/tenzir/vast/pull/870)
 
