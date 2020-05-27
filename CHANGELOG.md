@@ -11,6 +11,9 @@ Every entry has a category for which we use the following visual abbreviations:
 
 ## Unreleased
 
+- 🎁 VAST now ships with a schema suitable for Sysmon import.
+  [#886](https://github.com/tenzir/vast/pull/886)
+
 - 🎁 When importing events of a new or updated type, VAST now only requires the
   type to be specified once (e.g., in a schema file). For consecutive imports,
   the event type does not need to be specified again. A list of registered types
