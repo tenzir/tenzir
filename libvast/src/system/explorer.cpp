@@ -27,6 +27,7 @@
 #include "vast/table_slice_builder_factory.hpp"
 
 #include <caf/event_based_actor.hpp>
+#include <caf/settings.hpp>
 
 #include <algorithm>
 #include <optional>
@@ -65,20 +66,15 @@ void explorer_state::forward_results(vast::table_slice_ptr slice) {
   }
   // Send out the prepared slices up to the configured limit.
   for (auto slice : slices) {
-    VAST_WARNING(self, "limit", limits.total, "sent", sent);
-    if (!limits.total) {
-      self->send(sink, slice);
-      continue;
-    }
-    if (sent == limits.total)
+    if (num_sent >= limits.total)
       break;
-    if (sent + slice->rows() <= limits.total) {
+    if (num_sent + slice->rows() <= limits.total) {
       self->send(sink, slice);
-      sent += slice->rows();
+      num_sent += slice->rows();
     } else {
-      auto truncated = truncate(slice, limits.total - sent);
+      auto truncated = truncate(slice, limits.total - num_sent);
       self->send(sink, truncated);
-      sent += truncated->rows();
+      num_sent += truncated->rows();
     }
   }
   return;
@@ -93,7 +89,7 @@ explorer(caf::stateful_actor<explorer_state>* self, caf::actor node,
   st.self = self;
   st.node = node;
   st.limits = limits;
-  st.sent = 0;
+  st.num_sent = 0;
   // If none of 'before' and 'after' a given we assume an infinite timebox
   // around each result, but if one of them is given the interval should be
   // finite on both sides.
@@ -126,8 +122,8 @@ explorer(caf::stateful_actor<explorer_state>* self, caf::actor node,
         st.forward_results(slice);
         return;
       }
-      // Dont bother making new queries if we'd discard all results anyways.
-      if (st.limits.total && st.sent >= st.limits.total)
+      // Don't bother making new queries if we discard all results anyways.
+      if (st.num_sent >= st.limits.total)
         return;
       auto& layout = slice->layout();
       auto it = std::find_if(layout.fields.begin(), layout.fields.end(),
@@ -197,15 +193,13 @@ explorer(caf::stateful_actor<explorer_state>* self, caf::actor node,
         // We should have checked during argument parsing that `expr` has at
         // least one constraint.
         VAST_ASSERT(expr);
-        VAST_TRACE(self, "constructed expression", *expr);
         auto query = to_string(*expr);
         VAST_TRACE(self, "spawns new exporter with query", query);
         auto exporter_invocation
           = command::invocation{{}, "spawn exporter", {query}};
-        VAST_WARNING(self, st.limits.per_result);
         if (st.limits.per_result)
-          exporter_invocation.options["export"].as_dictionary()["max-events"]
-            = st.limits.per_result;
+          caf::put(exporter_invocation.options, "export.max-events",
+                   st.limits.per_result);
         self->send(st.node, exporter_invocation);
         ++st.running_exporters;
       }

@@ -295,9 +295,11 @@ tests:
       - command: -N explore --before=10years --after=10years '#type == /suricata.*/'
       - command: -N explore --max-events=3 --before=10years --after=10years '#type == /suricata.*/'
         transformation: wc -l | tr -d ' '
-      - command: -N explore --limit1=1 --before=10years --after=10years '#type == /suricata.*/'
+      - command: -N explore --max-events-query=1 --before=10years --after=10years '#type == /suricata.*/'
         transformation: wc -l | tr -d ' '
-      - command: -N explore --limit1=1 --limit2=1 --before=10years --after=10years '#type == /suricata.*/'
+      - command: -N explore --max-events-query=3 --before=0s --after=1ns '#type == /suricata.*/'
+        transformation: wc -l | tr -d ' '
+      - command: -N explore --max-events-query=1 --max-events-context=2 --before=10years --after=10years '#type == /suricata.*/'
         transformation: wc -l | tr -d ' '
   # TODO(ch15579): Re-enable this test once the slow zeek export is fixed.
   # Explore Zeek With Overlap:

@@ -29,8 +29,8 @@ namespace vast::system {
 
 struct explorer_state {
   struct event_limits {
-    int64_t total;
-    int64_t per_result;
+    uint64_t total;
+    uint64_t per_result;
   };
 
   static inline constexpr const char* name = "explorer";
@@ -44,7 +44,7 @@ struct explorer_state {
   event_limits limits;
 
   /// Number of events sent to the source.
-  size_t sent;
+  size_t num_sent;
 
   /// Size of the timespan prior to each event.
   std::optional<vast::duration> before;
