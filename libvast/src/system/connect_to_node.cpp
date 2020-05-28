@@ -43,9 +43,6 @@ caf::expected<actor>
 connect_to_node(scoped_actor& self, const caf::settings& opts) {
   // Fetch values from config.
   auto id = get_or(opts, "system.node-id", defaults::system::node_id);
-  auto db_dir
-    = get_or(opts, "system.db-directory", defaults::system::db_directory);
-  auto abs_dir = path{db_dir}.complete();
   endpoint node_endpoint;
   auto endpoint_str
     = get_or(opts, "system.endpoint", defaults::system::endpoint);
