@@ -109,7 +109,7 @@ reader::read_impl(size_t max_events, size_t max_slice_size, consumer& f) {
   for (size_t produced = 0; produced < max_events; timeout = next_line()) {
     if (timeout) {
       VAST_DEBUG(this, "reached input timeout at line", lines_->line_number());
-      return finish(f);
+      return finish(f, make_error(ec::end_of_input, "input timeout"));
     }
     if (lines_->done())
       return finish(f, make_error(ec::end_of_input, "input exhausted"));

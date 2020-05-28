@@ -305,7 +305,7 @@ caf::error reader::read_impl(size_t max_events, size_t max_slice_size,
       bool timeout = lines_->next_timeout(
         vast::defaults::import::shared::partial_slice_read_timeout);
       if (timeout)
-        return finish(f);
+        return finish(f, make_error(ec::end_of_input, "input timeout"));
     } else {
       lines_->next();
     }

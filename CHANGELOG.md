@@ -9,7 +9,11 @@ Every entry has a category for which we use the following visual abbreviations:
 - ⚠️ change
 - 🐞 bugfix
 
-<!-- ## Unreleased -->
+## Unreleased
+
+- 🐞 Line-based input formats (JSON, CSV, Zeek, and Syslog) now correctly
+  forward events when stalling on a continuous import.
+  [#889](https://github.com/tenzir/vast/pull/889)
 
 ## [2020.05.28]
 
