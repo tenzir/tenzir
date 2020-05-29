@@ -177,9 +177,9 @@ auto make_import_command() {
   import_->add_subcommand("csv", "imports CSV logs from STDIN or file",
                           documentation::vast_import_csv,
                           source_opts("?import.csv"));
-  import_->add_subcommand("json", "imports JSON with schema",
-                          documentation::vast_import_json,
-                          source_opts("?import.json"));
+  import_->add_subcommand(
+    "json", "imports JSON with schema", documentation::vast_import_json,
+    source_opts("?import.json").add<bool>("strict", "strict type matching"));
   import_->add_subcommand("suricata", "imports suricata eve json",
                           documentation::vast_import_suricata,
                           source_opts("?import.suricata"));

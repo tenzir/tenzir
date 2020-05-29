@@ -37,7 +37,7 @@
 namespace vast::format::json {
 namespace {
 
-struct convert {
+struct strict_convert {
   template <class T>
   using expected = caf::expected<T>;
   using json = vast::json;
@@ -145,6 +145,10 @@ struct convert {
   }
 };
 
+struct relaxed_convert : strict_convert {
+  using strict_convert::operator();
+};
+
 const vast::json* lookup(std::string_view field, const vast::json::object& xs) {
   VAST_ASSERT(!field.empty());
   auto lookup_flat = [&]() {
@@ -179,7 +183,7 @@ const char* writer::name() const {
 }
 
 caf::error add(table_slice_builder& builder, const vast::json::object& xs,
-               const record_type& layout) {
+               const record_type& layout, bool strict) {
   for (auto& field : layout.fields) {
     auto i = lookup(field.name, xs);
     // Non-existing fields are treated as empty (unset).
@@ -189,7 +193,8 @@ caf::error add(table_slice_builder& builder, const vast::json::object& xs,
                                            "slice builder");
       continue;
     }
-    auto x = caf::visit(convert{}, *i, field.type);
+    auto x = strict ? caf::visit(strict_convert{}, *i, field.type)
+                    : caf::visit(relaxed_convert{}, *i, field.type);
     if (!x)
       return make_error(ec::convert_error, x.error().context(),
                         "could not convert", field.name, ":", to_string(*i));

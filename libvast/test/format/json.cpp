@@ -104,7 +104,7 @@ TEST(json to data) {
   })json";
   auto jn = unbox(to<json>(str));
   auto xs = caf::get<json::object>(jn);
-  format::json::add(builder, xs, flat);
+  format::json::add(builder, xs, flat, true);
   auto ptr = builder.finish();
   REQUIRE(ptr);
   CHECK(ptr->at(0, 11) == data{enumeration{2}});
