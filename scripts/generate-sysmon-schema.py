@@ -91,7 +91,7 @@ def map_type(name):
     elif name == "date":
         return "time #timestamp"
     elif name == "boolean" or name == "bool":
-        return "string" # sysmon sends some booleans as strings
+        return "bool"
     elif name == "ip":
         return "addr"
     else:

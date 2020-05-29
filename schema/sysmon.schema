@@ -367,7 +367,7 @@ type sysmon.FileDelete = record {
     // Hashes captured by sysmon driver of the deleted file
     Hashes: string,
     // TBD
-    IsExecutable: string,
+    IsExecutable: bool,
     // States if the file was archived when deleted
     Archived: string,
 }
@@ -392,9 +392,9 @@ type sysmon.NetworkConnection = record {
     // Protocol being used for the network connection
     Protocol: string,
     // Indicated process initiated tcp connection
-    Initiated: string,
+    Initiated: bool,
     // is the source ip an Ipv6
-    SourceIsIpv6: string,
+    SourceIsIpv6: bool,
     // source ip address that made the network connection
     SourceIp: addr,
     // name of the host that made the network connection
@@ -404,7 +404,7 @@ type sysmon.NetworkConnection = record {
     // name of the source port being used (i.e. netbios-dgm)
     SourcePortName: string,
     // is the destination ip an Ipv6
-    DestinationIsIpv6: string,
+    DestinationIsIpv6: bool,
     // ip address destination
     DestinationIp: addr,
     // name of the host that received the network connection
@@ -457,7 +457,7 @@ type sysmon.DriverLoaded = record {
     // Hashes captured by sysmon driver
     Hashes: string,
     // is the driver loaded signed
-    Signed: string,
+    Signed: bool,
     // The signer
     Signature: string,
     // status of the signature (i.e valid)
@@ -497,7 +497,7 @@ type sysmon.ImageLoaded = record {
     // hash is a full hash of the file with the algorithms in the HashType field
     Hashes: string,
     // is the image loaded signed
-    Signed: string,
+    Signed: bool,
     // The signer
     Signature: string,
     // status of the signature (i.e valid)

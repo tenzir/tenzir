@@ -24,6 +24,12 @@
 
 namespace vast {
 
+namespace parsers {
+
+static auto const json_boolean = ignore(*parsers::space) >> parsers::boolean;
+
+} // namespace parsers
+
 struct json_parser : parser<json_parser> {
   using attribute = json;
 
@@ -41,13 +47,12 @@ struct json_parser : parser<json_parser> {
     // clang-format off
     auto null = ws >> "null"_p ->* [] { return json::null{}; };
     // clang-format on
-    auto boolean = ws >> parsers::boolean;
     auto string = ws >> parsers::qqstr;
     auto number = ws >> parsers::real_opt_dot;
     auto array = as<json::array>(lbracket >> ~(ref(j) % delim) >> rbracket);
     auto key_value = ws >> string >> ws >> ':' >> ws >> ref(j);
     auto object = as<json::object>(lbrace >> ~(key_value % delim) >> rbrace);
-    j = null | boolean | number | string | array | object;
+    j = null | json_boolean | number | string | array | object;
     return j(f, l, x);
   }
 };

@@ -147,6 +147,12 @@ struct strict_convert {
 
 struct relaxed_convert : strict_convert {
   using strict_convert::operator();
+
+  caf::expected<data> operator()(json::string str, const bool_type&) const {
+    if (bool res; parsers::json_boolean(str, res))
+      return res;
+    return make_error(ec::convert_error, "cannot convert from", str, "to bool");
+  }
 };
 
 const vast::json* lookup(std::string_view field, const vast::json::object& xs) {
