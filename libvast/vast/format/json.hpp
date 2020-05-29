@@ -35,6 +35,8 @@
 
 namespace vast::format::json {
 
+enum class conversion_policy { relaxed, strict };
+
 class writer : public ostream_writer {
 public:
   using defaults = vast::defaults::export_::json;
@@ -52,10 +54,10 @@ public:
 /// @param builder The builder to add the JSON object to.
 /// @param xs The JSON object to add to *builder.
 /// @param layout The record type describing *xs*.
-/// @param strict Toggle between strict and relaxed type matching.
+/// @param policy Type conversion policy.
 /// @returns An error iff the operation failed.
 caf::error add(table_slice_builder& builder, const vast::json::object& xs,
-               const record_type& layout, bool strict);
+               const record_type& layout, conversion_policy policy);
 
 /// @relates reader
 struct default_selector {
@@ -149,7 +151,7 @@ private:
   mutable size_t num_invalid_lines_ = 0;
   mutable size_t num_unknown_layouts_ = 0;
   mutable size_t num_lines_ = 0;
-  bool strict_ = false;
+  conversion_policy conversion_policy_ = conversion_policy::relaxed;
 };
 
 // -- implementation ----------------------------------------------------------
@@ -162,7 +164,8 @@ reader<Selector>::reader(caf::atom_value table_slice_type,
   if (in != nullptr)
     reset(std::move(in));
   std::string category = vast::defaults::import::json::category;
-  strict_ = caf::get_or(options, category + ".strict", false);
+  if (caf::get_or(options, category + ".strict", false))
+    conversion_policy_ = conversion_policy::strict;
 }
 
 template <class Selector>
@@ -261,7 +264,7 @@ caf::error reader<Selector>::read_impl(size_t max_events, size_t max_slice_size,
     bptr = builder(*layout);
     if (bptr == nullptr)
       return make_error(ec::parse_error, "unable to get a builder");
-    if (auto err = add(*bptr, *xs, *layout, strict_)) {
+    if (auto err = add(*bptr, *xs, *layout, conversion_policy_)) {
       err.context() += caf::make_message("line", lines_->line_number());
       return finish(cons, err);
     }

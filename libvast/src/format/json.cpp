@@ -216,7 +216,7 @@ const char* writer::name() const {
 }
 
 caf::error add(table_slice_builder& builder, const vast::json::object& xs,
-               const record_type& layout, bool strict) {
+               const record_type& layout, conversion_policy policy) {
   for (auto& field : layout.fields) {
     auto i = lookup(field.name, xs);
     // Non-existing fields are treated as empty (unset).
@@ -226,8 +226,14 @@ caf::error add(table_slice_builder& builder, const vast::json::object& xs,
                                            "slice builder");
       continue;
     }
-    auto x = strict ? caf::visit(strict_convert{}, *i, field.type)
-                    : caf::visit(relaxed_convert{}, *i, field.type);
+    auto x = [&] {
+      switch (policy) {
+        case conversion_policy::relaxed:
+          return caf::visit(relaxed_convert{}, *i, field.type);
+        case conversion_policy::strict:
+          return caf::visit(strict_convert{}, *i, field.type);
+      }
+    }();
     if (!x)
       return make_error(ec::convert_error, x.error().context(),
                         "could not convert", field.name, ":", to_string(*i));
