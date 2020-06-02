@@ -9,6 +9,7 @@
 , caf
 , libpcap
 , arrow-cpp
+, zstd
 , python3Packages
 , jq
 , tcpdump
@@ -54,7 +55,10 @@ stdenv.mkDerivation rec {
     "-DVAST_VERSION_TAG=${version}"
     # gen-table-slices runs at build time
     "-DCMAKE_SKIP_BUILD_RPATH=OFF"
-  ] ++ lib.optional static "-DVAST_STATIC_EXECUTABLE:BOOL=ON";
+  ] ++ lib.optionals static [
+    "-DVAST_STATIC_EXECUTABLE:BOOL=ON"
+    "-DZSTD_ROOT=${zstd}"
+  ];
 
   hardeningDisable = lib.optional static "pic";
 
