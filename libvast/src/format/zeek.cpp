@@ -316,6 +316,7 @@ caf::error reader::read_impl(size_t max_events, size_t max_slice_size,
     if (line.empty()) {
       // Ignore empty lines.
       VAST_DEBUG(this, "ignores empty line at", lines_->line_number());
+      continue;
     } else if (detail::starts_with(line, "#separator")) {
       // We encountered a new log file.
       if (auto err = finish(f))
