@@ -220,6 +220,11 @@ caf::error reader<Selector>::read_impl(size_t max_events, size_t max_slice_size,
     if (lines_->done())
       return finish(cons, make_error(ec::end_of_input, "input exhausted"));
     auto& line = lines_->get();
+    if (line.empty()) {
+      // Ignore empty lines.
+      VAST_DEBUG(this, "ignores empty line at", lines_->line_number());
+      continue;
+    }
     vast::json j;
     if (!parsers::json(line, j)) {
       ++num_invalid_lines;

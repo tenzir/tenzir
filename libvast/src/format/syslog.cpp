@@ -114,6 +114,11 @@ reader::read_impl(size_t max_events, size_t max_slice_size, consumer& f) {
     if (lines_->done())
       return finish(f, make_error(ec::end_of_input, "input exhausted"));
     auto& line = lines_->get();
+    if (line.empty()) {
+      // Ignore empty lines.
+      VAST_DEBUG(this, "ignores empty line at", lines_->line_number());
+      continue;
+    }
     message sys_msg;
     auto parser = message_parser{};
     if (parser(line, sys_msg)) {

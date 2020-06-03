@@ -436,6 +436,11 @@ caf::error reader::read_impl(size_t max_events, size_t max_slice_size,
     if (lines_->done())
       return finish(callback, make_error(ec::end_of_input, "input exhausted"));
     auto& line = lines_->get();
+    if (line.empty()) {
+      // Ignore empty lines.
+      VAST_DEBUG(this, "ignores empty line at", lines_->line_number());
+      continue;
+    }
     if (!p(line))
       return make_error(ec::type_clash, "unable to parse CSV line");
     ++produced;
