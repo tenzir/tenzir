@@ -517,6 +517,8 @@ TEST(unsigned hexadecimal integral) {
   CHECK_EQUAL(x, 0X12ab);
   CHECK(p("0x3e7", x));
   CHECK_EQUAL(x, 0x3e7);
+  CHECK(p("0x0000aa", x));
+  CHECK_EQUAL(x, 0x0000aa);
 }
 
 TEST(signed integral with digit constraints) {

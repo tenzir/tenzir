@@ -161,10 +161,11 @@ reader<Selector>::reader(caf::atom_value table_slice_type,
                          const caf::settings& options,
                          std::unique_ptr<std::istream> in)
   : super(table_slice_type) {
+  using namespace std::string_literals;
   if (in != nullptr)
     reset(std::move(in));
-  std::string category = vast::defaults::import::json::category;
-  if (caf::get_or(options, category + ".strict", false))
+  auto category = vast::defaults::import::json::category;
+  if (caf::get_or(options, category + ".strict"s, false))
     conversion_policy_ = conversion_policy::strict;
 }
 

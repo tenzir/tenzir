@@ -27,15 +27,19 @@ namespace vast {
 
 namespace parsers {
 
-static auto const json_boolean = parsers::boolean;
-static auto const json_int = parsers::i64;
-static auto const json_count = (!parsers::hex_prefix >> parsers::u64)
-                               | (parsers::hex_prefix >> parsers::hex64);
+// clang-format off
+static auto const json_boolean
+  = parsers::boolean;
+static auto const json_int
+  = parsers::i64;
+static auto const json_count
+  = (parsers::hex_prefix >> parsers::hex64)
+  | parsers::u64;
 static auto const json_number
-  = (!parsers::hex_prefix >> parsers::real_opt_dot)
-    | (parsers::hex_prefix >> parsers::hex64->*[](uint64_t x) {
-        return detail::narrow_cast<double>(x);
-      });
+  = (parsers::hex_prefix >> parsers::hex64 ->* [](uint64_t x) {
+        return detail::narrow_cast<json::number>(x); })
+  | parsers::real_opt_dot;
+// clang-format on
 
 } // namespace parsers
 
@@ -61,12 +65,13 @@ struct json_parser : parser<json_parser> {
     auto key_value = string >> ws >> ':' >> ws >> ref(j);
     auto object = as<json::object>(lbrace >> ~(key_value % delim) >> rbrace);
     // clang-format off
-    j = ws >> (null
-            | json_boolean
-            | json_number
-            | string
-            | array
-            | object);
+    j = ws >> ( null
+              | json_boolean
+              | json_number
+              | string
+              | array
+              | object
+              );
     // clang-format on
     return j(f, l, x);
   }
