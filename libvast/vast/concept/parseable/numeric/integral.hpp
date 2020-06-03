@@ -13,9 +13,10 @@
 
 #pragma once
 
-#include <cstdint>
+#include "vast/concept/parseable/core.hpp"
+#include "vast/detail/coding.hpp"
 
-#include "vast/concept/parseable/core/parser.hpp"
+#include <cstdint>
 
 namespace vast {
 namespace detail {
@@ -32,15 +33,14 @@ bool parse_sign(Iterator& i) {
 
 } // namespace detail
 
-template <
-  class T,
-  int MaxDigits = std::numeric_limits<T>::digits10 + 1,
-  int MinDigits = 1,
-  int Radix = 10
->
+template <class T,
+          // Note that it is fine to have this specific for base 10, as other
+          // bases must be specified as a later template parameters anyways.
+          int MaxDigits = std::numeric_limits<T>::digits10 + 1,
+          int MinDigits = 1, int Radix = 10>
 struct integral_parser
   : parser<integral_parser<T, MaxDigits, MinDigits, Radix>> {
-  static_assert(Radix == 10, "unsupported radix");
+  static_assert(Radix == 10 || Radix == 16, "unsupported radix");
   static_assert(MinDigits > 0, "need at least one minimum digit");
   static_assert(MaxDigits > 0, "need at least one maximum digit");
   static_assert(MinDigits <= MaxDigits, "maximum cannot exceed minimum");
@@ -48,7 +48,13 @@ struct integral_parser
   using attribute = T;
 
   static bool isdigit(char c) {
-    return c >= '0' && c <= '9';
+    if constexpr (Radix == 10)
+      return c >= '0' && c <= '9';
+    else if constexpr (Radix == 16)
+      return std::isxdigit(c);
+    else
+      static_assert(detail::always_false_v<decltype(Radix)>, "unsupported "
+                                                             "radix");
   }
 
   template <class Iterator, class Attribute, class F>
@@ -56,8 +62,15 @@ struct integral_parser
     if (f == l)
       return false;
     int digits = 0;
-    for (a = 0; isdigit(*f) && f != l && digits < MaxDigits; ++f, ++digits)
-      acc(a, *f - '0');
+    for (a = 0; isdigit(*f) && f != l && digits < MaxDigits; ++f, ++digits) {
+      if constexpr (Radix == 10)
+        acc(a, *f - '0');
+      else if constexpr (Radix == 16)
+        acc(a, detail::hex_to_byte(*f));
+      else
+        static_assert(detail::always_false_v<decltype(Radix)>, "unsupported "
+                                                               "radix");
+    }
     return digits >= MinDigits;
   }
 
@@ -140,6 +153,12 @@ auto const u8 = integral_parser<uint8_t>{};
 auto const u16 = integral_parser<uint16_t>{};
 auto const u32 = integral_parser<uint32_t>{};
 auto const u64 = integral_parser<uint64_t>{};
+
+auto const hex_prefix = ignore(lit{"0x"} | lit{"0X"});
+auto const hex8 = integral_parser<uint8_t, 2, 1, 16>{};
+auto const hex16 = integral_parser<uint16_t, 4, 1, 16>{};
+auto const hex32 = integral_parser<uint32_t, 8, 1, 16>{};
+auto const hex64 = integral_parser<uint64_t, 16, 1, 16>{};
 
 } // namespace parsers
 } // namespace vast

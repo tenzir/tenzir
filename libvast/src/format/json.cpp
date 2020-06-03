@@ -148,34 +148,38 @@ struct strict_convert {
 struct relaxed_convert : strict_convert {
   using strict_convert::operator();
 
-  caf::expected<data> operator()(json::string str, const bool_type&) const {
-    if (bool res; parsers::json_boolean(str, res))
-      return res;
+  caf::expected<data>
+  operator()(const json::string& str, const bool_type&) const {
+    if (bool x; parsers::json_boolean(str, x))
+      return x;
     return make_error(ec::convert_error, "cannot convert from", str, "to bool");
   }
 
-  caf::expected<data> operator()(json::string str, const real_type&) const {
-    if (real res; parsers::json_number(str, res))
-      return res;
+  caf::expected<data>
+  operator()(const json::string& str, const real_type&) const {
+    if (real x; parsers::json_number(str, x))
+      return x;
     return make_error(ec::convert_error, "cannot convert from", str, "to real");
   }
 
-  caf::expected<data> operator()(json::string str, const integer_type&) const {
-    if (integer res; parsers::json_int(str, res))
-      return res;
-    if (real res; parsers::json_number(str, res)) {
+  caf::expected<data>
+  operator()(const json::string& str, const integer_type&) const {
+    if (integer x; parsers::json_int(str, x))
+      return x;
+    if (real x; parsers::json_number(str, x)) {
       VAST_WARNING_ANON("json-reader narrowed", str, "to type int");
-      return detail::narrow_cast<integer>(res);
+      return detail::narrow_cast<integer>(x);
     }
     return make_error(ec::convert_error, "cannot convert from", str, "to int");
   }
 
-  caf::expected<data> operator()(json::string str, const count_type&) const {
-    if (count res; parsers::json_count(str, res))
-      return res;
-    if (real res; parsers::json_number(str, res)) {
-      VAST_WARNING_ANON("json-reader narrowed", str, "to type int");
-      return detail::narrow_cast<count>(res);
+  caf::expected<data>
+  operator()(const json::string& str, const count_type&) const {
+    if (count x; parsers::json_count(str, x))
+      return x;
+    if (real x; parsers::json_number(str, x)) {
+      VAST_WARNING_ANON("json-reader narrowed", str, "to type count");
+      return detail::narrow_cast<count>(x);
     }
     return make_error(ec::convert_error, "cannot convert from", str,
                       "to count");

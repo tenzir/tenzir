@@ -131,4 +131,19 @@ TEST_DISABLED(suricata) {
   CHECK(slices[0]->at(0, 19) == data{count{4520}});
 }
 
+TEST(json hex number parser) {
+  using namespace parsers;
+  double x;
+  CHECK(json_number("123.0", x));
+  CHECK_EQUAL(x, 123.0);
+  CHECK(json_number("-123.0", x));
+  CHECK_EQUAL(x, -123.0);
+  CHECK(json_number("123", x));
+  CHECK_EQUAL(x, 123.0);
+  CHECK(json_number("+123", x));
+  CHECK_EQUAL(x, 123.0);
+  CHECK(json_number("0xFF", x));
+  CHECK_EQUAL(x, 255.0);
+}
+
 FIXTURE_SCOPE_END()
