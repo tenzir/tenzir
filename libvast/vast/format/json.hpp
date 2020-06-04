@@ -238,6 +238,8 @@ caf::error reader<Selector>::read_impl(size_t max_events, size_t max_slice_size,
     auto layout = selector_(*xs);
     if (!layout) {
       ++num_unknown_layouts_;
+      VAST_WARNING(this, "failed to find a matching type at line",
+                   lines_->line_number(), ":", line);
       continue;
     }
     bptr = builder(*layout);
