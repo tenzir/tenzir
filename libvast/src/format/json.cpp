@@ -184,6 +184,14 @@ struct relaxed_convert : strict_convert {
     return make_error(ec::convert_error, "cannot convert from", str,
                       "to count");
   }
+
+  caf::expected<data> operator()(json::string str, const port_type&) const {
+    if (port x; parsers::port(str, x))
+      return x;
+    if (port::number_type x; parsers::u16(str, x))
+      return port{x};
+    return make_error(ec::convert_error, "cannot convert from", str, "to port");
+  }
 };
 
 const vast::json* lookup(std::string_view field, const vast::json::object& xs) {
