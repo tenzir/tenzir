@@ -109,6 +109,22 @@ in the query result.
 
 **Output**
 
+`--max-events=N`:
+
+An invocation of `vast explore` will print at most N events. A value of 0
+means unlimited. This option only restricts the output of `vast explore`,
+internally more than N results may be processed while preparing the results.
+
+`--max-events-query=N`, `--max-events-context=M`:
+
+Restricts the number of results returned by the initial query and by every
+follow-up query, respectively. A value of 0 means unlimited.
+
+Note that these limits apply before result deduplication, so the total number
+of returned results can be less than `N*M`, even if more results would be
+available.
+
+
 `--format=FORMAT`:
 
 Selects the output format of the explore command. Valid values are `json`,

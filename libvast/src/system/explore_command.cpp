@@ -55,6 +55,8 @@ explore_command(const command::invocation& invocation, caf::actor_system& sys) {
   auto query = read_query(invocation, "export.read", 0);
   if (!query)
     return caf::make_message(std::move(query.error()));
+  size_t max_events_search = caf::get_or(options, "explore.max-events-query",
+                                         defaults::explore::max_events_query);
   // Get a local actor to interact with `sys`.
   caf::scoped_actor self{sys};
   // TODO: Add --format option to select output format.
@@ -88,6 +90,8 @@ explore_command(const command::invocation& invocation, caf::actor_system& sys) {
   // Spawn exporter for the passed query
   auto spawn_exporter
     = command::invocation{invocation.options, "spawn exporter", {*query}};
+  if (max_events_search)
+    caf::put(spawn_exporter.options, "export.max-events", max_events_search);
   VAST_DEBUG(&invocation, "spawns exporter with parameters:", spawn_exporter);
   auto exporter = spawn_at_node(self, node, spawn_exporter);
   if (!exporter)

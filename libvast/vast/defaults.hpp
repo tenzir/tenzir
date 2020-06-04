@@ -149,6 +149,25 @@ struct pcap {
 
 } // namespace import
 
+// -- constants for the explore command and its subcommands --------------------
+
+namespace explore {
+
+// A value of zero means 'unlimited' for all three limits below.
+// If all limits are non-zero, the number of results is bounded
+// by `min(max_events, max_events_query*max_events_context)`.
+
+/// Maximum total number of results.
+constexpr size_t max_events = std::numeric_limits<size_t>::max();
+
+/// Maximum number of results for the initial query.
+constexpr size_t max_events_query = 100;
+
+/// Maximum number of results for every explored context.
+constexpr size_t max_events_context = 100;
+
+} // namespace explore
+
 // -- constants for the export command and its subcommands ---------------------
 
 // Unfortunately, `export` is a reserved keyword. The trailing `_` exists only
