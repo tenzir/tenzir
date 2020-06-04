@@ -144,8 +144,9 @@ private:
   std::unique_ptr<detail::line_range> lines_;
   caf::optional<size_t> proto_field_;
   std::vector<size_t> port_fields_;
-  mutable size_t num_invalid_lines = 0;
+  mutable size_t num_invalid_lines_ = 0;
   mutable size_t num_unknown_layouts_ = 0;
+  mutable size_t num_lines_ = 0;
 };
 
 // -- implementation ----------------------------------------------------------
@@ -184,13 +185,20 @@ const char* reader<Selector>::name() const {
 template <class Selector>
 vast::system::report reader<Selector>::status() const {
   using namespace std::string_literals;
-  uint64_t invalid_line = num_invalid_lines;
+  uint64_t invalid_line = num_invalid_lines_;
   uint64_t unknown_layout = num_unknown_layouts_;
-  num_invalid_lines = 0;
+  if (num_invalid_lines_ > 0)
+    VAST_WARNING(this, "failed to parse", num_invalid_lines_, "of", num_lines_,
+                 "recent lines");
+  if (num_unknown_layouts_ > 0)
+    VAST_WARNING(this, "failed to find a matching type for",
+                 num_unknown_layouts_, "of", num_lines_, "recent lines");
+  num_invalid_lines_ = 0;
   num_unknown_layouts_ = 0;
+  num_lines_ = 0;
   return {
     {name() + ".invalid-line"s, invalid_line},
-    {name() + ".unknown_layout"s, unknown_layout},
+    {name() + ".unknown-layout"s, unknown_layout},
   };
 }
 
@@ -220,6 +228,7 @@ caf::error reader<Selector>::read_impl(size_t max_events, size_t max_slice_size,
     if (lines_->done())
       return finish(cons, make_error(ec::end_of_input, "input exhausted"));
     auto& line = lines_->get();
+    ++num_lines_;
     if (line.empty()) {
       // Ignore empty lines.
       VAST_DEBUG(this, "ignores empty line at", lines_->line_number());
@@ -227,9 +236,10 @@ caf::error reader<Selector>::read_impl(size_t max_events, size_t max_slice_size,
     }
     vast::json j;
     if (!parsers::json(line, j)) {
-      ++num_invalid_lines;
-      VAST_WARNING(this, "failed to parse line", lines_->line_number(), ":",
-                   line);
+      if (num_invalid_lines_ == 0)
+        VAST_WARNING(this, "failed to parse line", lines_->line_number(), ":",
+                     line);
+      ++num_invalid_lines_;
       continue;
     }
     auto xs = caf::get_if<vast::json::object>(&j);
@@ -237,6 +247,9 @@ caf::error reader<Selector>::read_impl(size_t max_events, size_t max_slice_size,
       return make_error(ec::type_clash, "not a json object");
     auto layout = selector_(*xs);
     if (!layout) {
+      if (num_unknown_layouts_ == 0)
+        VAST_WARNING(this, "failed to find a matching type at line",
+                     lines_->line_number(), ":", line);
       ++num_unknown_layouts_;
       continue;
     }
