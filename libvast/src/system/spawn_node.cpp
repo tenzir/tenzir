@@ -13,17 +13,18 @@
 
 #include "vast/system/spawn_node.hpp"
 
-#include <string>
-#include <vector>
+#include "vast/defaults.hpp"
+#include "vast/logger.hpp"
+#include "vast/scope_linked.hpp"
+#include "vast/system/node.hpp"
 
 #include <caf/config_value.hpp>
 #include <caf/scoped_actor.hpp>
 #include <caf/settings.hpp>
 
-#include "vast/defaults.hpp"
-#include "vast/logger.hpp"
-#include "vast/scope_linked.hpp"
-#include "vast/system/node.hpp"
+#include <string>
+#include <unistd.h>
+#include <vector>
 
 namespace vast::system {
 
@@ -40,6 +41,9 @@ spawn_node(caf::scoped_actor& self, const caf::settings& opts) {
     if (auto res = mkdir(abs_dir); !res)
       return make_error(ec::filesystem_error,
                         "unable to create db-directory:", abs_dir.str());
+  if (::access(abs_dir.str().c_str(), W_OK) != 0)
+    return make_error(ec::filesystem_error,
+                      "unable to write to db-directory:", abs_dir.str());
   VAST_DEBUG_ANON(__func__, "spawns local node:", id);
   // Pointer to the root command to system::node.
   scope_linked_actor node{self->spawn(system::node, id, abs_dir)};
