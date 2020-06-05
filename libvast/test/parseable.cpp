@@ -501,6 +501,26 @@ TEST(unsigned integral) {
   CHECK_EQUAL(x, 12u);
 }
 
+TEST(unsigned hexadecimal integral) {
+  using namespace parsers;
+  auto p = ignore(-hex_prefix) >> hex64;
+  unsigned x;
+  CHECK(p("1234", x));
+  CHECK_EQUAL(x, 0x1234);
+  CHECK(p("13BFC3d1", x));
+  CHECK_EQUAL(x, 0x13BFC3d1);
+  CHECK(p("FF", x));
+  CHECK_EQUAL(x, 0xFF);
+  CHECK(p("ff00", x));
+  CHECK_EQUAL(x, 0xff00);
+  CHECK(p("0X12ab", x));
+  CHECK_EQUAL(x, 0X12ab);
+  CHECK(p("0x3e7", x));
+  CHECK_EQUAL(x, 0x3e7);
+  CHECK(p("0x0000aa", x));
+  CHECK_EQUAL(x, 0x0000aa);
+}
+
 TEST(signed integral with digit constraints) {
   constexpr auto max = 4;
   constexpr auto min = 2;
@@ -587,7 +607,7 @@ TEST(byte) {
   auto f = str.begin();
   auto l = f + 1;
   auto u8 = uint8_t{0};
-  CHECK(byte(f, l, u8));
+  CHECK(parsers::byte(f, l, u8));
   CHECK(u8 == 0x01u);
   CHECK(f == l);
   MESSAGE("big endian");

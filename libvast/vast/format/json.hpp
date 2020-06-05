@@ -119,7 +119,7 @@ public:
   /// @param options Additional options.
   /// @param in The stream of JSON objects.
   explicit reader(caf::atom_value table_slice_type,
-                  const caf::settings& options,
+                  const caf::settings& /*options*/,
                   std::unique_ptr<std::istream> in = nullptr);
 
   void reset(std::unique_ptr<std::istream> in);
@@ -153,7 +153,7 @@ private:
 
 template <class Selector>
 reader<Selector>::reader(caf::atom_value table_slice_type,
-                         const caf::settings& /*options*/,
+                         const caf::settings& options,
                          std::unique_ptr<std::istream> in)
   : super(table_slice_type) {
   if (in != nullptr)

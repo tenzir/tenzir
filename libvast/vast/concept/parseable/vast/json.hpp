@@ -13,16 +13,35 @@
 
 #pragma once
 
-#include "vast/json.hpp"
-
 #include "vast/concept/parseable/core.hpp"
 #include "vast/concept/parseable/core/rule.hpp"
 #include "vast/concept/parseable/numeric/bool.hpp"
+#include "vast/concept/parseable/numeric/integral.hpp"
 #include "vast/concept/parseable/numeric/real.hpp"
 #include "vast/concept/parseable/string/char_class.hpp"
 #include "vast/concept/parseable/string/quoted_string.hpp"
+#include "vast/detail/narrow.hpp"
+#include "vast/json.hpp"
 
 namespace vast {
+
+namespace parsers {
+
+// clang-format off
+static auto const json_boolean
+  = parsers::boolean;
+static auto const json_int
+  = parsers::i64;
+static auto const json_count
+  = (parsers::hex_prefix >> parsers::hex64)
+  | parsers::u64;
+static auto const json_number
+  = (parsers::hex_prefix >> parsers::hex64 ->* [](uint64_t x) {
+        return detail::narrow_cast<json::number>(x); })
+  | parsers::real_opt_dot;
+// clang-format on
+
+} // namespace parsers
 
 struct json_parser : parser<json_parser> {
   using attribute = json;
@@ -39,15 +58,21 @@ struct json_parser : parser<json_parser> {
     auto rbrace = ws >> '}' >> ws;
     auto delim = ws >> ',' >> ws;
     // clang-format off
-    auto null = ws >> "null"_p ->* [] { return json::null{}; };
+    auto null = "null"_p ->* [] { return json::null{}; };
     // clang-format on
-    auto boolean = ws >> parsers::boolean;
-    auto string = ws >> parsers::qqstr;
-    auto number = ws >> parsers::real_opt_dot;
+    auto string = parsers::qqstr;
     auto array = as<json::array>(lbracket >> ~(ref(j) % delim) >> rbracket);
-    auto key_value = ws >> string >> ws >> ':' >> ws >> ref(j);
+    auto key_value = string >> ws >> ':' >> ws >> ref(j);
     auto object = as<json::object>(lbrace >> ~(key_value % delim) >> rbrace);
-    j = null | boolean | number | string | array | object;
+    // clang-format off
+    j = ws >> ( null
+              | json_boolean
+              | json_number
+              | string
+              | array
+              | object
+              );
+    // clang-format on
     return j(f, l, x);
   }
 };
