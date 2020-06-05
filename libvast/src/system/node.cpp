@@ -398,7 +398,7 @@ caf::behavior node(node_actor* self, std::string id, path dir) {
   return {
     [=](const invocation& inv) {
       VAST_DEBUG(self, "got command", inv.full_name, "with options",
-                 inv.options, "and arguments", invocation.arguments);
+                 inv.options, "and arguments", inv.arguments);
       // Run the command.
       this_node = self;
       return run(inv, self->system(), node_state::command_factory);

@@ -130,7 +130,7 @@ caf::message pivot_command(const invocation& inv, caf::actor_system& sys) {
     sig_mon_thread, sys, defaults::system::signal_monitoring_interval, self);
   // Spawn exporter at the node.
   auto spawn_exporter = invocation{inv.options, "spawn exporter", {*query}};
-  VAST_DEBUG(&invocation, "spawns exporter with parameters:", spawn_exporter);
+  VAST_DEBUG(&inv, "spawns exporter with parameters:", spawn_exporter);
   auto exp = spawn_at_node(self, node, spawn_exporter);
   if (!exp)
     return caf::make_message(std::move(exp.error()));
@@ -139,7 +139,7 @@ caf::message pivot_command(const invocation& inv, caf::actor_system& sys) {
   // Spawn pivoter at the node.
   auto spawn_pivoter
     = invocation{inv.options, "spawn pivoter", {inv.arguments[0], *query}};
-  VAST_DEBUG(&invocation, "spawns pivoter with parameters:", spawn_pivoter);
+  VAST_DEBUG(&inv, "spawns pivoter with parameters:", spawn_pivoter);
   auto piv = spawn_at_node(self, node, spawn_pivoter);
   if (!piv)
     return caf::make_message(std::move(piv.error()));
@@ -151,7 +151,7 @@ caf::message pivot_command(const invocation& inv, caf::actor_system& sys) {
     return caf::make_message(std::move(components.error()));
   auto& [accountant] = *components;
   if (accountant) {
-    VAST_DEBUG(invocation.full_name, "assigns accountant to writer");
+    VAST_DEBUG(inv.full_name, "assigns accountant to writer");
     self->send(writer, caf::actor_cast<accountant_type>(accountant));
   }
   caf::error err;

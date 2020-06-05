@@ -101,7 +101,7 @@ caf::message explore_command(const invocation& inv, caf::actor_system& sys) {
   // Spawn explorer at the node.
   auto explorer_options = inv.options;
   auto spawn_explorer = invocation{explorer_options, "spawn explorer", {}};
-  VAST_DEBUG(&invocation, "spawns explorer with parameters:", spawn_explorer);
+  VAST_DEBUG(&inv, "spawns explorer with parameters:", spawn_explorer);
   auto explorer = spawn_at_node(self, node, spawn_explorer);
   if (!explorer)
     return caf::make_message(std::move(explorer.error()));
@@ -123,25 +123,25 @@ caf::message explore_command(const invocation& inv, caf::actor_system& sys) {
     ->do_receive(
       [&](caf::down_msg& msg) {
         if (msg.source == node) {
-          VAST_DEBUG(invocation.full_name, "received DOWN from node");
+          VAST_DEBUG(inv.full_name, "received DOWN from node");
         } else if (msg.source == *explorer) {
-          VAST_DEBUG(invocation.full_name, "received DOWN from explorer");
+          VAST_DEBUG(inv.full_name, "received DOWN from explorer");
           explorer_guard.disable();
         } else if (msg.source == writer) {
-          VAST_DEBUG(invocation.full_name, "received DOWN from sink");
+          VAST_DEBUG(inv.full_name, "received DOWN from sink");
           writer_guard.disable();
         } else {
           VAST_ASSERT(!"received DOWN from inexplicable actor");
         }
         if (msg.reason) {
-          VAST_DEBUG(invocation.full_name, "received error message:",
+          VAST_DEBUG(inv.full_name, "received error message:",
                      self->system().render(msg.reason));
           err = std::move(msg.reason);
         }
         stop = true;
       },
       [&](atom::signal, int signal) {
-        VAST_DEBUG(invocation.full_name, "got " << ::strsignal(signal));
+        VAST_DEBUG(inv.full_name, "got " << ::strsignal(signal));
         if (signal == SIGINT || signal == SIGTERM) {
           stop = true;
         }

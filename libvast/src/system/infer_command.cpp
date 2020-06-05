@@ -165,16 +165,16 @@ infer_command(const invocation& inv, [[maybe_unused]] caf::actor_system& sys) {
   auto bytes_read = detail::narrow_cast<size_t>(stream.gcount());
   VAST_ASSERT(bytes_read <= buffer_size);
   buffer.resize(bytes_read);
-  VAST_DEBUG(invocation.full_name, "tries Zeek TSV");
+  VAST_DEBUG(inv.full_name, "tries Zeek TSV");
   auto schema = infer<format::zeek::reader>(buffer, options);
   if (schema)
     return show(*schema);
-  VAST_DEBUG(invocation.full_name, "failed:", sys.render(schema.error()));
-  VAST_DEBUG(invocation.full_name, "tries JSON");
+  VAST_DEBUG(inv.full_name, "failed:", sys.render(schema.error()));
+  VAST_DEBUG(inv.full_name, "tries JSON");
   schema = infer_json(buffer);
   if (schema)
     return show(*schema);
-  VAST_DEBUG(invocation.full_name, "failed:", sys.render(schema.error()));
+  VAST_DEBUG(inv.full_name, "failed:", sys.render(schema.error()));
   // Failing to infer the input is not an error.
   return caf::none;
 }

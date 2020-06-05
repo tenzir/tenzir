@@ -71,7 +71,7 @@ sink_command(const invocation& inv, actor_system& sys, caf::actor snk) {
     auto pred = predicate{extractor, equal, data{"pcap.packet"}};
     auto ast = conjunction{std::move(pred), std::move(*expr)};
     *query = to_string(ast);
-    VAST_DEBUG(&invocation, "transformed expression to", *query);
+    VAST_DEBUG(&inv, "transformed expression to", *query);
   }
   // Get VAST node.
   auto node_opt
@@ -117,14 +117,14 @@ sink_command(const invocation& inv, actor_system& sys, caf::actor snk) {
       [&](down_msg& msg) {
         stop = true;
         if (msg.source == node) {
-          VAST_DEBUG_ANON(__func__, "received DOWN from node");
+          VAST_DEBUG(inv.full_name, "received DOWN from node");
           self->send_exit(snk, exit_reason::user_shutdown);
           self->send_exit(*exp, exit_reason::user_shutdown);
         } else if (msg.source == *exp) {
-          VAST_DEBUG(invocation.full_name, "received DOWN from exporter");
+          VAST_DEBUG(inv.full_name, "received DOWN from exporter");
           self->send_exit(snk, exit_reason::user_shutdown);
         } else if (msg.source == snk) {
-          VAST_DEBUG(invocation.full_name, "received DOWN from sink");
+          VAST_DEBUG(inv.full_name, "received DOWN from sink");
           self->send_exit(*exp, exit_reason::user_shutdown);
           stop = false;
           waiting_for_final_report = true;
