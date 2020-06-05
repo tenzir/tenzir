@@ -41,7 +41,7 @@ spawn_node(caf::scoped_actor& self, const caf::settings& opts) {
     if (auto res = mkdir(abs_dir); !res)
       return make_error(ec::filesystem_error,
                         "unable to create db-directory:", abs_dir.str());
-  if (::access(abs_dir.str().c_str(), W_OK) != 0)
+  if (!abs_dir.is_writable())
     return make_error(ec::filesystem_error,
                       "unable to write to db-directory:", abs_dir.str());
   VAST_DEBUG_ANON(__func__, "spawns local node:", id);
