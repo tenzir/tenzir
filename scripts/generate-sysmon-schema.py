@@ -82,11 +82,13 @@ def format_description(data):
     )
 
 
-def map_type(name):
+def map_type(name, field_name):
     """Maps a Sysmon event type to VAST type."""
     if name == "string":
         return "string"
     elif name == "integer":
+        if field_name == "SourcePort" or field_name == "DestinationPort":
+            return "port"
         return "count"
     elif name == "date":
         return "time #timestamp"
@@ -104,7 +106,7 @@ def format_event_fields(data):
         yield textwrap.indent(
             text=f"""\
 // {event_field['description']}
-{event_field['name']}: {map_type(event_field['type'])},""",
+{event_field['name']}: {map_type(event_field['type'], event_field['name'])},""",
             prefix="    ",
         )
 

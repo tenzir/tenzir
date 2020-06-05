@@ -400,7 +400,7 @@ type sysmon.NetworkConnection = record {
     // name of the host that made the network connection
     SourceHostname: string,
     // source port number
-    SourcePort: count,
+    SourcePort: port,
     // name of the source port being used (i.e. netbios-dgm)
     SourcePortName: string,
     // is the destination ip an Ipv6
@@ -410,7 +410,7 @@ type sysmon.NetworkConnection = record {
     // name of the host that received the network connection
     DestinationHostname: string,
     // destination port number
-    DestinationPort: count,
+    DestinationPort: port,
     // name of the destination port
     DestinationPortName: string,
 }
