@@ -12,8 +12,7 @@ Every entry has a category for which we use the following visual abbreviations:
 ## Unreleased
 
 - 🎁 The `import json` command's type restrictions are more relaxed now, and can
-  additionally convert from JSON strings to VAST internal data types. The new
-  option `--strict` allows for restoring the old behavior.
+  additionally convert from JSON strings to VAST internal data types.
   [#891](https://github.com/tenzir/vast/pull/891)
 
 - 🎁 VAST now supports /etc/vast/vast.conf as an additional fallback for the

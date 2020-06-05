@@ -31,11 +31,8 @@
 
 #include <caf/expected.hpp>
 #include <caf/fwd.hpp>
-#include <caf/settings.hpp>
 
 namespace vast::format::json {
-
-enum class conversion_policy { relaxed, strict };
 
 class writer : public ostream_writer {
 public:
@@ -54,10 +51,9 @@ public:
 /// @param builder The builder to add the JSON object to.
 /// @param xs The JSON object to add to *builder.
 /// @param layout The record type describing *xs*.
-/// @param policy Type conversion policy.
 /// @returns An error iff the operation failed.
 caf::error add(table_slice_builder& builder, const vast::json::object& xs,
-               const record_type& layout, conversion_policy policy);
+               const record_type& layout);
 
 /// @relates reader
 struct default_selector {
@@ -123,7 +119,7 @@ public:
   /// @param options Additional options.
   /// @param in The stream of JSON objects.
   explicit reader(caf::atom_value table_slice_type,
-                  const caf::settings& options,
+                  const caf::settings& /*options*/,
                   std::unique_ptr<std::istream> in = nullptr);
 
   void reset(std::unique_ptr<std::istream> in);
@@ -151,7 +147,6 @@ private:
   mutable size_t num_invalid_lines_ = 0;
   mutable size_t num_unknown_layouts_ = 0;
   mutable size_t num_lines_ = 0;
-  conversion_policy conversion_policy_ = conversion_policy::relaxed;
 };
 
 // -- implementation ----------------------------------------------------------
@@ -161,12 +156,8 @@ reader<Selector>::reader(caf::atom_value table_slice_type,
                          const caf::settings& options,
                          std::unique_ptr<std::istream> in)
   : super(table_slice_type) {
-  using namespace std::string_literals;
   if (in != nullptr)
     reset(std::move(in));
-  auto category = vast::defaults::import::json::category;
-  if (caf::get_or(options, category + ".strict"s, false))
-    conversion_policy_ = conversion_policy::strict;
 }
 
 template <class Selector>
@@ -265,7 +256,7 @@ caf::error reader<Selector>::read_impl(size_t max_events, size_t max_slice_size,
     bptr = builder(*layout);
     if (bptr == nullptr)
       return make_error(ec::parse_error, "unable to get a builder");
-    if (auto err = add(*bptr, *xs, *layout, conversion_policy_)) {
+    if (auto err = add(*bptr, *xs, *layout)) {
       err.context() += caf::make_message("line", lines_->line_number());
       return finish(cons, err);
     }

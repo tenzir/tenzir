@@ -179,10 +179,10 @@ auto make_import_command() {
                           source_opts("?import.csv"));
   import_->add_subcommand("json", "imports JSON with schema",
                           documentation::vast_import_json,
-                          json_source_opts("?import.json"));
+                          source_opts("?import.json"));
   import_->add_subcommand("suricata", "imports suricata eve json",
                           documentation::vast_import_suricata,
-                          json_source_opts("?import.suricata"));
+                          source_opts("?import.suricata"));
   import_->add_subcommand("syslog", "imports syslog messages",
                           documentation::vast_import_syslog,
                           source_opts("?import.syslog"));
@@ -468,10 +468,6 @@ command::opts_builder source_opts(std::string_view category) {
     .add<std::string>("schema,S", "alternate schema as string")
     .add<std::string>("type,t", "filter event type based on prefix matching")
     .add<bool>("uds,d", "treat -r as listening UNIX domain socket");
-}
-
-command::opts_builder json_source_opts(std::string_view category) {
-  return source_opts(category).add<bool>("strict", "strict type matching");
 }
 
 command::opts_builder sink_opts(std::string_view category) {

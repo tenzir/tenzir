@@ -37,7 +37,7 @@
 namespace vast::format::json {
 namespace {
 
-struct strict_convert {
+struct convert {
   template <class T>
   using expected = caf::expected<T>;
   using json = vast::json;
@@ -136,18 +136,6 @@ struct strict_convert {
     return xs;
   }
 
-  template <class T, class U>
-  caf::expected<data> operator()(T, U) const {
-    VAST_ERROR_ANON("json-reader cannot convert from",
-                    caf::detail::pretty_type_name(typeid(T)), "to",
-                    caf::detail::pretty_type_name(typeid(U)));
-    return make_error(ec::syntax_error, "invalid json type");
-  }
-};
-
-struct relaxed_convert : strict_convert {
-  using strict_convert::operator();
-
   caf::expected<data>
   operator()(const json::string& str, const bool_type&) const {
     if (bool x; parsers::json_boolean(str, x))
@@ -192,6 +180,14 @@ struct relaxed_convert : strict_convert {
       return port{x};
     return make_error(ec::convert_error, "cannot convert from", str, "to port");
   }
+
+  template <class T, class U>
+  caf::expected<data> operator()(T, U) const {
+    VAST_ERROR_ANON("json-reader cannot convert from",
+                    caf::detail::pretty_type_name(typeid(T)), "to",
+                    caf::detail::pretty_type_name(typeid(U)));
+    return make_error(ec::syntax_error, "invalid json type");
+  }
 };
 
 const vast::json* lookup(std::string_view field, const vast::json::object& xs) {
@@ -228,7 +224,7 @@ const char* writer::name() const {
 }
 
 caf::error add(table_slice_builder& builder, const vast::json::object& xs,
-               const record_type& layout, conversion_policy policy) {
+               const record_type& layout) {
   for (auto& field : layout.fields) {
     auto i = lookup(field.name, xs);
     // Non-existing fields are treated as empty (unset).
@@ -238,14 +234,7 @@ caf::error add(table_slice_builder& builder, const vast::json::object& xs,
                                            "slice builder");
       continue;
     }
-    auto x = [&] {
-      switch (policy) {
-        case conversion_policy::relaxed:
-          return caf::visit(relaxed_convert{}, *i, field.type);
-        case conversion_policy::strict:
-          return caf::visit(strict_convert{}, *i, field.type);
-      }
-    }();
+    auto x = caf::visit(convert{}, *i, field.type);
     if (!x)
       return make_error(ec::convert_error, x.error().context(),
                         "could not convert", field.name, ":", to_string(*i));
