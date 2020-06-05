@@ -426,7 +426,7 @@ bool init_config(caf::actor_system_config& cfg, const command::invocation& from,
                                      defaults::system::db_directory);
     if (!exists(log_dir))
       if (auto res = mkdir(log_dir); !res) {
-        error_output << "Unable to create directory: " << log_dir.str() << "\n";
+        error_output << "unable to create directory: " << log_dir.str() << "\n";
         return false;
       }
     // Store full path to the log file in config.

@@ -222,6 +222,10 @@ bool path::is_symlink() const {
   return kind() == symlink;
 }
 
+bool path::is_writable() const {
+  return ::access(str().c_str(), W_OK) == 0;
+}
+
 bool operator==(const path& x, const path& y) {
   return x.str_ == y.str_;
 }

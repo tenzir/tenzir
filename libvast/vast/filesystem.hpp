@@ -146,6 +146,10 @@ public:
   /// @returns `true` if the path is a symlink.
   bool is_symlink() const;
 
+  /// Checks whether the path is writable.
+  /// @returns `true` if the path is writable.
+  bool is_writable() const;
+
   friend bool operator==(const path& x, const path& y);
   friend bool operator<(const path& x, const path& y);
 
