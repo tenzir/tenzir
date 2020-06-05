@@ -56,6 +56,27 @@ size_t indexer_downstream_manager::buffered(caf::stream_slot slot) const
   return 0u;
 }
 
+void indexer_downstream_manager::close() {
+  VAST_DEBUG(self(), "closing downstream manager");
+  if (closing)
+    return;
+  for (auto it = partitions.begin(); it != partitions.end();) {
+    if (buffered(**it) == 0u) {
+      VAST_DEBUG(self(), "removes partition", (*it)->id());
+      cleanup_partition(**it);
+      auto pit = pending_partitions.find(*it);
+      if (pit != pending_partitions.end())
+        pending_partitions.erase(pit);
+      it = partitions.erase(it);
+    } else {
+      VAST_DEBUG(self(), "inserts partition", (*it)->id(), "into pending set");
+      pending_partitions.insert(*it);
+      ++it;
+    }
+  }
+  closing = true;
+}
+
 int32_t indexer_downstream_manager::max_capacity() const noexcept {
   // The maximum capacity is limited by the slowest downstream path.
   auto result = std::numeric_limits<int32_t>::max();
@@ -72,10 +93,19 @@ int32_t indexer_downstream_manager::max_capacity() const noexcept {
 void indexer_downstream_manager::register_partition(partition* p) {
   VAST_DEBUG(self(), "registers partition", p->id());
   partitions.insert(p);
+  // Corner case: it is possible that register gets called
+  if (closing) {
+    VAST_DEBUG(self(), "inserts new partition", p->id(), "into pending set");
+    pending_partitions.insert(p);
+  }
 }
 
 bool indexer_downstream_manager::unregister(partition* p) {
   VAST_DEBUG(self(), "unregisters partition", p->id());
+  // If we are closing already the partition in question might already be
+  // removed.
+  if (closing)
+    return true;
   auto it = partitions.find(p);
   if (it == partitions.end())
     return false;
