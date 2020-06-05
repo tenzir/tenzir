@@ -395,30 +395,32 @@ void node_state::init(std::string init_name, path init_dir) {
 
 caf::behavior node(node_actor* self, std::string id, path dir) {
   self->state.init(std::move(id), std::move(dir));
-  return {[=](const invocation& inv) {
-            VAST_DEBUG(self, "got command", inv.full_name, "with options",
-                       inv.options, "and arguments", invocation.arguments);
-            // Run the command.
-            this_node = self;
-            return run(inv, self->system(), node_state::command_factory);
+  return {
+    [=](const invocation& inv) {
+      VAST_DEBUG(self, "got command", inv.full_name, "with options",
+                 inv.options, "and arguments", invocation.arguments);
+      // Run the command.
+      this_node = self;
+      return run(inv, self->system(), node_state::command_factory);
+    },
+    [=](atom::peer, actor& tracker, std::string& peer_name) {
+      self->delegate(self->state.tracker, atom::peer_v, std::move(tracker),
+                     std::move(peer_name));
+    },
+    [=](atom::get) {
+      auto rp = self->make_response_promise();
+      self->request(self->state.tracker, infinite, atom::get_v)
+        .then(
+          [=](registry& reg) mutable {
+            rp.deliver(self->state.name, std::move(reg));
           },
-          [=](atom::peer, actor& tracker, std::string& peer_name) {
-            self->delegate(self->state.tracker, atom::peer_v,
-                           std::move(tracker), std::move(peer_name));
-          },
-          [=](atom::get) {
-            auto rp = self->make_response_promise();
-            self->request(self->state.tracker, infinite, atom::get_v)
-              .then(
-                [=](registry& reg) mutable {
-                  rp.deliver(self->state.name, std::move(reg));
-                },
-                [=](error& e) mutable { rp.deliver(std::move(e)); });
-          },
-          [=](atom::signal, int signal) {
-            VAST_IGNORE_UNUSED(signal);
-            VAST_WARNING(self, "got signal", ::strsignal(signal));
-          }};
+          [=](error& e) mutable { rp.deliver(std::move(e)); });
+    },
+    [=](atom::signal, int signal) {
+      VAST_IGNORE_UNUSED(signal);
+      VAST_WARNING(self, "got signal", ::strsignal(signal));
+    },
+  };
 }
 
 } // namespace vast::system

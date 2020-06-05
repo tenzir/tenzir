@@ -38,32 +38,33 @@ data_store(
   typename key_value_store_type<Key, Value>::template stateful_pointer<
     data_store_state<Key, Value>
   > self) {
-  return {[=](atom::put, const Key& key, Value& value) {
-            self->state.store[key] = std::move(value);
-            return atom::ok_v;
-          },
-          [=](atom::add, const Key& key,
-              const Value& value) -> caf::result<Value> {
-            auto& v = self->state.store[key];
-            auto old = v;
-            v += value;
-            return old;
-          },
-          [=](atom::erase, const Key& key) {
-            self->state.store.erase(key);
-            return atom::ok_v;
-          },
-          [=](atom::get, const Key& key) -> caf::result<optional<Value>> {
-            auto i = self->state.store.find(key);
-            if (i == self->state.store.end())
-              return caf::none;
-            return i->second;
-          },
-          [=](atom::status) -> caf::config_value::dictionary {
-            caf::dictionary<caf::config_value> result;
-            result.emplace("store-size", self->state.store.size());
-            return result;
-          }};
+  return {
+    [=](atom::put, const Key& key, Value& value) {
+      self->state.store[key] = std::move(value);
+      return atom::ok_v;
+    },
+    [=](atom::add, const Key& key, const Value& value) -> caf::result<Value> {
+      auto& v = self->state.store[key];
+      auto old = v;
+      v += value;
+      return old;
+    },
+    [=](atom::erase, const Key& key) {
+      self->state.store.erase(key);
+      return atom::ok_v;
+    },
+    [=](atom::get, const Key& key) -> caf::result<optional<Value>> {
+      auto i = self->state.store.find(key);
+      if (i == self->state.store.end())
+        return caf::none;
+      return i->second;
+    },
+    [=](atom::status) -> caf::config_value::dictionary {
+      caf::dictionary<caf::config_value> result;
+      result.emplace("store-size", self->state.store.size());
+      return result;
+    },
+  };
 }
 
 } // namespace vast::system

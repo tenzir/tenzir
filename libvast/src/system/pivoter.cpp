@@ -151,7 +151,8 @@ caf::behavior pivoter(caf::stateful_actor<pivoter_state>* self, caf::actor node,
       VAST_DEBUG(self, "registers sink", sink);
       auto& st = self->state;
       st.sink = sink;
-    }};
+    },
+  };
 }
 
 } // namespace vast::system

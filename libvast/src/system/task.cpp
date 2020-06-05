@@ -67,38 +67,40 @@ behavior task_impl(stateful_actor<task_state>* self, message done_msg) {
         notify(self);
     }
   );
-  return {[=](const actor& a) {
-            VAST_TRACE(self, "registers actor", a);
-            self->monitor(a);
-            if (++self->state.workers[a.address()] == 1)
-              ++self->state.total;
-          },
-          [=](const actor& a, uint64_t n) {
-            VAST_TRACE(self, "registers actor", a, "for", n, "sub-tasks");
-            self->monitor(a);
-            self->state.workers[a.address()] += n;
-            ++self->state.total;
-          },
-          [=](atom::done, const actor_addr& addr) {
-            VAST_TRACE(self, "manually completed actor with address", addr);
-            complete(self, addr);
-          },
-          [=](atom::done) {
-            VAST_TRACE(self, "completed actor", self->current_sender());
-            complete(self, actor_cast<actor_addr>(self->current_sender()));
-          },
-          [=](atom::supervisor, const actor& a) {
-            VAST_TRACE(self, "notifies actor", a, "about task completion");
-            self->state.supervisors.insert(a);
-          },
-          [=](atom::subscriber, const actor& a) {
-            VAST_TRACE(self, "notifies actor", a, "on task status change");
-            self->state.subscribers.insert(a);
-          },
-          [=](atom::progress) {
-            auto num_workers = uint64_t{self->state.workers.size()};
-            return make_message(num_workers, self->state.total);
-          }};
+  return {
+    [=](const actor& a) {
+      VAST_TRACE(self, "registers actor", a);
+      self->monitor(a);
+      if (++self->state.workers[a.address()] == 1)
+        ++self->state.total;
+    },
+    [=](const actor& a, uint64_t n) {
+      VAST_TRACE(self, "registers actor", a, "for", n, "sub-tasks");
+      self->monitor(a);
+      self->state.workers[a.address()] += n;
+      ++self->state.total;
+    },
+    [=](atom::done, const actor_addr& addr) {
+      VAST_TRACE(self, "manually completed actor with address", addr);
+      complete(self, addr);
+    },
+    [=](atom::done) {
+      VAST_TRACE(self, "completed actor", self->current_sender());
+      complete(self, actor_cast<actor_addr>(self->current_sender()));
+    },
+    [=](atom::supervisor, const actor& a) {
+      VAST_TRACE(self, "notifies actor", a, "about task completion");
+      self->state.supervisors.insert(a);
+    },
+    [=](atom::subscriber, const actor& a) {
+      VAST_TRACE(self, "notifies actor", a, "on task status change");
+      self->state.subscribers.insert(a);
+    },
+    [=](atom::progress) {
+      auto num_workers = uint64_t{self->state.workers.size()};
+      return make_message(num_workers, self->state.total);
+    },
+  };
 }
 
 } // namespace vast::system
