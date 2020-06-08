@@ -8,13 +8,13 @@ if (jemalloc_ROOT_DIR)
   message(STATUS "Using jemalloc_ROOT: ${jemalloc_ROOT}")
   find_path(jemalloc_INCLUDE_DIR
     NAMES jemalloc/jemalloc.h
-    PATHS "${ZSTD_ROOT}/include"
+    PATHS "${jemalloc_ROOT_DIR}/include"
     PATH_SUFFIXES ${INCLUDE_PATH_SUFFIXES}
     NO_DEFAULT_PATH)
 
   find_library(jemalloc_LIBRARY
     NAMES "${search_target}"
-    PATHS "${jemalloc_ROOT}/lib"
+    PATHS "${jemalloc_ROOT_DIR}/lib"
     PATH_SUFFIXES ${LIB_PATH_SUFFIXES}
     NO_DEFAULT_PATH)
 else ()
