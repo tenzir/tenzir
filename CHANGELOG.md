@@ -11,6 +11,9 @@ Every entry has a category for which we use the following visual abbreviations:
 
 ## Unreleased
 
+- 🎁 VAST now has options to limit the amount of results produced by an
+  invocation of `vast explore`. [#882](https://github.com/tenzir/vast/pull/882)
+
 - 🎁 The `import json` command's type restrictions are more relaxed now, and can
   additionally convert from JSON strings to VAST internal data types.
   [#891](https://github.com/tenzir/vast/pull/891)
