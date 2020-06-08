@@ -52,14 +52,13 @@ common_field(const pivoter_state& st, const record_type& indicator) {
   // updated type registry is available to feed the algorithm above.
   std::string edge;
   VAST_TRACE(st.self, VAST_ARG(st.target), VAST_ARG(indicator.name()));
-  if (detail::starts_with(st.target, "suricata") || st.target == "pcap.packet"
-      || detail::starts_with(st.target, "netflow"))
-    edge = "community_id";
-  else if (detail::starts_with(st.target, "zeek")) {
+  if (detail::starts_with(st.target, "zeek")) {
     if (detail::starts_with(indicator.name(), "zeek"))
       edge = "uid";
     else
       edge = "community_id";
+  } else {
+    edge = "community_id";
   }
   for (auto& i : indicator.fields) {
     if (i.name == edge) {
