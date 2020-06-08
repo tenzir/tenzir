@@ -205,7 +205,7 @@ if (PCAP_FOUND)
 endif ()
 
 if (VAST_USE_JEMALLOC)
-  target_link_libraries(libvast PRIVATE JeMalloc::JeMalloc)
+  target_link_libraries(libvast PRIVATE jemalloc::jemalloc)
 endif ()
 
 # Always link with -lprofile if we have Gperftools.
@@ -361,7 +361,7 @@ endif ()
 # Generate CMake tests
 #
 
-if (NOT NO_UNIT_TESTS)
+if (BUILD_UNIT_TESTS)
   # Add vast-test executable.
   add_executable(vast-test ${tests})
   target_link_libraries(vast-test libvast_test libvast

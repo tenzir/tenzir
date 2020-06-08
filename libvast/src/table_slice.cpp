@@ -77,16 +77,14 @@ data_view table_slice::row_view::operator[](size_t column) const {
 
 table_slice::table_slice(table_slice_header header)
   : header_{std::move(header)} {
-  // nop
   ++instance_count_;
 }
 
 table_slice::~table_slice() {
-  // no
   --instance_count_;
 }
 
-std::atomic<int> table_slice::instance_count_{0};
+std::atomic<size_t> table_slice::instance_count_{0u};
 
 record_type table_slice::layout(size_type first_column,
                                 size_type num_columns) const {

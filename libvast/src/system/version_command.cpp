@@ -49,9 +49,9 @@ json::object retrieve_versions() {
   std::ostringstream arrow_v;
   arrow_v << ARROW_VERSION_MAJOR << '.' << ARROW_VERSION_MINOR << '.'
           << ARROW_VERSION_PATCH;
-  result["ARROW"] = arrow_v.str();
+  result["Apache Arrow"] = arrow_v.str();
 #else
-  result["ARROW"] = json{};
+  result["Apache Arrow"] = json{};
 #endif
 #if VAST_HAVE_PCAP
   result["PCAP"] = pcap_lib_version();
@@ -59,9 +59,9 @@ json::object retrieve_versions() {
   result["PCAP"] = json{};
 #endif
 #if VAST_USE_JEMALLOC
-  result["JEMALLOC"] = JEMALLOC_VERSION;
+  result["jemalloc"] = JEMALLOC_VERSION;
 #else
-  result["JEMALLOC"] = json{};
+  result["jemalloc"] = json{};
 #endif
   return result;
 }

@@ -209,7 +209,7 @@ protected:
   table_slice_header header_;
 
 private:
-  static std::atomic<int> instance_count_;
+  static std::atomic<size_t> instance_count_;
 };
 
 // -- free functions -----------------------------------------------------------
