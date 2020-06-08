@@ -345,14 +345,15 @@ void segment_store::inspect_status(caf::settings& dict) {
   put(dict, "max-segment-size", max_segment_size_);
   auto& segments = put_dictionary(dict, "segments");
   // Note: `for (auto& kvp : segments_)` does not compile.
-  for (auto i = segments_.begin(); i != segments_.end(); ++i) {
-    std::string range = "[";
-    range += std::to_string(i->left);
-    range += ", ";
-    range += std::to_string(i->right);
-    range += ")";
-    put(segments, range, to_string(i->value));
-  }
+  // FIXME: This is too slow for large archives and blocks the node.
+  // for (auto i = segments_.begin(); i != segments_.end(); ++i) {
+  //   std::string range = "[";
+  //   range += std::to_string(i->left);
+  //   range += ", ";
+  //   range += std::to_string(i->right);
+  //   range += ")";
+  //   put(segments, range, to_string(i->value));
+  // }
   auto& cached = put_list(dict, "cached");
   for (auto& kvp : cache_)
     cached.emplace_back(to_string(kvp.first));
