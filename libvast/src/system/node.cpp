@@ -41,6 +41,7 @@
 #include "vast/system/spawn_sink.hpp"
 #include "vast/system/spawn_source.hpp"
 #include "vast/system/spawn_type_registry.hpp"
+#include "vast/table_slice.hpp"
 
 #include <caf/all.hpp>
 #include <caf/io/all.hpp>
@@ -138,6 +139,7 @@ void collect_component_status(node_actor* self,
   put(sys_stats, "running-actors", sys.registry().running());
   put(sys_stats, "detached-actors", sys.detached_actors());
   put(sys_stats, "worker-threads", sys.scheduler().num_workers());
+  put(sys_stats, "table-slices", table_slice::instances());
   // Send out requests and collects answers.
   for (auto& [node_name, state_map] : reg.components) {
     req_state->pending += state_map.size();

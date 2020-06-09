@@ -10,11 +10,13 @@
 , libpcap
 , arrow-cpp
 , zstd
+, jemalloc
 , python3Packages
 , jq
 , tcpdump
 , static ? stdenv.hostPlatform.isMusl
 , versionOverride ? null
+, disableTests ? true
 }:
 let
   isCross = stdenv.buildPlatform != stdenv.hostPlatform;
@@ -46,19 +48,20 @@ stdenv.mkDerivation rec {
 
   nativeBuildInputs = [ cmake ];
   propagatedNativeBuildInputs = [ pkgconfig pandoc ];
-  buildInputs = [ libpcap ];
+  buildInputs = [ libpcap jemalloc ];
   propagatedBuildInputs = [ arrow-cpp caf ];
 
   cmakeFlags = [
     "-DCAF_ROOT_DIR=${caf}"
     "-DVAST_RELOCATABLE_INSTALL=OFF"
     "-DVAST_VERSION_TAG=${version}"
+    "-DVAST_USE_JEMALLOC=ON"
     # gen-table-slices runs at build time
     "-DCMAKE_SKIP_BUILD_RPATH=OFF"
   ] ++ lib.optionals static [
     "-DVAST_STATIC_EXECUTABLE:BOOL=ON"
     "-DZSTD_ROOT=${zstd}"
-  ];
+  ] ++ lib.optional disableTests "-DBUILD_UNIT_TESTS=OFF";
 
   hardeningDisable = lib.optional static "pic";
 
@@ -66,10 +69,6 @@ stdenv.mkDerivation rec {
   checkTarget = "test";
 
   dontStrip = true;
-  postFixup = lib.optionalString isCross ''
-    ${stdenv.cc.targetPrefix}strip -s $out/bin/vast
-    ${stdenv.cc.targetPrefix}strip -s $out/bin/zeek-to-vast
-  '';
 
   doInstallCheck = true;
   installCheckInputs = [ python jq tcpdump ];

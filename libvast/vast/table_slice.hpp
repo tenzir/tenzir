@@ -199,10 +199,17 @@ public:
   /// @pre `row < rows() && col < columns()`
   virtual data_view at(size_type row, size_type col) const = 0;
 
+  static int instances() {
+    return instance_count_;
+  }
+
 protected:
   // -- member variables -------------------------------------------------------
 
   table_slice_header header_;
+
+private:
+  static std::atomic<size_t> instance_count_;
 };
 
 // -- free functions -----------------------------------------------------------
