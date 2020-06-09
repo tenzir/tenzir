@@ -60,8 +60,11 @@ void indexer_downstream_manager::close() {
   VAST_DEBUG(self(), "closing downstream manager");
   if (closing)
     return;
+  // At this point, we unregister all partitions by...
   for (auto it = partitions.begin(); it != partitions.end();) {
     if (buffered(**it) == 0u) {
+      // ... either removing them directly if the buffers are empty,
+      // meaning all table slices have been forwarded to the indexers,...
       VAST_DEBUG(self(), "removes partition", (*it)->id());
       cleanup_partition(**it);
       auto pit = pending_partitions.find(*it);
@@ -69,6 +72,8 @@ void indexer_downstream_manager::close() {
         pending_partitions.erase(pit);
       it = partitions.erase(it);
     } else {
+      // ... or else we insert them into the pending set to be removed once all
+      // remaining batches have been emitted.
       VAST_DEBUG(self(), "inserts partition", (*it)->id(), "into pending set");
       pending_partitions.insert(*it);
       ++it;
@@ -93,7 +98,8 @@ int32_t indexer_downstream_manager::max_capacity() const noexcept {
 void indexer_downstream_manager::register_partition(partition* p) {
   VAST_DEBUG(self(), "registers partition", p->id());
   partitions.insert(p);
-  // Corner case: it is possible that register gets called
+  // Corner case: it is possible that register gets called after close. If so,
+  // all partitons are pending for removal, so this is as well.
   if (closing) {
     VAST_DEBUG(self(), "inserts new partition", p->id(), "into pending set");
     pending_partitions.insert(p);
