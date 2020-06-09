@@ -62,6 +62,7 @@ void indexer_downstream_manager::close() {
     return;
   // At this point, we unregister all partitions by...
   for (auto it = partitions.begin(); it != partitions.end();) {
+    VAST_ASSERT(*it != nullptr);
     if (buffered(**it) == 0u) {
       // ... either removing them directly if the buffers are empty,
       // meaning all table slices have been forwarded to the indexers,...
@@ -115,6 +116,7 @@ bool indexer_downstream_manager::unregister(partition* p) {
   auto it = partitions.find(p);
   if (it == partitions.end())
     return false;
+  VAST_ASSERT(*it != nullptr);
   if (buffered(**it) == 0u) {
     cleanup_partition(**it);
     partitions.erase(it);
@@ -187,6 +189,7 @@ indexer_downstream_manager::set_type::iterator
 indexer_downstream_manager::try_remove_partition(set_type::iterator it) {
   auto pit = pending_partitions.find(*it);
   if (pit != pending_partitions.end()) {
+    VAST_ASSERT(*it != nullptr);
     if (buffered(**it) == 0u) {
       cleanup_partition(**it);
       pending_partitions.erase(pit);
