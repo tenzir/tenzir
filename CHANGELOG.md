@@ -11,6 +11,10 @@ Every entry has a category for which we use the following visual abbreviations:
 
 ## Unreleased
 
+- ⚠️ The JSON export format now renders timestamps using strings instead of
+  numbers in order to avoid possible loss of precision.
+  [#909](https://github.com/tenzir/vast/909)
+
 - 🐞 A use after free bug would sometimes crash the node while it was shutting
   down. [#896](https://github.com/tenzir/vast/pull/896)
 
