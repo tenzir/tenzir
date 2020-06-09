@@ -11,6 +11,9 @@ Every entry has a category for which we use the following visual abbreviations:
 
 ## Unreleased
 
+- 🐞 A use after free bug would sometimes crash the node while it was shutting
+  down. [#896](https://github.com/tenzir/vast/pull/896)
+
 - 🎁 VAST now has options to limit the amount of results produced by an
   invocation of `vast explore`. [#882](https://github.com/tenzir/vast/pull/882)
 
