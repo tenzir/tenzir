@@ -78,7 +78,7 @@ endif ()
 
 option(VAST_ENABLE_ASSERTIONS "Enable Assertions" "${VAST_ENABLE_ASSERTIONS_DEFAULT}")
 option(VAST_RELOCATABLE_INSTALL "Enable relocatable installations" ON)
-option(VAST_NO_SYSTEM_CAF "Always use the CAF submodule" OFF)
+option(VAST_USE_BUNDLED_CAF "Always use the CAF submodule" OFF)
 option(ENABLE_ZEEK_TO_VAST "Build zeek-to-vast" ON)
 option(VAST_STATIC_EXECUTABLE "Link VAST statically")
 cmake_dependent_option(
@@ -501,7 +501,7 @@ if (APPLE AND NOT OPENSSL_ROOT_DIR)
   endif ()
 endif ()
 
-if (NOT VAST_NO_SYSTEM_CAF)
+if (NOT VAST_USE_BUNDLED_CAF)
   # Try to find the required CAF components first...
   find_package(
     CAF 0.17.5 EXACT
