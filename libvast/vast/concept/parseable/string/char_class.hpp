@@ -13,12 +13,13 @@
 
 #pragma once
 
+#include "vast/concept/parseable/core.hpp"
+#include "vast/concept/parseable/detail/char_helpers.hpp"
+#include "vast/concept/parseable/string/any.hpp"
+
 #include <cctype>
 #include <string>
 #include <vector>
-
-#include "vast/concept/parseable/core/parser.hpp"
-#include "vast/concept/parseable/detail/char_helpers.hpp"
 
 namespace vast {
 
@@ -98,14 +99,17 @@ auto const cntrl = char_class_parser<cntrl_class>{};
 auto const digit = char_class_parser<digit_class>{};
 auto const graph = char_class_parser<graph_class>{};
 auto const lower = char_class_parser<lower_class>{};
-auto const print = char_class_parser<print_class>{};
+[[deprecated("Consider using the UTF-8 friendly `printable` "
+             "instead.")]] auto const print
+  = char_class_parser<print_class>{};
 auto const punct = char_class_parser<punct_class>{};
 auto const space = char_class_parser<space_class>{};
 auto const upper = char_class_parser<upper_class>{};
 auto const xdigit = char_class_parser<xdigit_class>{};
 
-// Avoid name clashes with the free function vast::print.
-auto const printable = print;
+// UTF-8 friendly, as it blacklists control characters rather than whitelisting
+// printable ASCII characters.
+constexpr auto printable = any - cntrl;
 
 } // namespace parsers
 } // namespace vast

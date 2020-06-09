@@ -88,7 +88,7 @@ struct type_parser : parser<type_parser> {
       };
     static constexpr auto attr_value
       = parsers::qqstr
-      | +(parsers::print - (parsers::space | ',' | '>' | '}' ));
+      | +(parsers::printable - (parsers::space | ',' | '>' | '}' ));
     static auto attr
       = ('#' >> parsers::identifier >> -('=' >> attr_value)) ->* to_attr;
     static auto attr_list = *(skp >> attr);
