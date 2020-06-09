@@ -87,6 +87,13 @@ TEST(JSON string escaping) {
   CHECK_EQUAL(json_unescape("\""), "");
   CHECK_EQUAL(json_unescape("\"invalid \\x escape sequence\""), "");
   CHECK_EQUAL(json_unescape("\"unescaped\"quote\""), "");
+
+  // Registered Sign: ®
+  CHECK_EQUAL(json_escape("®"), "\"\\u00C2\\u00AE\"");
+  CHECK_EQUAL(json_unescape("\"\\u00C2\\u00AE\""), "®");
+  CHECK_EQUAL(json_unescape("\"®\""), "®");
+  CHECK_EQUAL(json_unescape("\"Hello, world!\""), "Hello, world!");
+  CHECK_EQUAL(json_unescape("\"Hello®, world!\""), "Hello®, world!");
 }
 
 TEST(percent escaping) {
