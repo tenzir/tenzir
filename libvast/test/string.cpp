@@ -67,7 +67,7 @@ TEST(JSON string escaping) {
   CHECK_EQUAL(json_escape("foo\rbar"), "\"foo\\rbar\"");
   CHECK_EQUAL(json_escape("foo\nbar"), "\"foo\\nbar\"");
   CHECK_EQUAL(json_escape("foo\tbar"), "\"foo\\tbar\"");
-  CHECK_EQUAL(json_escape("foo\xFF\xFF"), "\"foo\\u00FF\\u00FF\"");
+  CHECK_EQUAL(json_escape("foo\xFF\xFF"), "\"foo\xFF\xFF\"");
 
   CHECK_EQUAL(json_unescape("\"foo\\\"bar\""), "foo\"bar");
   CHECK_EQUAL(json_unescape("\"foo\\\\bar\""), "foo\\bar");
@@ -89,7 +89,7 @@ TEST(JSON string escaping) {
   CHECK_EQUAL(json_unescape("\"unescaped\"quote\""), "");
 
   // Registered Sign: ®
-  CHECK_EQUAL(json_escape("®"), "\"\\u00C2\\u00AE\"");
+  CHECK_EQUAL(json_escape("®"), "\"®\"");
   CHECK_EQUAL(json_unescape("\"\\u00C2\\u00AE\""), "®");
   CHECK_EQUAL(json_unescape("\"®\""), "®");
   CHECK_EQUAL(json_unescape("\"Hello, world!\""), "Hello, world!");
