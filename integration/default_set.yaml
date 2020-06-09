@@ -123,9 +123,9 @@ tests:
     tags: [server, import-export, zeek]
     fixture: ServerTester
     steps:
-      - command: import zeek
+      - command: import -b zeek
         input: data/zeek/conn.log.gz
-      - command: import zeek
+      - command: import -b zeek
         input: data/zeek/dns.log.gz
       - command: export ascii 'resp_h == 192.168.1.104'
       - command: export ascii 'zeek.conn.id.resp_h == 192.168.1.104'
@@ -275,7 +275,7 @@ tests:
     tags: [explore, zeek]
     fixture: ServerTester
     steps:
-      - command: import zeek
+      - command: import -b zeek
         input: data/zeek/conn.log.gz
       - command: explore --after=3min 'uid == "Yaix3QBP3Xg"'
   # The first queries are stress tests for the deduplication: The query

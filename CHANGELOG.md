@@ -11,6 +11,9 @@ Every entry has a category for which we use the following visual abbreviations:
 
 ## Unreleased
 
+- 🐞 A use after free bug would sometimes crash the node while it was shutting
+  down. [#896](https://github.com/tenzir/vast/pull/896)
+
 - 🐞 The `export json` command now correctly unescapes its output.
   [#910](https://github.com/tenzir/vast/910)
 

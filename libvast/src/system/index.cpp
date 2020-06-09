@@ -436,7 +436,17 @@ caf::behavior index(caf::stateful_actor<index_state>* self, const path& dir,
   self->set_exit_handler([=](const caf::exit_msg& msg) {
     VAST_DEBUG(self, "received exit from", msg.source,
                "with reason:", msg.reason);
-    self->state.send_report();
+    auto& st = self->state;
+    if (!st.unpersisted.empty() || st.active_partition_indexers > 0) {
+      auto delay = defaults::index::shutdown_retry_interval;
+      VAST_INFO(self, "delaying exit by", delay, "to wait for outstanding indexers");
+      // Tell the upstreams that we are stopping.
+      st.stage->shutdown();
+      st.stage->out().close();
+      self->delayed_send(self, delay, msg);
+      return;
+    }
+    st.send_report();
     self->quit(msg.reason);
   });
   // Launch workers for resolving queries.

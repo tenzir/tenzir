@@ -56,6 +56,33 @@ size_t indexer_downstream_manager::buffered(caf::stream_slot slot) const
   return 0u;
 }
 
+void indexer_downstream_manager::close() {
+  VAST_DEBUG(self(), "closing downstream manager");
+  if (closing)
+    return;
+  // At this point, we unregister all partitions by...
+  for (auto it = partitions.begin(); it != partitions.end();) {
+    VAST_ASSERT(*it != nullptr);
+    if (buffered(**it) == 0u) {
+      // ... either removing them directly if the buffers are empty,
+      // meaning all table slices have been forwarded to the indexers,...
+      VAST_DEBUG(self(), "removes partition", (*it)->id());
+      cleanup_partition(**it);
+      auto pit = pending_partitions.find(*it);
+      if (pit != pending_partitions.end())
+        pending_partitions.erase(pit);
+      it = partitions.erase(it);
+    } else {
+      // ... or else we insert them into the pending set to be removed once all
+      // remaining batches have been emitted.
+      VAST_DEBUG(self(), "inserts partition", (*it)->id(), "into pending set");
+      pending_partitions.insert(*it);
+      ++it;
+    }
+  }
+  closing = true;
+}
+
 int32_t indexer_downstream_manager::max_capacity() const noexcept {
   // The maximum capacity is limited by the slowest downstream path.
   auto result = std::numeric_limits<int32_t>::max();
@@ -72,13 +99,24 @@ int32_t indexer_downstream_manager::max_capacity() const noexcept {
 void indexer_downstream_manager::register_partition(partition* p) {
   VAST_DEBUG(self(), "registers partition", p->id());
   partitions.insert(p);
+  // Corner case: it is possible that register gets called after close. If so,
+  // all partitons are pending for removal, so this is as well.
+  if (closing) {
+    VAST_DEBUG(self(), "inserts new partition", p->id(), "into pending set");
+    pending_partitions.insert(p);
+  }
 }
 
 bool indexer_downstream_manager::unregister(partition* p) {
   VAST_DEBUG(self(), "unregisters partition", p->id());
+  // If we are closing already the partition in question might already be
+  // removed.
+  if (closing)
+    return true;
   auto it = partitions.find(p);
   if (it == partitions.end())
     return false;
+  VAST_ASSERT(*it != nullptr);
   if (buffered(**it) == 0u) {
     cleanup_partition(**it);
     partitions.erase(it);
@@ -151,6 +189,7 @@ indexer_downstream_manager::set_type::iterator
 indexer_downstream_manager::try_remove_partition(set_type::iterator it) {
   auto pit = pending_partitions.find(*it);
   if (pit != pending_partitions.end()) {
+    VAST_ASSERT(*it != nullptr);
     if (buffered(**it) == 0u) {
       cleanup_partition(**it);
       pending_partitions.erase(pit);

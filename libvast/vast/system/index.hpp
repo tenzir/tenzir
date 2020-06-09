@@ -214,7 +214,7 @@ struct index_state {
   partition_ptr active;
 
   /// Active indexer count for the current partition.
-  size_t active_partition_indexers;
+  size_t active_partition_indexers = 0;
 
   /// Recently accessed partitions.
   partition_cache_type lru_partitions;
