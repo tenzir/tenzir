@@ -223,20 +223,15 @@ if (NOT VAST_DEV_MODE)
   string(APPEND CMAKE_CXX_FLAGS_RELWITHDEBINFO " -g1")
 endif ()
 
-# To give the user full control, we don't mess with with CXX_FLAGS if provided.
-# This is a deliberate decision but contrasts to many other packages that append
-# flags to the user-provide environment variable.
-if (NOT CMAKE_CXX_FLAGS)
-  # Our default flags.
-  set(EXTRA_FLAGS "${EXTRA_FLAGS} -Wall -Wextra -pedantic")
-  # Increase maximum number of template instantiations, for all that template-
-  # heavy code.
-  set(EXTRA_FLAGS "${EXTRA_FLAGS} -ftemplate-backtrace-limit=0")
-  # Relocate debug/file/macro paths to a common prefix for CCache users that
-  # work from multiple worktrees.
-  set(EXTRA_FLAGS
-      "${EXTRA_FLAGS} -fdebug-prefix-map=${CMAKE_CURRENT_SOURCE_DIR}=.")
-endif ()
+# Our default flags.
+set(EXTRA_FLAGS "${EXTRA_FLAGS} -Wall -Wextra -pedantic")
+# Increase maximum number of template instantiations, for all that template-
+# heavy code.
+set(EXTRA_FLAGS "${EXTRA_FLAGS} -ftemplate-backtrace-limit=0")
+# Relocate debug/file/macro paths to a common prefix for CCache users that
+# work from multiple worktrees.
+set(EXTRA_FLAGS
+    "${EXTRA_FLAGS} -fdebug-prefix-map=${CMAKE_CURRENT_SOURCE_DIR}=.")
 
 # Enable more (most) warnings when requested by the user.
 if (MORE_WARNINGS)
@@ -444,10 +439,7 @@ if (NOT HAVE_CXX_ATOMICS_WITHOUT_LIB)
   endif ()
 endif ()
 
-# Only set our flags if the environment variable CXXFLAGS is not present.
-if (NOT CMAKE_CXX_FLAGS)
-  set(CMAKE_CXX_FLAGS ${EXTRA_FLAGS})
-endif ()
+set(CMAKE_CXX_FLAGS "${EXTRA_FLAGS} ${CMAKE_CXX_FLAGS}")
 
 if (LDFLAGS)
   set(CMAKE_EXE_LINKER_FLAGS ${LDFLAGS})
