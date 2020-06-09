@@ -76,7 +76,7 @@ inline auto json_escaper = [](auto& f, auto out) {
     *out++ = c;
   };
   auto json_print_escaper = [](auto& f, auto out) {
-    if (std::isprint(*f)) {
+    if (!std::iscntrl(*f)) {
       *out++ = *f++;
     } else {
       auto hex = byte_to_hex(*f++);

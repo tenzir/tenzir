@@ -587,7 +587,7 @@ public:
 
   bool operator()(Iterator& out, const view<std::string>& str) const {
     for (auto c : str)
-      if (!std::isprint(c) || c == separator || c == set_separator) {
+      if (std::iscntrl(c) || c == separator || c == set_separator) {
         auto hex = detail::byte_to_hex(c);
         *out++ = '\\';
         *out++ = 'x';

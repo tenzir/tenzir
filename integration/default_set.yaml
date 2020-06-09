@@ -317,3 +317,4 @@ tests:
         input: data/json/sysmon.json
       - command: -N status
         transformation: jq '.node.index.statistics.layouts | del(."vast.metrics")'
+      - command: -N export json '"®" in :string'

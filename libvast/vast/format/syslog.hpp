@@ -88,7 +88,7 @@ struct header_parser : parser<header_parser> {
 
   template <class Iterator, class Attribute>
   bool parse(Iterator& f, const Iterator& l, Attribute& x) const {
-    using parsers::print, parsers::rep;
+    using parsers::printable, parsers::rep;
     auto is_prival = [](uint16_t in) { return in <= 191; };
     auto to_facility_and_severity = [&](uint16_t in) {
       // Retrieve facillity and severity from prival.
@@ -102,10 +102,10 @@ struct header_parser : parser<header_parser> {
     auto pri = '<' >> prival >> '>';
     auto is_version = [](uint16_t in) { return in > 0; };
     auto version = integral_parser<uint16_t, 3>{}.with(is_version);
-    auto hostname = maybe_nil(rep(print - ' ', 1, 255));
-    auto app_name = maybe_nil(rep(print - ' ', 1, 48));
-    auto process_id = maybe_nil(rep(print - ' ', 1, 128));
-    auto msg_id = maybe_nil(rep(print - ' ', 1, 32));
+    auto hostname = maybe_nil(rep(printable - ' ', 1, 255));
+    auto app_name = maybe_nil(rep(printable - ' ', 1, 48));
+    auto process_id = maybe_nil(rep(printable - ' ', 1, 128));
+    auto msg_id = maybe_nil(rep(printable - ' ', 1, 32));
     auto timestamp = maybe_nil(parsers::time);
     auto p = pri >> version >> ' ' >> timestamp >> ' ' >> hostname >> ' '
              >> app_name >> ' ' >> process_id >> ' ' >> msg_id;
@@ -127,14 +127,14 @@ struct parameter_parser : parser<parameter_parser> {
 
   template <class Iterator, class Attribute>
   bool parse(Iterator& f, const Iterator& l, Attribute& x) const {
-    using parsers::print, parsers::rep, parsers::ch;
+    using parsers::printable, parsers::rep, parsers::ch;
     // space, =, ", and ] are not allowed in the key of the parameter.
-    auto key = rep(print - '=' - ' ' - ']' - '"', 1, 32);
+    auto key = rep(printable - '=' - ' ' - ']' - '"', 1, 32);
     // \ is used to escape characters.
     auto esc = ignore(ch<'\\'>);
     // ], ", \ must to be escaped.
     auto escaped = esc >> (ch<']'> | ch<'\\'> | ch<'"'>);
-    auto value = escaped | (print - ']' - '"' - '\\');
+    auto value = escaped | (printable - ']' - '"' - '\\');
     auto p = ' ' >> key >> '=' >> '"' >> *value >> '"';
     if constexpr (std::is_same_v<Attribute, unused_type>)
       return p(f, l, unused);
@@ -173,11 +173,11 @@ struct structured_data_element_parser : parser<structured_data_element_parser> {
 
   template <class Iterator, class Attribute>
   bool parse(Iterator& f, const Iterator& l, Attribute& x) const {
-    using parsers::print, parsers::rep;
+    using parsers::printable, parsers::rep;
     auto is_sd_name_char = [](char in) {
       return in != '=' && in != ' ' && in != ']' && in != '"';
     };
-    auto sd_name = print - ' ';
+    auto sd_name = printable - ' ';
     auto sd_name_char = sd_name.with(is_sd_name_char);
     auto sd_id = rep(sd_name_char, 1, 32);
     auto params = parameters_parser{};
