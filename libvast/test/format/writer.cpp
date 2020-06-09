@@ -35,7 +35,7 @@ auto first_csv_http_log_line = "type,ts,uid,id.orig_h,id.orig_p,id.resp_h,id.res
 
 auto last_csv_http_log_line = R"__(zeek.http,2009-11-19T07:17:28.829955072,"rydI6puScNa",192.168.1.104,1224/tcp,87.106.66.233,80/tcp,1,"POST","87.106.66.233","/rpc.html?e=bl",,"SCSDK-6.0.0",1064,96,200,"OK",100,"Continue",,"",,,,"application/octet-stream",,)__";
 
-auto first_zeek_conn_log_line = R"__({"ts": 1258531221.486539, "uid": "Pii6cUUq1v4", "id.orig_h": "192.168.1.102", "id.orig_p": 68, "id.resp_h": "192.168.1.1", "id.resp_p": 67, "proto": "udp", "service": null, "duration": 0.16382, "orig_bytes": 301, "resp_bytes": 300, "conn_state": "SF", "local_orig": null, "missed_bytes": 0, "history": "Dd", "orig_pkts": 1, "orig_ip_bytes": 329, "resp_pkts": 1, "resp_ip_bytes": 328, "tunnel_parents": []})__";
+auto first_zeek_conn_log_line = R"__({"ts": "2009-11-18T08:00:21.486539008", "uid": "Pii6cUUq1v4", "id.orig_h": "192.168.1.102", "id.orig_p": 68, "id.resp_h": "192.168.1.1", "id.resp_p": 67, "proto": "udp", "service": null, "duration": 0.16382, "orig_bytes": 301, "resp_bytes": 300, "conn_state": "SF", "local_orig": null, "missed_bytes": 0, "history": "Dd", "orig_pkts": 1, "orig_ip_bytes": 329, "resp_pkts": 1, "resp_ip_bytes": 328, "tunnel_parents": []})__";
 // clang-format on
 
 template <class Writer>

@@ -193,7 +193,7 @@ const auto duration = duration_printer<
   Policy
 >{};
 
-template <class Clock, class Duration = class Clock::duration>
+template <class Clock, class Duration = typename Clock::duration>
 const auto time_point = time_point_printer<Clock, Duration>{};
 
 } // namespace printers
