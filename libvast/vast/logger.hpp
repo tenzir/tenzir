@@ -65,7 +65,11 @@ void fixup_logger(const system::configuration& cfg);
 #define VAST_LOG_10(lvl, m1, m2, m3, m4, m5, m6, m7, m8, m9)                   \
   VAST_LOG_IMPL(lvl, m1 << m2 << m3 << m4 << m5 << m6 << m7 << m8 << m9)
 
-#define VAST_LOG(...) VAST_PP_OVERLOAD(VAST_LOG_, __VA_ARGS__)(__VA_ARGS__)
+#  define VAST_LOG_11(lvl, m1, m2, m3, m4, m5, m6, m7, m8, m9, m10)            \
+    VAST_LOG_IMPL(lvl,                                                         \
+                  m1 << m2 << m3 << m4 << m5 << m6 << m7 << m8 << m9 << m10)
+
+#  define VAST_LOG(...) VAST_PP_OVERLOAD(VAST_LOG_, __VA_ARGS__)(__VA_ARGS__)
 
 namespace vast::detail {
 
@@ -101,10 +105,11 @@ auto id_or_name(T&& x) {
 #  if VAST_LOG_LEVEL >= VAST_LOG_LEVEL_TRACE
 
 #    define VAST_TRACE(...)                                                    \
-      VAST_LOG(VAST_LOG_LEVEL_TRACE, "ENTRY", __VA_ARGS__);                    \
+      VAST_LOG(VAST_LOG_LEVEL_TRACE, "ENTER", __func__, __VA_ARGS__);          \
       auto CAF_UNIFYN(vast_log_trace_guard_)                                   \
-        = ::caf::detail::make_scope_guard(                                     \
-          [=] { VAST_LOG(VAST_LOG_LEVEL_TRACE, "EXIT"); })
+        = ::caf::detail::make_scope_guard([=, func_name_ = __func__] {         \
+            VAST_LOG(VAST_LOG_LEVEL_TRACE, "EXIT", func_name_);                \
+          })
 
 #  else // VAST_LOG_LEVEL > VAST_LOG_LEVEL_TRACE
 
