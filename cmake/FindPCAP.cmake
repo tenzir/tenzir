@@ -39,10 +39,8 @@ endif ()
 if (PCAP_FOUND AND NOT TARGET pcap::pcap)
   add_library(pcap::pcap UNKNOWN IMPORTED GLOBAL)
   set_target_properties(
-    pcap::pcap
-    PROPERTIES
-      IMPORTED_LOCATION "${PCAP_LIBRARIES}"
-      INTERFACE_INCLUDE_DIRECTORIES "${PCAP_INCLUDE_DIR}")
+    pcap::pcap PROPERTIES IMPORTED_LOCATION "${PCAP_LIBRARIES}"
+                          INTERFACE_INCLUDE_DIRECTORIES "${PCAP_INCLUDE_DIR}")
 endif ()
 
 # TODO: Replace this with pkg_check_modules from the PkgConfig package, in case

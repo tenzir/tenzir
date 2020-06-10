@@ -171,7 +171,6 @@ set_target_properties(
   libvast
   PROPERTIES
     SOVERSION "${VERSION_YEAR}" VERSION "${VERSION_YEAR}.${VERSION_MONTH}"
-
     OUTPUT_NAME vast)
 
 target_include_directories(
@@ -377,18 +376,15 @@ if (BUILD_UNIT_TESTS)
 
   add_test(
     NAME build_vast_test
-    COMMAND
-      "${CMAKE_COMMAND}" --build "${CMAKE_BINARY_DIR}" --config "$<CONFIG>"
-      --target vast-test)
+    COMMAND "${CMAKE_COMMAND}" --build "${CMAKE_BINARY_DIR}" --config
+            "$<CONFIG>" --target vast-test)
   set_tests_properties(build_vast_test PROPERTIES FIXTURES_SETUP
                                                   vast_unit_test_fixture)
   # Helper macro to construct a CMake test from a VAST test suite.
   macro (make_test suite)
     string(REPLACE " " "_" test_name ${suite})
-    add_test(
-      NAME ${test_name}
-      COMMAND
-        vast-test -v 3 -r 600 -s "^${suite}$" ${ARGN})
+    add_test(NAME ${test_name} COMMAND vast-test -v 3 -r 600 -s "^${suite}$"
+                                       ${ARGN})
     set_tests_properties(${test_name} PROPERTIES FIXTURES_REQUIRED
                                                  vast_unit_test_fixture)
   endmacro ()
