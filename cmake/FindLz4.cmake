@@ -47,8 +47,7 @@ else ()
     list(APPEND LZ4_PC_LIBRARY_DIRS "${LZ4_PC_LIBDIR}")
     find_library(
       LZ4_LIB lz4
-      PATHS ${LZ4_PC_LIBRARY_DIRS}
-      NO_DEFAULT_PATH
+      PATHS ${LZ4_PC_LIBRARY_DIRS} NO_DEFAULT_PATH
       PATH_SUFFIXES ${LIB_PATH_SUFFIXES})
   else ()
     find_library(
@@ -71,7 +70,6 @@ if (Lz4_FOUND OR LZ4_FOUND)
   set(Lz4_FOUND TRUE)
   add_library(LZ4::lz4 UNKNOWN IMPORTED)
   set_target_properties(
-    LZ4::lz4
-    PROPERTIES IMPORTED_LOCATION "${LZ4_LIB}" INTERFACE_INCLUDE_DIRECTORIES
-                                              "${LZ4_INCLUDE_DIR}")
+    LZ4::lz4 PROPERTIES IMPORTED_LOCATION "${LZ4_LIB}"
+                        INTERFACE_INCLUDE_DIRECTORIES "${LZ4_INCLUDE_DIR}")
 endif ()

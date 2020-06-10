@@ -50,8 +50,7 @@ else ()
     list(APPEND ZSTD_PC_LIBRARY_DIRS "${ZSTD_PC_LIBDIR}")
     find_library(
       ZSTD_LIB zstd
-      PATHS ${ZSTD_PC_LIBRARY_DIRS}
-      NO_DEFAULT_PATH
+      PATHS ${ZSTD_PC_LIBRARY_DIRS} NO_DEFAULT_PATH
       PATH_SUFFIXES ${LIB_PATH_SUFFIXES})
     # Third, check all other CMake paths
   else ()
@@ -72,7 +71,6 @@ find_package_handle_standard_args(ZSTD REQUIRED_VARS ZSTD_LIB ZSTD_INCLUDE_DIR)
 if (ZSTD_FOUND)
   add_library(ZSTD::zstd UNKNOWN IMPORTED)
   set_target_properties(
-    ZSTD::zstd
-    PROPERTIES IMPORTED_LOCATION "${ZSTD_LIB}" INTERFACE_INCLUDE_DIRECTORIES
-                                               "${ZSTD_INCLUDE_DIR}")
+    ZSTD::zstd PROPERTIES IMPORTED_LOCATION "${ZSTD_LIB}"
+                          INTERFACE_INCLUDE_DIRECTORIES "${ZSTD_INCLUDE_DIR}")
 endif ()

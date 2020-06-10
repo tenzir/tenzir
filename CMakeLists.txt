@@ -76,7 +76,8 @@ if (CMAKE_BUILD_TYPE STREQUAL Release)
   set(VAST_ENABLE_ASSERTIONS_DEFAULT OFF)
 endif ()
 
-option(VAST_ENABLE_ASSERTIONS "Enable Assertions" "${VAST_ENABLE_ASSERTIONS_DEFAULT}")
+option(VAST_ENABLE_ASSERTIONS "Enable Assertions"
+       "${VAST_ENABLE_ASSERTIONS_DEFAULT}")
 option(VAST_RELOCATABLE_INSTALL "Enable relocatable installations" ON)
 option(VAST_USE_BUNDLED_CAF "Always use the CAF submodule" OFF)
 option(ENABLE_ZEEK_TO_VAST "Build zeek-to-vast" ON)
@@ -131,7 +132,7 @@ add_custom_target(
 if (VAST_RELOCATABLE_INSTALL)
   if (APPLE)
     list(APPEND CMAKE_INSTALL_RPATH
-                "@executable_path/../${CMAKE_INSTALL_LIBDIR}")
+         "@executable_path/../${CMAKE_INSTALL_LIBDIR}")
   else ()
     list(APPEND CMAKE_INSTALL_RPATH "$ORIGIN/../${CMAKE_INSTALL_LIBDIR}")
   endif ()
@@ -187,7 +188,14 @@ elseif (NOT VAST_LOG_LEVEL STREQUAL "$CACHE{VAST_LOG_LEVEL}")
 endif ()
 
 # Raise an error for invalid log levels.
-set(validLogLevels QUIET ERROR WARNING INFO VERBOSE DEBUG TRACE)
+set(validLogLevels
+    QUIET
+    ERROR
+    WARNING
+    INFO
+    VERBOSE
+    DEBUG
+    TRACE)
 list(FIND validLogLevels "${VAST_LOG_LEVEL}" logLevelIndex)
 if (logLevelIndex LESS 0)
   message(FATAL_ERROR "Invalid log level: \"${VAST_LOG_LEVEL}\"")
@@ -218,7 +226,8 @@ set(CMAKE_CXX_STANDARD 17)
 
 # Build-type specific flags.
 string(APPEND CMAKE_CXX_FLAGS_DEBUG " -O0")
-string(APPEND CMAKE_CXX_FLAGS_RELEASE " -msse3 -mssse3 -msse4.1 -msse4.2 -fno-omit-frame-pointer")
+string(APPEND CMAKE_CXX_FLAGS_RELEASE
+       " -msse3 -mssse3 -msse4.1 -msse4.2 -fno-omit-frame-pointer")
 string(APPEND CMAKE_CXX_FLAGS_RELWITHDEBINFO " -fno-omit-frame-pointer")
 if (NOT VAST_DEV_MODE)
   string(APPEND CMAKE_CXX_FLAGS_DEBUG " -g1")
@@ -368,15 +377,13 @@ if (ENABLE_GCOV)
   # Add gcovr targets to generate various output files.
   add_custom_target(
     gcovr-txt
-    COMMAND
-      gcovr -k -g -r .. -e libvast/test --object-directory=${GCOV_OUTPUT_DIR} -o
-      coverage.txt
+    COMMAND gcovr -k -g -r .. -e libvast/test
+            --object-directory=${GCOV_OUTPUT_DIR} -o coverage.txt
     COMMENT "Creating gcov text summary")
   add_custom_target(
     gcovr-xml
-    COMMAND
-      gcovr -k -g -r .. -e libvast/test --object-directory=${GCOV_OUTPUT_DIR} -x
-      -o coverage.xml
+    COMMAND gcovr -k -g -r .. -e libvast/test
+            --object-directory=${GCOV_OUTPUT_DIR} -x -o coverage.xml
     COMMENT "Creating gcov XML summary")
   add_custom_target(
     gcovr-html
@@ -496,10 +503,7 @@ endif ()
 
 if (NOT VAST_USE_BUNDLED_CAF)
   # Try to find the required CAF components first...
-  find_package(
-    CAF 0.17.5 EXACT
-    COMPONENTS core io test
-    QUIET)
+  find_package(CAF 0.17.5 EXACT COMPONENTS core io test QUIET)
 endif ()
 if (CAF_FOUND)
   message(STATUS "Found CAF")
@@ -508,10 +512,7 @@ if (CAF_FOUND)
          "\nfind_package(CAF COMPONENTS core io test REQUIRED QUIET)")
   set(CAF_FOUND_SAVE ${CAF_FOUND})
   # ...and then optional components.
-  find_package(
-    CAF
-    COMPONENTS openssl
-    QUIET)
+  find_package(CAF COMPONENTS openssl QUIET)
   if (CAF_LIBRARY_OPENSSL)
     message(STATUS "Found CAF's OpenSSL module, enabling OpenSSL support")
     set(VAST_USE_OPENSSL true)
@@ -687,7 +688,8 @@ if (NOT VAST_NO_ARROW)
   endif ()
   get_target_property(arrow_mode ${ARROW_LIBRARY} IMPORTED_CONFIGURATIONS)
   list(GET arrow_mode 0 arrow_mode)
-  get_target_property(arrow_dir ${ARROW_LIBRARY} IMPORTED_LOCATION_${arrow_mode})
+  get_target_property(arrow_dir ${ARROW_LIBRARY}
+                      IMPORTED_LOCATION_${arrow_mode})
   get_filename_component(arrow_dir ${arrow_dir} DIRECTORY) # <prefix>/lib
   get_filename_component(arrow_dir ${arrow_dir} DIRECTORY) # <prefix>
 endif ()
@@ -703,7 +705,7 @@ install(
   DESTINATION "${INSTALL_VAST_CMAKEDIR}"
   NAMESPACE tsl::)
 string(APPEND VAST_EXTRA_TARGETS_FILES
-        "\ninclude(\"\${CMAKE_CURRENT_LIST_DIR}/tsl-robin-mapTargets.cmake\")")
+       "\ninclude(\"\${CMAKE_CURRENT_LIST_DIR}/tsl-robin-mapTargets.cmake\")")
 
 find_package(Doxygen QUIET)
 find_package(Pandoc QUIET)
@@ -830,8 +832,8 @@ write_basic_package_version_file(
 
 configure_package_config_file(
   "${CMAKE_CURRENT_SOURCE_DIR}/cmake/VASTConfig.cmake.in"
-  "${CMAKE_CURRENT_BINARY_DIR}/VASTConfig.cmake" INSTALL_DESTINATION
-  "${INSTALL_VAST_CMAKEDIR}")
+  "${CMAKE_CURRENT_BINARY_DIR}/VASTConfig.cmake"
+  INSTALL_DESTINATION "${INSTALL_VAST_CMAKEDIR}")
 
 install(
   FILES "${CMAKE_CURRENT_BINARY_DIR}/VASTConfig.cmake"

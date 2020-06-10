@@ -14,8 +14,7 @@ macro (log_to_slices format name)
   file(MAKE_DIRECTORY "${target_dir}")
   add_custom_command(
     OUTPUT "${cppfile}"
-    COMMAND
-      ${cmd} -i ${logfile} -o ${cppfile} -f ${format} ${nn_arg} ${vn_arg}
+    COMMAND ${cmd} -i ${logfile} -o ${cppfile} -f ${format} ${nn_arg} ${vn_arg}
     DEPENDS gen-vast-slices "${logfile}")
 endmacro ()
 
@@ -55,7 +54,6 @@ set_target_properties(
   libvast_test
   PROPERTIES
     SOVERSION "${VERSION_YEAR}" VERSION "${VERSION_YEAR}.${VERSION_MONTH}"
-
     OUTPUT_NAME vast_test EXPORT_NAME test)
 add_library(vast::test ALIAS libvast_test)
 install(
