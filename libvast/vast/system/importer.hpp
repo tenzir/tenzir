@@ -119,7 +119,7 @@ struct importer_state {
   size_t blocks_per_replenish = 100;
 
   /// Stores when we received new IDs for the last time.
-  std::chrono::steady_clock::time_point last_replenish;
+  std::chrono::system_clock::time_point last_replenish;
 
   /// State directory.
   path dir;

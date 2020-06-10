@@ -111,7 +111,7 @@ caf::dictionary<caf::config_value> importer_state::status() const {
   result.emplace("in-flight-slices", in_flight_slices);
   result.emplace("max-table-slice-size", max_table_slice_size);
   result.emplace("blocks-per-replenish", blocks_per_replenish);
-  if (last_replenish > steady_clock::time_point::min())
+  if (last_replenish > system_clock::time_point::min())
     result.emplace("last-replenish", caf::deep_to_string(last_replenish));
   result.emplace("awaiting-ids", awaiting_ids);
   result.emplace("available-ids", available_ids());
@@ -156,7 +156,7 @@ void replenish(stateful_actor<importer_state>* self) {
   if (st.awaiting_ids)
     return;
   // Check whether we obtain new IDs too frequently.
-  auto now = steady_clock::now();
+  auto now = system_clock::now();
   if ((now - st.last_replenish) < 10s) {
     VAST_DEBUG(self, "had to replenish twice within 10 secs");
     VAST_DEBUG(self, "increase blocks_per_replenish:", st.blocks_per_replenish,
@@ -292,7 +292,7 @@ behavior importer(importer_actor* self, path dir, size_t max_table_slice_size,
   self->state.dir = dir;
   self->monitor(consensus);
   self->state.consensus = std::move(consensus);
-  self->state.last_replenish = steady_clock::time_point::min();
+  self->state.last_replenish = system_clock::time_point::min();
   self->state.max_table_slice_size = static_cast<int32_t>(max_table_slice_size);
   auto err = self->state.read_state();
   if (err) {

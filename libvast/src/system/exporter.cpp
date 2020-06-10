@@ -237,7 +237,7 @@ behavior exporter(stateful_actor<exporter_state>* self, expression expr,
       if (st.query.expected == 0)
         return caf::skip;
       // Add `hits` to the total result set and update all stats.
-      timespan runtime = steady_clock::now() - st.start;
+      timespan runtime = system_clock::now() - st.start;
       st.query.runtime = runtime;
       auto count = rank(hits);
       if (st.accountant) {
@@ -275,7 +275,7 @@ behavior exporter(stateful_actor<exporter_state>* self, expression expr,
         return caf::skip;
       // Figure out if we're done by bumping the counter for `received` and
       // check whether it reaches `expected`.
-      timespan runtime = steady_clock::now() - st.start;
+      timespan runtime = system_clock::now() - st.start;
       qs.runtime = runtime;
       qs.received += qs.scheduled;
       if (qs.received < qs.expected) {
@@ -373,7 +373,7 @@ behavior exporter(stateful_actor<exporter_state>* self, expression expr,
     },
     [=](run_atom) {
       VAST_INFO(self, "executes query:", to_string(self->state.expr));
-      self->state.start = steady_clock::now();
+      self->state.start = system_clock::now();
       if (!has_historical_option(self->state.options))
         return;
       self->request(self->state.index, infinite, self->state.expr).then(
