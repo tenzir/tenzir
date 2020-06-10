@@ -33,9 +33,6 @@
 
 #include <algorithm>
 
-using std::chrono::duration_cast;
-using std::chrono::microseconds;
-using std::chrono::steady_clock;
 using namespace caf;
 
 namespace vast::system {
