@@ -441,7 +441,11 @@ if (NOT HAVE_CXX_ATOMICS_WITHOUT_LIB)
   endif ()
 endif ()
 
-set(CMAKE_CXX_FLAGS "${EXTRA_FLAGS} ${CMAKE_CXX_FLAGS}")
+# We prepend our additional flags only if VAST is not the main project we're
+# building, e.g., if we're just linking again libvast.
+if (NOT vast_is_subproject)
+  set(CMAKE_CXX_FLAGS "${EXTRA_FLAGS} ${CMAKE_CXX_FLAGS}")
+endif ()
 
 if (LDFLAGS)
   set(CMAKE_EXE_LINKER_FLAGS ${LDFLAGS})
