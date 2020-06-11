@@ -34,7 +34,6 @@ node::node() {
   run();
   MESSAGE("spawning components");
   spawn_component("type-registry");
-  spawn_component("consensus");
   spawn_component("archive");
   spawn_component("index");
   spawn_component("importer");
