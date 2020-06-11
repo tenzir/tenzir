@@ -324,7 +324,7 @@ template <class Reader>
 caf::behavior default_source(caf::stateful_actor<source_state<Reader>>* self,
                              Reader reader) {
   auto slice_size = get_or(self->system().config(), "system.table-slice-size",
-                           defaults::system::table_slice_size);
+                           defaults::import::table_slice_size);
   //  The last five arguments are optional, and not required for the minimum
   //  behavior of the "default" source.
   return source(self, std::move(reader), slice_size, {}, {}, {}, {}, {});
