@@ -17,6 +17,10 @@ Every entry has a category for which we use the following visual abbreviations:
   between the `import` command and the node. The default timeout is 10 seconds.
   [#916](https://github.com/tenzir/vast/916)
 
+- 🐞 A bogus import process that assembled table slices with a greater number
+  of events than expected by the node was able to lead to wrong query results.
+  [#908](https://github.com/tenzir/vast/pull/908)
+
 - ⚠️ The JSON export format now renders timestamps using strings instead of
   numbers in order to avoid possible loss of precision.
   [#909](https://github.com/tenzir/vast/909)

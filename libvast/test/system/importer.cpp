@@ -266,8 +266,8 @@ using nondeterministic_fixture_base
 
 struct nondeterministic_fixture : nondeterministic_fixture_base {
   nondeterministic_fixture()
-    : nondeterministic_fixture_base(vast::defaults::system::table_slice_size) {
-      // nop
+    : nondeterministic_fixture_base(vast::defaults::import::table_slice_size) {
+    // nop
   }
 
   void fetch_ok() override {
