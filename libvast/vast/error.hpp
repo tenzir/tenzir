@@ -46,6 +46,8 @@ enum class ec : uint8_t {
   format_error,
   /// Exhausted the input.
   end_of_input,
+  /// The input timed out.
+  input_timeout,
   /// Encountered two incompatible versions.
   version_error,
   /// A command does not adhere to the expected syntax.
