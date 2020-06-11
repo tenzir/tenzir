@@ -178,7 +178,8 @@ struct source_state {
   void send_report() {
     // Send the reader-specific status report to the accountant.
     if (auto status = reader.status(); !status.empty() && accountant)
-      self->send(accountant, std::move(status));
+      if (accountant)
+        self->send(accountant, std::move(status));
     // Send the source-specific performance metrics to the accountant.
     if (metrics.events > 0) {
       auto r = performance_report{{{std::string{name}, metrics}}};
@@ -225,12 +226,14 @@ source(caf::stateful_actor<source_state<Reader>>* self, Reader reader,
   st.mgr = self->make_continuous_source(
     // init
     [=](bool& done) {
+      VAST_TRACE("init");
       done = false;
       caf::timestamp now = std::chrono::system_clock::now();
       self->send(self->state.accountant, "source.start", now);
     },
     // get next element
     [=](bool& done, caf::downstream<table_slice_ptr>& out, size_t num) {
+      VAST_TRACE("get next element", VAST_ARG(done), VAST_ARG(num));
       auto& st = self->state;
       auto t = timer::start(st.metrics);
       // Extract events until the source has exhausted its input or until
@@ -238,34 +241,46 @@ source(caf::stateful_actor<source_state<Reader>>* self, Reader reader,
       auto push_slice = [&](table_slice_ptr x) { out.push(std::move(x)); };
       // We can produce up to num * table_slice_size events per run.
       auto events = detail::opt_min(st.remaining, num * table_slice_size);
+      VAST_DEBUG(self, "asks reader to generate table slices");
       auto [err, produced] = st.reader.read(events, table_slice_size,
                                             push_slice);
+      VAST_DEBUG(self, "reader returned", VAST_ARG("error", err),
+                 VAST_ARG(produced));
       // TODO: If the source is unable to generate new events (returns 0),
       //       the source will stall and never be polled again. We should
       //       trigger CAF to poll the source after a predefined interval of
       //       time again, e.g., via delayed_send.
+      t.stop(produced);
       if (produced == 0)
         VAST_WARNING(self, "received 0 events from the source and may stall");
-      t.stop(produced);
+      else
+        st.send_report();
       if (st.remaining) {
         VAST_ASSERT(*st.remaining >= produced);
         *st.remaining -= produced;
       }
-      auto finish = [&] {
+      if (st.remaining && *st.remaining == 0) {
         done = true;
-        st.send_report();
         self->quit();
-      };
-      if (st.remaining && *st.remaining == 0)
-        return finish();
+      }
       if (err != caf::none) {
-        if (err != vast::ec::end_of_input)
-          VAST_INFO(self, "completed with message:", render(err));
-        return finish();
+        if (err == vast::ec::input_timeout) {
+          VAST_DEBUG(self, "forcefully emits batches");
+          st.mgr->out().fan_out_flush();
+          st.mgr->out().force_emit_batches();
+        } else {
+          if (err != vast::ec::end_of_input)
+            VAST_INFO(self, "completed with message:", render(err));
+          done = true;
+          self->quit(err);
+        }
       }
     },
     // done?
-    [](const bool& done) { return done; });
+    [](const bool& done) {
+      VAST_TRACE("done?", VAST_ARG(done));
+      return done;
+    });
   return {
     [=](get_atom, schema_atom) { return self->state.reader.schema(); },
     [=](put_atom, schema sch) -> caf::result<void> {
