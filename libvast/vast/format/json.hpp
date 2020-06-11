@@ -205,6 +205,7 @@ vast::system::report reader<Selector>::status() const {
 template <class Selector>
 caf::error reader<Selector>::read_impl(size_t max_events, size_t max_slice_size,
                                        consumer& cons) {
+  VAST_TRACE("json-reader", VAST_ARG(max_events), VAST_ARG(max_slice_size));
   VAST_ASSERT(max_events > 0);
   VAST_ASSERT(max_slice_size > 0);
   size_t produced = 0;
@@ -222,7 +223,7 @@ caf::error reader<Selector>::read_impl(size_t max_events, size_t max_slice_size,
   for (; produced < max_events; timeout = next_line()) {
     if (timeout) {
       VAST_DEBUG(this, "reached input timeout at line", lines_->line_number());
-      return finish(cons);
+      return finish(cons, ec::input_timeout);
     }
     // EOF check.
     if (lines_->done())
@@ -265,6 +266,7 @@ caf::error reader<Selector>::read_impl(size_t max_events, size_t max_slice_size,
       if (auto err = finish(cons, bptr))
         return err;
   }
+  VAST_DEBUG(this, "produces less events than desired");
   return finish(cons);
 }
 
