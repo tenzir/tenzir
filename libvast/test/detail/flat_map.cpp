@@ -41,6 +41,19 @@ TEST(membership) {
   CHECK_EQUAL(xs.count(43), 1u);
 }
 
+TEST(lookup) {
+  detail::flat_map<int, double> xs;
+  xs[5] = 1;
+  xs[4] = 1;
+  xs[3] = 1;
+  xs[2] = 1;
+  xs[1] = 1;
+  CHECK(xs.find(1) != xs.end());
+  CHECK(xs.find(5) != xs.end());
+  CHECK(xs.find(42) == xs.end());
+  CHECK_EQUAL(xs.count(2), 1u);
+}
+
 TEST(insert) {
   auto i = xs.emplace(1, 3.14);
   CHECK(i.second);
