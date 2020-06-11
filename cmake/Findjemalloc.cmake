@@ -68,10 +68,10 @@ endif ()
 
 mark_as_advanced(jemalloc_INCLUDE_DIR jemalloc_LIBRARY)
 
-if (jemalloc_FOUND AND NOT (TARGET jemalloc::jemalloc))
-  add_library(jemalloc::jemalloc UNKNOWN IMPORTED)
+if (jemalloc_FOUND AND NOT (TARGET jemalloc::jemalloc_))
+  add_library(jemalloc::jemalloc_ UNKNOWN IMPORTED)
   set_target_properties(
-    jemalloc::jemalloc
+    jemalloc::jemalloc_
     PROPERTIES IMPORTED_LOCATION ${jemalloc_LIBRARIES}
                INTERFACE_INCLUDE_DIRECTORIES ${jemalloc_INCLUDE_DIRS})
 endif ()

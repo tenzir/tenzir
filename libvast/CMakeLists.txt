@@ -204,7 +204,7 @@ if (PCAP_FOUND)
 endif ()
 
 if (VAST_USE_JEMALLOC)
-  target_link_libraries(libvast PRIVATE jemalloc::jemalloc)
+  target_link_libraries(libvast PRIVATE jemalloc::jemalloc_)
 endif ()
 
 # Always link with -lprofile if we have Gperftools.
