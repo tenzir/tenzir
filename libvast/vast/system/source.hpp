@@ -47,6 +47,7 @@
 #include <caf/stateful_actor.hpp>
 #include <caf/stream_source.hpp>
 
+#include <chrono>
 #include <unordered_map>
 
 namespace vast::detail {
@@ -123,6 +124,10 @@ struct source_state {
 
   /// Current metrics for the accountant.
   measurement metrics;
+
+  /// Stores when batches were last emitted forcefully.
+  std::chrono::steady_clock::time_point last_force_emit
+    = std::chrono::steady_clock::now();
 
   // -- utility functions ------------------------------------------------------
 
@@ -234,11 +239,17 @@ source(caf::stateful_actor<source_state<Reader>>* self, Reader reader,
     // get next element
     [=](bool& done, caf::downstream<table_slice_ptr>& out, size_t num) {
       VAST_TRACE("get next element", VAST_ARG(done), VAST_ARG(num));
+      using namespace std::chrono_literals;
       auto& st = self->state;
       auto t = timer::start(st.metrics);
       // Extract events until the source has exhausted its input or until
       // we have completed a batch.
       auto push_slice = [&](table_slice_ptr x) { out.push(std::move(x)); };
+      // Cap num at 5.
+      if (num > 5) {
+        VAST_DEBUG(self, "caps requested events at 5 /", num);
+        num = 5;
+      }
       // We can produce up to num * table_slice_size events per run.
       auto events = detail::opt_min(st.remaining, num * table_slice_size);
       VAST_DEBUG(self, "asks reader to generate table slices");
@@ -253,27 +264,36 @@ source(caf::stateful_actor<source_state<Reader>>* self, Reader reader,
       t.stop(produced);
       if (produced == 0)
         VAST_WARNING(self, "received 0 events from the source and may stall");
-      else
-        st.send_report();
       if (st.remaining) {
         VAST_ASSERT(*st.remaining >= produced);
         *st.remaining -= produced;
       }
-      if (st.remaining && *st.remaining == 0) {
+      auto force_emit_batches = [&] {
+        VAST_DEBUG(self, "forcefully emits batches");
+        st.mgr->out().fan_out_flush();
+        st.mgr->out().force_emit_batches();
+        st.send_report();
+        st.last_force_emit = std::chrono::steady_clock::now();
+      };
+      auto finish = [&] {
         done = true;
+        st.send_report();
         self->quit();
-      }
+      };
+      if (st.remaining && *st.remaining == 0)
+        return finish();
       if (err != caf::none) {
-        if (err == vast::ec::input_timeout) {
-          VAST_DEBUG(self, "forcefully emits batches");
-          st.mgr->out().fan_out_flush();
-          st.mgr->out().force_emit_batches();
-        } else {
+        if (err == vast::ec::input_timeout)
+          return force_emit_batches();
+        else {
           if (err != vast::ec::end_of_input)
             VAST_INFO(self, "completed with message:", render(err));
-          done = true;
-          self->quit(err);
+          return finish();
         }
+      }
+      if (st.last_force_emit + 10s < std::chrono::steady_clock::now()) {
+        VAST_DEBUG(self, "hit 10s timeout and forcefully emits batches");
+        return force_emit_batches();
       }
     },
     // done?
@@ -316,7 +336,7 @@ source(caf::stateful_actor<source_state<Reader>>* self, Reader reader,
     },
     [=](telemetry_atom) {
       auto& st = self->state;
-      st.send_report();
+      // st.send_report();
       if (!st.mgr->done())
         self->delayed_send(self, defaults::system::telemetry_rate,
                            telemetry_atom::value);

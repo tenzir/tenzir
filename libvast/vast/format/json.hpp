@@ -266,7 +266,6 @@ caf::error reader<Selector>::read_impl(size_t max_events, size_t max_slice_size,
       if (auto err = finish(cons, bptr))
         return err;
   }
-  VAST_DEBUG(this, "produces less events than desired");
   return finish(cons);
 }
 
