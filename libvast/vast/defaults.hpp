@@ -298,7 +298,8 @@ constexpr size_t max_container_elements = 256;
 
 /// The interval used to periodically check that all indexers are finished when
 /// shutting down.
-constexpr std::chrono::seconds shutdown_retry_interval = std::chrono::seconds{1};
+constexpr std::chrono::seconds shutdown_retry_interval
+  = std::chrono::seconds{1};
 
 } // namespace index
 

@@ -124,12 +124,14 @@ accountant_type::behavior_type accountant(accountant_actor* self) {
     finish_slice(self);
     self->quit(msg.reason);
   });
-  self->set_down_handler(
-    [=](const caf::down_msg& msg) {
+  self->set_down_handler([=](const caf::down_msg& msg) {
+    auto i = self->state.actor_map.find(msg.source.id());
+    if (i != self->state.actor_map.end())
+      VAST_DEBUG(self, "received DOWN from", i->second, "aka", msg.source);
+    else
       VAST_DEBUG(self, "received DOWN from", msg.source);
-      self->state.actor_map.erase(msg.source.id());
-    }
-  );
+    self->state.actor_map.erase(msg.source.id());
+  });
   self->state.mgr = self->make_continuous_source(
     // init
     [=](bool&) {},

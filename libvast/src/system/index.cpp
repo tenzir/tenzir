@@ -231,48 +231,6 @@ caf::dictionary<caf::config_value> index_state::status() const {
   return result;
 }
 
-void index_state::send_report() {
-  performance_report r;
-  measurement min, max;
-  auto min_rate = std::numeric_limits<double>::infinity();
-  auto max_rate = -std::numeric_limits<double>::infinity();
-  auto append_report = [&](partition& p) {
-    for (size_t i = 0; i < p.measurements_.size(); ++i) {
-      auto tmp = collect(p.measurements_[i]);
-      if (tmp.events > 0) {
-        r.push_back({as_vector(p.indexers_)[i].first.fqn(), tmp});
-        double rate = tmp.events * 1'000'000'000.0 / tmp.duration.count();
-        if (rate < min_rate) {
-          min_rate = rate;
-          min = tmp;
-        }
-        if (rate > max_rate) {
-          max_rate = rate;
-          max = tmp;
-        }
-      }
-    }
-  };
-  if (active)
-    append_report(*active);
-  for (auto& p : unpersisted)
-    append_report(*p.first);
-  if (min.events > 0) {
-    VAST_VERBOSE(self, "handled", min.events, "events at a minimum rate of",
-                 static_cast<uint64_t>(min_rate), "events/sec in",
-                 to_string(min.duration));
-    r.push_back({"index.min", min});
-  }
-  if (max.events > 0) {
-    VAST_DEBUG(self, "handled", max.events, "events at a maximum rate of",
-               static_cast<uint64_t>(max_rate), "events/sec in",
-               to_string(max.duration));
-    r.push_back({"index.max", max});
-  }
-  if (!r.empty())
-    self->send(accountant, std::move(r));
-}
-
 void index_state::reset_active_partition() {
   // Persist meta data and the state of all INDEXER actors when the active
   // partition gets replaced becomes full.
@@ -313,13 +271,13 @@ partition_ptr index_state::make_partition(uuid id) {
 }
 
 caf::actor index_state::make_indexer(path filename, type column_type,
-                                     uuid partition_id, atomic_measurement* m) {
+                                     uuid partition_id, std::string fqn) {
   VAST_TRACE(VAST_ARG(dir), VAST_ARG(column_type), VAST_ARG(index),
              VAST_ARG(partition_id));
   caf::settings index_opts;
   index_opts["cardinality"] = max_partition_size;
   return factory(self, std::move(filename), std::move(column_type),
-                 std::move(index_opts), self, partition_id, m);
+                 std::move(index_opts), self, partition_id, std::move(fqn));
 }
 
 void index_state::decrement_indexer_count(uuid partition_id) {
@@ -437,14 +395,16 @@ caf::behavior index(caf::stateful_actor<index_state>* self, const path& dir,
     auto& st = self->state;
     if (!st.unpersisted.empty() || st.active_partition_indexers > 0) {
       auto delay = defaults::index::shutdown_retry_interval;
-      VAST_INFO(self, "delaying exit by", delay, "to wait for outstanding indexers");
+      VAST_INFO(self, "delaying exit by", delay,
+                "to wait for outstanding indexers due to",
+                st.unpersisted.size(), "unpersisted and ",
+                st.active_partition_indexers, "active");
       // Tell the upstreams that we are stopping.
       st.stage->shutdown();
       st.stage->out().close();
       self->delayed_send(self, delay, msg);
       return;
     }
-    st.send_report();
     self->quit(msg.reason);
   });
   // Launch workers for resolving queries.
@@ -565,11 +525,6 @@ caf::behavior index(caf::stateful_actor<index_state>* self, const path& dir,
     [=](atom::status) -> caf::config_value::dictionary {
       return self->state.status();
     },
-    [=](atom::telemetry) {
-      self->state.send_report();
-      namespace defs = defaults::system;
-      self->delayed_send(self, defs::telemetry_rate, atom::telemetry_v);
-    },
     [=](atom::subscribe, atom::flush, caf::actor& listener) {
       self->state.add_flush_listener(std::move(listener));
     });
@@ -587,11 +542,6 @@ caf::behavior index(caf::stateful_actor<index_state>* self, const path& dir,
           },
           [=](atom::status) -> caf::config_value::dictionary {
             return self->state.status();
-          },
-          [=](atom::telemetry) {
-            self->state.send_report();
-            namespace defs = defaults::system;
-            self->delayed_send(self, defs::telemetry_rate, atom::telemetry_v);
           },
           [=](atom::subscribe, atom::flush, caf::actor& listener) {
             self->state.add_flush_listener(std::move(listener));
