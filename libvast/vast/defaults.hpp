@@ -32,10 +32,6 @@ namespace import::shared {
 /// Path for reading input events or `-` for reading from STDIN.
 constexpr std::string_view read = "-";
 
-/// Time that the reader waits for new data before it finishes a partial slice.
-constexpr std::chrono::milliseconds partial_slice_read_timeout
-  = std::chrono::milliseconds{500};
-
 } // namespace import::shared
 
 /// Contains constants for the import command.
@@ -49,6 +45,10 @@ caf::atom_value table_slice_type(const caf::actor_system& sys,
 
 /// Maximum number of results.
 constexpr size_t max_events = 0;
+
+/// Time that the reader waits for new data before it finishes a partial slice.
+constexpr std::chrono::milliseconds read_timeout
+  = std::chrono::milliseconds{500};
 
 /// Contains settings for the zeek subcommand.
 struct zeek {

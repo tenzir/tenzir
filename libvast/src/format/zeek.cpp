@@ -14,7 +14,9 @@
 #include "vast/format/zeek.hpp"
 
 #include "vast/attribute.hpp"
+#include "vast/concept/parseable/to.hpp"
 #include "vast/concept/parseable/vast/port.hpp"
+#include "vast/concept/parseable/vast/time.hpp"
 #include "vast/concept/printable/numeric.hpp"
 #include "vast/concept/printable/to_string.hpp"
 #include "vast/concept/printable/vast/data.hpp"
@@ -33,6 +35,7 @@
 #include "vast/type.hpp"
 
 #include <caf/none.hpp>
+#include <caf/settings.hpp>
 
 #include <fstream>
 #include <iomanip>
@@ -212,10 +215,14 @@ void add_hash_index_attribute(record_type& layout) {
 
 } // namespace
 
-reader::reader(caf::atom_value table_slice_type,
-               const caf::settings& /*options*/,
+reader::reader(caf::atom_value table_slice_type, const caf::settings& options,
                std::unique_ptr<std::istream> in)
   : super(table_slice_type) {
+  if (auto read_timeout_arg = caf::get_if<std::string>(&options, "import.read-"
+                                                                 "timeout")) {
+    if (auto read_timeout = to<vast::duration>(*read_timeout_arg))
+      read_timeout_ = *read_timeout;
+  }
   if (in != nullptr)
     reset(std::move(in));
 }
@@ -303,9 +310,9 @@ caf::error reader::read_impl(size_t max_events, size_t max_slice_size,
     // sees them even if there are currently no further events in the stream.
     if (builder_->rows() > 0) {
       bool timeout = lines_->next_timeout(
-        vast::defaults::import::shared::partial_slice_read_timeout);
+        std::chrono::duration_cast<std::chrono::milliseconds>(read_timeout_));
       if (timeout)
-        return finish(f, ec::input_timeout);
+        return finish(f, ec::timeout);
     } else {
       lines_->next();
     }

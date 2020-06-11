@@ -283,7 +283,7 @@ source(caf::stateful_actor<source_state<Reader>>* self, Reader reader,
       if (st.remaining && *st.remaining == 0)
         return finish();
       if (err != caf::none) {
-        if (err == vast::ec::input_timeout) {
+        if (err == vast::ec::timeout) {
           VAST_VERBOSE(self, "hit input timeout and forcefully emits batches");
           return force_emit_batches();
         } else {

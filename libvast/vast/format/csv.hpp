@@ -95,6 +95,8 @@ private:
   std::vector<rec_table> records;
   caf::optional<parser_type> parser_;
   options opt_;
+  vast::duration read_timeout_
+    = vast::duration{vast::defaults::import::read_timeout};
 };
 
 } // namespace vast::format::csv

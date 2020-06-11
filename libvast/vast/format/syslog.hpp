@@ -289,6 +289,8 @@ private:
   std::unique_ptr<detail::line_range> lines_;
   type syslog_rfc5424_type_;
   type syslog_unkown_type_;
+  vast::duration read_timeout_
+    = vast::duration{vast::defaults::import::read_timeout};
 };
 
 } // namespace vast::format::syslog

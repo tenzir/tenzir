@@ -35,7 +35,7 @@ TEST(to_string) {
   CHECK_EQUAL(str(ec::invalid_query), "invalid_query"s);
   CHECK_EQUAL(str(ec::format_error), "format_error"s);
   CHECK_EQUAL(str(ec::end_of_input), "end_of_input"s);
-  CHECK_EQUAL(str(ec::input_timeout), "input_timeout"s);
+  CHECK_EQUAL(str(ec::timeout), "timeout"s);
   CHECK_EQUAL(str(ec::version_error), "version_error"s);
   CHECK_EQUAL(str(ec::syntax_error), "syntax_error"s);
   CHECK_EQUAL(str(ec::lookup_error), "lookup_error"s);

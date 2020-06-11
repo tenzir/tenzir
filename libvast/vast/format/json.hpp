@@ -122,7 +122,7 @@ public:
   /// @param options Additional options.
   /// @param in The stream of JSON objects.
   explicit reader(caf::atom_value table_slice_type,
-                  const caf::settings& /*options*/,
+                  const caf::settings& options,
                   std::unique_ptr<std::istream> in = nullptr);
 
   void reset(std::unique_ptr<std::istream> in);
@@ -150,8 +150,8 @@ private:
   mutable size_t num_invalid_lines_ = 0;
   mutable size_t num_unknown_layouts_ = 0;
   mutable size_t num_lines_ = 0;
-  vast::duration read_timeout_ = vast::duration{
-    vast::defaults::import::shared::partial_slice_read_timeout};
+  vast::duration read_timeout_
+    = vast::duration{vast::defaults::import::read_timeout};
 };
 
 // -- implementation ----------------------------------------------------------
@@ -161,7 +161,6 @@ reader<Selector>::reader(caf::atom_value table_slice_type,
                          const caf::settings& options,
                          std::unique_ptr<std::istream> in)
   : super(table_slice_type) {
-  using namespace std::string_literals;
   if (auto read_timeout_arg = caf::get_if<std::string>(&options, "import.read-"
                                                                  "timeout")) {
     if (auto read_timeout = to<vast::duration>(*read_timeout_arg))
@@ -234,7 +233,7 @@ caf::error reader<Selector>::read_impl(size_t max_events, size_t max_slice_size,
   for (; produced < max_events; timeout = next_line()) {
     if (timeout) {
       VAST_DEBUG(this, "reached input timeout at line", lines_->line_number());
-      return finish(cons, ec::input_timeout);
+      return finish(cons, ec::timeout);
     }
     // EOF check.
     if (lines_->done())

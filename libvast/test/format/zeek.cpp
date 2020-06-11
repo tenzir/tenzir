@@ -208,7 +208,7 @@ struct fixture : fixtures::deterministic_actor_system {
                                   slice_size, add_slice);
     if (expect_eof && err != ec::end_of_input)
       FAIL("Zeek reader did not exhaust input: " << sys.render(err));
-    if (expect_timeout && err != ec::input_timeout)
+    if (expect_timeout && err != ec::timeout)
       FAIL("Zeek reader did not time out: " << sys.render(err));
     if (!expect_eof && !expect_timeout && err)
       FAIL("Zeek reader failed to parse input: " << sys.render(err));

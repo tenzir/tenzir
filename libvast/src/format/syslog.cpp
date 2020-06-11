@@ -13,11 +13,14 @@
 
 #include "vast/format/syslog.hpp"
 
+#include "vast/concept/parseable/to.hpp"
+#include "vast/concept/parseable/vast/time.hpp"
 #include "vast/error.hpp"
 #include "vast/fwd.hpp"
 #include "vast/type.hpp"
 
 #include <caf/expected.hpp>
+#include <caf/settings.hpp>
 
 namespace vast {
 namespace format {
@@ -57,12 +60,16 @@ type make_unknown_type() {
 
 } // namespace
 
-reader::reader(caf::atom_value table_slice_type,
-               [[maybe_unused]] const caf::settings& options,
+reader::reader(caf::atom_value table_slice_type, const caf::settings& options,
                std::unique_ptr<std::istream> in)
   : super(table_slice_type),
     syslog_rfc5424_type_{make_rfc5424_type()},
     syslog_unkown_type_{make_unknown_type()} {
+  if (auto read_timeout_arg = caf::get_if<std::string>(&options, "import.read-"
+                                                                 "timeout")) {
+    if (auto read_timeout = to<vast::duration>(*read_timeout_arg))
+      read_timeout_ = *read_timeout;
+  }
   if (in != nullptr)
     reset(std::move(in));
 }
@@ -103,13 +110,13 @@ reader::read_impl(size_t max_events, size_t max_slice_size, consumer& f) {
       return false;
     } else {
       return lines_->next_timeout(
-        vast::defaults::import::shared::partial_slice_read_timeout);
+        std::chrono::duration_cast<std::chrono::milliseconds>(read_timeout_));
     }
   };
   for (size_t produced = 0; produced < max_events; timeout = next_line()) {
     if (timeout) {
       VAST_DEBUG(this, "reached input timeout at line", lines_->line_number());
-      return finish(f, ec::input_timeout);
+      return finish(f, ec::timeout);
     }
     if (lines_->done())
       return finish(f, make_error(ec::end_of_input, "input exhausted"));

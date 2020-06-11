@@ -37,7 +37,7 @@ const char* descriptions[] = {
   "invalid_query",
   "format_error",
   "end_of_input",
-  "input_timeout",
+  "timeout",
   "version_error",
   "syntax_error",
   "lookup_error",
