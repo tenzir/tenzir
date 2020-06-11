@@ -68,6 +68,10 @@ endif ()
 
 mark_as_advanced(jemalloc_INCLUDE_DIR jemalloc_LIBRARY)
 
+# We use this somewhat unusual target name to avoid a collision with
+# the bundled jemalloc from Apache Arrow.
+# TODO: Rename to jemalloc::jemalloc once
+# https://issues.apache.org/jira/browse/ARROW-7605 is resolved.
 if (jemalloc_FOUND AND NOT (TARGET jemalloc::jemalloc_))
   add_library(jemalloc::jemalloc_ UNKNOWN IMPORTED)
   set_target_properties(
