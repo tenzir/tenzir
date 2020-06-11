@@ -247,7 +247,7 @@ source(caf::stateful_actor<source_state<Reader>>* self, Reader reader,
       auto push_slice = [&](table_slice_ptr x) { out.push(std::move(x)); };
       // Cap num at 5.
       if (num > 5) {
-        VAST_DEBUG(self, "caps requested events at 5 /", num);
+        VAST_VERBOSE(self, "caps requested events at 5 /", num);
         num = 5;
       }
       // We can produce up to num * table_slice_size events per run.
@@ -283,16 +283,17 @@ source(caf::stateful_actor<source_state<Reader>>* self, Reader reader,
       if (st.remaining && *st.remaining == 0)
         return finish();
       if (err != caf::none) {
-        if (err == vast::ec::input_timeout)
+        if (err == vast::ec::input_timeout) {
+          VAST_VERBOSE(self, "hit input timeout and forcefully emits batches");
           return force_emit_batches();
-        else {
+        } else {
           if (err != vast::ec::end_of_input)
             VAST_INFO(self, "completed with message:", render(err));
           return finish();
         }
       }
       if (st.last_force_emit + 10s < std::chrono::steady_clock::now()) {
-        VAST_DEBUG(self, "hit 10s timeout and forcefully emits batches");
+        VAST_VERBOSE(self, "hit 10s timeout and forcefully emits batches");
         return force_emit_batches();
       }
     },

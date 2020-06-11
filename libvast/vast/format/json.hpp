@@ -15,7 +15,9 @@
 
 #include "vast/concept/hashable/hash_append.hpp"
 #include "vast/concept/hashable/xxhash.hpp"
+#include "vast/concept/parseable/to.hpp"
 #include "vast/concept/parseable/vast/json.hpp"
+#include "vast/concept/parseable/vast/time.hpp"
 #include "vast/defaults.hpp"
 #include "vast/detail/flat_map.hpp"
 #include "vast/detail/line_range.hpp"
@@ -31,6 +33,7 @@
 
 #include <caf/expected.hpp>
 #include <caf/fwd.hpp>
+#include <caf/settings.hpp>
 
 namespace vast::format::json {
 
@@ -147,6 +150,8 @@ private:
   mutable size_t num_invalid_lines_ = 0;
   mutable size_t num_unknown_layouts_ = 0;
   mutable size_t num_lines_ = 0;
+  vast::duration read_timeout_ = vast::duration{
+    vast::defaults::import::shared::partial_slice_read_timeout};
 };
 
 // -- implementation ----------------------------------------------------------
@@ -156,6 +161,12 @@ reader<Selector>::reader(caf::atom_value table_slice_type,
                          const caf::settings& options,
                          std::unique_ptr<std::istream> in)
   : super(table_slice_type) {
+  using namespace std::string_literals;
+  if (auto read_timeout_arg = caf::get_if<std::string>(&options, "import.read-"
+                                                                 "timeout")) {
+    if (auto read_timeout = to<vast::duration>(*read_timeout_arg))
+      read_timeout_ = *read_timeout;
+  }
   if (in != nullptr)
     reset(std::move(in));
 }
@@ -217,7 +228,7 @@ caf::error reader<Selector>::read_impl(size_t max_events, size_t max_slice_size,
       return false;
     } else {
       return lines_->next_timeout(
-        vast::defaults::import::shared::partial_slice_read_timeout);
+        std::chrono::duration_cast<std::chrono::milliseconds>(read_timeout_));
     }
   };
   for (; produced < max_events; timeout = next_line()) {
