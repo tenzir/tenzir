@@ -19,11 +19,13 @@
 #include "vast/defaults.hpp"
 #include "vast/detail/fill_status_map.hpp"
 #include "vast/detail/notifying_stream_manager.hpp"
+#include "vast/fwd.hpp"
 #include "vast/logger.hpp"
 #include "vast/system/atoms.hpp"
 #include "vast/system/type_registry.hpp"
 #include "vast/table_slice.hpp"
 
+#include <caf/attach_continuous_stream_stage.hpp>
 #include <caf/config_value.hpp>
 #include <caf/dictionary.hpp>
 
@@ -107,55 +109,6 @@ void importer_state::notify_flush_listeners() {
   flush_listeners.clear();
 }
 
-namespace {
-
-class driver : public importer_state::driver_base {
-public:
-  using super = importer_state::driver_base;
-
-  using pointer = importer_actor*;
-
-  driver(importer_state::downstream_manager& out, pointer self)
-    : super(out),
-      self_(self) {
-    // nop
-  }
-
-  void process(caf::downstream<output_type>& out,
-               std::vector<input_type>& xs) override {
-    VAST_TRACE(VAST_ARG(xs));
-    auto& st = self_->state;
-    auto t = timer::start(st.measurement_);
-    VAST_DEBUG(self_, "has", st.available_ids(), "IDs available");
-    VAST_ASSERT(xs.size() <= static_cast<size_t>(st.available_ids()));
-    uint64_t events = 0;
-    for (auto& x : xs) {
-      events += x->rows();
-      auto advance = st.next_id + x->rows();
-      x.unshared().offset(st.next_id);
-      st.next_id = advance;
-      out.push(std::move(x));
-    }
-    t.stop(events);
-  }
-
-  pointer self() const {
-    return self_;
-  }
-
-private:
-  pointer self_;
-};
-
-auto make_importer_stage(importer_actor* self) {
-  using impl = detail::notifying_stream_manager<driver>;
-  auto result = caf::make_counted<impl>(self);
-  result->continuous(true);
-  return result;
-}
-
-} // namespace <anonymous>
-
 behavior importer(importer_actor* self, path dir, archive_type archive,
                   caf::actor index, type_registry_type type_registry) {
   VAST_TRACE(VAST_ARG(dir));
@@ -178,7 +131,27 @@ behavior importer(importer_actor* self, path dir, archive_type archive,
       self->state.send_report();
       self->quit(msg.reason);
     });
-  self->state.stg = make_importer_stage(self);
+  self->state.stg = caf::attach_continuous_stream_stage(
+    self,
+    [](unit_t&) {
+      // nop
+    },
+    [=](unit_t&, caf::downstream<table_slice_ptr>& out, table_slice_ptr x) {
+      VAST_TRACE(VAST_ARG(x));
+      auto& st = self->state;
+      auto t = timer::start(st.measurement_);
+      VAST_DEBUG(self, "has", st.available_ids(), "IDs available");
+      VAST_ASSERT(x->rows() <= static_cast<size_t>(st.available_ids()));
+      auto events = x->rows();
+      auto advance = st.next_id + events;
+      x.unshared().offset(st.next_id);
+      st.next_id = advance;
+      out.push(std::move(x));
+      t.stop(events);
+    },
+    [=](unit_t&, const error& err) {
+      VAST_DEBUG(self, "stopped with message:", err);
+    });
   if (type_registry)
     self->state.stg->add_outbound_path(type_registry);
   if (archive)
