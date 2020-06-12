@@ -67,8 +67,11 @@ reader::reader(caf::atom_value table_slice_type, const caf::settings& options,
     syslog_unkown_type_{make_unknown_type()} {
   if (auto read_timeout_arg = caf::get_if<std::string>(&options, "import.read-"
                                                                  "timeout")) {
-    if (auto read_timeout = to<vast::duration>(*read_timeout_arg))
+    if (auto read_timeout = to<decltype(read_timeout_)>(*read_timeout_arg))
       read_timeout_ = *read_timeout;
+    else
+      VAST_WARNING(this, "cannot set read-timeout to", *read_timeout_arg,
+                   "as it is not a valid duration");
   }
   if (in != nullptr)
     reset(std::move(in));
@@ -104,18 +107,18 @@ caf::error
 reader::read_impl(size_t max_events, size_t max_slice_size, consumer& f) {
   bool timeout = false;
   table_slice_builder_ptr bptr = nullptr;
-  auto next_line = [&] {
+  auto next_line = [&, start = std::chrono::steady_clock::now()] {
+    auto remaining = start + read_timeout_ - std::chrono::steady_clock::now();
+    if (remaining < std::chrono::steady_clock::duration::zero())
+      return true;
     if (!bptr || bptr->rows() == 0) {
       lines_->next();
       return false;
-    } else {
-      return lines_->next_timeout(
-        std::chrono::duration_cast<std::chrono::milliseconds>(read_timeout_));
     }
+    return lines_->next_timeout(remaining);
   };
-  auto start = std::chrono::steady_clock::now();
   for (size_t produced = 0; produced < max_events; timeout = next_line()) {
-    if (timeout || start + read_timeout_ < std::chrono::steady_clock::now()) {
+    if (timeout) {
       VAST_DEBUG(this, "reached input timeout at line", lines_->line_number());
       return finish(f, ec::timeout);
     }

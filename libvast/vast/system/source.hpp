@@ -178,9 +178,8 @@ struct source_state {
 
   void send_report() {
     // Send the reader-specific status report to the accountant.
-    if (auto status = reader.status(); !status.empty() && accountant)
-      if (accountant)
-        self->send(accountant, std::move(status));
+    if (auto status = reader.status(); !status.empty())
+      self->send(accountant, std::move(status));
     // Send the source-specific performance metrics to the accountant.
     if (metrics.events > 0) {
       auto r = performance_report{{{std::string{name}, metrics}}};
@@ -196,8 +195,7 @@ struct source_state {
       }
 #endif
       metrics = measurement{};
-      if (accountant)
-        self->send(accountant, std::move(r));
+      self->send(accountant, std::move(r));
     }
   }
 };
@@ -239,13 +237,10 @@ source(caf::stateful_actor<source_state<Reader>>* self, Reader reader,
       auto push_slice = [&](table_slice_ptr x) { out.push(std::move(x)); };
       // We can produce up to num * table_slice_size events per run.
       auto events = detail::opt_min(st.remaining, num * table_slice_size);
-      VAST_DEBUG(self, "asks reader to generate table slices");
       auto t = timer::start(st.metrics);
       auto [err, produced] = st.reader.read(events, table_slice_size,
                                             push_slice);
       t.stop(produced);
-      VAST_DEBUG(self, "reader returned", VAST_ARG("error", err),
-                 VAST_ARG(produced));
       // TODO: If the source is unable to generate new events (returns 0),
       //       the source will stall and never be polled again. We should
       //       trigger CAF to poll the source after a predefined interval of
@@ -280,9 +275,7 @@ source(caf::stateful_actor<source_state<Reader>>* self, Reader reader,
       }
     },
     // done?
-    [](const bool& done) {
-      return done;
-    });
+    [](const bool& done) { return done; });
   return {
     [=](get_atom, schema_atom) { return self->state.reader.schema(); },
     [=](put_atom, schema sch) -> caf::result<void> {

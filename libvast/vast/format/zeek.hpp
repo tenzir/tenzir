@@ -275,8 +275,6 @@ private:
   caf::optional<size_t> proto_field_;
   std::vector<size_t> port_fields_;
   std::vector<rule<iterator_type, data>> parsers_;
-  vast::duration read_timeout_
-    = vast::duration{vast::defaults::import::read_timeout};
 };
 
 /// A Zeek writer.

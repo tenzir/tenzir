@@ -36,6 +36,12 @@ public:
   // timeout occurred, other errors still need to be checked by `done()`.
   [[nodiscard]] bool next_timeout(std::chrono::milliseconds timeout);
 
+  template <class Rep, class Period = std::ratio<1>>
+  [[nodiscard]] bool next_timeout(std::chrono::duration<Rep, Period> timeout) {
+    return next_timeout(std::chrono::duration_cast<std::chrono::milliseconds>(
+      std::move(timeout)));
+  }
+
   bool done() const;
 
   std::string& line();
