@@ -25,19 +25,19 @@
 #include "vast/system/type_registry.hpp"
 #include "vast/table_slice.hpp"
 
+#include <caf/atom.hpp>
 #include <caf/attach_continuous_stream_stage.hpp>
 #include <caf/config_value.hpp>
 #include <caf/dictionary.hpp>
 
 #include <fstream>
 
-using namespace std::chrono;
-using namespace std::chrono_literals;
-using namespace caf;
-
 namespace vast::system {
 
-importer_state::importer_state(event_based_actor* self_ptr) : self(self_ptr) {
+using caf::subscribe_atom, caf::flush_atom, caf::add_atom;
+
+importer_state::importer_state(caf::event_based_actor* self_ptr)
+  : self(self_ptr) {
   // nop
 }
 
@@ -109,8 +109,8 @@ void importer_state::notify_flush_listeners() {
   flush_listeners.clear();
 }
 
-behavior importer(importer_actor* self, path dir, archive_type archive,
-                  caf::actor index, type_registry_type type_registry) {
+caf::behavior importer(importer_actor* self, path dir, archive_type archive,
+                       caf::actor index, type_registry_type type_registry) {
   VAST_TRACE(VAST_ARG(dir));
   self->state.dir = dir;
   auto err = self->state.read_state();
@@ -121,22 +121,22 @@ behavior importer(importer_actor* self, path dir, archive_type archive,
   }
   namespace defs = defaults::system;
   if (auto a = self->system().registry().get(accountant_atom::value)) {
-    self->state.accountant = actor_cast<accountant_type>(a);
+    self->state.accountant = caf::actor_cast<accountant_type>(a);
     self->send(self->state.accountant, announce_atom::value, self->name());
     self->delayed_send(self, defs::telemetry_rate, telemetry_atom::value);
     self->state.last_report = stopwatch::now();
   }
-  self->set_exit_handler(
-    [=](const exit_msg& msg) {
-      self->state.send_report();
-      self->quit(msg.reason);
-    });
+  self->set_exit_handler([=](const caf::exit_msg& msg) {
+    self->state.send_report();
+    self->quit(msg.reason);
+  });
   self->state.stg = caf::attach_continuous_stream_stage(
     self,
-    [](unit_t&) {
+    [](caf::unit_t&) {
       // nop
     },
-    [=](unit_t&, caf::downstream<table_slice_ptr>& out, table_slice_ptr x) {
+    [=](caf::unit_t&, caf::downstream<table_slice_ptr>& out,
+        table_slice_ptr x) {
       VAST_TRACE(VAST_ARG(x));
       auto& st = self->state;
       auto t = timer::start(st.measurement_);
@@ -149,7 +149,7 @@ behavior importer(importer_actor* self, path dir, archive_type archive,
       out.push(std::move(x));
       t.stop(events);
     },
-    [=](unit_t&, const error& err) {
+    [=](caf::unit_t&, const error& err) {
       VAST_DEBUG(self, "stopped with message:", err);
     });
   if (type_registry)
@@ -165,7 +165,7 @@ behavior importer(importer_actor* self, path dir, archive_type archive,
       VAST_DEBUG(self, "registers archive", archive);
       return self->state.stg->add_outbound_path(archive);
     },
-    [=](index_atom, const actor& index) {
+    [=](index_atom, const caf::actor& index) {
       VAST_DEBUG(self, "registers index", index);
       self->state.index_actors.emplace_back(index);
       // TODO: currently, the subscriber expects only a single 'flush' message.
@@ -179,34 +179,31 @@ behavior importer(importer_actor* self, path dir, archive_type archive,
                      "(currently unsupported!)");
       return self->state.stg->add_outbound_path(index);
     },
-    [=](exporter_atom, const actor& exporter) {
+    [=](exporter_atom, const caf::actor& exporter) {
       VAST_DEBUG(self, "registers exporter", exporter);
       return self->state.stg->add_outbound_path(exporter);
     },
-    [=](stream<importer_state::input_type>& in) {
+    [=](caf::stream<importer_state::input_type>& in) {
       auto& st = self->state;
       VAST_DEBUG(self, "adds a new source:", self->current_sender());
       st.stg->add_inbound_path(in);
     },
-    [=](add_atom, const actor& subscriber) {
+    [=](add_atom, const caf::actor& subscriber) {
       auto& st = self->state;
       VAST_DEBUG(self, "adds a new sink:", self->current_sender());
       st.stg->add_outbound_path(subscriber);
     },
-    [=](subscribe_atom, flush_atom, actor& listener) {
+    [=](subscribe_atom, flush_atom, caf::actor& listener) {
       auto& st = self->state;
       VAST_ASSERT(st.stg != nullptr);
       st.flush_listeners.emplace_back(std::move(listener));
       detail::notify_listeners_if_clean(st, *st.stg);
     },
-    [=](status_atom) {
-      return self->state.status();
-    },
+    [=](status_atom) { return self->state.status(); },
     [=](telemetry_atom) {
       self->state.send_report();
       self->delayed_send(self, defs::telemetry_rate, telemetry_atom::value);
-    }
-  };
+    }};
 }
 
 } // namespace vast::system
