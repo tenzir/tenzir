@@ -48,14 +48,13 @@ importer_state::~importer_state() {
 caf::error importer_state::read_state() {
   auto file = dir / "next_id";
   if (exists(file)) {
-    VAST_VERBOSE(self, "reads persistent state from", to_string(file));
+    VAST_VERBOSE(self, "reads persistent state from", file);
     std::ifstream available{to_string(file)};
     available >> next_id;
     if (!available.eof())
-      VAST_ERROR(
-        self, "got an invalidly formatted persistence file:", to_string(file));
+      VAST_ERROR(self, "got an invalidly formatted persistence file:", file);
   } else {
-    VAST_VERBOSE(self, "did not find a state file at", to_string(file));
+    VAST_VERBOSE(self, "did not find a state file at", file);
   }
   return caf::none;
 }
@@ -203,7 +202,8 @@ caf::behavior importer(importer_actor* self, path dir, archive_type archive,
     [=](telemetry_atom) {
       self->state.send_report();
       self->delayed_send(self, defs::telemetry_rate, telemetry_atom::value);
-    }};
+    },
+  };
 }
 
 } // namespace vast::system
