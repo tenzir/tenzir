@@ -106,6 +106,8 @@ private:
   double drop_rate_threshold_;
   mutable pcap_stat last_stats_;
   mutable size_t discard_count_;
+  vast::duration read_timeout_
+    = vast::duration{vast::defaults::import::read_timeout};
 };
 
 /// A PCAP writer.

@@ -433,8 +433,9 @@ caf::error reader::read_impl(size_t max_events, size_t max_slice_size,
   }
   auto& p = *parser_;
   bool timeout = next_line();
+  auto start = std::chrono::steady_clock::now();
   for (size_t produced = 0; produced < max_events; timeout = next_line()) {
-    if (timeout) {
+    if (timeout || start + read_timeout_ < std::chrono::steady_clock::now()) {
       VAST_DEBUG(this, "reached input timeout at line", lines_->line_number());
       return finish(callback, ec::timeout);
     }

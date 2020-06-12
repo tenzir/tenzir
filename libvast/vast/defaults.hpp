@@ -46,9 +46,9 @@ caf::atom_value table_slice_type(const caf::actor_system& sys,
 /// Maximum number of results.
 constexpr size_t max_events = 0;
 
-/// Time that the reader waits for new data before it finishes a partial slice.
-constexpr std::chrono::milliseconds read_timeout
-  = std::chrono::milliseconds{500};
+/// Read timoeut after which data is forwarded to the importer regardless of
+/// batching and table slices being unfinished.
+constexpr std::chrono::milliseconds read_timeout = std::chrono::seconds{10};
 
 /// Contains settings for the zeek subcommand.
 struct zeek {

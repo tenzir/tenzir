@@ -125,10 +125,6 @@ struct source_state {
   /// Current metrics for the accountant.
   measurement metrics;
 
-  /// Stores when batches were last emitted forcefully.
-  std::chrono::steady_clock::time_point last_force_emit
-    = std::chrono::steady_clock::now();
-
   // -- utility functions ------------------------------------------------------
 
   /// Initializes the state.
@@ -245,11 +241,6 @@ source(caf::stateful_actor<source_state<Reader>>* self, Reader reader,
       // Extract events until the source has exhausted its input or until
       // we have completed a batch.
       auto push_slice = [&](table_slice_ptr x) { out.push(std::move(x)); };
-      // Cap num at 5.
-      if (num > 5) {
-        VAST_VERBOSE(self, "caps requested events at 5 /", num);
-        num = 5;
-      }
       // We can produce up to num * table_slice_size events per run.
       auto events = detail::opt_min(st.remaining, num * table_slice_size);
       VAST_DEBUG(self, "asks reader to generate table slices");
@@ -273,7 +264,6 @@ source(caf::stateful_actor<source_state<Reader>>* self, Reader reader,
         st.mgr->out().fan_out_flush();
         st.mgr->out().force_emit_batches();
         st.send_report();
-        st.last_force_emit = std::chrono::steady_clock::now();
       };
       auto finish = [&] {
         done = true;
@@ -291,10 +281,6 @@ source(caf::stateful_actor<source_state<Reader>>* self, Reader reader,
             VAST_INFO(self, "completed with message:", render(err));
           return finish();
         }
-      }
-      if (st.last_force_emit + 10s < std::chrono::steady_clock::now()) {
-        VAST_VERBOSE(self, "hit 10s timeout and forcefully emits batches");
-        return force_emit_batches();
       }
     },
     // done?
@@ -337,7 +323,7 @@ source(caf::stateful_actor<source_state<Reader>>* self, Reader reader,
     },
     [=](telemetry_atom) {
       auto& st = self->state;
-      // st.send_report();
+      st.send_report();
       if (!st.mgr->done())
         self->delayed_send(self, defaults::system::telemetry_rate,
                            telemetry_atom::value);

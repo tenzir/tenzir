@@ -303,6 +303,7 @@ caf::error reader::read_impl(size_t max_events, size_t max_slice_size,
   // Counts successfully parsed records.
   size_t produced = 0;
   // Loop until reaching EOF or the configured limit of records.
+  auto start = std::chrono::steady_clock::now();
   while (produced < max_events) {
     // Advance line range and check for EOF. (In the first iteration, the
     // current line is the last line of the header)
@@ -311,8 +312,11 @@ caf::error reader::read_impl(size_t max_events, size_t max_slice_size,
     if (builder_->rows() > 0) {
       bool timeout = lines_->next_timeout(
         std::chrono::duration_cast<std::chrono::milliseconds>(read_timeout_));
-      if (timeout)
+      if (timeout || start + read_timeout_ < std::chrono::steady_clock::now()) {
+        VAST_DEBUG(this, "reached input timeout at line",
+                   lines_->line_number());
         return finish(f, ec::timeout);
+      }
     } else {
       lines_->next();
     }

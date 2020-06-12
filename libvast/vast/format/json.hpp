@@ -35,6 +35,8 @@
 #include <caf/fwd.hpp>
 #include <caf/settings.hpp>
 
+#include <chrono>
+
 namespace vast::format::json {
 
 class writer : public ostream_writer {
@@ -230,8 +232,9 @@ caf::error reader<Selector>::read_impl(size_t max_events, size_t max_slice_size,
         std::chrono::duration_cast<std::chrono::milliseconds>(read_timeout_));
     }
   };
+  auto start = std::chrono::steady_clock::now();
   for (; produced < max_events; timeout = next_line()) {
-    if (timeout) {
+    if (timeout || start + read_timeout_ < std::chrono::steady_clock::now()) {
       VAST_DEBUG(this, "reached input timeout at line", lines_->line_number());
       return finish(cons, ec::timeout);
     }

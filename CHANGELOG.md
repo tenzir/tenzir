@@ -11,6 +11,12 @@ Every entry has a category for which we use the following visual abbreviations:
 
 ## Unreleased
 
+- 🎁 The `import` command gained a new `--read-timeout` option that forces data
+  to be forwarded to the importer regardless of the internal batching parameters
+  and table slices being unfinished. This allows for reducing the latency
+  between the `import` command and the node. The default timeout is 10 seconds.
+  [#916](https://github.com/tenzir/vast/916)
+
 - ⚠️ The JSON export format now renders timestamps using strings instead of
   numbers in order to avoid possible loss of precision.
   [#909](https://github.com/tenzir/vast/909)
