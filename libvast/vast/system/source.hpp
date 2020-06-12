@@ -233,24 +233,23 @@ source(caf::stateful_actor<source_state<Reader>>* self, Reader reader,
     },
     // get next element
     [=](bool& done, caf::downstream<table_slice_ptr>& out, size_t num) {
-      using namespace std::chrono_literals;
       auto& st = self->state;
-      auto t = timer::start(st.metrics);
       // Extract events until the source has exhausted its input or until
       // we have completed a batch.
       auto push_slice = [&](table_slice_ptr x) { out.push(std::move(x)); };
       // We can produce up to num * table_slice_size events per run.
       auto events = detail::opt_min(st.remaining, num * table_slice_size);
       VAST_DEBUG(self, "asks reader to generate table slices");
+      auto t = timer::start(st.metrics);
       auto [err, produced] = st.reader.read(events, table_slice_size,
                                             push_slice);
+      t.stop(produced);
       VAST_DEBUG(self, "reader returned", VAST_ARG("error", err),
                  VAST_ARG(produced));
       // TODO: If the source is unable to generate new events (returns 0),
       //       the source will stall and never be polled again. We should
       //       trigger CAF to poll the source after a predefined interval of
       //       time again, e.g., via delayed_send.
-      t.stop(produced);
       if (produced == 0)
         VAST_WARNING(self, "received 0 events from the source and may stall");
       if (st.remaining) {
