@@ -47,6 +47,7 @@
 #include <caf/stateful_actor.hpp>
 #include <caf/stream_source.hpp>
 
+#include <chrono>
 #include <unordered_map>
 
 namespace vast::detail {
@@ -177,7 +178,7 @@ struct source_state {
 
   void send_report() {
     // Send the reader-specific status report to the accountant.
-    if (auto status = reader.status(); !status.empty() && accountant)
+    if (auto status = reader.status(); !status.empty())
       self->send(accountant, std::move(status));
     // Send the source-specific performance metrics to the accountant.
     if (metrics.events > 0) {
@@ -194,8 +195,7 @@ struct source_state {
       }
 #endif
       metrics = measurement{};
-      if (accountant)
-        self->send(accountant, std::move(r));
+      self->send(accountant, std::move(r));
     }
   }
 };
@@ -232,25 +232,30 @@ source(caf::stateful_actor<source_state<Reader>>* self, Reader reader,
     // get next element
     [=](bool& done, caf::downstream<table_slice_ptr>& out, size_t num) {
       auto& st = self->state;
-      auto t = timer::start(st.metrics);
       // Extract events until the source has exhausted its input or until
       // we have completed a batch.
       auto push_slice = [&](table_slice_ptr x) { out.push(std::move(x)); };
       // We can produce up to num * table_slice_size events per run.
       auto events = detail::opt_min(st.remaining, num * table_slice_size);
+      auto t = timer::start(st.metrics);
       auto [err, produced] = st.reader.read(events, table_slice_size,
                                             push_slice);
+      t.stop(produced);
       // TODO: If the source is unable to generate new events (returns 0),
       //       the source will stall and never be polled again. We should
       //       trigger CAF to poll the source after a predefined interval of
       //       time again, e.g., via delayed_send.
       if (produced == 0)
         VAST_WARNING(self, "received 0 events from the source and may stall");
-      t.stop(produced);
       if (st.remaining) {
         VAST_ASSERT(*st.remaining >= produced);
         *st.remaining -= produced;
       }
+      auto force_emit_batches = [&] {
+        st.mgr->out().fan_out_flush();
+        st.mgr->out().force_emit_batches();
+        st.send_report();
+      };
       auto finish = [&] {
         done = true;
         st.send_report();
@@ -259,9 +264,14 @@ source(caf::stateful_actor<source_state<Reader>>* self, Reader reader,
       if (st.remaining && *st.remaining == 0)
         return finish();
       if (err != caf::none) {
-        if (err != vast::ec::end_of_input)
-          VAST_INFO(self, "completed with message:", render(err));
-        return finish();
+        if (err == vast::ec::timeout) {
+          VAST_DEBUG(self, "hit input timeout and forcefully emits batches");
+          return force_emit_batches();
+        } else {
+          if (err != vast::ec::end_of_input)
+            VAST_INFO(self, "completed with message:", render(err));
+          return finish();
+        }
       }
     },
     // done?

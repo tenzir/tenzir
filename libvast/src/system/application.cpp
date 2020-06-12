@@ -170,7 +170,9 @@ auto make_import_command() {
       .add<caf::atom_value>("table-slice-type,t", "table slice type")
       .add<bool>("blocking,b", "block until the IMPORTER forwarded all data")
       .add<size_t>("max-events,n", "the maximum number of events to "
-                                   "import"));
+                                   "import")
+      .add<std::string>("read-timeout", "read timoeut after which data is "
+                                        "forwarded to the importer"));
   import_->add_subcommand("zeek", "imports Zeek logs from STDIN or file",
                           documentation::vast_import_zeek,
                           source_opts("?import.zeek"));

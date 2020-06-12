@@ -15,6 +15,7 @@
 
 #include "vast/concept/parseable/core.hpp"
 #include "vast/concept/parseable/string.hpp"
+#include "vast/concept/parseable/to.hpp"
 #include "vast/concept/parseable/vast.hpp"
 #include "vast/concept/printable/to_string.hpp"
 #include "vast/concept/printable/vast/type.hpp"
@@ -151,6 +152,14 @@ reader::reader(caf::atom_value table_slice_type, const caf::settings& options,
                               defaults::set_separator);
   opt_.kvp_separator = get_or(options, "import.csv.kvp_separator",
                               defaults::kvp_separator);
+  if (auto read_timeout_arg = caf::get_if<std::string>(&options, "import.read-"
+                                                                 "timeout")) {
+    if (auto read_timeout = to<vast::duration>(*read_timeout_arg))
+      read_timeout_ = *read_timeout;
+    else
+      VAST_WARNING(this, "cannot set read-timeout to", *read_timeout_arg,
+                   "as it is not a valid duration");
+  }
 }
 
 void reader::reset(std::unique_ptr<std::istream> in) {
@@ -410,14 +419,15 @@ caf::error reader::read_impl(size_t max_events, size_t max_slice_size,
                              consumer& callback) {
   VAST_ASSERT(max_events > 0);
   VAST_ASSERT(max_slice_size > 0);
-  auto next_line = [&] {
+  auto next_line = [&, start = std::chrono::steady_clock::now()] {
+    auto remaining = start + read_timeout_ - std::chrono::steady_clock::now();
+    if (remaining < std::chrono::steady_clock::duration::zero())
+      return true;
     if (!builder_ || builder_->rows() == 0) {
       lines_->next();
       return false;
-    } else {
-      return lines_->next_timeout(
-        vast::defaults::import::shared::partial_slice_read_timeout);
     }
+    return lines_->next_timeout(remaining);
   };
   if (!parser_) {
     auto p = read_header(lines_->get());
@@ -430,7 +440,7 @@ caf::error reader::read_impl(size_t max_events, size_t max_slice_size,
   for (size_t produced = 0; produced < max_events; timeout = next_line()) {
     if (timeout) {
       VAST_DEBUG(this, "reached input timeout at line", lines_->line_number());
-      return finish(callback);
+      return finish(callback, ec::timeout);
     }
     // EOF check.
     if (lines_->done())

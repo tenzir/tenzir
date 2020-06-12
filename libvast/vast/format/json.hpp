@@ -15,7 +15,9 @@
 
 #include "vast/concept/hashable/hash_append.hpp"
 #include "vast/concept/hashable/xxhash.hpp"
+#include "vast/concept/parseable/to.hpp"
 #include "vast/concept/parseable/vast/json.hpp"
+#include "vast/concept/parseable/vast/time.hpp"
 #include "vast/defaults.hpp"
 #include "vast/detail/flat_map.hpp"
 #include "vast/detail/line_range.hpp"
@@ -31,6 +33,9 @@
 
 #include <caf/expected.hpp>
 #include <caf/fwd.hpp>
+#include <caf/settings.hpp>
+
+#include <chrono>
 
 namespace vast::format::json {
 
@@ -119,7 +124,7 @@ public:
   /// @param options Additional options.
   /// @param in The stream of JSON objects.
   explicit reader(caf::atom_value table_slice_type,
-                  const caf::settings& /*options*/,
+                  const caf::settings& options,
                   std::unique_ptr<std::istream> in = nullptr);
 
   void reset(std::unique_ptr<std::istream> in);
@@ -156,6 +161,14 @@ reader<Selector>::reader(caf::atom_value table_slice_type,
                          const caf::settings& options,
                          std::unique_ptr<std::istream> in)
   : super(table_slice_type) {
+  if (auto read_timeout_arg = caf::get_if<std::string>(&options, "import.read-"
+                                                                 "timeout")) {
+    if (auto read_timeout = to<decltype(read_timeout_)>(*read_timeout_arg))
+      read_timeout_ = *read_timeout;
+    else
+      VAST_WARNING(this, "cannot set read-timeout to", *read_timeout_arg,
+                   "as it is not a valid duration");
+  }
   if (in != nullptr)
     reset(std::move(in));
 }
@@ -205,24 +218,26 @@ vast::system::report reader<Selector>::status() const {
 template <class Selector>
 caf::error reader<Selector>::read_impl(size_t max_events, size_t max_slice_size,
                                        consumer& cons) {
+  VAST_TRACE("json-reader", VAST_ARG(max_events), VAST_ARG(max_slice_size));
   VAST_ASSERT(max_events > 0);
   VAST_ASSERT(max_slice_size > 0);
   size_t produced = 0;
   table_slice_builder_ptr bptr = nullptr;
   bool timeout = false;
-  auto next_line = [&] {
+  auto next_line = [&, start = std::chrono::steady_clock::now()] {
+    auto remaining = start + read_timeout_ - std::chrono::steady_clock::now();
+    if (remaining < std::chrono::steady_clock::duration::zero())
+      return true;
     if (!bptr || bptr->rows() == 0) {
       lines_->next();
       return false;
-    } else {
-      return lines_->next_timeout(
-        vast::defaults::import::shared::partial_slice_read_timeout);
     }
+    return lines_->next_timeout(remaining);
   };
   for (; produced < max_events; timeout = next_line()) {
     if (timeout) {
       VAST_DEBUG(this, "reached input timeout at line", lines_->line_number());
-      return finish(cons);
+      return finish(cons, ec::timeout);
     }
     // EOF check.
     if (lines_->done())
