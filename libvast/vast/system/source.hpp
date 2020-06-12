@@ -227,14 +227,12 @@ source(caf::stateful_actor<source_state<Reader>>* self, Reader reader,
   st.mgr = self->make_continuous_source(
     // init
     [=](bool& done) {
-      VAST_TRACE("init");
       done = false;
       caf::timestamp now = std::chrono::system_clock::now();
       self->send(self->state.accountant, "source.start", now);
     },
     // get next element
     [=](bool& done, caf::downstream<table_slice_ptr>& out, size_t num) {
-      VAST_TRACE("get next element", VAST_ARG(done), VAST_ARG(num));
       using namespace std::chrono_literals;
       auto& st = self->state;
       auto t = timer::start(st.metrics);
@@ -260,7 +258,6 @@ source(caf::stateful_actor<source_state<Reader>>* self, Reader reader,
         *st.remaining -= produced;
       }
       auto force_emit_batches = [&] {
-        VAST_DEBUG(self, "forcefully emits batches");
         st.mgr->out().fan_out_flush();
         st.mgr->out().force_emit_batches();
         st.send_report();
@@ -274,7 +271,7 @@ source(caf::stateful_actor<source_state<Reader>>* self, Reader reader,
         return finish();
       if (err != caf::none) {
         if (err == vast::ec::timeout) {
-          VAST_VERBOSE(self, "hit input timeout and forcefully emits batches");
+          VAST_DEBUG(self, "hit input timeout and forcefully emits batches");
           return force_emit_batches();
         } else {
           if (err != vast::ec::end_of_input)
@@ -285,7 +282,6 @@ source(caf::stateful_actor<source_state<Reader>>* self, Reader reader,
     },
     // done?
     [](const bool& done) {
-      VAST_TRACE("done?", VAST_ARG(done));
       return done;
     });
   return {
