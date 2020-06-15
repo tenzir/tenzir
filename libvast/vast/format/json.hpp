@@ -235,7 +235,7 @@ caf::error reader<Selector>::read_impl(size_t max_events, size_t max_slice_size,
     return lines_->next_timeout(remaining);
   };
   for (; produced < max_events; timeout = next_line()) {
-    if (timeout) {
+    if (timeout && produced > 0) {
       VAST_DEBUG(this, "reached input timeout at line", lines_->line_number());
       return finish(cons, ec::timeout);
     }

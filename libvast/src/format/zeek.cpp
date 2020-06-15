@@ -318,7 +318,7 @@ caf::error reader::read_impl(size_t max_events, size_t max_slice_size,
   };
   // Loop until reaching EOF, a timeout, or the configured limit of records.
   for (; produced < max_events; timeout = next_line()) {
-    if (timeout) {
+    if (timeout && produced > 0) {
       VAST_DEBUG(this, "reached input timeout at line", lines_->line_number());
       return finish(f, ec::timeout);
     }
