@@ -21,8 +21,6 @@
 #include "vast/event.hpp"
 #include "vast/fwd.hpp"
 
-#include <caf/all.hpp>
-
 namespace fixtures {
 
 using namespace vast;

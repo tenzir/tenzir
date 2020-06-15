@@ -11,21 +11,21 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#include <caf/all.hpp>
+#include "vast/system/profiler.hpp"
 
+#include "vast/concept/printable/vast/error.hpp"
 #include "vast/config.hpp"
+#include "vast/filesystem.hpp"
+#include "vast/fwd.hpp"
+#include "vast/logger.hpp"
+#include "vast/time.hpp"
+
+#include <caf/scheduled_actor.hpp>
 
 #if VAST_HAVE_GPERFTOOLS
 #  include <gperftools/heap-profiler.h>
 #  include <gperftools/profiler.h>
 #endif
-
-#include "vast/concept/printable/vast/error.hpp"
-#include "vast/filesystem.hpp"
-#include "vast/fwd.hpp"
-#include "vast/logger.hpp"
-#include "vast/system/profiler.hpp"
-#include "vast/time.hpp"
 
 using namespace caf;
 

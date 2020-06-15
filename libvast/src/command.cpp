@@ -31,6 +31,7 @@
 #include <caf/settings.hpp>
 
 #include <functional>
+#include <iostream>
 #include <numeric>
 #include <string>
 

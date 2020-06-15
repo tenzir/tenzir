@@ -33,6 +33,7 @@
 #include <caf/stateful_actor.hpp>
 
 #include <chrono>
+#include <iostream>
 
 using namespace caf;
 using namespace std::chrono_literals;

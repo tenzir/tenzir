@@ -25,6 +25,8 @@
 #include "vast/system/spawn_indexer.hpp"
 #include "vast/uuid.hpp"
 
+#include <caf/actor.hpp>
+#include <caf/behavior.hpp>
 #include <caf/fwd.hpp>
 
 #include <unordered_map>

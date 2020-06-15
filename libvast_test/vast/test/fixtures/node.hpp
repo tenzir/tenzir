@@ -21,8 +21,6 @@
 #include "vast/system/node.hpp"
 #include "vast/uuid.hpp"
 
-#include <caf/all.hpp>
-
 #include <string>
 
 namespace fixtures {

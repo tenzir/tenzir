@@ -13,6 +13,9 @@
 
 #include "fixtures/events.hpp"
 
+#include "vast/concept/printable/to_string.hpp"
+#include "vast/concept/printable/vast/data.hpp"
+#include "vast/concept/printable/vast/event.hpp"
 #include "vast/default_table_slice_builder.hpp"
 #include "vast/defaults.hpp"
 #include "vast/format/test.hpp"
@@ -23,9 +26,8 @@
 #include "vast/to_events.hpp"
 #include "vast/type.hpp"
 
-#include "vast/concept/printable/to_string.hpp"
-#include "vast/concept/printable/vast/data.hpp"
-#include "vast/concept/printable/vast/event.hpp"
+#include <caf/binary_deserializer.hpp>
+#include <caf/settings.hpp>
 
 // Pull in the auto-generated serialized table slices.
 

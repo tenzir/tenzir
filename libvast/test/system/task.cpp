@@ -11,8 +11,6 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#include <caf/all.hpp>
-
 #include "vast/system/task.hpp"
 
 #define SUITE system

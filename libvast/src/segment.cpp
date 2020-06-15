@@ -13,8 +13,6 @@
 
 #include "vast/segment.hpp"
 
-#include <caf/binary_deserializer.hpp>
-
 #include "vast/bitmap.hpp"
 #include "vast/bitmap_algorithms.hpp"
 #include "vast/detail/assert.hpp"
@@ -24,6 +22,9 @@
 #include "vast/logger.hpp"
 #include "vast/si_literals.hpp"
 #include "vast/table_slice.hpp"
+
+#include <caf/binary_deserializer.hpp>
+#include <caf/binary_serializer.hpp>
 
 namespace vast {
 

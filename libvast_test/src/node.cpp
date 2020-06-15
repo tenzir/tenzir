@@ -13,8 +13,6 @@
 
 #include "fixtures/node.hpp"
 
-#include <caf/all.hpp>
-
 #include "vast/detail/spawn_container_source.hpp"
 #include "vast/query_options.hpp"
 #include "vast/table_slice.hpp"
