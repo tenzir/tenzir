@@ -265,8 +265,17 @@ source(caf::stateful_actor<source_state<Reader>>* self, Reader reader,
         return finish();
       if (err != caf::none) {
         if (err == vast::ec::timeout) {
-          VAST_DEBUG(self, "hit input timeout and forcefully emits batches");
-          return force_emit_batches();
+          if (produced > 0) {
+            VAST_DEBUG(self, "hit input timeout and forcefully emits", produced,
+                       "produced events");
+            return force_emit_batches();
+          } else {
+            // This case should never happen. If it does, we hit an internal
+            // application logic error in the reader. CAF might stall out on us
+            // here.
+            VAST_ERROR(self, "hit input timeout, but produced no events");
+            return finish();
+          }
         } else {
           if (err != vast::ec::end_of_input)
             VAST_INFO(self, "completed with message:", render(err));
