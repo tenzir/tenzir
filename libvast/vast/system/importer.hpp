@@ -65,9 +65,6 @@ struct importer_state {
   /// @returns various status metrics.
   caf::dictionary<caf::config_value> status() const;
 
-  /// Forwards listeners to all INDEX actors and clears the listeners vector.
-  void notify_flush_listeners();
-
   /// State directory.
   path dir;
 
@@ -76,9 +73,6 @@ struct importer_state {
 
   /// Pointer to the owning actor.
   caf::event_based_actor* self;
-
-  /// List of actors that wait for the next flush event.
-  std::vector<caf::actor> flush_listeners;
 
   measurement measurement_;
   stopwatch::time_point last_report;

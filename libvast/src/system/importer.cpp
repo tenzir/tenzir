@@ -18,7 +18,6 @@
 #include "vast/concept/printable/vast/filesystem.hpp"
 #include "vast/defaults.hpp"
 #include "vast/detail/fill_status_map.hpp"
-#include "vast/detail/notifying_stream_manager.hpp"
 #include "vast/fwd.hpp"
 #include "vast/logger.hpp"
 #include "vast/system/atoms.hpp"
@@ -97,15 +96,6 @@ void importer_state::send_report() {
     self->send(accountant, std::move(r));
   }
   last_report = now;
-}
-
-void importer_state::notify_flush_listeners() {
-  VAST_DEBUG(self, "forwards 'flush' subscribers to", index_actors.size(),
-             "INDEX actors");
-  for (auto& listener : flush_listeners)
-    for (auto& next : index_actors)
-      self->send(next, subscribe_atom::value, flush_atom::value, listener);
-  flush_listeners.clear();
 }
 
 caf::behavior importer(importer_actor* self, path dir, archive_type archive,
@@ -195,8 +185,8 @@ caf::behavior importer(importer_actor* self, path dir, archive_type archive,
     [=](subscribe_atom, flush_atom, caf::actor& listener) {
       auto& st = self->state;
       VAST_ASSERT(st.stg != nullptr);
-      st.flush_listeners.emplace_back(std::move(listener));
-      detail::notify_listeners_if_clean(st, *st.stg);
+      for (auto& next : st.index_actors)
+        self->send(next, subscribe_atom::value, flush_atom::value, listener);
     },
     [=](status_atom) { return self->state.status(); },
     [=](telemetry_atom) {
