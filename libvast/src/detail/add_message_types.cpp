@@ -22,7 +22,6 @@
 #include "vast/query_options.hpp"
 #include "vast/schema.hpp"
 #include "vast/system/query_status.hpp"
-#include "vast/system/replicated_store.hpp"
 #include "vast/system/report.hpp"
 #include "vast/system/tracker.hpp"
 #include "vast/system/type_registry.hpp"

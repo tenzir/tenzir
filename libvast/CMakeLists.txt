@@ -95,7 +95,6 @@ set(libvast_sources
     src/system/count_command.cpp
     src/system/counter.cpp
     src/system/default_configuration.cpp
-    src/system/dummy_consensus.cpp
     src/system/evaluator.cpp
     src/system/explore_command.cpp
     src/system/explorer.cpp
@@ -113,14 +112,12 @@ set(libvast_sources
     src/system/profiler.cpp
     src/system/query_processor.cpp
     src/system/query_supervisor.cpp
-    src/system/raft.cpp
     src/system/read_query.cpp
     src/system/remote_command.cpp
     src/system/signal_monitor.cpp
     src/system/sink_command.cpp
     src/system/spawn_archive.cpp
     src/system/spawn_arguments.cpp
-    src/system/spawn_consensus.cpp
     src/system/spawn_counter.cpp
     src/system/spawn_explorer.cpp
     src/system/spawn_exporter.cpp
@@ -314,10 +311,8 @@ set(tests
     test/subnet.cpp
     test/synopsis.cpp
     test/system/archive.cpp
-    test/system/consensus.cpp
     test/system/counter.cpp
     test/system/datagram_source.cpp
-    test/system/dummy_consensus.cpp
     test/system/evaluator.cpp
     test/system/explorer.cpp
     test/system/exporter.cpp
@@ -325,13 +320,11 @@ set(tests
     test/system/index.cpp
     test/system/indexer.cpp
     test/system/indexer_stage_driver.cpp
-    test/system/key_value_store.cpp
     test/system/partition.cpp
     test/system/pivoter.cpp
     test/system/queries.cpp
     test/system/query_processor.cpp
     test/system/query_supervisor.cpp
-    test/system/replicated_store.cpp
     test/system/sink.cpp
     test/system/source.cpp
     test/system/task.cpp

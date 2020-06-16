@@ -68,7 +68,6 @@ class value_index;
 
 namespace system {
 
-class actor_identity;
 class application;
 class configuration;
 class default_application;
@@ -329,7 +328,6 @@ CAF_BEGIN_TYPE_ID_BLOCK(vast, caf::first_custom_type_id)
   VAST_ADD_TYPE_ID((vast::type_extractor))
   VAST_ADD_TYPE_ID((vast::uuid))
 
-  VAST_ADD_TYPE_ID((vast::system::actor_identity))
   VAST_ADD_TYPE_ID((vast::system::component_map))
   VAST_ADD_TYPE_ID((vast::system::component_map_entry))
   VAST_ADD_TYPE_ID((vast::system::performance_report))
