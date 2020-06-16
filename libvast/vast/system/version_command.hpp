@@ -24,7 +24,6 @@ namespace vast::system {
 void print_version(const json::object& extra_content = {});
 
 /// Displays the software version to the user.
-caf::message
-version_command(const command::invocation& invocation, caf::actor_system& sys);
+caf::message version_command(const invocation& inv, caf::actor_system& sys);
 
 } // namespace vast::system

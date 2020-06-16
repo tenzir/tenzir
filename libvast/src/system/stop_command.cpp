@@ -25,11 +25,10 @@
 
 namespace vast::system {
 
-caf::message
-stop_command(const command::invocation& invocation, caf::actor_system& sys) {
-  VAST_TRACE(invocation);
+caf::message stop_command(const invocation& inv, caf::actor_system& sys) {
+  VAST_TRACE(inv);
   // Bail out early for bogus invocations.
-  if (caf::get_or(invocation.options, "system.node", false))
+  if (caf::get_or(inv.options, "system.node", false))
     return caf::make_message(make_error(
       ec::invalid_configuration, "cannot start and immediately stop a node"));
   // Obtain VAST node.

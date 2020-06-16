@@ -15,9 +15,6 @@
 
 #include "vast/aliases.hpp"
 #include "vast/fwd.hpp"
-#include "vast/system/fwd.hpp"
-
-#include <caf/fwd.hpp>
 
 namespace vast::system {
 

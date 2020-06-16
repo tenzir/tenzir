@@ -35,10 +35,10 @@
 
 namespace vast::system {
 
-caf::message pcap_writer_command(const command::invocation& invocation,
-                                 caf::actor_system& sys) {
-  VAST_TRACE(invocation);
-  auto& options = invocation.options;
+caf::message
+pcap_writer_command(const invocation& inv, caf::actor_system& sys) {
+  VAST_TRACE(inv);
+  auto& options = inv.options;
   using caf::get_or;
   using defaults_t = defaults::export_::pcap;
   std::string category = defaults_t::category;
@@ -49,7 +49,7 @@ caf::message pcap_writer_command(const command::invocation& invocation,
     = get_or(options, category + ".flush-interval", defaults_t::flush_interval);
   format::pcap::writer writer{output, flush};
   auto snk = sys.spawn(sink<format::pcap::writer>, std::move(writer), limit);
-  return sink_command(invocation, sys, std::move(snk));
+  return sink_command(inv, sys, std::move(snk));
 }
 
 } // namespace vast::system

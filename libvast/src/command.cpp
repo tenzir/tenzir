@@ -168,12 +168,11 @@ std::ostream& operator<<(std::ostream& os, const line_pair& x) {
 /// Iterates through the command hiearchy to correlate an error from
 /// `vast::parse` with the actual command for printing a human-readable
 /// description of what went wrong.
-void render_parse_error(const command& cmd,
-                        const command::invocation& invocation,
+void render_parse_error(const command& cmd, const invocation& inv,
                         const caf::error& err, std::ostream& os) {
   VAST_ASSERT(err != caf::none);
-  auto first = invocation.arguments.begin();
-  auto last = invocation.arguments.end();
+  auto first = inv.arguments.begin();
+  auto last = inv.arguments.end();
   auto position = first;
   // Convenience function for making a line pair with the current error
   // position highlighted in the second row.
@@ -193,7 +192,7 @@ void render_parse_error(const command& cmd,
       os << '\n' << make_line_pair() << '\n';
     helptext(cmd, os);
   } else if (err == ec::missing_subcommand) {
-    os << "error: missing subcommand after " << invocation.full_name << '\n';
+    os << "error: missing subcommand after " << inv.full_name << '\n';
     helptext(cmd, os);
   } else if (err == ec::invalid_subcommand) {
     os << "error: unrecognized subcommand" << '\n' << make_line_pair() << '\n';
@@ -280,7 +279,7 @@ command::opts_builder command::opts(std::string_view category) {
   return {category, opts()};
 }
 
-caf::error parse_impl(command::invocation& result, const command& cmd,
+caf::error parse_impl(invocation& result, const command& cmd,
                       command::argument_iterator first,
                       command::argument_iterator last, const command** target) {
   using caf::get_or;
@@ -344,10 +343,10 @@ caf::error parse_impl(command::invocation& result, const command& cmd,
   return parse_impl(result, **i, position + 1, last, target);
 }
 
-caf::expected<command::invocation>
+caf::expected<invocation>
 parse(const command& root, command::argument_iterator first,
       command::argument_iterator last) {
-  command::invocation result;
+  invocation result;
   const command* target = nullptr;
   if (auto err = parse_impl(result, root, first, last, &target)) {
     render_parse_error(*target, result, err, std::cerr);
@@ -368,7 +367,7 @@ parse(const command& root, command::argument_iterator first,
   return result;
 }
 
-bool init_config(caf::actor_system_config& cfg, const command::invocation& from,
+bool init_config(caf::actor_system_config& cfg, const invocation& from,
                  std::ostream& error_output) {
   // Disable file logging for all commands that don't start a node,
   // i.e., `vast start` and `vast -N ...`.
@@ -436,21 +435,20 @@ bool init_config(caf::actor_system_config& cfg, const command::invocation& from,
   return true;
 }
 
-caf::expected<caf::message>
-run(const command::invocation& invocation, caf::actor_system& sys,
-    const command::factory& fact) {
-  if (auto search_result = fact.find(invocation.full_name);
+caf::expected<caf::message> run(const invocation& inv, caf::actor_system& sys,
+                                const command::factory& fact) {
+  if (auto search_result = fact.find(inv.full_name);
       search_result != fact.end()) {
     // When coming from `main`, the original `sys.config()` was already merged
     // with the invocation options and this is a no-op, but when coming e.g.
     // from a remote_command we still need to do it here.
-    auto merged_invocation = invocation;
+    auto merged_invocation = inv;
     merged_invocation.options = content(sys.config());
-    merge_settings(invocation.options, merged_invocation.options);
+    merge_settings(inv.options, merged_invocation.options);
     return std::invoke(search_result->second, merged_invocation, sys);
   }
   // No callback was registered for this command
-  return make_error(ec::missing_subcommand, invocation.full_name, "");
+  return make_error(ec::missing_subcommand, inv.full_name, "");
 }
 
 const command& root(const command& cmd) {

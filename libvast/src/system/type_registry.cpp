@@ -70,25 +70,24 @@ caf::error type_registry_state::load_from_disk() {
 }
 
 void type_registry_state::insert(vast::type layout) {
-  auto& cont = data[layout.name()];
+  auto& cont = data[layout.name()].value;
   if ([[maybe_unused]] auto [hint, success]
       = cont.insert(flatten(std::move(layout)));
       success)
     VAST_VERBOSE(self, "registered", hint->name());
 }
 
-std::unordered_set<vast::type> type_registry_state::types() const {
+type_set type_registry_state::types() const {
   auto result = std::unordered_set<vast::type>{};
   // TODO: Replace merging logic once libc++ implements unordered_set::merge.
   //   result.merge(data);
   for ([[maybe_unused]] auto& [k, v] : data)
-    for (auto& x : v)
+    for (auto& x : v.value)
       result.insert(x);
-  return result;
+  return {result};
 }
 
-std::unordered_set<vast::type>
-type_registry_state::types(std::string key) const {
+type_set type_registry_state::types(std::string key) const {
   if (auto it = data.find(std::move(key)); it != data.end())
     return it->second;
   return {};
@@ -99,12 +98,12 @@ type_registry(type_registry_actor self, const path& dir) {
   self->state.self = self;
   self->state.dir = dir;
   // Register with the accountant.
-  if (auto accountant = self->system().registry().get(accountant_atom::value)) {
+  if (auto accountant = self->system().registry().get(atom::accountant_v)) {
     VAST_DEBUG(self, "connects to", VAST_ARG(accountant));
     self->state.accountant = caf::actor_cast<accountant_type>(accountant);
-    self->send(self->state.accountant, announce_atom::value, self->name());
+    self->send(self->state.accountant, atom::announce_v, self->name());
     self->delayed_send(self, defaults::system::telemetry_rate,
-                       telemetry_atom::value);
+                       atom::telemetry_v);
   }
   // Register the exit handler.
   self->set_exit_handler([=](const caf::exit_msg& msg) {
@@ -123,17 +122,17 @@ type_registry(type_registry_actor self, const path& dir) {
   // Load loaded schema types from the singleton.
   auto schema = vast::event_types::get();
   if (schema)
-    self->send(self, put_atom::value, *schema);
+    self->send(self, atom::put_v, *schema);
   // The behavior of the type-registry.
   return {
-    [=](telemetry_atom) {
+    [=](atom::telemetry) {
       VAST_TRACE(self, "sends out a telemetry report to the",
                  VAST_ARG("accountant", self->state.accountant));
       self->send(self->state.accountant, self->state.telemetry());
       self->delayed_send(self, defaults::system::telemetry_rate,
-                         telemetry_atom::value);
+                         atom::telemetry_v);
     },
-    [=](status_atom) {
+    [=](atom::status) {
       VAST_TRACE(self, "sends out a status report");
       return self->state.status();
     },
@@ -148,20 +147,20 @@ type_registry(type_registry_actor self, const path& dir) {
           self->state.insert(std::move(x->layout()));
         });
     },
-    [=](put_atom, vast::type x) {
+    [=](atom::put, vast::type x) {
       VAST_TRACE(self, "tries to add", VAST_ARG("type", x.name()));
       self->state.insert(std::move(x));
     },
-    [=](put_atom, vast::schema x) {
+    [=](atom::put, vast::schema x) {
       VAST_TRACE(self, "tries to add", VAST_ARG("schema", x));
       for (auto& type : x)
         self->state.insert(std::move(type));
     },
-    [=](get_atom) {
+    [=](atom::get) {
       VAST_TRACE(self, "retrieves a list of all known types");
       return self->state.types();
     },
-    [=](get_atom, std::string name) {
+    [=](atom::get, std::string name) {
       VAST_TRACE(self, "retrieves a list of all known types for",
                  VAST_ARG(name));
       return self->state.types(name);

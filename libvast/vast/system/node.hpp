@@ -49,7 +49,7 @@ struct node_state {
   // -- static member functions ------------------------------------------------
 
   static caf::message
-  spawn_command(const command::invocation& invocation, caf::actor_system& sys);
+  spawn_command(const invocation& inv, caf::actor_system& sys);
 
   // -- constructors, destructors, and assignment operators --------------------
 

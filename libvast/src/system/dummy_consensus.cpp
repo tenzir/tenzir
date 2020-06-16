@@ -63,14 +63,14 @@ dummy_consensus(dummy_consensus_state::actor_ptr self, path dir) {
     self->quit(std::move(err));
     return behavior_type::make_empty_behavior();
   }
-  return {[=](put_atom, const std::string& key,
-              data& value) -> caf::result<ok_atom> {
+  return {[=](atom::put, const std::string& key,
+              data& value) -> caf::result<atom::ok> {
             self->state.store[key] = std::move(value);
             if (auto err = self->state.save())
               return err;
-            return ok_atom::value;
+            return atom::ok_v;
           },
-          [=](add_atom, const std::string& key,
+          [=](atom::add, const std::string& key,
               const data& value) -> caf::result<data> {
             auto& v = self->state.store[key];
             auto old = v;
@@ -79,19 +79,20 @@ dummy_consensus(dummy_consensus_state::actor_ptr self, path dir) {
               return err;
             return old;
           },
-          [=](delete_atom, const std::string& key) -> caf::result<ok_atom> {
+          [=](atom::erase, const std::string& key) -> caf::result<atom::ok> {
             self->state.store.erase(key);
             if (auto err = self->state.save())
               return err;
-            return ok_atom::value;
+            return atom::ok_v;
           },
-          [=](get_atom, const std::string& key) -> caf::result<optional<data>> {
+          [=](atom::get,
+              const std::string& key) -> caf::result<optional<data>> {
             auto i = self->state.store.find(key);
             if (i == self->state.store.end())
               return caf::none;
             return i->second;
           },
-          [=](status_atom) -> caf::config_value::dictionary {
+          [=](atom::status) -> caf::config_value::dictionary {
             return self->state.status();
           }};
 }

@@ -13,28 +13,27 @@
 
 #pragma once
 
+#include "vast/fwd.hpp"
+#include "vast/optional.hpp"
+
 #include <caf/replies_to.hpp>
 #include <caf/stateful_actor.hpp>
 #include <caf/typed_actor.hpp>
-
-#include "vast/optional.hpp"
-
-#include "vast/system/atoms.hpp"
 
 namespace vast::system {
 
 template <class Key, class Value>
 using key_value_store_type = caf::typed_actor<
   // Updates the value of a specific key.
-  typename caf::replies_to<put_atom, Key, Value>::template with<ok_atom>,
+  typename caf::replies_to<atom::put, Key, Value>::template with<atom::ok>,
   // Adds a value to a specific key and returns old key.
-  typename caf::replies_to<add_atom, Key, Value>::template with<Value>,
+  typename caf::replies_to<atom::add, Key, Value>::template with<Value>,
   // Deletes a key-value pair.
-  typename caf::replies_to<delete_atom, Key>::template with<ok_atom>,
+  typename caf::replies_to<atom::erase, Key>::template with<atom::ok>,
   // Retrieves the value for a given key pair.
-  typename caf::replies_to<get_atom, Key>::template with<optional<Value>>,
+  typename caf::replies_to<atom::get, Key>::template with<optional<Value>>,
   // Returns the runtime status in a dict.
-  typename caf::replies_to<status_atom>::template with<
+  typename caf::replies_to<atom::status>::template with<
     caf::dictionary<caf::config_value>>>;
 
 } // namespace vast::system

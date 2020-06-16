@@ -102,12 +102,12 @@ TEST(type_registry) {
   {
     size_t size = -1;
     std::string name = "mock";
-    self->send(aut, system::get_atom::value, name);
+    self->send(aut, atom::get_v, name);
     run();
     bool done = false;
     self
-      ->do_receive([&](std::unordered_set<vast::type> result) {
-        size = result.size();
+      ->do_receive([&](vast::system::type_set result) {
+        size = result.value.size();
         done = true;
       })
       .until(done);

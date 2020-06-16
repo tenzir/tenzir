@@ -23,9 +23,9 @@
 #include "vast/concept/parseable/vast/uuid.hpp"
 #include "vast/defaults.hpp"
 #include "vast/detail/spawn_container_source.hpp"
+#include "vast/fwd.hpp"
 #include "vast/ids.hpp"
 #include "vast/system/archive.hpp"
-#include "vast/system/atoms.hpp"
 #include "vast/system/index.hpp"
 #include "vast/table_slice.hpp"
 #include "vast/uuid.hpp"
@@ -41,9 +41,6 @@ using vast::expression;
 using vast::ids;
 using vast::make_ids;
 using vast::uuid;
-using vast::system::done_atom;
-using vast::system::erase_atom;
-using vast::system::run_atom;
 
 namespace {
 
@@ -60,7 +57,7 @@ caf::behavior mock_client(mock_client_actor* self) {
             CHECK(!self->state.received_done);
             self->state.count += x;
           },
-          [=](done_atom) { self->state.received_done = true; }};
+          [=](atom::done) { self->state.received_done = true; }};
 }
 
 struct fixture : fixtures::deterministic_actor_system_and_events {
@@ -94,7 +91,7 @@ struct fixture : fixtures::deterministic_actor_system_and_events {
     aut = sys.spawn(counter, unbox(to<expression>(query)), index, archive,
                     skip_candidate_check);
     run();
-    anon_send(aut, run_atom::value, client);
+    anon_send(aut, atom::run_v, client);
     sched.run_once();
   }
 

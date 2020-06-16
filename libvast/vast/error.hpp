@@ -13,12 +13,15 @@
 
 #pragma once
 
+#include "vast/fwd.hpp"
+
 #include <caf/error.hpp>
 #include <caf/make_message.hpp>
 
 namespace vast {
 
 using caf::error;
+using caf::make_error;
 
 /// VAST's error codes.
 enum class ec : uint8_t {
@@ -89,16 +92,10 @@ enum class ec : uint8_t {
 /// @relates ec
 const char* to_string(ec x);
 
-/// @relates ec
-template <class... Ts>
-error make_error(ec x, Ts&&... xs) {
-  return error{static_cast<uint8_t>(x), caf::atom("vast"),
-               caf::make_message(std::forward<Ts>(xs)...)};
-}
-
 /// A formatting function that converts an error into a human-readable string.
 /// @relates ec
 std::string render(caf::error err);
 
 } // namespace vast
 
+CAF_ERROR_CODE_ENUM(vast::ec, "vast")

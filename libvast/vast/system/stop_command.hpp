@@ -20,7 +20,6 @@ namespace vast::system {
 
 /// Connects to a remote node and tears it down.
 /// @relates command
-caf::message
-stop_command(const command::invocation& invocation, caf::actor_system& sys);
+caf::message stop_command(const invocation& inv, caf::actor_system& sys);
 
 } // namespace vast::system

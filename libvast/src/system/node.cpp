@@ -66,10 +66,9 @@ auto make_error_msg(ec code, std::string msg) {
 }
 
 // Sends an atom to a registered actor. Blocks until the actor responds.
-caf::message
-send_command(const command::invocation& invocation, caf::actor_system& sys) {
-  auto first = invocation.arguments.begin();
-  auto last = invocation.arguments.end();
+caf::message send_command(const invocation& inv, caf::actor_system& sys) {
+  auto first = inv.arguments.begin();
+  auto last = inv.arguments.end();
   // Expect exactly two arguments.
   if (std::distance(first, last) != 2)
     return make_error_msg(ec::syntax_error,
@@ -88,10 +87,9 @@ send_command(const command::invocation& invocation, caf::actor_system& sys) {
 }
 
 // Tries to establish peering to another node.
-caf::message
-peer_command(const command::invocation& invocation, caf::actor_system& sys) {
-  auto first = invocation.arguments.begin();
-  auto last = invocation.arguments.end();
+caf::message peer_command(const invocation& inv, caf::actor_system& sys) {
+  auto first = inv.arguments.begin();
+  auto last = inv.arguments.end();
   VAST_ASSERT(this_node != nullptr);
   if (std::distance(first, last) != 1)
     return make_error_msg(ec::syntax_error,
@@ -115,7 +113,7 @@ peer_command(const command::invocation& invocation, caf::actor_system& sys) {
   }
   VAST_DEBUG(this_node, "sends peering request");
   auto& st = this_node->state;
-  this_node->delegate(*peer, peer_atom::value, st.tracker, st.name);
+  this_node->delegate(*peer, atom::peer_v, st.tracker, st.name);
   return caf::none;
 }
 
@@ -141,9 +139,9 @@ void collect_component_status(node_actor* self,
   put(sys_stats, "worker-threads", sys.scheduler().num_workers());
   put(sys_stats, "table-slices", table_slice::instances());
   // Send out requests and collects answers.
-  for (auto& [node_name, state_map] : reg.components) {
-    req_state->pending += state_map.size();
-    for (auto& kvp : state_map) {
+  for (auto& [node_name, state_map] : reg.components.value) {
+    req_state->pending += state_map.value.size();
+    for (auto& kvp : state_map.value) {
       auto& comp_state = kvp.second;
       // Skip the tracker. It has no interesting state.
       if (comp_state.label == "tracker") {
@@ -152,7 +150,7 @@ void collect_component_status(node_actor* self,
       }
       self
         ->request(comp_state.actor, defaults::system::initial_request_timeout,
-                  status_atom::value)
+                  atom::status_v)
         .then(
           [=, lbl = comp_state.label,
            nn = node_name](caf::config_value::dictionary& xs) mutable {
@@ -175,14 +173,13 @@ void collect_component_status(node_actor* self,
   }
 }
 
-caf::message
-status_command(const command::invocation&, caf::actor_system& sys) {
+caf::message status_command(const invocation&, caf::actor_system& sys) {
   auto self = this_node;
   auto rp = self->make_response_promise();
   caf::error err;
   self
     ->request(self->state.tracker, defaults::system::initial_request_timeout,
-              get_atom::value)
+              atom::get_v)
     .then(
       [=](registry& reg) mutable {
         collect_component_status(self, std::move(rp), reg);
@@ -197,46 +194,44 @@ status_command(const command::invocation&, caf::actor_system& sys) {
 
 maybe_actor spawn_accountant(node_actor* self, spawn_arguments&) {
   auto accountant = self->spawn<monitored>(system::accountant);
-  self->system().registry().put(accountant_atom::value, accountant);
+  self->system().registry().put(atom::accountant_v, accountant);
   return caf::actor_cast<caf::actor>(accountant);
 }
 
 // Tries to spawn a new VAST component.
 caf::expected<caf::actor>
-spawn_component(const command::invocation& invocation, spawn_arguments& args) {
+spawn_component(const invocation& inv, spawn_arguments& args) {
   VAST_TRACE(VAST_ARG(args));
   using caf::atom_uint;
   auto self = this_node;
-  auto i = node_state::component_factory.find(invocation.full_name);
+  auto i = node_state::component_factory.find(inv.full_name);
   if (i == node_state::component_factory.end())
     return make_error(ec::unspecified, "invalid spawn component");
   return i->second(self, args);
 }
 
-caf::message
-kill_command(const command::invocation& invocation, caf::actor_system&) {
-  auto first = invocation.arguments.begin();
-  auto last = invocation.arguments.end();
+caf::message kill_command(const invocation& inv, caf::actor_system&) {
+  auto first = inv.arguments.begin();
+  auto last = inv.arguments.end();
   if (std::distance(first, last) != 1)
     return make_error_msg(ec::syntax_error,
                           "expected exactly one component argument");
   auto rp = this_node->make_response_promise();
-  this_node->request(this_node->state.tracker, infinite, get_atom::value).then(
-    [rp, self = this_node, label = *first](registry& reg) mutable {
-      auto& local = reg.components[self->state.name];
-      auto i = std::find_if(local.begin(), local.end(),
-                            [&](auto& p) { return p.second.label == label; });
-      if (i == local.end()) {
-        rp.deliver(make_error(ec::unspecified, "no such component: " + label));
-        return;
-      }
-      self->send_exit(i->second.actor, exit_reason::user_shutdown);
-      rp.deliver(ok_atom::value);
-    },
-    [rp](error& e) mutable {
-      rp.deliver(std::move(e));
-    }
-  );
+  this_node->request(this_node->state.tracker, infinite, atom::get_v)
+    .then(
+      [rp, self = this_node, label = *first](registry& reg) mutable {
+        auto& local = reg.components.value[self->state.name].value;
+        auto i = std::find_if(local.begin(), local.end(),
+                              [&](auto& p) { return p.second.label == label; });
+        if (i == local.end()) {
+          rp.deliver(
+            make_error(ec::unspecified, "no such component: " + label));
+          return;
+        }
+        self->send_exit(i->second.actor, exit_reason::user_shutdown);
+        rp.deliver(atom::ok_v);
+      },
+      [rp](error& e) mutable { rp.deliver(std::move(e)); });
   return caf::none;
 }
 
@@ -312,18 +307,18 @@ auto make_command_factory() {
 } // namespace
 
 caf::message
-node_state::spawn_command(const command::invocation& invocation,
+node_state::spawn_command(const invocation& inv,
                           [[maybe_unused]] caf::actor_system& sys) {
-  VAST_TRACE(invocation);
+  VAST_TRACE(inv);
   using std::begin;
   using std::end;
   // Save some typing.
   auto& st = this_node->state;
   // We configured the command to have the name of the component.
-  std::string comp_name{invocation.name()};
+  std::string comp_name{inv.name()};
   // Auto-generate label if none given.
   std::string label;
-  if (auto label_ptr = caf::get_if<std::string>(&invocation.options, "label")) {
+  if (auto label_ptr = caf::get_if<std::string>(&inv.options, "label")) {
     label = *label_ptr;
   } else {
     label = comp_name;
@@ -338,9 +333,9 @@ node_state::spawn_command(const command::invocation& invocation,
     }
   }
   // Spawn our new VAST component.
-  spawn_arguments args{invocation, st.dir, label};
+  spawn_arguments args{inv, st.dir, label};
   caf::actor new_component;
-  if (auto spawn_res = spawn_component(invocation, args))
+  if (auto spawn_res = spawn_component(inv, args))
     new_component = std::move(*spawn_res);
   else {
     VAST_DEBUG(__func__, "got an error from spawn_component:",
@@ -350,7 +345,7 @@ node_state::spawn_command(const command::invocation& invocation,
   // Register component at tracker.
   auto rp = this_node->make_response_promise();
   this_node
-    ->request(st.tracker, infinite, try_put_atom::value, std::move(comp_name),
+    ->request(st.tracker, infinite, atom::try_put_v, std::move(comp_name),
               new_component, std::move(label))
     .then([=]() mutable { rp.deliver(std::move(new_component)); },
           [=](error& e) mutable { rp.deliver(std::move(e)); });
@@ -395,38 +390,37 @@ void node_state::init(std::string init_name, path init_dir) {
     VAST_DEBUG(self, "got DOWN from", msg.source);
     self->quit(msg.reason);
   });
-  self->system().registry().put(tracker_atom::value, tracker);
+  self->system().registry().put(atom::tracker_v, tracker);
 }
 
 caf::behavior node(node_actor* self, std::string id, path dir) {
   self->state.init(std::move(id), std::move(dir));
   return {
-    [=](const command::invocation& invocation) {
-      VAST_DEBUG(self, "got command", invocation.full_name, "with options",
-                 invocation.options, "and arguments", invocation.arguments);
+    [=](const invocation& inv) {
+      VAST_DEBUG(self, "got command", inv.full_name, "with options",
+                 inv.options, "and arguments", inv.arguments);
       // Run the command.
       this_node = self;
-      return run(invocation, self->system(), node_state::command_factory);
+      return run(inv, self->system(), node_state::command_factory);
     },
-    [=](peer_atom, actor& tracker, std::string& peer_name) {
-      self->delegate(self->state.tracker, peer_atom::value,
-                     std::move(tracker), std::move(peer_name));
+    [=](atom::peer, actor& tracker, std::string& peer_name) {
+      self->delegate(self->state.tracker, atom::peer_v, std::move(tracker),
+                     std::move(peer_name));
     },
-    [=](get_atom) {
+    [=](atom::get) {
       auto rp = self->make_response_promise();
-      self->request(self->state.tracker, infinite, get_atom::value).then(
-        [=](registry& reg) mutable {
-          rp.deliver(self->state.name, std::move(reg));
-        },
-        [=](error& e) mutable {
-          rp.deliver(std::move(e));
-        }
-      );
+      self->request(self->state.tracker, infinite, atom::get_v)
+        .then(
+          [=](registry& reg) mutable {
+            rp.deliver(self->state.name, std::move(reg));
+          },
+          [=](error& e) mutable { rp.deliver(std::move(e)); });
     },
-    [=](signal_atom, int signal) {
+    [=](atom::signal, int signal) {
       VAST_IGNORE_UNUSED(signal);
       VAST_WARNING(self, "got signal", ::strsignal(signal));
-    }};
+    },
+  };
 }
 
 } // namespace vast::system

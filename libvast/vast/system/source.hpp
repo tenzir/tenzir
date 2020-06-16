@@ -27,10 +27,10 @@
 #include "vast/event.hpp"
 #include "vast/expression.hpp"
 #include "vast/expression_visitors.hpp"
+#include "vast/fwd.hpp"
 #include "vast/logger.hpp"
 #include "vast/schema.hpp"
 #include "vast/system/accountant.hpp"
-#include "vast/system/atoms.hpp"
 #include "vast/system/instrumentation.hpp"
 #include "vast/system/type_registry.hpp"
 #include "vast/table_slice.hpp"
@@ -141,22 +141,22 @@ struct source_state {
     local_schema = std::move(sch);
     accountant = std::move(acc);
     // Register with the accountant.
-    self->send(accountant, announce_atom::value, name);
+    self->send(accountant, atom::announce_v, name);
     // Figure out which schemas we need.
     if (type_registry) {
-      self->request(type_registry, caf::infinite, get_atom::value)
-        .await([=](std::unordered_set<vast::type> types) {
+      self->request(type_registry, caf::infinite, atom::get_v)
+        .await([=](type_set types) {
           auto& st = selfptr->state;
           auto is_valid = [&](const auto& layout) {
             return detail::starts_with(layout.name(), type_filter);
           };
           // First, merge and de-duplicate the local schema with types from the
           // type-registry.
-          types.insert(std::make_move_iterator(st.local_schema.begin()),
-                       std::make_move_iterator(st.local_schema.end()));
+          types.value.insert(std::make_move_iterator(st.local_schema.begin()),
+                             std::make_move_iterator(st.local_schema.end()));
           st.local_schema.clear();
           // Second, filter valid types from all available record types.
-          for (auto& type : types)
+          for (auto& type : types.value)
             if (auto layout = caf::get_if<vast::record_type>(&type))
               if (is_valid(*layout))
                 st.local_schema.add(std::move(*layout));
@@ -286,8 +286,8 @@ source(caf::stateful_actor<source_state<Reader>>* self, Reader reader,
     // done?
     [](const bool& done) { return done; });
   return {
-    [=](get_atom, schema_atom) { return self->state.reader.schema(); },
-    [=](put_atom, schema sch) -> caf::result<void> {
+    [=](atom::get, atom::schema) { return self->state.reader.schema(); },
+    [=](atom::put, schema sch) -> caf::result<void> {
       VAST_DEBUG(self, "received", VAST_ARG("schema", sch));
       auto& st = self->state;
       if (auto err = st.reader.schema(std::move(sch));
@@ -300,7 +300,7 @@ source(caf::stateful_actor<source_state<Reader>>* self, Reader reader,
       auto& st = self->state;
       st.filter = std::move(expr);
     },
-    [=](sink_atom, const caf::actor& sink) {
+    [=](atom::sink, const caf::actor& sink) {
       VAST_ASSERT(sink);
       VAST_DEBUG(self, "registers", VAST_ARG(sink));
       // TODO: Currently, we use a broadcast downstream manager. We need to
@@ -314,16 +314,16 @@ source(caf::stateful_actor<source_state<Reader>>* self, Reader reader,
       }
       st.sink = sink;
       self->delayed_send(self, defaults::system::telemetry_rate,
-                         telemetry_atom::value);
+                         atom::telemetry_v);
       // Start streaming.
       st.mgr->add_outbound_path(st.sink);
     },
-    [=](telemetry_atom) {
+    [=](atom::telemetry) {
       auto& st = self->state;
       st.send_report();
       if (!st.mgr->done())
         self->delayed_send(self, defaults::system::telemetry_rate,
-                           telemetry_atom::value);
+                           atom::telemetry_v);
     },
   };
 }

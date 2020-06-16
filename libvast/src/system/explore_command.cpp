@@ -19,9 +19,9 @@
 #include "vast/detail/make_io_stream.hpp"
 #include "vast/error.hpp"
 #include "vast/format/json.hpp"
+#include "vast/fwd.hpp"
 #include "vast/logger.hpp"
 #include "vast/scope_linked.hpp"
-#include "vast/system/atoms.hpp"
 #include "vast/system/node_control.hpp"
 #include "vast/system/read_query.hpp"
 #include "vast/system/signal_monitor.hpp"
@@ -45,14 +45,13 @@ using namespace std::chrono_literals;
 
 namespace vast::system {
 
-caf::message
-explore_command(const command::invocation& invocation, caf::actor_system& sys) {
-  VAST_DEBUG_ANON(invocation);
-  const auto& options = invocation.options;
-  if (auto error = explorer_validate_args(invocation.options))
+caf::message explore_command(const invocation& inv, caf::actor_system& sys) {
+  VAST_DEBUG_ANON(inv);
+  const auto& options = inv.options;
+  if (auto error = explorer_validate_args(inv.options))
     return make_message(error);
   // Read query from input file, STDIN or CLI arguments.
-  auto query = read_query(invocation, "export.read", 0);
+  auto query = read_query(inv, "export.read", 0);
   if (!query)
     return caf::make_message(std::move(query.error()));
   size_t max_events_search = caf::get_or(options, "explore.max-events-query",
@@ -88,11 +87,10 @@ explore_command(const command::invocation& invocation, caf::actor_system& sys) {
   auto guard = system::signal_monitor::run_guarded(
     sig_mon_thread, sys, defaults::system::signal_monitoring_interval, self);
   // Spawn exporter for the passed query
-  auto spawn_exporter
-    = command::invocation{invocation.options, "spawn exporter", {*query}};
+  auto spawn_exporter = invocation{inv.options, "spawn exporter", {*query}};
   if (max_events_search)
     caf::put(spawn_exporter.options, "export.max-events", max_events_search);
-  VAST_DEBUG(&invocation, "spawns exporter with parameters:", spawn_exporter);
+  VAST_DEBUG(&inv, "spawns exporter with parameters:", spawn_exporter);
   auto exporter = spawn_at_node(self, node, spawn_exporter);
   if (!exporter)
     return caf::make_message(std::move(exporter.error()));
@@ -101,10 +99,9 @@ explore_command(const command::invocation& invocation, caf::actor_system& sys) {
     self->send_exit(*exporter, caf::exit_reason::user_shutdown);
   });
   // Spawn explorer at the node.
-  auto explorer_options = invocation.options;
-  auto spawn_explorer
-    = command::invocation{explorer_options, "spawn explorer", {}};
-  VAST_DEBUG(&invocation, "spawns explorer with parameters:", spawn_explorer);
+  auto explorer_options = inv.options;
+  auto spawn_explorer = invocation{explorer_options, "spawn explorer", {}};
+  VAST_DEBUG(&inv, "spawns explorer with parameters:", spawn_explorer);
   auto explorer = spawn_at_node(self, node, spawn_explorer);
   if (!explorer)
     return caf::make_message(std::move(explorer.error()));
@@ -113,38 +110,38 @@ explore_command(const command::invocation& invocation, caf::actor_system& sys) {
     self->send_exit(*explorer, caf::exit_reason::user_shutdown);
   });
   self->monitor(*explorer);
-  self->send(*explorer, provision_atom::value, *exporter);
+  self->send(*explorer, atom::provision_v, *exporter);
   // Set the explorer as sink for the initial query exporter.
-  self->send(*exporter, system::sink_atom::value, *explorer);
+  self->send(*exporter, atom::sink_v, *explorer);
   // (Ab)use query_statistics as done message.
-  self->send(*exporter, system::statistics_atom::value, *explorer);
-  self->send(*explorer, system::sink_atom::value, writer);
-  self->send(*exporter, system::run_atom::value);
+  self->send(*exporter, atom::statistics_v, *explorer);
+  self->send(*explorer, atom::sink_v, writer);
+  self->send(*exporter, atom::run_v);
   caf::error err;
   auto stop = false;
   self
     ->do_receive(
       [&](caf::down_msg& msg) {
         if (msg.source == node) {
-          VAST_DEBUG(invocation.full_name, "received DOWN from node");
+          VAST_DEBUG(inv.full_name, "received DOWN from node");
         } else if (msg.source == *explorer) {
-          VAST_DEBUG(invocation.full_name, "received DOWN from explorer");
+          VAST_DEBUG(inv.full_name, "received DOWN from explorer");
           explorer_guard.disable();
         } else if (msg.source == writer) {
-          VAST_DEBUG(invocation.full_name, "received DOWN from sink");
+          VAST_DEBUG(inv.full_name, "received DOWN from sink");
           writer_guard.disable();
         } else {
           VAST_ASSERT(!"received DOWN from inexplicable actor");
         }
         if (msg.reason) {
-          VAST_DEBUG(invocation.full_name, "received error message:",
+          VAST_DEBUG(inv.full_name, "received error message:",
                      self->system().render(msg.reason));
           err = std::move(msg.reason);
         }
         stop = true;
       },
-      [&](system::signal_atom, int signal) {
-        VAST_DEBUG(invocation.full_name, "got " << ::strsignal(signal));
+      [&](atom::signal, int signal) {
+        VAST_DEBUG(inv.full_name, "got " << ::strsignal(signal));
         if (signal == SIGINT || signal == SIGTERM) {
           stop = true;
         }

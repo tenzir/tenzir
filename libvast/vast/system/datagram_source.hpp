@@ -24,10 +24,10 @@
 #include "vast/event.hpp"
 #include "vast/expression.hpp"
 #include "vast/expression_visitors.hpp"
+#include "vast/fwd.hpp"
 #include "vast/logger.hpp"
 #include "vast/schema.hpp"
 #include "vast/system/accountant.hpp"
-#include "vast/system/atoms.hpp"
 #include "vast/system/source.hpp"
 #include "vast/table_slice.hpp"
 #include "vast/table_slice_builder.hpp"
@@ -159,16 +159,16 @@ datagram_source(datagram_source_actor<Reader>* self,
       auto& st = self->state;
       st.accountant = std::move(accountant);
       self->send(st.accountant, "source.start", st.start_time);
-      self->send(st.accountant, announce_atom::value, st.name);
+      self->send(st.accountant, atom::announce_v, st.name);
       // Start the heartbeat loop
       self->delayed_send(self, defaults::system::telemetry_rate,
-                         telemetry_atom::value);
+                         atom::telemetry_v);
     },
     [=](type_registry_type type_registry) {
       // TODO adapt
       VAST_DEBUG(self, "sets type-registry to", type_registry);
     },
-    [=](sink_atom, const caf::actor& sink) {
+    [=](atom::sink, const caf::actor& sink) {
       // TODO: Currently, we use a broadcast downstream manager. We need to
       //       implement an anycast downstream manager and use it for the
       //       source, because we mustn't duplicate data.
@@ -178,10 +178,10 @@ datagram_source(datagram_source_actor<Reader>* self,
       // Start streaming.
       st.mgr->add_outbound_path(sink);
     },
-    [=](get_atom, schema_atom) -> caf::result<schema> {
+    [=](atom::get, atom::schema) -> caf::result<schema> {
       return self->state.reader.schema();
     },
-    [=](put_atom, schema& sch) -> caf::result<void> {
+    [=](atom::put, schema& sch) -> caf::result<void> {
       if (auto err = self->state.reader.schema(std::move(sch)))
         return err;
       return caf::unit;
@@ -190,7 +190,7 @@ datagram_source(datagram_source_actor<Reader>* self,
       VAST_DEBUG(self, "sets filter expression to:", expr);
       self->state.filter = std::move(expr);
     },
-    [=](telemetry_atom) {
+    [=](atom::telemetry) {
       auto& st = self->state;
       st.send_report();
       if (st.dropped_packets > 0) {
@@ -200,7 +200,7 @@ datagram_source(datagram_source_actor<Reader>* self,
       }
       if (!st.done)
         self->delayed_send(self, defaults::system::telemetry_rate,
-                           telemetry_atom::value);
+                           atom::telemetry_v);
     },
   };
 }

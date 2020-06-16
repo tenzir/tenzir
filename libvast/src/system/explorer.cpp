@@ -19,8 +19,8 @@
 #include "vast/defaults.hpp"
 #include "vast/detail/string.hpp"
 #include "vast/expression.hpp"
+#include "vast/fwd.hpp"
 #include "vast/logger.hpp"
-#include "vast/system/atoms.hpp"
 #include "vast/system/exporter.hpp"
 #include "vast/table_slice.hpp"
 #include "vast/table_slice_builder.hpp"
@@ -157,12 +157,12 @@ explorer(caf::stateful_actor<explorer_state>* self, caf::actor node,
           continue;
         std::optional<vast::expression> before_expr;
         if (st.before)
-          before_expr = predicate{attribute_extractor{timestamp_atom::value},
+          before_expr = predicate{attribute_extractor{atom::timestamp_v},
                                   greater_equal, data{*x - *st.before}};
 
         std::optional<vast::expression> after_expr;
         if (st.after)
-          after_expr = predicate{attribute_extractor{timestamp_atom::value},
+          after_expr = predicate{attribute_extractor{atom::timestamp_v},
                                  less_equal, data{*x + *st.after}};
         std::optional<vast::expression> by_expr;
         if (st.by) {
@@ -195,8 +195,7 @@ explorer(caf::stateful_actor<explorer_state>* self, caf::actor node,
         VAST_ASSERT(expr);
         auto query = to_string(*expr);
         VAST_TRACE(self, "spawns new exporter with query", query);
-        auto exporter_invocation
-          = command::invocation{{}, "spawn exporter", {query}};
+        auto exporter_invocation = invocation{{}, "spawn exporter", {query}};
         if (st.limits.per_result)
           caf::put(exporter_invocation.options, "export.max-events",
                    st.limits.per_result);
@@ -204,21 +203,21 @@ explorer(caf::stateful_actor<explorer_state>* self, caf::actor node,
         ++st.running_exporters;
       }
     },
-    [=](provision_atom, caf::actor exp) {
+    [=](atom::provision, caf::actor exp) {
       self->state.initial_query_exporter = exp;
     },
     [=](caf::actor exp) {
       VAST_DEBUG(self, "registers exporter", exp);
       self->monitor(exp);
-      self->send(exp, system::sink_atom::value, self);
-      self->send(exp, system::run_atom::value);
+      self->send(exp, atom::sink_v, self);
+      self->send(exp, atom::run_v);
     },
     [=]([[maybe_unused]] std::string name, query_status) {
       VAST_DEBUG(self, "received final status from", name);
       self->state.initial_query_completed = true;
       quit_if_done();
     },
-    [=](sink_atom, const caf::actor& sink) {
+    [=](atom::sink, const caf::actor& sink) {
       VAST_DEBUG(self, "registers sink", sink);
       auto& st = self->state;
       st.sink = sink;

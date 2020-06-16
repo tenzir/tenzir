@@ -28,14 +28,13 @@ using namespace std::chrono_literals;
 
 namespace vast::system {
 
-caf::message
-remote_command(const command::invocation& invocation, caf::actor_system& sys) {
-  VAST_TRACE(invocation);
+caf::message remote_command(const invocation& inv, caf::actor_system& sys) {
+  VAST_TRACE(inv);
   // Get a convenient and blocking way to interact with actors.
   caf::scoped_actor self{sys};
   // Get VAST node.
   auto node_opt
-    = spawn_or_connect_to_node(self, invocation.options, content(sys.config()));
+    = spawn_or_connect_to_node(self, inv.options, content(sys.config()));
   if (auto err = caf::get_if<caf::error>(&node_opt))
     return caf::make_message(std::move(*err));
   auto& node = caf::holds_alternative<caf::actor>(node_opt)
@@ -44,25 +43,19 @@ remote_command(const command::invocation& invocation, caf::actor_system& sys) {
   self->monitor(node);
   // Delegate invocation to node.
   caf::error err;
-  self->send(node, std::move(invocation));
-  self->receive(
-    [&](const caf::down_msg&) {
-      err = ec::remote_node_down;
-    },
-    [&](caf::ok_atom) {
-      // Standard reply for success.
-    },
-    [&](caf::actor&) {
-      // "vast spawn" returns an actor.
-    },
-    [&](const std::string& str) {
-      // Status messages or query results.
-      std::cout << str << std::endl;
-    },
-    [&](caf::error& e) {
-      err = std::move(e);
-    }
-  );
+  self->send(node, std::move(inv));
+  self->receive([&](const caf::down_msg&) { err = ec::remote_node_down; },
+                [&](atom::ok) {
+                  // Standard reply for success.
+                },
+                [&](caf::actor&) {
+                  // "vast spawn" returns an actor.
+                },
+                [&](const std::string& str) {
+                  // Status messages or query results.
+                  std::cout << str << std::endl;
+                },
+                [&](caf::error& e) { err = std::move(e); });
   if (err)
     return caf::make_message(std::move(err));
   return caf::none;

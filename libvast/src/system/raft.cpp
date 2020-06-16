@@ -11,23 +11,22 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#include <caf/all.hpp>
+#include "vast/system/raft.hpp"
 
 #include "vast/concept/parseable/numeric/integral.hpp"
 #include "vast/concept/printable/std/chrono.hpp"
+#include "vast/detail/assert.hpp"
+#include "vast/detail/narrow.hpp"
+#include "vast/detail/string.hpp"
 #include "vast/die.hpp"
 #include "vast/error.hpp"
+#include "vast/fwd.hpp"
 #include "vast/load.hpp"
 #include "vast/logger.hpp"
 #include "vast/save.hpp"
 #include "vast/si_literals.hpp"
 
-#include "vast/system/atoms.hpp"
-#include "vast/system/raft.hpp"
-
-#include "vast/detail/assert.hpp"
-#include "vast/detail/narrow.hpp"
-#include "vast/detail/string.hpp"
+#include <caf/all.hpp>
 
 using namespace caf;
 
@@ -258,7 +257,7 @@ void reset_election_time(Actor* self) {
   auto timeout = random_timeout(self);
   VAST_DEBUG(role(self), "will start election in", timeout);
   self->state.election_time = clock::now() + timeout;
-  self->delayed_send(self, timeout, election_atom::value);
+  self->delayed_send(self, timeout, atom::election_v);
 }
 
 // Saves a state machine snapshot that represents all the applied state up to a
@@ -371,8 +370,7 @@ void deliver(Actor* self, index_type from, index_type to) {
     }
     VAST_DEBUG(role(self), "delivers snapshot at index",
                self->state.last_snapshot_index);
-    auto msg = make_message(snapshot_atom::value,
-                            self->state.last_snapshot_index,
+    auto msg = make_message(atom::snapshot_v, self->state.last_snapshot_index,
                             std::move(*snapshot));
     self->send(self->state.state_machine, self->state.last_snapshot_index, msg);
     from = self->state.last_snapshot_index + 1;
@@ -476,7 +474,7 @@ void become_leader(Actor* self) {
   // Kick off leader heartbeat loop.
   if (!self->state.peers.empty() && !self->state.heartbeat_inflight) {
     VAST_DEBUG(role(self), "kicks off heartbeat");
-    self->send(self, heartbeat_atom::value);
+    self->send(self, atom::heartbeat_v);
     self->state.heartbeat_inflight = true;
   }
 }
@@ -749,10 +747,8 @@ auto handle_install_snapshot(Actor* self, install_snapshot::request& req) {
         return resp;
       }
       VAST_DEBUG(role(self), "delivers snapshot");
-      self->send(self->state.state_machine,
-                 self->state.last_snapshot_index,
-                 make_message(snapshot_atom::value,
-                              self->state.last_snapshot_index,
+      self->send(self->state.state_machine, self->state.last_snapshot_index,
+                 make_message(atom::snapshot_v, self->state.last_snapshot_index,
                               std::move(*snapshot)));
     }
   }
@@ -964,25 +960,25 @@ behavior consensus(stateful_actor<server_state>* self, path dir) {
   );
   // -- common behavior ------------------------------------------------------
   auto common = message_handler{
-    [=](election_atom) {
+    [=](atom::election) {
       if (clock::now() >= self->state.election_time)
         become_candidate(self);
     },
-    [=](statistics_atom) -> result<statistics> {
+    [=](atom::statistics) -> result<statistics> {
       statistics stats;
       auto& l = *self->state.log;
       stats.log_entries = l.empty() ? 0 : l.last_index() - l.first_index();
       stats.log_bytes = bytes(l);
       return stats;
     },
-    [=](snapshot_atom, index_type index, const std::vector<char>& snapshot) {
+    [=](atom::snapshot, index_type index, const std::vector<char>& snapshot) {
       // We keep at least one entry in the log.
       // if (self->state.commit_index <= 1)
       //   return make_error(ec::unspecified,
       //                     "not enough commited entries to snapshot");
       return save_snapshot(self, index, snapshot);
     },
-    [=](peer_atom, const actor& peer, server_id peer_id) {
+    [=](atom::peer, const actor& peer, server_id peer_id) {
       VAST_DEBUG(role(self), "re-activates peer", peer_id);
       VAST_ASSERT(peer_id != 0);
       auto i = std::find_if(self->state.peers.begin(),
@@ -993,13 +989,13 @@ behavior consensus(stateful_actor<server_state>* self, path dir) {
       i->peer = peer;
       if (is_leader(self) && !self->state.heartbeat_inflight) {
         VAST_DEBUG(role(self), "kicks off heartbeat");
-        self->send(self, heartbeat_atom::value);
+        self->send(self, atom::heartbeat_v);
         self->state.heartbeat_inflight = true;
       }
     },
     // When the state machine initializes, it will obtain the latest state
     // through this handler.
-    [=](subscribe_atom, const actor& state_machine) {
+    [=](atom::subscribe, const actor& state_machine) {
       VAST_DEBUG(role(self), "got subscribe request from", state_machine);
       self->state.state_machine = state_machine;
       if (self->state.commit_index > 0)
@@ -1011,9 +1007,7 @@ behavior consensus(stateful_actor<server_state>* self, path dir) {
     [=](append_entries::request& req) {
       return handle_append_entries(self, req);
     },
-    [=](request_vote::request& req) {
-      return handle_request_vote(self, req);
-    },
+    [=](request_vote::request& req) { return handle_request_vote(self, req); },
     [=](install_snapshot::request& req) {
       return handle_install_snapshot(self, req);
     },
@@ -1021,17 +1015,16 @@ behavior consensus(stateful_actor<server_state>* self, path dir) {
     // TODO: instead of delegating the request, we could return with an error
     // and the actual leader to the user in order to avoid permanent routing of
     // messages through this instance (which may cause performance issues).
-    [=](replicate_atom, const message& command) {
+    [=](atom::replicate, const message& command) {
       auto rp = self->make_response_promise();
       if (!self->state.leader)
         rp.deliver(make_error(ec::unspecified, "no leader available"));
       else
-        rp.delegate(self->state.leader, replicate_atom::value, command);
-    }
-  }.or_else(common);
+        rp.delegate(self->state.leader, atom::replicate_v, command);
+    }}.or_else(common);
   // -- leader ---------------------------------------------------------------
   self->state.leading = message_handler{
-    [=](heartbeat_atom) {
+    [=](atom::heartbeat) {
       self->state.heartbeat_inflight = false;
       if (self->state.peers.empty()) {
         VAST_DEBUG(role(self), "cancels heartbeat loop (no peers)");
@@ -1040,10 +1033,10 @@ behavior consensus(stateful_actor<server_state>* self, path dir) {
       for (auto& peer : self->state.peers)
         if (peer.peer)
           send_append_entries(self, peer);
-      self->delayed_send(self, heartbeat_period, heartbeat_atom::value);
+      self->delayed_send(self, heartbeat_period, atom::heartbeat_v);
       self->state.heartbeat_inflight = true;
     },
-    [=](replicate_atom, const message& command) -> result<ok_atom> {
+    [=](atom::replicate, const message& command) -> result<atom::ok> {
       auto log_index = self->state.log->last_index() + 1;
       VAST_DEBUG(role(self), "replicates new entry with index", log_index);
       VAST_ASSERT(log_index > self->state.commit_index);
@@ -1063,19 +1056,16 @@ behavior consensus(stateful_actor<server_state>* self, path dir) {
       // Without peers, we can commit the entry immediately.
       if (self->state.peers.empty())
         advance_commit_index(self);
-      return ok_atom::value;
-    }
-  }.or_else(common);
+      return atom::ok_v;
+    }}.or_else(common);
   // -- startup --------------------------------------------------------------
   return {
-    [=](id_atom, server_id id) {
+    [=](atom::id, server_id id) {
       VAST_DEBUG(role(self), "sets server ID to", id);
       self->state.id = id;
     },
-    [=](seed_atom, uint64_t value) {
-      self->state.prng.seed(value);
-    },
-    [=](peer_atom, const actor& peer, server_id peer_id) {
+    [=](atom::seed, uint64_t value) { self->state.prng.seed(value); },
+    [=](atom::peer, const actor& peer, server_id peer_id) {
       VAST_ASSERT(peer_id != 0);
       VAST_DEBUG(role(self), "adds new peer", peer_id);
       if (peer_id == self->state.id) {
@@ -1092,7 +1082,7 @@ behavior consensus(stateful_actor<server_state>* self, path dir) {
       state.peer = peer;
       self->state.peers.push_back(std::move(state));
     },
-    [=](run_atom) {
+    [=](atom::run) {
       self->become(self->state.following);
       VAST_DEBUG(role(self), "starts in term", self->state.current_term);
       if (self->state.voted_for != 0)
@@ -1125,8 +1115,7 @@ behavior consensus(stateful_actor<server_state>* self, path dir) {
       } else {
         become_follower(self, self->state.current_term);
       }
-    }
-  };
+    }};
 }
 
 } // namespace raft

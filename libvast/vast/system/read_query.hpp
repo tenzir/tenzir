@@ -26,7 +26,7 @@ namespace vast::system {
 /// @param argument_offset The number of argumetns to skip before the query.
 /// @returns The query string or an error.
 caf::expected<std::string>
-read_query(const command::invocation& invocation, std::string_view file_option,
+read_query(const invocation& inv, std::string_view file_option,
            size_t argument_offset = 0);
 
 } // namespace vast::system

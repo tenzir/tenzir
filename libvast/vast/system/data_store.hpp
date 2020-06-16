@@ -39,31 +39,31 @@ data_store(
     data_store_state<Key, Value>
   > self) {
   return {
-    [=](put_atom, const Key& key, Value& value) {
+    [=](atom::put, const Key& key, Value& value) {
       self->state.store[key] = std::move(value);
-      return ok_atom::value;
+      return atom::ok_v;
     },
-    [=](add_atom, const Key& key, const Value& value) -> caf::result<Value> {
+    [=](atom::add, const Key& key, const Value& value) -> caf::result<Value> {
       auto& v = self->state.store[key];
       auto old = v;
       v += value;
       return old;
     },
-    [=](delete_atom, const Key& key) {
+    [=](atom::erase, const Key& key) {
       self->state.store.erase(key);
-      return ok_atom::value;
+      return atom::ok_v;
     },
-    [=](get_atom, const Key& key) -> caf::result<optional<Value>> {
+    [=](atom::get, const Key& key) -> caf::result<optional<Value>> {
       auto i = self->state.store.find(key);
       if (i == self->state.store.end())
         return caf::none;
       return i->second;
     },
-    [=](status_atom) -> caf::config_value::dictionary {
+    [=](atom::status) -> caf::config_value::dictionary {
       caf::dictionary<caf::config_value> result;
       result.emplace("store-size", self->state.store.size());
       return result;
-    }
+    },
   };
 }
 

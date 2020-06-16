@@ -29,13 +29,13 @@ using namespace std::string_literals;
 
 namespace {
 
-caf::message foo(const command::invocation& invocation, caf::actor_system&) {
-  CHECK_EQUAL(invocation.name(), "foo");
+caf::message foo(const invocation& inv, caf::actor_system&) {
+  CHECK_EQUAL(inv.name(), "foo");
   return caf::make_message("foo");
 }
 
-caf::message bar(const command::invocation& invocation, caf::actor_system&) {
-  CHECK_EQUAL(invocation.name(), "bar");
+caf::message bar(const invocation& inv, caf::actor_system&) {
+  CHECK_EQUAL(inv.name(), "bar");
   return caf::make_message("bar");
 }
 
@@ -43,21 +43,21 @@ struct fixture {
   command root;
   caf::actor_system_config cfg;
   caf::actor_system sys{cfg};
-  command::invocation invocation;
+  invocation inv;
 
   fixture() : root{"vast", "", "", command::opts()} {
   }
 
   caf::variant<caf::none_t, std::string, caf::error>
   exec(std::string str, const command::factory& factory) {
-    invocation.options.clear();
+    inv.options.clear();
     std::vector<std::string> xs;
     caf::split(xs, str, ' ', caf::token_compress_on);
     auto expected_inv = parse(root, xs.begin(), xs.end());
     if (!expected_inv)
       return expected_inv.error();
-    invocation = std::move(*expected_inv);
-    auto result = run(invocation, sys, factory);
+    inv = std::move(*expected_inv);
+    auto result = run(inv, sys, factory);
     if (!result)
       return result.error();
     if (result->empty())
@@ -109,12 +109,12 @@ TEST(flat command invocation) {
   CHECK(is_error(exec("nop", factory)));
   CHECK(is_error(exec("bar --flag -v 42", factory)));
   CHECK(is_error(exec("--flag bar", factory)));
-  CHECK_EQUAL(get_or(invocation.options, "flag", false), false);
-  CHECK_EQUAL(get_or(invocation.options, "value", 0), 0);
+  CHECK_EQUAL(get_or(inv.options, "flag", false), false);
+  CHECK_EQUAL(get_or(inv.options, "value", 0), 0);
   CHECK_VARIANT_EQUAL(exec("bar", factory), "bar"s);
   CHECK_VARIANT_EQUAL(exec("foo --flag -v 42", factory), "foo"s);
-  CHECK_EQUAL(get_or(invocation.options, "flag", false), true);
-  CHECK_EQUAL(get_or(invocation.options, "value", 0), 42);
+  CHECK_EQUAL(get_or(inv.options, "flag", false), true);
+  CHECK_EQUAL(get_or(inv.options, "value", 0), 42);
 }
 
 TEST(nested command invocation) {
@@ -135,11 +135,11 @@ TEST(nested command invocation) {
   CHECK(is_error(exec("bar --flag -v 42", factory)));
   CHECK(is_error(exec("foo --flag -v 42 --other-flag", factory)));
   CHECK_VARIANT_EQUAL(exec("foo --flag -v 42", factory), "foo"s);
-  CHECK_EQUAL(get_or(invocation.options, "flag", false), true);
-  CHECK_EQUAL(get_or(invocation.options, "value", 0), 42);
+  CHECK_EQUAL(get_or(inv.options, "flag", false), true);
+  CHECK_EQUAL(get_or(inv.options, "value", 0), 42);
   CHECK_VARIANT_EQUAL(exec("foo --flag -v 42 bar", factory), "bar"s);
-  CHECK_EQUAL(get_or(invocation.options, "flag", false), true);
-  CHECK_EQUAL(get_or(invocation.options, "value", 0), 42);
+  CHECK_EQUAL(get_or(inv.options, "flag", false), true);
+  CHECK_EQUAL(get_or(inv.options, "value", 0), 42);
   // Setting the command function to nullptr prohibits calling it directly.
   factory.erase(fptr->full_name());
   CHECK(is_error(exec("foo --flag -v 42", factory)));
