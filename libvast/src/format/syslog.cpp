@@ -118,7 +118,11 @@ reader::read_impl(size_t max_events, size_t max_slice_size, consumer& f) {
     return lines_->next_timeout(remaining);
   };
   for (size_t produced = 0; produced < max_events; timeout = next_line()) {
-    if (timeout) {
+    // We must check not only for a timeout but also whether any events were
+    // produced to work around CAF's assumption that sources are always able to
+    // generate events. Once `caf::stream_source` can handle empty batches
+    // gracefully, the second check should be removed.
+    if (timeout && produced > 0) {
       VAST_DEBUG(this, "reached input timeout at line", lines_->line_number());
       return finish(f, ec::timeout);
     }
