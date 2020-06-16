@@ -59,6 +59,7 @@ caf::behavior terminator(caf::stateful_actor<terminator_state>* self) {
   });
   return {[=](const std::vector<caf::actor>& xs) {
     VAST_DEBUG(self, "got request to terminate", xs.size(), "actors");
+    VAST_ASSERT(!self->state.promise.pending());
     self->state.promise = self->make_response_promise();
     auto& remaining = self->state.remaining_actors;
     remaining.reserve(xs.size());
