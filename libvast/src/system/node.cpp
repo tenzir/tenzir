@@ -25,10 +25,8 @@
 #include "vast/logger.hpp"
 #include "vast/system/accountant.hpp"
 #include "vast/system/node.hpp"
-#include "vast/system/raft.hpp"
 #include "vast/system/spawn_archive.hpp"
 #include "vast/system/spawn_arguments.hpp"
-#include "vast/system/spawn_consensus.hpp"
 #include "vast/system/spawn_counter.hpp"
 #include "vast/system/spawn_explorer.hpp"
 #include "vast/system/spawn_exporter.hpp"
@@ -260,7 +258,6 @@ auto make_component_factory() {
     {"spawn importer", lift_component_factory<spawn_importer>()},
     {"spawn type-registry", lift_component_factory<spawn_type_registry>()},
     {"spawn index", lift_component_factory<spawn_index>()},
-    {"spawn consensus", lift_component_factory<spawn_consensus>()},
     {"spawn pivoter", lift_component_factory<spawn_pivoter>()},
     {"spawn profiler", lift_component_factory<spawn_profiler>()},
     {"spawn source pcap", lift_component_factory<spawn_pcap_source>()},
@@ -283,7 +280,6 @@ auto make_command_factory() {
     {"send", send_command},
     {"spawn accountant", node_state::spawn_command},
     {"spawn archive", node_state::spawn_command},
-    {"spawn consensus", node_state::spawn_command},
     {"spawn counter", node_state::spawn_command},
     {"spawn explorer", node_state::spawn_command},
     {"spawn exporter", node_state::spawn_command},

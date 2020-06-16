@@ -31,7 +31,6 @@
 #include "vast/system/import_command.hpp"
 #include "vast/system/infer_command.hpp"
 #include "vast/system/pivot_command.hpp"
-#include "vast/system/raft.hpp"
 #include "vast/system/remote_command.hpp"
 #include "vast/system/start_command.hpp"
 #include "vast/system/stop_command.hpp"
@@ -307,10 +306,6 @@ auto make_spawn_command() {
                                                     "request (deprecated)"));
   spawn->add_subcommand("index", "creates a new index", "",
                         add_index_opts(opts()));
-  spawn->add_subcommand("consensus", "creates a new consensus", "",
-                        opts().add<raft::server_id>("id,i", "the server ID of "
-                                                            "the consensus "
-                                                            "module"));
   spawn->add_subcommand("profiler", "creates a new profiler", "",
                         opts()
                           .add<bool>("cpu,c", "start the CPU profiler")
@@ -390,7 +385,6 @@ auto make_command_factory() {
     {"send", remote_command},
     {"spawn accountant", remote_command},
     {"spawn archive", remote_command},
-    {"spawn consensus", remote_command},
     {"spawn exporter", remote_command},
     {"spawn explorer", remote_command},
     {"spawn importer", remote_command},

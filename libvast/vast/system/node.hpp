@@ -18,7 +18,6 @@
 #include "vast/error.hpp"
 #include "vast/filesystem.hpp"
 #include "vast/system/archive.hpp"
-#include "vast/system/consensus.hpp"
 #include "vast/system/spawn_arguments.hpp"
 #include "vast/system/tracker.hpp"
 #include "vast/system/type_registry.hpp"
@@ -75,9 +74,6 @@ struct node_state {
 
   /// Points to the node itself.
   caf::event_based_actor* self;
-
-  /// Handle to the consensus module.
-  consensus_type consensus;
 
   /// Handle to the ARCHIVE.
   archive_type archive;

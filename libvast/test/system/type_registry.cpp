@@ -10,7 +10,6 @@
 #include "vast/default_table_slice_builder.hpp"
 #include "vast/detail/notifying_stream_manager.hpp"
 #include "vast/detail/spawn_container_source.hpp"
-#include "vast/system/data_store.hpp"
 #include "vast/system/exporter.hpp"
 #include "vast/system/importer.hpp"
 #include "vast/type.hpp"

@@ -144,17 +144,6 @@ TEST(relational_operators) {
   CHECK(!(d1 > d2));
 }
 
-TEST(addition) {
-  auto x = data{42};
-  auto y = data{1};
-  CHECK_EQUAL(x + y, data{43});
-  y = caf::none;
-  CHECK_EQUAL(x + y, x);
-  y = vector{"foo", 3.14};
-  CHECK_EQUAL(x + y, vector({42, "foo", 3.14}));
-  CHECK_EQUAL(y + x, vector({"foo", 3.14, 42}));
-}
-
 TEST(evaluation) {
   MESSAGE("in");
   data lhs{"foo"};
