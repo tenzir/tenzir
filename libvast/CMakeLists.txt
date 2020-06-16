@@ -134,6 +134,7 @@ set(libvast_sources
     src/system/start_command.cpp
     src/system/stop_command.cpp
     src/system/task.cpp
+    src/system/terminator.cpp
     src/system/tracker.cpp
     src/system/type_registry.cpp
     src/system/version_command.cpp
@@ -328,6 +329,7 @@ set(tests
     test/system/sink.cpp
     test/system/source.cpp
     test/system/task.cpp
+    test/system/terminator.cpp
     test/system/type_registry.cpp
     test/table_slice.cpp
     test/time.cpp

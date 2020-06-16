@@ -54,8 +54,6 @@ struct node_state {
 
   node_state(caf::event_based_actor* selfptr);
 
-  ~node_state();
-
   void init(std::string init_name, path init_dir);
 
   // -- member variables -------------------------------------------------------
