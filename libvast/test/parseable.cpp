@@ -506,19 +506,19 @@ TEST(unsigned hexadecimal integral) {
   auto p = ignore(-hex_prefix) >> hex64;
   unsigned x;
   CHECK(p("1234", x));
-  CHECK_EQUAL(x, 0x1234);
+  CHECK_EQUAL(x, 0x1234u);
   CHECK(p("13BFC3d1", x));
-  CHECK_EQUAL(x, 0x13BFC3d1);
+  CHECK_EQUAL(x, 0x13BFC3d1u);
   CHECK(p("FF", x));
-  CHECK_EQUAL(x, 0xFF);
+  CHECK_EQUAL(x, 0xFFu);
   CHECK(p("ff00", x));
-  CHECK_EQUAL(x, 0xff00);
+  CHECK_EQUAL(x, 0xff00u);
   CHECK(p("0X12ab", x));
-  CHECK_EQUAL(x, 0X12ab);
+  CHECK_EQUAL(x, 0X12abu);
   CHECK(p("0x3e7", x));
-  CHECK_EQUAL(x, 0x3e7);
+  CHECK_EQUAL(x, 0x3e7u);
   CHECK(p("0x0000aa", x));
-  CHECK_EQUAL(x, 0x0000aa);
+  CHECK_EQUAL(x, 0x0000aau);
 }
 
 TEST(signed integral with digit constraints) {

@@ -87,7 +87,7 @@ caf::message import_command(const invocation& inv, caf::actor_system& sys) {
   auto max_events = caf::get_if<size_t>(&options, "import.max-events");
   auto uri = caf::get_if<std::string>(&options, category + ".listen");
   auto file = caf::get_if<std::string>(&options, category + ".read");
-  auto uds = get_or(options, category + ".uds", false);
+  [[maybe_unused]] auto uds = get_or(options, category + ".uds", false);
   auto type = caf::get_if<std::string>(&options, category + ".type");
   auto slice_type = defaults::import::table_slice_type(sys, options);
   auto slice_size = get_or(options, "import.table-slice-size",
