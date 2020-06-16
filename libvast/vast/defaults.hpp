@@ -369,6 +369,9 @@ constexpr std::chrono::milliseconds signal_monitoring_interval
 constexpr std::chrono::seconds initial_request_timeout
   = std::chrono::seconds{10};
 
+/// Timeout to cleanly shutdown actors.
+constexpr std::chrono::seconds shutdown_timeout = std::chrono::hours{1};
+
 } // namespace system
 
 } // namespace vast::defaults

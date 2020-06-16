@@ -114,6 +114,7 @@ set(libvast_sources
     src/system/query_supervisor.cpp
     src/system/read_query.cpp
     src/system/remote_command.cpp
+    src/system/shutdown.cpp
     src/system/signal_monitor.cpp
     src/system/sink_command.cpp
     src/system/spawn_archive.cpp
@@ -329,8 +330,8 @@ set(tests
     test/system/sink.cpp
     test/system/source.cpp
     test/system/task.cpp
-    test/system/terminator.cpp
     test/system/type_registry.cpp
+    test/system/wait.cpp
     test/table_slice.cpp
     test/time.cpp
     test/type.cpp

@@ -25,6 +25,7 @@
 #include "vast/logger.hpp"
 #include "vast/system/accountant.hpp"
 #include "vast/system/node.hpp"
+#include "vast/system/shutdown.hpp"
 #include "vast/system/spawn_archive.hpp"
 #include "vast/system/spawn_arguments.hpp"
 #include "vast/system/spawn_counter.hpp"
@@ -39,7 +40,6 @@
 #include "vast/system/spawn_sink.hpp"
 #include "vast/system/spawn_source.hpp"
 #include "vast/system/spawn_type_registry.hpp"
-#include "vast/system/terminator.hpp"
 #include "vast/table_slice.hpp"
 
 #include <caf/function_view.hpp>
@@ -382,8 +382,7 @@ void node_state::init(std::string init_name, path init_dir) {
     if (auto acc = self->system().registry().get(atom::accountant_v))
       actors.push_back(caf::actor_cast<caf::actor>(acc));
     actors.push_back(caf::actor_cast<caf::actor>(tracker));
-    auto t = self->spawn(terminator<policy::sequential>);
-    shutdown(self, t, std::move(actors));
+    shutdown<policy::sequential>(self, std::move(actors));
     self->attach_functor([=](const caf::error&) {
       VAST_DEBUG(self, "terminated all dependent actors");
       // Clean up. This is important for detached actors, otherwise they

@@ -13,8 +13,9 @@
 
 #pragma once
 
+#include <caf/actor_cast.hpp>
 #include <caf/fwd.hpp>
-#include <caf/response_promise.hpp>
+#include <caf/stateful_actor.hpp>
 
 #include <vector>
 
@@ -27,14 +28,20 @@ struct parallel;
 
 namespace vast::system {
 
-struct terminator_state {
-  std::vector<caf::actor_addr> remaining_actors;
-  caf::response_promise promise;
-  static inline const char* name = "terminator";
-};
-
-/// Performs a parallel shutdown of a list of actors.
+/// Performs an asynchronous shutdown of an actor by first shutting down a set
+/// of dependent actors. The shutdown process runs either sequentially or in
+/// parallel. As soon as all dependent actors have terminated, the calling
+/// actor exits.
+/// @param self The actor to terminate.
+/// @param xs Owned actors by *self* that need to shutdown prior to *self*.
 template <class Policy>
-caf::behavior terminator(caf::stateful_actor<terminator_state>* self);
+void shutdown(caf::event_based_actor* self, std::vector<caf::actor> xs);
+
+template <class Policy, class... Ts>
+void shutdown(caf::typed_event_based_actor<Ts...>* self,
+              std::vector<caf::actor> xs) {
+  auto handle = caf::actor_cast<caf::event_based_actor*>(self);
+  shutdown<Policy>(handle, std::move(xs));
+}
 
 } // namespace vast::system

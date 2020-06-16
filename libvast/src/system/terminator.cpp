@@ -17,7 +17,9 @@
 #include "vast/fwd.hpp"
 #include "vast/logger.hpp"
 
+#include <caf/behavior.hpp>
 #include <caf/event_based_actor.hpp>
+#include <caf/response_promise.hpp>
 
 namespace vast::system {
 
@@ -96,35 +98,10 @@ caf::behavior terminator(caf::stateful_actor<terminator_state>* self) {
   }};
 }
 
-void shutdown(caf::event_based_actor* self, const caf::actor& terminator,
-              std::vector<caf::actor> xs) {
-  // TODO: we should add a really long timeout here and switch to
-  // exit_reason::kill as a fallback.
-  self->request(terminator, caf::infinite, std::move(xs))
-    .then(
-      [=](atom::done) {
-        VAST_DEBUG(self, "terminates after shutting down all dependents");
-        self->quit(caf::exit_reason::user_shutdown);
-      },
-      [=](const caf::error& err) {
-        VAST_ERROR(self, "failed to cleanly terminate dependent actors", err);
-        self->quit(err);
-      });
-  // Ignore duplicate EXIT messages except for hard kills.
-  self->set_exit_handler([=](const caf::exit_msg& msg) {
-    if (msg.reason == caf::exit_reason::kill) {
-      VAST_DEBUG(self, "received hard kill and terminates immediately");
-      self->quit(msg.reason);
-    } else {
-      VAST_DEBUG(self, "ignores duplicate EXIT message");
-    }
-  });
-}
+template caf::behavior
+terminator<policy::sequential>(caf::stateful_actor<terminator_state>*);
 
 template caf::behavior
-terminator<policy::parallel>(caf::stateful_actor<terminator_state>* self);
-
-template caf::behavior
-terminator<policy::sequential>(caf::stateful_actor<terminator_state>* self);
+terminator<policy::parallel>(caf::stateful_actor<terminator_state>*);
 
 } // namespace vast::system

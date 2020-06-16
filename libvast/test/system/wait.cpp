@@ -11,11 +11,12 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#include "vast/system/terminator.hpp"
+#include "vast/system/wait.hpp"
 
-#include "vast/system/atoms.hpp"
+#include "vast/fwd.hpp"
 
-#include <caf/all.hpp>
+#include <caf/behavior.hpp>
+#include <caf/event_based_actor.hpp>
 
 #define SUITE terminator
 #include "vast/test/fixtures/actor_system.hpp"
@@ -27,22 +28,13 @@ using namespace vast::system;
 namespace {
 
 caf::behavior worker(caf::event_based_actor* self) {
-  return [=](done_atom) { self->quit(); };
+  return [=](atom::done) { self->quit(); };
 }
 
 struct terminator_fixture : fixtures::actor_system {
   terminator_fixture() {
     victims = std::vector<caf::actor>{sys.spawn(worker), sys.spawn(worker),
                                       sys.spawn(worker)};
-  }
-
-  void run(const caf::actor& aut) {
-    self->request(aut, caf::infinite, victims)
-      .receive(
-        [=](atom::done) { MESSAGE("terminated all actors successfully"); },
-        [=](const caf::error&) {
-          FAIL("could not terminate actors properly");
-        });
   }
 
   std::vector<caf::actor> victims;
@@ -53,11 +45,11 @@ struct terminator_fixture : fixtures::actor_system {
 FIXTURE_SCOPE(terminator_tests, terminator_fixture)
 
 TEST(parallel shutdown) {
-  run(sys.spawn(terminator<policy::parallel>));
+  wait<policy::parallel>(self, victims);
 }
 
 TEST(sequential shutdown) {
-  run(sys.spawn(terminator<policy::sequential>));
+  wait<policy::sequential>(self, victims);
 }
 
 FIXTURE_SCOPE_END()

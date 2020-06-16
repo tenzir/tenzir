@@ -16,6 +16,7 @@
 #include "vast/detail/assert.hpp"
 #include "vast/detail/string.hpp"
 #include "vast/error.hpp"
+#include "vast/fwd.hpp"
 #include "vast/logger.hpp"
 #include "vast/system/archive.hpp"
 #include "vast/system/shutdown.hpp"
@@ -119,13 +120,11 @@ tracker(tracker_type::stateful_pointer<tracker_state> self, std::string node) {
         actors.push_back(comp.actor);
       }
     }
-    // Avoid no longer needed subscription to DOWN messages.
+    // Avoid extra communication by cancelling no longer needed subscription to
+    // DOWN messages.
     self->set_down_handler({});
     local.clear();
-    // Perform asynchronous shutdown.
-    auto t = self->spawn(terminator<policy::sequential>);
-    shutdown(caf::actor_cast<caf::event_based_actor*>(self), t,
-             std::move(actors));
+    shutdown<policy::sequential>(self, std::move(actors));
   });
   return {
     [=](atom::put, const std::string& type, const actor& component,
