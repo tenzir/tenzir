@@ -109,6 +109,15 @@ void shutdown(caf::event_based_actor* self, const caf::actor& terminator,
         VAST_ERROR(self, "failed to cleanly terminate dependent actors", err);
         self->quit(err);
       });
+  // Ignore duplicate EXIT messages except for hard kills.
+  self->set_exit_handler([=](const caf::exit_msg& msg) {
+    if (msg.reason == caf::exit_reason::kill) {
+      VAST_DEBUG(self, "received hard kill and terminates immediately");
+      self->quit(msg.reason);
+    } else {
+      VAST_DEBUG(self, "ignores duplicate EXIT message");
+    }
+  });
 }
 
 template caf::behavior

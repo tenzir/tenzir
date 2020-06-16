@@ -39,7 +39,7 @@ struct terminator_fixture : fixtures::actor_system {
   void run(const caf::actor& aut) {
     self->request(aut, caf::infinite, victims)
       .receive(
-        [=](done_atom) { MESSAGE("terminated all actors successfully"); },
+        [=](atom::done) { MESSAGE("terminated all actors successfully"); },
         [=](const caf::error&) {
           FAIL("could not terminate actors properly");
         });
