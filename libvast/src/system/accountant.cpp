@@ -46,7 +46,7 @@ void init(accountant_actor* self) {
   self->delayed_send(self, overview_delay, telemetry_atom::value);
 #endif
   st.slice_size = get_or(self->system().config(), "system.table-slice-size",
-                         defaults::system::table_slice_size);
+                         defaults::import::table_slice_size);
 }
 
 void finish_slice(accountant_actor* self) {

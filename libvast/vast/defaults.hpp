@@ -43,6 +43,9 @@ namespace import {
 caf::atom_value table_slice_type(const caf::actor_system& sys,
                                  const caf::settings& options);
 
+/// Maximum size for sources that generate table slices.
+constexpr size_t table_slice_size = 100;
+
 /// Maximum number of results.
 constexpr size_t max_events = 0;
 
@@ -332,9 +335,6 @@ constexpr caf::atom_value table_slice_type = caf::atom("arrow");
 constexpr caf::atom_value table_slice_type = caf::atom("default");
 
 #endif // VAST_HAVE_ARROW
-
-/// Maximum size for sources that generate table slices.
-constexpr size_t table_slice_size = 100;
 
 /// Maximum number of events per INDEX partition.
 constexpr size_t max_partition_size = 1'048'576; // 1_Mi

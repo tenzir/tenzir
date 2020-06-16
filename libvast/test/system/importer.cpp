@@ -27,7 +27,6 @@
 #include "vast/event.hpp"
 #include "vast/format/zeek.hpp"
 #include "vast/system/archive.hpp"
-#include "vast/system/data_store.hpp"
 #include "vast/system/source.hpp"
 #include "vast/system/type_registry.hpp"
 #include "vast/table_slice.hpp"
@@ -71,12 +70,11 @@ template <class Base>
 struct importer_fixture : Base {
   importer_fixture(size_t table_slice_size) : slice_size(table_slice_size) {
     using vast::system::archive_type;
-    MESSAGE("spawn importer + store");
+    MESSAGE("spawn importer");
     this->directory /= "importer";
-    store = this->self->spawn(system::data_store<std::string, data>);
-    importer = this->self->spawn(system::importer, this->directory, slice_size,
-                                 archive_type{}, store, caf::actor{},
-                                 vast::system::type_registry_type{});
+    importer
+      = this->self->spawn(system::importer, this->directory, archive_type{},
+                          caf::actor{}, vast::system::type_registry_type{});
   }
 
   ~importer_fixture() {
@@ -127,7 +125,6 @@ struct importer_fixture : Base {
 
   size_t slice_size;
   actor importer;
-  system::key_value_store_type<std::string, data> store;
 };
 
 } // namespace <anonymous>
@@ -269,8 +266,8 @@ using nondeterministic_fixture_base
 
 struct nondeterministic_fixture : nondeterministic_fixture_base {
   nondeterministic_fixture()
-    : nondeterministic_fixture_base(vast::defaults::system::table_slice_size) {
-      // nop
+    : nondeterministic_fixture_base(vast::defaults::import::table_slice_size) {
+    // nop
   }
 
   void fetch_ok() override {

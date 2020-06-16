@@ -81,9 +81,9 @@ static std::vector<event> extract(Reader&& reader) {
   auto add_slice = [&](table_slice_ptr ptr) {
     slices.emplace_back(std::move(ptr));
   };
-  auto [err, produced] = reader.read(std::numeric_limits<size_t>::max(),
-                                     defaults::system::table_slice_size,
-                                     add_slice);
+  auto [err, produced]
+    = reader.read(std::numeric_limits<size_t>::max(),
+                  defaults::import::table_slice_size, add_slice);
   if (err != caf::none && err != ec::end_of_input)
     FAIL("reader returned an error: " << to_string(err));
   std::vector<event> result;

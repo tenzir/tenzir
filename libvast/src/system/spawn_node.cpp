@@ -56,8 +56,7 @@ spawn_node(caf::scoped_actor& self, const caf::settings& opts) {
                [&](caf::error& e) { result = std::move(e); });
     return result;
   };
-  std::list components
-    = {"type-registry", "consensus", "archive", "index", "importer"};
+  std::list components = {"type-registry", "archive", "index", "importer"};
   if (accounting)
     components.push_front("accountant");
   for (auto& c : components) {
