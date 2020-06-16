@@ -99,9 +99,7 @@ tracker(tracker_type::stateful_pointer<tracker_state> self, std::string node) {
   });
   self->set_exit_handler([=](const exit_msg&) {
     // We shut down the components in the order in which data flows so that
-    // downstream components can still process in-flight data. Because the
-    // terminator operates with a stack of components, we specify them in
-    // reverse order.
+    // downstream components can still process in-flight data.
     auto actors = std::vector<caf::actor>{};
     auto components = std::vector<std::string>{"source", "importer", "archive",
                                                "index", "exporter"};
