@@ -198,7 +198,9 @@ struct fixture : fixtures::deterministic_actor_system {
   read(std::unique_ptr<std::istream> input, size_t slice_size,
        size_t num_events, bool expect_eof, bool expect_timeout) {
     using reader_type = format::zeek::reader;
-    reader_type reader{defaults::system::table_slice_type, caf::settings{},
+    auto settings = caf::settings{};
+    caf::put(settings, "import.read-timeout", "200ms");
+    reader_type reader{defaults::system::table_slice_type, std::move(settings),
                        std::move(input)};
     std::vector<table_slice_ptr> slices;
     auto add_slice = [&](table_slice_ptr ptr) {
