@@ -153,8 +153,6 @@ public:
     // nop
   }
 
-  data& operator+=(const data& rhs);
-
   friend bool operator==(const data& lhs, const data& rhs);
   friend bool operator<(const data& lhs, const data& rhs);
 
