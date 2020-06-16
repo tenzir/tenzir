@@ -13,14 +13,13 @@
 
 #pragma once
 
-#include <map>
+#include "vast/detail/flat_set.hpp"
+#include "vast/fwd.hpp"
 
 #include <caf/behavior.hpp>
 #include <caf/stateful_actor.hpp>
 
-#include "vast/detail/flat_set.hpp"
-
-#include "vast/system/atoms.hpp"
+#include <map>
 
 namespace vast::system {
 
@@ -44,7 +43,7 @@ caf::behavior task_impl(caf::stateful_actor<task_state>* self,
 /// Subscribers receive progress updates with each work item that completes.
 template <class... Ts>
 caf::behavior task(caf::stateful_actor<task_state>* self, Ts... xs) {
-  auto done_msg = caf::make_message(done_atom::value, std::move(xs)...);
+  auto done_msg = caf::make_message(atom::done::value, std::move(xs)...);
   return task_impl(self, std::move(done_msg));
 }
 

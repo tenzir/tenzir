@@ -73,9 +73,8 @@ auto inspect(Inspector& f, replicated_store_state<Key, Value>& state) {
 template <class Key, class Value>
 using replicated_store_type =
   typename key_value_store_type<Key, Value>::template extend<
-    caf::replies_to<snapshot_atom>::template with<ok_atom>,
-    caf::reacts_to<raft::index_type, caf::message>
-  >;
+    caf::replies_to<atom::snapshot>::template with<atom::ok>,
+    caf::reacts_to<raft::index_type, caf::message>>;
 
 // FIXME: Make it possible to deserialize caf::actor_addr. This semantically
 // equivalent structure is a workaround for the lack of persistence of
@@ -126,21 +125,21 @@ auto apply(Actor* self, caf::message& operation) {
   using key_type = typename decltype(self->state.store)::key_type;
   using value_type = typename decltype(self->state.store)::mapped_type;
   return *operation.apply({
-    [=](put_atom, const key_type& key, value_type& value) {
+    [=](atom::put, const key_type& key, value_type& value) {
       VAST_DEBUG(self, "applies PUT");
       self->state.store[key] = std::move(value);
-      return ok_atom::value;
+      return atom::ok::value;
     },
-    [=](add_atom, const key_type& key, const value_type& value) {
+    [=](atom::add, const key_type& key, const value_type& value) {
       VAST_DEBUG(self, "applies ADD");
       auto old = self->state.store[key];
       self->state.store[key] += value;
       return old;
     },
-    [=](delete_atom, const key_type& key) {
+    [=](atom::erase, const key_type& key) {
       VAST_DEBUG(self, "applies DELETE");
       self->state.store.erase(key);
-      return ok_atom::value;
+      return atom::ok::value;
     },
   });
 }
@@ -149,30 +148,29 @@ auto apply(Actor* self, caf::message& operation) {
 template <class Actor>
 void update(Actor* self, caf::message& command) {
   using namespace vast::system;
-  command.apply({
-    [=](const actor_identity& identity, uint64_t id, caf::message operation) {
-      if (identity != self->address()) {
-        VAST_IGNORE_UNUSED(id);
-        VAST_DEBUG(self, "got remote operation", id);
-        apply(self, operation);
-      } else {
-        VAST_DEBUG(self, "got local operation", id);
-        auto id = command.get_as<uint64_t>(1);
-        auto i = self->state.requests.find(id);
-        if (i != self->state.requests.end()) {
-          i->second.deliver(apply(self, operation));
-          self->state.requests.erase(i);
-        }
-      }
-    },
-    [=](snapshot_atom, raft::index_type, const std::vector<char>& data) {
-      VAST_DEBUG(self, "applies snapshot");
-      caf::binary_deserializer bd{self->system(), data};
-      bd >> self->state;
-      self->state.last_snapshot_size = data.size();
-      return ok_atom::value;
-    }
-  });
+  command.apply(
+    {[=](const actor_identity& identity, uint64_t id, caf::message operation) {
+       if (identity != self->address()) {
+         VAST_IGNORE_UNUSED(id);
+         VAST_DEBUG(self, "got remote operation", id);
+         apply(self, operation);
+       } else {
+         VAST_DEBUG(self, "got local operation", id);
+         auto id = command.get_as<uint64_t>(1);
+         auto i = self->state.requests.find(id);
+         if (i != self->state.requests.end()) {
+           i->second.deliver(apply(self, operation));
+           self->state.requests.erase(i);
+         }
+       }
+     },
+     [=](atom::snapshot, raft::index_type, const std::vector<char>& data) {
+       VAST_DEBUG(self, "applies snapshot");
+       caf::binary_deserializer bd{self->system(), data};
+       bd >> self->state;
+       self->state.last_snapshot_size = data.size();
+       return atom::ok::value;
+     }});
 }
 
 // Replicates the current message through the consensus module.
@@ -184,15 +182,12 @@ void replicate(Actor* self, const caf::actor& consensus,
   auto id = ++self->state.request_id;
   self->state.requests.emplace(id, rp);
   auto msg = make_message(actor_identity{self->address()}, id, operation);
-  self->request(consensus, consensus_timeout, replicate_atom::value, msg).then(
-    [=](ok_atom) {
-      VAST_DEBUG(self, "submitted operation", id);
-    },
-    [=](error& e) mutable {
-      rp.deliver(std::move(e));
-      self->state.requests.erase(id);
-    }
-  );
+  self->request(consensus, consensus_timeout, atom::replicate::value, msg)
+    .then([=](atom::ok) { VAST_DEBUG(self, "submitted operation", id); },
+          [=](error& e) mutable {
+            rp.deliver(std::move(e));
+            self->state.requests.erase(id);
+          });
 }
 
 } // namespace vast::detail
@@ -219,7 +214,7 @@ replicated_store(
   caf::actor consensus) {
   using namespace caf;
   self->monitor(consensus);
-  self->anon_send(consensus, subscribe_atom::value, actor_cast<actor>(self));
+  self->anon_send(consensus, atom::subscribe::value, actor_cast<actor>(self));
   // Takes a snapshot at the currently applied index.
   auto make_snapshot = [=] {
     VAST_ASSERT(self->state.last_applied > 0);
@@ -249,28 +244,28 @@ replicated_store(
   );
   return {
     // Linearizability: all writes go through the consensus module.
-    [=](put_atom, const Key&, const Value&) {
+    [=](atom::put, const Key&, const Value&) {
       VAST_DEBUG(self, "replicates PUT");
-      auto rp = self->template make_response_promise<ok_atom>();
+      auto rp = self->template make_response_promise<atom::ok>();
       detail::replicate(self, consensus, rp);
       return rp;
     },
-    [=](add_atom, const Key&, const Value&) {
+    [=](atom::add, const Key&, const Value&) {
       VAST_DEBUG(self, "replicates ADD");
       auto rp = self->template make_response_promise<Value>();
       detail::replicate(self, consensus, rp);
       return rp;
     },
-    [=](delete_atom, const Key&) {
+    [=](atom::erase, const Key&) {
       VAST_DEBUG(self, "replicates DELETE");
-      auto rp = self->template make_response_promise<ok_atom>();
+      auto rp = self->template make_response_promise<atom::ok>();
       detail::replicate(self, consensus, rp);
       return rp;
     },
     // Sequential consistency: all reads may be stale since we're not going
     // through the consensus module. (For linearizability, we would have to go
     // through the leader.)
-    [=](get_atom, const Key& key) -> result<optional<Value>> {
+    [=](atom::get, const Key& key) -> result<optional<Value>> {
       auto i = self->state.store.find(key);
       if (i == self->state.store.end())
         return caf::none;
@@ -286,43 +281,42 @@ replicated_store(
         return;
       VAST_DEBUG(self, "gathers statistics");
       self->state.last_stats_update = now;
-      self->request(consensus, consensus_timeout, statistics_atom::value).then(
-        [=](const raft::statistics& stats) {
+      self->request(consensus, consensus_timeout, atom::statistics::value)
+        .then([=](const raft::statistics& stats) {
           using namespace vast::binary_byte_literals;
           self->state.stats = stats;
           auto low = static_cast<uint64_t>(64_MiB);
           auto high = self->state.last_snapshot_size * 4;
           if (stats.log_bytes > std::max(low, high))
-            self->anon_send(self, snapshot_atom::value);
-        }
-      );
+            self->anon_send(self, atom::snapshot::value);
+        });
     },
-    [=](snapshot_atom) {
+    [=](atom::snapshot) {
       VAST_DEBUG(self, "takes snapshot at index", self->state.last_applied);
-      auto rp = self->template make_response_promise<ok_atom>();
+      auto rp = self->template make_response_promise<atom::ok>();
       auto snapshot = make_snapshot();
       auto snapshot_size = snapshot.size();
-      self->request(consensus, consensus_timeout, snapshot_atom::value,
-                    self->state.last_applied, std::move(snapshot)).then(
-        [=](raft::index_type) mutable {
-          VAST_DEBUG(self, "successfully snapshotted state");
-          self->state.last_snapshot_size = snapshot_size;
-          rp.deliver(ok_atom::value);
-        },
-        [=](error& e) mutable {
-          VAST_ERROR(self, "failed to snapshot:", self->system().render(e));
-          rp.deliver(std::move(e));
-        }
-      );
+      self
+        ->request(consensus, consensus_timeout, atom::snapshot::value,
+                  self->state.last_applied, std::move(snapshot))
+        .then(
+          [=](raft::index_type) mutable {
+            VAST_DEBUG(self, "successfully snapshotted state");
+            self->state.last_snapshot_size = snapshot_size;
+            rp.deliver(atom::ok::value);
+          },
+          [=](error& e) mutable {
+            VAST_ERROR(self, "failed to snapshot:", self->system().render(e));
+            rp.deliver(std::move(e));
+          });
       return rp;
     },
-    [=](status_atom) {
+    [=](atom::status) {
       auto result = self->state.status();
       // General state such as open streams.
       detail::fill_status_map(result, self);
       return result;
-    }
-  };
+    }};
 }
 
 } // namespace vast::system

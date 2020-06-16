@@ -13,12 +13,11 @@
 
 #include "fixtures/actor_system.hpp"
 
-#include <caf/io/middleman.hpp>
-
-#include "vast/system/atoms.hpp"
+#include "vast/detail/assert.hpp"
+#include "vast/fwd.hpp"
 #include "vast/system/profiler.hpp"
 
-#include "vast/detail/assert.hpp"
+#include <caf/io/middleman.hpp>
 
 namespace fixtures {
 
@@ -46,24 +45,20 @@ actor_system::actor_system() : sys(config), self(sys, true) {
 
 actor_system::~actor_system() {
   // Stop profiler.
-  using vast::system::stop_atom;
-  using vast::system::heap_atom;
-  using vast::system::cpu_atom;
+  namespace atom = vast::atom;
   if (profiler) {
-    self->send(profiler, stop_atom::value, cpu_atom::value);
-    self->send(profiler, stop_atom::value, heap_atom::value);
+    self->send(profiler, atom::stop::value, atom::cpu::value);
+    self->send(profiler, atom::stop::value, atom::heap::value);
   }
 }
 
 void actor_system::enable_profiler() {
   VAST_ASSERT(!profiler);
-  using vast::system::start_atom;
-  using vast::system::heap_atom;
-  using vast::system::cpu_atom;
+  namespace atom = vast::atom;
   profiler = self->spawn(vast::system::profiler, directory / "profiler",
                          std::chrono::seconds(1));
-  self->send(profiler, start_atom::value, cpu_atom::value);
-  self->send(profiler, start_atom::value, heap_atom::value);
+  self->send(profiler, atom::start::value, atom::cpu::value);
+  self->send(profiler, atom::start::value, atom::heap::value);
 }
 
 deterministic_actor_system::deterministic_actor_system() {

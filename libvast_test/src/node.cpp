@@ -47,7 +47,7 @@ void node::ingest(const std::string& type) {
   // Get the importer from the node.
   MESSAGE("getting importer from node");
   caf::actor importer;
-  auto rh = self->request(test_node, caf::infinite, caf::get_atom::value);
+  auto rh = self->request(test_node, caf::infinite, atom::get::value);
   run();
   rh.receive(
     [&](const std::string& id, system::registry& reg) {
@@ -80,9 +80,9 @@ std::vector<event> node::query(std::string expr) {
   MESSAGE("spawn an exporter and register ourselves as sink");
   auto exp = spawn_component("exporter", std::move(expr));
   self->monitor(exp);
-  self->send(exp, system::sink_atom::value, self);
-  self->send(exp, system::run_atom::value);
-  self->send(exp, system::extract_atom::value);
+  self->send(exp, atom::sink::value, self);
+  self->send(exp, atom::run::value);
+  self->send(exp, atom::extract::value);
   run();
   MESSAGE("fetch results from mailbox");
   std::vector<event> result;

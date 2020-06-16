@@ -20,7 +20,6 @@
 namespace vast::system {
 
 /// Infers a VAST schema from given input.
-caf::message
-infer_command(const command::invocation& invocation, caf::actor_system& sys);
+caf::message infer_command(const invocation& inv, caf::actor_system& sys);
 
 } // namespace vast::system

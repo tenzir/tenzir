@@ -28,7 +28,6 @@ set(libvast_sources
     src/default_table_slice.cpp
     src/default_table_slice_builder.cpp
     src/defaults.cpp
-    src/detail/add_error_categories.cpp
     src/detail/add_message_types.cpp
     src/detail/adjust_resource_consumption.cpp
     src/detail/base64.cpp

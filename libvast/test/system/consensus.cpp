@@ -11,12 +11,12 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#include <caf/all.hpp>
-
-#include "vast/system/atoms.hpp"
-#include "vast/system/raft.hpp"
+#include "vast/fwd.hpp"
 #include "vast/system/key_value_store.hpp"
+#include "vast/system/raft.hpp"
 #include "vast/system/timeouts.hpp"
+
+#include <caf/all.hpp>
 
 #define SUITE consensus
 #include "vast/test/test.hpp"
@@ -32,28 +32,24 @@ FIXTURE_SCOPE(leader_tests, fixtures::actor_system)
 TEST_DISABLED(single leader) {
   directory /= "server";
   auto server = self->spawn(raft::consensus, directory);
-  self->send(server, id_atom::value, raft::server_id{1});
-  self->send(server, run_atom::value);
-  self->send(server, subscribe_atom::value, self);
+  self->send(server, atom::id::value, raft::server_id{1});
+  self->send(server, atom::run::value);
+  self->send(server, atom::subscribe::value, self);
   MESSAGE("sleeping until leader got elected");
   std::this_thread::sleep_for(raft::election_timeout * 2);
   MESSAGE("send two logs to leader");
-  auto cmd = make_message(put_atom::value, "foo", 42);
-  self->request(server, consensus_timeout, replicate_atom::value, cmd).receive(
-    [](ok_atom) { /* nop */ },
-    error_handler()
-  );
+  auto cmd = make_message(atom::put::value, "foo", 42);
+  self->request(server, consensus_timeout, atom::replicate::value, cmd)
+    .receive([](atom::ok) { /* nop */ }, error_handler());
   self->receive(
     [&](raft::index_type i, message) {
       CHECK_EQUAL(i, 2u);
     },
     error_handler()
   );
-  cmd = make_message(put_atom::value, "bar", 7);
-  self->request(server, consensus_timeout, replicate_atom::value, cmd).receive(
-    [](ok_atom) { /* nop */ },
-    error_handler()
-  );
+  cmd = make_message(atom::put::value, "bar", 7);
+  self->request(server, consensus_timeout, atom::replicate::value, cmd)
+    .receive([](atom::ok) { /* nop */ }, error_handler());
   self->receive(
     [&](raft::index_type i, message) {
       CHECK_EQUAL(i, 3u);
@@ -63,20 +59,21 @@ TEST_DISABLED(single leader) {
   MESSAGE("snapshotting");
   auto last_applied = raft::index_type{3};
   auto state_machine = std::vector<char>(1024);
-  self->request(server, consensus_timeout, snapshot_atom::value, last_applied,
-                state_machine).receive(
-    [&](raft::index_type last_included_index) {
-      CHECK_EQUAL(last_included_index, last_applied);
-    },
-    error_handler()
-  );
+  self
+    ->request(server, consensus_timeout, atom::snapshot::value, last_applied,
+              state_machine)
+    .receive(
+      [&](raft::index_type last_included_index) {
+        CHECK_EQUAL(last_included_index, last_applied);
+      },
+      error_handler());
   MESSAGE("shutting down server");
   self->send_exit(server, exit_reason::user_shutdown);
   self->wait_for(server);
   MESSAGE("respawning");
   server = self->spawn(raft::consensus, directory);
-  self->send(server, run_atom::value);
-  self->send(server, subscribe_atom::value, self);
+  self->send(server, atom::run::value);
+  self->send(server, atom::subscribe::value, self);
   MESSAGE("receiving old state after startup");
   self->receive(
     [&](raft::index_type i, const message& msg) {
@@ -86,11 +83,9 @@ TEST_DISABLED(single leader) {
     error_handler()
   );
   MESSAGE("sending another command");
-  cmd = make_message(put_atom::value, "baz", 49);
-  self->request(server, consensus_timeout, replicate_atom::value, cmd).receive(
-    [](ok_atom) { /* nop */ },
-    error_handler()
-  );
+  cmd = make_message(atom::put::value, "baz", 49);
+  self->request(server, consensus_timeout, atom::replicate::value, cmd)
+    .receive([](atom::ok) { /* nop */ }, error_handler());
   self->receive(
     [&](raft::index_type i, message) {
       CHECK_EQUAL(i, 5u);
@@ -125,13 +120,14 @@ TEST_DISABLED(manual snapshotting) {
   std::this_thread::sleep_for(raft::heartbeat_period * 2);
   MESSAGE("performing a manual snapshot at server 1");
   auto state_machine = std::vector<char>(512);
-  self->request(server1, consensus_timeout, snapshot_atom::value,
-                raft::index_type{3}, state_machine).receive(
-    [&](raft::index_type last_included_index) {
-      CHECK_EQUAL(last_included_index, 3u);
-    },
-    error_handler()
-  );
+  self
+    ->request(server1, consensus_timeout, atom::snapshot::value,
+              raft::index_type{3}, state_machine)
+    .receive(
+      [&](raft::index_type last_included_index) {
+        CHECK_EQUAL(last_included_index, 3u);
+      },
+      error_handler());
   MESSAGE("restarting consensus quorum");
   shutdown();
   launch();

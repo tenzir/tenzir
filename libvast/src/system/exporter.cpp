@@ -24,9 +24,9 @@
 #include "vast/detail/narrow.hpp"
 #include "vast/event.hpp"
 #include "vast/expression_visitors.hpp"
+#include "vast/fwd.hpp"
 #include "vast/logger.hpp"
 #include "vast/system/archive.hpp"
-#include "vast/system/atoms.hpp"
 #include "vast/system/query_status.hpp"
 #include "vast/table_slice.hpp"
 #include "vast/to_events.hpp"
@@ -160,9 +160,9 @@ caf::settings exporter_state::status() {
 
 behavior exporter(stateful_actor<exporter_state>* self, expression expr,
                   query_options options) {
-  if (auto a = self->system().registry().get(accountant_atom::value)) {
+  if (auto a = self->system().registry().get(atom::accountant::value)) {
     self->state.accountant = actor_cast<accountant_type>(a);
-    self->send(self->state.accountant, announce_atom::value, self->name());
+    self->send(self->state.accountant, atom::announce::value, self->name());
   }
   self->state.options = options;
   self->state.expr = std::move(expr);
@@ -266,7 +266,7 @@ behavior exporter(stateful_actor<exporter_state>* self, expression expr,
       // Use the same handler as we use for streamed slices.
       handle_batch(std::move(slice));
     },
-    [=](done_atom) -> caf::result<void> {
+    [=](atom::done) -> caf::result<void> {
       auto& st = self->state;
       auto& qs = st.query;
       // Ignore this message until we got all lookup results from the ARCHIVE.
@@ -292,7 +292,7 @@ behavior exporter(stateful_actor<exporter_state>* self, expression expr,
       }
       return caf::unit;
     },
-    [=](done_atom, [[maybe_unused]] const caf::error& err) {
+    [=](atom::done, [[maybe_unused]] const caf::error& err) {
       auto& st = self->state;
       if (self->current_sender() != st.archive) {
         VAST_WARNING(self, "received ('done', error) from unexpected actor");
@@ -306,7 +306,7 @@ behavior exporter(stateful_actor<exporter_state>* self, expression expr,
       // hits first. Hence, we can never be finished here.
       VAST_ASSERT(!finished(qs));
     },
-    [=](extract_atom) {
+    [=](atom::extract) {
       auto& qs = self->state.query;
       // Sanity check.
       VAST_DEBUG(self, "got request to extract all events");
@@ -319,7 +319,7 @@ behavior exporter(stateful_actor<exporter_state>* self, expression expr,
       ship_results(self);
       request_more_hits(self);
     },
-    [=](extract_atom, uint64_t requested_results) {
+    [=](atom::extract, uint64_t requested_results) {
       auto& qs = self->state.query;
       // Sanity checks.
       if (requested_results == 0) {
@@ -340,7 +340,7 @@ behavior exporter(stateful_actor<exporter_state>* self, expression expr,
       ship_results(self);
       request_more_hits(self);
     },
-    [=](status_atom) {
+    [=](atom::status) {
       auto result = self->state.status();
       detail::fill_status_map(result, self);
       return result;
@@ -352,26 +352,26 @@ behavior exporter(stateful_actor<exporter_state>* self, expression expr,
         self->monitor(archive);
       // Register self at the archive
       if (has_historical_option(self->state.options))
-        self->send(archive, exporter_atom::value, self);
+        self->send(archive, atom::exporter::value, self);
     },
-    [=](index_atom, const actor& index) {
+    [=](atom::index, const actor& index) {
       VAST_DEBUG(self, "registers index", index);
       self->state.index = index;
       if (has_continuous_option(self->state.options))
         self->monitor(index);
     },
-    [=](sink_atom, const actor& sink) {
+    [=](atom::sink, const actor& sink) {
       VAST_DEBUG(self, "registers sink", sink);
       self->state.sink = sink;
       self->monitor(self->state.sink);
     },
-    [=](importer_atom, const std::vector<actor>& importers) {
+    [=](atom::importer, const std::vector<actor>& importers) {
       // Register for events at running IMPORTERs.
       if (has_continuous_option(self->state.options))
         for (auto& x : importers)
-          self->send(x, exporter_atom::value, self);
+          self->send(x, atom::exporter::value, self);
     },
-    [=](run_atom) {
+    [=](atom::run) {
       VAST_INFO(self, "executes query:", to_string(self->state.expr));
       self->state.start = system_clock::now();
       if (!has_historical_option(self->state.options))
@@ -393,7 +393,7 @@ behavior exporter(stateful_actor<exporter_state>* self, expression expr,
         }
       );
     },
-    [=](statistics_atom, const actor& statistics_subscriber) {
+    [=](atom::statistics, const actor& statistics_subscriber) {
       VAST_DEBUG(self, "registers statistics subscriber",
                  statistics_subscriber);
       self->state.statistics_subscriber = statistics_subscriber;

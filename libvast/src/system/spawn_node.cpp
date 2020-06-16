@@ -49,9 +49,8 @@ spawn_node(caf::scoped_actor& self, const caf::settings& opts) {
   scope_linked_actor node{self->spawn(system::node, id, abs_dir)};
   auto spawn_component = [&](std::string name) {
     caf::error result;
-    auto invocation
-      = command::invocation{opts, "spawn "s + std::move(name), {}};
-    self->request(node.get(), caf::infinite, std::move(invocation))
+    auto inv = invocation{opts, "spawn "s + std::move(name), {}};
+    self->request(node.get(), caf::infinite, std::move(inv))
       .receive([](const caf::actor&) { /* nop */ },
                [&](caf::error& e) { result = std::move(e); });
     return result;

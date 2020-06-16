@@ -103,11 +103,11 @@ caf::error index_state::init(const path& dir, size_t max_partition_size,
   this->max_partition_size = max_partition_size;
   this->lru_partitions.size(in_mem_partitions);
   this->taste_partitions = taste_partitions;
-  if (auto a = self->system().registry().get(accountant_atom::value)) {
+  if (auto a = self->system().registry().get(atom::accountant::value)) {
     namespace defs = defaults::system;
     this->accountant = caf::actor_cast<accountant_type>(a);
-    self->send(this->accountant, announce_atom::value, "index");
-    self->delayed_send(self, defs::telemetry_rate, telemetry_atom::value);
+    self->send(this->accountant, atom::announce::value, "index");
+    self->delayed_send(self, defs::telemetry_rate, atom::telemetry::value);
   }
   // Read persistent state.
   if (auto err = load_from_disk())
@@ -414,7 +414,7 @@ void index_state::notify_flush_listeners() {
   VAST_DEBUG(self, "sends 'flush' messages to", flush_listeners.size(),
              "listeners");
   for (auto& listener : flush_listeners)
-    self->send(listener, flush_atom::value);
+    self->send(listener, atom::flush::value);
   flush_listeners.clear();
 }
 
@@ -474,7 +474,7 @@ caf::behavior index(caf::stateful_actor<index_state>* self, const path& dir,
       // sure that clients always receive a 'done' message.
       auto no_result = [&] {
         respond(uuid::nil(), uint32_t{0}, uint32_t{0});
-        self->send(client, done_atom::value);
+        self->send(client, atom::done::value);
       };
       // Get all potentially matching partitions.
       auto candidates = st.meta_idx.lookup(expr);
@@ -532,7 +532,7 @@ caf::behavior index(caf::stateful_actor<index_state>* self, const path& dir,
       auto iter = st.pending.find(query_id);
       if (iter == st.pending.end()) {
         VAST_WARNING(self, "got a request for unknown query ID", query_id);
-        self->send(client, done_atom::value);
+        self->send(client, atom::done::value);
         return;
       }
       auto pqm = st.build_query_map(iter->second, num_partitions);
@@ -540,7 +540,7 @@ caf::behavior index(caf::stateful_actor<index_state>* self, const path& dir,
         VAST_ASSERT(iter->second.partitions.empty());
         st.pending.erase(iter);
         VAST_DEBUG(self, "returns without result: no partitions qualify");
-        self->send(client, done_atom::value);
+        self->send(client, atom::done::value);
         return;
       }
       auto qm = st.launch_evaluators(pqm, iter->second.expr);
@@ -554,49 +554,49 @@ caf::behavior index(caf::stateful_actor<index_state>* self, const path& dir,
       if (iter->second.partitions.empty())
         st.pending.erase(iter);
     },
-    [=](worker_atom, caf::actor& worker) {
+    [=](atom::worker, caf::actor& worker) {
       self->state.idle_workers.emplace_back(std::move(worker));
     },
-    [=](done_atom, uuid partition_id) {
+    [=](atom::done, uuid partition_id) {
       self->state.decrement_indexer_count(partition_id);
     },
     [=](caf::stream<table_slice_ptr> in) {
       VAST_DEBUG(self, "got a new source");
       return self->state.stage->add_inbound_path(in);
     },
-    [=](status_atom) -> caf::config_value::dictionary {
+    [=](atom::status) -> caf::config_value::dictionary {
       return self->state.status();
     },
-    [=](telemetry_atom) {
+    [=](atom::telemetry) {
       self->state.send_report();
       namespace defs = defaults::system;
-      self->delayed_send(self, defs::telemetry_rate, telemetry_atom::value);
+      self->delayed_send(self, defs::telemetry_rate, atom::telemetry::value);
     },
-    [=](subscribe_atom, flush_atom, caf::actor& listener) {
+    [=](atom::subscribe, atom::flush, caf::actor& listener) {
       self->state.add_flush_listener(std::move(listener));
     });
-  return {[=](worker_atom, caf::actor& worker) {
+  return {[=](atom::worker, caf::actor& worker) {
             auto& st = self->state;
             st.idle_workers.emplace_back(std::move(worker));
             self->become(caf::keep_behavior, st.has_worker);
           },
-          [=](done_atom, uuid partition_id) {
+          [=](atom::done, uuid partition_id) {
             self->state.decrement_indexer_count(partition_id);
           },
           [=](caf::stream<table_slice_ptr> in) {
             VAST_DEBUG(self, "got a new source");
             return self->state.stage->add_inbound_path(in);
           },
-          [=](status_atom) -> caf::config_value::dictionary {
+          [=](atom::status) -> caf::config_value::dictionary {
             return self->state.status();
           },
-          [=](telemetry_atom) {
+          [=](atom::telemetry) {
             self->state.send_report();
             namespace defs = defaults::system;
             self->delayed_send(self, defs::telemetry_rate,
-                               telemetry_atom::value);
+                               atom::telemetry::value);
           },
-          [=](subscribe_atom, flush_atom, caf::actor& listener) {
+          [=](atom::subscribe, atom::flush, caf::actor& listener) {
             self->state.add_flush_listener(std::move(listener));
           }};
 }

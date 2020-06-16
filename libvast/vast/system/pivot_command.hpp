@@ -18,7 +18,6 @@
 namespace vast::system {
 
 /// Implementation for pivot command
-caf::message
-pivot_command(const command::invocation& invocation, caf::actor_system& sys);
+caf::message pivot_command(const invocation& inv, caf::actor_system& sys);
 
 } // namespace vast::system

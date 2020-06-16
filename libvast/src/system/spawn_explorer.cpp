@@ -72,7 +72,7 @@ caf::error explorer_validate_args(const caf::settings& args) {
 maybe_actor spawn_explorer(node_actor* self, spawn_arguments& args) {
   if (!args.empty())
     return unexpected_arguments(args);
-  if (auto error = explorer_validate_args(args.invocation.options))
+  if (auto error = explorer_validate_args(args.inv.options))
     return error;
   auto maybe_parse
     = [](caf::optional<std::string>&& str) -> std::optional<vast::duration> {
@@ -83,7 +83,7 @@ maybe_actor spawn_explorer(node_actor* self, spawn_arguments& args) {
       return std::nullopt;
     return *parsed;
   };
-  const auto& options = args.invocation.options;
+  const auto& options = args.inv.options;
   auto before
     = maybe_parse(caf::get_if<std::string>(&options, "explore.before"));
   auto after = maybe_parse(caf::get_if<std::string>(&options, "explore.after"));

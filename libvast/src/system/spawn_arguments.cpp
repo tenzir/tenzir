@@ -44,13 +44,12 @@ normalized_and_validated(std::vector<std::string>::const_iterator begin,
 
 caf::expected<expression>
 normalized_and_validated(const spawn_arguments& args) {
-  auto& arguments = args.invocation.arguments;
+  auto& arguments = args.inv.arguments;
   return normalized_and_validated(arguments.begin(), arguments.end());
 }
 
 caf::expected<caf::optional<schema>> read_schema(const spawn_arguments& args) {
-  auto schema_file_ptr
-    = caf::get_if<std::string>(&args.invocation.options, "schema");
+  auto schema_file_ptr = caf::get_if<std::string>(&args.inv.options, "schema");
   if (!schema_file_ptr)
     return caf::optional<schema>{caf::none};
   VAST_UNBOX_VAR(str, load_contents(*schema_file_ptr));
@@ -60,8 +59,8 @@ caf::expected<caf::optional<schema>> read_schema(const spawn_arguments& args) {
 
 caf::error unexpected_arguments(const spawn_arguments& args) {
   return make_error(ec::syntax_error, "unexpected argument(s)",
-                    caf::join(args.invocation.arguments.begin(),
-                              args.invocation.arguments.end(), " "));
+                    caf::join(args.inv.arguments.begin(),
+                              args.inv.arguments.end(), " "));
 }
 
 } // namespace vast::system

@@ -20,7 +20,6 @@
 #include "vast/detail/fill_status_map.hpp"
 #include "vast/fwd.hpp"
 #include "vast/logger.hpp"
-#include "vast/system/atoms.hpp"
 #include "vast/system/type_registry.hpp"
 #include "vast/table_slice.hpp"
 
@@ -109,10 +108,10 @@ caf::behavior importer(importer_actor* self, path dir, archive_type archive,
     return {};
   }
   namespace defs = defaults::system;
-  if (auto a = self->system().registry().get(accountant_atom::value)) {
+  if (auto a = self->system().registry().get(atom::accountant::value)) {
     self->state.accountant = caf::actor_cast<accountant_type>(a);
-    self->send(self->state.accountant, announce_atom::value, self->name());
-    self->delayed_send(self, defs::telemetry_rate, telemetry_atom::value);
+    self->send(self->state.accountant, atom::accountant::value, self->name());
+    self->delayed_send(self, defs::telemetry_rate, atom::telemetry::value);
     self->state.last_report = stopwatch::now();
   }
   self->set_exit_handler([=](const caf::exit_msg& msg) {
@@ -154,7 +153,7 @@ caf::behavior importer(importer_actor* self, path dir, archive_type archive,
       VAST_DEBUG(self, "registers archive", archive);
       return self->state.stg->add_outbound_path(archive);
     },
-    [=](index_atom, const caf::actor& index) {
+    [=](atom::index, const caf::actor& index) {
       VAST_DEBUG(self, "registers index", index);
       self->state.index_actors.emplace_back(index);
       // TODO: currently, the subscriber expects only a single 'flush' message.
@@ -168,7 +167,7 @@ caf::behavior importer(importer_actor* self, path dir, archive_type archive,
                      "(currently unsupported!)");
       return self->state.stg->add_outbound_path(index);
     },
-    [=](exporter_atom, const caf::actor& exporter) {
+    [=](atom::exporter, const caf::actor& exporter) {
       VAST_DEBUG(self, "registers exporter", exporter);
       return self->state.stg->add_outbound_path(exporter);
     },
@@ -177,7 +176,7 @@ caf::behavior importer(importer_actor* self, path dir, archive_type archive,
       VAST_DEBUG(self, "adds a new source:", self->current_sender());
       st.stg->add_inbound_path(in);
     },
-    [=](add_atom, const caf::actor& subscriber) {
+    [=](atom::add, const caf::actor& subscriber) {
       auto& st = self->state;
       VAST_DEBUG(self, "adds a new sink:", self->current_sender());
       st.stg->add_outbound_path(subscriber);
@@ -188,10 +187,10 @@ caf::behavior importer(importer_actor* self, path dir, archive_type archive,
       for (auto& next : st.index_actors)
         self->send(next, subscribe_atom::value, flush_atom::value, listener);
     },
-    [=](status_atom) { return self->state.status(); },
-    [=](telemetry_atom) {
+    [=](atom::status) { return self->state.status(); },
+    [=](atom::telemetry) {
       self->state.send_report();
-      self->delayed_send(self, defs::telemetry_rate, telemetry_atom::value);
+      self->delayed_send(self, defs::telemetry_rate, atom::telemetry::value);
     },
   };
 }

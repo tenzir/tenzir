@@ -20,9 +20,9 @@
 #include "vast/format/csv.hpp"
 #include "vast/format/json.hpp"
 #include "vast/format/zeek.hpp"
+#include "vast/fwd.hpp"
 #include "vast/logger.hpp"
 #include "vast/scope_linked.hpp"
-#include "vast/system/atoms.hpp"
 #include "vast/system/node_control.hpp"
 #include "vast/system/read_query.hpp"
 #include "vast/system/signal_monitor.hpp"
@@ -73,15 +73,14 @@ make_writer(caf::actor_system& sys, const caf::settings& options) {
 
 } // namespace
 
-caf::message
-pivot_command(const command::invocation& invocation, caf::actor_system& sys) {
-  VAST_TRACE(invocation);
+caf::message pivot_command(const invocation& inv, caf::actor_system& sys) {
+  VAST_TRACE(inv);
   // Read query from input file, STDIN or CLI arguments.
-  auto query = read_query(invocation, "export.read", size_t{1});
+  auto query = read_query(inv, "export.read", size_t{1});
   if (!query)
     return caf::make_message(std::move(query.error()));
-  auto& options = invocation.options;
-  auto& target = invocation.arguments[0];
+  auto& options = inv.options;
+  auto& target = inv.arguments[0];
   // using caf::get_or;
   auto limit
     = get_or(options, "export.max-events", defaults::export_::max_events);
@@ -100,12 +99,12 @@ pivot_command(const command::invocation& invocation, caf::actor_system& sys) {
                                                               "unavailable"));
 #endif
   } else if (detail::starts_with(target, "suricata")) {
-    auto w = make_writer<format::json::writer>(sys, invocation.options);
+    auto w = make_writer<format::json::writer>(sys, inv.options);
     if (!w)
       return make_message(w.error());
     writer = *w;
   } else if (detail::starts_with(target, "zeek")) {
-    auto w = make_writer<format::zeek::writer>(sys, invocation.options);
+    auto w = make_writer<format::zeek::writer>(sys, inv.options);
     if (!w)
       return make_message(w.error());
     writer = *w;
@@ -118,7 +117,7 @@ pivot_command(const command::invocation& invocation, caf::actor_system& sys) {
     [&] { self->send_exit(writer, caf::exit_reason::user_shutdown); });
   // Get VAST node.
   auto node_opt
-    = spawn_or_connect_to_node(self, invocation.options, content(sys.config()));
+    = spawn_or_connect_to_node(self, inv.options, content(sys.config()));
   if (auto err = caf::get_if<caf::error>(&node_opt))
     return caf::make_message(std::move(*err));
   auto& node = caf::holds_alternative<caf::actor>(node_opt)
@@ -130,8 +129,7 @@ pivot_command(const command::invocation& invocation, caf::actor_system& sys) {
   auto guard = system::signal_monitor::run_guarded(
     sig_mon_thread, sys, defaults::system::signal_monitoring_interval, self);
   // Spawn exporter at the node.
-  auto spawn_exporter
-    = command::invocation{invocation.options, "spawn exporter", {*query}};
+  auto spawn_exporter = invocation{inv.options, "spawn exporter", {*query}};
   VAST_DEBUG(&invocation, "spawns exporter with parameters:", spawn_exporter);
   auto exp = spawn_at_node(self, node, spawn_exporter);
   if (!exp)
@@ -139,8 +137,8 @@ pivot_command(const command::invocation& invocation, caf::actor_system& sys) {
   auto exp_guard = caf::detail::make_scope_guard(
     [&] { self->send_exit(*exp, caf::exit_reason::user_shutdown); });
   // Spawn pivoter at the node.
-  auto spawn_pivoter = command::invocation{
-    invocation.options, "spawn pivoter", {invocation.arguments[0], *query}};
+  auto spawn_pivoter
+    = invocation{inv.options, "spawn pivoter", {inv.arguments[0], *query}};
   VAST_DEBUG(&invocation, "spawns pivoter with parameters:", spawn_pivoter);
   auto piv = spawn_at_node(self, node, spawn_pivoter);
   if (!piv)
@@ -160,35 +158,35 @@ pivot_command(const command::invocation& invocation, caf::actor_system& sys) {
   self->monitor(writer);
   self->monitor(*piv);
   // Start the exporter.
-  self->send(*exp, system::sink_atom::value, *piv);
+  self->send(*exp, atom::sink::value, *piv);
   // (Ab)use query_statistics as done message.
-  self->send(*exp, system::statistics_atom::value, *piv);
-  self->send(*piv, system::sink_atom::value, writer);
-  self->send(*exp, system::run_atom::value);
+  self->send(*exp, atom::statistics::value, *piv);
+  self->send(*piv, atom::sink::value, writer);
+  self->send(*exp, atom::run::value);
   auto stop = false;
   self
     ->do_receive(
       [&](caf::down_msg& msg) {
         if (msg.source == node) {
-          VAST_DEBUG(invocation.full_name, "received DOWN from node");
+          VAST_DEBUG(inv.full_name, "received DOWN from node");
         } else if (msg.source == *piv) {
-          VAST_DEBUG(invocation.full_name, "received DOWN from pivoter");
+          VAST_DEBUG(inv.full_name, "received DOWN from pivoter");
           piv_guard.disable();
         } else if (msg.source == writer) {
-          VAST_DEBUG(invocation.full_name, "received DOWN from sink");
+          VAST_DEBUG(inv.full_name, "received DOWN from sink");
           writer_guard.disable();
         } else {
           VAST_ASSERT(!"received DOWN from inexplicable actor");
         }
         if (msg.reason) {
-          VAST_WARNING(invocation.full_name, "received error message:",
+          VAST_WARNING(inv.full_name, "received error message:",
                        self->system().render(msg.reason));
           err = std::move(msg.reason);
         }
         stop = true;
       },
-      [&](system::signal_atom, int signal) {
-        VAST_DEBUG(invocation.full_name, "got " << ::strsignal(signal));
+      [&](atom::signal, int signal) {
+        VAST_DEBUG(inv.full_name, "got " << ::strsignal(signal));
         if (signal == SIGINT || signal == SIGTERM) {
           stop = true;
         }

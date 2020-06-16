@@ -29,9 +29,9 @@
 #include "vast/defaults.hpp"
 #include "vast/endpoint.hpp"
 #include "vast/error.hpp"
+#include "vast/fwd.hpp"
 #include "vast/logger.hpp"
 #include "vast/scope_linked.hpp"
-#include "vast/system/atoms.hpp"
 #include "vast/system/signal_monitor.hpp"
 #include "vast/system/spawn_node.hpp"
 
@@ -40,11 +40,10 @@ namespace vast::system {
 using namespace std::chrono_literals;
 
 caf::message start_command_impl(start_command_extra_steps extra_steps,
-                                const command::invocation& invocation,
-                                caf::actor_system& sys) {
-  VAST_TRACE(invocation);
+                                const invocation& inv, caf::actor_system& sys) {
+  VAST_TRACE(inv);
   // Bail out early for bogus invocations.
-  if (caf::get_or(invocation.options, "system.node", false))
+  if (caf::get_or(inv.options, "system.node", false))
     return caf::make_message(make_error(ec::parse_error, "cannot start a local "
                                                          "node"));
   // Fetch SSL settings from config.
@@ -56,8 +55,7 @@ caf::message start_command_impl(start_command_extra_steps extra_steps,
                         || !sys_cfg.openssl_cafile.empty();
   // Construct an endpoint.
   endpoint node_endpoint;
-  auto str
-    = get_or(invocation.options, "system.endpoint", defaults::system::endpoint);
+  auto str = get_or(inv.options, "system.endpoint", defaults::system::endpoint);
   if (!parsers::endpoint(str, node_endpoint))
     return caf::make_message(
       make_error(ec::parse_error, "invalid endpoint", str));
@@ -88,7 +86,7 @@ caf::message start_command_impl(start_command_extra_steps extra_steps,
   VAST_INFO_ANON("VAST node is listening on", listen_addr);
   // Run user-defined extra code.
   if (extra_steps != nullptr)
-    if (auto err = extra_steps(self, invocation.options, node))
+    if (auto err = extra_steps(self, inv.options, node))
       return caf::make_message(std::move(err));
   // Start signal monitor.
   std::thread sig_mon_thread;
@@ -98,31 +96,30 @@ caf::message start_command_impl(start_command_extra_steps extra_steps,
   caf::error err;
   auto stop = false;
   self->monitor(node);
-  self->do_receive(
-    [&](caf::down_msg& msg) {
-      VAST_ASSERT(msg.source == node);
-      VAST_DEBUG_ANON("... received DOWN from node");
-      stop = true;
-      if (msg.reason != caf::exit_reason::user_shutdown)
-        err = std::move(msg.reason);
-    },
-    [&](system::signal_atom, int signal) {
-      VAST_DEBUG_ANON("... got " << ::strsignal(signal));
-      if (signal == SIGINT || signal == SIGTERM)
-        self->send_exit(node, caf::exit_reason::user_shutdown);
-      else
-        self->send(node, system::signal_atom::value, signal);
-    }
-  ).until([&] { return stop; });
+  self
+    ->do_receive(
+      [&](caf::down_msg& msg) {
+        VAST_ASSERT(msg.source == node);
+        VAST_DEBUG_ANON("... received DOWN from node");
+        stop = true;
+        if (msg.reason != caf::exit_reason::user_shutdown)
+          err = std::move(msg.reason);
+      },
+      [&](atom::signal, int signal) {
+        VAST_DEBUG_ANON("... got " << ::strsignal(signal));
+        if (signal == SIGINT || signal == SIGTERM)
+          self->send_exit(node, caf::exit_reason::user_shutdown);
+        else
+          self->send(node, atom::signal::value, signal);
+      })
+    .until([&] { return stop; });
   return caf::make_message(std::move(err));
 }
 
-caf::message
-start_command(const command::invocation& invocation, caf::actor_system& sys) {
-  VAST_TRACE(VAST_ARG(invocation.options),
-             VAST_ARG("args", invocation.arguments.begin(),
-                      invocation.arguments.end()));
-  return start_command_impl(nullptr, invocation, sys);
+caf::message start_command(const invocation& inv, caf::actor_system& sys) {
+  VAST_TRACE(VAST_ARG(inv.options),
+             VAST_ARG("args", inv.arguments.begin(), inv.arguments.end()));
+  return start_command_impl(nullptr, inv, sys);
 }
 
 } // namespace vast::system

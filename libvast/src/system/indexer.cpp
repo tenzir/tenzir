@@ -18,8 +18,8 @@
 #include "vast/detail/assert.hpp"
 #include "vast/expression.hpp"
 #include "vast/filesystem.hpp"
+#include "vast/fwd.hpp"
 #include "vast/logger.hpp"
-#include "vast/system/atoms.hpp"
 #include "vast/system/instrumentation.hpp"
 #include "vast/table_slice_column.hpp"
 #include "vast/view.hpp"
@@ -77,7 +77,7 @@ indexer(caf::stateful_actor<indexer_state>* self, path filename,
       VAST_DEBUG(self, "got predicate:", pred);
       return self->state.col.lookup(pred.op, make_view(pred.rhs));
     },
-    [=](persist_atom) -> caf::result<void> {
+    [=](atom::persist) -> caf::result<void> {
       if (auto err = self->state.col.flush_to_disk(); err != caf::none)
         return err;
       return caf::unit;
@@ -100,13 +100,13 @@ indexer(caf::stateful_actor<indexer_state>* self, path filename,
             VAST_ERROR(self, "got a stream error:", self->system().render(err));
             return;
           }
-          self->send(st.index, done_atom::value, st.partition_id);
+          self->send(st.index, atom::done::value, st.partition_id);
         });
     },
     [=](const std::vector<table_slice_column>& xs) {
       handle_batch(xs); // clang-format fix
     },
-    [=](shutdown_atom) {
+    [=](atom::shutdown) {
       self->quit(caf::exit_reason::user_shutdown); // clang-format fix
     },
   };

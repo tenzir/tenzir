@@ -29,7 +29,7 @@ namespace {
 
 behavior worker(event_based_actor* self, const actor& task) {
   return [=](std::string) {
-    self->send(task, done_atom::value);
+    self->send(task, atom::done::value);
     self->quit();
   };
 }
@@ -38,22 +38,22 @@ behavior worker(event_based_actor* self, const actor& task) {
 
 TEST(custom done message) {
   auto t = sys.spawn(task<int>, 42);
-  self->send(t, supervisor_atom::value, self);
+  self->send(t, atom::supervisor::value, self);
   self->send_exit(t, exit_reason::user_shutdown);
-  self->receive([&](done_atom, int i) { CHECK(i == 42); } );
+  self->receive([&](atom::done, int i) { CHECK(i == 42); });
 }
 
 TEST(manual task shutdown) {
   auto t = sys.spawn(task<>);
   auto w0 = sys.spawn(worker, t);
   auto w1 = sys.spawn(worker, t);
-  self->send(t, supervisor_atom::value, self);
+  self->send(t, atom::supervisor::value, self);
   self->send(t, w0);
   self->send(t, w1);
   self->send(w0, "regular");
   MESSAGE("sending explicit DONE atom");
-  self->send(t, done_atom::value, w1->address());
-  self->receive([&](done_atom) {/* nop */});
+  self->send(t, atom::done::value, w1->address());
+  self->receive([&](atom::done) { /* nop */ });
   self->send_exit(w1, exit_reason::user_shutdown);
 }
 
@@ -72,8 +72,8 @@ TEST(manual task shutdown) {
 TEST(hierarchical task) {
   MESSAGE("spawning task");
   auto t = self->spawn(task<>);
-  self->send(t, subscriber_atom::value, self);
-  self->send(t, supervisor_atom::value, self);
+  self->send(t, atom::subscriber::value, self);
+  self->send(t, atom::supervisor::value, self);
   MESSAGE("spawning main workers");
   auto leaf1a = self->spawn(worker, t);
   auto leaf1b = self->spawn(worker, t);
@@ -89,44 +89,41 @@ TEST(hierarchical task) {
   self->send(i, leaf2b);
   self->send(i, leaf2c);
   MESSAGE("asking main task for the current progress");
-  self->request(t, infinite, progress_atom::value).receive(
-    [&](uint64_t remaining, uint64_t total) {
-      CHECK(remaining == 3);
-      CHECK(total == 3);
-    },
-    error_handler()
-  );
+  self->request(t, infinite, atom::progress::value)
+    .receive(
+      [&](uint64_t remaining, uint64_t total) {
+        CHECK(remaining == 3);
+        CHECK(total == 3);
+      },
+      error_handler());
   MESSAGE("asking intermediate task for the current progress");
-  self->request(i, infinite, progress_atom::value).receive(
-    [&](uint64_t remaining, uint64_t total) {
-      CHECK(remaining == 3);
-      CHECK(total == 3);
-    },
-    error_handler()
-  );
+  self->request(i, infinite, atom::progress::value)
+    .receive(
+      [&](uint64_t remaining, uint64_t total) {
+        CHECK(remaining == 3);
+        CHECK(total == 3);
+      },
+      error_handler());
   MESSAGE("completing intermediate work items");
   self->send(leaf2a, "Go");
   self->send(leaf2b, "make");
   self->send(leaf2c, "money!");
   self->wait_for(i);
-  self->receive(
-    [&](progress_atom, uint64_t remaining, uint64_t total) {
-      CHECK(remaining == 2);
-      CHECK(total == 3);
-    }
-  );
+  self->receive([&](atom::progress, uint64_t remaining, uint64_t total) {
+    CHECK(remaining == 2);
+    CHECK(total == 3);
+  });
   MESSAGE("completing remaining work items");
   self->send(leaf1a, "Lots");
   self->send(leaf1b, "please!");
   auto n = 1;
-  self->receive_for(n, 2) (
-    [&](progress_atom, uint64_t remaining, uint64_t total) {
-      CHECK(remaining == static_cast<uint64_t>(n));
-      CHECK(total == 3);
-    }
-  );
+  self->receive_for(n,
+                    2)([&](atom::progress, uint64_t remaining, uint64_t total) {
+    CHECK(remaining == static_cast<uint64_t>(n));
+    CHECK(total == 3);
+  });
   MESSAGE("checking final notification");
-  self->receive([&](done_atom) { CHECK(self->current_sender() == t); } );
+  self->receive([&](atom::done) { CHECK(self->current_sender() == t); });
 }
 
 FIXTURE_SCOPE_END()

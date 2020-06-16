@@ -18,9 +18,9 @@
 #include "vast/detail/set_operations.hpp"
 #include "vast/detail/string.hpp"
 #include "vast/expression.hpp"
+#include "vast/fwd.hpp"
 #include "vast/logger.hpp"
 #include "vast/synopsis_factory.hpp"
-#include "vast/system/atoms.hpp"
 #include "vast/table_slice.hpp"
 #include "vast/time.hpp"
 
@@ -138,12 +138,12 @@ std::vector<uuid> meta_index::lookup(const expression& expr) const {
       };
       auto extract_expr = detail::overload(
         [&](const attribute_extractor& lhs, const data& d) -> result_type {
-          if (lhs.attr == system::timestamp_atom::value) {
+          if (lhs.attr == atom::timestamp::value) {
             auto pred = [](auto& field) {
               return has_attribute(field.type, "timestamp");
             };
             return search(pred);
-          } else if (lhs.attr == system::type_atom::value) {
+          } else if (lhs.attr == atom::type::value) {
             // We don't have to look into the synopses for type queries, just
             // at the layout names.
             result_type result;

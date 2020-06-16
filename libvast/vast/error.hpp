@@ -13,6 +13,8 @@
 
 #pragma once
 
+#include "vast/fwd.hpp"
+
 #include <caf/error.hpp>
 #include <caf/make_message.hpp>
 

@@ -35,8 +35,6 @@ typename Inspector::result_type inspect(Inspector& f, data_point& s) {
   return f(caf::meta::type_name("data_point"), s.key, s.value);
 }
 
-using report = std::vector<data_point>;
-
 struct performance_sample {
   std::string key;
   measurement value;
@@ -46,7 +44,5 @@ template <class Inspector>
 typename Inspector::result_type inspect(Inspector& f, performance_sample& s) {
   return f(caf::meta::type_name("performance_sample"), s.key, s.value);
 }
-
-using performance_report = std::vector<performance_sample>;
 
 } // namespace vast::system

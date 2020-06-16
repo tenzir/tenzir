@@ -35,8 +35,7 @@ using start_command_extra_steps = std::function<caf::error(
 ///          `start_command_impl` needs to stop running, `caf::none` otherwise.
 /// @relates start_command
 caf::message start_command_impl(start_command_extra_steps extra_steps,
-                                const command::invocation& invocation,
-                                caf::actor_system& sys);
+                                const invocation& inv, caf::actor_system& sys);
 
 /// Default implementation for the *start* command.
 /// @param invocation Invocation object that dispatches to this function.
@@ -44,7 +43,6 @@ caf::message start_command_impl(start_command_extra_steps extra_steps,
 /// @returns An error on invalid arguments or when unable to connect to the
 ///          remote node, an empty message otherwise.
 /// @relates application
-caf::message
-start_command(const command::invocation& invocation, caf::actor_system& sys);
+caf::message start_command(const invocation& inv, caf::actor_system& sys);
 
 } // namespace vast::system

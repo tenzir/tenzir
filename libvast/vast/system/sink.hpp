@@ -18,9 +18,9 @@
 #include "vast/concept/printable/to_string.hpp"
 #include "vast/concept/printable/vast/uuid.hpp"
 #include "vast/format/writer.hpp"
+#include "vast/fwd.hpp"
 #include "vast/logger.hpp"
 #include "vast/system/accountant.hpp"
-#include "vast/system/atoms.hpp"
 #include "vast/system/instrumentation.hpp"
 #include "vast/system/query_status.hpp"
 #include "vast/table_slice.hpp"
@@ -131,7 +131,7 @@ caf::behavior sink(caf::stateful_actor<sink_state<Writer>>* self,
         st.send_report();
       }
     },
-    [=](limit_atom, uint64_t max) {
+    [=](atom::limit, uint64_t max) {
       VAST_DEBUG(self, "caps event export at", max, "events");
       if (self->state.processed < max)
         self->state.max_events = max;
@@ -143,9 +143,9 @@ caf::behavior sink(caf::stateful_actor<sink_state<Writer>>* self,
       VAST_DEBUG(self, "sets accountant to", accountant);
       auto& st = self->state;
       st.accountant = std::move(accountant);
-      self->send(st.accountant, announce_atom::value, st.name);
+      self->send(st.accountant, atom::announce::value, st.name);
     },
-    [=](statistics_atom, const caf::actor& statistics_subscriber) {
+    [=](atom::statistics, const caf::actor& statistics_subscriber) {
       VAST_DEBUG(self, "sets statistics subscriber to", statistics_subscriber);
       self->state.statistics_subscriber = statistics_subscriber;
     },

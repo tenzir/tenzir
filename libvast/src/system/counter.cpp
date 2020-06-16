@@ -34,7 +34,7 @@ void counter_state::init(expression expr, caf::actor index,
   expr_ = std::move(expr);
   archive_ = std::move(archive);
   // Transition from idle state when receiving 'run' and client handle.
-  behaviors_[idle].assign([=](system::run_atom, caf::actor client) {
+  behaviors_[idle].assign([=](atom::run, caf::actor client) {
     client_ = std::move(client);
     start(expr_, index);
     // Stop immediately when losing the client.
@@ -47,7 +47,7 @@ void counter_state::init(expression expr, caf::actor index,
   // Add additional message handlers if we need to perform candidate checks.
   if (skip_candidate_check_)
     return;
-  self_->send(archive_, system::exporter_atom::value, self_);
+  self_->send(archive_, atom::exporter::value, self_);
   caf::message_handler base{behaviors_[collect_hits].as_behavior_impl()};
   behaviors_[collect_hits] = base.or_else(
     [this](table_slice_ptr slice) {
@@ -73,7 +73,7 @@ void counter_state::init(expression expr, caf::actor index,
       if (num_hits > 0)
         self_->send(client_, num_hits);
     },
-    [this](system::done_atom, const caf::error&) {
+    [this](atom::done, const caf::error&) {
       if (self_->current_sender() != archive_) {
         VAST_WARNING(self_, "received ('done', error) from unexpected actor");
         return;
@@ -105,7 +105,7 @@ void counter_state::process_end_of_hits() {
   }
   // The COUNTER runs only once. Hence, we call quit() after sending a final
   // 'done' atom to the client for end-of-results signaling.
-  self_->send(client_, system::done_atom::value);
+  self_->send(client_, atom::done::value);
   self_->quit();
 }
 

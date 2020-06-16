@@ -21,12 +21,12 @@
 #include "vast/detail/assert.hpp"
 #include "vast/event.hpp"
 #include "vast/expression_visitors.hpp"
+#include "vast/fwd.hpp"
 #include "vast/ids.hpp"
 #include "vast/load.hpp"
 #include "vast/logger.hpp"
 #include "vast/qualified_record_field.hpp"
 #include "vast/save.hpp"
-#include "vast/system/atoms.hpp"
 #include "vast/system/index.hpp"
 #include "vast/system/index_common.hpp"
 #include "vast/system/indexer_stage_driver.hpp"
@@ -176,7 +176,7 @@ caf::actor partition::fetch_indexer(const data_extractor& dx,
 caf::actor partition::fetch_indexer(const attribute_extractor& ex,
                                     relational_operator op, const data& x) {
   VAST_TRACE(VAST_ARG(ex), VAST_ARG(op), VAST_ARG(x));
-  if (ex.attr == system::type_atom::value) {
+  if (ex.attr == atom::type::value) {
     // We know the answer immediately: all IDs that are part of the table.
     // However, we still have to "lift" this result into an actor for the
     // EVALUATOR.

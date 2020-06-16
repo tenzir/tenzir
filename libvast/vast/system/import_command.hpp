@@ -25,11 +25,11 @@
 #include "vast/error.hpp"
 #include "vast/expression.hpp"
 #include "vast/format/reader.hpp"
+#include "vast/fwd.hpp"
 #include "vast/logger.hpp"
 #include "vast/schema.hpp"
 #include "vast/scope_linked.hpp"
 #include "vast/system/accountant.hpp"
-#include "vast/system/atoms.hpp"
 #include "vast/system/datagram_source.hpp"
 #include "vast/system/node_control.hpp"
 #include "vast/system/signal_monitor.hpp"
@@ -73,10 +73,8 @@ caf::expected<expression> parse_expression(command::argument_iterator begin,
 } // namespace
 
 template <class Policy, class Reader, class Defaults>
-caf::message
-import_command(const command::invocation& invocation, caf::actor_system& sys) {
-  VAST_TRACE(invocation.full_name, VAST_ARG("options", invocation.options),
-             VAST_ARG(sys));
+caf::message import_command(const invocation& inv, caf::actor_system& sys) {
+  VAST_TRACE(inv.full_name, VAST_ARG("options", inv.options), VAST_ARG(sys));
   // Placeholder thingies.
   auto self = caf::scoped_actor{sys};
   auto err = caf::error{};
@@ -84,7 +82,7 @@ import_command(const command::invocation& invocation, caf::actor_system& sys) {
   auto udp_port = std::optional<uint16_t>{};
   auto reader = std::unique_ptr<Reader>{nullptr};
   // Parse options.
-  auto& options = invocation.options;
+  auto& options = inv.options;
   std::string category = Defaults::category;
   auto max_events = caf::get_if<size_t>(&options, "import.max-events");
   auto uri = caf::get_if<std::string>(&options, category + ".listen");
@@ -167,13 +165,13 @@ import_command(const command::invocation& invocation, caf::actor_system& sys) {
                "events");
   // Get VAST node.
   auto node_opt
-    = spawn_or_connect_to_node(self, invocation.options, content(sys.config()));
+    = spawn_or_connect_to_node(self, inv.options, content(sys.config()));
   if (auto err = caf::get_if<caf::error>(&node_opt))
     return make_message(std::move(*err));
   auto& node = caf::holds_alternative<caf::actor>(node_opt)
                  ? caf::get<caf::actor>(node_opt)
                  : caf::get<scope_linked_actor>(node_opt).get();
-  VAST_DEBUG(invocation.full_name, "got node");
+  VAST_DEBUG(inv.full_name, "got node");
   // Start signal monitor.
   std::thread sig_mon_thread;
   auto guard = system::signal_monitor::run_guarded(
@@ -211,9 +209,8 @@ import_command(const command::invocation& invocation, caf::actor_system& sys) {
   }
   VAST_ASSERT(src);
   // Attempt to parse the remainder as an expression.
-  if (!invocation.arguments.empty()) {
-    auto expr = parse_expression(invocation.arguments.begin(),
-                                 invocation.arguments.end());
+  if (!inv.arguments.empty()) {
+    auto expr = parse_expression(inv.arguments.begin(), inv.arguments.end());
     if (!expr)
       return make_message(std::move(expr.error()));
     self->send(src, std::move(*expr));
@@ -221,9 +218,8 @@ import_command(const command::invocation& invocation, caf::actor_system& sys) {
   // Connect source to importer.
   if (!importer)
     return make_message(make_error(ec::missing_component, "importer"));
-  VAST_DEBUG(invocation.full_name, "connects to",
-             VAST_ARG("importer", importer));
-  self->send(src, system::sink_atom::value, importer);
+  VAST_DEBUG(inv.full_name, "connects to", VAST_ARG("importer", importer));
+  self->send(src, atom::sink::value, importer);
   // Start the source.
   bool stop = false;
   self->monitor(src);
@@ -232,30 +228,29 @@ import_command(const command::invocation& invocation, caf::actor_system& sys) {
     ->do_receive(
       [&](const caf::down_msg& msg) {
         if (msg.source == importer) {
-          VAST_DEBUG(invocation.full_name, "received DOWN from node importer");
+          VAST_DEBUG(inv.full_name, "received DOWN from node importer");
           self->send_exit(src, caf::exit_reason::user_shutdown);
           err = ec::remote_node_down;
           stop = true;
         } else if (msg.source == src) {
-          VAST_DEBUG(invocation.full_name, "received DOWN from source");
-          if (caf::get_or(invocation.options, "import.blocking", false))
-            self->send(importer, subscribe_atom::value, flush_atom::value,
+          VAST_DEBUG(inv.full_name, "received DOWN from source");
+          if (caf::get_or(inv.options, "import.blocking", false))
+            self->send(importer, atom::subscribe::value, atom::flush::value,
                        self);
           else
             stop = true;
         } else {
-          VAST_DEBUG(invocation.full_name, "received unexpected DOWN from",
+          VAST_DEBUG(inv.full_name, "received unexpected DOWN from",
                      msg.source);
           VAST_ASSERT(!"unexpected DOWN message");
         }
       },
-      [&](flush_atom) {
-        VAST_DEBUG(invocation.full_name, "received flush from IMPORTER");
+      [&](atom::flush) {
+        VAST_DEBUG(inv.full_name, "received flush from IMPORTER");
         stop = true;
       },
-      [&](system::signal_atom, int signal) {
-        VAST_DEBUG(invocation.full_name, "received signal",
-                   ::strsignal(signal));
+      [&](atom::signal, int signal) {
+        VAST_DEBUG(inv.full_name, "received signal", ::strsignal(signal));
         if (signal == SIGINT || signal == SIGTERM)
           self->send_exit(src, caf::exit_reason::user_shutdown);
       })

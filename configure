@@ -44,6 +44,7 @@ Usage: $0 [OPTION]... [VAR=VALUE]...
     --more-warnings         enables most warnings on GCC and Clang
     --without-tests         build without unit tests
     --without-zeek-to-vast  build without zeek-to-vast
+    --with-type-id-checks   build with compile-time type-id checks
 
   Debugging:
     --log-level=LEVEL       maximum compile-time log level
@@ -168,6 +169,9 @@ while [ $# -ne 0 ]; do
       ;;
     --without-zeek-to-vast)
       append_cache_entry ENABLE_ZEEK_TO_VAST BOOL no
+      ;;
+    --with-type-id-checks)
+      append_cache_entry CAF_ENABLE_TYPE_ID_CHECKS BOOL yes
       ;;
 # -- Debugging -----------------------------------------------------------------
     --log-level=*)

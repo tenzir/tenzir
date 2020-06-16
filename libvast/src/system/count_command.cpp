@@ -17,9 +17,9 @@
 #include "vast/concept/parseable/vast/expression.hpp"
 #include "vast/defaults.hpp"
 #include "vast/error.hpp"
+#include "vast/fwd.hpp"
 #include "vast/logger.hpp"
 #include "vast/scope_linked.hpp"
-#include "vast/system/atoms.hpp"
 #include "vast/system/read_query.hpp"
 #include "vast/system/signal_monitor.hpp"
 #include "vast/system/spawn_or_connect_to_node.hpp"
@@ -39,12 +39,11 @@ using namespace std::chrono_literals;
 
 namespace vast::system {
 
-caf::message
-count_command(const command::invocation& invocation, caf::actor_system& sys) {
-  VAST_DEBUG_ANON(invocation);
-  const auto& options = invocation.options;
+caf::message count_command(const invocation& inv, caf::actor_system& sys) {
+  VAST_DEBUG_ANON(inv);
+  const auto& options = inv.options;
   // Read query from input file, STDIN or CLI arguments.
-  auto query = read_query(invocation, "count.read");
+  auto query = read_query(inv, "count.read");
   if (!query)
     return caf::make_message(std::move(query.error()));
   // Get a convenient and blocking way to interact with actors.
@@ -64,8 +63,8 @@ count_command(const command::invocation& invocation, caf::actor_system& sys) {
     sig_mon_thread, sys, defaults::system::signal_monitoring_interval, self);
   // Spawn COUNTER at the node.
   caf::actor cnt;
-  auto args = command::invocation{options, "spawn counter", {*query}};
-  VAST_DEBUG(invocation.full_name, "spawns counter with parameters:", query);
+  auto args = invocation{options, "spawn counter", {*query}};
+  VAST_DEBUG(inv.full_name, "spawns counter with parameters:", query);
   caf::error err;
   self->request(node, caf::infinite, std::move(args))
     .receive(
@@ -77,15 +76,14 @@ count_command(const command::invocation& invocation, caf::actor_system& sys) {
       [&](caf::error& e) { err = std::move(e); });
   if (err)
     return caf::make_message(std::move(err));
-  self->send(cnt, system::run_atom::value, self);
+  self->send(cnt, atom::run::value, self);
   bool counting = true;
   uint64_t result = 0;
   self->receive_while
     // Loop until false.
     (counting)
     // Message handlers.
-    ([&](uint64_t x) { result += x; },
-     [&](system::done_atom) { counting = false; });
+    ([&](uint64_t x) { result += x; }, [&](atom::done) { counting = false; });
   std::cout << result << std::endl;
   return caf::none;
 }

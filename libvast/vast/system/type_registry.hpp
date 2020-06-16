@@ -14,9 +14,9 @@
 #pragma once
 
 #include "vast/filesystem.hpp"
+#include "vast/fwd.hpp"
 #include "vast/schema.hpp"
 #include "vast/system/accountant.hpp"
-#include "vast/system/atoms.hpp"
 #include "vast/type.hpp"
 
 #include <caf/expected.hpp>
@@ -31,13 +31,13 @@ namespace vast::system {
 
 // clang-format off
 using type_registry_type = caf::typed_actor<
-  caf::reacts_to<telemetry_atom>,
-  caf::replies_to<status_atom>::with<caf::dictionary<caf::config_value>>,
+  caf::reacts_to<atom::telemetry>,
+  caf::replies_to<atom::status>::with<caf::dictionary<caf::config_value>>,
   caf::reacts_to<caf::stream<table_slice_ptr>>,
-  caf::reacts_to<put_atom, vast::type>,
-  caf::reacts_to<put_atom, vast::schema>,
-  caf::replies_to<get_atom>::with<std::unordered_set<vast::type>>,
-  caf::replies_to<get_atom, std::string>::with<std::unordered_set<vast::type>>
+  caf::reacts_to<atom::put, vast::type>,
+  caf::reacts_to<atom::put, vast::schema>,
+  caf::replies_to<atom::get>::with<std::unordered_set<vast::type>>,
+  caf::replies_to<atom::get, std::string>::with<std::unordered_set<vast::type>>
 >;
 // clang-format on
 

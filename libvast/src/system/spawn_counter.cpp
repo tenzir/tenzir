@@ -40,7 +40,7 @@ spawn_counter(system::node_actor* self, system::spawn_arguments& args) {
   caf::actor index;
   system::archive_type archive;
   caf::scoped_actor blocking{self->system()};
-  blocking->request(self->state.tracker, caf::infinite, caf::get_atom::value)
+  blocking->request(self->state.tracker, caf::infinite, atom::get::value)
     .receive(
       [&](system::registry& reg) {
         VAST_DEBUG(self, "looks for index and archive");
@@ -65,8 +65,7 @@ spawn_counter(system::node_actor* self, system::spawn_arguments& args) {
   VAST_ASSERT(index != nullptr);
   VAST_ASSERT(archive != nullptr);
   return self->spawn(counter, std::move(expr), index, archive,
-                     caf::get_or(args.invocation.options, "count.estimate",
-                                 false));
+                     caf::get_or(args.inv.options, "count.estimate", false));
 }
 
 } // namespace vast::system

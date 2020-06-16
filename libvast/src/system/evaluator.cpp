@@ -14,8 +14,8 @@
 #include "vast/system/evaluator.hpp"
 
 #include "vast/expression_visitors.hpp"
+#include "vast/fwd.hpp"
 #include "vast/logger.hpp"
-#include "vast/system/atoms.hpp"
 #include "vast/system/index_common.hpp"
 
 #include <caf/actor.hpp>
@@ -144,7 +144,7 @@ void evaluator_state::decrement_pending() {
   // We're done evaluating if all INDEXER actors have reported their hits.
   if (--pending_responses == 0) {
     VAST_DEBUG(self, "completed expression evaluation");
-    promise.deliver(done_atom::value);
+    promise.deliver(atom::done::value);
   }
 }
 
@@ -179,7 +179,7 @@ caf::behavior evaluator(caf::stateful_actor<evaluator_state>* self,
     }
     if (st.pending_responses == 0) {
       VAST_DEBUG(self, "has nothing to evaluate for expression");
-      st.promise.deliver(done_atom::value);
+      st.promise.deliver(atom::done::value);
     }
     // We can only deal with exactly one expression/client at the moment.
     self->unbecome();

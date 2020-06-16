@@ -29,7 +29,7 @@ maybe_actor spawn_index(node_actor* self, spawn_arguments& args) {
   if (!args.empty())
     return unexpected_arguments(args);
   auto opt = [&](caf::string_view key, auto default_value) {
-    return get_or(args.invocation.options, key, default_value);
+    return get_or(args.inv.options, key, default_value);
   };
   namespace sd = vast::defaults::system;
   auto result = self->spawn(

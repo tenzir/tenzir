@@ -74,9 +74,8 @@ void print_version(const json::object& extra_content) {
 }
 
 caf::message
-version_command([[maybe_unused]] const command::invocation& invocation,
-                caf::actor_system&) {
-  VAST_TRACE(invocation);
+version_command([[maybe_unused]] const invocation& inv, caf::actor_system&) {
+  VAST_TRACE(inv);
   print_version();
   return caf::none;
 }

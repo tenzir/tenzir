@@ -37,11 +37,11 @@ struct node : deterministic_actor_system_and_events {
     using namespace caf;
     using namespace std::string_literals;
     actor result;
-    command::invocation invocation;
-    invocation.full_name = "spawn "s + component;
-    invocation.options = {};
-    invocation.arguments = {std::forward<Ts>(args)...};
-    auto rh = self->request(test_node, infinite, std::move(invocation));
+    invocation inv;
+    inv.full_name = "spawn "s + component;
+    inv.options = {};
+    inv.arguments = {std::forward<Ts>(args)...};
+    auto rh = self->request(test_node, infinite, std::move(inv));
     run();
     rh.receive(
       [&](const actor& a) { result = a; },

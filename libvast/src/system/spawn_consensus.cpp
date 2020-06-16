@@ -34,13 +34,13 @@ caf::expected<consensus_type>
 spawn_consensus_raft(caf::local_actor* self, spawn_arguments& args) {
   if (!args.empty())
     return unexpected_arguments(args);
-  auto id = get_or(args.invocation.options, "id", raft::server_id{0});
+  auto id = get_or(args.inv.options, "id", raft::server_id{0});
   // Bring up the consensus module.
   auto consensus = self->spawn(raft::consensus, args.dir / "consensus");
   self->monitor(consensus);
   if (id != 0)
-    caf::anon_send(consensus, id_atom::value, id);
-  anon_send(consensus, run_atom::value);
+    caf::anon_send(consensus, atom::id::value, id);
+  anon_send(consensus, atom::run::value);
   // Spawn the store on top.
   auto store = self->spawn(replicated_store<std::string, data>, consensus);
   store->attach_functor([=](const error&) {
@@ -55,7 +55,7 @@ spawn_dummy_consensus(caf::local_actor* self, spawn_arguments& args) {
 }
 
 maybe_actor spawn_consensus(node_actor* self, spawn_arguments& args) {
-  auto backend = get_or(args.invocation.options, "store-backend", "dummy"s);
+  auto backend = get_or(args.inv.options, "store-backend", "dummy"s);
   caf::expected<consensus_type> result
     = make_error(ec::invalid_configuration,
                  "unknown consensus implementation requested", backend);

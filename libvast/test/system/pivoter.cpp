@@ -30,7 +30,6 @@
 #include <caf/stateful_actor.hpp>
 
 using namespace vast;
-using invocation = command::invocation;
 
 namespace {
 

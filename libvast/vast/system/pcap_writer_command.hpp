@@ -18,7 +18,6 @@
 namespace vast::system {
 
 /// Format-independent implementation for import sub-commands.
-caf::message pcap_writer_command(const command::invocation& invocation,
-                                 caf::actor_system& sys);
+caf::message pcap_writer_command(const invocation& inv, caf::actor_system& sys);
 
 } // namespace vast::system

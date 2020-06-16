@@ -40,7 +40,7 @@ caf::expected<std::array<caf::actor, N>>
 get_node_components(caf::scoped_actor& self, caf::actor node,
                     const char* const (&names)[N]) {
   auto result = caf::expected{std::array<caf::actor, N>{}};
-  self->request(node, caf::infinite, get_atom::value)
+  self->request(node, caf::infinite, atom::get::value)
     .receive(
       [&](const std::string& id, system::registry& reg) {
         auto find_actor = [&](std::string_view name) -> caf::actor {
@@ -61,17 +61,17 @@ get_node_components(caf::scoped_actor& self, caf::actor node,
 inline caf::expected<caf::actor>
 get_node_component(caf::scoped_actor& self, caf::actor node, const std::string& type, const std::string& label) {
   caf::expected<caf::actor> result = vast::make_error(ec::missing_component);
-  self->request(node, caf::infinite, get_atom::value)
+  self->request(node, caf::infinite, atom::get::value)
     .receive(
       [&](const std::string& id, system::registry& reg) {
-          auto [begin, end] = reg.components[id].equal_range(type);
-          for (; begin != end; ++begin) {
-            if (begin->second.label == label) {
-              result = begin->second.actor;
-              break;
-            }
+        auto [begin, end] = reg.components[id].equal_range(type);
+        for (; begin != end; ++begin) {
+          if (begin->second.label == label) {
+            result = begin->second.actor;
+            break;
           }
-        },
+        }
+      },
       [&](caf::error& e) { result = e; });
   return result;
 }

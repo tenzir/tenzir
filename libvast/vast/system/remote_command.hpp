@@ -19,8 +19,7 @@ namespace vast::system {
 
 /// Default implementation of a remote command.
 /// @relates command
-caf::message
-remote_command(const command::invocation& invocation, caf::actor_system& sys);
+caf::message remote_command(const invocation& inv, caf::actor_system& sys);
 
 } // namespace vast::system
 

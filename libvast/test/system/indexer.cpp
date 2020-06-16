@@ -15,8 +15,8 @@
 
 #include "vast/system/indexer.hpp"
 
-#include "vast/test/test.hpp"
 #include "vast/test/fixtures/actor_system_and_events.hpp"
+#include "vast/test/test.hpp"
 
 #include "vast/bitmap.hpp"
 #include "vast/concept/parseable/to.hpp"
@@ -27,7 +27,7 @@
 #include "vast/concept/printable/vast/expression.hpp"
 #include "vast/default_table_slice.hpp"
 #include "vast/detail/spawn_container_source.hpp"
-#include "vast/system/atoms.hpp"
+#include "vast/fwd.hpp"
 #include "vast/system/evaluator.hpp"
 #include "vast/system/instrumentation.hpp"
 #include "vast/system/spawn_indexer.hpp"
@@ -89,7 +89,7 @@ struct fixture : fixtures::deterministic_actor_system_and_events {
 
   void check_done() {
     bool done = false;
-    self->receive([&](system::done_atom, uuid part_id) {
+    self->receive([&](atom::done, uuid part_id) {
       if (partition_id == part_id)
         done = true;
     });

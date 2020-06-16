@@ -147,10 +147,10 @@ auto show(const schema& schema) {
 
 } // namespace
 
-caf::message infer_command(const command::invocation& invocation,
-                           [[maybe_unused]] caf::actor_system& sys) {
-  VAST_TRACE(invocation);
-  const auto& options = invocation.options;
+caf::message
+infer_command(const invocation& inv, [[maybe_unused]] caf::actor_system& sys) {
+  VAST_TRACE(inv);
+  const auto& options = inv.options;
   auto input = detail::make_input_stream<defaults::infer>(options);
   if (!input)
     return make_message(input.error());
