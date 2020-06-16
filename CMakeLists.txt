@@ -10,12 +10,13 @@ cmake_minimum_required(VERSION 3.11...3.16 FATAL_ERROR)
 if (NOT VAST_VERSION_TAG)
   execute_process(
     COMMAND "git" "describe" "--tags" "--long" "--dirty"
+    WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
     RESULT_VARIABLE git_describe_result
     OUTPUT_VARIABLE VAST_VERSION_TAG
     OUTPUT_STRIP_TRAILING_WHITESPACE)
   # Fallback if the return value is not 0:
   if (NOT git_describe_result EQUAL 0)
-    set(VAST_VERSION_TAG "0.0-unknown")
+    set(VAST_VERSION_TAG "1970.01.01-unknown")
   endif ()
 endif ()
 string(REGEX REPLACE "\\.|-" " " version_numbers ${VAST_VERSION_TAG})
