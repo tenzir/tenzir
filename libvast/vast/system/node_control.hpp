@@ -44,8 +44,8 @@ get_node_components(caf::scoped_actor& self, caf::actor node,
     .receive(
       [&](const std::string& id, system::registry& reg) {
         auto find_actor = [&](std::string_view name) -> caf::actor {
-          if (auto er = reg.components[id].find(name);
-              er != reg.components[id].end())
+          if (auto er = reg.components.value[id].value.find(name);
+              er != reg.components.value[id].value.end())
             return er->second.actor;
           return nullptr;
         };
@@ -64,7 +64,7 @@ get_node_component(caf::scoped_actor& self, caf::actor node, const std::string& 
   self->request(node, caf::infinite, atom::get_v)
     .receive(
       [&](const std::string& id, system::registry& reg) {
-        auto [begin, end] = reg.components[id].equal_range(type);
+        auto [begin, end] = reg.components.value[id].value.equal_range(type);
         for (; begin != end; ++begin) {
           if (begin->second.label == label) {
             result = begin->second.actor;

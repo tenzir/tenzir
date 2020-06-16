@@ -25,16 +25,52 @@
 
 namespace vast::system {
 
+// TODO: This had to be forward declared so we can send it over-the-wire. We do
+// not want to include <map> and <string> in fwd.hpp, so this serves as a strong
+// typedef around the actual inner type. We should clean this up.
+struct component_state_map {
+  std::multimap<std::string, component_state, std::less<>> value;
+
+  template <class Inspector>
+  friend auto inspect(Inspector& f, component_state_map& x) {
+    return f(caf::meta::type_name("component_state_map"), x.value);
+  }
+};
+
+// TODO: This had to be forward declared so we can send it over-the-wire. We do
+// not want to include <map> and <string> in fwd.hpp, so this serves as a strong
+// typedef around the actual inner type. We should clean this up.
+struct component_map_entry {
+  std::pair<std::string, component_state_map> value;
+
+  template <class Inspector>
+  friend auto inspect(Inspector& f, component_map_entry& x) {
+    return f(caf::meta::type_name("component_map_entry"), x.value);
+  }
+};
+
+// TODO: This had to be forward declared so we can send it over-the-wire. We do
+// not want to include <map> and <string> in fwd.hpp, so this serves as a strong
+// typedef around the actual inner type. We should clean this up.
+struct component_map {
+  std::map<std::string, component_state_map, std::less<>> value;
+
+  template <class Inspector>
+  friend auto inspect(Inspector& f, component_map& x) {
+    return f(caf::meta::type_name("component_map"), x.value);
+  }
+};
+
 /// State maintained per component.
 struct component_state {
   caf::actor actor;
   std::string label;
-};
 
-template <class Inspector>
-auto inspect(Inspector& f, component_state& cs) {
-  return f(cs.actor, cs.label);
-}
+  template <class Inspector>
+  friend auto inspect(Inspector& f, component_state& x) {
+    return f(caf::meta::type_name("component_state"), x.actor, x.label);
+  }
+};
 
 /// The graph of connected components..
 //using link_map = std::unordered_multimap<caf::actor, caf::actor>;

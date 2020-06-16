@@ -75,17 +75,17 @@ struct terminator_state {
           return;
         }
         VAST_DEBUG(self, "kills parent and remaining components");
-        for (auto& component : components)
+        for (auto& component : components.value)
           kill(component.second.actor, component.second.label);
-        components.clear();
+        components.value.clear();
         kill(parent, "tracker");
         parent = nullptr;
         return;
       }
-      auto er = components.equal_range(victim_stack.back());
+      auto er = components.value.equal_range(victim_stack.back());
       for (auto i = er.first; i != er.second; ++i)
         kill(i->second.actor, i->second.label);
-      components.erase(er.first, er.second);
+      components.value.erase(er.first, er.second);
       victim_stack.pop_back();
     } while (pending_down_messages == 0);
   }
@@ -101,7 +101,7 @@ behavior terminator(stateful_actor<terminator_state>* self, caf::error reason,
                     caf::actor parent, component_state_map components,
                     std::vector<std::string> victim_stack) {
   VAST_DEBUG(self, "starts terminator with", victim_stack.size(),
-             "victims on the stack and", components.size(), "in total");
+             "victims on the stack and", components.value.size(), "in total");
   self->state.init(std::move(reason), std::move(parent), std::move(components),
                    std::move(victim_stack));
   self->state.kill_next();
@@ -121,7 +121,7 @@ void register_component(scheduled_actor* self, tracker_state& st,
   using caf::anon_send;
   // Save new component.
   self->monitor(component);
-  auto& local = st.registry.components[st.node];
+  auto& local = st.registry.components.value[st.node].value;
   local.emplace(type, component_state{component, label});
   // Wire it to existing components.
   auto actors = [&](auto key) {
@@ -150,8 +150,8 @@ void register_component(scheduled_actor* self, tracker_state& st,
   }
   // Propagate new component to peer.
   auto msg = make_message(atom::put_v, st.node, type, component, label);
-  for (auto& peer : st.registry.components) {
-    auto& t = peer.second.find("tracker")->second.actor;
+  for (auto& peer : st.registry.components.value) {
+    auto& t = peer.second.value.find("tracker")->second.actor;
     if (t != self)
       anon_send(t, msg);
   }
@@ -171,18 +171,19 @@ tracker_type::behavior_type
 tracker(tracker_type::stateful_pointer<tracker_state> self, std::string node) {
   self->state.node = node;
   // Insert ourself into the registry.
-  self->state.registry.components[node].emplace(
+  self->state.registry.components.value[node].value.emplace(
     "tracker", component_state{actor_cast<actor>(self), "tracker"});
   self->set_down_handler(
     [=](const down_msg& msg) {
       auto pred = [&](auto& p) { return p.second.actor == msg.source; };
-      for (auto& [node, comp_state] : self->state.registry.components) {
-        auto i = std::find_if(comp_state.begin(), comp_state.end(), pred);
-        if (i != comp_state.end()) {
+      for (auto& [node, comp_state] : self->state.registry.components.value) {
+        auto i = std::find_if(comp_state.value.begin(), comp_state.value.end(),
+                              pred);
+        if (i != comp_state.value.end()) {
           if (i->first == "tracker")
-            self->state.registry.components.erase(node);
+            self->state.registry.components.value.erase(node);
           else
-            comp_state.erase(i);
+            comp_state.value.erase(i);
           return;
         }
       }
@@ -197,7 +198,7 @@ tracker(tracker_type::stateful_pointer<tracker_state> self, std::string node) {
       // terminator operates with a stack of components, we specify them in
       // reverse order.
       self->spawn(terminator, msg.reason, actor_cast<actor>(self),
-                  self->state.registry.components[node],
+                  self->state.registry.components.value[node],
                   std::vector<std::string>{"exporter", "index", "archive",
                                            "importer", "source"});
     }
@@ -213,7 +214,7 @@ tracker(tracker_type::stateful_pointer<tracker_state> self, std::string node) {
         std::string& label) -> result<void> {
       VAST_DEBUG(self, "got new", type, '(' << label << ')');
       auto& st = self->state;
-      auto& local = st.registry.components[node];
+      auto& local = st.registry.components.value[node].value;
       if (is_singleton(type) && local.count(type) > 0)
         return make_error(ec::unspecified, "component already exists");
       register_component(self, st, type, component, label);
@@ -222,7 +223,7 @@ tracker(tracker_type::stateful_pointer<tracker_state> self, std::string node) {
     [=](atom::put, const std::string& name, const std::string& type,
         const actor& component, const std::string& label) {
       VAST_DEBUG(self, "got PUT from peer", name, "for", type);
-      auto& components = self->state.registry.components[name];
+      auto& components = self->state.registry.components.value[name].value;
       components.emplace(type, component_state{component, label});
       self->monitor(component);
     },
@@ -230,7 +231,7 @@ tracker(tracker_type::stateful_pointer<tracker_state> self, std::string node) {
     [=](atom::peer, const actor& peer, const std::string& peer_name)
       -> typed_response_promise<atom::state, registry> {
       auto rp = self->make_response_promise<atom::state, registry>();
-      if (self->state.registry.components.count(peer_name) > 0) {
+      if (self->state.registry.components.value.count(peer_name) > 0) {
         VAST_ERROR(self, "peer name already exists", peer_name);
         return rp.deliver(make_error(ec::unspecified, "duplicate node name"));
       }
@@ -239,20 +240,20 @@ tracker(tracker_type::stateful_pointer<tracker_state> self, std::string node) {
       return rp;
     },
     [=](atom::state, registry& reg) -> result<atom::ok> {
-      VAST_DEBUG(self, "got state for", reg.components.size(), "peers");
+      VAST_DEBUG(self, "got state for", reg.components.value.size(), "peers");
       // Monitor all remote components.
-      for (auto& peer : reg.components)
-        for (auto& pair : peer.second)
+      for (auto& peer : reg.components.value)
+        for (auto& pair : peer.second.value)
           self->monitor(pair.second.actor);
       // Incorporate new state from peer.
-      std::move(reg.components.begin(), reg.components.end(),
-                std::inserter(self->state.registry.components,
-                              self->state.registry.components.end()));
+      std::move(reg.components.value.begin(), reg.components.value.end(),
+                std::inserter(self->state.registry.components.value,
+                              self->state.registry.components.value.end()));
       // Broadcast our own state to all peers, without expecting a reply.
-      auto i = self->state.registry.components.find(node);
-      VAST_ASSERT(i != self->state.registry.components.end());
-      for (auto& peer : self->state.registry.components) {
-        auto& t = peer.second.find("tracker")->second.actor;
+      auto i = self->state.registry.components.value.find(node);
+      VAST_ASSERT(i != self->state.registry.components.value.end());
+      for (auto& peer : self->state.registry.components.value) {
+        auto& t = peer.second.value.find("tracker")->second.actor;
         if (t != self)
           self->send(actor_cast<tracker_type>(t), atom::state_v,
                      component_map_entry{*i});
@@ -261,9 +262,10 @@ tracker(tracker_type::stateful_pointer<tracker_state> self, std::string node) {
     },
     [=](atom::state, component_map_entry& entry) {
       VAST_DEBUG(self, "got components from new peer");
-      for (auto& pair : entry.second)
+      for (auto& pair : entry.value.second.value)
         self->monitor(pair.second.actor);
-      auto result = self->state.registry.components.insert(std::move(entry));
+      auto result
+        = self->state.registry.components.value.insert(std::move(entry.value));
       VAST_ASSERT(result.second);
     }};
 }

@@ -24,10 +24,21 @@
 #include <caf/typed_event_based_actor.hpp>
 
 #include <map>
-#include <set>
 #include <string>
+#include <unordered_set>
 
 namespace vast::system {
+
+// TODO: Operate on vast::schema directly, or find a way to properly forward
+// declare the inner type without having to include <unordered_set> in fwd.hpp.
+struct type_set {
+  std::unordered_set<vast::type> value;
+
+  template <class Inspector>
+  friend auto inspect(Inspector& f, type_set& x) {
+    return f(caf::meta::type_name("type_set"), x.value);
+  }
+};
 
 // clang-format off
 using type_registry_type = caf::typed_actor<
@@ -36,8 +47,8 @@ using type_registry_type = caf::typed_actor<
   caf::reacts_to<caf::stream<table_slice_ptr>>,
   caf::reacts_to<atom::put, vast::type>,
   caf::reacts_to<atom::put, vast::schema>,
-  caf::replies_to<atom::get>::with<std::unordered_set<vast::type>>,
-  caf::replies_to<atom::get, std::string>::with<std::unordered_set<vast::type>>
+  caf::replies_to<atom::get>::with<type_set>,
+  caf::replies_to<atom::get, std::string>::with<type_set>
 >;
 // clang-format on
 
@@ -71,14 +82,14 @@ struct type_registry_state {
   void insert(vast::type layout);
 
   /// Get a list of known types from the registry.
-  std::unordered_set<vast::type> types() const;
+  type_set types() const;
 
   /// Get a list of known types from the registry for a name.
-  std::unordered_set<vast::type> types(std::string key) const;
+  type_set types(std::string key) const;
 
   type_registry_actor self = {};
   accountant_type accountant = {};
-  std::map<std::string, std::unordered_set<vast::type>> data = {};
+  std::map<std::string, type_set> data = {};
   vast::path dir = {};
 };
 

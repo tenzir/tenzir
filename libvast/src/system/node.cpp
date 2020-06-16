@@ -139,9 +139,9 @@ void collect_component_status(node_actor* self,
   put(sys_stats, "worker-threads", sys.scheduler().num_workers());
   put(sys_stats, "table-slices", table_slice::instances());
   // Send out requests and collects answers.
-  for (auto& [node_name, state_map] : reg.components) {
-    req_state->pending += state_map.size();
-    for (auto& kvp : state_map) {
+  for (auto& [node_name, state_map] : reg.components.value) {
+    req_state->pending += state_map.value.size();
+    for (auto& kvp : state_map.value) {
       auto& comp_state = kvp.second;
       // Skip the tracker. It has no interesting state.
       if (comp_state.label == "tracker") {
@@ -220,7 +220,7 @@ caf::message kill_command(const invocation& inv, caf::actor_system&) {
   this_node->request(this_node->state.tracker, infinite, atom::get_v)
     .then(
       [rp, self = this_node, label = *first](registry& reg) mutable {
-        auto& local = reg.components[self->state.name];
+        auto& local = reg.components.value[self->state.name].value;
         auto i = std::find_if(local.begin(), local.end(),
                               [&](auto& p) { return p.second.label == label; });
         if (i == local.end()) {

@@ -25,6 +25,7 @@
 #include "vast/system/replicated_store.hpp"
 #include "vast/system/report.hpp"
 #include "vast/system/tracker.hpp"
+#include "vast/system/type_registry.hpp"
 #include "vast/table_slice.hpp"
 #include "vast/type.hpp"
 #include "vast/uuid.hpp"

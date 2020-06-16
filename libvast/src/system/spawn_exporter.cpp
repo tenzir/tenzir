@@ -50,20 +50,8 @@ maybe_actor spawn_exporter(node_actor* self, spawn_arguments& args) {
   else
     caf::anon_send(exp, atom::extract_v);
   // Send the running IMPORTERs to the EXPORTER if it handles a continous query.
-  if (has_continuous_option(query_opts)) {
-    self->request(self->state.tracker, caf::infinite, atom::get_v)
-      .then([=](registry& reg) mutable {
-        VAST_DEBUG(self, "looks for importers");
-        auto& local = reg.components[self->state.name];
-        const std::string wanted = "importer";
-        std::vector<caf::actor> importers;
-        for (auto& [component, state] : local)
-          if (std::equal(wanted.begin(), wanted.end(), component.begin()))
-            importers.push_back(state.actor);
-        if (!importers.empty())
-          self->send(exp, atom::importer_v, std::move(importers));
-      });
-  }
+  if (has_continuous_option(query_opts) && self->state.importer != nullptr)
+    self->send(exp, atom::importer_v, std::vector{self->state.importer});
   return exp;
 }
 

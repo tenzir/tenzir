@@ -70,25 +70,24 @@ caf::error type_registry_state::load_from_disk() {
 }
 
 void type_registry_state::insert(vast::type layout) {
-  auto& cont = data[layout.name()];
+  auto& cont = data[layout.name()].value;
   if ([[maybe_unused]] auto [hint, success]
       = cont.insert(flatten(std::move(layout)));
       success)
     VAST_VERBOSE(self, "registered", hint->name());
 }
 
-std::unordered_set<vast::type> type_registry_state::types() const {
+type_set type_registry_state::types() const {
   auto result = std::unordered_set<vast::type>{};
   // TODO: Replace merging logic once libc++ implements unordered_set::merge.
   //   result.merge(data);
   for ([[maybe_unused]] auto& [k, v] : data)
-    for (auto& x : v)
+    for (auto& x : v.value)
       result.insert(x);
-  return result;
+  return {result};
 }
 
-std::unordered_set<vast::type>
-type_registry_state::types(std::string key) const {
+type_set type_registry_state::types(std::string key) const {
   if (auto it = data.find(std::move(key)); it != data.end())
     return it->second;
   return {};

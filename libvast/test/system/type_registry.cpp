@@ -106,8 +106,8 @@ TEST(type_registry) {
     run();
     bool done = false;
     self
-      ->do_receive([&](std::unordered_set<vast::type> result) {
-        size = result.size();
+      ->do_receive([&](vast::system::type_set result) {
+        size = result.value.size();
         done = true;
       })
       .until(done);

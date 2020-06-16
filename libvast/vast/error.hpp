@@ -98,4 +98,4 @@ std::string render(caf::error err);
 
 } // namespace vast
 
-CAF_ERROR_CODE_ENUM(vast::ec, "vast");
+CAF_ERROR_CODE_ENUM(vast::ec, "vast")

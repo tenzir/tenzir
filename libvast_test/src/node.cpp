@@ -51,13 +51,12 @@ void node::ingest(const std::string& type) {
   run();
   rh.receive(
     [&](const std::string& id, system::registry& reg) {
-      auto er = reg.components[id].equal_range("importer");
+      auto er = reg.components.value[id].value.equal_range("importer");
       if (er.first == er.second)
         FAIL("no importers available at test node");
       importer = er.first->second.actor;
     },
-    error_handler()
-  );
+    error_handler());
   MESSAGE("sending " << type << " logs");
   // Send previously parsed logs directly to the importer (as opposed to
   // going through a source).

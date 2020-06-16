@@ -145,18 +145,18 @@ struct source_state {
     // Figure out which schemas we need.
     if (type_registry) {
       self->request(type_registry, caf::infinite, atom::get_v)
-        .await([=](std::unordered_set<vast::type> types) {
+        .await([=](type_set types) {
           auto& st = selfptr->state;
           auto is_valid = [&](const auto& layout) {
             return detail::starts_with(layout.name(), type_filter);
           };
           // First, merge and de-duplicate the local schema with types from the
           // type-registry.
-          types.insert(std::make_move_iterator(st.local_schema.begin()),
-                       std::make_move_iterator(st.local_schema.end()));
+          types.value.insert(std::make_move_iterator(st.local_schema.begin()),
+                             std::make_move_iterator(st.local_schema.end()));
           st.local_schema.clear();
           // Second, filter valid types from all available record types.
-          for (auto& type : types)
+          for (auto& type : types.value)
             if (auto layout = caf::get_if<vast::record_type>(&type))
               if (is_valid(*layout))
                 st.local_schema.add(std::move(*layout));

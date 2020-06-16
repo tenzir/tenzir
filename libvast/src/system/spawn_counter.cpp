@@ -20,6 +20,7 @@
 #include "vast/system/archive.hpp"
 #include "vast/system/counter.hpp"
 #include "vast/system/node.hpp"
+#include "vast/system/node_control.hpp"
 #include "vast/system/spawn_arguments.hpp"
 
 #include <caf/actor.hpp>
@@ -35,36 +36,8 @@ spawn_counter(system::node_actor* self, system::spawn_arguments& args) {
   VAST_TRACE(VAST_ARG(args));
   // Parse given expression.
   VAST_UNBOX_VAR(expr, system::normalized_and_validated(args));
-  // Get INDEX and ARCHIVE.
-  caf::error err;
-  caf::actor index;
-  system::archive_type archive;
-  caf::scoped_actor blocking{self->system()};
-  blocking->request(self->state.tracker, caf::infinite, atom::get_v)
-    .receive(
-      [&](system::registry& reg) {
-        VAST_DEBUG(self, "looks for index and archive");
-        auto by_name = [&](std::string key) -> caf::actor {
-          auto& local = reg.components[self->state.name];
-          auto [first, last] = local.equal_range(key);
-          if (first == last)
-            err = make_error(ec::invalid_configuration, "missing actor", key);
-          else if (std::distance(first, last) > 1)
-            err = make_error(ec::invalid_configuration,
-                             "too many actors for label", key);
-          else
-            return first->second.actor;
-          return nullptr;
-        };
-        index = by_name("index");
-        archive = caf::actor_cast<system::archive_type>(by_name("archive"));
-      },
-      [&](caf::error& tracker_error) { err = std::move(tracker_error); });
-  if (err)
-    return err;
-  VAST_ASSERT(index != nullptr);
-  VAST_ASSERT(archive != nullptr);
-  return self->spawn(counter, std::move(expr), index, archive,
+  return self->spawn(counter, std::move(expr), self->state.index,
+                     self->state.archive,
                      caf::get_or(args.inv.options, "count.estimate", false));
 }
 
