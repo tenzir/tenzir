@@ -110,7 +110,7 @@ caf::behavior importer(importer_actor* self, path dir, archive_type archive,
   namespace defs = defaults::system;
   if (auto a = self->system().registry().get(atom::accountant_v)) {
     self->state.accountant = caf::actor_cast<accountant_type>(a);
-    self->send(self->state.accountant, atom::accountant_v, self->name());
+    self->send(self->state.accountant, atom::announce_v, self->name());
     self->delayed_send(self, defs::telemetry_rate, atom::telemetry_v);
     self->state.last_report = stopwatch::now();
   }

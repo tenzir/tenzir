@@ -13,6 +13,8 @@
 
 #pragma once
 
+#include "vast/config.hpp"
+
 #include <caf/atom.hpp>
 #include <caf/config.hpp>
 #include <caf/fwd.hpp>
@@ -24,6 +26,10 @@
 #include <string>
 #include <unordered_set>
 #include <vector>
+
+#if !VAST_MEASUREMENT_MUTEX_WORKAROUND
+#  include <atomic>
+#endif
 
 namespace vast {
 
@@ -37,17 +43,14 @@ class bitmap;
 class chunk;
 class column_index;
 class command;
-class conjunction;
 class data;
 class default_table_slice;
 class default_table_slice_builder;
-class disjunction;
 class event;
 class ewah_bitstream;
 class expression;
 class json;
 class meta_index;
-class negation;
 class path;
 class path;
 class pattern;
@@ -62,7 +65,6 @@ class synopsis;
 class table_slice;
 class table_slice_builder;
 class type;
-class type_extractor;
 class uuid;
 class value;
 class value_index;
@@ -70,8 +72,16 @@ class value_index;
 namespace system {
 
 class actor_identity;
-class query_status;
-class registry;
+class application;
+class configuration;
+class default_application;
+class export_command;
+class import_command;
+class node_command;
+class pcap_writer_command;
+class remote_command;
+class sink_command;
+class start_command;
 
 } // namespace system
 
@@ -81,9 +91,11 @@ struct address_type;
 struct alias_type;
 struct attribute_extractor;
 struct bool_type;
+struct conjunction;
 struct count_type;
 struct curried_predicate;
 struct data_extractor;
+struct disjunction;
 struct duration_type;
 struct enumeration_type;
 struct flow;
@@ -91,6 +103,7 @@ struct integer_type;
 struct invocation;
 struct key_extractor;
 struct map_type;
+struct negation;
 struct none_type;
 struct offset;
 struct pattern_type;
@@ -103,13 +116,24 @@ struct set_type;
 struct string_type;
 struct subnet_type;
 struct time_type;
+struct type_extractor;
 struct vector_type;
 
 namespace system {
 
+#if VAST_MEASUREMENT_MUTEX_WORKAROUND
+struct atomic_measurement;
+#endif
+
 struct component_state;
 struct data_point;
+struct measurement;
+struct node_state;
 struct performance_sample;
+struct query_status;
+struct query_status;
+struct registry;
+struct spawn_arguments;
 
 } // namespace system
 
@@ -128,10 +152,15 @@ enum class query_options : uint32_t;
 
 namespace system {
 
+#if !VAST_MEASUREMENT_MUTEX_WORKAROUND
+using atomic_measurement = std::atomic<measurement>;
+#endif
+
 using component_state_map
   = std::multimap<std::string, component_state, std::less<>>;
-using component_map = std::map<std::string, component_state_map, std::less<>>;
 using component_map_entry = std::pair<std::string, component_state_map>;
+using component_map = std::map<std::string, component_state_map, std::less<>>;
+using node_actor = caf::stateful_actor<node_state>;
 using performance_report = std::vector<performance_sample>;
 using report = std::vector<data_point>;
 

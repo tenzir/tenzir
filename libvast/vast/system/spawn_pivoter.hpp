@@ -14,9 +14,7 @@
 #pragma once
 
 #include "vast/aliases.hpp"
-#include "vast/system/fwd.hpp"
-
-#include <caf/fwd.hpp>
+#include "vast/fwd.hpp"
 
 namespace vast::system {
 
