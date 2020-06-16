@@ -378,7 +378,7 @@ void node_state::init(std::string init_name, path init_dir) {
   tracker = self->spawn<linked>(system::tracker, name);
   self->set_exit_handler([=](const exit_msg& msg) {
     VAST_DEBUG(self, "got EXIT from", msg.source);
-    std::vector<actor> actors;
+    std::vector<caf::actor> actors;
     if (auto acc = self->system().registry().get(atom::accountant_v))
       actors.push_back(caf::actor_cast<caf::actor>(acc));
     actors.push_back(caf::actor_cast<caf::actor>(tracker));
