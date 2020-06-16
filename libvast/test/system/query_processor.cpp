@@ -43,7 +43,7 @@ caf::behavior mock_index(caf::stateful_actor<mock_index_state>* self) {
     self->send(hdl, query_id, uint32_t{3}, uint32_t(7));
     self->send(hdl, make_ids({1, 2, 4}));
     self->send(hdl, make_ids({3, 5}));
-    self->send(hdl, atom::done::value);
+    self->send(hdl, atom::done_v);
   }};
 }
 

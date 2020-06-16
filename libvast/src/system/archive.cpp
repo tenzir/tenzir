@@ -109,11 +109,11 @@ archive(archive_type::stateful_pointer<archive_state> self, path dir,
     VAST_DEBUG(self, "received DOWN from", msg.source);
     self->state.active_exporters.erase(msg.source);
   });
-  if (auto a = self->system().registry().get(atom::accountant::value)) {
+  if (auto a = self->system().registry().get(atom::accountant_v)) {
     namespace defs = defaults::system;
     self->state.accountant = actor_cast<accountant_type>(a);
-    self->send(self->state.accountant, atom::announce::value, self->name());
-    self->delayed_send(self, defs::telemetry_rate, atom::telemetry::value);
+    self->send(self->state.accountant, atom::announce_v, self->name());
+    self->delayed_send(self, defs::telemetry_rate, atom::telemetry_v);
   }
   return {
     [=](const ids& xs) {
@@ -149,7 +149,7 @@ archive(archive_type::stateful_pointer<archive_state> self, path dir,
       if (!st.session || st.session_id != session_id) {
         VAST_DEBUG(self, "considers extraction finished for invalidated "
                          "session");
-        self->send(requester, atom::done::value, make_error(ec::no_error));
+        self->send(requester, atom::done_v, make_error(ec::no_error));
         st.next_session();
         return;
       }
@@ -159,7 +159,7 @@ archive(archive_type::stateful_pointer<archive_state> self, path dir,
         auto err
           = slice.error() ? std::move(slice.error()) : make_error(ec::no_error);
         VAST_DEBUG(self, "finished extraction from the current session:", err);
-        self->send(requester, atom::done::value, std::move(err));
+        self->send(requester, atom::done_v, std::move(err));
         st.next_session();
         return;
       }
@@ -210,7 +210,7 @@ archive(archive_type::stateful_pointer<archive_state> self, path dir,
     [=](atom::telemetry) {
       self->state.send_report();
       namespace defs = defaults::system;
-      self->delayed_send(self, defs::telemetry_rate, atom::telemetry::value);
+      self->delayed_send(self, defs::telemetry_rate, atom::telemetry_v);
     },
     [=](atom::erase, const ids& xs) {
       if (auto err = self->state.store->erase(xs))

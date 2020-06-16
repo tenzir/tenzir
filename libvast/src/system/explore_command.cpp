@@ -110,13 +110,13 @@ caf::message explore_command(const invocation& inv, caf::actor_system& sys) {
     self->send_exit(*explorer, caf::exit_reason::user_shutdown);
   });
   self->monitor(*explorer);
-  self->send(*explorer, atom::provision::value, *exporter);
+  self->send(*explorer, atom::provision_v, *exporter);
   // Set the explorer as sink for the initial query exporter.
-  self->send(*exporter, atom::sink::value, *explorer);
+  self->send(*exporter, atom::sink_v, *explorer);
   // (Ab)use query_statistics as done message.
-  self->send(*exporter, atom::statistics::value, *explorer);
-  self->send(*explorer, atom::sink::value, writer);
-  self->send(*exporter, atom::run::value);
+  self->send(*exporter, atom::statistics_v, *explorer);
+  self->send(*explorer, atom::sink_v, writer);
+  self->send(*exporter, atom::run_v);
   caf::error err;
   auto stop = false;
   self

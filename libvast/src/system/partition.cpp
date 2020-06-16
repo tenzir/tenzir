@@ -176,7 +176,7 @@ caf::actor partition::fetch_indexer(const data_extractor& dx,
 caf::actor partition::fetch_indexer(const attribute_extractor& ex,
                                     relational_operator op, const data& x) {
   VAST_TRACE(VAST_ARG(ex), VAST_ARG(op), VAST_ARG(x));
-  if (ex.attr == atom::type::value) {
+  if (ex.attr == atom::type_v) {
     // We know the answer immediately: all IDs that are part of the table.
     // However, we still have to "lift" this result into an actor for the
     // EVALUATOR.

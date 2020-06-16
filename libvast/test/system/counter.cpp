@@ -91,7 +91,7 @@ struct fixture : fixtures::deterministic_actor_system_and_events {
     aut = sys.spawn(counter, unbox(to<expression>(query)), index, archive,
                     skip_candidate_check);
     run();
-    anon_send(aut, atom::run::value, client);
+    anon_send(aut, atom::run_v, client);
     sched.run_once();
   }
 

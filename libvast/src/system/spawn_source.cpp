@@ -50,7 +50,7 @@ maybe_actor spawn_generic_source(caf::local_actor* self, spawn_arguments& args,
   auto src = self->spawn(default_source<Reader>, std::move(reader));
   caf::anon_send(src, std::move(expr));
   if (sch)
-    caf::anon_send(src, atom::put::value, std::move(*sch));
+    caf::anon_send(src, atom::put_v, std::move(*sch));
   return src;
 }
 
@@ -91,7 +91,7 @@ maybe_actor spawn_test_source(caf::local_actor* self, spawn_arguments& args) {
                             defaults::import::max_events)};
   auto src = self->spawn(default_source<reader_type>, std::move(reader));
   if (sch)
-    caf::anon_send(src, atom::put::value, std::move(*sch));
+    caf::anon_send(src, atom::put_v, std::move(*sch));
   return src;
 }
 

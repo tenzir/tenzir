@@ -43,7 +43,7 @@ struct test_sink_state {
 using test_sink_type = caf::stateful_actor<test_sink_state>;
 
 caf::behavior test_sink(test_sink_type* self, caf::actor src) {
-  self->send(src, atom::sink::value, self);
+  self->send(src, atom::sink_v, self);
   return {
     [=](caf::stream<table_slice_ptr> in) {
       return self->make_sink(

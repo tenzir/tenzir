@@ -76,7 +76,7 @@ caf::message count_command(const invocation& inv, caf::actor_system& sys) {
       [&](caf::error& e) { err = std::move(e); });
   if (err)
     return caf::make_message(std::move(err));
-  self->send(cnt, atom::run::value, self);
+  self->send(cnt, atom::run_v, self);
   bool counting = true;
   uint64_t result = 0;
   self->receive_while

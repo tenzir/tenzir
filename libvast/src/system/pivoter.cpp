@@ -123,10 +123,9 @@ caf::behavior pivoter(caf::stateful_actor<pivoter_state>* self, caf::actor node,
         VAST_DEBUG(self, "already queried for all", pivot_field->name);
         return;
       }
-      auto expr = conjunction{predicate{attribute_extractor{atom::type::value},
-                                        equal, data{st.target}},
-                              predicate{key_extractor{pivot_field->name}, in,
-                                        data{xs}}};
+      auto expr = conjunction{
+        predicate{attribute_extractor{atom::type_v}, equal, data{st.target}},
+        predicate{key_extractor{pivot_field->name}, in, data{xs}}};
       // TODO(ch9411): Drop the conversion to a string when node actors can
       //               be spawned without going through an invocation.
       auto query = to_string(expr);
@@ -140,8 +139,8 @@ caf::behavior pivoter(caf::stateful_actor<pivoter_state>* self, caf::actor node,
       VAST_DEBUG(self, "registers exporter", exp);
       auto& st = self->state;
       self->monitor(exp);
-      self->send(exp, atom::sink::value, st.sink);
-      self->send(exp, atom::run::value);
+      self->send(exp, atom::sink_v, st.sink);
+      self->send(exp, atom::run_v);
     },
     [=]([[maybe_unused]] std::string name, query_status) {
       VAST_DEBUG(self, "received final status from", name);

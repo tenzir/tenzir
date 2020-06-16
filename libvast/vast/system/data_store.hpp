@@ -40,7 +40,7 @@ data_store(
   > self) {
   return {[=](atom::put, const Key& key, Value& value) {
             self->state.store[key] = std::move(value);
-            return atom::ok::value;
+            return atom::ok_v;
           },
           [=](atom::add, const Key& key,
               const Value& value) -> caf::result<Value> {
@@ -51,7 +51,7 @@ data_store(
           },
           [=](atom::erase, const Key& key) {
             self->state.store.erase(key);
-            return atom::ok::value;
+            return atom::ok_v;
           },
           [=](atom::get, const Key& key) -> caf::result<optional<Value>> {
             auto i = self->state.store.find(key);

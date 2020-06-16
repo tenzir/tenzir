@@ -110,7 +110,7 @@ caf::message start_command_impl(start_command_extra_steps extra_steps,
         if (signal == SIGINT || signal == SIGTERM)
           self->send_exit(node, caf::exit_reason::user_shutdown);
         else
-          self->send(node, atom::signal::value, signal);
+          self->send(node, atom::signal_v, signal);
       })
     .until([&] { return stop; });
   return caf::make_message(std::move(err));

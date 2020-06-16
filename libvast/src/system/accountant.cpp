@@ -43,7 +43,7 @@ void init(accountant_actor* self) {
   auto& st = self->state;
 #if VAST_LOG_LEVEL >= VAST_LOG_LEVEL_INFO
   VAST_DEBUG(self, "animates heartbeat loop");
-  self->delayed_send(self, overview_delay, atom::telemetry::value);
+  self->delayed_send(self, overview_delay, atom::telemetry_v);
 #endif
   st.slice_size = get_or(self->system().config(), "system.table-slice-size",
                          defaults::import::table_slice_size);
@@ -220,7 +220,7 @@ accountant_type::behavior_type accountant(accountant_actor* self) {
           },
           [=](atom::telemetry) {
             self->state.command_line_heartbeat();
-            self->delayed_send(self, overview_delay, atom::telemetry::value);
+            self->delayed_send(self, overview_delay, atom::telemetry_v);
           }};
 }
 

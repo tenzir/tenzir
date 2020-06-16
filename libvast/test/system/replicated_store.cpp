@@ -36,29 +36,29 @@ FIXTURE_SCOPE(consensus_tests, fixtures::consensus)
 TEST_DISABLED(single replicated store) {
   MESSAGE("operating with a replicated store");
   auto store = self->spawn(replicated_store<int, int>, server1);
-  self->request(store, timeout, atom::put::value, 42, 4711)
+  self->request(store, timeout, atom::put_v, 42, 4711)
     .receive([](atom::ok) { /* nop */ }, error_handler());
-  self->request(store, timeout, atom::put::value, 43, 42)
+  self->request(store, timeout, atom::put_v, 43, 42)
     .receive([](atom::ok) { /* nop */ }, error_handler());
-  self->request(store, timeout, atom::get::value, 42)
+  self->request(store, timeout, atom::get_v, 42)
     .receive(
       [&](optional<int> i) {
         REQUIRE(i);
         CHECK_EQUAL(*i, 4711);
       },
       error_handler());
-  self->request(store, timeout, atom::add::value, 42, -511)
+  self->request(store, timeout, atom::add_v, 42, -511)
     .receive([&](int old) { CHECK_EQUAL(old, 4711); }, error_handler());
-  self->request(store, timeout, atom::get::value, 42)
+  self->request(store, timeout, atom::get_v, 42)
     .receive(
       [&](optional<int> i) {
         REQUIRE(i);
         CHECK_EQUAL(*i, 4200);
       },
       error_handler());
-  self->request(store, timeout, atom::erase::value, 43)
+  self->request(store, timeout, atom::erase_v, 43)
     .receive([](atom::ok) { /* nop */ }, error_handler());
-  self->request(store, timeout, atom::snapshot::value)
+  self->request(store, timeout, atom::snapshot_v)
     .receive([](atom::ok) { /* nop */ }, error_handler());
   self->send_exit(store, exit_reason::user_shutdown);
   self->wait_for(store);
@@ -69,14 +69,14 @@ TEST_DISABLED(single replicated store) {
   MESSAGE("sleeping until state replay finishes");
   std::this_thread::sleep_for(raft::heartbeat_period * 2);
   MESSAGE("checking value persistence");
-  self->request(store, timeout, atom::get::value, 42)
+  self->request(store, timeout, atom::get_v, 42)
     .receive(
       [&](optional<int> i) {
         REQUIRE(i);
         CHECK_EQUAL(*i, 4200);
       },
       error_handler());
-  self->request(store, timeout, atom::get::value, 43)
+  self->request(store, timeout, atom::get_v, 43)
     .receive([&](optional<int> i) { REQUIRE(!i); }, error_handler());
   self->send_exit(store, exit_reason::user_shutdown);
   self->wait_for(store);
@@ -86,16 +86,16 @@ TEST_DISABLED(multiple replicated stores) {
   auto store1 = self->spawn(replicated_store<int, int>, server1);
   auto store2 = self->spawn(replicated_store<int, int>, server2);
   auto store3 = self->spawn(replicated_store<int, int>, server3);
-  self->request(store1, timeout, atom::put::value, 42, 4700)
+  self->request(store1, timeout, atom::put_v, 42, 4700)
     .receive([](atom::ok) { /* nop */ }, error_handler());
-  self->request(store2, timeout, atom::add::value, 42, 10)
+  self->request(store2, timeout, atom::add_v, 42, 10)
     .receive([](int) { /* nop */ }, error_handler());
-  self->request(store3, timeout, atom::add::value, 42, 1)
+  self->request(store3, timeout, atom::add_v, 42, 1)
     .receive([](int) { /* nop */ }, error_handler());
   MESSAGE("sleeping until state replay finishes");
   std::this_thread::sleep_for(raft::heartbeat_period * 2);
   for (auto store : {store1, store2, store3})
-    self->request(store, timeout, atom::get::value, 42)
+    self->request(store, timeout, atom::get_v, 42)
       .receive(
         [&](optional<int> i) {
           REQUIRE(i);

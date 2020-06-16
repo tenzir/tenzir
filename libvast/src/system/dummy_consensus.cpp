@@ -68,7 +68,7 @@ dummy_consensus(dummy_consensus_state::actor_ptr self, path dir) {
             self->state.store[key] = std::move(value);
             if (auto err = self->state.save())
               return err;
-            return atom::ok::value;
+            return atom::ok_v;
           },
           [=](atom::add, const std::string& key,
               const data& value) -> caf::result<data> {
@@ -83,7 +83,7 @@ dummy_consensus(dummy_consensus_state::actor_ptr self, path dir) {
             self->state.store.erase(key);
             if (auto err = self->state.save())
               return err;
-            return atom::ok::value;
+            return atom::ok_v;
           },
           [=](atom::get,
               const std::string& key) -> caf::result<optional<data>> {

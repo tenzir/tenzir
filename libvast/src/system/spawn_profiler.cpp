@@ -38,9 +38,9 @@ maybe_actor spawn_profiler([[maybe_unused]] caf::local_actor* self,
   auto secs = std::chrono::seconds(resolution);
   auto prof = self->spawn(profiler, args.dir / args.label, secs);
   if (get_or(args.inv.options, "cpu", false))
-    caf::anon_send(prof, atom::start::value, atom::cpu::value);
+    caf::anon_send(prof, atom::start_v, atom::cpu_v);
   if (get_or(args.inv.options, "heap", false))
-    caf::anon_send(prof, atom::start::value, atom::heap::value);
+    caf::anon_send(prof, atom::start_v, atom::heap_v);
   return prof;
 #endif // VAST_HAVE_GPERFTOOLS
 }

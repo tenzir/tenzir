@@ -141,10 +141,10 @@ struct source_state {
     local_schema = std::move(sch);
     accountant = std::move(acc);
     // Register with the accountant.
-    self->send(accountant, atom::announce::value, name);
+    self->send(accountant, atom::announce_v, name);
     // Figure out which schemas we need.
     if (type_registry) {
-      self->request(type_registry, caf::infinite, atom::get::value)
+      self->request(type_registry, caf::infinite, atom::get_v)
         .await([=](std::unordered_set<vast::type> types) {
           auto& st = selfptr->state;
           auto is_valid = [&](const auto& layout) {
@@ -314,7 +314,7 @@ source(caf::stateful_actor<source_state<Reader>>* self, Reader reader,
       }
       st.sink = sink;
       self->delayed_send(self, defaults::system::telemetry_rate,
-                         atom::telemetry::value);
+                         atom::telemetry_v);
       // Start streaming.
       st.mgr->add_outbound_path(st.sink);
     },
@@ -323,7 +323,7 @@ source(caf::stateful_actor<source_state<Reader>>* self, Reader reader,
       st.send_report();
       if (!st.mgr->done())
         self->delayed_send(self, defaults::system::telemetry_rate,
-                           atom::telemetry::value);
+                           atom::telemetry_v);
     },
   };
 }

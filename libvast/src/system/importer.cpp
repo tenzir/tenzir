@@ -108,10 +108,10 @@ caf::behavior importer(importer_actor* self, path dir, archive_type archive,
     return {};
   }
   namespace defs = defaults::system;
-  if (auto a = self->system().registry().get(atom::accountant::value)) {
+  if (auto a = self->system().registry().get(atom::accountant_v)) {
     self->state.accountant = caf::actor_cast<accountant_type>(a);
-    self->send(self->state.accountant, atom::accountant::value, self->name());
-    self->delayed_send(self, defs::telemetry_rate, atom::telemetry::value);
+    self->send(self->state.accountant, atom::accountant_v, self->name());
+    self->delayed_send(self, defs::telemetry_rate, atom::telemetry_v);
     self->state.last_report = stopwatch::now();
   }
   self->set_exit_handler([=](const caf::exit_msg& msg) {
@@ -156,12 +156,13 @@ caf::behavior importer(importer_actor* self, path dir, archive_type archive,
     [=](atom::index, const caf::actor& index) {
       VAST_DEBUG(self, "registers index", index);
       self->state.index_actors.emplace_back(index);
-      // TODO: currently, the subscriber expects only a single 'flush' message.
+      // TODO: currently, the subscriber expects only a single 'flush'
+      // message.
       //       Adding multiple INDEX actors will cause the subscriber to
-      //       receive more than one 'flush'  message, but the subscriber only
-      //       expects one and will stop waiting after the first one. Once we
-      //       support multiple INDEX actors at the IMPORTER, we also need to
-      //       revise the signaling of these 'flush' messages.
+      //       receive more than one 'flush'  message, but the subscriber
+      //       only expects one and will stop waiting after the first one.
+      //       Once we support multiple INDEX actors at the IMPORTER, we
+      //       also need to revise the signaling of these 'flush' messages.
       if (self->state.index_actors.size() > 1)
         VAST_WARNING(self, "registered more than one INDEX actor",
                      "(currently unsupported!)");
@@ -190,7 +191,7 @@ caf::behavior importer(importer_actor* self, path dir, archive_type archive,
     [=](atom::status) { return self->state.status(); },
     [=](atom::telemetry) {
       self->state.send_report();
-      self->delayed_send(self, defs::telemetry_rate, atom::telemetry::value);
+      self->delayed_send(self, defs::telemetry_rate, atom::telemetry_v);
     },
   };
 }

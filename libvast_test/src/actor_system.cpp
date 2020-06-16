@@ -47,8 +47,8 @@ actor_system::~actor_system() {
   // Stop profiler.
   namespace atom = vast::atom;
   if (profiler) {
-    self->send(profiler, atom::stop::value, atom::cpu::value);
-    self->send(profiler, atom::stop::value, atom::heap::value);
+    self->send(profiler, atom::stop_v, atom::cpu_v);
+    self->send(profiler, atom::stop_v, atom::heap_v);
   }
 }
 
@@ -57,8 +57,8 @@ void actor_system::enable_profiler() {
   namespace atom = vast::atom;
   profiler = self->spawn(vast::system::profiler, directory / "profiler",
                          std::chrono::seconds(1));
-  self->send(profiler, atom::start::value, atom::cpu::value);
-  self->send(profiler, atom::start::value, atom::heap::value);
+  self->send(profiler, atom::start_v, atom::cpu_v);
+  self->send(profiler, atom::start_v, atom::heap_v);
 }
 
 deterministic_actor_system::deterministic_actor_system() {

@@ -219,7 +219,7 @@ caf::message import_command(const invocation& inv, caf::actor_system& sys) {
   if (!importer)
     return make_message(make_error(ec::missing_component, "importer"));
   VAST_DEBUG(inv.full_name, "connects to", VAST_ARG("importer", importer));
-  self->send(src, atom::sink::value, importer);
+  self->send(src, atom::sink_v, importer);
   // Start the source.
   bool stop = false;
   self->monitor(src);
@@ -235,8 +235,7 @@ caf::message import_command(const invocation& inv, caf::actor_system& sys) {
         } else if (msg.source == src) {
           VAST_DEBUG(inv.full_name, "received DOWN from source");
           if (caf::get_or(inv.options, "import.blocking", false))
-            self->send(importer, atom::subscribe::value, atom::flush::value,
-                       self);
+            self->send(importer, atom::subscribe_v, atom::flush::value, self);
           else
             stop = true;
         } else {

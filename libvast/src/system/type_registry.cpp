@@ -99,13 +99,12 @@ type_registry(type_registry_actor self, const path& dir) {
   self->state.self = self;
   self->state.dir = dir;
   // Register with the accountant.
-  if (auto accountant
-      = self->system().registry().get(atom::accountant::value)) {
+  if (auto accountant = self->system().registry().get(atom::accountant_v)) {
     VAST_DEBUG(self, "connects to", VAST_ARG(accountant));
     self->state.accountant = caf::actor_cast<accountant_type>(accountant);
-    self->send(self->state.accountant, atom::announce::value, self->name());
+    self->send(self->state.accountant, atom::announce_v, self->name());
     self->delayed_send(self, defaults::system::telemetry_rate,
-                       atom::telemetry::value);
+                       atom::telemetry_v);
   }
   // Register the exit handler.
   self->set_exit_handler([=](const caf::exit_msg& msg) {
@@ -124,7 +123,7 @@ type_registry(type_registry_actor self, const path& dir) {
   // Load loaded schema types from the singleton.
   auto schema = vast::event_types::get();
   if (schema)
-    self->send(self, atom::put::value, *schema);
+    self->send(self, atom::put_v, *schema);
   // The behavior of the type-registry.
   return {
     [=](atom::telemetry) {
@@ -132,7 +131,7 @@ type_registry(type_registry_actor self, const path& dir) {
                  VAST_ARG("accountant", self->state.accountant));
       self->send(self->state.accountant, self->state.telemetry());
       self->delayed_send(self, defaults::system::telemetry_rate,
-                         atom::telemetry::value);
+                         atom::telemetry_v);
     },
     [=](atom::status) {
       VAST_TRACE(self, "sends out a status report");

@@ -47,7 +47,7 @@ void counter_state::init(expression expr, caf::actor index,
   // Add additional message handlers if we need to perform candidate checks.
   if (skip_candidate_check_)
     return;
-  self_->send(archive_, atom::exporter::value, self_);
+  self_->send(archive_, atom::exporter_v, self_);
   caf::message_handler base{behaviors_[collect_hits].as_behavior_impl()};
   behaviors_[collect_hits] = base.or_else(
     [this](table_slice_ptr slice) {
@@ -105,7 +105,7 @@ void counter_state::process_end_of_hits() {
   }
   // The COUNTER runs only once. Hence, we call quit() after sending a final
   // 'done' atom to the client for end-of-results signaling.
-  self_->send(client_, atom::done::value);
+  self_->send(client_, atom::done_v);
   self_->quit();
 }
 

@@ -29,7 +29,7 @@ namespace {
 
 behavior worker(event_based_actor* self, const actor& task) {
   return [=](std::string) {
-    self->send(task, atom::done::value);
+    self->send(task, atom::done_v);
     self->quit();
   };
 }
@@ -38,7 +38,7 @@ behavior worker(event_based_actor* self, const actor& task) {
 
 TEST(custom done message) {
   auto t = sys.spawn(task<int>, 42);
-  self->send(t, atom::supervisor::value, self);
+  self->send(t, atom::supervisor_v, self);
   self->send_exit(t, exit_reason::user_shutdown);
   self->receive([&](atom::done, int i) { CHECK(i == 42); });
 }
@@ -47,12 +47,12 @@ TEST(manual task shutdown) {
   auto t = sys.spawn(task<>);
   auto w0 = sys.spawn(worker, t);
   auto w1 = sys.spawn(worker, t);
-  self->send(t, atom::supervisor::value, self);
+  self->send(t, atom::supervisor_v, self);
   self->send(t, w0);
   self->send(t, w1);
   self->send(w0, "regular");
   MESSAGE("sending explicit DONE atom");
-  self->send(t, atom::done::value, w1->address());
+  self->send(t, atom::done_v, w1->address());
   self->receive([&](atom::done) { /* nop */ });
   self->send_exit(w1, exit_reason::user_shutdown);
 }
@@ -72,8 +72,8 @@ TEST(manual task shutdown) {
 TEST(hierarchical task) {
   MESSAGE("spawning task");
   auto t = self->spawn(task<>);
-  self->send(t, atom::subscriber::value, self);
-  self->send(t, atom::supervisor::value, self);
+  self->send(t, atom::subscriber_v, self);
+  self->send(t, atom::supervisor_v, self);
   MESSAGE("spawning main workers");
   auto leaf1a = self->spawn(worker, t);
   auto leaf1b = self->spawn(worker, t);
@@ -89,7 +89,7 @@ TEST(hierarchical task) {
   self->send(i, leaf2b);
   self->send(i, leaf2c);
   MESSAGE("asking main task for the current progress");
-  self->request(t, infinite, atom::progress::value)
+  self->request(t, infinite, atom::progress_v)
     .receive(
       [&](uint64_t remaining, uint64_t total) {
         CHECK(remaining == 3);
@@ -97,7 +97,7 @@ TEST(hierarchical task) {
       },
       error_handler());
   MESSAGE("asking intermediate task for the current progress");
-  self->request(i, infinite, atom::progress::value)
+  self->request(i, infinite, atom::progress_v)
     .receive(
       [&](uint64_t remaining, uint64_t total) {
         CHECK(remaining == 3);

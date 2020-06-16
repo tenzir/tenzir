@@ -54,7 +54,7 @@ TEST(parseable/printable - predicate) {
   CHECK(caf::holds_alternative<attribute_extractor>(pred.lhs));
   CHECK(caf::holds_alternative<data>(pred.rhs));
   CHECK(caf::get<attribute_extractor>(pred.lhs)
-        == attribute_extractor{atom::type::value});
+        == attribute_extractor{atom::type_v});
   CHECK(pred.op == not_equal);
   CHECK(caf::get<data>(pred.rhs) == data{"foo"});
   CHECK_EQUAL(to_string(pred), str);
@@ -83,7 +83,7 @@ TEST(parseable/printable - predicate) {
   CHECK(caf::holds_alternative<attribute_extractor>(pred.rhs));
   CHECK(pred.op == greater);
   CHECK(caf::get<attribute_extractor>(pred.rhs)
-        == attribute_extractor{atom::timestamp::value});
+        == attribute_extractor{atom::timestamp_v});
   str = "x.a_b == y.c_d";
   CHECK(parsers::predicate(str, pred));
   CHECK(caf::holds_alternative<key_extractor>(pred.lhs));

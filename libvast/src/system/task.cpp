@@ -28,7 +28,7 @@ namespace {
 template <class Actor>
 void notify(Actor self) {
   for (auto& s : self->state.subscribers)
-    self->send(s, atom::progress::value, uint64_t{self->state.workers.size()},
+    self->send(s, atom::progress_v, uint64_t{self->state.workers.size()},
                self->state.total);
   if (self->state.workers.empty()) {
     for (auto& s : self->state.supervisors)

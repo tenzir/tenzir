@@ -32,14 +32,14 @@ FIXTURE_SCOPE(leader_tests, fixtures::actor_system)
 TEST_DISABLED(single leader) {
   directory /= "server";
   auto server = self->spawn(raft::consensus, directory);
-  self->send(server, atom::id::value, raft::server_id{1});
-  self->send(server, atom::run::value);
-  self->send(server, atom::subscribe::value, self);
+  self->send(server, atom::id_v, raft::server_id{1});
+  self->send(server, atom::run_v);
+  self->send(server, atom::subscribe_v, self);
   MESSAGE("sleeping until leader got elected");
   std::this_thread::sleep_for(raft::election_timeout * 2);
   MESSAGE("send two logs to leader");
-  auto cmd = make_message(atom::put::value, "foo", 42);
-  self->request(server, consensus_timeout, atom::replicate::value, cmd)
+  auto cmd = make_message(atom::put_v, "foo", 42);
+  self->request(server, consensus_timeout, atom::replicate_v, cmd)
     .receive([](atom::ok) { /* nop */ }, error_handler());
   self->receive(
     [&](raft::index_type i, message) {
@@ -47,8 +47,8 @@ TEST_DISABLED(single leader) {
     },
     error_handler()
   );
-  cmd = make_message(atom::put::value, "bar", 7);
-  self->request(server, consensus_timeout, atom::replicate::value, cmd)
+  cmd = make_message(atom::put_v, "bar", 7);
+  self->request(server, consensus_timeout, atom::replicate_v, cmd)
     .receive([](atom::ok) { /* nop */ }, error_handler());
   self->receive(
     [&](raft::index_type i, message) {
@@ -60,7 +60,7 @@ TEST_DISABLED(single leader) {
   auto last_applied = raft::index_type{3};
   auto state_machine = std::vector<char>(1024);
   self
-    ->request(server, consensus_timeout, atom::snapshot::value, last_applied,
+    ->request(server, consensus_timeout, atom::snapshot_v, last_applied,
               state_machine)
     .receive(
       [&](raft::index_type last_included_index) {
@@ -72,8 +72,8 @@ TEST_DISABLED(single leader) {
   self->wait_for(server);
   MESSAGE("respawning");
   server = self->spawn(raft::consensus, directory);
-  self->send(server, atom::run::value);
-  self->send(server, atom::subscribe::value, self);
+  self->send(server, atom::run_v);
+  self->send(server, atom::subscribe_v, self);
   MESSAGE("receiving old state after startup");
   self->receive(
     [&](raft::index_type i, const message& msg) {
@@ -83,8 +83,8 @@ TEST_DISABLED(single leader) {
     error_handler()
   );
   MESSAGE("sending another command");
-  cmd = make_message(atom::put::value, "baz", 49);
-  self->request(server, consensus_timeout, atom::replicate::value, cmd)
+  cmd = make_message(atom::put_v, "baz", 49);
+  self->request(server, consensus_timeout, atom::replicate_v, cmd)
     .receive([](atom::ok) { /* nop */ }, error_handler());
   self->receive(
     [&](raft::index_type i, message) {
@@ -121,8 +121,8 @@ TEST_DISABLED(manual snapshotting) {
   MESSAGE("performing a manual snapshot at server 1");
   auto state_machine = std::vector<char>(512);
   self
-    ->request(server1, consensus_timeout, atom::snapshot::value,
-              raft::index_type{3}, state_machine)
+    ->request(server1, consensus_timeout, atom::snapshot_v, raft::index_type{3},
+              state_machine)
     .receive(
       [&](raft::index_type last_included_index) {
         CHECK_EQUAL(last_included_index, 3u);

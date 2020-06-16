@@ -159,10 +159,10 @@ datagram_source(datagram_source_actor<Reader>* self,
       auto& st = self->state;
       st.accountant = std::move(accountant);
       self->send(st.accountant, "source.start", st.start_time);
-      self->send(st.accountant, atom::announce::value, st.name);
+      self->send(st.accountant, atom::announce_v, st.name);
       // Start the heartbeat loop
       self->delayed_send(self, defaults::system::telemetry_rate,
-                         atom::telemetry::value);
+                         atom::telemetry_v);
     },
     [=](type_registry_type type_registry) {
       // TODO adapt
@@ -200,7 +200,7 @@ datagram_source(datagram_source_actor<Reader>* self,
       }
       if (!st.done)
         self->delayed_send(self, defaults::system::telemetry_rate,
-                           atom::telemetry::value);
+                           atom::telemetry_v);
     },
   };
 }

@@ -35,26 +35,26 @@ struct consensus : actor_system {
     server1 = self->spawn(raft::consensus, directory / "server1");
     server2 = self->spawn(raft::consensus, directory / "server2");
     server3 = self->spawn(raft::consensus, directory / "server3");
-    self->send(server1, atom::id::value, raft::server_id{1});
-    self->send(server2, atom::id::value, raft::server_id{2});
-    self->send(server3, atom::id::value, raft::server_id{3});
+    self->send(server1, atom::id_v, raft::server_id{1});
+    self->send(server2, atom::id_v, raft::server_id{2});
+    self->send(server3, atom::id_v, raft::server_id{3});
     // Make it deterministic.
-    self->send(server1, atom::seed::value, uint64_t{42});
-    self->send(server2, atom::seed::value, uint64_t{43});
-    self->send(server3, atom::seed::value, uint64_t{44});
+    self->send(server1, atom::seed_v, uint64_t{42});
+    self->send(server2, atom::seed_v, uint64_t{43});
+    self->send(server3, atom::seed_v, uint64_t{44});
     // Setup peers.
-    self->send(server1, atom::peer::value, server2, raft::server_id{2});
-    self->send(server1, atom::peer::value, server3, raft::server_id{3});
-    self->send(server2, atom::peer::value, server1, raft::server_id{1});
-    self->send(server2, atom::peer::value, server3, raft::server_id{3});
-    self->send(server3, atom::peer::value, server1, raft::server_id{1});
-    self->send(server3, atom::peer::value, server2, raft::server_id{2});
-    self->send(server1, atom::run::value);
-    self->send(server2, atom::run::value);
-    self->send(server3, atom::run::value);
-    self->send(server1, atom::subscribe::value, self);
-    self->send(server2, atom::subscribe::value, self);
-    self->send(server3, atom::subscribe::value, self);
+    self->send(server1, atom::peer_v, server2, raft::server_id{2});
+    self->send(server1, atom::peer_v, server3, raft::server_id{3});
+    self->send(server2, atom::peer_v, server1, raft::server_id{1});
+    self->send(server2, atom::peer_v, server3, raft::server_id{3});
+    self->send(server3, atom::peer_v, server1, raft::server_id{1});
+    self->send(server3, atom::peer_v, server2, raft::server_id{2});
+    self->send(server1, atom::run_v);
+    self->send(server2, atom::run_v);
+    self->send(server3, atom::run_v);
+    self->send(server1, atom::subscribe_v, self);
+    self->send(server2, atom::subscribe_v, self);
+    self->send(server3, atom::subscribe_v, self);
     MESSAGE("sleeping until leader got elected");
     std::this_thread::sleep_for(raft::election_timeout * 2);
   }
@@ -75,7 +75,7 @@ struct consensus : actor_system {
     using namespace vast;
     using namespace vast::system;
     auto command = caf::make_message(std::forward<Ts>(xs)...);
-    self->request(server, consensus_timeout, atom::replicate::value, command)
+    self->request(server, consensus_timeout, atom::replicate_v, command)
       .receive([](atom::ok) { /* nop */ }, error_handler());
   }
 

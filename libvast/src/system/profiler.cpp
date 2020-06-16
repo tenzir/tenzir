@@ -55,7 +55,7 @@ behavior profiler(stateful_actor<profiler_state>* self, path dir,
         auto filename = (dir / "perftools.cpu").str();
         VAST_INFO(self, "starts gperftools CPU profiler in", filename);
         ProfilerStart(filename.c_str());
-        self->delayed_send(self, secs, atom::flush::value);
+        self->delayed_send(self, secs, atom::flush_v);
       }
     },
     [=](atom::stop, atom::cpu) {
@@ -104,7 +104,7 @@ behavior profiler(stateful_actor<profiler_state>* self, path dir,
       if (ps.enabled) {
         VAST_DEBUG(self, "flushes gperftools CPU profiler");
         ProfilerFlush();
-        self->delayed_send(self, secs, atom::flush::value);
+        self->delayed_send(self, secs, atom::flush_v);
       }
     }};
 }

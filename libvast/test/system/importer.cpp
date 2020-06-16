@@ -45,7 +45,7 @@ behavior dummy_sink(event_based_actor* self, size_t num_events, actor overseer) 
   return {
     [=](stream<table_slice_ptr> in) {
       self->unbecome();
-      self->send(overseer, atom::ok::value);
+      self->send(overseer, atom::ok_v);
       self->make_sink(
         in,
         [=](event_buffer&) {
@@ -87,7 +87,7 @@ struct importer_fixture : Base {
 
   auto add_sink() {
     auto snk = make_sink();
-    anon_send(importer, atom::add::value, snk);
+    anon_send(importer, atom::add_v, snk);
     fetch_ok();
     return snk;
   }
@@ -198,7 +198,7 @@ TEST(deterministic importer with one sink and zeek source) {
   MESSAGE("spawn zeek source");
   auto src = make_zeek_source();
   consume_message();
-  self->send(src, atom::sink::value, importer);
+  self->send(src, atom::sink_v, importer);
   MESSAGE("loop until importer becomes idle");
   run();
   MESSAGE("verify results");
@@ -212,7 +212,7 @@ TEST(deterministic importer with two sinks and zeek source) {
   MESSAGE("spawn zeek source");
   auto src = make_zeek_source();
   consume_message();
-  self->send(src, atom::sink::value, importer);
+  self->send(src, atom::sink_v, importer);
   MESSAGE("loop until importer becomes idle");
   run();
   MESSAGE("verify results");
@@ -228,7 +228,7 @@ TEST(deterministic importer with one sink and failing zeek source) {
   MESSAGE("spawn zeek source");
   auto src = make_zeek_source();
   consume_message();
-  self->send(src, atom::sink::value, importer);
+  self->send(src, atom::sink_v, importer);
   MESSAGE("loop until first ack_batch");
   if (!allow((upstream_msg::ack_batch), from(importer).to(src)))
     sched.run_once();
@@ -318,7 +318,7 @@ TEST(nondeterministic importer with one sink and zeek source) {
   add_sink();
   MESSAGE("spawn zeek source");
   auto src = make_zeek_source();
-  self->send(src, atom::sink::value, importer);
+  self->send(src, atom::sink_v, importer);
   MESSAGE("verify results");
   verify(fetch_result(), zeek_conn_log);
 }
@@ -329,7 +329,7 @@ TEST(nondeterministic importer with two sinks and zeek source) {
   add_sink();
   MESSAGE("spawn zeek source");
   auto src = make_zeek_source();
-  self->send(src, atom::sink::value, importer);
+  self->send(src, atom::sink_v, importer);
   MESSAGE("verify results");
   auto result = fetch_result();
   MESSAGE("got first result");

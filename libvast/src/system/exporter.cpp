@@ -160,9 +160,9 @@ caf::settings exporter_state::status() {
 
 behavior exporter(stateful_actor<exporter_state>* self, expression expr,
                   query_options options) {
-  if (auto a = self->system().registry().get(atom::accountant::value)) {
+  if (auto a = self->system().registry().get(atom::accountant_v)) {
     self->state.accountant = actor_cast<accountant_type>(a);
-    self->send(self->state.accountant, atom::announce::value, self->name());
+    self->send(self->state.accountant, atom::announce_v, self->name());
   }
   self->state.options = options;
   self->state.expr = std::move(expr);
@@ -352,7 +352,7 @@ behavior exporter(stateful_actor<exporter_state>* self, expression expr,
         self->monitor(archive);
       // Register self at the archive
       if (has_historical_option(self->state.options))
-        self->send(archive, atom::exporter::value, self);
+        self->send(archive, atom::exporter_v, self);
     },
     [=](atom::index, const actor& index) {
       VAST_DEBUG(self, "registers index", index);
@@ -369,7 +369,7 @@ behavior exporter(stateful_actor<exporter_state>* self, expression expr,
       // Register for events at running IMPORTERs.
       if (has_continuous_option(self->state.options))
         for (auto& x : importers)
-          self->send(x, atom::exporter::value, self);
+          self->send(x, atom::exporter_v, self);
     },
     [=](atom::run) {
       VAST_INFO(self, "executes query:", to_string(self->state.expr));

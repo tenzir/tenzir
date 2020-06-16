@@ -158,11 +158,11 @@ caf::message pivot_command(const invocation& inv, caf::actor_system& sys) {
   self->monitor(writer);
   self->monitor(*piv);
   // Start the exporter.
-  self->send(*exp, atom::sink::value, *piv);
+  self->send(*exp, atom::sink_v, *piv);
   // (Ab)use query_statistics as done message.
-  self->send(*exp, atom::statistics::value, *piv);
-  self->send(*piv, atom::sink::value, writer);
-  self->send(*exp, atom::run::value);
+  self->send(*exp, atom::statistics_v, *piv);
+  self->send(*piv, atom::sink_v, writer);
+  self->send(*exp, atom::run_v);
   auto stop = false;
   self
     ->do_receive(

@@ -46,7 +46,7 @@ caf::behavior
 query_supervisor(caf::stateful_actor<query_supervisor_state>* self,
                  caf::actor master) {
   // Ask master for initial work.
-  self->send(master, atom::worker::value, self);
+  self->send(master, atom::worker_v, self);
   return {
     [=](const expression&, const query_map& qm, const caf::actor& client) {
       VAST_DEBUG(self, "got a new query for", qm.size(), "partitions:",
@@ -69,8 +69,8 @@ query_supervisor(caf::stateful_actor<query_supervisor_state>* self,
               // result.
               if (self->state.open_requests.empty()) {
                 VAST_DEBUG(self, "collected all results for all partitions");
-                self->send(client, atom::done::value);
-                self->send(master, atom::worker::value, self);
+                self->send(client, atom::done_v);
+                self->send(master, atom::worker_v, self);
               }
             }
           });

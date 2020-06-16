@@ -46,13 +46,12 @@ maybe_actor spawn_exporter(node_actor* self, spawn_arguments& args) {
   auto max_events = get_or(args.inv.options, "export.max-events",
                            defaults::export_::max_events);
   if (max_events > 0)
-    caf::anon_send(exp, atom::extract::value,
-                   static_cast<uint64_t>(max_events));
+    caf::anon_send(exp, atom::extract_v, static_cast<uint64_t>(max_events));
   else
-    caf::anon_send(exp, atom::extract::value);
+    caf::anon_send(exp, atom::extract_v);
   // Send the running IMPORTERs to the EXPORTER if it handles a continous query.
   if (has_continuous_option(query_opts)) {
-    self->request(self->state.tracker, caf::infinite, atom::get::value)
+    self->request(self->state.tracker, caf::infinite, atom::get_v)
       .then([=](registry& reg) mutable {
         VAST_DEBUG(self, "looks for importers");
         auto& local = reg.components[self->state.name];
@@ -62,7 +61,7 @@ maybe_actor spawn_exporter(node_actor* self, spawn_arguments& args) {
           if (std::equal(wanted.begin(), wanted.end(), component.begin()))
             importers.push_back(state.actor);
         if (!importers.empty())
-          self->send(exp, atom::importer::value, std::move(importers));
+          self->send(exp, atom::importer_v, std::move(importers));
       });
   }
   return exp;

@@ -128,7 +128,7 @@ auto apply(Actor* self, caf::message& operation) {
     [=](atom::put, const key_type& key, value_type& value) {
       VAST_DEBUG(self, "applies PUT");
       self->state.store[key] = std::move(value);
-      return atom::ok::value;
+      return atom::ok_v;
     },
     [=](atom::add, const key_type& key, const value_type& value) {
       VAST_DEBUG(self, "applies ADD");
@@ -139,7 +139,7 @@ auto apply(Actor* self, caf::message& operation) {
     [=](atom::erase, const key_type& key) {
       VAST_DEBUG(self, "applies DELETE");
       self->state.store.erase(key);
-      return atom::ok::value;
+      return atom::ok_v;
     },
   });
 }
@@ -169,7 +169,7 @@ void update(Actor* self, caf::message& command) {
        caf::binary_deserializer bd{self->system(), data};
        bd >> self->state;
        self->state.last_snapshot_size = data.size();
-       return atom::ok::value;
+       return atom::ok_v;
      }});
 }
 
@@ -182,7 +182,7 @@ void replicate(Actor* self, const caf::actor& consensus,
   auto id = ++self->state.request_id;
   self->state.requests.emplace(id, rp);
   auto msg = make_message(actor_identity{self->address()}, id, operation);
-  self->request(consensus, consensus_timeout, atom::replicate::value, msg)
+  self->request(consensus, consensus_timeout, atom::replicate_v, msg)
     .then([=](atom::ok) { VAST_DEBUG(self, "submitted operation", id); },
           [=](error& e) mutable {
             rp.deliver(std::move(e));
@@ -214,7 +214,7 @@ replicated_store(
   caf::actor consensus) {
   using namespace caf;
   self->monitor(consensus);
-  self->anon_send(consensus, atom::subscribe::value, actor_cast<actor>(self));
+  self->anon_send(consensus, atom::subscribe_v, actor_cast<actor>(self));
   // Takes a snapshot at the currently applied index.
   auto make_snapshot = [=] {
     VAST_ASSERT(self->state.last_applied > 0);
@@ -281,14 +281,14 @@ replicated_store(
         return;
       VAST_DEBUG(self, "gathers statistics");
       self->state.last_stats_update = now;
-      self->request(consensus, consensus_timeout, atom::statistics::value)
+      self->request(consensus, consensus_timeout, atom::statistics_v)
         .then([=](const raft::statistics& stats) {
           using namespace vast::binary_byte_literals;
           self->state.stats = stats;
           auto low = static_cast<uint64_t>(64_MiB);
           auto high = self->state.last_snapshot_size * 4;
           if (stats.log_bytes > std::max(low, high))
-            self->anon_send(self, atom::snapshot::value);
+            self->anon_send(self, atom::snapshot_v);
         });
     },
     [=](atom::snapshot) {
@@ -297,13 +297,13 @@ replicated_store(
       auto snapshot = make_snapshot();
       auto snapshot_size = snapshot.size();
       self
-        ->request(consensus, consensus_timeout, atom::snapshot::value,
+        ->request(consensus, consensus_timeout, atom::snapshot_v,
                   self->state.last_applied, std::move(snapshot))
         .then(
           [=](raft::index_type) mutable {
             VAST_DEBUG(self, "successfully snapshotted state");
             self->state.last_snapshot_size = snapshot_size;
-            rp.deliver(atom::ok::value);
+            rp.deliver(atom::ok_v);
           },
           [=](error& e) mutable {
             VAST_ERROR(self, "failed to snapshot:", self->system().render(e));

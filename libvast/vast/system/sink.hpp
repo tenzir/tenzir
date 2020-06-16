@@ -143,7 +143,7 @@ caf::behavior sink(caf::stateful_actor<sink_state<Writer>>* self,
       VAST_DEBUG(self, "sets accountant to", accountant);
       auto& st = self->state;
       st.accountant = std::move(accountant);
-      self->send(st.accountant, atom::announce::value, st.name);
+      self->send(st.accountant, atom::announce_v, st.name);
     },
     [=](atom::statistics, const caf::actor& statistics_subscriber) {
       VAST_DEBUG(self, "sets statistics subscriber to", statistics_subscriber);

@@ -257,7 +257,7 @@ void reset_election_time(Actor* self) {
   auto timeout = random_timeout(self);
   VAST_DEBUG(role(self), "will start election in", timeout);
   self->state.election_time = clock::now() + timeout;
-  self->delayed_send(self, timeout, atom::election::value);
+  self->delayed_send(self, timeout, atom::election_v);
 }
 
 // Saves a state machine snapshot that represents all the applied state up to a
@@ -370,9 +370,8 @@ void deliver(Actor* self, index_type from, index_type to) {
     }
     VAST_DEBUG(role(self), "delivers snapshot at index",
                self->state.last_snapshot_index);
-    auto msg
-      = make_message(atom::snapshot::value, self->state.last_snapshot_index,
-                     std::move(*snapshot));
+    auto msg = make_message(atom::snapshot_v, self->state.last_snapshot_index,
+                            std::move(*snapshot));
     self->send(self->state.state_machine, self->state.last_snapshot_index, msg);
     from = self->state.last_snapshot_index + 1;
   }
@@ -475,7 +474,7 @@ void become_leader(Actor* self) {
   // Kick off leader heartbeat loop.
   if (!self->state.peers.empty() && !self->state.heartbeat_inflight) {
     VAST_DEBUG(role(self), "kicks off heartbeat");
-    self->send(self, atom::heartbeat::value);
+    self->send(self, atom::heartbeat_v);
     self->state.heartbeat_inflight = true;
   }
 }
@@ -749,8 +748,7 @@ auto handle_install_snapshot(Actor* self, install_snapshot::request& req) {
       }
       VAST_DEBUG(role(self), "delivers snapshot");
       self->send(self->state.state_machine, self->state.last_snapshot_index,
-                 make_message(atom::snapshot::value,
-                              self->state.last_snapshot_index,
+                 make_message(atom::snapshot_v, self->state.last_snapshot_index,
                               std::move(*snapshot)));
     }
   }
@@ -991,7 +989,7 @@ behavior consensus(stateful_actor<server_state>* self, path dir) {
       i->peer = peer;
       if (is_leader(self) && !self->state.heartbeat_inflight) {
         VAST_DEBUG(role(self), "kicks off heartbeat");
-        self->send(self, atom::heartbeat::value);
+        self->send(self, atom::heartbeat_v);
         self->state.heartbeat_inflight = true;
       }
     },
@@ -1022,7 +1020,7 @@ behavior consensus(stateful_actor<server_state>* self, path dir) {
       if (!self->state.leader)
         rp.deliver(make_error(ec::unspecified, "no leader available"));
       else
-        rp.delegate(self->state.leader, atom::replicate::value, command);
+        rp.delegate(self->state.leader, atom::replicate_v, command);
     }}.or_else(common);
   // -- leader ---------------------------------------------------------------
   self->state.leading = message_handler{
@@ -1035,7 +1033,7 @@ behavior consensus(stateful_actor<server_state>* self, path dir) {
       for (auto& peer : self->state.peers)
         if (peer.peer)
           send_append_entries(self, peer);
-      self->delayed_send(self, heartbeat_period, atom::heartbeat::value);
+      self->delayed_send(self, heartbeat_period, atom::heartbeat_v);
       self->state.heartbeat_inflight = true;
     },
     [=](atom::replicate, const message& command) -> result<atom::ok> {
@@ -1058,7 +1056,7 @@ behavior consensus(stateful_actor<server_state>* self, path dir) {
       // Without peers, we can commit the entry immediately.
       if (self->state.peers.empty())
         advance_commit_index(self);
-      return atom::ok::value;
+      return atom::ok_v;
     }}.or_else(common);
   // -- startup --------------------------------------------------------------
   return {

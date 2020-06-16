@@ -39,8 +39,8 @@ spawn_consensus_raft(caf::local_actor* self, spawn_arguments& args) {
   auto consensus = self->spawn(raft::consensus, args.dir / "consensus");
   self->monitor(consensus);
   if (id != 0)
-    caf::anon_send(consensus, atom::id::value, id);
-  anon_send(consensus, atom::run::value);
+    caf::anon_send(consensus, atom::id_v, id);
+  anon_send(consensus, atom::run_v);
   // Spawn the store on top.
   auto store = self->spawn(replicated_store<std::string, data>, consensus);
   store->attach_functor([=](const error&) {

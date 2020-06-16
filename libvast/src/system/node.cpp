@@ -113,7 +113,7 @@ caf::message peer_command(const invocation& inv, caf::actor_system& sys) {
   }
   VAST_DEBUG(this_node, "sends peering request");
   auto& st = this_node->state;
-  this_node->delegate(*peer, atom::peer::value, st.tracker, st.name);
+  this_node->delegate(*peer, atom::peer_v, st.tracker, st.name);
   return caf::none;
 }
 
@@ -150,7 +150,7 @@ void collect_component_status(node_actor* self,
       }
       self
         ->request(comp_state.actor, defaults::system::initial_request_timeout,
-                  atom::status::value)
+                  atom::status_v)
         .then(
           [=, lbl = comp_state.label,
            nn = node_name](caf::config_value::dictionary& xs) mutable {
@@ -179,7 +179,7 @@ caf::message status_command(const invocation&, caf::actor_system& sys) {
   caf::error err;
   self
     ->request(self->state.tracker, defaults::system::initial_request_timeout,
-              atom::get::value)
+              atom::get_v)
     .then(
       [=](registry& reg) mutable {
         collect_component_status(self, std::move(rp), reg);
@@ -194,7 +194,7 @@ caf::message status_command(const invocation&, caf::actor_system& sys) {
 
 maybe_actor spawn_accountant(node_actor* self, spawn_arguments&) {
   auto accountant = self->spawn<monitored>(system::accountant);
-  self->system().registry().put(atom::accountant::value, accountant);
+  self->system().registry().put(atom::accountant_v, accountant);
   return caf::actor_cast<caf::actor>(accountant);
 }
 
@@ -217,7 +217,7 @@ caf::message kill_command(const invocation& inv, caf::actor_system&) {
     return make_error_msg(ec::syntax_error,
                           "expected exactly one component argument");
   auto rp = this_node->make_response_promise();
-  this_node->request(this_node->state.tracker, infinite, atom::get::value)
+  this_node->request(this_node->state.tracker, infinite, atom::get_v)
     .then(
       [rp, self = this_node, label = *first](registry& reg) mutable {
         auto& local = reg.components[self->state.name];
@@ -229,7 +229,7 @@ caf::message kill_command(const invocation& inv, caf::actor_system&) {
           return;
         }
         self->send_exit(i->second.actor, exit_reason::user_shutdown);
-        rp.deliver(atom::ok::value);
+        rp.deliver(atom::ok_v);
       },
       [rp](error& e) mutable { rp.deliver(std::move(e)); });
   return caf::none;
@@ -345,7 +345,7 @@ node_state::spawn_command(const invocation& inv,
   // Register component at tracker.
   auto rp = this_node->make_response_promise();
   this_node
-    ->request(st.tracker, infinite, atom::try_put::value, std::move(comp_name),
+    ->request(st.tracker, infinite, atom::try_put_v, std::move(comp_name),
               new_component, std::move(label))
     .then([=]() mutable { rp.deliver(std::move(new_component)); },
           [=](error& e) mutable { rp.deliver(std::move(e)); });
@@ -390,7 +390,7 @@ void node_state::init(std::string init_name, path init_dir) {
     VAST_DEBUG(self, "got DOWN from", msg.source);
     self->quit(msg.reason);
   });
-  self->system().registry().put(atom::tracker::value, tracker);
+  self->system().registry().put(atom::tracker_v, tracker);
 }
 
 caf::behavior node(node_actor* self, std::string id, path dir) {
@@ -403,12 +403,12 @@ caf::behavior node(node_actor* self, std::string id, path dir) {
             return run(inv, self->system(), node_state::command_factory);
           },
           [=](atom::peer, actor& tracker, std::string& peer_name) {
-            self->delegate(self->state.tracker, atom::peer::value,
+            self->delegate(self->state.tracker, atom::peer_v,
                            std::move(tracker), std::move(peer_name));
           },
           [=](atom::get) {
             auto rp = self->make_response_promise();
-            self->request(self->state.tracker, infinite, atom::get::value)
+            self->request(self->state.tracker, infinite, atom::get_v)
               .then(
                 [=](registry& reg) mutable {
                   rp.deliver(self->state.name, std::move(reg));

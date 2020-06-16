@@ -32,10 +32,10 @@ TEST(dummy consensus) {
   {
     auto store = self->spawn(dummy_consensus, store_dir);
     MESSAGE("put two values");
-    self->request(store, infinite, atom::put::value, "foo", data{42})
+    self->request(store, infinite, atom::put_v, "foo", data{42})
       .receive([&](atom::ok) {}, error_handler());
     MESSAGE("get a key with a single value");
-    self->request(store, infinite, atom::get::value, "foo")
+    self->request(store, infinite, atom::get_v, "foo")
       .receive(
         [&](optional<data> result) {
           REQUIRE(result);
@@ -43,16 +43,16 @@ TEST(dummy consensus) {
         },
         error_handler());
     MESSAGE("get an invalid key value");
-    self->request(store, infinite, atom::get::value, "bar")
+    self->request(store, infinite, atom::get_v, "bar")
       .receive([&](optional<data> result) { CHECK(!result); }, error_handler());
     MESSAGE("add to an existing single value");
-    self->request(store, infinite, atom::add::value, "foo", data{1})
+    self->request(store, infinite, atom::add_v, "foo", data{1})
       .receive([&](data old) { CHECK_EQUAL(old, data{42}); }, error_handler());
     MESSAGE("add to a non-existing single value");
-    self->request(store, infinite, atom::add::value, "baz", data{1})
+    self->request(store, infinite, atom::add_v, "baz", data{1})
       .receive([&](data old) { CHECK_EQUAL(old, caf::none); }, error_handler());
     MESSAGE("delete a key");
-    self->request(store, infinite, atom::erase::value, "foo")
+    self->request(store, infinite, atom::erase_v, "foo")
       .receive([](atom::ok) { /* nop */ }, error_handler());
     MESSAGE("restart the store, forcing a serialize -> deserialize loop");
     self->send_exit(store, exit_reason::user_shutdown);
@@ -60,7 +60,7 @@ TEST(dummy consensus) {
   {
     auto store = self->spawn(dummy_consensus, store_dir);
     MESSAGE("get a value from the store's previous lifetime");
-    self->request(store, infinite, atom::get::value, "baz")
+    self->request(store, infinite, atom::get_v, "baz")
       .receive(
         [&](optional<data> result) {
           REQUIRE(result);
@@ -68,7 +68,7 @@ TEST(dummy consensus) {
         },
         error_handler());
     MESSAGE("get a key that was deleted during the store's previous lfetime");
-    self->request(store, infinite, atom::get::value, "foo")
+    self->request(store, infinite, atom::get_v, "foo")
       .receive([&](optional<data> result) { CHECK(!result); }, error_handler());
   }
 }

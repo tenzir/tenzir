@@ -100,7 +100,7 @@ indexer(caf::stateful_actor<indexer_state>* self, path filename,
             VAST_ERROR(self, "got a stream error:", self->system().render(err));
             return;
           }
-          self->send(st.index, atom::done::value, st.partition_id);
+          self->send(st.index, atom::done_v, st.partition_id);
         });
     },
     [=](const std::vector<table_slice_column>& xs) {

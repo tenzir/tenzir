@@ -101,11 +101,11 @@ sink_command(const invocation& inv, actor_system& sys, caf::actor snk) {
     self->send(snk, actor_cast<accountant_type>(accountant));
   }
   // Start the exporter.
-  self->send(*exp, atom::sink::value, snk);
-  self->send(*exp, atom::run::value);
+  self->send(*exp, atom::sink_v, snk);
+  self->send(*exp, atom::run_v);
   // Register self as the statistics actor.
-  self->send(*exp, atom::statistics::value, self);
-  self->send(snk, atom::statistics::value, self);
+  self->send(*exp, atom::statistics_v, self);
+  self->send(snk, atom::statistics_v, self);
   self->monitor(snk);
   self->monitor(*exp);
   guard.disable();

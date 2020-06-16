@@ -157,12 +157,12 @@ explorer(caf::stateful_actor<explorer_state>* self, caf::actor node,
           continue;
         std::optional<vast::expression> before_expr;
         if (st.before)
-          before_expr = predicate{attribute_extractor{atom::timestamp::value},
+          before_expr = predicate{attribute_extractor{atom::timestamp_v},
                                   greater_equal, data{*x - *st.before}};
 
         std::optional<vast::expression> after_expr;
         if (st.after)
-          after_expr = predicate{attribute_extractor{atom::timestamp::value},
+          after_expr = predicate{attribute_extractor{atom::timestamp_v},
                                  less_equal, data{*x + *st.after}};
         std::optional<vast::expression> by_expr;
         if (st.by) {
@@ -209,8 +209,8 @@ explorer(caf::stateful_actor<explorer_state>* self, caf::actor node,
     [=](caf::actor exp) {
       VAST_DEBUG(self, "registers exporter", exp);
       self->monitor(exp);
-      self->send(exp, atom::sink::value, self);
-      self->send(exp, atom::run::value);
+      self->send(exp, atom::sink_v, self);
+      self->send(exp, atom::run_v);
     },
     [=]([[maybe_unused]] std::string name, query_status) {
       VAST_DEBUG(self, "received final status from", name);
