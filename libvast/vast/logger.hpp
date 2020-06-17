@@ -72,6 +72,10 @@ void fixup_logger(const system::configuration& cfg);
 
 #  define VAST_LOG(...) VAST_PP_OVERLOAD(VAST_LOG_, __VA_ARGS__)(__VA_ARGS__)
 
+// Ensures all args are used and syntactically valid, without evaluating them.
+#  define VAST_LOG_DISCARD_ARGS(...)                                           \
+    static_cast<std::void_t<decltype(__VA_ARGS__)>>(0)
+
 namespace vast::detail {
 
 template <class T>
@@ -114,7 +118,7 @@ auto id_or_name(T&& x) {
 
 #  else // VAST_LOG_LEVEL > VAST_LOG_LEVEL_TRACE
 
-#    define VAST_TRACE(...) CAF_VOID_STMT
+#    define VAST_TRACE(...) VAST_LOG_DISCARD_ARGS(__VA_ARGS__)
 
 #  endif // VAST_LOG_LEVEL > VAST_LOG_LEVEL_TRACE
 
@@ -123,8 +127,8 @@ auto id_or_name(T&& x) {
       VAST_LOG_COMPONENT(VAST_LOG_LEVEL_ERROR, __VA_ARGS__)
 #    define VAST_ERROR_ANON(...) VAST_LOG(VAST_LOG_LEVEL_ERROR, __VA_ARGS__)
 #  else
-#    define VAST_ERROR(...) CAF_VOID_STMT
-#    define VAST_ERROR_ANON(...) CAF_VOID_STMT
+#    define VAST_ERROR(...) VAST_LOG_DISCARD_ARGS(__VA_ARGS__)
+#    define VAST_ERROR_ANON(...) VAST_LOG_DISCARD_ARGS(__VA_ARGS__)
 #  endif
 
 #  if VAST_LOG_LEVEL >= VAST_LOG_LEVEL_WARNING
@@ -132,16 +136,16 @@ auto id_or_name(T&& x) {
       VAST_LOG_COMPONENT(VAST_LOG_LEVEL_WARNING, __VA_ARGS__)
 #    define VAST_WARNING_ANON(...) VAST_LOG(VAST_LOG_LEVEL_WARNING, __VA_ARGS__)
 #  else
-#    define VAST_WARNING(...) CAF_VOID_STMT
-#    define VAST_WARNING_ANON(...) CAF_VOID_STMT
+#    define VAST_WARNING(...) VAST_LOG_DISCARD_ARGS(__VA_ARGS__)
+#    define VAST_WARNING_ANON(...) VAST_LOG_DISCARD_ARGS(__VA_ARGS__)
 #  endif
 
 #  if VAST_LOG_LEVEL >= VAST_LOG_LEVEL_INFO
 #    define VAST_INFO(...) VAST_LOG_COMPONENT(VAST_LOG_LEVEL_INFO, __VA_ARGS__)
 #    define VAST_INFO_ANON(...) VAST_LOG(VAST_LOG_LEVEL_INFO, __VA_ARGS__)
 #  else
-#    define VAST_INFO(...) CAF_VOID_STMT
-#    define VAST_INFO_ANON(...) CAF_VOID_STMT
+#    define VAST_INFO(...) VAST_LOG_DISCARD_ARGS(__VA_ARGS__)
+#    define VAST_INFO_ANON(...) VAST_LOG_DISCARD_ARGS(__VA_ARGS__)
 #  endif
 
 #  if VAST_LOG_LEVEL >= VAST_LOG_LEVEL_VERBOSE
@@ -149,8 +153,8 @@ auto id_or_name(T&& x) {
       VAST_LOG_COMPONENT(VAST_LOG_LEVEL_VERBOSE, __VA_ARGS__)
 #    define VAST_VERBOSE_ANON(...) VAST_LOG(VAST_LOG_LEVEL_VERBOSE, __VA_ARGS__)
 #  else
-#    define VAST_VERBOSE(...) CAF_VOID_STMT
-#    define VAST_VERBOSE_ANON(...) CAF_VOID_STMT
+#    define VAST_VERBOSE(...) VAST_LOG_DISCARD_ARGS(__VA_ARGS__)
+#    define VAST_VERBOSE_ANON(...) VAST_LOG_DISCARD_ARGS(__VA_ARGS__)
 #  endif
 
 #  if VAST_LOG_LEVEL >= VAST_LOG_LEVEL_DEBUG
@@ -158,32 +162,32 @@ auto id_or_name(T&& x) {
       VAST_LOG_COMPONENT(VAST_LOG_LEVEL_DEBUG, __VA_ARGS__)
 #    define VAST_DEBUG_ANON(...) VAST_LOG(VAST_LOG_LEVEL_DEBUG, __VA_ARGS__)
 #  else
-#    define VAST_DEBUG(...) CAF_VOID_STMT
-#    define VAST_DEBUG_ANON(...) CAF_VOID_STMT
+#    define VAST_DEBUG(...) VAST_LOG_DISCARD_ARGS(__VA_ARGS__)
+#    define VAST_DEBUG_ANON(...) VAST_LOG_DISCARD_ARGS(__VA_ARGS__)
 #  endif
 
 #else // defined(VAST_LOG_LEVEL)
 
-#define VAST_LOG(...) CAF_VOID_STMT
+#  define VAST_LOG(...) VAST_LOG_DISCARD_ARGS(__VA_ARGS__)
 
-#define VAST_LOG_COMPONENT(...) CAF_VOID_STMT
+#  define VAST_LOG_COMPONENT(...) VAST_LOG_DISCARD_ARGS(__VA_ARGS__)
 
-#define VAST_TRACE(...) CAF_VOID_STMT
+#  define VAST_TRACE(...) VAST_LOG_DISCARD_ARGS(__VA_ARGS__)
 
-#define VAST_ERROR(...) CAF_VOID_STMT
-#define VAST_ERROR_ANON(...) CAF_VOID_STMT
+#  define VAST_ERROR(...) VAST_LOG_DISCARD_ARGS(__VA_ARGS__)
+#  define VAST_ERROR_ANON(...) VAST_LOG_DISCARD_ARGS(__VA_ARGS__)
 
-#define VAST_WARNING(...) CAF_VOID_STMT
-#define VAST_WARNING_ANON(...) CAF_VOID_STMT
+#  define VAST_WARNING(...) VAST_LOG_DISCARD_ARGS(__VA_ARGS__)
+#  define VAST_WARNING_ANON(...) VAST_LOG_DISCARD_ARGS(__VA_ARGS__)
 
-#define VAST_INFO(...) CAF_VOID_STMT
-#define VAST_INFO_ANON(...) CAF_VOID_STMT
+#  define VAST_INFO(...) VAST_LOG_DISCARD_ARGS(__VA_ARGS__)
+#  define VAST_INFO_ANON(...) VAST_LOG_DISCARD_ARGS(__VA_ARGS__)
 
-#  define VAST_VERBOSE(...) CAF_VOID_STMT
-#  define VAST_VERBOSE_ANON(...) CAF_VOID_STMT
+#  define VAST_VERBOSE(...) VAST_LOG_DISCARD_ARGS(__VA_ARGS__)
+#  define VAST_VERBOSE_ANON(...) VAST_LOG_DISCARD_ARGS(__VA_ARGS__)
 
-#  define VAST_DEBUG(...) CAF_VOID_STMT
-#  define VAST_DEBUG_ANON(...) CAF_VOID_STMT
+#  define VAST_DEBUG(...) VAST_LOG_DISCARD_ARGS(__VA_ARGS__)
+#  define VAST_DEBUG_ANON(...) VAST_LOG_DISCARD_ARGS(__VA_ARGS__)
 
 #endif // defined(VAST_LOG_LEVEL)
 
