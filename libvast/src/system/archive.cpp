@@ -118,9 +118,8 @@ archive(archive_type::stateful_pointer<archive_state> self, path dir,
   return {
     [=](const ids& xs) {
       VAST_ASSERT(rank(xs) > 0);
-      VAST_DEBUG(self, "got query for", rank(xs),
-                 "events in range [" << select(xs, 1) << ','
-                                     << (select(xs, -1) + 1) << ')');
+      VAST_DEBUG(self, "got query for", rank(xs), "events in range [",
+                 select(xs, 1), ',', (select(xs, -1) + 1), ')');
       if (auto requester
           = caf::actor_cast<receiver_type>(self->current_sender()))
         self->send(self, xs, requester);

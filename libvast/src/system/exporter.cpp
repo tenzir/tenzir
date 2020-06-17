@@ -377,22 +377,20 @@ behavior exporter(stateful_actor<exporter_state>* self, expression expr,
       self->state.start = system_clock::now();
       if (!has_historical_option(self->state.options))
         return;
-      self->request(self->state.index, infinite, self->state.expr).then(
-        [=](const uuid& lookup, uint32_t partitions, uint32_t scheduled) {
-          VAST_DEBUG(self, "got lookup handle", lookup << ", scheduled",
-                     scheduled << '/' << partitions, "partitions");
-          self->state.id = lookup;
-          if (partitions > 0) {
-            self->state.query.expected = partitions;
-            self->state.query.scheduled = scheduled;
-          } else {
-            shutdown(self);
-          }
-        },
-        [=](const error& e) {
-          shutdown(self, e);
-        }
-      );
+      self->request(self->state.index, infinite, self->state.expr)
+        .then(
+          [=](const uuid& lookup, uint32_t partitions, uint32_t scheduled) {
+            VAST_DEBUG(self, "got lookup handle", lookup, ", scheduled",
+                       scheduled, '/', partitions, "partitions");
+            self->state.id = lookup;
+            if (partitions > 0) {
+              self->state.query.expected = partitions;
+              self->state.query.scheduled = scheduled;
+            } else {
+              shutdown(self);
+            }
+          },
+          [=](const error& e) { shutdown(self, e); });
     },
     [=](atom::statistics, const actor& statistics_subscriber) {
       VAST_DEBUG(self, "registers statistics subscriber",

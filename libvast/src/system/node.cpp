@@ -102,7 +102,7 @@ caf::message peer_command(const invocation& inv, caf::actor_system& sys) {
     ep->host = "127.0.0.1";
   if (ep->port.number() == 0)
     return make_error_msg(ec::parse_error, "cannot connect to port 0");
-  VAST_DEBUG(this_node, "connects to", ep->host << ':' << ep->port);
+  VAST_DEBUG(this_node, "connects to", ep->host, ':', ep->port);
   auto& mm = sys.middleman();
   // TODO: this blocks the node, consider talking to the MM actor instead.
   auto peer = mm.remote_actor(ep->host.c_str(), ep->port.number());

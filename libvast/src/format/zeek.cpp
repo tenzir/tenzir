@@ -524,7 +524,7 @@ caf::error reader::parse_header() {
   // Add #index=hash attribute for fields where it makes sense.
   add_hash_index_attribute(layout_);
   for (auto i = 0u; i < layout_.fields.size(); ++i)
-    VAST_DEBUG(this, "     ", i << ')', layout_.fields[i].name << ':',
+    VAST_DEBUG(this, "     ", i, ')', layout_.fields[i].name, ':',
                layout_.fields[i].type);
   // After having modified layout attributes, we no longer make changes to the
   // type and can now safely copy it.

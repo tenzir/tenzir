@@ -128,14 +128,14 @@ bool indexer_downstream_manager::unregister(partition* p) {
 }
 
 void indexer_downstream_manager::emit_batches() {
-  VAST_TRACE(VAST_ARG_2("buffered", this->buffered())
-             << VAST_ARG_2("paths", this->paths_.size()));
+  VAST_TRACE(VAST_ARG_2("buffered", this->buffered()),
+             VAST_ARG_2("paths", this->paths_.size()));
   emit_batches_impl(false);
 }
 
 void indexer_downstream_manager::force_emit_batches() {
-  VAST_TRACE(VAST_ARG_2("buffered", this->buffered())
-             << VAST_ARG_2("paths", this->paths_.size()));
+  VAST_TRACE(VAST_ARG_2("buffered", this->buffered()),
+             VAST_ARG_2("paths", this->paths_.size()));
   emit_batches_impl(true);
 }
 

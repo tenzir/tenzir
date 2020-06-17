@@ -77,8 +77,8 @@ connect_to_node(scoped_actor& self, const caf::settings& opts) {
     return mm.remote_actor(node_endpoint.host, node_endpoint.port.number());
   }();
   if (result)
-    VAST_VERBOSE(self, "successfully connected to",
-                 node_endpoint.host << ':' << to_string(node_endpoint.port));
+    VAST_VERBOSE(self, "successfully connected to", node_endpoint.host, ':',
+                 to_string(node_endpoint.port));
   return result;
 }
 

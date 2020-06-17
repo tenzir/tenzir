@@ -101,13 +101,13 @@ caf::message start_command_impl(start_command_extra_steps extra_steps,
     ->do_receive(
       [&](caf::down_msg& msg) {
         VAST_ASSERT(msg.source == node);
-        VAST_DEBUG_ANON("... received DOWN from node");
+        VAST_DEBUG(self, "received DOWN from node");
         stop = true;
         if (msg.reason != caf::exit_reason::user_shutdown)
           err = std::move(msg.reason);
       },
       [&](atom::signal, int signal) {
-        VAST_DEBUG_ANON("... got " << ::strsignal(signal));
+        VAST_DEBUG(self, "got", ::strsignal(signal));
         if (signal == SIGINT || signal == SIGTERM)
           self->send_exit(node, caf::exit_reason::user_shutdown);
         else

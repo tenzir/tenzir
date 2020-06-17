@@ -141,7 +141,7 @@ caf::message explore_command(const invocation& inv, caf::actor_system& sys) {
         stop = true;
       },
       [&](atom::signal, int signal) {
-        VAST_DEBUG(inv.full_name, "got " << ::strsignal(signal));
+        VAST_DEBUG(inv.full_name, "got ", ::strsignal(signal));
         if (signal == SIGINT || signal == SIGTERM) {
           stop = true;
         }
