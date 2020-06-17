@@ -378,6 +378,9 @@ void node_state::init(std::string init_name, path init_dir) {
   tracker = self->spawn<linked>(system::tracker, name);
   self->set_exit_handler([=](const exit_msg& msg) {
     VAST_DEBUG(self, "got EXIT from", msg.source);
+    /// Collect all actors that we shutdown in sequence. First, we terminate
+    /// the accountant because it acts like a source and flush buffered data.
+    /// Thereafter, we tear down the ingestion pipeline from source to sink.
     std::vector<caf::actor> actors;
     if (auto acc = self->system().registry().get(atom::accountant_v))
       actors.push_back(caf::actor_cast<caf::actor>(acc));

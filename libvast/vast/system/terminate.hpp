@@ -35,11 +35,11 @@ struct parallel;
 
 namespace vast::system {
 
-/// Performs an asynchronous shutdown of a set of dependent actors,
-/// configurable either in sequential or parallel mode of operation. As soon as
-/// all dependent actors have terminated, the returned promise gets fulfilled.
+/// Performs an asynchronous shutdown of a set of actors by sending an EXIT
+/// message, configurable either in sequential or parallel mode of operation.
+/// As soon as all actors have terminated, the returned promise gets fulfilled.
 /// @param self The actor to terminate.
-/// @param xs Owned actors by *self* that need to shutdown prior to *self*.
+/// @param xs The actors to terminate.
 /// @returns A response promise to be fulfilled when all *xs* terminated.
 template <class Policy>
 auto terminate(caf::event_based_actor* self, std::vector<caf::actor> xs) {

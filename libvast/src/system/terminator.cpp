@@ -23,7 +23,6 @@
 
 namespace vast::system {
 
-/// Performs a parallel shutdown of a list of actors.
 template <class Policy>
 caf::behavior terminator(caf::stateful_actor<terminator_state>* self) {
   self->set_down_handler([=](const caf::down_msg& msg) {
