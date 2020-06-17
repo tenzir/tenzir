@@ -13,14 +13,15 @@
 
 #include "vast/system/start_command.hpp"
 
-#include <csignal>
-#include <iostream>
-#include <thread>
-
 #include "vast/config.hpp"
 
-#include <caf/all.hpp>
-#include <caf/io/all.hpp>
+#include <caf/actor_system_config.hpp>
+#include <caf/io/middleman.hpp>
+#include <caf/scoped_actor.hpp>
+#include <caf/settings.hpp>
+
+#include <csignal>
+#include <thread>
 #if VAST_USE_OPENSSL
 #  include <caf/openssl/all.hpp>
 #endif // VAST_USE_OPENSSL

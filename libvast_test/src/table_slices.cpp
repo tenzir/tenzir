@@ -13,8 +13,6 @@
 
 #include "fixtures/table_slices.hpp"
 
-#include <caf/all.hpp>
-
 #include "vast/chunk.hpp"
 #include "vast/concept/parseable/to.hpp"
 #include "vast/concept/parseable/vast/data.hpp"

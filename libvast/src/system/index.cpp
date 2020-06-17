@@ -13,7 +13,6 @@
 
 #include "vast/system/index.hpp"
 
-#include "vast/concept/parseable/to.hpp"
 #include "vast/concept/printable/to_string.hpp"
 #include "vast/concept/printable/vast/bitmap.hpp"
 #include "vast/concept/printable/vast/error.hpp"
@@ -25,10 +24,8 @@
 #include "vast/detail/fill_status_map.hpp"
 #include "vast/detail/narrow.hpp"
 #include "vast/detail/notifying_stream_manager.hpp"
-#include "vast/event.hpp"
 #include "vast/expression_visitors.hpp"
 #include "vast/ids.hpp"
-#include "vast/json.hpp"
 #include "vast/load.hpp"
 #include "vast/logger.hpp"
 #include "vast/save.hpp"
@@ -38,10 +35,10 @@
 #include "vast/system/partition.hpp"
 #include "vast/system/query_supervisor.hpp"
 #include "vast/system/spawn_indexer.hpp"
-#include "vast/system/task.hpp"
 #include "vast/table_slice.hpp"
 
-#include <caf/all.hpp>
+#include <caf/make_counted.hpp>
+#include <caf/stateful_actor.hpp>
 
 #include <chrono>
 #include <deque>

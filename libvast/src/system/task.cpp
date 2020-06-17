@@ -11,13 +11,13 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#include "vast/logger.hpp"
-
-#include <caf/all.hpp>
+#include "vast/system/task.hpp"
 
 #include "vast/error.hpp"
+#include "vast/logger.hpp"
 
-#include "vast/system/task.hpp"
+#include <caf/event_based_actor.hpp>
+#include <caf/typed_event_based_actor.hpp>
 
 using namespace caf;
 

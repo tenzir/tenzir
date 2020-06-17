@@ -17,6 +17,7 @@
 #include "vast/detail/pp.hpp"
 #include "vast/detail/type_traits.hpp"
 
+#include <caf/detail/pretty_type_name.hpp>
 #include <caf/logger.hpp>
 
 namespace vast {

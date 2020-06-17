@@ -23,6 +23,7 @@
 #include <csignal>
 #include <cstdlib>
 #include <cstring>
+#include <iostream>
 #include <thread>
 
 using namespace caf;

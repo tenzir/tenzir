@@ -24,7 +24,9 @@
 #include "vast/table_slice.hpp"
 #include "vast/table_slice_builder_factory.hpp"
 
-#include <caf/all.hpp>
+#include <caf/actor_system_config.hpp>
+#include <caf/config_value.hpp>
+#include <caf/typed_event_based_actor.hpp>
 
 #include <chrono>
 #include <cmath>

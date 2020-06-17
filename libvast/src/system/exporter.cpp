@@ -31,7 +31,8 @@
 #include "vast/table_slice.hpp"
 #include "vast/to_events.hpp"
 
-#include <caf/all.hpp>
+#include <caf/event_based_actor.hpp>
+#include <caf/settings.hpp>
 
 using namespace std::chrono;
 using namespace std::string_literals;

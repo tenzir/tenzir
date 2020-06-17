@@ -30,6 +30,7 @@
 #include <caf/timestamp.hpp>
 
 #include <cstdlib>
+#include <iostream>
 
 #if VAST_USE_OPENSSL
 #  include <caf/openssl/manager.hpp>

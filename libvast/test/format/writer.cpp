@@ -18,8 +18,10 @@
 #include "vast/format/json.hpp"
 
 #define SUITE format
-#include "vast/test/test.hpp"
 #include "vast/test/fixtures/events.hpp"
+#include "vast/test/test.hpp"
+
+#include <caf/streambuf.hpp>
 
 using namespace vast;
 using namespace std::string_literals;

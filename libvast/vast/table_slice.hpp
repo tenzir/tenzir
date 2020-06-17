@@ -18,9 +18,7 @@
 #include <string_view>
 #include <vector>
 
-#include <caf/allowed_unsafe_message_type.hpp>
 #include <caf/fwd.hpp>
-#include <caf/make_copy_on_write.hpp>
 #include <caf/optional.hpp>
 #include <caf/ref_counted.hpp>
 

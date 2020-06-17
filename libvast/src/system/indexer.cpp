@@ -24,7 +24,6 @@
 #include "vast/table_slice_column.hpp"
 #include "vast/view.hpp"
 
-#include <caf/all.hpp>
 #include <caf/attach_stream_sink.hpp>
 
 #include <new>

@@ -41,8 +41,9 @@
 #include "vast/system/spawn_type_registry.hpp"
 #include "vast/table_slice.hpp"
 
-#include <caf/all.hpp>
-#include <caf/io/all.hpp>
+#include <caf/function_view.hpp>
+#include <caf/io/middleman.hpp>
+#include <caf/settings.hpp>
 
 #include <chrono>
 #include <csignal>
