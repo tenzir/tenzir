@@ -45,30 +45,33 @@ void fixup_logger(const system::configuration& cfg);
 
 #define VAST_LOG_2(lvl, m1) VAST_LOG_IMPL(lvl, m1)
 
-#define VAST_LOG_3(lvl, m1, m2) VAST_LOG_IMPL(lvl, m1 << m2)
+#  define VAST_LOG_3(lvl, m1, m2) VAST_LOG_IMPL(lvl, (m1) << (m2))
 
-#define VAST_LOG_4(lvl, m1, m2, m3) VAST_LOG_IMPL(lvl, m1 << m2 << m3)
+#  define VAST_LOG_4(lvl, m1, m2, m3) VAST_LOG_IMPL(lvl, (m1) << (m2) << (m3))
 
-#define VAST_LOG_5(lvl, m1, m2, m3, m4) VAST_LOG_IMPL(lvl, m1 << m2 << m3 << m4)
+#  define VAST_LOG_5(lvl, m1, m2, m3, m4)                                      \
+    VAST_LOG_IMPL(lvl, (m1) << (m2) << (m3) << (m4))
 
-#define VAST_LOG_6(lvl, m1, m2, m3, m4, m5)                                    \
-  VAST_LOG_IMPL(lvl, m1 << m2 << m3 << m4 << m5)
+#  define VAST_LOG_6(lvl, m1, m2, m3, m4, m5)                                  \
+    VAST_LOG_IMPL(lvl, (m1) << (m2) << (m3) << (m4) << (m5))
 
-#define VAST_LOG_7(lvl, m1, m2, m3, m4, m5, m6)                                \
-  VAST_LOG_IMPL(lvl, m1 << m2 << m3 << m4 << m5 << m6)
+#  define VAST_LOG_7(lvl, m1, m2, m3, m4, m5, m6)                              \
+    VAST_LOG_IMPL(lvl, (m1) << (m2) << (m3) << (m4) << (m5) << (m6))
 
-#define VAST_LOG_8(lvl, m1, m2, m3, m4, m5, m6, m7)                            \
-  VAST_LOG_IMPL(lvl, m1 << m2 << m3 << m4 << m5 << m6 << m7)
+#  define VAST_LOG_8(lvl, m1, m2, m3, m4, m5, m6, m7)                          \
+    VAST_LOG_IMPL(lvl, (m1) << (m2) << (m3) << (m4) << (m5) << (m6) << (m7))
 
-#define VAST_LOG_9(lvl, m1, m2, m3, m4, m5, m6, m7, m8)                        \
-  VAST_LOG_IMPL(lvl, m1 << m2 << m3 << m4 << m5 << m6 << m7 << m8)
+#  define VAST_LOG_9(lvl, m1, m2, m3, m4, m5, m6, m7, m8)                      \
+    VAST_LOG_IMPL(lvl, (m1) << (m2) << (m3) << (m4) << (m5) << (m6) << (m7)    \
+                            << (m8))
 
-#define VAST_LOG_10(lvl, m1, m2, m3, m4, m5, m6, m7, m8, m9)                   \
-  VAST_LOG_IMPL(lvl, m1 << m2 << m3 << m4 << m5 << m6 << m7 << m8 << m9)
+#  define VAST_LOG_10(lvl, m1, m2, m3, m4, m5, m6, m7, m8, m9)                 \
+    VAST_LOG_IMPL(lvl, (m1) << (m2) << (m3) << (m4) << (m5) << (m6) << (m7)    \
+                            << (m8) << (m9))
 
 #  define VAST_LOG_11(lvl, m1, m2, m3, m4, m5, m6, m7, m8, m9, m10)            \
-    VAST_LOG_IMPL(lvl,                                                         \
-                  m1 << m2 << m3 << m4 << m5 << m6 << m7 << m8 << m9 << m10)
+    VAST_LOG_IMPL(lvl, (m1) << (m2) << (m3) << (m4) << (m5) << (m6) << (m7)    \
+                            << (m8) << (m9) << (m10))
 
 #  define VAST_LOG(...) VAST_PP_OVERLOAD(VAST_LOG_, __VA_ARGS__)(__VA_ARGS__)
 
