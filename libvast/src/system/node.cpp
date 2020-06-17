@@ -25,6 +25,7 @@
 #include "vast/logger.hpp"
 #include "vast/system/accountant.hpp"
 #include "vast/system/node.hpp"
+#include "vast/system/shutdown.hpp"
 #include "vast/system/spawn_archive.hpp"
 #include "vast/system/spawn_arguments.hpp"
 #include "vast/system/spawn_counter.hpp"
@@ -192,7 +193,7 @@ caf::message status_command(const invocation&, caf::actor_system& sys) {
 }
 
 maybe_actor spawn_accountant(node_actor* self, spawn_arguments&) {
-  auto accountant = self->spawn<monitored>(system::accountant);
+  auto accountant = self->spawn<linked>(system::accountant);
   self->system().registry().put(atom::accountant_v, accountant);
   return caf::actor_cast<caf::actor>(accountant);
 }
@@ -353,13 +354,6 @@ node_state::node_state(caf::event_based_actor* selfptr) : self(selfptr) {
   // nop
 }
 
-node_state::~node_state() {
-  auto err = self->fail_state();
-  if (!err)
-    err = exit_reason::user_shutdown;
-  self->send_exit(tracker, err);
-}
-
 void node_state::init(std::string init_name, path init_dir) {
   node_state::component_factory = make_component_factory();
   if (node_state::extra_component_factory != nullptr) {
@@ -381,13 +375,25 @@ void node_state::init(std::string init_name, path init_dir) {
   name = std::move(init_name);
   dir = std::move(init_dir);
   // Bring up the tracker.
-  tracker = self->spawn<monitored>(system::tracker, name);
-  self->set_down_handler([=](const down_msg& msg) {
-    VAST_IGNORE_UNUSED(msg);
-    VAST_DEBUG(self, "got DOWN from", msg.source);
-    self->quit(msg.reason);
+  tracker = self->spawn<linked>(system::tracker, name);
+  self->set_exit_handler([=](const exit_msg& msg) {
+    VAST_DEBUG(self, "got EXIT from", msg.source);
+    /// Collect all actors that we shutdown in sequence. First, we terminate
+    /// the accountant because it acts like a source and flush buffered data.
+    /// Thereafter, we tear down the ingestion pipeline from source to sink.
+    std::vector<caf::actor> actors;
+    if (auto acc = self->system().registry().get(atom::accountant_v))
+      actors.push_back(caf::actor_cast<caf::actor>(acc));
+    actors.push_back(caf::actor_cast<caf::actor>(tracker));
+    shutdown<policy::sequential>(self, std::move(actors));
+    self->attach_functor([=](const caf::error&) {
+      VAST_DEBUG(self, "terminated all dependent actors");
+      // Clean up. This is important for detached actors, otherwise they
+      // cause some destructor to hang. (This is a CAF bug; for details see
+      // https://github.com/actor-framework/actor-framework/issues/1110.)
+      self->system().registry().erase(atom::accountant_v);
+    });
   });
-  self->system().registry().put(atom::tracker_v, tracker);
 }
 
 caf::behavior node(node_actor* self, std::string id, path dir) {

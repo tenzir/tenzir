@@ -119,4 +119,3 @@ tracker_type::behavior_type
 tracker(tracker_type::stateful_pointer<tracker_state> self, std::string node);
 
 } // namespace vast::system
-

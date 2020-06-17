@@ -16,104 +16,16 @@
 #include "vast/detail/assert.hpp"
 #include "vast/detail/string.hpp"
 #include "vast/error.hpp"
+#include "vast/fwd.hpp"
 #include "vast/logger.hpp"
 #include "vast/system/archive.hpp"
-
-#include <caf/event_based_actor.hpp>
+#include "vast/system/shutdown.hpp"
 
 using namespace caf;
 
 namespace vast::system {
 
 namespace {
-
-struct terminator_state {
-  terminator_state(event_based_actor* selfptr) : self(selfptr) {
-    // nop
-  }
-
-  caf::error reason;
-  actor parent;
-  component_state_map components;
-  std::vector<std::string> victim_stack;
-  size_t pending_down_messages = 0;
-  event_based_actor* self;
-
-  // Keeps this actor alive until we manually stop it.
-  strong_actor_ptr anchor;
-
-  static inline const char* name = "terminator";
-
-  void init(caf::error reason, caf::actor parent,
-            component_state_map components,
-            std::vector<std::string> victim_stack) {
-    VAST_TRACE(VAST_ARG(components), VAST_ARG(victim_stack));
-    this->anchor = actor_cast<strong_actor_ptr>(self);
-    this->reason = std::move(reason);
-    this->parent = std::move(parent);
-    this->components = std::move(components);
-    this->victim_stack = std::move(victim_stack);
-  }
-
-  template <class Label>
-  void kill(const caf::actor& actor, const Label& label) {
-    VAST_IGNORE_UNUSED(label);
-    VAST_DEBUG(self, "sends exit_msg to", label);
-    self->monitor(actor);
-    self->send_exit(actor, reason);
-    ++pending_down_messages;
-  }
-
-  void kill_next() {
-    VAST_TRACE("");
-    do {
-      if (victim_stack.empty()) {
-        if (parent == nullptr) {
-          VAST_DEBUG(self, "stops after stopping all components");
-          anchor = nullptr;
-          self->quit();
-          return;
-        }
-        VAST_DEBUG(self, "kills parent and remaining components");
-        for (auto& component : components.value)
-          kill(component.second.actor, component.second.label);
-        components.value.clear();
-        kill(parent, "tracker");
-        parent = nullptr;
-        return;
-      }
-      auto er = components.value.equal_range(victim_stack.back());
-      for (auto i = er.first; i != er.second; ++i)
-        kill(i->second.actor, i->second.label);
-      components.value.erase(er.first, er.second);
-      victim_stack.pop_back();
-    } while (pending_down_messages == 0);
-  }
-
-  void got_down_msg() {
-    VAST_TRACE("");
-    if (--pending_down_messages == 0)
-      kill_next();
-  }
-};
-
-behavior terminator(stateful_actor<terminator_state>* self, caf::error reason,
-                    caf::actor parent, component_state_map components,
-                    std::vector<std::string> victim_stack) {
-  VAST_DEBUG(self, "starts terminator with", victim_stack.size(),
-             "victims on the stack and", components.value.size(), "in total");
-  self->state.init(std::move(reason), std::move(parent), std::move(components),
-                   std::move(victim_stack));
-  self->state.kill_next();
-  self->set_down_handler([=](const down_msg&) {
-    self->state.got_down_msg();
-  });
-  return {
-    [] {
-      // Dummy message handler to keep the actor alive and kicking.
-    }
-  };
-}
 
 void register_component(scheduled_actor* self, tracker_state& st,
                         const std::string& type, const actor& component,
@@ -164,7 +76,7 @@ bool is_singleton(const std::string& component) {
   return std::any_of(std::begin(singletons), std::end(singletons), pred);
 }
 
-} // namespace <anonymous>
+} // namespace
 
 tracker_type::behavior_type
 tracker(tracker_type::stateful_pointer<tracker_state> self, std::string node) {
@@ -172,36 +84,48 @@ tracker(tracker_type::stateful_pointer<tracker_state> self, std::string node) {
   // Insert ourself into the registry.
   self->state.registry.components.value[node].value.emplace(
     "tracker", component_state{actor_cast<actor>(self), "tracker"});
-  self->set_down_handler(
-    [=](const down_msg& msg) {
-      auto pred = [&](auto& p) { return p.second.actor == msg.source; };
-      for (auto& [node, comp_state] : self->state.registry.components.value) {
-        auto i = std::find_if(comp_state.value.begin(), comp_state.value.end(),
-                              pred);
-        if (i != comp_state.value.end()) {
-          if (i->first == "tracker")
-            self->state.registry.components.value.erase(node);
-          else
-            comp_state.value.erase(i);
-          return;
-        }
+  self->set_down_handler([=](const down_msg& msg) {
+    auto pred = [&](auto& p) { return p.second.actor == msg.source; };
+    for (auto& [node, comp_state] : self->state.registry.components.value) {
+      auto i
+        = std::find_if(comp_state.value.begin(), comp_state.value.end(), pred);
+      if (i != comp_state.value.end()) {
+        if (i->first == "tracker")
+          self->state.registry.components.value.erase(node);
+        else
+          comp_state.value.erase(i);
+        return;
       }
     }
-  );
-  self->set_exit_handler(
-    [=](const exit_msg& msg) {
-      // Only trap the first exit, regularly shutdown on the next one.
-      self->set_exit_handler({});
-      // We shut down the components in the order in which data flows so that
-      // downstream components can still process in-flight data. Because the
-      // terminator operates with a stack of components, we specify them in
-      // reverse order.
-      self->spawn(terminator, msg.reason, actor_cast<actor>(self),
-                  self->state.registry.components.value[node],
-                  std::vector<std::string>{"exporter", "index", "archive",
-                                           "importer", "source"});
+  });
+  self->set_exit_handler([=](const exit_msg&) {
+    // We shut down the components in the order in which data flows so that
+    // downstream components can still process in-flight data.
+    auto actors = std::vector<caf::actor>{};
+    auto components = std::vector<std::string>{"source", "importer", "archive",
+                                               "index", "exporter"};
+    auto& local = self->state.registry.components.value[node].value;
+    for (auto& component : components) {
+      auto er = local.equal_range(component);
+      for (auto i = er.first; i != er.second; ++i) {
+        self->demonitor(i->second.actor);
+        actors.push_back(i->second.actor);
+      }
+      local.erase(er.first, er.second);
     }
-  );
+    // Add remaining components.
+    for ([[maybe_unused]] auto& [_, comp] : local) {
+      if (comp.actor != self) {
+        self->demonitor(comp.actor);
+        actors.push_back(comp.actor);
+      }
+    }
+    // Avoid extra communication by cancelling no longer needed subscription to
+    // DOWN messages.
+    self->set_down_handler({});
+    local.clear();
+    shutdown<policy::sequential>(self, std::move(actors));
+  });
   return {
     [=](atom::put, const std::string& type, const actor& component,
         std::string& label) -> result<atom::ok> {
