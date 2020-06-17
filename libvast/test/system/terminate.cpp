@@ -11,7 +11,7 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#include "vast/system/wait.hpp"
+#include "vast/system/terminate.hpp"
 
 #include "vast/fwd.hpp"
 
@@ -31,8 +31,8 @@ caf::behavior worker(caf::event_based_actor* self) {
   return [=](atom::done) { self->quit(); };
 }
 
-struct terminator_fixture : fixtures::actor_system {
-  terminator_fixture() {
+struct fixture : fixtures::actor_system {
+  fixture() {
     victims = std::vector<caf::actor>{sys.spawn(worker), sys.spawn(worker),
                                       sys.spawn(worker)};
   }
@@ -42,14 +42,14 @@ struct terminator_fixture : fixtures::actor_system {
 
 } // namespace
 
-FIXTURE_SCOPE(terminator_tests, terminator_fixture)
+FIXTURE_SCOPE(terminate_tests, fixture)
 
 TEST(parallel shutdown) {
-  wait<policy::parallel>(self, victims);
+  terminate<policy::parallel>(self, victims);
 }
 
 TEST(sequential shutdown) {
-  wait<policy::sequential>(self, victims);
+  terminate<policy::sequential>(self, victims);
 }
 
 FIXTURE_SCOPE_END()

@@ -330,8 +330,8 @@ set(tests
     test/system/sink.cpp
     test/system/source.cpp
     test/system/task.cpp
+    test/system/terminate.cpp
     test/system/type_registry.cpp
-    test/system/wait.cpp
     test/table_slice.cpp
     test/time.cpp
     test/type.cpp

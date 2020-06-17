@@ -42,20 +42,20 @@ namespace vast::system {
 /// @param xs Owned actors by *self* that need to shutdown prior to *self*.
 /// @returns A response promise to be fulfilled when all *xs* terminated.
 template <class Policy>
-auto wait(caf::event_based_actor* self, std::vector<caf::actor> xs) {
+auto terminate(caf::event_based_actor* self, std::vector<caf::actor> xs) {
   auto timeout = defaults::system::shutdown_timeout;
   return self->request(self->spawn(terminator<Policy>), timeout, std::move(xs));
 }
 
 template <class Policy, class... Ts>
-auto wait(caf::typed_event_based_actor<Ts...>* self,
-          std::vector<caf::actor> xs) {
+auto terminate(caf::typed_event_based_actor<Ts...>* self,
+               std::vector<caf::actor> xs) {
   auto handle = caf::actor_cast<caf::event_based_actor*>(self);
-  return wait<Policy>(handle, std::move(xs));
+  return terminate<Policy>(handle, std::move(xs));
 }
 
 template <class Policy>
-void wait(caf::scoped_actor& self, std::vector<caf::actor> xs) {
+void terminate(caf::scoped_actor& self, std::vector<caf::actor> xs) {
   auto timeout = defaults::system::shutdown_timeout;
   self->request(self->spawn(terminator<Policy>), timeout, std::move(xs))
     .receive(
