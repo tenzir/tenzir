@@ -20,6 +20,7 @@
 #include "vast/logger.hpp"
 #include "vast/time.hpp"
 
+#include <caf/event_based_actor.hpp>
 #include <caf/scheduled_actor.hpp>
 
 #if VAST_HAVE_GPERFTOOLS
