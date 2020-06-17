@@ -138,7 +138,8 @@ while [ $# -ne 0 ]; do
     --ci-build)
       append_cache_entry CMAKE_BUILD_TYPE STRING CI
       append_cache_entry VAST_LOG_LEVEL STRING TRACE
-      append_cache_entry CMAKE_CXX_FLAGS_CI STRING "-O2 -DNDEBUG -g1 -Wall -Wextra -pedantic"
+      append_cache_entry CMAKE_CXX_FLAGS_CI STRING \
+        "-O2 -DNDEBUG -g1 -Wall -Wextra -pedantic -Werror -Wno-error=deprecated -Wno-error=deprecated-declarations"
       append_cache_entry ENABLE_ADDRESS_SANITIZER BOOL yes
       append_cache_entry VAST_ENABLE_ASSERTIONS BOOL yes
       ;;
