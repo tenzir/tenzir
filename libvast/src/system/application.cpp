@@ -88,7 +88,10 @@ auto make_root_command(std::string_view path) {
         .add<bool>("node,N", "spawn a node instead of connecting to one")
         .add<bool>("disable-metrics", "don't keep track of performance metrics")
         .add<bool>("no-default-schema", "don't load the default schema "
-                                        "definitions");
+                                        "definitions")
+        .add<std::string>("aging-frequency", "interval between two aging "
+                                             "cycles")
+        .add<std::string>("aging-query", "query for aging out obsolete data");
   return std::make_unique<command>(path, "", documentation::vast,
                                    add_index_opts(std::move(ob)));
 }
@@ -385,6 +388,7 @@ auto make_command_factory() {
     {"send", remote_command},
     {"spawn accountant", remote_command},
     {"spawn archive", remote_command},
+    {"spawn eraser", remote_command},
     {"spawn exporter", remote_command},
     {"spawn explorer", remote_command},
     {"spawn importer", remote_command},

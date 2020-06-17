@@ -11,6 +11,12 @@ Every entry has a category for which we use the following visual abbreviations:
 
 ## Unreleased
 
+- 🧬 VAST now supports aging out existing data. This feature currently only
+  concerns data in the archive. The options `system.aging-frequency` and
+  `system.aging-query` configure a query that runs on a regular schedule to
+  determine which events to delete. It is also possible to trigger an aging
+  cycle manually. [#929](https://github.com/tenzir/vast/929)
+
 - 🎁 The `import` command gained a new `--read-timeout` option that forces data
   to be forwarded to the importer regardless of the internal batching parameters
   and table slices being unfinished. This allows for reducing the latency
