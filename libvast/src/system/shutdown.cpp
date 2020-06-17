@@ -20,7 +20,6 @@
 #include "vast/logger.hpp"
 #include "vast/system/terminator.hpp"
 
-#include <caf/event_based_actor.hpp>
 #include <caf/response_promise.hpp>
 
 namespace vast::system {

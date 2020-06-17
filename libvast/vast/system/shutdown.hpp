@@ -14,6 +14,7 @@
 #pragma once
 
 #include <caf/actor_cast.hpp>
+#include <caf/event_based_actor.hpp>
 #include <caf/fwd.hpp>
 #include <caf/stateful_actor.hpp>
 
