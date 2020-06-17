@@ -16,6 +16,7 @@ set(libvast_sources
     src/base.cpp
     src/bitmap.cpp
     src/bloom_filter_parameters.cpp
+    src/bloom_filter_synopsis.cpp
     src/bool_synopsis.cpp
     src/chunk.cpp
     src/column_index.cpp

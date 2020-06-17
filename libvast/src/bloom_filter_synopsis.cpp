@@ -11,19 +11,18 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#include "vast/synopsis_factory.hpp"
-
-#include "vast/address_synopsis.hpp"
-#include "vast/bool_synopsis.hpp"
-#include "vast/concept/hashable/xxhash.hpp"
-#include "vast/time_synopsis.hpp"
+#include "vast/bloom_filter_synopsis.hpp"
 
 namespace vast {
 
-void factory_traits<synopsis>::initialize() {
-  factory<synopsis>::add(address_type{}, make_address_synopsis<xxhash64>);
-  factory<synopsis>::add<bool_type, bool_synopsis>();
-  factory<synopsis>::add<time_type, time_synopsis>();
+caf::optional<bloom_filter_parameters> parse_parameters(const type& x) {
+  auto pred = [](auto& attr) {
+    return attr.key == "synopsis" && attr.value != caf::none;
+  };
+  auto i = std::find_if(x.attributes().begin(), x.attributes().end(), pred);
+  if (i != x.attributes().end())
+    return parse_parameters(*i->value);
+  return caf::none;
 }
 
 } // namespace vast
