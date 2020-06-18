@@ -176,7 +176,8 @@ while [ $# -ne 0 ]; do
       ;;
 # -- Debugging -----------------------------------------------------------------
     --log-level=*)
-      append_cache_entry VAST_LOG_LEVEL STRING "$optarg"
+      append_cache_entry VAST_LOG_LEVEL STRING \
+        "$(echo "$optarg" |  tr '[a-z]' '[A-Z]')"
       ;;
     --without-assertions)
       append_cache_entry VAST_ENABLE_ASSERTIONS BOOL no
