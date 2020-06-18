@@ -15,6 +15,8 @@ set(libvast_sources
     src/banner.cpp
     src/base.cpp
     src/bitmap.cpp
+    src/bloom_filter_parameters.cpp
+    src/bloom_filter_synopsis.cpp
     src/bool_synopsis.cpp
     src/chunk.cpp
     src/column_index.cpp
@@ -253,12 +255,15 @@ add_library(vast::libvast ALIAS libvast)
 
 set(tests
     test/address.cpp
+    test/address_synopsis.cpp
     test/binner.cpp
     test/bitmap.cpp
     test/bitmap_algorithms.cpp
     test/bitmap_index.cpp
     test/bits.cpp
     test/bitvector.cpp
+    test/bloom_filter.cpp
+    test/bloom_filter_synopsis.cpp
     test/byte.cpp
     test/cache.cpp
     test/chunk.cpp
