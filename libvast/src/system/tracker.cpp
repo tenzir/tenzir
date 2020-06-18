@@ -129,13 +129,13 @@ tracker(tracker_type::stateful_pointer<tracker_state> self, std::string node) {
   return {
     [=](atom::put, const std::string& type, const actor& component,
         std::string& label) -> result<atom::ok> {
-      VAST_DEBUG(self, "got new", type, '(' << label << ')');
+      VAST_DEBUG(self, "got new", type, '(', label, ')');
       register_component(self, self->state, type, component, label);
       return atom::ok_v;
     },
     [=](atom::try_put, const std::string& type, const actor& component,
         std::string& label) -> result<void> {
-      VAST_DEBUG(self, "got new", type, '(' << label << ')');
+      VAST_DEBUG(self, "got new", type, '(', label, ')');
       auto& st = self->state;
       auto& local = st.registry.components.value[node].value;
       if (is_singleton(type) && local.count(type) > 0)

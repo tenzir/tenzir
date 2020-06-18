@@ -171,7 +171,7 @@ sink_command(const invocation& inv, actor_system& sys, caf::actor snk) {
           stop = true;
       },
       [&](atom::signal, int signal) {
-        VAST_DEBUG(inv.full_name, "got " << ::strsignal(signal));
+        VAST_DEBUG(inv.full_name, "got", ::strsignal(signal));
         if (signal == SIGINT || signal == SIGTERM) {
           self->send_exit(*exp, exit_reason::user_shutdown);
           self->send_exit(snk, exit_reason::user_shutdown);

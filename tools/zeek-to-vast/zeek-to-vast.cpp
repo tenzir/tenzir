@@ -292,7 +292,7 @@ int main(int argc, char** argv) {
                                                + std::to_string(vast_port)}}});
   caf::actor node;
   if (auto conn = vast::system::connect_to_node(self, opts); !conn) {
-    VAST_ERROR_ANON("failed to connect to VAST: " << sys.render(conn.error()));
+    VAST_ERROR_ANON("failed to connect to VAST:", conn.error());
     return 1;
   } else {
     node = std::move(*conn);

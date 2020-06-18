@@ -248,13 +248,13 @@ caf::error reader::read_impl(size_t max_events, size_t max_slice_size,
       }
       VAST_DEBUG(this, "reads trace from", input_);
       if (pseudo_realtime_ > 0)
-        VAST_DEBUG(this, "uses pseudo-realtime factor 1/" << pseudo_realtime_);
+        VAST_DEBUG(this, "uses pseudo-realtime factor 1/", pseudo_realtime_);
     }
     VAST_DEBUG(this, "cuts off flows after", cutoff_,
                "bytes in each direction");
     VAST_DEBUG(this, "keeps at most", max_flows_, "concurrent flows");
-    VAST_DEBUG(this, "evicts flows after", max_age_ << "s of inactivity");
-    VAST_DEBUG(this, "expires flow table every", expire_interval_ << "s");
+    VAST_DEBUG(this, "evicts flows after", max_age_, "s of inactivity");
+    VAST_DEBUG(this, "expires flow table every", expire_interval_, "s");
   }
   auto start = std::chrono::steady_clock::now();
   for (size_t produced = 0; produced < max_events; ++produced) {

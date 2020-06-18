@@ -113,7 +113,7 @@ void accountant_state::command_line_heartbeat() {
 #if VAST_LOG_LEVEL >= VAST_LOG_LEVEL_DEBUG
   if (auto rate = accumulator.rate_per_sec(); std::isfinite(rate))
     VAST_DEBUG(self, "received", accumulator.events, "events at a rate of",
-               static_cast<uint64_t>(rate) << "events/sec");
+               static_cast<uint64_t>(rate), "events/sec");
 #endif
   accumulator = {};
 }
