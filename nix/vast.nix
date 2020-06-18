@@ -9,12 +9,9 @@
 , caf
 , libpcap
 , arrow-cpp
-<<<<<<< HEAD
 , flatbuffers
-=======
 , zstd
 , jemalloc
->>>>>>> origin/master
 , python3Packages
 , jq
 , tcpdump
@@ -52,11 +49,7 @@ stdenv.mkDerivation rec {
 
   nativeBuildInputs = [ cmake ];
   propagatedNativeBuildInputs = [ pkgconfig pandoc ];
-<<<<<<< HEAD
-  buildInputs = [ libpcap flatbuffers ];
-=======
-  buildInputs = [ libpcap jemalloc ];
->>>>>>> origin/master
+  buildInputs = [ libpcap flatbuffers jemalloc ];
   propagatedBuildInputs = [ arrow-cpp caf ];
 
   cmakeFlags = [

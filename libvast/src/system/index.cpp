@@ -13,11 +13,8 @@
 
 #include "vast/system/index.hpp"
 
-<<<<<<< HEAD
 #include "vast/chunk.hpp"
 #include "vast/concept/parseable/to.hpp"
-=======
->>>>>>> origin/master
 #include "vast/concept/printable/to_string.hpp"
 #include "vast/concept/printable/vast/bitmap.hpp"
 #include "vast/concept/printable/vast/error.hpp"
@@ -33,12 +30,9 @@
 #include "vast/fbs/meta_index.hpp"
 #include "vast/fbs/utils.hpp"
 #include "vast/ids.hpp"
-<<<<<<< HEAD
 #include "vast/io/read.hpp"
 #include "vast/io/write.hpp"
 #include "vast/json.hpp"
-=======
->>>>>>> origin/master
 #include "vast/load.hpp"
 #include "vast/logger.hpp"
 #include "vast/save.hpp"

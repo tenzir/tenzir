@@ -325,11 +325,7 @@ void segment_store::inspect_status(caf::settings& dict) {
   using caf::put;
   put(dict, "segment-path", segment_path().str());
   put(dict, "max-segment-size", max_segment_size_);
-<<<<<<< HEAD
   put(dict, "num-events", num_events_);
-  auto& segments = put_dictionary(dict, "segments");
-=======
->>>>>>> origin/master
   // Note: `for (auto& kvp : segments_)` does not compile.
   // FIXME: This is too slow for large archives and blocks the node.
   // auto& segments = put_dictionary(dict, "segments");

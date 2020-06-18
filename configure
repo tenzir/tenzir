@@ -58,11 +58,8 @@ Usage: $0 [OPTION]... [VAR=VALUE]...
     --with-arrow=PATH       path to Apache Arrow install root
     --without-arrow         explicitly disable Apache Arrow integration
     --with-caf=PATH         path to CAF install root or build directory
-<<<<<<< HEAD
-    --with-flatbuffers=PATH path to flatbuffers install root
-=======
     --with-bundled-caf      build CAF from the submodule
->>>>>>> origin/master
+    --with-flatbuffers=PATH path to flatbuffers install root
 
   Optional packages:
     --with-broker=PATH      path to Broker install root (required for
@@ -204,13 +201,11 @@ while [ $# -ne 0 ]; do
     --with-caf=*)
       append_cache_entry CAF_ROOT_DIR PATH "$optarg"
       ;;
-<<<<<<< HEAD
-    --with-flatbuffers=*)
-      append_cache_entry FLATBUFFERS_ROOT_DIR PATH "$optarg"
-=======
     --with-bundled-caf)
       append_cache_entry VAST_USE_BUNDLED_CAF BOOL yes
->>>>>>> origin/master
+      ;;
+    --with-flatbuffers=*)
+      append_cache_entry FLATBUFFERS_ROOT_DIR PATH "$optarg"
       ;;
 # -- Optional packages ---------------------------------------------------------
     --with-broker=*)
