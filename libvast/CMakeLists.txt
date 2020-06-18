@@ -255,6 +255,7 @@ add_library(vast::libvast ALIAS libvast)
 
 set(tests
     test/address.cpp
+    test/address_synopsis.cpp
     test/binner.cpp
     test/bitmap.cpp
     test/bitmap_algorithms.cpp
