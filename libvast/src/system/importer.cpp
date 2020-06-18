@@ -32,8 +32,6 @@
 
 namespace vast::system {
 
-using caf::subscribe_atom, caf::flush_atom, caf::add_atom;
-
 importer_state::importer_state(caf::event_based_actor* self_ptr)
   : self(self_ptr) {
   // nop
@@ -182,11 +180,11 @@ caf::behavior importer(importer_actor* self, path dir, archive_type archive,
       VAST_DEBUG(self, "adds a new sink:", self->current_sender());
       st.stg->add_outbound_path(subscriber);
     },
-    [=](subscribe_atom, flush_atom, caf::actor& listener) {
+    [=](atom::subscribe, atom::flush, caf::actor& listener) {
       auto& st = self->state;
       VAST_ASSERT(st.stg != nullptr);
       for (auto& next : st.index_actors)
-        self->send(next, subscribe_atom::value, flush_atom::value, listener);
+        self->send(next, atom::subscribe_v, atom::flush_v, listener);
     },
     [=](atom::status) { return self->state.status(); },
     [=](atom::telemetry) {
