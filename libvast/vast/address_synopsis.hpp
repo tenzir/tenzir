@@ -92,21 +92,23 @@ synopsis_ptr make_address_synopsis(vast::type type, const caf::settings& opts) {
   auto i = opts.find("max-partition-size");
   if (i != opts.end()) {
     if (auto max_part_size = caf::get_if<int_type>(&i->second)) {
-      VAST_DEBUG_ANON(__func__, "uses max partition size to size Bloom filter");
+      VAST_DEBUG_ANON(__func__, "uses max partition size for Bloom filter; n =",
+                      *max_part_size);
       bloom_filter_parameters xs;
       xs.n = *max_part_size;
       xs.p = 0.01;
       // Because VAST deserializes a synopsis with empty options and
       // construction of an address synopsis fails without any sizing
-      // information is invalid, we augment the type with the synopsis options.
+      // information, we augment the type with the synopsis options.
       using namespace std::string_literals;
       auto v = "bloomfilter("s + std::to_string(*xs.n) + ','
                + std::to_string(*xs.p) + ')';
       auto t = type.attributes({{"synopsis", std::move(v)}});
-      return make(std::move(t), std::move(xs));
-      VAST_ERROR_ANON(
-        __func__, "failed to evaluate Bloom filter parameters:", xs.n, xs.p);
-      return nullptr;
+      auto result = make(std::move(t), std::move(xs));
+      if (!result)
+        VAST_ERROR_ANON(
+          __func__, "failed to evaluate Bloom filter parameters:", xs.n, xs.p);
+      return result;
     }
   }
   VAST_ERROR_ANON(__func__, "could not determine Bloom filter parameters");

@@ -137,6 +137,8 @@ make_bloom_filter(bloom_filter_parameters xs, std::vector<size_t> seeds = {}) {
   using result_type = bloom_filter<HashFunction, Hasher, PartitioningPolicy>;
   using hasher_type = typename result_type::hasher_type;
   if (auto ys = evaluate(xs)) {
+    if (*ys->m == 0 || *ys->k == 0)
+      return caf::none;
     if (seeds.empty()) {
       if constexpr (std::is_same_v<hasher_type, double_hasher<HashFunction>>) {
         seeds = {0, 1};
@@ -144,11 +146,10 @@ make_bloom_filter(bloom_filter_parameters xs, std::vector<size_t> seeds = {}) {
         seeds.resize(*ys->k);
         std::iota(seeds.begin(), seeds.end(), 0);
       }
-    } else if (seeds.size() != static_cast<size_t>(*ys->k)) {
+    } else if (seeds.size() != *ys->k) {
       return caf::none;
     }
-    auto size = static_cast<size_t>(*ys->m);
-    return result_type{size, hasher_type{*ys->k, std::move(seeds)}};
+    return result_type{*ys->m, hasher_type{*ys->k, std::move(seeds)}};
   }
   return caf::none;
 }
