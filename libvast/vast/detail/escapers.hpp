@@ -21,7 +21,7 @@
 
 namespace vast::detail {
 
-auto hex_escaper = [](auto& f, auto out) {
+inline auto hex_escaper = [](auto& f, auto out) {
   auto hex = byte_to_hex(*f++);
   *out++ = '\\';
   *out++ = 'x';
@@ -29,7 +29,7 @@ auto hex_escaper = [](auto& f, auto out) {
   *out++ = hex.second;
 };
 
-auto hex_unescaper = [](auto& f, auto l, auto out) {
+inline auto hex_unescaper = [](auto& f, auto l, auto out) {
   auto hi = *f++;
   if (f == l)
     return false;
@@ -40,25 +40,14 @@ auto hex_unescaper = [](auto& f, auto l, auto out) {
   return true;
 };
 
-auto print_escaper = [](auto& f, auto out) {
+inline auto print_escaper = [](auto& f, auto out) {
   if (std::isprint(*f))
     *out++ = *f++;
   else
     hex_escaper(f, out);
 };
 
-inline auto make_extra_print_escaper(std::string_view extra) {
-  return [=](auto& f, auto out) {
-    if (extra.find(*f) != std::string_view::npos) {
-      *out++ = '\\';
-      *out++ = *f++;
-    } else {
-      print_escaper(f, out);
-    }
-  };
-}
-
-auto byte_unescaper = [](auto& f, auto l, auto out) {
+inline auto byte_unescaper = [](auto& f, auto l, auto out) {
   if (*f != '\\') {
     *out++ = *f++;
     return true;
@@ -81,13 +70,13 @@ auto byte_unescaper = [](auto& f, auto l, auto out) {
 //
 // That is, '"', '\\', and control characters are the only mandatory escaped
 // values. The rest is optional.
-auto json_escaper = [](auto& f, auto out) {
+inline auto json_escaper = [](auto& f, auto out) {
   auto escape_char = [](char c, auto out) {
     *out++ = '\\';
     *out++ = c;
   };
   auto json_print_escaper = [](auto& f, auto out) {
-    if (std::isprint(*f)) {
+    if (!std::iscntrl(*f)) {
       *out++ = *f++;
     } else {
       auto hex = byte_to_hex(*f++);
@@ -126,7 +115,7 @@ auto json_escaper = [](auto& f, auto out) {
   ++f;
 };
 
-auto json_unescaper = [](auto& f, auto l, auto out) {
+inline auto json_unescaper = [](auto& f, auto l, auto out) {
   if (*f == '"') // Unescaped double-quotes not allowed.
     return false;
   if (*f != '\\') { // Skip every non-escape character.
@@ -190,7 +179,7 @@ auto json_unescaper = [](auto& f, auto l, auto out) {
   return true;
 };
 
-auto percent_escaper = [](auto& f, auto out) {
+inline auto percent_escaper = [](auto& f, auto out) {
   auto is_unreserved = [](char c) {
     return std::isalnum(c) || c == '-' || c == '_' || c == '.' || c == '~';
   };
@@ -204,7 +193,7 @@ auto percent_escaper = [](auto& f, auto out) {
   }
 };
 
-auto percent_unescaper = [](auto& f, auto l, auto out) {
+inline auto percent_unescaper = [](auto& f, auto l, auto out) {
   if (*f != '%') {
     *out++ = *f++;
     return true;
@@ -213,6 +202,17 @@ auto percent_unescaper = [](auto& f, auto l, auto out) {
     return false;
   return hex_unescaper(++f, l, out);
 };
+
+inline auto make_extra_print_escaper(std::string_view extra) {
+  return [=](auto& f, auto out) {
+    if (extra.find(*f) != std::string_view::npos) {
+      *out++ = '\\';
+      *out++ = *f++;
+    } else {
+      print_escaper(f, out);
+    }
+  };
+}
 
 inline auto make_double_escaper(std::string_view esc) {
   return [=](auto& f, auto out) {

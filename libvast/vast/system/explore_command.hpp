@@ -20,7 +20,6 @@
 namespace vast::system {
 
 /// Returns context around the results of a VAST query.
-caf::message
-explore_command(const command::invocation& invocation, caf::actor_system& sys);
+caf::message explore_command(const invocation& inv, caf::actor_system& sys);
 
 } // namespace vast::system

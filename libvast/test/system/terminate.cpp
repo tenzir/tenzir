@@ -11,14 +11,45 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#pragma once
+#include "vast/system/terminate.hpp"
 
-#include <caf/fwd.hpp>
+#include "vast/fwd.hpp"
 
-namespace vast::detail {
+#include <caf/behavior.hpp>
+#include <caf/event_based_actor.hpp>
 
-/// Adds the error categories VAST uses to a CAF actor system configuration.
-/// @param cfg The actor system configuration to add the error categories to.
-void add_error_categories(caf::actor_system_config& cfg);
+#define SUITE terminator
+#include "vast/test/fixtures/actor_system.hpp"
+#include "vast/test/test.hpp"
 
-} // namespace vast::detail
+using namespace vast;
+using namespace vast::system;
+
+namespace {
+
+caf::behavior worker(caf::event_based_actor* self) {
+  return [=](atom::done) { self->quit(); };
+}
+
+struct fixture : fixtures::actor_system {
+  fixture() {
+    victims = std::vector<caf::actor>{sys.spawn(worker), sys.spawn(worker),
+                                      sys.spawn(worker)};
+  }
+
+  std::vector<caf::actor> victims;
+};
+
+} // namespace
+
+FIXTURE_SCOPE(terminate_tests, fixture)
+
+TEST(parallel shutdown) {
+  terminate<policy::parallel>(self, victims);
+}
+
+TEST(sequential shutdown) {
+  terminate<policy::sequential>(self, victims);
+}
+
+FIXTURE_SCOPE_END()

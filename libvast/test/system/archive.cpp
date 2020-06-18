@@ -34,7 +34,7 @@ struct fixture : fixtures::deterministic_actor_system_and_events {
 
   fixture() {
     a = self->spawn(system::archive, directory, 10, 1024 * 1024);
-    self->send(a, system::exporter_atom::value, self);
+    self->send(a, atom::exporter_v, self);
   }
 
   template <class T>
@@ -48,15 +48,14 @@ struct fixture : fixtures::deterministic_actor_system_and_events {
     std::vector<event> result;
     self->send(a, ids);
     run();
-    self->do_receive(
-      [&](vast::system::done_atom, const caf::error& err) {
-        REQUIRE(!err);
-        done = true;
-      },
-      [&](table_slice_ptr slice) {
-        to_events(result, *slice, ids);
-      }
-    ).until(done);
+    self
+      ->do_receive(
+        [&](vast::atom::done, const caf::error& err) {
+          REQUIRE(!err);
+          done = true;
+        },
+        [&](table_slice_ptr slice) { to_events(result, *slice, ids); })
+      .until(done);
     return result;
   }
 

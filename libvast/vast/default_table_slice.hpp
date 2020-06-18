@@ -18,7 +18,6 @@
 #include <caf/atom.hpp>
 
 #include "vast/aliases.hpp"
-#include "vast/data.hpp"
 #include "vast/fwd.hpp"
 #include "vast/table_slice.hpp"
 

@@ -82,7 +82,7 @@ caf::error column_index::flush_to_disk() {
     return caf::none;
   // Check whether there's something to write.
   auto offset = idx_->offset();
-  VAST_DEBUG(this, "flushes index (" << (offset - last_flush_) << '/' << offset,
+  VAST_DEBUG(this, "flushes index (", offset - last_flush_, '/', offset,
              "new/total bits)");
   last_flush_ = offset;
   return save(nullptr, filename_, last_flush_, idx_);

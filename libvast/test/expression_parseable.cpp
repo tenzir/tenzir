@@ -21,15 +21,12 @@
 #include "vast/concept/printable/stream.hpp"
 #include "vast/concept/printable/to_string.hpp"
 #include "vast/concept/printable/vast/expression.hpp"
-#include "vast/system/atoms.hpp"
+#include "vast/fwd.hpp"
 
 #include <caf/sum_type.hpp>
 
 using namespace vast;
 using namespace std::string_literals;
-
-using vast::system::timestamp_atom;
-using vast::system::type_atom;
 
 TEST(parseable/printable - predicate) {
   predicate pred;
@@ -57,7 +54,7 @@ TEST(parseable/printable - predicate) {
   CHECK(caf::holds_alternative<attribute_extractor>(pred.lhs));
   CHECK(caf::holds_alternative<data>(pred.rhs));
   CHECK(caf::get<attribute_extractor>(pred.lhs)
-        == attribute_extractor{type_atom::value});
+        == attribute_extractor{atom::type_v});
   CHECK(pred.op == not_equal);
   CHECK(caf::get<data>(pred.rhs) == data{"foo"});
   CHECK_EQUAL(to_string(pred), str);
@@ -86,7 +83,7 @@ TEST(parseable/printable - predicate) {
   CHECK(caf::holds_alternative<attribute_extractor>(pred.rhs));
   CHECK(pred.op == greater);
   CHECK(caf::get<attribute_extractor>(pred.rhs)
-        == attribute_extractor{timestamp_atom::value});
+        == attribute_extractor{atom::timestamp_v});
   str = "x.a_b == y.c_d";
   CHECK(parsers::predicate(str, pred));
   CHECK(caf::holds_alternative<key_extractor>(pred.lhs));

@@ -11,14 +11,17 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
+// This file comes from a 3rd party and has been adapted to fit into the VAST
+// code base. Details about the original code:
+//
+// - Site:       https://stackoverflow.com/a/6089413/92560
+// - Author:     user763305 et al.
+// - License:    CC-BY-SA
+
 #pragma once
 
 #include <istream>
 #include <string>
-
-// The code in this file is based on a stackoverflow
-// post by user763305 et al., originally posted at
-// https://stackoverflow.com/a/6089413/92560.
 
 namespace vast::detail {
 
@@ -30,8 +33,10 @@ inline std::istream& getline_generic(std::istream& is, std::string& t) {
   // That is faster than reading them one-by-one using the std::istream.
   // Code that uses streambuf this way must be guarded by a sentry object.
   std::istream::sentry sentry(is, true);
+  if (!sentry)
+    return is;
   std::streambuf* sb = is.rdbuf();
-  for (;;) {
+  while (t.size() < t.max_size()) {
     int c = sb->sbumpc();
     switch (c) {
       case '\n':
@@ -41,14 +46,20 @@ inline std::istream& getline_generic(std::istream& is, std::string& t) {
           sb->sbumpc();
         return is;
       case std::streambuf::traits_type::eof():
-        // Also handle the case when the last line has no line ending
+        is.setstate(std::ios::eofbit);
+        // If `std::getline` extracts no characters, failbit is set.
+        // (21.4.8.9/7.9 [string.io])
         if (t.empty())
-          is.setstate(std::ios::eofbit);
+          is.setstate(std::ios::failbit);
         return is;
       default:
         t += static_cast<char>(c);
     }
   }
+  // After `str.max_size()` are stored by `std::getline`, failbit is set.
+  // (21.4.8.9/7.7.1 [string.io])
+  is.setstate(std::ios::failbit);
+  return is;
 }
 
 } // namespace vast::detail

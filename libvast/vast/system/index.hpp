@@ -25,6 +25,8 @@
 #include "vast/system/spawn_indexer.hpp"
 #include "vast/uuid.hpp"
 
+#include <caf/actor.hpp>
+#include <caf/behavior.hpp>
 #include <caf/fwd.hpp>
 
 #include <unordered_map>
@@ -214,7 +216,7 @@ struct index_state {
   partition_ptr active;
 
   /// Active indexer count for the current partition.
-  size_t active_partition_indexers;
+  size_t active_partition_indexers = 0;
 
   /// Recently accessed partitions.
   partition_cache_type lru_partitions;

@@ -28,7 +28,6 @@ set(libvast_sources
     src/default_table_slice.cpp
     src/default_table_slice_builder.cpp
     src/defaults.cpp
-    src/detail/add_error_categories.cpp
     src/detail/add_message_types.cpp
     src/detail/adjust_resource_consumption.cpp
     src/detail/base64.cpp
@@ -99,7 +98,6 @@ set(libvast_sources
     src/system/count_command.cpp
     src/system/counter.cpp
     src/system/default_configuration.cpp
-    src/system/dummy_consensus.cpp
     src/system/evaluator.cpp
     src/system/explore_command.cpp
     src/system/explorer.cpp
@@ -117,15 +115,13 @@ set(libvast_sources
     src/system/profiler.cpp
     src/system/query_processor.cpp
     src/system/query_supervisor.cpp
-    src/system/raft.cpp
     src/system/read_query.cpp
     src/system/remote_command.cpp
+    src/system/shutdown.cpp
     src/system/signal_monitor.cpp
     src/system/sink_command.cpp
-    src/system/source_command.cpp
     src/system/spawn_archive.cpp
     src/system/spawn_arguments.cpp
-    src/system/spawn_consensus.cpp
     src/system/spawn_counter.cpp
     src/system/spawn_explorer.cpp
     src/system/spawn_exporter.cpp
@@ -142,6 +138,7 @@ set(libvast_sources
     src/system/start_command.cpp
     src/system/stop_command.cpp
     src/system/task.cpp
+    src/system/terminator.cpp
     src/system/tracker.cpp
     src/system/type_registry.cpp
     src/system/version_command.cpp
@@ -210,6 +207,10 @@ endif ()
 
 if (PCAP_FOUND)
   target_link_libraries(libvast PRIVATE pcap::pcap)
+endif ()
+
+if (VAST_USE_JEMALLOC)
+  target_link_libraries(libvast PRIVATE jemalloc::jemalloc_)
 endif ()
 
 # Always link with -lprofile if we have Gperftools.
@@ -371,10 +372,8 @@ set(tests
     test/subnet.cpp
     test/synopsis.cpp
     test/system/archive.cpp
-    test/system/consensus.cpp
     test/system/counter.cpp
     test/system/datagram_source.cpp
-    test/system/dummy_consensus.cpp
     test/system/evaluator.cpp
     test/system/explorer.cpp
     test/system/exporter.cpp
@@ -382,16 +381,15 @@ set(tests
     test/system/index.cpp
     test/system/indexer.cpp
     test/system/indexer_stage_driver.cpp
-    test/system/key_value_store.cpp
     test/system/partition.cpp
     test/system/pivoter.cpp
     test/system/queries.cpp
     test/system/query_processor.cpp
     test/system/query_supervisor.cpp
-    test/system/replicated_store.cpp
     test/system/sink.cpp
     test/system/source.cpp
     test/system/task.cpp
+    test/system/terminate.cpp
     test/system/type_registry.cpp
     test/table_slice.cpp
     test/time.cpp
@@ -416,7 +414,7 @@ endif ()
 # Generate CMake tests
 #
 
-if (NOT NO_UNIT_TESTS)
+if (BUILD_UNIT_TESTS)
   # Add vast-test executable.
   add_executable(vast-test ${tests})
   target_link_libraries(vast-test libvast_test libvast
@@ -432,18 +430,15 @@ if (NOT NO_UNIT_TESTS)
 
   add_test(
     NAME build_vast_test
-    COMMAND
-      "${CMAKE_COMMAND}" --build "${CMAKE_BINARY_DIR}" --config "$<CONFIG>"
-      --target vast-test)
+    COMMAND "${CMAKE_COMMAND}" --build "${CMAKE_BINARY_DIR}" --config
+            "$<CONFIG>" --target vast-test)
   set_tests_properties(build_vast_test PROPERTIES FIXTURES_SETUP
                                                   vast_unit_test_fixture)
   # Helper macro to construct a CMake test from a VAST test suite.
   macro (make_test suite)
     string(REPLACE " " "_" test_name ${suite})
-    add_test(
-      NAME ${test_name}
-      COMMAND
-        vast-test -v 3 -r 600 -s "^${suite}$" ${ARGN})
+    add_test(NAME ${test_name} COMMAND vast-test -v 3 -r 600 -s "^${suite}$"
+                                       ${ARGN})
     set_tests_properties(${test_name} PROPERTIES FIXTURES_REQUIRED
                                                  vast_unit_test_fixture)
   endmacro ()

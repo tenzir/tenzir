@@ -47,7 +47,7 @@ struct suricata {
     }
     auto it = types.find(*event_type);
     if (it == types.end()) {
-      VAST_WARNING(this, "does not have a layout for event_type", *event_type);
+      VAST_VERBOSE(this, "does not have a layout for event_type", *event_type);
       return caf::none;
     }
     auto type = it->second;

@@ -20,7 +20,6 @@
 namespace vast::system {
 
 /// Starts a COUNTER actor and prints its result for a given query.
-caf::message
-count_command(const command::invocation& invocation, caf::actor_system& sys);
+caf::message count_command(const invocation& inv, caf::actor_system& sys);
 
 } // namespace vast::system

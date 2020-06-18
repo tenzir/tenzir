@@ -13,45 +13,37 @@
 
 #pragma once
 
-#include <memory>
-
+#include <caf/actor_cast.hpp>
+#include <caf/event_based_actor.hpp>
 #include <caf/fwd.hpp>
+#include <caf/stateful_actor.hpp>
 
-#include "vast/config.hpp"
+#include <vector>
+
+namespace vast::policy {
+
+struct sequential;
+struct parallel;
+
+} // namespace vast::policy
 
 namespace vast::system {
 
-// -- classes ------------------------------------------------------------------
+/// Performs an asynchronous shutdown of a set of actors, followed by
+/// terminating the actor in the calling context. The shutdown process runs
+/// either sequentially or in parallel. As soon as all actors have terminated,
+/// the calling actor exits. The shutdown process involves sending an EXIT
+/// message with reason `user_shutdown`.
+/// @param self The actor to terminate.
+/// @param xs Actors that need to shutdown before *self* quits.
+template <class Policy>
+void shutdown(caf::event_based_actor* self, std::vector<caf::actor> xs);
 
-class application;
-class configuration;
-class default_application;
-class export_command;
-class import_command;
-class node_command;
-class pcap_reader_command;
-class pcap_writer_command;
-class remote_command;
-class sink_command;
-class source_command;
-class start_command;
-
-// -- structs ------------------------------------------------------------------
-
-#if VAST_MEASUREMENT_MUTEX_WORKAROUND
-struct atomic_measurement;
-#endif
-struct measurement;
-struct node_state;
-struct query_status;
-struct spawn_arguments;
-
-// -- aliases ------------------------------------------------------------------
-
-#if !VAST_MEASUREMENT_MUTEX_WORKAROUND
-using atomic_measurement = std::atomic<measurement>;
-#endif
-using node_actor = caf::stateful_actor<node_state>;
-
+template <class Policy, class... Ts>
+void shutdown(caf::typed_event_based_actor<Ts...>* self,
+              std::vector<caf::actor> xs) {
+  auto handle = caf::actor_cast<caf::event_based_actor*>(self);
+  shutdown<Policy>(handle, std::move(xs));
+}
 
 } // namespace vast::system

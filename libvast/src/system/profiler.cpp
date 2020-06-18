@@ -11,22 +11,22 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#include <caf/all.hpp>
+#include "vast/system/profiler.hpp"
 
+#include "vast/concept/printable/vast/error.hpp"
 #include "vast/config.hpp"
+#include "vast/filesystem.hpp"
+#include "vast/fwd.hpp"
+#include "vast/logger.hpp"
+#include "vast/time.hpp"
+
+#include <caf/event_based_actor.hpp>
+#include <caf/scheduled_actor.hpp>
 
 #if VAST_HAVE_GPERFTOOLS
 #  include <gperftools/heap-profiler.h>
 #  include <gperftools/profiler.h>
 #endif
-
-#include "vast/concept/printable/vast/error.hpp"
-#include "vast/filesystem.hpp"
-#include "vast/logger.hpp"
-#include "vast/time.hpp"
-
-#include "vast/system/atoms.hpp"
-#include "vast/system/profiler.hpp"
 
 using namespace caf;
 
@@ -47,7 +47,7 @@ behavior profiler(stateful_actor<profiler_state>* self, path dir,
     return {};
   };
   return {
-    [=](start_atom, cpu_atom) {
+    [=](atom::start, atom::cpu) {
       ProfilerState ps;
       ProfilerGetCurrentState(&ps);
       if (ps.enabled) {
@@ -56,10 +56,10 @@ behavior profiler(stateful_actor<profiler_state>* self, path dir,
         auto filename = (dir / "perftools.cpu").str();
         VAST_INFO(self, "starts gperftools CPU profiler in", filename);
         ProfilerStart(filename.c_str());
-        self->delayed_send(self, secs, flush_atom::value);
+        self->delayed_send(self, secs, atom::flush_v);
       }
     },
-    [=](stop_atom, cpu_atom) {
+    [=](atom::stop, atom::cpu) {
       ProfilerState ps;
       ProfilerGetCurrentState(&ps);
       if (!ps.enabled) {
@@ -71,7 +71,7 @@ behavior profiler(stateful_actor<profiler_state>* self, path dir,
                   "gperftools CPU profiler samples in", ps.profile_name);
       }
     },
-    [=](start_atom, heap_atom) {
+    [=](atom::start, atom::heap) {
 #  if VAST_USE_PERFTOOLS_HEAP_PROFILER
       if (IsHeapProfilerRunning()) {
         VAST_WARNING(self, "ignores request to start enabled heap profiler");
@@ -85,7 +85,7 @@ behavior profiler(stateful_actor<profiler_state>* self, path dir,
                    "(not linked against tcmalloc)");
 #  endif
     },
-    [=](stop_atom, heap_atom) {
+    [=](atom::stop, atom::heap) {
 #  if VAST_USE_PERFTOOLS_HEAP_PROFILER
       if (!IsHeapProfilerRunning()) {
         VAST_WARNING(self, "ignores request to stop disabled heap profiler");
@@ -99,16 +99,15 @@ behavior profiler(stateful_actor<profiler_state>* self, path dir,
                    "(not linked against tcmalloc)");
 #  endif
     },
-    [=](flush_atom) {
+    [=](atom::flush) {
       ProfilerState ps;
       ProfilerGetCurrentState(&ps);
       if (ps.enabled) {
         VAST_DEBUG(self, "flushes gperftools CPU profiler");
         ProfilerFlush();
-        self->delayed_send(self, secs, flush_atom::value);
+        self->delayed_send(self, secs, atom::flush_v);
       }
-    }
-  };
+    }};
 }
 #else // VAST_HAVE_GPERFTOOLS
 behavior profiler(stateful_actor<profiler_state>*, path, std::chrono::seconds) {

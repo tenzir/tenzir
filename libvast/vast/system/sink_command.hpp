@@ -18,7 +18,7 @@
 namespace vast::system {
 
 /// Format-independent implementation for import sub-commands.
-caf::message sink_command(const command::invocation& invocation,
-                          caf::actor_system& sys, caf::actor snk);
+caf::message
+sink_command(const invocation& inv, caf::actor_system& sys, caf::actor snk);
 
 } // namespace vast::system

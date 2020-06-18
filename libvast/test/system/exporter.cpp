@@ -24,7 +24,6 @@
 #include "vast/detail/spawn_container_source.hpp"
 #include "vast/query_options.hpp"
 #include "vast/system/archive.hpp"
-#include "vast/system/dummy_consensus.hpp"
 #include "vast/system/importer.hpp"
 #include "vast/system/index.hpp"
 #include "vast/table_slice.hpp"
@@ -50,7 +49,6 @@ struct fixture : fixture_base {
     for (auto& hdl : {index, importer, exporter})
       self->send_exit(hdl, exit_reason::user_shutdown);
     self->send_exit(archive, exit_reason::user_shutdown);
-    self->send_exit(consensus, exit_reason::user_shutdown);
     run();
   }
 
@@ -68,12 +66,8 @@ struct fixture : fixture_base {
   }
 
   void spawn_importer() {
-    importer = self->spawn(system::importer, directory / "importer", slice_size,
-                           archive, consensus, index, type_registry);
-  }
-
-  void spawn_consensus() {
-    consensus = self->spawn(system::dummy_consensus, directory / "consensus");
+    importer = self->spawn(system::importer, directory / "importer", archive,
+                           index, type_registry);
   }
 
   void spawn_exporter(query_options opts) {
@@ -87,8 +81,6 @@ struct fixture : fixture_base {
       spawn_index();
     if (!archive)
       spawn_archive();
-    if (!consensus)
-      spawn_consensus();
     if (!importer)
       spawn_importer();
     run();
@@ -97,10 +89,10 @@ struct fixture : fixture_base {
   void exporter_setup(query_options opts) {
     spawn_exporter(opts);
     send(exporter, archive);
-    send(exporter, system::index_atom::value, index);
-    send(exporter, system::sink_atom::value, self);
-    send(exporter, system::run_atom::value);
-    send(exporter, system::extract_atom::value);
+    send(exporter, atom::index_v, index);
+    send(exporter, atom::sink_v, self);
+    send(exporter, atom::run_v);
+    send(exporter, atom::extract_v);
     run();
   }
 
@@ -129,7 +121,6 @@ struct fixture : fixture_base {
   system::archive_type archive;
   actor importer;
   actor exporter;
-  system::consensus_type consensus;
   expression expr;
 };
 
@@ -179,8 +170,8 @@ TEST(historical query with importer) {
 TEST(continuous query with exporter only) {
   MESSAGE("prepare exporter for continuous query");
   spawn_exporter(continuous);
-  send(exporter, system::sink_atom::value, self);
-  send(exporter, system::extract_atom::value);
+  send(exporter, atom::sink_v, self);
+  send(exporter, atom::extract_v);
   run();
   MESSAGE("send conn.log directly to exporter");
   vast::detail::spawn_container_source(sys, zeek_conn_log_slices, exporter);
@@ -199,7 +190,7 @@ TEST(continuous query with importer) {
   importer_setup();
   MESSAGE("prepare exporter for continous query");
   exporter_setup(continuous);
-  send(importer, system::exporter_atom::value, exporter);
+  send(importer, atom::exporter_v, exporter);
   MESSAGE("ingest conn.log via importer");
   // Again: copy because we musn't mutate static test data.
   vast::detail::spawn_container_source(sys, zeek_conn_log_slices, importer);
@@ -219,7 +210,7 @@ TEST(continuous query with mismatching importer) {
   MESSAGE("prepare exporter for continous query");
   expr = unbox(to<expression>("foo.bar == \"baz\""));
   exporter_setup(continuous);
-  send(importer, system::exporter_atom::value, exporter);
+  send(importer, atom::exporter_v, exporter);
   MESSAGE("ingest conn.log via importer");
   // Again: copy because we musn't mutate static test data.
   vast::detail::spawn_container_source(sys, zeek_conn_log_slices, importer);

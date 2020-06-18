@@ -44,7 +44,6 @@
 #include <vast/system/sink.hpp>
 #include <vast/system/sink_command.hpp>
 
-#include <vast/detail/add_error_categories.hpp>
 #include <vast/detail/add_message_types.hpp>
 #include <vast/detail/overload.hpp>
 
@@ -263,7 +262,6 @@ int main(int argc, char** argv) {
   // Parse the command line.
   config cfg;
   vast::detail::add_message_types(cfg);
-  vast::detail::add_error_categories(cfg);
   cfg.parse(argc, argv);
   if (cfg.cli_helptext_printed)
     return 0;
@@ -294,7 +292,7 @@ int main(int argc, char** argv) {
                                                + std::to_string(vast_port)}}});
   caf::actor node;
   if (auto conn = vast::system::connect_to_node(self, opts); !conn) {
-    VAST_ERROR_ANON("failed to connect to VAST: " << sys.render(conn.error()));
+    VAST_ERROR_ANON("failed to connect to VAST:", conn.error());
     return 1;
   } else {
     node = std::move(*conn);
@@ -344,13 +342,12 @@ int main(int argc, char** argv) {
     auto& [query_id, expression] = *result;
     // Relay the query expression to VAST.
     VAST_INFO_ANON("dispatching query", query_id, expression);
-    auto invocation
-      = vast::command::invocation{std::move(opts), "", {expression}};
+    auto inv = vast::invocation{std::move(opts), "", {expression}};
     auto sink = self->spawn(vast::system::sink<bro_writer>,
                             bro_writer{endpoint, query_id},
                             vast::defaults::export_::max_events);
     vast::scope_linked<caf::actor> guard{sink};
-    auto res = vast::system::sink_command(invocation, sys, sink);
+    auto res = vast::system::sink_command(std::move(inv), sys, sink);
     if (res.match_elements<caf::error>()) {
       VAST_ERROR_ANON("failed to dispatch query to VAST:",
                       res.get_as<caf::error>(0));

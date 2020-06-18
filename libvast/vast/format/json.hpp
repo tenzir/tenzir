@@ -13,9 +13,15 @@
 
 #pragma once
 
+#include "vast/concept/hashable/hash_append.hpp"
+#include "vast/concept/hashable/xxhash.hpp"
+#include "vast/concept/parseable/to.hpp"
 #include "vast/concept/parseable/vast/json.hpp"
+#include "vast/concept/parseable/vast/time.hpp"
 #include "vast/defaults.hpp"
+#include "vast/detail/flat_map.hpp"
 #include "vast/detail/line_range.hpp"
+#include "vast/detail/string.hpp"
 #include "vast/error.hpp"
 #include "vast/event.hpp"
 #include "vast/format/multi_layout_reader.hpp"
@@ -27,6 +33,9 @@
 
 #include <caf/expected.hpp>
 #include <caf/fwd.hpp>
+#include <caf/settings.hpp>
+
+#include <chrono>
 
 namespace vast::format::json {
 
@@ -53,23 +62,46 @@ caf::error add(table_slice_builder& builder, const vast::json::object& xs,
 
 /// @relates reader
 struct default_selector {
-  caf::optional<record_type> operator()(const vast::json::object&) {
-    return layout;
+  caf::optional<record_type> operator()(const vast::json::object& obj) const {
+    if (type_cache.empty())
+      return caf::none;
+    // Iff there is only one type in the type cache, allow the JSON reader to
+    // use it despite not being an exact match.
+    if (type_cache.size() == 1)
+      return type_cache.begin()->second;
+    std::vector<std::string> cache_entry;
+    auto build_cache_entry = [&cache_entry](auto& prefix, const vast::json&) {
+      cache_entry.emplace_back(detail::join(prefix.begin(), prefix.end(), "."));
+    };
+    each_field(vast::json{obj}, build_cache_entry);
+    std::sort(cache_entry.begin(), cache_entry.end());
+    if (auto search_result = type_cache.find(cache_entry);
+        search_result != type_cache.end())
+      return search_result->second;
+    return caf::none;
   }
 
   caf::error schema(vast::schema sch) {
-    auto entry = *sch.begin();
-    if (!caf::holds_alternative<record_type>(entry))
-      return make_error(ec::invalid_configuration,
-                        "only record_types supported for json schema");
-    layout = flatten(caf::get<record_type>(entry));
+    if (sch.empty())
+      return make_error(ec::invalid_configuration, "no schema provided or type "
+                                                   "too restricted");
+    for (auto& entry : sch) {
+      if (!caf::holds_alternative<record_type>(entry))
+        continue;
+      auto layout = flatten(caf::get<record_type>(entry));
+      std::vector<std::string> cache_entry;
+      for (auto& [k, v] : layout.fields)
+        cache_entry.emplace_back(k);
+      std::sort(cache_entry.begin(), cache_entry.end());
+      type_cache[cache_entry] = layout;
+    }
     return caf::none;
   }
 
   vast::schema schema() const {
     vast::schema result;
-    if (layout)
-      result.add(*layout);
+    for (const auto& [k, v] : type_cache)
+      result.add(v);
     return result;
   }
 
@@ -77,7 +109,7 @@ struct default_selector {
     return "json-reader";
   }
 
-  caf::optional<record_type> layout = caf::none;
+  detail::flat_map<std::vector<std::string>, record_type> type_cache = {};
 };
 
 /// A reader for JSON data. It operates with a *selector* to determine the
@@ -117,17 +149,26 @@ private:
   std::unique_ptr<detail::line_range> lines_;
   caf::optional<size_t> proto_field_;
   std::vector<size_t> port_fields_;
-  mutable size_t num_invalid_lines = 0;
+  mutable size_t num_invalid_lines_ = 0;
   mutable size_t num_unknown_layouts_ = 0;
+  mutable size_t num_lines_ = 0;
 };
 
 // -- implementation ----------------------------------------------------------
 
 template <class Selector>
 reader<Selector>::reader(caf::atom_value table_slice_type,
-                         const caf::settings& /*options*/,
+                         const caf::settings& options,
                          std::unique_ptr<std::istream> in)
   : super(table_slice_type) {
+  if (auto read_timeout_arg = caf::get_if<std::string>(&options, "import.read-"
+                                                                 "timeout")) {
+    if (auto read_timeout = to<decltype(read_timeout_)>(*read_timeout_arg))
+      read_timeout_ = *read_timeout;
+    else
+      VAST_WARNING(this, "cannot set read-timeout to", *read_timeout_arg,
+                   "as it is not a valid duration");
+  }
   if (in != nullptr)
     reset(std::move(in));
 }
@@ -157,47 +198,67 @@ const char* reader<Selector>::name() const {
 template <class Selector>
 vast::system::report reader<Selector>::status() const {
   using namespace std::string_literals;
-  uint64_t invalid_line = num_invalid_lines;
+  uint64_t invalid_line = num_invalid_lines_;
   uint64_t unknown_layout = num_unknown_layouts_;
-  num_invalid_lines = 0;
+  if (num_invalid_lines_ > 0)
+    VAST_WARNING(this, "failed to parse", num_invalid_lines_, "of", num_lines_,
+                 "recent lines");
+  if (num_unknown_layouts_ > 0)
+    VAST_WARNING(this, "failed to find a matching type for",
+                 num_unknown_layouts_, "of", num_lines_, "recent lines");
+  num_invalid_lines_ = 0;
   num_unknown_layouts_ = 0;
+  num_lines_ = 0;
   return {
     {name() + ".invalid-line"s, invalid_line},
-    {name() + ".unknown_layout"s, unknown_layout},
+    {name() + ".unknown-layout"s, unknown_layout},
   };
 }
 
 template <class Selector>
 caf::error reader<Selector>::read_impl(size_t max_events, size_t max_slice_size,
                                        consumer& cons) {
+  VAST_TRACE("json-reader", VAST_ARG(max_events), VAST_ARG(max_slice_size));
   VAST_ASSERT(max_events > 0);
   VAST_ASSERT(max_slice_size > 0);
   size_t produced = 0;
   table_slice_builder_ptr bptr = nullptr;
   bool timeout = false;
-  auto next_line = [&] {
+  auto next_line = [&, start = std::chrono::steady_clock::now()] {
+    auto remaining = start + read_timeout_ - std::chrono::steady_clock::now();
+    if (remaining < std::chrono::steady_clock::duration::zero())
+      return true;
     if (!bptr || bptr->rows() == 0) {
       lines_->next();
       return false;
-    } else {
-      return lines_->next_timeout(
-        vast::defaults::import::shared::partial_slice_read_timeout);
     }
+    return lines_->next_timeout(remaining);
   };
   for (; produced < max_events; timeout = next_line()) {
-    if (timeout) {
+    // We must check not only for a timeout but also whether any events were
+    // produced to work around CAF's assumption that sources are always able to
+    // generate events. Once `caf::stream_source` can handle empty batches
+    // gracefully, the second check should be removed.
+    if (timeout && produced > 0) {
       VAST_DEBUG(this, "reached input timeout at line", lines_->line_number());
-      return finish(cons);
+      return finish(cons, ec::timeout);
     }
     // EOF check.
     if (lines_->done())
       return finish(cons, make_error(ec::end_of_input, "input exhausted"));
     auto& line = lines_->get();
+    ++num_lines_;
+    if (line.empty()) {
+      // Ignore empty lines.
+      VAST_DEBUG(this, "ignores empty line at", lines_->line_number());
+      continue;
+    }
     vast::json j;
     if (!parsers::json(line, j)) {
-      ++num_invalid_lines;
-      VAST_WARNING(this, "failed to parse line", lines_->line_number(), ":",
-                   line);
+      if (num_invalid_lines_ == 0)
+        VAST_WARNING(this, "failed to parse line", lines_->line_number(), ":",
+                     line);
+      ++num_invalid_lines_;
       continue;
     }
     auto xs = caf::get_if<vast::json::object>(&j);
@@ -205,6 +266,9 @@ caf::error reader<Selector>::read_impl(size_t max_events, size_t max_slice_size,
       return make_error(ec::type_clash, "not a json object");
     auto layout = selector_(*xs);
     if (!layout) {
+      if (num_unknown_layouts_ == 0)
+        VAST_WARNING(this, "failed to find a matching type at line",
+                     lines_->line_number(), ":", line);
       ++num_unknown_layouts_;
       continue;
     }

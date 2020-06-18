@@ -43,7 +43,7 @@ struct test_sink_state {
 using test_sink_type = caf::stateful_actor<test_sink_state>;
 
 caf::behavior test_sink(test_sink_type* self, caf::actor src) {
-  self->send(src, sink_atom::value, self);
+  self->send(src, atom::sink_v, self);
   return {
     [=](caf::stream<table_slice_ptr> in) {
       return self->make_sink(
@@ -73,8 +73,10 @@ TEST(zeek conn source) {
   auto hdl = caf::io::datagram_handle::from_int(1);
   auto& mm = sys.middleman();
   mpx.provide_datagram_servant(8080, hdl);
-  auto src = mm.spawn_broker(datagram_source<bf::reader>, uint16_t{8080},
-                             std::move(reader), 100u, caf::none);
+  auto src
+    = mm.spawn_broker(datagram_source<bf::reader>, uint16_t{8080},
+                      std::move(reader), 100u, caf::none, type_registry_type{},
+                      vast::schema{}, std::string{}, accountant_type{});
   run();
   MESSAGE("start sink and initialize stream");
   auto snk = self->spawn(test_sink, src);

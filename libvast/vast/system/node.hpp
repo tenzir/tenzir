@@ -18,7 +18,6 @@
 #include "vast/error.hpp"
 #include "vast/filesystem.hpp"
 #include "vast/system/archive.hpp"
-#include "vast/system/consensus.hpp"
 #include "vast/system/spawn_arguments.hpp"
 #include "vast/system/tracker.hpp"
 #include "vast/system/type_registry.hpp"
@@ -49,13 +48,11 @@ struct node_state {
   // -- static member functions ------------------------------------------------
 
   static caf::message
-  spawn_command(const command::invocation& invocation, caf::actor_system& sys);
+  spawn_command(const invocation& inv, caf::actor_system& sys);
 
   // -- constructors, destructors, and assignment operators --------------------
 
   node_state(caf::event_based_actor* selfptr);
-
-  ~node_state();
 
   void init(std::string init_name, path init_dir);
 
@@ -75,9 +72,6 @@ struct node_state {
 
   /// Points to the node itself.
   caf::event_based_actor* self;
-
-  /// Handle to the consensus module.
-  consensus_type consensus;
 
   /// Handle to the ARCHIVE.
   archive_type archive;

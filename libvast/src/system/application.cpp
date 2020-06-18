@@ -28,11 +28,9 @@
 #include "vast/system/configuration.hpp"
 #include "vast/system/count_command.hpp"
 #include "vast/system/explore_command.hpp"
-#include "vast/system/generator_command.hpp"
+#include "vast/system/import_command.hpp"
 #include "vast/system/infer_command.hpp"
 #include "vast/system/pivot_command.hpp"
-#include "vast/system/raft.hpp"
-#include "vast/system/reader_command.hpp"
 #include "vast/system/remote_command.hpp"
 #include "vast/system/start_command.hpp"
 #include "vast/system/stop_command.hpp"
@@ -111,7 +109,10 @@ auto make_explore_command() {
                                    " time after each result")
       .add<std::string>("before,B", "include all records up to this much"
                                     " time before each result")
-      .add<std::string>("by", "perform an equijoin on the given field"));
+      .add<std::string>("by", "perform an equijoin on the given field")
+      .add<count>("max-events,n", "maximum number of results")
+      .add<count>("max-events-query", "maximum results for initial query")
+      .add<count>("max-events-context", "maximum results per exploration"));
 }
 
 auto make_export_command() {
@@ -166,9 +167,12 @@ auto make_import_command() {
     "import", "imports data from STDIN or file", documentation::vast_import,
     opts("?import")
       .add<caf::atom_value>("table-slice-type,t", "table slice type")
+      .add<size_t>("table-slice-size,s", "the suggested size for table slices")
       .add<bool>("blocking,b", "block until the IMPORTER forwarded all data")
       .add<size_t>("max-events,n", "the maximum number of events to "
-                                   "import"));
+                                   "import")
+      .add<std::string>("read-timeout", "read timoeut after which data is "
+                                        "forwarded to the importer"));
   import_->add_subcommand("zeek", "imports Zeek logs from STDIN or file",
                           documentation::vast_import_zeek,
                           source_opts("?import.zeek"));
@@ -302,10 +306,6 @@ auto make_spawn_command() {
                                                     "request (deprecated)"));
   spawn->add_subcommand("index", "creates a new index", "",
                         add_index_opts(opts()));
-  spawn->add_subcommand("consensus", "creates a new consensus", "",
-                        opts().add<raft::server_id>("id,i", "the server ID of "
-                                                            "the consensus "
-                                                            "module"));
   spawn->add_subcommand("profiler", "creates a new profiler", "",
                         opts()
                           .add<bool>("cpu,c", "start the CPU profiler")
@@ -360,33 +360,31 @@ auto make_command_factory() {
 #if VAST_HAVE_PCAP
     {"export pcap", pcap_writer_command},
 #endif
-    {"export zeek",
-     writer_command<format::zeek::writer, defaults::export_::zeek>},
+    {"export zeek", writer_command<format::zeek::writer,
+      defaults::export_::zeek>},
     {"infer", infer_command},
-    {"import csv",
-     reader_command<format::csv::reader, defaults::import::csv>},
-    {"import json",
-     reader_command<format::json::reader<>, defaults::import::json>},
+    {"import csv", import_command<policy::source_reader,
+      format::csv::reader, defaults::import::csv>},
+    {"import json", import_command<policy::source_reader,
+      format::json::reader<>, defaults::import::json>},
 #if VAST_HAVE_PCAP
-    {"import pcap",
-     reader_command<format::pcap::reader, defaults::import::pcap>},
+    {"import pcap", import_command<policy::source_reader,
+      format::pcap::reader, defaults::import::pcap>},
 #endif
-    {"import suricata",
-     reader_command<format::json::reader<format::json::suricata>,
-                    defaults::import::suricata>},
-    {"import syslog",
-     reader_command<format::syslog::reader, defaults::import::syslog>},
-    {"import test",
-     generator_command<format::test::reader, defaults::import::test>},
-    {"import zeek",
-     reader_command<format::zeek::reader, defaults::import::zeek>},
+    {"import suricata", import_command<policy::source_reader,
+      format::json::reader<format::json::suricata>, defaults::import::suricata>},
+    {"import syslog", import_command<policy::source_reader,
+      format::syslog::reader, defaults::import::syslog>},
+    {"import test", import_command<policy::source_generator,
+      format::test::reader, defaults::import::test>},
+    {"import zeek", import_command<policy::source_reader,
+      format::zeek::reader, defaults::import::zeek>},
     {"kill", remote_command},
     {"peer", remote_command},
     {"pivot", pivot_command},
     {"send", remote_command},
     {"spawn accountant", remote_command},
     {"spawn archive", remote_command},
-    {"spawn consensus", remote_command},
     {"spawn exporter", remote_command},
     {"spawn explorer", remote_command},
     {"spawn importer", remote_command},
@@ -450,7 +448,7 @@ void render_error(const command& root, const caf::error& err,
           if (auto cmd = resolve(root, name))
             helptext(*cmd, os);
         } else {
-          VAST_ASSERT("User visible error contexts must consist of strings!");
+          VAST_ASSERT(!"User visible error contexts must consist of strings!");
         }
         break;
       }
@@ -465,7 +463,7 @@ command::opts_builder source_opts(std::string_view category) {
     .add<std::string>("read,r", "path to input where to read events from")
     .add<std::string>("schema-file,s", "path to alternate schema")
     .add<std::string>("schema,S", "alternate schema as string")
-    .add<std::string>("type,t", "type the data should be parsed as")
+    .add<std::string>("type,t", "filter event type based on prefix matching")
     .add<bool>("uds,d", "treat -r as listening UNIX domain socket");
 }
 

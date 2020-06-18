@@ -128,7 +128,7 @@ struct fixture : fixtures::dummy_index {
     bool got_done_atom = false;
     while (!self->mailbox().empty())
       self->receive([&](const ids& hits) { result |= hits; },
-                    [&](system::done_atom) { got_done_atom = true; });
+                    [&](atom::done) { got_done_atom = true; });
     if (!got_done_atom)
       FAIL("evaluator failed to send 'done'");
     return result;

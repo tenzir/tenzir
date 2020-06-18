@@ -33,9 +33,6 @@
 
 #include <algorithm>
 
-using std::chrono::duration_cast;
-using std::chrono::microseconds;
-using std::chrono::steady_clock;
 using namespace caf;
 
 namespace vast::system {
@@ -112,18 +109,17 @@ archive(archive_type::stateful_pointer<archive_state> self, path dir,
     VAST_DEBUG(self, "received DOWN from", msg.source);
     self->state.active_exporters.erase(msg.source);
   });
-  if (auto a = self->system().registry().get(accountant_atom::value)) {
+  if (auto a = self->system().registry().get(atom::accountant_v)) {
     namespace defs = defaults::system;
     self->state.accountant = actor_cast<accountant_type>(a);
-    self->send(self->state.accountant, announce_atom::value, self->name());
-    self->delayed_send(self, defs::telemetry_rate, telemetry_atom::value);
+    self->send(self->state.accountant, atom::announce_v, self->name());
+    self->delayed_send(self, defs::telemetry_rate, atom::telemetry_v);
   }
   return {
     [=](const ids& xs) {
       VAST_ASSERT(rank(xs) > 0);
-      VAST_DEBUG(self, "got query for", rank(xs),
-                 "events in range [" << select(xs, 1) << ','
-                                     << (select(xs, -1) + 1) << ')');
+      VAST_DEBUG(self, "got query for", rank(xs), "events in range [",
+                 select(xs, 1), ',', (select(xs, -1) + 1), ')');
       if (auto requester
           = caf::actor_cast<receiver_type>(self->current_sender()))
         self->send(self, xs, requester);
@@ -152,7 +148,7 @@ archive(archive_type::stateful_pointer<archive_state> self, path dir,
       if (!st.session || st.session_id != session_id) {
         VAST_DEBUG(self, "considers extraction finished for invalidated "
                          "session");
-        self->send(requester, done_atom::value, make_error(ec::no_error));
+        self->send(requester, atom::done_v, make_error(ec::no_error));
         st.next_session();
         return;
       }
@@ -162,7 +158,7 @@ archive(archive_type::stateful_pointer<archive_state> self, path dir,
         auto err
           = slice.error() ? std::move(slice.error()) : make_error(ec::no_error);
         VAST_DEBUG(self, "finished extraction from the current session:", err);
-        self->send(requester, done_atom::value, std::move(err));
+        self->send(requester, atom::done_v, std::move(err));
         st.next_session();
         return;
       }
@@ -199,23 +195,23 @@ archive(archive_type::stateful_pointer<archive_state> self, path dir,
           }
         });
     },
-    [=](exporter_atom, const actor& exporter) {
+    [=](atom::exporter, const actor& exporter) {
       auto sender_addr = self->current_sender()->address();
       self->state.active_exporters.insert(sender_addr);
       self->monitor<caf::message_priority::high>(exporter);
     },
-    [=](status_atom) {
+    [=](atom::status) {
       caf::dictionary<caf::config_value> result;
       detail::fill_status_map(result, self);
       self->state.store->inspect_status(put_dictionary(result, "store"));
       return result;
     },
-    [=](telemetry_atom) {
+    [=](atom::telemetry) {
       self->state.send_report();
       namespace defs = defaults::system;
-      self->delayed_send(self, defs::telemetry_rate, telemetry_atom::value);
+      self->delayed_send(self, defs::telemetry_rate, atom::telemetry_v);
     },
-    [=](erase_atom, const ids& xs) {
+    [=](atom::erase, const ids& xs) {
       if (auto err = self->state.store->erase(xs))
         VAST_ERROR(self, "failed to erase events:", self->system().render(err));
     },

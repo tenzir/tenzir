@@ -28,6 +28,10 @@
 #include "vast/table_slice.hpp"
 
 #include <caf/binary_deserializer.hpp>
+<<<<<<< HEAD
+=======
+#include <caf/binary_serializer.hpp>
+>>>>>>> origin/master
 
 namespace vast {
 

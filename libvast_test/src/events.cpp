@@ -13,6 +13,9 @@
 
 #include "fixtures/events.hpp"
 
+#include "vast/concept/printable/to_string.hpp"
+#include "vast/concept/printable/vast/data.hpp"
+#include "vast/concept/printable/vast/event.hpp"
 #include "vast/default_table_slice_builder.hpp"
 #include "vast/defaults.hpp"
 #include "vast/format/test.hpp"
@@ -23,9 +26,8 @@
 #include "vast/to_events.hpp"
 #include "vast/type.hpp"
 
-#include "vast/concept/printable/to_string.hpp"
-#include "vast/concept/printable/vast/data.hpp"
-#include "vast/concept/printable/vast/event.hpp"
+#include <caf/binary_deserializer.hpp>
+#include <caf/settings.hpp>
 
 // Pull in the auto-generated serialized table slices.
 
@@ -81,9 +83,9 @@ static std::vector<event> extract(Reader&& reader) {
   auto add_slice = [&](table_slice_ptr ptr) {
     slices.emplace_back(std::move(ptr));
   };
-  auto [err, produced] = reader.read(std::numeric_limits<size_t>::max(),
-                                     defaults::system::table_slice_size,
-                                     add_slice);
+  auto [err, produced]
+    = reader.read(std::numeric_limits<size_t>::max(),
+                  defaults::import::table_slice_size, add_slice);
   if (err != caf::none && err != ec::end_of_input)
     FAIL("reader returned an error: " << to_string(err));
   std::vector<event> result;

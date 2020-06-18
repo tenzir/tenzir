@@ -14,18 +14,16 @@
 #include "vast/system/index_common.hpp"
 #define SUITE evaluator
 
-#include "vast/system/evaluator.hpp"
-
-#include "vast/test/test.hpp"
-
 #include "vast/test/fixtures/actor_system_and_events.hpp"
-
-#include <vector>
+#include "vast/test/test.hpp"
 
 #include "vast/concept/parseable/to.hpp"
 #include "vast/concept/parseable/vast/expression.hpp"
 #include "vast/expression.hpp"
-#include "vast/system/atoms.hpp"
+#include "vast/fwd.hpp"
+#include "vast/system/evaluator.hpp"
+
+#include <vector>
 
 using namespace vast;
 
@@ -112,7 +110,7 @@ struct fixture : fixtures::deterministic_actor_system_and_events {
     bool got_done_atom = false;
     while (!self->mailbox().empty())
       self->receive([&](const ids& hits) { result |= hits; },
-                    [&](system::done_atom) { got_done_atom = true; });
+                    [&](atom::done) { got_done_atom = true; });
     if (!got_done_atom)
       FAIL("evaluator failed to send 'done'");
     return result;

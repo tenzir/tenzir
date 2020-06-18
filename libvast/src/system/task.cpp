@@ -11,13 +11,13 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#include "vast/logger.hpp"
-
-#include <caf/all.hpp>
+#include "vast/system/task.hpp"
 
 #include "vast/error.hpp"
+#include "vast/logger.hpp"
 
-#include "vast/system/task.hpp"
+#include <caf/event_based_actor.hpp>
+#include <caf/typed_event_based_actor.hpp>
 
 using namespace caf;
 
@@ -28,7 +28,7 @@ namespace {
 template <class Actor>
 void notify(Actor self) {
   for (auto& s : self->state.subscribers)
-    self->send(s, progress_atom::value, uint64_t{self->state.workers.size()},
+    self->send(s, atom::progress_v, uint64_t{self->state.workers.size()},
                self->state.total);
   if (self->state.workers.empty()) {
     for (auto& s : self->state.supervisors)
@@ -80,26 +80,26 @@ behavior task_impl(stateful_actor<task_state>* self, message done_msg) {
       self->state.workers[a.address()] += n;
       ++self->state.total;
     },
-    [=](done_atom, const actor_addr& addr) {
+    [=](atom::done, const actor_addr& addr) {
       VAST_TRACE(self, "manually completed actor with address", addr);
       complete(self, addr);
     },
-    [=](done_atom) {
+    [=](atom::done) {
       VAST_TRACE(self, "completed actor", self->current_sender());
       complete(self, actor_cast<actor_addr>(self->current_sender()));
     },
-    [=](supervisor_atom, const actor& a) {
+    [=](atom::supervisor, const actor& a) {
       VAST_TRACE(self, "notifies actor", a, "about task completion");
       self->state.supervisors.insert(a);
     },
-    [=](subscriber_atom, const actor& a) {
+    [=](atom::subscriber, const actor& a) {
       VAST_TRACE(self, "notifies actor", a, "on task status change");
       self->state.subscribers.insert(a);
     },
-    [=](progress_atom) {
+    [=](atom::progress) {
       auto num_workers = uint64_t{self->state.workers.size()};
       return make_message(num_workers, self->state.total);
-    }
+    },
   };
 }
 

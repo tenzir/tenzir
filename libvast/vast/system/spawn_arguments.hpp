@@ -27,7 +27,7 @@ namespace vast::system {
 /// Wraps arguments for spawn functions.
 struct spawn_arguments {
   /// Current command executed by the node actor.
-  const command::invocation& invocation;
+  const invocation& inv;
 
   /// Path to persistent node state.
   const path& dir;
@@ -37,7 +37,7 @@ struct spawn_arguments {
 
   /// Returns whether CLI arguments are empty.
   bool empty() const noexcept {
-    return invocation.arguments.empty();
+    return inv.arguments.empty();
   }
 };
 

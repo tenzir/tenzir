@@ -30,21 +30,15 @@ maybe_actor spawn_importer(node_actor* self, spawn_arguments& args) {
   if (!args.empty())
     return unexpected_arguments(args);
   // FIXME: Notify exporters with a continuous query.
-  auto slice_size = caf::get_or(self->system().config(),
-                                "system.table-slice-size",
-                                defaults::system::table_slice_size);
   auto& st = self->state;
   if (!st.archive)
     return make_error(ec::missing_component, "archive");
-  if (!st.consensus)
-    return make_error(ec::missing_component, "consensus");
   if (!st.index)
     return make_error(ec::missing_component, "index");
   if (!st.type_registry)
     return make_error(ec::missing_component, "type-registry");
-  auto importer_actor
-    = self->spawn(importer, args.dir / args.label, slice_size, st.archive,
-                  st.consensus, st.index, st.type_registry);
+  auto importer_actor = self->spawn(importer, args.dir / args.label, st.archive,
+                                    st.index, st.type_registry);
   st.importer = importer_actor;
   return importer_actor;
 }

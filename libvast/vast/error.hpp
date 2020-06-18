@@ -13,12 +13,15 @@
 
 #pragma once
 
+#include "vast/fwd.hpp"
+
 #include <caf/error.hpp>
 #include <caf/make_message.hpp>
 
 namespace vast {
 
 using caf::error;
+using caf::make_error;
 
 /// VAST's error codes.
 enum class ec : uint8_t {
@@ -46,12 +49,16 @@ enum class ec : uint8_t {
   format_error,
   /// Exhausted the input.
   end_of_input,
+  /// A timeout was reached.
+  timeout,
   /// Encountered two incompatible versions.
   version_error,
   /// A command does not adhere to the expected syntax.
   syntax_error,
   /// A dictionary or table lookup failed to return a value.
   lookup_error,
+  /// An error caused by wrong internal application logic.
+  logic_error,
   /// Deserialization failed because an unknown implementation type was found.
   invalid_table_slice_type,
   /// Deserialization failed because an unknown implementation type was found.
@@ -85,16 +92,10 @@ enum class ec : uint8_t {
 /// @relates ec
 const char* to_string(ec x);
 
-/// @relates ec
-template <class... Ts>
-error make_error(ec x, Ts&&... xs) {
-  return error{static_cast<uint8_t>(x), caf::atom("vast"),
-               caf::make_message(std::forward<Ts>(xs)...)};
-}
-
 /// A formatting function that converts an error into a human-readable string.
 /// @relates ec
 std::string render(caf::error err);
 
 } // namespace vast
 
+CAF_ERROR_CODE_ENUM(vast::ec, "vast")

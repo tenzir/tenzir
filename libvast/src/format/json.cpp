@@ -136,6 +136,51 @@ struct convert {
     return xs;
   }
 
+  caf::expected<data>
+  operator()(const json::string& str, const bool_type&) const {
+    if (bool x; parsers::json_boolean(str, x))
+      return x;
+    return make_error(ec::convert_error, "cannot convert from", str, "to bool");
+  }
+
+  caf::expected<data>
+  operator()(const json::string& str, const real_type&) const {
+    if (real x; parsers::json_number(str, x))
+      return x;
+    return make_error(ec::convert_error, "cannot convert from", str, "to real");
+  }
+
+  caf::expected<data>
+  operator()(const json::string& str, const integer_type&) const {
+    if (integer x; parsers::json_int(str, x))
+      return x;
+    if (real x; parsers::json_number(str, x)) {
+      VAST_WARNING_ANON("json-reader narrowed", str, "to type int");
+      return detail::narrow_cast<integer>(x);
+    }
+    return make_error(ec::convert_error, "cannot convert from", str, "to int");
+  }
+
+  caf::expected<data>
+  operator()(const json::string& str, const count_type&) const {
+    if (count x; parsers::json_count(str, x))
+      return x;
+    if (real x; parsers::json_number(str, x)) {
+      VAST_WARNING_ANON("json-reader narrowed", str, "to type count");
+      return detail::narrow_cast<count>(x);
+    }
+    return make_error(ec::convert_error, "cannot convert from", str,
+                      "to count");
+  }
+
+  caf::expected<data> operator()(json::string str, const port_type&) const {
+    if (port x; parsers::port(str, x))
+      return x;
+    if (port::number_type x; parsers::u16(str, x))
+      return port{x};
+    return make_error(ec::convert_error, "cannot convert from", str, "to port");
+  }
+
   template <class T, class U>
   caf::expected<data> operator()(T, U) const {
     VAST_ERROR_ANON("json-reader cannot convert from",

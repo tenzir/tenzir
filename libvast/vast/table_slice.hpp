@@ -19,9 +19,7 @@
 #include "vast/type.hpp"
 #include "vast/view.hpp"
 
-#include <caf/allowed_unsafe_message_type.hpp>
 #include <caf/fwd.hpp>
-#include <caf/make_copy_on_write.hpp>
 #include <caf/optional.hpp>
 #include <caf/ref_counted.hpp>
 
@@ -200,10 +198,17 @@ public:
   /// @pre `row < rows() && col < columns()`
   virtual data_view at(size_type row, size_type col) const = 0;
 
+  static int instances() {
+    return instance_count_;
+  }
+
 protected:
   // -- member variables -------------------------------------------------------
 
   table_slice_header header_;
+
+private:
+  static std::atomic<size_t> instance_count_;
 };
 
 // -- free functions -----------------------------------------------------------

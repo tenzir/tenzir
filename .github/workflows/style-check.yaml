@@ -28,7 +28,7 @@ jobs:
     - name: CMake Format
       run: |
         set -x
-        pip install --upgrade pip "cmake_format==0.6.5"
+        pip install --upgrade pip cmake_format
         git diff --name-only --no-color --diff-filter=ACM $(git merge-base origin/master HEAD) -- "**CMakelists.txt" "**.cmake" |
           xargs cmake-format --in-place
         git diff --exit-code

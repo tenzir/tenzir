@@ -44,6 +44,7 @@ Usage: $0 [OPTION]... [VAR=VALUE]...
     --more-warnings         enables most warnings on GCC and Clang
     --without-tests         build without unit tests
     --without-zeek-to-vast  build without zeek-to-vast
+    --with-type-id-checks   build with compile-time type-id checks
 
   Debugging:
     --log-level=LEVEL       maximum compile-time log level
@@ -57,12 +58,17 @@ Usage: $0 [OPTION]... [VAR=VALUE]...
     --with-arrow=PATH       path to Apache Arrow install root
     --without-arrow         explicitly disable Apache Arrow integration
     --with-caf=PATH         path to CAF install root or build directory
+<<<<<<< HEAD
     --with-flatbuffers=PATH path to flatbuffers install root
+=======
+    --with-bundled-caf      build CAF from the submodule
+>>>>>>> origin/master
 
   Optional packages:
     --with-broker=PATH      path to Broker install root (required for
                             zeek-to-vast)
     --with-doxygen=PATH     path to Doxygen install root
+    --with-jemalloc=PATH    link against jemalloc
     --with-openssl=PATH     path to OpenSSL install root
     --with-pcap=PATH        path to libpcap install root
     --with-perftools=PATH   path to gperftools install root
@@ -136,7 +142,8 @@ while [ $# -ne 0 ]; do
     --ci-build)
       append_cache_entry CMAKE_BUILD_TYPE STRING CI
       append_cache_entry VAST_LOG_LEVEL STRING TRACE
-      append_cache_entry CMAKE_CXX_FLAGS_CI STRING "-O2 -DNDEBUG -g1 -Wall -Wextra -pedantic"
+      append_cache_entry CMAKE_CXX_FLAGS_CI STRING \
+        "-O2 -DNDEBUG -g1 -Wall -Wextra -pedantic -Werror -Wno-error=deprecated -Wno-error=deprecated-declarations"
       append_cache_entry ENABLE_ADDRESS_SANITIZER BOOL yes
       append_cache_entry VAST_ENABLE_ASSERTIONS BOOL yes
       ;;
@@ -168,6 +175,9 @@ while [ $# -ne 0 ]; do
     --without-zeek-to-vast)
       append_cache_entry ENABLE_ZEEK_TO_VAST BOOL no
       ;;
+    --with-type-id-checks)
+      append_cache_entry CAF_ENABLE_TYPE_ID_CHECKS BOOL yes
+      ;;
 # -- Debugging -----------------------------------------------------------------
     --log-level=*)
       append_cache_entry VAST_LOG_LEVEL STRING "$optarg"
@@ -194,8 +204,13 @@ while [ $# -ne 0 ]; do
     --with-caf=*)
       append_cache_entry CAF_ROOT_DIR PATH "$optarg"
       ;;
+<<<<<<< HEAD
     --with-flatbuffers=*)
       append_cache_entry FLATBUFFERS_ROOT_DIR PATH "$optarg"
+=======
+    --with-bundled-caf)
+      append_cache_entry VAST_USE_BUNDLED_CAF BOOL yes
+>>>>>>> origin/master
       ;;
 # -- Optional packages ---------------------------------------------------------
     --with-broker=*)
@@ -203,6 +218,10 @@ while [ $# -ne 0 ]; do
       ;;
     --with-doxygen=*)
       append_cache_entry Doxygen_ROOT_DIR PATH "$optarg"
+      ;;
+    --with-jemalloc|--with-jemalloc=*)
+      append_cache_entry VAST_USE_JEMALLOC BOOL yes
+      append_cache_entry jemalloc_ROOT_DIR PATH "$optarg"
       ;;
     --with-openssl=*)
       append_cache_entry OPENSSL_ROOT_DIR PATH "$optarg"

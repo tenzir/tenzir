@@ -24,7 +24,9 @@
 #include "vast/table_slice.hpp"
 #include "vast/table_slice_builder_factory.hpp"
 
-#include <caf/all.hpp>
+#include <caf/actor_system_config.hpp>
+#include <caf/config_value.hpp>
+#include <caf/typed_event_based_actor.hpp>
 
 #include <chrono>
 #include <cmath>
@@ -43,10 +45,10 @@ void init(accountant_actor* self) {
   auto& st = self->state;
 #if VAST_LOG_LEVEL >= VAST_LOG_LEVEL_INFO
   VAST_DEBUG(self, "animates heartbeat loop");
-  self->delayed_send(self, overview_delay, telemetry_atom::value);
+  self->delayed_send(self, overview_delay, atom::telemetry_v);
 #endif
   st.slice_size = get_or(self->system().config(), "system.table-slice-size",
-                         defaults::system::table_slice_size);
+                         defaults::import::table_slice_size);
 }
 
 void finish_slice(accountant_actor* self) {
@@ -111,7 +113,7 @@ void accountant_state::command_line_heartbeat() {
 #if VAST_LOG_LEVEL >= VAST_LOG_LEVEL_DEBUG
   if (auto rate = accumulator.rate_per_sec(); std::isfinite(rate))
     VAST_DEBUG(self, "received", accumulator.events, "events at a rate of",
-               static_cast<uint64_t>(rate) << "events/sec");
+               static_cast<uint64_t>(rate), "events/sec");
 #endif
   accumulator = {};
 }
@@ -147,7 +149,7 @@ accountant_type::behavior_type accountant(accountant_actor* self) {
     },
     // done?
     [](const bool&) { return false; });
-  return {[=](announce_atom, const std::string& name) {
+  return {[=](atom::announce, const std::string& name) {
             self->state.actor_map[self->current_sender()->id()] = name;
             self->monitor(self->current_sender());
             if (name == "importer")
@@ -209,7 +211,7 @@ accountant_type::behavior_type accountant(accountant_actor* self) {
 #endif
             }
           },
-          [=](status_atom) {
+          [=](atom::status) {
             using caf::put_dictionary;
             caf::dictionary<caf::config_value> result;
             auto& known = put_dictionary(result, "known-actors");
@@ -218,9 +220,9 @@ accountant_type::behavior_type accountant(accountant_actor* self) {
             detail::fill_status_map(result, self);
             return result;
           },
-          [=](telemetry_atom) {
+          [=](atom::telemetry) {
             self->state.command_line_heartbeat();
-            self->delayed_send(self, overview_delay, telemetry_atom::value);
+            self->delayed_send(self, overview_delay, atom::telemetry_v);
           }};
 }
 

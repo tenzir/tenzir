@@ -26,7 +26,7 @@ TEST(explorer config) {
   {
     MESSAGE("Specifying no options at all is not allowed.");
     caf::settings settings;
-    auto& explore = settings["explore"].as_dictionary();
+    [[maybe_unused]] auto& explore = settings["explore"].as_dictionary();
     CHECK_NOT_EQUAL(vast::system::explorer_validate_args(settings), caf::none);
   }
 

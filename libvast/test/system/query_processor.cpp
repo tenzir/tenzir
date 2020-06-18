@@ -15,15 +15,14 @@
 
 #include "vast/system/query_processor.hpp"
 
-#include "vast/test/test.hpp"
-
 #include "vast/test/fixtures/actor_system.hpp"
+#include "vast/test/test.hpp"
 
 #include "vast/concept/parseable/to.hpp"
 #include "vast/concept/parseable/vast/expression.hpp"
 #include "vast/concept/parseable/vast/uuid.hpp"
+#include "vast/fwd.hpp"
 #include "vast/ids.hpp"
-#include "vast/system/atoms.hpp"
 
 using namespace vast;
 
@@ -44,7 +43,7 @@ caf::behavior mock_index(caf::stateful_actor<mock_index_state>* self) {
     self->send(hdl, query_id, uint32_t{3}, uint32_t(7));
     self->send(hdl, make_ids({1, 2, 4}));
     self->send(hdl, make_ids({3, 5}));
-    self->send(hdl, system::done_atom::value);
+    self->send(hdl, atom::done_v);
   }};
 }
 
@@ -103,7 +102,7 @@ TEST(state transitions) {
   expect((uuid, uint32_t, uint32_t), from(index).to(aut));
   expect((ids), from(index).to(aut));
   expect((ids), from(index).to(aut));
-  expect((system::done_atom), from(index).to(aut));
+  expect((atom::done), from(index).to(aut));
   CHECK_EQUAL(mock_ref().log, expected_log);
   CHECK_EQUAL(mock_ref().hits, make_ids({{1, 6}}));
   CHECK_EQUAL(mock_ref().state(), system::query_processor::idle);
