@@ -11,6 +11,11 @@ Every entry has a category for which we use the following visual abbreviations:
 
 ## Unreleased
 
+- 🎁 The meta index now uses Bloom filters for equality queries involving IP
+  addresses. This especially accellerates queries where the user wants to know
+  whether a certain IP address exists in the entire database.
+  [#931](https://github.com/tenzir/vast/931)
+
 - 🧬 VAST now supports aging out existing data. This feature currently only
   concerns data in the archive. The options `system.aging-frequency` and
   `system.aging-query` configure a query that runs on a regular schedule to
