@@ -13,6 +13,8 @@
 
 #include "vast/bloom_filter_synopsis.hpp"
 
+#include <vast/detail/assert.hpp>
+
 namespace vast {
 
 caf::optional<bloom_filter_parameters> parse_parameters(const type& x) {
@@ -20,9 +22,10 @@ caf::optional<bloom_filter_parameters> parse_parameters(const type& x) {
     return attr.key == "synopsis" && attr.value != caf::none;
   };
   auto i = std::find_if(x.attributes().begin(), x.attributes().end(), pred);
-  if (i != x.attributes().end())
-    return parse_parameters(*i->value);
-  return caf::none;
+  if (i == x.attributes().end())
+    return caf::none;
+  VAST_ASSERT(i->value);
+  return parse_parameters(*i->value);
 }
 
 } // namespace vast

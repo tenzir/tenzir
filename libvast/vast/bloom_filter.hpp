@@ -68,7 +68,7 @@ public:
   /// @param x The element to add.
   template <class T>
   void add(T&& x) {
-    auto& digests = hasher_(x);
+    auto& digests = hasher_(std::forward<T>(x));
     for (size_t i = 0; i < digests.size(); ++i)
       bits_[position(i, digests[i])] = true;
   }
@@ -79,7 +79,7 @@ public:
   ///          according to the false-positive probability of the filter.
   template <class T>
   bool lookup(T&& x) const {
-    auto& digests = hasher_(x);
+    auto& digests = hasher_(std::forward<T>(x));
     for (size_t i = 0; i < digests.size(); ++i)
       if (!bits_[position(i, digests[i])])
         return false;
@@ -104,7 +104,7 @@ public:
 
   template <class Inspector>
   friend auto inspect(Inspector& f, bloom_filter& x) {
-    return f(x.hasher_, x.bits_);
+    return f(caf::meta::type_name("bloom_filter"), x.hasher_, x.bits_);
   }
 
 private:

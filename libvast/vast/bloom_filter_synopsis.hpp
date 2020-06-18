@@ -19,7 +19,6 @@
 #include <caf/optional.hpp>
 #include <caf/serializer.hpp>
 
-#include <vast/detail/assert.hpp>
 #include <vast/synopsis.hpp>
 #include <vast/type.hpp>
 

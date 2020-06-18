@@ -136,7 +136,8 @@ public:
 
   template <class Inspector>
   friend auto inspect(Inspector& f, simple_hasher& x) {
-    return f(static_cast<super&>(x), x.seeds_);
+    return f(caf::meta::type_name("simple_hasher"), static_cast<super&>(x),
+             x.seeds_);
   }
 
 private:
@@ -182,7 +183,8 @@ public:
 
   template <class Inspector>
   friend auto inspect(Inspector& f, double_hasher& x) {
-    return f(static_cast<super&>(x), x.seed1_, x.seed2_);
+    return f(caf::meta::type_name("double_hasher"), static_cast<super&>(x),
+             x.seed1_, x.seed2_);
   }
 
 private:
