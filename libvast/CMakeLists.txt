@@ -262,6 +262,7 @@ set(tests
     test/bits.cpp
     test/bitvector.cpp
     test/bloom_filter.cpp
+    test/bloom_filter_synopsis.cpp
     test/byte.cpp
     test/cache.cpp
     test/chunk.cpp
