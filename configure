@@ -67,8 +67,6 @@ Usage: $0 [OPTION]... [VAR=VALUE]...
     --with-jemalloc=PATH    link against jemalloc
     --with-openssl=PATH     path to OpenSSL install root
     --with-pcap=PATH        path to libpcap install root
-    --with-perftools=PATH   path to gperftools install root
-    --with-tcmalloc         link against tcmalloc (requires gperftools)
 
   Influential Environment Variables (only on first invocation):
     CXX                     C++ compiler command
@@ -220,12 +218,6 @@ while [ $# -ne 0 ]; do
       ;;
     --with-pcap=*)
       append_cache_entry PCAP_ROOT_DIR PATH "$optarg"
-      ;;
-    --with-perftools=*)
-      append_cache_entry Gperftools_ROOT_DIR PATH "$optarg"
-      ;;
-    --with-tcmalloc)
-      append_cache_entry VAST_USE_TCMALLOC BOOL yes
       ;;
     *)
       echo "Invalid option '$1'.  Try $0 --help to see available options."

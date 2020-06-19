@@ -41,8 +41,6 @@ struct actor_system : filesystem {
 
   ~actor_system();
 
-  void enable_profiler();
-
   auto error_handler() {
     return [&](const caf::error& e) { FAIL(sys.render(e)); };
   }
@@ -50,7 +48,6 @@ struct actor_system : filesystem {
   test_configuration config;
   caf::actor_system sys;
   caf::scoped_actor self;
-  caf::actor profiler;
 };
 
 using test_node_base_fixture = test_coordinator_fixture<test_configuration>;

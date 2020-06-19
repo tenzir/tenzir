@@ -15,7 +15,6 @@ Required dependencies:
 Optional dependencies:
 
 - [libpcap](http://www.tcpdump.org)
-- [gperftools](http://code.google.com/p/google-perftools)
 - [Doxygen](http://www.doxygen.org)
 - [Pandoc](https://github.com/jgm/pandoc)
 

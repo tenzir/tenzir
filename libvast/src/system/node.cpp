@@ -37,7 +37,6 @@
 #include "vast/system/spawn_node.hpp"
 #include "vast/system/spawn_or_connect_to_node.hpp"
 #include "vast/system/spawn_pivoter.hpp"
-#include "vast/system/spawn_profiler.hpp"
 #include "vast/system/spawn_sink.hpp"
 #include "vast/system/spawn_source.hpp"
 #include "vast/system/spawn_type_registry.hpp"
@@ -263,7 +262,6 @@ auto make_component_factory() {
     {"spawn type-registry", lift_component_factory<spawn_type_registry>()},
     {"spawn index", lift_component_factory<spawn_index>()},
     {"spawn pivoter", lift_component_factory<spawn_pivoter>()},
-    {"spawn profiler", lift_component_factory<spawn_profiler>()},
     {"spawn source pcap", lift_component_factory<spawn_pcap_source>()},
     {"spawn source syslog", lift_component_factory<spawn_syslog_source>()},
     {"spawn source zeek", lift_component_factory<spawn_zeek_source>()},
