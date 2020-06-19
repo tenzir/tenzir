@@ -13,13 +13,13 @@
 
 #pragma once
 
-#include <string>
-#include <vector>
-
-#include "vast/optional.hpp"
+#include "vast/detail/operators.hpp"
 #include "vast/type.hpp"
 
-#include "vast/detail/operators.hpp"
+#include <caf/expected.hpp>
+
+#include <string>
+#include <vector>
 
 namespace caf {
 class serializer;
@@ -43,7 +43,7 @@ public:
   /// @param s1 The first schema.
   /// @param s2 The second schema.
   /// @returns The union of *s1* and *s2* if the inputs are disjunct.
-  static optional<schema> merge(const schema& s1, const schema& s2);
+  static caf::expected<schema> merge(const schema& s1, const schema& s2);
 
   /// Combines two schemata, prefering definitions from s2 on conflicts.
   /// @param s1 The first schema.
