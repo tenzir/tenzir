@@ -217,12 +217,16 @@ caf::expected<schema> load_schema(const std::vector<path>& schema_paths) {
           case path::regular_file:
           case path::symlink: {
             auto schema = load_schema(f);
-            if (!schema)
-              return schema.error();
+            if (!schema) {
+              VAST_ERROR_ANON(__func__, render(schema.error()), f);
+              continue;
+            }
             if (auto merged = schema::merge(directory_schema, *schema))
               directory_schema = std::move(*merged);
-            else
-              return make_error(ec::format_error, "type clash in schema");
+            else {
+              VAST_ERROR_ANON(__func__, "type clash in schema");
+              continue;
+            }
           }
         }
       }
