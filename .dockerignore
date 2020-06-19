@@ -1,1 +1,5 @@
-.git
+*/*/.git*
+*.md
+examples/
+nix/
+pyvast/
