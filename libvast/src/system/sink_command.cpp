@@ -48,19 +48,19 @@ using namespace caf;
 
 namespace vast::system {
 
-caf::message sink_command(const command::invocation& invocation,
-                          actor_system& sys, caf::actor snk) {
+caf::message
+sink_command(const invocation& inv, actor_system& sys, caf::actor snk) {
   // Get a convenient and blocking way to interact with actors.
   scoped_actor self{sys};
   auto guard = caf::detail::make_scope_guard(
     [&] { self->send_exit(snk, exit_reason::user_shutdown); });
   // Read query from input file, STDIN or CLI arguments.
-  auto query = read_query(invocation, "export.read");
+  auto query = read_query(inv, "export.read");
   if (!query)
     return caf::make_message(std::move(query.error()));
   // Transform expression if needed, e.g., for PCAP sink.
-  if (invocation.name() == "pcap") {
-    VAST_DEBUG(invocation.full_name, "restricts expression to PCAP packets");
+  if (inv.name() == "pcap") {
+    VAST_DEBUG(inv.full_name, "restricts expression to PCAP packets");
     // We parse the query expression first, work on the AST, and then render
     // the expression again to avoid performing brittle string manipulations.
     auto expr = to<expression>(*query);
@@ -71,11 +71,11 @@ caf::message sink_command(const command::invocation& invocation,
     auto pred = predicate{extractor, equal, data{"pcap.packet"}};
     auto ast = conjunction{std::move(pred), std::move(*expr)};
     *query = to_string(ast);
-    VAST_DEBUG(&invocation, "transformed expression to", *query);
+    VAST_DEBUG(&inv, "transformed expression to", *query);
   }
   // Get VAST node.
   auto node_opt
-    = spawn_or_connect_to_node(self, invocation.options, content(sys.config()));
+    = spawn_or_connect_to_node(self, inv.options, content(sys.config()));
   if (auto err = caf::get_if<caf::error>(&node_opt))
     return caf::make_message(std::move(*err));
   auto& node = caf::holds_alternative<caf::actor>(node_opt)
@@ -86,9 +86,8 @@ caf::message sink_command(const command::invocation& invocation,
   std::thread sig_mon_thread;
   auto signal_guard = system::signal_monitor::run_guarded(
     sig_mon_thread, sys, defaults::system::signal_monitoring_interval, self);
-  auto spawn_exporter
-    = command::invocation{invocation.options, "spawn exporter", {*query}};
-  VAST_DEBUG(&invocation, "spawns exporter with parameters:", spawn_exporter);
+  auto spawn_exporter = invocation{inv.options, "spawn exporter", {*query}};
+  VAST_DEBUG(&inv, "spawns exporter with parameters:", spawn_exporter);
   auto exp = spawn_at_node(self, node, spawn_exporter);
   if (!exp)
     return caf::make_message(std::move(exp.error()));
@@ -98,15 +97,15 @@ caf::message sink_command(const command::invocation& invocation,
     return caf::make_message(std::move(components.error()));
   auto& [accountant] = *components;
   if (accountant) {
-    VAST_DEBUG(invocation.full_name, "assigns accountant to new sink");
+    VAST_DEBUG(inv.full_name, "assigns accountant to new sink");
     self->send(snk, actor_cast<accountant_type>(accountant));
   }
   // Start the exporter.
-  self->send(*exp, system::sink_atom::value, snk);
-  self->send(*exp, system::run_atom::value);
+  self->send(*exp, atom::sink_v, snk);
+  self->send(*exp, atom::run_v);
   // Register self as the statistics actor.
-  self->send(*exp, system::statistics_atom::value, self);
-  self->send(snk, system::statistics_atom::value, self);
+  self->send(*exp, atom::statistics_v, self);
+  self->send(snk, atom::statistics_v, self);
   self->monitor(snk);
   self->monitor(*exp);
   guard.disable();
@@ -118,14 +117,14 @@ caf::message sink_command(const command::invocation& invocation,
       [&](down_msg& msg) {
         stop = true;
         if (msg.source == node) {
-          VAST_DEBUG_ANON(__func__, "received DOWN from node");
+          VAST_DEBUG(inv.full_name, "received DOWN from node");
           self->send_exit(snk, exit_reason::user_shutdown);
           self->send_exit(*exp, exit_reason::user_shutdown);
         } else if (msg.source == *exp) {
-          VAST_DEBUG(invocation.full_name, "received DOWN from exporter");
+          VAST_DEBUG(inv.full_name, "received DOWN from exporter");
           self->send_exit(snk, exit_reason::user_shutdown);
         } else if (msg.source == snk) {
-          VAST_DEBUG(invocation.full_name, "received DOWN from sink");
+          VAST_DEBUG(inv.full_name, "received DOWN from sink");
           self->send_exit(*exp, exit_reason::user_shutdown);
           stop = false;
           waiting_for_final_report = true;
@@ -133,14 +132,14 @@ caf::message sink_command(const command::invocation& invocation,
           VAST_ASSERT(!"received DOWN from inexplicable actor");
         }
         if (msg.reason && msg.reason != exit_reason::user_shutdown) {
-          VAST_WARNING(invocation.full_name, "received error message:",
+          VAST_WARNING(inv.full_name, "received error message:",
                        self->system().render(msg.reason));
           err = std::move(msg.reason);
         }
       },
       [&](performance_report report) {
         // Log a set of named measurements.
-        VAST_DEBUG(invocation.full_name, "received performance report");
+        VAST_DEBUG(inv.full_name, "received performance report");
 #if VAST_LOG_LEVEL >= VAST_LOG_LEVEL_INFO
         for (const auto& [name, measurement] : report) {
           if (auto rate = measurement.rate_per_sec(); std::isfinite(rate))
@@ -154,7 +153,7 @@ caf::message sink_command(const command::invocation& invocation,
       },
       [&](std::string name, query_status query) {
         // Log the query status.
-        VAST_DEBUG(invocation.full_name, "received query status from", name);
+        VAST_DEBUG(inv.full_name, "received query status from", name);
 #if VAST_LOG_LEVEL >= VAST_LOG_LEVEL_INFO
         if (auto rate
             = measurement{query.runtime, query.processed}.rate_per_sec();
@@ -171,8 +170,8 @@ caf::message sink_command(const command::invocation& invocation,
         if (waiting_for_final_report)
           stop = true;
       },
-      [&](system::signal_atom, int signal) {
-        VAST_DEBUG(invocation.full_name, "got " << ::strsignal(signal));
+      [&](atom::signal, int signal) {
+        VAST_DEBUG(inv.full_name, "got", ::strsignal(signal));
         if (signal == SIGINT || signal == SIGTERM) {
           self->send_exit(*exp, exit_reason::user_shutdown);
           self->send_exit(snk, exit_reason::user_shutdown);

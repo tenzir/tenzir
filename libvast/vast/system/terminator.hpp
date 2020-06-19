@@ -13,47 +13,28 @@
 
 #pragma once
 
-#include <unordered_map>
-
 #include <caf/fwd.hpp>
+#include <caf/response_promise.hpp>
 
-#include "vast/data.hpp"
-#include "vast/filesystem.hpp"
+#include <vector>
 
-#include "vast/system/consensus.hpp"
+namespace vast::policy {
+
+struct sequential;
+struct parallel;
+
+} // namespace vast::policy
 
 namespace vast::system {
 
-struct dummy_consensus_state {
-  using actor_ptr = consensus_type::stateful_pointer<dummy_consensus_state>;
-
-  static inline const char* name = "dummy-consensus";
-
-  dummy_consensus_state(actor_ptr self);
-
-  /// Initializes the state.
-  /// @param dir The directory of the store.
-  caf::error init(path dir);
-
-  /// Saves the current state to `file`.
-  /// @pre `init()` was run successfully.
-  caf::error save();
-
-  actor_ptr self;
-
-  /// The data container.
-  std::unordered_map<std::string, data> store;
-
-  /// The location of the persistence file.
-  path file;
-
-  caf::dictionary<caf::config_value> status() const;
+struct terminator_state {
+  std::vector<caf::actor_addr> remaining_actors;
+  caf::response_promise promise;
+  static inline const char* name = "terminator";
 };
 
-/// A key-value store that stores its data in a `std::unordered_map`.
-/// @param self The actor handle.
-/// @param dir The directory of the store.
-consensus_type::behavior_type
-dummy_consensus(dummy_consensus_state::actor_ptr self, path dir);
+/// Performs a parallel shutdown of a list of actors.
+template <class Policy>
+caf::behavior terminator(caf::stateful_actor<terminator_state>* self);
 
 } // namespace vast::system

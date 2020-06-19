@@ -16,15 +16,14 @@
 #include "vast/system/source.hpp"
 
 #include "vast/test/data.hpp"
-#include "vast/test/test.hpp"
-
 #include "vast/test/fixtures/actor_system_and_events.hpp"
+#include "vast/test/test.hpp"
 
 #include "vast/detail/make_io_stream.hpp"
 #include "vast/format/zeek.hpp"
-#include "vast/system/atoms.hpp"
-#include "vast/table_slice.hpp"
+#include "vast/fwd.hpp"
 #include "vast/subset.hpp"
+#include "vast/table_slice.hpp"
 
 using namespace vast;
 using namespace vast::system;
@@ -39,7 +38,7 @@ struct test_sink_state {
 using test_sink_type = caf::stateful_actor<test_sink_state>;
 
 caf::behavior test_sink(test_sink_type* self, caf::actor src) {
-  self->send(src, sink_atom::value, self);
+  self->send(src, atom::sink_v, self);
   return {
     [=](caf::stream<table_slice_ptr> in) {
       return self->make_sink(
@@ -70,7 +69,9 @@ TEST(zeek source) {
                               caf::settings{}, std::move(stream)};
   MESSAGE("start source for producing table slices of size 10");
   auto src = self->spawn(source<format::zeek::reader>, std::move(reader),
-                         events::slice_size, caf::none);
+                         events::slice_size, caf::none,
+                         vast::system::type_registry_type{}, vast::schema{},
+                         std::string{}, vast::system::accountant_type{});
   run();
   MESSAGE("start sink and run exhaustively");
   auto snk = self->spawn(test_sink, src);

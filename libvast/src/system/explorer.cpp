@@ -19,14 +19,15 @@
 #include "vast/defaults.hpp"
 #include "vast/detail/string.hpp"
 #include "vast/expression.hpp"
+#include "vast/fwd.hpp"
 #include "vast/logger.hpp"
-#include "vast/system/atoms.hpp"
 #include "vast/system/exporter.hpp"
 #include "vast/table_slice.hpp"
 #include "vast/table_slice_builder.hpp"
 #include "vast/table_slice_builder_factory.hpp"
 
 #include <caf/event_based_actor.hpp>
+#include <caf/settings.hpp>
 
 #include <algorithm>
 #include <optional>
@@ -55,26 +56,40 @@ void explorer_state::forward_results(vast::table_slice_ptr slice) {
   }
   if (unseen.empty())
     return;
+  std::vector<table_slice_ptr> slices;
   if (unseen.size() == slice->rows()) {
-    self->send(sink, slice);
-    return;
+    slices.push_back(slice);
+  } else {
+    // If a slice was partially known, divide it up and forward only those
+    // ids that the source hasn't received yet.
+    slices = vast::select(slice, unseen);
   }
-  // If a slice was partially known, divide it up and forward only those
-  // ids that the source hasn't received yet.
-  auto slices = vast::select(slice, unseen);
+  // Send out the prepared slices up to the configured limit.
   for (auto slice : slices) {
-    self->send(sink, slice);
+    if (num_sent >= limits.total)
+      break;
+    if (num_sent + slice->rows() <= limits.total) {
+      self->send(sink, slice);
+      num_sent += slice->rows();
+    } else {
+      auto truncated = truncate(slice, limits.total - num_sent);
+      self->send(sink, truncated);
+      num_sent += truncated->rows();
+    }
   }
   return;
 }
 
 caf::behavior
 explorer(caf::stateful_actor<explorer_state>* self, caf::actor node,
+         explorer_state::event_limits limits,
          std::optional<vast::duration> before,
          std::optional<vast::duration> after, std::optional<std::string> by) {
   auto& st = self->state;
   st.self = self;
   st.node = node;
+  st.limits = limits;
+  st.num_sent = 0;
   // If none of 'before' and 'after' a given we assume an infinite timebox
   // around each result, but if one of them is given the interval should be
   // finite on both sides.
@@ -107,6 +122,9 @@ explorer(caf::stateful_actor<explorer_state>* self, caf::actor node,
         st.forward_results(slice);
         return;
       }
+      // Don't bother making new queries if we discard all results anyways.
+      if (st.num_sent >= st.limits.total)
+        return;
       auto& layout = slice->layout();
       auto it = std::find_if(layout.fields.begin(), layout.fields.end(),
                              [](const record_field& field) {
@@ -139,12 +157,12 @@ explorer(caf::stateful_actor<explorer_state>* self, caf::actor node,
           continue;
         std::optional<vast::expression> before_expr;
         if (st.before)
-          before_expr = predicate{attribute_extractor{timestamp_atom::value},
+          before_expr = predicate{attribute_extractor{atom::timestamp_v},
                                   greater_equal, data{*x - *st.before}};
 
         std::optional<vast::expression> after_expr;
         if (st.after)
-          after_expr = predicate{attribute_extractor{timestamp_atom::value},
+          after_expr = predicate{attribute_extractor{atom::timestamp_v},
                                  less_equal, data{*x + *st.after}};
         std::optional<vast::expression> by_expr;
         if (st.by) {
@@ -175,30 +193,31 @@ explorer(caf::stateful_actor<explorer_state>* self, caf::actor node,
         // We should have checked during argument parsing that `expr` has at
         // least one constraint.
         VAST_ASSERT(expr);
-        VAST_TRACE(self, "constructed expression", *expr);
         auto query = to_string(*expr);
         VAST_TRACE(self, "spawns new exporter with query", query);
-        auto exporter_invocation
-          = command::invocation{{}, "spawn exporter", {query}};
+        auto exporter_invocation = invocation{{}, "spawn exporter", {query}};
+        if (st.limits.per_result)
+          caf::put(exporter_invocation.options, "export.max-events",
+                   st.limits.per_result);
         self->send(st.node, exporter_invocation);
         ++st.running_exporters;
       }
     },
-    [=](provision_atom, caf::actor exp) {
+    [=](atom::provision, caf::actor exp) {
       self->state.initial_query_exporter = exp;
     },
     [=](caf::actor exp) {
       VAST_DEBUG(self, "registers exporter", exp);
       self->monitor(exp);
-      self->send(exp, system::sink_atom::value, self);
-      self->send(exp, system::run_atom::value);
+      self->send(exp, atom::sink_v, self);
+      self->send(exp, atom::run_v);
     },
     [=]([[maybe_unused]] std::string name, query_status) {
       VAST_DEBUG(self, "received final status from", name);
       self->state.initial_query_completed = true;
       quit_if_done();
     },
-    [=](sink_atom, const caf::actor& sink) {
+    [=](atom::sink, const caf::actor& sink) {
       VAST_DEBUG(self, "registers sink", sink);
       auto& st = self->state;
       st.sink = sink;

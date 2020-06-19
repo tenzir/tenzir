@@ -17,7 +17,6 @@
 #include "vast/ids.hpp"
 #include "vast/store.hpp"
 #include "vast/system/accountant.hpp"
-#include "vast/system/atoms.hpp"
 #include "vast/system/instrumentation.hpp"
 
 #include <caf/fwd.hpp>
@@ -39,7 +38,7 @@ namespace vast::system {
 // clang-format off
 using receiver_type = caf::typed_actor<
   caf::reacts_to<table_slice_ptr>,
-  caf::reacts_to<done_atom, caf::error>
+  caf::reacts_to<atom::done, caf::error>
 >;
 // clang-format on
 
@@ -47,13 +46,13 @@ using receiver_type = caf::typed_actor<
 /// @relates archive
 using archive_type = caf::typed_actor<
   caf::reacts_to<caf::stream<table_slice_ptr>>,
-  caf::reacts_to<exporter_atom, caf::actor>,
+  caf::reacts_to<atom::exporter, caf::actor>,
   caf::reacts_to<ids>,
   caf::reacts_to<ids, receiver_type>,
   caf::reacts_to<ids, receiver_type, uint64_t>,
-  caf::replies_to<status_atom>::with<caf::dictionary<caf::config_value>>,
-  caf::reacts_to<telemetry_atom>,
-  caf::reacts_to<erase_atom, ids>
+  caf::replies_to<atom::status>::with<caf::dictionary<caf::config_value>>,
+  caf::reacts_to<atom::telemetry>,
+  caf::reacts_to<atom::erase, ids>
 >;
 // clang-format on
 

@@ -13,6 +13,8 @@
 
 #pragma once
 
+#include "vast/fwd.hpp"
+
 #include <cstdint>
 
 namespace vast {

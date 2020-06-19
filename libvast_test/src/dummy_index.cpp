@@ -33,7 +33,7 @@ namespace {
 
 caf::behavior
 dummy_indexer(caf::stateful_actor<dummy_index::dummy_indexer_state>*) {
-  return {[](caf::ok_atom) {
+  return {[](atom::ok) {
     // nop
   }};
 }

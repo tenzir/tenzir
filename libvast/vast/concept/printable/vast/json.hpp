@@ -13,14 +13,14 @@
 
 #pragma once
 
-#include "vast/json.hpp"
-
 #include "vast/concept/printable/core/operators.hpp"
 #include "vast/concept/printable/core/printer.hpp"
 #include "vast/concept/printable/core/sequence.hpp"
 #include "vast/concept/printable/print.hpp"
+#include "vast/concept/printable/std/chrono.hpp"
 #include "vast/concept/printable/string.hpp"
 #include "vast/detail/escapers.hpp"
+#include "vast/json.hpp"
 #include "vast/time.hpp"
 #include "vast/view.hpp"
 
@@ -120,6 +120,11 @@ struct json_printer : printer<json_printer<TreePolicy, Indent, Padding>> {
 
     bool operator()(const view<pattern>& x) {
       return (*this)(x.string());
+    }
+
+    bool operator()(const view<time>& x) {
+      static auto p = '"' << make_printer<time>{} << '"';
+      return p.print(out_, x);
     }
 
     bool operator()(const std::pair<std::string_view, view<data>>& kvp) {

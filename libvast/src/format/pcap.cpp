@@ -15,6 +15,8 @@
 
 #include "vast/byte.hpp"
 #include "vast/community_id.hpp"
+#include "vast/concept/parseable/to.hpp"
+#include "vast/concept/parseable/vast/time.hpp"
 #include "vast/defaults.hpp"
 #include "vast/detail/assert.hpp"
 #include "vast/detail/byte_swap.hpp"
@@ -84,6 +86,14 @@ reader::reader(caf::atom_value id, const caf::settings& options,
     = community_id_ ? pcap_packet_type_community_id : pcap_packet_type;
   last_stats_ = {};
   discard_count_ = 0;
+  if (auto read_timeout_arg = caf::get_if<std::string>(&options, "import.read-"
+                                                                 "timeout")) {
+    if (auto read_timeout = to<decltype(read_timeout_)>(*read_timeout_arg))
+      read_timeout_ = *read_timeout;
+    else
+      VAST_WARNING(this, "cannot set read-timeout to", *read_timeout_arg,
+                   "as it is not a valid duration");
+  }
 }
 
 void reader::reset(std::unique_ptr<std::istream>) {
@@ -238,15 +248,25 @@ caf::error reader::read_impl(size_t max_events, size_t max_slice_size,
       }
       VAST_DEBUG(this, "reads trace from", input_);
       if (pseudo_realtime_ > 0)
-        VAST_DEBUG(this, "uses pseudo-realtime factor 1/" << pseudo_realtime_);
+        VAST_DEBUG(this, "uses pseudo-realtime factor 1/", pseudo_realtime_);
     }
     VAST_DEBUG(this, "cuts off flows after", cutoff_,
                "bytes in each direction");
     VAST_DEBUG(this, "keeps at most", max_flows_, "concurrent flows");
-    VAST_DEBUG(this, "evicts flows after", max_age_ << "s of inactivity");
-    VAST_DEBUG(this, "expires flow table every", expire_interval_ << "s");
+    VAST_DEBUG(this, "evicts flows after", max_age_, "s of inactivity");
+    VAST_DEBUG(this, "expires flow table every", expire_interval_, "s");
   }
+  auto start = std::chrono::steady_clock::now();
   for (size_t produced = 0; produced < max_events; ++produced) {
+    // We must check not only for a timeout but also whether any events were
+    // produced to work around CAF's assumption that sources are always able to
+    // generate events. Once `caf::stream_source` can handle empty batches
+    // gracefully, the second check should be removed.
+    if (start + read_timeout_ < std::chrono::steady_clock::now()
+        && produced > 0) {
+      VAST_DEBUG(this, "reached input timeout");
+      return finish(f, ec::timeout);
+    }
     // Attempt to fetch next packet.
     const u_char* data;
     pcap_pkthdr* header;

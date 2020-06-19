@@ -197,7 +197,7 @@ public:
     auto i = find(key);
     if (i != end())
       return i->second;
-    return xs_.insert(i, value_type{key, mapped_type{}})->second;
+    return insert(i, value_type{key, mapped_type{}})->second;
   }
 
   template <class L>

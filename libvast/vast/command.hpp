@@ -14,6 +14,7 @@
 #pragma once
 
 #include "vast/detail/string.hpp"
+#include "vast/fwd.hpp"
 
 #include <caf/config_option_set.hpp>
 #include <caf/error.hpp>
@@ -35,50 +36,11 @@ public:
   /// Iterates over CLI arguments.
   using argument_iterator = std::vector<std::string>::const_iterator;
 
-  /// Wraps invocation of a single command for separating the parsing of
-  /// program argument from running the command.
-  struct invocation {
-    // -- member variables -----------------------------------------------------
-
-    /// Stores user-defined program options.
-    caf::settings options;
-
-    /// Holds the fully-qualified name of the scheduled command.
-    std::string full_name;
-
-    /// Holds the CLI arguments.
-    std::vector<std::string> arguments;
-
-    // -- utility methods ------------------------------------------------------
-
-    /// Holds the name of the scheduled command.
-    std::string_view name() const {
-      std::string_view result = full_name;
-      result.remove_prefix(
-        std::min(result.find_last_of(' ') + 1, result.size()));
-      return result;
-    }
-
-    template <class Inspector>
-    friend auto inspect(Inspector& f, command::invocation& x) {
-      return f(caf::meta::type_name("command::invocation"), x.full_name,
-               x.arguments, x.options);
-    }
-
-    // -- mutators -------------------------------------------------------------
-
-    /// Sets the members `full_nane`, and `arguments`.
-    void assign(const command* cmd, argument_iterator first,
-                argument_iterator last) {
-      full_name = cmd->full_name();
-      arguments = {first, last};
-    }
-  };
   /// Stores child commands.
   using children_list = std::vector<std::unique_ptr<command>>;
 
   /// Delegates to the command implementation logic.
-  using fun = caf::message (*)(const command::invocation&, caf::actor_system&);
+  using fun = caf::message (*)(const invocation&, caf::actor_system&);
 
   /// Central store for mapping fully-qualified command name to callback
   using factory = std::map<std::string, fun>;
@@ -191,10 +153,49 @@ public:
   }
 };
 
+/// Wraps invocation of a single command for separating the parsing of
+/// program argument from running the command.
+struct invocation {
+  // -- member variables -----------------------------------------------------
+
+  /// Stores user-defined program options.
+  caf::settings options;
+
+  /// Holds the fully-qualified name of the scheduled command.
+  std::string full_name;
+
+  /// Holds the CLI arguments.
+  std::vector<std::string> arguments;
+
+  // -- utility methods ------------------------------------------------------
+
+  /// Holds the name of the scheduled command.
+  std::string_view name() const {
+    std::string_view result = full_name;
+    result.remove_prefix(std::min(result.find_last_of(' ') + 1, result.size()));
+    return result;
+  }
+
+  template <class Inspector>
+  friend auto inspect(Inspector& f, invocation& x) {
+    return f(caf::meta::type_name("invocation"), x.full_name, x.arguments,
+             x.options);
+  }
+
+  // -- mutators -------------------------------------------------------------
+
+  /// Sets the members `full_nane`, and `arguments`.
+  void assign(const command* cmd, command::argument_iterator first,
+              command::argument_iterator last) {
+    full_name = cmd->full_name();
+    arguments = {first, last};
+  }
+};
+
 /// Parses all program arguments without running the command.
 /// @returns an error for malformed input, `none` otherwise.
 /// @relates command
-caf::expected<command::invocation>
+caf::expected<invocation>
 parse(const command& root, command::argument_iterator first,
       command::argument_iterator last);
 
@@ -208,14 +209,14 @@ parse(const command& root, command::argument_iterator first,
 /// @param error_output Destination for writing human-readable error output.
 ///                     Only used when returning `false`.
 /// @returns `true` if all steps were successful, otherwise `false`.
-bool init_config(caf::actor_system_config& cfg, const command::invocation& from,
+bool init_config(caf::actor_system_config& cfg, const invocation& from,
                  std::ostream& error_output);
 
 /// Runs the command and blocks until execution completes.
 /// @returns a type-erased result or a wrapped `caf::error`.
 /// @relates command
 caf::expected<caf::message>
-run(const command::invocation& invocation, caf::actor_system& sys,
+run(const invocation& invocation, caf::actor_system& sys,
     const command::factory& fact);
 
 /// Traverses the command hierarchy until finding the root.

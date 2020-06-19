@@ -122,7 +122,7 @@ type suricata.http = record{
   http: record{
     hostname: string,
     url: string,
-    http_port: count,
+    http_port: port,
     http_user_agent: string,
     http_content_type: string,
     http_method: string,
@@ -162,7 +162,7 @@ type suricata.fileinfo = record{
   http: record{
     hostname: string,
     url: string,
-    http_port: count,
+    http_port: port,
     http_user_agent: string,
     http_content_type: string,
     http_method: string,

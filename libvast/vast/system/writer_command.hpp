@@ -32,10 +32,9 @@ namespace vast::system {
 /// Default implementation for export sub-commands. Compatible with Bro and MRT
 /// formats.
 template <class Writer, class Defaults>
-caf::message
-writer_command(const command::invocation& invocation, caf::actor_system& sys) {
-  VAST_TRACE(invocation);
-  auto& options = invocation.options;
+caf::message writer_command(const invocation& inv, caf::actor_system& sys) {
+  VAST_TRACE(inv);
+  auto& options = inv.options;
   std::string category = Defaults::category;
   using ostream_ptr = std::unique_ptr<std::ostream>;
   auto max_events
@@ -53,7 +52,7 @@ writer_command(const command::invocation& invocation, caf::actor_system& sys) {
     Writer writer;
     snk = sys.spawn(sink<Writer>, std::move(writer), max_events);
   }
-  return sink_command(invocation, sys, std::move(snk));
+  return sink_command(inv, sys, std::move(snk));
 }
 
 } // namespace vast::system

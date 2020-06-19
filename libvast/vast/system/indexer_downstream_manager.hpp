@@ -14,7 +14,7 @@
 #pragma once
 
 #include "vast/detail/assert.hpp"
-#include "vast/system/fwd.hpp"
+#include "vast/fwd.hpp"
 #include "vast/table_slice_column.hpp"
 
 #include <caf/downstream_manager_base.hpp>
@@ -64,6 +64,8 @@ public:
   /// the central buffer.
   size_t buffered(caf::stream_slot slot) const noexcept override;
 
+  void close() override;
+
   int32_t max_capacity() const noexcept override;
 
   // Verbose naming because `register` is a keyword.
@@ -92,6 +94,7 @@ private:
 
   set_type partitions;
   set_type pending_partitions;
+  bool closing = false;
 };
 
 } // namespace vast::system

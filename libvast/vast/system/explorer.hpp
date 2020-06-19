@@ -28,12 +28,23 @@
 namespace vast::system {
 
 struct explorer_state {
+  struct event_limits {
+    uint64_t total;
+    uint64_t per_result;
+  };
+
   static inline constexpr const char* name = "explorer";
 
   explorer_state(caf::event_based_actor* self);
 
   /// Send the results to the sink, after removing duplicates.
   void forward_results(vast::table_slice_ptr slice);
+
+  /// Maximum number of events to output.
+  event_limits limits;
+
+  /// Number of events sent to the source.
+  size_t num_sent;
 
   /// Size of the timespan prior to each event.
   std::optional<vast::duration> before;
@@ -77,6 +88,7 @@ struct explorer_state {
 /// @param by Field by which to restrict the result set for each element.
 caf::behavior
 explorer(caf::stateful_actor<explorer_state>* self, caf::actor node,
+         explorer_state::event_limits limits,
          std::optional<vast::duration> before,
          std::optional<vast::duration> after, std::optional<std::string> by);
 

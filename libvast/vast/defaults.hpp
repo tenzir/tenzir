@@ -32,10 +32,6 @@ namespace import::shared {
 /// Path for reading input events or `-` for reading from STDIN.
 constexpr std::string_view read = "-";
 
-/// Time that the reader waits for new data before it finishes a partial slice.
-constexpr std::chrono::milliseconds partial_slice_read_timeout
-  = std::chrono::milliseconds{500};
-
 } // namespace import::shared
 
 /// Contains constants for the import command.
@@ -47,8 +43,15 @@ namespace import {
 caf::atom_value table_slice_type(const caf::actor_system& sys,
                                  const caf::settings& options);
 
+/// Maximum size for sources that generate table slices.
+constexpr size_t table_slice_size = 100;
+
 /// Maximum number of results.
 constexpr size_t max_events = 0;
+
+/// Read timoeut after which data is forwarded to the importer regardless of
+/// batching and table slices being unfinished.
+constexpr std::chrono::milliseconds read_timeout = std::chrono::seconds{10};
 
 /// Contains settings for the zeek subcommand.
 struct zeek {
@@ -148,6 +151,25 @@ struct pcap {
 };
 
 } // namespace import
+
+// -- constants for the explore command and its subcommands --------------------
+
+namespace explore {
+
+// A value of zero means 'unlimited' for all three limits below.
+// If all limits are non-zero, the number of results is bounded
+// by `min(max_events, max_events_query*max_events_context)`.
+
+/// Maximum total number of results.
+constexpr size_t max_events = std::numeric_limits<size_t>::max();
+
+/// Maximum number of results for the initial query.
+constexpr size_t max_events_query = 100;
+
+/// Maximum number of results for every explored context.
+constexpr size_t max_events_context = 100;
+
+} // namespace explore
 
 // -- constants for the export command and its subcommands ---------------------
 
@@ -268,6 +290,10 @@ constexpr size_t max_string_size = 1024;
 /// or table).
 constexpr size_t max_container_elements = 256;
 
+/// The interval used to periodically check that all indexers are finished when
+/// shutting down.
+constexpr std::chrono::seconds shutdown_retry_interval = std::chrono::seconds{1};
+
 } // namespace index
 
 // -- constants for the logger -------------------------------------------------
@@ -310,9 +336,6 @@ constexpr caf::atom_value table_slice_type = caf::atom("default");
 
 #endif // VAST_HAVE_ARROW
 
-/// Maximum size for sources that generate table slices.
-constexpr size_t table_slice_size = 100;
-
 /// Maximum number of events per INDEX partition.
 constexpr size_t max_partition_size = 1'048'576; // 1_Mi
 
@@ -345,6 +368,9 @@ constexpr std::chrono::milliseconds signal_monitoring_interval
 /// Timeout for initial connections to the node.
 constexpr std::chrono::seconds initial_request_timeout
   = std::chrono::seconds{10};
+
+/// Timeout to cleanly shutdown actors.
+constexpr std::chrono::seconds shutdown_timeout = std::chrono::hours{1};
 
 } // namespace system
 

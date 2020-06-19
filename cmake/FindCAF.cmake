@@ -113,11 +113,8 @@ endif ()
 include(FindPackageHandleStandardArgs)
 find_package_handle_standard_args(
   CAF
-  REQUIRED_VARS
-  CAF_LIBRARIES
-  CAF_INCLUDE_DIRS
-  VERSION_VAR
-  CAF_VERSION
+  REQUIRED_VARS CAF_LIBRARIES CAF_INCLUDE_DIRS
+  VERSION_VAR CAF_VERSION
   HANDLE_COMPONENTS)
 
 if (NOT CAF_FOUND)
@@ -134,17 +131,16 @@ if (CAF_FOUND)
     add_library(caf::core UNKNOWN IMPORTED GLOBAL)
     set_target_properties(
       caf::core
-      PROPERTIES
-        IMPORTED_LOCATION "${CAF_LIBRARY_CORE}" INTERFACE_INCLUDE_DIRECTORIES
-                                                "${CAF_INCLUDE_DIR_CORE}")
+      PROPERTIES IMPORTED_LOCATION "${CAF_LIBRARY_CORE}"
+                 INTERFACE_INCLUDE_DIRECTORIES "${CAF_INCLUDE_DIR_CORE}")
   endif ()
   if (CAF_io_FOUND AND NOT TARGET caf::io)
     add_library(caf::io UNKNOWN IMPORTED GLOBAL)
     set_target_properties(
       caf::io
       PROPERTIES
-        IMPORTED_LOCATION "${CAF_LIBRARY_IO}"
-        INTERFACE_INCLUDE_DIRECTORIES "${CAF_INCLUDE_DIR_IO}"
+        IMPORTED_LOCATION "${CAF_LIBRARY_IO}" INTERFACE_INCLUDE_DIRECTORIES
+                                              "${CAF_INCLUDE_DIR_IO}"
         INTERFACE_LINK_LIBRARIES "caf::core;Threads::Threads")
   endif ()
   if (CAF_openssl_FOUND AND NOT TARGET caf::openssl)
@@ -152,8 +148,8 @@ if (CAF_FOUND)
     set_target_properties(
       caf::openssl
       PROPERTIES
-        IMPORTED_LOCATION "${CAF_LIBRARY_OPENSSL}"
-        INTERFACE_INCLUDE_DIRECTORIES "${CAF_INCLUDE_DIR_OPENSSL}"
+        IMPORTED_LOCATION "${CAF_LIBRARY_OPENSSL}" INTERFACE_INCLUDE_DIRECTORIES
+                                                   "${CAF_INCLUDE_DIR_OPENSSL}"
         INTERFACE_LINK_LIBRARIES "caf::core;caf::io")
     if (NOT BUILD_SHARED_LIBS)
       include(CMakeFindDependencyMacro)
@@ -170,17 +166,15 @@ if (CAF_FOUND)
     set_target_properties(
       caf::opencl
       PROPERTIES
-        IMPORTED_LOCATION "${CAF_LIBRARY_OPENCL}"
-        INTERFACE_INCLUDE_DIRECTORIES "${CAF_INCLUDE_DIR_OPENCL}"
+        IMPORTED_LOCATION "${CAF_LIBRARY_OPENCL}" INTERFACE_INCLUDE_DIRECTORIES
+                                                  "${CAF_INCLUDE_DIR_OPENCL}"
         INTERFACE_LINK_LIBRARIES "caf::core")
   endif ()
   if (CAF_test_FOUND AND NOT TARGET caf::test)
     add_library(caf::test INTERFACE IMPORTED GLOBAL)
     set_target_properties(
       caf::test
-      PROPERTIES
-        INTERFACE_INCLUDE_DIRECTORIES "${CAF_INCLUDE_DIR_TEST}"
-
-        INTERFACE_LINK_LIBRARIES "caf::core")
+      PROPERTIES INTERFACE_INCLUDE_DIRECTORIES "${CAF_INCLUDE_DIR_TEST}"
+                 INTERFACE_LINK_LIBRARIES "caf::core")
   endif ()
 endif ()

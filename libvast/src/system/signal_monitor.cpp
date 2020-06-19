@@ -13,17 +13,18 @@
 
 #include "vast/system/signal_monitor.hpp"
 
-#include <atomic>
-#include <csignal>
-#include <cstdlib>
-#include <cstring>
-#include <thread>
+#include "vast/fwd.hpp"
+#include "vast/logger.hpp"
 
 #include <caf/actor.hpp>
 #include <caf/send.hpp>
 
-#include "vast/logger.hpp"
-#include "vast/system/atoms.hpp"
+#include <atomic>
+#include <csignal>
+#include <cstdlib>
+#include <cstring>
+#include <iostream>
+#include <thread>
 
 using namespace caf;
 
@@ -71,7 +72,7 @@ void signal_monitor::run(std::chrono::milliseconds monitoring_interval,
         if (signals[i]) {
           VAST_DEBUG(class_name, "caught signal", strsignal(i));
           signals[i] = false;
-          caf::anon_send(receiver, signal_atom::value, i);
+          caf::anon_send(receiver, atom::signal_v, i);
         }
       }
     }

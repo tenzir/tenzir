@@ -15,8 +15,8 @@
 
 #include "vast/system/index.hpp"
 
-#include "vast/test/test.hpp"
 #include "vast/test/fixtures/actor_system_and_events.hpp"
+#include "vast/test/test.hpp"
 
 #include "vast/concept/parseable/to.hpp"
 #include "vast/concept/parseable/vast/expression.hpp"
@@ -24,15 +24,14 @@
 #include "vast/concept/printable/to_string.hpp"
 #include "vast/concept/printable/vast/event.hpp"
 #include "vast/default_table_slice.hpp"
-#include "vast/event.hpp"
-#include "vast/ids.hpp"
-#include "vast/query_options.hpp"
-#include "vast/system/atoms.hpp"
-#include "vast/table_slice.hpp"
-#include "vast/table_slice_builder.hpp"
-
 #include "vast/detail/spawn_container_source.hpp"
 #include "vast/detail/spawn_generator_source.hpp"
+#include "vast/event.hpp"
+#include "vast/fwd.hpp"
+#include "vast/ids.hpp"
+#include "vast/query_options.hpp"
+#include "vast/table_slice.hpp"
+#include "vast/table_slice_builder.hpp"
 
 using caf::after;
 using std::chrono_literals::operator""s;
@@ -87,7 +86,7 @@ struct fixture : fixtures::deterministic_actor_system_and_events {
       auto done = false;
       while (!done)
         self->receive([&](ids& sub_result) { result |= sub_result; },
-                      [&](system::done_atom) { done = true; },
+                      [&](atom::done) { done = true; },
                       caf::others >> [](caf::message_view& msg)
                         -> caf::result<caf::message> {
                         FAIL("unexpected message: " << msg.content());

@@ -13,17 +13,17 @@
 
 #pragma once
 
-#include <unordered_map>
+#include "vast/column_index.hpp"
+#include "vast/filesystem.hpp"
+#include "vast/fwd.hpp"
+#include "vast/type.hpp"
+#include "vast/uuid.hpp"
 
 #include <caf/actor.hpp>
 #include <caf/event_based_actor.hpp>
 #include <caf/stateful_actor.hpp>
 
-#include "vast/column_index.hpp"
-#include "vast/filesystem.hpp"
-#include "vast/system/fwd.hpp"
-#include "vast/type.hpp"
-#include "vast/uuid.hpp"
+#include <unordered_map>
 
 namespace vast::system {
 

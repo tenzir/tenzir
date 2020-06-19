@@ -24,10 +24,10 @@
 #include "vast/event.hpp"
 #include "vast/expression.hpp"
 #include "vast/expression_visitors.hpp"
+#include "vast/fwd.hpp"
 #include "vast/logger.hpp"
 #include "vast/schema.hpp"
 #include "vast/system/accountant.hpp"
-#include "vast/system/atoms.hpp"
 #include "vast/system/source.hpp"
 #include "vast/table_slice.hpp"
 #include "vast/table_slice_builder.hpp"
@@ -77,15 +77,21 @@ using datagram_source_actor = caf::stateful_actor<datagram_source_state<Reader>,
 /// An event producer.
 /// @tparam Reader The concrete source implementation.
 /// @param self The actor handle.
+/// @param udp_listening_port The requested port.
 /// @param reader The reader instance.
+/// @param table_slice_size The maximum size for a table slice.
+/// @param max_events The optional maximum amount of events to import.
+/// @param type_registry The actor handle for the type-registry component.
+/// @oaram local_schema Additional local schemas to consider.
+/// @param type_filter Restriction for considered types.
+/// @param accountant_type The actor handle for the accountant component.
 template <class Reader>
-caf::behavior datagram_source(datagram_source_actor<Reader>* self,
-                              uint16_t udp_listening_port, Reader reader,
-                              size_t table_slice_size,
-                              caf::optional<size_t> max_events) {
-  using namespace caf;
-  using namespace std::chrono;
-  namespace defs = defaults::system;
+caf::behavior
+datagram_source(datagram_source_actor<Reader>* self,
+                uint16_t udp_listening_port, Reader reader,
+                size_t table_slice_size, caf::optional<size_t> max_events,
+                type_registry_type type_registry, vast::schema local_schema,
+                std::string type_filter, accountant_type accountant) {
   // Try to open requested UDP port.
   auto udp_res = self->add_udp_datagram_servant(udp_listening_port);
   if (!udp_res) {
@@ -95,13 +101,18 @@ caf::behavior datagram_source(datagram_source_actor<Reader>* self,
   }
   VAST_DEBUG(self, "starts listening at port", udp_res->second);
   // Initialize state.
-  self->state.init(std::move(reader), std::move(max_events));
+  auto& st = self->state;
+  st.init(self, std::move(reader), std::move(max_events),
+          std::move(type_registry), std::move(local_schema),
+          std::move(type_filter), std::move(accountant));
   // Spin up the stream manager for the source.
-  self->state.mgr = self->make_continuous_source(
+  st.mgr = self->make_continuous_source(
     // init
-    [=](caf::unit_t&) { self->state.start_time = system_clock::now(); },
+    [=](caf::unit_t&) {
+      self->state.start_time = std::chrono::system_clock::now();
+    },
     // get next element
-    [](caf::unit_t&, downstream<table_slice_ptr>&, size_t) {
+    [](caf::unit_t&, caf::downstream<table_slice_ptr>&, size_t) {
       // nop, new slices are generated in the new_datagram_msg handler
     },
     // done?
@@ -111,7 +122,7 @@ caf::behavior datagram_source(datagram_source_actor<Reader>* self,
       // Check whether we can buffer more slices in the stream.
       VAST_DEBUG(self, "got a new datagram of size", msg.buf.size());
       auto& st = self->state;
-      auto t = timer::start(st.measurement_);
+      auto t = timer::start(st.metrics);
       auto capacity = st.mgr->out().capacity();
       if (capacity == 0) {
         st.dropped_packets++;
@@ -148,23 +159,29 @@ caf::behavior datagram_source(datagram_source_actor<Reader>* self,
       auto& st = self->state;
       st.accountant = std::move(accountant);
       self->send(st.accountant, "source.start", st.start_time);
-      self->send(st.accountant, announce_atom::value, st.name);
+      self->send(st.accountant, atom::announce_v, st.name);
       // Start the heartbeat loop
-      self->delayed_send(self, defs::telemetry_rate, telemetry_atom::value);
+      self->delayed_send(self, defaults::system::telemetry_rate,
+                         atom::telemetry_v);
     },
-    [=](sink_atom, const actor& sink) {
+    [=](type_registry_type type_registry) {
+      // TODO adapt
+      VAST_DEBUG(self, "sets type-registry to", type_registry);
+    },
+    [=](atom::sink, const caf::actor& sink) {
       // TODO: Currently, we use a broadcast downstream manager. We need to
       //       implement an anycast downstream manager and use it for the
       //       source, because we mustn't duplicate data.
       VAST_ASSERT(sink != nullptr);
       VAST_DEBUG(self, "registers sink", sink);
+      auto& st = self->state;
       // Start streaming.
-      self->state.mgr->add_outbound_path(sink);
+      st.mgr->add_outbound_path(sink);
     },
-    [=](get_atom, schema_atom) -> result<schema> {
+    [=](atom::get, atom::schema) -> caf::result<schema> {
       return self->state.reader.schema();
     },
-    [=](put_atom, schema& sch) -> result<void> {
+    [=](atom::put, schema& sch) -> caf::result<void> {
       if (auto err = self->state.reader.schema(std::move(sch)))
         return err;
       return caf::unit;
@@ -173,7 +190,7 @@ caf::behavior datagram_source(datagram_source_actor<Reader>* self,
       VAST_DEBUG(self, "sets filter expression to:", expr);
       self->state.filter = std::move(expr);
     },
-    [=](telemetry_atom) {
+    [=](atom::telemetry) {
       auto& st = self->state;
       st.send_report();
       if (st.dropped_packets > 0) {
@@ -182,8 +199,10 @@ caf::behavior datagram_source(datagram_source_actor<Reader>* self,
         st.dropped_packets = 0;
       }
       if (!st.done)
-        self->delayed_send(self, defs::telemetry_rate, telemetry_atom::value);
-    }};
+        self->delayed_send(self, defaults::system::telemetry_rate,
+                           atom::telemetry_v);
+    },
+  };
 }
 
 } // namespace vast::system

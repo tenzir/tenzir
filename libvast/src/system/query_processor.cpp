@@ -13,14 +13,14 @@
 
 #include "vast/system/query_processor.hpp"
 
+#include "vast/expression.hpp"
+#include "vast/fwd.hpp"
+#include "vast/ids.hpp"
+#include "vast/logger.hpp"
+
 #include <caf/event_based_actor.hpp>
 #include <caf/skip.hpp>
 #include <caf/stateful_actor.hpp>
-
-#include "vast/expression.hpp"
-#include "vast/ids.hpp"
-#include "vast/logger.hpp"
-#include "vast/system/atoms.hpp"
 
 namespace vast::system {
 
@@ -52,7 +52,7 @@ query_processor::query_processor(caf::event_based_actor* self)
       process_hits(hits);
       // No transtion. We will receive a 'done' message after getting all hits.
     },
-    [=](done_atom) -> caf::result<void> {
+    [=](atom::done) -> caf::result<void> {
       if (block_end_of_hits_)
         return caf::skip;
       partitions_.received += partitions_.scheduled;

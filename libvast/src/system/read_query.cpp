@@ -17,9 +17,9 @@
 #include "vast/concept/parseable/vast/expression.hpp"
 #include "vast/defaults.hpp"
 #include "vast/error.hpp"
+#include "vast/fwd.hpp"
 #include "vast/logger.hpp"
 #include "vast/scope_linked.hpp"
-#include "vast/system/atoms.hpp"
 #include "vast/system/signal_monitor.hpp"
 #include "vast/system/spawn_or_connect_to_node.hpp"
 #include "vast/system/start_command.hpp"
@@ -33,6 +33,8 @@
 
 #include <chrono>
 #include <cstdio>
+#include <fstream>
+#include <iostream>
 #include <unistd.h>
 
 using namespace caf;
@@ -41,17 +43,17 @@ using namespace std::chrono_literals;
 namespace vast::system {
 
 caf::expected<std::string>
-read_query(const command::invocation& invocation, std::string_view file_option,
+read_query(const invocation& inv, std::string_view file_option,
            size_t argument_offset) {
-  VAST_TRACE(invocation, file_option);
+  VAST_TRACE(inv, file_option);
   std::string result;
   auto assign_query = [&](std::istream& in) {
     result.assign(std::istreambuf_iterator<char>{in},
                   std::istreambuf_iterator<char>{});
   };
-  if (auto fname = caf::get_if<std::string>(&invocation.options, file_option)) {
+  if (auto fname = caf::get_if<std::string>(&inv.options, file_option)) {
     // Sanity check.
-    if (!invocation.arguments.empty())
+    if (!inv.arguments.empty())
       return make_error(ec::parse_error, "got a query on the command line "
                                          "but --read option is defined");
     // Read query from STDIN if file name is '-'.
@@ -63,7 +65,7 @@ read_query(const command::invocation& invocation, std::string_view file_option,
         return make_error(ec::no_such_file, "unable to read from " + *fname);
       assign_query(f);
     }
-  } else if (invocation.arguments.empty()) {
+  } else if (inv.arguments.empty()) {
     // Read query from STDIN.
     if (::isatty(::fileno(stdout)))
       std::cerr << "please enter a query and confirm with CTRL-D: "
@@ -71,15 +73,15 @@ read_query(const command::invocation& invocation, std::string_view file_option,
     assign_query(std::cin);
   } else {
     // Assemble expression from all remaining arguments.
-    if (invocation.arguments.size() > 1) {
+    if (inv.arguments.size() > 1) {
       VAST_WARNING_ANON("spreading a query over multiple arguments is "
                         "deprecated; please pass it as a single string "
                         "instead.");
       VAST_VERBOSE_ANON("(hint: use a heredoc if you run into quoting "
                         "issues.)");
     }
-    result = detail::join(invocation.arguments.begin() + argument_offset,
-                          invocation.arguments.end(), " ");
+    result = detail::join(inv.arguments.begin() + argument_offset,
+                          inv.arguments.end(), " ");
   }
   if (result.empty())
     return make_error(ec::invalid_query);

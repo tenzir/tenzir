@@ -13,17 +13,18 @@
 
 #include "vast/system/spawn_node.hpp"
 
-#include <string>
-#include <vector>
+#include "vast/defaults.hpp"
+#include "vast/logger.hpp"
+#include "vast/scope_linked.hpp"
+#include "vast/system/node.hpp"
 
 #include <caf/config_value.hpp>
 #include <caf/scoped_actor.hpp>
 #include <caf/settings.hpp>
 
-#include "vast/defaults.hpp"
-#include "vast/logger.hpp"
-#include "vast/scope_linked.hpp"
-#include "vast/system/node.hpp"
+#include <string>
+#include <unistd.h>
+#include <vector>
 
 namespace vast::system {
 
@@ -36,20 +37,25 @@ spawn_node(caf::scoped_actor& self, const caf::settings& opts) {
   auto db_dir
     = get_or(opts, "system.db-directory", defaults::system::db_directory);
   auto abs_dir = path{db_dir}.complete();
+  if (!exists(abs_dir))
+    if (auto res = mkdir(abs_dir); !res)
+      return make_error(ec::filesystem_error,
+                        "unable to create db-directory:", abs_dir.str());
+  if (!abs_dir.is_writable())
+    return make_error(ec::filesystem_error,
+                      "unable to write to db-directory:", abs_dir.str());
   VAST_DEBUG_ANON(__func__, "spawns local node:", id);
   // Pointer to the root command to system::node.
   scope_linked_actor node{self->spawn(system::node, id, abs_dir)};
   auto spawn_component = [&](std::string name) {
     caf::error result;
-    auto invocation
-      = command::invocation{opts, "spawn "s + std::move(name), {}};
-    self->request(node.get(), caf::infinite, std::move(invocation))
+    auto inv = invocation{opts, "spawn "s + std::move(name), {}};
+    self->request(node.get(), caf::infinite, std::move(inv))
       .receive([](const caf::actor&) { /* nop */ },
                [&](caf::error& e) { result = std::move(e); });
     return result;
   };
-  std::list components
-    = {"type-registry", "consensus", "archive", "index", "importer"};
+  std::list components = {"type-registry", "archive", "index", "importer"};
   if (accounting)
     components.push_front("accountant");
   for (auto& c : components) {

@@ -13,8 +13,6 @@
 
 #include "fixtures/node.hpp"
 
-#include <caf/all.hpp>
-
 #include "vast/detail/spawn_container_source.hpp"
 #include "vast/query_options.hpp"
 #include "vast/table_slice.hpp"
@@ -34,7 +32,6 @@ node::node() {
   run();
   MESSAGE("spawning components");
   spawn_component("type-registry");
-  spawn_component("consensus");
   spawn_component("archive");
   spawn_component("index");
   spawn_component("importer");
@@ -48,17 +45,16 @@ void node::ingest(const std::string& type) {
   // Get the importer from the node.
   MESSAGE("getting importer from node");
   caf::actor importer;
-  auto rh = self->request(test_node, caf::infinite, caf::get_atom::value);
+  auto rh = self->request(test_node, caf::infinite, atom::get_v);
   run();
   rh.receive(
     [&](const std::string& id, system::registry& reg) {
-      auto er = reg.components[id].equal_range("importer");
+      auto er = reg.components.value[id].value.equal_range("importer");
       if (er.first == er.second)
         FAIL("no importers available at test node");
       importer = er.first->second.actor;
     },
-    error_handler()
-  );
+    error_handler());
   MESSAGE("sending " << type << " logs");
   // Send previously parsed logs directly to the importer (as opposed to
   // going through a source).
@@ -81,9 +77,9 @@ std::vector<event> node::query(std::string expr) {
   MESSAGE("spawn an exporter and register ourselves as sink");
   auto exp = spawn_component("exporter", std::move(expr));
   self->monitor(exp);
-  self->send(exp, system::sink_atom::value, self);
-  self->send(exp, system::run_atom::value);
-  self->send(exp, system::extract_atom::value);
+  self->send(exp, atom::sink_v, self);
+  self->send(exp, atom::run_v);
+  self->send(exp, atom::extract_v);
   run();
   MESSAGE("fetch results from mailbox");
   std::vector<event> result;

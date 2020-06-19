@@ -43,6 +43,8 @@ IndentWidth: 2
 IndentWrappedFunctionNames: false
 KeepEmptyLinesAtTheStartOfBlocks: false
 Language: Cpp
+MacroBlockBegin: "CAF_BEGIN_TYPE_ID_BLOCK"
+MacroBlockEnd: "CAF_END_TYPE_ID_BLOCK"
 MaxEmptyLinesToKeep: 1
 NamespaceIndentation: None
 PenaltyBreakAssignment: 0

@@ -27,6 +27,10 @@
 #  include <pcap/pcap.h>
 #endif
 
+#if VAST_USE_JEMALLOC
+#  include <jemalloc/jemalloc.h>
+#endif
+
 #include <iostream>
 #include <sstream>
 
@@ -45,14 +49,19 @@ json::object retrieve_versions() {
   std::ostringstream arrow_v;
   arrow_v << ARROW_VERSION_MAJOR << '.' << ARROW_VERSION_MINOR << '.'
           << ARROW_VERSION_PATCH;
-  result["ARROW"] = arrow_v.str();
+  result["Apache Arrow"] = arrow_v.str();
 #else
-  result["ARROW"] = json{};
+  result["Apache Arrow"] = json{};
 #endif
 #if VAST_HAVE_PCAP
   result["PCAP"] = pcap_lib_version();
 #else
   result["PCAP"] = json{};
+#endif
+#if VAST_USE_JEMALLOC
+  result["jemalloc"] = JEMALLOC_VERSION;
+#else
+  result["jemalloc"] = json{};
 #endif
   return result;
 }
@@ -65,9 +74,8 @@ void print_version(const json::object& extra_content) {
 }
 
 caf::message
-version_command([[maybe_unused]] const command::invocation& invocation,
-                caf::actor_system&) {
-  VAST_TRACE(invocation);
+version_command([[maybe_unused]] const invocation& inv, caf::actor_system&) {
+  VAST_TRACE(inv);
   print_version();
   return caf::none;
 }

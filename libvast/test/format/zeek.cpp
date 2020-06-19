@@ -196,9 +196,11 @@ std::string_view conn_log_100_events = R"__(#separator \x09
 struct fixture : fixtures::deterministic_actor_system {
   std::vector<table_slice_ptr>
   read(std::unique_ptr<std::istream> input, size_t slice_size,
-       size_t num_events, bool expect_eof) {
+       size_t num_events, bool expect_eof, bool expect_timeout) {
     using reader_type = format::zeek::reader;
-    reader_type reader{defaults::system::table_slice_type, caf::settings{},
+    auto settings = caf::settings{};
+    caf::put(settings, "import.read-timeout", "200ms");
+    reader_type reader{defaults::system::table_slice_type, std::move(settings),
                        std::move(input)};
     std::vector<table_slice_ptr> slices;
     auto add_slice = [&](table_slice_ptr ptr) {
@@ -208,7 +210,9 @@ struct fixture : fixtures::deterministic_actor_system {
                                   slice_size, add_slice);
     if (expect_eof && err != ec::end_of_input)
       FAIL("Zeek reader did not exhaust input: " << sys.render(err));
-    if (!expect_eof && err)
+    if (expect_timeout && err != ec::timeout)
+      FAIL("Zeek reader did not time out: " << sys.render(err));
+    if (!expect_eof && !expect_timeout && err)
       FAIL("Zeek reader failed to parse input: " << sys.render(err));
     if (num != num_events)
       FAIL("Zeek reader only produced " << num << " events, expected "
@@ -216,10 +220,11 @@ struct fixture : fixtures::deterministic_actor_system {
     return slices;
   }
 
-  std::vector<table_slice_ptr> read(std::string_view input, size_t slice_size,
-                                    size_t num_events, bool expect_eof = true) {
+  std::vector<table_slice_ptr>
+  read(std::string_view input, size_t slice_size, size_t num_events,
+       bool expect_eof = true, bool expect_timeout = false) {
     return read(std::make_unique<std::istringstream>(std::string{input}),
-                slice_size, num_events, expect_eof);
+                slice_size, num_events, expect_eof, expect_timeout);
   }
 };
 
@@ -324,7 +329,9 @@ TEST(zeek reader - continous stream with partial slice) {
   std::vector<table_slice_ptr> slices;
   std::thread t([&] {
     bool expect_eof = false;
-    slices = read(std::make_unique<std::istream>(&buf), 100, 10, expect_eof);
+    bool expect_timeout = true;
+    slices = read(std::make_unique<std::istream>(&buf), 100, 10, expect_eof,
+                  expect_timeout);
   });
   // Write less than one full slice, leaving the pipe open.
   result

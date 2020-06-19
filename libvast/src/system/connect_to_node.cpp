@@ -43,9 +43,6 @@ caf::expected<actor>
 connect_to_node(scoped_actor& self, const caf::settings& opts) {
   // Fetch values from config.
   auto id = get_or(opts, "system.node-id", defaults::system::node_id);
-  auto db_dir
-    = get_or(opts, "system.db-directory", defaults::system::db_directory);
-  auto abs_dir = path{db_dir}.complete();
   endpoint node_endpoint;
   auto endpoint_str
     = get_or(opts, "system.endpoint", defaults::system::endpoint);
@@ -80,8 +77,8 @@ connect_to_node(scoped_actor& self, const caf::settings& opts) {
     return mm.remote_actor(node_endpoint.host, node_endpoint.port.number());
   }();
   if (result)
-    VAST_VERBOSE(self, "successfully connected to",
-                 node_endpoint.host << ':' << to_string(node_endpoint.port));
+    VAST_VERBOSE(self, "successfully connected to", node_endpoint.host, ':',
+                 to_string(node_endpoint.port));
   return result;
 }
 

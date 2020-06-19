@@ -27,7 +27,6 @@
 #include "vast/event.hpp"
 #include "vast/format/zeek.hpp"
 #include "vast/system/archive.hpp"
-#include "vast/system/data_store.hpp"
 #include "vast/system/source.hpp"
 #include "vast/system/type_registry.hpp"
 #include "vast/table_slice.hpp"
@@ -46,7 +45,7 @@ behavior dummy_sink(event_based_actor* self, size_t num_events, actor overseer) 
   return {
     [=](stream<table_slice_ptr> in) {
       self->unbecome();
-      self->send(overseer, ok_atom::value);
+      self->send(overseer, atom::ok_v);
       self->make_sink(
         in,
         [=](event_buffer&) {
@@ -71,12 +70,11 @@ template <class Base>
 struct importer_fixture : Base {
   importer_fixture(size_t table_slice_size) : slice_size(table_slice_size) {
     using vast::system::archive_type;
-    MESSAGE("spawn importer + store");
+    MESSAGE("spawn importer");
     this->directory /= "importer";
-    store = this->self->spawn(system::data_store<std::string, data>);
-    importer = this->self->spawn(system::importer, this->directory, slice_size,
-                                 archive_type{}, store, caf::actor{},
-                                 vast::system::type_registry_type{});
+    importer
+      = this->self->spawn(system::importer, this->directory, archive_type{},
+                          caf::actor{}, vast::system::type_registry_type{});
   }
 
   ~importer_fixture() {
@@ -89,7 +87,7 @@ struct importer_fixture : Base {
 
   auto add_sink() {
     auto snk = make_sink();
-    anon_send(importer, add_atom::value, snk);
+    anon_send(importer, atom::add_v, snk);
     fetch_ok();
     return snk;
   }
@@ -109,7 +107,9 @@ struct importer_fixture : Base {
     bf::reader reader{vast::defaults::system::table_slice_type, caf::settings{},
                       std::move(stream)};
     return this->self->spawn(system::source<bf::reader>, std::move(reader),
-                             slice_size, caf::none);
+                             slice_size, caf::none,
+                             vast::system::type_registry_type{}, vast::schema{},
+                             std::string{}, vast::system::accountant_type{});
   }
 
   // Checks whether two event buffers are equal.
@@ -125,7 +125,6 @@ struct importer_fixture : Base {
 
   size_t slice_size;
   actor importer;
-  system::key_value_store_type<std::string, data> store;
 };
 
 } // namespace <anonymous>
@@ -145,7 +144,7 @@ struct deterministic_fixture : deterministic_fixture_base {
 
   void fetch_ok() override {
     run();
-    expect((atom_value), from(_).to(self).with(ok_atom::value));
+    expect((atom_value), from(_).to(self).with(atom::ok::value));
   }
 
   auto fetch_result() {
@@ -199,7 +198,7 @@ TEST(deterministic importer with one sink and zeek source) {
   MESSAGE("spawn zeek source");
   auto src = make_zeek_source();
   consume_message();
-  self->send(src, system::sink_atom::value, importer);
+  self->send(src, atom::sink_v, importer);
   MESSAGE("loop until importer becomes idle");
   run();
   MESSAGE("verify results");
@@ -213,7 +212,7 @@ TEST(deterministic importer with two sinks and zeek source) {
   MESSAGE("spawn zeek source");
   auto src = make_zeek_source();
   consume_message();
-  self->send(src, system::sink_atom::value, importer);
+  self->send(src, atom::sink_v, importer);
   MESSAGE("loop until importer becomes idle");
   run();
   MESSAGE("verify results");
@@ -229,7 +228,7 @@ TEST(deterministic importer with one sink and failing zeek source) {
   MESSAGE("spawn zeek source");
   auto src = make_zeek_source();
   consume_message();
-  self->send(src, system::sink_atom::value, importer);
+  self->send(src, atom::sink_v, importer);
   MESSAGE("loop until first ack_batch");
   if (!allow((upstream_msg::ack_batch), from(importer).to(src)))
     sched.run_once();
@@ -267,12 +266,12 @@ using nondeterministic_fixture_base
 
 struct nondeterministic_fixture : nondeterministic_fixture_base {
   nondeterministic_fixture()
-    : nondeterministic_fixture_base(vast::defaults::system::table_slice_size) {
-      // nop
+    : nondeterministic_fixture_base(vast::defaults::import::table_slice_size) {
+    // nop
   }
 
   void fetch_ok() override {
-    self->receive([](ok_atom) {
+    self->receive([](atom::ok) {
       // nop
     });
   }
@@ -319,7 +318,7 @@ TEST(nondeterministic importer with one sink and zeek source) {
   add_sink();
   MESSAGE("spawn zeek source");
   auto src = make_zeek_source();
-  self->send(src, system::sink_atom::value, importer);
+  self->send(src, atom::sink_v, importer);
   MESSAGE("verify results");
   verify(fetch_result(), zeek_conn_log);
 }
@@ -330,7 +329,7 @@ TEST(nondeterministic importer with two sinks and zeek source) {
   add_sink();
   MESSAGE("spawn zeek source");
   auto src = make_zeek_source();
-  self->send(src, system::sink_atom::value, importer);
+  self->send(src, atom::sink_v, importer);
   MESSAGE("verify results");
   auto result = fetch_result();
   MESSAGE("got first result");

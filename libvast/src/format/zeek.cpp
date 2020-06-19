@@ -14,7 +14,9 @@
 #include "vast/format/zeek.hpp"
 
 #include "vast/attribute.hpp"
+#include "vast/concept/parseable/to.hpp"
 #include "vast/concept/parseable/vast/port.hpp"
+#include "vast/concept/parseable/vast/time.hpp"
 #include "vast/concept/printable/numeric.hpp"
 #include "vast/concept/printable/to_string.hpp"
 #include "vast/concept/printable/vast/data.hpp"
@@ -33,6 +35,7 @@
 #include "vast/type.hpp"
 
 #include <caf/none.hpp>
+#include <caf/settings.hpp>
 
 #include <fstream>
 #include <iomanip>
@@ -212,10 +215,17 @@ void add_hash_index_attribute(record_type& layout) {
 
 } // namespace
 
-reader::reader(caf::atom_value table_slice_type,
-               const caf::settings& /*options*/,
+reader::reader(caf::atom_value table_slice_type, const caf::settings& options,
                std::unique_ptr<std::istream> in)
   : super(table_slice_type) {
+  if (auto read_timeout_arg = caf::get_if<std::string>(&options, "import.read-"
+                                                                 "timeout")) {
+    if (auto read_timeout = to<decltype(read_timeout_)>(*read_timeout_arg))
+      read_timeout_ = *read_timeout;
+    else
+      VAST_WARNING(this, "cannot set read-timeout to", *read_timeout_arg,
+                   "as it is not a valid duration");
+  }
   if (in != nullptr)
     reset(std::move(in));
 }
@@ -295,19 +305,26 @@ caf::error reader::read_impl(size_t max_events, size_t max_slice_size,
   std::vector<data> xs;
   // Counts successfully parsed records.
   size_t produced = 0;
-  // Loop until reaching EOF or the configured limit of records.
-  while (produced < max_events) {
-    // Advance line range and check for EOF. (In the first iteration, the
-    // current line is the last line of the header)
-    // If we already have some events, set a read timeout to ensure downstream
-    // sees them even if there are currently no further events in the stream.
-    if (builder_->rows() > 0) {
-      bool timeout = lines_->next_timeout(
-        vast::defaults::import::shared::partial_slice_read_timeout);
-      if (timeout)
-        return finish(f);
-    } else {
+  bool timeout = false;
+  auto next_line = [&, start = std::chrono::steady_clock::now()] {
+    auto remaining = start + read_timeout_ - std::chrono::steady_clock::now();
+    if (remaining < std::chrono::steady_clock::duration::zero())
+      return true;
+    if (!builder_ || builder_->rows() == 0) {
       lines_->next();
+      return false;
+    }
+    return lines_->next_timeout(remaining);
+  };
+  // Loop until reaching EOF, a timeout, or the configured limit of records.
+  for (; produced < max_events; timeout = next_line()) {
+    // We must check not only for a timeout but also whether any events were
+    // produced to work around CAF's assumption that sources are always able to
+    // generate events. Once `caf::stream_source` can handle empty batches
+    // gracefully, the second check should be removed.
+    if (timeout && produced > 0) {
+      VAST_DEBUG(this, "reached input timeout at line", lines_->line_number());
+      return finish(f, ec::timeout);
     }
     if (lines_->done())
       return finish(f, make_error(ec::end_of_input, "input exhausted"));
@@ -316,6 +333,7 @@ caf::error reader::read_impl(size_t max_events, size_t max_slice_size,
     if (line.empty()) {
       // Ignore empty lines.
       VAST_DEBUG(this, "ignores empty line at", lines_->line_number());
+      continue;
     } else if (detail::starts_with(line, "#separator")) {
       // We encountered a new log file.
       if (auto err = finish(f))
@@ -506,7 +524,7 @@ caf::error reader::parse_header() {
   // Add #index=hash attribute for fields where it makes sense.
   add_hash_index_attribute(layout_);
   for (auto i = 0u; i < layout_.fields.size(); ++i)
-    VAST_DEBUG(this, "     ", i << ')', layout_.fields[i].name << ':',
+    VAST_DEBUG(this, "     ", i, ')', layout_.fields[i].name, ':',
                layout_.fields[i].type);
   // After having modified layout attributes, we no longer make changes to the
   // type and can now safely copy it.
@@ -586,7 +604,7 @@ public:
 
   bool operator()(Iterator& out, const view<std::string>& str) const {
     for (auto c : str)
-      if (!std::isprint(c) || c == separator || c == set_separator) {
+      if (std::iscntrl(c) || c == separator || c == set_separator) {
         auto hex = detail::byte_to_hex(c);
         *out++ = '\\';
         *out++ = 'x';

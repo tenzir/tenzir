@@ -15,15 +15,14 @@
 
 #include "vast/system/query_supervisor.hpp"
 
-#include "vast/test/test.hpp"
-
 #include "vast/test/fixtures/actor_system.hpp"
+#include "vast/test/test.hpp"
 
 #include "vast/concept/parseable/to.hpp"
 #include "vast/concept/parseable/vast/expression.hpp"
 #include "vast/expression.hpp"
+#include "vast/fwd.hpp"
 #include "vast/ids.hpp"
-#include "vast/system/atoms.hpp"
 
 using namespace vast;
 
@@ -33,7 +32,7 @@ caf::behavior dummy_evaluator(caf::event_based_actor* self, ids x) {
   return {
     [=](const caf::actor& client) {
       self->send(client, x);
-      return system::done_atom::value;
+      return atom::done_v;
     }
   };
 }
@@ -47,7 +46,7 @@ TEST(lookup) {
   auto sv = sys.spawn(system::query_supervisor, self);
   run();
   expect((caf::atom_value, caf::actor),
-         from(sv).to(self).with(system::worker_atom::value, sv));
+         from(sv).to(self).with(atom::worker_v, sv));
   MESSAGE("spawn evaluators");
   auto e0 = sys.spawn(dummy_evaluator, make_ids({0, 2, 4, 6, 8}));
   auto e1 = sys.spawn(dummy_evaluator, make_ids({1, 7}));
@@ -62,11 +61,11 @@ TEST(lookup) {
   ids result;
   while (!done)
     self->receive([&](const ids& x) { result |= x; },
-                  [&](system::done_atom) { done = true; });
+                  [&](atom::done) { done = true; });
   CHECK_EQUAL(result, make_ids({{0, 9}}));
   MESSAGE("after completion, the supervisor should register itself again");
   expect((caf::atom_value, caf::actor),
-         from(sv).to(self).with(system::worker_atom::value, sv));
+         from(sv).to(self).with(atom::worker_v, sv));
 }
 
 FIXTURE_SCOPE_END()

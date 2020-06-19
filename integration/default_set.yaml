@@ -109,23 +109,23 @@ tests:
         input: data/zeek/conn.log.gz
       - command: export ascii 'resp_h == 192.168.1.104'
       # import some more to make sure accounting data is in the system.
-      - command: import -b zeek
+      - command: import -b -s 10 zeek
         input: data/zeek/conn.log.gz
-      - command: import -b zeek
+      - command: import -b -s 1000 zeek
         input: data/zeek/conn.log.gz
-      - command: import -b zeek
+      - command: import -b -s 100000 zeek
         input: data/zeek/conn.log.gz
-      - command: import -b zeek
+      - command: import -b -s 1 -n 242 zeek
         input: data/zeek/conn.log.gz
       - command: status
-        transformation: jq '.node.index.statistics.layouts | del(."vast.metrics".count)'
+        transformation: jq '.node.index.statistics.layouts | del(."vast.metrics")'
   Server Zeek multiple imports:
     tags: [server, import-export, zeek]
     fixture: ServerTester
     steps:
-      - command: import zeek
+      - command: import -b zeek
         input: data/zeek/conn.log.gz
-      - command: import zeek
+      - command: import -b zeek
         input: data/zeek/dns.log.gz
       - command: export ascii 'resp_h == 192.168.1.104'
       - command: export ascii 'zeek.conn.id.resp_h == 192.168.1.104'
@@ -169,7 +169,7 @@ tests:
   Node json zeek conn:
     tags: [node, import-export, zeek, json]
     steps:
-      - command: -N import json -s @./misc/schema/zeek-conn.schema -t zeek.conn
+      - command: -N import json -s @./misc/schema/zeek-conn.schema -t zeek.conn.custom
         input: data/json/conn.log.json.gz
       - command: -N export ascii 'duration > 6s'
       - command: -N export ascii '#timestamp >= 2011-08-15T03:48'
@@ -265,12 +265,6 @@ tests:
         input: data/zeek/conn.log.gz
       - command: -N export -n 10 arrow '#type == "zeek.conn"'
         transformation: python @./misc/scripts/print-arrow.py
-  Type Registry:
-    tags: [import]
-    steps:
-      - command: -N import -n 1 test
-      - command: -N status
-        transformation: jq '.node."type-registry".statistics'
   Import syslog:
     tags: [syslog, import]
     steps:
@@ -281,18 +275,26 @@ tests:
     tags: [explore, zeek]
     fixture: ServerTester
     steps:
-      - command: import zeek
+      - command: import -b zeek
         input: data/zeek/conn.log.gz
       - command: explore --after=3min 'uid == "Yaix3QBP3Xg"'
-  # These are a stress tests for the deduplication: The query selects every
-  # event, and the huge timebox ensures that every event is included in
-  # the context of every other event.
+  # The first queries are stress tests for the deduplication: The query
+  # selects every event, and the huge timebox ensures that every event
+  # is included in the context of every other event.
   Explore Suricata With Overlap:
     tags: [explore, suricata]
     steps:
       - command: -N import suricata
         input: data/suricata/eve.json
       - command: -N explore --before=10years --after=10years '#type == /suricata.*/'
+      - command: -N explore --max-events=3 --before=10years --after=10years '#type == /suricata.*/'
+        transformation: wc -l | tr -d ' '
+      - command: -N explore --max-events-query=1 --before=10years --after=10years '#type == /suricata.*/'
+        transformation: wc -l | tr -d ' '
+      - command: -N explore --max-events-query=3 --before=0s --after=1ns '#type == /suricata.*/'
+        transformation: wc -l | tr -d ' '
+      - command: -N explore --max-events-query=1 --max-events-context=2 --before=10years --after=10years '#type == /suricata.*/'
+        transformation: wc -l | tr -d ' '
   # TODO(ch15579): Re-enable this test once the slow zeek export is fixed.
   # Explore Zeek With Overlap:
   #   tags: [explore, zeek]
@@ -308,3 +310,11 @@ tests:
       - command: -N import zeek
         input: data/zeek/dns.log.gz
       - command: -N explore --by='id.orig_h' --after=1s --before=0s 'zeek.dns.query == "survey.112.2o7.net"'
+  Heterogenous JSONL import:
+    tags: [import, json, sysmon]
+    steps:
+      - command: -N import json
+        input: data/json/sysmon.json
+      - command: -N status
+        transformation: jq '.node.index.statistics.layouts | del(."vast.metrics")'
+      - command: -N export json '"®" in :string'

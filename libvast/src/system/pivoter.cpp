@@ -18,8 +18,8 @@
 #include "vast/concept/printable/vast/expression.hpp"
 #include "vast/detail/string.hpp"
 #include "vast/expression.hpp"
+#include "vast/fwd.hpp"
 #include "vast/logger.hpp"
-#include "vast/system/atoms.hpp"
 #include "vast/system/exporter.hpp"
 #include "vast/table_slice.hpp"
 
@@ -52,14 +52,13 @@ common_field(const pivoter_state& st, const record_type& indicator) {
   // updated type registry is available to feed the algorithm above.
   std::string edge;
   VAST_TRACE(st.self, VAST_ARG(st.target), VAST_ARG(indicator.name()));
-  if (detail::starts_with(st.target, "suricata") || st.target == "pcap.packet"
-      || detail::starts_with(st.target, "netflow"))
-    edge = "community_id";
-  else if (detail::starts_with(st.target, "zeek")) {
+  if (detail::starts_with(st.target, "zeek")) {
     if (detail::starts_with(indicator.name(), "zeek"))
       edge = "uid";
     else
       edge = "community_id";
+  } else {
+    edge = "community_id";
   }
   for (auto& i : indicator.fields) {
     if (i.name == edge) {
@@ -99,62 +98,61 @@ caf::behavior pivoter(caf::stateful_actor<pivoter_state>* self, caf::actor node,
                "outstanding requests:", st.running_exporters);
     quit_if_done();
   });
-  return {[=](vast::table_slice_ptr slice) {
-            auto& st = self->state;
-            auto pivot_field = common_field(st, slice->layout());
-            if (!pivot_field)
-              return;
-            VAST_DEBUG(self, "uses", *pivot_field, "to extract", st.target,
-                       "events");
-            auto column = slice->column(pivot_field->name);
-            auto xs = set{};
-            for (size_t i = 0; i < column->rows(); ++i) {
-              auto data = materialize((*column)[i]);
-              auto x = caf::get_if<std::string>(&data);
-              // Skip if no value
-              if (!x)
-                continue;
-              // Skip if id was already requested
-              if (st.requested_ids.count(*x) > 0)
-                continue;
-              xs.insert(*x);
-              st.requested_ids.insert(*x);
-            }
-            if (xs.empty()) {
-              VAST_DEBUG(self, "already queried for all", pivot_field->name);
-              return;
-            }
-            auto expr = conjunction{
-              predicate{attribute_extractor{type_atom::value}, equal,
-                        data{st.target}},
-              predicate{key_extractor{pivot_field->name}, in, data{xs}}};
-            // TODO(ch9411): Drop the conversion to a string when node actors can
-            //               be spawned without going through an invocation.
-            auto query = to_string(expr);
-            VAST_DEBUG(self, "queries for", xs.size(), pivot_field->name);
-            VAST_TRACE(self, "spawns new exporter with query", query);
-            auto exporter_invocation
-              = command::invocation{{}, "spawn exporter", {query}};
-            self->send(st.node, exporter_invocation);
-            st.running_exporters++;
-          },
-          [=](caf::actor exp) {
-            VAST_DEBUG(self, "registers exporter", exp);
-            auto& st = self->state;
-            self->monitor(exp);
-            self->send(exp, system::sink_atom::value, st.sink);
-            self->send(exp, system::run_atom::value);
-          },
-          [=]([[maybe_unused]] std::string name, query_status) {
-            VAST_DEBUG(self, "received final status from", name);
-            self->state.initial_query_completed = true;
-            quit_if_done();
-          },
-          [=](sink_atom, const caf::actor& sink) {
-            VAST_DEBUG(self, "registers sink", sink);
-            auto& st = self->state;
-            st.sink = sink;
-          }};
+  return {
+    [=](vast::table_slice_ptr slice) {
+      auto& st = self->state;
+      auto pivot_field = common_field(st, slice->layout());
+      if (!pivot_field)
+        return;
+      VAST_DEBUG(self, "uses", *pivot_field, "to extract", st.target, "events");
+      auto column = slice->column(pivot_field->name);
+      auto xs = set{};
+      for (size_t i = 0; i < column->rows(); ++i) {
+        auto data = materialize((*column)[i]);
+        auto x = caf::get_if<std::string>(&data);
+        // Skip if no value
+        if (!x)
+          continue;
+        // Skip if id was already requested
+        if (st.requested_ids.count(*x) > 0)
+          continue;
+        xs.insert(*x);
+        st.requested_ids.insert(*x);
+      }
+      if (xs.empty()) {
+        VAST_DEBUG(self, "already queried for all", pivot_field->name);
+        return;
+      }
+      auto expr = conjunction{
+        predicate{attribute_extractor{atom::type_v}, equal, data{st.target}},
+        predicate{key_extractor{pivot_field->name}, in, data{xs}}};
+      // TODO(ch9411): Drop the conversion to a string when node actors can
+      //               be spawned without going through an invocation.
+      auto query = to_string(expr);
+      VAST_DEBUG(self, "queries for", xs.size(), pivot_field->name);
+      VAST_TRACE(self, "spawns new exporter with query", query);
+      auto exporter_invocation = invocation{{}, "spawn exporter", {query}};
+      self->send(st.node, exporter_invocation);
+      st.running_exporters++;
+    },
+    [=](caf::actor exp) {
+      VAST_DEBUG(self, "registers exporter", exp);
+      auto& st = self->state;
+      self->monitor(exp);
+      self->send(exp, atom::sink_v, st.sink);
+      self->send(exp, atom::run_v);
+    },
+    [=]([[maybe_unused]] std::string name, query_status) {
+      VAST_DEBUG(self, "received final status from", name);
+      self->state.initial_query_completed = true;
+      quit_if_done();
+    },
+    [=](atom::sink, const caf::actor& sink) {
+      VAST_DEBUG(self, "registers sink", sink);
+      auto& st = self->state;
+      st.sink = sink;
+    },
+  };
 }
 
 } // namespace vast::system

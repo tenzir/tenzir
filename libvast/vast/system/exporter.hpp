@@ -67,7 +67,7 @@ struct exporter_state {
   std::vector<table_slice_ptr> results;
 
   /// Stores the time point for when this actor got started via 'run'.
-  std::chrono::steady_clock::time_point start;
+  std::chrono::system_clock::time_point start;
 
   /// Stores various meta information about the progress we made on the query.
   query_status query;
