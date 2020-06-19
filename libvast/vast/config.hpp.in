@@ -1,7 +1,6 @@
 #pragma once
 
 #cmakedefine01 VAST_ENABLE_ASSERTIONS
-#cmakedefine01 VAST_HAVE_GPERFTOOLS
 #cmakedefine01 VAST_HAVE_PCAP
 #cmakedefine01 VAST_HAVE_ARROW
 #cmakedefine01 VAST_HAVE_BROCCOLI
