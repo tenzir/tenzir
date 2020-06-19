@@ -11,6 +11,10 @@ Every entry has a category for which we use the following visual abbreviations:
 
 ## Unreleased
 
+- ⚠️ `vast spawn profiler` was removed, along with the `Gperftools` and
+  `tcmalloc` integrations. They were not properly maintained, and will be
+  replaced in the future. [#939](https://github.com/tenzir/vast/939)
+
 - 🎁 The meta index now uses Bloom filters for equality queries involving IP
   addresses. This especially accellerates queries where the user wants to know
   whether a certain IP address exists in the entire database.
