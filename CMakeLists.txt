@@ -296,12 +296,6 @@ if ("${CMAKE_CXX_COMPILER_ID}" MATCHES "GNU")
     set(EXTRA_FLAGS "${EXTRA_FLAGS} -D_GLIBCXX_USE_C99_MATH")
     set(EXTRA_FLAGS "${EXTRA_FLAGS} -D_GLIBCXX_USE_C99_MATH_TR1")
   endif ()
-  if (VAST_USE_TCMALLOC)
-    # GCC makes some optimizations assuming it is using its own, built-in
-    # malloc; that assumption obviously isn't true with tcmalloc.
-    set(EXTRA_FLAGS "${EXTRA_FLAGS} -fno-builtin-malloc -fno-builtin-calloc")
-    set(EXTRA_FLAGS "${EXTRA_FLAGS} -fno-builtin-realloc -fno-builtin-free")
-  endif ()
 elseif ("${CMAKE_CXX_COMPILER_ID}" MATCHES "Clang")
   if ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "AppleClang")
     message(STATUS "Using Clang that ships with XCode")
@@ -648,19 +642,6 @@ if (PCAP_FOUND)
   endif ()
 endif ()
 
-if (NOT Gperftools_ROOT_DIR AND VAST_PREFIX)
-  set(Gperftools_ROOT_DIR ${VAST_PREFIX})
-endif ()
-find_package(Gperftools QUIET)
-if (GPERFTOOLS_FOUND)
-  set(VAST_HAVE_GPERFTOOLS true)
-  if (NOT BUILD_SHARED_LIBS)
-    provide_find_module(Gperftools)
-    string(APPEND VAST_FIND_DEPENDENCY_LIST
-           "\nfind_package(Gperftools REQUIRED QUIET)")
-  endif ()
-endif ()
-
 if (NOT VAST_NO_ARROW)
   if (NOT ARROW_ROOT_DIR AND VAST_PREFIX)
     set(ARROW_ROOT_DIR ${VAST_PREFIX})
@@ -914,11 +895,9 @@ display(CAF_FOUND "${caf_dir}" caf_summary)
 display(BROKER_FOUND "${broker_dir}" broker_summary)
 display(Arrow_FOUND "${arrow_dir}" arrow_summary)
 display(PCAP_FOUND "${PCAP_INCLUDE_DIR}" pcap_summary)
-display(GPERFTOOLS_FOUND "${GPERFTOOLS_INCLUDE_DIR}" perftools_summary)
 display(DOXYGEN_FOUND yes doxygen_summary)
 display(PANDOC_FOUND yes pandoc_summary)
 display(VAST_USE_JEMALLOC "${jemalloc_INCLUDE_DIR}" jemalloc_summary)
-display(VAST_USE_TCMALLOC yes tcmalloc_summary)
 display(VAST_USE_OPENSSL yes openssl_summary)
 display(BUILD_UNIT_TESTS yes build_tests_summary)
 display(VAST_RELOCATABLE_INSTALL yes relocatable_install_summary)
@@ -954,12 +933,10 @@ set(summary
     "\nArrow:               ${arrow_summary}"
     "\nBroker:              ${broker_summary}"
     "\nPCAP:                ${pcap_summary}"
-    "\nGperftools:          ${perftools_summary}"
     "\nDoxygen:             ${doxygen_summary}"
     "\npandoc:              ${pandoc_summary}"
     "\n"
     "\njemalloc:            ${jemalloc_summary}"
-    "\ntcmalloc:            ${tcmalloc_summary}"
     "\nOpenSSL:             ${openssl_summary}"
     "\n"
     "\n================================================================")

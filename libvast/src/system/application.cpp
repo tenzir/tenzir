@@ -309,12 +309,6 @@ auto make_spawn_command() {
                                                     "request (deprecated)"));
   spawn->add_subcommand("index", "creates a new index", "",
                         add_index_opts(opts()));
-  spawn->add_subcommand("profiler", "creates a new profiler", "",
-                        opts()
-                          .add<bool>("cpu,c", "start the CPU profiler")
-                          .add<bool>("heap,h", "start the heap profiler")
-                          .add<size_t>("resolution,r", "seconds between "
-                                                       "measurements"));
   spawn->add_subcommand(make_spawn_source_command());
   spawn->add_subcommand(make_spawn_sink_command());
   return spawn;

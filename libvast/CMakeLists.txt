@@ -112,7 +112,6 @@ set(libvast_sources
     src/system/partition.cpp
     src/system/pivot_command.cpp
     src/system/pivoter.cpp
-    src/system/profiler.cpp
     src/system/query_processor.cpp
     src/system/query_supervisor.cpp
     src/system/read_query.cpp
@@ -132,7 +131,6 @@ set(libvast_sources
     src/system/spawn_node.cpp
     src/system/spawn_or_connect_to_node.cpp
     src/system/spawn_pivoter.cpp
-    src/system/spawn_profiler.cpp
     src/system/spawn_sink.cpp
     src/system/spawn_source.cpp
     src/system/spawn_type_registry.cpp
@@ -207,16 +205,6 @@ endif ()
 
 if (VAST_USE_JEMALLOC)
   target_link_libraries(libvast PRIVATE jemalloc::jemalloc_)
-endif ()
-
-# Always link with -lprofile if we have Gperftools.
-if (GPERFTOOLS_FOUND)
-  target_link_libraries(libvast PRIVATE gperftools::profiler)
-endif ()
-
-# Only link against tcmalloc if requested.
-if (GPERFTOOLS_FOUND AND VAST_USE_PERFTOOLS_HEAP_PROFILER)
-  target_link_libraries(libvast PRIVATE gperftools::tcmalloc)
 endif ()
 
 if (HAVE_CXX_ATOMICS_WITH_LIB)
