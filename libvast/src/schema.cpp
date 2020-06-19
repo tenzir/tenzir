@@ -19,6 +19,7 @@
 #include "vast/concept/printable/to_string.hpp"
 #include "vast/concept/printable/vast/schema.hpp"
 #include "vast/concept/printable/vast/type.hpp"
+#include "vast/error.hpp"
 #include "vast/event_types.hpp"
 #include "vast/filesystem.hpp"
 #include "vast/json.hpp"
@@ -28,13 +29,16 @@
 
 namespace vast {
 
-optional<schema> schema::merge(const schema& s1, const schema& s2) {
+caf::expected<schema> schema::merge(const schema& s1, const schema& s2) {
   auto result = s2;
   for (auto& t : s1) {
     if (auto u = s2.find(t.name())) {
       if (t != *u && t.name() == u->name())
         // Type clash: cannot accomodate two types with same name.
-        return {};
+        return make_error(ec::format_error,
+                          "type clash: cannot accomodate two types with the "
+                          "same name:",
+                          t.name());
     } else {
       result.types_.push_back(t);
     }
@@ -223,10 +227,9 @@ caf::expected<schema> load_schema(const std::vector<path>& schema_paths) {
             }
             if (auto merged = schema::merge(directory_schema, *schema))
               directory_schema = std::move(*merged);
-            else {
-              VAST_ERROR_ANON(__func__, "type clash in schema");
-              continue;
-            }
+            else
+              return make_error(ec::format_error, merged.error().context(),
+                                "in schema file", f);
           }
         }
       }
