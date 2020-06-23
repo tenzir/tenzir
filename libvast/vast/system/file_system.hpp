@@ -38,7 +38,9 @@ struct filesystem_statistics {
 
 // clang-format off
 
-/// The interface for file system I/O.
+/// The interface for file system I/O. The filesystem actor implementation must
+/// interpret all operations that contain paths *relative* to its own root
+/// directory.
 using file_system_type = caf::typed_actor<
   // Writes a chunk of data to a given path. Creates intermediate directories
   // if needed.

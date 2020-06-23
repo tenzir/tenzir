@@ -33,7 +33,8 @@ struct posix_file_system_state {
 
 /// A filesystem implemented with POSIX system calls.
 /// @param self The actor handle.
-/// @param root The filesystem root.
+/// @param root The filesystem root. The actor prepends this path to all
+///             operations that include a path parameter.
 /// @returns The actor behavior.
 file_system_type::behavior_type posix_file_system(
   file_system_type::stateful_pointer<posix_file_system_state> self, path root);
