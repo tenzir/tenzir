@@ -53,6 +53,16 @@ jobs:
     env:
       CC: ${{ matrix.os.cc }}
       CXX: ${{ matrix.os.cxx }}
+      CMAKE_GENERATOR: Ninja
+      CMAKE_MAKE_PROGRAM: ninja
+      CMAKE_C_COMPILER_LAUNCHER: ccache
+      CMAKE_CXX_COMPILER_LAUNCHER: ccache
+      CCACHE_HASH_DIR: true
+      CCACHE_UNIFY: true
+      CCACHE_SLOPPINESS: 'file_macro,time_macros'
+      CCACHE_DIR: '${{ github.workspace }}/.ccache'
+      CCACHE_COMPRESS: true
+      CCACHE_COMPRESSLEVEL: 6
       BUILD_DIR: build
     steps:
       - uses: actions/checkout@v2
@@ -82,7 +92,7 @@ jobs:
         if: matrix.os.tag == 'Ubuntu'
         run: |
           sudo apt-get -qq update
-          sudo apt-get -qqy install ninja-build libpcap-dev libssl-dev libatomic1 lsb-release
+          sudo apt-get -qqy install ninja-build libpcap-dev libssl-dev libatomic1 lsb-release ccache
           # Install Apache Arrow (c.f. https://arrow.apache.org/install/)
           wget https://apache.bintray.com/arrow/$(lsb_release --id --short | tr 'A-Z' 'a-z')/apache-arrow-archive-keyring-latest-$(lsb_release --codename --short).deb
           sudo apt-get -qqy install ./apache-arrow-archive-keyring-latest-$(lsb_release --codename --short).deb
@@ -98,7 +108,7 @@ jobs:
           HOMEBREW_NO_AUTO_UPDATE: 1
         run: |
           brew --version
-          brew install libpcap tcpdump rsync pandoc apache-arrow pkg-config ninja
+          brew install libpcap tcpdump rsync pandoc apache-arrow pkg-config ninja ccache
 
       - name: Configure Environment
         id: configure_env
@@ -111,14 +121,25 @@ jobs:
           echo "::set-env name=PACKAGE_NAME::$PACKAGE_NAME"
           echo "::set-env name=BUILD_DIR::$BUILD_DIR"
 
+      - name: Fetch ccache Cache
+        uses: actions/cache@v2
+        with:
+          path: .ccache
+          key: ccache-${{ matrix.os.tag }}-${{ matrix.os.compiler }}-${{ matrix.configure.tag }}-${{ github.ref }}-${{ github.sha }}
+          restore-keys: |
+            ccache-${{ matrix.os.tag }}-${{ matrix.os.compiler }}-${{ matrix.configure.tag }}-${{ github.ref }}-${{ github.sha }}
+            ccache-${{ matrix.os.tag }}-${{ matrix.os.compiler }}-${{ matrix.configure.tag }}-${{ github.ref }}
+            ccache-${{ matrix.os.tag }}-${{ matrix.os.compiler }}-${{ matrix.configure.tag }}-${{ github.base_ref }}
+            ccache-${{ matrix.os.tag }}-${{ matrix.os.compiler }}-${{ matrix.configure.tag }}
+
       - name: Configure
         run: |
           python --version
           pip --version
           "$CC" --version
           "$CXX" --version
+          ccache --show-stats
           ./configure \
-            --generator=Ninja \
             --prefix="${PWD}/opt/vast" \
             --build-dir="$BUILD_DIR" \
             --package-name="$PACKAGE_NAME" \
