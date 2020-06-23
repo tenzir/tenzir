@@ -138,7 +138,11 @@ jobs:
           pip --version
           "$CC" --version
           "$CXX" --version
+          ccache --version
           ccache --show-stats
+          # --show-config is a relatively new ccache option and not available
+          # in the ccache version installed via apt, so we ignore failure.
+          ccache --show-config || true
           ./configure \
             --prefix="${PWD}/opt/vast" \
             --build-dir="$BUILD_DIR" \
