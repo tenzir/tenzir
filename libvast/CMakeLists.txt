@@ -372,6 +372,7 @@ set(tests
     test/system/evaluator.cpp
     test/system/explorer.cpp
     test/system/exporter.cpp
+    test/system/filesystem.cpp
     test/system/importer.cpp
     test/system/index.cpp
     test/system/indexer.cpp
