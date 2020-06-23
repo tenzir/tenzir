@@ -131,11 +131,11 @@ arrow_table_slice::serialize_impl(caf::binary_serializer& sink) const {
   if (rows() == 0)
     return caf::none;
   VAST_ASSERT(batch_ != nullptr);
-  auto schema = batch_->schema();
-  auto st = arrow::ipc::RecordBatchStreamWriter::Open(&output_stream, schema);
-  if (!st.ok())
+  auto writer_result
+    = arrow::ipc::NewStreamWriter(&output_stream, batch_->schema());
+  if (!writer_result.ok())
     return ec::unspecified;
-  auto writer = std::move(*st);
+  auto writer = std::move(*writer_result);
   if (!writer->WriteRecordBatch(*batch_).ok())
     return ec::unspecified;
   return caf::none;
