@@ -15,6 +15,7 @@
 #include "vast/system/posix_file_system.hpp"
 
 #include "vast/chunk.hpp"
+#include "vast/detail/assert.hpp"
 #include "vast/io/read.hpp"
 #include "vast/io/write.hpp"
 
@@ -30,6 +31,7 @@ file_system_type::behavior_type posix_file_system(
   return {
     [=](atom::write, const path& filename,
         chunk_ptr chk) -> caf::result<atom::ok> {
+      VAST_ASSERT(chk != nullptr);
       if (auto err = io::write(root / filename, as_bytes(chk))) {
         ++self->state.stats.writes.failed;
         return err;
@@ -63,15 +65,15 @@ file_system_type::behavior_type posix_file_system(
       caf::dictionary<caf::config_value> result;
       result["type"] = "POSIX";
       auto& ops = put_dictionary(result, "operations");
-      auto put = [&](auto& name, auto& stats) {
+      auto add_stats = [&](auto& name, auto& stats) {
         auto& dict = put_dictionary(ops, name);
-        caf::put(dict, "successful", stats.successful);
-        caf::put(dict, "failed", stats.failed);
-        caf::put(dict, "bytes", stats.bytes);
+        dict["successful"] = stats.successful;
+        dict["failed"] = stats.failed;
+        dict["bytes"] = stats.bytes;
       };
-      put("writes", self->state.stats.writes);
-      put("reads", self->state.stats.reads);
-      put("mmaps", self->state.stats.mmaps);
+      add_stats("writes", self->state.stats.writes);
+      add_stats("reads", self->state.stats.reads);
+      add_stats("mmaps", self->state.stats.mmaps);
       return result;
     },
   };
