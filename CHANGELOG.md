@@ -11,6 +11,10 @@ Every entry has a category for which we use the following visual abbreviations:
 
 ## Unreleased
 
+- 🎁 The output format for the `explore` and `pivot` commands can now be set
+  using the `explore.format` and `pivot.format` options respectively. Both
+  default to JSON. [#921](https://github.com/tenzir/vast/921)
+
 - 🎁 The meta index now uses Bloom filters for equality queries involving IP
   addresses. This especially accellerates queries where the user wants to know
   whether a certain IP address exists in the entire database.
@@ -52,10 +56,10 @@ Every entry has a category for which we use the following visual abbreviations:
   additionally convert from JSON strings to VAST internal data types.
   [#891](https://github.com/tenzir/vast/pull/891)
 
-- 🎁 VAST now supports /etc/vast/vast.conf as an additional fallback for the
+- 🎁 VAST now supports `/etc/vast/vast.conf` as an additional fallback for the
   configuration file. The following file locations are looked at in order: Path
   specified on the command line via `--config=path/to/vast.conf`, `vast.conf` in
-  current working directory, `${INSATLL_PREFIX}/etc/vast/vast.conf`, and
+  current working directory, `${INSTALL_PREFIX}/etc/vast/vast.conf`, and
   `/etc/vast/vast.conf`. [#898](https://github.com/tenzir/vast/pull/898)
 
 ## [2020.05.28]
