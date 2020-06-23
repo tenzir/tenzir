@@ -87,9 +87,8 @@ append_cache_entry() {
 # Set defaults
 builddir=build
 CMakeCacheEntries=""
-append_cache_entry CMAKE_INSTALL_PREFIX   PATH      /usr/local
-append_cache_entry CMAKE_BUILD_TYPE       STRING    RelWithDebInfo
-append_cache_entry VAST_USE_TCMALLOC      BOOL      no
+append_cache_entry CMAKE_INSTALL_PREFIX PATH   ${CMAKE_INSTALL_PREFIX:-/usr/local}
+append_cache_entry CMAKE_BUILD_TYPE     STRING ${CMAKE_BUILD_TYPE:-RelWithDebInfo}
 
 # Parse custom environment variable to initialize CMakeGenerator.
 if [ -n "$CMAKE_GENERATOR" ]; then
