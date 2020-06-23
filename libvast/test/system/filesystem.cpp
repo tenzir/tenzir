@@ -94,7 +94,7 @@ TEST(status) {
   self->request(fs, caf::infinite, atom::read_v, path{"not-there"})
     .receive(
       [&](const chunk_ptr&) { FAIL("should not receive chunk on failure"); },
-      [&](const caf::error& err) {
+      [&](const caf::error&) {
         // expected
       });
   self->request(fs, caf::infinite, atom::status_v)
