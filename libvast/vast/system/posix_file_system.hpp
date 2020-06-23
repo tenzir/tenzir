@@ -24,6 +24,9 @@ namespace vast::system {
 /// The state for the POSIX filesystem.
 /// @relates posix_file_system
 struct posix_file_system_state {
+  /// Statistics about filesystem operations.
+  filesystem_statistics stats;
+
   /// The actor name.
   static inline const char* name = "posix-file-system";
 };

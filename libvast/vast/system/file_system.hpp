@@ -19,7 +19,22 @@
 #include <caf/replies_to.hpp>
 #include <caf/typed_actor.hpp>
 
+#include <cstdint>
+
 namespace vast::system {
+
+/// Statistics about filesystem operations.
+struct filesystem_statistics {
+  struct ops_statistics {
+    uint64_t successful = 0;
+    uint64_t failed = 0;
+    uint64_t bytes = 0;
+  };
+
+  ops_statistics writes;
+  ops_statistics reads;
+  ops_statistics mmaps;
+};
 
 // clang-format off
 

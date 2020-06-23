@@ -21,6 +21,7 @@
 #include <caf/config_value.hpp>
 #include <caf/dictionary.hpp>
 #include <caf/result.hpp>
+#include <caf/settings.hpp>
 
 namespace vast::system {
 
@@ -29,22 +30,48 @@ file_system_type::behavior_type posix_file_system(
   return {
     [=](atom::write, const path& filename,
         chunk_ptr chk) -> caf::result<atom::ok> {
-      if (auto err = io::write(root / filename, as_bytes(chk)))
+      if (auto err = io::write(root / filename, as_bytes(chk))) {
+        ++self->state.stats.writes.failed;
         return err;
-      return atom::ok_v;
+      } else {
+        ++self->state.stats.writes.successful;
+        ++self->state.stats.writes.bytes += chk->size();
+        return atom::ok_v;
+      }
     },
     [=](atom::read, const path& filename) -> caf::result<chunk_ptr> {
-      if (auto bytes = io::read(root / filename))
+      if (auto bytes = io::read(root / filename)) {
+        ++self->state.stats.reads.successful;
+        ++self->state.stats.reads.bytes += bytes->size();
         return chunk::make(std::move(*bytes));
-      else
+      } else {
+        ++self->state.stats.reads.failed;
         return bytes.error();
+      }
     },
-    [=](atom::mmap, const path& filename) {
-      return chunk::mmap(root / filename);
+    [=](atom::mmap, const path& filename) -> caf::result<chunk_ptr> {
+      if (auto chk = chunk::mmap(root / filename)) {
+        ++self->state.stats.mmaps.successful;
+        ++self->state.stats.mmaps.bytes += chk->size();
+        return chk;
+      } else {
+        ++self->state.stats.mmaps.failed;
+        return nullptr;
+      }
     },
     [=](atom::status) {
       caf::dictionary<caf::config_value> result;
-      // TODO: fill in reads, writes, mmaps, etc.
+      result["type"] = "POSIX";
+      auto& ops = put_dictionary(result, "operations");
+      auto put = [&](auto& name, auto& stats) {
+        auto& dict = put_dictionary(ops, name);
+        caf::put(dict, "successful", stats.successful);
+        caf::put(dict, "failed", stats.failed);
+        caf::put(dict, "bytes", stats.bytes);
+      };
+      put("writes", self->state.stats.writes);
+      put("reads", self->state.stats.reads);
+      put("mmaps", self->state.stats.mmaps);
       return result;
     },
   };
