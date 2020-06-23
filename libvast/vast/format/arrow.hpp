@@ -13,6 +13,7 @@
 
 #pragma once
 
+#include "vast/defaults.hpp"
 #include "vast/format/writer.hpp"
 #include "vast/fwd.hpp"
 #include "vast/type.hpp"
@@ -31,6 +32,8 @@ namespace vast::format::arrow {
 /// An Arrow writer.
 class writer : public format::writer {
 public:
+  using defaults = vast::defaults::export_::arrow;
+
   using output_stream_ptr = std::shared_ptr<::arrow::io::OutputStream>;
 
   using batch_writer_ptr = std::shared_ptr<::arrow::ipc::RecordBatchWriter>;

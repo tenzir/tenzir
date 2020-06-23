@@ -31,7 +31,7 @@ namespace vast::system {
 
 /// Default implementation for export sub-commands. Compatible with Bro and MRT
 /// formats.
-template <class Writer, class Defaults>
+template <class Writer, class Defaults = typename Writer::defaults>
 caf::message writer_command(const invocation& inv, caf::actor_system& sys) {
   VAST_TRACE(inv);
   auto& options = inv.options;
