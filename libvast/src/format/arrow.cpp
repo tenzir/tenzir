@@ -85,8 +85,12 @@ bool writer::layout(const record_type& x) {
   current_layout_ = x;
   auto schema = arrow_table_slice_builder::make_arrow_schema(x);
   current_builder_ = arrow_table_slice_builder::make(x);
-  using stream_writer = ::arrow::ipc::RecordBatchStreamWriter;
-  return stream_writer::Open(out_.get(), schema, &current_batch_writer_).ok();
+  if (auto writer_result = ::arrow::ipc::NewStreamWriter(out_.get(), schema);
+      writer_result.ok()) {
+    current_batch_writer_ = std::move(*writer_result);
+    return true;
+  }
+  return false;
 }
 
 caf::error writer::write_arrow_batches(const arrow_table_slice& x) {
