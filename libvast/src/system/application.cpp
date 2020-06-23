@@ -108,6 +108,7 @@ auto make_explore_command() {
     "explore", "explore context around query results",
     documentation::vast_explore,
     opts("?explore")
+      .add<std::string>("format", "output format (default: JSON)")
       .add<std::string>("after,A", "include all records up to this much"
                                    " time after each result")
       .add<std::string>("before,B", "include all records up to this much"
@@ -229,7 +230,9 @@ auto make_peer_command() {
 auto make_pivot_command() {
   auto pivot = std::make_unique<command>(
     "pivot", "extracts related events of a given type",
-    documentation::vast_pivot, make_pcap_options("?pivot"));
+    documentation::vast_pivot,
+    make_pcap_options("?pivot").add<std::string>("format", "output format "
+                                                           "(default: JSON)"));
   return pivot;
 }
 
