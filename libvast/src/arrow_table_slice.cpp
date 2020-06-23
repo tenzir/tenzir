@@ -100,10 +100,12 @@ public:
   }
 
   arrow::Result<std::shared_ptr<arrow::Buffer>> Read(int64_t nbytes) override {
-    std::shared_ptr<arrow::Buffer> out;
-    ARROW_RETURN_NOT_OK(arrow::AllocateBuffer(nbytes, &out));
-    ARROW_RETURN_NOT_OK(Read(nbytes, out->mutable_data()));
-    return out;
+    auto buffer_result = arrow::AllocateBuffer(nbytes);
+    if (!buffer_result.ok())
+      return buffer_result.status();
+    auto buffer = std::move(*buffer_result);
+    ARROW_RETURN_NOT_OK(Read(nbytes, buffer->mutable_data()));
+    return buffer;
   }
 
 private:
@@ -129,12 +131,11 @@ arrow_table_slice::serialize_impl(caf::binary_serializer& sink) const {
   if (rows() == 0)
     return caf::none;
   VAST_ASSERT(batch_ != nullptr);
-  std::shared_ptr<arrow::ipc::RecordBatchWriter> writer;
-  auto schema = batch_->schema();
-  auto st = arrow::ipc::RecordBatchStreamWriter::Open(&output_stream, schema,
-                                                      &writer);
-  if (!st.ok())
+  auto writer_result
+    = arrow::ipc::NewStreamWriter(&output_stream, batch_->schema());
+  if (!writer_result.ok())
     return ec::unspecified;
+  auto writer = std::move(*writer_result);
   if (!writer->WriteRecordBatch(*batch_).ok())
     return ec::unspecified;
   return caf::none;
@@ -146,10 +147,10 @@ caf::error arrow_table_slice::deserialize(caf::deserializer& source) {
     batch_ = nullptr;
     return caf::none;
   }
-  std::shared_ptr<arrow::RecordBatchReader> reader;
-  auto st = arrow::ipc::RecordBatchStreamReader::Open(&input_stream, &reader);
-  if (!st.ok())
+  auto reader_result = arrow::ipc::RecordBatchStreamReader::Open(&input_stream);
+  if (!reader_result.ok())
     return ec::unspecified;
+  auto reader = std::move(*reader_result);
   if (!reader->ReadNext(&batch_).ok())
     return ec::unspecified;
   return caf::none;
