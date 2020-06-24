@@ -56,14 +56,25 @@ struct importer_state {
 
   void send_report();
 
-  /// Stores the id offset for the next slice.
-  id next_id = 0u;
+  caf::error bump_boundary();
+
+  /// @returns the next unused id and increments the position by its argument.
+  id next_id(uint64_t advance);
 
   /// @returns the number of currently available IDs.
   id available_ids() const noexcept;
 
   /// @returns various status metrics.
   caf::dictionary<caf::config_value> status() const;
+
+  /// Stores the id offset for the next slice.
+  id next_id_ = 0u;
+
+  /// Stores the id block boundary for persisting the id_space.
+  /// When next_id_ reaches this value, the boundary gets bumped and synchronized
+  /// to the state file on disk. When the importer spawns, it reads the value,
+  /// initializes next_id_ with it, and bumps the boundary immediately.
+  id id_boundary;
 
   /// State directory.
   path dir;
