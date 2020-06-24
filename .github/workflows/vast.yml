@@ -76,7 +76,8 @@ jobs:
           git -c "http.extraheader=$auth_header" -c protocol.version=2 submodule update --init --force --recursive
           git fetch origin +refs/tags/*:refs/tags/*
 
-      - uses: actions/setup-python@v1
+      - name: Setup Python
+        uses: actions/setup-python@v1
         with:
           python-version: '3.7'
 
@@ -88,7 +89,7 @@ jobs:
           service_account_email: ${{ secrets.GCP_SA_EMAIL }}
           service_account_key: ${{ secrets.GCP_SA_KEY }}
 
-      - name: Install Ubuntu Dependencies
+      - name: Install Dependencies (Ubuntu)
         if: matrix.os.tag == 'Ubuntu'
         run: |
           sudo apt-get -qq update
@@ -99,7 +100,7 @@ jobs:
           sudo apt-get -qq update
           sudo apt-get -qqy install libarrow-dev
 
-      - name: Install macOS Dependencies
+      - name: Install Dependencies (macOS)
         if: matrix.os.tag == 'macOS'
         env:
           HOMEBREW_GITHUB_API_TOKEN: ${{ github.token }}
@@ -108,50 +109,48 @@ jobs:
           HOMEBREW_NO_AUTO_UPDATE: 1
         run: |
           brew --version
-          brew install libpcap tcpdump rsync pandoc apache-arrow pkg-config ninja ccache
+          brew install libpcap tcpdump rsync pandoc apache-arrow pkg-config ninja ccache gnu-sed
 
       - name: Configure Environment
         id: configure_env
         run: |
           PACKAGE_NAME="$(echo "vast-$(git describe)-$(uname -s)-${{ matrix.configure.tag }}-${{ matrix.os.compiler }}" | awk '{ print tolower($0) }')"
           BUILD_DIR="build"
-          ## the upload artifact action cannot resolve environment variables
+          ## The upload artifact action cannot resolve environment variables.
           echo "::set-output name=package_name::$PACKAGE_NAME"
           echo "::set-output name=build_dir::$BUILD_DIR"
           echo "::set-env name=PACKAGE_NAME::$PACKAGE_NAME"
           echo "::set-env name=BUILD_DIR::$BUILD_DIR"
-
-      - name: Export Slug Variables
-        run: |
+          # Export slug variables for the cache action.
           slug_ref() {
             echo "$1" |
               tr "[:upper:]" "[:lower:]" |
-              sed -r 's#refs/[^\/]*/##;s/[~\^]+//g;s/[^a-zA-Z0-9.]+/-/g;s/^-+\|-+$//g;s/^-*//;s/-*$//' |
+              ${{ matrix.os.tag == 'macOS' && 'gsed' || 'sed' }} -r 's#refs/[^\/]*/##;s/[~\^]+//g;s/[^a-zA-Z0-9.]+/-/g;s/^-+\|-+$//g;s/^-*//;s/-*$//' |
               cut -c1-63
           }
-          echo ::set-env name=GITHUB_REF_SLUG::"$(slug_ref "$GITHUB_REF")"
-          echo ::set-env name=GITHUB_HEAD_REF_SLUG::"$(slug_ref "$GITHUB_HEAD_REF")"
-          echo ::set-env name=GITHUB_BASE_REF_SLUG::"$(slug_ref "$GITHUB_BASE_REF")"
+          echo ::set-env name=CACHE_REF_SLUG::"$(slug_ref "$GITHUB_REF")"
+          echo ::set-env name=CACHE_HEAD_REF_SLUG::"$(slug_ref "$GITHUB_HEAD_REF")"
+          echo ::set-env name=CACHE_BASE_REF_SLUG::"$(slug_ref "$GITHUB_BASE_REF")"
 
-      - name: Fetch ccache Cache (pull_request)
+      - name: Fetch ccache Cache (Pull Request)
         if: github.event_name == 'pull_request'
         uses: actions/cache@v2
         with:
           path: .ccache
-          key: ccache-${{ matrix.os.tag }}-${{ matrix.os.compiler }}-${{ matrix.configure.tag }}-${{ env.GITHUB_HEAD_REF_SLUG }}-${{ github.sha }}
+          key: ccache-${{ matrix.os.tag }}-${{ matrix.os.compiler }}-${{ matrix.configure.tag }}-${{ env.CACHE_HEAD_REF_SLUG }}-${{ github.sha }}
           restore-keys: |
-            ccache-${{ matrix.os.tag }}-${{ matrix.os.compiler }}-${{ matrix.configure.tag }}-${{ env.GITHUB_HEAD_REF_SLUG }}
-            ccache-${{ matrix.os.tag }}-${{ matrix.os.compiler }}-${{ matrix.configure.tag }}-${{ env.GITHUB_BASE_REF_SLUG }}
+            ccache-${{ matrix.os.tag }}-${{ matrix.os.compiler }}-${{ matrix.configure.tag }}-${{ env.CACHE_HEAD_REF_SLUG }}
+            ccache-${{ matrix.os.tag }}-${{ matrix.os.compiler }}-${{ matrix.configure.tag }}-${{ env.CACHE_BASE_REF_SLUG }}
             ccache-${{ matrix.os.tag }}-${{ matrix.os.compiler }}-${{ matrix.configure.tag }}
 
-      - name: Fetch ccache Cache (push)
+      - name: Fetch ccache Cache (Push)
         if: github.event_name == 'push'
         uses: actions/cache@v2
         with:
           path: .ccache
-          key: ccache-${{ matrix.os.tag }}-${{ matrix.os.compiler }}-${{ matrix.configure.tag }}-${{ env.GITHUB_REF_SLUG }}-${{ github.sha }}
+          key: ccache-${{ matrix.os.tag }}-${{ matrix.os.compiler }}-${{ matrix.configure.tag }}-${{ env.CACHE_REF_SLUG }}-${{ github.sha }}
           restore-keys: |
-            ccache-${{ matrix.os.tag }}-${{ matrix.os.compiler }}-${{ matrix.configure.tag }}-${{ env.GITHUB_REF_SLUG }}
+            ccache-${{ matrix.os.tag }}-${{ matrix.os.compiler }}-${{ matrix.configure.tag }}-${{ env.CACHE_REF_SLUG }}
             ccache-${{ matrix.os.tag }}-${{ matrix.os.compiler }}-${{ matrix.configure.tag }}
 
       - name: Configure
@@ -161,7 +160,8 @@ jobs:
           "$CC" --version
           "$CXX" --version
           ccache --version
-          ccache --show-stats
+          # Zero the cache statistics (but not the configuration options).
+          ccache --zero-stats
           # --show-config is a relatively new ccache option and not available
           # in the ccache version installed via apt, so we ignore failure.
           ccache --show-config || true
@@ -170,11 +170,16 @@ jobs:
             --build-dir="$BUILD_DIR" \
             --package-name="$PACKAGE_NAME" \
             ${{ matrix.os.extra-flags }} \
-            ${{ github.event.action == 'published' && matrix.configure.flags || matrix.configure.ci-flags }}
+            ${{ github.event.action == 'published' && matrix.configure.flags || matrix.configure.ci-flags }}
 
       - name: Compile All Targets
         run: |
           cmake --build "$BUILD_DIR" --target all
+
+      - name: Show ccache Statistics
+        run: |
+          # Print statistics counter IDs and corresponding values.
+          ccache --show-stats
 
       - name: Run Unit Tests
         env:
