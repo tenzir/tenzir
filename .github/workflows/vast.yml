@@ -133,7 +133,8 @@ jobs:
           echo ::set-env name=GITHUB_HEAD_REF_SLUG::"$(slug_ref "$GITHUB_HEAD_REF")"
           echo ::set-env name=GITHUB_BASE_REF_SLUG::"$(slug_ref "$GITHUB_BASE_REF")"
 
-      - name: Fetch ccache Cache
+      - name: Fetch ccache Cache (pull_request)
+        if: github.event_name == 'pull_request'
         uses: actions/cache@v2
         with:
           path: .ccache
@@ -141,17 +142,16 @@ jobs:
           restore-keys: |
             ccache-${{ matrix.os.tag }}-${{ matrix.os.compiler }}-${{ matrix.configure.tag }}-${{ env.GITHUB_HEAD_REF_SLUG }}
             ccache-${{ matrix.os.tag }}-${{ matrix.os.compiler }}-${{ matrix.configure.tag }}-${{ env.GITHUB_BASE_REF_SLUG }}
-            ccache-${{ matrix.os.tag }}-${{ matrix.os.compiler }}-${{ matrix.configure.tag }}-${{ env.GITHUB_REF_SLUG }}
             ccache-${{ matrix.os.tag }}-${{ matrix.os.compiler }}-${{ matrix.configure.tag }}
 
-      - name: Fetch ccache Cache
+      - name: Fetch ccache Cache (push)
+        if: github.event_name == 'push'
         uses: actions/cache@v2
         with:
           path: .ccache
-          key: ccache-${{ matrix.os.tag }}-${{ matrix.os.compiler }}-${{ matrix.configure.tag }}-${{ env.GITHUB_HEAD_REF_SLUG }}-${{ github.sha }}
+          key: ccache-${{ matrix.os.tag }}-${{ matrix.os.compiler }}-${{ matrix.configure.tag }}-${{ env.GITHUB_REF_SLUG }}-${{ github.sha }}
           restore-keys: |
-            ccache-${{ matrix.os.tag }}-${{ matrix.os.compiler }}-${{ matrix.configure.tag }}-${{ env.GITHUB_HEAD_REF_SLUG }}
-            ccache-${{ matrix.os.tag }}-${{ matrix.os.compiler }}-${{ matrix.configure.tag }}-${{ env.GITHUB_BASE_REF_SLUG }}
+            ccache-${{ matrix.os.tag }}-${{ matrix.os.compiler }}-${{ matrix.configure.tag }}-${{ env.GITHUB_REF_SLUG }}
             ccache-${{ matrix.os.tag }}-${{ matrix.os.compiler }}-${{ matrix.configure.tag }}
 
       - name: Configure
