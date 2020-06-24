@@ -18,9 +18,9 @@
 #include "vast/test/fixtures/actor_system_and_events.hpp"
 #include "vast/test/test.hpp"
 
+#include "vast/caf_table_slice.hpp"
 #include "vast/concept/parseable/to.hpp"
 #include "vast/concept/parseable/vast/expression.hpp"
-#include "vast/default_table_slice.hpp"
 #include "vast/table_slice_builder.hpp"
 #include "vast/table_slice_column.hpp"
 #include "vast/type.hpp"
@@ -61,7 +61,7 @@ TEST(integer values) {
   auto col
     = unbox(make_column_index(sys, directory, column_type, caf::settings{}));
   auto rows = make_rows(1, 2, 3, 1, 2, 3, 1, 2, 3);
-  auto slice = default_table_slice::make(layout, rows);
+  auto slice = caf_table_slice::make(layout, rows);
   auto column = table_slice_column{slice, 0};
   col->add(column);
   REQUIRE_EQUAL(slice->rows(), rows.size());

@@ -13,21 +13,9 @@
 
 #include "vast/table_slice.hpp"
 
-#include <unordered_map>
-
-#include <caf/actor_system.hpp>
-#include <caf/actor_system_config.hpp>
-#include <caf/binary_deserializer.hpp>
-#include <caf/deserializer.hpp>
-#include <caf/error.hpp>
-#include <caf/execution_unit.hpp>
-#include <caf/sec.hpp>
-#include <caf/serializer.hpp>
-#include <caf/sum_type.hpp>
-
+#include "vast/caf_table_slice.hpp"
+#include "vast/caf_table_slice_builder.hpp"
 #include "vast/chunk.hpp"
-#include "vast/default_table_slice.hpp"
-#include "vast/default_table_slice_builder.hpp"
 #include "vast/defaults.hpp"
 #include "vast/detail/assert.hpp"
 #include "vast/detail/byte_swap.hpp"
@@ -41,6 +29,19 @@
 #include "vast/table_slice_factory.hpp"
 #include "vast/value.hpp"
 #include "vast/value_index.hpp"
+
+#include <caf/actor_system.hpp>
+#include <caf/actor_system_config.hpp>
+#include <caf/binary_deserializer.hpp>
+#include <caf/deserializer.hpp>
+#include <caf/error.hpp>
+#include <caf/execution_unit.hpp>
+#include <caf/sec.hpp>
+#include <caf/serializer.hpp>
+#include <caf/sum_type.hpp>
+
+#include <unordered_map>
+
 #include <vast/table_slice_builder_factory.hpp>
 
 namespace vast {

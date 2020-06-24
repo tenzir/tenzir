@@ -7,7 +7,7 @@
 #include "vast/test/fixtures/actor_system_and_events.hpp"
 #include "vast/test/test.hpp"
 
-#include "vast/default_table_slice_builder.hpp"
+#include "vast/caf_table_slice_builder.hpp"
 #include "vast/detail/notifying_stream_manager.hpp"
 #include "vast/detail/spawn_container_source.hpp"
 #include "vast/system/exporter.hpp"
@@ -30,7 +30,7 @@ const vast::record_type mock_layout_a = vast::record_type{
 }.name("mock");
 
 vast::table_slice_ptr make_data_a(std::string a, vast::count b, vast::real c) {
-  vast::default_table_slice_builder builder(mock_layout_a);
+  vast::caf_table_slice_builder builder(mock_layout_a);
   builder.append(a);
   builder.append(b);
   builder.append(c);
@@ -46,7 +46,7 @@ const vast::record_type mock_layout_b = vast::record_type{
 
 vast::table_slice_ptr
 make_data_b(std::string a, vast::count b, vast::real c, std::string d) {
-  vast::default_table_slice_builder builder(mock_layout_b);
+  vast::caf_table_slice_builder builder(mock_layout_b);
   builder.append(a);
   builder.append(b);
   builder.append(c);

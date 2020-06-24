@@ -18,6 +18,8 @@ set(libvast_sources
     src/bloom_filter_parameters.cpp
     src/bloom_filter_synopsis.cpp
     src/bool_synopsis.cpp
+    src/caf_table_slice.cpp
+    src/caf_table_slice_builder.cpp
     src/chunk.cpp
     src/column_index.cpp
     src/command.cpp
@@ -27,8 +29,6 @@ set(libvast_sources
     src/concept/hashable/xxhash.cpp
     src/concept/parseable/vast/expression.cpp
     src/data.cpp
-    src/default_table_slice.cpp
-    src/default_table_slice_builder.cpp
     src/defaults.cpp
     src/detail/add_message_types.cpp
     src/detail/adjust_resource_consumption.cpp

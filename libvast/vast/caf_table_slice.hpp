@@ -23,16 +23,16 @@
 
 namespace vast {
 
-/// The default implementation of `table_slice`.
-class default_table_slice : public table_slice {
+/// An implementation of `table_slice` that uses CAF for serialization.
+class caf_table_slice : public table_slice {
 public:
   // -- friends ----------------------------------------------------------------
 
-  friend class default_table_slice_builder;
+  friend class caf_table_slice_builder;
 
   // -- constants --------------------------------------------------------------
 
-  static constexpr caf::atom_value class_id = caf::atom("default");
+  static constexpr caf::atom_value class_id = caf::atom("caf");
 
   // -- static factory functions -----------------------------------------------
 
@@ -43,7 +43,7 @@ public:
 
   // -- factory functions ------------------------------------------------------
 
-  default_table_slice* copy() const final;
+  caf_table_slice* copy() const final;
 
   // -- persistence ------------------------------------------------------------
 
@@ -68,13 +68,13 @@ public:
   }
 
 protected:
-  explicit default_table_slice(table_slice_header header);
+  explicit caf_table_slice(table_slice_header header);
 
 private:
   vector xs_;
 };
 
-/// @relates default_table_slice
-using default_table_slice_ptr = caf::intrusive_cow_ptr<default_table_slice>;
+/// @relates caf_table_slice
+using caf_table_slice_ptr = caf::intrusive_cow_ptr<caf_table_slice>;
 
 } // namespace vast
