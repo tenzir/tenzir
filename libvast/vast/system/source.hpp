@@ -332,7 +332,7 @@ source(caf::stateful_actor<source_state<Reader>>* self, Reader reader,
 template <class Reader>
 caf::behavior default_source(caf::stateful_actor<source_state<Reader>>* self,
                              Reader reader) {
-  auto slice_size = get_or(self->system().config(), "system.table-slice-size",
+  auto slice_size = get_or(self->system().config(), "import.table-slice-size",
                            defaults::import::table_slice_size);
   //  The last five arguments are optional, and not required for the minimum
   //  behavior of the "default" source.

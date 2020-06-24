@@ -104,7 +104,7 @@ struct importer_fixture : Base {
     namespace bf = format::zeek;
     auto stream = unbox(
       vast::detail::make_input_stream(artifacts::logs::zeek::small_conn));
-    bf::reader reader{vast::defaults::system::table_slice_type, caf::settings{},
+    bf::reader reader{vast::defaults::import::table_slice_type, caf::settings{},
                       std::move(stream)};
     return this->self->spawn(system::source<bf::reader>, std::move(reader),
                              slice_size, caf::none,

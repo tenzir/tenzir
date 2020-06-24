@@ -73,7 +73,7 @@ TEST(PCAP read/write 1) {
   caf::put(settings, "import.pcap.read", artifacts::traces::nmap_vsn);
   caf::put(settings, "import.pcap.cutoff", static_cast<uint64_t>(-1));
   caf::put(settings, "import.pcap.max-flows", static_cast<size_t>(5));
-  format::pcap::reader reader{defaults::system::table_slice_type,
+  format::pcap::reader reader{defaults::import::table_slice_type,
                               std::move(settings)};
   size_t events_produces = 0;
   table_slice_ptr slice;
@@ -111,7 +111,7 @@ TEST(PCAP read/write 2) {
   caf::put(settings, "import.pcap.max-flows", static_cast<size_t>(100));
   caf::put(settings, "import.pcap.max-flow-age", static_cast<size_t>(5));
   caf::put(settings, "import.pcap.flow-expiry", static_cast<size_t>(2));
-  format::pcap::reader reader{defaults::system::table_slice_type,
+  format::pcap::reader reader{defaults::import::table_slice_type,
                               std::move(settings)};
   table_slice_ptr slice;
   auto add_slice = [&](const table_slice_ptr& x) {

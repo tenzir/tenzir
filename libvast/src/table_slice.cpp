@@ -138,7 +138,7 @@ make_random_table_slices(size_t num_slices, size_t slice_size,
   // We have no access to the actor system, so we can only pick the default
   // table slice type here. This ignores any user-defined overrides. However,
   // this function is only meant for testing anyways.
-  format::test::reader src{defaults::system::table_slice_type, seed,
+  format::test::reader src{defaults::import::table_slice_type, seed,
                            std::numeric_limits<uint64_t>::max()};
   src.schema(std::move(sc));
   std::vector<table_slice_ptr> result;

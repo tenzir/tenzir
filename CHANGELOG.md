@@ -11,10 +11,16 @@ Every entry has a category for which we use the following visual abbreviations:
 
 ## Unreleased
 
+- ⚠️ The options `system.table-slice-type` and `system.table-slice-size` have
+  been removed, as they duplicated `import.table-slice-type` and
+  `import.table-slice-size` respectively.
+  [#908](https://github.com/tenzir/vast/pull/908)
+  [#951](https://github.com/tenzir/vast/pull/951)
+
 - ⚠️ The `default` table slice type has been renamed to `caf`. It has not been
   the default when built with Apache Arrow support for a while now, and the new
   name more accurately reflects what it is doing.
-  [#948](https://github.com/tenzir/vast/948)
+  [#948](https://github.com/tenzir/vast/pull/948)
 
 - 🎁 The meta index now uses Bloom filters for equality queries involving IP
   addresses. This especially accellerates queries where the user wants to know

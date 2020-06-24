@@ -22,16 +22,6 @@
 
 namespace vast::defaults::import {
 
-caf::atom_value table_slice_type(const caf::actor_system& sys,
-                                 const caf::settings& options) {
-  // The parameter import.table-slice-type overrides system.table-slice-type.
-  if (auto val = caf::get_if<caf::atom_value>(&options,
-                                              "import.table-slice-type"))
-    return *val;
-  return get_or(sys.config(), "system.table-slice-type",
-                system::table_slice_type);
-}
-
 size_t test::seed(const caf::settings& options) {
   std::string cat = category;
   if (auto val = caf::get_if<size_t>(&options, cat + ".seed"))

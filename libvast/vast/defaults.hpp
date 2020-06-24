@@ -37,14 +37,20 @@ constexpr std::string_view read = "-";
 /// Contains constants for the import command.
 namespace import {
 
-/// @returns the table slice type from `options` if available, otherwise the
-///          type configured in the actor system, or ::system::table_slice_type
-///          if no user-defined option is available.
-caf::atom_value table_slice_type(const caf::actor_system& sys,
-                                 const caf::settings& options);
-
 /// Maximum size for sources that generate table slices.
 constexpr size_t table_slice_size = 100;
+
+#if VAST_HAVE_ARROW
+
+/// The default table slice type when arrow is available.
+constexpr caf::atom_value table_slice_type = caf::atom("arrow");
+
+#else // VAST_HAVE_ARROW
+
+/// The default table slice type when arrow is unavailable.
+constexpr caf::atom_value table_slice_type = caf::atom("caf");
+
+#endif // VAST_HAVE_ARROW
 
 /// Maximum number of results.
 constexpr size_t max_events = 0;
@@ -326,18 +332,6 @@ constexpr std::string_view db_directory = "vast.db";
 
 /// Interval between two aging cycles.
 constexpr caf::timespan aging_frequency = std::chrono::hours{24};
-
-#if VAST_HAVE_ARROW
-
-/// The default table slice type when arrow is available.
-constexpr caf::atom_value table_slice_type = caf::atom("arrow");
-
-#else // VAST_HAVE_ARROW
-
-/// The default table slice type when arrow is unavailable.
-constexpr caf::atom_value table_slice_type = caf::atom("caf");
-
-#endif // VAST_HAVE_ARROW
 
 /// Maximum number of events per INDEX partition.
 constexpr size_t max_partition_size = 1'048'576; // 1_Mi
