@@ -23,7 +23,7 @@
 
 namespace vast {
 
-/// The default implementation of `table_slice`.
+/// An implementation of `table_slice` that uses CAF for serialization.
 class caf_table_slice : public table_slice {
 public:
   // -- friends ----------------------------------------------------------------
