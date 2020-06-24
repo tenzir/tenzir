@@ -121,15 +121,37 @@ jobs:
           echo "::set-env name=PACKAGE_NAME::$PACKAGE_NAME"
           echo "::set-env name=BUILD_DIR::$BUILD_DIR"
 
+      - name: Export Slug Variables
+        run: |
+          slug_ref() {
+            echo "$1" |
+              tr "[:upper:]" "[:lower:]" |
+              sed -r 's#refs/[^\/]*/##;s/[~\^]+//g;s/[^a-zA-Z0-9.]+/-/g;s/^-+\|-+$//g;s/^-*//;s/-*$//' |
+              cut -c1-63
+          }
+          echo ::set-env name=GITHUB_REF_SLUG::"$(slug_ref "$GITHUB_REF")"
+          echo ::set-env name=GITHUB_HEAD_REF_SLUG::"$(slug_ref "$GITHUB_HEAD_REF")"
+          echo ::set-env name=GITHUB_BASE_REF_SLUG::"$(slug_ref "$GITHUB_BASE_REF")"
+
       - name: Fetch ccache Cache
         uses: actions/cache@v2
         with:
           path: .ccache
-          key: ccache-${{ matrix.os.tag }}-${{ matrix.os.compiler }}-${{ matrix.configure.tag }}-${{ github.ref }}-${{ github.sha }}
+          key: ccache-${{ matrix.os.tag }}-${{ matrix.os.compiler }}-${{ matrix.configure.tag }}-${{ env.GITHUB_HEAD_REF_SLUG }}-${{ github.sha }}
           restore-keys: |
-            ccache-${{ matrix.os.tag }}-${{ matrix.os.compiler }}-${{ matrix.configure.tag }}-${{ github.ref }}-${{ github.sha }}
-            ccache-${{ matrix.os.tag }}-${{ matrix.os.compiler }}-${{ matrix.configure.tag }}-${{ github.ref }}
-            ccache-${{ matrix.os.tag }}-${{ matrix.os.compiler }}-${{ matrix.configure.tag }}-${{ github.base_ref }}
+            ccache-${{ matrix.os.tag }}-${{ matrix.os.compiler }}-${{ matrix.configure.tag }}-${{ env.GITHUB_HEAD_REF_SLUG }}
+            ccache-${{ matrix.os.tag }}-${{ matrix.os.compiler }}-${{ matrix.configure.tag }}-${{ env.GITHUB_BASE_REF_SLUG }}
+            ccache-${{ matrix.os.tag }}-${{ matrix.os.compiler }}-${{ matrix.configure.tag }}-${{ env.GITHUB_REF_SLUG }}
+            ccache-${{ matrix.os.tag }}-${{ matrix.os.compiler }}-${{ matrix.configure.tag }}
+
+      - name: Fetch ccache Cache
+        uses: actions/cache@v2
+        with:
+          path: .ccache
+          key: ccache-${{ matrix.os.tag }}-${{ matrix.os.compiler }}-${{ matrix.configure.tag }}-${{ env.GITHUB_HEAD_REF_SLUG }}-${{ github.sha }}
+          restore-keys: |
+            ccache-${{ matrix.os.tag }}-${{ matrix.os.compiler }}-${{ matrix.configure.tag }}-${{ env.GITHUB_HEAD_REF_SLUG }}
+            ccache-${{ matrix.os.tag }}-${{ matrix.os.compiler }}-${{ matrix.configure.tag }}-${{ env.GITHUB_BASE_REF_SLUG }}
             ccache-${{ matrix.os.tag }}-${{ matrix.os.compiler }}-${{ matrix.configure.tag }}
 
       - name: Configure
