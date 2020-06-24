@@ -9,7 +9,9 @@ Every entry has a category for which we use the following visual abbreviations:
 - ⚠️ change
 - 🐞 bugfix
 
-## Unreleased
+<!-- ## Unreleased -->
+
+## [2020.06.25]
 
 - ⚠️ The options `system.table-slice-type` and `system.table-slice-size` have
   been removed, as they duplicated `import.table-slice-type` and
@@ -23,21 +25,21 @@ Every entry has a category for which we use the following visual abbreviations:
   [#948](https://github.com/tenzir/vast/pull/948)
 
 - 🎁 The meta index now uses Bloom filters for equality queries involving IP
-  addresses. This especially accellerates queries where the user wants to know
+  addresses. This especially accelerates queries where the user wants to know
   whether a certain IP address exists in the entire database.
-  [#931](https://github.com/tenzir/vast/931)
+  [#931](https://github.com/tenzir/vast/pull/931)
 
 - 🧬 VAST now supports aging out existing data. This feature currently only
   concerns data in the archive. The options `system.aging-frequency` and
   `system.aging-query` configure a query that runs on a regular schedule to
   determine which events to delete. It is also possible to trigger an aging
-  cycle manually. [#929](https://github.com/tenzir/vast/929)
+  cycle manually. [#929](https://github.com/tenzir/vast/pull/929)
 
 - 🎁 The `import` command gained a new `--read-timeout` option that forces data
   to be forwarded to the importer regardless of the internal batching parameters
   and table slices being unfinished. This allows for reducing the latency
   between the `import` command and the node. The default timeout is 10 seconds.
-  [#916](https://github.com/tenzir/vast/916)
+  [#916](https://github.com/tenzir/vast/pull/916)
 
 - 🐞 A bogus import process that assembled table slices with a greater number
   of events than expected by the node was able to lead to wrong query results.
@@ -45,16 +47,16 @@ Every entry has a category for which we use the following visual abbreviations:
 
 - ⚠️ The JSON export format now renders timestamps using strings instead of
   numbers in order to avoid possible loss of precision.
-  [#909](https://github.com/tenzir/vast/909)
+  [#909](https://github.com/tenzir/vast/pull/909)
 
 - 🐞 A use after free bug would sometimes crash the node while it was shutting
   down. [#896](https://github.com/tenzir/vast/pull/896)
 
 - 🐞 The `export json` command now correctly unescapes its output.
-  [#910](https://github.com/tenzir/vast/910)
+  [#910](https://github.com/tenzir/vast/pull/910)
 
 - 🐞 VAST now correctly checks for control characters in inputs.
-  [#910](https://github.com/tenzir/vast/910)
+  [#910](https://github.com/tenzir/vast/pull/910)
 
 - 🎁 VAST now has options to limit the amount of results produced by an
   invocation of `vast explore`. [#882](https://github.com/tenzir/vast/pull/882)
@@ -63,10 +65,10 @@ Every entry has a category for which we use the following visual abbreviations:
   additionally convert from JSON strings to VAST internal data types.
   [#891](https://github.com/tenzir/vast/pull/891)
 
-- 🎁 VAST now supports /etc/vast/vast.conf as an additional fallback for the
+- 🎁 VAST now supports `/etc/vast/vast.conf` as an additional fallback for the
   configuration file. The following file locations are looked at in order: Path
   specified on the command line via `--config=path/to/vast.conf`, `vast.conf` in
-  current working directory, `${INSATLL_PREFIX}/etc/vast/vast.conf`, and
+  current working directory, `${INSTALL_PREFIX}/etc/vast/vast.conf`, and
   `/etc/vast/vast.conf`. [#898](https://github.com/tenzir/vast/pull/898)
 
 ## [2020.05.28]
@@ -580,3 +582,4 @@ This is the first official release.
 [2020.03.26]: https://github.com/tenzir/vast/releases/tag/2020.03.26
 [2020.04.29]: https://github.com/tenzir/vast/releases/tag/2020.04.29
 [2020.05.28]: https://github.com/tenzir/vast/releases/tag/2020.05.28
+[2020.06.25]: https://github.com/tenzir/vast/releases/tag/2020.06.25
