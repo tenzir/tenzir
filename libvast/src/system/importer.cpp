@@ -103,8 +103,9 @@ caf::dictionary<caf::config_value> importer_state::status() const {
   caf::dictionary<caf::config_value> result;
   // Misc parameters.
   result.emplace("available-ids", available_ids());
-  result.emplace("next-id", current.next);
-  result.emplace("block-boundary", current.end);
+  result["ids.available"] = available_ids();
+  result["ids.block.next"] = current.next;
+  result["ids.block.end"] = current.end;
   // General state such as open streams.
   detail::fill_status_map(result, self);
   return result;
