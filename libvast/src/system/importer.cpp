@@ -49,7 +49,6 @@ caf::error importer_state::read_state() {
     std::ifstream state_file{to_string(file)};
     state_file >> current.end;
     state_file >> current.next;
-    // TODO:
     if (!state_file) {
       VAST_WARNING(self, "did not find next id position from the state file; "
                          "detected an irregular shutdown");
