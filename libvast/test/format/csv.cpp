@@ -15,14 +15,13 @@
 
 #define SUITE format
 
-#include "vast/test/test.hpp"
-
 #include "vast/test/fixtures/actor_system.hpp"
 #include "vast/test/fixtures/events.hpp"
+#include "vast/test/test.hpp"
 
+#include "vast/caf_table_slice_builder.hpp"
 #include "vast/concept/parseable/to.hpp"
 #include "vast/concept/parseable/vast.hpp"
-#include "vast/default_table_slice_builder.hpp"
 
 #include <algorithm>
 

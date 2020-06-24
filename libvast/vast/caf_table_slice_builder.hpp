@@ -13,14 +13,14 @@
 
 #pragma once
 
+#include "vast/caf_table_slice.hpp"
 #include "vast/data.hpp"
-#include "vast/default_table_slice.hpp"
 #include "vast/table_slice_builder.hpp"
 
 namespace vast {
 
 /// The default implementation of `table_slice_builder`.
-class default_table_slice_builder : public table_slice_builder {
+class caf_table_slice_builder : public table_slice_builder {
 public:
   // -- member types -----------------------------------------------------------
 
@@ -32,7 +32,7 @@ public:
 
   // -- constructors, destructors, and assignment operators --------------------
 
-  default_table_slice_builder(record_type layout);
+  caf_table_slice_builder(record_type layout);
 
   // -- factory functions ------------------------------------------------------
 
@@ -62,7 +62,7 @@ protected:
 
   std::vector<data> row_;
   size_t col_;
-  std::unique_ptr<default_table_slice> slice_;
+  std::unique_ptr<caf_table_slice> slice_;
 };
 
 } // namespace vast

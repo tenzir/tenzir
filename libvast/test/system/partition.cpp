@@ -13,28 +13,26 @@
 
 #include "vast/system/index_common.hpp"
 #define SUITE partition
+#include "vast/test/fixtures/dummy_index.hpp"
 #include "vast/test/test.hpp"
 
-#include "vast/system/partition.hpp"
-
-#include <caf/atom.hpp>
-#include <caf/behavior.hpp>
-#include <caf/event_based_actor.hpp>
-
+#include "vast/caf_table_slice.hpp"
 #include "vast/concept/parseable/to.hpp"
 #include "vast/concept/parseable/vast/expression.hpp"
 #include "vast/concept/printable/to_string.hpp"
 #include "vast/concept/printable/vast/type.hpp"
-#include "vast/default_table_slice.hpp"
 #include "vast/detail/overload.hpp"
 #include "vast/detail/spawn_container_source.hpp"
 #include "vast/event.hpp"
 #include "vast/ids.hpp"
 #include "vast/system/evaluator.hpp"
 #include "vast/system/indexer.hpp"
+#include "vast/system/partition.hpp"
 #include "vast/table_slice.hpp"
 
-#include "vast/test/fixtures/dummy_index.hpp"
+#include <caf/atom.hpp>
+#include <caf/behavior.hpp>
+#include <caf/event_based_actor.hpp>
 
 using namespace vast;
 using namespace vast::system;
@@ -273,7 +271,7 @@ TEST_DISABLED(integer rows lookup) {
     integer_type col_type;
     record_type layout{{"value", col_type}};
     auto rows = make_rows(1, 2, 3, 1, 2, 3, 1, 2, 3);
-    ingest(default_table_slice::make(layout, rows));
+    ingest(caf_table_slice::make(layout, rows));
     MESSAGE("verify partition content");
     auto res = [&](auto... args) { return make_ids({args...}, rows.size()); };
     CHECK_EQUAL(query(":int == +1"), res(0u, 3u, 6u));

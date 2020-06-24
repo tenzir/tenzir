@@ -11,6 +11,11 @@ Every entry has a category for which we use the following visual abbreviations:
 
 ## Unreleased
 
+- ⚠️ The `default` table slice type has been renamed to `caf`. It has not been
+  the default when built with Apache Arrow support for a while now, and the new
+  name more accurately reflects what it is doing.
+  [#948](https://github.com/tenzir/vast/948)
+
 - 🎁 The meta index now uses Bloom filters for equality queries involving IP
   addresses. This especially accellerates queries where the user wants to know
   whether a certain IP address exists in the entire database.
