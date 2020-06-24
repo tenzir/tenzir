@@ -89,7 +89,8 @@ caf::message import_command(const invocation& inv, caf::actor_system& sys) {
   auto file = caf::get_if<std::string>(&options, category + ".read");
   [[maybe_unused]] auto uds = get_or(options, category + ".uds", false);
   auto type = caf::get_if<std::string>(&options, category + ".type");
-  auto slice_type = defaults::import::table_slice_type(sys, options);
+  auto slice_type = get_or(options, "import.table-slice-type",
+                           defaults::import::table_slice_type);
   auto slice_size = get_or(options, "import.table-slice-size",
                            defaults::import::table_slice_size);
   if (slice_size == 0)

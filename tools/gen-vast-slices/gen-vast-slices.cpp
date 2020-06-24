@@ -121,7 +121,7 @@ slices_vector read_zeek(actor_system& sys) {
   auto slice_size = get_or(sys.config(), "table-slice-size",
                            vast::defaults::import::table_slice_size);
   auto slice_type = get_or(sys.config(), "table-slice-type",
-                           vast::defaults::system::table_slice_type);
+                           vast::defaults::import::table_slice_type);
   auto in = vast::detail::make_input_stream(get_or(sys.config(), "input", "-"),
                                             false);
   auto push_slice = [&](table_slice_ptr x) {

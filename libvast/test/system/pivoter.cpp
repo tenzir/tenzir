@@ -59,7 +59,7 @@ const auto zeek_conn_m57_head = R"__(#separator \x09
 template <class Reader>
 std::vector<table_slice_ptr> inhale(const char* data) {
   auto input = std::make_unique<std::istringstream>(data);
-  Reader reader{defaults::system::table_slice_type, caf::settings{},
+  Reader reader{defaults::import::table_slice_type, caf::settings{},
                 std::move(input)};
   std::vector<table_slice_ptr> slices;
   auto add_slice

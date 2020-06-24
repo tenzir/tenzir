@@ -100,7 +100,7 @@ static std::vector<event> extract(Reader&& reader) {
 template <class Reader>
 static std::vector<event> inhale(const char* filename) {
   auto input = std::make_unique<std::ifstream>(filename);
-  Reader reader{defaults::system::table_slice_type, caf::settings{},
+  Reader reader{defaults::import::table_slice_type, caf::settings{},
                 std::move(input)};
   return extract(reader);
 }
@@ -217,7 +217,7 @@ events::events() {
   REQUIRE_EQUAL(zeek_dns_log.size(), 32u);
   zeek_http_log = inhale<format::zeek::reader>(artifacts::logs::zeek::http);
   REQUIRE_EQUAL(zeek_http_log.size(), 40u);
-  vast::format::test::reader rd{defaults::system::table_slice_type, 42, 1000};
+  vast::format::test::reader rd{defaults::import::table_slice_type, 42, 1000};
   random = extract(rd);
   REQUIRE_EQUAL(random.size(), 1000u);
   ascending_integers = make_ascending_integers(250);
