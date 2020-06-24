@@ -75,9 +75,6 @@ configuration::configuration() {
 #if VAST_USE_OPENCL
   load<opencl::manager>();
 #endif
-  opt_group{custom_options_, "system"}
-    .add<size_t>("table-slice-size",
-                 "maximum size for sources that generate table slices");
   initialize_factories<synopsis, table_slice, table_slice_builder,
                        value_index>();
 #if VAST_HAVE_ARROW

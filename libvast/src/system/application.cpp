@@ -244,7 +244,6 @@ auto make_spawn_source_command() {
     opts()
       .add<std::string>("read,r", "path to input")
       .add<std::string>("schema,s", "path to alternate schema")
-      .add<caf::atom_value>("table-slice,t", "table slice type")
       .add<bool>("uds,d", "treat -w as UNIX domain socket"),
     false);
   spawn_source->add_subcommand(
