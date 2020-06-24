@@ -20,6 +20,7 @@
 #include "vast/detail/fill_status_map.hpp"
 #include "vast/fwd.hpp"
 #include "vast/logger.hpp"
+#include "vast/si_literals.hpp"
 #include "vast/system/type_registry.hpp"
 #include "vast/table_slice.hpp"
 
@@ -38,60 +39,73 @@ importer_state::importer_state(caf::event_based_actor* self_ptr)
 }
 
 importer_state::~importer_state() {
-}
-
-caf::error importer_state::bump_boundary() {
-  while (next_id_ >= id_boundary)
-    id_boundary += 10'000'000;
-  return write_state();
-}
-
-id importer_state::next_id(uint64_t advance) {
-  id pre = next_id_;
-  next_id_ += advance;
-  if (next_id_ >= id_boundary)
-    bump_boundary();
-  return pre;
+  write_state(write_mode::with_next);
 }
 
 caf::error importer_state::read_state() {
-  auto file = dir / "id_boundary";
+  auto file = dir / "current_id_block";
   if (exists(file)) {
     VAST_VERBOSE(self, "reads persistent state from", file);
     std::ifstream state_file{to_string(file)};
-    state_file >> next_id_;
-    if (!state_file)
-      VAST_ERROR(self, "got an invalidly formatted persistence file:", file);
+    state_file >> current.end;
+    state_file >> current.next;
+    // TODO:
+    if (!state_file) {
+      VAST_WARNING(self, "did not find next id position from the state file; "
+                         "detected an irregular shutdown");
+      current.next = current.end;
+    }
   } else {
     VAST_VERBOSE(self, "did not find a state file at", file);
-    next_id_ = 0;
+    current.end = 0;
+    current.next = 0;
   }
-  id_boundary = next_id_;
-  return bump_boundary();
+  return get_next_block();
 }
 
-caf::error importer_state::write_state() {
+caf::error importer_state::write_state(write_mode mode) {
   if (!exists(dir)) {
     auto result = mkdir(dir);
     if (!result)
       return std::move(result.error());
   }
-  std::ofstream state_file{to_string(dir / "id_boundary")};
-  state_file << id_boundary;
-  VAST_VERBOSE(self, "persisted id space caret at", id_boundary);
+  std::ofstream state_file{to_string(dir / "current_id_block")};
+  state_file << current.end;
+  if (mode == write_mode::with_next) {
+    state_file << " " << current.next;
+    VAST_VERBOSE(self, "persisted id block [", current.next, ",", current.end,
+                 ")");
+  } else {
+    VAST_VERBOSE(self, "persisted id block boundary at", current.end);
+  }
   return caf::none;
 }
 
+caf::error importer_state::get_next_block() {
+  using namespace si_literals;
+  while (current.next >= current.end)
+    current.end += 8_Mi;
+  return write_state(write_mode::without_next);
+}
+
+id importer_state::next_id(uint64_t advance) {
+  id pre = current.next;
+  current.next += advance;
+  if (current.next >= current.end)
+    get_next_block();
+  return pre;
+}
+
 id importer_state::available_ids() const noexcept {
-  return max_id - next_id_;
+  return max_id - current.next;
 }
 
 caf::dictionary<caf::config_value> importer_state::status() const {
   caf::dictionary<caf::config_value> result;
   // Misc parameters.
   result.emplace("available-ids", available_ids());
-  result.emplace("next-id", next_id_);
-  result.emplace("id-boundary", id_boundary);
+  result.emplace("next-id", current.next);
+  result.emplace("block-boundary", current.end);
   // General state such as open streams.
   detail::fill_status_map(result, self);
   return result;

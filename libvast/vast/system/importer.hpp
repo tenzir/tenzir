@@ -34,6 +34,25 @@ namespace vast::system {
 struct importer_state {
   // -- member types -----------------------------------------------------------
 
+  /// Used to signal how much information should be persisted in write_state().
+  enum class write_mode : bool {
+    /// Persist the next assignable id, used during a regular shutdown.
+    with_next,
+    /// Persist only the end of the block, used during regular operation to
+    /// prevent state corruption if an irregular shutdown occurs.
+    without_next
+  };
+
+  /// A helper structure to partition the id space into blocks.
+  /// An importer uses one currently active block.
+  struct id_block {
+    /// The next available id of this block.
+    id next;
+
+    /// The last + 1 id of this block.
+    id end;
+  };
+
   /// Type of incoming stream elements.
   using input_type = table_slice_ptr;
 
@@ -52,11 +71,11 @@ struct importer_state {
 
   caf::error read_state();
 
-  caf::error write_state();
+  caf::error write_state(write_mode mode);
 
   void send_report();
 
-  caf::error bump_boundary();
+  caf::error get_next_block();
 
   /// @returns the next unused id and increments the position by its argument.
   id next_id(uint64_t advance);
@@ -67,14 +86,8 @@ struct importer_state {
   /// @returns various status metrics.
   caf::dictionary<caf::config_value> status() const;
 
-  /// Stores the id offset for the next slice.
-  id next_id_ = 0u;
-
-  /// Stores the id block boundary for persisting the id_space.
-  /// When next_id_ reaches this value, the boundary gets bumped and synchronized
-  /// to the state file on disk. When the importer spawns, it reads the value,
-  /// initializes next_id_ with it, and bumps the boundary immediately.
-  id id_boundary;
+  /// The active id block.
+  id_block current;
 
   /// State directory.
   path dir;
