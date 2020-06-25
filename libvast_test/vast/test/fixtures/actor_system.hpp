@@ -31,7 +31,10 @@ namespace fixtures {
 /// Configures the actor system of a fixture with default settings for unit
 /// testing.
 struct test_configuration : vast::system::configuration {
+  using super = vast::system::configuration;
+
   test_configuration();
+  caf::error parse(int argc, char** argv);
 };
 
 /// A fixture with an actor system that uses the default work-stealing
