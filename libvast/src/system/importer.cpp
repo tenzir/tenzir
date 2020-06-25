@@ -48,6 +48,9 @@ caf::error importer_state::read_state() {
     VAST_VERBOSE(self, "reads persistent state from", file);
     std::ifstream state_file{to_string(file)};
     state_file >> current.end;
+    if (!state_file)
+      return make_error(ec::parse_error, "unable to read importer state file",
+                        file.str());
     state_file >> current.next;
     if (!state_file) {
       VAST_WARNING(self, "did not find next ID position in state file; "
