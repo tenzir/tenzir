@@ -14,6 +14,8 @@
 #include "vast/uuid.hpp"
 
 #include "vast/detail/narrow.hpp"
+#include "vast/error.hpp"
+#include "vast/fbs/uuid.hpp"
 
 #include <cstring>
 #include <random>
@@ -107,6 +109,24 @@ bool operator==(const uuid& x, const uuid& y) {
 
 bool operator<(const uuid& x, const uuid& y) {
   return std::lexicographical_compare(x.begin(), x.end(), y.begin(), y.end());
+}
+
+caf::expected<flatbuffers::Offset<fbs::UUID>>
+pack(flatbuffers::FlatBufferBuilder& builder, const uuid& x) {
+  auto data = builder.CreateVector(
+    reinterpret_cast<const uint8_t*>(&*x.begin()), x.size());
+  fbs::UUIDBuilder uuid_builder{builder};
+  uuid_builder.add_data(data);
+  return uuid_builder.Finish();
+}
+
+caf::error unpack(const fbs::UUID& x, uuid& y) {
+  if (x.data()->size() != uuid::num_bytes)
+    return make_error(ec::format_error, "wrong uuid format");
+  span<const byte, uuid::num_bytes> bytes{
+    reinterpret_cast<const byte*>(x.data()->data()), x.data()->size()};
+  y = uuid{bytes};
+  return caf::none;
 }
 
 } // namespace vast
