@@ -132,6 +132,9 @@ jobs:
           echo ::set-env name=CACHE_HEAD_REF_SLUG::"$(slug_ref "$GITHUB_HEAD_REF")"
           echo ::set-env name=CACHE_BASE_REF_SLUG::"$(slug_ref "$GITHUB_BASE_REF")"
 
+      # For 'pull_request' events we want to take the latest build on the PR
+      # branch, or if that fails the latest build from the branch we're merging
+      # into.
       - name: Fetch ccache Cache (Pull Request)
         if: github.event_name == 'pull_request'
         uses: actions/cache@v2
@@ -143,6 +146,7 @@ jobs:
             ccache-${{ matrix.os.tag }}-${{ matrix.os.compiler }}-${{ matrix.configure.tag }}-${{ env.CACHE_BASE_REF_SLUG }}
             ccache-${{ matrix.os.tag }}-${{ matrix.os.compiler }}-${{ matrix.configure.tag }}
 
+      # For 'push' events we want to take the latest build on the branch we pushed to.
       - name: Fetch ccache Cache (Push)
         if: github.event_name == 'push'
         uses: actions/cache@v2
@@ -151,6 +155,17 @@ jobs:
           key: ccache-${{ matrix.os.tag }}-${{ matrix.os.compiler }}-${{ matrix.configure.tag }}-${{ env.CACHE_REF_SLUG }}-${{ github.sha }}
           restore-keys: |
             ccache-${{ matrix.os.tag }}-${{ matrix.os.compiler }}-${{ matrix.configure.tag }}-${{ env.CACHE_REF_SLUG }}
+            ccache-${{ matrix.os.tag }}-${{ matrix.os.compiler }}-${{ matrix.configure.tag }}
+
+      # For 'release' events we want to take the latest master build.
+      - name: Fetch ccache Cache (Release)
+        if: github.event_name == 'release'
+        uses: actions/cache@v2
+        with:
+          path: .ccache
+          key: ccache-${{ matrix.os.tag }}-${{ matrix.os.compiler }}-${{ matrix.configure.tag }}-master-${{ github.sha }}
+          restore-keys: |
+            ccache-${{ matrix.os.tag }}-${{ matrix.os.compiler }}-${{ matrix.configure.tag }}-master
             ccache-${{ matrix.os.tag }}-${{ matrix.os.compiler }}-${{ matrix.configure.tag }}
 
       - name: Configure
