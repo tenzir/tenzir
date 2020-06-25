@@ -321,6 +321,7 @@ set(tests
     test/expression_parseable.cpp
     test/factory.cpp
     test/filesystem.cpp
+    test/flatbuffers.cpp
     test/flow.cpp
     test/format/csv.cpp
     test/format/json.cpp
