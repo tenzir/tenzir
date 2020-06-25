@@ -20,6 +20,7 @@
 #include "vast/detail/fill_status_map.hpp"
 #include "vast/fwd.hpp"
 #include "vast/logger.hpp"
+#include "vast/si_literals.hpp"
 #include "vast/system/type_registry.hpp"
 #include "vast/table_slice.hpp"
 
@@ -38,44 +39,78 @@ importer_state::importer_state(caf::event_based_actor* self_ptr)
 }
 
 importer_state::~importer_state() {
-  write_state();
+  write_state(write_mode::with_next);
 }
 
 caf::error importer_state::read_state() {
-  auto file = dir / "next_id";
+  auto file = dir / "current_id_block";
   if (exists(file)) {
     VAST_VERBOSE(self, "reads persistent state from", file);
-    std::ifstream available{to_string(file)};
-    available >> next_id;
-    if (!available.eof())
-      VAST_ERROR(self, "got an invalidly formatted persistence file:", file);
+    std::ifstream state_file{to_string(file)};
+    state_file >> current.end;
+    if (!state_file)
+      return make_error(ec::parse_error, "unable to read importer state file",
+                        file.str());
+    state_file >> current.next;
+    if (!state_file) {
+      VAST_WARNING(self, "did not find next ID position in state file; "
+                         "irregular shutdown detected");
+      current.next = current.end;
+    }
   } else {
     VAST_VERBOSE(self, "did not find a state file at", file);
+    current.end = 0;
+    current.next = 0;
   }
-  return caf::none;
+  return get_next_block();
 }
 
-caf::error importer_state::write_state() {
+caf::error importer_state::write_state(write_mode mode) {
   if (!exists(dir)) {
     auto result = mkdir(dir);
     if (!result)
       return std::move(result.error());
   }
-  std::ofstream available{to_string(dir / "next_id")};
-  available << next_id;
-  VAST_VERBOSE(self, "persisted id space caret at", next_id);
+  std::ofstream state_file{to_string(dir / "current_id_block")};
+  state_file << current.end;
+  if (mode == write_mode::with_next) {
+    state_file << " " << current.next;
+    VAST_VERBOSE(self, "persisted ID block [", current.next, ",", current.end,
+                 ")");
+  } else {
+    VAST_VERBOSE(self, "persisted ID block boundary at", current.end);
+  }
   return caf::none;
 }
 
+caf::error importer_state::get_next_block(uint64_t required) {
+  using namespace si_literals;
+  while (current.next + required >= current.end)
+    current.end += 8_Mi;
+  return write_state(write_mode::without_next);
+}
+
+id importer_state::next_id(uint64_t advance) {
+  id pre = current.next;
+  id post = pre + advance;
+  if (post >= current.end)
+    get_next_block(advance);
+  current.next = post;
+  VAST_ASSERT(current.next < current.end);
+  return pre;
+}
+
 id importer_state::available_ids() const noexcept {
-  return max_id - next_id;
+  return max_id - current.next;
 }
 
 caf::dictionary<caf::config_value> importer_state::status() const {
   caf::dictionary<caf::config_value> result;
   // Misc parameters.
   result.emplace("available-ids", available_ids());
-  result.emplace("next-id", next_id);
+  result["ids.available"] = available_ids();
+  result["ids.block.next"] = current.next;
+  result["ids.block.end"] = current.end;
   // General state such as open streams.
   detail::fill_status_map(result, self);
   return result;
@@ -126,12 +161,9 @@ caf::behavior importer(importer_actor* self, path dir, archive_type archive,
       VAST_TRACE(VAST_ARG(x));
       auto& st = self->state;
       auto t = timer::start(st.measurement_);
-      VAST_DEBUG(self, "has", st.available_ids(), "IDs available");
       VAST_ASSERT(x->rows() <= static_cast<size_t>(st.available_ids()));
       auto events = x->rows();
-      auto advance = st.next_id + events;
-      x.unshared().offset(st.next_id);
-      st.next_id = advance;
+      x.unshared().offset(st.next_id(events));
       out.push(std::move(x));
       t.stop(events);
     },
