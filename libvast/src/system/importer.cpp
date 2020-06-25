@@ -50,8 +50,8 @@ caf::error importer_state::read_state() {
     state_file >> current.end;
     state_file >> current.next;
     if (!state_file) {
-      VAST_WARNING(self, "did not find next id position from the state file; "
-                         "detected an irregular shutdown");
+      VAST_WARNING(self, "did not find next ID position in state file; "
+                         "irregular shutdown detected");
       current.next = current.end;
     }
   } else {
@@ -72,10 +72,10 @@ caf::error importer_state::write_state(write_mode mode) {
   state_file << current.end;
   if (mode == write_mode::with_next) {
     state_file << " " << current.next;
-    VAST_VERBOSE(self, "persisted id block [", current.next, ",", current.end,
+    VAST_VERBOSE(self, "persisted ID block [", current.next, ",", current.end,
                  ")");
   } else {
-    VAST_VERBOSE(self, "persisted id block boundary at", current.end);
+    VAST_VERBOSE(self, "persisted ID block boundary at", current.end);
   }
   return caf::none;
 }
