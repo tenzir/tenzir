@@ -80,18 +80,20 @@ caf::error importer_state::write_state(write_mode mode) {
   return caf::none;
 }
 
-caf::error importer_state::get_next_block() {
+caf::error importer_state::get_next_block(uint64_t required) {
   using namespace si_literals;
-  while (current.next >= current.end)
+  while (current.next + required >= current.end)
     current.end += 8_Mi;
   return write_state(write_mode::without_next);
 }
 
 id importer_state::next_id(uint64_t advance) {
   id pre = current.next;
-  current.next += advance;
-  if (current.next >= current.end)
-    get_next_block();
+  id post = pre + advance;
+  if (post >= current.end)
+    get_next_block(advance);
+  current.next = post;
+  VAST_ASSERT(current.next < current.end);
   return pre;
 }
 
