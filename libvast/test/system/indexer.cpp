@@ -42,7 +42,8 @@ namespace {
 struct fixture : fixtures::deterministic_actor_system_and_events {
   void init(type col_type) {
     indexer = system::spawn_indexer(self.ptr(), directory / "indexer", col_type,
-                                    caf::settings{}, self, partition_id, &m);
+                                    caf::settings{}, self, partition_id,
+                                    "test indexer");
     run();
   }
 
@@ -100,7 +101,6 @@ struct fixture : fixtures::deterministic_actor_system_and_events {
   size_t num_ids = 0;
 
   uuid partition_id = uuid::random();
-  vast::system::atomic_measurement m;
 
   /// Our actors-under-test.
   actor indexer;

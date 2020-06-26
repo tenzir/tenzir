@@ -207,10 +207,6 @@ if (VAST_USE_JEMALLOC)
   target_link_libraries(libvast PRIVATE jemalloc::jemalloc_)
 endif ()
 
-if (HAVE_CXX_ATOMICS_WITH_LIB)
-  target_link_libraries(libvast PUBLIC atomic)
-endif ()
-
 if (BUILD_SHARED_LIBS AND "${CMAKE_SYSTEM_NAME}" MATCHES "Linux")
   target_link_libraries(libvast PUBLIC dl)
 endif ()

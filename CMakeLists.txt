@@ -404,45 +404,6 @@ endif ()
 include(CheckCXXSourceCompiles)
 include(CheckLibraryExists)
 
-function (check_working_cxx_atomics128 varname)
-  set(OLD_CMAKE_REQUIRED_FLAGS ${CMAKE_REQUIRED_FLAGS})
-  set(CMAKE_REQUIRED_FLAGS "-std=c++11 ${CMAKE_REQUIRED_FLAGS}")
-  check_cxx_source_compiles(
-    "
-#include <atomic>
-#include <cstdint>
-struct sixteen {
-  uint64_t x = 1;
-  int64_t  y = -1;
-};
-std::atomic<sixteen> x;
-int main()
-{
-  auto v = x.load(std::memory_order_relaxed);
-  return std::atomic_is_lock_free(&x);
-}
-"
-    ${varname})
-  set(CMAKE_REQUIRED_FLAGS ${OLD_CMAKE_REQUIRED_FLAGS})
-endfunction (check_working_cxx_atomics128)
-
-check_working_cxx_atomics128(HAVE_CXX_ATOMICS_WITHOUT_LIB)
-if (NOT HAVE_CXX_ATOMICS_WITHOUT_LIB)
-  check_library_exists(atomic __atomic_fetch_add_16 "" HAVE_LIBATOMIC)
-  if (HAVE_LIBATOMIC)
-    list(APPEND CMAKE_REQUIRED_LIBRARIES "atomic")
-    check_working_cxx_atomics128(HAVE_CXX_ATOMICS_WITH_LIB)
-    if (NOT HAVE_CXX_ATOMICS_WITH_LIB)
-      message(FATAL_ERROR "Host compiler must support std::atomic!")
-    endif ()
-  else ()
-    message(
-      STATUS "Host compiler appears to require libatomic, but cannot find it")
-    message(STATUS "Enabling mutex lock workaround")
-    set(VAST_MEASUREMENT_MUTEX_WORKAROUND ON)
-  endif ()
-endif ()
-
 # We prepend our additional flags only if VAST is not the main project we're
 # building, e.g., if we're just linking again libvast.
 if (NOT vast_is_subproject)

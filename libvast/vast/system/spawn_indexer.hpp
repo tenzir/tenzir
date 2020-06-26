@@ -25,12 +25,10 @@ namespace vast::system {
 /// @param index_opts Runtime options to parameterize the value index.
 /// @param index A handle to the index actor.
 /// @param partition_id The partition ID that this INDEXER belongs to.
-/// @param m A pointer to the measuring probe used for perfomance data
-///        accumulation.
+/// @param fqn The fully qualified name of the indexed field.
 /// @returns the new INDEXER actor.
-caf::actor
-spawn_indexer(caf::local_actor* parent, path filename, type column_type,
-              caf::settings index_opts, caf::actor index, uuid partition_id,
-              atomic_measurement* m);
+caf::actor spawn_indexer(caf::local_actor* parent, path filename,
+                         type column_type, caf::settings index_opts,
+                         caf::actor index, uuid partition_id, std::string fqn);
 
 } // namespace vast::system

@@ -4,7 +4,6 @@
 #cmakedefine01 VAST_HAVE_PCAP
 #cmakedefine01 VAST_HAVE_ARROW
 #cmakedefine01 VAST_HAVE_BROCCOLI
-#cmakedefine01 VAST_MEASUREMENT_MUTEX_WORKAROUND
 #cmakedefine01 VAST_USE_JEMALLOC
 #cmakedefine01 VAST_USE_OPENCL
 #cmakedefine01 VAST_USE_OPENSSL

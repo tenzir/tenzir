@@ -14,7 +14,7 @@ ENV BRANCH master
 # Compiler and dependency setup
 RUN apt-get -qq update && apt-get -qqy install \
   build-essential gcc-8 g++-8 ninja-build libbenchmark-dev libpcap-dev \
-  libssl-dev libatomic1 python3-dev python3-pip python3-venv git-core jq tcpdump
+  libssl-dev python3-dev python3-pip python3-venv git-core jq tcpdump
 RUN pip3 install --upgrade pip && pip install --upgrade cmake && \
   cmake --version
 
@@ -41,7 +41,6 @@ LABEL maintainer="engineering@tenzir.com"
 ENV PREFIX /usr/local
 
 COPY --from=builder $PREFIX/ $PREFIX/
-COPY --from=builder /usr/lib/x86_64-linux-gnu/libatomic.so.1 /usr/lib/x86_64-linux-gnu/libatomic.so.1
 RUN apt-get -qq update && apt-get -qq install -y libc++1 libc++abi1 libpcap0.8 \
   openssl
 RUN echo "Adding vast user" && useradd --system --user-group vast

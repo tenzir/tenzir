@@ -16,6 +16,8 @@
 #include "vast/column_index.hpp"
 #include "vast/filesystem.hpp"
 #include "vast/fwd.hpp"
+#include "vast/system/accountant.hpp"
+#include "vast/system/instrumentation.hpp"
 #include "vast/type.hpp"
 #include "vast/uuid.hpp"
 
@@ -23,7 +25,7 @@
 #include <caf/event_based_actor.hpp>
 #include <caf/stateful_actor.hpp>
 
-#include <unordered_map>
+#include <string>
 
 namespace vast::system {
 
@@ -34,9 +36,13 @@ struct indexer_state {
 
   ~indexer_state();
 
+  // -- member functions -------------------------------------------------------
+
   caf::error init(caf::event_based_actor* self, path filename, type column_type,
                   caf::settings index_opts, caf::actor index, uuid partition_id,
-                  atomic_measurement* m);
+                  std::string fqn);
+
+  void send_report();
 
   // -- member variables -------------------------------------------------------
 
@@ -44,9 +50,17 @@ struct indexer_state {
 
   caf::actor index;
 
+  accountant_type accountant;
+
+  caf::event_based_actor* self;
+
   uuid partition_id;
 
-  atomic_measurement* measurement;
+  std::string fqn;
+
+  measurement m;
+
+  bool streaming_done;
 
   static inline const char* name = "indexer";
 };
@@ -58,12 +72,10 @@ struct indexer_state {
 /// @param index_opts Runtime options to parameterize the value index.
 /// @param index A handle to the index actor.
 /// @param partition_id The partition ID that this INDEXER belongs to.
-/// @param m A pointer to the measuring probe used for perfomance data
-///        accumulation.
+/// @param fqn The fully-qualified name of the indexed column.
 /// @returns the initial behavior of the INDEXER.
-caf::behavior
-indexer(caf::stateful_actor<indexer_state>* self, path filename,
-        type column_type, caf::settings index_opts, caf::actor index,
-        uuid partition_id, atomic_measurement* m);
+caf::behavior indexer(caf::stateful_actor<indexer_state>* self, path filename,
+                      type column_type, caf::settings index_opts,
+                      caf::actor index, uuid partition_id, std::string fqn);
 
 } // namespace vast::system

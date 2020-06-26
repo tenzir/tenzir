@@ -19,12 +19,8 @@
 
 #include <caf/meta/type_name.hpp>
 
-#include <atomic>
 #include <chrono>
 #include <cmath>
-#if VAST_MEASUREMENT_MUTEX_WORKAROUND
-#  include <mutex>
-#endif
 
 namespace vast::system {
 
@@ -79,57 +75,6 @@ struct timer {
 private:
   stopwatch::time_point start_ = stopwatch::now();
   measurement& m_;
-};
-
-// Atomic variants
-//
-#if VAST_MEASUREMENT_MUTEX_WORKAROUND
-struct atomic_measurement : public measurement {
-  std::mutex mutex;
-  void reset() {
-    measurement{};
-  }
-};
-#else
-using atomic_measurement = std::atomic<measurement>;
-#endif
-
-inline measurement collect(atomic_measurement& am) {
-#if VAST_MEASUREMENT_MUTEX_WORKAROUND
-  std::unique_lock<std::mutex> lock{am.mutex};
-  auto result = static_cast<measurement>(am);
-  am.reset();
-  return result;
-#else
-  return std::atomic_exchange(&am, measurement{});
-#endif
-}
-
-struct atomic_timer {
-  explicit atomic_timer(atomic_measurement& m) : m_{m} {
-    // nop
-  }
-
-  static atomic_timer start(atomic_measurement& m) {
-    return atomic_timer{m};
-  }
-
-  void stop(uint64_t events) {
-    auto stop = stopwatch::now();
-    auto elapsed = std::chrono::duration_cast<duration>(stop - start_);
-#if VAST_MEASUREMENT_MUTEX_WORKAROUND
-    std::unique_lock<std::mutex> lock{m_.mutex};
-    m_ += measurement{elapsed, events};
-#else
-    auto tmp = m_.load();
-    tmp += measurement{elapsed, events};
-    m_.exchange(tmp);
-#endif
-  }
-
-private:
-  stopwatch::time_point start_ = stopwatch::now();
-  atomic_measurement& m_;
 };
 
 } // namespace vast::system

@@ -58,7 +58,7 @@ struct index_state {
   /// Loads partitions from disk by UUID.
   class partition_factory {
   public:
-    partition_factory(index_state* st) : st_(st) {
+    explicit partition_factory(index_state* st) : st_(st) {
       // nop
     }
 
@@ -98,7 +98,7 @@ struct index_state {
 
   // -- constructors, destructors, and assignment operators --------------------
 
-  index_state(caf::stateful_actor<index_state>* self);
+  explicit index_state(caf::stateful_actor<index_state>* self);
 
   ~index_state();
 
@@ -151,7 +151,7 @@ struct index_state {
 
   /// @returns a new INDEXER actor.
   caf::actor make_indexer(path filename, type column_type, uuid partition_id,
-                          atomic_measurement* m);
+                          std::string fqn);
 
   /// Decrements the indexer count for a partition.
   void decrement_indexer_count(uuid pid);
@@ -168,8 +168,6 @@ struct index_state {
   /// @returns a query map for passing to INDEX workers over the spawned
   ///          EVALUATOR actors.
   query_map launch_evaluators(pending_query_map pqm, expression expr);
-
-  void send_report();
 
   /// Adds a new flush listener.
   void add_flush_listener(caf::actor listener);
