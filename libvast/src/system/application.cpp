@@ -244,28 +244,40 @@ auto make_send_command() {
 auto make_spawn_source_command() {
   auto spawn_source = std::make_unique<command>(
     "source", "creates a new source", "",
-    opts()
-      .add<std::string>("read,r", "path to input")
-      .add<std::string>("schema,s", "path to alternate schema")
-      .add<bool>("uds,d", "treat -w as UNIX domain socket"),
+    opts("?spawn.source")
+      .add<caf::atom_value>("table-slice-type,t", "table slice type")
+      .add<size_t>("table-slice-size,s", "the suggested size for table slices")
+      .add<size_t>("max-events,n", "the maximum number of events to "
+                                   "import")
+      .add<std::string>("read-timeout", "read timoeut after which data is "
+                                        "forwarded to the importer"),
     false);
+#if VAST_HAVE_PCAP
   spawn_source->add_subcommand(
     "pcap", "creates a new PCAP source", "",
-    opts()
+    source_opts("?spawn.source.pcap")
+      .add<std::string>("interface,i", "network interface to read packets from")
       .add<size_t>("cutoff,c", "skip flow packets after this many bytes")
-      .add<size_t>("flow-max,m", "number of concurrent flows to track")
-      .add<size_t>("flow-age,a", "max flow lifetime before eviction")
+      .add<size_t>("max-flows,m", "number of concurrent flows to track")
+      .add<size_t>("max-flow-age,a", "max flow lifetime before eviction")
       .add<size_t>("flow-expiry,e", "flow table expiration interval")
-      .add<int64_t>("pseudo-realtime,p", "factor c delaying trace packets by "
-                                         "1/c"));
+      .add<size_t>("pseudo-realtime-factor,p", "factor c delaying packets by "
+                                               "1/c")
+      .add<size_t>("snaplen", "snapshot length in bytes")
+      .add<double>("drop-rate-threshold", "drop rate that must be exceeded for "
+                                          "warnings to occur")
+      .add<bool>("disable-community-id", "disable computation of community id "
+                                         "for every packet"));
+#endif
   spawn_source->add_subcommand("test", "creates a new test source", "",
-                               opts()
+                               opts("?spawn.source.test")
                                  .add<size_t>("seed,s", "the PRNG seed")
                                  .add<size_t>("events,n", "number of events to "
                                                           "generate"));
-  spawn_source->add_subcommand("zeek", "creates a new Zeek source", "", opts());
+  spawn_source->add_subcommand("zeek", "creates a new Zeek source", "",
+                               source_opts("?spawn.source.zeek"));
   spawn_source->add_subcommand("syslog", "creates a new Syslog source", "",
-                               opts());
+                               source_opts("?spawn.source.syslog"));
   return spawn_source;
 }
 

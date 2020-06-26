@@ -201,12 +201,13 @@ maybe_actor spawn_accountant(node_actor* self, spawn_arguments&) {
 // Tries to spawn a new VAST component.
 caf::expected<caf::actor>
 spawn_component(const invocation& inv, spawn_arguments& args) {
-  VAST_TRACE(VAST_ARG(args));
+  VAST_TRACE(VAST_ARG(inv), VAST_ARG(args));
   using caf::atom_uint;
   auto self = this_node;
   auto i = node_state::component_factory.find(inv.full_name);
   if (i == node_state::component_factory.end())
     return make_error(ec::unspecified, "invalid spawn component");
+  VAST_VERBOSE(__func__, VAST_ARG(inv.full_name));
   return i->second(self, args);
 }
 
