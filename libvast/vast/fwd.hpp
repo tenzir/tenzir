@@ -24,10 +24,6 @@
 
 #include <vector>
 
-#if !VAST_MEASUREMENT_MUTEX_WORKAROUND
-#  include <atomic>
-#endif
-
 namespace vast {
 
 // -- classes ------------------------------------------------------------------
@@ -116,10 +112,6 @@ struct vector_type;
 
 namespace system {
 
-#if VAST_MEASUREMENT_MUTEX_WORKAROUND
-struct atomic_measurement;
-#endif
-
 struct component_state_map;
 struct component_map_entry;
 struct component_map;
@@ -150,10 +142,6 @@ enum class query_options : uint32_t;
 // -- aliases ------------------------------------------------------------------
 
 namespace system {
-
-#if !VAST_MEASUREMENT_MUTEX_WORKAROUND
-using atomic_measurement = std::atomic<measurement>;
-#endif
 
 using node_actor = caf::stateful_actor<node_state>;
 using performance_report = std::vector<performance_sample>;

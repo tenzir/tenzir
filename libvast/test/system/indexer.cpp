@@ -101,7 +101,6 @@ struct fixture : fixtures::deterministic_actor_system_and_events {
   size_t num_ids = 0;
 
   uuid partition_id = uuid::random();
-  vast::system::atomic_measurement m;
 
   /// Our actors-under-test.
   actor indexer;

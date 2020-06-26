@@ -19,7 +19,6 @@
 #include "vast/system/instrumentation.hpp"
 
 using void_fun = std::function<void()>;
-using atomic_measurement = vast::system::atomic_measurement;
 
 CAF_ALLOW_UNSAFE_MESSAGE_TYPE(void_fun)
 
