@@ -223,7 +223,6 @@ caf::error reader<Selector>::read_impl(size_t max_events, size_t max_slice_size,
   VAST_ASSERT(max_slice_size > 0);
   size_t produced = 0;
   table_slice_builder_ptr bptr = nullptr;
-  bool timeout = false;
   auto next_line = [&, start = std::chrono::steady_clock::now()] {
     auto remaining = start + read_timeout_ - std::chrono::steady_clock::now();
     if (remaining < std::chrono::steady_clock::duration::zero())
@@ -234,7 +233,8 @@ caf::error reader<Selector>::read_impl(size_t max_events, size_t max_slice_size,
     }
     return lines_->next_timeout(remaining);
   };
-  for (; produced < max_events; timeout = next_line()) {
+  while (produced < max_events) {
+    auto timeout = next_line();
     // We must check not only for a timeout but also whether any events were
     // produced to work around CAF's assumption that sources are always able to
     // generate events. Once `caf::stream_source` can handle empty batches

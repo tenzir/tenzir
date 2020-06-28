@@ -447,14 +447,16 @@ caf::error reader::read_impl(size_t max_events, size_t max_slice_size,
     return lines_->next_timeout(remaining);
   };
   if (!parser_) {
+    lines_->next();
     auto p = read_header(lines_->get());
     if (!p)
       return p.error();
     parser_ = *std::move(p);
   }
   auto& p = *parser_;
-  bool timeout = next_line();
-  for (size_t produced = 0; produced < max_events; timeout = next_line()) {
+  size_t produced = 0;
+  while (produced < max_events) {
+    bool timeout = next_line();
     // We must check not only for a timeout but also whether any events were
     // produced to work around CAF's assumption that sources are always able to
     // generate events. Once `caf::stream_source` can handle empty batches

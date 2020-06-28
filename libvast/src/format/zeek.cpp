@@ -291,6 +291,7 @@ caf::error reader::read_impl(size_t max_events, size_t max_slice_size,
   // Make sure we have a builder.
   if (builder_ == nullptr) {
     VAST_ASSERT(layout_.fields.empty());
+    lines_->next();
     if (auto err = parse_header())
       return err;
     if (!reset_builder(layout_))
@@ -305,7 +306,6 @@ caf::error reader::read_impl(size_t max_events, size_t max_slice_size,
   std::vector<data> xs;
   // Counts successfully parsed records.
   size_t produced = 0;
-  bool timeout = false;
   auto next_line = [&, start = std::chrono::steady_clock::now()] {
     auto remaining = start + read_timeout_ - std::chrono::steady_clock::now();
     if (remaining < std::chrono::steady_clock::duration::zero())
@@ -317,7 +317,8 @@ caf::error reader::read_impl(size_t max_events, size_t max_slice_size,
     return lines_->next_timeout(remaining);
   };
   // Loop until reaching EOF, a timeout, or the configured limit of records.
-  for (; produced < max_events; timeout = next_line()) {
+  while (produced < max_events) {
+    auto timeout = next_line();
     // We must check not only for a timeout but also whether any events were
     // produced to work around CAF's assumption that sources are always able to
     // generate events. Once `caf::stream_source` can handle empty batches
