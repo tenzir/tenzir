@@ -23,6 +23,7 @@
 #include "vast/detail/assert.hpp"
 #include "vast/json.hpp"
 #include "vast/logger.hpp"
+#include "vast/settings.hpp"
 #include "vast/system/accountant.hpp"
 #include "vast/system/node.hpp"
 #include "vast/system/shutdown.hpp"
@@ -315,10 +316,12 @@ node_state::spawn_command(const invocation& inv,
   // Save some typing.
   auto& st = this_node->state;
   // We configured the command to have the name of the component.
-  std::string comp_name{inv.name()};
+  auto inv_name_split = detail::split(inv.full_name, " ");
+  VAST_ASSERT(inv_name_split.size() > 1);
+  std::string comp_name{inv_name_split[1]};
   // Auto-generate label if none given.
   std::string label;
-  if (auto label_ptr = caf::get_if<std::string>(&inv.options, "label")) {
+  if (auto label_ptr = caf::get_if<std::string>(&inv.options, "spawn.label")) {
     label = *label_ptr;
   } else {
     label = comp_name;
@@ -332,14 +335,23 @@ node_state::spawn_command(const invocation& inv,
       VAST_DEBUG(this_node, "auto-generated new label:", label);
     }
   }
+  VAST_DEBUG(this_node, "spawns a", comp_name, "with the label", label);
+  auto spawn_inv = inv;
+  if (comp_name == "source") {
+    auto spawn_opt = caf::get<caf::settings>(spawn_inv.options, "spawn");
+    auto source_opt = caf::get<caf::settings>(spawn_opt, "source");
+    auto import_opt = caf::get<caf::settings>(spawn_inv.options, "import");
+    merge_settings(source_opt, import_opt);
+    put(spawn_inv.options, "import", import_opt);
+  }
   // Spawn our new VAST component.
-  spawn_arguments args{inv, st.dir, label};
+  spawn_arguments args{spawn_inv, st.dir, label};
   caf::actor new_component;
-  if (auto spawn_res = spawn_component(inv, args))
+  if (auto spawn_res = spawn_component(spawn_inv, args))
     new_component = std::move(*spawn_res);
   else {
-    VAST_DEBUG(__func__, "got an error from spawn_component:",
-               sys.render(spawn_res.error()));
+    VAST_WARNING(__func__, "got an error from spawn_component:",
+                 sys.render(spawn_res.error()));
     return caf::make_message(std::move(spawn_res.error()));
   }
   // Register component at tracker.
