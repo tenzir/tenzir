@@ -84,6 +84,7 @@ set(libvast_sources
     src/segment.cpp
     src/segment_builder.cpp
     src/segment_store.cpp
+    src/settings.cpp
     src/store.cpp
     src/subnet.cpp
     src/subset.cpp
