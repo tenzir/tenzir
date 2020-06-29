@@ -350,9 +350,11 @@ node_state::spawn_command(const invocation& inv,
   if (auto spawn_res = spawn_component(spawn_inv, args))
     new_component = std::move(*spawn_res);
   else {
-    VAST_WARNING(__func__, "got an error from spawn_component:",
-                 sys.render(spawn_res.error()));
-    return caf::make_message(std::move(spawn_res.error()));
+    auto& err = spawn_res.error();
+    if (err)
+      VAST_WARNING(__func__,
+                   "got an error from spawn_component:", sys.render(err));
+    return caf::make_message(std::move(err));
   }
   // Register component at tracker.
   auto rp = this_node->make_response_promise();
