@@ -39,7 +39,7 @@ SystemCallErrorNumber=EPERM
 # service specifics
 TimeoutStopSec=600
 WorkingDirectory=/var/db/vast
-ExecStop=/opt/tenzir/bin/vast stop
+ExecStop=/opt/tenzir/bin/vast --config=/opt/tenzir/vast.conf stop
 ExecStart=/opt/tenzir/bin/vast --config=/opt/tenzir/vast.conf start
 
 [Install]
