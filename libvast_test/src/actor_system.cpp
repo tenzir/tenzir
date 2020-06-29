@@ -15,7 +15,6 @@
 
 #include "vast/detail/assert.hpp"
 #include "vast/fwd.hpp"
-#include "vast/system/profiler.hpp"
 
 #include <caf/io/middleman.hpp>
 
@@ -38,27 +37,10 @@ actor_system::actor_system() : sys(config), self(sys, true) {
   // Clean up state from previous executions.
   if (vast::exists(directory))
     vast::rm(directory);
-  // Start profiler.
-  if (vast::test::config.count("gperftools") > 0)
-    enable_profiler();
 }
 
 actor_system::~actor_system() {
-  // Stop profiler.
-  namespace atom = vast::atom;
-  if (profiler) {
-    self->send(profiler, atom::stop_v, atom::cpu_v);
-    self->send(profiler, atom::stop_v, atom::heap_v);
-  }
-}
-
-void actor_system::enable_profiler() {
-  VAST_ASSERT(!profiler);
-  namespace atom = vast::atom;
-  profiler = self->spawn(vast::system::profiler, directory / "profiler",
-                         std::chrono::seconds(1));
-  self->send(profiler, atom::start_v, atom::cpu_v);
-  self->send(profiler, atom::start_v, atom::heap_v);
+  // nop
 }
 
 deterministic_actor_system::deterministic_actor_system() {

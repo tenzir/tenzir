@@ -53,6 +53,16 @@ jobs:
     env:
       CC: ${{ matrix.os.cc }}
       CXX: ${{ matrix.os.cxx }}
+      CMAKE_GENERATOR: Ninja
+      CMAKE_MAKE_PROGRAM: ninja
+      CMAKE_C_COMPILER_LAUNCHER: ccache
+      CMAKE_CXX_COMPILER_LAUNCHER: ccache
+      CCACHE_HASH_DIR: true
+      CCACHE_UNIFY: true
+      CCACHE_SLOPPINESS: 'file_macro,time_macros'
+      CCACHE_DIR: '${{ github.workspace }}/.ccache'
+      CCACHE_COMPRESS: true
+      CCACHE_COMPRESSLEVEL: 6
       BUILD_DIR: build
     steps:
       - uses: actions/checkout@v2
@@ -66,7 +76,8 @@ jobs:
           git -c "http.extraheader=$auth_header" -c protocol.version=2 submodule update --init --force --recursive
           git fetch origin +refs/tags/*:refs/tags/*
 
-      - uses: actions/setup-python@v1
+      - name: Setup Python
+        uses: actions/setup-python@v1
         with:
           python-version: '3.7'
 
@@ -78,11 +89,11 @@ jobs:
           service_account_email: ${{ secrets.GCP_SA_EMAIL }}
           service_account_key: ${{ secrets.GCP_SA_KEY }}
 
-      - name: Install Ubuntu Dependencies
+      - name: Install Dependencies (Ubuntu)
         if: matrix.os.tag == 'Ubuntu'
         run: |
           sudo apt-get -qq update
-          sudo apt-get -qqy install ninja-build libpcap-dev libssl-dev libatomic1 lsb-release
+          sudo apt-get -qqy install ninja-build libpcap-dev libssl-dev libatomic1 lsb-release ccache
           # Install Apache Arrow (c.f. https://arrow.apache.org/install/)
           wget https://apache.bintray.com/arrow/$(lsb_release --id --short | tr 'A-Z' 'a-z')/apache-arrow-archive-keyring-latest-$(lsb_release --codename --short).deb
           sudo apt-get -qqy install ./apache-arrow-archive-keyring-latest-$(lsb_release --codename --short).deb
@@ -100,7 +111,7 @@ jobs:
           cmake --build build-dir --target all --parallel
           sudo cmake --build build-dir --target install
 
-      - name: Install macOS Dependencies
+      - name: Install Dependencies (macOS)
         if: matrix.os.tag == 'macOS'
         env:
           HOMEBREW_GITHUB_API_TOKEN: ${{ github.token }}
@@ -109,18 +120,64 @@ jobs:
           HOMEBREW_NO_AUTO_UPDATE: 1
         run: |
           brew --version
-          brew install libpcap tcpdump rsync pandoc apache-arrow pkg-config ninja
+          brew install libpcap tcpdump rsync pandoc apache-arrow pkg-config ninja ccache gnu-sed
 
       - name: Configure Environment
         id: configure_env
         run: |
           PACKAGE_NAME="$(echo "vast-$(git describe)-$(uname -s)-${{ matrix.configure.tag }}-${{ matrix.os.compiler }}" | awk '{ print tolower($0) }')"
           BUILD_DIR="build"
-          ## the upload artifact action cannot resolve environment variables
+          ## The upload artifact action cannot resolve environment variables.
           echo "::set-output name=package_name::$PACKAGE_NAME"
           echo "::set-output name=build_dir::$BUILD_DIR"
           echo "::set-env name=PACKAGE_NAME::$PACKAGE_NAME"
           echo "::set-env name=BUILD_DIR::$BUILD_DIR"
+          # Export slug variables for the cache action.
+          slug_ref() {
+            echo "$1" |
+              tr "[:upper:]" "[:lower:]" |
+              ${{ matrix.os.tag == 'macOS' && 'gsed' || 'sed' }} -r 's#refs/[^\/]*/##;s/[~\^]+//g;s/[^a-zA-Z0-9.]+/-/g;s/^-+\|-+$//g;s/^-*//;s/-*$//' |
+              cut -c1-63
+          }
+          echo ::set-env name=CACHE_REF_SLUG::"$(slug_ref "$GITHUB_REF")"
+          echo ::set-env name=CACHE_HEAD_REF_SLUG::"$(slug_ref "$GITHUB_HEAD_REF")"
+          echo ::set-env name=CACHE_BASE_REF_SLUG::"$(slug_ref "$GITHUB_BASE_REF")"
+
+      # For 'pull_request' events we want to take the latest build on the PR
+      # branch, or if that fails the latest build from the branch we're merging
+      # into.
+      - name: Fetch ccache Cache (Pull Request)
+        if: github.event_name == 'pull_request'
+        uses: actions/cache@v2
+        with:
+          path: .ccache
+          key: ccache-${{ matrix.os.tag }}-${{ matrix.os.compiler }}-${{ matrix.configure.tag }}-${{ env.CACHE_HEAD_REF_SLUG }}-${{ github.sha }}
+          restore-keys: |
+            ccache-${{ matrix.os.tag }}-${{ matrix.os.compiler }}-${{ matrix.configure.tag }}-${{ env.CACHE_HEAD_REF_SLUG }}
+            ccache-${{ matrix.os.tag }}-${{ matrix.os.compiler }}-${{ matrix.configure.tag }}-${{ env.CACHE_BASE_REF_SLUG }}
+            ccache-${{ matrix.os.tag }}-${{ matrix.os.compiler }}-${{ matrix.configure.tag }}
+
+      # For 'push' events we want to take the latest build on the branch we pushed to.
+      - name: Fetch ccache Cache (Push)
+        if: github.event_name == 'push'
+        uses: actions/cache@v2
+        with:
+          path: .ccache
+          key: ccache-${{ matrix.os.tag }}-${{ matrix.os.compiler }}-${{ matrix.configure.tag }}-${{ env.CACHE_REF_SLUG }}-${{ github.sha }}
+          restore-keys: |
+            ccache-${{ matrix.os.tag }}-${{ matrix.os.compiler }}-${{ matrix.configure.tag }}-${{ env.CACHE_REF_SLUG }}
+            ccache-${{ matrix.os.tag }}-${{ matrix.os.compiler }}-${{ matrix.configure.tag }}
+
+      # For 'release' events we want to take the latest master build.
+      - name: Fetch ccache Cache (Release)
+        if: github.event_name == 'release'
+        uses: actions/cache@v2
+        with:
+          path: .ccache
+          key: ccache-${{ matrix.os.tag }}-${{ matrix.os.compiler }}-${{ matrix.configure.tag }}-master-${{ github.sha }}
+          restore-keys: |
+            ccache-${{ matrix.os.tag }}-${{ matrix.os.compiler }}-${{ matrix.configure.tag }}-master
+            ccache-${{ matrix.os.tag }}-${{ matrix.os.compiler }}-${{ matrix.configure.tag }}
 
       - name: Configure
         run: |
@@ -128,17 +185,27 @@ jobs:
           pip --version
           "$CC" --version
           "$CXX" --version
+          ccache --version
+          # Zero the cache statistics (but not the configuration options).
+          ccache --zero-stats
+          # --show-config is a relatively new ccache option and not available
+          # in the ccache version installed via apt, so we ignore failure.
+          ccache --show-config || true
           ./configure \
-            --generator=Ninja \
             --prefix="${PWD}/opt/vast" \
             --build-dir="$BUILD_DIR" \
             --package-name="$PACKAGE_NAME" \
             ${{ matrix.os.extra-flags }} \
-            ${{ github.event.action == 'published' && matrix.configure.flags || matrix.configure.ci-flags }}
+            ${{ github.event.action == 'published' && matrix.configure.flags || matrix.configure.ci-flags }}
 
       - name: Compile All Targets
         run: |
           cmake --build "$BUILD_DIR" --target all
+
+      - name: Show ccache Statistics
+        run: |
+          # Print statistics counter IDs and corresponding values.
+          ccache --show-stats
 
       - name: Run Unit Tests
         env:

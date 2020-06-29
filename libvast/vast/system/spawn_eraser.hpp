@@ -18,10 +18,10 @@
 
 namespace vast::system {
 
-/// Tries to spawn a new PROFILER.
+/// Tries to spawn the ERASER.
 /// @param self Points to the parent actor.
 /// @param args Configures the new actor.
 /// @returns a handle to the spawned actor on success, an error otherwise
-maybe_actor spawn_profiler(caf::local_actor* self, spawn_arguments& args);
+maybe_actor spawn_eraser(system::node_actor* self, spawn_arguments& args);
 
 } // namespace vast::system

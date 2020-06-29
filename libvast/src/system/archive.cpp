@@ -179,13 +179,11 @@ archive(archive_type::stateful_pointer<archive_state> self, path dir,
           auto t = timer::start(self->state.measurement);
           uint64_t events = 0;
           for (auto& slice : batch) {
-            if (auto error = self->state.store->put(slice)) {
+            if (auto error = self->state.store->put(slice))
               VAST_ERROR(self, "failed to add table slice to store",
                          self->system().render(error));
-              self->quit(error);
-              break;
-            }
-            events += slice->rows();
+            else
+              events += slice->rows();
           }
           t.stop(events);
         },

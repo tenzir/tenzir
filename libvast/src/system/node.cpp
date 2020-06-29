@@ -29,6 +29,7 @@
 #include "vast/system/spawn_archive.hpp"
 #include "vast/system/spawn_arguments.hpp"
 #include "vast/system/spawn_counter.hpp"
+#include "vast/system/spawn_eraser.hpp"
 #include "vast/system/spawn_explorer.hpp"
 #include "vast/system/spawn_exporter.hpp"
 #include "vast/system/spawn_importer.hpp"
@@ -36,7 +37,6 @@
 #include "vast/system/spawn_node.hpp"
 #include "vast/system/spawn_or_connect_to_node.hpp"
 #include "vast/system/spawn_pivoter.hpp"
-#include "vast/system/spawn_profiler.hpp"
 #include "vast/system/spawn_sink.hpp"
 #include "vast/system/spawn_source.hpp"
 #include "vast/system/spawn_type_registry.hpp"
@@ -255,13 +255,13 @@ auto make_component_factory() {
     {"spawn accountant", lift_component_factory<spawn_accountant>()},
     {"spawn archive", lift_component_factory<spawn_archive>()},
     {"spawn counter", lift_component_factory<spawn_counter>()},
+    {"spawn eraser", lift_component_factory<spawn_eraser>()},
     {"spawn exporter", lift_component_factory<spawn_exporter>()},
     {"spawn explorer", lift_component_factory<spawn_explorer>()},
     {"spawn importer", lift_component_factory<spawn_importer>()},
     {"spawn type-registry", lift_component_factory<spawn_type_registry>()},
     {"spawn index", lift_component_factory<spawn_index>()},
     {"spawn pivoter", lift_component_factory<spawn_pivoter>()},
-    {"spawn profiler", lift_component_factory<spawn_profiler>()},
     {"spawn source pcap", lift_component_factory<spawn_pcap_source>()},
     {"spawn source syslog", lift_component_factory<spawn_syslog_source>()},
     {"spawn source zeek", lift_component_factory<spawn_zeek_source>()},
@@ -283,6 +283,7 @@ auto make_command_factory() {
     {"spawn accountant", node_state::spawn_command},
     {"spawn archive", node_state::spawn_command},
     {"spawn counter", node_state::spawn_command},
+    {"spawn eraser", node_state::spawn_command},
     {"spawn explorer", node_state::spawn_command},
     {"spawn exporter", node_state::spawn_command},
     {"spawn importer", node_state::spawn_command},

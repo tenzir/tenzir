@@ -137,10 +137,9 @@ sink_command(const invocation& inv, actor_system& sys, caf::actor snk) {
           err = std::move(msg.reason);
         }
       },
-      [&](performance_report report) {
-        // Log a set of named measurements.
-        VAST_DEBUG(inv.full_name, "received performance report");
+      [&]([[maybe_unused]] performance_report report) {
 #if VAST_LOG_LEVEL >= VAST_LOG_LEVEL_INFO
+        // Log a set of named measurements.
         for (const auto& [name, measurement] : report) {
           if (auto rate = measurement.rate_per_sec(); std::isfinite(rate))
             VAST_INFO(name, "processed", measurement.events,
@@ -151,9 +150,8 @@ sink_command(const invocation& inv, actor_system& sys, caf::actor snk) {
         }
 #endif
       },
-      [&](std::string name, query_status query) {
-        // Log the query status.
-        VAST_DEBUG(inv.full_name, "received query status from", name);
+      [&]([[maybe_unused]] std::string name,
+          [[maybe_unused]] query_status query) {
 #if VAST_LOG_LEVEL >= VAST_LOG_LEVEL_INFO
         if (auto rate
             = measurement{query.runtime, query.processed}.rate_per_sec();

@@ -29,6 +29,21 @@ fixtures:
     exit: | # python
       node.stop()
 
+  AgingTester:
+    enter: | # python
+      node = Server(self.cmd,
+                    ['-e', f':{VAST_PORT}',
+                     '-i', 'node',
+                     '--aging-frequency=2000min',
+                     '--aging-query=:addr == 192.168.1.104',
+                     'start'],
+                    work_dir, name='node', port=VAST_PORT,
+                    config_file=f'{self.config_file}')
+      cmd += ['-e', f':{VAST_PORT}']
+
+    exit: | # python
+      node.stop()
+
 tests:
   JSON schema inference:
     tags: [schema, infer, json]
@@ -125,7 +140,7 @@ tests:
     steps:
       - command: import -b zeek
         input: data/zeek/conn.log.gz
-      - command: import -b zeek
+      - command: import --table-slice-type=caf -b zeek
         input: data/zeek/dns.log.gz
       - command: export ascii 'resp_h == 192.168.1.104'
       - command: export ascii 'zeek.conn.id.resp_h == 192.168.1.104'
@@ -318,3 +333,12 @@ tests:
       - command: -N status
         transformation: jq '.node.index.statistics.layouts | del(."vast.metrics")'
       - command: -N export json '"®" in :string'
+  Zeek conn log aging:
+    tags: [import-export, aging, zeek]
+    fixture: AgingTester
+    steps:
+      - command: import -b zeek
+        input: data/zeek/conn.log.gz
+      - command: export ascii 'resp_h == 192.168.1.104'
+      - command: send eraser run
+      - command: export ascii 'resp_h == 192.168.1.104'

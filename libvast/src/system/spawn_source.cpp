@@ -44,7 +44,8 @@ maybe_actor spawn_generic_source(caf::local_actor* self, spawn_arguments& args,
   VAST_UNBOX_VAR(expr, normalized_and_validated(args));
   VAST_UNBOX_VAR(sch, read_schema(args));
   auto table_slice_type
-    = defaults::import::table_slice_type(self->system(), args.inv.options);
+    = caf::get_or(args.inv.options, "import.table-slice-type",
+                  defaults::import::table_slice_type);
   Reader reader{table_slice_type, args.inv.options,
                 std::forward<Ts>(ctor_args)...};
   auto src = self->spawn(default_source<Reader>, std::move(reader));
@@ -83,7 +84,8 @@ maybe_actor spawn_test_source(caf::local_actor* self, spawn_arguments& args) {
   if (!args.empty())
     return unexpected_arguments(args);
   auto table_slice_type
-    = defaults::import::table_slice_type(self->system(), args.inv.options);
+    = caf::get_or(args.inv.options, "import.table-slice-type",
+                  defaults::import::table_slice_type);
   using defaults_t = defaults::import::test;
   std::string category = defaults_t::category;
   reader_type reader{table_slice_type, defaults_t::seed(args.inv.options),

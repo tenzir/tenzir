@@ -88,7 +88,10 @@ auto make_root_command(std::string_view path) {
         .add<bool>("node,N", "spawn a node instead of connecting to one")
         .add<bool>("disable-metrics", "don't keep track of performance metrics")
         .add<bool>("no-default-schema", "don't load the default schema "
-                                        "definitions");
+                                        "definitions")
+        .add<std::string>("aging-frequency", "interval between two aging "
+                                             "cycles")
+        .add<std::string>("aging-query", "query for aging out obsolete data");
   return std::make_unique<command>(path, "", documentation::vast,
                                    add_index_opts(std::move(ob)));
 }
@@ -241,7 +244,6 @@ auto make_spawn_source_command() {
     opts()
       .add<std::string>("read,r", "path to input")
       .add<std::string>("schema,s", "path to alternate schema")
-      .add<caf::atom_value>("table-slice,t", "table slice type")
       .add<bool>("uds,d", "treat -w as UNIX domain socket"),
     false);
   spawn_source->add_subcommand(
@@ -306,12 +308,6 @@ auto make_spawn_command() {
                                                     "request (deprecated)"));
   spawn->add_subcommand("index", "creates a new index", "",
                         add_index_opts(opts()));
-  spawn->add_subcommand("profiler", "creates a new profiler", "",
-                        opts()
-                          .add<bool>("cpu,c", "start the CPU profiler")
-                          .add<bool>("heap,h", "start the heap profiler")
-                          .add<size_t>("resolution,r", "seconds between "
-                                                       "measurements"));
   spawn->add_subcommand(make_spawn_source_command());
   spawn->add_subcommand(make_spawn_sink_command());
   return spawn;
@@ -385,6 +381,7 @@ auto make_command_factory() {
     {"send", remote_command},
     {"spawn accountant", remote_command},
     {"spawn archive", remote_command},
+    {"spawn eraser", remote_command},
     {"spawn exporter", remote_command},
     {"spawn explorer", remote_command},
     {"spawn importer", remote_command},

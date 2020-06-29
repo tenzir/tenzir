@@ -34,6 +34,25 @@ namespace vast::system {
 struct importer_state {
   // -- member types -----------------------------------------------------------
 
+  /// Used to signal how much information should be persisted in write_state().
+  enum class write_mode : bool {
+    /// Persist the next assignable id, used during a regular shutdown.
+    with_next,
+    /// Persist only the end of the block, used during regular operation to
+    /// prevent state corruption if an irregular shutdown occurs.
+    without_next
+  };
+
+  /// A helper structure to partition the id space into blocks.
+  /// An importer uses one currently active block.
+  struct id_block {
+    /// The next available id of this block.
+    id next;
+
+    /// The last + 1 id of this block.
+    id end;
+  };
+
   /// Type of incoming stream elements.
   using input_type = table_slice_ptr;
 
@@ -52,18 +71,27 @@ struct importer_state {
 
   caf::error read_state();
 
-  caf::error write_state();
+  caf::error write_state(write_mode mode);
 
   void send_report();
 
-  /// Stores the id offset for the next slice.
-  id next_id = 0u;
+  /// Extends the available ids by block size
+  /// @param required The minimum increment of ids so that available ids are
+  /// not depleted after calling this function and assigning this amount
+  /// subsequently.
+  caf::error get_next_block(uint64_t required = 0u);
+
+  /// @returns the next unused id and increments the position by its argument.
+  id next_id(uint64_t advance);
 
   /// @returns the number of currently available IDs.
   id available_ids() const noexcept;
 
   /// @returns various status metrics.
   caf::dictionary<caf::config_value> status() const;
+
+  /// The active id block.
+  id_block current;
 
   /// State directory.
   path dir;

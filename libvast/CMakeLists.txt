@@ -15,7 +15,11 @@ set(libvast_sources
     src/banner.cpp
     src/base.cpp
     src/bitmap.cpp
+    src/bloom_filter_parameters.cpp
+    src/bloom_filter_synopsis.cpp
     src/bool_synopsis.cpp
+    src/caf_table_slice.cpp
+    src/caf_table_slice_builder.cpp
     src/chunk.cpp
     src/column_index.cpp
     src/command.cpp
@@ -25,8 +29,6 @@ set(libvast_sources
     src/concept/hashable/xxhash.cpp
     src/concept/parseable/vast/expression.cpp
     src/data.cpp
-    src/default_table_slice.cpp
-    src/default_table_slice_builder.cpp
     src/defaults.cpp
     src/detail/add_message_types.cpp
     src/detail/adjust_resource_consumption.cpp
@@ -98,6 +100,7 @@ set(libvast_sources
     src/system/count_command.cpp
     src/system/counter.cpp
     src/system/default_configuration.cpp
+    src/system/eraser.cpp
     src/system/evaluator.cpp
     src/system/explore_command.cpp
     src/system/explorer.cpp
@@ -112,7 +115,6 @@ set(libvast_sources
     src/system/partition.cpp
     src/system/pivot_command.cpp
     src/system/pivoter.cpp
-    src/system/profiler.cpp
     src/system/query_processor.cpp
     src/system/query_supervisor.cpp
     src/system/read_query.cpp
@@ -123,6 +125,7 @@ set(libvast_sources
     src/system/spawn_archive.cpp
     src/system/spawn_arguments.cpp
     src/system/spawn_counter.cpp
+    src/system/spawn_eraser.cpp
     src/system/spawn_explorer.cpp
     src/system/spawn_exporter.cpp
     src/system/spawn_importer.cpp
@@ -131,7 +134,6 @@ set(libvast_sources
     src/system/spawn_node.cpp
     src/system/spawn_or_connect_to_node.cpp
     src/system/spawn_pivoter.cpp
-    src/system/spawn_profiler.cpp
     src/system/spawn_sink.cpp
     src/system/spawn_source.cpp
     src/system/spawn_type_registry.cpp
@@ -211,16 +213,6 @@ endif ()
 
 if (VAST_USE_JEMALLOC)
   target_link_libraries(libvast PRIVATE jemalloc::jemalloc_)
-endif ()
-
-# Always link with -lprofile if we have Gperftools.
-if (GPERFTOOLS_FOUND)
-  target_link_libraries(libvast PRIVATE gperftools::profiler)
-endif ()
-
-# Only link against tcmalloc if requested.
-if (GPERFTOOLS_FOUND AND VAST_USE_PERFTOOLS_HEAP_PROFILER)
-  target_link_libraries(libvast PRIVATE gperftools::tcmalloc)
 endif ()
 
 if (HAVE_CXX_ATOMICS_WITH_LIB)
@@ -310,12 +302,15 @@ install(DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/vast/fbs/
 
 set(tests
     test/address.cpp
+    test/address_synopsis.cpp
     test/binner.cpp
     test/bitmap.cpp
     test/bitmap_algorithms.cpp
     test/bitmap_index.cpp
     test/bits.cpp
     test/bitvector.cpp
+    test/bloom_filter.cpp
+    test/bloom_filter_synopsis.cpp
     test/byte.cpp
     test/cache.cpp
     test/chunk.cpp
@@ -374,6 +369,7 @@ set(tests
     test/system/archive.cpp
     test/system/counter.cpp
     test/system/datagram_source.cpp
+    test/system/eraser.cpp
     test/system/evaluator.cpp
     test/system/explorer.cpp
     test/system/exporter.cpp

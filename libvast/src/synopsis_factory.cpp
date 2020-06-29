@@ -13,12 +13,15 @@
 
 #include "vast/synopsis_factory.hpp"
 
+#include "vast/address_synopsis.hpp"
 #include "vast/bool_synopsis.hpp"
+#include "vast/concept/hashable/xxhash.hpp"
 #include "vast/time_synopsis.hpp"
 
 namespace vast {
 
 void factory_traits<synopsis>::initialize() {
+  factory<synopsis>::add(address_type{}, make_address_synopsis<xxhash64>);
   factory<synopsis>::add<bool_type, bool_synopsis>();
   factory<synopsis>::add<time_type, time_synopsis>();
 }

@@ -37,12 +37,12 @@ class address;
 class arrow_table_slice;
 class arrow_table_slice_builder;
 class bitmap;
+class caf_table_slice;
+class caf_table_slice_builder;
 class chunk;
 class column_index;
 class command;
 class data;
-class default_table_slice;
-class default_table_slice_builder;
 class event;
 class ewah_bitstream;
 class expression;
@@ -178,7 +178,7 @@ void intrusive_ptr_release(const table_slice_builder*);
 
 using chunk_ptr = caf::intrusive_ptr<chunk>;
 using column_index_ptr = std::unique_ptr<column_index>;
-using default_table_slice_ptr = caf::intrusive_cow_ptr<default_table_slice>;
+using caf_table_slice_ptr = caf::intrusive_cow_ptr<caf_table_slice>;
 using synopsis_ptr = caf::intrusive_ptr<synopsis>;
 using table_slice_builder_ptr = caf::intrusive_ptr<table_slice_builder>;
 using table_slice_ptr = caf::intrusive_cow_ptr<table_slice>;
@@ -281,10 +281,12 @@ CAF_BEGIN_TYPE_ID_BLOCK(vast, caf::first_custom_type_id)
   VAST_ADD_ATOM(accountant, "accountant")
   VAST_ADD_ATOM(archive, "archive")
   VAST_ADD_ATOM(candidate, "candidate")
-  VAST_ADD_ATOM(consensus, "consensus")
-  VAST_ADD_ATOM(identifier, "identifier")
-  VAST_ADD_ATOM(index, "index")
+  VAST_ADD_ATOM(eraser, "eraser")
+  VAST_ADD_ATOM(exporter, "exporter")
   VAST_ADD_ATOM(follower, "follower")
+  VAST_ADD_ATOM(identifier, "identifier")
+  VAST_ADD_ATOM(importer, "importer")
+  VAST_ADD_ATOM(index, "index")
   VAST_ADD_ATOM(leader, "leader")
   VAST_ADD_ATOM(receiver, "receiver")
   VAST_ADD_ATOM(search, "search")
@@ -294,8 +296,6 @@ CAF_BEGIN_TYPE_ID_BLOCK(vast, caf::first_custom_type_id)
   VAST_ADD_ATOM(supervisor, "supervisor")
   VAST_ADD_ATOM(tracker, "tracker")
   VAST_ADD_ATOM(worker, "worker")
-  VAST_ADD_ATOM(exporter, "exporter")
-  VAST_ADD_ATOM(importer, "importer")
 
   // -- attribute atoms ----------------------------------------------------------
 

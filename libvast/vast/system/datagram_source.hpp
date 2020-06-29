@@ -13,11 +13,11 @@
 
 #pragma once
 
+#include "vast/caf_table_slice.hpp"
 #include "vast/concept/printable/std/chrono.hpp"
 #include "vast/concept/printable/stream.hpp"
 #include "vast/concept/printable/vast/error.hpp"
 #include "vast/concept/printable/vast/expression.hpp"
-#include "vast/default_table_slice.hpp"
 #include "vast/defaults.hpp"
 #include "vast/detail/assert.hpp"
 #include "vast/error.hpp"

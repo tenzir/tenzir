@@ -15,14 +15,13 @@
 
 #define SUITE format
 
-#include "vast/test/test.hpp"
-
 #include "vast/test/fixtures/actor_system.hpp"
 #include "vast/test/fixtures/events.hpp"
+#include "vast/test/test.hpp"
 
+#include "vast/caf_table_slice_builder.hpp"
 #include "vast/concept/parseable/to.hpp"
 #include "vast/concept/parseable/vast.hpp"
-#include "vast/default_table_slice_builder.hpp"
 
 #include <algorithm>
 
@@ -78,7 +77,7 @@ struct fixture : fixtures::deterministic_actor_system {
                                    size_t max_slice_size) {
     using reader_type = format::csv::reader;
     auto in = std::make_unique<std::istringstream>(std::string{data});
-    reader_type reader{defaults::system::table_slice_type, options,
+    reader_type reader{defaults::import::table_slice_type, options,
                        std::move(in)};
     reader.schema(s);
     std::vector<table_slice_ptr> slices;

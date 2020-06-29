@@ -11,29 +11,21 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#pragma once
+#include "vast/bloom_filter_synopsis.hpp"
 
-#include <chrono>
-
-#include <caf/stateful_actor.hpp>
+#include <vast/detail/assert.hpp>
 
 namespace vast {
 
-class path;
+caf::optional<bloom_filter_parameters> parse_parameters(const type& x) {
+  auto pred = [](auto& attr) {
+    return attr.key == "synopsis" && attr.value != caf::none;
+  };
+  auto i = std::find_if(x.attributes().begin(), x.attributes().end(), pred);
+  if (i == x.attributes().end())
+    return caf::none;
+  VAST_ASSERT(i->value);
+  return parse_parameters(*i->value);
+}
 
-namespace system {
-
-struct profiler_state {
-  static inline const char* name = "profiler";
-};
-
-/// Profiles CPU and heap usage via gperftools.
-/// @param self The actor handle.
-/// @param dir The directory where to write profiler output to.
-/// @param secs The number of seconds between subsequent measurements.
-caf::behavior profiler(caf::stateful_actor<profiler_state>* self, path dir,
-                       std::chrono::seconds secs);
-
-} // namespace system
 } // namespace vast
-

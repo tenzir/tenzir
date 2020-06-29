@@ -15,21 +15,19 @@
 
 #include "vast/meta_index.hpp"
 
-#include "vast/test/test.hpp"
 #include "vast/test/fixtures/actor_system.hpp"
+#include "vast/test/test.hpp"
 
-#include "vast/default_table_slice_builder.hpp"
+#include "vast/caf_table_slice_builder.hpp"
+#include "vast/concept/parseable/to.hpp"
+#include "vast/concept/parseable/vast/expression.hpp"
+#include "vast/detail/overload.hpp"
 #include "vast/synopsis.hpp"
 #include "vast/synopsis_factory.hpp"
 #include "vast/table_slice.hpp"
 #include "vast/table_slice_builder.hpp"
 #include "vast/uuid.hpp"
 #include "vast/view.hpp"
-
-#include "vast/concept/parseable/to.hpp"
-#include "vast/concept/parseable/vast/expression.hpp"
-
-#include "vast/detail/overload.hpp"
 
 using namespace vast;
 
@@ -59,7 +57,7 @@ struct generator {
   }
 
   table_slice_ptr operator()(size_t num) {
-    auto builder = default_table_slice_builder::make(layout);
+    auto builder = caf_table_slice_builder::make(layout);
     for (size_t i = 0; i < num; ++i) {
       vast::time ts = epoch + std::chrono::seconds(i + offset);
       CHECK(builder->add(make_data_view(ts)));
@@ -216,7 +214,7 @@ TEST(meta index with bool synopsis) {
   MESSAGE("generate slice data and add it to the meta index");
   meta_index meta_idx;
   auto layout = record_type{{"x", bool_type{}}}.name("test");
-  auto builder = default_table_slice_builder::make(layout);
+  auto builder = caf_table_slice_builder::make(layout);
   CHECK(builder->add(make_data_view(true)));
   auto slice = builder->finish();
   REQUIRE(slice != nullptr);

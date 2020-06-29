@@ -13,6 +13,7 @@
 
 #pragma once
 
+#include "vast/caf_table_slice_builder.hpp"
 #include "vast/concept/printable/std/chrono.hpp"
 #include "vast/concept/printable/stream.hpp"
 #include "vast/concept/printable/to_string.hpp"
@@ -20,7 +21,6 @@
 #include "vast/concept/printable/vast/expression.hpp"
 #include "vast/concept/printable/vast/type.hpp"
 #include "vast/data.hpp"
-#include "vast/default_table_slice_builder.hpp"
 #include "vast/defaults.hpp"
 #include "vast/detail/assert.hpp"
 #include "vast/error.hpp"
@@ -332,7 +332,7 @@ source(caf::stateful_actor<source_state<Reader>>* self, Reader reader,
 template <class Reader>
 caf::behavior default_source(caf::stateful_actor<source_state<Reader>>* self,
                              Reader reader) {
-  auto slice_size = get_or(self->system().config(), "system.table-slice-size",
+  auto slice_size = get_or(self->system().config(), "import.table-slice-size",
                            defaults::import::table_slice_size);
   //  The last five arguments are optional, and not required for the minimum
   //  behavior of the "default" source.

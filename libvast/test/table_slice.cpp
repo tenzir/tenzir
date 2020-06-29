@@ -18,20 +18,20 @@
 #include "vast/test/fixtures/table_slices.hpp"
 #include "vast/test/test.hpp"
 
-#include <caf/make_copy_on_write.hpp>
-#include <caf/test/dsl.hpp>
-
-#include "vast/default_table_slice.hpp"
-#include "vast/default_table_slice_builder.hpp"
+#include "vast/caf_table_slice.hpp"
+#include "vast/caf_table_slice_builder.hpp"
 #include "vast/ids.hpp"
 #include "vast/to_events.hpp"
+
+#include <caf/make_copy_on_write.hpp>
+#include <caf/test/dsl.hpp>
 
 using namespace vast;
 using namespace std::string_literals;
 
 namespace {
 
-class rebranded_table_slice : public default_table_slice {
+class rebranded_table_slice : public caf_table_slice {
 public:
   static constexpr caf::atom_value class_id = caf::atom("test");
 
@@ -40,7 +40,7 @@ public:
   }
 
   explicit rebranded_table_slice(table_slice_header header)
-    : default_table_slice{std::move(header)} {
+    : caf_table_slice{std::move(header)} {
     // nop
   }
 
@@ -49,9 +49,9 @@ public:
   }
 };
 
-class rebranded_table_slice_builder : public default_table_slice_builder {
+class rebranded_table_slice_builder : public caf_table_slice_builder {
 public:
-  using super = default_table_slice_builder;
+  using super = caf_table_slice_builder;
 
   using table_slice_type = rebranded_table_slice;
 
@@ -91,7 +91,7 @@ private:
 
 FIXTURE_SCOPE(table_slice_tests, fixtures::table_slices)
 
-TEST_TABLE_SLICE(default_table_slice)
+TEST_TABLE_SLICE(caf_table_slice)
 TEST_TABLE_SLICE(rebranded_table_slice)
 
 TEST(random integer slices) {

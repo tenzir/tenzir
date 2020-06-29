@@ -47,7 +47,7 @@ void init(accountant_actor* self) {
   VAST_DEBUG(self, "animates heartbeat loop");
   self->delayed_send(self, overview_delay, atom::telemetry_v);
 #endif
-  st.slice_size = get_or(self->system().config(), "system.table-slice-size",
+  st.slice_size = get_or(self->system().config(), "import.table-slice-size",
                          defaults::import::table_slice_size);
 }
 
@@ -77,9 +77,8 @@ void record(accountant_actor* self, const std::string& key, T x,
                               {"key", string_type{}},
                               {"value", string_type{}}}
                     .name("vast.metrics");
-
-    auto slice_type = get_or(sys.config(), "system.table-slice-type",
-                             defaults::system::table_slice_type);
+    auto slice_type = get_or(sys.config(), "import.table-slice-type",
+                             defaults::import::table_slice_type);
     st.builder = factory<table_slice_builder>::make(slice_type, layout);
     VAST_DEBUG(self, "obtained builder");
   }

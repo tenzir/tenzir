@@ -90,7 +90,7 @@ int main(int argc, char** argv) {
   if (auto schema = load_schema(default_dirs)) {
     event_types::init(*std::move(schema));
   } else {
-    VAST_ERROR_ANON("failed to read schema dirs:", to_string(schema.error()));
+    VAST_ERROR_ANON("failed to read schema dirs:", render(schema.error()));
     return EXIT_FAILURE;
   }
   // Dispatch to root command.

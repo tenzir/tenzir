@@ -19,13 +19,13 @@
 #include "vast/test/test.hpp"
 
 #include "vast/bitmap.hpp"
+#include "vast/caf_table_slice.hpp"
 #include "vast/concept/parseable/to.hpp"
 #include "vast/concept/parseable/vast/expression.hpp"
 #include "vast/concept/printable/stream.hpp"
 #include "vast/concept/printable/vast/error.hpp"
 #include "vast/concept/printable/vast/event.hpp"
 #include "vast/concept/printable/vast/expression.hpp"
-#include "vast/default_table_slice.hpp"
 #include "vast/detail/spawn_container_source.hpp"
 #include "vast/fwd.hpp"
 #include "vast/system/evaluator.hpp"
@@ -116,7 +116,7 @@ TEST(integer rows) {
   record_type layout{{"value", column_type}};
   auto rows = make_rows(1, 2, 3, 1, 2, 3, 1, 2, 3);
   num_ids = rows.size();
-  ingest({default_table_slice::make(layout, rows)});
+  ingest({caf_table_slice::make(layout, rows)});
   MESSAGE("verify table index");
   auto verify = [&] {
     CHECK_EQUAL(query(":int == +1"), res(0u, 3u, 6u));

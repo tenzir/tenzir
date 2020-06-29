@@ -101,6 +101,7 @@ index_state::init(const path& dir, size_t max_partition_size,
                   uint32_t in_mem_partitions, uint32_t taste_partitions) {
   VAST_TRACE(VAST_ARG(dir), VAST_ARG(max_partition_size),
              VAST_ARG(in_mem_partitions), VAST_ARG(taste_partitions));
+  // This option must be kept in sync with vast/address_synopsis.hpp.
   put(meta_idx.factory_options(), "max-partition-size", max_partition_size);
   // Set members.
   this->dir = dir;

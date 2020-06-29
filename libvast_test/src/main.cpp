@@ -78,11 +78,7 @@ int main(int argc, char** argv) {
     }
   }
   if (start != argc) {
-    auto res
-      = caf::message_builder(argv + start, argv + argc)
-          .extract_opts({
-            {"gperftools,g", "enable gperftools profiler for actor tests"},
-          });
+    auto res = caf::message_builder(argv + start, argv + argc).extract_opts({});
     if (!res.error.empty()) {
       std::cout << res.error << std::endl;
       return 1;

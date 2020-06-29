@@ -13,10 +13,10 @@
 
 #include "fixtures/events.hpp"
 
+#include "vast/caf_table_slice_builder.hpp"
 #include "vast/concept/printable/to_string.hpp"
 #include "vast/concept/printable/vast/data.hpp"
 #include "vast/concept/printable/vast/event.hpp"
-#include "vast/default_table_slice_builder.hpp"
 #include "vast/defaults.hpp"
 #include "vast/format/test.hpp"
 #include "vast/format/zeek.hpp"
@@ -100,7 +100,7 @@ static std::vector<event> extract(Reader&& reader) {
 template <class Reader>
 static std::vector<event> inhale(const char* filename) {
   auto input = std::make_unique<std::ifstream>(filename);
-  Reader reader{defaults::system::table_slice_type, caf::settings{},
+  Reader reader{defaults::import::table_slice_type, caf::settings{},
                 std::move(input)};
   return extract(reader);
 }
@@ -184,7 +184,7 @@ public:
     return caf::visit(
       detail::overload(
         [&](const record_type& rt) -> id_assigning_builder* {
-          id_assigning_builder tmp{default_table_slice_builder::make(rt)};
+          id_assigning_builder tmp{caf_table_slice_builder::make(rt)};
           return &(builders_.emplace(rt.name(), std::move(tmp)).first->second);
         },
         [&](const auto&) -> id_assigning_builder* {
@@ -217,7 +217,7 @@ events::events() {
   REQUIRE_EQUAL(zeek_dns_log.size(), 32u);
   zeek_http_log = inhale<format::zeek::reader>(artifacts::logs::zeek::http);
   REQUIRE_EQUAL(zeek_http_log.size(), 40u);
-  vast::format::test::reader rd{defaults::system::table_slice_type, 42, 1000};
+  vast::format::test::reader rd{defaults::import::table_slice_type, 42, 1000};
   random = extract(rd);
   REQUIRE_EQUAL(random.size(), 1000u);
   ascending_integers = make_ascending_integers(250);

@@ -200,7 +200,7 @@ struct fixture : fixtures::deterministic_actor_system {
     using reader_type = format::zeek::reader;
     auto settings = caf::settings{};
     caf::put(settings, "import.read-timeout", "200ms");
-    reader_type reader{defaults::system::table_slice_type, std::move(settings),
+    reader_type reader{defaults::import::table_slice_type, std::move(settings),
                        std::move(input)};
     std::vector<table_slice_ptr> slices;
     auto add_slice = [&](table_slice_ptr ptr) {
@@ -308,7 +308,7 @@ TEST(zeek reader - custom schema) {
   auto expected = flatten(unbox(to<type>(eref)).name("zeek.conn"));
   using reader_type = format::zeek::reader;
   reader_type reader{
-    defaults::system::table_slice_type, caf::settings{},
+    defaults::import::table_slice_type, caf::settings{},
     std::make_unique<std::istringstream>(std::string{conn_log_100_events})};
   reader.schema(sch);
   std::vector<table_slice_ptr> slices;

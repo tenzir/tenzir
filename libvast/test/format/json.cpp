@@ -16,15 +16,14 @@
 
 #define SUITE format
 
-#include "vast/test/test.hpp"
-
 #include "vast/test/fixtures/actor_system.hpp"
 #include "vast/test/fixtures/events.hpp"
+#include "vast/test/test.hpp"
 
+#include "vast/caf_table_slice_builder.hpp"
 #include "vast/concept/parseable/to.hpp"
 #include "vast/concept/parseable/vast/json.hpp"
 #include "vast/concept/parseable/vast/time.hpp"
-#include "vast/default_table_slice_builder.hpp"
 
 using namespace vast;
 using namespace std::string_literals;
@@ -82,7 +81,7 @@ TEST(json to data) {
                             {"mcs", map_type{count_type{}, string_type{}}}}
                   .name("layout");
   auto flat = flatten(layout);
-  auto builder = default_table_slice_builder{flat};
+  auto builder = caf_table_slice_builder{flat};
   std::string_view str = R"json({
     "b": true,
     "c": 424242,
@@ -117,7 +116,7 @@ TEST(json to data) {
 TEST_DISABLED(suricata) {
   using reader_type = format::json::reader<format::json::suricata>;
   auto input = std::make_unique<std::istringstream>(std::string{eve_log});
-  reader_type reader{defaults::system::table_slice_type, caf::settings{},
+  reader_type reader{defaults::import::table_slice_type, caf::settings{},
                      std::move(input)};
   std::vector<table_slice_ptr> slices;
   auto add_slice = [&](table_slice_ptr ptr) {
