@@ -15,6 +15,7 @@
 
 #include "vast/concept/parseable/core.hpp"
 #include "vast/concept/parseable/string.hpp"
+#include "vast/concept/parseable/string/char_class.hpp"
 #include "vast/concept/parseable/to.hpp"
 #include "vast/concept/parseable/vast.hpp"
 #include "vast/concept/printable/to_string.hpp"
@@ -188,6 +189,7 @@ const char* reader::name() const {
 
 caf::optional<record_type>
 reader::make_layout(const std::vector<std::string>& names) {
+  VAST_TRACE(__func__, VAST_ARG(names));
   for (auto& t : schema_) {
     if (auto r = caf::get_if<record_type>(&t)) {
       auto select_fields = [&]() -> caf::optional<record_type> {
@@ -397,7 +399,8 @@ make_csv_parser(const record_type& layout, table_slice_builder_ptr builder,
 
 caf::expected<reader::parser_type> reader::read_header(std::string_view line) {
   auto ws = ignore(*parsers::space);
-  auto p = (ws >> schema_parser::id >> ws) % opt_.separator;
+  auto column_name = +(parsers::printable - opt_.separator);
+  auto p = (ws >> column_name >> ws) % opt_.separator;
   std::vector<std::string> columns;
   auto b = line.begin();
   auto f = b;
@@ -456,7 +459,7 @@ caf::error reader::read_impl(size_t max_events, size_t max_slice_size,
       continue;
     }
     if (!p(line))
-      return make_error(ec::type_clash, "unable to parse CSV line");
+      return make_error(ec::type_clash, "unable to parse CSV line", line);
     ++produced;
     if (builder_->rows() == max_slice_size)
       if (auto err = finish(callback))
