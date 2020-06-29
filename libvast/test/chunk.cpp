@@ -48,7 +48,7 @@ TEST(access) {
 
 TEST(slicing) {
   char buf[100];
-  auto x = chunk::make(as_bytes(span{buf, sizeof(buf)}));
+  auto x = chunk::copy(span{buf, sizeof(buf)});
   auto y = x->slice(50);
   auto z = y->slice(40, 5);
   CHECK_EQUAL(y->size(), 50u);
@@ -57,7 +57,7 @@ TEST(slicing) {
 
 TEST(serialization) {
   std::string_view str = "foobarbaz";
-  auto x = chunk::make(as_bytes(span{str.data(), str.size()}));
+  auto x = chunk::copy(span{str.data(), str.size()});
   std::vector<char> buf;
   CHECK_EQUAL(save(nullptr, buf, x), caf::none);
   chunk_ptr y;
@@ -68,8 +68,9 @@ TEST(serialization) {
 
 TEST(as_bytes) {
   std::string_view str = "foobarbaz";
-  auto bytes = as_bytes(span{str.data(), str.size()});
-  auto x = chunk::make(bytes);
+  auto bytes
+    = span{reinterpret_cast<const vast::byte*>(str.data()), str.size()};
+  auto x = chunk::copy(span{str.data(), str.size()});
   CHECK_EQUAL(bytes, as_bytes(x));
 }
 
@@ -77,7 +78,7 @@ FIXTURE_SCOPE(chunk_tests, fixtures::filesystem)
 
 TEST(read / write) {
   std::string_view str = "foobarbaz";
-  auto x = chunk::make(str);
+  auto x = chunk::copy(span{str.data(), str.size()});
   auto filename = directory / "chunk";
   auto err = write(filename, x);
   CHECK_EQUAL(err, caf::none);

@@ -59,7 +59,7 @@ TEST(read) {
 
 TEST(write) {
   auto foo = "foo"s;
-  auto chk = chunk::make(foo);
+  auto chk = chunk::copy(span{foo.data(), foo.size()});
   REQUIRE(chk);
   auto filename = directory / foo;
   MESSAGE("write file via actor");

@@ -274,7 +274,7 @@ void table_slices::test_load_from_chunk() {
   auto slice1 = make_slice();
   auto sink = make_sink();
   CHECK_EQUAL(sink(slice1), caf::none);
-  auto chk = chunk::make(as_bytes(span{buf.data(), buf.size()}));
+  auto chk = chunk::make(std::vector<char>{buf});
   auto slice2 = factory<table_slice>::traits::make(chk);
   REQUIRE_NOT_EQUAL(slice2, nullptr);
   CHECK_EQUAL(*slice1, *slice2);

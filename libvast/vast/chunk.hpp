@@ -17,6 +17,7 @@
 #include "vast/detail/assert.hpp"
 #include "vast/detail/operators.hpp"
 #include "vast/detail/type_traits.hpp"
+#include "vast/die.hpp"
 #include "vast/fwd.hpp"
 #include "vast/span.hpp"
 
@@ -25,7 +26,9 @@
 #include <caf/ref_counted.hpp>
 
 #include <cstddef>
+#include <cstring>
 #include <functional>
+#include <memory>
 #include <string>
 #include <utility>
 
@@ -62,22 +65,33 @@ public:
   /// @pre `size > 0 && static_cast<bool>(deleter)`
   static chunk_ptr make(size_type size, void* data, deleter_type deleter);
 
-  /// Construct a chunk from a container of bytes.
-  /// @param xs The container of bytes.
+  /// Construct a chunk from a std::vector of bytes.
+  /// @param xs The std::vector of bytes.
   /// @returns A chunk pointer or `nullptr` on failure.
   /// @pre `std::size(xs) != 0`
-  template <class Container,
-            class = std::enable_if_t<detail::is_container<Container>>>
-  static chunk_ptr make(Container xs) {
-    static_assert(sizeof(typename Container::value_type) == 1,
-                  "chunks only support byte containers");
+  // FIXME: Make a type whitelist. This optimization only makes sense for owning
+  // containers of bytes that implement move constructors. (i.e. we want to
+  // allow vector<char>, vector<byte>, flatbuffer, etc. but not string_view,
+  // vast::span, etc.)
+  template <typename Byte>
+  static chunk_ptr make(std::vector<Byte>&& xs) {
+    static_assert(sizeof(Byte) == 1);
     VAST_ASSERT(std::size(xs) != 0);
-    auto ys = std::make_shared<Container>(std::move(xs));
+    auto ys = std::make_shared<std::vector<Byte>>(std::move(xs));
     auto deleter = [=]() mutable { ys.reset(); };
-    auto data = std::data(*ys);
-    // The deleter won't touch the data.
-    using mutable_data = std::decay_t<decltype(*data)>*;
-    return make(std::size(*ys), const_cast<mutable_data>(data), deleter);
+    return make(ys->size(), ys->data(), deleter);
+  }
+
+  // Construct a chunk by copying a range of bytes.
+  template <typename Byte>
+  static chunk_ptr copy(span<Byte> span) {
+    static_assert(sizeof(Byte) == 1);
+    auto size = span.size();
+    VAST_ASSERT(size > 0);
+    auto chunk = make(size);
+    if (chunk)
+      ::memcpy(chunk->data_, span.data(), size);
+    return chunk;
   }
 
   /// Memory-maps a chunk from a read-only file.
@@ -89,7 +103,7 @@ public:
   mmap(const path& filename, size_type size = 0, size_type offset = 0);
 
   /// Destroys the chunk and releases owned memory via the deleter.
-  ~chunk();
+  ~chunk() override;
 
   // -- container API ---------------------------------------------------------
 
@@ -165,5 +179,14 @@ private:
   size_type size_;
   deleter_type deleter_;
 };
+
+// We need this template in order to be able to send chunks as messages,
+// but we never actually want to have to use it since it will only be invoked
+// if chunk messages would be sent over the network. And we only want to send
+// chunks around internally. So it is declared here but never defined, leading
+// to a linker error if its used.
+// TODO: Replace with a static assert.
+template <typename Inspector>
+typename Inspector::return_type inspect(Inspector&, chunk&);
 
 } // namespace vast
