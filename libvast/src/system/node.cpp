@@ -342,7 +342,7 @@ node_state::spawn_command(const invocation& inv,
     auto source_opt = caf::get<caf::settings>(spawn_opt, "source");
     auto import_opt = caf::get<caf::settings>(spawn_inv.options, "import");
     merge_settings(source_opt, import_opt);
-    put(spawn_inv.options, "import", import_opt);
+    spawn_inv.options["import"] = import_opt;
   }
   // Spawn our new VAST component.
   spawn_arguments args{spawn_inv, st.dir, label};
