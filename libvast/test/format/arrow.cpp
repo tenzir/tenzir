@@ -74,8 +74,9 @@ TEST(arrow batch) {
     buf = *res;
   }
   arrow::io::BufferReader input_stream{buf};
-  std::shared_ptr<arrow::ipc::RecordBatchReader> reader;
-  REQUIRE_OK(arrow::ipc::RecordBatchStreamReader::Open(&input_stream, &reader));
+  auto reader_result = arrow::ipc::RecordBatchStreamReader::Open(&input_stream);
+  REQUIRE_OK(reader_result);
+  auto reader = *reader_result;
   auto layout = zeek_conn_log_slices[0]->layout();
   auto arrow_schema = arrow_table_slice_builder::make_arrow_schema(layout);
   size_t slice_id = 0;
