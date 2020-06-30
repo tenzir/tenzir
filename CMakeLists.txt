@@ -624,7 +624,7 @@ if (NOT VAST_NO_ARROW)
              "\nfind_package(${dep} REQUIRED QUIET CONFIG)")
     endforeach ()
   endif ()
-  find_package(Arrow REQUIRED QUIET CONFIG)
+  find_package(Arrow 0.17 REQUIRED QUIET CONFIG)
   string(APPEND VAST_FIND_DEPENDENCY_LIST
          "\nfind_package(Arrow REQUIRED QUIET CONFIG)")
   set(VAST_HAVE_ARROW true)
