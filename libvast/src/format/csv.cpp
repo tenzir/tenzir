@@ -397,6 +397,19 @@ make_csv_parser(const record_type& layout, table_slice_builder_ptr builder,
 
 } // namespace
 
+vast::system::report reader::status() const {
+  using namespace std::string_literals;
+  uint64_t num_lines = num_lines_;
+  uint64_t invalid_lines = num_invalid_lines_;
+  if (num_invalid_lines_ > 0)
+    VAST_WARNING(this, "failed to parse", num_invalid_lines_, "of", num_lines_,
+                 "recent lines");
+  num_lines_ = 0;
+  num_invalid_lines_ = 0;
+  return {{name() + ".num-lines"s, num_lines},
+          {name() + ".invalid-lines"s, invalid_lines}};
+}
+
 caf::expected<reader::parser_type> reader::read_header(std::string_view line) {
   auto ws = ignore(*parsers::space);
   auto column_name = +(parsers::printable - opt_.separator);
@@ -458,8 +471,14 @@ caf::error reader::read_impl(size_t max_events, size_t max_slice_size,
       VAST_DEBUG(this, "ignores empty line at", lines_->line_number());
       continue;
     }
-    if (!p(line))
-      return make_error(ec::type_clash, "unable to parse CSV line", line);
+    ++num_lines_;
+    if (!p(line)) {
+      if (num_invalid_lines_ == 0)
+        VAST_WARNING(this, "failed to parse line", lines_->line_number(), ":",
+                     line);
+      ++num_invalid_lines_;
+      continue;
+    }
     ++produced;
     if (builder_->rows() == max_slice_size)
       if (auto err = finish(callback))
