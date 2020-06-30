@@ -27,13 +27,30 @@ rm -rf demo.db
 vast -d demo.db start
 ```
 
+### Download Demo Data
+
+The demo data, packaged as `tar`-ball, is publicly available
+[here](https://storage.googleapis.com/tenzir-public-data/vast-jupyter-demo.tgz).
+
+Follow these steps to download and unpack the data.
+
+```sh
+curl -L -o vast-jupyter-demo.tgz https://storage.googleapis.com/tenzir-public-data/vast-jupyter-demo.tgz
+tar xzf vast-jupyter-demo.tgz
+```
+
+Once unpacked, the archive provides a folder with three files:
+
+- vast-jupyter-demo/M57-2009-day11-18.trace
+- vast-jupyter-demo/M57-day11-18-conn.log
+- vast-jupyter-demo/M57-day11-18.json
+
 ### Import Demo Data
 
 ```sh
-ln -s /path/to/data
-vast import zeek -r data/Zeek/M57-2009-day11-18/conn.log
-vast import suricata -r data/Suricata/M57-day11-18.json
-vast import pcap -r data/PCAP/M57-2009-day11-18.trace
+vast import zeek -r vast-jupyter-demo/M57-2009-day11-18/conn.log
+vast import suricata -r vast-jupyter-demo/M57-day11-18.json
+vast import pcap -r vast-jupyter-demo/M57-2009-day11-18.trace
 ```
 
 ### Verify the Imported Data
