@@ -8,6 +8,8 @@ on:
     - '!doc/**.md'
     - examples
     - pyvast
+    - .github/workflows/jupyter.yaml
+    - .github/workflows/pyvast.yaml
   pull_request:
     types: [opened, synchronize]
     paths-ignore:
@@ -16,6 +18,8 @@ on:
     - examples
     - pyvast
     - systemd
+    - .github/workflows/jupyter.yaml
+    - .github/workflows/pyvast.yaml
   release:
     types: published
 env:
