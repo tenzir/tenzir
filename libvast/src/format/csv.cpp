@@ -14,7 +14,6 @@
 #include "vast/format/csv.hpp"
 
 #include "vast/concept/parseable/core.hpp"
-#include "vast/concept/parseable/string.hpp"
 #include "vast/concept/parseable/string/char_class.hpp"
 #include "vast/concept/parseable/to.hpp"
 #include "vast/concept/parseable/vast.hpp"
@@ -189,7 +188,7 @@ const char* reader::name() const {
 
 caf::optional<record_type>
 reader::make_layout(const std::vector<std::string>& names) {
-  VAST_TRACE(__func__, VAST_ARG(names));
+  VAST_TRACE(VAST_ARG(names));
   for (auto& t : schema_) {
     if (auto r = caf::get_if<record_type>(&t)) {
       auto select_fields = [&]() -> caf::optional<record_type> {
