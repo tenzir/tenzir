@@ -1,4 +1,4 @@
-name: "PyVAST Python Egg"
+name: "Jupyter Notebook"
 on:
   push:
     paths:
@@ -51,8 +51,9 @@ jobs:
     - name: Run Demo
       run: |
         export PATH="$PWD"/vast/bin:"$PATH"
-        vast start &
+        nohup vast start &
         vast import zeek -r vast-jupyter-demo/M57-2009-day11-18/conn.log
         vast import suricata -r vast-jupyter-demo/M57-day11-18.json
         vast import pcap -r vast-jupyter-demo/M57-2009-day11-18.trace
         jupyter-nbconvert --to notebook --execute --output vast-example-1.py examples/jupyter/vast-example-1.ipynb
+        vast stop
