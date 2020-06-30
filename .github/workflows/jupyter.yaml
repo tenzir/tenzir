@@ -1,0 +1,58 @@
+name: "PyVAST Python Egg"
+on:
+  push:
+    paths:
+    - 'examples/jupyter'
+    - '.github/workflows/jupyter.yml'
+  release:
+    types: published
+env:
+  DEBIAN_FRONTEND: noninteractive
+jobs:
+  test-demo:
+    name: Jupyter Test
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: true
+      matrix:
+        python-version: [3.7, 3.8]
+
+    steps:
+    - uses: actions/checkout@v2
+      with:
+        ref: ${{ github.ref }}
+
+    # Fetch latest successful build of the 'VAST' workflow, master branch
+    - name: Fetch VAST
+      run: |
+        artifacts_url=$(curl -sL https://api.github.com/repos/tenzir/vast/actions/workflows/vast.yml/runs | jq -er '.workflow_runs | map(select((.conclusion? == "success") and (.head_branch? == "master") and (.workflow_url? == "https://api.github.com/repos/tenzir/vast/actions/workflows/27406") )) | .[0].artifacts_url' )
+        zip_url=$(curl -sL $artifacts_url | jq -er '.artifacts[] | select(.name | contains("-gcc.tar.gz")) | .archive_download_url')
+        curl --header 'authorization: Bearer ${{ secrets.GITHUB_TOKEN }}' -sL $VAST_URL | funzip > vast.tar.gz
+        mkdir -p vast
+        chmod -R +w vast/  # Ensure `tar` has permissions to overwrite files
+        tar --overwrite -C vast/ -xzvf vast.tar.gz
+
+    - name: Set up Python ${{ matrix.python-version }}
+      uses: actions/setup-python@v1
+      with:
+        python-version: ${{ matrix.python-version }}
+
+    - name: Install PyVAST
+      run: |
+        python -m pip install --upgrade pip
+        python -m pip install wheel setuptools
+        python -m pip install pyvast
+
+    - name: Fetch Demo Data
+      run: |
+        curl -L -o vast-jupyter-demo.tgz https://storage.googleapis.com/tenzir-public-data/vast-jupyter-demo.tgz
+        tar xzf vast-jupyter-demo.tgz
+
+    - name: Run Demo
+      run: |
+        export PATH="$PWD"/vast/bin:"$PATH"
+        vast start &
+        vast import zeek -r vast-jupyter-demo/M57-2009-day11-18/conn.log
+        vast import suricata -r vast-jupyter-demo/M57-day11-18.json
+        vast import pcap -r vast-jupyter-demo/M57-2009-day11-18.trace
+        jupyter-nbconvert --to notebook --execute --output vast-example-1.py examples/jupyter/vast-example-1.ipynb
