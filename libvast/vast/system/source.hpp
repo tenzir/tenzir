@@ -260,7 +260,7 @@ source(caf::stateful_actor<source_state<Reader>>* self, Reader reader,
       //       trigger CAF to poll the source after a predefined interval of
       //       time again, e.g., via delayed_send.
       if (produced == 0)
-        VAST_WARNING(self, "received 0 events from the source and may stall");
+        VAST_WARNING(self, "produced 0 events from may stall");
       if (st.remaining) {
         VAST_ASSERT(*st.remaining >= produced);
         *st.remaining -= produced;
