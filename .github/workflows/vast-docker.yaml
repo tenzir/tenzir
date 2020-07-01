@@ -1,0 +1,31 @@
+name: "VAST"
+on:
+  pull_request:
+    types: [opened, synchronize]
+    paths:
+    - Dockerfile
+  release:
+    types: published
+
+env:
+  DEBIAN_FRONTEND: noninteractive
+
+jobs:
+  docker:
+    name: Build Docker Image
+    steps:
+
+    - uses: actions/checkout@v2
+      with:
+        fetch-depth: 0
+
+    - name: Fetch Submodules and Tags
+      run: |
+        auth_header="$(git config --local --get http.https://github.com/.extraheader)"
+        git submodule sync --recursive
+        git -c "http.extraheader=$auth_header" -c protocol.version=2 submodule update --init --force --recursive
+        git fetch origin +refs/tags/*:refs/tags/*
+
+    - name: Build Docker Image
+      run: |
+        docker build .
