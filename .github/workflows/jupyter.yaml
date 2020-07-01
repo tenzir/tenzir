@@ -3,7 +3,7 @@ on:
   push:
     paths:
     - 'examples/jupyter'
-    - '.github/workflows/jupyter.yml'
+    - '.github/workflows/jupyter.yaml'
   release:
     types: published
 env:
