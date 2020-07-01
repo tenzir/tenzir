@@ -22,6 +22,16 @@ jobs:
       with:
         ref: ${{ github.ref }}
 
+    - name: Install Dependencies
+      run: |
+        sudo apt-get -qq update
+        sudo apt-get -qqy install libpcap-dev libssl-dev lsb-release
+        # Install Apache Arrow (c.f. https://arrow.apache.org/install/)
+        wget https://apache.bintray.com/arrow/$(lsb_release --id --short | tr 'A-Z' 'a-z')/apache-arrow-archive-keyring-latest-$(lsb_release --codename --short).deb
+        sudo apt-get -qqy install ./apache-arrow-archive-keyring-latest-$(lsb_release --codename --short).deb
+        sudo apt-get -qq update
+        sudo apt-get -qqy install libarrow-dev
+
     # Fetch latest successful build of the 'VAST' workflow, master branch
     - name: Fetch VAST
       run: |
