@@ -140,6 +140,7 @@ struct source_state {
     remaining = std::move(max_events);
     local_schema = std::move(sch);
     accountant = std::move(acc);
+    sink = {};
     // Register with the accountant.
     self->send(accountant, atom::announce_v, name);
     // Figure out which schemas we need.
@@ -216,6 +217,7 @@ source(caf::stateful_actor<source_state<Reader>>* self, Reader reader,
        size_t table_slice_size, caf::optional<size_t> max_events,
        type_registry_type type_registry, vast::schema local_schema,
        std::string type_filter, accountant_type accountant) {
+  VAST_TRACE(VAST_ARG(self));
   // Initialize state.
   auto& st = self->state;
   st.init(self, std::move(reader), std::move(max_events),
@@ -307,9 +309,12 @@ source(caf::stateful_actor<source_state<Reader>>* self, Reader reader,
       //       implement an anycast downstream manager and use it for the
       //       source, because we mustn't duplicate data.
       auto& st = self->state;
-      if (st.sink) {
-        self->quit(make_error(ec::logic_error, "does not support multiple "
-                                               "sinks"));
+      if (st.sink.address() != sink.address()) {
+        self->quit(caf::make_error(ec::logic_error, "source does not support "
+                                                    "multiple sinks"));
+      } else if (st.sink) {
+        VAST_WARNING(self, "ignores request from", self->current_sender(),
+                     "to set same sink again");
         return;
       }
       st.sink = sink;
