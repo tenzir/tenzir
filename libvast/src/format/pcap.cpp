@@ -272,6 +272,8 @@ caf::error reader::read_impl(size_t max_events, size_t max_slice_size,
     const u_char* data;
     pcap_pkthdr* header;
     auto r = ::pcap_next_ex(pcap_, &header, &data);
+    if (r == 0 && produced == 0)
+      continue; // timed out, no events produced yet
     if (r == 0)
       return finish(f, caf::none); // timed out
     if (r == -2)
