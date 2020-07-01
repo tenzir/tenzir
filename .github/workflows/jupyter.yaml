@@ -61,8 +61,10 @@ jobs:
 
     - name: Run Demo
       run: |
+        set -x
         export PATH="$PWD"/vast/bin:"$PATH"
         nohup vast start &
+        while ! lsof -i ":42000"; do sleep 1; done
         vast import zeek -r vast-jupyter-demo/M57-day11-18-conn.log
         vast import suricata -r vast-jupyter-demo/M57-day11-18.json
         vast import pcap -r vast-jupyter-demo/M57-2009-day11-18.trace
