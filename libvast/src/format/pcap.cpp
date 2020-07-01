@@ -257,7 +257,8 @@ caf::error reader::read_impl(size_t max_events, size_t max_slice_size,
     VAST_DEBUG(this, "expires flow table every", expire_interval_, "s");
   }
   auto start = std::chrono::steady_clock::now();
-  for (size_t produced = 0; produced < max_events; ++produced) {
+  auto produced = size_t{0};
+  while (produced < max_events) {
     // We must check not only for a timeout but also whether any events were
     // produced to work around CAF's assumption that sources are always able to
     // generate events. Once `caf::stream_source` can handle empty batches
@@ -397,6 +398,7 @@ caf::error reader::read_impl(size_t max_events, size_t max_slice_size,
           && builder_->add(packet))) {
       return make_error(ec::parse_error, "unable to fill row");
     }
+    ++produced;
     if (pseudo_realtime_ > 0) {
       if (ts < last_timestamp_) {
         VAST_WARNING(this, "encountered non-monotonic packet timestamps:",
