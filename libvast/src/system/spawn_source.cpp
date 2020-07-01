@@ -60,9 +60,10 @@ maybe_actor spawn_generic_source(node_actor* self, spawn_arguments& args,
     return make_error(ec::invalid_configuration, "table-slice-size can't be 0");
   Reader reader{table_slice_type, options, std::forward<Ts>(ctor_args)...};
   VAST_INFO(self, "spawned a", reader.name(), "source");
-  auto src = self->spawn(source<Reader>, std::move(reader), slice_size,
-                         max_events, st.type_registry, vast::schema{},
-                         std::move(type_filter), accountant_type{});
+  auto src
+    = self->spawn<caf::detached>(source<Reader>, std::move(reader), slice_size,
+                                 max_events, st.type_registry, vast::schema{},
+                                 std::move(type_filter), accountant_type{});
   src->attach_functor([=, name = reader.name()](const caf::error& reason) {
     if (!reason || reason == caf::exit_reason::user_shutdown)
       VAST_VERBOSE(src, name, "source shuts down");
