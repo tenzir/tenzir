@@ -27,7 +27,7 @@ jobs:
       run: |
         artifacts_url=$(curl -sL https://api.github.com/repos/tenzir/vast/actions/workflows/vast.yml/runs | jq -er '.workflow_runs | map(select((.conclusion? == "success") and (.head_branch? == "master") and (.workflow_url? == "https://api.github.com/repos/tenzir/vast/actions/workflows/27406") )) | .[0].artifacts_url' )
         zip_url=$(curl -sL $artifacts_url | jq -er '.artifacts[] | select(.name | contains("-gcc.tar.gz")) | .archive_download_url')
-        curl --header 'authorization: Bearer ${{ secrets.GITHUB_TOKEN }}' -sL $VAST_URL | funzip > vast.tar.gz
+        curl --header 'authorization: Bearer ${{ secrets.GITHUB_TOKEN }}' -sL $zip_url | funzip > vast.tar.gz
         mkdir -p vast
         chmod -R +w vast/  # Ensure `tar` has permissions to overwrite files
         tar --overwrite -C vast/ -xzvf vast.tar.gz
