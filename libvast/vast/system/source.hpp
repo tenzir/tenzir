@@ -125,6 +125,9 @@ struct source_state {
   /// Current metrics for the accountant.
   measurement metrics;
 
+  /// Indicates whether the stream source is done.
+  bool done;
+
   // -- utility functions ------------------------------------------------------
 
   /// Initializes the state.
@@ -141,6 +144,7 @@ struct source_state {
     local_schema = std::move(sch);
     accountant = std::move(acc);
     sink = {};
+    done = false;
     // Register with the accountant.
     self->send(accountant, atom::announce_v, name);
     // Figure out which schemas we need.
@@ -223,16 +227,24 @@ source(caf::stateful_actor<source_state<Reader>>* self, Reader reader,
   st.init(self, std::move(reader), std::move(max_events),
           std::move(type_registry), std::move(local_schema),
           std::move(type_filter), std::move(accountant));
+  self->set_down_handler([=](const caf::down_msg& msg) {
+    VAST_VERBOSE(self, "received DOWN from", msg.source);
+    self->state.done = true;
+  });
+  self->set_exit_handler([=](const caf::exit_msg& msg) {
+    VAST_VERBOSE(self, "received EXIT from", msg.source);
+    self->state.done = true;
+    self->quit(msg.reason);
+  });
   // Spin up the stream manager for the source.
   st.mgr = self->make_continuous_source(
     // init
-    [=](bool& done) {
-      done = false;
+    [=](caf::unit_t&) {
       caf::timestamp now = std::chrono::system_clock::now();
       self->send(self->state.accountant, "source.start", now);
     },
     // get next element
-    [=](bool& done, caf::downstream<table_slice_ptr>& out, size_t num) {
+    [=](caf::unit_t&, caf::downstream<table_slice_ptr>& out, size_t num) {
       auto& st = self->state;
       // Extract events until the source has exhausted its input or until
       // we have completed a batch.
@@ -259,7 +271,7 @@ source(caf::stateful_actor<source_state<Reader>>* self, Reader reader,
         st.send_report();
       };
       auto finish = [&] {
-        done = true;
+        st.done = true;
         st.send_report();
         self->quit();
       };
@@ -286,7 +298,7 @@ source(caf::stateful_actor<source_state<Reader>>* self, Reader reader,
       }
     },
     // done?
-    [](const bool& done) { return done; });
+    [=](const caf::unit_t&) { return self->state.done; });
   return {
     [=](atom::get, atom::schema) { return self->state.reader.schema(); },
     [=](atom::put, schema sch) -> caf::result<void> {
