@@ -30,7 +30,7 @@ jobs:
         curl --header 'authorization: Bearer ${{ secrets.GITHUB_TOKEN }}' -sL $zip_url | funzip > vast.tar.gz
         mkdir -p vast
         chmod -R +w vast/  # Ensure `tar` has permissions to overwrite files
-        tar --overwrite -C vast/ -xzvf vast.tar.gz
+        tar --strip 1 --overwrite -C vast/ -xzvf vast.tar.gz
 
     - name: Set up Python ${{ matrix.python-version }}
       uses: actions/setup-python@v1
