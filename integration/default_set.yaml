@@ -263,14 +263,14 @@ tests:
         input: data/pcap/zeek/packet_filter.log.gz
       - command: -N import zeek
         input: data/pcap/zeek/ssh.log.gz
-      - command: -N pivot zeek.conn '#type ~ /suricata.*/ && dest_ip == 72.247.178.18'
+      - command: -N pivot --format=zeek zeek.conn '#type ~ /suricata.*/ && dest_ip == 72.247.178.18'
         transformation: awk '!/^#(open|close)/'
       - command: -N pivot zeek.conn '#type ~ /zeek.http/ && method == "GET"'
         transformation: awk '!/^#(open|close)/'
       - guard: 'import -h 2>&1 | grep -q pcap'
       - command: -N import pcap
         input: data/pcap/example.pcap.gz
-      - command: -N pivot pcap.packet 'dest_ip == 72.247.178.18'
+      - command: -N pivot --format=pcap pcap.packet 'dest_ip == 72.247.178.18'
         transformation: tcpdump -n -tt -r -
   Arrow:
     condition: 'export -h 2>&1 | grep -q arrow'
@@ -293,6 +293,7 @@ tests:
       - command: import -b zeek
         input: data/zeek/conn.log.gz
       - command: explore --after=3min 'uid == "Yaix3QBP3Xg"'
+      - command: explore --format=ascii --after=3min 'uid == "Yaix3QBP3Xg"'
   # The first queries are stress tests for the deduplication: The query
   # selects every event, and the huge timebox ensures that every event
   # is included in the context of every other event.

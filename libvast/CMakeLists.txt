@@ -108,6 +108,7 @@ set(libvast_sources
     src/system/indexer_downstream_manager.cpp
     src/system/indexer_stage_driver.cpp
     src/system/infer_command.cpp
+    src/system/make_sink.cpp
     src/system/node.cpp
     src/system/partition.cpp
     src/system/pivot_command.cpp

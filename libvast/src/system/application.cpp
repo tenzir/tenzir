@@ -108,6 +108,7 @@ auto make_explore_command() {
     "explore", "explore context around query results",
     documentation::vast_explore,
     opts("?explore")
+      .add<std::string>("format", "output format (default: JSON)")
       .add<std::string>("after,A", "include all records up to this much"
                                    " time after each result")
       .add<std::string>("before,B", "include all records up to this much"
@@ -229,7 +230,9 @@ auto make_peer_command() {
 auto make_pivot_command() {
   auto pivot = std::make_unique<command>(
     "pivot", "extracts related events of a given type",
-    documentation::vast_pivot, make_pcap_options("?pivot"));
+    documentation::vast_pivot,
+    make_pcap_options("?pivot").add<std::string>("format", "output format "
+                                                           "(default: JSON)"));
   return pivot;
 }
 
@@ -342,22 +345,21 @@ auto make_command_factory() {
     {"count", count_command},
     {"explore", explore_command},
     {"export ascii",
-     writer_command<format::ascii::writer, defaults::export_::ascii>},
+     writer_command<format::ascii::writer>},
     {"export csv",
-     writer_command<format::csv::writer, defaults::export_::csv>},
+     writer_command<format::csv::writer>},
     {"export json",
-     writer_command<format::json::writer, defaults::export_::json>},
+     writer_command<format::json::writer>},
     {"export null",
-     writer_command<format::null::writer, defaults::export_::null>},
+     writer_command<format::null::writer>},
 #if VAST_HAVE_ARROW
     {"export arrow",
-     writer_command<format::arrow::writer, defaults::export_::arrow>},
+     writer_command<format::arrow::writer>},
 #endif
 #if VAST_HAVE_PCAP
     {"export pcap", pcap_writer_command},
 #endif
-    {"export zeek", writer_command<format::zeek::writer,
-      defaults::export_::zeek>},
+    {"export zeek", writer_command<format::zeek::writer>},
     {"infer", infer_command},
     {"import csv", import_command<policy::source_reader,
       format::csv::reader, defaults::import::csv>},

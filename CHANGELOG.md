@@ -24,6 +24,10 @@ Every entry has a category for which we use the following visual abbreviations:
   name more accurately reflects what it is doing.
   [#948](https://github.com/tenzir/vast/pull/948)
 
+- 🎁 The output format for the `explore` and `pivot` commands can now be set
+  using the `explore.format` and `pivot.format` options respectively. Both
+  default to JSON. [#921](https://github.com/tenzir/vast/921)
+
 - 🎁 The meta index now uses Bloom filters for equality queries involving IP
   addresses. This especially accelerates queries where the user wants to know
   whether a certain IP address exists in the entire database.

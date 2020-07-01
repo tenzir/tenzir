@@ -13,23 +13,17 @@
 
 #include "vast/system/explore_command.hpp"
 
-#include "vast/concept/parseable/to.hpp"
-#include "vast/concept/parseable/vast/expression.hpp"
 #include "vast/defaults.hpp"
-#include "vast/detail/make_io_stream.hpp"
 #include "vast/error.hpp"
-#include "vast/format/json.hpp"
-#include "vast/fwd.hpp"
 #include "vast/logger.hpp"
 #include "vast/scope_linked.hpp"
+#include "vast/system/make_sink.hpp"
 #include "vast/system/node_control.hpp"
 #include "vast/system/read_query.hpp"
 #include "vast/system/signal_monitor.hpp"
 #include "vast/system/sink.hpp"
 #include "vast/system/spawn_explorer.hpp"
 #include "vast/system/spawn_or_connect_to_node.hpp"
-#include "vast/system/start_command.hpp"
-#include "vast/system/tracker.hpp"
 
 #include <caf/actor.hpp>
 #include <caf/event_based_actor.hpp>
@@ -46,10 +40,13 @@ using namespace std::chrono_literals;
 namespace vast::system {
 
 caf::message explore_command(const invocation& inv, caf::actor_system& sys) {
+  using namespace std::string_literals;
   VAST_DEBUG_ANON(inv);
   const auto& options = inv.options;
   if (auto error = explorer_validate_args(inv.options))
     return make_message(error);
+  // Read options and arguments.
+  auto output_format = caf::get_or(inv.options, "explore.format", "json"s);
   // Read query from input file, STDIN or CLI arguments.
   auto query = read_query(inv, "export.read", 0);
   if (!query)
@@ -58,21 +55,15 @@ caf::message explore_command(const invocation& inv, caf::actor_system& sys) {
                                          defaults::explore::max_events_query);
   // Get a local actor to interact with `sys`.
   caf::scoped_actor self{sys};
-  // TODO: Add --format option to select output format.
-  auto out = detail::make_output_stream(
-    std::string{format::json::writer::defaults::write}, false);
-  if (!out)
-    return make_message(out.error());
-  caf::actor writer
-    = sys.spawn(sink<format::json::writer>,
-                format::json::writer{std::move(*out)}, max_events);
-  if (!writer)
-    return make_message(ec::unspecified, "could not spawn writer");
-  auto writer_guard = caf::detail::make_scope_guard([&] {
-    VAST_DEBUG(self, "sending exit to writer");
-    self->send_exit(writer, caf::exit_reason::user_shutdown);
+  auto s = make_sink(sys, inv.options, output_format);
+  if (!s)
+    return make_message(s.error());
+  auto sink = *s;
+  auto sink_guard = caf::detail::make_scope_guard([&] {
+    VAST_DEBUG(self, "sending exit to sink");
+    self->send_exit(sink, caf::exit_reason::user_shutdown);
   });
-  self->monitor(writer);
+  self->monitor(sink);
   // Get VAST node.
   auto node_opt
     = system::spawn_or_connect_to_node(self, options, content(sys.config()));
@@ -115,7 +106,7 @@ caf::message explore_command(const invocation& inv, caf::actor_system& sys) {
   self->send(*exporter, atom::sink_v, *explorer);
   // (Ab)use query_statistics as done message.
   self->send(*exporter, atom::statistics_v, *explorer);
-  self->send(*explorer, atom::sink_v, writer);
+  self->send(*explorer, atom::sink_v, sink);
   self->send(*exporter, atom::run_v);
   caf::error err;
   auto stop = false;
@@ -127,9 +118,9 @@ caf::message explore_command(const invocation& inv, caf::actor_system& sys) {
         } else if (msg.source == *explorer) {
           VAST_DEBUG(inv.full_name, "received DOWN from explorer");
           explorer_guard.disable();
-        } else if (msg.source == writer) {
+        } else if (msg.source == sink) {
           VAST_DEBUG(inv.full_name, "received DOWN from sink");
-          writer_guard.disable();
+          sink_guard.disable();
         } else {
           VAST_ASSERT(!"received DOWN from inexplicable actor");
         }
