@@ -123,6 +123,8 @@ const char* reader::name() const {
 
 vast::system::report reader::status() const {
   using namespace std::string_literals;
+  if (!pcap_)
+    return {};
   auto stats = pcap_stat{};
   if (auto res = pcap_stats(pcap_, &stats); res != 0)
     return {};
