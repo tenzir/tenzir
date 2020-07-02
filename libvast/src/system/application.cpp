@@ -356,17 +356,12 @@ auto make_command_factory() {
   return command::factory{
     {"count", count_command},
     {"explore", explore_command},
-    {"export ascii",
-     writer_command<format::ascii::writer>},
-    {"export csv",
-     writer_command<format::csv::writer>},
-    {"export json",
-     writer_command<format::json::writer>},
-    {"export null",
-     writer_command<format::null::writer>},
+    {"export ascii", writer_command<format::ascii::writer>},
+    {"export csv", writer_command<format::csv::writer>},
+    {"export json", writer_command<format::json::writer>},
+    {"export null", writer_command<format::null::writer>},
 #if VAST_HAVE_ARROW
-    {"export arrow",
-     writer_command<format::arrow::writer>},
+    {"export arrow", writer_command<format::arrow::writer>},
 #endif
 #if VAST_HAVE_PCAP
     {"export pcap", pcap_writer_command},
