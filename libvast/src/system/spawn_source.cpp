@@ -47,6 +47,9 @@ maybe_actor spawn_generic_source(node_actor* self, spawn_arguments& args,
                                  Ts&&... ctor_args) {
   auto& st = self->state;
   auto& options = args.inv.options;
+  // Bail out early for bogus invocations.
+  if (caf::get_or(options, "system.node", false))
+    return make_error(ec::parse_error, "cannot start a local node");
   // VAST_UNBOX_VAR(expr, normalized_and_validated(args));
   VAST_UNBOX_VAR(sch, read_schema(args));
   auto table_slice_type = caf::get_or(options, "source.spawn.table-slice-type",
