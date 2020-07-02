@@ -401,7 +401,13 @@ auto make_command_factory() {
     {"spawn sink json", remote_command},
     {"spawn sink pcap", remote_command},
     {"spawn sink zeek", remote_command},
+    {"spawn source csv", remote_command},
+    {"spawn source json", remote_command},
+#if VAST_HAVE_PCAP
     {"spawn source pcap", remote_command},
+#endif
+    {"spawn source suricata", remote_command},
+    {"spawn source syslog", remote_command},
     {"spawn source test", remote_command},
     {"spawn source zeek", remote_command},
     {"start", start_command},
