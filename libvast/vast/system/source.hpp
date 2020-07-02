@@ -227,10 +227,6 @@ source(caf::stateful_actor<source_state<Reader>>* self, Reader reader,
   st.init(self, std::move(reader), std::move(max_events),
           std::move(type_registry), std::move(local_schema),
           std::move(type_filter), std::move(accountant));
-  self->set_down_handler([=](const caf::down_msg& msg) {
-    VAST_VERBOSE(self, "received DOWN from", msg.source);
-    self->state.done = true;
-  });
   self->set_exit_handler([=](const caf::exit_msg& msg) {
     VAST_VERBOSE(self, "received EXIT from", msg.source);
     self->state.done = true;
