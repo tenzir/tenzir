@@ -195,7 +195,7 @@ auto make_import_command() {
   import_->add_subcommand(
     "test", "imports random data for testing or benchmarking",
     documentation::vast_import_test,
-    source_opts("?import.test").add<size_t>("seed,s", "the PRNG seed"));
+    source_opts("?import.test").add<size_t>("seed", "the PRNG seed"));
 #if VAST_HAVE_PCAP
   import_->add_subcommand(
     "pcap", "imports PCAP logs from STDIN or file",
@@ -279,7 +279,7 @@ auto make_spawn_source_command() {
                                source_opts("?spawn.source.syslog"));
   spawn_source->add_subcommand(
     "test", "creates a new test source", "",
-    source_opts("?spawn.source.test").add<size_t>("seed,s", "the PRNG seed"));
+    source_opts("?spawn.source.test").add<size_t>("seed", "the PRNG seed"));
   spawn_source->add_subcommand("zeek", "creates a new Zeek source", "",
                                source_opts("?spawn.source.zeek"));
   return spawn_source;
