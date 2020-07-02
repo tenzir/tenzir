@@ -53,9 +53,6 @@ void register_component(scheduled_actor* self, tracker_state& st,
   } else if (type == "importer") {
     for (auto& a : actors("source"))
       anon_send(a, atom::sink_v, component);
-  } else if (type == "source") {
-    for (auto& a : actors("importer"))
-      anon_send(component, atom::sink_v, a);
   } else if (type == "sink") {
     for (auto& a : actors("exporter"))
       anon_send(a, atom::sink_v, component);
