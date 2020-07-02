@@ -1,9 +1,10 @@
-name: "VAST"
+name: "VAST Docker"
 on:
   pull_request:
     types: [opened, synchronize]
     paths:
     - Dockerfile
+    - .github/workflows/vast-docker.yaml
   release:
     types: published
 
