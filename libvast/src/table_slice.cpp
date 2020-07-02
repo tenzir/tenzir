@@ -138,8 +138,11 @@ make_random_table_slices(size_t num_slices, size_t slice_size,
   // We have no access to the actor system, so we can only pick the default
   // table slice type here. This ignores any user-defined overrides. However,
   // this function is only meant for testing anyways.
-  format::test::reader src{defaults::import::table_slice_type, seed,
-                           std::numeric_limits<uint64_t>::max()};
+  caf::settings opts;
+  caf::put(opts, "import.test.seed", seed);
+  caf::put(opts, "import.max-events", std::numeric_limits<size_t>::max());
+  format::test::reader src{defaults::import::table_slice_type, std::move(opts),
+                           nullptr};
   src.schema(std::move(sc));
   std::vector<table_slice_ptr> result;
   auto add_slice = [&](table_slice_ptr ptr) {

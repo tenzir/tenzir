@@ -17,12 +17,14 @@
 #include "vast/concept/parseable/numeric/real.hpp"
 #include "vast/concept/parseable/string/char_class.hpp"
 #include "vast/concept/parseable/vast/schema.hpp"
+#include "vast/defaults.hpp"
 #include "vast/detail/assert.hpp"
 #include "vast/detail/string.hpp"
 #include "vast/detail/type_traits.hpp"
 #include "vast/error.hpp"
 #include "vast/factory.hpp"
 #include "vast/logger.hpp"
+#include "vast/settings.hpp"
 #include "vast/table_slice_builder.hpp"
 #include "vast/table_slice_builder_factory.hpp"
 
@@ -239,9 +241,20 @@ using default_randomizer = randomizer<std::mt19937_64>;
 
 } // namespace <anonymous>
 
-reader::reader(caf::atom_value slice_type, size_t seed, size_t n)
-  : super{slice_type}, generator_{seed}, num_events_{n} {
-  // nop
+reader::reader(caf::atom_value id, const caf::settings& options,
+               std::unique_ptr<std::istream>)
+  : super{id},
+    generator_{vast::defaults::import::test::seed(options)},
+    num_events_{caf::get_or(options, "import.max-events",
+                            vast::defaults::import::max_events)} {
+  if (num_events_ == 0)
+    num_events_ = std::numeric_limits<size_t>::max();
+}
+
+void reader::reset(std::unique_ptr<std::istream>) {
+  // This function intentionally does nothing, as the test reader generates data
+  // instead of reading from an input stream. It only exists for compatibility
+  // with our reader abstraction.
 }
 
 caf::error reader::schema(vast::schema sch) {
@@ -280,6 +293,8 @@ const char* reader::name() const {
 
 caf::error reader::read_impl(size_t max_events, size_t max_slice_size,
                              consumer& f) {
+  VAST_TRACE(VAST_ARG(max_events), VAST_ARG(max_slice_size),
+             VAST_ARG(num_events_));
   // Sanity checks.
   if (schema_.empty())
     if (auto err = schema(default_schema()))

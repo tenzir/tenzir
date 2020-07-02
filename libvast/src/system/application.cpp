@@ -192,10 +192,10 @@ auto make_import_command() {
   import_->add_subcommand("syslog", "imports syslog messages",
                           documentation::vast_import_syslog,
                           source_opts("?import.syslog"));
-  import_->add_subcommand("test",
-                          "imports random data for testing or benchmarking",
-                          documentation::vast_import_test,
-                          opts("?import.test"));
+  import_->add_subcommand(
+    "test", "imports random data for testing or benchmarking",
+    documentation::vast_import_test,
+    source_opts("?import.test").add<size_t>("seed,s", "the PRNG seed"));
 #if VAST_HAVE_PCAP
   import_->add_subcommand(
     "pcap", "imports PCAP logs from STDIN or file",
@@ -277,11 +277,9 @@ auto make_spawn_source_command() {
                                source_opts("?spawn.source.suricata"));
   spawn_source->add_subcommand("syslog", "creates a new Syslog source", "",
                                source_opts("?spawn.source.syslog"));
-  spawn_source->add_subcommand("test", "creates a new test source", "",
-                               opts("?spawn.source.test")
-                                 .add<size_t>("seed,s", "the PRNG seed")
-                                 .add<size_t>("events,n", "number of events to "
-                                                          "generate"));
+  spawn_source->add_subcommand(
+    "test", "creates a new test source", "",
+    source_opts("?spawn.source.test").add<size_t>("seed,s", "the PRNG seed"));
   spawn_source->add_subcommand("zeek", "creates a new Zeek source", "",
                                source_opts("?spawn.source.zeek"));
   return spawn_source;
@@ -374,22 +372,22 @@ auto make_command_factory() {
 #endif
     {"export zeek", writer_command<format::zeek::writer>},
     {"infer", infer_command},
-    {"import csv", import_command<policy::source_reader,
-      format::csv::reader, defaults::import::csv>},
-    {"import json", import_command<policy::source_reader,
-      format::json::reader<>, defaults::import::json>},
+    {"import csv", import_command<format::csv::reader, defaults::import::csv>},
+    {"import json", import_command<format::json::reader<>,
+      defaults::import::json>},
 #if VAST_HAVE_PCAP
-    {"import pcap", import_command<policy::source_reader,
-      format::pcap::reader, defaults::import::pcap>},
+    {"import pcap", import_command<format::pcap::reader,
+      defaults::import::pcap>},
 #endif
-    {"import suricata", import_command<policy::source_reader,
-      format::json::reader<format::json::suricata>, defaults::import::suricata>},
-    {"import syslog", import_command<policy::source_reader,
-      format::syslog::reader, defaults::import::syslog>},
-    {"import test", import_command<policy::source_generator,
-      format::test::reader, defaults::import::test>},
-    {"import zeek", import_command<policy::source_reader,
-      format::zeek::reader, defaults::import::zeek>},
+    {"import suricata", import_command<
+      format::json::reader<format::json::suricata>,
+      defaults::import::suricata>},
+    {"import syslog", import_command<format::syslog::reader,
+      defaults::import::syslog>},
+    {"import test", import_command<format::test::reader,
+      defaults::import::test>},
+    {"import zeek", import_command<format::zeek::reader,
+      defaults::import::zeek>},
     {"kill", remote_command},
     {"peer", remote_command},
     {"pivot", pivot_command},

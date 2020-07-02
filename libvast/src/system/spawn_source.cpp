@@ -118,24 +118,9 @@ maybe_actor spawn_syslog_source(node_actor* self, spawn_arguments& args) {
 }
 
 maybe_actor spawn_test_source(node_actor* self, spawn_arguments& args) {
-  using reader_type = format::test::reader;
-  VAST_UNBOX_VAR(sch, read_schema(args));
-  // The test source only generates events out of thin air and thus accepts no
-  // source expression.
-  if (!args.empty())
-    return unexpected_arguments(args);
-  auto table_slice_type
-    = caf::get_or(args.inv.options, "import.table-slice-type",
-                  defaults::import::table_slice_type);
   using defaults_t = defaults::import::test;
-  std::string category = defaults_t::category;
-  reader_type reader{table_slice_type, defaults_t::seed(args.inv.options),
-                     get_or(args.inv.options, "import.max-events",
-                            defaults::import::max_events)};
-  auto src = self->spawn(default_source<reader_type>, std::move(reader));
-  if (sch)
-    caf::anon_send(src, atom::put_v, std::move(*sch));
-  return src;
+  VAST_UNBOX_VAR(in, detail::make_input_stream<defaults_t>(args.inv.options));
+  return spawn_generic_source<format::test::reader>(self, args, std::move(in));
 }
 
 maybe_actor spawn_zeek_source(node_actor* self, spawn_arguments& args) {
