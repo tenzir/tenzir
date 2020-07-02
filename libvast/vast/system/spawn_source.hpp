@@ -18,11 +18,29 @@
 
 namespace vast::system {
 
+/// Tries to spawn a new SOURCE for the CSV format.
+/// @param self Points to the parent actor.
+/// @param args Configures the new actor.
+/// @returns a handle to the spawned actor on success, an error otherwise
+maybe_actor spawn_csv_source(node_actor* self, spawn_arguments& args);
+
+/// Tries to spawn a new SOURCE for the JSON format.
+/// @param self Points to the parent actor.
+/// @param args Configures the new actor.
+/// @returns a handle to the spawned actor on success, an error otherwise
+maybe_actor spawn_json_source(node_actor* self, spawn_arguments& args);
+
 /// Tries to spawn a new SOURCE for the PCAP format.
 /// @param self Points to the parent actor.
 /// @param args Configures the new actor.
 /// @returns a handle to the spawned actor on success, an error otherwise
 maybe_actor spawn_pcap_source(node_actor* self, spawn_arguments& args);
+
+/// Tries to spawn a new SOURCE for the Suricata format.
+/// @param self Points to the parent actor.
+/// @param args Configures the new actor.
+/// @returns a handle to the spawned actor on success, an error otherwise
+maybe_actor spawn_suricata_source(node_actor* self, spawn_arguments& args);
 
 /// Tries to spawn a new SOURCE for the Syslog format.
 /// @param self Points to the parent actor.

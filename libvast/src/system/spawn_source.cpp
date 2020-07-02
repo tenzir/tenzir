@@ -17,6 +17,9 @@
 #include "vast/defaults.hpp"
 #include "vast/detail/make_io_stream.hpp"
 #include "vast/detail/unbox_var.hpp"
+#include "vast/format/csv.hpp"
+#include "vast/format/json.hpp"
+#include "vast/format/json/suricata.hpp"
 #include "vast/format/syslog.hpp"
 #include "vast/format/test.hpp"
 #include "vast/format/zeek.hpp"
@@ -76,6 +79,19 @@ maybe_actor spawn_generic_source(node_actor* self, spawn_arguments& args,
 
 } // namespace <anonymous>
 
+maybe_actor spawn_csv_source(node_actor* self, spawn_arguments& args) {
+  using defaults_t = defaults::import::csv;
+  VAST_UNBOX_VAR(in, detail::make_input_stream<defaults_t>(args.inv.options));
+  return spawn_generic_source<format::csv::reader>(self, args, std::move(in));
+}
+
+maybe_actor spawn_json_source(node_actor* self, spawn_arguments& args) {
+  using defaults_t = defaults::import::json;
+  VAST_UNBOX_VAR(in, detail::make_input_stream<defaults_t>(args.inv.options));
+  return spawn_generic_source<format::json::reader<>>(self, args,
+                                                      std::move(in));
+}
+
 maybe_actor spawn_pcap_source([[maybe_unused]] node_actor* self,
                               [[maybe_unused]] spawn_arguments& args) {
 #if !VAST_HAVE_PCAP
@@ -87,8 +103,14 @@ maybe_actor spawn_pcap_source([[maybe_unused]] node_actor* self,
 #endif // VAST_HAVE_PCAP
 }
 
-maybe_actor spawn_syslog_source([[maybe_unused]] node_actor* self,
-                                [[maybe_unused]] spawn_arguments& args) {
+maybe_actor spawn_suricata_source(node_actor* self, spawn_arguments& args) {
+  using defaults_t = defaults::import::suricata;
+  VAST_UNBOX_VAR(in, detail::make_input_stream<defaults_t>(args.inv.options));
+  return spawn_generic_source<format::json::reader<format::json::suricata>>(
+    self, args, std::move(in));
+}
+
+maybe_actor spawn_syslog_source(node_actor* self, spawn_arguments& args) {
   using defaults_t = defaults::import::syslog;
   VAST_UNBOX_VAR(in, detail::make_input_stream<defaults_t>(args.inv.options));
   return spawn_generic_source<format::syslog::reader>(self, args,

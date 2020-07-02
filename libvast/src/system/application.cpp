@@ -252,6 +252,10 @@ auto make_spawn_source_command() {
       .add<std::string>("read-timeout", "read timoeut after which data is "
                                         "forwarded to the importer"),
     false);
+  spawn_source->add_subcommand("csv", "creates a new CSV source", "",
+                               source_opts("?spawn.source.csv"));
+  spawn_source->add_subcommand("json", "creates a new JSON source", "",
+                               source_opts("?spawn.source.json"));
 #if VAST_HAVE_PCAP
   spawn_source->add_subcommand(
     "pcap", "creates a new PCAP source", "",
@@ -269,6 +273,10 @@ auto make_spawn_source_command() {
       .add<bool>("disable-community-id", "disable computation of community id "
                                          "for every packet"));
 #endif
+  spawn_source->add_subcommand("suricata", "creates a new Syslog source", "",
+                               source_opts("?spawn.source.suricata"));
+  spawn_source->add_subcommand("syslog", "creates a new Syslog source", "",
+                               source_opts("?spawn.source.syslog"));
   spawn_source->add_subcommand("test", "creates a new test source", "",
                                opts("?spawn.source.test")
                                  .add<size_t>("seed,s", "the PRNG seed")
@@ -276,8 +284,6 @@ auto make_spawn_source_command() {
                                                           "generate"));
   spawn_source->add_subcommand("zeek", "creates a new Zeek source", "",
                                source_opts("?spawn.source.zeek"));
-  spawn_source->add_subcommand("syslog", "creates a new Syslog source", "",
-                               source_opts("?spawn.source.syslog"));
   return spawn_source;
 }
 
@@ -403,9 +409,7 @@ auto make_command_factory() {
     {"spawn sink zeek", remote_command},
     {"spawn source csv", remote_command},
     {"spawn source json", remote_command},
-#if VAST_HAVE_PCAP
     {"spawn source pcap", remote_command},
-#endif
     {"spawn source suricata", remote_command},
     {"spawn source syslog", remote_command},
     {"spawn source test", remote_command},
