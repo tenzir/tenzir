@@ -69,9 +69,9 @@ maybe_actor spawn_generic_source(node_actor* self, spawn_arguments& args,
                                  std::move(type_filter), accountant_type{});
   src->attach_functor([=, name = reader.name()](const caf::error& reason) {
     if (!reason || reason == caf::exit_reason::user_shutdown)
-      VAST_VERBOSE(src, name, "source shuts down");
+      VAST_INFO(name, "source shuts down");
     else
-      VAST_WARNING(src, name, "source shuts down with error:", reason);
+      VAST_WARNING(name, "source shuts down with error:", reason);
   });
   self->send(src, atom::sink_v, st.importer);
   return src;
