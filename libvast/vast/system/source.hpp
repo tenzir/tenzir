@@ -317,12 +317,11 @@ source(caf::stateful_actor<source_state<Reader>>* self, Reader reader,
       //       implement an anycast downstream manager and use it for the
       //       source, because we mustn't duplicate data.
       auto& st = self->state;
-      if (st.sink.address() != sink.address()) {
-        self->quit(caf::make_error(ec::logic_error, "source does not support "
-                                                    "multiple sinks"));
-      } else if (st.sink) {
-        VAST_WARNING(self, "ignores request from", self->current_sender(),
-                     "to set same sink again");
+      if (st.sink) {
+        self->quit(caf::make_error(ec::logic_error,
+                                   "source does not support "
+                                   "multiple sinks; sender =",
+                                   self->current_sender()));
         return;
       }
       st.sink = sink;
