@@ -21,6 +21,12 @@
 #include "vast/config.hpp"
 #include "vast/defaults.hpp"
 #include "vast/detail/assert.hpp"
+#include "vast/format/csv.hpp"
+#include "vast/format/json.hpp"
+#include "vast/format/json/suricata.hpp"
+#include "vast/format/syslog.hpp"
+#include "vast/format/test.hpp"
+#include "vast/format/zeek.hpp"
 #include "vast/json.hpp"
 #include "vast/logger.hpp"
 #include "vast/settings.hpp"
@@ -42,6 +48,10 @@
 #include "vast/system/spawn_source.hpp"
 #include "vast/system/spawn_type_registry.hpp"
 #include "vast/table_slice.hpp"
+
+#if VAST_HAVE_PCAP
+#  include "vast/format/pcap.hpp"
+#endif
 
 #include <caf/function_view.hpp>
 #include <caf/io/middleman.hpp>
@@ -255,27 +265,44 @@ node_state::component_factory_fun lift_component_factory() {
 auto make_component_factory() {
   return node_state::named_component_factory{
     {"spawn accountant", lift_component_factory<spawn_accountant>()},
-    {"spawn archive", lift_component_factory<spawn_archive>()},
-    {"spawn counter", lift_component_factory<spawn_counter>()},
-    {"spawn eraser", lift_component_factory<spawn_eraser>()},
-    {"spawn exporter", lift_component_factory<spawn_exporter>()},
-    {"spawn explorer", lift_component_factory<spawn_explorer>()},
-    {"spawn importer", lift_component_factory<spawn_importer>()},
-    {"spawn type-registry", lift_component_factory<spawn_type_registry>()},
-    {"spawn index", lift_component_factory<spawn_index>()},
-    {"spawn pivoter", lift_component_factory<spawn_pivoter>()},
-    {"spawn source csv", lift_component_factory<spawn_csv_source>()},
-    {"spawn source json", lift_component_factory<spawn_json_source>()},
-    {"spawn source pcap", lift_component_factory<spawn_pcap_source>()},
-    {"spawn source suricata", lift_component_factory<spawn_suricata_source>()},
-    {"spawn source syslog", lift_component_factory<spawn_syslog_source>()},
-    {"spawn source test", lift_component_factory<spawn_test_source>()},
-    {"spawn source zeek", lift_component_factory<spawn_zeek_source>()},
-    {"spawn sink pcap", lift_component_factory<spawn_pcap_sink>()},
-    {"spawn sink zeek", lift_component_factory<spawn_zeek_sink>()},
-    {"spawn sink csv", lift_component_factory<spawn_csv_sink>()},
-    {"spawn sink ascii", lift_component_factory<spawn_ascii_sink>()},
-    {"spawn sink json", lift_component_factory<spawn_json_sink>()},
+      {"spawn archive", lift_component_factory<spawn_archive>()},
+      {"spawn counter", lift_component_factory<spawn_counter>()},
+      {"spawn eraser", lift_component_factory<spawn_eraser>()},
+      {"spawn exporter", lift_component_factory<spawn_exporter>()},
+      {"spawn explorer", lift_component_factory<spawn_explorer>()},
+      {"spawn importer", lift_component_factory<spawn_importer>()},
+      {"spawn type-registry", lift_component_factory<spawn_type_registry>()},
+      {"spawn index", lift_component_factory<spawn_index>()},
+      {"spawn pivoter", lift_component_factory<spawn_pivoter>()},
+      {"spawn source csv",
+       lift_component_factory<
+         spawn_source<format::csv::reader, defaults::import::csv>>()},
+      {"spawn source json",
+       lift_component_factory<
+         spawn_source<format::json::reader<>, defaults::import::json>>()},
+#if VAST_HAVE_PCAP
+      {"spawn source pcap",
+       lift_component_factory<
+         spawn_source<format::pcap::reader, defaults::import::pcap>>()},
+#endif
+      {"spawn source suricata",
+       lift_component_factory<
+         spawn_source<format::json::reader<format::json::suricata>,
+                      defaults::import::suricata>>()},
+      {"spawn source syslog",
+       lift_component_factory<
+         spawn_source<format::syslog::reader, defaults::import::syslog>>()},
+      {"spawn source test",
+       lift_component_factory<
+         spawn_source<format::test::reader, defaults::import::test>>()},
+      {"spawn source zeek",
+       lift_component_factory<
+         spawn_source<format::zeek::reader, defaults::import::zeek>>()},
+      {"spawn sink pcap", lift_component_factory<spawn_pcap_sink>()},
+      {"spawn sink zeek", lift_component_factory<spawn_zeek_sink>()},
+      {"spawn sink csv", lift_component_factory<spawn_csv_sink>()},
+      {"spawn sink ascii", lift_component_factory<spawn_ascii_sink>()},
+      {"spawn sink json", lift_component_factory<spawn_json_sink>()},
   };
 }
 
