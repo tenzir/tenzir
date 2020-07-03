@@ -11,6 +11,7 @@ The network telemetry engine for data-driven security investigations.
 
 [![Build Status][ci-badge]][ci-url]
 [![Examples Status][ci-examples-badge]][ci-examples-url]
+[![Docker Status][docker-badge]][ci-docker-url]
 [![Changelog][changelog-badge]][changelog-url]
 [![Latest Release][latest-release-badge]][latest-release-url]
 [![Chat][chat-badge]][chat-url]
@@ -137,6 +138,8 @@ proceedings][nsdi-proceedings].
 [ci-badge]: https://github.com/tenzir/vast/workflows/VAST/badge.svg?branch=master
 [ci-examples-url]: https://github.com/tenzir/vast/actions?query=branch%3Amaster+workflow%3AJupyter+Notebook
 [ci-examples-badge]: https://github.com/tenzir/vast/workflows/Jupyter%20Notebook/badge.svg?branch=master
+[ci-docker-url]: https://github.com/tenzir/vast/actions?query=branch%3Amaster+workflow%3AVAST+Docker
+[ci-docker-badge]: https://github.com/tenzir/vast/workflows/VAST%20Docker/badge.svg?branch=master
 [license-badge]: https://img.shields.io/badge/license-BSD-blue.svg
 [license-url]: https://raw.github.com/vast-io/vast/master/COPYING
 [changelog-badge]: https://img.shields.io/badge/view-changelog-green.svg
