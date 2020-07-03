@@ -41,7 +41,7 @@ struct filesystem_statistics {
 /// The interface for file system I/O. The filesystem actor implementation must
 /// interpret all operations that contain paths *relative* to its own root
 /// directory.
-using file_system_type = caf::typed_actor<
+using filesystem_type = caf::typed_actor<
   // Writes a chunk of data to a given path. Creates intermediate directories
   // if needed.
   caf::replies_to<atom::write, path, chunk_ptr>::with<atom::ok>,

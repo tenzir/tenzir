@@ -31,10 +31,10 @@ namespace {
 
 struct fixture : fixtures::deterministic_actor_system {
   fixture() {
-    fs = self->spawn<caf::detached>(posix_file_system, directory);
+    fs = self->spawn<caf::detached>(posix_filesystem, directory);
   }
 
-  file_system_type fs;
+  filesystem_type fs;
 };
 
 } // namespace

@@ -401,7 +401,7 @@ void node_state::init(std::string init_name, path init_dir) {
   // Bring up the tracker.
   tracker = self->spawn<linked>(system::tracker, name);
   // Initialize the file system with the node directory as root.
-  auto fs = self->spawn<linked + detached>(posix_file_system, dir);
+  auto fs = self->spawn<linked + detached>(posix_filesystem, dir);
   self->system().registry().put(atom::filesystem_v, fs);
   self->set_exit_handler([=](const exit_msg& msg) {
     VAST_DEBUG(self, "got EXIT from", msg.source);

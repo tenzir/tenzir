@@ -22,13 +22,13 @@
 namespace vast::system {
 
 /// The state for the POSIX filesystem.
-/// @relates posix_file_system
-struct posix_file_system_state {
+/// @relates posix_filesystem
+struct posix_filesystem_state {
   /// Statistics about filesystem operations.
   filesystem_statistics stats;
 
   /// The actor name.
-  static inline const char* name = "posix-file-system";
+  static inline const char* name = "posix-filesystem";
 };
 
 /// A filesystem implemented with POSIX system calls.
@@ -36,7 +36,8 @@ struct posix_file_system_state {
 /// @param root The filesystem root. The actor prepends this path to all
 ///             operations that include a path parameter.
 /// @returns The actor behavior.
-file_system_type::behavior_type posix_file_system(
-  file_system_type::stateful_pointer<posix_file_system_state> self, path root);
+filesystem_type::behavior_type
+posix_filesystem(filesystem_type::stateful_pointer<posix_filesystem_state> self,
+                 path root);
 
 } // namespace vast::system

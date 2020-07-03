@@ -26,8 +26,9 @@
 
 namespace vast::system {
 
-file_system_type::behavior_type posix_file_system(
-  file_system_type::stateful_pointer<posix_file_system_state> self, path root) {
+filesystem_type::behavior_type
+posix_filesystem(filesystem_type::stateful_pointer<posix_filesystem_state> self,
+                 path root) {
   return {
     [=](atom::write, const path& filename,
         chunk_ptr chk) -> caf::result<atom::ok> {
