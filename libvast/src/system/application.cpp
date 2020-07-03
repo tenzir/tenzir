@@ -108,6 +108,7 @@ auto make_explore_command() {
     "explore", "explore context around query results",
     documentation::vast_explore,
     opts("?explore")
+      .add<std::string>("format", "output format (default: JSON)")
       .add<std::string>("after,A", "include all records up to this much"
                                    " time after each result")
       .add<std::string>("before,B", "include all records up to this much"
@@ -191,10 +192,10 @@ auto make_import_command() {
   import_->add_subcommand("syslog", "imports syslog messages",
                           documentation::vast_import_syslog,
                           source_opts("?import.syslog"));
-  import_->add_subcommand("test",
-                          "imports random data for testing or benchmarking",
-                          documentation::vast_import_test,
-                          opts("?import.test"));
+  import_->add_subcommand(
+    "test", "imports random data for testing or benchmarking",
+    documentation::vast_import_test,
+    source_opts("?import.test").add<size_t>("seed", "the PRNG seed"));
 #if VAST_HAVE_PCAP
   import_->add_subcommand(
     "pcap", "imports PCAP logs from STDIN or file",
@@ -229,7 +230,9 @@ auto make_peer_command() {
 auto make_pivot_command() {
   auto pivot = std::make_unique<command>(
     "pivot", "extracts related events of a given type",
-    documentation::vast_pivot, make_pcap_options("?pivot"));
+    documentation::vast_pivot,
+    make_pcap_options("?pivot").add<std::string>("format", "output format "
+                                                           "(default: JSON)"));
   return pivot;
 }
 
@@ -241,28 +244,44 @@ auto make_send_command() {
 auto make_spawn_source_command() {
   auto spawn_source = std::make_unique<command>(
     "source", "creates a new source", "",
-    opts()
-      .add<std::string>("read,r", "path to input")
-      .add<std::string>("schema,s", "path to alternate schema")
-      .add<bool>("uds,d", "treat -w as UNIX domain socket"),
+    opts("?spawn.source")
+      .add<caf::atom_value>("table-slice-type,t", "table slice type")
+      .add<size_t>("table-slice-size,s", "the suggested size for table slices")
+      .add<size_t>("max-events,n", "the maximum number of events to "
+                                   "import")
+      .add<std::string>("read-timeout", "read timoeut after which data is "
+                                        "forwarded to the importer"),
     false);
+  spawn_source->add_subcommand("csv", "creates a new CSV source", "",
+                               source_opts("?spawn.source.csv"));
+  spawn_source->add_subcommand("json", "creates a new JSON source", "",
+                               source_opts("?spawn.source.json"));
+#if VAST_HAVE_PCAP
   spawn_source->add_subcommand(
     "pcap", "creates a new PCAP source", "",
-    opts()
+    source_opts("?spawn.source.pcap")
+      .add<std::string>("interface,i", "network interface to read packets from")
       .add<size_t>("cutoff,c", "skip flow packets after this many bytes")
-      .add<size_t>("flow-max,m", "number of concurrent flows to track")
-      .add<size_t>("flow-age,a", "max flow lifetime before eviction")
+      .add<size_t>("max-flows,m", "number of concurrent flows to track")
+      .add<size_t>("max-flow-age,a", "max flow lifetime before eviction")
       .add<size_t>("flow-expiry,e", "flow table expiration interval")
-      .add<int64_t>("pseudo-realtime,p", "factor c delaying trace packets by "
-                                         "1/c"));
-  spawn_source->add_subcommand("test", "creates a new test source", "",
-                               opts()
-                                 .add<size_t>("seed,s", "the PRNG seed")
-                                 .add<size_t>("events,n", "number of events to "
-                                                          "generate"));
-  spawn_source->add_subcommand("zeek", "creates a new Zeek source", "", opts());
+      .add<size_t>("pseudo-realtime-factor,p", "factor c delaying packets by "
+                                               "1/c")
+      .add<size_t>("snaplen", "snapshot length in bytes")
+      .add<double>("drop-rate-threshold", "drop rate that must be exceeded for "
+                                          "warnings to occur")
+      .add<bool>("disable-community-id", "disable computation of community id "
+                                         "for every packet"));
+#endif
+  spawn_source->add_subcommand("suricata", "creates a new Syslog source", "",
+                               source_opts("?spawn.source.suricata"));
   spawn_source->add_subcommand("syslog", "creates a new Syslog source", "",
-                               opts());
+                               source_opts("?spawn.source.syslog"));
+  spawn_source->add_subcommand(
+    "test", "creates a new test source", "",
+    source_opts("?spawn.source.test").add<size_t>("seed", "the PRNG seed"));
+  spawn_source->add_subcommand("zeek", "creates a new Zeek source", "",
+                               source_opts("?spawn.source.zeek"));
   return spawn_source;
 }
 
@@ -341,40 +360,34 @@ auto make_command_factory() {
   return command::factory{
     {"count", count_command},
     {"explore", explore_command},
-    {"export ascii",
-     writer_command<format::ascii::writer, defaults::export_::ascii>},
-    {"export csv",
-     writer_command<format::csv::writer, defaults::export_::csv>},
-    {"export json",
-     writer_command<format::json::writer, defaults::export_::json>},
-    {"export null",
-     writer_command<format::null::writer, defaults::export_::null>},
+    {"export ascii", writer_command<format::ascii::writer>},
+    {"export csv", writer_command<format::csv::writer>},
+    {"export json", writer_command<format::json::writer>},
+    {"export null", writer_command<format::null::writer>},
 #if VAST_HAVE_ARROW
-    {"export arrow",
-     writer_command<format::arrow::writer, defaults::export_::arrow>},
+    {"export arrow", writer_command<format::arrow::writer>},
 #endif
 #if VAST_HAVE_PCAP
     {"export pcap", pcap_writer_command},
 #endif
-    {"export zeek", writer_command<format::zeek::writer,
-      defaults::export_::zeek>},
+    {"export zeek", writer_command<format::zeek::writer>},
     {"infer", infer_command},
-    {"import csv", import_command<policy::source_reader,
-      format::csv::reader, defaults::import::csv>},
-    {"import json", import_command<policy::source_reader,
-      format::json::reader<>, defaults::import::json>},
+    {"import csv", import_command<format::csv::reader, defaults::import::csv>},
+    {"import json", import_command<format::json::reader<>,
+      defaults::import::json>},
 #if VAST_HAVE_PCAP
-    {"import pcap", import_command<policy::source_reader,
-      format::pcap::reader, defaults::import::pcap>},
+    {"import pcap", import_command<format::pcap::reader,
+      defaults::import::pcap>},
 #endif
-    {"import suricata", import_command<policy::source_reader,
-      format::json::reader<format::json::suricata>, defaults::import::suricata>},
-    {"import syslog", import_command<policy::source_reader,
-      format::syslog::reader, defaults::import::syslog>},
-    {"import test", import_command<policy::source_generator,
-      format::test::reader, defaults::import::test>},
-    {"import zeek", import_command<policy::source_reader,
-      format::zeek::reader, defaults::import::zeek>},
+    {"import suricata", import_command<
+      format::json::reader<format::json::suricata>,
+      defaults::import::suricata>},
+    {"import syslog", import_command<format::syslog::reader,
+      defaults::import::syslog>},
+    {"import test", import_command<format::test::reader,
+      defaults::import::test>},
+    {"import zeek", import_command<format::zeek::reader,
+      defaults::import::zeek>},
     {"kill", remote_command},
     {"peer", remote_command},
     {"pivot", pivot_command},
@@ -392,7 +405,11 @@ auto make_command_factory() {
     {"spawn sink json", remote_command},
     {"spawn sink pcap", remote_command},
     {"spawn sink zeek", remote_command},
+    {"spawn source csv", remote_command},
+    {"spawn source json", remote_command},
     {"spawn source pcap", remote_command},
+    {"spawn source suricata", remote_command},
+    {"spawn source syslog", remote_command},
     {"spawn source test", remote_command},
     {"spawn source zeek", remote_command},
     {"start", start_command},

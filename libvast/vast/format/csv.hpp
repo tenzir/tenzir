@@ -74,6 +74,8 @@ public:
 
   vast::schema schema() const override;
 
+  vast::system::report status() const override;
+
   const char* name() const override;
 
 protected:
@@ -95,6 +97,8 @@ private:
   std::vector<rec_table> records;
   caf::optional<parser_type> parser_;
   options opt_;
+  mutable size_t num_lines_ = 0;
+  mutable size_t num_invalid_lines_ = 0;
 };
 
 } // namespace vast::format::csv

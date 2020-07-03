@@ -162,9 +162,6 @@ public:
   /// A map to the indexers.
   detail::stable_map<qualified_record_field, wrapped_indexer> indexers_;
 
-  /// Instrumentation data store, one entry for each INDEXER.
-  std::unordered_map<size_t, atomic_measurement> measurements_;
-
   /// Remaining capacity in this partition.
   size_t capacity_;
 

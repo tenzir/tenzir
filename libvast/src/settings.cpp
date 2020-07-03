@@ -11,24 +11,35 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#pragma once
+#include "vast/settings.hpp"
 
-#include "vast/aliases.hpp"
-#include "vast/fwd.hpp"
+#include "vast/logger.hpp"
 
-namespace vast::system {
+namespace vast {
 
-/// Spawns an INDEXER actor.
-/// @param parent The parent actor.
-/// @param filename File for persistent state.
-/// @param column_type The type of the indexed field.
-/// @param index_opts Runtime options to parameterize the value index.
-/// @param index A handle to the index actor.
-/// @param partition_id The partition ID that this INDEXER belongs to.
-/// @param fqn The fully qualified name of the indexed field.
-/// @returns the new INDEXER actor.
-caf::actor spawn_indexer(caf::local_actor* parent, path filename,
-                         type column_type, caf::settings index_opts,
-                         caf::actor index, uuid partition_id, std::string fqn);
+namespace {
 
-} // namespace vast::system
+void merge_settings_impl(const caf::settings& src, caf::settings& dst,
+                         size_t depth = 0) {
+  if (depth > 100) {
+    VAST_ERROR_ANON("Exceeded maximum nesting depth in settings.");
+    return;
+  }
+  for (auto& [key, value] : src) {
+    if (caf::holds_alternative<caf::settings>(value))
+      merge_settings_impl(caf::get<caf::settings>(value),
+                          dst[key].as_dictionary(), depth + 1);
+    else
+      dst.insert_or_assign(key, value);
+  }
+}
+
+} // namespace
+
+/// Merge settings of `src` into `dst`, overwriting existing values
+/// from `dst` if necessary.
+void merge_settings(const caf::settings& src, caf::settings& dst) {
+  return merge_settings_impl(src, dst);
+}
+
+} // namespace vast

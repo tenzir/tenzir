@@ -66,7 +66,7 @@ behavior dummy_sink(event_based_actor* self) {
 
 caf::actor spawn_sink(caf::local_actor* self, [[maybe_unused]] path dir,
                       [[maybe_unused]] type t, caf::settings, caf::actor,
-                      [[maybe_unused]] uuid partition_id, atomic_measurement*) {
+                      [[maybe_unused]] uuid partition_id, std::string) {
   VAST_TRACE(VAST_ARG(dir), VAST_ARG("t", t.name()), VAST_ARG(partition_id));
   auto result = self->spawn(dummy_sink);
   all_sinks.emplace_back(result);
@@ -112,7 +112,7 @@ struct fixture : fixtures::deterministic_actor_system_and_events {
     index = sys.spawn(dummy_index, state_dir / "dummy-index");
   }
 
-  ~fixture() {
+  ~fixture() override {
     // Make sure we're not leaving stuff behind.
     for (auto& snk : all_sinks)
       anon_send_exit(snk, exit_reason::user_shutdown);

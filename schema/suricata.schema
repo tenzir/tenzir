@@ -265,3 +265,7 @@ type suricata.tls = record{
     notafter: time
   }
 }
+
+type suricata.stats = record{
+  timestamp: time #timestamp
+}

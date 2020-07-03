@@ -97,8 +97,8 @@ caf::actor& partition::indexer_at(size_t position) {
   VAST_ASSERT(position < indexers_.size());
   auto& [fqf, ip] = as_vector(indexers_)[position];
   if (!ip.indexer) {
-    ip.indexer = state().make_indexer(column_file(fqf), fqf.type, id(),
-                                      &measurements_[position]);
+    ip.indexer
+      = state().make_indexer(column_file(fqf), fqf.type, id(), fqf.fqn());
     VAST_ASSERT(ip.indexer != nullptr);
   }
   return ip.indexer;
@@ -128,9 +128,8 @@ void partition::add(table_slice_ptr slice) {
         // Spawn a new indexer.
         auto k = indexers_.emplace(fqf, wrapped_indexer{});
         auto& ip = k.first->second;
-        auto pos = std::distance(indexers_.begin(), k.first);
-        ip.indexer = state().make_indexer(column_file(fqf), fqf.type, id(),
-                                          &measurements_[pos]);
+        ip.indexer
+          = state().make_indexer(column_file(fqf), fqf.type, id(), fqf.fqn());
         state_->active_partition_indexers++;
         ip.slot
           = out().parent()->add_unchecked_outbound_path<table_slice_column>(

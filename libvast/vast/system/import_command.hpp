@@ -50,13 +50,6 @@
 #include <type_traits>
 #include <utility>
 
-namespace vast::policy {
-
-struct source_reader {};
-struct source_generator {};
-
-} // namespace vast::policy
-
 namespace vast::system {
 
 namespace {
@@ -72,7 +65,7 @@ caf::expected<expression> parse_expression(command::argument_iterator begin,
 
 } // namespace
 
-template <class Policy, class Reader, class Defaults>
+template <class Reader, class Defaults>
 caf::message import_command(const invocation& inv, caf::actor_system& sys) {
   VAST_TRACE(inv.full_name, VAST_ARG("options", inv.options), VAST_ARG(sys));
   // Placeholder thingies.
@@ -100,64 +93,52 @@ caf::message import_command(const invocation& inv, caf::actor_system& sys) {
   auto schema = get_schema(options, category);
   if (!schema)
     return caf::make_message(schema.error());
-  if constexpr (std::is_same_v<Policy, vast::policy::source_generator>) {
-    if (!max_events)
-      return caf::make_message(make_error(ec::invalid_configuration,
-                                          "test import requires max-events "
-                                          "to be set"));
-    auto seed = Defaults::seed(options);
-    reader = std::make_unique<Reader>(slice_type, seed, *max_events);
-  } else if constexpr (std::is_same_v<Policy, vast::policy::source_reader>) {
-    // Discern the input source (file, stream, or socket).
-    if (uri && file)
-      return caf::make_message(make_error(
-        ec::invalid_configuration, "only one source possible (-r or -l)"));
-    if (!uri && !file) {
+  // Discern the input source (file, stream, or socket).
+  if (uri && file)
+    return caf::make_message(make_error(ec::invalid_configuration,
+                                        "only one source possible (-r or -l)"));
+  if (!uri && !file) {
+    using inputs = vast::format::reader::inputs;
+    if constexpr (Reader::defaults::input == inputs::inet)
+      uri = std::string{Reader::defaults::uri};
+    else
+      file = std::string{Reader::defaults::path};
+  }
+  if (uri) {
+    endpoint ep;
+    if (!vast::parsers::endpoint(*uri, ep))
+      return caf::make_message(
+        make_error(vast::ec::parse_error, "unable to parse endpoint", *uri));
+    if (ep.port.type() == port::unknown) {
       using inputs = vast::format::reader::inputs;
-      if constexpr (Reader::defaults::input == inputs::inet)
-        uri = std::string{Reader::defaults::uri};
-      else
-        file = std::string{Reader::defaults::path};
+      if constexpr (Reader::defaults::input == inputs::inet) {
+        endpoint default_ep;
+        vast::parsers::endpoint(Reader::defaults::uri, default_ep);
+        ep.port = port{ep.port.number(), default_ep.port.type()};
+      } else {
+        // Fall back to tcp if we don't know anything else.
+        ep.port = port{ep.port.number(), port::tcp};
+      }
     }
-    if (uri) {
-      endpoint ep;
-      if (!vast::parsers::endpoint(*uri, ep))
-        return caf::make_message(
-          make_error(vast::ec::parse_error, "unable to parse endpoint", *uri));
-      if (ep.port.type() == port::unknown) {
-        using inputs = vast::format::reader::inputs;
-        if constexpr (Reader::defaults::input == inputs::inet) {
-          endpoint default_ep;
-          vast::parsers::endpoint(Reader::defaults::uri, default_ep);
-          ep.port = port{ep.port.number(), default_ep.port.type()};
-        } else {
-          // Fall back to tcp if we don't know anything else.
-          ep.port = port{ep.port.number(), port::tcp};
-        }
-      }
-      reader = std::make_unique<Reader>(slice_type, options);
-      VAST_INFO(*reader, "listens for data on", ep.host, ", port", ep.port);
-      switch (ep.port.type()) {
-        default:
-          return caf::make_message(
-            make_error(vast::ec::unimplemented,
-                       "port type not supported:", ep.port.type()));
-        case port::udp:
-          udp_port = ep.port.number();
-          break;
-      }
-    } else {
-      auto in = detail::make_input_stream(*file, uds);
-      if (!in)
-        return caf::make_message(std::move(in.error()));
-      reader = std::make_unique<Reader>(slice_type, options, std::move(*in));
-      if (*file == "-")
-        VAST_INFO(*reader, "reads data from stdin");
-      else
-        VAST_INFO(*reader, "reads data from", *file);
+    reader = std::make_unique<Reader>(slice_type, options);
+    VAST_INFO(*reader, "listens for data on", ep.host, ", port", ep.port);
+    switch (ep.port.type()) {
+      default:
+        return caf::make_message(make_error(
+          vast::ec::unimplemented, "port type not supported:", ep.port.type()));
+      case port::udp:
+        udp_port = ep.port.number();
+        break;
     }
   } else {
-    static_assert(detail::always_false_v<Policy>, "unsupported policy");
+    auto in = detail::make_input_stream(*file, uds);
+    if (!in)
+      return caf::make_message(std::move(in.error()));
+    reader = std::make_unique<Reader>(slice_type, options, std::move(*in));
+    if (*file == "-")
+      VAST_INFO(*reader, "reads data from stdin");
+    else
+      VAST_INFO(*reader, "reads data from", *file);
   }
   if (!reader)
     return caf::make_message(make_error(ec::invalid_result, "failed to spawn "
@@ -192,17 +173,11 @@ caf::message import_command(const invocation& inv, caf::actor_system& sys) {
   auto local_schema = schema ? std::move(*schema) : vast::schema{};
   auto type_filter = type ? std::move(*type) : std::string{};
   if (udp_port) {
-    if constexpr (std::is_same_v<Policy, policy::source_generator>) {
-      VAST_ASSERT(!"unsupported policy");
-      return caf::make_message(make_error(ec::logic_error, "unsupported "
-                                                           "policy"));
-    } else {
-      auto& mm = sys.middleman();
-      src = mm.spawn_broker(datagram_source<Reader>, *udp_port,
-                            std::move(*reader), slice_size, max_events,
-                            std::move(type_registry), std::move(local_schema),
-                            std::move(type_filter), std::move(accountant));
-    }
+    auto& mm = sys.middleman();
+    src = mm.spawn_broker(datagram_source<Reader>, *udp_port,
+                          std::move(*reader), slice_size, max_events,
+                          std::move(type_registry), std::move(local_schema),
+                          std::move(type_filter), std::move(accountant));
   } else {
     src = sys.spawn(source<Reader>, std::move(*reader), slice_size, max_events,
                     std::move(type_registry), std::move(local_schema),

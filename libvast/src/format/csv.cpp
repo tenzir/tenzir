@@ -14,7 +14,7 @@
 #include "vast/format/csv.hpp"
 
 #include "vast/concept/parseable/core.hpp"
-#include "vast/concept/parseable/string.hpp"
+#include "vast/concept/parseable/string/char_class.hpp"
 #include "vast/concept/parseable/to.hpp"
 #include "vast/concept/parseable/vast.hpp"
 #include "vast/concept/printable/to_string.hpp"
@@ -188,6 +188,7 @@ const char* reader::name() const {
 
 caf::optional<record_type>
 reader::make_layout(const std::vector<std::string>& names) {
+  VAST_TRACE(VAST_ARG(names));
   for (auto& t : schema_) {
     if (auto r = caf::get_if<record_type>(&t)) {
       auto select_fields = [&]() -> caf::optional<record_type> {
@@ -395,9 +396,25 @@ make_csv_parser(const record_type& layout, table_slice_builder_ptr builder,
 
 } // namespace
 
+vast::system::report reader::status() const {
+  using namespace std::string_literals;
+  uint64_t num_lines = num_lines_;
+  uint64_t invalid_lines = num_invalid_lines_;
+  if (num_invalid_lines_ > 0)
+    VAST_WARNING(this, "failed to parse", num_invalid_lines_, "of", num_lines_,
+                 "recent lines");
+  num_lines_ = 0;
+  num_invalid_lines_ = 0;
+  return {
+    {name() + ".num-lines"s, num_lines},
+    {name() + ".invalid-lines"s, invalid_lines},
+  };
+}
+
 caf::expected<reader::parser_type> reader::read_header(std::string_view line) {
   auto ws = ignore(*parsers::space);
-  auto p = (ws >> schema_parser::id >> ws) % opt_.separator;
+  auto column_name = +(parsers::printable - opt_.separator);
+  auto p = (ws >> column_name >> ws) % opt_.separator;
   std::vector<std::string> columns;
   auto b = line.begin();
   auto f = b;
@@ -430,14 +447,16 @@ caf::error reader::read_impl(size_t max_events, size_t max_slice_size,
     return lines_->next_timeout(remaining);
   };
   if (!parser_) {
+    lines_->next();
     auto p = read_header(lines_->get());
     if (!p)
       return p.error();
     parser_ = *std::move(p);
   }
   auto& p = *parser_;
-  bool timeout = next_line();
-  for (size_t produced = 0; produced < max_events; timeout = next_line()) {
+  size_t produced = 0;
+  while (produced < max_events) {
+    bool timeout = next_line();
     // We must check not only for a timeout but also whether any events were
     // produced to work around CAF's assumption that sources are always able to
     // generate events. Once `caf::stream_source` can handle empty batches
@@ -455,8 +474,14 @@ caf::error reader::read_impl(size_t max_events, size_t max_slice_size,
       VAST_DEBUG(this, "ignores empty line at", lines_->line_number());
       continue;
     }
-    if (!p(line))
-      return make_error(ec::type_clash, "unable to parse CSV line");
+    ++num_lines_;
+    if (!p(line)) {
+      if (num_invalid_lines_ == 0)
+        VAST_WARNING(this, "failed to parse line", lines_->line_number(), ":",
+                     line);
+      ++num_invalid_lines_;
+      continue;
+    }
     ++produced;
     if (builder_->rows() == max_slice_size)
       if (auto err = finish(callback))

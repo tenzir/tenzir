@@ -87,6 +87,7 @@ set(libvast_sources
     src/segment.cpp
     src/segment_builder.cpp
     src/segment_store.cpp
+    src/settings.cpp
     src/store.cpp
     src/subnet.cpp
     src/subset.cpp
@@ -111,6 +112,7 @@ set(libvast_sources
     src/system/indexer_downstream_manager.cpp
     src/system/indexer_stage_driver.cpp
     src/system/infer_command.cpp
+    src/system/make_sink.cpp
     src/system/node.cpp
     src/system/partition.cpp
     src/system/pivot_command.cpp
@@ -213,10 +215,6 @@ endif ()
 
 if (VAST_USE_JEMALLOC)
   target_link_libraries(libvast PRIVATE jemalloc::jemalloc_)
-endif ()
-
-if (HAVE_CXX_ATOMICS_WITH_LIB)
-  target_link_libraries(libvast PUBLIC atomic)
 endif ()
 
 if (BUILD_SHARED_LIBS AND "${CMAKE_SYSTEM_NAME}" MATCHES "Linux")

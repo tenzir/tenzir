@@ -13,22 +13,16 @@
 
 #pragma once
 
-#include "vast/aliases.hpp"
 #include "vast/fwd.hpp"
 
 namespace vast::system {
 
-/// Spawns an INDEXER actor.
-/// @param parent The parent actor.
-/// @param filename File for persistent state.
-/// @param column_type The type of the indexed field.
-/// @param index_opts Runtime options to parameterize the value index.
-/// @param index A handle to the index actor.
-/// @param partition_id The partition ID that this INDEXER belongs to.
-/// @param fqn The fully qualified name of the indexed field.
-/// @returns the new INDEXER actor.
-caf::actor spawn_indexer(caf::local_actor* parent, path filename,
-                         type column_type, caf::settings index_opts,
-                         caf::actor index, uuid partition_id, std::string fqn);
+/// Spawns a sink based on the output format name.
+/// @param sys The actor system to spawn the sink in.
+/// @param options The invocation options for configuring writer and sink.
+/// @param output_format A valid output format name.
+caf::expected<caf::actor>
+make_sink(caf::actor_system& sys, const caf::settings& options,
+          std::string output_format);
 
 } // namespace vast::system

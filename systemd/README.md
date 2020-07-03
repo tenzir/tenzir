@@ -2,7 +2,7 @@ VAST Systemd Unit
 =================
 
 The `vast.service` provides a `systemd` service unit for running VAST as system
-service. The service is sandboxed and run with limited privileges.
+service. The service is sandboxed and runs with limited privileges.
 
 ## Prepare the Host System
 
@@ -24,10 +24,13 @@ mkdir -p {/var/db/vast,/var/log/vast}
 chown -R vast:vast {/var/db/vast,/var/log/vast}
 ```
 
-The systemd unit passes a
-[vast.conf](https://github.com/tenzir/vast/tree/master/systemd/) configuration
-file to the VAST process. Make sure that the new user can read the `vast.conf`
-and change permissions if required.
+As described above, the systemd unit is configured to allow certrain write paths
+for logging and file storage. This also has to be configured in vast. Use the
+provided [vast.conf](https://github.com/tenzir/vast/tree/master/systemd/) file.
+
+The default configuration directory for VAST is `/etc/vast`. Place the
+configuration file in there. Make sure that the new `vast` user can read the
+contents of `/etc/vast/vast.conf`.
 
 ## Usage
 

@@ -217,7 +217,11 @@ events::events() {
   REQUIRE_EQUAL(zeek_dns_log.size(), 32u);
   zeek_http_log = inhale<format::zeek::reader>(artifacts::logs::zeek::http);
   REQUIRE_EQUAL(zeek_http_log.size(), 40u);
-  vast::format::test::reader rd{defaults::import::table_slice_type, 42, 1000};
+  caf::settings opts;
+  caf::put(opts, "import.test.seed", std::size_t{42});
+  caf::put(opts, "import.max-events", std::size_t{1000});
+  vast::format::test::reader rd{defaults::import::table_slice_type,
+                                std::move(opts), nullptr};
   random = extract(rd);
   REQUIRE_EQUAL(random.size(), 1000u);
   ascending_integers = make_ascending_integers(250);

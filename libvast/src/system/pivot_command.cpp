@@ -15,21 +15,15 @@
 
 #include "vast/defaults.hpp"
 #include "vast/detail/assert.hpp"
-#include "vast/detail/make_io_stream.hpp"
 #include "vast/error.hpp"
-#include "vast/format/csv.hpp"
-#include "vast/format/json.hpp"
-#include "vast/format/zeek.hpp"
-#include "vast/fwd.hpp"
 #include "vast/logger.hpp"
 #include "vast/scope_linked.hpp"
+#include "vast/system/accountant.hpp"
+#include "vast/system/make_sink.hpp"
 #include "vast/system/node_control.hpp"
 #include "vast/system/read_query.hpp"
 #include "vast/system/signal_monitor.hpp"
-#include "vast/system/sink.hpp"
-#include "vast/system/sink_command.hpp"
 #include "vast/system/spawn_or_connect_to_node.hpp"
-#include "vast/system/tracker.hpp"
 
 #if VAST_HAVE_PCAP
 #  include "vast/format/pcap.hpp"
@@ -49,72 +43,24 @@ using namespace std::chrono_literals;
 
 namespace vast::system {
 
-namespace {
-
-template <class Writer>
-caf::expected<caf::actor>
-make_writer(caf::actor_system& sys, const caf::settings& options) {
-  using defaults = typename Writer::defaults;
-  using ostream_ptr = std::unique_ptr<std::ostream>;
-  std::string category = defaults::category;
-  if constexpr (std::is_constructible_v<Writer, ostream_ptr>) {
-    auto output = get_or(options, category + ".write", defaults::write);
-    auto uds = get_or(options, category + ".uds", false);
-    auto out = detail::make_output_stream(output, uds);
-    if (!out)
-      return out.error();
-    Writer writer{std::move(*out)};
-    return sys.spawn(sink<Writer>, std::move(writer), max_events);
-  } else {
-    Writer writer;
-    return sys.spawn(sink<Writer>, std::move(writer), max_events);
-  }
-}
-
-} // namespace
-
 caf::message pivot_command(const invocation& inv, caf::actor_system& sys) {
   VAST_TRACE(inv);
+  using namespace std::string_literals;
+  // Read options and arguments.
+  auto output_format = caf::get_or(inv.options, "pivot.format", "json"s);
   // Read query from input file, STDIN or CLI arguments.
-  auto query = read_query(inv, "export.read", size_t{1});
+  auto query = read_query(inv, "pivot.read", 1u);
   if (!query)
     return caf::make_message(std::move(query.error()));
-  auto& options = inv.options;
-  auto& target = inv.arguments[0];
-  // using caf::get_or;
-  auto limit
-    = get_or(options, "export.max-events", defaults::export_::max_events);
-  caf::actor writer;
-  if (detail::starts_with(target, "pcap")) {
-#if VAST_HAVE_PCAP
-    using defaults_t = defaults::export_::pcap;
-    std::string category = defaults_t::category;
-    auto output = get_or(options, category + ".write", defaults_t::write);
-    auto flush = get_or(options, category + ".flush-interval",
-                        defaults_t::flush_interval);
-    format::pcap::writer w{output, flush};
-    writer = sys.spawn(sink<format::pcap::writer>, std::move(w), limit);
-#else
-    return make_message(make_error(ec::invalid_configuration, "pcap support "
-                                                              "unavailable"));
-#endif
-  } else if (detail::starts_with(target, "suricata")) {
-    auto w = make_writer<format::json::writer>(sys, inv.options);
-    if (!w)
-      return make_message(w.error());
-    writer = *w;
-  } else if (detail::starts_with(target, "zeek")) {
-    auto w = make_writer<format::zeek::writer>(sys, inv.options);
-    if (!w)
-      return make_message(w.error());
-    writer = *w;
-  } else
-    return make_message(make_error(ec::unimplemented, "pivoting is only "
-                                                      "implemented for pcap, "
-                                                      "suricata and zeek"));
+  caf::actor sink;
+  // Create sink for format.
+  auto s = system::make_sink(sys, inv.options, output_format);
+  if (!s)
+    return make_message(s.error());
+  sink = *s;
   caf::scoped_actor self{sys};
-  auto writer_guard = caf::detail::make_scope_guard(
-    [&] { self->send_exit(writer, caf::exit_reason::user_shutdown); });
+  auto sink_guard = caf::detail::make_scope_guard(
+    [&] { self->send_exit(sink, caf::exit_reason::user_shutdown); });
   // Get VAST node.
   auto node_opt
     = spawn_or_connect_to_node(self, inv.options, content(sys.config()));
@@ -151,17 +97,17 @@ caf::message pivot_command(const invocation& inv, caf::actor_system& sys) {
     return caf::make_message(std::move(components.error()));
   auto& [accountant] = *components;
   if (accountant) {
-    VAST_DEBUG(inv.full_name, "assigns accountant to writer");
-    self->send(writer, caf::actor_cast<accountant_type>(accountant));
+    VAST_DEBUG(inv.full_name, "assigns accountant to sink");
+    self->send(sink, caf::actor_cast<accountant_type>(accountant));
   }
   caf::error err;
-  self->monitor(writer);
+  self->monitor(sink);
   self->monitor(*piv);
   // Start the exporter.
   self->send(*exp, atom::sink_v, *piv);
   // (Ab)use query_statistics as done message.
   self->send(*exp, atom::statistics_v, *piv);
-  self->send(*piv, atom::sink_v, writer);
+  self->send(*piv, atom::sink_v, sink);
   self->send(*exp, atom::run_v);
   auto stop = false;
   self
@@ -172,9 +118,9 @@ caf::message pivot_command(const invocation& inv, caf::actor_system& sys) {
         } else if (msg.source == *piv) {
           VAST_DEBUG(inv.full_name, "received DOWN from pivoter");
           piv_guard.disable();
-        } else if (msg.source == writer) {
+        } else if (msg.source == sink) {
           VAST_DEBUG(inv.full_name, "received DOWN from sink");
-          writer_guard.disable();
+          sink_guard.disable();
         } else {
           VAST_ASSERT(!"received DOWN from inexplicable actor");
         }

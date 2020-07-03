@@ -20,7 +20,6 @@ namespace vast {
 namespace detail {
 
 line_range::line_range(std::istream& input) : input_{input} {
-  next(); // prime the pump
 }
 
 const std::string& line_range::get() const {

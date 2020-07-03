@@ -63,11 +63,14 @@ public:
   using super = multi_layout_reader;
 
   /// Constructs a test reader.
-  /// @param seed A seed for the random number generator.
-  /// @param n The numer of events to generate.
-  /// @param id The base event ID to start at.
-  explicit reader(caf::atom_value slice_type, size_t seed = 0,
-                  size_t  n = 100);
+  /// @param table_slice_type The ID for table slice type to build.
+  /// @param options Additional options.
+  /// @param in Input stream that should be nullptr. Exists for compatibility
+  ///           reasons with other readers.
+  explicit reader(caf::atom_value id, const caf::settings& options,
+                  std::unique_ptr<std::istream> in = nullptr);
+
+  void reset(std::unique_ptr<std::istream> in);
 
   caf::error schema(vast::schema sch) override;
 

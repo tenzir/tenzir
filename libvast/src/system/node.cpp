@@ -23,6 +23,7 @@
 #include "vast/detail/assert.hpp"
 #include "vast/json.hpp"
 #include "vast/logger.hpp"
+#include "vast/settings.hpp"
 #include "vast/system/accountant.hpp"
 #include "vast/system/node.hpp"
 #include "vast/system/shutdown.hpp"
@@ -201,12 +202,13 @@ maybe_actor spawn_accountant(node_actor* self, spawn_arguments&) {
 // Tries to spawn a new VAST component.
 caf::expected<caf::actor>
 spawn_component(const invocation& inv, spawn_arguments& args) {
-  VAST_TRACE(VAST_ARG(args));
+  VAST_TRACE(VAST_ARG(inv), VAST_ARG(args));
   using caf::atom_uint;
   auto self = this_node;
   auto i = node_state::component_factory.find(inv.full_name);
   if (i == node_state::component_factory.end())
     return make_error(ec::unspecified, "invalid spawn component");
+  VAST_VERBOSE(__func__, VAST_ARG(inv.full_name));
   return i->second(self, args);
 }
 
@@ -262,8 +264,12 @@ auto make_component_factory() {
     {"spawn type-registry", lift_component_factory<spawn_type_registry>()},
     {"spawn index", lift_component_factory<spawn_index>()},
     {"spawn pivoter", lift_component_factory<spawn_pivoter>()},
+    {"spawn source csv", lift_component_factory<spawn_csv_source>()},
+    {"spawn source json", lift_component_factory<spawn_json_source>()},
     {"spawn source pcap", lift_component_factory<spawn_pcap_source>()},
+    {"spawn source suricata", lift_component_factory<spawn_suricata_source>()},
     {"spawn source syslog", lift_component_factory<spawn_syslog_source>()},
+    {"spawn source test", lift_component_factory<spawn_test_source>()},
     {"spawn source zeek", lift_component_factory<spawn_zeek_source>()},
     {"spawn sink pcap", lift_component_factory<spawn_pcap_sink>()},
     {"spawn sink zeek", lift_component_factory<spawn_zeek_sink>()},
@@ -295,7 +301,10 @@ auto make_command_factory() {
     {"spawn sink json", node_state::spawn_command},
     {"spawn sink pcap", node_state::spawn_command},
     {"spawn sink zeek", node_state::spawn_command},
+    {"spawn source csv", node_state::spawn_command},
+    {"spawn source json", node_state::spawn_command},
     {"spawn source pcap", node_state::spawn_command},
+    {"spawn source suricata", node_state::spawn_command},
     {"spawn source syslog", node_state::spawn_command},
     {"spawn source test", node_state::spawn_command},
     {"spawn source zeek", node_state::spawn_command},
@@ -314,10 +323,12 @@ node_state::spawn_command(const invocation& inv,
   // Save some typing.
   auto& st = this_node->state;
   // We configured the command to have the name of the component.
-  std::string comp_name{inv.name()};
+  auto inv_name_split = detail::split(inv.full_name, " ");
+  VAST_ASSERT(inv_name_split.size() > 1);
+  std::string comp_name{inv_name_split[1]};
   // Auto-generate label if none given.
   std::string label;
-  if (auto label_ptr = caf::get_if<std::string>(&inv.options, "label")) {
+  if (auto label_ptr = caf::get_if<std::string>(&inv.options, "spawn.label")) {
     label = *label_ptr;
   } else {
     label = comp_name;
@@ -331,15 +342,26 @@ node_state::spawn_command(const invocation& inv,
       VAST_DEBUG(this_node, "auto-generated new label:", label);
     }
   }
+  VAST_DEBUG(this_node, "spawns a", comp_name, "with the label", label);
+  auto spawn_inv = inv;
+  if (comp_name == "source") {
+    auto spawn_opt = caf::get_or(spawn_inv.options, "spawn", caf::settings{});
+    auto source_opt = caf::get_or(spawn_opt, "source", caf::settings{});
+    auto import_opt = caf::get_or(spawn_inv.options, "import", caf::settings{});
+    merge_settings(source_opt, import_opt);
+    spawn_inv.options["import"] = import_opt;
+  }
   // Spawn our new VAST component.
-  spawn_arguments args{inv, st.dir, label};
+  spawn_arguments args{spawn_inv, st.dir, label};
   caf::actor new_component;
-  if (auto spawn_res = spawn_component(inv, args))
+  if (auto spawn_res = spawn_component(spawn_inv, args))
     new_component = std::move(*spawn_res);
   else {
-    VAST_DEBUG(__func__, "got an error from spawn_component:",
-               sys.render(spawn_res.error()));
-    return caf::make_message(std::move(spawn_res.error()));
+    auto& err = spawn_res.error();
+    if (err)
+      VAST_WARNING(__func__,
+                   "got an error from spawn_component:", sys.render(err));
+    return caf::make_message(std::move(err));
   }
   // Register component at tracker.
   auto rp = this_node->make_response_promise();

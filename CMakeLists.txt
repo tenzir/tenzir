@@ -255,7 +255,8 @@ if (MORE_WARNINGS)
         "-Wno-c++98-compat-pedantic -Wno-unused-member-function "
         "-Wno-unused-const-variable -Wno-switch-enum "
         "-Wno-abstract-vbase-init "
-        "-Wno-missing-noreturn -Wno-covered-switch-default")
+        "-Wno-missing-noreturn -Wno-covered-switch-default "
+        "-Wno-unknown-warning-option")
   elseif (CMAKE_CXX_COMPILER_ID MATCHES "GNU")
     set(WFLAGS
         "-Waddress -Wall -Warray-bounds "
@@ -276,7 +277,8 @@ if (MORE_WARNINGS)
         "-Wpmf-conversions -Wpointer-arith -Wreorder "
         "-Wreturn-type -Wsequence-point "
         "-Wsign-compare -Wswitch -Wtype-limits -Wundef "
-        "-Wuninitialized -Wunused -Wvla -Wwrite-strings")
+        "-Wuninitialized -Wunused -Wvla -Wwrite-strings "
+        "-Wno-unknown-warning")
   endif ()
   # convert CMake list to a single string, erasing the ";" separators
   string(REPLACE ";" "" WFLAGS_STR ${WFLAGS})
@@ -403,45 +405,6 @@ endif ()
 
 include(CheckCXXSourceCompiles)
 include(CheckLibraryExists)
-
-function (check_working_cxx_atomics128 varname)
-  set(OLD_CMAKE_REQUIRED_FLAGS ${CMAKE_REQUIRED_FLAGS})
-  set(CMAKE_REQUIRED_FLAGS "-std=c++11 ${CMAKE_REQUIRED_FLAGS}")
-  check_cxx_source_compiles(
-    "
-#include <atomic>
-#include <cstdint>
-struct sixteen {
-  uint64_t x = 1;
-  int64_t  y = -1;
-};
-std::atomic<sixteen> x;
-int main()
-{
-  auto v = x.load(std::memory_order_relaxed);
-  return std::atomic_is_lock_free(&x);
-}
-"
-    ${varname})
-  set(CMAKE_REQUIRED_FLAGS ${OLD_CMAKE_REQUIRED_FLAGS})
-endfunction (check_working_cxx_atomics128)
-
-check_working_cxx_atomics128(HAVE_CXX_ATOMICS_WITHOUT_LIB)
-if (NOT HAVE_CXX_ATOMICS_WITHOUT_LIB)
-  check_library_exists(atomic __atomic_fetch_add_16 "" HAVE_LIBATOMIC)
-  if (HAVE_LIBATOMIC)
-    list(APPEND CMAKE_REQUIRED_LIBRARIES "atomic")
-    check_working_cxx_atomics128(HAVE_CXX_ATOMICS_WITH_LIB)
-    if (NOT HAVE_CXX_ATOMICS_WITH_LIB)
-      message(FATAL_ERROR "Host compiler must support std::atomic!")
-    endif ()
-  else ()
-    message(
-      STATUS "Host compiler appears to require libatomic, but cannot find it")
-    message(STATUS "Enabling mutex lock workaround")
-    set(VAST_MEASUREMENT_MUTEX_WORKAROUND ON)
-  endif ()
-endif ()
 
 # We prepend our additional flags only if VAST is not the main project we're
 # building, e.g., if we're just linking again libvast.
@@ -668,7 +631,7 @@ if (NOT VAST_NO_ARROW)
              "\nfind_package(${dep} REQUIRED QUIET CONFIG)")
     endforeach ()
   endif ()
-  find_package(Arrow REQUIRED QUIET CONFIG)
+  find_package(Arrow 0.17 REQUIRED QUIET CONFIG)
   string(APPEND VAST_FIND_DEPENDENCY_LIST
          "\nfind_package(Arrow REQUIRED QUIET CONFIG)")
   set(VAST_HAVE_ARROW true)

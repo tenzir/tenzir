@@ -17,16 +17,20 @@
 #include "vast/defaults.hpp"
 #include "vast/detail/make_io_stream.hpp"
 #include "vast/detail/unbox_var.hpp"
+#include "vast/format/csv.hpp"
+#include "vast/format/json.hpp"
+#include "vast/format/json/suricata.hpp"
 #include "vast/format/syslog.hpp"
 #include "vast/format/test.hpp"
 #include "vast/format/zeek.hpp"
+#include "vast/fwd.hpp"
+#include "vast/logger.hpp"
 #include "vast/system/node.hpp"
 #include "vast/system/source.hpp"
 #include "vast/system/spawn_arguments.hpp"
 
 #include <caf/actor.hpp>
 #include <caf/expected.hpp>
-#include <caf/local_actor.hpp>
 
 #include <string>
 
@@ -39,25 +43,59 @@ namespace vast::system {
 namespace {
 
 template <class Reader, class... Ts>
-maybe_actor spawn_generic_source(caf::local_actor* self, spawn_arguments& args,
+maybe_actor spawn_generic_source(node_actor* self, spawn_arguments& args,
                                  Ts&&... ctor_args) {
-  VAST_UNBOX_VAR(expr, normalized_and_validated(args));
+  auto& st = self->state;
+  auto& options = args.inv.options;
+  // Bail out early for bogus invocations.
+  if (caf::get_or(options, "system.node", false))
+    return make_error(ec::parse_error, "cannot start a local node");
+  // VAST_UNBOX_VAR(expr, normalized_and_validated(args));
   VAST_UNBOX_VAR(sch, read_schema(args));
-  auto table_slice_type
-    = caf::get_or(args.inv.options, "import.table-slice-type",
-                  defaults::import::table_slice_type);
-  Reader reader{table_slice_type, args.inv.options,
-                std::forward<Ts>(ctor_args)...};
-  auto src = self->spawn(default_source<Reader>, std::move(reader));
-  caf::anon_send(src, std::move(expr));
-  if (sch)
-    caf::anon_send(src, atom::put_v, std::move(*sch));
+  auto table_slice_type = caf::get_or(options, "source.spawn.table-slice-type",
+                                      defaults::import::table_slice_type);
+  auto slice_size = get_or(options, "source.spawn.table-slice-size",
+                           defaults::import::table_slice_size);
+  auto max_events = caf::get_if<size_t>(&options, "source.spawn.max-events");
+  auto type = caf::get_if<std::string>(&options, "source.spawn.type");
+  auto type_filter = type ? std::move(*type) : std::string{};
+  auto schema = get_schema(options, "spawn.source");
+  if (!schema)
+    return schema.error();
+  if (slice_size == 0)
+    return make_error(ec::invalid_configuration, "table-slice-size can't be 0");
+  Reader reader{table_slice_type, options, std::forward<Ts>(ctor_args)...};
+  VAST_INFO(self, "spawned a", reader.name(), "source");
+  auto src
+    = self->spawn<caf::detached>(source<Reader>, std::move(reader), slice_size,
+                                 max_events, st.type_registry, vast::schema{},
+                                 std::move(type_filter), accountant_type{});
+  src->attach_functor([=, name = reader.name()](const caf::error& reason) {
+    if (!reason || reason == caf::exit_reason::user_shutdown)
+      VAST_INFO(name, "source shuts down");
+    else
+      VAST_WARNING(name, "source shuts down with error:", reason);
+  });
+  self->send(src, atom::sink_v, st.importer);
   return src;
 }
 
 } // namespace <anonymous>
 
-maybe_actor spawn_pcap_source([[maybe_unused]] caf::local_actor* self,
+maybe_actor spawn_csv_source(node_actor* self, spawn_arguments& args) {
+  using defaults_t = defaults::import::csv;
+  VAST_UNBOX_VAR(in, detail::make_input_stream<defaults_t>(args.inv.options));
+  return spawn_generic_source<format::csv::reader>(self, args, std::move(in));
+}
+
+maybe_actor spawn_json_source(node_actor* self, spawn_arguments& args) {
+  using defaults_t = defaults::import::json;
+  VAST_UNBOX_VAR(in, detail::make_input_stream<defaults_t>(args.inv.options));
+  return spawn_generic_source<format::json::reader<>>(self, args,
+                                                      std::move(in));
+}
+
+maybe_actor spawn_pcap_source([[maybe_unused]] node_actor* self,
                               [[maybe_unused]] spawn_arguments& args) {
 #if !VAST_HAVE_PCAP
   return make_error(ec::unspecified, "not compiled with pcap support");
@@ -68,36 +106,27 @@ maybe_actor spawn_pcap_source([[maybe_unused]] caf::local_actor* self,
 #endif // VAST_HAVE_PCAP
 }
 
-maybe_actor spawn_syslog_source([[maybe_unused]] caf::local_actor* self,
-                                [[maybe_unused]] spawn_arguments& args) {
+maybe_actor spawn_suricata_source(node_actor* self, spawn_arguments& args) {
+  using defaults_t = defaults::import::suricata;
+  VAST_UNBOX_VAR(in, detail::make_input_stream<defaults_t>(args.inv.options));
+  return spawn_generic_source<format::json::reader<format::json::suricata>>(
+    self, args, std::move(in));
+}
+
+maybe_actor spawn_syslog_source(node_actor* self, spawn_arguments& args) {
   using defaults_t = defaults::import::syslog;
   VAST_UNBOX_VAR(in, detail::make_input_stream<defaults_t>(args.inv.options));
   return spawn_generic_source<format::syslog::reader>(self, args,
                                                       std::move(in));
 }
 
-maybe_actor spawn_test_source(caf::local_actor* self, spawn_arguments& args) {
-  using reader_type = format::test::reader;
-  VAST_UNBOX_VAR(sch, read_schema(args));
-  // The test source only generates events out of thin air and thus accepts no
-  // source expression.
-  if (!args.empty())
-    return unexpected_arguments(args);
-  auto table_slice_type
-    = caf::get_or(args.inv.options, "import.table-slice-type",
-                  defaults::import::table_slice_type);
+maybe_actor spawn_test_source(node_actor* self, spawn_arguments& args) {
   using defaults_t = defaults::import::test;
-  std::string category = defaults_t::category;
-  reader_type reader{table_slice_type, defaults_t::seed(args.inv.options),
-                     get_or(args.inv.options, "import.max-events",
-                            defaults::import::max_events)};
-  auto src = self->spawn(default_source<reader_type>, std::move(reader));
-  if (sch)
-    caf::anon_send(src, atom::put_v, std::move(*sch));
-  return src;
+  VAST_UNBOX_VAR(in, detail::make_input_stream<defaults_t>(args.inv.options));
+  return spawn_generic_source<format::test::reader>(self, args, std::move(in));
 }
 
-maybe_actor spawn_zeek_source(caf::local_actor* self, spawn_arguments& args) {
+maybe_actor spawn_zeek_source(node_actor* self, spawn_arguments& args) {
   using defaults_t = defaults::import::zeek;
   VAST_UNBOX_VAR(in, detail::make_input_stream<defaults_t>(args.inv.options));
   return spawn_generic_source<format::zeek::reader>(self, args, std::move(in));
