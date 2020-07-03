@@ -135,7 +135,7 @@ pack(flatbuffers::FlatBufferBuilder& builder, table_slice_ptr x) {
   if (auto error = sink2(x))
     return error;
   auto transform = [](caf::atom_value x) -> caf::expected<fbs::Encoding> {
-    if (x == caf::atom("default"))
+    if (x == caf::atom("caf"))
       return fbs::Encoding::CAF;
     if (x == caf::atom("arrow"))
       return fbs::Encoding::Arrow;

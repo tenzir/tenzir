@@ -20,7 +20,7 @@
 namespace vast {
 
 caf::atom_value caf_table_slice_builder::get_implementation_id() noexcept {
-  return caf::atom("default");
+  return caf::atom("caf");
 }
 
 caf_table_slice_builder::caf_table_slice_builder(record_type layout)
