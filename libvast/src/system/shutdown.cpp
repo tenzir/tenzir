@@ -44,7 +44,7 @@ void shutdown(caf::event_based_actor* self, std::vector<caf::actor> xs) {
       VAST_DEBUG(self, "received hard kill and terminates immediately");
       self->quit(msg.reason);
     } else {
-      VAST_DEBUG(self, "ignores duplicate EXIT message");
+      VAST_DEBUG(self, "ignores duplicate EXIT message from", msg.source);
     }
   });
 }

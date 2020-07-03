@@ -20,6 +20,7 @@
 #include "vast/error.hpp"
 #include "vast/filesystem.hpp"
 #include "vast/logger.hpp"
+#include "vast/settings.hpp"
 #include "vast/system/application.hpp"
 #include "vast/system/start_command.hpp"
 
@@ -221,23 +222,6 @@ void mantext(const command& cmd, std::ostream& os,
     if (subcmd->visible)
       mantext(*subcmd, os, depth + 1);
   os << '\n';
-}
-
-/// Merge settings of `src` into `dst`, overwriting existing values
-/// from `dst` if necessary.
-void merge_settings(const caf::settings& src, caf::settings& dst,
-                    size_t depth = 0) {
-  if (depth > 100) {
-    VAST_ERROR_ANON("Exceeded maximum nesting depth in settings.");
-    return;
-  }
-  for (auto& [key, value] : src) {
-    if (caf::holds_alternative<caf::settings>(value))
-      merge_settings(caf::get<caf::settings>(value), dst[key].as_dictionary(),
-                     depth + 1);
-    else
-      dst.insert_or_assign(key, value);
-  }
 }
 
 } // namespace

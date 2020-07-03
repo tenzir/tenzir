@@ -9,7 +9,13 @@ Every entry has a category for which we use the following visual abbreviations:
 - ⚠️ change
 - 🐞 bugfix
 
-<!-- ## Unreleased -->
+## Unreleased
+
+- 🐞 The PCAP reader now correctly shows the amount of generated events.
+  [#954](https://github.com/tenzir/vast/pull/954)
+
+- ⚠️ A type definition for the stats event was added to the suricata schema
+  file. [#954](https://github.com/tenzir/vast/pull/954)
 
 ## [2020.06.25]
 

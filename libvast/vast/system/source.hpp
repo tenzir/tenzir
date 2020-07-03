@@ -125,6 +125,9 @@ struct source_state {
   /// Current metrics for the accountant.
   measurement metrics;
 
+  /// Indicates whether the stream source is done.
+  bool done;
+
   // -- utility functions ------------------------------------------------------
 
   /// Initializes the state.
@@ -140,6 +143,8 @@ struct source_state {
     remaining = std::move(max_events);
     local_schema = std::move(sch);
     accountant = std::move(acc);
+    sink = {};
+    done = false;
     // Register with the accountant.
     self->send(accountant, atom::announce_v, name);
     // Figure out which schemas we need.
@@ -216,21 +221,26 @@ source(caf::stateful_actor<source_state<Reader>>* self, Reader reader,
        size_t table_slice_size, caf::optional<size_t> max_events,
        type_registry_type type_registry, vast::schema local_schema,
        std::string type_filter, accountant_type accountant) {
+  VAST_TRACE(VAST_ARG(self));
   // Initialize state.
   auto& st = self->state;
   st.init(self, std::move(reader), std::move(max_events),
           std::move(type_registry), std::move(local_schema),
           std::move(type_filter), std::move(accountant));
+  self->set_exit_handler([=](const caf::exit_msg& msg) {
+    VAST_VERBOSE(self, "received EXIT from", msg.source);
+    self->state.done = true;
+    self->quit(msg.reason);
+  });
   // Spin up the stream manager for the source.
   st.mgr = self->make_continuous_source(
     // init
-    [=](bool& done) {
-      done = false;
+    [=](caf::unit_t&) {
       caf::timestamp now = std::chrono::system_clock::now();
       self->send(self->state.accountant, "source.start", now);
     },
     // get next element
-    [=](bool& done, caf::downstream<table_slice_ptr>& out, size_t num) {
+    [=](caf::unit_t&, caf::downstream<table_slice_ptr>& out, size_t num) {
       auto& st = self->state;
       // Extract events until the source has exhausted its input or until
       // we have completed a batch.
@@ -246,7 +256,7 @@ source(caf::stateful_actor<source_state<Reader>>* self, Reader reader,
       //       trigger CAF to poll the source after a predefined interval of
       //       time again, e.g., via delayed_send.
       if (produced == 0)
-        VAST_WARNING(self, "received 0 events from the source and may stall");
+        VAST_WARNING(self, "produced 0 events from may stall");
       if (st.remaining) {
         VAST_ASSERT(*st.remaining >= produced);
         *st.remaining -= produced;
@@ -257,7 +267,7 @@ source(caf::stateful_actor<source_state<Reader>>* self, Reader reader,
         st.send_report();
       };
       auto finish = [&] {
-        done = true;
+        st.done = true;
         st.send_report();
         self->quit();
       };
@@ -284,7 +294,7 @@ source(caf::stateful_actor<source_state<Reader>>* self, Reader reader,
       }
     },
     // done?
-    [](const bool& done) { return done; });
+    [=](const caf::unit_t&) { return self->state.done; });
   return {
     [=](atom::get, atom::schema) { return self->state.reader.schema(); },
     [=](atom::put, schema sch) -> caf::result<void> {
@@ -308,8 +318,10 @@ source(caf::stateful_actor<source_state<Reader>>* self, Reader reader,
       //       source, because we mustn't duplicate data.
       auto& st = self->state;
       if (st.sink) {
-        self->quit(make_error(ec::logic_error, "does not support multiple "
-                                               "sinks"));
+        self->quit(caf::make_error(ec::logic_error,
+                                   "source does not support "
+                                   "multiple sinks; sender =",
+                                   self->current_sender()));
         return;
       }
       st.sink = sink;
@@ -326,17 +338,6 @@ source(caf::stateful_actor<source_state<Reader>>* self, Reader reader,
                            atom::telemetry_v);
     },
   };
-}
-
-/// An event producer with default table slice settings.
-template <class Reader>
-caf::behavior default_source(caf::stateful_actor<source_state<Reader>>* self,
-                             Reader reader) {
-  auto slice_size = get_or(self->system().config(), "import.table-slice-size",
-                           defaults::import::table_slice_size);
-  //  The last five arguments are optional, and not required for the minimum
-  //  behavior of the "default" source.
-  return source(self, std::move(reader), slice_size, {}, {}, {}, {}, {});
 }
 
 } // namespace vast::system

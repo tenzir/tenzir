@@ -343,3 +343,11 @@ tests:
       - command: export ascii 'resp_h == 192.168.1.104'
       - command: send eraser run
       - command: export ascii 'resp_h == 192.168.1.104'
+  Spawn source:
+    tags: [import, spawn-source, zeek]
+    fixture: ServerTester
+    steps:
+      - command: spawn source suricata -r @./data/suricata/eve.json
+      - command: import -b zeek
+        input: data/zeek/conn.log.gz
+      - command: count '#type ~ /suricata.*/'
