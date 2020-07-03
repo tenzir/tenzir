@@ -255,7 +255,8 @@ if (MORE_WARNINGS)
         "-Wno-c++98-compat-pedantic -Wno-unused-member-function "
         "-Wno-unused-const-variable -Wno-switch-enum "
         "-Wno-abstract-vbase-init "
-        "-Wno-missing-noreturn -Wno-covered-switch-default")
+        "-Wno-missing-noreturn -Wno-covered-switch-default "
+        "-Wno-unknown-warning-option")
   elseif (CMAKE_CXX_COMPILER_ID MATCHES "GNU")
     set(WFLAGS
         "-Waddress -Wall -Warray-bounds "
@@ -276,7 +277,8 @@ if (MORE_WARNINGS)
         "-Wpmf-conversions -Wpointer-arith -Wreorder "
         "-Wreturn-type -Wsequence-point "
         "-Wsign-compare -Wswitch -Wtype-limits -Wundef "
-        "-Wuninitialized -Wunused -Wvla -Wwrite-strings")
+        "-Wuninitialized -Wunused -Wvla -Wwrite-strings "
+        "-Wno-unknown-warning")
   endif ()
   # convert CMake list to a single string, erasing the ";" separators
   string(REPLACE ";" "" WFLAGS_STR ${WFLAGS})
