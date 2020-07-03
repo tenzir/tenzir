@@ -36,6 +36,7 @@ void shutdown(caf::event_based_actor* self, std::vector<caf::actor> xs) {
       },
       [=](const caf::error& err) {
         VAST_ERROR(self, "failed to cleanly terminate dependent actors", err);
+        self->send_exit(t, caf::exit_reason::kill);
         self->quit(err);
       });
   // Ignore duplicate EXIT messages except for hard kills.
