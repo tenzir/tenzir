@@ -345,9 +345,9 @@ node_state::spawn_command(const invocation& inv,
   VAST_DEBUG(this_node, "spawns a", comp_name, "with the label", label);
   auto spawn_inv = inv;
   if (comp_name == "source") {
-    auto spawn_opt = caf::get<caf::settings>(spawn_inv.options, "spawn");
-    auto source_opt = caf::get<caf::settings>(spawn_opt, "source");
-    auto import_opt = caf::get<caf::settings>(spawn_inv.options, "import");
+    auto spawn_opt = caf::get_or(spawn_inv.options, "spawn", caf::settings{});
+    auto source_opt = caf::get_or(spawn_opt, "source", caf::settings{});
+    auto import_opt = caf::get_or(spawn_inv.options, "import", caf::settings{});
     merge_settings(source_opt, import_opt);
     spawn_inv.options["import"] = import_opt;
   }
