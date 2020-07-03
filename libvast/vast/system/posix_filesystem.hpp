@@ -14,7 +14,7 @@
 #pragma once
 
 #include "vast/filesystem.hpp"
-#include "vast/system/file_system.hpp"
+#include "vast/system/filesystem.hpp"
 
 #include <caf/stateful_actor.hpp>
 #include <caf/typed_event_based_actor.hpp>

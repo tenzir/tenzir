@@ -12,7 +12,7 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#include "vast/system/posix_file_system.hpp"
+#include "vast/system/posix_filesystem.hpp"
 
 #include "vast/chunk.hpp"
 #include "vast/detail/assert.hpp"

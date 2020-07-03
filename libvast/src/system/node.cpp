@@ -26,7 +26,7 @@
 #include "vast/settings.hpp"
 #include "vast/system/accountant.hpp"
 #include "vast/system/node.hpp"
-#include "vast/system/posix_file_system.hpp"
+#include "vast/system/posix_filesystem.hpp"
 #include "vast/system/shutdown.hpp"
 #include "vast/system/spawn_archive.hpp"
 #include "vast/system/spawn_arguments.hpp"

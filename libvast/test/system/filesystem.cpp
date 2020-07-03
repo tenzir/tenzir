@@ -19,7 +19,7 @@
 #include "vast/chunk.hpp"
 #include "vast/io/read.hpp"
 #include "vast/io/write.hpp"
-#include "vast/system/posix_file_system.hpp"
+#include "vast/system/posix_filesystem.hpp"
 
 #include <fstream>
 
