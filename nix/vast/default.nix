@@ -9,6 +9,7 @@
 , caf
 , libpcap
 , arrow-cpp
+, broker
 , zstd
 , jemalloc
 , python3Packages
@@ -31,7 +32,8 @@ let
     ]
   );
 
-  src = nix-gitignore.gitignoreSource [ "/nix" ] ../.;
+  # TODO: Implement a fetcher that uses git ls-files.
+  src = nix-gitignore.gitignoreSource [] ../..;
 
   version = if (versionOverride != null) then versionOverride else stdenv.lib.fileContents (nix-gitDescribe src);
 in
@@ -48,7 +50,7 @@ stdenv.mkDerivation rec {
 
   nativeBuildInputs = [ cmake ];
   propagatedNativeBuildInputs = [ pkgconfig pandoc ];
-  buildInputs = [ libpcap jemalloc ];
+  buildInputs = [ libpcap jemalloc broker ];
   propagatedBuildInputs = [ arrow-cpp caf ];
 
   cmakeFlags = [
@@ -56,10 +58,12 @@ stdenv.mkDerivation rec {
     "-DVAST_RELOCATABLE_INSTALL=OFF"
     "-DVAST_VERSION_TAG=${version}"
     "-DVAST_USE_JEMALLOC=ON"
+    "-DBROKER_ROOT_DIR=${broker}"
     # gen-table-slices runs at build time
     "-DCMAKE_SKIP_BUILD_RPATH=OFF"
   ] ++ lib.optionals static [
     "-DVAST_STATIC_EXECUTABLE:BOOL=ON"
+    "-DCMAKE_INTERPROCEDURAL_OPTIMIZATION:BOOL=ON"
     "-DZSTD_ROOT=${zstd}"
   ] ++ lib.optional disableTests "-DBUILD_UNIT_TESTS=OFF";
 
