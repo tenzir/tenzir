@@ -7,7 +7,7 @@ else ()
 endif ()
 
 if (jemalloc_ROOT_DIR)
-  message(STATUS "Using jemalloc_ROOT: ${jemalloc_ROOT}")
+  message(STATUS "Using jemalloc_ROOT: ${jemalloc_ROOT_DIR}")
   find_path(
     jemalloc_INCLUDE_DIR
     NAMES jemalloc/jemalloc.h
