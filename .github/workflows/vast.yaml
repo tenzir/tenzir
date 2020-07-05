@@ -98,6 +98,9 @@ jobs:
         run: |
           sudo apt-get -qq update
           sudo apt-get -qqy install ninja-build libpcap-dev libssl-dev lsb-release ccache
+          # Install Flatbuffers via Linuxbrew
+          brew --version
+          brew install flatbuffers
           # Install Apache Arrow (c.f. https://arrow.apache.org/install/)
           wget https://apache.bintray.com/arrow/$(lsb_release --id --short | tr 'A-Z' 'a-z')/apache-arrow-archive-keyring-latest-$(lsb_release --codename --short).deb
           sudo apt-get -qqy install ./apache-arrow-archive-keyring-latest-$(lsb_release --codename --short).deb
@@ -113,10 +116,10 @@ jobs:
           HOMEBREW_NO_AUTO_UPDATE: 1
         run: |
           brew --version
-          brew install libpcap tcpdump rsync pandoc apache-arrow pkg-config ninja ccache gnu-sed
+          brew install libpcap tcpdump rsync pandoc apache-arrow pkg-config ninja ccache gnu-sed flatbuffers
 
       - name: Compile flatbuffers
-        if: matrix.os.tag == 'Ubuntu' || matrix.os.tag == 'macOS'
+        if: matrix.os.tag == 'Ubuntu'
         run: |
           cd $(mktemp -d)
           curl -LO https://github.com/google/flatbuffers/archive/v1.12.0.tar.gz
