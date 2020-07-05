@@ -29,5 +29,6 @@ in {
     dontStrip = true;
   });
   broker = final.callPackage ./broker {python = final.python3;};
+  vast-source = final.nix-gitignore.gitignoreSource [] ./..;
   vast = final.callPackage ./vast {};
 }

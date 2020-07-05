@@ -1,5 +1,6 @@
 { stdenv
 , lib
+, vast-source
 , nix-gitignore
 , nix-gitDescribe
 , cmake
@@ -32,8 +33,7 @@ let
     ]
   );
 
-  # TODO: Implement a fetcher that uses git ls-files.
-  src = nix-gitignore.gitignoreSource [] ../..;
+  src = vast-source;
 
   version = if (versionOverride != null) then versionOverride else stdenv.lib.fileContents (nix-gitDescribe src);
 in
