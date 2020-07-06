@@ -29,7 +29,7 @@ fi
 result=$(nix-build --no-out-link -E "${exp}")
 
 mkdir -p build
-tar -C result \
+tar -C "${result}" \
   --exclude lib \
   --exclude include \
   --exclude nix-support \
@@ -37,4 +37,4 @@ tar -C result \
   --exclude share/vast/integration \
   --mode='u+w' \
   -cvzf "$PWD/build/${target}-${desc}.tar.gz" \
-  $(ls result)
+  $(ls "${result}")
