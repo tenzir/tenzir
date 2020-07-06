@@ -62,5 +62,8 @@ jobs:
       with:
         upload_url: ${{ github.event.release.upload_url }}
         asset_path: "${{ env.BUILD_DIR }}/${{ steps.create_paths.outputs.artifact_name }}"
-        asset_name: "${{ steps.configure_env.outputs.artifact_name }}"
+        # The asset name is constant so we can permanently link to
+        # https://github.com/tenzir/vast/releases/latest/download/vast-linux-static.tar.gz
+        # for a build of the latest release.
+        asset_name: "vast-linux-static.tar.gz"
         asset_content_type: application/gzip
