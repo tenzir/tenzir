@@ -17,7 +17,7 @@ jobs:
     name: Static Binary
     env:
       BUILD_DIR: build
-      STATIC_BINARY_TARGET: (${{ github.event.client_payload.args == '' && 'vast' || github.event.client_payload.args }})
+      STATIC_BINARY_TARGET: ${{ github.event.client_payload.args == '' && 'vast' || github.event.client_payload.args }}
     steps:
     - name: Checkout
       if: github.event_name == 'repository_dispatch'
