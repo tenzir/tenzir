@@ -7,7 +7,7 @@ on:
       - master
   pull_request:
     paths:
-      - '.github/workflows/static-binary.yml'
+      - '.github/workflows/static-binary.yaml'
   release:
     types: published
 
