@@ -38,7 +38,10 @@ maybe_actor spawn_source(node_actor* self, spawn_arguments& args) {
   auto& options = args.inv.options;
   // Bail out early for bogus invocations.
   if (caf::get_or(options, "system.node", false))
-    return make_error(ec::parse_error, "cannot start a local node");
+    return make_error(ec::invalid_configuration,
+                      "unable to spawn a remote source when spawning a node "
+                      "locally instead of connecting to one; please unset "
+                      "the option system.node");
   VAST_UNBOX_VAR(in, detail::make_input_stream<Defaults>(args.inv.options));
   VAST_UNBOX_VAR(sch, read_schema(args));
   auto table_slice_type = caf::get_or(options, "source.spawn.table-slice-type",
