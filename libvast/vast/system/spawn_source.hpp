@@ -15,7 +15,7 @@
 
 #include "vast/fwd.hpp"
 #include "vast/logger.hpp"
-#include "vast/system/import_command.hpp"
+#include "vast/system/make_source.hpp"
 #include "vast/system/node.hpp"
 #include "vast/system/spawn_arguments.hpp"
 
@@ -40,7 +40,7 @@ maybe_actor spawn_source(node_actor* self, spawn_arguments& args) {
   auto accountant = accountant_type{};
   if (auto a = self->system().registry().get(atom::accountant_v))
     accountant = caf::actor_cast<accountant_type>(a);
-  auto src = configure_source<Reader, Defaults, caf::detached>(
+  auto src = make_source<Reader, Defaults, caf::detached>(
     self, self->system(), args.inv, std::move(accountant), st.type_registry,
     st.importer);
   if (!src)
