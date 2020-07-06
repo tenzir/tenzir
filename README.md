@@ -10,8 +10,9 @@
 The network telemetry engine for data-driven security investigations.
 
 [![Build Status][ci-badge]][ci-url]
+[![Static Build Status][ci-static-badge]][ci-static-url]
 [![Examples Status][ci-examples-badge]][ci-examples-url]
-[![Docker Status][docker-badge]][ci-docker-url]
+[![Docker Status][ci-docker-badge]][ci-docker-url]
 [![Changelog][changelog-badge]][changelog-url]
 [![Latest Release][latest-release-badge]][latest-release-url]
 [![Chat][chat-badge]][chat-url]
@@ -136,10 +137,12 @@ proceedings][nsdi-proceedings].
 [chat-url]: https://gitter.im/tenzir/chat
 [ci-url]: https://github.com/tenzir/vast/actions?query=branch%3Amaster+workflow%3AVAST
 [ci-badge]: https://github.com/tenzir/vast/workflows/VAST/badge.svg?branch=master
-[ci-examples-url]: https://github.com/tenzir/vast/actions?query=branch%3Amaster+workflow%3AJupyter+Notebook
+[ci-examples-url]: https://github.com/tenzir/vast/actions?query=branch%3Amaster+workflow%3A%22Jupyter+Notebook%22
 [ci-examples-badge]: https://github.com/tenzir/vast/workflows/Jupyter%20Notebook/badge.svg?branch=master
-[ci-docker-url]: https://github.com/tenzir/vast/actions?query=branch%3Amaster+workflow%3AVAST+Docker
+[ci-docker-url]: https://github.com/tenzir/vast/actions?query=branch%3Amaster+workflow%3A%22VAST+Docker%22
 [ci-docker-badge]: https://github.com/tenzir/vast/workflows/VAST%20Docker/badge.svg?branch=master
+[ci-static-url]: https://github.com/tenzir/vast/actions?query=branch%3Amaster+workflow%3A%22VAST+Static%22
+[ci-static-badge]: https://github.com/tenzir/vast/workflows/VAST%20Static/badge.svg?branch=master
 [license-badge]: https://img.shields.io/badge/license-BSD-blue.svg
 [license-url]: https://raw.github.com/vast-io/vast/master/COPYING
 [changelog-badge]: https://img.shields.io/badge/view-changelog-green.svg
