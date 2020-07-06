@@ -24,30 +24,21 @@
 #include "vast/endpoint.hpp"
 #include "vast/error.hpp"
 #include "vast/expression.hpp"
-#include "vast/format/reader.hpp"
 #include "vast/fwd.hpp"
 #include "vast/logger.hpp"
 #include "vast/schema.hpp"
-#include "vast/scope_linked.hpp"
 #include "vast/system/accountant.hpp"
 #include "vast/system/datagram_source.hpp"
-#include "vast/system/node_control.hpp"
 #include "vast/system/signal_monitor.hpp"
 #include "vast/system/source.hpp"
-#include "vast/system/spawn_or_connect_to_node.hpp"
-#include "vast/system/tracker.hpp"
 #include "vast/system/type_registry.hpp"
-#include "vast/table_slice_builder.hpp"
 
+#include <caf/actor.hpp>
 #include <caf/actor_cast.hpp>
+#include <caf/actor_system.hpp>
 #include <caf/io/middleman.hpp>
-#include <caf/scoped_actor.hpp>
 #include <caf/settings.hpp>
 #include <caf/spawn_options.hpp>
-
-#include <csignal>
-#include <string>
-#include <utility>
 
 namespace vast::system {
 
@@ -64,16 +55,25 @@ caf::expected<expression> parse_expression(command::argument_iterator begin,
 
 } // namespace
 
+/// Tries to spawn a new SOURCE for the specified format.
+/// @tparam Reader the format-specific reader.
+/// @tparam Defaults defaults for the format-specific reader.
+/// @tparam SpawnOptions caf::spawn_options to pass to sys.spawn().
+/// @param self Points to the parent actor.
+/// @param sys The actor system to spawn the source in.
+/// @param inv The invocation that prompted the actor to be spawned.
+/// @param accountant A handle to the accountant component.
+/// @param type_registry A handle to the type registry component.
+/// @param importer A handle to the importer component.
+/// @returns a handle to the spawned actor on success, an error otherwise
 template <class Reader, class Defaults,
           caf::spawn_options SpawnOptions = caf::spawn_options::no_flags,
           class Actor>
 caf::expected<caf::actor>
-configure_source(const Actor& self, caf::actor_system& sys,
-                 const invocation& inv, accountant_type accountant,
-                 type_registry_type type_registry, caf::actor importer) {
+make_source(const Actor& self, caf::actor_system& sys, const invocation& inv,
+            accountant_type accountant, type_registry_type type_registry,
+            caf::actor importer) {
   // Placeholder thingies.
-  auto err = caf::error{};
-  auto src = caf::actor{};
   auto udp_port = std::optional<uint16_t>{};
   auto reader = std::unique_ptr<Reader>{nullptr};
   // Parse options.
@@ -148,19 +148,17 @@ configure_source(const Actor& self, caf::actor_system& sys,
   // Spawn the source, falling back to the default spawn function.
   auto local_schema = schema ? std::move(*schema) : vast::schema{};
   auto type_filter = type ? std::move(*type) : std::string{};
-  if (udp_port) {
-    auto& mm = sys.middleman();
-    src = mm.spawn_broker(datagram_source<Reader>, *udp_port,
-                          std::move(*reader), slice_size, max_events,
-                          std::move(type_registry), std::move(local_schema),
-                          std::move(type_filter), std::move(accountant));
-  } else {
-    src
-      = sys.spawn<SpawnOptions>(source<Reader>, std::move(*reader), slice_size,
-                                max_events, std::move(type_registry),
-                                std::move(local_schema), std::move(type_filter),
-                                std::move(accountant));
-  }
+  auto src =
+    [&](auto&&... args) {
+      if (udp_port)
+        return sys.middleman().spawn_broker<SpawnOptions>(
+          datagram_source<Reader>, *udp_port,
+          std::forward<decltype(args)>(args)...);
+      else
+        return sys.spawn<SpawnOptions>(source<Reader>,
+                                       std::forward<decltype(args)>(args)...);
+    }(std::move(*reader), slice_size, max_events, std::move(type_registry),
+      std::move(local_schema), std::move(type_filter), std::move(accountant));
   VAST_ASSERT(src);
   // Attempt to parse the remainder as an expression.
   if (!inv.arguments.empty()) {
@@ -175,80 +173,6 @@ configure_source(const Actor& self, caf::actor_system& sys,
   VAST_DEBUG(inv.full_name, "connects to", VAST_ARG(importer));
   self->send(src, atom::sink_v, importer);
   return src;
-}
-
-template <class Reader, class Defaults>
-caf::message import_command(const invocation& inv, caf::actor_system& sys) {
-  VAST_TRACE(inv.full_name, VAST_ARG("options", inv.options), VAST_ARG(sys));
-  auto self = caf::scoped_actor{sys};
-  // Placeholder thingies.
-  auto err = caf::error{};
-  // Get VAST node.
-  auto node_opt
-    = spawn_or_connect_to_node(self, inv.options, content(sys.config()));
-  if (auto err = caf::get_if<caf::error>(&node_opt))
-    return make_message(std::move(*err));
-  auto& node = caf::holds_alternative<caf::actor>(node_opt)
-                 ? caf::get<caf::actor>(node_opt)
-                 : caf::get<scope_linked_actor>(node_opt).get();
-  VAST_DEBUG(inv.full_name, "got node");
-  // Get node components.
-  auto components = get_node_components(
-    self, node, {"accountant", "type-registry", "importer"});
-  if (!components)
-    return make_message(std::move(components.error()));
-  VAST_ASSERT(components->size() == 3);
-  auto accountant = caf::actor_cast<accountant_type>((*components)[0]);
-  auto type_registry = caf::actor_cast<type_registry_type>((*components)[1]);
-  auto& importer = (*components)[2];
-  if (!type_registry)
-    return make_message(make_error(ec::missing_component, "type-registry"));
-  // Configure source.
-  auto src = configure_source<Reader, Defaults>(self, sys, inv, accountant,
-                                                type_registry, importer);
-  if (!src)
-    return make_message(std::move(src.error()));
-  // Start signal monitor.
-  std::thread sig_mon_thread;
-  auto guard = system::signal_monitor::run_guarded(
-    sig_mon_thread, sys, defaults::system::signal_monitoring_interval, self);
-  // Start the source.
-  bool stop = false;
-  self->monitor(*src);
-  self->monitor(importer);
-  self
-    ->do_receive(
-      [&](const caf::down_msg& msg) {
-        if (msg.source == importer) {
-          VAST_DEBUG(inv.full_name, "received DOWN from node importer");
-          self->send_exit(*src, caf::exit_reason::user_shutdown);
-          err = ec::remote_node_down;
-          stop = true;
-        } else if (msg.source == *src) {
-          VAST_DEBUG(inv.full_name, "received DOWN from source");
-          if (caf::get_or(inv.options, "import.blocking", false))
-            self->send(importer, atom::subscribe_v, atom::flush::value, self);
-          else
-            stop = true;
-        } else {
-          VAST_DEBUG(inv.full_name, "received unexpected DOWN from",
-                     msg.source);
-          VAST_ASSERT(!"unexpected DOWN message");
-        }
-      },
-      [&](atom::flush) {
-        VAST_DEBUG(inv.full_name, "received flush from IMPORTER");
-        stop = true;
-      },
-      [&](atom::signal, int signal) {
-        VAST_DEBUG(inv.full_name, "received signal", ::strsignal(signal));
-        if (signal == SIGINT || signal == SIGTERM)
-          self->send_exit(*src, caf::exit_reason::user_shutdown);
-      })
-    .until(stop);
-  if (err)
-    return make_message(std::move(err));
-  return caf::none;
 }
 
 } // namespace vast::system
