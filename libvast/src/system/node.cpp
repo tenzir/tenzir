@@ -26,6 +26,7 @@
 #include "vast/settings.hpp"
 #include "vast/system/accountant.hpp"
 #include "vast/system/node.hpp"
+#include "vast/system/posix_filesystem.hpp"
 #include "vast/system/shutdown.hpp"
 #include "vast/system/spawn_archive.hpp"
 #include "vast/system/spawn_arguments.hpp"
@@ -399,15 +400,22 @@ void node_state::init(std::string init_name, path init_dir) {
   dir = std::move(init_dir);
   // Bring up the tracker.
   tracker = self->spawn<linked>(system::tracker, name);
+  // Initialize the file system with the node directory as root.
+  auto fs = self->spawn<linked + detached>(posix_filesystem, dir);
+  self->system().registry().put(atom::filesystem_v, fs);
   self->set_exit_handler([=](const exit_msg& msg) {
     VAST_DEBUG(self, "got EXIT from", msg.source);
     /// Collect all actors that we shutdown in sequence. First, we terminate
     /// the accountant because it acts like a source and flush buffered data.
     /// Thereafter, we tear down the ingestion pipeline from source to sink.
+    /// Finally, after everything has exited, we can terminate the filesystem.
     std::vector<caf::actor> actors;
     if (auto acc = self->system().registry().get(atom::accountant_v))
       actors.push_back(caf::actor_cast<caf::actor>(acc));
     actors.push_back(caf::actor_cast<caf::actor>(tracker));
+    auto fs = self->system().registry().get(atom::filesystem_v);
+    VAST_ASSERT(fs);
+    actors.push_back(caf::actor_cast<caf::actor>(fs));
     shutdown<policy::sequential>(self, std::move(actors));
     self->attach_functor([=](const caf::error&) {
       VAST_DEBUG(self, "terminated all dependent actors");
@@ -415,6 +423,7 @@ void node_state::init(std::string init_name, path init_dir) {
       // cause some destructor to hang. (This is a CAF bug; for details see
       // https://github.com/actor-framework/actor-framework/issues/1110.)
       self->system().registry().erase(atom::accountant_v);
+      self->system().registry().erase(atom::filesystem_v);
     });
   });
 }

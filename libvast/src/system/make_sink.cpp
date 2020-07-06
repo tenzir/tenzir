@@ -53,15 +53,13 @@ caf::expected<Writer> make_writer(const caf::settings& options) {
     if (!out)
       return out.error();
     return Writer{std::move(*out)};
-  } else if constexpr (std::is_same_v<Writer, format::pcap::writer>) {
 #if VAST_HAVE_PCAP
+  } else if constexpr (std::is_same_v<Writer, format::pcap::writer>) {
     auto output
       = get_or(options, Defaults::category + ".write"s, Defaults::write);
     auto flush = get_or(options, Defaults::category + ".flush-interval"s,
                         Defaults::flush_interval);
     return Writer{output, flush};
-#else
-    return make_error(ec::invalid_configuration, "pcap support unavailable");
 #endif
   } else {
     return Writer{};
@@ -87,12 +85,16 @@ make_sink(caf::actor_system& sys, const caf::settings& options,
     return make_sink_impl<format::zeek::writer>(sys, options);
   if (output_format == "json")
     return make_sink_impl<format::json::writer>(sys, options);
+#if VAST_HAVE_PCAP
   if (output_format == "pcap")
     return make_sink_impl<format::pcap::writer>(sys, options);
+#endif
   if (output_format == "csv")
     return make_sink_impl<format::csv::writer>(sys, options);
+#if VAST_HAVE_ARROW
   if (output_format == "arrow")
     return make_sink_impl<format::arrow::writer>(sys, options);
+#endif
   if (output_format == "null")
     return make_sink_impl<format::null::writer>(sys, options);
   if (output_format == "ascii")

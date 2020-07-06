@@ -117,6 +117,7 @@ set(libvast_sources
     src/system/partition.cpp
     src/system/pivot_command.cpp
     src/system/pivoter.cpp
+    src/system/posix_filesystem.cpp
     src/system/query_processor.cpp
     src/system/query_supervisor.cpp
     src/system/read_query.cpp
@@ -371,6 +372,7 @@ set(tests
     test/system/evaluator.cpp
     test/system/explorer.cpp
     test/system/exporter.cpp
+    test/system/filesystem.cpp
     test/system/importer.cpp
     test/system/index.cpp
     test/system/indexer.cpp
