@@ -13,7 +13,7 @@ on:
 
 jobs:
   manual:
-    if: github.event_name == 'repository_dispatch' || github.event_name == 'pull_request'
+    if: github.event_name == 'repository_dispatch'
     runs-on: ubuntu-latest
     name: Manual Static Binary (${{ github.event.client_payload.ref == '' && 'master' || github.event.client_payload.ref }}/${{ github.event.client_payload.args == '' && 'vast' || github.event.client_payload.args }})
     env:
@@ -52,7 +52,7 @@ jobs:
         path: "${{ env.BUILD_DIR }}/${{ steps.create_paths.outputs.artifact_name }}"
 
   push_to_master:
-    if: github.event_name == 'push'
+    if: github.event_name != 'repository_dispatch'
     runs-on: ubuntu-latest
     name: Master Static Binary
     env:
