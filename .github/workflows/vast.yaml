@@ -268,5 +268,5 @@ jobs:
           # https://github.com/tenzir/vast/releases/latest/download/vast-ubuntu-release-clang.tar.gz
           # https://github.com/tenzir/vast/releases/latest/download/vast-darwin-release-appleclang.tar.gz
           # for builds of the latest release.
-          asset_name: "${{ steps.configure_env.outputs.package_name }}.tar.gz"
+          asset_name: "${{ steps.configure_env.outputs.publish_name }}.tar.gz"
           asset_content_type: application/gzip
