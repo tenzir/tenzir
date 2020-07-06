@@ -36,5 +36,5 @@ tar -C "${result}" \
   --exclude share/vast/test \
   --exclude share/vast/integration \
   --mode='u+w' \
-  -cvzf "$PWD/build/${target}-${desc}.tar.gz" \
+  -cvzf "$PWD/build/${target}-${desc}-static.tar.gz" \
   $(ls "${result}")

@@ -1,4 +1,4 @@
-name: "Static Binary"
+name: "VAST Static"
 on:
   repository_dispatch:
     types: static-binary
@@ -12,54 +12,21 @@ on:
     types: published
 
 jobs:
-  manual:
-    if: github.event_name == 'repository_dispatch'
+  static_binary:
     runs-on: ubuntu-latest
-    name: Manual Static Binary (${{ github.event.client_payload.ref == '' && 'master' || github.event.client_payload.ref }}/${{ github.event.client_payload.args == '' && 'vast' || github.event.client_payload.args }})
+    name: Static Binary
     env:
       BUILD_DIR: build
       STATIC_BINARY_TARGET: (${{ github.event.client_payload.args == '' && 'vast' || github.event.client_payload.args }})
     steps:
-
     - name: Checkout
+      if: github.event_name == 'repository_dispatch'
       uses: actions/checkout@v1
       with:
         ref: ${{ github.event.client_payload.ref == '' && 'master' || github.event.client_payload.ref }}
 
-    - name: Install Nix
-      uses: cachix/install-nix-action@v10
-
-    - name: Setup Cachix
-      uses: cachix/cachix-action@v6
-      with:
-        name: vast
-        signingKey: '${{ secrets.CACHIX_VAST_SIGNING_KEY }}'
-
-    - name: Build a Static Binary
-      run: |
-        nix/static-binary.sh --use-head
-
-    - name: Create Paths
-      id: create_paths
-      run: |
-        ARTIFACT_NAME=$(ls "${BUILD_DIR}" | grep "vast.*.tar.gz")
-        echo "::set-output name=artifact_name::${ARTIFACT_NAME}"
-
-    - name: Upload Artifact to Github
-      uses: actions/upload-artifact@v1
-      with:
-        name: "${{ steps.create_paths.outputs.artifact_name }}"
-        path: "${{ env.BUILD_DIR }}/${{ steps.create_paths.outputs.artifact_name }}"
-
-  push_to_master:
-    if: github.event_name != 'repository_dispatch'
-    runs-on: ubuntu-latest
-    name: Master Static Binary
-    env:
-      BUILD_DIR: build
-    steps:
-
     - name: Checkout
+      if: github.event_name != 'repository_dispatch'
       uses: actions/checkout@v1
 
     - name: Install Nix
@@ -86,3 +53,14 @@ jobs:
       with:
         name: "${{ steps.create_paths.outputs.artifact_name }}"
         path: "${{ env.BUILD_DIR }}/${{ steps.create_paths.outputs.artifact_name }}"
+
+    - name: Publish to GitHub Release
+      if: github.event_name == 'release' && github.event.action == 'published'
+      uses: actions/upload-release-asset@v1.0.1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ github.event.release.upload_url }}
+        asset_path: "${{ env.BUILD_DIR }}/${{ steps.create_paths.outputs.artifact_name }}"
+        asset_name: "${{ steps.configure_env.outputs.artifact_name }}"
+        asset_content_type: application/gzip
