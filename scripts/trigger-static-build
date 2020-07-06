@@ -1,0 +1,17 @@
+#!/bin/sh
+
+# e - non-interactive terminals will exit on failures immediately
+set -e
+
+# Usage: ./trigger-static-build [<ref>] [<args>]
+
+if [ "$#" -lt 1 ]; then
+  >&2 echo "Using 'master' as default branch."
+fi
+
+if [ -z "${GITHUB_TOKEN}" ]; then
+  >&2 echo "A GitHub personal access token with \"Repo\" access must be"
+  >&2 echo "availabe in the environment variable GITHUB_TOKEN."
+fi
+
+./trigger-action static-binary "{\"ref\": \"${1:-master}\", \"args\": \"${2}\"}"
