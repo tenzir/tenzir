@@ -25,6 +25,11 @@ in {
     hardeningDisable = [
       "pic"
     ];
+    # Building statically implies using -flto. Since we produce a final binary with
+    # link time optimizaitons in VAST, we need to make sure that type definitions that
+    # are parsed in both projects are the same, otherwise the compiler will complain
+    # at the optimization stage.
+    # TODO: Remove when updating to CAF 0.18.
     NIX_CFLAGS_COMPILE = "-std=c++17";
     dontStrip = true;
   });
