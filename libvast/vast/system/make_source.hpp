@@ -128,7 +128,8 @@ make_source(const Actor& self, caf::actor_system& sys, const invocation& inv,
       }
     }
     reader = std::make_unique<Reader>(slice_type, options);
-    VAST_INFO(*reader, "listens for data on", ep.host, ", port", ep.port);
+    VAST_INFO(*reader, "listens for data on",
+              ep.host + ":" + to_string(ep.port));
     switch (ep.port.type()) {
       default:
         return make_error(vast::ec::unimplemented,
