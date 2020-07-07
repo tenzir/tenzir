@@ -164,10 +164,6 @@ datagram_source(datagram_source_actor<Reader>* self,
       self->delayed_send(self, defaults::system::telemetry_rate,
                          atom::telemetry_v);
     },
-    [=](type_registry_type type_registry) {
-      // TODO adapt
-      VAST_DEBUG(self, "sets type-registry to", type_registry);
-    },
     [=](atom::sink, const caf::actor& sink) {
       // TODO: Currently, we use a broadcast downstream manager. We need to
       //       implement an anycast downstream manager and use it for the
@@ -186,11 +182,10 @@ datagram_source(datagram_source_actor<Reader>* self,
         return err;
       return caf::unit;
     },
-    [=](expression& expr) {
-      VAST_INFO(self, "sets filter expression to", expr);
-      self->state.filter = std::move(expr);
+    [=]([[maybe_unused]] expression& expr) {
       // FIXME: Allow for filtering import data.
-      VAST_WARNING(self, "fitler expressions are not currently implemented");
+      // self->state.filter = std::move(expr);
+      VAST_WARNING(self, "does not currently implement filter expressions");
     },
     [=](atom::telemetry) {
       auto& st = self->state;
