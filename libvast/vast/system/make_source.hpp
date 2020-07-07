@@ -128,8 +128,8 @@ make_source(const Actor& self, caf::actor_system& sys, const invocation& inv,
       }
     }
     reader = std::make_unique<Reader>(slice_type, options);
-    VAST_INFO(*reader, "listens for data on",
-              ep.host + ":" + to_string(ep.port));
+    VAST_INFO_ANON(reader->name(), "listens for data on",
+                   ep.host + ":" + to_string(ep.port));
     switch (ep.port.type()) {
       default:
         return make_error(vast::ec::unimplemented,
@@ -144,14 +144,14 @@ make_source(const Actor& self, caf::actor_system& sys, const invocation& inv,
       return in.error();
     reader = std::make_unique<Reader>(slice_type, options, std::move(*in));
     if (*file == "-")
-      VAST_INFO(*reader, "reads data from stdin");
+      VAST_INFO_ANON(reader->name(), "reads data from stdin");
     else
-      VAST_INFO(*reader, "reads data from", *file);
+      VAST_INFO_ANON(reader->name(), "reads data from", *file);
   }
   if (!reader)
     return make_error(ec::invalid_result, "failed to spawn reader");
-  VAST_VERBOSE(*reader, "produces", slice_type, "table slices of", slice_size,
-               "events");
+  VAST_VERBOSE_ANON(reader->name(), "produces", slice_type, "table slices of",
+                    slice_size, "events");
   // Spawn the source, falling back to the default spawn function.
   auto local_schema = schema ? std::move(*schema) : vast::schema{};
   auto type_filter = type ? std::move(*type) : std::string{};
