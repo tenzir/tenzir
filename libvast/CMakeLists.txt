@@ -1,4 +1,50 @@
 # ----------------------------------------------------------------------------
+# flattbuffers
+# ----------------------------------------------------------------------------
+
+file(GLOB flatbuffers_schemas CONFIGURE_DEPENDS
+  ${CMAKE_CURRENT_SOURCE_DIR}/vast/fbs/*.fbs)
+set(flatbuffers_output_path ${CMAKE_CURRENT_BINARY_DIR}/vast/fbs)
+
+add_custom_target(libvast_flatbuffers)
+
+# Translate paths to desired output paths.
+foreach (schema ${flatbuffers_schemas})
+  get_filename_component(basename ${schema} NAME_WE)
+  # The hardcoded path that flatc generates.
+  set(output_file "${flatbuffers_output_path}/${basename}_generated.h")
+  # The path that we want.
+  set(desired_file "${flatbuffers_output_path}/${basename}.hpp")
+  # Hackish way to patch generated flatbuffers schemas to support our naming.
+  set(rename_${basename}
+      ${CMAKE_CURRENT_BINARY_DIR}/flatbuffers_strip_suffix_${basename}.cmake)
+  file(
+    WRITE ${rename_${basename}}
+    "file(READ \"${desired_file}\" include)\n"
+    "string(REGEX REPLACE\n"
+    "      \"([^\\n]+)_generated.h\\\"\"\n"
+    "      \"\\\\1.hpp\\\"\"\n"
+    "      new_include \"\${include}\")\n"
+    "file(WRITE \"${desired_file}\" \"\${new_include}\")\n"
+  )
+  # Compile and rename schema.
+  add_custom_command(
+    OUTPUT ${desired_file}
+    COMMAND
+      flatbuffers::flatc -b --cpp --scoped-enums -I
+      ${CMAKE_CURRENT_SOURCE_DIR}/flatbuffers -o ${flatbuffers_output_path}
+      ${schema}
+    COMMAND
+      ${CMAKE_COMMAND} -E rename ${output_file} ${desired_file}
+    COMMAND
+      ${CMAKE_COMMAND} -P ${rename_${basename}}
+    DEPENDS ${schema}
+    COMMENT "Compiling flatbuffers schema ${schema}")
+  add_custom_target(flatbuffers_${basename} DEPENDS ${desired_file})
+  add_dependencies(libvast_flatbuffers flatbuffers_${basename})
+endforeach ()
+
+# ----------------------------------------------------------------------------
 # libvast
 # ----------------------------------------------------------------------------
 
@@ -195,10 +241,8 @@ if (VAST_USE_OPENSSL)
   target_link_libraries(libvast PUBLIC caf::openssl)
 endif ()
 
-target_include_directories(
-  libvast
-  PUBLIC
-    $<BUILD_INTERFACE:${FLATBUFFERS_INCLUDE_DIR}>)
+target_link_libraries(libvast PRIVATE flatbuffers::flatbuffers)
+add_dependencies(libvast libvast_flatbuffers)
 
 if (VAST_ENABLE_ASSERTIONS)
   target_include_directories(libvast PUBLIC ${Backtrace_INCLUDE_DIRECTORIES})
@@ -234,7 +278,7 @@ install(
   FILES_MATCHING
   PATTERN "*.hpp")
 
-# Install generated config header.
+# Install generated config and flatbuffers headers.
 install(
   DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/vast"
   DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
@@ -242,57 +286,6 @@ install(
   PATTERN "*.hpp")
 
 add_library(vast::libvast ALIAS libvast)
-
-# ----------------------------------------------------------------------------
-# flattbuffers
-# ----------------------------------------------------------------------------
-
-file(GLOB flatbuffers_schemas CONFIGURE_DEPENDS
-  ${CMAKE_CURRENT_SOURCE_DIR}/vast/fbs/*.fbs)
-set(flatbuffers_output_path ${CMAKE_CURRENT_BINARY_DIR}/vast/fbs)
-
-add_custom_target(flatbuffers)
-add_dependencies(libvast flatbuffers)
-
-# Translate paths to desired output paths.
-foreach (schema ${flatbuffers_schemas})
-  get_filename_component(basename ${schema} NAME_WE)
-  # The hardcoded path that flatc generates.
-  set(output_file "${flatbuffers_output_path}/${basename}_generated.h")
-  # The path that we want.
-  set(desired_file "${flatbuffers_output_path}/${basename}.hpp")
-  # Hackish way to patch generated flatbuffers schemas to support our naming.
-  set(rename_${basename}
-      ${CMAKE_CURRENT_BINARY_DIR}/flatbuffers_strip_suffix_${basename}.cmake)
-  file(
-    WRITE ${rename_${basename}}
-    "file(READ \"${desired_file}\" include)\n"
-    "string(REGEX REPLACE\n"
-    "      \"([^\\n]+)_generated.h\\\"\"\n"
-    "      \"\\\\1.hpp\\\"\"\n"
-    "      new_include \"\${include}\")\n"
-    "file(WRITE \"${desired_file}\" \"\${new_include}\")\n"
-  )
-  # Compile and rename schema.
-  add_custom_command(
-    OUTPUT ${desired_file}
-    COMMAND
-      ${FLATBUFFERS_EXECUTABLE} -b --cpp --scoped-enums -I
-      ${CMAKE_CURRENT_SOURCE_DIR}/flatbuffers -o ${flatbuffers_output_path}
-      ${schema}
-    COMMAND
-      ${CMAKE_COMMAND} -E rename ${output_file} ${desired_file}
-    COMMAND
-      ${CMAKE_COMMAND} -P ${rename_${basename}}
-    DEPENDS ${schema}
-    COMMENT "Compiling flatbuffers schema ${schema}")
-  add_custom_target(flatbuffers_${basename} DEPENDS ${desired_file})
-  add_dependencies(flatbuffers flatbuffers_${basename})
-endforeach ()
-
-
-install(DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/vast/fbs/
-        DESTINATION include/vast)
 
 # ----------------------------------------------------------------------------
 # unit tests
