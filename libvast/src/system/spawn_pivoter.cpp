@@ -13,7 +13,6 @@
 
 #include "vast/system/spawn_pivoter.hpp"
 
-#include "vast/detail/unbox_var.hpp"
 #include "vast/logger.hpp"
 #include "vast/system/pivoter.hpp"
 #include "vast/system/spawn_arguments.hpp"
@@ -28,8 +27,10 @@ maybe_actor spawn_pivoter(node_actor* self, spawn_arguments& args) {
   auto target_name = arguments[0];
   // Parse given expression.
   auto query_begin = std::next(arguments.begin());
-  VAST_UNBOX_VAR(expr, normalized_and_validated(query_begin, arguments.end()));
-  return self->spawn(pivoter, self, target_name, std::move(expr));
+  auto expr = system::normalized_and_validated(query_begin, arguments.end());
+  if (!expr)
+    return expr.error();
+  return self->spawn(pivoter, self, target_name, std::move(*expr));
 }
 
 } // namespace vast::system

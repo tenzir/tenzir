@@ -18,7 +18,6 @@
 #include <caf/settings.hpp>
 
 #include "vast/defaults.hpp"
-#include "vast/detail/unbox_var.hpp"
 #include "vast/system/index.hpp"
 #include "vast/system/node.hpp"
 #include "vast/system/spawn_arguments.hpp"

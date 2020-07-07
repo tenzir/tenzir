@@ -14,7 +14,6 @@
 #include "vast/system/spawn_type_registry.hpp"
 
 #include "vast/defaults.hpp"
-#include "vast/detail/unbox_var.hpp"
 #include "vast/logger.hpp"
 #include "vast/system/node.hpp"
 #include "vast/system/spawn_arguments.hpp"
