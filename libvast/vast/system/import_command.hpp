@@ -63,41 +63,42 @@ caf::message import_command(const invocation& inv, caf::actor_system& sys) {
   auto guard = system::signal_monitor::run_guarded(
     sig_mon_thread, sys, defaults::system::signal_monitoring_interval, self);
   // Start the source.
-  auto src = make_source<Reader, Defaults>(self, sys, inv, accountant,
-                                           type_registry, importer);
-  if (!src)
-    return make_message(std::move(src.error()));
+  auto src_result = make_source<Reader, Defaults>(self, sys, inv, accountant,
+                                                  type_registry, importer);
+  if (!src_result)
+    return make_message(std::move(src_result.error()));
+  auto src = std::move(src_result->src);
+  auto name = std::move(src_result->name);
   bool stop = false;
-  self->monitor(*src);
+  self->monitor(src);
   self->monitor(importer);
   self
     ->do_receive(
       [&](const caf::down_msg& msg) {
         if (msg.source == importer) {
-          VAST_DEBUG(inv.full_name, "received DOWN from node importer");
-          self->send_exit(*src, caf::exit_reason::user_shutdown);
+          VAST_DEBUG(name, "received DOWN from node importer");
+          self->send_exit(src, caf::exit_reason::user_shutdown);
           err = ec::remote_node_down;
           stop = true;
-        } else if (msg.source == *src) {
-          VAST_DEBUG(inv.full_name, "received DOWN from source");
+        } else if (msg.source == src) {
+          VAST_DEBUG(name, "received DOWN from source");
           if (caf::get_or(inv.options, "import.blocking", false))
             self->send(importer, atom::subscribe_v, atom::flush::value, self);
           else
             stop = true;
         } else {
-          VAST_DEBUG(inv.full_name, "received unexpected DOWN from",
-                     msg.source);
+          VAST_DEBUG(name, "received unexpected DOWN from", msg.source);
           VAST_ASSERT(!"unexpected DOWN message");
         }
       },
       [&](atom::flush) {
-        VAST_DEBUG(inv.full_name, "received flush from IMPORTER");
+        VAST_DEBUG(name, "received flush from IMPORTER");
         stop = true;
       },
       [&](atom::signal, int signal) {
-        VAST_DEBUG(inv.full_name, "received signal", ::strsignal(signal));
+        VAST_DEBUG(name, "received signal", ::strsignal(signal));
         if (signal == SIGINT || signal == SIGTERM)
-          self->send_exit(*src, caf::exit_reason::user_shutdown);
+          self->send_exit(src, caf::exit_reason::user_shutdown);
       })
     .until(stop);
   if (err)

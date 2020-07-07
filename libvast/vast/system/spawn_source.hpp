@@ -40,16 +40,19 @@ maybe_actor spawn_source(node_actor* self, spawn_arguments& args) {
   auto accountant = accountant_type{};
   if (auto a = self->system().registry().get(atom::accountant_v))
     accountant = caf::actor_cast<accountant_type>(a);
-  auto src = make_source<Reader, Defaults, caf::detached>(
+  auto src_result = make_source<Reader, Defaults, caf::detached>(
     self, self->system(), args.inv, std::move(accountant), st.type_registry,
     st.importer);
-  if (!src)
-    return src.error();
-  (*src)->attach_functor([=](const caf::error& reason) {
+  if (!src_result)
+    return src_result.error();
+  auto src = std::move(src_result->src);
+  auto name = std::move(src_result->name);
+  VAST_INFO(self, "spawned a", name, "source");
+  src->attach_functor([=](const caf::error& reason) {
     if (!reason || reason == caf::exit_reason::user_shutdown)
-      VAST_INFO(src, "source shut down");
+      VAST_INFO(name, "source shut down");
     else
-      VAST_WARNING(src, "source shut down with error:", reason);
+      VAST_WARNING(name, "source shut down with error:", reason);
   });
   return src;
 }

@@ -53,6 +53,11 @@ caf::expected<expression> parse_expression(command::argument_iterator begin,
   return expr;
 }
 
+struct make_source_result {
+  caf::actor src;
+  std::string name;
+};
+
 } // namespace
 
 /// Tries to spawn a new SOURCE for the specified format.
@@ -65,11 +70,12 @@ caf::expected<expression> parse_expression(command::argument_iterator begin,
 /// @param accountant A handle to the accountant component.
 /// @param type_registry A handle to the type registry component.
 /// @param importer A handle to the importer component.
-/// @returns a handle to the spawned actor on success, an error otherwise
+/// @returns a handle to the spawned actor and the name of the reader on
+///          success, an error otherwise.
 template <class Reader, class Defaults,
           caf::spawn_options SpawnOptions = caf::spawn_options::no_flags,
           class Actor>
-caf::expected<caf::actor>
+caf::expected<make_source_result>
 make_source(const Actor& self, caf::actor_system& sys, const invocation& inv,
             accountant_type accountant, type_registry_type type_registry,
             caf::actor importer) {
@@ -82,7 +88,7 @@ make_source(const Actor& self, caf::actor_system& sys, const invocation& inv,
   auto max_events = caf::get_if<size_t>(&options, "import.max-events");
   auto uri = caf::get_if<std::string>(&options, category + ".listen");
   auto file = caf::get_if<std::string>(&options, category + ".read");
-  [[maybe_unused]] auto uds = get_or(options, category + ".uds", false);
+  auto uds = get_or(options, category + ".uds", false);
   auto type = caf::get_if<std::string>(&options, category + ".type");
   auto slice_type = get_or(options, "import.table-slice-type",
                            defaults::import::table_slice_type);
@@ -172,7 +178,7 @@ make_source(const Actor& self, caf::actor_system& sys, const invocation& inv,
     return make_error(ec::missing_component, "importer");
   VAST_DEBUG(inv.full_name, "connects to", VAST_ARG(importer));
   self->send(src, atom::sink_v, importer);
-  return src;
+  return make_source_result{src, reader->name()};
 }
 
 } // namespace vast::system
