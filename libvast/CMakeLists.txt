@@ -138,7 +138,6 @@ set(libvast_sources
     src/system/spawn_or_connect_to_node.cpp
     src/system/spawn_pivoter.cpp
     src/system/spawn_sink.cpp
-    src/system/spawn_source.cpp
     src/system/spawn_type_registry.cpp
     src/system/start_command.cpp
     src/system/stop_command.cpp

@@ -221,10 +221,9 @@ struct message_content_parser : parser<message_content_parser> {
   using attribute = message_content;
   template <class Iterator, class Attribute>
   bool parse(Iterator& f, const Iterator& l, Attribute& x) const {
-    using namespace parsers;
     using namespace parser_literals;
     auto bom = "\xEF\xBB\xBF"_p;
-    auto p = (bom >> +any) | +any | eoi;
+    auto p = (bom >> +parsers::any) | +parsers::any | parsers::eoi;
     return p(f, l, x);
   }
 };
