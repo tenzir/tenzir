@@ -305,10 +305,10 @@ source(caf::stateful_actor<source_state<Reader>>* self, Reader reader,
         return err;
       return caf::unit;
     },
-    [=](expression& expr) {
-      VAST_INFO(self, "sets filter expression to", expr);
-      auto& st = self->state;
-      st.filter = std::move(expr);
+    [=]([[maybe_unused]] expression& expr) {
+      // FIXME: Allow for filtering import data.
+      // self->state.filter = std::move(expr);
+      VAST_WARNING(self, "does not currently implement filter expressions");
     },
     [=](atom::sink, const caf::actor& sink) {
       VAST_ASSERT(sink);
