@@ -187,8 +187,10 @@ datagram_source(datagram_source_actor<Reader>* self,
       return caf::unit;
     },
     [=](expression& expr) {
-      VAST_DEBUG(self, "sets filter expression to:", expr);
+      VAST_INFO(self, "sets filter expression to", expr);
       self->state.filter = std::move(expr);
+      // FIXME: Allow for filtering import data.
+      VAST_WARNING(self, "fitler expressions are not currently implemented");
     },
     [=](atom::telemetry) {
       auto& st = self->state;
