@@ -1,0 +1,67 @@
+diff --git a/cmake_modules/ArrowJemallocTarget.cmake.in b/cmake_modules/ArrowJemallocTarget.cmake.in
+new file mode 100644
+index 000000000..123fdf4b7
+--- /dev/null
++++ b/cmake_modules/ArrowJemallocTarget.cmake.in
+@@ -0,0 +1,18 @@
++
++# Compute the installation prefix relative to this file.
++get_filename_component(_IMPORT_PREFIX "${CMAKE_CURRENT_LIST_FILE}" PATH)
++get_filename_component(_IMPORT_PREFIX "${_IMPORT_PREFIX}" PATH)
++get_filename_component(_IMPORT_PREFIX "${_IMPORT_PREFIX}" PATH)
++get_filename_component(_IMPORT_PREFIX "${_IMPORT_PREFIX}" PATH)
++if(_IMPORT_PREFIX STREQUAL "/")
++  set(_IMPORT_PREFIX "")
++endif()
++
++add_library(jemalloc::jemalloc STATIC IMPORTED)
++set_target_properties(jemalloc::jemalloc
++                      PROPERTIES INTERFACE_LINK_LIBRARIES
++                                 Threads::Threads)
++set_property(TARGET jemalloc::jemalloc APPEND PROPERTY IMPORTED_CONFIGURATIONS @CMAKE_BUILD_TYPE@)
++set_target_properties(jemalloc::jemalloc PROPERTIES
++  IMPORTED_LINK_INTERFACE_LANGUAGES_@CMAKE_BUILD_TYPE@ "C;CXX"
++  IMPORTED_LOCATION_@CMAKE_BUILD_TYPE@ "${_IMPORT_PREFIX}/lib/arrow/@JEMALLOC_STATIC_NAME@")
+diff --git a/cmake_modules/ThirdpartyToolchain.cmake b/cmake_modules/ThirdpartyToolchain.cmake
+index ba3138d20..2722968fd 100644
+--- a/cmake_modules/ThirdpartyToolchain.cmake
++++ b/cmake_modules/ThirdpartyToolchain.cmake
+@@ -1308,8 +1308,9 @@ if(ARROW_JEMALLOC)
+   set(ARROW_JEMALLOC_USE_SHARED OFF)
+   set(JEMALLOC_PREFIX
+       "${CMAKE_CURRENT_BINARY_DIR}/jemalloc_ep-prefix/src/jemalloc_ep/dist/")
++  set(JEMALLOC_STATIC_NAME "libjemalloc_pic${CMAKE_STATIC_LIBRARY_SUFFIX}")
+   set(JEMALLOC_STATIC_LIB
+-      "${JEMALLOC_PREFIX}/lib/libjemalloc_pic${CMAKE_STATIC_LIBRARY_SUFFIX}")
++      "${JEMALLOC_PREFIX}/lib/${JEMALLOC_STATIC_NAME}")
+   set(JEMALLOC_CONFIGURE_COMMAND ./configure "AR=${CMAKE_AR}" "CC=${CMAKE_C_COMPILER}")
+   if(CMAKE_OSX_SYSROOT)
+     list(APPEND JEMALLOC_CONFIGURE_COMMAND "SDKROOT=${CMAKE_OSX_SYSROOT}")
+@@ -1353,6 +1354,14 @@ if(ARROW_JEMALLOC)
+                                    INTERFACE_INCLUDE_DIRECTORIES
+                                    "${CMAKE_CURRENT_BINARY_DIR}/jemalloc_ep-prefix/src")
+   add_dependencies(jemalloc::jemalloc jemalloc_ep)
++  if(ARROW_BUILD_STATIC)
++    install(FILES "${JEMALLOC_STATIC_LIB}"
++            DESTINATION "${CMAKE_INSTALL_LIBDIR}/arrow")
++        configure_file("${PROJECT_SOURCE_DIR}/cmake_modules/ArrowJemallocTarget.cmake.in"
++                       "${CMAKE_CURRENT_BINARY_DIR}/ArrowJemallocTarget.cmake" @ONLY)
++    install(FILES "${CMAKE_CURRENT_BINARY_DIR}/ArrowJemallocTarget.cmake"
++            DESTINATION "${CMAKE_INSTALL_LIBDIR}/cmake/arrow")
++  endif()
+ endif()
+ 
+ # ----------------------------------------------------------------------
+diff --git a/src/arrow/ArrowConfig.cmake.in b/src/arrow/ArrowConfig.cmake.in
+index 0e595066d..c52e3cb07 100644
+--- a/src/arrow/ArrowConfig.cmake.in
++++ b/src/arrow/ArrowConfig.cmake.in
+@@ -39,5 +39,8 @@ include("${CMAKE_CURRENT_LIST_DIR}/ArrowOptions.cmake")
+ # Load targets only once. If we load targets multiple times, CMake reports
+ # already existent target error.
+ if(NOT (TARGET arrow_shared OR TARGET arrow_static))
++  if(ARROW_BUILD_STATIC AND ARROW_JEMALLOC)
++    include("${CMAKE_CURRENT_LIST_DIR}/ArrowJemallocTarget.cmake")
++  endif()
+   include("${CMAKE_CURRENT_LIST_DIR}/ArrowTargets.cmake")
+ endif()

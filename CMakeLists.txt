@@ -82,8 +82,8 @@ option(VAST_ENABLE_ASSERTIONS "Enable Assertions"
 option(VAST_RELOCATABLE_INSTALL "Enable relocatable installations" ON)
 option(VAST_USE_BUNDLED_CAF "Always use the CAF submodule" OFF)
 option(ENABLE_ZEEK_TO_VAST "Build zeek-to-vast" ON)
-option(VAST_STATIC_EXECUTABLE "Link VAST statically")
-option(VAST_USE_JEMALLOC "Use jemalloc instead of libc malloc" OFF)
+option(VAST_STATIC_EXECUTABLE "Link VAST statically" $ENV{VAST_STATIC_EXECUTABLE})
+option(VAST_USE_JEMALLOC "Use jemalloc instead of libc malloc" "${VAST_STATIC_EXECUTABLE}")
 cmake_dependent_option(
   BUILD_SHARED_LIBS "Build shared libraries instead of static" ON
   "NOT VAST_STATIC_EXECUTABLE" OFF)

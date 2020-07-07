@@ -5,6 +5,7 @@
 
 # Build artifacts
 /build*/
+/nix/build/
 /compile_commands.json
 .mypy_cache/
 __pycache__/

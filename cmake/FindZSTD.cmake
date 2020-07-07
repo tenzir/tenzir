@@ -23,6 +23,13 @@ set(ZSTD_STATIC_LIB_NAME
     ${CMAKE_STATIC_LIBRARY_PREFIX}zstd${ZSTD_STATIC_LIB_SUFFIX})
 
 # First, find via if specified ZTD_ROOT
+if (NOT ZSTD_ROOT)
+  # We look for an environment variable of the same name too, because
+  # that can be provided by a tool like nix-shell or docker. Wo do this
+  # so the user doesn't have to remember to add "-DZSTD_ROOT=..." to their
+  # cmake invocations.
+  set(ZSTD_ROOT "$ENV{ZSTD_ROOT}")
+endif ()
 if (ZSTD_ROOT)
   message(STATUS "Using ZSTD_ROOT: ${ZSTD_ROOT}")
   find_library(

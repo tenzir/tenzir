@@ -11,6 +11,10 @@ Every entry has a category for which we use the following visual abbreviations:
 
 ## Unreleased
 
+- 🎁 Starting with this release, installing VAST on any Linux becomes
+  significantly easier: A static binary will be provided with each release on
+  the GitHub releases page. [#966](https://github.com/tenzir/vast/pull/966)
+
 - 🐞 The PCAP reader now correctly shows the amount of generated events.
   [#954](https://github.com/tenzir/vast/pull/954)
 
