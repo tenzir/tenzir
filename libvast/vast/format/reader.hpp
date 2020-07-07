@@ -17,6 +17,7 @@
 #include "vast/fwd.hpp"
 #include "vast/system/report.hpp"
 #include "vast/table_slice.hpp"
+#include "vast/detail/assert.hpp"
 
 #include <caf/error.hpp>
 #include <caf/expected.hpp>
