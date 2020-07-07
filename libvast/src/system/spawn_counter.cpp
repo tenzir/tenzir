@@ -14,7 +14,6 @@
 #include "vast/system/spawn_counter.hpp"
 
 #include "vast/defaults.hpp"
-#include "vast/detail/unbox_var.hpp"
 #include "vast/error.hpp"
 #include "vast/logger.hpp"
 #include "vast/system/archive.hpp"
@@ -35,8 +34,10 @@ maybe_actor
 spawn_counter(system::node_actor* self, system::spawn_arguments& args) {
   VAST_TRACE(VAST_ARG(args));
   // Parse given expression.
-  VAST_UNBOX_VAR(expr, system::normalized_and_validated(args));
-  return self->spawn(counter, std::move(expr), self->state.index,
+  auto expr = system::normalized_and_validated(args);
+  if (!expr)
+    return expr.error();
+  return self->spawn(counter, std::move(*expr), self->state.index,
                      self->state.archive,
                      caf::get_or(args.inv.options, "count.estimate", false));
 }
