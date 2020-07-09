@@ -145,6 +145,10 @@ public:
   /// @returns `true` if the path is writable.
   bool is_writable() const;
 
+  /// Checks whether the path is absolute.
+  /// @returns `true` if the path is absolute.
+  bool is_absolute() const;
+
   friend bool operator==(const path& x, const path& y);
   friend bool operator<(const path& x, const path& y);
 
