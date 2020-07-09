@@ -17,7 +17,6 @@ jobs:
     name: Static Binary
     env:
       BUILD_DIR: build
-      STATIC_BINARY_TARGET: ${{ github.event.client_payload.args == '' && 'vast' || github.event.client_payload.args }}
     steps:
     - name: Checkout
       if: github.event_name == 'repository_dispatch'
@@ -53,6 +52,25 @@ jobs:
       with:
         name: "${{ steps.create_paths.outputs.artifact_name }}"
         path: "${{ env.BUILD_DIR }}/${{ steps.create_paths.outputs.artifact_name }}"
+
+    - name: Setup Python
+      uses: actions/setup-python@v1
+      with:
+        python-version: '3.7'
+
+    - name: Configure GCloud Credentials
+      uses: GoogleCloudPlatform/github-actions/setup-gcloud@master
+      with:
+        version: '275.0.0'
+        service_account_email: ${{ secrets.GCP_SA_EMAIL }}
+        service_account_key: ${{ secrets.GCP_SA_KEY }}
+
+    - name: Upload Artifact to GCS
+      env:
+        PUBLIC_GCS_BUCKET: tenzir-public-data
+        STATIC_BINARY_FOLDER: vast-static-builds
+      run: |
+        gsutil -m cp "${{ env.BUILD_DIR }}/${{ steps.create_paths.outputs.artifact_name }}" "gs://${{ env.PUBLIC_GCS_BUCKET }}/${{ env.STATIC_BINARY_FOLDER }}"
 
     - name: Publish to GitHub Release
       if: github.event_name == 'release' && github.event.action == 'published'
