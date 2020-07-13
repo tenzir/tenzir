@@ -1,0 +1,12 @@
+namespace vast.fbs;
+
+/// The persistent state of the meta index.
+table MetaIndex {
+  /// The meta index state.
+  /// TODO: tear apart into different pieces.
+  state: [ubyte];
+}
+
+root_type MetaIndex;
+
+file_identifier "VAST";

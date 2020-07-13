@@ -13,15 +13,17 @@
 
 #pragma once
 
-#include <cstddef>
-#include <vector>
+#include "vast/aliases.hpp"
+#include "vast/fbs/segment.hpp"
+#include "vast/fbs/table_slice.hpp"
+#include "vast/segment.hpp"
+#include "vast/uuid.hpp"
 
 #include <caf/expected.hpp>
 #include <caf/fwd.hpp>
 
-#include "vast/aliases.hpp"
-#include "vast/segment.hpp"
-#include "vast/uuid.hpp"
+#include <cstddef>
+#include <vector>
 
 namespace vast {
 
@@ -41,37 +43,36 @@ public:
 
   /// Constructs a segment from previously added table slices.
   /// @post The builder can now be reused to contruct a new segment.
-  segment_ptr finish();
+  segment finish();
 
   /// Locates previously added table slices for a given set of IDs.
   /// @param xs The IDs to lookup.
   /// @returns The table slices according to *xs*.
-  caf::expected<std::vector<table_slice_ptr>>
-  lookup(const ids& xs) const;
+  caf::expected<std::vector<table_slice_ptr>> lookup(const vast::ids& xs) const;
 
   /// @returns The UUID for the segment under construction.
   const uuid& id() const;
 
+  /// @returns The IDs for the contained table slices.
+  vast::ids ids() const;
+
   /// @returns The number of bytes of the current segment.
   size_t table_slice_bytes() const;
 
-  /// @returns the meta data for the segment.
-  const auto& meta() const {
-    return meta_;
-  }
+  /// @returns The currently buffered table slices.
+  const std::vector<table_slice_ptr>& table_slices() const;
 
   /// Resets the builder state to start with a new segment.
   void reset();
 
 private:
-  // Segment state
-  segment::meta_data meta_;
   uuid id_;
-  // Table slice state
   vast::id min_table_slice_offset_;
-  std::vector<char> table_slice_buffer_;
-  // Lookup cache
-  std::vector<table_slice_ptr> slices_;
+  uint64_t num_events_;
+  flatbuffers::FlatBufferBuilder builder_;
+  std::vector<flatbuffers::Offset<fbs::TableSliceBuffer>> flat_slices_;
+  std::vector<table_slice_ptr> slices_; // For queries to an unfinished segment.
+  std::vector<fbs::Interval> intervals_;
 };
 
 } // namespace vast

@@ -103,7 +103,6 @@ struct port_type;
 struct predicate;
 struct real_type;
 struct record_type;
-struct segment_header;
 struct set_type;
 struct string_type;
 struct subnet_type;
@@ -224,6 +223,7 @@ CAF_BEGIN_TYPE_ID_BLOCK(vast, caf::first_custom_type_id)
   VAST_ADD_ATOM(erase, "erase")
   VAST_ADD_ATOM(exists, "exists")
   VAST_ADD_ATOM(extract, "extract")
+  VAST_ADD_ATOM(filesystem, "filesystem")
   VAST_ADD_ATOM(heap, "heap")
   VAST_ADD_ATOM(heartbeat, "heartbeat")
   VAST_ADD_ATOM(historical, "historical")
@@ -233,6 +233,7 @@ CAF_BEGIN_TYPE_ID_BLOCK(vast, caf::first_custom_type_id)
   VAST_ADD_ATOM(link, "link")
   VAST_ADD_ATOM(list, "list")
   VAST_ADD_ATOM(load, "load")
+  VAST_ADD_ATOM(mmap, "mmap")
   VAST_ADD_ATOM(peer, "peer")
   VAST_ADD_ATOM(persist, "persist")
   VAST_ADD_ATOM(ping, "ping")

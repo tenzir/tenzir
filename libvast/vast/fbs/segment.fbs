@@ -1,0 +1,35 @@
+include "table_slice.fbs";
+include "version.fbs";
+
+namespace vast.fbs;
+
+/// A half-open interval *[a,b)* in the ID Space.
+struct Interval {
+  /// The left side of the interval (inclusive).
+  begin: ulong = 0;
+
+  /// The right side of the interval (exclusive).
+  end: ulong = 0;
+}
+
+/// A bundled sequence of table slices.
+table Segment {
+  /// The version of the segment.
+  version: Version;
+
+  /// The contained table slices.
+  slices: [TableSliceBuffer];
+
+  /// A unique identifier.
+  uuid: [ubyte];
+
+  /// The ID intervals this segment covers.
+  ids: [Interval];
+
+  /// The number of events in the store.
+  events: ulong;
+}
+
+root_type Segment;
+
+file_identifier "VAST";

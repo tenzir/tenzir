@@ -13,6 +13,8 @@
 
 #include "vast/system/index.hpp"
 
+#include "vast/chunk.hpp"
+#include "vast/concept/parseable/to.hpp"
 #include "vast/concept/printable/to_string.hpp"
 #include "vast/concept/printable/vast/bitmap.hpp"
 #include "vast/concept/printable/vast/error.hpp"
@@ -25,7 +27,12 @@
 #include "vast/detail/narrow.hpp"
 #include "vast/detail/notifying_stream_manager.hpp"
 #include "vast/expression_visitors.hpp"
+#include "vast/fbs/meta_index.hpp"
+#include "vast/fbs/utils.hpp"
 #include "vast/ids.hpp"
+#include "vast/io/read.hpp"
+#include "vast/io/write.hpp"
+#include "vast/json.hpp"
 #include "vast/load.hpp"
 #include "vast/logger.hpp"
 #include "vast/save.hpp"
@@ -89,9 +96,9 @@ index_state::~index_state() {
   flush_to_disk();
 }
 
-caf::error index_state::init(const path& dir, size_t max_partition_size,
-                             uint32_t in_mem_partitions,
-                             uint32_t taste_partitions) {
+caf::error
+index_state::init(const path& dir, size_t max_partition_size,
+                  uint32_t in_mem_partitions, uint32_t taste_partitions) {
   VAST_TRACE(VAST_ARG(dir), VAST_ARG(max_partition_size),
              VAST_ARG(in_mem_partitions), VAST_ARG(taste_partitions));
   // This option must be kept in sync with vast/address_synopsis.hpp.
@@ -123,7 +130,7 @@ caf::error index_state::load_from_disk() {
     return caf::none;
   }
   if (auto fname = statistics_filename(); exists(fname)) {
-    VAST_VERBOSE(self, "loading statistics from", fname);
+    VAST_VERBOSE(self, "loads statistics from", fname);
     if (auto err = load(&self->system(), fname, stats)) {
       VAST_ERROR(self,
                  "failed to load statistics:", self->system().render(err));
@@ -132,24 +139,31 @@ caf::error index_state::load_from_disk() {
     VAST_DEBUG(self, "loaded statistics");
   }
   if (auto fname = meta_index_filename(); exists(fname)) {
-    VAST_VERBOSE(self, "loading meta index from", fname);
-    if (auto err = load(&self->system(), fname, meta_idx)) {
-      VAST_ERROR(self, "failed to load meta index:",
-                 self->system().render(err));
-      return err;
+    VAST_VERBOSE(self, "loads meta index from", fname);
+    auto buffer = io::read(fname);
+    if (!buffer) {
+      VAST_ERROR(self, "failed to read meta index file:",
+                 self->system().render(buffer.error()));
+      return buffer.error();
     }
+    auto bytes = span<const byte>{*buffer};
+    if (auto err = fbs::unwrap<fbs::MetaIndex>(bytes, meta_idx))
+      return err;
     VAST_DEBUG(self, "loaded meta index");
   }
   return caf::none;
 }
 
 caf::error index_state::flush_meta_index() {
-  VAST_VERBOSE(self, "writing meta index to", meta_index_filename());
-  return save(&self->system(), meta_index_filename(), meta_idx);
+  VAST_VERBOSE(self, "writes meta index to", meta_index_filename());
+  auto flatbuf = fbs::wrap(meta_idx, fbs::file_identifier);
+  if (!flatbuf)
+    return flatbuf.error();
+  return io::write(meta_index_filename(), as_bytes(*flatbuf));
 }
 
 caf::error index_state::flush_statistics() {
-  VAST_VERBOSE(self, "writing statistics to", statistics_filename());
+  VAST_VERBOSE(self, "writes statistics to", statistics_filename());
   return save(&self->system(), statistics_filename(), stats);
 }
 
@@ -284,10 +298,10 @@ void index_state::decrement_indexer_count(uuid partition_id) {
   if (partition_id == active->id())
     active_partition_indexers--;
   else {
-    auto i = std::find_if(unpersisted.begin(), unpersisted.end(),
-                          [&](auto& kvp) {
-                            return kvp.first->id() == partition_id;
-                          });
+    auto i
+      = std::find_if(unpersisted.begin(), unpersisted.end(), [&](auto& kvp) {
+          return kvp.first->id() == partition_id;
+        });
     if (i == unpersisted.end())
       VAST_ERROR(self,
                  "received done from unknown indexer:", self->current_sender());

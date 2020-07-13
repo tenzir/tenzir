@@ -36,10 +36,9 @@ TEST(construction and querying) {
   for (auto& slice : zeek_conn_log_slices)
     REQUIRE(!builder.add(slice));
   auto x = builder.finish();
-  REQUIRE_NOT_EQUAL(x, nullptr);
-  CHECK_EQUAL(x->num_slices(), zeek_conn_log_slices.size());
+  CHECK_EQUAL(x.num_slices(), zeek_conn_log_slices.size());
   MESSAGE("lookup IDs for some segments");
-  auto xs = x->lookup(make_ids({0, 6, 19, 21}));
+  auto xs = x.lookup(make_ids({0, 6, 19, 21}));
   REQUIRE(xs);
   auto& slices = *xs;
   REQUIRE_EQUAL(slices.size(), 2u); // [0,8), [16,24)
@@ -52,20 +51,15 @@ TEST(serialization) {
   auto slice = zeek_conn_log_slices[0];
   REQUIRE(!builder.add(slice));
   auto x = builder.finish();
-  REQUIRE_NOT_EQUAL(x, nullptr);
-  segment_ptr y;
+  chunk_ptr chk;
   std::vector<char> buf;
-  REQUIRE_EQUAL(save(nullptr, buf, x), caf::none);
-  REQUIRE_EQUAL(load(nullptr, buf, y), caf::none);
-  REQUIRE_NOT_EQUAL(y, nullptr);
-  CHECK_EQUAL(y->num_slices(), 1u);
-  CHECK(std::equal(x->chunk()->begin(), x->chunk()->end(),
-                   y->chunk()->begin(), y->chunk()->end()));
-  MESSAGE("load segment from chunk");
-  auto z = segment::make(chunk::make(std::move(buf)));
-  REQUIRE(z);
-  CHECK(std::equal(x->chunk()->begin(), x->chunk()->end(),
-                   z->chunk()->begin(), z->chunk()->end()));
+  REQUIRE_EQUAL(save(nullptr, buf, x.chunk()), caf::none);
+  REQUIRE_EQUAL(load(nullptr, buf, chk), caf::none);
+  REQUIRE_NOT_EQUAL(chk, nullptr);
+  auto y = segment::make(chk);
+  REQUIRE(y);
+  CHECK_EQUAL(x.ids(), y->ids());
+  CHECK_EQUAL(x.num_slices(), y->num_slices());
 }
 
 FIXTURE_SCOPE_END()

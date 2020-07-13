@@ -13,17 +13,17 @@
 
 #include "vast/segment_builder.hpp"
 
-#include <caf/binary_serializer.hpp>
-
+#include "vast/detail/assert.hpp"
+#include "vast/detail/byte_swap.hpp"
+#include "vast/detail/narrow.hpp"
 #include "vast/error.hpp"
+#include "vast/fbs/utils.hpp"
 #include "vast/ids.hpp"
 #include "vast/logger.hpp"
 #include "vast/segment.hpp"
 #include "vast/table_slice.hpp"
 
-#include "vast/detail/assert.hpp"
-#include "vast/detail/byte_swap.hpp"
-#include "vast/detail/narrow.hpp"
+#include <caf/binary_serializer.hpp>
 
 namespace vast {
 
@@ -34,38 +34,40 @@ segment_builder::segment_builder() {
 caf::error segment_builder::add(table_slice_ptr x) {
   if (x->offset() < min_table_slice_offset_)
     return make_error(ec::unspecified, "slice offsets not increasing");
-  auto before = table_slice_buffer_.size();
-  caf::binary_serializer sink{nullptr, table_slice_buffer_};
-  if (auto error = sink(x)) {
-    table_slice_buffer_.resize(before);
-    return error;
-  }
-  auto after = table_slice_buffer_.size();
-  VAST_ASSERT(before < after);
-  meta_.slices.push_back({
-    detail::narrow_cast<int64_t>(before),
-    detail::narrow_cast<int64_t>(after),
-    x->offset(), x->rows()});
-  min_table_slice_offset_ = x->offset() + x->rows();
+  auto slice = pack(builder_, x);
+  if (!slice)
+    return slice.error();
+  flat_slices_.push_back(*slice);
+  // This works only with monotonically increasing IDs.
+  if (!intervals_.empty() && intervals_.back().end() == x->offset())
+    intervals_.back()
+      = {intervals_.back().begin(), intervals_.back().end() + x->rows()};
+  else
+    intervals_.emplace_back(x->offset(), x->offset() + x->rows());
+  num_events_ += x->rows();
   slices_.push_back(x);
   return caf::none;
 }
 
-segment_ptr segment_builder::finish() {
-  if (meta_.slices.empty())
-    return nullptr;
-  auto result = segment_ptr{new segment, false};
-  result->meta_ = std::move(meta_);
-  result->chunk_ = chunk::make(std::move(table_slice_buffer_));
-  result->header_.magic = segment::magic;
-  result->header_.version = segment::version;
-  result->header_.id = id_;
+segment segment_builder::finish() {
+  auto table_slices_offset = builder_.CreateVector(flat_slices_);
+  auto uuid_offset = fbs::pack_bytes(builder_, id_);
+  auto ids_offset = builder_.CreateVectorOfStructs(intervals_);
+  fbs::SegmentBuilder segment_builder{builder_};
+  segment_builder.add_version(fbs::Version::v0);
+  segment_builder.add_slices(table_slices_offset);
+  segment_builder.add_uuid(uuid_offset);
+  segment_builder.add_ids(ids_offset);
+  segment_builder.add_events(num_events_);
+  auto segment_offset = segment_builder.Finish();
+  fbs::FinishSegmentBuffer(builder_, segment_offset);
+  auto chk = fbs::release(builder_);
   reset();
-  return result;
+  return segment{std::move(chk)};
 }
 
 caf::expected<std::vector<table_slice_ptr>>
-segment_builder::lookup(const ids& xs) const {
+segment_builder::lookup(const vast::ids& xs) const {
   std::vector<table_slice_ptr> result;
   auto f = [](auto& slice) {
     return std::pair{slice->offset(), slice->offset() + slice->rows()};
@@ -83,15 +85,30 @@ const uuid& segment_builder::id() const {
   return id_;
 }
 
+vast::ids segment_builder::ids() const {
+  vast::ids result;
+  for (auto x : slices_) {
+    result.append_bits(false, x->offset() - result.size());
+    result.append_bits(true, x->rows());
+  }
+  return result;
+}
+
 size_t segment_builder::table_slice_bytes() const {
-  return table_slice_buffer_.size();
+  return builder_.GetSize();
+}
+
+const std::vector<table_slice_ptr>& segment_builder::table_slices() const {
+  return slices_;
 }
 
 void segment_builder::reset() {
-  min_table_slice_offset_ = 0;
-  meta_ = {};
   id_ = uuid::random();
-  table_slice_buffer_ = {};
+  min_table_slice_offset_ = 0;
+  num_events_ = 0;
+  builder_.Clear();
+  flat_slices_.clear();
+  intervals_.clear();
   slices_.clear();
 }
 

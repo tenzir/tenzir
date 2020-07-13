@@ -11,37 +11,18 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#pragma once
+#include "vast/byte.hpp"
+#include "vast/fwd.hpp"
+#include "vast/span.hpp"
 
-#include <cstdint>
+#include "caf/fwd.hpp"
 
-#include "vast/uuid.hpp"
+namespace vast::io {
 
-namespace vast {
+/// Performs a one-shot write of an immutable buffer into a file.
+/// @param filename The file to write to.
+/// @param xs The buffer to read from.
+/// @returns An error if the operation failed.
+caf::error write(const path& filename, span<const byte> xs);
 
-/// @relates segment_header
-using segment_magic_type = uint32_t;
-
-/// @relates segment_header
-using segment_version_type = uint32_t;
-
-/// The header of a segment.
-/// @relates segment
-struct segment_header {
-  segment_magic_type magic;       ///< Magic constant to identify segments.
-  segment_version_type version;   ///< Version of the segment format.
-  uuid id;                        ///< The UUID of the segment.
-  uint64_t payload_offset;        ///< The offset to the table slices.
-};
-
-// Guarantee proper layout of the header, since we're going to rely on its
-// in-memory representation.
-static_assert(sizeof(segment_header) == 32);
-
-/// @relates segment_header
-template <class Inspector>
-auto inspect(Inspector& f, segment_header& x) {
-  return f(x.magic, x.version, x.id, x.payload_offset);
-}
-
-} // namespace vast
+} // namespace vast::io

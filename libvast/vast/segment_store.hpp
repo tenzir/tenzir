@@ -45,18 +45,7 @@ public:
 
   ~segment_store();
 
-  /// @cond PRIVATE
-
-  segment_store(path dir, uint64_t max_segment_size, size_t in_memory_segments);
-
-  /// @endcond
-
   // -- properties -------------------------------------------------------------
-
-  /// @returns the path for storing meta information such as segment UUIDs.
-  path meta_path() const {
-    return dir_ / "meta";
-  }
 
   /// @returns the path for storing the segments.
   path segment_path() const {
@@ -100,9 +89,15 @@ public:
   void inspect_status(caf::settings& dict) override;
 
 private:
+  segment_store(path dir, uint64_t max_segment_size, size_t in_memory_segments);
+
   // -- utility functions ------------------------------------------------------
 
-  caf::expected<segment_ptr> load_segment(uuid id) const;
+  caf::error register_segments();
+
+  caf::error register_segment(const path& filename);
+
+  caf::expected<segment> load_segment(uuid id) const;
 
   /// Fills `candidates` with all segments that qualify for `selection`.
   caf::error select_segments(const ids& selection,
@@ -121,17 +116,19 @@ private:
 
   // -- member variables -------------------------------------------------------
 
-  /// Identifies the base directory for our ::meta_path and ::segment_path.
+  /// Identifies the base directory for segments.
   path dir_;
 
   /// Configures the limit each segment until we seal and flush it.
   uint64_t max_segment_size_;
 
+  uint64_t num_events_ = 0;
+
   /// Maps event IDs to candidate segments.
   detail::range_map<id, uuid> segments_;
 
   /// Optimizes access times into segments by keeping some segments in memory.
-  mutable detail::cache<uuid, segment_ptr> cache_;
+  mutable detail::cache<uuid, segment> cache_;
 
   /// Serializes table slices into contiguous chunks of memory.
   segment_builder builder_;

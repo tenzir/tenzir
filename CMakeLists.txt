@@ -4,7 +4,7 @@
 
 # Initial scaffold
 
-cmake_minimum_required(VERSION 3.11...3.16 FATAL_ERROR)
+cmake_minimum_required(VERSION 3.11...3.18 FATAL_ERROR)
 
 # Extract VERSION
 if (NOT VAST_VERSION_TAG)
@@ -59,8 +59,9 @@ include(CTest)
 if (NOT CPack_CMake_INCLUDED)
   include(CPack)
 endif ()
-include(GNUInstallDirs)
+include(CMakePrintHelpers)
 include(CMakeDependentOption)
+include(GNUInstallDirs)
 set(CMAKE_INSTALL_CMAKEDIR
     "${CMAKE_INSTALL_LIBDIR}/cmake"
     CACHE PATH "Base directory for installing cmake specific artifacts")
@@ -437,16 +438,10 @@ macro (provide_find_module name)
     COMPONENT dev)
 endmacro ()
 
-find_package(Threads)
-if (NOT Threads_FOUND)
-  message(FATAL_ERROR "Could not find system threading libraries")
-endif ()
+find_package(Threads REQUIRED)
 
 if (VAST_ENABLE_ASSERTIONS)
-  find_package(Backtrace)
-  if (NOT Backtrace_FOUND)
-    message(FATAL_ERROR "Could not find backtrace (execinfo) libraries")
-  endif ()
+  find_package(Backtrace REQUIRED)
 endif ()
 
 # On macOS, Homebrew is commonly used to install OpenSSL.
@@ -462,6 +457,15 @@ if (APPLE AND NOT OPENSSL_ROOT_DIR)
     endif ()
   endif ()
 endif ()
+
+find_package(Flatbuffers REQUIRED CONFIG)
+if (NOT BUILD_SHARED_LIBS)
+  string(APPEND VAST_FIND_DEPENDENCY_LIST
+         "\nfind_package(Flatbuffers REQUIRED CONFIG)")
+endif ()
+get_target_property(flatbuffers_dir flatbuffers::flatbuffers
+                    INTERFACE_INCLUDE_DIRECTORIES)
+get_filename_component(flatbuffers_dir ${flatbuffers_dir} DIRECTORY) # <prefix>
 
 if (NOT VAST_USE_BUNDLED_CAF)
   # Try to find the required CAF components first...
@@ -892,6 +896,7 @@ set(summary
     "\nCXXFLAGS:            ${CMAKE_CXX_FLAGS} ${CMAKE_CXX_FLAGS_${build_type}}"
     "\nLDFLAGS:             ${LDFLAGS}"
     "\n"
+    "\nFlatbuffers:         ${flatbuffers_dir}"
     "\nCAF:                 ${caf_summary}"
     "\nArrow:               ${arrow_summary}"
     "\nBroker:              ${broker_summary}"

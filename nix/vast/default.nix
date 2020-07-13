@@ -10,6 +10,7 @@
 , caf
 , libpcap
 , arrow-cpp
+, flatbuffers
 , broker
 , zstd
 , jemalloc
@@ -50,7 +51,7 @@ stdenv.mkDerivation rec {
 
   nativeBuildInputs = [ cmake ];
   propagatedNativeBuildInputs = [ pkgconfig pandoc ];
-  buildInputs = [ libpcap jemalloc broker ];
+  buildInputs = [ libpcap flatbuffers jemalloc broker ];
   propagatedBuildInputs = [ arrow-cpp caf ];
 
   cmakeFlags = [

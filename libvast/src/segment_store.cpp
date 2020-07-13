@@ -13,46 +13,46 @@
 
 #include "vast/segment_store.hpp"
 
-#include <caf/config_value.hpp>
-#include <caf/dictionary.hpp>
-#include <caf/settings.hpp>
-
 #include "vast/bitmap_algorithms.hpp"
-#include "vast/error.hpp"
-#include "vast/event.hpp"
-#include "vast/ids.hpp"
-#include "vast/load.hpp"
-#include "vast/logger.hpp"
-#include "vast/save.hpp"
-#include "vast/segment_store.hpp"
-
 #include "vast/concept/printable/to_string.hpp"
 #include "vast/concept/printable/vast/error.hpp"
 #include "vast/concept/printable/vast/filesystem.hpp"
 #include "vast/concept/printable/vast/uuid.hpp"
-
+#include "vast/error.hpp"
+#include "vast/event.hpp"
+#include "vast/fbs/segment.hpp"
+#include "vast/fbs/utils.hpp"
+#include "vast/ids.hpp"
+#include "vast/logger.hpp"
+#include "vast/segment_store.hpp"
 #include "vast/table_slice.hpp"
 #include "vast/to_events.hpp"
 
+#include <caf/config_value.hpp>
+#include <caf/dictionary.hpp>
+#include <caf/settings.hpp>
+
 namespace vast {
 
+// TODO: return expected<segment_store_ptr> for better error propagation.
 segment_store_ptr segment_store::make(path dir, size_t max_segment_size,
                                       size_t in_memory_segments) {
   VAST_TRACE(VAST_ARG(dir), VAST_ARG(max_segment_size),
              VAST_ARG(in_memory_segments));
   VAST_ASSERT(max_segment_size > 0);
-  auto x = std::make_unique<segment_store>(std::move(dir), max_segment_size,
-                                           in_memory_segments);
-  // Materialize meta data of existing segments.
-  if (exists(x->meta_path())) {
-    VAST_DEBUG_ANON(__func__, "loads segment meta data from", x->meta_path());
-    if (auto err = load(nullptr, x->meta_path(), x->segments_)) {
-      VAST_ERROR_ANON(__func__, "failed to unarchive meta data from",
-                      x->meta_path());
-      return nullptr;
-    }
-  }
-  return x;
+  auto result = segment_store_ptr{
+    new segment_store{std::move(dir), max_segment_size, in_memory_segments}};
+  if (auto err = result->register_segments())
+    return nullptr;
+  return result;
+}
+
+segment_store::segment_store(path dir, uint64_t max_segment_size,
+                             size_t in_memory_segments)
+  : dir_{std::move(dir)},
+    max_segment_size_{max_segment_size},
+    cache_{in_memory_segments} {
+  // nop
 }
 
 segment_store::~segment_store() {
@@ -66,38 +66,14 @@ caf::error segment_store::put(table_slice_ptr xs) {
     return error;
   if (!segments_.inject(xs->offset(), xs->offset() + xs->rows(), builder_.id()))
     return make_error(ec::unspecified, "failed to update range_map");
+  num_events_ += xs->rows();
   if (builder_.table_slice_bytes() < max_segment_size_)
     return caf::none;
   // We have exceeded our maximum segment size and now finish.
   return flush();
 }
 
-caf::error segment_store::flush() {
-  if (!dirty())
-    return caf::none;
-  auto x = builder_.finish();
-  if (x == nullptr)
-    return make_error(ec::unspecified, "failed to build segment");
-  auto filename = segment_path() / to_string(x->id());
-  if (auto err = save(nullptr, filename, x))
-    return err;
-  // Keep new segment in the cache.
-  cache_.emplace(x->id(), x);
-  VAST_DEBUG(this, "wrote new segment to", filename.trim(-3));
-  VAST_DEBUG(this, "saves segment meta data");
-  return save(nullptr, meta_path(), segments_);
-}
-
-caf::expected<segment_ptr> segment_store::load_segment(uuid id) const {
-  auto filename = segment_path() / to_string(id);
-  VAST_DEBUG(this, "loads segment from", filename);
-  if (auto chk = chunk::mmap(filename))
-    return segment::make(std::move(chk));
-  return make_error(ec::filesystem_error, "failed to mmap chunk", filename);
-}
-
 std::unique_ptr<store::lookup> segment_store::extract(const ids& xs) const {
-
   class lookup : public store::lookup {
   public:
     using uuid_iterator = std::vector<uuid>::iterator;
@@ -129,21 +105,17 @@ std::unique_ptr<store::lookup> segment_store::extract(const ids& xs) const {
         VAST_DEBUG(this, "looks into the active segement", cand);
         return store_.builder_.lookup(xs_);
       }
-      segment_ptr seg_ptr = nullptr;
       auto i = store_.cache_.find(cand);
       if (i != store_.cache_.end()) {
         VAST_DEBUG(this, "got cache hit for segment", cand);
-        seg_ptr = i->second;
-      } else {
-        VAST_DEBUG(this, "got cache miss for segment", cand);
-        if(auto seg_ptr_ = store_.load_segment(cand))
-          seg_ptr = *seg_ptr_;
-        else
-          return seg_ptr_.error();
-        i = store_.cache_.emplace(cand, seg_ptr).first;
+        return i->second.lookup(xs_);
       }
-      VAST_ASSERT(seg_ptr != nullptr);
-      return seg_ptr->lookup(xs_);
+      VAST_DEBUG(this, "got cache miss for segment", cand);
+      auto s = store_.load_segment(cand);
+      if (!s)
+        return s.error();
+      store_.cache_.emplace(cand, *s);
+      return s->lookup(xs_);
     }
 
     const segment_store& store_;
@@ -191,7 +163,7 @@ caf::error segment_store::erase(const ids& xs) {
     auto segment_id = seg.id();
     // Get all slices in the segment and generate a new segment that contains
     // only what's left after dropping the selection.
-    auto segment_ids = flat_slice_ids(seg.meta());
+    auto segment_ids = seg.ids();
     // Check whether we can drop the entire segment.
     if (is_subset_of_xs(segment_ids)) {
       erased_events += drop(seg);
@@ -262,8 +234,8 @@ caf::error segment_store::erase(const ids& xs) {
     // Flush the new segment and remove the previous segment.
     if constexpr (std::is_same_v<decltype(seg), segment&>) {
       auto new_segment = builder->finish();
-      auto filename = segment_path() / to_string(new_segment->id());
-      if (auto err = save(nullptr, filename, new_segment))
+      auto filename = segment_path() / to_string(new_segment.id());
+      if (auto err = write(filename, new_segment.chunk()))
         VAST_ERROR(this, "failed to persist the new segment");
       auto stale_filename = segment_path() / to_string(segment_id);
       // Schedule deletion of the segment file when releasing the chunk.
@@ -276,20 +248,20 @@ caf::error segment_store::erase(const ids& xs) {
     auto j = cache_.find(candidate);
     if (j != cache_.end()) {
       VAST_DEBUG(this, "erases from the cached segement", candidate);
-      impl(*j->second);
+      impl(j->second);
       cache_.erase(j);
     } else if (candidate == builder_.id()) {
       VAST_DEBUG(this, "erases from the active segement", candidate);
       impl(builder_);
-    } else if (auto sptr = load_segment(candidate)) {
+    } else if (auto s = load_segment(candidate)) {
       VAST_DEBUG(this, "erases from the segement", candidate);
-      impl(**sptr);
+      impl(*s);
     }
   }
   if (erased_events > 0) {
+    VAST_ASSERT(erased_events <= num_events_);
+    num_events_ -= erased_events;
     VAST_INFO(this, "erased", erased_events, "events");
-    if (auto err = save(nullptr, meta_path(), segments_))
-      VAST_ERROR(this, "failed to persist meta data after adding segment");
   }
   return caf::none;
 }
@@ -314,21 +286,18 @@ caf::expected<std::vector<table_slice_ptr>> segment_store::get(const ids& xs) {
       VAST_DEBUG(this, "looks into the active segement", id);
       slices = builder_.lookup(xs);
     } else {
-      segment_ptr seg_ptr = nullptr;
       auto i = cache_.find(id);
-      if (i != cache_.end()) {
-        VAST_DEBUG(this, "got cache hit for segment", id);
-      } else {
+      if (i == cache_.end()) {
         VAST_DEBUG(this, "got cache miss for segment", id);
         auto x = load_segment(id);
         if (!x)
           return x.error();
         i = cache_.emplace(id, std::move(*x)).first;
+      } else {
+        VAST_DEBUG(this, "got cache hit for segment", id);
       }
-      seg_ptr = i->second;
-      VAST_ASSERT(seg_ptr != nullptr);
       VAST_DEBUG(this, "looks into segment", id);
-      slices = seg_ptr->lookup(xs);
+      slices = i->second.lookup(xs);
     }
     if (!slices)
       return slices.error();
@@ -338,11 +307,25 @@ caf::expected<std::vector<table_slice_ptr>> segment_store::get(const ids& xs) {
   return result;
 }
 
+caf::error segment_store::flush() {
+  if (!dirty())
+    return caf::none;
+  VAST_DEBUG(this, "finishes current builder");
+  auto seg = builder_.finish();
+  auto filename = segment_path() / to_string(seg.id());
+  if (auto err = write(filename, seg.chunk()))
+    return err;
+  // Keep new segment in the cache.
+  cache_.emplace(seg.id(), seg);
+  VAST_DEBUG(this, "wrote new segment to", filename.trim(-3));
+  return caf::none;
+}
+
 void segment_store::inspect_status(caf::settings& dict) {
   using caf::put;
-  put(dict, "meta-path", meta_path().str());
   put(dict, "segment-path", segment_path().str());
   put(dict, "max-segment-size", max_segment_size_);
+  put(dict, "num-events", num_events_);
   // Note: `for (auto& kvp : segments_)` does not compile.
   // FIXME: This is too slow for large archives and blocks the node.
   // auto& segments = put_dictionary(dict, "segments");
@@ -362,12 +345,36 @@ void segment_store::inspect_status(caf::settings& dict) {
   put(current, "size", builder_.table_slice_bytes());
 }
 
-segment_store::segment_store(path dir, uint64_t max_segment_size,
-                             size_t in_memory_segments)
-  : dir_{std::move(dir)},
-    max_segment_size_{max_segment_size},
-    cache_{in_memory_segments} {
-  // nop
+caf::error segment_store::register_segments() {
+  for (auto filename : directory{segment_path()})
+    if (auto err = register_segment(filename))
+      return err;
+  return caf::none;
+}
+
+caf::error segment_store::register_segment(const path& filename) {
+  auto chk = chunk::mmap(filename);
+  if (!chk)
+    return make_error(ec::filesystem_error, "failed to mmap chunk", filename);
+  auto s = fbs::as_flatbuffer<fbs::Segment>(as_bytes(chk));
+  if (s == nullptr)
+    return make_error(ec::format_error, "segment integrity check failed");
+  num_events_ += s->events();
+  auto segment_uuid = uuid{fbs::as_bytes<16>(*s->uuid())};
+  VAST_DEBUG(this, "found segment", segment_uuid);
+  for (auto interval : *s->ids())
+    if (!segments_.inject(interval->begin(), interval->end(), segment_uuid))
+      return make_error(ec::unspecified, "failed to update range_map");
+  return caf::none;
+}
+
+caf::expected<segment> segment_store::load_segment(uuid id) const {
+  auto filename = segment_path() / to_string(id);
+  VAST_DEBUG(this, "mmaps segment from", filename);
+  auto chk = chunk::mmap(filename);
+  if (!chk)
+    return make_error(ec::filesystem_error, "failed to mmap chunk", filename);
+  return segment::make(std::move(chk));
 }
 
 caf::error segment_store::select_segments(const ids& selection,
@@ -388,8 +395,12 @@ caf::error segment_store::select_segments(const ids& selection,
 uint64_t segment_store::drop(segment& x) {
   uint64_t erased_events = 0;
   auto segment_id = x.id();
-  for (auto& slices_data : x.meta().slices)
-    erased_events += slices_data.size;
+  // TODO: discuss whether we want to allow accessing a segment through the
+  // flatbuffers API. The (heavy-weight) altnerative here would be to create a
+  // custom iterator so that a segment can be iterated as a list of table_slice
+  // instances.
+  for (auto buffer : *fbs::GetSegment(x.chunk()->data())->slices())
+    erased_events += buffer->data_nested_root()->rows();
   VAST_INFO(this, "erases entire segment", segment_id);
   // Schedule deletion of the segment file when releasing the chunk.
   auto filename = segment_path() / to_string(segment_id);
@@ -401,9 +412,9 @@ uint64_t segment_store::drop(segment& x) {
 uint64_t segment_store::drop(segment_builder& x) {
   uint64_t erased_events = 0;
   auto segment_id = x.id();
-  for (auto& slices_data : x.meta().slices)
-    erased_events += slices_data.size;
-  VAST_INFO(this, "erases entire segment", segment_id);
+  for (auto& slice : x.table_slices())
+    erased_events += slice->rows();
+  VAST_INFO(this, "erases segment under construction", segment_id);
   x.reset();
   segments_.erase_value(segment_id);
   return erased_events;

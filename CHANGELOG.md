@@ -11,6 +11,11 @@ Every entry has a category for which we use the following visual abbreviations:
 
 ## Unreleased
 
+- ⚠️ [Flatbuffers](https://google.github.io/flatbuffers/) is now a required
+  dependency for VAST. The archive and the segment store use flatbuffers to
+  store and version their on-disk persistent state.
+  [#972](https://github.com/tenzir/vast/pull/972)
+
 - 🎁 We open-sourced our [MessagePack](http://msgpack.org)-based table slice
   implementation, which provides a compact row-oriented encoding of data. This
   encoding works well for binary formats (e.g., PCAP) and access patterns that
