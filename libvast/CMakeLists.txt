@@ -75,6 +75,7 @@ set(libvast_sources
     src/json.cpp
     src/logger.cpp
     src/meta_index.cpp
+    src/msgpack.cpp
     src/null_bitmap.cpp
     src/operator.cpp
     src/pattern.cpp
@@ -287,6 +288,7 @@ set(tests
     test/json.cpp
     test/meta_index.cpp
     test/mmapbuf.cpp
+    test/msgpack.cpp
     test/offset.cpp
     test/parse_data.cpp
     test/parseable.cpp
