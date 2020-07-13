@@ -13,6 +13,7 @@
 
 #include "vast/system/importer.hpp"
 
+#include "vast/concept/printable/numeric/integral.hpp"
 #include "vast/concept/printable/to_string.hpp"
 #include "vast/concept/printable/vast/error.hpp"
 #include "vast/concept/printable/vast/filesystem.hpp"
@@ -27,7 +28,7 @@
 #include <caf/atom.hpp>
 #include <caf/attach_continuous_stream_stage.hpp>
 #include <caf/config_value.hpp>
-#include <caf/dictionary.hpp>
+#include <caf/settings.hpp>
 
 #include <fstream>
 
@@ -106,11 +107,12 @@ id importer_state::available_ids() const noexcept {
 
 caf::dictionary<caf::config_value> importer_state::status() const {
   caf::dictionary<caf::config_value> result;
-  // Misc parameters.
-  result.emplace("available-ids", available_ids());
-  result["ids.available"] = available_ids();
-  result["ids.block.next"] = current.next;
-  result["ids.block.end"] = current.end;
+  // TODO: caf::config_value can only represent signed 64 bit integers, which
+  // may make it look like overflow happened in the status report. As an
+  // intermediate workaround, we convert the values to strings.
+  caf::put(result, "ids.available", to_string(available_ids()));
+  caf::put(result, "ids.block.next", to_string(current.next));
+  caf::put(result, "ids.block.end", to_string(current.end));
   // General state such as open streams.
   detail::fill_status_map(result, self);
   return result;
