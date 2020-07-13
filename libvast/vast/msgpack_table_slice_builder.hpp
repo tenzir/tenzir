@@ -1,0 +1,73 @@
+// Copyright Tenzir GmbH. All rights reserved.
+
+#pragma once
+
+#include "vast/msgpack_builder.hpp"
+
+#include <vector>
+
+#include <vast/byte.hpp>
+#include <vast/table_slice.hpp>
+#include <vast/table_slice_builder.hpp>
+
+namespace vast {
+
+class msgpack_table_slice_builder final : public vast::table_slice_builder {
+public:
+  // -- member types -----------------------------------------------------------
+
+  using super = vast::table_slice_builder;
+
+  // -- class properties -------------------------------------------------------
+
+  /// The default size of the buffer that the builder works with.
+  static constexpr size_t default_buffer_size = 8192;
+
+  /// @returns `msgpack_table_slice::class_id`
+  static caf::atom_value get_implementation_id() noexcept;
+
+  // -- factory functions ------------------------------------------------------
+
+  /// @returns a table_slice_builder instance.
+  static vast::table_slice_builder_ptr
+  make(vast::record_type layout, size_t initial_buffer_size
+                                 = default_buffer_size);
+
+  // -- constructors, destructors, and assignment operators --------------------
+
+  /// Constructs a MessagePack table slice.
+  /// @param layout The layout of the slice.
+  /// @param initial_buffer_size The buffer size the builder starts with.
+  explicit msgpack_table_slice_builder(vast::record_type layout,
+                                       size_t initial_buffer_size
+                                       = default_buffer_size);
+
+  ~msgpack_table_slice_builder() override;
+
+  // -- properties -------------------------------------------------------------
+
+  vast::table_slice_ptr finish() override;
+
+  size_t rows() const noexcept override;
+
+  caf::atom_value implementation_id() const noexcept override;
+
+protected:
+  bool add_impl(vast::data_view x) override;
+
+private:
+  // -- member variables -------------------------------------------------------
+
+  /// Current column index.
+  size_t col_;
+
+  /// Offsets from the beginning of the buffer to each row.
+  std::vector<size_t> offset_table_;
+
+  /// Elements encoded in MessagePack format.
+  std::vector<vast::byte> buffer_;
+
+  msgpack::builder<msgpack::no_input_validation> builder_;
+};
+
+} // namespace vast

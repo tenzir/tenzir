@@ -33,6 +33,8 @@
 #include "vast/detail/string.hpp"
 #include "vast/detail/system.hpp"
 #include "vast/filesystem.hpp"
+#include "vast/msgpack_table_slice.hpp"
+#include "vast/msgpack_table_slice_builder.hpp"
 #include "vast/synopsis_factory.hpp"
 #include "vast/table_slice_builder_factory.hpp"
 #include "vast/table_slice_factory.hpp"
@@ -77,6 +79,9 @@ configuration::configuration() {
 #endif
   initialize_factories<synopsis, table_slice, table_slice_builder,
                        value_index>();
+  factory<vast::table_slice>::add<msgpack_table_slice>();
+  factory<vast::table_slice_builder>::add<msgpack_table_slice_builder>(
+    msgpack_table_slice::class_id);
 #if VAST_HAVE_ARROW
   factory<vast::table_slice>::add<arrow_table_slice>();
   factory<vast::table_slice_builder>::add<arrow_table_slice_builder>(
