@@ -11,11 +11,14 @@ Every entry has a category for which we use the following visual abbreviations:
 
 ## Unreleased
 
-- 🎁 We open-sourced our [MessagePack](http://msgpack.org)-based Table Slice
-  implementation. `msgpack` is now a valid option for the
-  `import.table-slice-type` configuration option, and is the new default when
-  Apache Arrow is unavailable. We recommend using MessagePack for row-bsaed
-  formats like PCAP. [#975](https://github.com/tenzir/vast/pull/975)
+- 🎁 We open-sourced our [MessagePack](http://msgpack.org)-based table slice
+  implementation, which provides a compact row-oriented encoding of data. This
+  encoding works well for binary formats (e.g., PCAP) and access patterns that
+  involve materializing entire rows. The MessagePack table slice is the new
+  default when Apache Arrow is unavailable. To enable parsing into MessagePack,
+  you can pass `--table-slice-type=msgpack` to the `import` command, or set the
+  configuration option `import.table-slice-type` to `'msgpack'`.
+  [#975](https://github.com/tenzir/vast/pull/975)
 
 - 🎁 Starting with this release, installing VAST on any Linux becomes
   significantly easier: A static binary will be provided with each release on
