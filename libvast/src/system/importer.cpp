@@ -27,7 +27,7 @@
 #include <caf/atom.hpp>
 #include <caf/attach_continuous_stream_stage.hpp>
 #include <caf/config_value.hpp>
-#include <caf/dictionary.hpp>
+#include <caf/settings.hpp>
 
 #include <fstream>
 
@@ -107,9 +107,9 @@ id importer_state::available_ids() const noexcept {
 caf::dictionary<caf::config_value> importer_state::status() const {
   caf::dictionary<caf::config_value> result;
   // Misc parameters.
-  result["ids.available"] = available_ids();
-  result["ids.block.next"] = current.next;
-  result["ids.block.end"] = current.end;
+  caf::put(result, "ids.available", available_ids());
+  caf::put(result, "ids.block.next", current.next);
+  caf::put(result, "ids.block.end", current.end);
   // General state such as open streams.
   detail::fill_status_map(result, self);
   return result;
