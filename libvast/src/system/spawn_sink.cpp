@@ -23,7 +23,6 @@
 #include "vast/config.hpp"
 #include "vast/defaults.hpp"
 #include "vast/detail/make_io_stream.hpp"
-#include "vast/detail/unbox_var.hpp"
 #include "vast/format/ascii.hpp"
 #include "vast/format/csv.hpp"
 #include "vast/format/json.hpp"
@@ -48,8 +47,10 @@ maybe_actor spawn_generic_sink(caf::local_actor* self, spawn_arguments& args) {
   if (!args.empty())
     return unexpected_arguments(args);
   std::string category = Defaults::category;
-  VAST_UNBOX_VAR(out, detail::make_output_stream<Defaults>(args.inv.options));
-  return self->spawn(sink<Writer>, Writer{std::move(out)}, 0u);
+  auto out = detail::make_output_stream<Defaults>(args.inv.options);
+  if (!out)
+    return out.error();
+  return self->spawn(sink<Writer>, Writer{std::move(*out)}, 0u);
 }
 
 } // namespace <anonymous>

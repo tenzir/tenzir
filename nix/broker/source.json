@@ -1,0 +1,10 @@
+{
+  "url": "https://github.com/zeek/broker",
+  "rev": "e65cca620b1d2d26af6c5a9ee9513321fc3ed2a0",
+  "date": "2020-03-09T13:05:12-07:00",
+  "path": "/nix/store/18cmr8qkiy04846pnn5p2h67j2b18yjn-broker-e65cca6",
+  "sha256": "0c5v69afv5ip0bp385x5cvww1999lhrvvyjk52khb7j4bimx05wq",
+  "fetchSubmodules": true,
+  "deepClone": false,
+  "leaveDotGit": false
+}

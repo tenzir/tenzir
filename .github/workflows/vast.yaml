@@ -3,13 +3,6 @@ on:
   push:
     branches:
     - master
-    paths-ignore:
-    - '**.md'
-    - '!doc/**.md'
-    - examples
-    - pyvast
-    - .github/workflows/jupyter.yaml
-    - .github/workflows/pyvast.yaml
   pull_request:
     types: [opened, synchronize]
     paths-ignore:
@@ -133,9 +126,11 @@ jobs:
         id: configure_env
         run: |
           PACKAGE_NAME="$(echo "vast-$(git describe)-$(uname -s)-${{ matrix.configure.tag }}-${{ matrix.os.compiler }}" | awk '{ print tolower($0) }')"
+          PUBLISH_NAME="$(echo "vast-$(uname -s)-${{ matrix.configure.tag }}-${{ matrix.os.compiler }}" | awk '{ print tolower($0) }')"
           BUILD_DIR="build"
           ## The upload artifact action cannot resolve environment variables.
           echo "::set-output name=package_name::$PACKAGE_NAME"
+          echo "::set-output name=publish_name::$PUBLISH_NAME"
           echo "::set-output name=build_dir::$BUILD_DIR"
           echo "::set-env name=PACKAGE_NAME::$PACKAGE_NAME"
           echo "::set-env name=BUILD_DIR::$BUILD_DIR"
@@ -275,5 +270,10 @@ jobs:
         with:
           upload_url: ${{ github.event.release.upload_url }}
           asset_path: "${{ steps.configure_env.outputs.build_dir }}/${{ steps.configure_env.outputs.package_name }}.tar.gz"
-          asset_name: "${{ steps.configure_env.outputs.package_name }}.tar.gz"
+          # The asset names are constant so we can permanently link to
+          # https://github.com/tenzir/vast/releases/latest/download/vast-ubuntu-release-gcc.tar.gz
+          # https://github.com/tenzir/vast/releases/latest/download/vast-ubuntu-release-clang.tar.gz
+          # https://github.com/tenzir/vast/releases/latest/download/vast-darwin-release-appleclang.tar.gz
+          # for builds of the latest release.
+          asset_name: "${{ steps.configure_env.outputs.publish_name }}.tar.gz"
           asset_content_type: application/gzip

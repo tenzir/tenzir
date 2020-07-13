@@ -23,7 +23,6 @@
 #include "vast/concept/parseable/to.hpp"
 #include "vast/concept/parseable/vast/expression.hpp"
 #include "vast/concept/parseable/vast/schema.hpp"
-#include "vast/detail/unbox_var.hpp"
 #include "vast/error.hpp"
 #include "vast/expression.hpp"
 #include "vast/filesystem.hpp"
@@ -52,9 +51,13 @@ caf::expected<caf::optional<schema>> read_schema(const spawn_arguments& args) {
   auto schema_file_ptr = caf::get_if<std::string>(&args.inv.options, "schema");
   if (!schema_file_ptr)
     return caf::optional<schema>{caf::none};
-  VAST_UNBOX_VAR(str, load_contents(*schema_file_ptr));
-  VAST_UNBOX_VAR(result, to<schema>(str));
-  return caf::optional<schema>{std::move(result)};
+  auto str = load_contents(*schema_file_ptr);
+  if (!str)
+    return str.error();
+  auto result = to<schema>(*str);
+  if (!result)
+    return result.error();
+  return caf::optional<schema>{std::move(*result)};
 }
 
 caf::error unexpected_arguments(const spawn_arguments& args) {

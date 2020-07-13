@@ -21,7 +21,6 @@
 #include "vast/concept/printable/vast/data.hpp"
 #include "vast/concept/printable/vast/json.hpp"
 #include "vast/data.hpp"
-#include "vast/detail/unbox_var.hpp"
 #include "vast/format/json.hpp"
 #include "vast/logger.hpp"
 #include "vast/policy/include_field_names.hpp"
@@ -129,9 +128,13 @@ struct convert {
     xs.reserve(o.size());
     for (auto& [k, v] : o) {
       // TODO: Properly unwrap the key type instead of wrapping is in json.
-      VAST_UNBOX_VAR(key, caf::visit(*this, json{k}, m.key_type));
-      VAST_UNBOX_VAR(val, caf::visit(*this, v, m.value_type));
-      xs[key] = val;
+      auto key = caf::visit(*this, json{k}, m.key_type);
+      if (!key)
+        return key.error();
+      auto val = caf::visit(*this, v, m.value_type);
+      if (!val)
+        return val.error();
+      xs[*key] = *val;
     }
     return xs;
   }

@@ -19,7 +19,6 @@
 #include <caf/settings.hpp>
 
 #include "vast/defaults.hpp"
-#include "vast/detail/unbox_var.hpp"
 #include "vast/logger.hpp"
 #include "vast/query_options.hpp"
 #include "vast/system/exporter.hpp"
@@ -31,7 +30,9 @@ namespace vast::system {
 maybe_actor spawn_exporter(node_actor* self, spawn_arguments& args) {
   VAST_TRACE(VAST_ARG(args));
   // Parse given expression.
-  VAST_UNBOX_VAR(expr, normalized_and_validated(args));
+  auto expr = system::normalized_and_validated(args);
+  if (!expr)
+    return expr.error();
   // Parse query options.
   auto query_opts = no_query_options;
   if (get_or(args.inv.options, "export.continuous", false))
@@ -41,7 +42,7 @@ maybe_actor spawn_exporter(node_actor* self, spawn_arguments& args) {
   // Default to historical if no options provided.
   if (query_opts == no_query_options)
     query_opts = historical;
-  auto exp = self->spawn(exporter, std::move(expr), query_opts);
+  auto exp = self->spawn(exporter, std::move(*expr), query_opts);
   // Setting max-events to 0 means infinite.
   auto max_events = get_or(args.inv.options, "export.max-events",
                            defaults::export_::max_events);

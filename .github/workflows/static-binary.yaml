@@ -1,0 +1,87 @@
+name: "VAST Static"
+on:
+  repository_dispatch:
+    types: static-binary
+  push:
+    branches:
+      - master
+  pull_request:
+    paths:
+      - '.github/workflows/static-binary.yaml'
+  release:
+    types: published
+
+jobs:
+  static_binary:
+    runs-on: ubuntu-latest
+    name: Static Binary
+    env:
+      BUILD_DIR: build
+    steps:
+    - name: Checkout
+      if: github.event_name == 'repository_dispatch'
+      uses: actions/checkout@v1
+      with:
+        ref: ${{ github.event.client_payload.ref == '' && 'master' || github.event.client_payload.ref }}
+
+    - name: Checkout
+      if: github.event_name != 'repository_dispatch'
+      uses: actions/checkout@v1
+
+    - name: Install Nix
+      uses: cachix/install-nix-action@v10
+
+    - name: Setup Cachix
+      uses: cachix/cachix-action@v6
+      with:
+        name: vast
+        signingKey: '${{ secrets.CACHIX_VAST_SIGNING_KEY }}'
+
+    - name: Build a Static Binary
+      run: |
+        nix/static-binary.sh --use-head
+
+    - name: Create Paths
+      id: create_paths
+      run: |
+        ARTIFACT_NAME=$(ls "${BUILD_DIR}" | grep "vast.*.tar.gz")
+        echo "::set-output name=artifact_name::${ARTIFACT_NAME}"
+
+    - name: Upload Artifact to Github
+      uses: actions/upload-artifact@v1
+      with:
+        name: "${{ steps.create_paths.outputs.artifact_name }}"
+        path: "${{ env.BUILD_DIR }}/${{ steps.create_paths.outputs.artifact_name }}"
+
+    - name: Setup Python
+      uses: actions/setup-python@v1
+      with:
+        python-version: '3.7'
+
+    - name: Configure GCloud Credentials
+      uses: GoogleCloudPlatform/github-actions/setup-gcloud@master
+      with:
+        version: '275.0.0'
+        service_account_email: ${{ secrets.GCP_SA_EMAIL }}
+        service_account_key: ${{ secrets.GCP_SA_KEY }}
+
+    - name: Upload Artifact to GCS
+      env:
+        PUBLIC_GCS_BUCKET: tenzir-public-data
+        STATIC_BINARY_FOLDER: vast-static-builds
+      run: |
+        gsutil -m cp "${{ env.BUILD_DIR }}/${{ steps.create_paths.outputs.artifact_name }}" "gs://${{ env.PUBLIC_GCS_BUCKET }}/${{ env.STATIC_BINARY_FOLDER }}"
+
+    - name: Publish to GitHub Release
+      if: github.event_name == 'release' && github.event.action == 'published'
+      uses: actions/upload-release-asset@v1.0.1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ github.event.release.upload_url }}
+        asset_path: "${{ env.BUILD_DIR }}/${{ steps.create_paths.outputs.artifact_name }}"
+        # The asset name is constant so we can permanently link to
+        # https://github.com/tenzir/vast/releases/latest/download/vast-linux-static.tar.gz
+        # for a build of the latest release.
+        asset_name: "vast-linux-static.tar.gz"
+        asset_content_type: application/gzip
