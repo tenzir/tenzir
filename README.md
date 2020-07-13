@@ -60,7 +60,7 @@ Linux uesrs can download our
 via browser or cURL.
 
 ```sh
-curl -L -o vast-static-latest.tar.gz https://storage.googleapis.com/tenzir-public-data/vast-static-builds/vast-static-latest.tar.gz
+curl -L -O https://storage.googleapis.com/tenzir-public-data/vast-static-builds/vast-static-latest.tar.gz
 ```
 
 Unpack the archive. It contains three folders `bin`, `etc`, and `share`. To get
