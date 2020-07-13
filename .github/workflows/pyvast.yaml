@@ -17,7 +17,7 @@ jobs:
       fail-fast: true
       matrix:
         python-version: [3.7, 3.8]
-        os: [ubuntu-latest, macOS-latest]
+        os: [ubuntu-20.04, macOS-latest]
 
     steps:
     - uses: actions/checkout@v2
@@ -48,7 +48,7 @@ jobs:
     name: Egg Release
     if: github.event.action == 'published'
     needs: egg-install
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-20.04
     env:
       TWINE_USERNAME: __token__
       TWINE_PASSWORD: ${{ secrets.PYPI_TOKEN }}

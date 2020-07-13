@@ -25,13 +25,13 @@ jobs:
       matrix:
         os:
         - tag: Ubuntu
-          name: ubuntu-latest
+          name: ubuntu-20.04
           extra-flags:
           compiler: GCC
           cc: gcc-9
           cxx: g++-9
         - tag: Ubuntu
-          name: ubuntu-latest
+          name: ubuntu-20.04
           extra-flags:
           compiler: Clang
           cc: clang-9
