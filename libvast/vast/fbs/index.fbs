@@ -30,4 +30,4 @@ table Index {
 
 root_type Index;
 
-file_identifier "VAST";
+file_identifier "I000";

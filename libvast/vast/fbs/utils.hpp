@@ -29,14 +29,9 @@
 
 namespace vast::fbs {
 
-/// The flatbuffer file_identifier. Defining this identifier here is
-/// workaround for the lack of traits for generated flatbuffer classes. The
-/// only way to get a flatbuffer identifier is by calling MyTypeIdentifier().
-/// Because this prevents use of generic programming, we use one global file
-/// identifier for VAST flatbuffers. When wrapping objects into flatbuffers,
-/// use this value. When unwrapping objects, it's fortunately possible to
-/// figure out the existance of file identifier at runtime.
-constexpr const char* file_identifier = "VAST";
+/// Inspects the 4-byte file identifier of a flatbuffer and returns the
+/// type of content that one can expect to find inside.
+std::pair<std::string, Version> resolve_filemagic(span<const byte> fb);
 
 // -- general helpers --------------------------------------------------------
 
@@ -88,7 +83,9 @@ pack_bytes(flatbuffers::FlatBufferBuilder& builder, const T& x) {
   return builder.CreateVector(data, bytes.size());
 }
 
-/// Generic unpacking utility.
+/// Generic unpacking utility. The structural integrity of the flatbuffer is
+/// verified (i.e., no out-of-bounds offsets), but no type checking is done
+/// at all.
 /// @tparam Flatbuffer The flatbuffer type to unpack.
 /// @param xs The buffer to unpack a flatbuffer from.
 /// @returns A pointer to the unpacked flatbuffer of type `Flatbuffer` or
@@ -99,13 +96,37 @@ const Flatbuffer* as_flatbuffer(span<const byte, Extent> xs) {
   // Verify the buffer.
   auto data = reinterpret_cast<const uint8_t*>(xs.data());
   auto size = xs.size();
-  char const* identifier = nullptr;
-  if (flatbuffers::BufferHasIdentifier(data, file_identifier))
-    identifier = file_identifier;
   flatbuffers::Verifier verifier{data, size};
-  if (!verifier.template VerifyBuffer<Flatbuffer>(identifier))
+  if (!verifier.template VerifyBuffer<Flatbuffer>())
     return nullptr;
   return flatbuffers::GetRoot<Flatbuffer>(data);
+}
+
+/// Unpacks a flatbuffer that has version information encoded in its file
+/// identifier.
+/// @tparam Flatbuffer The root flatbuffer type to unpack. This must be the
+///         same type that is marked as `root_type` in the schema definition,
+///         and its file_identifier must be one of the well-known values
+///         recognized by VAST.
+/// @param xs The buffer to unpack a flatbuffer from.
+/// @returns A pointer to the unpacked flatbuffer of type `Flatbuffer` or
+///          `caf::error` if verification failed.
+template <class Flatbuffer, size_t Extent = dynamic_extent>
+caf::expected<const Flatbuffer*>
+as_versioned_flatbuffer(span<const byte, Extent> xs, Version expected_version) {
+  auto [name, version] = resolve_filemagic(xs);
+  auto expected_name = Flatbuffer::GetFullyQualifiedName();
+  if (name != expected_name)
+    return make_error(ec::format_error, "Invalid type in flatbuffer, expected",
+                      expected_name, "got", name);
+  if (version != expected_version)
+    return make_error(ec::format_error, "Invalid version in flatbuffer");
+  auto fb = as_flatbuffer<Flatbuffer>(xs);
+  // TODO: We could use SFINAE here to automatically check `fb->version()` iff
+  // the flatbuffer type has a field called `version`.
+  if (!fb)
+    return make_error(ec::format_error, "Flatbuffer validation failed");
+  return fb;
 }
 
 /// Wraps an object into a flatbuffer. This function requires existance of an

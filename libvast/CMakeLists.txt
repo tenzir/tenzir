@@ -30,7 +30,7 @@ foreach (schema ${flatbuffers_schemas})
   add_custom_command(
     OUTPUT ${desired_file}
     COMMAND
-      flatbuffers::flatc -b --cpp --scoped-enums -I
+      flatbuffers::flatc -b --cpp --scoped-enums --gen-name-strings -I
       ${CMAKE_CURRENT_SOURCE_DIR}/flatbuffers -o ${flatbuffers_output_path}
       ${schema}
     COMMAND ${CMAKE_COMMAND} -E rename ${output_file} ${desired_file}
