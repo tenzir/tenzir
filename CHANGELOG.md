@@ -11,6 +11,11 @@ Every entry has a category for which we use the following visual abbreviations:
 
 ## Unreleased
 
+- ⚠️ [Flatbuffers](https://google.github.io/flatbuffers/) is now a required
+  dependency for VAST. The archive and the segment store use flatbuffers to
+  store and version their on-disk persistent state.
+  [#972](https://github.com/tenzir/vast/pull/972)
+
 - 🎁 Starting with this release, installing VAST on any Linux becomes
   significantly easier: A static binary will be provided with each release on
   the GitHub releases page. [#966](https://github.com/tenzir/vast/pull/966)
