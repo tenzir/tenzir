@@ -140,11 +140,22 @@ tests:
     steps:
       - command: import -b zeek
         input: data/zeek/conn.log.gz
-      - command: import --table-slice-type=caf -b zeek
+      - command: import -b zeek
         input: data/zeek/dns.log.gz
       - command: export ascii 'resp_h == 192.168.1.104'
       - command: export ascii 'zeek.conn.id.resp_h == 192.168.1.104'
       - command: 'count "#timestamp >= 1970-01-01 && #type != \"vast.metrics\""'
+      - command: count '#type == "zeek.conn"'
+  Table Slice Types:
+    tags: [server, import-export, table-slice-type, zeek]
+    fixture: ServerTester
+    steps:
+      - command: import -b --table-slice-type=caf zeek
+        input: data/zeek/conn.log.gz
+      - command: import -b --table-slice-type=arrow zeek
+        input: data/zeek/conn.log.gz
+      - command: import -b --table-slice-type=msgpack zeek
+        input: data/zeek/conn.log.gz
       - command: count '#type == "zeek.conn"'
   Query Operators:
     tags: [server, operator]
