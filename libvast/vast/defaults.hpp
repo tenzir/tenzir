@@ -48,7 +48,7 @@ constexpr caf::atom_value table_slice_type = caf::atom("arrow");
 #else // VAST_HAVE_ARROW
 
 /// The default table slice type when arrow is unavailable.
-constexpr caf::atom_value table_slice_type = caf::atom("caf");
+constexpr caf::atom_value table_slice_type = caf::atom("msgpack");
 
 #endif // VAST_HAVE_ARROW
 

@@ -53,9 +53,29 @@ Chat with us on [Matrix][chat-url].
   e.g., extracting a PCAP for a given IDS alert, or locating all related logs
   for a given query.
 
-## Getting Started
+## Get VAST
 
-Clone the `master` branch to get the most recent version of VAST.
+Linux uesrs can download our
+[latest static binary release](https://storage.googleapis.com/tenzir-public-data/vast-static-builds/vast-static-latest.tar.gz)
+via browser or cURL.
+
+```sh
+curl -L -O https://storage.googleapis.com/tenzir-public-data/vast-static-builds/vast-static-latest.tar.gz
+```
+
+Unpack the archive. It contains three folders `bin`, `etc`, and `share`. To get
+started invoke the binary in the `bin` directory directly.
+
+```sh
+tar xfz vast-static-latest.tar.gz
+bin/vast --help
+```
+
+To install VAST properly for your local user simly place the unpacked folders in
+`/usr/local/`.
+
+MacOS and FreeBSD users have to build from source. Clone the `master` branch to
+get the most recent version of VAST.
 
 ```sh
 git clone --recursive https://github.com/tenzir/vast
@@ -74,6 +94,10 @@ cmake --build build --target install
 
 The [installation guide][installation-url] contains more detailed and
 platform-specific instructions on how to build and install VAST.
+
+## Getting Started
+
+Here are some commands to get a first glimpse of what VAST can do for you.
 
 **Start a VAST node**:
 
