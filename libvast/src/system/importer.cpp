@@ -107,7 +107,6 @@ id importer_state::available_ids() const noexcept {
 caf::dictionary<caf::config_value> importer_state::status() const {
   caf::dictionary<caf::config_value> result;
   // Misc parameters.
-  result.emplace("available-ids", available_ids());
   result["ids.available"] = available_ids();
   result["ids.block.next"] = current.next;
   result["ids.block.end"] = current.end;
