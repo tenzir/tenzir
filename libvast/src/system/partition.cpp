@@ -522,7 +522,7 @@ active_partition(caf::stateful_actor<active_partition_state>* self, uuid id,
         self->state.persistence_promise.deliver(partition.error());
         return;
       }
-      builder.Finish(*partition);
+      builder.Finish(*partition, "P000");
       VAST_ASSERT(self->state.persist_path);
       auto fb = builder.Release();
       // TODO: This is duplicating code from one of the `chunk` constructors,
@@ -591,13 +591,16 @@ passive_partition(caf::stateful_actor<passive_partition_state>* self, uuid id,
   return {
     [=](vast::chunk_ptr chunk) {
       // Deserialize chunk from the filesystem actor
-      auto partition = fbs::GetPartition(chunk->data());
+      auto view
+        = span(reinterpret_cast<const byte*>(chunk->data()), chunk->size());
+      auto partition
+        = fbs::as_versioned_flatbuffer<fbs::Partition>(view, fbs::Version::v0);
       if (!partition) {
         VAST_ERROR(self, "could not parse provided chunk as flatbuffer");
         self->quit(make_error(ec::format_error, "chunk did not contain valid "
                                                 "partition flatbuffer"));
       }
-      if (auto error = unpack(*partition, self->state)) {
+      if (auto error = unpack(**partition, self->state)) {
         VAST_ERROR(self, "error unpacking partition", error);
         self->quit(error);
       }

@@ -55,4 +55,4 @@ table Partition {
 
 root_type Partition;
 
-file_identifier "VAST";
+file_identifier "P000";

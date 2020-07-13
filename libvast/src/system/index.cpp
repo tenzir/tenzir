@@ -137,9 +137,15 @@ caf::error index_state::load_from_disk() {
     }
     // TODO: Create a `index_ondisk_state` struct and move this part of the
     // code into an `unpack()` function.
-    auto index = fbs::GetIndex(buffer->data());
-    auto version = index->version();
-    if (version != fbs::Version::v0)
+    auto fb = span<const byte>{buffer->data(), buffer->size()};
+    auto maybe_index
+      = fbs::as_versioned_flatbuffer<fbs::Index>(fb, fbs::Version::v0);
+    if (!maybe_index)
+      return maybe_index.error();
+    auto& index = *maybe_index;
+    // Sanity check.
+    auto fbversion = index->version();
+    if (fbversion != fbs::Version::v0)
       return make_error(ec::format_error,
                         "unsupported index version, either remove the existing "
                         "vast.db "
@@ -401,7 +407,7 @@ void index_state::flush_to_disk() {
     VAST_WARNING(self, "couldnt pack index", index.error());
     return;
   }
-  builder->Finish(*index, vast::fbs::file_identifier);
+  builder->Finish(*index, "I000");
   auto ptr = builder->GetBufferPointer();
   auto size = builder->GetSize();
   auto chunk = vast::chunk::make(size, ptr, [=] { delete builder; });
