@@ -188,9 +188,7 @@ jobs:
           ccache --version
           # Zero the cache statistics (but not the configuration options).
           ccache --zero-stats
-          # --show-config is a relatively new ccache option and not available
-          # in the ccache version installed via apt, so we ignore failure.
-          ccache --show-config || true
+          ccache --show-config
           ./configure \
             --prefix="${PWD}/opt/vast" \
             --build-dir="$BUILD_DIR" \
