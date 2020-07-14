@@ -16,6 +16,18 @@ RUN apt-get -qq update && apt-get -qqy install \
 RUN pip3 install --upgrade pip && pip install --upgrade cmake && \
   cmake --version
 
+# Install flatbuffers
+RUN pushd $(mktemp)
+RUN curl -LO https://github.com/google/flatbuffers/archive/v1.12.0.tar.gz
+RUN tar xzf v1.12.0.tar.gz
+RUN cd flatbuffers-1.12.0
+RUN cmake -B build-dir \
+  -DFLATBUFFERS_BUILD_TESTS=OFF \
+  -DFLATBUFFERS_BUILD_GRPCTEST=OFF
+RUN cmake --build build-dir --target all --parallel
+RUN sudo cmake --build build-dir --target install
+RUN popd
+
 # VAST
 WORKDIR $BUILD_DIR/vast
 COPY aux ./aux
