@@ -97,9 +97,6 @@ private:
 };
 
 /// @relates table_slice_builder
-using table_slice_builder_ptr = caf::intrusive_ptr<table_slice_builder>;
-
-/// @relates table_slice_builder
 void intrusive_ptr_add_ref(const table_slice_builder* ptr);
 
 /// @relates table_slice_builder

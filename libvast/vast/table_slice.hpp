@@ -296,9 +296,6 @@ void intrusive_ptr_release(const table_slice* ptr);
 table_slice* intrusive_cow_ptr_unshare(table_slice*&);
 
 /// @relates table_slice
-using table_slice_ptr = caf::intrusive_cow_ptr<table_slice>;
-
-/// @relates table_slice
 caf::error inspect(caf::serializer& sink, table_slice_ptr& ptr);
 
 /// @relates table_slice
