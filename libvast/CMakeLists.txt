@@ -244,7 +244,7 @@ if (VAST_USE_OPENSSL)
   target_link_libraries(libvast PUBLIC caf::openssl)
 endif ()
 
-target_link_libraries(libvast PRIVATE flatbuffers::flatbuffers)
+target_link_libraries(libvast PUBLIC flatbuffers::flatbuffers)
 add_dependencies(libvast libvast_flatbuffers)
 
 if (VAST_ENABLE_ASSERTIONS)

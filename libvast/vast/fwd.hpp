@@ -167,7 +167,6 @@ void intrusive_ptr_release(const table_slice_builder*);
 
 using chunk_ptr = caf::intrusive_ptr<chunk>;
 using column_index_ptr = std::unique_ptr<column_index>;
-using caf_table_slice_ptr = caf::intrusive_cow_ptr<caf_table_slice>;
 using synopsis_ptr = caf::intrusive_ptr<synopsis>;
 using table_slice_builder_ptr = caf::intrusive_ptr<table_slice_builder>;
 using table_slice_ptr = caf::intrusive_cow_ptr<table_slice>;
