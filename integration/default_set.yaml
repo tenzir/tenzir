@@ -152,9 +152,11 @@ tests:
     steps:
       - command: import -b --table-slice-type=caf zeek
         input: data/zeek/conn.log.gz
-      - command: import -b --table-slice-type=arrow zeek
-        input: data/zeek/conn.log.gz
       - command: import -b --table-slice-type=msgpack zeek
+        input: data/zeek/conn.log.gz
+      - command: count '#type == "zeek.conn"'
+      - guard: 'export -h 2>&1 | grep -q arrow'
+      - command: import -b --table-slice-type=arrow zeek
         input: data/zeek/conn.log.gz
       - command: count '#type == "zeek.conn"'
   Query Operators:
