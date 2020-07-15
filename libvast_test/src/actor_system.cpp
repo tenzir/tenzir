@@ -23,7 +23,6 @@ namespace fixtures {
 /// Configures the actor system of a fixture with default settings for unit
 /// testing.
 test_configuration::test_configuration() {
-  load<caf::io::middleman>();
   std::string log_file = "vast-unit-test.log";
   set("logger.file-name", log_file);
   // Always begin with an empy log file.
