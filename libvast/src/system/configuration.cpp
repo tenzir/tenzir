@@ -13,23 +13,11 @@
 
 #include "vast/system/configuration.hpp"
 
-#include <algorithm>
-#include <iostream>
-
 #include "vast/config.hpp"
-
-#include <caf/message_builder.hpp>
-#include <caf/io/middleman.hpp>
-#if VAST_USE_OPENCL
-#  include <caf/opencl/manager.hpp>
-#endif
-#if VAST_USE_OPENSSL
-#  include <caf/openssl/manager.hpp>
-#endif
-
 #include "vast/detail/add_message_types.hpp"
 #include "vast/detail/adjust_resource_consumption.hpp"
 #include "vast/detail/assert.hpp"
+#include "vast/detail/process.hpp"
 #include "vast/detail/string.hpp"
 #include "vast/detail/system.hpp"
 #include "vast/filesystem.hpp"
@@ -38,6 +26,18 @@
 #include "vast/table_slice_factory.hpp"
 #include "vast/value_index.hpp"
 #include "vast/value_index_factory.hpp"
+
+#include <caf/io/middleman.hpp>
+#include <caf/message_builder.hpp>
+#if VAST_USE_OPENCL
+#  include <caf/opencl/manager.hpp>
+#endif
+#if VAST_USE_OPENSSL
+#  include <caf/openssl/manager.hpp>
+#endif
+
+#include <algorithm>
+#include <iostream>
 
 namespace vast::system {
 
@@ -52,15 +52,20 @@ void initialize_factories() {
 
 configuration::configuration() {
   detail::add_message_types(*this);
-  // Use 'vast.conf' instead of generic 'caf-application.ini' and fall back to
-  // $PREFIX/etc/vast if no local vast.conf exists.
-  if ((path::current() / "vast.conf").is_regular_file()) {
-    config_file_path = "vast.conf";
-  } else {
-    auto global_conf = path{VAST_INSTALL_PREFIX} / "etc" / "vast" / "vast.conf";
-    if (!global_conf.is_regular_file())
-      global_conf = path{"/etc/vast/vast.conf"};
-    config_file_path = global_conf.str();
+  // Use 'vast.conf' instead of generic 'caf-application.ini'.
+  auto config_path_candidates = std::vector{
+    path::current() / "vast.conf",
+    path{"/etc/vast/vast.conf"},
+  };
+  auto binary = detail::objectpath();
+  if (binary)
+    config_path_candidates.push_back(binary->parent().parent() / "share"
+                                     / "vast" / "schema");
+  for (auto& p : config_path_candidates) {
+    if (p.is_regular_file()) {
+      config_file_path = p.str();
+      break;
+    }
   }
   // Load I/O module.
   load<caf::io::middleman>();
