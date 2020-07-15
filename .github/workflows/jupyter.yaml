@@ -11,7 +11,7 @@ env:
 jobs:
   test-demo:
     name: Jupyter Test
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-20.04
     strategy:
       fail-fast: true
       matrix:

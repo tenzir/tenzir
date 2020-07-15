@@ -11,10 +11,16 @@ ENV DEBIAN_FRONTEND noninteractive
 
 # Compiler and dependency setup
 RUN apt-get -qq update && apt-get -qqy install \
-  build-essential gcc-8 g++-8 ninja-build libbenchmark-dev libpcap-dev \
-  libssl-dev python3-dev python3-pip python3-venv git-core jq tcpdump
+  build-essential gcc-8 g++-8 ninja-build libbenchmark-dev libpcap-dev tcpdump \
+  libssl-dev python3-dev python3-pip python3-venv git-core jq gnupg2
 RUN pip3 install --upgrade pip && pip install --upgrade cmake && \
   cmake --version
+
+# flatbuffers
+RUN echo "deb http://www.deb-multimedia.org buster main" | tee -a /etc/apt/sources.list && \
+  apt-key adv --keyserver hkp://pool.sks-keyservers.net:80 --recv-keys 5C808C2B65558117 && \
+  apt-get -qq update
+RUN apt-get -qqy install libflatbuffers-dev flatbuffers-compiler-dev
 
 # VAST
 WORKDIR $BUILD_DIR/vast
@@ -35,8 +41,8 @@ RUN ./configure \
     --log-level=INFO \
     --generator=Ninja \
     --without-arrow
-RUN cmake --build build && \
-  cmake --build build --target test && \
+RUN cmake --build build --parallel
+RUN cmake --build build --target test && \
   cmake --build build --target integration && \
   cmake --build build --target install
 

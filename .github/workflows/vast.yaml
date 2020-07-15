@@ -25,13 +25,13 @@ jobs:
       matrix:
         os:
         - tag: Ubuntu
-          name: ubuntu-latest
+          name: ubuntu-20.04
           extra-flags:
           compiler: GCC
           cc: gcc-9
           cxx: g++-9
         - tag: Ubuntu
-          name: ubuntu-latest
+          name: ubuntu-20.04
           extra-flags:
           compiler: Clang
           cc: clang-9
@@ -90,7 +90,7 @@ jobs:
         if: matrix.os.tag == 'Ubuntu'
         run: |
           sudo apt-get -qq update
-          sudo apt-get -qqy install ninja-build libpcap-dev libssl-dev lsb-release ccache
+          sudo apt-get -qqy install ninja-build libpcap-dev libssl-dev lsb-release ccache libflatbuffers-dev
           # Install Apache Arrow (c.f. https://arrow.apache.org/install/)
           wget https://apache.bintray.com/arrow/$(lsb_release --id --short | tr 'A-Z' 'a-z')/apache-arrow-archive-keyring-latest-$(lsb_release --codename --short).deb
           sudo apt-get -qqy install ./apache-arrow-archive-keyring-latest-$(lsb_release --codename --short).deb
@@ -107,18 +107,6 @@ jobs:
         run: |
           brew --version
           brew install libpcap tcpdump rsync pandoc apache-arrow pkg-config ninja ccache gnu-sed flatbuffers
-
-      # TODO: Install flatbuffers from apt instead once we use Ubuntu 20.04 in CI.
-      - name: Compile flatbuffers
-        if: matrix.os.tag == 'Ubuntu'
-        run: |
-          cd $(mktemp -d)
-          curl -LO https://github.com/google/flatbuffers/archive/v1.12.0.tar.gz
-          tar xzf v1.12.0.tar.gz
-          cd flatbuffers-1.12.0
-          cmake -B build-dir -DFLATBUFFERS_BUILD_TESTS=OFF -DFLATBUFFERS_BUILD_GRPCTEST=OFF
-          cmake --build build-dir --target all --parallel
-          sudo cmake --build build-dir --target install
 
       - name: Configure Environment
         id: configure_env
@@ -188,9 +176,7 @@ jobs:
           ccache --version
           # Zero the cache statistics (but not the configuration options).
           ccache --zero-stats
-          # --show-config is a relatively new ccache option and not available
-          # in the ccache version installed via apt, so we ignore failure.
-          ccache --show-config || true
+          ccache --show-config
           ./configure \
             --prefix="${PWD}/opt/vast" \
             --build-dir="$BUILD_DIR" \
