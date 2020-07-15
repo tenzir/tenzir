@@ -81,12 +81,13 @@ int main(int argc, char** argv) {
       return EXIT_FAILURE;
     }
     auto vast_share = binary->parent().parent() / "share" / "vast";
-    // Load event types.
-    default_dirs = {vast_share / "schema"};
+    default_dirs.emplace_back(vast_share / "schema");
+    default_dirs.emplace_back("/etc/vast/schema");
   }
   if (auto user_dirs = caf::get_if<string_list>(&cfg, "system.schema-paths"))
     default_dirs.insert(default_dirs.end(), user_dirs->begin(),
                         user_dirs->end());
+  // Load event types.
   if (auto schema = load_schema(default_dirs)) {
     event_types::init(*std::move(schema));
   } else {
