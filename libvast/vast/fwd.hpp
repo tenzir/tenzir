@@ -181,7 +181,7 @@ namespace atom {
 
 #define VAST_CAF_ATOM_ALIAS(name)                                              \
   using name = caf::name##_atom;                                               \
-  constexpr auto name##_v = caf::name##_atom_v;
+  [[maybe_unused]] constexpr inline auto name##_v = caf::name##_atom_v;
 
 // Inherited from CAF
 VAST_CAF_ATOM_ALIAS(add)
