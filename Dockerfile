@@ -42,10 +42,9 @@ RUN ./configure \
     --generator=Ninja \
     --without-arrow
 RUN cmake --build build --parallel
-RUN cmake --build build --target test && \
+RUN CTEST_OUTPUT_ON_FAILURE=1 cmake --build build --target test && \
   cmake --build build --target integration && \
   cmake --build build --target install
-
 
 # Production image: copy application
 FROM debian:buster-slim
