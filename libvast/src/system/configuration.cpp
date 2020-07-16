@@ -55,12 +55,12 @@ configuration::configuration() {
   // Use 'vast.conf' instead of generic 'caf-application.ini'.
   auto config_path_candidates = std::vector{
     path::current() / "vast.conf",
-    path{"/etc/vast/vast.conf"},
   };
   auto binary = detail::objectpath();
   if (binary)
     config_path_candidates.push_back(binary->parent().parent() / "share"
                                      / "vast" / "schema");
+  config_path_candidates.emplace_back("/etc/vast/vast.conf");
   for (auto& p : config_path_candidates) {
     if (p.is_regular_file()) {
       config_file_path = p.str();
