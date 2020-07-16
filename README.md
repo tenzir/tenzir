@@ -158,7 +158,7 @@ proceedings][nsdi-proceedings].
 
 [docs]: https://docs.tenzir.com/vast
 [chat-badge]: https://img.shields.io/badge/matrix-chat-brightgreen.svg
-[chat-url]: https://tenzir.riot.im
+[chat-url]: https://tenzir.element.io
 [ci-url]: https://github.com/tenzir/vast/actions?query=branch%3Amaster+workflow%3AVAST
 [ci-badge]: https://github.com/tenzir/vast/workflows/VAST/badge.svg?branch=master
 [ci-examples-url]: https://github.com/tenzir/vast/actions?query=branch%3Amaster+workflow%3A%22Jupyter+Notebook%22
