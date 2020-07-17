@@ -81,7 +81,7 @@ endif ()
 option(VAST_ENABLE_ASSERTIONS "Enable Assertions"
        "${VAST_ENABLE_ASSERTIONS_DEFAULT}")
 # Setting this option removes configuration dependent absolute paths from the
-# vast installation. Concretely, it enables the dynamic binary and libraries to
+# VAST installation. Concretely, it enables the dynamic binary and libraries to
 # use relative paths for loading their dependencies.
 option(VAST_RELOCATABLE_INSTALL "Enable relocatable installations" ON)
 option(VAST_USE_BUNDLED_CAF "Always use the CAF submodule" OFF)

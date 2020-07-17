@@ -11,7 +11,7 @@ Every entry has a category for which we use the following visual abbreviations:
 
 ## Unreleased
 
-- ⚠️ Vast now recognizes /etc/vast/schema as an additional default directory
+- ⚠️ VAST now recognizes `/etc/vast/schema` as an additional default directory
   for schema files. [#980](https://github.com/tenzir/vast/pull/980)
 
 - ⚠️ [Flatbuffers](https://google.github.io/flatbuffers/) is now a required
