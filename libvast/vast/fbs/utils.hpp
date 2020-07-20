@@ -23,9 +23,9 @@
 #include <caf/error.hpp>
 #include <caf/expected.hpp>
 
-#include <cstdint>
-
 #include <flatbuffers/flatbuffers.h>
+
+#include <cstdint>
 
 namespace vast::fbs {
 
