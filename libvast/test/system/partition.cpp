@@ -11,7 +11,6 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#include "vast/system/index_common.hpp"
 #define SUITE partition
 #include "vast/test/fixtures/dummy_index.hpp"
 #include "vast/test/test.hpp"

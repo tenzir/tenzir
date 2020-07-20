@@ -16,7 +16,6 @@
 #include "vast/expression_visitors.hpp"
 #include "vast/fwd.hpp"
 #include "vast/logger.hpp"
-#include "vast/system/index_common.hpp"
 
 #include <caf/actor.hpp>
 #include <caf/behavior.hpp>
