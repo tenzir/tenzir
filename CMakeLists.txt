@@ -708,7 +708,7 @@ file(
      fi
      base_dir=\"${CMAKE_CURRENT_SOURCE_DIR}/integration\"
      env_dir=\"${CMAKE_CURRENT_BINARY_DIR}/integration_env\"
-     app=\"${EXECUTABLE_OUTPUT_PATH}/vast\"
+     app=\"$<TARGET_FILE:vast>\"
      set -e
      if [ ! -d \"$env_dir\" ]; then
        python3 -m venv \"$env_dir\"
