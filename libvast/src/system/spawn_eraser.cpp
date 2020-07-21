@@ -31,9 +31,6 @@ maybe_actor
 spawn_eraser(system::node_actor* self, system::spawn_arguments& args) {
   using namespace std::string_literals;
   VAST_TRACE(VAST_ARG(self), VAST_ARG(args));
-  // We require the ERASER to be started after INDEX and ARCHIVE components.
-  VAST_ASSERT(self->state.index);
-  VAST_ASSERT(self->state.archive);
   // Parse options.
   auto eraser_query = caf::get_or(args.inv.options, "system.aging-query", ""s);
   if (eraser_query.empty()) {
@@ -52,13 +49,15 @@ spawn_eraser(system::node_actor* self, system::spawn_arguments& args) {
       return parsed.error();
     aging_frequency = *parsed;
   }
-  // Spawn the ERASER.
-  auto res
-    = self->spawn(eraser, aging_frequency, eraser_query, self->state.index,
-                  caf::actor_cast<caf::actor>(self->state.archive));
-  if (res)
-    self->system().registry().put(atom::eraser_v, res);
-  return res;
+  // Ensure component dependencies.
+  auto [index, archive]
+    = self->state.registry.find_by_label("index", "archive");
+  if (index)
+    return make_error(ec::missing_component, "index");
+  if (archive)
+    return make_error(ec::missing_component, "archive");
+  // Spawn the eraser.
+  return self->spawn(eraser, aging_frequency, eraser_query, index, archive);
 }
 
 } // namespace vast::system

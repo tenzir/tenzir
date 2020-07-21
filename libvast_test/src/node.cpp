@@ -45,16 +45,11 @@ void node::ingest(const std::string& type) {
   // Get the importer from the node.
   MESSAGE("getting importer from node");
   caf::actor importer;
-  auto rh = self->request(test_node, caf::infinite, atom::get_v);
+  auto rh = self->request(test_node, caf::infinite, atom::get_v, atom::label_v,
+                          "importer");
   run();
-  rh.receive(
-    [&](const std::string& id, system::registry& reg) {
-      auto er = reg.components.value[id].value.equal_range("importer");
-      if (er.first == er.second)
-        FAIL("no importers available at test node");
-      importer = er.first->second.actor;
-    },
-    error_handler());
+  rh.receive([&](caf::actor actor) { importer = std::move(actor); },
+             error_handler());
   MESSAGE("sending " << type << " logs");
   // Send previously parsed logs directly to the importer (as opposed to
   // going through a source).
@@ -79,7 +74,6 @@ std::vector<event> node::query(std::string expr) {
   self->monitor(exp);
   self->send(exp, atom::sink_v, self);
   self->send(exp, atom::run_v);
-  self->send(exp, atom::extract_v);
   run();
   MESSAGE("fetch results from mailbox");
   std::vector<event> result;

@@ -39,9 +39,8 @@ maybe_actor spawn_archive(node_actor* self, spawn_arguments& args) {
   auto mss
     = 1_MiB
       * get_or(args.inv.options, "max-segment-size", sd::max_segment_size);
-  auto a = self->spawn(archive, args.dir / args.label, segments, mss);
-  self->state.archive = a;
-  return caf::actor_cast<caf::actor>(a);
+  auto actor = self->spawn(archive, args.dir / args.label, segments, mss);
+  return caf::actor_cast<caf::actor>(actor);
 }
 
 } // namespace vast::system

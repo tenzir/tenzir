@@ -13,17 +13,18 @@
 
 #include "vast/system/spawn_exporter.hpp"
 
+#include "vast/defaults.hpp"
+#include "vast/logger.hpp"
+#include "vast/query_options.hpp"
+#include "vast/system/archive.hpp"
+#include "vast/system/exporter.hpp"
+#include "vast/system/node.hpp"
+#include "vast/system/spawn_arguments.hpp"
+
 #include <caf/actor.hpp>
 #include <caf/expected.hpp>
 #include <caf/send.hpp>
 #include <caf/settings.hpp>
-
-#include "vast/defaults.hpp"
-#include "vast/logger.hpp"
-#include "vast/query_options.hpp"
-#include "vast/system/exporter.hpp"
-#include "vast/system/node.hpp"
-#include "vast/system/spawn_arguments.hpp"
 
 namespace vast::system {
 
@@ -43,16 +44,25 @@ maybe_actor spawn_exporter(node_actor* self, spawn_arguments& args) {
   if (query_opts == no_query_options)
     query_opts = historical;
   auto exp = self->spawn(exporter, std::move(*expr), query_opts);
+  // Wire the exporter to all components.
+  if (has_continuous_option(query_opts))
+    if (auto importer = self->state.registry.find_by_label("importer"))
+      self->send(exp, atom::importer_v, std::vector{importer});
+  for (auto& a : self->state.registry.find_by_type("archive")) {
+    VAST_DEBUG(self, "connects archive to new exporter");
+    self->send(exp, caf::actor_cast<archive_type>(a));
+  }
+  for (auto& a : self->state.registry.find_by_type("index")) {
+    VAST_DEBUG(self, "connects index to new exporter");
+    self->send(exp, atom::index_v, a);
+  }
   // Setting max-events to 0 means infinite.
   auto max_events = get_or(args.inv.options, "export.max-events",
                            defaults::export_::max_events);
   if (max_events > 0)
-    caf::anon_send(exp, atom::extract_v, static_cast<uint64_t>(max_events));
+    self->send(exp, atom::extract_v, static_cast<uint64_t>(max_events));
   else
-    caf::anon_send(exp, atom::extract_v);
-  // Send the running IMPORTERs to the EXPORTER if it handles a continous query.
-  if (has_continuous_option(query_opts) && self->state.importer != nullptr)
-    self->send(exp, atom::importer_v, std::vector{self->state.importer});
+    self->send(exp, atom::extract_v);
   return exp;
 }
 

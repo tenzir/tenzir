@@ -147,6 +147,7 @@ set(libvast_sources
     src/system/archive.cpp
     src/system/configuration.cpp
     src/system/connect_to_node.cpp
+    src/system/component_registry.cpp
     src/system/count_command.cpp
     src/system/counter.cpp
     src/system/default_configuration.cpp
@@ -192,7 +193,6 @@ set(libvast_sources
     src/system/stop_command.cpp
     src/system/task.cpp
     src/system/terminator.cpp
-    src/system/tracker.cpp
     src/system/type_registry.cpp
     src/system/version_command.cpp
     src/table_slice.cpp

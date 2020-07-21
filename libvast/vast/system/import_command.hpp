@@ -52,29 +52,30 @@ caf::message import_command(const invocation& inv, caf::actor_system& sys) {
     self, node, {"accountant", "type-registry", "importer"});
   if (!components)
     return make_message(std::move(components.error()));
-  VAST_ASSERT(components->size() == 3);
-  auto accountant = caf::actor_cast<accountant_type>((*components)[0]);
-  auto type_registry = caf::actor_cast<type_registry_type>((*components)[1]);
-  auto& importer = (*components)[2];
+  auto& [accountant, type_registry, importer] = *components;
   if (!type_registry)
     return make_message(make_error(ec::missing_component, "type-registry"));
+  if (!importer)
+    return make_message(make_error(ec::missing_component, "importer"));
   // Start signal monitor.
   std::thread sig_mon_thread;
   auto guard = system::signal_monitor::run_guarded(
     sig_mon_thread, sys, defaults::system::signal_monitoring_interval, self);
   // Start the source.
-  auto src_result = make_source<Reader, Defaults>(self, sys, inv, accountant,
-                                                  type_registry, importer);
+  auto src_result = make_source<Reader, Defaults>(
+    self, sys, inv, caf::actor_cast<accountant_type>(accountant),
+    caf::actor_cast<type_registry_type>(type_registry), importer);
   if (!src_result)
     return make_message(std::move(src_result.error()));
   auto src = std::move(src_result->src);
   auto name = std::move(src_result->name);
   bool stop = false;
+  self->send(node, atom::put_v, src, "source");
   self->monitor(src);
   self->monitor(importer);
   self
     ->do_receive(
-      [&](const caf::down_msg& msg) {
+      [&, importer = importer](const caf::down_msg& msg) {
         if (msg.source == importer) {
           VAST_DEBUG(name, "received DOWN from node importer");
           self->send_exit(src, caf::exit_reason::user_shutdown);

@@ -46,4 +46,9 @@ void shutdown(caf::typed_event_based_actor<Ts...>* self,
   shutdown<Policy>(handle, std::move(xs));
 }
 
+template <class Policy, class Actor>
+void shutdown(Actor* self, caf::actor x) {
+  shutdown<Policy>(self, std::vector<caf::actor>{std::move(x)});
+}
+
 } // namespace vast::system

@@ -112,17 +112,12 @@ struct vector_type;
 
 namespace system {
 
-struct component_state_map;
-struct component_map_entry;
-struct component_map;
-struct component_state;
 struct data_point;
 struct measurement;
 struct node_state;
 struct performance_sample;
 struct query_status;
 struct query_status;
-struct registry;
 struct spawn_arguments;
 struct type_set;
 
@@ -229,6 +224,7 @@ CAF_BEGIN_TYPE_ID_BLOCK(vast, caf::first_custom_type_id)
   VAST_ADD_ATOM(historical, "historical")
   VAST_ADD_ATOM(id, "id")
   VAST_ADD_ATOM(key, "key")
+  VAST_ADD_ATOM(label, "label")
   VAST_ADD_ATOM(limit, "limit")
   VAST_ADD_ATOM(link, "link")
   VAST_ADD_ATOM(list, "list")
@@ -318,11 +314,8 @@ CAF_BEGIN_TYPE_ID_BLOCK(vast, caf::first_custom_type_id)
   VAST_ADD_TYPE_ID((vast::type_extractor))
   VAST_ADD_TYPE_ID((vast::uuid))
 
-  VAST_ADD_TYPE_ID((vast::system::component_map))
-  VAST_ADD_TYPE_ID((vast::system::component_map_entry))
   VAST_ADD_TYPE_ID((vast::system::performance_report))
   VAST_ADD_TYPE_ID((vast::system::query_status))
-  VAST_ADD_TYPE_ID((vast::system::registry))
   VAST_ADD_TYPE_ID((vast::system::report))
   VAST_ADD_TYPE_ID((vast::system::type_set))
 
