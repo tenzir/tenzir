@@ -100,7 +100,7 @@ public:
     : size_{xs.size() / spread(value_type)},
       value_type_{std::move(value_type)},
       data_{xs.data()} {
-    // nop
+    VAST_ASSERT(xs.size() % spread(value_type) == 0);
   }
 
   // implemented out-of-line below due to dependency on decode
@@ -127,6 +127,7 @@ public:
     using namespace msgpack;
     VAST_ASSERT(xs.format() == fixmap || xs.format() == map16
                 || xs.format() == map32);
+    VAST_ASSERT(xs.size() % (spread(key_type) + spread(value_type)) == 0);
   }
 
   // implemented out-of-line below due to dependency on decode
