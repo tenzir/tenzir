@@ -412,6 +412,7 @@ if (BUILD_UNIT_TESTS)
   add_executable(vast-test ${tests})
   target_link_libraries(vast-test libvast_test libvast
                         ${CMAKE_THREAD_LIBS_INIT})
+  multi_config_target_symlink(vast-test)
 
   if (VAST_HAVE_ARROW)
     target_link_libraries(vast-test ${ARROW_LIBRARY})

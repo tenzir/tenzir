@@ -3,4 +3,5 @@ include_directories(${CMAKE_BINARY_DIR}/libvast)
 
 add_executable(dscat dscat.cpp)
 target_link_libraries(dscat libvast caf::core)
+multi_config_target_symlink(dscat)
 install(TARGETS dscat DESTINATION bin)
