@@ -72,11 +72,34 @@ caf::error msgpack_table_slice::load(chunk_ptr chunk) {
 
 namespace {
 
+/// Returns the number of MsgPack objects a type spreads across.
+size_t spread(const type& t) {
+  auto f = [](auto&& x) -> size_t {
+    using object_type = std::decay_t<decltype(x)>;
+    if constexpr (detail::is_any_v<object_type, port_type, subnet_type>)
+      return 2;
+    else
+      return 1;
+  };
+  return caf::visit(f, t);
+}
+
+// For a given type, skips the amount of msgpack objects that it occupies.
+size_t skip(msgpack::overlay& xs, const type& t) {
+  // Since VAST's data model always allows for NULL objects, it could be that a
+  // compound object will be condensed to a single nil object.
+  if (xs.get().format() == msgpack::nil)
+    return xs.next();
+  return xs.next(spread(t));
+}
+
 class msgpack_array_view : public container_view<data_view>,
                            detail::totally_ordered<msgpack_array_view> {
 public:
   msgpack_array_view(type value_type, msgpack::array_view xs)
-    : size_{xs.size()}, value_type_{std::move(value_type)}, data_{xs.data()} {
+    : size_{xs.size() / spread(value_type)},
+      value_type_{std::move(value_type)},
+      data_{xs.data()} {
     // nop
   }
 
@@ -97,7 +120,7 @@ class msgpack_map_view : public container_view<std::pair<data_view, data_view>>,
                          detail::totally_ordered<msgpack_map_view> {
 public:
   msgpack_map_view(type key_type, type value_type, msgpack::array_view xs)
-    : size_{xs.size() / 2},
+    : size_{xs.size() / (spread(key_type) + spread(value_type))},
       key_type_{std::move(key_type)},
       value_type_{std::move(value_type)},
       data_{xs.data()} {
@@ -119,21 +142,6 @@ private:
   type value_type_;
   msgpack::overlay data_;
 };
-
-// For a given type, skips the amount of msgpack objects that it occupies.
-size_t skip(msgpack::overlay& xs, const type& t) {
-  // Since VAST's data model always allows for NULL objects, it could be that a
-  // compound object will be condensed to a single nil object.
-  if (xs.get().format() == msgpack::nil)
-    return xs.next();
-  auto count = [](auto& x) -> size_t {
-    using object_type = std::decay_t<decltype(x)>;
-    if constexpr (detail::is_any_v<object_type, port_type, subnet_type>)
-      return 2;
-    return 1;
-  };
-  return xs.next(caf::visit(count, t));
-}
 
 // Helper utilities for decoding.
 
