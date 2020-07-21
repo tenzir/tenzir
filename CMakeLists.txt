@@ -466,7 +466,14 @@ if (NOT BUILD_SHARED_LIBS)
   string(APPEND VAST_FIND_DEPENDENCY_LIST
          "\nfind_package(Flatbuffers REQUIRED CONFIG)")
 endif ()
-get_target_property(flatbuffers_dir flatbuffers::flatbuffers
+if (TARGET flatbuffers::flatbuffers)
+  set(flatbuffers_target flatbuffers::flatbuffers)
+elseif (NOT VAST_STATIC_EXECUTABLE AND TARGET flatbuffers::flatbuffers_shared)
+  set(flatbuffers_target flatbuffers::flatbuffers_shared)
+else ()
+  message(FATAL_ERROR "No suiteable imported target for Flatbuffers found")
+endif ()
+get_target_property(flatbuffers_dir ${flatbuffers_target}
                     INTERFACE_INCLUDE_DIRECTORIES)
 get_filename_component(flatbuffers_dir ${flatbuffers_dir} DIRECTORY) # <prefix>
 
