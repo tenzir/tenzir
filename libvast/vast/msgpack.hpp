@@ -275,9 +275,9 @@ constexpr size_t capacity() {
     return 8;
   if constexpr (Format == fixext16)
     return 16;
-  if constexpr (Format == fixarray || Format == fixmap)
+  if constexpr (is_fixarray(Format) || is_fixmap(Format))
     return (1u << 4) - 1;
-  if constexpr (Format == fixstr)
+  if constexpr (is_fixstr(Format))
     return (1u << 5) - 1;
   if constexpr (Format == str8 || Format == bin8 || Format == ext8)
     return (1u << 8) - 1;
@@ -336,8 +336,8 @@ public:
   array_view(msgpack::format fmt, size_t size,
              vast::span<const vast::byte> data)
     : format_{fmt}, size_{size}, data_{data} {
-    VAST_ASSERT(fmt == fixarray || fmt == array16 || fmt == array32
-                || fmt == fixmap || fmt == map16 || fmt == map32);
+    VAST_ASSERT(is_fixarray(fmt) || fmt == array16 || fmt == array32
+                || is_fixmap(fixmap) || fmt == map16 || fmt == map32);
   }
 
   /// @returns The container format.
@@ -413,9 +413,9 @@ decltype(auto) visit(Visitor&& f, const object& x) {
     auto str = reinterpret_cast<const char*>(at(1));
     return f(std::string_view{str, size});
   } else if (is_fixarray(fmt)) {
-    return f(array_view{fixarray, fixarray_size(fmt), data.subspan(1)});
+    return f(array_view{fmt, fixarray_size(fmt), data.subspan(1)});
   } else if (is_fixmap(fmt)) {
-    return f(array_view{fixmap, fixmap_size(fmt) * 2u, data.subspan(1)});
+    return f(array_view{fmt, fixmap_size(fmt) * 2u, data.subspan(1)});
   }
   switch (fmt) {
     default:
@@ -598,7 +598,7 @@ public:
 
   /// Skips multiple objects.
   /// @param n The number of objects to skip.
-  /// @returns The number of bytes skipped or 0 on failure.
+  /// @returns The number of bytes skipped or if no object got skipped.
   /// @pre The underlying buffer must contain at least *n* more well-formed
   ///      msgpack objects starting from the current position.
   size_t next(size_t n);

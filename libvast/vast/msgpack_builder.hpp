@@ -534,11 +534,7 @@ size_t put(Builder& builder, std::vector<T>& xs) {
 template <class Builder, class T, class F>
 size_t put_map(Builder& builder, const T& xs, F f) {
   auto add = [&](auto proxy) -> size_t {
-    // This for loop style with structured bindings yields an internal
-    // compiler error...uncomment at some glory time in the future. --MV
-    // for (auto&& [k, v] : xs) {
-    for (auto&& x : xs) {
-      auto& [k, v] = x;
+    for (auto&& [k, v] : xs) {
       if (f(proxy, k) == 0 || f(proxy, v) == 0) {
         builder.reset();
         return 0;
