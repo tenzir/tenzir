@@ -62,8 +62,7 @@ size_t encode(Builder& builder, View v) {
     [&](view<time> x) { return put(builder, x.time_since_epoch().count()); },
     [&](view<pattern> x) { return put(builder, x.string()); },
     [&](view<address> x) {
-      auto bytes = x.data();
-      auto ptr = reinterpret_cast<const char*>(bytes.data());
+      auto ptr = reinterpret_cast<const char*>(x.data().data());
       if (x.is_v4()) {
         auto str = std::string_view{ptr + 12, 4};
         return builder.template add<fixstr>(str);
@@ -73,16 +72,16 @@ size_t encode(Builder& builder, View v) {
       }
     },
     [&](view<subnet> x) {
-      auto n0 = encode(builder, make_view(x.network()));
-      if (n0 == 0)
-        return n0;
-      auto n1 = put(builder, x.length());
-      if (n1 == 0)
-        return n1;
-      return n0 + n1;
+      auto proxy = builder.template build<fixarray>();
+      encode(proxy, make_view(x.network()));
+      proxy.template add<uint8>(x.length());
+      return proxy.finish();
     },
     [&](view<port> x) {
-      return put(builder, static_cast<uint8_t>(x.type()), x.number());
+      auto proxy = builder.template build<fixarray>();
+      proxy.template add<uint16>(x.number());
+      proxy.template add<uint8>(static_cast<uint8_t>(x.type()));
+      return proxy.finish();
     },
     [&](view<enumeration> x) {
       // The noop cast exists only to communicate the MsgPack type.
