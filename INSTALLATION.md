@@ -4,8 +4,8 @@ VAST Installation Instructions
 Required dependencies:
 
 - A C++17 compiler:
-  - GCC >= 8
-  - Clang >= 6
+  - GCC >= 8.0
+  - Clang >= 8.0
   - Apple Clang >= 9.1
 - [CMake](http://www.cmake.org) >= 3.11
 - [flatbuffers](https://google.github.io/flatbuffers/) >= 1.11.0

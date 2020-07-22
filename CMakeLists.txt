@@ -211,7 +211,7 @@ endif ()
 # ------------------------------------------------------------------------------
 
 # Compiler requirements
-set(CLANG_MINIMUM_VERSION 5.0)
+set(CLANG_MINIMUM_VERSION 8.0)
 set(APPLE_CLANG_MINIMUM_VERSION 9.1)
 set(GCC_MINIMUM_VERSION 8.0)
 
