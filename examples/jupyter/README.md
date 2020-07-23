@@ -11,7 +11,7 @@ Run `./scripts/run-demo` to run the demo in a temporary directory. Note that
 this requires the demo data to be downloaded, which might not be ideal for
 development on the demo, but is practical for a quick demo setup.
 
-Arguments to this script are passed to the 'jupyter notebook' command. Run with
+Arguments to this script are passed to the `jupyter notebook` command. Run with
 `--ip=<public ip>` to share the demo over the network.
 
 ## Prepare the environment
