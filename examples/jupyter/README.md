@@ -79,6 +79,10 @@ vast pivot suricata.netflow '"cashback" in hostname'
 vast pivot zeek.conn '"cashback" in hostname'
 vast pivot --format=pcap pcap.packet '"cashback" in hostname' | tcpdump -r -
 vast explore --after=1s '"cashback" in hostname'
+vast explore --after=5s --by=src_ip '"cashback" in hostname'
+
+vast export json 'ntlmssp.host == "M57-CHARLIE"'
+vast export json '"FAILURE" in smb.status'
 ```
 
 ## Jupyter Notebook
