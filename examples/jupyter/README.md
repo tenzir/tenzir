@@ -69,10 +69,16 @@ vast import -b pcap -r vast-jupyter-demo/M57-2009-day11-18.trace
 ```sh
 # This is a sample of the original data from Suricata
 vast export -n 10 json 'src_ip == 192.168.1.103'
+
 # Pivot to Zeek conn logs
 vast pivot zeek.conn 'src_ip == 192.168.1.103' | head -n 20
-# Pivot to PCAP
-vast pivot pcap.packet 'src_ip == 192.168.1.103' | tcpdump -nl -r -
+
+# Explore based on one sample query for suricata.http.hostname data
+vast export json '"cashback" in hostname'
+vast pivot suricata.netflow '"cashback" in hostname'
+vast pivot zeek.conn '"cashback" in hostname'
+vast pivot --format=pcap pcap.packet '"cashback" in hostname' | tcpdump -r -
+vast explore --after=1s '"cashback" in hostname'
 ```
 
 ## Jupyter Notebook
