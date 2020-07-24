@@ -62,8 +62,9 @@ void fill_status_map(caf::settings& xs, caf::stream_manager& mgr) {
   }
 }
 
-void fill_status_map(caf::dictionary<caf::config_value>& xs,
+void fill_status_map(caf::dictionary<caf::config_value>& dict,
                      caf::scheduled_actor* self) {
+  auto& xs = caf::put_dictionary(dict, self->name());
   put(xs, "actor-id", self->id());
   put(xs, "name", self->name());
   put(xs, "mailbox-size", self->mailbox().size());

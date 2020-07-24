@@ -62,8 +62,8 @@ public:
   /// @returns No error on success.
   virtual caf::error flush() = 0;
 
-  /// Fills `dict` with implementation-specific status information.
-  virtual void inspect_status(caf::settings& dict) = 0;
+  /// Fills `s` with implementation-specific status information.
+  virtual void inspect_status(vast::status& s) = 0;
 };
 
 } // namespace vast

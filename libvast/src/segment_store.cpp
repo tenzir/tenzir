@@ -25,7 +25,7 @@
 #include "vast/fbs/utils.hpp"
 #include "vast/ids.hpp"
 #include "vast/logger.hpp"
-#include "vast/segment_store.hpp"
+#include "vast/status.hpp"
 #include "vast/table_slice.hpp"
 #include "vast/to_events.hpp"
 
@@ -322,14 +322,14 @@ caf::error segment_store::flush() {
   return caf::none;
 }
 
-void segment_store::inspect_status(caf::settings& dict) {
+void segment_store::inspect_status(vast::status& s) {
   using caf::put;
-  put(dict, "segment-path", segment_path().str());
-  put(dict, "max-segment-size", max_segment_size_);
-  put(dict, "num-events", num_events_);
+  put(s.info, "segment-path", segment_path().str());
+  put(s.info, "max-segment-size", max_segment_size_);
+  put(s.info, "archive-events", num_events_);
   // Note: `for (auto& kvp : segments_)` does not compile.
   // FIXME: This is too slow for large archives and blocks the node.
-  // auto& segments = put_dictionary(dict, "segments");
+  // auto& segments = put_dictionary(verbose, "segments");
   // for (auto i = segments_.begin(); i != segments_.end(); ++i) {
   //   std::string range = "[";
   //   range += std::to_string(i->left);
@@ -338,10 +338,10 @@ void segment_store::inspect_status(caf::settings& dict) {
   //   range += ")";
   //   put(segments, range, to_string(i->value));
   // }
-  auto& cached = put_list(dict, "cached");
+  auto& cached = put_list(s.verbose, "cached");
   for (auto& kvp : cache_)
     cached.emplace_back(to_string(kvp.first));
-  auto& current = put_dictionary(dict, "current-segment");
+  auto& current = put_dictionary(s.verbose, "current-segment");
   put(current, "id", to_string(builder_.id()));
   put(current, "size", builder_.table_slice_bytes());
 }

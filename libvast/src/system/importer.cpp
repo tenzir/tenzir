@@ -23,6 +23,7 @@
 #include "vast/logger.hpp"
 #include "vast/si_literals.hpp"
 #include "vast/system/report.hpp"
+#include "vast/status.hpp"
 #include "vast/system/type_registry.hpp"
 #include "vast/table_slice.hpp"
 
@@ -106,16 +107,16 @@ id importer_state::available_ids() const noexcept {
 }
 
 caf::dictionary<caf::config_value> importer_state::status() const {
-  caf::dictionary<caf::config_value> result;
+  auto s = vast::status{};
   // TODO: caf::config_value can only represent signed 64 bit integers, which
   // may make it look like overflow happened in the status report. As an
   // intermediate workaround, we convert the values to strings.
-  caf::put(result, "ids.available", to_string(available_ids()));
-  caf::put(result, "ids.block.next", to_string(current.next));
-  caf::put(result, "ids.block.end", to_string(current.end));
+  caf::put(s.verbose, "ids.available", to_string(available_ids()));
+  caf::put(s.verbose, "ids.block.next", to_string(current.next));
+  caf::put(s.verbose, "ids.block.end", to_string(current.end));
   // General state such as open streams.
-  detail::fill_status_map(result, self);
-  return result;
+  detail::fill_status_map(s.debug, self);
+  return join(s);
 }
 
 void importer_state::send_report() {

@@ -32,6 +32,7 @@
 #include "vast/json.hpp"
 #include "vast/logger.hpp"
 #include "vast/settings.hpp"
+#include "vast/status.hpp"
 #include "vast/system/accountant.hpp"
 #include "vast/system/node.hpp"
 #include "vast/system/posix_filesystem.hpp"
@@ -127,12 +128,13 @@ void collect_component_status(node_actor* self,
   auto req_state = std::make_shared<req_state_t>();
   req_state->rp = std::move(status_promise);
   // Pre-fill our result with system stats.
-  auto& sys_stats = put_dictionary(req_state->content, "system");
   auto& sys = self->system();
-  put(sys_stats, "running-actors", sys.registry().running());
-  put(sys_stats, "detached-actors", sys.detached_actors());
-  put(sys_stats, "worker-threads", sys.scheduler().num_workers());
-  put(sys_stats, "table-slices", table_slice::instances());
+  auto s = vast::status{};
+  put(s.debug, "running-actors", sys.registry().running());
+  put(s.debug, "detached-actors", sys.detached_actors());
+  put(s.debug, "worker-threads", sys.scheduler().num_workers());
+  put(s.info, "table-slices", table_slice::instances());
+  req_state->content = join(s);
   // Send out requests and collects answers.
   req_state->pending += self->state.registry.components().size();
   for (auto& [label, component] : self->state.registry.components())
@@ -141,8 +143,7 @@ void collect_component_status(node_actor* self,
                 atom::status_v)
       .then(
         [=, lab = label](caf::config_value::dictionary& xs) mutable {
-          auto& dict = req_state->content[self->state.name].as_dictionary();
-          dict.emplace(std::move(lab), std::move(xs));
+          merge_settings(xs, req_state->content);
           if (--req_state->pending == 0)
             req_state->rp.deliver(to_string(to_json(req_state->content)));
         },
