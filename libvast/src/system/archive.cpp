@@ -202,7 +202,7 @@ archive(archive_type::stateful_pointer<archive_state> self, path dir,
       self->state.active_exporters.insert(sender_addr);
       self->monitor<caf::message_priority::high>(exporter);
     },
-    [=](atom::status) {
+    [=](atom::status, status_verbosity v) {
       auto s = vast::status{};
       detail::fill_status_map(s.debug, self);
       self->state.store->inspect_status(s);

@@ -14,6 +14,7 @@
 #pragma once
 
 #include "vast/fwd.hpp"
+#include "vast/status.hpp"
 #include "vast/time.hpp"
 
 #include <caf/typed_actor.hpp>
@@ -43,7 +44,7 @@ using accountant_type = caf::typed_actor<
   caf::reacts_to<std::string, double>,
   caf::reacts_to<report>,
   caf::reacts_to<performance_report>,
-  caf::replies_to<atom::status>::with<caf::dictionary<caf::config_value>>,
+  caf::replies_to<atom::status, status_verbosity>::with<caf::dictionary<caf::config_value>>,
   caf::reacts_to<atom::telemetry>>;
 // clang-format on
 

@@ -106,7 +106,8 @@ id importer_state::available_ids() const noexcept {
   return max_id - current.next;
 }
 
-caf::dictionary<caf::config_value> importer_state::status() const {
+caf::dictionary<caf::config_value>
+importer_state::status(status_verbosity v) const {
   auto s = vast::status{};
   // TODO: caf::config_value can only represent signed 64 bit integers, which
   // may make it look like overflow happened in the status report. As an
@@ -201,7 +202,7 @@ caf::behavior importer(importer_actor* self, path dir, archive_type archive,
       VAST_ASSERT(self->state.stg != nullptr);
       self->send(index, atom::subscribe_v, atom::flush_v, listener);
     },
-    [=](atom::status) { return self->state.status(); },
+    [=](atom::status, status_verbosity v) { return self->state.status(v); },
     [=](atom::telemetry) {
       self->state.send_report();
       self->delayed_send(self, defs::telemetry_rate, atom::telemetry_v);

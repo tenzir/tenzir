@@ -18,6 +18,7 @@
 #include "vast/expression.hpp"
 #include "vast/fwd.hpp"
 #include "vast/meta_index.hpp"
+#include "vast/status.hpp"
 #include "vast/system/accountant.hpp"
 #include "vast/system/indexer_stage_driver.hpp"
 #include "vast/system/partition.hpp"
@@ -136,7 +137,7 @@ struct index_state {
   caf::actor next_worker();
 
   /// @returns various status metrics.
-  caf::dictionary<caf::config_value> status() const;
+  caf::dictionary<caf::config_value> status(status_verbosity v) const;
 
   /// Creates a new partition owned by the INDEX (stored as `active`).
   void reset_active_partition();

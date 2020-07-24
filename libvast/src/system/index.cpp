@@ -212,7 +212,8 @@ caf::actor index_state::next_worker() {
   return result;
 }
 
-caf::dictionary<caf::config_value> index_state::status() const {
+caf::dictionary<caf::config_value>
+index_state::status(status_verbosity v) const {
   using caf::put;
   using caf::put_dictionary;
   using caf::put_list;
@@ -523,8 +524,8 @@ caf::behavior index(caf::stateful_actor<index_state>* self, const path& dir,
       VAST_DEBUG(self, "got a new source");
       return self->state.stage->add_inbound_path(in);
     },
-    [=](atom::status) -> caf::config_value::dictionary {
-      return self->state.status();
+    [=](atom::status, status_verbosity v) -> caf::config_value::dictionary {
+      return self->state.status(v);
     },
     [=](atom::subscribe, atom::flush, caf::actor& listener) {
       self->state.add_flush_listener(std::move(listener));
@@ -547,9 +548,8 @@ caf::behavior index(caf::stateful_actor<index_state>* self, const path& dir,
             self->send(self->state.accountant, atom::announce_v, "index");
             self->delayed_send(self, defs::telemetry_rate, atom::telemetry_v);
           },
-          [=](atom::status) -> caf::config_value::dictionary {
-            return self->state.status();
-          },
+          [=](atom::status, status_verbosity v)
+            -> caf::config_value::dictionary { return self->state.status(v); },
           [=](atom::subscribe, atom::flush, caf::actor& listener) {
             self->state.add_flush_listener(std::move(listener));
           }};

@@ -312,7 +312,7 @@ accountant(accountant_actor* self, accountant_config cfg) {
 #endif
       }
     },
-    [=](atom::status) {
+    [=](atom::status, status_verbosity v) {
       auto s = vast::status{};
       using caf::put_dictionary;
       caf::dictionary<caf::config_value> result;

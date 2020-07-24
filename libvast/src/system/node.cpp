@@ -113,7 +113,8 @@ caf::message send_command(const invocation& inv, caf::actor_system&) {
 }
 
 void collect_component_status(node_actor* self,
-                              caf::response_promise status_promise) {
+                              caf::response_promise status_promise,
+                              status_verbosity v) {
   // Shared state between our response handlers.
   // TODO: we no longer use the key in this settings object; it's always the
   // same node name. So we could simplify the whole structure a bit.
@@ -137,7 +138,7 @@ void collect_component_status(node_actor* self,
   for (auto& [label, component] : self->state.registry.components())
     self
       ->request(component.actor, defaults::system::initial_request_timeout,
-                atom::status_v)
+                atom::status_v, v)
       .then(
         [=, lab = label](caf::config_value::dictionary& xs) mutable {
           merge_settings(xs, req_state->content);
@@ -160,7 +161,8 @@ void collect_component_status(node_actor* self,
 
 caf::message status_command(const invocation&, caf::actor_system&) {
   auto self = this_node;
-  collect_component_status(self, self->make_response_promise());
+  collect_component_status(self, self->make_response_promise(),
+                           status_verbosity::debug);
   return caf::none;
 }
 

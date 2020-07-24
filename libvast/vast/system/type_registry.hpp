@@ -16,6 +16,7 @@
 #include "vast/fwd.hpp"
 #include "vast/path.hpp"
 #include "vast/schema.hpp"
+#include "vast/status.hpp"
 #include "vast/system/accountant.hpp"
 #include "vast/type.hpp"
 
@@ -43,7 +44,7 @@ struct type_set {
 // clang-format off
 using type_registry_type = caf::typed_actor<
   caf::reacts_to<atom::telemetry>,
-  caf::replies_to<atom::status>::with<caf::dictionary<caf::config_value>>,
+  caf::replies_to<atom::status, status_verbosity>::with<caf::dictionary<caf::config_value>>,
   caf::reacts_to<caf::stream<table_slice_ptr>>,
   caf::reacts_to<atom::put, vast::type>,
   caf::reacts_to<atom::put, vast::schema>,
@@ -68,7 +69,7 @@ struct type_registry_state {
   report telemetry() const;
 
   /// Summarizes the actors state.
-  caf::dictionary<caf::config_value> status() const;
+  caf::dictionary<caf::config_value> status(status_verbosity v) const;
 
   /// Create the path that the type-registry is persisted at on disk.
   vast::path filename() const;

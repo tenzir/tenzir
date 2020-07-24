@@ -16,6 +16,7 @@
 #include "vast/aliases.hpp"
 #include "vast/data.hpp"
 #include "vast/path.hpp"
+#include "vast/status.hpp"
 #include "vast/system/accountant.hpp"
 #include "vast/system/archive.hpp"
 #include "vast/system/instrumentation.hpp"
@@ -88,7 +89,7 @@ struct importer_state {
   id available_ids() const noexcept;
 
   /// @returns various status metrics.
-  caf::dictionary<caf::config_value> status() const;
+  caf::dictionary<caf::config_value> status(status_verbosity v) const;
 
   /// The active id block.
   id_block current;

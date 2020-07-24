@@ -36,7 +36,8 @@ report type_registry_state::telemetry() const {
   return {};
 }
 
-caf::dictionary<caf::config_value> type_registry_state::status() const {
+caf::dictionary<caf::config_value>
+type_registry_state::status(status_verbosity v) const {
   auto s = vast::status{};
   // Sorted list of all keys.
   auto keys = std::vector<std::string>(data.size());
@@ -127,9 +128,9 @@ type_registry(type_registry_actor self, const path& dir) {
       self->delayed_send(self, defaults::system::telemetry_rate,
                          atom::telemetry_v);
     },
-    [=](atom::status) {
+    [=](atom::status, status_verbosity v) {
       VAST_TRACE(self, "sends out a status report");
-      return self->state.status();
+      return self->state.status(v);
     },
     [=](caf::stream<table_slice_ptr> in) {
       VAST_TRACE(self, "attaches to", VAST_ARG("stream", in));
