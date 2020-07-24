@@ -479,7 +479,7 @@ get_filename_component(flatbuffers_dir ${flatbuffers_dir} DIRECTORY) # <prefix>
 
 if (NOT VAST_USE_BUNDLED_CAF)
   # Try to find the required CAF components first...
-  find_package(CAF 0.17.5 EXACT COMPONENTS core io test QUIET)
+  find_package(CAF 0.17.6 EXACT COMPONENTS core io test QUIET)
 endif ()
 if (CAF_FOUND)
   message(STATUS "Found CAF")
