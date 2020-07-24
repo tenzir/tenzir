@@ -118,8 +118,6 @@ void collect_component_status(node_actor* self,
   // TODO: we no longer use the key in this settings object; it's always the
   // same node name. So we could simplify the whole structure a bit.
   struct req_state_t {
-    // Keeps track of how many requests are pending.
-    size_t pending = 0;
     // Promise to the original client request.
     caf::response_promise rp;
     // Maps nodes to a map associating components with status information.
@@ -136,7 +134,6 @@ void collect_component_status(node_actor* self,
   put(s.info, "table-slices", table_slice::instances());
   req_state->content = join(s);
   // Send out requests and collects answers.
-  req_state->pending += self->state.registry.components().size();
   for (auto& [label, component] : self->state.registry.components())
     self
       ->request(component.actor, defaults::system::initial_request_timeout,
@@ -144,7 +141,8 @@ void collect_component_status(node_actor* self,
       .then(
         [=, lab = label](caf::config_value::dictionary& xs) mutable {
           merge_settings(xs, req_state->content);
-          if (--req_state->pending == 0)
+          // Both handlers have a copy of req_state.
+          if (req_state.use_count() == 2)
             req_state->rp.deliver(to_string(to_json(req_state->content)));
         },
         [=, lab = label](caf::error& err) mutable {
@@ -152,7 +150,8 @@ void collect_component_status(node_actor* self,
                        "status:", to_string(err));
           auto& dict = req_state->content[self->state.name].as_dictionary();
           dict.emplace(std::move(lab), to_string(err));
-          if (--req_state->pending == 0)
+          // Both handlers have a copy of req_state.
+          if (req_state.use_count() == 2)
             req_state->rp.deliver(to_string(to_json(req_state->content)));
         });
 }
