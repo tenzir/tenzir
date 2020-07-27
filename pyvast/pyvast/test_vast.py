@@ -8,7 +8,14 @@ import json
 
 class TestConnection(aiounittest.AsyncTestCase):
     def setUp(self):
-        self.vast = VAST(binary="/opt/tenzir/bin/vast")
+        self.vast = VAST(binary="/opt/tenzir/bin/vast") # default port
+        self.vast_disconnected = VAST(binary="/opt/tenzir/bin/vast", endpoint="localhost:44883") # closed / unbound port
+
+    async def test_connection(self):
+        self.assertTrue(await self.vast.test_connection())
+
+    async def test_custom_endpoint_parameterization(self):
+        self.assertFalse(await self.vast_disconnected.test_connection())
 
     async def test_connection(self):
         self.assertTrue(await self.vast.test_connection())
