@@ -78,7 +78,11 @@ private:
   /// Elements encoded in MessagePack format.
   std::vector<vast::byte> buffer_;
 
+#if VAST_ENABLE_ASSERTIONS
+  msgpack::builder<msgpack::input_validation> builder_;
+#else
   msgpack::builder<msgpack::no_input_validation> builder_;
+#endif
 };
 
 } // namespace vast
