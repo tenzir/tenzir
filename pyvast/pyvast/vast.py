@@ -24,7 +24,7 @@ import logging
 class VAST:
     """A VAST node handle"""
 
-    def __init__(self, binary="vast", endpoint="localhost:42000"):
+    def __init__(self, binary="vast", endpoint=None):
         self.logger = logging.getLogger("vast")
         self.binary = binary
         self.endpoint = endpoint
@@ -33,10 +33,10 @@ class VAST:
 
     async def __spawn(self, *args, stdin=None):
         """Spawns a process asynchronously."""
+        if self.endpoint is not None:
+            args = ("-e", self.endpoint) + args
         return await asyncio.create_subprocess_exec(
             self.binary,
-            "-e",
-            self.endpoint,
             *args,
             stdin=stdin,
             stdout=asyncio.subprocess.PIPE,
