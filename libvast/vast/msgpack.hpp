@@ -322,6 +322,11 @@ public:
     return data_;
   }
 
+  template <class Inspector>
+  friend auto inspect(Inspector& f, object& x) {
+    return f(caf::meta::type_name("vast.msgpack.object"), x.format_, x.data_);
+  }
+
 private:
   msgpack::format format_;
   vast::span<const vast::byte> data_;
@@ -353,6 +358,12 @@ public:
   /// @returns A pointer to the beginning of the array data.
   overlay data() const;
 
+  template <class Inspector>
+  friend auto inspect(Inspector& f, array_view& x) {
+    return f(caf::meta::type_name("vast.msgpack.array_view"), x.format_,
+             x.size_, x.data_);
+  }
+
 private:
   msgpack::format format_;
   size_t size_;
@@ -380,6 +391,12 @@ public:
 
   auto data() const {
     return data_;
+  }
+
+  template <class Inspector>
+  friend auto inspect(Inspector& f, ext_view& x) {
+    return f(caf::meta::type_name("vast.msgpack.ext_view"), x.format_, x.type_,
+             x.data_);
   }
 
 private:
@@ -602,6 +619,12 @@ public:
   /// @pre The underlying buffer must contain at least *n* more well-formed
   ///      msgpack objects starting from the current position.
   size_t next(size_t n);
+
+  template <class Inspector>
+  friend auto inspect(Inspector& f, overlay& x) {
+    return f(caf::meta::type_name("vast.msgpack.overlay"), x.buffer_,
+             x.position_);
+  }
 
 private:
   const vast::byte* at(size_t i) const {

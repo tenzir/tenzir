@@ -63,6 +63,12 @@ public:
 
   caf::atom_value implementation_id() const noexcept override;
 
+  template <class Inspector>
+  friend auto inspect(Inspector& f, msgpack_table_slice_builder& x) {
+    return f(caf::meta::type_name("vast.msgpack_table_slice_builder"), x.col_,
+             x.offset_table_, x.buffer_, x.builder_);
+  }
+
 protected:
   bool add_impl(vast::data_view x) override;
 

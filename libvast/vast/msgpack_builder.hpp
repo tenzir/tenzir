@@ -13,7 +13,13 @@
 
 #pragma once
 
+#include "vast/byte.hpp"
+#include "vast/detail/byte_swap.hpp"
+#include "vast/detail/narrow.hpp"
+#include "vast/detail/type_traits.hpp"
+#include "vast/logger.hpp"
 #include "vast/msgpack.hpp"
+#include "vast/span.hpp"
 
 #include <array>
 #include <chrono>
@@ -23,12 +29,6 @@
 #include <map>
 #include <type_traits>
 #include <vector>
-
-#include <vast/byte.hpp>
-#include <vast/detail/byte_swap.hpp>
-#include <vast/detail/narrow.hpp>
-#include <vast/detail/type_traits.hpp>
-#include <vast/span.hpp>
 
 namespace vast::msgpack {
 
@@ -53,7 +53,12 @@ struct no_input_validation {};
 ///         should be validated.
 template <class InputValidationPolicy = input_validation>
 class builder {
-  struct empty {};
+  struct empty {
+    template <class Inspector>
+    friend auto inspect(Inspector& f, empty&) {
+      return f(caf::meta::type_name("vast.msgpack.builder.empty"));
+    }
+  };
 
 public:
   using value_type = vast::byte;
@@ -152,6 +157,12 @@ public:
       // Skip directly to data offset. We patch in the header data later in
       // finish().
       builder_.buffer_.resize(offset_ + header_size<Format>());
+    }
+
+    template <class Inspector>
+    friend auto inspect(Inspector& f, proxy& x) {
+      return f(caf::meta::type_name("vast.msgpack.builder.proxy"), x.builder_,
+               x.offset_, x.size_);
     }
 
   private:
@@ -258,6 +269,12 @@ public:
   /// construction.
   void reset() {
     return buffer_.resize(offset_);
+  }
+
+  template <class Inspector>
+  friend auto inspect(Inspector& f, builder& x) {
+    return f(caf::meta::type_name("vast.msgpack.builder"), x.buffer_,
+             x.offset_);
   }
 
 private:
