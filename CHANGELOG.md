@@ -9,7 +9,9 @@ Every entry has a category for which we use the following visual abbreviations:
 - ⚠️ change
 - 🐞 bugfix
 
-## Unreleased
+<!-- ## Unreleased -->
+
+## [2020.07.28]
 
 - ⚠️ VAST now recognizes `/etc/vast/schema` as an additional default directory
   for schema files. [#980](https://github.com/tenzir/vast/pull/980)
@@ -35,8 +37,9 @@ Every entry has a category for which we use the following visual abbreviations:
 - 🐞 The PCAP reader now correctly shows the amount of generated events.
   [#954](https://github.com/tenzir/vast/pull/954)
 
-- ⚠️ A type definition for the stats event was added to the suricata schema
-  file. [#954](https://github.com/tenzir/vast/pull/954)
+- ⚠️ The suricata schema file contains new type definitions for the stats, krb5,
+  smb, and ssh events. [#954](https://github.com/tenzir/vast/pull/954)
+  [#986](https://github.com/tenzir/vast/pull/986)
 
 ## [2020.06.25]
 
@@ -614,3 +617,4 @@ This is the first official release.
 [2020.04.29]: https://github.com/tenzir/vast/releases/tag/2020.04.29
 [2020.05.28]: https://github.com/tenzir/vast/releases/tag/2020.05.28
 [2020.06.25]: https://github.com/tenzir/vast/releases/tag/2020.06.25
+[2020.07.28]: https://github.com/tenzir/vast/releases/tag/2020.07.28
