@@ -16,8 +16,8 @@ Every entry has a category for which we use the following visual abbreviations:
 - ⚠️ VAST now recognizes `/etc/vast/schema` as an additional default directory
   for schema files. [#980](https://github.com/tenzir/vast/pull/980)
 
-- ⚠️ [Flatbuffers](https://google.github.io/flatbuffers/) is now a required
-  dependency for VAST. The archive and the segment store use flatbuffers to
+- ⚠️ [FlatBuffers](https://google.github.io/flatbuffers/) is now a required
+  dependency for VAST. The archive and the segment store use FlatBuffers to
   store and version their on-disk persistent state.
   [#972](https://github.com/tenzir/vast/pull/972)
 
