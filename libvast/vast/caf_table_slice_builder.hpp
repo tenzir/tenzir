@@ -42,7 +42,7 @@ public:
 
   bool append(data x);
 
-  table_slice_ptr finish() override;
+  [[nodiscard]] table_slice_ptr finish() override;
 
   size_t rows() const noexcept override;
 

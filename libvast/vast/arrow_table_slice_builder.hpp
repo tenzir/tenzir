@@ -48,7 +48,7 @@ public:
 
     virtual bool add(vast::data_view x) = 0;
 
-    virtual std::shared_ptr<arrow::Array> finish() = 0;
+    [[nodiscard]] virtual std::shared_ptr<arrow::Array> finish() = 0;
 
     virtual std::shared_ptr<arrow::ArrayBuilder> arrow_builder() const = 0;
   };
@@ -86,7 +86,7 @@ public:
 
   // -- properties -------------------------------------------------------------
 
-  vast::table_slice_ptr finish() override;
+  [[nodiscard]] vast::table_slice_ptr finish() override;
 
   size_t rows() const noexcept override;
 

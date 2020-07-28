@@ -13,14 +13,14 @@
 
 #include "vast/msgpack_table_slice_builder.hpp"
 
+#include "vast/detail/overload.hpp"
+#include "vast/logger.hpp"
 #include "vast/msgpack_table_slice.hpp"
 
 #include <caf/make_copy_on_write.hpp>
 #include <caf/make_counted.hpp>
 
 #include <memory>
-
-#include <vast/detail/overload.hpp>
 
 using namespace vast;
 
@@ -50,7 +50,7 @@ msgpack_table_slice_builder::~msgpack_table_slice_builder() {
 namespace {
 
 template <class Builder>
-size_t encode(Builder& builder, data_view v);
+[[nodiscard]] size_t encode(Builder& builder, data_view v);
 
 template <class Builder, class View>
 size_t encode(Builder& builder, View v) {

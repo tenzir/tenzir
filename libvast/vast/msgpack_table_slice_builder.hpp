@@ -57,7 +57,7 @@ public:
 
   // -- properties -------------------------------------------------------------
 
-  vast::table_slice_ptr finish() override;
+  [[nodiscard]] vast::table_slice_ptr finish() override;
 
   size_t rows() const noexcept override;
 

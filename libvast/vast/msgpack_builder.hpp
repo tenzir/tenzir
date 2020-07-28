@@ -94,6 +94,9 @@ public:
           ++size_;
         else
           size_ += result;
+      } else {
+        VAST_WARNING_ANON("vast.msgpack_builder.add failed to add", VAST_ARG(x),
+                          VAST_ARG(y), "of format", Format);
       }
       return result;
     }
@@ -102,7 +105,7 @@ public:
     /// @returns The number of total bytes the proxy has written or 0 on
     ///          failure. When the result is 0, the proxy is in the state as if
     ///          after a call to reset().
-    size_t finish() {
+    [[nodiscard]] size_t finish() {
       using namespace vast::detail;
       VAST_ASSERT(size_ <= capacity<Format>());
       if constexpr (Format == fixmap || Format == map16 || Format == map32) {
@@ -132,7 +135,7 @@ public:
     /// @param type The value of the extension type integer.
     /// @returns The number of total bytes the proxy has written or 0 on
     ///          failure.
-    size_t finish(extension_type type) {
+    [[nodiscard]] size_t finish(extension_type type) {
       static_assert(is_fixext(Format) || is_ext(Format));
       auto num_bytes = finish();
       if (num_bytes == 0)
@@ -172,7 +175,7 @@ public:
     }
 
     builder& builder_;
-    size_t offset_; // where we started in the builder buffer
+    const size_t offset_; // where we started in the builder buffer
     size_t size_;   // number of elements or size in bytes
   };
 
@@ -195,32 +198,38 @@ public:
   /// @param x The object to add.
   /// @returns The number of bytes written or 0 on failure
   template <format Format, class T = empty, class U = empty>
-  size_t add(const T& x = {}, const U& y = {}) {
-    if (!validate<Format>(x, y))
-      return false;
+  [[nodiscard]] size_t add(const T& x = {}, const U& y = {}) {
+    if (!validate<Format>(x, y)) {
+      VAST_ERROR_ANON("vast.msgpack_builder failed to validate", VAST_ARG(x),
+                      VAST_ARG(y), "of format", Format);
+      return 0;
+    }
     if constexpr (Format == nil || Format == false_ || Format == true_)
       return add_format(Format);
-    if constexpr (Format == positive_fixint || Format == negative_fixint)
+    else if constexpr (Format == positive_fixint || Format == negative_fixint)
       return add_format(x & Format);
-    if constexpr (Format == uint8 || Format == uint16 || Format == uint32
-                  || Format == uint64 || Format == int8 || Format == int16
-                  || Format == int32 || Format == int64)
+    else if constexpr (Format == uint8 || Format == uint16 || Format == uint32
+                       || Format == uint64 || Format == int8 || Format == int16
+                       || Format == int32 || Format == int64)
       return add_int<Format>(x);
-    if constexpr (Format == float32 || Format == float64)
+    else if constexpr (Format == float32 || Format == float64)
       return add_float<Format>(x);
-    if constexpr (Format == fixstr)
+    else if constexpr (Format == fixstr)
       return add_fixstr(x);
-    if constexpr (Format == str8 || Format == str16 || Format == str32)
+    else if constexpr (Format == str8 || Format == str16 || Format == str32)
       return add_str<Format>(x);
-    if constexpr (Format == bin8 || Format == bin16 || Format == bin32)
+    else if constexpr (Format == bin8 || Format == bin16 || Format == bin32)
       return add_binary<Format>(x);
-    if constexpr (Format == fixext1 || Format == fixext2 || Format == fixext4
-                  || Format == fixext8 || Format == fixext16)
+    else if constexpr (Format == fixext1 || Format == fixext2
+                       || Format == fixext4 || Format == fixext8
+                       || Format == fixext16)
       return add_fix_ext<Format>(x, y);
-    if constexpr (Format == ext8 || Format == ext16 || Format == ext32)
+    else if constexpr (Format == ext8 || Format == ext16 || Format == ext32)
       return add_ext<Format>(x, y);
-    VAST_ASSERT(!"unsupported format");
-    return 0;
+    else
+      static_assert(detail::always_false_v<decltype(Format)>, "unsupported "
+                                                              "format");
+    vast::die("unreachable");
   }
 
   /// Adds a timestmap. Internally, the builder creates an extension object
@@ -228,7 +237,8 @@ public:
   /// @param x The number of seconds since the UNIX epoch.
   /// @param ns The number of nanoseconds since the UNIX epoch.
   /// @returns The number of bytes written or 0 on failure.
-  size_t add(std::chrono::seconds secs, std::chrono::nanoseconds ns) {
+  [[nodiscard]] size_t
+  add(std::chrono::seconds secs, std::chrono::nanoseconds ns) {
     using namespace std::chrono;
     using namespace vast;
     using namespace vast::detail;
@@ -257,7 +267,7 @@ public:
   /// Adds a timestmap.
   /// @param x The time.
   /// @returns The number of bytes written or 0 on failure.
-  size_t add(vast::time x) {
+  [[nodiscard]] size_t add(vast::time x) {
     using namespace std::chrono;
     auto since_epoch = x.time_since_epoch();
     auto secs = duration_cast<seconds>(since_epoch);
@@ -335,12 +345,12 @@ private:
 
   // -- format-specific utilities ----------------------------------------------
 
-  size_t add_format(uint8_t x) {
+  [[nodiscard]] size_t add_format(uint8_t x) {
     return write_byte(x);
   }
 
   template <format Format, class T>
-  size_t add_int(T x) {
+  [[nodiscard]] size_t add_int(T x) {
     static_assert(std::is_integral_v<T>);
     auto y = native_cast<Format>(x);
     auto u = static_cast<std::make_unsigned_t<decltype(y)>>(y);
@@ -349,20 +359,20 @@ private:
   }
 
   template <format Format, class T>
-  size_t add_float(T x) {
+  [[nodiscard]] size_t add_float(T x) {
     static_assert(std::is_floating_point_v<T>);
     // TODO: is it okay to write the floating-point value as is?
     return write_byte(Format) + write_data(&x, sizeof(x));
   }
 
-  size_t add_fixstr(std::string_view x) {
+  [[nodiscard]] size_t add_fixstr(std::string_view x) {
     using namespace vast::detail;
     auto fmt = uint8_t{0b1010'0000} | narrow_cast<uint8_t>(x.size());
     return write_byte(fmt) + write_data(x.data(), x.size());
   }
 
   template <format Format>
-  size_t add_str(std::string_view x) {
+  [[nodiscard]] size_t add_str(std::string_view x) {
     auto xs = as_bytes(vast::span{x.data(), x.size()});
     if (!xs.empty())
       return add_binary<Format>(xs);
@@ -370,27 +380,29 @@ private:
   }
 
   template <format Format>
-  size_t add_binary(vast::span<const vast::byte> xs) {
+  [[nodiscard]] size_t add_binary(vast::span<const vast::byte> xs) {
     using namespace vast::detail;
     auto n = make_size<Format>(xs.size());
     return write_byte(Format) + write_count(n) + write_data(xs);
   }
 
   template <format Format>
-  size_t add_fix_ext(extension_type type, vast::span<const vast::byte> xs) {
+  [[nodiscard]] size_t
+  add_fix_ext(extension_type type, vast::span<const vast::byte> xs) {
     return write_byte(Format) + write_byte(type)
            + write_data(xs.data(), xs.size());
   }
 
   template <format Format>
-  size_t add_ext(extension_type type, vast::span<const vast::byte> xs) {
+  [[nodiscard]] size_t
+  add_ext(extension_type type, vast::span<const vast::byte> xs) {
     auto n = make_size<Format>(xs.size());
     return write_byte(Format) + write_count(n) + write_byte(type)
            + write_data(xs.data(), xs.size());
   }
 
   std::vector<value_type>& buffer_;
-  size_t offset_;
+  const size_t offset_;
 };
 
 // -- helper functions to encode common types ---------------------------------

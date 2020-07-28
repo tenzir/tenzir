@@ -64,7 +64,7 @@ public:
   /// such that subsequent calls to add will restart with a new table_slice.
   /// @returns A table slice from the accumulated calls to add or `nullptr` on
   ///          failure.
-  virtual table_slice_ptr finish() = 0;
+  [[nodiscard]] virtual table_slice_ptr finish() = 0;
 
   /// @returns the current number of rows in the table slice.
   virtual size_t rows() const noexcept = 0;

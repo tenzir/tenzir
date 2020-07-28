@@ -13,7 +13,13 @@
 
 #include "vast/msgpack_table_slice.hpp"
 
+#include "vast/detail/narrow.hpp"
+#include "vast/detail/overload.hpp"
+#include "vast/detail/type_traits.hpp"
+#include "vast/die.hpp"
+#include "vast/logger.hpp"
 #include "vast/msgpack.hpp"
+#include "vast/value_index.hpp"
 
 #include <caf/binary_deserializer.hpp>
 #include <caf/deserializer.hpp>
@@ -21,12 +27,6 @@
 #include <caf/streambuf.hpp>
 
 #include <type_traits>
-
-#include <vast/detail/narrow.hpp>
-#include <vast/detail/overload.hpp>
-#include <vast/detail/type_traits.hpp>
-#include <vast/logger.hpp>
-#include <vast/value_index.hpp>
 
 using namespace vast;
 
@@ -77,6 +77,7 @@ class msgpack_array_view : public container_view<data_view>,
 public:
   msgpack_array_view(type value_type, msgpack::array_view xs)
     : size_{xs.size()}, value_type_{std::move(value_type)}, data_{xs.data()} {
+    // nop
   }
 
   // implemented out-of-line below due to dependency on decode
@@ -260,12 +261,14 @@ data_view decode(msgpack::overlay& objects, const T& t) {
   } else {
     static_assert(detail::always_false_v<T>, "missing type");
   }
-  return {};
+  // The end of this function is unreachable.
+  vast::die("unreachable");
 }
 
 data_view decode(msgpack::overlay& objects, const type& t) {
-  auto f = [&](auto& x) { return decode(objects, x); };
-  return caf::visit(f, t);
+  // Dispatch to the more specific decode.
+  return caf::visit(
+    [&](auto&& x) { return decode(objects, std::forward<decltype(x)>(x)); }, t);
 }
 
 msgpack_array_view::value_type msgpack_array_view::at(size_type i) const {
