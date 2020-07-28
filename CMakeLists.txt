@@ -909,7 +909,7 @@ set(summary
     "\nCXXFLAGS:            ${CMAKE_CXX_FLAGS} ${CMAKE_CXX_FLAGS_${build_type}}"
     "\nLDFLAGS:             ${LDFLAGS}"
     "\n"
-    "\nFlatbuffers:         ${flatbuffers_dir}"
+    "\nFlatBuffers:         ${flatbuffers_dir}"
     "\nCAF:                 ${caf_summary}"
     "\nArrow:               ${arrow_summary}"
     "\nBroker:              ${broker_summary}"
