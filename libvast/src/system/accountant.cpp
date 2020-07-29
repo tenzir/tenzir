@@ -66,25 +66,21 @@ void finish_slice(accountant_actor* self) {
 void record(accountant_actor* self, const std::string& key, real x,
             time ts = std::chrono::system_clock::now()) {
   auto& st = self->state;
-  auto& sys = self->system();
   auto actor_id = self->current_sender()->id();
-  auto node = self->current_sender()->node();
   if (!st.builder) {
     auto layout = record_type{
       {"ts", time_type{}.attributes({{"timestamp"}})},
-      {"nodeid", string_type{}},
-      {"aid", count_type{}},
-      {"actor_name", string_type{}},
+      {"actor", string_type{}},
       {"key", string_type{}},
       {"value", real_type{}},
     }.name("vast.metrics");
+    auto& sys = self->system();
     auto slice_type = get_or(sys.config(), "import.table-slice-type",
                              defaults::import::table_slice_type);
     st.builder = factory<table_slice_builder>::make(slice_type, layout);
-    VAST_DEBUG(self, "obtained builder");
+    VAST_DEBUG(self, "obtained a table slice builder");
   }
-  VAST_ASSERT(st.builder->add(ts, to_string(node), actor_id,
-                              st.actor_map[actor_id], key, x));
+  VAST_ASSERT(st.builder->add(ts, st.actor_map[actor_id], key, x));
   if (st.builder->rows() == st.slice_size)
     finish_slice(self);
 }
