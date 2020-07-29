@@ -360,9 +360,10 @@ auto make_spawn_command() {
 }
 
 auto make_status_command() {
-  return std::make_unique<command>("status",
-                                   "shows various properties of a topology",
-                                   documentation::vast_status, opts());
+  return std::make_unique<command>(
+    "status", "shows various properties of a topology",
+    documentation::vast_status,
+    opts().add<caf::atom_value>("verbosity,v", "output verbosity level"));
 }
 
 auto make_start_command() {
