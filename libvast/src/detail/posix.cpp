@@ -66,6 +66,11 @@ int uds_accept(int socket) {
   return fd;
 }
 
+VAST_DIAGNOSTIC_PUSH
+#if VAST_GCC
+#  pragma GCC diagnostic ignored "-Wmaybe-uninitialized"
+#endif
+
 int uds_connect(const std::string& path, socket_type type) {
   int fd;
   switch (type) {
@@ -101,6 +106,8 @@ int uds_connect(const std::string& path, socket_type type) {
   }
   return fd;
 }
+
+VAST_DIAGNOSTIC_POP
 
 // On Mac OS, CMSG_SPACE is for some reason not a constant expression.
 VAST_DIAGNOSTIC_PUSH

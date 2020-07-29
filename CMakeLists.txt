@@ -295,7 +295,7 @@ endif ()
 if ("${CMAKE_CXX_COMPILER_ID}" MATCHES "GNU")
   check_compiler_version(${GCC_MINIMUM_VERSION})
   # Too many false positives.
-  set(EXTRA_FLAGS "${EXTRA_FLAGS} -Wno-maybe-uninitialized -Wno-redundant-move")
+  set(EXTRA_FLAGS "${EXTRA_FLAGS} -Wno-redundant-move")
   if (${CMAKE_SYSTEM_NAME} MATCHES "FreeBSD")
     # Works around issues with libstdc++ and C++11. For details, see: -
     # https://bugs.freebsd.org/bugzilla/show_bug.cgi?id=194929 -

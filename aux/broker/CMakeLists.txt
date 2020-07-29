@@ -86,9 +86,9 @@ target_compile_definitions(broker PRIVATE SQLITE_OMIT_LOAD_EXTENSION)
 # since it is not included in the ignored warnings list for -isystem yet.
 target_compile_options(
   broker
-  PRIVATE -Wno-implicit-int-float-conversion -Wno-missing-field-initializers
-          -Wno-unknown-warning-option -Wno-unused-parameter
-          -Wno-unused-variable)
+  PRIVATE -Wno-implicit-int-float-conversion -Wno-maybe-uninitialized
+          -Wno-missing-field-initializers -Wno-unknown-warning-option
+          -Wno-unused -Wno-unused-parameter)
 target_link_libraries(broker PUBLIC caf::core caf::io caf::openssl)
 install(TARGETS broker DESTINATION ${INSTALL_LIB_DIR})
 
