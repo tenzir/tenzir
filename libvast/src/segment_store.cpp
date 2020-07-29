@@ -322,28 +322,21 @@ caf::error segment_store::flush() {
   return caf::none;
 }
 
-void segment_store::inspect_status(vast::status& s) {
+void segment_store::inspect_status(vast::status& s, status_verbosity v) {
   using caf::put;
-  put(s.info, "segment-path", segment_path().str());
-  put(s.info, "max-segment-size", max_segment_size_);
-  put(s.info, "archive-events", num_events_);
-  // Note: `for (auto& kvp : segments_)` does not compile.
-  // FIXME: This is too slow for large archives and blocks the node.
-  // auto& segments = put_dictionary(verbose, "segments");
-  // for (auto i = segments_.begin(); i != segments_.end(); ++i) {
-  //   std::string range = "[";
-  //   range += std::to_string(i->left);
-  //   range += ", ";
-  //   range += std::to_string(i->right);
-  //   range += ")";
-  //   put(segments, range, to_string(i->value));
-  // }
-  auto& cached = put_list(s.verbose, "cached");
-  for (auto& kvp : cache_)
-    cached.emplace_back(to_string(kvp.first));
-  auto& current = put_dictionary(s.verbose, "current-segment");
-  put(current, "id", to_string(builder_.id()));
-  put(current, "size", builder_.table_slice_bytes());
+  if (v >= status_verbosity::info) {
+    put(s.info, "segment-path", segment_path().str());
+    put(s.info, "max-segment-size", max_segment_size_);
+    put(s.info, "archive-events", num_events_);
+  }
+  if (v >= status_verbosity::verbose) {
+    auto& cached = put_list(s.verbose, "cached");
+    for (auto& kvp : cache_)
+      cached.emplace_back(to_string(kvp.first));
+    auto& current = put_dictionary(s.verbose, "current-segment");
+    put(current, "id", to_string(builder_.id()));
+    put(current, "size", builder_.table_slice_bytes());
+  }
 }
 
 caf::error segment_store::register_segments() {

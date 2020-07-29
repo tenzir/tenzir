@@ -13,11 +13,11 @@
 
 #pragma once
 
-#include <caf/fwd.hpp>
+#include "vast/fwd.hpp"
+#include "vast/status.hpp"
 
 #include <caf/expected.hpp>
-
-#include "vast/fwd.hpp"
+#include <caf/fwd.hpp>
 
 namespace vast {
 
@@ -63,7 +63,7 @@ public:
   virtual caf::error flush() = 0;
 
   /// Fills `s` with implementation-specific status information.
-  virtual void inspect_status(vast::status& s) = 0;
+  virtual void inspect_status(vast::status& s, status_verbosity v) = 0;
 };
 
 } // namespace vast

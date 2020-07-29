@@ -129,10 +129,14 @@ void collect_component_status(node_actor* self,
   // Pre-fill our result with system stats.
   auto& sys = self->system();
   auto s = vast::status{};
-  put(s.debug, "running-actors", sys.registry().running());
-  put(s.debug, "detached-actors", sys.detached_actors());
-  put(s.debug, "worker-threads", sys.scheduler().num_workers());
-  put(s.info, "table-slices", table_slice::instances());
+  if (v >= status_verbosity::info) {
+    put(s.info, "table-slices", table_slice::instances());
+  }
+  if (v >= status_verbosity::debug) {
+    put(s.debug, "running-actors", sys.registry().running());
+    put(s.debug, "detached-actors", sys.detached_actors());
+    put(s.debug, "worker-threads", sys.scheduler().num_workers());
+  }
   req_state->content = join(s);
   // Send out requests and collects answers.
   for (auto& [label, component] : self->state.registry.components())

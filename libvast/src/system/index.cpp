@@ -219,30 +219,35 @@ index_state::status(status_verbosity v) const {
   using caf::put_list;
   auto s = vast::status{};
   // Misc parameters.
-  put(s.debug, "meta-index-filename", meta_index_filename().str());
-  // Statistics.
-  auto& stats_object = put_dictionary(s.verbose, "index.statistics");
-  auto& layout_object = put_dictionary(stats_object, "layouts");
-  for (auto& [name, layout_stats] : stats.layouts) {
-    auto xs = caf::dictionary<caf::config_value>{};
-    xs.emplace("count", layout_stats.count);
-    // We cannot use put_dictionary(layout_object, name) here, because this
-    // function splits the key at '.', which occurs in every layout name.
-    // Hence the fallback to low-level primitives.
-    layout_object.insert_or_assign(name, std::move(xs));
+  if (v >= status_verbosity::info) {
   }
-  // Resident partitions.
-  auto& partitions = put_dictionary(s.debug, "index.partitions");
-  if (active != nullptr)
-    partitions.emplace("active", to_string(active->id()));
-  auto& cached = put_list(partitions, "cached");
-  for (auto& part : lru_partitions.elements())
-    cached.emplace_back(to_string(part->id()));
-  auto& unpersisted = put_list(partitions, "unpersisted");
-  for (auto& kvp : this->unpersisted)
-    unpersisted.emplace_back(to_string(kvp.first->id()));
-  // General state such as open streams.
-  detail::fill_status_map(s.debug, self);
+  if (v >= status_verbosity::verbose) {
+    auto& stats_object = put_dictionary(s.verbose, "index.statistics");
+    auto& layout_object = put_dictionary(stats_object, "layouts");
+    for (auto& [name, layout_stats] : stats.layouts) {
+      auto xs = caf::dictionary<caf::config_value>{};
+      xs.emplace("count", layout_stats.count);
+      // We cannot use put_dictionary(layout_object, name) here, because this
+      // function splits the key at '.', which occurs in every layout name.
+      // Hence the fallback to low-level primitives.
+      layout_object.insert_or_assign(name, std::move(xs));
+    }
+  }
+  if (v >= status_verbosity::debug) {
+    put(s.debug, "meta-index-filename", meta_index_filename().str());
+    // Resident partitions.
+    auto& partitions = put_dictionary(s.debug, "index.partitions");
+    if (active != nullptr)
+      partitions.emplace("active", to_string(active->id()));
+    auto& cached = put_list(partitions, "cached");
+    for (auto& part : lru_partitions.elements())
+      cached.emplace_back(to_string(part->id()));
+    auto& unpersisted = put_list(partitions, "unpersisted");
+    for (auto& kvp : this->unpersisted)
+      unpersisted.emplace_back(to_string(kvp.first->id()));
+    // General state such as open streams.
+    detail::fill_status_map(s.debug, self);
+  }
   return join(s);
 }
 

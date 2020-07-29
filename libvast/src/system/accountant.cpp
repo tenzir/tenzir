@@ -313,13 +313,16 @@ accountant(accountant_actor* self, accountant_config cfg) {
       }
     },
     [=](atom::status, status_verbosity v) {
-      auto s = vast::status{};
       using caf::put_dictionary;
-      caf::dictionary<caf::config_value> result;
-      auto& known = put_dictionary(s.verbose, "accountant.known-actors");
-      for (const auto& [aid, name] : self->state->actor_map)
-        known.emplace(name, aid);
-      detail::fill_status_map(s.debug, self);
+      auto s = vast::status{};
+      if (v >= status_verbosity::verbose) {
+        auto& known
+          = put_dictionary(s.verbose, "accountant.known-actors");
+        for (const auto& [aid, name] : self->state->actor_map)
+          known.emplace(name, aid);
+      }
+      if (v >= status_verbosity::debug)
+        detail::fill_status_map(s.debug, self);
       return join(s);
     },
     [=](atom::telemetry) {
