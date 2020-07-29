@@ -32,7 +32,6 @@ namespace vast::system {
 /// @relates accountant
 using accountant_type = caf::typed_actor<
   caf::reacts_to<atom::announce, std::string>,
-  caf::reacts_to<std::string, std::string>,
   caf::reacts_to<std::string, duration>,
   caf::reacts_to<std::string, time>,
   caf::reacts_to<std::string, int64_t>,

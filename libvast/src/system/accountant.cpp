@@ -32,6 +32,7 @@
 #include <cmath>
 #include <iomanip>
 #include <ios>
+#include <limits>
 
 namespace vast {
 namespace system {
@@ -62,44 +63,41 @@ void finish_slice(accountant_actor* self) {
   st.mgr->advance();
 }
 
-template <class T>
-void record(accountant_actor* self, const std::string& key, T x,
+void record(accountant_actor* self, const std::string& key, real x,
             time ts = std::chrono::system_clock::now()) {
   auto& st = self->state;
   auto& sys = self->system();
   auto actor_id = self->current_sender()->id();
   auto node = self->current_sender()->node();
   if (!st.builder) {
-    auto layout = record_type{{"ts", time_type{}.attributes({{"timestamp"}})},
-                              {"nodeid", string_type{}},
-                              {"aid", count_type{}},
-                              {"actor_name", string_type{}},
-                              {"key", string_type{}},
-                              {"value", string_type{}}}
-                    .name("vast.metrics");
+    auto layout = record_type{
+      {"ts", time_type{}.attributes({{"timestamp"}})},
+      {"nodeid", string_type{}},
+      {"aid", count_type{}},
+      {"actor_name", string_type{}},
+      {"key", string_type{}},
+      {"value", real_type{}},
+    }.name("vast.metrics");
     auto slice_type = get_or(sys.config(), "import.table-slice-type",
                              defaults::import::table_slice_type);
     st.builder = factory<table_slice_builder>::make(slice_type, layout);
     VAST_DEBUG(self, "obtained builder");
   }
   VAST_ASSERT(st.builder->add(ts, to_string(node), actor_id,
-                              st.actor_map[actor_id], key, to_string(x)));
+                              st.actor_map[actor_id], key, x));
   if (st.builder->rows() == st.slice_size)
     finish_slice(self);
 }
 
 void record(accountant_actor* self, const std::string& key, duration x,
             time ts = std::chrono::system_clock::now()) {
-  using namespace std::chrono;
-  auto us = duration_cast<microseconds>(x).count();
-  record(self, key, us, std::move(ts));
+  auto ms = std::chrono::duration<double, std::milli>{x}.count();
+  record(self, key, ms, std::move(ts));
 }
 
 void record(accountant_actor* self, const std::string& key, time x,
             time ts = std::chrono::system_clock::now()) {
-  using namespace std::chrono;
-  auto ms = duration_cast<milliseconds>(x.time_since_epoch()).count();
-  record(self, key, ms, ts);
+  record(self, key, x.time_since_epoch(), ts);
 }
 
 } // namespace <anonymous>
@@ -157,11 +155,6 @@ accountant_type::behavior_type accountant(accountant_actor* self) {
             if (name == "importer")
               self->state.mgr->add_outbound_path(self->current_sender());
           },
-          [=](const std::string& key, const std::string& value) {
-            VAST_TRACE(self, "received", key, "from", self->current_sender());
-            record(self, key, value);
-          },
-          // Helpers to avoid to_string(..) in sender context.
           [=](const std::string& key, duration value) {
             VAST_TRACE(self, "received", key, "from", self->current_sender());
             record(self, key, value);
@@ -202,8 +195,8 @@ accountant_type::behavior_type accountant(accountant_actor* self) {
               if (std::isfinite(rate))
                 record(self, key + ".rate", static_cast<uint64_t>(rate), ts);
               else {
-                using namespace std::string_view_literals;
-                record(self, key + ".rate", "NaN"sv, ts);
+                record(self, key + ".rate",
+                       std::numeric_limits<uint64_t>::max(), ts);
               }
 #if VAST_LOG_LEVEL >= VAST_LOG_LEVEL_INFO
               auto logger = caf::logger::current_logger();

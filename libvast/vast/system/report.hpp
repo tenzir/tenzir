@@ -27,7 +27,7 @@ namespace vast::system {
 
 struct data_point {
   std::string key;
-  caf::variant<std::string, duration, time, int64_t, uint64_t, double> value;
+  caf::variant<duration, time, int64_t, uint64_t, double> value;
 };
 
 template <class Inspector>
