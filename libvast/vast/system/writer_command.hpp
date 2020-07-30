@@ -41,9 +41,7 @@ caf::message writer_command(const invocation& inv, caf::actor_system& sys) {
     = get_or(options, "export.max-events", defaults::export_::max_events);
   caf::actor snk;
   if constexpr (std::is_constructible_v<Writer, ostream_ptr>) {
-    auto output = get_or(options, category + ".write", Defaults::write);
-    auto uds = get_or(options, category + ".uds", false);
-    auto out = detail::make_output_stream(output, uds);
+    auto out = detail::make_output_stream<Defaults>(options);
     if (!out)
       return caf::make_message(out.error());
     Writer writer{std::move(*out)};

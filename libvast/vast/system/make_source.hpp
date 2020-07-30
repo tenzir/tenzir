@@ -90,7 +90,6 @@ make_source(const Actor& self, caf::actor_system& sys, const invocation& inv,
   auto max_events = caf::get_if<size_t>(&options, "import.max-events");
   auto uri = caf::get_if<std::string>(&options, category + ".listen");
   auto file = caf::get_if<std::string>(&options, category + ".read");
-  auto uds = get_or(options, category + ".uds", false);
   auto type = caf::get_if<std::string>(&options, category + ".type");
   auto slice_type = get_or(options, "import.table-slice-type",
                            defaults::import::table_slice_type);
@@ -141,7 +140,7 @@ make_source(const Actor& self, caf::actor_system& sys, const invocation& inv,
         break;
     }
   } else {
-    auto in = detail::make_input_stream(*file, uds);
+    auto in = detail::make_input_stream<Defaults>(options);
     if (!in)
       return in.error();
     reader = std::make_unique<Reader>(slice_type, options, std::move(*in));
