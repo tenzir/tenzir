@@ -65,6 +65,7 @@ make_input_stream(const std::string& input, bool is_uds) {
 caf::expected<std::unique_ptr<std::ostream>>
 make_output_stream(const std::string& output, bool is_uds) {
   if (is_uds) {
+    if (output == "-")
       return make_error(ec::filesystem_error,
                         "cannot use stdout as UNIX domain socket");
     auto uds = unix_domain_socket::connect(output);
