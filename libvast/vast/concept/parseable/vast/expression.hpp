@@ -51,7 +51,7 @@ struct predicate_parser : parser<predicate_parser> {
     auto id = +(alnum | chr{'_'} | chr{'-'});
     // A key cannot start with ':', othwise it would be interpreted as a type
     // extractor.
-    auto key = !':'_p >> (+(alnum | chr{'_'} | chr{':'}) % '.');
+    auto key = !':'_p >> (+(alnum | chr{'_'} | chr{'-'} | chr{':'}) % '.');
     auto operand
       = parsers::data ->* to_data_operand
       | '#' >> id ->* to_attr_extractor
