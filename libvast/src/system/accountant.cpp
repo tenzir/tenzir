@@ -14,15 +14,17 @@
 #include "vast/system/accountant.hpp"
 
 #include "vast/concept/printable/std/chrono.hpp"
-#include "vast/concept/printable/stream.hpp"
 #include "vast/concept/printable/to_string.hpp"
+#include "vast/concept/printable/vast/json.hpp"
 #include "vast/defaults.hpp"
 #include "vast/detail/coding.hpp"
 #include "vast/detail/fill_status_map.hpp"
+#include "vast/detail/make_io_stream.hpp"
 #include "vast/error.hpp"
 #include "vast/logger.hpp"
 #include "vast/table_slice.hpp"
 #include "vast/table_slice_builder_factory.hpp"
+#include "vast/view.hpp"
 
 #include <caf/actor_system_config.hpp>
 #include <caf/config_value.hpp>
@@ -42,16 +44,6 @@ namespace {
 using accountant_actor = accountant_type::stateful_base<accountant_state>;
 constexpr std::chrono::seconds overview_delay(3);
 
-void init(accountant_actor* self) {
-  auto& st = self->state;
-#if VAST_LOG_LEVEL >= VAST_LOG_LEVEL_INFO
-  VAST_DEBUG(self, "animates heartbeat loop");
-  self->delayed_send(self, overview_delay, atom::telemetry_v);
-#endif
-  st.slice_size = get_or(self->system().config(), "import.table-slice-size",
-                         defaults::import::table_slice_size);
-}
-
 void finish_slice(accountant_actor* self) {
   auto& st = self->state;
   // Do nothing if builder has not been created or no rows have been added yet.
@@ -63,8 +55,8 @@ void finish_slice(accountant_actor* self) {
   st.mgr->advance();
 }
 
-void record(accountant_actor* self, const std::string& key, real x,
-            time ts = std::chrono::system_clock::now()) {
+void record_internally(accountant_actor* self, const std::string& key, real x,
+                       time ts) {
   auto& st = self->state;
   auto actor_id = self->current_sender()->id();
   if (!st.builder) {
@@ -85,6 +77,36 @@ void record(accountant_actor* self, const std::string& key, real x,
     finish_slice(self);
 }
 
+void record_to_output(accountant_actor* self, const std::string& key, real x,
+                      time ts) {
+  using namespace std::string_view_literals;
+  auto& st = self->state;
+  auto actor_id = self->current_sender()->id();
+  json_printer<policy::oneline> printer;
+  std::vector<char> buf;
+  auto iter = std::back_inserter(buf);
+  *iter++ = '{';
+  printer.print(iter, std::pair{"ts"sv, make_data_view(ts)});
+  *iter++ = ',';
+  printer.print(iter,
+                std::pair{"actor"sv, make_data_view(st.actor_map[actor_id])});
+  *iter++ = ',';
+  printer.print(iter, std::pair{"key"sv, make_data_view(key)});
+  *iter++ = ',';
+  printer.print(iter, std::pair{"value"sv, make_data_view(x)});
+  *iter++ = '}';
+  *iter++ = '\n';
+  st.output->write(buf.data(), buf.size());
+  if (!*st.output)
+    st.output = nullptr;
+}
+
+void record(accountant_actor* self, const std::string& key, real x,
+            time ts = std::chrono::system_clock::now()) {
+  record_internally(self, key, x, ts);
+  if (self->state.output)
+    record_to_output(self, key, x, ts);
+}
 void record(accountant_actor* self, const std::string& key, duration x,
             time ts = std::chrono::system_clock::now()) {
   auto ms = std::chrono::duration<double, std::milli>{x}.count();
@@ -111,9 +133,28 @@ void accountant_state::command_line_heartbeat() {
   accumulator = {};
 }
 
-accountant_type::behavior_type accountant(accountant_actor* self) {
+void initialize_ostream_sink(accountant_actor* self) {
+  auto& st = self->state;
+  auto sink = "/tmp/vast-metrics.sock";
+  // FIXME: path::socket does not work with a naive
+  // socat UNIX-LISTEN:/tmp/vast-metrics.sock -
+  auto s = detail::make_output_stream(sink, path::regular_file);
+  if (s) {
+    VAST_INFO(self, "connected to the metrics output at", sink);
+    st.output = std::move(*s);
+  } else {
+    VAST_INFO(self, "could not connect to the metrics:", s.error());
+  }
+}
+
+accountant_type::behavior_type
+accountant(accountant_actor* self, std::unique_ptr<std::ostream> os) {
   using namespace std::chrono;
-  init(self);
+  auto& st = self->state;
+  VAST_DEBUG(self, "animates heartbeat loop");
+  self->delayed_send(self, overview_delay, atom::telemetry_v);
+  st.slice_size = get_or(self->system().config(), "import.table-slice-size",
+                         defaults::import::table_slice_size);
   self->set_exit_handler([=](const caf::exit_msg& msg) {
     VAST_DEBUG(self, "got EXIT from", msg.source);
     finish_slice(self);
@@ -127,6 +168,7 @@ accountant_type::behavior_type accountant(accountant_actor* self) {
       VAST_DEBUG(self, "received DOWN from", msg.source);
     self->state.actor_map.erase(msg.source.id());
   });
+  initialize_ostream_sink(self);
   self->state.mgr = self->make_continuous_source(
     // init
     [=](bool&) {},
@@ -212,7 +254,12 @@ accountant_type::behavior_type accountant(accountant_actor* self) {
             return result;
           },
           [=](atom::telemetry) {
+            auto& st = self->state;
+#if VAST_LOG_LEVEL >= VAST_LOG_LEVEL_INFO
             self->state.command_line_heartbeat();
+#endif
+            if (!st.output)
+              initialize_ostream_sink(self);
             self->delayed_send(self, overview_delay, atom::telemetry_v);
           }};
 }

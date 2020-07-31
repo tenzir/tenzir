@@ -79,6 +79,9 @@ struct accountant_state {
   /// Takes care of transmitting batches.
   caf::stream_source_ptr<downstream_manager> mgr;
 
+  /// Handle to the output channel.
+  std::unique_ptr<std::ostream> output = nullptr;
+
   /// Pointer to the parent actor.
   accountant_type::stateful_pointer<accountant_state> self;
 
@@ -90,6 +93,7 @@ struct accountant_state {
 /// them to VAST table slices.
 /// @param self The actor handle.
 accountant_type::behavior_type
-accountant(accountant_type::stateful_pointer<accountant_state> self);
+accountant(accountant_type::stateful_pointer<accountant_state> self,
+           std::unique_ptr<std::ostream> os);
 
 } // namespace vast::system
