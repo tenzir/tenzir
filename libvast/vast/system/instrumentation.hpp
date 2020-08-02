@@ -48,7 +48,7 @@ struct measurement : public detail::addable<measurement> {
       return std::round(static_cast<double>(events)
                         * decltype(duration)::period::den / duration.count());
     else
-      return std::numeric_limits<double>::quiet_NaN();
+      return std::numeric_limits<double>::max();
   }
 };
 
