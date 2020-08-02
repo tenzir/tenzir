@@ -80,11 +80,11 @@ make_output_stream(const std::string& output, path::type pt) {
       if (output == "-")
         return make_error(ec::filesystem_error, "cannot use stdout as UNIX "
                                                 "domain socket");
-      auto uds = unix_domain_socket::connect(output);
+      auto uds = unix_domain_socket::connect(output, socket::dgram);
       if (!uds)
         return make_error(ec::filesystem_error,
                           "failed to connect to UNIX domain socket at", output);
-      auto remote_fd = uds.recv_fd(); // Blocks!
+      auto remote_fd = uds.fd();
       return std::make_unique<fdostream>(remote_fd);
     }
     case path::fifo: // TODO

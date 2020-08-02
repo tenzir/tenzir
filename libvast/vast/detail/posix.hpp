@@ -19,6 +19,8 @@
 
 namespace vast::detail {
 
+enum class socket : bool { dgram, stream };
+
 /// Constructs a UNIX domain socket.
 /// @param path The file system path where to construct the socket.
 /// @returns The descriptor of the domain socket on success or -1 on failure.
@@ -31,8 +33,9 @@ int uds_accept(int socket);
 
 /// Connects to UNIX domain socket.
 /// @param path The file system path where to the existing domain socket.
+/// @param type The socket type.
 /// @returns The descriptor of the domain socket on success or -1 on failure.
-int uds_connect(const std::string& path);
+int uds_connect(const std::string& path, socket type);
 
 /// Sends a file descriptor over a UNIX domain socket.
 /// @param socket The domain socket descriptor.
@@ -61,8 +64,10 @@ public:
 
   /// Creates a UNIX domain socket client by connecting to an existing server.
   /// @param path The filesystem path identifying the server socket.
+  /// @param type The socket type.
   /// @returns A UNIX domain socket handle.
-  static unix_domain_socket connect(const std::string& path);
+  static unix_domain_socket
+  connect(const std::string& path, socket type = socket::stream);
 
   /// Constructs a UNIX domain socket.
   /// @param fd The file descriptor to the socket. Default to -1, an invalid

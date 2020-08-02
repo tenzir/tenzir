@@ -138,7 +138,7 @@ void initialize_ostream_sink(accountant_actor* self) {
   auto sink = "/tmp/vast-metrics.sock";
   // FIXME: path::socket does not work with a naive
   // socat UNIX-LISTEN:/tmp/vast-metrics.sock -
-  auto s = detail::make_output_stream(sink, path::regular_file);
+  auto s = detail::make_output_stream(sink, path::socket);
   if (s) {
     VAST_INFO(self, "connected to the metrics output at", sink);
     st.output = std::move(*s);
