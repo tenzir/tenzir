@@ -82,7 +82,8 @@ auto make_error_msg(ec code, std::string msg) {
 /// once.
 bool is_singleton(std::string_view type) {
   const char* singletons[]
-    = {"archive", "importer", "index", "type-registry", "eraser"};
+    = {"accountant", "archive", "eraser",       "filesystem",
+       "importer",   "index",   "type-registry"};
   auto pred = [&](const char* x) { return x == type; };
   return std::any_of(std::begin(singletons), std::end(singletons), pred);
 }
