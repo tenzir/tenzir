@@ -18,6 +18,7 @@
 
 #include "vast/concept/parseable/to.hpp"
 #include "vast/concept/parseable/vast/expression.hpp"
+#include "vast/concept/parseable/vast/time.hpp"
 #include "vast/event.hpp"
 #include "vast/expression.hpp"
 #include "vast/expression_visitors.hpp"
