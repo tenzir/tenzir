@@ -108,12 +108,6 @@ index_state::init(const path& dir, size_t max_partition_size,
   this->max_partition_size = max_partition_size;
   this->lru_partitions.size(in_mem_partitions);
   this->taste_partitions = taste_partitions;
-  if (auto a = self->system().registry().get(atom::accountant_v)) {
-    namespace defs = defaults::system;
-    this->accountant = caf::actor_cast<accountant_type>(a);
-    self->send(this->accountant, atom::announce_v, "index");
-    self->delayed_send(self, defs::telemetry_rate, atom::telemetry_v);
-  }
   // Read persistent state.
   if (auto err = load_from_disk())
     return err;
@@ -290,8 +284,9 @@ caf::actor index_state::make_indexer(path filename, type column_type,
              VAST_ARG(partition_id));
   caf::settings index_opts;
   index_opts["cardinality"] = max_partition_size;
-  return factory(self, std::move(filename), std::move(column_type),
-                 std::move(index_opts), self, partition_id, std::move(fqn));
+  return factory(self, self->state.accountant, std::move(filename),
+                 std::move(column_type), std::move(index_opts), self,
+                 partition_id, std::move(fqn));
 }
 
 void index_state::decrement_indexer_count(uuid partition_id) {
@@ -540,6 +535,12 @@ caf::behavior index(caf::stateful_actor<index_state>* self, const path& dir,
           [=](caf::stream<table_slice_ptr> in) {
             VAST_DEBUG(self, "got a new source");
             return self->state.stage->add_inbound_path(in);
+          },
+          [=](accountant_type accountant) {
+            namespace defs = defaults::system;
+            self->state.accountant = std::move(accountant);
+            self->send(self->state.accountant, atom::announce_v, "index");
+            self->delayed_send(self, defs::telemetry_rate, atom::telemetry_v);
           },
           [=](atom::status) -> caf::config_value::dictionary {
             return self->state.status();

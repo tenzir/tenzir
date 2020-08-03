@@ -14,6 +14,7 @@
 #pragma once
 
 #include <caf/actor.hpp>
+#include <caf/actor_cast.hpp>
 #include <caf/meta/type_name.hpp>
 #include <caf/optional.hpp>
 

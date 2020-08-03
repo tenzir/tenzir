@@ -48,7 +48,8 @@ using type_registry_type = caf::typed_actor<
   caf::reacts_to<atom::put, vast::type>,
   caf::reacts_to<atom::put, vast::schema>,
   caf::replies_to<atom::get>::with<type_set>,
-  caf::replies_to<atom::get, std::string>::with<type_set>
+  caf::replies_to<atom::get, std::string>::with<type_set>,
+  caf::reacts_to<accountant_type>
 >;
 // clang-format on
 

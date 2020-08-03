@@ -48,10 +48,6 @@ indexer_state::init(caf::event_based_actor* self, path filename,
   this->fqn = fqn;
   this->self = self;
   this->streaming_done = false;
-  if (auto a = self->system().registry().get(atom::accountant_v)) {
-    namespace defs = defaults::system;
-    this->accountant = caf::actor_cast<accountant_type>(a);
-  }
   new (&col) column_index(self->system(), std::move(column_type),
                           std::move(index_opts), std::move(filename));
   return col.init();
@@ -143,6 +139,10 @@ caf::behavior indexer(caf::stateful_actor<indexer_state>* self, path filename,
     },
     [=](atom::shutdown) {
       self->quit(caf::exit_reason::user_shutdown); // clang-format fix
+    },
+    [=](accountant_type accountant) {
+      namespace defs = defaults::system;
+      self->state.accountant = std::move(accountant);
     },
   };
 }

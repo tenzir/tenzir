@@ -15,11 +15,13 @@
 
 #include "vast/aliases.hpp"
 #include "vast/fwd.hpp"
+#include "vast/system/accountant.hpp"
 
 namespace vast::system {
 
 /// Spawns an INDEXER actor.
 /// @param parent The parent actor.
+/// @param accountant A handle to the accountant.
 /// @param filename File for persistent state.
 /// @param column_type The type of the indexed field.
 /// @param index_opts Runtime options to parameterize the value index.
@@ -27,8 +29,9 @@ namespace vast::system {
 /// @param partition_id The partition ID that this INDEXER belongs to.
 /// @param fqn The fully qualified name of the indexed field.
 /// @returns the new INDEXER actor.
-caf::actor spawn_indexer(caf::local_actor* parent, path filename,
-                         type column_type, caf::settings index_opts,
-                         caf::actor index, uuid partition_id, std::string fqn);
+caf::actor
+spawn_indexer(caf::local_actor* parent, accountant_type accountant,
+              path filename, type column_type, caf::settings index_opts,
+              caf::actor index, uuid partition_id, std::string fqn);
 
 } // namespace vast::system

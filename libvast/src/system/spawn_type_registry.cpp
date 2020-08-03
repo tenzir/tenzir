@@ -15,6 +15,7 @@
 
 #include "vast/defaults.hpp"
 #include "vast/logger.hpp"
+#include "vast/system/accountant.hpp"
 #include "vast/system/node.hpp"
 #include "vast/system/spawn_arguments.hpp"
 #include "vast/system/type_registry.hpp"
@@ -28,8 +29,10 @@ namespace vast::system {
 maybe_actor spawn_type_registry(node_actor* self, spawn_arguments& args) {
   if (!args.empty())
     return unexpected_arguments(args);
-  self->state.type_registry = self->spawn(type_registry, args.dir / args.label);
-  return caf::actor_cast<caf::actor>(self->state.type_registry);
+  auto tr = self->spawn(type_registry, args.dir / args.label);
+  if (auto accountant = self->state.registry.find_by_label("accountant"))
+    self->send(tr, caf::actor_cast<accountant_type>(accountant));
+  return caf::actor_cast<caf::actor>(tr);
 }
 
 } // namespace vast::system

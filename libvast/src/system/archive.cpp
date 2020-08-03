@@ -109,12 +109,6 @@ archive(archive_type::stateful_pointer<archive_state> self, path dir,
     VAST_DEBUG(self, "received DOWN from", msg.source);
     self->state.active_exporters.erase(msg.source);
   });
-  if (auto a = self->system().registry().get(atom::accountant_v)) {
-    namespace defs = defaults::system;
-    self->state.accountant = actor_cast<accountant_type>(a);
-    self->send(self->state.accountant, atom::announce_v, self->name());
-    self->delayed_send(self, defs::telemetry_rate, atom::telemetry_v);
-  }
   return {
     [=](const ids& xs) {
       VAST_ASSERT(rank(xs) > 0);
@@ -192,6 +186,12 @@ archive(archive_type::stateful_pointer<archive_state> self, path dir,
             VAST_ERROR(self, "got a stream error:", self->system().render(err));
           }
         });
+    },
+    [=](accountant_type accountant) {
+      namespace defs = defaults::system;
+      self->state.accountant = std::move(accountant);
+      self->send(self->state.accountant, atom::announce_v, self->name());
+      self->delayed_send(self, defs::telemetry_rate, atom::telemetry_v);
     },
     [=](atom::exporter, const actor& exporter) {
       auto sender_addr = self->current_sender()->address();

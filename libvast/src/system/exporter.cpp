@@ -161,10 +161,6 @@ caf::settings exporter_state::status() {
 
 behavior exporter(stateful_actor<exporter_state>* self, expression expr,
                   query_options options) {
-  if (auto a = self->system().registry().get(atom::accountant_v)) {
-    self->state.accountant = actor_cast<accountant_type>(a);
-    self->send(self->state.accountant, atom::announce_v, self->name());
-  }
   self->state.options = options;
   self->state.expr = std::move(expr);
   if (has_continuous_option(options))
@@ -345,6 +341,10 @@ behavior exporter(stateful_actor<exporter_state>* self, expression expr,
       auto result = self->state.status();
       detail::fill_status_map(result, self);
       return result;
+    },
+    [=](accountant_type accountant) {
+      self->state.accountant = std::move(accountant);
+      self->send(self->state.accountant, atom::announce_v, self->name());
     },
     [=](const archive_type& archive) {
       VAST_DEBUG(self, "registers archive", archive);

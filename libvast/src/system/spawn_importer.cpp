@@ -42,6 +42,8 @@ maybe_actor spawn_importer(node_actor* self, spawn_arguments& args) {
   auto imp = self->spawn(importer, args.dir / args.label,
                          caf::actor_cast<archive_type>(archive), index,
                          caf::actor_cast<type_registry_type>(type_registry));
+  if (auto accountant = self->state.registry.find_by_label("accountant"))
+    self->send(imp, caf::actor_cast<accountant_type>(accountant));
   for (auto& a : self->state.registry.find_by_type("source")) {
     VAST_DEBUG(self, "connects source to new importer");
     self->send(a, atom::sink_v, imp);

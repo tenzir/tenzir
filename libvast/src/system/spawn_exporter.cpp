@@ -45,6 +45,8 @@ maybe_actor spawn_exporter(node_actor* self, spawn_arguments& args) {
     query_opts = historical;
   auto exp = self->spawn(exporter, std::move(*expr), query_opts);
   // Wire the exporter to all components.
+  if (auto accountant = self->state.registry.find_by_label("accountant"))
+    self->send(exp, caf::actor_cast<accountant_type>(accountant));
   if (has_continuous_option(query_opts))
     if (auto importer = self->state.registry.find_by_label("importer"))
       self->send(exp, atom::importer_v, std::vector{importer});

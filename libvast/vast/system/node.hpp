@@ -20,7 +20,6 @@
 #include "vast/system/archive.hpp"
 #include "vast/system/component_registry.hpp"
 #include "vast/system/spawn_arguments.hpp"
-#include "vast/system/type_registry.hpp"
 
 #include <caf/actor.hpp>
 #include <caf/event_based_actor.hpp>
@@ -60,9 +59,6 @@ struct node_state {
 
   /// Stores the base directory for persistent state.
   path dir;
-
-  /// Handle to the schema-store module.
-  type_registry_type type_registry;
 
   /// The component registry
   component_registry registry;

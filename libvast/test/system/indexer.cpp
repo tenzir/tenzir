@@ -28,6 +28,7 @@
 #include "vast/concept/printable/vast/expression.hpp"
 #include "vast/detail/spawn_container_source.hpp"
 #include "vast/fwd.hpp"
+#include "vast/system/accountant.hpp"
 #include "vast/system/evaluator.hpp"
 #include "vast/system/instrumentation.hpp"
 #include "vast/system/spawn_indexer.hpp"
@@ -41,9 +42,10 @@ namespace {
 
 struct fixture : fixtures::deterministic_actor_system_and_events {
   void init(type col_type) {
-    indexer = system::spawn_indexer(self.ptr(), directory / "indexer", col_type,
-                                    caf::settings{}, self, partition_id,
-                                    "test indexer");
+    indexer
+      = system::spawn_indexer(self.ptr(), system::accountant_type{},
+                              directory / "indexer", col_type, caf::settings{},
+                              self, partition_id, "test indexer");
     run();
   }
 

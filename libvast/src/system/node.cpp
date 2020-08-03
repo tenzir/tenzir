@@ -89,7 +89,7 @@ bool is_singleton(std::string_view type) {
 }
 
 // Sends an atom to a registered actor. Blocks until the actor responds.
-caf::message send_command(const invocation& inv, caf::actor_system& sys) {
+caf::message send_command(const invocation& inv, caf::actor_system&) {
   auto first = inv.arguments.begin();
   auto last = inv.arguments.end();
   // Expect exactly two arguments.
@@ -97,7 +97,7 @@ caf::message send_command(const invocation& inv, caf::actor_system& sys) {
     return make_error_msg(ec::syntax_error, "expected two arguments: receiver "
                                             "and message atom");
   // Get destination actor from the registry.
-  auto dst = self->state.registry.find_by_label(*first);
+  auto dst = this_node->state.registry.find_by_label(*first);
   if (dst == nullptr)
     return make_error_msg(ec::syntax_error,
                           "registry contains no actor named " + *first);
@@ -163,11 +163,8 @@ caf::message status_command(const invocation&, caf::actor_system&) {
 }
 
 maybe_actor spawn_accountant(node_actor* self, spawn_arguments&) {
-  auto acc = self->spawn(accountant);
-  // FIXME: do not use CAF actor system registry for our components.
-  self->system().registry().put(atom::accountant_v,
-                                caf::actor_cast<caf::actor>(acc));
-  return caf::actor_cast<caf::actor>(acc);
+  auto acc = caf::actor_cast<caf::actor>(self->spawn(accountant));
+  return acc;
 }
 
 caf::expected<caf::actor>
@@ -381,7 +378,7 @@ caf::behavior node(node_actor* self, std::string name, path dir) {
   }
   // Initialize the file system with the node directory as root.
   auto fs = self->spawn<linked + detached>(posix_filesystem, self->state.dir);
-  self->system().registry().put(atom::filesystem_v, fs);
+  self->state.registry.add(caf::actor_cast<caf::actor>(fs), "filesystem");
   // Remove monitored components.
   self->set_down_handler([=](const down_msg& msg) {
     VAST_DEBUG(self, "got DOWN from", msg.source);
@@ -390,38 +387,35 @@ caf::behavior node(node_actor* self, std::string name, path dir) {
   });
   // Terminate deterministically on shutdown.
   self->set_exit_handler([=](const exit_msg& msg) {
-    self->attach_functor([=](const caf::error&) {
-      VAST_DEBUG(self, "terminated all dependent actors");
-      // Clean up. This is important for detached actors, otherwise they
-      // cause some destructor to hang. (This is a CAF bug; for details see
-      // https://github.com/actor-framework/actor-framework/issues/1110.)
-      self->system().registry().erase(atom::accountant_v); // FIXME: remove
-      self->system().registry().erase(atom::filesystem_v);
-    });
-    VAST_DEBUG(self, "got EXIT from", msg.source);
-    /// Collect all actors that we shutdown in sequence. First, we terminate
-    /// the accountant because it acts like a source and flush buffered data.
-    /// Thereafter, we tear down the ingestion pipeline from source to sink.
-    /// Finally, after everything has exited, we can terminate the filesystem.
-    std::vector<caf::actor> actors;
-    auto sequence
-      = {"accountant", "source", "importer", "archive", "index", "exporter"};
+    VAST_DEBUG(self, "terminates after receiving EXIT from", msg.source);
     auto& registry = self->state.registry;
-    for (auto type : sequence) {
-      for (auto& component : registry.find_by_type(type)) {
-        self->demonitor(component);
-        registry.remove(component);
-        actors.push_back(component);
-      }
-    }
-    // Add remaining components.
-    for ([[maybe_unused]] auto& [_, comp] : registry.components()) {
-      self->demonitor(comp.actor);
-      actors.push_back(comp.actor);
-    }
-    auto fs = self->system().registry().get(atom::filesystem_v);
-    VAST_ASSERT(fs);
-    actors.push_back(caf::actor_cast<caf::actor>(fs));
+    std::vector<caf::actor> actors;
+    auto schedule_teardown = [&](caf::actor actor) {
+      self->demonitor(actor);
+      registry.remove(actor);
+      actors.push_back(std::move(actor));
+    };
+    // Terminate the accountant first because it acts like a source and may
+    // hold buffered data.
+    schedule_teardown(registry.find_by_label("accountant"));
+    // Take out the filesystem, which we terminate at the very end.
+    auto filesystem = registry.find_by_label("filesystem");
+    VAST_ASSERT(filesystem);
+    self->unlink_from(filesystem);
+    registry.remove(filesystem);
+    // Tear down the ingestion pipeline from source to sink.
+    auto pipeline = {"source", "importer", "archive", "index", "exporter"};
+    for (auto component : pipeline)
+      for (auto actor : registry.find_by_type(component))
+        schedule_teardown(std::move(actor));
+    // Now terminate everything else.
+    std::vector<caf::actor> remaining;
+    for ([[maybe_unused]] auto& [label, comp] : registry.components())
+      remaining.push_back(comp.actor);
+    for (auto& actor : remaining)
+      schedule_teardown(actor);
+    // Finally, bring down the filesystem.
+    actors.push_back(filesystem);
     shutdown<policy::sequential>(self, std::move(actors));
   });
   // Define the node behavior.

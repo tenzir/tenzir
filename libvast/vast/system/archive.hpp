@@ -47,6 +47,7 @@ using receiver_type = caf::typed_actor<
 using archive_type = caf::typed_actor<
   caf::reacts_to<caf::stream<table_slice_ptr>>,
   caf::reacts_to<atom::exporter, caf::actor>,
+  caf::reacts_to<accountant_type>,
   caf::reacts_to<ids>,
   caf::reacts_to<ids, receiver_type>,
   caf::reacts_to<ids, receiver_type, uint64_t>,

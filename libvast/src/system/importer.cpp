@@ -143,12 +143,6 @@ caf::behavior importer(importer_actor* self, path dir, archive_type archive,
     return {};
   }
   namespace defs = defaults::system;
-  if (auto a = self->system().registry().get(atom::accountant_v)) {
-    self->state.accountant = caf::actor_cast<accountant_type>(a);
-    self->send(self->state.accountant, atom::announce_v, self->name());
-    self->delayed_send(self, defs::telemetry_rate, atom::telemetry_v);
-    self->state.last_report = stopwatch::now();
-  }
   self->set_exit_handler([=](const caf::exit_msg& msg) {
     self->state.send_report();
     self->quit(msg.reason);
@@ -181,7 +175,14 @@ caf::behavior importer(importer_actor* self, path dir, archive_type archive,
     self->state.stg->add_outbound_path(index);
   }
   return {
-    [=](const archive_type& archive) {
+    [=](accountant_type accountant) {
+      VAST_DEBUG(self, "registers accountant", archive);
+      self->state.accountant = std::move(accountant);
+      self->send(self->state.accountant, atom::announce_v, self->name());
+      self->delayed_send(self, defs::telemetry_rate, atom::telemetry_v);
+      self->state.last_report = stopwatch::now();
+    },
+    [=](archive_type archive) {
       VAST_DEBUG(self, "registers archive", archive);
       return self->state.stg->add_outbound_path(archive);
     },
