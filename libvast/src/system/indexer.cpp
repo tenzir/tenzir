@@ -54,6 +54,7 @@ indexer_state::init(caf::event_based_actor* self, path filename,
 }
 
 void indexer_state::send_report() {
+  VAST_ASSERT(accountant != nullptr);
   performance_report r;
   if (m.events > 0) {
     VAST_TRACE(self, "indexed", m.events, "events for column", fqn, "at",
@@ -141,7 +142,6 @@ caf::behavior indexer(caf::stateful_actor<indexer_state>* self, path filename,
       self->quit(caf::exit_reason::user_shutdown); // clang-format fix
     },
     [=](accountant_type accountant) {
-      namespace defs = defaults::system;
       self->state.accountant = std::move(accountant);
     },
   };

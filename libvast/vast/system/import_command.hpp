@@ -70,7 +70,9 @@ caf::message import_command(const invocation& inv, caf::actor_system& sys) {
   auto src = std::move(src_result->src);
   auto name = std::move(src_result->name);
   bool stop = false;
-  self->send(node, atom::put_v, src, "source");
+  self->request(node, caf::infinite, atom::put_v, src, "source")
+    .receive([&](atom::ok) { VAST_DEBUG(name, "registered source at node"); },
+             [&](caf::error error) { err = std::move(error); });
   self->monitor(src);
   self->monitor(importer);
   self

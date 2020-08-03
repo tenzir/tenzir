@@ -171,7 +171,7 @@ caf::behavior importer(importer_actor* self, path dir, archive_type archive,
   if (archive)
     self->state.stg->add_outbound_path(archive);
   if (index) {
-    self->state.index_actors.emplace_back(index);
+    self->state.index = index;
     self->state.stg->add_outbound_path(index);
   }
   return {
@@ -181,25 +181,6 @@ caf::behavior importer(importer_actor* self, path dir, archive_type archive,
       self->send(self->state.accountant, atom::announce_v, self->name());
       self->delayed_send(self, defs::telemetry_rate, atom::telemetry_v);
       self->state.last_report = stopwatch::now();
-    },
-    [=](archive_type archive) {
-      VAST_DEBUG(self, "registers archive", archive);
-      return self->state.stg->add_outbound_path(archive);
-    },
-    [=](atom::index, const caf::actor& index) {
-      VAST_DEBUG(self, "registers index", index);
-      self->state.index_actors.emplace_back(index);
-      // TODO: currently, the subscriber expects only a single 'flush'
-      // message.
-      //       Adding multiple INDEX actors will cause the subscriber to
-      //       receive more than one 'flush'  message, but the subscriber
-      //       only expects one and will stop waiting after the first one.
-      //       Once we support multiple INDEX actors at the IMPORTER, we
-      //       also need to revise the signaling of these 'flush' messages.
-      if (self->state.index_actors.size() > 1)
-        VAST_WARNING(self, "registered more than one INDEX actor",
-                     "(currently unsupported!)");
-      return self->state.stg->add_outbound_path(index);
     },
     [=](atom::exporter, const caf::actor& exporter) {
       VAST_DEBUG(self, "registers exporter", exporter);
@@ -216,10 +197,8 @@ caf::behavior importer(importer_actor* self, path dir, archive_type archive,
       st.stg->add_outbound_path(subscriber);
     },
     [=](atom::subscribe, atom::flush, caf::actor& listener) {
-      auto& st = self->state;
-      VAST_ASSERT(st.stg != nullptr);
-      for (auto& next : st.index_actors)
-        self->send(next, atom::subscribe_v, atom::flush_v, listener);
+      VAST_ASSERT(self->state.stg != nullptr);
+      self->send(index, atom::subscribe_v, atom::flush_v, listener);
     },
     [=](atom::status) { return self->state.status(); },
     [=](atom::telemetry) {
