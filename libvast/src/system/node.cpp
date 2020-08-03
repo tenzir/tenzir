@@ -97,7 +97,7 @@ caf::message send_command(const invocation& inv, caf::actor_system& sys) {
     return make_error_msg(ec::syntax_error, "expected two arguments: receiver "
                                             "and message atom");
   // Get destination actor from the registry.
-  auto dst = sys.registry().get(caf::atom_from_string(*first));
+  auto dst = self->state.registry.find_by_label(*first);
   if (dst == nullptr)
     return make_error_msg(ec::syntax_error,
                           "registry contains no actor named " + *first);
