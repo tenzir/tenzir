@@ -49,11 +49,12 @@ struct predicate_parser : parser<predicate_parser> {
     using parsers::chr;
     using namespace parser_literals;
     auto id = +(alnum | chr{'_'} | chr{'-'});
+    auto key_char = alnum | chr{'_'} | chr{'-'} | chr{':'};
     // A key cannot start with ':', othwise it would be interpreted as a type
     // extractor.
-    auto key = !':'_p >> (+(alnum | chr{'_'} | chr{'-'} | chr{':'}) % '.');
+    auto key = !(':'_p | '-') >> (+key_char % '.');
     auto operand
-      = parsers::data ->* to_data_operand
+      = (parsers::data >> !key_char) ->* to_data_operand
       | '#' >> id ->* to_attr_extractor
       | ':' >> parsers::type ->* to_type_extractor
       | key ->* to_key_extractor
