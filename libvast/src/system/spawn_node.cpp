@@ -14,6 +14,7 @@
 #include "vast/system/spawn_node.hpp"
 
 #include "vast/defaults.hpp"
+#include "vast/detail/pid_file.hpp"
 #include "vast/logger.hpp"
 #include "vast/scope_linked.hpp"
 #include "vast/system/node.hpp"
@@ -44,9 +45,20 @@ spawn_node(caf::scoped_actor& self, const caf::settings& opts) {
   if (!abs_dir.is_writable())
     return make_error(ec::filesystem_error,
                       "unable to write to db-directory:", abs_dir.str());
+  // Acquire PID lock.
+  auto pid_file = abs_dir / "pid.lock";
+  VAST_DEBUG_ANON(__func__, "acquires PID lock", pid_file.str());
+  if (auto err = detail::acquire_pid_file(pid_file))
+    return err;
+  // Spawn the node.
   VAST_DEBUG_ANON(__func__, "spawns local node:", id);
   // Pointer to the root command to system::node.
-  scope_linked_actor node{self->spawn(system::node, id, abs_dir)};
+  auto actor = self->spawn(system::node, id, abs_dir);
+  actor->attach_functor([pid_file = std::move(pid_file)](const caf::error&) {
+    VAST_DEBUG_ANON(__func__, "removes PID lock:", pid_file.str());
+    rm(pid_file);
+  });
+  scope_linked_actor node{std::move(actor)};
   auto spawn_component = [&](std::string name) {
     caf::error result;
     auto inv = invocation{opts, "spawn "s + std::move(name), {}};
