@@ -35,26 +35,26 @@ caf::error acquire_pid_file(const path& filename) {
     auto contents = load_contents(filename);
     if (!contents)
       return contents.error();
-    return caf::make_error(ec::filesystem_error,
-                           "stale PID file found: ", filename.str(),
-                           "terminate process", *contents,
-                           "or remove PID file manually");
+    return make_error(ec::filesystem_error,
+                      "stale PID file found: ", filename.str(),
+                      "terminate process", *contents,
+                      "or remove PID file manually");
   }
   // Open the file.
   auto fd = ::open(filename.str().c_str(), O_WRONLY | O_CREAT, 0600);
   if (fd < 0)
-    return caf::make_error(ec::filesystem_error, "open(2):", strerror(errno));
+    return make_error(ec::filesystem_error, "open(2):", strerror(errno));
   // Lock the file handle.
   if (::flock(fd, LOCK_EX | LOCK_NB) < 0) {
     ::close(fd);
-    return caf::make_error(ec::filesystem_error, "flock(2):", strerror(errno));
+    return make_error(ec::filesystem_error, "flock(2):", strerror(errno));
   }
   // Write the PID in human readable form into the file.
   auto pid = to_string(process_id());
   VAST_ASSERT(!pid.empty());
   if (::write(fd, pid.data(), pid.size()) < 0) {
     ::close(fd);
-    return caf::make_error(ec::filesystem_error, "write(2):", strerror(errno));
+    return make_error(ec::filesystem_error, "write(2):", strerror(errno));
   }
   // Relinquish the lock implicitly by closing the descriptor.
   ::close(fd);
