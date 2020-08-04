@@ -65,32 +65,45 @@ static predicate to_data_predicate(data x) {
 }
 
 static auto make_predicate_parser() {
-  // clang-format of
   using parsers::alnum;
   using parsers::chr;
   using namespace parser_literals;
+  // clang-format off
   auto id = +(alnum | chr{'_'} | chr{'-'});
   auto key_char = alnum | chr{'_'} | chr{'-'} | chr{':'};
-  // A key cannot start with ':' or '-', othwise it would be interpreted as a
-  // type extractor.
+  // A key cannot start with:
+  //  - '-' to leave room for potential arithmetic expressions in operands
+  //  - ':' so it won't be interpreted as a type extractor
   auto key = !(':'_p | '-') >> (+key_char % '.');
-  auto operand = (parsers::data >> !key_char)->*to_data_operand
-                 | '#' >> id->*to_attr_extractor
-                 | ':' >> parsers::type->*to_type_extractor
-                 | key->*to_key_extractor;
+  auto operand
+    = (parsers::data >> !(key_char | '.')) ->* to_data_operand
+    | '#' >> id ->* to_attr_extractor
+    | ':' >> parsers::type ->* to_type_extractor
+    | key ->* to_key_extractor
+    ;
   auto operation
-    = "~"_p->*[] { return match; } | "!~"_p->*[] { return not_match; }
-      | "=="_p->*[] { return equal; } | "!="_p->*[] { return not_equal; }
-      | "<="_p->*[] { return less_equal; } | "<"_p->*[] { return less; }
-      | ">="_p->*[] { return greater_equal; } | ">"_p->*[] { return greater; }
-      | "in"_p->*[] { return in; } | "!in"_p->*[] { return not_in; }
-      | "ni"_p->*[] { return ni; } | "!ni"_p->*[] { return not_ni; }
-      | "[+"_p->*[] { return in; } | "[-"_p->*[] { return not_in; }
-      | "+]"_p->*[] { return ni; } | "-]"_p->*[] { return not_ni; };
+    = "~"_p   ->* [] { return match; }
+    | "!~"_p  ->* [] { return not_match; }
+    | "=="_p  ->* [] { return equal; }
+    | "!="_p  ->* [] { return not_equal; }
+    | "<="_p  ->* [] { return less_equal; }
+    | "<"_p   ->* [] { return less; }
+    | ">="_p  ->* [] { return greater_equal; }
+    | ">"_p   ->* [] { return greater; }
+    | "in"_p  ->* [] { return in; }
+    | "!in"_p ->* [] { return not_in; }
+    | "ni"_p  ->* [] { return ni; }
+    | "!ni"_p ->* [] { return not_ni; }
+    | "[+"_p  ->* [] { return in; }
+    | "[-"_p  ->* [] { return not_in; }
+    | "+]"_p  ->* [] { return ni; }
+    | "-]"_p  ->* [] { return not_ni; }
+    ;
   auto ws = ignore(*parsers::space);
-  auto pred = (operand >> ws >> operation >> ws >> operand)->*to_predicate
-              | parsers::data->*to_data_predicate;
-  ;
+  auto pred
+    = (operand >> ws >> operation >> ws >> operand)->*to_predicate
+    | parsers::data->*to_data_predicate
+    ;
   return pred;
   // clang-format on
 }

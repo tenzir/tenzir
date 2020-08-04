@@ -42,14 +42,14 @@ TEST(parseable/printable - predicate) {
   CHECK(caf::get<data>(pred.rhs) == data{42u});
   CHECK_EQUAL(to_string(pred), str);
   // LHS: data, RHS: schema
-  MESSAGE("42 == Foo");
-  str = "42 == Foo";
+  MESSAGE("T.x == Foo");
+  str = "T.x == Foo";
   CHECK(parsers::predicate(str, pred));
-  CHECK(caf::holds_alternative<data>(pred.lhs));
+  CHECK(caf::holds_alternative<key_extractor>(pred.lhs));
   CHECK(caf::holds_alternative<key_extractor>(pred.rhs));
+  CHECK(caf::get<key_extractor>(pred.lhs) == key_extractor{"T.x"});
   CHECK(caf::get<key_extractor>(pred.rhs) == key_extractor{"Foo"});
   CHECK(pred.op == equal);
-  CHECK(caf::get<data>(pred.lhs) == data{42u});
   CHECK_EQUAL(to_string(pred), str);
   // LHS: data, RHS: data
   MESSAGE("42 in {21, 42, 84}");
@@ -101,8 +101,8 @@ TEST(parseable/printable - predicate) {
   CHECK(pred.op == greater);
   CHECK(caf::get<attribute_extractor>(pred.rhs)
         == attribute_extractor{atom::timestamp_v});
-  MESSAGE("x.a_b == y.c_d");
   // LHS: schema, RHS: schema
+  MESSAGE("x.a_b == y.c_d");
   str = "x.a_b == y.c_d";
   CHECK(parsers::predicate(str, pred));
   CHECK(caf::holds_alternative<key_extractor>(pred.lhs));
