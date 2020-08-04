@@ -1,11 +1,17 @@
 ---
-name: Crash / Bug Report
+name: Bug Report
 about: Create a bug report to help us improve
 labels: bug
 ---
 
+**Observed behavior**
+<!-- Describe the issue you experienced. -->
+
+**Expected behavior**
+<!-- Unless obvious from the description above, describe the behavior you would expect instead. -->
+
 **Steps to reproduce**
-<!-- Describe the steps that lead to the crash or hanging. -->
+<!-- Describe the steps that lead to the unexpected behavior. -->
 
 **Additional Information**
 <!-- The following survey helps developers triage your issue. Please fill out the *Required* section, and add what feels related in the *Optional* section. -->
