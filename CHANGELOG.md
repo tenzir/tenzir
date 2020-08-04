@@ -9,7 +9,12 @@ Every entry has a category for which we use the following visual abbreviations:
 - ⚠️ change
 - 🐞 bugfix
 
-<!-- ## Unreleased -->
+## Unreleased
+
+- 🎁 VAST now writes a PID lock file on startup to prevent multiple server
+  processes from accessing the same persistent state. The `pid.lock` file
+  resides in the `vast.db` directory.
+  [#1001](https://github.com/tenzir/vast/pull/1001)
 
 ## [2020.07.28]
 
