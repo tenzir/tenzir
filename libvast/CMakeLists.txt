@@ -88,6 +88,7 @@ set(libvast_sources
     src/detail/line_range.cpp
     src/detail/make_io_stream.cpp
     src/detail/mmapbuf.cpp
+    src/detail/pid_file.cpp
     src/detail/posix.cpp
     src/detail/process.cpp
     src/detail/string.cpp
