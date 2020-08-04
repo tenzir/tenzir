@@ -18,6 +18,7 @@
 
 #include "vast/concept/parseable/to.hpp"
 #include "vast/concept/parseable/vast/expression.hpp"
+#include "vast/concept/parseable/vast/subnet.hpp"
 #include "vast/concept/printable/stream.hpp"
 #include "vast/concept/printable/to_string.hpp"
 #include "vast/concept/printable/vast/expression.hpp"
@@ -31,6 +32,7 @@ using namespace std::string_literals;
 TEST(parseable/printable - predicate) {
   predicate pred;
   // LHS: schema, RHS: data
+  MESSAGE("x.y.z == 42");
   std::string str = "x.y.z == 42";
   CHECK(parsers::predicate(str, pred));
   CHECK(caf::holds_alternative<key_extractor>(pred.lhs));
@@ -39,7 +41,18 @@ TEST(parseable/printable - predicate) {
   CHECK(pred.op == equal);
   CHECK(caf::get<data>(pred.rhs) == data{42u});
   CHECK_EQUAL(to_string(pred), str);
+  // LHS: data, RHS: schema
+  MESSAGE("T.x == Foo");
+  str = "T.x == Foo";
+  CHECK(parsers::predicate(str, pred));
+  CHECK(caf::holds_alternative<key_extractor>(pred.lhs));
+  CHECK(caf::holds_alternative<key_extractor>(pred.rhs));
+  CHECK(caf::get<key_extractor>(pred.lhs) == key_extractor{"T.x"});
+  CHECK(caf::get<key_extractor>(pred.rhs) == key_extractor{"Foo"});
+  CHECK(pred.op == equal);
+  CHECK_EQUAL(to_string(pred), str);
   // LHS: data, RHS: data
+  MESSAGE("42 in {21, 42, 84}");
   str = "42 in {21, 42, 84}";
   CHECK(parsers::predicate(str, pred));
   CHECK(caf::holds_alternative<data>(pred.lhs));
@@ -49,6 +62,7 @@ TEST(parseable/printable - predicate) {
   CHECK(caf::get<data>(pred.rhs) == data{set{21u, 42u, 84u}});
   CHECK_EQUAL(to_string(pred), str);
   // LHS: type, RHS: data
+  MESSAGE("#type != \"foo\"");
   str = "#type != \"foo\"";
   CHECK(parsers::predicate(str, pred));
   CHECK(caf::holds_alternative<attribute_extractor>(pred.lhs));
@@ -59,6 +73,7 @@ TEST(parseable/printable - predicate) {
   CHECK(caf::get<data>(pred.rhs) == data{"foo"});
   CHECK_EQUAL(to_string(pred), str);
   // LHS: data, RHS: type
+  MESSAGE("10.0.0.0/8 ni :addr");
   str = "10.0.0.0/8 ni :addr";
   CHECK(parsers::predicate(str, pred));
   CHECK(caf::holds_alternative<data>(pred.lhs));
@@ -68,6 +83,7 @@ TEST(parseable/printable - predicate) {
   CHECK(caf::get<type_extractor>(pred.rhs) == type_extractor{address_type{}});
   CHECK_EQUAL(to_string(pred), str);
   // LHS: type, RHS: data
+  MESSAGE(":real >= -4.8");
   str = ":real >= -4.8";
   CHECK(parsers::predicate(str, pred));
   CHECK(caf::holds_alternative<type_extractor>(pred.lhs));
@@ -77,6 +93,7 @@ TEST(parseable/printable - predicate) {
   CHECK(caf::get<data>(pred.rhs) == data{-4.8});
   CHECK_EQUAL(to_string(pred), str);
   // LHS: data, RHS: time
+  MESSAGE("now > #timestamp");
   str = "now > #timestamp";
   CHECK(parsers::predicate(str, pred));
   CHECK(caf::holds_alternative<data>(pred.lhs));
@@ -84,6 +101,8 @@ TEST(parseable/printable - predicate) {
   CHECK(pred.op == greater);
   CHECK(caf::get<attribute_extractor>(pred.rhs)
         == attribute_extractor{atom::timestamp_v});
+  // LHS: schema, RHS: schema
+  MESSAGE("x.a_b == y.c_d");
   str = "x.a_b == y.c_d";
   CHECK(parsers::predicate(str, pred));
   CHECK(caf::holds_alternative<key_extractor>(pred.lhs));
@@ -93,6 +112,7 @@ TEST(parseable/printable - predicate) {
   CHECK(caf::get<key_extractor>(pred.rhs) == key_extractor{"y.c_d"});
   CHECK_EQUAL(to_string(pred), str);
   // Invalid type name.
+  MESSAGE(":foo == -42");
   CHECK(!parsers::predicate(":foo == -42"));
 }
 
