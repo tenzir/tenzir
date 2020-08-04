@@ -54,23 +54,23 @@ auto inspect(Inspector& f, attribute_extractor& x) {
   return f(caf::meta::type_name("attribute_extractor"), x.attr);
 }
 
-/// Extracts one or more values according to a given key.
-struct key_extractor : detail::totally_ordered<key_extractor> {
-  key_extractor(std::string k = {});
+/// Extracts one or more values according to a given field.
+struct field_extractor : detail::totally_ordered<field_extractor> {
+  field_extractor(std::string k = {});
 
-  std::string key;
+  std::string field;
 };
 
-/// @relates key_extractor
-bool operator==(const key_extractor& x, const key_extractor& y);
+/// @relates field_extractor
+bool operator==(const field_extractor& x, const field_extractor& y);
 
-/// @relates key_extractor
-bool operator<(const key_extractor& x, const key_extractor& y);
+/// @relates field_extractor
+bool operator<(const field_extractor& x, const field_extractor& y);
 
-/// @relates key_extractor
+/// @relates field_extractor
 template <class Inspector>
-auto inspect(Inspector& f, key_extractor& x) {
-  return f(caf::meta::type_name("key_extractor"), x.key);
+auto inspect(Inspector& f, field_extractor& x) {
+  return f(caf::meta::type_name("field_extractor"), x.field);
 }
 
 /// Extracts one or more values according to a given type.
@@ -94,7 +94,7 @@ auto inspect(Inspector& f, type_extractor& x) {
 }
 
 /// Extracts a specific data value from a type according to an offset. During
-/// AST resolution, the ::key_extractor generates multiple instantiations of
+/// AST resolution, the ::field_extractor generates multiple instantiations of
 /// this extractor for a given ::schema.
 struct data_extractor : detail::totally_ordered<data_extractor> {
   data_extractor() = default;
@@ -122,13 +122,8 @@ struct predicate : detail::totally_ordered<predicate> {
   predicate() = default;
 
   /// The operand of a predicate, which can be either LHS or RHS.
-  using operand = caf::variant<
-      attribute_extractor,
-      key_extractor,
-      type_extractor,
-      data_extractor,
-      data
-    >;
+  using operand = caf::variant<attribute_extractor, field_extractor,
+                               type_extractor, data_extractor, data>;
 
   predicate(operand l, relational_operator o, operand r);
 
@@ -312,7 +307,7 @@ caf::expected<expression> tailor(const expression& expr, const type& t);
 const expression* at(const expression& expr, const offset& o);
 
 /// Resolves expression predicates according to given type. The resolution
-/// includes replacement of key and type extractors with data extractors
+/// includes replacement of field and type extractors with data extractors
 /// pertaining to the given type.
 /// @param expr The expression whose predicates to resolve.
 /// @param t The type according to which extractors should be resolved.
@@ -343,9 +338,9 @@ struct hash<vast::attribute_extractor> {
   }
 };
 
-template<>
-struct hash<vast::key_extractor> {
-  size_t operator()(const vast::key_extractor& x) const {
+template <>
+struct hash<vast::field_extractor> {
+  size_t operator()(const vast::field_extractor& x) const {
     return vast::uhash<vast::xxhash>{}(x);
   }
 };

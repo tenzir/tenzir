@@ -172,7 +172,7 @@ explorer(caf::stateful_actor<explorer_state>* self, caf::actor node,
             continue;
           // TODO: Make `predicate` accept a data_view as well to save
           // the call to `materialize()`.
-          by_expr = predicate{key_extractor{*st.by}, equal, materialize(ci)};
+          by_expr = predicate{field_extractor{*st.by}, equal, materialize(ci)};
         }
         auto build_conjunction
           = [](std::optional<expression>&& lhs,

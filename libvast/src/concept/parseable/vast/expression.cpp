@@ -34,13 +34,13 @@ static predicate to_predicate(predicate_tuple xs) {
           std::move(std::get<2>(xs))};
 }
 
-static predicate::operand to_key_extractor(std::vector<std::string> xs) {
+static predicate::operand to_field_extractor(std::vector<std::string> xs) {
   // TODO: rather than doing all the work with the attributes, it would be nice
   // if the parser framework would just give us an iterator range over the raw
   // input. Then we wouldn't have to use expensive attributes and could simply
   // wrap a parser P into raw(P) or raw_str(P) to obtain a range/string_view.
-  auto key = detail::join(xs, ".");
-  return key_extractor{std::move(key)};
+  auto field = detail::join(xs, ".");
+  return field_extractor{std::move(field)};
 }
 
 static predicate::operand to_attr_extractor(std::string x) {
@@ -70,16 +70,16 @@ static auto make_predicate_parser() {
   using namespace parser_literals;
   // clang-format off
   auto id = +(alnum | chr{'_'} | chr{'-'});
-  auto key_char = alnum | chr{'_'} | chr{'-'} | chr{':'};
-  // A key cannot start with:
+  auto field_char = alnum | chr{'_'} | chr{'-'} | chr{':'};
+  // A field cannot start with:
   //  - '-' to leave room for potential arithmetic expressions in operands
   //  - ':' so it won't be interpreted as a type extractor
-  auto key = !(':'_p | '-') >> (+key_char % '.');
+  auto field = !(':'_p | '-') >> (+field_char % '.');
   auto operand
-    = (parsers::data >> !(key_char | '.')) ->* to_data_operand
+    = (parsers::data >> !(field_char | '.')) ->* to_data_operand
     | '#' >> id ->* to_attr_extractor
     | ':' >> parsers::type ->* to_type_extractor
-    | key ->* to_key_extractor
+    | field ->* to_field_extractor
     ;
   auto operation
     = "~"_p   ->* [] { return match; }

@@ -93,7 +93,7 @@ struct enumeration_type;
 struct flow;
 struct integer_type;
 struct invocation;
-struct key_extractor;
+struct field_extractor;
 struct map_type;
 struct negation;
 struct none_type;
@@ -305,7 +305,7 @@ CAF_BEGIN_TYPE_ID_BLOCK(vast, caf::first_custom_type_id)
   VAST_ADD_TYPE_ID((vast::event))
   VAST_ADD_TYPE_ID((vast::expression))
   VAST_ADD_TYPE_ID((vast::invocation))
-  VAST_ADD_TYPE_ID((vast::key_extractor))
+  VAST_ADD_TYPE_ID((vast::field_extractor))
   VAST_ADD_TYPE_ID((vast::negation))
   VAST_ADD_TYPE_ID((vast::path))
   VAST_ADD_TYPE_ID((vast::predicate))
