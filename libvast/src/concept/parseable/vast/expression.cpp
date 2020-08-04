@@ -71,8 +71,8 @@ static auto make_predicate_parser() {
   using namespace parser_literals;
   auto id = +(alnum | chr{'_'} | chr{'-'});
   auto key_char = alnum | chr{'_'} | chr{'-'} | chr{':'};
-  // A key cannot start with ':', othwise it would be interpreted as a type
-  // extractor.
+  // A key cannot start with ':' or '-', othwise it would be interpreted as a
+  // type extractor.
   auto key = !(':'_p | '-') >> (+key_char % '.');
   auto operand = (parsers::data >> !key_char)->*to_data_operand
                  | '#' >> id->*to_attr_extractor
