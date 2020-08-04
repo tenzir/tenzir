@@ -187,9 +187,9 @@ static auto make_expression_parser() {
   rule<Iterator, expression> group;
   // clang-format off
   group
-    = '(' >> ws >> expr >> ws >> ')'
+    = '(' >> ws >> ref(expr) >> ws >> ')'
     | '!' >> ws >> parsers::predicate ->* negate_pred
-    | '!' >> ws >> '(' >> ws >> (expr ->* negate_expr) >> ws >> ')'
+    | '!' >> ws >> '(' >> ws >> (ref(expr) ->* negate_expr) >> ws >> ')'
     | parsers::predicate
     ;
   auto and_or
@@ -197,7 +197,12 @@ static auto make_expression_parser() {
     | "&&"_p  ->* [] { return logical_and; }
     ;
   expr
-    = (group >> *(ws >> and_or >> ws >> group) >> ws) ->* to_expr
+    // One embedding of the group rule is intentionally not wrapped in a
+    // rule_ref, because otherwise the reference count of the internal
+    // shared_ptr would go to 0 at end of scope. We don't need this
+    // precaution for the expr rule because that is part of the return
+    // expression.
+    = (group >> *(ws >> and_or >> ws >> ref(group)) >> ws) ->* to_expr
     ;
   // clang-format on
   return expr >> parsers::eoi;
