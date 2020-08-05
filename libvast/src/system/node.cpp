@@ -397,7 +397,8 @@ caf::behavior node(node_actor* self, std::string name, path dir) {
     };
     // Terminate the accountant first because it acts like a source and may
     // hold buffered data.
-    schedule_teardown(registry.find_by_label("accountant"));
+    if (auto accountant = registry.find_by_label("accountant"))
+      schedule_teardown(std::move(accountant));
     // Take out the filesystem, which we terminate at the very end.
     auto filesystem = registry.find_by_label("filesystem");
     VAST_ASSERT(filesystem);
