@@ -15,6 +15,8 @@
 
 #include "vast/detail/assert.hpp"
 
+#include <algorithm>
+
 namespace vast::system {
 
 bool component_registry::add(caf::actor comp, std::string type,
@@ -22,12 +24,13 @@ bool component_registry::add(caf::actor comp, std::string type,
   VAST_ASSERT(comp);
   if (label.empty())
     label = type;
-  for (auto& [lab, c] : components_)
-    if (lab == label || c.actor == comp)
-      return false;
-  components_.emplace(std::move(label),
-                      component{std::move(comp), std::move(type)});
-  return true;
+#if VAST_ENABLE_ASSERTIONS
+  auto pred = [&](auto& x) { return x.second.actor == comp; };
+  VAST_ASSERT(std::none_of(components_.begin(), components_.end(), pred));
+#endif
+  return components_
+    .emplace(std::move(label), component{std::move(comp), std::move(type)})
+    .second;
 }
 
 bool component_registry::remove(const caf::actor& comp) {
