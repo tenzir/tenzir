@@ -13,6 +13,7 @@
 
 #pragma once
 
+#include "vast/detail/posix.hpp"
 #include "vast/filesystem.hpp"
 
 #include <caf/expected.hpp>
@@ -23,6 +24,9 @@
 #include <string>
 
 namespace vast::detail {
+
+caf::expected<std::unique_ptr<std::ostream>>
+make_output_stream(const std::string& output, socket_type st);
 
 caf::expected<std::unique_ptr<std::ostream>>
 make_output_stream(const std::string& output, path::type pt

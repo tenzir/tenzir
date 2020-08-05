@@ -14,6 +14,7 @@
 #include "vast/detail/make_io_stream.hpp"
 
 #include "vast/defaults.hpp"
+#include "vast/detail/assert.hpp"
 #include "vast/detail/fdinbuf.hpp"
 #include "vast/detail/fdostream.hpp"
 #include "vast/detail/posix.hpp"
@@ -72,21 +73,30 @@ make_input_stream(const std::string& input, path::type pt) {
 }
 
 caf::expected<std::unique_ptr<std::ostream>>
+make_output_stream(const std::string& output, socket_type st) {
+  if (output == "-")
+    return make_error(ec::filesystem_error, "cannot use stdout as UNIX "
+                                            "domain socket");
+  auto connect_st = st;
+  if (connect_st == socket_type::fd)
+    connect_st = socket_type::stream;
+  auto uds = unix_domain_socket::connect(output, st);
+  if (!uds)
+    return make_error(ec::filesystem_error,
+                      "failed to connect to UNIX domain socket at", output);
+  auto remote_fd = uds.fd();
+  if (st == socket_type::fd)
+    remote_fd = uds.recv_fd();
+  return std::make_unique<fdostream>(remote_fd);
+}
+
+caf::expected<std::unique_ptr<std::ostream>>
 make_output_stream(const std::string& output, path::type pt) {
   switch (pt) {
     default:
       return make_error(ec::filesystem_error, "unsupported path type", output);
-    case path::socket: {
-      if (output == "-")
-        return make_error(ec::filesystem_error, "cannot use stdout as UNIX "
-                                                "domain socket");
-      auto uds = unix_domain_socket::connect(output, socket::dgram);
-      if (!uds)
-        return make_error(ec::filesystem_error,
-                          "failed to connect to UNIX domain socket at", output);
-      auto remote_fd = uds.fd();
-      return std::make_unique<fdostream>(remote_fd);
-    }
+    case path::socket:
+      return make_error(ec::filesystem_error, "wrong overload for socket");
     case path::fifo: // TODO
     case path::regular_file: {
       if (output == "-")
