@@ -62,9 +62,9 @@ int uds_accept(int socket) {
   return fd;
 }
 
-int uds_connect(const std::string& path, socket type) {
+int uds_connect(const std::string& path, socket_type type) {
   int fd;
-  if (type == socket::stream) {
+  if (type == socket_type::stream) {
     if ((fd = ::socket(AF_UNIX, SOCK_STREAM, 0)) < 0)
       return fd;
   } else {
@@ -86,7 +86,7 @@ int uds_connect(const std::string& path, socket type) {
   srv.sun_family = AF_UNIX;
   std::strncpy(srv.sun_path, path.data(), sizeof(srv.sun_path) - 1);
   if (::connect(fd, reinterpret_cast<sockaddr*>(&srv), sizeof(srv)) < 0) {
-    if (!(type == socket::dgram && errno == ENOENT)) {
+    if (!(type == socket_type::dgram && errno == ENOENT)) {
       VAST_WARNING(__func__, "failed in connect:", ::strerror(errno));
       return -1;
     }
@@ -167,7 +167,7 @@ unix_domain_socket unix_domain_socket::accept(const std::string& path) {
 }
 
 unix_domain_socket
-unix_domain_socket::connect(const std::string& path, socket type) {
+unix_domain_socket::connect(const std::string& path, socket_type type) {
   return unix_domain_socket{detail::uds_connect(path, type)};
 }
 
