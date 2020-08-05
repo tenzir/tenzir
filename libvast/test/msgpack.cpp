@@ -186,7 +186,7 @@ TEST(fixarray) {
   CHECK_EQUAL(proxy.add<true_>(), 1u);
   CHECK_EQUAL(proxy.add<float32>(4.2f), 5u);
   CHECK_EQUAL(proxy.add<fixstr>("foo"), 4u);
-  CHECK(proxy.finish());
+  CHECK_EQUAL(builder.add(std::move(proxy)), 11u);
   auto o = object{buf};
   REQUIRE(is_fixarray(o.format()));
   auto view = unbox(get<array_view>(o));
@@ -206,7 +206,7 @@ TEST(array16) {
   auto proxy = builder.build<array16>();
   for (auto x : {1, 2, 3, 4, 5, 6, 7, 8, 9, 10})
     CHECK_EQUAL(proxy.add<int32>(x), 5u);
-  CHECK(proxy.finish());
+  CHECK_EQUAL(builder.add(std::move(proxy)), 53u);
   auto o = object{buf};
   REQUIRE_EQUAL(o.format(), array16);
   auto view = unbox(get<array_view>(o));
@@ -227,7 +227,7 @@ TEST(fixmap) {
   CHECK_EQUAL(proxy.add<positive_fixint>(7), 1u); // value
   CHECK_EQUAL(proxy.add<int16>(44), 3u);          // key
   CHECK_EQUAL(proxy.add<fixstr>("foo"), 4u);      // value
-  CHECK(proxy.finish());
+  CHECK_EQUAL(builder.add(std::move(proxy)), 18u);
   array_view view{map16, 3, data(3)};
   CHECK_EQUAL(view.size(), 3u);
   auto xs = view.data();
@@ -280,7 +280,8 @@ TEST(ext8 via proxy) {
   CHECK_EQUAL(proxy.add<fixstr>(std::string_view{foobar}), foobar.size() + 1);
   CHECK_EQUAL(proxy.add<uint8>(uint8_t{7}), 2u);
   auto size = header_size<ext8>() + header_size<fixstr>() + foobar.size() + 2;
-  CHECK_EQUAL(proxy.finish(42), size);
+  auto result = builder.add(std::move(proxy), 42);
+  CHECK_EQUAL(result, size);
   auto inner = as_bytes(
     span{buf.data() + header_size<ext8>(), buf.size() - header_size<ext8>()});
   auto view = unbox(get<ext_view>(object{span<const byte>{buf}}));
