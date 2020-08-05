@@ -170,9 +170,9 @@ std::vector<uuid> meta_index::lookup(const expression& expr) const {
           VAST_WARNING(this, "cannot process attribute extractor:", lhs.attr);
           return all_partitions();
         },
-        [&](const key_extractor& lhs, const data&) -> result_type {
+        [&](const field_extractor& lhs, const data&) -> result_type {
           auto pred = [&](auto& field) {
-            return detail::ends_with(field.fqn(), lhs.key);
+            return detail::ends_with(field.fqn(), lhs.field);
           };
           return search(pred);
         },

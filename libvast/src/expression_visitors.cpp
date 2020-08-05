@@ -282,8 +282,8 @@ operator()(const type_extractor& ex, const data& d) {
   return caf::no_error;
 }
 
-caf::expected<void> validator::operator()(const key_extractor&, const data&) {
-  // Validity of a key extractor requires a specific schema, which we don't
+caf::expected<void> validator::operator()(const field_extractor&, const data&) {
+  // Validity of a field extractor requires a specific schema, which we don't
   // have in this context.
   return caf::no_error;
 }
@@ -376,12 +376,12 @@ operator()(const data& d, const type_extractor& ex) {
   return (*this)(ex, d);
 }
 
-caf::expected<expression> type_resolver::
-operator()(const key_extractor& ex, const data& d) {
+caf::expected<expression>
+type_resolver::operator()(const field_extractor& ex, const data& d) {
   std::vector<expression> connective;
-  // First, interpret the key as a suffix of a record field name.
+  // First, interpret the field as a suffix of a record field name.
   if (auto r = caf::get_if<record_type>(&type_)) {
-    auto suffixes = r->find_suffix(ex.key);
+    auto suffixes = r->find_suffix(ex.field);
     // All suffixes must pass the type check, otherwise the RHS of a
     // predicate would be ambiguous.
     for (auto& offset : suffixes) {
@@ -394,8 +394,8 @@ operator()(const key_extractor& ex, const data& d) {
       auto x = data_extractor{type_, std::move(offset)};
       connective.emplace_back(predicate{std::move(x), op_, d});
     }
-  // Second, try to interpret the key as the name of a single type.
-  } else if (ex.key == type_.name()) {
+    // Second, try to interpret the field as the name of a single type.
+  } else if (ex.field == type_.name()) {
     if (!compatible(type_, op_, d))
       return make_error(ec::type_clash, type_, op_, d);
     auto x = data_extractor{type_, {}};
@@ -411,8 +411,8 @@ operator()(const key_extractor& ex, const data& d) {
     return {disjunction{std::move(connective)}};
 }
 
-caf::expected<expression> type_resolver::
-operator()(const data& d, const key_extractor& ex) {
+caf::expected<expression>
+type_resolver::operator()(const data& d, const field_extractor& ex) {
   return (*this)(ex, d);
 }
 
@@ -532,8 +532,8 @@ bool event_evaluator::operator()(const type_extractor&, const data&) {
   die("type extractor should have been resolved at this point");
 }
 
-bool event_evaluator::operator()(const key_extractor&, const data&) {
-  die("key extractor should have been resolved at this point");
+bool event_evaluator::operator()(const field_extractor&, const data&) {
+  die("field extractor should have been resolved at this point");
 }
 
 bool event_evaluator::operator()(const data_extractor& e, const data& d) {
@@ -610,8 +610,9 @@ bool table_slice_row_evaluator::operator()(const type_extractor&, const data&) {
   die("type extractor should have been resolved at this point");
 }
 
-bool table_slice_row_evaluator::operator()(const key_extractor&, const data&) {
-  die("key extractor should have been resolved at this point");
+bool table_slice_row_evaluator::operator()(const field_extractor&,
+                                           const data&) {
+  die("field extractor should have been resolved at this point");
 }
 
 bool table_slice_row_evaluator::operator()(const data_extractor& e,
