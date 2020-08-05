@@ -70,12 +70,6 @@ public:
   template <format Format>
   class proxy {
     friend builder;
-    static_assert(Format == bin8 || Format == bin16 || Format == bin32
-                  || Format == fixarray || Format == array16
-                  || Format == array32 || Format == fixmap || Format == map16
-                  || Format == map32 || Format == ext8 || Format == ext16
-                  || Format == ext32);
-
   public:
     /// Finalizes the addition of values to a nested container.
     /// @returns The number of total bytes the proxy has written or 0 on
@@ -83,20 +77,14 @@ public:
     ///          after a call to reset().
     template <format NestedFormat, class... FinishArgs>
     [[nodiscard]] size_t
-    add_proxy(proxy<NestedFormat> nested_proxy, FinishArgs&&... finish_args) {
+    add(proxy<NestedFormat>&& nested_proxy, FinishArgs&&... finish_args) {
       auto result
         = nested_proxy.finish(std::forward<FinishArgs>(finish_args)...);
-      if (result > 0) {
-        if constexpr (Format == fixarray || Format == fixmap
-                      || Format == array16 || Format == array32
-                      || Format == map16 || Format == map32)
-          ++size_;
-        else
-          size_ += result;
-      } else {
-        VAST_WARNING_ANON("vast.msgpack_builder.proxy.add_proxy failed to add",
+      if (result > 0)
+        bump_size(result);
+      else
+        VAST_WARNING_ANON("vast.msgpack_builder.proxy.add failed to add",
                           VAST_ARG(nested_proxy), "of format", NestedFormat);
-      }
       return result;
     }
 
@@ -105,22 +93,19 @@ public:
     /// @param x The object to add.
     /// @returns The number of bytes written or 0 on failure.
     template <format ElementFormat, class T = empty, class U = empty>
-    size_t add(const T& x = {}, const U& y = {}) {
+    auto add(const T& x = {}, const U& y = {}) -> std::enable_if_t<
+      std::disjunction_v<std::is_same<T, empty>,
+                         std::negation<std::is_same<T, proxy<ElementFormat>>>>,
+      size_t> {
       if constexpr (std::is_same_v<InputValidationPolicy, input_validation>)
         if (size_ >= capacity<Format>())
           return 0;
       auto result = builder_.add<ElementFormat>(x, y);
-      if (result > 0) {
-        if constexpr (Format == fixarray || Format == fixmap
-                      || Format == array16 || Format == array32
-                      || Format == map16 || Format == map32)
-          ++size_;
-        else
-          size_ += result;
-      } else {
+      if (result > 0)
+        bump_size(result);
+      else
         VAST_WARNING_ANON("vast.msgpack_builder.proxy.add failed to add",
                           VAST_ARG(x), VAST_ARG(y), "of format", Format);
-      }
       return result;
     }
 
@@ -146,6 +131,15 @@ public:
     }
 
   private:
+    void bump_size(size_t n) noexcept {
+      VAST_ASSERT(n > 0);
+      if constexpr (Format == fixarray || Format == fixmap || Format == array16
+                    || Format == array32 || Format == map16 || Format == map32)
+        ++size_;
+      else
+        size_ += n;
+    }
+
     /// Finalizes the addition of values to a container.
     /// @returns The number of total bytes the proxy has written or 0 on
     ///          failure. When the result is 0, the proxy is in the state as if
@@ -194,6 +188,13 @@ public:
 
     explicit proxy(builder& b)
       : builder_{b}, offset_{builder_.buffer_.size()}, size_{0} {
+      // This assertion cannot be at class-level, because the proxy type is
+      // instantiated with other formats for function overloading via SFINAE.
+      static_assert(Format == bin8 || Format == bin16 || Format == bin32
+                    || Format == fixarray || Format == array16
+                    || Format == array32 || Format == fixmap || Format == map16
+                    || Format == map32 || Format == ext8 || Format == ext16
+                    || Format == ext32);
       reset();
     }
 
@@ -222,10 +223,10 @@ public:
   ///          after a call to reset().
   template <format NestedFormat, class... FinishArgs>
   [[nodiscard]] size_t
-  add_proxy(proxy<NestedFormat> nested_proxy, FinishArgs&&... finish_args) {
+  add(proxy<NestedFormat>&& nested_proxy, FinishArgs&&... finish_args) {
     auto result = nested_proxy.finish(std::forward<FinishArgs>(finish_args)...);
     if (result == 0)
-      VAST_WARNING_ANON("vast.msgpack_builder.add_proxy failed to add",
+      VAST_WARNING_ANON("vast.msgpack_builder.add failed to add",
                         VAST_ARG(nested_proxy), "of format", NestedFormat);
     return result;
   }
@@ -235,7 +236,10 @@ public:
   /// @param x The object to add.
   /// @returns The number of bytes written or 0 on failure
   template <format Format, class T = empty, class U = empty>
-  [[nodiscard]] size_t add(const T& x = {}, const U& y = {}) {
+  [[nodiscard]] auto add(const T& x = {}, const U& y = {}) -> std::enable_if_t<
+    std::disjunction_v<std::is_same<T, empty>,
+                       std::negation<std::is_same<T, proxy<Format>>>>,
+    size_t> {
     if (!validate<Format>(x, y)) {
       VAST_ERROR_ANON("vast.msgpack_builder failed to validate", VAST_ARG(x),
                       VAST_ARG(y), "of format", Format);
@@ -572,7 +576,7 @@ size_t put_array(Builder& builder, const T& xs, F f) {
         builder.reset();
         return 0;
       }
-    return builder.add_proxy(std::move(proxy));
+    return builder.add(std::move(proxy));
   };
   auto size = vast::detail::narrow_cast<size_t>(xs.size());
   if (size <= capacity<fixarray>())
@@ -606,7 +610,7 @@ size_t put_map(Builder& builder, const T& xs, F f) {
         return 0;
       }
     }
-    return builder.add_proxy(std::move(proxy));
+    return builder.add(std::move(proxy));
   };
   auto size = vast::detail::narrow_cast<size_t>(xs.size());
   if (size <= capacity<fixmap>())
