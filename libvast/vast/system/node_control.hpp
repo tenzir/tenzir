@@ -50,8 +50,7 @@ get_node_components(caf::scoped_actor& self, caf::actor node,
     .receive(
       [&](std::vector<caf::actor>& components) {
         VAST_ASSERT(components.size() == N);
-        for (size_t i = 0; i < N; ++i)
-          result->at(i) = std::move(components[i]);
+        std::move(components.begin(), components.end(), result->begin());
       },
       [&](caf::error& e) { result = std::move(e); });
   return result;
