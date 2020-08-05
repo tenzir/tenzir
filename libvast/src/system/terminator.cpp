@@ -29,22 +29,18 @@ caf::behavior terminator(caf::stateful_actor<terminator_state>* self) {
     // Remove actor from list of remaining actors.
     VAST_DEBUG(self, "received DOWN from actor", msg.source);
     auto& remaining = self->state.remaining_actors;
-    auto i = std::find(remaining.begin(), remaining.end(), msg.source);
+    auto pred = [=](auto& actor) { return actor == msg.source; };
+    auto i = std::find_if(remaining.begin(), remaining.end(), pred);
     VAST_ASSERT(i != remaining.end());
     remaining.erase(i);
     // Perform next action based on policy.
     if constexpr (std::is_same_v<Policy, policy::sequential>) {
-      while (!remaining.empty()) {
-        auto& x = remaining.back();
-        if (auto next = caf::actor_cast<caf::actor>(x)) {
-          VAST_DEBUG(self, "terminates next actor", next);
-          self->monitor(next);
-          self->send_exit(next, caf::exit_reason::user_shutdown);
-          return;
-        } else {
-          VAST_DEBUG(self, "skips already exited actor", x.id());
-          remaining.pop_back();
-        }
+      if (!remaining.empty()) {
+        auto& next = remaining.back();
+        VAST_DEBUG(self, "terminates next actor", next);
+        self->monitor(next);
+        self->send_exit(next, caf::exit_reason::user_shutdown);
+        return;
       }
     } else if constexpr (std::is_same_v<Policy, policy::parallel>) {
       // nothing to do, all EXIT messages are in flight.
@@ -68,7 +64,7 @@ caf::behavior terminator(caf::stateful_actor<terminator_state>* self) {
       if (!*i)
         VAST_DEBUG(self, "skips termination of already exited actor", i->id());
       else
-        remaining.push_back((*i)->address());
+        remaining.push_back(*i);
     if (remaining.size() < xs.size())
       VAST_DEBUG(self, "only needs to terminate", remaining.size(), "actors");
     // Terminate early if there's nothing to do.
