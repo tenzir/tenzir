@@ -52,9 +52,9 @@ spawn_eraser(system::node_actor* self, system::spawn_arguments& args) {
   // Ensure component dependencies.
   auto [index, archive]
     = self->state.registry.find_by_label("index", "archive");
-  if (index)
+  if (!index)
     return make_error(ec::missing_component, "index");
-  if (archive)
+  if (!archive)
     return make_error(ec::missing_component, "archive");
   // Spawn the eraser.
   return self->spawn(eraser, aging_frequency, eraser_query, index, archive);
