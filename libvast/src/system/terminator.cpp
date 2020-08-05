@@ -42,7 +42,7 @@ caf::behavior terminator(caf::stateful_actor<terminator_state>* self) {
           self->send_exit(next, caf::exit_reason::user_shutdown);
           return;
         } else {
-          VAST_DEBUG(self, "skips already exited actor");
+          VAST_DEBUG(self, "skips already exited actor", x.id());
           remaining.pop_back();
         }
       }
@@ -66,7 +66,7 @@ caf::behavior terminator(caf::stateful_actor<terminator_state>* self) {
     remaining.reserve(xs.size());
     for (auto i = xs.rbegin(); i != xs.rend(); ++i)
       if (!*i)
-        VAST_DEBUG(self, "skips termination of already exited actor");
+        VAST_DEBUG(self, "skips termination of already exited actor", i->id());
       else
         remaining.push_back((*i)->address());
     if (remaining.size() < xs.size())
