@@ -102,7 +102,8 @@ archive(archive_type::stateful_pointer<archive_state> self, path dir,
   self->set_exit_handler([=](const exit_msg& msg) {
     VAST_DEBUG(self, "got EXIT from", msg.source);
     self->state.send_report();
-    self->state.store->flush();
+    if (auto err = self->state.store->flush())
+      VAST_ERROR(self, "failed to flush archive", to_string(err));
     self->state.store.reset();
     self->quit(msg.reason);
   });
