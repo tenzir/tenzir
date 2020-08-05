@@ -165,31 +165,11 @@ caf::message status_command(const invocation&, caf::actor_system&) {
 
 maybe_actor spawn_accountant(node_actor* self, spawn_arguments& args) {
   auto& options = args.inv.options;
-  auto make_accountant_stream_sink = [&] {
-    auto file = caf::get_if<std::string>(&options, "accountant.sink-path");
-    if (!file)
-      return std::unique_ptr<std::ostream>{};
-    auto type = get_or(options, "accountant.sink-type", "fifo");
-    path::type pt;
-    if (type == "file")
-      pt = path::regular_file;
-    else if (type == "fifo")
-      pt = path::fifo;
-    else if (type == "uds")
-      pt = path::socket;
-    else {
-      VAST_ERROR(self,
-                 "got an invalid option for the accountant sink type:", type);
-      return std::unique_ptr<std::ostream>{};
-    }
-    auto os = detail::make_output_stream(*file, pt);
-    if (!os)
-      return std::unique_ptr<std::ostream>{};
-    return std::move(*os);
-  };
-  auto os = make_accountant_stream_sink();
-  auto acc = caf::actor_cast<caf::actor>(self->spawn(accountant, std::move(os)));
-  return acc;
+  auto metrics_opts = caf::get_or(options, "system.metrics", caf::settings{});
+  auto cfg = to_accountant_config(metrics_opts);
+  if (!cfg)
+    return cfg.error();
+  return caf::actor_cast<caf::actor>(self->spawn(accountant, std::move(*cfg)));
 }
 
 caf::expected<caf::actor>

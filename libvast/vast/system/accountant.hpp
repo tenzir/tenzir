@@ -13,12 +13,13 @@
 
 #pragma once
 
+#include "vast/aliases.hpp"
+#include "vast/detail/posix.hpp"
 #include "vast/fwd.hpp"
 #include "vast/system/report.hpp"
 #include "vast/time.hpp"
 
 #include <caf/broadcast_downstream_manager.hpp>
-#include <caf/fwd.hpp>
 #include <caf/typed_actor.hpp>
 
 #include <cstdint>
@@ -28,9 +29,34 @@
 
 namespace vast::system {
 
+struct accountant_config {
+  struct file_sink {
+    bool enable = false;
+    std::string path;
+  };
+
+  struct uds_sink {
+    bool enable = false;
+    std::string path;
+    detail::socket_type type;
+  };
+
+  bool enable = true;
+  bool enable_self_sink = true;
+
+  file_sink file_sink;
+  uds_sink uds_sink;
+};
+
+caf::expected<accountant_config>
+to_accountant_config(const caf::settings& opts);
+
+caf::expected<accountant_config> to_accountant_config(const map& d);
+
 // clang-format off
 /// @relates accountant
 using accountant_type = caf::typed_actor<
+  caf::replies_to<atom::config, accountant_config>::with<atom::ok>,
   caf::reacts_to<atom::announce, std::string>,
   caf::reacts_to<std::string, duration>,
   caf::reacts_to<std::string, time>,
@@ -79,8 +105,14 @@ struct accountant_state {
   /// Takes care of transmitting batches.
   caf::stream_source_ptr<downstream_manager> mgr;
 
-  /// Handle to the output channel.
-  std::unique_ptr<std::ostream> output = nullptr;
+  /// Handle to the file output channel.
+  std::unique_ptr<std::ostream> file_sink = nullptr;
+
+  /// Handle to the uds output channel.
+  std::unique_ptr<std::ostream> uds_sink = nullptr;
+
+  /// The configuration.
+  accountant_config cfg;
 
   /// Pointer to the parent actor.
   accountant_type::stateful_pointer<accountant_state> self;
@@ -94,6 +126,6 @@ struct accountant_state {
 /// @param self The actor handle.
 accountant_type::behavior_type
 accountant(accountant_type::stateful_pointer<accountant_state> self,
-           std::unique_ptr<std::ostream> os);
+           accountant_config cfg);
 
 } // namespace vast::system
