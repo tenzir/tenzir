@@ -404,7 +404,7 @@ caf::behavior node(node_actor* self, std::string name, path dir) {
     self->unlink_from(filesystem);
     registry.remove(filesystem);
     // Tear down the ingestion pipeline from source to sink.
-    auto pipeline = {"source", "importer", "archive", "index", "exporter"};
+    auto pipeline = {"source", "importer", "index", "archive", "exporter"};
     for (auto component : pipeline)
       for (auto actor : registry.find_by_type(component))
         schedule_teardown(std::move(actor));
