@@ -298,7 +298,8 @@ auto make_command_factory() {
 }
 
 std::string generate_label(node_actor* self, std::string_view component) {
-  auto n = self->state.registry.find_by_type(component).size() + 1;
+  // C++20: remove the indirection through std::string.
+  auto n = self->state.label_counters[std::string{component}]++;
   return std::string{component} + '-' + std::to_string(n);
 }
 

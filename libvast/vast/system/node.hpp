@@ -60,8 +60,11 @@ struct node_state {
   /// Stores the base directory for persistent state.
   path dir;
 
-  /// The component registry
+  /// The component registry.
   component_registry registry;
+
+  /// Counters for multi-instance components.
+  std::unordered_map<std::string, uint64_t> label_counters;
 
   /// Gives the actor a recognizable name in log files.
   std::string name;
