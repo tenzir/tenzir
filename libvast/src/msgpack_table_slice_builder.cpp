@@ -75,13 +75,13 @@ size_t encode(Builder& builder, View v) {
       auto proxy = builder.template build<fixarray>();
       encode(proxy, make_view(x.network()));
       proxy.template add<uint8>(x.length());
-      return proxy.finish();
+      return builder.add_proxy(std::move(proxy));
     },
     [&](view<port> x) {
       auto proxy = builder.template build<fixarray>();
       proxy.template add<uint16>(x.number());
       proxy.template add<uint8>(static_cast<uint8_t>(x.type()));
-      return proxy.finish();
+      return builder.add_proxy(std::move(proxy));
     },
     [&](view<enumeration> x) {
       // The noop cast exists only to communicate the MsgPack type.

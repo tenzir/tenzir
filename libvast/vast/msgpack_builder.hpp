@@ -77,6 +77,29 @@ public:
                   || Format == ext32);
 
   public:
+    /// Finalizes the addition of values to a nested container.
+    /// @returns The number of total bytes the proxy has written or 0 on
+    ///          failure. When the result is 0, the proxy is in the state as if
+    ///          after a call to reset().
+    template <format NestedFormat, class... FinishArgs>
+    [[nodiscard]] size_t
+    add_proxy(proxy<NestedFormat> nested_proxy, FinishArgs&&... finish_args) {
+      auto result
+        = nested_proxy.finish(std::forward<FinishArgs>(finish_args)...);
+      if (result > 0) {
+        if constexpr (Format == fixarray || Format == fixmap
+                      || Format == array16 || Format == array32
+                      || Format == map16 || Format == map32)
+          ++size_;
+        else
+          size_ += result;
+      } else {
+        VAST_WARNING_ANON("vast.msgpack_builder.proxy.add_proxy failed to add",
+                          VAST_ARG(nested_proxy), "of format", NestedFormat);
+      }
+      return result;
+    }
+
     /// Adds an object to an array.
     /// @tparam ElementFormat The format of the object to add.
     /// @param x The object to add.
@@ -95,12 +118,34 @@ public:
         else
           size_ += result;
       } else {
-        VAST_WARNING_ANON("vast.msgpack_builder.add failed to add", VAST_ARG(x),
-                          VAST_ARG(y), "of format", Format);
+        VAST_WARNING_ANON("vast.msgpack_builder.proxy.add failed to add",
+                          VAST_ARG(x), VAST_ARG(y), "of format", Format);
       }
       return result;
     }
 
+    /// Creates a nested proxy builder to build container values.
+    /// @tparam NestedFormat The format to create a proxy builder for.
+    template <format NestedFormat>
+    proxy<NestedFormat> build() {
+      return builder_.build<NestedFormat>();
+    }
+
+    /// Resets the proxy to its state immediately after construction.
+    void reset() {
+      size_ = 0;
+      // Skip directly to data offset. We patch in the header data later in
+      // finish().
+      builder_.buffer_.resize(offset_ + header_size<Format>());
+    }
+
+    template <class Inspector>
+    friend auto inspect(Inspector& f, proxy& x) {
+      return f(caf::meta::type_name("vast.msgpack.builder.proxy"), x.builder_,
+               x.offset_, x.size_);
+    }
+
+  private:
     /// Finalizes the addition of values to a container.
     /// @returns The number of total bytes the proxy has written or 0 on
     ///          failure. When the result is 0, the proxy is in the state as if
@@ -120,7 +165,7 @@ public:
       auto ptr = builder_.buffer_.data() + offset_;
       *ptr = static_cast<value_type>(Format);
       // Then write the number of elements or size in bytes.
-      if constexpr (Format == fixarray || Format == fixmap) {
+      if constexpr (is_fix_sequence(Format)) {
         *ptr &= value_type{0b1111'0000};
         *ptr |= narrow_cast<value_type>(size_);
       } else {
@@ -147,28 +192,6 @@ public:
       return num_bytes;
     }
 
-    /// Creates a nested proxy builder to build container values.
-    /// @tparam NestedFormat The format to create a proxy builder for.
-    template <format NestedFormat>
-    proxy<NestedFormat> build() {
-      return builder_.build<NestedFormat>();
-    }
-
-    /// Resets the proxy to its state immediately after construction.
-    void reset() {
-      size_ = 0;
-      // Skip directly to data offset. We patch in the header data later in
-      // finish().
-      builder_.buffer_.resize(offset_ + header_size<Format>());
-    }
-
-    template <class Inspector>
-    friend auto inspect(Inspector& f, proxy& x) {
-      return f(caf::meta::type_name("vast.msgpack.builder.proxy"), x.builder_,
-               x.offset_, x.size_);
-    }
-
-  private:
     explicit proxy(builder& b)
       : builder_{b}, offset_{builder_.buffer_.size()}, size_{0} {
       reset();
@@ -191,6 +214,20 @@ public:
   template <format Format>
   proxy<Format> build() {
     return proxy<Format>(*this);
+  }
+
+  /// Finalizes the addition of values to a nested container.
+  /// @returns The number of total bytes the proxy has written or 0 on
+  ///          failure. When the result is 0, the proxy is in the state as if
+  ///          after a call to reset().
+  template <format NestedFormat, class... FinishArgs>
+  [[nodiscard]] size_t
+  add_proxy(proxy<NestedFormat> nested_proxy, FinishArgs&&... finish_args) {
+    auto result = nested_proxy.finish(std::forward<FinishArgs>(finish_args)...);
+    if (result == 0)
+      VAST_WARNING_ANON("vast.msgpack_builder.add_proxy failed to add",
+                        VAST_ARG(nested_proxy), "of format", NestedFormat);
+    return result;
   }
 
   /// Adds an object of a statically chosen format.
@@ -535,7 +572,7 @@ size_t put_array(Builder& builder, const T& xs, F f) {
         builder.reset();
         return 0;
       }
-    return proxy.finish();
+    return builder.add_proxy(std::move(proxy));
   };
   auto size = vast::detail::narrow_cast<size_t>(xs.size());
   if (size <= capacity<fixarray>())
@@ -569,7 +606,7 @@ size_t put_map(Builder& builder, const T& xs, F f) {
         return 0;
       }
     }
-    return proxy.finish();
+    return builder.add_proxy(std::move(proxy));
   };
   auto size = vast::detail::narrow_cast<size_t>(xs.size());
   if (size <= capacity<fixmap>())
