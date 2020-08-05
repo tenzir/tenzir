@@ -109,8 +109,8 @@ type_registry(type_registry_actor self, const path& dir) {
   self->set_exit_handler([=](const caf::exit_msg& msg) {
     VAST_DEBUG(self, "received exit from", msg.source,
                "with reason:", msg.reason);
-    if (self->state.accountant)
-      self->send(self->state.accountant, self->state.telemetry());
+    if (auto telemetry = self->state.telemetry(); !telemetry.empty())
+      self->send(self->state.accountant, std::move(telemetry));
     if (auto err = self->state.save_to_disk())
       VAST_ERROR(
         self, "failed to persist state to disk:", self->system().render(err));
@@ -126,9 +126,11 @@ type_registry(type_registry_actor self, const path& dir) {
   // The behavior of the type-registry.
   return {
     [=](atom::telemetry) {
-      VAST_TRACE(self, "sends out a telemetry report to the",
-                 VAST_ARG("accountant", self->state.accountant));
-      self->send(self->state.accountant, self->state.telemetry());
+      if (auto telemetry = self->state.telemetry(); !telemetry.empty()) {
+        VAST_TRACE(self, "sends out a telemetry report to the",
+                   VAST_ARG("accountant", self->state.accountant));
+        self->send(self->state.accountant, std::move(telemetry));
+      }
       self->delayed_send(self, defaults::system::telemetry_rate,
                          atom::telemetry_v);
     },
