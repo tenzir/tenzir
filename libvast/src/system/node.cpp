@@ -387,7 +387,7 @@ caf::behavior node(node_actor* self, std::string name, path dir) {
   });
   // Terminate deterministically on shutdown.
   self->set_exit_handler([=](const exit_msg& msg) {
-    VAST_DEBUG(self, "terminates after receiving EXIT from", msg.source);
+    VAST_DEBUG(self, "got EXIT from", msg.source);
     auto& registry = self->state.registry;
     std::vector<caf::actor> actors;
     auto schedule_teardown = [&](caf::actor actor) {

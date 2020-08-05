@@ -100,6 +100,7 @@ archive(archive_type::stateful_pointer<archive_state> self, path dir,
   self->state.store = segment_store::make(dir, max_segment_size, capacity);
   VAST_ASSERT(self->state.store != nullptr);
   self->set_exit_handler([=](const exit_msg& msg) {
+    VAST_DEBUG(self, "got EXIT from", msg.source);
     self->state.send_report();
     self->state.store->flush();
     self->state.store.reset();

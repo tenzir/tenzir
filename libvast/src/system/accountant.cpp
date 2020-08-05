@@ -121,6 +121,7 @@ accountant_type::behavior_type accountant(accountant_actor* self) {
   using namespace std::chrono;
   init(self);
   self->set_exit_handler([=](const caf::exit_msg& msg) {
+    VAST_DEBUG(self, "got EXIT from", msg.source);
     finish_slice(self);
     self->quit(msg.reason);
   });

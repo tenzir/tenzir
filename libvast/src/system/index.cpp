@@ -399,8 +399,7 @@ caf::behavior index(caf::stateful_actor<index_state>* self, const path& dir,
     return {};
   }
   self->set_exit_handler([=](const caf::exit_msg& msg) {
-    VAST_DEBUG(self, "received exit from", msg.source,
-               "with reason:", msg.reason);
+    VAST_DEBUG(self, "got EXIT from", msg.source);
     self->quit(msg.reason);
   });
   // Launch workers for resolving queries.

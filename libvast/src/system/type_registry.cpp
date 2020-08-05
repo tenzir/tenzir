@@ -99,8 +99,7 @@ type_registry(type_registry_actor self, const path& dir) {
   self->state.dir = dir;
   // Register the exit handler.
   self->set_exit_handler([=](const caf::exit_msg& msg) {
-    VAST_DEBUG(self, "received exit from", msg.source,
-               "with reason:", msg.reason);
+    VAST_DEBUG(self, "got EXIT from", msg.source);
     if (self->state.accountant)
       self->send(self->state.accountant, self->state.telemetry());
     if (auto err = self->state.save_to_disk())
