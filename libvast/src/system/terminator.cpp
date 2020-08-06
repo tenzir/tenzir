@@ -25,10 +25,9 @@
 namespace vast::system {
 
 template <class Policy>
-caf::behavior terminator(caf::stateful_actor<terminator_state>* self) {
-  // TODO make configurable.
-  self->state.kill_timeout = std::chrono::seconds{60 * 10};
-  self->state.abort_timeout = std::chrono::seconds{60 * 10};
+caf::behavior terminator(caf::stateful_actor<terminator_state>* self,
+                         std::chrono::seconds clean_exit_timeout,
+                         std::chrono::seconds kill_exit_timeout) {
   self->set_down_handler([=](const caf::down_msg& msg) {
     // Remove actor from list of remaining actors.
     VAST_DEBUG(self, "received DOWN from actor", msg.source);
@@ -97,7 +96,7 @@ caf::behavior terminator(caf::stateful_actor<terminator_state>* self) {
         static_assert(detail::always_false_v<Policy>, "unsupported policy");
       }
       // Send a reminder for killing all alive actors.
-      self->delayed_send(self, self->state.kill_timeout, atom::shutdown_v);
+      self->delayed_send(self, clean_exit_timeout, atom::shutdown_v);
     },
     [=](atom::shutdown) {
       VAST_ASSERT(!self->state.remaining_actors.empty());
@@ -126,7 +125,7 @@ caf::behavior terminator(caf::stateful_actor<terminator_state>* self) {
         }
       });
       // Send another reminder for a hard-kill.
-      self->delayed_send(self, self->state.abort_timeout, atom::stop_v);
+      self->delayed_send(self, kill_exit_timeout, atom::stop_v);
     },
     [=](atom::stop) {
       auto n = self->state.remaining_actors.size();
@@ -136,9 +135,11 @@ caf::behavior terminator(caf::stateful_actor<terminator_state>* self) {
 }
 
 template caf::behavior
-terminator<policy::sequential>(caf::stateful_actor<terminator_state>*);
+terminator<policy::sequential>(caf::stateful_actor<terminator_state>*,
+                               std::chrono::seconds, std::chrono::seconds);
 
 template caf::behavior
-terminator<policy::parallel>(caf::stateful_actor<terminator_state>*);
+terminator<policy::parallel>(caf::stateful_actor<terminator_state>*,
+                             std::chrono::seconds, std::chrono::seconds);
 
 } // namespace vast::system

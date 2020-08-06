@@ -13,6 +13,8 @@
 
 #pragma once
 
+#include "vast/defaults.hpp"
+
 #include <caf/actor_cast.hpp>
 #include <caf/event_based_actor.hpp>
 #include <caf/fwd.hpp>
@@ -37,18 +39,38 @@ namespace vast::system {
 /// @param self The actor to terminate.
 /// @param xs Actors that need to shutdown before *self* quits.
 template <class Policy>
-void shutdown(caf::event_based_actor* self, std::vector<caf::actor> xs);
+void shutdown(caf::event_based_actor* self, std::vector<caf::actor> xs,
+              std::chrono::seconds shutdown_timeout
+              = defaults::system::shutdown_timeout,
+              std::chrono::seconds clean_exit_timeout
+              = defaults::system::clean_exit_timeout,
+              std::chrono::seconds kill_exit_timeout
+              = defaults::system::kill_exit_timeout);
 
 template <class Policy, class... Ts>
 void shutdown(caf::typed_event_based_actor<Ts...>* self,
-              std::vector<caf::actor> xs) {
+              std::vector<caf::actor> xs,
+              std::chrono::seconds shutdown_timeout
+              = defaults::system::shutdown_timeout,
+              std::chrono::seconds clean_exit_timeout
+              = defaults::system::clean_exit_timeout,
+              std::chrono::seconds kill_exit_timeout
+              = defaults::system::kill_exit_timeout) {
   auto handle = caf::actor_cast<caf::event_based_actor*>(self);
-  shutdown<Policy>(handle, std::move(xs));
+  shutdown<Policy>(handle, std::move(xs), shutdown_timeout, clean_exit_timeout,
+                   kill_exit_timeout);
 }
 
 template <class Policy, class Actor>
-void shutdown(Actor* self, caf::actor x) {
-  shutdown<Policy>(self, std::vector<caf::actor>{std::move(x)});
+void shutdown(Actor* self, caf::actor x,
+              std::chrono::seconds shutdown_timeout
+              = defaults::system::shutdown_timeout,
+              std::chrono::seconds clean_exit_timeout
+              = defaults::system::clean_exit_timeout,
+              std::chrono::seconds kill_exit_timeout
+              = defaults::system::kill_exit_timeout) {
+  shutdown<Policy>(self, std::vector<caf::actor>{std::move(x)},
+                   shutdown_timeout, clean_exit_timeout, kill_exit_timeout);
 }
 
 } // namespace vast::system

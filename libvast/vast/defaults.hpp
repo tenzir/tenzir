@@ -362,8 +362,14 @@ constexpr std::chrono::milliseconds signal_monitoring_interval
 constexpr std::chrono::seconds initial_request_timeout
   = std::chrono::seconds{10};
 
-/// Timeout to cleanly shutdown actors.
+/// Time to wait for requesting a shutdown of one or more actors.
 constexpr std::chrono::seconds shutdown_timeout = std::chrono::hours{1};
+
+/// Time to wait until an actor exits cleanly.
+constexpr std::chrono::seconds clean_exit_timeout = std::chrono::minutes{30};
+
+/// Time to wait until a killed actor exits.
+constexpr std::chrono::seconds kill_exit_timeout = std::chrono::minutes{30};
 
 } // namespace system
 

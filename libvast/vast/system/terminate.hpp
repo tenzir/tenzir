@@ -42,22 +42,43 @@ namespace vast::system {
 /// @param xs The actors to terminate.
 /// @returns A response promise to be fulfilled when all *xs* terminated.
 template <class Policy>
-auto terminate(caf::event_based_actor* self, std::vector<caf::actor> xs) {
-  auto timeout = defaults::system::shutdown_timeout;
-  return self->request(self->spawn(terminator<Policy>), timeout, std::move(xs));
+auto terminate(caf::event_based_actor* self, std::vector<caf::actor> xs,
+               std::chrono::seconds shutdown_timeout
+               = defaults::system::shutdown_timeout,
+               std::chrono::seconds clean_exit_timeout
+               = defaults::system::clean_exit_timeout,
+               std::chrono::seconds kill_exit_timeout
+               = defaults::system::kill_exit_timeout) {
+  auto t
+    = self->spawn(terminator<Policy>, clean_exit_timeout, kill_exit_timeout);
+  return self->request(std::move(t), shutdown_timeout, std::move(xs));
 }
 
 template <class Policy, class... Ts>
 auto terminate(caf::typed_event_based_actor<Ts...>* self,
-               std::vector<caf::actor> xs) {
+               std::vector<caf::actor> xs,
+               std::chrono::seconds shutdown_timeout
+               = defaults::system::shutdown_timeout,
+               std::chrono::seconds clean_exit_timeout
+               = defaults::system::clean_exit_timeout,
+               std::chrono::seconds kill_exit_timeout
+               = defaults::system::kill_exit_timeout) {
   auto handle = caf::actor_cast<caf::event_based_actor*>(self);
-  return terminate<Policy>(handle, std::move(xs));
+  return terminate<Policy>(handle, std::move(xs), shutdown_timeout,
+                           clean_exit_timeout, kill_exit_timeout);
 }
 
 template <class Policy>
-void terminate(caf::scoped_actor& self, std::vector<caf::actor> xs) {
-  auto timeout = defaults::system::shutdown_timeout;
-  self->request(self->spawn(terminator<Policy>), timeout, std::move(xs))
+void terminate(caf::scoped_actor& self, std::vector<caf::actor> xs,
+               std::chrono::seconds shutdown_timeout
+               = defaults::system::shutdown_timeout,
+               std::chrono::seconds clean_exit_timeout
+               = defaults::system::clean_exit_timeout,
+               std::chrono::seconds kill_exit_timeout
+               = defaults::system::kill_exit_timeout) {
+  auto t
+    = self->spawn(terminator<Policy>, clean_exit_timeout, kill_exit_timeout);
+  self->request(std::move(t), shutdown_timeout, std::move(xs))
     .receive(
       [=](atom::done) { VAST_DEBUG_ANON("terminated all dependent actor"); },
       [=](const caf::error& err) {
