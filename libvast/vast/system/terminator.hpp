@@ -16,6 +16,7 @@
 #include <caf/fwd.hpp>
 #include <caf/response_promise.hpp>
 
+#include <chrono>
 #include <vector>
 
 namespace vast::policy {
@@ -30,6 +31,8 @@ namespace vast::system {
 struct terminator_state {
   std::vector<caf::actor> remaining_actors;
   caf::response_promise promise;
+  std::chrono::seconds kill_timeout;
+  std::chrono::seconds abort_timeout;
   static inline const char* name = "terminator";
 };
 

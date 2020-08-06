@@ -14,6 +14,7 @@
 #include "vast/system/terminator.hpp"
 
 #include "vast/detail/assert.hpp"
+#include "vast/die.hpp"
 #include "vast/fwd.hpp"
 #include "vast/logger.hpp"
 
@@ -25,6 +26,9 @@ namespace vast::system {
 
 template <class Policy>
 caf::behavior terminator(caf::stateful_actor<terminator_state>* self) {
+  // TODO make configurable.
+  self->state.kill_timeout = std::chrono::seconds{60 * 10};
+  self->state.abort_timeout = std::chrono::seconds{60 * 10};
   self->set_down_handler([=](const caf::down_msg& msg) {
     // Remove actor from list of remaining actors.
     VAST_DEBUG(self, "received DOWN from actor", msg.source);
@@ -54,43 +58,81 @@ caf::behavior terminator(caf::stateful_actor<terminator_state>* self) {
       self->quit(caf::exit_reason::user_shutdown);
     }
   });
-  return {[=](const std::vector<caf::actor>& xs) {
-    VAST_DEBUG(self, "got request to terminate", xs.size(), "actors");
-    VAST_ASSERT(!self->state.promise.pending());
-    self->state.promise = self->make_response_promise();
-    auto& remaining = self->state.remaining_actors;
-    remaining.reserve(xs.size());
-    for (auto i = xs.rbegin(); i != xs.rend(); ++i)
-      if (!*i)
-        VAST_DEBUG(self, "skips termination of already exited actor", i->id());
-      else
-        remaining.push_back(*i);
-    if (remaining.size() < xs.size())
-      VAST_DEBUG(self, "only needs to terminate", remaining.size(), "actors");
-    // Terminate early if there's nothing to do.
-    if (remaining.empty()) {
-      VAST_DEBUG(self, "quits prematurely because all actors have exited");
-      self->state.promise.deliver(atom::done_v);
-      self->quit(caf::exit_reason::user_shutdown);
-      return;
-    }
-    if constexpr (std::is_same_v<Policy, policy::sequential>) {
-      // Track actors in reverse order because the user provides the actors in
-      // the order of shutdown, but we use a stack internally that stores the
-      // first actor to be terminated at the end.
-      auto& next = remaining.back();
-      self->monitor(next);
-      self->send_exit(next, caf::exit_reason::user_shutdown);
-    } else if constexpr (std::is_same_v<Policy, policy::parallel>) {
-      // Terminate all actors.
-      for (auto& x : xs) {
-        self->monitor(x);
-        self->send_exit(x, caf::exit_reason::user_shutdown);
+  return {
+    [=](const std::vector<caf::actor>& xs) {
+      VAST_DEBUG(self, "got request to terminate", xs.size(), "actors");
+      VAST_ASSERT(!self->state.promise.pending());
+      self->state.promise = self->make_response_promise();
+      auto& remaining = self->state.remaining_actors;
+      remaining.reserve(xs.size());
+      for (auto i = xs.rbegin(); i != xs.rend(); ++i)
+        if (!*i)
+          VAST_DEBUG(self, "skips termination of already exited actor",
+                     i->id());
+        else
+          remaining.push_back(*i);
+      if (remaining.size() < xs.size())
+        VAST_DEBUG(self, "only needs to terminate", remaining.size(), "actors");
+      // Terminate early if there's nothing to do.
+      if (remaining.empty()) {
+        VAST_DEBUG(self, "quits prematurely because all actors have exited");
+        self->state.promise.deliver(atom::done_v);
+        self->quit(caf::exit_reason::user_shutdown);
+        return;
       }
-    } else {
-      static_assert(detail::always_false_v<Policy>, "unsupported policy");
-    }
-  }};
+      if constexpr (std::is_same_v<Policy, policy::sequential>) {
+        // Track actors in reverse order because the user provides the actors in
+        // the order of shutdown, but we use a stack internally that stores the
+        // first actor to be terminated at the end.
+        auto& next = remaining.back();
+        self->monitor(next);
+        self->send_exit(next, caf::exit_reason::user_shutdown);
+      } else if constexpr (std::is_same_v<Policy, policy::parallel>) {
+        // Terminate all actors.
+        for (auto& x : xs) {
+          self->monitor(x);
+          self->send_exit(x, caf::exit_reason::user_shutdown);
+        }
+      } else {
+        static_assert(detail::always_false_v<Policy>, "unsupported policy");
+      }
+      // Send a reminder for killing all alive actors.
+      self->delayed_send(self, self->state.kill_timeout, atom::shutdown_v);
+    },
+    [=](atom::shutdown) {
+      VAST_ASSERT(!self->state.remaining_actors.empty());
+      VAST_WARNING(self, "failed to terminate all actors within 10 mins");
+      VAST_WARNING(self, "initiates hard kill of",
+                   self->state.remaining_actors.size(), "remaining actors");
+      // Kill remaining actors.
+      for (auto& actor : self->state.remaining_actors) {
+        VAST_DEBUG(self, "sends KILL to actor", actor->id());
+        if constexpr (std::is_same_v<Policy, policy::sequential>)
+          self->monitor(actor);
+        self->send_exit(actor, caf::exit_reason::kill);
+      }
+      // Handle them now differently.
+      self->set_down_handler([=](const caf::down_msg& msg) {
+        VAST_DEBUG(self, "killed actor", msg.source.id());
+        auto pred = [=](auto& actor) { return actor == msg.source; };
+        auto& remaining = self->state.remaining_actors;
+        auto i = std::find_if(remaining.begin(), remaining.end(), pred);
+        VAST_ASSERT(i != remaining.end());
+        remaining.erase(i);
+        if (remaining.empty()) {
+          VAST_DEBUG(self, "killed all remaining actors");
+          self->state.promise.deliver(atom::done_v);
+          self->quit(caf::exit_reason::kill);
+        }
+      });
+      // Send another reminder for a hard-kill.
+      self->delayed_send(self, self->state.abort_timeout, atom::stop_v);
+    },
+    [=](atom::stop) {
+      auto n = self->state.remaining_actors.size();
+      VAST_ERROR(self, "failed to kill", n, "actors");
+      die("did not receive answer from terminated actors");
+    }};
 }
 
 template caf::behavior
