@@ -11,6 +11,10 @@ Every entry has a category for which we use the following visual abbreviations:
 
 ## Unreleased
 
+- 🐞 When continuous query in a client process terminated, the node did not
+  clean up the corresponding server-side state. This memory leak no longer
+  exists. [#1006](https://github.com/tenzir/vast/pull/1006)
+
 - 🐞 MessagePack-encoded table slices now work correctly for nested container
   types. [#984](https://github.com/tenzir/vast/pull/984)
 
