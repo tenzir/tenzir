@@ -250,7 +250,7 @@ caf::error reader::read_impl(size_t max_events, size_t max_slice_size,
       }
       VAST_INFO(this, "reads trace from", input_);
       if (pseudo_realtime_ > 0)
-        VAST_VERBOSE(this, "uses pseudo-realtime factor 1/", pseudo_realtime_);
+        VAST_VERBOSE(this, "uses pseudo-realtime factor 1 /", pseudo_realtime_);
     }
     VAST_VERBOSE(this, "cuts off flows after", cutoff_,
                  "bytes in each direction");
