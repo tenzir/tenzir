@@ -29,7 +29,6 @@ namespace vast::system {
 template <class Reader, class Defaults = typename Reader::defaults>
 maybe_actor spawn_source(node_actor* self, spawn_arguments& args) {
   VAST_TRACE(VAST_ARG("node", self), VAST_ARG(args));
-  auto& st = self->state;
   auto& options = args.inv.options;
   // Bail out early for bogus invocations.
   if (caf::get_or(options, "system.node", false))
@@ -37,12 +36,17 @@ maybe_actor spawn_source(node_actor* self, spawn_arguments& args) {
                       "unable to spawn a remote source when spawning a node "
                       "locally instead of connecting to one; please unset "
                       "the option system.node");
-  auto accountant = accountant_type{};
-  if (auto a = self->system().registry().get(atom::accountant_v))
-    accountant = caf::actor_cast<accountant_type>(a);
+  auto [accountant, importer, type_registry]
+    = self->state.registry.find_by_label("accountant", "importer",
+                                         "type-registry");
+  if (!importer)
+    return make_error(ec::missing_component, "importer");
+  if (!type_registry)
+    return make_error(ec::missing_component, "type-registry");
   auto src_result = make_source<Reader, Defaults, caf::detached>(
-    self, self->system(), args.inv, std::move(accountant), st.type_registry,
-    st.importer);
+    self, self->system(), args.inv,
+    caf::actor_cast<accountant_type>(accountant),
+    caf::actor_cast<type_registry_type>(type_registry), importer);
   if (!src_result)
     return src_result.error();
   auto src = std::move(src_result->src);

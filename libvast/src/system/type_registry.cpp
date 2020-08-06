@@ -97,18 +97,9 @@ type_registry_behavior
 type_registry(type_registry_actor self, const path& dir) {
   self->state.self = self;
   self->state.dir = dir;
-  // Register with the accountant.
-  if (auto accountant = self->system().registry().get(atom::accountant_v)) {
-    VAST_DEBUG(self, "connects to", VAST_ARG(accountant));
-    self->state.accountant = caf::actor_cast<accountant_type>(accountant);
-    self->send(self->state.accountant, atom::announce_v, self->name());
-    self->delayed_send(self, defaults::system::telemetry_rate,
-                       atom::telemetry_v);
-  }
   // Register the exit handler.
   self->set_exit_handler([=](const caf::exit_msg& msg) {
-    VAST_DEBUG(self, "received exit from", msg.source,
-               "with reason:", msg.reason);
+    VAST_DEBUG(self, "got EXIT from", msg.source);
     if (auto telemetry = self->state.telemetry(); !telemetry.empty())
       self->send(self->state.accountant, std::move(telemetry));
     if (auto err = self->state.save_to_disk())
@@ -167,7 +158,14 @@ type_registry(type_registry_actor self, const path& dir) {
                  VAST_ARG(name));
       return self->state.types(name);
     },
-  };
+    [=](accountant_type accountant) {
+      VAST_ASSERT(accountant);
+      VAST_DEBUG(self, "connects to", VAST_ARG(accountant));
+      self->state.accountant = caf::actor_cast<accountant_type>(accountant);
+      self->send(self->state.accountant, atom::announce_v, self->name());
+      self->delayed_send(self, defaults::system::telemetry_rate,
+                         atom::telemetry_v);
+    }};
 }
 
 } // namespace vast::system

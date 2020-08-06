@@ -65,4 +65,9 @@ void terminate(caf::scoped_actor& self, std::vector<caf::actor> xs) {
       });
 }
 
+template <class Policy, class Actor>
+auto terminate(Actor* self, caf::actor x) {
+  return terminate<Policy>(self, std::vector<caf::actor>{std::move(x)});
+}
+
 } // namespace vast::system

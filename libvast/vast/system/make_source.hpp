@@ -79,6 +79,8 @@ caf::expected<make_source_result>
 make_source(const Actor& self, caf::actor_system& sys, const invocation& inv,
             accountant_type accountant, type_registry_type type_registry,
             caf::actor importer) {
+  if (!importer)
+    return make_error(ec::missing_component, "importer");
   // Placeholder thingies.
   auto udp_port = std::optional<uint16_t>{};
   auto reader = std::unique_ptr<Reader>{nullptr};
@@ -175,8 +177,6 @@ make_source(const Actor& self, caf::actor_system& sys, const invocation& inv,
     self->send(src, std::move(*expr));
   }
   // Connect source to importer.
-  if (!importer)
-    return make_error(ec::missing_component, "importer");
   VAST_DEBUG(inv.full_name, "connects to", VAST_ARG(importer));
   self->send(src, atom::sink_v, importer);
   return make_source_result{src, reader->name()};

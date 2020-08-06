@@ -37,9 +37,15 @@ spawn_counter(system::node_actor* self, system::spawn_arguments& args) {
   auto expr = system::normalized_and_validated(args);
   if (!expr)
     return expr.error();
-  return self->spawn(counter, std::move(*expr), self->state.index,
-                     self->state.archive,
-                     caf::get_or(args.inv.options, "count.estimate", false));
+  auto [index, archive]
+    = self->state.registry.find_by_label("index", "archive");
+  if (!index)
+    return make_error(ec::missing_component, "index");
+  if (!archive)
+    return make_error(ec::missing_component, "archive");
+  auto estimate = caf::get_or(args.inv.options, "count.estimate", false);
+  return self->spawn(counter, std::move(*expr), index,
+                     caf::actor_cast<archive_type>(archive), estimate);
 }
 
 } // namespace vast::system

@@ -36,8 +36,6 @@ template <class Reader, class Defaults>
 caf::message import_command(const invocation& inv, caf::actor_system& sys) {
   VAST_TRACE(inv.full_name, VAST_ARG("options", inv.options), VAST_ARG(sys));
   auto self = caf::scoped_actor{sys};
-  // Placeholder thingies.
-  auto err = caf::error{};
   // Get VAST node.
   auto node_opt
     = spawn_or_connect_to_node(self, inv.options, content(sys.config()));
@@ -52,29 +50,38 @@ caf::message import_command(const invocation& inv, caf::actor_system& sys) {
     self, node, {"accountant", "type-registry", "importer"});
   if (!components)
     return make_message(std::move(components.error()));
-  VAST_ASSERT(components->size() == 3);
-  auto accountant = caf::actor_cast<accountant_type>((*components)[0]);
-  auto type_registry = caf::actor_cast<type_registry_type>((*components)[1]);
-  auto& importer = (*components)[2];
+  auto& [accountant, type_registry, importer] = *components;
   if (!type_registry)
     return make_message(make_error(ec::missing_component, "type-registry"));
+  if (!importer)
+    return make_message(make_error(ec::missing_component, "importer"));
   // Start signal monitor.
   std::thread sig_mon_thread;
   auto guard = system::signal_monitor::run_guarded(
     sig_mon_thread, sys, defaults::system::signal_monitoring_interval, self);
   // Start the source.
-  auto src_result = make_source<Reader, Defaults>(self, sys, inv, accountant,
-                                                  type_registry, importer);
+  auto src_result = make_source<Reader, Defaults>(
+    self, sys, inv, caf::actor_cast<accountant_type>(accountant),
+    caf::actor_cast<type_registry_type>(type_registry), importer);
   if (!src_result)
     return make_message(std::move(src_result.error()));
   auto src = std::move(src_result->src);
   auto name = std::move(src_result->name);
   bool stop = false;
+  caf::error err;
+  self->request(node, caf::infinite, atom::put_v, src, "source")
+    .receive([&](atom::ok) { VAST_DEBUG(name, "registered source at node"); },
+             [&](caf::error error) { err = std::move(error); });
+  if (err) {
+    self->send_exit(src, caf::exit_reason::user_shutdown);
+    return make_message(std::move(err));
+  }
   self->monitor(src);
   self->monitor(importer);
   self
     ->do_receive(
-      [&](const caf::down_msg& msg) {
+      // C++20: remove explicit 'importer' parameter passing.
+      [&, importer = importer](const caf::down_msg& msg) {
         if (msg.source == importer) {
           VAST_DEBUG(name, "received DOWN from node importer");
           self->send_exit(src, caf::exit_reason::user_shutdown);

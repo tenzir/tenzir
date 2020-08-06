@@ -105,8 +105,8 @@ struct importer_state {
   measurement measurement_;
   stopwatch::time_point last_report;
 
-  /// Stores all actor handles of connected INDEX actors.
-  std::vector<caf::actor> index_actors;
+  /// The index actor.
+  caf::actor index;
 
   accountant_type accountant;
 

@@ -29,7 +29,6 @@
 #include "vast/system/read_query.hpp"
 #include "vast/system/signal_monitor.hpp"
 #include "vast/system/spawn_or_connect_to_node.hpp"
-#include "vast/system/tracker.hpp"
 
 #include <caf/event_based_actor.hpp>
 #include <caf/scoped_actor.hpp>
@@ -91,7 +90,7 @@ sink_command(const invocation& inv, actor_system& sys, caf::actor snk) {
   auto exp = spawn_at_node(self, node, spawn_exporter);
   if (!exp)
     return caf::make_message(std::move(exp.error()));
-  // Register the accountant at the Sink.
+  // Register the accountant at the sink.
   auto components = get_node_components(self, node, {"accountant"});
   if (!components)
     return caf::make_message(std::move(components.error()));
@@ -100,12 +99,14 @@ sink_command(const invocation& inv, actor_system& sys, caf::actor snk) {
     VAST_DEBUG(inv.full_name, "assigns accountant to new sink");
     self->send(snk, actor_cast<accountant_type>(accountant));
   }
-  // Start the exporter.
-  self->send(*exp, atom::sink_v, snk);
-  self->send(*exp, atom::run_v);
+  // Register sink at the node.
+  self->send(node, atom::put_v, snk, "sink");
   // Register self as the statistics actor.
   self->send(*exp, atom::statistics_v, self);
   self->send(snk, atom::statistics_v, self);
+  // Start the exporter.
+  self->send(*exp, atom::sink_v, snk);
+  self->send(*exp, atom::run_v);
   self->monitor(snk);
   self->monitor(*exp);
   guard.disable();
@@ -119,7 +120,6 @@ sink_command(const invocation& inv, actor_system& sys, caf::actor snk) {
         if (msg.source == node) {
           VAST_DEBUG(inv.full_name, "received DOWN from node");
           self->send_exit(snk, exit_reason::user_shutdown);
-          self->send_exit(*exp, exit_reason::user_shutdown);
         } else if (msg.source == *exp) {
           VAST_DEBUG(inv.full_name, "received DOWN from exporter");
           self->send_exit(snk, exit_reason::user_shutdown);

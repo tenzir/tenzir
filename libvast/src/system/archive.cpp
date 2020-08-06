@@ -100,8 +100,10 @@ archive(archive_type::stateful_pointer<archive_state> self, path dir,
   self->state.store = segment_store::make(dir, max_segment_size, capacity);
   VAST_ASSERT(self->state.store != nullptr);
   self->set_exit_handler([=](const exit_msg& msg) {
+    VAST_DEBUG(self, "got EXIT from", msg.source);
     self->state.send_report();
-    self->state.store->flush();
+    if (auto err = self->state.store->flush())
+      VAST_ERROR(self, "failed to flush archive", to_string(err));
     self->state.store.reset();
     self->quit(msg.reason);
   });
@@ -109,12 +111,6 @@ archive(archive_type::stateful_pointer<archive_state> self, path dir,
     VAST_DEBUG(self, "received DOWN from", msg.source);
     self->state.active_exporters.erase(msg.source);
   });
-  if (auto a = self->system().registry().get(atom::accountant_v)) {
-    namespace defs = defaults::system;
-    self->state.accountant = actor_cast<accountant_type>(a);
-    self->send(self->state.accountant, atom::announce_v, self->name());
-    self->delayed_send(self, defs::telemetry_rate, atom::telemetry_v);
-  }
   return {
     [=](const ids& xs) {
       VAST_ASSERT(rank(xs) > 0);
@@ -192,6 +188,12 @@ archive(archive_type::stateful_pointer<archive_state> self, path dir,
             VAST_ERROR(self, "got a stream error:", self->system().render(err));
           }
         });
+    },
+    [=](accountant_type accountant) {
+      namespace defs = defaults::system;
+      self->state.accountant = std::move(accountant);
+      self->send(self->state.accountant, atom::announce_v, self->name());
+      self->delayed_send(self, defs::telemetry_rate, atom::telemetry_v);
     },
     [=](atom::exporter, const actor& exporter) {
       auto sender_addr = self->current_sender()->address();

@@ -18,9 +18,8 @@
 #include "vast/error.hpp"
 #include "vast/filesystem.hpp"
 #include "vast/system/archive.hpp"
+#include "vast/system/component_registry.hpp"
 #include "vast/system/spawn_arguments.hpp"
-#include "vast/system/tracker.hpp"
-#include "vast/system/type_registry.hpp"
 
 #include <caf/actor.hpp>
 #include <caf/event_based_actor.hpp>
@@ -37,53 +36,14 @@ using node_actor = caf::stateful_actor<node_state>;
 
 /// State of the node actor.
 struct node_state {
-  // -- member types ----------------------------------------------------------
-
   /// Spawns a component (actor) for the NODE with given spawn arguments.
   using component_factory_fun = maybe_actor (*)(node_actor*, spawn_arguments&);
 
   /// Maps command names to a component factory.
   using named_component_factory = std::map<std::string, component_factory_fun>;
 
-  // -- static member functions ------------------------------------------------
-
   static caf::message
   spawn_command(const invocation& inv, caf::actor_system& sys);
-
-  // -- constructors, destructors, and assignment operators --------------------
-
-  node_state(caf::event_based_actor* selfptr);
-
-  void init(std::string init_name, path init_dir);
-
-  // -- member variables -------------------------------------------------------
-
-  /// Stores the base directory for persistent state.
-  path dir;
-
-  /// Points to the instance of the tracker actor.
-  tracker_type tracker;
-
-  /// Stores how many components per label are active.
-  std::map<std::string, size_t> labels;
-
-  /// Gives the actor a recognizable name in log files.
-  std::string name = "node";
-
-  /// Points to the node itself.
-  caf::event_based_actor* self;
-
-  /// Handle to the ARCHIVE.
-  archive_type archive;
-
-  /// Handle to the schema-store module.
-  type_registry_type type_registry;
-
-  /// Handle to the INDEX.
-  caf::actor index;
-
-  /// Handle to the IMPORTER.
-  caf::actor importer;
 
   /// Maps command names (including parent command) to spawn functions.
   inline static named_component_factory component_factory = {};
@@ -96,6 +56,18 @@ struct node_state {
 
   /// Optionally creates extra component mappings.
   inline static command::factory (*extra_command_factory)() = nullptr;
+
+  /// Stores the base directory for persistent state.
+  path dir;
+
+  /// The component registry.
+  component_registry registry;
+
+  /// Counters for multi-instance components.
+  std::unordered_map<std::string, uint64_t> label_counters;
+
+  /// Gives the actor a recognizable name in log files.
+  std::string name;
 };
 
 /// Spawns a node.
@@ -105,4 +77,3 @@ struct node_state {
 caf::behavior node(node_actor* self, std::string id, path dir);
 
 } // namespace vast::system
-

@@ -14,6 +14,8 @@
 #include "vast/system/spawn_importer.hpp"
 
 #include "vast/defaults.hpp"
+#include "vast/detail/assert.hpp"
+#include "vast/logger.hpp"
 #include "vast/system/importer.hpp"
 #include "vast/system/node.hpp"
 #include "vast/system/spawn_arguments.hpp"
@@ -29,17 +31,24 @@ maybe_actor spawn_importer(node_actor* self, spawn_arguments& args) {
   if (!args.empty())
     return unexpected_arguments(args);
   // FIXME: Notify exporters with a continuous query.
-  auto& st = self->state;
-  if (!st.archive)
+  auto [archive, index, type_registry]
+    = self->state.registry.find_by_label("archive", "index", "type-registry");
+  if (!archive)
     return make_error(ec::missing_component, "archive");
-  if (!st.index)
+  if (!index)
     return make_error(ec::missing_component, "index");
-  if (!st.type_registry)
+  if (!type_registry)
     return make_error(ec::missing_component, "type-registry");
-  auto importer_actor = self->spawn(importer, args.dir / args.label, st.archive,
-                                    st.index, st.type_registry);
-  st.importer = importer_actor;
-  return importer_actor;
+  auto imp = self->spawn(importer, args.dir / args.label,
+                         caf::actor_cast<archive_type>(archive), index,
+                         caf::actor_cast<type_registry_type>(type_registry));
+  if (auto accountant = self->state.registry.find_by_label("accountant"))
+    self->send(imp, caf::actor_cast<accountant_type>(accountant));
+  for (auto& a : self->state.registry.find_by_type("source")) {
+    VAST_DEBUG(self, "connects source to new importer");
+    self->send(a, atom::sink_v, imp);
+  }
+  return imp;
 }
 
 } // namespace vast::system

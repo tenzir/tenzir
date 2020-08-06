@@ -22,8 +22,6 @@
 #include "vast/scope_linked.hpp"
 #include "vast/system/signal_monitor.hpp"
 #include "vast/system/spawn_or_connect_to_node.hpp"
-#include "vast/system/start_command.hpp"
-#include "vast/system/tracker.hpp"
 
 #include <caf/actor.hpp>
 #include <caf/event_based_actor.hpp>

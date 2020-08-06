@@ -11,15 +11,15 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#include "vast/detail/array.hpp"
+#include "vast/detail/assert.hpp"
 #include "vast/error.hpp"
-#include "vast/system/tracker.hpp"
 
 #include <caf/actor.hpp>
 #include <caf/expected.hpp>
 #include <caf/scoped_actor.hpp>
 
 #include <array>
+#include <string>
 
 namespace vast::system {
 
@@ -40,39 +40,19 @@ caf::expected<std::array<caf::actor, N>>
 get_node_components(caf::scoped_actor& self, caf::actor node,
                     const char* const (&names)[N]) {
   auto result = caf::expected{std::array<caf::actor, N>{}};
-  self->request(node, caf::infinite, atom::get_v)
+  std::vector<std::string> labels;
+  labels.reserve(N);
+  for (auto name : names)
+    labels.emplace_back(name);
+  self
+    ->request(node, caf::infinite, atom::get_v, atom::label_v,
+              std::move(labels))
     .receive(
-      [&](const std::string& id, system::registry& reg) {
-        auto find_actor = [&](std::string_view name) -> caf::actor {
-          if (auto er = reg.components.value[id].value.find(name);
-              er != reg.components.value[id].value.end())
-            return er->second.actor;
-          return nullptr;
-        };
-        for (size_t i = 0; i < N; ++i) {
-          result->at(i) = find_actor(names[i]);
-        }
+      [&](std::vector<caf::actor>& components) {
+        VAST_ASSERT(components.size() == N);
+        std::move(components.begin(), components.end(), result->begin());
       },
       [&](caf::error& e) { result = std::move(e); });
-  return result;
-}
-
-/// Look up a node component by component type and label
-inline caf::expected<caf::actor>
-get_node_component(caf::scoped_actor& self, caf::actor node, const std::string& type, const std::string& label) {
-  caf::expected<caf::actor> result = vast::make_error(ec::missing_component);
-  self->request(node, caf::infinite, atom::get_v)
-    .receive(
-      [&](const std::string& id, system::registry& reg) {
-        auto [begin, end] = reg.components.value[id].value.equal_range(type);
-        for (; begin != end; ++begin) {
-          if (begin->second.label == label) {
-            result = begin->second.actor;
-            break;
-          }
-        }
-      },
-      [&](caf::error& e) { result = e; });
   return result;
 }
 

@@ -28,7 +28,7 @@ struct parallel;
 namespace vast::system {
 
 struct terminator_state {
-  std::vector<caf::actor_addr> remaining_actors;
+  std::vector<caf::actor> remaining_actors;
   caf::response_promise promise;
   static inline const char* name = "terminator";
 };

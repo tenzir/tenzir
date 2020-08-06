@@ -327,7 +327,7 @@ class Server:
             **kwargs,
         )
         LOGGER.debug(f"waiting for server to listen on port {self.port}")
-        if not wait.tcp.open(self.port, timeout=5):
+        if not wait.tcp.open(self.port, timeout=10):
             raise RuntimeError("Server could not aquire port.\nAborting tests")
 
     def stop(self):

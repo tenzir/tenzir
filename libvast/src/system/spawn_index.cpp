@@ -31,14 +31,15 @@ maybe_actor spawn_index(node_actor* self, spawn_arguments& args) {
     return get_or(args.inv.options, key, default_value);
   };
   namespace sd = vast::defaults::system;
-  auto result = self->spawn(
+  auto idx = self->spawn(
     index, args.dir / args.label,
     opt("system.max-partition-size", sd::max_partition_size),
     opt("system.max-resident-partitions", sd::max_in_mem_partitions),
     opt("system.max-taste-partitions", sd::taste_partitions),
     opt("system.max-queries", sd::num_query_supervisors));
-  self->state.index = result;
-  return result;
+  if (auto accountant = self->state.registry.find_by_label("accountant"))
+    self->send(idx, caf::actor_cast<accountant_type>(accountant));
+  return idx;
 }
 
 } // namespace vast::system
