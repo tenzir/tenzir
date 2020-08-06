@@ -231,7 +231,7 @@ caf::error reader::read_impl(size_t max_events, size_t max_slice_size,
         pseudo_realtime_ = 0;
         VAST_WARNING(this, "ignores pseudo-realtime in live mode");
       }
-      VAST_DEBUG(this, "listens on interface", *interface_);
+      VAST_INFO(this, "listens on interface", *interface_);
     } else if (input_ != "-" && !exists(input_)) {
       return make_error(ec::format_error, "no such file: ", input_);
     } else {
@@ -248,15 +248,15 @@ caf::error reader::read_impl(size_t max_events, size_t max_slice_size,
         return make_error(ec::format_error, "failed to open pcap file ", input_,
                           ": ", std::string{buf});
       }
-      VAST_DEBUG(this, "reads trace from", input_);
+      VAST_INFO(this, "reads trace from", input_);
       if (pseudo_realtime_ > 0)
-        VAST_DEBUG(this, "uses pseudo-realtime factor 1/", pseudo_realtime_);
+        VAST_VERBOSE(this, "uses pseudo-realtime factor 1/", pseudo_realtime_);
     }
-    VAST_DEBUG(this, "cuts off flows after", cutoff_,
-               "bytes in each direction");
-    VAST_DEBUG(this, "keeps at most", max_flows_, "concurrent flows");
-    VAST_DEBUG(this, "evicts flows after", max_age_, "s of inactivity");
-    VAST_DEBUG(this, "expires flow table every", expire_interval_, "s");
+    VAST_VERBOSE(this, "cuts off flows after", cutoff_,
+                 "bytes in each direction");
+    VAST_VERBOSE(this, "keeps at most", max_flows_, "concurrent flows");
+    VAST_VERBOSE(this, "evicts flows after", max_age_, "s of inactivity");
+    VAST_VERBOSE(this, "expires flow table every", expire_interval_, "s");
   }
   auto start = std::chrono::steady_clock::now();
   auto produced = size_t{0};
