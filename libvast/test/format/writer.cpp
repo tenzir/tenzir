@@ -31,7 +31,7 @@ FIXTURE_SCOPE(ascii_tests, fixtures::events)
 namespace {
 
 // clang-format off
-auto last_zeek_http_log_line = R"__(<2009-11-19T07:17:28.829955072, "rydI6puScNa", 192.168.1.104, 1224/tcp, 87.106.66.233, 80/tcp, 1, "POST", "87.106.66.233", "/rpc.html?e=bl", nil, "SCSDK-6.0.0", 1064, 96, 200, "OK", 100, "Continue", nil, {}, nil, nil, nil, "application/octet-stream", nil, nil>)__";
+auto last_zeek_http_log_line = R"__(<2009-11-19T07:17:28.829955072, "rydI6puScNa", 192.168.1.104, 1224/tcp, 87.106.66.233, 80/tcp, 1, "POST", "87.106.66.233", "/rpc.html?e=bl", nil, "SCSDK-6.0.0", 1064, 96, 200, "OK", 100, "Continue", nil, [], nil, nil, nil, "application/octet-stream", nil, nil>)__";
 
 auto first_csv_http_log_line = "type,ts,uid,id.orig_h,id.orig_p,id.resp_h,id.resp_p,trans_depth,method,host,uri,referrer,user_agent,request_body_len,response_body_len,status_code,status_msg,info_code,info_msg,filename,tags,username,password,proxied,mime_type,md5,extraction_file";
 

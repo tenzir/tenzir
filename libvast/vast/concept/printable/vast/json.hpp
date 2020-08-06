@@ -175,11 +175,6 @@ struct json_printer : printer<json_printer<TreePolicy, Indent, Padding>> {
       return print_array(xs.begin(), xs.end());
     }
 
-    bool operator()(const view<set>& xs) {
-      // JSON has no data type for sets, so we're printing it as an array.
-      return print_array(xs.begin(), xs.end());
-    }
-
     template <class ForwardIterator>
     bool print_map(ForwardIterator begin, ForwardIterator end) {
       using namespace printers;

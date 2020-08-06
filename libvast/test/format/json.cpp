@@ -72,7 +72,6 @@ TEST(json to data) {
                             {"d", duration_type{}},
                             {"d2", duration_type{}},
                             {"e", enumeration_type{{"FOO", "BAR", "BAZ"}}},
-                            {"sc", set_type{count_type{}}},
                             {"vp", vector_type{port_type{}}},
                             {"vt", vector_type{time_type{}}},
                             {"rec", record_type{{"c", count_type{}},
@@ -94,7 +93,6 @@ TEST(json to data) {
     "d": "42s",
     "d2": 3.006088,
     "e": "BAZ",
-    "sc": [ 44, 42, 43 ],
     "vp": [ 19, "5555/tcp", 0, "0/icmp" ],
     "vt": [ 1556624773, "2019-04-30T11:46:13Z" ],
     "rec": { "c": 421, "s":"test" },
@@ -110,7 +108,7 @@ TEST(json to data) {
   auto reference = map{};
   reference[count{1}] = data{"FOO"};
   reference[count{1024}] = data{"BAR!"};
-  CHECK_EQUAL(materialize(ptr->at(0, 18)), data{reference});
+  CHECK_EQUAL(materialize(ptr->at(0, 17)), data{reference});
 }
 
 TEST_DISABLED(suricata) {

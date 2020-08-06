@@ -95,7 +95,6 @@ VAST_DEFINE_BASIC_TYPE_PRINTER(port_type, "port")
   };
 
 VAST_DECLARE_TYPE_PRINTER(vector_type)
-VAST_DECLARE_TYPE_PRINTER(set_type)
 VAST_DECLARE_TYPE_PRINTER(map_type)
 VAST_DECLARE_TYPE_PRINTER(record_type)
 VAST_DECLARE_TYPE_PRINTER(alias_type)
@@ -147,7 +146,6 @@ struct type_printer : printer<type_printer<Policy>> {
              | port_type_printer{}
              | enumeration_type_printer{}
              | vector_type_printer{}
-             | set_type_printer{}
              | map_type_printer{}
              | record_type_printer{}
              | alias_type_printer{}
@@ -175,13 +173,6 @@ struct printer_registry<type> {
 template <class Iterator>
 bool vector_type_printer::print(Iterator& out, const vector_type& t) const {
   auto p = "vector<" << type_printer<policy::name_only>{} << '>';
-  auto a = detail::make_attr_printer(t);
-  return (p << a)(out, t.value_type, t.attributes());
-}
-
-template <class Iterator>
-bool set_type_printer::print(Iterator& out, const set_type& t) const {
-  auto p = "set<" << type_printer<policy::name_only>{} << '>';
   auto a = detail::make_attr_printer(t);
   return (p << a)(out, t.value_type, t.attributes());
 }

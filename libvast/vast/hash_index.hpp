@@ -216,14 +216,14 @@ private:
       auto keys = caf::visit(
         detail::overload([&](auto xs) -> caf::expected<std::vector<key>> {
           using view_type = decltype(xs);
-          if constexpr (detail::is_any_v<view_type, view<set>, view<vector>>) {
+          if constexpr (std::is_same_v<view_type, view<vector>>) {
             std::vector<key> result;
             result.reserve(xs.size());
             for (auto x : xs)
               result.emplace_back(find_digest(x));
             return result;
           } else {
-            return make_error(ec::type_clash, "expected set or vector on RHS",
+            return make_error(ec::type_clash, "expected vector on RHS",
                               materialize(x));
           }
         }),

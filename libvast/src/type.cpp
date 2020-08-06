@@ -496,10 +496,6 @@ struct type_congruence_checker {
     return visit(*this, x.value_type, y.value_type);
   }
 
-  bool operator()(const set_type& x, const set_type& y) const {
-    return visit(*this, x.value_type, y.value_type);
-  }
-
   bool operator()(const map_type& x, const map_type& y) const {
     return visit(*this, x.key_type, y.key_type) &&
         visit(*this, x.value_type, y.value_type);
@@ -574,10 +570,6 @@ struct data_congruence_checker {
   }
 
   bool operator()(const vector_type&, const vector&) const {
-    return true;
-  }
-
-  bool operator()(const set_type&, const set&) const {
     return true;
   }
 
@@ -731,11 +723,6 @@ bool type_check(const type& t, const data& x) {
         return xs->empty() || type_check(u.value_type, *xs->begin());
       return false;
     },
-    [&](const set_type& u) {
-      if (auto xs = caf::get_if<set>(&x))
-        return xs->empty() || type_check(u.value_type, *xs->begin());
-      return false;
-    },
     [&](const map_type& u) {
       auto xs = caf::get_if<map>(&x);
       if (!xs)
@@ -792,7 +779,7 @@ namespace {
 const char* kind_tbl[] = {
   "none",        "bool",   "int",     "count",   "real",   "duration",
   "time",        "string", "pattern", "address", "subnet", "port",
-  "enumeration", "vector", "set",     "map",     "record", "alias",
+  "enumeration", "vector", "map",     "record",  "alias",
 };
 
 using caf::detail::tl_size;
@@ -810,11 +797,6 @@ json jsonize(const type& x) {
       return json{std::move(a)};
     },
     [&](const vector_type& t) {
-      json::object o;
-      o["value_type"] = to_json(t.value_type);
-      return json{std::move(o)};
-    },
-    [&](const set_type& t) {
       json::object o;
       o["value_type"] = to_json(t.value_type);
       return json{std::move(o)};

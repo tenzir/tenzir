@@ -77,7 +77,6 @@ using to_data_type = std::conditional_t<
             || std::is_same_v<T, subnet>
             || std::is_same_v<T, port>
             || std::is_same_v<T, vector>
-            || std::is_same_v<T, set>
             || std::is_same_v<T, map>,
             T,
             std::false_type
@@ -116,7 +115,6 @@ public:
     port,
     enumeration,
     vector,
-    set,
     map
   >;
   // clang-format on
@@ -228,7 +226,6 @@ VAST_DATA_TRAIT(subnet);
 VAST_DATA_TRAIT(port);
 VAST_DATA_TRAIT(enumeration);
 VAST_DATA_TRAIT(vector);
-VAST_DATA_TRAIT(set);
 VAST_DATA_TRAIT(map);
 
 #undef VAST_DATA_TRAIT
@@ -298,7 +295,6 @@ bool evaluate(const data& lhs, relational_operator op, const data& rhs);
 // -- convertible -------------------------------------------------------------
 
 bool convert(const vector& v, json& j);
-bool convert(const set& v, json& j);
 bool convert(const map& v, json& j);
 bool convert(const data& v, json& j);
 

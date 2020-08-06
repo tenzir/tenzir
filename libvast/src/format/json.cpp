@@ -97,19 +97,6 @@ struct convert {
   }
 
   caf::expected<data>
-  operator()(const json::array& a, const set_type& s) const {
-    set xs;
-    xs.reserve(a.size());
-    for (auto& x : a) {
-      if (auto elem = caf::visit(*this, x, s.value_type))
-        xs.insert(*std::move(elem));
-      else
-        return elem;
-    }
-    return xs;
-  }
-
-  caf::expected<data>
   operator()(const json::array& a, const vector_type& v) const {
     vector xs;
     xs.reserve(a.size());

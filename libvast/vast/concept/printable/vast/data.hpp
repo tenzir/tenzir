@@ -77,21 +77,6 @@ struct printer_registry<vector> {
   using type = vector_printer;
 };
 
-struct set_printer : printer<set_printer> {
-  using attribute = set;
-
-  template <class Iterator>
-  bool print(Iterator& out, const set& s) const {
-    auto p = '{' << ~(data_printer{} % ", ") << '}';
-    return p.print(out, s);
-  }
-};
-
-template <>
-struct printer_registry<set> {
-  using type = set_printer;
-};
-
 struct map_printer : printer<map_printer> {
   using attribute = map;
 

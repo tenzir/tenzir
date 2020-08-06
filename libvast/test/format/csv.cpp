@@ -38,7 +38,7 @@ struct fixture : fixtures::deterministic_actor_system {
 
   const record_type l1 = record_type{{"s", string_type{}},
                                      {"ptn", pattern_type{}},
-                                     {"set", set_type{count_type{}}}}
+                                     {"lis", vector_type{count_type{}}}}
                            .name("l1");
 
   const record_type l2 = record_type{{"b", bool_type{}},
@@ -54,7 +54,6 @@ struct fixture : fixtures::deterministic_actor_system {
                                      {"d2", duration_type{}},
                                      {"e",
                                       enumeration_type{{"FOO", "BAR", "BAZ"}}},
-                                     {"sc", set_type{count_type{}}},
                                      {"vp", vector_type{port_type{}}},
                                      {"vt", vector_type{time_type{}}},
                                      {"msa",
@@ -75,10 +74,9 @@ struct fixture : fixtures::deterministic_actor_system {
 
   std::vector<table_slice_ptr> run(std::string_view data, size_t max_events,
                                    size_t max_slice_size) {
-    using reader_type = format::csv::reader;
     auto in = std::make_unique<std::istringstream>(std::string{data});
-    reader_type reader{defaults::import::table_slice_type, options,
-                       std::move(in)};
+    format::csv::reader reader{defaults::import::table_slice_type, options,
+                               std::move(in)};
     reader.schema(s);
     std::vector<table_slice_ptr> slices;
     auto add_slice = [&](table_slice_ptr ptr) {
@@ -153,43 +151,43 @@ TEST(csv reader - pattern) {
   CHECK(slices[0]->at(0, 0) == data{pattern{"hello"}});
 }
 
-std::string_view l1_log0 = R"__(s,ptn,set
-hello,world,{1,2}
-Tom,appeared,{42,1337}
-on,the,{42,1337}
-sidewalk,with,{42,1337}
-a,bucket,{42,1337}
-of,whitewash,{42,1337}
-and,a,{42,1337}
-long-handled,brush,{42,1337}
-He,surveyed the,{42,1337}
-fence,and,{42,1337}
-all,gladness,{42,1337}
-left,him,{42,1337}
-and ,a,{42,1337}
-deep,melancholy,{42,1337}
-settled,down,{42,1337}
-upon,his,{42,1337}
-spirit,Thirty,{42,1337}
-yards,of,{42,1337}
-board, fence,{42,1337}
-nine,feet,{42,1337}
-high,Life,{42,1337}
-to,him,{42,1337}
-seemed,hollow,{42,1337}
-and,existence,{42,1337}
-but,a,{42,1337}
-burden,Sighing,{42,1337}
+std::string_view l1_log0 = R"__(s,ptn,lis
+hello,world,[1,2]
+Tom,appeared,[42,1337]
+on,the,[42,1337]
+sidewalk,with,[42,1337]
+a,bucket,[42,1337]
+of,whitewash,[42,1337]
+and,a,[42,1337]
+long-handled,brush,[42,1337]
+He,surveyed the,[42,1337]
+fence,and,[42,1337]
+all,gladness,[42,1337]
+left,him,[42,1337]
+and ,a,[42,1337]
+deep,melancholy,[42,1337]
+settled,down,[42,1337]
+upon,his,[42,1337]
+spirit,Thirty,[42,1337]
+yards,of,[42,1337]
+board, fence,[42,1337]
+nine,feet,[42,1337]
+high,Life,[42,1337]
+to,him,[42,1337]
+seemed,hollow,[42,1337]
+and,existence,[42,1337]
+but,a,[42,1337]
+burden,Sighing,[42,1337]
 ,,)__";
 
 TEST(csv reader - layout with container) {
   auto slices = run(l1_log0, 20, 20);
   REQUIRE_EQUAL(slices[0]->layout(), l1);
   CHECK(slices[0]->at(10, 1) == data{pattern{"gladness"}});
-  auto s = vast::set{};
-  s.emplace(data{count{42}});
-  s.emplace(data{count{1337}});
-  CHECK(slices[0]->at(19, 2) == data{s});
+  auto xs = vast::vector{};
+  xs.emplace_back(data{count{42}});
+  xs.emplace_back(data{count{1337}});
+  CHECK(slices[0]->at(19, 2) == data{xs});
 }
 
 std::string_view l1_log1 = R"__(s,ptn
@@ -282,14 +280,13 @@ TEST(csv reader - duration) {
 }
 
 std::string_view l2_log_reord
-  = R"__(msa, c, r, i, b,  a,  p, sn, d,  e,  t,  sc, vp, vt
-{ foo=1.2.3.4, bar=2001:db8:: },424242,4.2,-1337,T,147.32.84.165,42/udp,192.168.0.1/24,42s,BAZ,2011-08-12+14:59:11.994970,{ 44, 42, 43 },[ 5555/tcp, 0/icmp ],[ 2019-04-30T11:46:13Z ])__";
+  = R"__(msa, c, r, i, b,  a,  p, sn, d,  e,  t, vp, vt
+{ foo=1.2.3.4, bar=2001:db8:: },424242,4.2,-1337,T,147.32.84.165,42/udp,192.168.0.1/24,42s,BAZ,2011-08-12+14:59:11.994970,[ 5555/tcp, 0/icmp ],[ 2019-04-30T11:46:13Z ])__";
 // FIXME: Parsing maps in csv is broken, see ch12358.
-//   = R"__(msa, c, r, i, b,  a,  p, sn, d,  e,  t,  sc, vp, vt, mcs
+//   = R"__(msa, c, r, i, b,  a,  p, sn, d,  e,  t,  vp, vt, mcs
 // { foo=1.2.3.4, bar=2001:db8::
-// },424242,4.2,-1337,T,147.32.84.165,42/udp,192.168.0.1/24,42s,BAZ,2011-08-12+14:59:11.994970,{
-// 44, 42, 43 },[ 5555/tcp, 0/icmp ],[ 2019-04-30T11:46:13Z ],{ 1=FOO, 1024=BAR!
-// })__";
+// },424242,4.2,-1337,T,147.32.84.165,42/udp,192.168.0.1/24,42s,BAZ,2011-08-12+14:59:11.994970,
+// [ 5555/tcp, 0/icmp ],[ 2019-04-30T11:46:13Z ],{ 1=FOO, 1024=BAR! })__";
 
 TEST(csv reader - reordered layout) {
   auto slices = run(l2_log_reord, 1, 1);
@@ -304,7 +301,6 @@ TEST(csv reader - reordered layout) {
                             {"d", duration_type{}},
                             {"e", enumeration_type{{"FOO", "BAR", "BAZ"}}},
                             {"t", time_type{}},
-                            {"sc", set_type{count_type{}}},
                             {"vp", vector_type{port_type{}}},
                             {"vt", vector_type{time_type{}}},
                             // FIXME: Parsing maps in csv is broken, see ch12358.
@@ -326,15 +322,10 @@ TEST(csv reader - reordered layout) {
   CHECK(slices[0]->at(0, 9) == data{enumeration{2}});
   CHECK(slices[0]->at(0, 10)
         == data{unbox(to<vast::time>("2011-08-12+14:59:11.994970"))});
-  auto s = set{};
-  s.emplace(count{44});
-  s.emplace(count{42});
-  s.emplace(count{43});
-  CHECK_EQUAL(materialize(slices[0]->at(0, 11)), data{s});
-  CHECK(
-    slices[0]->at(0, 12)
-    == data{vector{unbox(to<port>("5555/tcp")), unbox(to<port>("0/icmp"))}});
-  CHECK(slices[0]->at(0, 13)
+  CHECK(slices[0]->at(0, 11)
+        == data{vector{unbox(to<port>("5555/tcp")), unbox(to<port>("0/"
+                                                                   "icmp"))}});
+  CHECK(slices[0]->at(0, 12)
         == data{vector{unbox(to<vast::time>("2019-04-30T11:46:13Z"))}});
   auto m = map{};
   m[1u] = data{"FOO"};

@@ -62,11 +62,8 @@ TEST(data) {
   MESSAGE("vector");
   CHECK_EQUAL(to_data("[]"), vector{});
   CHECK_EQUAL(to_data("[42, 4.2, nil]"), (vector{42u, 4.2, caf::none}));
-  MESSAGE("set");
-  CHECK_EQUAL(to_data("{}"), set{});
-  CHECK_EQUAL(to_data("{42, 42, nil}"), (set{42u, caf::none}));
   MESSAGE("map");
-  CHECK_EQUAL(to_data("{-}"), map{});
+  CHECK_EQUAL(to_data("{}"), map{});
   CHECK_EQUAL(to_data("{+1->T,+2->F}"), (map{{1, true}, {2, false}}));
   CHECK_EQUAL(to_data("{-1 -> T, -2 -> F}"), (map{{-1, true}, {-2, false}}));
 }

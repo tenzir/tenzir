@@ -125,10 +125,6 @@ struct zeek_type_printer {
     return "vector[" + caf::visit(*this, t.value_type) + ']';
   }
 
-  std::string operator()(const set_type& t) const {
-    return "vector[" + caf::visit(*this, t.value_type) + ']';
-  }
-
   std::string operator()(const alias_type& t) const {
     return caf::visit(*this, t.value_type);
   }
@@ -560,7 +556,7 @@ public:
 
   template <class T>
   bool operator()(Iterator& out, const T& x) const {
-    if constexpr (detail::is_any_v<T, view<vector>, view<set>>) {
+    if constexpr (std::is_same_v<T, view<vector>>) {
       if (x.empty()) {
         for (auto c : std::string_view(empty_field))
           *out++ = c;

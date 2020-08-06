@@ -72,9 +72,6 @@ bool is_equal(const data& x, const data_view& y) {
     [&](const vector& lhs, const view<vector>& rhs) {
       return std::equal(lhs.begin(), lhs.end(), rhs.begin(), rhs.end(), pred);
     },
-    [&](const set& lhs, const view<set>& rhs) {
-      return std::equal(lhs.begin(), lhs.end(), rhs.begin(), rhs.end(), pred);
-    },
     [&](const map& lhs, const view<map>& rhs) {
       auto f = [](const auto& xs, const auto& ys) {
         return is_equal(xs.first, ys.first) && is_equal(xs.second, ys.second);
@@ -99,20 +96,6 @@ default_vector_view::value_type default_vector_view::at(size_type i) const {
 }
 
 default_vector_view::size_type default_vector_view::size() const noexcept {
-  return xs_.size();
-}
-
-// -- default_set_view --------------------------------------------------------
-
-default_set_view::default_set_view(const set& xs) : xs_{xs} {
-  // nop
-}
-
-default_set_view::value_type default_set_view::at(size_type i) const {
-  return make_data_view(*std::next(xs_.begin(), i));
-}
-
-default_set_view::size_type default_set_view::size() const noexcept {
   return xs_.size();
 }
 
@@ -168,10 +151,6 @@ vector materialize(vector_view_handle xs) {
   return materialize_container<vector>(xs);
 }
 
-set materialize(set_view_handle xs) {
-  return materialize_container<set>(xs);
-}
-
 map materialize(map_view_handle xs) {
   return materialize_container<map>(xs);
 }
@@ -202,13 +181,6 @@ bool type_check(const type& t, const data_view& x) {
         return false;
       auto& xs = **v;
       return xs.empty() || type_check(u.value_type,  xs.at(0));
-    },
-    [&](const set_type& u) {
-      auto v = caf::get_if<view<set>>(&x);
-      if (!v)
-        return false;
-      auto& xs = **v;
-      return xs.empty() || type_check(u.value_type, xs.at(0));
     },
     [&](const map_type& u) {
       auto v = caf::get_if<view<map>>(&x);
@@ -246,7 +218,7 @@ namespace {
 struct contains_predicate {
   template <class T, class U>
   bool operator()(const T& lhs, const U& rhs) const {
-    if constexpr (detail::is_any_v<U, view<vector>, view<set>>) {
+    if constexpr (std::is_same_v<U, view<vector>>) {
       auto equals_lhs = [&](const auto& y) {
         if constexpr (std::is_same_v<T, std::decay_t<decltype(y)>>)
           return lhs == y;

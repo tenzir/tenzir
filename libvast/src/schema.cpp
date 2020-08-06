@@ -148,10 +148,6 @@ bool operator==(const schema& x, const schema& y) {
 //    save_type(t.value_type);
 //  }
 //
-//  void operator()(const set_type& t) const {
-//    save_type(t.value_type);
-//  }
-//
 //  void operator()(const table_type& t) const {
 //    save_type(t.key_type);
 //    save_type(t.value_type);

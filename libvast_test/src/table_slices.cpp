@@ -45,7 +45,6 @@ table_slices::table_slices() {
     {"j", subnet_type{}},
     {"k", port_type{}},
     {"l", vector_type{count_type{}}},
-    {"m", set_type{bool_type{}}},
     {"n", map_type{count_type{}, bool_type{}}},
     // test_vectors
     {"va", vector_type{bool_type{}}},
@@ -60,23 +59,7 @@ table_slices::table_slices() {
     {"vj", vector_type{subnet_type{}}},
     {"vk", vector_type{port_type{}}},
     // {"vl", vector_type{vector_type{count_type{}}}},
-    // {"vm", vector_type{set_type{bool_type{}}}},
     // {"vn", vector_type{map_type{count_type{}, bool_type{}}}},
-    // -- test_sets
-    {"sa", set_type{bool_type{}}},
-    {"sb", set_type{integer_type{}}},
-    {"sc", set_type{count_type{}}},
-    {"sd", set_type{real_type{}}},
-    {"se", set_type{duration_type{}}},
-    {"sf", set_type{time_type{}}},
-    {"sg", set_type{string_type{}}},
-    {"sh", set_type{pattern_type{}}},
-    {"si", set_type{address_type{}}},
-    {"sj", set_type{subnet_type{}}},
-    {"sk", set_type{port_type{}}},
-    // {"sl", set_type{vector_type{count_type{}}}},
-    // {"sm", set_type{set_type{bool_type{}}}},
-    // {"sn", set_type{map_type{count_type{}, bool_type{}}}},
     // -- test_maps_left
     {"maa", map_type{bool_type{}, bool_type{}}},
     {"mba", map_type{integer_type{}, bool_type{}}},
@@ -90,7 +73,6 @@ table_slices::table_slices() {
     {"mja", map_type{subnet_type{}, bool_type{}}},
     {"mka", map_type{port_type{}, bool_type{}}},
     // {"mla", map_type{vector_type{count_type{}}, bool_type{}}},
-    // {"mma", map_type{set_type{bool_type{}}, bool_type{}}},
     // {"mna", map_type{map_type{count_type{}, bool_type{}}, bool_type{}}},
     // -- test_maps_right (intentionally no maa)
     {"mab", map_type{bool_type{}, integer_type{}}},
@@ -104,7 +86,6 @@ table_slices::table_slices() {
     {"maj", map_type{bool_type{}, subnet_type{}}},
     {"mak", map_type{bool_type{}, port_type{}}},
     // {"mal", map_type{bool_type{}, vector_type{count_type{}}}},
-    // {"mam", map_type{bool_type{}, set_type{bool_type{}}}},
     // {"man", map_type{bool_type{}, map_type{count_type{}, bool_type{}}}},
   }.name("test");
   // A bunch of test data for nested type combinations.
@@ -122,24 +103,7 @@ table_slices::table_slices() {
     + ", [10.0.0.0/8]"s // vj
     + ", [80/tcp]"s // vk
     // + ", [[1, 2, 3]]"s // vl
-    // + ", [{T, F}]"s // vm
     // + ", [{1 -> T, 2 -> F, 3 -> T}]"s // vn
-    ;
-  auto test_sets = ""s
-    + ", {T}"s // sa
-    + ", {+7}"s // sb
-    + ", {42}"s // sc
-    + ", {4.2}"s // sd
-    + ", {1337ms}"s // se
-    + ", {2018-12-24}"s // sf
-    + ", {\"foo\"}"s // sg
-    + ", {/foo.*bar/}"s // sh
-    + ", {127.0.0.1}"s // si
-    + ", {10.0.0.0/8}"s // sj
-    + ", {80/tcp}"s // sk
-    // + ", {[1, 2, 3]}"s // sl
-    // + ", {{T, F}}"s // sm
-    // + ", {{1 -> T, 2 -> F, 3 -> T}}"s // sn
     ;
   auto test_maps_left = ""s
     + ", {T -> T}"s // maa
@@ -154,7 +118,6 @@ table_slices::table_slices() {
     + ", {10.0.0.0/8 -> T}"s // mja
     + ", {80/tcp -> T}"s // mka
     // + ", {[1, 2, 3] -> T}"s // mla
-    // + ", {{T, F} -> T}"s // mma
     // + ", {{1 -> T, 2 -> F, 3 -> T} -> T}"s // mna
     ;
   auto test_maps_right = ""s
@@ -170,12 +133,10 @@ table_slices::table_slices() {
     + ", {T -> 10.0.0.0/8}"s // maj
     + ", {T -> 80/tcp}"s // mak
     // + ", {T -> [1, 2, 3]}"s // mal
-    // + ", {T -> {T, F}}"s // mam
     // + ", {T -> {1 -> T, 2 -> F, 3 -> T}}"s // man
     ;
   auto test_collections
     = test_vectors
-    + test_sets
     + test_maps_left
     + test_maps_right
     ;
@@ -183,10 +144,10 @@ table_slices::table_slices() {
   // Initialize test data.
   auto rows = std::vector<std::string>{
     "[T, +7, 42, 4.2, 1337ms, 2018-12-24, \"foo\", /foo.*bar/, 127.0.0.1,"
-    " 10.0.0.0/8, 80/tcp, [1, 2, 3], {T, F}, {1 -> T, 2 -> F, 3 -> T}"
+    " 10.0.0.0/8, 80/tcp, [1, 2, 3], {1 -> T, 2 -> F, 3 -> T}"
       + test_collections + "]",
     "[F, -7, 43, 0.42, -1337ms, 2018-12-25, \"bar\", nil, ::1, 64:ff9b::/96,"
-    " 53/udp, [], {}, {-}"
+    " 53/udp, [], {}"
       + test_collections + "]",
   };
   for (auto& row : rows) {

@@ -132,15 +132,6 @@ struct type_parser : parser<type_parser> {
       = ("vector" >> skp >> '<' >> skp >> ref(type_type) >> skp >> '>')
         ->* to_vector
       ;
-    // Set
-    static auto to_set = [](sequence_tuple xs) -> type {
-      auto& [value_type, attrs] = xs;
-      return set_type{std::move(value_type)}.attributes(std::move(attrs));
-    };
-    auto set_type_parser
-      = ("set" >> skp >> '<' >> skp >> ref(type_type) >> skp >> '>')
-      ->* to_set
-      ;
     // Map
     using map_tuple = std::tuple<type, type, std::vector<vast::attribute>>;
     static auto to_map = [](map_tuple xs) -> type {
@@ -182,7 +173,6 @@ struct type_parser : parser<type_parser> {
         = basic_type_parser
         | enum_type_parser
         | vector_type_parser
-        | set_type_parser
         | map_type_parser
         | record_type_parser
         | *symbol_type; // The *symbol_type parser must MUST be last as it
@@ -192,7 +182,6 @@ struct type_parser : parser<type_parser> {
         = basic_type_parser
         | enum_type_parser
         | vector_type_parser
-        | set_type_parser
         | map_type_parser
         | record_type_parser;
     return type_type(f, l, a);

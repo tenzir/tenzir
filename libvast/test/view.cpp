@@ -81,20 +81,6 @@ TEST(vector view) {
   CHECK_EQUAL(xs, materialize(v));
 }
 
-TEST(set view) {
-  auto xs = set{true, 42, "foo"};
-  auto v = make_view(xs);
-  REQUIRE_EQUAL(v->size(), xs.size());
-  MESSAGE("check view contents");
-  for (auto i = 0u; i < xs.size(); ++i)
-    CHECK_EQUAL(v->at(i), make_data_view(*std::next(xs.begin(), i)));
-  MESSAGE("check iterator semantics");
-  CHECK_EQUAL(std::next(v->begin(), 3), v->end());
-  CHECK_EQUAL(*std::next(v->begin(), 1), make_data_view(42));
-  MESSAGE("check conversion back to data");
-  CHECK_EQUAL(xs, materialize(v));
-}
-
 TEST(map view) {
   auto xs = map{{42, true}, {84, false}};
   auto v = make_view(xs);
@@ -145,7 +131,7 @@ TEST(comparison with data) {
   CHECK(!is_equal(x, y));
   x = caf::none;
   CHECK(is_equal(x, y));
-  x = set{1, "foo", 4.2};
+  x = vector{1, "foo", 4.2};
   y = make_view(x);
   CHECK(is_equal(x, y));
 }
@@ -175,13 +161,6 @@ TEST(container comparison) {
   CHECK(make_view(xs) < make_view(ys));
   xs = map{{43, true}};
   CHECK(make_view(xs) > make_view(ys));
-  MESSAGE("strict weak ordering corner cases");
-  auto zs = set{1, 2, 3};
-  CHECK(!(view<set>{} < view<set>{}));
-  CHECK(view<set>{} < make_view(zs));
-  CHECK(!(make_view(zs) < view<set>{}));
-  CHECK(make_data_view(zs) < make_view(xs));
-  CHECK(!(make_view(xs) < make_data_view(zs)));
 }
 
 TEST(hashing views) {
@@ -190,7 +169,6 @@ TEST(hashing views) {
   data st = "string"s;
   data p = pattern{"x"};
   data v = vector{42, true, "foo", 4.2};
-  data s = set{true, 42, "foo"};
   data m = map{{42, true}, {84, false}};
 
   using hash = vast::uhash<vast::xxhash>;
@@ -199,6 +177,5 @@ TEST(hashing views) {
   CHECK_EQUAL(hash{}(st), hash{}(make_view(st)));
   CHECK_EQUAL(hash{}(p), hash{}(make_view(p)));
   CHECK_EQUAL(hash{}(v), hash{}(make_view(v)));
-  CHECK_EQUAL(hash{}(s), hash{}(make_view(s)));
   CHECK_EQUAL(hash{}(m), hash{}(make_view(m)));
 }

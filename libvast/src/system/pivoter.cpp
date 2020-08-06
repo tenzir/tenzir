@@ -103,17 +103,17 @@ caf::behavior pivoter(caf::stateful_actor<pivoter_state>* self, caf::actor node,
         return;
       VAST_DEBUG(self, "uses", *pivot_field, "to extract", st.target, "events");
       auto column = slice->column(pivot_field->name);
-      auto xs = set{};
+      auto xs = vector{};
       for (size_t i = 0; i < column->rows(); ++i) {
         auto data = materialize((*column)[i]);
         auto x = caf::get_if<std::string>(&data);
         // Skip if no value
         if (!x)
           continue;
-        // Skip if id was already requested
+        // Skip if ID was already requested
         if (st.requested_ids.count(*x) > 0)
           continue;
-        xs.insert(*x);
+        xs.push_back(*x);
         st.requested_ids.insert(*x);
       }
       if (xs.empty()) {

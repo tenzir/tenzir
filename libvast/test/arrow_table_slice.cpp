@@ -321,19 +321,6 @@ TEST(single column - list of list of integers) {
   CHECK_ROUNDTRIP_DEREF(slice);
 }
 
-TEST(single column - set of integers) {
-  auto list_type = set_type{integer_type{}};
-  record_type layout{record_field{"values", list_type}};
-  set set1{1_i, 2_i, 3_i};
-  set set2{10_i, 20_i};
-  auto slice = make_slice(layout, set1, caf::none, set2);
-  REQUIRE_EQUAL(slice->rows(), 3u);
-  CHECK_VARIANT_EQUAL(slice->at(0, 0), make_view(set1));
-  CHECK_VARIANT_EQUAL(slice->at(1, 0), caf::none);
-  CHECK_VARIANT_EQUAL(slice->at(2, 0), make_view(set2));
-  CHECK_ROUNDTRIP_DEREF(slice);
-}
-
 TEST(single column - map) {
   record_type layout{
     record_field{"values", map_type{string_type{}, count_type{}}}};

@@ -60,8 +60,7 @@ private:
       | parsers::qqstr
       | parsers::pattern
       | '[' >> ~(x % ',') >> ~(',' >> ws) >> ']'
-      | '{' >> (('-' >> &'}'_p) | as<map>(kvp % ',')) >> ~(',' >> ws) >> '}'
-      | '{' >> ~as<set>(x % ',') >> ~(',' >> ws) >> '}'
+      | '{' >> ~as<map>(kvp % ',') >> ~(',' >> ws) >> '}'
       | as<caf::none_t>("nil"_p)
       ;
     // clang-format on
