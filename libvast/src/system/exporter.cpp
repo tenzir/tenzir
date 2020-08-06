@@ -183,7 +183,7 @@ behavior exporter(stateful_actor<exporter_state>* self, expression expr,
           && (msg.source == self->state.archive
               || msg.source == self->state.index))
         report_statistics(self);
-      // Without sinks and resumable sessions, there's not reason to proceed.
+      // Without sinks and resumable sessions, there's no reason to proceed.
       self->quit(msg.reason);
     }
   );
