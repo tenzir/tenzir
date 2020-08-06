@@ -11,6 +11,10 @@ Every entry has a category for which we use the following visual abbreviations:
 
 ## Unreleased
 
+- 🐞 The port encoding for Arrow-encoded table slices is now host-independent
+  and always uses network-byte order.
+  [#1007](https://github.com/tenzir/vast/pull/1007)
+
 - 🐞 When continuous query in a client process terminated, the node did not
   clean up the corresponding server-side state. This memory leak no longer
   exists. [#1006](https://github.com/tenzir/vast/pull/1006)

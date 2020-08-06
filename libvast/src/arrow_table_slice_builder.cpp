@@ -14,6 +14,7 @@
 #include "vast/arrow_table_slice_builder.hpp"
 
 #include "vast/arrow_table_slice.hpp"
+#include "vast/detail/byte_swap.hpp"
 #include "vast/detail/narrow.hpp"
 #include "vast/detail/overload.hpp"
 
@@ -235,7 +236,7 @@ struct column_builder_trait<port_type>
 
   using view_type = view<data_type>;
 
-  using meta_type = address_type;
+  using meta_type = port_type;
 
   // -- static member functions ------------------------------------------------
 
@@ -246,7 +247,7 @@ struct column_builder_trait<port_type>
   static bool append(typename super::BuilderType& builder, view_type x) {
     // We store ports as uint16 (little endian) for the port itself plus an
     // uint8 for the type.
-    uint16_t n = x.number();
+    uint16_t n = detail::to_network_order(x.number());
     auto n_ptr = reinterpret_cast<uint8_t*>(&n);
     std::array<uint8_t, 3> data{n_ptr[0], n_ptr[1],
                                 static_cast<uint8_t>(x.type())};

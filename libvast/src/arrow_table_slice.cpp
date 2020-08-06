@@ -14,6 +14,7 @@
 #include "vast/arrow_table_slice.hpp"
 
 #include "vast/arrow_table_slice_builder.hpp"
+#include "vast/detail/byte_swap.hpp"
 #include "vast/detail/narrow.hpp"
 #include "vast/detail/overload.hpp"
 #include "vast/error.hpp"
@@ -410,7 +411,7 @@ auto subnet_at(const arrow::FixedSizeBinaryArray& arr, int64_t row) {
 auto port_at(const arrow::FixedSizeBinaryArray& arr, int64_t row) {
   auto bytes = arr.raw_values() + (row * 3);
   uint8_t n[2] = {bytes[0], bytes[1]};
-  return port(*reinterpret_cast<uint16_t*>(n),
+  return port(detail::to_host_order(*reinterpret_cast<uint16_t*>(n)),
               static_cast<port::port_type>(bytes[2]));
 }
 
