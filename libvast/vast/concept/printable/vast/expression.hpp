@@ -71,8 +71,8 @@ struct expression_printer : printer<expression_printer> {
       return (':' << printers::type<policy::name_only>)(out_, e.type);
     }
 
-    bool operator()(const key_extractor& e) const {
-      return printers::str(out_, e.key);
+    bool operator()(const field_extractor& e) const {
+      return printers::str(out_, e.field);
     }
 
     bool operator()(const data_extractor& e) const {
@@ -90,7 +90,7 @@ struct expression_printer : printer<expression_printer> {
   template <class Iterator, class T>
   auto print(Iterator& out, const T& x) const -> std::enable_if_t<
     std::disjunction_v<std::is_same<T, attribute_extractor>,
-                       std::is_same<T, key_extractor>,
+                       std::is_same<T, field_extractor>,
                        std::is_same<T, data_extractor>,
                        std::is_same<T, predicate>, std::is_same<T, conjunction>,
                        std::is_same<T, disjunction>, std::is_same<T, negation>>,
@@ -107,7 +107,7 @@ struct expression_printer : printer<expression_printer> {
 template <class T>
 struct printer_registry<
   T, std::enable_if_t<std::disjunction_v<
-       std::is_same<T, attribute_extractor>, std::is_same<T, key_extractor>,
+       std::is_same<T, attribute_extractor>, std::is_same<T, field_extractor>,
        std::is_same<T, data_extractor>, std::is_same<T, predicate>,
        std::is_same<T, conjunction>, std::is_same<T, disjunction>,
        std::is_same<T, negation>, std::is_same<T, expression>>>> {

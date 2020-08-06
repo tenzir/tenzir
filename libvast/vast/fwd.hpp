@@ -93,7 +93,7 @@ struct enumeration_type;
 struct flow;
 struct integer_type;
 struct invocation;
-struct key_extractor;
+struct field_extractor;
 struct map_type;
 struct negation;
 struct none_type;
@@ -162,7 +162,6 @@ void intrusive_ptr_release(const table_slice_builder*);
 
 using chunk_ptr = caf::intrusive_ptr<chunk>;
 using column_index_ptr = std::unique_ptr<column_index>;
-using caf_table_slice_ptr = caf::intrusive_cow_ptr<caf_table_slice>;
 using synopsis_ptr = caf::intrusive_ptr<synopsis>;
 using table_slice_builder_ptr = caf::intrusive_ptr<table_slice_builder>;
 using table_slice_ptr = caf::intrusive_cow_ptr<table_slice>;
@@ -176,7 +175,7 @@ namespace atom {
 
 #define VAST_CAF_ATOM_ALIAS(name)                                              \
   using name = caf::name##_atom;                                               \
-  constexpr auto name##_v = caf::name##_atom_v;
+  [[maybe_unused]] constexpr inline auto name##_v = caf::name##_atom_v;
 
 // Inherited from CAF
 VAST_CAF_ATOM_ALIAS(add)
@@ -302,7 +301,7 @@ CAF_BEGIN_TYPE_ID_BLOCK(vast, caf::first_custom_type_id)
   VAST_ADD_TYPE_ID((vast::event))
   VAST_ADD_TYPE_ID((vast::expression))
   VAST_ADD_TYPE_ID((vast::invocation))
-  VAST_ADD_TYPE_ID((vast::key_extractor))
+  VAST_ADD_TYPE_ID((vast::field_extractor))
   VAST_ADD_TYPE_ID((vast::negation))
   VAST_ADD_TYPE_ID((vast::path))
   VAST_ADD_TYPE_ID((vast::predicate))

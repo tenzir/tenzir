@@ -16,6 +16,7 @@
 #include "vast/command.hpp"
 #include "vast/config.hpp"
 #include "vast/detail/assert.hpp"
+#include "vast/detail/process.hpp"
 #include "vast/documentation.hpp"
 #include "vast/format/ascii.hpp"
 #include "vast/format/csv.hpp"
@@ -72,15 +73,21 @@ auto make_root_command(std::string_view path) {
   // interested in "vast".
   path.remove_prefix(std::min(path.find_last_of('/') + 1, path.size()));
   // For documentation, we use the complete man-page formatted as Markdown
+  auto binary = detail::objectpath();
+  auto schema_desc
+    = "list of paths to look for schema files ([/etc/vast/schema"s;
+  if (binary) {
+    auto relative_schema_dir
+      = binary->parent().parent() / "share" / "vast" / "schema";
+    schema_desc += ", " + relative_schema_dir.str();
+  }
+  schema_desc += "])";
   auto ob
     = opts("?system")
         .add<std::string>("config", "path to a configuration file")
         .add<caf::atom_value>("verbosity,v", "output verbosity level on the "
                                              "console")
-        .add<std::vector<std::string>>("schema-paths",
-                                       "list of paths to look for schema files "
-                                       "([" VAST_INSTALL_PREFIX
-                                       "/share/vast/schema])")
+        .add<std::vector<std::string>>("schema-paths", schema_desc.c_str())
         .add<std::string>("db-directory,d", "directory for persistent state")
         .add<std::string>("log-file", "log filename")
         .add<std::string>("endpoint,e", "node endpoint")

@@ -87,7 +87,7 @@ struct validator {
   caf::expected<void> operator()(const predicate& p);
   caf::expected<void> operator()(const attribute_extractor& ex, const data& d);
   caf::expected<void> operator()(const type_extractor& ex, const data& d);
-  caf::expected<void> operator()(const key_extractor& ex, const data& d);
+  caf::expected<void> operator()(const field_extractor& ex, const data& d);
 
   template <class T, class U>
   caf::expected<void> operator()(const T& lhs, const U& rhs) {
@@ -98,7 +98,7 @@ struct validator {
   relational_operator op_;
 };
 
-/// Transforms all ::key_extractor and ::type_extractor predicates into
+/// Transforms all ::field_extractor and ::type_extractor predicates into
 /// ::data_extractor instances according to a given type.
 struct type_resolver {
   // TODO: This function still assumes that we can pass types that are no
@@ -115,8 +115,9 @@ struct type_resolver {
   operator()(const attribute_extractor& ex, const data& d);
   caf::expected<expression> operator()(const type_extractor& ex, const data& d);
   caf::expected<expression> operator()(const data& d, const type_extractor& ex);
-  caf::expected<expression> operator()(const key_extractor& ex, const data& d);
-  caf::expected<expression> operator()(const data& d, const key_extractor& e);
+  caf::expected<expression>
+  operator()(const field_extractor& ex, const data& d);
+  caf::expected<expression> operator()(const data& d, const field_extractor& e);
 
   template <class T, class U>
   caf::expected<expression> operator()(const T& lhs, const U& rhs) {
@@ -153,7 +154,7 @@ struct type_resolver {
 };
 
 // Tailors an expression to a specific type by pruning all unecessary branches
-// and resolving keys into the corresponding data extractors.
+// and resolving fields into the corresponding data extractors.
 struct type_pruner {
   explicit type_pruner(const type& event_type);
 
@@ -177,7 +178,7 @@ struct event_evaluator {
   bool operator()(const negation& n);
   bool operator()(const predicate& p);
   bool operator()(const attribute_extractor& e, const data& d);
-  bool operator()(const key_extractor&, const data&);
+  bool operator()(const field_extractor&, const data&);
   bool operator()(const type_extractor&, const data&);
   bool operator()(const data_extractor& e, const data& d);
 
@@ -206,7 +207,7 @@ struct table_slice_row_evaluator {
   bool operator()(const negation& n);
   bool operator()(const predicate& p);
   bool operator()(const attribute_extractor& e, const data& d);
-  bool operator()(const key_extractor&, const data&);
+  bool operator()(const field_extractor&, const data&);
   bool operator()(const type_extractor&, const data&);
   bool operator()(const data_extractor& e, const data& d);
 

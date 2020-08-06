@@ -13,13 +13,22 @@
 
 #include "vast/system/configuration.hpp"
 
-#include <algorithm>
-#include <iostream>
-
 #include "vast/config.hpp"
+#include "vast/detail/add_message_types.hpp"
+#include "vast/detail/adjust_resource_consumption.hpp"
+#include "vast/detail/assert.hpp"
+#include "vast/detail/process.hpp"
+#include "vast/detail/string.hpp"
+#include "vast/detail/system.hpp"
+#include "vast/filesystem.hpp"
+#include "vast/synopsis_factory.hpp"
+#include "vast/table_slice_builder_factory.hpp"
+#include "vast/table_slice_factory.hpp"
+#include "vast/value_index.hpp"
+#include "vast/value_index_factory.hpp"
 
-#include <caf/message_builder.hpp>
 #include <caf/io/middleman.hpp>
+#include <caf/message_builder.hpp>
 #if VAST_USE_OPENCL
 #  include <caf/opencl/manager.hpp>
 #endif
@@ -27,26 +36,8 @@
 #  include <caf/openssl/manager.hpp>
 #endif
 
-#include "vast/detail/add_message_types.hpp"
-#include "vast/detail/adjust_resource_consumption.hpp"
-#include "vast/detail/assert.hpp"
-#include "vast/detail/string.hpp"
-#include "vast/detail/system.hpp"
-#include "vast/filesystem.hpp"
-#include "vast/msgpack_table_slice.hpp"
-#include "vast/msgpack_table_slice_builder.hpp"
-#include "vast/synopsis_factory.hpp"
-#include "vast/table_slice_builder_factory.hpp"
-#include "vast/table_slice_factory.hpp"
-#include "vast/value_index.hpp"
-#include "vast/value_index_factory.hpp"
-
-#if VAST_HAVE_ARROW
-#  include "vast/arrow_table_slice.hpp"
-#  include "vast/arrow_table_slice_builder.hpp"
-#endif
-
-using namespace caf;
+#include <algorithm>
+#include <iostream>
 
 namespace vast::system {
 
@@ -61,32 +52,29 @@ void initialize_factories() {
 
 configuration::configuration() {
   detail::add_message_types(*this);
-  // Use 'vast.conf' instead of generic 'caf-application.ini' and fall back to
-  // $PREFIX/etc/vast if no local vast.conf exists.
-  if ((path::current() / "vast.conf").is_regular_file()) {
-    config_file_path = "vast.conf";
-  } else {
-    auto global_conf = path{VAST_INSTALL_PREFIX} / "etc" / "vast" / "vast.conf";
-    if (!global_conf.is_regular_file())
-      global_conf = path{"/etc/vast/vast.conf"};
-    config_file_path = global_conf.str();
+  // Use 'vast.conf' instead of generic 'caf-application.ini'.
+  auto config_path_candidates = std::vector{
+    path::current() / "vast.conf",
+  };
+  auto binary = detail::objectpath();
+  if (binary)
+    config_path_candidates.push_back(binary->parent().parent() / "share"
+                                     / "vast" / "schema");
+  config_path_candidates.emplace_back("/etc/vast/vast.conf");
+  for (auto& p : config_path_candidates) {
+    if (p.is_regular_file()) {
+      config_file_path = p.str();
+      break;
+    }
   }
   // Load I/O module.
-  load<io::middleman>();
+  load<caf::io::middleman>();
   // GPU acceleration.
 #if VAST_USE_OPENCL
-  load<opencl::manager>();
+  load<caf::opencl::manager>();
 #endif
   initialize_factories<synopsis, table_slice, table_slice_builder,
                        value_index>();
-  factory<vast::table_slice>::add<msgpack_table_slice>();
-  factory<vast::table_slice_builder>::add<msgpack_table_slice_builder>(
-    msgpack_table_slice::class_id);
-#if VAST_HAVE_ARROW
-  factory<vast::table_slice>::add<arrow_table_slice>();
-  factory<vast::table_slice_builder>::add<arrow_table_slice_builder>(
-    arrow_table_slice::class_id);
-#endif
 }
 
 caf::error configuration::parse(int argc, char** argv) {
@@ -96,8 +84,9 @@ caf::error configuration::parse(int argc, char** argv) {
   // Move CAF options to the end of the command line, parse them, and then
   // remove them.
   auto is_vast_opt = [](auto& x) {
-    return !(starts_with(x, "--caf.") || starts_with(x, "--config=")
-             || starts_with(x, "--config-file="));
+    return !(detail::starts_with(x, "--caf.")
+             || detail::starts_with(x, "--config=")
+             || detail::starts_with(x, "--config-file="));
   };
   auto caf_opt = std::stable_partition(command_line.begin(),
                                        command_line.end(), is_vast_opt);
@@ -106,10 +95,10 @@ caf::error configuration::parse(int argc, char** argv) {
   command_line.erase(caf_opt, command_line.end());
   for (auto& arg : caf_args) {
     // Remove caf. prefix for CAF parser.
-    if (starts_with(arg, "--caf."))
+    if (detail::starts_with(arg, "--caf."))
       arg.erase(2, 4);
     // Rewrite --config= option to CAF's expexted format.
-    if (starts_with(arg, "--config="))
+    if (detail::starts_with(arg, "--config="))
       arg.replace(8, 0, "-file");
   }
   return actor_system_config::parse(std::move(caf_args));

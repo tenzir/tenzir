@@ -80,6 +80,9 @@ endif ()
 
 option(VAST_ENABLE_ASSERTIONS "Enable Assertions"
        "${VAST_ENABLE_ASSERTIONS_DEFAULT}")
+# Setting this option removes configuration dependent absolute paths from the
+# VAST installation. Concretely, it enables the dynamic binary and libraries to
+# use relative paths for loading their dependencies.
 option(VAST_RELOCATABLE_INSTALL "Enable relocatable installations" ON)
 option(VAST_USE_BUNDLED_CAF "Always use the CAF submodule" OFF)
 option(ENABLE_ZEEK_TO_VAST "Build zeek-to-vast" ON)
@@ -208,7 +211,7 @@ endif ()
 # ------------------------------------------------------------------------------
 
 # Compiler requirements
-set(CLANG_MINIMUM_VERSION 5.0)
+set(CLANG_MINIMUM_VERSION 8.0)
 set(APPLE_CLANG_MINIMUM_VERSION 9.1)
 set(GCC_MINIMUM_VERSION 8.0)
 
@@ -463,13 +466,20 @@ if (NOT BUILD_SHARED_LIBS)
   string(APPEND VAST_FIND_DEPENDENCY_LIST
          "\nfind_package(Flatbuffers REQUIRED CONFIG)")
 endif ()
-get_target_property(flatbuffers_dir flatbuffers::flatbuffers
+if (TARGET flatbuffers::flatbuffers)
+  set(flatbuffers_target flatbuffers::flatbuffers)
+elseif (NOT VAST_STATIC_EXECUTABLE AND TARGET flatbuffers::flatbuffers_shared)
+  set(flatbuffers_target flatbuffers::flatbuffers_shared)
+else ()
+  message(FATAL_ERROR "No suiteable imported target for Flatbuffers found")
+endif ()
+get_target_property(flatbuffers_dir ${flatbuffers_target}
                     INTERFACE_INCLUDE_DIRECTORIES)
 get_filename_component(flatbuffers_dir ${flatbuffers_dir} DIRECTORY) # <prefix>
 
 if (NOT VAST_USE_BUNDLED_CAF)
   # Try to find the required CAF components first...
-  find_package(CAF 0.17.5 EXACT COMPONENTS core io test QUIET)
+  find_package(CAF 0.17.6 EXACT COMPONENTS core io test QUIET)
 endif ()
 if (CAF_FOUND)
   message(STATUS "Found CAF")
@@ -630,6 +640,9 @@ if (NOT VAST_NO_ARROW)
              "\nfind_package(${dep} REQUIRED QUIET CONFIG)")
     endforeach ()
   endif ()
+  if (ARROW_ROOT_DIR)
+    set (Arrow_ROOT ${ARROW_ROOT_DIR})
+  endif ()
   find_package(Arrow 0.17 REQUIRED QUIET CONFIG)
   string(APPEND VAST_FIND_DEPENDENCY_LIST
          "\nfind_package(Arrow REQUIRED QUIET CONFIG)")
@@ -705,7 +718,7 @@ file(
      fi
      base_dir=\"${CMAKE_CURRENT_SOURCE_DIR}/integration\"
      env_dir=\"${CMAKE_CURRENT_BINARY_DIR}/integration_env\"
-     app=\"${EXECUTABLE_OUTPUT_PATH}/vast\"
+     app=\"$<TARGET_FILE:vast>\"
      set -e
      if [ ! -d \"$env_dir\" ]; then
        python3 -m venv \"$env_dir\"
@@ -896,7 +909,7 @@ set(summary
     "\nCXXFLAGS:            ${CMAKE_CXX_FLAGS} ${CMAKE_CXX_FLAGS_${build_type}}"
     "\nLDFLAGS:             ${LDFLAGS}"
     "\n"
-    "\nFlatbuffers:         ${flatbuffers_dir}"
+    "\nFlatBuffers:         ${flatbuffers_dir}"
     "\nCAF:                 ${caf_summary}"
     "\nArrow:               ${arrow_summary}"
     "\nBroker:              ${broker_summary}"

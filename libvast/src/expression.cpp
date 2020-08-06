@@ -36,17 +36,17 @@ bool operator<(const attribute_extractor& x, const attribute_extractor& y) {
   return x.attr < y.attr;
 }
 
-// -- key_extractor ------------------------------------------------------------
+// -- field_extractor ------------------------------------------------------------
 
-key_extractor::key_extractor(std::string k) : key{std::move(k)} {
+field_extractor::field_extractor(std::string f) : field{std::move(f)} {
 }
 
-bool operator==(const key_extractor& x, const key_extractor& y) {
-  return x.key == y.key;
+bool operator==(const field_extractor& x, const field_extractor& y) {
+  return x.field == y.field;
 }
 
-bool operator<(const key_extractor& x, const key_extractor& y) {
-  return x.key < y.key;
+bool operator<(const field_extractor& x, const field_extractor& y) {
+  return x.field < y.field;
 }
 
 // -- type_extractor -----------------------------------------------------------

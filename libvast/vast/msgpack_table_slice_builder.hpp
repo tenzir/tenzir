@@ -57,11 +57,17 @@ public:
 
   // -- properties -------------------------------------------------------------
 
-  vast::table_slice_ptr finish() override;
+  [[nodiscard]] vast::table_slice_ptr finish() override;
 
   size_t rows() const noexcept override;
 
   caf::atom_value implementation_id() const noexcept override;
+
+  template <class Inspector>
+  friend auto inspect(Inspector& f, msgpack_table_slice_builder& x) {
+    return f(caf::meta::type_name("vast.msgpack_table_slice_builder"), x.col_,
+             x.offset_table_, x.buffer_, x.builder_);
+  }
 
 protected:
   bool add_impl(vast::data_view x) override;
@@ -78,7 +84,11 @@ private:
   /// Elements encoded in MessagePack format.
   std::vector<vast::byte> buffer_;
 
+#if VAST_ENABLE_ASSERTIONS
+  msgpack::builder<msgpack::input_validation> builder_;
+#else
   msgpack::builder<msgpack::no_input_validation> builder_;
+#endif
 };
 
 } // namespace vast

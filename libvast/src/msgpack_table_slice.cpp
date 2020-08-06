@@ -13,7 +13,13 @@
 
 #include "vast/msgpack_table_slice.hpp"
 
+#include "vast/detail/narrow.hpp"
+#include "vast/detail/overload.hpp"
+#include "vast/detail/type_traits.hpp"
+#include "vast/die.hpp"
+#include "vast/logger.hpp"
 #include "vast/msgpack.hpp"
+#include "vast/value_index.hpp"
 
 #include <caf/binary_deserializer.hpp>
 #include <caf/deserializer.hpp>
@@ -21,12 +27,6 @@
 #include <caf/streambuf.hpp>
 
 #include <type_traits>
-
-#include <vast/detail/narrow.hpp>
-#include <vast/detail/overload.hpp>
-#include <vast/detail/type_traits.hpp>
-#include <vast/logger.hpp>
-#include <vast/value_index.hpp>
 
 using namespace vast;
 
@@ -102,7 +102,7 @@ public:
       value_type_{std::move(value_type)},
       data_{xs.data()} {
     using namespace msgpack;
-    VAST_ASSERT(xs.format() == fixmap || xs.format() == map16
+    VAST_ASSERT(is_fixmap(xs.format()) || xs.format() == map16
                 || xs.format() == map32);
   }
 
@@ -119,21 +119,6 @@ private:
   type value_type_;
   msgpack::overlay data_;
 };
-
-// For a given type, skips the amount of msgpack objects that it occupies.
-size_t skip(msgpack::overlay& xs, const type& t) {
-  // Since VAST's data model always allows for NULL objects, it could be that a
-  // compound object will be condensed to a single nil object.
-  if (xs.get().format() == msgpack::nil)
-    return xs.next();
-  auto count = [](auto& x) -> size_t {
-    using object_type = std::decay_t<decltype(x)>;
-    if constexpr (detail::is_any_v<object_type, port_type, subnet_type>)
-      return 2;
-    return 1;
-  };
-  return xs.next(caf::visit(count, t));
-}
 
 // Helper utilities for decoding.
 
@@ -224,53 +209,50 @@ data_view decode(msgpack::overlay& objects, const T& t) {
   } else if constexpr (std::is_same_v<T, pattern_type>) {
     if (auto x = get<std::string_view>(o))
       return data_view{pattern_view{*x}};
-  } else if constexpr (detail::is_any_v<T, address_type, subnet_type>) {
-    auto decode_address = [&] {
-      if (auto x = get<std::string_view>(o)) {
-        VAST_ASSERT(x->size() == 4 || x->size() == 16);
-        auto family = x->size() == 4 ? address::ipv4 : address::ipv6;
-        return address{x->data(), family, address::byte_order::network};
-      }
-      VAST_ASSERT(!"corrupted msgpack data");
-      return address{};
-    };
-    auto addr = decode_address();
-    if constexpr (std::is_same_v<T, address_type>) {
+  } else if constexpr (std::is_same_v<T, address_type>) {
+    if (auto x = get<std::string_view>(o)) {
+      VAST_ASSERT(x->size() == 4 || x->size() == 16);
+      auto family = x->size() == 4 ? address::ipv4 : address::ipv6;
+      auto addr = address{x->data(), family, address::byte_order::network};
       return make_data_view(addr);
-    } else if constexpr (std::is_same_v<T, subnet_type>) {
-      auto n = objects.next();
-      VAST_ASSERT(n > 0);
-      auto length = *get<uint8_t>(objects.get());
-      return data_view{view<subnet>{addr, length}};
+    }
+  } else if constexpr (std::is_same_v<T, subnet_type>) {
+    if (auto xs = get<array_view>(o)) {
+      VAST_ASSERT(xs->size() == 2);
+      auto inner = xs->data();
+      auto str = *get<std::string_view>(inner.get());
+      auto family = str.size() == 4 ? address::ipv4 : address::ipv6;
+      auto addr = address{str.data(), family, address::byte_order::network};
+      inner.next();
+      auto length = *get<uint8_t>(inner.get());
+      return data_view{view<subnet>{make_view(addr), length}};
     }
   } else if constexpr (std::is_same_v<T, port_type>) {
-    // Get port type.
-    auto port_type = static_cast<port::port_type>(*get<uint8_t>(o));
-    // Get number type.
-    auto n = objects.next();
-    VAST_ASSERT(n > 0);
-    auto make_port_view = [=](uint16_t num) {
-      return make_data_view(port{num, port_type});
-    };
-    auto f = detail::overload([=](uint8_t x) { return make_port_view(x); },
-                              [=](uint16_t x) { return make_port_view(x); },
-                              make_none_view());
-    return visit(f, objects.get());
+    if (auto xs = get<array_view>(o)) {
+      VAST_ASSERT(xs->size() == 2);
+      auto inner = xs->data();
+      auto n = *get<uint16_t>(inner.get());
+      inner.next();
+      auto t = static_cast<port::port_type>(*get<uint8_t>(inner.get()));
+      return make_data_view(port{n, t});
+    }
   } else if constexpr (std::is_same_v<T, enumeration_type>) {
     if (auto x = get<uint8_t>(o))
       return make_data_view(enumeration{*x});
   } else if constexpr (detail::is_any_v<T, vector_type, set_type>) {
-    auto xs = *get<array_view>(o);
-    auto ptr = caf::make_counted<msgpack_array_view>(t.value_type, xs);
-    if constexpr (std::is_same_v<T, vector_type>)
-      return vector_view_handle{vector_view_ptr{std::move(ptr)}};
-    else
-      return set_view_handle{set_view_ptr{std::move(ptr)}};
+    if (auto xs = get<array_view>(o)) {
+      auto ptr = caf::make_counted<msgpack_array_view>(t.value_type, *xs);
+      if constexpr (std::is_same_v<T, vector_type>)
+        return vector_view_handle{vector_view_ptr{std::move(ptr)}};
+      else
+        return set_view_handle{set_view_ptr{std::move(ptr)}};
+    }
   } else if constexpr (std::is_same_v<T, map_type>) {
-    auto xs = *get<array_view>(o);
-    auto ptr
-      = caf::make_counted<msgpack_map_view>(t.key_type, t.value_type, xs);
-    return map_view_handle{map_view_ptr{std::move(ptr)}};
+    if (auto xs = get<array_view>(o)) {
+      auto ptr
+        = caf::make_counted<msgpack_map_view>(t.key_type, t.value_type, *xs);
+      return map_view_handle{map_view_ptr{std::move(ptr)}};
+    }
   } else if constexpr (std::is_same_v<T, record_type>) {
     VAST_ASSERT(!"records are unrolled");
     return {};
@@ -279,32 +261,27 @@ data_view decode(msgpack::overlay& objects, const T& t) {
   } else {
     static_assert(detail::always_false_v<T>, "missing type");
   }
-  return {};
+  // The end of this function is unreachable.
+  vast::die("unreachable");
 }
 
 data_view decode(msgpack::overlay& objects, const type& t) {
-  auto f = [&](auto& x) { return decode(objects, x); };
-  return caf::visit(f, t);
+  // Dispatch to the more specific decode.
+  return caf::visit(
+    [&](auto&& x) { return decode(objects, std::forward<decltype(x)>(x)); }, t);
 }
 
 msgpack_array_view::value_type msgpack_array_view::at(size_type i) const {
   VAST_ASSERT(i < size());
   auto xs = data_;
-  for (size_t j = 0; j < i; ++j) {
-    auto n = skip(xs, value_type_);
-    VAST_ASSERT(n > 0);
-  }
+  xs.next(i);
   return decode(xs, value_type_);
 }
 
 msgpack_map_view::value_type msgpack_map_view::at(size_type i) const {
   VAST_ASSERT(i < size());
   auto xs = data_;
-  for (size_t j = 0; j < i; ++j) {
-    auto n0 = skip(xs, key_type_);
-    auto n1 = skip(xs, value_type_);
-    VAST_ASSERT(n0 > 0 && n1 > 0);
-  }
+  xs.next(i * 2);
   auto key = decode(xs, key_type_);
   auto n = xs.next();
   VAST_ASSERT(n > 0);
@@ -321,10 +298,7 @@ void msgpack_table_slice::append_column_to_index(size_type col,
   for (size_t row = 0; row < rows(); ++row) {
     auto row_offset = offset_table_[row];
     auto xs = msgpack::overlay{buffer_.subspan(row_offset)};
-    for (size_t i = 0; i < col; ++i) {
-      auto n = skip(xs, layout().fields[i].type);
-      VAST_ASSERT(n > 0);
-    }
+    xs.next(col);
     auto x = decode(xs, layout().fields[col].type);
     idx.append(x, offset() + row);
   }
@@ -341,10 +315,7 @@ data_view msgpack_table_slice::at(size_type row, size_type col) const {
   VAST_ASSERT(offset < static_cast<size_t>(buffer_.size()));
   auto xs = msgpack::overlay{buffer_.subspan(offset)};
   // ...then skip (decode) up to the desired column.
-  for (size_t i = 0; i < col; ++i) {
-    auto n = skip(xs, layout().fields[i].type);
-    VAST_ASSERT(n > 0);
-  }
+  xs.next(col);
   return decode(xs, layout().fields[col].type);
 }
 

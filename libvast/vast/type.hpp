@@ -241,6 +241,12 @@ public:
   virtual abstract_type* copy() const = 0;
 
   /// @endcond
+  template <class Inspector>
+  friend auto inspect(Inspector& f, abstract_type& x) {
+    return f(caf::meta::type_name("vast.abstract_type"),
+             caf::meta::omittable_if_empty(), x.name_,
+             caf::meta::omittable_if_empty(), x.attributes_);
+  }
 
 protected:
   virtual bool equals(const abstract_type& other) const;
@@ -306,9 +312,52 @@ public:
 
   template <class Inspector>
   friend auto inspect(Inspector& f, concrete_type& x) {
-    return f(x.name_, x.attributes_);
+    const char* name = nullptr;
+    if constexpr (std::is_same_v<Derived, none_type>) {
+      name = "vast.none_type";
+    } else if constexpr (std::is_same_v<Derived, bool_type>) {
+      name = "vast.bool_type";
+    } else if constexpr (std::is_same_v<Derived, integer_type>) {
+      name = "vast.integer_type";
+    } else if constexpr (std::is_same_v<Derived, count_type>) {
+      name = "vast.count_type";
+    } else if constexpr (std::is_same_v<Derived, real_type>) {
+      name = "vast.real_type";
+    } else if constexpr (std::is_same_v<Derived, duration_type>) {
+      name = "vast.duration_type";
+    } else if constexpr (std::is_same_v<Derived, time_type>) {
+      name = "vast.time_type";
+    } else if constexpr (std::is_same_v<Derived, string_type>) {
+      name = "vast.string_type";
+    } else if constexpr (std::is_same_v<Derived, pattern_type>) {
+      name = "vast.pattern_type";
+    } else if constexpr (std::is_same_v<Derived, address_type>) {
+      name = "vast.address_type";
+    } else if constexpr (std::is_same_v<Derived, subnet_type>) {
+      name = "vast.subnet_type";
+    } else if constexpr (std::is_same_v<Derived, port_type>) {
+      name = "vast.port_type";
+    } else if constexpr (std::is_same_v<Derived, enumeration_type>) {
+      name = "vast.enumeration_type";
+    } else if constexpr (std::is_same_v<Derived, vector_type>) {
+      name = "vast.vector_type";
+    } else if constexpr (std::is_same_v<Derived, set_type>) {
+      name = "vast.set_type";
+    } else if constexpr (std::is_same_v<Derived, map_type>) {
+      name = "vast.map_type";
+    } else if constexpr (std::is_same_v<Derived, record_type>) {
+      name = "vast.record_type";
+    } else if constexpr (std::is_same_v<Derived, alias_type>) {
+      name = "vast.alias_type";
+    } else {
+      static_assert(detail::always_false_v<Derived>, "cannot inspect non-leaf "
+                                                     "type");
+    }
+    VAST_ASSERT(name != nullptr);
+    return f(caf::meta::type_name(name), type_id<Derived>(),
+             caf::meta::omittable_if_empty(), x.name_,
+             caf::meta::omittable_if_empty(), x.attributes_);
   }
-
 
 protected:
   // Convenience function to cast an abstract type into an instance of this
@@ -359,6 +408,8 @@ struct complex_type : concrete_type<Derived> {
 /// @relates type
 template <class Derived>
 struct recursive_type : complex_type<Derived> {
+  using super = complex_type<Derived>;
+
   type_flags flags() const noexcept override {
     return type_flags::complex | type_flags::recursive;
   }
@@ -378,7 +429,8 @@ struct nested_type : recursive_type<Derived> {
 
   template <class Inspector>
   friend auto inspect(Inspector& f, Derived& x) {
-    return f(super::upcast(x), x.value_type);
+    return f(caf::meta::type_name("vast.nested_type"), super::upcast(x),
+             x.value_type);
   }
 
   bool equals(const abstract_type& other) const final {
@@ -453,7 +505,8 @@ struct enumeration_type final : complex_type<enumeration_type> {
 
   template <class Inspector>
   friend auto inspect(Inspector& f, enumeration_type& x) {
-    return f(super::upcast(x), x.fields);
+    return f(caf::meta::type_name("vast.enumeration_type"), super::upcast(x),
+             caf::meta::omittable_if_empty(), x.fields);
   }
 
   bool equals(const abstract_type& other) const final {
@@ -507,7 +560,8 @@ struct map_type final : recursive_type<map_type> {
 
   template <class Inspector>
   friend auto inspect(Inspector& f, map_type& x) {
-    return f(super::upcast(x), x.key_type, x.value_type);
+    return f(caf::meta::type_name("vast.map_type"), super::upcast(x),
+             x.key_type, x.value_type);
   }
 
   bool equals(const abstract_type& other) const final {
@@ -545,7 +599,7 @@ struct record_field : detail::totally_ordered<record_field> {
 
   template <class Inspector>
   friend auto inspect(Inspector& f, record_field& x) {
-    return f(x.name, x.type);
+    return f(caf::meta::type_name("vast.record_field"), x.name, x.type);
   }
 };
 
@@ -619,7 +673,7 @@ struct record_type final : recursive_type<record_type> {
 
   template <class Inspector>
   friend auto inspect(Inspector& f, record_type& x) {
-    return f(upcast(x), x.fields);
+    return f(caf::meta::type_name("vast.record_type"), upcast(x), x.fields);
   }
 
   std::vector<record_field> fields;
@@ -922,7 +976,7 @@ auto make_inspect_fun() {
   using fun = typename Inspector::result_type (*)(Inspector&, type&);
   auto lambda = [](Inspector& g, type& ref) {
     T tmp;
-    auto res = g(tmp);
+    auto res = g(caf::meta::type_name("vast.type"), tmp);
     ref = std::move(tmp);
     return res;
   };
@@ -965,7 +1019,8 @@ auto inspect(Inspector& f, type& x) {
   // We use a single byte for the type index on the wire.
   auto type_tag = x ? static_cast<type_id_type>(x->index()) : invalid_type_id;
   type::inspect_helper helper{type_tag, x};
-  return f(caf::meta::omittable(), type_tag, helper);
+  return f(caf::meta::type_name("vast.type"), caf::meta::omittable(), type_tag,
+           helper);
 }
 
 } // namespace vast

@@ -8,12 +8,13 @@ on:
   pull_request:
     paths:
       - '.github/workflows/static-binary.yaml'
+      - 'nix/**'
   release:
     types: published
 
 jobs:
   static_binary:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-20.04
     name: Static Binary
     env:
       BUILD_DIR: build

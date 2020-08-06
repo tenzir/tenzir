@@ -11,10 +11,18 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#include "vast/key.hpp"
+#pragma once
 
-namespace vast {
+#include "vast/filesystem.hpp"
 
-constexpr char key::delimiter;
+#include <caf/error.hpp>
 
-} // namespace vast
+namespace vast::detail {
+
+/// Attempts to acquire a PID file at a given path.
+/// @param filename The path to the PID file.
+/// @returns `none` if acquiring succeeded and an error on failure.
+/// @relates release_pid_file
+caf::error acquire_pid_file(const path& filename);
+
+} // namespace vast::detail

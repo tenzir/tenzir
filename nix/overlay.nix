@@ -14,6 +14,7 @@ in {
     # agnostic. Because of that, callPackageWith does not detect that sha256
     # is a required argument, and it has to be passed explicitly instead.
     src = lib.callPackageWith source final.fetchFromGitHub { inherit (source) sha256; };
+    inherit (source) version;
   } // lib.optionalAttrs static_stdenv {
     cmakeFlags = old.cmakeFlags ++ [
       "-DCAF_BUILD_STATIC=ON"

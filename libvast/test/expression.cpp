@@ -20,9 +20,11 @@
 #include "vast/concept/parseable/to.hpp"
 #include "vast/concept/parseable/vast/expression.hpp"
 #include "vast/concept/parseable/vast/schema.hpp"
+#include "vast/concept/parseable/vast/subnet.hpp"
 #include "vast/concept/parseable/vast/time.hpp"
 #include "vast/concept/printable/to_string.hpp"
 #include "vast/concept/printable/vast/expression.hpp"
+#include "vast/data.hpp"
 #include "vast/detail/stable_map.hpp"
 #include "vast/event.hpp"
 #include "vast/expression_visitors.hpp"
@@ -51,7 +53,7 @@ expression to_expr(T&& x) {
 struct fixture {
   fixture() {
     // expr0 := !(x.y.z <= 42 && #foo == T)
-    auto p0 = predicate{key_extractor{"x.y.z"}, less_equal, data{42}};
+    auto p0 = predicate{field_extractor{"x.y.z"}, less_equal, data{42}};
     auto p1 = predicate{attribute_extractor{caf::atom("foo")},
                         equal, data{true}};
     auto conj = conjunction{p0, p1};
@@ -77,7 +79,7 @@ TEST(construction) {
   REQUIRE(c->size() == 2);
   auto p0 = caf::get_if<predicate>(&c->at(0));
   REQUIRE(p0);
-  CHECK_EQUAL(get<key_extractor>(p0->lhs).key, "x.y.z");
+  CHECK_EQUAL(get<field_extractor>(p0->lhs).field, "x.y.z");
   CHECK_EQUAL(p0->op, less_equal);
   CHECK(get<data>(p0->rhs) == data{42});
   auto p1 = caf::get_if<predicate>(&c->at(1));
@@ -180,7 +182,7 @@ TEST(extractors) {
     auto expr = unbox(to<expression>(":addr in 192.168.0.0/24"));
     auto resolved = caf::visit(type_resolver(r), expr);
     CHECK_EQUAL(resolved, normalized);
-    MESSAGE("key extractor - distribution");
+    MESSAGE("field extractor - distribution");
     expr = unbox(to<expression>("host in 192.168.0.0/24"));
     resolved = unbox(caf::visit(type_resolver(r), expr));
     CHECK_EQUAL(resolved, normalized);
@@ -193,7 +195,7 @@ TEST(extractors) {
     auto expr = unbox(to<expression>(":addr !in 192.168.0.0/24"));
     auto resolved = caf::visit(type_resolver(r), expr);
     CHECK_EQUAL(resolved, normalized);
-    MESSAGE("key extractor - distribution with negation");
+    MESSAGE("field extractor - distribution with negation");
     expr = unbox(to<expression>("host !in 192.168.0.0/24"));
     resolved = unbox(caf::visit(type_resolver(r), expr));
     CHECK_EQUAL(resolved, normalized);
@@ -258,7 +260,7 @@ TEST(matcher) {
   };
   CHECK(match(":count == 42 || :real < 4.2", r));
   CHECK(match(":port == 80/tcp && :real < 4.2", r));
-  MESSAGE("key extractors");
+  MESSAGE("field extractors");
   CHECK(match("x < 4.2 || (y == 80/tcp && z in 10.0.0.0/8)", r));
   CHECK(match("x < 4.2 && (y == 80/tcp || :bool == F)", r));
   CHECK(!match("x < 4.2 && a == T", r));

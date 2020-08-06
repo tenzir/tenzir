@@ -13,7 +13,13 @@
 
 #pragma once
 
+#include "vast/byte.hpp"
+#include "vast/detail/byte_swap.hpp"
+#include "vast/detail/narrow.hpp"
+#include "vast/detail/type_traits.hpp"
+#include "vast/logger.hpp"
 #include "vast/msgpack.hpp"
+#include "vast/span.hpp"
 
 #include <array>
 #include <chrono>
@@ -23,12 +29,6 @@
 #include <map>
 #include <type_traits>
 #include <vector>
-
-#include <vast/byte.hpp>
-#include <vast/detail/byte_swap.hpp>
-#include <vast/detail/narrow.hpp>
-#include <vast/detail/type_traits.hpp>
-#include <vast/span.hpp>
 
 namespace vast::msgpack {
 
@@ -53,7 +53,12 @@ struct no_input_validation {};
 ///         should be validated.
 template <class InputValidationPolicy = input_validation>
 class builder {
-  struct empty {};
+  struct empty {
+    template <class Inspector>
+    friend auto inspect(Inspector& f, empty&) {
+      return f(caf::meta::type_name("vast.msgpack.builder.empty"));
+    }
+  };
 
 public:
   using value_type = vast::byte;
@@ -65,78 +70,43 @@ public:
   template <format Format>
   class proxy {
     friend builder;
-    static_assert(Format == bin8 || Format == bin16 || Format == bin32
-                  || Format == fixarray || Format == array16
-                  || Format == array32 || Format == fixmap || Format == map16
-                  || Format == map32 || Format == ext8 || Format == ext16
-                  || Format == ext32);
-
   public:
+    /// Finalizes the addition of values to a nested container.
+    /// @returns The number of total bytes the proxy has written or 0 on
+    ///          failure. When the result is 0, the proxy is in the state as if
+    ///          after a call to reset().
+    template <format NestedFormat, class... FinishArgs>
+    [[nodiscard]] size_t
+    add(proxy<NestedFormat>&& nested_proxy, FinishArgs&&... finish_args) {
+      auto result
+        = nested_proxy.finish(std::forward<FinishArgs>(finish_args)...);
+      if (result > 0)
+        bump_size(result);
+      else
+        VAST_WARNING_ANON("vast.msgpack_builder.proxy.add failed to add",
+                          VAST_ARG(nested_proxy), "of format", NestedFormat);
+      return result;
+    }
+
     /// Adds an object to an array.
     /// @tparam ElementFormat The format of the object to add.
     /// @param x The object to add.
     /// @returns The number of bytes written or 0 on failure.
     template <format ElementFormat, class T = empty, class U = empty>
-    size_t add(const T& x = {}, const U& y = {}) {
+    auto add(const T& x = {}, const U& y = {}) -> std::enable_if_t<
+      std::disjunction_v<std::is_same<T, empty>,
+                         std::negation<std::is_same<T, proxy<ElementFormat>>>>,
+      size_t> {
       if constexpr (std::is_same_v<InputValidationPolicy, input_validation>)
         if (size_ >= capacity<Format>())
           return 0;
       auto result = builder_.add<ElementFormat>(x, y);
-      if (result > 0) {
-        if constexpr (Format == fixarray || Format == fixmap
-                      || Format == array16 || Format == array32
-                      || Format == map16 || Format == map32)
-          ++size_;
-        else
-          size_ += result;
-      }
+      if (result > 0)
+        bump_size(result);
+      else
+        VAST_WARNING_ANON("vast.msgpack_builder.proxy.add failed to add",
+                          VAST_ARG(x), VAST_ARG(y), "of format", Format);
       return result;
-    }
-
-    /// Finalizes the addition of values to a container.
-    /// @returns The number of total bytes the proxy has written or 0 on
-    ///          failure. When the result is 0, the proxy is in the state as if
-    ///          after a call to reset().
-    size_t finish() {
-      using namespace vast::detail;
-      VAST_ASSERT(size_ <= capacity<Format>());
-      if constexpr (Format == fixmap || Format == map16 || Format == map32) {
-        if constexpr (std::is_same_v<InputValidationPolicy, input_validation>)
-          if (size_ % 2 != 0) { // Maps have an even number of elements.
-            reset();
-            return 0;
-          }
-        size_ /= 2;
-      }
-      // Always write the format first.
-      auto ptr = builder_.buffer_.data() + offset_;
-      *ptr = static_cast<value_type>(Format);
-      // Then write the number of elements or size in bytes.
-      if constexpr (Format == fixarray || Format == fixmap) {
-        *ptr &= value_type{0b1111'0000};
-        *ptr |= narrow_cast<value_type>(size_);
-      } else {
-        auto size = make_size<Format>(size_);
-        auto size_ptr = reinterpret_cast<decltype(&size)>(ptr + 1);
-        *size_ptr = to_network_order(size);
-      }
-      return builder_.buffer_.size() - offset_;
-    }
-
-    /// Finalizes the addition of data to an extension format.
-    /// @param type The value of the extension type integer.
-    /// @returns The number of total bytes the proxy has written or 0 on
-    ///          failure.
-    size_t finish(extension_type type) {
-      static_assert(is_fixext(Format) || is_ext(Format));
-      auto num_bytes = finish();
-      if (num_bytes == 0)
-        return 0;
-      auto data = builder_.buffer_.data();
-      auto offset = offset_ + header_size<Format>() - 1;
-      auto ptr = reinterpret_cast<extension_type*>(data + offset);
-      *ptr = type;
-      return num_bytes;
     }
 
     /// Creates a nested proxy builder to build container values.
@@ -154,14 +124,82 @@ public:
       builder_.buffer_.resize(offset_ + header_size<Format>());
     }
 
+    template <class Inspector>
+    friend auto inspect(Inspector& f, proxy& x) {
+      return f(caf::meta::type_name("vast.msgpack.builder.proxy"), x.builder_,
+               x.offset_, x.size_);
+    }
+
   private:
+    void bump_size(size_t n) noexcept {
+      VAST_ASSERT(n > 0);
+      if constexpr (Format == fixarray || Format == fixmap || Format == array16
+                    || Format == array32 || Format == map16 || Format == map32)
+        ++size_;
+      else
+        size_ += n;
+    }
+
+    /// Finalizes the addition of values to a container.
+    /// @returns The number of total bytes the proxy has written or 0 on
+    ///          failure. When the result is 0, the proxy is in the state as if
+    ///          after a call to reset().
+    [[nodiscard]] size_t finish() {
+      using namespace vast::detail;
+      VAST_ASSERT(size_ <= capacity<Format>());
+      if constexpr (Format == fixmap || Format == map16 || Format == map32) {
+        if constexpr (std::is_same_v<InputValidationPolicy, input_validation>)
+          if (size_ % 2 != 0) { // Maps have an even number of elements.
+            reset();
+            return 0;
+          }
+        size_ /= 2;
+      }
+      // Always write the format first.
+      auto ptr = builder_.buffer_.data() + offset_;
+      *ptr = static_cast<value_type>(Format);
+      // Then write the number of elements or size in bytes.
+      if constexpr (is_fix_sequence(Format)) {
+        *ptr &= value_type{0b1111'0000};
+        *ptr |= narrow_cast<value_type>(size_);
+      } else {
+        auto size = make_size<Format>(size_);
+        auto size_ptr = reinterpret_cast<decltype(&size)>(ptr + 1);
+        *size_ptr = to_network_order(size);
+      }
+      return builder_.buffer_.size() - offset_;
+    }
+
+    /// Finalizes the addition of data to an extension format.
+    /// @param type The value of the extension type integer.
+    /// @returns The number of total bytes the proxy has written or 0 on
+    ///          failure.
+    [[nodiscard]] size_t finish(extension_type type) {
+      static_assert(is_fixext(Format) || is_ext(Format));
+      auto num_bytes = finish();
+      if (num_bytes == 0)
+        return 0;
+      auto data = builder_.buffer_.data();
+      auto offset = offset_ + header_size<Format>() - 1;
+      auto ptr = reinterpret_cast<extension_type*>(data + offset);
+      *ptr = type;
+      return num_bytes;
+    }
+
     explicit proxy(builder& b)
       : builder_{b}, offset_{builder_.buffer_.size()}, size_{0} {
+      // This assertion cannot be at class-level, because the proxy type is
+      // instantiated with other formats for function overloading via SFINAE.
+      static_assert(Format == bin8 || Format == bin16 || Format == bin32
+                    || Format == fixarray || Format == array16
+                    || Format == array32 || Format == fixmap || Format == map16
+                    || Format == map32 || Format == ext8 || Format == ext16
+                    || Format == ext32);
       reset();
     }
 
     builder& builder_;
-    size_t offset_; // where we started in the builder buffer
+    const size_t offset_; // where we started in the builder buffer
     size_t size_;   // number of elements or size in bytes
   };
 
@@ -179,37 +217,60 @@ public:
     return proxy<Format>(*this);
   }
 
+  /// Finalizes the addition of values to a nested container.
+  /// @returns The number of total bytes the proxy has written or 0 on
+  ///          failure. When the result is 0, the proxy is in the state as if
+  ///          after a call to reset().
+  template <format NestedFormat, class... FinishArgs>
+  [[nodiscard]] size_t
+  add(proxy<NestedFormat>&& nested_proxy, FinishArgs&&... finish_args) {
+    auto result = nested_proxy.finish(std::forward<FinishArgs>(finish_args)...);
+    if (result == 0)
+      VAST_WARNING_ANON("vast.msgpack_builder.add failed to add",
+                        VAST_ARG(nested_proxy), "of format", NestedFormat);
+    return result;
+  }
+
   /// Adds an object of a statically chosen format.
   /// @tparam fmt The format of *x*
   /// @param x The object to add.
   /// @returns The number of bytes written or 0 on failure
   template <format Format, class T = empty, class U = empty>
-  size_t add(const T& x = {}, const U& y = {}) {
-    if (!validate<Format>(x, y))
-      return false;
+  [[nodiscard]] auto add(const T& x = {}, const U& y = {}) -> std::enable_if_t<
+    std::disjunction_v<std::is_same<T, empty>,
+                       std::negation<std::is_same<T, proxy<Format>>>>,
+    size_t> {
+    if (!validate<Format>(x, y)) {
+      VAST_ERROR_ANON("vast.msgpack_builder failed to validate", VAST_ARG(x),
+                      VAST_ARG(y), "of format", Format);
+      return 0;
+    }
     if constexpr (Format == nil || Format == false_ || Format == true_)
       return add_format(Format);
-    if constexpr (Format == positive_fixint || Format == negative_fixint)
+    else if constexpr (Format == positive_fixint || Format == negative_fixint)
       return add_format(x & Format);
-    if constexpr (Format == uint8 || Format == uint16 || Format == uint32
-                  || Format == uint64 || Format == int8 || Format == int16
-                  || Format == int32 || Format == int64)
+    else if constexpr (Format == uint8 || Format == uint16 || Format == uint32
+                       || Format == uint64 || Format == int8 || Format == int16
+                       || Format == int32 || Format == int64)
       return add_int<Format>(x);
-    if constexpr (Format == float32 || Format == float64)
+    else if constexpr (Format == float32 || Format == float64)
       return add_float<Format>(x);
-    if constexpr (Format == fixstr)
+    else if constexpr (Format == fixstr)
       return add_fixstr(x);
-    if constexpr (Format == str8 || Format == str16 || Format == str32)
+    else if constexpr (Format == str8 || Format == str16 || Format == str32)
       return add_str<Format>(x);
-    if constexpr (Format == bin8 || Format == bin16 || Format == bin32)
+    else if constexpr (Format == bin8 || Format == bin16 || Format == bin32)
       return add_binary<Format>(x);
-    if constexpr (Format == fixext1 || Format == fixext2 || Format == fixext4
-                  || Format == fixext8 || Format == fixext16)
+    else if constexpr (Format == fixext1 || Format == fixext2
+                       || Format == fixext4 || Format == fixext8
+                       || Format == fixext16)
       return add_fix_ext<Format>(x, y);
-    if constexpr (Format == ext8 || Format == ext16 || Format == ext32)
+    else if constexpr (Format == ext8 || Format == ext16 || Format == ext32)
       return add_ext<Format>(x, y);
-    VAST_ASSERT(!"unsupported format");
-    return 0;
+    else
+      static_assert(detail::always_false_v<decltype(Format)>, "unsupported "
+                                                              "format");
+    vast::die("unreachable");
   }
 
   /// Adds a timestmap. Internally, the builder creates an extension object
@@ -217,7 +278,8 @@ public:
   /// @param x The number of seconds since the UNIX epoch.
   /// @param ns The number of nanoseconds since the UNIX epoch.
   /// @returns The number of bytes written or 0 on failure.
-  size_t add(std::chrono::seconds secs, std::chrono::nanoseconds ns) {
+  [[nodiscard]] size_t
+  add(std::chrono::seconds secs, std::chrono::nanoseconds ns) {
     using namespace std::chrono;
     using namespace vast;
     using namespace vast::detail;
@@ -246,7 +308,7 @@ public:
   /// Adds a timestmap.
   /// @param x The time.
   /// @returns The number of bytes written or 0 on failure.
-  size_t add(vast::time x) {
+  [[nodiscard]] size_t add(vast::time x) {
     using namespace std::chrono;
     auto since_epoch = x.time_since_epoch();
     auto secs = duration_cast<seconds>(since_epoch);
@@ -258,6 +320,12 @@ public:
   /// construction.
   void reset() {
     return buffer_.resize(offset_);
+  }
+
+  template <class Inspector>
+  friend auto inspect(Inspector& f, builder& x) {
+    return f(caf::meta::type_name("vast.msgpack.builder"), x.buffer_,
+             x.offset_);
   }
 
 private:
@@ -318,12 +386,12 @@ private:
 
   // -- format-specific utilities ----------------------------------------------
 
-  size_t add_format(uint8_t x) {
+  [[nodiscard]] size_t add_format(uint8_t x) {
     return write_byte(x);
   }
 
   template <format Format, class T>
-  size_t add_int(T x) {
+  [[nodiscard]] size_t add_int(T x) {
     static_assert(std::is_integral_v<T>);
     auto y = native_cast<Format>(x);
     auto u = static_cast<std::make_unsigned_t<decltype(y)>>(y);
@@ -332,20 +400,20 @@ private:
   }
 
   template <format Format, class T>
-  size_t add_float(T x) {
+  [[nodiscard]] size_t add_float(T x) {
     static_assert(std::is_floating_point_v<T>);
     // TODO: is it okay to write the floating-point value as is?
     return write_byte(Format) + write_data(&x, sizeof(x));
   }
 
-  size_t add_fixstr(std::string_view x) {
+  [[nodiscard]] size_t add_fixstr(std::string_view x) {
     using namespace vast::detail;
     auto fmt = uint8_t{0b1010'0000} | narrow_cast<uint8_t>(x.size());
     return write_byte(fmt) + write_data(x.data(), x.size());
   }
 
   template <format Format>
-  size_t add_str(std::string_view x) {
+  [[nodiscard]] size_t add_str(std::string_view x) {
     auto xs = as_bytes(vast::span{x.data(), x.size()});
     if (!xs.empty())
       return add_binary<Format>(xs);
@@ -353,27 +421,29 @@ private:
   }
 
   template <format Format>
-  size_t add_binary(vast::span<const vast::byte> xs) {
+  [[nodiscard]] size_t add_binary(vast::span<const vast::byte> xs) {
     using namespace vast::detail;
     auto n = make_size<Format>(xs.size());
     return write_byte(Format) + write_count(n) + write_data(xs);
   }
 
   template <format Format>
-  size_t add_fix_ext(extension_type type, vast::span<const vast::byte> xs) {
+  [[nodiscard]] size_t
+  add_fix_ext(extension_type type, vast::span<const vast::byte> xs) {
     return write_byte(Format) + write_byte(type)
            + write_data(xs.data(), xs.size());
   }
 
   template <format Format>
-  size_t add_ext(extension_type type, vast::span<const vast::byte> xs) {
+  [[nodiscard]] size_t
+  add_ext(extension_type type, vast::span<const vast::byte> xs) {
     auto n = make_size<Format>(xs.size());
     return write_byte(Format) + write_count(n) + write_byte(type)
            + write_data(xs.data(), xs.size());
   }
 
   std::vector<value_type>& buffer_;
-  size_t offset_;
+  const size_t offset_;
 };
 
 // -- helper functions to encode common types ---------------------------------
@@ -506,7 +576,7 @@ size_t put_array(Builder& builder, const T& xs, F f) {
         builder.reset();
         return 0;
       }
-    return proxy.finish();
+    return builder.add(std::move(proxy));
   };
   auto size = vast::detail::narrow_cast<size_t>(xs.size());
   if (size <= capacity<fixarray>())
@@ -534,17 +604,13 @@ size_t put(Builder& builder, std::vector<T>& xs) {
 template <class Builder, class T, class F>
 size_t put_map(Builder& builder, const T& xs, F f) {
   auto add = [&](auto proxy) -> size_t {
-    // This for loop style with structured bindings yields an internal
-    // compiler error...uncomment at some glory time in the future. --MV
-    // for (auto&& [k, v] : xs) {
-    for (auto&& x : xs) {
-      auto& [k, v] = x;
+    for (auto&& [k, v] : xs) {
       if (f(proxy, k) == 0 || f(proxy, v) == 0) {
         builder.reset();
         return 0;
       }
     }
-    return proxy.finish();
+    return builder.add(std::move(proxy));
   };
   auto size = vast::detail::narrow_cast<size_t>(xs.size());
   if (size <= capacity<fixmap>())

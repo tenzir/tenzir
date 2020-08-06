@@ -13,6 +13,17 @@
 
 #pragma once
 
+#include "vast/byte.hpp"
+#include "vast/detail/assert.hpp"
+#include "vast/detail/byte_swap.hpp"
+#include "vast/detail/operators.hpp"
+#include "vast/detail/overload.hpp"
+#include "vast/detail/type_traits.hpp"
+#include "vast/die.hpp"
+#include "vast/logger.hpp"
+#include "vast/span.hpp"
+#include "vast/time.hpp"
+
 #include <caf/none.hpp>
 #include <caf/optional.hpp>
 #include <caf/variant.hpp>
@@ -22,15 +33,6 @@
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
-
-#include <vast/byte.hpp>
-#include <vast/detail/assert.hpp>
-#include <vast/detail/byte_swap.hpp>
-#include <vast/detail/operators.hpp>
-#include <vast/detail/overload.hpp>
-#include <vast/detail/type_traits.hpp>
-#include <vast/span.hpp>
-#include <vast/time.hpp>
 
 /// The [MessagePack](https://github.com/msgpack/msgpack/blob/master/spec.md)
 /// object serialization specification.
@@ -220,7 +222,10 @@ constexpr size_t header_size() {
     return 5;
   else if constexpr (Format == ext32)
     return 6;
-  return 0;
+  else
+    static_assert(detail::always_false_v<decltype(Format)>, "unsupported "
+                                                            "format");
+  vast::die("unreachable");
 }
 
 /// @relates format
@@ -229,12 +234,16 @@ constexpr auto make_size(size_t x) {
   using vast::detail::narrow_cast;
   if constexpr (Format == str8 || Format == bin8 || Format == ext8)
     return narrow_cast<uint8_t>(x);
-  if constexpr (Format == str16 || Format == bin16 || Format == ext16
-                || Format == array16 || Format == map16)
+  else if constexpr (Format == str16 || Format == bin16 || Format == ext16
+                     || Format == array16 || Format == map16)
     return narrow_cast<uint16_t>(x);
-  if constexpr (Format == str32 || Format == bin32 || Format == ext32
-                || Format == array32 || Format == map32)
+  else if constexpr (Format == str32 || Format == bin32 || Format == ext32
+                     || Format == array32 || Format == map32)
     return narrow_cast<uint32_t>(x);
+  else
+    static_assert(detail::always_false_v<decltype(Format)>, "unsupported "
+                                                            "format");
+  vast::die("unreachable");
 }
 
 /// @relates format
@@ -242,24 +251,27 @@ template <format Format, class T>
 constexpr auto native_cast(T x) {
   if constexpr (is_positive_fixint(Format) || Format == uint8)
     return static_cast<uint8_t>(x);
-  if constexpr (Format == uint16)
+  else if constexpr (Format == uint16)
     return static_cast<uint16_t>(x);
-  if constexpr (Format == uint32)
+  else if constexpr (Format == uint32)
     return static_cast<uint32_t>(x);
-  if constexpr (Format == uint64)
+  else if constexpr (Format == uint64)
     return static_cast<int64_t>(x);
-  if constexpr (is_negative_fixint(Format) || Format == int8)
+  else if constexpr (is_negative_fixint(Format) || Format == int8)
     return static_cast<int8_t>(x);
-  if constexpr (Format == int16)
+  else if constexpr (Format == int16)
     return static_cast<int16_t>(x);
-  if constexpr (Format == int32)
+  else if constexpr (Format == int32)
     return static_cast<int32_t>(x);
-  if constexpr (Format == int64)
+  else if constexpr (Format == int64)
     return static_cast<int64_t>(x);
-  if constexpr (Format == float32)
+  else if constexpr (Format == float32)
     return static_cast<float>(x);
-  if constexpr (Format == float64)
+  else if constexpr (Format == float64)
     return static_cast<double>(x);
+  else
+    static_assert(detail::always_false_v<decltype(Format)>, "unsupported "
+                                                            "format");
 }
 
 /// @relates format
@@ -267,27 +279,30 @@ template <format Format>
 constexpr size_t capacity() {
   if constexpr (Format == fixext1)
     return 1;
-  if constexpr (Format == fixext2)
+  else if constexpr (Format == fixext2)
     return 2;
-  if constexpr (Format == fixext4)
+  else if constexpr (Format == fixext4)
     return 4;
-  if constexpr (Format == fixext8)
+  else if constexpr (Format == fixext8)
     return 8;
-  if constexpr (Format == fixext16)
+  else if constexpr (Format == fixext16)
     return 16;
-  if constexpr (Format == fixarray || Format == fixmap)
+  else if constexpr (is_fixarray(Format) || is_fixmap(Format))
     return (1u << 4) - 1;
-  if constexpr (Format == fixstr)
+  else if constexpr (is_fixstr(Format))
     return (1u << 5) - 1;
-  if constexpr (Format == str8 || Format == bin8 || Format == ext8)
+  else if constexpr (Format == str8 || Format == bin8 || Format == ext8)
     return (1u << 8) - 1;
-  if constexpr (Format == str16 || Format == bin16 || Format == array16
-                || Format == map16 || Format == ext16)
+  else if constexpr (Format == str16 || Format == bin16 || Format == array16
+                     || Format == map16 || Format == ext16)
     return (1u << 16) - 1;
-  if constexpr (Format == str32 || Format == bin32 || Format == array32
-                || Format == map32 || Format == ext32)
+  else if constexpr (Format == str32 || Format == bin32 || Format == array32
+                     || Format == map32 || Format == ext32)
     return (1ull << 32) - 1;
-  return 0;
+  else
+    static_assert(detail::always_false_v<decltype(Format)>, "unsupported "
+                                                            "format");
+  vast::die("unreachable");
 }
 
 /// Helper function to convert a numeric value (betweeen 16 and 64 bits)
@@ -322,6 +337,11 @@ public:
     return data_;
   }
 
+  template <class Inspector>
+  friend auto inspect(Inspector& f, object& x) {
+    return f(caf::meta::type_name("vast.msgpack.object"), x.format_, x.data_);
+  }
+
 private:
   msgpack::format format_;
   vast::span<const vast::byte> data_;
@@ -336,8 +356,8 @@ public:
   array_view(msgpack::format fmt, size_t size,
              vast::span<const vast::byte> data)
     : format_{fmt}, size_{size}, data_{data} {
-    VAST_ASSERT(fmt == fixarray || fmt == array16 || fmt == array32
-                || fmt == fixmap || fmt == map16 || fmt == map32);
+    VAST_ASSERT(is_fixarray(fmt) || fmt == array16 || fmt == array32
+                || is_fixmap(fixmap) || fmt == map16 || fmt == map32);
   }
 
   /// @returns The container format.
@@ -352,6 +372,12 @@ public:
 
   /// @returns A pointer to the beginning of the array data.
   overlay data() const;
+
+  template <class Inspector>
+  friend auto inspect(Inspector& f, array_view& x) {
+    return f(caf::meta::type_name("vast.msgpack.array_view"), x.format_,
+             x.size_, x.data_);
+  }
 
 private:
   msgpack::format format_;
@@ -380,6 +406,12 @@ public:
 
   auto data() const {
     return data_;
+  }
+
+  template <class Inspector>
+  friend auto inspect(Inspector& f, ext_view& x) {
+    return f(caf::meta::type_name("vast.msgpack.ext_view"), x.format_, x.type_,
+             x.data_);
   }
 
 private:
@@ -413,9 +445,9 @@ decltype(auto) visit(Visitor&& f, const object& x) {
     auto str = reinterpret_cast<const char*>(at(1));
     return f(std::string_view{str, size});
   } else if (is_fixarray(fmt)) {
-    return f(array_view{fixarray, fixarray_size(fmt), data.subspan(1)});
+    return f(array_view{fmt, fixarray_size(fmt), data.subspan(1)});
   } else if (is_fixmap(fmt)) {
-    return f(array_view{fixmap, fixmap_size(fmt) * 2u, data.subspan(1)});
+    return f(array_view{fmt, fixmap_size(fmt) * 2u, data.subspan(1)});
   }
   switch (fmt) {
     default:
@@ -598,10 +630,16 @@ public:
 
   /// Skips multiple objects.
   /// @param n The number of objects to skip.
-  /// @returns The number of bytes skipped or 0 on failure.
+  /// @returns The number of bytes skipped or if no object got skipped.
   /// @pre The underlying buffer must contain at least *n* more well-formed
   ///      msgpack objects starting from the current position.
   size_t next(size_t n);
+
+  template <class Inspector>
+  friend auto inspect(Inspector& f, overlay& x) {
+    return f(caf::meta::type_name("vast.msgpack.overlay"), x.buffer_,
+             x.position_);
+  }
 
 private:
   const vast::byte* at(size_t i) const {

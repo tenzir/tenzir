@@ -7,7 +7,6 @@
 #cmakedefine01 VAST_USE_JEMALLOC
 #cmakedefine01 VAST_USE_OPENCL
 #cmakedefine01 VAST_USE_OPENSSL
-#define VAST_INSTALL_PREFIX "@CMAKE_INSTALL_PREFIX@"
 #define VAST_VERSION "@VAST_VERSION_TAG@"
 
 #include <caf/config.hpp>

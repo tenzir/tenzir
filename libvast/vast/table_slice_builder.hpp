@@ -64,7 +64,7 @@ public:
   /// such that subsequent calls to add will restart with a new table_slice.
   /// @returns A table slice from the accumulated calls to add or `nullptr` on
   ///          failure.
-  virtual table_slice_ptr finish() = 0;
+  [[nodiscard]] virtual table_slice_ptr finish() = 0;
 
   /// @returns the current number of rows in the table slice.
   virtual size_t rows() const noexcept = 0;
@@ -95,9 +95,6 @@ protected:
 private:
   record_type layout_;
 };
-
-/// @relates table_slice_builder
-using table_slice_builder_ptr = caf::intrusive_ptr<table_slice_builder>;
 
 /// @relates table_slice_builder
 void intrusive_ptr_add_ref(const table_slice_builder* ptr);

@@ -88,6 +88,7 @@ set(libvast_sources
     src/detail/line_range.cpp
     src/detail/make_io_stream.cpp
     src/detail/mmapbuf.cpp
+    src/detail/pid_file.cpp
     src/detail/posix.cpp
     src/detail/process.cpp
     src/detail/string.cpp
@@ -244,7 +245,7 @@ if (VAST_USE_OPENSSL)
   target_link_libraries(libvast PUBLIC caf::openssl)
 endif ()
 
-target_link_libraries(libvast PRIVATE flatbuffers::flatbuffers)
+target_link_libraries(libvast PUBLIC ${flatbuffers_target})
 add_dependencies(libvast libvast_flatbuffers)
 
 if (VAST_ENABLE_ASSERTIONS)
