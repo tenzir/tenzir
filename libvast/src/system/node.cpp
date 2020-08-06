@@ -13,6 +13,7 @@
 
 #include "vast/system/node.hpp"
 
+#include "vast/accountant/config.hpp"
 #include "vast/concept/parseable/to.hpp"
 #include "vast/concept/parseable/vast/endpoint.hpp"
 #include "vast/concept/printable/stream.hpp"

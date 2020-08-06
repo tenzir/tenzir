@@ -22,6 +22,7 @@
 #include "vast/fwd.hpp"
 #include "vast/logger.hpp"
 #include "vast/si_literals.hpp"
+#include "vast/system/report.hpp"
 #include "vast/system/type_registry.hpp"
 #include "vast/table_slice.hpp"
 

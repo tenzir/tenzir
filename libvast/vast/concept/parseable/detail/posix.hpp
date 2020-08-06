@@ -30,7 +30,7 @@ struct socket_type_parser : parser<socket_type_parser> {
     using namespace parser_literals;
     // clang-format off
     auto p
-      = ( "datagram"_p ->* [] { return detail::socket_type::dgram; }
+      = ( "datagram"_p ->* [] { return detail::socket_type::datagram; }
         | "stream"_p ->* [] { return detail::socket_type::stream; }
         | "fd"_p ->* [] { return detail::socket_type::fd; }
         );

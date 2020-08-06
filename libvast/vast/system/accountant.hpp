@@ -13,45 +13,23 @@
 
 #pragma once
 
-#include "vast/aliases.hpp"
-#include "vast/detail/posix.hpp"
 #include "vast/fwd.hpp"
-#include "vast/system/report.hpp"
 #include "vast/time.hpp"
 
-#include <caf/broadcast_downstream_manager.hpp>
 #include <caf/typed_actor.hpp>
-
-#include <cstdint>
-#include <fstream>
-#include <queue>
-#include <string>
 
 namespace vast::system {
 
-struct accountant_config {
-  struct file_sink {
-    bool enable = false;
-    std::string path;
-  };
+// Forward declarations
+struct accountant_config;
+struct accountant_state;
 
-  struct uds_sink {
-    bool enable = false;
-    std::string path;
-    detail::socket_type type;
-  };
-
-  bool enable = true;
-  bool enable_self_sink = true;
-
-  file_sink file_sink;
-  uds_sink uds_sink;
+struct accountant_state_deleter {
+  void operator()(accountant_state* st);
 };
 
-caf::expected<accountant_config>
-to_accountant_config(const caf::settings& opts);
-
-caf::expected<accountant_config> to_accountant_config(const map& d);
+using accountant_state_ptr
+  = std::unique_ptr<accountant_state, accountant_state_deleter>;
 
 // clang-format off
 /// @relates accountant
@@ -69,63 +47,11 @@ using accountant_type = caf::typed_actor<
   caf::reacts_to<atom::telemetry>>;
 // clang-format on
 
-/// @relates accountant
-struct accountant_state {
-  // -- member types -----------------------------------------------------------
-
-  using downstream_manager = caf::broadcast_downstream_manager<table_slice_ptr>;
-
-  // -- constructors, destructors, and assignment operators --------------------
-
-  accountant_state(accountant_type::stateful_base<accountant_state>* self);
-
-  // -- functions --------------------------------------------------------------
-
-  /// Prints information about the current load to the INFO log.
-  void command_line_heartbeat();
-
-  // -- member variables -------------------------------------------------------
-
-  /// Stores the names of known actors to fill into the actor_name column.
-  std::unordered_map<caf::actor_id, std::string> actor_map;
-
-  /// Accumulates the importer throughput until the next heartbeat.
-  measurement accumulator;
-
-  /// The maximum size of generated slices.
-  size_t slice_size;
-
-  /// Stores the builder instance.
-  table_slice_builder_ptr builder;
-
-  /// Buffers table_slices, acting as a adaptor between the push based
-  /// ACCOUNTANT interface and the pull based stream to the IMPORTER.
-  std::queue<table_slice_ptr> slice_buffer;
-
-  /// Takes care of transmitting batches.
-  caf::stream_source_ptr<downstream_manager> mgr;
-
-  /// Handle to the file output channel.
-  std::unique_ptr<std::ostream> file_sink = nullptr;
-
-  /// Handle to the uds output channel.
-  std::unique_ptr<std::ostream> uds_sink = nullptr;
-
-  /// The configuration.
-  accountant_config cfg;
-
-  /// Pointer to the parent actor.
-  accountant_type::stateful_pointer<accountant_state> self;
-
-  /// Name of the ACCOUNTANT actor.
-  static constexpr const char* name = "accountant";
-};
-
 /// Accumulates various performance metrics in a key-value format and writes
 /// them to VAST table slices.
 /// @param self The actor handle.
 accountant_type::behavior_type
-accountant(accountant_type::stateful_pointer<accountant_state> self,
+accountant(accountant_type::stateful_pointer<accountant_state_ptr> self,
            accountant_config cfg);
 
 } // namespace vast::system

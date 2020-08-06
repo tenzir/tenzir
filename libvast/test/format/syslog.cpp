@@ -32,8 +32,7 @@ using namespace vast;
 // log files to hunt down bugs faster.
 FIXTURE_SCOPE(syslog_tests, fixtures::deterministic_actor_system)
 TEST(syslog reader) {
-  auto in
-    = detail::make_input_stream(artifacts::logs::syslog::syslog_msgs, false);
+  auto in = detail::make_input_stream(artifacts::logs::syslog::syslog_msgs);
   format::syslog::reader reader{defaults::import::table_slice_type,
                                 caf::settings{}, std::move(*in)};
   table_slice_ptr slice;

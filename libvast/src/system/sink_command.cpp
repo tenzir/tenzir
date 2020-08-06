@@ -27,6 +27,7 @@
 #include "vast/system/node_control.hpp"
 #include "vast/system/query_status.hpp"
 #include "vast/system/read_query.hpp"
+#include "vast/system/report.hpp"
 #include "vast/system/signal_monitor.hpp"
 #include "vast/system/spawn_or_connect_to_node.hpp"
 

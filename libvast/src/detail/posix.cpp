@@ -64,29 +64,33 @@ int uds_accept(int socket) {
 
 int uds_connect(const std::string& path, socket_type type) {
   int fd;
-  if (type == socket_type::stream) {
-    if ((fd = ::socket(AF_UNIX, SOCK_STREAM, 0)) < 0)
-      return fd;
-  } else {
-    if ((fd = ::socket(AF_UNIX, SOCK_DGRAM, 0)) < 0)
-      return fd;
-    ::sockaddr_un clt;
-    std::memset(&clt, 0, sizeof(clt));
-    clt.sun_family = AF_UNIX;
-    auto client_path = path + "-client";
-    std::strncpy(clt.sun_path, client_path.data(), sizeof(clt.sun_path) - 1);
-    ::unlink(client_path.c_str()); // Always remove previous socket file.
-    if (::bind(fd, reinterpret_cast<sockaddr*>(&clt), sizeof(clt)) < 0) {
-      VAST_WARNING(__func__, "failed in bind:", ::strerror(errno));
-      return -1;
-    }
+  switch (type) {
+    case socket_type::stream:
+    case socket_type::fd:
+      if ((fd = ::socket(AF_UNIX, SOCK_STREAM, 0)) < 0)
+        return fd;
+      break;
+    case socket_type::datagram:
+      if ((fd = ::socket(AF_UNIX, SOCK_DGRAM, 0)) < 0)
+        return fd;
+      ::sockaddr_un clt;
+      std::memset(&clt, 0, sizeof(clt));
+      clt.sun_family = AF_UNIX;
+      auto client_path = path + "-client";
+      std::strncpy(clt.sun_path, client_path.data(), sizeof(clt.sun_path) - 1);
+      ::unlink(client_path.c_str()); // Always remove previous socket file.
+      if (::bind(fd, reinterpret_cast<sockaddr*>(&clt), sizeof(clt)) < 0) {
+        VAST_WARNING(__func__, "failed in bind:", ::strerror(errno));
+        return -1;
+      }
+      break;
   }
   ::sockaddr_un srv;
   std::memset(&srv, 0, sizeof(srv));
   srv.sun_family = AF_UNIX;
   std::strncpy(srv.sun_path, path.data(), sizeof(srv.sun_path) - 1);
   if (::connect(fd, reinterpret_cast<sockaddr*>(&srv), sizeof(srv)) < 0) {
-    if (!(type == socket_type::dgram && errno == ENOENT)) {
+    if (!(type == socket_type::datagram && errno == ENOENT)) {
       VAST_WARNING(__func__, "failed in connect:", ::strerror(errno));
       return -1;
     }

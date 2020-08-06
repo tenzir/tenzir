@@ -19,7 +19,7 @@
 
 namespace vast::detail {
 
-enum class socket_type { dgram, stream, fd };
+enum class socket_type { datagram, stream, fd };
 
 /// Constructs a UNIX domain socket.
 /// @param path The file system path where to construct the socket.
