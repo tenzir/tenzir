@@ -89,8 +89,7 @@ caf::expected<type> parse_type(std::string_view zeek_type) {
     if (!elem)
       return elem.error();
     // Zeek sometimes logs sets as tables, e.g., represents set[string] as
-    // table[string]. We iron out this inconsistency by normalizing the type to
-    // a vector.
+    // table[string]. In VAST, they are all lists.
     t = vector_type{*elem};
   }
   if (caf::holds_alternative<none_type>(t))
