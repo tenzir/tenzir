@@ -250,22 +250,27 @@ auto make_send_command() {
 
 auto make_spawn_source_command() {
   auto spawn_source = std::make_unique<command>(
-    "source", "creates a new source", "",
+    "source", "creates a new source inside the node",
+    documentation::vast_spawn_source,
     opts("?spawn.source")
       .add<caf::atom_value>("table-slice-type,t", "table slice type")
       .add<size_t>("table-slice-size,s", "the suggested size for table slices")
       .add<size_t>("max-events,n", "the maximum number of events to "
                                    "import")
       .add<std::string>("read-timeout", "read timoeut after which data is "
-                                        "forwarded to the importer"),
-    false);
-  spawn_source->add_subcommand("csv", "creates a new CSV source", "",
+                                        "forwarded to the importer"));
+  spawn_source->add_subcommand("csv",
+                               "creates a new CSV source inside the node",
+                               documentation::vast_spawn_source_csv,
                                source_opts("?spawn.source.csv"));
-  spawn_source->add_subcommand("json", "creates a new JSON source", "",
+  spawn_source->add_subcommand("json",
+                               "creates a new JSON source inside the node",
+                               documentation::vast_spawn_source_json,
                                source_opts("?spawn.source.json"));
 #if VAST_HAVE_PCAP
   spawn_source->add_subcommand(
-    "pcap", "creates a new PCAP source", "",
+    "pcap", "creates a new PCAP source inside the node",
+    documentation::vast_spawn_source_pcap,
     source_opts("?spawn.source.pcap")
       .add<std::string>("interface,i", "network interface to read packets from")
       .add<size_t>("cutoff,c", "skip flow packets after this many bytes")
@@ -280,14 +285,21 @@ auto make_spawn_source_command() {
       .add<bool>("disable-community-id", "disable computation of community id "
                                          "for every packet"));
 #endif
-  spawn_source->add_subcommand("suricata", "creates a new Syslog source", "",
+  spawn_source->add_subcommand("suricata",
+                               "creates a new Suricata source inside the node",
+                               documentation::vast_spawn_source_suricata,
                                source_opts("?spawn.source.suricata"));
-  spawn_source->add_subcommand("syslog", "creates a new Syslog source", "",
+  spawn_source->add_subcommand("syslog",
+                               "creates a new Syslog source inside the node",
+                               documentation::vast_spawn_source_syslog,
                                source_opts("?spawn.source.syslog"));
   spawn_source->add_subcommand(
-    "test", "creates a new test source", "",
+    "test", "creates a new test source inside the node",
+    documentation::vast_spawn_source_test,
     source_opts("?spawn.source.test").add<size_t>("seed", "the PRNG seed"));
-  spawn_source->add_subcommand("zeek", "creates a new Zeek source", "",
+  spawn_source->add_subcommand("zeek",
+                               "creates a new Zeek source inside the node",
+                               documentation::vast_spawn_source_zeek,
                                source_opts("?spawn.source.zeek"));
   return spawn_source;
 }
@@ -310,30 +322,35 @@ auto make_spawn_sink_command() {
 }
 
 auto make_spawn_command() {
-  auto spawn = std::make_unique<command>("spawn", "creates a new component", "",
-                                         opts(), false);
-  spawn->add_subcommand("accountant", "spawns the accountant", "", opts());
+  auto spawn = std::make_unique<command>("spawn", "creates a new component",
+                                         documentation::vast_spawn, opts());
+  spawn->add_subcommand("accountant", "spawns the accountant", "", opts(),
+                        false);
   spawn->add_subcommand(
     "archive", "creates a new archive", "",
     opts()
       .add<size_t>("segments,s", "number of cached segments")
-      .add<size_t>("max-segment-size,m", "maximum segment size in MB"));
+      .add<size_t>("max-segment-size,m", "maximum segment size in MB"),
+    false);
   spawn->add_subcommand(
     "explorer", "creates a new explorer", "",
     opts()
       .add<vast::duration>("after,A", "timebox after each result")
-      .add<vast::duration>("before,B", "timebox before each result"));
+      .add<vast::duration>("before,B", "timebox before each result"),
+    false);
   spawn->add_subcommand(
     "exporter", "creates a new exporter", "",
     opts()
       .add<bool>("continuous,c", "marks a query as continuous")
       .add<bool>("unified,u", "marks a query as unified")
-      .add<uint64_t>("events,e", "maximum number of results"));
+      .add<uint64_t>("events,e", "maximum number of results"),
+    false);
   spawn->add_subcommand("importer", "creates a new importer", "",
                         opts().add<size_t>("ids,n", "number of initial IDs to "
-                                                    "request (deprecated)"));
+                                                    "request (deprecated)"),
+                        false);
   spawn->add_subcommand("index", "creates a new index", "",
-                        add_index_opts(opts()));
+                        add_index_opts(opts()), false);
   spawn->add_subcommand(make_spawn_source_command());
   spawn->add_subcommand(make_spawn_sink_command());
   return spawn;
