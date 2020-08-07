@@ -77,6 +77,7 @@ TEST(IPv4) {
 
 TEST(IPv6) {
   CHECK(address() == *to<address>("::"));
+  CHECK(address() == *to<address>("[::]"));
 
   auto a = *to<address>("2001:db8:0000:0000:0202:b3ff:fe1e:8329");
   auto b = *to<address>("2001:db8:0:0:202:b3ff:fe1e:8329");
@@ -84,6 +85,7 @@ TEST(IPv6) {
   CHECK(a.is_v6() && b.is_v6() && c.is_v6());
   CHECK(!(a.is_v4() || b.is_v4() || c.is_v4()));
   CHECK(a == b && b == c);
+  CHECK(a == *to<address>("[2001:db8:0000:0000:0202:b3ff:fe1e:8329]"));
 
   auto d = *to<address>("ff01::1");
   CHECK(d.is_multicast());

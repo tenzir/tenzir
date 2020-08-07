@@ -67,6 +67,7 @@ struct address_parser : vast::parser<address_parser> {
   static auto make_v6() {
     using namespace parsers;
     using namespace parser_literals;
+    // clang-format off
     auto h16
       = rep<1, 4>(xdigit)
       ;
@@ -83,9 +84,9 @@ struct address_parser : vast::parser<address_parser> {
       ;
     auto ls32
       = h16 >> ':' >> h16
-      | make_v4();
+      | make_v4()
       ;
-    auto v6
+    auto v6_without_brackets
       =                                             rep<6>(h16 >> ':') >> ls32
       |                                     "::" >> rep<5>(h16 >> ':') >> ls32
       |   -(                        h16) >> "::" >> rep<4>(h16 >> ':') >> ls32
@@ -96,6 +97,13 @@ struct address_parser : vast::parser<address_parser> {
       |   -(rep<0, 5>(h16_colon) >> h16) >> "::"                       >> h16
       |   -(rep<0, 6>(h16_colon) >> h16) >> "::"
       ;
+    auto v6_with_brackets
+      = '[' >> v6_without_brackets >> ']'
+      ;
+    auto v6
+      = v6_with_brackets
+      | v6_without_brackets;
+    // clang-format on
     return v6;
   }
 
@@ -139,8 +147,14 @@ struct access::parser<address> : vast::parser<access::parser<address>> {
       // i.e., it does not work when other characters follow the address.
       char buf[INET6_ADDRSTRLEN];
       std::memset(buf, 0, sizeof(buf));
-      VAST_ASSERT(f - begin < INET6_ADDRSTRLEN);
-      std::copy(begin, f, buf);
+      if (*begin == '[') {
+        // Exclude [ at the beginning and ] at the end of the parsed buffer.
+        VAST_ASSERT(f - begin < INET6_ADDRSTRLEN + 2);
+        std::copy(begin + 1, f - 1, buf);
+      } else {
+        VAST_ASSERT(f - begin < INET6_ADDRSTRLEN);
+        std::copy(begin, f, buf);
+      }
       return ::inet_pton(AF_INET6, buf, &a.bytes_) == 1;
     }
     return false;
