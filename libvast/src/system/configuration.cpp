@@ -61,6 +61,9 @@ configuration::configuration() {
     config_path_candidates.push_back(binary->parent().parent() / "share"
                                      / "vast" / "schema");
   config_path_candidates.emplace_back("/etc/vast/vast.conf");
+  // We must clear the config_file_path first so it does not use
+  // `caf-application.ini` as fallback.
+  config_file_path.clear();
   for (auto& p : config_path_candidates) {
     if (p.is_regular_file()) {
       config_file_path = p.str();
