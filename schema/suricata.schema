@@ -122,6 +122,45 @@ type suricata.dns = record {
   }
 }
 
+type suricata.ftp = record{
+  timestamp: time #timestamp,
+  flow_id: count #index=hash,
+  pcap_cnt: count,
+  src_ip: addr,
+  src_port: port,
+  dest_ip: addr,
+  dest_port: port,
+  proto: string,
+  event_type: string,
+  community_id: string #index=hash,
+  ftp: record{
+    command: string #index=hash,
+    command_data: string  #index=hash,
+    reply: vector<string>,
+    completion_code: vector<string>,
+    dynamic_port: port,
+    mode: string,
+    reply_received: string
+  }
+}
+
+type suricata.ftp_data = record{
+  timestamp: time #timestamp,
+  flow_id: count #index=hash,
+  pcap_cnt: count,
+  src_ip: addr,
+  src_port: port,
+  dest_ip: addr,
+  dest_port: port,
+  proto: string,
+  event_type: string,
+  community_id: string #index=hash,
+  ftp_data: record{
+    filename: string #index=hash,
+    command: string  #index=hash
+  }
+}
+
 type suricata.http = record {
   timestamp: time #timestamp,
   flow_id: count #index=hash,
