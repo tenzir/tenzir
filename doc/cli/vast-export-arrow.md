@@ -40,5 +40,3 @@ try:
 except:
     print("done with all readers")
 ```
-
-
