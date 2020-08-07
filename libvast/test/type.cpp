@@ -650,7 +650,7 @@ TEST(hashable) {
   auto x = record_type{{"x", integer_type{}},
                        {"y", string_type{}},
                        {"z", vector_type{real_type{}}}};
-  CHECK_EQUAL(hash(x), 12385688613179294200);
+  CHECK_EQUAL(hash(x), 12385688613179294200ul);
   CHECK_EQUAL(to_digest(x), std::to_string(hash(type{x})));
 }
 
