@@ -20,6 +20,7 @@
 
 #include <array>
 #include <string>
+#include <string_view>
 
 namespace vast::system {
 
@@ -38,7 +39,7 @@ spawn_at_node(caf::scoped_actor& self, caf::actor node, Arguments&&... xs) {
 template <size_t N>
 caf::expected<std::array<caf::actor, N>>
 get_node_components(caf::scoped_actor& self, caf::actor node,
-                    const char* const (&names)[N]) {
+                    const std::string_view (&names)[N]) {
   auto result = caf::expected{std::array<caf::actor, N>{}};
   std::vector<std::string> labels;
   labels.reserve(N);
