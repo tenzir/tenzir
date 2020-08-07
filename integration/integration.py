@@ -96,7 +96,8 @@ def spawn(*popenargs, **kwargs):
 def try_wait(process, timeout):
     """Wait for a specified time or terminate the process"""
     try:
-        if process.wait(timeout) != 0:
+        # Ignore SIGPIPE errors
+        if process.wait(timeout) not in [0, -13]:
             LOGGER.error(f"{process.args} returned {process.returncode}")
             return Result.ERROR
         return Result.SUCCESS
