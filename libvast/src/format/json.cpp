@@ -186,10 +186,16 @@ struct convert {
 
   template <class T, class U>
   caf::expected<data> operator()(T, U) const {
-    VAST_ERROR_ANON("json-reader cannot convert from",
-                    caf::detail::pretty_type_name(typeid(T)), "to",
-                    caf::detail::pretty_type_name(typeid(U)));
-    return make_error(ec::syntax_error, "invalid json type");
+    if constexpr (std::is_same_v<std::decay_t<T>, caf::none_t>) {
+      // Iff there is no specific conversion available, but the LHS is JSON
+      // `null`, we always want to return VAST `nil`.
+      return caf::none;
+    } else {
+      VAST_ERROR_ANON("json-reader cannot convert from",
+                      caf::detail::pretty_type_name(typeid(T)), "to",
+                      caf::detail::pretty_type_name(typeid(U)));
+      return make_error(ec::syntax_error, "invalid json type");
+    }
   }
 };
 
