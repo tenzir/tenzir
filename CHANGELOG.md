@@ -11,6 +11,14 @@ Every entry has a category for which we use the following visual abbreviations:
 
 ## Unreleased
 
+- 🎁 The default schema for Suricata has been updated to support the
+  `suricata.ftp` and `suricata.ftp_data` event types.
+  [#1009](https://github.com/tenzir/vast/pull/1009)
+
+- 🐞 Importing JSON no longer fails for JSON fields containing `null` when the
+  corresponding VAST type in the schema is a non-trivial type like
+  `vector<string>`. [#1009](https://github.com/tenzir/vast/pull/1009)
+
 - 🐞 The port encoding for Arrow-encoded table slices is now host-independent
   and always uses network-byte order.
   [#1007](https://github.com/tenzir/vast/pull/1007)
