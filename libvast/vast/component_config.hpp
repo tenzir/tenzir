@@ -21,24 +21,29 @@
 
 namespace vast {
 
-template <class V>
-bool assign(V& v, const caf::settings& m, std::string_view key) {
-  auto cv = caf::get_if(&m, key);
+/// Extracts a value from a settings object and assigns it to a variable.
+/// @param to The value to assign to.
+/// @param from The settings that holds the data.
+/// @param path The location of the data inside the settings object.
+/// @returns false on a type mismatch, true otherwise.
+template <class T>
+bool absorb(T& to, const caf::settings& from, std::string_view path) {
+  auto cv = caf::get_if(&from, path);
   if (!cv)
     return true;
   if constexpr (caf::detail::tl_contains<caf::config_value::variant_type::types,
-                                         V>::value) {
-    auto x = caf::get_if<V>(&*cv);
+                                         T>::value) {
+    auto x = caf::get_if<T>(&*cv);
     if (!x)
       return false;
-    v = *x;
+    to = *x;
     return true;
   } else {
     auto x = caf::get_if<std::string>(&*cv);
     if (!x)
       return false;
     auto f = x->begin();
-    return parse(f, x->end(), v);
+    return parse(f, x->end(), to);
   }
 }
 

@@ -21,15 +21,15 @@ namespace vast::system {
 caf::expected<accountant_config>
 to_accountant_config(const caf::settings& opts) {
   accountant_config result;
-  assign(result.enable, opts, "enable");
-  assign(result.self_sink.enable, opts, "self_sink.enable");
-  assign(result.self_sink.slice_size, opts, "self_sink.slize_size");
-  assign(result.self_sink.slice_type, opts, "self_sink.slize_type");
-  assign(result.file_sink.enable, opts, "file_sink.enable");
-  assign(result.file_sink.path, opts, "file_sink.path");
-  assign(result.uds_sink.enable, opts, "uds_sink.enable");
-  assign(result.uds_sink.path, opts, "uds_sink.path");
-  assign(result.uds_sink.type, opts, "uds_sink.type");
+  absorb(result.enable, opts, "enable");
+  absorb(result.self_sink.enable, opts, "self_sink.enable");
+  absorb(result.self_sink.slice_size, opts, "self_sink.slize_size");
+  absorb(result.self_sink.slice_type, opts, "self_sink.slize_type");
+  absorb(result.file_sink.enable, opts, "file_sink.enable");
+  absorb(result.file_sink.path, opts, "file_sink.path");
+  absorb(result.uds_sink.enable, opts, "uds_sink.enable");
+  absorb(result.uds_sink.path, opts, "uds_sink.path");
+  absorb(result.uds_sink.type, opts, "uds_sink.type");
   return result;
 }
 
