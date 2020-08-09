@@ -438,7 +438,7 @@ arrow_table_slice_builder::make_column_builder(const type& t,
   auto f = detail::overload(
     [=](const auto& x) -> column_builder_ptr {
       using type = std::decay_t<decltype(x)>;
-      if constexpr (std::is_same_v<type, vector_type>) {
+      if constexpr (std::is_same_v<type, list_type>) {
         auto nested = make_column_builder(x.value_type, pool);
         auto ptr = new sequence_column_builder<type>(pool, std::move(nested));
         return column_builder_ptr{ptr};
@@ -484,7 +484,7 @@ arrow_table_slice_builder::make_arrow_type(const type& t) {
       using trait = column_builder_trait<std::decay_t<decltype(x)>>;
       return trait::make_arrow_type();
     },
-    [=](const vector_type& x) -> data_type_ptr {
+    [=](const list_type& x) -> data_type_ptr {
       return arrow::list(make_arrow_type(x.value_type));
     },
     [=](const map_type& x) -> data_type_ptr {

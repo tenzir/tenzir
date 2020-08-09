@@ -91,7 +91,7 @@ type suricata.dhcp = record {
     assigned_ip: addr,
     client_id: string #index=hash,
     hostname: string,
-    params: vector<string>
+    params: list<string>
   }
 }
 
@@ -136,8 +136,8 @@ type suricata.ftp = record{
   ftp: record{
     command: string #index=hash,
     command_data: string  #index=hash,
-    reply: vector<string>,
-    completion_code: vector<string>,
+    reply: list<string>,
+    completion_code: list<string>,
     dynamic_port: port,
     mode: string,
     reply_received: string
@@ -309,7 +309,7 @@ type suricata.smb = record {
     status_code: string,
     session_id: count,
     tree_id: count,
-    client_dialects: vector<string>,
+    client_dialects: list<string>,
     request: record {
       native_lm: string,
       native_os: string
@@ -399,14 +399,14 @@ type suricata.smtp = record {
   smtp: record {
     helo: string,
     mail_from: string,
-    rcpt_to: vector<string>
+    rcpt_to: list<string>
   },
   email: record {
     status: string,
     from: string,
-    to: vector<string>,
-    attachment: vector<string>,
-    url: vector<string>
+    to: list<string>,
+    attachment: list<string>,
+    url: list<string>
   }
 }
 

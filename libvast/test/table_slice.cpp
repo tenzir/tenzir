@@ -82,7 +82,7 @@ private:
   void eager_init() {
     table_slice_header header{layout(), rows(), 0};
     slice_.reset(new rebranded_table_slice{std::move(header)});
-    row_ = vector(columns());
+    row_ = list(columns());
     col_ = 0;
   }
 };

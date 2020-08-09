@@ -14,7 +14,7 @@ type zeek.conn.custom = record{
   orig_ip_bytes: count,
   resp_pkts: count,
   resp_ip_bytes: count,
-  tunnel_parents: vector<addr>,
+  tunnel_parents: list<addr>,
   orig_l2_addr: string,
   resp_l2_addr: string
 }

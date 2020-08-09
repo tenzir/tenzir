@@ -64,7 +64,7 @@ TEST(bool) {
   CHECK_EQUAL(to_string(unbox(f)), "00101110");
   auto t = idx->lookup(not_equal, make_data_view(false));
   CHECK_EQUAL(to_string(unbox(t)), "11010001");
-  auto xs = vector{true, false};
+  auto xs = list{true, false};
   auto multi = unbox(idx->lookup(in, make_data_view(xs)));
   CHECK_EQUAL(to_string(multi), "11111111");
   MESSAGE("serialization");
@@ -96,7 +96,7 @@ TEST(integer) {
   CHECK(to_string(unbox(less_than_leet)) == "1111011");
   auto greater_zero = idx->lookup(greater, make_data_view(0));
   CHECK(to_string(unbox(greater_zero)) == "0111111");
-  auto xs = vector{42, 10, 4711};
+  auto xs = list{42, 10, 4711};
   auto multi = unbox(idx->lookup(in, make_data_view(xs)));
   CHECK_EQUAL(to_string(multi), "0101011");
   MESSAGE("serialization");
@@ -257,7 +257,7 @@ TEST(string) {
   CHECK_EQUAL(to_string(unbox(result)),  "0000000010");
   result = idx.lookup(match, make_data_view("foo"));
   CHECK(!result);
-  auto xs = vector{"foo", "bar", "baz"};
+  auto xs = list{"foo", "bar", "baz"};
   result = idx.lookup(in, make_data_view(xs));
   CHECK_EQUAL(to_string(unbox(result)), "1111110000");
   MESSAGE("serialization");
@@ -321,7 +321,7 @@ TEST(address) {
   y = {*to<address>("192.168.0.64"), 26};
   bm = idx.lookup(not_in, make_data_view(y));
   CHECK(to_string(unbox(bm)) == "11111111101");
-  auto xs = vector{*to<address>("192.168.0.1"), *to<address>("192.168.0.2")};
+  auto xs = list{*to<address>("192.168.0.1"), *to<address>("192.168.0.2")};
   auto multi = unbox(idx.lookup(in, make_data_view(xs)));
   CHECK_EQUAL(to_string(multi), "11011100000");
   MESSAGE("gaps");
@@ -391,7 +391,7 @@ TEST(subnet) {
   x = unbox(to<subnet>("192.0.0.0/8"));
   bm = idx.lookup(ni, make_data_view(x));
   CHECK_EQUAL(to_string(unbox(bm)), "000000");
-  auto xs = vector{s0, s1};
+  auto xs = list{s0, s1};
   auto multi = unbox(idx.lookup(in, make_data_view(xs)));
   CHECK_EQUAL(to_string(multi), "111100");
   MESSAGE("serialization");
@@ -429,7 +429,7 @@ TEST(port) {
   CHECK(to_string(unbox(bm)) == "111101110");
   bm = idx.lookup(greater, make_data_view(port{2, port::unknown}));
   CHECK(to_string(unbox(bm)) == "111111111");
-  auto xs = vector{http, port(53, port::udp)};
+  auto xs = list{http, port(53, port::udp)};
   auto multi = unbox(idx.lookup(in, make_data_view(xs)));
   CHECK_EQUAL(to_string(multi), "101001000");
   MESSAGE("serialization");
@@ -441,11 +441,11 @@ TEST(port) {
   CHECK_EQUAL(to_string(unbox(bm)), "111101110");
 }
 
-TEST(vector) {
-  auto container_type = vector_type{string_type{}};
-  sequence_index idx{container_type};
+TEST(list) {
+  auto container_type = list_type{string_type{}};
+  list_index idx{container_type};
   MESSAGE("append");
-  vector xs{"foo", "bar"};
+  list xs{"foo", "bar"};
   REQUIRE(idx.append(make_data_view(xs)));
   xs = {"qux", "foo", "baz", "corge"};
   REQUIRE(idx.append(make_data_view(xs)));
@@ -464,7 +464,7 @@ TEST(vector) {
   MESSAGE("serialization");
   std::vector<char> buf;
   CHECK_EQUAL(save(nullptr, buf, idx), caf::none);
-  sequence_index idx2{container_type};
+  list_index idx2{container_type};
   CHECK_EQUAL(load(nullptr, buf, idx2), caf::none);
   x = "foo";
   CHECK_EQUAL(to_string(*idx2.lookup(ni, make_data_view(x))), "11000000");

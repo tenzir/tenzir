@@ -103,7 +103,7 @@ caf::behavior pivoter(caf::stateful_actor<pivoter_state>* self, caf::actor node,
         return;
       VAST_DEBUG(self, "uses", *pivot_field, "to extract", st.target, "events");
       auto column = slice->column(pivot_field->name);
-      auto xs = vector{};
+      auto xs = list{};
       for (size_t i = 0; i < column->rows(); ++i) {
         auto data = materialize((*column)[i]);
         auto x = caf::get_if<std::string>(&data);

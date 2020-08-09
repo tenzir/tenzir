@@ -59,9 +59,9 @@ TEST(data) {
   CHECK_EQUAL(to_data("10.0.0.1"), unbox(to<address>("10.0.0.1")));
   MESSAGE("port");
   CHECK_EQUAL(to_data("22/tcp"), (port{22, port::tcp}));
-  MESSAGE("vector");
-  CHECK_EQUAL(to_data("[]"), vector{});
-  CHECK_EQUAL(to_data("[42, 4.2, nil]"), (vector{42u, 4.2, caf::none}));
+  MESSAGE("list");
+  CHECK_EQUAL(to_data("[]"), list{});
+  CHECK_EQUAL(to_data("[42, 4.2, nil]"), (list{42u, 4.2, caf::none}));
   MESSAGE("map");
   CHECK_EQUAL(to_data("{}"), map{});
   CHECK_EQUAL(to_data("{+1->T,+2->F}"), (map{{1, true}, {2, false}}));

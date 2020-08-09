@@ -60,8 +60,8 @@ TEST(string view) {
   CHECK_EQUAL(str, materialize(v));
 }
 
-TEST(vector view) {
-  auto xs = vector{42, true, "foo", 4.2};
+TEST(list view) {
+  auto xs = list{42, true, "foo", 4.2};
   auto v = make_view(xs);
   REQUIRE_EQUAL(v->size(), xs.size());
   auto i = v->begin();
@@ -109,10 +109,10 @@ TEST(make_data_view) {
   x = make_data_view(str);
   CHECK(caf::holds_alternative<view<std::string>>(x));
   CHECK(caf::holds_alternative<std::string_view>(x));
-  auto xs = vector{42, true, "foo"};
+  auto xs = list{42, true, "foo"};
   x = make_data_view(xs);
-  REQUIRE(caf::holds_alternative<view<vector>>(x));
-  auto v = caf::get<view<vector>>(x);
+  REQUIRE(caf::holds_alternative<view<list>>(x));
+  auto v = caf::get<view<list>>(x);
   REQUIRE_EQUAL(v->size(), 3u);
   CHECK_VARIANT_EQUAL(v->at(0), integer{42});
   CHECK_VARIANT_EQUAL(v->at(1), true);
@@ -131,13 +131,13 @@ TEST(comparison with data) {
   CHECK(!is_equal(x, y));
   x = caf::none;
   CHECK(is_equal(x, y));
-  x = vector{1, "foo", 4.2};
+  x = list{1, "foo", 4.2};
   y = make_view(x);
   CHECK(is_equal(x, y));
 }
 
 TEST(increment decrement container_view_iterator) {
-  auto xs = vector{42, true, "foo", 4.2};
+  auto xs = list{42, true, "foo", 4.2};
   auto v = make_view(xs);
   auto it1 = v->begin();
   auto it2 = v->begin();
@@ -149,11 +149,11 @@ TEST(increment decrement container_view_iterator) {
 }
 
 TEST(container comparison) {
-  data xs = vector{42};
-  data ys = vector{42};
+  data xs = list{42};
+  data ys = list{42};
   CHECK(make_view(xs) == make_view(ys));
   CHECK(!(make_view(xs) < make_view(ys)));
-  caf::get<vector>(ys).push_back(0);
+  caf::get<list>(ys).push_back(0);
   CHECK(make_view(xs) != make_view(ys));
   CHECK(make_view(xs) < make_view(ys));
   ys = map{{42, true}};
@@ -168,7 +168,7 @@ TEST(hashing views) {
   data c = "chars";
   data st = "string"s;
   data p = pattern{"x"};
-  data v = vector{42, true, "foo", 4.2};
+  data v = list{42, true, "foo", 4.2};
   data m = map{{42, true}, {84, false}};
 
   using hash = vast::uhash<vast::xxhash>;

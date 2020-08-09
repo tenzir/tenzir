@@ -143,7 +143,7 @@ void factory_traits<value_index>::initialize() {
   add_value_index_factory<subnet_type, subnet_index>();
   add_value_index_factory<port_type, port_index>();
   add_value_index_factory<string_type, string_index>();
-  add_value_index_factory<vector_type, sequence_index>();
+  add_value_index_factory<list_type, list_index>();
 }
 
 factory_traits<value_index>::key_type

@@ -51,8 +51,8 @@ struct fixture : fixtures::events {
     }.name("bar");
     sch.add(foo);
     sch.add(bar);
-    e0 = event::make(vector{"babba", 1.337, 42u, 100, "bar", -4.8}, foo);
-    e1 = event::make(vector{"yadda", vector{false, "baz"}}, bar);
+    e0 = event::make(list{"babba", 1.337, 42u, 100, "bar", -4.8}, foo);
+    e1 = event::make(list{"yadda", list{false, "baz"}}, bar);
     MESSAGE("event meta data queries");
     auto tp = to<vast::time>("2014-01-16+05:30:12");
     REQUIRE(tp);

@@ -62,19 +62,19 @@ namespace printers {
   auto const data = data_printer{};
 } // namespace printers
 
-struct vector_printer : printer<vector_printer> {
-  using attribute = vector;
+struct vast_list_printer : printer<vast_list_printer> {
+  using attribute = list;
 
   template <class Iterator>
-  bool print(Iterator& out, const vector& v) const {
+  bool print(Iterator& out, const list& xs) const {
     auto p = '[' << ~(data_printer{} % ", ") << ']';
-    return p.print(out, v);
+    return p.print(out, xs);
   }
 };
 
 template <>
-struct printer_registry<vector> {
-  using type = vector_printer;
+struct printer_registry<list> {
+  using type = vast_list_printer;
 };
 
 struct map_printer : printer<map_printer> {

@@ -147,7 +147,7 @@ broker::data to_broker(const vast::data& data) {
               // for this data instance and perform the string conversion.
               return broker::count{x};
             },
-            [](const vast::vector& xs) -> broker::data {
+            [](const vast::list& xs) -> broker::data {
               broker::vector result;
               result.reserve(xs.size());
               std::transform(xs.begin(), xs.end(), std::back_inserter(result),

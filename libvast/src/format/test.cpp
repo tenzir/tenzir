@@ -85,10 +85,10 @@ struct initializer {
   }
 
   caf::expected<void> operator()(const record_type& r) {
-    auto& v = caf::get<vector>(*data_);
-    VAST_ASSERT(v.size() == r.fields.size());
+    auto& xs = caf::get<list>(*data_);
+    VAST_ASSERT(xs.size() == r.fields.size());
     for (auto i = 0u; i < r.fields.size(); ++i) {
-      data_ = &v[i];
+      data_ = &xs[i];
       auto result = visit(*this, r.fields[i].type);
       if (!result)
         return result;
@@ -200,9 +200,9 @@ struct randomizer {
   }
 
   // Can only be a record, because we don't support randomizing containers.
-  void operator()(const record_type& r, vector& v) {
-    for (auto i = 0u; i < v.size(); ++i)
-      visit(*this, r.fields[i].type, v[i]);
+  void operator()(const record_type& r, list& xs) {
+    for (auto i = 0u; i < xs.size(); ++i)
+      visit(*this, r.fields[i].type, xs[i]);
   }
 
   auto sample() {
@@ -216,7 +216,7 @@ struct randomizer {
 
 std::string_view builtin_schema = R"__(
   type test.full = record{
-    n: vector<int>,
+    n: list<int>,
     b: bool #default="uniform(0,1)",
     i: int #default="uniform(-42000,1337)",
     c: count #default="pareto(0,1)",

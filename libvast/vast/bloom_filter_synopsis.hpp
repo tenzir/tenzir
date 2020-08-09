@@ -48,7 +48,7 @@ public:
       case equal:
         return bloom_filter_.lookup(caf::get<view<T>>(rhs));
       case in: {
-        if (auto xs = caf::get_if<view<vector>>(&rhs)) {
+        if (auto xs = caf::get_if<view<list>>(&rhs)) {
           for (auto x : **xs)
             if (bloom_filter_.lookup(caf::get<view<T>>(x)))
               return true;

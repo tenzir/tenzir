@@ -252,7 +252,7 @@ string_index::lookup_impl(relational_operator op, data_view x) const {
           }
         }
       },
-      [&](view<vector> xs) { return detail::container_lookup(*this, op, xs); }),
+      [&](view<list> xs) { return detail::container_lookup(*this, op, xs); }),
     x);
 }
 
@@ -295,7 +295,7 @@ enumeration_index::lookup_impl(relational_operator op, data_view d) const {
           return make_error(ec::unsupported_operator, op);
         return index_.lookup(op, x);
       },
-      [&](view<vector> xs) { return detail::container_lookup(*this, op, xs); }),
+      [&](view<list> xs) { return detail::container_lookup(*this, op, xs); }),
     d);
 }
 
@@ -377,7 +377,7 @@ address_index::lookup_impl(relational_operator op, data_view d) const {
           result.flip();
         return result;
       },
-      [&](view<vector> xs) { return detail::container_lookup(*this, op, xs); }),
+      [&](view<list> xs) { return detail::container_lookup(*this, op, xs); }),
     d);
 }
 
@@ -482,7 +482,7 @@ subnet_index::lookup_impl(relational_operator op, data_view d) const {
           }
         }
       },
-      [&](view<vector> xs) { return detail::container_lookup(*this, op, xs); }),
+      [&](view<list> xs) { return detail::container_lookup(*this, op, xs); }),
     d);
 }
 
@@ -538,18 +538,18 @@ port_index::lookup_impl(relational_operator op, data_view d) const {
         }
         return result;
       },
-      [&](view<vector> xs) { return detail::container_lookup(*this, op, xs); }),
+      [&](view<list> xs) { return detail::container_lookup(*this, op, xs); }),
     d);
 }
 
-// -- sequence_index -----------------------------------------------------------
+// -- list_index -----------------------------------------------------------
 
-sequence_index::sequence_index(vast::type t, caf::settings opts)
+list_index::list_index(vast::type t, caf::settings opts)
   : value_index{std::move(t), std::move(opts)} {
   max_size_ = caf::get_or(options(), "max-size",
                           defaults::index::max_container_elements);
   auto f = detail::overload([](const auto&) { return vast::type{}; },
-                            [](const vector_type& x) { return x.value_type; });
+                            [](const list_type& x) { return x.value_type; });
   value_type_ = caf::visit(f, value_index::type());
   VAST_ASSERT(!caf::holds_alternative<none_type>(value_type_));
   size_t components = std::log10(max_size_);
@@ -558,22 +558,22 @@ sequence_index::sequence_index(vast::type t, caf::settings opts)
   size_ = size_bitmap_index{base::uniform(10, components)};
 }
 
-caf::error sequence_index::serialize(caf::serializer& sink) const {
+caf::error list_index::serialize(caf::serializer& sink) const {
   return caf::error::eval(
     [&] { return value_index::serialize(sink); },
     [&] { return sink(elements_, size_, max_size_, value_type_); });
 }
 
-caf::error sequence_index::deserialize(caf::deserializer& source) {
+caf::error list_index::deserialize(caf::deserializer& source) {
   return caf::error::eval(
     [&] { return value_index::deserialize(source); },
     [&] { return source(elements_, size_, max_size_, value_type_); });
 }
 
-bool sequence_index::append_impl(data_view x, id pos) {
+bool list_index::append_impl(data_view x, id pos) {
   auto f = [&](const auto& v) {
     using view_type = std::decay_t<decltype(v)>;
-    if constexpr (std::is_same_v<view_type, view<vector>>) {
+    if constexpr (std::is_same_v<view_type, view<list>>) {
       auto seq_size = std::min(v->size(), max_size_);
       if (seq_size > elements_.size()) {
         auto old = elements_.size();
@@ -596,7 +596,7 @@ bool sequence_index::append_impl(data_view x, id pos) {
 }
 
 caf::expected<ids>
-sequence_index::lookup_impl(relational_operator op, data_view x) const {
+list_index::lookup_impl(relational_operator op, data_view x) const {
   if (!(op == ni || op == not_ni))
     return make_error(ec::unsupported_operator, op);
   if (elements_.empty())

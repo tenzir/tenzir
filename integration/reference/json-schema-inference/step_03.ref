@@ -1,1 +1,1 @@
-type json = record{a: vector<none>, b: vector<real>, c: vector<int>, d: vector<vector<none>>, e: vector<vector<vector<none>>>, f: vector<vector<real>>, g: vector<record{x: bool}>}
+type json = record{a: list<none>, b: list<real>, c: list<int>, d: list<list<none>>, e: list<list<list<none>>>, f: list<list<real>>, g: list<record{x: bool}>}

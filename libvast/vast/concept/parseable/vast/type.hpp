@@ -122,15 +122,15 @@ struct type_parser : parser<type_parser> {
       ;
     // Compound types
     rule<Iterator, type> type_type;
-    // Vector
+    // List
     using sequence_tuple = std::tuple<type, std::vector<vast::attribute>>;
-    static auto to_vector = [](sequence_tuple xs) -> type {
+    static auto to_list = [](sequence_tuple xs) -> type {
       auto& [value_type, attrs] = xs;
-      return vector_type{std::move(value_type)}.attributes(std::move(attrs));
+      return list_type{std::move(value_type)}.attributes(std::move(attrs));
     };
-    auto vector_type_parser
-      = ("vector" >> skp >> '<' >> skp >> ref(type_type) >> skp >> '>')
-        ->* to_vector
+    auto list_type_parser
+      = ("list" >> skp >> '<' >> skp >> ref(type_type) >> skp >> '>')
+        ->* to_list
       ;
     // Map
     using map_tuple = std::tuple<type, type, std::vector<vast::attribute>>;
@@ -172,7 +172,7 @@ struct type_parser : parser<type_parser> {
       type_type
         = basic_type_parser
         | enum_type_parser
-        | vector_type_parser
+        | list_type_parser
         | map_type_parser
         | record_type_parser
         | *symbol_type; // The *symbol_type parser must MUST be last as it
@@ -181,7 +181,7 @@ struct type_parser : parser<type_parser> {
       type_type
         = basic_type_parser
         | enum_type_parser
-        | vector_type_parser
+        | list_type_parser
         | map_type_parser
         | record_type_parser;
     return type_type(f, l, a);

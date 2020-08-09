@@ -331,7 +331,7 @@ TEST(data) {
   CHECK_TO_STRING(s, "\"foobar\"");
   data d{duration{512}};
   CHECK_TO_STRING(d, "512.0ns");
-  data v{vector{r, b, c, i, s, d}};
+  data v{list{r, b, c, i, s, d}};
   CHECK_TO_STRING(v, "[12.21, T, 23, +42, \"foobar\", 512.0ns]");
 }
 

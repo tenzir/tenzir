@@ -55,26 +55,21 @@ bool evaluate(const data& lhs, relational_operator op, const data& rhs) {
     ), x, y);
   };
   auto eval_in = [](const auto& x, const auto& y) {
-    return caf::visit(detail::overload(
-      [](const auto&, const auto&) {
-        return false;
-      },
-      [](const std::string& lhs, const std::string& rhs) {
-        return rhs.find(lhs) != std::string::npos;
-      },
-      [](const std::string& lhs, const pattern& rhs) {
-        return rhs.search(lhs);
-      },
-      [](const address& lhs, const subnet& rhs) {
-        return rhs.contains(lhs);
-      },
-      [](const subnet& lhs, const subnet& rhs) {
-        return rhs.contains(lhs);
-      },
-      [](const auto& lhs, const vector& rhs) {
-        return std::find(rhs.begin(), rhs.end(), lhs) != rhs.end();
-      }
-    ), x, y);
+    return caf::visit(
+      detail::overload(
+        [](const auto&, const auto&) { return false; },
+        [](const std::string& lhs, const std::string& rhs) {
+          return rhs.find(lhs) != std::string::npos;
+        },
+        [](const std::string& lhs, const pattern& rhs) {
+          return rhs.search(lhs);
+        },
+        [](const address& lhs, const subnet& rhs) { return rhs.contains(lhs); },
+        [](const subnet& lhs, const subnet& rhs) { return rhs.contains(lhs); },
+        [](const auto& lhs, const list& rhs) {
+          return std::find(rhs.begin(), rhs.end(), lhs) != rhs.end();
+        }),
+      x, y);
   };
   switch (op) {
     default:
@@ -112,11 +107,10 @@ bool evaluate(const data& lhs, relational_operator op, const data& rhs) {
 }
 
 bool is_basic(const data& x) {
-  return caf::visit(detail::overload(
-    [](const auto&) { return true; },
-    [](const vector&) { return false; },
-    [](const map&) { return false; }
-  ), x);
+  return caf::visit(detail::overload([](const auto&) { return true; },
+                                     [](const list&) { return false; },
+                                     [](const map&) { return false; }),
+                    x);
 }
 
 bool is_complex(const data& x) {
@@ -124,19 +118,18 @@ bool is_complex(const data& x) {
 }
 
 bool is_recursive(const data& x) {
-  return caf::visit(detail::overload(
-    [](const auto&) { return false; },
-    [](const vector&) { return true; },
-    [](const map&) { return true; }
-  ), x);
+  return caf::visit(detail::overload([](const auto&) { return false; },
+                                     [](const list&) { return true; },
+                                     [](const map&) { return true; }),
+                    x);
 }
 
 bool is_container(const data& x) {
   return is_recursive(x);
 }
 
-const data* get(const vector& v, const offset& o) {
-  const vector* x = &v;
+const data* get(const list& xs, const offset& o) {
+  const list* x = &xs;
   for (size_t i = 0; i < o.size(); ++i) {
     auto& idx = o[i];
     if (idx >= x->size())
@@ -144,7 +137,7 @@ const data* get(const vector& v, const offset& o) {
     auto d = &(*x)[idx];
     if (i + 1 == o.size())
       return d;
-    x = caf::get_if<vector>(d);
+    x = caf::get_if<list>(d);
     if (!x)
       return nullptr;
   }
@@ -152,22 +145,22 @@ const data* get(const vector& v, const offset& o) {
 }
 
 const data* get(const data& d, const offset& o) {
-  if (auto v = caf::get_if<vector>(&d))
-    return get(*v, o);
+  if (auto xs = caf::get_if<list>(&d))
+    return get(*xs, o);
   return nullptr;
 }
 
-caf::optional<vector> flatten(const vector& xs, const record_type& t) {
+caf::optional<list> flatten(const list& xs, const record_type& t) {
   if (xs.size() != t.fields.size())
     return caf::none;
-  vector result;
+  list result;
   for (size_t i = 0; i < xs.size(); ++i) {
     if (auto u = caf::get_if<record_type>(&t.fields[i].type)) {
       if (caf::holds_alternative<caf::none_t>(xs[i])) {
         result.reserve(result.size() + u->fields.size());
         for (size_t j = 0; j < u->fields.size(); ++j)
           result.emplace_back(caf::none);
-      } else if (auto ys = caf::get_if<vector>(&xs[i])) {
+      } else if (auto ys = caf::get_if<list>(&xs[i])) {
         auto sub_result = flatten(*ys, *u);
         if (!sub_result)
           return caf::none;
@@ -187,7 +180,7 @@ caf::optional<vector> flatten(const vector& xs, const record_type& t) {
 }
 
 caf::optional<data> flatten(const data& x, type t) {
-  auto xs = caf::get_if<vector>(&x);
+  auto xs = caf::get_if<list>(&x);
   auto r = caf::get_if<record_type>(&t);
   if (xs && r)
     return flatten(*xs, *r);
@@ -196,10 +189,10 @@ caf::optional<data> flatten(const data& x, type t) {
 
 namespace {
 
-bool consume(const record_type& t, const vector& xs, size_t& i, vector& res) {
+bool consume(const record_type& t, const list& xs, size_t& i, list& res) {
   for (auto& field : t.fields) {
     if (auto u = caf::get_if<record_type>(&field.type)) {
-      vector sub_res;
+      list sub_res;
       if (!consume(*u, xs, i, sub_res))
         return false;
       auto is_none = [](const auto& x) {
@@ -210,7 +203,7 @@ bool consume(const record_type& t, const vector& xs, size_t& i, vector& res) {
       else
         res.emplace_back(std::move(sub_res));
     } else if (i == xs.size()) {
-      return false; // too few elements in vector
+      return false; // too few elements in list
     } else {
       res.emplace_back(xs[i++]);
     }
@@ -220,8 +213,8 @@ bool consume(const record_type& t, const vector& xs, size_t& i, vector& res) {
 
 } // namespace <anonymous>
 
-caf::optional<vector> unflatten(const vector& xs, const record_type& t) {
-  vector result;
+caf::optional<list> unflatten(const list& xs, const record_type& t) {
+  list result;
   size_t i = 0;
   if (consume(t, xs, i, result))
     return result;
@@ -229,7 +222,7 @@ caf::optional<vector> unflatten(const vector& xs, const record_type& t) {
 }
 
 caf::optional<data> unflatten(const data& x, type t) {
-  auto xs = caf::get_if<vector>(&x);
+  auto xs = caf::get_if<list>(&x);
   auto r = caf::get_if<record_type>(&t);
   if (xs && r)
     return unflatten(*xs, *r);
@@ -249,10 +242,10 @@ json jsonize(const data& x) {
 
 } // namespace <anonymous>
 
-bool convert(const vector& v, json& j) {
-  json::array a(v.size());
-  for (size_t i = 0; i < v.size(); ++i)
-    a[i] = jsonize(v[i]);
+bool convert(const list& xs, json& j) {
+  json::array a(xs.size());
+  for (size_t i = 0; i < xs.size(); ++i)
+    a[i] = jsonize(xs[i]);
   j = std::move(a);
   return true;
 }
@@ -275,15 +268,15 @@ bool convert(const data& d, json& j) {
 }
 
 bool convert(const data& d, json& j, const type& t) {
-  auto v = caf::get_if<vector>(&d);
+  auto xs = caf::get_if<list>(&d);
   auto rt = caf::get_if<record_type>(&t);
-  if (v && rt) {
-    if (v->size() != rt->fields.size())
+  if (xs && rt) {
+    if (xs->size() != rt->fields.size())
       return false;
     json::object o;
-    for (size_t i = 0; i < v->size(); ++i) {
+    for (size_t i = 0; i < xs->size(); ++i) {
       auto& f = rt->fields[i];
-      if (!convert((*v)[i], o[f.name], f.type))
+      if (!convert((*xs)[i], o[f.name], f.type))
         return false;
     }
     j = std::move(o);

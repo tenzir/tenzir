@@ -57,8 +57,8 @@ struct events {
   static record_type zeek_conn_log_layout();
 
   template <class... Ts>
-  static std::vector<vector> make_rows(Ts... xs) {
-    return {make_vector(xs)...};
+  static std::vector<list> make_rows(Ts... xs) {
+    return {list{data{std::move(xs)}}...};
   }
 
   auto take(const std::vector<table_slice_ptr>& xs, size_t n) {

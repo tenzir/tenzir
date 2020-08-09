@@ -63,7 +63,7 @@ using concrete_types = caf::detail::type_list<
   subnet_type,
   port_type,
   enumeration_type,
-  vector_type,
+  list_type,
   map_type,
   record_type,
   alias_type
@@ -338,8 +338,8 @@ public:
       name = "vast.port_type";
     } else if constexpr (std::is_same_v<Derived, enumeration_type>) {
       name = "vast.enumeration_type";
-    } else if constexpr (std::is_same_v<Derived, vector_type>) {
-      name = "vast.vector_type";
+    } else if constexpr (std::is_same_v<Derived, list_type>) {
+      name = "vast.list_type";
     } else if constexpr (std::is_same_v<Derived, map_type>) {
       name = "vast.map_type";
     } else if constexpr (std::is_same_v<Derived, record_type>) {
@@ -422,7 +422,7 @@ struct nested_type : recursive_type<Derived> {
     // nop
   }
 
-  type value_type; ///< The type of the vector elements.
+  type value_type; ///< The type of the list elements.
 
   template <class Inspector>
   friend auto inspect(Inspector& f, Derived& x) {
@@ -517,8 +517,8 @@ struct enumeration_type final : complex_type<enumeration_type> {
 
 /// A type representing a sequence of elements.
 /// @relates type
-struct vector_type final : nested_type<vector_type> {
-  using super = nested_type<vector_type>;
+struct list_type final : nested_type<list_type> {
+  using super = nested_type<list_type>;
 
   using super::super;
 
@@ -749,7 +749,7 @@ VAST_TYPE_TRAIT(address);
 VAST_TYPE_TRAIT(subnet);
 VAST_TYPE_TRAIT(port);
 VAST_TYPE_TRAIT(enumeration);
-VAST_TYPE_TRAIT(vector);
+VAST_TYPE_TRAIT(list);
 VAST_TYPE_TRAIT(map);
 
 #undef VAST_TYPE_TRAIT
@@ -1035,7 +1035,7 @@ VAST_DEFINE_HASH_SPECIALIZATION(address_type);
 VAST_DEFINE_HASH_SPECIALIZATION(subnet_type);
 VAST_DEFINE_HASH_SPECIALIZATION(port_type);
 VAST_DEFINE_HASH_SPECIALIZATION(enumeration_type);
-VAST_DEFINE_HASH_SPECIALIZATION(vector_type);
+VAST_DEFINE_HASH_SPECIALIZATION(list_type);
 VAST_DEFINE_HASH_SPECIALIZATION(map_type);
 VAST_DEFINE_HASH_SPECIALIZATION(record_field);
 VAST_DEFINE_HASH_SPECIALIZATION(record_type);

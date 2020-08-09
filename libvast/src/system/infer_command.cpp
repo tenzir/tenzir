@@ -107,7 +107,7 @@ type deduce(const json& j) {
       // elements. Ideally, the input contains multiple instances that allow us
       // to "upgrade" from a previously unknown element type to a concrete
       // type.
-      return vector_type{xs.empty() ? type{} : deduce(xs[0])};
+      return list_type{xs.empty() ? type{} : deduce(xs[0])};
     },
     [](const json::object& xs) -> type {
       record_type result;

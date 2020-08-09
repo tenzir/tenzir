@@ -51,7 +51,7 @@ std::vector<event> make_ascending_integers(size_t count) {
   type layout{record_type{{"value", integer_type{}}}};
   layout.name("test::int");
   for (size_t i = 0; i < count; ++i) {
-    result.emplace_back(event::make(vector{static_cast<integer>(i)}, layout));
+    result.emplace_back(event::make(list{static_cast<integer>(i)}, layout));
     result.back().timestamp(epoch + std::chrono::seconds(i + 100));
   }
   return result;
@@ -62,8 +62,7 @@ std::vector<event> make_alternating_integers(size_t count) {
   type layout{record_type{{"value", integer_type{}}}};
   layout.name("test::int");
   for (size_t i = 0; i < count; ++i) {
-    result.emplace_back(event::make(vector{static_cast<integer>(i % 2)},
-                                    layout));
+    result.emplace_back(event::make(list{static_cast<integer>(i % 2)}, layout));
     result.back().timestamp(epoch + std::chrono::seconds(i + 100));
   }
   return result;

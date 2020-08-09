@@ -171,7 +171,7 @@ struct json_printer : printer<json_printer<TreePolicy, Indent, Padding>> {
       return print_array(xs.begin(), xs.end());
     }
 
-    bool operator()(const view<vector>& xs) {
+    bool operator()(const view<list>& xs) {
       return print_array(xs.begin(), xs.end());
     }
 

@@ -492,7 +492,7 @@ struct type_congruence_checker {
     return x.fields.size() == y.fields.size();
   }
 
-  bool operator()(const vector_type& x, const vector_type& y) const {
+  bool operator()(const list_type& x, const list_type& y) const {
     return visit(*this, x.value_type, y.value_type);
   }
 
@@ -569,7 +569,7 @@ struct data_congruence_checker {
     return std::find(x.fields.begin(), x.fields.end(), y) != x.fields.end();
   }
 
-  bool operator()(const vector_type&, const vector&) const {
+  bool operator()(const list_type&, const list&) const {
     return true;
   }
 
@@ -577,7 +577,7 @@ struct data_congruence_checker {
     return true;
   }
 
-  bool operator()(const record_type& x, const vector& y) const {
+  bool operator()(const record_type& x, const list& y) const {
     if (x.fields.size() != y.size())
       return false;
     for (size_t i = 0; i < x.fields.size(); ++i)
@@ -718,8 +718,8 @@ bool type_check(const type& t, const data& x) {
       auto e = caf::get_if<enumeration>(&x);
       return e && *e < u.fields.size();
     },
-    [&](const vector_type& u) {
-      if (auto xs = caf::get_if<vector>(&x))
+    [&](const list_type& u) {
+      if (auto xs = caf::get_if<list>(&x))
         return xs->empty() || type_check(u.value_type, *xs->begin());
       return false;
     },
@@ -733,8 +733,8 @@ bool type_check(const type& t, const data& x) {
       return type_check(u.key_type, key) && type_check(u.value_type, value);
     },
     [&](const record_type& u) {
-      // Until we have a separate data type for records we treat them as vector.
-      auto xs = caf::get_if<vector>(&x);
+      // Until we have a separate data type for records we treat them as list.
+      auto xs = caf::get_if<list>(&x);
       if (!xs)
         return false;
       if (xs->size() != u.fields.size())
@@ -744,29 +744,26 @@ bool type_check(const type& t, const data& x) {
           return false;
       return true;
     },
-    [&](const alias_type& u) {
-      return type_check(u.value_type, x);
-    }
-  );
+    [&](const alias_type& u) { return type_check(u.value_type, x); });
   return caf::holds_alternative<caf::none_t>(x) || caf::visit(f, t);
 }
 
 data construct(const type& x) {
   return visit(detail::overload(
-    [](const auto& y) {
-      return data{type_to_data<std::decay_t<decltype(y)>>{}};
-    },
-    [](const record_type& t) {
-      vector xs;
-      xs.reserve(t.fields.size());
-      std::transform(t.fields.begin(), t.fields.end(), std::back_inserter(xs),
-                     [&](auto& field) { return construct(field.type); });
-      return data{std::move(xs)};
-    },
-    [](const alias_type& t) {
-      return construct(t.value_type);
-    }
-  ), x);
+                 [](const auto& y) {
+                   return data{type_to_data<std::decay_t<decltype(y)>>{}};
+                 },
+                 [](const record_type& t) {
+                   list xs;
+                   xs.reserve(t.fields.size());
+                   std::transform(t.fields.begin(), t.fields.end(),
+                                  std::back_inserter(xs), [&](auto& field) {
+                                    return construct(field.type);
+                                  });
+                   return data{std::move(xs)};
+                 },
+                 [](const alias_type& t) { return construct(t.value_type); }),
+               x);
 }
 
 std::string to_digest(const type& x) {
@@ -779,7 +776,7 @@ namespace {
 const char* kind_tbl[] = {
   "none",        "bool",   "int",     "count",   "real",   "duration",
   "time",        "string", "pattern", "address", "subnet", "port",
-  "enumeration", "vector", "map",     "record",  "alias",
+  "enumeration", "list",   "map",     "record",  "alias",
 };
 
 using caf::detail::tl_size;
@@ -788,38 +785,33 @@ static_assert(std::size(kind_tbl) == tl_size<concrete_types>::value);
 
 json jsonize(const type& x) {
   return visit(detail::overload(
-    [](const enumeration_type&t) {
-      json::array a;
-      std::transform(t.fields.begin(),
-                     t.fields.end(),
-                     std::back_inserter(a),
-                     [](auto& x) { return json{x}; });
-      return json{std::move(a)};
-    },
-    [&](const vector_type& t) {
-      json::object o;
-      o["value_type"] = to_json(t.value_type);
-      return json{std::move(o)};
-    },
-    [&](const map_type& t) {
-      json::object o;
-      o["key_type"] = to_json(t.key_type);
-      o["value_type"] = to_json(t.value_type);
-      return json{std::move(o)};
-    },
-    [&](const record_type& t) {
-      json::object o;
-      for (auto& field : t.fields)
-        o[to_string(field.name)] = to_json(field.type);
-      return json{std::move(o)};
-    },
-    [&](const alias_type& t) {
-      return to_json(t.value_type);
-    },
-    [](const abstract_type&) {
-      return json{};
-    }
-  ), x);
+                 [](const enumeration_type& t) {
+                   json::array a;
+                   std::transform(t.fields.begin(), t.fields.end(),
+                                  std::back_inserter(a),
+                                  [](auto& x) { return json{x}; });
+                   return json{std::move(a)};
+                 },
+                 [&](const list_type& t) {
+                   json::object o;
+                   o["value_type"] = to_json(t.value_type);
+                   return json{std::move(o)};
+                 },
+                 [&](const map_type& t) {
+                   json::object o;
+                   o["key_type"] = to_json(t.key_type);
+                   o["value_type"] = to_json(t.value_type);
+                   return json{std::move(o)};
+                 },
+                 [&](const record_type& t) {
+                   json::object o;
+                   for (auto& field : t.fields)
+                     o[to_string(field.name)] = to_json(field.type);
+                   return json{std::move(o)};
+                 },
+                 [&](const alias_type& t) { return to_json(t.value_type); },
+                 [](const abstract_type&) { return json{}; }),
+               x);
 }
 
 } // namespace <anonymous>

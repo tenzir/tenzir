@@ -38,29 +38,27 @@ struct fixture : fixtures::deterministic_actor_system {
 
   const record_type l1 = record_type{{"s", string_type{}},
                                      {"ptn", pattern_type{}},
-                                     {"lis", vector_type{count_type{}}}}
+                                     {"lis", list_type{count_type{}}}}
                            .name("l1");
 
-  const record_type l2 = record_type{{"b", bool_type{}},
-                                     {"c", count_type{}},
-                                     {"r", real_type{}},
-                                     {"i", integer_type{}},
-                                     {"s", string_type{}},
-                                     {"a", address_type{}},
-                                     {"p", port_type{}},
-                                     {"sn", subnet_type{}},
-                                     {"t", time_type{}},
-                                     {"d", duration_type{}},
-                                     {"d2", duration_type{}},
-                                     {"e",
-                                      enumeration_type{{"FOO", "BAR", "BAZ"}}},
-                                     {"vp", vector_type{port_type{}}},
-                                     {"vt", vector_type{time_type{}}},
-                                     {"msa",
-                                      map_type{string_type{}, address_type{}}},
-                                     {"mcs",
-                                      map_type{count_type{}, string_type{}}}}
-                           .name("l2");
+  const record_type l2
+    = record_type{{"b", bool_type{}},
+                  {"c", count_type{}},
+                  {"r", real_type{}},
+                  {"i", integer_type{}},
+                  {"s", string_type{}},
+                  {"a", address_type{}},
+                  {"p", port_type{}},
+                  {"sn", subnet_type{}},
+                  {"t", time_type{}},
+                  {"d", duration_type{}},
+                  {"d2", duration_type{}},
+                  {"e", enumeration_type{{"FOO", "BAR", "BAZ"}}},
+                  {"vp", list_type{port_type{}}},
+                  {"vt", list_type{time_type{}}},
+                  {"msa", map_type{string_type{}, address_type{}}},
+                  {"mcs", map_type{count_type{}, string_type{}}}}
+        .name("l2");
 
   schema s;
 
@@ -184,7 +182,7 @@ TEST(csv reader - layout with container) {
   auto slices = run(l1_log0, 20, 20);
   REQUIRE_EQUAL(slices[0]->layout(), l1);
   CHECK(slices[0]->at(10, 1) == data{pattern{"gladness"}});
-  auto xs = vast::vector{};
+  auto xs = vast::list{};
   xs.emplace_back(data{count{42}});
   xs.emplace_back(data{count{1337}});
   CHECK(slices[0]->at(19, 2) == data{xs});
@@ -245,14 +243,13 @@ std::string_view l2_log_vp = R"__(vp
 [5555/tcp, 0/icmp]
 [])__";
 
-TEST(csv reader - vector of port) {
+TEST(csv reader - list of port) {
   auto slices = run(l2_log_vp, 2, 100);
-  auto l2_vp = record_type{{"vp", vector_type{port_type{}}}}.name("l2");
+  auto l2_vp = record_type{{"vp", list_type{port_type{}}}}.name("l2");
   REQUIRE_EQUAL(slices[0]->layout(), l2_vp);
-  CHECK(
-    slices[0]->at(0, 0)
-    == data{vector{unbox(to<port>("5555/tcp")), unbox(to<port>("0/icmp"))}});
-  CHECK(slices[0]->at(1, 0) == data{vector{}});
+  CHECK(slices[0]->at(0, 0)
+        == data{list{unbox(to<port>("5555/tcp")), unbox(to<port>("0/icmp"))}});
+  CHECK(slices[0]->at(1, 0) == data{list{}});
 }
 
 std::string_view l2_log_subnet = R"__(sn
@@ -301,8 +298,8 @@ TEST(csv reader - reordered layout) {
                             {"d", duration_type{}},
                             {"e", enumeration_type{{"FOO", "BAR", "BAZ"}}},
                             {"t", time_type{}},
-                            {"vp", vector_type{port_type{}}},
-                            {"vt", vector_type{time_type{}}},
+                            {"vp", list_type{port_type{}}},
+                            {"vt", list_type{time_type{}}},
                             // FIXME: Parsing maps in csv is broken, see ch12358.
                             // {"mcs", map_type{count_type{}, string_type{}}}
                             }
@@ -323,10 +320,10 @@ TEST(csv reader - reordered layout) {
   CHECK(slices[0]->at(0, 10)
         == data{unbox(to<vast::time>("2011-08-12+14:59:11.994970"))});
   CHECK(slices[0]->at(0, 11)
-        == data{vector{unbox(to<port>("5555/tcp")), unbox(to<port>("0/"
-                                                                   "icmp"))}});
+        == data{list{unbox(to<port>("5555/tcp")), unbox(to<port>("0/"
+                                                                 "icmp"))}});
   CHECK(slices[0]->at(0, 12)
-        == data{vector{unbox(to<vast::time>("2019-04-30T11:46:13Z"))}});
+        == data{list{unbox(to<vast::time>("2019-04-30T11:46:13Z"))}});
   auto m = map{};
   m[1u] = data{"FOO"};
   m[1024u] = data{"BAR!"};
