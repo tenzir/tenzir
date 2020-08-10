@@ -103,7 +103,6 @@ struct port_type;
 struct predicate;
 struct real_type;
 struct record_type;
-struct set_type;
 struct string_type;
 struct subnet_type;
 struct time_type;

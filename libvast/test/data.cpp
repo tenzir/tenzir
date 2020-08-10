@@ -33,13 +33,6 @@ TEST(vector) {
   REQUIRE(std::is_same_v<std::vector<data>, vector>);
 }
 
-TEST(set) {
-  auto xs = set{1, 2, 3};
-  REQUIRE_EQUAL(xs.size(), 3u);
-  CHECK_EQUAL(*xs.begin(), data{1});
-  CHECK_EQUAL(*xs.rbegin(), data{3});
-}
-
 TEST(tables) {
   map ports{{"ssh", 22u}, {"http", 80u}, {"https", 443u}, {"imaps", 993u}};
   CHECK(ports.size() == 4);
@@ -108,7 +101,6 @@ TEST(construction) {
   CHECK(caf::holds_alternative<subnet>(data{subnet{}}));
   CHECK(caf::holds_alternative<port>(data{port{53, port::udp}}));
   CHECK(caf::holds_alternative<vector>(data{vector{}}));
-  CHECK(caf::holds_alternative<set>(data{set{}}));
   CHECK(caf::holds_alternative<map>(data{map{}}));
 }
 
@@ -180,10 +172,10 @@ TEST(evaluation - pattern matching) {
 }
 
 TEST(serialization) {
-  set xs;
-  xs.emplace(port{80, port::tcp});
-  xs.emplace(port{53, port::udp});
-  xs.emplace(port{8, port::icmp});
+  vector xs;
+  xs.emplace_back(port{80, port::tcp});
+  xs.emplace_back(port{53, port::udp});
+  xs.emplace_back(port{8, port::icmp});
   auto x0 = data{xs};
   std::vector<char> buf;
   CHECK_EQUAL(save(nullptr, buf, x0), caf::none);
@@ -264,13 +256,6 @@ TEST(parseable) {
   CHECK(p(f, l, d));
   CHECK(f == l);
   CHECK(d == vector{42u, 4.2, caf::none});
-  MESSAGE("set");
-  str = "{-42,+42,-1}"s;
-  f = str.begin();
-  l = str.end();
-  CHECK(p(f, l, d));
-  CHECK(f == l);
-  CHECK(d == set{-42, 42, -1});
   MESSAGE("map");
   str = "{T->1,F->0}"s;
   f = str.begin();

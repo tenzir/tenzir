@@ -89,11 +89,6 @@ caf::error render(output_iterator& out, const view<vector>& xs) {
   return caf::none;
 }
 
-caf::error render(output_iterator& out, const view<set>& xs) {
-  render(out, xs.begin(), xs.end());
-  return caf::none;
-}
-
 caf::error render(output_iterator&, const view<map>&) {
   return make_error(ec::unimplemented, "CSV writer does not support map types");
 }
@@ -251,15 +246,6 @@ struct container_parser_builder {
       };
       return (+(parsers::any - opt_.set_separator - opt_.kvp_separator))
         .with(to_enumeration);
-    } else if constexpr (std::is_same_v<T, set_type>) {
-      auto set_insert = [](std::vector<Attribute> xs) {
-        return set(std::make_move_iterator(xs.begin()),
-                   std::make_move_iterator(xs.end()));
-      };
-      // clang-format off
-      return
-        ('{'_p >> (caf::visit(*this, t.value_type) % opt_.set_separator) >> '}'_p)
-               ->* set_insert;
     } else if constexpr (std::is_same_v<T, vector_type>) {
       auto vector_insert = [](std::vector<Attribute> xs) { return xs; };
       return ('[' >> ~(caf::visit(*this, t.value_type) % opt_.set_separator) >> ']')
@@ -362,7 +348,7 @@ struct csv_parser_factory {
       return ((+(parsers::any - opt_.separator))
               ->* to_enumeration).with(add_t<enumeration>{bptr_});
       // clang-format on
-    } else if constexpr (detail::is_any_v<T, set_type, vector_type, map_type>) {
+    } else if constexpr (detail::is_any_v<T, vector_type, map_type>) {
       return (-container_parser_builder<Iterator, data>{opt_}(t))
         .with(add_t<data>{bptr_});
     } else if constexpr (has_parser_v<type_to_data<T>>) {

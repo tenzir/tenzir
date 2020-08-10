@@ -216,7 +216,7 @@ struct randomizer {
 
 std::string_view builtin_schema = R"__(
   type test.full = record{
-    n: set<int>,
+    n: vector<int>,
     b: bool #default="uniform(0,1)",
     i: int #default="uniform(-42000,1337)",
     c: count #default="pareto(0,1)",

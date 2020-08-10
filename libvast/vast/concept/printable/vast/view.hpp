@@ -79,18 +79,6 @@ struct vector_view_printer : printer<vector_view_printer> {
   }
 };
 
-struct set_view_printer : printer<set_view_printer> {
-  using attribute = view<set>;
-
-  template <class Iterator>
-  bool print(Iterator& out, const attribute& xs) const {
-    if (!xs || xs->empty())
-      return printers::str.print(out, "{}");
-    auto p = '{' << ~(data_view_printer{} % ", ") << '}';
-    return p.print(out, xs);
-  }
-};
-
 struct map_view_printer : printer<map_view_printer> {
   using attribute = view<map>;
 
@@ -119,11 +107,6 @@ struct printer_registry<view<pattern>> {
 template <>
 struct printer_registry<view<vector>> {
   using type = vector_view_printer;
-};
-
-template <>
-struct printer_registry<view<set>> {
-  using type = set_view_printer;
 };
 
 template <>

@@ -60,24 +60,24 @@ TEST(min-max synopsis) {
   MESSAGE("[4,7] op 9");
   time nine = epoch + 9s;
   verify(nine, {N, N, N, N, N, N, F, T, T, T, F, F});
-  MESSAGE("[4,7] op {0, 4}");
-  auto zero_four = data{set{zero, four}};
+  MESSAGE("[4,7] op [0, 4]");
+  auto zero_four = data{vector{zero, four}};
   auto zero_four_view = make_view(zero_four);
   verify(zero_four_view, {N, N, T, F, N, N, N, N, N, N, N, N});
-  MESSAGE("[4,7] op {7, 9}");
-  auto seven_nine = data{set{seven, nine}};
+  MESSAGE("[4,7] op [7, 9]");
+  auto seven_nine = data{vector{seven, nine}};
   auto seven_nine_view = make_view(seven_nine);
   verify(seven_nine_view, {N, N, T, F, N, N, N, N, N, N, N, N});
-  MESSAGE("[4,7] op {0, 9}");
-  auto zero_nine = data{set{zero, nine}};
+  MESSAGE("[4,7] op [0, 9]");
+  auto zero_nine = data{vector{zero, nine}};
   auto zero_nine_view = make_view(zero_nine);
   verify(zero_nine_view, {N, N, F, T, N, N, N, N, N, N, N, N});
   // Check that we don't do any implicit conversions.
   MESSAGE("[4,7] op count{5}");
   count c = 5;
   verify(c, {N, N, N, N, N, N, N, N, N, N, N, N});
-  MESSAGE("[4,7] op {count{5}, 7}");
-  auto heterogeneous = data{set{c, seven}};
+  MESSAGE("[4,7] op [count{5}, 7]");
+  auto heterogeneous = data{vector{c, seven}};
   auto heterogeneous_view = make_view(heterogeneous);
   verify(heterogeneous_view, {N, N, T, F, N, N, N, N, N, N, N, N});
 }

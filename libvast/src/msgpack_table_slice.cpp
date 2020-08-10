@@ -239,13 +239,10 @@ data_view decode(msgpack::overlay& objects, const T& t) {
   } else if constexpr (std::is_same_v<T, enumeration_type>) {
     if (auto x = get<uint8_t>(o))
       return make_data_view(enumeration{*x});
-  } else if constexpr (detail::is_any_v<T, vector_type, set_type>) {
+  } else if constexpr (std::is_same_v<T, vector_type>) {
     if (auto xs = get<array_view>(o)) {
       auto ptr = caf::make_counted<msgpack_array_view>(t.value_type, *xs);
-      if constexpr (std::is_same_v<T, vector_type>)
-        return vector_view_handle{vector_view_ptr{std::move(ptr)}};
-      else
-        return set_view_handle{set_view_ptr{std::move(ptr)}};
+      return vector_view_handle{vector_view_ptr{std::move(ptr)}};
     }
   } else if constexpr (std::is_same_v<T, map_type>) {
     if (auto xs = get<array_view>(o)) {

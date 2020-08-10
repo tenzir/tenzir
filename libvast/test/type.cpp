@@ -138,9 +138,6 @@ TEST(introspection) {
   CHECK(is_complex(vector_type{}));
   CHECK(is_container(vector_type{}));
   CHECK(is_recursive(vector_type{}));
-  CHECK(is_complex(set_type{}));
-  CHECK(is_container(set_type{}));
-  CHECK(is_recursive(set_type{}));
   CHECK(is_complex(map_type{}));
   CHECK(is_container(map_type{}));
   CHECK(is_recursive(map_type{}));
@@ -173,7 +170,6 @@ TEST(serialization) {
   CHECK_ROUNDTRIP(port_type{});
   CHECK_ROUNDTRIP(enumeration_type{});
   CHECK_ROUNDTRIP(vector_type{});
-  CHECK_ROUNDTRIP(set_type{});
   CHECK_ROUNDTRIP(map_type{});
   CHECK_ROUNDTRIP(record_type{});
   CHECK_ROUNDTRIP(alias_type{});
@@ -191,7 +187,6 @@ TEST(serialization) {
   CHECK_ROUNDTRIP(type{port_type{}});
   CHECK_ROUNDTRIP(type{enumeration_type{}});
   CHECK_ROUNDTRIP(type{vector_type{}});
-  CHECK_ROUNDTRIP(type{set_type{}});
   CHECK_ROUNDTRIP(type{map_type{}});
   CHECK_ROUNDTRIP(type{record_type{}});
   CHECK_ROUNDTRIP(type{alias_type{}});
@@ -438,13 +433,13 @@ TEST(congruence) {
   CHECK(congruent(i, j));
   CHECK(!congruent(i, c));
   MESSAGE("sets");
-  auto s0 = set_type{i};
-  auto s1 = set_type{j};
-  auto s2 = set_type{c};
-  CHECK(s0 != s1);
-  CHECK(s0 != s2);
-  CHECK(congruent(s0, s1));
-  CHECK(!congruent(s1, s2));
+  auto v0 = vector_type{i};
+  auto v1 = vector_type{j};
+  auto v2 = vector_type{c};
+  CHECK(v0 != v1);
+  CHECK(v0 != v2);
+  CHECK(congruent(v0, v1));
+  CHECK(!congruent(v1, v2));
   MESSAGE("records");
   auto r0 = record_type{{"a", address_type{}},
                         {"b", bool_type{}},
@@ -491,10 +486,6 @@ TEST(type_check) {
   TYPE_CHECK(vector_type{}, vector({1, 2, 3}));
   TYPE_CHECK(vector_type{}, vector{});
   TYPE_CHECK(vector_type{string_type{}}, vector{});
-  TYPE_CHECK(set_type{integer_type{}}, set({1, 2, 3}));
-  TYPE_CHECK(set_type{}, set({1, 2, 3}));
-  TYPE_CHECK(set_type{}, set{});
-  TYPE_CHECK(set_type{string_type{}}, set{});
   auto xs = map{{1, true}, {2, false}};
   TYPE_CHECK(map_type({integer_type{}, bool_type{}}), xs);
   TYPE_CHECK(map_type{}, xs);
@@ -525,7 +516,6 @@ TEST(printable) {
   CHECK_EQUAL(to_string(e), "enum {foo, bar, baz}");
   MESSAGE("container types");
   CHECK_EQUAL(to_string(vector_type{real_type{}}), "vector<real>");
-  CHECK_EQUAL(to_string(set_type{bool_type{}}), "set<bool>");
   auto b = bool_type{};
   CHECK_EQUAL(to_string(map_type{count_type{}, b}), "map<count, bool>");
   auto r = record_type{{
@@ -551,19 +541,19 @@ TEST(printable) {
   attr = {"skip"};
   CHECK_EQUAL(to_string(attr), "#skip");
   // Attributes on types.
-  auto s = set_type{port_type{}};
+  auto s = vector_type{port_type{}};
   s = s.attributes({attr, {"tokenize", "/rx/"}});
-  CHECK_EQUAL(to_string(s), "set<port> #skip #tokenize=/rx/");
+  CHECK_EQUAL(to_string(s), "vector<port> #skip #tokenize=/rx/");
   // Nested types
   t = s;
   t.attributes({attr});
   t = map_type{count_type{}, t};
-  CHECK_EQUAL(to_string(t), "map<count, set<port> #skip>");
+  CHECK_EQUAL(to_string(t), "map<count, vector<port> #skip>");
   MESSAGE("signature");
   t.name("jells");
   std::string sig;
   CHECK(printers::type<policy::signature>(sig, t));
-  CHECK_EQUAL(sig, "jells = map<count, set<port> #skip>");
+  CHECK_EQUAL(sig, "jells = map<count, vector<port> #skip>");
 }
 
 TEST(parseable) {
@@ -581,8 +571,6 @@ TEST(parseable) {
   MESSAGE("container");
   CHECK(parsers::type("vector<real>", t));
   CHECK(t == type{vector_type{real_type{}}});
-  CHECK(parsers::type("set<port>", t));
-  CHECK(t == type{set_type{port_type{}}});
   CHECK(parsers::type("map<count, bool>", t));
   CHECK(t == type{map_type{count_type{}, bool_type{}}});
   MESSAGE("record");
@@ -616,8 +604,6 @@ TEST(parseable) {
   CHECK(t == foo);
   CHECK(p("vector<foo>", t));
   CHECK(t == type{vector_type{foo}});
-  CHECK(p("set<foo>", t));
-  CHECK(t == type{set_type{foo}});
   CHECK(p("map<foo, foo>", t));
   CHECK(t == type{map_type{foo, foo}});
   MESSAGE("record");
@@ -664,7 +650,7 @@ TEST(hashable) {
   auto x = record_type{{"x", integer_type{}},
                        {"y", string_type{}},
                        {"z", vector_type{real_type{}}}};
-  CHECK_EQUAL(hash(x), 18023514065049357725ul);
+  CHECK_EQUAL(hash(x), 12385688613179294200ul);
   CHECK_EQUAL(to_digest(x), std::to_string(hash(type{x})));
 }
 

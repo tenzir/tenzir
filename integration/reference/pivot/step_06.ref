@@ -3,7 +3,7 @@
 #path	conn
 #separator 	
 #set_separator	,
-#types	time	string	addr	port	addr	port	string	string	interval	count	count	string	bool	bool	count	string	count	count	count	count	set[string]	string
+#types	time	string	addr	port	addr	port	string	string	interval	count	count	string	bool	bool	count	string	count	count	count	count	vector[string]	string
 #unset_field	-
 1540889849.325075	C4xvGs2g6UWECwk2Rb	192.168.168.100	61206	72.247.178.18	80	tcp	http	115.721079	890	1736	SF	-	-	0	ShADadFf	19	1758	16	2576	-	1:aiB9ixqgqVUlxDucVgiCzPCos7A=
 1540889849.325145	CnDxlq40ITKKeEYTW3	192.168.168.100	61208	72.247.178.18	80	tcp	http	115.721008	445	868	SF	-	-	0	ShADadFf	17	1209	15	1656	-	1:yZL4x1ra1wearOeXlyhuOH+A1qE=

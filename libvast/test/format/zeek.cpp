@@ -256,8 +256,8 @@ TEST(zeek data parsing) {
   CHECK(d == port{49329, port::unknown});
   CHECK(zeek_parse(vector_type{integer_type{}}, "49329", d));
   CHECK(d == vector{49329});
-  CHECK(zeek_parse(set_type{string_type{}}, "49329,42", d));
-  CHECK(d == set{"49329", "42"});
+  CHECK(zeek_parse(vector_type{string_type{}}, "49329,42", d));
+  CHECK(d == vector{"49329", "42"});
 }
 
 TEST(zeek reader - capture loss) {
@@ -303,7 +303,7 @@ TEST(zeek reader - custom schema) {
       orig_ip_bytes: count,
       resp_pkts: count,
       resp_ip_bytes: count,
-      tunnel_parents: set<string>,
+      tunnel_parents: vector<string>,
     })__";
   auto expected = flatten(unbox(to<type>(eref)).name("zeek.conn"));
   using reader_type = format::zeek::reader;
@@ -358,7 +358,7 @@ TEST(zeek writer) {
   REQUIRE(record);
   REQUIRE_EQUAL(record->size(), 20u);
   CHECK_EQUAL(record->at(6), data{"udp"}); // one after the conn record
-  CHECK_EQUAL(record->back(), data{set{}}); // table[T] is actually a set
+  CHECK_EQUAL(record->back(), data{vector{}}); // table[T] is actually a list
   // Perform the writing.
   auto dir = path{"vast-unit-test-zeek"};
   auto guard = caf::detail::make_scope_guard([&] { rm(dir); });

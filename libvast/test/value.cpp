@@ -117,19 +117,19 @@ TEST(relational operators) {
 }
 
 TEST(serialization) {
-  type t = set_type{port_type{}};
-  set s;
-  s.emplace(port{80, port::tcp});
-  s.emplace(port{53, port::udp});
-  s.emplace(port{8, port::icmp});
-  CHECK(type_check(t, data{s}));
-  value v{s, t};
+  type t = vector_type{port_type{}};
+  vector xs;
+  xs.emplace_back(port{80, port::tcp});
+  xs.emplace_back(port{53, port::udp});
+  xs.emplace_back(port{8, port::icmp});
+  CHECK(type_check(t, data{xs}));
+  value v{xs, t};
   value w;
   std::vector<char> buf;
   CHECK_EQUAL(save(nullptr, buf, v), caf::none);
   CHECK_EQUAL(load(nullptr, buf, w), caf::none);
   CHECK(v == w);
-  CHECK(to_string(w) == "{80/tcp, 53/udp, 8/icmp}");
+  CHECK(to_string(w) == "[80/tcp, 53/udp, 8/icmp]");
 }
 
 TEST(json)

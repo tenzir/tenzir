@@ -164,13 +164,6 @@ container_lookup(const Index& idx, relational_operator op, view<vector> xs) {
   return container_lookup_impl(idx, op, *xs);
 }
 
-template <class Index>
-caf::expected<ids>
-container_lookup(const Index& idx, relational_operator op, view<set> xs) {
-  VAST_ASSERT(xs);
-  return container_lookup_impl(idx, op, *xs);
-}
-
 } // namespace detail
 
 /// An index for arithmetic values.
@@ -290,8 +283,7 @@ private:
       [&](view<time> x) -> caf::expected<ids> {
         return bmi_.lookup(op, x.time_since_epoch().count());
       },
-      [&](view<vector> xs) { return detail::container_lookup(*this, op, xs); },
-      [&](view<set> xs) { return detail::container_lookup(*this, op, xs); });
+      [&](view<vector> xs) { return detail::container_lookup(*this, op, xs); });
     return caf::visit(f, d);
   };
 

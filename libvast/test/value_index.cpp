@@ -64,7 +64,7 @@ TEST(bool) {
   CHECK_EQUAL(to_string(unbox(f)), "00101110");
   auto t = idx->lookup(not_equal, make_data_view(false));
   CHECK_EQUAL(to_string(unbox(t)), "11010001");
-  auto xs = set{true, false};
+  auto xs = vector{true, false};
   auto multi = unbox(idx->lookup(in, make_data_view(xs)));
   CHECK_EQUAL(to_string(multi), "11111111");
   MESSAGE("serialization");
@@ -96,7 +96,7 @@ TEST(integer) {
   CHECK(to_string(unbox(less_than_leet)) == "1111011");
   auto greater_zero = idx->lookup(greater, make_data_view(0));
   CHECK(to_string(unbox(greater_zero)) == "0111111");
-  auto xs = set{42, 10, 4711};
+  auto xs = vector{42, 10, 4711};
   auto multi = unbox(idx->lookup(in, make_data_view(xs)));
   CHECK_EQUAL(to_string(multi), "0101011");
   MESSAGE("serialization");
@@ -257,7 +257,7 @@ TEST(string) {
   CHECK_EQUAL(to_string(unbox(result)),  "0000000010");
   result = idx.lookup(match, make_data_view("foo"));
   CHECK(!result);
-  auto xs = set{"foo", "bar", "baz"};
+  auto xs = vector{"foo", "bar", "baz"};
   result = idx.lookup(in, make_data_view(xs));
   CHECK_EQUAL(to_string(unbox(result)), "1111110000");
   MESSAGE("serialization");
@@ -468,32 +468,6 @@ TEST(vector) {
   CHECK_EQUAL(load(nullptr, buf, idx2), caf::none);
   x = "foo";
   CHECK_EQUAL(to_string(*idx2.lookup(ni, make_data_view(x))), "11000000");
-}
-
-TEST(set) {
-  auto t = set_type{integer_type{}};
-  caf::settings opts;
-  opts["max-size"] = 2;
-  auto idx = factory<value_index>::make(t, opts);
-  REQUIRE_NOT_EQUAL(idx, nullptr);
-  auto xs = set{42, 43, 44};
-  REQUIRE(idx->append(make_data_view(xs)));
-  xs = set{1, 2, 3};
-  REQUIRE(idx->append(make_data_view(xs)));
-  xs = set{};
-  REQUIRE(idx->append(make_data_view(xs)));
-  xs = set{42};
-  REQUIRE(idx->append(make_data_view(xs)));
-  CHECK_EQUAL(to_string(*idx->lookup(ni, make_data_view(42))), "1001");
-  MESSAGE("chopped off");
-  CHECK_EQUAL(to_string(*idx->lookup(ni, make_data_view(44))), "0000");
-  MESSAGE("serialization");
-  std::vector<char> buf;
-  CHECK_EQUAL(save(nullptr, buf, idx), caf::none);
-  value_index_ptr idx2;
-  CHECK_EQUAL(load(nullptr, buf, idx2), caf::none);
-  REQUIRE_NOT_EQUAL(idx2, nullptr);
-  CHECK_EQUAL(to_string(*idx2->lookup(ni, make_data_view(42))), "1001");
 }
 
 TEST(none values - string) {

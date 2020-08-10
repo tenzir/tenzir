@@ -73,9 +73,6 @@ bool evaluate(const data& lhs, relational_operator op, const data& rhs) {
       },
       [](const auto& lhs, const vector& rhs) {
         return std::find(rhs.begin(), rhs.end(), lhs) != rhs.end();
-      },
-      [](const auto& lhs, const set& rhs) {
-        return std::find(rhs.begin(), rhs.end(), lhs) != rhs.end();
       }
     ), x, y);
   };
@@ -118,7 +115,6 @@ bool is_basic(const data& x) {
   return caf::visit(detail::overload(
     [](const auto&) { return true; },
     [](const vector&) { return false; },
-    [](const set&) { return false; },
     [](const map&) { return false; }
   ), x);
 }
@@ -131,7 +127,6 @@ bool is_recursive(const data& x) {
   return caf::visit(detail::overload(
     [](const auto&) { return false; },
     [](const vector&) { return true; },
-    [](const set&) { return true; },
     [](const map&) { return true; }
   ), x);
 }
@@ -258,15 +253,6 @@ bool convert(const vector& v, json& j) {
   json::array a(v.size());
   for (size_t i = 0; i < v.size(); ++i)
     a[i] = jsonize(v[i]);
-  j = std::move(a);
-  return true;
-}
-
-bool convert(const set& s, json& j) {
-  json::array a(s.size());
-  size_t i = 0;
-  for (auto& x : s)
-    a[i++] = jsonize(x);
   j = std::move(a);
   return true;
 }

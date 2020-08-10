@@ -64,7 +64,6 @@ using concrete_types = caf::detail::type_list<
   port_type,
   enumeration_type,
   vector_type,
-  set_type,
   map_type,
   record_type,
   alias_type
@@ -341,8 +340,6 @@ public:
       name = "vast.enumeration_type";
     } else if constexpr (std::is_same_v<Derived, vector_type>) {
       name = "vast.vector_type";
-    } else if constexpr (std::is_same_v<Derived, set_type>) {
-      name = "vast.set_type";
     } else if constexpr (std::is_same_v<Derived, map_type>) {
       name = "vast.map_type";
     } else if constexpr (std::is_same_v<Derived, record_type>) {
@@ -522,18 +519,6 @@ struct enumeration_type final : complex_type<enumeration_type> {
 /// @relates type
 struct vector_type final : nested_type<vector_type> {
   using super = nested_type<vector_type>;
-
-  using super::super;
-
-  type_flags flags() const noexcept final {
-    return super::flags() | type_flags::container;
-  }
-};
-
-/// A type representing a mathematical set.
-/// @relates type
-struct set_type final : nested_type<set_type> {
-  using super = nested_type<set_type>;
 
   using super::super;
 
@@ -765,7 +750,6 @@ VAST_TYPE_TRAIT(subnet);
 VAST_TYPE_TRAIT(port);
 VAST_TYPE_TRAIT(enumeration);
 VAST_TYPE_TRAIT(vector);
-VAST_TYPE_TRAIT(set);
 VAST_TYPE_TRAIT(map);
 
 #undef VAST_TYPE_TRAIT
@@ -1052,7 +1036,6 @@ VAST_DEFINE_HASH_SPECIALIZATION(subnet_type);
 VAST_DEFINE_HASH_SPECIALIZATION(port_type);
 VAST_DEFINE_HASH_SPECIALIZATION(enumeration_type);
 VAST_DEFINE_HASH_SPECIALIZATION(vector_type);
-VAST_DEFINE_HASH_SPECIALIZATION(set_type);
 VAST_DEFINE_HASH_SPECIALIZATION(map_type);
 VAST_DEFINE_HASH_SPECIALIZATION(record_field);
 VAST_DEFINE_HASH_SPECIALIZATION(record_type);
