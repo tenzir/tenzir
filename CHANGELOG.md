@@ -14,9 +14,10 @@ Every entry has a category for which we use the following visual abbreviations:
 - ⚠️ The `set` type has been removed. Experience with the data model showed
   that there is no strong use case to separate sets from vectors in the core.
   While this may be useful in programming languages, VAST deals with immutable
-  data where set constraints have been enforced upstream. Users can still
-  attach set semantics to vectors using type attributes, but the operations are
-  effectively identical.
+  data where set constraints have been enforced upstream. This change requires
+  updating existing schemas by changing `set<T>` to `vector<T>`. In the query
+  language, the new symbol for the empty `map` changed from `{-}` to `{}`, as
+  it now unambiguisly identifies `map` instances.
   [#1010](https://github.com/tenzir/vast/pull/1010)
 
 - 🎁 The default schema for Suricata has been updated to support the
