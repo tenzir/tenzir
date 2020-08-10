@@ -77,7 +77,8 @@ using to_data_type = std::conditional_t<
             || std::is_same_v<T, subnet>
             || std::is_same_v<T, port>
             || std::is_same_v<T, list>
-            || std::is_same_v<T, map>,
+            || std::is_same_v<T, map>
+            || std::is_same_v<T, record>,
             T,
             std::false_type
           >
@@ -115,7 +116,8 @@ public:
     port,
     enumeration,
     list,
-    map
+    map,
+    record
   >;
   // clang-format on
 
@@ -227,6 +229,7 @@ VAST_DATA_TRAIT(port);
 VAST_DATA_TRAIT(enumeration);
 VAST_DATA_TRAIT(list);
 VAST_DATA_TRAIT(map);
+VAST_DATA_TRAIT(record);
 
 #undef VAST_DATA_TRAIT
 
@@ -260,31 +263,30 @@ bool is_recursive(const data& x);
 /// @relates data
 bool is_container(const data& x);
 
-/// Retrieves data at a given offset.
-/// @param xs The record to lookup.
-/// @param o The offset to access.
-/// @returns A pointer to the data at *o* or `nullptr` if *o* does not
-///          describe a valid offset.
-const data* get(const list& xs, const offset& o);
-const data* get(const data& d, const offset& o);
+/// Flattens a record recursively.
+record flatten(const record& r);
 
-/// Flattens a list recursively according to a record type such that only
-/// nested records are lifted into parent list.
-/// @param xs The list to flatten.
-/// @param t The record type according to which *xs* should be flattened.
-/// @returns The flattened list if the nested structure of *xs* is congruent to
-///          *t*.
+/// Flattens a record recursively according to a record type such
+/// that only nested records are lifted into parent list.
+/// @param r The record to flatten.
+/// @param rt The record type according to which *r* should be flattened.
+/// @returns The flattened record if the nested structure of *r* is a valid
+///          subset of *rt*.
 /// @see unflatten
-caf::optional<list> flatten(const list& xs, const record_type& t);
-caf::optional<data> flatten(const data& x, type t);
+caf::optional<record> flatten(const record& r, const record_type& rt);
+caf::optional<data> flatten(const data& x, const type& t);
 
-/// Unflattens a list according to a record type.
-/// @param xs The list to unflatten according to *rt*.
-/// @param rt The type that defines the list structure.
-/// @returns The unflattened list of *xs* according to *rt*.
+/// Unflattens a flattened record.
+record unflatten(const record& r);
+
+/// Unflattens a record according to a record type such that the record becomes
+/// a recursive structure.
+/// @param r The record to unflatten according to *rt*.
+/// @param rt The type that defines the record structure.
+/// @returns The unflattened record of *r* according to *rt*.
 /// @see flatten
-caf::optional<list> unflatten(const list& xs, const record_type& rt);
-caf::optional<data> unflatten(const data& x, type t);
+caf::optional<record> unflatten(const record& r, const record_type& rt);
+caf::optional<data> unflatten(const data& x, const type& t);
 
 /// Evaluates a data predicate.
 /// @param lhs The LHS of the predicate.
@@ -296,6 +298,7 @@ bool evaluate(const data& lhs, relational_operator op, const data& rhs);
 
 bool convert(const list& xs, json& j);
 bool convert(const map& xs, json& j);
+bool convert(const record& xs, json& j);
 bool convert(const data& xs, json& j);
 
 /// Converts data with a type to "zipped" JSON, i.e., the JSON object for

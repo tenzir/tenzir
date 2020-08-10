@@ -12,12 +12,13 @@
  ******************************************************************************/
 
 #include "vast/data.hpp"
-#include "vast/json.hpp"
 
 #include "vast/detail/assert.hpp"
 #include "vast/detail/narrow.hpp"
 #include "vast/detail/overload.hpp"
+#include "vast/detail/string.hpp"
 #include "vast/detail/type_traits.hpp"
+#include "vast/json.hpp"
 
 namespace vast {
 
@@ -109,7 +110,8 @@ bool evaluate(const data& lhs, relational_operator op, const data& rhs) {
 bool is_basic(const data& x) {
   return caf::visit(detail::overload([](const auto&) { return true; },
                                      [](const list&) { return false; },
-                                     [](const map&) { return false; }),
+                                     [](const map&) { return false; },
+                                     [](const record&) { return false; }),
                     x);
 }
 
@@ -120,112 +122,112 @@ bool is_complex(const data& x) {
 bool is_recursive(const data& x) {
   return caf::visit(detail::overload([](const auto&) { return false; },
                                      [](const list&) { return true; },
-                                     [](const map&) { return true; }),
+                                     [](const map&) { return true; },
+                                     [](const record&) { return true; }),
                     x);
 }
 
 bool is_container(const data& x) {
+  // TODO: should a record be considered as a container?
   return is_recursive(x);
 }
 
-const data* get(const list& xs, const offset& o) {
-  const list* x = &xs;
-  for (size_t i = 0; i < o.size(); ++i) {
-    auto& idx = o[i];
-    if (idx >= x->size())
-      return nullptr;
-    auto d = &(*x)[idx];
-    if (i + 1 == o.size())
-      return d;
-    x = caf::get_if<list>(d);
-    if (!x)
-      return nullptr;
+record flatten(const record& r) {
+  record result;
+  for (auto& [k, v] : r) {
+    if (auto nested = caf::get_if<record>(&v))
+      for (auto& [nk, nv] : flatten(*nested))
+        result.emplace(k + '.' + nk, std::move(nv));
+    else
+      result.emplace(k, v);
   }
-  return nullptr;
+  return result;
 }
 
-const data* get(const data& d, const offset& o) {
-  if (auto xs = caf::get_if<list>(&d))
-    return get(*xs, o);
-  return nullptr;
-}
-
-caf::optional<list> flatten(const list& xs, const record_type& t) {
-  if (xs.size() != t.fields.size())
-    return caf::none;
-  list result;
-  for (size_t i = 0; i < xs.size(); ++i) {
-    if (auto u = caf::get_if<record_type>(&t.fields[i].type)) {
-      if (caf::holds_alternative<caf::none_t>(xs[i])) {
-        result.reserve(result.size() + u->fields.size());
-        for (size_t j = 0; j < u->fields.size(); ++j)
-          result.emplace_back(caf::none);
-      } else if (auto ys = caf::get_if<list>(&xs[i])) {
-        auto sub_result = flatten(*ys, *u);
-        if (!sub_result)
-          return caf::none;
-        result.insert(result.end(),
-                      std::make_move_iterator(sub_result->begin()),
-                      std::make_move_iterator(sub_result->end()));
-      } else {
+caf::optional<record> flatten(const record& r, const record_type& rt) {
+  record result;
+  for (auto& [k, v] : r) {
+    if (auto ir = caf::get_if<record>(&v)) {
+      // Look for a matching field of type record.
+      auto field = rt.find(k);
+      if (field == nullptr)
         return caf::none;
-      }
-    } else {
-      // We could perform another type-check here, but that's technically
-      // orthogonal to the objective of this function.
-      result.emplace_back(xs[i]);
+      auto irt = caf::get_if<record_type>(&field->type);
+      if (!irt)
+        return caf::none;
+      // Recurse.
+      auto nested = flatten(*ir, *irt);
+      if (!nested)
+        return caf::none;
+      // Hoist nested record into parent scope by prefixing field names.
+      for (auto& [nk, nv] : *nested)
+        result.emplace(k + '.' + nk, std::move(nv));
     }
   }
   return result;
 }
 
-caf::optional<data> flatten(const data& x, type t) {
-  auto xs = caf::get_if<list>(&x);
-  auto r = caf::get_if<record_type>(&t);
-  if (xs && r)
-    return flatten(*xs, *r);
+caf::optional<data> flatten(const data& x, const type& t) {
+  auto xs = caf::get_if<record>(&x);
+  auto rt = caf::get_if<record_type>(&t);
+  if (xs && rt)
+    return flatten(*xs, *rt);
   return caf::none;
 }
 
-namespace {
-
-bool consume(const record_type& t, const list& xs, size_t& i, list& res) {
-  for (auto& field : t.fields) {
-    if (auto u = caf::get_if<record_type>(&field.type)) {
-      list sub_res;
-      if (!consume(*u, xs, i, sub_res))
-        return false;
-      auto is_none = [](const auto& x) {
-        return caf::holds_alternative<caf::none_t>(x);
-      };
-      if (std::all_of(sub_res.begin(), sub_res.end(), is_none))
-        res.emplace_back(caf::none);
-      else
-        res.emplace_back(std::move(sub_res));
-    } else if (i == xs.size()) {
-      return false; // too few elements in list
+caf::optional<record> unflatten(const record& r, const record_type* rt) {
+  record result;
+  for (auto& [k, v] : r) {
+    // Check if have a leaf value.
+    if (k.find('.') == std::string::npos) {
+      result.emplace(k, v);
     } else {
-      res.emplace_back(xs[i++]);
+      // Split field name by '.' to obtain intermediate records.
+      auto split = detail::split(k, ".");
+      VAST_ASSERT(split.size() >= 2);
+      // Create intermediate records as needed.
+      auto nested = &result;
+      auto nested_type = rt;
+      for (size_t i = 0; i < split.size() - 1; ++i) {
+        auto& field_name = split[i];
+        if (rt) {
+          // Does the record type contain a corresponding field?
+          auto field = nested_type->find(field_name);
+          if (field == nullptr)
+            return caf::none;
+          // Is the field a record type?
+          nested_type = caf::get_if<record_type>(&field->type);
+          if (nested_type == nullptr)
+            return caf::none;
+        }
+        // Do we already have an intermediate record instantiated?
+        auto it = nested->find(field_name);
+        if (it == nested->end())
+          it = nested->emplace(std::string{split[i]}, record{}).first;
+        nested = &caf::get<record>(it->second);
+      }
+      // Insert value into deepest record.
+      nested->emplace(std::string{split[split.size() - 1]}, v);
     }
   }
-  return true;
+  return result;
 }
 
-} // namespace <anonymous>
+record unflatten(const record& r) {
+  auto result = unflatten(r, nullptr);
+  VAST_ASSERT(result);
+  return std::move(*result);
+}
 
-caf::optional<list> unflatten(const list& xs, const record_type& t) {
-  list result;
-  size_t i = 0;
-  if (consume(t, xs, i, result))
-    return result;
-  return caf::none;
+caf::optional<record> unflatten(const record& r, const record_type& rt) {
+  return unflatten(r, &rt);
 }
 
 caf::optional<data> unflatten(const data& x, type t) {
-  auto xs = caf::get_if<list>(&x);
-  auto r = caf::get_if<record_type>(&t);
-  if (xs && r)
-    return unflatten(*xs, *r);
+  auto r = caf::get_if<record>(&x);
+  auto rt = caf::get_if<record_type>(&t);
+  if (r && rt)
+    return unflatten(*r, *rt);
   return caf::none;
 }
 
