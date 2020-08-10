@@ -97,8 +97,8 @@ struct convert {
   }
 
   caf::expected<data>
-  operator()(const json::array& a, const vector_type& v) const {
-    vector xs;
+  operator()(const json::array& a, const list_type& v) const {
+    list xs;
     xs.reserve(a.size());
     for (auto& x : a) {
       if (auto elem = caf::visit(*this, x, v.value_type))

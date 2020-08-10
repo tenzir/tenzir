@@ -87,7 +87,7 @@ size_t encode(Builder& builder, View v) {
       // The noop cast exists only to communicate the MsgPack type.
       return put(builder, static_cast<uint8_t>(x));
     },
-    [&](view<vector> xs) { return put_array(builder, *xs, proxy_encode); },
+    [&](view<list> xs) { return put_array(builder, *xs, proxy_encode); },
     [&](view<map> xs) { return put_map(builder, *xs, proxy_encode); });
   return f(v);
 }

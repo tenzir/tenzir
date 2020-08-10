@@ -117,8 +117,8 @@ TEST(relational operators) {
 }
 
 TEST(serialization) {
-  type t = vector_type{port_type{}};
-  vector xs;
+  type t = list_type{port_type{}};
+  list xs;
   xs.emplace_back(port{80, port::tcp});
   xs.emplace_back(port{53, port::udp});
   xs.emplace_back(port{8, port::icmp});

@@ -159,7 +159,7 @@ container_lookup_impl(const Index& idx, relational_operator op,
 
 template <class Index>
 caf::expected<ids>
-container_lookup(const Index& idx, relational_operator op, view<vector> xs) {
+container_lookup(const Index& idx, relational_operator op, view<list> xs) {
   VAST_ASSERT(xs);
   return container_lookup_impl(idx, op, *xs);
 }
@@ -283,7 +283,7 @@ private:
       [&](view<time> x) -> caf::expected<ids> {
         return bmi_.lookup(op, x.time_since_epoch().count());
       },
-      [&](view<vector> xs) { return detail::container_lookup(*this, op, xs); });
+      [&](view<list> xs) { return detail::container_lookup(*this, op, xs); });
     return caf::visit(f, d);
   };
 
@@ -414,13 +414,13 @@ private:
   protocol_index proto_;
 };
 
-/// An index for vectors and sets.
-class sequence_index : public value_index {
+/// An index for lists.
+class list_index : public value_index {
 public:
   /// Constructs a sequence index of a given type.
   /// @param t The sequence type.
   /// @param opts Runtime options for element type construction.
-  explicit sequence_index(vast::type t, caf::settings opts = {});
+  explicit list_index(vast::type t, caf::settings opts = {});
 
   /// The bitmap index holding the sequence size.
   using size_bitmap_index =

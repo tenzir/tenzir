@@ -94,7 +94,7 @@ VAST_DEFINE_BASIC_TYPE_PRINTER(port_type, "port")
     using type = TYPE##_printer;                                               \
   };
 
-VAST_DECLARE_TYPE_PRINTER(vector_type)
+VAST_DECLARE_TYPE_PRINTER(list_type)
 VAST_DECLARE_TYPE_PRINTER(map_type)
 VAST_DECLARE_TYPE_PRINTER(record_type)
 VAST_DECLARE_TYPE_PRINTER(alias_type)
@@ -145,7 +145,7 @@ struct type_printer : printer<type_printer<Policy>> {
              | subnet_type_printer{}
              | port_type_printer{}
              | enumeration_type_printer{}
-             | vector_type_printer{}
+             | list_type_printer{}
              | map_type_printer{}
              | record_type_printer{}
              | alias_type_printer{}
@@ -171,8 +171,8 @@ struct printer_registry<type> {
 // -- implementation of recursive type printers ------------------------------
 
 template <class Iterator>
-bool vector_type_printer::print(Iterator& out, const vector_type& t) const {
-  auto p = "vector<" << type_printer<policy::name_only>{} << '>';
+bool list_type_printer::print(Iterator& out, const list_type& t) const {
+  auto p = "list<" << type_printer<policy::name_only>{} << '>';
   auto a = detail::make_attr_printer(t);
   return (p << a)(out, t.value_type, t.attributes());
 }

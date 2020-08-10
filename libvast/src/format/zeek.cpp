@@ -90,7 +90,7 @@ caf::expected<type> parse_type(std::string_view zeek_type) {
       return elem.error();
     // Zeek sometimes logs sets as tables, e.g., represents set[string] as
     // table[string]. In VAST, they are all lists.
-    t = vector_type{*elem};
+    t = list_type{*elem};
   }
   if (caf::holds_alternative<none_type>(t))
     return make_error(ec::format_error, "failed to parse type: ",
@@ -120,7 +120,7 @@ struct zeek_type_printer {
     return "addr";
   }
 
-  std::string operator()(const vector_type& t) const {
+  std::string operator()(const list_type& t) const {
     return "vector[" + caf::visit(*this, t.value_type) + ']';
   }
 
@@ -555,7 +555,7 @@ public:
 
   template <class T>
   bool operator()(Iterator& out, const T& x) const {
-    if constexpr (std::is_same_v<T, view<vector>>) {
+    if constexpr (std::is_same_v<T, view<list>>) {
       if (x.empty()) {
         for (auto c : std::string_view(empty_field))
           *out++ = c;

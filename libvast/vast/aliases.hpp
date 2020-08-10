@@ -42,7 +42,7 @@ using real = double;
 using enumeration = uint8_t;
 
 /// A random-access sequence of data.
-using vector = std::vector<data>;
+using list = std::vector<data>;
 
 /// A mathematical set where each element is ::data.
 using set = detail::stable_set<data>;

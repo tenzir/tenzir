@@ -75,24 +75,25 @@ integer operator"" _i(unsigned long long int x) {
 
 TEST(manual table slice building) {
   using std::make_shared;
-  using namespace arrow;
-  using bptr = std::shared_ptr<ArrayBuilder>;
+  using bptr = std::shared_ptr<arrow::ArrayBuilder>;
   using vast::map;
-  auto pool = default_memory_pool();
-  auto make_int_builder = [&] { return make_shared<Int64Builder>(pool); };
+  auto pool = arrow::default_memory_pool();
+  auto make_int_builder
+    = [&] { return make_shared<arrow::Int64Builder>(pool); };
   // Our schema is `map: list<key: int64, value: int64>, int: int64`.
-  auto kvp_fields = std::vector{field("key", int64()), field("value", int64())};
-  auto kvp_record = struct_(kvp_fields);
-  auto map_record = list(kvp_record);
-  auto int_record = int64();
+  auto kvp_fields = std::vector{arrow::field("key", arrow::int64()),
+                                field("value", arrow::int64())};
+  auto kvp_record = arrow::struct_(kvp_fields);
+  auto map_record = arrow::list(kvp_record);
+  auto int_record = arrow::int64();
   // Create builders.
   auto key_builder = make_int_builder();
   auto value_builder = make_int_builder();
   auto kvp_field_builders = std::vector{bptr{key_builder}, bptr{value_builder}};
-  auto kvp_builder = make_shared<StructBuilder>(kvp_record, pool,
-                                                std::move(kvp_field_builders));
-  auto map_builder = make_shared<ListBuilder>(pool, kvp_builder);
-  auto int_builder = make_shared<Int64Builder>(pool);
+  auto kvp_builder = make_shared<arrow::StructBuilder>(
+    kvp_record, pool, std::move(kvp_field_builders));
+  auto map_builder = make_shared<arrow::ListBuilder>(pool, kvp_builder);
+  auto int_builder = make_shared<arrow::Int64Builder>(pool);
   // Add two rows to column 1.
   CHECK_OK(map_builder->Append());
   CHECK_OK(kvp_builder->Append());
@@ -109,13 +110,13 @@ TEST(manual table slice building) {
   CHECK_OK(int_builder->Append(42));
   CHECK_OK(int_builder->Append(84));
   // Get result.
-  std::vector<std::shared_ptr<Array>> columns(2);
+  std::vector<std::shared_ptr<arrow::Array>> columns(2);
   CHECK_OK(map_builder->Finish(&columns[0]));
   CHECK_OK(int_builder->Finish(&columns[1]));
   auto row_fields
-    = std::vector{field("map", map_record), field("int", int64())};
-  auto schema = make_shared<Schema>(row_fields);
-  auto batch = RecordBatch::Make(schema, 2, columns);
+    = std::vector{field("map", map_record), field("int", arrow::int64())};
+  auto schema = make_shared<arrow::Schema>(row_fields);
+  auto batch = arrow::RecordBatch::Make(schema, 2, columns);
   // VAST stuff
   record_type layout{{"map", map_type{integer_type{}, integer_type{}}},
                      {"int", integer_type{}}};
@@ -277,10 +278,10 @@ TEST(single column - port) {
 }
 
 TEST(single column - list of integers) {
-  auto list_type = vector_type{integer_type{}};
-  record_type layout{record_field{"values", list_type}};
-  vector list1{1_i, 2_i, 3_i};
-  vector list2{10_i, 20_i};
+  auto t = list_type{integer_type{}};
+  record_type layout{record_field{"values", t}};
+  list list1{1_i, 2_i, 3_i};
+  list list2{10_i, 20_i};
   auto slice = make_slice(layout, list1, caf::none, list2);
   REQUIRE_EQUAL(slice->rows(), 3u);
   CHECK_VARIANT_EQUAL(slice->at(0, 0), make_view(list1));
@@ -290,10 +291,10 @@ TEST(single column - list of integers) {
 }
 
 TEST(single column - list of strings) {
-  auto list_type = vector_type{string_type{}};
-  record_type layout{record_field{"values", list_type}};
-  vector list1{"hello"s, "world"s};
-  vector list2{"a"s, "b"s, "c"s};
+  auto t = list_type{string_type{}};
+  record_type layout{record_field{"values", t}};
+  list list1{"hello"s, "world"s};
+  list list2{"a"s, "b"s, "c"s};
   auto slice = make_slice(layout, list1, list2, caf::none);
   REQUIRE_EQUAL(slice->rows(), 3u);
   CHECK_VARIANT_EQUAL(slice->at(0, 0), make_view(list1));
@@ -303,16 +304,16 @@ TEST(single column - list of strings) {
 }
 
 TEST(single column - list of list of integers) {
-  auto list_type = vector_type{integer_type{}};
+  auto t = list_type{integer_type{}};
   // Note: we call the copy ctor if we don't wrap list_type into a type.
-  auto list_list_type = vector_type{type{list_type}};
+  auto list_list_type = list_type{type{t}};
   record_type layout{record_field{"values", list_list_type}};
-  vector list11{1_i, 2_i, 3_i};
-  vector list12{10_i, 20_i};
-  vector list1{list11, list12};
-  vector list21{};
-  vector list22{0_i, 1_i, 1_i, 2_i, 3_i, 5_i, 8_i, 13_i};
-  vector list2{list11, list12};
+  list list11{1_i, 2_i, 3_i};
+  list list12{10_i, 20_i};
+  list list1{list11, list12};
+  list list21{};
+  list list22{0_i, 1_i, 1_i, 2_i, 3_i, 5_i, 8_i, 13_i};
+  list list2{list11, list12};
   auto slice = make_slice(layout, caf::none, list1, list2);
   REQUIRE_EQUAL(slice->rows(), 3u);
   CHECK_VARIANT_EQUAL(slice->at(0, 0), caf::none);

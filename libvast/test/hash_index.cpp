@@ -101,14 +101,14 @@ TEST(hash index for integer) {
   CHECK_EQUAL(to_string(unbox(result)), "011");
 }
 
-TEST(hash index for vector) {
+TEST(hash index for list) {
   factory<value_index>::initialize();
-  auto t = vector_type{address_type{}}.attributes({{"index", "hash"}});
+  auto t = list_type{address_type{}}.attributes({{"index", "hash"}});
   auto idx = factory<value_index>::make(t, caf::settings{});
   REQUIRE(idx != nullptr);
-  auto xs = vector{1, 2, 3};
-  auto ys = vector{7, 5, 4};
-  auto zs = vector{0, 0, 0};
+  auto xs = list{1, 2, 3};
+  auto ys = list{7, 5, 4};
+  auto zs = list{0, 0, 0};
   CHECK(idx->append(make_data_view(xs)));
   CHECK(idx->append(make_data_view(xs)));
   CHECK(idx->append(make_data_view(zs)));

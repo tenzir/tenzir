@@ -11,6 +11,12 @@ Every entry has a category for which we use the following visual abbreviations:
 
 ## Unreleased
 
+- ⚠️ The `vector` type has been renamed to `list`.In an effort to streamline
+  the type system vocabulary, we favor `list` over `vector` because it's closer
+  to existing terminology (e.g., Apache Arrow). This change requires updating
+  existing schemas by changing `vector<T>` to `list<T>`. 
+  [#1016](https://github.com/tenzir/vast/pull/1016)
+
 - ⚠️ The `set` type has been removed. Experience with the data model showed
   that there is no strong use case to separate sets from vectors in the core.
   While this may be useful in programming languages, VAST deals with immutable

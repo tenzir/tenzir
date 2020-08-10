@@ -29,8 +29,8 @@
 
 using namespace vast;
 
-TEST(vector) {
-  REQUIRE(std::is_same_v<std::vector<data>, vector>);
+TEST(list) {
+  REQUIRE(std::is_same_v<std::vector<data>, list>);
 }
 
 TEST(tables) {
@@ -47,8 +47,8 @@ TEST(tables) {
 }
 
 TEST(get) {
-  auto v = vector{"foo", -42, 1001u, "x", port{443, port::tcp}};
-  vector w{100, "bar", v};
+  auto v = list{"foo", -42, 1001u, "x", port{443, port::tcp}};
+  list w{100, "bar", v};
   CHECK(v.size() == 5);
   MESSAGE("access via offset");
   CHECK(*get(w, offset{0}) == 100);
@@ -65,7 +65,7 @@ TEST(flatten) {
     {"a", string_type{}},
     {"b", record_type{
       {"c", integer_type{}},
-      {"d", vector_type{integer_type{}}}
+      {"d", list_type{integer_type{}}}
     }},
     {"e", record_type{
       {"f", address_type{}},
@@ -74,8 +74,8 @@ TEST(flatten) {
     {"f", bool_type{}}
   };
   // clang-format on
-  auto xs = vector{"foo", vector{-42, vector{1, 2, 3}}, caf::none, true};
-  auto ys = vector{"foo", -42, vector{1, 2, 3}, caf::none, caf::none, true};
+  auto xs = list{"foo", list{-42, list{1, 2, 3}}, caf::none, true};
+  auto ys = list{"foo", -42, list{1, 2, 3}, caf::none, caf::none, true};
   auto zs = flatten(xs, t);
   REQUIRE(zs);
   CHECK_EQUAL(*zs, ys);
@@ -100,7 +100,7 @@ TEST(construction) {
   CHECK(caf::holds_alternative<address>(data{address{}}));
   CHECK(caf::holds_alternative<subnet>(data{subnet{}}));
   CHECK(caf::holds_alternative<port>(data{port{53, port::udp}}));
-  CHECK(caf::holds_alternative<vector>(data{vector{}}));
+  CHECK(caf::holds_alternative<list>(data{list{}}));
   CHECK(caf::holds_alternative<map>(data{map{}}));
 }
 
@@ -172,7 +172,7 @@ TEST(evaluation - pattern matching) {
 }
 
 TEST(serialization) {
-  vector xs;
+  list xs;
   xs.emplace_back(port{80, port::tcp});
   xs.emplace_back(port{53, port::udp});
   xs.emplace_back(port{8, port::icmp});
@@ -249,13 +249,13 @@ TEST(parseable) {
   CHECK(p(f, l, d));
   CHECK(f == l);
   CHECK(d == port{22, port::tcp});
-  MESSAGE("vector");
+  MESSAGE("list");
   str = "[42,4.2,nil]"s;
   f = str.begin();
   l = str.end();
   CHECK(p(f, l, d));
   CHECK(f == l);
-  CHECK(d == vector{42u, 4.2, caf::none});
+  CHECK(d == list{42u, 4.2, caf::none});
   MESSAGE("map");
   str = "{T->1,F->0}"s;
   f = str.begin();
@@ -267,7 +267,7 @@ TEST(parseable) {
 
 TEST(json) {
   MESSAGE("plain");
-  data x = vector{"foo", vector{-42, vector{1001u}}, "x", port{443, port::tcp}};
+  data x = list{"foo", list{-42, list{1001u}}, "x", port{443, port::tcp}};
   json expected = json{json::make_array(
     "foo",
     json::make_array(-42, json::make_array(1001)),

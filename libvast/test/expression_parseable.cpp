@@ -59,7 +59,7 @@ TEST(parseable/printable - predicate) {
   CHECK(caf::holds_alternative<data>(pred.rhs));
   CHECK(caf::get<data>(pred.lhs) == data{42u});
   CHECK(pred.op == in);
-  CHECK(caf::get<data>(pred.rhs) == data{vector{21u, 42u, 84u}});
+  CHECK(caf::get<data>(pred.rhs) == data{list{21u, 42u, 84u}});
   CHECK_EQUAL(to_string(pred), str);
   // LHS: type, RHS: data
   MESSAGE("#type != \"foo\"");

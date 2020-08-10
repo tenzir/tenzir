@@ -38,8 +38,8 @@ public:
 
   static table_slice_ptr make(table_slice_header header);
 
-  static table_slice_ptr make(record_type layout,
-                              const std::vector<vector>& rows);
+  static table_slice_ptr
+  make(record_type layout, const std::vector<list>& rows);
 
   // -- factory functions ------------------------------------------------------
 
@@ -63,7 +63,7 @@ public:
   caf::atom_value implementation_id() const noexcept override;
 
   /// @returns the container for storing table slice rows.
-  const vector& container() const noexcept {
+  const list& container() const noexcept {
     return xs_;
   }
 
@@ -71,7 +71,7 @@ protected:
   explicit caf_table_slice(table_slice_header header);
 
 private:
-  vector xs_;
+  list xs_;
 };
 
 /// @relates caf_table_slice

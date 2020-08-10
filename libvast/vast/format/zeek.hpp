@@ -197,9 +197,9 @@ struct zeek_parser_factory {
     return parsers::u16 ->* [](uint16_t x) { return port{x, port::unknown}; };
   }
 
-  result_type operator()(const vector_type& t) const {
+  result_type operator()(const list_type& t) const {
     return (caf::visit(*this, t.value_type) % set_separator_)
-      ->* [](std::vector<Attribute> x) { return vector(std::move(x)); };
+             ->*[](std::vector<Attribute> x) { return list(std::move(x)); };
   }
 
   const std::string& set_separator_;

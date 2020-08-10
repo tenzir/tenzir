@@ -543,7 +543,7 @@ bool event_evaluator::operator()(const data_extractor& e, const data& d) {
     return evaluate(event_.data(), op_, d);
   // offset wouldn't be empty
   VAST_ASSERT(caf::holds_alternative<record_type>(event_.type()));
-  if (auto r = caf::get_if<vector>(&event_.data()))
+  if (auto r = caf::get_if<list>(&event_.data()))
     if (auto x = get(*r, e.offset))
       return evaluate(*x, op_, d);
   return false;

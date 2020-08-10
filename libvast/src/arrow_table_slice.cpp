@@ -276,7 +276,7 @@ void decode(const type& t, const arrow::TimestampArray& arr, F& f) {
 
 template <class F>
 void decode(const type& t, const arrow::ListArray& arr, F& f) {
-  DECODE_TRY_DISPATCH(vector);
+  DECODE_TRY_DISPATCH(list);
   DECODE_TRY_DISPATCH(map);
   VAST_WARNING(__func__, "expected to decode a list or map but got a", kind(t));
 }
@@ -450,9 +450,9 @@ auto container_view_at(type value_type, const arrow::ListArray& arr,
                                       offset, length);
 }
 
-auto vector_at(type value_type, const arrow::ListArray& arr, int64_t row) {
+auto list_at(type value_type, const arrow::ListArray& arr, int64_t row) {
   auto ptr = container_view_at(std::move(value_type), arr, row);
-  return vector_view_handle{vector_view_ptr{std::move(ptr)}};
+  return list_view_handle{list_view_ptr{std::move(ptr)}};
 }
 
 auto map_at(type key_type, type value_type, const arrow::ListArray& arr,
@@ -544,8 +544,8 @@ public:
   void operator()(const arrow::ListArray& arr, const T& t) {
     if (arr.IsNull(row_))
       return;
-    if constexpr (std::is_same_v<T, vector_type>) {
-      result_ = vector_at(t.value_type, arr, row_);
+    if constexpr (std::is_same_v<T, list_type>) {
+      result_ = list_at(t.value_type, arr, row_);
     } else {
       static_assert(std::is_same_v<T, map_type>);
       result_ = map_at(t.key_type, t.value_type, arr, row_);
@@ -635,9 +635,9 @@ public:
 
   template <class T>
   void operator()(const arrow::ListArray& arr, const T& t) {
-    if constexpr (std::is_same_v<T, vector_type>) {
+    if constexpr (std::is_same_v<T, list_type>) {
       auto f = [&](const auto& arr, int64_t row) {
-        return vector_at(t.value_type, arr, row);
+        return list_at(t.value_type, arr, row);
       };
       apply(arr, f);
     } else {

@@ -67,8 +67,8 @@ struct pattern_view_printer : printer<pattern_view_printer> {
   }
 };
 
-struct vector_view_printer : printer<vector_view_printer> {
-  using attribute = view<vector>;
+struct list_view_printer : printer<list_view_printer> {
+  using attribute = view<list>;
 
   template <class Iterator>
   bool print(Iterator& out, const attribute& xs) const {
@@ -105,8 +105,8 @@ struct printer_registry<view<pattern>> {
 };
 
 template <>
-struct printer_registry<view<vector>> {
-  using type = vector_view_printer;
+struct printer_registry<view<list>> {
+  using type = list_view_printer;
 };
 
 template <>

@@ -39,7 +39,7 @@ std::vector<value> subset(const table_slice& slice,
   auto row_end = cap(first_row, num_rows, slice.rows());
   auto value_layout = slice.layout(first_col, num_cols);
   for (auto row = row_begin; row < row_end; ++row) {
-    vector xs;
+    list xs;
     for (auto col = col_begin; col < col_end; ++col)
       xs.emplace_back(materialize(slice.at(row, col)));
     result.emplace_back(value::make(std::move(xs), value_layout));

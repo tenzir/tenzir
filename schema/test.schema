@@ -10,5 +10,5 @@ type test.full = record{
  a: addr #default="uniform(0,2000000)",
  s: subnet #default="uniform(1000,2000)",
  p: port #default="uniform(1,65384)",
- n: vector<int>
+ n: list<int>
 }

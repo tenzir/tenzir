@@ -37,7 +37,7 @@ event to_event(const table_slice& slice, id eid, type event_layout,
                caf::optional<size_t> timestamp_column) {
   VAST_ASSERT(slice.columns() > 0);
   VAST_ASSERT(!timestamp_column || *timestamp_column < slice.columns());
-  vector xs(slice.columns());  // TODO(ch3290): make this a record
+  list xs(slice.columns()); // TODO(ch3290): make this a record
   for (table_slice::size_type i = 0; i < slice.columns(); ++i)
     xs[i] = materialize(slice.at(eid - slice.offset(), i));
   auto e = event::make(std::move(xs), std::move(event_layout));
@@ -45,7 +45,7 @@ event to_event(const table_slice& slice, id eid, type event_layout,
   e.id(eid);
   // Assign event timestamp.
   if (timestamp_column) {
-    auto& xs = caf::get<vector>(e.data());
+    auto& xs = caf::get<list>(e.data());
     auto ts = caf::get<time>(xs[*timestamp_column]);
     e.timestamp(ts);
   }

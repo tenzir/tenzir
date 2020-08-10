@@ -76,7 +76,7 @@ using to_data_type = std::conditional_t<
             || std::is_same_v<T, address>
             || std::is_same_v<T, subnet>
             || std::is_same_v<T, port>
-            || std::is_same_v<T, vector>
+            || std::is_same_v<T, list>
             || std::is_same_v<T, map>,
             T,
             std::false_type
@@ -114,7 +114,7 @@ public:
     subnet,
     port,
     enumeration,
-    vector,
+    list,
     map
   >;
   // clang-format on
@@ -225,7 +225,7 @@ VAST_DATA_TRAIT(address);
 VAST_DATA_TRAIT(subnet);
 VAST_DATA_TRAIT(port);
 VAST_DATA_TRAIT(enumeration);
-VAST_DATA_TRAIT(vector);
+VAST_DATA_TRAIT(list);
 VAST_DATA_TRAIT(map);
 
 #undef VAST_DATA_TRAIT
@@ -261,29 +261,29 @@ bool is_recursive(const data& x);
 bool is_container(const data& x);
 
 /// Retrieves data at a given offset.
-/// @param v The vector to lookup.
+/// @param xs The record to lookup.
 /// @param o The offset to access.
 /// @returns A pointer to the data at *o* or `nullptr` if *o* does not
 ///          describe a valid offset.
-const data* get(const vector& v, const offset& o);
+const data* get(const list& xs, const offset& o);
 const data* get(const data& d, const offset& o);
 
-/// Flattens a vector recursively according to a record type such that only
-/// nested records are lifted into parent vector.
-/// @param xs The vector to flatten.
+/// Flattens a list recursively according to a record type such that only
+/// nested records are lifted into parent list.
+/// @param xs The list to flatten.
 /// @param t The record type according to which *xs* should be flattened.
-/// @returns The flattened vector if the nested structure of *xs* is congruent
-///           to *t*.
+/// @returns The flattened list if the nested structure of *xs* is congruent to
+///          *t*.
 /// @see unflatten
-caf::optional<vector> flatten(const vector& xs, const record_type& t);
+caf::optional<list> flatten(const list& xs, const record_type& t);
 caf::optional<data> flatten(const data& x, type t);
 
-/// Unflattens a vector according to a record type.
-/// @param xs The vector to unflatten according to *rt*.
-/// @param rt The type that defines the vector structure.
-/// @returns The unflattened vector of *xs* according to *rt*.
+/// Unflattens a list according to a record type.
+/// @param xs The list to unflatten according to *rt*.
+/// @param rt The type that defines the list structure.
+/// @returns The unflattened list of *xs* according to *rt*.
 /// @see flatten
-caf::optional<vector> unflatten(const vector& xs, const record_type& rt);
+caf::optional<list> unflatten(const list& xs, const record_type& rt);
 caf::optional<data> unflatten(const data& x, type t);
 
 /// Evaluates a data predicate.
@@ -294,26 +294,14 @@ bool evaluate(const data& lhs, relational_operator op, const data& rhs);
 
 // -- convertible -------------------------------------------------------------
 
-bool convert(const vector& v, json& j);
-bool convert(const map& v, json& j);
-bool convert(const data& v, json& j);
+bool convert(const list& xs, json& j);
+bool convert(const map& xs, json& j);
+bool convert(const data& xs, json& j);
 
 /// Converts data with a type to "zipped" JSON, i.e., the JSON object for
 /// records contains the field names from the type corresponding to the given
 /// data.
-bool convert(const data& v, json& j, const type& t);
-
-/// @relates data
-template <class... Ts>
-auto make_vector(Ts... xs) {
-  return vector{data{std::move(xs)}...};
-}
-
-template <class... Ts>
-auto make_vector(std::tuple<Ts...> tup) {
-  return std::apply([](auto&... xs) { return make_vector(std::move(xs)...); },
-                    tup);
-}
+bool convert(const data& x, json& j, const type& t);
 
 } // namespace vast
 

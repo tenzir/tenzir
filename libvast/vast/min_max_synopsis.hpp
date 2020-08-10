@@ -52,7 +52,7 @@ public:
         return caf::none;
     };
     auto membership = [&]() -> caf::optional<bool> {
-      if (auto xs = caf::get_if<view<vector>>(&rhs)) {
+      if (auto xs = caf::get_if<view<list>>(&rhs)) {
         for (auto x : **xs) {
           auto result = do_lookup(equal, x);
           if (result && *result)

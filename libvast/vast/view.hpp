@@ -114,19 +114,19 @@ struct view_trait<pattern> {
 template <class T>
 class container_view_handle;
 
-struct vector_view_ptr;
+struct list_view_ptr;
 struct map_view_ptr;
 
 // @relates view_trait
-using vector_view_handle = container_view_handle<vector_view_ptr>;
+using list_view_handle = container_view_handle<list_view_ptr>;
 
 // @relates view_trait
 using map_view_handle = container_view_handle<map_view_ptr>;
 
 /// @relates view_trait
 template <>
-struct view_trait<vector> {
-  using type = vector_view_handle;
+struct view_trait<list> {
+  using type = list_view_handle;
 };
 
 /// @relates view_trait
@@ -152,7 +152,7 @@ using data_view = caf::variant<
   view<subnet>,
   view<port>,
   view<enumeration>,
-  view<vector>,
+  view<list>,
   view<map>
 >;
 // clang-format on
@@ -363,25 +363,24 @@ bool operator<(const container_view<T>& xs, const container_view<T>& ys) {
 }
 
 // @relates view_trait
-struct vector_view_ptr : container_view_ptr<data_view> {};
+struct list_view_ptr : container_view_ptr<data_view> {};
 
 // @relates view_trait
 struct map_view_ptr : container_view_ptr<std::pair<data_view, data_view>> {};
 
-/// A view over a @ref vector.
+/// A view over a @ref list.
 /// @relates view_trait
-class default_vector_view
-  : public container_view<data_view>,
-    detail::totally_ordered<default_vector_view> {
+class default_list_view : public container_view<data_view>,
+                          detail::totally_ordered<default_list_view> {
 public:
-  explicit default_vector_view(const vector& xs);
+  explicit default_list_view(const list& xs);
 
   value_type at(size_type i) const override;
 
   size_type size() const noexcept override;
 
 private:
-  const vector& xs_;
+  const list& xs_;
 };
 
 /// A view over a @ref map.
@@ -413,9 +412,9 @@ view<T> make_view(const T& x) {
     return x;
   } else if constexpr (std::is_same_v<T, pattern>) {
     return pattern_view{x};
-  } else if constexpr (std::is_same_v<T, vector>) {
-    return vector_view_handle{
-      vector_view_ptr{caf::make_counted<default_vector_view>(x)}};
+  } else if constexpr (std::is_same_v<T, list>) {
+    return list_view_handle{
+      list_view_ptr{caf::make_counted<default_list_view>(x)}};
   } else if constexpr (std::is_same_v<T, map>) {
     return map_view_handle{
       map_view_ptr{caf::make_counted<default_map_view>(x)}};
@@ -466,7 +465,7 @@ std::string materialize(std::string_view x);
 
 pattern materialize(pattern_view x);
 
-vector materialize(vector_view_handle xs);
+list materialize(list_view_handle xs);
 
 map materialize(map_view_handle xs);
 

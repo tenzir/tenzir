@@ -107,7 +107,7 @@ struct string_type;
 struct subnet_type;
 struct time_type;
 struct type_extractor;
-struct vector_type;
+struct list_type;
 
 namespace system {
 

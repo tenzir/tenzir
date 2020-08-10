@@ -44,22 +44,22 @@ table_slices::table_slices() {
     {"i", address_type{}},
     {"j", subnet_type{}},
     {"k", port_type{}},
-    {"l", vector_type{count_type{}}},
+    {"l", list_type{count_type{}}},
     {"n", map_type{count_type{}, bool_type{}}},
-    // test_vectors
-    {"va", vector_type{bool_type{}}},
-    {"vb", vector_type{integer_type{}}},
-    {"vc", vector_type{count_type{}}},
-    {"vd", vector_type{real_type{}}},
-    {"ve", vector_type{duration_type{}}},
-    {"vf", vector_type{time_type{}}},
-    {"vg", vector_type{string_type{}}},
-    {"vh", vector_type{pattern_type{}}},
-    {"vi", vector_type{address_type{}}},
-    {"vj", vector_type{subnet_type{}}},
-    {"vk", vector_type{port_type{}}},
-    // {"vl", vector_type{vector_type{count_type{}}}},
-    // {"vm", vector_type{map_type{count_type{}, bool_type{}}}},
+    // test_lists
+    {"va", list_type{bool_type{}}},
+    {"vb", list_type{integer_type{}}},
+    {"vc", list_type{count_type{}}},
+    {"vd", list_type{real_type{}}},
+    {"ve", list_type{duration_type{}}},
+    {"vf", list_type{time_type{}}},
+    {"vg", list_type{string_type{}}},
+    {"vh", list_type{pattern_type{}}},
+    {"vi", list_type{address_type{}}},
+    {"vj", list_type{subnet_type{}}},
+    {"vk", list_type{port_type{}}},
+    // {"vl", list_type{list_type{count_type{}}}},
+    // {"vm", list_type{map_type{count_type{}, bool_type{}}}},
     // -- test_maps_left
     {"maa", map_type{bool_type{}, bool_type{}}},
     {"mba", map_type{integer_type{}, bool_type{}}},
@@ -72,7 +72,7 @@ table_slices::table_slices() {
     {"mia", map_type{address_type{}, bool_type{}}},
     {"mja", map_type{subnet_type{}, bool_type{}}},
     {"mka", map_type{port_type{}, bool_type{}}},
-    // {"mla", map_type{vector_type{count_type{}}, bool_type{}}},
+    // {"mla", map_type{list_type{count_type{}}, bool_type{}}},
     // {"mna", map_type{map_type{count_type{}, bool_type{}}, bool_type{}}},
     // -- test_maps_right (intentionally no maa)
     {"mab", map_type{bool_type{}, integer_type{}}},
@@ -85,12 +85,12 @@ table_slices::table_slices() {
     {"mai", map_type{bool_type{}, address_type{}}},
     {"maj", map_type{bool_type{}, subnet_type{}}},
     {"mak", map_type{bool_type{}, port_type{}}},
-    // {"mal", map_type{bool_type{}, vector_type{count_type{}}}},
+    // {"mal", map_type{bool_type{}, list_type{count_type{}}}},
     // {"man", map_type{bool_type{}, map_type{count_type{}, bool_type{}}}},
   }.name("test");
   // A bunch of test data for nested type combinations.
   // clang-format off
-  auto test_vectors = ""s
+  auto test_lists = ""s
     + ", [T]"s // va
     + ", [+7]"s // vb
     + ", [42]"s // vc
@@ -136,7 +136,7 @@ table_slices::table_slices() {
     // + ", {T -> {1 -> T, 2 -> F, 3 -> T}}"s // man
     ;
   auto test_collections
-    = test_vectors
+    = test_lists
     + test_maps_left
     + test_maps_right
     ;
@@ -152,7 +152,7 @@ table_slices::table_slices() {
   };
   for (auto& row : rows) {
     auto xs = unbox(to<data>(row));
-    test_data.push_back(caf::get<vector>(xs));
+    test_data.push_back(caf::get<list>(xs));
   }
 }
 

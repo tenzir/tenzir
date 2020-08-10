@@ -277,11 +277,11 @@ TEST(parseable - basic types local) {
 TEST(parseable - complex types global) {
   auto str = R"__(
     type enum_t = enum{x, y, z}
-    type vector_t = vector<addr>
+    type list_t = list<addr>
     type map_t = map<port, addr>
     type foo = record{
       e: enum_t,
-      v: vector_t,
+      v: list_t,
       t: map_t
     }
   )__";
@@ -289,7 +289,7 @@ TEST(parseable - complex types global) {
   CHECK(parsers::schema(std::string{str}, sch));
   auto enum_t = sch.find("enum_t");
   REQUIRE(enum_t);
-  CHECK(sch.find("vector_t"));
+  CHECK(sch.find("list_t"));
   CHECK(sch.find("map_t"));
   auto foo = sch.find("foo");
   REQUIRE(foo);

@@ -40,7 +40,7 @@ bool caf_table_slice_builder::append(data x) {
   row_[col_++] = std::move(x);
   if (col_ == layout().fields.size()) {
     slice_->xs_.push_back(std::move(row_));
-    row_ = vector(slice_->columns());
+    row_ = list(slice_->columns());
     col_ = 0;
   }
   return true;
@@ -78,7 +78,7 @@ void caf_table_slice_builder::lazy_init() {
     table_slice_header header;
     header.layout = layout();
     slice_.reset(new caf_table_slice{std::move(header)});
-    row_ = vector(slice_->columns());
+    row_ = list(slice_->columns());
     col_ = 0;
   }
 }

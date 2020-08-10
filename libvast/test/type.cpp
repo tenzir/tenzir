@@ -135,9 +135,9 @@ TEST(strict weak ordering) {
 TEST(introspection) {
   CHECK(is_complex(enumeration_type{}));
   CHECK(!is_basic(enumeration_type{}));
-  CHECK(is_complex(vector_type{}));
-  CHECK(is_container(vector_type{}));
-  CHECK(is_recursive(vector_type{}));
+  CHECK(is_complex(list_type{}));
+  CHECK(is_container(list_type{}));
+  CHECK(is_recursive(list_type{}));
   CHECK(is_complex(map_type{}));
   CHECK(is_container(map_type{}));
   CHECK(is_recursive(map_type{}));
@@ -169,7 +169,7 @@ TEST(serialization) {
   CHECK_ROUNDTRIP(subnet_type{});
   CHECK_ROUNDTRIP(port_type{});
   CHECK_ROUNDTRIP(enumeration_type{});
-  CHECK_ROUNDTRIP(vector_type{});
+  CHECK_ROUNDTRIP(list_type{});
   CHECK_ROUNDTRIP(map_type{});
   CHECK_ROUNDTRIP(record_type{});
   CHECK_ROUNDTRIP(alias_type{});
@@ -186,7 +186,7 @@ TEST(serialization) {
   CHECK_ROUNDTRIP(type{subnet_type{}});
   CHECK_ROUNDTRIP(type{port_type{}});
   CHECK_ROUNDTRIP(type{enumeration_type{}});
-  CHECK_ROUNDTRIP(type{vector_type{}});
+  CHECK_ROUNDTRIP(type{list_type{}});
   CHECK_ROUNDTRIP(type{map_type{}});
   CHECK_ROUNDTRIP(type{record_type{}});
   CHECK_ROUNDTRIP(type{alias_type{}});
@@ -195,7 +195,7 @@ TEST(serialization) {
                        {"z", real_type{}.attributes({{"key", "value"}})}};
   // Make it recursive.
   r = {{"a", map_type{string_type{}, port_type{}}},
-       {"b", vector_type{bool_type{}}.name("foo")},
+       {"b", list_type{bool_type{}}.name("foo")},
        {"c", r}};
   r.name("foo");
   CHECK_ROUNDTRIP(r);
@@ -433,13 +433,13 @@ TEST(congruence) {
   CHECK(congruent(i, j));
   CHECK(!congruent(i, c));
   MESSAGE("sets");
-  auto v0 = vector_type{i};
-  auto v1 = vector_type{j};
-  auto v2 = vector_type{c};
-  CHECK(v0 != v1);
-  CHECK(v0 != v2);
-  CHECK(congruent(v0, v1));
-  CHECK(!congruent(v1, v2));
+  auto l0 = list_type{i};
+  auto l1 = list_type{j};
+  auto l2 = list_type{c};
+  CHECK(l0 != l1);
+  CHECK(l0 != l2);
+  CHECK(congruent(l0, l1));
+  CHECK(!congruent(l1, l2));
   MESSAGE("records");
   auto r0 = record_type{{"a", address_type{}},
                         {"b", bool_type{}},
@@ -482,10 +482,10 @@ TEST(type_check) {
   TYPE_CHECK(enumeration_type{{"foo"}}, enumeration{0});
   TYPE_CHECK_FAIL(enumeration_type{{"foo"}}, enumeration{1});
   MESSAGE("containers");
-  TYPE_CHECK(vector_type{integer_type{}}, vector({1, 2, 3}));
-  TYPE_CHECK(vector_type{}, vector({1, 2, 3}));
-  TYPE_CHECK(vector_type{}, vector{});
-  TYPE_CHECK(vector_type{string_type{}}, vector{});
+  TYPE_CHECK(list_type{integer_type{}}, list({1, 2, 3}));
+  TYPE_CHECK(list_type{}, list({1, 2, 3}));
+  TYPE_CHECK(list_type{}, list{});
+  TYPE_CHECK(list_type{string_type{}}, list{});
   auto xs = map{{1, true}, {2, false}};
   TYPE_CHECK(map_type({integer_type{}, bool_type{}}), xs);
   TYPE_CHECK(map_type{}, xs);
@@ -493,8 +493,8 @@ TEST(type_check) {
   auto t = record_type{{"a", integer_type{}},
                        {"b", bool_type{}},
                        {"c", string_type{}}};
-  TYPE_CHECK(t, vector({42, true, "foo"}));
-  TYPE_CHECK_FAIL(t, vector({42, 100, "foo"}));
+  TYPE_CHECK(t, list({42, true, "foo"}));
+  TYPE_CHECK_FAIL(t, list({42, 100, "foo"}));
 }
 
 TEST(printable) {
@@ -515,7 +515,7 @@ TEST(printable) {
   auto e = enumeration_type{{"foo", "bar", "baz"}};
   CHECK_EQUAL(to_string(e), "enum {foo, bar, baz}");
   MESSAGE("container types");
-  CHECK_EQUAL(to_string(vector_type{real_type{}}), "vector<real>");
+  CHECK_EQUAL(to_string(list_type{real_type{}}), "list<real>");
   auto b = bool_type{};
   CHECK_EQUAL(to_string(map_type{count_type{}, b}), "map<count, bool>");
   auto r = record_type{{
@@ -541,19 +541,19 @@ TEST(printable) {
   attr = {"skip"};
   CHECK_EQUAL(to_string(attr), "#skip");
   // Attributes on types.
-  auto s = vector_type{port_type{}};
+  auto s = list_type{port_type{}};
   s = s.attributes({attr, {"tokenize", "/rx/"}});
-  CHECK_EQUAL(to_string(s), "vector<port> #skip #tokenize=/rx/");
+  CHECK_EQUAL(to_string(s), "list<port> #skip #tokenize=/rx/");
   // Nested types
   t = s;
   t.attributes({attr});
   t = map_type{count_type{}, t};
-  CHECK_EQUAL(to_string(t), "map<count, vector<port> #skip>");
+  CHECK_EQUAL(to_string(t), "map<count, list<port> #skip>");
   MESSAGE("signature");
   t.name("jells");
   std::string sig;
   CHECK(printers::type<policy::signature>(sig, t));
-  CHECK_EQUAL(sig, "jells = map<count, vector<port> #skip>");
+  CHECK_EQUAL(sig, "jells = map<count, list<port> #skip>");
 }
 
 TEST(parseable) {
@@ -569,8 +569,8 @@ TEST(parseable) {
   CHECK(parsers::type("enum{foo, bar, baz}", t));
   CHECK(t == enumeration_type{{"foo", "bar", "baz"}});
   MESSAGE("container");
-  CHECK(parsers::type("vector<real>", t));
-  CHECK(t == type{vector_type{real_type{}}});
+  CHECK(parsers::type("list<real>", t));
+  CHECK(t == type{list_type{real_type{}}});
   CHECK(parsers::type("map<count, bool>", t));
   CHECK(t == type{map_type{count_type{}, bool_type{}}});
   MESSAGE("record");
@@ -602,8 +602,8 @@ TEST(parseable) {
   auto p = type_parser{std::addressof(symbols)}; // overloaded operator&
   CHECK(p("foo", t));
   CHECK(t == foo);
-  CHECK(p("vector<foo>", t));
-  CHECK(t == type{vector_type{foo}});
+  CHECK(p("list<foo>", t));
+  CHECK(t == type{list_type{foo}});
   CHECK(p("map<foo, foo>", t));
   CHECK(t == type{map_type{foo, foo}});
   MESSAGE("record");
@@ -647,10 +647,9 @@ TEST(hashable) {
   CHECK_NOT_EQUAL(hash(type{bool_type{}}), hash(bool_type{}));
   CHECK_NOT_EQUAL(hash(bool_type{}), hash(address_type{}));
   CHECK_NOT_EQUAL(hash(type{bool_type{}}), hash(type{address_type{}}));
-  auto x = record_type{{"x", integer_type{}},
-                       {"y", string_type{}},
-                       {"z", vector_type{real_type{}}}};
-  CHECK_EQUAL(hash(x), 12385688613179294200ul);
+  auto x = record_type{
+    {"x", integer_type{}}, {"y", string_type{}}, {"z", list_type{real_type{}}}};
+  CHECK_EQUAL(hash(x), 7434606127152318469ul);
   CHECK_EQUAL(to_digest(x), std::to_string(hash(type{x})));
 }
 

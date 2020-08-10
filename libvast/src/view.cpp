@@ -69,7 +69,7 @@ bool is_equal(const data& x, const data_view& y) {
     [&](const pattern& lhs, const view<pattern>& rhs) {
       return lhs.string() == rhs.string();
     },
-    [&](const vector& lhs, const view<vector>& rhs) {
+    [&](const list& lhs, const view<list>& rhs) {
       return std::equal(lhs.begin(), lhs.end(), rhs.begin(), rhs.end(), pred);
     },
     [&](const map& lhs, const view<map>& rhs) {
@@ -85,17 +85,17 @@ bool is_equal(const data_view& x, const data& y) {
   return is_equal(y, x);
 }
 
-// -- default_vector_view -----------------------------------------------------
+// -- default_list_view -----------------------------------------------------
 
-default_vector_view::default_vector_view(const vector& xs) : xs_{xs} {
+default_list_view::default_list_view(const list& xs) : xs_{xs} {
   // nop
 }
 
-default_vector_view::value_type default_vector_view::at(size_type i) const {
+default_list_view::value_type default_list_view::at(size_type i) const {
   return make_data_view(xs_[i]);
 }
 
-default_vector_view::size_type default_vector_view::size() const noexcept {
+default_list_view::size_type default_list_view::size() const noexcept {
   return xs_.size();
 }
 
@@ -147,8 +147,8 @@ Result materialize_container(const T& xs) {
 
 } // namespace <anonymous>
 
-vector materialize(vector_view_handle xs) {
-  return materialize_container<vector>(xs);
+list materialize(list_view_handle xs) {
+  return materialize_container<list>(xs);
 }
 
 map materialize(map_view_handle xs) {
@@ -175,8 +175,8 @@ bool type_check(const type& t, const data_view& x) {
       auto e = caf::get_if<view<enumeration>>(&x);
       return e && *e < u.fields.size();
     },
-    [&](const vector_type& u) {
-      auto v = caf::get_if<view<vector>>(&x);
+    [&](const list_type& u) {
+      auto v = caf::get_if<view<list>>(&x);
       if (!v)
         return false;
       auto& xs = **v;
@@ -193,8 +193,8 @@ bool type_check(const type& t, const data_view& x) {
       return type_check(u.key_type, key) && type_check(u.value_type, value);
     },
     [&](const record_type& u) {
-      // Until we have a separate data type for records we treat them as vector.
-      auto v = caf::get_if<view<vector>>(&x);
+      // Until we have a separate data type for records we treat them as list.
+      auto v = caf::get_if<view<list>>(&x);
       if (!v)
         return false;
       auto& xs = **v;
@@ -205,10 +205,7 @@ bool type_check(const type& t, const data_view& x) {
           return false;
       return true;
     },
-    [&](const alias_type& u) {
-      return type_check(u.value_type, x);
-    }
-  );
+    [&](const alias_type& u) { return type_check(u.value_type, x); });
   return caf::holds_alternative<caf::none_t>(x) || caf::visit(f, t);
 }
 
@@ -218,7 +215,7 @@ namespace {
 struct contains_predicate {
   template <class T, class U>
   bool operator()(const T& lhs, const U& rhs) const {
-    if constexpr (std::is_same_v<U, view<vector>>) {
+    if constexpr (std::is_same_v<U, view<list>>) {
       auto equals_lhs = [&](const auto& y) {
         if constexpr (std::is_same_v<T, std::decay_t<decltype(y)>>)
           return lhs == y;

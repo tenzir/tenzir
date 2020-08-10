@@ -46,9 +46,9 @@ auto http = record_type{{"ts", time_type{}},
                         {"response_body_len", count_type{}},
                         {"status_code", count_type{}},
                         {"status_msg", string_type{}},
-                        {"tags", vector_type{string_type{}}},
-                        {"resp_fuids", vector_type{string_type{}}},
-                        {"resp_mime_types", vector_type{string_type{}}}}
+                        {"tags", list_type{string_type{}}},
+                        {"resp_fuids", list_type{string_type{}}},
+                        {"resp_mime_types", list_type{string_type{}}}}
               .name("http");
 
 std::string_view eve_log
@@ -72,8 +72,8 @@ TEST(json to data) {
                             {"d", duration_type{}},
                             {"d2", duration_type{}},
                             {"e", enumeration_type{{"FOO", "BAR", "BAZ"}}},
-                            {"vp", vector_type{port_type{}}},
-                            {"vt", vector_type{time_type{}}},
+                            {"vp", list_type{port_type{}}},
+                            {"vt", list_type{time_type{}}},
                             {"rec", record_type{{"c", count_type{}},
                                                 {"s", string_type{}}}},
                             {"msa", map_type{string_type{}, address_type{}}},

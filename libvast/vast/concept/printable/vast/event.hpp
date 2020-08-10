@@ -26,7 +26,7 @@ struct event_printer : printer<event_printer> {
   template <class Iterator>
   bool print(Iterator& out, const event& e) const {
     auto p = '<' << (printers::data % ", ") << '>';
-    auto& xs = caf::get<vector>(e.data());
+    auto& xs = caf::get<list>(e.data());
     return p(out, xs);
   }
 };
