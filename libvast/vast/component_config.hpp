@@ -27,7 +27,7 @@ namespace vast {
 /// @param path The location of the data inside the settings object.
 /// @returns false on a type mismatch, true otherwise.
 template <class T>
-bool absorb(T& to, const caf::settings& from, std::string_view path) {
+bool extract_settings(T& to, const caf::settings& from, std::string_view path) {
   auto cv = caf::get_if(&from, path);
   if (!cv)
     return true;
