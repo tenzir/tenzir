@@ -59,7 +59,7 @@ table_slices::table_slices() {
     {"vj", vector_type{subnet_type{}}},
     {"vk", vector_type{port_type{}}},
     // {"vl", vector_type{vector_type{count_type{}}}},
-    // {"vn", vector_type{map_type{count_type{}, bool_type{}}}},
+    // {"vm", vector_type{map_type{count_type{}, bool_type{}}}},
     // -- test_maps_left
     {"maa", map_type{bool_type{}, bool_type{}}},
     {"mba", map_type{integer_type{}, bool_type{}}},
@@ -103,7 +103,7 @@ table_slices::table_slices() {
     + ", [10.0.0.0/8]"s // vj
     + ", [80/tcp]"s // vk
     // + ", [[1, 2, 3]]"s // vl
-    // + ", [{1 -> T, 2 -> F, 3 -> T}]"s // vn
+    // + ", [{1 -> T, 2 -> F, 3 -> T}]"s // vm
     ;
   auto test_maps_left = ""s
     + ", {T -> T}"s // maa
