@@ -162,8 +162,6 @@ private:
   std::string str_;
 };
 
-constexpr bool close_on_destruction = true;
-
 /// A simple file abstraction.
 class file {
   file(const file&) = delete;
@@ -190,16 +188,7 @@ public:
 
   /// Constructs a file from a path.
   /// @param p The file path.
-  file(vast::path p);
-
-  /// Constructs a file from the OS' native file handle type.
-  /// @param handle The file handle.
-  /// @param p The file path.
-  /// @param close_behavior Whether to close or leave open the file handle upon
-  ///                       destruction.
-  /// @pre The file identified via *handle* is open.
-  file(native_type handle, bool close_behavior = close_on_destruction,
-       vast::path p = {});
+  explicit file(vast::path p);
 
   file(file&&) = default;
 
@@ -253,7 +242,6 @@ public:
 
 private:
   native_type handle_;
-  bool close_on_destruction_ = !close_on_destruction;
   bool is_open_ = false;
   bool seek_failed_ = false;
   vast::path path_;
