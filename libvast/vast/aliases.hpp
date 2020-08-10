@@ -44,9 +44,6 @@ using enumeration = uint8_t;
 /// A random-access sequence of data.
 using list = std::vector<data>;
 
-/// A mathematical set where each element is ::data.
-using set = detail::stable_set<data>;
-
 /// An associative array with ::data as both key and value.
 using map = detail::stable_map<data, data>;
 

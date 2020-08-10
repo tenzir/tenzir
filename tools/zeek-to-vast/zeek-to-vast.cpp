@@ -154,13 +154,6 @@ broker::data to_broker(const vast::data& data) {
                              [](const auto& x) { return to_broker(x); });
               return result;
             },
-            [](const vast::set& xs) -> broker::data {
-              broker::set result;
-              std::transform(xs.begin(), xs.end(),
-                             std::inserter(result, result.end()),
-                             [](const auto& x) { return to_broker(x); });
-              return result;
-            },
             [](const vast::map& xs) -> broker::data {
               broker::table result;
               auto f = [](const auto& x) {
