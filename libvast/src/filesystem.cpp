@@ -469,11 +469,6 @@ caf::expected<void> mkdir(const path& p) {
   return {};
 }
 
-// int mkfifo(const path& p) {
-//  auto copy = std::string{path.begin(), path.end()};
-//  return mkfifo(copy.c_str(), mode_t mode);
-//}
-
 caf::expected<std::uintmax_t> file_size(const path& p) noexcept {
   struct stat st;
   if (::lstat(p.str().data(), &st) < 0)

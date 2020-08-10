@@ -55,7 +55,9 @@ make_input_stream(const std::string& input, path::type pt) {
       auto sb = std::make_unique<fdinbuf>(remote_fd);
       return std::make_unique<owning_istream>(std::move(sb));
     }
-    case path::fifo: {
+    case path::fifo: { // TODO
+      return make_error(ec::unimplemented, "make_input_stream does not "
+                                           "support fifo yet");
     }
     case path::regular_file: {
       if (input == "-") {
@@ -98,6 +100,8 @@ make_output_stream(const std::string& output, path::type pt) {
     case path::socket:
       return make_error(ec::filesystem_error, "wrong overload for socket");
     case path::fifo: // TODO
+      return make_error(ec::unimplemented, "make_output_stream does not "
+                                           "support fifo yet");
     case path::regular_file: {
       if (output == "-")
         return std::make_unique<fdostream>(1); // stdout
