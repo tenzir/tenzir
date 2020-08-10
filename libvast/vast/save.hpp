@@ -24,6 +24,7 @@
 #include <caf/expected.hpp>
 #include <caf/stream_serializer.hpp>
 
+#include <cstring>
 #include <fstream>
 #include <stdexcept>
 #include <streambuf>
@@ -74,7 +75,7 @@ caf::error save(caf::actor_system* sys, Sink&& out, const Ts&... xs) {
     std::ofstream fs{tmp.str()};
     if (!fs)
       return make_error(ec::filesystem_error, "failed to create filestream",
-                        out);
+                        out, std::strerror(errno));
     if (auto err = save<Method>(sys, *fs.rdbuf(), xs...))
       return err;
     if (std::rename(tmp.str().c_str(), out.str().c_str()) != 0)
