@@ -20,6 +20,7 @@
 #include "vast/load.hpp"
 #include "vast/logger.hpp"
 #include "vast/save.hpp"
+#include "vast/system/report.hpp"
 #include "vast/table_slice.hpp"
 
 #include <caf/atom.hpp>

@@ -11,41 +11,26 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#pragma once
+#include "vast/accountant/config.hpp"
 
-#include "vast/fwd.hpp"
-#include "vast/system/instrumentation.hpp"
-#include "vast/time.hpp"
-
-#include <caf/fwd.hpp>
-#include <caf/variant.hpp>
-
-#include <cstdint>
-#include <string>
+#include "vast/component_config.hpp"
+#include "vast/concept/parseable/detail/posix.hpp"
 
 namespace vast::system {
 
-struct data_point {
-  std::string key;
-  caf::variant<duration, time, int64_t, uint64_t, double> value;
-};
-
-template <class Inspector>
-typename Inspector::result_type inspect(Inspector& f, data_point& s) {
-  return f(caf::meta::type_name("data_point"), s.key, s.value);
+caf::expected<accountant_config>
+to_accountant_config(const caf::settings& opts) {
+  accountant_config result;
+  extract_settings(result.enable, opts, "enable");
+  extract_settings(result.self_sink.enable, opts, "self_sink.enable");
+  extract_settings(result.self_sink.slice_size, opts, "self_sink.slize_size");
+  extract_settings(result.self_sink.slice_type, opts, "self_sink.slize_type");
+  extract_settings(result.file_sink.enable, opts, "file_sink.enable");
+  extract_settings(result.file_sink.path, opts, "file_sink.path");
+  extract_settings(result.uds_sink.enable, opts, "uds_sink.enable");
+  extract_settings(result.uds_sink.path, opts, "uds_sink.path");
+  extract_settings(result.uds_sink.type, opts, "uds_sink.type");
+  return result;
 }
-
-struct performance_sample {
-  std::string key;
-  measurement value;
-};
-
-template <class Inspector>
-typename Inspector::result_type inspect(Inspector& f, performance_sample& s) {
-  return f(caf::meta::type_name("performance_sample"), s.key, s.value);
-}
-
-using performance_report = std::vector<performance_sample>;
-using report = std::vector<data_point>;
 
 } // namespace vast::system

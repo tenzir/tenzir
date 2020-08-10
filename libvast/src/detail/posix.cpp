@@ -11,21 +11,25 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
+#include "vast/detail/posix.hpp"
+
+#include "vast/config.hpp"
+#include "vast/detail/assert.hpp"
+#include "vast/detail/raise_error.hpp"
+#include "vast/logger.hpp"
+
+#include <cerrno>
+#include <cstring>
 #include <fcntl.h>
+#include <stdexcept>
+#include <stdlib.h>
+#include <string.h>
 #include <unistd.h>
+
 #include <sys/select.h>
 #include <sys/socket.h>
 #include <sys/types.h>
 #include <sys/un.h>
-
-#include <cerrno>
-#include <cstring>
-#include <stdexcept>
-
-#include "vast/config.hpp"
-#include "vast/detail/assert.hpp"
-#include "vast/detail/posix.hpp"
-#include "vast/detail/raise_error.hpp"
 
 namespace vast {
 namespace detail {
@@ -58,16 +62,39 @@ int uds_accept(int socket) {
   return fd;
 }
 
-int uds_connect(const std::string& path) {
+int uds_connect(const std::string& path, socket_type type) {
   int fd;
-  if ((fd = ::socket(AF_UNIX, SOCK_STREAM, 0)) < 0)
-    return fd;
-  ::sockaddr_un un;
-  std::memset(&un, 0, sizeof(un));
-  un.sun_family = AF_UNIX;
-  std::strncpy(un.sun_path, path.data(), sizeof(un.sun_path) - 1);
-  if (::connect(fd, reinterpret_cast<sockaddr*>(&un), sizeof(un)) < 0)
-    return -1;
+  switch (type) {
+    case socket_type::stream:
+    case socket_type::fd:
+      if ((fd = ::socket(AF_UNIX, SOCK_STREAM, 0)) < 0)
+        return fd;
+      break;
+    case socket_type::datagram:
+      if ((fd = ::socket(AF_UNIX, SOCK_DGRAM, 0)) < 0)
+        return fd;
+      ::sockaddr_un clt;
+      std::memset(&clt, 0, sizeof(clt));
+      clt.sun_family = AF_UNIX;
+      auto client_path = path + "-client";
+      std::strncpy(clt.sun_path, client_path.data(), sizeof(clt.sun_path) - 1);
+      ::unlink(client_path.c_str()); // Always remove previous socket file.
+      if (::bind(fd, reinterpret_cast<sockaddr*>(&clt), sizeof(clt)) < 0) {
+        VAST_WARNING(__func__, "failed in bind:", ::strerror(errno));
+        return -1;
+      }
+      break;
+  }
+  ::sockaddr_un srv;
+  std::memset(&srv, 0, sizeof(srv));
+  srv.sun_family = AF_UNIX;
+  std::strncpy(srv.sun_path, path.data(), sizeof(srv.sun_path) - 1);
+  if (::connect(fd, reinterpret_cast<sockaddr*>(&srv), sizeof(srv)) < 0) {
+    if (!(type == socket_type::datagram && errno == ENOENT)) {
+      VAST_WARNING(__func__, "failed in connect:", ::strerror(errno));
+      return -1;
+    }
+  }
   return fd;
 }
 
@@ -143,8 +170,9 @@ unix_domain_socket unix_domain_socket::accept(const std::string& path) {
   return unix_domain_socket{};
 }
 
-unix_domain_socket unix_domain_socket::connect(const std::string& path) {
-  return unix_domain_socket{detail::uds_connect(path)};
+unix_domain_socket
+unix_domain_socket::connect(const std::string& path, socket_type type) {
+  return unix_domain_socket{detail::uds_connect(path, type)};
 }
 
 unix_domain_socket::unix_domain_socket(int fd) : fd_{fd} {

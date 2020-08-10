@@ -13,39 +13,42 @@
 
 #pragma once
 
-#include "vast/fwd.hpp"
-#include "vast/system/instrumentation.hpp"
-#include "vast/time.hpp"
+#include "vast/defaults.hpp"
+#include "vast/detail/posix.hpp"
 
-#include <caf/fwd.hpp>
-#include <caf/variant.hpp>
+#include <caf/expected.hpp>
 
-#include <cstdint>
 #include <string>
 
 namespace vast::system {
 
-struct data_point {
-  std::string key;
-  caf::variant<duration, time, int64_t, uint64_t, double> value;
+struct accountant_config {
+  struct self_sink {
+    bool enable = true;
+    // TODO: Switch to unsigned when moving to vast::record for transmitting.
+    int64_t slice_size = 100;
+    caf::atom_value slice_type = defaults::import::table_slice_type;
+  };
+
+  struct file_sink {
+    bool enable = false;
+    std::string path;
+  };
+
+  struct uds_sink {
+    bool enable = false;
+    std::string path;
+    detail::socket_type type;
+  };
+
+  bool enable = true;
+
+  self_sink self_sink;
+  file_sink file_sink;
+  uds_sink uds_sink;
 };
 
-template <class Inspector>
-typename Inspector::result_type inspect(Inspector& f, data_point& s) {
-  return f(caf::meta::type_name("data_point"), s.key, s.value);
-}
-
-struct performance_sample {
-  std::string key;
-  measurement value;
-};
-
-template <class Inspector>
-typename Inspector::result_type inspect(Inspector& f, performance_sample& s) {
-  return f(caf::meta::type_name("performance_sample"), s.key, s.value);
-}
-
-using performance_report = std::vector<performance_sample>;
-using report = std::vector<data_point>;
+caf::expected<accountant_config>
+to_accountant_config(const caf::settings& opts);
 
 } // namespace vast::system

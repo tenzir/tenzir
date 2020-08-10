@@ -28,6 +28,7 @@
 #include "vast/logger.hpp"
 #include "vast/system/archive.hpp"
 #include "vast/system/query_status.hpp"
+#include "vast/system/report.hpp"
 #include "vast/table_slice.hpp"
 #include "vast/to_events.hpp"
 

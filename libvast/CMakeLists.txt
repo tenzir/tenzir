@@ -56,6 +56,7 @@ configure_file(${CMAKE_CURRENT_SOURCE_DIR}/vast/config.hpp.in
 file(GLOB_RECURSE libvast_headers "${CMAKE_CURRENT_SOURCE_DIR}/vast/*.hpp")
 
 set(libvast_sources
+    src/accountant/config.cpp
     src/address.cpp
     src/attribute.cpp
     src/banner.cpp
@@ -233,7 +234,8 @@ target_include_directories(
   PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}>
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
-    $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>)
+    $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>
+    )
 target_include_directories(libvast PRIVATE "${PROJECT_SOURCE_DIR}/aux")
 
 add_dependencies(libvast vast-schema)

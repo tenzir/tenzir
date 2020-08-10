@@ -13,6 +13,7 @@
 
 #include "vast/system/node.hpp"
 
+#include "vast/accountant/config.hpp"
 #include "vast/concept/parseable/to.hpp"
 #include "vast/concept/parseable/vast/endpoint.hpp"
 #include "vast/concept/printable/stream.hpp"
@@ -21,6 +22,7 @@
 #include "vast/config.hpp"
 #include "vast/defaults.hpp"
 #include "vast/detail/assert.hpp"
+#include "vast/detail/make_io_stream.hpp"
 #include "vast/format/csv.hpp"
 #include "vast/format/json.hpp"
 #include "vast/format/json/suricata.hpp"
@@ -162,9 +164,13 @@ caf::message status_command(const invocation&, caf::actor_system&) {
   return caf::none;
 }
 
-maybe_actor spawn_accountant(node_actor* self, spawn_arguments&) {
-  auto acc = caf::actor_cast<caf::actor>(self->spawn(accountant));
-  return acc;
+maybe_actor spawn_accountant(node_actor* self, spawn_arguments& args) {
+  auto& options = args.inv.options;
+  auto metrics_opts = caf::get_or(options, "system.metrics", caf::settings{});
+  auto cfg = to_accountant_config(metrics_opts);
+  if (!cfg)
+    return cfg.error();
+  return caf::actor_cast<caf::actor>(self->spawn(accountant, std::move(*cfg)));
 }
 
 caf::expected<caf::actor>

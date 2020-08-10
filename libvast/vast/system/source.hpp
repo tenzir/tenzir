@@ -32,6 +32,7 @@
 #include "vast/schema.hpp"
 #include "vast/system/accountant.hpp"
 #include "vast/system/instrumentation.hpp"
+#include "vast/system/report.hpp"
 #include "vast/system/type_registry.hpp"
 #include "vast/table_slice.hpp"
 #include "vast/table_slice_builder.hpp"

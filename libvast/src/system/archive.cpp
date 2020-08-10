@@ -24,6 +24,7 @@
 #include "vast/logger.hpp"
 #include "vast/segment_store.hpp"
 #include "vast/store.hpp"
+#include "vast/system/report.hpp"
 #include "vast/table_slice.hpp"
 #include "vast/to_events.hpp"
 

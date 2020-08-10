@@ -46,10 +46,7 @@ caf::expected<Writer> make_writer(const caf::settings& options) {
   using namespace std::string_literals;
   using ostream_ptr = std::unique_ptr<std::ostream>;
   if constexpr (std::is_constructible_v<Writer, ostream_ptr>) {
-    auto output
-      = get_or(options, Defaults::category + ".write"s, Defaults::write);
-    auto uds = get_or(options, Defaults::category + ".uds"s, false);
-    auto out = detail::make_output_stream(output, uds);
+    auto out = detail::make_output_stream<Defaults>(options);
     if (!out)
       return out.error();
     return Writer{std::move(*out)};

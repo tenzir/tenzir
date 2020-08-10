@@ -23,6 +23,7 @@
 #include "vast/system/accountant.hpp"
 #include "vast/system/instrumentation.hpp"
 #include "vast/system/query_status.hpp"
+#include "vast/system/report.hpp"
 #include "vast/table_slice.hpp"
 
 #include <caf/behavior.hpp>

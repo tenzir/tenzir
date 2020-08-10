@@ -93,7 +93,7 @@ void print_cpp(actor_system& sys, const slices_vector& slices) {
   auto nn = get_or(sys.config(), "namespace-name", "log");
   auto vn = get_or(sys.config(), "variable-name", "buf");
   auto path = get_or(sys.config(), "output", "-");
-  auto maybe_out = vast::detail::make_output_stream(path, false);
+  auto maybe_out = vast::detail::make_output_stream(path);
   if (!maybe_out) {
     cerr << "unable to open " << path << ": " << sys.render(maybe_out.error())
          << endl;
@@ -122,11 +122,9 @@ slices_vector read_zeek(actor_system& sys) {
                            vast::defaults::import::table_slice_size);
   auto slice_type = get_or(sys.config(), "table-slice-type",
                            vast::defaults::import::table_slice_type);
-  auto in = vast::detail::make_input_stream(get_or(sys.config(), "input", "-"),
-                                            false);
-  auto push_slice = [&](table_slice_ptr x) {
-    result.emplace_back(std::move(x));
-  };
+  auto in = vast::detail::make_input_stream(get_or(sys.config(), "input", "-"));
+  auto push_slice
+    = [&](table_slice_ptr x) { result.emplace_back(std::move(x)); };
   reader_type reader{slice_type, content(sys.config()), std::move(*in)};
   auto [err, produced] = reader.read(std::numeric_limits<size_t>::max(),
                                      slice_size, push_slice);
