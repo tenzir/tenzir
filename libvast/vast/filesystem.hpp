@@ -190,18 +190,6 @@ public:
   /// @param p The file path.
   explicit file(vast::path p);
 
-  /// Constructs a file from the OS' native file handle type.
-  /// @param handle The file handle.
-  /// @param p The file path.
-  /// @param close_on_destruction Whether to close or leave open the file handle
-  /// upon
-  ///                       destruction.
-  /// @pre The file identified via *handle* is open.
-  // TODO: This constructor and the support for `native_type` seem to be
-  // completely unused and can probably be removed.
-  explicit file(native_type handle, bool close_on_destruction = true,
-                vast::path p = {});
-
   file(file&&) = default;
 
   /// Destroys and closes a file.
@@ -254,7 +242,6 @@ public:
 
 private:
   native_type handle_;
-  bool close_on_destruction_ = true;
   bool is_open_ = false;
   bool seek_failed_ = false;
   vast::path path_;

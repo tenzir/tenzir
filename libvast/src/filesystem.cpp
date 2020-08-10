@@ -237,16 +237,9 @@ bool operator<(const path& x, const path& y) {
 file::file(vast::path p) : path_{std::move(p)} {
 }
 
-file::file(native_type handle, bool close_behavior, vast::path p)
-  : handle_{handle},
-    close_on_destruction_{close_behavior},
-    is_open_{true},
-    path_{std::move(p)} {
-}
-
 file::~file() {
   // Don't close stdin/stdout implicitly.
-  if (path_ != "-" && close_on_destruction_)
+  if (path_ != "-")
     close();
 }
 
