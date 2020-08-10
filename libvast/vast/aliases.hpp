@@ -47,6 +47,9 @@ using list = std::vector<data>;
 /// An associative array with ::data as both key and value.
 using map = detail::stable_map<data, data>;
 
+/// Maps field names to data elements.
+using record = detail::stable_map<std::string, data>;
+
 /// Default bitstream implementation.
 using default_bitstream = ewah_bitstream;
 
