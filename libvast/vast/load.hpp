@@ -25,6 +25,7 @@
 #include <caf/stream_deserializer.hpp>
 #include <caf/streambuf.hpp>
 
+#include <cstring>
 #include <fstream>
 #include <stdexcept>
 #include <streambuf>
@@ -67,8 +68,8 @@ caf::error load(caf::actor_system* sys, Source&& in, Ts&... xs) {
       VAST_WARNING_ANON(__func__, "discovered temporary file:", tmp);
     std::ifstream fs{in.str()};
     if (!fs)
-      return make_error(ec::filesystem_error, "failed to create filestream",
-                        in);
+      return make_error(ec::filesystem_error, "failed to create filestream", in,
+                        std::strerror(errno));
     return load<Method>(sys, *fs.rdbuf(), xs...);
   } else {
     static_assert(!std::is_same_v<Source, Source>, "unexpected Source type");
