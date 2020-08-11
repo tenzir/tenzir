@@ -14,7 +14,7 @@
 #include "vast/system/terminator.hpp"
 
 #include "vast/detail/assert.hpp"
-#include "vast/die.hpp"
+#include "vast/error.hpp"
 #include "vast/fwd.hpp"
 #include "vast/logger.hpp"
 
@@ -125,16 +125,18 @@ caf::behavior terminator(caf::stateful_actor<terminator_state>* self,
         if (remaining.empty()) {
           VAST_DEBUG(self, "killed all remaining actors");
           self->state.promise.deliver(atom::done_v);
-          self->quit(caf::exit_reason::kill);
+          self->quit(caf::exit_reason::user_shutdown);
         }
       });
-      // Send another reminder for a hard-kill.
+      // Send the final reminder for a hard-kill.
       self->delayed_send(self, kill_exit_timeout, atom::stop_v);
     },
     [=](atom::stop) {
       auto n = self->state.remaining_actors.size();
       VAST_ERROR(self, "failed to kill", n, "actors");
-      die("did not receive answer from terminated actors");
+      self->state.promise.deliver(
+        make_error(ec::timeout, "failed to kill remaining actors", n));
+      self->quit(caf::exit_reason::user_shutdown);
     }};
 }
 
