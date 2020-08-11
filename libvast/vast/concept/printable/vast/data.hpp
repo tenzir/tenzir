@@ -95,4 +95,20 @@ struct printer_registry<map> {
   using type = map_printer;
 };
 
+struct record_printer : printer<record_printer> {
+  using attribute = record;
+
+  template <class Iterator>
+  bool print(Iterator& out, const record& xs) const {
+    auto kvp = printers::str << ": " << printers::data;
+    auto p = '<' << (kvp % ", ") << '>';
+    return p.print(out, xs);
+  }
+};
+
+template <>
+struct printer_registry<record> {
+  using type = record_printer;
+};
+
 } // namespace vast

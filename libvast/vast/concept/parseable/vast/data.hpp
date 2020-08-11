@@ -13,20 +13,21 @@
 
 #pragma once
 
-#include <caf/none.hpp>
-
-#include "vast/data.hpp"
-
 #include "vast/concept/parseable/core/parser.hpp"
 #include "vast/concept/parseable/core/rule.hpp"
 #include "vast/concept/parseable/numeric.hpp"
 #include "vast/concept/parseable/string/quoted_string.hpp"
+#include "vast/concept/parseable/string/string.hpp"
 #include "vast/concept/parseable/vast/address.hpp"
+#include "vast/concept/parseable/vast/identifier.hpp"
 #include "vast/concept/parseable/vast/pattern.hpp"
 #include "vast/concept/parseable/vast/port.hpp"
 #include "vast/concept/parseable/vast/si.hpp"
 #include "vast/concept/parseable/vast/subnet.hpp"
 #include "vast/concept/parseable/vast/time.hpp"
+#include "vast/data.hpp"
+
+#include <caf/none.hpp>
 
 namespace vast {
 
@@ -47,6 +48,8 @@ private:
     auto ws = ignore(*parsers::space);
     auto x = ws >> ref(p) >> ws;
     auto kvp = x >> "->" >> x;
+    auto field = parsers::identifier >> ":" >> x;
+    auto trailing_comma = ~(',' >> ws);
     // clang-format off
     p = parsers::time
       | parsers::duration
@@ -59,8 +62,9 @@ private:
       | parsers::tf
       | parsers::qqstr
       | parsers::pattern
-      | '[' >> ~(x % ',') >> ~(',' >> ws) >> ']'
-      | '{' >> ~as<map>(kvp % ',') >> ~(',' >> ws) >> '}'
+      | '[' >> ~(x % ',') >> trailing_comma >> ']'
+      | '{' >> ~as<map>(kvp % ',') >> trailing_comma >> '}'
+      | '<' >> ~as<record>(field % ',') >> trailing_comma >> '>'
       | as<caf::none_t>("nil"_p)
       ;
     // clang-format on
