@@ -22,8 +22,10 @@
 #include "vast/detail/overload.hpp"
 #include "vast/error.hpp"
 #include "vast/event.hpp"
+#include "vast/expression.hpp"
 #include "vast/factory.hpp"
 #include "vast/format/test.hpp"
+#include "vast/ids.hpp"
 #include "vast/logger.hpp"
 #include "vast/table_slice_builder.hpp"
 #include "vast/table_slice_factory.hpp"
@@ -358,6 +360,108 @@ std::pair<table_slice_ptr, table_slice_ptr> split(const table_slice_ptr& slice,
   select(xs, slice, make_ids({{mid, last}}));
   VAST_ASSERT(xs.size() == 2);
   return {std::move(xs.front()), std::move(xs.back())};
+}
+
+namespace {
+
+struct table_slice_row_evaluator {
+  table_slice_row_evaluator(const table_slice& slice, size_t row)
+    : slice_{slice}, row_{row} {
+    // nop
+  }
+
+  template <class T>
+  bool operator()(const data& d, const T& x) {
+    return (*this)(x, d);
+  }
+
+  template <class T, class U>
+  bool operator()(const T&, const U&) {
+    return false;
+  }
+
+  bool operator()(caf::none_t) {
+    return false;
+  }
+
+  bool operator()(const conjunction& c) {
+    for (auto& op : c)
+      if (!caf::visit(*this, op))
+        return false;
+    return true;
+  }
+
+  bool operator()(const disjunction& d) {
+    for (auto& op : d)
+      if (caf::visit(*this, op))
+        return true;
+    return false;
+  }
+
+  bool operator()(const negation& n) {
+    return !caf::visit(*this, n.expr());
+  }
+
+  bool operator()(const predicate& p) {
+    op_ = p.op;
+    return caf::visit(*this, p.lhs, p.rhs);
+  }
+
+  bool operator()(const attribute_extractor& e, const data& d) {
+    // FIXME: perform a transformation on the AST that replaces the attribute
+    // with the corresponding function object.
+    if (e.attr == atom::type_v)
+      return evaluate(slice_.layout().name(), op_, d);
+    if (e.attr == atom::timestamp_v) {
+      auto pred = [](auto& x) {
+        return caf::holds_alternative<time_type>(x.type)
+               && has_attribute(x.type, "timestamp");
+      };
+      auto& fs = slice_.layout().fields;
+      auto i = std::find_if(fs.begin(), fs.end(), pred);
+      if (i == fs.end())
+        return false;
+      // Compare timestamp at given cell.
+      auto pos = static_cast<size_t>(std::distance(fs.begin(), i));
+      auto x
+        = to_canonical(slice_.layout().fields[pos].type, slice_.at(row_, pos));
+      return evaluate_view(x, op_, make_view(d));
+    }
+    return false;
+  }
+
+  bool operator()(const type_extractor&, const data&) {
+    die("type extractor should have been resolved at this point");
+  }
+
+  bool operator()(const field_extractor&, const data&) {
+    die("field extractor should have been resolved at this point");
+  }
+
+  bool operator()(const data_extractor& e, const data& d) {
+    if (e.type != slice_.layout())
+      return false;
+    VAST_ASSERT(e.offset.size() == 1);
+    auto x = to_canonical(slice_.layout().fields[e.offset[0]].type,
+                          slice_.at(row_, e.offset[0]));
+    return evaluate_view(x, op_, make_data_view(d));
+  }
+
+  const table_slice& slice_;
+  size_t row_;
+  relational_operator op_;
+};
+
+} // namespace
+
+ids evaluate(const table_slice& slice, const expression& expr) {
+  ids result;
+  result.append(false, slice.offset());
+  for (size_t row = 0; row != slice.rows(); ++row) {
+    auto x = caf::visit(table_slice_row_evaluator{slice, row}, expr);
+    result.append_bit(x);
+  }
+  return result;
 }
 
 } // namespace vast
