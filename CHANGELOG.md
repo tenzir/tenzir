@@ -11,7 +11,8 @@ Every entry has a category for which we use the following visual abbreviations:
 
 ## Unreleased
 
-- 🐞 Some file descriptors remained open when they weren't needed any more. This descriptor leak has been fixed.
+- 🐞 Some file descriptors remained open when they weren't needed any more.
+  This descriptor leak has been fixed.
   [#1018](https://github.com/tenzir/vast/pull/1018)
 
 - ⚠️ The `vector` type has been renamed to `list`.In an effort to streamline
