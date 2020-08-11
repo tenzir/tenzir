@@ -82,7 +82,11 @@ caf::behavior terminator(caf::stateful_actor<terminator_state>* self,
       if constexpr (std::is_same_v<Policy, policy::sequential>) {
         // Track actors in reverse order because the user provides the actors in
         // the order of shutdown, but we use a stack internally that stores the
-        // first actor to be terminated at the end.
+        // first actor to be terminated at the end. In sequential operation, we
+        // monitor the next actor, send it an EXIT, wait for the DOWN, and then
+        // move to the next. This ensures that we'll always process the DOWN
+        // that corresponds to our EXIT message. (When monitoring an already
+        // terminated actor, CAF dispatches the DOWN immediately.)
         auto& next = remaining.back();
         self->monitor(next);
         self->send_exit(next, caf::exit_reason::user_shutdown);
