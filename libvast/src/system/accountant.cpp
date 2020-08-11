@@ -291,9 +291,10 @@ accountant(accountant_actor* self, accountant_config cfg) {
         record(self, key + ".duration", value.duration, ts);
         auto rate = value.rate_per_sec();
         if (std::isfinite(rate))
-          record(self, key + ".rate", static_cast<uint64_t>(rate), ts);
+          record(self, key + ".rate", rate, ts);
         else {
-          record(self, key + ".rate", std::numeric_limits<uint64_t>::max(), ts);
+          record(self, key + ".rate",
+                 std::numeric_limits<decltype(rate)>::max(), ts);
         }
 #if VAST_LOG_LEVEL >= VAST_LOG_LEVEL_INFO
         auto logger = caf::logger::current_logger();
