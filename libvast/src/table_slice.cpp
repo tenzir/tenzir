@@ -118,6 +118,69 @@ table_slice::column(std::string_view name) const {
   return caf::none;
 }
 
+caf::error table_slice::load(chunk_ptr chunk) {
+  VAST_ASSERT(chunk != nullptr);
+  auto data = const_cast<char*>(chunk->data()); // CAF won't touch it.
+  caf::binary_deserializer source{nullptr, data, chunk->size()};
+  return deserialize(source);
+}
+
+void table_slice::append_column_to_index(size_type col,
+                                         value_index& idx) const {
+  for (size_type row = 0; row < rows(); ++row)
+    idx.append(at(row, col), offset() + row);
+}
+
+bool operator==(const table_slice& x, const table_slice& y) {
+  if (&x == &y)
+    return true;
+  if (x.rows() != y.rows() || x.columns() != y.columns()
+      || x.layout() != y.layout())
+    return false;
+  for (size_t row = 0; row < x.rows(); ++row)
+    for (size_t col = 0; col < x.columns(); ++col)
+      if (x.at(row, col) != y.at(row, col))
+        return false;
+  return true;
+}
+
+void intrusive_ptr_add_ref(const table_slice* ptr) {
+  intrusive_ptr_add_ref(static_cast<const caf::ref_counted*>(ptr));
+}
+
+void intrusive_ptr_release(const table_slice* ptr) {
+  intrusive_ptr_release(static_cast<const caf::ref_counted*>(ptr));
+}
+
+table_slice* intrusive_cow_ptr_unshare(table_slice*& ptr) {
+  return caf::default_intrusive_cow_ptr_unshare(ptr);
+}
+
+caf::error inspect(caf::serializer& sink, table_slice_ptr& ptr) {
+  if (!ptr)
+    return sink(caf::atom("NULL"));
+  return caf::error::eval([&] { return sink(ptr->implementation_id()); },
+                          [&] { return sink(ptr->header()); },
+                          [&] { return ptr->serialize(sink); });
+}
+
+caf::error inspect(caf::deserializer& source, table_slice_ptr& ptr) {
+  caf::atom_value id;
+  if (auto err = source(id))
+    return err;
+  if (id == caf::atom("NULL")) {
+    ptr.reset();
+    return caf::none;
+  }
+  table_slice_header header;
+  if (auto err = source(header))
+    return err;
+  ptr = factory<table_slice>::make(id, std::move(header));
+  if (!ptr)
+    return ec::invalid_table_slice_type;
+  return ptr.unshared().deserialize(source);
+}
+
 // TODO: this function will boil down to accessing the chunk inside the table
 // slice and then calling GetTableSlice(buf). But until we touch the table
 // slice internals, we use this helper.
@@ -173,19 +236,6 @@ caf::error unpack(const fbs::TableSlice& x, table_slice_ptr& y) {
   auto ptr = reinterpret_cast<const char*>(x.data()->Data());
   caf::binary_deserializer source{nullptr, ptr, x.data()->size()};
   return source(y);
-}
-
-caf::error table_slice::load(chunk_ptr chunk) {
-  VAST_ASSERT(chunk != nullptr);
-  auto data = const_cast<char*>(chunk->data()); // CAF won't touch it.
-  caf::binary_deserializer source{nullptr, data, chunk->size()};
-  return deserialize(source);
-}
-
-void table_slice::append_column_to_index(size_type col,
-                                         value_index& idx) const {
-  for (size_type row = 0; row < rows(); ++row)
-    idx.append(at(row, col), offset() + row);
 }
 
 caf::expected<std::vector<table_slice_ptr>>
@@ -280,18 +330,6 @@ std::vector<table_slice_ptr> select(const table_slice_ptr& xs,
   return result;
 }
 
-void intrusive_ptr_add_ref(const table_slice* ptr) {
-  intrusive_ptr_add_ref(static_cast<const caf::ref_counted*>(ptr));
-}
-
-void intrusive_ptr_release(const table_slice* ptr) {
-  intrusive_ptr_release(static_cast<const caf::ref_counted*>(ptr));
-}
-
-table_slice* intrusive_cow_ptr_unshare(table_slice*& ptr) {
-  return caf::default_intrusive_cow_ptr_unshare(ptr);
-}
-
 table_slice_ptr truncate(const table_slice_ptr& slice, size_t num_rows) {
   VAST_ASSERT(slice != nullptr);
   VAST_ASSERT(num_rows > 0);
@@ -320,45 +358,6 @@ std::pair<table_slice_ptr, table_slice_ptr> split(const table_slice_ptr& slice,
   select(xs, slice, make_ids({{mid, last}}));
   VAST_ASSERT(xs.size() == 2);
   return {std::move(xs.front()), std::move(xs.back())};
-}
-
-bool operator==(const table_slice& x, const table_slice& y) {
-  if (&x == &y)
-    return true;
-  if (x.rows() != y.rows()
-      || x.columns() != y.columns()
-      || x.layout() != y.layout())
-    return false;
-  for (size_t row = 0; row < x.rows(); ++row)
-    for (size_t col = 0; col < x.columns(); ++col)
-      if (x.at(row, col) != y.at(row, col))
-        return false;
-  return true;
-}
-
-caf::error inspect(caf::serializer& sink, table_slice_ptr& ptr) {
-  if (!ptr)
-    return sink(caf::atom("NULL"));
-  return caf::error::eval([&] { return sink(ptr->implementation_id()); },
-                          [&] { return sink(ptr->header()); },
-                          [&] { return ptr->serialize(sink); });
-}
-
-caf::error inspect(caf::deserializer& source, table_slice_ptr& ptr) {
-  caf::atom_value id;
-  if (auto err = source(id))
-    return err;
-  if (id == caf::atom("NULL")) {
-    ptr.reset();
-    return caf::none;
-  }
-  table_slice_header header;
-  if (auto err = source(header))
-    return err;
-  ptr = factory<table_slice>::make(id, std::move(header));
-  if (!ptr)
-    return ec::invalid_table_slice_type;
-  return ptr.unshared().deserialize(source);
 }
 
 } // namespace vast

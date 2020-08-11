@@ -211,7 +211,28 @@ private:
   static std::atomic<size_t> instance_count_;
 };
 
-// -- free functions -----------------------------------------------------------
+/// @relates table_slice
+bool operator==(const table_slice& x, const table_slice& y);
+
+/// @relates table_slice
+inline bool operator!=(const table_slice& x, const table_slice& y) {
+  return !(x == y);
+}
+
+/// @relates table_slice
+void intrusive_ptr_add_ref(const table_slice* ptr);
+
+/// @relates table_slice
+void intrusive_ptr_release(const table_slice* ptr);
+
+/// @relates table_slice
+table_slice* intrusive_cow_ptr_unshare(table_slice*&);
+
+/// @relates table_slice
+caf::error inspect(caf::serializer& sink, table_slice_ptr& ptr);
+
+/// @relates table_slice
+caf::error inspect(caf::deserializer& source, table_slice_ptr& ptr);
 
 /// Packs a table slice into a flatbuffer.
 /// @param builder The builder to pack *x* into.
@@ -225,6 +246,8 @@ pack(flatbuffers::FlatBufferBuilder& builder, table_slice_ptr x);
 /// @param y The target to unpack *x* into.
 /// @returns An error iff the operation fails.
 caf::error unpack(const fbs::TableSlice& x, table_slice_ptr& y);
+
+// -- operations ---------------------------------------------------------------
 
 /// Constructs table slices filled with random content for testing purposes.
 /// @param num_slices The number of table slices to generate.
@@ -277,28 +300,5 @@ table_slice_ptr truncate(const table_slice_ptr& slice, size_t num_rows);
 /// @pre `slice != nullptr`
 std::pair<table_slice_ptr, table_slice_ptr> split(const table_slice_ptr& slice,
                                                   size_t partition_point);
-
-/// @relates table_slice
-bool operator==(const table_slice& x, const table_slice& y);
-
-/// @relates table_slice
-inline bool operator!=(const table_slice& x, const table_slice& y) {
-  return !(x == y);
-}
-
-/// @relates table_slice
-void intrusive_ptr_add_ref(const table_slice* ptr);
-
-/// @relates table_slice
-void intrusive_ptr_release(const table_slice* ptr);
-
-/// @relates table_slice
-table_slice* intrusive_cow_ptr_unshare(table_slice*&);
-
-/// @relates table_slice
-caf::error inspect(caf::serializer& sink, table_slice_ptr& ptr);
-
-/// @relates table_slice
-caf::error inspect(caf::deserializer& source, table_slice_ptr& ptr);
 
 } // namespace vast
