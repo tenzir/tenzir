@@ -168,34 +168,6 @@ struct type_pruner {
   const type& type_;
 };
 
-/// Evaluates an event over a [resolved](@ref type_extractor) expression.
-struct event_evaluator {
-  explicit event_evaluator(const event& e);
-
-  bool operator()(caf::none_t);
-  bool operator()(const conjunction& c);
-  bool operator()(const disjunction& d);
-  bool operator()(const negation& n);
-  bool operator()(const predicate& p);
-  bool operator()(const attribute_extractor& e, const data& d);
-  bool operator()(const field_extractor&, const data&);
-  bool operator()(const type_extractor&, const data&);
-  bool operator()(const data_extractor& e, const data& d);
-
-  template <class T>
-  bool operator()(const data& d, const T& x) {
-    return (*this)(x, d);
-  }
-
-  template <class T, class U>
-  bool operator()(const T&, const U&) {
-    return false;
-  }
-
-  const event& event_;
-  relational_operator op_;
-};
-
 /// Checks whether a [resolved](@ref type_extractor) expression matches a given
 /// type. That is, this visitor tests whether an expression consists of a
 /// viable set of predicates for a type. For conjunctions, all operands must

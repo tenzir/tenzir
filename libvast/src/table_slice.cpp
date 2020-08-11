@@ -364,8 +364,8 @@ std::pair<table_slice_ptr, table_slice_ptr> split(const table_slice_ptr& slice,
 
 namespace {
 
-struct table_slice_row_evaluator {
-  table_slice_row_evaluator(const table_slice& slice, size_t row)
+struct row_evaluator {
+  row_evaluator(const table_slice& slice, size_t row)
     : slice_{slice}, row_{row} {
     // nop
   }
@@ -455,10 +455,11 @@ struct table_slice_row_evaluator {
 } // namespace
 
 ids evaluate(const table_slice& slice, const expression& expr) {
+  // TODO: switch to a column-based evaluation strategy where it makes sense.
   ids result;
   result.append(false, slice.offset());
   for (size_t row = 0; row != slice.rows(); ++row) {
-    auto x = caf::visit(table_slice_row_evaluator{slice, row}, expr);
+    auto x = caf::visit(row_evaluator{slice, row}, expr);
     result.append_bit(x);
   }
   return result;

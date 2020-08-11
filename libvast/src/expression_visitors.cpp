@@ -488,67 +488,6 @@ expression type_pruner::operator()(const predicate& p) {
   return p;
 }
 
-event_evaluator::event_evaluator(const event& e) : event_{e} {
-}
-
-bool event_evaluator::operator()(caf::none_t) {
-  return false;
-}
-
-bool event_evaluator::operator()(const conjunction& c) {
-  for (auto& op : c)
-    if (!caf::visit(*this, op))
-      return false;
-  return true;
-}
-
-bool event_evaluator::operator()(const disjunction& d) {
-  for (auto& op : d)
-    if (caf::visit(*this, op))
-      return true;
-  return false;
-}
-
-bool event_evaluator::operator()(const negation& n) {
-  return !caf::visit(*this, n.expr());
-}
-
-bool event_evaluator::operator()(const predicate& p) {
-  op_ = p.op;
-  return caf::visit(*this, p.lhs, p.rhs);
-}
-
-bool event_evaluator::operator()(const attribute_extractor& e, const data& d) {
-  // FIXME: perform a transformation on the AST that replaces the attribute
-  // with the corresponding function object.
-  if (e.attr == atom::type_v)
-    return evaluate(event_.type().name(), op_, d);
-  if (e.attr == atom::timestamp_v)
-    return evaluate(event_.timestamp(), op_, d);
-  return false;
-}
-
-bool event_evaluator::operator()(const type_extractor&, const data&) {
-  die("type extractor should have been resolved at this point");
-}
-
-bool event_evaluator::operator()(const field_extractor&, const data&) {
-  die("field extractor should have been resolved at this point");
-}
-
-bool event_evaluator::operator()(const data_extractor& e, const data& d) {
-  if (e.type != event_.type())
-    return false;
-  if (e.offset.empty())
-    return evaluate(event_.data(), op_, d);
-  // offset wouldn't be empty
-  VAST_ASSERT(caf::holds_alternative<record_type>(event_.type()));
-  if (auto r = caf::get_if<list>(&event_.data()))
-    if (auto x = get(*r, e.offset))
-      return evaluate(*x, op_, d);
-  return false;
-}
-
 matcher::matcher(const type& t) : type_{t} {
   // nop
 }

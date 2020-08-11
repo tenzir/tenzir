@@ -20,6 +20,9 @@
 
 namespace vast {
 
+// Deprecation warning: the to_events family of functions exists currently only
+// for unit testing and is scheduled for removal.
+
 /// Performs a selection of events on a table slice.
 /// @param storage List for storing a selection of *slice* with rows in the
 ///                range *[first_row, first_row + num_rows)*.
