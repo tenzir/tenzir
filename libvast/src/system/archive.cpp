@@ -26,7 +26,6 @@
 #include "vast/store.hpp"
 #include "vast/system/report.hpp"
 #include "vast/table_slice.hpp"
-#include "vast/to_events.hpp"
 
 #include <caf/config_value.hpp>
 #include <caf/expected.hpp>

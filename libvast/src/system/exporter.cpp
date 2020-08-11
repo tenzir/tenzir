@@ -30,7 +30,6 @@
 #include "vast/system/query_status.hpp"
 #include "vast/system/report.hpp"
 #include "vast/table_slice.hpp"
-#include "vast/to_events.hpp"
 
 #include <caf/event_based_actor.hpp>
 #include <caf/settings.hpp>

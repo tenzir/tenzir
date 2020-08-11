@@ -26,7 +26,6 @@
 #include "vast/logger.hpp"
 #include "vast/segment_store.hpp"
 #include "vast/table_slice.hpp"
-#include "vast/to_events.hpp"
 
 #include <caf/config_value.hpp>
 #include <caf/dictionary.hpp>
