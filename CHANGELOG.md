@@ -11,10 +11,14 @@ Every entry has a category for which we use the following visual abbreviations:
 
 ## Unreleased
 
+- 🐞 Some file descriptors remained open when they weren't needed any more.
+  This descriptor leak has been fixed.
+  [#1018](https://github.com/tenzir/vast/pull/1018)
+
 - ⚠️ The `vector` type has been renamed to `list`.In an effort to streamline
   the type system vocabulary, we favor `list` over `vector` because it's closer
   to existing terminology (e.g., Apache Arrow). This change requires updating
-  existing schemas by changing `vector<T>` to `list<T>`. 
+  existing schemas by changing `vector<T>` to `list<T>`.
   [#1016](https://github.com/tenzir/vast/pull/1016)
 
 - ⚠️ The `set` type has been removed. Experience with the data model showed
@@ -34,6 +38,9 @@ Every entry has a category for which we use the following visual abbreviations:
   corresponding VAST type in the schema is a non-trivial type like
   `vector<string>`. [#1009](https://github.com/tenzir/vast/pull/1009)
 
+- 🎁 VAST now prints the location of the configuration file that is used.
+  [#1009](https://github.com/tenzir/vast/pull/1009)
+
 - 🐞 The port encoding for Arrow-encoded table slices is now host-independent
   and always uses network-byte order.
   [#1007](https://github.com/tenzir/vast/pull/1007)
@@ -41,6 +48,13 @@ Every entry has a category for which we use the following visual abbreviations:
 - 🐞 When continuous query in a client process terminated, the node did not
   clean up the corresponding server-side state. This memory leak no longer
   exists. [#1006](https://github.com/tenzir/vast/pull/1006)
+
+- ⚠️ The expression field parser now allows the '-' character.
+  [#999](https://github.com/tenzir/vast/pull/999)
+
+- 🐞 A bug in the expression parser prevented the correct parsing of fields
+  starting with either 'F' or 'T'.
+  [#999](https://github.com/tenzir/vast/pull/999)
 
 - 🐞 MessagePack-encoded table slices now work correctly for nested container
   types. [#984](https://github.com/tenzir/vast/pull/984)
