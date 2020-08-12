@@ -52,7 +52,8 @@ auto terminate(caf::event_based_actor* self, std::vector<caf::actor> xs,
                std::chrono::seconds kill_timeout
                = defaults::system::kill_timeout) {
   auto t = self->spawn(terminator<Policy>, grace_period, kill_timeout);
-  auto shutdown_timeout = grace_period + kill_timeout;
+  auto epsilon = std::chrono::microseconds(1); // unit test workaround
+  auto shutdown_timeout = grace_period + kill_timeout + epsilon;
   return self->request(std::move(t), shutdown_timeout, std::move(xs));
 }
 
@@ -74,7 +75,8 @@ auto terminate(caf::scoped_actor& self, std::vector<caf::actor> xs,
                std::chrono::seconds kill_timeout
                = defaults::system::kill_timeout) {
   auto t = self->spawn(terminator<Policy>, grace_period, kill_timeout);
-  auto shutdown_timeout = grace_period + kill_timeout;
+  auto epsilon = std::chrono::microseconds(1); // unit test workaround
+  auto shutdown_timeout = grace_period + kill_timeout + epsilon;
   return self->request(std::move(t), shutdown_timeout, std::move(xs));
 }
 

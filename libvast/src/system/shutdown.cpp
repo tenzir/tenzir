@@ -39,7 +39,7 @@ void shutdown(caf::event_based_actor* self, std::vector<caf::actor> xs,
     }
   });
   // Terminate actors as requested.
-  terminate<Policy>(self, std::move(xs), grace_period + kill_timeout)
+  terminate<Policy>(self, std::move(xs), grace_period, kill_timeout)
     .then(
       [=](atom::done) {
         VAST_DEBUG(self, "terminates after shutting down all dependents");
@@ -64,7 +64,9 @@ void shutdown(caf::scoped_actor& self, std::vector<caf::actor> xs,
               std::chrono::seconds grace_period,
               std::chrono::seconds kill_timeout) {
   auto t = self->spawn(terminator<Policy>, grace_period, kill_timeout);
-  self->request(std::move(t), grace_period + kill_timeout, std::move(xs))
+  auto epsilon = std::chrono::microseconds(1); // unit test workaround
+  auto timeout = grace_period + kill_timeout + epsilon;
+  self->request(std::move(t), timeout, std::move(xs))
     .receive(
       [&](atom::done) {
         VAST_DEBUG(self, "terminates after shutting down all dependents");
