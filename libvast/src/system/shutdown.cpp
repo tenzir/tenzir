@@ -63,10 +63,7 @@ template <class Policy>
 void shutdown(caf::scoped_actor& self, std::vector<caf::actor> xs,
               std::chrono::seconds grace_period,
               std::chrono::seconds kill_timeout) {
-  auto t = self->spawn(terminator<Policy>, grace_period, kill_timeout);
-  auto epsilon = std::chrono::milliseconds(1); // unit test workaround
-  auto timeout = grace_period + kill_timeout + epsilon;
-  self->request(std::move(t), timeout, std::move(xs))
+  terminate<Policy>(self, std::move(xs), grace_period, kill_timeout)
     .receive(
       [&](atom::done) {
         VAST_DEBUG(self, "terminates after shutting down all dependents");
