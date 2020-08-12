@@ -27,8 +27,8 @@ namespace vast::system {
 
 template <class Policy>
 void shutdown(caf::event_based_actor* self, std::vector<caf::actor> xs,
-              std::chrono::seconds clean_exit_timeout,
-              std::chrono::seconds kill_exit_timeout) {
+              std::chrono::seconds grace_period,
+              std::chrono::seconds kill_timeout) {
   // Ignore duplicate EXIT messages except for hard kills.
   self->set_exit_handler([=](const caf::exit_msg& msg) {
     if (msg.reason == caf::exit_reason::kill) {
@@ -39,7 +39,7 @@ void shutdown(caf::event_based_actor* self, std::vector<caf::actor> xs,
     }
   });
   // Terminate actors as requested.
-  terminate<Policy>(self, std::move(xs), clean_exit_timeout + kill_exit_timeout)
+  terminate<Policy>(self, std::move(xs), grace_period + kill_timeout)
     .then(
       [=](atom::done) {
         VAST_DEBUG(self, "terminates after shutting down all dependents");
@@ -61,12 +61,10 @@ shutdown<policy::parallel>(caf::event_based_actor*, std::vector<caf::actor>,
 
 template <class Policy>
 void shutdown(caf::scoped_actor& self, std::vector<caf::actor> xs,
-              std::chrono::seconds clean_exit_timeout,
-              std::chrono::seconds kill_exit_timeout) {
-  auto t
-    = self->spawn(terminator<Policy>, clean_exit_timeout, kill_exit_timeout);
-  auto shutdown_timeout = clean_exit_timeout + kill_exit_timeout;
-  self->request(std::move(t), shutdown_timeout, std::move(xs))
+              std::chrono::seconds grace_period,
+              std::chrono::seconds kill_timeout) {
+  auto t = self->spawn(terminator<Policy>, grace_period, kill_timeout);
+  self->request(std::move(t), grace_period + kill_timeout, std::move(xs))
     .receive(
       [&](atom::done) {
         VAST_DEBUG(self, "terminates after shutting down all dependents");

@@ -48,38 +48,37 @@ namespace vast::system {
 /// @relates terminate
 template <class Policy>
 void shutdown(caf::event_based_actor* self, std::vector<caf::actor> xs,
-              std::chrono::seconds clean_exit_timeout
-              = defaults::system::clean_exit_timeout,
-              std::chrono::seconds kill_exit_timeout
-              = defaults::system::kill_exit_timeout);
+              std::chrono::seconds grace_period
+              = defaults::system::shutdown_grace_period,
+              std::chrono::seconds kill_timeout
+              = defaults::system::kill_timeout);
 
 template <class Policy, class... Ts>
 void shutdown(caf::typed_event_based_actor<Ts...>* self,
               std::vector<caf::actor> xs,
-              std::chrono::seconds clean_exit_timeout
-              = defaults::system::clean_exit_timeout,
-              std::chrono::seconds kill_exit_timeout
-              = defaults::system::kill_exit_timeout) {
+              std::chrono::seconds grace_period
+              = defaults::system::shutdown_grace_period,
+              std::chrono::seconds kill_timeout
+              = defaults::system::kill_timeout) {
   auto handle = caf::actor_cast<caf::event_based_actor*>(self);
-  shutdown<Policy>(handle, std::move(xs), clean_exit_timeout,
-                   kill_exit_timeout);
+  shutdown<Policy>(handle, std::move(xs), grace_period, kill_timeout);
 }
 
 template <class Policy>
 void shutdown(caf::scoped_actor& self, std::vector<caf::actor> xs,
-              std::chrono::seconds clean_exit_timeout
-              = defaults::system::clean_exit_timeout,
-              std::chrono::seconds kill_exit_timeout
-              = defaults::system::kill_exit_timeout);
+              std::chrono::seconds grace_period
+              = defaults::system::shutdown_grace_period,
+              std::chrono::seconds kill_timeout
+              = defaults::system::kill_timeout);
 
 template <class Policy, class Actor>
 void shutdown(Actor* self, caf::actor x,
-              std::chrono::seconds clean_exit_timeout
-              = defaults::system::clean_exit_timeout,
-              std::chrono::seconds kill_exit_timeout
-              = defaults::system::kill_exit_timeout) {
-  shutdown<Policy>(self, std::vector<caf::actor>{std::move(x)},
-                   clean_exit_timeout, kill_exit_timeout);
+              std::chrono::seconds grace_period
+              = defaults::system::shutdown_grace_period,
+              std::chrono::seconds kill_timeout
+              = defaults::system::kill_timeout) {
+  shutdown<Policy>(self, std::vector<caf::actor>{std::move(x)}, grace_period,
+                   kill_timeout);
 }
 
 } // namespace vast::system

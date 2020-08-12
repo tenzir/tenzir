@@ -47,37 +47,34 @@ namespace vast::system {
 /// @relates shutdown
 template <class Policy>
 auto terminate(caf::event_based_actor* self, std::vector<caf::actor> xs,
-               std::chrono::seconds clean_exit_timeout
-               = defaults::system::clean_exit_timeout,
-               std::chrono::seconds kill_exit_timeout
-               = defaults::system::kill_exit_timeout) {
-  auto t
-    = self->spawn(terminator<Policy>, clean_exit_timeout, kill_exit_timeout);
-  auto shutdown_timeout = clean_exit_timeout + kill_exit_timeout;
+               std::chrono::seconds grace_period
+               = defaults::system::shutdown_grace_period,
+               std::chrono::seconds kill_timeout
+               = defaults::system::kill_timeout) {
+  auto t = self->spawn(terminator<Policy>, grace_period, kill_timeout);
+  auto shutdown_timeout = grace_period + kill_timeout;
   return self->request(std::move(t), shutdown_timeout, std::move(xs));
 }
 
 template <class Policy, class... Ts>
 auto terminate(caf::typed_event_based_actor<Ts...>* self,
                std::vector<caf::actor> xs,
-               std::chrono::seconds clean_exit_timeout
-               = defaults::system::clean_exit_timeout,
-               std::chrono::seconds kill_exit_timeout
-               = defaults::system::kill_exit_timeout) {
+               std::chrono::seconds grace_period
+               = defaults::system::shutdown_grace_period,
+               std::chrono::seconds kill_timeout
+               = defaults::system::kill_timeout) {
   auto handle = caf::actor_cast<caf::event_based_actor*>(self);
-  return terminate<Policy>(handle, std::move(xs), clean_exit_timeout,
-                           kill_exit_timeout);
+  return terminate<Policy>(handle, std::move(xs), grace_period, kill_timeout);
 }
 
 template <class Policy>
 auto terminate(caf::scoped_actor& self, std::vector<caf::actor> xs,
-               std::chrono::seconds clean_exit_timeout
-               = defaults::system::clean_exit_timeout,
-               std::chrono::seconds kill_exit_timeout
-               = defaults::system::kill_exit_timeout) {
-  auto t
-    = self->spawn(terminator<Policy>, clean_exit_timeout, kill_exit_timeout);
-  auto shutdown_timeout = clean_exit_timeout + kill_exit_timeout;
+               std::chrono::seconds grace_period
+               = defaults::system::shutdown_grace_period,
+               std::chrono::seconds kill_timeout
+               = defaults::system::kill_timeout) {
+  auto t = self->spawn(terminator<Policy>, grace_period, kill_timeout);
+  auto shutdown_timeout = grace_period + kill_timeout;
   return self->request(std::move(t), shutdown_timeout, std::move(xs));
 }
 
