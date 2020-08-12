@@ -49,44 +49,29 @@ namespace vast::system {
 ///        response promise.
 /// @returns A response promise to be fulfilled when all *xs* terminated.
 /// @relates shutdown
-template <class Policy>
-auto terminate(caf::event_based_actor* self, std::vector<caf::actor> xs,
+template <class Policy, class Actor>
+auto terminate(Actor&& self, std::vector<caf::actor> xs,
                std::chrono::seconds grace_period
                = defaults::system::shutdown_grace_period,
                std::chrono::seconds kill_timeout
                = defaults::system::kill_timeout) {
   auto t = self->spawn(terminator<Policy>, grace_period, kill_timeout);
-  auto epsilon = std::chrono::milliseconds(1); // unit test workaround
-  auto shutdown_timeout = grace_period + kill_timeout + epsilon;
-  return self->request(std::move(t), shutdown_timeout, std::move(xs));
-}
-
-template <class Policy, class... Ts>
-auto terminate(caf::typed_event_based_actor<Ts...>* self,
-               std::vector<caf::actor> xs,
-               std::chrono::seconds grace_period
-               = defaults::system::shutdown_grace_period,
-               std::chrono::seconds kill_timeout
-               = defaults::system::kill_timeout) {
-  auto handle = caf::actor_cast<caf::event_based_actor*>(self);
-  return terminate<Policy>(handle, std::move(xs), grace_period, kill_timeout);
-}
-
-template <class Policy>
-auto terminate(caf::scoped_actor& self, std::vector<caf::actor> xs,
-               std::chrono::seconds grace_period
-               = defaults::system::shutdown_grace_period,
-               std::chrono::seconds kill_timeout
-               = defaults::system::kill_timeout) {
-  auto t = self->spawn(terminator<Policy>, grace_period, kill_timeout);
-  auto epsilon = std::chrono::milliseconds(1); // unit test workaround
-  auto shutdown_timeout = grace_period + kill_timeout + epsilon;
-  return self->request(std::move(t), shutdown_timeout, std::move(xs));
+  auto request_timeout = grace_period + kill_timeout;
+  if (request_timeout > std::chrono::seconds::zero())
+    return self->request(std::move(t), request_timeout, std::move(xs));
+  else
+    return self->request(std::move(t), caf::infinite, std::move(xs));
 }
 
 template <class Policy, class Actor>
-auto terminate(Actor* self, caf::actor x) {
-  return terminate<Policy>(self, std::vector<caf::actor>{std::move(x)});
+auto terminate(Actor&& self, caf::actor x,
+               std::chrono::seconds grace_period
+               = defaults::system::shutdown_grace_period,
+               std::chrono::seconds kill_timeout
+               = defaults::system::kill_timeout) {
+  return terminate<Policy>(std::forward<Actor>(self),
+                           std::vector<caf::actor>{std::move(x)},
+                           shutdown_grace_period, kill_timeout);
 }
 
 } // namespace vast::system
