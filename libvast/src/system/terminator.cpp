@@ -100,7 +100,8 @@ caf::behavior terminator(caf::stateful_actor<terminator_state>* self,
         static_assert(detail::always_false_v<Policy>, "unsupported policy");
       }
       // Send a reminder for killing all alive actors.
-      self->delayed_send(self, grace_period, atom::shutdown_v);
+      if (grace_period > std::chrono::seconds::zero())
+        self->delayed_send(self, grace_period, atom::shutdown_v);
     },
     [=](atom::shutdown) {
       VAST_ASSERT(!self->state.remaining_actors.empty());
@@ -129,7 +130,8 @@ caf::behavior terminator(caf::stateful_actor<terminator_state>* self,
         }
       });
       // Send the final reminder for a hard-kill.
-      self->delayed_send(self, kill_timeout, atom::stop_v);
+      if (kill_timeout > std::chrono::seconds::zero())
+        self->delayed_send(self, kill_timeout, atom::stop_v);
     },
     [=](atom::stop) {
       auto n = self->state.remaining_actors.size();
