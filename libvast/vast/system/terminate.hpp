@@ -66,7 +66,7 @@ auto terminate(caf::typed_event_based_actor<Ts...>* self,
 }
 
 template <class Policy>
-void terminate(caf::scoped_actor& self, std::vector<caf::actor> xs,
+auto terminate(caf::scoped_actor& self, std::vector<caf::actor> xs,
                std::chrono::seconds clean_exit_timeout
                = defaults::system::clean_exit_timeout,
                std::chrono::seconds kill_exit_timeout
@@ -74,12 +74,7 @@ void terminate(caf::scoped_actor& self, std::vector<caf::actor> xs,
   auto t
     = self->spawn(terminator<Policy>, clean_exit_timeout, kill_exit_timeout);
   auto shutdown_timeout = clean_exit_timeout + kill_exit_timeout;
-  self->request(std::move(t), shutdown_timeout, std::move(xs))
-    .receive(
-      [=](atom::done) { VAST_DEBUG_ANON("terminated all dependent actor"); },
-      [=](const caf::error& err) {
-        VAST_ERROR_ANON("failed to terminated all dependent actors", err);
-      });
+  return self->request(std::move(t), shutdown_timeout, std::move(xs));
 }
 
 template <class Policy, class Actor>
