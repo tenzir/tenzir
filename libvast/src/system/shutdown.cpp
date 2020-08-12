@@ -15,6 +15,7 @@
 
 #include "vast/detail/assert.hpp"
 #include "vast/detail/type_traits.hpp"
+#include "vast/die.hpp"
 #include "vast/fwd.hpp"
 #include "vast/logger.hpp"
 #include "vast/system/terminate.hpp"
@@ -46,7 +47,7 @@ void shutdown(caf::event_based_actor* self, std::vector<caf::actor> xs,
       },
       [=](const caf::error& err) {
         VAST_ERROR(self, "failed to cleanly terminate dependent actors", err);
-        self->quit(err);
+        die("failed to terminate dependent actors in given time window");
       });
 }
 
@@ -67,9 +68,12 @@ void shutdown(caf::scoped_actor& self, std::vector<caf::actor> xs,
   auto shutdown_timeout = clean_exit_timeout + kill_exit_timeout;
   self->request(std::move(t), shutdown_timeout, std::move(xs))
     .receive(
-      [=](atom::done) { VAST_DEBUG_ANON("terminated all dependent actor"); },
-      [=](const caf::error& err) {
+      [&](atom::done) {
+        VAST_DEBUG(self, "terminates after shutting down all dependents");
+      },
+      [&](const caf::error& err) {
         VAST_ERROR_ANON("failed to terminated all dependent actors", err);
+        die("failed to terminate dependent actors in given time window");
       });
 }
 
