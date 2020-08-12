@@ -33,11 +33,19 @@ namespace vast::system {
 
 /// Performs an asynchronous shutdown of a set of actors, followed by
 /// terminating the actor in the calling context. The shutdown process runs
-/// either sequentially or in parallel. As soon as all actors have terminated,
-/// the calling actor exits. The shutdown process involves sending an EXIT
-/// message with reason `user_shutdown`.
+/// either sequentially or in parallel, based on the provided policy parameter.
+/// This involves monitoring the actor, sending an EXIT message with reason
+/// `user_shutdown`, and then waiting for the DOWN. As soon as all actors have
+/// terminated, the calling actor exits with `caf::exit_reason::user_shutdown`.
+/// If an actor does not respond with a DOWN within the provided grace period,
+/// we send out another EXIT message with reason `kill`. If the actor still
+/// does not terminate within the provided timeout, the process aborts hard. If
+/// these failure semantics do not suit your use case, consider using the
+/// function `terminate`, which allows for more detailed control over the
+/// shutdown sequence.
 /// @param self The actor to terminate.
 /// @param xs Actors that need to shutdown before *self* quits.
+/// @relates terminate
 template <class Policy>
 void shutdown(caf::event_based_actor* self, std::vector<caf::actor> xs,
               std::chrono::seconds clean_exit_timeout
@@ -56,6 +64,13 @@ void shutdown(caf::typed_event_based_actor<Ts...>* self,
   shutdown<Policy>(handle, std::move(xs), clean_exit_timeout,
                    kill_exit_timeout);
 }
+
+template <class Policy>
+void shutdown(caf::scoped_actor& self, std::vector<caf::actor> xs,
+              std::chrono::seconds clean_exit_timeout
+              = defaults::system::clean_exit_timeout,
+              std::chrono::seconds kill_exit_timeout
+              = defaults::system::kill_exit_timeout);
 
 template <class Policy, class Actor>
 void shutdown(Actor* self, caf::actor x,

@@ -38,9 +38,13 @@ namespace vast::system {
 /// Performs an asynchronous shutdown of a set of actors by sending an EXIT
 /// message, configurable either in sequential or parallel mode of operation.
 /// As soon as all actors have terminated, the returned promise gets fulfilled.
+/// This function is the lower-level interface for bringing down actors. The
+/// function `shutdown` uses this function internally to implement a more
+/// convenient one-stop solution.
 /// @param self The actor to terminate.
 /// @param xs The actors to terminate.
 /// @returns A response promise to be fulfilled when all *xs* terminated.
+/// @relates shutdown
 template <class Policy>
 auto terminate(caf::event_based_actor* self, std::vector<caf::actor> xs,
                std::chrono::seconds clean_exit_timeout
