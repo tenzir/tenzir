@@ -26,7 +26,6 @@ namespace vast::system {
 
 template <class Policy>
 void shutdown(caf::event_based_actor* self, std::vector<caf::actor> xs,
-              std::chrono::seconds shutdown_timeout,
               std::chrono::seconds clean_exit_timeout,
               std::chrono::seconds kill_exit_timeout) {
   // Ignore duplicate EXIT messages except for hard kills.
@@ -39,8 +38,7 @@ void shutdown(caf::event_based_actor* self, std::vector<caf::actor> xs,
     }
   });
   // Terminate actors as requested.
-  terminate<Policy>(self, std::move(xs), shutdown_timeout, clean_exit_timeout,
-                    kill_exit_timeout)
+  terminate<Policy>(self, std::move(xs), clean_exit_timeout + kill_exit_timeout)
     .then(
       [=](atom::done) {
         VAST_DEBUG(self, "terminates after shutting down all dependents");
@@ -54,12 +52,10 @@ void shutdown(caf::event_based_actor* self, std::vector<caf::actor> xs,
 
 template void
 shutdown<policy::sequential>(caf::event_based_actor*, std::vector<caf::actor>,
-                             std::chrono::seconds, std::chrono::seconds,
-                             std::chrono::seconds);
+                             std::chrono::seconds, std::chrono::seconds);
 
 template void
 shutdown<policy::parallel>(caf::event_based_actor*, std::vector<caf::actor>,
-                           std::chrono::seconds, std::chrono::seconds,
-                           std::chrono::seconds);
+                           std::chrono::seconds, std::chrono::seconds);
 
 } // namespace vast::system
