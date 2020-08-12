@@ -54,7 +54,7 @@ void shutdown(caf::event_based_actor* self, std::vector<caf::actor> xs,
               std::chrono::seconds grace_period
               = defaults::system::shutdown_grace_period,
               std::chrono::seconds kill_timeout
-              = defaults::system::kill_timeout);
+              = defaults::system::shutdown_kill_timeout);
 
 template <class Policy, class... Ts>
 void shutdown(caf::typed_event_based_actor<Ts...>* self,
@@ -62,7 +62,7 @@ void shutdown(caf::typed_event_based_actor<Ts...>* self,
               std::chrono::seconds grace_period
               = defaults::system::shutdown_grace_period,
               std::chrono::seconds kill_timeout
-              = defaults::system::kill_timeout) {
+              = defaults::system::shutdown_kill_timeout) {
   auto handle = caf::actor_cast<caf::event_based_actor*>(self);
   shutdown<Policy>(handle, std::move(xs), grace_period, kill_timeout);
 }
@@ -72,15 +72,16 @@ void shutdown(caf::scoped_actor& self, std::vector<caf::actor> xs,
               std::chrono::seconds grace_period
               = defaults::system::shutdown_grace_period,
               std::chrono::seconds kill_timeout
-              = defaults::system::kill_timeout);
+              = defaults::system::shutdown_kill_timeout);
 
 template <class Policy, class Actor>
-void shutdown(Actor* self, caf::actor x,
+void shutdown(Actor&& self, caf::actor x,
               std::chrono::seconds grace_period
               = defaults::system::shutdown_grace_period,
               std::chrono::seconds kill_timeout
-              = defaults::system::kill_timeout) {
-  shutdown<Policy>(self, std::vector<caf::actor>{std::move(x)}, grace_period,
+              = defaults::system::shutdown_kill_timeout) {
+  shutdown<Policy>(std::forward<Actor>(self),
+                   std::vector<caf::actor>{std::move(x)}, grace_period,
                    kill_timeout);
 }
 

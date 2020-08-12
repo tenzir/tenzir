@@ -366,7 +366,7 @@ constexpr std::chrono::seconds initial_request_timeout
 constexpr std::chrono::seconds shutdown_grace_period = std::chrono::minutes{3};
 
 /// Time to wait until receiving a DOWN from a killed actor.
-constexpr std::chrono::seconds kill_timeout = std::chrono::minutes{1};
+constexpr std::chrono::seconds shutdown_kill_timeout = std::chrono::minutes{1};
 
 } // namespace system
 

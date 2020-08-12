@@ -54,7 +54,7 @@ auto terminate(Actor&& self, std::vector<caf::actor> xs,
                std::chrono::seconds grace_period
                = defaults::system::shutdown_grace_period,
                std::chrono::seconds kill_timeout
-               = defaults::system::kill_timeout) {
+               = defaults::system::shutdown_kill_timeout) {
   auto t = self->spawn(terminator<Policy>, grace_period, kill_timeout);
   auto request_timeout = grace_period + kill_timeout;
   if (request_timeout > std::chrono::seconds::zero())
@@ -68,10 +68,10 @@ auto terminate(Actor&& self, caf::actor x,
                std::chrono::seconds grace_period
                = defaults::system::shutdown_grace_period,
                std::chrono::seconds kill_timeout
-               = defaults::system::kill_timeout) {
+               = defaults::system::shutdown_kill_timeout) {
   return terminate<Policy>(std::forward<Actor>(self),
-                           std::vector<caf::actor>{std::move(x)},
-                           shutdown_grace_period, kill_timeout);
+                           std::vector<caf::actor>{std::move(x)}, grace_period,
+                           kill_timeout);
 }
 
 } // namespace vast::system
