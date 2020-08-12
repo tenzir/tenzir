@@ -36,13 +36,13 @@ struct terminator_state {
 
 /// Performs a parallel shutdown of a list of actors.
 /// @param self That terminator actor.
-/// @param clean_exit_timeout The timeout after which the terminator sends a
+/// @param grace_period The timeout after which the terminator sends a
 ///        kill exit message to all remaining actors.
-/// @param kill_exit_timeout The timeout after which the terminator gives up
+/// @param kill_timeout The timeout after which the terminator gives up
 ///        and exits, after having tried to kill remaining actors.
 template <class Policy>
 caf::behavior terminator(caf::stateful_actor<terminator_state>* self,
-                         std::chrono::seconds clean_exit_timeout,
-                         std::chrono::seconds kill_exit_timeout);
+                         std::chrono::seconds grace_period,
+                         std::chrono::seconds kill_timeout);
 
 } // namespace vast::system

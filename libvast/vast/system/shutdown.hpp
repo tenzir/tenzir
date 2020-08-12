@@ -31,8 +31,8 @@ struct parallel;
 
 namespace vast::system {
 
-/// Performs an asynchronous shutdown of a set of actors, followed by
-/// terminating the actor in the calling context. The shutdown process runs
+/// Performs an asynchronous shutdown of a set of actors, or terminates the
+/// current process if that is not possible. The shutdown process runs
 /// either sequentially or in parallel, based on the provided policy parameter.
 /// This involves monitoring the actor, sending an EXIT message with reason
 /// `user_shutdown`, and then waiting for the DOWN. As soon as all actors have
@@ -45,6 +45,9 @@ namespace vast::system {
 /// shutdown sequence.
 /// @param self The actor to terminate.
 /// @param xs Actors that need to shutdown before *self* quits.
+/// @param grace_period The amount of time to wait until all actors terminated
+///        cleanly.
+/// @param kill_timeout The timeout befor giving and calling `abort(3)`.
 /// @relates terminate
 template <class Policy>
 void shutdown(caf::event_based_actor* self, std::vector<caf::actor> xs,

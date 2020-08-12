@@ -26,8 +26,8 @@ namespace vast::system {
 
 template <class Policy>
 caf::behavior terminator(caf::stateful_actor<terminator_state>* self,
-                         std::chrono::seconds clean_exit_timeout,
-                         std::chrono::seconds kill_exit_timeout) {
+                         std::chrono::seconds grace_period,
+                         std::chrono::seconds kill_timeout) {
   self->set_down_handler([=](const caf::down_msg& msg) {
     // Remove actor from list of remaining actors.
     VAST_DEBUG(self, "received DOWN from actor", msg.source);
@@ -100,7 +100,7 @@ caf::behavior terminator(caf::stateful_actor<terminator_state>* self,
         static_assert(detail::always_false_v<Policy>, "unsupported policy");
       }
       // Send a reminder for killing all alive actors.
-      self->delayed_send(self, clean_exit_timeout, atom::shutdown_v);
+      self->delayed_send(self, grace_period, atom::shutdown_v);
     },
     [=](atom::shutdown) {
       VAST_ASSERT(!self->state.remaining_actors.empty());
@@ -129,7 +129,7 @@ caf::behavior terminator(caf::stateful_actor<terminator_state>* self,
         }
       });
       // Send the final reminder for a hard-kill.
-      self->delayed_send(self, kill_exit_timeout, atom::stop_v);
+      self->delayed_send(self, kill_timeout, atom::stop_v);
     },
     [=](atom::stop) {
       auto n = self->state.remaining_actors.size();

@@ -43,6 +43,10 @@ namespace vast::system {
 /// convenient one-stop solution.
 /// @param self The actor to terminate.
 /// @param xs The actors to terminate.
+/// @param grace_period The amount of time to wait until all actors terminated
+///        cleanly.
+/// @param kill_timeout The timeout befor giving and delivering an error to the
+///        response promise.
 /// @returns A response promise to be fulfilled when all *xs* terminated.
 /// @relates shutdown
 template <class Policy>
