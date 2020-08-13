@@ -426,7 +426,18 @@ caf::behavior node(node_actor* self, std::string name, path dir,
     for (auto& actor : remaining)
       schedule_teardown(actor);
     // Finally, bring down the filesystem.
-    actors.push_back(filesystem);
+    // actors.push_back(std::move(filesystem));
+    // FIXME: there's a super-annoying bug that makes it impossible to receive a
+    // DOWN message from the filesystem during shutdown, but *only* when the
+    // filesystem is detached! This might be related to a bug we experienced
+    // earlier: https://github.com/actor-framework/actor-framework/issues/1110.
+    // Until it gets fixed, we cannot add the filesystem to the set of
+    // sequentially terminated actors but instead terminate it after the node
+    // has exited. (This won't cause any issues because the filesystem is
+    // currently stateless, but needs to be reconsidered when it changes.)
+    self->attach_functor([=](const caf::error&) {
+      self->send_exit(filesystem, caf::exit_reason::user_shutdown);
+    });
     auto shutdown_kill_timeout = shutdown_grace_period / 5;
     shutdown<policy::sequential>(self, std::move(actors), shutdown_grace_period,
                                  shutdown_kill_timeout);
