@@ -28,7 +28,8 @@ namespace fixtures {
 
 node::node() {
   MESSAGE("spawning node");
-  test_node = self->spawn(system::node, "test", directory / "node");
+  test_node = self->spawn(system::node, "test", directory / "node",
+                          std::chrono::milliseconds::zero());
   run();
   MESSAGE("spawning components");
   spawn_component("type-registry");

@@ -19,7 +19,6 @@
 #include "vast/fwd.hpp"
 #include "vast/logger.hpp"
 #include "vast/system/terminate.hpp"
-#include "vast/system/terminator.hpp"
 
 #include <caf/response_promise.hpp>
 
@@ -27,8 +26,8 @@ namespace vast::system {
 
 template <class Policy>
 void shutdown(caf::event_based_actor* self, std::vector<caf::actor> xs,
-              std::chrono::seconds grace_period,
-              std::chrono::seconds kill_timeout) {
+              std::chrono::milliseconds grace_period,
+              std::chrono::milliseconds kill_timeout) {
   // Ignore duplicate EXIT messages except for hard kills.
   self->set_exit_handler([=](const caf::exit_msg& msg) {
     if (msg.reason == caf::exit_reason::kill) {
@@ -53,16 +52,18 @@ void shutdown(caf::event_based_actor* self, std::vector<caf::actor> xs,
 
 template void
 shutdown<policy::sequential>(caf::event_based_actor*, std::vector<caf::actor>,
-                             std::chrono::seconds, std::chrono::seconds);
+                             std::chrono::milliseconds,
+                             std::chrono::milliseconds);
 
 template void
 shutdown<policy::parallel>(caf::event_based_actor*, std::vector<caf::actor>,
-                           std::chrono::seconds, std::chrono::seconds);
+                           std::chrono::milliseconds,
+                           std::chrono::milliseconds);
 
 template <class Policy>
 void shutdown(caf::scoped_actor& self, std::vector<caf::actor> xs,
-              std::chrono::seconds grace_period,
-              std::chrono::seconds kill_timeout) {
+              std::chrono::milliseconds grace_period,
+              std::chrono::milliseconds kill_timeout) {
   terminate<Policy>(self, std::move(xs), grace_period, kill_timeout)
     .receive(
       [&](atom::done) {
@@ -76,10 +77,12 @@ void shutdown(caf::scoped_actor& self, std::vector<caf::actor> xs,
 
 template void
 shutdown<policy::sequential>(caf::scoped_actor&, std::vector<caf::actor>,
-                             std::chrono::seconds, std::chrono::seconds);
+                             std::chrono::milliseconds,
+                             std::chrono::milliseconds);
 
 template void
 shutdown<policy::parallel>(caf::scoped_actor&, std::vector<caf::actor>,
-                           std::chrono::seconds, std::chrono::seconds);
+                           std::chrono::milliseconds,
+                           std::chrono::milliseconds);
 
 } // namespace vast::system

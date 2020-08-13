@@ -51,13 +51,13 @@ namespace vast::system {
 /// @relates shutdown
 template <class Policy, class Actor>
 auto terminate(Actor&& self, std::vector<caf::actor> xs,
-               std::chrono::seconds grace_period
+               std::chrono::milliseconds grace_period
                = defaults::system::shutdown_grace_period,
-               std::chrono::seconds kill_timeout
+               std::chrono::milliseconds kill_timeout
                = defaults::system::shutdown_kill_timeout) {
   auto t = self->spawn(terminator<Policy>, grace_period, kill_timeout);
   auto request_timeout = grace_period + kill_timeout;
-  if (request_timeout > std::chrono::seconds::zero())
+  if (request_timeout > std::chrono::milliseconds::zero())
     return self->request(std::move(t), request_timeout, std::move(xs));
   else
     return self->request(std::move(t), caf::infinite, std::move(xs));
@@ -65,9 +65,9 @@ auto terminate(Actor&& self, std::vector<caf::actor> xs,
 
 template <class Policy, class Actor>
 auto terminate(Actor&& self, caf::actor x,
-               std::chrono::seconds grace_period
+               std::chrono::milliseconds grace_period
                = defaults::system::shutdown_grace_period,
-               std::chrono::seconds kill_timeout
+               std::chrono::milliseconds kill_timeout
                = defaults::system::shutdown_kill_timeout) {
   return terminate<Policy>(std::forward<Actor>(self),
                            std::vector<caf::actor>{std::move(x)}, grace_period,

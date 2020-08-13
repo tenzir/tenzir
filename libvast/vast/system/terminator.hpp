@@ -42,7 +42,7 @@ struct terminator_state {
 ///        and exits, after having tried to kill remaining actors.
 template <class Policy>
 caf::behavior terminator(caf::stateful_actor<terminator_state>* self,
-                         std::chrono::seconds grace_period,
-                         std::chrono::seconds kill_timeout);
+                         std::chrono::milliseconds grace_period,
+                         std::chrono::milliseconds kill_timeout);
 
 } // namespace vast::system

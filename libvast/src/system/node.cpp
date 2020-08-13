@@ -363,7 +363,8 @@ node_state::spawn_command(const invocation& inv,
   return caf::none;
 }
 
-caf::behavior node(node_actor* self, std::string name, path dir) {
+caf::behavior node(node_actor* self, std::string name, path dir,
+                   std::chrono::milliseconds shutdown_grace_period) {
   self->state.name = std::move(name);
   self->state.dir = std::move(dir);
   // Initialize component and command factories.
@@ -414,17 +415,21 @@ caf::behavior node(node_actor* self, std::string name, path dir) {
     // Tear down the ingestion pipeline from source to sink.
     auto pipeline = {"source", "importer", "index", "archive", "exporter"};
     for (auto component : pipeline)
-      for (auto actor : registry.find_by_type(component))
+      for (auto actor : registry.find_by_type(component)) {
         schedule_teardown(std::move(actor));
+      }
     // Now terminate everything else.
     std::vector<caf::actor> remaining;
-    for ([[maybe_unused]] auto& [label, comp] : registry.components())
+    for ([[maybe_unused]] auto& [label, comp] : registry.components()) {
       remaining.push_back(comp.actor);
+    }
     for (auto& actor : remaining)
       schedule_teardown(actor);
     // Finally, bring down the filesystem.
     actors.push_back(filesystem);
-    shutdown<policy::sequential>(self, std::move(actors));
+    auto shutdown_kill_timeout = shutdown_grace_period / 5;
+    shutdown<policy::sequential>(self, std::move(actors), shutdown_grace_period,
+                                 shutdown_kill_timeout);
   });
   // Define the node behavior.
   return {

@@ -25,6 +25,7 @@
 #include <caf/event_based_actor.hpp>
 #include <caf/stateful_actor.hpp>
 
+#include <chrono>
 #include <map>
 #include <string>
 
@@ -72,8 +73,10 @@ struct node_state {
 
 /// Spawns a node.
 /// @param self The actor handle
-/// @param id The unique ID of the node.
+/// @param name The unique name of the node.
 /// @param dir The directory where to store persistent state.
-caf::behavior node(node_actor* self, std::string id, path dir);
+/// @param shutdown_grace_period Time to give components to shutdown cleanly.
+caf::behavior node(node_actor* self, std::string name, path dir,
+                   std::chrono::milliseconds shutdown_grace_period);
 
 } // namespace vast::system

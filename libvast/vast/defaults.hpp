@@ -351,8 +351,8 @@ constexpr size_t max_segment_size = 128;
 constexpr size_t initially_requested_ids = 128;
 
 /// Rate at which telemetry data is sent to the ACCOUNTANT.
-constexpr std::chrono::milliseconds telemetry_rate = std::chrono::milliseconds{
-  1000};
+constexpr std::chrono::milliseconds telemetry_rate
+  = std::chrono::milliseconds{1000};
 
 /// Interval between checks whether a signal occured.
 constexpr std::chrono::milliseconds signal_monitoring_interval
@@ -363,7 +363,8 @@ constexpr std::chrono::seconds initial_request_timeout
   = std::chrono::seconds{10};
 
 /// Time to wait until an actor exits cleanly.
-constexpr std::chrono::seconds shutdown_grace_period = std::chrono::minutes{3};
+constexpr std::chrono::milliseconds shutdown_grace_period
+  = std::chrono::minutes{3};
 
 /// Time to wait until receiving a DOWN from a killed actor.
 constexpr std::chrono::seconds shutdown_kill_timeout = std::chrono::minutes{1};
