@@ -17,6 +17,18 @@ Every entry has a category for which we use the following visual abbreviations:
   and if that fails after another timeout, the process will call `abort(3)`.
   [#1005](https://github.com/tenzir/vast/pull/1005)
 
+- ⚠️ We now bundle a patched version of CAF, with a changed ABI. This means
+  that if you're linking against the bundled CAF library, you also need to
+  distribute that library so that VAST can use it at runtime.
+  The versions are API compatible so linking against a system version of
+  CAF is still possible and supported.
+  [#1020](https://github.com/tenzir/vast/pull/1020)
+
+- 🐞 When running VAST under heavy load, CAF stream slot ids could wrap around
+  after a few days and deadlock the system. As a workaround, we extended the
+  slot id bit width to make the time until this happens unrealistically large.
+  [#1020](https://github.com/tenzir/vast/pull/1020)
+
 - 🐞 Some file descriptors remained open when they weren't needed any more.
   This descriptor leak has been fixed.
   [#1018](https://github.com/tenzir/vast/pull/1018)
