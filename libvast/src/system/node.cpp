@@ -410,7 +410,7 @@ caf::behavior node(node_actor* self, std::string name, path dir,
     // Take out the filesystem, which we terminate at the very end.
     auto filesystem = registry.find_by_label("filesystem");
     VAST_ASSERT(filesystem);
-    self->unlink_from(filesystem);
+    self->unlink_from(filesystem); // avoid receiving an unneeded EXIT
     registry.remove(filesystem);
     // Tear down the ingestion pipeline from source to sink.
     auto pipeline = {"source", "importer", "index", "archive", "exporter"};
@@ -426,18 +426,17 @@ caf::behavior node(node_actor* self, std::string name, path dir,
     for (auto& actor : remaining)
       schedule_teardown(actor);
     // Finally, bring down the filesystem.
-    // actors.push_back(std::move(filesystem));
     // FIXME: there's a super-annoying bug that makes it impossible to receive a
     // DOWN message from the filesystem during shutdown, but *only* when the
     // filesystem is detached! This might be related to a bug we experienced
     // earlier: https://github.com/actor-framework/actor-framework/issues/1110.
     // Until it gets fixed, we cannot add the filesystem to the set of
-    // sequentially terminated actors but instead terminate it after the node
-    // has exited. (This won't cause any issues because the filesystem is
-    // currently stateless, but needs to be reconsidered when it changes.)
-    self->attach_functor([=](const caf::error&) {
-      self->send_exit(filesystem, caf::exit_reason::user_shutdown);
-    });
+    // sequentially terminated actors but instead let it implicitly terminate
+    // after the node exits when the filesystem ref count goes to 0. (A
+    // shutdown after the node won't be an issue because the filesystem is
+    // currently stateless, but this needs to be reconsidered when it changes.)
+    // // TODO: uncomment when we get a DOWN from detached actors.
+    // actors.push_back(std::move(filesystem));
     auto shutdown_kill_timeout = shutdown_grace_period / 5;
     shutdown<policy::sequential>(self, std::move(actors), shutdown_grace_period,
                                  shutdown_kill_timeout);
