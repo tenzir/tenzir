@@ -342,6 +342,7 @@ set(tests
     test/hash_index.cpp
     test/http.cpp
     test/ids.cpp
+    test/indexer_downstream_manager.cpp
     test/iterator.cpp
     test/json.cpp
     test/meta_index.cpp
