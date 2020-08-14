@@ -48,7 +48,8 @@ namespace vast::system {
 /// @param xs Actors that need to shutdown before *self* quits.
 /// @param grace_period The amount of time to wait until all actors terminated
 ///        cleanly.
-/// @param kill_timeout The timeout befor giving and calling `abort(3)`.
+/// @param kill_timeout The timeout before giving and calling `abort(3)`. This
+///                     timeout starts *after* the grace period elapsed.
 /// @relates terminate
 template <class Policy>
 void shutdown(caf::event_based_actor* self, std::vector<caf::actor> xs,

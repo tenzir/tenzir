@@ -35,7 +35,7 @@ struct terminator_state {
 };
 
 /// Performs a parallel shutdown of a list of actors.
-/// @param self That terminator actor.
+/// @param self The terminator actor.
 /// @param grace_period The timeout after which the terminator sends a
 ///        kill exit message to all remaining actors.
 /// @param kill_timeout The timeout after which the terminator gives up
