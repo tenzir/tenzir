@@ -363,7 +363,8 @@ node_state::spawn_command(const invocation& inv,
   return caf::none;
 }
 
-caf::behavior node(node_actor* self, std::string name, path dir) {
+caf::behavior node(node_actor* self, std::string name, path dir,
+                   std::chrono::milliseconds shutdown_grace_period) {
   self->state.name = std::move(name);
   self->state.dir = std::move(dir);
   // Initialize component and command factories.
@@ -409,22 +410,36 @@ caf::behavior node(node_actor* self, std::string name, path dir) {
     // Take out the filesystem, which we terminate at the very end.
     auto filesystem = registry.find_by_label("filesystem");
     VAST_ASSERT(filesystem);
-    self->unlink_from(filesystem);
+    self->unlink_from(filesystem); // avoid receiving an unneeded EXIT
     registry.remove(filesystem);
     // Tear down the ingestion pipeline from source to sink.
     auto pipeline = {"source", "importer", "index", "archive", "exporter"};
     for (auto component : pipeline)
-      for (auto actor : registry.find_by_type(component))
+      for (auto actor : registry.find_by_type(component)) {
         schedule_teardown(std::move(actor));
+      }
     // Now terminate everything else.
     std::vector<caf::actor> remaining;
-    for ([[maybe_unused]] auto& [label, comp] : registry.components())
+    for ([[maybe_unused]] auto& [label, comp] : registry.components()) {
       remaining.push_back(comp.actor);
+    }
     for (auto& actor : remaining)
       schedule_teardown(actor);
     // Finally, bring down the filesystem.
-    actors.push_back(filesystem);
-    shutdown<policy::sequential>(self, std::move(actors));
+    // FIXME: there's a super-annoying bug that makes it impossible to receive a
+    // DOWN message from the filesystem during shutdown, but *only* when the
+    // filesystem is detached! This might be related to a bug we experienced
+    // earlier: https://github.com/actor-framework/actor-framework/issues/1110.
+    // Until it gets fixed, we cannot add the filesystem to the set of
+    // sequentially terminated actors but instead let it implicitly terminate
+    // after the node exits when the filesystem ref count goes to 0. (A
+    // shutdown after the node won't be an issue because the filesystem is
+    // currently stateless, but this needs to be reconsidered when it changes.)
+    // // TODO: uncomment when we get a DOWN from detached actors.
+    // actors.push_back(std::move(filesystem));
+    auto shutdown_kill_timeout = shutdown_grace_period / 5;
+    shutdown<policy::sequential>(self, std::move(actors), shutdown_grace_period,
+                                 shutdown_kill_timeout);
   });
   // Define the node behavior.
   return {

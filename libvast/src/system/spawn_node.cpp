@@ -13,6 +13,8 @@
 
 #include "vast/system/spawn_node.hpp"
 
+#include "vast/concept/parseable/to.hpp"
+#include "vast/concept/parseable/vast/time.hpp"
 #include "vast/defaults.hpp"
 #include "vast/detail/pid_file.hpp"
 #include "vast/logger.hpp"
@@ -52,8 +54,16 @@ spawn_node(caf::scoped_actor& self, const caf::settings& opts) {
     return err;
   // Spawn the node.
   VAST_DEBUG_ANON(__func__, "spawns local node:", id);
+  auto shutdown_grace_period = defaults::system::shutdown_grace_period;
+  if (auto str = caf::get_if<std::string>(&opts, "system.shutdown-grace-"
+                                                 "period")) {
+    if (auto x = to<std::chrono::milliseconds>(*str))
+      shutdown_grace_period = *x;
+    else
+      return x.error();
+  }
   // Pointer to the root command to system::node.
-  auto actor = self->spawn(system::node, id, abs_dir);
+  auto actor = self->spawn(system::node, id, abs_dir, shutdown_grace_period);
   actor->attach_functor([pid_file = std::move(pid_file)](const caf::error&) {
     VAST_DEBUG_ANON(__func__, "removes PID lock:", pid_file.str());
     rm(pid_file);
