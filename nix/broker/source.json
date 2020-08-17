@@ -7,5 +7,5 @@
   "fetchSubmodules": true,
   "deepClone": false,
   "leaveDotGit": false,
-  "version": "current"
+  "version": "v1.3.1"
 }

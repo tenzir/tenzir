@@ -1,8 +1,8 @@
 {
   "owner": "actor-framework",
   "repo": "actor-framework",
-  "rev": "f7d4fc7ac679e18ba385f64434f8015c3cea9cb5",
-  "sha256": "03pi2jcdvdxncvv3hmzlamask0db1fc5l79k9rgq9agl0swd0mnz",
+  "rev": "347917fee3420d5fa02220af861869d1728b7fc0",
+  "sha256": "0hlalghjjfr3mj8if1bbd5r8prn9skhwxzsf6rjv5hxsrq6g532r",
   "fetchSubmodules": false,
-  "version": "0.17.6"
+  "version": "0.17.6-1-g347917fe"
 }
