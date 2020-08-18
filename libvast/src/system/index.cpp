@@ -58,8 +58,8 @@ namespace vast::system {
 namespace {
 
 auto make_index_stage(index_state* st) {
-  using impl = detail::notifying_stream_manager<indexer_stage_driver>;
-  auto result = caf::make_counted<impl>(st->self);
+  using impl = detail::notifying_stream_manager<caf::stateful_actor<index_state>, indexer_stage_driver>;
+  auto result = caf::make_counted<impl>(st->self, st->self);
   result->continuous(true);
   return result;
 }
