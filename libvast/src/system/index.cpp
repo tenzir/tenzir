@@ -246,7 +246,7 @@ void index_state::reset_active_partition() {
     [[maybe_unused]] auto unregistered = stage->out().unregister(active.get());
     VAST_ASSERT(unregistered);
     if (auto err = active->flush_to_disk())
-      VAST_ERROR(self, "failed to persist active partition");
+      VAST_ERROR(self, "failed to persist active partition:", err);
     // Store this partition as unpersisted to make sure we're not attempting
     // to load it from disk until it is safe to do so.
     if (active_partition_indexers > 0)
@@ -255,9 +255,9 @@ void index_state::reset_active_partition() {
   // Persist the current version of the meta_index and statistics to preserve
   // the state and be partially robust against crashes.
   if (auto err = flush_meta_index())
-    VAST_ERROR(self, "failed to persist the meta index");
+    VAST_ERROR(self, "failed to persist the meta index:", err);
   if (auto err = flush_statistics())
-    VAST_ERROR(self, "failed to persist the statistics");
+    VAST_ERROR(self, "failed to persist the statistics:", err);
   active = make_partition();
   stage->out().register_partition(active.get());
   active_partition_indexers = 0;
