@@ -52,7 +52,6 @@
 #include "vast/table_slice.hpp"
 #include "vast/value_index.hpp"
 
-#include <caf/attach_continuous_stream_stage.hpp>
 #include <caf/make_counted.hpp>
 #include <caf/stateful_actor.hpp>
 
@@ -480,8 +479,9 @@ index(caf::stateful_actor<index_state>* self, filesystem_type fs, path dir,
         });
   };
   // Setup stream manager.
-  self->state.stage = caf::attach_continuous_stream_stage(
+  self->state.stage = detail::attach_notifying_stream_stage(
     self,
+    /* continuous = */ true,
     [=](caf::unit_t&) {
       VAST_DEBUG(self, "initializes new table slice stream");
     },
