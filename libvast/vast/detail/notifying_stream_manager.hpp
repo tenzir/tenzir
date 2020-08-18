@@ -13,7 +13,12 @@
 
 #pragma once
 
+#include "vast/query_options.hpp"
+
+#include <caf/default_downstream_manager.hpp>
+#include <caf/detail/stream_stage_driver_impl.hpp>
 #include <caf/detail/stream_stage_impl.hpp>
+#include <caf/policy/arg.hpp>
 
 namespace vast::detail {
 
@@ -25,15 +30,20 @@ void notify_listeners_if_clean(State& st, const caf::stream_manager& mgr) {
   }
 }
 
-template <class Driver>
+// A custom stream manager that is able to notify when all data has been
+// processed. It relies on the presence of a function
+// `Self->state.notify_flush_listeners()`, which means that it is currently only
+// usable in combination with the `index` actor.
+template <class Self, class Driver>
 class notifying_stream_manager : public caf::detail::stream_stage_impl<Driver> {
 public:
   using super = caf::detail::stream_stage_impl<Driver>;
 
-  template <class Self>
-  notifying_stream_manager(Self* self)
+  template <class... Ts>
+  notifying_stream_manager(Self* self, Ts&&... xs)
     : caf::stream_manager(self),
-      super(self, self) {
+      super(self, std::forward<Ts>(xs)...),
+      self_(self) {
     // nop
   }
 
@@ -56,13 +66,49 @@ public:
   }
 
 private:
+  Self* self_;
+
   auto self() {
-    return this->driver_.self();
+    return self_;
   }
 
   auto& state() {
     return self()->state;
   }
 };
+
+/// Create a `notifying_stream_stage` and attaches it to the given actor.
+// This is essentially a copy of `caf::attach_continous_stream_stage()`, but
+// since the construction of the `stream_stage_impl` is buried quite deep there
+// it is necesssary to duplicate the code.
+template <class Self, class Init, class Fun, class Finalize = caf::unit_t,
+          class DownstreamManager = caf::default_downstream_manager_t<Fun>,
+          class Trait = caf::stream_stage_trait_t<Fun>>
+caf::stream_stage_ptr<typename Trait::input, DownstreamManager>
+attach_notifying_stream_stage(
+  Self* self, bool continuous, Init init, Fun fun, Finalize fin = {},
+  [[maybe_unused]] caf::policy::arg<DownstreamManager> token = {}) {
+  using input_type = typename Trait::input;
+  using output_type = typename Trait::output;
+  using state_type = typename Trait::state;
+  static_assert(
+    std::is_same<void(state_type&),
+                 typename caf::detail::get_callable_trait<Init>::fun_sig>::value,
+    "Expected signature `void (State&)` for init function");
+  static_assert(
+    std::is_same<void(state_type&, caf::downstream<output_type>&, input_type),
+                 typename caf::detail::get_callable_trait<Fun>::fun_sig>::value,
+    "Expected signature `void (State&, downstream<Out>&, In)` "
+    "for consume function");
+  using caf::detail::stream_stage_driver_impl;
+  using driver = stream_stage_driver_impl<typename Trait::input,
+                                          DownstreamManager, Fun, Finalize>;
+  using impl = notifying_stream_manager<Self, driver>;
+  auto ptr = caf::make_counted<impl>(self, std::move(init), std::move(fun),
+                                     std::move(fin));
+  if (continuous)
+    ptr->continuous(true);
+  return ptr;
+}
 
 } // namespace vast::detail
