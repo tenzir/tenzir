@@ -31,7 +31,7 @@
 #include "vast/fbs/utils.hpp"
 #include "vast/ids.hpp"
 #include "vast/io/read.hpp"
-#include "vast/io/write.hpp"
+#include "vast/io/save.hpp"
 #include "vast/json.hpp"
 #include "vast/load.hpp"
 #include "vast/logger.hpp"
@@ -153,7 +153,7 @@ caf::error index_state::flush_meta_index() {
   auto flatbuf = fbs::wrap(meta_idx, fbs::file_identifier);
   if (!flatbuf)
     return flatbuf.error();
-  return io::write(meta_index_filename(), as_bytes(*flatbuf));
+  return io::save(meta_index_filename(), as_bytes(*flatbuf));
 }
 
 caf::error index_state::flush_statistics() {

@@ -119,6 +119,7 @@ set(libvast_sources
     src/icmp.cpp
     src/ids.cpp
     src/io/read.cpp
+    src/io/save.cpp
     src/io/write.cpp
     src/json.cpp
     src/logger.cpp

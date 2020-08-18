@@ -17,7 +17,7 @@
 #include "vast/chunk.hpp"
 #include "vast/detail/assert.hpp"
 #include "vast/io/read.hpp"
-#include "vast/io/write.hpp"
+#include "vast/io/save.hpp"
 
 #include <caf/config_value.hpp>
 #include <caf/dictionary.hpp>
@@ -33,7 +33,7 @@ posix_filesystem(filesystem_type::stateful_pointer<posix_filesystem_state> self,
     [=](atom::write, const path& filename,
         chunk_ptr chk) -> caf::result<atom::ok> {
       VAST_ASSERT(chk != nullptr);
-      if (auto err = io::write(root / filename, as_bytes(chk))) {
+      if (auto err = io::save(root / filename, as_bytes(chk))) {
         ++self->state.stats.writes.failed;
         return err;
       } else {
