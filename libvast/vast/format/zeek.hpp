@@ -22,12 +22,12 @@
 #include "vast/defaults.hpp"
 #include "vast/detail/line_range.hpp"
 #include "vast/detail/string.hpp"
-#include "vast/filesystem.hpp"
 #include "vast/format/ostream_writer.hpp"
 #include "vast/format/reader.hpp"
 #include "vast/format/single_layout_reader.hpp"
 #include "vast/format/writer.hpp"
 #include "vast/fwd.hpp"
+#include "vast/path.hpp"
 #include "vast/schema.hpp"
 #include "vast/table_slice_builder.hpp"
 

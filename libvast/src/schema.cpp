@@ -19,11 +19,12 @@
 #include "vast/concept/printable/to_string.hpp"
 #include "vast/concept/printable/vast/schema.hpp"
 #include "vast/concept/printable/vast/type.hpp"
+#include "vast/directory.hpp"
 #include "vast/error.hpp"
 #include "vast/event_types.hpp"
-#include "vast/filesystem.hpp"
 #include "vast/json.hpp"
 #include "vast/logger.hpp"
+#include "vast/path.hpp"
 
 #include <caf/actor_system_config.hpp>
 

@@ -92,6 +92,7 @@ set(libvast_sources
     src/detail/system.cpp
     src/detail/terminal.cpp
     src/die.cpp
+    src/directory.cpp
     src/error.cpp
     src/ether_type.cpp
     src/event.cpp
@@ -100,7 +101,7 @@ set(libvast_sources
     src/expression.cpp
     src/expression_visitors.cpp
     src/fbs/utils.cpp
-    src/filesystem.cpp
+    src/file.cpp
     src/flow.cpp
     src/format/ascii.cpp
     src/format/csv.cpp
@@ -127,6 +128,7 @@ set(libvast_sources
     src/msgpack_table_slice_builder.cpp
     src/null_bitmap.cpp
     src/operator.cpp
+    src/path.cpp
     src/pattern.cpp
     src/port.cpp
     src/qualified_record_field.cpp

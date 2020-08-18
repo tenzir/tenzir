@@ -16,7 +16,7 @@
 #include "vast/bitmap.hpp"
 #include "vast/event.hpp"
 #include "vast/expression.hpp"
-#include "vast/filesystem.hpp"
+#include "vast/path.hpp"
 #include "vast/type.hpp"
 #include "vast/value_index.hpp"
 

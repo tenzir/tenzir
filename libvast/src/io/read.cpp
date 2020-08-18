@@ -14,7 +14,8 @@
 #include "vast/io/read.hpp"
 
 #include "vast/error.hpp"
-#include "vast/filesystem.hpp"
+#include "vast/file.hpp"
+#include "vast/path.hpp"
 
 namespace vast::io {
 

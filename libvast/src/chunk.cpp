@@ -15,7 +15,8 @@
 
 #include "vast/detail/narrow.hpp"
 #include "vast/error.hpp"
-#include "vast/filesystem.hpp"
+#include "vast/file.hpp"
+#include "vast/path.hpp"
 
 #include <caf/deserializer.hpp>
 #include <caf/make_counted.hpp>

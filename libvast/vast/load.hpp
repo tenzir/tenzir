@@ -17,8 +17,8 @@
 #include "vast/detail/compressedbuf.hpp"
 #include "vast/detail/type_traits.hpp"
 #include "vast/error.hpp"
-#include "vast/filesystem.hpp"
 #include "vast/logger.hpp"
+#include "vast/path.hpp"
 
 #include <caf/actor_system.hpp>
 #include <caf/expected.hpp>

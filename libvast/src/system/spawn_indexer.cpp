@@ -13,8 +13,8 @@
 
 #include "vast/system/spawn_indexer.hpp"
 
-#include "vast/filesystem.hpp"
 #include "vast/logger.hpp"
+#include "vast/path.hpp"
 #include "vast/system/indexer.hpp"
 #include "vast/system/instrumentation.hpp"
 #include "vast/type.hpp"

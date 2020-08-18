@@ -13,8 +13,8 @@
 
 #pragma once
 
-#include "vast/filesystem.hpp"
 #include "vast/fwd.hpp"
+#include "vast/path.hpp"
 #include "vast/schema.hpp"
 #include "vast/system/accountant.hpp"
 #include "vast/type.hpp"

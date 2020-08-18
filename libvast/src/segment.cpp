@@ -21,7 +21,6 @@
 #include "vast/error.hpp"
 #include "vast/fbs/segment.hpp"
 #include "vast/fbs/utils.hpp"
-#include "vast/filesystem.hpp"
 #include "vast/ids.hpp"
 #include "vast/logger.hpp"
 #include "vast/si_literals.hpp"

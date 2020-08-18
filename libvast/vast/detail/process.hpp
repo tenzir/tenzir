@@ -13,7 +13,8 @@
 
 #pragma once
 
-#include "vast/filesystem.hpp"
+#include "vast/path.hpp"
+
 #include <caf/expected.hpp>
 
 namespace vast::detail {
