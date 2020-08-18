@@ -102,8 +102,10 @@ bool file::read(void* sink, size_t bytes, size_t* got) {
   return is_open_ && detail::read(handle_, sink, bytes, got);
 }
 
-bool file::write(const void* source, size_t bytes, size_t* put) {
-  return is_open_ && detail::write(handle_, source, bytes, put);
+caf::error file::write(const void* source, size_t bytes, size_t* put) {
+  if (!is_open_)
+    return make_error(ec::filesystem_error, "file is not open", path_);
+  return detail::write(handle_, source, bytes, put);
 }
 
 bool file::seek(size_t bytes) {
