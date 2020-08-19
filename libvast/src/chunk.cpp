@@ -15,7 +15,8 @@
 
 #include "vast/detail/narrow.hpp"
 #include "vast/error.hpp"
-#include "vast/file.hpp"
+#include "vast/io/read.hpp"
+#include "vast/io/save.hpp"
 #include "vast/path.hpp"
 
 #include <caf/deserializer.hpp>
@@ -113,32 +114,17 @@ span<const byte> as_bytes(const chunk_ptr& x) {
 }
 
 caf::error write(const path& filename, const chunk_ptr& x) {
-  file f{filename};
-  if (!f.open(file::write_only))
-    return make_error(ec::filesystem_error, "failed open file");
-  size_t bytes_written;
-  if (!f.write(x->data(), x->size(), &bytes_written))
-    return make_error(ec::filesystem_error, "failed to write chunk");
-  if (bytes_written != x->size())
-    return make_error(ec::filesystem_error, "incomplete write");
-  return caf::none;
+  return io::save(filename, as_bytes(x));
 }
 
 caf::error read(const path& filename, chunk_ptr& x) {
   auto size = file_size(filename);
   if (!size)
     return size.error();
-  file f{filename};
-  if (!f.open(file::read_only))
-    return make_error(ec::filesystem_error, "failed open file");
   x = chunk::make(*size);
-  size_t bytes_read;
-  auto ptr = const_cast<char*>(x->data()); // okay, we just created it.
-  if (!f.read(ptr, x->size(), &bytes_read))
-    return make_error(ec::filesystem_error, "failed to read chunk");
-  if (bytes_read != x->size())
-    return make_error(ec::filesystem_error, "incomplete read");
-  return caf::none;
+  // Okay, we just created it.
+  auto ptr = const_cast<byte*>(reinterpret_cast<const byte*>(x->data()));
+  return io::read(filename, span{ptr, *size});
 }
 
 caf::error inspect(caf::serializer& sink, const chunk_ptr& x) {
