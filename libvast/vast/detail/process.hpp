@@ -16,6 +16,7 @@
 #include "vast/path.hpp"
 
 #include <caf/expected.hpp>
+#include <caf/settings.hpp>
 
 namespace vast::detail {
 
@@ -25,5 +26,7 @@ namespace vast::detail {
 /// @returns The filesystem path to the library or executable mapped at address
 ///          addr, or error if the resolution fails.
 caf::expected<path> objectpath(const void* addr = nullptr);
+
+caf::settings get_status();
 
 } // namespace vast::detail

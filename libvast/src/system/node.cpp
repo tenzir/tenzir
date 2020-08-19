@@ -22,7 +22,7 @@
 #include "vast/config.hpp"
 #include "vast/defaults.hpp"
 #include "vast/detail/assert.hpp"
-#include "vast/detail/make_io_stream.hpp"
+#include "vast/detail/process.hpp"
 #include "vast/format/csv.hpp"
 #include "vast/format/json.hpp"
 #include "vast/format/json/suricata.hpp"
@@ -131,6 +131,8 @@ void collect_component_status(node_actor* self,
   auto s = vast::status{};
   if (v >= status_verbosity::info) {
     put(s.info, "table-slices", table_slice::instances());
+    put(s.info, "database-path", self->state.dir.str());
+    merge_settings(detail::get_status(), s.info);
   }
   if (v >= status_verbosity::debug) {
     put(s.debug, "running-actors", sys.registry().running());
