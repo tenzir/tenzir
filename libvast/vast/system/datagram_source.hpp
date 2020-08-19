@@ -136,16 +136,15 @@ datagram_source(datagram_source_actor<Reader>* self,
         VAST_DEBUG(self, "produced a slice with", slice->rows(), "rows");
         st.mgr->out().push(std::move(slice));
       };
-      auto events = detail::opt_min(st.remaining, capacity * table_slice_size);
+      auto events = capacity * table_slice_size;
+      if (st.requested)
+        events = std::min(events, *st.requested - st.count);
       auto [err, produced] = st.reader.read(events, table_slice_size,
                                             push_slice);
       t.stop(produced);
-      if (st.remaining) {
-        VAST_ASSERT(*st.remaining >= produced);
-        *st.remaining -= produced;
-        if (*st.remaining == 0)
-          st.done = true;
-      }
+      st.count += produced;
+      if (st.requested && st.count >= *st.requested)
+        st.done = true;
       if (err != caf::none && err != ec::end_of_input)
         VAST_WARNING(self,
                      "has not enough capacity left in stream, dropping input!");
@@ -186,6 +185,19 @@ datagram_source(datagram_source_actor<Reader>* self,
       // FIXME: Allow for filtering import data.
       // self->state.filter = std::move(expr);
       VAST_WARNING(self, "does not currently implement filter expressions");
+    },
+    [=](atom::status, status_verbosity v) {
+      auto& st = self->state;
+      vast::status s;
+      if (v >= status_verbosity::verbose) {
+        caf::settings src;
+        if (st.reader_initialized)
+          put(src, "format", st.reader.name());
+        put(src, "produced", st.count);
+        auto& xs = put_list(s.info, "sources");
+        xs.emplace_back(std::move(src));
+      }
+      return join(s);
     },
     [=](atom::telemetry) {
       auto& st = self->state;

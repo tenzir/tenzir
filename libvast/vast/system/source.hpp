@@ -114,8 +114,10 @@ struct source_state {
   /// Points to the owning actor.
   Self* self;
 
+  size_t count = 0;
+
   /// The maximum number of events to ingest.
-  caf::optional<size_t> remaining;
+  caf::optional<size_t> requested;
 
   /// The import-local schema.
   vast::schema local_schema;
@@ -141,7 +143,7 @@ struct source_state {
     name = reader.name();
     new (&reader) Reader(std::move(rd));
     reader_initialized = true;
-    remaining = std::move(max_events);
+    requested = std::move(max_events);
     local_schema = std::move(sch);
     accountant = std::move(acc);
     sink = {};
@@ -247,7 +249,9 @@ source(caf::stateful_actor<source_state<Reader>>* self, Reader reader,
       // we have completed a batch.
       auto push_slice = [&](table_slice_ptr x) { out.push(std::move(x)); };
       // We can produce up to num * table_slice_size events per run.
-      auto events = detail::opt_min(st.remaining, num * table_slice_size);
+      auto events = num * table_slice_size;
+      if (st.requested)
+        events = std::min(events, *st.requested - st.count);
       auto t = timer::start(st.metrics);
       auto [err, produced] = st.reader.read(events, table_slice_size,
                                             push_slice);
@@ -258,10 +262,7 @@ source(caf::stateful_actor<source_state<Reader>>* self, Reader reader,
       //       time again, e.g., via delayed_send.
       if (produced == 0)
         VAST_WARNING(self, "produced 0 events from may stall");
-      if (st.remaining) {
-        VAST_ASSERT(*st.remaining >= produced);
-        *st.remaining -= produced;
-      }
+      st.count += produced;
       auto force_emit_batches = [&] {
         st.mgr->out().fan_out_flush();
         st.mgr->out().force_emit_batches();
@@ -272,7 +273,7 @@ source(caf::stateful_actor<source_state<Reader>>* self, Reader reader,
         st.send_report();
         self->quit();
       };
-      if (st.remaining && *st.remaining == 0)
+      if (st.requested && st.count >= *st.requested)
         return finish();
       if (err != caf::none) {
         if (err == vast::ec::timeout) {
@@ -330,6 +331,19 @@ source(caf::stateful_actor<source_state<Reader>>* self, Reader reader,
                          atom::telemetry_v);
       // Start streaming.
       st.mgr->add_outbound_path(st.sink);
+    },
+    [=](atom::status, status_verbosity v) {
+      auto& st = self->state;
+      vast::status s;
+      if (v >= status_verbosity::verbose) {
+        caf::settings src;
+        if (st.reader_initialized)
+          put(src, "format", st.reader.name());
+        put(src, "produced", st.count);
+        auto& xs = put_list(s.info, "sources");
+        xs.emplace_back(std::move(src));
+      }
+      return join(s);
     },
     [=](atom::telemetry) {
       auto& st = self->state;
