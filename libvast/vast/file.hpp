@@ -94,8 +94,8 @@ public:
   /// @returns `true` on success.
   bool seek(size_t bytes);
 
-  /// Retrieves the ::path for this file.
-  /// @returns The ::path for this file.
+  /// Retrieves the path for this file.
+  /// @returns The path for this file.
   const vast::path& path() const;
 
   /// Retrieves the native handle for this file.

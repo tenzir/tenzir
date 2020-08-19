@@ -32,7 +32,6 @@
 #include "vast/endpoint.hpp"
 #include "vast/error.hpp"
 #include "vast/logger.hpp"
-//#include "vast/system/node.hpp"
 
 using namespace caf;
 

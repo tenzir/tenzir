@@ -264,7 +264,7 @@ caf::error write(int fd, const void* buffer, size_t bytes, size_t* put) {
       written = ::write(fd, buf + total, bytes - total);
     } while (written < 0 && errno == EINTR);
     if (written < 0)
-      return make_error(ec::filesystem_error, "write(2)", std::strerror(errno));
+      return make_error(ec::filesystem_error, "write(2):", std::strerror(errno));
     // write should not return 0 if it wasn't asked to write that amount. We
     // want to cover this case anyway in case it ever happens.
     if (written == 0)
