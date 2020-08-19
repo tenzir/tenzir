@@ -86,8 +86,10 @@ option(VAST_ENABLE_ASSERTIONS "Enable Assertions"
 option(VAST_RELOCATABLE_INSTALL "Enable relocatable installations" ON)
 option(VAST_USE_BUNDLED_CAF "Always use the CAF submodule" OFF)
 option(ENABLE_ZEEK_TO_VAST "Build zeek-to-vast" ON)
-option(VAST_STATIC_EXECUTABLE "Link VAST statically" $ENV{VAST_STATIC_EXECUTABLE})
-option(VAST_USE_JEMALLOC "Use jemalloc instead of libc malloc" "${VAST_STATIC_EXECUTABLE}")
+option(VAST_STATIC_EXECUTABLE "Link VAST statically"
+       $ENV{VAST_STATIC_EXECUTABLE})
+option(VAST_USE_JEMALLOC "Use jemalloc instead of libc malloc"
+       "${VAST_STATIC_EXECUTABLE}")
 cmake_dependent_option(
   BUILD_SHARED_LIBS "Build shared libraries instead of static" ON
   "NOT VAST_STATIC_EXECUTABLE" OFF)
@@ -453,8 +455,8 @@ if (APPLE AND NOT OPENSSL_ROOT_DIR)
   if (HOMEBREW)
     execute_process(
       COMMAND ${HOMEBREW} --prefix openssl
-      OUTPUT_VARIABLE OPENSSL_ROOT_DIR ERROR_QUIET
-                      OUTPUT_STRIP_TRAILING_WHITESPACE)
+      OUTPUT_VARIABLE OPENSSL_ROOT_DIR
+      ERROR_QUIET OUTPUT_STRIP_TRAILING_WHITESPACE)
     if (OPENSSL_ROOT_DIR)
       message(STATUS "Using OpenSSL from Homebrew: ${OPENSSL_ROOT_DIR}")
     endif ()
@@ -479,7 +481,10 @@ get_filename_component(flatbuffers_dir ${flatbuffers_dir} DIRECTORY) # <prefix>
 
 if (NOT VAST_USE_BUNDLED_CAF)
   # Try to find the required CAF components first...
-  find_package(CAF 0.17.6 EXACT COMPONENTS core io test QUIET)
+  find_package(
+    CAF 0.17.6 EXACT
+    COMPONENTS core io test
+    QUIET)
 endif ()
 if (CAF_FOUND)
   message(STATUS "Found CAF")
@@ -488,7 +493,10 @@ if (CAF_FOUND)
          "\nfind_package(CAF COMPONENTS core io test REQUIRED QUIET)")
   set(CAF_FOUND_SAVE ${CAF_FOUND})
   # ...and then optional components.
-  find_package(CAF COMPONENTS openssl QUIET)
+  find_package(
+    CAF
+    COMPONENTS openssl
+    QUIET)
   if (CAF_LIBRARY_OPENSSL)
     message(STATUS "Found CAF's OpenSSL module, enabling OpenSSL support")
     set(VAST_USE_OPENSSL true)
@@ -641,7 +649,7 @@ if (NOT VAST_NO_ARROW)
     endforeach ()
   endif ()
   if (ARROW_ROOT_DIR)
-    set (Arrow_ROOT ${ARROW_ROOT_DIR})
+    set(Arrow_ROOT ${ARROW_ROOT_DIR})
   endif ()
   find_package(Arrow 0.17 REQUIRED QUIET CONFIG)
   string(APPEND VAST_FIND_DEPENDENCY_LIST
@@ -801,10 +809,9 @@ configure_package_config_file(
   "${CMAKE_CURRENT_BINARY_DIR}/VASTConfig.cmake"
   INSTALL_DESTINATION "${INSTALL_VAST_CMAKEDIR}")
 
-install(
-  FILES "${CMAKE_CURRENT_BINARY_DIR}/VASTConfig.cmake"
-        "${CMAKE_CURRENT_BINARY_DIR}/VASTConfigVersion.cmake"
-  DESTINATION "${INSTALL_VAST_CMAKEDIR}")
+install(FILES "${CMAKE_CURRENT_BINARY_DIR}/VASTConfig.cmake"
+              "${CMAKE_CURRENT_BINARY_DIR}/VASTConfigVersion.cmake"
+        DESTINATION "${INSTALL_VAST_CMAKEDIR}")
 
 install(DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/schema"
         DESTINATION "${CMAKE_INSTALL_DATADIR}/vast")

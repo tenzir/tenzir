@@ -52,9 +52,9 @@ target_sources(
 )
 set_target_properties(
   libvast_test
-  PROPERTIES
-    SOVERSION "${VERSION_YEAR}" VERSION "${VERSION_YEAR}.${VERSION_MONTH}"
-    OUTPUT_NAME vast_test EXPORT_NAME test)
+  PROPERTIES SOVERSION "${VERSION_YEAR}" VERSION
+                                         "${VERSION_YEAR}.${VERSION_MONTH}"
+             OUTPUT_NAME vast_test EXPORT_NAME test)
 add_library(vast::test ALIAS libvast_test)
 install(
   TARGETS libvast_test

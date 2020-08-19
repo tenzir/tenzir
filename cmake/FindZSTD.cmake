@@ -57,7 +57,8 @@ else ()
     list(APPEND ZSTD_PC_LIBRARY_DIRS "${ZSTD_PC_LIBDIR}")
     find_library(
       ZSTD_LIB zstd
-      PATHS ${ZSTD_PC_LIBRARY_DIRS} NO_DEFAULT_PATH
+      PATHS ${ZSTD_PC_LIBRARY_DIRS}
+      NO_DEFAULT_PATH
       PATH_SUFFIXES ${LIB_PATH_SUFFIXES})
     # Third, check all other CMake paths
   else ()

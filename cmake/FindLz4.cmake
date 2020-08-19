@@ -47,7 +47,8 @@ else ()
     list(APPEND LZ4_PC_LIBRARY_DIRS "${LZ4_PC_LIBDIR}")
     find_library(
       LZ4_LIB lz4
-      PATHS ${LZ4_PC_LIBRARY_DIRS} NO_DEFAULT_PATH
+      PATHS ${LZ4_PC_LIBRARY_DIRS}
+      NO_DEFAULT_PATH
       PATH_SUFFIXES ${LIB_PATH_SUFFIXES})
   else ()
     find_library(
