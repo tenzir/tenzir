@@ -325,9 +325,11 @@ caf::error segment_store::flush() {
 void segment_store::inspect_status(vast::status& s, status_verbosity v) {
   using caf::put;
   if (v >= status_verbosity::info) {
-    put(s.info, "segment-path", segment_path().str());
-    put(s.info, "max-segment-size", max_segment_size_);
-    put(s.info, "archive-events", num_events_);
+    put(s.info, "archive.events", num_events_);
+    auto mem = builder_.table_slice_bytes();
+    for (auto& segment : cache_)
+      mem += segment.second.chunk()->size();
+    put(s.info, "archive.memory-usage", mem);
   }
   if (v >= status_verbosity::verbose) {
     auto& cached = put_list(s.verbose, "cached");
