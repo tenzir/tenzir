@@ -97,10 +97,11 @@ TEST(status) {
       [&](const caf::error&) {
         // expected
       });
-  self->request(fs, caf::infinite, atom::status_v)
+  self->request(fs, caf::infinite, atom::status_v, status_verbosity::debug)
     .receive(
       [&](const caf::dictionary<caf::config_value>& status) {
-        auto failed = caf::get<uint64_t>(status, "operations.reads.failed");
+        auto failed = caf::get<uint64_t>(status, "debug.filesystem.operations."
+                                                 "reads.failed");
         CHECK_EQUAL(failed, 1u);
       },
       [&](const caf::error& err) { FAIL(err); });

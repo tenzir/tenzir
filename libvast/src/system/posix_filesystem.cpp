@@ -1,4 +1,3 @@
-
 /******************************************************************************
  *                    _   _____   __________                                  *
  *                   | | / / _ | / __/_  __/     Visibility                   *
@@ -62,20 +61,24 @@ posix_filesystem(filesystem_type::stateful_pointer<posix_filesystem_state> self,
         return nullptr;
       }
     },
-    [=](atom::status) {
-      caf::dictionary<caf::config_value> result;
-      result["type"] = "POSIX";
-      auto& ops = put_dictionary(result, "operations");
-      auto add_stats = [&](auto& name, auto& stats) {
-        auto& dict = put_dictionary(ops, name);
-        dict["successful"] = stats.successful;
-        dict["failed"] = stats.failed;
-        dict["bytes"] = stats.bytes;
-      };
-      add_stats("writes", self->state.stats.writes);
-      add_stats("reads", self->state.stats.reads);
-      add_stats("mmaps", self->state.stats.mmaps);
-      return result;
+    [=](atom::status, status_verbosity v) {
+      vast::status s;
+      if (v >= status_verbosity::info) {
+        s.info["filesystem.type"] = "POSIX";
+      }
+      if (v >= status_verbosity::debug) {
+        auto& ops = put_dictionary(s.debug, "filesystem.operations");
+        auto add_stats = [&](auto& name, auto& stats) {
+          auto& dict = put_dictionary(ops, name);
+          dict["successful"] = stats.successful;
+          dict["failed"] = stats.failed;
+          dict["bytes"] = stats.bytes;
+        };
+        add_stats("writes", self->state.stats.writes);
+        add_stats("reads", self->state.stats.reads);
+        add_stats("mmaps", self->state.stats.mmaps);
+      }
+      return join(s);
     },
   };
 }
