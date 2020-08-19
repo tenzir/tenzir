@@ -585,6 +585,7 @@ if (ENABLE_ZEEK_TO_VAST)
   if (NOT BROKER_ROOT_DIR
       AND EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/aux/broker/broker/CMakeLists.txt)
     add_subdirectory(aux/broker)
+    set(broker_dir ${CMAKE_CURRENT_SOURCE_DIR}/aux/broker)
     set(VAST_HAVE_BROKER true)
   else ()
     if (NOT BROKER_ROOT_DIR AND VAST_PREFIX)
@@ -599,6 +600,9 @@ if (ENABLE_ZEEK_TO_VAST)
           "Broker not found, either use -DBROKER_ROOT_DIR=... or initialize the aux/broker submodule"
       )
     endif ()
+    get_target_property(broker_dir zeek::broker IMPORTED_LOCATION)
+    get_filename_component(broker_dir "${broker_dir}" DIRECTORY) # <prefix>/lib
+    get_filename_component(broker_dir "${broker_dir}" DIRECTORY) # <prefix>
   endif ()
 endif ()
 
@@ -850,19 +854,8 @@ if (NOT caf_dir)
   get_filename_component(caf_dir ${caf_dir} DIRECTORY)
 endif ()
 
-# Figure out whether we point to a build directory or a prefix.
-if (BROKER_FOUND)
-  set(broker_dir ${BROKER_LIBRARY})
-  get_filename_component(broker_dir ${broker_dir} DIRECTORY)
-  if (EXISTS "${broker_dir}/../broker")
-    get_filename_component(broker_dir ${broker_dir} DIRECTORY)
-  else ()
-    set(broker_dir ${BROKER_INCLUDE_DIRS})
-  endif ()
-endif ()
-
 display(CAF_FOUND "${caf_dir}" caf_summary)
-display(BROKER_FOUND "${broker_dir}" broker_summary)
+display(VAST_HAVE_BROKER "${broker_dir}" broker_summary)
 display(Arrow_FOUND "${arrow_dir}" arrow_summary)
 display(PCAP_FOUND "${PCAP_INCLUDE_DIR}" pcap_summary)
 display(DOXYGEN_FOUND yes doxygen_summary)
