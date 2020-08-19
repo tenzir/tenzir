@@ -78,7 +78,6 @@ set(libvast_sources
     src/data.cpp
     src/defaults.cpp
     src/detail/add_message_types.cpp
-    src/detail/adjust_resource_consumption.cpp
     src/detail/base64.cpp
     src/detail/compressedbuf.cpp
     src/detail/fdinbuf.cpp

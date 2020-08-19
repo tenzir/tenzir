@@ -12,7 +12,6 @@
  ******************************************************************************/
 
 #include "vast/config.hpp"
-#include "vast/detail/adjust_resource_consumption.hpp"
 #include "vast/detail/process.hpp"
 #include "vast/detail/system.hpp"
 #include "vast/error.hpp"
@@ -47,9 +46,6 @@ int main(int argc, char** argv) {
               << std::endl;
     return EXIT_FAILURE;
   }
-  // Make sure we have enough resources (e.g., file descriptors)
-  if (!detail::adjust_resource_consumption())
-    return EXIT_FAILURE;
   // Application setup.
   const auto [root, factory] = make_application(argv[0]);
   if (!root)

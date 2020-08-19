@@ -15,7 +15,6 @@
 
 #include "vast/config.hpp"
 #include "vast/detail/add_message_types.hpp"
-#include "vast/detail/adjust_resource_consumption.hpp"
 #include "vast/detail/assert.hpp"
 #include "vast/detail/process.hpp"
 #include "vast/detail/string.hpp"
