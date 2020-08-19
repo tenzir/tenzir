@@ -153,12 +153,22 @@ void request_more_hits(stateful_actor<exporter_state>* self) {
 } // namespace <anonymous>
 
 caf::settings exporter_state::status(status_verbosity v) {
-  caf::settings result;
-  put(result, "hits", rank(hits));
-  put(result, "start", caf::deep_to_string(start));
-  put(result, "id", to_string(id));
-  put(result, "expression", to_string(expr));
-  return result;
+  vast::status s;
+  if (v >= status_verbosity::info) {
+    caf::settings exp;
+    put(exp, "expression", to_string(expr));
+    auto& xs = put_list(s.info, "queries");
+    xs.emplace_back(std::move(exp));
+  }
+  if (v >= status_verbosity::verbose) {
+    caf::settings exp;
+    put(exp, "expression", to_string(expr));
+    put(exp, "hits", rank(hits));
+    put(exp, "start", caf::deep_to_string(start));
+    auto& xs = put_list(s.info, "queries");
+    xs.emplace_back(std::move(exp));
+  }
+  return join(s);
 }
 
 behavior exporter(stateful_actor<exporter_state>* self, expression expr,
