@@ -111,10 +111,8 @@ set(LZ4_LIBRARIES_BUILT)
 if (BUILD_SHARED_LIBS)
   add_library(lz4_shared SHARED ${LZ4_SOURCES})
   set_target_properties(
-    lz4_shared
-    PROPERTIES
-      OUTPUT_NAME lz4 SOVERSION "${LZ4_VERSION_MAJOR}" VERSION
-                                                       "${LZ4_VERSION_STRING}")
+    lz4_shared PROPERTIES OUTPUT_NAME lz4 SOVERSION "${LZ4_VERSION_MAJOR}"
+                          VERSION "${LZ4_VERSION_STRING}")
   list(APPEND LZ4_LIBRARIES_BUILT lz4_shared)
 endif ()
 if (BUILD_STATIC_LIBS)
@@ -184,10 +182,9 @@ if (NOT LZ4_BUNDLED_MODE)
     LIBRARY DESTINATION "${CMAKE_INSTALL_LIBDIR}"
     ARCHIVE DESTINATION "${CMAKE_INSTALL_LIBDIR}"
     RUNTIME DESTINATION "${CMAKE_INSTALL_BINDIR}")
-  install(
-    FILES "${LZ4_LIB_SOURCE_DIR}/lz4.h" "${LZ4_LIB_SOURCE_DIR}/lz4frame.h"
-          "${LZ4_LIB_SOURCE_DIR}/lz4hc.h"
-    DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}")
+  install(FILES "${LZ4_LIB_SOURCE_DIR}/lz4.h" "${LZ4_LIB_SOURCE_DIR}/lz4frame.h"
+                "${LZ4_LIB_SOURCE_DIR}/lz4hc.h"
+          DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}")
   install(FILES "${LZ4_PROG_SOURCE_DIR}/lz4.1"
           DESTINATION "${CMAKE_INSTALL_MANDIR}/man1")
   install(FILES "${CMAKE_CURRENT_BINARY_DIR}/liblz4.pc"

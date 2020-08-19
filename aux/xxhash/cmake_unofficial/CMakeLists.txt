@@ -24,10 +24,9 @@ set(CMAKE_INSTALL_RPATH_USE_LINK_PATH TRUE)
 add_library(xxhash ../xxhash.c)
 set_target_properties(
   xxhash
-  PROPERTIES
-    COMPILE_DEFINITIONS "XXHASH_EXPORT" VERSION "${XXHASH_LIB_VERSION}"
-
-    SOVERSION "${XXHASH_LIB_SOVERSION}")
+  PROPERTIES COMPILE_DEFINITIONS "XXHASH_EXPORT"
+             VERSION "${XXHASH_LIB_VERSION}" SOVERSION
+                                             "${XXHASH_LIB_SOVERSION}")
 
 if (BUILD_XXHSUM)
   add_executable(xxhsum ../xxhsum.c)

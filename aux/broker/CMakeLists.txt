@@ -78,21 +78,17 @@ target_include_directories(
   PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/broker/3rdparty)
 set_target_properties(
   broker
-  PROPERTIES
-    CXX_STANDARD 17
-    SOVERSION ${BROKER_SOVERSION}
-    VERSION ${BROKER_VERSION_MAJOR}.${BROKER_VERSION_MINOR}
-    MACOSX_RPATH true
-    OUTPUT_NAME broker)
+  PROPERTIES CXX_STANDARD 17 SOVERSION ${BROKER_SOVERSION}
+             VERSION ${BROKER_VERSION_MAJOR}.${BROKER_VERSION_MINOR}
+             MACOSX_RPATH true OUTPUT_NAME broker)
 target_compile_definitions(broker PRIVATE SQLITE_OMIT_LOAD_EXTENSION)
 # For Clang 10, we need to additionally silence -Wimplicit-int-float-conversion,
 # since it is not included in the ignored warnings list for -isystem yet.
-target_compile_options(broker PRIVATE 
-  -Wno-implicit-int-float-conversion
-  -Wno-missing-field-initializers
-  -Wno-unknown-warning-option
-  -Wno-unused-parameter
-  -Wno-unused-variable)
+target_compile_options(
+  broker
+  PRIVATE -Wno-implicit-int-float-conversion -Wno-missing-field-initializers
+          -Wno-unknown-warning-option -Wno-unused-parameter
+          -Wno-unused-variable)
 target_link_libraries(broker PUBLIC caf::core caf::io caf::openssl)
 install(TARGETS broker DESTINATION ${INSTALL_LIB_DIR})
 

@@ -48,8 +48,7 @@ if (BROKER_FOUND AND NOT TARGET zeek::broker)
   add_library(zeek::broker UNKNOWN IMPORTED GLOBAL)
   set_target_properties(
     zeek::broker
-    PROPERTIES
-      IMPORTED_LOCATION ${BROKER_LIBRARY} INTERFACE_INCLUDE_DIRECTORIES
-                                          "${BROKER_INCLUDE_DIRS}"
-      INTERFACE_LINK_LIBRARIES "caf::core;caf::io;caf::openssl")
+    PROPERTIES IMPORTED_LOCATION ${BROKER_LIBRARY} INTERFACE_INCLUDE_DIRECTORIES
+                                                   "${BROKER_INCLUDE_DIRS}"
+               INTERFACE_LINK_LIBRARIES "caf::core;caf::io;caf::openssl")
 endif ()
