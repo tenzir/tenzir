@@ -165,10 +165,26 @@ void collect_component_status(node_actor* self,
 
 } // namespace
 
-caf::message status_command(const invocation&, caf::actor_system&) {
+caf::message status_command(const invocation& inv, caf::actor_system&) {
   auto self = this_node;
-  collect_component_status(self, self->make_response_promise(),
-                           status_verbosity::debug);
+  constexpr caf::atom_value atm = caf::atom("info");
+  auto verbosity_atom = caf::get_or(inv.options, "verbosity", atm);
+  auto verbosity = status_verbosity::info;
+  switch (caf::atom_uint(to_lowercase(verbosity_atom))) {
+    default:
+      return make_error_msg(ec::syntax_error, "expected one of 'info', "
+                                              "'verbose', 'debug' ");
+    case caf::atom_uint("info"):
+      verbosity = status_verbosity::info;
+      break;
+    case caf::atom_uint("verbose"):
+      verbosity = status_verbosity::verbose;
+      break;
+    case caf::atom_uint("debug"):
+      verbosity = status_verbosity::debug;
+      break;
+  }
+  collect_component_status(self, self->make_response_promise(), verbosity);
   return caf::none;
 }
 
