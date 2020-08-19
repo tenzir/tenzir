@@ -19,7 +19,8 @@
 
 namespace vast::io {
 
-/// Safely writes a buffer to a file on disk.
+/// Writes a buffer to a temporary file and atomically renames it to *filename*
+/// afterwards.
 /// @param filename The file to write to.
 /// @param xs The buffer to read from.
 /// @returns An error if the operation failed.

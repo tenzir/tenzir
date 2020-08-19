@@ -22,11 +22,15 @@
 namespace vast::io {
 
 caf::error save(const path& filename, span<const byte> xs) {
-  auto tmp = filename + ".save";
-  if (auto err = write(tmp, xs))
+  auto tmp = filename + ".tmp";
+  if (auto err = write(tmp, xs)) {
+    rm(tmp);
     return err;
-  if (std::rename(tmp.str().c_str(), filename.str().c_str()) != 0)
+  }
+  if (std::rename(tmp.str().c_str(), filename.str().c_str()) != 0) {
+    rm(tmp);
     return make_error(ec::filesystem_error, "rename(2)", std::strerror(errno));
+  }
   return caf::none;
 }
 

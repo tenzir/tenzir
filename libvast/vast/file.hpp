@@ -85,7 +85,8 @@ public:
   /// @param size The number of bytes to write.
   /// @param put The number of bytes written.
   /// @returns `caf::none` on success.
-  caf::error write(const void* source, size_t size, size_t* put = nullptr);
+  [[nodiscard]] caf::error
+  write(const void* source, size_t size, size_t* put = nullptr);
 
   /// Seeks the file forward.
   /// @param bytes The number of bytes to seek forward relative to the current
