@@ -75,9 +75,10 @@ struct fixture : fixtures::deterministic_actor_system_and_events {
     put(slices);
     auto segment_id = store->active_id();
     auto files_before = segment_files().size();
-    store->flush();
+    if (auto err = store->flush())
+      FAIL("failed to flush segment store after put(): " << err);
     if (store->dirty())
-      FAIL("failed to flush segment store after put()");
+      FAIL("segment store is dirty after flush()");
     if (segment_files().size() <= files_before)
       FAIL("flush did not produce a segment file on disk");
     if (!store->cached(segment_id))
@@ -90,10 +91,11 @@ struct fixture : fixtures::deterministic_actor_system_and_events {
     put(slices);
     auto segment_id = store->active_id();
     auto files_before = segment_files().size();
-    store->flush();
+    if (auto err = store->flush())
+      FAIL("failed to flush segment store after put(): " << err);
     store->clear_cache();
     if (store->dirty())
-      FAIL("failed to flush segment store after put()");
+      FAIL("segment store is dirty after flush()");
     if (segment_files().size() <= files_before)
       FAIL("flush did not produce a segment file on disk");
     if (store->cached(segment_id))
