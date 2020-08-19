@@ -132,8 +132,8 @@ tests:
         input: data/zeek/conn.log.gz
       - command: import -b -s 1 -n 242 zeek
         input: data/zeek/conn.log.gz
-      - command: status
-        transformation: jq '.node.index.statistics.layouts | del(."vast.metrics")'
+      - command: status -v verbose
+        transformation: jq '.verbose.index.statistics.layouts | del(."vast.metrics")'
   Server Zeek multiple imports:
     tags: [server, import-export, zeek]
     fixture: ServerTester
@@ -234,8 +234,8 @@ tests:
         input: data/pcap/example.pcap.gz
       - command: -N export ascii ':addr in 192.168.168.0/24'
       - command: -N export pcap 'sport > 60000/tcp && src !in 192.168.168.0/8'
-      - command: -N status
-        transformation: jq '.node.index.statistics'
+      - command: -N status -v verbose
+        transformation: jq '.verbose.index.statistics'
 
   Manual 2:
     tags: [examples, disabled]
@@ -250,8 +250,8 @@ tests:
     steps:
       - command: -N import pcap
         input: data/pcap/vlan.pcap.gz
-      - command: -N status
-        transformation: jq '.node.index.statistics'
+      - command: -N status -v verbose
+        transformation: jq '.verbose.index.statistics'
 
   Multi addr query:
     tags: [import-export, zeek]
@@ -344,8 +344,8 @@ tests:
     steps:
       - command: -N import json
         input: data/json/sysmon.json
-      - command: -N status
-        transformation: jq '.node.index.statistics.layouts | del(."vast.metrics")'
+      - command: -N status -v verbose
+        transformation: jq '.verbose.index.statistics.layouts | del(."vast.metrics")'
       - command: -N export json '"®" in :string'
   Zeek conn log aging:
     tags: [import-export, aging, zeek]
