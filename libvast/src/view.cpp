@@ -77,6 +77,12 @@ bool is_equal(const data& x, const data_view& y) {
         return is_equal(xs.first, ys.first) && is_equal(xs.second, ys.second);
       };
       return std::equal(lhs.begin(), lhs.end(), rhs.begin(), rhs.end(), f);
+    },
+    [&](const record& lhs, const view<record>& rhs) {
+      auto f = [](const auto& xs, const auto& ys) {
+        return xs.first == ys.first && is_equal(xs.second, ys.second);
+      };
+      return std::equal(lhs.begin(), lhs.end(), rhs.begin(), rhs.end(), f);
     });
   return caf::visit(f, x, y);
 }
@@ -114,6 +120,21 @@ default_map_view::size_type default_map_view::size() const noexcept {
   return xs_.size();
 }
 
+// -- default_record_view --------------------------------------------------------
+
+default_record_view::default_record_view(const record& xs) : xs_{xs} {
+  // nop
+}
+
+default_record_view::value_type default_record_view::at(size_type i) const {
+  auto& [key, value] = *std::next(xs_.begin(), i);
+  return {key, make_data_view(value)};
+}
+
+default_record_view::size_type default_record_view::size() const noexcept {
+  return xs_.size();
+}
+
 // -- make_view ---------------------------------------------------------------
 
 data_view make_view(const data& x) {
@@ -136,6 +157,10 @@ auto materialize(std::pair<data_view, data_view> x) {
   return std::pair(materialize(x.first), materialize(x.second));
 }
 
+auto materialize(std::pair<std::string_view, data_view> x) {
+  return std::pair(materialize(x.first), materialize(x.second));
+}
+
 template <class Result, class T>
 Result materialize_container(const T& xs) {
   Result result;
@@ -153,6 +178,10 @@ list materialize(list_view_handle xs) {
 
 map materialize(map_view_handle xs) {
   return materialize_container<map>(xs);
+}
+
+record materialize(record_view_handle xs) {
+  return materialize_container<record>(xs);
 }
 
 data materialize(data_view x) {

@@ -145,7 +145,7 @@ struct json_printer : printer<json_printer<TreePolicy, Indent, Padding>> {
         return str.print(out_, "[]");
       if (!printers::any.print(out_, '['))
         return false;
-      if (tree) {
+      if constexpr (tree) {
         ++depth_;
         printers::any.print(out_, '\n');
       }
@@ -159,7 +159,7 @@ struct json_printer : printer<json_printer<TreePolicy, Indent, Padding>> {
           if (!str.print(out_, tree ? ",\n" : ", "))
             return false;
       }
-      if (tree) {
+      if constexpr (tree) {
         --depth_;
         if (!printers::any.print(out_, '\n') || !indent())
           return false;
@@ -176,7 +176,7 @@ struct json_printer : printer<json_printer<TreePolicy, Indent, Padding>> {
     }
 
     template <class ForwardIterator>
-    bool print_map(ForwardIterator begin, ForwardIterator end) {
+    bool print_object(ForwardIterator begin, ForwardIterator end) {
       using namespace printers;
       if (depth_ == 0 && !pad())
         return false;
@@ -184,7 +184,7 @@ struct json_printer : printer<json_printer<TreePolicy, Indent, Padding>> {
         return str.print(out_, "{}");
       if (!printers::any.print(out_, '{'))
         return false;
-      if (tree) {
+      if constexpr (tree) {
         ++depth_;
         if (!printers::any.print(out_, '\n'))
           return false;
@@ -203,7 +203,7 @@ struct json_printer : printer<json_printer<TreePolicy, Indent, Padding>> {
           if (!str.print(out_, tree ? ",\n" : ", "))
             return false;
       }
-      if (tree) {
+      if constexpr (tree) {
         --depth_;
         if (!printers::any.print(out_, '\n'))
           return false;
@@ -214,11 +214,18 @@ struct json_printer : printer<json_printer<TreePolicy, Indent, Padding>> {
     }
 
     bool operator()(const json::object& xs) {
-      return print_map(xs.begin(), xs.end());
+      return print_object(xs.begin(), xs.end());
     }
 
     bool operator()(const view<map>& xs) {
-      return print_map(xs.begin(), xs.end());
+      // FIXME: maps are currently treated the same as records. This feels
+      // wrong. We should reconsider rendering of VAST maps, e.g., as list of
+      // key-value pairs: [[a, b], [c, d]].
+      return print_object(xs.begin(), xs.end());
+    }
+
+    bool operator()(const view<record>& xs) {
+      return print_object(xs.begin(), xs.end());
     }
 
     bool pad() {
@@ -232,7 +239,7 @@ struct json_printer : printer<json_printer<TreePolicy, Indent, Padding>> {
     bool indent() {
       if (!pad())
         return false;
-      if (!tree)
+      if constexpr (!tree)
         return true;
       for (auto i = 0; i < depth_ * Indent; ++i)
         if (!printers::any.print(out_, ' '))
