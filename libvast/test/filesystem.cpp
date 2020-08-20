@@ -172,7 +172,7 @@ TEST(file_and_directory_manipulation) {
   p /= base / std::to_string(detail::process_id());
   CHECK(!p.is_regular_file());
   CHECK(!exists(p));
-  CHECK(mkdir(p));
+  CHECK(!mkdir(p));
   CHECK(exists(p));
   CHECK(p.is_directory());
   CHECK(rm(p));

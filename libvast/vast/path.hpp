@@ -180,8 +180,8 @@ bool rm(const path& p);
 
 /// If the path does not exist, create it as directory.
 /// @param p The path to a directory to create.
-/// @returns `true` on success or if *p* exists already.
-caf::expected<void> mkdir(const path& p);
+/// @returns `caf::none` on success or if *p* exists already.
+[[nodiscard]] caf::error mkdir(const path& p);
 
 /// Determines the size of a file.
 /// @param p The path pointint to a file.

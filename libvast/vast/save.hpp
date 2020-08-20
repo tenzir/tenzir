@@ -64,9 +64,9 @@ caf::error save(caf::actor_system* sys, Sink&& out, const Ts&... xs) {
   } else if constexpr (std::is_same_v<sink_type, path>) {
     if (auto dir = out.parent(); !exists(dir)) {
       VAST_DEBUG_ANON(__func__, "creates directory", dir);
-      if (auto res = mkdir(dir); !res) {
+      if (auto err = mkdir(dir)) {
         VAST_DEBUG_ANON(__func__, "failed to create directory", dir);
-        return res.error();
+        return err;
       }
     }
     auto tmp = out + ".tmp";

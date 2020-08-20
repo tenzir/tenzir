@@ -28,9 +28,7 @@ jobs:
     - name: CMake Format
       run: |
         set -x
-        # cmake-format==0.6.12 is broken, pin to 0.6.11:
-        # https://github.com/cheshirekow/cmake_format/issues/219
-        pip install --upgrade pip cmake_format==0.6.11
+        pip install --upgrade pip cmake_format
         git diff --name-only --no-color --diff-filter=ACM $(git merge-base origin/master HEAD) -- "**CMakelists.txt" "**.cmake" |
           xargs cmake-format --in-place
         git diff --exit-code

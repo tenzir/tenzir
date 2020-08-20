@@ -77,8 +77,8 @@ public:
   /// @param sink The destination of the read.
   /// @param size The number of bytes to read.
   /// @param got The number of bytes read.
-  /// @returns `true` on success.
-  bool read(void* sink, size_t size, size_t* got = nullptr);
+  /// @returns `caf::none` on success.
+  [[nodiscard]] caf::error read(void* sink, size_t size, size_t* got = nullptr);
 
   /// Writes a given number of bytes into a buffer.
   /// @param source The source of the write.

@@ -41,9 +41,10 @@ spawn_node(caf::scoped_actor& self, const caf::settings& opts) {
     = get_or(opts, "system.db-directory", defaults::system::db_directory);
   auto abs_dir = path{db_dir}.complete();
   if (!exists(abs_dir))
-    if (auto res = mkdir(abs_dir); !res)
+    if (auto err = mkdir(abs_dir))
       return make_error(ec::filesystem_error,
-                        "unable to create db-directory:", abs_dir.str());
+                        "unable to create db-directory:", abs_dir.str(),
+                        err.context());
   if (!abs_dir.is_writable())
     return make_error(ec::filesystem_error,
                       "unable to write to db-directory:", abs_dir.str());
