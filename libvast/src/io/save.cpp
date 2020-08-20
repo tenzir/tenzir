@@ -29,7 +29,8 @@ caf::error save(const path& filename, span<const byte> xs) {
   }
   if (std::rename(tmp.str().c_str(), filename.str().c_str()) != 0) {
     rm(tmp);
-    return make_error(ec::filesystem_error, "rename(2)", std::strerror(errno));
+    return make_error(ec::filesystem_error,
+                      "failed in rename(2):", std::strerror(errno));
   }
   return caf::none;
 }

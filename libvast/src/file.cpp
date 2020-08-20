@@ -71,17 +71,17 @@ caf::expected<void> file::open(open_mode mode, bool append) {
     flags |= O_APPEND;
   errno = 0;
   if (mode != read_only && !exists(path_.parent())) {
-    auto m = mkdir(path_.parent());
-    if (!m)
+    if (auto err = mkdir(path_.parent()))
       return make_error(ec::filesystem_error,
-                        "failed to create parent directory: ", m.error());
+                        "failed to create parent directory: ", err.context());
   }
   handle_ = ::open(path_.str().data(), flags, 0644);
   if (handle_ != -1) {
     is_open_ = true;
     return {};
   }
-  return make_error(ec::filesystem_error, std::strerror(errno));
+  return make_error(ec::filesystem_error,
+                    "failed in open(2):", std::strerror(errno));
 #else
   return make_error(ec::filesystem_error, "not yet implemented");
 #endif // VAST_POSIX
@@ -98,8 +98,10 @@ bool file::is_open() const {
   return is_open_;
 }
 
-bool file::read(void* sink, size_t bytes, size_t* got) {
-  return is_open_ && detail::read(handle_, sink, bytes, got);
+caf::error file::read(void* sink, size_t bytes, size_t* got) {
+  if (!is_open_)
+    return make_error(ec::filesystem_error, "file is not open", path_);
+  return detail::read(handle_, sink, bytes, got);
 }
 
 caf::error file::write(const void* source, size_t bytes, size_t* put) {

@@ -19,6 +19,7 @@
 #include "vast/detail/posix.hpp"
 #include "vast/detail/string.hpp"
 #include "vast/directory.hpp"
+#include "vast/logger.hpp"
 
 #include <caf/streambuf.hpp>
 
@@ -27,29 +28,33 @@
 
 #ifdef VAST_POSIX
 #  include <cerrno>
-#  include <cstring>
 #  include <cstdio>
+#  include <cstring>
 #  include <fcntl.h>
 #  include <unistd.h>
+
 #  include <sys/stat.h>
 #  include <sys/types.h>
-#  define VAST_CHDIR(P)(::chdir(P) == 0)
-#  define VAST_CREATE_DIRECTORY(P)(::mkdir(P, S_IRWXU|S_IRWXG|S_IRWXO) == 0)
-#  define VAST_CREATE_HARD_LINK(F, T)(::link(T, F) == 0)
-#  define VAST_CREATE_SYMBOLIC_LINK(F, T, Flag)(::symlink(T, F) == 0)
-#  define VAST_DELETE_FILE(P)(::unlink(P) == 0)
-#  define VAST_DELETE_DIRECTORY(P)(::rmdir(P) == 0)
-#  define VAST_MOVE_FILE(F,T)(::rename(F, T) == 0)
+#  define VAST_CHDIR(P) (::chdir(P) == 0)
+#  define VAST_CREATE_DIRECTORY(P)                                             \
+    (::mkdir(P, S_IRWXU | S_IRWXG | S_IRWXO) == 0)
+#  define VAST_CREATE_HARD_LINK(F, T) (::link(T, F) == 0)
+#  define VAST_CREATE_SYMBOLIC_LINK(F, T, Flag) (::symlink(T, F) == 0)
+#  define VAST_DELETE_FILE(P) (::unlink(P) == 0)
+#  define VAST_DELETE_DIRECTORY(P) (::rmdir(P) == 0)
+#  define VAST_MOVE_FILE(F, T) (::rename(F, T) == 0)
 #else
-#  define VAST_CHDIR(P)(::SetCurrentDirectoryW(P) != 0)
-#  define VAST_CREATE_DIRECTORY(P)(::CreateDirectoryW(P, 0) != 0)
-#  define VAST_CREATE_HARD_LINK(F,T)(create_hard_link_api(F, T, 0) != 0)
-#  define VAST_CREATE_SYMBOLIC_LINK(F,T,Flag)(create_symbolic_link_api(F, T, Flag) != 0)
-#  define VAST_DELETE_FILE(P)(::DeleteFileW(P) != 0)
-#  define VAST_DELETE_DIRECTORY(P)(::RemoveDirectoryW(P) != 0) \
-   (::CopyFileW(F, T, FailIfExistsBool) != 0)
-#  define VAST_MOVE_FILE(F,T) \
-   (::MoveFileExW(\ F, T, MOVEFILE_REPLACE_EXISTING|MOVEFILE_COPY_ALLOWED) != 0)
+#  define VAST_CHDIR(P) (::SetCurrentDirectoryW(P) != 0)
+#  define VAST_CREATE_DIRECTORY(P) (::CreateDirectoryW(P, 0) != 0)
+#  define VAST_CREATE_HARD_LINK(F, T) (create_hard_link_api(F, T, 0) != 0)
+#  define VAST_CREATE_SYMBOLIC_LINK(F, T, Flag)                                \
+    (create_symbolic_link_api(F, T, Flag) != 0)
+#  define VAST_DELETE_FILE(P) (::DeleteFileW(P) != 0)
+#  define VAST_DELETE_DIRECTORY(P)                                             \
+    (::RemoveDirectoryW(P) != 0)(::CopyFileW(F, T, FailIfExistsBool) != 0)
+#  define VAST_MOVE_FILE(F, T)                                                 \
+    (::MoveFileExW(\ F, T, MOVEFILE_REPLACE_EXISTING | MOVEFILE_COPY_ALLOWED)  \
+     != 0)
 #endif // VAST_POSIX
 
 namespace vast {
@@ -263,7 +268,8 @@ bool exists(const path& p) {
 
 caf::error create_symlink(const path& target, const path& link) {
   if (::symlink(target.str().c_str(), link.str().c_str()))
-    return make_error(ec::filesystem_error, std::strerror(errno));
+    return make_error(ec::filesystem_error,
+                      "failed in symlink(2):", std::strerror(errno));
   return caf::none;
 }
 
@@ -282,7 +288,7 @@ bool rm(const path& p) {
   return false;
 }
 
-caf::expected<void> mkdir(const path& p) {
+caf::error mkdir(const path& p) {
   auto components = split(p);
   if (components.empty())
     return make_error(ec::filesystem_error, "cannot mkdir empty path");
@@ -303,12 +309,13 @@ caf::expected<void> mkdir(const path& p) {
             return make_error(ec::filesystem_error,
                               "not a directory or symlink:", c);
         } else {
-          return make_error(ec::filesystem_error, std::strerror(errno), c);
+          return make_error(ec::filesystem_error,
+                            "failed in mkdir(2):", std::strerror(errno), c);
         }
       }
     }
   }
-  return {};
+  return caf::none;
 }
 
 caf::expected<std::uintmax_t> file_size(const path& p) noexcept {

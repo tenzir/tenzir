@@ -69,9 +69,8 @@ caf::error importer_state::read_state() {
 
 caf::error importer_state::write_state(write_mode mode) {
   if (!exists(dir)) {
-    auto result = mkdir(dir);
-    if (!result)
-      return std::move(result.error());
+    if (auto err = mkdir(dir))
+      return err;
   }
   std::ofstream state_file{to_string(dir / "current_id_block")};
   state_file << current.end;

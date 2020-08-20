@@ -13,13 +13,16 @@
 
 #include "vast/detail/terminal.hpp"
 
-#include <sys/select.h>
+#include "vast/detail/posix.hpp"
+#include "vast/error.hpp"
+#include "vast/logger.hpp"
+
 #include <cstdio>
+#include <cstdlib>
 #include <termios.h>
 #include <unistd.h>
-#include <cstdlib>
 
-#include "vast/detail/posix.hpp"
+#include <sys/select.h>
 
 namespace vast {
 namespace detail {
@@ -91,8 +94,10 @@ bool enable_echo() {
 }
 
 bool get(char& c, int timeout) {
-  if (!poll(::fileno(stdin), timeout))
+  if (auto err = poll(::fileno(stdin), timeout)) {
+    VAST_ERROR(__func__, render(err));
     return false;
+  }
   auto i = ::fgetc(stdin);
   if (::feof(stdin))
     return false;

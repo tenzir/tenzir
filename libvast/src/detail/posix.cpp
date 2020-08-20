@@ -16,6 +16,7 @@
 #include "vast/config.hpp"
 #include "vast/detail/assert.hpp"
 #include "vast/detail/raise_error.hpp"
+#include "vast/die.hpp"
 #include "vast/error.hpp"
 #include "vast/logger.hpp"
 
@@ -32,8 +33,7 @@
 #include <sys/types.h>
 #include <sys/un.h>
 
-namespace vast {
-namespace detail {
+namespace vast::detail {
 
 int uds_listen(const std::string& path) {
   int fd;
@@ -160,8 +160,9 @@ int uds_recv_fd(int socket) {
 }
 
 VAST_DIAGNOSTIC_POP
-int unix_domain_socket::listen(const std::string& path) {
-  return detail::uds_listen(path);
+
+unix_domain_socket unix_domain_socket::listen(const std::string& path) {
+  return unix_domain_socket{detail::uds_listen(path)};
 }
 
 unix_domain_socket unix_domain_socket::accept(const std::string& path) {
@@ -176,48 +177,45 @@ unix_domain_socket::connect(const std::string& path, socket_type type) {
   return unix_domain_socket{detail::uds_connect(path, type)};
 }
 
-unix_domain_socket::unix_domain_socket(int fd) : fd_{fd} {
-}
-
 unix_domain_socket::operator bool() const {
-  return fd_ != -1;
+  return fd != -1;
 }
 
 bool unix_domain_socket::send_fd(int fd) {
   VAST_ASSERT(*this);
-  return detail::uds_send_fd(fd_, fd);
+  return detail::uds_send_fd(this->fd, fd);
 }
 
 int unix_domain_socket::recv_fd() {
   VAST_ASSERT(*this);
-  return detail::uds_recv_fd(fd_);
-}
-
-int unix_domain_socket::fd() const {
-  return fd_;
+  return detail::uds_recv_fd(fd);
 }
 
 namespace {
 
-bool make_nonblocking(int fd, bool flag) {
+[[nodiscard]] caf::error make_nonblocking(int fd, bool flag) {
   auto flags = ::fcntl(fd, F_GETFL, 0);
   if (flags == -1)
-    return false;
+    return make_error(ec::filesystem_error,
+                      "failed in fcntl(2):", std::strerror(errno));
   flags = flag ? flags | O_NONBLOCK : flags & ~O_NONBLOCK;
-  return ::fcntl(fd, F_SETFL, flags) != -1;
+  if (::fcntl(fd, F_SETFL, flags) == -1)
+    return make_error(ec::filesystem_error,
+                      "failed in fcntl(2):", std::strerror(errno));
+  return caf::none;
 }
 
-} // namespace <anonymous>
+} // namespace
 
-bool make_nonblocking(int fd) {
+caf::error make_nonblocking(int fd) {
   return make_nonblocking(fd, true);
 }
 
-bool make_blocking(int fd) {
+caf::error make_blocking(int fd) {
   return make_nonblocking(fd, false);
 }
 
-bool poll(int fd, int usec) {
+caf::error poll(int fd, int usec) {
   fd_set rdset;
   FD_ZERO(&rdset);
   FD_SET(fd, &rdset);
@@ -226,33 +224,41 @@ bool poll(int fd, int usec) {
   if (rc < 0) {
     switch (rc) {
       default:
-        VAST_RAISE_ERROR(std::logic_error, "unhandled select() error");
+        vast::die("unhandled select(2) error");
       case EINTR:
       case ENOMEM:
-        return false;
+        return make_error(ec::filesystem_error,
+                          "failed in select(2):", std::strerror(errno));
     }
   }
-  return FD_ISSET(fd, &rdset);
+  if (!FD_ISSET(fd, &rdset))
+    return make_error(ec::filesystem_error,
+                      "failed in fd_isset(3):", std::strerror(errno));
+  return caf::none;
 }
 
-bool close(int fd) {
+caf::error close(int fd) {
   int result;
   do {
     result = ::close(fd);
   } while (result < 0 && errno == EINTR);
-  return result == 0;
+  if (result != 0)
+    return make_error(ec::filesystem_error,
+                      "failed in close(2):", std::strerror(errno));
+  return caf::none;
 }
 
-bool read(int fd, void* buffer, size_t bytes, size_t* got) {
+caf::error read(int fd, void* buffer, size_t bytes, size_t* got) {
   ssize_t taken;
   do {
     taken = ::read(fd, buffer, bytes);
   } while (taken < 0 && errno == EINTR);
   if (taken <= 0) // EOF == 0, error == -1
-    return false;
+    return make_error(ec::filesystem_error,
+                      "failed in read(2):", std::strerror(errno));
   if (got)
     *got = static_cast<size_t>(taken);
-  return true;
+  return caf::none;
 }
 
 caf::error write(int fd, const void* buffer, size_t bytes, size_t* put) {
@@ -264,7 +270,8 @@ caf::error write(int fd, const void* buffer, size_t bytes, size_t* put) {
       written = ::write(fd, buf + total, bytes - total);
     } while (written < 0 && errno == EINTR);
     if (written < 0)
-      return make_error(ec::filesystem_error, "write(2):", std::strerror(errno));
+      return make_error(ec::filesystem_error,
+                        "failed in write(2):", std::strerror(errno));
     // write should not return 0 if it wasn't asked to write that amount. We
     // want to cover this case anyway in case it ever happens.
     if (written == 0)
@@ -276,9 +283,11 @@ caf::error write(int fd, const void* buffer, size_t bytes, size_t* put) {
   return caf::none;
 }
 
-bool seek(int fd, size_t bytes) {
-  return ::lseek(fd, bytes, SEEK_CUR) != -1;
+caf::error seek(int fd, size_t bytes) {
+  if (::lseek(fd, bytes, SEEK_CUR) == -1)
+    return make_error(ec::filesystem_error,
+                      "failed in seek(2):", std::strerror(errno));
+  return caf::none;
 }
 
-} // namespace detail
-} // namespace vast
+} // namespace vast::detail
