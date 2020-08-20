@@ -162,6 +162,14 @@ broker::data to_broker(const vast::data& data) {
               std::transform(xs.begin(), xs.end(),
                              std::inserter(result, result.end()), f);
               return result;
+            },
+            [](const vast::record& xs) -> broker::data {
+              broker::vector result;
+              result.reserve(xs.size());
+              auto f = [](const auto& x) { return to_broker(x.second); };
+              std::transform(xs.begin(), xs.end(), std::back_inserter(result),
+                             f);
+              return result;
             }),
           data);
 }

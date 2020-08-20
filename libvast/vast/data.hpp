@@ -263,6 +263,14 @@ bool is_recursive(const data& x);
 /// @relates data
 bool is_container(const data& x);
 
+/// Creates a record instance for a given record type. The number of data
+/// instances must correspond to the number of fields in the flattened version
+/// of the record.
+/// @param rt The record type
+/// @param xs The record fields.
+/// @returns A record according to the fields as defined in *rt*.
+caf::optional<record> make_record(const record_type& rt, std::vector<data> xs);
+
 /// Flattens a record recursively.
 record flatten(const record& r);
 

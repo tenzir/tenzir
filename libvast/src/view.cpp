@@ -158,7 +158,7 @@ auto materialize(std::pair<data_view, data_view> x) {
 }
 
 auto materialize(std::pair<std::string_view, data_view> x) {
-  return std::pair(materialize(x.first), materialize(x.second));
+  return std::pair(std::string{x.first}, materialize(x.second));
 }
 
 template <class Result, class T>

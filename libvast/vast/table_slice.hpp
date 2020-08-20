@@ -305,6 +305,6 @@ std::pair<table_slice_ptr, table_slice_ptr> split(const table_slice_ptr& slice,
 /// @param expr The expression to evaluate.
 /// @param slice The table slice to apply *expr* on.
 /// @returns The set of row IDs in *slice* for which *expr* yields true.
-ids evaluate(const table_slice& slice, const expression& expr);
+ids evaluate(const expression& expr, const table_slice& slice);
 
 } // namespace vast

@@ -132,6 +132,37 @@ bool is_container(const data& x) {
   return is_recursive(x);
 }
 
+namespace {
+
+template <class Iterator, class Sentinel>
+caf::optional<record>
+make_record(const record_type& rt, Iterator& begin, Sentinel end) {
+  record result;
+  result.reserve(rt.fields.size());
+  for (auto& field : rt.fields) {
+    if (begin == end)
+      return caf::none;
+    if (auto nested = caf::get_if<record_type>(&field.type)) {
+      if (auto r = make_record(*nested, begin, end))
+        result.emplace(field.name, std::move(*r));
+      else
+        return caf::none;
+    } else {
+      result.emplace(field.name, std::move(*begin));
+      ++begin;
+    }
+  }
+  return result;
+}
+
+} // namespace
+
+caf::optional<record> make_record(const record_type& rt, std::vector<data> xs) {
+  auto begin = xs.begin();
+  auto end = xs.end();
+  return make_record(rt, begin, end);
+};
+
 record flatten(const record& r) {
   record result;
   for (auto& [k, v] : r) {
@@ -162,6 +193,8 @@ caf::optional<record> flatten(const record& r, const record_type& rt) {
       // Hoist nested record into parent scope by prefixing field names.
       for (auto& [nk, nv] : *nested)
         result.emplace(k + '.' + nk, std::move(nv));
+    } else {
+      result.emplace(k, v);
     }
   }
   return result;
@@ -175,11 +208,14 @@ caf::optional<data> flatten(const data& x, const type& t) {
   return caf::none;
 }
 
+namespace {
+
 caf::optional<record> unflatten(const record& r, const record_type* rt) {
   record result;
   for (auto& [k, v] : r) {
     // Check if have a leaf value.
     if (k.find('.') == std::string::npos) {
+      VAST_ASSERT(!caf::holds_alternative<record>(v));
       result.emplace(k, v);
     } else {
       // Split field name by '.' to obtain intermediate records.
@@ -213,6 +249,8 @@ caf::optional<record> unflatten(const record& r, const record_type* rt) {
   return result;
 }
 
+} // namespace
+
 record unflatten(const record& r) {
   auto result = unflatten(r, nullptr);
   VAST_ASSERT(result);
@@ -223,7 +261,7 @@ caf::optional<record> unflatten(const record& r, const record_type& rt) {
   return unflatten(r, &rt);
 }
 
-caf::optional<data> unflatten(const data& x, type t) {
+caf::optional<data> unflatten(const data& x, const type& t) {
   auto r = caf::get_if<record>(&x);
   auto rt = caf::get_if<record_type>(&t);
   if (r && rt)
@@ -261,6 +299,14 @@ bool convert(const map& t, json& j) {
     values.emplace_back(std::move(a));
   };
   j = std::move(values);
+  return true;
+}
+
+bool convert(const record& xs, json& j) {
+  json::object o;
+  for (auto& [k, v] : xs)
+    o[k] = jsonize(v);
+  j = std::move(o);
   return true;
 }
 

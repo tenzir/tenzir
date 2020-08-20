@@ -229,7 +229,7 @@ struct json_printer : printer<json_printer<TreePolicy, Indent, Padding>> {
     }
 
     bool pad() {
-      if (Padding > 0)
+      if constexpr (Padding > 0)
         for (auto i = 0; i < Padding; ++i)
           if (!printers::any.print(out_, ' '))
             return false;

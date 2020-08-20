@@ -454,7 +454,7 @@ struct row_evaluator {
 
 } // namespace
 
-ids evaluate(const table_slice& slice, const expression& expr) {
+ids evaluate(const expression& expr, const table_slice& slice) {
   // TODO: switch to a column-based evaluation strategy where it makes sense.
   ids result;
   result.append(false, slice.offset());

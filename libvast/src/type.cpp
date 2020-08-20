@@ -252,6 +252,12 @@ caf::optional<std::string> record_type::resolve(const offset& o) const {
   return result;
 }
 
+const record_field* record_type::find(std::string_view field_name) const {
+  auto pred = [&](auto field) { return field.name == field_name; };
+  auto i = std::find_if(fields.begin(), fields.end(), pred);
+  return i == fields.end() ? nullptr : &*i;
+}
+
 namespace {
 
 struct offset_map_builder {
