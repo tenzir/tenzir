@@ -16,6 +16,7 @@
 #include "vast/config.hpp"
 #include "vast/detail/assert.hpp"
 #include "vast/detail/raise_error.hpp"
+#include "vast/error.hpp"
 #include "vast/logger.hpp"
 
 #include <cerrno>
@@ -254,7 +255,7 @@ bool read(int fd, void* buffer, size_t bytes, size_t* got) {
   return true;
 }
 
-bool write(int fd, const void* buffer, size_t bytes, size_t* put) {
+caf::error write(int fd, const void* buffer, size_t bytes, size_t* put) {
   auto total = size_t{0};
   auto buf = reinterpret_cast<const uint8_t*>(buffer);
   while (total < bytes) {
@@ -262,13 +263,17 @@ bool write(int fd, const void* buffer, size_t bytes, size_t* put) {
     do {
       written = ::write(fd, buf + total, bytes - total);
     } while (written < 0 && errno == EINTR);
-    if (written <= 0)
-      return false;
+    if (written < 0)
+      return make_error(ec::filesystem_error, "write(2):", std::strerror(errno));
+    // write should not return 0 if it wasn't asked to write that amount. We
+    // want to cover this case anyway in case it ever happens.
+    if (written == 0)
+      return make_error(ec::filesystem_error, "write(2) returned 0");
     total += static_cast<size_t>(written);
   }
   if (put)
     *put = total;
-  return true;
+  return caf::none;
 }
 
 bool seek(int fd, size_t bytes) {

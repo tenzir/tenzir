@@ -13,7 +13,7 @@
 
 #pragma once
 
-#include "vast/filesystem.hpp"
+#include "vast/path.hpp"
 #include "vast/system/filesystem.hpp"
 
 #include <caf/stateful_actor.hpp>

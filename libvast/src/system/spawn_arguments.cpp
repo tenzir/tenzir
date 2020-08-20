@@ -13,20 +13,20 @@
 
 #include "vast/system/spawn_arguments.hpp"
 
+#include "vast/concept/parseable/to.hpp"
+#include "vast/concept/parseable/vast/expression.hpp"
+#include "vast/concept/parseable/vast/schema.hpp"
+#include "vast/error.hpp"
+#include "vast/expression.hpp"
+#include "vast/path.hpp"
+#include "vast/schema.hpp"
+
 #include <caf/config_value.hpp>
 #include <caf/error.hpp>
 #include <caf/expected.hpp>
 #include <caf/optional.hpp>
 #include <caf/settings.hpp>
 #include <caf/string_algorithms.hpp>
-
-#include "vast/concept/parseable/to.hpp"
-#include "vast/concept/parseable/vast/expression.hpp"
-#include "vast/concept/parseable/vast/schema.hpp"
-#include "vast/error.hpp"
-#include "vast/expression.hpp"
-#include "vast/filesystem.hpp"
-#include "vast/schema.hpp"
 
 namespace vast::system {
 

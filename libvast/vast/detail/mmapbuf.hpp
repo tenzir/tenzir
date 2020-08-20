@@ -13,12 +13,12 @@
 
 #pragma once
 
+#include "vast/chunk.hpp"
+#include "vast/path.hpp"
+
 #include <cstddef>
 #include <streambuf>
 #include <string>
-
-#include "vast/chunk.hpp"
-#include "vast/filesystem.hpp"
 
 namespace vast::detail {
 

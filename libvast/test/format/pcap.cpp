@@ -24,7 +24,6 @@
 #include "vast/defaults.hpp"
 #include "vast/error.hpp"
 #include "vast/event.hpp"
-#include "vast/filesystem.hpp"
 #include "vast/to_events.hpp"
 
 using namespace vast;

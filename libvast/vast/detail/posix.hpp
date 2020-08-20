@@ -13,6 +13,8 @@
 
 #pragma once
 
+#include <caf/fwd.hpp>
+
 #include <string>
 
 /// Various POSIX-compliant helper tools.
@@ -122,7 +124,7 @@ bool close(int fd);
 /// @param buffer The buffer to write into.
 /// @param bytes The number of bytes to read from *fd* and write into *buffer*.
 /// @param got If not-nullptr, receives the number of bytes actually read.
-/// @returns `true` on successful reading.
+/// @returns `true` on successful read.
 bool read(int fd, void* buffer, size_t bytes, size_t* got = nullptr);
 
 /// Wraps `write(2)`.
@@ -130,8 +132,9 @@ bool read(int fd, void* buffer, size_t bytes, size_t* got = nullptr);
 /// @param buffer The buffer to read from.
 /// @param bytes The number of bytes to write into *fd* from *buffer*.
 /// @param put If not-nullptr, receives the number of bytes actually read.
-/// @returns `true` on successful reading.
-bool write(int fd, const void* buffer, size_t bytes, size_t* put = nullptr);
+/// @returns `caf::none` on successful write.
+[[nodiscard]] caf::error
+write(int fd, const void* buffer, size_t bytes, size_t* put = nullptr);
 
 /// Wraps `seek(2)`.
 /// @param fd A seekable file descriptor.
@@ -140,4 +143,3 @@ bool write(int fd, const void* buffer, size_t bytes, size_t* put = nullptr);
 bool seek(int fd, size_t bytes);
 
 } // namespace vast::detail
-

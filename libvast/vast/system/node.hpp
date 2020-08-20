@@ -16,7 +16,7 @@
 #include "vast/aliases.hpp"
 #include "vast/command.hpp"
 #include "vast/error.hpp"
-#include "vast/filesystem.hpp"
+#include "vast/path.hpp"
 #include "vast/system/archive.hpp"
 #include "vast/system/component_registry.hpp"
 #include "vast/system/spawn_arguments.hpp"

@@ -14,7 +14,7 @@
 #include "vast/system/spawn_archive.hpp"
 
 #include "vast/defaults.hpp"
-#include "vast/filesystem.hpp"
+#include "vast/path.hpp"
 #include "vast/si_literals.hpp"
 #include "vast/system/archive.hpp"
 #include "vast/system/node.hpp"

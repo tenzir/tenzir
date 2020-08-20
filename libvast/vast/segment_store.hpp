@@ -13,17 +13,16 @@
 
 #pragma once
 
-#include <caf/fwd.hpp>
-
-#include "vast/filesystem.hpp"
+#include "vast/detail/cache.hpp"
+#include "vast/detail/range_map.hpp"
 #include "vast/fwd.hpp"
+#include "vast/path.hpp"
 #include "vast/segment.hpp"
 #include "vast/segment_builder.hpp"
 #include "vast/store.hpp"
 #include "vast/uuid.hpp"
 
-#include "vast/detail/cache.hpp"
-#include "vast/detail/range_map.hpp"
+#include <caf/fwd.hpp>
 
 namespace vast {
 

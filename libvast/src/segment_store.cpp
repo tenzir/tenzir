@@ -18,6 +18,7 @@
 #include "vast/concept/printable/vast/error.hpp"
 #include "vast/concept/printable/vast/filesystem.hpp"
 #include "vast/concept/printable/vast/uuid.hpp"
+#include "vast/directory.hpp"
 #include "vast/error.hpp"
 #include "vast/event.hpp"
 #include "vast/fbs/segment.hpp"

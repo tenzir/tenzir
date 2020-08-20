@@ -11,8 +11,10 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#include "vast/filesystem.hpp"
 #include "vast/detail/system.hpp"
+#include "vast/directory.hpp"
+#include "vast/file.hpp"
+#include "vast/path.hpp"
 
 #define SUITE filesystem
 #include "vast/test/test.hpp"

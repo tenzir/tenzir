@@ -31,7 +31,7 @@
 #include "vast/fbs/utils.hpp"
 #include "vast/ids.hpp"
 #include "vast/io/read.hpp"
-#include "vast/io/write.hpp"
+#include "vast/io/save.hpp"
 #include "vast/json.hpp"
 #include "vast/load.hpp"
 #include "vast/logger.hpp"
@@ -153,7 +153,7 @@ caf::error index_state::flush_meta_index() {
   auto flatbuf = fbs::wrap(meta_idx, fbs::file_identifier);
   if (!flatbuf)
     return flatbuf.error();
-  return io::write(meta_index_filename(), as_bytes(*flatbuf));
+  return io::save(meta_index_filename(), as_bytes(*flatbuf));
 }
 
 caf::error index_state::flush_statistics() {
@@ -246,7 +246,7 @@ void index_state::reset_active_partition() {
     [[maybe_unused]] auto unregistered = stage->out().unregister(active.get());
     VAST_ASSERT(unregistered);
     if (auto err = active->flush_to_disk())
-      VAST_ERROR(self, "failed to persist active partition");
+      VAST_ERROR(self, "failed to persist active partition:", err);
     // Store this partition as unpersisted to make sure we're not attempting
     // to load it from disk until it is safe to do so.
     if (active_partition_indexers > 0)
@@ -255,9 +255,9 @@ void index_state::reset_active_partition() {
   // Persist the current version of the meta_index and statistics to preserve
   // the state and be partially robust against crashes.
   if (auto err = flush_meta_index())
-    VAST_ERROR(self, "failed to persist the meta index");
+    VAST_ERROR(self, "failed to persist the meta index:", err);
   if (auto err = flush_statistics())
-    VAST_ERROR(self, "failed to persist the statistics");
+    VAST_ERROR(self, "failed to persist the statistics:", err);
   active = make_partition();
   stage->out().register_partition(active.get());
   active_partition_indexers = 0;

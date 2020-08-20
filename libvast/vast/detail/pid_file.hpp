@@ -13,7 +13,7 @@
 
 #pragma once
 
-#include "vast/filesystem.hpp"
+#include "vast/path.hpp"
 
 #include <caf/error.hpp>
 

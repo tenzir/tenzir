@@ -13,25 +13,52 @@
 
 #pragma once
 
-#include "vast/concept/printable/core/printer.hpp"
-#include "vast/concept/printable/string/string.hpp"
+#include "vast/config.hpp"
+#include "vast/detail/iterator.hpp"
 #include "vast/path.hpp"
+
+#ifdef VAST_POSIX
+#  include <dirent.h>
+#endif
 
 namespace vast {
 
-struct path_printer : printer<path_printer> {
-  using attribute = path;
+/// An ordered sequence of all the directory entries in a particular directory.
+class directory {
+public:
+  using const_iterator = class iterator
+    : public detail::iterator_facade<iterator, std::input_iterator_tag,
+                                     const path&, const path&> {
+  public:
+    iterator(directory* dir = nullptr);
 
-  template <class Iterator>
-  bool print(Iterator& out, const path& p) const {
-    return printers::str.print(out, p.str());
-  }
-};
+    void increment();
+    const path& dereference() const;
+    bool equals(const iterator& other) const;
 
-template <>
-struct printer_registry<path> {
-  using type = path_printer;
+  private:
+    path current_;
+    const directory* dir_ = nullptr;
+  };
+
+  /// Constructs a directory stream.
+  /// @param p The path to the directory.
+  directory(vast::path p);
+
+  ~directory();
+
+  iterator begin();
+  iterator end() const;
+
+  /// Retrieves the ::path for this file.
+  /// @returns The ::path for this file.
+  const vast::path& path() const;
+
+private:
+  vast::path path_;
+#ifdef VAST_POSIX
+  DIR* dir_ = nullptr;
+#endif
 };
 
 } // namespace vast
-
