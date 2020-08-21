@@ -249,15 +249,22 @@ caf::error close(int fd) {
 }
 
 caf::error read(int fd, void* buffer, size_t bytes, size_t* got) {
-  ssize_t taken;
-  do {
-    taken = ::read(fd, buffer, bytes);
-  } while (taken < 0 && errno == EINTR);
-  if (taken <= 0) // EOF == 0, error == -1
-    return make_error(ec::filesystem_error,
-                      "failed in read(2):", std::strerror(errno));
+  auto total = size_t{0};
+  auto buf = reinterpret_cast<uint8_t*>(buffer);
+  while (total < bytes) {
+    ssize_t taken;
+    do {
+      taken = ::read(fd, buf + total, bytes - total);
+    } while (taken < 0 && errno == EINTR);
+    if (taken < 0) // error
+      return make_error(ec::filesystem_error,
+                        "failed in read(2):", std::strerror(errno));
+    if (taken == 0) // EOF
+      break;
+    total += static_cast<size_t>(taken);
+  }
   if (got)
-    *got = static_cast<size_t>(taken);
+    *got = total;
   return caf::none;
 }
 
