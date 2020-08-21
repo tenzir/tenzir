@@ -24,6 +24,7 @@
 #include <cstring>
 #include <fcntl.h>
 #include <stdexcept>
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
@@ -249,45 +250,31 @@ caf::error close(int fd) {
 }
 
 caf::error read(int fd, void* buffer, size_t bytes, size_t* got) {
-  auto total = size_t{0};
-  auto buf = reinterpret_cast<uint8_t*>(buffer);
-  while (total < bytes) {
-    ssize_t taken;
-    do {
-      taken = ::read(fd, buf + total, bytes - total);
-    } while (taken < 0 && errno == EINTR);
-    if (taken < 0) // error
-      return make_error(ec::filesystem_error,
-                        "failed in read(2):", std::strerror(errno));
-    if (taken == 0) // EOF
-      break;
-    total += static_cast<size_t>(taken);
+  caf::error result = caf::none;
+  auto stream = fdopen(dup(fd), "r");
+  auto ret = fread(buffer, sizeof(char), bytes, stream);
+  if (ret != bytes && !feof(stream)) {
+    result = make_error(ec::filesystem_error,
+                        "failed in fread():", std::strerror(errno));
   }
+  fclose(stream);
   if (got)
-    *got = total;
-  return caf::none;
+    *got = ret;
+  return result;
 }
 
 caf::error write(int fd, const void* buffer, size_t bytes, size_t* put) {
-  auto total = size_t{0};
-  auto buf = reinterpret_cast<const uint8_t*>(buffer);
-  while (total < bytes) {
-    ssize_t written;
-    do {
-      written = ::write(fd, buf + total, bytes - total);
-    } while (written < 0 && errno == EINTR);
-    if (written < 0)
-      return make_error(ec::filesystem_error,
-                        "failed in write(2):", std::strerror(errno));
-    // write should not return 0 if it wasn't asked to write that amount. We
-    // want to cover this case anyway in case it ever happens.
-    if (written == 0)
-      return make_error(ec::filesystem_error, "write(2) returned 0");
-    total += static_cast<size_t>(written);
+  caf::error result = caf::none;
+  auto stream = fdopen(dup(fd), "w");
+  auto ret = fwrite(buffer, sizeof(char), bytes, stream);
+  if (ret != bytes && !feof(stream)) {
+    result = make_error(ec::filesystem_error,
+                        "failed in fwrite():", std::strerror(errno));
   }
+  fclose(stream);
   if (put)
-    *put = total;
-  return caf::none;
+    *put = ret;
+  return result;
 }
 
 caf::error seek(int fd, size_t bytes) {
