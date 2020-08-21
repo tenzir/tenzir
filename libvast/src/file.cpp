@@ -88,7 +88,9 @@ caf::expected<void> file::open(open_mode mode, bool append) {
 }
 
 bool file::close() {
-  if (!(is_open_ && detail::close(handle_)))
+  if (!is_open_)
+    return false;
+  if (detail::close(handle_))
     return false;
   is_open_ = false;
   return true;
