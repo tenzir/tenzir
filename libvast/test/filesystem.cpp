@@ -11,13 +11,20 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
+#include "vast/byte.hpp"
 #include "vast/detail/system.hpp"
 #include "vast/directory.hpp"
 #include "vast/file.hpp"
 #include "vast/path.hpp"
+#include "vast/si_literals.hpp"
 
 #define SUITE filesystem
+#include "vast/test/fixtures/filesystem.hpp"
 #include "vast/test/test.hpp"
+
+#if VAST_POSIX
+#  include <unistd.h>
+#endif
 
 using namespace vast;
 
@@ -181,3 +188,38 @@ TEST(file_and_directory_manipulation) {
   CHECK(rm(p.parent()));
   CHECK(!p.parent().is_directory());
 }
+
+FIXTURE_SCOPE(chunk_tests, fixtures::filesystem)
+
+// This test takes almost one minute on macOS 10.14.
+#if VAST_POSIX && !VAST_MACOS
+
+TEST(read_large_file) {
+  using namespace vast::binary_byte_literals;
+  auto filename = directory / "very-large.file";
+  auto size = 3_GiB;
+  {
+    MESSAGE("Generate a sparse file");
+    file f{filename};
+    REQUIRE(f.open(file::write_only));
+    auto fd = f.handle();
+    REQUIRE(fd > 0);
+    REQUIRE_EQUAL(ftruncate(fd, size), 0);
+    REQUIRE(f.close());
+  }
+  {
+    MESSAGE("load into memory");
+    file f{filename};
+    REQUIRE(f.open(file::read_only));
+    std::vector<byte> buffer(size);
+    size_t bytes_read;
+    auto ptr = reinterpret_cast<char*>(buffer.data());
+    if (auto err = f.read(ptr, size, &bytes_read))
+      FAIL(err);
+    CHECK_EQUAL(bytes_read, size);
+  }
+}
+
+#endif
+
+FIXTURE_SCOPE_END()
