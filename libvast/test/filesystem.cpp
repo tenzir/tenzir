@@ -212,11 +212,9 @@ TEST(read_large_file) {
     file f{filename};
     REQUIRE(f.open(file::read_only));
     std::vector<byte> buffer(size);
-    size_t bytes_read;
     auto ptr = reinterpret_cast<char*>(buffer.data());
-    if (auto err = f.read(ptr, size, &bytes_read))
+    if (auto err = f.read(ptr, size))
       FAIL(err);
-    CHECK_EQUAL(bytes_read, size);
   }
 }
 

@@ -109,23 +109,20 @@ struct [[nodiscard]] unix_domain_socket {
 /// @returns `caf::none` on successful closing.
 [[nodiscard]] caf::error close(int fd);
 
-/// Wraps `read(2)`.
+/// Wraps `fread(3)`.
 /// @param fd The file descriptor to read from.
 /// @param buffer The buffer to write into.
 /// @param bytes The number of bytes to read from *fd* and write into *buffer*.
-/// @param got If not-nullptr, receives the number of bytes actually read.
-/// @returns `caf::none` on successful reading.
-[[nodiscard]] caf::error
-read(int fd, void* buffer, size_t bytes, size_t* got = nullptr);
+/// @returns the number of bytes on successful reading.
+[[nodiscard]] caf::expected<size_t> read(int fd, void* buffer, size_t bytes);
 
-/// Wraps `write(2)`.
+/// Wraps `fwrite(3)`.
 /// @param fd The file descriptor to write to.
 /// @param buffer The buffer to read from.
 /// @param bytes The number of bytes to write into *fd* from *buffer*.
-/// @param put If not-nullptr, receives the number of bytes actually read.
-/// @returns `caf::none` on successful writing.
-[[nodiscard]] caf::error
-write(int fd, const void* buffer, size_t bytes, size_t* put = nullptr);
+/// @returns the number of written bytes on successful writing.
+[[nodiscard]] caf::expected<size_t>
+write(int fd, const void* buffer, size_t bytes);
 
 /// Wraps `seek(2)`.
 /// @param fd A seekable file descriptor.

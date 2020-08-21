@@ -23,12 +23,7 @@ caf::error write(const path& filename, span<const byte> xs) {
   file f{filename};
   if (!f.open(file::write_only))
     return make_error(ec::filesystem_error, "failed open file");
-  size_t bytes_written = 0;
-  if (auto err = f.write(xs.data(), xs.size(), &bytes_written))
-    return err;
-  if (bytes_written != xs.size())
-    return make_error(ec::filesystem_error, "incomplete write");
-  return caf::none;
+  return f.write(xs.data(), xs.size());
 }
 
 } // namespace vast::io

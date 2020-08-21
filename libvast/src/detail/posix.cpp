@@ -20,6 +20,8 @@
 #include "vast/error.hpp"
 #include "vast/logger.hpp"
 
+#include <caf/expected.hpp>
+
 #include <cerrno>
 #include <cstring>
 #include <fcntl.h>
@@ -249,32 +251,30 @@ caf::error close(int fd) {
   return caf::none;
 }
 
-caf::error read(int fd, void* buffer, size_t bytes, size_t* got) {
-  caf::error result = caf::none;
+caf::expected<size_t> read(int fd, void* buffer, size_t bytes) {
+  int errno_copy = 0;
   auto stream = fdopen(dup(fd), "r");
-  auto ret = fread(buffer, sizeof(char), bytes, stream);
-  if (ret != bytes && !feof(stream)) {
-    result = make_error(ec::filesystem_error,
-                        "failed in fread():", std::strerror(errno));
-  }
+  auto read = fread(buffer, sizeof(char), bytes, stream);
+  if (read != bytes && !feof(stream))
+    errno_copy = errno;
   fclose(stream);
-  if (got)
-    *got = ret;
-  return result;
+  if (errno_copy != 0)
+    return make_error(ec::filesystem_error,
+                      "failed in fread():", std::strerror(errno_copy));
+  return read;
 }
 
-caf::error write(int fd, const void* buffer, size_t bytes, size_t* put) {
-  caf::error result = caf::none;
+caf::expected<size_t> write(int fd, const void* buffer, size_t bytes) {
+  int errno_copy = 0;
   auto stream = fdopen(dup(fd), "w");
-  auto ret = fwrite(buffer, sizeof(char), bytes, stream);
-  if (ret != bytes && !feof(stream)) {
-    result = make_error(ec::filesystem_error,
-                        "failed in fwrite():", std::strerror(errno));
-  }
+  auto written = fwrite(buffer, sizeof(char), bytes, stream);
+  if (written != bytes && !feof(stream))
+    errno_copy = errno;
   fclose(stream);
-  if (put)
-    *put = ret;
-  return result;
+  if (errno_copy != 0)
+    return make_error(ec::filesystem_error,
+                      "failed in fwrite():", std::strerror(errno));
+  return written;
 }
 
 caf::error seek(int fd, size_t bytes) {
