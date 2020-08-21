@@ -14,7 +14,6 @@
 #pragma once
 
 #include "vast/bitmap.hpp"
-#include "vast/event.hpp"
 #include "vast/expression.hpp"
 #include "vast/filesystem.hpp"
 #include "vast/type.hpp"

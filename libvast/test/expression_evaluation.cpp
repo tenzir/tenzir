@@ -19,7 +19,6 @@
 #include "vast/concept/parseable/to.hpp"
 #include "vast/concept/parseable/vast/expression.hpp"
 #include "vast/concept/parseable/vast/time.hpp"
-#include "vast/event.hpp"
 #include "vast/expression.hpp"
 #include "vast/expression_visitors.hpp"
 #include "vast/ids.hpp"
@@ -34,6 +33,7 @@ namespace {
 
 struct fixture : fixtures::events {
   fixture() {
+    // clang-format off
     foo = record_type{
       {"s1", string_type{}},
       {"d1", real_type{}},
@@ -45,28 +45,24 @@ struct fixture : fixtures::events {
     bar = record_type{
       {"s1", string_type{}},
       {"r", record_type{
-      {"b", bool_type{}},
-      {"s", string_type{}}
+        {"b", bool_type{}},
+        {"s", string_type{}}
       }},
     }.name("bar");
+    // clang-format on
     sch.add(foo);
     sch.add(bar);
-    e0 = event::make(list{"babba", 1.337, 42u, 100, "bar", -4.8}, foo);
-    e1 = event::make(list{"yadda", list{false, "baz"}}, bar);
-    MESSAGE("event meta data queries");
-    auto tp = to<vast::time>("2014-01-16+05:30:12");
-    REQUIRE(tp);
-    e.timestamp(*tp);
-    auto t = alias_type{}.name("foo"); // nil type, for meta data only
-    CHECK(e.type(t));
+    e0 = {{"s1", "babba"}, {"d1", 1.337}, {"c1", 42u},
+          {"i", 100},      {"s2", "bar"}, {"d2", -4.8}};
+    e1 = {{"s1", "yadda"}, {"r", record{{"b", false}, {"s", "baz"}}}};
   }
 
   schema sch;
   type foo;
   type bar;
-  event e;
-  event e0;
-  event e1;
+  record e;
+  record e0;
+  record e1;
 };
 
 } // namespace <anonymous>
@@ -163,7 +159,7 @@ FIXTURE_SCOPE(evaluation_tests, fixture)
 //}
 
 // TEST(evaluation - table slice rows) {
-//  auto& slice = zeek_conn_log_slices[0];
+//  auto& slice = zeek_conn_log[0];
 //  auto layout = slice->layout();
 //  auto tailored = [&](std::string_view expr) {
 //    auto ast = unbox(to<expression>(expr));
@@ -182,7 +178,7 @@ FIXTURE_SCOPE(evaluation_tests, fixture)
 //}
 
 TEST(evaluation - table slice) {
-  auto slice = zeek_conn_log_slices[0];
+  auto slice = zeek_conn_log[0];
   slice.unshared().offset(0);
   REQUIRE_EQUAL(slice->rows(), 8u);
   auto layout = slice->layout();

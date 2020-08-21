@@ -22,7 +22,6 @@
 #include "vast/defaults.hpp"
 #include "vast/detail/make_io_stream.hpp"
 #include "vast/filesystem.hpp"
-#include "vast/to_events.hpp"
 
 using namespace vast;
 

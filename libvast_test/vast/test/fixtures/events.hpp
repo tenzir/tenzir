@@ -16,9 +16,9 @@
 #include "vast/test/data.hpp"
 #include "vast/test/test.hpp"
 
+#include "vast/data.hpp"
 #include "vast/defaults.hpp"
 #include "vast/error.hpp"
-#include "vast/event.hpp"
 #include "vast/fwd.hpp"
 
 namespace fixtures {
@@ -29,36 +29,25 @@ struct events {
   events();
 
   /// Maximum size of all generated slices.
-  static size_t slice_size;
+  static constexpr size_t slice_size = 8;
 
-  static std::vector<event> zeek_conn_log;
-  static std::vector<event> zeek_dns_log;
-  static std::vector<event> zeek_http_log;
-  static std::vector<event> random;
+  // TODO: remove these entirely; all operations should be on table slices.
+  static std::vector<table_slice_ptr> zeek_conn_log;
+  static std::vector<table_slice_ptr> zeek_dns_log;
+  static std::vector<table_slice_ptr> zeek_http_log;
+  static std::vector<table_slice_ptr> random;
 
-  static std::vector<table_slice_ptr> zeek_conn_log_slices;
-  // TODO: table_slice::recursive_add flattens too much, why the following
-  //       slices won't work. However, flatten(value) is also broken
-  //       at the moment (cf. #3215), so we can't fix it until then.
-  static std::vector<table_slice_ptr> zeek_http_log_slices;
-  static std::vector<table_slice_ptr> zeek_dns_log_slices;
-  // static std::vector<table_slice_ptr> random_slices;
-
-  static std::vector<table_slice_ptr> zeek_full_conn_log_slices;
+  static std::vector<table_slice_ptr> zeek_conn_log_full;
 
   /// 10000 ascending integer values, starting at 0.
-  static std::vector<event> ascending_integers;
-  static std::vector<table_slice_ptr> ascending_integers_slices;
+  static std::vector<table_slice_ptr> ascending_integers;
 
   /// 10000 integer values, alternating between 0 and 1.
-  static std::vector<event> alternating_integers;
-  static std::vector<table_slice_ptr> alternating_integers_slices;
-
-  static record_type zeek_conn_log_layout();
+  static std::vector<table_slice_ptr> alternating_integers;
 
   template <class... Ts>
-  static std::vector<list> make_rows(Ts... xs) {
-    return {list{data{std::move(xs)}}...};
+  static std::vector<std::vector<data>> make_rows(Ts... xs) {
+    return {std::vector<data>{data{std::move(xs)}}...};
   }
 
   auto take(const std::vector<table_slice_ptr>& xs, size_t n) {

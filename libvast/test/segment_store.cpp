@@ -25,7 +25,6 @@
 #include "vast/ids.hpp"
 #include "vast/si_literals.hpp"
 #include "vast/table_slice.hpp"
-#include "vast/to_events.hpp"
 
 using namespace vast;
 using namespace binary_byte_literals;
@@ -43,11 +42,10 @@ struct fixture : fixtures::deterministic_actor_system_and_events {
     // degradations.
     everything = make_ids({{0, 100}});
     // Check that ground truth is what we expect.
-    if (zeek_conn_log_slices.size() != 3u)
+    if (zeek_conn_log.size() != 3u)
       FAIL("expected 3 slices in test data set");
-    if (zeek_conn_log_slices[0]->rows() != 8
-        || zeek_conn_log_slices[1]->rows() != 8
-        || zeek_conn_log_slices[2]->rows() != 4)
+    if (zeek_conn_log[0]->rows() != 8 || zeek_conn_log[1]->rows() != 8
+        || zeek_conn_log[2]->rows() != 4)
       FAIL("expected 8, 8 and 4 rows in data set");
   }
 
@@ -138,11 +136,9 @@ size_t num_rows(const table_slice& xs, size_t starting_row,
 
 } // namespace
 
-#define CHECK_SLICE(xs, zeek_slice, ...)                                       \
-  CHECK_EQUAL(xs->rows(),                                                      \
-              num_rows(*zeek_conn_log_slices[zeek_slice], __VA_ARGS__));       \
-  CHECK_EQUAL(to_events(*xs),                                                  \
-              to_events(*zeek_conn_log_slices[zeek_slice], __VA_ARGS__))
+#define CHECK_SLICE(xs, slice, ...)                                            \
+  CHECK_EQUAL(xs->rows(), num_rows(*zeek_conn_log[slice], __VA_ARGS__));       \
+  CHECK_EQUAL(to_data(*xs), to_data(*zeek_conn_log[slice], __VA_ARGS__))
 
 FIXTURE_SCOPE(segment_store_tests, fixture)
 
@@ -154,7 +150,7 @@ TEST(flushing empty store - no op) {
 }
 
 TEST(flushing filled store) {
-  put(zeek_conn_log_slices);
+  put(zeek_conn_log);
   CHECK_EQUAL(store->dirty(), true);
   auto active = store->active_id();
   auto err = store->flush();
@@ -171,12 +167,12 @@ TEST(querying empty segment store) {
 }
 
 TEST(querying filled segment store) {
-  put(zeek_conn_log_slices);
-  CHECK(deep_compare(zeek_conn_log_slices, get(everything)));
+  put(zeek_conn_log);
+  CHECK(deep_compare(zeek_conn_log, get(everything)));
   auto slices = get(make_ids({0, 6, 19, 21}));
   REQUIRE_EQUAL(slices.size(), 2u);
-  CHECK_EQUAL(val(slices[0]), val(zeek_conn_log_slices[0]));
-  CHECK_EQUAL(val(slices[1]), val(zeek_conn_log_slices[2]));
+  CHECK_EQUAL(val(slices[0]), val(zeek_conn_log[0]));
+  CHECK_EQUAL(val(slices[1]), val(zeek_conn_log[2]));
 }
 
 TEST(sessionized extraction on empty segment store) {
@@ -188,7 +184,7 @@ TEST(sessionized extraction on empty segment store) {
 }
 
 TEST(sessionized extraction on filled segment store) {
-  put(zeek_conn_log_slices);
+  put(zeek_conn_log);
   auto session = store->extract(make_ids({0, 6, 19, 21}));
   std::vector<table_slice_ptr> slices;
   for (auto x = session->next(); x.engaged(); x = session->next())
@@ -205,13 +201,13 @@ TEST(erase on empty segment store) {
 }
 
 TEST(erase on filled segment store with mismatched IDs) {
-  put(zeek_conn_log_slices);
+  put(zeek_conn_log);
   erase(make_ids({1000}));
-  CHECK(deep_compare(zeek_conn_log_slices, get(everything)));
+  CHECK(deep_compare(zeek_conn_log, get(everything)));
 }
 
 TEST(erase active segment) {
-  put(zeek_conn_log_slices);
+  put(zeek_conn_log);
   CHECK_EQUAL(store->dirty(), true);
   CHECK_EQUAL(segment_files().size(), 0u);
   auto segment_id = store->active_id();
@@ -224,7 +220,7 @@ TEST(erase active segment) {
 }
 
 TEST(erase cached segment) {
-  put_hot(zeek_conn_log_slices);
+  put_hot(zeek_conn_log);
   CHECK_EQUAL(segment_files().size(), 1u);
   erase(everything);
   CHECK_EQUAL(get(everything).size(), 0u);
@@ -233,7 +229,7 @@ TEST(erase cached segment) {
 }
 
 TEST(erase persisted segment) {
-  put_cold(zeek_conn_log_slices);
+  put_cold(zeek_conn_log);
   CHECK_EQUAL(segment_files().size(), 1u);
   erase(everything);
   CHECK_EQUAL(get(everything).size(), 0u);
@@ -242,7 +238,7 @@ TEST(erase persisted segment) {
 }
 
 TEST(erase single slice from active segment) {
-  put(zeek_conn_log_slices);
+  put(zeek_conn_log);
   erase(make_ids({{8, 16}}));
   auto slices = get(everything);
   REQUIRE_EQUAL(slices.size(), 2u);
@@ -251,7 +247,7 @@ TEST(erase single slice from active segment) {
 }
 
 TEST(erase single slice from cached segment) {
-  put_hot(zeek_conn_log_slices);
+  put_hot(zeek_conn_log);
   erase(make_ids({{8, 16}}));
   auto slices = get(everything);
   REQUIRE_EQUAL(slices.size(), 2u);
@@ -260,7 +256,7 @@ TEST(erase single slice from cached segment) {
 }
 
 TEST(erase single slice from persisted segment) {
-  put_cold(zeek_conn_log_slices);
+  put_cold(zeek_conn_log);
   erase(make_ids({{8, 16}}));
   auto slices = get(everything);
   REQUIRE_EQUAL(slices.size(), 2u);
@@ -269,7 +265,7 @@ TEST(erase single slice from persisted segment) {
 }
 
 TEST(erase slice part from active segment) {
-  put(zeek_conn_log_slices);
+  put(zeek_conn_log);
   erase(make_ids({{10, 14}}));
   auto slices = get(everything);
   REQUIRE_EQUAL(slices.size(), 4u);
@@ -280,7 +276,7 @@ TEST(erase slice part from active segment) {
 }
 
 TEST(erase slice part from cached segment) {
-  put_hot(zeek_conn_log_slices);
+  put_hot(zeek_conn_log);
   erase(make_ids({{10, 14}}));
   auto slices = get(everything);
   REQUIRE_EQUAL(slices.size(), 4u);
@@ -291,7 +287,7 @@ TEST(erase slice part from cached segment) {
 }
 
 TEST(erase slice part from persisted segment) {
-  put_cold(zeek_conn_log_slices);
+  put_cold(zeek_conn_log);
   erase(make_ids({{10, 14}}));
   auto slices = get(everything);
   REQUIRE_EQUAL(slices.size(), 4u);

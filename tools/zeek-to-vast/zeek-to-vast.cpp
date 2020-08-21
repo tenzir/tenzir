@@ -28,12 +28,10 @@
 #include <vast/data.hpp>
 #include <vast/defaults.hpp>
 #include <vast/error.hpp>
-#include <vast/event.hpp>
 #include <vast/expression.hpp>
 #include <vast/format/writer.hpp>
 #include <vast/logger.hpp>
 #include <vast/scope_linked.hpp>
-#include <vast/to_events.hpp>
 #include <vast/uuid.hpp>
 
 #include <vast/concept/parseable/parse.hpp>
@@ -182,28 +180,18 @@ broker::zeek::Event make_result_event(std::string query_id, broker::data x) {
   return {"VAST::result", std::move(args)};
 }
 
-// Constructs a result event for Zeek from a VAST event.
-broker::zeek::Event make_result_event(std::string query_id,
-                                      const vast::event& x) {
-  broker::vector xs(2);
-  xs[0] = x.type().name();
-  xs[1] = to_broker(x.data());
-  return make_result_event(std::move(query_id), std::move(xs));
-}
-
 // A VAST writer that publishes the event it gets to a Zeek endpoint.
-class bro_writer : public vast::format::writer {
+class zeek_writer : public vast::format::writer {
 public:
-  bro_writer() = default;
+  zeek_writer() = default;
 
-  bro_writer(broker::endpoint& endpoint, std::string query_id)
-    : endpoint_{&endpoint},
-      query_id_{std::move(query_id)} {
+  zeek_writer(broker::endpoint& endpoint, std::string query_id)
+    : endpoint_{&endpoint}, query_id_{std::move(query_id)} {
     auto& cfg = endpoint.system().config();
     show_progress_ = caf::get_or(cfg, "show-progress", false);
   }
 
-  ~bro_writer() override {
+  ~zeek_writer() override {
     if (show_progress_ && num_results_ > 0)
       std::cerr << std::endl;
     VAST_INFO_ANON("query", query_id_, "had", num_results_, "result(s)");
@@ -212,12 +200,21 @@ public:
   using vast::format::writer::write;
 
   caf::error write(const vast::table_slice& slice) override {
-    auto xs = vast::to_events(slice);
-    num_results_ += xs.size();
-    if (show_progress_)
-      std::cerr << '.' << std::flush;
-    for (auto& x : xs)
-      endpoint_->publish(data_topic, make_result_event(query_id_, x));
+    for (size_t row = 0; row < slice.rows(); ++row) {
+      if (show_progress_)
+        std::cerr << '.' << std::flush;
+      // Assemble an event as a list of broker data values.
+      broker::vector xs;
+      auto columns = slice.layout().fields.size();
+      xs.reserve(columns);
+      for (size_t col = 0; col < columns; ++col)
+        // TODO: remove unnecessary materialization and operate on data views
+        // instead.
+        xs.push_back(to_broker(materialize(slice.at(row, col))));
+      auto event = make_result_event(query_id_, std::move(xs));
+      endpoint_->publish(data_topic, std::move(event));
+    }
+    num_results_ += slice.rows();
     return caf::none;
   }
 
@@ -344,8 +341,8 @@ int main(int argc, char** argv) {
     // Relay the query expression to VAST.
     VAST_INFO_ANON("dispatching query", query_id, expression);
     auto inv = vast::invocation{std::move(opts), "", {expression}};
-    auto sink = self->spawn(vast::system::sink<bro_writer>,
-                            bro_writer{endpoint, query_id},
+    auto sink = self->spawn(vast::system::sink<zeek_writer>,
+                            zeek_writer{endpoint, query_id},
                             vast::defaults::export_::max_events);
     vast::scope_linked<caf::actor> guard{sink};
     auto res = vast::system::sink_command(std::move(inv), sys, sink);

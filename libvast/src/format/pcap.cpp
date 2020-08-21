@@ -22,7 +22,6 @@
 #include "vast/detail/byte_swap.hpp"
 #include "vast/error.hpp"
 #include "vast/ether_type.hpp"
-#include "vast/event.hpp"
 #include "vast/filesystem.hpp"
 #include "vast/logger.hpp"
 #include "vast/span.hpp"

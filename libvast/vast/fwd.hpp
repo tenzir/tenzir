@@ -39,7 +39,6 @@ class chunk;
 class column_index;
 class command;
 class data;
-class event;
 class ewah_bitstream;
 class expression;
 class json;
@@ -60,7 +59,6 @@ class table_slice;
 class table_slice_builder;
 class type;
 class uuid;
-class value;
 class value_index;
 
 namespace system {
@@ -298,7 +296,6 @@ CAF_BEGIN_TYPE_ID_BLOCK(vast, caf::first_custom_type_id)
   VAST_ADD_TYPE_ID((vast::data_extractor))
   VAST_ADD_TYPE_ID((vast::disjunction))
   VAST_ADD_TYPE_ID((vast::ec))
-  VAST_ADD_TYPE_ID((vast::event))
   VAST_ADD_TYPE_ID((vast::expression))
   VAST_ADD_TYPE_ID((vast::invocation))
   VAST_ADD_TYPE_ID((vast::field_extractor))
@@ -318,7 +315,6 @@ CAF_BEGIN_TYPE_ID_BLOCK(vast, caf::first_custom_type_id)
   VAST_ADD_TYPE_ID((vast::system::report))
   VAST_ADD_TYPE_ID((vast::system::type_set))
 
-  VAST_ADD_TYPE_ID((std::vector<vast::event>) )
   VAST_ADD_TYPE_ID((std::vector<uint32_t>) )
   VAST_ADD_TYPE_ID((std::vector<vast::table_slice_ptr>) )
 

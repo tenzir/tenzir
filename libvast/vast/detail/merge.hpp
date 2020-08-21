@@ -13,27 +13,14 @@
 
 #pragma once
 
-#include "vast/concept/printable/core/printer.hpp"
-#include "vast/concept/printable/string/char.hpp"
-#include "vast/concept/printable/vast/data.hpp"
-#include "vast/event.hpp"
+namespace vast::detail {
 
-namespace vast {
+/// Merges the contents of two containers into the first.
+template <class Container>
+void merge(Container& xs, Container&& ys) {
+  auto begin = std::make_move_iterator(ys.begin());
+  auto end = std::make_move_iterator(ys.end());
+  xs.insert(xs.end(), begin, end);
+}
 
-struct event_printer : printer<event_printer> {
-  using attribute = event;
-
-  template <class Iterator>
-  bool print(Iterator& out, const event& e) const {
-    auto p = '<' << (printers::data % ", ") << '>';
-    auto& xs = caf::get<list>(e.data());
-    return p(out, xs);
-  }
-};
-
-template <>
-struct printer_registry<event> {
-  using type = event_printer;
-};
-
-} // namespace vast
+} // namespace vast::detail

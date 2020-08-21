@@ -23,7 +23,6 @@
 #include "vast/data.hpp"
 #include "vast/detail/assert.hpp"
 #include "vast/die.hpp"
-#include "vast/event.hpp"
 #include "vast/fwd.hpp"
 #include "vast/ids.hpp"
 #include "vast/logger.hpp"

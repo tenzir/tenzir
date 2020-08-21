@@ -16,7 +16,6 @@
 #include "vast/bitmap.hpp"
 #include "vast/command.hpp"
 #include "vast/config.hpp"
-#include "vast/event.hpp"
 #include "vast/expression.hpp"
 #include "vast/operator.hpp"
 #include "vast/query_options.hpp"

@@ -22,7 +22,6 @@
 #include "vast/detail/make_io_stream.hpp"
 #include "vast/format/zeek.hpp"
 #include "vast/fwd.hpp"
-#include "vast/subset.hpp"
 #include "vast/table_slice.hpp"
 
 using namespace vast;
@@ -78,23 +77,10 @@ TEST(zeek source) {
   run();
   MESSAGE("get slices");
   const auto& slices = deref<test_sink_type>(snk).state.slices;
-  MESSAGE("collect all rows as values");
-  REQUIRE_EQUAL(slices.size(), 3u);
-  std::vector<value> row_contents;
-  for (size_t row = 0; row < 3u; ++row) {
-    auto xs = subset(*slices[row], 0, table_slice::npos);
-    std::move(xs.begin(), xs.end(), std::back_inserter(row_contents));
-  }
-  std::vector<value> zeek_conn_log_values;
-  for (auto& x : zeek_conn_log)
-    zeek_conn_log_values.emplace_back(x);
-  REQUIRE_EQUAL(row_contents.size(), zeek_conn_log_values.size());
-  for (size_t i = 0; i < row_contents.size(); ++i)
-    REQUIRE_EQUAL(row_contents[i], zeek_conn_log_values[i]);
   MESSAGE("compare slices to auto-generates ones");
-  REQUIRE_EQUAL(slices.size(), zeek_conn_log_slices.size());
+  REQUIRE_EQUAL(slices.size(), zeek_conn_log.size());
   for (size_t i = 0; i < slices.size(); ++i)
-    CHECK_EQUAL(*slices[i], *zeek_conn_log_slices[i]);
+    CHECK_EQUAL(*slices[i], *zeek_conn_log[i]);
   MESSAGE("shutdown");
   self->send_exit(src, caf::exit_reason::user_shutdown);
   run();

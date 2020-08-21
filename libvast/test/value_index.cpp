@@ -528,7 +528,7 @@ TEST(regression - build an address index from zeek events) {
   // Populate the index with data up to the critical point.
   address_index idx{address_type{}};
   size_t row_id = 0;
-  for (auto& slice : zeek_full_conn_log_slices) {
+  for (auto& slice : zeek_conn_log_full) {
     for (size_t row = 0; row < slice->rows(); ++row) {
       // Column 2 is orig_h.
       if (!idx.append(slice->at(row, 2), row_id))
@@ -571,7 +571,7 @@ TEST(regression - manual address bitmap index from bitmaps) {
   MESSAGE("populating index");
   std::array<ewah_bitmap, 32> idx;
   size_t row_id = 0;
-  for (auto& slice : zeek_full_conn_log_slices) {
+  for (auto& slice : zeek_conn_log_full) {
     for (size_t row = 0; row < slice->rows(); ++row) {
       // Column 2 is orig_h.
       auto x = caf::get<view<address>>(slice->at(row, 2));
@@ -606,7 +606,7 @@ TEST(regression - manual address bitmap index from 4 byte indexes) {
   idx.fill(byte_index{8});
   size_t row_id = 0;
   MESSAGE("populating index");
-  for (auto& slice : zeek_full_conn_log_slices) {
+  for (auto& slice : zeek_conn_log_full) {
     for (size_t row = 0; row < slice->rows(); ++row) {
       // Column 2 is orig_h.
       auto x = caf::get<view<address>>(slice->at(row, 2));
@@ -649,7 +649,7 @@ TEST(regression - zeek conn log service http) {
     39, 2,  0,  9,  8,  0,  13, 4,  2,  13, 2,  36, 33, 17, 48, 50, 27,
     44, 9,  94, 63, 74, 66, 5,  54, 21, 7,  2,  3,  21, 7,  2,  14, 7,
   };
-  auto& slices = zeek_full_conn_log_slices;
+  auto& slices = zeek_conn_log_full;
   REQUIRE_EQUAL(slices.size(), http_per_100_events.size());
   REQUIRE(std::all_of(slices.begin(), prev(slices.end()),
                       [](auto& slice) { return slice->rows() == 100; }));
@@ -690,7 +690,7 @@ TEST(regression - manual value index for zeek conn log service http) {
   ewah_bitmap none;
   ewah_bitmap mask;
   // Get the slice that contains the events for [8000,8100).
-  auto slice = zeek_full_conn_log_slices[80];
+  auto slice = zeek_conn_log_full[80];
   for (size_t row = 0; row < slice->rows(); ++row) {
     auto i = 8000 + row;
     auto f = detail::overload(

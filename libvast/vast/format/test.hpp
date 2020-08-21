@@ -15,7 +15,6 @@
 
 #include "vast/data.hpp"
 #include "vast/detail/random.hpp"
-#include "vast/event.hpp"
 #include "vast/format/multi_layout_reader.hpp"
 #include "vast/format/reader.hpp"
 #include "vast/fwd.hpp"

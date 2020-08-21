@@ -19,9 +19,9 @@
 #include "vast/defaults.hpp"
 #include "vast/detail/assert.hpp"
 #include "vast/detail/byte_swap.hpp"
+#include "vast/detail/merge.hpp"
 #include "vast/detail/overload.hpp"
 #include "vast/error.hpp"
-#include "vast/event.hpp"
 #include "vast/expression.hpp"
 #include "vast/factory.hpp"
 #include "vast/format/test.hpp"
@@ -29,7 +29,6 @@
 #include "vast/logger.hpp"
 #include "vast/table_slice_builder.hpp"
 #include "vast/table_slice_factory.hpp"
-#include "vast/value.hpp"
 #include "vast/value_index.hpp"
 
 #include <caf/actor_system.hpp>
@@ -360,6 +359,40 @@ std::pair<table_slice_ptr, table_slice_ptr> split(const table_slice_ptr& slice,
   select(xs, slice, make_ids({{mid, last}}));
   VAST_ASSERT(xs.size() == 2);
   return {std::move(xs.front()), std::move(xs.back())};
+}
+
+uint64_t rows(const std::vector<table_slice_ptr>& slices) {
+  auto result = uint64_t{0};
+  for (auto& slice : slices)
+    result += slice->rows();
+  return result;
+}
+
+std::vector<std::vector<data>>
+to_data(const table_slice& slice, size_t first_row, size_t num_rows) {
+  VAST_ASSERT(first_row < slice.rows());
+  VAST_ASSERT(num_rows <= slice.rows() - first_row);
+  if (num_rows == 0)
+    num_rows = slice.rows() - first_row;
+  std::vector<std::vector<data>> result;
+  result.reserve(num_rows);
+  for (size_t i = 0; i < num_rows; ++i) {
+    std::vector<data> xs;
+    xs.reserve(slice.columns());
+    for (size_t j = 0; j < slice.columns(); ++j)
+      xs.emplace_back(materialize(slice.at(first_row + i, j)));
+    result.push_back(std::move(xs));
+  }
+  return result;
+}
+
+std::vector<std::vector<data>>
+to_data(const std::vector<table_slice_ptr>& slices) {
+  std::vector<std::vector<data>> result;
+  result.reserve(rows(slices));
+  for (auto& slice : slices)
+    detail::merge(result, to_data(*slice));
+  return result;
 }
 
 namespace {

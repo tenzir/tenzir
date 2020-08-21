@@ -15,8 +15,6 @@
 
 #include "vast/detail/spawn_container_source.hpp"
 #include "vast/query_options.hpp"
-#include "vast/table_slice.hpp"
-#include "vast/to_events.hpp"
 #include "vast/uuid.hpp"
 
 #include "vast/system/node.hpp"
@@ -54,7 +52,7 @@ void node::ingest(const std::string& type) {
   // Send previously parsed logs directly to the importer (as opposed to
   // going through a source).
   if (type == "zeek" || type == "all") {
-    detail::spawn_container_source(sys, zeek_conn_log_slices, importer);
+    detail::spawn_container_source(sys, zeek_conn_log, importer);
     // TODO: ship DNS and HTTP log slices when available in the events fixture
     // self->send(importer, zeek_dns_log);
     // self->send(importer, zeek_http_log);
@@ -68,7 +66,7 @@ void node::ingest(const std::string& type) {
   MESSAGE("done ingesting logs");
 }
 
-std::vector<event> node::query(std::string expr) {
+std::vector<table_slice_ptr> node::query(std::string expr) {
   MESSAGE("spawn an exporter and register ourselves as sink");
   auto exp = spawn_component("exporter", std::move(expr));
   self->monitor(exp);
@@ -76,12 +74,12 @@ std::vector<event> node::query(std::string expr) {
   self->send(exp, atom::run_v);
   run();
   MESSAGE("fetch results from mailbox");
-  std::vector<event> result;
+  std::vector<table_slice_ptr> result;
   bool running = true;
   self->receive_while(running)(
     [&](table_slice_ptr slice) {
       MESSAGE("... got " << slice->rows() << " events");
-      to_events(result, *slice);
+      result.push_back(std::move(slice));
     },
     [&](const uuid&, const system::query_status&) {
       // ignore
@@ -92,7 +90,7 @@ std::vector<event> node::query(std::string expr) {
     },
     // Do a one-pass can over the mailbox without waiting for messages.
     caf::after(std::chrono::seconds(0)) >> [&] { running = false; });
-  MESSAGE("got " << result.size() << " events in total");
+  MESSAGE("got " << result.size() << " table slices in total");
   return result;
 }
 

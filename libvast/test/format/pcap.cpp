@@ -23,9 +23,7 @@
 #include "vast/concept/parseable/vast/address.hpp"
 #include "vast/defaults.hpp"
 #include "vast/error.hpp"
-#include "vast/event.hpp"
 #include "vast/filesystem.hpp"
-#include "vast/to_events.hpp"
 
 using namespace vast;
 
@@ -75,19 +73,19 @@ TEST(PCAP read/write 1) {
   caf::put(settings, "import.pcap.max-flows", static_cast<size_t>(5));
   format::pcap::reader reader{defaults::import::table_slice_type,
                               std::move(settings)};
-  size_t events_produces = 0;
+  size_t events_produced = 0;
   table_slice_ptr slice;
   auto add_slice = [&](const table_slice_ptr& x) {
     REQUIRE(slice == nullptr);
     REQUIRE(x != nullptr);
     slice = x;
-    events_produces = x->rows();
+    events_produced = x->rows();
   };
   auto [err, produced] = reader.read(std::numeric_limits<size_t>::max(),
                                      100, // we expect only 44 events
                                      add_slice);
   CHECK_EQUAL(err, ec::end_of_input);
-  REQUIRE_EQUAL(events_produces, 44u);
+  REQUIRE_EQUAL(events_produced, 44u);
   CHECK_EQUAL(slice->layout().name(), "pcap.packet");
   auto src_field = slice->at(43, 1);
   auto src = unbox(caf::get_if<view<address>>(&src_field));

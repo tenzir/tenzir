@@ -144,7 +144,7 @@ TEST(eraser on mock INDEX) {
 }
 
 TEST(eraser on actual INDEX with Zeek conn logs) {
-  auto slices = take(zeek_full_conn_log_slices, 4);
+  auto slices = take(zeek_conn_log_full, 4);
   MESSAGE("spawn INDEX ingest 4 slices with 100 rows (= 1 partition) each");
   index = self->spawn(system::index, directory / "index",
                       defaults::import::table_slice_size, 100, taste_count, 1);

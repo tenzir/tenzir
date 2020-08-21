@@ -14,7 +14,6 @@
 #include "vast/system/counter.hpp"
 
 #include "vast/bitmap_algorithms.hpp"
-#include "vast/event.hpp"
 #include "vast/logger.hpp"
 #include "vast/table_slice.hpp"
 

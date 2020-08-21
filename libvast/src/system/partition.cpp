@@ -19,7 +19,6 @@
 #include "vast/concept/printable/vast/expression.hpp"
 #include "vast/concept/printable/vast/uuid.hpp"
 #include "vast/detail/assert.hpp"
-#include "vast/event.hpp"
 #include "vast/expression_visitors.hpp"
 #include "vast/fwd.hpp"
 #include "vast/ids.hpp"

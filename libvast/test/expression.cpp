@@ -26,7 +26,6 @@
 #include "vast/concept/printable/vast/expression.hpp"
 #include "vast/data.hpp"
 #include "vast/detail/stable_map.hpp"
-#include "vast/event.hpp"
 #include "vast/expression_visitors.hpp"
 #include "vast/load.hpp"
 #include "vast/save.hpp"

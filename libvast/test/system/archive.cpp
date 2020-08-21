@@ -11,18 +11,16 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#include "vast/concept/printable/stream.hpp"
-#include "vast/concept/printable/vast/event.hpp"
-#include "vast/ids.hpp"
 #include "vast/system/archive.hpp"
-#include "vast/table_slice.hpp"
-#include "vast/to_events.hpp"
 
+#include "vast/concept/printable/stream.hpp"
 #include "vast/detail/spawn_container_source.hpp"
+#include "vast/ids.hpp"
+#include "vast/table_slice.hpp"
 
 #define SUITE archive
-#include "vast/test/test.hpp"
 #include "vast/test/fixtures/actor_system_and_events.hpp"
+#include "vast/test/test.hpp"
 
 using namespace caf;
 using namespace vast;
@@ -37,15 +35,14 @@ struct fixture : fixtures::deterministic_actor_system_and_events {
     self->send(a, atom::exporter_v, self);
   }
 
-  template <class T>
-  void push_to_archive(std::vector<T> xs) {
+  void push_to_archive(std::vector<table_slice_ptr> xs) {
     vast::detail::spawn_container_source(sys, std::move(xs), a);
     run();
   }
 
-  std::vector<event> query(const ids& ids) {
+  std::vector<table_slice_ptr> query(const ids& ids) {
     bool done = false;
-    std::vector<event> result;
+    std::vector<table_slice_ptr> result;
     self->send(a, ids);
     run();
     self
@@ -54,48 +51,44 @@ struct fixture : fixtures::deterministic_actor_system_and_events {
           REQUIRE(!err);
           done = true;
         },
-        [&](table_slice_ptr slice) { to_events(result, *slice, ids); })
+        [&](table_slice_ptr slice) { result.push_back(std::move(slice)); })
       .until(done);
     return result;
   }
 
-  std::vector<event> query(std::initializer_list<id_range> ranges) {
+  std::vector<table_slice_ptr> query(std::initializer_list<id_range> ranges) {
     return query(make_ids(ranges));
   }
 };
 
-} // namespace <anonymous>
+} // namespace
 
 FIXTURE_SCOPE(archive_tests, fixture)
 
 TEST(zeek conn logs slices) {
-  push_to_archive(zeek_conn_log_slices);
+  push_to_archive(zeek_conn_log);
   auto result = query({{10, 15}});
-  CHECK_EQUAL(result.size(), 5u);
+  CHECK_EQUAL(rows(result), 5u);
 }
 
 TEST(archiving and querying) {
-  MESSAGE("import zeek conn logs to archive");
-  push_to_archive(zeek_conn_log_slices);
-  MESSAGE("import DNS logs to archive");
-  push_to_archive(zeek_dns_log_slices);
-  MESSAGE("import HTTP logs to archive");
-  push_to_archive(zeek_http_log_slices);
+  MESSAGE("import Zeek conn logs to archive");
+  push_to_archive(zeek_conn_log);
+  MESSAGE("import Zeek DNS logs to archive");
+  push_to_archive(zeek_dns_log);
+  MESSAGE("import Zeek HTTP logs to archive");
+  push_to_archive(zeek_http_log);
   MESSAGE("query events");
-  auto ids = make_ids({{24, 56}, {1076, 1096}});
-  auto result = query(ids);
-  REQUIRE_EQUAL(result.size(), 52u);
-  // We sort because the specific compression algorithm used at the archive
-  // determines the order of results.
-  std::sort(result.begin(), result.end());
-  // We processed the segments in reverse order of arrival (to maximize LRU hit
-  // rate). Therefore, the result set contains first the events with higher
-  // IDs [10150,10200) and then the ones with lower ID [100,150).
-  CHECK_EQUAL(result[0].id(), 24u);
-  CHECK_EQUAL(result[0].type().name(), "zeek.dns");
-  CHECK_EQUAL(result[32].id(), 1076u);
-  CHECK_EQUAL(result[32].type().name(), "zeek.http");
-  CHECK_EQUAL(result[result.size() - 1].id(), 1095u);
+  // conn.log = [0, 20)
+  // dns.log  = [20, 52)
+  // http.log = [1052, 1092)
+  auto result = query(make_ids({{24, 56}, {1076, 1096}}));
+  REQUIRE_EQUAL(rows(result), (52u - 24) + (1092 - 1076));
+  // ID 20 is the first entry in the dns.log; then add 4 more.
+  CHECK_EQUAL(result[0]->at(3, 1), make_data_view("JoNZFZc3lJb"));
+  // ID 1052 is the first entry in the http.log; then add 4 more.
+  auto last = result[result.size() - 1];
+  CHECK_EQUAL(last->at(last->rows() - 1, 1), make_data_view("rydI6puScNa"));
   self->send_exit(a, exit_reason::user_shutdown);
 }
 
