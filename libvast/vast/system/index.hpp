@@ -231,6 +231,9 @@ struct index_state {
   /// Statistics about processed data.
   statistics stats;
 
+  /// Whether the INDEX should attempt to flush its state on shutdown.
+  bool flush_on_destruction;
+
   /// Name of the INDEX actor.
   static inline const char* name = "index";
 };
