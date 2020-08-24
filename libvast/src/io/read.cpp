@@ -23,7 +23,13 @@ caf::error read(const path& filename, span<byte> xs) {
   file f{filename};
   if (!f.open(file::read_only))
     return make_error(ec::filesystem_error, "failed open file");
-  return f.read(xs.data(), xs.size());
+  auto bytes_read = f.read(xs.data(), xs.size());
+  if (!bytes_read)
+    return bytes_read.error();
+  if (*bytes_read != xs.size())
+    return make_error(ec::filesystem_error, "incomplete read of",
+                      filename.str());
+  return caf::none;
 }
 
 caf::expected<std::vector<byte>> read(const path& filename) {

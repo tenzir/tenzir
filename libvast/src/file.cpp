@@ -100,15 +100,10 @@ bool file::is_open() const {
   return is_open_;
 }
 
-caf::error file::read(void* sink, size_t bytes) {
+caf::expected<size_t> file::read(void* sink, size_t bytes) {
   if (!is_open_)
     return make_error(ec::filesystem_error, "file is not open", path_);
-  auto count = detail::read(handle_, sink, bytes);
-  if (!count)
-    return count.error();
-  if (*count != bytes)
-    return make_error(ec::filesystem_error, "incomplete read", path_);
-  return caf::none;
+  return detail::read(handle_, sink, bytes);
 }
 
 caf::error file::write(const void* source, size_t bytes) {

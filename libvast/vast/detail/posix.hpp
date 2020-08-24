@@ -109,14 +109,14 @@ struct [[nodiscard]] unix_domain_socket {
 /// @returns `caf::none` on successful closing.
 [[nodiscard]] caf::error close(int fd);
 
-/// Wraps `fread(3)`.
+/// Wraps `read(2)`.
 /// @param fd The file descriptor to read from.
 /// @param buffer The buffer to write into.
 /// @param bytes The number of bytes to read from *fd* and write into *buffer*.
 /// @returns the number of bytes on successful reading.
 [[nodiscard]] caf::expected<size_t> read(int fd, void* buffer, size_t bytes);
 
-/// Wraps `fwrite(3)`.
+/// Wraps `write(2)`.
 /// @param fd The file descriptor to write to.
 /// @param buffer The buffer to read from.
 /// @param bytes The number of bytes to write into *fd* from *buffer*.
