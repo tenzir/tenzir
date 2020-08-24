@@ -93,7 +93,8 @@ index_state::~index_state() {
     [[maybe_unused]] auto unregistered = stage->out().unregister(active.get());
     VAST_ASSERT(unregistered);
   }
-  flush_to_disk();
+  if (flush_on_destruction)
+    flush_to_disk();
 }
 
 caf::error
@@ -108,9 +109,12 @@ index_state::init(const path& dir, size_t max_partition_size,
   this->max_partition_size = max_partition_size;
   this->lru_partitions.size(in_mem_partitions);
   this->taste_partitions = taste_partitions;
+  this->flush_on_destruction = false;
   // Read persistent state.
   if (auto err = load_from_disk())
     return err;
+  // Dont try to overwrite existing state on boot failure.
+  this->flush_on_destruction = true;
   // Spin up the stream manager.
   stage = make_index_stage(this);
   return caf::none;
