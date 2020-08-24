@@ -11,6 +11,10 @@ Every entry has a category for which we use the following visual abbreviations:
 
 ## Unreleased
 
+- 🐞 VAST did not terminate when a critical component failed during startup.
+  VAST now binds the lifetime of the node to all critical components.
+  [#1028](https://github.com/tenzir/vast/pull/1028)
+
 - 🐞 VAST would overwrite existing on-disk state data when encountering a partial
   read during startup. This state-corrupting behavior no longer exists.
   [#1026](https://github.com/tenzir/vast/pull/1026)
