@@ -66,8 +66,9 @@ caf::behavior terminator(caf::stateful_actor<terminator_state>* self,
       remaining.reserve(xs.size());
       for (auto i = xs.rbegin(); i != xs.rend(); ++i)
         if (!*i)
-          VAST_DEBUG(self, "skips termination of already exited actor",
-                     i->id());
+          VAST_DEBUG(self,
+                     "skips termination of already exited actor at position",
+                     std::distance(xs.begin(), i.base()));
         else
           remaining.push_back(*i);
       if (remaining.size() < xs.size())
