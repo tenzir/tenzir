@@ -191,10 +191,12 @@ TEST(file_and_directory_manipulation) {
 
 FIXTURE_SCOPE(chunk_tests, fixtures::filesystem)
 
-// This test takes almost one minute on macOS 10.14.
-#if VAST_POSIX && !VAST_MACOS
+#if VAST_POSIX
 
-TEST(read_large_file) {
+// The following write test adds several seconds (or minutes in case of
+// macOS) to the execution time. Running it every time would hurt development
+// speed, so it must be enabled manually.
+TEST_DISABLED(large_file_io) {
   using namespace vast::binary_byte_literals;
   auto filename = directory / "very-large.file";
   auto size = 3_GiB;
@@ -215,6 +217,16 @@ TEST(read_large_file) {
     auto ptr = reinterpret_cast<char*>(buffer.data());
     if (auto err = f.read(ptr, size))
       FAIL(err);
+    REQUIRE(f.close());
+    CHECK(rm(filename));
+    MESSAGE("write back to disk");
+    auto filename_copy = filename + ".copy";
+    auto f2 = file{filename_copy};
+    REQUIRE(f2.open(file::write_only));
+    if (auto err = f2.write(ptr, size))
+      FAIL(err);
+    REQUIRE(f2.close());
+    CHECK(rm(filename_copy));
   }
 }
 
