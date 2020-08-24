@@ -62,12 +62,12 @@ posix_filesystem(filesystem_type::stateful_pointer<posix_filesystem_state> self,
       }
     },
     [=](atom::status, status_verbosity v) {
-      vast::status s;
+      auto result = caf::settings{};
       if (v >= status_verbosity::info) {
-        s.info["filesystem.type"] = "POSIX";
+        result["filesystem.type"] = "POSIX";
       }
       if (v >= status_verbosity::debug) {
-        auto& ops = put_dictionary(s.debug, "filesystem.operations");
+        auto& ops = put_dictionary(result, "filesystem.operations");
         auto add_stats = [&](auto& name, auto& stats) {
           auto& dict = put_dictionary(ops, name);
           dict["successful"] = stats.successful;
@@ -78,7 +78,7 @@ posix_filesystem(filesystem_type::stateful_pointer<posix_filesystem_state> self,
         add_stats("reads", self->state.stats.reads);
         add_stats("mmaps", self->state.stats.mmaps);
       }
-      return join(s);
+      return result;
     },
   };
 }

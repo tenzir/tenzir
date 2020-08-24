@@ -19,7 +19,6 @@
 #include "vast/path.hpp"
 #include "vast/segment.hpp"
 #include "vast/segment_builder.hpp"
-#include "vast/status.hpp"
 #include "vast/store.hpp"
 #include "vast/uuid.hpp"
 
@@ -86,7 +85,7 @@ public:
 
   caf::error flush() override;
 
-  void inspect_status(vast::status& s, status_verbosity v) override;
+  void inspect_status(caf::settings& xs, status_verbosity v) override;
 
 private:
   segment_store(path dir, uint64_t max_segment_size, size_t in_memory_segments);

@@ -36,7 +36,6 @@
 #include "vast/load.hpp"
 #include "vast/logger.hpp"
 #include "vast/save.hpp"
-#include "vast/status.hpp"
 #include "vast/system/accountant.hpp"
 #include "vast/system/evaluator.hpp"
 #include "vast/system/index_common.hpp"
@@ -217,12 +216,12 @@ index_state::status(status_verbosity v) const {
   using caf::put;
   using caf::put_dictionary;
   using caf::put_list;
-  auto s = vast::status{};
+  auto result = caf::settings{};
   // Misc parameters.
   if (v >= status_verbosity::info) {
   }
   if (v >= status_verbosity::verbose) {
-    auto& stats_object = put_dictionary(s.verbose, "index.statistics");
+    auto& stats_object = put_dictionary(result, "index.statistics");
     auto& layout_object = put_dictionary(stats_object, "layouts");
     for (auto& [name, layout_stats] : stats.layouts) {
       auto xs = caf::dictionary<caf::config_value>{};
@@ -234,9 +233,9 @@ index_state::status(status_verbosity v) const {
     }
   }
   if (v >= status_verbosity::debug) {
-    put(s.debug, "meta-index-filename", meta_index_filename().str());
+    put(result, "meta-index-filename", meta_index_filename().str());
     // Resident partitions.
-    auto& partitions = put_dictionary(s.debug, "index.partitions");
+    auto& partitions = put_dictionary(result, "index.partitions");
     if (active != nullptr)
       partitions.emplace("active", to_string(active->id()));
     auto& cached = put_list(partitions, "cached");
@@ -246,9 +245,9 @@ index_state::status(status_verbosity v) const {
     for (auto& kvp : this->unpersisted)
       unpersisted.emplace_back(to_string(kvp.first->id()));
     // General state such as open streams.
-    detail::fill_status_map(s.debug, self);
+    detail::fill_status_map(result, self);
   }
-  return join(s);
+  return result;
 }
 
 void index_state::reset_active_partition() {

@@ -24,7 +24,6 @@
 #include "vast/error.hpp"
 #include "vast/logger.hpp"
 #include "vast/system/report.hpp"
-#include "vast/status.hpp"
 #include "vast/table_slice.hpp"
 #include "vast/table_slice_builder_factory.hpp"
 #include "vast/time.hpp"
@@ -314,16 +313,15 @@ accountant(accountant_actor* self, accountant_config cfg) {
     },
     [=](atom::status, status_verbosity v) {
       using caf::put_dictionary;
-      auto s = vast::status{};
+      auto result = caf::settings{};
       if (v >= status_verbosity::verbose) {
-        auto& known
-          = put_dictionary(s.verbose, "accountant.known-actors");
+        auto& known = put_dictionary(result, "accountant.known-actors");
         for (const auto& [aid, name] : self->state->actor_map)
           known.emplace(name, aid);
       }
       if (v >= status_verbosity::debug)
-        detail::fill_status_map(s.debug, self);
-      return join(s);
+        detail::fill_status_map(result, self);
+      return result;
     },
     [=](atom::telemetry) {
       command_line_heartbeat(self);

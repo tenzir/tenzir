@@ -32,7 +32,6 @@
 #include "vast/json.hpp"
 #include "vast/logger.hpp"
 #include "vast/settings.hpp"
-#include "vast/status.hpp"
 #include "vast/system/accountant.hpp"
 #include "vast/system/node.hpp"
 #include "vast/system/posix_filesystem.hpp"
@@ -116,8 +115,6 @@ void collect_component_status(node_actor* self,
                               caf::response_promise status_promise,
                               status_verbosity v) {
   // Shared state between our response handlers.
-  // TODO: we no longer use the key in this settings object; it's always the
-  // same node name. So we could simplify the whole structure a bit.
   struct req_state_t {
     // Promise to the original client request.
     caf::response_promise rp;
@@ -128,18 +125,17 @@ void collect_component_status(node_actor* self,
   req_state->rp = std::move(status_promise);
   // Pre-fill our result with system stats.
   auto& sys = self->system();
-  auto s = vast::status{};
+  auto& content = req_state->content;
   if (v >= status_verbosity::info) {
-    put(s.info, "table-slices", table_slice::instances());
-    put(s.info, "database-path", self->state.dir.str());
-    merge_settings(detail::get_status(), s.info);
+    put(content, "table-slices", table_slice::instances());
+    put(content, "database-path", self->state.dir.str());
+    merge_settings(detail::get_status(), content);
   }
   if (v >= status_verbosity::debug) {
-    put(s.debug, "running-actors", sys.registry().running());
-    put(s.debug, "detached-actors", sys.detached_actors());
-    put(s.debug, "worker-threads", sys.scheduler().num_workers());
+    put(content, "running-actors", sys.registry().running());
+    put(content, "detached-actors", sys.detached_actors());
+    put(content, "worker-threads", sys.scheduler().num_workers());
   }
-  req_state->content = join(s);
   // Send out requests and collects answers.
   for (auto& [label, component] : self->state.registry.components())
     self

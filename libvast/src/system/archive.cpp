@@ -23,7 +23,6 @@
 #include "vast/event.hpp"
 #include "vast/logger.hpp"
 #include "vast/segment_store.hpp"
-#include "vast/status.hpp"
 #include "vast/store.hpp"
 #include "vast/system/report.hpp"
 #include "vast/table_slice.hpp"
@@ -203,11 +202,11 @@ archive(archive_type::stateful_pointer<archive_state> self, path dir,
       self->monitor<caf::message_priority::high>(exporter);
     },
     [=](atom::status, status_verbosity v) {
-      auto s = vast::status{};
+      auto result = caf::settings{};
       if (v >= status_verbosity::debug)
-        detail::fill_status_map(s.debug, self);
-      self->state.store->inspect_status(s, v);
-      return join(s);
+        detail::fill_status_map(result, self);
+      self->state.store->inspect_status(result, v);
+      return result;
     },
     [=](atom::telemetry) {
       self->state.send_report();

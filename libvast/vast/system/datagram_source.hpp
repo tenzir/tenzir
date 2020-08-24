@@ -188,16 +188,16 @@ datagram_source(datagram_source_actor<Reader>* self,
     },
     [=](atom::status, status_verbosity v) {
       auto& st = self->state;
-      vast::status s;
+      caf::settings result;
       if (v >= status_verbosity::verbose) {
         caf::settings src;
         if (st.reader_initialized)
           put(src, "format", st.reader.name());
         put(src, "produced", st.count);
-        auto& xs = put_list(s.info, "sources");
+        auto& xs = put_list(result, "sources");
         xs.emplace_back(std::move(src));
       }
-      return join(s);
+      return result;
     },
     [=](atom::telemetry) {
       auto& st = self->state;

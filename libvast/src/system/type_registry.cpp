@@ -21,7 +21,6 @@
 #include "vast/logger.hpp"
 #include "vast/save.hpp"
 #include "vast/system/report.hpp"
-#include "vast/status.hpp"
 #include "vast/table_slice.hpp"
 
 #include <caf/atom.hpp>
@@ -38,18 +37,18 @@ report type_registry_state::telemetry() const {
 
 caf::dictionary<caf::config_value>
 type_registry_state::status(status_verbosity v) const {
-  auto s = vast::status{};
+  auto result = caf::settings{};
   if (v >= status_verbosity::debug) {
     // Sorted list of all keys.
     auto keys = std::vector<std::string>(data.size());
     std::transform(data.begin(), data.end(), keys.begin(),
                    [](const auto& x) { return x.first; });
     std::sort(keys.begin(), keys.end());
-    caf::put(s.debug, "type-registry.types", keys);
+    caf::put(result, "type-registry.types", keys);
     // The usual per-component status.
-    detail::fill_status_map(s.debug, self);
+    detail::fill_status_map(result, self);
   }
-  return join(s);
+  return result;
 }
 
 vast::path type_registry_state::filename() const {

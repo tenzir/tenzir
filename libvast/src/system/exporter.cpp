@@ -26,7 +26,6 @@
 #include "vast/expression_visitors.hpp"
 #include "vast/fwd.hpp"
 #include "vast/logger.hpp"
-#include "vast/status.hpp"
 #include "vast/system/archive.hpp"
 #include "vast/system/query_status.hpp"
 #include "vast/system/report.hpp"
@@ -153,11 +152,11 @@ void request_more_hits(stateful_actor<exporter_state>* self) {
 } // namespace <anonymous>
 
 caf::settings exporter_state::status(status_verbosity v) {
-  vast::status s;
+  auto result = caf::settings{};
   if (v >= status_verbosity::info) {
     caf::settings exp;
     put(exp, "expression", to_string(expr));
-    auto& xs = put_list(s.info, "queries");
+    auto& xs = put_list(result, "queries");
     xs.emplace_back(std::move(exp));
   }
   if (v >= status_verbosity::verbose) {
@@ -165,10 +164,10 @@ caf::settings exporter_state::status(status_verbosity v) {
     put(exp, "expression", to_string(expr));
     put(exp, "hits", rank(hits));
     put(exp, "start", caf::deep_to_string(start));
-    auto& xs = put_list(s.info, "queries");
+    auto& xs = put_list(result, "queries");
     xs.emplace_back(std::move(exp));
   }
-  return join(s);
+  return result;
 }
 
 behavior exporter(stateful_actor<exporter_state>* self, expression expr,
