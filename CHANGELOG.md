@@ -15,6 +15,12 @@ Every entry has a category for which we use the following visual abbreviations:
   read during startup. This state-corrupting behavior no longer exists.
   [#1026](https://github.com/tenzir/vast/pull/1026)
 
+- 🐞 Writing files larger than 2 GB on macOS has been corrected.
+  [#1025](https://github.com/tenzir/vast/pull/1025)
+
+- 🐞 Reading files larger than 2 GB has been corrected.
+  [#1025](https://github.com/tenzir/vast/pull/1025)
+
 - 🐞 The shutdown process of the server process could potentially hang forever.
   VAST now uses a 2-step procedure that first attempts to terminate all
   components cleanly. If that fails, it will attempt a hard kill afterwards,
