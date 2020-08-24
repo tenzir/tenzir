@@ -94,6 +94,8 @@ caf::behavior terminator(caf::stateful_actor<terminator_state>* self,
       } else if constexpr (std::is_same_v<Policy, policy::parallel>) {
         // Terminate all actors.
         for (auto& x : xs) {
+          if (!x)
+            continue;
           self->monitor(x);
           self->send_exit(x, caf::exit_reason::user_shutdown);
         }
