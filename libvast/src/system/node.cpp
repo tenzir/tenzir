@@ -392,7 +392,8 @@ caf::behavior node(node_actor* self, std::string name, path dir,
     VAST_DEBUG(self, "got DOWN from", msg.source);
     auto component = caf::actor_cast<caf::actor>(msg.source);
     auto type = self->state.registry.find_type_for(component);
-    VAST_ASSERT(type != nullptr); // We monitor all components in the registry.
+    // All monitored components are in the registry.
+    VAST_ASSERT(type != nullptr);
     if (is_singleton(*type)) {
       auto label = self->state.registry.find_label_for(component);
       VAST_ASSERT(label != nullptr); // Per the above assertion.
