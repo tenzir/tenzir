@@ -11,6 +11,10 @@ Every entry has a category for which we use the following visual abbreviations:
 
 ## Unreleased
 
+- 🐞 VAST would overwrite existing on-disk state data when encountering a partial
+  read during startup. This state-corrupting behavior no longer exists.
+  [#1026](https://github.com/tenzir/vast/pull/1026)
+
 - 🐞 The shutdown process of the server process could potentially hang forever.
   VAST now uses a 2-step procedure that first attempts to terminate all
   components cleanly. If that fails, it will attempt a hard kill afterwards,
