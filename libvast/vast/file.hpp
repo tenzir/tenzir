@@ -76,17 +76,14 @@ public:
   /// Reads a given number of bytes in to a buffer.
   /// @param sink The destination of the read.
   /// @param size The number of bytes to read.
-  /// @param got The number of bytes read.
-  /// @returns `caf::none` on success.
-  [[nodiscard]] caf::error read(void* sink, size_t size, size_t* got = nullptr);
+  /// @returns The number of read bytes on success.
+  [[nodiscard]] caf::expected<size_t> read(void* sink, size_t size);
 
   /// Writes a given number of bytes into a buffer.
   /// @param source The source of the write.
   /// @param size The number of bytes to write.
-  /// @param put The number of bytes written.
   /// @returns `caf::none` on success.
-  [[nodiscard]] caf::error
-  write(const void* source, size_t size, size_t* put = nullptr);
+  [[nodiscard]] caf::error write(const void* source, size_t size);
 
   /// Seeks the file forward.
   /// @param bytes The number of bytes to seek forward relative to the current

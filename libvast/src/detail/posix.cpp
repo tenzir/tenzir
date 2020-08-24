@@ -20,9 +20,12 @@
 #include "vast/error.hpp"
 #include "vast/logger.hpp"
 
+#include <caf/expected.hpp>
+
 #include <cerrno>
 #include <cstring>
 #include <fcntl.h>
+#include <limits>
 #include <stdexcept>
 #include <stdlib.h>
 #include <string.h>
@@ -248,26 +251,45 @@ caf::error close(int fd) {
   return caf::none;
 }
 
-caf::error read(int fd, void* buffer, size_t bytes, size_t* got) {
-  ssize_t taken;
-  do {
-    taken = ::read(fd, buffer, bytes);
-  } while (taken < 0 && errno == EINTR);
-  if (taken <= 0) // EOF == 0, error == -1
-    return make_error(ec::filesystem_error,
-                      "failed in read(2):", std::strerror(errno));
-  if (got)
-    *got = static_cast<size_t>(taken);
-  return caf::none;
+// Note: Enable the *large_file_io* test in filesystem.cpp to test
+// modifications to this funciton.
+caf::expected<size_t> read(int fd, void* buffer, size_t bytes) {
+  auto total = size_t{0};
+  auto buf = reinterpret_cast<uint8_t*>(buffer);
+  while (total < bytes) {
+    ssize_t taken;
+    // On darwin (macOS), read returns with EINVAL if more than INT_MAX bytes
+    // are requested. This problem might also exist on other platforms, so we
+    // defensively limit our calls everywhere.
+    constexpr size_t read_max = std::numeric_limits<int>::max();
+    auto request_size = std::min(read_max, bytes - total);
+    do {
+      taken = ::read(fd, buf + total, request_size);
+    } while (taken < 0 && errno == EINTR);
+    if (taken < 0) // error
+      return make_error(ec::filesystem_error,
+                        "failed in read(2):", std::strerror(errno));
+    if (taken == 0) // EOF
+      break;
+    total += static_cast<size_t>(taken);
+  }
+  return total;
 }
 
-caf::error write(int fd, const void* buffer, size_t bytes, size_t* put) {
+// Note: Enable the *large_file_io* test in filesystem.cpp to test
+// modifications to this funciton.
+caf::expected<size_t> write(int fd, const void* buffer, size_t bytes) {
   auto total = size_t{0};
   auto buf = reinterpret_cast<const uint8_t*>(buffer);
   while (total < bytes) {
     ssize_t written;
+    // On darwin (macOS), write returns with EINVAL if more than INT_MAX bytes
+    // are requested. This problem might also exist on other platforms, so we
+    // defensively limit our calls everywhere.
+    constexpr size_t write_max = std::numeric_limits<int>::max();
+    auto request_size = std::min(write_max, bytes - total);
     do {
-      written = ::write(fd, buf + total, bytes - total);
+      written = ::write(fd, buf + total, request_size);
     } while (written < 0 && errno == EINTR);
     if (written < 0)
       return make_error(ec::filesystem_error,
@@ -278,9 +300,7 @@ caf::error write(int fd, const void* buffer, size_t bytes, size_t* put) {
       return make_error(ec::filesystem_error, "write(2) returned 0");
     total += static_cast<size_t>(written);
   }
-  if (put)
-    *put = total;
-  return caf::none;
+  return total;
 }
 
 caf::error seek(int fd, size_t bytes) {

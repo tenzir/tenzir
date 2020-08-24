@@ -15,6 +15,12 @@ Every entry has a category for which we use the following visual abbreviations:
   read during startup. This state-corrupting behavior no longer exists.
   [#1026](https://github.com/tenzir/vast/pull/1026)
 
+- 🐞 Incomplete reads have not been handled properly, which manifested for
+  files larger than 2GB. On macOS, writing files larger than 2GB may have
+  failed previously. VAST now respects OS-specific constraints on the maximum
+  block size.
+  [#1025](https://github.com/tenzir/vast/pull/1025)
+
 - 🐞 The shutdown process of the server process could potentially hang forever.
   VAST now uses a 2-step procedure that first attempts to terminate all
   components cleanly. If that fails, it will attempt a hard kill afterwards,

@@ -88,7 +88,9 @@ caf::expected<void> file::open(open_mode mode, bool append) {
 }
 
 bool file::close() {
-  if (!(is_open_ && detail::close(handle_)))
+  if (!is_open_)
+    return false;
+  if (detail::close(handle_))
     return false;
   is_open_ = false;
   return true;
@@ -98,16 +100,21 @@ bool file::is_open() const {
   return is_open_;
 }
 
-caf::error file::read(void* sink, size_t bytes, size_t* got) {
+caf::expected<size_t> file::read(void* sink, size_t bytes) {
   if (!is_open_)
     return make_error(ec::filesystem_error, "file is not open", path_);
-  return detail::read(handle_, sink, bytes, got);
+  return detail::read(handle_, sink, bytes);
 }
 
-caf::error file::write(const void* source, size_t bytes, size_t* put) {
+caf::error file::write(const void* source, size_t bytes) {
   if (!is_open_)
     return make_error(ec::filesystem_error, "file is not open", path_);
-  return detail::write(handle_, source, bytes, put);
+  auto count = detail::write(handle_, source, bytes);
+  if (!count)
+    return count.error();
+  if (*count != bytes)
+    return make_error(ec::filesystem_error, "incomplete read", path_);
+  return caf::none;
 }
 
 bool file::seek(size_t bytes) {
