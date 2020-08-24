@@ -391,6 +391,14 @@ caf::behavior node(node_actor* self, std::string name, path dir,
   self->set_down_handler([=](const down_msg& msg) {
     VAST_DEBUG(self, "got DOWN from", msg.source);
     auto component = caf::actor_cast<caf::actor>(msg.source);
+    auto type = self->state.registry.find_type_for(component);
+    VAST_ASSERT(type != nullptr); // We monitor all components in the registry.
+    if (is_singleton(*type)) {
+      auto label = self->state.registry.find_label_for(component);
+      VAST_ASSERT(label != nullptr); // Per the above assertion.
+      VAST_ERROR(self, "got DOWN from", *label, "; initiating shutdown");
+      self->send_exit(self, caf::exit_reason::user_shutdown);
+    }
     self->state.registry.remove(component);
   });
   // Terminate deterministically on shutdown.

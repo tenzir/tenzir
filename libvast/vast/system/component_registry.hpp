@@ -49,6 +49,18 @@ public:
   /// @returns `true` iff the component was deleted successfully.
   bool remove(const caf::actor& comp);
 
+  /// Finds the label of a given component actor.
+  /// @param comp The component actor.
+  /// @returns A pointer to the name of the label of *comp* or `nullptr` if
+  ///          *comp* is not known.
+  const std::string* find_label_for(const caf::actor& comp) const;
+
+  /// Finds the type of a given component actor.
+  /// @param comp The component actor.
+  /// @returns A pointer to the name of the type of *comp* or `nullptr` if
+  ///          *comp* is not known.
+  const std::string* find_type_for(const caf::actor& comp) const;
+
   /// Locates a component by label.
   /// @param label The label of the component to lookup.
   /// @returns The respective component actor if found.
