@@ -1,4 +1,4 @@
-{ pkgs ? import ./nix { }, useClang ? false }:
+{ nixpkgs ? import ./nix/pinned.nix, pkgs ? import ./nix { nixpkgs = nixpkgs; }, useClang ? pkgs.stdenv.isDarwin }:
 let
   inherit (pkgs) lib;
   llvmPkgs = pkgs.buildPackages.llvmPackages_10;
