@@ -4,9 +4,6 @@ let
   static_stdenv = final.stdenv.hostPlatform.isMusl;
 in {
   nix-gitDescribe = final.callPackage ./gitDescribe.nix {};
-  arrow-cpp = prev.arrow-cpp.overrideAttrs (old: {
-    patches = old.patches ++ lib.optional static_stdenv arrow/fix-static-jemalloc.patch;
-  });
   caf = let
     source = builtins.fromJSON (builtins.readFile ./caf/source.json);
     in prev.caf.overrideAttrs (old: {
