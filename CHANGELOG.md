@@ -9,7 +9,9 @@ Every entry has a category for which we use the following visual abbreviations:
 - ⚠️ change
 - 🐞 bugfix
 
-## Unreleased
+<!-- ## Unreleased -->
+
+## [2020.08.28]
 
 - 🐞 VAST did not terminate when a critical component failed during startup.
   VAST now binds the lifetime of the node to all critical components.
@@ -703,3 +705,4 @@ This is the first official release.
 [2020.05.28]: https://github.com/tenzir/vast/releases/tag/2020.05.28
 [2020.06.25]: https://github.com/tenzir/vast/releases/tag/2020.06.25
 [2020.07.28]: https://github.com/tenzir/vast/releases/tag/2020.07.28
+[2020.08.28]: https://github.com/tenzir/vast/releases/tag/2020.08.28
