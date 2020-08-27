@@ -55,7 +55,7 @@ Chat with us on [Matrix][chat-url].
 
 ## Get VAST
 
-Linux uesrs can download our
+Linux users can download our
 [latest static binary release](https://storage.googleapis.com/tenzir-public-data/vast-static-builds/vast-static-latest.tar.gz)
 via browser or cURL.
 
