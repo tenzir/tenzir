@@ -13,7 +13,6 @@
 , arrow-cpp
 , flatbuffers
 , broker
-, zstd
 , jemalloc
 , python3
 , jq
@@ -68,6 +67,7 @@ stdenv.mkDerivation rec {
   propagatedBuildInputs = [ arrow-cpp caf ];
 
   cmakeFlags = [
+    "-DCMAKE_FIND_PACKAGE_PREFER_CONFIG=ON"
     "-DCAF_ROOT_DIR=${caf}"
     "-DVAST_RELOCATABLE_INSTALL=OFF"
     "-DVAST_VERSION_TAG=${version}"
@@ -78,7 +78,6 @@ stdenv.mkDerivation rec {
   ] ++ lib.optionals static [
     "-DVAST_STATIC_EXECUTABLE:BOOL=ON"
     "-DCMAKE_INTERPROCEDURAL_OPTIMIZATION:BOOL=ON"
-    "-DZSTD_ROOT=${zstd}"
   ] ++ lib.optional disableTests "-DBUILD_UNIT_TESTS=OFF";
 
   hardeningDisable = lib.optional static "pic";
