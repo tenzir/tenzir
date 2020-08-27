@@ -57,8 +57,8 @@ configuration::configuration() {
   };
   auto binary = detail::objectpath();
   if (binary)
-    config_path_candidates.push_back(binary->parent().parent() / "share"
-                                     / "vast" / "schema");
+    config_path_candidates.push_back(binary->parent().parent() / "etc" / "vast"
+                                     / "vast.conf");
   config_path_candidates.emplace_back("/etc/vast/vast.conf");
   // We must clear the config_file_path first so it does not use
   // `caf-application.ini` as fallback.
