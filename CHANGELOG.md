@@ -17,27 +17,27 @@ Every entry has a category for which we use the following visual abbreviations:
   VAST now binds the lifetime of the node to all critical components.
   [#1028](https://github.com/tenzir/vast/pull/1028)
 
-- 🐞 VAST would overwrite existing on-disk state data when encountering a partial
-  read during startup. This state-corrupting behavior no longer exists.
+- 🐞 VAST would overwrite existing on-disk state data when encountering a
+  partial read during startup. This state-corrupting behavior no longer exists.
   [#1026](https://github.com/tenzir/vast/pull/1026)
 
-- 🐞 Incomplete reads have not been handled properly, which manifested for
-  files larger than 2GB. On macOS, writing files larger than 2GB may have
-  failed previously. VAST now respects OS-specific constraints on the maximum
-  block size.
+- 🐞 Incomplete reads have not been handled properly, which manifested for files
+  larger than 2GB. On macOS, writing files larger than 2GB may have failed
+  previously. VAST now respects OS-specific constraints on the maximum block
+  size.
   [#1025](https://github.com/tenzir/vast/pull/1025)
 
 - 🐞 The shutdown process of the server process could potentially hang forever.
   VAST now uses a 2-step procedure that first attempts to terminate all
-  components cleanly. If that fails, it will attempt a hard kill afterwards,
-  and if that fails after another timeout, the process will call `abort(3)`.
+  components cleanly. If that fails, it will attempt a hard kill afterwards, and
+  if that fails after another timeout, the process will call `abort(3)`.
   [#1005](https://github.com/tenzir/vast/pull/1005)
 
-- ⚠️ We now bundle a patched version of CAF, with a changed ABI. This means
-  that if you're linking against the bundled CAF library, you also need to
-  distribute that library so that VAST can use it at runtime.
-  The versions are API compatible so linking against a system version of
-  CAF is still possible and supported.
+- ⚠️ We now bundle a patched version of CAF, with a changed ABI. This means that
+  if you're linking against the bundled CAF library, you also need to distribute
+  that library so that VAST can use it at runtime.  The versions are API
+  compatible so linking against a system version of CAF is still possible and
+  supported.
   [#1020](https://github.com/tenzir/vast/pull/1020)
 
 - 🐞 When running VAST under heavy load, CAF stream slot ids could wrap around
@@ -49,19 +49,19 @@ Every entry has a category for which we use the following visual abbreviations:
   This descriptor leak has been fixed.
   [#1018](https://github.com/tenzir/vast/pull/1018)
 
-- ⚠️ The `vector` type has been renamed to `list`.In an effort to streamline
-  the type system vocabulary, we favor `list` over `vector` because it's closer
-  to existing terminology (e.g., Apache Arrow). This change requires updating
+- ⚠️ The `vector` type has been renamed to `list`.In an effort to streamline the
+  type system vocabulary, we favor `list` over `vector` because it's closer to
+  existing terminology (e.g., Apache Arrow). This change requires updating
   existing schemas by changing `vector<T>` to `list<T>`.
   [#1016](https://github.com/tenzir/vast/pull/1016)
 
-- ⚠️ The `set` type has been removed. Experience with the data model showed
-  that there is no strong use case to separate sets from vectors in the core.
-  While this may be useful in programming languages, VAST deals with immutable
-  data where set constraints have been enforced upstream. This change requires
+- ⚠️ The `set` type has been removed. Experience with the data model showed that
+  there is no strong use case to separate sets from vectors in the core.  While
+  this may be useful in programming languages, VAST deals with immutable data
+  where set constraints have been enforced upstream. This change requires
   updating existing schemas by changing `set<T>` to `vector<T>`. In the query
-  language, the new symbol for the empty `map` changed from `{-}` to `{}`, as
-  it now unambiguisly identifies `map` instances.
+  language, the new symbol for the empty `map` changed from `{-}` to `{}`, as it
+  now unambiguously identifies `map` instances.
   [#1010](https://github.com/tenzir/vast/pull/1010)
 
 - 🎁 The default schema for Suricata has been updated to support the
