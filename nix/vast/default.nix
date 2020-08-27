@@ -4,6 +4,7 @@
 , nix-gitignore
 , nix-gitDescribe
 , cmake
+, cmake-format
 , pkgconfig
 , git
 , pandoc
@@ -61,7 +62,7 @@ stdenv.mkDerivation rec {
       --replace nm "''${NM}"
   '';
 
-  nativeBuildInputs = [ cmake ];
+  nativeBuildInputs = [ cmake cmake-format ];
   propagatedNativeBuildInputs = [ pkgconfig pandoc ];
   buildInputs = [ libpcap flatbuffers jemalloc broker ];
   propagatedBuildInputs = [ arrow-cpp caf ];
