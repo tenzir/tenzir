@@ -66,8 +66,9 @@ caf::behavior terminator(caf::stateful_actor<terminator_state>* self,
       remaining.reserve(xs.size());
       for (auto i = xs.rbegin(); i != xs.rend(); ++i)
         if (!*i)
-          VAST_DEBUG(self, "skips termination of already exited actor",
-                     i->id());
+          VAST_DEBUG(self,
+                     "skips termination of already exited actor at position",
+                     std::distance(xs.begin(), i.base()));
         else
           remaining.push_back(*i);
       if (remaining.size() < xs.size())
@@ -93,6 +94,8 @@ caf::behavior terminator(caf::stateful_actor<terminator_state>* self,
       } else if constexpr (std::is_same_v<Policy, policy::parallel>) {
         // Terminate all actors.
         for (auto& x : xs) {
+          if (!x)
+            continue;
           self->monitor(x);
           self->send_exit(x, caf::exit_reason::user_shutdown);
         }
