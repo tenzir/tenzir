@@ -95,6 +95,13 @@ void finish_slice(accountant_actor* self) {
 
 void record_internally(accountant_actor* self, const std::string& key, real x,
                        time ts) {
+  // This is a workaround to a bug that is somewhere else -- the index cannot
+  // handle NaN, and a bug that we were unable to reproduce reliably caused the
+  // accountant to forward NaN to the index here.
+  if (!std::isfinite(x)) {
+    VAST_DEBUG(self, "cannot record a non-finite metric");
+    return;
+  }
   auto& st = *self->state;
   auto actor_id = self->current_sender()->id();
   if (!st.builder) {
