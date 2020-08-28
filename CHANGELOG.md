@@ -9,7 +9,12 @@ Every entry has a category for which we use the following visual abbreviations:
 - ⚠️ change
 - 🐞 bugfix
 
-<!-- ## Unreleased -->
+## Unreleased
+
+- ⚠️ The JSON export format now renders `duration` and `port` fields using
+  strings as opposed to numbers. This avoids a possible loss of information and
+  enables users to re-use the output in follow-up queries directly.
+  [#1034](https://github.com/tenzir/vast/pull/1034)
 
 ## [2020.08.28]
 
