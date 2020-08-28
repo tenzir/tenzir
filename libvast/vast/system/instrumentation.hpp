@@ -67,8 +67,7 @@ struct timer {
   }
 
   void stop(uint64_t events) {
-    auto stop = stopwatch::now();
-    auto elapsed = std::chrono::duration_cast<duration>(stop - start_);
+    auto elapsed = stopwatch::now() - start_;
     m_ += {elapsed, events};
   }
 
