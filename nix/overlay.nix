@@ -1,15 +1,13 @@
 final: prev:
 let
   inherit (final) lib;
-  static_stdenv = final.stdenv.hostPlatform.isMusl;
+  static_stdenv = prev.stdenv.hostPlatform.isMusl;
+  stdenv = if prev.stdenv.isDarwin then final.llvmPackages_10.stdenv else final.stdenv;
 in {
   nix-gitDescribe = final.callPackage ./gitDescribe.nix {};
-  arrow-cpp = prev.arrow-cpp.overrideAttrs (old: {
-    patches = old.patches ++ lib.optional static_stdenv arrow/fix-static-jemalloc.patch;
-  });
   caf = let
     source = builtins.fromJSON (builtins.readFile ./caf/source.json);
-    in prev.caf.overrideAttrs (old: {
+    in (prev.caf.override {inherit stdenv;}).overrideAttrs (old: {
     # fetchFromGitHub uses ellipsis in the parameter set to be hash method
     # agnostic. Because of that, callPackageWith does not detect that sha256
     # is a required argument, and it has to be passed explicitly instead.
@@ -34,7 +32,7 @@ in {
     NIX_CFLAGS_COMPILE = "-std=c++17";
     dontStrip = true;
   });
-  broker = final.callPackage ./broker {python = final.python3;};
+  broker = final.callPackage ./broker {inherit stdenv; python = final.python3;};
   vast-source = final.nix-gitignore.gitignoreSource [] ./..;
-  vast = final.callPackage ./vast {};
+  vast = final.callPackage ./vast {inherit stdenv;};
 }
