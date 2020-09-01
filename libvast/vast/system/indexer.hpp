@@ -33,12 +33,17 @@ namespace vast::system {
 // TODO: Create a separate `passive_indexer_state`, similar to how partitions
 // are handled.
 struct indexer_state {
-  value_index_ptr idx;
-
   /// The name of this indexer.
   std::string name;
 
-  /// The partition id to which this indexer belongs (for debugging).
+  /// The index holding the data.
+  value_index_ptr idx;
+
+  /// Whether the type of this indexer has the `#skip` attribute, implying that
+  /// the incoming data should not be indexed.
+  bool has_skip_attribute;
+
+  /// The partition id to which this indexer belongs (for log messages).
   uuid partition_id;
 
   /// Tracks whether we received at least one table slice column.
