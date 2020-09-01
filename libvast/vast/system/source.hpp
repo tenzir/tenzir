@@ -114,6 +114,7 @@ struct source_state {
   /// Points to the owning actor.
   Self* self;
 
+  /// An accumulator for the amount of produced events.
   size_t count = 0;
 
   /// The maximum number of events to ingest.
