@@ -11,6 +11,10 @@ Every entry has a category for which we use the following visual abbreviations:
 
 <!-- ## Unreleased -->
 
+- ⚠️ The delay between the periodic log messages for reporting the current
+  event rates has been increased to 10 seconds.
+  [#1035](https://github.com/tenzir/vast/pull/1035)
+
 ## [2020.08.28]
 
 - 🐞 VAST did not terminate when a critical component failed during startup.
