@@ -363,7 +363,9 @@ auto make_status_command() {
   return std::make_unique<command>(
     "status", "shows properties of a server process",
     documentation::vast_status,
-    opts().add<caf::atom_value>("verbosity,v", "output verbosity level"));
+    opts()
+      .add<bool>("detailed", "add more information to the output")
+      .add<bool>("debug", "include extra debug information"));
 }
 
 auto make_start_command() {
