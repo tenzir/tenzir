@@ -63,16 +63,15 @@ posix_filesystem(filesystem_type::stateful_pointer<posix_filesystem_state> self,
     },
     [=](atom::status, status_verbosity v) {
       auto result = caf::settings{};
-      if (v >= status_verbosity::info) {
-        result["filesystem.type"] = "POSIX";
-      }
+      if (v >= status_verbosity::info)
+        caf::put(result, "filesystem.type", "POSIX");
       if (v >= status_verbosity::debug) {
         auto& ops = put_dictionary(result, "filesystem.operations");
         auto add_stats = [&](auto& name, auto& stats) {
           auto& dict = put_dictionary(ops, name);
-          dict["successful"] = stats.successful;
-          dict["failed"] = stats.failed;
-          dict["bytes"] = stats.bytes;
+          caf::put(dict, "successful", stats.successful);
+          caf::put(dict, "failed", stats.failed);
+          caf::put(dict, "bytes", stats.bytes);
         };
         add_stats("writes", self->state.stats.writes);
         add_stats("reads", self->state.stats.reads);
