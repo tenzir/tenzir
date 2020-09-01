@@ -361,7 +361,7 @@ auto make_spawn_command() {
 
 auto make_status_command() {
   return std::make_unique<command>(
-    "status", "shows various properties of a topology",
+    "status", "shows properties of a server process",
     documentation::vast_status,
     opts().add<caf::atom_value>("verbosity,v", "output verbosity level"));
 }
