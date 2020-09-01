@@ -23,10 +23,13 @@ namespace vast::detail {
 /// Locates the path of a shared library or executable.
 /// @param addr The address to use for the lookup, needs to be in an
 ///             mmaped region in order to succeed.
-/// @returns The filesystem path to the library or executable mapped at address
+/// @returns the filesystem path to the library or executable mapped at address
 ///          addr, or error if the resolution fails.
 caf::expected<path> objectpath(const void* addr = nullptr);
 
+/// Retrieves runtime information about the current process.
+/// @returns a settings object containing information about system resource
+///          usage.
 caf::settings get_status();
 
 } // namespace vast::detail

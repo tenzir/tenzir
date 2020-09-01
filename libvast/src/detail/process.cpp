@@ -15,6 +15,7 @@
 
 #include "vast/error.hpp"
 #include "vast/logger.hpp"
+#include "vast/settings.hpp"
 
 #include <caf/expected.hpp>
 
@@ -61,6 +62,34 @@ static caf::settings get_status_proc() {
     if (!p(line))
       VAST_WARNING_ANON("failed to parse /proc/self/status:", line);
   }
+  return result;
+}
+
+} // namespace vast::detail
+#endif
+
+#if VAST_MACOS
+
+#  include <stdio.h>
+#  include <stdlib.h>
+#  include <unistd.h>
+
+#  include <mach/mach_init.h>
+#  include <mach/task.h>
+#  include <sys/sysctl.h>
+#  include <sys/types.h>
+
+namespace vast::detail {
+
+static caf::settings get_settings_mach() {
+  caf::settings result;
+  task_t task = MACH_PORT_NULL;
+  if (task_for_pid(current_task(), getpid(), &task) != KERN_SUCCESS)
+    return {};
+  struct task_basic_info t_info;
+  mach_msg_type_number_t t_info_count = TASK_BASIC_INFO_COUNT;
+  task_info(task, TASK_BASIC_INFO, (task_info_t) &t_info, &t_info_count);
+  result["current-memory-usage"] = t_info.resident_size;
   return result;
 }
 
@@ -133,9 +162,14 @@ caf::expected<path> objectpath(const void* addr) {
 caf::settings get_status() {
 #if VAST_LINUX
   return get_status_proc();
+#elif VAST_MACOS
+  auto result = get_status_rusage();
+  merge_settings(get_settings_mach(), result);
+  return result;
 #elif VAST_POSIX
   return get_status_rusage();
 #else
+  VAST_DEBUG_ANON("getting process information not supported");
   // Not implemented.
   return caf::settings{};
 #endif
