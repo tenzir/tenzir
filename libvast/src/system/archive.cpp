@@ -73,15 +73,15 @@ void archive_state::next_session() {
 void archive_state::send_report() {
   if (measurement.events > 0) {
     auto r = performance_report{{{std::string{name}, measurement}}};
-#if VAST_LOG_LEVEL >= VAST_LOG_LEVEL_VERBOSE
+#if VAST_LOG_LEVEL >= VAST_LOG_LEVEL_DEBUG
     for (const auto& [key, m] : r) {
       if (auto rate = m.rate_per_sec(); std::isfinite(rate))
-        VAST_VERBOSE(self, "handled", m.events, "events at a rate of",
-                     static_cast<uint64_t>(rate), "events/sec in",
-                     to_string(m.duration));
+        VAST_DEBUG(self, "handled", m.events, "events at a rate of",
+                   static_cast<uint64_t>(rate), "events/sec in",
+                   to_string(m.duration));
       else
-        VAST_VERBOSE(self, "handled", m.events, "events in",
-                     to_string(m.duration));
+        VAST_DEBUG(self, "handled", m.events, "events in",
+                   to_string(m.duration));
     }
 #endif
     measurement = vast::system::measurement{};
