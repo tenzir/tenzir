@@ -352,7 +352,7 @@ constexpr size_t initially_requested_ids = 128;
 
 /// Rate at which telemetry data is sent to the ACCOUNTANT.
 constexpr std::chrono::milliseconds telemetry_rate
-  = std::chrono::milliseconds{1000};
+  = std::chrono::milliseconds{10000};
 
 /// Interval between checks whether a signal occured.
 constexpr std::chrono::milliseconds signal_monitoring_interval
