@@ -159,7 +159,7 @@ caf::settings exporter_state::status(status_verbosity v) {
     auto& xs = put_list(result, "queries");
     xs.emplace_back(std::move(exp));
   }
-  if (v >= status_verbosity::verbose) {
+  if (v >= status_verbosity::detailed) {
     caf::settings exp;
     put(exp, "expression", to_string(expr));
     put(exp, "hits", rank(hits));

@@ -336,7 +336,7 @@ source(caf::stateful_actor<source_state<Reader>>* self, Reader reader,
     [=](atom::status, status_verbosity v) {
       auto& st = self->state;
       caf::settings result;
-      if (v >= status_verbosity::verbose) {
+      if (v >= status_verbosity::detailed) {
         caf::settings src;
         if (st.reader_initialized)
           put(src, "format", st.reader.name());

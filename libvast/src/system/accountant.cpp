@@ -314,7 +314,7 @@ accountant(accountant_actor* self, accountant_config cfg) {
     [=](atom::status, status_verbosity v) {
       using caf::put_dictionary;
       auto result = caf::settings{};
-      if (v >= status_verbosity::verbose) {
+      if (v >= status_verbosity::detailed) {
         auto& known = put_dictionary(result, "accountant.known-actors");
         for (const auto& [aid, name] : self->state->actor_map)
           known.emplace(name, aid);

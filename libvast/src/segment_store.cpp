@@ -331,7 +331,7 @@ void segment_store::inspect_status(caf::settings& xs, status_verbosity v) {
       mem += segment.second.chunk()->size();
     put(xs, "archive.memory-usage", mem);
   }
-  if (v >= status_verbosity::verbose) {
+  if (v >= status_verbosity::detailed) {
     auto& cached = put_list(xs, "cached");
     for (auto& kvp : cache_)
       cached.emplace_back(to_string(kvp.first));

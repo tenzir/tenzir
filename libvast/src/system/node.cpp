@@ -165,7 +165,7 @@ caf::message status_command(const invocation& inv, caf::actor_system&) {
   auto self = this_node;
   auto verbosity = status_verbosity::info;
   if (caf::get_or(inv.options, "detailed", false))
-    verbosity = status_verbosity::verbose;
+    verbosity = status_verbosity::detailed;
   if (caf::get_or(inv.options, "debug", false))
     verbosity = status_verbosity::debug;
   collect_component_status(self, self->make_response_promise(), verbosity);

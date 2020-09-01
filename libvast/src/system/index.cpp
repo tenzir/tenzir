@@ -220,7 +220,7 @@ index_state::status(status_verbosity v) const {
   // Misc parameters.
   if (v >= status_verbosity::info) {
   }
-  if (v >= status_verbosity::verbose) {
+  if (v >= status_verbosity::detailed) {
     auto& stats_object = put_dictionary(result, "index.statistics");
     auto& layout_object = put_dictionary(stats_object, "layouts");
     for (auto& [name, layout_stats] : stats.layouts) {

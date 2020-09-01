@@ -15,6 +15,6 @@
 
 namespace vast {
 
-enum class status_verbosity { info, verbose, debug };
+enum class status_verbosity { info, detailed, debug };
 
 } // namespace vast

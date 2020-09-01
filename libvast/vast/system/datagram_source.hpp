@@ -189,7 +189,7 @@ datagram_source(datagram_source_actor<Reader>* self,
     [=](atom::status, status_verbosity v) {
       auto& st = self->state;
       caf::settings result;
-      if (v >= status_verbosity::verbose) {
+      if (v >= status_verbosity::detailed) {
         caf::settings src;
         if (st.reader_initialized)
           put(src, "format", st.reader.name());

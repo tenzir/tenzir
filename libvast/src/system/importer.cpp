@@ -111,7 +111,7 @@ importer_state::status(status_verbosity v) const {
   // TODO: caf::config_value can only represent signed 64 bit integers, which
   // may make it look like overflow happened in the status report. As an
   // intermediate workaround, we convert the values to strings.
-  if (v >= status_verbosity::verbose) {
+  if (v >= status_verbosity::detailed) {
     caf::put(result, "ids.available", to_string(available_ids()));
     caf::put(result, "ids.block.next", to_string(current.next));
     caf::put(result, "ids.block.end", to_string(current.end));
