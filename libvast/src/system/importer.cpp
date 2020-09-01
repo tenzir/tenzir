@@ -14,6 +14,7 @@
 #include "vast/system/importer.hpp"
 
 #include "vast/concept/printable/numeric/integral.hpp"
+#include "vast/concept/printable/std/chrono.hpp"
 #include "vast/concept/printable/to_string.hpp"
 #include "vast/concept/printable/vast/error.hpp"
 #include "vast/concept/printable/vast/filesystem.hpp"
@@ -126,6 +127,18 @@ void importer_state::send_report() {
     auto node_throughput = measurement{elapsed, measurement_.events};
     auto r = performance_report{
       {{"importer"s, measurement_}, {"node_throughput"s, node_throughput}}};
+#if VAST_LOG_LEVEL >= VAST_LOG_LEVEL_VERBOSE
+    auto beat = [&](performance_sample s) {
+      if (auto rate = s.value.rate_per_sec(); std::isfinite(rate))
+        VAST_VERBOSE(self, "handled", s.value.events, "events at a rate of",
+                     static_cast<uint64_t>(rate), "events/sec in",
+                     to_string(s.value.duration));
+      else
+        VAST_VERBOSE(self, "handled", s.value.events, "events in",
+                     to_string(s.value.duration));
+    };
+    beat(r[1]);
+#endif
     measurement_ = measurement{};
     self->send(accountant, std::move(r));
   }
