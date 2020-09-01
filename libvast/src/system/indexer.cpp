@@ -82,6 +82,7 @@ caf::behavior passive_indexer(caf::stateful_actor<indexer_state>* self,
 caf::behavior active_indexer(caf::stateful_actor<indexer_state>* self, type index_type,
                       caf::settings index_opts) {
   self->state.name = "indexer-" + to_string(index_type);
+  self->state.has_skip_attribute = vast::has_skip_attribute(index_type);
   return {
     [=](caf::stream<table_slice_column> in) {
       VAST_DEBUG(self, "received new table slice stream");
@@ -97,6 +98,12 @@ caf::behavior active_indexer(caf::stateful_actor<indexer_state>* self, type inde
         [=](caf::unit_t&, const std::vector<table_slice_column>& xs) {
           VAST_ASSERT(self->state.idx != nullptr);
           self->state.stream_initiated = true;
+          // NOTE: It seems like having the `#skip` attribute should lead to
+          // no index being created at all (as opposed to creating it and
+          // never adding data), but that was the behaviour of the previous
+          // implementation so we're keeping it for now.
+          if (self->state.has_skip_attribute)
+            return;
           for (auto& x : xs) {
             for (size_t i = 0; i < x.slice->rows(); ++i) {
               auto v = x.slice->at(i, x.column);
