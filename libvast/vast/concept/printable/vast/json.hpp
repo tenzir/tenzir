@@ -19,6 +19,7 @@
 #include "vast/concept/printable/print.hpp"
 #include "vast/concept/printable/std/chrono.hpp"
 #include "vast/concept/printable/string.hpp"
+#include "vast/concept/printable/vast/port.hpp"
 #include "vast/detail/escapers.hpp"
 #include "vast/json.hpp"
 #include "vast/time.hpp"
@@ -78,13 +79,6 @@ struct json_printer : printer<json_printer<TreePolicy, Indent, Padding>> {
       return caf::visit(*this, x);
     }
 
-    bool operator()(const view<port>& x) {
-      // TODO: convert() generates a string, while our unit tests expect a
-      //       number. Eventually, we're probably going to drop the protocol
-      //       part but convert() and print() should be consistent regardless.
-      return (*this)(x.number());
-    }
-
     template <class T>
     bool operator()(const T& x) {
       if constexpr (std::is_arithmetic_v<T>) {
@@ -120,6 +114,16 @@ struct json_printer : printer<json_printer<TreePolicy, Indent, Padding>> {
 
     bool operator()(const view<pattern>& x) {
       return (*this)(x.string());
+    }
+
+    bool operator()(const view<port>& x) {
+      static auto p = '"' << make_printer<port>{} << '"';
+      return p.print(out_, x);
+    }
+
+    bool operator()(const view<duration>& x) {
+      static auto p = '"' << make_printer<duration>{} << '"';
+      return p.print(out_, x);
     }
 
     bool operator()(const view<time>& x) {
