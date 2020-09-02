@@ -730,7 +730,7 @@ add_custom_target(
   vast-schema
   COMMAND ${CMAKE_COMMAND} -E make_directory
           "${CMAKE_BINARY_DIR}/share/vast/schema"
-  COMMENT "Linking schema directory")
+  COMMENT "Copying schema directory")
 
 file(
   GLOB schema_files
@@ -741,9 +741,9 @@ foreach (x ${schema_files})
     TARGET vast-schema
     PRE_BUILD
     COMMAND
-      ${CMAKE_COMMAND} -E create_symlink "${CMAKE_CURRENT_SOURCE_DIR}/${x}"
+      ${CMAKE_COMMAND} -E copy_if_different "${CMAKE_CURRENT_SOURCE_DIR}/${x}"
       "${CMAKE_BINARY_DIR}/share/vast/${x}"
-    COMMENT "Linking schema ${x}")
+    COMMENT "Copying schema ${x}")
 endforeach ()
 
 add_subdirectory(libvast)
