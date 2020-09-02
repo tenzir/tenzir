@@ -42,4 +42,22 @@ void merge_settings(const caf::settings& src, caf::settings& dst) {
   return merge_settings_impl(src, dst);
 }
 
+bool strip_settings(caf::settings& xs) {
+  auto& m = xs.container();
+  for (auto it = m.begin(); it != m.end();) {
+    if (auto x = caf::get_if<caf::settings>(&it->second)) {
+      if (x->empty()) {
+        it = m.erase(it);
+      } else {
+        if (strip_settings(*x))
+          it = m.erase(it);
+        else
+          ++it;
+      }
+    } else
+      ++it;
+  }
+  return m.empty();
+}
+
 } // namespace vast
