@@ -314,13 +314,14 @@ accountant(accountant_actor* self, accountant_config cfg) {
     [=](atom::status, status_verbosity v) {
       using caf::put_dictionary;
       auto result = caf::settings{};
+      auto& accountant_status = put_dictionary(result, "accountant");
       if (v >= status_verbosity::detailed) {
-        auto& known = put_dictionary(result, "accountant.known-actors");
+        auto& components = put_dictionary(accountant_status, "components");
         for (const auto& [aid, name] : self->state->actor_map)
-          known.emplace(name, aid);
+          components.emplace(name, aid);
       }
       if (v >= status_verbosity::debug)
-        detail::fill_status_map(result, self);
+        detail::fill_status_map(accountant_status, self);
       return result;
     },
     [=](atom::telemetry) {

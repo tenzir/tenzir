@@ -35,10 +35,6 @@ struct exporter_state {
 
   static inline const char* name = "exporter";
 
-  // -- properties -------------------------------------------------------------
-
-  caf::settings status(status_verbosity v);
-
   // -- member variables -------------------------------------------------------
 
   /// Stores a handle to the ARCHIVE for fetching candidates.

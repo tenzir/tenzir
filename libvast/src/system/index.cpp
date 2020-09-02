@@ -217,11 +217,12 @@ index_state::status(status_verbosity v) const {
   using caf::put_dictionary;
   using caf::put_list;
   auto result = caf::settings{};
+  auto& index_status = put_dictionary(result, "index");
   // Misc parameters.
   if (v >= status_verbosity::info) {
   }
   if (v >= status_verbosity::detailed) {
-    auto& stats_object = put_dictionary(result, "index.statistics");
+    auto& stats_object = put_dictionary(index_status, "statistics");
     auto& layout_object = put_dictionary(stats_object, "layouts");
     for (auto& [name, layout_stats] : stats.layouts) {
       auto xs = caf::dictionary<caf::config_value>{};
@@ -233,9 +234,9 @@ index_state::status(status_verbosity v) const {
     }
   }
   if (v >= status_verbosity::debug) {
-    put(result, "meta-index-filename", meta_index_filename().str());
+    put(index_status, "meta-index-filename", meta_index_filename().str());
     // Resident partitions.
-    auto& partitions = put_dictionary(result, "index.partitions");
+    auto& partitions = put_dictionary(index_status, "partitions");
     if (active != nullptr)
       partitions.emplace("active", to_string(active->id()));
     auto& cached = put_list(partitions, "cached");
@@ -245,7 +246,7 @@ index_state::status(status_verbosity v) const {
     for (auto& kvp : this->unpersisted)
       unpersisted.emplace_back(to_string(kvp.first->id()));
     // General state such as open streams.
-    detail::fill_status_map(result, self);
+    detail::fill_status_map(index_status, self);
   }
   return result;
 }

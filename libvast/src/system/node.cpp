@@ -125,17 +125,21 @@ void collect_component_status(node_actor* self,
   req_state->rp = std::move(status_promise);
   // Pre-fill our result with system stats.
   auto& sys = self->system();
-  auto& content = req_state->content;
+  auto& system = put_dictionary(req_state->content, "system");
   if (v >= status_verbosity::info) {
-    put(content, "table-slices", table_slice::instances());
-    put(content, "database-path", self->state.dir.str());
-    merge_settings(detail::get_status(), content);
+    put(system, "in-memory-table-slices", table_slice::instances());
+    put(system, "database-path", self->state.dir.str());
+    merge_settings(detail::get_status(), system);
   }
   if (v >= status_verbosity::debug) {
-    put(content, "running-actors", sys.registry().running());
-    put(content, "detached-actors", sys.detached_actors());
-    put(content, "worker-threads", sys.scheduler().num_workers());
+    put(system, "running-actors", sys.registry().running());
+    put(system, "detached-actors", sys.detached_actors());
+    put(system, "worker-threads", sys.scheduler().num_workers());
   }
+  auto deliver = [](auto&& req_state) {
+    strip_settings(req_state->content);
+    req_state->rp.deliver(to_string(to_json(req_state->content)));
+  };
   // Send out requests and collects answers.
   for (auto& [label, component] : self->state.registry.components())
     self
@@ -146,7 +150,7 @@ void collect_component_status(node_actor* self,
           merge_settings(xs, req_state->content);
           // Both handlers have a copy of req_state.
           if (req_state.use_count() == 2)
-            req_state->rp.deliver(to_string(to_json(req_state->content)));
+            deliver(std::move(req_state));
         },
         [=, lab = label](caf::error& err) mutable {
           VAST_WARNING(self, "failed to retrieve", lab,
@@ -155,7 +159,7 @@ void collect_component_status(node_actor* self,
           dict.emplace(std::move(lab), to_string(err));
           // Both handlers have a copy of req_state.
           if (req_state.use_count() == 2)
-            req_state->rp.deliver(to_string(to_json(req_state->content)));
+            deliver(std::move(req_state));
         });
 }
 

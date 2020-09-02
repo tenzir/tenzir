@@ -325,18 +325,19 @@ caf::error segment_store::flush() {
 void segment_store::inspect_status(caf::settings& xs, status_verbosity v) {
   using caf::put;
   if (v >= status_verbosity::info) {
-    put(xs, "archive.events", num_events_);
+    put(xs, "events", num_events_);
     auto mem = builder_.table_slice_bytes();
     for (auto& segment : cache_)
       mem += segment.second.chunk()->size();
-    put(xs, "archive.memory-usage", mem);
+    put(xs, "memory-usage", mem);
   }
   if (v >= status_verbosity::detailed) {
-    auto& cached = put_list(xs, "cached");
+    auto& segments = put_dictionary(xs, "segments");
+    auto& cached = put_list(segments, "cached");
     for (auto& kvp : cache_)
       cached.emplace_back(to_string(kvp.first));
-    auto& current = put_dictionary(xs, "current-segment");
-    put(current, "id", to_string(builder_.id()));
+    auto& current = put_dictionary(segments, "current");
+    put(current, "uuid", to_string(builder_.id()));
     put(current, "size", builder_.table_slice_bytes());
   }
 }

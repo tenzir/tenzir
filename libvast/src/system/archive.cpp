@@ -203,9 +203,10 @@ archive(archive_type::stateful_pointer<archive_state> self, path dir,
     },
     [=](atom::status, status_verbosity v) {
       auto result = caf::settings{};
+      auto& archive_status = put_dictionary(result, "archive");
       if (v >= status_verbosity::debug)
-        detail::fill_status_map(result, self);
-      self->state.store->inspect_status(result, v);
+        detail::fill_status_map(archive_status, self);
+      self->state.store->inspect_status(archive_status, v);
       return result;
     },
     [=](atom::telemetry) {
