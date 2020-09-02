@@ -15,12 +15,12 @@ Every entry has a category for which we use the following visual abbreviations:
   now found at `${XDG_CONFIG_HOME:-${HOME}/.config}/vast/vast.conf`, and schema
   files at `${XDG_DATA_HOME:-${HOME}/.local/share}/vast/schema/`. The
   user-specific configuration file takes precedence over the global
-  configuration file in `${sysconfdir}/vast/vast.conf`.
+  configuration file in `<sysconfdir>/vast/vast.conf`.
   [#1036](https://github.com/tenzir/vast/pull/1036)
 
 - ⚠️ The global VAST configuration now always resides in
-  `${sysconfdir}/vast/vast.conf`, and bundled schemas always in
-  `${datadir}/vast/schema/`. VAST no longer supports reading a `vast.conf` file
+  `<sysconfdir>/vast/vast.conf`, and bundled schemas always in
+  `<datadir>/vast/schema/`. VAST no longer supports reading a `vast.conf` file
   in the current working directory.
   [#1036](https://github.com/tenzir/vast/pull/1036)
 
