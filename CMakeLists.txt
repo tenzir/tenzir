@@ -805,8 +805,6 @@ install(DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/integration"
 install(
   FILES "${CMAKE_CURRENT_SOURCE_DIR}/vast.conf.example"
   DESTINATION "${CMAKE_INSTALL_DATADIR}/vast/")
-install(FILES "${CMAKE_CURRENT_SOURCE_DIR}/vast.conf.example"
-        DESTINATION "${CMAKE_INSTALL_SYSCONFDIR}/vast/")
 
 install(FILES "${CMAKE_CURRENT_SOURCE_DIR}/scripts/corelight-cat"
         DESTINATION ${CMAKE_INSTALL_BINDIR})
