@@ -81,7 +81,7 @@ int main(int argc, char** argv) {
     }
     auto vast_share = binary->parent().parent() / "share" / "vast";
     default_dirs.emplace_back(vast_share / "schema");
-    default_dirs.emplace_back("/etc/vast/schema");
+    default_dirs.emplace_back(VAST_DATADIR "/vast/schema");
   }
   if (auto user_dirs = caf::get_if<string_list>(&cfg, "system.schema-paths"))
     default_dirs.insert(default_dirs.end(), user_dirs->begin(),
