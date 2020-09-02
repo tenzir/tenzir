@@ -45,7 +45,8 @@ spawn_dummy_indexer(caf::local_actor* self, system::accountant_type, path, type,
 
 caf::behavior
 dummy_index_actor(caf::stateful_actor<index_state>* self, path dir) {
-  self->state.init(std::move(dir), std::numeric_limits<size_t>::max(), 10, 5);
+  self->state.init(std::move(dir), std::numeric_limits<size_t>::max(), 10, 5,
+                   true);
   self->state.factory = spawn_dummy_indexer;
   return {[](std::function<void()> f) { f(); }};
 }

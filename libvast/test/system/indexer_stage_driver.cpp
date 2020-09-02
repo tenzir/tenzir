@@ -76,7 +76,7 @@ spawn_sink(caf::local_actor* self, accountant_type, [[maybe_unused]] path dir,
 
 behavior dummy_index(stateful_actor<index_state>* self, path dir) {
   VAST_TRACE(VAST_ARG(dir));
-  self->state.init(dir, std::numeric_limits<size_t>::max(), 10, 5);
+  self->state.init(dir, std::numeric_limits<size_t>::max(), 10, 5, true);
   self->state.factory = spawn_sink;
   return {[=](stream<table_slice_ptr> in) {
     auto mgr = self->make_continuous_stage<indexer_stage_driver>(self);

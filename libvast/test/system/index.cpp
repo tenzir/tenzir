@@ -51,7 +51,8 @@ struct fixture : fixtures::deterministic_actor_system_and_events {
   fixture() {
     directory /= "index";
     index = self->spawn(system::index, directory / "index", slice_size,
-                        in_mem_partitions, taste_count, num_query_supervisors);
+                        in_mem_partitions, taste_count, num_query_supervisors,
+                        false);
   }
 
   ~fixture() {
