@@ -205,10 +205,10 @@ caf::expected<schema> load_schema(const path& sf) {
 
 caf::expected<schema> load_schema(const std::vector<path>& schema_paths) {
   vast::schema types;
-  VAST_VERBOSE_ANON("Looking for schema files in", schema_paths);
+  VAST_VERBOSE_ANON("looking for schema files in", schema_paths);
   for (const auto& dir : schema_paths) {
     if (!exists(dir))
-      break;
+      continue;
     vast::schema directory_schema;
     for (auto f : directory(dir)) {
       if (f.extension() == ".schema" && exists(f)) {
