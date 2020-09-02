@@ -52,18 +52,16 @@ void initialize_factories() {
 configuration::configuration() {
   detail::add_message_types(*this);
   // Use 'vast.conf' instead of generic 'caf-application.ini'.
-  auto config_path_candidates = std::vector<path>{};
+  auto config_paths = std::vector<path>{};
   if (const char* xdg_config_home = std::getenv("XDG_CONFIG_HOME"))
-    config_path_candidates.emplace_back(path{xdg_config_home} / "vast"
-                                        / "vast.conf");
+    config_paths.emplace_back(path{xdg_config_home} / "vast" / "vast.conf");
   else if (const char* home = std::getenv("HOME"))
-    config_path_candidates.emplace_back(path{home} / ".config" / "vast"
-                                        / "vast.conf");
-  config_path_candidates.emplace_back(VAST_SYSCONFDIR "/vast/vast.conf");
+    config_paths.emplace_back(path{home} / ".config" / "vast" / "vast.conf");
+  config_paths.emplace_back(VAST_SYSCONFDIR "/vast/vast.conf");
   // We must clear the config_file_path first so it does not use
   // `caf-application.ini` as fallback.
   config_file_path.clear();
-  for (auto& p : config_path_candidates) {
+  for (auto& p : config_paths) {
     if (p.is_regular_file()) {
       config_file_path = p.str();
       break;

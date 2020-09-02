@@ -71,7 +71,7 @@ int main(int argc, char** argv) {
   if (!cfg.config_file_path.empty())
     VAST_INFO_ANON("loaded configuration file:", cfg.config_file_path);
   using string_list = std::vector<std::string>;
-  auto data_dirs = std::vector<vast::path>{};
+  auto schema_dirs = std::vector<vast::path>{};
   if (!caf::get_or(cfg, "system.no-default-schema", false)) {
     // Get filesystem path to the executable.
     auto binary = detail::objectpath();
@@ -80,18 +80,18 @@ int main(int argc, char** argv) {
       return EXIT_FAILURE;
     }
     if (const char* xdg_data_home = std::getenv("XDG_DATA_HOME"))
-      data_dirs.emplace_back(path{xdg_data_home} / "vast" / "schema");
+      schema_dirs.emplace_back(path{xdg_data_home} / "vast" / "schema");
     else if (const char* home = std::getenv("HOME"))
-      data_dirs.emplace_back(path{home} / ".local" / "share" / "vast"
+      schema_dirs.emplace_back(path{home} / ".local" / "share" / "vast"
+                               / "schema");
+    schema_dirs.emplace_back(binary->parent().parent() / "share" / "vast"
                              / "schema");
-    data_dirs.emplace_back(binary->parent().parent() / "share" / "vast"
-                           / "schema");
-    data_dirs.emplace_back(VAST_DATADIR "/vast/schema");
+    schema_dirs.emplace_back(VAST_DATADIR "/vast/schema");
   }
   if (auto user_dirs = caf::get_if<string_list>(&cfg, "system.schema-paths"))
-    data_dirs.insert(data_dirs.end(), user_dirs->begin(), user_dirs->end());
+    schema_dirs.insert(schema_dirs.end(), user_dirs->begin(), user_dirs->end());
   // Load event types.
-  if (auto schema = load_schema(data_dirs)) {
+  if (auto schema = load_schema(schema_dirs)) {
     event_types::init(*std::move(schema));
   } else {
     VAST_ERROR_ANON("failed to read schema dirs:", render(schema.error()));
