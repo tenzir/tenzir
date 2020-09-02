@@ -442,7 +442,8 @@ index(caf::stateful_actor<index_state>* self, filesystem_type fs, path dir,
   auto create_active_partition = [=] {
     auto id = uuid::random();
     caf::settings index_opts;
-    index_opts["cardinality"] = partition_capacity;
+    // TODO: Set the 'cardinality' option once ch19167 is resolved.
+    // index_opts["cardinality"] = partition_capacity;
     auto part
       = self->spawn(active_partition, id, self->state.filesystem, index_opts);
     auto slot = self->state.stage->add_outbound_path(part);
