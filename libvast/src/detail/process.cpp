@@ -20,11 +20,6 @@
 #include <caf/expected.hpp>
 
 #include <dlfcn.h>
-#if __linux__
-#  include <limits.h>
-#  include <sys/stat.h>
-#  include <unistd.h>
-#endif
 
 #if VAST_LINUX
 #  include "vast/concept/parseable/core/operators.hpp"
@@ -34,6 +29,26 @@
 #  include "vast/detail/line_range.hpp"
 
 #  include <fstream>
+#  include <limits.h>
+#  include <unistd.h>
+
+#  include <sys/stat.h>
+#elif VAST_MACOS
+#  include <unistd.h>
+
+#  include <mach/mach_init.h>
+#  include <mach/task.h>
+#  include <sys/types.h>
+#endif
+
+#if VAST_POSIX && !VAST_LINUX
+#  include <sys/resource.h>
+#  include <sys/sysctl.h>
+#  include <sys/time.h>
+#  include <sys/types.h>
+#endif
+
+#if VAST_LINUX
 
 namespace vast::detail {
 
@@ -70,15 +85,6 @@ static caf::settings get_status_proc() {
 
 #if VAST_MACOS
 
-#  include <stdio.h>
-#  include <stdlib.h>
-#  include <unistd.h>
-
-#  include <mach/mach_init.h>
-#  include <mach/task.h>
-#  include <sys/sysctl.h>
-#  include <sys/types.h>
-
 namespace vast::detail {
 
 static caf::settings get_settings_mach() {
@@ -97,8 +103,6 @@ static caf::settings get_settings_mach() {
 #endif
 
 #if VAST_POSIX && !VAST_LINUX
-#  include <sys/resource.h>
-#  include <sys/time.h>
 
 namespace vast::detail {
 
