@@ -21,4 +21,11 @@ namespace vast {
 /// from `dst` if necessary.
 void merge_settings(const caf::settings& src, caf::settings& dst);
 
+/// Remove empty settings objects from the tree.
+/// Example:
+///   { a = 13, b = {}, c = { d = {} } }
+/// is changed into:
+///   { a = 13 }
+bool strip_settings(caf::settings& xs);
+
 } // namespace vast

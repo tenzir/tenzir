@@ -35,16 +35,20 @@ report type_registry_state::telemetry() const {
   return {};
 }
 
-caf::dictionary<caf::config_value> type_registry_state::status() const {
-  caf::dictionary<caf::config_value> result;
-  // Sorted list of all keys.
-  auto keys = std::vector<std::string>(data.size());
-  std::transform(data.begin(), data.end(), keys.begin(),
-                 [](const auto& x) { return x.first; });
-  std::sort(keys.begin(), keys.end());
-  caf::put(result, "types", keys);
-  // The usual per-component status.
-  detail::fill_status_map(result, self);
+caf::dictionary<caf::config_value>
+type_registry_state::status(status_verbosity v) const {
+  auto result = caf::settings{};
+  auto& tr_status = put_dictionary(result, "type-registry");
+  if (v >= status_verbosity::debug) {
+    // Sorted list of all keys.
+    auto keys = std::vector<std::string>(data.size());
+    std::transform(data.begin(), data.end(), keys.begin(),
+                   [](const auto& x) { return x.first; });
+    std::sort(keys.begin(), keys.end());
+    caf::put(tr_status, "types", keys);
+    // The usual per-component status.
+    detail::fill_status_map(tr_status, self);
+  }
   return result;
 }
 
@@ -126,9 +130,9 @@ type_registry(type_registry_actor self, const path& dir) {
       self->delayed_send(self, defaults::system::telemetry_rate,
                          atom::telemetry_v);
     },
-    [=](atom::status) {
+    [=](atom::status, status_verbosity v) {
       VAST_TRACE(self, "sends out a status report");
-      return self->state.status();
+      return self->state.status(v);
     },
     [=](caf::stream<table_slice_ptr> in) {
       VAST_TRACE(self, "attaches to", VAST_ARG("stream", in));

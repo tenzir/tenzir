@@ -211,35 +211,43 @@ caf::actor index_state::next_worker() {
   return result;
 }
 
-caf::dictionary<caf::config_value> index_state::status() const {
+caf::dictionary<caf::config_value>
+index_state::status(status_verbosity v) const {
+  using caf::put;
   using caf::put_dictionary;
   using caf::put_list;
-  caf::dictionary<caf::config_value> result;
+  auto result = caf::settings{};
+  auto& index_status = put_dictionary(result, "index");
   // Misc parameters.
-  result.emplace("meta-index-filename", meta_index_filename().str());
-  // Statistics.
-  auto& stats_object = put_dictionary(result, "statistics");
-  auto& layout_object = put_dictionary(stats_object, "layouts");
-  for (auto& [name, layout_stats] : stats.layouts) {
-    auto xs = caf::dictionary<caf::config_value>{};
-    xs.emplace("count", layout_stats.count);
-    // We cannot use put_dictionary(layout_object, name) here, because this
-    // function splits the key at '.', which occurs in every layout name.
-    // Hence the fallback to low-level primitives.
-    layout_object.insert_or_assign(name, std::move(xs));
+  if (v >= status_verbosity::info) {
   }
-  // Resident partitions.
-  auto& partitions = put_dictionary(result, "partitions");
-  if (active != nullptr)
-    partitions.emplace("active", to_string(active->id()));
-  auto& cached = put_list(partitions, "cached");
-  for (auto& part : lru_partitions.elements())
-    cached.emplace_back(to_string(part->id()));
-  auto& unpersisted = put_list(partitions, "unpersisted");
-  for (auto& kvp : this->unpersisted)
-    unpersisted.emplace_back(to_string(kvp.first->id()));
-  // General state such as open streams.
-  detail::fill_status_map(result, self);
+  if (v >= status_verbosity::detailed) {
+    auto& stats_object = put_dictionary(index_status, "statistics");
+    auto& layout_object = put_dictionary(stats_object, "layouts");
+    for (auto& [name, layout_stats] : stats.layouts) {
+      auto xs = caf::dictionary<caf::config_value>{};
+      xs.emplace("count", layout_stats.count);
+      // We cannot use put_dictionary(layout_object, name) here, because this
+      // function splits the key at '.', which occurs in every layout name.
+      // Hence the fallback to low-level primitives.
+      layout_object.insert_or_assign(name, std::move(xs));
+    }
+  }
+  if (v >= status_verbosity::debug) {
+    put(index_status, "meta-index-filename", meta_index_filename().str());
+    // Resident partitions.
+    auto& partitions = put_dictionary(index_status, "partitions");
+    if (active != nullptr)
+      partitions.emplace("active", to_string(active->id()));
+    auto& cached = put_list(partitions, "cached");
+    for (auto& part : lru_partitions.elements())
+      cached.emplace_back(to_string(part->id()));
+    auto& unpersisted = put_list(partitions, "unpersisted");
+    for (auto& kvp : this->unpersisted)
+      unpersisted.emplace_back(to_string(kvp.first->id()));
+    // General state such as open streams.
+    detail::fill_status_map(index_status, self);
+  }
   return result;
 }
 
@@ -521,8 +529,8 @@ caf::behavior index(caf::stateful_actor<index_state>* self, const path& dir,
       VAST_DEBUG(self, "got a new source");
       return self->state.stage->add_inbound_path(in);
     },
-    [=](atom::status) -> caf::config_value::dictionary {
-      return self->state.status();
+    [=](atom::status, status_verbosity v) -> caf::config_value::dictionary {
+      return self->state.status(v);
     },
     [=](atom::subscribe, atom::flush, caf::actor& listener) {
       self->state.add_flush_listener(std::move(listener));
@@ -545,9 +553,8 @@ caf::behavior index(caf::stateful_actor<index_state>* self, const path& dir,
             self->send(self->state.accountant, atom::announce_v, "index");
             self->delayed_send(self, defs::telemetry_rate, atom::telemetry_v);
           },
-          [=](atom::status) -> caf::config_value::dictionary {
-            return self->state.status();
-          },
+          [=](atom::status, status_verbosity v)
+            -> caf::config_value::dictionary { return self->state.status(v); },
           [=](atom::subscribe, atom::flush, caf::actor& listener) {
             self->state.add_flush_listener(std::move(listener));
           }};

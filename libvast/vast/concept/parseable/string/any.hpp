@@ -14,6 +14,7 @@
 #pragma once
 
 #include "vast/concept/parseable/core/parser.hpp"
+#include "vast/concept/parseable/detail/char_helpers.hpp"
 
 namespace vast {
 

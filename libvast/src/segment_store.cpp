@@ -25,7 +25,7 @@
 #include "vast/fbs/utils.hpp"
 #include "vast/ids.hpp"
 #include "vast/logger.hpp"
-#include "vast/segment_store.hpp"
+#include "vast/status.hpp"
 #include "vast/table_slice.hpp"
 #include "vast/to_events.hpp"
 
@@ -322,28 +322,24 @@ caf::error segment_store::flush() {
   return caf::none;
 }
 
-void segment_store::inspect_status(caf::settings& dict) {
+void segment_store::inspect_status(caf::settings& xs, status_verbosity v) {
   using caf::put;
-  put(dict, "segment-path", segment_path().str());
-  put(dict, "max-segment-size", max_segment_size_);
-  put(dict, "num-events", num_events_);
-  // Note: `for (auto& kvp : segments_)` does not compile.
-  // FIXME: This is too slow for large archives and blocks the node.
-  // auto& segments = put_dictionary(dict, "segments");
-  // for (auto i = segments_.begin(); i != segments_.end(); ++i) {
-  //   std::string range = "[";
-  //   range += std::to_string(i->left);
-  //   range += ", ";
-  //   range += std::to_string(i->right);
-  //   range += ")";
-  //   put(segments, range, to_string(i->value));
-  // }
-  auto& cached = put_list(dict, "cached");
-  for (auto& kvp : cache_)
-    cached.emplace_back(to_string(kvp.first));
-  auto& current = put_dictionary(dict, "current-segment");
-  put(current, "id", to_string(builder_.id()));
-  put(current, "size", builder_.table_slice_bytes());
+  if (v >= status_verbosity::info) {
+    put(xs, "events", num_events_);
+    auto mem = builder_.table_slice_bytes();
+    for (auto& segment : cache_)
+      mem += segment.second.chunk()->size();
+    put(xs, "memory-usage", mem);
+  }
+  if (v >= status_verbosity::detailed) {
+    auto& segments = put_dictionary(xs, "segments");
+    auto& cached = put_list(segments, "cached");
+    for (auto& kvp : cache_)
+      cached.emplace_back(to_string(kvp.first));
+    auto& current = put_dictionary(segments, "current");
+    put(current, "uuid", to_string(builder_.id()));
+    put(current, "size", builder_.table_slice_bytes());
+  }
 }
 
 caf::error segment_store::register_segments() {

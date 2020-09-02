@@ -13,20 +13,20 @@
 
 #pragma once
 
-#include <chrono>
-#include <deque>
-#include <memory>
-#include <unordered_map>
-
 #include "vast/aliases.hpp"
 #include "vast/expression.hpp"
 #include "vast/ids.hpp"
 #include "vast/query_options.hpp"
-#include "vast/uuid.hpp"
-
+#include "vast/status.hpp"
 #include "vast/system/accountant.hpp"
 #include "vast/system/archive.hpp"
 #include "vast/system/query_status.hpp"
+#include "vast/uuid.hpp"
+
+#include <chrono>
+#include <deque>
+#include <memory>
+#include <unordered_map>
 
 namespace vast::system {
 
@@ -34,10 +34,6 @@ struct exporter_state {
   /// -- constants -------------------------------------------------------------
 
   static inline const char* name = "exporter";
-
-  // -- properties -------------------------------------------------------------
-
-  caf::settings status();
 
   // -- member variables -------------------------------------------------------
 

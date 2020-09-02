@@ -106,16 +106,21 @@ id importer_state::available_ids() const noexcept {
   return max_id - current.next;
 }
 
-caf::dictionary<caf::config_value> importer_state::status() const {
-  caf::dictionary<caf::config_value> result;
+caf::dictionary<caf::config_value>
+importer_state::status(status_verbosity v) const {
+  auto result = caf::settings{};
+  auto& importer_status = put_dictionary(result, "importer");
   // TODO: caf::config_value can only represent signed 64 bit integers, which
   // may make it look like overflow happened in the status report. As an
   // intermediate workaround, we convert the values to strings.
-  caf::put(result, "ids.available", to_string(available_ids()));
-  caf::put(result, "ids.block.next", to_string(current.next));
-  caf::put(result, "ids.block.end", to_string(current.end));
+  if (v >= status_verbosity::detailed) {
+    caf::put(importer_status, "ids.available", to_string(available_ids()));
+    caf::put(importer_status, "ids.block.next", to_string(current.next));
+    caf::put(importer_status, "ids.block.end", to_string(current.end));
+  }
   // General state such as open streams.
-  detail::fill_status_map(result, self);
+  if (v >= status_verbosity::debug)
+    detail::fill_status_map(importer_status, self);
   return result;
 }
 
@@ -213,7 +218,7 @@ caf::behavior importer(importer_actor* self, path dir, archive_type archive,
       VAST_ASSERT(self->state.stg != nullptr);
       self->send(index, atom::subscribe_v, atom::flush_v, listener);
     },
-    [=](atom::status) { return self->state.status(); },
+    [=](atom::status, status_verbosity v) { return self->state.status(v); },
     [=](atom::telemetry) {
       self->state.send_report();
       self->delayed_send(self, defs::telemetry_rate, atom::telemetry_v);

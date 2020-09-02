@@ -311,19 +311,21 @@ accountant(accountant_actor* self, accountant_config cfg) {
 #endif
       }
     },
-    [=](atom::status) {
+    [=](atom::status, status_verbosity v) {
       using caf::put_dictionary;
-      caf::dictionary<caf::config_value> result;
-      auto& known = put_dictionary(result, "known-actors");
-      for (const auto& [aid, name] : self->state->actor_map)
-        known.emplace(name, aid);
-      detail::fill_status_map(result, self);
+      auto result = caf::settings{};
+      auto& accountant_status = put_dictionary(result, "accountant");
+      if (v >= status_verbosity::detailed) {
+        auto& components = put_dictionary(accountant_status, "components");
+        for (const auto& [aid, name] : self->state->actor_map)
+          components.emplace(name, aid);
+      }
+      if (v >= status_verbosity::debug)
+        detail::fill_status_map(accountant_status, self);
       return result;
     },
     [=](atom::telemetry) {
-#if VAST_LOG_LEVEL >= VAST_LOG_LEVEL_INFO
       command_line_heartbeat(self);
-#endif
       self->delayed_send(self, overview_delay, atom::telemetry_v);
     },
     [=](atom::config, accountant_config cfg) {

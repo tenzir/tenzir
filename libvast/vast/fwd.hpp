@@ -104,6 +104,7 @@ struct predicate;
 struct real_type;
 struct record_type;
 struct string_type;
+struct status;
 struct subnet_type;
 struct time_type;
 struct type_extractor;

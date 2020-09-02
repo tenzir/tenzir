@@ -22,7 +22,7 @@
 #include "vast/config.hpp"
 #include "vast/defaults.hpp"
 #include "vast/detail/assert.hpp"
-#include "vast/detail/make_io_stream.hpp"
+#include "vast/detail/process.hpp"
 #include "vast/format/csv.hpp"
 #include "vast/format/json.hpp"
 #include "vast/format/json/suricata.hpp"
@@ -112,13 +112,10 @@ caf::message send_command(const invocation& inv, caf::actor_system&) {
 }
 
 void collect_component_status(node_actor* self,
-                              caf::response_promise status_promise) {
+                              caf::response_promise status_promise,
+                              status_verbosity v) {
   // Shared state between our response handlers.
-  // TODO: we no longer use the key in this settings object; it's always the
-  // same node name. So we could simplify the whole structure a bit.
   struct req_state_t {
-    // Keeps track of how many requests are pending.
-    size_t pending = 0;
     // Promise to the original client request.
     caf::response_promise rp;
     // Maps nodes to a map associating components with status information.
@@ -127,40 +124,55 @@ void collect_component_status(node_actor* self,
   auto req_state = std::make_shared<req_state_t>();
   req_state->rp = std::move(status_promise);
   // Pre-fill our result with system stats.
-  auto& sys_stats = put_dictionary(req_state->content, "system");
   auto& sys = self->system();
-  put(sys_stats, "running-actors", sys.registry().running());
-  put(sys_stats, "detached-actors", sys.detached_actors());
-  put(sys_stats, "worker-threads", sys.scheduler().num_workers());
-  put(sys_stats, "table-slices", table_slice::instances());
+  auto& system = put_dictionary(req_state->content, "system");
+  if (v >= status_verbosity::info) {
+    put(system, "in-memory-table-slices", table_slice::instances());
+    put(system, "database-path", self->state.dir.str());
+    merge_settings(detail::get_status(), system);
+  }
+  if (v >= status_verbosity::debug) {
+    put(system, "running-actors", sys.registry().running());
+    put(system, "detached-actors", sys.detached_actors());
+    put(system, "worker-threads", sys.scheduler().num_workers());
+  }
+  auto deliver = [](auto&& req_state) {
+    strip_settings(req_state->content);
+    req_state->rp.deliver(to_string(to_json(req_state->content)));
+  };
   // Send out requests and collects answers.
-  req_state->pending += self->state.registry.components().size();
   for (auto& [label, component] : self->state.registry.components())
     self
       ->request(component.actor, defaults::system::initial_request_timeout,
-                atom::status_v)
+                atom::status_v, v)
       .then(
         [=, lab = label](caf::config_value::dictionary& xs) mutable {
-          auto& dict = req_state->content[self->state.name].as_dictionary();
-          dict.emplace(std::move(lab), std::move(xs));
-          if (--req_state->pending == 0)
-            req_state->rp.deliver(to_string(to_json(req_state->content)));
+          merge_settings(xs, req_state->content);
+          // Both handlers have a copy of req_state.
+          if (req_state.use_count() == 2)
+            deliver(std::move(req_state));
         },
         [=, lab = label](caf::error& err) mutable {
           VAST_WARNING(self, "failed to retrieve", lab,
                        "status:", to_string(err));
           auto& dict = req_state->content[self->state.name].as_dictionary();
           dict.emplace(std::move(lab), to_string(err));
-          if (--req_state->pending == 0)
-            req_state->rp.deliver(to_string(to_json(req_state->content)));
+          // Both handlers have a copy of req_state.
+          if (req_state.use_count() == 2)
+            deliver(std::move(req_state));
         });
 }
 
 } // namespace
 
-caf::message status_command(const invocation&, caf::actor_system&) {
+caf::message status_command(const invocation& inv, caf::actor_system&) {
   auto self = this_node;
-  collect_component_status(self, self->make_response_promise());
+  auto verbosity = status_verbosity::info;
+  if (caf::get_or(inv.options, "detailed", false))
+    verbosity = status_verbosity::detailed;
+  if (caf::get_or(inv.options, "debug", false))
+    verbosity = status_verbosity::debug;
+  collect_component_status(self, self->make_response_promise(), verbosity);
   return caf::none;
 }
 

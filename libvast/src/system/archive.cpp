@@ -201,10 +201,12 @@ archive(archive_type::stateful_pointer<archive_state> self, path dir,
       self->state.active_exporters.insert(sender_addr);
       self->monitor<caf::message_priority::high>(exporter);
     },
-    [=](atom::status) {
-      caf::dictionary<caf::config_value> result;
-      detail::fill_status_map(result, self);
-      self->state.store->inspect_status(put_dictionary(result, "store"));
+    [=](atom::status, status_verbosity v) {
+      auto result = caf::settings{};
+      auto& archive_status = put_dictionary(result, "archive");
+      if (v >= status_verbosity::debug)
+        detail::fill_status_map(archive_status, self);
+      self->state.store->inspect_status(archive_status, v);
       return result;
     },
     [=](atom::telemetry) {
