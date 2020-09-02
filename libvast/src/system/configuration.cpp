@@ -47,12 +47,18 @@ void initialize_factories() {
   (factory<Ts>::initialize(), ...);
 }
 
-} // namespace <anonymous>
+} // namespace
 
 configuration::configuration() {
   detail::add_message_types(*this);
   // Use 'vast.conf' instead of generic 'caf-application.ini'.
   auto config_path_candidates = std::vector<path>{};
+  if (const char* xdg_config_home = std::getenv("XDG_CONFIG_HOME"))
+    config_path_candidates.emplace_back(path{xdg_config_home} / "vast"
+                                        / "vast.conf");
+  else if (const char* home = std::getenv("HOME"))
+    config_path_candidates.emplace_back(path{home} / ".config" / "vast"
+                                        / "vast.conf");
   config_path_candidates.emplace_back(VAST_SYSCONFDIR "/vast/vast.conf");
   // We must clear the config_file_path first so it does not use
   // `caf-application.ini` as fallback.
@@ -84,8 +90,8 @@ caf::error configuration::parse(int argc, char** argv) {
              || detail::starts_with(x, "--config=")
              || detail::starts_with(x, "--config-file="));
   };
-  auto caf_opt = std::stable_partition(command_line.begin(),
-                                       command_line.end(), is_vast_opt);
+  auto caf_opt = std::stable_partition(command_line.begin(), command_line.end(),
+                                       is_vast_opt);
   std::vector<std::string> caf_args;
   std::move(caf_opt, command_line.end(), std::back_inserter(caf_args));
   command_line.erase(caf_opt, command_line.end());
