@@ -67,6 +67,7 @@ stdenv.mkDerivation rec {
   propagatedBuildInputs = [ arrow-cpp caf ];
 
   cmakeFlags = [
+    "-DCMAKE_INSTALL_SYSCONFDIR:PATH=/etc"
     "-DCMAKE_FIND_PACKAGE_PREFER_CONFIG=ON"
     "-DCAF_ROOT_DIR=${caf}"
     "-DVAST_RELOCATABLE_INSTALL=OFF"

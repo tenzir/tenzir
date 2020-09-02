@@ -11,6 +11,19 @@ Every entry has a category for which we use the following visual abbreviations:
 
 ## Unreleased
 
+- 🎁 VAST now supports the XDG base directory specification: The `vast.conf` is
+  now found at `${XDG_CONFIG_HOME:-${HOME}/.config}/vast/vast.conf`, and schema
+  files at `${XDG_DATA_HOME:-${HOME}/.local/share}/vast/schema/`. The
+  user-specific configuration file takes precedence over the global
+  configuration file in `<sysconfdir>/vast/vast.conf`.
+  [#1036](https://github.com/tenzir/vast/pull/1036)
+
+- ⚠️ The global VAST configuration now always resides in
+  `<sysconfdir>/vast/vast.conf`, and bundled schemas always in
+  `<datadir>/vast/schema/`. VAST no longer supports reading a `vast.conf` file
+  in the current working directory.
+  [#1036](https://github.com/tenzir/vast/pull/1036)
+
 - ⚠️ The JSON export format now renders `duration` and `port` fields using
   strings as opposed to numbers. This avoids a possible loss of information and
   enables users to re-use the output in follow-up queries directly.
