@@ -52,9 +52,7 @@ void initialize_factories() {
 configuration::configuration() {
   detail::add_message_types(*this);
   // Use 'vast.conf' instead of generic 'caf-application.ini'.
-  auto config_path_candidates = std::vector{
-    path::current() / "vast.conf",
-  };
+  auto config_path_candidates = std::vector<path>{};
   config_path_candidates.emplace_back(VAST_SYSCONFDIR "/vast/vast.conf");
   // We must clear the config_file_path first so it does not use
   // `caf-application.ini` as fallback.
