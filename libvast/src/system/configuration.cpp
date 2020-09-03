@@ -98,7 +98,7 @@ caf::error configuration::parse(int argc, char** argv) {
       arg.replace(8, 0, "-file");
   }
   for (const auto& p : config_paths) {
-    if (auto err = actor_system_config::parse(caf_args, p.str().c_str())) {
+    if (auto err = actor_system_config::parse({}, p.str().c_str())) {
       err.context() += caf::make_message(p);
       return err;
     }
@@ -106,7 +106,7 @@ caf::error configuration::parse(int argc, char** argv) {
   // We must clear the config_file_path first so it does not use
   // `caf-application.ini` as fallback.
   config_file_path.clear();
-  return actor_system_config::parse(caf_args);
+  return actor_system_config::parse(std::move(caf_args));
 }
 
 } // namespace vast::system
