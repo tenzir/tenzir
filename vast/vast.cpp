@@ -70,10 +70,8 @@ int main(int argc, char** argv) {
   // Print the configuration file(s) that were loaded.
   if (!cfg.config_file_path.empty())
     cfg.config_paths.emplace_back(std::move(cfg.config_file_path));
-  if (cfg.config_paths.size() == 1)
-    VAST_INFO_ANON("loaded configuration file:", cfg.config_paths[0]);
-  else if (!cfg.config_paths.empty())
-    VAST_INFO_ANON("loaded configuration files:", cfg.config_paths);
+  for (auto& path : cfg.config_paths)
+    VAST_INFO_ANON("loaded configuration file:", path);
   using string_list = std::vector<std::string>;
   auto schema_dirs = std::vector<vast::path>{};
   if (!caf::get_or(cfg, "system.no-default-schema", false)) {
