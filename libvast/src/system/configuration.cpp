@@ -99,9 +99,12 @@ caf::error configuration::parse(int argc, char** argv) {
     if (detail::starts_with(arg, "--config="))
       arg.replace(8, 0, "-file");
   }
-  for (const auto& p : config_paths)
-    if (auto err = actor_system_config::parse(caf_args, p.str().c_str()))
+  for (const auto& p : config_paths) {
+    if (auto err = actor_system_config::parse(caf_args, p.str().c_str())) {
+      err.context() += caf::make_message(p);
       return err;
+    }
+  }
   return caf::none;
 }
 
