@@ -51,9 +51,6 @@ void initialize_factories() {
 
 configuration::configuration() {
   detail::add_message_types(*this);
-  // We must clear the config_file_path first so it does not use
-  // `caf-application.ini` as fallback.
-  config_file_path.clear();
   // Instead of the CAF-supplied `config_file_path`, we use our own
   // `config_paths` variable in order to support multiple configuration files.
   if (const char* xdg_config_home = std::getenv("XDG_CONFIG_HOME"))
@@ -106,6 +103,9 @@ caf::error configuration::parse(int argc, char** argv) {
       return err;
     }
   }
+  // We must clear the config_file_path first so it does not use
+  // `caf-application.ini` as fallback.
+  config_file_path.clear();
   return actor_system_config::parse(caf_args);
 }
 

@@ -68,6 +68,8 @@ int main(int argc, char** argv) {
   caf::actor_system sys{cfg};
   fixup_logger(cfg);
   // Print the configuration file(s) that were loaded.
+  if (!cfg.config_file_path.empty())
+    cfg.config_paths.emplace_back(std::move(cfg.config_file_path));
   if (cfg.config_paths.size() == 1)
     VAST_INFO_ANON("loaded configuration file:", cfg.config_paths[0]);
   else if (!cfg.config_paths.empty())
