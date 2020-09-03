@@ -6,5 +6,5 @@ For example, to see how many events of each type are indexed, this command can
 be used:
 
 ```
-vast status -v verbose | jq '.index.statistics.layouts'
+vast status --detailed | jq '.index.statistics.layouts'
 ```

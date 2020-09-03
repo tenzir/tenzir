@@ -11,6 +11,10 @@ Every entry has a category for which we use the following visual abbreviations:
 
 ## Unreleased
 
+- 🎁 The output of the `status` command was restructured with a strong focus on
+  usability. The new flags `--detailed` and `--debug` add additional content to
+  the output. [#995](https://github.com/tenzir/vast/pull/995)
+
 - 🎁 VAST now supports the XDG base directory specification: The `vast.conf` is
   now found at `${XDG_CONFIG_HOME:-${HOME}/.config}/vast/vast.conf`, and schema
   files at `${XDG_DATA_HOME:-${HOME}/.local/share}/vast/schema/`. The
