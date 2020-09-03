@@ -11,24 +11,19 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#include "vast/config.hpp"
-#include "vast/detail/adjust_resource_consumption.hpp"
+#include "vast/byte.hpp"
+#include "vast/fwd.hpp"
+#include "vast/span.hpp"
 
-#ifdef VAST_MACOS
-#include <sys/resource.h> // setrlimit
-#endif
+#include "caf/fwd.hpp"
 
-namespace vast {
-namespace detail {
+namespace vast::io {
 
-bool adjust_resource_consumption() {
-#ifdef VAST_MACOS
-  auto rl = ::rlimit{4096, 8192};
-  auto result = ::setrlimit(RLIMIT_NOFILE, &rl);
-  return result == 0;
-#endif
-  return true;
-}
+/// Writes a buffer to a temporary file and atomically renames it to *filename*
+/// afterwards.
+/// @param filename The file to write to.
+/// @param xs The buffer to read from.
+/// @returns An error if the operation failed.
+[[nodiscard]] caf::error save(const path& filename, span<const byte> xs);
 
-} // namespace detail
-} // namespace vast
+} // namespace vast::io

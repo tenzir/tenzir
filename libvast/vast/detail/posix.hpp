@@ -13,6 +13,8 @@
 
 #pragma once
 
+#include <caf/fwd.hpp>
+
 #include <string>
 
 /// Various POSIX-compliant helper tools.
@@ -50,12 +52,11 @@ int uds_recv_fd(int socket);
 
 /// An abstraction of a UNIX domain socket. This class facilitates sending and
 /// receiving file descriptors.
-class unix_domain_socket {
-public:
+struct [[nodiscard]] unix_domain_socket {
   /// Creates a UNIX domain socket listening server at a given path.
   /// @param path The filesystem path where to construct the socket.
-  /// @returns A file descriptor to the listening docket.
-  static int listen(const std::string& path);
+  /// @returns A UNIX domain socket handle.
+  static unix_domain_socket listen(const std::string& path);
 
   /// Creates a UNIX domain socket server and blocks to accept a connection.
   /// @param path The filesystem path where to construct the socket.
@@ -66,78 +67,67 @@ public:
   /// @param path The filesystem path identifying the server socket.
   /// @param type The socket type.
   /// @returns A UNIX domain socket handle.
-  static unix_domain_socket
-  connect(const std::string& path, socket_type type = socket_type::stream);
-
-  /// Constructs a UNIX domain socket.
-  /// @param fd The file descriptor to the socket. Default to -1, an invalid
-  ///           descriptor.
-  explicit unix_domain_socket(int fd = -1);
+  static unix_domain_socket connect(const std::string& path,
+                                    socket_type type = socket_type::stream);
 
   /// Checks whether the UNIX domain socket is in working state.
   /// @returns `true` if the UNIX domain socket is open and operable.
-  explicit operator bool() const;
+  [[nodiscard]] explicit operator bool() const;
 
   /// Sends a file descriptor over the UNIX domain socket.
   /// @param fd The file descriptor to send.
-  /// @pre `this == true` and *fd* must be open.
-  bool send_fd(int fd);
+  /// @pre `*this == true` and *fd* must be open.
+  [[nodiscard]] bool send_fd(int fd);
 
   /// Receives a file descriptor from the UNIX domain socket.
   /// @returns The file descriptor from the other end.
-  /// @pre `this == true`.
-  int recv_fd();
+  /// @pre `*this == true`.
+  [[nodiscard]] int recv_fd();
 
-  /// Retrieves the underlying file descriptor of this socket.
-  /// @returns The file descriptor of this UNIX domain socket.
-  int fd() const;
-
-private:
-  int fd_;
+  /// The file descriptor to the socket; defaults to -1, an invalid descriptor.
+  const int fd = -1;
 };
 
 /// Puts a file descriptor into non-blocking mode.
 /// @param fd The file descriptor to adjust.
-/// @returns `true` on success.
-bool make_nonblocking(int fd);
+/// @returns `caf::none` on success.
+[[nodiscard]] caf::error make_nonblocking(int fd);
 
 /// Puts a file descriptor into blocking mode.
 /// @param fd The file descriptor to adjust.
-/// @returns `true` on success.
-bool make_blocking(int fd);
+/// @returns `caf::none` on success.
+[[nodiscard]] caf::error make_blocking(int fd);
 
 /// Polls a file descriptor for ready read events via `select(2)`.
 /// @param fd The file descriptor to poll
 /// @param usec The number of microseconds to wait.
-/// @returns `true` if *fd* has ready events for reading.
-bool poll(int fd, int usec = 100000);
+/// @returns `caf::none` if *fd* has ready events for reading.
+[[nodiscard]] caf::error poll(int fd, int usec = 100000);
 
 /// Wraps `close(2)`.
 /// @param fd The file descriptor to close.
-/// @returns `true` on successful close.
-bool close(int fd);
+/// @returns `caf::none` on successful closing.
+[[nodiscard]] caf::error close(int fd);
 
 /// Wraps `read(2)`.
 /// @param fd The file descriptor to read from.
 /// @param buffer The buffer to write into.
 /// @param bytes The number of bytes to read from *fd* and write into *buffer*.
-/// @param got If not-nullptr, receives the number of bytes actually read.
-/// @returns `true` on successful reading.
-bool read(int fd, void* buffer, size_t bytes, size_t* got = nullptr);
+/// @returns the number of bytes on successful reading.
+[[nodiscard]] caf::expected<size_t> read(int fd, void* buffer, size_t bytes);
 
 /// Wraps `write(2)`.
 /// @param fd The file descriptor to write to.
 /// @param buffer The buffer to read from.
 /// @param bytes The number of bytes to write into *fd* from *buffer*.
-/// @param put If not-nullptr, receives the number of bytes actually read.
-/// @returns `true` on successful reading.
-bool write(int fd, const void* buffer, size_t bytes, size_t* put = nullptr);
+/// @returns the number of written bytes on successful writing.
+[[nodiscard]] caf::expected<size_t>
+write(int fd, const void* buffer, size_t bytes);
 
 /// Wraps `seek(2)`.
 /// @param fd A seekable file descriptor.
 /// @param bytes The number of bytes that should be skipped.
-/// @returns `true` on successful seek.
-bool seek(int fd, size_t bytes);
+/// @returns `caf::none` on successful seeking.
+[[nodiscard]] caf::error seek(int fd, size_t bytes);
 
 } // namespace vast::detail
-

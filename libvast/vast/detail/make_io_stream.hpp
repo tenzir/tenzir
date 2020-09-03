@@ -14,7 +14,7 @@
 #pragma once
 
 #include "vast/detail/posix.hpp"
-#include "vast/filesystem.hpp"
+#include "vast/path.hpp"
 
 #include <caf/expected.hpp>
 #include <caf/settings.hpp>

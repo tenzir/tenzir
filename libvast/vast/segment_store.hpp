@@ -13,17 +13,16 @@
 
 #pragma once
 
-#include <caf/fwd.hpp>
-
-#include "vast/filesystem.hpp"
+#include "vast/detail/cache.hpp"
+#include "vast/detail/range_map.hpp"
 #include "vast/fwd.hpp"
+#include "vast/path.hpp"
 #include "vast/segment.hpp"
 #include "vast/segment_builder.hpp"
 #include "vast/store.hpp"
 #include "vast/uuid.hpp"
 
-#include "vast/detail/cache.hpp"
-#include "vast/detail/range_map.hpp"
+#include <caf/fwd.hpp>
 
 namespace vast {
 
@@ -86,7 +85,7 @@ public:
 
   caf::error flush() override;
 
-  void inspect_status(caf::settings& dict) override;
+  void inspect_status(caf::settings& xs, status_verbosity v) override;
 
 private:
   segment_store(path dir, uint64_t max_segment_size, size_t in_memory_segments);

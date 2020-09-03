@@ -45,11 +45,15 @@ struct fixture : fixtures::actor_system {
 FIXTURE_SCOPE(terminate_tests, fixture)
 
 TEST(parallel shutdown) {
-  terminate<policy::parallel>(self, victims);
+  terminate<policy::parallel>(self, victims)
+    .receive([&](atom::done) { /* */ },
+             [&](const caf::error& err) { FAIL(err); });
 }
 
 TEST(sequential shutdown) {
-  terminate<policy::sequential>(self, victims);
+  terminate<policy::sequential>(self, victims)
+    .receive([&](atom::done) { /* */ },
+             [&](const caf::error& err) { FAIL(err); });
 }
 
 FIXTURE_SCOPE_END()

@@ -95,6 +95,13 @@ void finish_slice(accountant_actor* self) {
 
 void record_internally(accountant_actor* self, const std::string& key, real x,
                        time ts) {
+  // This is a workaround to a bug that is somewhere else -- the index cannot
+  // handle NaN, and a bug that we were unable to reproduce reliably caused the
+  // accountant to forward NaN to the index here.
+  if (!std::isfinite(x)) {
+    VAST_DEBUG(self, "cannot record a non-finite metric");
+    return;
+  }
   auto& st = *self->state;
   auto actor_id = self->current_sender()->id();
   if (!st.builder) {
@@ -291,9 +298,10 @@ accountant(accountant_actor* self, accountant_config cfg) {
         record(self, key + ".duration", value.duration, ts);
         auto rate = value.rate_per_sec();
         if (std::isfinite(rate))
-          record(self, key + ".rate", static_cast<uint64_t>(rate), ts);
+          record(self, key + ".rate", rate, ts);
         else {
-          record(self, key + ".rate", std::numeric_limits<uint64_t>::max(), ts);
+          record(self, key + ".rate",
+                 std::numeric_limits<decltype(rate)>::max(), ts);
         }
 #if VAST_LOG_LEVEL >= VAST_LOG_LEVEL_INFO
         auto logger = caf::logger::current_logger();
@@ -303,19 +311,21 @@ accountant(accountant_actor* self, accountant_config cfg) {
 #endif
       }
     },
-    [=](atom::status) {
+    [=](atom::status, status_verbosity v) {
       using caf::put_dictionary;
-      caf::dictionary<caf::config_value> result;
-      auto& known = put_dictionary(result, "known-actors");
-      for (const auto& [aid, name] : self->state->actor_map)
-        known.emplace(name, aid);
-      detail::fill_status_map(result, self);
+      auto result = caf::settings{};
+      auto& accountant_status = put_dictionary(result, "accountant");
+      if (v >= status_verbosity::detailed) {
+        auto& components = put_dictionary(accountant_status, "components");
+        for (const auto& [aid, name] : self->state->actor_map)
+          components.emplace(name, aid);
+      }
+      if (v >= status_verbosity::debug)
+        detail::fill_status_map(accountant_status, self);
       return result;
     },
     [=](atom::telemetry) {
-#if VAST_LOG_LEVEL >= VAST_LOG_LEVEL_INFO
       command_line_heartbeat(self);
-#endif
       self->delayed_send(self, overview_delay, atom::telemetry_v);
     },
     [=](atom::config, accountant_config cfg) {

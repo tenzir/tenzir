@@ -86,8 +86,10 @@ option(VAST_ENABLE_ASSERTIONS "Enable Assertions"
 option(VAST_RELOCATABLE_INSTALL "Enable relocatable installations" ON)
 option(VAST_USE_BUNDLED_CAF "Always use the CAF submodule" OFF)
 option(ENABLE_ZEEK_TO_VAST "Build zeek-to-vast" ON)
-option(VAST_STATIC_EXECUTABLE "Link VAST statically" $ENV{VAST_STATIC_EXECUTABLE})
-option(VAST_USE_JEMALLOC "Use jemalloc instead of libc malloc" "${VAST_STATIC_EXECUTABLE}")
+option(VAST_STATIC_EXECUTABLE "Link VAST statically"
+       $ENV{VAST_STATIC_EXECUTABLE})
+option(VAST_USE_JEMALLOC "Use jemalloc instead of libc malloc"
+       "${VAST_STATIC_EXECUTABLE}")
 cmake_dependent_option(
   BUILD_SHARED_LIBS "Build shared libraries instead of static" ON
   "NOT VAST_STATIC_EXECUTABLE" OFF)
@@ -293,7 +295,7 @@ endif ()
 if ("${CMAKE_CXX_COMPILER_ID}" MATCHES "GNU")
   check_compiler_version(${GCC_MINIMUM_VERSION})
   # Too many false positives.
-  set(EXTRA_FLAGS "${EXTRA_FLAGS} -Wno-maybe-uninitialized -Wno-redundant-move")
+  set(EXTRA_FLAGS "${EXTRA_FLAGS} -Wno-redundant-move")
   if (${CMAKE_SYSTEM_NAME} MATCHES "FreeBSD")
     # Works around issues with libstdc++ and C++11. For details, see: -
     # https://bugs.freebsd.org/bugzilla/show_bug.cgi?id=194929 -
@@ -453,8 +455,8 @@ if (APPLE AND NOT OPENSSL_ROOT_DIR)
   if (HOMEBREW)
     execute_process(
       COMMAND ${HOMEBREW} --prefix openssl
-      OUTPUT_VARIABLE OPENSSL_ROOT_DIR ERROR_QUIET
-                      OUTPUT_STRIP_TRAILING_WHITESPACE)
+      OUTPUT_VARIABLE OPENSSL_ROOT_DIR
+      ERROR_QUIET OUTPUT_STRIP_TRAILING_WHITESPACE)
     if (OPENSSL_ROOT_DIR)
       message(STATUS "Using OpenSSL from Homebrew: ${OPENSSL_ROOT_DIR}")
     endif ()
@@ -479,7 +481,10 @@ get_filename_component(flatbuffers_dir ${flatbuffers_dir} DIRECTORY) # <prefix>
 
 if (NOT VAST_USE_BUNDLED_CAF)
   # Try to find the required CAF components first...
-  find_package(CAF 0.17.6 EXACT COMPONENTS core io test QUIET)
+  find_package(
+    CAF 0.17.6 EXACT
+    COMPONENTS core io test
+    QUIET)
 endif ()
 if (CAF_FOUND)
   message(STATUS "Found CAF")
@@ -488,7 +493,10 @@ if (CAF_FOUND)
          "\nfind_package(CAF COMPONENTS core io test REQUIRED QUIET)")
   set(CAF_FOUND_SAVE ${CAF_FOUND})
   # ...and then optional components.
-  find_package(CAF COMPONENTS openssl QUIET)
+  find_package(
+    CAF
+    COMPONENTS openssl
+    QUIET)
   if (CAF_LIBRARY_OPENSSL)
     message(STATUS "Found CAF's OpenSSL module, enabling OpenSSL support")
     set(VAST_USE_OPENSSL true)
@@ -577,6 +585,7 @@ if (ENABLE_ZEEK_TO_VAST)
   if (NOT BROKER_ROOT_DIR
       AND EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/aux/broker/broker/CMakeLists.txt)
     add_subdirectory(aux/broker)
+    set(broker_dir ${CMAKE_CURRENT_SOURCE_DIR}/aux/broker)
     set(VAST_HAVE_BROKER true)
   else ()
     if (NOT BROKER_ROOT_DIR AND VAST_PREFIX)
@@ -591,6 +600,9 @@ if (ENABLE_ZEEK_TO_VAST)
           "Broker not found, either use -DBROKER_ROOT_DIR=... or initialize the aux/broker submodule"
       )
     endif ()
+    get_target_property(broker_dir zeek::broker IMPORTED_LOCATION)
+    get_filename_component(broker_dir "${broker_dir}" DIRECTORY) # <prefix>/lib
+    get_filename_component(broker_dir "${broker_dir}" DIRECTORY) # <prefix>
   endif ()
 endif ()
 
@@ -623,25 +635,8 @@ if (NOT VAST_NO_ARROW)
   if (NOT ARROW_ROOT_DIR AND VAST_PREFIX)
     set(ARROW_ROOT_DIR ${VAST_PREFIX})
   endif ()
-  if (NOT BUILD_SHARED_LIBS)
-    set(dependencies_module ZLIB Brotli Lz4 ZSTD)
-    foreach (module ${dependencies_module})
-      find_package("${module}" MODULE REQUIRED QUIET)
-      string(APPEND VAST_FIND_DEPENDENCY_LIST
-             "\nfind_package(${module} REQUIRED QUIET)")
-      if (EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/cmake/Find${module}.cmake")
-        provide_find_module("${module}")
-      endif ()
-    endforeach ()
-    set(dependencies_config Snappy GLOG Thrift)
-    foreach (dep ${dependencies_config})
-      find_package("${dep}" REQUIRED QUIET CONFIG)
-      string(APPEND VAST_FIND_DEPENDENCY_LIST
-             "\nfind_package(${dep} REQUIRED QUIET CONFIG)")
-    endforeach ()
-  endif ()
   if (ARROW_ROOT_DIR)
-    set (Arrow_ROOT ${ARROW_ROOT_DIR})
+    set(Arrow_ROOT ${ARROW_ROOT_DIR})
   endif ()
   find_package(Arrow 0.17 REQUIRED QUIET CONFIG)
   string(APPEND VAST_FIND_DEPENDENCY_LIST
@@ -739,7 +734,7 @@ add_custom_target(
   vast-schema
   COMMAND ${CMAKE_COMMAND} -E make_directory
           "${CMAKE_BINARY_DIR}/share/vast/schema"
-  COMMENT "Linking schema directory")
+  COMMENT "Copying schema directory")
 
 file(
   GLOB schema_files
@@ -750,9 +745,9 @@ foreach (x ${schema_files})
     TARGET vast-schema
     PRE_BUILD
     COMMAND
-      ${CMAKE_COMMAND} -E create_symlink "${CMAKE_CURRENT_SOURCE_DIR}/${x}"
+      ${CMAKE_COMMAND} -E copy_if_different "${CMAKE_CURRENT_SOURCE_DIR}/${x}"
       "${CMAKE_BINARY_DIR}/share/vast/${x}"
-    COMMENT "Linking schema ${x}")
+    COMMENT "Copying schema ${x}")
 endforeach ()
 
 add_subdirectory(libvast)
@@ -801,10 +796,9 @@ configure_package_config_file(
   "${CMAKE_CURRENT_BINARY_DIR}/VASTConfig.cmake"
   INSTALL_DESTINATION "${INSTALL_VAST_CMAKEDIR}")
 
-install(
-  FILES "${CMAKE_CURRENT_BINARY_DIR}/VASTConfig.cmake"
-        "${CMAKE_CURRENT_BINARY_DIR}/VASTConfigVersion.cmake"
-  DESTINATION "${INSTALL_VAST_CMAKEDIR}")
+install(FILES "${CMAKE_CURRENT_BINARY_DIR}/VASTConfig.cmake"
+              "${CMAKE_CURRENT_BINARY_DIR}/VASTConfigVersion.cmake"
+        DESTINATION "${INSTALL_VAST_CMAKEDIR}")
 
 install(DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/schema"
         DESTINATION "${CMAKE_INSTALL_DATADIR}/vast")
@@ -812,12 +806,14 @@ install(DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/schema"
 install(DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/integration"
         DESTINATION "${CMAKE_INSTALL_DATADIR}/vast")
 
-install(
-  FILES "${CMAKE_CURRENT_SOURCE_DIR}/vast.conf"
-  DESTINATION "${CMAKE_INSTALL_DATADIR}/vast/"
-  RENAME "vast.conf.example")
-install(FILES "${CMAKE_CURRENT_SOURCE_DIR}/vast.conf"
-        DESTINATION "${CMAKE_INSTALL_SYSCONFDIR}/vast/")
+install(FILES "${CMAKE_CURRENT_SOURCE_DIR}/LICENSE"
+        DESTINATION "${CMAKE_INSTALL_DOCDIR}/")
+
+install(FILES "${CMAKE_CURRENT_SOURCE_DIR}/README.md"
+        DESTINATION "${CMAKE_INSTALL_DOCDIR}/")
+
+install(FILES "${CMAKE_CURRENT_SOURCE_DIR}/vast.conf.example"
+        DESTINATION "${CMAKE_INSTALL_DATADIR}/vast/")
 
 install(FILES "${CMAKE_CURRENT_SOURCE_DIR}/scripts/corelight-cat"
         DESTINATION ${CMAKE_INSTALL_BINDIR})
@@ -860,19 +856,8 @@ if (NOT caf_dir)
   get_filename_component(caf_dir ${caf_dir} DIRECTORY)
 endif ()
 
-# Figure out whether we point to a build directory or a prefix.
-if (BROKER_FOUND)
-  set(broker_dir ${BROKER_LIBRARY})
-  get_filename_component(broker_dir ${broker_dir} DIRECTORY)
-  if (EXISTS "${broker_dir}/../broker")
-    get_filename_component(broker_dir ${broker_dir} DIRECTORY)
-  else ()
-    set(broker_dir ${BROKER_INCLUDE_DIRS})
-  endif ()
-endif ()
-
 display(CAF_FOUND "${caf_dir}" caf_summary)
-display(BROKER_FOUND "${broker_dir}" broker_summary)
+display(VAST_HAVE_BROKER "${broker_dir}" broker_summary)
 display(Arrow_FOUND "${arrow_dir}" arrow_summary)
 display(PCAP_FOUND "${PCAP_INCLUDE_DIR}" pcap_summary)
 display(DOXYGEN_FOUND yes doxygen_summary)

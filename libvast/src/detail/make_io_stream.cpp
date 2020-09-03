@@ -19,7 +19,7 @@
 #include "vast/detail/fdostream.hpp"
 #include "vast/detail/posix.hpp"
 #include "vast/error.hpp"
-#include "vast/filesystem.hpp"
+#include "vast/path.hpp"
 
 #include <caf/config_value.hpp>
 #include <caf/settings.hpp>
@@ -86,7 +86,7 @@ make_output_stream(const std::string& output, socket_type st) {
   if (!uds)
     return make_error(ec::filesystem_error,
                       "failed to connect to UNIX domain socket at", output);
-  auto remote_fd = uds.fd();
+  auto remote_fd = uds.fd;
   if (st == socket_type::fd)
     remote_fd = uds.recv_fd();
   return std::make_unique<fdostream>(remote_fd);

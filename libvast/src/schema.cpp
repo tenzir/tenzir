@@ -19,11 +19,12 @@
 #include "vast/concept/printable/to_string.hpp"
 #include "vast/concept/printable/vast/schema.hpp"
 #include "vast/concept/printable/vast/type.hpp"
+#include "vast/directory.hpp"
 #include "vast/error.hpp"
 #include "vast/event_types.hpp"
-#include "vast/filesystem.hpp"
 #include "vast/json.hpp"
 #include "vast/logger.hpp"
+#include "vast/path.hpp"
 
 #include <caf/actor_system_config.hpp>
 
@@ -204,10 +205,10 @@ caf::expected<schema> load_schema(const path& sf) {
 
 caf::expected<schema> load_schema(const std::vector<path>& schema_paths) {
   vast::schema types;
-  VAST_VERBOSE_ANON("Looking for schema files in", schema_paths);
+  VAST_VERBOSE_ANON("looking for schema files in", schema_paths);
   for (const auto& dir : schema_paths) {
     if (!exists(dir))
-      break;
+      continue;
     vast::schema directory_schema;
     for (auto f : directory(dir)) {
       if (f.extension() == ".schema" && exists(f)) {

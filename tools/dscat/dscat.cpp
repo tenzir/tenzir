@@ -11,16 +11,15 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#include <cstdio>
-
-#include <iostream>
+#include "vast/detail/fdinbuf.hpp"
+#include "vast/detail/fdoutbuf.hpp"
+#include "vast/detail/posix.hpp"
+#include "vast/file.hpp"
 
 #include <caf/message_builder.hpp>
 
-#include "vast/filesystem.hpp"
-#include "vast/detail/posix.hpp"
-#include "vast/detail/fdinbuf.hpp"
-#include "vast/detail/fdoutbuf.hpp"
+#include <cstdio>
+#include <iostream>
 
 using namespace caf;
 using namespace std;

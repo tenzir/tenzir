@@ -440,7 +440,7 @@ TEST(bool) {
   auto i = str.begin();
   auto l = str.end();
   auto f = i;
-  bool b;
+  bool b = false;
 
   MESSAGE("successful 'T'");
   CHECK(p0(i, l, b));

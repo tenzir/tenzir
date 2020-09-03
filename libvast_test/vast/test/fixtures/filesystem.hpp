@@ -13,7 +13,10 @@
 
 #pragma once
 
-#include "vast/filesystem.hpp"
+#include "vast/test/test.hpp"
+
+#include "vast/error.hpp"
+#include "vast/path.hpp"
 
 namespace fixtures {
 
@@ -21,12 +24,12 @@ struct filesystem {
   filesystem() {
     // Fresh afresh.
     rm(directory);
-    mkdir(directory);
+    if (auto err = mkdir(directory))
+      // error is non-recoverable, so we just abort
+      FAIL(vast::render(err));
   }
 
   vast::path directory = "vast-unit-test";
 };
 
 } // namespace fixtures
-
-

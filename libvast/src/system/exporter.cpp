@@ -148,12 +148,25 @@ void request_more_hits(stateful_actor<exporter_state>* self) {
 
 } // namespace <anonymous>
 
-caf::settings exporter_state::status() {
-  caf::settings result;
-  put(result, "hits", rank(hits));
-  put(result, "start", caf::deep_to_string(start));
-  put(result, "id", to_string(id));
-  put(result, "expression", to_string(expr));
+caf::settings status(stateful_actor<exporter_state>* self, status_verbosity v) {
+  auto& st = self->state;
+  auto result = caf::settings{};
+  auto& exporter_status = put_dictionary(result, "exporter");
+  if (v >= status_verbosity::info) {
+    caf::settings exp;
+    put(exp, "expression", to_string(st.expr));
+    auto& xs = put_list(result, "queries");
+    xs.emplace_back(std::move(exp));
+  }
+  if (v >= status_verbosity::detailed) {
+    caf::settings exp;
+    put(exp, "expression", to_string(st.expr));
+    put(exp, "hits", rank(st.hits));
+    put(exp, "start", caf::deep_to_string(st.start));
+    auto& xs = put_list(result, "queries");
+    xs.emplace_back(std::move(exp));
+    detail::fill_status_map(exporter_status, self);
+  }
   return result;
 }
 
@@ -337,11 +350,7 @@ behavior exporter(stateful_actor<exporter_state>* self, expression expr,
       ship_results(self);
       request_more_hits(self);
     },
-    [=](atom::status) {
-      auto result = self->state.status();
-      detail::fill_status_map(result, self);
-      return result;
-    },
+    [=](atom::status, status_verbosity v) { return status(self, v); },
     [=](accountant_type accountant) {
       self->state.accountant = std::move(accountant);
       self->send(self->state.accountant, atom::announce_v, self->name());

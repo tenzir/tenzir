@@ -3,7 +3,7 @@
 # ----------------------------------------------------------------------------
 
 file(GLOB flatbuffers_schemas CONFIGURE_DEPENDS
-  ${CMAKE_CURRENT_SOURCE_DIR}/vast/fbs/*.fbs)
+     ${CMAKE_CURRENT_SOURCE_DIR}/vast/fbs/*.fbs)
 set(flatbuffers_output_path ${CMAKE_CURRENT_BINARY_DIR}/vast/fbs)
 
 add_custom_target(libvast_flatbuffers)
@@ -25,8 +25,7 @@ foreach (schema ${flatbuffers_schemas})
     "      \"([^\\n]+)_generated.h\\\"\"\n"
     "      \"\\\\1.hpp\\\"\"\n"
     "      new_include \"\${include}\")\n"
-    "file(WRITE \"${desired_file}\" \"\${new_include}\")\n"
-  )
+    "file(WRITE \"${desired_file}\" \"\${new_include}\")\n")
   # Compile and rename schema.
   add_custom_command(
     OUTPUT ${desired_file}
@@ -34,10 +33,8 @@ foreach (schema ${flatbuffers_schemas})
       flatbuffers::flatc -b --cpp --scoped-enums -I
       ${CMAKE_CURRENT_SOURCE_DIR}/flatbuffers -o ${flatbuffers_output_path}
       ${schema}
-    COMMAND
-      ${CMAKE_COMMAND} -E rename ${output_file} ${desired_file}
-    COMMAND
-      ${CMAKE_COMMAND} -P ${rename_${basename}}
+    COMMAND ${CMAKE_COMMAND} -E rename ${output_file} ${desired_file}
+    COMMAND ${CMAKE_COMMAND} -P ${rename_${basename}}
     DEPENDS ${schema}
     COMMENT "Compiling flatbuffers schema ${schema}")
   add_custom_target(flatbuffers_${basename} DEPENDS ${desired_file})
@@ -78,7 +75,6 @@ set(libvast_sources
     src/data.cpp
     src/defaults.cpp
     src/detail/add_message_types.cpp
-    src/detail/adjust_resource_consumption.cpp
     src/detail/base64.cpp
     src/detail/compressedbuf.cpp
     src/detail/fdinbuf.cpp
@@ -96,6 +92,7 @@ set(libvast_sources
     src/detail/system.cpp
     src/detail/terminal.cpp
     src/die.cpp
+    src/directory.cpp
     src/error.cpp
     src/ether_type.cpp
     src/event_types.cpp
@@ -103,7 +100,7 @@ set(libvast_sources
     src/expression.cpp
     src/expression_visitors.cpp
     src/fbs/utils.cpp
-    src/filesystem.cpp
+    src/file.cpp
     src/flow.cpp
     src/format/ascii.cpp
     src/format/csv.cpp
@@ -121,6 +118,7 @@ set(libvast_sources
     src/icmp.cpp
     src/ids.cpp
     src/io/read.cpp
+    src/io/save.cpp
     src/io/write.cpp
     src/json.cpp
     src/logger.cpp
@@ -130,6 +128,7 @@ set(libvast_sources
     src/msgpack_table_slice_builder.cpp
     src/null_bitmap.cpp
     src/operator.cpp
+    src/path.cpp
     src/pattern.cpp
     src/port.cpp
     src/qualified_record_field.cpp
@@ -221,17 +220,15 @@ endif ()
 add_library(libvast ${libvast_sources} ${libvast_headers})
 set_target_properties(
   libvast
-  PROPERTIES
-    SOVERSION "${VERSION_YEAR}" VERSION "${VERSION_YEAR}.${VERSION_MONTH}"
-    OUTPUT_NAME vast)
+  PROPERTIES SOVERSION "${VERSION_YEAR}" VERSION
+                                         "${VERSION_YEAR}.${VERSION_MONTH}"
+             OUTPUT_NAME vast)
 
 target_include_directories(
   libvast
-  PUBLIC
-    $<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}>
-    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
-    $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>
-    )
+  PUBLIC $<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}>
+         $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
+         $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>)
 target_include_directories(libvast PRIVATE "${PROJECT_SOURCE_DIR}/aux")
 
 add_dependencies(libvast vast-schema)
@@ -418,10 +415,9 @@ if (BUILD_UNIT_TESTS)
     target_link_libraries(vast-test pcap::pcap)
   endif ()
 
-  add_test(
-    NAME build_vast_test
-    COMMAND "${CMAKE_COMMAND}" --build "${CMAKE_BINARY_DIR}" --config
-            "$<CONFIG>" --target vast-test)
+  add_test(NAME build_vast_test
+           COMMAND "${CMAKE_COMMAND}" --build "${CMAKE_BINARY_DIR}" --config
+                   "$<CONFIG>" --target vast-test)
   set_tests_properties(build_vast_test PROPERTIES FIXTURES_SETUP
                                                   vast_unit_test_fixture)
   # Helper macro to construct a CMake test from a VAST test suite.

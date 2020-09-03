@@ -14,8 +14,6 @@
 #include "vast/test/data.hpp"
 #include "vast/test/test.hpp"
 
-#include "vast/detail/adjust_resource_consumption.hpp"
-
 #include <caf/message_builder.hpp>
 #include <caf/test/unit_test.hpp>
 
@@ -89,9 +87,6 @@ int main(int argc, char** argv) {
     }
     vast::test::config = std::move(res.opts);
   }
-  // Make sure we have enough resources (e.g., file descriptors).
-  if (!vast::detail::adjust_resource_consumption())
-    return 1;
   // Run the unit tests.
   return caf::test::main(argc, argv);
 }

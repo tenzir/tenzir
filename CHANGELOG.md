@@ -11,19 +11,90 @@ Every entry has a category for which we use the following visual abbreviations:
 
 ## Unreleased
 
-- ⚠️ The `vector` type has been renamed to `list`.In an effort to streamline
-  the type system vocabulary, we favor `list` over `vector` because it's closer
-  to existing terminology (e.g., Apache Arrow). This change requires updating
-  existing schemas by changing `vector<T>` to `list<T>`. 
+- 🎁 VAST now merges the contents of all used configuration files instead of
+  using only the most user-specific file. The file specified using `--config`
+  takes the highest precedence, followed by the user-specific path
+  `${XDG_CONFIG_HOME:-${HOME}/.config}/vast/vast.conf`, and the compile-time
+  path `<sysconfdir>/vast/vast.conf`
+  [#1040](https://github.com/tenzir/vast/pull/1040)
+
+- 🎁 The output of the `status` command was restructured with a strong focus on
+  usability. The new flags `--detailed` and `--debug` add additional content to
+  the output. [#995](https://github.com/tenzir/vast/pull/995)
+
+- 🎁 VAST now supports the XDG base directory specification: The `vast.conf` is
+  now found at `${XDG_CONFIG_HOME:-${HOME}/.config}/vast/vast.conf`, and schema
+  files at `${XDG_DATA_HOME:-${HOME}/.local/share}/vast/schema/`. The
+  user-specific configuration file takes precedence over the global
+  configuration file in `<sysconfdir>/vast/vast.conf`.
+  [#1036](https://github.com/tenzir/vast/pull/1036)
+
+- ⚠️ The global VAST configuration now always resides in
+  `<sysconfdir>/vast/vast.conf`, and bundled schemas always in
+  `<datadir>/vast/schema/`. VAST no longer supports reading a `vast.conf` file
+  in the current working directory.
+  [#1036](https://github.com/tenzir/vast/pull/1036)
+
+- ⚠️ The JSON export format now renders `duration` and `port` fields using
+  strings as opposed to numbers. This avoids a possible loss of information and
+  enables users to re-use the output in follow-up queries directly.
+  [#1034](https://github.com/tenzir/vast/pull/1034)
+
+- ⚠️ The delay between the periodic log messages for reporting the current
+  event rates has been increased to 10 seconds.
+  [#1035](https://github.com/tenzir/vast/pull/1035)
+
+## [2020.08.28]
+
+- 🐞 VAST did not terminate when a critical component failed during startup.
+  VAST now binds the lifetime of the node to all critical components.
+  [#1028](https://github.com/tenzir/vast/pull/1028)
+
+- 🐞 VAST would overwrite existing on-disk state data when encountering a
+  partial read during startup. This state-corrupting behavior no longer exists.
+  [#1026](https://github.com/tenzir/vast/pull/1026)
+
+- 🐞 Incomplete reads have not been handled properly, which manifested for files
+  larger than 2GB. On macOS, writing files larger than 2GB may have failed
+  previously. VAST now respects OS-specific constraints on the maximum block
+  size.
+  [#1025](https://github.com/tenzir/vast/pull/1025)
+
+- 🐞 The shutdown process of the server process could potentially hang forever.
+  VAST now uses a 2-step procedure that first attempts to terminate all
+  components cleanly. If that fails, it will attempt a hard kill afterwards, and
+  if that fails after another timeout, the process will call `abort(3)`.
+  [#1005](https://github.com/tenzir/vast/pull/1005)
+
+- ⚠️ We now bundle a patched version of CAF, with a changed ABI. This means that
+  if you're linking against the bundled CAF library, you also need to distribute
+  that library so that VAST can use it at runtime.  The versions are API
+  compatible so linking against a system version of CAF is still possible and
+  supported.
+  [#1020](https://github.com/tenzir/vast/pull/1020)
+
+- 🐞 When running VAST under heavy load, CAF stream slot ids could wrap around
+  after a few days and deadlock the system. As a workaround, we extended the
+  slot id bit width to make the time until this happens unrealistically large.
+  [#1020](https://github.com/tenzir/vast/pull/1020)
+
+- 🐞 Some file descriptors remained open when they weren't needed any more.
+  This descriptor leak has been fixed.
+  [#1018](https://github.com/tenzir/vast/pull/1018)
+
+- ⚠️ The `vector` type has been renamed to `list`.In an effort to streamline the
+  type system vocabulary, we favor `list` over `vector` because it's closer to
+  existing terminology (e.g., Apache Arrow). This change requires updating
+  existing schemas by changing `vector<T>` to `list<T>`.
   [#1016](https://github.com/tenzir/vast/pull/1016)
 
-- ⚠️ The `set` type has been removed. Experience with the data model showed
-  that there is no strong use case to separate sets from vectors in the core.
-  While this may be useful in programming languages, VAST deals with immutable
-  data where set constraints have been enforced upstream. This change requires
+- ⚠️ The `set` type has been removed. Experience with the data model showed that
+  there is no strong use case to separate sets from vectors in the core.  While
+  this may be useful in programming languages, VAST deals with immutable data
+  where set constraints have been enforced upstream. This change requires
   updating existing schemas by changing `set<T>` to `vector<T>`. In the query
-  language, the new symbol for the empty `map` changed from `{-}` to `{}`, as
-  it now unambiguisly identifies `map` instances.
+  language, the new symbol for the empty `map` changed from `{-}` to `{}`, as it
+  now unambiguously identifies `map` instances.
   [#1010](https://github.com/tenzir/vast/pull/1010)
 
 - 🎁 The default schema for Suricata has been updated to support the
@@ -34,6 +105,9 @@ Every entry has a category for which we use the following visual abbreviations:
   corresponding VAST type in the schema is a non-trivial type like
   `vector<string>`. [#1009](https://github.com/tenzir/vast/pull/1009)
 
+- 🎁 VAST now prints the location of the configuration file that is used.
+  [#1009](https://github.com/tenzir/vast/pull/1009)
+
 - 🐞 The port encoding for Arrow-encoded table slices is now host-independent
   and always uses network-byte order.
   [#1007](https://github.com/tenzir/vast/pull/1007)
@@ -41,6 +115,13 @@ Every entry has a category for which we use the following visual abbreviations:
 - 🐞 When continuous query in a client process terminated, the node did not
   clean up the corresponding server-side state. This memory leak no longer
   exists. [#1006](https://github.com/tenzir/vast/pull/1006)
+
+- ⚠️ The expression field parser now allows the '-' character.
+  [#999](https://github.com/tenzir/vast/pull/999)
+
+- 🐞 A bug in the expression parser prevented the correct parsing of fields
+  starting with either 'F' or 'T'.
+  [#999](https://github.com/tenzir/vast/pull/999)
 
 - 🐞 MessagePack-encoded table slices now work correctly for nested container
   types. [#984](https://github.com/tenzir/vast/pull/984)
@@ -657,3 +738,4 @@ This is the first official release.
 [2020.05.28]: https://github.com/tenzir/vast/releases/tag/2020.05.28
 [2020.06.25]: https://github.com/tenzir/vast/releases/tag/2020.06.25
 [2020.07.28]: https://github.com/tenzir/vast/releases/tag/2020.07.28
+[2020.08.28]: https://github.com/tenzir/vast/releases/tag/2020.08.28

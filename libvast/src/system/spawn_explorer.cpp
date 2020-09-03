@@ -16,7 +16,6 @@
 #include "vast/concept/parseable/to.hpp"
 #include "vast/concept/parseable/vast.hpp"
 #include "vast/defaults.hpp"
-#include "vast/filesystem.hpp"
 #include "vast/si_literals.hpp"
 #include "vast/system/explorer.hpp"
 #include "vast/system/node.hpp"

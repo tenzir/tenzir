@@ -14,6 +14,7 @@
 #pragma once
 
 #include "vast/fwd.hpp"
+#include "vast/status.hpp"
 
 #include <caf/fwd.hpp>
 #include <caf/replies_to.hpp>
@@ -50,7 +51,7 @@ using filesystem_type = caf::typed_actor<
   // Memory-maps a file.
   caf::replies_to<atom::mmap, path>::with<chunk_ptr>,
   // Reports statistics of filesystem interactions.
-  caf::replies_to<atom::status>::with<caf::dictionary<caf::config_value>>
+  caf::replies_to<atom::status, status_verbosity>::with<caf::dictionary<caf::config_value>>
 >;
 
 // clang-format on

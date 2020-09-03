@@ -18,8 +18,8 @@
 #include "vast/detail/string.hpp"
 #include "vast/detail/system.hpp"
 #include "vast/error.hpp"
-#include "vast/filesystem.hpp"
 #include "vast/logger.hpp"
+#include "vast/path.hpp"
 #include "vast/settings.hpp"
 #include "vast/system/application.hpp"
 #include "vast/system/start_command.hpp"
@@ -362,8 +362,8 @@ bool init_config(caf::actor_system_config& cfg, const invocation& from,
   // Merge all CLI settings into the actor_system settings.
   merge_settings(from.options, cfg.content);
   // Allow users to use `system.verbosity` to configure console verbosity.
-  if (auto value = caf::get_if<caf::atom_value>(&from.options,
-                                                "system.verbosity")) {
+  if (auto value = caf::get_if<caf::atom_value>(&from.options, "system."
+                                                               "verbosity")) {
     // Verify user input.
     auto level = loglevel_to_int(caf::to_lowercase(*value), -1);
     if (level == -1) {
@@ -406,11 +406,12 @@ bool init_config(caf::actor_system_config& cfg, const invocation& from,
     if (caf::get_if<std::string>(&cfg, "system.log-directory"))
       error_output << "Config option 'system.log-directory' is deprecated and"
                       " ignored, use 'system.log-file' instead\n";
-    path log_dir = caf::get_or(cfg, "system.db-directory",
-                                     defaults::system::db_directory);
+    path log_dir
+      = caf::get_or(cfg, "system.db-directory", defaults::system::db_directory);
     if (!exists(log_dir))
-      if (auto res = mkdir(log_dir); !res) {
-        error_output << "unable to create directory: " << log_dir.str() << "\n";
+      if (auto err = mkdir(log_dir)) {
+        error_output << "unable to create directory: " << log_dir.str() << ' '
+                     << render(err) << '\n';
         return false;
       }
     // Store full path to the log file in config.
@@ -440,9 +441,9 @@ const command& root(const command& cmd) {
   return cmd.parent == nullptr ? cmd : root(*cmd.parent);
 }
 
-const command* resolve(const command& cmd,
-                       std::vector<std::string_view>::iterator position,
-                       std::vector<std::string_view>::iterator end) {
+const command*
+resolve(const command& cmd, std::vector<std::string_view>::iterator position,
+        std::vector<std::string_view>::iterator end) {
   if (position == end)
     return &cmd;
   auto i = std::find_if(cmd.children.begin(), cmd.children.end(),

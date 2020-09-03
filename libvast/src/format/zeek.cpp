@@ -667,8 +667,8 @@ caf::error writer::write(const table_slice& slice) {
     } else {
       VAST_DEBUG(this, "creates new stream for layout", slice.layout().name());
       if (!exists(dir_)) {
-        if (auto d = mkdir(dir_); !d)
-          return d.error();
+        if (auto err = mkdir(dir_))
+          return err;
       } else if (!dir_.is_directory()) {
         return make_error(ec::format_error, "got existing non-directory path",
                           dir_);

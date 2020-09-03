@@ -12,13 +12,12 @@
  ******************************************************************************/
 
 #include "vast/config.hpp"
-#include "vast/detail/adjust_resource_consumption.hpp"
 #include "vast/detail/process.hpp"
 #include "vast/detail/system.hpp"
 #include "vast/error.hpp"
 #include "vast/event_types.hpp"
-#include "vast/filesystem.hpp"
 #include "vast/logger.hpp"
+#include "vast/path.hpp"
 #include "vast/schema.hpp"
 #include "vast/system/application.hpp"
 #include "vast/system/default_configuration.hpp"
@@ -47,9 +46,6 @@ int main(int argc, char** argv) {
               << std::endl;
     return EXIT_FAILURE;
   }
-  // Make sure we have enough resources (e.g., file descriptors)
-  if (!detail::adjust_resource_consumption())
-    return EXIT_FAILURE;
   // Application setup.
   const auto [root, factory] = make_application(argv[0]);
   if (!root)
@@ -71,11 +67,13 @@ int main(int argc, char** argv) {
     return EXIT_FAILURE;
   caf::actor_system sys{cfg};
   fixup_logger(cfg);
-  // Print the configuration file that was used.
+  // Print the configuration file(s) that were loaded.
   if (!cfg.config_file_path.empty())
-    VAST_INFO_ANON("loaded configuration file:", cfg.config_file_path);
+    cfg.config_paths.emplace_back(std::move(cfg.config_file_path));
+  for (auto& path : cfg.config_paths)
+    VAST_INFO_ANON("loaded configuration file:", path);
   using string_list = std::vector<std::string>;
-  std::vector<vast::path> default_dirs;
+  auto schema_dirs = std::vector<vast::path>{};
   if (!caf::get_or(cfg, "system.no-default-schema", false)) {
     // Get filesystem path to the executable.
     auto binary = detail::objectpath();
@@ -83,15 +81,19 @@ int main(int argc, char** argv) {
       VAST_ERROR_ANON("failed to get program path");
       return EXIT_FAILURE;
     }
-    auto vast_share = binary->parent().parent() / "share" / "vast";
-    default_dirs.emplace_back(vast_share / "schema");
-    default_dirs.emplace_back("/etc/vast/schema");
+    if (const char* xdg_data_home = std::getenv("XDG_DATA_HOME"))
+      schema_dirs.emplace_back(path{xdg_data_home} / "vast" / "schema");
+    else if (const char* home = std::getenv("HOME"))
+      schema_dirs.emplace_back(path{home} / ".local" / "share" / "vast"
+                               / "schema");
+    schema_dirs.emplace_back(binary->parent().parent() / "share" / "vast"
+                             / "schema");
+    schema_dirs.emplace_back(VAST_DATADIR "/vast/schema");
   }
   if (auto user_dirs = caf::get_if<string_list>(&cfg, "system.schema-paths"))
-    default_dirs.insert(default_dirs.end(), user_dirs->begin(),
-                        user_dirs->end());
+    schema_dirs.insert(schema_dirs.end(), user_dirs->begin(), user_dirs->end());
   // Load event types.
-  if (auto schema = load_schema(default_dirs)) {
+  if (auto schema = load_schema(schema_dirs)) {
     event_types::init(*std::move(schema));
   } else {
     VAST_ERROR_ANON("failed to read schema dirs:", render(schema.error()));

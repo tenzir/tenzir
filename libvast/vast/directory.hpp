@@ -13,32 +13,52 @@
 
 #pragma once
 
-#include "vast/concept/parseable/core/parser.hpp"
-#include "vast/concept/parseable/detail/char_helpers.hpp"
+#include "vast/config.hpp"
+#include "vast/detail/iterator.hpp"
+#include "vast/path.hpp"
+
+#ifdef VAST_POSIX
+#  include <dirent.h>
+#endif
 
 namespace vast {
 
-struct any_parser : public parser<any_parser> {
-  using attribute = char;
+/// An ordered sequence of all the directory entries in a particular directory.
+class directory {
+public:
+  using const_iterator = class iterator
+    : public detail::iterator_facade<iterator, std::input_iterator_tag,
+                                     const path&, const path&> {
+  public:
+    iterator(directory* dir = nullptr);
 
-  template <class Iterator, class Attribute>
-  bool parse(Iterator& f, const Iterator& l, Attribute& x) const {
-    if (f == l)
-      return false;
-    detail::absorb(x, *f);
-    ++f;
-    return true;
-  }
+    void increment();
+    const path& dereference() const;
+    bool equals(const iterator& other) const;
+
+  private:
+    path current_;
+    const directory* dir_ = nullptr;
+  };
+
+  /// Constructs a directory stream.
+  /// @param p The path to the directory.
+  directory(vast::path p);
+
+  ~directory();
+
+  iterator begin();
+  iterator end() const;
+
+  /// Retrieves the ::path for this file.
+  /// @returns The ::path for this file.
+  const vast::path& path() const;
+
+private:
+  vast::path path_;
+#ifdef VAST_POSIX
+  DIR* dir_ = nullptr;
+#endif
 };
 
-template <>
-struct parser_registry<char> {
-  using type = any_parser;
-};
-
-namespace parsers {
-
-static const auto any = any_parser{};
-
-} // namespace parsers
 } // namespace vast

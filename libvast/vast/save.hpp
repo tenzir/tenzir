@@ -17,13 +17,14 @@
 #include "vast/detail/compressedbuf.hpp"
 #include "vast/detail/type_traits.hpp"
 #include "vast/error.hpp"
-#include "vast/filesystem.hpp"
 #include "vast/logger.hpp"
+#include "vast/path.hpp"
 
 #include <caf/actor_system.hpp>
 #include <caf/expected.hpp>
 #include <caf/stream_serializer.hpp>
 
+#include <cstring>
 #include <fstream>
 #include <stdexcept>
 #include <streambuf>
@@ -63,9 +64,9 @@ caf::error save(caf::actor_system* sys, Sink&& out, const Ts&... xs) {
   } else if constexpr (std::is_same_v<sink_type, path>) {
     if (auto dir = out.parent(); !exists(dir)) {
       VAST_DEBUG_ANON(__func__, "creates directory", dir);
-      if (auto res = mkdir(dir); !res) {
+      if (auto err = mkdir(dir)) {
         VAST_DEBUG_ANON(__func__, "failed to create directory", dir);
-        return res.error();
+        return err;
       }
     }
     auto tmp = out + ".tmp";
@@ -74,7 +75,7 @@ caf::error save(caf::actor_system* sys, Sink&& out, const Ts&... xs) {
     std::ofstream fs{tmp.str()};
     if (!fs)
       return make_error(ec::filesystem_error, "failed to create filestream",
-                        out);
+                        out, std::strerror(errno));
     if (auto err = save<Method>(sys, *fs.rdbuf(), xs...))
       return err;
     if (std::rename(tmp.str().c_str(), out.str().c_str()) != 0)

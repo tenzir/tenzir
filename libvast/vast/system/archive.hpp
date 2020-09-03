@@ -15,6 +15,7 @@
 
 #include "vast/fwd.hpp"
 #include "vast/ids.hpp"
+#include "vast/status.hpp"
 #include "vast/store.hpp"
 #include "vast/system/accountant.hpp"
 #include "vast/system/instrumentation.hpp"
@@ -51,7 +52,7 @@ using archive_type = caf::typed_actor<
   caf::reacts_to<ids>,
   caf::reacts_to<ids, receiver_type>,
   caf::reacts_to<ids, receiver_type, uint64_t>,
-  caf::replies_to<atom::status>::with<caf::dictionary<caf::config_value>>,
+  caf::replies_to<atom::status, status_verbosity>::with<caf::dictionary<caf::config_value>>,
   caf::reacts_to<atom::telemetry>,
   caf::reacts_to<atom::erase, ids>
 >;

@@ -21,7 +21,6 @@
 #include "vast/concept/parseable/to.hpp"
 #include "vast/defaults.hpp"
 #include "vast/detail/make_io_stream.hpp"
-#include "vast/filesystem.hpp"
 
 using namespace vast;
 

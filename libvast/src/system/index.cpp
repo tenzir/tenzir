@@ -31,7 +31,7 @@
 #include "vast/fbs/utils.hpp"
 #include "vast/ids.hpp"
 #include "vast/io/read.hpp"
-#include "vast/io/write.hpp"
+#include "vast/io/save.hpp"
 #include "vast/json.hpp"
 #include "vast/load.hpp"
 #include "vast/logger.hpp"
@@ -93,7 +93,8 @@ index_state::~index_state() {
     [[maybe_unused]] auto unregistered = stage->out().unregister(active.get());
     VAST_ASSERT(unregistered);
   }
-  flush_to_disk();
+  if (flush_on_destruction)
+    flush_to_disk();
 }
 
 caf::error
@@ -108,9 +109,12 @@ index_state::init(const path& dir, size_t max_partition_size,
   this->max_partition_size = max_partition_size;
   this->lru_partitions.size(in_mem_partitions);
   this->taste_partitions = taste_partitions;
+  this->flush_on_destruction = false;
   // Read persistent state.
   if (auto err = load_from_disk())
     return err;
+  // Dont try to overwrite existing state on boot failure.
+  this->flush_on_destruction = true;
   // Spin up the stream manager.
   stage = make_index_stage(this);
   return caf::none;
@@ -153,7 +157,7 @@ caf::error index_state::flush_meta_index() {
   auto flatbuf = fbs::wrap(meta_idx, fbs::file_identifier);
   if (!flatbuf)
     return flatbuf.error();
-  return io::write(meta_index_filename(), as_bytes(*flatbuf));
+  return io::save(meta_index_filename(), as_bytes(*flatbuf));
 }
 
 caf::error index_state::flush_statistics() {
@@ -207,35 +211,43 @@ caf::actor index_state::next_worker() {
   return result;
 }
 
-caf::dictionary<caf::config_value> index_state::status() const {
+caf::dictionary<caf::config_value>
+index_state::status(status_verbosity v) const {
+  using caf::put;
   using caf::put_dictionary;
   using caf::put_list;
-  caf::dictionary<caf::config_value> result;
+  auto result = caf::settings{};
+  auto& index_status = put_dictionary(result, "index");
   // Misc parameters.
-  result.emplace("meta-index-filename", meta_index_filename().str());
-  // Statistics.
-  auto& stats_object = put_dictionary(result, "statistics");
-  auto& layout_object = put_dictionary(stats_object, "layouts");
-  for (auto& [name, layout_stats] : stats.layouts) {
-    auto xs = caf::dictionary<caf::config_value>{};
-    xs.emplace("count", layout_stats.count);
-    // We cannot use put_dictionary(layout_object, name) here, because this
-    // function splits the key at '.', which occurs in every layout name.
-    // Hence the fallback to low-level primitives.
-    layout_object.insert_or_assign(name, std::move(xs));
+  if (v >= status_verbosity::info) {
   }
-  // Resident partitions.
-  auto& partitions = put_dictionary(result, "partitions");
-  if (active != nullptr)
-    partitions.emplace("active", to_string(active->id()));
-  auto& cached = put_list(partitions, "cached");
-  for (auto& part : lru_partitions.elements())
-    cached.emplace_back(to_string(part->id()));
-  auto& unpersisted = put_list(partitions, "unpersisted");
-  for (auto& kvp : this->unpersisted)
-    unpersisted.emplace_back(to_string(kvp.first->id()));
-  // General state such as open streams.
-  detail::fill_status_map(result, self);
+  if (v >= status_verbosity::detailed) {
+    auto& stats_object = put_dictionary(index_status, "statistics");
+    auto& layout_object = put_dictionary(stats_object, "layouts");
+    for (auto& [name, layout_stats] : stats.layouts) {
+      auto xs = caf::dictionary<caf::config_value>{};
+      xs.emplace("count", layout_stats.count);
+      // We cannot use put_dictionary(layout_object, name) here, because this
+      // function splits the key at '.', which occurs in every layout name.
+      // Hence the fallback to low-level primitives.
+      layout_object.insert_or_assign(name, std::move(xs));
+    }
+  }
+  if (v >= status_verbosity::debug) {
+    put(index_status, "meta-index-filename", meta_index_filename().str());
+    // Resident partitions.
+    auto& partitions = put_dictionary(index_status, "partitions");
+    if (active != nullptr)
+      partitions.emplace("active", to_string(active->id()));
+    auto& cached = put_list(partitions, "cached");
+    for (auto& part : lru_partitions.elements())
+      cached.emplace_back(to_string(part->id()));
+    auto& unpersisted = put_list(partitions, "unpersisted");
+    for (auto& kvp : this->unpersisted)
+      unpersisted.emplace_back(to_string(kvp.first->id()));
+    // General state such as open streams.
+    detail::fill_status_map(index_status, self);
+  }
   return result;
 }
 
@@ -246,7 +258,7 @@ void index_state::reset_active_partition() {
     [[maybe_unused]] auto unregistered = stage->out().unregister(active.get());
     VAST_ASSERT(unregistered);
     if (auto err = active->flush_to_disk())
-      VAST_ERROR(self, "failed to persist active partition");
+      VAST_ERROR(self, "failed to persist active partition:", err);
     // Store this partition as unpersisted to make sure we're not attempting
     // to load it from disk until it is safe to do so.
     if (active_partition_indexers > 0)
@@ -255,9 +267,9 @@ void index_state::reset_active_partition() {
   // Persist the current version of the meta_index and statistics to preserve
   // the state and be partially robust against crashes.
   if (auto err = flush_meta_index())
-    VAST_ERROR(self, "failed to persist the meta index");
+    VAST_ERROR(self, "failed to persist the meta index:", err);
   if (auto err = flush_statistics())
-    VAST_ERROR(self, "failed to persist the statistics");
+    VAST_ERROR(self, "failed to persist the statistics:", err);
   active = make_partition();
   stage->out().register_partition(active.get());
   active_partition_indexers = 0;
@@ -517,8 +529,8 @@ caf::behavior index(caf::stateful_actor<index_state>* self, const path& dir,
       VAST_DEBUG(self, "got a new source");
       return self->state.stage->add_inbound_path(in);
     },
-    [=](atom::status) -> caf::config_value::dictionary {
-      return self->state.status();
+    [=](atom::status, status_verbosity v) -> caf::config_value::dictionary {
+      return self->state.status(v);
     },
     [=](atom::subscribe, atom::flush, caf::actor& listener) {
       self->state.add_flush_listener(std::move(listener));
@@ -541,9 +553,8 @@ caf::behavior index(caf::stateful_actor<index_state>* self, const path& dir,
             self->send(self->state.accountant, atom::announce_v, "index");
             self->delayed_send(self, defs::telemetry_rate, atom::telemetry_v);
           },
-          [=](atom::status) -> caf::config_value::dictionary {
-            return self->state.status();
-          },
+          [=](atom::status, status_verbosity v)
+            -> caf::config_value::dictionary { return self->state.status(v); },
           [=](atom::subscribe, atom::flush, caf::actor& listener) {
             self->state.add_flush_listener(std::move(listener));
           }};

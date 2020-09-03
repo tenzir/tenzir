@@ -19,6 +19,7 @@ stdenv.mkDerivation rec {
     ++ lib.optionals (!static) [ python ncurses ];
 
   cmakeFlags = [
+    "-DCMAKE_OSX_DEPLOYMENT_TARGET=10.14"
     "-DBUILD_SHARED_LIBS=ON"
     "-DBROKER_DISABLE_DOCS=ON"
     "-DCAF_ROOT_DIR=${caf}"

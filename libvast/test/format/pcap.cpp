@@ -23,7 +23,6 @@
 #include "vast/concept/parseable/vast/address.hpp"
 #include "vast/defaults.hpp"
 #include "vast/error.hpp"
-#include "vast/filesystem.hpp"
 
 using namespace vast;
 
