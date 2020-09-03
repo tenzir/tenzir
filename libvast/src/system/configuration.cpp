@@ -105,7 +105,7 @@ caf::error configuration::parse(int argc, char** argv) {
       return err;
     }
   }
-  return caf::none;
+  return actor_system_config::parse(caf_args);
 }
 
 } // namespace vast::system
