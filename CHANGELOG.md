@@ -11,6 +11,13 @@ Every entry has a category for which we use the following visual abbreviations:
 
 ## Unreleased
 
+- 🎁 VAST now merges the contents of all used configuration files instead of
+  using only the most user-specific file. The file specified using `--config`
+  takes the highest precedence, followed by the user-specific path
+  `${XDG_CONFIG_HOME:-${HOME}/.config}/vast/vast.conf`, and the compile-time
+  path `<sysconfdir>/vast/vast.conf`
+  [#1040](https://github.com/tenzir/vast/pull/1040)
+
 - 🎁 The output of the `status` command was restructured with a strong focus on
   usability. The new flags `--detailed` and `--debug` add additional content to
   the output. [#995](https://github.com/tenzir/vast/pull/995)

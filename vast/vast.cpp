@@ -67,9 +67,11 @@ int main(int argc, char** argv) {
     return EXIT_FAILURE;
   caf::actor_system sys{cfg};
   fixup_logger(cfg);
-  // Print the configuration file that was used.
+  // Print the configuration file(s) that were loaded.
   if (!cfg.config_file_path.empty())
-    VAST_INFO_ANON("loaded configuration file:", cfg.config_file_path);
+    cfg.config_paths.emplace_back(std::move(cfg.config_file_path));
+  for (auto& path : cfg.config_paths)
+    VAST_INFO_ANON("loaded configuration file:", path);
   using string_list = std::vector<std::string>;
   auto schema_dirs = std::vector<vast::path>{};
   if (!caf::get_or(cfg, "system.no-default-schema", false)) {
