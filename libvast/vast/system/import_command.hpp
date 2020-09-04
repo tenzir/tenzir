@@ -26,6 +26,8 @@
 #include "vast/system/spawn_or_connect_to_node.hpp"
 #include "vast/system/type_registry.hpp"
 
+#include <caf/make_message.hpp>
+
 #include <csignal>
 #include <string>
 #include <utility>
@@ -40,21 +42,23 @@ caf::message import_command(const invocation& inv, caf::actor_system& sys) {
   auto node_opt
     = spawn_or_connect_to_node(self, inv.options, content(sys.config()));
   if (auto err = caf::get_if<caf::error>(&node_opt))
-    return make_message(std::move(*err));
+    return caf::make_message(std::move(*err));
   auto& node = caf::holds_alternative<caf::actor>(node_opt)
                  ? caf::get<caf::actor>(node_opt)
                  : caf::get<scope_linked_actor>(node_opt).get();
   VAST_DEBUG(inv.full_name, "got node");
   // Get node components.
+  using namespace std::string_view_literals;
   auto components = get_node_components(
-    self, node, {"accountant", "type-registry", "importer"});
+    self, node, {"accountant"sv, "type-registry"sv, "importer"sv});
   if (!components)
-    return make_message(std::move(components.error()));
+    return caf::make_message(std::move(components.error()));
   auto& [accountant, type_registry, importer] = *components;
   if (!type_registry)
-    return make_message(make_error(ec::missing_component, "type-registry"));
+    return caf::make_message(make_error(ec::missing_component, "type-"
+                                                               "registry"));
   if (!importer)
-    return make_message(make_error(ec::missing_component, "importer"));
+    return caf::make_message(make_error(ec::missing_component, "importer"));
   // Start signal monitor.
   std::thread sig_mon_thread;
   auto guard = system::signal_monitor::run_guarded(
@@ -64,7 +68,7 @@ caf::message import_command(const invocation& inv, caf::actor_system& sys) {
     self, sys, inv, caf::actor_cast<accountant_type>(accountant),
     caf::actor_cast<type_registry_type>(type_registry), importer);
   if (!src_result)
-    return make_message(std::move(src_result.error()));
+    return caf::make_message(std::move(src_result.error()));
   auto src = std::move(src_result->src);
   auto name = std::move(src_result->name);
   bool stop = false;
@@ -74,7 +78,7 @@ caf::message import_command(const invocation& inv, caf::actor_system& sys) {
              [&](caf::error error) { err = std::move(error); });
   if (err) {
     self->send_exit(src, caf::exit_reason::user_shutdown);
-    return make_message(std::move(err));
+    return caf::make_message(std::move(err));
   }
   self->monitor(src);
   self->monitor(importer);
@@ -109,7 +113,7 @@ caf::message import_command(const invocation& inv, caf::actor_system& sys) {
       })
     .until(stop);
   if (err)
-    return make_message(std::move(err));
+    return caf::make_message(std::move(err));
   return caf::none;
 }
 
