@@ -92,7 +92,8 @@ sink_command(const invocation& inv, actor_system& sys, caf::actor snk) {
   if (!exp)
     return caf::make_message(std::move(exp.error()));
   // Register the accountant at the sink.
-  auto components = get_node_components(self, node, {"accountant"});
+  using namespace std::string_view_literals;
+  auto components = get_node_components(self, node, {"accountant"sv});
   if (!components)
     return caf::make_message(std::move(components.error()));
   auto& [accountant] = *components;
