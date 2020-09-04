@@ -13,12 +13,17 @@
 
 #include "vast/data.hpp"
 
+#include "vast/concept/parseable/vast/data.hpp"
+#include "vast/concept/printable/to_string.hpp"
+#include "vast/concept/printable/vast/data.hpp"
 #include "vast/detail/assert.hpp"
 #include "vast/detail/narrow.hpp"
 #include "vast/detail/overload.hpp"
 #include "vast/detail/string.hpp"
 #include "vast/detail/type_traits.hpp"
 #include "vast/json.hpp"
+
+#include <yaml-cpp/yaml.h>
 
 namespace vast {
 
@@ -333,6 +338,109 @@ bool convert(const data& d, json& j, const type& t) {
     return true;
   }
   return convert(d, j);
+}
+
+namespace {
+
+data parse(const YAML::Node& node) {
+  switch (node.Type()) {
+    case YAML::NodeType::Undefined:
+    case YAML::NodeType::Null:
+      return data{};
+    case YAML::NodeType::Scalar: {
+      auto str = node.as<std::string>();
+      data result;
+      // Attempt some type inference.
+      if (parsers::boolean(str, result))
+        return result;
+      // Attempt maximum type inference.
+      if (parsers::data(str, result))
+        return result;
+      // Take the input as-is if nothing worked.
+      return str;
+    }
+    case YAML::NodeType::Sequence: {
+      list xs;
+      xs.reserve(node.size());
+      for (size_t i = 0; i < node.size(); ++i)
+        xs.push_back(parse(node[i]));
+      return xs;
+    }
+    case YAML::NodeType::Map: {
+      record xs;
+      xs.reserve(node.size());
+      for (auto& pair : node)
+        xs.emplace(pair.first.as<std::string>(), parse(pair.second));
+      return xs;
+    }
+  }
+}
+
+} // namespace
+
+caf::expected<data> from_yaml(std::string_view str) {
+  try {
+    // Maybe one glory day in the future it will be possible to perform a
+    // single pass over the input without incurring a copy.
+    auto node = YAML::Load(std::string{str});
+    return parse(node);
+  } catch (const YAML::Exception& e) {
+    return caf::make_error(ec::parse_error,
+                           "failed to parse YAML at line/col/pos", e.mark.line,
+                           e.mark.column, e.mark.pos);
+  }
+}
+
+namespace {
+
+void print(YAML::Emitter& out, const data& x) {
+  // clang-format off
+  auto f = detail::overload(
+    [&out](const auto& x) { out << to_string(x); },
+    [&out](bool x) { out << (x ? "true" : "false"); },
+    [&out](count x) { out << x; },
+    [&out](integer x) { out << x; },
+    [&out](real x) { out << x; },
+    [&out](const std::string& x) { out << x; },
+    [&out](const list& xs) {
+      out << YAML::BeginSeq;
+      for (auto& x : xs)
+        print(out, x);
+      out << YAML::EndSeq;
+    },
+    // We treat maps like records.
+    [&out](const map& xs) {
+      out << YAML::BeginMap;
+      for (auto& [k, v] : xs) {
+        out << YAML::Key;
+        print(out, k);
+        out << YAML::Value;
+        print(out, v);
+      }
+      out << YAML::EndMap;
+    },
+    [&out](const record& xs) {
+      out << YAML::BeginMap;
+      for (auto& [k, v] : xs) {
+        out << YAML::Key << k << YAML::Value;
+        print(out, v);
+      }
+      out << YAML::EndMap;
+    }
+  );
+  // clang-format off
+  return caf::visit(f, x);
+}
+
+} // namespace
+
+std::string to_yaml(const data& x) {
+  YAML::Emitter out;
+  out.SetOutputCharset(YAML::EscapeNonAscii); // restrict to ASCII output
+  out.SetIndent(2);
+  print(out, x);
+  VAST_ASSERT(out.good());
+  return out.c_str();
 }
 
 } // namespace vast
