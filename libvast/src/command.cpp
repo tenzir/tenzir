@@ -211,17 +211,45 @@ void doctext(const command& cmd, std::ostream& out) {
   out << std::left << cmd.documentation;
 }
 
+void manheader(std::ostream& out) {
+  out << "% VAST(1)\n"
+         "% Tenzir GmbH\n"
+         "\n"
+         "# NAME\n"
+         "\n"
+         "`vast` -- manage a VAST topology\n"
+         "\n"
+         "# OVERVIEW\n"
+         "\n"
+         "This section describes the VAST system and its components from a "
+         "user "
+         "interaction point of view.\n"
+         "\n";
+}
+
+void manfooter(std::ostream& out) {
+  out << "# ISSUES\n"
+         "\n"
+         "If you encounter a bug or have suggestions for improvement, please "
+         "file "
+         "an issue at <http://vast.fail>.\n"
+         "\n"
+         "# SEE ALSO\n"
+         "\n"
+         "Visit <http://vast.io> for more information about VAST.\n";
+}
+
 // Prints Markdown-formatted documentation for the target command and all its
 // subcommands with headers of increasing depth.
-void mantext(const command& cmd, std::ostream& os,
+void mantext(const command& cmd, std::ostream& out,
              std::string::size_type depth) {
   auto header_prefix = std::string(depth, '#');
-  os << header_prefix << ' ' << cmd.name << "\n\n";
-  doctext(cmd, os);
+  out << header_prefix << ' ' << cmd.name << "\n\n";
+  doctext(cmd, out);
   for (const auto& subcmd : cmd.children)
     if (subcmd->visible)
-      mantext(*subcmd, os, depth + 1);
-  os << '\n';
+      mantext(*subcmd, out, depth + 1);
+  out << '\n';
 }
 
 } // namespace
@@ -346,7 +374,9 @@ parse(const command& root, command::argument_iterator first,
     return caf::no_error;
   }
   if (get_or(result.options, "manual", false)) {
+    manheader(std::cerr);
     mantext(*target, std::cerr, 3);
+    manfooter(std::cerr);
     return caf::no_error;
   }
   return result;
