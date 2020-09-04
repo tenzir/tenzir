@@ -45,7 +45,7 @@ make_input_stream(const std::string& input, path::type pt) {
       return make_error(ec::filesystem_error, "unsupported path type", input);
     case path::socket: {
       if (input == "-")
-        return make_error(ec::filesystem_error, "cannot use stdin as UNIX "
+        return make_error(ec::filesystem_error, "cannot use STDIN as UNIX "
                                                 "domain socket");
       auto uds = unix_domain_socket::connect(input);
       if (!uds)
@@ -77,7 +77,7 @@ make_input_stream(const std::string& input, path::type pt) {
 caf::expected<std::unique_ptr<std::ostream>>
 make_output_stream(const std::string& output, socket_type st) {
   if (output == "-")
-    return make_error(ec::filesystem_error, "cannot use stdout as UNIX "
+    return make_error(ec::filesystem_error, "cannot use STDOUT as UNIX "
                                             "domain socket");
   auto connect_st = st;
   if (connect_st == socket_type::fd)
