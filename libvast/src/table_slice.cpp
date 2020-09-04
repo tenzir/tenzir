@@ -28,6 +28,7 @@
 #include "vast/ids.hpp"
 #include "vast/logger.hpp"
 #include "vast/table_slice_builder.hpp"
+#include "vast/table_slice_builder_factory.hpp"
 #include "vast/table_slice_factory.hpp"
 #include "vast/value_index.hpp"
 
@@ -43,8 +44,6 @@
 #include <caf/sum_type.hpp>
 
 #include <unordered_map>
-
-#include <vast/table_slice_builder_factory.hpp>
 
 namespace vast {
 
@@ -441,24 +440,24 @@ struct row_evaluator {
   }
 
   bool operator()(const attribute_extractor& e, const data& d) {
-    // FIXME: perform a transformation on the AST that replaces the attribute
-    // with the corresponding function object.
+    // TODO: Transform this AST node into a constant-time lookup node (e.g.,
+    // data_extractor). It's not necessary to iterate over the schema for every
+    // row; this should happen upfront.
     if (e.attr == atom::type_v)
       return evaluate(slice_.layout().name(), op_, d);
     if (e.attr == atom::timestamp_v) {
-      auto pred = [](auto& x) {
-        return caf::holds_alternative<time_type>(x.type)
-               && has_attribute(x.type, "timestamp");
-      };
-      auto& fs = slice_.layout().fields;
-      auto i = std::find_if(fs.begin(), fs.end(), pred);
-      if (i == fs.end())
-        return false;
-      // Compare timestamp at given cell.
-      auto pos = static_cast<size_t>(std::distance(fs.begin(), i));
-      auto x
-        = to_canonical(slice_.layout().fields[pos].type, slice_.at(row_, pos));
-      return evaluate_view(x, op_, make_view(d));
+      for (size_t col = 0; col < slice_.layout().fields.size(); ++col) {
+        auto& field = slice_.layout().fields[col];
+        if (has_attribute(field.type, "timestamp")) {
+          if (!caf::holds_alternative<time_type>(field.type)) {
+            VAST_WARNING_ANON("got timestamp attribute for non-time type");
+            return false;
+          }
+        }
+        auto lhs = to_canonical(field.type, slice_.at(row_, col));
+        auto rhs = make_view(d);
+        return evaluate_view(lhs, op_, rhs);
+      }
     }
     return false;
   }
@@ -472,12 +471,14 @@ struct row_evaluator {
   }
 
   bool operator()(const data_extractor& e, const data& d) {
-    if (e.type != slice_.layout())
-      return false;
     VAST_ASSERT(e.offset.size() == 1);
-    auto x = to_canonical(slice_.layout().fields[e.offset[0]].type,
-                          slice_.at(row_, e.offset[0]));
-    return evaluate_view(x, op_, make_data_view(d));
+    if (e.type != slice_.layout()) // TODO: make this a precondition instead.
+      return false;
+    auto col = e.offset[0];
+    auto& field = slice_.layout().fields[col];
+    auto lhs = to_canonical(field.type, slice_.at(row_, col));
+    auto rhs = make_data_view(d);
+    return evaluate_view(lhs, op_, rhs);
   }
 
   const table_slice& slice_;
