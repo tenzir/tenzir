@@ -171,9 +171,9 @@ file(WRITE ${CMAKE_CURRENT_BINARY_DIR}/libvast/vast/documentation.hpp
 
 # Choose a deafult log level based on build type.
 if (CMAKE_BUILD_TYPE STREQUAL Release)
-  set(VAST_LOG_LEVEL_DEFAULT "VERBOSE")
+  set(VAST_LOG_LEVEL_DEFAULT "DEBUG")
 elseif (CMAKE_BUILD_TYPE STREQUAL MinSizeRel)
-  set(VAST_LOG_LEVEL_DEFAULT "VERBOSE")
+  set(VAST_LOG_LEVEL_DEFAULT "DEBUG")
 elseif (CMAKE_BUILD_TYPE STREQUAL RelWithDebInfo)
   set(VAST_LOG_LEVEL_DEFAULT "DEBUG")
 else ()
