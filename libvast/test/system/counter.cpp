@@ -27,6 +27,7 @@
 #include "vast/ids.hpp"
 #include "vast/system/archive.hpp"
 #include "vast/system/index.hpp"
+#include "vast/system/posix_filesystem.hpp"
 #include "vast/table_slice.hpp"
 #include "vast/uuid.hpp"
 
@@ -64,7 +65,8 @@ struct fixture : fixtures::deterministic_actor_system_and_events {
   fixture() {
     // Spawn INDEX and ARCHIVE, and a mock client.
     MESSAGE("spawn INDEX ingest 4 slices with 100 rows (= 1 partition) each");
-    index = self->spawn(system::index, directory / "index",
+    auto fs = self->spawn(vast::system::posix_filesystem, directory);
+    index = self->spawn(system::index, fs, directory / "index",
                         defaults::import::table_slice_size, 100, 3, 1, true);
     archive = self->spawn(system::archive, directory / "archive",
                           defaults::system::segments,

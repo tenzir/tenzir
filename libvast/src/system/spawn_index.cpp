@@ -36,7 +36,7 @@ maybe_actor spawn_index(node_actor* self, spawn_arguments& args) {
     return make_error(ec::lookup_error, "couldnt find filesystem actor");
   namespace sd = vast::defaults::system;
   auto idx
-    = self->spawn(v2::index, fs, args.dir / args.label,
+    = self->spawn(index, fs, args.dir / args.label,
                   opt("system.max-partition-size", sd::max_partition_size),
                   opt("system.in-mem-partitions", sd::max_in_mem_partitions),
                   opt("system.taste-partitions", sd::taste_partitions),
