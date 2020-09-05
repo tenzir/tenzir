@@ -15,17 +15,18 @@
 
 #include "vast/system/exporter.hpp"
 
-#include "vast/test/test.hpp"
-
 #include "vast/test/fixtures/actor_system_and_events.hpp"
+#include "vast/test/test.hpp"
 
 #include "vast/concept/parseable/to.hpp"
 #include "vast/concept/parseable/vast/expression.hpp"
 #include "vast/detail/spawn_container_source.hpp"
 #include "vast/query_options.hpp"
 #include "vast/system/archive.hpp"
+#include "vast/system/filesystem.hpp"
 #include "vast/system/importer.hpp"
 #include "vast/system/index.hpp"
+#include "vast/system/posix_filesystem.hpp"
 #include "vast/table_slice.hpp"
 
 using namespace caf;
@@ -58,7 +59,7 @@ struct fixture : fixture_base {
 
   void spawn_index() {
     auto fs = self->spawn(system::posix_filesystem, directory);
-    index = self->spawn(system::v2::index, fs, directory / "index", 10000, 5, 5, 1, true);
+    index = self->spawn(system::index, fs, directory / "index", 10000, 5, 5, 1, true);
   }
 
   void spawn_archive() {

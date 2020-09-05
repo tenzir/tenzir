@@ -1,7 +1,6 @@
 add_library(
   libvast_test STATIC
   src/actor_system.cpp
-  src/dummy_index.cpp
   src/events.cpp
   src/node.cpp
   src/symbols.cpp

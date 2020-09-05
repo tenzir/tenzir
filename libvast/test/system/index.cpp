@@ -28,6 +28,7 @@
 #include "vast/fwd.hpp"
 #include "vast/ids.hpp"
 #include "vast/query_options.hpp"
+#include "vast/system/posix_filesystem.hpp"
 #include "vast/table_slice.hpp"
 #include "vast/table_slice_builder.hpp"
 
@@ -47,7 +48,7 @@ struct fixture : fixtures::deterministic_actor_system_and_events {
   fixture() {
     directory /= "index";
     auto fs = self->spawn(system::posix_filesystem, directory);
-    index = self->spawn(system::v2::index, fs, directory / "index", slice_size,
+    index = self->spawn(system::index, fs, directory / "index", slice_size,
                         in_mem_partitions, taste_count, num_query_supervisors, false);
   }
 

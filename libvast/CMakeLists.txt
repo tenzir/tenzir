@@ -65,7 +65,6 @@ set(libvast_sources
     src/caf_table_slice.cpp
     src/caf_table_slice_builder.cpp
     src/chunk.cpp
-    src/column_index.cpp
     src/command.cpp
     src/compression.cpp
     src/concept/hashable/crc.cpp
@@ -158,8 +157,6 @@ set(libvast_sources
     src/system/importer.cpp
     src/system/index.cpp
     src/system/indexer.cpp
-    src/system/indexer_downstream_manager.cpp
-    src/system/indexer_stage_driver.cpp
     src/system/infer_command.cpp
     src/system/make_sink.cpp
     src/system/node.cpp
@@ -182,7 +179,6 @@ set(libvast_sources
     src/system/spawn_exporter.cpp
     src/system/spawn_importer.cpp
     src/system/spawn_index.cpp
-    src/system/spawn_indexer.cpp
     src/system/spawn_node.cpp
     src/system/spawn_or_connect_to_node.cpp
     src/system/spawn_pivoter.cpp
@@ -307,7 +303,6 @@ set(tests
     test/cache.cpp
     test/chunk.cpp
     test/coder.cpp
-    test/column_index.cpp
     test/command.cpp
     test/community_id.cpp
     test/compressedbuf.cpp
@@ -369,9 +364,6 @@ set(tests
     test/system/filesystem.cpp
     test/system/importer.cpp
     test/system/index.cpp
-    test/system/indexer.cpp
-    test/system/indexer_stage_driver.cpp
-    test/system/partition.cpp
     test/system/pivoter.cpp
     test/system/queries.cpp
     test/system/query_processor.cpp

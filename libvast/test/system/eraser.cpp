@@ -28,6 +28,7 @@
 #include "vast/fwd.hpp"
 #include "vast/ids.hpp"
 #include "vast/system/index.hpp"
+#include "vast/system/posix_filesystem.hpp"
 #include "vast/table_slice.hpp"
 
 using namespace std::literals::chrono_literals;
@@ -147,7 +148,7 @@ TEST(eraser on actual INDEX with Zeek conn logs) {
   auto slices = take(zeek_conn_log_full, 4);
   MESSAGE("spawn INDEX ingest 4 slices with 100 rows (= 1 partition) each");
   auto fs = self->spawn(vast::system::posix_filesystem, directory);
-  index = self->spawn(system::v2::index, fs, directory / "index",
+  index = self->spawn(system::index, fs, directory / "index",
                       defaults::import::table_slice_size, 100, taste_count, 1, true);
   detail::spawn_container_source(sys, std::move(slices), index);
   run();
