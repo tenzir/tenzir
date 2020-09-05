@@ -479,7 +479,7 @@ get_target_property(flatbuffers_dir ${flatbuffers_target}
                     INTERFACE_INCLUDE_DIRECTORIES)
 get_filename_component(flatbuffers_dir ${flatbuffers_dir} DIRECTORY) # <prefix>
 
-find_package(yaml-cpp REQUIRED)
+find_package(yaml-cpp 0.6.2 REQUIRED)
 
 if (NOT VAST_USE_BUNDLED_CAF)
   # Try to find the required CAF components first...
