@@ -98,7 +98,6 @@ FIXTURE_SCOPE(yaml_tests, fixture)
 
 TEST(from_yaml - nested) {
   auto x = from_yaml(str);
-  std::cout << to_string(x) << std::endl;
   CHECK_EQUAL(x, rec);
 }
 
