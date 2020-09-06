@@ -374,6 +374,7 @@ data parse(const YAML::Node& node) {
       return xs;
     }
   }
+  return {}; // makes GCC happy
 }
 
 } // namespace
