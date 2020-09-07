@@ -21,6 +21,7 @@
 #include "vast/detail/overload.hpp"
 #include "vast/detail/string.hpp"
 #include "vast/detail/type_traits.hpp"
+#include "vast/die.hpp"
 #include "vast/json.hpp"
 
 #include <yaml-cpp/yaml.h>
@@ -374,7 +375,7 @@ data parse(const YAML::Node& node) {
       return xs;
     }
   }
-  return {}; // makes GCC happy
+  die("unhandled YAML node type");
 }
 
 } // namespace
