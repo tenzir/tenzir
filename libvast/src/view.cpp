@@ -127,6 +127,7 @@ default_record_view::default_record_view(const record& xs) : xs_{xs} {
 }
 
 default_record_view::value_type default_record_view::at(size_type i) const {
+  VAST_ASSERT(i < xs_.size());
   auto& [key, value] = *std::next(xs_.begin(), i);
   return {key, make_data_view(value)};
 }

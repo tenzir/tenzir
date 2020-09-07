@@ -338,6 +338,7 @@ struct container_view
   /// Retrieves a specific element.
   /// @param i The position of the element to retrieve.
   /// @returns A view to the element at position *i*.
+  /// @pre `i < size()`
   virtual value_type at(size_type i) const = 0;
 
   /// @returns The number of elements in the container.
