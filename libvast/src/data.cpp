@@ -243,7 +243,7 @@ caf::optional<record> unflatten(const record& r, const record_type* rt) {
         nested = &caf::get<record>(it->second);
       }
       // Insert value into deepest record.
-      nested->emplace(std::string{split[split.size() - 1]}, v);
+      nested->emplace(std::string{split.back()}, v);
     }
   }
   return result;
