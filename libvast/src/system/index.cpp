@@ -99,9 +99,11 @@ index_state::~index_state() {
 
 caf::error
 index_state::init(const path& dir, size_t max_partition_size,
-                  uint32_t in_mem_partitions, uint32_t taste_partitions) {
+                  uint32_t in_mem_partitions, uint32_t taste_partitions,
+                  bool delay_flush_until_shutdown) {
   VAST_TRACE(VAST_ARG(dir), VAST_ARG(max_partition_size),
-             VAST_ARG(in_mem_partitions), VAST_ARG(taste_partitions));
+             VAST_ARG(in_mem_partitions), VAST_ARG(taste_partitions),
+             VAST_ARG(delay_flush_until_shutdown));
   // This option must be kept in sync with vast/address_synopsis.hpp.
   put(meta_idx.factory_options(), "max-partition-size", max_partition_size);
   // Set members.
@@ -110,6 +112,7 @@ index_state::init(const path& dir, size_t max_partition_size,
   this->lru_partitions.size(in_mem_partitions);
   this->taste_partitions = taste_partitions;
   this->flush_on_destruction = false;
+  this->delay_flush_until_shutdown = delay_flush_until_shutdown;
   // Read persistent state.
   if (auto err = load_from_disk())
     return err;
@@ -266,10 +269,12 @@ void index_state::reset_active_partition() {
   }
   // Persist the current version of the meta_index and statistics to preserve
   // the state and be partially robust against crashes.
-  if (auto err = flush_meta_index())
-    VAST_ERROR(self, "failed to persist the meta index:", err);
-  if (auto err = flush_statistics())
-    VAST_ERROR(self, "failed to persist the statistics:", err);
+  if (!delay_flush_until_shutdown) {
+    if (auto err = flush_meta_index())
+      VAST_ERROR(self, "failed to persist the meta index:", err);
+    if (auto err = flush_statistics())
+      VAST_ERROR(self, "failed to persist the statistics:", err);
+  }
   active = make_partition();
   stage->out().register_partition(active.get());
   active_partition_indexers = 0;
@@ -397,16 +402,18 @@ void index_state::notify_flush_listeners() {
 
 caf::behavior index(caf::stateful_actor<index_state>* self, const path& dir,
                     size_t max_partition_size, size_t in_mem_partitions,
-                    size_t taste_partitions, size_t num_workers) {
+                    size_t taste_partitions, size_t num_workers,
+                    bool delay_flush_until_shutdown) {
   VAST_TRACE(VAST_ARG(dir), VAST_ARG(max_partition_size),
              VAST_ARG(in_mem_partitions), VAST_ARG(taste_partitions),
-             VAST_ARG(num_workers));
+             VAST_ARG(num_workers), VAST_ARG(delay_flush_until_shutdown));
   VAST_ASSERT(max_partition_size > 0);
   VAST_ASSERT(in_mem_partitions > 0);
   VAST_DEBUG(self, "spawned:", VAST_ARG(max_partition_size),
              VAST_ARG(in_mem_partitions), VAST_ARG(taste_partitions));
-  if (auto err = self->state.init(dir, max_partition_size, in_mem_partitions,
-                                  taste_partitions)) {
+  if (auto err
+      = self->state.init(dir, max_partition_size, in_mem_partitions,
+                         taste_partitions, delay_flush_until_shutdown)) {
     self->quit(std::move(err));
     return {};
   }

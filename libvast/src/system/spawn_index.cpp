@@ -36,7 +36,8 @@ maybe_actor spawn_index(node_actor* self, spawn_arguments& args) {
     opt("system.max-partition-size", sd::max_partition_size),
     opt("system.max-resident-partitions", sd::max_in_mem_partitions),
     opt("system.max-taste-partitions", sd::taste_partitions),
-    opt("system.max-queries", sd::num_query_supervisors));
+    opt("system.max-queries", sd::num_query_supervisors),
+    opt("system.disable-recoverability", false));
   if (auto accountant = self->state.registry.find_by_label("accountant"))
     self->send(idx, caf::actor_cast<accountant_type>(accountant));
   return idx;

@@ -105,7 +105,7 @@ struct index_state {
 
   /// Initializes the state.
   caf::error init(const path& dir, size_t max_events, uint32_t max_parts,
-                  uint32_t taste_parts);
+                  uint32_t taste_parts, bool delay_flush_until_shutdown);
 
   // -- persistence ------------------------------------------------------------
 
@@ -232,6 +232,9 @@ struct index_state {
   /// Statistics about processed data.
   statistics stats;
 
+  /// Disables regular persisting of global state. NOT FOR PRODUCTION!!!
+  bool delay_flush_until_shutdown;
+
   /// Whether the INDEX should attempt to flush its state on shutdown.
   bool flush_on_destruction;
 
@@ -256,10 +259,12 @@ auto inspect(Inspector& f, index_state::statistics& x) {
 /// @param max_partition_size The maximum number of events per partition.
 /// @param in_mem_partitions The maximum number of partitions to hold in memory.
 /// @param taste_partitions The number of partitions to schedule immediately
-///                         for each query
+///                         for each query.
+/// @param yolo_mode Whether to disable periodic persisting of global state.
 /// @pre `max_partition_size > 0 && in_mem_partitions > 0`
-caf::behavior index(caf::stateful_actor<index_state>* self, const path& dir,
-                    size_t max_partition_size, size_t in_mem_partitions,
-                    size_t taste_partitions, size_t num_workers);
+caf::behavior
+index(caf::stateful_actor<index_state>* self, const path& dir,
+      size_t max_partition_size, size_t in_mem_partitions,
+      size_t taste_partitions, size_t num_workers, bool yolo_mode);
 
 } // namespace vast::system
