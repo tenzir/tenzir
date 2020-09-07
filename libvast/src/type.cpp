@@ -740,14 +740,17 @@ bool type_check(const type& t, const data& x) {
     },
     [&](const record_type& u) {
       // Until we have a separate data type for records we treat them as list.
-      auto xs = caf::get_if<list>(&x);
+      auto xs = caf::get_if<record>(&x);
       if (!xs)
         return false;
       if (xs->size() != u.fields.size())
         return false;
-      for (size_t i = 0; i < xs->size(); ++i)
-        if (!type_check(u.fields[i].type, (*xs)[i]))
+      for (size_t i = 0; i < xs->size(); ++i) {
+        auto field = u.fields[i];
+        auto& [k, v] = as_vector(*xs)[i];
+        if (!(field.name == k && type_check(field.type, v)))
           return false;
+      }
       return true;
     },
     [&](const alias_type& u) { return type_check(u.value_type, x); });

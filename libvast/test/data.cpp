@@ -273,15 +273,31 @@ TEST(parseable) {
   CHECK(d == map{{true, 1u}, {false, 0u}});
 }
 
+// clang-format on
 TEST(json) {
   MESSAGE("plain");
-  data x = list{"foo", list{-42, list{1001u}}, "x", port{443, port::tcp}};
-  json expected = json{json::make_array(
-    "foo",
-    json::make_array(-42, json::make_array(1001)),
-    "x",
-    443
-  )};
+  data x = record{
+    {"x", "foo"},
+    {"r", record{
+      {"i", -42},
+      {"r", record{
+        {"u", 1001u}
+      }},
+    }},
+    {"str", "x"},
+    {"port", port{443, port::tcp}}
+  };
+  auto expected = json{json::object{
+    {"x", json{"foo"}},
+    {"r", json{json::object{
+      {"i", json{-42}},
+      {"r", json{json::object{
+        {"u", json{1001}}
+      }}},
+    }}},
+    {"str", json{"x"}},
+    {"port", json{443}}
+  }};
   CHECK_EQUAL(to_json(x), expected);
   MESSAGE("zipped");
   type t = record_type{
@@ -309,3 +325,4 @@ TEST(json) {
 })__";
   CHECK_EQUAL(to_string(to_json(x, t)), expected);
 }
+// clang-format on
