@@ -105,7 +105,7 @@ struct index_state {
 
   /// Initializes the state.
   caf::error init(const path& dir, size_t max_events, uint32_t max_parts,
-                  uint32_t taste_parts, bool yolo_mode);
+                  uint32_t taste_parts, bool delay_flush_until_shutdown);
 
   // -- persistence ------------------------------------------------------------
 
@@ -233,7 +233,7 @@ struct index_state {
   statistics stats;
 
   /// Disables regular persisting of global state. NOT FOR PRODUCTION!!!
-  bool yolo_mode;
+  bool delay_flush_until_shutdown;
 
   /// Whether the INDEX should attempt to flush its state on shutdown.
   bool flush_on_destruction;
