@@ -13,25 +13,25 @@
 
 #pragma once
 
-#include <array>
-#include <cstdint>
-#include <string>
-#include <type_traits>
+#include "vast/aliases.hpp"
+#include "vast/data.hpp"
+#include "vast/detail/assert.hpp"
+#include "vast/detail/iterator.hpp"
+#include "vast/detail/operators.hpp"
+#include "vast/detail/type_traits.hpp"
+#include "vast/fwd.hpp"
+#include "vast/time.hpp"
 
 #include <caf/intrusive_ptr.hpp>
 #include <caf/make_counted.hpp>
 #include <caf/ref_counted.hpp>
 #include <caf/variant.hpp>
 
-#include "vast/aliases.hpp"
-#include "vast/data.hpp"
-#include "vast/fwd.hpp"
-#include "vast/time.hpp"
-
-#include "vast/detail/assert.hpp"
-#include "vast/detail/iterator.hpp"
-#include "vast/detail/operators.hpp"
-#include "vast/detail/type_traits.hpp"
+#include <array>
+#include <cstdint>
+#include <string>
+#include <type_traits>
+#include <typeindex>
 
 namespace vast {
 
@@ -235,8 +235,11 @@ public:
 
   template <class Hasher>
   friend void hash_append(Hasher& h, container_view_handle xs) {
+    // To make sure we don't have different container views to the same value,
+    // we must include the type information into the hash as well.
+    hash_append(h, std::type_index(typeid(view_type)).hash_code());
     if (!xs)
-      return hash_append(h, caf::none); // FIXME: include type ino
+      return hash_append(h, caf::none);
     for (auto x : *xs)
       hash_append(h, x);
     hash_append(h, xs->size());
