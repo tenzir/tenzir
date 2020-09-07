@@ -217,7 +217,7 @@ void manheader(std::ostream& out) {
          "\n"
          "# NAME\n"
          "\n"
-         "`vast` -- manage a VAST topology\n"
+         "`vast` -- manage a VAST node\n"
          "\n"
          "# OVERVIEW\n"
          "\n"
