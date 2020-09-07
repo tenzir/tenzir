@@ -65,7 +65,7 @@ struct fixture : fixtures::deterministic_actor_system_and_events {
     // Spawn INDEX and ARCHIVE, and a mock client.
     MESSAGE("spawn INDEX ingest 4 slices with 100 rows (= 1 partition) each");
     index = self->spawn(system::index, directory / "index",
-                        defaults::import::table_slice_size, 100, 3, 1);
+                        defaults::import::table_slice_size, 100, 3, 1, true);
     archive = self->spawn(system::archive, directory / "archive",
                           defaults::system::segments,
                           defaults::system::max_segment_size);

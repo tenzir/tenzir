@@ -145,7 +145,7 @@ make_source(const Actor& self, caf::actor_system& sys, const invocation& inv,
       return in.error();
     reader = std::make_unique<Reader>(slice_type, options, std::move(*in));
     if (*file == "-")
-      VAST_INFO_ANON(reader->name(), "reads data from stdin");
+      VAST_INFO_ANON(reader->name(), "reads data from STDIN");
     else
       VAST_INFO_ANON(reader->name(), "reads data from", *file);
   }

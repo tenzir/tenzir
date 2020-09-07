@@ -64,7 +64,9 @@ command::opts_builder add_index_opts(command::opts_builder ob) {
                                             "partitions")
     .add<size_t>("max-taste-partitions", "maximum number of immediately "
                                          "scheduled partitions")
-    .add<size_t>("max-queries,q", "maximum number of concurrent queries");
+    .add<size_t>("max-queries,q", "maximum number of concurrent queries")
+    .add<bool>("disable-recoverability", "don't sync meta-index for every new "
+                                         "partition");
 }
 
 auto make_root_command(std::string_view path) {

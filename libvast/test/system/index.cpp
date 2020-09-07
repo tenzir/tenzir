@@ -48,7 +48,7 @@ struct fixture : fixtures::deterministic_actor_system_and_events {
     // FIXME: it's not very smart to test the index with only 1 table slice per
     // partition. This should be a higher multiple.
     index = self->spawn(system::index, directory, slice_size, in_mem_partitions,
-                        taste_count, num_query_supervisors);
+                        taste_count, num_query_supervisors, false);
   }
 
   ~fixture() {

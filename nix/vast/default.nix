@@ -17,6 +17,7 @@
 , python3
 , jq
 , tcpdump
+, utillinux
 , static ? stdenv.hostPlatform.isMusl
 , versionOverride ? null
 , disableTests ? true
