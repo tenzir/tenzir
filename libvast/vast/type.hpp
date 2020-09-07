@@ -635,6 +635,8 @@ struct record_type final : recursive_type<record_type> {
   /// Finds a record field by exact name.
   /// @param field_name The name of the field to lookup.
   /// @returns A pointer to the found field or `nullptr` otherwise.
+  /// @warning The returned pointer becomes invalid when adding or removing
+  ///          additional fields.
   const record_field* find(std::string_view field_name) const;
 
   /// Finds all offsets for a *suffix* key in this and nested records.
