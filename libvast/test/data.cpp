@@ -78,7 +78,7 @@ TEST(flatten) {
   // clang-format on
   auto values
     = std::vector<data>{"foo", -42, list{1, 2, 3}, caf::none, caf::none, true};
-  auto r = unbox(make_record(rt, values));
+  auto r = unbox(make_record(rt, std::vector<data>{values}));
   REQUIRE_EQUAL(r, xs);
   MESSAGE("flatten");
   auto fr = flatten(r);

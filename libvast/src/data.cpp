@@ -157,7 +157,7 @@ make_record(const record_type& rt, Iterator& begin, Sentinel end) {
 
 } // namespace
 
-caf::optional<record> make_record(const record_type& rt, std::vector<data> xs) {
+caf::optional<record> make_record(const record_type& rt, std::vector<data>&& xs) {
   auto begin = xs.begin();
   auto end = xs.end();
   return make_record(rt, begin, end);

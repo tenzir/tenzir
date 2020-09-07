@@ -269,7 +269,7 @@ bool is_container(const data& x);
 /// @param rt The record type
 /// @param xs The record fields.
 /// @returns A record according to the fields as defined in *rt*.
-caf::optional<record> make_record(const record_type& rt, std::vector<data> xs);
+caf::optional<record> make_record(const record_type& rt, std::vector<data>&& xs);
 
 /// Flattens a record recursively.
 record flatten(const record& r);
