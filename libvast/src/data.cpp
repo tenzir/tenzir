@@ -213,17 +213,15 @@ namespace {
 caf::optional<record> unflatten(const record& r, const record_type* rt) {
   record result;
   for (auto& [k, v] : r) {
-    // Check if have a leaf value.
-    if (k.find('.') == std::string::npos) {
+    auto nested = &result;
+    auto nested_type = rt;
+    // Split field name by '.' to obtain intermediate records.
+    auto split = detail::split(k, ".");
+    if (split.size() == 1) {
+      // We have a leaf value.
       VAST_ASSERT(!caf::holds_alternative<record>(v));
-      result.emplace(k, v);
     } else {
-      // Split field name by '.' to obtain intermediate records.
-      auto split = detail::split(k, ".");
-      VAST_ASSERT(split.size() >= 2);
       // Create intermediate records as needed.
-      auto nested = &result;
-      auto nested_type = rt;
       for (size_t i = 0; i < split.size() - 1; ++i) {
         auto& field_name = split[i];
         if (rt) {
@@ -242,9 +240,14 @@ caf::optional<record> unflatten(const record& r, const record_type* rt) {
           it = nested->emplace(std::string{split[i]}, record{}).first;
         nested = &caf::get<record>(it->second);
       }
-      // Insert value into deepest record.
-      nested->emplace(std::string{split.back()}, v);
     }
+    // Insert leaf value into deepest record.
+    if (rt) {
+      auto field = nested_type->find(split.back());
+      if (!(field && type_check(field->type, v)))
+        return caf::none;
+    }
+    nested->emplace(std::string{split.back()}, v);
   }
   return result;
 }
