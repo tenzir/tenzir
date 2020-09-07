@@ -15,9 +15,9 @@
 
 namespace vast::detail {
 
-/// Merges the contents of two containers into the first.
+/// Appends the contents of the second containers to the first.
 template <class Container>
-void merge(Container& xs, Container&& ys) {
+void append(Container& xs, Container&& ys) {
   auto begin = std::make_move_iterator(ys.begin());
   auto end = std::make_move_iterator(ys.end());
   xs.insert(xs.end(), begin, end);

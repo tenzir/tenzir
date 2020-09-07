@@ -19,7 +19,7 @@
 #include "vast/defaults.hpp"
 #include "vast/detail/assert.hpp"
 #include "vast/detail/byte_swap.hpp"
-#include "vast/detail/merge.hpp"
+#include "vast/detail/append.hpp"
 #include "vast/detail/overload.hpp"
 #include "vast/error.hpp"
 #include "vast/expression.hpp"
@@ -390,7 +390,7 @@ to_data(const std::vector<table_slice_ptr>& slices) {
   std::vector<std::vector<data>> result;
   result.reserve(rows(slices));
   for (auto& slice : slices)
-    detail::merge(result, to_data(*slice));
+    detail::append(result, to_data(*slice));
   return result;
 }
 
