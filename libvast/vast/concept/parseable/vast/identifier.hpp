@@ -21,6 +21,6 @@
 
 namespace vast::parsers {
 
-constexpr auto identifier = +(alnum | ch<'_'>);
+constexpr inline auto identifier = +(alnum | ch<'_'>);
 
 } // namespace vast::parsers
