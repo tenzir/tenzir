@@ -235,9 +235,8 @@ public:
 
   template <class Hasher>
   friend void hash_append(Hasher& h, container_view_handle xs) {
-    // To make sure we don't have different container views to the same value,
-    // we must include the type information into the hash as well.
-    hash_append(h, std::type_index(typeid(view_type)).hash_code());
+    // TODO: include the concrete view type in the hash digest so that it
+    // guarantees the absense of collisions between view types.
     if (!xs)
       return hash_append(h, caf::none);
     for (auto x : *xs)

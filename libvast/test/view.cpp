@@ -170,7 +170,7 @@ TEST(hashing views) {
   data p = pattern{"x"};
   data v = list{42, true, "foo", 4.2};
   data m = map{{42, true}, {84, false}};
-
+  data r = record{{"foo", 42}, {"bar", true}};
   using hash = vast::uhash<vast::xxhash>;
   CHECK_EQUAL(hash{}(i), hash{}(make_view(i)));
   CHECK_EQUAL(hash{}(c), hash{}(make_view(c)));
@@ -178,4 +178,5 @@ TEST(hashing views) {
   CHECK_EQUAL(hash{}(p), hash{}(make_view(p)));
   CHECK_EQUAL(hash{}(v), hash{}(make_view(v)));
   CHECK_EQUAL(hash{}(m), hash{}(make_view(m)));
+  CHECK_EQUAL(hash{}(r), hash{}(make_view(r)));
 }
