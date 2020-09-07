@@ -398,12 +398,19 @@ namespace {
 void print(YAML::Emitter& out, const data& x) {
   // clang-format off
   auto f = detail::overload(
-    [&out](const auto& x) { out << to_string(x); },
+    [&out](caf::none_t) { out << YAML::Null; },
     [&out](bool x) { out << (x ? "true" : "false"); },
-    [&out](count x) { out << x; },
     [&out](integer x) { out << x; },
+    [&out](count x) { out << x; },
     [&out](real x) { out << x; },
+    [&out](duration x) { out << to_string(x); },
+    [&out](time x) { out << to_string(x); },
     [&out](const std::string& x) { out << x; },
+    [&out](const pattern& x) { out << to_string(x); },
+    [&out](const address& x) { out << to_string(x); },
+    [&out](const subnet& x) { out << to_string(x); },
+    [&out](const port& x) { out << to_string(x); },
+    [&out](const enumeration& x) { out << to_string(x); },
     [&out](const list& xs) {
       out << YAML::BeginSeq;
       for (auto& x : xs)

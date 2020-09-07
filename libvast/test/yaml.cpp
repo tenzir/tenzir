@@ -34,7 +34,7 @@ struct fixture {
     rec = record{
       {"foo", -42},
       {"bar", 3.14},
-      {"baz", list{"a", "b", true}},
+      {"baz", list{"a", caf::none, true}},
       {"qux", record{
         {"x", false},
         {"y", 1337u},
@@ -59,7 +59,7 @@ struct fixture {
 bar: 3.1400000000000001
 baz:
   - a
-  - b
+  - ~
   - true
 qux:
   x: false
