@@ -24,7 +24,7 @@ struct yaml_parser : parser<yaml_parser> {
 
   template <class Iterator, class Attribute>
   bool parse(Iterator& f, const Iterator& l, Attribute& a) const {
-    auto str = std::string_view{f, detail::narrow<size_t>(l - f)};
+    auto str = std::string_view{f, detail::narrow_cast<size_t>(l - f)};
     if (auto yaml = from_yaml(str)) {
       a = std::move(*yaml);
       f = l;
