@@ -138,7 +138,6 @@ template <class Iterator, class Sentinel>
 caf::optional<record>
 make_record(const record_type& rt, Iterator& begin, Sentinel end) {
   record result;
-  result.reserve(rt.fields.size());
   for (auto& field : rt.fields) {
     if (begin == end)
       return caf::none;
