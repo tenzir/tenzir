@@ -62,7 +62,6 @@ segment_store::~segment_store() {
 
 caf::error segment_store::put(table_slice_ptr xs) {
   VAST_TRACE(VAST_ARG(xs));
-  VAST_DEBUG(this, "adds a table slice");
   if (auto error = builder_.add(xs))
     return error;
   if (!segments_.inject(xs->offset(), xs->offset() + xs->rows(), builder_.id()))
