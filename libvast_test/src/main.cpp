@@ -29,7 +29,6 @@ const char* conn = VAST_TEST_PATH "artifacts/logs/zeek/conn.log";
 const char* dns = VAST_TEST_PATH "artifacts/logs/zeek/dns.log";
 const char* ftp = VAST_TEST_PATH "artifacts/logs/zeek/ftp.log";
 const char* http = VAST_TEST_PATH "artifacts/logs/zeek/http.log";
-const char* out = VAST_TEST_PATH "artifacts/logs/zeek/out.txt";
 const char* small_conn = VAST_TEST_PATH "artifacts/logs/zeek/small_conn.log";
 const char* smtp = VAST_TEST_PATH "artifacts/logs/zeek/smtp.log";
 const char* ssl = VAST_TEST_PATH "artifacts/logs/zeek/ssl.log";

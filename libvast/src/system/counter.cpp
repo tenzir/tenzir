@@ -13,11 +13,9 @@
 
 #include "vast/system/counter.hpp"
 
-#include "vast/event.hpp"
-#include "vast/expression_visitors.hpp"
+#include "vast/bitmap_algorithms.hpp"
 #include "vast/logger.hpp"
 #include "vast/table_slice.hpp"
-#include "vast/to_events.hpp"
 
 #include <caf/event_based_actor.hpp>
 
@@ -63,15 +61,10 @@ void counter_state::init(expression expr, caf::actor index,
           return;
         }
       }
-      auto& checker = it->second;
-      // Performance candidate checks for all selected rows.
-      uint64_t num_hits = 0;
-      auto candidates = to_events(*slice, hits_);
-      for (auto& candidate : candidates)
-        if (caf::visit(event_evaluator{candidate}, checker))
-          ++num_hits;
-      if (num_hits > 0)
-        self_->send(client_, num_hits);
+      // Perform the candidate check and count results.
+      auto num_results = rank(evaluate(it->second, *slice));
+      if (num_results > 0)
+        self_->send(client_, num_results);
     },
     [this](atom::done, const caf::error&) {
       if (self_->current_sender() != archive_) {

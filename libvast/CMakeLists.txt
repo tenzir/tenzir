@@ -95,7 +95,6 @@ set(libvast_sources
     src/directory.cpp
     src/error.cpp
     src/ether_type.cpp
-    src/event.cpp
     src/event_types.cpp
     src/ewah_bitmap.cpp
     src/expression.cpp
@@ -140,7 +139,6 @@ set(libvast_sources
     src/settings.cpp
     src/store.cpp
     src/subnet.cpp
-    src/subset.cpp
     src/synopsis.cpp
     src/synopsis_factory.cpp
     src/system/accountant.cpp
@@ -202,10 +200,8 @@ set(libvast_sources
     src/table_slice_factory.cpp
     src/time.cpp
     src/time_synopsis.cpp
-    src/to_events.cpp
     src/type.cpp
     src/uuid.cpp
-    src/value.cpp
     src/value_index.cpp
     src/value_index_factory.cpp
     src/view.cpp
@@ -323,7 +319,6 @@ set(tests
     test/detail/set_operations.cpp
     test/endpoint.cpp
     test/error.cpp
-    test/event.cpp
     test/expression.cpp
     test/expression_evaluation.cpp
     test/expression_parseable.cpp
@@ -388,7 +383,6 @@ set(tests
     test/time.cpp
     test/type.cpp
     test/uuid.cpp
-    test/value.cpp
     test/value_index.cpp
     test/vector_map.cpp
     test/vector_set.cpp

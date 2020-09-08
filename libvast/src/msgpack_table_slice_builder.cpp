@@ -49,13 +49,9 @@ msgpack_table_slice_builder::~msgpack_table_slice_builder() {
 
 namespace {
 
-template <class Builder>
-[[nodiscard]] size_t encode(Builder& builder, data_view v);
-
 template <class Builder, class View>
 size_t encode(Builder& builder, View v) {
   using namespace msgpack;
-  auto proxy_encode = [](auto& proxy, data_view x) { return encode(proxy, x); };
   auto f = detail::overload(
     [&](auto x) { return put(builder, x); },
     [&](view<duration> x) { return put(builder, x.count()); },
@@ -73,7 +69,11 @@ size_t encode(Builder& builder, View v) {
     },
     [&](view<subnet> x) {
       auto proxy = builder.template build<fixarray>();
-      encode(proxy, make_view(x.network()));
+      auto n = encode(proxy, make_view(x.network()));
+      if (n == 0) {
+        builder.reset();
+        return n;
+      }
       proxy.template add<uint8>(x.length());
       return builder.add(std::move(proxy));
     },
@@ -87,17 +87,36 @@ size_t encode(Builder& builder, View v) {
       // The noop cast exists only to communicate the MsgPack type.
       return put(builder, static_cast<uint8_t>(x));
     },
-    [&](view<list> xs) { return put_array(builder, *xs, proxy_encode); },
-    [&](view<map> xs) { return put_map(builder, *xs, proxy_encode); });
+    [&](view<list> xs) { return put_array(builder, *xs); },
+    [&](view<map> xs) { return put_map(builder, *xs); },
+    [&](view<record> xs) -> size_t {
+      // We store records flattened, so we just append all values sequentially.
+      size_t result = 0;
+      for ([[maybe_unused]] auto [_, x] : xs) {
+        auto n = put(builder, x);
+        if (n == 0) {
+          builder.reset();
+          return 0;
+        }
+        result += n;
+      }
+      return result;
+    });
   return f(v);
 }
 
+} // namespace
+
+namespace msgpack {
+
+// We activate ADL for data_view here so that we can rely on existing recursive
+// put functions defined in msgpack_builder.hpp.
 template <class Builder>
-size_t encode(Builder& builder, data_view v) {
+[[nodiscard]] size_t put(Builder& builder, data_view v) {
   return caf::visit([&](auto&& x) { return encode(builder, x); }, v);
 }
 
-} // namespace
+} // namespace msgpack
 
 bool msgpack_table_slice_builder::add_impl(data_view x) {
   // Check whether input is valid.
@@ -106,8 +125,7 @@ bool msgpack_table_slice_builder::add_impl(data_view x) {
   if (col_ == 0)
     offset_table_.push_back(buffer_.size());
   col_ = (col_ + 1) % columns();
-  auto f = [&](auto v) { return encode(builder_, v); };
-  auto n = caf::visit(f, x);
+  auto n = put(builder_, x);
   VAST_ASSERT(n > 0);
   return true;
 }

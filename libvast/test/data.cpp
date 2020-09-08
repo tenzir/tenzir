@@ -13,12 +13,10 @@
 
 #define SUITE data
 
+#include "vast/data.hpp"
+
 #include "vast/test/test.hpp"
 
-#include "vast/data.hpp"
-#include "vast/json.hpp"
-#include "vast/load.hpp"
-#include "vast/save.hpp"
 #include "vast/concept/convertible/to.hpp"
 #include "vast/concept/parseable/to.hpp"
 #include "vast/concept/parseable/vast/data.hpp"
@@ -26,6 +24,11 @@
 #include "vast/concept/printable/to_string.hpp"
 #include "vast/concept/printable/vast/data.hpp"
 #include "vast/concept/printable/vast/json.hpp"
+#include "vast/json.hpp"
+#include "vast/load.hpp"
+#include "vast/save.hpp"
+
+#include <caf/test/dsl.hpp>
 
 using namespace vast;
 
@@ -46,22 +49,9 @@ TEST(tables) {
   CHECK(!ports.emplace("http", 8080u).second);
 }
 
-TEST(get) {
-  auto v = list{"foo", -42, 1001u, "x", port{443, port::tcp}};
-  list w{100, "bar", v};
-  CHECK(v.size() == 5);
-  MESSAGE("access via offset");
-  CHECK(*get(w, offset{0}) == 100);
-  CHECK(*get(w, offset{1}) == "bar");
-  CHECK(*get(w, offset{2}) == v);
-  CHECK(*get(w, offset{2, 3}) == data{"x"});
-  CHECK(*get(data{w}, offset{2, 2}) == data{1001u});
-}
-
 TEST(flatten) {
-  MESSAGE("flatten");
   // clang-format off
-  auto t = record_type{
+  auto rt = record_type{
     {"a", string_type{}},
     {"b", record_type{
       {"c", integer_type{}},
@@ -71,18 +61,40 @@ TEST(flatten) {
       {"f", address_type{}},
       {"g", port_type{}}
     }},
-    {"f", bool_type{}}
+    {"h", bool_type{}}
+  };
+  auto xs = record{
+    {"a", "foo"},
+    {"b", record{
+      {"c", -42},
+      {"d", list{1, 2, 3}}
+    }},
+    {"e", record{
+      {"f", caf::none},
+      {"g", caf::none},
+    }},
+    {"h", true}
   };
   // clang-format on
-  auto xs = list{"foo", list{-42, list{1, 2, 3}}, caf::none, true};
-  auto ys = list{"foo", -42, list{1, 2, 3}, caf::none, caf::none, true};
-  auto zs = flatten(xs, t);
-  REQUIRE(zs);
-  CHECK_EQUAL(*zs, ys);
+  auto values
+    = std::vector<data>{"foo", -42, list{1, 2, 3}, caf::none, caf::none, true};
+  // Because list is exactly std::vector<data>, and data can be constructed from
+  // list, we must use () over {} for explicitly copying values here. This
+  // happened to work with brace-initialization using libc++, because libc++
+  // does not properly implement deduction guides for std::vector.
+  auto r = unbox(make_record(rt, std::vector<data>(values)));
+  REQUIRE_EQUAL(r, xs);
+  MESSAGE("flatten");
+  auto fr = flatten(r);
+  auto ftr = unbox(flatten(r, rt));
+  CHECK_EQUAL(fr, ftr);
+  REQUIRE_EQUAL(fr.size(), values.size());
+  CHECK_EQUAL(fr["b.c"], -42);
   MESSAGE("unflatten");
-  zs = unflatten(ys, t);
-  REQUIRE(zs);
-  CHECK_EQUAL(*zs, xs);
+  auto ur = unflatten(fr);
+  CHECK_EQUAL(ur, xs);
+  auto utr = unbox(unflatten(fr, rt));
+  CHECK_EQUAL(utr, xs);
 }
 
 TEST(construction) {
@@ -265,15 +277,31 @@ TEST(parseable) {
   CHECK(d == map{{true, 1u}, {false, 0u}});
 }
 
+// clang-format on
 TEST(json) {
   MESSAGE("plain");
-  data x = list{"foo", list{-42, list{1001u}}, "x", port{443, port::tcp}};
-  json expected = json{json::make_array(
-    "foo",
-    json::make_array(-42, json::make_array(1001)),
-    "x",
-    443
-  )};
+  data x = record{
+    {"x", "foo"},
+    {"r", record{
+      {"i", -42},
+      {"r", record{
+        {"u", 1001u}
+      }},
+    }},
+    {"str", "x"},
+    {"port", port{443, port::tcp}}
+  };
+  auto expected = json{json::object{
+    {"x", json{"foo"}},
+    {"r", json{json::object{
+      {"i", json{-42}},
+      {"r", json{json::object{
+        {"u", json{1001}}
+      }}},
+    }}},
+    {"str", json{"x"}},
+    {"port", json{443}}
+  }};
   CHECK_EQUAL(to_json(x), expected);
   MESSAGE("zipped");
   type t = record_type{
@@ -301,3 +329,4 @@ TEST(json) {
 })__";
   CHECK_EQUAL(to_string(to_json(x, t)), expected);
 }
+// clang-format on

@@ -28,7 +28,6 @@
 #include "vast/meta_index.hpp"
 #include "vast/system/index.hpp"
 #include "vast/system/partition.hpp"
-#include "vast/to_events.hpp"
 #include "vast/uuid.hpp"
 
 using namespace caf;
@@ -100,12 +99,12 @@ struct fixture : fixtures::deterministic_actor_system_and_events {
       test_slices.emplace_back(slices[0]);
       layouts.emplace(slices[0]->layout());
     };
-    pick_from(zeek_conn_log_slices);
-    pick_from(ascending_integers_slices);
+    pick_from(zeek_conn_log);
+    pick_from(ascending_integers);
     // TODO: uncomment when resolving [ch3215]
-    // pick_from(zeek_http_log_slices);
-    // pick_from(bgpdump_txt_slices);
-    // pick_from(random_slices);
+    // pick_from(zeek_http_log);
+    // pick_from(bgpdump_txt);
+    // pick_from(random);
     num_layouts = layouts.size();
     for (auto& layout : layouts)
       expected_sink_count += layout.fields.size();

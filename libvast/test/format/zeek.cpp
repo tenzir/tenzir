@@ -24,13 +24,13 @@
 
 #include "vast/test/fixtures/actor_system.hpp"
 #include "vast/test/fixtures/events.hpp"
+#include "vast/test/fixtures/filesystem.hpp"
 #include "vast/test/test.hpp"
 
 #include "vast/concept/parseable/to.hpp"
 #include "vast/concept/parseable/vast/schema.hpp"
 #include "vast/concept/parseable/vast/type.hpp"
 #include "vast/detail/fdinbuf.hpp"
-#include "vast/event.hpp"
 
 using namespace vast;
 using namespace std::string_literals;
@@ -348,29 +348,26 @@ TEST(zeek reader - continous stream with partial slice) {
 
 FIXTURE_SCOPE_END()
 
-FIXTURE_SCOPE(zeek_writer_tests, fixtures::events)
+namespace {
+
+struct writer_fixture : fixtures::events, fixtures::filesystem {};
+
+} // namespace
+
+FIXTURE_SCOPE(zeek_writer_tests, writer_fixture)
 
 TEST(zeek writer) {
-  // Sanity check some Zeek events.
-  CHECK_EQUAL(zeek_conn_log.size(), 20u);
-  CHECK_EQUAL(zeek_conn_log.front().type().name(), "zeek.conn");
-  auto record = caf::get_if<list>(&zeek_conn_log.front().data());
-  REQUIRE(record);
-  REQUIRE_EQUAL(record->size(), 20u);
-  CHECK_EQUAL(record->at(6), data{"udp"}); // one after the conn record
-  CHECK_EQUAL(record->back(), data{list{}}); // table[T] is actually a list
   // Perform the writing.
-  auto dir = path{"vast-unit-test-zeek"};
-  auto guard = caf::detail::make_scope_guard([&] { rm(dir); });
-  format::zeek::writer writer{dir};
-  for (auto& slice : zeek_conn_log_slices)
+  format::zeek::writer writer{directory};
+  for (auto& slice : zeek_conn_log)
     if (auto err = writer.write(*slice))
       FAIL("failed to write conn log");
-  for (auto& slice : zeek_http_log_slices)
+  for (auto& slice : zeek_http_log)
     if (auto err = writer.write(*slice))
       FAIL("failed to write HTTP log");
-  CHECK(exists(dir / zeek_conn_log[0].type().name() + ".log"));
-  CHECK(exists(dir / zeek_http_log[0].type().name() + ".log"));
+  CHECK(exists(directory / zeek_conn_log[0]->layout().name() + ".log"));
+  CHECK(exists(directory / zeek_http_log[0]->layout().name() + ".log"));
+  // TODO: these tests should verify content as well.
 }
 
 FIXTURE_SCOPE_END()

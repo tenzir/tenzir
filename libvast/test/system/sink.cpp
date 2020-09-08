@@ -29,8 +29,8 @@ TEST(zeek sink) {
   MESSAGE("constructing a sink");
   format::zeek::writer writer{directory};
   auto snk = self->spawn(sink<format::zeek::writer>, std::move(writer), 20u);
-  MESSAGE("sending events");
-  for (auto& slice : zeek_conn_log_slices)
+  MESSAGE("sending table slices");
+  for (auto& slice : zeek_conn_log)
     self->send(snk, slice);
   MESSAGE("shutting down");
   self->send_exit(snk, caf::exit_reason::user_shutdown);

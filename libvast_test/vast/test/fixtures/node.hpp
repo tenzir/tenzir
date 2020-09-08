@@ -19,6 +19,7 @@
 #include "vast/detail/spawn_container_source.hpp"
 #include "vast/query_options.hpp"
 #include "vast/system/node.hpp"
+#include "vast/table_slice.hpp"
 #include "vast/uuid.hpp"
 
 #include <string>
@@ -41,12 +42,10 @@ struct node : deterministic_actor_system_and_events {
     inv.arguments = {std::forward<Ts>(args)...};
     auto rh = self->request(test_node, infinite, std::move(inv));
     run();
-    rh.receive(
-      [&](const actor& a) { result = a; },
-      [&](const error& e) {
-        FAIL("failed to spawn " << component << ": " << sys.render(e));
-       }
-    );
+    rh.receive([&](const actor& a) { result = a; },
+               [&](const error& e) {
+                 FAIL("failed to spawn " << component << ": " << sys.render(e));
+               });
     return result;
   }
 
@@ -54,7 +53,7 @@ struct node : deterministic_actor_system_and_events {
   void ingest(const std::string& type);
 
   // Performs a historical query and returns the resulting events.
-  std::vector<event> query(std::string expr);
+  std::vector<table_slice_ptr> query(std::string expr);
 
   caf::actor test_node;
 };

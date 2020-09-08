@@ -252,6 +252,12 @@ caf::optional<std::string> record_type::resolve(const offset& o) const {
   return result;
 }
 
+const record_field* record_type::find(std::string_view field_name) const {
+  auto pred = [&](auto field) { return field.name == field_name; };
+  auto i = std::find_if(fields.begin(), fields.end(), pred);
+  return i == fields.end() ? nullptr : &*i;
+}
+
 namespace {
 
 struct offset_map_builder {
@@ -733,15 +739,17 @@ bool type_check(const type& t, const data& x) {
       return type_check(u.key_type, key) && type_check(u.value_type, value);
     },
     [&](const record_type& u) {
-      // Until we have a separate data type for records we treat them as list.
-      auto xs = caf::get_if<list>(&x);
+      auto xs = caf::get_if<record>(&x);
       if (!xs)
         return false;
       if (xs->size() != u.fields.size())
         return false;
-      for (size_t i = 0; i < xs->size(); ++i)
-        if (!type_check(u.fields[i].type, (*xs)[i]))
+      for (size_t i = 0; i < xs->size(); ++i) {
+        auto field = u.fields[i];
+        auto& [k, v] = as_vector(*xs)[i];
+        if (!(field.name == k && type_check(field.type, v)))
           return false;
+      }
       return true;
     },
     [&](const alias_type& u) { return type_check(u.value_type, x); });

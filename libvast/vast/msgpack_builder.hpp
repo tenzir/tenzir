@@ -566,6 +566,19 @@ size_t put(Builder& builder, vast::span<const vast::byte> xs) {
   return 0;
 }
 
+// -- pair --------------------------------------------------------------------
+
+template <class Builder, class T, class U>
+size_t put(Builder& builder, const std::pair<T, U>& xs) {
+  auto n0 = put(builder, xs.first);
+  if (n0 == 0)
+    return 0;
+  auto n1 = put(builder, xs.second);
+  if (n1 == 0)
+    return 0;
+  return n0 + n1;
+}
+
 // -- array -------------------------------------------------------------------
 
 template <class Builder, class T, class F>
@@ -643,6 +656,22 @@ size_t put(Builder& builder, const T& x, const Ts&... xs) {
     return 0;
   }
   return n + put(builder, xs...);
+}
+
+// -- sequence ----------------------------------------------------------------
+
+template <class Builder, class T>
+size_t put_range(Builder& builder, const T& xs) {
+  size_t result = 0;
+  for (auto&& x : xs) {
+    auto n = put(builder, x);
+    if (n == 0) {
+      builder.reset();
+      return 0;
+    }
+    result += n;
+  }
+  return result;
 }
 
 } // namespace vast::msgpack

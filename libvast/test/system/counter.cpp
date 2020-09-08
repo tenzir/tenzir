@@ -71,11 +71,9 @@ struct fixture : fixtures::deterministic_actor_system_and_events {
                           defaults::system::max_segment_size);
     client = sys.spawn(mock_client);
     // Fill the INDEX with 400 rows from the Zeek conn log.
-    detail::spawn_container_source(sys, take(zeek_full_conn_log_slices, 4),
-                                   index);
+    detail::spawn_container_source(sys, take(zeek_conn_log_full, 4), index);
     // Fill the ARCHIVE with only 300 rows from the Zeek conn log.
-    detail::spawn_container_source(sys, take(zeek_full_conn_log_slices, 3),
-                                   archive);
+    detail::spawn_container_source(sys, take(zeek_conn_log_full, 3), archive);
     run();
   }
 

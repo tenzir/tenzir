@@ -490,12 +490,34 @@ TEST(type_check) {
   TYPE_CHECK(map_type({integer_type{}, bool_type{}}), xs);
   TYPE_CHECK(map_type{}, xs);
   TYPE_CHECK(map_type{}, map{});
-  auto t = record_type{{"a", integer_type{}},
-                       {"b", bool_type{}},
-                       {"c", string_type{}}};
-  TYPE_CHECK(t, list({42, true, "foo"}));
-  TYPE_CHECK_FAIL(t, list({42, 100, "foo"}));
 }
+
+TEST(type_check - nested record) {
+  data x = record{
+    {"x", "foo"},
+    {"r", record{
+      {"i", -42},
+      {"r", record{
+        {"u", 1001u}
+      }},
+    }},
+    {"str", "x"},
+    {"port", port{443, port::tcp}}
+  };
+  type t = record_type{
+    {"x", string_type{}},
+    {"r", record_type{
+      {"i", integer_type{}},
+      {"r", record_type{
+        {"u", count_type{}}
+      }},
+    }},
+    {"str", string_type{}},
+    {"port", port_type{}}
+  };
+  CHECK(type_check(t, x));
+}
+
 
 TEST(printable) {
   MESSAGE("basic types");

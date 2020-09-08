@@ -14,9 +14,7 @@
 #include "vast/format/writer.hpp"
 
 #include "vast/error.hpp"
-#include "vast/event.hpp"
 #include "vast/table_slice.hpp"
-#include "vast/to_events.hpp"
 
 namespace vast::format {
 

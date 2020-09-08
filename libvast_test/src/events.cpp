@@ -13,17 +13,16 @@
 
 #include "fixtures/events.hpp"
 
-#include "vast/caf_table_slice_builder.hpp"
 #include "vast/concept/printable/to_string.hpp"
 #include "vast/concept/printable/vast/data.hpp"
-#include "vast/concept/printable/vast/event.hpp"
 #include "vast/defaults.hpp"
+#include "vast/detail/assert.hpp"
 #include "vast/format/test.hpp"
 #include "vast/format/zeek.hpp"
+#include "vast/msgpack_table_slice_builder.hpp"
 #include "vast/table_slice_builder.hpp"
 #include "vast/table_slice_builder_factory.hpp"
 #include "vast/table_slice_factory.hpp"
-#include "vast/to_events.hpp"
 #include "vast/type.hpp"
 
 #include <caf/binary_deserializer.hpp>
@@ -43,274 +42,126 @@ namespace fixtures {
 
 namespace {
 
-// 2000-01-01 (GMT), just to not use 0 here.
-constexpr vast::time epoch = vast::time{duration{946684800}};
+struct ascending {};
+struct alternating {};
 
-std::vector<event> make_ascending_integers(size_t count) {
-  std::vector<event> result;
-  type layout{record_type{{"value", integer_type{}}}};
-  layout.name("test::int");
-  for (size_t i = 0; i < count; ++i) {
-    result.emplace_back(event::make(list{static_cast<integer>(i)}, layout));
-    result.back().timestamp(epoch + std::chrono::seconds(i + 100));
+template <class Policy>
+std::vector<table_slice_ptr> make_integers(size_t count) {
+  auto layout = record_type{{"value", integer_type{}}}.name("test.int");
+  auto builder = msgpack_table_slice_builder::make(layout);
+  VAST_ASSERT(builder != nullptr);
+  std::vector<table_slice_ptr> result;
+  result.reserve(count);
+  auto i = size_t{0};
+  while (i < count) {
+    integer x;
+    if constexpr (std::is_same_v<Policy, ascending>)
+      x = i;
+    else if constexpr (std::is_same_v<Policy, alternating>)
+      x = i % 2;
+    else
+      static_assert(detail::always_false_v<Policy>, "invalid policy");
+    if (!builder->add(make_view(x)))
+      FAIL("could not add data to builder at row" << i);
+    if (++i % events::slice_size == 0)
+      result.push_back(builder->finish());
   }
+  // Add last slice.
+  if (i % events::slice_size != 0)
+    result.push_back(builder->finish());
+  VAST_ASSERT(!result.empty());
   return result;
-}
-
-std::vector<event> make_alternating_integers(size_t count) {
-  std::vector<event> result;
-  type layout{record_type{{"value", integer_type{}}}};
-  layout.name("test::int");
-  for (size_t i = 0; i < count; ++i) {
-    result.emplace_back(event::make(list{static_cast<integer>(i % 2)}, layout));
-    result.back().timestamp(epoch + std::chrono::seconds(i + 100));
-  }
-  return result;
-}
-
-/// insert item into a sorted vector
-/// @precondition is_sorted(vec)
-/// @postcondition is_sorted(vec)
-template <typename T, typename Pred>
-auto insert_sorted(std::vector<T>& vec, const T& item, Pred pred) {
-  return vec.insert(std::upper_bound(vec.begin(), vec.end(), item, pred), item);
 }
 
 template <class Reader>
-static std::vector<event> extract(Reader&& reader) {
-  std::vector<table_slice_ptr> slices;
-  auto add_slice = [&](table_slice_ptr ptr) {
-    slices.emplace_back(std::move(ptr));
-  };
+std::vector<table_slice_ptr>
+extract(Reader&& reader, table_slice::size_type slice_size) {
+  std::vector<table_slice_ptr> result;
+  auto add_slice
+    = [&](table_slice_ptr ptr) { result.emplace_back(std::move(ptr)); };
   auto [err, produced]
-    = reader.read(std::numeric_limits<size_t>::max(),
-                  defaults::import::table_slice_size, add_slice);
-  if (err != caf::none && err != ec::end_of_input)
+    = reader.read(std::numeric_limits<size_t>::max(), slice_size, add_slice);
+  if (err && err != ec::end_of_input)
     FAIL("reader returned an error: " << to_string(err));
-  std::vector<event> result;
-  result.reserve(produced);
-  for (auto& slice : slices)
-    to_events(result, *slice);
-  if (result.size() != produced)
-    FAIL("to_events() failed fill the vector");
   return result;
 }
 
 template <class Reader>
-static std::vector<event> inhale(const char* filename) {
+std::vector<table_slice_ptr>
+inhale(const char* filename, table_slice::size_type slice_size) {
   auto input = std::make_unique<std::ifstream>(filename);
   Reader reader{defaults::import::table_slice_type, caf::settings{},
                 std::move(input)};
-  return extract(reader);
+  return extract(reader, slice_size);
 }
 
-} // namespace <anonymous>
+} // namespace
 
-size_t events::slice_size = 8;
-
-std::vector<event> events::zeek_conn_log;
-std::vector<event> events::zeek_dns_log;
-std::vector<event> events::zeek_http_log;
-std::vector<event> events::random;
-
-std::vector<table_slice_ptr> events::zeek_conn_log_slices;
-std::vector<table_slice_ptr> events::zeek_dns_log_slices;
-std::vector<table_slice_ptr> events::zeek_http_log_slices;
-// std::vector<table_slice_ptr> events::random_slices;
-
-std::vector<table_slice_ptr> events::zeek_full_conn_log_slices;
-
-std::vector<event> events::ascending_integers;
-std::vector<table_slice_ptr> events::ascending_integers_slices;
-
-std::vector<event> events::alternating_integers;
-std::vector<table_slice_ptr> events::alternating_integers_slices;
-
-record_type events::zeek_conn_log_layout() {
-  return zeek_conn_log_slices[0]->layout();
-}
-
-/// A wrapper around a table_slice_builder_ptr that assigns ids to each
-/// added event.
-class id_assigning_builder {
-public:
-  explicit id_assigning_builder(table_slice_builder_ptr b) : inner_{b} {
-    // nop
-  }
-
-  /// Adds an event to the table slice and assigns an id.
-  bool add(event& e) {
-    if (!inner_->recursive_add(e.data(), e.type()))
-      FAIL("builder->recursive_add() failed");
-    e.id(id_++);
-    return true;
-  }
-
-  auto rows() const {
-    return inner_->rows();
-  }
-
-  bool start_slice(size_t offset) {
-    if (rows() != 0)
-      return false;
-    offset_ = offset;
-    id_ = offset;
-    return true;
-  }
-
-  /// Finish the slice and set its offset.
-  table_slice_ptr finish() {
-    auto slice = inner_->finish();
-    slice.unshared().offset(offset_);
-    return slice;
-  }
-
-private:
-  table_slice_builder_ptr inner_;
-  size_t offset_ = 0;
-  size_t id_ = 0;
-};
-
-/// Tries to access the builder for `layout`.
-class builders {
-public:
-  using map_type = std::map<std::string, id_assigning_builder>;
-
-  id_assigning_builder* get(const type& layout) {
-    auto i = builders_.find(layout.name());
-    if (i != builders_.end())
-      return &i->second;
-    return caf::visit(
-      detail::overload(
-        [&](const record_type& rt) -> id_assigning_builder* {
-          id_assigning_builder tmp{caf_table_slice_builder::make(rt)};
-          return &(builders_.emplace(rt.name(), std::move(tmp)).first->second);
-        },
-        [&](const auto&) -> id_assigning_builder* {
-          FAIL("layout is not a record type");
-          return nullptr;
-        }),
-      layout);
-  }
-
-  map_type& all() {
-    return builders_;
-  }
-
-private:
-  map_type builders_;
-};
+std::vector<table_slice_ptr> events::zeek_conn_log;
+std::vector<table_slice_ptr> events::zeek_conn_log_full;
+std::vector<table_slice_ptr> events::zeek_dns_log;
+std::vector<table_slice_ptr> events::zeek_http_log;
+std::vector<table_slice_ptr> events::random;
+std::vector<table_slice_ptr> events::ascending_integers;
+std::vector<table_slice_ptr> events::alternating_integers;
 
 events::events() {
+  // Only read the fixture data once per process.
   static bool initialized = false;
   if (initialized)
     return;
   factory<table_slice>::initialize();
   factory<table_slice_builder>::initialize();
   initialized = true;
+  // Create Zeek log data.
   MESSAGE("inhaling unit test suite events");
   zeek_conn_log = inhale<format::zeek::reader>(
-    artifacts::logs::zeek::small_conn);
-  REQUIRE_EQUAL(zeek_conn_log.size(), 20u);
-  zeek_dns_log = inhale<format::zeek::reader>(artifacts::logs::zeek::dns);
-  REQUIRE_EQUAL(zeek_dns_log.size(), 32u);
-  zeek_http_log = inhale<format::zeek::reader>(artifacts::logs::zeek::http);
-  REQUIRE_EQUAL(zeek_http_log.size(), 40u);
+    artifacts::logs::zeek::small_conn, slice_size);
+  REQUIRE_EQUAL(rows(zeek_conn_log), 20u);
+  CHECK_EQUAL(zeek_conn_log[0]->layout().name(), "zeek.conn");
+  zeek_dns_log
+    = inhale<format::zeek::reader>(artifacts::logs::zeek::dns, slice_size);
+  REQUIRE_EQUAL(rows(zeek_dns_log), 32u);
+  zeek_http_log
+    = inhale<format::zeek::reader>(artifacts::logs::zeek::http, slice_size);
+  REQUIRE_EQUAL(rows(zeek_http_log), 40u);
+  // For the full conn.log, we're using a different table slice size for
+  // historic reasons: there used to be a utility that generated a binary set
+  // of table slices that used a different table slice size than the other
+  // table slice collections.
+  zeek_conn_log_full = inhale<format::zeek::reader>(
+    artifacts::logs::zeek::conn, defaults::import::table_slice_size);
+  REQUIRE_EQUAL(rows(zeek_conn_log_full), 8462u);
+  // Create random table slices.
   caf::settings opts;
   caf::put(opts, "import.test.seed", std::size_t{42});
   caf::put(opts, "import.max-events", std::size_t{1000});
   vast::format::test::reader rd{defaults::import::table_slice_type,
                                 std::move(opts), nullptr};
-  random = extract(rd);
-  REQUIRE_EQUAL(random.size(), 1000u);
-  ascending_integers = make_ascending_integers(250);
-  alternating_integers = make_alternating_integers(250);
-  auto allocate_id_block = [i = id{0}](size_t size) mutable {
-    auto first = i;
-    i += size;
-    return first;
-  };
-  MESSAGE("building slices of " << slice_size << " events each");
-  auto assign_ids_and_slice_up =
-    [&](std::vector<event>& src) {
-      VAST_ASSERT(src.size() > 0);
-      VAST_ASSERT(caf::holds_alternative<record_type>(src[0].type()));
-      std::vector<table_slice_ptr> slices;
-      builders bs;
-      auto finish_slice = [&](auto& builder) {
-        auto pred = [](const auto& lhs, const auto& rhs) {
-          return lhs->offset() < rhs->offset();
-        };
-        insert_sorted(slices, builder.finish(), pred);
-      };
-      for (auto& e : src) {
-        auto bptr = bs.get(e.type());
-        if (bptr->rows() == 0)
-          bptr->start_slice(allocate_id_block(slice_size));
-        bptr->add(e);
-        if (bptr->rows() == slice_size)
-          finish_slice(*bptr);
-      }
-      for (auto& i : bs.all()) {
-        auto builder = i.second;
-        if (builder.rows() > 0)
-          finish_slice(builder);
-      }
-      return slices;
-    };
-  zeek_conn_log_slices = assign_ids_and_slice_up(zeek_conn_log);
-  zeek_dns_log_slices = assign_ids_and_slice_up(zeek_dns_log);
-  allocate_id_block(1000); // cause an artificial gap in the ID sequence
-  zeek_http_log_slices = assign_ids_and_slice_up(zeek_http_log);
-  ascending_integers_slices = assign_ids_and_slice_up(ascending_integers);
-  alternating_integers_slices = assign_ids_and_slice_up(alternating_integers);
-  auto sort_by_id = [](std::vector<event>& v) {
-    auto pred = [](const auto& lhs, const auto& rhs) {
-      return lhs.id() < rhs.id();
-    };
-    std::sort(v.begin(), v.end(), pred);
-  };
-  auto as_events = [&](const auto& slices) {
-    std::vector<event> result;
+  random = extract(rd, slice_size);
+  REQUIRE_EQUAL(rows(random), 1000u);
+  // Create integer test data.
+  ascending_integers = make_integers<ascending>(250);
+  alternating_integers = make_integers<alternating>(250);
+  REQUIRE_EQUAL(rows(ascending_integers), 250u);
+  REQUIRE_EQUAL(rows(alternating_integers), 250u);
+  // Assign IDs.
+  auto i = id{0};
+  auto assign_ids = [&](auto& slices) {
     for (auto& slice : slices) {
-      auto xs = to_events(*slice);
-      std::move(xs.begin(), xs.end(), std::back_inserter(result));
+      slice.unshared().offset(i);
+      i += slice->rows();
     }
-    return result;
   };
-#define SANITY_CHECK(event_vec, slice_vec)                                     \
-  {                                                                            \
-    auto flat_log = as_events(slice_vec);                                      \
-    auto sorted_event_vec = event_vec;                                         \
-    sort_by_id(sorted_event_vec);                                              \
-    REQUIRE_EQUAL(sorted_event_vec.size(), flat_log.size());                   \
-    for (size_t i = 0; i < sorted_event_vec.size(); ++i) {                     \
-      if (sorted_event_vec[i] != flat_log[i]) {                                \
-        FAIL(#event_vec << " != " << #slice_vec << "\ni: " << i << '\n'        \
-                        << to_string(sorted_event_vec[i])                      \
-                        << " != " << to_string(flat_log[i]));                  \
-      }                                                                        \
-    }                                                                          \
-  }
-  SANITY_CHECK(zeek_conn_log, zeek_conn_log_slices);
-  SANITY_CHECK(zeek_dns_log, zeek_dns_log_slices);
-  SANITY_CHECK(zeek_http_log, zeek_http_log_slices);
-  // SANITY_CHECK(random, const_random_slices);
-  // Read the full Zeek conn.log.
-  caf::binary_deserializer src{nullptr, artifacts::logs::zeek::conn_buf,
-                               artifacts::logs::zeek::conn_buf_size};
-  if (auto err = src(zeek_full_conn_log_slices))
-    FAIL("unable to load full Zeek conn logs from buffer");
-  VAST_ASSERT(std::all_of(zeek_full_conn_log_slices.begin(),
-                          zeek_full_conn_log_slices.end() - 1,
-                          [](auto& slice) { return slice->rows() == 100; }));
-  // TODO: port remaining slices to new deserialization API and replace
-  //       this hard-coded starting offset
-  id offset = 100000;
-  for (auto& ptr : zeek_full_conn_log_slices) {
-    ptr.unshared().offset(offset);
-    offset += ptr->rows();
-  }
+  assign_ids(zeek_conn_log);
+  assign_ids(zeek_dns_log);
+  i += 1'000; // Cause an artificial gap in the ID space.
+  assign_ids(zeek_http_log);
+  assign_ids(ascending_integers);
+  assign_ids(alternating_integers);
+  // The full conn.log stands out in that it has its own offset.
+  i = 100'000;
+  assign_ids(zeek_conn_log_full);
 }
 
 } // namespace fixtures

@@ -19,11 +19,8 @@
 #include "vast/concept/parseable/string/char.hpp"
 #include "vast/concept/parseable/string/char_class.hpp"
 
-namespace vast {
-namespace parsers {
+namespace vast::parsers {
 
-auto const identifier = +(alnum | chr{'_'});
+constexpr inline auto identifier = +(alnum | ch<'_'>);
 
-} // namespace parsers
-} // namespace vast
-
+} // namespace vast::parsers

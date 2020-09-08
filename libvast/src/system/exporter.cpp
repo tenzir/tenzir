@@ -16,13 +16,11 @@
 #include "vast/concept/printable/std/chrono.hpp"
 #include "vast/concept/printable/to_string.hpp"
 #include "vast/concept/printable/vast/bitmap.hpp"
-#include "vast/concept/printable/vast/event.hpp"
 #include "vast/concept/printable/vast/expression.hpp"
 #include "vast/concept/printable/vast/uuid.hpp"
 #include "vast/detail/assert.hpp"
 #include "vast/detail/fill_status_map.hpp"
 #include "vast/detail/narrow.hpp"
-#include "vast/event.hpp"
 #include "vast/expression_visitors.hpp"
 #include "vast/fwd.hpp"
 #include "vast/logger.hpp"
@@ -30,7 +28,6 @@
 #include "vast/system/query_status.hpp"
 #include "vast/system/report.hpp"
 #include "vast/table_slice.hpp"
-#include "vast/to_events.hpp"
 
 #include <caf/event_based_actor.hpp>
 #include <caf/settings.hpp>
@@ -228,7 +225,7 @@ behavior exporter(stateful_actor<exporter_state>* self, expression expr,
     }
     auto& checker = it->second;
     // Perform candidate check, splitting the slice into subsets if needed.
-    auto selection = evaluate(*slice, checker);
+    auto selection = evaluate(checker, *slice);
     auto selection_size = rank(selection);
     if (selection_size == 0) {
       // No rows qualify.

@@ -12,7 +12,6 @@
  ******************************************************************************/
 
 #include "vast/concept/printable/stream.hpp"
-#include "vast/concept/printable/vast/event.hpp"
 
 #define SUITE system
 #include "vast/test/test.hpp"
@@ -25,8 +24,8 @@ FIXTURE_SCOPE(query_tests, fixtures::node)
 
 TEST(node queries) {
   ingest("zeek");
-  CHECK_EQUAL(query("proto == \"udp\"").size(), 20u);
-  CHECK_EQUAL(query("proto == \"tcp\"").size(), 0u);
+  CHECK_EQUAL(rows(query("proto == \"udp\"")), 20u);
+  CHECK_EQUAL(rows(query("proto == \"tcp\"")), 0u);
 }
 
 FIXTURE_SCOPE_END()

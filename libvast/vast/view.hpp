@@ -13,25 +13,25 @@
 
 #pragma once
 
-#include <array>
-#include <cstdint>
-#include <string>
-#include <type_traits>
+#include "vast/aliases.hpp"
+#include "vast/data.hpp"
+#include "vast/detail/assert.hpp"
+#include "vast/detail/iterator.hpp"
+#include "vast/detail/operators.hpp"
+#include "vast/detail/type_traits.hpp"
+#include "vast/fwd.hpp"
+#include "vast/time.hpp"
 
 #include <caf/intrusive_ptr.hpp>
 #include <caf/make_counted.hpp>
 #include <caf/ref_counted.hpp>
 #include <caf/variant.hpp>
 
-#include "vast/aliases.hpp"
-#include "vast/data.hpp"
-#include "vast/fwd.hpp"
-#include "vast/time.hpp"
-
-#include "vast/detail/assert.hpp"
-#include "vast/detail/iterator.hpp"
-#include "vast/detail/operators.hpp"
-#include "vast/detail/type_traits.hpp"
+#include <array>
+#include <cstdint>
+#include <string>
+#include <type_traits>
+#include <typeindex>
 
 namespace vast {
 
@@ -115,13 +115,7 @@ template <class T>
 class container_view_handle;
 
 struct list_view_ptr;
-struct map_view_ptr;
-
-// @relates view_trait
 using list_view_handle = container_view_handle<list_view_ptr>;
-
-// @relates view_trait
-using map_view_handle = container_view_handle<map_view_ptr>;
 
 /// @relates view_trait
 template <>
@@ -129,10 +123,22 @@ struct view_trait<list> {
   using type = list_view_handle;
 };
 
+struct map_view_ptr;
+using map_view_handle = container_view_handle<map_view_ptr>;
+
 /// @relates view_trait
 template <>
 struct view_trait<map> {
   using type = map_view_handle;
+};
+
+struct record_view_ptr;
+using record_view_handle = container_view_handle<record_view_ptr>;
+
+/// @relates view_trait
+template <>
+struct view_trait<record> {
+  using type = record_view_handle;
 };
 
 // clang-format off
@@ -153,7 +159,8 @@ using data_view = caf::variant<
   view<port>,
   view<enumeration>,
   view<list>,
-  view<map>
+  view<map>,
+  view<record>
 >;
 // clang-format on
 
@@ -228,6 +235,8 @@ public:
 
   template <class Hasher>
   friend void hash_append(Hasher& h, container_view_handle xs) {
+    // TODO: include the concrete view type in the hash digest so that it
+    // guarantees the absense of collisions between view types.
     if (!xs)
       return hash_append(h, caf::none);
     for (auto x : *xs)
@@ -331,6 +340,7 @@ struct container_view
   /// Retrieves a specific element.
   /// @param i The position of the element to retrieve.
   /// @returns A view to the element at position *i*.
+  /// @pre `i < size()`
   virtual value_type at(size_type i) const = 0;
 
   /// @returns The number of elements in the container.
@@ -365,9 +375,6 @@ bool operator<(const container_view<T>& xs, const container_view<T>& ys) {
 // @relates view_trait
 struct list_view_ptr : container_view_ptr<data_view> {};
 
-// @relates view_trait
-struct map_view_ptr : container_view_ptr<std::pair<data_view, data_view>> {};
-
 /// A view over a @ref list.
 /// @relates view_trait
 class default_list_view : public container_view<data_view>,
@@ -383,6 +390,9 @@ private:
   const list& xs_;
 };
 
+// @relates view_trait
+struct map_view_ptr : container_view_ptr<std::pair<data_view, data_view>> {};
+
 /// A view over a @ref map.
 /// @relates view_trait
 class default_map_view
@@ -397,6 +407,26 @@ public:
 
 private:
   const map& xs_;
+};
+
+// @relates view_trait
+struct record_view_ptr
+  : container_view_ptr<std::pair<std::string_view, data_view>> {};
+
+/// A view over a @ref record.
+/// @relates view_trait
+class default_record_view
+  : public container_view<std::pair<std::string_view, data_view>>,
+    detail::totally_ordered<default_record_view> {
+public:
+  explicit default_record_view(const record& xs);
+
+  value_type at(size_type i) const override;
+
+  size_type size() const noexcept override;
+
+private:
+  const record& xs_;
 };
 
 // -- factories ----------------------------------------------------------------
@@ -418,6 +448,9 @@ view<T> make_view(const T& x) {
   } else if constexpr (std::is_same_v<T, map>) {
     return map_view_handle{
       map_view_ptr{caf::make_counted<default_map_view>(x)}};
+  } else if constexpr (std::is_same_v<T, record>) {
+    return record_view_handle{
+      record_view_ptr{caf::make_counted<default_record_view>(x)}};
   } else {
     VAST_ASSERT(!"missing branch");
     return {};
@@ -468,6 +501,8 @@ pattern materialize(pattern_view x);
 list materialize(list_view_handle xs);
 
 map materialize(map_view_handle xs);
+
+record materialize(record_view_handle xs);
 
 data materialize(data_view xs);
 

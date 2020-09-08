@@ -19,7 +19,6 @@
 #include "vast/concept/parseable/to.hpp"
 #include "vast/concept/parseable/vast/expression.hpp"
 #include "vast/concept/parseable/vast/time.hpp"
-#include "vast/event.hpp"
 #include "vast/expression.hpp"
 #include "vast/expression_visitors.hpp"
 #include "vast/ids.hpp"
@@ -34,166 +33,82 @@ namespace {
 
 struct fixture : fixtures::events {
   fixture() {
-    foo = record_type{
-      {"s1", string_type{}},
-      {"d1", real_type{}},
-      {"c", count_type{}},
-      {"i", integer_type{}},
-      {"s2", string_type{}},
-      {"d2", real_type{}}
-    }.name("foo");
-    bar = record_type{
-      {"s1", string_type{}},
-      {"r", record_type{
-      {"b", bool_type{}},
-      {"s", string_type{}}
-      }},
-    }.name("bar");
-    sch.add(foo);
-    sch.add(bar);
-    e0 = event::make(list{"babba", 1.337, 42u, 100, "bar", -4.8}, foo);
-    e1 = event::make(list{"yadda", list{false, "baz"}}, bar);
-    MESSAGE("event meta data queries");
-    auto tp = to<vast::time>("2014-01-16+05:30:12");
-    REQUIRE(tp);
-    e.timestamp(*tp);
-    auto t = alias_type{}.name("foo"); // nil type, for meta data only
-    CHECK(e.type(t));
+    zeek_conn_log_slice = zeek_conn_log_full[0];
+    zeek_conn_log_slice.unshared().offset(0); // make it easier to write tests
   }
 
-  schema sch;
-  type foo;
-  type bar;
-  event e;
-  event e0;
-  event e1;
+  expression make_expr(std::string_view str) const {
+    return unbox(to<expression>(str));
+  }
+
+  expression make_conn_expr(std::string_view str) const {
+    auto expr = make_expr(str);
+    return unbox(tailor(expr, zeek_conn_log_slice->layout()));
+  }
+
+  table_slice_ptr zeek_conn_log_slice;
 };
 
-} // namespace <anonymous>
+} // namespace
 
 FIXTURE_SCOPE(evaluation_tests, fixture)
 
-TEST(evaluation - attributes) {
-  auto ast = to<expression>("#timestamp == 2014-01-16+05:30:12");
-  REQUIRE(ast);
-  CHECK(caf::visit(event_evaluator{e}, *ast));
-  // slight data change
-  ast = to<expression>("#timestamp == 2015-01-16+05:30:12");
-  REQUIRE(ast);
-  CHECK(!caf::visit(event_evaluator{e}, *ast));
-  ast = to<expression>("#type == \"foo\"");
-  REQUIRE(ast);
-  CHECK(caf::visit(event_evaluator{e}, *ast));
-  ast = to<expression>("! #type == \"bar\"");
-  REQUIRE(ast);
-  CHECK(caf::visit(event_evaluator{e}, *ast));
-  ast = to<expression>("#type != \"foo\"");
-  REQUIRE(ast);
-  CHECK(!caf::visit(event_evaluator{e}, *ast));
+TEST(evaluation - attribute extractor - #timestamp) {
+  auto expr = make_expr("#timestamp <= 2009-11-18T08:09");
+  auto ids = evaluate(expr, *zeek_conn_log_slice);
+  CHECK_EQUAL(ids, make_ids({{0, 5}}, zeek_conn_log_slice->rows()));
 }
 
-TEST(evaluation - types) {
-  auto ast = to<expression>(":count == 42");
-  REQUIRE(ast);
-  CHECK(caf::visit(event_evaluator{e0}, caf::visit(type_pruner{foo}, *ast)));
-  CHECK(!caf::visit(event_evaluator{e1}, caf::visit(type_pruner{bar}, *ast)));
-  ast = to<expression>(":int != +101");
-  REQUIRE(ast);
-  CHECK(caf::visit(event_evaluator{e0}, caf::visit(type_pruner{foo}, *ast)));
-  CHECK(!caf::visit(event_evaluator{e1}, caf::visit(type_pruner{bar}, *ast)));
-  ast = to<expression>(":string ~ /bar/ && :int == +100");
-  REQUIRE(ast);
-  CHECK(caf::visit(event_evaluator{e0}, caf::visit(type_pruner{foo}, *ast)));
-  CHECK(!caf::visit(event_evaluator{e1}, caf::visit(type_pruner{bar}, *ast)));
-  ast = to<expression>(":real >= -4.8");
-  REQUIRE(ast);
-  CHECK(caf::visit(event_evaluator{e0}, caf::visit(type_pruner{foo}, *ast)));
-  CHECK(!caf::visit(event_evaluator{e1}, caf::visit(type_pruner{bar}, *ast)));
-  ast = to<expression>(
-    ":int <= -3 || :int >= +100 && :string !~ /bar/ || :real > 1.0");
-  REQUIRE(ast);
-  CHECK(caf::visit(event_evaluator{e0}, caf::visit(type_pruner{foo}, *ast)));
-  // For the event of type "bar", this expression degenerates to
-  // <nil> because it has no numeric types and the first predicate of the
-  // conjunction in the middle renders the entire conjunction not viable.
-  CHECK(!caf::visit(event_evaluator{e1}, caf::visit(type_pruner{bar}, *ast)));
+TEST(evaluation - attribute extractor - #type) {
+  auto expr = make_expr("#type == \"zeek.conn\"");
+  auto ids = evaluate(expr, *zeek_conn_log_slice);
+  CHECK_EQUAL(ids, make_ids({{0, zeek_conn_log_slice->rows()}}));
 }
 
-TEST(evaluation - schema) {
-  auto ast = to<expression>("s1 == \"babba\" && d1 <= 1337.0");
-  REQUIRE(ast);
-  auto ast_resolved = caf::visit(type_resolver{foo}, *ast);
-  REQUIRE(ast_resolved);
-  CHECK(!caf::holds_alternative<caf::none_t>(*ast_resolved));
-  CHECK(caf::visit(event_evaluator{e0}, *ast_resolved));
-  CHECK(!caf::visit(event_evaluator{e1}, *ast_resolved));
-  ast = to<expression>("s1 != \"cheetah\"");
-  REQUIRE(ast);
-  ast_resolved = caf::visit(type_resolver{foo}, *ast);
-  REQUIRE(ast_resolved);
-  CHECK(caf::visit(event_evaluator{e0}, *ast_resolved));
-  ast_resolved = caf::visit(type_resolver{bar}, *ast);
-  REQUIRE(ast_resolved);
-  CHECK(caf::visit(event_evaluator{e1}, *ast_resolved));
-  ast = to<expression>("d1 > 0.5");
-  REQUIRE(ast);
-  ast_resolved = caf::visit(type_resolver{foo}, *ast);
-  REQUIRE(ast_resolved);
-  CHECK(caf::visit(event_evaluator{e0}, *ast_resolved));
-  CHECK(!caf::visit(event_evaluator{e1}, *ast_resolved));
-  ast = to<expression>("r.b == F");
-  REQUIRE(ast);
-  ast_resolved = caf::visit(type_resolver{bar}, *ast);
-  REQUIRE(ast_resolved);
-  CHECK(caf::visit(event_evaluator{e1}, *ast_resolved));
-  MESSAGE("error cases");
-  // Invalid prefix.
-  ast = to<expression>("not.there ~ /nil/");
-  REQUIRE(ast);
-  ast_resolved = caf::visit(type_resolver{foo}, *ast);
-  REQUIRE(ast_resolved);
-  CHECK(caf::holds_alternative<caf::none_t>(*ast_resolved));
-  // 'q' doesn't exist in 'r'.
-  ast = to<expression>("r.q == 80/tcp");
-  REQUIRE(ast);
-  ast_resolved = caf::visit(type_resolver{bar}, *ast);
-  REQUIRE(ast_resolved);
-  CHECK(caf::holds_alternative<caf::none_t>(*ast_resolved));
+TEST(evaluation - attribute extractor - #foo) {
+  auto expr = make_expr("#foo == 42");
+  auto ids = evaluate(expr, *zeek_conn_log_slice);
+  CHECK_EQUAL(ids.size(), zeek_conn_log_slice->rows());
+  CHECK(all<0>(ids));
 }
 
-TEST(evaluation - table slice rows) {
-  // Get the first Zeek conn log slice and provide some utility.
-  auto& slice = zeek_conn_log_slices[0];
-  auto layout = slice->layout();
-  auto tailored = [&](std::string_view expr) {
-    auto ast = unbox(to<expression>(expr));
-    return unbox(caf::visit(type_resolver{layout}, ast));
-  };
-  // Run some checks on various rows.
-  CHECK(evaluate_at(*slice, 0, tailored("#timestamp < 2009-12-18+00:00:00")));
-  CHECK(evaluate_at(*slice, 0, tailored("orig_h == 192.168.1.102")));
-  CHECK(evaluate_at(*slice, 0, tailored(":addr == 192.168.1.102")));
-  CHECK(evaluate_at(*slice, 1, tailored("orig_h != 192.168.1.102")));
-  CHECK(evaluate_at(*slice, 1, tailored(":addr != 192.168.1.102")));
-  CHECK(evaluate_at(*slice, 1, tailored("orig_h in 192.168.1.0/24")));
-  CHECK(evaluate_at(*slice, 1, tailored("!(orig_h in 192.168.2.0/24)")));
-  CHECK(evaluate_at(*slice, 1,
-                    tailored("orig_h in [192.168.1.102, 192.168.1.103]")));
+TEST(evaluation - type extractor - count) {
+  // head -n 108 conn.log | grep '\t350\t' | wc -l
+  auto expr = make_conn_expr(":count == 350");
+  auto ids = evaluate(expr, *zeek_conn_log_slice);
+  CHECK_EQUAL(rank(ids), 18u);
 }
 
-TEST(evaluation - table slice) {
-  // Get the first Zeek conn log slice and provide some utility.
-  auto slice = zeek_conn_log_slices[0];
-  slice.unshared().offset(0);
-  REQUIRE_EQUAL(slice->rows(), 8u);
-  auto layout = slice->layout();
-  auto tailored = [&](std::string_view expr) {
-    auto ast = unbox(to<expression>(expr));
-    return unbox(caf::visit(type_resolver{layout}, ast));
-  };
-  // Run some checks on various rows.
-  CHECK_EQUAL(evaluate(*slice, tailored("orig_h == 192.168.1.102")),
-              make_ids({0, 2, 4}, 8));
+TEST(evaluation - type extractor - string + duration) {
+  // head -n 108 conn.log | awk '$8 == "http" && $9 > 30'
+  auto expr = make_conn_expr("\"http\" in :string && :duration > 30s");
+  auto ids = evaluate(expr, *zeek_conn_log_slice);
+  CHECK_EQUAL(rank(ids), 1u);
+  auto id = select(ids, 1);
+  REQUIRE_EQUAL(id, 97u);
+  CHECK_EQUAL(zeek_conn_log_slice->at(id, 1), make_data_view("jM8ATYNKqZg"));
+}
+
+TEST(evaluation - field extractor - orig_h + proto) {
+  // head -n 108 conn.log | awk '$3 != "192.168.1.102" && $7 != "udp"'
+  auto expr = make_conn_expr("orig_h != 192.168.1.102 && proto != \"udp\"");
+  auto ids = evaluate(expr, *zeek_conn_log_slice);
+  REQUIRE_EQUAL(rank(ids), 10u);
+  auto last = select(ids, -1);
+  CHECK_EQUAL(zeek_conn_log_slice->at(last, 1), make_data_view("WfzxgFx2lWb"));
+}
+
+TEST(evaluation - field extractor - service + orig_h) {
+  auto str = "service == nil && orig_h == fe80::219:e3ff:fee7:5d23";
+  auto expr = make_conn_expr(str);
+  auto ids = evaluate(expr, *zeek_conn_log_slice);
+  REQUIRE_EQUAL(rank(ids), 2u);
+}
+
+TEST(evaluation - field extractor - nonexistant field) {
+  auto expr = make_conn_expr("devnull != nil");
+  auto ids = evaluate(expr, *zeek_conn_log_slice);
+  CHECK(all<0>(ids));
 }
 
 FIXTURE_SCOPE_END()

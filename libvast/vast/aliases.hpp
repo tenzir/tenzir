@@ -14,7 +14,6 @@
 #pragma once
 
 #include "vast/detail/stable_map.hpp"
-#include "vast/detail/stable_set.hpp"
 #include "vast/fwd.hpp"
 
 #include <caf/fwd.hpp>
@@ -44,11 +43,11 @@ using enumeration = uint8_t;
 /// A random-access sequence of data.
 using list = std::vector<data>;
 
-/// A mathematical set where each element is ::data.
-using set = detail::stable_set<data>;
-
 /// An associative array with ::data as both key and value.
 using map = detail::stable_map<data, data>;
+
+/// Maps field names to data elements.
+using record = detail::stable_map<std::string, data>;
 
 /// Default bitstream implementation.
 using default_bitstream = ewah_bitstream;

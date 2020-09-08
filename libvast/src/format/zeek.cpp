@@ -28,7 +28,6 @@
 #include "vast/detail/fdostream.hpp"
 #include "vast/detail/string.hpp"
 #include "vast/error.hpp"
-#include "vast/event.hpp"
 #include "vast/logger.hpp"
 #include "vast/table_slice.hpp"
 #include "vast/table_slice_builder.hpp"

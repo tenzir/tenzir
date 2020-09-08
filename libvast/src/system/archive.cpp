@@ -20,13 +20,11 @@
 #include "vast/detail/assert.hpp"
 #include "vast/detail/bit_cast.hpp"
 #include "vast/detail/fill_status_map.hpp"
-#include "vast/event.hpp"
 #include "vast/logger.hpp"
 #include "vast/segment_store.hpp"
 #include "vast/store.hpp"
 #include "vast/system/report.hpp"
 #include "vast/table_slice.hpp"
-#include "vast/to_events.hpp"
 
 #include <caf/config_value.hpp>
 #include <caf/expected.hpp>

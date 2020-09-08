@@ -36,6 +36,17 @@ namespace vast {
 
 // -- printer implementations --------------------------------------------------
 
+struct string_view_printer : printer<string_view_printer> {
+  using attribute = view<std::string>;
+
+  template <class Iterator>
+  bool print(Iterator& out, const attribute& x) const {
+    static auto escaper = detail::make_extra_print_escaper("\"");
+    static auto p = '"' << printers::escape(escaper) << '"';
+    return p(out, x);
+  }
+};
+
 struct data_view_printer : printer<data_view_printer> {
   using attribute = view<data>;
 
@@ -49,9 +60,7 @@ struct data_view_printer : printer<data_view_printer> {
         return printers::integral<integer, policy::force_sign>(out, x);
       },
       [&](const view<std::string>& x) {
-        static auto escaper = detail::make_extra_print_escaper("\"");
-        static auto p = '"' << printers::escape(escaper) << '"';
-        return p(out, x);
+        return string_view_printer{}(out, x);
       });
     return caf::visit(f, d);
   }
@@ -85,9 +94,22 @@ struct map_view_printer : printer<map_view_printer> {
   template <class Iterator>
   bool print(Iterator& out, const attribute& xs) const {
     if (!xs || xs->empty())
-      return printers::str.print(out, "{-}");
+      return printers::str.print(out, "{}");
     auto kvp = data_view_printer{} << " -> " << data_view_printer{};
     auto p = '{' << (kvp % ", ") << '}';
+    return p.print(out, xs);
+  }
+};
+
+struct record_view_printer : printer<record_view_printer> {
+  using attribute = view<record>;
+
+  template <class Iterator>
+  bool print(Iterator& out, const attribute& xs) const {
+    if (!xs || xs->empty())
+      return printers::str.print(out, "<>");
+    auto kvp = string_view_printer{} << ": " << data_view_printer{};
+    auto p = '<' << (kvp % ", ") << '>';
     return p.print(out, xs);
   }
 };
@@ -112,6 +134,11 @@ struct printer_registry<view<list>> {
 template <>
 struct printer_registry<view<map>> {
   using type = map_view_printer;
+};
+
+template <>
+struct printer_registry<view<record>> {
+  using type = record_view_printer;
 };
 
 } // namespace vast

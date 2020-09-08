@@ -23,7 +23,6 @@
 #include "vast/table_slice_builder_factory.hpp"
 #include "vast/table_slice_factory.hpp"
 #include "vast/type.hpp"
-#include "vast/value.hpp"
 #include "vast/view.hpp"
 
 #include <caf/binary_deserializer.hpp>

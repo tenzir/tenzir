@@ -20,14 +20,12 @@
 #include "vast/concept/printable/vast/uuid.hpp"
 #include "vast/directory.hpp"
 #include "vast/error.hpp"
-#include "vast/event.hpp"
 #include "vast/fbs/segment.hpp"
 #include "vast/fbs/utils.hpp"
 #include "vast/ids.hpp"
 #include "vast/logger.hpp"
 #include "vast/status.hpp"
 #include "vast/table_slice.hpp"
-#include "vast/to_events.hpp"
 
 #include <caf/config_value.hpp>
 #include <caf/dictionary.hpp>

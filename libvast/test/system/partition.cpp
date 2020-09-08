@@ -23,7 +23,6 @@
 #include "vast/concept/printable/vast/type.hpp"
 #include "vast/detail/overload.hpp"
 #include "vast/detail/spawn_container_source.hpp"
-#include "vast/event.hpp"
 #include "vast/ids.hpp"
 #include "vast/system/evaluator.hpp"
 #include "vast/system/indexer.hpp"
@@ -253,7 +252,7 @@ TEST_DISABLED(zeek conn log http slices) {
   for (size_t index = 0; index < num_hits.size(); ++index) {
     run_in_index([&] {
       make_partition();
-      ingest(zeek_full_conn_log_slices[index]);
+      ingest(zeek_conn_log_full[index]);
       MESSAGE("expecting");
       CHECK_EQUAL(rank(query("service == \"http\"")), num_hits[index]);
       reset_partition();
@@ -290,7 +289,7 @@ TEST_DISABLED(single partition zeek conn log lookup) {
   run_in_index([&] {
     make_partition();
     MESSAGE("ingest zeek conn logs");
-    ingest(zeek_conn_log_slices);
+    ingest(zeek_conn_log);
     MESSAGE("verify partition content");
     auto res = [&](auto... args) {
       return make_ids({args...}, zeek_conn_log.size());

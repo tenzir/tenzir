@@ -83,7 +83,7 @@ struct map_printer : printer<map_printer> {
   template <class Iterator>
   bool print(Iterator& out, const map& xs) const {
     if (xs.empty())
-      return printers::str.print(out, "{-}");
+      return printers::str.print(out, "{}");
     auto kvp = printers::data << " -> " << printers::data;
     auto p = '{' << (kvp % ", ") << '}';
     return p.print(out, xs);
@@ -93,6 +93,22 @@ struct map_printer : printer<map_printer> {
 template <>
 struct printer_registry<map> {
   using type = map_printer;
+};
+
+struct record_printer : printer<record_printer> {
+  using attribute = record;
+
+  template <class Iterator>
+  bool print(Iterator& out, const record& xs) const {
+    auto kvp = printers::str << ": " << printers::data;
+    auto p = '<' << (kvp % ", ") << '>';
+    return p.print(out, xs);
+  }
+};
+
+template <>
+struct printer_registry<record> {
+  using type = record_printer;
 };
 
 } // namespace vast

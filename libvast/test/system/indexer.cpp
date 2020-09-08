@@ -24,7 +24,6 @@
 #include "vast/concept/parseable/vast/expression.hpp"
 #include "vast/concept/printable/stream.hpp"
 #include "vast/concept/printable/vast/error.hpp"
-#include "vast/concept/printable/vast/event.hpp"
 #include "vast/concept/printable/vast/expression.hpp"
 #include "vast/detail/spawn_container_source.hpp"
 #include "vast/fwd.hpp"

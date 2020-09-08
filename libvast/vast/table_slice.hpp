@@ -211,7 +211,28 @@ private:
   static std::atomic<size_t> instance_count_;
 };
 
-// -- free functions -----------------------------------------------------------
+/// @relates table_slice
+bool operator==(const table_slice& x, const table_slice& y);
+
+/// @relates table_slice
+inline bool operator!=(const table_slice& x, const table_slice& y) {
+  return !(x == y);
+}
+
+/// @relates table_slice
+void intrusive_ptr_add_ref(const table_slice* ptr);
+
+/// @relates table_slice
+void intrusive_ptr_release(const table_slice* ptr);
+
+/// @relates table_slice
+table_slice* intrusive_cow_ptr_unshare(table_slice*&);
+
+/// @relates table_slice
+caf::error inspect(caf::serializer& sink, table_slice_ptr& ptr);
+
+/// @relates table_slice
+caf::error inspect(caf::deserializer& source, table_slice_ptr& ptr);
 
 /// Packs a table slice into a flatbuffer.
 /// @param builder The builder to pack *x* into.
@@ -225,6 +246,8 @@ pack(flatbuffers::FlatBufferBuilder& builder, table_slice_ptr x);
 /// @param y The target to unpack *x* into.
 /// @returns An error iff the operation fails.
 caf::error unpack(const fbs::TableSlice& x, table_slice_ptr& y);
+
+// -- operations ---------------------------------------------------------------
 
 /// Constructs table slices filled with random content for testing purposes.
 /// @param num_slices The number of table slices to generate.
@@ -278,27 +301,31 @@ table_slice_ptr truncate(const table_slice_ptr& slice, size_t num_rows);
 std::pair<table_slice_ptr, table_slice_ptr> split(const table_slice_ptr& slice,
                                                   size_t partition_point);
 
-/// @relates table_slice
-bool operator==(const table_slice& x, const table_slice& y);
+/// Counts the number of total rows of multiple table slices.
+/// @param slices The table slices to count.
+/// @returns The sum of rows across *slices*.
+uint64_t rows(const std::vector<table_slice_ptr>& slices);
 
-/// @relates table_slice
-inline bool operator!=(const table_slice& x, const table_slice& y) {
-  return !(x == y);
-}
+/// Converts the table slice into a 2-D matrix in row-major order such that
+/// each row represents an event.
+/// @param slice The table slice to convert.
+/// @param first_row An offset to the first row to consider.
+/// @param num_rows Then number of rows to consider. (0 = all rows)
+/// @returns a 2-D matrix of data instances corresponding to *slice*.
+/// @requires first_row < slice->rows()
+/// @requires num_rows <= slice->rows() - first_row
+/// @note This function exists primarily for unit testing because it performs
+/// excessive memory allocations.
+std::vector<std::vector<data>>
+to_data(const table_slice& slice, size_t first_row = 0, size_t num_rows = 0);
 
-/// @relates table_slice
-void intrusive_ptr_add_ref(const table_slice* ptr);
+std::vector<std::vector<data>>
+to_data(const std::vector<table_slice_ptr>& slices);
 
-/// @relates table_slice
-void intrusive_ptr_release(const table_slice* ptr);
-
-/// @relates table_slice
-table_slice* intrusive_cow_ptr_unshare(table_slice*&);
-
-/// @relates table_slice
-caf::error inspect(caf::serializer& sink, table_slice_ptr& ptr);
-
-/// @relates table_slice
-caf::error inspect(caf::deserializer& source, table_slice_ptr& ptr);
+/// Evaluates an expression over a table slice by applying it row-wise.
+/// @param expr The expression to evaluate.
+/// @param slice The table slice to apply *expr* on.
+/// @returns The set of row IDs in *slice* for which *expr* yields true.
+ids evaluate(const expression& expr, const table_slice& slice);
 
 } // namespace vast
