@@ -172,7 +172,7 @@ archive(archive_type::stateful_pointer<archive_state> self, path dir,
           // nop
         },
         [=](unit_t&, std::vector<table_slice_ptr>& batch) {
-          VAST_DEBUG(self, "got", batch.size(), "table slices");
+          VAST_TRACE(self, "got", batch.size(), "table slices");
           auto t = timer::start(self->state.measurement);
           uint64_t events = 0;
           for (auto& slice : batch) {
