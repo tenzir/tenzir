@@ -45,10 +45,10 @@ struct fixture : fixtures::deterministic_actor_system_and_events {
   static constexpr size_t num_query_supervisors = 1;
 
   fixture() {
-    // FIXME: it's not very smart to test the index with only 1 table slice per
-    // partition. This should be a higher multiple.
-    index = self->spawn(system::index, directory, slice_size, in_mem_partitions,
-                        taste_count, num_query_supervisors, false);
+    directory /= "index";
+    auto fs = self->spawn(system::posix_filesystem, directory);
+    index = self->spawn(system::v2::index, fs, directory / "index", slice_size,
+                        in_mem_partitions, taste_count, num_query_supervisors, false);
   }
 
   ~fixture() {
@@ -73,10 +73,6 @@ struct fixture : fixtures::deterministic_actor_system_and_events {
   }
 
   ids receive_result(const uuid& query_id, uint32_t hits, uint32_t scheduled) {
-    if (hits == scheduled)
-      CHECK_EQUAL(query_id, uuid::nil());
-    else
-      CHECK_NOT_EQUAL(query_id, uuid::nil());
     ids result;
     uint32_t collected = 0;
     auto fetch = [&](size_t chunk) {
@@ -139,7 +135,6 @@ TEST(one-shot integer query result) {
   run();
   MESSAGE("query half of the values");
   auto [query_id, hits, scheduled] = query(":int == 1");
-  CHECK_EQUAL(query_id, uuid::nil());
   CHECK_EQUAL(hits, taste_count);
   CHECK_EQUAL(scheduled, taste_count);
   ids expected_result;

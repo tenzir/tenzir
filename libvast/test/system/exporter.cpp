@@ -57,8 +57,8 @@ struct fixture : fixture_base {
   }
 
   void spawn_index() {
-    index
-      = self->spawn(system::index, directory / "index", 10000, 5, 5, 1, true);
+    auto fs = self->spawn(system::posix_filesystem, directory);
+    index = self->spawn(system::v2::index, fs, directory / "index", 10000, 5, 5, 1, true);
   }
 
   void spawn_archive() {
