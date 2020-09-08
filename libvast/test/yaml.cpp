@@ -17,6 +17,8 @@
 
 #include "vast/test/test.hpp"
 
+#include "vast/concept/parseable/to.hpp"
+#include "vast/concept/parseable/vast/time.hpp"
 #include "vast/concept/printable/to_string.hpp"
 #include "vast/concept/printable/vast/data.hpp"
 #include "vast/data.hpp"
@@ -25,6 +27,7 @@
 #include <caf/test/dsl.hpp>
 
 using namespace vast;
+using namespace std::chrono_literals;
 using namespace std::string_literals;
 
 namespace {
@@ -92,6 +95,13 @@ TEST(from_yaml - invalid yaml) {
 TEST(to_yaml - basic) {
   auto yaml = unbox(to_yaml(record{{"a", 4.2}, {"b", list{"foo", "bar"}}}));
   auto str = "a: 4.2000000000000002\nb:\n  - foo\n  - bar";
+  CHECK_EQUAL(yaml, str);
+}
+
+TEST(to_yaml - time types) {
+  auto t = unbox(to<vast::time>("2021-01-01"));
+  auto yaml = unbox(to_yaml(record{{"d", 12ms}, {"t", t}}));
+  auto str = "d: 12.0ms\nt: 2021-01-01T00:00:00";
   CHECK_EQUAL(yaml, str);
 }
 
