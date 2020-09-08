@@ -60,7 +60,7 @@ struct fixture {
     };
     // clang-format on
     str = R"yaml(foo: -42
-bar: 3.1400000000000001
+bar: 3.14
 baz:
   - a
   - ~
@@ -94,7 +94,7 @@ TEST(from_yaml - invalid yaml) {
 
 TEST(to_yaml - basic) {
   auto yaml = unbox(to_yaml(record{{"a", 4.2}, {"b", list{"foo", "bar"}}}));
-  auto str = "a: 4.2000000000000002\nb:\n  - foo\n  - bar";
+  auto str = "a: 4.2\nb:\n  - foo\n  - bar";
   CHECK_EQUAL(yaml, str);
 }
 

@@ -402,7 +402,7 @@ void print(YAML::Emitter& out, const data& x) {
     [&out](bool x) { out << (x ? "true" : "false"); },
     [&out](integer x) { out << x; },
     [&out](count x) { out << x; },
-    [&out](real x) { out << x; },
+    [&out](real x) { out << to_string(x); },
     [&out](duration x) { out << to_string(x); },
     [&out](time x) { out << to_string(x); },
     [&out](const std::string& x) { out << x; },
