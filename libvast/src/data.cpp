@@ -449,7 +449,7 @@ std::string to_yaml(const data& x) {
   out.SetIndent(2);
   print(out, x);
   VAST_ASSERT(out.good());
-  return out.c_str();
+  return {out.c_str(), out.size()};
 }
 
 } // namespace vast
