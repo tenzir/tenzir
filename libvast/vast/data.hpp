@@ -97,6 +97,17 @@ template <class T>
 using to_data_type = detail::to_data_type<std::decay_t<T>>;
 
 /// A type-erased represenation of various types of data.
+/// @note Be careful when constructing a `vector<data>` from a single `list`.
+/// Brace-initialization may behave unexpectedly, creating a nested vector
+/// instead of copying the elements of the list for gcc only. This happens for
+/// two reasons:
+/// - `data` can be implicitly constructed from `list`, which is exactly
+///   `vector<data>`. This is not easily fixable, because `data` is a
+///   `variant<list, ...>`, which is implicitly constructible from `list` by
+///   design.
+/// - Core Working Group (CWG) issue #2137 has not been fixed in clang yet.
+///   c.f. https://wg21.cmeerw.net/cwg/issue2137, causing brace-initialization
+///   to erroneously behave like other means of construction.
 class data : detail::totally_ordered<data>,
              detail::addable<data> {
 public:
