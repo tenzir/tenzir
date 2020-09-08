@@ -20,6 +20,7 @@
 #include "vast/concept/printable/to_string.hpp"
 #include "vast/concept/printable/vast/data.hpp"
 #include "vast/data.hpp"
+#include "vast/error.hpp"
 
 #include <caf/test/dsl.hpp>
 
@@ -82,10 +83,25 @@ TEST(from_yaml - basic) {
   CHECK_EQUAL(yaml, (record{{"a", 4.2}, {"b", list{"foo", "bar"}}}));
 }
 
+TEST(from_yaml - invalid yaml) {
+  auto yaml = from_yaml("@!#$%^&*()_+");
+  REQUIRE(!yaml);
+  CHECK_EQUAL(yaml.error(), ec::parse_error);
+}
+
 TEST(to_yaml - basic) {
-  auto yaml = to_yaml(record{{"a", 4.2}, {"b", list{"foo", "bar"}}});
+  auto yaml = unbox(to_yaml(record{{"a", 4.2}, {"b", list{"foo", "bar"}}}));
   auto str = "a: 4.2000000000000002\nb:\n  - foo\n  - bar";
   CHECK_EQUAL(yaml, str);
+}
+
+TEST(to_yaml - invalid data) {
+  // We tried a lot of weird combinations of invalid data values, but none of
+  // them triggered a failure in the emitter logic.
+  CHECK(to_yaml(caf::none).engaged());
+  CHECK(to_yaml(list{map{{"", ""}}}).engaged());
+  CHECK(to_yaml(map{{list{}, caf::none}}).engaged());
+  CHECK(to_yaml(record{{"", caf::none}}).engaged());
 }
 
 TEST(parseable) {
@@ -102,7 +118,7 @@ TEST(from_yaml - nested) {
 }
 
 TEST(to_yaml - nested) {
-  auto yaml = to_yaml(rec);
+  auto yaml = unbox(to_yaml(rec));
   CHECK_EQUAL(yaml, str);
 }
 

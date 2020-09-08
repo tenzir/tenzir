@@ -438,18 +438,19 @@ void print(YAML::Emitter& out, const data& x) {
     }
   );
   // clang-format off
-  return caf::visit(f, x);
+  caf::visit(f, x);
 }
 
 } // namespace
 
-std::string to_yaml(const data& x) {
+caf::expected<std::string> to_yaml(const data& x) {
   YAML::Emitter out;
   out.SetOutputCharset(YAML::EscapeNonAscii); // restrict to ASCII output
   out.SetIndent(2);
   print(out, x);
-  VAST_ASSERT(out.good());
-  return {out.c_str(), out.size()};
+  if (out.good())
+    return std::string{out.c_str(), out.size()};
+  return caf::make_error(ec::parse_error, out.GetLastError());
 }
 
 } // namespace vast

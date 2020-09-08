@@ -323,7 +323,7 @@ caf::expected<data> from_yaml(std::string_view str);
 /// Prints data as YAML.
 /// @param x The data instance.
 /// @returns The YAML representation of *x*.
-std::string to_yaml(const data& x);
+caf::expected<std::string> to_yaml(const data& x);
 
 } // namespace vast
 
