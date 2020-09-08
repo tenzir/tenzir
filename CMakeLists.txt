@@ -479,7 +479,7 @@ get_target_property(flatbuffers_dir ${flatbuffers_target}
                     INTERFACE_INCLUDE_DIRECTORIES)
 get_filename_component(flatbuffers_dir ${flatbuffers_dir} DIRECTORY) # <prefix>
 
-find_package(yaml-cpp 0.6.2 REQUIRED)
+find_package(yaml-cpp 0.6.2 REQUIRED HINTS ${YAML_CPP_ROOT})
 
 if (NOT VAST_USE_BUNDLED_CAF)
   # Try to find the required CAF components first...
@@ -863,7 +863,7 @@ display(VAST_HAVE_BROKER "${broker_dir}" broker_summary)
 display(Arrow_FOUND "${arrow_dir}" arrow_summary)
 display(PCAP_FOUND "${PCAP_INCLUDE_DIR}" pcap_summary)
 # FIXME: what's the modern way to query if a pkg is found?
-display(YAML_CPP_FOUND "${YAML_CPP_INCLUDE_DIR}" yaml_cpp_summary)
+display(YAML_CPP_INCLUDE_DIR "${YAML_CPP_INCLUDE_DIR}" yaml_cpp_summary)
 display(DOXYGEN_FOUND yes doxygen_summary)
 display(PANDOC_FOUND yes pandoc_summary)
 display(VAST_USE_JEMALLOC "${jemalloc_INCLUDE_DIR}" jemalloc_summary)
