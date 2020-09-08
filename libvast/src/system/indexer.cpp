@@ -57,7 +57,7 @@ vast::chunk_ptr chunkify(const value_index_ptr& idx) {
 } // namespace
 
 caf::behavior passive_indexer(caf::stateful_actor<indexer_state>* self,
-                               uuid partition_id, value_index_ptr idx) {
+                              uuid partition_id, value_index_ptr idx) {
   self->state.name = "indexer-" + to_string(idx->type());
   self->state.partition_id = partition_id;
   self->state.idx = std::move(idx);
@@ -79,8 +79,8 @@ caf::behavior passive_indexer(caf::stateful_actor<indexer_state>* self,
   };
 }
 
-caf::behavior active_indexer(caf::stateful_actor<indexer_state>* self, type index_type,
-                      caf::settings index_opts) {
+caf::behavior active_indexer(caf::stateful_actor<indexer_state>* self,
+                             type index_type, caf::settings index_opts) {
   self->state.name = "indexer-" + to_string(index_type);
   self->state.has_skip_attribute = vast::has_skip_attribute(index_type);
   return {

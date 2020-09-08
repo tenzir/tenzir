@@ -81,18 +81,25 @@ using namespace std::chrono;
 // receives an expression and loads the partitions that might contain relevant
 // results into memory.
 //
-//                     expression                atom::evaluate
+//                     expression                expression
 // query_supervisor    ------------>  index     ----------------->   partition
 //                                                                      |
-//                                                  [indexer]           |
-//                                  (spawns     <-----------------------/     
-//                                   evaluators) 
+//                                                                      v
+//                                                  [evaluators]      (spawns     
+//                     <-------------           <-----------------     evaluators) 
 //
-//                                                  curried_predicate
-//                                   evaluator  -------------------------------> indexer
 //
-//                                                      ids
-//                     <--------------------------------------------------------
+//
+//                       client                          curried_predicate
+//                     --------------> evaluator  -------------------------------> indexer
+//                                                                                  |
+//                                                            ids                   |
+//                                                <---------------------------------/
+//
+//
+// TODO: Having the evaluators inside the index is an artifact from the previous index architecture,
+// and should be refactored such that evaluators live completely within the partition.
+//
 // clang-format on
 
 namespace vast::system {
@@ -283,11 +290,11 @@ index_state::collect_query_actors(query_state& lookup,
   return result;
 }
 
-/// Sends an `evaluate` atom to all partition actors passed into this function,
-/// and collects the resulting
+/// Sends an expression to all partition actors passed into this function,
+/// and collects the resulting evaluators.
 /// @param c Continuation that takes a single argument of type
-/// `caf::expected<pending_query_map>`. The continuation will be called in the
-/// context of `self`.
+/// `caf::expected<query_map>`. The continuation will be called in the
+/// actor context of `self`.
 //
 // TODO: At some point we should add some more template magic on top of
 // this and turn it into a generic functions that maps
@@ -295,13 +302,13 @@ index_state::collect_query_actors(query_state& lookup,
 //   (map from U to A, request param pack R, result handler with param X) ->
 //   expected<map from U to X>
 template <typename Continuation>
-void await_evaluation_maps(
+void await_evaluators_then(
   caf::stateful_actor<index_state>* self, const expression& expr,
   const std::vector<std::pair<vast::uuid, caf::actor>>& actors,
   Continuation then) {
   struct counter {
     size_t received;
-    pending_query_map pqm;
+    query_map qm;
   };
   auto expected = actors.size();
   auto shared_counter = std::make_shared<counter>();
@@ -309,12 +316,13 @@ void await_evaluation_maps(
     auto& partition_id = id; // Can't use structured binding inside lambda.
     self->request(actor, caf::infinite, expr)
       .then(
-        [=](evaluation_triples triples) {
+        [=](caf::actor evaluator) {
           auto received = ++shared_counter->received;
-          if (!triples.empty())
-            shared_counter->pqm.emplace(partition_id, std::move(triples));
+          if (evaluator)
+            shared_counter->qm.emplace(partition_id,
+                                       std::vector<caf::actor>{evaluator});
           if (received == expected)
-            then(std::move(shared_counter->pqm));
+            then(std::move(shared_counter->qm));
         },
         [=](caf::error err) {
           // Don't increase `received` to ensure the sucess handler never gets
@@ -322,17 +330,6 @@ void await_evaluation_maps(
           then(err);
         });
   }
-}
-
-query_map
-index_state::launch_evaluators(pending_query_map& pqm, expression expr) {
-  query_map result;
-  for (auto& [id, eval] : pqm) {
-    std::vector<caf::actor> xs{self->spawn(evaluator, expr, std::move(eval))};
-    result.emplace(id, std::move(xs));
-  }
-  pqm.clear();
-  return result;
 }
 
 path index_state::index_filename(path basename) const {
@@ -404,10 +401,10 @@ void index_state::flush_to_disk() {
           });
 }
 
-caf::behavior
-index(caf::stateful_actor<index_state>* self, filesystem_type fs, path dir,
-      size_t partition_capacity, size_t max_inmem_partitions,
-      size_t taste_partitions, size_t num_workers, bool delay_flush_until_shutdown) {
+caf::behavior index(caf::stateful_actor<index_state>* self, filesystem_type fs,
+                    path dir, size_t partition_capacity,
+                    size_t max_inmem_partitions, size_t taste_partitions,
+                    size_t num_workers, bool delay_flush_until_shutdown) {
   VAST_VERBOSE(self, "initializes index in", dir);
   VAST_VERBOSE(self, "caps partition size at", partition_capacity, "events");
   // Set members.
@@ -638,10 +635,10 @@ index(caf::stateful_actor<index_state>* self, filesystem_type fs, path dir,
       // Send an evaluate atom to all the actors and collect the returned
       // evaluation triples in a `pending_query_map`, then run the continuation
       // below in the same actor context.
-      await_evaluation_maps(
+      await_evaluators_then(
         self, iter->second.expression, actors,
         [self, client, query_id,
-         num_partitions](caf::expected<pending_query_map> maybe_pqm) {
+         num_partitions](caf::expected<query_map> maybe_qm) {
           auto& st = self->state;
           auto iter = st.pending.find(query_id);
           if (iter == st.pending.end()) {
@@ -650,17 +647,16 @@ index(caf::stateful_actor<index_state>* self, filesystem_type fs, path dir,
             self->send(client, atom::done_v);
             return;
           }
-          if (!maybe_pqm) {
-            VAST_ERROR(self, "error collecting pending query map",
-                       maybe_pqm.error());
+          if (!maybe_qm) {
+            VAST_ERROR(self, "error collecting query map", maybe_qm.error());
             self->send(client, atom::done_v);
             return;
           }
-          auto& pqm = *maybe_pqm;
-          if (pqm.empty()) {
+          auto& qm = *maybe_qm;
+          if (qm.empty()) {
             if (!iter->second.partitions.empty()) {
-              // None of the partitions of this round produced an evaluation
-              // triple, but there are still more to go.
+              // None of the partitions of this round produced an evaluator,
+              // but there are still more to go.
               self->delegate(caf::actor_cast<caf::actor>(self), query_id,
                              num_partitions);
               return;
@@ -670,7 +666,6 @@ index(caf::stateful_actor<index_state>* self, filesystem_type fs, path dir,
             self->send(client, atom::done_v);
             return;
           }
-          auto qm = st.launch_evaluators(pqm, iter->second.expression);
           // Delegate to query supervisor (uses up this worker) and report
           // query ID + some stats to the client.
           VAST_DEBUG(self, "schedules", qm.size(),

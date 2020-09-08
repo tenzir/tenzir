@@ -32,6 +32,7 @@
 #include "vast/logger.hpp"
 #include "vast/qualified_record_field.hpp"
 #include "vast/save.hpp"
+#include "vast/system/evaluator.hpp"
 #include "vast/system/filesystem.hpp"
 #include "vast/system/index.hpp"
 #include "vast/system/indexer_stage_driver.hpp"
@@ -143,8 +144,9 @@ evaluate(const PartitionState& state, const expression& expr) {
       });
     // Package the predicate, its position in the query and the required
     // INDEXER as a "job description".
-    if (auto hdl = caf::visit(v, pred.lhs, pred.rhs))
+    if (auto hdl = caf::visit(v, pred.lhs, pred.rhs)) {
       result.emplace_back(kvp.first, curried(pred), std::move(hdl));
+    }
   }
   // Return the list of jobs, to be used by the EVALUATOR.
   return result;
@@ -542,7 +544,12 @@ active_partition(caf::stateful_actor<active_partition_state>* self, uuid id,
                                                fbchunk);
       return;
     },
-    [=](const expression& expr) { return self->state.evaluate(expr); },
+    [=](const expression& expr) -> caf::actor {
+      auto triples = self->state.evaluate(expr);
+      if (triples.empty())
+        return nullptr;
+      return self->spawn(evaluator, expr, std::move(triples));
+    },
   };
 }
 
@@ -557,7 +564,12 @@ passive_partition(caf::stateful_actor<passive_partition_state>* self, uuid id,
     [=](atom::persist, const vast::path&) {
       VAST_ASSERT(!"read-only partition does not need to be persisted");
     },
-    [=](const expression& expr) { return self->state.evaluate(expr); },
+    [=](const expression& expr) -> caf::actor {
+      auto triples = self->state.evaluate(expr);
+      if (triples.empty())
+        return nullptr;
+      return self->spawn(evaluator, expr, std::move(triples));
+    },
   };
   self->set_exit_handler([=](const caf::exit_msg& msg) {
     VAST_DEBUG(self, "received EXIT from", msg.source,

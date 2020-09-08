@@ -97,8 +97,6 @@ private:
   const index_state& state_;
 };
 
-using pending_query_map = detail::stable_map<uuid, evaluation_triples>;
-
 struct query_state {
   /// The UUID of the query.
   vast::uuid id;
@@ -153,7 +151,7 @@ struct index_state {
   /// Spawns one evaluator for each partition.
   /// @returns a query map for passing to INDEX workers over the spawned
   ///          EVALUATOR actors.
-  query_map launch_evaluators(pending_query_map& pqm, expression expr);
+  // query_map launch_evaluators(pending_query_map& pqm, expression expr);
 
   // -- flush handling ---------------------------------------------------
 
@@ -251,9 +249,9 @@ pack(flatbuffers::FlatBufferBuilder& builder, const index_state& x);
 /// @param dir The directory of the index.
 /// @param partition_capacity The maximum number of events per partition.
 /// @pre `partition_capacity > 0
-caf::behavior
-index(caf::stateful_actor<index_state>* self, filesystem_type fs, path dir,
-      size_t partition_capacity, size_t in_mem_partitions,
-      size_t taste_partitions, size_t num_workers, bool delay_flush_until_shutdown);
+caf::behavior index(caf::stateful_actor<index_state>* self, filesystem_type fs,
+                    path dir, size_t partition_capacity,
+                    size_t in_mem_partitions, size_t taste_partitions,
+                    size_t num_workers, bool delay_flush_until_shutdown);
 
 } // namespace vast::system
