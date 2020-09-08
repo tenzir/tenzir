@@ -369,6 +369,11 @@ protected:
     return static_cast<concrete_type&>(x);
   }
 
+  template <class T>
+  static const concrete_type<Derived>& upcast(const T& x) {
+    return static_cast<const concrete_type&>(x);
+  }
+
   concrete_type* copy() const final {
     return new Derived(derived());
   }

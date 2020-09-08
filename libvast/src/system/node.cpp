@@ -29,6 +29,7 @@
 #include "vast/format/syslog.hpp"
 #include "vast/format/test.hpp"
 #include "vast/format/zeek.hpp"
+#include "vast/fwd.hpp"
 #include "vast/json.hpp"
 #include "vast/logger.hpp"
 #include "vast/settings.hpp"
@@ -399,6 +400,7 @@ caf::behavior node(node_actor* self, std::string name, path dir,
   // Initialize the file system with the node directory as root.
   auto fs = self->spawn<linked + detached>(posix_filesystem, self->state.dir);
   self->state.registry.add(caf::actor_cast<caf::actor>(fs), "filesystem");
+  // self->system().registry().put(atom::filesystem_v, fs);
   // Remove monitored components.
   self->set_down_handler([=](const down_msg& msg) {
     VAST_DEBUG(self, "got DOWN from", msg.source);

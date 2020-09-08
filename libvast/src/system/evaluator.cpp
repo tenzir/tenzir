@@ -102,7 +102,7 @@ void evaluator_state::init(caf::actor client, expression expr,
 }
 
 void evaluator_state::handle_result(const offset& position, const ids& result) {
-  VAST_DEBUG(self, "got", result.size(), "new hits for predicate at position",
+  VAST_DEBUG(self, "got", rank(result), "new hits for predicate at position",
              position);
   auto ptr = hits_for(position);
   VAST_ASSERT(ptr != nullptr);
@@ -118,7 +118,7 @@ void evaluator_state::handle_result(const offset& position, const ids& result) {
 void evaluator_state::handle_missing_result(const offset& position,
                                             const caf::error& err) {
   VAST_IGNORE_UNUSED(err);
-  VAST_WARNING(self, "INDEXER returned", self->system().render(err),
+  VAST_WARNING(self, "INDEXER returned", render(err),
                "instead of a result for predicate at position", position);
   auto ptr = hits_for(position);
   VAST_ASSERT(ptr != nullptr);
