@@ -78,7 +78,11 @@ TEST(flatten) {
   // clang-format on
   auto values
     = std::vector<data>{"foo", -42, list{1, 2, 3}, caf::none, caf::none, true};
-  auto r = unbox(make_record(rt, std::vector<data>{values}));
+  // Because list is exactly std::vector<data>, and data can be constructed from
+  // list, we must use () over {} for explicitly copying values here. This
+  // happened to work with brace-initialization using libc++, because libc++
+  // does not properly implement deduction guides for std::vector.
+  auto r = unbox(make_record(rt, std::vector<data>(values)));
   REQUIRE_EQUAL(r, xs);
   MESSAGE("flatten");
   auto fr = flatten(r);
