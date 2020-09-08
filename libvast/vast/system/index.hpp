@@ -260,11 +260,11 @@ auto inspect(Inspector& f, index_state::statistics& x) {
 /// @param in_mem_partitions The maximum number of partitions to hold in memory.
 /// @param taste_partitions The number of partitions to schedule immediately
 ///                         for each query.
-/// @param yolo_mode Whether to disable periodic persisting of global state.
+/// @param delay_flush_until_shutdown Whether to disable periodic persisting of global state.
 /// @pre `max_partition_size > 0 && in_mem_partitions > 0`
-caf::behavior
-index(caf::stateful_actor<index_state>* self, const path& dir,
-      size_t max_partition_size, size_t in_mem_partitions,
-      size_t taste_partitions, size_t num_workers, bool yolo_mode);
+caf::behavior index(caf::stateful_actor<index_state>* self,
+                    path dir, size_t partition_capacity,
+                    size_t in_mem_partitions, size_t taste_partitions,
+                    size_t num_workers, bool delay_flush_until_shutdown);
 
 } // namespace vast::system
