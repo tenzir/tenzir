@@ -16,7 +16,7 @@ if (PANDOC_FOUND)
     WRITE ${CMAKE_CURRENT_BINARY_DIR}/make_man_${man_page}.cmake
     "execute_process(
       COMMAND ${CMAKE_BINARY_DIR}/bin/vast manual
-      ERROR_FILE ${man_generated}.md)
+      OUTPUT_FILE ${man_generated}.md)
     execute_process(
       COMMAND pandoc -s -f markdown -t man ${man_generated}.md
       OUTPUT_FILE ${man_generated})")

@@ -374,9 +374,9 @@ parse(const command& root, command::argument_iterator first,
     return caf::no_error;
   }
   if (get_or(result.options, "manual", false)) {
-    manheader(std::cerr);
-    mantext(*target, std::cerr, 3);
-    manfooter(std::cerr);
+    manheader(std::cout);
+    mantext(*target, std::cout, 3);
+    manfooter(std::cout);
     return caf::no_error;
   }
   return result;
