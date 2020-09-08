@@ -739,7 +739,6 @@ bool type_check(const type& t, const data& x) {
       return type_check(u.key_type, key) && type_check(u.value_type, value);
     },
     [&](const record_type& u) {
-      // Until we have a separate data type for records we treat them as list.
       auto xs = caf::get_if<record>(&x);
       if (!xs)
         return false;
