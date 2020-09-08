@@ -14,9 +14,11 @@
 #pragma once
 
 #include "vast/column_index.hpp"
+#include "vast/fbs/partition.hpp"
 #include "vast/fwd.hpp"
 #include "vast/path.hpp"
 #include "vast/system/accountant.hpp"
+#include "vast/system/filesystem.hpp"
 #include "vast/system/instrumentation.hpp"
 #include "vast/type.hpp"
 #include "vast/uuid.hpp"
@@ -28,6 +30,37 @@
 #include <string>
 
 namespace vast::system {
+
+namespace v2 {
+
+// TODO: Create a separate `passive_indexer_state`, similar to how partitions
+// are handled.
+struct indexer_state {
+  value_index_ptr idx;
+
+  /// The name of this indexer.
+  std::string name;
+
+  /// The partition id to which this indexer belongs (for debugging).
+  uuid partition_id;
+
+  /// Tracks whether we received at least one table slice column.
+  bool stream_initiated;
+
+  /// The response promise for a snapshot atom.
+  caf::response_promise promise;
+};
+
+/// Indexes a table slice column with a single value index.
+caf::behavior active_indexer(caf::stateful_actor<indexer_state>* self, type index_type,
+                      caf::settings index_opts);
+
+/// An indexer that was recovered from on-disk state. It can only respond
+/// to queries, but not add eny more entries.
+caf::behavior passive_indexer(caf::stateful_actor<indexer_state>* self,
+                               uuid partition_id, value_index_ptr idx);
+
+} // namespace v2
 
 struct indexer_state {
   // -- constructors, destructors, and assignment operators --------------------

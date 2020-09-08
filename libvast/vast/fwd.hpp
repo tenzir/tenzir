@@ -110,6 +110,20 @@ struct list_type;
 
 namespace system {
 
+namespace v2 {
+
+struct active_partition_state;
+struct passive_partition_state;
+struct index_state;
+struct index_statistics;
+struct layout_statistics;
+
+} // namespace v2
+
+struct component_map;
+struct component_map_entry;
+struct component_state;
+struct component_state_map;
 struct data_point;
 struct measurement;
 struct node_state;

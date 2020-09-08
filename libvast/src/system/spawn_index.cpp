@@ -13,14 +13,14 @@
 
 #include "vast/system/spawn_index.hpp"
 
-#include <caf/actor.hpp>
-#include <caf/expected.hpp>
-#include <caf/settings.hpp>
-
 #include "vast/defaults.hpp"
 #include "vast/system/index.hpp"
 #include "vast/system/node.hpp"
 #include "vast/system/spawn_arguments.hpp"
+
+#include <caf/actor.hpp>
+#include <caf/expected.hpp>
+#include <caf/settings.hpp>
 
 namespace vast::system {
 
