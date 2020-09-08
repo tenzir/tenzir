@@ -130,9 +130,10 @@ void evaluator_state::handle_missing_result(const offset& position,
 }
 
 void evaluator_state::evaluate() {
+  auto expr_hits = caf::visit(ids_evaluator{predicate_hits}, expr);
   VAST_DEBUG(self, "got predicate_hits:", predicate_hits,
-             "expr_hits:", caf::visit(ids_evaluator{predicate_hits}, expr));
-  auto delta = caf::visit(ids_evaluator{predicate_hits}, expr) - hits;
+             "expr_hits:", expr_hits);
+  auto delta = expr_hits - hits;
   if (any<1>(delta)) {
     hits |= delta;
     self->send(client, std::move(delta));
