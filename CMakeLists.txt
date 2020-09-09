@@ -194,6 +194,8 @@ elseif (NOT VAST_LOG_LEVEL STREQUAL "$CACHE{VAST_LOG_LEVEL}")
       CACHE STRING "${VAST_LOG_LEVEL_DOC}" FORCE)
 endif ()
 
+set(VAST_CAF_LOG_LEVEL "WARNING" CACHE STRING ${VAST_LOG_LEVEL_DOC})
+
 # Raise an error for invalid log levels.
 set(validLogLevels
     QUIET
@@ -505,6 +507,7 @@ if (CAF_FOUND)
   endif ()
   set(CAF_FOUND ${CAF_FOUND_SAVE})
 elseif (EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/aux/caf/CMakeLists.txt)
+  set(CAF_LOG_LEVEL ${VAST_CAF_LOG_LEVEL})
   set(CAF_NO_AUTO_LIBCPP TRUE)
   set(CAF_NO_OPENCL TRUE)
   set(CAF_NO_EXAMPLES TRUE)
@@ -523,6 +526,9 @@ elseif (EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/aux/caf/CMakeLists.txt)
                                                                   core)
   add_library(caf::core ALIAS libcaf_core_${_linkage_suffix})
   set_target_properties(libcaf_io_${_linkage_suffix} PROPERTIES EXPORT_NAME io)
+  target_compile_options(libcaf_io_${_linkage_suffix} PRIVATE
+    -Wno-maybe-uninitialized
+    -Wno-unknown-warning-option)
   target_link_libraries(libcaf_io_${_linkage_suffix} Threads::Threads)
   add_library(caf::io ALIAS libcaf_io_${_linkage_suffix})
   install(

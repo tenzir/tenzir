@@ -49,6 +49,8 @@ Usage: $0 [OPTION]... [VAR=VALUE]...
   Debugging:
     --log-level=LEVEL       maximum compile-time log level
                             (quiet,error,warning,info,verbose,debug,trace)
+    --caf-log-level=LEVEL   maximum compile-time log level for CAF
+                            (quiet,error,warning,info,debug,trace)
     --without-assertions    disable assertions
     --without-exceptions    disable C++ exceptions
     --with-asan             enable AddressSanitizer
@@ -175,6 +177,10 @@ while [ $# -ne 0 ]; do
 # -- Debugging -----------------------------------------------------------------
     --log-level=*)
       append_cache_entry VAST_LOG_LEVEL STRING \
+        "$(echo "$optarg" |  tr '[a-z]' '[A-Z]')"
+      ;;
+    --caf-log-level=*)
+      append_cache_entry VAST_CAF_LOG_LEVEL STRING \
         "$(echo "$optarg" |  tr '[a-z]' '[A-Z]')"
       ;;
     --without-assertions)
