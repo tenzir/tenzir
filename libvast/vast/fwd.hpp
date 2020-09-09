@@ -131,6 +131,7 @@ enum relational_operator : uint8_t;
 
 enum class ec : uint8_t;
 enum class query_options : uint32_t;
+enum class status_verbosity;
 
 // -- aliases ------------------------------------------------------------------
 
@@ -298,14 +299,15 @@ CAF_BEGIN_TYPE_ID_BLOCK(vast, caf::first_custom_type_id)
   VAST_ADD_TYPE_ID((vast::disjunction))
   VAST_ADD_TYPE_ID((vast::ec))
   VAST_ADD_TYPE_ID((vast::expression))
-  VAST_ADD_TYPE_ID((vast::invocation))
   VAST_ADD_TYPE_ID((vast::field_extractor))
+  VAST_ADD_TYPE_ID((vast::invocation))
   VAST_ADD_TYPE_ID((vast::negation))
   VAST_ADD_TYPE_ID((vast::path))
   VAST_ADD_TYPE_ID((vast::predicate))
   VAST_ADD_TYPE_ID((vast::query_options))
   VAST_ADD_TYPE_ID((vast::relational_operator))
   VAST_ADD_TYPE_ID((vast::schema))
+  VAST_ADD_TYPE_ID((vast::status_verbosity))
   VAST_ADD_TYPE_ID((vast::table_slice_ptr))
   VAST_ADD_TYPE_ID((vast::type))
   VAST_ADD_TYPE_ID((vast::type_extractor))

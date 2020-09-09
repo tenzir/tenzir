@@ -143,8 +143,9 @@ void collect_component_status(node_actor* self,
   // Send out requests and collects answers.
   for (auto& [label, component] : self->state.registry.components())
     self
-      ->request(component.actor, defaults::system::initial_request_timeout,
-                atom::status_v, v)
+      ->request<message_priority::high>(
+        component.actor, defaults::system::initial_request_timeout,
+        atom::status_v, v)
       .then(
         [=, lab = label](caf::config_value::dictionary& xs) mutable {
           merge_settings(xs, req_state->content);
