@@ -13,6 +13,8 @@
 
 #include "vast/detail/fill_status_map.hpp"
 
+#include "vast/detail/algorithms.hpp"
+
 #include <caf/config_value.hpp>
 #include <caf/downstream_manager.hpp>
 #include <caf/inbound_path.hpp>
@@ -21,7 +23,18 @@
 #include <caf/settings.hpp>
 #include <caf/stream_manager.hpp>
 
-#include "vast/detail/algorithms.hpp"
+#include <sstream>
+#include <thread>
+
+namespace {
+
+std::string thread_id() {
+  std::stringstream ss;
+  ss << std::this_thread::get_id();
+  return std::move(ss).str();
+}
+
+} // namespace
 
 namespace vast::detail {
 
@@ -65,6 +78,7 @@ void fill_status_map(caf::settings& xs, caf::stream_manager& mgr) {
 void fill_status_map(caf::dictionary<caf::config_value>& xs,
                      caf::scheduled_actor* self) {
   put(xs, "actor-id", self->id());
+  put(xs, "thread-id", thread_id());
   put(xs, "name", self->name());
   put(xs, "mailbox-size", self->mailbox().size());
   size_t counter = 0;
