@@ -12,7 +12,8 @@ ENV DEBIAN_FRONTEND noninteractive
 # Compiler and dependency setup
 RUN apt-get -qq update && apt-get -qqy install \
   build-essential gcc-8 g++-8 ninja-build libbenchmark-dev libpcap-dev tcpdump \
-  libssl-dev python3-dev python3-pip python3-venv git-core jq gnupg2
+  libssl-dev python3-dev python3-pip python3-venv git-core jq gnupg2 \
+  libyaml-cpp-dev
 RUN pip3 install --upgrade pip && pip install --upgrade cmake && \
   cmake --version
 
