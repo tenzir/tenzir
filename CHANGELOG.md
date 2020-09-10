@@ -11,6 +11,12 @@ Every entry has a category for which we use the following visual abbreviations:
 
 ## Unreleased
 
+- ⚠️ VAST has a new dependency: [yaml-cpp](https://github.com/jbeder/yaml-cpp)
+  version 0.6.2 or greater. This new dependency will allow VAST to switch its
+  configuration file from a currently proprietary format to the ops-friendly
+  industry standard: YAML.
+  [#1045](https://github.com/tenzir/vast/pull/1045)
+
 - 🎁 VAST now merges the contents of all used configuration files instead of
   using only the most user-specific file. The file specified using `--config`
   takes the highest precedence, followed by the user-specific path
