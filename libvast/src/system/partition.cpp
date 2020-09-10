@@ -56,6 +56,7 @@
 #include "caf/broadcast_downstream_manager.hpp"
 #include "caf/deserializer.hpp"
 #include "caf/error.hpp"
+#include "caf/exit_reason.hpp"
 #include "caf/fwd.hpp"
 #include "caf/sec.hpp"
 
@@ -561,11 +562,15 @@ passive_partition(caf::stateful_actor<passive_partition_state>* self, uuid id,
     auto indexers = std::vector<caf::actor>{};
     for (auto& [_, idx] : self->state.indexers)
       indexers.push_back(idx);
-    // NOTE: We technically don't need to kill the indexers at all here, since
-    // they're ref-counted and should just expire once nobody uses them for
-    // query handling anymore. On the other hand, that lack of ownership delays
-    // the shutdown and can introduce subtle bugs, e.g. the telemetry message
-    // handler keeping indexers alive indefinitely.
+    // Receiving an EXIT message does not need to coincide with the state being
+    // destructed, so we explicitly clear the vector to release the references.
+    self->state.indexers.clear();
+    if (msg.reason != caf::exit_reason::user_shutdown) {
+      self->quit(msg.reason);
+      return;
+    }
+    // When the shutdown was requested by the user (as opposed to the partition
+    // just dropping out of the LRU cache), pro-active remove the indexers.
     terminate<policy::parallel>(self, std::move(indexers))
       .then(
         [=](atom::done) {

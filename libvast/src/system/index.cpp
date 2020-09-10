@@ -456,7 +456,9 @@ index(caf::stateful_actor<index_state>* self, filesystem_type fs, path dir,
   auto decomission_active_partition = [=] {
     auto& active = self->state.active_partition;
     auto id = active.id;
-    self->state.unpersisted[id] = active.actor;
+    caf::actor actor = nullptr;
+    std::swap(actor, active.actor);
+    self->state.unpersisted[id] = actor;
     // Send buffered batches.
     self->state.stage->out().fan_out_flush();
     self->state.stage->out().force_emit_batches();
@@ -465,7 +467,7 @@ index(caf::stateful_actor<index_state>* self, filesystem_type fs, path dir,
     // Persist active partition asynchronously.
     auto part_dir = dir / to_string(id);
     VAST_DEBUG(self, "persists active partition to", part_dir);
-    self->request(active.actor, caf::infinite, atom::persist_v, part_dir)
+    self->request(actor, caf::infinite, atom::persist_v, part_dir)
       .then(
         [=](atom::ok) {
           VAST_VERBOSE(self, "successfully persisted partition", id);
@@ -544,13 +546,19 @@ index(caf::stateful_actor<index_state>* self, filesystem_type fs, path dir,
     // Collect partitions for termination.
     std::vector<caf::actor> partitions;
     partitions.reserve(self->state.inmem_partitions.size() + 1);
-    partitions.push_back(self->state.active_partition.actor);
+    // partitions.push_back(self->state.active_partition.actor);
+    for ([[maybe_unused]] auto& [_, part] : self->state.unpersisted)
+      partitions.push_back(part);
     for ([[maybe_unused]] auto& [_, part] : self->state.inmem_partitions)
       partitions.push_back(part);
+    // Receiving an EXIT message does not need to coincide with the state being
+    // destructed, so we explicitly clear the tables to release the references.
+    self->state.unpersisted.clear();
+    self->state.inmem_partitions.clear();
     // Terminate partition actors.
     VAST_DEBUG(self, "brings down", partitions.size(), "partitions");
-    shutdown<policy::parallel>(self, std::move(partitions));
     self->state.flush_to_disk();
+    shutdown<policy::parallel>(self, std::move(partitions));
   });
   // Launch workers for resolving queries.
   for (size_t i = 0; i < num_workers; ++i)
