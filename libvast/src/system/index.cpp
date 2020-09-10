@@ -421,10 +421,10 @@ void index_state::flush_to_disk() {
       });
 }
 
-caf::behavior
-index(caf::stateful_actor<index_state>* self, filesystem_type fs, path dir,
-      size_t partition_capacity, size_t max_inmem_partitions,
-      size_t taste_partitions, size_t num_workers, bool delay_flush_until_shutdown) {
+caf::behavior index(caf::stateful_actor<index_state>* self, filesystem_type fs,
+                    path dir, size_t partition_capacity,
+                    size_t max_inmem_partitions, size_t taste_partitions,
+                    size_t num_workers, bool delay_flush_until_shutdown) {
   VAST_VERBOSE(self, "initializes index in", dir);
   VAST_VERBOSE(self, "caps partition size at", partition_capacity, "events");
   // Set members.

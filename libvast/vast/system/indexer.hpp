@@ -54,12 +54,12 @@ struct indexer_state {
 };
 
 /// Indexes a table slice column with a single value index.
-caf::behavior active_indexer(caf::stateful_actor<indexer_state>* self, type index_type,
-                      caf::settings index_opts);
+caf::behavior active_indexer(caf::stateful_actor<indexer_state>* self,
+                             type index_type, caf::settings index_opts);
 
 /// An indexer that was recovered from on-disk state. It can only respond
 /// to queries, but not add eny more entries.
 caf::behavior passive_indexer(caf::stateful_actor<indexer_state>* self,
-                               uuid partition_id, value_index_ptr idx);
+                              uuid partition_id, value_index_ptr idx);
 
 } // namespace vast::system

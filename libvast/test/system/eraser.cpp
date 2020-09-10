@@ -149,7 +149,8 @@ TEST(eraser on actual INDEX with Zeek conn logs) {
   MESSAGE("spawn INDEX ingest 4 slices with 100 rows (= 1 partition) each");
   auto fs = self->spawn(vast::system::posix_filesystem, directory);
   index = self->spawn(system::index, fs, directory / "index",
-                      defaults::import::table_slice_size, 100, taste_count, 1, true);
+                      defaults::import::table_slice_size, 100, taste_count, 1,
+                      true);
   detail::spawn_container_source(sys, std::move(slices), index);
   run();
   // Predicate for running all actors *except* aut.
