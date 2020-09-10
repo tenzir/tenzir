@@ -317,12 +317,12 @@ bool convert(const data& x, json& j, const type& t);
 
 /// Parses YAML into a data.
 /// @param str The string containing the YAML content
-/// @returns The parsed YAML as data.
+/// @returns The parsed YAML as data, or an error.
 caf::expected<data> from_yaml(std::string_view str);
 
 /// Prints data as YAML.
 /// @param x The data instance.
-/// @returns The YAML representation of *x*.
+/// @returns The YAML representation of *x*, or an error.
 caf::expected<std::string> to_yaml(const data& x);
 
 } // namespace vast

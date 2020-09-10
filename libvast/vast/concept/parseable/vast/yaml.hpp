@@ -39,4 +39,5 @@ namespace parsers {
 static auto const yaml = yaml_parser{};
 
 } // namespace parsers
+
 } // namespace vast

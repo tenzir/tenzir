@@ -862,7 +862,6 @@ display(CAF_FOUND "${caf_dir}" caf_summary)
 display(VAST_HAVE_BROKER "${broker_dir}" broker_summary)
 display(Arrow_FOUND "${arrow_dir}" arrow_summary)
 display(PCAP_FOUND "${PCAP_INCLUDE_DIR}" pcap_summary)
-# FIXME: what's the modern way to query if a pkg is found?
 display(YAML_CPP_INCLUDE_DIR "${YAML_CPP_INCLUDE_DIR}" yaml_cpp_summary)
 display(DOXYGEN_FOUND yes doxygen_summary)
 display(PANDOC_FOUND yes pandoc_summary)
