@@ -34,7 +34,7 @@ COPY schema ./schema
 COPY scripts ./scripts
 COPY tools ./tools
 COPY vast ./vast
-COPY .clang-format .cmake-format BANNER CMakeLists.txt configure vast.conf.example ./
+COPY .clang-format .cmake-format LICENSE README.md BANNER CMakeLists.txt configure vast.conf.example ./
 RUN ./configure \
     --prefix=$PREFIX \
     --build-type=$BUILD_TYPE \
@@ -42,9 +42,9 @@ RUN ./configure \
     --generator=Ninja \
     --without-arrow
 RUN cmake --build build --parallel
-RUN CTEST_OUTPUT_ON_FAILURE=1 cmake --build build --target test && \
-  cmake --build build --target integration && \
-  cmake --build build --target install
+RUN CTEST_OUTPUT_ON_FAILURE=1 cmake --build build --target test
+RUN cmake --build build --target integration
+RUN cmake --build build --target install
 
 # Production image: copy application
 FROM debian:buster-slim
