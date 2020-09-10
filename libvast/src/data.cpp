@@ -23,6 +23,8 @@
 #include "vast/detail/type_traits.hpp"
 #include "vast/json.hpp"
 
+#include <caf/settings.hpp>
+
 #include <stdexcept>
 
 #include <yaml-cpp/yaml.h>
@@ -340,6 +342,57 @@ bool convert(const data& d, json& j, const type& t) {
     return true;
   }
   return convert(d, j);
+}
+
+caf::error convert(const data& d, caf::config_value& cv) {
+  auto f = detail::overload(
+    [&](const auto& x) -> caf::error {
+      using value_type = std::decay_t<decltype(x)>;
+      if constexpr (detail::is_any_v<value_type, bool, integer, real, duration>)
+        cv = x;
+      else
+        cv = to_string(x);
+      return caf::none;
+    },
+    [&](const std::string& x) -> caf::error {
+      if (auto uri = caf::make_uri(x))
+        cv = std::move(*uri);
+      else
+        // If we couldn't infer a more specific config value type, we use the
+        // string as is.
+        cv = x;
+      return caf::none;
+    },
+    [&](const list& xs) -> caf::error {
+      caf::config_value::list result;
+      result.reserve(xs.size());
+      for (auto x : xs) {
+        caf::config_value y;
+        if (auto err = convert(x, y))
+          return err;
+        result.push_back(std::move(y));
+      }
+      cv = std::move(result);
+      return caf::none;
+    },
+    [&](const record& xs) -> caf::error {
+      caf::dictionary<caf::config_value> result;
+      if (auto err = convert(xs, result))
+        return err;
+      cv = std::move(result);
+      return caf::none;
+    });
+  return caf::visit(f, d);
+}
+
+caf::error convert(const record& xs, caf::settings& ys) {
+  for (auto& [k, v] : xs) {
+    caf::config_value x;
+    if (auto err = convert(v, x))
+      return err;
+    put(ys, k, std::move(x));
+  }
+  return caf::none;
 }
 
 namespace {
