@@ -240,6 +240,8 @@ if (VAST_USE_OPENSSL)
   target_link_libraries(libvast PUBLIC caf::openssl)
 endif ()
 
+target_link_libraries(libvast PUBLIC yaml-cpp)
+
 target_link_libraries(libvast PUBLIC ${flatbuffers_target})
 add_dependencies(libvast libvast_flatbuffers)
 
@@ -387,7 +389,8 @@ set(tests
     test/vector_map.cpp
     test/vector_set.cpp
     test/view.cpp
-    test/word.cpp)
+    test/word.cpp
+    test/yaml.cpp)
 
 if (VAST_HAVE_ARROW)
   set(tests ${tests} test/format/arrow.cpp test/arrow_table_slice.cpp)

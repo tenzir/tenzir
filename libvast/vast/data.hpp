@@ -13,30 +13,29 @@
 
 #pragma once
 
-#include <chrono>
-#include <string>
-#include <tuple>
-#include <type_traits>
+#include "vast/address.hpp"
+#include "vast/aliases.hpp"
+#include "vast/concept/hashable/uhash.hpp"
+#include "vast/concept/hashable/xxhash.hpp"
+#include "vast/detail/operators.hpp"
+#include "vast/offset.hpp"
+#include "vast/pattern.hpp"
+#include "vast/port.hpp"
+#include "vast/subnet.hpp"
+#include "vast/time.hpp"
+#include "vast/type.hpp"
 
 #include <caf/default_sum_type_access.hpp>
 #include <caf/detail/type_list.hpp>
+#include <caf/expected.hpp>
 #include <caf/none.hpp>
 #include <caf/optional.hpp>
 #include <caf/variant.hpp>
 
-#include "vast/aliases.hpp"
-#include "vast/address.hpp"
-#include "vast/pattern.hpp"
-#include "vast/subnet.hpp"
-#include "vast/port.hpp"
-#include "vast/offset.hpp"
-#include "vast/time.hpp"
-#include "vast/type.hpp"
-
-#include "vast/concept/hashable/uhash.hpp"
-#include "vast/concept/hashable/xxhash.hpp"
-
-#include "vast/detail/operators.hpp"
+#include <chrono>
+#include <string>
+#include <tuple>
+#include <type_traits>
 
 namespace vast {
 
@@ -324,6 +323,18 @@ bool convert(const data& xs, json& j);
 /// records contains the field names from the type corresponding to the given
 /// data.
 bool convert(const data& x, json& j, const type& t);
+
+// -- YAML -------------------------------------------------------------
+
+/// Parses YAML into a data.
+/// @param str The string containing the YAML content
+/// @returns The parsed YAML as data, or an error.
+caf::expected<data> from_yaml(std::string_view str);
+
+/// Prints data as YAML.
+/// @param x The data instance.
+/// @returns The YAML representation of *x*, or an error.
+caf::expected<std::string> to_yaml(const data& x);
 
 } // namespace vast
 

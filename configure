@@ -62,6 +62,7 @@ Usage: $0 [OPTION]... [VAR=VALUE]...
     --with-caf=PATH         path to CAF install root or build directory
     --with-bundled-caf      build CAF from the submodule
     --with-flatbuffers=PATH path to flatbuffers install root
+    --with-yaml-cpp=PATH    path to yaml-cpp install root
 
   Optional packages:
     --with-broker=PATH      path to Broker install root (required for
@@ -210,6 +211,9 @@ while [ $# -ne 0 ]; do
       ;;
     --with-flatbuffers=*)
       append_cache_entry FLATBUFFERS_ROOT_DIR PATH "$optarg"
+      ;;
+    --with-yaml-cpp=*)
+      append_cache_entry YAML_CPP_ROOT PATH "$optarg"
       ;;
 # -- Optional packages ---------------------------------------------------------
     --with-broker=*)
