@@ -5,6 +5,7 @@ on:
     paths:
     - Dockerfile
     - .github/workflows/vast-docker.yaml
+    - .github/workflows/vast.yaml
   release:
     types: published
 
