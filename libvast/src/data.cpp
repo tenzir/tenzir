@@ -21,8 +21,9 @@
 #include "vast/detail/overload.hpp"
 #include "vast/detail/string.hpp"
 #include "vast/detail/type_traits.hpp"
-#include "vast/die.hpp"
 #include "vast/json.hpp"
+
+#include <stdexcept>
 
 #include <yaml-cpp/yaml.h>
 
@@ -375,7 +376,8 @@ data parse(const YAML::Node& node) {
       return xs;
     }
   }
-  die("unhandled YAML node type");
+  VAST_ASSERT(!"unhandled YAML node type in switch statement");
+  throw std::logic_error{"unhandled YAML node type in switch statement"};
 }
 
 } // namespace
@@ -390,6 +392,8 @@ caf::expected<data> from_yaml(std::string_view str) {
     return caf::make_error(ec::parse_error,
                            "failed to parse YAML at line/col/pos", e.mark.line,
                            e.mark.column, e.mark.pos);
+  } catch (const std::logic_error& e) {
+    return caf::make_error(ec::logic_error, e.what());
   }
 }
 
