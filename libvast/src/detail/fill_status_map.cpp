@@ -13,6 +13,7 @@
 
 #include "vast/detail/fill_status_map.hpp"
 
+#include "vast/config.hpp"
 #include "vast/detail/algorithms.hpp"
 
 #include <caf/config_value.hpp>
@@ -26,6 +27,17 @@
 #include <sstream>
 #include <thread>
 
+#if VAST_LINUX
+
+#  define _GNU_SOURCE
+
+#  include <unistd.h>
+
+#  include <sys/syscall.h>
+#  include <sys/types.h>
+
+#endif // VAST_LINUX
+
 namespace {
 
 std::string thread_id() {
@@ -33,6 +45,17 @@ std::string thread_id() {
   ss << std::this_thread::get_id();
   return std::move(ss).str();
 }
+
+#if VAST_LINUX
+
+// Gets the PID associated with a certain PThread for comparison with the PID
+// shown in htop's tree mode.
+// c.f. https://stackoverflow.com/a/26526741/1974431
+pid_t pthread_id() {
+  return syscall(SYS_gettid);
+}
+
+#endif // VAST_LINUX
 
 } // namespace
 
@@ -79,6 +102,9 @@ void fill_status_map(caf::dictionary<caf::config_value>& xs,
                      caf::scheduled_actor* self) {
   put(xs, "actor-id", self->id());
   put(xs, "thread-id", thread_id());
+#if VAST_LINUX
+  put(xs, "pthread-id", pthread_id());
+#endif // VAST_LINUX
   put(xs, "name", self->name());
   put(xs, "mailbox-size", self->mailbox().size());
   size_t counter = 0;
