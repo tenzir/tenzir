@@ -10,6 +10,7 @@
 , pandoc
 , caf
 , libpcap
+, libyaml-cpp
 , arrow-cpp
 , flatbuffers
 , broker
@@ -64,7 +65,7 @@ stdenv.mkDerivation rec {
 
   nativeBuildInputs = [ cmake cmake-format ];
   propagatedNativeBuildInputs = [ pkgconfig pandoc ];
-  buildInputs = [ libpcap flatbuffers jemalloc broker ];
+  buildInputs = [ libpcap flatbuffers libyaml-cpp jemalloc broker ];
   propagatedBuildInputs = [ arrow-cpp caf ];
 
   cmakeFlags = [

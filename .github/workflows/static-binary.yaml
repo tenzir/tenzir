@@ -7,8 +7,9 @@ on:
       - master
   pull_request:
     paths:
-      - '.github/workflows/static-binary.yaml'
       - 'nix/**'
+      - '.github/workflows/static-binary.yaml'
+      - '.github/workflows/vast.yaml'
   release:
     types: published
 
