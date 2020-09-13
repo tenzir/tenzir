@@ -64,6 +64,7 @@
 
 #include "caf/error.hpp"
 #include "caf/response_promise.hpp"
+#include "caf/scheduled_actor.hpp"
 
 using namespace std::chrono;
 
@@ -327,15 +328,23 @@ void await_evaluation_maps(
       .then(
         [=](evaluation_triples triples) {
           auto received = ++shared_counter->received;
-          if (!triples.empty())
+          VAST_DEBUG_ANON("received", received, "of", expected);
+          if (!triples.empty()) {
             shared_counter->pqm.emplace(partition_id, std::move(triples));
+          } else {
+            VAST_DEBUG_ANON("was empty :(");
+          }
           if (received == expected)
             then(std::move(shared_counter->pqm));
         },
         [=](caf::error err) {
-          // Don't increase `received` to ensure the sucess handler never gets
-          // called.
-          then(err);
+          auto received = ++shared_counter->received;
+          // TODO: Add a way to signal to the caller that he is only getting
+          // partial results because some of the partitions error'ed out.
+          VAST_ERROR(self, "error getting evaluation triples from partition",
+                     partition_id, err);
+          if (received == expected)
+            then(std::move(shared_counter->pqm));
         });
   }
 }
@@ -444,6 +453,9 @@ caf::behavior index(caf::stateful_actor<index_state>* self, filesystem_type fs,
     self->quit(err);
     return {};
   }
+  // This option must be kept in sync with vast/address_synopsis.hpp.
+  // put(self->state.meta_idx.factory_options(), "max-partition-size",
+  //     partition_capacity);
   // Creates a new active partition and updates index state.
   auto create_active_partition = [=] {
     auto id = uuid::random();
@@ -553,18 +565,17 @@ caf::behavior index(caf::stateful_actor<index_state>* self, filesystem_type fs,
     // Collect partitions for termination.
     std::vector<caf::actor> partitions;
     partitions.reserve(self->state.inmem_partitions.size() + 1);
-    // partitions.push_back(self->state.active_partition.actor);
     for ([[maybe_unused]] auto& [_, part] : self->state.unpersisted)
       partitions.push_back(part);
     for ([[maybe_unused]] auto& [_, part] : self->state.inmem_partitions)
       partitions.push_back(part);
+    self->state.flush_to_disk();
     // Receiving an EXIT message does not need to coincide with the state being
     // destructed, so we explicitly clear the tables to release the references.
     self->state.unpersisted.clear();
     self->state.inmem_partitions.clear();
     // Terminate partition actors.
     VAST_DEBUG(self, "brings down", partitions.size(), "partitions");
-    self->state.flush_to_disk();
     shutdown<policy::parallel>(self, std::move(partitions));
   });
   // Launch workers for resolving queries.
@@ -655,6 +666,7 @@ caf::behavior index(caf::stateful_actor<index_state>* self, filesystem_type fs,
       }
       auto iter = st.pending.find(query_id);
       if (iter == st.pending.end()) {
+        VAST_DEBUG(self, "dropping query for unknown id", query_id);
         self->send(client, atom::done_v);
         return;
       }
@@ -665,8 +677,7 @@ caf::behavior index(caf::stateful_actor<index_state>* self, filesystem_type fs,
       // below in the same actor context.
       await_evaluation_maps(
         self, iter->second.expression, actors,
-        [self, client, query_id,
-         num_partitions](caf::expected<pending_query_map> maybe_pqm) {
+        [self, client, query_id](caf::expected<pending_query_map> maybe_pqm) {
           auto& st = self->state;
           auto iter = st.pending.find(query_id);
           if (iter == st.pending.end()) {
@@ -683,15 +694,9 @@ caf::behavior index(caf::stateful_actor<index_state>* self, filesystem_type fs,
           }
           auto& pqm = *maybe_pqm;
           if (pqm.empty()) {
-            if (!iter->second.partitions.empty()) {
-              // None of the partitions of this round produced an evaluation
-              // triple, but there are still more to go.
-              self->delegate(caf::actor_cast<caf::actor>(self), query_id,
-                             num_partitions);
-              return;
-            }
-            st.pending.erase(iter);
             VAST_DEBUG(self, "returns without result: no partitions qualify");
+            if (iter->second.partitions.empty())
+              st.pending.erase(iter);
             self->send(client, atom::done_v);
             return;
           }
