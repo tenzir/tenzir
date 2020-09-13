@@ -123,6 +123,9 @@ struct active_partition_state {
   /// Temporary storage for the serialized indexers of this partition, before
   /// they get written into the flatbuffer.
   std::map<caf::actor_id, vast::chunk_ptr> chunks;
+
+  /// A once_flag for things that need to be done only once at shutdown.
+  std::once_flag shutdown_once;
 };
 
 // TODO: Split this into a `static data` part that can be mmaped

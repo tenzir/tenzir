@@ -446,11 +446,15 @@ active_partition(caf::stateful_actor<active_partition_state>* self, uuid id,
     }
     // Delay shutdown if we're currently in the process of persisting.
     if (self->state.persistence_promise.pending()) {
-      VAST_INFO(self, "delaying partition shutdown because its still writing "
-                      "to disk");
+      std::call_once(self->state.shutdown_once, [self] {
+        VAST_VERBOSE(self,
+                     "delaying partition shutdown because its still writing "
+                     "to disk");
+      });
       self->delayed_send(self, std::chrono::milliseconds(100), msg);
       return;
     }
+    VAST_VERBOSE(self, "will shut down after persist finished");
     auto indexers = std::vector<caf::actor>{};
     auto indexer_ids = std::vector<caf::actor_id>{};
     for ([[maybe_unused]] auto& [_, idx] : self->state.indexers) {
