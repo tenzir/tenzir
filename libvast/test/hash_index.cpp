@@ -74,6 +74,7 @@ TEST(factory construction and parameterization) {
   auto idx = factory<value_index>::make(t, opts);
   auto ptr3 = dynamic_cast<hash_index<3>*>(idx.get()); // 20 bits in 3 bytes
   CHECK(ptr3 != nullptr);
+  CHECK_EQUAL(idx->options().size(), 1u);
   MESSAGE("test cardinality that is not a power of 2");
   opts["cardinality"] = 1_Mi + 7;
   idx = factory<value_index>::make(t, opts);
