@@ -58,6 +58,11 @@ vast::chunk_ptr chunkify(const value_index_ptr& idx) {
 
 caf::behavior passive_indexer(caf::stateful_actor<indexer_state>* self,
                               uuid partition_id, value_index_ptr idx) {
+  if (!idx) {
+    VAST_ERROR(self, "got invalid index");
+    self->quit(make_error(ec::end_of_input, "invalid index"));
+    return {};
+  }
   self->state.name = "indexer-" + to_string(idx->type());
   self->state.partition_id = partition_id;
   self->state.idx = std::move(idx);
