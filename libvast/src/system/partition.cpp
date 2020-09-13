@@ -58,6 +58,7 @@
 #include "caf/error.hpp"
 #include "caf/exit_reason.hpp"
 #include "caf/fwd.hpp"
+#include "caf/scheduled_actor.hpp"
 #include "caf/sec.hpp"
 
 using namespace std::chrono;
@@ -620,6 +621,7 @@ passive_partition(caf::stateful_actor<passive_partition_state>* self, uuid id,
       }
       // Switch to "normal" partition mode
       self->become(passive_partition_behavior);
+      self->set_default_handler(caf::print_and_drop);
     },
     [=](caf::error err) {
       VAST_ERROR("Could not load partition", id, err);
