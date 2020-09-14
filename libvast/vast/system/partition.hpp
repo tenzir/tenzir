@@ -51,28 +51,6 @@ struct active_partition_state {
     caf::broadcast_downstream_manager<
       table_slice_column, vast::qualified_record_field, partition_selector>>;
 
-  /// Member functions
-
-  /// Gets the INDEXER at position in the layout.
-  caf::actor indexer_at(size_t position) const;
-
-  /// Retrieves an INDEXER for a predicate with a data extractor.
-  /// @param dx The extractor.
-  /// @param op The operator (only used to precompute ids for type queries.
-  /// @param x The literal side of the predicate.
-  caf::actor fetch_indexer(const data_extractor& dx, relational_operator op,
-                           const data& x) const;
-
-  /// Retrieves an INDEXER for a predicate with an attribute extractor.
-  /// @param ex The extractor.
-  /// @param op The operator (only used to precompute ids for type queries.
-  /// @param x The literal side of the predicate.
-  caf::actor fetch_indexer(const attribute_extractor& ex,
-                           relational_operator op, const data& x) const;
-
-  /// Returns all INDEXERs that are involved in evaluating the expression.
-  evaluation_triples evaluate(const expression& expr) const;
-
   /// Data Members
 
   /// Pointer to the parent actor.
@@ -136,15 +114,15 @@ struct active_partition_state {
 struct passive_partition_state {
   using recovered_indexer = std::pair<qualified_record_field, value_index_ptr>;
 
-  caf::actor indexer_at(size_t position) const;
+  // caf::actor indexer_at(size_t position) const;
 
-  caf::actor fetch_indexer(const data_extractor& dx, relational_operator op,
-                           const data& x) const;
+  // caf::actor fetch_indexer(const data_extractor& dx, relational_operator op,
+  //                          const data& x) const;
 
-  caf::actor fetch_indexer(const attribute_extractor& ex,
-                           relational_operator op, const data& x) const;
+  // caf::actor fetch_indexer(const attribute_extractor& ex,
+  //                          relational_operator op, const data& x) const;
 
-  evaluation_triples evaluate(const expression& expr) const;
+  // evaluation_triples evaluate(const expression& expr) const;
 
   /// Pointer to the parent actor.
   caf::stateful_actor<passive_partition_state>* self;

@@ -68,9 +68,10 @@ namespace vast::system {
 
 namespace {
 
-// The three functions in this namespace take PartitionState as template
-// argument because they are shared between the read-only and active
-// partitions.
+// The functions in this namespace take PartitionState as template argument
+// because the impelementation is the same for passive and active partitions.
+
+/// Gets the INDEXER at a certain position in the `indexers` stable map.
 template <typename PartitionState>
 caf::actor indexer_at(const PartitionState& state, size_t position) {
   VAST_ASSERT(position < state.indexers.size());
@@ -78,6 +79,9 @@ caf::actor indexer_at(const PartitionState& state, size_t position) {
   return indexer;
 }
 
+/// Gets the INDEXER at position in the layout.
+/// @relates active_partition_state
+/// @relates passive_partition_state
 template <typename PartitionState>
 caf::actor fetch_indexer(const PartitionState& state, const data_extractor& dx,
                          relational_operator op, const data& x) {
@@ -96,6 +100,12 @@ caf::actor fetch_indexer(const PartitionState& state, const data_extractor& dx,
   return indexer_at(state, *index);
 }
 
+/// Retrieves an INDEXER for a predicate with a data extractor.
+/// @param dx The extractor.
+/// @param op The operator (only used to precompute ids for type queries.
+/// @param x The literal side of the predicate.
+/// @relates active_partition_state
+/// @relates passive_partition_state
 template <typename PartitionState>
 caf::actor
 fetch_indexer(const PartitionState& state, const attribute_extractor& ex,
@@ -119,6 +129,9 @@ fetch_indexer(const PartitionState& state, const attribute_extractor& ex,
   return nullptr;
 }
 
+/// Returns all INDEXERs that are involved in evaluating the expression.
+/// @relates active_partition_state
+/// @relates passive_partition_state
 template <typename PartitionState>
 evaluation_triples
 evaluate(const PartitionState& state, const expression& expr) {
@@ -131,7 +144,7 @@ evaluate(const PartitionState& state, const expression& expr) {
     // according to the specified type of extractor.
     auto& pred = kvp.second;
     auto get_indexer_handle = [&](const auto& ext, const data& x) {
-      return state.fetch_indexer(ext, pred.op, x);
+      return fetch_indexer(state, ext, pred.op, x);
     };
     auto v = detail::overload(
       [&](const attribute_extractor& ex, const data& x) {
@@ -154,50 +167,6 @@ evaluate(const PartitionState& state, const expression& expr) {
 
 } // namespace
 
-// TODO: Currently these wrappers are a bit useless, but eventually we
-// probably want to implement them differently to avoid deserialization
-// costs for the passive partitions.
-caf::actor active_partition_state::indexer_at(size_t position) const {
-  return vast::system::indexer_at(*this, position);
-}
-
-caf::actor passive_partition_state::indexer_at(size_t position) const {
-  return vast::system::indexer_at(*this, position);
-}
-
-caf::actor active_partition_state::fetch_indexer(const attribute_extractor& ex,
-                                                 relational_operator op,
-                                                 const data& x) const {
-  return vast::system::fetch_indexer(*this, ex, op, x);
-}
-
-caf::actor passive_partition_state::fetch_indexer(const attribute_extractor& ex,
-                                                  relational_operator op,
-                                                  const data& x) const {
-  return vast::system::fetch_indexer(*this, ex, op, x);
-}
-
-caf::actor active_partition_state::fetch_indexer(const data_extractor& ex,
-                                                 relational_operator op,
-                                                 const data& x) const {
-  return vast::system::fetch_indexer(*this, ex, op, x);
-}
-
-caf::actor passive_partition_state::fetch_indexer(const data_extractor& ex,
-                                                  relational_operator op,
-                                                  const data& x) const {
-  return vast::system::fetch_indexer(*this, ex, op, x);
-}
-
-evaluation_triples
-active_partition_state::evaluate(const expression& expr) const {
-  return vast::system::evaluate(*this, expr);
-}
-
-evaluation_triples
-passive_partition_state::evaluate(const expression& expr) const {
-  return vast::system::evaluate(*this, expr);
-}
 
 bool partition_selector::operator()(const vast::qualified_record_field& filter,
                                     const table_slice_column& x) const {
@@ -372,8 +341,6 @@ active_partition(caf::stateful_actor<active_partition_state>* self, uuid id,
     [=](caf::unit_t&, caf::downstream<table_slice_column>& out,
         table_slice_ptr x) {
       VAST_DEBUG(self, "got new table slice", to_string(*x));
-      // TODO: putting this line in the handshake message should be enough, but
-      // for some reason it is not :( Why?
       self->state.streaming_initiated = true;
       // We rely on `invalid_id` actually being the highest possible id
       // when using `min()` below.
@@ -536,7 +503,7 @@ active_partition(caf::stateful_actor<active_partition_state>* self, uuid id,
                                                fbchunk);
       return;
     },
-    [=](const expression& expr) { return self->state.evaluate(expr); },
+    [=](const expression& expr) { return evaluate(self->state, expr); },
   };
 }
 
@@ -551,7 +518,7 @@ passive_partition(caf::stateful_actor<passive_partition_state>* self, uuid id,
     [=](atom::persist, const vast::path&) {
       VAST_ASSERT(!"read-only partition does not need to be persisted");
     },
-    [=](const expression& expr) { return self->state.evaluate(expr); },
+    [=](const expression& expr) { return evaluate(self->state, expr); },
   };
   self->set_exit_handler([=](const caf::exit_msg& msg) {
     VAST_DEBUG(self, "received EXIT from", msg.source,
@@ -567,7 +534,7 @@ passive_partition(caf::stateful_actor<passive_partition_state>* self, uuid id,
       return;
     }
     // When the shutdown was requested by the user (as opposed to the partition
-    // just dropping out of the LRU cache), pro-active remove the indexers.
+    // just dropping out of the LRU cache), pro-actively remove the indexers.
     terminate<policy::parallel>(self, std::move(indexers))
       .then(
         [=](atom::done) {
