@@ -5,7 +5,10 @@ namespace vast.fbs;
 
 table ValueIndex {
   /// The type of the index.
-  type: string; // TODO: use the Type flatbuffer once available.
+  // TODO: This is currently deduced implicitly from the `combined_layout` of
+  // the `Partition`. Once available, we want to use the `Type` flatbuffer here
+  // so all relevant information is available.
+  // type: Type;
 
   /// The serialized `vast::value_index`.
   data: [ubyte];

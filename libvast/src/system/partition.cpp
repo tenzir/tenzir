@@ -221,14 +221,10 @@ pack(flatbuffers::FlatBufferBuilder& builder, const active_partition_state& x) {
       return make_error(ec::logic_error,
                         "No chunk for for actor id " + to_string(actor_id));
     auto& chunk = chunk_it->second;
-    // TODO: Can we somehow get rid of this copy?
     auto data = builder.CreateVector(
       reinterpret_cast<const uint8_t*>(chunk->data()), chunk->size());
-    auto type = builder.CreateString(
-      "ValueIndex"); // TODO: read this from the actual type of the indexer
     auto fqf = builder.CreateString(qf.field_name);
     fbs::ValueIndexBuilder vbuilder(builder);
-    vbuilder.add_type(type);
     vbuilder.add_data(data);
     auto vindex = vbuilder.Finish();
     fbs::QualifiedValueIndexBuilder qbuilder(builder);
@@ -298,12 +294,8 @@ unpack(const fbs::Partition& partition, passive_partition_state& state) {
     if (!index)
       return make_error(ec::format_error, "missing index name in qualified "
                                           "index");
-    if (!index->type())
-      return make_error(ec::format_error, "missing type in index");
     if (!index->data())
       return make_error(ec::format_error, "missing data in index");
-    if (index->type()->str() != "ValueIndex")
-      return make_error(ec::format_error, "unknown index type in flatbuffer");
   }
   if (auto error = unpack(*partition.uuid(), state.id))
     return error;
