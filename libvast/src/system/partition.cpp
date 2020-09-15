@@ -440,7 +440,7 @@ active_partition(caf::stateful_actor<active_partition_state>* self, uuid id,
       // `resume` atom when finalizing the stream, but then the case
       // where the stream finishes before persisting starts becomes more
       // complicated.
-      if (!self->state.streaming_initiated || !self->state.stage->idle()) {
+      if (!self->state.streaming_initiated || !self->state.stage->inbound_paths().empty() || !self->state.stage->idle()) {
         VAST_INFO(self, "waiting for stream before persisting");
         self->delayed_send(self, 50ms, atom::persist_v, part_dir);
         return st.persistence_promise;
