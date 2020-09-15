@@ -11,6 +11,16 @@ Every entry has a category for which we use the following visual abbreviations:
 
 ## Unreleased
 
+- ⚠️ The options that affect batches in the `import` command received new, more
+  user-facing names: `import.table-slice-type`, `import.table-slice-size`, and
+  `import.read-timeout` are now called `import.batch-encoding`,
+  `import.batch-size`, and `import.batch-timeout` respectively.
+  [#1058](https://github.com/tenzir/vast/pull/1058)
+
+- 🐞 Stalled sources that were unable to generate new events no longer stop
+  import processes from shutting down under rare circumstances.
+  [#1058](https://github.com/tenzir/vast/pull/1058)
+
 - ⚠️ VAST has a new dependency: [yaml-cpp](https://github.com/jbeder/yaml-cpp)
   version 0.6.2 or greater. This new dependency will allow VAST to switch its
   configuration file from a currently proprietary format to the ops-friendly
