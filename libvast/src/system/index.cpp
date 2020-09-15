@@ -454,14 +454,14 @@ caf::behavior index(caf::stateful_actor<index_state>* self, filesystem_type fs,
     return {};
   }
   // This option must be kept in sync with vast/address_synopsis.hpp.
-  // put(self->state.meta_idx.factory_options(), "max-partition-size",
-  //     partition_capacity);
+  put(self->state.meta_idx.factory_options(), "max-partition-size",
+      partition_capacity);
   // Creates a new active partition and updates index state.
   auto create_active_partition = [=] {
     auto id = uuid::random();
     caf::settings index_opts;
     // TODO: Set the 'cardinality' option once ch19167 is resolved.
-    // index_opts["cardinality"] = partition_capacity;
+    index_opts["cardinality"] = partition_capacity;
     auto part
       = self->spawn(active_partition, id, self->state.filesystem, index_opts);
     auto slot = self->state.stage->add_outbound_path(part);
