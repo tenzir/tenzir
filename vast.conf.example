@@ -179,7 +179,9 @@ import {
   ; Timeout after which batched table slices are forwarded.
   ;batch-timeout = "10s"
 
-  ; Upper bound for the size of a table slice.
+  ; Upper bound for the size of a table slice. A value of 0 causes the
+  ; batch-size to be unbounded, leaving control of batching to the
+  ; import.batch-timeout option only.
   ;batch-size = 100
 
   ; Encoding type of table slices (arrow or msgpack).
