@@ -15,12 +15,12 @@
 
 #include "vast/defaults.hpp"
 #include "vast/detail/assert.hpp"
+#include "vast/detail/settings.hpp"
 #include "vast/detail/string.hpp"
 #include "vast/detail/system.hpp"
 #include "vast/error.hpp"
 #include "vast/logger.hpp"
 #include "vast/path.hpp"
-#include "vast/settings.hpp"
 #include "vast/system/application.hpp"
 #include "vast/system/start_command.hpp"
 
@@ -390,7 +390,7 @@ bool init_config(caf::actor_system_config& cfg, const invocation& from,
         || caf::get_or(from.options, "system.node", false)))
     cfg.set("logger.file-verbosity", caf::atom("quiet"));
   // Merge all CLI settings into the actor_system settings.
-  merge_settings(from.options, cfg.content);
+  detail::merge_settings(from.options, cfg.content);
   // Allow users to use `system.verbosity` to configure console verbosity.
   if (auto value = caf::get_if<caf::atom_value>(&from.options, "system."
                                                                "verbosity")) {
@@ -460,7 +460,7 @@ caf::expected<caf::message> run(const invocation& inv, caf::actor_system& sys,
     // from a remote_command we still need to do it here.
     auto merged_invocation = inv;
     merged_invocation.options = content(sys.config());
-    merge_settings(inv.options, merged_invocation.options);
+    detail::merge_settings(inv.options, merged_invocation.options);
     return std::invoke(search_result->second, merged_invocation, sys);
   }
   // No callback was registered for this command

@@ -11,11 +11,11 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#include "vast/settings.hpp"
+#include "vast/detail/settings.hpp"
 
 #include "vast/logger.hpp"
 
-namespace vast {
+namespace vast::detail {
 
 namespace {
 
@@ -60,4 +60,4 @@ bool strip_settings(caf::settings& xs) {
   return m.empty();
 }
 
-} // namespace vast
+} // namespace vast::detail

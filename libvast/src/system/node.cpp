@@ -23,6 +23,7 @@
 #include "vast/defaults.hpp"
 #include "vast/detail/assert.hpp"
 #include "vast/detail/process.hpp"
+#include "vast/detail/settings.hpp"
 #include "vast/format/csv.hpp"
 #include "vast/format/json.hpp"
 #include "vast/format/json/suricata.hpp"
@@ -32,7 +33,6 @@
 #include "vast/fwd.hpp"
 #include "vast/json.hpp"
 #include "vast/logger.hpp"
-#include "vast/settings.hpp"
 #include "vast/system/accountant.hpp"
 #include "vast/system/node.hpp"
 #include "vast/system/posix_filesystem.hpp"
@@ -130,7 +130,7 @@ void collect_component_status(node_actor* self,
   if (v >= status_verbosity::info) {
     put(system, "in-memory-table-slices", table_slice::instances());
     put(system, "database-path", self->state.dir.str());
-    merge_settings(detail::get_status(), system);
+    detail::merge_settings(detail::get_status(), system);
   }
   if (v >= status_verbosity::debug) {
     put(system, "running-actors", sys.registry().running());
@@ -138,7 +138,7 @@ void collect_component_status(node_actor* self,
     put(system, "worker-threads", sys.scheduler().num_workers());
   }
   auto deliver = [](auto&& req_state) {
-    strip_settings(req_state->content);
+    detail::strip_settings(req_state->content);
     req_state->rp.deliver(to_string(to_json(req_state->content)));
   };
   // Send out requests and collects answers.
@@ -149,7 +149,7 @@ void collect_component_status(node_actor* self,
         atom::status_v, v)
       .then(
         [=, lab = label](caf::config_value::dictionary& xs) mutable {
-          merge_settings(xs, req_state->content);
+          detail::merge_settings(xs, req_state->content);
           // Both handlers have a copy of req_state.
           if (req_state.use_count() == 2)
             deliver(std::move(req_state));
@@ -356,7 +356,7 @@ node_state::spawn_command(const invocation& inv,
     auto spawn_opt = caf::get_or(spawn_inv.options, "spawn", caf::settings{});
     auto source_opt = caf::get_or(spawn_opt, "source", caf::settings{});
     auto import_opt = caf::get_or(spawn_inv.options, "import", caf::settings{});
-    merge_settings(source_opt, import_opt);
+    detail::merge_settings(source_opt, import_opt);
     spawn_inv.options["import"] = import_opt;
   }
   // Spawn our new VAST component.

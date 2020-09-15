@@ -13,9 +13,9 @@
 
 #include "vast/detail/process.hpp"
 
+#include "vast/detail/settings.hpp"
 #include "vast/error.hpp"
 #include "vast/logger.hpp"
-#include "vast/settings.hpp"
 
 #include <caf/expected.hpp>
 
