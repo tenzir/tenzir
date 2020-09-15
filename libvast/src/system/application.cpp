@@ -157,9 +157,11 @@ auto make_export_command() {
                           documentation::vast_export_null,
                           sink_opts("?export.null"));
 #if VAST_HAVE_ARROW
+  // The Arrow export does not support --write or --uds, so we don't use the
+  // sink_opts here intentionally.
   export_->add_subcommand("arrow", "exports query results in Arrow format",
                           documentation::vast_export_arrow,
-                          sink_opts("?export.arrow"));
+                          opts("?export.arrow"));
 
 #endif
 #if VAST_HAVE_PCAP

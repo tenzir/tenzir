@@ -121,7 +121,6 @@ export {
 
   ; The `vast export arrow` command exports events in the Apache Arrow format.
   arrow {
-    ; For available options, see export.ascii.
   }
 
   ; The `vast export pcap` command exports events in the PCAP format.
