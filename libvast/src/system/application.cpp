@@ -182,13 +182,14 @@ auto make_import_command() {
   auto import_ = std::make_unique<command>(
     "import", "imports data from STDIN or file", documentation::vast_import,
     opts("?import")
-      .add<caf::atom_value>("table-slice-type,t", "table slice type")
-      .add<size_t>("table-slice-size,s", "the suggested size for table slices")
+      .add<caf::atom_value>("batch-encoding", "encoding type of table slices "
+                                              "(arrow or msgpack)")
+      .add<size_t>("batch-size", "upper bound for the size of a table slice")
+      .add<std::string>("batch-timeout", "timoeut after which batched table "
+                                         "slices are forwarded")
       .add<bool>("blocking,b", "block until the IMPORTER forwarded all data")
       .add<size_t>("max-events,n", "the maximum number of events to "
-                                   "import")
-      .add<std::string>("read-timeout", "read timoeut after which data is "
-                                        "forwarded to the importer"));
+                                   "import"));
   import_->add_subcommand("zeek", "imports Zeek logs from STDIN or file",
                           documentation::vast_import_zeek,
                           source_opts("?import.zeek"));
@@ -258,12 +259,13 @@ auto make_spawn_source_command() {
     "source", "creates a new source inside the node",
     documentation::vast_spawn_source,
     opts("?spawn.source")
-      .add<caf::atom_value>("table-slice-type,t", "table slice type")
-      .add<size_t>("table-slice-size,s", "the suggested size for table slices")
+      .add<caf::atom_value>("batch-encoding", "encoding type of table slices "
+                                              "(arrow or msgpack)")
+      .add<size_t>("batch-size", "upper bound for the size of a table slice")
+      .add<std::string>("batch-timeout", "timoeut after which batched table "
+                                         "slices are forwarded")
       .add<size_t>("max-events,n", "the maximum number of events to "
-                                   "import")
-      .add<std::string>("read-timeout", "read timoeut after which data is "
-                                        "forwarded to the importer"));
+                                   "import"));
   spawn_source->add_subcommand("csv",
                                "creates a new CSV source inside the node",
                                documentation::vast_spawn_source_csv,

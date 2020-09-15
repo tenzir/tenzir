@@ -176,19 +176,17 @@ import {
   ; The maximum number of events to import.
   ;max-events = <infinity>
 
-  ; Read timoeut after which data is forwarded to the importer regardless of
-  ; batching and table slices being unfinished.
-  ;read-timeout = "10s"
+  ; Timeout after which batched table slices are forwarded.
+  ;batch-timeout = "10s"
+
+  ; Upper bound for the size of a table slice.
+  ;batch-size = 100
+
+  ; Encoding type of table slices (arrow or msgpack).
+  ;batch-encoding = 'arrow'
 
   ; Block until the importer forwarded all data.
   ;blocking = false
-
-  ; Number of events to be batched in a table slice (this is a target value that
-  ; can be underrun if the source has a low rate).
-  ;table-slice-size = 100
-
-  ; The table slice type (caf|msgpack|arrow).
-  ;table-slice-type = 'arrow'
 
   ; The `vast import csv` command imports data from CSVs with a known schema.
   csv {

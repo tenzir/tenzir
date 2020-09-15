@@ -65,13 +65,13 @@ reader::reader(caf::atom_value table_slice_type, const caf::settings& options,
   : super(table_slice_type),
     syslog_rfc5424_type_{make_rfc5424_type()},
     syslog_unkown_type_{make_unknown_type()} {
-  if (auto read_timeout_arg = caf::get_if<std::string>(&options, "import.read-"
+  if (auto read_timeout_arg = caf::get_if<std::string>(&options, "import.batch-"
                                                                  "timeout")) {
     if (auto read_timeout = to<decltype(read_timeout_)>(*read_timeout_arg))
       read_timeout_ = *read_timeout;
     else
-      VAST_WARNING(this, "cannot set read-timeout to", *read_timeout_arg,
-                   "as it is not a valid duration");
+      VAST_WARNING(this, "cannot set import.batch-timeout to",
+                   *read_timeout_arg, "as it is not a valid duration");
   }
   if (in != nullptr)
     reset(std::move(in));
