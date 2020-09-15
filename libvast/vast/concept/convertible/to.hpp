@@ -32,7 +32,8 @@ template <class To, class From, class... Opts>
 auto to(From&& from, Opts&&... opts)
   -> std::enable_if_t<is_convertible<std::decay_t<From>, To>{},
                       caf::expected<To>> {
-  using return_type = decltype(convert(from, std::declval<To&>(), opts...));
+  using return_type
+    = decltype(convert(from, std::declval<To&>(), std::forward<Opts>(opts)...));
   if constexpr (std::is_same_v<return_type, bool>) {
     caf::expected<To> result{To()};
     if (convert(from, *result, std::forward<Opts>(opts)...))
