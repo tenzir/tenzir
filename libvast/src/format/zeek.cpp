@@ -309,6 +309,8 @@ caf::error reader::read_impl(size_t max_events, size_t max_slice_size,
   };
   // Loop until reaching EOF, a timeout, or the configured limit of records.
   while (produced < max_events) {
+    if (lines_->done())
+      return finish(f, make_error(ec::end_of_input, "input exhausted"));
     auto timeout = next_line();
     // We must check not only for a timeout but also whether any events were
     // produced to work around CAF's assumption that sources are always able to
@@ -318,8 +320,6 @@ caf::error reader::read_impl(size_t max_events, size_t max_slice_size,
       VAST_DEBUG(this, "reached input timeout at line", lines_->line_number());
       return finish(f, ec::timeout);
     }
-    if (lines_->done())
-      return finish(f, make_error(ec::end_of_input, "input exhausted"));
     // Parse curent line.
     auto& line = lines_->get();
     if (line.empty()) {

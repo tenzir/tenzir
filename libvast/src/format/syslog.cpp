@@ -117,6 +117,8 @@ reader::read_impl(size_t max_events, size_t max_slice_size, consumer& f) {
     return lines_->next_timeout(remaining);
   };
   for (size_t produced = 0; produced < max_events;) {
+    if (lines_->done())
+      return finish(f, make_error(ec::end_of_input, "input exhausted"));
     auto timeout = next_line();
     // We must check not only for a timeout but also whether any events were
     // produced to work around CAF's assumption that sources are always able to
@@ -126,8 +128,6 @@ reader::read_impl(size_t max_events, size_t max_slice_size, consumer& f) {
       VAST_DEBUG(this, "reached input timeout at line", lines_->line_number());
       return finish(f, ec::timeout);
     }
-    if (lines_->done())
-      return finish(f, make_error(ec::end_of_input, "input exhausted"));
     auto& line = lines_->get();
     if (line.empty()) {
       // Ignore empty lines.
