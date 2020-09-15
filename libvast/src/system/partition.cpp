@@ -167,7 +167,6 @@ evaluate(const PartitionState& state, const expression& expr) {
 
 } // namespace
 
-
 bool partition_selector::operator()(const vast::qualified_record_field& filter,
                                     const table_slice_column& x) const {
   auto& layout = x.slice->layout();
@@ -341,7 +340,6 @@ active_partition(caf::stateful_actor<active_partition_state>* self, uuid id,
     [=](caf::unit_t&, caf::downstream<table_slice_column>& out,
         table_slice_ptr x) {
       VAST_DEBUG(self, "got new table slice", to_string(*x));
-      self->state.streaming_initiated = true;
       // We rely on `invalid_id` actually being the highest possible id
       // when using `min()` below.
       VAST_ASSERT(vast::invalid_id == std::numeric_limits<vast::id>::max());
@@ -375,8 +373,7 @@ active_partition(caf::stateful_actor<active_partition_state>* self, uuid id,
       // We get an 'unreachable' error when the stream becomes unreachable
       // because the actor was destroyed; in this case we can't use `self`
       // anymore.
-      if (err
-          && caf::exit_reason{err.code()} != caf::exit_reason::unreachable) {
+      if (err && err != caf::exit_reason::unreachable) {
         VAST_ERROR(self, "was aborted with error", self->system().render(err));
         self->send_exit(self, err);
       }
@@ -426,6 +423,7 @@ active_partition(caf::stateful_actor<active_partition_state>* self, uuid id,
   });
   return {
     [=](caf::stream<table_slice_ptr> in) {
+      self->state.streaming_initiated = true;
       return self->state.stage->add_inbound_path(in);
     },
     [=](atom::persist, const path& part_dir) {
@@ -440,7 +438,9 @@ active_partition(caf::stateful_actor<active_partition_state>* self, uuid id,
       // `resume` atom when finalizing the stream, but then the case
       // where the stream finishes before persisting starts becomes more
       // complicated.
-      if (!self->state.streaming_initiated || !self->state.stage->inbound_paths().empty() || !self->state.stage->idle()) {
+      if (!self->state.streaming_initiated
+          || !self->state.stage->inbound_paths().empty()
+          || !self->state.stage->idle()) {
         VAST_INFO(self, "waiting for stream before persisting");
         self->delayed_send(self, 50ms, atom::persist_v, part_dir);
         return st.persistence_promise;

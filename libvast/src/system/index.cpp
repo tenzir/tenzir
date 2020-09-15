@@ -506,6 +506,10 @@ caf::behavior index(caf::stateful_actor<index_state>* self, filesystem_type fs,
     },
     [=](caf::unit_t&, caf::downstream<table_slice_ptr>& out,
         table_slice_ptr x) {
+      if (!x) {
+        VAST_WARNING(self, "ignoring null table slice");
+        return;
+      }
       self->state.stats.layouts[x->layout().name()].count += x->rows();
       auto& active = self->state.active_partition;
       if (!active.actor) {

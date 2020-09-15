@@ -88,21 +88,20 @@ caf::behavior active_indexer(caf::stateful_actor<indexer_state>* self,
                              type index_type, caf::settings index_opts) {
   self->state.name = "indexer-" + to_string(index_type);
   self->state.has_skip_attribute = vast::has_skip_attribute(index_type);
+  self->state.idx = factory<value_index>::make(index_type, index_opts);
+  if (!self->state.idx) {
+    VAST_ERROR(self, "failed constructing index");
+    self->quit(make_error(ec::unspecified, "fail constructing index"));
+    return {};
+  }
   return {
     [=](caf::stream<table_slice_column> in) {
-      VAST_DEBUG(self, "received new table slice stream");
+      self->state.stream_initiated = true;
       return caf::attach_stream_sink(
         self, in,
-        [=](caf::unit_t&) {
-          self->state.idx = factory<value_index>::make(index_type, index_opts);
-          if (!self->state.idx) {
-            VAST_ERROR(self, "failed constructing index");
-            self->quit(make_error(ec::unspecified, "fail constructing index"));
-          }
-        },
+        [=](caf::unit_t&) { VAST_DEBUG(self, "initializes stream sink"); },
         [=](caf::unit_t&, const std::vector<table_slice_column>& xs) {
           VAST_ASSERT(self->state.idx != nullptr);
-          self->state.stream_initiated = true;
           // NOTE: It seems like having the `#skip` attribute should lead to
           // no index being created at all (as opposed to creating it and
           // never adding data), but that was the behaviour of the previous
