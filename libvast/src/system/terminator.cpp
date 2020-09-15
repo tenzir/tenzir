@@ -125,7 +125,10 @@ caf::behavior terminator(caf::stateful_actor<terminator_state>* self,
         auto pred = [=](auto& actor) { return actor == msg.source; };
         auto& remaining = self->state.remaining_actors;
         auto i = std::find_if(remaining.begin(), remaining.end(), pred);
-        VAST_ASSERT(i != remaining.end());
+        if (i == remaining.end()) {
+          VAST_DEBUG(self, "ignores duplicate DOWN message");
+          return;
+        }
         remaining.erase(i);
         if (remaining.empty()) {
           VAST_DEBUG(self, "killed all remaining actors");
