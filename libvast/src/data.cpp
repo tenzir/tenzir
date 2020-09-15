@@ -23,7 +23,7 @@
 #include "vast/detail/type_traits.hpp"
 #include "vast/json.hpp"
 
-#include <caf/settings.hpp>
+#include <caf/config_value.hpp>
 
 #include <stdexcept>
 
@@ -344,6 +344,34 @@ bool convert(const data& d, json& j, const type& t) {
   return convert(d, j);
 }
 
+caf::error convert(const map& xs, caf::dictionary<caf::config_value>& ys) {
+  for (auto& [k, v] : xs) {
+    caf::config_value x;
+    if (auto err = convert(v, x))
+      return err;
+    ys[to_string(k)] = std::move(x);
+  }
+  return caf::none;
+}
+
+caf::error convert(const record& xs, caf::dictionary<caf::config_value>& ys) {
+  for (auto& [k, v] : xs) {
+    caf::config_value x;
+    if (auto err = convert(v, x))
+      return err;
+    ys[k] = std::move(x);
+  }
+  return caf::none;
+}
+
+caf::error convert(const record& xs, caf::config_value& cv) {
+  caf::config_value::dictionary result;
+  if (auto err = convert(xs, result))
+    return err;
+  cv = std::move(result);
+  return caf::none;
+}
+
 caf::error convert(const data& d, caf::config_value& cv) {
   auto f = detail::overload(
     [&](const auto& x) -> caf::error {
@@ -375,6 +403,14 @@ caf::error convert(const data& d, caf::config_value& cv) {
       cv = std::move(result);
       return caf::none;
     },
+    [&](const map& xs) -> caf::error {
+      // We treat maps like records.
+      caf::dictionary<caf::config_value> result;
+      if (auto err = convert(xs, result))
+        return err;
+      cv = std::move(result);
+      return caf::none;
+    },
     [&](const record& xs) -> caf::error {
       caf::dictionary<caf::config_value> result;
       if (auto err = convert(xs, result))
@@ -383,16 +419,6 @@ caf::error convert(const data& d, caf::config_value& cv) {
       return caf::none;
     });
   return caf::visit(f, d);
-}
-
-caf::error convert(const record& xs, caf::settings& ys) {
-  for (auto& [k, v] : xs) {
-    caf::config_value x;
-    if (auto err = convert(v, x))
-      return err;
-    put(ys, k, std::move(x));
-  }
-  return caf::none;
 }
 
 namespace {

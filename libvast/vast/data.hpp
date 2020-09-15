@@ -325,9 +325,9 @@ bool convert(const data& xs, json& j);
 /// data.
 bool convert(const data& x, json& j, const type& t);
 
-caf::error convert(const data& x, caf::config_value& y);
-
-caf::error convert(const record& xs, caf::settings& ys);
+caf::error convert(const record& xs, caf::dictionary<caf::config_value>& ys);
+caf::error convert(const record& xs, caf::config_value& cv);
+caf::error convert(const data& x, caf::config_value& cv);
 
 // -- YAML -------------------------------------------------------------
 
