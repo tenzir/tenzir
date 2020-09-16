@@ -256,12 +256,6 @@ source(caf::stateful_actor<source_state<Reader>>* self, Reader reader,
       auto [err, produced] = st.reader.read(events, table_slice_size,
                                             push_slice);
       t.stop(produced);
-      // TODO: If the source is unable to generate new events (returns 0),
-      //       the source will stall and never be polled again. We should
-      //       trigger CAF to poll the source after a predefined interval of
-      //       time again, e.g., via delayed_send.
-      if (produced == 0)
-        VAST_WARNING(self, "produced 0 events from may stall");
       st.count += produced;
       auto force_emit_batches = [&] {
         st.mgr->out().fan_out_flush();
@@ -273,6 +267,16 @@ source(caf::stateful_actor<source_state<Reader>>* self, Reader reader,
         st.send_report();
         self->quit();
       };
+      if (produced == 0) {
+        // If the source is unable to generate new events (returns 0), the
+        // source will stall and never be polled again, because CAF expects
+        // stream sources to _always_ be able to generate new events. As a
+        // workaround, we send out an invalid table slice here that gets ignored
+        // downstream, and forcefully emit batches.
+        VAST_VERBOSE(self, "emits invalid table slice to prevent stalling");
+        out.push(nullptr);
+        return finish();
+      }
       if (st.requested && st.count >= *st.requested)
         return finish();
       if (err != caf::none) {

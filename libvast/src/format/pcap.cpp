@@ -85,13 +85,13 @@ reader::reader(caf::atom_value id, const caf::settings& options,
     = community_id_ ? pcap_packet_type_community_id : pcap_packet_type;
   last_stats_ = {};
   discard_count_ = 0;
-  if (auto read_timeout_arg = caf::get_if<std::string>(&options, "import.read-"
+  if (auto read_timeout_arg = caf::get_if<std::string>(&options, "import.batch-"
                                                                  "timeout")) {
     if (auto read_timeout = to<decltype(read_timeout_)>(*read_timeout_arg))
       read_timeout_ = *read_timeout;
     else
-      VAST_WARNING(this, "cannot set read-timeout to", *read_timeout_arg,
-                   "as it is not a valid duration");
+      VAST_WARNING(this, "cannot set import.batch-timeout to",
+                   *read_timeout_arg, "as it is not a valid duration");
   }
 }
 

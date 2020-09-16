@@ -91,12 +91,12 @@ make_source(const Actor& self, caf::actor_system& sys, const invocation& inv,
   auto uri = caf::get_if<std::string>(&options, category + ".listen");
   auto file = caf::get_if<std::string>(&options, category + ".read");
   auto type = caf::get_if<std::string>(&options, category + ".type");
-  auto slice_type = get_or(options, "import.table-slice-type",
+  auto slice_type = get_or(options, "import.batch-encoding",
                            defaults::import::table_slice_type);
-  auto slice_size = get_or(options, "import.table-slice-size",
-                           defaults::import::table_slice_size);
+  auto slice_size
+    = get_or(options, "import.batch-size", defaults::import::table_slice_size);
   if (slice_size == 0)
-    return make_error(ec::invalid_configuration, "table-slice-size can't be 0");
+    slice_size = std::numeric_limits<decltype(slice_size)>::max();
   // Parse schema local to the import command.
   auto schema = get_schema(options, category);
   if (!schema)
@@ -151,8 +151,11 @@ make_source(const Actor& self, caf::actor_system& sys, const invocation& inv,
   }
   if (!reader)
     return make_error(ec::invalid_result, "failed to spawn reader");
-  VAST_VERBOSE_ANON(reader->name(), "produces", slice_type, "table slices of",
-                    slice_size, "events");
+  if (slice_size == std::numeric_limits<decltype(slice_size)>::max())
+    VAST_VERBOSE_ANON(reader->name(), "produces", slice_type, "table slices");
+  else
+    VAST_VERBOSE_ANON(reader->name(), "produces", slice_type,
+                      "table slices of at most", slice_size, "events");
   // Spawn the source, falling back to the default spawn function.
   auto local_schema = schema ? std::move(*schema) : vast::schema{};
   auto type_filter = type ? std::move(*type) : std::string{};

@@ -124,13 +124,13 @@ tests:
         input: data/zeek/conn.log.gz
       - command: export ascii 'resp_h == 192.168.1.104'
       # import some more to make sure accounting data is in the system.
-      - command: import -b -s 10 zeek
+      - command: import -b --batch-size=10 zeek
         input: data/zeek/conn.log.gz
-      - command: import -b -s 1000 zeek
+      - command: import -b --batch-size=1000 zeek
         input: data/zeek/conn.log.gz
-      - command: import -b -s 100000 zeek
+      - command: import -b --batch-size=100000 zeek
         input: data/zeek/conn.log.gz
-      - command: import -b -s 1 -n 242 zeek
+      - command: import -b --batch-size=1 -n 242 zeek
         input: data/zeek/conn.log.gz
       - command: status --detailed
         transformation: jq '.index.statistics.layouts | del(."vast.metrics")'
@@ -147,16 +147,16 @@ tests:
       - command: 'count "#timestamp >= 1970-01-01 && #type != \"vast.metrics\""'
       - command: count '#type == "zeek.conn"'
   Table Slice Types:
-    tags: [server, import-export, table-slice-type, zeek]
+    tags: [server, import-export, batch-encoding, zeek]
     fixture: ServerTester
     steps:
-      - command: import -b --table-slice-type=caf zeek
+      - command: import -b zeek
         input: data/zeek/conn.log.gz
-      - command: import -b --table-slice-type=msgpack zeek
+      - command: import -b --batch-encoding=msgpack zeek
         input: data/zeek/conn.log.gz
       - command: count '#type == "zeek.conn"'
       - guard: version | jq -e '."Apache Arrow"'
-      - command: import -b --table-slice-type=arrow zeek
+      - command: import -b --batch-encoding=arrow zeek
         input: data/zeek/conn.log.gz
       - command: count '#type == "zeek.conn"'
   Query Operators:

@@ -18,6 +18,8 @@ The above command signals the running node to ingest (i.e., to archive and index
 for later export) all Suricata events from the Eve JSON file passed via standard
 input.
 
+### Filter Expressions
+
 An optional filter expression allows for importing the relevant subset of
 information only. For example, a user might want to import Suricata Eve JSON,
 but skip over all events of type `suricata.stats`.
@@ -29,11 +31,15 @@ vast import suricata '#type != "suricata.stats"' < path/to/eve.json
 For more information on the optional filter expression, see the [query language
 documentation](https://docs.tenzir.com/vast/query-language/overview).
 
+### Format-Specific Options
+
 Some import formats have format-specific options. For example, the `pcap` import
 format has an `interface` option that can be used to ingest PCAPs from a network
 interface directly. To retrieve a list of format-specific options, run `vast
 import <format> help`, and similarly to retrieve format-specific documentation,
 run `vast import <format> documentation`.
+
+### Type Filtering
 
 The `--type` option filters known event types based on a prefix.  E.g., `vast
 import json --type=zeek` matches all event types that begin with `zeek`, and
@@ -41,3 +47,40 @@ restricts the event types known to the import command accordingly.
 
 VAST permanently tracks imported event types. They do not need to be specified
 again for consecutive imports.
+
+### Batching
+
+The import command parses events into table slices (batches). The following
+options control the batching:
+
+#### `import.batch-encoding`
+
+Selects the encoding of table slices. Available options are `msgpack`
+(row-based) and `arrow` (column-based).
+
+#### `import.batch-size`
+
+Sets an upper bound for the number of events per table slice.
+
+Most components in VAST operate on table slices, which makes the table slice
+size a fundamental tuning knob on the spectrum of throughput and latency.  Small
+table slices allow for shorter processing times, resulting in more scheduler
+context switches and a more balanced workload. However, the increased pressure
+on the scheduler comes at the cost of throughput. A large table slice size
+allows actors to spend more time processing a block of memory, but makes them
+yield less frequently to the scheduler. As a result, other actors scheduled on
+the same thread may have to wait a little longer.
+
+The `import.batch-size` option merely controls number of events per table slice,
+but not necessarily the number of events until a component forwards a batch to
+the next stage in a stream. The [CAF streaming
+framework](https://actor-framework.readthedocs.io/en/latest/Streaming.html) uses
+a credit-based flow-control mechanism to determine buffering of tables slices.
+Setting `import.batch-size` to 0 causes the table slice size to be unbounded and
+leaves it to other parameters to determine the actual table slice size.
+
+#### `import.batch-timeout`
+
+Sets a timeout for forwarding buffered table slices to the importer. If the
+timeout fires before a table slice reaches `import.batch-size`, then the table
+slice will contain fewer events but ship immediately.
