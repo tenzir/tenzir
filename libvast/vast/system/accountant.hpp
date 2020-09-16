@@ -29,13 +29,19 @@ struct accountant_state_deleter {
   void operator()(accountant_state* st);
 };
 
-using accountant_state_ptr
-  = std::unique_ptr<accountant_state, accountant_state_deleter>;
+struct accountant_state_ptr
+  : std::unique_ptr<accountant_state, accountant_state_deleter> {
+  using unique_ptr::unique_ptr;
+
+  // Name of the ACCOUNTANT actor.
+  static constexpr const char* name = "accountant";
+};
 
 // clang-format off
 /// @relates accountant
 using accountant_type = caf::typed_actor<
-  caf::replies_to<atom::config, accountant_config>::with<atom::ok>,
+  caf::replies_to<atom::config, accountant_config>
+    ::with<atom::ok>,
   caf::reacts_to<atom::announce, std::string>,
   caf::reacts_to<std::string, duration>,
   caf::reacts_to<std::string, time>,
@@ -44,7 +50,8 @@ using accountant_type = caf::typed_actor<
   caf::reacts_to<std::string, double>,
   caf::reacts_to<report>,
   caf::reacts_to<performance_report>,
-  caf::replies_to<atom::status, status_verbosity>::with<caf::dictionary<caf::config_value>>,
+  caf::replies_to<atom::status, status_verbosity>
+    ::with<caf::dictionary<caf::config_value>>,
   caf::reacts_to<atom::telemetry>>;
 // clang-format on
 
