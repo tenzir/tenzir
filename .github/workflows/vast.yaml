@@ -22,6 +22,7 @@ jobs:
   build:
     name: ${{ matrix.os.tag }} ${{ matrix.os.compiler }} ${{ matrix.configure.tag }}
     strategy:
+      fail-fast: false
       matrix:
         os:
         - tag: Ubuntu
