@@ -72,9 +72,6 @@ struct accountant_state {
 
   // The configuration.
   accountant_config cfg;
-
-  // Name of the ACCOUNTANT actor.
-  static constexpr const char* name = "accountant";
 };
 
 namespace {
@@ -163,19 +160,18 @@ void record(accountant_actor* self, const std::string& key, time x,
   record(self, key, x.time_since_epoch(), ts);
 }
 
-} // namespace <anonymous>
-
 void command_line_heartbeat(accountant_actor* self) {
   auto& st = *self->state;
 #if VAST_LOG_LEVEL >= VAST_LOG_LEVEL_DEBUG
-  if (auto rate = st.accumulator.rate_per_sec(); std::isfinite(rate))
-    VAST_DEBUG(self, "received", st.accumulator.events, "events at a rate of",
-               static_cast<uint64_t>(rate), "events/sec");
+  if (st.accumulator.events > 0)
+    if (auto rate = st.accumulator.rate_per_sec(); std::isfinite(rate))
+      VAST_DEBUG(self, "received", st.accumulator.events, "events at a rate of",
+                 static_cast<uint64_t>(rate), "events/sec");
 #endif
   st.accumulator = {};
 }
 
-static void apply_config(accountant_actor* self, accountant_config cfg) {
+void apply_config(accountant_actor* self, accountant_config cfg) {
   auto& st = *self->state;
   auto& old = st.cfg;
   // Act on file sink config.
@@ -214,6 +210,8 @@ static void apply_config(accountant_actor* self, accountant_config cfg) {
   }
   st.cfg = std::move(cfg);
 }
+
+} // namespace
 
 accountant_type::behavior_type
 accountant(accountant_actor* self, accountant_config cfg) {
