@@ -14,6 +14,7 @@
 #pragma once
 
 #include "vast/concept/convertible/is_convertible.hpp"
+#include "vast/detail/type_traits.hpp"
 #include "vast/error.hpp"
 
 #include <caf/expected.hpp>
@@ -31,10 +32,21 @@ template <class To, class From, class... Opts>
 auto to(From&& from, Opts&&... opts)
   -> std::enable_if_t<is_convertible<std::decay_t<From>, To>{},
                       caf::expected<To>> {
-  caf::expected<To> x{To()};
-  if (convert(from, *x, std::forward<Opts>(opts)...))
-    return x;
-  return make_error(ec::convert_error);
+  using return_type
+    = decltype(convert(from, std::declval<To&>(), std::forward<Opts>(opts)...));
+  if constexpr (std::is_same_v<return_type, bool>) {
+    caf::expected<To> result{To()};
+    if (convert(from, *result, std::forward<Opts>(opts)...))
+      return result;
+    return make_error(ec::convert_error);
+  } else if constexpr (std::is_same_v<return_type, caf::error>) {
+    To result;
+    if (auto err = convert(from, result, std::forward<Opts>(opts)...))
+      return err;
+    return result;
+  } else {
+    static_assert(detail::always_false_v<return_type>, "invalid return type");
+  }
 }
 
 template <class To, class From, class... Opts>
@@ -49,4 +61,3 @@ auto to_string(From&& from, Opts&&... opts)
 }
 
 } // namespace vast
-

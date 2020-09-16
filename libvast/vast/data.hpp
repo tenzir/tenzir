@@ -28,6 +28,7 @@
 #include <caf/default_sum_type_access.hpp>
 #include <caf/detail/type_list.hpp>
 #include <caf/expected.hpp>
+#include <caf/fwd.hpp>
 #include <caf/none.hpp>
 #include <caf/optional.hpp>
 #include <caf/variant.hpp>
@@ -323,6 +324,10 @@ bool convert(const data& xs, json& j);
 /// records contains the field names from the type corresponding to the given
 /// data.
 bool convert(const data& x, json& j, const type& t);
+
+caf::error convert(const record& xs, caf::dictionary<caf::config_value>& ys);
+caf::error convert(const record& xs, caf::config_value& cv);
+caf::error convert(const data& x, caf::config_value& cv);
 
 // -- YAML -------------------------------------------------------------
 

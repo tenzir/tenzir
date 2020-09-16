@@ -31,6 +31,7 @@
 #include <caf/test/dsl.hpp>
 
 using namespace vast;
+using namespace std::chrono_literals;
 
 TEST(list) {
   REQUIRE(std::is_same_v<std::vector<data>, list>);
@@ -326,3 +327,44 @@ TEST(json) {
   CHECK_EQUAL(to_string(to_json(x, t)), expected);
 }
 // clang-format on
+
+TEST(convert - caf::settings) {
+  // clang-format off
+  auto x = record{
+    {"x", "foo"},
+    {"r", record{
+      {"i", -42},
+      {"r", record{
+        {"u", 3.14}
+      }},
+    }},
+    {"delta", 12ms},
+    {"uri", "https://tenzir.com/"},
+    {"xs", list{1, 2, 3}},
+    {"ys", list{1, "foo", 3.14}},
+    {"zs", list{record{{"z", true}}, map{{42u, 4.2}}}},
+    {"port", port{443, port::tcp}}
+  };
+  // clang-format on
+  using namespace caf;
+  auto y = config_value::dictionary{};
+  y.emplace("x", "foo");
+  auto r = config_value::dictionary{};
+  r.emplace("i", -42);
+  auto rr = config_value::dictionary{};
+  rr.emplace("u", 3.14);
+  r.emplace("r", std::move(rr));
+  y.emplace("r", std::move(r));
+  y.emplace("delta", timespan{12ms});
+  y.emplace("uri", unbox(make_uri("https://tenzir.com/")));
+  y.emplace("xs", make_config_value_list(1, 2, 3));
+  y.emplace("ys", make_config_value_list(1, "foo", 3.14));
+  auto z0 = config_value::dictionary{};
+  z0.emplace("z", true);
+  auto z1 = config_value::dictionary{};
+  z1.emplace("42", 4.2);
+  y.emplace("zs", make_config_value_list(std::move(z0), std::move(z1)));
+  y.emplace("port", "443/tcp");
+  CHECK_EQUAL(unbox(to<settings>(x)), y);
+  CHECK_EQUAL(unbox(to<dictionary<config_value>>(x)), y);
+}
