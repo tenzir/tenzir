@@ -240,7 +240,7 @@ if (VAST_USE_OPENSSL)
   target_link_libraries(libvast PUBLIC caf::openssl)
 endif ()
 
-target_link_libraries(libvast PUBLIC yaml-cpp)
+target_link_libraries(libvast PRIVATE yaml-cpp)
 
 target_link_libraries(libvast PUBLIC ${flatbuffers_target})
 add_dependencies(libvast libvast_flatbuffers)
