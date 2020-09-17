@@ -75,8 +75,6 @@ stdenv.mkDerivation rec {
     "-DVAST_VERSION_TAG=${version}"
     "-DVAST_USE_JEMALLOC=ON"
     "-DBROKER_ROOT_DIR=${broker}"
-    # gen-table-slices runs at build time
-    "-DCMAKE_SKIP_BUILD_RPATH=OFF"
   ] ++ lib.optionals static [
     "-DVAST_STATIC_EXECUTABLE:BOOL=ON"
     "-DCMAKE_INTERPROCEDURAL_OPTIMIZATION:BOOL=ON"
