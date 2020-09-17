@@ -11,6 +11,18 @@ Every entry has a category for which we use the following visual abbreviations:
 
 ## Unreleased
 
+- 🎁 VAST now ships with a new tool `lsvast` to display information about the
+  contents of a VAST database directory. See `lsvast --help` for usage
+  instructions.
+  [#863](https://github.com/tenzir/vast/pull/863)
+
+- ⚠️ The persistent storage format of the index now uses FlatBuffers.
+  [#863](https://github.com/tenzir/vast/pull/863)
+
+- ⚠️ We refactored the index architecture to improve stability and
+  responsiveness. This includes fixes for several shutdown issues.
+  [#863](https://github.com/tenzir/vast/pull/863)
+
 - ⚠️ The options that affect batches in the `import` command received new, more
   user-facing names: `import.table-slice-type`, `import.table-slice-size`, and
   `import.read-timeout` are now called `import.batch-encoding`,
