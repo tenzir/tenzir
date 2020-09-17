@@ -12,6 +12,7 @@
 , libpcap
 , arrow-cpp
 , flatbuffers
+, libyamlcpp
 , broker
 , jemalloc
 , python3
@@ -64,7 +65,7 @@ stdenv.mkDerivation rec {
 
   nativeBuildInputs = [ cmake cmake-format ];
   propagatedNativeBuildInputs = [ pkgconfig pandoc ];
-  buildInputs = [ libpcap flatbuffers jemalloc broker ];
+  buildInputs = [ libpcap flatbuffers jemalloc broker libyamlcpp ];
   propagatedBuildInputs = [ arrow-cpp caf ];
 
   cmakeFlags = [
@@ -75,8 +76,6 @@ stdenv.mkDerivation rec {
     "-DVAST_VERSION_TAG=${version}"
     "-DVAST_USE_JEMALLOC=ON"
     "-DBROKER_ROOT_DIR=${broker}"
-    # gen-table-slices runs at build time
-    "-DCMAKE_SKIP_BUILD_RPATH=OFF"
   ] ++ lib.optionals static [
     "-DVAST_STATIC_EXECUTABLE:BOOL=ON"
     "-DCMAKE_INTERPROCEDURAL_OPTIMIZATION:BOOL=ON"
