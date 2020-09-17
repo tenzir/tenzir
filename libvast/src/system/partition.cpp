@@ -65,18 +65,38 @@ using namespace caf;
 
 namespace vast::system {
 
+caf::actor active_partition_state::indexer_at(size_t position) const {
+  VAST_ASSERT(position < indexers.size());
+  return as_vector(indexers)[position].second;
+}
+
+/// Gets the INDEXER at a certain position in the `indexers` stable map.
+caf::actor passive_partition_state::indexer_at(size_t position) const {
+  VAST_ASSERT(position < indexers.size());
+  auto& indexer = indexers[position];
+  // Deserialize the value index and spawn a passive_indexer lazily when it is
+  // requested for the first time.
+  if (!indexer) {
+    auto qualified_index = flatbuffer->indexes()->Get(position);
+    auto index = qualified_index->index();
+    auto data = index->data();
+    value_index_ptr state_ptr;
+    caf::binary_deserializer sink(
+      nullptr, reinterpret_cast<const char*>(data->data()), data->size());
+    if (auto error = sink(state_ptr)) {
+      VAST_ERROR(self, "failed to deserialize indexer at", position,
+                 "with error:", render(error));
+      return nullptr;
+    }
+    indexer = self->spawn(passive_indexer, id, std::move(state_ptr));
+  }
+  return indexer;
+}
+
 namespace {
 
 // The functions in this namespace take PartitionState as template argument
 // because the impelementation is the same for passive and active partitions.
-
-/// Gets the INDEXER at a certain position in the `indexers` stable map.
-template <typename PartitionState>
-caf::actor indexer_at(const PartitionState& state, size_t position) {
-  VAST_ASSERT(position < state.indexers.size());
-  auto& [_, indexer] = as_vector(state.indexers)[position];
-  return indexer;
-}
 
 /// Gets the INDEXER at position in the layout.
 /// @relates active_partition_state
@@ -96,7 +116,7 @@ caf::actor fetch_indexer(const PartitionState& state, const data_extractor& dx,
     VAST_DEBUG(state.self, "got invalid offset for record type", dx.type);
     return nullptr;
   }
-  return indexer_at(state, *index);
+  return state.indexer_at(*index);
 }
 
 /// Retrieves an INDEXER for a predicate with a data extractor.
@@ -277,33 +297,18 @@ unpack(const fbs::Partition& partition, passive_partition_state& state) {
   // This condition should be '!=', but then we cant deserialize in unit tests
   // anymore without creating a bunch of index actors first. :/
   if (state.combined_layout.fields.size() < indexes->size()) {
-    VAST_DEBUG(state.self, state.combined_layout.fields.size(), "fields vs",
+    VAST_ERROR(state.self,
+               "found incoherent number of indexers in deserialized state;",
+               state.combined_layout.fields.size(), "fields for",
                indexes->size(), "indexes");
     return make_error(ec::format_error, "incoherent number of indexers");
   }
-  // We rely on the indexes being stored in the same order as the layout
-  // fields, and need to preserve the same order in `indexer_states`.
-  state.indexer_states.resize(indexes->size());
-  for (size_t i = 0; i < indexes->size(); ++i) {
-    auto qualified_index = indexes->Get(i);
-    auto field = state.combined_layout.fields.at(i);
-    auto& indexer_state = state.indexer_states.at(i);
-    VAST_DEBUG("restoring indexer", i, "with name",
-               qualified_index->qualified_field_name()->str(), "and type",
-               field);
-    // Deserialize the value index.
-    indexer_state.first = qualified_record_field{
-      qualified_index->qualified_field_name()->str(), field};
-    auto index = qualified_index->index();
-    auto data = index->data();
-    auto& vindex_ptr = indexer_state.second;
-    caf::binary_deserializer bds(
-      nullptr, reinterpret_cast<const char*>(data->data()), data->size());
-    if (auto error = bds(vindex_ptr))
-      return error;
-  }
-  VAST_VERBOSE_ANON("restored", state.indexer_states.size(),
-                    "indexers for partition", state.id);
+  // We only create dummy entries here, since the positions of the `indexers`
+  // vector must be the same as in `combined_layout`. The actual indexers are
+  // deserialized and spawned lazily on demand.
+  state.indexers.resize(indexes->size());
+  VAST_DEBUG(state.self, "found", indexes->size(), "indexers for partition",
+             state.id);
   auto type_ids = partition.type_ids();
   for (size_t i = 0; i < type_ids->size(); ++i) {
     auto type_ids_tuple = type_ids->Get(i);
@@ -523,9 +528,7 @@ passive_partition(caf::stateful_actor<passive_partition_state>* self, uuid id,
   self->set_exit_handler([=](const caf::exit_msg& msg) {
     VAST_DEBUG(self, "received EXIT from", msg.source,
                "with reason:", msg.reason);
-    auto indexers = std::vector<caf::actor>{};
-    for (auto& [_, idx] : self->state.indexers)
-      indexers.push_back(idx);
+    auto indexers = self->state.indexers;
     // Receiving an EXIT message does not need to coincide with the state being
     // destructed, so we explicitly clear the vector to release the references.
     self->state.indexers.clear();
@@ -551,7 +554,7 @@ passive_partition(caf::stateful_actor<passive_partition_state>* self, uuid id,
   // to queries. The `skip` default handler is used to buffer all messages
   // arriving until then.
   self->set_default_handler(skip);
-  self->send(caf::actor_cast<caf::actor>(fs), atom::read_v, path);
+  self->send(caf::actor_cast<caf::actor>(fs), atom::mmap_v, path);
   return {
     [=](vast::chunk_ptr chunk) {
       if (!chunk) {
@@ -568,20 +571,15 @@ passive_partition(caf::stateful_actor<passive_partition_state>* self, uuid id,
                    render(partition.error()));
         return self->quit(std::move(partition.error()));
       }
-      if (auto error = unpack(**partition, self->state)) {
-        VAST_ERROR(self, "error unpacking partition", error);
-        self->quit(error);
+      self->state.partition_chunk = chunk;
+      self->state.flatbuffer = *partition;
+      if (auto error = unpack(*self->state.flatbuffer, self->state)) {
+        VAST_ERROR(self, "failed to unpack partition:", render(error));
+        return self->quit(std::move(error));
       }
       if (id != self->state.id)
-        VAST_WARNING(self, "encountered partition id mismatch: restored", self->state.id,
-                     "from disk, expected", id);
-      for (auto& kv : self->state.indexer_states) {
-        auto field = kv.first;
-        // Note that we rely on `self->state.indexers` always keeping elements
-        // in insertion order in the underlying vector.
-        self->state.indexers[field]
-          = self->spawn(passive_indexer, id, std::move(kv.second));
-      }
+        VAST_WARNING(self, "encountered partition id mismatch: restored",
+                     self->state.id, "from disk, expected", id);
       // Switch to "normal" partition mode
       self->become(passive_partition_behavior);
       self->set_default_handler(caf::print_and_drop);

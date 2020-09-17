@@ -14,7 +14,6 @@
 #pragma once
 
 #include "vast/aliases.hpp"
-#include "vast/detail/stable_map.hpp"
 #include "vast/expression.hpp"
 #include "vast/fbs/partition.hpp"
 #include "vast/fwd.hpp"
@@ -50,6 +49,8 @@ struct active_partition_state {
     table_slice_ptr,
     caf::broadcast_downstream_manager<
       table_slice_column, vast::qualified_record_field, partition_selector>>;
+
+  caf::actor indexer_at(size_t position) const;
 
   /// Data Members
 
@@ -114,15 +115,7 @@ struct active_partition_state {
 struct passive_partition_state {
   using recovered_indexer = std::pair<qualified_record_field, value_index_ptr>;
 
-  // caf::actor indexer_at(size_t position) const;
-
-  // caf::actor fetch_indexer(const data_extractor& dx, relational_operator op,
-  //                          const data& x) const;
-
-  // caf::actor fetch_indexer(const attribute_extractor& ex,
-  //                          relational_operator op, const data& x) const;
-
-  // evaluation_triples evaluate(const expression& expr) const;
+  caf::actor indexer_at(size_t position) const;
 
   /// Pointer to the parent actor.
   caf::stateful_actor<passive_partition_state>* self;
@@ -145,13 +138,15 @@ struct passive_partition_state {
   /// The number of events in the partition.
   size_t events;
 
-  // Stores the deserialized indexer states. This is only used while unpacking
-  // the `Partition` flatbuffer, afterwards the indexer states are moved into
-  // the indexer actor.
-  std::vector<recovered_indexer> indexer_states;
+  /// The raw memory of the partition, used to spawn indexers on demand.
+  vast::chunk_ptr partition_chunk;
 
-  /// Maps qualified fields to indexer actors.
-  detail::stable_map<qualified_record_field, caf::actor> indexers;
+  /// A typed view into the `partition_chunk`.
+  const fbs::Partition* flatbuffer;
+
+  /// Maps qualified fields to indexer actors. This is mutable since
+  /// indexers are spawned lazily on first access.
+  mutable std::vector<caf::actor> indexers;
 };
 
 // Flatbuffer support
