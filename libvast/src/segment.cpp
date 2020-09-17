@@ -26,6 +26,7 @@
 #include "vast/logger.hpp"
 #include "vast/si_literals.hpp"
 #include "vast/table_slice.hpp"
+#include "vast/uuid.hpp"
 
 #include <caf/binary_deserializer.hpp>
 #include <caf/binary_serializer.hpp>
@@ -48,8 +49,10 @@ caf::expected<segment> segment::make(chunk_ptr chunk) {
 
 uuid segment::id() const {
   auto ptr = fbs::GetSegment(chunk_->data());
-  auto data = span<const uint8_t, 16>(ptr->uuid()->Data(), 16);
-  return uuid{as_bytes(data)};
+  uuid result;
+  if (auto error = unpack(*ptr->uuid(), result))
+    VAST_ERROR_ANON("couldnt get uuid from segment:", error);
+  return result;
 }
 
 vast::ids segment::ids() const {

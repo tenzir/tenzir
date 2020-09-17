@@ -182,10 +182,9 @@ void print_segment_v0(fs::path path) {
     return;
   }
   auto& segment = *maybe_segment;
-  auto& uuid_bytes = *segment->uuid();
-  vast::span uuid_view{reinterpret_cast<const vast::byte*>(uuid_bytes.Data()),
-                       uuid_bytes.size()};
-  vast::uuid id(uuid_view);
+  vast::uuid id;
+  if (segment->uuid())
+    unpack(*segment->uuid(), id);
   std::cout << "  uuid: " << to_string(id) << "\n";
   std::cout << "  events: " << segment->events() << "\n";
 }

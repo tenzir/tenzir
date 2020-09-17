@@ -354,7 +354,9 @@ caf::error segment_store::register_segment(const path& filename) {
   if (s == nullptr)
     return make_error(ec::format_error, "segment integrity check failed");
   num_events_ += s->events();
-  auto segment_uuid = uuid{fbs::as_bytes<16>(*s->uuid())};
+  uuid segment_uuid;
+  if (auto error = unpack(*s->uuid(), segment_uuid))
+    return error;
   VAST_DEBUG(this, "found segment", segment_uuid);
   for (auto interval : *s->ids())
     if (!segments_.inject(interval->begin(), interval->end(), segment_uuid))

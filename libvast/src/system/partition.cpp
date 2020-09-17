@@ -78,9 +78,8 @@ caf::actor indexer_at(const PartitionState& state, size_t position) {
   return indexer;
 }
 
-/// Gets the INDEXER at position in the layout.
-/// @relates active_partition_state
-/// @relates passive_partition_state
+/// Gets the INDEXER at position in the layout, spawning it if this is the
+/// first time that position is accessed.
 template <typename PartitionState>
 caf::actor fetch_indexer(const PartitionState& state, const data_extractor& dx,
                          relational_operator op, const data& x) {

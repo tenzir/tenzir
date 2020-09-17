@@ -1,5 +1,6 @@
 include "table_slice.fbs";
 include "version.fbs";
+include "uuid.fbs";
 
 namespace vast.fbs;
 
@@ -21,7 +22,7 @@ table Segment {
   slices: [TableSliceBuffer];
 
   /// A unique identifier.
-  uuid: [ubyte];
+  uuid: UUID;
 
   /// The ID intervals this segment covers.
   ids: [Interval];

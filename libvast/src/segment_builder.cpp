@@ -22,6 +22,7 @@
 #include "vast/logger.hpp"
 #include "vast/segment.hpp"
 #include "vast/table_slice.hpp"
+#include "vast/uuid.hpp"
 
 #include <caf/binary_serializer.hpp>
 
@@ -51,12 +52,12 @@ caf::error segment_builder::add(table_slice_ptr x) {
 
 segment segment_builder::finish() {
   auto table_slices_offset = builder_.CreateVector(flat_slices_);
-  auto uuid_offset = fbs::pack_bytes(builder_, id_);
+  auto uuid_offset = pack(builder_, id_);
   auto ids_offset = builder_.CreateVectorOfStructs(intervals_);
   fbs::SegmentBuilder segment_builder{builder_};
   segment_builder.add_version(fbs::Version::v0);
   segment_builder.add_slices(table_slices_offset);
-  segment_builder.add_uuid(uuid_offset);
+  segment_builder.add_uuid(*uuid_offset);
   segment_builder.add_ids(ids_offset);
   segment_builder.add_events(num_events_);
   auto segment_offset = segment_builder.Finish();
