@@ -90,7 +90,7 @@ public:
     VAST_ASSERT(size > 0);
     auto chunk = make(size);
     if (chunk)
-      ::memcpy(chunk->data_, span.data(), size);
+      std::memcpy(chunk->data_, span.data(), size);
     return chunk;
   }
 

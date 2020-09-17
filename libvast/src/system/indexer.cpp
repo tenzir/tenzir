@@ -59,8 +59,8 @@ vast::chunk_ptr chunkify(const value_index_ptr& idx) {
 caf::behavior passive_indexer(caf::stateful_actor<indexer_state>* self,
                               uuid partition_id, value_index_ptr idx) {
   if (!idx) {
-    VAST_ERROR(self, "got invalid index");
-    self->quit(make_error(ec::end_of_input, "invalid index"));
+    VAST_ERROR(self, "got invalid value index pointer");
+    self->quit(make_error(ec::end_of_input, "invalid value index pointer"));
     return {};
   }
   self->state.name = "indexer-" + to_string(idx->type());
@@ -90,16 +90,19 @@ caf::behavior active_indexer(caf::stateful_actor<indexer_state>* self,
   self->state.has_skip_attribute = vast::has_skip_attribute(index_type);
   self->state.idx = factory<value_index>::make(index_type, index_opts);
   if (!self->state.idx) {
-    VAST_ERROR(self, "failed constructing index");
-    self->quit(make_error(ec::unspecified, "fail constructing index"));
+    VAST_ERROR(self, "failed to construct value index");
+    self->quit(make_error(ec::unspecified, "failed to construct value index"));
     return {};
   }
   return {
     [=](caf::stream<table_slice_column> in) {
+      VAST_DEBUG(self, "got a new stream");
       self->state.stream_initiated = true;
       return caf::attach_stream_sink(
         self, in,
-        [=](caf::unit_t&) { VAST_DEBUG(self, "initializes stream sink"); },
+        [=](caf::unit_t&) {
+          // nop
+        },
         [=](caf::unit_t&, const std::vector<table_slice_column>& xs) {
           VAST_ASSERT(self->state.idx != nullptr);
           // NOTE: It seems like having the `#skip` attribute should lead to
@@ -117,13 +120,11 @@ caf::behavior active_indexer(caf::stateful_actor<indexer_state>* self,
         },
         [=](caf::unit_t&, const error& err) {
           if (err) {
-            // Exit reason `user_shutdown` means that the actor has exited,
-            // so we can't use `self` anymore.
-            if (err == caf::exit_reason::user_shutdown)
-              VAST_ERROR_ANON("indexer got a stream error:", err);
-            else
-              VAST_ERROR(self,
-                         "got a stream error:", self->system().render(err));
+            // Exit reason `unreachable` means that the actor has exited,
+            // so we can't safely use `self` anymore.
+            // TODO: We also need to deliver the promise here *if* self
+            // still exists and the promise is already pending.
+            VAST_ERROR_ANON("indexer got a stream error:", render(err));
             return;
           }
           if (self->state.promise.pending())

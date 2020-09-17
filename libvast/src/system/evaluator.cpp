@@ -109,7 +109,7 @@ void evaluator_state::handle_result(const offset& position, const ids& result) {
   auto& [missing, accumulated_hits] = *ptr;
   accumulated_hits |= result;
   if (--missing == 0) {
-    VAST_DEBUG(self, "collected all INDEXER results at position", position);
+    VAST_DEBUG(self, "collected all results at position", position);
     evaluate();
   }
   decrement_pending();
@@ -118,12 +118,12 @@ void evaluator_state::handle_result(const offset& position, const ids& result) {
 void evaluator_state::handle_missing_result(const offset& position,
                                             const caf::error& err) {
   VAST_IGNORE_UNUSED(err);
-  VAST_WARNING(self, "INDEXER returned", render(err),
+  VAST_WARNING(self, "received", render(err),
                "instead of a result for predicate at position", position);
   auto ptr = hits_for(position);
   VAST_ASSERT(ptr != nullptr);
   if (--ptr->first == 0) {
-    VAST_DEBUG(self, "collected all INDEXER results at position", position);
+    VAST_DEBUG(self, "collected all results at position", position);
     evaluate();
   }
   decrement_pending();
