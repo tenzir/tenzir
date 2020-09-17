@@ -32,4 +32,4 @@ table Segment {
 
 root_type Segment;
 
-file_identifier "VAST";
+file_identifier "S000";

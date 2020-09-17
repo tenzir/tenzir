@@ -13,44 +13,28 @@
 
 #pragma once
 
-#include <vector>
-
-#include "vast/system/index.hpp"
+#include "vast/concept/printable/core.hpp"
+#include "vast/concept/printable/numeric/integral.hpp"
+#include "vast/concept/printable/string/char.hpp"
 #include "vast/table_slice.hpp"
 
-#include "vast/test/fixtures/actor_system_and_events.hpp"
+namespace vast {
 
-namespace fixtures {
+/// Prints a table slice as ID interval.
+struct table_slice_printer : printer<table_slice_printer> {
+  using attribute = table_slice;
 
-/// A fixture with a dummy INDEX actor.
-struct dummy_index : deterministic_actor_system_and_events {
-  // -- member types -----------------------------------------------------------
-
-  struct dummy_indexer_state {
-    std::vector<vast::table_slice_ptr> buf;
-  };
-
-  // -- constructors, destructors, and assignment operators --------------------
-
-  dummy_index();
-
-  ~dummy_index() override;
-
-  // -- convenience functions --------------------------------------------------
-
-  auto& indexer_buf(caf::actor& hdl) {
-    return deref<caf::stateful_actor<dummy_indexer_state>>(hdl).state.buf;
+  template <class Iterator>
+  bool print(Iterator& out, const table_slice& x) const {
+    using namespace printers;
+    auto p = '[' << u64 << ',' << u64 << ')';
+    return p(out, x.offset(), x.offset() + x.rows());
   }
-
-  /// Runs `f` inside the dummy INDEX actor.
-  void run_in_index(std::function<void()> f);
-
-  // -- member variables -------------------------------------------------------
-
-  /// Actor handle to our dummy.
-  caf::actor idx_handle;
-
-  vast::system::index_state* idx_state;
 };
 
-} // namespace fixtures
+template <>
+struct printer_registry<table_slice> {
+  using type = table_slice_printer;
+};
+
+} // namespace vast

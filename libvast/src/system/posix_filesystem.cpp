@@ -32,7 +32,8 @@ posix_filesystem(filesystem_type::stateful_pointer<posix_filesystem_state> self,
     [=](atom::write, const path& filename,
         chunk_ptr chk) -> caf::result<atom::ok> {
       VAST_ASSERT(chk != nullptr);
-      if (auto err = io::save(root / filename, as_bytes(chk))) {
+      auto path = filename.is_absolute() ? filename : root / filename;
+      if (auto err = io::save(path, as_bytes(chk))) {
         ++self->state.stats.writes.failed;
         return err;
       } else {
@@ -42,7 +43,8 @@ posix_filesystem(filesystem_type::stateful_pointer<posix_filesystem_state> self,
       }
     },
     [=](atom::read, const path& filename) -> caf::result<chunk_ptr> {
-      if (auto bytes = io::read(root / filename)) {
+      auto path = filename.is_absolute() ? filename : root / filename;
+      if (auto bytes = io::read(path)) {
         ++self->state.stats.reads.successful;
         ++self->state.stats.reads.bytes += bytes->size();
         return chunk::make(std::move(*bytes));
@@ -52,7 +54,8 @@ posix_filesystem(filesystem_type::stateful_pointer<posix_filesystem_state> self,
       }
     },
     [=](atom::mmap, const path& filename) -> caf::result<chunk_ptr> {
-      if (auto chk = chunk::mmap(root / filename)) {
+      auto path = filename.is_absolute() ? filename : root / filename;
+      if (auto chk = chunk::mmap(path)) {
         ++self->state.stats.mmaps.successful;
         ++self->state.stats.mmaps.bytes += chk->size();
         return chk;

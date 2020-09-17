@@ -15,8 +15,11 @@
 
 #include "vast/byte.hpp"
 #include "vast/detail/operators.hpp"
+#include "vast/fbs/uuid.hpp"
 #include "vast/span.hpp"
 
+#include <caf/error.hpp>
+#include <caf/expected.hpp>
 #include <caf/meta/hex_formatted.hpp>
 
 #include <array>
@@ -73,6 +76,13 @@ public:
 private:
   std::array<value_type, num_bytes> id_;
 };
+
+// flatbuffer support
+
+caf::expected<flatbuffers::Offset<fbs::UUID>>
+pack(flatbuffers::FlatBufferBuilder& builder, const uuid& x);
+
+caf::error unpack(const fbs::UUID& x, uuid& y);
 
 } // namespace vast
 

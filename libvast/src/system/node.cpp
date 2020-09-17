@@ -29,6 +29,7 @@
 #include "vast/format/syslog.hpp"
 #include "vast/format/test.hpp"
 #include "vast/format/zeek.hpp"
+#include "vast/fwd.hpp"
 #include "vast/json.hpp"
 #include "vast/logger.hpp"
 #include "vast/settings.hpp"

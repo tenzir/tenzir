@@ -21,6 +21,7 @@
 #include "vast/error.hpp"
 #include "vast/fbs/segment.hpp"
 #include "vast/fbs/utils.hpp"
+#include "vast/fbs/version.hpp"
 #include "vast/ids.hpp"
 #include "vast/logger.hpp"
 #include "vast/si_literals.hpp"
@@ -35,11 +36,12 @@ using namespace binary_byte_literals;
 
 caf::expected<segment> segment::make(chunk_ptr chunk) {
   VAST_ASSERT(chunk != nullptr);
-  auto ptr = fbs::as_flatbuffer<fbs::Segment>(as_bytes(chunk));
-  if (ptr == nullptr)
-    return make_error(ec::format_error, "segment integrity check failed");
+  auto fb = fbs::as_versioned_flatbuffer<fbs::Segment>(as_bytes(chunk),
+                                                       fbs::Version::v0);
+  if (!fb)
+    return fb.error();
   // Perform version check.
-  if (auto err = fbs::check_version(ptr->version(), fbs::Version::v0))
+  if (auto err = fbs::check_version((*fb)->version(), fbs::Version::v0))
     return err;
   return segment{std::move(chunk)};
 }

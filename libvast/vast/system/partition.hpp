@@ -13,184 +13,172 @@
 
 #pragma once
 
+#include "vast/aliases.hpp"
 #include "vast/detail/stable_map.hpp"
+#include "vast/expression.hpp"
+#include "vast/fbs/partition.hpp"
 #include "vast/fwd.hpp"
 #include "vast/ids.hpp"
+#include "vast/path.hpp"
 #include "vast/qualified_record_field.hpp"
+#include "vast/system/filesystem.hpp"
 #include "vast/system/instrumentation.hpp"
 #include "vast/table_slice_column.hpp"
 #include "vast/type.hpp"
 #include "vast/uuid.hpp"
+#include "vast/value_index.hpp"
 
 #include <caf/event_based_actor.hpp>
 #include <caf/stream_slot.hpp>
 
 #include <unordered_map>
 
+#include "caf/fwd.hpp"
+
 namespace vast::system {
 
-struct index_state;
-class indexer_downstream_manager;
+/// Helper class used to route table slice columns to the correct indexer
+/// in the CAF stream stage.
+struct partition_selector {
+  bool operator()(const vast::qualified_record_field& filter,
+                  const table_slice_column& x) const;
+};
 
-/// The horizontal data scaling unit of the index. A partition represents a
-/// slice of indexes for a specific ID interval.
-class partition {
-public:
-  // -- member types -----------------------------------------------------------
+/// The state of the active partition actor.
+struct active_partition_state {
+  using partition_stream_stage_ptr = caf::stream_stage_ptr<
+    table_slice_ptr,
+    caf::broadcast_downstream_manager<
+      table_slice_column, vast::qualified_record_field, partition_selector>>;
 
-  /// Persistent meta state for the partition.
-  struct meta_data {
-    /// Keeps a list of already added layouts so we don't have to check if
-    /// additional columns have to be spawned for each added slice.
-    std::unordered_set<record_type> layouts;
+  /// Data Members
 
-    /// Maps type names to ids. Used the answer #type queries.
-    std::unordered_map<std::string, ids> type_ids;
-
-    /// Stores whether the partition has been mutated in memory.
-    bool dirty = false;
-  };
-
-  /// An indexer combined withs streaming support structures.
-  struct wrapped_indexer {
-    /// Mutable because it can be initalized layzily.
-    mutable caf::actor indexer;
-
-    /// The slot is used by the indexer_downstream_manager during ingestion.
-    caf::stream_slot slot;
-
-    /// The message queue of the downstream indexer.
-    /// This is used by the indexer_downstream_manager, the pointed-to object is
-    /// removed when the partition is removed from said manager.
-    caf::outbound_path* outbound;
-
-    /// A buffer to avoid overloading the indexer.
-    /// Only used during ingestion.
-    std::vector<table_slice_column> buf;
-  };
-
-  // -- constructors, destructors, and assignment operators --------------------
-
-  /// @param self The parent actor.
-  /// @param id Unique identifier for this partition.
-  /// @param max_capacity The amount of events this partition can hold.
-  /// @pre `self != nullptr`
-  /// @pre `factory != nullptr`
-  partition(index_state* state, uuid id, size_t max_capacity);
-
-  ~partition() noexcept;
-
-  // -- persistence ------------------------------------------------------------
-
-  /// Materializes the partition layouts from disk.
-  /// @returns an error if I/O operations fail.
-  caf::error init();
-
-  /// Persists the partition layouts to disk.
-  /// @returns an error if I/O operations fail.
-  caf::error flush_to_disk();
-
-  // -- properties -------------------------------------------------------------
-
-  /// @returns the unique ID of the partition.
-  auto& id() const noexcept {
-    return id_;
-  }
-
-  /// @returns the state of the owning INDEX actor.
-  auto& state() noexcept {
-    return *state_;
-  }
-
-  /// @returns the remaining capacity in this partition.
-  auto capacity() const noexcept {
-    return capacity_;
-  }
-
-  /// @returns a record type containing all columns of this partition.
-  // TODO: Should this be renamed to layout()?
-  record_type combined_type() const;
-
-  /// @returns the directory for persistent state.
-  path base_dir() const;
-
-  /// @returns the file name for saving or loading the ::meta_data.
-  path meta_file() const;
-
-  indexer_downstream_manager& out() const;
-
-  /// @returns the file name for `column`.
-  path column_file(const qualified_record_field& field) const;
-
-  // -- operations -------------------------------------------------------------
-
-  /// Adds a slice to the partition.
-  void add(table_slice_ptr slice);
-
-  /// Gets the INDEXER at position in the layout.
-  caf::actor& indexer_at(size_t position);
-
-  /// Retrieves an INDEXER for a predicate with a data extractor.
-  /// @param dx The extractor.
-  /// @param op The operator (only used to precompute ids for type queries.
-  /// @param x The literal side of the predicate.
-  caf::actor fetch_indexer(const data_extractor& dx, relational_operator op,
-                           const data& x);
-
-  /// Retrieves an INDEXER for a predicate with an attribute extractor.
-  /// @param dx The extractor.
-  /// @param op The operator (only used to precompute ids for type queries.
-  /// @param x The literal side of the predicate.
-  caf::actor fetch_indexer(const attribute_extractor& ex,
-                           relational_operator op, const data& x);
-
-  /// @returns all INDEXER actors required for a query, together with tailored
-  /// predicates their offsets in the expression. Used by the EVALUATOR.
-  evaluation_triples eval(const expression& expr);
-
-  // -- members ----------------------------------------------------------------
-
-  /// State of the INDEX actor that owns this partition.
-  index_state* state_;
-
-  /// Keeps track of row types in this partition.
-  meta_data meta_data_;
+  /// Pointer to the parent actor.
+  caf::stateful_actor<active_partition_state>* self;
 
   /// Uniquely identifies this partition.
-  uuid id_;
+  uuid id;
 
-  /// A map to the indexers.
-  detail::stable_map<qualified_record_field, wrapped_indexer> indexers_;
+  /// The streaming stage.
+  partition_stream_stage_ptr stage;
 
-  /// Remaining capacity in this partition.
-  size_t capacity_;
+  /// Tracks whether we already received at least one table slice.
+  bool streaming_initiated;
 
-  std::vector<table_slice_ptr> inbound_;
+  /// The combined type of all columns of this partition
+  record_type combined_layout;
 
-  friend struct index_state;
-  friend class indexer_downstream_manager;
+  /// Maps qualified fields to indexer actors.
+  //  TODO: Should we use the tsl map here for heterogenous key lookup?
+  detail::stable_map<qualified_record_field, caf::actor> indexers;
+
+  /// Maps type names to IDs. Used the answer #type queries.
+  std::unordered_map<std::string, ids> type_ids;
+
+  /// A readable name for this partition
+  std::string name;
+
+  /// The first ID in the partition.
+  vast::id offset;
+
+  /// The number of events in the partition.
+  size_t events;
+
+  /// Actor handle of the filesystem actor.
+  filesystem_type fs_actor;
+
+  /// Promise that gets satisfied when the partition state was serialized
+  /// and written to disk.
+  caf::response_promise persistence_promise;
+
+  /// Path where the index state is written.
+  std::optional<path> persist_path;
+
+  /// Counts how many indexers have already responded to the `snapshot` atom
+  /// with a serialized chunk.
+  size_t persisted_indexers;
+
+  /// Temporary storage for the serialized indexers of this partition, before
+  /// they get written into the flatbuffer.
+  std::map<caf::actor_id, vast::chunk_ptr> chunks;
+
+  /// A once_flag for things that need to be done only once at shutdown.
+  std::once_flag shutdown_once;
 };
 
-// -- related types ------------------------------------------------------------
+// TODO: Split this into a `static data` part that can be mmaped
+// straight from disk, and an actor-related part that contains the
+// former. In the ideal case, we want to be able to use the on-disk
+// state without any intermediate deserialization step,
+// like yandex::mms or cap'n proto.
+struct passive_partition_state {
+  using recovered_indexer = std::pair<qualified_record_field, value_index_ptr>;
 
-/// @relates partition
-using partition_ptr = std::unique_ptr<partition>;
+  // caf::actor indexer_at(size_t position) const;
 
-// -- free functions -----------------------------------------------------------
+  // caf::actor fetch_indexer(const data_extractor& dx, relational_operator op,
+  //                          const data& x) const;
 
-/// @relates partition::meta_data
-template <class Inspector>
-auto inspect(Inspector& f, partition::meta_data& x) {
-  return f(x.layouts, x.type_ids);
-}
+  // caf::actor fetch_indexer(const attribute_extractor& ex,
+  //                          relational_operator op, const data& x) const;
+
+  // evaluation_triples evaluate(const expression& expr) const;
+
+  /// Pointer to the parent actor.
+  caf::stateful_actor<passive_partition_state>* self;
+
+  /// Uniquely identifies this partition.
+  uuid id;
+
+  /// The combined type of all columns of this partition
+  record_type combined_layout;
+
+  /// Maps type names to ids. Used the answer #type queries.
+  std::unordered_map<std::string, ids> type_ids;
+
+  /// A readable name for this partition
+  std::string name;
+
+  /// The first ID in the partition.
+  size_t offset;
+
+  /// The number of events in the partition.
+  size_t events;
+
+  // Stores the deserialized indexer states. This is only used while unpacking
+  // the `Partition` flatbuffer, afterwards the indexer states are moved into
+  // the indexer actor.
+  std::vector<recovered_indexer> indexer_states;
+
+  /// Maps qualified fields to indexer actors.
+  detail::stable_map<qualified_record_field, caf::actor> indexers;
+};
+
+// Flatbuffer support
+
+caf::expected<flatbuffers::Offset<fbs::Partition>>
+pack(flatbuffers::FlatBufferBuilder& builder, const active_partition_state& x);
+
+caf::error unpack(const fbs::Partition& x, passive_partition_state& y);
+
+// TODO: Use typed actors for the partition actors.
+
+/// Spawns a partition.
+/// @param self The partition actor.
+/// @param id The UUID of this partition.
+/// @param fs The actor handle of the filesystem actor.
+/// @param index_opts Settings that are forwarded when creating indexers.
+caf::behavior
+active_partition(caf::stateful_actor<active_partition_state>* self, uuid id,
+                 filesystem_type fs, caf::settings index_opts);
+
+/// Spawns a read-only partition.
+/// @param self The partition actor.
+/// @param id The UUID of this partition.
+/// @param fs The actor handle of the filesystem actor.
+/// @param path The path where the partition flatbuffer can be found.
+caf::behavior
+passive_partition(caf::stateful_actor<passive_partition_state>* self, uuid id,
+                  filesystem_type fs, vast::path path);
 
 } // namespace vast::system
-
-namespace std {
-
-template <>
-struct hash<vast::system::partition_ptr> {
-  size_t operator()(const vast::system::partition_ptr& ptr) const;
-};
-
-} // namespace std

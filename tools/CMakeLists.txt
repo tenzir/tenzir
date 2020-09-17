@@ -1,4 +1,5 @@
 add_subdirectory(dscat)
+add_subdirectory(lsvast)
 if (VAST_HAVE_BROKER)
   add_subdirectory(zeek-to-vast)
 endif ()

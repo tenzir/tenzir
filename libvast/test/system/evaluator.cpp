@@ -11,7 +11,6 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#include "vast/system/index_common.hpp"
 #define SUITE evaluator
 
 #include "vast/test/fixtures/actor_system_and_events.hpp"

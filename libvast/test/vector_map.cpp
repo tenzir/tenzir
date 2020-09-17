@@ -62,10 +62,28 @@ TEST(stable_map at) {
 #endif // VAST_NO_EXCEPTIONS
 
 TEST(stable_map insert) {
-  auto i = xs.insert({"qux", 1});
-  CHECK(i.second);
-  CHECK_EQUAL(i.first->second, 1);
+  xs.clear();
+  // Insert 4 elements in non-sorted order. The numbers
+  auto i1 = xs.insert({"qux", 3});
+  CHECK(i1.second);
+  auto i2 = xs.insert({"ax", 0});
+  CHECK(i2.second);
+  auto i3 = xs.insert({"erx", 1});
+  CHECK(i3.second);
+  auto i4 = xs.insert({"qtp", 2});
+  CHECK(i4.second);
+  // Check map content.
   CHECK_EQUAL(xs.size(), 4u);
+  CHECK_EQUAL(xs["ax"], 0);
+  CHECK_EQUAL(xs["erx"], 1);
+  CHECK_EQUAL(xs["qtp"], 2);
+  CHECK_EQUAL(xs["qux"], 3);
+  // Check that the underlying data is stored in the order it was inserted.
+  std::vector<int> insert_order{3, 0, 1, 2};
+  auto& vec = as_vector(xs);
+  for (size_t i = 0; i < xs.size(); ++i) {
+    CHECK_EQUAL(vec.at(i).second, insert_order.at(i));
+  }
 }
 
 TEST(stable_map duplicates) {

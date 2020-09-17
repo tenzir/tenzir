@@ -16,7 +16,6 @@
 #include "vast/expression_visitors.hpp"
 #include "vast/fwd.hpp"
 #include "vast/logger.hpp"
-#include "vast/system/index_common.hpp"
 
 #include <caf/actor.hpp>
 #include <caf/behavior.hpp>
@@ -103,14 +102,14 @@ void evaluator_state::init(caf::actor client, expression expr,
 }
 
 void evaluator_state::handle_result(const offset& position, const ids& result) {
-  VAST_DEBUG(self, "got", result.size(), "new hits for predicate at position",
+  VAST_DEBUG(self, "got", rank(result), "new hits for predicate at position",
              position);
   auto ptr = hits_for(position);
   VAST_ASSERT(ptr != nullptr);
   auto& [missing, accumulated_hits] = *ptr;
   accumulated_hits |= result;
   if (--missing == 0) {
-    VAST_DEBUG(self, "collected all INDEXER results at position", position);
+    VAST_DEBUG(self, "collected all results at position", position);
     evaluate();
   }
   decrement_pending();
@@ -119,21 +118,22 @@ void evaluator_state::handle_result(const offset& position, const ids& result) {
 void evaluator_state::handle_missing_result(const offset& position,
                                             const caf::error& err) {
   VAST_IGNORE_UNUSED(err);
-  VAST_WARNING(self, "INDEXER returned", self->system().render(err),
+  VAST_WARNING(self, "received", render(err),
                "instead of a result for predicate at position", position);
   auto ptr = hits_for(position);
   VAST_ASSERT(ptr != nullptr);
   if (--ptr->first == 0) {
-    VAST_DEBUG(self, "collected all INDEXER results at position", position);
+    VAST_DEBUG(self, "collected all results at position", position);
     evaluate();
   }
   decrement_pending();
 }
 
 void evaluator_state::evaluate() {
+  auto expr_hits = caf::visit(ids_evaluator{predicate_hits}, expr);
   VAST_DEBUG(self, "got predicate_hits:", predicate_hits,
-             "expr_hits:", caf::visit(ids_evaluator{predicate_hits}, expr));
-  auto delta = caf::visit(ids_evaluator{predicate_hits}, expr) - hits;
+             "expr_hits:", expr_hits);
+  auto delta = expr_hits - hits;
   if (any<1>(delta)) {
     hits |= delta;
     self->send(client, std::move(delta));

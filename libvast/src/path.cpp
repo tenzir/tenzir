@@ -216,6 +216,10 @@ path::type path::kind() const {
   return unknown;
 }
 
+bool path::is_absolute() const {
+  return !str_.empty() && str_[0] == '/';
+}
+
 bool path::is_regular_file() const {
   return kind() == regular_file;
 }

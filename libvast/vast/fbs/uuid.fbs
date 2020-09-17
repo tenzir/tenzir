@@ -1,0 +1,7 @@
+namespace vast.fbs;
+
+table UUID {
+  /// The 16-byte UUID data.
+  // TODO: Switch to fixed-size buffer, aka `data:[ubyte:16]`
+  data: [ubyte];
+}

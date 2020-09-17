@@ -95,21 +95,29 @@ value_index_ptr make(type x, caf::settings opts) {
             VAST_ERROR_ANON(__func__, "invalid digest size", *cardinality);
             return nullptr;
           case 1:
-            return std::make_unique<hash_index<1>>(std::move(x));
+            return std::make_unique<hash_index<1>>(std::move(x),
+                                                   std::move(opts));
           case 2:
-            return std::make_unique<hash_index<2>>(std::move(x));
+            return std::make_unique<hash_index<2>>(std::move(x),
+                                                   std::move(opts));
           case 3:
-            return std::make_unique<hash_index<3>>(std::move(x));
+            return std::make_unique<hash_index<3>>(std::move(x),
+                                                   std::move(opts));
           case 4:
-            return std::make_unique<hash_index<4>>(std::move(x));
+            return std::make_unique<hash_index<4>>(std::move(x),
+                                                   std::move(opts));
           case 5:
-            return std::make_unique<hash_index<5>>(std::move(x));
+            return std::make_unique<hash_index<5>>(std::move(x),
+                                                   std::move(opts));
           case 6:
-            return std::make_unique<hash_index<6>>(std::move(x));
+            return std::make_unique<hash_index<6>>(std::move(x),
+                                                   std::move(opts));
           case 7:
-            return std::make_unique<hash_index<7>>(std::move(x));
+            return std::make_unique<hash_index<7>>(std::move(x),
+                                                   std::move(opts));
           case 8:
-            return std::make_unique<hash_index<8>>(std::move(x));
+            return std::make_unique<hash_index<8>>(std::move(x),
+                                                   std::move(opts));
         }
       }
   }

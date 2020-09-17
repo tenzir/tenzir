@@ -4,5 +4,6 @@ namespace vast.fbs;
 /// structures experience changes that are incompatible to a previous version,
 /// the version should get bumped.
 enum Version : short {
+  Invalid,               // Default value
   v0,
 }

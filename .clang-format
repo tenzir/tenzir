@@ -35,8 +35,10 @@ IncludeCategories:
     Priority:        3
   - Regex:           '^<arrow/'
     Priority:        4
-  - Regex:           '<[[:alnum:]_.]+>'
+  - Regex:           '^<flatbuffers/'
     Priority:        5
+  - Regex:           '<[[:alnum:]_.]+>'
+    Priority:        6
 IndentCaseLabels: true
 IndentPPDirectives: AfterHash
 IndentWidth: 2
