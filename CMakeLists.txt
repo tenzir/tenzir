@@ -97,6 +97,7 @@ cmake_dependent_option(BUILD_UNIT_TESTS "Build unit tests" ON
                        "NOT CMAKE_CROSS_COMPILING" OFF)
 cmake_dependent_option(VAST_NO_ARROW "Build without Apache Arrow" OFF
                        "NOT ${CMAKE_SYSTEM_NAME} STREQUAL \"FreeBSD\"" ON)
+option(VAST_BUILD_LSVAST "Build the lsvast debugging tool" ON)
 
 # Keep make output sane
 set(CMAKE_VERBOSE_MAKEFILE
