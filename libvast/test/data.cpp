@@ -334,6 +334,7 @@ TEST(convert - caf::config_value) {
     {"x", "foo"},
     {"r", record{
       {"i", -42},
+      {"u", 42u},
       {"r", record{
         {"u", 3.14}
       }},
@@ -351,6 +352,7 @@ TEST(convert - caf::config_value) {
   y.emplace("x", "foo");
   auto r = config_value::dictionary{};
   r.emplace("i", -42);
+  r.emplace("u", 42u);
   auto rr = config_value::dictionary{};
   rr.emplace("u", 3.14);
   r.emplace("r", std::move(rr));

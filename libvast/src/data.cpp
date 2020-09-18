@@ -376,7 +376,8 @@ caf::error convert(const data& d, caf::config_value& cv) {
   auto f = detail::overload(
     [&](const auto& x) -> caf::error {
       using value_type = std::decay_t<decltype(x)>;
-      if constexpr (detail::is_any_v<value_type, bool, integer, real, duration>)
+      if constexpr (detail::is_any_v<value_type, bool, integer, count, real,
+                                     duration>)
         cv = x;
       else
         cv = to_string(x);
@@ -393,6 +394,7 @@ caf::error convert(const data& d, caf::config_value& cv) {
                                              "config_value");
     },
     [&](const std::string& x) -> caf::error {
+      // Go deeper into the string an infer more CAF-specific typing.
       if (auto uri = caf::make_uri(x))
         cv = std::move(*uri);
       else
