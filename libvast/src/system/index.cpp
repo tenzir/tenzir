@@ -366,9 +366,9 @@ pack(flatbuffers::FlatBufferBuilder& builder, const index_state& state) {
   auto meta_idx = pack(builder, state.meta_idx);
   if (!meta_idx)
     return meta_idx.error();
-  VAST_VERBOSE(state.self, "persisting", state.persisted_partitions.size(),
-               " definitely persisted and ", state.unpersisted.size(),
-               " maybe persisted partitions uuids");
+  VAST_DEBUG(state.self, "persists", state.persisted_partitions.size(),
+             "uuids of definitely persisted and", state.unpersisted.size(),
+             "uuids of maybe persisted partitions");
   std::vector<flatbuffers::Offset<fbs::UUID>> partition_offsets;
   for (auto uuid : state.persisted_partitions) {
     if (auto uuid_fb = pack(builder, uuid))
