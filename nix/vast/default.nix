@@ -15,38 +15,13 @@
 , libyamlcpp
 , broker
 , jemalloc
-, python3
-, jq
-, tcpdump
-, utillinux
+, vastIntegrationTestInputs
 , static ? stdenv.hostPlatform.isMusl
 , versionOverride ? null
 , disableTests ? true
 }:
 let
   isCross = stdenv.buildPlatform != stdenv.hostPlatform;
-
-  py3 = (let
-    python = let
-      packageOverrides = final: prev: {
-        # See https://github.com/NixOS/nixpkgs/pull/96037
-        coloredlogs = prev.coloredlogs.overridePythonAttrs (old: rec {
-          doCheck = !stdenv.isDarwin;
-          checkInputs = with prev; [ pytest mock utillinux verboselogs capturer ];
-          pythonImportsCheck = [ "coloredlogs" ];
-
-          propagatedBuildInputs = [ prev.humanfriendly ];
-        });
-      };
-    in python3.override {inherit packageOverrides; self = python;};
-
-  in python.withPackages(ps: with ps; [
-    coloredlogs
-    jsondiff
-    pyarrow
-    pyyaml
-    schema
-  ]));
 
   src = vast-source;
 
@@ -89,7 +64,7 @@ stdenv.mkDerivation rec {
   dontStrip = true;
 
   doInstallCheck = true;
-  installCheckInputs = [ py3 jq tcpdump ];
+  installCheckInputs = vastIntegrationTestInputs;
   installCheckPhase = ''
     python ../integration/integration.py --app ${placeholder "out"}/bin/vast
   '';

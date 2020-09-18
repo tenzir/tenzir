@@ -34,5 +34,6 @@ in {
   });
   broker = final.callPackage ./broker {inherit stdenv; python = final.python3;};
   vast-source = final.nix-gitignore.gitignoreSource [] ./..;
+  vastIntegrationTestInputs = final.callPackage ./vast/integration-test-inputs.nix {inherit stdenv;};
   vast = final.callPackage ./vast {inherit stdenv;};
 }
