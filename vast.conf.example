@@ -360,13 +360,13 @@ logger:
 
 #scheduler:
   # Accepted alternative: "sharing".
-  #policy: "stealing"
+  #policy: stealing
 
   # Configures whether the scheduler generates profiling output.
   #enable-profiling: false
 
   # Output file for profiler data (only if profiling is enabled).
-  #profiling-output-file: "/dev/null"
+  #profiling-output-file: /dev/null
 
   # Measurement resolution in milliseconds (only if profiling is enabled).
   #profiling-resolution: 100ms
