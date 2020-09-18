@@ -161,7 +161,7 @@ import:
   #max-events: <infinity>
 
   # Timeout after which batched table slices are forwarded.
-  batch-timeout = "10s"
+  batch-timeout: "10s"
 
   # Read timoeut after which data is forwarded to the importer regardless of
   # batching and table slices being unfinished.
@@ -173,7 +173,7 @@ import:
   # Upper bound for the size of a table slice. A value of 0 causes the
   # batch-size to be unbounded, leaving control of batching to the
   # import.batch-timeout option only.
-  batch-size = 100
+  batch-size: 100
 
   # Encoding type of table slices (arrow or msgpack).
   batch-encoding: arrow
