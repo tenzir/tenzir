@@ -22,6 +22,9 @@
 }:
 let
   isCross = stdenv.buildPlatform != stdenv.hostPlatform;
+  platformIsCompatible = (isCross
+    && stdenv.buildPlatform.parsed.kernel == stdenv.hostPlatform.parsed.kernel
+    && stdenv.buildPlatform.parsed.cpu == stdenv.hostPlatform.parsed.cpu);
 
   src = vast-source;
 
@@ -38,6 +41,7 @@ stdenv.mkDerivation rec {
       --replace nm "''${NM}"
   '';
 
+  depsBuildBuild = lib.optionals platformIsCompatible vastIntegrationTestInputs;
   nativeBuildInputs = [ cmake cmake-format ];
   propagatedNativeBuildInputs = [ pkgconfig pandoc ];
   buildInputs = [ libpcap flatbuffers jemalloc broker libyamlcpp ];
@@ -62,6 +66,14 @@ stdenv.mkDerivation rec {
   checkTarget = "test";
 
   dontStrip = true;
+
+  # Workaround for stdenv.mkDerivation disabling checks for all cross builds.
+  # libc is factored into the platform attribute even though it does not matter
+  # in case of musl vs glibc.
+  postFixup = lib.optionalString platformIsCompatible ''
+    showPhaseHeader "installCheckPhase"
+    eval "${installCheckPhase}"
+  '';
 
   doInstallCheck = true;
   installCheckInputs = vastIntegrationTestInputs;
