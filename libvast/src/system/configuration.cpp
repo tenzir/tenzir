@@ -55,11 +55,11 @@ void initialize_factories() {
 configuration::configuration() {
   detail::add_message_types(*this);
   // Instead of the CAF-supplied `config_file_path`, we use our own
-  // `config_paths` variable in order to support multiple configuration files.
+  // `config_files` variable in order to support multiple configuration files.
   auto add_configs = [&](auto&& dir) {
-    config_paths.emplace_back(dir / "vast.conf");
-    config_paths.emplace_back(dir / "vast.yml");
-    config_paths.emplace_back(dir / "vast.yaml");
+    config_files.emplace_back(dir / "vast.conf");
+    config_files.emplace_back(dir / "vast.yml");
+    config_files.emplace_back(dir / "vast.yaml");
   };
   if (const char* xdg_config_home = std::getenv("XDG_CONFIG_HOME"))
     add_configs(path{xdg_config_home} / "vast");
@@ -67,10 +67,10 @@ configuration::configuration() {
     add_configs(path{home} / ".config" / "vast");
   add_configs(VAST_SYSCONFDIR / path{"vast"});
   // Remove all non-existent config files.
-  config_paths.erase(
-    std::remove_if(config_paths.begin(), config_paths.end(),
+  config_files.erase(
+    std::remove_if(config_files.begin(), config_files.end(),
                    [](auto&& p) { return !p.is_regular_file(); }),
-    config_paths.end());
+    config_files.end());
   // Load I/O module.
   load<caf::io::middleman>();
   // GPU acceleration.
@@ -97,10 +97,10 @@ caf::error configuration::parse(int argc, char** argv) {
   // parse it last.
   for (auto& arg : command_line)
     if (detail::starts_with(arg, "--config="))
-      config_paths.push_back(arg.substr(9));
+      config_files.push_back(arg.substr(9));
   // Parse and merge all configuration files.
   caf::settings merged_settings;
-  for (const auto& config : config_paths) {
+  for (const auto& config : config_files) {
     if (exists(config)) {
       auto contents = load_contents(config);
       if (!contents)
