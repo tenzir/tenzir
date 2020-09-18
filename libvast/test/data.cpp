@@ -358,7 +358,7 @@ TEST(convert - caf::config_value) {
   r.emplace("r", std::move(rr));
   y.emplace("r", std::move(r));
   y.emplace("delta", timespan{12ms});
-  y.emplace("uri", unbox(make_uri("https://tenzir.com/")));
+  y.emplace("uri", "https://tenzir.com/"); // maybe in the future as caf::uri
   y.emplace("xs", make_config_value_list(1, 2, 3));
   y.emplace("ys", make_config_value_list(1, "foo", 3.14));
   auto z0 = config_value::dictionary{};

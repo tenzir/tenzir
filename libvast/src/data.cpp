@@ -377,7 +377,7 @@ caf::error convert(const data& d, caf::config_value& cv) {
     [&](const auto& x) -> caf::error {
       using value_type = std::decay_t<decltype(x)>;
       if constexpr (detail::is_any_v<value_type, bool, integer, count, real,
-                                     duration>)
+                                     duration, std::string>)
         cv = x;
       else
         cv = to_string(x);
@@ -392,16 +392,6 @@ caf::error convert(const data& d, caf::config_value& cv) {
       // all null keys. Then this branch will not be triggered.
       return caf::make_error(ec::type_clash, "cannot convert null to "
                                              "config_value");
-    },
-    [&](const std::string& x) -> caf::error {
-      // Go deeper into the string an infer more CAF-specific typing.
-      if (auto uri = caf::make_uri(x))
-        cv = std::move(*uri);
-      else
-        // If we couldn't infer a more specific config value type, we use the
-        // string as is.
-        cv = x;
-      return caf::none;
     },
     [&](const list& xs) -> caf::error {
       caf::config_value::list result;
