@@ -679,7 +679,7 @@ caf::behavior index(caf::stateful_actor<index_state>* self, filesystem_type fs,
       // below in the same actor context.
       await_evaluation_maps(
         self, iter->second.expression, actors,
-        [self, client, query_id](caf::expected<pending_query_map> maybe_pqm) {
+        [=](caf::expected<pending_query_map> maybe_pqm) {
           auto& st = self->state;
           auto iter = st.pending.find(query_id);
           if (iter == st.pending.end()) {
@@ -688,7 +688,7 @@ caf::behavior index(caf::stateful_actor<index_state>* self, filesystem_type fs,
             self->send(client, atom::done_v);
             return;
           }
-          auto& [query_id, query_state] = *iter;
+          auto& query_state = iter->second;
           if (!maybe_pqm) {
             VAST_ERROR(self, "failed to collect pending query map:",
                        render(maybe_pqm.error()));

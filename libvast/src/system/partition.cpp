@@ -410,7 +410,7 @@ active_partition(caf::stateful_actor<active_partition_state>* self, uuid id,
     }
     // Delay shutdown if we're currently in the process of persisting.
     if (self->state.persistence_promise.pending()) {
-      std::call_once(self->state.shutdown_once, [self] {
+      std::call_once(self->state.shutdown_once, [=] {
         VAST_DEBUG(self,
                    "delays partition shutdown because it is still writing "
                    "to disk");
