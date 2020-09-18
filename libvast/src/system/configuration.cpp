@@ -40,6 +40,7 @@
 #endif
 
 #include <algorithm>
+#include <unordered_set>
 
 namespace vast::system {
 
@@ -98,6 +99,16 @@ caf::error configuration::parse(int argc, char** argv) {
   for (auto& arg : command_line)
     if (detail::starts_with(arg, "--config="))
       config_files.push_back(arg.substr(9));
+  // Check for multiple config files in directories.
+  std::unordered_set<path> config_dirs;
+  for (const auto& config : config_files) {
+    auto dir = config.parent();
+    if (config_dirs.count(dir))
+      return caf::make_error(ec::parse_error, "found multiple config files in",
+                             dir);
+    else
+      config_dirs.insert(std::move(dir));
+  }
   // Parse and merge all configuration files.
   caf::settings merged_settings;
   for (const auto& config : config_files) {
