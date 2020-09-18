@@ -821,7 +821,7 @@ install(FILES "${CMAKE_CURRENT_SOURCE_DIR}/LICENSE"
 install(FILES "${CMAKE_CURRENT_SOURCE_DIR}/README.md"
         DESTINATION "${CMAKE_INSTALL_DOCDIR}/")
 
-install(FILES "${CMAKE_CURRENT_SOURCE_DIR}/vast.conf.example"
+install(FILES "${CMAKE_CURRENT_SOURCE_DIR}/vast.yaml.example"
         DESTINATION "${CMAKE_INSTALL_DATADIR}/vast/")
 
 install(FILES "${CMAKE_CURRENT_SOURCE_DIR}/scripts/corelight-cat"

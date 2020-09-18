@@ -24,13 +24,14 @@ mkdir -p {/var/db/vast,/var/log/vast}
 chown -R vast:vast {/var/db/vast,/var/log/vast}
 ```
 
-As described above, the systemd unit is configured to allow certrain write paths
-for logging and file storage. This also has to be configured in vast. Use the
-provided [vast.conf](https://github.com/tenzir/vast/tree/master/systemd/) file.
+As described above, the systemd unit is configured to allow certain write paths
+for logging and file storage. This also has to be configured in VAST. Use the
+provided
+[vast.yaml](https://github.com/tenzir/vast/tree/master/systemd/vast.yaml) file.
 
 The default configuration directory for VAST is `/etc/vast`. Place the
 configuration file in there. Make sure that the new `vast` user can read the
-contents of `/etc/vast/vast.conf`.
+contents of `/etc/vast/vast.yaml`.
 
 ## Usage
 
@@ -40,7 +41,7 @@ you might need to change the location of the `vast` binary and configuration
 file.
 
 ```bash
-ExecStart=/path/to/vast --config=/path/to/vast.conf start
+ExecStart=/path/to/vast --config=/path/to/vast.yaml start
 ```
 
 Then copy (or symlink) the unit file to `/etc/systemd/system`.
