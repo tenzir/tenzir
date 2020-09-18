@@ -382,6 +382,16 @@ caf::error convert(const data& d, caf::config_value& cv) {
         cv = to_string(x);
       return caf::none;
     },
+    [&](caf::none_t) -> caf::error {
+      // A caf::config_value has no notion of "null" value. Converting it to a
+      // default-constructed config_value would be wrong, because that's just
+      // an integer with value 0. As such, the conversion is a partial function
+      // and we must fail at this point. If you trigger this error when
+      // converting a record, you can first flatten the record and then delete
+      // all null keys. Then this branch will not be triggered.
+      return caf::make_error(ec::type_clash, "cannot convert null to "
+                                             "config_value");
+    },
     [&](const std::string& x) -> caf::error {
       if (auto uri = caf::make_uri(x))
         cv = std::move(*uri);

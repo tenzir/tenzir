@@ -328,7 +328,7 @@ TEST(json) {
 }
 // clang-format on
 
-TEST(convert - caf::settings) {
+TEST(convert - caf::config_value) {
   // clang-format off
   auto x = record{
     {"x", "foo"},
@@ -367,4 +367,23 @@ TEST(convert - caf::settings) {
   y.emplace("port", "443/tcp");
   CHECK_EQUAL(unbox(to<settings>(x)), y);
   CHECK_EQUAL(unbox(to<dictionary<config_value>>(x)), y);
+}
+
+TEST(convert - caf::config_value - null) {
+  // clang-format off
+  auto x = record{
+    {"valid", "foo"},
+    {"invalid", caf::none}
+  };
+  // clang-format on
+  using namespace caf;
+  auto y = to<dictionary<config_value>>(x);
+  REQUIRE(!y.engaged());
+  CHECK_EQUAL(y.error(), ec::type_clash);
+  // If we flatten the record first and weed out null values, it'll work.
+  auto flat = flatten(x);
+  auto& [k, v] = as_vector(flat).back();
+  flat.erase(k);
+  y = to<dictionary<config_value>>(flat);
+  REQUIRE(y.engaged());
 }
