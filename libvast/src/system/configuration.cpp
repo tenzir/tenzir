@@ -105,7 +105,8 @@ caf::error configuration::parse(int argc, char** argv) {
         return yaml.error();
       auto rec = caf::get_if<record>(&*yaml);
       if (!rec)
-        return caf::make_error(ec::parse_error, "config file not a YAML map");
+        return caf::make_error(ec::parse_error, "config file not a map of "
+                                                "key-value pairs");
       auto flat_yaml = flatten(*rec);
       // Erase all null values because a caf::config_value has no such notion.
       for (auto i = flat_yaml.begin(); i != flat_yaml.end();) {
