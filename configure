@@ -44,6 +44,7 @@ Usage: $0 [OPTION]... [VAR=VALUE]...
     --more-warnings         enables most warnings on GCC and Clang
     --without-tests         build without unit tests
     --without-zeek-to-vast  build without zeek-to-vast
+    --without-lsvast        build without lsvast
     --with-type-id-checks   build with compile-time type-id checks
 
   Debugging:
@@ -171,6 +172,9 @@ while [ $# -ne 0 ]; do
       ;;
     --without-zeek-to-vast)
       append_cache_entry ENABLE_ZEEK_TO_VAST BOOL no
+      ;;
+    --without-lsvast)
+      append_cache_entry VAST_BUILD_LSVAST BOOL no
       ;;
     --with-type-id-checks)
       append_cache_entry CAF_ENABLE_TYPE_ID_CHECKS BOOL yes
