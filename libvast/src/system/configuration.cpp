@@ -40,7 +40,6 @@
 #endif
 
 #include <algorithm>
-#include <regex>
 
 namespace vast::system {
 
@@ -142,7 +141,7 @@ caf::error configuration::parse(int argc, char** argv) {
       // clash is the only instance we currently cannot distinguish. Everything
       // else is a true type clash.
       // (With CAF 0.18, this heuristic will be obsolete.)
-      str = std::regex_replace(str, std::regex("\""), "'");
+      str = detail::replace_all(std::move(str), "\"", "'");
       result = opt.parse(str);
       if (!result)
         return caf::make_error(ec::type_clash, "failed to parse config option",
