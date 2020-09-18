@@ -39,7 +39,7 @@ using namespace vast;
 using namespace vast::system;
 
 int main(int argc, char** argv) {
-  // CAF scaffold.
+  // Set up our configuration, e.g., load of YAML config file(s).
   default_configuration cfg;
   if (auto err = cfg.parse(argc, argv)) {
     std::cerr << "failed to parse configuration: " << to_string(err)
