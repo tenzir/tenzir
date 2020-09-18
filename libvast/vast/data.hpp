@@ -307,6 +307,12 @@ record unflatten(const record& r);
 caf::optional<record> unflatten(const record& r, const record_type& rt);
 caf::optional<data> unflatten(const data& x, const type& t);
 
+/// Merges one record into another such that the source overwrites potential
+/// keys in the destination.
+/// @param src The record to merge into *dst*.
+/// @param dst The result record containing the merged result.
+void merge(const record& src, record& dst);
+
 /// Evaluates a data predicate.
 /// @param lhs The LHS of the predicate.
 /// @param op The relational operator.

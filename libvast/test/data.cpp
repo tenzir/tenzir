@@ -94,6 +94,42 @@ TEST(flatten) {
   CHECK_EQUAL(utr, xs);
 }
 
+TEST(merge) {
+  // clang-format off
+  auto xs = record{
+    {"a", "foo"},
+    {"b", record{
+      {"c", -42},
+      {"d", list{1, 2, 3}}
+    }},
+    {"c", record{
+      {"a", "bar"}
+    }}
+  };
+  auto ys = record{
+    {"a", "bar"},
+    {"b", record{
+      {"a", 42},
+      {"d", list{1, 2, 3}}
+    }},
+    {"c", "not a record yet"}
+  };
+  auto expected = record{
+    {"a", "foo"},
+    {"b", record{
+      {"a", 42},
+      {"d", list{1, 2, 3}},
+      {"c", -42}
+    }},
+    {"c", record{
+      {"a", "bar"}
+    }}
+  };
+  // clang-format on
+  merge(xs, ys);
+  CHECK_EQUAL(ys, expected);
+}
+
 TEST(construction) {
   CHECK(caf::holds_alternative<caf::none_t>(data{}));
   CHECK(caf::holds_alternative<bool>(data{true}));

@@ -280,6 +280,22 @@ caf::optional<data> unflatten(const data& x, const type& t) {
   return caf::none;
 }
 
+void merge(const record& src, record& dst) {
+  for (auto& [k, v] : src) {
+    if (auto src_rec = caf::get_if<record>(&v)) {
+      auto dst_rec = caf::get_if<record>(&dst[k]);
+      if (!dst_rec) {
+        // Overwrite key with empty record on type mismatch.
+        dst[k] = record{};
+        dst_rec = caf::get_if<record>(&dst[k]);
+      }
+      merge(*src_rec, *dst_rec);
+    } else {
+      dst[k] = v;
+    }
+  }
+}
+
 namespace {
 
 json jsonize(const data& x) {

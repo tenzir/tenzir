@@ -20,7 +20,6 @@
 #include "vast/detail/append.hpp"
 #include "vast/detail/assert.hpp"
 #include "vast/detail/process.hpp"
-#include "vast/detail/settings.hpp"
 #include "vast/detail/string.hpp"
 #include "vast/detail/system.hpp"
 #include "vast/path.hpp"
@@ -110,7 +109,7 @@ caf::error configuration::parse(int argc, char** argv) {
       config_dirs.insert(std::move(dir));
   }
   // Parse and merge all configuration files.
-  caf::settings merged_settings;
+  record merged_config;
   for (const auto& config : config_files) {
     if (exists(config)) {
       auto contents = load_contents(config);
@@ -123,20 +122,22 @@ caf::error configuration::parse(int argc, char** argv) {
       if (!rec)
         return caf::make_error(ec::parse_error, "config file not a map of "
                                                 "key-value pairs");
-      auto flat_yaml = flatten(*rec);
-      // Erase all null values because a caf::config_value has no such notion.
-      for (auto i = flat_yaml.begin(); i != flat_yaml.end();) {
-        if (caf::holds_alternative<caf::none_t>(i->second))
-          i = flat_yaml.erase(i);
-        else
-          ++i;
-      }
-      auto settings = to<caf::settings>(flat_yaml);
-      if (!settings)
-        return settings.error();
-      detail::merge_settings(*settings, merged_settings);
+      merge(*rec, merged_config);
     }
   }
+  // Flatten everything for simplicity.
+  merged_config = flatten(merged_config);
+  // Erase all null values because a caf::config_value has no such notion.
+  for (auto i = merged_config.begin(); i != merged_config.end();) {
+    if (caf::holds_alternative<caf::none_t>(i->second))
+      i = merged_config.erase(i);
+    else
+      ++i;
+  }
+  // Convert to CAF-readable data structure.
+  auto settings = to<caf::settings>(merged_config);
+  if (!settings)
+    return settings.error();
   // TODO: Revisit this after we are on CAF 0.18.
   // Helper function to parse a config_value with the type information
   // contained in an config_option. Because our YAML config only knows about
@@ -168,7 +169,7 @@ caf::error configuration::parse(int argc, char** argv) {
     }
     return result;
   };
-  for (auto& [key, value] : merged_settings) {
+  for (auto& [key, value] : *settings) {
     // We have flattened the YAML contents above, so dictionaries cannot occur.
     VAST_ASSERT(!caf::holds_alternative<caf::config_value::dictionary>(value));
     // Now this is incredibly ugly, but custom_options_ (a config_option_set)
