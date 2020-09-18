@@ -14,6 +14,7 @@
 #include "vast/chunk.hpp"
 #include "vast/concept/printable/to_string.hpp"
 #include "vast/concept/printable/vast/uuid.hpp"
+#include "vast/directory.hpp"
 #include "vast/fbs/index.hpp"
 #include "vast/fbs/partition.hpp"
 #include "vast/fbs/segment.hpp"
@@ -28,7 +29,6 @@
 #include <flatbuffers/flatbuffers.h>
 
 #include <cstddef>
-#include <filesystem>
 #include <iostream>
 #include <string>
 
@@ -38,8 +38,6 @@ using std::endl;
 
 using namespace std::string_literals;
 
-namespace fs = std::filesystem;
-
 enum class Kind {
   Unknown,
   DatabaseDir,
@@ -48,13 +46,13 @@ enum class Kind {
   Segment_v0,
 };
 
-typedef void (*printer)(fs::path);
+typedef void (*printer)(vast::path);
 
-void print_unknown(fs::path);
-void print_vast_db(fs::path);
-void print_partition_v0(fs::path);
-void print_index_v0(fs::path);
-void print_segment_v0(fs::path);
+void print_unknown(vast::path);
+void print_vast_db(vast::path);
+void print_partition_v0(vast::path);
+void print_index_v0(vast::path);
+void print_segment_v0(vast::path);
 
 static const std::map<Kind, printer> printers = {
   {Kind::Unknown, print_unknown},
@@ -64,12 +62,12 @@ static const std::map<Kind, printer> printers = {
   {Kind::Segment_v0, print_segment_v0},
 };
 
-Kind classify(fs::path path) {
-  if (fs::is_directory(path) && path.filename() == "vast.db")
+Kind classify(vast::path path) {
+  if (path.is_directory() && path.basename() == "vast.db")
     return Kind::DatabaseDir;
-  if (!fs::is_regular_file(path))
+  if (!path.is_regular_file())
     return Kind::Unknown;
-  auto bytes = vast::io::read(path.string());
+  auto bytes = vast::io::read(path);
   if (!bytes)
     return Kind::Unknown;
   auto view = vast::span<const vast::byte>(bytes->data(), bytes->size());
@@ -83,33 +81,32 @@ Kind classify(fs::path path) {
   return Kind::Unknown;
 }
 
-void print_unknown(fs::path path) {
-  std::cout << "(unknown " << path.string() << ")\n";
+void print_unknown(vast::path path) {
+  std::cout << "(unknown " << path.str() << ")\n";
 }
 
-void print_vast_db(fs::path vast_db) {
+void print_vast_db(vast::path vast_db) {
   // TODO: We should have some versioning for the layout
   // of the vast.db directory itself, so we can still read
   // older versions.
   auto index_dir = vast_db / "index";
   print_index_v0(index_dir / "index.bin");
-  for (auto file : fs::directory_iterator{index_dir}) {
-    auto path = file.path();
-    auto stem = path.stem().string();
+  for (auto file : vast::directory{index_dir}) {
+    auto stem = file.basename(true).str();
     if (stem == "index")
       continue;
     print_partition_v0(file);
   }
   auto segments_dir = vast_db / "archive" / "segments";
-  for (auto file : fs::directory_iterator{segments_dir}) {
+  for (auto file : vast::directory{segments_dir}) {
     print_segment_v0(file);
   }
 }
 
-void print_partition_v0(fs::path path) {
+void print_partition_v0(vast::path path) {
   using vast::fbs::Partition;
   using vast::fbs::Version;
-  auto bytes = vast::io::read(path.string());
+  auto bytes = vast::io::read(path);
   if (!bytes) {
     std::cout << "(error: " << caf::to_string(bytes.error()) << ")\n";
     return;
@@ -141,11 +138,11 @@ void print_partition_v0(fs::path path) {
   // TODO: print combined_layout and indexes
 }
 
-void print_index_v0(fs::path path) {
+void print_index_v0(vast::path path) {
   using vast::fbs::Index;
   using vast::fbs::Version;
   std::cout << "Index v0" << std::endl;
-  auto bytes = vast::io::read(path.string());
+  auto bytes = vast::io::read(path);
   if (!bytes)
     std::cout << "(error: " << caf::to_string(bytes.error()) << ")\n";
   auto view = vast::span<const vast::byte>(bytes->data(), bytes->size());
@@ -165,11 +162,11 @@ void print_index_v0(fs::path path) {
   // TODO: Print partition ids and meta index contents.
 }
 
-void print_segment_v0(fs::path path) {
+void print_segment_v0(vast::path path) {
   using vast::fbs::Segment;
   using vast::fbs::Version;
   std::cout << "Segment v0" << std::endl;
-  auto bytes = vast::io::read(path.string());
+  auto bytes = vast::io::read(path);
   if (!bytes) {
     std::cout << "(error: " << caf::to_string(bytes.error()) << ")\n";
     return;
@@ -197,7 +194,7 @@ int main(int argc, char** argv) {
   std::string raw_path{argv[1]};
   if (raw_path.back() == '/')
     raw_path.resize(raw_path.size() - 1);
-  auto path = fs::path{raw_path};
+  auto path = vast::path{raw_path};
   auto kind = classify(path);
   // TODO: Add command line options to force a specific kind.
   if (kind == Kind::Unknown) {
