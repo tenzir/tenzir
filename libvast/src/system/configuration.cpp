@@ -56,11 +56,16 @@ configuration::configuration() {
   detail::add_message_types(*this);
   // Instead of the CAF-supplied `config_file_path`, we use our own
   // `config_paths` variable in order to support multiple configuration files.
+  auto add_configs = [&](auto&& dir) {
+    config_paths.emplace_back(dir / "vast.conf");
+    config_paths.emplace_back(dir / "vast.yml");
+    config_paths.emplace_back(dir / "vast.yaml");
+  };
   if (const char* xdg_config_home = std::getenv("XDG_CONFIG_HOME"))
-    config_paths.emplace_back(path{xdg_config_home} / "vast" / "vast.conf");
+    add_configs(path{xdg_config_home} / "vast");
   else if (const char* home = std::getenv("HOME"))
-    config_paths.emplace_back(path{home} / ".config" / "vast" / "vast.conf");
-  config_paths.emplace_back(VAST_SYSCONFDIR "/vast/vast.conf");
+    add_configs(path{home} / ".config" / "vast");
+  add_configs(VAST_SYSCONFDIR / path{"vast"});
   // Remove all non-existent config files.
   config_paths.erase(
     std::remove_if(config_paths.begin(), config_paths.end(),
