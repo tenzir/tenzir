@@ -221,6 +221,6 @@ TEST(conversion) {
   auto xs = to_json(std::vector<int>{1, 2, 3});
   CHECK_EQUAL(xs, json::make_array(1, 2, 3));
   MESSAGE("std::map");
-  auto ys = to_json(std::map<unsigned, bool>{{1, true}, {2, false}});
+  auto ys = to_json(std::map<std::string, bool>{{"1", true}, {"2", false}});
   CHECK_EQUAL(ys, (json::object{{"1", json{true}}, {"2", json{false}}}));
 }

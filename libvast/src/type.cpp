@@ -11,23 +11,23 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#include <tuple>
-#include <typeindex>
-#include <utility>
-
-#include "vast/data.hpp"
-#include "vast/json.hpp"
-#include "vast/logger.hpp"
-#include "vast/pattern.hpp"
-#include "vast/schema.hpp"
 #include "vast/type.hpp"
 
 #include "vast/concept/printable/to_string.hpp"
 #include "vast/concept/printable/vast/type.hpp"
-
+#include "vast/data.hpp"
 #include "vast/detail/narrow.hpp"
 #include "vast/detail/overload.hpp"
 #include "vast/detail/string.hpp"
+#include "vast/error.hpp"
+#include "vast/json.hpp"
+#include "vast/logger.hpp"
+#include "vast/pattern.hpp"
+#include "vast/schema.hpp"
+
+#include <tuple>
+#include <typeindex>
+#include <utility>
 
 using caf::get_if;
 using caf::holds_alternative;

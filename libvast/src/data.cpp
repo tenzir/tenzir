@@ -21,6 +21,7 @@
 #include "vast/detail/overload.hpp"
 #include "vast/detail/string.hpp"
 #include "vast/detail/type_traits.hpp"
+#include "vast/error.hpp"
 #include "vast/json.hpp"
 
 #include <caf/config_value.hpp>
