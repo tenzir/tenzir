@@ -87,6 +87,7 @@ set(libvast_sources
     src/detail/pid_file.cpp
     src/detail/posix.cpp
     src/detail/process.cpp
+    src/detail/settings.cpp
     src/detail/string.cpp
     src/detail/system.cpp
     src/detail/terminal.cpp
@@ -135,7 +136,6 @@ set(libvast_sources
     src/segment.cpp
     src/segment_builder.cpp
     src/segment_store.cpp
-    src/settings.cpp
     src/store.cpp
     src/subnet.cpp
     src/synopsis.cpp

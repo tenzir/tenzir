@@ -15,7 +15,7 @@
 
 #include <caf/settings.hpp>
 
-namespace vast {
+namespace vast::detail {
 
 /// Merge settings of `src` into `dst`, overwriting existing values
 /// from `dst` if necessary.
@@ -28,4 +28,4 @@ void merge_settings(const caf::settings& src, caf::settings& dst);
 ///   { a = 13 }
 bool strip_settings(caf::settings& xs);
 
-} // namespace vast
+} // namespace vast::detail

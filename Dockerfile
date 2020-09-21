@@ -35,7 +35,7 @@ COPY schema ./schema
 COPY scripts ./scripts
 COPY tools ./tools
 COPY vast ./vast
-COPY .clang-format .cmake-format LICENSE README.md BANNER CMakeLists.txt configure vast.conf.example ./
+COPY .clang-format .cmake-format LICENSE README.md BANNER CMakeLists.txt configure vast.yaml.example ./
 RUN ./configure \
     --prefix=$PREFIX \
     --build-type=$BUILD_TYPE \
@@ -61,7 +61,7 @@ EXPOSE 42000/tcp
 RUN echo "Adding vast user" && useradd --system --user-group vast
 
 RUN mkdir -p /etc/vast /var/log/vast /var/db/vast
-COPY systemd/vast.conf /etc/vast/vast.conf
+COPY systemd/vast.yaml /etc/vast/vast.yaml
 RUN chown -R vast:vast /var/log/vast /var/db/vast
 
 WORKDIR /var/db/vast

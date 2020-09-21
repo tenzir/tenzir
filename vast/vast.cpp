@@ -39,7 +39,7 @@ using namespace vast;
 using namespace vast::system;
 
 int main(int argc, char** argv) {
-  // CAF scaffold.
+  // Set up our configuration, e.g., load of YAML config file(s).
   default_configuration cfg;
   if (auto err = cfg.parse(argc, argv)) {
     std::cerr << "failed to parse configuration: " << to_string(err)
@@ -69,8 +69,8 @@ int main(int argc, char** argv) {
   fixup_logger(cfg);
   // Print the configuration file(s) that were loaded.
   if (!cfg.config_file_path.empty())
-    cfg.config_paths.emplace_back(std::move(cfg.config_file_path));
-  for (auto& path : cfg.config_paths)
+    cfg.config_files.emplace_back(std::move(cfg.config_file_path));
+  for (auto& path : cfg.config_files)
     VAST_INFO_ANON("loaded configuration file:", path);
   using string_list = std::vector<std::string>;
   auto schema_dirs = std::vector<vast::path>{};

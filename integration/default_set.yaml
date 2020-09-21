@@ -1,4 +1,4 @@
-config-file: vast.conf
+config-file: vast.yaml
 
 fixtures:
   BiTopologyTester:

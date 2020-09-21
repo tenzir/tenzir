@@ -33,11 +33,18 @@ Every entry has a category for which we use the following visual abbreviations:
   import processes from shutting down under rare circumstances.
   [#1058](https://github.com/tenzir/vast/pull/1058)
 
-- ⚠️ VAST has a new dependency: [yaml-cpp](https://github.com/jbeder/yaml-cpp)
-  version 0.6.2 or greater. This new dependency will allow VAST to switch its
-  configuration file from a currently proprietary format to the ops-friendly
-  industry standard: YAML.
+- ⚠️ The prioprietary VAST configuration file has changed to the more
+  ops-friendly industry standard YAML. This change introduced also a new
+  dependency: [yaml-cpp](https://github.com/jbeder/yaml-cpp) version 0.6.2 or
+  greater. The top-level `vast.yaml.example` illustrates how the new YAML
+  config looks like. Please rename existing configuration files from
+  `vast.conf` to `vast.yaml`. VAST still reads `vast.conf` but will soon only
+  look for `vast.yaml` or `vast.yml` files in available configuration file
+  paths.
   [#1045](https://github.com/tenzir/vast/pull/1045)
+  [#1055](https://github.com/tenzir/vast/pull/1055)
+  [#1059](https://github.com/tenzir/vast/pull/1059)
+  [#1062](https://github.com/tenzir/vast/pull/1062)
 
 - 🎁 VAST now merges the contents of all used configuration files instead of
   using only the most user-specific file. The file specified using `--config`

@@ -280,6 +280,22 @@ caf::optional<data> unflatten(const data& x, const type& t) {
   return caf::none;
 }
 
+void merge(const record& src, record& dst) {
+  for (auto& [k, v] : src) {
+    if (auto src_rec = caf::get_if<record>(&v)) {
+      auto dst_rec = caf::get_if<record>(&dst[k]);
+      if (!dst_rec) {
+        // Overwrite key with empty record on type mismatch.
+        dst[k] = record{};
+        dst_rec = caf::get_if<record>(&dst[k]);
+      }
+      merge(*src_rec, *dst_rec);
+    } else {
+      dst[k] = v;
+    }
+  }
+}
+
 namespace {
 
 json jsonize(const data& x) {
@@ -376,20 +392,22 @@ caf::error convert(const data& d, caf::config_value& cv) {
   auto f = detail::overload(
     [&](const auto& x) -> caf::error {
       using value_type = std::decay_t<decltype(x)>;
-      if constexpr (detail::is_any_v<value_type, bool, integer, real, duration>)
+      if constexpr (detail::is_any_v<value_type, bool, integer, count, real,
+                                     duration, std::string>)
         cv = x;
       else
         cv = to_string(x);
       return caf::none;
     },
-    [&](const std::string& x) -> caf::error {
-      if (auto uri = caf::make_uri(x))
-        cv = std::move(*uri);
-      else
-        // If we couldn't infer a more specific config value type, we use the
-        // string as is.
-        cv = x;
-      return caf::none;
+    [&](caf::none_t) -> caf::error {
+      // A caf::config_value has no notion of "null" value. Converting it to a
+      // default-constructed config_value would be wrong, because that's just
+      // an integer with value 0. As such, the conversion is a partial function
+      // and we must fail at this point. If you trigger this error when
+      // converting a record, you can first flatten the record and then delete
+      // all null keys. Then this branch will not be triggered.
+      return caf::make_error(ec::type_clash, "cannot convert null to "
+                                             "config_value");
     },
     [&](const list& xs) -> caf::error {
       caf::config_value::list result;

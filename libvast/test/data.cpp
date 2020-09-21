@@ -94,6 +94,42 @@ TEST(flatten) {
   CHECK_EQUAL(utr, xs);
 }
 
+TEST(merge) {
+  // clang-format off
+  auto xs = record{
+    {"a", "foo"},
+    {"b", record{
+      {"c", -42},
+      {"d", list{1, 2, 3}}
+    }},
+    {"c", record{
+      {"a", "bar"}
+    }}
+  };
+  auto ys = record{
+    {"a", "bar"},
+    {"b", record{
+      {"a", 42},
+      {"d", list{1, 2, 3}}
+    }},
+    {"c", "not a record yet"}
+  };
+  auto expected = record{
+    {"a", "foo"},
+    {"b", record{
+      {"a", 42},
+      {"d", list{1, 2, 3}},
+      {"c", -42}
+    }},
+    {"c", record{
+      {"a", "bar"}
+    }}
+  };
+  // clang-format on
+  merge(xs, ys);
+  CHECK_EQUAL(ys, expected);
+}
+
 TEST(construction) {
   CHECK(caf::holds_alternative<caf::none_t>(data{}));
   CHECK(caf::holds_alternative<bool>(data{true}));
@@ -328,12 +364,13 @@ TEST(json) {
 }
 // clang-format on
 
-TEST(convert - caf::settings) {
+TEST(convert - caf::config_value) {
   // clang-format off
   auto x = record{
     {"x", "foo"},
     {"r", record{
       {"i", -42},
+      {"u", 42u},
       {"r", record{
         {"u", 3.14}
       }},
@@ -351,12 +388,13 @@ TEST(convert - caf::settings) {
   y.emplace("x", "foo");
   auto r = config_value::dictionary{};
   r.emplace("i", -42);
+  r.emplace("u", 42u);
   auto rr = config_value::dictionary{};
   rr.emplace("u", 3.14);
   r.emplace("r", std::move(rr));
   y.emplace("r", std::move(r));
   y.emplace("delta", timespan{12ms});
-  y.emplace("uri", unbox(make_uri("https://tenzir.com/")));
+  y.emplace("uri", "https://tenzir.com/"); // maybe in the future as caf::uri
   y.emplace("xs", make_config_value_list(1, 2, 3));
   y.emplace("ys", make_config_value_list(1, "foo", 3.14));
   auto z0 = config_value::dictionary{};
@@ -367,4 +405,23 @@ TEST(convert - caf::settings) {
   y.emplace("port", "443/tcp");
   CHECK_EQUAL(unbox(to<settings>(x)), y);
   CHECK_EQUAL(unbox(to<dictionary<config_value>>(x)), y);
+}
+
+TEST(convert - caf::config_value - null) {
+  // clang-format off
+  auto x = record{
+    {"valid", "foo"},
+    {"invalid", caf::none}
+  };
+  // clang-format on
+  using namespace caf;
+  auto y = to<dictionary<config_value>>(x);
+  REQUIRE(!y.engaged());
+  CHECK_EQUAL(y.error(), ec::type_clash);
+  // If we flatten the record first and weed out null values, it'll work.
+  auto flat = flatten(x);
+  auto& [k, v] = as_vector(flat).back();
+  flat.erase(k);
+  y = to<dictionary<config_value>>(flat);
+  REQUIRE(y.engaged());
 }

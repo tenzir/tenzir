@@ -41,8 +41,7 @@ public:
   std::vector<std::string> command_line;
 
   /// The configuration files to load.
-  std::vector<path> config_paths = {};
+  std::vector<path> config_files;
 };
 
 } // namespace vast::system
-
