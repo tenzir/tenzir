@@ -13,7 +13,6 @@
 
 #pragma once
 
-#include "vast/concept/printable/to.hpp"
 #include "vast/detail/narrow.hpp"
 #include "vast/detail/operators.hpp"
 #include "vast/detail/overload.hpp"
@@ -21,6 +20,7 @@
 #include "vast/detail/stack_vector.hpp"
 #include "vast/detail/type_traits.hpp"
 
+#include <caf/config_value.hpp>
 #include <caf/detail/type_list.hpp>
 #include <caf/dictionary.hpp>
 #include <caf/fwd.hpp>
@@ -202,15 +202,14 @@ bool convert(const std::vector<T>& v, json& j) {
 }
 
 /// @relates json
-template <class K, class V>
-bool convert(const std::map<K, V>& m, json& j) {
+template <class V>
+bool convert(const std::map<std::string, V>& m, json& j) {
   json::object o;
   for (auto& p : m) {
-    auto k = to<std::string>(p.first);
     json v;
-    if (!(k && convert(p.second, v)))
+    if (!convert(p.second, v))
       return false;
-    o.emplace(std::move(*k), std::move(v));
+    o.emplace(p.first, std::move(v));
   };
   j = std::move(o);
   return true;
