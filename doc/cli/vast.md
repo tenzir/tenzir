@@ -36,8 +36,8 @@ In addition to command options, a YAML configuration file `vast.yaml` allows
 for persisting option values and tweaking system parameters. Command line
 options always override configuration file values.
 
-During startup, `vast` looks for a `vast.yaml` or `vast.yml` in the following
-directories, in order:
+During startup, `vast` looks for a `vast.yaml` in the following directories, in
+order:
 
 1. `<sysconfdir>/vast`
 2. Environment-variables (stopping when first variable found):
