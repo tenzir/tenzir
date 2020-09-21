@@ -6,4 +6,5 @@ namespace vast.fbs;
 enum Version : short {
   Invalid,               // Default value
   v0,
+  v1,
 }
