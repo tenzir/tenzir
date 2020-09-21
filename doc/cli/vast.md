@@ -32,12 +32,12 @@ for `vast start`.
 
 ## Configuration
 
-In addition to command options, a configuration file `vast.conf` allows for
+In addition to command options, a configuration file `vast.yaml` allows for
 persisting option values and tweaking system parameters. Command line options
 always override configuration file values.
 
-During startup, `vast` looks for a `vast.conf` in the current directory. If
-the file does not exist, `vast` then attempts to open `PREFIX/etc/vast.conf`
+During startup, `vast` looks for a `vast.yaml` in the current directory. If
+the file does not exist, `vast` then attempts to open `PREFIX/etc/vast.yaml`
 where `PREFIX` is the installation prefix (which defaults to `/usr/local`).
 
 ## System Architecture

@@ -4,7 +4,7 @@ foreground and uses standard error for logging. Standard output remains unused.
 
 By default, the `start` command creates a `vast.db` directory in the current
 working directory. It is recommended to set the options for the node in the
-`vast.conf` file, such that they are picked up by all client commands as well.
+`vast.yaml` file, such that they are picked up by all client commands as well.
 
 In the most basic form, VAST spawns one server process that contains all core
 actors that manage the persistent state, i.e., archive and index. This process
