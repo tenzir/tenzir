@@ -45,7 +45,7 @@ directories, in order:
   2. `${HOME}/.config/vast`
 
 The `<sysconfdir>` is a platform-specific directory for configuration files,
-e.g., `/usr/local/etc/vast`.
+e.g., `/etc/vast`.
 
 ## System Architecture
 
