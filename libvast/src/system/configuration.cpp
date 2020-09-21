@@ -57,7 +57,6 @@ configuration::configuration() {
   // Instead of the CAF-supplied `config_file_path`, we use our own
   // `config_files` variable in order to support multiple configuration files.
   auto add_configs = [&](auto&& dir) {
-    config_files.emplace_back(dir / "vast.conf");
     config_files.emplace_back(dir / "vast.yml");
     config_files.emplace_back(dir / "vast.yaml");
   };
