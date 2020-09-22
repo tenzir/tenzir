@@ -38,7 +38,7 @@ constexpr std::string_view read = "-";
 namespace import {
 
 /// Maximum size for sources that generate table slices.
-constexpr size_t table_slice_size = 100;
+constexpr size_t table_slice_size = 1000;
 
 #if VAST_HAVE_ARROW
 

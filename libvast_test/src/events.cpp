@@ -129,8 +129,8 @@ events::events() {
   // historic reasons: there used to be a utility that generated a binary set
   // of table slices that used a different table slice size than the other
   // table slice collections.
-  zeek_conn_log_full = inhale<format::zeek::reader>(
-    artifacts::logs::zeek::conn, defaults::import::table_slice_size);
+  zeek_conn_log_full
+    = inhale<format::zeek::reader>(artifacts::logs::zeek::conn, 100u);
   REQUIRE_EQUAL(rows(zeek_conn_log_full), 8462u);
   // Create random table slices.
   caf::settings opts;
