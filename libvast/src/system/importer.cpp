@@ -77,8 +77,7 @@ caf::error importer_state::write_state(write_mode mode) {
   state_file << current.end;
   if (mode == write_mode::with_next) {
     state_file << " " << current.next;
-    VAST_VERBOSE(self, "persisted ID block [", current.next, ",", current.end,
-                 ")");
+    VAST_VERBOSE(self, "persisted next available ID at", current.next);
   } else {
     VAST_VERBOSE(self, "persisted ID block boundary at", current.end);
   }
