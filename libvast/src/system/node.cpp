@@ -180,7 +180,7 @@ caf::message status_command(const invocation& inv, caf::actor_system&) {
 
 maybe_actor spawn_accountant(node_actor* self, spawn_arguments& args) {
   auto& options = args.inv.options;
-  auto metrics_opts = caf::get_or(options, "system.metrics", caf::settings{});
+  auto metrics_opts = caf::get_or(options, "vast.metrics", caf::settings{});
   auto cfg = to_accountant_config(metrics_opts);
   if (!cfg)
     return cfg.error();
@@ -336,7 +336,8 @@ node_state::spawn_command(const invocation& inv,
   std::string comp_type{inv_name_split[1]};
   // Auto-generate label if none given.
   std::string label;
-  if (auto label_ptr = caf::get_if<std::string>(&inv.options, "spawn.label")) {
+  if (auto label_ptr = caf::get_if<std::string>(&inv.options, "vast.spawn."
+                                                              "label")) {
     label = *label_ptr;
     if (this_node->state.registry.find_by_label(label)) {
       auto err = caf::make_error(ec::unspecified, "duplicate component label");
@@ -353,11 +354,14 @@ node_state::spawn_command(const invocation& inv,
   VAST_DEBUG(this_node, "spawns a", comp_type, "with the label", label);
   auto spawn_inv = inv;
   if (comp_type == "source") {
-    auto spawn_opt = caf::get_or(spawn_inv.options, "spawn", caf::settings{});
+    auto spawn_opt
+      = caf::get_or(spawn_inv.options, "vast.spawn", caf::settings{});
     auto source_opt = caf::get_or(spawn_opt, "source", caf::settings{});
-    auto import_opt = caf::get_or(spawn_inv.options, "import", caf::settings{});
+    auto import_opt
+      = caf::get_or(spawn_inv.options, "vast.import", caf::settings{});
     detail::merge_settings(source_opt, import_opt);
     spawn_inv.options["import"] = import_opt;
+    caf::put(spawn_inv.options, "vast.import", import_opt);
   }
   // Spawn our new VAST component.
   spawn_arguments args{spawn_inv, this_node->state.dir, label};

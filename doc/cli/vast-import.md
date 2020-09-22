@@ -53,12 +53,12 @@ again for consecutive imports.
 The import command parses events into table slices (batches). The following
 options control the batching:
 
-#### `import.batch-encoding`
+#### `vast.import.batch-encoding`
 
 Selects the encoding of table slices. Available options are `msgpack`
 (row-based) and `arrow` (column-based).
 
-#### `import.batch-size`
+#### `vast.import.batch-size`
 
 Sets an upper bound for the number of events per table slice.
 
@@ -71,16 +71,17 @@ allows actors to spend more time processing a block of memory, but makes them
 yield less frequently to the scheduler. As a result, other actors scheduled on
 the same thread may have to wait a little longer.
 
-The `import.batch-size` option merely controls number of events per table slice,
-but not necessarily the number of events until a component forwards a batch to
-the next stage in a stream. The [CAF streaming
+The `vast.import.batch-size` option merely controls number of events per table
+slice, but not necessarily the number of events until a component forwards a
+batch to the next stage in a stream. The [CAF streaming
 framework](https://actor-framework.readthedocs.io/en/latest/Streaming.html) uses
 a credit-based flow-control mechanism to determine buffering of tables slices.
-Setting `import.batch-size` to 0 causes the table slice size to be unbounded and
-leaves it to other parameters to determine the actual table slice size.
+Setting `vast.import.batch-size` to 0 causes the table slice size to be
+unbounded and leaves it to other parameters to determine the actual table slice
+size.
 
-#### `import.batch-timeout`
+#### `vast.import.batch-timeout`
 
 Sets a timeout for forwarding buffered table slices to the importer. If the
-timeout fires before a table slice reaches `import.batch-size`, then the table
-slice will contain fewer events but ship immediately.
+timeout fires before a table slice reaches `vast.import.batch-size`, then the
+table slice will contain fewer events but ship immediately.

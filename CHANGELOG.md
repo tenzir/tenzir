@@ -11,6 +11,12 @@ Every entry has a category for which we use the following visual abbreviations:
 
 ## Unreleased
 
+- ⚠️ All configuration options are now grouped into `vast` and `caf` sections,
+  depending on whether they affect VAST itself or are handed through to the
+  underlying actor framework CAF directly. Take a look at the bundled
+  `vast.yaml.example` file for an explanation of the new layout.
+  [#1073](https://github.com/tenzir/vast/pull/1073)
+
 - ⚠️ Data exported in the Apache Arrow format now contains the name of the
   payload record type in the metadata section of the schema.
   [#1072](https://github.com/tenzir/vast/pull/1072)

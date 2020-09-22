@@ -38,7 +38,7 @@ caf::message writer_command(const invocation& inv, caf::actor_system& sys) {
   std::string category = Defaults::category;
   using ostream_ptr = std::unique_ptr<std::ostream>;
   auto max_events
-    = get_or(options, "export.max-events", defaults::export_::max_events);
+    = get_or(options, "vast.export.max-events", defaults::export_::max_events);
   caf::actor snk;
   if constexpr (std::is_constructible_v<Writer, ostream_ptr>) {
     auto out = detail::make_output_stream<Defaults>(options);

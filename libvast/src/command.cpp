@@ -387,12 +387,12 @@ bool init_config(caf::actor_system_config& cfg, const invocation& from,
   // Disable file logging for all commands that don't start a node,
   // i.e., `vast start` and `vast -N ...`.
   if (!(from.name() == "start"
-        || caf::get_or(from.options, "system.node", false)))
+        || caf::get_or(from.options, "vast.node", false)))
     cfg.set("logger.file-verbosity", caf::atom("quiet"));
   // Merge all CLI settings into the actor_system settings.
   detail::merge_settings(from.options, cfg.content);
-  // Allow users to use `system.verbosity` to configure console verbosity.
-  if (auto value = caf::get_if<caf::atom_value>(&from.options, "system."
+  // Allow users to use `vast.verbosity` to configure console verbosity.
+  if (auto value = caf::get_if<caf::atom_value>(&from.options, "vast."
                                                                "verbosity")) {
     // Verify user input.
     auto level = loglevel_to_int(caf::to_lowercase(*value), -1);
@@ -412,14 +412,14 @@ bool init_config(caf::actor_system_config& cfg, const invocation& from,
     }
     cfg.set("logger.console-verbosity", *value);
   }
-  // Allow users to use `system.log-file` to set log filename
-  if (auto fn = caf::get_if<std::string>(&cfg, "system.log-file"))
+  // Allow users to use `vast.log-file` to set log filename
+  if (auto fn = caf::get_if<std::string>(&cfg, "vast.log-file"))
     cfg.set("logger.file-name", *fn);
   // Allow users to specify `verbose` log level.
   auto fixup_verbose_mode = [&](const std::string& option) {
     auto logopt = "logger." + option;
     if (auto verbosity = caf::get_if<caf::atom_value>(&cfg, logopt)) {
-      put(cfg.content, "system." + option, *verbosity);
+      put(cfg.content, "vast." + option, *verbosity);
       if (*verbosity == caf::atom("verbose"))
         cfg.set(logopt, caf::atom("info"));
     }
@@ -429,15 +429,15 @@ bool init_config(caf::actor_system_config& cfg, const invocation& from,
   fixup_verbose_mode("file-verbosity");
   // Adjust logger file name unless the user overrides the default.
   auto default_fn = caf::defaults::logger::file_name;
-  auto file_verbosity = caf::get_or(cfg, "system.file-verbosity",
-                                    defaults::logger::file_verbosity);
+  auto file_verbosity
+    = caf::get_or(cfg, "vast.file-verbosity", defaults::logger::file_verbosity);
   if (caf::get_or(cfg, "logger.file-name", default_fn) == default_fn
       && loglevel_to_int(file_verbosity) > VAST_LOG_LEVEL_QUIET) {
-    if (caf::get_if<std::string>(&cfg, "system.log-directory"))
-      error_output << "Config option 'system.log-directory' is deprecated and"
-                      " ignored, use 'system.log-file' instead\n";
+    if (caf::get_if<std::string>(&cfg, "vast.log-directory"))
+      error_output << "Config option 'vast.log-directory' is deprecated and"
+                      " ignored, use 'vast.log-file' instead\n";
     path log_dir
-      = caf::get_or(cfg, "system.db-directory", defaults::system::db_directory);
+      = caf::get_or(cfg, "vast.db-directory", defaults::system::db_directory);
     if (!exists(log_dir))
       if (auto err = mkdir(log_dir)) {
         error_output << "unable to create directory: " << log_dir.str() << ' '

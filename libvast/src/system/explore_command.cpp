@@ -46,13 +46,14 @@ caf::message explore_command(const invocation& inv, caf::actor_system& sys) {
   if (auto error = explorer_validate_args(inv.options))
     return make_message(error);
   // Read options and arguments.
-  auto output_format = caf::get_or(inv.options, "explore.format", "json"s);
+  auto output_format = caf::get_or(inv.options, "vast.explore.format", "json"s);
   // Read query from input file, STDIN or CLI arguments.
-  auto query = read_query(inv, "export.read", 0);
+  auto query = read_query(inv, "vast.export.read", 0);
   if (!query)
     return caf::make_message(std::move(query.error()));
-  size_t max_events_search = caf::get_or(options, "explore.max-events-query",
-                                         defaults::explore::max_events_query);
+  size_t max_events_search
+    = caf::get_or(options, "vast.explore.max-events-query",
+                  defaults::explore::max_events_query);
   // Get a local actor to interact with `sys`.
   caf::scoped_actor self{sys};
   auto s = make_sink(sys, inv.options, output_format);
@@ -80,7 +81,8 @@ caf::message explore_command(const invocation& inv, caf::actor_system& sys) {
   // Spawn exporter for the passed query
   auto spawn_exporter = invocation{inv.options, "spawn exporter", {*query}};
   if (max_events_search)
-    caf::put(spawn_exporter.options, "export.max-events", max_events_search);
+    caf::put(spawn_exporter.options, "vast.export.max-events",
+             max_events_search);
   VAST_DEBUG(&inv, "spawns exporter with parameters:", spawn_exporter);
   auto exporter = spawn_at_node(self, node, spawn_exporter);
   if (!exporter)

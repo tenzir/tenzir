@@ -40,10 +40,9 @@ namespace vast::system {
 caf::expected<actor>
 connect_to_node(scoped_actor& self, const caf::settings& opts) {
   // Fetch values from config.
-  auto id = get_or(opts, "system.node-id", defaults::system::node_id);
+  auto id = get_or(opts, "vast.node-id", defaults::system::node_id);
   endpoint node_endpoint;
-  auto endpoint_str
-    = get_or(opts, "system.endpoint", defaults::system::endpoint);
+  auto endpoint_str = get_or(opts, "vast.endpoint", defaults::system::endpoint);
   if (!parsers::endpoint(endpoint_str, node_endpoint))
     return make_error(ec::parse_error, "invalid endpoint", endpoint_str);
   if (node_endpoint.port.type() == port::port_type::unknown)

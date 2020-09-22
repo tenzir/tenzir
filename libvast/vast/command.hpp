@@ -202,7 +202,7 @@ parse(const command& root, command::argument_iterator first,
 /// Prepares `cfg` before using it to initialize an `actor_system` with it.
 /// This includes: (1) merging all settings from parsed CLI settings to `cfg`,
 /// (2) setting up the log file, and (3) overriding CAF settings with system
-/// settings where necessary, e.g., `system.verbosity` overrides
+/// settings where necessary, e.g., `vast.verbosity` overrides
 /// `logger.console-verbosity`.
 /// @param cfg The config that should reflect all settings in `from`.
 /// @param from Result of parsed CLI arguments.

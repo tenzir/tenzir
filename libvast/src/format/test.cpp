@@ -246,11 +246,11 @@ reader::reader(caf::atom_value id, const caf::settings& options,
                std::unique_ptr<std::istream>)
   : super{id},
     generator_{vast::defaults::import::test::seed(options)},
-    num_events_{caf::get_or(options, "import.max-events",
+    num_events_{caf::get_or(options, "vast.import.max-events",
                             vast::defaults::import::max_events)} {
   if (num_events_ == 0)
     num_events_ = std::numeric_limits<size_t>::max();
-  if (caf::holds_alternative<std::string>(options, "import.batch-timeout"))
+  if (caf::holds_alternative<std::string>(options, "vast.import.batch-timeout"))
     VAST_VERBOSE(this, "ingnores the unsupported read timeout option");
 }
 

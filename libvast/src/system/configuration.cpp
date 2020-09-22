@@ -126,6 +126,12 @@ caf::error configuration::parse(int argc, char** argv) {
   }
   // Flatten everything for simplicity.
   merged_config = flatten(merged_config);
+  // Strip the caf. prefix from all keys.
+  // TODO: Remove this after switching to CAF 0.18.
+  for (auto& option : merged_config)
+    if (auto& key = option.first;
+        detail::starts_with(key.begin(), key.end(), "caf."))
+      key.erase(0, 4);
   // Erase all null values because a caf::config_value has no such notion.
   for (auto i = merged_config.begin(); i != merged_config.end();) {
     if (caf::holds_alternative<caf::none_t>(i->second))

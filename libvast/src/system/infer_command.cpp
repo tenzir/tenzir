@@ -155,8 +155,8 @@ infer_command(const invocation& inv, [[maybe_unused]] caf::actor_system& sys) {
   if (!input)
     return make_message(input.error());
   // Setup buffer for input data.
-  auto buffer_size
-    = caf::get_or(options, "infer.buffer-size", defaults::infer::buffer_size);
+  auto buffer_size = caf::get_or(options, "vast.infer.buffer-size",
+                                 defaults::infer::buffer_size);
   std::string buffer;
   buffer.resize(buffer_size);
   // Try to parse input with all readers that we know.

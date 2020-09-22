@@ -43,7 +43,7 @@ pcap_writer_command(const invocation& inv, caf::actor_system& sys) {
   using defaults_t = defaults::export_::pcap;
   std::string category = defaults_t::category;
   auto limit
-    = get_or(options, "export.max-events", defaults::export_::max_events);
+    = get_or(options, "vast.export.max-events", defaults::export_::max_events);
   auto output = get_or(options, category + ".write", defaults_t::write);
   auto flush
     = get_or(options, category + ".flush-interval", defaults_t::flush_interval);

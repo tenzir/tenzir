@@ -47,9 +47,9 @@ caf::message pivot_command(const invocation& inv, caf::actor_system& sys) {
   VAST_TRACE(inv);
   using namespace std::string_literals;
   // Read options and arguments.
-  auto output_format = caf::get_or(inv.options, "pivot.format", "json"s);
+  auto output_format = caf::get_or(inv.options, "vast.pivot.format", "json"s);
   // Read query from input file, STDIN or CLI arguments.
-  auto query = read_query(inv, "pivot.read", 1u);
+  auto query = read_query(inv, "vast.pivot.read", 1u);
   if (!query)
     return caf::make_message(std::move(query.error()));
   caf::actor sink;

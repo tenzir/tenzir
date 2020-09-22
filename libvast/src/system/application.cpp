@@ -85,7 +85,7 @@ auto make_root_command(std::string_view path) {
   }
   schema_desc += "])";
   auto ob
-    = opts("?system")
+    = opts("?vast")
         .add<std::string>("config", "path to a configuration file")
         .add<caf::atom_value>("verbosity,v", "output verbosity level on the "
                                              "console")
@@ -111,15 +111,16 @@ auto make_root_command(std::string_view path) {
 auto make_count_command() {
   return std::make_unique<command>(
     "count", "count hits for a query without exporting data", "",
-    opts("?count").add<bool>("estimate,e", "estimate an upper bound by "
-                                           "skipping candidate checks"));
+    opts("?vast.count")
+      .add<bool>("estimate,e", "estimate an upper bound by "
+                               "skipping candidate checks"));
 }
 
 auto make_explore_command() {
   return std::make_unique<command>(
     "explore", "explore context around query results",
     documentation::vast_explore,
-    opts("?explore")
+    opts("?vast.explore")
       .add<std::string>("format", "output format (default: JSON)")
       .add<std::string>("after,A", "include all records up to this much"
                                    " time after each result")
@@ -135,39 +136,39 @@ auto make_export_command() {
   auto export_ = std::make_unique<command>(
     "export", "exports query results to STDOUT or file",
     documentation::vast_export,
-    opts("?export")
+    opts("?vast.export")
       .add<bool>("continuous,c", "marks a query as continuous")
       .add<bool>("unified,u", "marks a query as unified")
       .add<size_t>("max-events,n", "maximum number of results")
       .add<std::string>("read,r", "path for reading the query"));
   export_->add_subcommand("zeek", "exports query results in Zeek format",
                           documentation::vast_export_zeek,
-                          sink_opts("?export.zeek"));
+                          sink_opts("?vast.export.zeek"));
   export_->add_subcommand("csv", "exports query results in CSV format",
                           documentation::vast_export_csv,
-                          sink_opts("?export.csv"));
+                          sink_opts("?vast.export.csv"));
   export_->add_subcommand("ascii", "exports query results in ASCII format",
                           documentation::vast_export_ascii,
-                          sink_opts("?export.ascii"));
+                          sink_opts("?vast.export.ascii"));
   export_->add_subcommand("json", "exports query results in JSON format",
                           documentation::vast_export_json,
-                          sink_opts("?export.json"));
+                          sink_opts("?vast.export.json"));
   export_->add_subcommand("null",
                           "exports query without printing them (debug option)",
                           documentation::vast_export_null,
-                          sink_opts("?export.null"));
+                          sink_opts("?vast.export.null"));
 #if VAST_HAVE_ARROW
   // The Arrow export does not support --write or --uds, so we don't use the
   // sink_opts here intentionally.
   export_->add_subcommand("arrow", "exports query results in Arrow format",
                           documentation::vast_export_arrow,
-                          opts("?export.arrow"));
+                          opts("?vast.export.arrow"));
 
 #endif
 #if VAST_HAVE_PCAP
   export_->add_subcommand("pcap", "exports query results in PCAP format",
                           documentation::vast_export_pcap,
-                          make_pcap_options("?export.pcap"));
+                          make_pcap_options("?vast.export.pcap"));
 #endif
   return export_;
 }
@@ -175,7 +176,7 @@ auto make_export_command() {
 auto make_infer_command() {
   return std::make_unique<command>(
     "infer", "infers the schema from data", documentation::vast_infer,
-    opts("?infer")
+    opts("?vast.infer")
       .add<size_t>("buffer,b", "maximum number of bytes to buffer")
       .add<std::string>("read,r", "path to the input data"));
 }
@@ -183,7 +184,7 @@ auto make_infer_command() {
 auto make_import_command() {
   auto import_ = std::make_unique<command>(
     "import", "imports data from STDIN or file", documentation::vast_import,
-    opts("?import")
+    opts("?vast.import")
       .add<caf::atom_value>("batch-encoding", "encoding type of table slices "
                                               "(arrow or msgpack)")
       .add<size_t>("batch-size", "upper bound for the size of a table slice")
@@ -194,28 +195,28 @@ auto make_import_command() {
                                    "import"));
   import_->add_subcommand("zeek", "imports Zeek logs from STDIN or file",
                           documentation::vast_import_zeek,
-                          source_opts("?import.zeek"));
+                          source_opts("?vast.import.zeek"));
   import_->add_subcommand("csv", "imports CSV logs from STDIN or file",
                           documentation::vast_import_csv,
-                          source_opts("?import.csv"));
+                          source_opts("?vast.import.csv"));
   import_->add_subcommand("json", "imports JSON with schema",
                           documentation::vast_import_json,
-                          source_opts("?import.json"));
+                          source_opts("?vast.import.json"));
   import_->add_subcommand("suricata", "imports suricata eve json",
                           documentation::vast_import_suricata,
-                          source_opts("?import.suricata"));
+                          source_opts("?vast.import.suricata"));
   import_->add_subcommand("syslog", "imports syslog messages",
                           documentation::vast_import_syslog,
-                          source_opts("?import.syslog"));
+                          source_opts("?vast.import.syslog"));
   import_->add_subcommand(
     "test", "imports random data for testing or benchmarking",
     documentation::vast_import_test,
-    source_opts("?import.test").add<size_t>("seed", "the PRNG seed"));
+    source_opts("?vast.import.test").add<size_t>("seed", "the PRNG seed"));
 #if VAST_HAVE_PCAP
   import_->add_subcommand(
     "pcap", "imports PCAP logs from STDIN or file",
     documentation::vast_import_pcap,
-    source_opts("?import.pcap")
+    source_opts("?vast.import.pcap")
       .add<std::string>("interface,i", "network interface to read packets from")
       .add<size_t>("cutoff,c", "skip flow packets after this many bytes")
       .add<size_t>("max-flows,m", "number of concurrent flows to track")
@@ -246,8 +247,9 @@ auto make_pivot_command() {
   auto pivot = std::make_unique<command>(
     "pivot", "extracts related events of a given type",
     documentation::vast_pivot,
-    make_pcap_options("?pivot").add<std::string>("format", "output format "
-                                                           "(default: JSON)"));
+    make_pcap_options("?vast.pivot")
+      .add<std::string>("format", "output format "
+                                  "(default: JSON)"));
   return pivot;
 }
 
@@ -260,7 +262,7 @@ auto make_spawn_source_command() {
   auto spawn_source = std::make_unique<command>(
     "source", "creates a new source inside the node",
     documentation::vast_spawn_source,
-    opts("?spawn.source")
+    opts("?vast.spawn.source")
       .add<caf::atom_value>("batch-encoding", "encoding type of table slices "
                                               "(arrow or msgpack)")
       .add<size_t>("batch-size", "upper bound for the size of a table slice")
@@ -271,16 +273,16 @@ auto make_spawn_source_command() {
   spawn_source->add_subcommand("csv",
                                "creates a new CSV source inside the node",
                                documentation::vast_spawn_source_csv,
-                               source_opts("?spawn.source.csv"));
+                               source_opts("?vast.spawn.source.csv"));
   spawn_source->add_subcommand("json",
                                "creates a new JSON source inside the node",
                                documentation::vast_spawn_source_json,
-                               source_opts("?spawn.source.json"));
+                               source_opts("?vast.spawn.source.json"));
 #if VAST_HAVE_PCAP
   spawn_source->add_subcommand(
     "pcap", "creates a new PCAP source inside the node",
     documentation::vast_spawn_source_pcap,
-    source_opts("?spawn.source.pcap")
+    source_opts("?vast.spawn.source.pcap")
       .add<std::string>("interface,i", "network interface to read packets from")
       .add<size_t>("cutoff,c", "skip flow packets after this many bytes")
       .add<size_t>("max-flows,m", "number of concurrent flows to track")
@@ -297,19 +299,19 @@ auto make_spawn_source_command() {
   spawn_source->add_subcommand("suricata",
                                "creates a new Suricata source inside the node",
                                documentation::vast_spawn_source_suricata,
-                               source_opts("?spawn.source.suricata"));
+                               source_opts("?vast.spawn.source.suricata"));
   spawn_source->add_subcommand("syslog",
                                "creates a new Syslog source inside the node",
                                documentation::vast_spawn_source_syslog,
-                               source_opts("?spawn.source.syslog"));
+                               source_opts("?vast.spawn.source.syslog"));
   spawn_source->add_subcommand(
     "test", "creates a new test source inside the node",
     documentation::vast_spawn_source_test,
-    source_opts("?spawn.source.test").add<size_t>("seed", "the PRNG seed"));
+    source_opts("?vast.spawn.source.test").add<size_t>("seed", "the PRNG seed"));
   spawn_source->add_subcommand("zeek",
                                "creates a new Zeek source inside the node",
                                documentation::vast_spawn_source_zeek,
-                               source_opts("?spawn.source.zeek"));
+                               source_opts("?vast.spawn.source.zeek"));
   return spawn_source;
 }
 

@@ -87,14 +87,14 @@ make_source(const Actor& self, caf::actor_system& sys, const invocation& inv,
   // Parse options.
   auto& options = inv.options;
   std::string category = Defaults::category;
-  auto max_events = caf::get_if<size_t>(&options, "import.max-events");
+  auto max_events = caf::get_if<size_t>(&options, "vast.import.max-events");
   auto uri = caf::get_if<std::string>(&options, category + ".listen");
   auto file = caf::get_if<std::string>(&options, category + ".read");
   auto type = caf::get_if<std::string>(&options, category + ".type");
-  auto slice_type = get_or(options, "import.batch-encoding",
+  auto slice_type = get_or(options, "vast.import.batch-encoding",
                            defaults::import::table_slice_type);
-  auto slice_size
-    = get_or(options, "import.batch-size", defaults::import::table_slice_size);
+  auto slice_size = get_or(options, "vast.import.batch-size",
+                           defaults::import::table_slice_size);
   if (slice_size == 0)
     slice_size = std::numeric_limits<decltype(slice_size)>::max();
   // Parse schema local to the import command.
