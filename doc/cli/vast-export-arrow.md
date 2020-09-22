@@ -2,8 +2,29 @@ The Arrow export format renders events in [Apache
 Arrow](https://arrow.apache.org), a development platform for in-memory data
 with bindings for many different programming languages.
 
+Primitive VAST types are mapped to Arrow types as follows:
+
+  |   VAST         |  Arrow               |
+  |---------------:|---------------------:|
+  |   none         |  NullType            |
+  |   bool         |  BooleanType         |
+  |   integer      |  Int64Type           |
+  |   count        |  UInt64Type          |
+  |   real         |  DoubleType          |
+  |   time         |  TimestampType       |
+  |   duration     |  Int64Type           |
+  |   string       |  StringType          |
+  |   pattern      |  StringType          |
+  |   enumeration  |  Uint64Type          |
+  |   address      |  FixedSizeBinary(16) |
+  |   subnet       |  FixedSizeBinary(17) |
+  |   port         |  FixedSizeBinary(3)  |
+
+The name of the event_type present in a record batch is encoded into the
+metadata field of the schema at the key "name".
+
 For example, the below Python program reads Arrow-formatted data from stdin and
-prints it back in a readable format batch by batch.
+prints the schema of each batch to stdout.
 
 ```python
 #! /usr/bin/env python

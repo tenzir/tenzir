@@ -473,7 +473,8 @@ arrow_table_slice_builder::make_arrow_schema(const record_type& t) {
     auto field_ptr = arrow::field(field.name, make_arrow_type(field.type));
     arrow_fields.emplace_back(std::move(field_ptr));
   }
-  return std::make_shared<arrow::Schema>(arrow_fields);
+  auto metadata = arrow::key_value_metadata({{"name", t.name()}});
+  return std::make_shared<arrow::Schema>(arrow_fields, metadata);
 }
 
 std::shared_ptr<arrow::DataType>

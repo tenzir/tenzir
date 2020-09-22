@@ -1,4 +1,5 @@
   child 0, item: string
+-- schema metadata --
 conn_state: string
 done with all readers
 done with current reader, rows: 10
@@ -10,6 +11,7 @@ id.resp_h: fixed_size_binary[16]
 id.resp_p: fixed_size_binary[3]
 local_orig: bool
 missed_bytes: uint64
+name: 'zeek.conn'
 open next reader
 open next reader
 orig_bytes: uint64
