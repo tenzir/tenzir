@@ -62,7 +62,7 @@ constexpr std::chrono::milliseconds read_timeout = std::chrono::seconds{10};
 /// Contains settings for the zeek subcommand.
 struct zeek {
   /// Nested category in config files for this subcommand.
-  static constexpr const char* category = "import.zeek";
+  static constexpr const char* category = "vast.import.zeek";
 
   /// Path for reading input events.
   static constexpr auto read = shared::read;
@@ -71,7 +71,7 @@ struct zeek {
 /// Contains settings for the csv subcommand.
 struct csv {
   /// Nested category in config files for this subcommand.
-  static constexpr const char* category = "import.csv";
+  static constexpr const char* category = "vast.import.csv";
 
   /// Path for reading input events.
   static constexpr auto read = shared::read;
@@ -87,7 +87,7 @@ struct csv {
 /// Contains settings for the json subcommand.
 struct json {
   /// Nested category in config files for this subcommand.
-  static constexpr const char* category = "import.json";
+  static constexpr const char* category = "vast.import.json";
 
   /// Path for reading input events.
   static constexpr auto read = shared::read;
@@ -96,7 +96,7 @@ struct json {
 /// Contains settings for the suricata subcommand.
 struct suricata {
   /// Nested category in config files for this subcommand.
-  static constexpr const char* category = "import.suricata";
+  static constexpr const char* category = "vast.import.suricata";
 
   /// Path for reading input events.
   static constexpr auto read = shared::read;
@@ -105,7 +105,7 @@ struct suricata {
 /// Contains settings for the syslog subcommand.
 struct syslog {
   /// Nested category in config files for this subcommand.
-  static constexpr const char* category = "import.syslog";
+  static constexpr const char* category = "vast.import.syslog";
 
   /// Path for reading input events.
   static constexpr auto read = shared::read;
@@ -114,7 +114,7 @@ struct syslog {
 /// Contains settings for the test subcommand.
 struct test {
   /// Nested category in config files for this subcommand.
-  static constexpr const char* category = "import.test";
+  static constexpr const char* category = "vast.import.test";
 
   /// Path for reading input events.
   static constexpr auto read = shared::read;
@@ -127,7 +127,7 @@ struct test {
 /// Contains settings for the pcap subcommand.
 struct pcap {
   /// Nested category in config files for this subcommand.
-  static constexpr const char* category = "import.pcap";
+  static constexpr const char* category = "vast.import.pcap";
 
   /// Path for reading input events.
   static constexpr auto read = shared::read;
@@ -202,7 +202,7 @@ constexpr size_t max_events = 0;
 /// Contains settings for the zeek subcommand.
 struct zeek {
   /// Nested category in config files for this subcommand.
-  static constexpr const char* category = "export.zeek";
+  static constexpr const char* category = "vast.export.zeek";
 
   /// Path for writing query results.
   static constexpr auto write = shared::write;
@@ -211,7 +211,7 @@ struct zeek {
 /// Contains settings for the csv subcommand.
 struct csv {
   /// Nested category in config files for this subcommand.
-  static constexpr const char* category = "export.csv";
+  static constexpr const char* category = "vast.export.csv";
 
   /// Path for writing query results.
   static constexpr auto write = shared::write;
@@ -225,7 +225,7 @@ struct csv {
 /// Contains settings for the ascii subcommand.
 struct ascii {
   /// Nested category in config files for this subcommand.
-  static constexpr const char* category = "export.ascii";
+  static constexpr const char* category = "vast.export.ascii";
 
   /// Path for writing query results.
   static constexpr auto write = shared::write;
@@ -234,7 +234,7 @@ struct ascii {
 /// Contains settings for the json subcommand.
 struct json {
   /// Nested category in config files for this subcommand.
-  static constexpr const char* category = "export.json";
+  static constexpr const char* category = "vast.export.json";
 
   /// Path for writing query results.
   static constexpr auto write = shared::write;
@@ -243,7 +243,7 @@ struct json {
 /// Contains settings for the null subcommand.
 struct null {
   /// Nested category in config files for this subcommand.
-  static constexpr const char* category = "export.null";
+  static constexpr const char* category = "vast.export.null";
 
   /// Path for writing query results.
   static constexpr auto write = shared::write;
@@ -251,7 +251,7 @@ struct null {
 
 struct arrow {
   /// Nested category in config files for this subcommand.
-  static constexpr const char* category = "export.arrow";
+  static constexpr const char* category = "vast.export.arrow";
   /// Path for writing query results.
   static constexpr auto write = vast::defaults::export_::shared::write;
 };
@@ -259,7 +259,7 @@ struct arrow {
 /// Contains settings for the pcap subcommand.
 struct pcap {
   /// Nested category in config files for this subcommand.
-  static constexpr const char* category = "export.pcap";
+  static constexpr const char* category = "vast.export.pcap";
 
   /// Path for writing query results.
   static constexpr auto write = shared::write;
@@ -275,7 +275,7 @@ struct pcap {
 /// Contains settings for the csv subcommand.
 struct infer {
   /// Nested category in config files for this subcommand.
-  static constexpr const char* category = "infer";
+  static constexpr const char* category = "vast.infer";
 
   /// Path for reading input events.
   static constexpr auto read = defaults::import::shared::read;

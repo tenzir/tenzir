@@ -35,9 +35,9 @@ using namespace std::chrono_literals;
 namespace vast::system {
 
 caf::error explorer_validate_args(const caf::settings& args) {
-  auto before_arg = caf::get_if<std::string>(&args, "explore.before");
-  auto after_arg = caf::get_if<std::string>(&args, "explore.after");
-  auto by_arg = caf::get_if(&args, "explore.by");
+  auto before_arg = caf::get_if<std::string>(&args, "vast.explore.before");
+  auto after_arg = caf::get_if<std::string>(&args, "vast.explore.after");
+  auto by_arg = caf::get_if(&args, "vast.explore.by");
   if (!before_arg && !after_arg && !by_arg)
     return make_error(ec::invalid_configuration, "At least one of '--before', "
                                                  "'--after', or '--by' must be "
@@ -84,13 +84,14 @@ maybe_actor spawn_explorer(node_actor* self, spawn_arguments& args) {
   };
   const auto& options = args.inv.options;
   auto before
-    = maybe_parse(caf::get_if<std::string>(&options, "explore.before"));
-  auto after = maybe_parse(caf::get_if<std::string>(&options, "explore.after"));
-  auto by = to_std(caf::get_if<std::string>(&options, "explore.by"));
+    = maybe_parse(caf::get_if<std::string>(&options, "vast.explore.before"));
+  auto after
+    = maybe_parse(caf::get_if<std::string>(&options, "vast.explore.after"));
+  auto by = to_std(caf::get_if<std::string>(&options, "vast.explore.by"));
   explorer_state::event_limits limits;
-  limits.total
-    = caf::get_or(options, "explore.max-events", defaults::explore::max_events);
-  limits.per_result = caf::get_or(options, "explore.max-events-context",
+  limits.total = caf::get_or(options, "vast.explore.max-events",
+                             defaults::explore::max_events);
+  limits.per_result = caf::get_or(options, "vast.explore.max-events-context",
                                   defaults::explore::max_events_context);
   return self->spawn(explorer, self, limits, before, after, by);
 }

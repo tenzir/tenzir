@@ -1,6 +1,7 @@
-system:
+vast:
   disable-metrics: true
 
-logger:
-  file-verbosity: trace
-  component-blacklist: []
+caf:
+  logger:
+    file-verbosity: trace
+    component-blacklist: []

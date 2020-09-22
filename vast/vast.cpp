@@ -74,7 +74,7 @@ int main(int argc, char** argv) {
     VAST_INFO_ANON("loaded configuration file:", path);
   using string_list = std::vector<std::string>;
   auto schema_dirs = std::vector<vast::path>{};
-  if (!caf::get_or(cfg, "system.no-default-schema", false)) {
+  if (!caf::get_or(cfg, "vast.no-default-schema", false)) {
     // Get filesystem path to the executable.
     auto binary = detail::objectpath();
     if (!binary) {
@@ -90,7 +90,7 @@ int main(int argc, char** argv) {
                              / "schema");
     schema_dirs.emplace_back(VAST_DATADIR "/vast/schema");
   }
-  if (auto user_dirs = caf::get_if<string_list>(&cfg, "system.schema-paths"))
+  if (auto user_dirs = caf::get_if<string_list>(&cfg, "vast.schema-paths"))
     schema_dirs.insert(schema_dirs.end(), user_dirs->begin(), user_dirs->end());
   // Load event types.
   if (auto schema = load_schema(schema_dirs)) {

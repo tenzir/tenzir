@@ -42,7 +42,7 @@ namespace {
 template <class Writer, class Defaults>
 maybe_actor spawn_generic_sink(caf::local_actor* self, spawn_arguments& args) {
   // Bail out early for bogus invocations.
-  if (caf::get_or(args.inv.options, "system.node", false))
+  if (caf::get_or(args.inv.options, "vast.node", false))
     return make_error(ec::parse_error, "cannot start a local node");
   if (!args.empty())
     return unexpected_arguments(args);
@@ -63,7 +63,7 @@ maybe_actor spawn_pcap_sink([[maybe_unused]] caf::local_actor* self,
   return make_error(ec::unspecified, "not compiled with pcap support");
 #else // VAST_HAVE_PCAP
   // Bail out early for bogus invocations.
-  if (caf::get_or(args.inv.options, "system.node", false))
+  if (caf::get_or(args.inv.options, "vast.node", false))
     return make_error(ec::parse_error, "cannot start a local node");
   if (!args.empty())
     return unexpected_arguments(args);
@@ -78,7 +78,7 @@ maybe_actor spawn_pcap_sink([[maybe_unused]] caf::local_actor* self,
 maybe_actor spawn_zeek_sink(caf::local_actor* self, spawn_arguments& args) {
   using defaults_t = defaults::export_::zeek;
   // Bail out early for bogus invocations.
-  if (caf::get_or(args.inv.options, "system.node", false))
+  if (caf::get_or(args.inv.options, "vast.node", false))
     return make_error(ec::parse_error, "cannot start a local node");
   std::string category = defaults_t::category;
   if (!args.empty())

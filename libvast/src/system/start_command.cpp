@@ -44,7 +44,7 @@ caf::message start_command_impl(start_command_extra_steps extra_steps,
                                 const invocation& inv, caf::actor_system& sys) {
   VAST_TRACE(inv);
   // Bail out early for bogus invocations.
-  if (caf::get_or(inv.options, "system.node", false))
+  if (caf::get_or(inv.options, "vast.node", false))
     return caf::make_message(make_error(ec::parse_error, "cannot start a local "
                                                          "node"));
   // Fetch SSL settings from config.
@@ -56,7 +56,7 @@ caf::message start_command_impl(start_command_extra_steps extra_steps,
                         || !sys_cfg.openssl_cafile.empty();
   // Construct an endpoint.
   endpoint node_endpoint;
-  auto str = get_or(inv.options, "system.endpoint", defaults::system::endpoint);
+  auto str = get_or(inv.options, "vast.endpoint", defaults::system::endpoint);
   if (!parsers::endpoint(str, node_endpoint))
     return caf::make_message(
       make_error(ec::parse_error, "invalid endpoint", str));

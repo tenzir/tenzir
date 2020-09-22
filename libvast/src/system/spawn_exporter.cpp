@@ -36,9 +36,9 @@ maybe_actor spawn_exporter(node_actor* self, spawn_arguments& args) {
     return expr.error();
   // Parse query options.
   auto query_opts = no_query_options;
-  if (get_or(args.inv.options, "export.continuous", false))
+  if (get_or(args.inv.options, "vast.export.continuous", false))
     query_opts = query_opts + continuous;
-  if (get_or(args.inv.options, "export.unified", false))
+  if (get_or(args.inv.options, "vast.export.unified", false))
     query_opts = unified;
   // Default to historical if no options provided.
   if (query_opts == no_query_options)
@@ -59,7 +59,7 @@ maybe_actor spawn_exporter(node_actor* self, spawn_arguments& args) {
     self->send(exp, atom::index_v, a);
   }
   // Setting max-events to 0 means infinite.
-  auto max_events = get_or(args.inv.options, "export.max-events",
+  auto max_events = get_or(args.inv.options, "vast.export.max-events",
                            defaults::export_::max_events);
   if (max_events > 0)
     self->send(exp, atom::extract_v, static_cast<uint64_t>(max_events));

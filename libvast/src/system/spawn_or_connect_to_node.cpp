@@ -37,7 +37,7 @@ result_t spawn_or_connect_to_node(caf::scoped_actor& self,
     else
       return std::move(result.error());
   };
-  if (caf::get_or<bool>(opts, "system.node", false))
+  if (caf::get_or<bool>(opts, "vast.node", false))
     return convert(spawn_node(self, node_opts));
   return convert(connect_to_node(self, node_opts));
 }

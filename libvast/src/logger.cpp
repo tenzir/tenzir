@@ -79,12 +79,12 @@ void fixup_logger(const system::configuration& cfg) {
   // A workaround for the lack of an accessor function for logger.cfg_,
   // see https://github.com/actor-framework/actor-framework/issues/1066.
   auto& cfg_ = logger->*stowed<logger_cfg>::value;
-  auto verbosity = caf::get_if<caf::atom_value>(&cfg, "system.verbosity");
+  auto verbosity = caf::get_if<caf::atom_value>(&cfg, "vast.verbosity");
   auto file_verbosity = verbosity ? *verbosity : lg::file_verbosity;
   auto console_verbosity = verbosity ? *verbosity : lg::console_verbosity;
-  file_verbosity = get_or(cfg, "system.file-verbosity", file_verbosity);
+  file_verbosity = get_or(cfg, "vast.file-verbosity", file_verbosity);
   console_verbosity
-    = caf::get_or(cfg, "system.console-verbosity", console_verbosity);
+    = caf::get_or(cfg, "vast.console-verbosity", console_verbosity);
   cfg_.file_verbosity = loglevel_to_int(file_verbosity);
   cfg_.console_verbosity = loglevel_to_int(console_verbosity);
   cfg_.verbosity = std::max(cfg_.file_verbosity, cfg_.console_verbosity);

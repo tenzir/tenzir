@@ -32,7 +32,7 @@ spawn_eraser(system::node_actor* self, system::spawn_arguments& args) {
   using namespace std::string_literals;
   VAST_TRACE(VAST_ARG(self), VAST_ARG(args));
   // Parse options.
-  auto eraser_query = caf::get_or(args.inv.options, "system.aging-query", ""s);
+  auto eraser_query = caf::get_or(args.inv.options, "vast.aging-query", ""s);
   if (eraser_query.empty()) {
     VAST_VERBOSE(self, "has no aging-query and skips starting the eraser");
     return ec::no_error;
@@ -42,7 +42,7 @@ spawn_eraser(system::node_actor* self, system::spawn_arguments& args) {
     return expr.error();
   }
   auto aging_frequency = defaults::system::aging_frequency;
-  if (auto str = caf::get_if<std::string>(&args.inv.options, "system.aging-"
+  if (auto str = caf::get_if<std::string>(&args.inv.options, "vast.aging-"
                                                              "frequency")) {
     auto parsed = to<duration>(*str);
     if (!parsed)

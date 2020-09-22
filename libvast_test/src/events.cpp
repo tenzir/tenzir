@@ -134,8 +134,8 @@ events::events() {
   REQUIRE_EQUAL(rows(zeek_conn_log_full), 8462u);
   // Create random table slices.
   caf::settings opts;
-  caf::put(opts, "import.test.seed", std::size_t{42});
-  caf::put(opts, "import.max-events", std::size_t{1000});
+  caf::put(opts, "vast.import.test.seed", std::size_t{42});
+  caf::put(opts, "vast.import.max-events", std::size_t{1000});
   vast::format::test::reader rd{defaults::import::table_slice_type,
                                 std::move(opts), nullptr};
   random = extract(rd, slice_size);

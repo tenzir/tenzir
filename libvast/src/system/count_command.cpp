@@ -43,7 +43,7 @@ caf::message count_command(const invocation& inv, caf::actor_system& sys) {
   VAST_DEBUG_ANON(inv);
   const auto& options = inv.options;
   // Read query from input file, STDIN or CLI arguments.
-  auto query = read_query(inv, "count.read");
+  auto query = read_query(inv, "vast.count.read");
   if (!query)
     return caf::make_message(std::move(query.error()));
   // Get a convenient and blocking way to interact with actors.

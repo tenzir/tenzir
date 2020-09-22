@@ -247,8 +247,8 @@ make_random_table_slices(size_t num_slices, size_t slice_size,
   // table slice type here. This ignores any user-defined overrides. However,
   // this function is only meant for testing anyways.
   caf::settings opts;
-  caf::put(opts, "import.test.seed", seed);
-  caf::put(opts, "import.max-events", std::numeric_limits<size_t>::max());
+  caf::put(opts, "vast.import.test.seed", seed);
+  caf::put(opts, "vast.import.max-events", std::numeric_limits<size_t>::max());
   format::test::reader src{defaults::import::table_slice_type, std::move(opts),
                            nullptr};
   src.schema(std::move(sc));

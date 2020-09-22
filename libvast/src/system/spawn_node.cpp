@@ -35,10 +35,10 @@ caf::expected<scope_linked_actor>
 spawn_node(caf::scoped_actor& self, const caf::settings& opts) {
   using namespace std::string_literals;
   // Fetch values from config.
-  auto accounting = !get_or(opts, "system.disable-metrics", false);
-  auto id = get_or(opts, "system.node-id", defaults::system::node_id);
+  auto accounting = !get_or(opts, "vast.disable-metrics", false);
+  auto id = get_or(opts, "vast.node-id", defaults::system::node_id);
   auto db_dir
-    = get_or(opts, "system.db-directory", defaults::system::db_directory);
+    = get_or(opts, "vast.db-directory", defaults::system::db_directory);
   auto abs_dir = path{db_dir}.complete();
   if (!exists(abs_dir))
     if (auto err = mkdir(abs_dir))
@@ -56,7 +56,7 @@ spawn_node(caf::scoped_actor& self, const caf::settings& opts) {
   // Spawn the node.
   VAST_DEBUG_ANON(__func__, "spawns local node:", id);
   auto shutdown_grace_period = defaults::system::shutdown_grace_period;
-  if (auto str = caf::get_if<std::string>(&opts, "system.shutdown-grace-"
+  if (auto str = caf::get_if<std::string>(&opts, "vast.shutdown-grace-"
                                                  "period")) {
     if (auto x = to<std::chrono::milliseconds>(*str))
       shutdown_grace_period = *x;

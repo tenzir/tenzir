@@ -197,7 +197,7 @@ explorer(caf::stateful_actor<explorer_state>* self, caf::actor node,
         VAST_TRACE(self, "spawns new exporter with query", query);
         auto exporter_invocation = invocation{{}, "spawn exporter", {query}};
         if (st.limits.per_result)
-          caf::put(exporter_invocation.options, "export.max-events",
+          caf::put(exporter_invocation.options, "vast.export.max-events",
                    st.limits.per_result);
         self->send(st.node, exporter_invocation);
         ++st.running_exporters;

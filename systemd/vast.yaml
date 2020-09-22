@@ -1,7 +1,5 @@
-system {
-  ; The file system path used for persistent state.
-  db-directory = "/var/db/vast"
-
-  ; The file system path used for log files.
-  log-file = "/var/log/vast/server.log"
-}
+vast:
+  # The file system path used for persistent state.
+  db-directory: /var/db/vast
+  # The file system path used for log files.
+  log-file: /var/log/vast/server.log

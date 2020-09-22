@@ -31,11 +31,11 @@ maybe_actor spawn_source(node_actor* self, spawn_arguments& args) {
   VAST_TRACE(VAST_ARG("node", self), VAST_ARG(args));
   auto& options = args.inv.options;
   // Bail out early for bogus invocations.
-  if (caf::get_or(options, "system.node", false))
+  if (caf::get_or(options, "vast.node", false))
     return make_error(ec::invalid_configuration,
                       "unable to spawn a remote source when spawning a node "
                       "locally instead of connecting to one; please unset "
-                      "the option system.node");
+                      "the option vast.node");
   auto [accountant, importer, type_registry]
     = self->state.registry.find_by_label("accountant", "importer",
                                          "type-registry");
