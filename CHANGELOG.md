@@ -11,6 +11,10 @@ Every entry has a category for which we use the following visual abbreviations:
 
 ## Unreleased
 
+- ⚠️ Data exported in the Apache Arrow format now contains the name of the
+  payload record type in the metadata section of the schema.
+  [#1072](https://github.com/tenzir/vast/pull/1072)
+
 - 🎁 VAST now ships with a new tool `lsvast` to display information about the
   contents of a VAST database directory. See `lsvast --help` for usage
   instructions.
