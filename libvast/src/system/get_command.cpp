@@ -50,7 +50,7 @@ ids to_ids(const count& x) {
 caf::error
 run(caf::scoped_actor& self, archive_type& archive, const invocation& inv) {
   using namespace std::string_literals;
-  auto output_format = get_or(inv.options, "get.format", "json"s);
+  auto output_format = get_or(inv.options, "vast.get.format", "json"s);
   auto writer = factory<format::writer>::make(output_format, inv.options);
   if (!writer)
     return writer.error();
