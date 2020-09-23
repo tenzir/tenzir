@@ -18,7 +18,7 @@ labels: bug
 
 *Required*
 - Output of `vast version`
-- Contents of your configuration files, e.g., `PREFIX/etc/vast/vast.conf`
+- Contents of your configuration files, e.g., `PREFIX/etc/vast/vast.yaml`
 - Environment the error was reproduced in (e.g., `macOS 10.15.5`, or Docker `debian-buster`)
 
 *Optional*
