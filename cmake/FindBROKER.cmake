@@ -18,13 +18,14 @@
 find_library(
   BROKER_LIBRARY
   NAMES broker
-  HINTS ${BROKER_ROOT_DIR}/lib ${BROKER_ROOT_DIR})
+  HINTS ${BROKER_ROOT_DIR}
+  PATH_SUFFIXES lib)
 
 find_path(
   BROKER_INCLUDE_DIRS
   NAMES broker/broker.hh
-  HINTS ${BROKER_ROOT_DIR}/include ${BROKER_ROOT_DIR}/..
-        ${BROKER_ROOT_DIR}/../..)
+  HINTS ${BROKER_ROOT_DIR}
+  PATH_SUFFIXES include .. ../..)
 
 if (BROKER_INCLUDE_DIRS)
   # When we're pointing to a build directory, we must add it to the include path
@@ -41,7 +42,7 @@ include(FindPackageHandleStandardArgs)
 find_package_handle_standard_args(BROKER DEFAULT_MSG BROKER_LIBRARY
                                   BROKER_INCLUDE_DIRS)
 
-mark_as_advanced(BROKER_ROOT_DIR BROKER_LIBRARY BROKER_INCLUDE_DIRS)
+mark_as_advanced(BROKER_LIBRARY BROKER_INCLUDE_DIRS)
 
 # create IMPORTED target
 if (BROKER_FOUND AND NOT TARGET zeek::broker)

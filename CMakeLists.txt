@@ -86,6 +86,9 @@ option(VAST_ENABLE_ASSERTIONS "Enable Assertions"
 option(VAST_RELOCATABLE_INSTALL "Enable relocatable installations" ON)
 option(VAST_USE_BUNDLED_CAF "Always use the CAF submodule" OFF)
 option(ENABLE_ZEEK_TO_VAST "Build zeek-to-vast" ON)
+cmake_dependent_option(
+  VAST_USE_BUNDLED_BROKER "Always use the Broker submodule" OFF
+  "ENABLE_ZEEK_TO_VAST" OFF)
 option(VAST_STATIC_EXECUTABLE "Link VAST statically"
        $ENV{VAST_STATIC_EXECUTABLE})
 option(VAST_USE_JEMALLOC "Use jemalloc instead of libc malloc"
@@ -195,7 +198,9 @@ elseif (NOT VAST_LOG_LEVEL STREQUAL "$CACHE{VAST_LOG_LEVEL}")
       CACHE STRING "${VAST_LOG_LEVEL_DOC}" FORCE)
 endif ()
 
-set(VAST_CAF_LOG_LEVEL "WARNING" CACHE STRING ${VAST_LOG_LEVEL_DOC})
+set(VAST_CAF_LOG_LEVEL
+    "WARNING"
+    CACHE STRING ${VAST_LOG_LEVEL_DOC})
 
 # Raise an error for invalid log levels.
 set(validLogLevels
@@ -529,9 +534,9 @@ elseif (EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/aux/caf/CMakeLists.txt)
                                                                   core)
   add_library(caf::core ALIAS libcaf_core_${_linkage_suffix})
   set_target_properties(libcaf_io_${_linkage_suffix} PROPERTIES EXPORT_NAME io)
-  target_compile_options(libcaf_io_${_linkage_suffix} PRIVATE
-    -Wno-maybe-uninitialized
-    -Wno-unknown-warning-option)
+  target_compile_options(
+    libcaf_io_${_linkage_suffix} PRIVATE -Wno-maybe-uninitialized
+                                         -Wno-unknown-warning-option)
   target_link_libraries(libcaf_io_${_linkage_suffix} Threads::Threads)
   add_library(caf::io ALIAS libcaf_io_${_linkage_suffix})
   install(
@@ -591,28 +596,24 @@ else ()
 endif ()
 
 if (ENABLE_ZEEK_TO_VAST)
-  if (NOT BROKER_ROOT_DIR
-      AND EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/aux/broker/broker/CMakeLists.txt)
-    add_subdirectory(aux/broker)
-    set(broker_dir ${CMAKE_CURRENT_SOURCE_DIR}/aux/broker)
-    set(VAST_HAVE_BROKER true)
-  else ()
-    if (NOT BROKER_ROOT_DIR AND VAST_PREFIX)
-      set(BROKER_ROOT_DIR "${VAST_PREFIX}")
-    endif ()
-    if (BROKER_ROOT_DIR)
-      find_package(BROKER REQUIRED)
-      set(VAST_HAVE_BROKER true)
+  if (NOT VAST_USE_BUNDLED_BROKER)
+    find_package(BROKER QUIET)
+  endif ()
+  if (NOT BROKER_FOUND)
+    if (EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/aux/broker/broker/CMakeLists.txt)
+      add_subdirectory(aux/broker)
+      set(broker_dir ${CMAKE_CURRENT_SOURCE_DIR}/aux/broker)
     else ()
       message(
         FATAL_ERROR
-          "Broker not found, either use -DBROKER_ROOT_DIR=... or initialize the aux/broker submodule"
-      )
+          "Broker not found, either use -DBROKER_ROOT_DIR=... or initialize the
+          aux/broker/broker submodule")
     endif ()
-    get_target_property(broker_dir zeek::broker IMPORTED_LOCATION)
-    get_filename_component(broker_dir "${broker_dir}" DIRECTORY) # <prefix>/lib
-    get_filename_component(broker_dir "${broker_dir}" DIRECTORY) # <prefix>
   endif ()
+  set(VAST_HAVE_BROKER true)
+  get_target_property(broker_dir zeek::broker IMPORTED_LOCATION)
+  get_filename_component(broker_dir "${broker_dir}" DIRECTORY) # <prefix>/lib
+  get_filename_component(broker_dir "${broker_dir}" DIRECTORY) # <prefix>
 endif ()
 
 if (VAST_USE_JEMALLOC)
