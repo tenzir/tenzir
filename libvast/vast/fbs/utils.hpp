@@ -20,6 +20,8 @@
 #include "vast/fwd.hpp"
 #include "vast/span.hpp"
 
+#include <caf/binary_deserializer.hpp>
+#include <caf/binary_serializer.hpp>
 #include <caf/error.hpp>
 #include <caf/expected.hpp>
 
@@ -81,6 +83,34 @@ pack_bytes(flatbuffers::FlatBufferBuilder& builder, const T& x) {
   auto bytes = as_bytes(x);
   auto data = reinterpret_cast<const Byte*>(bytes.data());
   return builder.CreateVector(data, bytes.size());
+}
+
+/// Adds a byte vector to builder for a type that can be serialized to a byte
+/// sequence using the `caf::bianry_serializer`.
+template <class T, class Byte = uint8_t>
+caf::expected<flatbuffers::Offset<flatbuffers::Vector<Byte>>>
+serialize_bytes(flatbuffers::FlatBufferBuilder& builder, const T& x) {
+  static_assert(detail::is_any_v<Byte, int8_t, uint8_t>);
+  std::vector<char> buf;
+  caf::binary_serializer source(nullptr, buf);
+  if (auto error = source(x))
+    return error;
+  return builder.CreateVector(reinterpret_cast<const Byte*>(buf.data()),
+                              buf.size());
+}
+
+/// Deserializes an object of type `T` from a flatbuffer byte vector, using
+/// the `caf::binary_deserializer`.
+template <class T, class Byte = uint8_t>
+caf::error deserialize_bytes(const flatbuffers::Vector<Byte>* v, T& x) {
+  static_assert(detail::is_any_v<Byte, int8_t, uint8_t>);
+  if (!v)
+    return make_error(ec::format_error, "no input");
+  caf::binary_deserializer sink(
+    nullptr, reinterpret_cast<const char*>(v->data()), v->size());
+  if (auto error = sink(x))
+    return error;
+  return caf::none;
 }
 
 /// Generic unpacking utility. The structural integrity of the flatbuffer is
