@@ -25,6 +25,7 @@
 #endif // VAST_HAVE_PCAP
 
 #include <caf/actor.hpp>
+#include <caf/event_based_actor.hpp>
 #include <caf/expected.hpp>
 #include <caf/local_actor.hpp>
 #include <caf/settings.hpp>
