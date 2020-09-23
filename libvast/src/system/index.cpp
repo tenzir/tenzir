@@ -413,7 +413,7 @@ void index_state::flush_to_disk() {
     VAST_WARNING(self, "failed to pack index:", render(index.error()));
     return;
   }
-  builder->Finish(*index, "I000");
+  fbs::FinishIndexBuffer(*builder, *index);
   auto ptr = builder->GetBufferPointer();
   auto size = builder->GetSize();
   auto chunk = vast::chunk::make(size, ptr, [=] { delete builder; });

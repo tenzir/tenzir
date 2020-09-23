@@ -491,7 +491,7 @@ active_partition(caf::stateful_actor<active_partition_state>* self, uuid id,
         self->state.persistence_promise.deliver(partition.error());
         return;
       }
-      builder.Finish(*partition, "P000");
+      fbs::FinishPartitionBuffer(builder, *partition);
       VAST_ASSERT(self->state.persist_path);
       auto fb = builder.Release();
       // TODO: This is duplicating code from one of the `chunk` constructors,
