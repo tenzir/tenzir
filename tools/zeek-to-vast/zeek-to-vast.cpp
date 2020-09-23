@@ -11,6 +11,27 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
+#include "vast/concept/parseable/parse.hpp"
+#include "vast/concept/parseable/vast/expression.hpp"
+#include "vast/concept/parseable/vast/uuid.hpp"
+#include "vast/data.hpp"
+#include "vast/defaults.hpp"
+#include "vast/detail/add_message_types.hpp"
+#include "vast/detail/overload.hpp"
+#include "vast/error.hpp"
+#include "vast/expression.hpp"
+#include "vast/format/writer.hpp"
+#include "vast/logger.hpp"
+#include "vast/scope_linked.hpp"
+#include "vast/system/connect_to_node.hpp"
+#include "vast/system/sink.hpp"
+#include "vast/system/sink_command.hpp"
+#include "vast/table_slice.hpp"
+#include "vast/uuid.hpp"
+
+#include <caf/config_option_adder.hpp>
+#include <caf/config_value.hpp>
+
 #include <atomic>
 #include <csignal>
 #include <cstdint>
@@ -19,31 +40,8 @@
 #include <string>
 #include <utility>
 
-#include <caf/config_option_adder.hpp>
-#include <caf/config_value.hpp>
-
 #include <broker/broker.hh>
 #include <broker/zeek.hh>
-
-#include <vast/data.hpp>
-#include <vast/defaults.hpp>
-#include <vast/error.hpp>
-#include <vast/expression.hpp>
-#include <vast/format/writer.hpp>
-#include <vast/logger.hpp>
-#include <vast/scope_linked.hpp>
-#include <vast/uuid.hpp>
-
-#include <vast/concept/parseable/parse.hpp>
-#include <vast/concept/parseable/vast/expression.hpp>
-#include <vast/concept/parseable/vast/uuid.hpp>
-#include <vast/format/writer.hpp>
-#include <vast/system/connect_to_node.hpp>
-#include <vast/system/sink.hpp>
-#include <vast/system/sink_command.hpp>
-
-#include <vast/detail/add_message_types.hpp>
-#include <vast/detail/overload.hpp>
 
 using namespace std::chrono_literals;
 
@@ -341,8 +339,8 @@ int main(int argc, char** argv) {
     // Relay the query expression to VAST.
     VAST_INFO_ANON("dispatching query", query_id, expression);
     auto inv = vast::invocation{std::move(opts), "", {expression}};
-    auto sink = self->spawn(vast::system::sink<zeek_writer>,
-                            zeek_writer{endpoint, query_id},
+    auto writer = std::make_unique<zeek_writer>(endpoint, query_id);
+    auto sink = self->spawn(vast::system::sink, std::move(writer),
                             vast::defaults::export_::max_events);
     vast::scope_linked<caf::actor> guard{sink};
     auto res = vast::system::sink_command(std::move(inv), sys, sink);
