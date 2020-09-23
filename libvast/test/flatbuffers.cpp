@@ -15,7 +15,6 @@
 #include "vast/detail/spawn_container_source.hpp"
 #include "vast/expression.hpp"
 #include "vast/fbs/index.hpp"
-#include "vast/fbs/meta_index.hpp"
 #include "vast/fbs/utils.hpp"
 #include "vast/fbs/uuid.hpp"
 #include "vast/fwd.hpp"
@@ -49,32 +48,6 @@ TEST(uuid roundtrip) {
   CHECK_EQUAL(uuid, uuid2);
 }
 
-TEST(meta index roundtrip) {
-  // Prepare a mini meta index. The meta index only looks at the layout of the
-  // table slices it gets, so we feed it with an empty table slice.
-  auto meta_idx = vast::meta_index{};
-  auto mock_partition = vast::uuid::random();
-  vast::table_slice_header header;
-  header.layout = vast::record_type{{"x", vast::count_type{}}}.name("y");
-  auto slice = vast::msgpack_table_slice::make(header);
-  REQUIRE(slice);
-  meta_idx.add(mock_partition, *slice);
-  // Serialize meta index.
-  auto expected_fb = vast::fbs::wrap(meta_idx);
-  REQUIRE(expected_fb);
-  auto fb = *expected_fb;
-  span<const byte> span{reinterpret_cast<const byte*>(fb->data()), fb->size()};
-  // Deserialize meta index.
-  vast::meta_index recovered_meta_idx;
-  vast::fbs::unwrap<vast::fbs::MetaIndex>(span, recovered_meta_idx);
-  // Check that lookups still work as expected.
-  auto candidates = recovered_meta_idx.lookup(vast::expression{
-    vast::predicate{vast::field_extractor{".x"}, vast::equal, vast::data{0u}},
-  });
-  REQUIRE_EQUAL(candidates.size(), 1u);
-  CHECK_EQUAL(candidates[0], mock_partition);
-}
-
 TEST(index roundtrip) {
   vast::system::index_state state(/*self = */ nullptr);
   // The active partition is not supposed to appear in the
@@ -101,11 +74,6 @@ TEST(index roundtrip) {
   // Deserialize the index.
   auto idx = vast::fbs::GetIndex(span.data());
   // Check Index state.
-  CHECK_EQUAL(idx->version(), vast::fbs::Version::v0);
-  // We only check the presence and not the contents of the meta index
-  // since that should be covered by the previous unit test.
-  auto meta_idx = idx->meta_index();
-  CHECK(meta_idx);
   auto partition_uuids = idx->partitions();
   REQUIRE(partition_uuids);
   CHECK_EQUAL(partition_uuids->size(), expected_uuids.size());
@@ -137,6 +105,14 @@ TEST(empty partition roundtrip) {
   auto& ids = state.type_ids["x"];
   ids.append_bits(0, 3);
   ids.append_bits(1, 3);
+  // Prepare a mini meta index. The meta index only looks at the layout of the
+  // table slices it gets, so we feed it with an empty table slice.
+  auto meta_idx = vast::meta_index{};
+  vast::table_slice_header header;
+  header.layout = vast::record_type{{"x", vast::count_type{}}}.name("y");
+  auto slice = vast::msgpack_table_slice::make(header);
+  REQUIRE(slice);
+  state.meta_idx.add(state.id, *slice);
   // Serialize partition.
   auto expected_fb = vast::fbs::wrap(state);
   REQUIRE(expected_fb);
@@ -147,12 +123,24 @@ TEST(empty partition roundtrip) {
   REQUIRE(partition);
   auto error = unpack(*partition, readonly_state);
   CHECK(!error);
-  std::cerr << caf::to_string(error) << std::endl;
   CHECK_EQUAL(readonly_state.id, state.id);
   CHECK_EQUAL(readonly_state.offset, state.offset);
   CHECK_EQUAL(readonly_state.events, state.events);
   CHECK_EQUAL(readonly_state.combined_layout, state.combined_layout);
   CHECK_EQUAL(readonly_state.type_ids, state.type_ids);
+  // Deserialize meta index state from this partition.
+  vast::partition_synopsis ps;
+  auto error2 = vast::system::unpack(*partition, ps);
+  CHECK(!error2);
+  CHECK_EQUAL(ps.size(), 1u);
+  vast::meta_index recovered_meta_idx;
+  recovered_meta_idx.merge(state.id, std::move(ps));
+  // Check that lookups still work as expected.
+  auto candidates = recovered_meta_idx.lookup(vast::expression{
+    vast::predicate{vast::field_extractor{".x"}, vast::equal, vast::data{0u}},
+  });
+  REQUIRE_EQUAL(candidates.size(), 1u);
+  CHECK_EQUAL(candidates[0], state.id);
 }
 
 FIXTURE_SCOPE(foo, fixtures::deterministic_actor_system)
@@ -168,7 +156,7 @@ TEST(full partition roundtrip) {
     directory); // `directory` is provided by the unit test fixture
   auto partition_uuid = vast::uuid::random();
   auto partition = sys.spawn(vast::system::active_partition, partition_uuid, fs,
-                             caf::settings{});
+                             caf::settings{}, vast::meta_index{});
   run();
   REQUIRE(partition);
   // Add data to the partition.

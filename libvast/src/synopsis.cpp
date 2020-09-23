@@ -13,19 +13,20 @@
 
 #include "vast/synopsis.hpp"
 
-#include <typeindex>
-
-#include <caf/deserializer.hpp>
-#include <caf/error.hpp>
-#include <caf/serializer.hpp>
-
 #include "vast/bool_synopsis.hpp"
+#include "vast/detail/overload.hpp"
 #include "vast/error.hpp"
+#include "vast/fbs/utils.hpp"
 #include "vast/logger.hpp"
+#include "vast/qualified_record_field.hpp"
 #include "vast/synopsis_factory.hpp"
 #include "vast/time_synopsis.hpp"
 
-#include "vast/detail/overload.hpp"
+#include <caf/binary_deserializer.hpp>
+#include <caf/binary_serializer.hpp>
+#include <caf/error.hpp>
+
+#include <typeindex>
 
 namespace vast {
 
@@ -70,6 +71,62 @@ caf::error inspect(caf::deserializer& source, synopsis_ptr& ptr) {
   // Change `ptr` only after successfully deserializing.
   using std::swap;
   swap(ptr, new_ptr);
+  return caf::none;
+}
+
+caf::expected<flatbuffers::Offset<fbs::Synopsis>>
+pack(flatbuffers::FlatBufferBuilder& builder, const synopsis_ptr& synopsis,
+     const qualified_record_field& fqf) {
+  auto column_name = fbs::serialize_bytes(builder, fqf);
+  if (!column_name)
+    return column_name.error();
+  auto ptr = synopsis.get();
+  if (auto tptr = dynamic_cast<time_synopsis*>(ptr)) {
+    auto min = tptr->min().time_since_epoch().count();
+    auto max = tptr->max().time_since_epoch().count();
+    fbs::TimeSynopsis time_synopsis(min, max);
+    fbs::SynopsisBuilder synopsis_builder(builder);
+    synopsis_builder.add_qualified_record_field(*column_name);
+    synopsis_builder.add_time_synopsis(&time_synopsis);
+    return synopsis_builder.Finish();
+  } else if (auto bptr = dynamic_cast<bool_synopsis*>(ptr)) {
+    fbs::BoolSynopsis bool_synopsis(bptr->any_true(), bptr->any_false());
+    fbs::SynopsisBuilder synopsis_builder(builder);
+    synopsis_builder.add_qualified_record_field(*column_name);
+    synopsis_builder.add_bool_synopsis(&bool_synopsis);
+    return synopsis_builder.Finish();
+  } else {
+    auto data = fbs::serialize_bytes(builder, synopsis);
+    if (!data)
+      return data.error();
+    fbs::OpaqueSynopsisBuilder opaque_builder(builder);
+    opaque_builder.add_data(*data);
+    auto opaque_synopsis = opaque_builder.Finish();
+    fbs::SynopsisBuilder synopsis_builder(builder);
+    synopsis_builder.add_qualified_record_field(*column_name);
+    synopsis_builder.add_opaque_synopsis(opaque_synopsis);
+    return synopsis_builder.Finish();
+  }
+  return make_error(ec::logic_error, "unreachable");
+}
+
+caf::error unpack(const fbs::Synopsis& synopsis, synopsis_ptr& ptr) {
+  ptr = nullptr;
+  if (auto bs = synopsis.bool_synopsis())
+    ptr = caf::make_counted<bool_synopsis>(bs->any_true(), bs->any_false());
+  else if (auto ts = synopsis.time_synopsis())
+    ptr = caf::make_counted<time_synopsis>(
+      vast::time{} + vast::duration{ts->start()},
+      vast::time{} + vast::duration{ts->end()});
+  else if (auto os = synopsis.opaque_synopsis()) {
+    caf::binary_deserializer sink(
+      nullptr, reinterpret_cast<const char*>(os->data()->data()),
+      os->data()->size());
+    if (auto error = sink(ptr))
+      return error;
+  } else {
+    return make_error(ec::format_error, "no synopsis type");
+  }
   return caf::none;
 }
 

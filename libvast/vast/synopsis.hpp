@@ -13,15 +13,16 @@
 
 #pragma once
 
-#include <caf/fwd.hpp>
-#include <caf/intrusive_ptr.hpp>
-#include <caf/ref_counted.hpp>
-
 #include "vast/aliases.hpp"
+#include "vast/fbs/synopsis.hpp"
 #include "vast/fwd.hpp"
 #include "vast/operator.hpp"
 #include "vast/type.hpp"
 #include "vast/view.hpp"
+
+#include <caf/fwd.hpp>
+#include <caf/intrusive_ptr.hpp>
+#include <caf/ref_counted.hpp>
 
 namespace vast {
 
@@ -87,5 +88,12 @@ caf::error inspect(caf::serializer& sink, synopsis_ptr& ptr);
 
 /// @relates synopsis
 caf::error inspect(caf::deserializer& source, synopsis_ptr& ptr);
+
+/// Flatbuffer support.
+caf::expected<flatbuffers::Offset<fbs::Synopsis>>
+pack(flatbuffers::FlatBufferBuilder& builder, const synopsis_ptr&,
+     const qualified_record_field&);
+
+caf::error unpack(const fbs::Synopsis&, synopsis_ptr&);
 
 } // namespace vast

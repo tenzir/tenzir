@@ -1,4 +1,3 @@
-include "meta_index.fbs";
 include "partition.fbs";
 include "uuid.fbs";
 include "version.fbs";
@@ -15,12 +14,6 @@ table LayoutStatistics {
 
 /// The persistent state of the index.
 table Index {
-  /// The version of the index state.
-  version: Version;
-
-  /// Synopsis structures for the contained partitions.
-  meta_index: MetaIndex;
-
   /// The contained partition UUIDs.
   partitions: [UUID];
 
@@ -30,4 +23,4 @@ table Index {
 
 root_type Index;
 
-file_identifier "I000";
+file_identifier "I001";

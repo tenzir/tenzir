@@ -3,7 +3,8 @@
 # ----------------------------------------------------------------------------
 
 file(GLOB flatbuffers_schemas CONFIGURE_DEPENDS
-     ${CMAKE_CURRENT_SOURCE_DIR}/vast/fbs/*.fbs)
+     ${CMAKE_CURRENT_SOURCE_DIR}/vast/fbs/*.fbs
+     ${CMAKE_CURRENT_SOURCE_DIR}/vast/fbs/legacy/*.fbs)
 set(flatbuffers_output_path ${CMAKE_CURRENT_BINARY_DIR}/vast/fbs)
 
 add_custom_target(libvast_flatbuffers)

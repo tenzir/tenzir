@@ -13,7 +13,7 @@
 
 #pragma once
 
-#include "vast/fbs/meta_index.hpp"
+#include "vast/fbs/meta_index_v0.hpp"
 #include "vast/fbs/partition.hpp"
 #include "vast/fwd.hpp"
 #include "vast/qualified_record_field.hpp"
@@ -23,6 +23,8 @@
 
 #include <caf/fwd.hpp>
 #include <caf/settings.hpp>
+
+#include <flatbuffers/flatbuffers.h>
 
 #include <functional>
 #include <string>
@@ -34,6 +36,7 @@ namespace vast {
 
 namespace system {
 
+// Forward declaration to be able to `friend` this function.
 caf::expected<flatbuffers::Offset<fbs::Partition>>
 pack(flatbuffers::FlatBufferBuilder& builder,
      const system::active_partition_state& x);
@@ -41,6 +44,9 @@ pack(flatbuffers::FlatBufferBuilder& builder,
 } // namespace system
 
 /// Contains one synopsis per partition column.
+//  TODO: Turn this into a proper struct with its own `add()` function.
+//        Then we could store this in the `active_partition_state` directly
+//        instead of using a meta_index with only one entry.
 struct partition_synopsis
   : public std::unordered_map<qualified_record_field, synopsis_ptr> {};
 
@@ -94,10 +100,15 @@ private:
 
 // -- flatbuffer ---------------------------------------------------------------
 
-// FIXME:  these can be removed?
-caf::expected<flatbuffers::Offset<fbs::MetaIndex>>
+// TODO: Move these into some 'legacy' flatbuffer section
+caf::expected<flatbuffers::Offset<fbs::v0::MetaIndex>>
 pack(flatbuffers::FlatBufferBuilder& builder, const meta_index& x);
 
-caf::error unpack(const fbs::MetaIndex& x, meta_index& y);
+caf::error unpack(const fbs::v0::MetaIndex& x, meta_index& y);
+
+caf::expected<flatbuffers::Offset<fbs::PartitionSynopsis>>
+pack(flatbuffers::FlatBufferBuilder& builder, const partition_synopsis&);
+
+caf::error unpack(const fbs::PartitionSynopsis&, partition_synopsis&);
 
 } // namespace vast
