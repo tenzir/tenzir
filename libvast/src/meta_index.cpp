@@ -59,6 +59,10 @@ void meta_index::add(const uuid& partition, const table_slice& slice) {
   }
 }
 
+void meta_index::merge(const uuid& partition, partition_synopsis&& ps) {
+  synopses_.emplace(uuid{partition}, std::move(ps));
+}
+
 std::vector<uuid> meta_index::lookup(const expression& expr) const {
   VAST_ASSERT(!caf::holds_alternative<caf::none_t>(expr));
   // TODO: we could consider a flat_set<uuid> here, which would then have

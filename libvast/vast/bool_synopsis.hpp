@@ -22,6 +22,8 @@ class bool_synopsis : public synopsis {
 public:
   explicit bool_synopsis(vast::type x);
 
+  bool_synopsis(bool true_, bool false_);
+
   void add(data_view x) override;
 
   caf::optional<bool> lookup(relational_operator op,
@@ -33,9 +35,13 @@ public:
 
   caf::error deserialize(caf::deserializer& source) override;
 
+  bool any_true();
+
+  bool any_false();
+
 private:
-  bool false_ = false;
   bool true_ = false;
+  bool false_ = false;
 };
 
 } // namespace vast

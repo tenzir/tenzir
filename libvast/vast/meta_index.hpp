@@ -14,6 +14,7 @@
 #pragma once
 
 #include "vast/fbs/meta_index.hpp"
+#include "vast/fbs/partition.hpp"
 #include "vast/fwd.hpp"
 #include "vast/qualified_record_field.hpp"
 #include "vast/synopsis.hpp"
@@ -31,6 +32,18 @@
 
 namespace vast {
 
+namespace system {
+
+caf::expected<flatbuffers::Offset<fbs::Partition>>
+pack(flatbuffers::FlatBufferBuilder& builder,
+     const system::active_partition_state& x);
+
+} // namespace system
+
+/// Contains one synopsis per partition column.
+struct partition_synopsis
+  : public std::unordered_map<qualified_record_field, synopsis_ptr> {};
+
 /// The meta index is the first data structure that queries hit. The result
 /// represents a list of candidate partition IDs that may contain the desired
 /// data. The meta index may return false positives but never false negatives.
@@ -44,6 +57,10 @@ public:
   /// @param slice The table slice to extract data from.
   /// @param partition The partition ID that *slice* belongs to.
   void add(const uuid& partition, const table_slice& slice);
+
+  /// Adds new synopses for a partition in bulk. Used when
+  /// re-building the meta index state at startup.
+  void merge(const uuid& partition, partition_synopsis&&);
 
   /// Retrieves the list of candidate partition IDs for a given expression.
   /// @param expr The expression to lookup.
@@ -62,11 +79,12 @@ public:
     return f(x.synopsis_options_, x.synopses_);
   }
 
-private:
-  /// Contains one synopsis per partition column.
-  using partition_synopsis
-    = std::unordered_map<qualified_record_field, synopsis_ptr>;
+  // Allow the partition to directly serialize the relevant synopses.
+  friend caf::expected<flatbuffers::Offset<fbs::Partition>>
+  vast::system::pack(flatbuffers::FlatBufferBuilder& builder,
+                     const system::active_partition_state& x);
 
+private:
   /// Maps a partition ID to the synopses for that partition.
   std::unordered_map<uuid, partition_synopsis> synopses_;
 
@@ -76,6 +94,7 @@ private:
 
 // -- flatbuffer ---------------------------------------------------------------
 
+// FIXME:  these can be removed?
 caf::expected<flatbuffers::Offset<fbs::MetaIndex>>
 pack(flatbuffers::FlatBufferBuilder& builder, const meta_index& x);
 

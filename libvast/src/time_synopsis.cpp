@@ -20,6 +20,10 @@ time_synopsis::time_synopsis(vast::type x)
   // nop
 }
 
+time_synopsis::time_synopsis(time start, time end)
+  : min_max_synopsis<time>{time_type{}, start, end} {
+}
+
 bool time_synopsis::equals(const synopsis& other) const noexcept {
   if (typeid(other) != typeid(time_synopsis))
     return false;

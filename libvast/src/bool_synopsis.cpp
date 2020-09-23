@@ -24,6 +24,10 @@ bool_synopsis::bool_synopsis(vast::type x) : synopsis{std::move(x)} {
   VAST_ASSERT(caf::holds_alternative<bool_type>(type()));
 }
 
+bool_synopsis::bool_synopsis(bool true_, bool false_)
+  : synopsis{bool_type{}}, true_(true_), false_(false_) {
+}
+
 void bool_synopsis::add(data_view x) {
   VAST_ASSERT(caf::holds_alternative<view<bool>>(x));
   if (caf::get<view<bool>>(x))
@@ -48,6 +52,14 @@ bool bool_synopsis::equals(const synopsis& other) const noexcept {
     return false;
   auto& rhs = static_cast<const bool_synopsis&>(other);
   return type() == rhs.type() && false_ == rhs.false_ && true_ == rhs.true_;
+}
+
+bool bool_synopsis::any_false() {
+  return false_;
+}
+
+bool bool_synopsis::any_true() {
+  return true_;
 }
 
 caf::error bool_synopsis::serialize(caf::serializer& sink) const {
