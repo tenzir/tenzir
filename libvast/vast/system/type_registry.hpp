@@ -30,8 +30,6 @@
 
 namespace vast::system {
 
-// TODO: Operate on vast::schema directly, or find a way to properly forward
-// declare the inner type without having to include <unordered_set> in fwd.hpp.
 struct type_set {
   std::unordered_set<vast::type> value;
 
