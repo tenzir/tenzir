@@ -113,6 +113,7 @@ set(libvast_sources
     src/format/syslog.cpp
     src/format/test.cpp
     src/format/writer.cpp
+    src/format/writer_factory.cpp
     src/format/zeek.cpp
     src/http.cpp
     src/icmp.cpp

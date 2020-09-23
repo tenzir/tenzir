@@ -13,34 +13,20 @@
 
 #pragma once
 
-#include "vast/fwd.hpp"
+#include "vast/factory.hpp"
+#include "vast/format/writer.hpp"
 
-#include <caf/expected.hpp>
+#include <string>
 
-#include <memory>
-#include <vector>
+namespace vast {
 
-namespace vast::format {
+template <>
+struct factory_traits<format::writer> {
+  using result_type = caf::expected<format::writer_ptr>;
+  using key_type = std::string;
+  using signature = result_type (*)(const caf::settings&);
 
-/// The base class for writers.
-class writer {
-public:
-  virtual ~writer();
-
-  /// Processes a single batch of events.
-  /// @param x The events to write wrapped in a table slice.
-  /// @returns `caf::none` on success.
-  virtual caf::error write(const table_slice& x) = 0;
-
-  /// Called periodically to flush state.
-  /// @returns `caf::none` on success.
-  /// The default implementation does nothing.
-  virtual caf::expected<void> flush();
-
-  /// @returns The name of the writer type.
-  virtual const char* name() const = 0;
+  static void initialize();
 };
 
-using writer_ptr = std::unique_ptr<writer>;
-
-} // namespace vast::format
+} // namespace vast

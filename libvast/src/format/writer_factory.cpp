@@ -11,36 +11,40 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#pragma once
+#include "vast/format/writer_factory.hpp"
 
-#include "vast/fwd.hpp"
+#include "vast/config.hpp"
+#include "vast/format/ascii.hpp"
+#include "vast/format/csv.hpp"
+#include "vast/format/json.hpp"
+#include "vast/format/make_writer.hpp"
+#include "vast/format/null.hpp"
+#include "vast/format/zeek.hpp"
 
-#include <caf/expected.hpp>
+#if VAST_HAVE_PCAP
+#  include "vast/format/pcap.hpp"
+#endif
 
-#include <memory>
-#include <vector>
+#if VAST_HAVE_ARROW
+#  include "vast/format/arrow.hpp"
+#endif
 
-namespace vast::format {
+namespace vast {
 
-/// The base class for writers.
-class writer {
-public:
-  virtual ~writer();
+void factory_traits<format::writer>::initialize() {
+  using namespace format;
+  using fac = factory<writer>;
+  fac::add("ascii", make_writer<ascii::writer>);
+  fac::add("csv", make_writer<csv::writer>);
+  fac::add("json", make_writer<format::json::writer>);
+  fac::add("null", make_writer<null::writer>);
+  fac::add("zeek", make_writer<zeek::writer>);
+#if VAST_HAVE_PCAP
+  fac::add("pcap", make_writer<pcap::writer>);
+#endif
+#if VAST_HAVE_ARROW
+  fac::add("arrow", make_writer<arrow::writer>);
+#endif
+}
 
-  /// Processes a single batch of events.
-  /// @param x The events to write wrapped in a table slice.
-  /// @returns `caf::none` on success.
-  virtual caf::error write(const table_slice& x) = 0;
-
-  /// Called periodically to flush state.
-  /// @returns `caf::none` on success.
-  /// The default implementation does nothing.
-  virtual caf::expected<void> flush();
-
-  /// @returns The name of the writer type.
-  virtual const char* name() const = 0;
-};
-
-using writer_ptr = std::unique_ptr<writer>;
-
-} // namespace vast::format
+} // namespace vast

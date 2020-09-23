@@ -19,15 +19,10 @@
 #include "vast/format/ascii.hpp"
 #include "vast/format/csv.hpp"
 #include "vast/format/json.hpp"
+#include "vast/format/make_writer.hpp"
 #include "vast/format/null.hpp"
 #include "vast/format/zeek.hpp"
 #include "vast/system/sink.hpp"
-
-#include <caf/actor.hpp>
-#include <caf/actor_system.hpp>
-#include <caf/expected.hpp>
-
-#include <string>
 
 #if VAST_HAVE_PCAP
 #  include "vast/format/pcap.hpp"
@@ -37,36 +32,20 @@
 #  include "vast/format/arrow.hpp"
 #endif
 
+#include <caf/actor.hpp>
+#include <caf/actor_system.hpp>
+#include <caf/expected.hpp>
+
+#include <string>
+
 namespace vast::system {
 
 namespace {
 
-template <class Writer, class Defaults = typename Writer::defaults>
-caf::expected<Writer> make_writer(const caf::settings& options) {
-  using namespace std::string_literals;
-  using ostream_ptr = std::unique_ptr<std::ostream>;
-  if constexpr (std::is_constructible_v<Writer, ostream_ptr>) {
-    auto out = detail::make_output_stream<Defaults>(options);
-    if (!out)
-      return out.error();
-    return Writer{std::move(*out)};
-#if VAST_HAVE_PCAP
-  } else if constexpr (std::is_same_v<Writer, format::pcap::writer>) {
-    auto output
-      = get_or(options, Defaults::category + ".write"s, Defaults::write);
-    auto flush = get_or(options, Defaults::category + ".flush-interval"s,
-                        Defaults::flush_interval);
-    return Writer{output, flush};
-#endif
-  } else {
-    return Writer{};
-  }
-}
-
-template <class Writer, class Defaults = typename Writer::defaults>
+template <class Writer>
 caf::expected<caf::actor>
 make_sink_impl(caf::actor_system& sys, const caf::settings& options) {
-  auto writer = make_writer<Writer, Defaults>(options);
+  auto writer = format::make_writer<Writer>(options);
   if (!writer)
     return writer.error();
   auto max_events = 0;

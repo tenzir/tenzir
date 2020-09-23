@@ -22,6 +22,7 @@
 #include "vast/detail/process.hpp"
 #include "vast/detail/string.hpp"
 #include "vast/detail/system.hpp"
+#include "vast/format/writer_factory.hpp"
 #include "vast/path.hpp"
 #include "vast/synopsis_factory.hpp"
 #include "vast/table_slice_builder_factory.hpp"
@@ -76,8 +77,8 @@ configuration::configuration() {
 #if VAST_USE_OPENCL
   load<caf::opencl::manager>();
 #endif
-  initialize_factories<synopsis, table_slice, table_slice_builder,
-                       value_index>();
+  initialize_factories<synopsis, table_slice, table_slice_builder, value_index,
+                       format::writer>();
 }
 
 caf::error configuration::parse(int argc, char** argv) {

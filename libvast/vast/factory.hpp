@@ -77,8 +77,13 @@ struct factory {
   // Sanity checks.
   static_assert(std::is_polymorphic_v<Type>,
                 "factory only supports polymorphic types");
-  static_assert(
-    std::is_same_v<Type, std::decay_t<decltype(*std::declval<result_type>())>>);
+
+  // This check attempts to only allow pointer<T> or expected<pointer<T>> as
+  // result_type.
+  static_assert(detail::is_any_v<
+                  Type, std::decay_t<detail::deref_t<result_type>>,
+                  std::decay_t<detail::deref_t<detail::deref_t<result_type>>>>,
+                "result_type must be an indirection to Type");
 
   // -- registration ----------------------------------------------------------
 

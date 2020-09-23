@@ -129,6 +129,14 @@ struct is_pair<std::pair<T, U>> : std::true_type {};
 template <class T>
 constexpr bool is_pair_v = is_pair<T>::value;
 
+// deref - generic version of std::remove_pointer
+
+template <class T>
+using deref_t_helper = decltype(*std::declval<T>());
+
+template <class T>
+using deref_t = detected_t<deref_t_helper, T>;
+
 // Types that work with std::data and std::size (= containers)
 
 template <typename T>
