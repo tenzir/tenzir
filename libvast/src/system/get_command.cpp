@@ -21,6 +21,7 @@
 #include "vast/detail/make_io_stream.hpp"
 #include "vast/format/ascii.hpp"
 #include "vast/format/json.hpp"
+#include "vast/format/writer_factory.hpp"
 #include "vast/fwd.hpp"
 #include "vast/ids.hpp"
 #include "vast/logger.hpp"
@@ -46,22 +47,11 @@ ids to_ids(const count& x) {
   return result;
 }
 
-template <class Writer>
 caf::error
 run(caf::scoped_actor& self, archive_type& archive, const invocation& inv) {
-  auto make_writer = [&]() -> caf::expected<Writer> {
-    using ostream_ptr = std::unique_ptr<std::ostream>;
-    if constexpr (std::is_constructible_v<Writer, ostream_ptr>) {
-      auto out
-        = detail::make_output_stream<typename Writer::defaults>(inv.options);
-      if (!out)
-        return {out.error()};
-      return Writer{std::move(*out)};
-    } else {
-      return Writer{};
-    }
-  };
-  auto writer = make_writer();
+  using namespace std::string_literals;
+  auto output_format = get_or(inv.options, "get.format", "json"s);
+  auto writer = factory<format::writer>::make(output_format, inv.options);
   if (!writer)
     return writer.error();
   // TODO: Sending one id at a time is overly pessimistic. A smarter algorithm
@@ -75,7 +65,7 @@ run(caf::scoped_actor& self, archive_type& archive, const invocation& inv) {
     bool waiting = true;
     self->receive_while(waiting)
       // Message handlers.
-      ([&](table_slice_ptr slice) { writer->write(*slice); },
+      ([&](table_slice_ptr slice) { (*writer)->write(*slice); },
        [&](atom::done, const caf::error& err) {
          if (err)
            VAST_WARNING_ANON("get_command received an error:", err);
@@ -104,17 +94,8 @@ get_command(const invocation& inv, [[maybe_unused]] caf::actor_system& sys) {
   if (!components)
     return caf::make_message(std::move(components.error()));
   auto archive = caf::actor_cast<archive_type>((*components)[0]);
-  using namespace std::string_literals;
-  auto output_format = get_or(inv.options, "get.format", "json"s);
   self->send(archive, atom::exporter_v, self);
-  caf::error err = caf::none;
-  if (output_format == "ascii")
-    err = run<format::ascii::writer>(self, archive, inv);
-  else if (output_format == "json")
-    err = run<format::json::writer>(self, archive, inv);
-  else
-    err = make_error(ec::invalid_subcommand,
-                     output_format + " is not supported for 'get.format'");
+  auto err = run(self, archive, inv);
   return caf::make_message(err);
 }
 
