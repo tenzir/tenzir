@@ -407,16 +407,18 @@ pack(flatbuffers::FlatBufferBuilder& builder, const index_state& state) {
 
 /// Persists the state to disk.
 void index_state::flush_to_disk() {
-  auto builder = new flatbuffers::FlatBufferBuilder();
+  auto builder = std::make_unique<flatbuffers::FlatBufferBuilder>();
   auto index = pack(*builder, *this);
   if (!index) {
     VAST_WARNING(self, "failed to pack index:", render(index.error()));
     return;
   }
   fbs::FinishIndexBuffer(*builder, *index);
-  auto ptr = builder->GetBufferPointer();
+  auto ptr = builder.get();
+  auto buffer = builder->GetBufferPointer();
   auto size = builder->GetSize();
-  auto chunk = vast::chunk::make(size, ptr, [=] { delete builder; });
+  auto chunk = vast::chunk::make(size, buffer, [=] { delete ptr; });
+  builder.release(); // It's now owned by the chunk.
   self
     ->request(caf::actor_cast<caf::actor>(filesystem), caf::infinite,
               atom::write_v, index_filename(), chunk)
