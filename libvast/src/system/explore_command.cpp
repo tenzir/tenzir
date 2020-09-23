@@ -56,7 +56,7 @@ caf::message explore_command(const invocation& inv, caf::actor_system& sys) {
                   defaults::explore::max_events_query);
   // Get a local actor to interact with `sys`.
   caf::scoped_actor self{sys};
-  auto s = make_sink(sys, inv.options, output_format);
+  auto s = make_sink(sys, output_format, inv.options);
   if (!s)
     return make_message(s.error());
   auto sink = *s;

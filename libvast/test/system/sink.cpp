@@ -27,8 +27,8 @@ FIXTURE_SCOPE(sink_tests, fixtures::actor_system_and_events)
 
 TEST(zeek sink) {
   MESSAGE("constructing a sink");
-  format::zeek::writer writer{directory};
-  auto snk = self->spawn(sink<format::zeek::writer>, std::move(writer), 20u);
+  auto writer = std::make_unique<format::zeek::writer>(directory);
+  auto snk = self->spawn(sink, std::move(writer), 20u);
   MESSAGE("sending table slices");
   for (auto& slice : zeek_conn_log)
     self->send(snk, slice);

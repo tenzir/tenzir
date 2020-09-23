@@ -192,6 +192,7 @@ set(libvast_sources
     src/system/terminator.cpp
     src/system/type_registry.cpp
     src/system/version_command.cpp
+    src/system/writer_command.cpp
     src/table_slice.cpp
     src/table_slice_builder.cpp
     src/table_slice_builder_factory.cpp

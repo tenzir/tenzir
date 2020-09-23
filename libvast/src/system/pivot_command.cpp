@@ -54,7 +54,7 @@ caf::message pivot_command(const invocation& inv, caf::actor_system& sys) {
     return caf::make_message(std::move(query.error()));
   caf::actor sink;
   // Create sink for format.
-  auto s = system::make_sink(sys, inv.options, output_format);
+  auto s = system::make_sink(sys, output_format, inv.options);
   if (!s)
     return make_message(s.error());
   sink = *s;

@@ -11,14 +11,28 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#pragma once
+#include "vast/system/writer_command.hpp"
 
-#include "vast/command.hpp"
+#include "vast/logger.hpp"
+#include "vast/system/make_sink.hpp"
+#include "vast/system/sink_command.hpp"
 
-#include <string_view>
+#include <caf/actor.hpp>
+#include <caf/make_message.hpp>
+
+#include <string>
 
 namespace vast::system {
 
-command::fun make_writer_command(std::string_view format);
+command::fun make_writer_command(std::string_view format) {
+  return [format = std::string{format}](const invocation& inv,
+                                        caf::actor_system& sys) {
+    VAST_TRACE(inv);
+    auto snk = make_sink(sys, format, inv.options);
+    if (!snk)
+      return make_message(snk.error());
+    return caf::make_message(sink_command(inv, sys, std::move(*snk)));
+  };
+}
 
 } // namespace vast::system

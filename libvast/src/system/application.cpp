@@ -405,17 +405,17 @@ auto make_command_factory() {
   return command::factory{
     {"count", count_command},
     {"explore", explore_command},
-    {"export ascii", writer_command<format::ascii::writer>},
-    {"export csv", writer_command<format::csv::writer>},
-    {"export json", writer_command<format::json::writer>},
-    {"export null", writer_command<format::null::writer>},
+    {"export ascii", make_writer_command("ascii")},
+    {"export csv", make_writer_command("csv")},
+    {"export json", make_writer_command("json")},
+    {"export null", make_writer_command("null")},
 #if VAST_HAVE_ARROW
-    {"export arrow", writer_command<format::arrow::writer>},
+    {"export arrow", make_writer_command("arrow")},
 #endif
 #if VAST_HAVE_PCAP
     {"export pcap", pcap_writer_command},
 #endif
-    {"export zeek", writer_command<format::zeek::writer>},
+    {"export zeek", make_writer_command("zeek")},
     {"get", get_command},
     {"infer", infer_command},
     {"import csv", import_command<format::csv::reader, defaults::import::csv>},

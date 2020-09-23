@@ -47,8 +47,8 @@ pcap_writer_command(const invocation& inv, caf::actor_system& sys) {
   auto output = get_or(options, category + ".write", defaults_t::write);
   auto flush
     = get_or(options, category + ".flush-interval", defaults_t::flush_interval);
-  format::pcap::writer writer{output, flush};
-  auto snk = sys.spawn(sink<format::pcap::writer>, std::move(writer), limit);
+  auto writer = std::make_unique<format::pcap::writer>(output, flush);
+  auto snk = sys.spawn(sink, std::move(writer), limit);
   return sink_command(inv, sys, std::move(snk));
 }
 

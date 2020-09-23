@@ -37,7 +37,6 @@
 namespace vast::system {
 
 // The base class for SINK actors.
-template <class Writer>
 struct sink_state {
   std::chrono::steady_clock::duration flush_interval = std::chrono::seconds(1);
   std::chrono::steady_clock::time_point last_flush;
@@ -47,7 +46,7 @@ struct sink_state {
   caf::actor statistics_subscriber;
   accountant_type accountant;
   vast::system::measurement measurement;
-  Writer writer;
+  format::writer_ptr writer;
   const char* name = "writer";
 
   sink_state(caf::event_based_actor* self_ptr) : self(self_ptr) {
@@ -66,14 +65,12 @@ struct sink_state {
   }
 };
 
-template <class Writer>
-caf::behavior sink(caf::stateful_actor<sink_state<Writer>>* self,
-                   Writer&& writer, uint64_t max_events) {
-  static_assert(std::is_base_of_v<format::writer, Writer>);
+caf::behavior sink(caf::stateful_actor<sink_state>* self,
+                   format::writer_ptr&& writer, uint64_t max_events) {
   using namespace std::chrono;
   auto& st = self->state;
   st.writer = std::move(writer);
-  st.name = st.writer.name();
+  st.name = st.writer->name();
   st.last_flush = steady_clock::now();
   if (max_events > 0) {
     VAST_DEBUG(self, "caps event export at", max_events, "events");
@@ -103,7 +100,7 @@ caf::behavior sink(caf::stateful_actor<sink_state<Writer>>* self,
 #endif
       auto reached_max_events = [&] {
         VAST_INFO(self, "reached max_events:", st.max_events, "events");
-        st.writer.flush();
+        st.writer->flush();
         st.send_report();
         self->quit();
       };
@@ -115,7 +112,7 @@ caf::behavior sink(caf::stateful_actor<sink_state<Writer>>* self,
         slice = truncate(slice, remaining);
       // Handle events.
       auto t = timer::start(st.measurement);
-      if (auto err = st.writer.write(*slice)) {
+      if (auto err = st.writer->write(*slice)) {
         VAST_ERROR(self, self->system().render(err));
         self->quit(std::move(err));
         return;
@@ -127,7 +124,7 @@ caf::behavior sink(caf::stateful_actor<sink_state<Writer>>* self,
         return reached_max_events();
       // Force flush if necessary.
       if (time_since_flush > st.flush_interval) {
-        st.writer.flush();
+        st.writer->flush();
         st.last_flush = now;
         st.send_report();
       }

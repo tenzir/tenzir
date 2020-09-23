@@ -54,4 +54,9 @@ make_writer(const caf::settings& options) {
   }
 }
 
+caf::expected<std::unique_ptr<format::writer>>
+make_writer(std::string output_format, const caf::settings& options) {
+  return factory<format::writer>::make(output_format, options);
+}
+
 } // namespace vast::format
