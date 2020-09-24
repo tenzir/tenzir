@@ -195,7 +195,6 @@ spawn_component(const invocation& inv, spawn_arguments& args) {
   auto i = node_state::component_factory.find(inv.full_name);
   if (i == node_state::component_factory.end())
     return make_error(ec::unspecified, "invalid spawn component");
-  VAST_VERBOSE_ANON("node spawns the", inv.name(), "component");
   return i->second(self, args);
 }
 

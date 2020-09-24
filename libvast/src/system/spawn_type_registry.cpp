@@ -29,10 +29,11 @@ namespace vast::system {
 maybe_actor spawn_type_registry(node_actor* self, spawn_arguments& args) {
   if (!args.empty())
     return unexpected_arguments(args);
-  auto tr = self->spawn(type_registry, args.dir / args.label);
+  auto handle = self->spawn(type_registry, args.dir / args.label);
+  VAST_VERBOSE(self, "spawned the type-registry");
   if (auto accountant = self->state.registry.find_by_label("accountant"))
-    self->send(tr, caf::actor_cast<accountant_type>(accountant));
-  return caf::actor_cast<caf::actor>(tr);
+    self->send(handle, caf::actor_cast<accountant_type>(accountant));
+  return caf::actor_cast<caf::actor>(handle);
 }
 
 } // namespace vast::system

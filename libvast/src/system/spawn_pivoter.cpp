@@ -13,6 +13,8 @@
 
 #include "vast/system/spawn_pivoter.hpp"
 
+#include "vast/concept/printable/to_string.hpp"
+#include "vast/concept/printable/vast/expression.hpp"
 #include "vast/logger.hpp"
 #include "vast/system/pivoter.hpp"
 #include "vast/system/spawn_arguments.hpp"
@@ -30,7 +32,9 @@ maybe_actor spawn_pivoter(node_actor* self, spawn_arguments& args) {
   auto expr = system::normalized_and_validated(query_begin, arguments.end());
   if (!expr)
     return expr.error();
-  return self->spawn(pivoter, self, target_name, std::move(*expr));
+  auto handle = self->spawn(pivoter, self, target_name, *expr);
+  VAST_VERBOSE(self, "spawned a pivoter for", to_string(*expr));
+  return handle;
 }
 
 } // namespace vast::system

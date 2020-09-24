@@ -16,6 +16,7 @@
 #include "vast/concept/parseable/to.hpp"
 #include "vast/concept/parseable/vast.hpp"
 #include "vast/defaults.hpp"
+#include "vast/logger.hpp"
 #include "vast/si_literals.hpp"
 #include "vast/system/explorer.hpp"
 #include "vast/system/node.hpp"
@@ -93,7 +94,9 @@ maybe_actor spawn_explorer(node_actor* self, spawn_arguments& args) {
                              defaults::explore::max_events);
   limits.per_result = caf::get_or(options, "vast.explore.max-events-context",
                                   defaults::explore::max_events_context);
-  return self->spawn(explorer, self, limits, before, after, by);
+  auto handle = self->spawn(explorer, self, limits, before, after, by);
+  VAST_VERBOSE(self, "spawned an explorer");
+  return handle;
 }
 
 } // namespace vast::system
