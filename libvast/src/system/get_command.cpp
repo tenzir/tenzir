@@ -48,7 +48,7 @@ ids to_ids(const count& x) {
 }
 
 caf::error
-run(caf::scoped_actor& self, archive_type& archive, const invocation& inv) {
+run(caf::scoped_actor& self, archive_type archive, const invocation& inv) {
   using namespace std::string_literals;
   auto output_format = get_or(inv.options, "vast.get.format", "json"s);
   auto writer = factory<format::writer>::make(output_format, inv.options);
@@ -68,7 +68,7 @@ run(caf::scoped_actor& self, archive_type& archive, const invocation& inv) {
       ([&](table_slice_ptr slice) { (*writer)->write(*slice); },
        [&](atom::done, const caf::error& err) {
          if (err)
-           VAST_WARNING_ANON("get_command received an error:", err);
+           VAST_WARNING_ANON("failed to get table slice:", render(err));
          waiting = false;
        });
   }
@@ -78,7 +78,7 @@ run(caf::scoped_actor& self, archive_type& archive, const invocation& inv) {
 } // namespace
 
 caf::message
-get_command(const invocation& inv, [[maybe_unused]] caf::actor_system& sys) {
+get_command(const invocation& inv, caf::actor_system& sys) {
   VAST_TRACE(inv);
   caf::scoped_actor self{sys};
   // Get VAST node.

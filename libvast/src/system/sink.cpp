@@ -74,7 +74,7 @@ caf::behavior sink(caf::stateful_actor<sink_state>* self,
       }
 #endif
       auto reached_max_events = [&] {
-        VAST_INFO(self, "reached max_events:", st.max_events, "events");
+        VAST_INFO(self, "reached limit of", st.max_events, "events");
         st.writer->flush();
         st.send_report();
         self->quit();
@@ -109,7 +109,7 @@ caf::behavior sink(caf::stateful_actor<sink_state>* self,
       if (self->state.processed < max)
         self->state.max_events = max;
       else
-        VAST_WARNING(self, "ignores new max_events of", max,
+        VAST_WARNING(self, "ignores new limit of", max,
                      "(already processed", self->state.processed, " events)");
     },
     [=](accountant_type accountant) {
