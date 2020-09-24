@@ -11,9 +11,9 @@ Every entry has a category for which we use the following visual abbreviations:
 
 ## Unreleased
 
-- 🧬 The `vast get` subcommand has been added. It can be used to retrieve
-  events by their ids from the database.
-  [#938](https://github.com/tenzir/vast/938)
+- 🧬 The `vast get` command has been added. It retrieves events from the
+  database directly by their ids.
+  [#938](https://github.com/tenzir/vast/pull/938)
 
 - ⚠️ All configuration options are now grouped into `vast` and `caf` sections,
   depending on whether they affect VAST itself or are handed through to the
