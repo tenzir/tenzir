@@ -67,12 +67,10 @@ caf::behavior sink(caf::stateful_actor<sink_state>* self,
       auto& st = self->state;
       auto now = steady_clock::now();
       auto time_since_flush = now - st.last_flush;
-#if VAST_LOG_LEVEL >= VAST_LOG_LEVEL_INFO
       if (st.processed == 0) {
         VAST_INFO(st.name, "received first result with a latency of",
                   to_string(time_since_flush));
       }
-#endif
       auto reached_max_events = [&] {
         VAST_INFO(self, "reached limit of", st.max_events, "events");
         st.writer->flush();

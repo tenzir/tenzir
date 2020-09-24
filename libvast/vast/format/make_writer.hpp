@@ -54,6 +54,10 @@ make_writer(const caf::settings& options) {
   }
 }
 
+/// Produces a writer for the specified format.
+/// @param output_format The output format.
+/// @param options Config options for the concrete writer.
+/// @returns An owning pointer to the writer or an error.
 caf::expected<std::unique_ptr<format::writer>>
 make_writer(std::string output_format, const caf::settings& options) {
   return factory<format::writer>::make(output_format, options);

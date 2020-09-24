@@ -94,6 +94,7 @@ get_command(const invocation& inv, caf::actor_system& sys) {
   if (!components)
     return caf::make_message(std::move(components.error()));
   auto archive = caf::actor_cast<archive_type>((*components)[0]);
+  VAST_ASSERT(archive);
   self->send(archive, atom::exporter_v, self);
   auto err = run(self, archive, inv);
   return caf::make_message(err);
