@@ -488,8 +488,8 @@ get_target_property(flatbuffers_dir ${flatbuffers_target}
 get_filename_component(flatbuffers_dir ${flatbuffers_dir} DIRECTORY) # <prefix>
 
 find_package(yaml-cpp 0.6.2 REQUIRED HINTS ${YAML_CPP_ROOT})
-get_filename_component(yaml-cpp_dir "${YAML_CPP_INCLUDE_DIR}" ABSOLUTE)
-get_filename_component(yaml-cpp_dir "${yaml-cpp_dir}" DIRECTORY)
+get_filename_component(yaml_cpp_dir "${YAML_CPP_INCLUDE_DIR}" ABSOLUTE)
+get_filename_component(yaml_cpp_dir "${yaml_cpp_dir}" DIRECTORY)
 
 if (NOT VAST_USE_BUNDLED_CAF)
   # Try to find the required CAF components first...
@@ -608,8 +608,8 @@ if (ENABLE_ZEEK_TO_VAST)
     else ()
       message(
         FATAL_ERROR
-          "Broker not found, either use -DBROKER_ROOT_DIR=... or initialize the
-          aux/broker/broker submodule")
+          "Broker not found, either use -DBROKER_ROOT_DIR=... or initialize the aux/broker/broker submodule"
+      )
     endif ()
   endif ()
   set(VAST_HAVE_BROKER true)
@@ -872,7 +872,7 @@ display(CAF_FOUND "${caf_dir}" caf_summary)
 display(VAST_HAVE_BROKER "${broker_dir}" broker_summary)
 display(Arrow_FOUND "${arrow_dir}" arrow_summary)
 display(PCAP_FOUND "${PCAP_INCLUDE_DIR}" pcap_summary)
-display(YAML_CPP_INCLUDE_DIR "${yaml-cpp_dir}" yaml_cpp_summary)
+display(YAML_CPP_INCLUDE_DIR "${yaml_cpp_dir}" yaml_cpp_summary)
 display(DOXYGEN_FOUND yes doxygen_summary)
 display(PANDOC_FOUND yes pandoc_summary)
 display(VAST_USE_JEMALLOC "${jemalloc_INCLUDE_DIR}" jemalloc_summary)
