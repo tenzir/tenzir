@@ -14,7 +14,7 @@
 #include "vast/system/make_sink.hpp"
 
 #include "vast/defaults.hpp"
-#include "vast/format/writer_factory.hpp"
+#include "vast/format/writer.hpp"
 #include "vast/system/sink.hpp"
 
 #include <caf/actor.hpp>
@@ -30,7 +30,7 @@ namespace vast::system {
 caf::expected<caf::actor>
 make_sink(caf::actor_system& sys, const std::string& output_format,
           const caf::settings& options) {
-  auto writer = factory<format::writer>::make(output_format, options);
+  auto writer = format::writer::make(output_format, options);
   if (!writer)
     return writer.error();
   auto max_events

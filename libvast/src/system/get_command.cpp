@@ -19,9 +19,7 @@
 #include "vast/defaults.hpp"
 #include "vast/detail/assert.hpp"
 #include "vast/detail/make_io_stream.hpp"
-#include "vast/format/ascii.hpp"
-#include "vast/format/json.hpp"
-#include "vast/format/writer_factory.hpp"
+#include "vast/format/writer.hpp"
 #include "vast/fwd.hpp"
 #include "vast/ids.hpp"
 #include "vast/logger.hpp"
@@ -51,7 +49,7 @@ caf::error
 run(caf::scoped_actor& self, archive_type archive, const invocation& inv) {
   using namespace std::string_literals;
   auto output_format = get_or(inv.options, "vast.get.format", "json"s);
-  auto writer = factory<format::writer>::make(output_format, inv.options);
+  auto writer = format::writer::make(output_format, inv.options);
   if (!writer)
     return writer.error();
   // TODO: Sending one id at a time is overly pessimistic. A smarter algorithm

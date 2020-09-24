@@ -15,7 +15,7 @@
 
 #include "vast/config.hpp"
 #include "vast/defaults.hpp"
-#include "vast/format/writer_factory.hpp"
+#include "vast/format/writer.hpp"
 #include "vast/format/zeek.hpp"
 #include "vast/system/sink.hpp"
 #include "vast/system/spawn_arguments.hpp"
@@ -45,7 +45,7 @@ maybe_actor spawn_generic_sink(caf::local_actor* self, spawn_arguments& args,
     return make_error(ec::parse_error, "cannot start a local node");
   if (!args.empty())
     return unexpected_arguments(args);
-  auto writer = factory<format::writer>::make(output_format, args.inv.options);
+  auto writer = format::writer::make(output_format, args.inv.options);
   if (!writer)
     return writer.error();
   return self->spawn(sink, std::move(*writer), 0u);

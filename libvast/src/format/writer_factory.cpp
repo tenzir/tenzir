@@ -14,11 +14,12 @@
 #include "vast/format/writer_factory.hpp"
 
 #include "vast/config.hpp"
+#include "vast/detail/make_io_stream.hpp"
 #include "vast/format/ascii.hpp"
 #include "vast/format/csv.hpp"
 #include "vast/format/json.hpp"
-#include "vast/format/make_writer.hpp"
 #include "vast/format/null.hpp"
+#include "vast/format/writer.hpp"
 #include "vast/format/zeek.hpp"
 
 #if VAST_HAVE_PCAP
@@ -30,6 +31,30 @@
 #endif
 
 namespace vast {
+
+template <class Writer>
+caf::expected<std::unique_ptr<format::writer>>
+make_writer(const caf::settings& options) {
+  using namespace std::string_literals;
+  using defaults = typename Writer::defaults;
+  using ostream_ptr = std::unique_ptr<std::ostream>;
+  if constexpr (std::is_constructible_v<Writer, ostream_ptr>) {
+    auto out = detail::make_output_stream<defaults>(options);
+    if (!out)
+      return out.error();
+    return std::make_unique<Writer>(std::move(*out));
+#if VAST_HAVE_PCAP
+  } else if constexpr (std::is_same_v<Writer, format::pcap::writer>) {
+    auto output
+      = get_or(options, defaults::category + ".write"s, defaults::write);
+    auto flush = get_or(options, defaults::category + ".flush-interval"s,
+                        defaults::flush_interval);
+    return std::make_unique<Writer>(output, flush);
+#endif
+  } else {
+    return std::make_unique<Writer>();
+  }
+}
 
 void factory_traits<format::writer>::initialize() {
   using namespace format;

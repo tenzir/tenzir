@@ -15,16 +15,26 @@
 
 #include "vast/fwd.hpp"
 
-#include <caf/expected.hpp>
+#include <caf/fwd.hpp>
 
 #include <memory>
-#include <vector>
+#include <string>
 
 namespace vast::format {
+
+/// @relates writer
+using writer_ptr = std::unique_ptr<writer>;
 
 /// The base class for writers.
 class writer {
 public:
+  /// Produces a writer for the specified format.
+  /// @param output_format The output format.
+  /// @param options Config options for the concrete writer.
+  /// @returns An owning pointer to the writer or an error.
+  static caf::expected<std::unique_ptr<format::writer>>
+  make(std::string output_format, const caf::settings& options);
+
   virtual ~writer();
 
   /// Processes a single batch of events.
@@ -40,7 +50,5 @@ public:
   /// @returns The name of the writer type.
   virtual const char* name() const = 0;
 };
-
-using writer_ptr = std::unique_ptr<writer>;
 
 } // namespace vast::format
