@@ -599,9 +599,14 @@ endif ()
 
 if (ENABLE_ZEEK_TO_VAST)
   if (NOT VAST_USE_BUNDLED_BROKER)
-    find_package(BROKER QUIET)
+    find_package(BROKER 1.3.1 EXACT QUIET)
   endif ()
-  if (NOT BROKER_FOUND)
+  if (BROKER_FOUND)
+    get_target_property(broker_dir zeek::broker IMPORTED_LOCATION)
+    get_filename_component(broker_dir "${broker_dir}" DIRECTORY) # <prefix>/lib
+    get_filename_component(broker_dir "${broker_dir}" DIRECTORY) # <prefix>
+  else ()
+    message(STATUS "Broker not found falling back to bundled version")
     if (EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/aux/broker/broker/CMakeLists.txt)
       add_subdirectory(aux/broker)
       set(broker_dir ${CMAKE_CURRENT_SOURCE_DIR}/aux/broker)
@@ -613,9 +618,6 @@ if (ENABLE_ZEEK_TO_VAST)
     endif ()
   endif ()
   set(VAST_HAVE_BROKER true)
-  get_target_property(broker_dir zeek::broker IMPORTED_LOCATION)
-  get_filename_component(broker_dir "${broker_dir}" DIRECTORY) # <prefix>/lib
-  get_filename_component(broker_dir "${broker_dir}" DIRECTORY) # <prefix>
 endif ()
 
 if (VAST_USE_JEMALLOC)
