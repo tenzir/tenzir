@@ -79,6 +79,7 @@ tests:
       - command: '-N --disable-metrics export ascii "#type != \"zeek.conn\" && #type != \"vast.metrics\""'
       - command: -N --disable-metrics export ascii '#type != "foobar" && resp_h == 192.168.1.104'
       - command: -N --disable-metrics get --format=json 1 42 7777 9999999999 122
+      - command: -N --disable-metrics get --format=csv 99 99 99
   Node Zeek multiple imports:
     tags: [node, import-export, zeek]
     steps:
