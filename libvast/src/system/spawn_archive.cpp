@@ -14,7 +14,8 @@
 #include "vast/system/spawn_archive.hpp"
 
 #include "vast/defaults.hpp"
-#include "vast/path.hpp"
+#include "vast/error.hpp"
+#include "vast/logger.hpp"
 #include "vast/si_literals.hpp"
 #include "vast/system/archive.hpp"
 #include "vast/system/node.hpp"
@@ -39,10 +40,11 @@ maybe_actor spawn_archive(node_actor* self, spawn_arguments& args) {
   auto mss
     = 1_MiB
       * get_or(args.inv.options, "max-segment-size", sd::max_segment_size);
-  auto actor = self->spawn(archive, args.dir / args.label, segments, mss);
+  auto handle = self->spawn(archive, args.dir / args.label, segments, mss);
+  VAST_VERBOSE(self, "spawned the archive");
   if (auto accountant = self->state.registry.find_by_label("accountant"))
-    self->send(actor, caf::actor_cast<accountant_type>(accountant));
-  return caf::actor_cast<caf::actor>(actor);
+    self->send(handle, caf::actor_cast<accountant_type>(accountant));
+  return caf::actor_cast<caf::actor>(handle);
 }
 
 } // namespace vast::system

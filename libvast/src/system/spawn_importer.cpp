@@ -39,16 +39,17 @@ maybe_actor spawn_importer(node_actor* self, spawn_arguments& args) {
     return make_error(ec::missing_component, "index");
   if (!type_registry)
     return make_error(ec::missing_component, "type-registry");
-  auto imp = self->spawn(importer, args.dir / args.label,
-                         caf::actor_cast<archive_type>(archive), index,
-                         caf::actor_cast<type_registry_type>(type_registry));
+  auto handle = self->spawn(importer, args.dir / args.label,
+                            caf::actor_cast<archive_type>(archive), index,
+                            caf::actor_cast<type_registry_type>(type_registry));
+  VAST_VERBOSE(self, "spawned the importer");
   if (auto accountant = self->state.registry.find_by_label("accountant"))
-    self->send(imp, caf::actor_cast<accountant_type>(accountant));
+    self->send(handle, caf::actor_cast<accountant_type>(accountant));
   for (auto& a : self->state.registry.find_by_type("source")) {
     VAST_DEBUG(self, "connects source to new importer");
-    self->send(a, atom::sink_v, imp);
+    self->send(a, atom::sink_v, handle);
   }
-  return imp;
+  return handle;
 }
 
 } // namespace vast::system

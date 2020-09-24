@@ -44,8 +44,10 @@ spawn_counter(system::node_actor* self, system::spawn_arguments& args) {
   if (!archive)
     return make_error(ec::missing_component, "archive");
   auto estimate = caf::get_or(args.inv.options, "vast.count.estimate", false);
-  return self->spawn(counter, std::move(*expr), index,
-                     caf::actor_cast<archive_type>(archive), estimate);
+  auto handle = self->spawn(counter, *expr, index,
+                            caf::actor_cast<archive_type>(archive), estimate);
+  VAST_VERBOSE(self, "spawned a counter for", *expr);
+  return handle;
 }
 
 } // namespace vast::system

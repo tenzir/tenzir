@@ -13,6 +13,8 @@
 
 #include "vast/system/spawn_exporter.hpp"
 
+#include "vast/concept/printable/to_string.hpp"
+#include "vast/concept/printable/vast/expression.hpp"
 #include "vast/defaults.hpp"
 #include "vast/logger.hpp"
 #include "vast/query_options.hpp"
@@ -43,29 +45,30 @@ maybe_actor spawn_exporter(node_actor* self, spawn_arguments& args) {
   // Default to historical if no options provided.
   if (query_opts == no_query_options)
     query_opts = historical;
-  auto exp = self->spawn(exporter, std::move(*expr), query_opts);
+  auto handle = self->spawn(exporter, *expr, query_opts);
+  VAST_VERBOSE(self, "spawned an exporter for", to_string(*expr));
   // Wire the exporter to all components.
   if (auto accountant = self->state.registry.find_by_label("accountant"))
-    self->send(exp, caf::actor_cast<accountant_type>(accountant));
+    self->send(handle, caf::actor_cast<accountant_type>(accountant));
   if (has_continuous_option(query_opts))
     if (auto importer = self->state.registry.find_by_label("importer"))
-      self->send(exp, atom::importer_v, std::vector{importer});
+      self->send(handle, atom::importer_v, std::vector{importer});
   for (auto& a : self->state.registry.find_by_type("archive")) {
     VAST_DEBUG(self, "connects archive to new exporter");
-    self->send(exp, caf::actor_cast<archive_type>(a));
+    self->send(handle, caf::actor_cast<archive_type>(a));
   }
   for (auto& a : self->state.registry.find_by_type("index")) {
     VAST_DEBUG(self, "connects index to new exporter");
-    self->send(exp, atom::index_v, a);
+    self->send(handle, atom::index_v, a);
   }
   // Setting max-events to 0 means infinite.
   auto max_events = get_or(args.inv.options, "vast.export.max-events",
                            defaults::export_::max_events);
   if (max_events > 0)
-    self->send(exp, atom::extract_v, static_cast<uint64_t>(max_events));
+    self->send(handle, atom::extract_v, static_cast<uint64_t>(max_events));
   else
-    self->send(exp, atom::extract_v);
-  return exp;
+    self->send(handle, atom::extract_v);
+  return handle;
 }
 
 } // namespace vast::system
