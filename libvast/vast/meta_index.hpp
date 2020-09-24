@@ -36,6 +36,9 @@ namespace vast {
 /// data. The meta index may return false positives but never false negatives.
 class meta_index {
 public:
+  /// Adds an (empty) entry for the given partition.
+  void add(const uuid& partition);
+
   /// Adds all data from a table slice belonging to a given partition to the
   /// index.
   /// @param slice The table slice to extract data from.

@@ -29,6 +29,10 @@
 
 namespace vast {
 
+void meta_index::add(const uuid& partition) {
+  synopses_[partition];
+}
+
 void meta_index::add(const uuid& partition, const table_slice& slice) {
   auto make_synopsis = [&](const record_field& field) -> synopsis_ptr {
     return has_skip_attribute(field.type)
