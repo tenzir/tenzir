@@ -70,14 +70,16 @@ tests:
   Node Zeek conn log:
     tags: [node, import-export, zeek]
     steps:
-      - command: -N import zeek
+      - command: -N --disable-metrics import zeek
         input: data/zeek/conn.log.gz
-      - command: -N export ascii 'resp_h == 192.168.1.104'
-      - command: -N export ascii 'orig_bytes > 1k && orig_bytes < 1Ki'
-      - command: -N export ascii ':string == "OrfTtuI5G4e" || :port == 67/udp'
-      - command: -N export ascii '#type == "zeek.conn" && resp_h == 192.168.1.104'
-      - command: '-N export ascii "#type != \"zeek.conn\" && #type != \"vast.metrics\""'
-      - command: -N export ascii '#type != "foobar" && resp_h == 192.168.1.104'
+      - command: -N --disable-metrics export ascii 'resp_h == 192.168.1.104'
+      - command: -N --disable-metrics export ascii 'orig_bytes > 1k && orig_bytes < 1Ki'
+      - command: -N --disable-metrics export ascii ':string == "OrfTtuI5G4e" || :port == 67/udp'
+      - command: -N --disable-metrics export ascii '#type == "zeek.conn" && resp_h == 192.168.1.104'
+      - command: '-N --disable-metrics export ascii "#type != \"zeek.conn\" && #type != \"vast.metrics\""'
+      - command: -N --disable-metrics export ascii '#type != "foobar" && resp_h == 192.168.1.104'
+      - command: -N --disable-metrics get --format=json 1 42 7777 9999999999 122
+      - command: -N --disable-metrics get --format=csv 99 99 99
   Node Zeek multiple imports:
     tags: [node, import-export, zeek]
     steps:

@@ -14,9 +14,15 @@
 #include "vast/format/writer.hpp"
 
 #include "vast/error.hpp"
+#include "vast/format/writer_factory.hpp"
 #include "vast/table_slice.hpp"
 
 namespace vast::format {
+
+caf::expected<std::unique_ptr<format::writer>>
+writer::make(std::string output_format, const caf::settings& options) {
+  return factory<format::writer>::make(output_format, options);
+}
 
 writer::~writer() {
   // nop

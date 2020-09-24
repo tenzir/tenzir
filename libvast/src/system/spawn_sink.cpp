@@ -13,21 +13,10 @@
 
 #include "vast/system/spawn_sink.hpp"
 
-#include <string>
-
-#include <caf/actor.hpp>
-#include <caf/expected.hpp>
-#include <caf/local_actor.hpp>
-#include <caf/settings.hpp>
-
 #include "vast/config.hpp"
 #include "vast/defaults.hpp"
-#include "vast/detail/make_io_stream.hpp"
-#include "vast/format/ascii.hpp"
-#include "vast/format/csv.hpp"
-#include "vast/format/json.hpp"
+#include "vast/format/writer.hpp"
 #include "vast/format/zeek.hpp"
-#include "vast/system/node.hpp"
 #include "vast/system/sink.hpp"
 #include "vast/system/spawn_arguments.hpp"
 
@@ -35,22 +24,31 @@
 #  include "vast/format/pcap.hpp"
 #endif // VAST_HAVE_PCAP
 
+#include <caf/actor.hpp>
+#include <caf/event_based_actor.hpp>
+#include <caf/expected.hpp>
+#include <caf/local_actor.hpp>
+#include <caf/settings.hpp>
+
+#include <string>
+
+using namespace std::string_literals;
+
 namespace vast::system {
 
 namespace {
 
-template <class Writer, class Defaults>
-maybe_actor spawn_generic_sink(caf::local_actor* self, spawn_arguments& args) {
+maybe_actor spawn_generic_sink(caf::local_actor* self, spawn_arguments& args,
+                               std::string output_format) {
   // Bail out early for bogus invocations.
   if (caf::get_or(args.inv.options, "vast.node", false))
     return make_error(ec::parse_error, "cannot start a local node");
   if (!args.empty())
     return unexpected_arguments(args);
-  std::string category = Defaults::category;
-  auto out = detail::make_output_stream<Defaults>(args.inv.options);
-  if (!out)
-    return out.error();
-  return self->spawn(sink<Writer>, Writer{std::move(*out)}, 0u);
+  auto writer = format::writer::make(output_format, args.inv.options);
+  if (!writer)
+    return writer.error();
+  return self->spawn(sink, std::move(*writer), 0u);
 }
 
 } // namespace <anonymous>
@@ -67,11 +65,11 @@ maybe_actor spawn_pcap_sink([[maybe_unused]] caf::local_actor* self,
     return make_error(ec::parse_error, "cannot start a local node");
   if (!args.empty())
     return unexpected_arguments(args);
-  format::pcap::writer writer{
+  auto writer = std::make_unique<format::pcap::writer>(
     caf::get_or(args.inv.options, category + ".write", defaults_t::write),
     caf::get_or(args.inv.options, category + ".flush-interval",
-                defaults_t::flush_interval)};
-  return self->spawn(sink<format::pcap::writer>, std::move(writer), 0u);
+                defaults_t::flush_interval));
+  return self->spawn(sink, std::move(writer), 0u);
 #endif // VAST_HAVE_PCAP
 }
 
@@ -83,24 +81,21 @@ maybe_actor spawn_zeek_sink(caf::local_actor* self, spawn_arguments& args) {
   std::string category = defaults_t::category;
   if (!args.empty())
     return unexpected_arguments(args);
-  format::zeek::writer writer{
-    get_or(args.inv.options, category + ".write", defaults_t::write)};
-  return self->spawn(sink<format::zeek::writer>, std::move(writer), 0u);
+  auto writer = std::make_unique<format::zeek::writer>(
+    get_or(args.inv.options, category + ".write", defaults_t::write));
+  return self->spawn(sink, std::move(writer), 0u);
 }
 
 maybe_actor spawn_ascii_sink(caf::local_actor* self, spawn_arguments& args) {
-  auto f = spawn_generic_sink<format::ascii::writer, defaults::export_::ascii>;
-  return f(self, args);
+  return spawn_generic_sink(self, args, "ascii"s);
 }
 
 maybe_actor spawn_csv_sink(caf::local_actor* self, spawn_arguments& args) {
-  auto f = spawn_generic_sink<format::csv::writer, defaults::export_::csv>;
-  return f(self, args);
+  return spawn_generic_sink(self, args, "csv"s);
 }
 
 maybe_actor spawn_json_sink(caf::local_actor* self, spawn_arguments& args) {
-  auto f = spawn_generic_sink<format::json::writer, defaults::export_::json>;
-  return f(self, args);
+  return spawn_generic_sink(self, args, "json"s);
 }
 
 } // namespace vast::system

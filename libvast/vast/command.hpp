@@ -20,6 +20,7 @@
 #include <caf/error.hpp>
 #include <caf/fwd.hpp>
 
+#include <functional>
 #include <iosfwd>
 #include <map>
 #include <memory>
@@ -40,7 +41,8 @@ public:
   using children_list = std::vector<std::unique_ptr<command>>;
 
   /// Delegates to the command implementation logic.
-  using fun = caf::message (*)(const invocation&, caf::actor_system&);
+  using fun
+    = std::function<caf::message(const invocation&, caf::actor_system&)>;
 
   /// Central store for mapping fully-qualified command name to callback
   using factory = std::map<std::string, fun>;

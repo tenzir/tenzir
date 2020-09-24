@@ -61,6 +61,14 @@ class type;
 class uuid;
 class value_index;
 
+namespace format {
+
+class writer;
+
+using writer_ptr = std::unique_ptr<writer>;
+
+} // namespace format
+
 namespace system {
 
 class application;

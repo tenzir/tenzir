@@ -13,38 +13,20 @@
 
 #pragma once
 
-#include "vast/fwd.hpp"
-#include "vast/system/accountant.hpp"
-#include "vast/system/instrumentation.hpp"
+#include "vast/factory.hpp"
+#include "vast/format/writer.hpp"
 
-#include <caf/behavior.hpp>
-#include <caf/fwd.hpp>
-#include <caf/stateful_actor.hpp>
+#include <string>
 
-#include <chrono>
-#include <cstdint>
+namespace vast {
 
-namespace vast::system {
+template <>
+struct factory_traits<format::writer> {
+  using result_type = caf::expected<format::writer_ptr>;
+  using key_type = std::string;
+  using signature = result_type (*)(const caf::settings&);
 
-// The base class for SINK actors.
-struct sink_state {
-  std::chrono::steady_clock::duration flush_interval = std::chrono::seconds(1);
-  std::chrono::steady_clock::time_point last_flush;
-  uint64_t processed = 0;
-  uint64_t max_events = 0;
-  caf::event_based_actor* self;
-  caf::actor statistics_subscriber;
-  accountant_type accountant;
-  vast::system::measurement measurement;
-  format::writer_ptr writer;
-  const char* name = "writer";
-
-  explicit sink_state(caf::event_based_actor* self_ptr);
-
-  void send_report();
+  static void initialize();
 };
 
-caf::behavior sink(caf::stateful_actor<sink_state>* self,
-                   format::writer_ptr&& writer, uint64_t max_events);
-
-} // namespace vast::system
+} // namespace vast

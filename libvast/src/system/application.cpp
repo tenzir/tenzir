@@ -30,6 +30,7 @@
 #include "vast/system/count_command.hpp"
 #include "vast/system/explore_command.hpp"
 #include "vast/system/import_command.hpp"
+#include "vast/system/get_command.hpp"
 #include "vast/system/infer_command.hpp"
 #include "vast/system/pivot_command.hpp"
 #include "vast/system/remote_command.hpp"
@@ -171,6 +172,13 @@ auto make_export_command() {
                           make_pcap_options("?vast.export.pcap"));
 #endif
   return export_;
+}
+
+auto make_get_command() {
+  return std::make_unique<command>(
+    "get", "extracts the events assiciated with ids", documentation::vast_get,
+    opts("?vast.get")
+      .add<std::string>("format", "output format (default: JSON)"));
 }
 
 auto make_infer_command() {
@@ -398,17 +406,18 @@ auto make_command_factory() {
   return command::factory{
     {"count", count_command},
     {"explore", explore_command},
-    {"export ascii", writer_command<format::ascii::writer>},
-    {"export csv", writer_command<format::csv::writer>},
-    {"export json", writer_command<format::json::writer>},
-    {"export null", writer_command<format::null::writer>},
+    {"export ascii", make_writer_command("ascii")},
+    {"export csv", make_writer_command("csv")},
+    {"export json", make_writer_command("json")},
+    {"export null", make_writer_command("null")},
 #if VAST_HAVE_ARROW
-    {"export arrow", writer_command<format::arrow::writer>},
+    {"export arrow", make_writer_command("arrow")},
 #endif
 #if VAST_HAVE_PCAP
     {"export pcap", pcap_writer_command},
 #endif
-    {"export zeek", writer_command<format::zeek::writer>},
+    {"export zeek", make_writer_command("zeek")},
+    {"get", get_command},
     {"infer", infer_command},
     {"import csv", import_command<format::csv::reader, defaults::import::csv>},
     {"import json", import_command<format::json::reader<>,
@@ -466,6 +475,7 @@ make_application(std::string_view path) {
   root->add_subcommand(make_count_command());
   root->add_subcommand(make_export_command());
   root->add_subcommand(make_explore_command());
+  root->add_subcommand(make_get_command());
   root->add_subcommand(make_infer_command());
   root->add_subcommand(make_import_command());
   root->add_subcommand(make_kill_command());

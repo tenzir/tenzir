@@ -11,6 +11,10 @@ Every entry has a category for which we use the following visual abbreviations:
 
 ## Unreleased
 
+- 🧬 The `vast get` command has been added. It retrieves events from the
+  database directly by their ids.
+  [#938](https://github.com/tenzir/vast/pull/938)
+
 - ⚠️ All configuration options are now grouped into `vast` and `caf` sections,
   depending on whether they affect VAST itself or are handed through to the
   underlying actor framework CAF directly. Take a look at the bundled

@@ -113,6 +113,7 @@ set(libvast_sources
     src/format/syslog.cpp
     src/format/test.cpp
     src/format/writer.cpp
+    src/format/writer_factory.cpp
     src/format/zeek.cpp
     src/http.cpp
     src/icmp.cpp
@@ -154,6 +155,7 @@ set(libvast_sources
     src/system/explore_command.cpp
     src/system/explorer.cpp
     src/system/exporter.cpp
+    src/system/get_command.cpp
     src/system/importer.cpp
     src/system/index.cpp
     src/system/indexer.cpp
@@ -170,6 +172,7 @@ set(libvast_sources
     src/system/remote_command.cpp
     src/system/shutdown.cpp
     src/system/signal_monitor.cpp
+    src/system/sink.cpp
     src/system/sink_command.cpp
     src/system/spawn_archive.cpp
     src/system/spawn_arguments.cpp
@@ -190,6 +193,7 @@ set(libvast_sources
     src/system/terminator.cpp
     src/system/type_registry.cpp
     src/system/version_command.cpp
+    src/system/writer_command.cpp
     src/table_slice.cpp
     src/table_slice_builder.cpp
     src/table_slice_builder_factory.cpp
