@@ -40,7 +40,6 @@ Usage: $0 [OPTION]... [VAR=VALUE]...
     --build-type=DIR        CMake build type [RelWithDebInfo]
     --extra-flags=STRING    additional compiler flags
     --show-time-report      show where the compiler spends its time
-    --no-auto-libc++        do not automatically use libc++ with Clang
     --more-warnings         enables most warnings on GCC and Clang
     --without-tests         build without unit tests
     --without-zeek-to-vast  build without zeek-to-vast
@@ -68,6 +67,7 @@ Usage: $0 [OPTION]... [VAR=VALUE]...
   Optional packages:
     --with-broker=PATH      path to Broker install root (required for
                             zeek-to-vast)
+    --with-bundled-broker   build Broker from the submodule
     --with-doxygen=PATH     path to Doxygen install root
     --with-jemalloc=PATH    link against jemalloc
     --with-openssl=PATH     path to OpenSSL install root
@@ -161,9 +161,6 @@ while [ $# -ne 0 ]; do
     --show-time-report)
       append_cache_entry SHOW_TIME_REPORT BOOL yes
       ;;
-    --no-auto-libc++)
-      append_cache_entry NO_AUTO_LIBCPP BOOL yes
-      ;;
     --more-warnings)
       append_cache_entry MORE_WARNINGS BOOL yes
       ;;
@@ -222,6 +219,9 @@ while [ $# -ne 0 ]; do
 # -- Optional packages ---------------------------------------------------------
     --with-broker=*)
       append_cache_entry BROKER_ROOT_DIR PATH "$optarg"
+      ;;
+    --with-bundled-broker)
+      append_cache_entry VAST_USE_BUNDLED_BROKER BOOL yes
       ;;
     --with-doxygen=*)
       append_cache_entry Doxygen_ROOT_DIR PATH "$optarg"
