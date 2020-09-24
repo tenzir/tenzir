@@ -242,13 +242,13 @@ auto make_import_command() {
 }
 
 auto make_kill_command() {
-  return std::make_unique<command>("kill", "terminates a component", "", opts(),
-                                   false);
+  return std::make_unique<command>("kill", "terminates a component", "",
+                                   opts("?vast.kill"), false);
 }
 
 auto make_peer_command() {
   return std::make_unique<command>("peer", "peers with another node", "",
-                                   opts(), false);
+                                   opts("?vast.peer"), false);
 }
 
 auto make_pivot_command() {
@@ -262,8 +262,9 @@ auto make_pivot_command() {
 }
 
 auto make_send_command() {
-  return std::make_unique<command>(
-    "send", "sends a message to a registered actor", "", opts(), false);
+  return std::make_unique<command>("send",
+                                   "sends a message to a registered actor", "",
+                                   opts("?vast.send"), false);
 }
 
 auto make_spawn_source_command() {
@@ -326,50 +327,57 @@ auto make_spawn_source_command() {
 auto make_spawn_sink_command() {
   auto spawn_sink = std::make_unique<command>(
     "sink", "creates a new sink", "",
-    opts()
+    opts("?vast.spawn.sink")
       .add<std::string>("write,w", "path to write events to")
       .add<bool>("uds,d", "treat -w as UNIX domain socket"),
     false);
-  spawn_sink->add_subcommand(
-    "pcap", "creates a new PCAP sink", "",
-    opts().add<size_t>("flush,f", "flush to disk after this many packets"));
-  spawn_sink->add_subcommand("zeek", "creates a new Zeek sink", "", opts());
-  spawn_sink->add_subcommand("ascii", "creates a new ASCII sink", "", opts());
-  spawn_sink->add_subcommand("csv", "creates a new CSV sink", "", opts());
-  spawn_sink->add_subcommand("json", "creates a new JSON sink", "", opts());
+  spawn_sink->add_subcommand("pcap", "creates a new PCAP sink", "",
+                             opts("?vast.spawn.sink.pcap")
+                               .add<size_t>("flush,f", "flush to disk after "
+                                                       "this many packets"));
+  spawn_sink->add_subcommand("zeek", "creates a new Zeek sink", "",
+                             opts("?vast.spawn.sink.zeek"));
+  spawn_sink->add_subcommand("ascii", "creates a new ASCII sink", "",
+                             opts("?vast.spawn.sink.ascii"));
+  spawn_sink->add_subcommand("csv", "creates a new CSV sink", "",
+                             opts("?vast.spawn.sink.csv"));
+  spawn_sink->add_subcommand("json", "creates a new JSON sink", "",
+                             opts("?vast.spawn.sink.json"));
   return spawn_sink;
 }
 
 auto make_spawn_command() {
-  auto spawn = std::make_unique<command>("spawn", "creates a new component",
-                                         documentation::vast_spawn, opts());
-  spawn->add_subcommand("accountant", "spawns the accountant", "", opts(),
-                        false);
+  auto spawn
+    = std::make_unique<command>("spawn", "creates a new component",
+                                documentation::vast_spawn, opts("?vast.spawn"));
+  spawn->add_subcommand("accountant", "spawns the accountant", "",
+                        opts("?vast.spawn.accountant"), false);
   spawn->add_subcommand(
     "archive", "creates a new archive", "",
-    opts()
+    opts("?vast.spawn.archive")
       .add<size_t>("segments,s", "number of cached segments")
       .add<size_t>("max-segment-size,m", "maximum segment size in MB"),
     false);
   spawn->add_subcommand(
     "explorer", "creates a new explorer", "",
-    opts()
+    opts("?vast.spawn.explorer")
       .add<vast::duration>("after,A", "timebox after each result")
       .add<vast::duration>("before,B", "timebox before each result"),
     false);
   spawn->add_subcommand(
     "exporter", "creates a new exporter", "",
-    opts()
+    opts("?vast.spawn.exporter")
       .add<bool>("continuous,c", "marks a query as continuous")
       .add<bool>("unified,u", "marks a query as unified")
       .add<uint64_t>("events,e", "maximum number of results"),
     false);
   spawn->add_subcommand("importer", "creates a new importer", "",
-                        opts().add<size_t>("ids,n", "number of initial IDs to "
-                                                    "request (deprecated)"),
+                        opts("?vast.spawn.importer")
+                          .add<size_t>("ids,n", "number of initial IDs to "
+                                                "request (deprecated)"),
                         false);
   spawn->add_subcommand("index", "creates a new index", "",
-                        add_index_opts(opts()), false);
+                        add_index_opts(opts("?vast.spawn.index")), false);
   spawn->add_subcommand(make_spawn_source_command());
   spawn->add_subcommand(make_spawn_sink_command());
   return spawn;
@@ -379,24 +387,25 @@ auto make_status_command() {
   return std::make_unique<command>(
     "status", "shows properties of a server process",
     documentation::vast_status,
-    opts()
+    opts("?vast.status")
       .add<bool>("detailed", "add more information to the output")
       .add<bool>("debug", "include extra debug information"));
 }
 
 auto make_start_command() {
-  return std::make_unique<command>("start", "starts a node",
-                                   documentation::vast_start, opts());
+  return std::make_unique<command>(
+    "start", "starts a node", documentation::vast_start, opts("?vast.start"));
 }
 
 auto make_stop_command() {
-  return std::make_unique<command>("stop", "stops a node",
-                                   documentation::vast_stop, opts());
+  return std::make_unique<command>(
+    "stop", "stops a node", documentation::vast_stop, opts("?vast.stop"));
 }
 
 auto make_version_command() {
   return std::make_unique<command>("version", "prints the software version",
-                                   documentation::vast_version, opts());
+                                   documentation::vast_version,
+                                   opts("?vast.version"));
 }
 
 auto make_command_factory() {

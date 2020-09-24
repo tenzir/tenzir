@@ -170,9 +170,9 @@ void collect_component_status(node_actor* self,
 caf::message status_command(const invocation& inv, caf::actor_system&) {
   auto self = this_node;
   auto verbosity = status_verbosity::info;
-  if (caf::get_or(inv.options, "detailed", false))
+  if (caf::get_or(inv.options, "vast.status.detailed", false))
     verbosity = status_verbosity::detailed;
-  if (caf::get_or(inv.options, "debug", false))
+  if (caf::get_or(inv.options, "vast.status.debug", false))
     verbosity = status_verbosity::debug;
   collect_component_status(self, self->make_response_promise(), verbosity);
   return caf::none;

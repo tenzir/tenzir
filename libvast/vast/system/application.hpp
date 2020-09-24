@@ -40,6 +40,6 @@ command::opts_builder source_opts(std::string_view category);
 command::opts_builder sink_opts(std::string_view category);
 
 /// @returns default options for commands.
-command::opts_builder opts(std::string_view category = "global");
+command::opts_builder opts(std::string_view category);
 
 } // namespace vast::system
