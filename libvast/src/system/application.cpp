@@ -176,8 +176,9 @@ auto make_export_command() {
 
 auto make_get_command() {
   return std::make_unique<command>(
-    "get", "extracts the events assiciated with ids", "TODO",
-    opts("?vast.get").add<std::string>("format", "output format (default: JSON)"));
+    "get", "extracts the events assiciated with ids", documentation::vast_get,
+    opts("?vast.get")
+      .add<std::string>("format", "output format (default: JSON)"));
 }
 
 auto make_infer_command() {
