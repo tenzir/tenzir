@@ -107,6 +107,7 @@ struct offset;
 struct pattern_type;
 struct port_type;
 struct predicate;
+struct qualified_record_field;
 struct real_type;
 struct record_type;
 struct string_type;
