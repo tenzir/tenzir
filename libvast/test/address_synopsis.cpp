@@ -69,7 +69,7 @@ TEST(construction via custom factory) {
   auto x = factory<synopsis>::make(t, opts);
   REQUIRE_NOT_EQUAL(x, nullptr);
   x->add(to_addr_view("192.168.0.1"));
-  auto verify = verifier{x};
+  auto verify = verifier{x.get()};
   verify(to_addr_view("192.168.0.1"), {N, N, N, N, N, N, T, N, N, N, N, N});
   MESSAGE("collisions");
   verify(to_addr_view("192.168.0.6"), {N, N, N, N, N, N, F, N, N, N, N, N});
@@ -85,7 +85,7 @@ TEST(construction based on partition size) {
   opts["max-partition-size"] = 1_Mi;
   auto ptr = factory<synopsis>::make(address_type{}, opts);
   REQUIRE_NOT_EQUAL(ptr, nullptr);
-  CHECK_ROUNDTRIP_DEREF(ptr);
+  CHECK_ROUNDTRIP_DEREF(std::move(ptr));
 }
 
 FIXTURE_SCOPE_END()

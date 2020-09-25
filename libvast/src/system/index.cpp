@@ -466,7 +466,7 @@ caf::behavior index(caf::stateful_actor<index_state>* self, filesystem_type fs,
     put(local_meta_idx.factory_options(), "max-partition-size",
         partition_capacity);
     auto part = self->spawn(active_partition, id, self->state.filesystem,
-                            index_opts, local_meta_idx);
+                            index_opts, std::move(local_meta_idx));
     auto slot = self->state.stage->add_outbound_path(part);
     self->state.active_partition.actor = part;
     self->state.active_partition.stream_slot = slot;

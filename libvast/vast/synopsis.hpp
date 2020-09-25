@@ -21,16 +21,16 @@
 #include "vast/view.hpp"
 
 #include <caf/fwd.hpp>
-#include <caf/intrusive_ptr.hpp>
-#include <caf/ref_counted.hpp>
+
+#include <memory>
 
 namespace vast {
 
 /// @relates synopsis
-using synopsis_ptr = caf::intrusive_ptr<synopsis>;
+using synopsis_ptr = std::unique_ptr<synopsis>;
 
 /// The abstract base class for synopsis data structures.
-class synopsis : public caf::ref_counted {
+class synopsis {
 public:
   // -- construction & destruction ---------------------------------------------
 

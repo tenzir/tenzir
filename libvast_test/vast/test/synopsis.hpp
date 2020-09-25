@@ -30,7 +30,7 @@ inline const auto F = caf::optional<bool>{false};
 }
 
 struct verifier {
-  synopsis_ptr syn;
+  synopsis* syn;
   inline
   void operator()(data_view rhs, std::array<caf::optional<bool>, 12> ref) {
     CHECK_EQUAL(syn->lookup(vast::match, rhs), ref[0]);

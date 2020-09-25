@@ -113,9 +113,9 @@ pack(flatbuffers::FlatBufferBuilder& builder, const synopsis_ptr& synopsis,
 caf::error unpack(const fbs::Synopsis& synopsis, synopsis_ptr& ptr) {
   ptr = nullptr;
   if (auto bs = synopsis.bool_synopsis())
-    ptr = caf::make_counted<bool_synopsis>(bs->any_true(), bs->any_false());
+    ptr = std::make_unique<bool_synopsis>(bs->any_true(), bs->any_false());
   else if (auto ts = synopsis.time_synopsis())
-    ptr = caf::make_counted<time_synopsis>(
+    ptr = std::make_unique<time_synopsis>(
       vast::time{} + vast::duration{ts->start()},
       vast::time{} + vast::duration{ts->end()});
   else if (auto os = synopsis.opaque_synopsis()) {

@@ -44,7 +44,7 @@ TEST(min-max synopsis) {
   REQUIRE_NOT_EQUAL(x, nullptr);
   x->add(time{epoch + 4s});
   x->add(time{epoch + 7s});
-  auto verify = verifier{x};
+  auto verify = verifier{x.get()};
   MESSAGE("[4,7] op 0");
   time zero = epoch + 0s;
   verify(zero, {N, N, N, N, N, N, F, T, F, F, T, T});

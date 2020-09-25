@@ -255,7 +255,7 @@ caf::error unpack(const fbs::PartitionSynopsis& x, partition_synopsis& ps) {
     synopsis_ptr ptr;
     if (auto error = unpack(*synopsis, ptr))
       return error;
-    ps[qf] = ptr;
+    ps[qf] = std::move(ptr);
   }
   return caf::none;
 }
