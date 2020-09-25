@@ -11,7 +11,7 @@ mkShell ({
   hardeningDisable = [ "fortify" ] ++ lib.optional static_stdenv "pic";
   inputsFrom = [ pkgs.vast ];
   shellHook = ''
-    echo "Entering Event Horizon environment"
+    echo "Entering VAST environment"
   '';
 } // lib.optionalAttrs static_stdenv {
   VAST_STATIC_EXECUTABLE = "ON";
