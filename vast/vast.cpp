@@ -86,7 +86,9 @@ int main(int argc, char** argv) {
     else if (const char* home = std::getenv("HOME"))
       schema_dirs.insert(path{home} / ".local" / "share" / "vast" / "schema");
     schema_dirs.insert(binary->parent().parent() / "share" / "vast" / "schema");
+#if !VAST_RELOCATABLE_INSTALL
     schema_dirs.insert(VAST_DATADIR "/vast/schema");
+#endif
   }
   if (auto user_dirs = caf::get_if<string_list>(&cfg, "vast.schema-paths"))
     std::copy(user_dirs->begin(), user_dirs->end(),
