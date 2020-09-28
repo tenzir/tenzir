@@ -460,7 +460,6 @@ caf::behavior index(caf::stateful_actor<index_state>* self, filesystem_type fs,
   auto create_active_partition = [=] {
     auto id = uuid::random();
     caf::settings index_opts;
-    // TODO: Set the 'cardinality' option once ch19167 is resolved.
     index_opts["cardinality"] = partition_capacity;
     meta_index local_meta_idx;
     put(local_meta_idx.factory_options(), "max-partition-size",
