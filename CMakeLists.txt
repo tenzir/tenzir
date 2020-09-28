@@ -472,10 +472,8 @@ if (APPLE AND NOT OPENSSL_ROOT_DIR)
 endif ()
 
 find_package(Flatbuffers REQUIRED CONFIG)
-if (NOT BUILD_SHARED_LIBS)
-  string(APPEND VAST_FIND_DEPENDENCY_LIST
-         "\nfind_package(Flatbuffers REQUIRED CONFIG)")
-endif ()
+string(APPEND VAST_FIND_DEPENDENCY_LIST
+       "\nfind_package(Flatbuffers REQUIRED CONFIG)")
 if (TARGET flatbuffers::flatbuffers)
   set(flatbuffers_target flatbuffers::flatbuffers)
 elseif (NOT VAST_STATIC_EXECUTABLE AND TARGET flatbuffers::flatbuffers_shared)

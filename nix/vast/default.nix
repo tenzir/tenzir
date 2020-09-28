@@ -65,8 +65,8 @@ stdenv.mkDerivation rec {
 
   nativeBuildInputs = [ cmake cmake-format ];
   propagatedNativeBuildInputs = [ pkgconfig pandoc ];
-  buildInputs = [ libpcap flatbuffers jemalloc broker libyamlcpp ];
-  propagatedBuildInputs = [ arrow-cpp caf ];
+  buildInputs = [ libpcap jemalloc broker libyamlcpp ];
+  propagatedBuildInputs = [ arrow-cpp caf flatbuffers ];
 
   cmakeFlags = [
     "-DCMAKE_INSTALL_SYSCONFDIR:PATH=/etc"
