@@ -83,7 +83,7 @@ bool convert(const schema& s, json& j);
 
 caf::expected<schema> load_schema(const path& sf);
 
-caf::expected<vast::schema> load_schema(const std::vector<path>& data_paths);
+caf::expected<vast::schema> load_schema(const std::set<path>& data_paths);
 
 caf::expected<schema> get_schema(const caf::settings& options,
                                  const std::string& category);
