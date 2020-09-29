@@ -48,9 +48,8 @@ caf::message import_command(const invocation& inv, caf::actor_system& sys) {
                  : caf::get<scope_linked_actor>(node_opt).get();
   VAST_DEBUG(inv.full_name, "got node");
   // Get node components.
-  using namespace std::string_view_literals;
-  auto components = get_node_components(
-    self, node, {"accountant"sv, "type-registry"sv, "importer"sv});
+  auto components = get_node_components(self, node, "accountant",
+                                        "type-registry", "importer");
   if (!components)
     return caf::make_message(std::move(components.error()));
   auto& [accountant, type_registry, importer] = *components;

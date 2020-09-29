@@ -32,7 +32,6 @@
 #include <caf/scoped_actor.hpp>
 #include <caf/settings.hpp>
 
-#include <string_view>
 #include <vector>
 
 namespace vast::system {
@@ -89,8 +88,7 @@ get_command(const invocation& inv, caf::actor_system& sys) {
                  ? caf::get<caf::actor>(node_opt)
                  : caf::get<scope_linked_actor>(node_opt).get();
   VAST_ASSERT(node != nullptr);
-  using namespace std::string_view_literals;
-  auto components = get_node_components(self, node, {"archive"sv});
+  auto components = get_node_components(self, node, "archive");
   if (!components)
     return caf::make_message(std::move(components.error()));
   auto archive = caf::actor_cast<archive_type>((*components)[0]);

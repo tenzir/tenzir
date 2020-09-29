@@ -36,21 +36,21 @@ spawn_at_node(caf::scoped_actor& self, caf::actor node, Arguments&&... xs) {
 
 /// Look up components by category. Returns the first actor of each
 /// category name passed in `names`.
-template <size_t N>
-caf::expected<std::array<caf::actor, N>>
+template <class... Names>
+caf::expected<std::array<caf::actor, sizeof...(Names)>>
 get_node_components(caf::scoped_actor& self, caf::actor node,
-                    const std::string_view (&names)[N]) {
-  auto result = caf::expected{std::array<caf::actor, N>{}};
-  std::vector<std::string> labels;
-  labels.reserve(N);
-  for (auto name : names)
-    labels.emplace_back(name);
+                    Names&&... names) {
+  static_assert(
+    std::conjunction_v<std::is_constructible<std::string, Names>...>,
+    "names cannot be used for construction a string");
+  auto result = caf::expected{std::array<caf::actor, sizeof...(names)>{}};
+  auto labels = std::vector<std::string>{std::forward<Names>(names)...};
   self
     ->request(node, caf::infinite, atom::get_v, atom::label_v,
               std::move(labels))
     .receive(
       [&](std::vector<caf::actor>& components) {
-        VAST_ASSERT(components.size() == N);
+        VAST_ASSERT(components.size() == sizeof...(names));
         std::move(components.begin(), components.end(), result->begin());
       },
       [&](caf::error& e) { result = std::move(e); });
