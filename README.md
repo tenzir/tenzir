@@ -14,7 +14,7 @@ The network telemetry engine for data-driven security investigations.
 [![Examples Status][ci-examples-badge]][ci-examples-url]
 [![Docker Status][ci-docker-badge]][ci-docker-url]
 [![Changelog][changelog-badge]][changelog-url]
-[![Latest Release][latest-release-badge]][latest-release-url]
+[![Since Release][since-release-badge]][since-release-url]
 [![Chat][chat-badge]][chat-url]
 [![License][license-badge]][license-url]
 
@@ -34,14 +34,13 @@ Chat with us on [Matrix][chat-url].
   events/second, including [Zeek](https://www.zeek.org/),
   [Suricata](https://suricata-ids.org/), JSON, and CSV.
 
-- **Low-Latency Queries**: sub-second response times over the
-  entire data lake, thanks to multi-level bitmap indexing and actor model
-  concurrency. Particularly helpful for instant indicator checking over the
-  entire dataset.
+- **Low-Latency Queries**: sub-second response times over the entire data lake,
+  thanks to multi-level bitmap indexing and actor model concurrency.
+  Particularly helpful for instant indicator checking over the entire dataset.
 
-- **Flexible Export**: access data in common text formats (ASCII, JSON, CSV),
-  in binary form (MRT, PCAP), or via zero-copy relay through
-  [Apache Arrow](https://arrow.apache.org/) for arbitrary downstream analysis.
+- **Flexible Export**: access data in common text formats (ASCII, JSON, CSV), in
+  binary form (MRT, PCAP), or via zero-copy relay through [Apache
+  Arrow](https://arrow.apache.org/) for arbitrary downstream analysis.
 
 - **Powerful Data Model and Query Language**: the generic semi-structured data
   model allows for expressing complex data in a typed fashion. An intuitive
@@ -55,8 +54,8 @@ Chat with us on [Matrix][chat-url].
 
 ## Get VAST
 
-Linux users can download our
-[latest static binary release](https://storage.googleapis.com/tenzir-public-data/vast-static-builds/vast-static-latest.tar.gz)
+Linux users can download our [latest static binary
+release](https://storage.googleapis.com/tenzir-public-data/vast-static-builds/vast-static-latest.tar.gz)
 via browser or cURL.
 
 ```sh
@@ -74,15 +73,14 @@ bin/vast --help
 To install VAST properly for your local user simly place the unpacked folders in
 `/usr/local/`.
 
-MacOS and FreeBSD users have to build from source. Clone the `master` branch to
+FreeBSD and macOS users have to build from source. Clone the `master` branch to
 get the most recent version of VAST.
 
 ```sh
 git clone --recursive https://github.com/tenzir/vast
 ```
 
-Once you have all dependencies in place, build VAST with the following
-commands:
+Once you have all dependencies in place, build VAST with the following commands:
 
 ```sh
 ./configure
@@ -135,8 +133,8 @@ vast export pcap "sport > 60000/tcp && src !in 10.0.0.0/8" \
 
 ## License and Scientific Use
 
-VAST comes with a [3-clause BSD license][license-url]. When referring to VAST
-in a scientific context, please use the following citation:
+VAST comes with a [3-clause BSD license][license-url]. When referring to VAST in
+a scientific context, please use the following citation:
 
 ```bibtex
 @InProceedings{nsdi16:vast,
@@ -172,8 +170,8 @@ proceedings][nsdi-proceedings].
 [changelog-badge]: https://img.shields.io/badge/view-changelog-green.svg
 [changelog-url]: CHANGELOG.md
 [contributing-url]: https://github.com/tenzir/.github/blob/master/contributing.md
-[latest-release-badge]: https://img.shields.io/github/commits-since/tenzir/vast/latest.svg?color=green
-[latest-release-url]: https://github.com/tenzir/vast/releases
+[since-release-badge]: https://img.shields.io/github/commits-since/tenzir/vast/latest.svg?color=green
+[since-release-url]: https://github.com/tenzir/vast/compare/2020.09.30...master
 [installation-url]: INSTALLATION.md
 
 [vast-paper]: https://www.usenix.org/system/files/conference/nsdi16/nsdi16-paper-vallentin.pdf

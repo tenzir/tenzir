@@ -9,7 +9,9 @@ Every entry has a category for which we use the following visual abbreviations:
 - ⚠️ change
 - 🐞 bugfix
 
-## Unreleased
+<!-- ## Unreleased -->
+
+## [2020.09.30]
 
 - 🧬 The `vast get` command has been added. It retrieves events from the
   database directly by their ids.
@@ -773,7 +775,6 @@ Every entry has a category for which we use the following visual abbreviations:
   same bug also existed for key extractors. De-Morgan is now applied properly
   for the operations `!in` and `!~`.
 
-
 ## [0.1] - 2019.02.28
 
 This is the first official release.
@@ -788,3 +789,4 @@ This is the first official release.
 [2020.06.25]: https://github.com/tenzir/vast/releases/tag/2020.06.25
 [2020.07.28]: https://github.com/tenzir/vast/releases/tag/2020.07.28
 [2020.08.28]: https://github.com/tenzir/vast/releases/tag/2020.08.28
+[2020.09.30]: https://github.com/tenzir/vast/releases/tag/2020.09.30
