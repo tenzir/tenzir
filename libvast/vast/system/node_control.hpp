@@ -42,7 +42,7 @@ get_node_components(caf::scoped_actor& self, caf::actor node,
                     Names&&... names) {
   static_assert(
     std::conjunction_v<std::is_constructible<std::string, Names>...>,
-    "names cannot be used for construction a string");
+    "name parameter cannot be used to construct a string");
   auto result = caf::expected{std::array<caf::actor, sizeof...(names)>{}};
   auto labels = std::vector<std::string>{std::forward<Names>(names)...};
   self
