@@ -18,6 +18,7 @@
 #include "vast/fbs/partition.hpp"
 #include "vast/fwd.hpp"
 #include "vast/ids.hpp"
+#include "vast/meta_index.hpp"
 #include "vast/path.hpp"
 #include "vast/qualified_record_field.hpp"
 #include "vast/system/filesystem.hpp"
@@ -75,6 +76,12 @@ struct active_partition_state {
 
   /// Maps type names to IDs. Used the answer #type queries.
   std::unordered_map<std::string, ids> type_ids;
+
+  /// A local version of the meta index that only contains the entry
+  /// related for this partition. During startup, the INDEX reads all
+  /// of these from the flatbufferized state to build up the global
+  /// meta index.
+  meta_index meta_idx;
 
   /// A readable name for this partition
   std::string name;
@@ -156,6 +163,8 @@ pack(flatbuffers::FlatBufferBuilder& builder, const active_partition_state& x);
 
 caf::error unpack(const fbs::Partition& x, passive_partition_state& y);
 
+caf::error unpack(const fbs::Partition& x, partition_synopsis& y);
+
 // TODO: Use typed actors for the partition actors.
 
 /// Spawns a partition.
@@ -165,7 +174,7 @@ caf::error unpack(const fbs::Partition& x, passive_partition_state& y);
 /// @param index_opts Settings that are forwarded when creating indexers.
 caf::behavior
 active_partition(caf::stateful_actor<active_partition_state>* self, uuid id,
-                 filesystem_type fs, caf::settings index_opts);
+                 filesystem_type fs, caf::settings index_opts, meta_index);
 
 /// Spawns a read-only partition.
 /// @param self The partition actor.

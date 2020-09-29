@@ -32,6 +32,7 @@
 #include "vast/logger.hpp"
 #include "vast/qualified_record_field.hpp"
 #include "vast/save.hpp"
+#include "vast/synopsis.hpp"
 #include "vast/system/filesystem.hpp"
 #include "vast/system/index.hpp"
 #include "vast/system/indexer.hpp"
@@ -245,12 +246,18 @@ pack(flatbuffers::FlatBufferBuilder& builder, const active_partition_state& x) {
     tids.push_back(tids_builder.Finish());
   }
   auto type_ids = builder.CreateVector(tids);
+  // Serialize synopses.
+  // A dummy entry is created in `spawn()`, so we can safely use `at()`.
+  auto& partition_synopsis = x.meta_idx.synopses_.at(x.id);
+  auto maybe_ps = pack(builder, partition_synopsis);
+  if (!maybe_ps)
+    return maybe_ps.error();
   fbs::PartitionBuilder partition_builder(builder);
-  partition_builder.add_version(fbs::Version::v0);
   partition_builder.add_uuid(*uuid);
   partition_builder.add_offset(x.offset);
   partition_builder.add_events(x.events);
   partition_builder.add_indexes(indexes);
+  partition_builder.add_partition_synopsis(*maybe_ps);
   partition_builder.add_combined_layout(combined_layout);
   partition_builder.add_type_ids(type_ids);
   return partition_builder.Finish();
@@ -259,9 +266,6 @@ pack(flatbuffers::FlatBufferBuilder& builder, const active_partition_state& x) {
 caf::error
 unpack(const fbs::Partition& partition, passive_partition_state& state) {
   // Check that all fields exist.
-  if (partition.version() != fbs::Version::v0)
-    return make_error(ec::format_error, "unknown version for partition "
-                                        "flatbuffer");
   if (!partition.uuid())
     return make_error(ec::format_error, "missing 'uuid' field in partition "
                                         "flatbuffer");
@@ -326,9 +330,16 @@ unpack(const fbs::Partition& partition, passive_partition_state& state) {
   return caf::none;
 }
 
+caf::error unpack(const fbs::Partition& x, partition_synopsis& ps) {
+  if (!x.partition_synopsis())
+    return make_error(ec::format_error, "missing partition synopsis");
+  return unpack(*x.partition_synopsis(), ps);
+}
+
 caf::behavior
 active_partition(caf::stateful_actor<active_partition_state>* self, uuid id,
-                 filesystem_type fs, caf::settings index_opts) {
+                 filesystem_type fs, caf::settings index_opts,
+                 meta_index meta_idx) {
   self->state.self = self;
   self->state.name = "partition-" + to_string(id);
   self->state.id = id;
@@ -336,6 +347,8 @@ active_partition(caf::stateful_actor<active_partition_state>* self, uuid id,
   self->state.events = 0;
   self->state.fs_actor = fs;
   self->state.streaming_initiated = false;
+  self->state.meta_idx = std::move(meta_idx);
+  self->state.meta_idx.add(id);
   // The active partition stage is a caf stream stage that takes
   // a stream of `table_slice_ptr` as input and produces several
   // streams of `table_slice_column` as output.
@@ -360,6 +373,7 @@ active_partition(caf::stateful_actor<active_partition_state>* self, uuid id,
       ids.append_bits(true, last - first);
       self->state.offset = std::min(x->offset(), self->state.offset);
       self->state.events += x->rows();
+      self->state.meta_idx.add(id, *x);
       size_t col = 0;
       VAST_ASSERT(!x->layout().fields.empty());
       for (auto& field : x->layout().fields) {
@@ -491,7 +505,7 @@ active_partition(caf::stateful_actor<active_partition_state>* self, uuid id,
         self->state.persistence_promise.deliver(partition.error());
         return;
       }
-      builder.Finish(*partition, "P000");
+      fbs::FinishPartitionBuffer(builder, *partition);
       VAST_ASSERT(self->state.persist_path);
       auto fb = builder.Release();
       // TODO: This is duplicating code from one of the `chunk` constructors,
@@ -565,7 +579,7 @@ passive_partition(caf::stateful_actor<passive_partition_state>* self, uuid id,
       auto view
         = span(reinterpret_cast<const byte*>(chunk->data()), chunk->size());
       auto partition
-        = fbs::as_versioned_flatbuffer<fbs::Partition>(view, fbs::Version::v0);
+        = fbs::as_versioned_flatbuffer<fbs::Partition>(view, fbs::Version::v1);
       if (!partition) {
         VAST_ERROR(self, "failed to parse provided chunk as flatbuffer:",
                    render(partition.error()));

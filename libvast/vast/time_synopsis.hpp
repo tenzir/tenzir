@@ -22,6 +22,8 @@ class time_synopsis final : public min_max_synopsis<time> {
 public:
   time_synopsis(vast::type x);
 
+  time_synopsis(time start, time end);
+
   bool equals(const synopsis& other) const noexcept override;
 };
 

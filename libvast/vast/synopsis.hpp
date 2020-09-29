@@ -13,23 +13,24 @@
 
 #pragma once
 
-#include <caf/fwd.hpp>
-#include <caf/intrusive_ptr.hpp>
-#include <caf/ref_counted.hpp>
-
 #include "vast/aliases.hpp"
+#include "vast/fbs/synopsis.hpp"
 #include "vast/fwd.hpp"
 #include "vast/operator.hpp"
 #include "vast/type.hpp"
 #include "vast/view.hpp"
 
+#include <caf/fwd.hpp>
+
+#include <memory>
+
 namespace vast {
 
 /// @relates synopsis
-using synopsis_ptr = caf::intrusive_ptr<synopsis>;
+using synopsis_ptr = std::unique_ptr<synopsis>;
 
 /// The abstract base class for synopsis data structures.
-class synopsis : public caf::ref_counted {
+class synopsis {
 public:
   // -- construction & destruction ---------------------------------------------
 
@@ -87,5 +88,12 @@ caf::error inspect(caf::serializer& sink, synopsis_ptr& ptr);
 
 /// @relates synopsis
 caf::error inspect(caf::deserializer& source, synopsis_ptr& ptr);
+
+/// Flatbuffer support.
+caf::expected<flatbuffers::Offset<fbs::Synopsis>>
+pack(flatbuffers::FlatBufferBuilder& builder, const synopsis_ptr&,
+     const qualified_record_field&);
+
+caf::error unpack(const fbs::Synopsis&, synopsis_ptr&);
 
 } // namespace vast

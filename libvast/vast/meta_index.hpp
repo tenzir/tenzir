@@ -13,7 +13,8 @@
 
 #pragma once
 
-#include "vast/fbs/meta_index.hpp"
+#include "vast/fbs/meta_index_v0.hpp"
+#include "vast/fbs/partition.hpp"
 #include "vast/fwd.hpp"
 #include "vast/qualified_record_field.hpp"
 #include "vast/synopsis.hpp"
@@ -23,6 +24,8 @@
 #include <caf/fwd.hpp>
 #include <caf/settings.hpp>
 
+#include <flatbuffers/flatbuffers.h>
+
 #include <functional>
 #include <string>
 #include <unordered_map>
@@ -31,16 +34,39 @@
 
 namespace vast {
 
+namespace system {
+
+// Forward declaration to be able to `friend` this function.
+caf::expected<flatbuffers::Offset<fbs::Partition>>
+pack(flatbuffers::FlatBufferBuilder& builder,
+     const system::active_partition_state& x);
+
+} // namespace system
+
+/// Contains one synopsis per partition column.
+//  TODO: Turn this into a proper struct with its own `add()` function.
+//        Then we could store this in the `active_partition_state` directly
+//        instead of using a meta_index with only one entry.
+struct partition_synopsis
+  : public std::unordered_map<qualified_record_field, synopsis_ptr> {};
+
 /// The meta index is the first data structure that queries hit. The result
 /// represents a list of candidate partition IDs that may contain the desired
 /// data. The meta index may return false positives but never false negatives.
 class meta_index {
 public:
+  /// Adds an (empty) entry for the given partition.
+  void add(const uuid& partition);
+
   /// Adds all data from a table slice belonging to a given partition to the
   /// index.
   /// @param slice The table slice to extract data from.
   /// @param partition The partition ID that *slice* belongs to.
   void add(const uuid& partition, const table_slice& slice);
+
+  /// Adds new synopses for a partition in bulk. Used when
+  /// re-building the meta index state at startup.
+  void merge(const uuid& partition, partition_synopsis&&);
 
   /// Retrieves the list of candidate partition IDs for a given expression.
   /// @param expr The expression to lookup.
@@ -59,11 +85,12 @@ public:
     return f(x.synopsis_options_, x.synopses_);
   }
 
-private:
-  /// Contains one synopsis per partition column.
-  using partition_synopsis
-    = std::unordered_map<qualified_record_field, synopsis_ptr>;
+  // Allow the partition to directly serialize the relevant synopses.
+  friend caf::expected<flatbuffers::Offset<fbs::Partition>>
+  vast::system::pack(flatbuffers::FlatBufferBuilder& builder,
+                     const system::active_partition_state& x);
 
+private:
   /// Maps a partition ID to the synopses for that partition.
   std::unordered_map<uuid, partition_synopsis> synopses_;
 
@@ -73,9 +100,15 @@ private:
 
 // -- flatbuffer ---------------------------------------------------------------
 
-caf::expected<flatbuffers::Offset<fbs::MetaIndex>>
+// TODO: Move these into some 'legacy' flatbuffer section
+caf::expected<flatbuffers::Offset<fbs::v0::MetaIndex>>
 pack(flatbuffers::FlatBufferBuilder& builder, const meta_index& x);
 
-caf::error unpack(const fbs::MetaIndex& x, meta_index& y);
+caf::error unpack(const fbs::v0::MetaIndex& x, meta_index& y);
+
+caf::expected<flatbuffers::Offset<fbs::PartitionSynopsis>>
+pack(flatbuffers::FlatBufferBuilder& builder, const partition_synopsis&);
+
+caf::error unpack(const fbs::PartitionSynopsis&, partition_synopsis&);
 
 } // namespace vast

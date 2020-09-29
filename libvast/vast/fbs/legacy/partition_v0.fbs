@@ -1,16 +1,9 @@
-include "uuid.fbs";
-include "version.fbs";
-include "synopsis.fbs";
+include "../uuid.fbs";
+include "../version.fbs";
 
-namespace vast.fbs;
+namespace vast.fbs.v0;
 
 table ValueIndex {
-  /// The type of the index.
-  // TODO: This is currently deduced implicitly from the `combined_layout` of
-  // the `Partition`. Once available, we want to use the `Type` flatbuffer here
-  // so all relevant information is available.
-  // type: Type;
-
   /// The serialized `vast::value_index`.
   data: [ubyte];
 }
@@ -35,6 +28,8 @@ table TypeIds {
 
 /// The persistent state of the meta index.
 table Partition {
+  version: Version;
+
   /// The UUID of this partition.
   uuid: UUID;
 
@@ -45,15 +40,10 @@ table Partition {
   events: uint64;
 
   /// The available layouts in this partition.
-  /// TODO: Use the layout type once available.
   combined_layout: [ubyte];
 
   /// A map storing the mapping from type name -> ids
   type_ids: [TypeIds];
-
-  /// Various synopsis structures for partition-wide synopses of certain
-  /// columns. (eg. global min and max timestamp)
-  partition_synopsis: PartitionSynopsis;
 
   /// The contained value indexes.
   indexes: [QualifiedValueIndex];
@@ -61,4 +51,4 @@ table Partition {
 
 root_type Partition;
 
-file_identifier "P001";
+file_identifier "P000";

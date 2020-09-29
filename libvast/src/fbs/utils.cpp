@@ -51,8 +51,10 @@ std::pair<std::string, Version> resolve_filemagic(span<const byte> fb) {
   using namespace std::string_literals;
   static const std::map<std::string, std::pair<std::string, Version>>
     known_identifiers = {
-      {"I000"s, {"vast.fbs.Index"s, Version::v0}},
-      {"P000"s, {"vast.fbs.Partition"s, Version::v0}},
+      {"I000"s, {"vast.fbs.v0.Index"s, Version::v0}},
+      {"I001"s, {"vast.fbs.Index"s, Version::v1}},
+      {"P000"s, {"vast.fbs.v0.Partition"s, Version::v0}},
+      {"P001"s, {"vast.fbs.Partition"s, Version::v1}},
       {"S000"s, {"vast.fbs.Segment"s, Version::v0}},
     };
   // The file identifier is 4 bytes long and at a fixed offset 4.

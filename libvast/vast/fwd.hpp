@@ -107,6 +107,7 @@ struct offset;
 struct pattern_type;
 struct port_type;
 struct predicate;
+struct qualified_record_field;
 struct real_type;
 struct record_type;
 struct string_type;
@@ -178,7 +179,7 @@ void intrusive_ptr_release(const table_slice_builder*);
 
 using chunk_ptr = caf::intrusive_ptr<chunk>;
 using column_index_ptr = std::unique_ptr<column_index>;
-using synopsis_ptr = caf::intrusive_ptr<synopsis>;
+using synopsis_ptr = std::unique_ptr<synopsis>;
 using table_slice_builder_ptr = caf::intrusive_ptr<table_slice_builder>;
 using table_slice_ptr = caf::intrusive_cow_ptr<table_slice>;
 using value_index_ptr = std::unique_ptr<value_index>;

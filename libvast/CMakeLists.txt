@@ -3,7 +3,8 @@
 # ----------------------------------------------------------------------------
 
 file(GLOB flatbuffers_schemas CONFIGURE_DEPENDS
-     ${CMAKE_CURRENT_SOURCE_DIR}/vast/fbs/*.fbs)
+     ${CMAKE_CURRENT_SOURCE_DIR}/vast/fbs/*.fbs
+     ${CMAKE_CURRENT_SOURCE_DIR}/vast/fbs/legacy/*.fbs)
 set(flatbuffers_output_path ${CMAKE_CURRENT_BINARY_DIR}/vast/fbs)
 
 add_custom_target(libvast_flatbuffers)
@@ -30,8 +31,8 @@ foreach (schema ${flatbuffers_schemas})
   add_custom_command(
     OUTPUT ${desired_file}
     COMMAND
-      flatbuffers::flatc -b --cpp --scoped-enums --gen-name-strings -I
-      ${CMAKE_CURRENT_SOURCE_DIR}/flatbuffers -o ${flatbuffers_output_path}
+      flatbuffers::flatc -b --cpp --scoped-enums --gen-name-strings
+      -o ${flatbuffers_output_path}
       ${schema}
     COMMAND ${CMAKE_COMMAND} -E rename ${output_file} ${desired_file}
     COMMAND ${CMAKE_COMMAND} -P ${rename_${basename}}

@@ -1,4 +1,4 @@
-namespace vast.fbs;
+namespace vast.fbs.v0;
 
 /// The persistent state of the meta index.
 table MetaIndex {

@@ -30,7 +30,6 @@
 #include "vast/error.hpp"
 #include "vast/expression_visitors.hpp"
 #include "vast/fbs/index.hpp"
-#include "vast/fbs/meta_index.hpp"
 #include "vast/fbs/utils.hpp"
 #include "vast/fbs/uuid.hpp"
 #include "vast/fbs/version.hpp"
@@ -58,6 +57,7 @@
 #include <flatbuffers/flatbuffers.h>
 
 #include <chrono>
+#include <ctime>
 #include <deque>
 #include <memory>
 #include <unordered_set>
@@ -139,37 +139,41 @@ caf::error index_state::load_from_disk() {
     // code into an `unpack()` function.
     auto fb = span<const byte>{buffer->data(), buffer->size()};
     auto maybe_index
-      = fbs::as_versioned_flatbuffer<fbs::Index>(fb, fbs::Version::v0);
+      = fbs::as_versioned_flatbuffer<fbs::Index>(fb, fbs::Version::v1);
     if (!maybe_index)
       return maybe_index.error();
     auto& index = *maybe_index;
-    // Sanity check.
-    auto fbversion = index->version();
-    if (fbversion != fbs::Version::v0)
-      return make_error(ec::format_error, "unsupported index version, either "
-                                          "remove the existing vast.db "
-                                          "directory or try again with a newer "
-                                          "version of VAST");
-    auto meta_idx = index->meta_index();
-    VAST_ASSERT(meta_idx);
-    auto error = unpack(*meta_idx, this->meta_idx);
-    if (error)
-      return error;
     auto partition_uuids = index->partitions();
     VAST_ASSERT(partition_uuids);
     for (auto uuid_fb : *partition_uuids) {
       VAST_ASSERT(uuid_fb);
       vast::uuid partition_uuid;
       unpack(*uuid_fb, partition_uuid);
-      if (exists(dir / to_string(partition_uuid)))
+      auto partition_path = dir / to_string(partition_uuid);
+      if (exists(partition_path)) {
         persisted_partitions.insert(partition_uuid);
-      else
-        // TODO: Either remove the problematic uuid from the meta index if we
-        // get here, or offer a user tool to regenerate the partition from the
-        // archive state.
+        // Use blocking operations here since this is part of the startup.
+        auto chunk = chunk::mmap(partition_path);
+        if (!chunk) {
+          VAST_WARNING(self, "could not mmap partition at", partition_path);
+          continue;
+        }
+        auto partition = fbs::as_versioned_flatbuffer<fbs::Partition>(
+          as_bytes(chunk), fbs::Version::v1);
+        if (!partition) {
+          VAST_WARNING(self, "coult not parse", partition_path,
+                       "as partition:", partition.error());
+          continue;
+        }
+        partition_synopsis ps;
+        unpack(**partition, ps);
+        VAST_DEBUG(self, "merging partition synopsis from", partition_uuid);
+        meta_idx.merge(partition_uuid, std::move(ps));
+      } else {
         VAST_WARNING(self, "found partition", partition_uuid,
                      "in the index state but not on disk; this may have been "
                      "caused by an unclean shutdown");
+      }
     }
     auto stats = index->stats();
     if (!stats)
@@ -363,9 +367,6 @@ path index_state::index_filename(path basename) const {
 
 caf::expected<flatbuffers::Offset<fbs::Index>>
 pack(flatbuffers::FlatBufferBuilder& builder, const index_state& state) {
-  auto meta_idx = pack(builder, state.meta_idx);
-  if (!meta_idx)
-    return meta_idx.error();
   VAST_DEBUG(state.self, "persists", state.persisted_partitions.size(),
              "uuids of definitely persisted and", state.unpersisted.size(),
              "uuids of maybe persisted partitions");
@@ -398,8 +399,6 @@ pack(flatbuffers::FlatBufferBuilder& builder, const index_state& state) {
   }
   auto stats = builder.CreateVector(stats_offsets);
   fbs::IndexBuilder index_builder(builder);
-  index_builder.add_version(fbs::Version::v0);
-  index_builder.add_meta_index(*meta_idx);
   index_builder.add_partitions(partitions);
   index_builder.add_stats(stats);
   return index_builder.Finish();
@@ -407,16 +406,18 @@ pack(flatbuffers::FlatBufferBuilder& builder, const index_state& state) {
 
 /// Persists the state to disk.
 void index_state::flush_to_disk() {
-  auto builder = new flatbuffers::FlatBufferBuilder();
+  auto builder = std::make_unique<flatbuffers::FlatBufferBuilder>();
   auto index = pack(*builder, *this);
   if (!index) {
     VAST_WARNING(self, "failed to pack index:", render(index.error()));
     return;
   }
-  builder->Finish(*index, "I000");
-  auto ptr = builder->GetBufferPointer();
+  fbs::FinishIndexBuffer(*builder, *index);
+  auto ptr = builder.get();
+  auto buffer = builder->GetBufferPointer();
   auto size = builder->GetSize();
-  auto chunk = vast::chunk::make(size, ptr, [=] { delete builder; });
+  auto chunk = vast::chunk::make(size, buffer, [=] { delete ptr; });
+  builder.release(); // It's now owned by the chunk.
   self
     ->request(caf::actor_cast<caf::actor>(filesystem), caf::infinite,
               atom::write_v, index_filename(), chunk)
@@ -459,10 +460,12 @@ caf::behavior index(caf::stateful_actor<index_state>* self, filesystem_type fs,
   auto create_active_partition = [=] {
     auto id = uuid::random();
     caf::settings index_opts;
-    // TODO: Set the 'cardinality' option once ch19167 is resolved.
     index_opts["cardinality"] = partition_capacity;
-    auto part
-      = self->spawn(active_partition, id, self->state.filesystem, index_opts);
+    meta_index local_meta_idx;
+    put(local_meta_idx.factory_options(), "max-partition-size",
+        partition_capacity);
+    auto part = self->spawn(active_partition, id, self->state.filesystem,
+                            index_opts, std::move(local_meta_idx));
     auto slot = self->state.stage->add_outbound_path(part);
     self->state.active_partition.actor = part;
     self->state.active_partition.stream_slot = slot;

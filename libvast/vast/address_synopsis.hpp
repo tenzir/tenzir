@@ -67,7 +67,7 @@ make_address_synopsis(vast::type type, bloom_filter_parameters params,
     return nullptr;
   }
   using synopsis_type = address_synopsis<HashFunction>;
-  return caf::make_counted<synopsis_type>(std::move(type), std::move(*x));
+  return std::make_unique<synopsis_type>(std::move(type), std::move(*x));
 }
 
 /// Factory to construct an IP address synopsis. This overload looks for a type

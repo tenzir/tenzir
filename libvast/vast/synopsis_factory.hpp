@@ -58,9 +58,9 @@ struct factory_traits<synopsis> {
   template <class T>
   static result_type make(type x, const caf::settings& opts) {
     if constexpr (std::is_constructible_v<T, type, const caf::settings&>)
-      return caf::make_counted<T>(std::move(x), opts);
+      return std::make_unique<T>(std::move(x), opts);
     else
-      return caf::make_counted<T>(std::move(x));
+      return std::make_unique<T>(std::move(x));
   }
 };
 

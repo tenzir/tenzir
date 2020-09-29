@@ -18,8 +18,10 @@
 #include "vast/detail/set_operations.hpp"
 #include "vast/detail/string.hpp"
 #include "vast/expression.hpp"
+#include "vast/fbs/utils.hpp"
 #include "vast/fwd.hpp"
 #include "vast/logger.hpp"
+#include "vast/synopsis.hpp"
 #include "vast/synopsis_factory.hpp"
 #include "vast/table_slice.hpp"
 #include "vast/time.hpp"
@@ -28,6 +30,10 @@
 #include <caf/binary_serializer.hpp>
 
 namespace vast {
+
+void meta_index::add(const uuid& partition) {
+  synopses_[partition];
+}
 
 void meta_index::add(const uuid& partition, const table_slice& slice) {
   auto make_synopsis = [&](const record_field& field) -> synopsis_ptr {
@@ -53,6 +59,10 @@ void meta_index::add(const uuid& partition, const table_slice& slice) {
       }
     }
   }
+}
+
+void meta_index::merge(const uuid& partition, partition_synopsis&& ps) {
+  synopses_[partition] = std::move(ps);
 }
 
 std::vector<uuid> meta_index::lookup(const expression& expr) const {
@@ -198,7 +208,7 @@ caf::settings& meta_index::factory_options() {
   return synopsis_options_;
 }
 
-caf::expected<flatbuffers::Offset<fbs::MetaIndex>>
+caf::expected<flatbuffers::Offset<fbs::v0::MetaIndex>>
 pack(flatbuffers::FlatBufferBuilder& builder, const meta_index& x) {
   std::vector<char> buffer;
   caf::binary_serializer sink{nullptr, buffer};
@@ -206,15 +216,48 @@ pack(flatbuffers::FlatBufferBuilder& builder, const meta_index& x) {
     return error;
   auto data_ptr = reinterpret_cast<const uint8_t*>(buffer.data());
   auto data = builder.CreateVector(data_ptr, buffer.size());
-  fbs::MetaIndexBuilder meta_index_builder{builder};
+  fbs::v0::MetaIndexBuilder meta_index_builder{builder};
   meta_index_builder.add_state(data);
   return meta_index_builder.Finish();
 }
 
-caf::error unpack(const fbs::MetaIndex& x, meta_index& y) {
+caf::error unpack(const fbs::v0::MetaIndex& x, meta_index& y) {
   auto ptr = reinterpret_cast<const char*>(x.state()->Data());
   caf::binary_deserializer source{nullptr, ptr, x.state()->size()};
   return source(y);
+}
+
+caf::expected<flatbuffers::Offset<fbs::PartitionSynopsis>>
+pack(flatbuffers::FlatBufferBuilder& builder, const partition_synopsis& x) {
+  std::vector<flatbuffers::Offset<fbs::Synopsis>> synopses;
+  for (auto& [fqf, synopsis] : x) {
+    auto maybe_synopsis = pack(builder, synopsis, fqf);
+    if (!maybe_synopsis)
+      return maybe_synopsis.error();
+    synopses.push_back(*maybe_synopsis);
+  }
+  auto synopses_vector = builder.CreateVector(synopses);
+  fbs::PartitionSynopsisBuilder ps_builder(builder);
+  ps_builder.add_synopses(synopses_vector);
+  return ps_builder.Finish();
+}
+
+caf::error unpack(const fbs::PartitionSynopsis& x, partition_synopsis& ps) {
+  if (!x.synopses())
+    return make_error(ec::format_error, "missing synopses");
+  for (auto synopsis : *x.synopses()) {
+    if (!synopsis)
+      return make_error(ec::format_error, "synopsis is null");
+    qualified_record_field qf;
+    if (auto error
+        = fbs::deserialize_bytes(synopsis->qualified_record_field(), qf))
+      return error;
+    synopsis_ptr ptr;
+    if (auto error = unpack(*synopsis, ptr))
+      return error;
+    ps[qf] = std::move(ptr);
+  }
+  return caf::none;
 }
 
 } // namespace vast
