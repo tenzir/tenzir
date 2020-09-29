@@ -37,7 +37,6 @@
 
 #include <csignal>
 #include <string>
-#include <string_view>
 
 using namespace std::chrono_literals;
 
@@ -92,8 +91,7 @@ caf::message pivot_command(const invocation& inv, caf::actor_system& sys) {
   auto piv_guard = caf::detail::make_scope_guard(
     [&] { self->send_exit(*piv, caf::exit_reason::user_shutdown); });
   // Register the accountant at the Sink.
-  using namespace std::string_view_literals;
-  auto components = get_node_components(self, node, {"accountant"sv});
+  auto components = get_node_components(self, node, "accountant");
   if (!components)
     return caf::make_message(std::move(components.error()));
   auto& [accountant] = *components;
