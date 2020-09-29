@@ -1,4 +1,4 @@
-namespace vast.fbs;
+namespace vast.fbs.v0;
 
 /// A boolean value that can either be true or false.
 table BoolType {}

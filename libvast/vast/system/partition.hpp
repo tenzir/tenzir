@@ -149,7 +149,7 @@ struct passive_partition_state {
   vast::chunk_ptr partition_chunk;
 
   /// A typed view into the `partition_chunk`.
-  const fbs::Partition* flatbuffer;
+  const fbs::v1::Partition* flatbuffer;
 
   /// Maps qualified fields to indexer actors. This is mutable since
   /// indexers are spawned lazily on first access.
@@ -158,12 +158,12 @@ struct passive_partition_state {
 
 // Flatbuffer support
 
-caf::expected<flatbuffers::Offset<fbs::Partition>>
+caf::expected<flatbuffers::Offset<fbs::v1::Partition>>
 pack(flatbuffers::FlatBufferBuilder& builder, const active_partition_state& x);
 
-caf::error unpack(const fbs::Partition& x, passive_partition_state& y);
+caf::error unpack(const fbs::v1::Partition& x, passive_partition_state& y);
 
-caf::error unpack(const fbs::Partition& x, partition_synopsis& y);
+caf::error unpack(const fbs::v1::Partition& x, partition_synopsis& y);
 
 // TODO: Use typed actors for the partition actors.
 

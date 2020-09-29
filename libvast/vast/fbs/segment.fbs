@@ -2,7 +2,7 @@ include "table_slice.fbs";
 include "version.fbs";
 include "uuid.fbs";
 
-namespace vast.fbs;
+namespace vast.fbs.v0;
 
 /// A half-open interval *[a,b)* in the ID Space.
 struct Interval {
@@ -31,6 +31,16 @@ table Segment {
   events: ulong;
 }
 
+namespace vast.fbs;
+
+union SegmentUnion {
+  v0.Segment,
+}
+
+table Segment {
+  versioned_segment: SegmentUnion;
+}
+
 root_type Segment;
 
-file_identifier "S000";
+file_identifier "VSTs";

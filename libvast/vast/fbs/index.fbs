@@ -2,7 +2,7 @@ include "partition.fbs";
 include "uuid.fbs";
 include "version.fbs";
 
-namespace vast.fbs;
+namespace vast.fbs.v0;
 
 table LayoutStatistics {
   /// Name of the layout.
@@ -12,8 +12,21 @@ table LayoutStatistics {
   count: uint64;
 }
 
+/// The persistent state of the meta index.
+table MetaIndex {
+  /// The meta index state.
+  /// TODO: tear apart into different pieces.
+  state: [ubyte];
+}
+
 /// The persistent state of the index.
 table Index {
+  /// The version of the index state.
+  version: Version;
+
+  /// Synopsis structures for the contained partitions.
+  meta_index: MetaIndex;
+
   /// The contained partition UUIDs.
   partitions: [UUID];
 
@@ -21,6 +34,28 @@ table Index {
   stats: [LayoutStatistics];
 }
 
+namespace vast.fbs.v1;
+
+/// The persistent state of the index.
+table Index {
+  /// The contained partition UUIDs.
+  partitions: [v0.UUID];
+
+  /// The index statistics
+  stats: [v0.LayoutStatistics];
+}
+
+namespace vast.fbs;
+
+union IndexUnion {
+  v0.Index,
+  v1.Index,
+}
+
+table Index {
+  versioned_index: IndexUnion;
+}
+
 root_type Index;
 
-file_identifier "I001";
+file_identifier "VSTi";

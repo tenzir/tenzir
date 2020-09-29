@@ -1,4 +1,4 @@
-namespace vast.fbs;
+namespace vast.fbs.v0;
 
 table OpaqueSynopsis {
   /// The serialized synopsis as produced by `caf::serialize()`.

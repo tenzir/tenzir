@@ -353,12 +353,13 @@ caf::error segment_store::register_segment(const path& filename) {
   auto s = fbs::as_flatbuffer<fbs::Segment>(as_bytes(chk));
   if (s == nullptr)
     return make_error(ec::format_error, "segment integrity check failed");
-  num_events_ += s->events();
+  auto s0 = s->versioned_segment_as_v0_Segment();
+  num_events_ += s0->events();
   uuid segment_uuid;
-  if (auto error = unpack(*s->uuid(), segment_uuid))
+  if (auto error = unpack(*s0->uuid(), segment_uuid))
     return error;
   VAST_DEBUG(this, "found segment", segment_uuid);
-  for (auto interval : *s->ids())
+  for (auto interval : *s0->ids())
     if (!segments_.inject(interval->begin(), interval->end(), segment_uuid))
       return make_error(ec::unspecified, "failed to update range_map");
   return caf::none;
@@ -395,7 +396,9 @@ uint64_t segment_store::drop(segment& x) {
   // flatbuffers API. The (heavy-weight) altnerative here would be to create a
   // custom iterator so that a segment can be iterated as a list of table_slice
   // instances.
-  for (auto buffer : *fbs::GetSegment(x.chunk()->data())->slices())
+  auto s = fbs::GetSegment(x.chunk()->data());
+  auto s0 = s->versioned_segment_as_v0_Segment();
+  for (auto buffer : *s0->slices())
     erased_events += buffer->data_nested_root()->rows();
   VAST_INFO(this, "erases entire segment", segment_id);
   // Schedule deletion of the segment file when releasing the chunk.

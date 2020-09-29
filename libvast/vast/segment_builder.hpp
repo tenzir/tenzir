@@ -70,9 +70,9 @@ private:
   vast::id min_table_slice_offset_;
   uint64_t num_events_;
   flatbuffers::FlatBufferBuilder builder_;
-  std::vector<flatbuffers::Offset<fbs::TableSliceBuffer>> flat_slices_;
+  std::vector<flatbuffers::Offset<fbs::v0::TableSliceBuffer>> flat_slices_;
   std::vector<table_slice_ptr> slices_; // For queries to an unfinished segment.
-  std::vector<fbs::Interval> intervals_;
+  std::vector<fbs::v0::Interval> intervals_;
 };
 
 } // namespace vast

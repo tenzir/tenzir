@@ -2,7 +2,7 @@ include "uuid.fbs";
 include "version.fbs";
 include "synopsis.fbs";
 
-namespace vast.fbs;
+namespace vast.fbs.v0;
 
 table ValueIndex {
   /// The type of the index.
@@ -33,10 +33,36 @@ table TypeIds {
   ids: [ubyte];
 }
 
-/// The persistent state of the meta index.
+/// A partition is a collection of indices for some id range.
 table Partition {
+  version: Version;
+
   /// The UUID of this partition.
   uuid: UUID;
+
+  /// The first ID in the partition.
+  offset: uint64;
+
+  /// The number of contained events.
+  events: uint64;
+
+  /// The available layouts in this partition.
+  combined_layout: [ubyte];
+
+  /// A map storing the mapping from type name -> ids
+  type_ids: [TypeIds];
+
+  /// The contained value indexes.
+  indexes: [QualifiedValueIndex];
+}
+
+namespace vast.fbs.v1;
+
+/// A partition is a collection of indices and column synopses for some
+/// id range.
+table Partition {
+  /// The UUID of this partition.
+  uuid: v0.UUID;
 
   /// The first ID in the partition.
   offset: uint64;
@@ -49,16 +75,27 @@ table Partition {
   combined_layout: [ubyte];
 
   /// A map storing the mapping from type name -> ids
-  type_ids: [TypeIds];
+  type_ids: [v0.TypeIds];
 
   /// Various synopsis structures for partition-wide synopses of certain
   /// columns. (eg. global min and max timestamp)
-  partition_synopsis: PartitionSynopsis;
+  partition_synopsis: v0.PartitionSynopsis;
 
   /// The contained value indexes.
-  indexes: [QualifiedValueIndex];
+  indexes: [v0.QualifiedValueIndex];
+}
+
+namespace vast.fbs;
+
+union PartitionUnion {
+  v0.Partition,
+  v1.Partition,
+}
+
+table Partition {
+  versioned_partition: PartitionUnion;
 }
 
 root_type Partition;
 
-file_identifier "P001";
+file_identifier "VSTp";

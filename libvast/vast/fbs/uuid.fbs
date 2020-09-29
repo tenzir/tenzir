@@ -1,4 +1,4 @@
-namespace vast.fbs;
+namespace vast.fbs.v0;
 
 table UUID {
   /// The 16-byte UUID data.

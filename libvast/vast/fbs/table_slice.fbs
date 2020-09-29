@@ -1,4 +1,4 @@
-namespace vast.fbs;
+namespace vast.fbs.v0;
 
 /// The format of the binary table slice data.
 enum Encoding : byte {

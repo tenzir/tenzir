@@ -13,7 +13,7 @@
 
 #pragma once
 
-#include "vast/fbs/meta_index_v0.hpp"
+#include "vast/fbs/index.hpp"
 #include "vast/fbs/partition.hpp"
 #include "vast/fwd.hpp"
 #include "vast/qualified_record_field.hpp"
@@ -37,7 +37,7 @@ namespace vast {
 namespace system {
 
 // Forward declaration to be able to `friend` this function.
-caf::expected<flatbuffers::Offset<fbs::Partition>>
+caf::expected<flatbuffers::Offset<fbs::v1::Partition>>
 pack(flatbuffers::FlatBufferBuilder& builder,
      const system::active_partition_state& x);
 
@@ -86,7 +86,7 @@ public:
   }
 
   // Allow the partition to directly serialize the relevant synopses.
-  friend caf::expected<flatbuffers::Offset<fbs::Partition>>
+  friend caf::expected<flatbuffers::Offset<fbs::v1::Partition>>
   vast::system::pack(flatbuffers::FlatBufferBuilder& builder,
                      const system::active_partition_state& x);
 
@@ -106,9 +106,9 @@ pack(flatbuffers::FlatBufferBuilder& builder, const meta_index& x);
 
 caf::error unpack(const fbs::v0::MetaIndex& x, meta_index& y);
 
-caf::expected<flatbuffers::Offset<fbs::PartitionSynopsis>>
+caf::expected<flatbuffers::Offset<fbs::v0::PartitionSynopsis>>
 pack(flatbuffers::FlatBufferBuilder& builder, const partition_synopsis&);
 
-caf::error unpack(const fbs::PartitionSynopsis&, partition_synopsis&);
+caf::error unpack(const fbs::v0::PartitionSynopsis&, partition_synopsis&);
 
 } // namespace vast

@@ -15,6 +15,7 @@
 #include "vast/detail/spawn_container_source.hpp"
 #include "vast/expression.hpp"
 #include "vast/fbs/index.hpp"
+#include "vast/fbs/partition.hpp"
 #include "vast/fbs/utils.hpp"
 #include "vast/fbs/uuid.hpp"
 #include "vast/fwd.hpp"
@@ -29,12 +30,16 @@
 #include "vast/type.hpp"
 #include "vast/uuid.hpp"
 
+#include <flatbuffers/flatbuffers.h>
+
 #define SUITE flatbuffers
 #include "vast/test/fixtures/actor_system_and_events.hpp"
 #include "vast/test/test.hpp"
 
 using vast::byte;
 using vast::span;
+
+using vast::fbs::v0::UUID;
 
 TEST(uuid roundtrip) {
   vast::uuid uuid = vast::uuid::random();
@@ -44,7 +49,7 @@ TEST(uuid roundtrip) {
   vast::uuid uuid2 = vast::uuid::random();
   CHECK_NOT_EQUAL(uuid, uuid2);
   span<const byte> span{reinterpret_cast<const byte*>(fb->data()), fb->size()};
-  vast::fbs::unwrap<vast::fbs::UUID>(span, uuid2);
+  vast::fbs::unwrap<UUID>(span, uuid2);
   CHECK_EQUAL(uuid, uuid2);
 }
 
@@ -67,14 +72,26 @@ TEST(index roundtrip) {
   // Add some fake statistics
   state.stats.layouts["zeek.conn"] = vast::system::layout_statistics{54931u};
   // Serialize the index.
-  auto expected_fb = vast::fbs::wrap(state, "I000");
-  REQUIRE(expected_fb);
-  auto fb = *expected_fb;
-  auto span = as_bytes(fb);
+  // auto expected_fb = vast::fbs::wrap(state);
+  flatbuffers::FlatBufferBuilder builder;
+  auto index_v1 = pack(builder, state);
+  REQUIRE(index_v1);
+  vast::fbs::IndexBuilder index_builder(builder);
+  index_builder.add_versioned_index_type(vast::fbs::IndexUnion::v1_Index);
+  index_builder.add_versioned_index(index_v1->Union());
+  auto index = index_builder.Finish();
+  vast::fbs::FinishIndexBuffer(builder, index);
+  // auto fb = *expected_fb;
+  auto fb = builder.GetBufferPointer();
+  auto sz = builder.GetSize();
+  // auto span = as_bytes(fb, sz);
+  auto span = vast::span(fb, sz);
   // Deserialize the index.
   auto idx = vast::fbs::GetIndex(span.data());
+  CHECK_EQUAL(idx->versioned_index_type(), vast::fbs::IndexUnion::v1_Index);
+  auto idx_v1 = idx->versioned_index_as_v1_Index();
   // Check Index state.
-  auto partition_uuids = idx->partitions();
+  auto partition_uuids = idx_v1->partitions();
   REQUIRE(partition_uuids);
   CHECK_EQUAL(partition_uuids->size(), expected_uuids.size());
   std::set<vast::uuid> restored_uuids;
@@ -86,7 +103,7 @@ TEST(index roundtrip) {
   }
   CHECK_EQUAL(expected_uuids, restored_uuids);
   // Check that layout statistics were restored correctly
-  auto stats = idx->stats();
+  auto stats = idx_v1->stats();
   REQUIRE(stats);
   REQUIRE_EQUAL(stats->size(), 1u);
   REQUIRE(stats->Get(0));
@@ -114,14 +131,32 @@ TEST(empty partition roundtrip) {
   REQUIRE(slice);
   state.meta_idx.add(state.id, *slice);
   // Serialize partition.
-  auto expected_fb = vast::fbs::wrap(state);
-  REQUIRE(expected_fb);
-  auto span = as_bytes(*expected_fb);
+  // auto expected_fb = vast::fbs::wrap(state);
+  flatbuffers::FlatBufferBuilder builder;
+  {
+    auto partition_v1 = pack(builder, state);
+    REQUIRE(partition_v1);
+    vast::fbs::PartitionBuilder partition_builder(builder);
+    partition_builder.add_versioned_partition_type(
+      vast::fbs::PartitionUnion::v1_Partition);
+    partition_builder.add_versioned_partition(partition_v1->Union());
+    auto partition = partition_builder.Finish();
+    vast::fbs::FinishPartitionBuffer(builder, partition);
+  }
+  // REQUIRE(expected_fb);
+  // auto span = as_bytes(*expected_fb);
+  auto ptr = builder.GetBufferPointer();
+  auto sz = builder.GetSize();
+  vast::span span(ptr, sz);
   // Deserialize partition.
   vast::system::passive_partition_state readonly_state;
   auto partition = vast::fbs::GetPartition(span.data());
   REQUIRE(partition);
-  auto error = unpack(*partition, readonly_state);
+  REQUIRE_EQUAL(partition->versioned_partition_type(),
+                vast::fbs::PartitionUnion::v1_Partition);
+  auto partition_v1 = partition->versioned_partition_as_v1_Partition();
+  REQUIRE(partition_v1);
+  auto error = unpack(*partition_v1, readonly_state);
   CHECK(!error);
   CHECK_EQUAL(readonly_state.id, state.id);
   CHECK_EQUAL(readonly_state.offset, state.offset);
@@ -130,7 +165,7 @@ TEST(empty partition roundtrip) {
   CHECK_EQUAL(readonly_state.type_ids, state.type_ids);
   // Deserialize meta index state from this partition.
   vast::partition_synopsis ps;
-  auto error2 = vast::system::unpack(*partition, ps);
+  auto error2 = vast::system::unpack(*partition_v1, ps);
   CHECK(!error2);
   CHECK_EQUAL(ps.size(), 1u);
   vast::meta_index recovered_meta_idx;

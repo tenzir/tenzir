@@ -227,9 +227,9 @@ caf::error unpack(const fbs::v0::MetaIndex& x, meta_index& y) {
   return source(y);
 }
 
-caf::expected<flatbuffers::Offset<fbs::PartitionSynopsis>>
+caf::expected<flatbuffers::Offset<fbs::v0::PartitionSynopsis>>
 pack(flatbuffers::FlatBufferBuilder& builder, const partition_synopsis& x) {
-  std::vector<flatbuffers::Offset<fbs::Synopsis>> synopses;
+  std::vector<flatbuffers::Offset<fbs::v0::Synopsis>> synopses;
   for (auto& [fqf, synopsis] : x) {
     auto maybe_synopsis = pack(builder, synopsis, fqf);
     if (!maybe_synopsis)
@@ -237,12 +237,12 @@ pack(flatbuffers::FlatBufferBuilder& builder, const partition_synopsis& x) {
     synopses.push_back(*maybe_synopsis);
   }
   auto synopses_vector = builder.CreateVector(synopses);
-  fbs::PartitionSynopsisBuilder ps_builder(builder);
+  fbs::v0::PartitionSynopsisBuilder ps_builder(builder);
   ps_builder.add_synopses(synopses_vector);
   return ps_builder.Finish();
 }
 
-caf::error unpack(const fbs::PartitionSynopsis& x, partition_synopsis& ps) {
+caf::error unpack(const fbs::v0::PartitionSynopsis& x, partition_synopsis& ps) {
   if (!x.synopses())
     return make_error(ec::format_error, "missing synopses");
   for (auto synopsis : *x.synopses()) {

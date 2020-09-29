@@ -1,6 +1,6 @@
 include "type.fbs";
 
-namespace vast.fbs;
+namespace vast.fbs.v0;
 
 table Layout {
   name: string;
