@@ -47,6 +47,8 @@ jobs:
         - tag: Release
           flags: --release
           ci-flags: --ci-build
+        use_for:
+        - docker: matrix.os.tag == 'Ubuntu' && matrix.os.compiler == 'GCC' && matrix.configure.tag == 'Release'
     runs-on: ${{ matrix.os.name }}
     env:
       CC: ${{ matrix.os.cc }}
@@ -131,6 +133,11 @@ jobs:
           echo ::set-env name=CACHE_REF_SLUG::"$(slug_ref "$GITHUB_REF")"
           echo ::set-env name=CACHE_HEAD_REF_SLUG::"$(slug_ref "$GITHUB_HEAD_REF")"
           echo ::set-env name=CACHE_BASE_REF_SLUG::"$(slug_ref "$GITHUB_BASE_REF")"
+          if [[ "$GITHUB_REF" == refs/tags/* ]]; then
+            echo ::set-env name=DOCKER_RELEASE_VERSION::$(echo ${GITHUB_REF:10})
+          else
+            echo ::set-env name=DOCKER_RELEASE_VERSION::$(echo ${GITHUB_SHA})
+          fi
 
       # For 'pull_request' events we want to take the latest build on the PR
       # branch, or if that fails the latest build from the branch we're merging
@@ -227,6 +234,22 @@ jobs:
         run: |
           cmake --build "$BUILD_DIR" --target package
 
+      - name: Verify Docker Image
+        if: matrix.use_for.docker == true
+        run: |
+          docker build -f Dockerfile_prebuilt -t tenzir/vast:test .
+          docker run tenzir/vast:test -N status
+
+      - name: Publish Docker Image
+        if: matrix.use_for.docker == true && ( github.ref == 'refs/heads/master' || startsWith(github.ref, 'refs/tags') )
+        uses: elgohr/Publish-Docker-Github-Action@2.22
+        with:
+          name: tenzir/vast
+          username: ${{ secrets.DOCKERHUB_USER }}
+          password: ${{ secrets.DOCKERHUB_PASSWORD }}
+          dockerfile: Dockerfile_prebuilt
+          tags: "latest,${{ env.DOCKER_RELEASE_VERSION }}"
+
       - name: Upload Artifact to Github
         uses: actions/upload-artifact@v1
         with:
@@ -237,15 +260,6 @@ jobs:
         if: matrix.os.tag != 'macOS' && (github.ref == 'refs/heads/master' || startsWith(github.ref, 'refs/tags'))
         run: |
           gsutil -m cp "$BUILD_DIR/$PACKAGE_NAME.tar.gz" "gs://${{ secrets.GCS_BUCKET }}"
-
-      - name: Publish Docker Image
-        if: ( github.ref == 'refs/heads/master' || startsWith(github.ref, 'refs/tags') ) && matrix.os.tag == 'Ubuntu' && matrix.os.compiler == 'GCC' && matrix.configure.tag == 'Release'
-        uses: elgohr/Publish-Docker-Github-Action@2.12
-        with:
-          name: tenzir/vast
-          username: ${{ secrets.DOCKERHUB_USER }}
-          password: ${{ secrets.DOCKERHUB_PASSWORD }}
-          dockerfile: Dockerfile_prebuilt
 
       - name: Publish to GitHub Release
         if: github.event.action == 'published'
