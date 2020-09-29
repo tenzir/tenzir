@@ -140,7 +140,7 @@ add_custom_target(
     ${CMAKE_BINARY_DIR}/compile_commands.json
     ${CMAKE_SOURCE_DIR}/compile_commands.json)
 
-if (VAST_RELOCATABLE_INSTALL)
+if (VAST_RELOCATABLE_INSTALL AND NOT VAST_STATIC_EXECUTABLE)
   if (APPLE)
     list(APPEND CMAKE_INSTALL_RPATH
          "@executable_path/../${CMAKE_INSTALL_LIBDIR}")

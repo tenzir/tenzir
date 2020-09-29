@@ -203,7 +203,7 @@ caf::expected<schema> load_schema(const path& sf) {
   return to<schema>(*str);
 }
 
-caf::expected<schema> load_schema(const std::vector<path>& schema_paths) {
+caf::expected<schema> load_schema(const std::set<path>& schema_paths) {
   vast::schema types;
   VAST_VERBOSE_ANON("looking for schema files in", schema_paths);
   for (const auto& dir : schema_paths) {

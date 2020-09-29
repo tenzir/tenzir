@@ -72,7 +72,7 @@ stdenv.mkDerivation rec {
     "-DCMAKE_INSTALL_SYSCONFDIR:PATH=/etc"
     "-DCMAKE_FIND_PACKAGE_PREFER_CONFIG=ON"
     "-DCAF_ROOT_DIR=${caf}"
-    "-DVAST_RELOCATABLE_INSTALL=OFF"
+    "-DVAST_RELOCATABLE_INSTALL=${if static then "ON" else "OFF"}"
     "-DVAST_VERSION_TAG=${version}"
     "-DVAST_USE_JEMALLOC=ON"
     "-DBROKER_ROOT_DIR=${broker}"

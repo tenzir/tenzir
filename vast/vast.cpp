@@ -30,6 +30,9 @@
 
 #include <cstdlib>
 #include <iostream>
+#include <set>
+#include <string>
+#include <vector>
 
 #if VAST_USE_OPENSSL
 #  include <caf/openssl/manager.hpp>
@@ -73,7 +76,7 @@ int main(int argc, char** argv) {
   for (auto& path : cfg.config_files)
     VAST_INFO_ANON("loaded configuration file:", path);
   using string_list = std::vector<std::string>;
-  auto schema_dirs = std::vector<vast::path>{};
+  auto schema_dirs = std::set<vast::path>{};
   if (!caf::get_or(cfg, "vast.no-default-schema", false)) {
     // Get filesystem path to the executable.
     auto binary = detail::objectpath();
@@ -82,16 +85,17 @@ int main(int argc, char** argv) {
       return EXIT_FAILURE;
     }
     if (const char* xdg_data_home = std::getenv("XDG_DATA_HOME"))
-      schema_dirs.emplace_back(path{xdg_data_home} / "vast" / "schema");
+      schema_dirs.insert(path{xdg_data_home} / "vast" / "schema");
     else if (const char* home = std::getenv("HOME"))
-      schema_dirs.emplace_back(path{home} / ".local" / "share" / "vast"
-                               / "schema");
-    schema_dirs.emplace_back(binary->parent().parent() / "share" / "vast"
-                             / "schema");
-    schema_dirs.emplace_back(VAST_DATADIR "/vast/schema");
+      schema_dirs.insert(path{home} / ".local" / "share" / "vast" / "schema");
+    schema_dirs.insert(binary->parent().parent() / "share" / "vast" / "schema");
+#if !VAST_RELOCATABLE_INSTALL
+    schema_dirs.insert(VAST_DATADIR "/vast/schema");
+#endif
   }
   if (auto user_dirs = caf::get_if<string_list>(&cfg, "vast.schema-paths"))
-    schema_dirs.insert(schema_dirs.end(), user_dirs->begin(), user_dirs->end());
+    std::copy(user_dirs->begin(), user_dirs->end(),
+              std::inserter(schema_dirs, schema_dirs.end()));
   // Load event types.
   if (auto schema = load_schema(schema_dirs)) {
     event_types::init(*std::move(schema));
