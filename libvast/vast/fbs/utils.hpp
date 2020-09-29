@@ -85,8 +85,8 @@ pack_bytes(flatbuffers::FlatBufferBuilder& builder, const T& x) {
   return builder.CreateVector(data, bytes.size());
 }
 
-/// Adds a byte vector to builder for a type that can be serialized to a byte
-/// sequence using the `caf::bianry_serializer`.
+/// Adds a byte vector to the builder for a type that can be serialized to a
+/// byte sequence using the `caf::binary_serializer`.
 template <class T, class Byte = uint8_t>
 caf::expected<flatbuffers::Offset<flatbuffers::Vector<Byte>>>
 serialize_bytes(flatbuffers::FlatBufferBuilder& builder, const T& x) {

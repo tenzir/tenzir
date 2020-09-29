@@ -45,8 +45,6 @@
 
 #include <caf/actor_system.hpp>
 #include <caf/attach_continuous_stream_stage.hpp>
-#include <caf/binary_deserializer.hpp>
-#include <caf/binary_serializer.hpp>
 #include <caf/broadcast_downstream_manager.hpp>
 #include <caf/deserializer.hpp>
 #include <caf/error.hpp>
@@ -82,9 +80,7 @@ caf::actor passive_partition_state::indexer_at(size_t position) const {
     auto index = qualified_index->index();
     auto data = index->data();
     value_index_ptr state_ptr;
-    caf::binary_deserializer sink(
-      nullptr, reinterpret_cast<const char*>(data->data()), data->size());
-    if (auto error = sink(state_ptr)) {
+    if (auto error = fbs::deserialize_bytes(data, state_ptr)) {
       VAST_ERROR(self, "failed to deserialize indexer at", position,
                  "with error:", render(error));
       return nullptr;
@@ -223,26 +219,18 @@ pack(flatbuffers::FlatBufferBuilder& builder, const active_partition_state& x) {
   }
   auto indexes = builder.CreateVector(indices);
   // Serialize layout.
-  // TODO: Create a generic function for arbitrary type -> flatbuffers byte
-  // array serialization.
-  std::vector<char> buf;
-  caf::binary_serializer bs{nullptr, buf};
-  bs(x.combined_layout);
-  auto layout_chunk = chunk::make(std::move(buf));
-  auto combined_layout = builder.CreateVector(
-    reinterpret_cast<const uint8_t*>(layout_chunk->data()),
-    layout_chunk->size());
+  auto combined_layout = fbs::serialize_bytes(builder, x.combined_layout);
+  if (!combined_layout)
+    return combined_layout.error();
   std::vector<flatbuffers::Offset<fbs::TypeIds>> tids;
   for (const auto& kv : x.type_ids) {
     auto name = builder.CreateString(kv.first);
-    buf.clear();
-    caf::binary_serializer bs{nullptr, buf};
-    bs(kv.second);
-    auto ids = builder.CreateVector(
-      reinterpret_cast<const uint8_t*>(buf.data()), buf.size());
+    auto ids = fbs::serialize_bytes(builder, kv.second);
+    if (!ids)
+      return ids.error();
     fbs::TypeIdsBuilder tids_builder(builder);
     tids_builder.add_name(name);
-    tids_builder.add_ids(ids);
+    tids_builder.add_ids(*ids);
     tids.push_back(tids_builder.Finish());
   }
   auto type_ids = builder.CreateVector(tids);
@@ -258,7 +246,7 @@ pack(flatbuffers::FlatBufferBuilder& builder, const active_partition_state& x) {
   partition_builder.add_events(x.events);
   partition_builder.add_indexes(indexes);
   partition_builder.add_partition_synopsis(*maybe_ps);
-  partition_builder.add_combined_layout(combined_layout);
+  partition_builder.add_combined_layout(*combined_layout);
   partition_builder.add_type_ids(type_ids);
   return partition_builder.Finish();
 }
@@ -293,10 +281,8 @@ unpack(const fbs::Partition& partition, passive_partition_state& state) {
   state.events = partition.events();
   state.offset = partition.offset();
   state.name = "partition-" + to_string(state.id);
-  caf::binary_deserializer bds(
-    nullptr, reinterpret_cast<const char*>(combined_layout->data()),
-    combined_layout->size());
-  if (auto error = bds(state.combined_layout))
+  if (auto error
+      = fbs::deserialize_bytes(combined_layout, state.combined_layout))
     return error;
   // This condition should be '!=', but then we cant deserialize in unit tests
   // anymore without creating a bunch of index actors first. :/
@@ -319,10 +305,7 @@ unpack(const fbs::Partition& partition, passive_partition_state& state) {
     auto name = type_ids_tuple->name();
     auto ids_data = type_ids_tuple->ids();
     auto& ids = state.type_ids[name->str()];
-    caf::binary_deserializer bds(
-      nullptr, reinterpret_cast<const char*>(ids_data->data()),
-      ids_data->size());
-    if (auto error = bds(ids))
+    if (auto error = fbs::deserialize_bytes(ids_data, ids))
       return error;
   }
   VAST_DEBUG(state.self, "restored", state.type_ids.size(),
