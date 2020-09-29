@@ -131,6 +131,11 @@ jobs:
           echo ::set-env name=CACHE_REF_SLUG::"$(slug_ref "$GITHUB_REF")"
           echo ::set-env name=CACHE_HEAD_REF_SLUG::"$(slug_ref "$GITHUB_HEAD_REF")"
           echo ::set-env name=CACHE_BASE_REF_SLUG::"$(slug_ref "$GITHUB_BASE_REF")"
+          if [[ "$GITHUB_REF" == refs/tags/* ]]; then
+            echo ::set-env name=DOCKER_RELEASE_VERSION::$(echo ${GITHUB_REF:10})
+          else
+            echo ::set-env name=DOCKER_RELEASE_VERSION::$(echo ${GITHUB_SHA})
+          fi
 
       # For 'pull_request' events we want to take the latest build on the PR
       # branch, or if that fails the latest build from the branch we're merging
@@ -240,12 +245,13 @@ jobs:
 
       - name: Publish Docker Image
         if: ( github.ref == 'refs/heads/master' || startsWith(github.ref, 'refs/tags') ) && matrix.os.tag == 'Ubuntu' && matrix.os.compiler == 'GCC' && matrix.configure.tag == 'Release'
-        uses: elgohr/Publish-Docker-Github-Action@2.12
+        uses: elgohr/Publish-Docker-Github-Action@2.22
         with:
           name: tenzir/vast
           username: ${{ secrets.DOCKERHUB_USER }}
           password: ${{ secrets.DOCKERHUB_PASSWORD }}
           dockerfile: Dockerfile_prebuilt
+          tags: "latest,${{ env.DOCKER_RELEASE_VERSION }}"
 
       - name: Publish to GitHub Release
         if: github.event.action == 'published'
