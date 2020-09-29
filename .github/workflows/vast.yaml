@@ -47,6 +47,8 @@ jobs:
         - tag: Release
           flags: --release
           ci-flags: --ci-build
+        use_for:
+        - docker: matrix.os.tag == 'Ubuntu' && matrix.os.compiler == 'GCC' && matrix.configure.tag == 'Release'
     runs-on: ${{ matrix.os.name }}
     env:
       CC: ${{ matrix.os.cc }}
@@ -233,13 +235,13 @@ jobs:
           cmake --build "$BUILD_DIR" --target package
 
       - name: Verify Docker Image
-        if: matrix.os.tag == 'Ubuntu' && matrix.os.compiler == 'GCC' && matrix.configure.tag == 'Release'
+        if: matrix.use_for.docker == true
         run: |
           docker build -f Dockerfile_prebuilt -t tenzir/vast:test .
           docker run tenzir/vast:test -N status
 
       - name: Publish Docker Image
-        if: ( github.ref == 'refs/heads/master' || startsWith(github.ref, 'refs/tags') ) && matrix.os.tag == 'Ubuntu' && matrix.os.compiler == 'GCC' && matrix.configure.tag == 'Release'
+        if: matrix.use_for.docker == true && ( github.ref == 'refs/heads/master' || startsWith(github.ref, 'refs/tags') )
         uses: elgohr/Publish-Docker-Github-Action@2.22
         with:
           name: tenzir/vast
