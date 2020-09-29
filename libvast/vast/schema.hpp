@@ -18,6 +18,7 @@
 
 #include <caf/expected.hpp>
 
+#include <set>
 #include <string>
 #include <vector>
 

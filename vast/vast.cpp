@@ -30,6 +30,9 @@
 
 #include <cstdlib>
 #include <iostream>
+#include <set>
+#include <string>
+#include <vector>
 
 #if VAST_USE_OPENSSL
 #  include <caf/openssl/manager.hpp>
