@@ -190,7 +190,7 @@ bool partition_selector::operator()(const vast::qualified_record_field& filter,
   return filter == fqf;
 }
 
-caf::expected<flatbuffers::Offset<fbs::partition::v1>>
+caf::expected<flatbuffers::Offset<fbs::partition::v0>>
 pack(flatbuffers::FlatBufferBuilder& builder, const active_partition_state& x) {
   auto uuid = pack(builder, x.id);
   if (!uuid)
@@ -240,7 +240,7 @@ pack(flatbuffers::FlatBufferBuilder& builder, const active_partition_state& x) {
   auto maybe_ps = pack(builder, partition_synopsis);
   if (!maybe_ps)
     return maybe_ps.error();
-  fbs::partition::v1Builder partition_builder(builder);
+  fbs::partition::v0Builder partition_builder(builder);
   partition_builder.add_uuid(*uuid);
   partition_builder.add_offset(x.offset);
   partition_builder.add_events(x.events);
@@ -252,7 +252,7 @@ pack(flatbuffers::FlatBufferBuilder& builder, const active_partition_state& x) {
 }
 
 caf::error
-unpack(const fbs::partition::v1& partition, passive_partition_state& state) {
+unpack(const fbs::partition::v0& partition, passive_partition_state& state) {
   // Check that all fields exist.
   if (!partition.uuid())
     return make_error(ec::format_error, "missing 'uuid' field in partition "
@@ -313,7 +313,7 @@ unpack(const fbs::partition::v1& partition, passive_partition_state& state) {
   return caf::none;
 }
 
-caf::error unpack(const fbs::partition::v1& x, partition_synopsis& ps) {
+caf::error unpack(const fbs::partition::v0& x, partition_synopsis& ps) {
   if (!x.partition_synopsis())
     return make_error(ec::format_error, "missing partition synopsis");
   return unpack(*x.partition_synopsis(), ps);
@@ -490,7 +490,7 @@ active_partition(caf::stateful_actor<active_partition_state>* self, uuid id,
       }
       fbs::PartitionBuilder vpartition_builder(builder);
       vpartition_builder.add_partition_type(
-        vast::fbs::partition::Partition::v1);
+        vast::fbs::partition::Partition::v0);
       vpartition_builder.add_partition(partition->Union());
       auto vpartition = vpartition_builder.Finish();
       fbs::FinishPartitionBuffer(builder, vpartition);
@@ -565,13 +565,14 @@ passive_partition(caf::stateful_actor<passive_partition_state>* self, uuid id,
       }
       // Deserialize chunk from the filesystem actor
       auto partition = fbs::GetPartition(chunk->data());
-      if (partition->partition_type() != fbs::partition::Partition::v1) {
-        VAST_ERROR(self, "got flatbuffer partition with invalid version");
+      if (partition->partition_type() != fbs::partition::Partition::v0) {
+        VAST_ERROR(self, "found partition with invalid version of type:",
+                   partition->GetFullyQualifiedName());
         return self->quit();
       }
-      auto partition_v1 = partition->partition_as_v1();
+      auto partition_v0 = partition->partition_as_v0();
       self->state.partition_chunk = chunk;
-      self->state.flatbuffer = partition_v1;
+      self->state.flatbuffer = partition_v0;
       if (auto error = unpack(*self->state.flatbuffer, self->state)) {
         VAST_ERROR(self, "failed to unpack partition:", render(error));
         return self->quit(std::move(error));

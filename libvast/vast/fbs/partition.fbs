@@ -39,32 +39,9 @@ table v0 {
 
 namespace vast.fbs.partition;
 
-/// A partition is a collection of indices for some id range.
-table v0 {
-  version: Version;
-
-  /// The UUID of this partition.
-  uuid: uuid.v0;
-
-  /// The first ID in the partition.
-  offset: uint64;
-
-  /// The number of contained events.
-  events: uint64;
-
-  /// The available layouts in this partition.
-  combined_layout: [ubyte];
-
-  /// A map storing the mapping from type name -> ids
-  type_ids: [type_ids.v0];
-
-  /// The contained value indexes.
-  indexes: [qualified_value_index.v0];
-}
-
 /// A partition is a collection of indices and column synopses for some
 /// id range.
-table v1 {
+table v0 {
   /// The UUID of this partition.
   uuid: uuid.v0;
 
@@ -91,7 +68,6 @@ table v1 {
 
 union Partition {
   v0,
-  v1,
 }
 
 namespace vast.fbs;

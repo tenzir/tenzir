@@ -139,10 +139,10 @@ caf::error index_state::load_from_disk() {
     // TODO: Create a `index_ondisk_state` struct and move this part of the
     // code into an `unpack()` function.
     auto index = fbs::GetIndex(buffer->data());
-    if (index->index_type() != fbs::index::Index::v1)
+    if (index->index_type() != fbs::index::Index::v0)
       return make_error(ec::format_error, "invalid index version");
-    auto index_v1 = index->index_as_v1();
-    auto partition_uuids = index_v1->partitions();
+    auto index_v0 = index->index_as_v0();
+    auto partition_uuids = index_v0->partitions();
     VAST_ASSERT(partition_uuids);
     for (auto uuid_fb : *partition_uuids) {
       VAST_ASSERT(uuid_fb);
@@ -158,16 +158,15 @@ caf::error index_state::load_from_disk() {
           continue;
         }
         auto partition = fbs::GetPartition(chunk->data());
-        if (partition->partition_type() != fbs::partition::Partition::v1) {
-          // TODO: We could also support v0 partitions here by creating the
-          // missing meta index on-the-fly.
-          VAST_WARNING(self, "found outdated partition flatbuffer");
+        if (partition->partition_type() != fbs::partition::Partition::v0) {
+          VAST_WARNING(self, "found unsupported version for partition",
+                       partition_uuid);
           continue;
         }
-        auto partition_v1 = partition->partition_as_v1();
-        VAST_ASSERT(partition_v1);
+        auto partition_v0 = partition->partition_as_v0();
+        VAST_ASSERT(partition_v0);
         partition_synopsis ps;
-        unpack(*partition_v1, ps);
+        unpack(*partition_v0, ps);
         VAST_DEBUG(self, "merging partition synopsis from", partition_uuid);
         meta_idx.merge(partition_uuid, std::move(ps));
       } else {
@@ -176,7 +175,7 @@ caf::error index_state::load_from_disk() {
                      "caused by an unclean shutdown");
       }
     }
-    auto stats = index_v1->stats();
+    auto stats = index_v0->stats();
     if (!stats)
       return make_error(ec::format_error, "no stats in persisted index state");
     for (const auto stat : *stats) {
@@ -366,7 +365,7 @@ path index_state::index_filename(path basename) const {
   return basename / dir / "index.bin";
 }
 
-caf::expected<flatbuffers::Offset<fbs::index::v1>>
+caf::expected<flatbuffers::Offset<fbs::index::v0>>
 pack(flatbuffers::FlatBufferBuilder& builder, const index_state& state) {
   VAST_DEBUG(state.self, "persists", state.persisted_partitions.size(),
              "uuids of definitely persisted and", state.unpersisted.size(),
@@ -399,7 +398,7 @@ pack(flatbuffers::FlatBufferBuilder& builder, const index_state& state) {
     stats_offsets.push_back(offset);
   }
   auto stats = builder.CreateVector(stats_offsets);
-  fbs::index::v1Builder index_builder(builder);
+  fbs::index::v0Builder index_builder(builder);
   index_builder.add_partitions(partitions);
   index_builder.add_stats(stats);
   return index_builder.Finish();
@@ -414,7 +413,7 @@ void index_state::flush_to_disk() {
     return;
   }
   fbs::IndexBuilder vindex_builder(*builder);
-  vindex_builder.add_index_type(vast::fbs::index::Index::v1);
+  vindex_builder.add_index_type(vast::fbs::index::Index::v0);
   vindex_builder.add_index(index->Union());
   auto vindex = vindex_builder.Finish();
   fbs::FinishIndexBuffer(*builder, vindex);

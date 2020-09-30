@@ -24,21 +24,6 @@ namespace vast.fbs.index;
 
 /// The persistent state of the index.
 table v0 {
-  /// The version of the index state.
-  version: Version;
-
-  /// Synopsis structures for the contained partitions.
-  meta_index: meta_index.v0;
-
-  /// The contained partition UUIDs.
-  partitions: [uuid.v0];
-
-  /// The index statistics
-  stats: [layout_statistics.v0];
-}
-
-/// The persistent state of the index.
-table v1 {
   /// The contained partition UUIDs.
   partitions: [uuid.v0];
 
@@ -50,7 +35,6 @@ namespace vast.fbs.index;
 
 union Index {
   v0,
-  v1,
 }
 
 namespace vast.fbs;

@@ -111,10 +111,6 @@ read_flatbuffer_file(vast::path path) {
     return result;
   auto bytes = std::move(*maybe_bytes);
   const auto* ptr = flatbuffers::GetRoot<T>(bytes.data());
-  // auto view = vast::span<const vast::byte>(bytes.data(), bytes.size());
-  // auto maybe_flatbuffer = vast::fbs::as_versioned_flatbuffer<T>(view,
-  // version); if (!maybe_flatbuffer)
-  //   return result;
   return result_t(ptr, flatbuffer_deleter<T>(std::move(bytes)));
 }
 
@@ -148,11 +144,9 @@ void print_vast_db(vast::path vast_db) {
   }
 }
 
-/// Prints the common fields of v0 and v1 partitions.
-template <typename T>
-void print_partition_common(const T* partition) {
+void print_partition_v0(const vast::fbs::partition::v0* partition) {
   if (!partition) {
-    std::cout << "(error reading partition)\n";
+    std::cout << "(null)\n";
     return;
   }
   vast::uuid id;
@@ -175,24 +169,7 @@ void print_partition_common(const T* partition) {
       std::cout << rank(restored_ids);
     std::cout << "\n";
   }
-  // TODO: print combined_layout and indexes
-}
-
-void print_partition_v0(const vast::fbs::partition::v0* partition) {
-  if (!partition) {
-    std::cout << "(null)\n";
-    return;
-  }
-  print_partition_common(partition);
-}
-
-void print_partition_v1(const vast::fbs::partition::v1* partition) {
-  if (!partition) {
-    std::cout << "(null)\n";
-    return;
-  }
-  print_partition_common(partition);
-  // TODO: print partition synopsis
+  // TODO: print combined_layout, indexes, and partition synopsis
 }
 
 void print_partition(vast::path path) {
@@ -208,18 +185,14 @@ void print_partition(vast::path path) {
     case vast::fbs::partition::Partition::v0:
       print_partition_v0(partition->partition_as_v0());
       break;
-    case vast::fbs::partition::Partition::v1:
-      print_partition_v1(partition->partition_as_v1());
-      break;
     default:
       std::cout << "(unknown partition version)\n";
   }
 }
 
-template <typename T>
-static void print_index_common(const T* index) {
+void print_index_v0(const vast::fbs::index::v0* index) {
   if (!index) {
-    std::cout << "(error reading index)\n";
+    std::cout << "(null)\n";
     return;
   }
   std::cout << "layouts:\n";
@@ -241,23 +214,6 @@ static void print_index_common(const T* index) {
   }
 }
 
-void print_index_v0(const vast::fbs::index::v0* index) {
-  if (!index) {
-    std::cout << "(null)\n";
-    return;
-  }
-  print_index_common(index);
-  // TODO: Print meta index contents.
-}
-
-void print_index_v1(const vast::fbs::index::v1* index) {
-  if (!index) {
-    std::cout << "(null)\n";
-    return;
-  }
-  print_index_common(index);
-}
-
 void print_index(vast::path path) {
   auto index = read_flatbuffer_file<vast::fbs::Index>(path);
   if (!index) {
@@ -270,9 +226,6 @@ void print_index(vast::path path) {
   switch (index->index_type()) {
     case vast::fbs::index::Index::v0:
       print_index_v0(index->index_as_v0());
-      break;
-    case vast::fbs::index::Index::v1:
-      print_index_v1(index->index_as_v1());
       break;
     default:
       std::cout << "(unknown partition version)\n";

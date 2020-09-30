@@ -37,7 +37,7 @@ namespace vast {
 namespace system {
 
 // Forward declaration to be able to `friend` this function.
-caf::expected<flatbuffers::Offset<fbs::partition::v1>>
+caf::expected<flatbuffers::Offset<fbs::partition::v0>>
 pack(flatbuffers::FlatBufferBuilder& builder,
      const system::active_partition_state& x);
 
@@ -86,7 +86,7 @@ public:
   }
 
   // Allow the partition to directly serialize the relevant synopses.
-  friend caf::expected<flatbuffers::Offset<fbs::partition::v1>>
+  friend caf::expected<flatbuffers::Offset<fbs::partition::v0>>
   vast::system::pack(flatbuffers::FlatBufferBuilder& builder,
                      const system::active_partition_state& x);
 
