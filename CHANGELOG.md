@@ -9,7 +9,10 @@ Every entry has a category for which we use the following visual abbreviations:
 - ⚠️ change
 - 🐞 bugfix
 
-<!-- ## Unreleased -->
+## Unreleased
+
+- 🐞 The lookup for schema directories now happens in a fixed order.
+  [#1086](https://github.com/tenzir/vast/pull/1086)
 
 ## [2020.09.30]
 
