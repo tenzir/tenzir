@@ -1,10 +1,9 @@
-include "partition.fbs";
 include "uuid.fbs";
 include "version.fbs";
 
-namespace vast.fbs.v0;
+namespace vast.fbs.layout_statistics;
 
-table LayoutStatistics {
+table v0 {
   /// Name of the layout.
   name: string;
 
@@ -12,50 +11,54 @@ table LayoutStatistics {
   count: uint64;
 }
 
+namespace vast.fbs.meta_index;
+
 /// The persistent state of the meta index.
-table MetaIndex {
+table v0 {
   /// The meta index state.
   /// TODO: tear apart into different pieces.
   state: [ubyte];
 }
 
+namespace vast.fbs.index;
+
 /// The persistent state of the index.
-table Index {
+table v0 {
   /// The version of the index state.
   version: Version;
 
   /// Synopsis structures for the contained partitions.
-  meta_index: MetaIndex;
+  meta_index: meta_index.v0;
 
   /// The contained partition UUIDs.
-  partitions: [UUID];
+  partitions: [uuid.v0];
 
   /// The index statistics
-  stats: [LayoutStatistics];
+  stats: [layout_statistics.v0];
 }
 
-namespace vast.fbs.v1;
-
 /// The persistent state of the index.
-table Index {
+table v1 {
   /// The contained partition UUIDs.
-  partitions: [v0.UUID];
+  partitions: [uuid.v0];
 
   /// The index statistics
-  stats: [v0.LayoutStatistics];
+  stats: [layout_statistics.v0];
+}
+
+namespace vast.fbs.index;
+
+union Index {
+  v0,
+  v1,
 }
 
 namespace vast.fbs;
 
-union IndexUnion {
-  v0.Index,
-  v1.Index,
-}
-
 table Index {
-  versioned_index: IndexUnion;
+  index: index.Index;
 }
 
 root_type Index;
 
-file_identifier "VSTi";
+file_identifier "vIDX";

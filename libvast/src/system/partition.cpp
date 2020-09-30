@@ -190,12 +190,12 @@ bool partition_selector::operator()(const vast::qualified_record_field& filter,
   return filter == fqf;
 }
 
-caf::expected<flatbuffers::Offset<fbs::v1::Partition>>
+caf::expected<flatbuffers::Offset<fbs::partition::v1>>
 pack(flatbuffers::FlatBufferBuilder& builder, const active_partition_state& x) {
   auto uuid = pack(builder, x.id);
   if (!uuid)
     return uuid.error();
-  std::vector<flatbuffers::Offset<fbs::v0::QualifiedValueIndex>> indices;
+  std::vector<flatbuffers::Offset<fbs::qualified_value_index::v0>> indices;
   // Note that the deserialization code relies on the order of indexers within
   // the flatbuffers being preserved.
   for (auto& [qf, actor] : x.indexers) {
@@ -208,10 +208,10 @@ pack(flatbuffers::FlatBufferBuilder& builder, const active_partition_state& x) {
     auto data = builder.CreateVector(
       reinterpret_cast<const uint8_t*>(chunk->data()), chunk->size());
     auto fqf = builder.CreateString(qf.field_name);
-    fbs::v0::ValueIndexBuilder vbuilder(builder);
+    fbs::value_index::v0Builder vbuilder(builder);
     vbuilder.add_data(data);
     auto vindex = vbuilder.Finish();
-    fbs::v0::QualifiedValueIndexBuilder qbuilder(builder);
+    fbs::qualified_value_index::v0Builder qbuilder(builder);
     qbuilder.add_qualified_field_name(fqf);
     qbuilder.add_index(vindex);
     auto qindex = qbuilder.Finish();
@@ -222,13 +222,13 @@ pack(flatbuffers::FlatBufferBuilder& builder, const active_partition_state& x) {
   auto combined_layout = fbs::serialize_bytes(builder, x.combined_layout);
   if (!combined_layout)
     return combined_layout.error();
-  std::vector<flatbuffers::Offset<fbs::v0::TypeIds>> tids;
+  std::vector<flatbuffers::Offset<fbs::type_ids::v0>> tids;
   for (const auto& kv : x.type_ids) {
     auto name = builder.CreateString(kv.first);
     auto ids = fbs::serialize_bytes(builder, kv.second);
     if (!ids)
       return ids.error();
-    fbs::TypeIdsBuilder tids_builder(builder);
+    fbs::type_ids::v0Builder tids_builder(builder);
     tids_builder.add_name(name);
     tids_builder.add_ids(*ids);
     tids.push_back(tids_builder.Finish());
@@ -240,7 +240,7 @@ pack(flatbuffers::FlatBufferBuilder& builder, const active_partition_state& x) {
   auto maybe_ps = pack(builder, partition_synopsis);
   if (!maybe_ps)
     return maybe_ps.error();
-  fbs::v1::PartitionBuilder partition_builder(builder);
+  fbs::partition::v1Builder partition_builder(builder);
   partition_builder.add_uuid(*uuid);
   partition_builder.add_offset(x.offset);
   partition_builder.add_events(x.events);
@@ -252,7 +252,7 @@ pack(flatbuffers::FlatBufferBuilder& builder, const active_partition_state& x) {
 }
 
 caf::error
-unpack(const fbs::v1::Partition& partition, passive_partition_state& state) {
+unpack(const fbs::partition::v1& partition, passive_partition_state& state) {
   // Check that all fields exist.
   if (!partition.uuid())
     return make_error(ec::format_error, "missing 'uuid' field in partition "
@@ -313,7 +313,7 @@ unpack(const fbs::v1::Partition& partition, passive_partition_state& state) {
   return caf::none;
 }
 
-caf::error unpack(const fbs::v1::Partition& x, partition_synopsis& ps) {
+caf::error unpack(const fbs::partition::v1& x, partition_synopsis& ps) {
   if (!x.partition_synopsis())
     return make_error(ec::format_error, "missing partition synopsis");
   return unpack(*x.partition_synopsis(), ps);
@@ -489,9 +489,9 @@ active_partition(caf::stateful_actor<active_partition_state>* self, uuid id,
         return;
       }
       fbs::PartitionBuilder vpartition_builder(builder);
-      vpartition_builder.add_versioned_partition_type(
-        vast::fbs::PartitionUnion::v1_Partition);
-      vpartition_builder.add_versioned_partition(partition->Union());
+      vpartition_builder.add_partition_type(
+        vast::fbs::partition::Partition::v1);
+      vpartition_builder.add_partition(partition->Union());
       auto vpartition = vpartition_builder.Finish();
       fbs::FinishPartitionBuffer(builder, vpartition);
       VAST_ASSERT(self->state.persist_path);
@@ -565,12 +565,11 @@ passive_partition(caf::stateful_actor<passive_partition_state>* self, uuid id,
       }
       // Deserialize chunk from the filesystem actor
       auto partition = fbs::GetPartition(chunk->data());
-      if (partition->versioned_partition_type()
-          != fbs::PartitionUnion::v1_Partition) {
+      if (partition->partition_type() != fbs::partition::Partition::v1) {
         VAST_ERROR(self, "got flatbuffer partition with invalid version");
         return self->quit();
       }
-      auto partition_v1 = partition->versioned_partition_as_v1_Partition();
+      auto partition_v1 = partition->partition_as_v1();
       self->state.partition_chunk = chunk;
       self->state.flatbuffer = partition_v1;
       if (auto error = unpack(*self->state.flatbuffer, self->state)) {

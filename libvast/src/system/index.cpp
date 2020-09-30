@@ -139,9 +139,9 @@ caf::error index_state::load_from_disk() {
     // TODO: Create a `index_ondisk_state` struct and move this part of the
     // code into an `unpack()` function.
     auto index = fbs::GetIndex(buffer->data());
-    if (index->versioned_index_type() != fbs::IndexUnion::v1_Index)
+    if (index->index_type() != fbs::index::Index::v1)
       return make_error(ec::format_error, "invalid index version");
-    auto index_v1 = index->versioned_index_as_v1_Index();
+    auto index_v1 = index->index_as_v1();
     auto partition_uuids = index_v1->partitions();
     VAST_ASSERT(partition_uuids);
     for (auto uuid_fb : *partition_uuids) {
@@ -158,14 +158,13 @@ caf::error index_state::load_from_disk() {
           continue;
         }
         auto partition = fbs::GetPartition(chunk->data());
-        if (partition->versioned_partition_type()
-            != fbs::PartitionUnion::v1_Partition) {
+        if (partition->partition_type() != fbs::partition::Partition::v1) {
           // TODO: We could also support v0 partitions here by creating the
           // missing meta index on-the-fly.
           VAST_WARNING(self, "found outdated partition flatbuffer");
           continue;
         }
-        auto partition_v1 = partition->versioned_partition_as_v1_Partition();
+        auto partition_v1 = partition->partition_as_v1();
         VAST_ASSERT(partition_v1);
         partition_synopsis ps;
         unpack(*partition_v1, ps);
@@ -367,12 +366,12 @@ path index_state::index_filename(path basename) const {
   return basename / dir / "index.bin";
 }
 
-caf::expected<flatbuffers::Offset<fbs::v1::Index>>
+caf::expected<flatbuffers::Offset<fbs::index::v1>>
 pack(flatbuffers::FlatBufferBuilder& builder, const index_state& state) {
   VAST_DEBUG(state.self, "persists", state.persisted_partitions.size(),
              "uuids of definitely persisted and", state.unpersisted.size(),
              "uuids of maybe persisted partitions");
-  std::vector<flatbuffers::Offset<fbs::v0::UUID>> partition_offsets;
+  std::vector<flatbuffers::Offset<fbs::uuid::v0>> partition_offsets;
   for (auto uuid : state.persisted_partitions) {
     if (auto uuid_fb = pack(builder, uuid))
       partition_offsets.push_back(*uuid_fb);
@@ -390,17 +389,17 @@ pack(flatbuffers::FlatBufferBuilder& builder, const index_state& state) {
       return uuid_fb.error();
   }
   auto partitions = builder.CreateVector(partition_offsets);
-  std::vector<flatbuffers::Offset<fbs::v0::LayoutStatistics>> stats_offsets;
+  std::vector<flatbuffers::Offset<fbs::layout_statistics::v0>> stats_offsets;
   for (auto& [name, layout_stats] : state.stats.layouts) {
     auto name_fb = builder.CreateString(name);
-    fbs::v0::LayoutStatisticsBuilder stats_builder(builder);
+    fbs::layout_statistics::v0Builder stats_builder(builder);
     stats_builder.add_name(name_fb);
     stats_builder.add_count(layout_stats.count);
     auto offset = stats_builder.Finish();
     stats_offsets.push_back(offset);
   }
   auto stats = builder.CreateVector(stats_offsets);
-  fbs::v1::IndexBuilder index_builder(builder);
+  fbs::index::v1Builder index_builder(builder);
   index_builder.add_partitions(partitions);
   index_builder.add_stats(stats);
   return index_builder.Finish();
@@ -415,8 +414,8 @@ void index_state::flush_to_disk() {
     return;
   }
   fbs::IndexBuilder vindex_builder(*builder);
-  vindex_builder.add_versioned_index_type(vast::fbs::IndexUnion::v1_Index);
-  vindex_builder.add_versioned_index(index->Union());
+  vindex_builder.add_index_type(vast::fbs::index::Index::v1);
+  vindex_builder.add_index(index->Union());
   auto vindex = vindex_builder.Finish();
   fbs::FinishIndexBuffer(*builder, vindex);
   auto ptr = builder.get();

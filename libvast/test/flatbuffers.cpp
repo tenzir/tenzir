@@ -39,8 +39,6 @@
 using vast::byte;
 using vast::span;
 
-using vast::fbs::v0::UUID;
-
 TEST(uuid roundtrip) {
   vast::uuid uuid = vast::uuid::random();
   auto expected_fb = vast::fbs::wrap(uuid);
@@ -49,7 +47,7 @@ TEST(uuid roundtrip) {
   vast::uuid uuid2 = vast::uuid::random();
   CHECK_NOT_EQUAL(uuid, uuid2);
   span<const byte> span{reinterpret_cast<const byte*>(fb->data()), fb->size()};
-  vast::fbs::unwrap<UUID>(span, uuid2);
+  vast::fbs::unwrap<vast::fbs::uuid::v0>(span, uuid2);
   CHECK_EQUAL(uuid, uuid2);
 }
 
@@ -77,8 +75,8 @@ TEST(index roundtrip) {
   auto index_v1 = pack(builder, state);
   REQUIRE(index_v1);
   vast::fbs::IndexBuilder index_builder(builder);
-  index_builder.add_versioned_index_type(vast::fbs::IndexUnion::v1_Index);
-  index_builder.add_versioned_index(index_v1->Union());
+  index_builder.add_index_type(vast::fbs::index::Index::v1);
+  index_builder.add_index(index_v1->Union());
   auto index = index_builder.Finish();
   vast::fbs::FinishIndexBuffer(builder, index);
   // auto fb = *expected_fb;
@@ -88,8 +86,8 @@ TEST(index roundtrip) {
   auto span = vast::span(fb, sz);
   // Deserialize the index.
   auto idx = vast::fbs::GetIndex(span.data());
-  CHECK_EQUAL(idx->versioned_index_type(), vast::fbs::IndexUnion::v1_Index);
-  auto idx_v1 = idx->versioned_index_as_v1_Index();
+  CHECK_EQUAL(idx->index_type(), vast::fbs::index::Index::v1);
+  auto idx_v1 = idx->index_as_v1();
   // Check Index state.
   auto partition_uuids = idx_v1->partitions();
   REQUIRE(partition_uuids);
@@ -137,9 +135,8 @@ TEST(empty partition roundtrip) {
     auto partition_v1 = pack(builder, state);
     REQUIRE(partition_v1);
     vast::fbs::PartitionBuilder partition_builder(builder);
-    partition_builder.add_versioned_partition_type(
-      vast::fbs::PartitionUnion::v1_Partition);
-    partition_builder.add_versioned_partition(partition_v1->Union());
+    partition_builder.add_partition_type(vast::fbs::partition::Partition::v1);
+    partition_builder.add_partition(partition_v1->Union());
     auto partition = partition_builder.Finish();
     vast::fbs::FinishPartitionBuffer(builder, partition);
   }
@@ -152,9 +149,9 @@ TEST(empty partition roundtrip) {
   vast::system::passive_partition_state readonly_state;
   auto partition = vast::fbs::GetPartition(span.data());
   REQUIRE(partition);
-  REQUIRE_EQUAL(partition->versioned_partition_type(),
-                vast::fbs::PartitionUnion::v1_Partition);
-  auto partition_v1 = partition->versioned_partition_as_v1_Partition();
+  REQUIRE_EQUAL(partition->partition_type(),
+                vast::fbs::partition::Partition::v1);
+  auto partition_v1 = partition->partition_as_v1();
   REQUIRE(partition_v1);
   auto error = unpack(*partition_v1, readonly_state);
   CHECK(!error);

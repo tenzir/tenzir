@@ -241,7 +241,7 @@ struct index_state {
 /// the index state needs additional runtime information.
 // TODO: Pull out the persisted part of the state into a separate struct
 // that can be packed and unpacked.
-caf::expected<flatbuffers::Offset<fbs::v1::Index>>
+caf::expected<flatbuffers::Offset<fbs::index::v1>>
 pack(flatbuffers::FlatBufferBuilder& builder, const index_state& x);
 
 /// Indexes events in horizontal partitions.

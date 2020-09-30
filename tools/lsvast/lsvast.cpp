@@ -118,7 +118,7 @@ read_flatbuffer_file(vast::path path) {
   return result_t(ptr, flatbuffer_deleter<T>(std::move(bytes)));
 }
 
-std::ostream& operator<<(std::ostream& out, const vast::fbs::v0::UUID* uuid) {
+std::ostream& operator<<(std::ostream& out, const vast::fbs::uuid::v0* uuid) {
   if (!uuid || !uuid->data())
     return out << "(null)";
   for (size_t i = 0; i < uuid->data()->size(); ++i)
@@ -178,7 +178,7 @@ void print_partition_common(const T* partition) {
   // TODO: print combined_layout and indexes
 }
 
-void print_partition_v0(const vast::fbs::v0::Partition* partition) {
+void print_partition_v0(const vast::fbs::partition::v0* partition) {
   if (!partition) {
     std::cout << "(null)\n";
     return;
@@ -186,7 +186,7 @@ void print_partition_v0(const vast::fbs::v0::Partition* partition) {
   print_partition_common(partition);
 }
 
-void print_partition_v1(const vast::fbs::v1::Partition* partition) {
+void print_partition_v1(const vast::fbs::partition::v1* partition) {
   if (!partition) {
     std::cout << "(null)\n";
     return;
@@ -204,12 +204,12 @@ void print_partition(vast::path path) {
     std::cout << "(invalid file identifier)\n";
     return;
   }
-  switch (partition->versioned_partition_type()) {
-    case vast::fbs::PartitionUnion::v0_Partition:
-      print_partition_v0(partition->versioned_partition_as_v0_Partition());
+  switch (partition->partition_type()) {
+    case vast::fbs::partition::Partition::v0:
+      print_partition_v0(partition->partition_as_v0());
       break;
-    case vast::fbs::PartitionUnion::v1_Partition:
-      print_partition_v1(partition->versioned_partition_as_v1_Partition());
+    case vast::fbs::partition::Partition::v1:
+      print_partition_v1(partition->partition_as_v1());
       break;
     default:
       std::cout << "(unknown partition version)\n";
@@ -241,7 +241,7 @@ static void print_index_common(const T* index) {
   }
 }
 
-void print_index_v0(const vast::fbs::v0::Index* index) {
+void print_index_v0(const vast::fbs::index::v0* index) {
   if (!index) {
     std::cout << "(null)\n";
     return;
@@ -250,7 +250,7 @@ void print_index_v0(const vast::fbs::v0::Index* index) {
   // TODO: Print meta index contents.
 }
 
-void print_index_v1(const vast::fbs::v1::Index* index) {
+void print_index_v1(const vast::fbs::index::v1* index) {
   if (!index) {
     std::cout << "(null)\n";
     return;
@@ -267,19 +267,19 @@ void print_index(vast::path path) {
     std::cout << "(invalid file identifier)\n";
     return;
   }
-  switch (index->versioned_index_type()) {
-    case vast::fbs::IndexUnion::v0_Index:
-      print_index_v0(index->versioned_index_as_v0_Index());
+  switch (index->index_type()) {
+    case vast::fbs::index::Index::v0:
+      print_index_v0(index->index_as_v0());
       break;
-    case vast::fbs::IndexUnion::v1_Index:
-      print_index_v1(index->versioned_index_as_v1_Index());
+    case vast::fbs::index::Index::v1:
+      print_index_v1(index->index_as_v1());
       break;
     default:
       std::cout << "(unknown partition version)\n";
   }
 }
 
-void print_segment_v0(const vast::fbs::v0::Segment* segment) {
+void print_segment_v0(const vast::fbs::segment::v0* segment) {
   vast::uuid id;
   if (segment->uuid())
     unpack(*segment->uuid(), id);
@@ -296,9 +296,9 @@ void print_segment(vast::path path) {
     std::cout << "(invalid file identifier)\n";
     return;
   }
-  switch (segment->versioned_segment_type()) {
-    case vast::fbs::SegmentUnion::v0_Segment:
-      print_segment_v0(segment->versioned_segment_as_v0_Segment());
+  switch (segment->segment_type()) {
+    case vast::fbs::segment::Segment::v0:
+      print_segment_v0(segment->segment_as_v0());
       break;
     default:
       std::cout << "(unknown partition version)\n";

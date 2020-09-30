@@ -55,17 +55,16 @@ segment segment_builder::finish() {
   auto table_slices_offset = builder_.CreateVector(flat_slices_);
   auto uuid_offset = pack(builder_, id_);
   auto ids_offset = builder_.CreateVectorOfStructs(intervals_);
-  fbs::v0::SegmentBuilder segment_v0_builder{builder_};
-  segment_v0_builder.add_version(fbs::v0::Version::v0);
+  fbs::segment::v0Builder segment_v0_builder{builder_};
+  segment_v0_builder.add_version(fbs::Version::v0);
   segment_v0_builder.add_slices(table_slices_offset);
   segment_v0_builder.add_uuid(*uuid_offset);
   segment_v0_builder.add_ids(ids_offset);
   segment_v0_builder.add_events(num_events_);
   auto segment_v0_offset = segment_v0_builder.Finish();
   fbs::SegmentBuilder segment_builder{builder_};
-  segment_builder.add_versioned_segment_type(
-    vast::fbs::SegmentUnion::v0_Segment);
-  segment_builder.add_versioned_segment(segment_v0_offset.Union());
+  segment_builder.add_segment_type(vast::fbs::segment::Segment::v0);
+  segment_builder.add_segment(segment_v0_offset.Union());
   auto segment_offset = segment_builder.Finish();
   fbs::FinishSegmentBuffer(builder_, segment_offset);
   auto chk = fbs::release(builder_);

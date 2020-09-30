@@ -39,19 +39,19 @@ caf::expected<segment> segment::make(chunk_ptr chunk) {
   VAST_ASSERT(chunk != nullptr);
   auto s = fbs::GetSegment(chunk->data());
   VAST_ASSERT(s); // `GetSegment` is just a cast, so this cant become null.
-  if (s->versioned_segment_type() != fbs::SegmentUnion::v0_Segment)
+  if (s->segment_type() != fbs::segment::Segment::v0)
     return make_error(ec::format_error, "unsupported segment version");
-  auto vs = s->versioned_segment_as_v0_Segment();
+  auto vs = s->segment_as_v0();
   // This check is an artifact from an earlier flatbuffer versioning
   // scheme, where the version was stored as an inline field.
-  if (vs->version() != fbs::v0::Version::v0)
+  if (vs->version() != fbs::Version::v0)
     return make_error(ec::format_error, "invalid v0 segment layout");
   return segment{std::move(chunk)};
 }
 
 uuid segment::id() const {
   auto segment = fbs::GetSegment(chunk_->data());
-  auto segment_v0 = segment->versioned_segment_as_v0_Segment();
+  auto segment_v0 = segment->segment_as_v0();
   uuid result;
   if (auto error = unpack(*segment_v0->uuid(), result))
     VAST_ERROR_ANON("couldnt get uuid from segment:", error);
@@ -61,7 +61,7 @@ uuid segment::id() const {
 vast::ids segment::ids() const {
   vast::ids result;
   auto segment = fbs::GetSegment(chunk_->data());
-  auto segment_v0 = segment->versioned_segment_as_v0_Segment();
+  auto segment_v0 = segment->segment_as_v0();
   for (auto buffer : *segment_v0->slices()) {
     auto slice = buffer->data_nested_root();
     result.append_bits(false, slice->offset() - result.size());
@@ -72,7 +72,7 @@ vast::ids segment::ids() const {
 
 size_t segment::num_slices() const {
   auto segment = fbs::GetSegment(chunk_->data());
-  auto segment_v0 = segment->versioned_segment_as_v0_Segment();
+  auto segment_v0 = segment->segment_as_v0();
   return segment_v0->slices()->size();
 }
 
@@ -98,7 +98,7 @@ segment::lookup(const vast::ids& xs) const {
     return caf::none;
   };
   auto segment = fbs::GetSegment(chunk_->data());
-  auto segment_v0 = segment->versioned_segment_as_v0_Segment();
+  auto segment_v0 = segment->segment_as_v0();
   auto begin = segment_v0->slices()->begin();
   auto end = segment_v0->slices()->end();
   if (auto error = select_with(xs, begin, end, f, g))

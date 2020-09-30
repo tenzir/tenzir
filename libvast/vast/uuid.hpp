@@ -79,10 +79,10 @@ private:
 
 // flatbuffer support
 
-caf::expected<flatbuffers::Offset<fbs::v0::UUID>>
+caf::expected<flatbuffers::Offset<fbs::uuid::v0>>
 pack(flatbuffers::FlatBufferBuilder& builder, const uuid& x);
 
-caf::error unpack(const fbs::v0::UUID& x, uuid& y);
+caf::error unpack(const fbs::uuid::v0& x, uuid& y);
 
 } // namespace vast
 

@@ -208,7 +208,7 @@ caf::settings& meta_index::factory_options() {
   return synopsis_options_;
 }
 
-caf::expected<flatbuffers::Offset<fbs::v0::MetaIndex>>
+caf::expected<flatbuffers::Offset<fbs::meta_index::v0>>
 pack(flatbuffers::FlatBufferBuilder& builder, const meta_index& x) {
   std::vector<char> buffer;
   caf::binary_serializer sink{nullptr, buffer};
@@ -216,20 +216,20 @@ pack(flatbuffers::FlatBufferBuilder& builder, const meta_index& x) {
     return error;
   auto data_ptr = reinterpret_cast<const uint8_t*>(buffer.data());
   auto data = builder.CreateVector(data_ptr, buffer.size());
-  fbs::v0::MetaIndexBuilder meta_index_builder{builder};
+  fbs::meta_index::v0Builder meta_index_builder{builder};
   meta_index_builder.add_state(data);
   return meta_index_builder.Finish();
 }
 
-caf::error unpack(const fbs::v0::MetaIndex& x, meta_index& y) {
+caf::error unpack(const fbs::meta_index::v0& x, meta_index& y) {
   auto ptr = reinterpret_cast<const char*>(x.state()->Data());
   caf::binary_deserializer source{nullptr, ptr, x.state()->size()};
   return source(y);
 }
 
-caf::expected<flatbuffers::Offset<fbs::v0::PartitionSynopsis>>
+caf::expected<flatbuffers::Offset<fbs::partition_synopsis::v0>>
 pack(flatbuffers::FlatBufferBuilder& builder, const partition_synopsis& x) {
-  std::vector<flatbuffers::Offset<fbs::v0::Synopsis>> synopses;
+  std::vector<flatbuffers::Offset<fbs::synopsis::v0>> synopses;
   for (auto& [fqf, synopsis] : x) {
     auto maybe_synopsis = pack(builder, synopsis, fqf);
     if (!maybe_synopsis)
@@ -237,12 +237,13 @@ pack(flatbuffers::FlatBufferBuilder& builder, const partition_synopsis& x) {
     synopses.push_back(*maybe_synopsis);
   }
   auto synopses_vector = builder.CreateVector(synopses);
-  fbs::v0::PartitionSynopsisBuilder ps_builder(builder);
+  fbs::partition_synopsis::v0Builder ps_builder(builder);
   ps_builder.add_synopses(synopses_vector);
   return ps_builder.Finish();
 }
 
-caf::error unpack(const fbs::v0::PartitionSynopsis& x, partition_synopsis& ps) {
+caf::error
+unpack(const fbs::partition_synopsis::v0& x, partition_synopsis& ps) {
   if (!x.synopses())
     return make_error(ec::format_error, "missing synopses");
   for (auto synopsis : *x.synopses()) {

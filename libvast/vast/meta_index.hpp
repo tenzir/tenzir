@@ -37,7 +37,7 @@ namespace vast {
 namespace system {
 
 // Forward declaration to be able to `friend` this function.
-caf::expected<flatbuffers::Offset<fbs::v1::Partition>>
+caf::expected<flatbuffers::Offset<fbs::partition::v1>>
 pack(flatbuffers::FlatBufferBuilder& builder,
      const system::active_partition_state& x);
 
@@ -86,7 +86,7 @@ public:
   }
 
   // Allow the partition to directly serialize the relevant synopses.
-  friend caf::expected<flatbuffers::Offset<fbs::v1::Partition>>
+  friend caf::expected<flatbuffers::Offset<fbs::partition::v1>>
   vast::system::pack(flatbuffers::FlatBufferBuilder& builder,
                      const system::active_partition_state& x);
 
@@ -101,14 +101,14 @@ private:
 // -- flatbuffer ---------------------------------------------------------------
 
 // TODO: Move these into some 'legacy' flatbuffer section
-caf::expected<flatbuffers::Offset<fbs::v0::MetaIndex>>
+caf::expected<flatbuffers::Offset<fbs::meta_index::v0>>
 pack(flatbuffers::FlatBufferBuilder& builder, const meta_index& x);
 
-caf::error unpack(const fbs::v0::MetaIndex& x, meta_index& y);
+caf::error unpack(const fbs::meta_index::v0& x, meta_index& y);
 
-caf::expected<flatbuffers::Offset<fbs::v0::PartitionSynopsis>>
+caf::expected<flatbuffers::Offset<fbs::partition_synopsis::v0>>
 pack(flatbuffers::FlatBufferBuilder& builder, const partition_synopsis&);
 
-caf::error unpack(const fbs::v0::PartitionSynopsis&, partition_synopsis&);
+caf::error unpack(const fbs::partition_synopsis::v0&, partition_synopsis&);
 
 } // namespace vast
