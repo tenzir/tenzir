@@ -14,11 +14,11 @@
 #pragma once
 
 #include "vast/detail/operators.hpp"
+#include "vast/detail/stable_set.hpp"
 #include "vast/type.hpp"
 
 #include <caf/expected.hpp>
 
-#include <set>
 #include <string>
 #include <vector>
 
@@ -84,9 +84,16 @@ bool convert(const schema& s, json& j);
 
 caf::expected<schema> load_schema(const path& sf);
 
-caf::expected<vast::schema> load_schema(const std::set<path>& data_paths);
+/// Loads *.schema files from the given directories.
+/// @param schema_dirs The directories to load schemas from.
+/// @note Schemas from the same directory are merged, but directories are
+/// combined. It is designed so types that exist in later paths can override the
+/// earlier ones, but the same mechanism makes no sense inside of a single
+/// directory unless we specify a specific order of traversal.
+caf::expected<vast::schema>
+load_schema(const detail::stable_set<path>& schema_dirs);
 
-caf::expected<schema> get_schema(const caf::settings& options,
-                                 const std::string& category);
+caf::expected<schema>
+get_schema(const caf::settings& options, const std::string& category);
 
 } // namespace vast

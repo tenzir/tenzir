@@ -13,6 +13,7 @@
 
 #include "vast/config.hpp"
 #include "vast/detail/process.hpp"
+#include "vast/detail/stable_set.hpp"
 #include "vast/detail/system.hpp"
 #include "vast/error.hpp"
 #include "vast/event_types.hpp"
@@ -30,7 +31,6 @@
 
 #include <cstdlib>
 #include <iostream>
-#include <set>
 #include <string>
 #include <vector>
 
@@ -76,7 +76,7 @@ int main(int argc, char** argv) {
   for (auto& path : cfg.config_files)
     VAST_INFO_ANON("loaded configuration file:", path);
   using string_list = std::vector<std::string>;
-  auto schema_dirs = std::set<vast::path>{};
+  auto schema_dirs = detail::stable_set<vast::path>{};
   if (!caf::get_or(cfg, "vast.no-default-schema", false)) {
     // Get filesystem path to the executable.
     auto binary = detail::objectpath();
@@ -97,7 +97,7 @@ int main(int argc, char** argv) {
     std::copy(user_dirs->begin(), user_dirs->end(),
               std::inserter(schema_dirs, schema_dirs.end()));
   // Load event types.
-  if (auto schema = load_schema(schema_dirs)) {
+  if (auto schema = load_schema(std::move(schema_dirs))) {
     event_types::init(*std::move(schema));
   } else {
     VAST_ERROR_ANON("failed to read schema dirs:", render(schema.error()));
