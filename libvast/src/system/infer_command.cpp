@@ -125,7 +125,8 @@ caf::expected<schema> infer_json(const std::string& input) {
   using namespace vast;
   // Try JSONLD.
   auto lines = detail::split(input, "\r\n");
-  VAST_ASSERT(!lines.empty());
+  if (lines.empty())
+    return make_error(ec::parse_error, "failed to get first line of input");
   auto x = to<json>(lines[0]);
   if (!x)
     return make_error(ec::parse_error, "failed to parse JSON value");
@@ -165,16 +166,14 @@ infer_command(const invocation& inv, [[maybe_unused]] caf::actor_system& sys) {
   auto bytes_read = detail::narrow_cast<size_t>(stream.gcount());
   VAST_ASSERT(bytes_read <= buffer_size);
   buffer.resize(bytes_read);
-  VAST_DEBUG(inv.full_name, "tries Zeek TSV");
   auto schema = infer<format::zeek::reader>(buffer, options);
   if (schema)
     return show(*schema);
-  VAST_DEBUG(inv.full_name, "failed:", sys.render(schema.error()));
-  VAST_DEBUG(inv.full_name, "tries JSON");
+  VAST_INFO(inv.full_name, "failed to infer Zeek TSV:", render(schema.error()));
   schema = infer_json(buffer);
   if (schema)
     return show(*schema);
-  VAST_DEBUG(inv.full_name, "failed:", sys.render(schema.error()));
+  VAST_INFO(inv.full_name, "failed to infer JSON:", render(schema.error()));
   // Failing to infer the input is not an error.
   return caf::none;
 }
