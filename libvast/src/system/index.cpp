@@ -365,7 +365,7 @@ path index_state::index_filename(path basename) const {
   return basename / dir / "index.bin";
 }
 
-caf::expected<flatbuffers::Offset<fbs::index::v0>>
+caf::expected<flatbuffers::Offset<fbs::Index>>
 pack(flatbuffers::FlatBufferBuilder& builder, const index_state& state) {
   VAST_DEBUG(state.self, "persists", state.persisted_partitions.size(),
              "uuids of definitely persisted and", state.unpersisted.size(),
@@ -398,10 +398,16 @@ pack(flatbuffers::FlatBufferBuilder& builder, const index_state& state) {
     stats_offsets.push_back(offset);
   }
   auto stats = builder.CreateVector(stats_offsets);
-  fbs::index::v0Builder index_builder(builder);
-  index_builder.add_partitions(partitions);
-  index_builder.add_stats(stats);
-  return index_builder.Finish();
+  fbs::index::v0Builder v0_builder(builder);
+  v0_builder.add_partitions(partitions);
+  v0_builder.add_stats(stats);
+  auto index_v0 = v0_builder.Finish();
+  fbs::IndexBuilder index_builder(builder);
+  index_builder.add_index_type(vast::fbs::index::Index::v0);
+  index_builder.add_index(index_v0.Union());
+  auto index = index_builder.Finish();
+  fbs::FinishIndexBuffer(builder, index);
+  return index;
 }
 
 /// Persists the state to disk.
@@ -412,11 +418,6 @@ void index_state::flush_to_disk() {
     VAST_WARNING(self, "failed to pack index:", render(index.error()));
     return;
   }
-  fbs::IndexBuilder vindex_builder(*builder);
-  vindex_builder.add_index_type(vast::fbs::index::Index::v0);
-  vindex_builder.add_index(index->Union());
-  auto vindex = vindex_builder.Finish();
-  fbs::FinishIndexBuffer(*builder, vindex);
   auto ptr = builder.get();
   auto buffer = builder->GetBufferPointer();
   auto size = builder->GetSize();

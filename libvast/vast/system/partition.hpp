@@ -158,7 +158,7 @@ struct passive_partition_state {
 
 // Flatbuffer support
 
-caf::expected<flatbuffers::Offset<fbs::partition::v0>>
+caf::expected<flatbuffers::Offset<fbs::Partition>>
 pack(flatbuffers::FlatBufferBuilder& builder, const active_partition_state& x);
 
 caf::error unpack(const fbs::partition::v0& x, passive_partition_state& y);

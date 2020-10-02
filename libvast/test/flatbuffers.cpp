@@ -71,13 +71,9 @@ TEST(index roundtrip) {
   state.stats.layouts["zeek.conn"] = vast::system::layout_statistics{54931u};
   // Serialize the index.
   flatbuffers::FlatBufferBuilder builder;
-  auto index_v0 = pack(builder, state);
-  REQUIRE(index_v0);
-  vast::fbs::IndexBuilder index_builder(builder);
-  index_builder.add_index_type(vast::fbs::index::Index::v0);
-  index_builder.add_index(index_v0->Union());
-  auto index = index_builder.Finish();
-  vast::fbs::FinishIndexBuffer(builder, index);
+  auto index = pack(builder, state);
+  REQUIRE(index);
+  vast::fbs::FinishIndexBuffer(builder, *index);
   auto fb = builder.GetBufferPointer();
   auto sz = builder.GetSize();
   auto span = vast::span(fb, sz);
@@ -128,13 +124,9 @@ TEST(empty partition roundtrip) {
   // Serialize partition.
   flatbuffers::FlatBufferBuilder builder;
   {
-    auto partition_v0 = pack(builder, state);
-    REQUIRE(partition_v0);
-    vast::fbs::PartitionBuilder partition_builder(builder);
-    partition_builder.add_partition_type(vast::fbs::partition::Partition::v0);
-    partition_builder.add_partition(partition_v0->Union());
-    auto partition = partition_builder.Finish();
-    vast::fbs::FinishPartitionBuffer(builder, partition);
+    auto partition = pack(builder, state);
+    REQUIRE(partition);
+    vast::fbs::FinishPartitionBuffer(builder, *partition);
   }
   auto ptr = builder.GetBufferPointer();
   auto sz = builder.GetSize();

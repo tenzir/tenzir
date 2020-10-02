@@ -190,7 +190,7 @@ bool partition_selector::operator()(const vast::qualified_record_field& filter,
   return filter == fqf;
 }
 
-caf::expected<flatbuffers::Offset<fbs::partition::v0>>
+caf::expected<flatbuffers::Offset<fbs::Partition>>
 pack(flatbuffers::FlatBufferBuilder& builder, const active_partition_state& x) {
   auto uuid = pack(builder, x.id);
   if (!uuid)
@@ -240,15 +240,21 @@ pack(flatbuffers::FlatBufferBuilder& builder, const active_partition_state& x) {
   auto maybe_ps = pack(builder, partition_synopsis);
   if (!maybe_ps)
     return maybe_ps.error();
-  fbs::partition::v0Builder partition_builder(builder);
-  partition_builder.add_uuid(*uuid);
-  partition_builder.add_offset(x.offset);
-  partition_builder.add_events(x.events);
-  partition_builder.add_indexes(indexes);
-  partition_builder.add_partition_synopsis(*maybe_ps);
-  partition_builder.add_combined_layout(*combined_layout);
-  partition_builder.add_type_ids(type_ids);
-  return partition_builder.Finish();
+  fbs::partition::v0Builder v0_builder(builder);
+  v0_builder.add_uuid(*uuid);
+  v0_builder.add_offset(x.offset);
+  v0_builder.add_events(x.events);
+  v0_builder.add_indexes(indexes);
+  v0_builder.add_partition_synopsis(*maybe_ps);
+  v0_builder.add_combined_layout(*combined_layout);
+  v0_builder.add_type_ids(type_ids);
+  auto partition_v0 = v0_builder.Finish();
+  fbs::PartitionBuilder partition_builder(builder);
+  partition_builder.add_partition_type(vast::fbs::partition::Partition::v0);
+  partition_builder.add_partition(partition_v0.Union());
+  auto partition = partition_builder.Finish();
+  fbs::FinishPartitionBuffer(builder, partition);
+  return partition;
 }
 
 caf::error
@@ -488,12 +494,6 @@ active_partition(caf::stateful_actor<active_partition_state>* self, uuid id,
         self->state.persistence_promise.deliver(partition.error());
         return;
       }
-      fbs::PartitionBuilder vpartition_builder(builder);
-      vpartition_builder.add_partition_type(
-        vast::fbs::partition::Partition::v0);
-      vpartition_builder.add_partition(partition->Union());
-      auto vpartition = vpartition_builder.Finish();
-      fbs::FinishPartitionBuffer(builder, vpartition);
       VAST_ASSERT(self->state.persist_path);
       auto fb = builder.Release();
       // TODO: This is duplicating code from one of the `chunk` constructors,
