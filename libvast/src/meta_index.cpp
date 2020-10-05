@@ -88,7 +88,7 @@ std::vector<uuid> meta_index::lookup(const expression& expr) const {
     std::sort(memoized_partitions.begin(), memoized_partitions.end());
     return memoized_partitions;
   };
-  auto f = detail::overload(
+  auto f = detail::overload{
     [&](const conjunction& x) -> result_type {
       VAST_ASSERT(!x.empty());
       auto i = x.begin();
@@ -149,7 +149,7 @@ std::vector<uuid> meta_index::lookup(const expression& expr) const {
         std::sort(result.begin(), result.end());
         return found_matching_synopsis ? result : all_partitions();
       };
-      auto extract_expr = detail::overload(
+      auto extract_expr = detail::overload{
         [&](const attribute_extractor& lhs, const data& d) -> result_type {
           if (lhs.attr == atom::timestamp_v) {
             auto pred = [](auto& field) {
@@ -193,14 +193,16 @@ std::vector<uuid> meta_index::lookup(const expression& expr) const {
         [&](const auto&, const auto&) -> result_type {
           VAST_WARNING(this, "cannot process predicate:", x);
           return all_partitions();
-        });
+        },
+      };
       return caf::visit(extract_expr, x.lhs, x.rhs);
     },
     [&](caf::none_t) -> result_type {
       VAST_ERROR(this, "received an empty expression");
       VAST_ASSERT(!"invalid expression");
       return all_partitions();
-    });
+    },
+  };
   return caf::visit(f, expr);
 }
 

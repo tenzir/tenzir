@@ -152,19 +152,25 @@ auto make_signed_visitor(F f = {}) {
     using signed_type = std::make_signed_t<decltype(x)>;
     return f(static_cast<signed_type>(x));
   };
-  return detail::overload(make_data_view_lambda<uint8_t>(g), // for 0
-                          make_data_view_lambda<int8_t>(g),
-                          make_data_view_lambda<int16_t>(g),
-                          make_data_view_lambda<int32_t>(g),
-                          make_data_view_lambda<int64_t>(g), make_none_view());
+  return detail::overload{
+    make_data_view_lambda<uint8_t>(g), // for 0
+    make_data_view_lambda<int8_t>(g),
+    make_data_view_lambda<int16_t>(g),
+    make_data_view_lambda<int32_t>(g),
+    make_data_view_lambda<int64_t>(g),
+    make_none_view(),
+  };
 }
 
 template <class F = identity>
 auto make_unsigned_visitor(F f = {}) {
-  return detail::overload(make_data_view_lambda<uint8_t>(f),
-                          make_data_view_lambda<uint16_t>(f),
-                          make_data_view_lambda<uint32_t>(f),
-                          make_data_view_lambda<uint64_t>(f), make_none_view());
+  return detail::overload{
+    make_data_view_lambda<uint8_t>(f),
+    make_data_view_lambda<uint16_t>(f),
+    make_data_view_lambda<uint32_t>(f),
+    make_data_view_lambda<uint64_t>(f),
+    make_none_view(),
+  };
 }
 
 // Decodes a data view from one or more objects.

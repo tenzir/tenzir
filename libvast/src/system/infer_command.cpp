@@ -67,14 +67,9 @@ infer(const std::string& input, const caf::settings& options) {
 
 type deduce(const json& j) {
   using namespace vast;
-  // clang-format off
-  auto f = detail::overload(
-    [](json::null) {
-      return type{};
-    },
-    [](json::boolean) -> type {
-      return bool_type{};
-    },
+  auto f = detail::overload{
+    [](json::null) { return type{}; },
+    [](json::boolean) -> type { return bool_type{}; },
     [](json::number x) -> type {
       // TODO: we should include the string representation of the value to make
       // a good guess because at this point we no longer know whether the input
@@ -116,8 +111,8 @@ type deduce(const json& j) {
       if (xs.empty())
         return {};
       return result;
-    });
-  // clang-format on
+    },
+  };
   return caf::visit(f, j);
 }
 

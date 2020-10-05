@@ -51,8 +51,10 @@ struct fixture {
 
 template <class T>
 void check_value(object o, T x) {
-  visit(detail::overload([](auto) { FAIL("invalid type dispatch"); },
-                         [=](T y) { CHECK_EQUAL(y, x); }),
+  visit(detail::overload{
+          [](auto) { FAIL("invalid type dispatch"); },
+          [=](T y) { CHECK_EQUAL(y, x); },
+        },
         o);
 }
 

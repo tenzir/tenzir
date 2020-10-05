@@ -154,9 +154,10 @@ caf::error configuration::parse(int argc, char** argv) {
          const caf::config_value val) -> caf::expected<caf::config_value> {
     // Hackish way to get a string representation that doesn't add double
     // quotes around the value.
-    auto no_quote_stringify
-      = detail::overload([](const auto& x) { return caf::deep_to_string(x); },
-                         [](const std::string& x) { return x; });
+    auto no_quote_stringify = detail::overload{
+      [](const auto& x) { return caf::deep_to_string(x); },
+      [](const std::string& x) { return x; },
+    };
     auto str = caf::visit(no_quote_stringify, val);
     auto result = opt.parse(str);
     if (!result) {

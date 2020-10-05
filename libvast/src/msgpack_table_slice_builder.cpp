@@ -52,7 +52,7 @@ namespace {
 template <class Builder, class View>
 size_t encode(Builder& builder, View v) {
   using namespace msgpack;
-  auto f = detail::overload(
+  auto f = detail::overload{
     [&](auto x) { return put(builder, x); },
     [&](view<duration> x) { return put(builder, x.count()); },
     [&](view<time> x) { return put(builder, x.time_since_epoch().count()); },
@@ -101,7 +101,8 @@ size_t encode(Builder& builder, View v) {
         result += n;
       }
       return result;
-    });
+    },
+  };
   return f(v);
 }
 

@@ -57,7 +57,7 @@ bool operator<(pattern_view x, pattern_view y) noexcept {
 bool is_equal(const data& x, const data_view& y) {
   auto pred
     = [](const auto& lhs, const auto& rhs) { return is_equal(lhs, rhs); };
-  auto f = detail::overload(
+  auto f = detail::overload{
     [&](const auto& lhs, const auto& rhs) {
       using lhs_type = std::decay_t<decltype(lhs)>;
       using rhs_type = std::decay_t<decltype(rhs)>;
@@ -83,7 +83,8 @@ bool is_equal(const data& x, const data_view& y) {
         return xs.first == ys.first && is_equal(xs.second, ys.second);
       };
       return std::equal(lhs.begin(), lhs.end(), rhs.begin(), rhs.end(), f);
-    });
+    },
+  };
   return caf::visit(f, x, y);
 }
 
@@ -192,7 +193,7 @@ data materialize(data_view x) {
 // WARNING: making changes to the logic of this function requires adapting the
 // companion overload in type.cpp.
 bool type_check(const type& t, const data_view& x) {
-  auto f = detail::overload(
+  auto f = detail::overload{
     [&](const auto& u) {
       using data_type = type_to_data<std::decay_t<decltype(u)>>;
       return caf::holds_alternative<view<data_type>>(x);
@@ -210,7 +211,7 @@ bool type_check(const type& t, const data_view& x) {
       if (!v)
         return false;
       auto& xs = **v;
-      return xs.empty() || type_check(u.value_type,  xs.at(0));
+      return xs.empty() || type_check(u.value_type, xs.at(0));
     },
     [&](const map_type& u) {
       auto v = caf::get_if<view<map>>(&x);
@@ -235,7 +236,8 @@ bool type_check(const type& t, const data_view& x) {
           return false;
       return true;
     },
-    [&](const alias_type& u) { return type_check(u.value_type, x); });
+    [&](const alias_type& u) { return type_check(u.value_type, x); },
+  };
   return caf::holds_alternative<caf::none_t>(x) || caf::visit(f, t);
 }
 
@@ -287,11 +289,12 @@ struct contains_predicate {
 bool evaluate_view(const data_view& lhs, relational_operator op,
                    const data_view& rhs) {
   auto check_match = [](const auto& x, const auto& y) {
-    return caf::visit(detail::overload([](auto, auto) { return false; },
-                                       [](view<std::string>& lhs,
-                                          view<pattern> rhs) {
-                                         return rhs.match(lhs);
-                                       }),
+    return caf::visit(detail::overload{
+                        [](auto, auto) { return false; },
+                        [](view<std::string>& lhs, view<pattern> rhs) {
+                          return rhs.match(lhs);
+                        },
+                      },
                       x, y);
   };
   auto check_in = [](const auto& x, const auto& y) {
@@ -329,18 +332,19 @@ bool evaluate_view(const data_view& lhs, relational_operator op,
 }
 
 data_view to_canonical(const type& t, const data_view& x) {
-  auto v = detail::overload(
+  auto v = detail::overload{
     [](const view<enumeration>& x, const enumeration_type& t) -> data_view {
       if (materialize(x) >= t.fields.size())
         return caf::none;
       return make_view(t.fields[materialize(x)]);
     },
-    [&](auto&, auto&) { return x; });
+    [&](auto&, auto&) { return x; },
+  };
   return caf::visit(v, x, t);
 }
 
 data_view to_internal(const type& t, const data_view& x) {
-  auto v = detail::overload(
+  auto v = detail::overload{
     [](const view<std::string>& s, const enumeration_type& t) -> data_view {
       auto i = std::find(t.fields.begin(), t.fields.end(), s);
       if (i == t.fields.end())
@@ -348,7 +352,8 @@ data_view to_internal(const type& t, const data_view& x) {
       return detail::narrow_cast<enumeration>(
         std::distance(t.fields.begin(), i));
     },
-    [&](auto&, auto&) { return x; });
+    [&](auto&, auto&) { return x; },
+  };
   return caf::visit(v, x, t);
 }
 

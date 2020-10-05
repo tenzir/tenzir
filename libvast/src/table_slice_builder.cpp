@@ -30,7 +30,7 @@ table_slice_builder::~table_slice_builder() {
 
 bool table_slice_builder::recursive_add(const data& x, const type& t) {
   return caf::visit(
-    detail::overload(
+    detail::overload{
       [&](const list& xs, const record_type& rt) {
         for (size_t i = 0; i < xs.size(); ++i) {
           if (!recursive_add(xs[i], rt.fields[i].type))
@@ -38,7 +38,8 @@ bool table_slice_builder::recursive_add(const data& x, const type& t) {
         }
         return true;
       },
-      [&](const auto&, const auto&) { return add(make_view(x)); }),
+      [&](const auto&, const auto&) { return add(make_view(x)); },
+    },
     x, t);
 }
 

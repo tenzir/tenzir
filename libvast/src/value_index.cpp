@@ -190,7 +190,7 @@ bool string_index::append_impl(data_view x, id pos) {
 caf::expected<ids>
 string_index::lookup_impl(relational_operator op, data_view x) const {
   return caf::visit(
-    detail::overload(
+    detail::overload{
       [&](auto x) -> caf::expected<ids> {
         return make_error(ec::type_clash, materialize(x));
       },
@@ -252,7 +252,8 @@ string_index::lookup_impl(relational_operator op, data_view x) const {
           }
         }
       },
-      [&](view<list> xs) { return detail::container_lookup(*this, op, xs); }),
+      [&](view<list> xs) { return detail::container_lookup(*this, op, xs); },
+    },
     x);
 }
 
@@ -286,7 +287,7 @@ bool enumeration_index::append_impl(data_view x, id pos) {
 caf::expected<ids>
 enumeration_index::lookup_impl(relational_operator op, data_view d) const {
   return caf::visit(
-    detail::overload(
+    detail::overload{
       [&](auto x) -> caf::expected<ids> {
         return make_error(ec::type_clash, materialize(x));
       },
@@ -295,7 +296,8 @@ enumeration_index::lookup_impl(relational_operator op, data_view d) const {
           return make_error(ec::unsupported_operator, op);
         return index_.lookup(op, x);
       },
-      [&](view<list> xs) { return detail::container_lookup(*this, op, xs); }),
+      [&](view<list> xs) { return detail::container_lookup(*this, op, xs); },
+    },
     d);
 }
 
@@ -333,7 +335,7 @@ bool address_index::append_impl(data_view x, id pos) {
 caf::expected<ids>
 address_index::lookup_impl(relational_operator op, data_view d) const {
   return caf::visit(
-    detail::overload(
+    detail::overload{
       [&](auto x) -> caf::expected<ids> {
         return make_error(ec::type_clash, materialize(x));
       },
@@ -377,7 +379,8 @@ address_index::lookup_impl(relational_operator op, data_view d) const {
           result.flip();
         return result;
       },
-      [&](view<list> xs) { return detail::container_lookup(*this, op, xs); }),
+      [&](view<list> xs) { return detail::container_lookup(*this, op, xs); },
+    },
     d);
 }
 
@@ -412,7 +415,7 @@ bool subnet_index::append_impl(data_view x, id pos) {
 caf::expected<ids>
 subnet_index::lookup_impl(relational_operator op, data_view d) const {
   return caf::visit(
-    detail::overload(
+    detail::overload{
       [&](auto x) -> caf::expected<ids> {
         return make_error(ec::type_clash, materialize(x));
       },
@@ -482,7 +485,8 @@ subnet_index::lookup_impl(relational_operator op, data_view d) const {
           }
         }
       },
-      [&](view<list> xs) { return detail::container_lookup(*this, op, xs); }),
+      [&](view<list> xs) { return detail::container_lookup(*this, op, xs); },
+    },
     d);
 }
 
@@ -520,7 +524,7 @@ bool port_index::append_impl(data_view x, id pos) {
 caf::expected<ids>
 port_index::lookup_impl(relational_operator op, data_view d) const {
   return caf::visit(
-    detail::overload(
+    detail::overload{
       [&](auto x) -> caf::expected<ids> {
         return make_error(ec::type_clash, materialize(x));
       },
@@ -538,7 +542,8 @@ port_index::lookup_impl(relational_operator op, data_view d) const {
         }
         return result;
       },
-      [&](view<list> xs) { return detail::container_lookup(*this, op, xs); }),
+      [&](view<list> xs) { return detail::container_lookup(*this, op, xs); },
+    },
     d);
 }
 
@@ -548,8 +553,10 @@ list_index::list_index(vast::type t, caf::settings opts)
   : value_index{std::move(t), std::move(opts)} {
   max_size_ = caf::get_or(options(), "max-size",
                           defaults::index::max_container_elements);
-  auto f = detail::overload([](const auto&) { return vast::type{}; },
-                            [](const list_type& x) { return x.value_type; });
+  auto f = detail::overload{
+    [](const auto&) { return vast::type{}; },
+    [](const list_type& x) { return x.value_type; },
+  };
   value_type_ = caf::visit(f, value_index::type());
   VAST_ASSERT(!caf::holds_alternative<none_type>(value_type_));
   size_t components = std::log10(max_size_);
