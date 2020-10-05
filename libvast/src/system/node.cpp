@@ -368,7 +368,7 @@ node_state::spawn_command(const invocation& inv,
   if (!component) {
     if (component.error())
       VAST_WARNING(__func__,
-                   "failed to spawn component:", to_string(component.error()));
+                   "failed to spawn component:", render(component.error()));
     rp.deliver(component.error());
     return caf::make_message(component.error());
   }

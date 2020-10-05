@@ -210,7 +210,7 @@ void print_partition_v1(vast::path path) {
 void print_partition(vast::path path) {
   auto bytes = vast::io::read(path);
   if (!bytes) {
-    std::cout << "(error: " << caf::to_string(bytes.error()) << ")\n";
+    std::cout << "(error: " << vast::render(bytes.error()) << ")\n";
     return;
   }
   auto view = vast::span<const vast::byte>(bytes->data(), bytes->size());
@@ -264,7 +264,7 @@ void print_index_v1(vast::path path) {
 void print_index(vast::path path) {
   auto bytes = vast::io::read(path);
   if (!bytes) {
-    std::cout << "(error: " << caf::to_string(bytes.error()) << ")\n";
+    std::cout << "(error: " << vast::render(bytes.error()) << ")\n";
     return;
   }
   auto view = vast::span<const vast::byte>(bytes->data(), bytes->size());
@@ -283,14 +283,14 @@ void print_segment_v0(vast::path path) {
   std::cout << "Segment v0" << std::endl;
   auto bytes = vast::io::read(path);
   if (!bytes) {
-    std::cout << "(error: " << caf::to_string(bytes.error()) << ")\n";
+    std::cout << "(error: " << vast::render(bytes.error()) << ")\n";
     return;
   }
   auto view = vast::span<const vast::byte>(bytes->data(), bytes->size());
   auto maybe_segment
     = vast::fbs::as_versioned_flatbuffer<Segment>(view, Version::v0);
   if (!maybe_segment) {
-    std::cout << "(error: " << caf::to_string(maybe_segment.error()) << ")\n";
+    std::cout << "(error: " << vast::render(maybe_segment.error()) << ")\n";
     return;
   }
   auto& segment = *maybe_segment;

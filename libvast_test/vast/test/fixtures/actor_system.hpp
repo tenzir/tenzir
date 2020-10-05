@@ -16,6 +16,7 @@
 #include "vast/test/fixtures/filesystem.hpp"
 #include "vast/test/test.hpp"
 
+#include "vast/error.hpp"
 #include "vast/system/configuration.hpp"
 
 #include <caf/actor.hpp>
@@ -45,7 +46,7 @@ struct actor_system : filesystem {
   ~actor_system();
 
   auto error_handler() {
-    return [&](const caf::error& e) { FAIL(sys.render(e)); };
+    return [&](const caf::error& e) { FAIL(vast::render(e)); };
   }
 
   test_configuration config;
@@ -63,7 +64,7 @@ struct deterministic_actor_system : test_node_fixture<test_node_base_fixture>,
   deterministic_actor_system();
 
   auto error_handler() {
-    return [&](const caf::error& e) { FAIL(sys.render(e)); };
+    return [&](const caf::error& e) { FAIL(vast::render(e)); };
   }
 
   template <class... Ts>
@@ -71,7 +72,7 @@ struct deterministic_actor_system : test_node_fixture<test_node_base_fixture>,
     std::vector<char> buf;
     caf::binary_serializer bs{sys.dummy_execution_unit(), buf};
     if (auto err = bs(xs...))
-      FAIL("error during serialization: " << sys.render(err));
+      FAIL("error during serialization: " << vast::render(err));
     return buf;
   }
 
@@ -79,7 +80,7 @@ struct deterministic_actor_system : test_node_fixture<test_node_base_fixture>,
   void deserialize(const std::vector<char>& buf, Ts&... xs) {
     caf::binary_deserializer bd{sys.dummy_execution_unit(), buf};
     if (auto err = bd(xs...))
-      FAIL("error during deserialization: " << sys.render(err));
+      FAIL("error during deserialization: " << vast::render(err));
   }
 
   template <class T>
