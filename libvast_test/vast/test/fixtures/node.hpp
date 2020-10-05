@@ -44,7 +44,7 @@ struct node : deterministic_actor_system_and_events {
     run();
     rh.receive([&](const actor& a) { result = a; },
                [&](const error& e) {
-                 FAIL("failed to spawn " << component << ": " << sys.render(e));
+                 FAIL("failed to spawn " << component << ": " << render(e));
                });
     return result;
   }

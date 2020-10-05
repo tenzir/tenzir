@@ -309,7 +309,7 @@ int main(int argc, char** argv) {
                    // timeout
                  },
                  [&]([[maybe_unused]] broker::error error) {
-                   VAST_ERROR_ANON(sys.render(error));
+                   VAST_ERROR_ANON(vast::render(error));
                  },
                  [&](broker::status status) {
                    if (status == broker::sc::peer_added)
@@ -332,7 +332,7 @@ int main(int argc, char** argv) {
     // Parse the Zeek query event.
     auto result = parse_query_event(data);
     if (!result) {
-      VAST_ERROR_ANON(sys.render(result.error()));
+      VAST_ERROR_ANON(vast::render(result.error()));
       continue;
     }
     auto& [query_id, expression] = *result;
