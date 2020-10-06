@@ -14,6 +14,7 @@
 #include "vast/system/start_command.hpp"
 
 #include "vast/config.hpp"
+#include "vast/systemd.hpp"
 
 #include <caf/actor_system_config.hpp>
 #include <caf/io/middleman.hpp>
@@ -93,6 +94,9 @@ caf::message start_command_impl(start_command_extra_steps extra_steps,
   std::thread sig_mon_thread;
   auto guard = system::signal_monitor::run_guarded(
     sig_mon_thread, sys, defaults::system::signal_monitoring_interval, self);
+  // Notify the service manager if it expects an update.
+  if (auto error = systemd::notify_ready())
+    return caf::make_message(std::move(error));
   // Run main loop.
   caf::error err;
   auto stop = false;

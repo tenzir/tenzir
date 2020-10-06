@@ -11,6 +11,11 @@ Every entry has a category for which we use the following visual abbreviations:
 
 ## Unreleased
 
+- 🎁 When running VAST under systemd supervision, it is now possible to use
+  the `Type=notify` directive in the unit file to let VAST notify
+  the service manager when it becomes ready.
+  [#1091](https://github.com/tenzir/vast/pull/1091)
+
 - 🐞 The lookup for schema directories now happens in a fixed order.
   [#1086](https://github.com/tenzir/vast/pull/1086)
 
