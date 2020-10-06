@@ -711,7 +711,7 @@ bool compatible(const data& lhs, relational_operator op, const type& rhs) {
 // WARNING: making changes to the logic of this function requires adapting the
 // companion overload in view.cpp.
 bool type_check(const type& t, const data& x) {
-  auto f = detail::overload(
+  auto f = detail::overload{
     [&](const auto& u) {
       using data_type = type_to_data<std::decay_t<decltype(u)>>;
       return caf::holds_alternative<data_type>(x);
@@ -752,12 +752,13 @@ bool type_check(const type& t, const data& x) {
       }
       return true;
     },
-    [&](const alias_type& u) { return type_check(u.value_type, x); });
+    [&](const alias_type& u) { return type_check(u.value_type, x); },
+  };
   return caf::holds_alternative<caf::none_t>(x) || caf::visit(f, t);
 }
 
 data construct(const type& x) {
-  return visit(detail::overload(
+  return visit(detail::overload{
                  [](const auto& y) {
                    return data{type_to_data<std::decay_t<decltype(y)>>{}};
                  },
@@ -770,7 +771,8 @@ data construct(const type& x) {
                                   });
                    return data{std::move(xs)};
                  },
-                 [](const alias_type& t) { return construct(t.value_type); }),
+                 [](const alias_type& t) { return construct(t.value_type); },
+               },
                x);
 }
 
@@ -792,7 +794,7 @@ using caf::detail::tl_size;
 static_assert(std::size(kind_tbl) == tl_size<concrete_types>::value);
 
 json jsonize(const type& x) {
-  return visit(detail::overload(
+  return visit(detail::overload{
                  [](const enumeration_type& t) {
                    json::array a;
                    std::transform(t.fields.begin(), t.fields.end(),
@@ -818,7 +820,8 @@ json jsonize(const type& x) {
                    return json{std::move(o)};
                  },
                  [&](const alias_type& t) { return to_json(t.value_type); },
-                 [](const abstract_type&) { return json{}; }),
+                 [](const abstract_type&) { return json{}; },
+               },
                x);
 }
 

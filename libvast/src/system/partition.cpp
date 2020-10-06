@@ -162,7 +162,7 @@ evaluate(const PartitionState& state, const expression& expr) {
     auto get_indexer_handle = [&](const auto& ext, const data& x) {
       return fetch_indexer(state, ext, pred.op, x);
     };
-    auto v = detail::overload(
+    auto v = detail::overload{
       [&](const attribute_extractor& ex, const data& x) {
         return get_indexer_handle(ex, x);
       },
@@ -171,7 +171,8 @@ evaluate(const PartitionState& state, const expression& expr) {
       },
       [](const auto&, const auto&) {
         return caf::actor{}; // clang-format fix
-      });
+      },
+    };
     // Package the predicate, its position in the query and the required
     // INDEXER as a "job description".
     if (auto hdl = caf::visit(v, pred.lhs, pred.rhs))

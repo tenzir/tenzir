@@ -17,19 +17,16 @@
 
 namespace vast::detail {
 
-/// Creates a set of overloaded functions. This utility function allows for
+/// Creates a set of overloaded functions. This utility struct allows for
 /// writing inline visitors without having to result to inversion of control.
-/// @param funs A list of function objects.
-/// @returns An overloaded function object representing the union of *funs*.
-template <class... Functions>
-auto overload(Functions... funs) {
-  struct lambda : Functions... {
-    lambda(Functions... funs) : Functions(std::move(funs))... {}
-    using Functions::operator()...;
-  };
-  return lambda(std::move(funs)...);
-}
+template <class... Ts>
+struct overload : Ts... {
+  using Ts::operator()...;
+};
 
+/// Explicit deduction guide for overload (not needed as of C++20).
+template <class... Ts>
+overload(Ts...) -> overload<Ts...>;
 
 } // namespace vast::detail
 

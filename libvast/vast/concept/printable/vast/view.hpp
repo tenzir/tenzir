@@ -52,16 +52,15 @@ struct data_view_printer : printer<data_view_printer> {
 
   template <class Iterator>
   bool print(Iterator& out, const attribute& d) const {
-    auto f = detail::overload(
+    auto f = detail::overload{
       [&](const auto& x) {
         return make_printer<std::decay_t<decltype(x)>>{}(out, x);
       },
       [&](const view<integer>& x) {
         return printers::integral<integer, policy::force_sign>(out, x);
       },
-      [&](const view<std::string>& x) {
-        return string_view_printer{}(out, x);
-      });
+      [&](const view<std::string>& x) { return string_view_printer{}(out, x); },
+    };
     return caf::visit(f, d);
   }
 };

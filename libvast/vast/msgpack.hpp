@@ -604,10 +604,11 @@ decltype(auto) visit(Visitor&& f, const object& x) {
 /// @relates object
 template <class T>
 caf::optional<T> get(const object& o) {
-  return visit(
-    vast::detail::overload([](auto&&) { return caf::optional<T>{}; },
-                           [](T x) { return caf::optional<T>{std::move(x)}; }),
-    o);
+  return visit(vast::detail::overload{
+                 [](auto&&) { return caf::optional<T>{}; },
+                 [](T x) { return caf::optional<T>{std::move(x)}; },
+               },
+               o);
 }
 
 /// A view over a sequence of objects. It is a sequential, single-pass

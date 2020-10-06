@@ -246,7 +246,7 @@ void each_field_impl(const json& x, F f,
     "f does not match the required signature");
   caf::visit(
     // This comment exists merely for clang-format.
-    detail::overload(
+    detail::overload{
       // For json objects we recurse deeper.
       [&](const json::object& obj) {
         for (const auto& [k, v] : obj) {
@@ -256,7 +256,8 @@ void each_field_impl(const json& x, F f,
         }
       },
       // For everything else, we have reached a leaf and invoke the functor.
-      [&](const auto& j) { std::invoke(std::move(f), prefix, json{j}); }),
+      [&](const auto& j) { std::invoke(std::move(f), prefix, json{j}); },
+    },
     x);
 }
 

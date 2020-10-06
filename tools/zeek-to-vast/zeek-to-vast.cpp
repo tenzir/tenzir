@@ -111,63 +111,63 @@ public:
 
 /// Converts VAST data to the corresponding Broker type.
 broker::data to_broker(const vast::data& data) {
-  return caf::
-    visit(vast::detail::overload(
-            [](const auto& x) -> broker::data { return x; },
-            [](caf::none_t) -> broker::data { return {}; },
-            [](const vast::pattern& x) -> broker::data { return x.string(); },
-            [](const vast::address& x) -> broker::data {
-              auto bytes = reinterpret_cast<const uint32_t*>(
-                std::launder(x.data().data()));
-              return broker::address{bytes, broker::address::family::ipv6,
-                                     broker::address::byte_order::network};
-            },
-            [](const vast::subnet& x) -> broker::data {
-              auto bytes = reinterpret_cast<const uint32_t*>(
-                std::launder(x.network().data().data()));
-              auto addr = broker::address{bytes, broker::address::family::ipv6,
-                                          broker::address::byte_order::network};
-              return broker::subnet(addr, x.length());
-            },
-            [](vast::port x) -> broker::data {
-              // We rely on the fact that port types don't change...ever.
-              auto protocol = static_cast<broker::port::protocol>(x.type());
-              return broker::port{x.number(), protocol};
-            },
-            [](vast::enumeration x) -> broker::data {
-              // FIXME: here we face two different implementation approaches for
-              // enums. To represent the actual enum value, Broker uses a string
-              // whereas VAST uses a 32-bit unsigned integer. We currently lose
-              // the type information by converting the VAST enum into a Broker
-              // count. A wholistic approach would include the type information
-              // for this data instance and perform the string conversion.
-              return broker::count{x};
-            },
-            [](const vast::list& xs) -> broker::data {
-              broker::vector result;
-              result.reserve(xs.size());
-              std::transform(xs.begin(), xs.end(), std::back_inserter(result),
-                             [](const auto& x) { return to_broker(x); });
-              return result;
-            },
-            [](const vast::map& xs) -> broker::data {
-              broker::table result;
-              auto f = [](const auto& x) {
-                return std::pair{to_broker(x.first), to_broker(x.second)};
-              };
-              std::transform(xs.begin(), xs.end(),
-                             std::inserter(result, result.end()), f);
-              return result;
-            },
-            [](const vast::record& xs) -> broker::data {
-              broker::vector result;
-              result.reserve(xs.size());
-              auto f = [](const auto& x) { return to_broker(x.second); };
-              std::transform(xs.begin(), xs.end(), std::back_inserter(result),
-                             f);
-              return result;
-            }),
-          data);
+  return caf::visit(
+    vast::detail::overload{
+      [](const auto& x) -> broker::data { return x; },
+      [](caf::none_t) -> broker::data { return {}; },
+      [](const vast::pattern& x) -> broker::data { return x.string(); },
+      [](const vast::address& x) -> broker::data {
+        auto bytes
+          = reinterpret_cast<const uint32_t*>(std::launder(x.data().data()));
+        return broker::address{bytes, broker::address::family::ipv6,
+                               broker::address::byte_order::network};
+      },
+      [](const vast::subnet& x) -> broker::data {
+        auto bytes = reinterpret_cast<const uint32_t*>(
+          std::launder(x.network().data().data()));
+        auto addr = broker::address{bytes, broker::address::family::ipv6,
+                                    broker::address::byte_order::network};
+        return broker::subnet(addr, x.length());
+      },
+      [](vast::port x) -> broker::data {
+        // We rely on the fact that port types don't change...ever.
+        auto protocol = static_cast<broker::port::protocol>(x.type());
+        return broker::port{x.number(), protocol};
+      },
+      [](vast::enumeration x) -> broker::data {
+        // FIXME: here we face two different implementation approaches for
+        // enums. To represent the actual enum value, Broker uses a string
+        // whereas VAST uses a 32-bit unsigned integer. We currently lose
+        // the type information by converting the VAST enum into a Broker
+        // count. A wholistic approach would include the type information
+        // for this data instance and perform the string conversion.
+        return broker::count{x};
+      },
+      [](const vast::list& xs) -> broker::data {
+        broker::vector result;
+        result.reserve(xs.size());
+        std::transform(xs.begin(), xs.end(), std::back_inserter(result),
+                       [](const auto& x) { return to_broker(x); });
+        return result;
+      },
+      [](const vast::map& xs) -> broker::data {
+        broker::table result;
+        auto f = [](const auto& x) {
+          return std::pair{to_broker(x.first), to_broker(x.second)};
+        };
+        std::transform(xs.begin(), xs.end(),
+                       std::inserter(result, result.end()), f);
+        return result;
+      },
+      [](const vast::record& xs) -> broker::data {
+        broker::vector result;
+        result.reserve(xs.size());
+        auto f = [](const auto& x) { return to_broker(x.second); };
+        std::transform(xs.begin(), xs.end(), std::back_inserter(result), f);
+        return result;
+      },
+    },
+    data);
 }
 
 // Constructs a result event for Zeek from Broker data.
@@ -304,7 +304,7 @@ int main(int argc, char** argv) {
       return -1;
     if (!msg)
       continue; // timeout
-    caf::visit(vast::detail::overload(
+    caf::visit(vast::detail::overload{
                  [&](broker::none) {
                    // timeout
                  },
@@ -316,7 +316,8 @@ int main(int argc, char** argv) {
                      peered = true;
                    else
                      VAST_ERROR_ANON(to_string(status));
-                 }),
+                 },
+               },
                *msg);
   };
   VAST_INFO_ANON("peered with Zeek successfully, waiting for commands");

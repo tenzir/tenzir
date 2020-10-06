@@ -253,23 +253,21 @@ private:
       bmi_.append(x);
       return true;
     };
-    auto f = detail::overload([&](auto&&) { return false; },
-                              [&](view<bool> x) { return append(x); },
-                              [&](view<integer> x) { return append(x); },
-                              [&](view<count> x) { return append(x); },
-                              [&](view<real> x) { return append(x); },
-                              [&](view<duration> x) {
-                                return append(x.count());
-                              },
-                              [&](view<time> x) {
-                                return append(x.time_since_epoch().count());
-                              });
+    auto f = detail::overload{
+      [&](auto&&) { return false; },
+      [&](view<bool> x) { return append(x); },
+      [&](view<integer> x) { return append(x); },
+      [&](view<count> x) { return append(x); },
+      [&](view<real> x) { return append(x); },
+      [&](view<duration> x) { return append(x.count()); },
+      [&](view<time> x) { return append(x.time_since_epoch().count()); },
+    };
     return caf::visit(f, d);
   }
 
   caf::expected<ids>
   lookup_impl(relational_operator op, data_view d) const override {
-    auto f = detail::overload(
+    auto f = detail::overload{
       [&](auto x) -> caf::expected<ids> {
         return make_error(ec::type_clash, value_type{}, materialize(x));
       },
@@ -283,7 +281,8 @@ private:
       [&](view<time> x) -> caf::expected<ids> {
         return bmi_.lookup(op, x.time_since_epoch().count());
       },
-      [&](view<list> xs) { return detail::container_lookup(*this, op, xs); });
+      [&](view<list> xs) { return detail::container_lookup(*this, op, xs); },
+    };
     return caf::visit(f, d);
   };
 

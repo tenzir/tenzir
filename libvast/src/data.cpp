@@ -43,7 +43,7 @@ bool operator<(const data& lhs, const data& rhs) {
 bool evaluate(const data& lhs, relational_operator op, const data& rhs) {
   auto eval_string_and_pattern = [](const auto& x, const auto& y) {
     return caf::visit(
-      detail::overload(
+      detail::overload{
         [](const auto&, const auto&) -> caf::optional<bool> {
           return caf::none;
         },
@@ -52,22 +52,22 @@ bool evaluate(const data& lhs, relational_operator op, const data& rhs) {
         },
         [](const pattern& lhs, const std::string& rhs) -> caf::optional<bool> {
           return lhs.match(rhs);
-        }),
+        },
+      },
       x, y);
   };
   auto eval_match = [](const auto& x, const auto& y) {
-    return caf::visit(detail::overload(
-      [](const auto&, const auto&) {
-        return false;
-      },
-      [](const std::string& lhs, const pattern& rhs) {
-        return rhs.match(lhs);
-      }
-    ), x, y);
+    return caf::visit(detail::overload{
+                        [](const auto&, const auto&) { return false; },
+                        [](const std::string& lhs, const pattern& rhs) {
+                          return rhs.match(lhs);
+                        },
+                      },
+                      x, y);
   };
   auto eval_in = [](const auto& x, const auto& y) {
     return caf::visit(
-      detail::overload(
+      detail::overload{
         [](const auto&, const auto&) { return false; },
         [](const std::string& lhs, const std::string& rhs) {
           return rhs.find(lhs) != std::string::npos;
@@ -79,7 +79,8 @@ bool evaluate(const data& lhs, relational_operator op, const data& rhs) {
         [](const subnet& lhs, const subnet& rhs) { return rhs.contains(lhs); },
         [](const auto& lhs, const list& rhs) {
           return std::find(rhs.begin(), rhs.end(), lhs) != rhs.end();
-        }),
+        },
+      },
       x, y);
   };
   switch (op) {
@@ -118,10 +119,12 @@ bool evaluate(const data& lhs, relational_operator op, const data& rhs) {
 }
 
 bool is_basic(const data& x) {
-  return caf::visit(detail::overload([](const auto&) { return true; },
-                                     [](const list&) { return false; },
-                                     [](const map&) { return false; },
-                                     [](const record&) { return false; }),
+  return caf::visit(detail::overload{
+                      [](const auto&) { return true; },
+                      [](const list&) { return false; },
+                      [](const map&) { return false; },
+                      [](const record&) { return false; },
+                    },
                     x);
 }
 
@@ -130,10 +133,12 @@ bool is_complex(const data& x) {
 }
 
 bool is_recursive(const data& x) {
-  return caf::visit(detail::overload([](const auto&) { return false; },
-                                     [](const list&) { return true; },
-                                     [](const map&) { return true; },
-                                     [](const record&) { return true; }),
+  return caf::visit(detail::overload{
+                      [](const auto&) { return false; },
+                      [](const list&) { return true; },
+                      [](const map&) { return true; },
+                      [](const record&) { return true; },
+                    },
                     x);
 }
 
@@ -300,12 +305,14 @@ void merge(const record& src, record& dst) {
 namespace {
 
 json jsonize(const data& x) {
-  return caf::visit(detail::overload(
-    [&](const auto& y) { return to_json(y); },
-    [&](port p) { return json{p.number()}; }, // ignore port type
-    [&](caf::none_t) { return json{}; },
-    [&](const std::string& str) { return json{str}; }
-  ), x);
+  return caf::visit(
+    detail::overload{
+      [&](const auto& y) { return to_json(y); },
+      [&](port p) { return json{p.number()}; }, // ignore port type
+      [&](caf::none_t) { return json{}; },
+      [&](const std::string& str) { return json{str}; },
+    },
+    x);
 }
 
 } // namespace <anonymous>
@@ -390,7 +397,7 @@ caf::error convert(const record& xs, caf::config_value& cv) {
 }
 
 caf::error convert(const data& d, caf::config_value& cv) {
-  auto f = detail::overload(
+  auto f = detail::overload{
     [&](const auto& x) -> caf::error {
       using value_type = std::decay_t<decltype(x)>;
       if constexpr (detail::is_any_v<value_type, bool, integer, count, real,
@@ -436,7 +443,8 @@ caf::error convert(const data& d, caf::config_value& cv) {
         return err;
       cv = std::move(result);
       return caf::none;
-    });
+    },
+  };
   return caf::visit(f, d);
 }
 
@@ -498,8 +506,7 @@ caf::expected<data> from_yaml(std::string_view str) {
 namespace {
 
 void print(YAML::Emitter& out, const data& x) {
-  // clang-format off
-  auto f = detail::overload(
+  auto f = detail::overload{
     [&out](caf::none_t) { out << YAML::Null; },
     [&out](bool x) { out << (x ? "true" : "false"); },
     [&out](integer x) { out << x; },
@@ -537,9 +544,8 @@ void print(YAML::Emitter& out, const data& x) {
         print(out, v);
       }
       out << YAML::EndMap;
-    }
-  );
-  // clang-format off
+    },
+  };
   caf::visit(f, x);
 }
 

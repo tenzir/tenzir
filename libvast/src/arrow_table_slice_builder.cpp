@@ -435,7 +435,7 @@ table_slice_builder_ptr arrow_table_slice_builder::make(record_type layout) {
 arrow_table_slice_builder::column_builder_ptr
 arrow_table_slice_builder::make_column_builder(const type& t,
                                                arrow::MemoryPool* pool) {
-  auto f = detail::overload(
+  auto f = detail::overload{
     [=](const auto& x) -> column_builder_ptr {
       using type = std::decay_t<decltype(x)>;
       if constexpr (std::is_same_v<type, list_type>) {
@@ -461,7 +461,8 @@ arrow_table_slice_builder::make_column_builder(const type& t,
     },
     [=](const alias_type& x) -> column_builder_ptr {
       return make_column_builder(x.value_type, pool);
-    });
+    },
+  };
   return caf::visit(f, t);
 }
 
@@ -480,7 +481,7 @@ arrow_table_slice_builder::make_arrow_schema(const record_type& t) {
 std::shared_ptr<arrow::DataType>
 arrow_table_slice_builder::make_arrow_type(const type& t) {
   using data_type_ptr = std::shared_ptr<arrow::DataType>;
-  auto f = detail::overload(
+  auto f = detail::overload{
     [=](const auto& x) -> data_type_ptr {
       using trait = column_builder_trait<std::decay_t<decltype(x)>>;
       return trait::make_arrow_type();
@@ -504,7 +505,8 @@ arrow_table_slice_builder::make_arrow_type(const type& t) {
     },
     [=](const alias_type& x) -> data_type_ptr {
       return make_arrow_type(x.value_type);
-    });
+    },
+  };
   return caf::visit(f, t);
 }
 

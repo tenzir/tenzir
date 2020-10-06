@@ -693,7 +693,7 @@ TEST(regression - manual value index for zeek conn log service http) {
   auto slice = zeek_conn_log_full[80];
   for (size_t row = 0; row < slice->rows(); ++row) {
     auto i = 8000 + row;
-    auto f = detail::overload(
+    auto f = detail::overload{
       [&](caf::none_t) {
         none.append_bits(false, i - none.size());
         none.append_bit(true);
@@ -712,7 +712,8 @@ TEST(regression - manual value index for zeek conn log service http) {
         mask.append_bits(false, i - mask.size());
         mask.append_bit(true);
       },
-      [&](auto) { FAIL("unexpected service type"); });
+      [&](auto) { FAIL("unexpected service type"); },
+    };
     // Column 7 is service.
     caf::visit(f, slice->at(row, 7));
   }
