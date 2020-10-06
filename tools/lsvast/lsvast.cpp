@@ -16,9 +16,7 @@
 #include "vast/concept/printable/vast/uuid.hpp"
 #include "vast/directory.hpp"
 #include "vast/fbs/index.hpp"
-#include "vast/fbs/index_v0.hpp"
 #include "vast/fbs/partition.hpp"
-#include "vast/fbs/partition_v0.hpp"
 #include "vast/fbs/segment.hpp"
 #include "vast/fbs/utils.hpp"
 #include "vast/ids.hpp"
@@ -43,11 +41,9 @@ using namespace std::string_literals;
 enum class Kind {
   Unknown,
   DatabaseDir,
-  Partition_v0,
-  Partition_v1,
-  Index_v0,
-  Index_v1,
-  Segment_v0,
+  Partition,
+  Index,
+  Segment,
 };
 
 typedef void (*printer)(vast::path);
@@ -55,21 +51,13 @@ typedef void (*printer)(vast::path);
 void print_unknown(vast::path);
 void print_vast_db(vast::path);
 void print_partition(vast::path);
-void print_partition_v0(vast::path);
-void print_partition_v1(vast::path);
 void print_index(vast::path);
-void print_index_v0(vast::path);
-void print_index_v1(vast::path);
-void print_segment_v0(vast::path);
+void print_segment(vast::path);
 
 static const std::map<Kind, printer> printers = {
-  {Kind::Unknown, print_unknown},
-  {Kind::DatabaseDir, print_vast_db},
-  {Kind::Index_v0, print_index_v0},
-  {Kind::Index_v1, print_index_v1},
-  {Kind::Partition_v0, print_partition_v0},
-  {Kind::Partition_v1, print_partition_v1},
-  {Kind::Segment_v0, print_segment_v0},
+  {Kind::Unknown, print_unknown}, {Kind::DatabaseDir, print_vast_db},
+  {Kind::Index, print_index},     {Kind::Partition, print_partition},
+  {Kind::Segment, print_segment},
 };
 
 Kind classify(vast::path path) {
@@ -80,18 +68,13 @@ Kind classify(vast::path path) {
   auto bytes = vast::io::read(path);
   if (!bytes)
     return Kind::Unknown;
-  auto view = vast::span<const vast::byte>(bytes->data(), bytes->size());
-  auto [type, version] = vast::fbs::resolve_filemagic(view);
-  if (type == "vast.fbs.v0.Index" && version == vast::fbs::Version::v0)
-    return Kind::Index_v0;
-  if (type == "vast.fbs.Index" && version == vast::fbs::Version::v1)
-    return Kind::Index_v1;
-  if (type == "vast.fbs.v0.Partition" && version == vast::fbs::Version::v0)
-    return Kind::Partition_v0;
-  if (type == "vast.fbs.Partition" && version == vast::fbs::Version::v1)
-    return Kind::Partition_v1;
-  if (type == "vast.fbs.Segment" && version == vast::fbs::Version::v0)
-    return Kind::Segment_v0;
+  auto buf = bytes->data();
+  if (vast::fbs::IndexBufferHasIdentifier(buf))
+    return Kind::Index;
+  if (vast::fbs::PartitionBufferHasIdentifier(buf))
+    return Kind::Partition;
+  if (vast::fbs::SegmentBufferHasIdentifier(buf))
+    return Kind::Segment;
   return Kind::Unknown;
 }
 
@@ -119,7 +102,7 @@ struct flatbuffer_deleter {
 // automatically upon destruction.
 template <typename T>
 std::unique_ptr<const T, flatbuffer_deleter<T>>
-read_flatbuffer_file(vast::path path, vast::fbs::Version version) {
+read_flatbuffer_file(vast::path path) {
   using result_t = std::unique_ptr<const T, flatbuffer_deleter<T>>;
   auto result
     = result_t(static_cast<const T*>(nullptr), flatbuffer_deleter<T>{});
@@ -127,14 +110,11 @@ read_flatbuffer_file(vast::path path, vast::fbs::Version version) {
   if (!maybe_bytes)
     return result;
   auto bytes = std::move(*maybe_bytes);
-  auto view = vast::span<const vast::byte>(bytes.data(), bytes.size());
-  auto maybe_flatbuffer = vast::fbs::as_versioned_flatbuffer<T>(view, version);
-  if (!maybe_flatbuffer)
-    return result;
-  return result_t(*maybe_flatbuffer, flatbuffer_deleter<T>(std::move(bytes)));
+  const auto* ptr = flatbuffers::GetRoot<T>(bytes.data());
+  return result_t(ptr, flatbuffer_deleter<T>(std::move(bytes)));
 }
 
-std::ostream& operator<<(std::ostream& out, const vast::fbs::UUID* uuid) {
+std::ostream& operator<<(std::ostream& out, const vast::fbs::uuid::v0* uuid) {
   if (!uuid || !uuid->data())
     return out << "(null)";
   for (size_t i = 0; i < uuid->data()->size(); ++i)
@@ -160,15 +140,13 @@ void print_vast_db(vast::path vast_db) {
   }
   auto segments_dir = vast_db / "archive" / "segments";
   for (auto file : vast::directory{segments_dir}) {
-    print_segment_v0(file);
+    print_segment(file);
   }
 }
 
-/// Prints the common fields of v0 and v1 partitions.
-template <typename T>
-void print_partition_common(const T* partition) {
+void print_partition_v0(const vast::fbs::partition::v0* partition) {
   if (!partition) {
-    std::cout << "(error reading partition)\n";
+    std::cout << "(null)\n";
     return;
   }
   vast::uuid id;
@@ -191,42 +169,30 @@ void print_partition_common(const T* partition) {
       std::cout << rank(restored_ids);
     std::cout << "\n";
   }
-  // TODO: print combined_layout and indexes
-}
-
-void print_partition_v0(vast::path path) {
-  auto partition = read_flatbuffer_file<vast::fbs::v0::Partition>(
-    path, vast::fbs::Version::v0);
-  print_partition_common(partition.get());
-}
-
-void print_partition_v1(vast::path path) {
-  auto partition
-    = read_flatbuffer_file<vast::fbs::Partition>(path, vast::fbs::Version::v1);
-  print_partition_common(partition.get());
-  // TODO: print partition synopsis
+  // TODO: print combined_layout, indexes, and partition synopsis
 }
 
 void print_partition(vast::path path) {
-  auto bytes = vast::io::read(path);
-  if (!bytes) {
-    std::cout << "(error: " << vast::render(bytes.error()) << ")\n";
+  auto partition = read_flatbuffer_file<vast::fbs::Partition>(path);
+  if (!partition) {
+    std::cout << "(error reading partition file " << path.str() << ")\n";
+  }
+  if (!vast::fbs::PartitionBufferHasIdentifier(partition.get())) {
+    std::cout << "(invalid file identifier)\n";
     return;
   }
-  auto view = vast::span<const vast::byte>(bytes->data(), bytes->size());
-  auto version = vast::fbs::resolve_filemagic(view).second;
-  if (version == vast::fbs::Version::v0)
-    print_partition_v0(path);
-  else if (version == vast::fbs::Version::v1)
-    print_partition_v1(path);
-  else
-    std::cout << "(unknown version)\n";
+  switch (partition->partition_type()) {
+    case vast::fbs::partition::Partition::v0:
+      print_partition_v0(partition->partition_as_v0());
+      break;
+    default:
+      std::cout << "(unknown partition version)\n";
+  }
 }
 
-template <typename T>
-static void print_index_common(const T* index) {
+void print_index_v0(const vast::fbs::index::v0* index) {
   if (!index) {
-    std::cout << "(error reading index)\n";
+    std::cout << "(null)\n";
     return;
   }
   std::cout << "layouts:\n";
@@ -248,57 +214,48 @@ static void print_index_common(const T* index) {
   }
 }
 
-void print_index_v0(vast::path path) {
-  auto idx
-    = read_flatbuffer_file<vast::fbs::v0::Index>(path, vast::fbs::Version::v0);
-  print_index_common(idx.get());
-  // TODO: Print meta index contents.
-}
-
-void print_index_v1(vast::path path) {
-  auto idx
-    = read_flatbuffer_file<vast::fbs::Index>(path, vast::fbs::Version::v1);
-  print_index_common(idx.get());
-}
-
 void print_index(vast::path path) {
-  auto bytes = vast::io::read(path);
-  if (!bytes) {
-    std::cout << "(error: " << vast::render(bytes.error()) << ")\n";
+  auto index = read_flatbuffer_file<vast::fbs::Index>(path);
+  if (!index) {
+    std::cout << "(error reading index file " << path.str() << ")\n";
+  }
+  if (!vast::fbs::IndexBufferHasIdentifier(index.get())) {
+    std::cout << "(invalid file identifier)\n";
     return;
   }
-  auto view = vast::span<const vast::byte>(bytes->data(), bytes->size());
-  auto version = vast::fbs::resolve_filemagic(view).second;
-  if (version == vast::fbs::Version::v0)
-    print_index_v0(path);
-  else if (version == vast::fbs::Version::v1)
-    print_index_v1(path);
-  else
-    std::cout << "(unknown version)\n";
+  switch (index->index_type()) {
+    case vast::fbs::index::Index::v0:
+      print_index_v0(index->index_as_v0());
+      break;
+    default:
+      std::cout << "(unknown partition version)\n";
+  }
 }
 
-void print_segment_v0(vast::path path) {
-  using vast::fbs::Segment;
-  using vast::fbs::Version;
-  std::cout << "Segment v0" << std::endl;
-  auto bytes = vast::io::read(path);
-  if (!bytes) {
-    std::cout << "(error: " << vast::render(bytes.error()) << ")\n";
-    return;
-  }
-  auto view = vast::span<const vast::byte>(bytes->data(), bytes->size());
-  auto maybe_segment
-    = vast::fbs::as_versioned_flatbuffer<Segment>(view, Version::v0);
-  if (!maybe_segment) {
-    std::cout << "(error: " << vast::render(maybe_segment.error()) << ")\n";
-    return;
-  }
-  auto& segment = *maybe_segment;
+void print_segment_v0(const vast::fbs::segment::v0* segment) {
   vast::uuid id;
   if (segment->uuid())
     unpack(*segment->uuid(), id);
   std::cout << "  uuid: " << to_string(id) << "\n";
   std::cout << "  events: " << segment->events() << "\n";
+}
+
+void print_segment(vast::path path) {
+  auto segment = read_flatbuffer_file<vast::fbs::Segment>(path);
+  if (!segment) {
+    std::cout << "(error reading segment file " << path.str() << ")\n";
+  }
+  if (!vast::fbs::SegmentBufferHasIdentifier(segment.get())) {
+    std::cout << "(invalid file identifier)\n";
+    return;
+  }
+  switch (segment->segment_type()) {
+    case vast::fbs::segment::Segment::v0:
+      print_segment_v0(segment->segment_as_v0());
+      break;
+    default:
+      std::cout << "(unknown partition version)\n";
+  }
 }
 
 int main(int argc, char** argv) {

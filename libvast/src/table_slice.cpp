@@ -184,7 +184,7 @@ caf::error inspect(caf::deserializer& source, table_slice_ptr& ptr) {
 // TODO: this function will boil down to accessing the chunk inside the table
 // slice and then calling GetTableSlice(buf). But until we touch the table
 // slice internals, we use this helper.
-caf::expected<flatbuffers::Offset<fbs::TableSliceBuffer>>
+caf::expected<flatbuffers::Offset<fbs::table_slice_buffer::v0>>
 pack(flatbuffers::FlatBufferBuilder& builder, table_slice_ptr x) {
   // This local builder instance will vanish once we can access the underlying
   // chunk of a table slice.
@@ -213,7 +213,7 @@ pack(flatbuffers::FlatBufferBuilder& builder, table_slice_ptr x) {
   auto layout = local_builder.CreateVector(layout_ptr, layout_buffer.size());
   auto data_ptr = reinterpret_cast<const uint8_t*>(data_buffer.data());
   auto data = local_builder.CreateVector(data_ptr, data_buffer.size());
-  fbs::TableSliceBuilder table_slice_builder{local_builder};
+  fbs::table_slice::v0Builder table_slice_builder{local_builder};
   table_slice_builder.add_offset(x->offset());
   table_slice_builder.add_rows(x->rows());
   table_slice_builder.add_layout(layout);
@@ -226,13 +226,13 @@ pack(flatbuffers::FlatBufferBuilder& builder, table_slice_ptr x) {
   // This is the only code that will remain. All the stuff above will move into
   // the respective table slice builders.
   auto bytes = builder.CreateVector(buffer.data(), buffer.size());
-  fbs::TableSliceBufferBuilder table_slice_buffer_builder{builder};
+  fbs::table_slice_buffer::v0Builder table_slice_buffer_builder{builder};
   table_slice_buffer_builder.add_data(bytes);
   return table_slice_buffer_builder.Finish();
 }
 
 // TODO: The dual to the note above applies here.
-caf::error unpack(const fbs::TableSlice& x, table_slice_ptr& y) {
+caf::error unpack(const fbs::table_slice::v0& x, table_slice_ptr& y) {
   auto ptr = reinterpret_cast<const char*>(x.data()->Data());
   caf::binary_deserializer source{nullptr, ptr, x.data()->size()};
   return source(y);

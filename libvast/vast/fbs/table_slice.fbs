@@ -7,8 +7,10 @@ enum Encoding : byte {
   MessagePack,
 }
 
+namespace vast.fbs.table_slice;
+
 /// A subset of rows of a table.
-table TableSlice {
+table v0 {
   /// The offset in the 2^64 ID event space.
   offset: ulong;
 
@@ -25,13 +27,17 @@ table TableSlice {
   data: [ubyte];
 }
 
+root_type v0;
+
+namespace vast.fbs.table_slice_buffer;
+
 /// A vector of bytes that wraps a table slice.
 /// The extra wrapping makes it possible to append existing table slices as
 /// blobs to a segment builder. For example, this happens when the archive
 /// receives a stream of table slices. Without the wrapping, we'd have to go
 /// through a new table slice builder for every slice.
-table TableSliceBuffer {
-  data: [ubyte] (nested_flatbuffer: "TableSlice");
+table v0 {
+  data: [ubyte] (nested_flatbuffer: "vast.fbs.table_slice.v0");
 }
 
-root_type TableSlice;
+root_type v0;

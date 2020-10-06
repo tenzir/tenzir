@@ -31,10 +31,6 @@
 
 namespace vast::fbs {
 
-/// Inspects the 4-byte file identifier of a flatbuffer and returns the
-/// type of content that one can expect to find inside.
-std::pair<std::string, Version> resolve_filemagic(span<const byte> fb);
-
 // -- general helpers --------------------------------------------------------
 
 /// Releases the buffer of finished builder in the form of a chunk.
@@ -46,13 +42,6 @@ chunk_ptr release(flatbuffers::FlatBufferBuilder& builder);
 /// @xs The buffer to create a verifier for.
 /// @param A verifier that is ready to use.
 flatbuffers::Verifier make_verifier(span<const byte> xs);
-
-/// Performs a check whether two given versions are equal and returns an error
-/// if not.
-/// @param given The provided version to check.
-/// @param expected The version that *given* should be.
-/// @returns An error iff *given* does not match *expected*.
-caf::error check_version(Version given, Version expected);
 
 /// Converts a flatbuffer vector of [u]int8_t into a byte span.
 /// @param xs The flatbuffer to convert.
@@ -130,33 +119,6 @@ const Flatbuffer* as_flatbuffer(span<const byte, Extent> xs) {
   if (!verifier.template VerifyBuffer<Flatbuffer>())
     return nullptr;
   return flatbuffers::GetRoot<Flatbuffer>(data);
-}
-
-/// Unpacks a flatbuffer that has version information encoded in its file
-/// identifier.
-/// @tparam Flatbuffer The root flatbuffer type to unpack. This must be the
-///         same type that is marked as `root_type` in the schema definition,
-///         and its file_identifier must be one of the well-known values
-///         recognized by VAST.
-/// @param xs The buffer to unpack a flatbuffer from.
-/// @returns A pointer to the unpacked flatbuffer of type `Flatbuffer` or
-///          `caf::error` if verification failed.
-template <class Flatbuffer, size_t Extent = dynamic_extent>
-caf::expected<const Flatbuffer*>
-as_versioned_flatbuffer(span<const byte, Extent> xs, Version expected_version) {
-  auto [name, version] = resolve_filemagic(xs);
-  auto expected_name = Flatbuffer::GetFullyQualifiedName();
-  if (name != expected_name)
-    return make_error(ec::format_error, "Invalid type in flatbuffer, expected",
-                      expected_name, "got", name);
-  if (version != expected_version)
-    return make_error(ec::format_error, "Invalid version in flatbuffer");
-  auto fb = as_flatbuffer<Flatbuffer>(xs);
-  // TODO: We could use SFINAE here to automatically check `fb->version()` iff
-  // the flatbuffer type has a field called `version`.
-  if (!fb)
-    return make_error(ec::format_error, "Flatbuffer validation failed");
-  return fb;
 }
 
 /// Wraps an object into a flatbuffer. This function requires existance of an

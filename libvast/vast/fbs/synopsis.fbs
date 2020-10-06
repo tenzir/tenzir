@@ -1,11 +1,13 @@
-namespace vast.fbs;
+namespace vast.fbs.opaque_synopsis;
 
-table OpaqueSynopsis {
+table v0 {
   /// The serialized synopsis as produced by `caf::serialize()`.
   data: [ubyte];
 }
 
-struct TimeSynopsis {
+namespace vast.fbs.time_synopsis;
+
+struct v0 {
   /// The earliest timestamp in this column, in nanoseconds since epoch.
   start: int64;
 
@@ -13,7 +15,9 @@ struct TimeSynopsis {
   end: int64;
 }
 
-struct BoolSynopsis {
+namespace vast.fbs.bool_synopsis;
+
+struct v0 {
   /// Whether this column has any "true" value.
   any_true: bool;
 
@@ -21,21 +25,25 @@ struct BoolSynopsis {
   any_false: bool;
 }
 
-table Synopsis {
+namespace vast.fbs.synopsis;
+
+table v0 {
   /// The caf-serialized record field for this synopsis.
   // TODO: Use the `Type` flatbuffer once available.
   qualified_record_field: [ubyte];
 
   /// Synopsis for a bool column.
-  bool_synopsis: BoolSynopsis;
+  bool_synopsis: bool_synopsis.v0;
 
   /// Synopsis for a time column.
-  time_synopsis: TimeSynopsis;
+  time_synopsis: time_synopsis.v0;
 
   /// Other synopsis type with no native flatbuffer layout.
-  opaque_synopsis: OpaqueSynopsis;
+  opaque_synopsis: opaque_synopsis.v0;
 }
 
-table PartitionSynopsis {
-  synopses: [Synopsis];
+namespace vast.fbs.partition_synopsis;
+
+table v0 {
+  synopses: [synopsis.v0];
 }

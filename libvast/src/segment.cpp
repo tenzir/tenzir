@@ -37,28 +37,32 @@ using namespace binary_byte_literals;
 
 caf::expected<segment> segment::make(chunk_ptr chunk) {
   VAST_ASSERT(chunk != nullptr);
-  auto fb = fbs::as_versioned_flatbuffer<fbs::Segment>(as_bytes(chunk),
-                                                       fbs::Version::v0);
-  if (!fb)
-    return fb.error();
-  // Perform version check.
-  if (auto err = fbs::check_version((*fb)->version(), fbs::Version::v0))
-    return err;
+  auto s = fbs::GetSegment(chunk->data());
+  VAST_ASSERT(s); // `GetSegment` is just a cast, so this cant become null.
+  if (s->segment_type() != fbs::segment::Segment::v0)
+    return make_error(ec::format_error, "unsupported segment version");
+  auto vs = s->segment_as_v0();
+  // This check is an artifact from an earlier flatbuffer versioning
+  // scheme, where the version was stored as an inline field.
+  if (vs->version() != fbs::Version::v0)
+    return make_error(ec::format_error, "invalid v0 segment layout");
   return segment{std::move(chunk)};
 }
 
 uuid segment::id() const {
-  auto ptr = fbs::GetSegment(chunk_->data());
+  auto segment = fbs::GetSegment(chunk_->data());
+  auto segment_v0 = segment->segment_as_v0();
   uuid result;
-  if (auto error = unpack(*ptr->uuid(), result))
+  if (auto error = unpack(*segment_v0->uuid(), result))
     VAST_ERROR_ANON("couldnt get uuid from segment:", error);
   return result;
 }
 
 vast::ids segment::ids() const {
   vast::ids result;
-  auto ptr = fbs::GetSegment(chunk_->data());
-  for (auto buffer : *ptr->slices()) {
+  auto segment = fbs::GetSegment(chunk_->data());
+  auto segment_v0 = segment->segment_as_v0();
+  for (auto buffer : *segment_v0->slices()) {
     auto slice = buffer->data_nested_root();
     result.append_bits(false, slice->offset() - result.size());
     result.append_bits(true, slice->rows());
@@ -67,7 +71,9 @@ vast::ids segment::ids() const {
 }
 
 size_t segment::num_slices() const {
-  return fbs::GetSegment(chunk_->data())->slices()->size();
+  auto segment = fbs::GetSegment(chunk_->data());
+  auto segment_v0 = segment->segment_as_v0();
+  return segment_v0->slices()->size();
 }
 
 chunk_ptr segment::chunk() const {
@@ -91,9 +97,10 @@ segment::lookup(const vast::ids& xs) const {
     result.push_back(std::move(slice));
     return caf::none;
   };
-  auto ptr = fbs::GetSegment(chunk_->data());
-  auto begin = ptr->slices()->begin();
-  auto end = ptr->slices()->end();
+  auto segment = fbs::GetSegment(chunk_->data());
+  auto segment_v0 = segment->segment_as_v0();
+  auto begin = segment_v0->slices()->begin();
+  auto end = segment_v0->slices()->end();
   if (auto error = select_with(xs, begin, end, f, g))
     return error;
   return result;

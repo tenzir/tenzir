@@ -2,10 +2,10 @@ include "table_slice.fbs";
 include "version.fbs";
 include "uuid.fbs";
 
-namespace vast.fbs;
+namespace vast.fbs.interval;
 
 /// A half-open interval *[a,b)* in the ID Space.
-struct Interval {
+struct v0 {
   /// The left side of the interval (inclusive).
   begin: ulong = 0;
 
@@ -13,24 +13,36 @@ struct Interval {
   end: ulong = 0;
 }
 
+namespace vast.fbs.segment;
+
 /// A bundled sequence of table slices.
-table Segment {
+table v0 {
   /// The version of the segment.
   version: Version;
 
   /// The contained table slices.
-  slices: [TableSliceBuffer];
+  slices: [table_slice_buffer.v0];
 
   /// A unique identifier.
-  uuid: UUID;
+  uuid: uuid.v0;
 
   /// The ID intervals this segment covers.
-  ids: [Interval];
+  ids: [interval.v0];
 
   /// The number of events in the store.
   events: ulong;
 }
 
+union Segment {
+  v0,
+}
+
+namespace vast.fbs;
+
+table Segment {
+  segment: segment.Segment;
+}
+
 root_type Segment;
 
-file_identifier "S000";
+file_identifier "vSEG";

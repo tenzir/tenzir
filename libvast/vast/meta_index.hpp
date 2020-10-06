@@ -13,7 +13,7 @@
 
 #pragma once
 
-#include "vast/fbs/meta_index_v0.hpp"
+#include "vast/fbs/index.hpp"
 #include "vast/fbs/partition.hpp"
 #include "vast/fwd.hpp"
 #include "vast/qualified_record_field.hpp"
@@ -101,14 +101,14 @@ private:
 // -- flatbuffer ---------------------------------------------------------------
 
 // TODO: Move these into some 'legacy' flatbuffer section
-caf::expected<flatbuffers::Offset<fbs::v0::MetaIndex>>
+caf::expected<flatbuffers::Offset<fbs::meta_index::v0>>
 pack(flatbuffers::FlatBufferBuilder& builder, const meta_index& x);
 
-caf::error unpack(const fbs::v0::MetaIndex& x, meta_index& y);
+caf::error unpack(const fbs::meta_index::v0& x, meta_index& y);
 
-caf::expected<flatbuffers::Offset<fbs::PartitionSynopsis>>
+caf::expected<flatbuffers::Offset<fbs::partition_synopsis::v0>>
 pack(flatbuffers::FlatBufferBuilder& builder, const partition_synopsis&);
 
-caf::error unpack(const fbs::PartitionSynopsis&, partition_synopsis&);
+caf::error unpack(const fbs::partition_synopsis::v0&, partition_synopsis&);
 
 } // namespace vast

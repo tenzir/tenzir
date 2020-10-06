@@ -30,6 +30,7 @@
 #include "vast/error.hpp"
 #include "vast/expression_visitors.hpp"
 #include "vast/fbs/index.hpp"
+#include "vast/fbs/partition.hpp"
 #include "vast/fbs/utils.hpp"
 #include "vast/fbs/uuid.hpp"
 #include "vast/fbs/version.hpp"
@@ -137,13 +138,11 @@ caf::error index_state::load_from_disk() {
     }
     // TODO: Create a `index_ondisk_state` struct and move this part of the
     // code into an `unpack()` function.
-    auto fb = span<const byte>{buffer->data(), buffer->size()};
-    auto maybe_index
-      = fbs::as_versioned_flatbuffer<fbs::Index>(fb, fbs::Version::v1);
-    if (!maybe_index)
-      return maybe_index.error();
-    auto& index = *maybe_index;
-    auto partition_uuids = index->partitions();
+    auto index = fbs::GetIndex(buffer->data());
+    if (index->index_type() != fbs::index::Index::v0)
+      return make_error(ec::format_error, "invalid index version");
+    auto index_v0 = index->index_as_v0();
+    auto partition_uuids = index_v0->partitions();
     VAST_ASSERT(partition_uuids);
     for (auto uuid_fb : *partition_uuids) {
       VAST_ASSERT(uuid_fb);
@@ -158,15 +157,16 @@ caf::error index_state::load_from_disk() {
           VAST_WARNING(self, "could not mmap partition at", partition_path);
           continue;
         }
-        auto partition = fbs::as_versioned_flatbuffer<fbs::Partition>(
-          as_bytes(chunk), fbs::Version::v1);
-        if (!partition) {
-          VAST_WARNING(self, "coult not parse", partition_path,
-                       "as partition:", partition.error());
+        auto partition = fbs::GetPartition(chunk->data());
+        if (partition->partition_type() != fbs::partition::Partition::v0) {
+          VAST_WARNING(self, "found unsupported version for partition",
+                       partition_uuid);
           continue;
         }
+        auto partition_v0 = partition->partition_as_v0();
+        VAST_ASSERT(partition_v0);
         partition_synopsis ps;
-        unpack(**partition, ps);
+        unpack(*partition_v0, ps);
         VAST_DEBUG(self, "merging partition synopsis from", partition_uuid);
         meta_idx.merge(partition_uuid, std::move(ps));
       } else {
@@ -175,7 +175,7 @@ caf::error index_state::load_from_disk() {
                      "caused by an unclean shutdown");
       }
     }
-    auto stats = index->stats();
+    auto stats = index_v0->stats();
     if (!stats)
       return make_error(ec::format_error, "no stats in persisted index state");
     for (const auto stat : *stats) {
@@ -370,7 +370,7 @@ pack(flatbuffers::FlatBufferBuilder& builder, const index_state& state) {
   VAST_DEBUG(state.self, "persists", state.persisted_partitions.size(),
              "uuids of definitely persisted and", state.unpersisted.size(),
              "uuids of maybe persisted partitions");
-  std::vector<flatbuffers::Offset<fbs::UUID>> partition_offsets;
+  std::vector<flatbuffers::Offset<fbs::uuid::v0>> partition_offsets;
   for (auto uuid : state.persisted_partitions) {
     if (auto uuid_fb = pack(builder, uuid))
       partition_offsets.push_back(*uuid_fb);
@@ -388,20 +388,26 @@ pack(flatbuffers::FlatBufferBuilder& builder, const index_state& state) {
       return uuid_fb.error();
   }
   auto partitions = builder.CreateVector(partition_offsets);
-  std::vector<flatbuffers::Offset<fbs::LayoutStatistics>> stats_offsets;
+  std::vector<flatbuffers::Offset<fbs::layout_statistics::v0>> stats_offsets;
   for (auto& [name, layout_stats] : state.stats.layouts) {
     auto name_fb = builder.CreateString(name);
-    fbs::LayoutStatisticsBuilder stats_builder(builder);
+    fbs::layout_statistics::v0Builder stats_builder(builder);
     stats_builder.add_name(name_fb);
     stats_builder.add_count(layout_stats.count);
     auto offset = stats_builder.Finish();
     stats_offsets.push_back(offset);
   }
   auto stats = builder.CreateVector(stats_offsets);
+  fbs::index::v0Builder v0_builder(builder);
+  v0_builder.add_partitions(partitions);
+  v0_builder.add_stats(stats);
+  auto index_v0 = v0_builder.Finish();
   fbs::IndexBuilder index_builder(builder);
-  index_builder.add_partitions(partitions);
-  index_builder.add_stats(stats);
-  return index_builder.Finish();
+  index_builder.add_index_type(vast::fbs::index::Index::v0);
+  index_builder.add_index(index_v0.Union());
+  auto index = index_builder.Finish();
+  fbs::FinishIndexBuffer(builder, index);
+  return index;
 }
 
 /// Persists the state to disk.
@@ -412,7 +418,6 @@ void index_state::flush_to_disk() {
     VAST_WARNING(self, "failed to pack index:", render(index.error()));
     return;
   }
-  fbs::FinishIndexBuffer(*builder, *index);
   auto ptr = builder.get();
   auto buffer = builder->GetBufferPointer();
   auto size = builder->GetSize();
