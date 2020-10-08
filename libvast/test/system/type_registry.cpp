@@ -115,4 +115,28 @@ TEST(type_registry) {
   self->send_exit(aut, caf::exit_reason::user_shutdown);
 }
 
+TEST(taxonomies) {
+  MESSAGE("set a taxonomy");
+  auto c1 = concepts_t{{"foo", {"a.fo0", "b.foO", "x.foe"}},
+                       {"bar", {"a.b@r", "b.baR"}}};
+  auto models = models_t{};
+  auto t1 = taxonomies{std::move(c1), std::move(models)};
+  self->send(aut, atom::put_v, t1);
+  run();
+  MESSAGE("get it back");
+  taxonomies_ptr tp;
+  self->send(aut, atom::get_v, atom::taxonomies_v);
+  run();
+  self->receive([&](taxonomies_ptr p) { tp = p; }, error_handler());
+  CHECK_EQUAL(tp.use_count(), 2u);
+  MESSAGE("set another taxonomy");
+  auto c2 = c1;
+  c2.insert({"car", {"chevy"}});
+  auto t2 = taxonomies{std::move(c2), std::move(models)};
+  self->send(aut, atom::put_v, t2);
+  run();
+  CHECK_EQUAL(tp.use_count(), 1u);
+  CHECK_EQUAL(t1, *tp);
+}
+
 FIXTURE_SCOPE_END()

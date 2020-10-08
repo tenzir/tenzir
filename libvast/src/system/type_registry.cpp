@@ -163,6 +163,11 @@ type_registry(type_registry_actor self, const path& dir) {
                  VAST_ARG(name));
       return self->state.types(name);
     },
+    [=](atom::put, taxonomies t) {
+      VAST_TRACE("");
+      self->state.taxonomies = std::make_shared<const taxonomies>(std::move(t));
+    },
+    [=](atom::get, atom::taxonomies) { return self->state.taxonomies; },
     [=](accountant_type accountant) {
       VAST_ASSERT(accountant);
       VAST_DEBUG(self, "connects to", VAST_ARG(accountant));
