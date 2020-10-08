@@ -53,6 +53,7 @@
 #include "vast/system/spawn_type_registry.hpp"
 #include "vast/system/terminate.hpp"
 #include "vast/table_slice.hpp"
+#include "vast/taxonomies.hpp"
 
 #if VAST_HAVE_PCAP
 #  include "vast/format/pcap.hpp"
@@ -326,9 +327,9 @@ caf::message
 node_state::spawn_command(const invocation& inv,
                           [[maybe_unused]] caf::actor_system& sys) {
   VAST_TRACE(inv);
-  auto rp = this_node->make_response_promise();
   using std::begin;
   using std::end;
+  caf::response_promise rp;
   // We configured the command to have the name of the component.
   auto inv_name_split = detail::split(inv.full_name, " ");
   VAST_ASSERT(inv_name_split.size() > 1);
@@ -362,21 +363,45 @@ node_state::spawn_command(const invocation& inv,
     spawn_inv.options["import"] = import_opt;
     caf::put(spawn_inv.options, "vast.import", import_opt);
   }
-  // Spawn our new VAST component.
-  spawn_arguments args{spawn_inv, this_node->state.dir, label};
-  auto component = spawn_component(spawn_inv, args);
-  if (!component) {
-    if (component.error())
-      VAST_WARNING(__func__,
-                   "failed to spawn component:", render(component.error()));
-    rp.deliver(component.error());
-    return caf::make_message(component.error());
+  auto doit = [=](taxonomies_ptr t) mutable {
+    if (t) {
+      auto expr = normalized_and_validated(spawn_inv.arguments);
+      if (!expr)
+        rp.deliver(expr.error());
+      auto resolved = resolve(*t, *expr);
+      spawn_inv.arguments = std::vector{to_string(resolved)};
+    }
+    // Spawn our new VAST component.
+    spawn_arguments args{spawn_inv, this_node->state.dir, label};
+    auto component = spawn_component(spawn_inv, args);
+    if (!component) {
+      if (component.error())
+        VAST_WARNING(
+          __func__, "failed to spawn component:", render(component.error()));
+      rp.deliver(component.error());
+      return;
+    }
+    this_node->monitor(*component);
+    auto okay = this_node->state.registry.add(*component, std::move(comp_type),
+                                              std::move(label));
+    VAST_ASSERT(okay);
+    rp.deliver(*component);
+    return;
+  };
+  if (std::set<std::string>{"counter", "eraser", "exporter", "pivoter"}.count(
+        comp_type)
+      > 0u) {
+    if (auto tr_ = this_node->state.registry.find_by_label("type_registry")) {
+      auto tr = caf::actor_cast<type_registry_type>(tr_);
+      this_node
+        ->request(tr, defaults::system::initial_request_timeout, atom::get_v,
+                  atom::taxonomies_v)
+        .then(doit);
+    }
+  } else {
+    taxonomies t;
+    doit(nullptr);
   }
-  this_node->monitor(*component);
-  auto okay = this_node->state.registry.add(*component, std::move(comp_type),
-                                            std::move(label));
-  VAST_ASSERT(okay);
-  rp.deliver(*component);
   return caf::none;
 }
 
