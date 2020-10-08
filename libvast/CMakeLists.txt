@@ -158,6 +158,7 @@ set(libvast_sources
     src/system/count_command.cpp
     src/system/counter.cpp
     src/system/default_configuration.cpp
+    src/system/disk_monitor.cpp
     src/system/eraser.cpp
     src/system/evaluator.cpp
     src/system/explore_command.cpp
@@ -185,6 +186,7 @@ set(libvast_sources
     src/system/spawn_archive.cpp
     src/system/spawn_arguments.cpp
     src/system/spawn_counter.cpp
+    src/system/spawn_disk_monitor.cpp
     src/system/spawn_eraser.cpp
     src/system/spawn_explorer.cpp
     src/system/spawn_exporter.cpp

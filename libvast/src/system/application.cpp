@@ -399,7 +399,12 @@ auto make_status_command() {
 
 auto make_start_command() {
   return std::make_unique<command>(
-    "start", "starts a node", documentation::vast_start, opts("?vast.start"));
+    "start", "starts a node", documentation::vast_start,
+    opts("?vast.start")
+      .add<size_t>("disk-budget-check-interval", "time between two disk size "
+                                                 "scans")
+      .add<std::string>("disk-budget-high", "high-water mark for disk budget")
+      .add<std::string>("disk-budget-low", "low-water mark for disk budget"));
 }
 
 auto make_stop_command() {

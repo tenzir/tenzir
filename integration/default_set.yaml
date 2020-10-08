@@ -44,6 +44,21 @@ fixtures:
     exit: | # python
       node.stop()
 
+  DiskMonitorTester:
+    enter: | # python
+      node = Server(self.cmd,
+                    ['-e', f':{VAST_PORT}',
+                     '-i', 'node',
+                     '--disk-quota-high=20MiB',
+                     '--disk-quota-low=10MiB',
+                     'start'],
+                    work_dir, name='node', port=VAST_PORT,
+                    config_file=f'{self.config_file}')
+      cmd += ['-e', f':{VAST_PORT}']
+
+    exit: | # python
+      node.stop()
+
 tests:
   JSON schema inference:
     tags: [schema, infer, json]
@@ -376,3 +391,17 @@ tests:
       - command: import -b zeek
         input: data/zeek/conn.log.gz
       - command: count '#type ~ /suricata.*/'
+  # FIXME: This test still needs to be written, but the idea is import just enough
+  #        to hit the high-water mark, wait, and then verify that most of the
+  #        partitions and segments were deleted. As a nice bonus, this test will
+  #        also allow us to catch changes that drastically alter the amount of space
+  #        used by the on-disk layout for partitions/table slices.
+  # Disk monitor:
+  #   tags: [disk-quota]
+  #   fixture: DiskMonitorTester
+  #   steps:
+  #     - command: import -b zeek
+  #     - command: import -b zeek
+  #     - command: import -b zeek
+  #     - command: import -b zeek
+  #     - command: count '#type == /zeek.*/'

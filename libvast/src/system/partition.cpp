@@ -323,6 +323,8 @@ unpack(const fbs::partition::v0& partition, passive_partition_state& state) {
 caf::error unpack(const fbs::partition::v0& x, partition_synopsis& ps) {
   if (!x.partition_synopsis())
     return make_error(ec::format_error, "missing partition synopsis");
+  if (!x.type_ids())
+    return make_error(ec::format_error, "missing type_ids");
   return unpack(*x.partition_synopsis(), ps);
 }
 

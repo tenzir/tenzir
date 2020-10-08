@@ -60,6 +60,16 @@ vast:
   # period without escalation into a hard kill.
   shutdown-grace-period: "3m"
 
+  # The `vast start` command starts a new VAST server process.
+  start:
+    # Triggers removal of old data when the disk budget is exceeded.
+    disk-budget-high: 0K
+    # When the budget was exceeded, data is erased until the disk space
+    # is below this value.
+    disk-budget-low: 0K
+    # Seconds between successive disk space checks.
+    disk-budget-check-interval: 90
+
   # The `vast count` command counts hits for a query without exporting data.
   count:
     # Estimate an upper bound by skipping candidate checks

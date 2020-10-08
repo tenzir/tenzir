@@ -215,6 +215,7 @@ archive(archive_type::stateful_pointer<archive_state> self, path dir,
     [=](atom::erase, const ids& xs) {
       if (auto err = self->state.store->erase(xs))
         VAST_ERROR(self, "failed to erase events:", self->system().render(err));
+      return atom::done_v;
     },
   };
 }

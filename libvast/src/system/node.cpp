@@ -40,6 +40,7 @@
 #include "vast/system/spawn_archive.hpp"
 #include "vast/system/spawn_arguments.hpp"
 #include "vast/system/spawn_counter.hpp"
+#include "vast/system/spawn_disk_monitor.hpp"
 #include "vast/system/spawn_eraser.hpp"
 #include "vast/system/spawn_explorer.hpp"
 #include "vast/system/spawn_exporter.hpp"
@@ -249,6 +250,7 @@ auto make_component_factory() {
     {"spawn accountant", lift_component_factory<spawn_accountant>()},
       {"spawn archive", lift_component_factory<spawn_archive>()},
       {"spawn counter", lift_component_factory<spawn_counter>()},
+      {"spawn disk_monitor", lift_component_factory<spawn_disk_monitor>()},
       {"spawn eraser", lift_component_factory<spawn_eraser>()},
       {"spawn exporter", lift_component_factory<spawn_exporter>()},
       {"spawn explorer", lift_component_factory<spawn_explorer>()},
@@ -297,6 +299,7 @@ auto make_command_factory() {
     {"spawn accountant", node_state::spawn_command},
     {"spawn archive", node_state::spawn_command},
     {"spawn counter", node_state::spawn_command},
+    {"spawn disk_monitor", node_state::spawn_command},
     {"spawn eraser", node_state::spawn_command},
     {"spawn explorer", node_state::spawn_command},
     {"spawn exporter", node_state::spawn_command},
