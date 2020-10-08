@@ -119,8 +119,8 @@ jobs:
           echo "::set-output name=package_name::$PACKAGE_NAME"
           echo "::set-output name=publish_name::$PUBLISH_NAME"
           echo "::set-output name=build_dir::$BUILD_DIR"
-          echo "::set-env name=PACKAGE_NAME::$PACKAGE_NAME"
-          echo "::set-env name=BUILD_DIR::$BUILD_DIR"
+          echo "PACKAGE_NAME=$PACKAGE_NAME" >> $GITHUB_ENV
+          echo "BUILD_DIR=$BUILD_DIR" >> $GITHUB_ENV
           # Export slug variables for the cache action.
           slug_ref() {
             echo "$1" |
@@ -128,13 +128,13 @@ jobs:
               ${{ matrix.os.tag == 'macOS' && 'gsed' || 'sed' }} -r 's#refs/[^\/]*/##;s/[~\^]+//g;s/[^a-zA-Z0-9.]+/-/g;s/^-+\|-+$//g;s/^-*//;s/-*$//' |
               cut -c1-63
           }
-          echo ::set-env name=CACHE_REF_SLUG::"$(slug_ref "$GITHUB_REF")"
-          echo ::set-env name=CACHE_HEAD_REF_SLUG::"$(slug_ref "$GITHUB_HEAD_REF")"
-          echo ::set-env name=CACHE_BASE_REF_SLUG::"$(slug_ref "$GITHUB_BASE_REF")"
+          echo "CACHE_REF_SLUG=$(slug_ref "$GITHUB_REF")" >> $GITHUB_ENV
+          echo "CACHE_HEAD_REF_SLUG=$(slug_ref "$GITHUB_HEAD_REF")" >> $GITHUB_ENV
+          echo "CACHE_BASE_REF_SLUG=$(slug_ref "$GITHUB_BASE_REF")" >> $GITHUB_ENV
           if [[ "$GITHUB_REF" == refs/tags/* ]]; then
-            echo ::set-env name=DOCKER_RELEASE_VERSION::$(echo ${GITHUB_REF:10})
+            echo "DOCKER_RELEASE_VERSION=$(echo ${GITHUB_REF:10})" >> $GITHUB_ENV
           else
-            echo ::set-env name=DOCKER_RELEASE_VERSION::$(echo ${GITHUB_SHA})
+            echo "DOCKER_RELEASE_VERSION=$(echo ${GITHUB_SHA})" >> $GITHUB_ENV
           fi
 
       # For 'pull_request' events we want to take the latest build on the PR
