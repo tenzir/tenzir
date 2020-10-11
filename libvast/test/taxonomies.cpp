@@ -14,14 +14,25 @@
 
 using namespace vast;
 
-TEST(concepts) {
-  auto c1 = concepts_t{{"foo", {"a.fo0", "b.foO", "x.foe"}},
-                       {"bar", {"a.b@r", "b.baR"}}};
-  auto models = models_t{};
-  auto t1 = taxonomies{std::move(c1), std::move(models)};
+TEST(concepts - simple) {
+  auto c = concepts_t{{"foo", {"a.fo0", "b.foO", "x.foe"}},
+                      {"bar", {"a.bar", "b.baR"}}};
+  auto t = taxonomies{std::move(c), models_t{}};
   auto exp = unbox(to<expression>("foo == \"1\""));
   auto ref = unbox(to<expression>("a.fo0 == \"1\" || b.foO == \"1\" || x.foe "
                                   "== \"1\""));
-  auto result = resolve(t1, exp);
+  auto result = resolve(t, exp);
+  CHECK_EQUAL(result, ref);
+}
+
+TEST(concepts - cyclic definition) {
+  auto c = concepts_t{{"foo", {"bar", "a.fo0", "b.foO", "x.foe"}},
+                      {"bar", {"a.bar", "b.baR", "foo"}}};
+  auto t = taxonomies{std::move(c), models_t{}};
+  auto exp = unbox(to<expression>("foo == \"1\""));
+  auto ref
+    = unbox(to<expression>("a.fo0 == \"1\" || b.foO == \"1\" || x.foe == \"1\" "
+                           "|| a.bar == \"1\" || b.baR == \"1\""));
+  auto result = resolve(t, exp);
   CHECK_EQUAL(result, ref);
 }

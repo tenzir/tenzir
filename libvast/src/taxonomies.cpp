@@ -20,8 +20,8 @@
 #include <caf/serializer.hpp>
 
 #include <algorithm>
+#include <deque>
 #include <stack>
-#include <vector>
 
 namespace vast {
 
@@ -48,21 +48,35 @@ resolve_concepts(const concepts_t& concepts, const expression& orig) {
       // generates a predicate for every discovered name that is not a concept
       // itself.
       disjunction d;
-      std::stack<std::string> s;
-      std::vector<std::string> tried;
-      s.push(fe->field);
-      while (!s.empty()) {
-        auto x = s.top();
-        s.pop();
+      // The log of all fields that we tried to resolve to concepts already.
+      // This is a deque instead of a stable_set because we don't want
+      // push_back to invalidate the `current` iterator.
+      std::deque<std::string> log;
+      log.push_back(fe->field);
+      // The log is partitioned into 3 segments:
+      //  1. The item we're presently looking for (current)
+      //  2. The items that have been looked for already. Those are not
+      //     discarded because we must not enqueue any items more than once
+      //  3. The items that still need to be looked for
+      for (auto current = log.begin(); current != log.end(); ++current) {
+        auto& x = *current;
         auto i = concepts.find(x);
-        tried.push_back(x);
         if (i != concepts.end()) {
-          for (auto ri = i->second.rbegin(); ri != i->second.rend(); ++ri) {
-            // Cycle breaker.
-            if (std::find(tried.begin(), tried.end(), *ri) == tried.end())
-              s.push(*ri);
+          // x is a concpept, push target items to the back of the log, we
+          // will check if they are concepts themselves later.
+          for (auto ri = i->second.begin(); ri != i->second.end(); ++ri) {
+            // We need to prevent duplicate additions to the queue for 2
+            // reasons:
+            //  1. We don't want to add the same predicate to the expression
+            //     twice
+            //  2. If the target is itself a concept and it was already looked
+            //     for, adding it again would create an infinite loop.
+            if (std::find(log.begin(), log.end(), *ri) == log.end())
+              log.push_back(*ri);
           }
         } else {
+          // x is not a concept, that means it is a field and we create a
+          // predicate for it.
           d.emplace_back(predicate{field_extractor{x}, pred.op, pred.rhs});
         }
       }
