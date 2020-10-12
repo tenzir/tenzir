@@ -224,13 +224,6 @@ struct index_state {
   /// List of actors that wait for the next flush event.
   std::vector<caf::actor> flush_listeners;
 
-  /// Disables regular persisting of global state.
-  //  TODO: This is a workaround for situations where the meta index becomes
-  //  big enough that writing it becomes a significant performance issue for
-  //  the indexer. Ideally, we want to move the meta index state into the
-  //  individual partitions, so this would become irrelevant.
-  bool delay_flush_until_shutdown;
-
   /// Actor handle of the filesystem actor.
   filesystem_type filesystem;
 
@@ -250,9 +243,9 @@ pack(flatbuffers::FlatBufferBuilder& builder, const index_state& x);
 /// @param dir The directory of the index.
 /// @param partition_capacity The maximum number of events per partition.
 /// @pre `partition_capacity > 0
-caf::behavior index(caf::stateful_actor<index_state>* self, filesystem_type fs,
-                    path dir, size_t partition_capacity,
-                    size_t in_mem_partitions, size_t taste_partitions,
-                    size_t num_workers, bool delay_flush_until_shutdown);
+caf::behavior
+index(caf::stateful_actor<index_state>* self, filesystem_type fs, path dir,
+      size_t partition_capacity, size_t in_mem_partitions,
+      size_t taste_partitions, size_t num_workers);
 
 } // namespace vast::system

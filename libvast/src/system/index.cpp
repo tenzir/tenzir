@@ -433,13 +433,13 @@ void index_state::flush_to_disk() {
       });
 }
 
-caf::behavior index(caf::stateful_actor<index_state>* self, filesystem_type fs,
-                    path dir, size_t partition_capacity,
-                    size_t max_inmem_partitions, size_t taste_partitions,
-                    size_t num_workers, bool delay_flush_until_shutdown) {
+caf::behavior
+index(caf::stateful_actor<index_state>* self, filesystem_type fs, path dir,
+      size_t partition_capacity, size_t max_inmem_partitions,
+      size_t taste_partitions, size_t num_workers) {
   VAST_TRACE(VAST_ARG(fs), VAST_ARG(dir), VAST_ARG(partition_capacity),
              VAST_ARG(max_inmem_partitions), VAST_ARG(taste_partitions),
-             VAST_ARG(num_workers), VAST_ARG(delay_flush_until_shutdown));
+             VAST_ARG(num_workers));
   VAST_VERBOSE(self, "initializes index in", dir,
                "with a maximum partition size of", partition_capacity,
                "events");
@@ -447,7 +447,6 @@ caf::behavior index(caf::stateful_actor<index_state>* self, filesystem_type fs,
   self->state.self = self;
   self->state.filesystem = fs;
   self->state.dir = dir;
-  self->state.delay_flush_until_shutdown = delay_flush_until_shutdown;
   self->state.partition_capacity = partition_capacity;
   self->state.taste_partitions = taste_partitions;
   self->state.inmem_partitions.factory().fs() = fs;
@@ -523,8 +522,7 @@ caf::behavior index(caf::stateful_actor<index_state>* self, filesystem_type fs,
         VAST_DEBUG(self, "exceeds active capacity by",
                    (x->rows() - active.capacity), "rows");
         decomission_active_partition();
-        if (!self->state.delay_flush_until_shutdown)
-          self->state.flush_to_disk();
+        self->state.flush_to_disk();
         create_active_partition();
       }
       out.push(x);
