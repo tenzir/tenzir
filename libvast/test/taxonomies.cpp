@@ -20,30 +20,31 @@ TEST(concepts - simple) {
   auto t = taxonomies{std::move(c), models_type{}};
   {
     MESSAGE("LHS");
-    auto exp = unbox(to<expression>("foo == \"1\""));
-    auto ref = unbox(to<expression>("a.fo0 == \"1\" || b.foO == \"1\" || x.foe "
-                                    "== \"1\""));
+    auto exp = unbox(to<expression>("foo == 1"));
+    auto ref = unbox(to<expression>("a.fo0 == 1 || b.foO == 1 || x.foe == 1"));
     auto result = resolve(t, exp);
     CHECK_EQUAL(result, ref);
   }
   {
     MESSAGE("RHS");
-    auto exp = unbox(to<expression>("\"\" in foo"));
-    auto ref = unbox(to<expression>("\"\" in a.fo0 || \"\" in b.foO || \"\" in "
-                                    "x.foe"));
+    auto exp = unbox(to<expression>("0 in foo"));
+    auto ref = unbox(to<expression>("0 in a.fo0 || 0 in b.foO || 0 in x.foe"));
     auto result = resolve(t, exp);
     CHECK_EQUAL(result, ref);
   }
 }
 
 TEST(concepts - cyclic definition) {
+  // Concepts can reference other concepts in their definition. Two concepts
+  // referencing each other create a cycle. This test makes sure that the
+  // resolve function does not go into an infinite loop and the result is
+  // according to the expectation.
   auto c = concepts_type{{"foo", {"bar", "a.fo0", "b.foO", "x.foe"}},
                          {"bar", {"a.bar", "b.baR", "foo"}}};
   auto t = taxonomies{std::move(c), models_type{}};
-  auto exp = unbox(to<expression>("foo == \"1\""));
-  auto ref
-    = unbox(to<expression>("a.fo0 == \"1\" || b.foO == \"1\" || x.foe == \"1\" "
-                           "|| a.bar == \"1\" || b.baR == \"1\""));
+  auto exp = unbox(to<expression>("foo == 1"));
+  auto ref = unbox(to<expression>("a.fo0 == 1 || b.foO == 1 || x.foe == 1 || "
+                                  "a.bar == 1 || b.baR == 1"));
   auto result = resolve(t, exp);
   CHECK_EQUAL(result, ref);
 }
