@@ -14,6 +14,7 @@
 #pragma once
 
 #include "vast/fwd.hpp"
+#include "vast/type_set.hpp"
 
 #include <caf/meta/type_name.hpp>
 
@@ -50,5 +51,14 @@ struct taxonomies {
 /// @param e The original expression.
 /// @returns The sustitute expression.
 expression resolve(const taxonomies& t, const expression& e);
+
+/// Substitutes concept and model identifiers in field extractors with
+/// replacement expressions containing only concrete field names.
+/// @param t The set of taxonomies to apply.
+/// @param e The original expression.
+/// @param seen The set of all types in the database.
+/// @returns The sustitute expression.
+expression resolve(const taxonomies& t, const expression& e,
+                   const std::map<std::string, type_set>& seen);
 
 } // namespace vast

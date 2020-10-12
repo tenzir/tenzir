@@ -168,7 +168,7 @@ type_registry(type_registry_actor self, const path& dir) {
       self->state.taxonomies = std::move(t);
     },
     [=](atom::resolve, expression e) {
-      return resolve(self->state.taxonomies, e);
+      return resolve(self->state.taxonomies, e, self->state.data);
     },
     [=](accountant_type accountant) {
       VAST_ASSERT(accountant);
