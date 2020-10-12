@@ -60,11 +60,13 @@ resolve_concepts(const concepts_type& concepts, const expression& e) {
       //  3. The items that still need to be looked for
       for (auto current = log.begin(); current != log.end(); ++current) {
         auto& x = *current;
-        auto i = concepts.find(x);
-        if (i != concepts.end()) {
+        auto concept_ = concepts.find(x);
+        if (concept_ != concepts.end()) {
           // x is a concpept, push target items to the back of the log, we
           // will check if they are concepts themselves later.
-          for (auto ri = i->second.begin(); ri != i->second.end(); ++ri) {
+          auto& replacements = concept_->second;
+          // ri abbreviates "replacement iterator".
+          for (auto ri = replacements.begin(); ri != replacements.end(); ++ri) {
             // We need to prevent duplicate additions to the queue for 2
             // reasons:
             //  1. We don't want to add the same predicate to the expression
