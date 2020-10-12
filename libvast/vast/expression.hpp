@@ -278,7 +278,7 @@ auto inspect(Inspector&f, expression& x) {
 }
 
 template <class F>
-struct expression_visitor {
+struct predicate_transformer {
   expression operator()(caf::none_t) const {
     return caf::none;
   }
@@ -312,7 +312,7 @@ struct expression_visitor {
 /// @returns The transformed expression.
 template <typename F>
 expression for_each_predicate(const expression& e, F&& f) {
-  auto v = expression_visitor<F>{std::forward<F>(f)};
+  auto v = predicate_transformer<F>{std::forward<F>(f)};
   return caf::visit(v, e);
 }
 
