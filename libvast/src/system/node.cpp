@@ -363,14 +363,7 @@ node_state::spawn_command(const invocation& inv,
     spawn_inv.options["import"] = import_opt;
     caf::put(spawn_inv.options, "vast.import", import_opt);
   }
-  auto doit = [=](taxonomies_ptr t) mutable {
-    if (t) {
-      auto expr = normalized_and_validated(spawn_inv.arguments);
-      if (!expr)
-        rp.deliver(expr.error());
-      auto resolved = resolve(*t, *expr);
-      spawn_inv.arguments = std::vector{to_string(resolved)};
-    }
+  auto spawn_actually = [=](const invocation& spawn_inv) mutable {
     // Spawn our new VAST component.
     spawn_arguments args{spawn_inv, this_node->state.dir, label};
     auto component = spawn_component(spawn_inv, args);
@@ -388,19 +381,31 @@ node_state::spawn_command(const invocation& inv,
     rp.deliver(*component);
     return;
   };
-  if (std::set<std::string>{"counter", "eraser", "exporter", "pivoter"}.count(
-        comp_type)
-      > 0u) {
-    if (auto tr_ = this_node->state.registry.find_by_label("type_registry")) {
-      auto tr = caf::actor_cast<type_registry_type>(tr_);
+  auto handle_taxonomies = [=](taxonomies_ptr t) mutable {
+    if (t) {
+      auto expr = normalized_and_validated(spawn_inv.arguments);
+      if (!expr)
+        rp.deliver(expr.error());
+      auto resolved = resolve(*t, *expr);
+      spawn_inv.arguments = std::vector{to_string(resolved)};
+    }
+    spawn_actually(spawn_inv);
+  };
+  // Retrieve taxonomies and delay spawning until the response arrives if we're
+  // dealing with a query...
+  auto query_handlers
+    = std::set<std::string>{"counter", "eraser", "exporter", "pivoter"};
+  if (query_handlers.count(comp_type) > 0u) {
+    if (auto tr = this_node->state.registry.find_by_label("type_registry")) {
       this_node
-        ->request(tr, defaults::system::initial_request_timeout, atom::get_v,
+        ->request(caf::actor_cast<type_registry_type>(tr),
+                  defaults::system::initial_request_timeout, atom::get_v,
                   atom::taxonomies_v)
-        .then(doit);
+        .then(handle_taxonomies);
     }
   } else {
-    taxonomies t;
-    doit(nullptr);
+    // ... or spawn the component right away if not.
+    spawn_actually(spawn_inv);
   }
   return caf::none;
 }
