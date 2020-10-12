@@ -43,7 +43,7 @@ caf::error inspect(caf::deserializer& source, taxonomies_ptr& x) {
 static expression
 resolve_concepts(const concepts_t& concepts, const expression& orig) {
   return for_each_predicate(orig, [&](const auto& pred) {
-    if (auto fe = caf::get_if<field_extractor>(&pred.lhs)) {
+    auto run = [&](const std::string& field_name, auto make_predicate) {
       // This algorithm recursivly looks up items form the concepts map and
       // generates a predicate for every discovered name that is not a concept
       // itself.
@@ -52,7 +52,7 @@ resolve_concepts(const concepts_t& concepts, const expression& orig) {
       // This is a deque instead of a stable_set because we don't want
       // push_back to invalidate the `current` iterator.
       std::deque<std::string> log;
-      log.push_back(fe->field);
+      log.push_back(field_name);
       // The log is partitioned into 3 segments:
       //  1. The item we're presently looking for (current)
       //  2. The items that have been looked for already. Those are not
@@ -77,10 +77,20 @@ resolve_concepts(const concepts_t& concepts, const expression& orig) {
         } else {
           // x is not a concept, that means it is a field and we create a
           // predicate for it.
-          d.emplace_back(predicate{field_extractor{x}, pred.op, pred.rhs});
+          d.emplace_back(make_predicate(x));
         }
       }
       return expression{d};
+    };
+    if (auto fe = caf::get_if<field_extractor>(&pred.lhs)) {
+      return run(fe->field, [&](const std::string& item) {
+        return predicate{field_extractor{item}, pred.op, pred.rhs};
+      });
+    }
+    if (auto fe = caf::get_if<field_extractor>(&pred.rhs)) {
+      return run(fe->field, [&](const std::string& item) {
+        return predicate{pred.lhs, pred.op, field_extractor{item}};
+      });
     }
     return expression{pred};
   });

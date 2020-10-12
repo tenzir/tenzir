@@ -18,11 +18,22 @@ TEST(concepts - simple) {
   auto c = concepts_t{{"foo", {"a.fo0", "b.foO", "x.foe"}},
                       {"bar", {"a.bar", "b.baR"}}};
   auto t = taxonomies{std::move(c), models_t{}};
-  auto exp = unbox(to<expression>("foo == \"1\""));
-  auto ref = unbox(to<expression>("a.fo0 == \"1\" || b.foO == \"1\" || x.foe "
-                                  "== \"1\""));
-  auto result = resolve(t, exp);
-  CHECK_EQUAL(result, ref);
+  {
+    MESSAGE("LHS");
+    auto exp = unbox(to<expression>("foo == \"1\""));
+    auto ref = unbox(to<expression>("a.fo0 == \"1\" || b.foO == \"1\" || x.foe "
+                                    "== \"1\""));
+    auto result = resolve(t, exp);
+    CHECK_EQUAL(result, ref);
+  }
+  {
+    MESSAGE("RHS");
+    auto exp = unbox(to<expression>("\"\" in foo"));
+    auto ref = unbox(to<expression>("\"\" in a.fo0 || \"\" in b.foO || \"\" in "
+                                    "x.foe"));
+    auto result = resolve(t, exp);
+    CHECK_EQUAL(result, ref);
+  }
 }
 
 TEST(concepts - cyclic definition) {
