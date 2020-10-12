@@ -27,7 +27,7 @@ namespace vast {
 /// Maps concept names to the fields or concepts that implement them.
 using concepts_type = std::unordered_map<std::string, std::vector<std::string>>;
 
-/// Maps model names to the concepts or models from which they are constituted.
+/// Maps model names to the concepts or models that implement them.
 using models_type = std::unordered_map<std::string, std::vector<std::string>>;
 
 /// A taxonomy is a combination of concepts and models. VAST stores all
