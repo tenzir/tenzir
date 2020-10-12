@@ -21,6 +21,7 @@
 #include "vast/system/accountant.hpp"
 #include "vast/taxonomies.hpp"
 #include "vast/type.hpp"
+#include "vast/type_set.hpp"
 
 #include <caf/expected.hpp>
 #include <caf/typed_actor.hpp>
@@ -31,15 +32,6 @@
 #include <unordered_set>
 
 namespace vast::system {
-
-struct type_set {
-  std::unordered_set<vast::type> value;
-
-  template <class Inspector>
-  friend auto inspect(Inspector& f, type_set& x) {
-    return f(caf::meta::type_name("type_set"), x.value);
-  }
-};
 
 // clang-format off
 using type_registry_type = caf::typed_actor<

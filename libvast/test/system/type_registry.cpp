@@ -107,7 +107,7 @@ TEST(type_registry) {
     run();
     bool done = false;
     self
-      ->do_receive([&](vast::system::type_set result) {
+      ->do_receive([&](vast::type_set result) {
         size = result.value.size();
         done = true;
       })
