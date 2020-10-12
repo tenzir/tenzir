@@ -41,8 +41,8 @@ caf::error inspect(caf::deserializer& source, taxonomies_ptr& x) {
 }
 
 static expression
-resolve_concepts(const concepts_type& concepts, const expression& orig) {
-  return for_each_predicate(orig, [&](const auto& pred) {
+resolve_concepts(const concepts_type& concepts, const expression& e) {
+  return for_each_predicate(e, [&](const auto& pred) {
     auto run = [&](const std::string& field_name, auto make_predicate) {
       // This algorithm recursivly looks up items form the concepts map and
       // generates a predicate for every discovered name that is not a concept
@@ -96,8 +96,8 @@ resolve_concepts(const concepts_type& concepts, const expression& orig) {
   });
 }
 
-expression resolve(const taxonomies& t, const expression& orig) {
-  return resolve_concepts(t.concepts, orig);
+expression resolve(const taxonomies& t, const expression& e) {
+  return resolve_concepts(t.concepts, e);
 }
 
 } // namespace vast
