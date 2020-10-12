@@ -15,9 +15,9 @@
 using namespace vast;
 
 TEST(concepts - simple) {
-  auto c = concepts_t{{"foo", {"a.fo0", "b.foO", "x.foe"}},
-                      {"bar", {"a.bar", "b.baR"}}};
-  auto t = taxonomies{std::move(c), models_t{}};
+  auto c = concepts_type{{"foo", {"a.fo0", "b.foO", "x.foe"}},
+                         {"bar", {"a.bar", "b.baR"}}};
+  auto t = taxonomies{std::move(c), models_type{}};
   {
     MESSAGE("LHS");
     auto exp = unbox(to<expression>("foo == \"1\""));
@@ -37,9 +37,9 @@ TEST(concepts - simple) {
 }
 
 TEST(concepts - cyclic definition) {
-  auto c = concepts_t{{"foo", {"bar", "a.fo0", "b.foO", "x.foe"}},
-                      {"bar", {"a.bar", "b.baR", "foo"}}};
-  auto t = taxonomies{std::move(c), models_t{}};
+  auto c = concepts_type{{"foo", {"bar", "a.fo0", "b.foO", "x.foe"}},
+                         {"bar", {"a.bar", "b.baR", "foo"}}};
+  auto t = taxonomies{std::move(c), models_type{}};
   auto exp = unbox(to<expression>("foo == \"1\""));
   auto ref
     = unbox(to<expression>("a.fo0 == \"1\" || b.foO == \"1\" || x.foe == \"1\" "

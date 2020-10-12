@@ -41,7 +41,7 @@ caf::error inspect(caf::deserializer& source, taxonomies_ptr& x) {
 }
 
 static expression
-resolve_concepts(const concepts_t& concepts, const expression& orig) {
+resolve_concepts(const concepts_type& concepts, const expression& orig) {
   return for_each_predicate(orig, [&](const auto& pred) {
     auto run = [&](const std::string& field_name, auto make_predicate) {
       // This algorithm recursivly looks up items form the concepts map and

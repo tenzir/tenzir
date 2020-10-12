@@ -24,12 +24,12 @@
 
 namespace vast {
 
-using concepts_t = std::unordered_map<std::string, std::vector<std::string>>;
-using models_t = std::unordered_map<std::string, std::vector<std::string>>;
+using concepts_type = std::unordered_map<std::string, std::vector<std::string>>;
+using models_type = std::unordered_map<std::string, std::vector<std::string>>;
 
 struct taxonomies {
-  concepts_t concepts;
-  models_t models;
+  concepts_type concepts;
+  models_type models;
 
   friend bool operator==(const taxonomies& lhs, const taxonomies& rhs);
 

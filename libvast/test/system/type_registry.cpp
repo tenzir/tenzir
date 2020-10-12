@@ -117,10 +117,9 @@ TEST(type_registry) {
 
 TEST(taxonomies) {
   MESSAGE("set a taxonomy");
-  auto c1 = concepts_t{{"foo", {"a.fo0", "b.foO", "x.foe"}},
-                       {"bar", {"a.b@r", "b.baR"}}};
-  auto models = models_t{};
-  auto t1 = taxonomies{std::move(c1), std::move(models)};
+  auto c1 = concepts_type{{"foo", {"a.fo0", "b.foO", "x.foe"}},
+                          {"bar", {"a.b@r", "b.baR"}}};
+  auto t1 = taxonomies{c1, models_type{}};
   self->send(aut, atom::put_v, t1);
   run();
   MESSAGE("get it back");
@@ -132,7 +131,7 @@ TEST(taxonomies) {
   MESSAGE("set another taxonomy");
   auto c2 = c1;
   c2.insert({"car", {"chevy"}});
-  auto t2 = taxonomies{std::move(c2), std::move(models)};
+  auto t2 = taxonomies{c2, models_type{}};
   self->send(aut, atom::put_v, t2);
   run();
   CHECK_EQUAL(tp.use_count(), 1u);
