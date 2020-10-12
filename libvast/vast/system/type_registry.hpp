@@ -13,6 +13,7 @@
 
 #pragma once
 
+#include "vast/expression.hpp"
 #include "vast/fwd.hpp"
 #include "vast/path.hpp"
 #include "vast/schema.hpp"
@@ -50,7 +51,7 @@ using type_registry_type = caf::typed_actor<
   caf::replies_to<atom::get>::with<type_set>,
   caf::replies_to<atom::get, std::string>::with<type_set>,
   caf::reacts_to<atom::put, vast::taxonomies>,
-  caf::replies_to<atom::get, atom::taxonomies>::with<taxonomies_ptr>,
+  caf::replies_to<atom::resolve, expression>::with<expression>,
   caf::reacts_to<accountant_type>
 >;
 // clang-format on
@@ -93,7 +94,7 @@ struct type_registry_state {
   type_registry_actor self = {};
   accountant_type accountant = {};
   std::map<std::string, type_set> data = {};
-  taxonomies_ptr taxonomies = {};
+  vast::taxonomies taxonomies = {};
   vast::path dir = {};
 };
 

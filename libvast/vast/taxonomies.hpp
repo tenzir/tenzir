@@ -44,18 +44,6 @@ struct taxonomies {
   }
 };
 
-/// The taxonomies_ptr is used to hand out pointers to the taxonomies and let
-/// the receiver co-own them for the time they need to.
-using taxonomies_ptr = std::shared_ptr<const taxonomies>;
-
-// Required to put a taxonomies_ptr into a caf::message.
-/// @relates taxonomies_ptr
-caf::error inspect(caf::serializer& sink, const taxonomies_ptr& x);
-
-// Required to put a taxonomies_ptr into a caf::message.
-/// @relates taxonomies_ptr
-caf::error inspect(caf::deserializer& source, taxonomies_ptr& x);
-
 /// Substitutes concept and model identifiers in field extractors with
 /// replacement expressions containing only concrete field names.
 /// @param t The set of taxonomies to apply.

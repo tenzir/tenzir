@@ -381,14 +381,8 @@ node_state::spawn_command(const invocation& inv,
     rp.deliver(*component);
     return;
   };
-  auto handle_taxonomies = [=](taxonomies_ptr t) mutable {
-    if (t) {
-      auto expr = normalized_and_validated(spawn_inv.arguments);
-      if (!expr)
-        rp.deliver(expr.error());
-      auto resolved = resolve(*t, *expr);
-      spawn_inv.arguments = std::vector{to_string(resolved)};
-    }
+  auto handle_taxonomies = [=](expression e) mutable {
+    spawn_inv.arguments = std::vector{to_string(e)};
     spawn_actually(spawn_inv);
   };
   // Retrieve taxonomies and delay spawning until the response arrives if we're
@@ -397,10 +391,11 @@ node_state::spawn_command(const invocation& inv,
     = std::set<std::string>{"counter", "eraser", "exporter", "pivoter"};
   if (query_handlers.count(comp_type) > 0u) {
     if (auto tr = this_node->state.registry.find_by_label("type_registry")) {
+      auto expr = normalized_and_validated(spawn_inv.arguments);
       this_node
         ->request(caf::actor_cast<type_registry_type>(tr),
-                  defaults::system::initial_request_timeout, atom::get_v,
-                  atom::taxonomies_v)
+                  defaults::system::initial_request_timeout, atom::resolve_v,
+                  *expr)
         .then(handle_taxonomies);
     }
   } else {

@@ -29,17 +29,6 @@ bool operator==(const taxonomies& lhs, const taxonomies& rhs) {
   return lhs.concepts == rhs.concepts && lhs.models == rhs.models;
 }
 
-caf::error inspect(caf::serializer& sink, const taxonomies_ptr& x) {
-  return sink(*x);
-}
-
-caf::error inspect(caf::deserializer& source, taxonomies_ptr& x) {
-  if (x.use_count() > 1)
-    return make_error(ec::logic_error, "deserializing into object with multiple"
-                                       "owners violates precondition");
-  return source(*x);
-}
-
 static expression
 resolve_concepts(const concepts_type& concepts, const expression& e) {
   return for_each_predicate(e, [&](const auto& pred) {

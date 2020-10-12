@@ -8,6 +8,8 @@
 #include "vast/test/test.hpp"
 
 #include "vast/caf_table_slice_builder.hpp"
+#include "vast/concept/parseable/to.hpp"
+#include "vast/concept/parseable/vast/expression.hpp"
 #include "vast/detail/notifying_stream_manager.hpp"
 #include "vast/detail/spawn_container_source.hpp"
 #include "vast/system/exporter.hpp"
@@ -122,20 +124,14 @@ TEST(taxonomies) {
   auto t1 = taxonomies{c1, models_type{}};
   self->send(aut, atom::put_v, t1);
   run();
-  MESSAGE("get it back");
-  taxonomies_ptr tp;
-  self->send(aut, atom::get_v, atom::taxonomies_v);
+  MESSAGE("resolving an expression");
+  auto exp = unbox(to<expression>("foo == 1"));
+  auto ref = unbox(to<expression>("a.fo0 == 1 || b.foO == 1 || x.foe == 1"));
+  self->send(aut, atom::resolve_v, exp);
   run();
-  self->receive([&](taxonomies_ptr p) { tp = p; }, error_handler());
-  CHECK_EQUAL(tp.use_count(), 2u);
-  MESSAGE("set another taxonomy");
-  auto c2 = c1;
-  c2.insert({"car", {"chevy"}});
-  auto t2 = taxonomies{c2, models_type{}};
-  self->send(aut, atom::put_v, t2);
-  run();
-  CHECK_EQUAL(tp.use_count(), 1u);
-  CHECK_EQUAL(t1, *tp);
+  expression result;
+  self->receive([&](expression r) { result = r; }, error_handler());
+  CHECK_EQUAL(result, ref);
 }
 
 FIXTURE_SCOPE_END()
