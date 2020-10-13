@@ -81,17 +81,17 @@ struct fixture : fixtures::deterministic_actor_system_and_events {
   using type_registry_actor
     = system::type_registry_type::stateful_pointer<system::type_registry_state>;
 
-  caf::actor spawn_aut() {
+  system::type_registry_type spawn_aut() {
     auto handle = sys.spawn(system::type_registry, directory);
     sched.run();
-    return caf::actor_cast<caf::actor>(handle);
+    return handle;
   }
 
   system::type_registry_state& state() {
     return caf::actor_cast<type_registry_actor>(aut)->state;
   }
 
-  caf::actor aut;
+  system::type_registry_type aut;
 };
 
 FIXTURE_SCOPE(type_registry_tests, fixture)
@@ -109,8 +109,7 @@ TEST(type_registry) {
   MESSAGE("retrieving layouts");
   {
     size_t size = -1;
-    std::string name = "mock";
-    self->send(aut, atom::get_v, name);
+    self->send(aut, atom::get_v);
     run();
     bool done = false;
     self

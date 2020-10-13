@@ -41,7 +41,6 @@ using type_registry_type = caf::typed_actor<
   caf::reacts_to<atom::put, vast::type>,
   caf::reacts_to<atom::put, vast::schema>,
   caf::replies_to<atom::get>::with<type_set>,
-  caf::replies_to<atom::get, std::string>::with<type_set>,
   caf::reacts_to<atom::put, taxonomies>,
   caf::replies_to<atom::resolve, expression>::with<expression>,
   caf::reacts_to<accountant_type>
@@ -79,9 +78,6 @@ struct type_registry_state {
 
   /// Get a list of known types from the registry.
   type_set types() const;
-
-  /// Get a list of known types from the registry for a name.
-  type_set types(std::string key) const;
 
   type_registry_actor self = {};
   accountant_type accountant = {};

@@ -92,12 +92,6 @@ type_set type_registry_state::types() const {
   return {result};
 }
 
-type_set type_registry_state::types(std::string key) const {
-  if (auto it = data.find(std::move(key)); it != data.end())
-    return it->second;
-  return {};
-}
-
 type_registry_behavior
 type_registry(type_registry_actor self, const path& dir) {
   self->state.self = self;
@@ -157,11 +151,6 @@ type_registry(type_registry_actor self, const path& dir) {
     [=](atom::get) {
       VAST_TRACE(self, "retrieves a list of all known types");
       return self->state.types();
-    },
-    [=](atom::get, std::string name) {
-      VAST_TRACE(self, "retrieves a list of all known types for",
-                 VAST_ARG(name));
-      return self->state.types(name);
     },
     [=](atom::put, taxonomies t) {
       VAST_TRACE("");
