@@ -372,14 +372,14 @@ node_state::spawn_command(const invocation& inv,
         VAST_WARNING(
           __func__, "failed to spawn component:", render(component.error()));
       rp.deliver(component.error());
-      return;
+      return caf::make_message(std::move(component.error()));
     }
     this_node->monitor(*component);
     auto okay = this_node->state.registry.add(*component, std::move(comp_type),
                                               std::move(label));
     VAST_ASSERT(okay);
     rp.deliver(*component);
-    return;
+    return caf::make_message(*component);
   };
   auto handle_taxonomies = [=](expression e) mutable {
     spawn_inv.arguments = std::vector{to_string(e)};
@@ -397,12 +397,11 @@ node_state::spawn_command(const invocation& inv,
                   defaults::system::initial_request_timeout, atom::resolve_v,
                   *expr)
         .then(handle_taxonomies);
+      return caf::none;
     }
-  } else {
-    // ... or spawn the component right away if not.
-    spawn_actually(spawn_inv);
   }
-  return caf::none;
+  // ... or spawn the component right away if not.
+  return spawn_actually(spawn_inv);
 }
 
 caf::behavior node(node_actor* self, std::string name, path dir,
@@ -493,6 +492,7 @@ caf::behavior node(node_actor* self, std::string name, path dir,
                                  shutdown_kill_timeout);
   });
   // Define the node behavior.
+  self->set_default_handler(caf::print_and_drop);
   return {
     [=](const invocation& inv) {
       VAST_DEBUG(self, "got command", inv.full_name, "with options",
