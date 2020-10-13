@@ -167,7 +167,7 @@ type_registry(type_registry_actor self, const path& dir) {
       VAST_TRACE("");
       self->state.taxonomies = std::move(t);
     },
-    [=](atom::resolve, expression e) {
+    [=](atom::resolve, const expression& e) {
       return resolve(self->state.taxonomies, e, self->state.data);
     },
     [=](accountant_type accountant) {

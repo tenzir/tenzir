@@ -381,7 +381,7 @@ node_state::spawn_command(const invocation& inv,
     rp.deliver(*component);
     return caf::make_message(*component);
   };
-  auto handle_taxonomies = [=](expression e) mutable {
+  auto handle_taxonomies = [=](const expression& e) mutable {
     spawn_inv.arguments = std::vector{to_string(e)};
     spawn_actually(spawn_inv);
   };
@@ -395,7 +395,7 @@ node_state::spawn_command(const invocation& inv,
       this_node
         ->request(caf::actor_cast<type_registry_type>(tr),
                   defaults::system::initial_request_timeout, atom::resolve_v,
-                  *expr)
+                  std::move(*expr))
         .then(handle_taxonomies);
       return caf::none;
     }
