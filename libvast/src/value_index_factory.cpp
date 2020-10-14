@@ -19,6 +19,7 @@
 #include "vast/detail/bit.hpp"
 #include "vast/detail/type_traits.hpp"
 #include "vast/hash_index.hpp"
+#include "vast/index/arithmetic_index.hpp"
 #include "vast/logger.hpp"
 #include "vast/type.hpp"
 #include "vast/value_index.hpp"

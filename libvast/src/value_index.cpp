@@ -15,8 +15,7 @@
 
 #include "vast/base.hpp"
 #include "vast/defaults.hpp"
-
-#include <caf/settings.hpp>
+#include "vast/index/container_lookup.hpp"
 
 #include <cmath>
 
