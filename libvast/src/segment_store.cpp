@@ -399,7 +399,8 @@ uint64_t segment_store::drop(segment& x) {
   auto s = fbs::GetSegment(x.chunk()->data());
   auto s0 = s->segment_as_v0();
   for (auto buffer : *s0->slices())
-    erased_events += buffer->data_nested_root()->rows();
+    erased_events
+      += buffer->data_nested_root()->table_slice_as_generic_v0()->rows();
   VAST_INFO(this, "erases entire segment", segment_id);
   // Schedule deletion of the segment file when releasing the chunk.
   auto filename = segment_path() / to_string(segment_id);

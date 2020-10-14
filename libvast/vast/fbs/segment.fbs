@@ -21,7 +21,7 @@ table v0 {
   version: Version;
 
   /// The contained table slices.
-  slices: [table_slice_buffer.v0];
+  slices: [TableSliceBuffer];
 
   /// A unique identifier.
   uuid: uuid.v0;

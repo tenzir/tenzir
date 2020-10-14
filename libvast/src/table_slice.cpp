@@ -194,7 +194,7 @@ caf::error inspect(caf::deserializer& source, table_slice_ptr& ptr) {
 // TODO: this function will boil down to accessing the chunk inside the table
 // slice and then calling GetTableSlice(buf). But until we touch the table
 // slice internals, we use this helper.
-caf::expected<flatbuffers::Offset<fbs::table_slice_buffer::v0>>
+caf::expected<flatbuffers::Offset<fbs::TableSliceBuffer>>
 pack(flatbuffers::FlatBufferBuilder& builder, table_slice_ptr x) {
   // This local builder instance will vanish once we can access the underlying
   // chunk of a table slice.
@@ -207,13 +207,15 @@ pack(flatbuffers::FlatBufferBuilder& builder, table_slice_ptr x) {
   caf::binary_serializer sink2{nullptr, data_buffer};
   if (auto error = sink2(x))
     return error;
-  auto transform = [](caf::atom_value x) -> caf::expected<fbs::Encoding> {
+  auto transform =
+    [](
+      caf::atom_value x) -> caf::expected<fbs::table_slice::generic::Encoding> {
     if (x == caf::atom("caf"))
-      return fbs::Encoding::CAF;
+      return fbs::table_slice::generic::Encoding::CAF;
     if (x == caf::atom("arrow"))
-      return fbs::Encoding::Arrow;
+      return fbs::table_slice::generic::Encoding::Arrow;
     if (x == caf::atom("msgpack"))
-      return fbs::Encoding::MessagePack;
+      return fbs::table_slice::generic::Encoding::MessagePack;
     return make_error(ec::unspecified, "unsupported table slice type", x);
   };
   auto encoding = transform(x->implementation_id());
@@ -223,12 +225,17 @@ pack(flatbuffers::FlatBufferBuilder& builder, table_slice_ptr x) {
   auto layout = local_builder.CreateVector(layout_ptr, layout_buffer.size());
   auto data_ptr = reinterpret_cast<const uint8_t*>(data_buffer.data());
   auto data = local_builder.CreateVector(data_ptr, data_buffer.size());
-  fbs::table_slice::v0Builder table_slice_builder{local_builder};
-  table_slice_builder.add_offset(x->offset());
-  table_slice_builder.add_rows(x->rows());
-  table_slice_builder.add_layout(layout);
-  table_slice_builder.add_encoding(*encoding);
-  table_slice_builder.add_data(data);
+  fbs::table_slice::generic::v0Builder generic_v0_builder{local_builder};
+  generic_v0_builder.add_offset(x->offset());
+  generic_v0_builder.add_rows(x->rows());
+  generic_v0_builder.add_layout(layout);
+  generic_v0_builder.add_encoding(*encoding);
+  generic_v0_builder.add_data(data);
+  auto generic_v0_slice = generic_v0_builder.Finish();
+  fbs::TableSliceBuilder table_slice_builder{local_builder};
+  table_slice_builder.add_table_slice_type(
+    fbs::table_slice::TableSlice::generic_v0);
+  table_slice_builder.add_table_slice(generic_v0_slice.Union());
   auto flat_slice = table_slice_builder.Finish();
   local_builder.Finish(flat_slice);
   auto buffer = span<const uint8_t>{local_builder.GetBufferPointer(),
@@ -236,13 +243,13 @@ pack(flatbuffers::FlatBufferBuilder& builder, table_slice_ptr x) {
   // This is the only code that will remain. All the stuff above will move into
   // the respective table slice builders.
   auto bytes = builder.CreateVector(buffer.data(), buffer.size());
-  fbs::table_slice_buffer::v0Builder table_slice_buffer_builder{builder};
+  fbs::TableSliceBufferBuilder table_slice_buffer_builder{builder};
   table_slice_buffer_builder.add_data(bytes);
   return table_slice_buffer_builder.Finish();
 }
 
 // TODO: The dual to the note above applies here.
-caf::error unpack(const fbs::table_slice::v0& x, table_slice_ptr& y) {
+caf::error unpack(const fbs::table_slice::generic::v0& x, table_slice_ptr& y) {
   auto ptr = reinterpret_cast<const char*>(x.data()->Data());
   caf::binary_deserializer source{nullptr, ptr, x.data()->size()};
   return source(y);
