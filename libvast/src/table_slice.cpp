@@ -17,6 +17,7 @@
 
 #include "vast/detail/assert.hpp"
 #include "vast/detail/overload.hpp"
+#include "vast/die.hpp"
 #include "vast/table_slice_visit.hpp"
 
 #include <utility>
@@ -62,31 +63,48 @@ namespace v1 {
 
 // -- constructors, destructors, and assignment operators ----------------------
 
-table_slice::table_slice() {
-  // nop
+table_slice::table_slice() noexcept {
+  ++num_instances_;
 }
 
-table_slice::~table_slice() {
-  // nop
+table_slice::~table_slice() noexcept {
+  --num_instances_;
 }
 
-table_slice::table_slice(const table_slice& other) : chunk_{other.chunk_} {
-  // nop
+table_slice::table_slice(const table_slice& other) noexcept
+  : chunk_{other.chunk_} {
+  ++num_instances_;
 }
 
-table_slice& table_slice::operator=(const table_slice& rhs) {
+table_slice& table_slice::operator=(const table_slice& rhs) noexcept {
   chunk_ = rhs.chunk_;
+  ++num_instances_;
   return *this;
 }
 
-table_slice::table_slice(table_slice&& other)
+table_slice::table_slice(table_slice&& other) noexcept
   : chunk_{std::exchange(other.chunk_, {})} {
   // nop
 }
 
-table_slice& table_slice::operator=(table_slice&& rhs) {
+table_slice& table_slice::operator=(table_slice&& rhs) noexcept {
   chunk_ = std::exchange(rhs.chunk_, {});
   return *this;
+}
+
+// -- comparison operators -----------------------------------------------------
+
+bool operator==(const table_slice& lhs, const table_slice& rhs) {
+  if (&lhs == &rhs)
+    return true;
+  if (lhs.num_rows() != rhs.num_rows() || lhs.num_columns() != rhs.num_columns()
+      || lhs.layout() != rhs.layout())
+    return false;
+  for (size_t row = 0; row < lhs.num_rows(); ++row)
+    for (size_t col = 0; col < lhs.num_columns(); ++col)
+      if (lhs.at(row, col) != rhs.at(row, col))
+        return false;
+  return true;
 }
 
 // -- properties: encoding -----------------------------------------------------
@@ -95,15 +113,76 @@ table_slice& table_slice::operator=(table_slice&& rhs) {
 table_slice_encoding table_slice::encoding() const noexcept {
   return visit(
     detail::overload{
-      [] { return table_slice_encoding::invalid; },
+      []() noexcept { return table_slice_encoding::invalid; },
     },
     *this);
 }
 
+// -- properties: offset -------------------------------------------------------
+
+id table_slice::offset() const noexcept {
+  return offset_;
+}
+
+/// Sets the offset in the ID space.
+void table_slice::offset(id offset) noexcept {
+  // It is usually an error to set the offset when the table slice is shared.
+  VAST_ASSERT(chunk() && chunk()->unique());
+  offset_ = std::move(offset);
+}
+
+// -- properties: rows ---------------------------------------------------------
+
+table_slice::size_type table_slice::num_rows() const noexcept {
+  return visit(
+    detail::overload{
+      []() noexcept { return size_type{}; },
+    },
+    *this);
+}
+
+// -- properties: columns ------------------------------------------------------
+
+table_slice::size_type table_slice::num_columns() const noexcept {
+  return visit(
+    detail::overload{
+      []() noexcept { return size_type{}; },
+    },
+    *this);
+}
+
+// -- properties: layout -------------------------------------------------------
+
+record_type table_slice::layout() const noexcept {
+  return visit(
+    detail::overload{
+      []() noexcept { return record_type{}; },
+    },
+    *this);
+}
+
+// -- properties: data access --------------------------------------------------
+
+data_view table_slice::at(size_type row, size_type column) const {
+  VAST_ASSERT(row < num_rows());
+  VAST_ASSERT(column < num_columns());
+  return visit(
+    detail::overload{
+      []() noexcept -> data_view {
+        // The preconditions imply that this handler can never be called.
+        die("logic error: invalid table slices cannot be accessed");
+      },
+    },
+    *this);
+}
 // -- type introspection -------------------------------------------------------
 
 const chunk_ptr& table_slice::chunk() const noexcept {
   return chunk_;
+}
+
+size_t table_slice::instances() noexcept {
+  return table_slice::num_instances_;
 }
 
 // -- implementation details ---------------------------------------------------

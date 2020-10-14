@@ -19,6 +19,9 @@
 #include "vast/fwd.hpp"
 #include "vast/table_slice_builder.hpp"
 #include "vast/table_slice_encoding.hpp"
+#include "vast/view.hpp"
+
+#include <atomic>
 
 // -- v0 includes --------------------------------------------------------------
 
@@ -45,33 +48,80 @@ class table_slice final {
   friend class table_slice_builder;
 
 public:
+  // -- types and constants ----------------------------------------------------
+
+  using size_type = uint64_t;
+
   // -- constructors, destructors, and assignment operators --------------------
 
   // Default-construct an invalid table slice.
-  table_slice();
+  table_slice() noexcept;
 
   /// Destroys a table slice.
-  ~table_slice();
+  ~table_slice() noexcept;
 
   /// Copy-constructs a table slice.
   /// @param other The table slice to copy.
-  table_slice(const table_slice& other);
-  table_slice& operator=(const table_slice& rhs);
+  table_slice(const table_slice& other) noexcept;
+  table_slice& operator=(const table_slice& rhs) noexcept;
 
   /// Move-constructs a table slice.
   /// @param other The table slice to move from.
-  table_slice(table_slice&& other);
-  table_slice& operator=(table_slice&& rhs);
+  table_slice(table_slice&& other) noexcept;
+  table_slice& operator=(table_slice&& rhs) noexcept;
+
+  // -- comparison operators ---------------------------------------------------
+
+  /// Compares two table slices for equality.
+  friend bool operator==(const table_slice& lhs, const table_slice& rhs);
+
+  // -- properties: offset -----------------------------------------------------
+
+  /// @returns The offset in the ID space.
+  id offset() const noexcept;
+
+  /// Sets the offset in the ID space.
+  /// @param offset The new offset in the ID space.
+  /// @pre `chunk() && chunk()->unique()`
+  void offset(id offset) noexcept;
 
   // -- properties: encoding ---------------------------------------------------
 
   /// @returns The encoding of the table slice.
   table_slice_encoding encoding() const noexcept;
 
+  // -- properties: rows -------------------------------------------------------
+
+  /// @returns The number of rows in the slice.
+  size_type num_rows() const noexcept;
+
+  // -- properties: columns ----------------------------------------------------
+
+  /// @returns The number of rows in the slice.
+  size_type num_columns() const noexcept;
+
+  // -- properties: layout -----------------------------------------------------
+
+  /// @returns The table layout.
+  record_type layout() const noexcept;
+
+  // -- properties: data access ------------------------------------------------
+
+  /// Retrieves data by specifying 2D-coordinates via row and column.
+  /// @param row The row offset.
+  /// @param column The column offset.
+  /// @returns The data view at the requested position.
+  /// @pre `row < num_rows()`
+  /// @pre `column < num_columns()`
+  data_view at(size_type row, size_type column) const;
+
   // -- type introspection -----------------------------------------------------
 
   /// @returns The underlying chunk.
   const chunk_ptr& chunk() const noexcept;
+
+  /// @returns Number of in-memory table slices.
+  static size_t instances() noexcept;
 
   /// Visitor function for the CAF Type Inspection API; do not call directly.
   /// @param f The visitor used for inspection.
@@ -80,7 +130,7 @@ public:
   /// Inspection API.
   template <class Inspector>
   friend auto inspect(Inspector& f, table_slice& slice) {
-    return f(caf::meta::type_name("table_slice"), slice.chunk_);
+    return f(caf::meta::type_name("table_slice"), slice.chunk_, slice.offset_);
   }
 
 private:
@@ -93,7 +143,14 @@ private:
   /// @relates table_slice_builder
   explicit table_slice(chunk_ptr chunk) noexcept;
 
+  /// The raw data of the table slice.
   chunk_ptr chunk_ = nullptr;
+
+  /// The offset in the id space.
+  id offset_ = invalid_id;
+
+  /// The number of in-memory table slices.
+  inline static std::atomic<size_t> num_instances_ = 0;
 };
 
 } // namespace v1
