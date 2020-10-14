@@ -16,6 +16,8 @@
 #include "vast/table_slice.hpp"
 
 #include "vast/detail/assert.hpp"
+#include "vast/detail/overload.hpp"
+#include "vast/table_slice_visit.hpp"
 
 #include <utility>
 
@@ -91,7 +93,11 @@ table_slice& table_slice::operator=(table_slice&& rhs) {
 
 /// @returns The encoding of the table slice.
 table_slice_encoding table_slice::encoding() const noexcept {
-  return table_slice_encoding::invalid;
+  return visit(
+    detail::overload{
+      [] { return table_slice_encoding::invalid; },
+    },
+    *this);
 }
 
 // -- type introspection -------------------------------------------------------
