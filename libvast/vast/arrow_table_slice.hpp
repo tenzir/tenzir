@@ -13,6 +13,12 @@
 
 #pragma once
 
+// -- v1 includes --------------------------------------------------------------
+
+#include "vast/fwd.hpp"
+
+// -- v0 includes --------------------------------------------------------------
+
 #include "vast/fwd.hpp"
 #include "vast/table_slice.hpp"
 #include "vast/view.hpp"
@@ -25,6 +31,14 @@
 #include <memory>
 
 namespace vast {
+
+namespace v1 {
+
+class arrow_table_slice final {};
+
+} // namespace v1
+
+inline namespace v0 {
 
 /// A table slice that stores elements encoded in the
 /// [Arrow](https://arrow.org) format. The implementation stores data in
@@ -88,5 +102,7 @@ private:
 
 /// @relates arrow_table_slice
 using arrow_table_slice_ptr = caf::intrusive_cow_ptr<arrow_table_slice>;
+
+} // namespace v0
 
 } // namespace vast

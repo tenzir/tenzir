@@ -13,12 +13,16 @@
 
 #pragma once
 
-#include <cstdint>
+// -- v0 includes --------------------------------------------------------------
 
 #include "vast/aliases.hpp"
 #include "vast/type.hpp"
 
+#include <cstdint>
+
 namespace vast {
+
+inline namespace v0 {
 
 /// The header of a table slice.
 /// @relates table_slice
@@ -33,5 +37,7 @@ template <class Inspector>
 auto inspect(Inspector& f, table_slice_header& x) {
   return f(x.layout, x.rows, x.offset);
 }
+
+} // namespace v0
 
 } // namespace vast

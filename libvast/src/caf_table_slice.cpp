@@ -11,8 +11,13 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
+// -- v1 includes --------------------------------------------------------------
+
 #include "vast/caf_table_slice.hpp"
 
+// -- v0 includes --------------------------------------------------------------
+
+#include "vast/caf_table_slice.hpp"
 #include "vast/caf_table_slice_builder.hpp"
 #include "vast/value_index.hpp"
 
@@ -20,6 +25,10 @@
 #include <caf/serializer.hpp>
 
 namespace vast {
+
+namespace v1 {} // namespace v1
+
+inline namespace v0 {
 
 caf_table_slice* caf_table_slice::copy() const {
   return new caf_table_slice(*this);
@@ -71,5 +80,7 @@ caf_table_slice::caf_table_slice(table_slice_header header)
   : table_slice{std::move(header)} {
   // nop
 }
+
+} // namespace v0
 
 } // namespace vast

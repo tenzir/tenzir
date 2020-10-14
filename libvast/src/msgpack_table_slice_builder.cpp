@@ -11,11 +11,16 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
+// -- v1 includes --------------------------------------------------------------
+
 #include "vast/msgpack_table_slice_builder.hpp"
+
+// -- v0 includes --------------------------------------------------------------
 
 #include "vast/detail/overload.hpp"
 #include "vast/logger.hpp"
 #include "vast/msgpack_table_slice.hpp"
+#include "vast/msgpack_table_slice_builder.hpp"
 
 #include <caf/make_copy_on_write.hpp>
 #include <caf/make_counted.hpp>
@@ -25,6 +30,19 @@
 using namespace vast;
 
 namespace vast {
+
+namespace v1 {} // namespace v1
+
+namespace msgpack {
+
+// We activate ADL for data_view here so that we can rely on existing recursive
+// put functions defined in msgpack_builder.hpp.
+template <class Builder>
+[[nodiscard]] size_t put(Builder& builder, data_view v);
+
+} // namespace msgpack
+
+inline namespace v0 {
 
 caf::atom_value msgpack_table_slice_builder::get_implementation_id() noexcept {
   return msgpack_table_slice::class_id;
@@ -108,17 +126,6 @@ size_t encode(Builder& builder, View v) {
 
 } // namespace
 
-namespace msgpack {
-
-// We activate ADL for data_view here so that we can rely on existing recursive
-// put functions defined in msgpack_builder.hpp.
-template <class Builder>
-[[nodiscard]] size_t put(Builder& builder, data_view v) {
-  return caf::visit([&](auto&& x) { return encode(builder, x); }, v);
-}
-
-} // namespace msgpack
-
 bool msgpack_table_slice_builder::add_impl(data_view x) {
   // Check whether input is valid.
   if (!type_check(layout().fields[col_].type, x))
@@ -155,5 +162,18 @@ caf::atom_value
 msgpack_table_slice_builder::implementation_id() const noexcept {
   return get_implementation_id();
 }
+
+} // namespace v0
+
+namespace msgpack {
+
+// We activate ADL for data_view here so that we can rely on existing recursive
+// put functions defined in msgpack_builder.hpp.
+template <class Builder>
+[[nodiscard]] size_t put(Builder& builder, data_view v) {
+  return caf::visit([&](auto&& x) { return encode(builder, x); }, v);
+}
+
+} // namespace msgpack
 
 } // namespace vast

@@ -13,6 +13,13 @@
 
 #pragma once
 
+// -- v1 includes --------------------------------------------------------------
+
+#include "vast/fwd.hpp"
+#include "vast/table_slice_builder.hpp"
+
+// -- v0 includes --------------------------------------------------------------
+
 #include "vast/table_slice.hpp"
 #include "vast/table_slice_builder.hpp"
 
@@ -30,6 +37,14 @@ class Schema;
 } // namespace arrow
 
 namespace vast {
+
+namespace v1 {
+
+class arrow_table_slice_builder final : public table_slice_builder {};
+
+} // namespace v1
+
+inline namespace v0 {
 
 class arrow_table_slice_builder final : public vast::table_slice_builder {
 public:
@@ -107,5 +122,7 @@ private:
   /// Builders for columnar arrays.
   std::vector<column_builder_ptr> builders_;
 };
+
+} // namespace v0
 
 } // namespace vast

@@ -27,27 +27,27 @@
 
 namespace vast {
 
-void factory_traits<table_slice>::initialize() {
-  factory<table_slice>::add<caf_table_slice>();
-  factory<table_slice>::add<msgpack_table_slice>();
+void factory_traits<v0::table_slice>::initialize() {
+  factory<table_slice>::add<v0::caf_table_slice>();
+  factory<table_slice>::add<v0::msgpack_table_slice>();
 #if VAST_HAVE_ARROW
-  factory<table_slice>::add<arrow_table_slice>();
+  factory<table_slice>::add<v0::arrow_table_slice>();
 #endif
 }
 
-table_slice_ptr factory_traits<table_slice>::make(chunk_ptr chunk) {
+table_slice_ptr factory_traits<v0::table_slice>::make(chunk_ptr chunk) {
   if (chunk == nullptr)
     return nullptr;
   // Setup a CAF deserializer.
   caf::binary_deserializer source{nullptr, chunk->data(), chunk->size()};
   // Deserialize the class ID and default-construct a table slice.
   caf::atom_value id;
-  table_slice_header header;
+  v0::table_slice_header header;
   if (auto err = source(id, header)) {
     VAST_ERROR_ANON(__func__, "failed to deserialize table slice meta data");
     return nullptr;
   }
-  auto result = factory<table_slice>::make(id, std::move(header));
+  auto result = factory<v0::table_slice>::make(id, std::move(header));
   if (!result) {
     VAST_ERROR_ANON(__func__, "failed to make table slice for:", to_string(id));
     return nullptr;

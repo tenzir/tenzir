@@ -13,6 +13,14 @@
 
 #pragma once
 
+// -- v1 includes --------------------------------------------------------------
+
+#include "vast/fwd.hpp"
+
+#include <caf/make_counted.hpp>
+
+// -- v0 includes --------------------------------------------------------------
+
 #include "vast/fwd.hpp"
 #include "vast/view.hpp"
 
@@ -22,6 +30,22 @@
 #include <type_traits>
 
 namespace vast {
+
+namespace v1 {
+
+/// Enables incremental construction of a table slice.
+/// @relates table_slice
+class table_slice_builder : public caf::ref_counted {};
+
+/// @relates table_slice_builder
+void intrusive_ptr_add_ref(const table_slice_builder* ptr);
+
+/// @relates table_slice_builder
+void intrusive_ptr_release(const table_slice_builder* ptr);
+
+} // namespace v1
+
+inline namespace v0 {
 
 /// Enables incremental construction of a table slice.
 /// @relates table_slice
@@ -101,5 +125,7 @@ void intrusive_ptr_add_ref(const table_slice_builder* ptr);
 
 /// @relates table_slice_builder
 void intrusive_ptr_release(const table_slice_builder* ptr);
+
+} // namespace v0
 
 } // namespace vast

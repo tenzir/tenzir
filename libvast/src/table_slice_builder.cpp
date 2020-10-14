@@ -11,14 +11,33 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
+// -- v1 includes --------------------------------------------------------------
+
+#include "vast/table_slice_builder.hpp"
+
+// -- v0 includes --------------------------------------------------------------
+
+#include "vast/data.hpp"
+#include "vast/detail/overload.hpp"
 #include "vast/table_slice_builder.hpp"
 
 #include <algorithm>
 
-#include "vast/data.hpp"
-#include "vast/detail/overload.hpp"
-
 namespace vast {
+
+namespace v1 {
+
+void intrusive_ptr_add_ref(const table_slice_builder* ptr) {
+  intrusive_ptr_add_ref(static_cast<const caf::ref_counted*>(ptr));
+}
+
+void intrusive_ptr_release(const table_slice_builder* ptr) {
+  intrusive_ptr_release(static_cast<const caf::ref_counted*>(ptr));
+}
+
+} // namespace v1
+
+inline namespace v0 {
 
 table_slice_builder::table_slice_builder(record_type layout)
   : layout_(std::move(layout)) { // nop
@@ -58,5 +77,7 @@ void intrusive_ptr_add_ref(const table_slice_builder* ptr) {
 void intrusive_ptr_release(const table_slice_builder* ptr) {
   intrusive_ptr_release(static_cast<const caf::ref_counted*>(ptr));
 }
+
+} // namespace v0
 
 } // namespace vast

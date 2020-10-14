@@ -13,6 +13,12 @@
 
 #pragma once
 
+// -- v1 includes --------------------------------------------------------------
+
+#include "vast/fwd.hpp"
+
+// -- v0 includes --------------------------------------------------------------
+
 #include "vast/fwd.hpp"
 
 #include <caf/fwd.hpp>
@@ -27,6 +33,14 @@
 #include <vast/view.hpp>
 
 namespace vast {
+
+namespace v1 {
+
+class msgpack_table_slice final {};
+
+} // namespace v1
+
+inline namespace v0 {
 
 class msgpack_table_slice;
 class msgpack_table_slice_builder;
@@ -88,5 +102,7 @@ private:
   /// The table slice after the header.
   vast::chunk_ptr chunk_;
 };
+
+} // namespace v0
 
 } // namespace vast

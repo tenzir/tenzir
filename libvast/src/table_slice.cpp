@@ -11,6 +11,12 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
+// -- v1 includes --------------------------------------------------------------
+
+#include "vast/table_slice.hpp"
+
+// -- v0 includes --------------------------------------------------------------
+
 #include "vast/table_slice.hpp"
 
 #include "vast/caf_table_slice.hpp"
@@ -46,6 +52,10 @@
 #include <unordered_map>
 
 namespace vast {
+
+namespace v1 {} // namespace v1
+
+inline namespace v0 {
 
 namespace {
 
@@ -498,5 +508,7 @@ ids evaluate(const expression& expr, const table_slice& slice) {
   }
   return result;
 }
+
+} // namespace v0
 
 } // namespace vast

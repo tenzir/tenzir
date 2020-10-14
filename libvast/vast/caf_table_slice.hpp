@@ -13,15 +13,29 @@
 
 #pragma once
 
-#include <vector>
+// -- v1 includes --------------------------------------------------------------
 
-#include <caf/atom.hpp>
+#include "vast/fwd.hpp"
+
+// -- v0 includes --------------------------------------------------------------
 
 #include "vast/aliases.hpp"
 #include "vast/fwd.hpp"
 #include "vast/table_slice.hpp"
 
+#include <caf/atom.hpp>
+
+#include <vector>
+
 namespace vast {
+
+namespace v1 {
+
+class caf_table_slice final {};
+
+} // namespace v1
+
+inline namespace v0 {
 
 /// An implementation of `table_slice` that uses CAF for serialization.
 class caf_table_slice : public table_slice {
@@ -76,5 +90,7 @@ private:
 
 /// @relates caf_table_slice
 using caf_table_slice_ptr = caf::intrusive_cow_ptr<caf_table_slice>;
+
+} // namespace v0
 
 } // namespace vast

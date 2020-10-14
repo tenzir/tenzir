@@ -22,10 +22,10 @@
 namespace vast {
 
 template <>
-struct factory_traits<table_slice> {
-  using result_type = table_slice_ptr;
+struct factory_traits<v0::table_slice> {
+  using result_type = v0::table_slice_ptr;
   using key_type = caf::atom_value;
-  using signature = result_type (*)(table_slice_header);
+  using signature = result_type (*)(v0::table_slice_header);
 
   static void initialize();
 
@@ -35,7 +35,7 @@ struct factory_traits<table_slice> {
   }
 
   template <class T>
-  static result_type make(table_slice_header header) {
+  static result_type make(v0::table_slice_header header) {
     return T::make(std::move(header));
   }
 

@@ -30,11 +30,7 @@ namespace vast {
 
 class abstract_type;
 class address;
-class arrow_table_slice;
-class arrow_table_slice_builder;
 class bitmap;
-class caf_table_slice;
-class caf_table_slice_builder;
 class chunk;
 class column_index;
 class command;
@@ -43,8 +39,6 @@ class ewah_bitstream;
 class expression;
 class json;
 class meta_index;
-class msgpack_table_slice;
-class msgpack_table_slice_builder;
 class path;
 class pattern;
 class port;
@@ -55,11 +49,35 @@ class segment_store;
 class store;
 class subnet;
 class synopsis;
-class table_slice;
-class table_slice_builder;
 class type;
 class uuid;
 class value_index;
+
+namespace v1 {
+
+class arrow_table_slice;
+class arrow_table_slice_builder;
+class caf_table_slice;
+class caf_table_slice_builder;
+class msgpack_table_slice;
+class msgpack_table_slice_builder;
+class table_slice;
+class table_slice_builder;
+
+} // namespace v1
+
+inline namespace v0 {
+
+class arrow_table_slice;
+class arrow_table_slice_builder;
+class caf_table_slice;
+class caf_table_slice_builder;
+class msgpack_table_slice;
+class msgpack_table_slice_builder;
+class table_slice;
+class table_slice_builder;
+
+} // namespace v0
 
 namespace format {
 
@@ -168,6 +186,15 @@ class scope_linked;
 
 // -- free functions -----------------------------------------------------------
 
+namespace v1 {
+
+void intrusive_ptr_add_ref(const table_slice_builder*);
+void intrusive_ptr_release(const table_slice_builder*);
+
+} // namespace v1
+
+inline namespace v0 {
+
 void intrusive_ptr_add_ref(const table_slice*);
 void intrusive_ptr_release(const table_slice*);
 table_slice* intrusive_cow_ptr_unshare(table_slice*&);
@@ -175,14 +202,27 @@ table_slice* intrusive_cow_ptr_unshare(table_slice*&);
 void intrusive_ptr_add_ref(const table_slice_builder*);
 void intrusive_ptr_release(const table_slice_builder*);
 
+} // namespace v0
+
 // -- smart pointers -----------------------------------------------------------
 
 using chunk_ptr = caf::intrusive_ptr<chunk>;
 using column_index_ptr = std::unique_ptr<column_index>;
 using synopsis_ptr = std::unique_ptr<synopsis>;
+using value_index_ptr = std::unique_ptr<value_index>;
+
+namespace v1 {
+
+using table_slice_builder_ptr = caf::intrusive_ptr<table_slice_builder>;
+
+} // namespace v1
+
+inline namespace v0 {
+
 using table_slice_builder_ptr = caf::intrusive_ptr<table_slice_builder>;
 using table_slice_ptr = caf::intrusive_cow_ptr<table_slice>;
-using value_index_ptr = std::unique_ptr<value_index>;
+
+} // namespace v0
 
 // -- miscellaneous ------------------------------------------------------------
 
@@ -330,7 +370,8 @@ CAF_BEGIN_TYPE_ID_BLOCK(vast, caf::first_custom_type_id)
   VAST_ADD_TYPE_ID((vast::relational_operator))
   VAST_ADD_TYPE_ID((vast::schema))
   VAST_ADD_TYPE_ID((vast::status_verbosity))
-  VAST_ADD_TYPE_ID((vast::table_slice_ptr))
+  VAST_ADD_TYPE_ID((vast::v1::table_slice))
+  VAST_ADD_TYPE_ID((vast::v0::table_slice_ptr))
   VAST_ADD_TYPE_ID((vast::type))
   VAST_ADD_TYPE_ID((vast::type_extractor))
   VAST_ADD_TYPE_ID((vast::type_set))
@@ -341,9 +382,11 @@ CAF_BEGIN_TYPE_ID_BLOCK(vast, caf::first_custom_type_id)
   VAST_ADD_TYPE_ID((vast::system::report))
 
   VAST_ADD_TYPE_ID((std::vector<uint32_t>) )
-  VAST_ADD_TYPE_ID((std::vector<vast::table_slice_ptr>) )
+  VAST_ADD_TYPE_ID((std::vector<vast::v1::table_slice>) )
+  VAST_ADD_TYPE_ID((std::vector<vast::v0::table_slice_ptr>) )
 
-  VAST_ADD_TYPE_ID((caf::stream<vast::table_slice_ptr>) )
+  VAST_ADD_TYPE_ID((caf::stream<vast::v1::table_slice>) )
+  VAST_ADD_TYPE_ID((caf::stream<vast::v0::table_slice_ptr>) )
 
 CAF_END_TYPE_ID_BLOCK(vast)
 

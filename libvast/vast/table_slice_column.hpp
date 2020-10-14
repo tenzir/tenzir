@@ -13,12 +13,16 @@
 
 #pragma once
 
+// -- v0 includes --------------------------------------------------------------
+
 #include "vast/fwd.hpp"
 #include "vast/table_slice.hpp"
 
 #include <cstdint>
 
 namespace vast {
+
+inline namespace v0 {
 
 struct table_slice_column {
   table_slice_column() {
@@ -36,5 +40,7 @@ struct table_slice_column {
     return f(x.slice, x.column);
   }
 };
+
+} // namespace v0
 
 } // namespace vast

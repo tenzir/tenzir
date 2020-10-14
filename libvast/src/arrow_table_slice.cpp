@@ -11,8 +11,13 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
+// -- v1 includes --------------------------------------------------------------
+
 #include "vast/arrow_table_slice.hpp"
 
+// -- v0 includes --------------------------------------------------------------
+
+#include "vast/arrow_table_slice.hpp"
 #include "vast/arrow_table_slice_builder.hpp"
 #include "vast/detail/byte_swap.hpp"
 #include "vast/detail/narrow.hpp"
@@ -30,6 +35,10 @@
 #include <arrow/ipc/writer.h>
 
 namespace vast {
+
+namespace v1 {} // namespace v1
+
+inline namespace v0 {
 
 arrow_table_slice::arrow_table_slice(table_slice_header header,
                                      record_batch_ptr batch)
@@ -671,5 +680,7 @@ void arrow_table_slice::append_column_to_index(size_type col,
   auto arr = batch_->column(detail::narrow_cast<int>(col));
   decode(layout().fields[col].type, *arr, f);
 }
+
+} // namespace v0
 
 } // namespace vast

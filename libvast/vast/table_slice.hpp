@@ -13,6 +13,12 @@
 
 #pragma once
 
+// -- v1 includes --------------------------------------------------------------
+
+#include "vast/fwd.hpp"
+
+// -- v0 includes --------------------------------------------------------------
+
 #include "vast/fbs/table_slice.hpp"
 #include "vast/fwd.hpp"
 #include "vast/table_slice_header.hpp"
@@ -29,6 +35,14 @@
 #include <vector>
 
 namespace vast {
+
+namespace v1 {
+
+class table_slice final {};
+
+} // namespace v1
+
+inline namespace v0 {
 
 /// A horizontal partition of a table. A slice defines a tabular interface for
 /// accessing homogenous data independent of the concrete carrier format.
@@ -151,8 +165,8 @@ public:
 
   /// @returns the layout for columns in range
   /// [first_column, first_column + num_columns).
-  record_type layout(size_type first_column,
-                     size_type num_columns = npos) const;
+  record_type
+  layout(size_type first_column, size_type num_columns = npos) const;
 
   /// @returns the number of rows in the slice.
   size_type rows() const noexcept {
@@ -278,8 +292,8 @@ void select(std::vector<table_slice_ptr>& result, const table_slice_ptr& xs,
 /// @returns new table slices of the same implementation type as `xs` from
 ///          `selection`.
 /// @pre `xs != nullptr`
-std::vector<table_slice_ptr> select(const table_slice_ptr& xs,
-                                    const ids& selection);
+std::vector<table_slice_ptr>
+select(const table_slice_ptr& xs, const ids& selection);
 
 /// Selects the first `num_rows` rows of `slice`.
 /// @param slice The input table slice.
@@ -298,8 +312,8 @@ table_slice_ptr truncate(const table_slice_ptr& slice, size_t num_rows);
 /// @returns two new table slices if `0 < partition_point < slice->rows()`,
 ///          otherwise returns `slice` and a `nullptr`.
 /// @pre `slice != nullptr`
-std::pair<table_slice_ptr, table_slice_ptr> split(const table_slice_ptr& slice,
-                                                  size_t partition_point);
+std::pair<table_slice_ptr, table_slice_ptr>
+split(const table_slice_ptr& slice, size_t partition_point);
 
 /// Counts the number of total rows of multiple table slices.
 /// @param slices The table slices to count.
@@ -327,5 +341,7 @@ to_data(const std::vector<table_slice_ptr>& slices);
 /// @param slice The table slice to apply *expr* on.
 /// @returns The set of row IDs in *slice* for which *expr* yields true.
 ids evaluate(const expression& expr, const table_slice& slice);
+
+} // namespace v0
 
 } // namespace vast

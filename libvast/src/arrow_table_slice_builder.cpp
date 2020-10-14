@@ -11,9 +11,14 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
+// -- v1 includes --------------------------------------------------------------
+
 #include "vast/arrow_table_slice_builder.hpp"
 
+// -- v0 includes --------------------------------------------------------------
+
 #include "vast/arrow_table_slice.hpp"
+#include "vast/arrow_table_slice_builder.hpp"
 #include "vast/detail/byte_swap.hpp"
 #include "vast/detail/narrow.hpp"
 #include "vast/detail/overload.hpp"
@@ -28,6 +33,10 @@
 using namespace vast;
 
 namespace vast {
+
+namespace v1 {} // namespace v1
+
+inline namespace v0 {
 
 // -- column builder (cb) implementations --------------------------------------
 
@@ -559,5 +568,7 @@ size_t arrow_table_slice_builder::rows() const noexcept {
 caf::atom_value arrow_table_slice_builder::implementation_id() const noexcept {
   return get_implementation_id();
 }
+
+} // namespace v0
 
 } // namespace vast

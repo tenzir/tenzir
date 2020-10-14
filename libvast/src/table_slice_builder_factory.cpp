@@ -26,12 +26,21 @@
 
 namespace vast {
 
-void factory_traits<table_slice_builder>::initialize() {
-  using f = factory<table_slice_builder>;
-  f::add<caf_table_slice_builder>(caf_table_slice::class_id);
-  f::add<msgpack_table_slice_builder>(msgpack_table_slice::class_id);
+// void factory_traits<v1::table_slice_builder>::initialize() {
+//   using f = factory<v1::table_slice_builder>;
+//   f::add<caf_table_slice_builder>(caf_table_slice::class_id);
+//   f::add<msgpack_table_slice_builder>(msgpack_table_slice::class_id);
+// #if VAST_HAVE_ARROW
+//   f::add<arrow_table_slice_builder>(arrow_table_slice::class_id);
+// #endif
+// }
+
+void factory_traits<v0::table_slice_builder>::initialize() {
+  using f = factory<v0::table_slice_builder>;
+  f::add<v0::caf_table_slice_builder>(v0::caf_table_slice::class_id);
+  f::add<v0::msgpack_table_slice_builder>(v0::msgpack_table_slice::class_id);
 #if VAST_HAVE_ARROW
-  f::add<arrow_table_slice_builder>(arrow_table_slice::class_id);
+  f::add<v0::arrow_table_slice_builder>(v0::arrow_table_slice::class_id);
 #endif
 }
 

@@ -11,6 +11,12 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
+// -- v1 includes --------------------------------------------------------------
+
+#include "vast/caf_table_slice_builder.hpp"
+
+// -- v0 includes --------------------------------------------------------------
+
 #include "vast/caf_table_slice_builder.hpp"
 
 #include <caf/make_counted.hpp>
@@ -18,6 +24,10 @@
 #include <utility>
 
 namespace vast {
+
+namespace v1 {} // namespace v1
+
+inline namespace v0 {
 
 caf::atom_value caf_table_slice_builder::get_implementation_id() noexcept {
   return caf::atom("caf");
@@ -82,5 +92,7 @@ void caf_table_slice_builder::lazy_init() {
     col_ = 0;
   }
 }
+
+} // namespace v0
 
 } // namespace vast

@@ -13,6 +13,13 @@
 
 #pragma once
 
+// -- v1 includes --------------------------------------------------------------
+
+#include "vast/fwd.hpp"
+#include "vast/table_slice_builder.hpp"
+
+// -- v0 includes --------------------------------------------------------------
+
 #include "vast/msgpack_builder.hpp"
 
 #include <vector>
@@ -22,6 +29,14 @@
 #include <vast/table_slice_builder.hpp>
 
 namespace vast {
+
+namespace v1 {
+
+class msgpack_table_slice_builder final : public table_slice_builder {};
+
+} // namespace v1
+
+inline namespace v0 {
 
 class msgpack_table_slice_builder final : public vast::table_slice_builder {
 public:
@@ -90,5 +105,7 @@ private:
   msgpack::builder<msgpack::no_input_validation> builder_;
 #endif
 };
+
+} // namespace v0
 
 } // namespace vast

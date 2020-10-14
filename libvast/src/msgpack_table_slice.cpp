@@ -11,7 +11,11 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
+// -- v1 includes --------------------------------------------------------------
+
 #include "vast/msgpack_table_slice.hpp"
+
+// -- v0 includes --------------------------------------------------------------
 
 #include "vast/detail/narrow.hpp"
 #include "vast/detail/overload.hpp"
@@ -19,6 +23,7 @@
 #include "vast/die.hpp"
 #include "vast/logger.hpp"
 #include "vast/msgpack.hpp"
+#include "vast/msgpack_table_slice.hpp"
 #include "vast/value_index.hpp"
 
 #include <caf/binary_deserializer.hpp>
@@ -31,6 +36,10 @@
 using namespace vast;
 
 namespace vast {
+
+namespace v1 {} // namespace v1
+
+inline namespace v0 {
 
 table_slice_ptr msgpack_table_slice::make(table_slice_header header) {
   auto ptr = new msgpack_table_slice{std::move(header)};
@@ -321,5 +330,7 @@ data_view msgpack_table_slice::at(size_type row, size_type col) const {
   xs.next(col);
   return decode(xs, layout().fields[col].type);
 }
+
+} // namespace v0
 
 } // namespace vast
