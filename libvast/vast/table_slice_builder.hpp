@@ -16,8 +16,11 @@
 // -- v1 includes --------------------------------------------------------------
 
 #include "vast/fwd.hpp"
+#include "vast/table_slice_encoding.hpp"
 
 #include <caf/make_counted.hpp>
+
+#include <flatbuffers/flatbuffers.h>
 
 // -- v0 includes --------------------------------------------------------------
 
@@ -35,7 +38,83 @@ namespace v1 {
 
 /// Enables incremental construction of a table slice.
 /// @relates table_slice
-class table_slice_builder : public caf::ref_counted {};
+class table_slice_builder : public caf::ref_counted {
+public:
+  // -- constructors, destructors, and assignment operators --------------------
+
+  /// Constructs a table slice builder from a layout.
+  explicit table_slice_builder(record_type layout);
+
+  /// Destroys a table slice builder.
+  virtual ~table_slice_builder();
+
+  // -- factory facade ---------------------------------------------------------
+
+  /// The default implementation builds invalid table slices.
+  static constexpr inline auto implementation_id
+    = table_slice_encoding::invalid;
+
+  // -- properties -------------------------------------------------------------
+
+  /// Calls `add(x)` as long as `x` is not a vector, otherwise calls `add(y)`
+  /// for each `y` in `x`.
+  [[nodiscard]] bool recursive_add(const data& x, const type& t);
+
+  /// Adds data to the builder.
+  /// @param xs The data to add.
+  /// @returns `true` on success.
+  template <class T, class... Ts>
+  [[nodiscard]] bool add(const T& x, const Ts&... xs) {
+    if constexpr (sizeof...(Ts) == 0) {
+      if constexpr (std::is_same_v<std::decay_t<T>, data_view>)
+        return add_impl(x);
+      else
+        return add_impl(make_view(x));
+    } else {
+      return add(x) && (add(xs) && ...);
+    }
+  }
+
+  /// Constructs a table_slice from the currently accumulated state and resets
+  /// the internal state.
+  /// @returns A table slice from the accumulated calls to add.
+  [[nodiscard]] table_slice finish();
+
+  /// @returns the current number of rows in the table slice.
+  virtual size_t rows() const noexcept;
+
+  /// @returns an identifier for the implementing class.
+  virtual table_slice_encoding encoding() const noexcept;
+
+  /// Allows the table slice builder to allocate sufficient storage.
+  /// @param num_rows The number of rows to allocate storage for.
+  virtual void reserve(size_t num_rows);
+
+  /// @returns The table layout.
+  const record_type& layout() const noexcept;
+
+  /// @returns The number of columns in the table slice.
+  size_t columns() const noexcept;
+
+protected:
+  // -- implementation details -------------------------------------------------
+
+  /// Adds data to the builder.
+  /// @param x The data to add.
+  /// @returns `true` on success.
+  virtual bool add_impl(data_view x);
+
+  /// Constructs a table_slice from the currently accumulated state.
+  /// @returns A table slice from the accumulated calls to add.
+  virtual table_slice finish_impl();
+
+  flatbuffers::FlatBufferBuilder fbb_;
+
+private:
+  record_type layout_;
+};
+
+// -- intrusive_ptr facade -----------------------------------------------------
 
 /// @relates table_slice_builder
 void intrusive_ptr_add_ref(const table_slice_builder* ptr);

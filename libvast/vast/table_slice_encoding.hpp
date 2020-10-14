@@ -11,33 +11,18 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#include "vast/table_slice_builder_factory.hpp"
+#pragma once
 
-#include "vast/caf_table_slice.hpp"
-#include "vast/caf_table_slice_builder.hpp"
-#include "vast/config.hpp"
-#include "vast/msgpack_table_slice.hpp"
-#include "vast/msgpack_table_slice_builder.hpp"
-
-#if VAST_HAVE_ARROW
-#  include "vast/arrow_table_slice.hpp"
-#  include "vast/arrow_table_slice_builder.hpp"
-#endif
+#include "vast/fwd.hpp"
 
 namespace vast {
 
-void factory_traits<v1::table_slice_builder>::initialize() {
-  using f = factory<v1::table_slice_builder>;
-  f::add<v1::table_slice_builder>(v1::table_slice_builder::implementation_id);
-}
+namespace v1 {
 
-void factory_traits<v0::table_slice_builder>::initialize() {
-  using f = factory<v0::table_slice_builder>;
-  f::add<v0::caf_table_slice_builder>(v0::caf_table_slice::class_id);
-  f::add<v0::msgpack_table_slice_builder>(v0::msgpack_table_slice::class_id);
-#if VAST_HAVE_ARROW
-  f::add<v0::arrow_table_slice_builder>(v0::arrow_table_slice::class_id);
-#endif
-}
+enum class table_slice_encoding : uint8_t {
+  invalid,
+};
+
+} // namespace v1
 
 } // namespace vast

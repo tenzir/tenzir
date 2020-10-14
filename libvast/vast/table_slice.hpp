@@ -15,7 +15,10 @@
 
 // -- v1 includes --------------------------------------------------------------
 
+#include "vast/chunk.hpp"
 #include "vast/fwd.hpp"
+#include "vast/table_slice_builder.hpp"
+#include "vast/table_slice_encoding.hpp"
 
 // -- v0 includes --------------------------------------------------------------
 
@@ -38,7 +41,60 @@ namespace vast {
 
 namespace v1 {
 
-class table_slice final {};
+class table_slice final {
+  friend class table_slice_builder;
+
+public:
+  // -- constructors, destructors, and assignment operators --------------------
+
+  // Default-construct an invalid table slice.
+  table_slice();
+
+  /// Destroys a table slice.
+  ~table_slice();
+
+  /// Copy-constructs a table slice.
+  /// @param other The table slice to copy.
+  table_slice(const table_slice& other);
+  table_slice& operator=(const table_slice& rhs);
+
+  /// Move-constructs a table slice.
+  /// @param other The table slice to move from.
+  table_slice(table_slice&& other);
+  table_slice& operator=(table_slice&& rhs);
+
+  // -- properties: encoding ---------------------------------------------------
+
+  /// @returns The encoding of the table slice.
+  table_slice_encoding encoding() const noexcept;
+
+  // -- type introspection -----------------------------------------------------
+
+  /// @returns The underlying chunk.
+  const chunk_ptr& chunk() const noexcept;
+
+  /// Visitor function for the CAF Type Inspection API; do not call directly.
+  /// @param f The visitor used for inspection.
+  /// @param slice The inspected table slice.
+  /// @returns An implementation-defined return value from the CAF Type
+  /// Inspection API.
+  template <class Inspector>
+  friend auto inspect(Inspector& f, table_slice& slice) {
+    return f(caf::meta::type_name("table_slice"), slice.chunk_);
+  }
+
+private:
+  // -- implementation details -------------------------------------------------
+
+  /// Constructs a table slice from a chunk.
+  /// @param chunk The chunk containing a blob of binary data.
+  /// @pre `chunk`
+  /// @post `chunk()`
+  /// @relates table_slice_builder
+  explicit table_slice(chunk_ptr chunk) noexcept;
+
+  chunk_ptr chunk_ = nullptr;
+};
 
 } // namespace v1
 

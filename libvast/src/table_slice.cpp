@@ -15,17 +15,19 @@
 
 #include "vast/table_slice.hpp"
 
-// -- v0 includes --------------------------------------------------------------
+#include "vast/detail/assert.hpp"
 
-#include "vast/table_slice.hpp"
+#include <utility>
+
+// -- v0 includes --------------------------------------------------------------
 
 #include "vast/caf_table_slice.hpp"
 #include "vast/caf_table_slice_builder.hpp"
 #include "vast/chunk.hpp"
 #include "vast/defaults.hpp"
+#include "vast/detail/append.hpp"
 #include "vast/detail/assert.hpp"
 #include "vast/detail/byte_swap.hpp"
-#include "vast/detail/append.hpp"
 #include "vast/detail/overload.hpp"
 #include "vast/error.hpp"
 #include "vast/expression.hpp"
@@ -33,6 +35,7 @@
 #include "vast/format/test.hpp"
 #include "vast/ids.hpp"
 #include "vast/logger.hpp"
+#include "vast/table_slice.hpp"
 #include "vast/table_slice_builder.hpp"
 #include "vast/table_slice_builder_factory.hpp"
 #include "vast/table_slice_factory.hpp"
@@ -53,7 +56,57 @@
 
 namespace vast {
 
-namespace v1 {} // namespace v1
+namespace v1 {
+
+// -- constructors, destructors, and assignment operators ----------------------
+
+table_slice::table_slice() {
+  // nop
+}
+
+table_slice::~table_slice() {
+  // nop
+}
+
+table_slice::table_slice(const table_slice& other) : chunk_{other.chunk_} {
+  // nop
+}
+
+table_slice& table_slice::operator=(const table_slice& rhs) {
+  chunk_ = rhs.chunk_;
+  return *this;
+}
+
+table_slice::table_slice(table_slice&& other)
+  : chunk_{std::exchange(other.chunk_, {})} {
+  // nop
+}
+
+table_slice& table_slice::operator=(table_slice&& rhs) {
+  chunk_ = std::exchange(rhs.chunk_, {});
+  return *this;
+}
+
+// -- properties: encoding -----------------------------------------------------
+
+/// @returns The encoding of the table slice.
+table_slice_encoding table_slice::encoding() const noexcept {
+  return table_slice_encoding::invalid;
+}
+
+// -- type introspection -------------------------------------------------------
+
+const chunk_ptr& table_slice::chunk() const noexcept {
+  return chunk_;
+}
+
+// -- implementation details ---------------------------------------------------
+
+table_slice::table_slice(chunk_ptr chunk) noexcept : chunk_{std::move(chunk)} {
+  VAST_ASSERT(chunk_);
+}
+
+} // namespace v1
 
 inline namespace v0 {
 
@@ -61,11 +114,11 @@ namespace {
 
 using size_type = table_slice::size_type;
 
-auto cap (size_type pos, size_type num, size_type last) {
+auto cap(size_type pos, size_type num, size_type last) {
   return num == table_slice::npos ? last : std::min(last, pos + num);
 }
 
-} // namespace <anonymous>
+} // namespace
 
 table_slice::column_view::column_view(const table_slice& slice, size_t column)
   : slice_(slice), column_(column) {
@@ -98,8 +151,8 @@ table_slice::~table_slice() {
 
 std::atomic<size_t> table_slice::instance_count_{0u};
 
-record_type table_slice::layout(size_type first_column,
-                                size_type num_columns) const {
+record_type
+table_slice::layout(size_type first_column, size_type num_columns) const {
   if (first_column >= columns())
     return {};
   auto col_begin = first_column;
@@ -276,8 +329,7 @@ make_random_table_slices(size_t num_slices, size_t slice_size,
     result.emplace_back(std::move(ptr));
   };
   result.reserve(num_slices);
-  if (auto err = src.read(num_slices * slice_size, slice_size, add_slice)
-                   .first)
+  if (auto err = src.read(num_slices * slice_size, slice_size, add_slice).first)
     return err;
   return result;
 }
@@ -340,8 +392,8 @@ void select(std::vector<table_slice_ptr>& result, const table_slice_ptr& xs,
   push_slice();
 }
 
-std::vector<table_slice_ptr> select(const table_slice_ptr& xs,
-                                    const ids& selection) {
+std::vector<table_slice_ptr>
+select(const table_slice_ptr& xs, const ids& selection) {
   std::vector<table_slice_ptr> result;
   select(result, xs, selection);
   return result;
@@ -358,8 +410,8 @@ table_slice_ptr truncate(const table_slice_ptr& slice, size_t num_rows) {
   return std::move(xs.back());
 }
 
-std::pair<table_slice_ptr, table_slice_ptr> split(const table_slice_ptr& slice,
-                                                  size_t partition_point) {
+std::pair<table_slice_ptr, table_slice_ptr>
+split(const table_slice_ptr& slice, size_t partition_point) {
   VAST_ASSERT(slice != nullptr);
   if (partition_point == 0)
     return {nullptr, slice};

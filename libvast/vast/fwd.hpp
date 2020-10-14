@@ -169,6 +169,12 @@ enum class ec : uint8_t;
 enum class query_options : uint32_t;
 enum class status_verbosity;
 
+namespace v1 {
+
+enum class table_slice_encoding : uint8_t;
+
+} // namespace v1
+
 // -- aliases ------------------------------------------------------------------
 
 namespace system {
