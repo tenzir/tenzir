@@ -53,6 +53,7 @@
 #include "vast/system/spawn_type_registry.hpp"
 #include "vast/system/terminate.hpp"
 #include "vast/table_slice.hpp"
+#include "vast/taxonomies.hpp"
 
 #if VAST_HAVE_PCAP
 #  include "vast/format/pcap.hpp"
@@ -326,9 +327,9 @@ caf::message
 node_state::spawn_command(const invocation& inv,
                           [[maybe_unused]] caf::actor_system& sys) {
   VAST_TRACE(inv);
-  auto rp = this_node->make_response_promise();
   using std::begin;
   using std::end;
+  caf::response_promise rp;
   // We configured the command to have the name of the component.
   auto inv_name_split = detail::split(inv.full_name, " ");
   VAST_ASSERT(inv_name_split.size() > 1);
@@ -362,22 +363,45 @@ node_state::spawn_command(const invocation& inv,
     spawn_inv.options["import"] = import_opt;
     caf::put(spawn_inv.options, "vast.import", import_opt);
   }
-  // Spawn our new VAST component.
-  spawn_arguments args{spawn_inv, this_node->state.dir, label};
-  auto component = spawn_component(spawn_inv, args);
-  if (!component) {
-    if (component.error())
-      VAST_WARNING(__func__,
-                   "failed to spawn component:", render(component.error()));
-    rp.deliver(component.error());
-    return caf::make_message(component.error());
+  auto spawn_actually = [=](const invocation& spawn_inv) mutable {
+    // Spawn our new VAST component.
+    spawn_arguments args{spawn_inv, this_node->state.dir, label};
+    auto component = spawn_component(spawn_inv, args);
+    if (!component) {
+      if (component.error())
+        VAST_WARNING(
+          __func__, "failed to spawn component:", render(component.error()));
+      rp.deliver(component.error());
+      return caf::make_message(std::move(component.error()));
+    }
+    this_node->monitor(*component);
+    auto okay = this_node->state.registry.add(*component, std::move(comp_type),
+                                              std::move(label));
+    VAST_ASSERT(okay);
+    rp.deliver(*component);
+    return caf::make_message(*component);
+  };
+  auto handle_taxonomies = [=](const expression& e) mutable {
+    spawn_inv.arguments = std::vector{to_string(e)};
+    spawn_actually(spawn_inv);
+  };
+  // Retrieve taxonomies and delay spawning until the response arrives if we're
+  // dealing with a query...
+  auto query_handlers
+    = std::set<std::string>{"counter", "eraser", "exporter", "pivoter"};
+  if (query_handlers.count(comp_type) > 0u) {
+    if (auto tr = this_node->state.registry.find_by_label("type_registry")) {
+      auto expr = normalized_and_validated(spawn_inv.arguments);
+      this_node
+        ->request(caf::actor_cast<type_registry_type>(tr),
+                  defaults::system::initial_request_timeout, atom::resolve_v,
+                  std::move(*expr))
+        .then(handle_taxonomies);
+      return caf::none;
+    }
   }
-  this_node->monitor(*component);
-  auto okay = this_node->state.registry.add(*component, std::move(comp_type),
-                                            std::move(label));
-  VAST_ASSERT(okay);
-  rp.deliver(*component);
-  return caf::none;
+  // ... or spawn the component right away if not.
+  return spawn_actually(spawn_inv);
 }
 
 caf::behavior node(node_actor* self, std::string name, path dir,
@@ -468,6 +492,7 @@ caf::behavior node(node_actor* self, std::string name, path dir,
                                  shutdown_kill_timeout);
   });
   // Define the node behavior.
+  self->set_default_handler(caf::print_and_drop);
   return {
     [=](const invocation& inv) {
       VAST_DEBUG(self, "got command", inv.full_name, "with options",

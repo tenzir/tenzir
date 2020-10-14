@@ -43,6 +43,9 @@ struct spawn_arguments {
 
 /// Attempts to parse `[args.first, args.last)` as ::expression and returns a
 /// normalized and validated version of that expression on success.
+caf::expected<expression>
+normalized_and_validated(const std::vector<std::string>& args);
+
 caf::expected<expression> normalized_and_validated(const spawn_arguments& args);
 
 caf::expected<expression>

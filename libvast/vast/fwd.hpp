@@ -100,6 +100,7 @@ struct flow;
 struct integer_type;
 struct invocation;
 struct field_extractor;
+struct list_type;
 struct map_type;
 struct negation;
 struct none_type;
@@ -115,7 +116,7 @@ struct status;
 struct subnet_type;
 struct time_type;
 struct type_extractor;
-struct list_type;
+struct type_set;
 
 namespace system {
 
@@ -135,7 +136,6 @@ struct performance_sample;
 struct query_status;
 struct query_status;
 struct spawn_arguments;
-struct type_set;
 
 } // namespace system
 
@@ -259,6 +259,7 @@ CAF_BEGIN_TYPE_ID_BLOCK(vast, caf::first_custom_type_id)
   VAST_ADD_ATOM(read, "read")
   VAST_ADD_ATOM(replicate, "replicate")
   VAST_ADD_ATOM(request, "request")
+  VAST_ADD_ATOM(resolve, "resolve")
   VAST_ADD_ATOM(response, "response")
   VAST_ADD_ATOM(run, "run")
   VAST_ADD_ATOM(schema, "schema")
@@ -274,6 +275,7 @@ CAF_BEGIN_TYPE_ID_BLOCK(vast, caf::first_custom_type_id)
   VAST_ADD_ATOM(stop, "stop")
   VAST_ADD_ATOM(store, "store")
   VAST_ADD_ATOM(submit, "submit")
+  VAST_ADD_ATOM(taxonomies, "taxonomies")
   VAST_ADD_ATOM(telemetry, "telemetry")
   VAST_ADD_ATOM(try_put, "tryPut")
   VAST_ADD_ATOM(unload, "unload")
@@ -329,12 +331,12 @@ CAF_BEGIN_TYPE_ID_BLOCK(vast, caf::first_custom_type_id)
   VAST_ADD_TYPE_ID((vast::table_slice_ptr))
   VAST_ADD_TYPE_ID((vast::type))
   VAST_ADD_TYPE_ID((vast::type_extractor))
+  VAST_ADD_TYPE_ID((vast::type_set))
   VAST_ADD_TYPE_ID((vast::uuid))
 
   VAST_ADD_TYPE_ID((vast::system::performance_report))
   VAST_ADD_TYPE_ID((vast::system::query_status))
   VAST_ADD_TYPE_ID((vast::system::report))
-  VAST_ADD_TYPE_ID((vast::system::type_set))
 
   VAST_ADD_TYPE_ID((std::vector<uint32_t>) )
   VAST_ADD_TYPE_ID((std::vector<vast::table_slice_ptr>) )

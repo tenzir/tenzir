@@ -13,12 +13,15 @@
 
 #pragma once
 
+#include "vast/expression.hpp"
 #include "vast/fwd.hpp"
 #include "vast/path.hpp"
 #include "vast/schema.hpp"
 #include "vast/status.hpp"
 #include "vast/system/accountant.hpp"
+#include "vast/taxonomies.hpp"
 #include "vast/type.hpp"
+#include "vast/type_set.hpp"
 
 #include <caf/expected.hpp>
 #include <caf/typed_actor.hpp>
@@ -30,17 +33,6 @@
 
 namespace vast::system {
 
-// TODO: Operate on vast::schema directly, or find a way to properly forward
-// declare the inner type without having to include <unordered_set> in fwd.hpp.
-struct type_set {
-  std::unordered_set<vast::type> value;
-
-  template <class Inspector>
-  friend auto inspect(Inspector& f, type_set& x) {
-    return f(caf::meta::type_name("type_set"), x.value);
-  }
-};
-
 // clang-format off
 using type_registry_type = caf::typed_actor<
   caf::reacts_to<atom::telemetry>,
@@ -49,7 +41,8 @@ using type_registry_type = caf::typed_actor<
   caf::reacts_to<atom::put, vast::type>,
   caf::reacts_to<atom::put, vast::schema>,
   caf::replies_to<atom::get>::with<type_set>,
-  caf::replies_to<atom::get, std::string>::with<type_set>,
+  caf::reacts_to<atom::put, taxonomies>,
+  caf::replies_to<atom::resolve, expression>::with<expression>,
   caf::reacts_to<accountant_type>
 >;
 // clang-format on
@@ -86,12 +79,10 @@ struct type_registry_state {
   /// Get a list of known types from the registry.
   type_set types() const;
 
-  /// Get a list of known types from the registry for a name.
-  type_set types(std::string key) const;
-
   type_registry_actor self = {};
   accountant_type accountant = {};
   std::map<std::string, type_set> data = {};
+  vast::taxonomies taxonomies = {};
   vast::path dir = {};
 };
 

@@ -277,6 +277,45 @@ auto inspect(Inspector&f, expression& x) {
   return f(caf::meta::type_name("expression"), x.get_data());
 }
 
+template <class F>
+struct predicate_transformer {
+  expression operator()(caf::none_t) const {
+    return caf::none;
+  }
+  expression operator()(const conjunction& c) const {
+    conjunction result;
+    for (auto& op : c)
+      result.push_back(caf::visit(*this, op));
+    return result;
+  }
+
+  expression operator()(const disjunction& d) const {
+    disjunction result;
+    for (auto& op : d)
+      result.push_back(caf::visit(*this, op));
+    return result;
+  }
+  expression operator()(const negation& n) const {
+    return {negation{caf::visit(*this, n.expr())}};
+  }
+
+  expression operator()(const predicate& p) const {
+    return f(p);
+  }
+
+  F f;
+};
+
+/// Applies a transformation for every predicate in an expression.
+/// @param expr The input expression.
+/// @param f A callable that takes a predicate and returns an expression.
+/// @returns The transformed expression.
+template <typename F>
+expression for_each_predicate(const expression& e, F&& f) {
+  auto v = predicate_transformer<F>{std::forward<F>(f)};
+  return caf::visit(v, e);
+}
+
 /// Normalizes an expression such that:
 ///
 /// 1. Single-element conjunctions/disjunctions don't exist.

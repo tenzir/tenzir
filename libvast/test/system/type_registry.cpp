@@ -8,6 +8,8 @@
 #include "vast/test/test.hpp"
 
 #include "vast/caf_table_slice_builder.hpp"
+#include "vast/concept/parseable/to.hpp"
+#include "vast/concept/parseable/vast/expression.hpp"
 #include "vast/detail/notifying_stream_manager.hpp"
 #include "vast/detail/spawn_container_source.hpp"
 #include "vast/system/exporter.hpp"
@@ -54,6 +56,13 @@ make_data_b(std::string a, vast::count b, vast::real c, std::string d) {
   return builder.finish();
 }
 
+template <class... Ts>
+vast::table_slice_ptr make_data(const vast::record_type& layout, Ts&&... ts) {
+  vast::caf_table_slice_builder builder(layout);
+  builder.append((std::forward<Ts>(ts), ...));
+  return builder.finish();
+}
+
 } // namespace
 
 struct fixture : fixtures::deterministic_actor_system_and_events {
@@ -72,17 +81,17 @@ struct fixture : fixtures::deterministic_actor_system_and_events {
   using type_registry_actor
     = system::type_registry_type::stateful_pointer<system::type_registry_state>;
 
-  caf::actor spawn_aut() {
+  system::type_registry_type spawn_aut() {
     auto handle = sys.spawn(system::type_registry, directory);
     sched.run();
-    return caf::actor_cast<caf::actor>(handle);
+    return handle;
   }
 
   system::type_registry_state& state() {
     return caf::actor_cast<type_registry_actor>(aut)->state;
   }
 
-  caf::actor aut;
+  system::type_registry_type aut;
 };
 
 FIXTURE_SCOPE(type_registry_tests, fixture)
@@ -100,12 +109,11 @@ TEST(type_registry) {
   MESSAGE("retrieving layouts");
   {
     size_t size = -1;
-    std::string name = "mock";
-    self->send(aut, atom::get_v, name);
+    self->send(aut, atom::get_v);
     run();
     bool done = false;
     self
-      ->do_receive([&](vast::system::type_set result) {
+      ->do_receive([&](vast::type_set result) {
         size = result.value.size();
         done = true;
       })
@@ -113,6 +121,35 @@ TEST(type_registry) {
     CHECK_EQUAL(size, 2u);
   }
   self->send_exit(aut, caf::exit_reason::user_shutdown);
+}
+
+TEST(taxonomies) {
+  MESSAGE("setting a taxonomy");
+  auto c1 = concepts_type{{"foo", {"a.fo0", "b.foO", "x.foe"}},
+                          {"bar", {"a.b@r", "b.baR"}}};
+  auto t1 = taxonomies{c1, models_type{}};
+  self->send(aut, atom::put_v, t1);
+  run();
+  MESSAGE("collecting some types");
+  const vast::record_type la = vast::record_type{
+    {"fo0", vast::string_type{}},
+  }.name("a");
+  auto slices_a = std::vector{make_data(la, "bogus")};
+  const vast::record_type lx = vast::record_type{
+    {"foe", vast::count_type{}},
+  }.name("x");
+  auto slices_x = std::vector{make_data(lx, 1u)};
+  vast::detail::spawn_container_source(sys, std::move(slices_a), aut);
+  vast::detail::spawn_container_source(sys, std::move(slices_x), aut);
+  run();
+  MESSAGE("resolving an expression");
+  auto exp = unbox(to<expression>("foo == 1"));
+  auto ref = unbox(to<expression>("x.foe == 1"));
+  self->send(aut, atom::resolve_v, exp);
+  run();
+  expression result;
+  self->receive([&](expression r) { result = r; }, error_handler());
+  CHECK_EQUAL(result, ref);
 }
 
 FIXTURE_SCOPE_END()

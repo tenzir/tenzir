@@ -42,6 +42,11 @@ normalized_and_validated(std::vector<std::string>::const_iterator begin,
 }
 
 caf::expected<expression>
+normalized_and_validated(const std::vector<std::string>& args) {
+  return normalized_and_validated(args.begin(), args.end());
+}
+
+caf::expected<expression>
 normalized_and_validated(const spawn_arguments& args) {
   auto& arguments = args.inv.arguments;
   return normalized_and_validated(arguments.begin(), arguments.end());

@@ -199,6 +199,7 @@ set(libvast_sources
     src/table_slice_builder.cpp
     src/table_slice_builder_factory.cpp
     src/table_slice_factory.cpp
+    src/taxonomies.cpp
     src/time.cpp
     src/time_synopsis.cpp
     src/type.cpp
@@ -380,6 +381,7 @@ set(tests
     test/system/terminate.cpp
     test/system/type_registry.cpp
     test/table_slice.cpp
+    test/taxonomies.cpp
     test/time.cpp
     test/type.cpp
     test/uuid.cpp
