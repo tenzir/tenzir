@@ -15,7 +15,6 @@
 
 #include "vast/index/arithmetic_index.hpp"
 
-#include "vast/test/fixtures/events.hpp"
 #include "vast/test/test.hpp"
 
 #include "vast/concept/parseable/to.hpp"
@@ -37,7 +36,7 @@ using namespace std::string_literals;
 
 namespace {
 
-struct fixture : fixtures::events {
+struct fixture {
   fixture() {
     factory<value_index>::initialize();
   }
@@ -142,6 +141,20 @@ TEST(time) {
   CHECK_EQUAL(load(nullptr, buf, idx2), caf::none);
   eighteen = idx2.lookup(greater_equal, make_data_view(unbox(ts)));
   CHECK(to_string(*eighteen) == "000101");
+}
+
+TEST(none values - arithmetic) {
+  auto idx = factory<value_index>::make(count_type{}, caf::settings{});
+  REQUIRE_NOT_EQUAL(idx, nullptr);
+  REQUIRE(idx->append(make_data_view(caf::none)));
+  REQUIRE(idx->append(make_data_view(42)));
+  REQUIRE(idx->append(make_data_view(43)));
+  REQUIRE(idx->append(make_data_view(caf::none)));
+  REQUIRE(idx->append(make_data_view(caf::none)));
+  auto bm = idx->lookup(less, make_data_view(50));
+  CHECK_EQUAL(to_string(unbox(bm)), "01100");
+  bm = idx->lookup(greater, make_data_view(42));
+  CHECK_EQUAL(to_string(unbox(bm)), "00100");
 }
 
 FIXTURE_SCOPE_END()

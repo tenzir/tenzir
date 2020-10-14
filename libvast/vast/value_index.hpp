@@ -122,36 +122,6 @@ caf::error inspect(caf::serializer& sink, const value_index_ptr& x);
 /// @relates value_index
 caf::error inspect(caf::deserializer& source, value_index_ptr& x);
 
-/// An index for strings.
-class string_index : public value_index {
-public:
-  /// Constructs a string index.
-  /// @param t An instance of `string_type`.
-  /// @param opts Runtime context for index parameterization.
-  explicit string_index(vast::type t, caf::settings opts = {});
-
-  caf::error serialize(caf::serializer& sink) const override;
-
-  caf::error deserialize(caf::deserializer& source) override;
-
-private:
-  /// The index which holds each character.
-  using char_bitmap_index = bitmap_index<uint8_t, bitslice_coder<ewah_bitmap>>;
-
-  /// The index which holds the string length.
-  using length_bitmap_index =
-    bitmap_index<uint32_t, multi_level_coder<range_coder<ids>>>;
-
-  bool append_impl(data_view x, id pos) override;
-
-  caf::expected<ids>
-  lookup_impl(relational_operator op, data_view x) const override;
-
-  size_t max_length_;
-  length_bitmap_index length_;
-  std::vector<char_bitmap_index> chars_;
-};
-
 /// An index for IP addresses.
 class address_index : public value_index {
 public:

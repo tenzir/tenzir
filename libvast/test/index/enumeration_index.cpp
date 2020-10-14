@@ -15,7 +15,6 @@
 
 #include "vast/index/enumeration_index.hpp"
 
-#include "vast/test/fixtures/events.hpp"
 #include "vast/test/test.hpp"
 
 #include "vast/concept/printable/to_string.hpp"
@@ -28,7 +27,7 @@ using namespace std::string_literals;
 
 namespace {
 
-struct fixture : fixtures::events {
+struct fixture {
   fixture() {
     factory<value_index>::initialize();
   }

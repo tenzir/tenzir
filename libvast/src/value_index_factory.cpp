@@ -21,6 +21,7 @@
 #include "vast/hash_index.hpp"
 #include "vast/index/arithmetic_index.hpp"
 #include "vast/index/enumeration_index.hpp"
+#include "vast/index/string_index.hpp"
 #include "vast/logger.hpp"
 #include "vast/type.hpp"
 #include "vast/value_index.hpp"
