@@ -22,6 +22,7 @@
 #include "vast/index/address_index.hpp"
 #include "vast/index/arithmetic_index.hpp"
 #include "vast/index/enumeration_index.hpp"
+#include "vast/index/port_index.hpp"
 #include "vast/index/string_index.hpp"
 #include "vast/index/subnet_index.hpp"
 #include "vast/logger.hpp"

@@ -122,37 +122,6 @@ caf::error inspect(caf::serializer& sink, const value_index_ptr& x);
 /// @relates value_index
 caf::error inspect(caf::deserializer& source, value_index_ptr& x);
 
-/// An index for ports.
-class port_index : public value_index {
-public:
-  using number_index =
-    bitmap_index<
-      port::number_type,
-      multi_level_coder<range_coder<ewah_bitmap>>
-    >;
-
-  using protocol_index =
-    bitmap_index<
-      std::underlying_type<port::port_type>::type,
-      equality_coder<ewah_bitmap>
-    >;
-
-  explicit port_index(vast::type t, caf::settings opts = {});
-
-  caf::error serialize(caf::serializer& sink) const override;
-
-  caf::error deserialize(caf::deserializer& source) override;
-
-private:
-  bool append_impl(data_view x, id pos) override;
-
-  caf::expected<ids>
-  lookup_impl(relational_operator op, data_view x) const override;
-
-  number_index num_;
-  protocol_index proto_;
-};
-
 /// An index for lists.
 class list_index : public value_index {
 public:
