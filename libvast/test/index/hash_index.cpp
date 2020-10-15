@@ -13,7 +13,7 @@
 
 #define SUITE hash_index
 
-#include "vast/hash_index.hpp"
+#include "vast/index/hash_index.hpp"
 
 #include "vast/test/test.hpp"
 
