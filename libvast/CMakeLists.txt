@@ -119,8 +119,10 @@ set(libvast_sources
     src/http.cpp
     src/icmp.cpp
     src/ids.cpp
+    src/index/address_index.cpp
     src/index/enumeration_index.cpp
     src/index/string_index.cpp
+    src/index/subnet_index.cpp
     src/io/read.cpp
     src/io/save.cpp
     src/io/write.cpp
@@ -339,9 +341,11 @@ set(tests
     test/hash_index.cpp
     test/http.cpp
     test/ids.cpp
+    test/index/address_index.cpp
     test/index/arithmetic_index.cpp
     test/index/enumeration_index.cpp
     test/index/string_index.cpp
+    test/index/subnet_index.cpp
     test/iterator.cpp
     test/json.cpp
     test/meta_index.cpp

@@ -122,49 +122,6 @@ caf::error inspect(caf::serializer& sink, const value_index_ptr& x);
 /// @relates value_index
 caf::error inspect(caf::deserializer& source, value_index_ptr& x);
 
-/// An index for IP addresses.
-class address_index : public value_index {
-public:
-  using byte_index = bitmap_index<uint8_t, bitslice_coder<ewah_bitmap>>;
-  using type_index = bitmap_index<bool, singleton_coder<ewah_bitmap>>;
-
-  explicit address_index(vast::type t, caf::settings opts = {});
-
-  caf::error serialize(caf::serializer& sink) const override;
-
-  caf::error deserialize(caf::deserializer& source) override;
-
-private:
-  bool append_impl(data_view x, id pos) override;
-
-  caf::expected<ids>
-  lookup_impl(relational_operator op, data_view x) const override;
-
-  std::array<byte_index, 16> bytes_;
-  type_index v4_;
-};
-
-/// An index for subnets.
-class subnet_index : public value_index {
-public:
-  using prefix_index = bitmap_index<uint8_t, equality_coder<ewah_bitmap>>;
-
-  explicit subnet_index(vast::type t, caf::settings opts = {});
-
-  caf::error serialize(caf::serializer& sink) const override;
-
-  caf::error deserialize(caf::deserializer& source) override;
-
-private:
-  bool append_impl(data_view x, id pos) override;
-
-  caf::expected<ids>
-  lookup_impl(relational_operator op, data_view x) const override;
-
-  address_index network_;
-  prefix_index length_;
-};
-
 /// An index for ports.
 class port_index : public value_index {
 public:
