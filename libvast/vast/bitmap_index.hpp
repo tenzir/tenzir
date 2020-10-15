@@ -13,12 +13,12 @@
 
 #pragma once
 
-#include <type_traits>
-
 #include "vast/base.hpp"
 #include "vast/binner.hpp"
 #include "vast/coder.hpp"
 #include "vast/detail/order.hpp"
+
+#include <type_traits>
 
 namespace vast {
 
@@ -65,7 +65,7 @@ public:
   /// @param x The value to append.
   /// @param n The number of times to append *x*.
   void append(value_type x, size_type n) {
-    coder_.encode(transform(binner_type::bin(x)), n);
+    coder_.encode(this->transform(binner_type::bin(x)), n);
   }
 
   /// Appends the contents of another bitmap index to this one.
@@ -98,7 +98,7 @@ public:
       if (op == less)
         ++binned;
     }
-    return coder_.decode(op, transform(binned));
+    return coder_.decode(op, this->transform(binned));
   }
 
   /// Retrieves the bitmap index size.
@@ -129,28 +129,21 @@ public:
   }
 
 private:
-  template <class U, class B>
-  using is_shiftable =
-    std::integral_constant<
-      bool,
-      (detail::is_precision_binner<B>{} || detail::is_decimal_binner<B>{})
-        && std::is_floating_point<U>{}
-    >;
-
-  template <class U, class B = binner_type>
-  static auto transform(U x)
-  -> std::enable_if_t<is_shiftable<U, B>{}, detail::ordered_type<U>> {
-    return detail::order(x) >> (52 - B::digits2);
-  }
-
-  template <class U, class B = binner_type>
-  static auto transform(U x)
-  -> std::enable_if_t<!is_shiftable<U, B>{}, detail::ordered_type<T>> {
-    return detail::order(x);
+  template <class U>
+  static auto transform(U x) {
+    constexpr auto is_shiftable_v = std::integral_constant < bool,
+                   (detail::is_precision_binner<binner_type>{}
+                    || detail::is_decimal_binner<binner_type>{})
+                     && std::is_floating_point<U>{} > ::value;
+    if constexpr (is_shiftable_v) {
+      constexpr auto digits = binner_type::digits2;
+      return detail::ordered_type<U>{detail::order(x) >> (52 - digits)};
+    } else {
+      return detail::ordered_type<T>{detail::order(x)};
+    }
   }
 
   coder_type coder_;
 };
 
 } // namespace vast
-

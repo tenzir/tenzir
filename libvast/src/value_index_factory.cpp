@@ -24,6 +24,7 @@
 #include "vast/index/hash_index.hpp"
 #include "vast/index/list_index.hpp"
 #include "vast/index/port_index.hpp"
+#include "vast/index/real_index.hpp"
 #include "vast/index/string_index.hpp"
 #include "vast/index/subnet_index.hpp"
 #include "vast/logger.hpp"
@@ -136,10 +137,15 @@ auto add_value_index_factory() {
   return factory<value_index>::add(T{}, make<Index>);
 }
 
+value_index_ptr make_real_index(type t, caf::settings) {
+  // FIXME
+  return std::make_unique<real_index>(std::move(t), 6, 2);
+}
+
 template <class T>
 auto add_arithmetic_index_factory() {
   static_assert(detail::is_any_v<T, integer_type, count_type, enumeration_type,
-                                 real_type, duration_type, time_type>);
+                                 duration_type, time_type>);
   using concrete_data = type_to_data<T>;
   return add_value_index_factory<T, arithmetic_index<concrete_data>>();
 }
@@ -150,9 +156,9 @@ void factory_traits<value_index>::initialize() {
   add_value_index_factory<bool_type, arithmetic_index<bool>>();
   add_arithmetic_index_factory<integer_type>();
   add_arithmetic_index_factory<count_type>();
-  add_arithmetic_index_factory<real_type>();
   add_arithmetic_index_factory<duration_type>();
   add_arithmetic_index_factory<time_type>();
+  factory<value_index>::add(real_type{}, make_real_index);
   add_value_index_factory<enumeration_type, enumeration_index>();
   add_value_index_factory<address_type, address_index>();
   add_value_index_factory<subnet_type, subnet_index>();

@@ -46,37 +46,6 @@ struct fixture {
 
 FIXTURE_SCOPE(value_index_tests, fixture)
 
-TEST(real with custom binner) {
-  using index_type = arithmetic_index<real, precision_binner<6, 2>>;
-  caf::settings opts;
-  opts["base"] = "uniform64(10)";
-  auto idx = index_type{real_type{}, opts};
-  MESSAGE("append");
-  REQUIRE(idx.append(make_data_view(-7.8)));
-  REQUIRE(idx.append(make_data_view(42.123)));
-  REQUIRE(idx.append(make_data_view(10000.0)));
-  REQUIRE(idx.append(make_data_view(4711.13510)));
-  REQUIRE(idx.append(make_data_view(31337.3131313)));
-  REQUIRE(idx.append(make_data_view(42.12258)));
-  REQUIRE(idx.append(make_data_view(42.125799)));
-  MESSAGE("lookup");
-  auto result = idx.lookup(less, make_data_view(100.0));
-  CHECK_EQUAL(to_string(unbox(result)), "1100011");
-  result = idx.lookup(less, make_data_view(43.0));
-  CHECK_EQUAL(to_string(unbox(result)), "1100011");
-  result = idx.lookup(greater_equal, make_data_view(42.0));
-  CHECK_EQUAL(to_string(unbox(result)), "0111111");
-  result = idx.lookup(not_equal, make_data_view(4711.14));
-  CHECK_EQUAL(to_string(unbox(result)), "1110111");
-  MESSAGE("serialization");
-  std::vector<char> buf;
-  CHECK_EQUAL(save(nullptr, buf, idx), caf::none);
-  auto idx2 = index_type{real_type{}, opts};
-  REQUIRE_EQUAL(load(nullptr, buf, idx2), caf::none);
-  result = idx2.lookup(not_equal, make_data_view(4711.14));
-  CHECK_EQUAL(to_string(unbox(result)), "1110111");
-}
-
 TEST(duration) {
   using namespace std::chrono;
   caf::settings opts;

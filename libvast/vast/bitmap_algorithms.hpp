@@ -228,6 +228,19 @@ auto nary_xor(Iterator begin, Iterator end) {
   return nary_eval(begin, end, op);
 }
 
+/// Computes the unary complement of a bitmap and produces a new bitmap of a
+/// larger size, filled with additional bits.
+/// @param bm The bitmap to invert.
+/// @param size The size of resulting bitmap in bits.
+/// @returns `~bm` plus `size - bm.size()` bits appended.
+template <bool Bit = true, class Bitmap>
+Bitmap flip(const Bitmap& bm, size_t size) {
+  auto result = bm;
+  result.flip();
+  result.append_bits(Bit, size - bm.size());
+  return result;
+}
+
 /// Computes the *rank* of a Bitmap, i.e., the number of occurrences of a bit
 /// value in *B[0,i]*.
 /// @tparam Bit The bit value to count.
