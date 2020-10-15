@@ -26,42 +26,49 @@
 
 namespace vast {
 
-static caf::error to_concepts_impl(const data& d, concepts_type& out) {
-  if (const auto& tl = caf::get_if<list>(&d)) {
-    for (const auto& item : *tl) {
+caf::error convert(const data& d, concepts_type& out) {
+  if (const auto& c = caf::get_if<record>(&d)) {
+    auto n = c->find("name");
+    if (n == c->end())
+      return make_error(ec::convert_error, "concept has no name:", d);
+    auto name = caf::get_if<std::string>(&n->second);
+    if (!name)
+      return make_error(ec::convert_error, "name is not a string:", *n);
+    auto fs = c->find("fields");
+    if (fs == c->end())
+      return make_error(ec::convert_error, "concept has no fields:", d);
+    if (const auto& fields = caf::get_if<list>(&fs->second)) {
+      for (auto& f : *fields) {
+        auto field = caf::get_if<std::string>(&f);
+        if (!field)
+          return make_error(ec::convert_error, "field is not a string:", f);
+        out[*name].push_back(*field);
+      }
+    } else
+      return make_error(ec::convert_error, "fields is not a list:", d);
+  } else
+    return make_error(ec::convert_error, "concept is not a record:", d);
+  return caf::none;
+}
+
+caf::error extract_concepts(const data& d, concepts_type& out) {
+  if (const auto& xs = caf::get_if<list>(&d)) {
+    for (const auto& item : *xs) {
       if (const auto& x = caf::get_if<record>(&item)) {
         auto n = x->find("concept");
         if (n == x->end())
           continue;
-        if (const auto& c = caf::get_if<record>(&n->second)) {
-          auto n = c->find("name");
-          if (n == c->end())
-            return make_error(ec::convert_error, "concept has no name:", *x);
-          auto name = caf::get_if<std::string>(&n->second);
-          if (!name)
-            return make_error(ec::convert_error, "name is not a string:", *n);
-          auto fs = c->find("fields");
-          if (fs == x->end())
-            continue;
-          if (const auto& fields = caf::get_if<list>(&fs->second)) {
-            for (auto& f : *fields) {
-              auto field = caf::get_if<std::string>(&f);
-              if (!field)
-                return make_error(ec::convert_error,
-                                  "field is not a string:", f);
-              out[*name].push_back(*field);
-            }
-          }
-        }
+        if (auto err = convert(n->second, out))
+          return err;
       }
     }
   }
   return caf::none;
 }
 
-caf::expected<concepts_type> to_concepts(const data& d) {
+caf::expected<concepts_type> extract_concepts(const data& d) {
   concepts_type result;
-  if (auto err = to_concepts_impl(d, result))
+  if (auto err = extract_concepts(d, result))
     return err;
   return result;
 }

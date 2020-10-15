@@ -22,7 +22,7 @@ TEST(concepts - convert from data) {
             record{{"name", "bar"}, {"fields", list{"a.bar", "b.baR"}}}}}}};
   auto ref = concepts_type{{"foo", {"a.fo0", "b.foO", "x.foe"}},
                            {"bar", {"a.bar", "b.baR"}}};
-  auto test = unbox(to_concepts(x));
+  auto test = unbox(extract_concepts(x));
   CHECK_EQUAL(test, ref);
 }
 
