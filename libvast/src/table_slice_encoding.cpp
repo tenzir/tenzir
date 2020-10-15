@@ -11,23 +11,24 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#pragma once
+#include "vast/table_slice_encoding.hpp"
 
-#include "vast/fwd.hpp"
+#include <array>
+#include <type_traits>
 
 namespace vast {
 
 namespace v1 {
 
-/// Tag for the unversioned encoding of a table slice.
-enum class table_slice_encoding : uint8_t {
-  invalid, ///< An invalid table slice.
-  COUNT,   ///< Not an encoding; this must always be the last entry.
-};
-
-/// @returns A textual representation of the given encoding.
-/// @param encoding The encoding.
-const char* to_string(table_slice_encoding encoding);
+const char* to_string(table_slice_encoding encoding) {
+  static constexpr std::array descriptions = {
+    "invalid",
+  };
+  using underlying = std::underlying_type_t<table_slice_encoding>;
+  static_assert(descriptions.size()
+                == static_cast<underlying>(table_slice_encoding::COUNT));
+  return descriptions[static_cast<underlying>(encoding)];
+}
 
 } // namespace v1
 
