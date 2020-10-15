@@ -27,18 +27,6 @@
 using namespace vast;
 using namespace std::string_literals;
 
-namespace {
-
-struct fixture {
-  fixture() {
-    factory<value_index>::initialize();
-  }
-};
-
-} // namespace
-
-FIXTURE_SCOPE(value_index_tests, fixture)
-
 TEST(port) {
   port_index idx{port_type{}};
   MESSAGE("append");
@@ -76,5 +64,3 @@ TEST(port) {
   bm = idx2.lookup(less_equal, make_data_view(priv));
   CHECK_EQUAL(to_string(unbox(bm)), "111101110");
 }
-
-FIXTURE_SCOPE_END()

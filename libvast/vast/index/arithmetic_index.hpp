@@ -13,8 +13,10 @@
 
 #pragma once
 
+#include "vast/base.hpp"
 #include "vast/bitmap_index.hpp"
 #include "vast/coder.hpp"
+#include "vast/concept/parseable/to.hpp"
 #include "vast/concept/parseable/vast/base.hpp"
 #include "vast/detail/assert.hpp"
 #include "vast/detail/overload.hpp"

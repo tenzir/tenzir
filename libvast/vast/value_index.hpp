@@ -13,30 +13,18 @@
 
 #pragma once
 
-#include "vast/bitmap_index.hpp"
-#include "vast/concept/parseable/to.hpp"
-#include "vast/concept/parseable/vast/base.hpp"
-#include "vast/concept/printable/vast/data.hpp"
-#include "vast/concept/printable/vast/operator.hpp"
-#include "vast/detail/assert.hpp"
-#include "vast/detail/overload.hpp"
-#include "vast/die.hpp"
 #include "vast/error.hpp"
 #include "vast/ewah_bitmap.hpp"
 #include "vast/ids.hpp"
 #include "vast/type.hpp"
-#include "vast/value_index_factory.hpp"
 #include "vast/view.hpp"
 
-#include <caf/deserializer.hpp>
 #include <caf/error.hpp>
 #include <caf/expected.hpp>
-#include <caf/serializer.hpp>
+#include <caf/fwd.hpp>
 #include <caf/settings.hpp>
 
-#include <algorithm>
 #include <memory>
-#include <type_traits>
 
 namespace vast {
 
@@ -76,7 +64,7 @@ public:
   /// Merges another value index with this one.
   /// @param other The value index to merge.
   /// @returns `true` on success.
-  //bool merge(const value_index& other);
+  // bool merge(const value_index& other);
 
   /// Retrieves the ID of the last append operation.
   /// @returns The largest ID in the index.
@@ -121,33 +109,5 @@ caf::error inspect(caf::serializer& sink, const value_index_ptr& x);
 
 /// @relates value_index
 caf::error inspect(caf::deserializer& source, value_index_ptr& x);
-
-/// An index for lists.
-class list_index : public value_index {
-public:
-  /// Constructs a sequence index of a given type.
-  /// @param t The sequence type.
-  /// @param opts Runtime options for element type construction.
-  explicit list_index(vast::type t, caf::settings opts = {});
-
-  /// The bitmap index holding the sequence size.
-  using size_bitmap_index =
-    bitmap_index<uint32_t, multi_level_coder<range_coder<ids>>>;
-
-  caf::error serialize(caf::serializer& sink) const override;
-
-  caf::error deserialize(caf::deserializer& source) override;
-
-private:
-  bool append_impl(data_view x, id pos) override;
-
-  caf::expected<ids>
-  lookup_impl(relational_operator op, data_view x) const override;
-
-  std::vector<value_index_ptr> elements_;
-  size_t max_size_;
-  size_bitmap_index size_;
-  vast::type value_type_;
-};
 
 } // namespace vast

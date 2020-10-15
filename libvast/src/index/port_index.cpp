@@ -14,6 +14,7 @@
 #include "vast/index/port_index.hpp"
 
 #include "vast/defaults.hpp"
+#include "vast/detail/overload.hpp"
 #include "vast/index/container_lookup.hpp"
 #include "vast/type.hpp"
 

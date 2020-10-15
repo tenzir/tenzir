@@ -31,18 +31,6 @@
 using namespace vast;
 using namespace std::string_literals;
 
-namespace {
-
-struct fixture {
-  fixture() {
-    factory<value_index>::initialize();
-  }
-};
-
-} // namespace
-
-FIXTURE_SCOPE(value_index_tests, fixture)
-
 TEST(subnet) {
   subnet_index idx{subnet_type{}};
   auto s0 = *to<subnet>("192.168.0.0/24");
@@ -107,5 +95,3 @@ TEST(subnet) {
   bm = idx2.lookup(not_equal, make_data_view(s1));
   CHECK_EQUAL(to_string(unbox(bm)), "101111");
 }
-
-FIXTURE_SCOPE_END()

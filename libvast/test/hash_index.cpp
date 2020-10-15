@@ -22,6 +22,7 @@
 #include "vast/load.hpp"
 #include "vast/save.hpp"
 #include "vast/si_literals.hpp"
+#include "vast/value_index_factory.hpp"
 
 #include <caf/test/dsl.hpp>
 

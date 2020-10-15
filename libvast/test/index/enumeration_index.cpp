@@ -25,18 +25,6 @@
 using namespace vast;
 using namespace std::string_literals;
 
-namespace {
-
-struct fixture {
-  fixture() {
-    factory<value_index>::initialize();
-  }
-};
-
-} // namespace
-
-FIXTURE_SCOPE(value_index_tests, fixture)
-
 TEST(enumeration) {
   auto e = enumeration_type{{"foo", "bar"}};
   auto idx = enumeration_index(e);
@@ -49,5 +37,3 @@ TEST(enumeration) {
   auto bar = idx.lookup(not_equal, make_data_view(enumeration{0}));
   CHECK_EQUAL(to_string(bar), "0010");
 }
-
-FIXTURE_SCOPE_END()

@@ -33,18 +33,6 @@
 using namespace vast;
 using namespace std::string_literals;
 
-namespace {
-
-struct fixture : fixtures::events {
-  fixture() {
-    factory<value_index>::initialize();
-  }
-};
-
-} // namespace
-
-FIXTURE_SCOPE(value_index_tests, fixture)
-
 TEST(address) {
   address_index idx{address_type{}};
   MESSAGE("append");
@@ -111,6 +99,8 @@ TEST(address) {
   CHECK_EQUAL(load(nullptr, buf, idx2), caf::none);
   CHECK_EQUAL(to_string(unbox(idx2.lookup(equal, make_data_view(x)))), str);
 }
+
+FIXTURE_SCOPE(value_index_tests, fixtures::events)
 
 // This test uncovered a regression that ocurred when computing the rank of a
 // bitmap representing conn.log events. The culprit was the EWAH bitmap

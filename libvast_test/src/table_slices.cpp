@@ -19,7 +19,9 @@
 #include "vast/span.hpp"
 #include "vast/table_slice_factory.hpp"
 #include "vast/value_index.hpp"
+#include "vast/value_index_factory.hpp"
 
+using namespace std::string_literals;
 using namespace vast;
 
 namespace fixtures {

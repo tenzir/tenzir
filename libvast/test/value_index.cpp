@@ -108,35 +108,6 @@ TEST(integer) {
   CHECK(to_string(unbox(less_than_leet)) == "1111011");
 }
 
-TEST(list) {
-  auto container_type = list_type{string_type{}};
-  list_index idx{container_type};
-  MESSAGE("append");
-  list xs{"foo", "bar"};
-  REQUIRE(idx.append(make_data_view(xs)));
-  xs = {"qux", "foo", "baz", "corge"};
-  REQUIRE(idx.append(make_data_view(xs)));
-  xs = {"bar"};
-  REQUIRE(idx.append(make_data_view(xs)));
-  REQUIRE(idx.append(make_data_view(xs)));
-  REQUIRE(idx.append(make_data_view(xs), 7));
-  MESSAGE("lookup");
-  auto x = "foo"s;
-  CHECK_EQUAL(to_string(*idx.lookup(ni, make_data_view(x))), "11000000");
-  CHECK_EQUAL(to_string(*idx.lookup(not_ni, make_data_view(x))), "00110001");
-  x = "bar";
-  CHECK_EQUAL(to_string(*idx.lookup(ni, make_data_view(x))), "10110001");
-  x = "not";
-  CHECK_EQUAL(to_string(*idx.lookup(ni, make_data_view(x))), "00000000");
-  MESSAGE("serialization");
-  std::vector<char> buf;
-  CHECK_EQUAL(save(nullptr, buf, idx), caf::none);
-  list_index idx2{container_type};
-  CHECK_EQUAL(load(nullptr, buf, idx2), caf::none);
-  x = "foo";
-  CHECK_EQUAL(to_string(*idx2.lookup(ni, make_data_view(x))), "11000000");
-}
-
 // This was the first attempt in figuring out where the bug sat. It didn't fire.
 TEST(regression - checking the result single bitmap) {
   ewah_bitmap bm;
