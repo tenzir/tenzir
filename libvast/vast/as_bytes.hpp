@@ -11,28 +11,28 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#define LZ4_DISABLE_DEPRECATE_WARNINGS
-#define LZ4_FORCE_INLINE
-#include "lz4/lib/lz4.c"
+#pragma once
 
-#include "vast/compression.hpp"
-#include "vast/die.hpp"
+#include "vast/byte.hpp"
+#include "vast/span.hpp"
+
+#include <type_traits>
+#include <vector>
 
 namespace vast {
-namespace lz4 {
 
-size_t compress_bound(size_t size) {
-  return LZ4_compressBound(size);
+template <class T>
+span<const byte> as_bytes(const std::vector<T>& xs) noexcept {
+  static_assert(std::is_integral_v<T>, "byte span requires integral types");
+  auto data = reinterpret_cast<const byte*>(xs.data());
+  return {data, xs.size() * sizeof(T)};
 }
 
-size_t compress(const char* in, size_t in_size, char* out, size_t out_size) {
-  return LZ4_compress_default(in, out, in_size, out_size);
+template <class T>
+span<byte> as_writeable_bytes(std::vector<T>& xs) noexcept {
+  static_assert(std::is_integral_v<T>, "byte span requires integral types");
+  auto data = reinterpret_cast<byte*>(xs.data());
+  return {data, xs.size() * sizeof(T)};
 }
 
-size_t uncompress(const char* in, size_t in_size, char* out, size_t out_size) {
-  return LZ4_decompress_safe(in, out, static_cast<int>(in_size),
-                             static_cast<int>(out_size));
-}
-
-} // namespace lz4
 } // namespace vast
