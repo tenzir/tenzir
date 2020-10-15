@@ -11,6 +11,10 @@ Every entry has a category for which we use the following visual abbreviations:
 
 ## Unreleased
 
+- 🐞 Input starved sources aren't going to block calls to `vast status` any
+  longer.
+  [#1096](https://github.com/tenzir/vast/pull/1096)
+
 - ⚠️ VAST will now warn if a client command connects to a server that runs on a
   different version of the vast binary.
   [#1098](https://github.com/tenzir/vast/pull/1098)
