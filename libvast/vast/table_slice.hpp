@@ -95,10 +95,22 @@ public:
   /// @returns The number of rows in the slice.
   size_type num_rows() const noexcept;
 
+  /// @returns An owning view on a specific table slice row.
+  /// @param row The row index.
+  /// @pre `row < num_rows()`
+  table_slice_row row(size_type row) const&;
+  table_slice_row row(size_type row) &&;
+
   // -- properties: columns ----------------------------------------------------
 
   /// @returns The number of rows in the slice.
   size_type num_columns() const noexcept;
+
+  /// @returns An owning view on given column of a table slice.
+  /// @param column The column index.
+  /// @pre `column < num_columns()`
+  table_slice_column column(size_type column) const&;
+  table_slice_column column(size_type column) &&;
 
   // -- properties: layout -----------------------------------------------------
 

@@ -63,6 +63,8 @@ class msgpack_table_slice;
 class msgpack_table_slice_builder;
 class table_slice;
 class table_slice_builder;
+class table_slice_column;
+class table_slice_row;
 
 } // namespace v1
 

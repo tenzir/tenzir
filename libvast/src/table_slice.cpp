@@ -18,6 +18,8 @@
 #include "vast/detail/assert.hpp"
 #include "vast/detail/overload.hpp"
 #include "vast/die.hpp"
+#include "vast/table_slice_column.hpp"
+#include "vast/table_slice_row.hpp"
 #include "vast/table_slice_visit.hpp"
 
 #include <utility>
@@ -141,6 +143,16 @@ table_slice::size_type table_slice::num_rows() const noexcept {
     *this);
 }
 
+table_slice_row table_slice::row(size_type row) const& {
+  VAST_ASSERT(row < num_rows());
+  return {*this, row};
+}
+
+table_slice_row table_slice::row(size_type row) && {
+  VAST_ASSERT(row < num_rows());
+  return {std::move(*this), row};
+}
+
 // -- properties: columns ------------------------------------------------------
 
 table_slice::size_type table_slice::num_columns() const noexcept {
@@ -149,6 +161,16 @@ table_slice::size_type table_slice::num_columns() const noexcept {
       []() noexcept { return size_type{}; },
     },
     *this);
+}
+
+table_slice_column table_slice::column(size_type column) const& {
+  VAST_ASSERT(column < num_columns());
+  return {*this, column};
+}
+
+table_slice_column table_slice::column(size_type column) && {
+  VAST_ASSERT(column < num_columns());
+  return {std::move(*this), column};
 }
 
 // -- properties: layout -------------------------------------------------------

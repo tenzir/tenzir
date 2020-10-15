@@ -21,94 +21,62 @@
 
 #include <caf/meta/type_name.hpp>
 
-// -- v0 includes --------------------------------------------------------------
-
-#include "vast/fwd.hpp"
-#include "vast/table_slice.hpp"
-
-#include <cstdint>
-
 namespace vast {
 
 namespace v1 {
 
-class table_slice_column final {
+class table_slice_row final {
 public:
   // -- constructors, destructors, and assignment operators --------------------
 
   /// Constructs an iterable view on a column of a table slice.
   /// @param slice The table slice to view.
   /// @param column The column index of the viewed slice.
-  table_slice_column(table_slice slice, table_slice::size_type column) noexcept;
+  table_slice_row(table_slice slice, table_slice::size_type column) noexcept;
 
   /// Default-constructs an invalid table slice column.
-  table_slice_column() noexcept;
+  table_slice_row() noexcept;
 
   /// Copy-constructs a table slice column.
-  table_slice_column(const table_slice_column& other) noexcept;
-  table_slice_column& operator=(const table_slice_column& rhs) noexcept;
+  table_slice_row(const table_slice_row& other) noexcept;
+  table_slice_row& operator=(const table_slice_row& rhs) noexcept;
 
   /// Move-constructs a table slice column.
-  table_slice_column(table_slice_column&& other) noexcept;
-  table_slice_column& operator=(table_slice_column&& rhs) noexcept;
+  table_slice_row(table_slice_row&& other) noexcept;
+  table_slice_row& operator=(table_slice_row&& rhs) noexcept;
 
   /// Destroys a table slice column.
-  ~table_slice_column() noexcept;
+  ~table_slice_row() noexcept;
 
   // -- properties -------------------------------------------------------------
 
-  /// @returns The index of the column in its slice.
+  /// @returns The index of the row in its slice.
   table_slice::size_type index() const noexcept;
 
   /// @returns The viewed slice.
   const table_slice& slice() const noexcept;
 
-  /// @returns The number of rows in the column.
+  /// @returns The number of columns in the row.
   table_slice::size_type size() const noexcept;
 
-  /// @returns The data at given row.
-  /// @pre `row < size()`
-  data_view operator[](table_slice::size_type row) const;
-
-  /// @returns The name of the column.
-  std::string name() const noexcept;
+  /// @returns the data at given column.
+  /// @pre `column < size()`
+  data_view operator[](table_slice::size_type column) const;
 
   // -- type introspection -----------------------------------------------------
 
   template <class Inspector>
-  friend auto inspect(Inspector& f, table_slice_column& column) {
-    return f(caf::meta::type_name("table_slice_column"), column.slice_,
-             column.column_);
+  friend auto inspect(Inspector& f, table_slice_row& row) {
+    return f(caf::meta::type_name("table_slice_row"), row.slice_, row.row_);
   }
 
 private:
   // -- implementation details -------------------------------------------------
 
   table_slice slice_ = {};
-  table_slice::size_type column_ = 0;
+  table_slice::size_type row_ = 0;
 };
 
 } // namespace v1
-
-inline namespace v0 {
-
-struct table_slice_column {
-  table_slice_column() {
-  }
-
-  table_slice_column(table_slice_ptr slice, size_t col)
-    : slice{std::move(slice)}, column{col} {
-    // nop
-  }
-  table_slice_ptr slice;
-  size_t column;
-
-  template <class Inspector>
-  friend auto inspect(Inspector& f, table_slice_column& x) {
-    return f(x.slice, x.column);
-  }
-};
-
-} // namespace v0
 
 } // namespace vast
