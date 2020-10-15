@@ -276,13 +276,21 @@ caf::error reader::read_impl(size_t max_events, size_t max_slice_size,
   // Sanity checks.
   VAST_ASSERT(max_events > 0);
   VAST_ASSERT(max_slice_size > 0);
+  auto next_line = [&] {
+    auto timed_out = lines_->next_timeout(read_timeout_);
+    if (timed_out)
+      VAST_DEBUG(this, "reached input timeout at line", lines_->line_number());
+    return timed_out;
+  };
   // EOF check.
   if (lines_->done())
     return make_error(ec::end_of_input, "input exhausted");
   // Make sure we have a builder.
   if (builder_ == nullptr) {
     VAST_ASSERT(layout_.fields.empty());
-    lines_->next();
+    auto timed_out = next_line();
+    if (timed_out)
+      return ec::timeout;
     if (auto err = parse_header())
       return err;
     if (!reset_builder(layout_))
@@ -297,29 +305,13 @@ caf::error reader::read_impl(size_t max_events, size_t max_slice_size,
   std::vector<data> xs;
   // Counts successfully parsed records.
   size_t produced = 0;
-  auto next_line = [&, start = std::chrono::steady_clock::now()] {
-    auto remaining = start + read_timeout_ - std::chrono::steady_clock::now();
-    if (remaining < std::chrono::steady_clock::duration::zero())
-      return true;
-    if (!builder_ || builder_->rows() == 0) {
-      lines_->next();
-      return false;
-    }
-    return lines_->next_timeout(remaining);
-  };
   // Loop until reaching EOF, a timeout, or the configured limit of records.
   while (produced < max_events) {
     if (lines_->done())
       return finish(f, make_error(ec::end_of_input, "input exhausted"));
-    auto timeout = next_line();
-    // We must check not only for a timeout but also whether any events were
-    // produced to work around CAF's assumption that sources are always able to
-    // generate events. Once `caf::stream_source` can handle empty batches
-    // gracefully, the second check should be removed.
-    if (timeout && produced > 0) {
-      VAST_DEBUG(this, "reached input timeout at line", lines_->line_number());
+    auto timed_out = next_line();
+    if (timed_out)
       return finish(f, ec::timeout);
-    }
     // Parse curent line.
     auto& line = lines_->get();
     if (line.empty()) {

@@ -110,7 +110,7 @@ protected:
 
   caf::atom_value table_slice_type_;
   std::chrono::steady_clock::duration read_timeout_
-    = vast::defaults::import::read_timeout;
+    = std::chrono::milliseconds{20};
 };
 
 } // namespace vast::format

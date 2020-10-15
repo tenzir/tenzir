@@ -260,12 +260,8 @@ caf::error reader::read_impl(size_t max_events, size_t max_slice_size,
   auto start = std::chrono::steady_clock::now();
   auto produced = size_t{0};
   while (produced < max_events) {
-    // We must check not only for a timeout but also whether any events were
-    // produced to work around CAF's assumption that sources are always able to
-    // generate events. Once `caf::stream_source` can handle empty batches
-    // gracefully, the second check should be removed.
-    if (start + read_timeout_ < std::chrono::steady_clock::now()
-        && produced > 0) {
+    if (read_timeout_ > decltype(read_timeout_)::zero()
+        && start + read_timeout_ < std::chrono::steady_clock::now()) {
       VAST_DEBUG(this, "reached input timeout");
       return finish(f, ec::timeout);
     }

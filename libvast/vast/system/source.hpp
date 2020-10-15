@@ -128,6 +128,9 @@ struct source_state {
   /// Current metrics for the accountant.
   measurement metrics;
 
+  /// Indicates whether the stream source is waiting for input.
+  bool waiting_for_input = false;
+
   /// Indicates whether the stream source is done.
   bool done;
 
@@ -257,46 +260,26 @@ source(caf::stateful_actor<source_state<Reader>>* self, Reader reader,
                                             push_slice);
       t.stop(produced);
       st.count += produced;
-      auto force_emit_batches = [&] {
-        st.mgr->out().fan_out_flush();
-        st.mgr->out().force_emit_batches();
-        st.send_report();
-      };
       auto finish = [&] {
         st.done = true;
         st.send_report();
         self->quit();
       };
-      if (produced == 0) {
-        // If the source is unable to generate new events (returns 0), the
-        // source will stall and never be polled again, because CAF expects
-        // stream sources to _always_ be able to generate new events. As a
-        // workaround, we send out an invalid table slice here that gets ignored
-        // downstream, and forcefully emit batches.
-        VAST_VERBOSE(self, "emits invalid table slice to prevent stalling");
-        out.push(nullptr);
-        return finish();
-      }
       if (st.requested && st.count >= *st.requested)
         return finish();
-      if (err != caf::none) {
-        if (err == vast::ec::timeout) {
-          if (produced > 0) {
-            VAST_DEBUG(self, "hit input timeout and forcefully emits", produced,
-                       "produced events");
-            return force_emit_batches();
-          } else {
-            // This case should never happen. If it does, we hit an internal
-            // application logic error in the reader. CAF might stall out on us
-            // here.
-            VAST_ERROR(self, "hit input timeout, but produced no events");
-            return finish();
-          }
-        } else {
-          if (err != vast::ec::end_of_input)
-            VAST_INFO(self, "completed with message:", render(err));
-          return finish();
+      if (err == ec::timeout) {
+        if (!st.waiting_for_input) {
+          // This pull handler was invoked while we were waiting for a wakeup
+          // message. Sending another one would create a parallel wakeup cycle.
+          st.waiting_for_input = true;
+          self->delayed_send(self, std::chrono::seconds{1}, atom::wakeup_v);
         }
+        return;
+      }
+      if (err != caf::none) {
+        if (err != vast::ec::end_of_input)
+          VAST_INFO(self, "completed with message:", render(err));
+        return finish();
       }
     },
     // done?
@@ -349,7 +332,17 @@ source(caf::stateful_actor<source_state<Reader>>* self, Reader reader,
       }
       return result;
     },
+    [=](atom::wakeup) {
+      VAST_VERBOSE(self, "wakes up to check for new input");
+      auto& st = self->state;
+      st.waiting_for_input = false;
+      // If we are here, the reader returned with ec::timeout the last time it
+      // was called. Let's check if we can read something now.
+      if (st.mgr->generate_messages())
+        st.mgr->push();
+    },
     [=](atom::telemetry) {
+      VAST_VERBOSE(self, "got a telemetry atom");
       auto& st = self->state;
       st.send_report();
       if (!st.mgr->done())
