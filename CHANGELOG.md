@@ -11,16 +11,15 @@ Every entry has a category for which we use the following visual abbreviations:
 
 ## Unreleased
 
-- ⚠️ The `read-timeout` option has been added to allow setting the input
-  timeout for low volume data sources. When this timeout is reached while
-  a source is waiting for input, the current batch will be closed sent to
-  the server. This behavior was previously controlled by `batch-timeout`,
-  which still exists and controls the maximum buffer time before batches
-  are sent to the server.
+- ⚠️ The new option `import.read-timeout` allows for setting an input timeout
+  for low volume sources. Reaching the timeout causes the current batch to be
+  forwarded immediately. This behavior was previously controlled by
+  `import.batch-timeout`, which now only controls the maximum buffer time
+  before the source forwards batches to the server.
   [#1096](https://github.com/tenzir/vast/pull/1096)
 
-- 🐞 Input starved sources aren't going to block calls to `vast status` any
-  longer.
+- 🐞 Sources that receive no or very little input do not block `vast status`
+  any longer.
   [#1096](https://github.com/tenzir/vast/pull/1096)
 
 - ⚠️ VAST will now warn if a client command connects to a server that runs on a
