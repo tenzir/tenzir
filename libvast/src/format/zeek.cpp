@@ -308,7 +308,7 @@ caf::error reader::read_impl(size_t max_events, size_t max_slice_size,
     }
     auto timed_out = next_line();
     if (timed_out)
-      return finish(f, ec::timeout);
+      return ec::timeout;
     // Parse curent line.
     auto& line = lines_->get();
     if (line.empty()) {
