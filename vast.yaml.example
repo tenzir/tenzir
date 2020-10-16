@@ -138,23 +138,28 @@ vast:
     # Maximum number of results per exploration.
     max-events-context: 100
 
-  # The `vast import` command imports data from stdin, files or over the network.
+  # The `vast import` command imports data from stdin, files or over the
+  # network.
   import:
     # The maximum number of events to import.
     #max-events: <infinity>
-    # Timeout after which batched table slices are forwarded.
-    read-timeout: 10s
-    # Read timoeut after which data is forwarded to the importer regardless of
-    # batching and table slices being unfinished.
-    read-timeout: 10s
-    # Block until the importer forwarded all data.
-    blocking: false
+    # Timeout after which buffered table slices are forwarded to the node.
+    # Currently unfinished table slices will be finished and forwarded when
+    # this timeout is hit.
+    batch-timeout: 1s
     # Upper bound for the size of a table slice. A value of 0 causes the
     # batch-size to be unbounded, leaving control of batching to the
     # vast.import.read-timeout option only.
     batch-size: 100
     # Encoding type of table slices (arrow or msgpack).
     batch-encoding: arrow
+    # Block until the importer forwarded all data.
+    blocking: false
+    # Timeout the for read function. Input streams are polled before data is
+    # read from them. This mechansim helps with keeping the import process
+    # responsive. The amount of time that each iteration waits for new input
+    # can be configured with this option.
+    read-timeout: 20ms
 
     # The `vast import csv` command imports data from CSVs with a known schema.
     csv:
