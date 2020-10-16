@@ -11,6 +11,10 @@ Every entry has a category for which we use the following visual abbreviations:
 
 ## Unreleased
 
+- ⚠️ VAST will now warn if a client command connects to a server that runs on a
+  different version of the vast binary.
+  [#1098](https://github.com/tenzir/vast/pull/1098)
+
 - 🎁 When running VAST under systemd supervision, it is now possible to use
   the `Type=notify` directive in the unit file to let VAST notify
   the service manager when it becomes ready.

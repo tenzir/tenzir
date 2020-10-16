@@ -528,6 +528,7 @@ caf::behavior node(node_actor* self, std::string name, path dir,
         result.push_back(self->state.registry.find_by_label(label));
       return result;
     },
+    [=](atom::get, atom::version) { return VAST_VERSION; },
     [=](atom::signal, int signal) {
       VAST_IGNORE_UNUSED(signal);
       VAST_WARNING(self, "got signal", ::strsignal(signal));
