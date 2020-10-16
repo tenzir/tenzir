@@ -492,7 +492,6 @@ caf::behavior node(node_actor* self, std::string name, path dir,
                                  shutdown_kill_timeout);
   });
   // Define the node behavior.
-  self->set_default_handler(caf::print_and_drop);
   return {
     [=](const invocation& inv) {
       VAST_DEBUG(self, "got command", inv.full_name, "with options",
