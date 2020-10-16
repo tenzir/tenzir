@@ -15,6 +15,9 @@
 
 #include "vast/msgpack_table_slice_builder.hpp"
 
+#include "vast/fbs/table_slice.hpp"
+#include "vast/fbs/utils.hpp"
+
 // -- v0 includes --------------------------------------------------------------
 
 #include "vast/detail/overload.hpp"
@@ -31,8 +34,6 @@ using namespace vast;
 
 namespace vast {
 
-namespace v1 {} // namespace v1
-
 namespace msgpack {
 
 // We activate ADL for data_view here so that we can rely on existing recursive
@@ -41,6 +42,69 @@ template <class Builder>
 [[nodiscard]] size_t put(Builder& builder, data_view v);
 
 } // namespace msgpack
+
+namespace v1 {
+
+// -- constructors, destructors, and assignment operators ----------------------
+
+msgpack_table_slice_builder::msgpack_table_slice_builder(
+  record_type layout) noexcept
+  : table_slice_builder(std::move(layout)), msgpack_builder_{buffer_} {
+  // nop
+}
+
+msgpack_table_slice_builder::~msgpack_table_slice_builder() noexcept = default;
+
+// -- properties ---------------------------------------------------------------
+
+/// @returns the current number of rows in the table slice.
+table_slice::size_type msgpack_table_slice_builder::rows() const noexcept {
+  return detail::narrow_cast<table_slice::size_type>(offset_table_.size());
+}
+
+table_slice_encoding msgpack_table_slice_builder::encoding() const noexcept {
+  return implementation_id;
+}
+
+void msgpack_table_slice_builder::reserve(table_slice::size_type num_rows) {
+  offset_table_.reserve(num_rows);
+}
+
+// -- implementation details -------------------------------------------------
+
+bool msgpack_table_slice_builder::add_impl(data_view x) {
+  if (!type_check(layout().fields[column_].type, x))
+    return false;
+  if (column_ == 0)
+    offset_table_.push_back(buffer_.size());
+  column_ = (column_ + 1) % columns();
+  auto n = put(msgpack_builder_, x);
+  return n > 0;
+};
+
+caf::expected<chunk_ptr> msgpack_table_slice_builder::finish_impl() {
+  // Create a `vast.fbs.table_slice.msgpack.v0` table slice.
+  auto builder = fbs::table_slice::msgpack::v0Builder{fbb_};
+  auto serialized_layout = fbs::serialize_bytes(fbb_, layout());
+  if (!serialized_layout)
+    return std::move(serialized_layout.error());
+  builder.add_layout(*serialized_layout);
+  builder.add_offset_table(fbb_.CreateVector(offset_table_));
+  builder.add_data(fbb_.CreateVector(
+    reinterpret_cast<const uint8_t*>(buffer_.data()), buffer_.size()));
+  auto encoded_slice = builder.Finish();
+  // Create the table slice and put it into a chunk.
+  fbs::CreateTableSlice(fbb_, fbs::table_slice::TableSlice::msgpack_v0,
+                        encoded_slice.Union());
+  return fbs::release(fbb_);
+}
+
+void msgpack_table_slice_builder::reset_impl() {
+  offset_table_ = {};
+  buffer_ = {};
+}
+
+} // namespace v1
 
 inline namespace v0 {
 

@@ -25,11 +25,27 @@ table v0 {
   data: [ubyte];
 }
 
+namespace vast.fbs.table_slice.msgpack;
+
+/// A table slice encoded with MessagePack.
+table v0 {
+  /// The schema of the data.
+  /// TODO: currently CAF binary; make this a separate table.
+  layout: [ubyte];
+
+  /// Offsets from the beginning of the buffer to each row.
+  offset_table: [ulong];
+
+  /// The buffer that contains the MessagePack data.
+  data: [ubyte];
+}
+
 namespace vast.fbs.table_slice;
 
 /// A sum type containing all versions of all encodings of a table slice.
 union TableSlice {
   generic.v0,
+  msgpack.v0,
 }
 
 namespace vast.fbs;

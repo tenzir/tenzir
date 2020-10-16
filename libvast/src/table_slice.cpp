@@ -16,8 +16,10 @@
 #include "vast/table_slice.hpp"
 
 #include "vast/detail/assert.hpp"
+#include "vast/detail/narrow.hpp"
 #include "vast/detail/overload.hpp"
 #include "vast/die.hpp"
+#include "vast/error.hpp"
 #include "vast/table_slice_column.hpp"
 #include "vast/table_slice_row.hpp"
 #include "vast/table_slice_visit.hpp"
@@ -114,11 +116,13 @@ bool operator==(const table_slice& lhs, const table_slice& rhs) {
 
 /// @returns The encoding of the table slice.
 table_slice_encoding table_slice::encoding() const noexcept {
-  return visit(
-    detail::overload{
-      []() noexcept { return table_slice_encoding::invalid; },
-    },
-    *this);
+  return visit(detail::overload{
+                 []() noexcept { return table_slice_encoding::invalid; },
+                 [](const fbs::table_slice::msgpack::v0&) noexcept {
+                   return table_slice_encoding::msgpack;
+                 },
+               },
+               *this);
 }
 
 // -- properties: offset -------------------------------------------------------
@@ -137,11 +141,12 @@ void table_slice::offset(id offset) noexcept {
 // -- properties: rows ---------------------------------------------------------
 
 table_slice::size_type table_slice::rows() const noexcept {
-  return visit(
-    detail::overload{
-      []() noexcept { return size_type{}; },
-    },
-    *this);
+  return visit(detail::overload{
+                 []() noexcept -> size_type { return {}; },
+                 [](const fbs::table_slice::msgpack::v0&) noexcept
+                 -> size_type { die("not yet implemented"); },
+               },
+               *this);
 }
 
 table_slice_row table_slice::row(size_type row) const& {
@@ -157,11 +162,12 @@ table_slice_row table_slice::row(size_type row) && {
 // -- properties: columns ------------------------------------------------------
 
 table_slice::size_type table_slice::columns() const noexcept {
-  return visit(
-    detail::overload{
-      []() noexcept { return size_type{}; },
-    },
-    *this);
+  return visit(detail::overload{
+                 []() noexcept -> size_type { return {}; },
+                 [](const fbs::table_slice::msgpack::v0&) noexcept
+                 -> size_type { die("not yet implemented"); },
+               },
+               *this);
 }
 
 table_slice_column table_slice::column(size_type column) const& {
@@ -177,26 +183,29 @@ table_slice_column table_slice::column(size_type column) && {
 // -- properties: layout -------------------------------------------------------
 
 record_type table_slice::layout() const noexcept {
-  return visit(
-    detail::overload{
-      []() noexcept { return record_type{}; },
-    },
-    *this);
+  return visit(detail::overload{
+                 []() noexcept -> record_type { return {}; },
+                 [](const fbs::table_slice::msgpack::v0&) noexcept
+                 -> record_type { die("not yet implemented"); },
+               },
+               *this);
 }
 
 // -- properties: data access --------------------------------------------------
 
 data_view table_slice::at(size_type row, size_type column) const {
-  return visit(
-    detail::overload{
-      []() noexcept -> data_view {
-        // The preconditions imply that this handler can never be called.
-        die("logic error: invalid table slices cannot be accessed");
-      },
-    },
-    *this);
   VAST_ASSERT(row < rows());
   VAST_ASSERT(column < columns());
+  return visit(detail::overload{
+                 []() noexcept -> data_view {
+                   // The preconditions imply that this handler can never be
+                   // called.
+                   die("logic error: invalid table slices cannot be accessed");
+                 },
+                 [](const fbs::table_slice::msgpack::v0&) noexcept
+                 -> data_view { die("not yet implemented"); },
+               },
+               *this);
 }
 // -- type introspection -------------------------------------------------------
 
@@ -322,16 +331,17 @@ ids evaluate(const expression&, const table_slice&) {
 
 // -- column operations --------------------------------------------------------
 
-void append_column_to_index(const table_slice_column& column,
-                            value_index& idx) {
-  visit(
-    detail::overload{
-      []() noexcept {
-        // An invalid slice cannot be added to a value index, so this is just a
-        // nop.
-      },
-    },
-    column.slice());
+void append_column_to_index(const table_slice_column& column, value_index&) {
+  visit(detail::overload{
+          []() noexcept {
+            // An invalid slice cannot be added to a value index, so this is
+            // just a nop.
+          },
+          [&](const fbs::table_slice::msgpack::v0&) noexcept {
+            die("not yet implemented");
+          },
+        },
+        column.slice());
 }
 
 } // namespace v1

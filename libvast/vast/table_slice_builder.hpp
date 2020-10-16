@@ -16,6 +16,7 @@
 // -- v1 includes --------------------------------------------------------------
 
 #include "vast/fwd.hpp"
+#include "vast/table_slice.hpp"
 #include "vast/table_slice_encoding.hpp"
 
 #include <caf/make_counted.hpp>
@@ -77,24 +78,27 @@ public:
 
   /// Constructs a table_slice from the currently accumulated state and resets
   /// the internal state.
-  /// @returns A table slice from the accumulated calls to add.
+  /// @returns A table slice from the accumulated calls to add, or an error.
   [[nodiscard]] table_slice finish();
 
+  /// Reset the builder state.
+  void reset();
+
   /// @returns the current number of rows in the table slice.
-  virtual size_t rows() const noexcept;
+  virtual table_slice::size_type rows() const noexcept;
 
   /// @returns an identifier for the implementing class.
   virtual table_slice_encoding encoding() const noexcept;
 
   /// Allows the table slice builder to allocate sufficient storage.
   /// @param num_rows The number of rows to allocate storage for.
-  virtual void reserve(size_t num_rows);
+  virtual void reserve(table_slice::size_type num_rows);
 
   /// @returns The table layout.
   const record_type& layout() const noexcept;
 
   /// @returns The number of columns in the table slice.
-  size_t columns() const noexcept;
+  table_slice::size_type columns() const noexcept;
 
 protected:
   // -- implementation details -------------------------------------------------
@@ -105,12 +109,18 @@ protected:
   virtual bool add_impl(data_view x);
 
   /// Constructs a table_slice from the currently accumulated state.
-  /// @returns A table slice from the accumulated calls to add.
-  virtual table_slice finish_impl();
+  /// @returns A chunk from the accumulated calls to add that matches the
+  /// encoding of the builder implementation.
+  virtual caf::expected<chunk_ptr> finish_impl();
 
+  /// Reset the builder.
+  virtual void reset_impl();
+
+  /// The underlying builder for FlatBuffers.
   flatbuffers::FlatBufferBuilder fbb_;
 
 private:
+  /// The layout of the to-be-constructed table slices.
   record_type layout_;
 };
 

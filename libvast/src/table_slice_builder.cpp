@@ -17,9 +17,13 @@
 
 #include "vast/data.hpp"
 #include "vast/detail/overload.hpp"
+#include "vast/error.hpp"
 #include "vast/fbs/table_slice.hpp"
 #include "vast/fbs/utils.hpp"
+#include "vast/logger.hpp"
 #include "vast/table_slice.hpp"
+
+#include <caf/expected.hpp>
 
 // -- v0 includes --------------------------------------------------------------
 
@@ -60,20 +64,29 @@ bool table_slice_builder::recursive_add(const data& x, const type& t) {
 }
 
 table_slice table_slice_builder::finish() {
-  auto result = finish_impl();
-  fbb_.Clear();
-  return result;
+  auto chunk = finish_impl();
+  if (!chunk) {
+    VAST_ERROR(__func__, "failed to build table slice:", render(chunk.error()));
+    return {};
+  }
+  reset();
+  return table_slice{*chunk};
 }
 
-size_t table_slice_builder::rows() const noexcept {
-  return 0;
+void table_slice_builder::reset() {
+  fbb_.Clear();
+  reset_impl();
+}
+
+table_slice::size_type table_slice_builder::rows() const noexcept {
+  return {};
 }
 
 table_slice_encoding table_slice_builder::encoding() const noexcept {
   return implementation_id;
 }
 
-void table_slice_builder::reserve(size_t) {
+void table_slice_builder::reserve(table_slice::size_type) {
   // nop
 }
 
@@ -81,7 +94,7 @@ const record_type& table_slice_builder::layout() const noexcept {
   return layout_;
 }
 
-size_t table_slice_builder::columns() const noexcept {
+table_slice::size_type table_slice_builder::columns() const noexcept {
   return layout().fields.size();
 }
 
@@ -91,10 +104,14 @@ bool table_slice_builder::add_impl(data_view) {
   return false;
 }
 
-table_slice table_slice_builder::finish_impl() {
+caf::expected<chunk_ptr> table_slice_builder::finish_impl() {
   // Create an invalid table slice.
   fbs::CreateTableSlice(fbb_);
-  return table_slice{fbs::release(fbb_)};
+  return fbs::release(fbb_);
+}
+
+void table_slice_builder::reset_impl() {
+  // nop
 }
 
 // -- intrusive_ptr facade -----------------------------------------------------

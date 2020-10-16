@@ -33,7 +33,9 @@ namespace v1 {
 /// @relates table_slice
 template <class Visitor>
 auto visit(Visitor&& visitor, const table_slice& slice) noexcept(
-  std::conjunction_v<std::is_nothrow_invocable<Visitor>>) {
+  std::conjunction_v<
+    std::is_nothrow_invocable<Visitor>,
+    std::is_nothrow_invocable<Visitor, const fbs::table_slice::msgpack::v0&>>) {
   VAST_ASSERT(slice.chunk());
   // The actual dispatching function that ends up calling the vsitor.
   auto dispatch = [&](auto&&... args) {
@@ -63,6 +65,9 @@ auto visit(Visitor&& visitor, const table_slice& slice) noexcept(
     }
     case fbs::table_slice::TableSlice::generic_v0: {
       die("unable to dispatch vast.fbs.table_slice.generic.v0");
+    }
+    case fbs::table_slice::TableSlice::msgpack_v0: {
+      return dispatch(*fbs_slice->table_slice_as_msgpack_v0());
     }
   }
 }

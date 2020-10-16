@@ -22,6 +22,7 @@ namespace v1 {
 /// Tag for the unversioned encoding of a table slice.
 enum class table_slice_encoding : uint8_t {
   invalid, ///< An invalid table slice.
+  msgpack, ///< A MessagePack-encoded table slice.
   COUNT,   ///< Not an encoding; this must always be the last entry.
 };
 
