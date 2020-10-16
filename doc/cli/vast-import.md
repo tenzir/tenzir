@@ -82,8 +82,8 @@ size.
 
 #### `vast.import.batch-timeout`
 
-Sets a time limit for forwarding buffered table slices to the importer. If the
-time limit is hit while the source is still busy processing data, the current
+Sets a timeout for forwarding buffered table slices to the importer. If the
+timeout is hit while the source is still busy processing data, the current
 batch will be finalized and all buffered batches will be send to the node. The
 default batch timeout is 1 second.
 

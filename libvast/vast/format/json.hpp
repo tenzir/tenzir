@@ -218,7 +218,7 @@ caf::error reader<Selector>::read_impl(size_t max_events, size_t max_slice_size,
       return finish(cons, make_error(ec::end_of_input, "input exhausted"));
     if (batch_timeout_ > decltype(batch_timeout_)::zero()
         && start + batch_timeout_ < std::chrono::steady_clock::now()) {
-      VAST_DEBUG(this, "reached input time limit");
+      VAST_DEBUG(this, "reached input timeout");
       break;
     }
     bool timed_out = lines_->next_timeout(read_timeout_);

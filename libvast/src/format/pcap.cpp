@@ -252,7 +252,7 @@ caf::error reader::read_impl(size_t max_events, size_t max_slice_size,
   while (produced < max_events) {
     if (batch_timeout_ > decltype(batch_timeout_)::zero()
         && start + batch_timeout_ < std::chrono::steady_clock::now()) {
-      VAST_DEBUG(this, "reached input time limit");
+      VAST_DEBUG(this, "reached input timeout");
       break;
     }
     // Attempt to fetch next packet.
