@@ -171,6 +171,33 @@ int uds_recv_fd(int socket) {
 
 VAST_DIAGNOSTIC_POP
 
+int uds_sendmsg(int socket, const std::string& destination,
+                const std::string& msg, int flags) {
+  struct sockaddr_un dst;
+  std::memset(&dst, 0, sizeof(dst));
+  if (destination.empty() || destination.size() >= sizeof(dst.sun_path))
+    return -EINVAL;
+  dst.sun_family = AF_UNIX;
+  std::strncpy(dst.sun_path, destination.data(), sizeof(dst.sun_path) - 1);
+  struct iovec iovec;
+  std::memset(&iovec, 0, sizeof(iovec));
+  iovec.iov_base = const_cast<char*>(msg.data());
+  iovec.iov_len = msg.size();
+  struct msghdr msghdr;
+  std::memset(&msghdr, 0, sizeof(msghdr));
+  msghdr.msg_name = &dst;
+  // For abstract domain sockets (i.e., where the first char is '@'), the
+  // terminating NUL byte is not counted towards the length, but any NUL
+  // bytes embedded in the path are. For example, in the extreme case it
+  // would be possible to have two different sockets named "\0" and "\0\0".
+  auto pathlen = destination[0] == '@' ? destination.size()
+                                       : std::strlen(&destination[0]) + 1;
+  msghdr.msg_namelen = offsetof(struct sockaddr_un, sun_path) + pathlen;
+  msghdr.msg_iov = &iovec;
+  msghdr.msg_iovlen = 1;
+  return ::sendmsg(socket, &msghdr, flags);
+}
+
 unix_domain_socket unix_domain_socket::listen(const std::string& path) {
   return unix_domain_socket{detail::uds_listen(path)};
 }

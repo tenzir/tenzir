@@ -39,6 +39,15 @@ int uds_accept(int socket);
 /// @returns The descriptor of the domain socket on success or -1 on failure.
 int uds_connect(const std::string& path, socket_type type);
 
+/// Sends a single message over a UNIX domain socket.
+/// @param socket The domain socket descriptor.
+/// @param destination The destination to which to send the message.
+/// @param msg The message payload
+/// @param flags The flags are passed verbatim to `sendmsg(3)`.
+/// @returns The number of bytes sent or -1 on failure.
+int uds_sendmsg(int socket, const std::string& destination,
+                const std::string& msg, int flags = 0);
+
 /// Sends a file descriptor over a UNIX domain socket.
 /// @param socket The domain socket descriptor.
 /// @param fd The file descriptor to send.
