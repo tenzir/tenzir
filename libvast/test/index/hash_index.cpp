@@ -13,7 +13,7 @@
 
 #define SUITE hash_index
 
-#include "vast/hash_index.hpp"
+#include "vast/index/hash_index.hpp"
 
 #include "vast/test/test.hpp"
 
@@ -22,6 +22,7 @@
 #include "vast/load.hpp"
 #include "vast/save.hpp"
 #include "vast/si_literals.hpp"
+#include "vast/value_index_factory.hpp"
 
 #include <caf/test/dsl.hpp>
 

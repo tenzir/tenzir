@@ -19,6 +19,7 @@
 #include "vast/detail/add_message_types.hpp"
 #include "vast/detail/append.hpp"
 #include "vast/detail/assert.hpp"
+#include "vast/detail/overload.hpp"
 #include "vast/detail/process.hpp"
 #include "vast/detail/string.hpp"
 #include "vast/detail/system.hpp"
