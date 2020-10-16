@@ -128,6 +128,9 @@ struct source_state {
   /// Current metrics for the accountant.
   measurement metrics;
 
+  /// The amount of time to wait until the next wakeup.
+  std::chrono::milliseconds wakeup_delay = std::chrono::milliseconds::zero();
+
   /// Indicates whether the stream source is waiting for input.
   bool waiting_for_input = false;
 
@@ -272,10 +275,19 @@ source(caf::stateful_actor<source_state<Reader>>* self, Reader reader,
           // This pull handler was invoked while we were waiting for a wakeup
           // message. Sending another one would create a parallel wakeup cycle.
           st.waiting_for_input = true;
-          self->delayed_send(self, std::chrono::seconds{1}, atom::wakeup_v);
+          self->delayed_send(self, st.wakeup_delay, atom::wakeup_v);
+          // Exponential backoff for the wakeup calls.
+          // For each consecutive invocation of this generate handler that does
+          // not emit any events, we double the wakeup delay.
+          // The sequence is 0, 20, 40, 80, 160, 320, 640, 1280.
+          if (st.wakeup_delay == std::chrono::milliseconds::zero())
+            st.wakeup_delay = std::chrono::milliseconds{20};
+          else if (st.wakeup_delay < std::chrono::milliseconds{1000})
+            st.wakeup_delay *= 2;
         }
         return;
       }
+      st.wakeup_delay = std::chrono::milliseconds::zero();
       if (err != caf::none) {
         if (err != vast::ec::end_of_input)
           VAST_INFO(self, "completed with message:", render(err));
