@@ -144,8 +144,6 @@ vast:
     # The maximum number of events to import.
     #max-events: <infinity>
     # Timeout after which buffered table slices are forwarded to the node.
-    # Currently unfinished table slices will be finished and forwarded when
-    # this timeout is hit.
     batch-timeout: 1s
     # Upper bound for the size of a table slice. A value of 0 causes the
     # batch-size to be unbounded, leaving control of batching to the
@@ -155,10 +153,7 @@ vast:
     batch-encoding: arrow
     # Block until the importer forwarded all data.
     blocking: false
-    # Timeout the for read function. Input streams are polled before data is
-    # read from them. This mechansim helps with keeping the import process
-    # responsive. The amount of time that each iteration waits for new input
-    # can be configured with this option.
+    # The amount of time that each read iteration waits for new input.
     read-timeout: 20ms
 
     # The `vast import csv` command imports data from CSVs with a known schema.
