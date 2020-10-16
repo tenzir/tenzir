@@ -22,6 +22,8 @@
 #include "vast/view.hpp"
 
 #include <atomic>
+#include <utility>
+#include <vector>
 
 // -- v0 includes --------------------------------------------------------------
 
@@ -164,6 +166,67 @@ private:
   /// The number of in-memory table slices.
   inline static std::atomic<size_t> num_instances_ = 0;
 };
+
+// -- row operations -----------------------------------------------------------
+
+/// Selects all rows in `slices` with event IDs in `selection` and appends
+/// produced table slices to `result`. Cuts `slices` into multiple slices if
+/// `selection` produces gaps.
+/// @param result The container for appending generated table slices.
+/// @param slice The input table slice.
+/// @param selection ID set for selecting events from `slices`.
+/// @relates table_slice
+void select(std::vector<table_slice>& result, table_slice slice,
+            const ids& selection);
+
+/// Selects all rows in `slice` with event IDs in `selection`. Cuts `slice` into
+/// multiple slices if `selection` produces gaps.
+/// @param slice The input table slice.
+/// @param selection ID set for selecting events from `slice`.
+/// @returns new table slices of the same implementation type as `slice` from
+///          `selection`.
+/// @relates table_slice
+std::vector<table_slice> select(table_slice slice, const ids& selection);
+
+/// Selects the first `num_rows` rows of `slice`.
+/// @param slice The input table slice.
+/// @param num_rows The number of rows to keep.
+/// @returns `slice` if `slice.num_rows() <= num_rows`, otherwise creates a new
+///          table slice of the first `num_rows` rows from `slice`.
+/// @relates table_slice
+table_slice truncate(table_slice slice, table_slice::size_type num_rows);
+
+/// Splits a table slice into two slices such that the first slice contains
+/// the rows `[0, partition_point)` and the second slice contains the rows
+/// `[partition_point, slice.num_rows())`.
+/// @param slice The input table slice.
+/// @param partition_point The index of the first row for the second slice.
+/// @returns Two new table slices if `0 < part;ition_point < slice.num_rows()`,
+///          otherwise returns `slice` and an invalid table slice.
+/// @relates table_slice
+std::pair<table_slice, table_slice>
+split(table_slice slice, table_slice::size_type partition_point);
+
+/// Counts the number of total rows of multiple table slices.
+/// @param slices The table slices to count.
+/// @returns The sum of rows across *slices*.
+/// @relates table_slice
+table_slice::size_type num_rows(const std::vector<table_slice>& slices);
+
+/// Evaluates an expression over a table slice by applying it row-wise.
+/// @param expr The expression to evaluate.
+/// @param slice The table slice to apply *expr* on.
+/// @returns The set of row IDs in *slice* for which *expr* yields true.
+/// @relates table_slice
+ids evaluate(const expression& expr, const table_slice& slice);
+
+// -- column operations --------------------------------------------------------
+
+/// Appends all values in column `column` to `idx`.
+/// @param column A view on a table slice column.
+/// @param idx The value index to append `column` to.
+/// @relates table_slice
+void append_column_to_index(const table_slice_column& column, value_index& idx);
 
 } // namespace v1
 

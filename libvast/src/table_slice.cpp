@@ -21,6 +21,7 @@
 #include "vast/table_slice_column.hpp"
 #include "vast/table_slice_row.hpp"
 #include "vast/table_slice_visit.hpp"
+#include "vast/value_index.hpp"
 
 #include <utility>
 
@@ -211,6 +212,126 @@ size_t table_slice::instances() noexcept {
 
 table_slice::table_slice(chunk_ptr chunk) noexcept : chunk_{std::move(chunk)} {
   VAST_ASSERT(chunk_);
+}
+
+// -- row operations -----------------------------------------------------------
+
+void select(std::vector<table_slice>& result, table_slice slice,
+            const ids& selection) {
+  auto slice_ids
+    = make_ids({{slice.offset(), slice.offset() + slice.num_rows()}});
+  auto intersection = selection & slice_ids;
+  auto intersection_rank = rank(intersection);
+  // Do no rows qualify?
+  if (intersection_rank == 0)
+    return;
+  // Do all rows qualify?
+  if (rank(slice_ids) == intersection_rank) {
+    result.emplace_back(std::move(slice));
+    return;
+  }
+  // Start slicing and dicing.
+  auto builder
+    = factory<table_slice_builder>::make(slice.encoding(), slice.layout());
+  if (builder == nullptr) {
+    VAST_ERROR(__func__, "failed to get a table slice builder for",
+               slice.encoding());
+    return;
+  }
+  id last_offset = slice.offset();
+  auto push_slice = [&] {
+    if (builder->rows() == 0)
+      return;
+    auto slice = builder->finish();
+    if (slice.num_rows() == 0) {
+      VAST_WARNING(__func__, "got an empty slice");
+      return;
+    }
+    slice.offset(last_offset);
+    result.emplace_back(std::move(slice));
+  };
+  auto last_id = last_offset - 1;
+  for (auto id : select(intersection)) {
+    // Finish last slice when hitting non-consecutive IDs.
+    if (last_id + 1 != id) {
+      push_slice();
+      last_offset = id;
+      last_id = id;
+    } else {
+      ++last_id;
+    }
+    VAST_ASSERT(id >= slice.offset());
+    auto row = id - slice.offset();
+    VAST_ASSERT(row < slice.num_rows());
+    for (size_t column = 0; column < slice.num_columns(); ++column) {
+      auto cell_value = slice.at(row, column);
+      if (!builder->add(cell_value)) {
+        VAST_ERROR(__func__, "failed to add data at column", column, "in row",
+                   row, "to the builder:", cell_value);
+        return;
+      }
+    }
+  }
+  push_slice();
+}
+
+std::vector<table_slice> select(table_slice slice, const ids& selection) {
+  std::vector<table_slice> result;
+  select(result, std::move(slice), selection);
+  return result;
+}
+
+table_slice truncate(table_slice slice, table_slice::size_type num_rows) {
+  if (num_rows == 0)
+    return {};
+  if (slice.num_rows() <= num_rows)
+    return slice;
+  auto selection = make_ids({{slice.offset(), slice.offset() + num_rows}});
+  auto xs = select(std::move(slice), selection);
+  VAST_ASSERT(xs.size() == 1);
+  return std::move(xs.back());
+}
+
+std::pair<table_slice, table_slice>
+split(table_slice slice, table_slice::size_type partition_point) {
+  if (partition_point == 0)
+    return {{}, std::move(slice)};
+  if (partition_point >= slice.num_rows())
+    return {std::move(slice), {}};
+  auto first = slice.offset();
+  auto mid = first + partition_point;
+  auto last = first + slice.num_rows();
+  // Create first table slice.
+  auto xs = select(std::move(slice), make_ids({{first, mid}}));
+  VAST_ASSERT(xs.size() == 1);
+  // Create second table slice.
+  select(xs, slice, make_ids({{mid, last}}));
+  VAST_ASSERT(xs.size() == 2);
+  return {std::move(xs.front()), std::move(xs.back())};
+}
+
+table_slice::size_type rows(const std::vector<table_slice>& slices) {
+  return std::transform_reduce(slices.begin(), slices.end(),
+                               table_slice::size_type{}, std::plus<>{},
+                               [](auto&& slice) { return slice.num_rows(); });
+}
+
+ids evaluate(const expression&, const table_slice&) {
+  die("not yet implemented");
+}
+
+// -- column operations --------------------------------------------------------
+
+void append_column_to_index(const table_slice_column& column,
+                            value_index& idx) {
+  visit(
+    detail::overload{
+      []() noexcept {
+        // An invalid slice cannot be added to a value index, so this is just a
+        // nop.
+      },
+    },
+    column.slice());
 }
 
 } // namespace v1
