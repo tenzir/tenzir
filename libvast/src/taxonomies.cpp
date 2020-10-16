@@ -44,10 +44,12 @@ caf::error convert(const data& d, concepts_type& out) {
           return make_error(ec::convert_error, "field is not a string:", f);
         out[*name].push_back(*field);
       }
-    } else
+    } else {
       return make_error(ec::convert_error, "fields is not a list:", d);
-  } else
+    }
+  } else {
     return make_error(ec::convert_error, "concept is not a record:", d);
+  }
   return caf::none;
 }
 
