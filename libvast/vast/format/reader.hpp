@@ -52,7 +52,8 @@ public:
   // -- constructors, destructors, and assignment operators --------------------
 
   /// @param id Implementation ID for the table slice builder.
-  explicit reader(caf::atom_value table_slice_type);
+  explicit reader(caf::atom_value table_slice_type,
+                  const caf::settings& options);
 
   virtual ~reader();
 
@@ -109,6 +110,8 @@ protected:
                                consumer& f) = 0;
 
   caf::atom_value table_slice_type_;
+  std::chrono::steady_clock::duration batch_timeout_
+    = std::chrono::milliseconds{200};
   std::chrono::steady_clock::duration read_timeout_
     = std::chrono::milliseconds{20};
 };

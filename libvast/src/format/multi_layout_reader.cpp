@@ -21,8 +21,9 @@
 
 namespace vast::format {
 
-multi_layout_reader::multi_layout_reader(caf::atom_value table_slice_type)
-  : reader(table_slice_type) {
+multi_layout_reader::multi_layout_reader(caf::atom_value table_slice_type,
+                                         const caf::settings& options)
+  : reader(table_slice_type, options) {
   // nop
 }
 

@@ -70,7 +70,8 @@ TEST(PCAP read/write 1) {
   caf::put(settings, "vast.import.pcap.read", artifacts::traces::nmap_vsn);
   caf::put(settings, "vast.import.pcap.cutoff", static_cast<uint64_t>(-1));
   caf::put(settings, "vast.import.pcap.max-flows", static_cast<size_t>(5));
-  caf::put(settings, "vast.import.batch-timeout", "0s");
+  // A non-positive value disables the time limit.
+  caf::put(settings, "vast.import.batch-timelimit", "0s");
   format::pcap::reader reader{defaults::import::table_slice_type,
                               std::move(settings)};
   size_t events_produced = 0;
@@ -109,7 +110,8 @@ TEST(PCAP read/write 2) {
   caf::put(settings, "vast.import.pcap.max-flows", static_cast<size_t>(100));
   caf::put(settings, "vast.import.pcap.max-flow-age", static_cast<size_t>(5));
   caf::put(settings, "vast.import.pcap.flow-expiry", static_cast<size_t>(2));
-  caf::put(settings, "vast.import.batch-timeout", "0s");
+  // A non-positive value disables the time limit.
+  caf::put(settings, "vast.import.batch-timelimit", "0s");
   format::pcap::reader reader{defaults::import::table_slice_type,
                               std::move(settings)};
   table_slice_ptr slice;

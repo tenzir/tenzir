@@ -14,9 +14,7 @@
 #include "vast/format/zeek.hpp"
 
 #include "vast/attribute.hpp"
-#include "vast/concept/parseable/to.hpp"
 #include "vast/concept/parseable/vast/port.hpp"
-#include "vast/concept/parseable/vast/time.hpp"
 #include "vast/concept/printable/numeric.hpp"
 #include "vast/concept/printable/to_string.hpp"
 #include "vast/concept/printable/vast/data.hpp"
@@ -208,15 +206,7 @@ void add_hash_index_attribute(record_type& layout) {
 
 reader::reader(caf::atom_value table_slice_type, const caf::settings& options,
                std::unique_ptr<std::istream> in)
-  : super(table_slice_type) {
-  if (auto read_timeout_arg
-      = caf::get_if<std::string>(&options, "vast.import.batch-timeout")) {
-    if (auto read_timeout = to<decltype(read_timeout_)>(*read_timeout_arg))
-      read_timeout_ = *read_timeout;
-    else
-      VAST_WARNING(this, "cannot set vast.import.batch-timeout to",
-                   *read_timeout_arg, "as it is not a valid duration");
-  }
+  : super(table_slice_type, options) {
   if (in != nullptr)
     reset(std::move(in));
 }
@@ -305,10 +295,17 @@ caf::error reader::read_impl(size_t max_events, size_t max_slice_size,
   std::vector<data> xs;
   // Counts successfully parsed records.
   size_t produced = 0;
+  // The timepoint before entring the reading loop.
+  auto start = std::chrono::steady_clock::now();
   // Loop until reaching EOF, a timeout, or the configured limit of records.
   while (produced < max_events) {
     if (lines_->done())
       return finish(f, make_error(ec::end_of_input, "input exhausted"));
+    if (batch_timeout_ > decltype(batch_timeout_)::zero()
+        && start + batch_timeout_ < std::chrono::steady_clock::now()) {
+      VAST_DEBUG(this, "reached input time limit");
+      break;
+    }
     auto timed_out = next_line();
     if (timed_out)
       return finish(f, ec::timeout);

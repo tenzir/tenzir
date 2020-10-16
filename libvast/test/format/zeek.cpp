@@ -199,7 +199,7 @@ struct fixture : fixtures::deterministic_actor_system {
        size_t num_events, bool expect_eof, bool expect_timeout) {
     using reader_type = format::zeek::reader;
     auto settings = caf::settings{};
-    caf::put(settings, "vast.import.batch-timeout", "200ms");
+    caf::put(settings, "vast.import.read-timeout", "200ms");
     reader_type reader{defaults::import::table_slice_type, std::move(settings),
                        std::move(input)};
     std::vector<table_slice_ptr> slices;

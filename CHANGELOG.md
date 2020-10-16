@@ -11,6 +11,14 @@ Every entry has a category for which we use the following visual abbreviations:
 
 ## Unreleased
 
+- ⚠️ The `read-timeout` option has been added to allow setting the input
+  timeout for low volume data sources. When this timeout is reached while
+  a source is waiting for input, the current batch will be closed sent to
+  the server. This behavior was previously controlled by `batch-timeout`,
+  which still exists and controls the maximum buffer time before batches
+  are sent to the server.
+  [#1096](https://github.com/tenzir/vast/pull/1096)
+
 - 🐞 Input starved sources aren't going to block calls to `vast status` any
   longer.
   [#1096](https://github.com/tenzir/vast/pull/1096)
@@ -58,7 +66,7 @@ Every entry has a category for which we use the following visual abbreviations:
 - ⚠️ The options that affect batches in the `import` command received new, more
   user-facing names: `import.table-slice-type`, `import.table-slice-size`, and
   `import.read-timeout` are now called `import.batch-encoding`,
-  `import.batch-size`, and `import.batch-timeout` respectively.
+  `import.batch-size`, and `import.read-timeout` respectively.
   [#1058](https://github.com/tenzir/vast/pull/1058)
 
 - 🐞 Stalled sources that were unable to generate new events no longer stop

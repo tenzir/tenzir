@@ -138,7 +138,7 @@ using namespace parser_literals;
 
 reader::reader(caf::atom_value table_slice_type, const caf::settings& options,
                std::unique_ptr<std::istream> in)
-  : super(table_slice_type) {
+  : super(table_slice_type, options) {
   if (in != nullptr)
     reset(std::move(in));
   using defaults = vast::defaults::import::csv;
@@ -148,14 +148,6 @@ reader::reader(caf::atom_value table_slice_type, const caf::settings& options,
     = get_or(options, "vast.import.csv.set_separator", defaults::set_separator);
   opt_.kvp_separator
     = get_or(options, "vast.import.csv.kvp_separator", defaults::kvp_separator);
-  if (auto read_timeout_arg
-      = caf::get_if<std::string>(&options, "vast.import.batch-timeout")) {
-    if (auto read_timeout = to<vast::duration>(*read_timeout_arg))
-      read_timeout_ = *read_timeout;
-    else
-      VAST_WARNING(this, "cannot set vast.import.batch-timeout to",
-                   *read_timeout_arg, "as it is not a valid duration");
-  }
 }
 
 void reader::reset(std::unique_ptr<std::istream> in) {
@@ -441,10 +433,16 @@ caf::error reader::read_impl(size_t max_events, size_t max_slice_size,
   }
   auto& p = *parser_;
   size_t produced = 0;
+  auto start = std::chrono::steady_clock::now();
   while (produced < max_events) {
     // EOF check.
     if (lines_->done())
       return finish(callback, make_error(ec::end_of_input, "input exhausted"));
+    if (batch_timeout_ > decltype(batch_timeout_)::zero()
+        && start + batch_timeout_ < std::chrono::steady_clock::now()) {
+      VAST_DEBUG(this, "reached input time limit");
+      break;
+    }
     bool timed_out = next_line();
     if (timed_out)
       return ec::timeout;
