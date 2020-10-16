@@ -13,13 +13,14 @@
 
 #include "vast/system/connect_to_node.hpp"
 
+#include "vast/config.hpp"
+#include "vast/fwd.hpp"
+
 #include <caf/actor_system.hpp>
 #include <caf/actor_system_config.hpp>
 #include <caf/io/middleman.hpp>
 #include <caf/scoped_actor.hpp>
 #include <caf/settings.hpp>
-
-#include "vast/config.hpp"
 
 #if VAST_USE_OPENSSL
 #  include <caf/openssl/all.hpp>
@@ -73,9 +74,22 @@ connect_to_node(scoped_actor& self, const caf::settings& opts) {
     auto& mm = self->system().middleman();
     return mm.remote_actor(node_endpoint.host, node_endpoint.port.number());
   }();
-  if (result)
-    VAST_VERBOSE(self, "successfully connected to", node_endpoint.host, ':',
-                 to_string(node_endpoint.port));
+  if (!result)
+    return result;
+  VAST_VERBOSE(self, "successfully connected to", node_endpoint.host, ':',
+               to_string(node_endpoint.port));
+  self
+    ->request(*result, defaults::system::initial_request_timeout, atom::get_v,
+              atom::version_v)
+    .receive(
+      [&](std::string node_version) {
+        if (node_version != VAST_VERSION)
+          VAST_WARNING(self,
+                       "Version mismatch between client and node detected; "
+                       "client: " VAST_VERSION,
+                       "node:", node_version);
+      },
+      [&](caf::error error) { result = std::move(error); });
   return result;
 }
 

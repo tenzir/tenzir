@@ -280,6 +280,7 @@ CAF_BEGIN_TYPE_ID_BLOCK(vast, caf::first_custom_type_id)
   VAST_ADD_ATOM(try_put, "tryPut")
   VAST_ADD_ATOM(unload, "unload")
   VAST_ADD_ATOM(value, "value")
+  VAST_ADD_ATOM(version, "version")
   VAST_ADD_ATOM(write, "write")
 
   // -- actor role atoms ---------------------------------------------------------
