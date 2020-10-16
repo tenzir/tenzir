@@ -28,6 +28,15 @@ namespace vast {
 /// Maps concept names to the fields or concepts that implement them.
 using concepts_type = std::unordered_map<std::string, std::vector<std::string>>;
 
+/// Converts a data record to a concept.
+caf::error convert(const data& d, concepts_type& out);
+
+/// Extracts a concept definition from a data object.
+caf::error extract_concepts(const data& d, concepts_type& out);
+
+/// Extracts a concept definition from a data object.
+caf::expected<concepts_type> extract_concepts(const data& d);
+
 /// Maps model names to the concepts or models that implement them.
 using models_type = std::unordered_map<std::string, std::vector<std::string>>;
 

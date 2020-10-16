@@ -14,6 +14,18 @@
 
 using namespace vast;
 
+TEST(concepts - convert from data) {
+  auto x = data{list{
+    record{{"concept", record{{"name", "foo"},
+                              {"fields", list{"a.fo0", "b.foO", "x.foe"}}}}},
+    record{{"concept",
+            record{{"name", "bar"}, {"fields", list{"a.bar", "b.baR"}}}}}}};
+  auto ref = concepts_type{{"foo", {"a.fo0", "b.foO", "x.foe"}},
+                           {"bar", {"a.bar", "b.baR"}}};
+  auto test = unbox(extract_concepts(x));
+  CHECK_EQUAL(test, ref);
+}
+
 TEST(concepts - simple) {
   auto c = concepts_type{{"foo", {"a.fo0", "b.foO", "x.foe"}},
                          {"bar", {"a.bar", "b.baR"}}};
