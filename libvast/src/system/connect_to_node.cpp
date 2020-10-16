@@ -76,20 +76,25 @@ connect_to_node(scoped_actor& self, const caf::settings& opts) {
   }();
   if (!result)
     return result;
-  VAST_VERBOSE(self, "successfully connected to", node_endpoint.host, ':',
-               to_string(node_endpoint.port));
-  self
-    ->request(*result, defaults::system::initial_request_timeout, atom::get_v,
-              atom::version_v)
-    .receive(
-      [&](std::string node_version) {
-        if (node_version != VAST_VERSION)
-          VAST_WARNING(self,
-                       "Version mismatch between client and node detected; "
-                       "client: " VAST_VERSION,
-                       "node:", node_version);
-      },
-      [&](caf::error error) { result = std::move(error); });
+#if VAST_LOG_LEVEL >= VAST_LOG_LEVEL_WARNING
+  if (caf::logger::current_logger()->accepts(VAST_LOG_LEVEL_WARNING,
+                                             caf::atom("vast"))) {
+    VAST_VERBOSE(self, "successfully connected to", node_endpoint.host, ':',
+                 to_string(node_endpoint.port));
+    self
+      ->request(*result, defaults::system::initial_request_timeout, atom::get_v,
+                atom::version_v)
+      .receive(
+        [&](std::string node_version) {
+          if (node_version != VAST_VERSION)
+            VAST_WARNING(self,
+                         "Version mismatch between client and node detected; "
+                         "client: " VAST_VERSION,
+                         "node:", node_version);
+        },
+        [&](caf::error error) { result = std::move(error); });
+  }
+#endif
   return result;
 }
 
