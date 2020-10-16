@@ -66,7 +66,7 @@ const table_slice& table_slice_row::slice() const noexcept {
 }
 
 table_slice::size_type table_slice_row::size() const noexcept {
-  return slice_.num_columns();
+  return slice_.columns();
 }
 
 data_view table_slice_row::operator[](table_slice::size_type column) const {

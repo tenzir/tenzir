@@ -17,7 +17,6 @@
 
 #include "vast/chunk.hpp"
 #include "vast/fwd.hpp"
-#include "vast/table_slice_builder.hpp"
 #include "vast/table_slice_encoding.hpp"
 #include "vast/view.hpp"
 
@@ -95,7 +94,7 @@ public:
   // -- properties: rows -------------------------------------------------------
 
   /// @returns The number of rows in the slice.
-  size_type num_rows() const noexcept;
+  size_type rows() const noexcept;
 
   /// @returns An owning view on a specific table slice row.
   /// @param row The row index.
@@ -106,11 +105,11 @@ public:
   // -- properties: columns ----------------------------------------------------
 
   /// @returns The number of rows in the slice.
-  size_type num_columns() const noexcept;
+  size_type columns() const noexcept;
 
   /// @returns An owning view on given column of a table slice.
   /// @param column The column index.
-  /// @pre `column < num_columns()`
+  /// @pre `column < columns()`
   table_slice_column column(size_type column) const&;
   table_slice_column column(size_type column) &&;
 
@@ -125,8 +124,8 @@ public:
   /// @param row The row offset.
   /// @param column The column offset.
   /// @returns The data view at the requested position.
-  /// @pre `row < num_rows()`
-  /// @pre `column < num_columns()`
+  /// @pre `row < rows()`
+  /// @pre `column < columns()`
   data_view at(size_type row, size_type column) const;
 
   // -- type introspection -----------------------------------------------------
@@ -191,17 +190,17 @@ std::vector<table_slice> select(table_slice slice, const ids& selection);
 /// Selects the first `num_rows` rows of `slice`.
 /// @param slice The input table slice.
 /// @param num_rows The number of rows to keep.
-/// @returns `slice` if `slice.num_rows() <= num_rows`, otherwise creates a new
+/// @returns `slice` if `slice.rows() <= num_rows`, otherwise creates a new
 ///          table slice of the first `num_rows` rows from `slice`.
 /// @relates table_slice
 table_slice truncate(table_slice slice, table_slice::size_type num_rows);
 
 /// Splits a table slice into two slices such that the first slice contains
 /// the rows `[0, partition_point)` and the second slice contains the rows
-/// `[partition_point, slice.num_rows())`.
+/// `[partition_point, slice.rows())`.
 /// @param slice The input table slice.
 /// @param partition_point The index of the first row for the second slice.
-/// @returns Two new table slices if `0 < part;ition_point < slice.num_rows()`,
+/// @returns Two new table slices if `0 < partition_point < slice.rows()`,
 ///          otherwise returns `slice` and an invalid table slice.
 /// @relates table_slice
 std::pair<table_slice, table_slice>
@@ -211,7 +210,7 @@ split(table_slice slice, table_slice::size_type partition_point);
 /// @param slices The table slices to count.
 /// @returns The sum of rows across *slices*.
 /// @relates table_slice
-table_slice::size_type num_rows(const std::vector<table_slice>& slices);
+table_slice::size_type rows(const std::vector<table_slice>& slices);
 
 /// Evaluates an expression over a table slice by applying it row-wise.
 /// @param expr The expression to evaluate.

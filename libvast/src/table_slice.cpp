@@ -100,11 +100,11 @@ table_slice& table_slice::operator=(table_slice&& rhs) noexcept {
 bool operator==(const table_slice& lhs, const table_slice& rhs) {
   if (&lhs == &rhs)
     return true;
-  if (lhs.num_rows() != rhs.num_rows() || lhs.num_columns() != rhs.num_columns()
+  if (lhs.rows() != rhs.rows() || lhs.columns() != rhs.columns()
       || lhs.layout() != rhs.layout())
     return false;
-  for (size_t row = 0; row < lhs.num_rows(); ++row)
-    for (size_t col = 0; col < lhs.num_columns(); ++col)
+  for (size_t row = 0; row < lhs.rows(); ++row)
+    for (size_t col = 0; col < lhs.columns(); ++col)
       if (lhs.at(row, col) != rhs.at(row, col))
         return false;
   return true;
@@ -136,7 +136,7 @@ void table_slice::offset(id offset) noexcept {
 
 // -- properties: rows ---------------------------------------------------------
 
-table_slice::size_type table_slice::num_rows() const noexcept {
+table_slice::size_type table_slice::rows() const noexcept {
   return visit(
     detail::overload{
       []() noexcept { return size_type{}; },
@@ -145,18 +145,18 @@ table_slice::size_type table_slice::num_rows() const noexcept {
 }
 
 table_slice_row table_slice::row(size_type row) const& {
-  VAST_ASSERT(row < num_rows());
+  VAST_ASSERT(row < rows());
   return {*this, row};
 }
 
 table_slice_row table_slice::row(size_type row) && {
-  VAST_ASSERT(row < num_rows());
+  VAST_ASSERT(row < rows());
   return {std::move(*this), row};
 }
 
 // -- properties: columns ------------------------------------------------------
 
-table_slice::size_type table_slice::num_columns() const noexcept {
+table_slice::size_type table_slice::columns() const noexcept {
   return visit(
     detail::overload{
       []() noexcept { return size_type{}; },
@@ -165,12 +165,12 @@ table_slice::size_type table_slice::num_columns() const noexcept {
 }
 
 table_slice_column table_slice::column(size_type column) const& {
-  VAST_ASSERT(column < num_columns());
+  VAST_ASSERT(column < columns());
   return {*this, column};
 }
 
 table_slice_column table_slice::column(size_type column) && {
-  VAST_ASSERT(column < num_columns());
+  VAST_ASSERT(column < columns());
   return {std::move(*this), column};
 }
 
@@ -187,8 +187,6 @@ record_type table_slice::layout() const noexcept {
 // -- properties: data access --------------------------------------------------
 
 data_view table_slice::at(size_type row, size_type column) const {
-  VAST_ASSERT(row < num_rows());
-  VAST_ASSERT(column < num_columns());
   return visit(
     detail::overload{
       []() noexcept -> data_view {
@@ -197,6 +195,8 @@ data_view table_slice::at(size_type row, size_type column) const {
       },
     },
     *this);
+  VAST_ASSERT(row < rows());
+  VAST_ASSERT(column < columns());
 }
 // -- type introspection -------------------------------------------------------
 
@@ -219,7 +219,7 @@ table_slice::table_slice(chunk_ptr chunk) noexcept : chunk_{std::move(chunk)} {
 void select(std::vector<table_slice>& result, table_slice slice,
             const ids& selection) {
   auto slice_ids
-    = make_ids({{slice.offset(), slice.offset() + slice.num_rows()}});
+    = make_ids({{slice.offset(), slice.offset() + slice.rows()}});
   auto intersection = selection & slice_ids;
   auto intersection_rank = rank(intersection);
   // Do no rows qualify?
@@ -243,7 +243,7 @@ void select(std::vector<table_slice>& result, table_slice slice,
     if (builder->rows() == 0)
       return;
     auto slice = builder->finish();
-    if (slice.num_rows() == 0) {
+    if (slice.rows() == 0) {
       VAST_WARNING(__func__, "got an empty slice");
       return;
     }
@@ -262,8 +262,8 @@ void select(std::vector<table_slice>& result, table_slice slice,
     }
     VAST_ASSERT(id >= slice.offset());
     auto row = id - slice.offset();
-    VAST_ASSERT(row < slice.num_rows());
-    for (size_t column = 0; column < slice.num_columns(); ++column) {
+    VAST_ASSERT(row < slice.rows());
+    for (size_t column = 0; column < slice.columns(); ++column) {
       auto cell_value = slice.at(row, column);
       if (!builder->add(cell_value)) {
         VAST_ERROR(__func__, "failed to add data at column", column, "in row",
@@ -284,7 +284,7 @@ std::vector<table_slice> select(table_slice slice, const ids& selection) {
 table_slice truncate(table_slice slice, table_slice::size_type num_rows) {
   if (num_rows == 0)
     return {};
-  if (slice.num_rows() <= num_rows)
+  if (slice.rows() <= num_rows)
     return slice;
   auto selection = make_ids({{slice.offset(), slice.offset() + num_rows}});
   auto xs = select(std::move(slice), selection);
@@ -296,11 +296,11 @@ std::pair<table_slice, table_slice>
 split(table_slice slice, table_slice::size_type partition_point) {
   if (partition_point == 0)
     return {{}, std::move(slice)};
-  if (partition_point >= slice.num_rows())
+  if (partition_point >= slice.rows())
     return {std::move(slice), {}};
   auto first = slice.offset();
   auto mid = first + partition_point;
-  auto last = first + slice.num_rows();
+  auto last = first + slice.rows();
   // Create first table slice.
   auto xs = select(std::move(slice), make_ids({{first, mid}}));
   VAST_ASSERT(xs.size() == 1);
@@ -313,7 +313,7 @@ split(table_slice slice, table_slice::size_type partition_point) {
 table_slice::size_type rows(const std::vector<table_slice>& slices) {
   return std::transform_reduce(slices.begin(), slices.end(),
                                table_slice::size_type{}, std::plus<>{},
-                               [](auto&& slice) { return slice.num_rows(); });
+                               [](auto&& slice) { return slice.rows(); });
 }
 
 ids evaluate(const expression&, const table_slice&) {
