@@ -20,6 +20,7 @@
 #include "vast/detail/overload.hpp"
 #include "vast/die.hpp"
 #include "vast/error.hpp"
+#include "vast/msgpack_table_slice.hpp"
 #include "vast/table_slice_column.hpp"
 #include "vast/table_slice_row.hpp"
 #include "vast/table_slice_visit.hpp"
@@ -143,8 +144,8 @@ void table_slice::offset(id offset) noexcept {
 table_slice::size_type table_slice::rows() const noexcept {
   return visit(detail::overload{
                  []() noexcept -> size_type { return {}; },
-                 [](const fbs::table_slice::msgpack::v0&) noexcept
-                 -> size_type { die("not yet implemented"); },
+                 [](const fbs::table_slice::msgpack::v0& slice) noexcept
+                 -> size_type { return msgpack_table_slice{slice}.columns(); },
                },
                *this);
 }
@@ -164,8 +165,8 @@ table_slice_row table_slice::row(size_type row) && {
 table_slice::size_type table_slice::columns() const noexcept {
   return visit(detail::overload{
                  []() noexcept -> size_type { return {}; },
-                 [](const fbs::table_slice::msgpack::v0&) noexcept
-                 -> size_type { die("not yet implemented"); },
+                 [](const fbs::table_slice::msgpack::v0& slice) noexcept
+                 -> size_type { return msgpack_table_slice{slice}.columns(); },
                },
                *this);
 }
@@ -185,8 +186,8 @@ table_slice_column table_slice::column(size_type column) && {
 record_type table_slice::layout() const noexcept {
   return visit(detail::overload{
                  []() noexcept -> record_type { return {}; },
-                 [](const fbs::table_slice::msgpack::v0&) noexcept
-                 -> record_type { die("not yet implemented"); },
+                 [](const fbs::table_slice::msgpack::v0& slice) noexcept
+                 -> record_type { return msgpack_table_slice{slice}.layout(); },
                },
                *this);
 }
@@ -196,16 +197,18 @@ record_type table_slice::layout() const noexcept {
 data_view table_slice::at(size_type row, size_type column) const {
   VAST_ASSERT(row < rows());
   VAST_ASSERT(column < columns());
-  return visit(detail::overload{
-                 []() noexcept -> data_view {
-                   // The preconditions imply that this handler can never be
-                   // called.
-                   die("logic error: invalid table slices cannot be accessed");
-                 },
-                 [](const fbs::table_slice::msgpack::v0&) noexcept
-                 -> data_view { die("not yet implemented"); },
-               },
-               *this);
+  return visit(
+    detail::overload{
+      []() noexcept -> data_view {
+        // The preconditions imply that this handler can never be
+        // called.
+        die("logic error: invalid table slices cannot be accessed");
+      },
+      [&](const fbs::table_slice::msgpack::v0& slice) noexcept -> data_view {
+        return msgpack_table_slice{slice}.at(row, column);
+      },
+    },
+    *this);
 }
 // -- type introspection -------------------------------------------------------
 
@@ -227,8 +230,7 @@ table_slice::table_slice(chunk_ptr chunk) noexcept : chunk_{std::move(chunk)} {
 
 void select(std::vector<table_slice>& result, table_slice slice,
             const ids& selection) {
-  auto slice_ids
-    = make_ids({{slice.offset(), slice.offset() + slice.rows()}});
+  auto slice_ids = make_ids({{slice.offset(), slice.offset() + slice.rows()}});
   auto intersection = selection & slice_ids;
   auto intersection_rank = rank(intersection);
   // Do no rows qualify?
@@ -331,14 +333,16 @@ ids evaluate(const expression&, const table_slice&) {
 
 // -- column operations --------------------------------------------------------
 
-void append_column_to_index(const table_slice_column& column, value_index&) {
+void append_column_to_index(const table_slice_column& column,
+                            value_index& idx) {
   visit(detail::overload{
           []() noexcept {
             // An invalid slice cannot be added to a value index, so this is
             // just a nop.
           },
-          [&](const fbs::table_slice::msgpack::v0&) noexcept {
-            die("not yet implemented");
+          [&](const fbs::table_slice::msgpack::v0& slice) {
+            return msgpack_table_slice{slice}.append_column_to_index(
+              column.slice().offset(), column.index(), idx);
           },
         },
         column.slice());
