@@ -55,9 +55,13 @@ constexpr caf::atom_value table_slice_type = caf::atom("msgpack");
 /// Maximum number of results.
 constexpr size_t max_events = 0;
 
-/// Read timoeut after which data is forwarded to the importer regardless of
+/// Timeout after which data is forwarded to the importer regardless of
 /// batching and table slices being unfinished.
 constexpr std::chrono::milliseconds batch_timeout = std::chrono::seconds{10};
+
+/// Timeout for how long readers should block while waiting for their input.
+constexpr std::chrono::milliseconds read_timeout
+  = std::chrono::milliseconds{20};
 
 /// Contains settings for the zeek subcommand.
 struct zeek {

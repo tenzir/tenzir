@@ -114,8 +114,8 @@ protected:
 
 public:
   caf::atom_value table_slice_type_;
-  reader_clock::duration read_timeout_ = std::chrono::milliseconds{20};
   reader_clock::duration batch_timeout_ = vast::defaults::import::batch_timeout;
+  reader_clock::duration read_timeout_ = vast::defaults::import::read_timeout;
 
 protected:
   reader_clock::time_point last_batch_sent_;
