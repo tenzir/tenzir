@@ -19,6 +19,7 @@
 #include "vast/concept/printable/to_string.hpp"
 #include "vast/concept/printable/vast/schema.hpp"
 #include "vast/concept/printable/vast/type.hpp"
+#include "vast/detail/process.hpp"
 #include "vast/directory.hpp"
 #include "vast/error.hpp"
 #include "vast/event_types.hpp"
@@ -194,6 +195,57 @@ bool convert(const schema& s, json& j) {
   return true;
 }
 
+caf::expected<schema>
+get_schema(const caf::settings& options, const std::string& category) {
+  // Get the default schema from the registry.
+  auto schema_reg_ptr = event_types::get();
+  auto schema = schema_reg_ptr ? *schema_reg_ptr : vast::schema{};
+  // Update with an alternate schema, if requested.
+  auto sc = caf::get_if<std::string>(&options, category + ".schema");
+  auto sf = caf::get_if<std::string>(&options, category + ".schema-file");
+  if (sc && sf)
+    make_error(ec::invalid_configuration, "had both schema and schema-file "
+                                          "provided");
+  auto update = [&]() -> caf::expected<vast::schema> {
+    if (sc)
+      return to<vast::schema>(*sc);
+    if (sf)
+      return load_schema(*sf);
+    return caf::no_error;
+  }();
+  if (!update) {
+    if (update.error() != caf::no_error)
+      return update.error();
+    else
+      return schema;
+  }
+  return schema::combine(schema, *update);
+}
+
+detail::stable_set<vast::path>
+get_schema_dirs(const caf::actor_system_config& cfg) {
+  detail::stable_set<vast::path> result;
+  if (!caf::get_or(cfg, "vast.no-default-schema", false)) {
+#if !VAST_RELOCATABLE_INSTALL
+    result.insert(VAST_DATADIR "/vast/schema");
+#endif
+    // Get filesystem path to the executable.
+    if (auto binary = detail::objectpath())
+      result.insert(binary->parent().parent() / "share" / "vast" / "schema");
+    else
+      VAST_ERROR_ANON(__func__, "failed to get program path");
+    if (const char* xdg_data_home = std::getenv("XDG_DATA_HOME"))
+      result.insert(path{xdg_data_home} / "vast" / "schema");
+    else if (const char* home = std::getenv("HOME"))
+      result.insert(path{home} / ".local" / "share" / "vast" / "schema");
+  }
+  if (auto user_dirs
+      = caf::get_if<std::vector<std::string>>(&cfg, "vast.schema-paths"))
+    std::copy(user_dirs->begin(), user_dirs->end(),
+              std::inserter(result, result.end()));
+  return result;
+}
+
 caf::expected<schema> load_schema(const path& sf) {
   if (sf.empty())
     return make_error(ec::filesystem_error, "empty path");
@@ -236,31 +288,8 @@ caf::expected<schema> load_schema(const detail::stable_set<path>& schema_dirs) {
   return types;
 }
 
-caf::expected<schema> get_schema(const caf::settings& options,
-                                 const std::string& category) {
-  // Get the default schema from the registry.
-  auto schema_reg_ptr = event_types::get();
-  auto schema = schema_reg_ptr ? *schema_reg_ptr : vast::schema{};
-  // Update with an alternate schema, if requested.
-  auto sc = caf::get_if<std::string>(&options, category + ".schema");
-  auto sf = caf::get_if<std::string>(&options, category + ".schema-file");
-  if (sc && sf)
-    make_error(ec::invalid_configuration,
-               "had both schema and schema-file provided");
-  auto update = [&]() -> caf::expected<vast::schema> {
-    if (sc)
-      return to<vast::schema>(*sc);
-    if (sf)
-      return load_schema(*sf);
-    return caf::no_error;
-  }();
-  if (!update) {
-    if (update.error() != caf::no_error)
-      return update.error();
-    else
-      return schema;
-  }
-  return schema::combine(schema, *update);
+caf::expected<vast::schema> load_schema(const caf::actor_system_config& cfg) {
+  return load_schema(get_schema_dirs(cfg));
 }
 
 } // namespace vast

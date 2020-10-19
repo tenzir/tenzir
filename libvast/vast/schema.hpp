@@ -82,6 +82,12 @@ private:
 
 bool convert(const schema& s, json& j);
 
+caf::expected<schema>
+get_schema(const caf::settings& options, const std::string& category);
+
+detail::stable_set<vast::path>
+get_schema_dirs(const caf::actor_system_config& cfg);
+
 caf::expected<schema> load_schema(const path& sf);
 
 /// Loads *.schema files from the given directories.
@@ -93,7 +99,6 @@ caf::expected<schema> load_schema(const path& sf);
 caf::expected<vast::schema>
 load_schema(const detail::stable_set<path>& schema_dirs);
 
-caf::expected<schema>
-get_schema(const caf::settings& options, const std::string& category);
+caf::expected<vast::schema> load_schema(const caf::actor_system_config& cfg);
 
 } // namespace vast
