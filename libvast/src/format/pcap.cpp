@@ -247,11 +247,10 @@ caf::error reader::read_impl(size_t max_events, size_t max_slice_size,
     VAST_VERBOSE(this, "evicts flows after", max_age_, "s of inactivity");
     VAST_VERBOSE(this, "expires flow table every", expire_interval_, "s");
   }
-  auto start = std::chrono::steady_clock::now();
   auto produced = size_t{0};
   while (produced < max_events) {
-    if (batch_timeout_ > decltype(batch_timeout_)::zero()
-        && start + batch_timeout_ < std::chrono::steady_clock::now()) {
+    if (batch_timeout_ > reader_clock::duration::zero()
+        && last_batch_sent_ + batch_timeout_ < reader_clock::now()) {
       VAST_DEBUG(this, "reached input timeout");
       break;
     }

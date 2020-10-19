@@ -14,15 +14,16 @@
 #pragma once
 
 #include "vast/defaults.hpp"
+#include "vast/detail/assert.hpp"
 #include "vast/fwd.hpp"
 #include "vast/system/report.hpp"
 #include "vast/table_slice.hpp"
-#include "vast/detail/assert.hpp"
 
 #include <caf/error.hpp>
 #include <caf/expected.hpp>
 #include <caf/fwd.hpp>
 
+#include <chrono>
 #include <cstddef>
 #include <string_view>
 
@@ -32,6 +33,8 @@ namespace vast::format {
 class reader {
 public:
   // -- member types -----------------------------------------------------------
+
+  using reader_clock = std::chrono::steady_clock;
 
   enum class inputs { file, inet };
 
@@ -110,10 +113,9 @@ protected:
                                consumer& f) = 0;
 
   caf::atom_value table_slice_type_;
-  std::chrono::steady_clock::duration batch_timeout_
-    = std::chrono::milliseconds{200};
-  std::chrono::steady_clock::duration read_timeout_
-    = std::chrono::milliseconds{20};
+  reader_clock::duration read_timeout_ = std::chrono::milliseconds{20};
+  reader_clock::duration batch_timeout_ = std::chrono::milliseconds{200};
+  reader_clock::time_point last_batch_sent_;
 };
 
 } // namespace vast::format

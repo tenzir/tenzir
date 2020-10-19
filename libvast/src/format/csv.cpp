@@ -433,13 +433,12 @@ caf::error reader::read_impl(size_t max_events, size_t max_slice_size,
   }
   auto& p = *parser_;
   size_t produced = 0;
-  auto start = std::chrono::steady_clock::now();
   while (produced < max_events) {
     // EOF check.
     if (lines_->done())
       return finish(callback, make_error(ec::end_of_input, "input exhausted"));
-    if (batch_timeout_ > decltype(batch_timeout_)::zero()
-        && start + batch_timeout_ < std::chrono::steady_clock::now()) {
+    if (batch_timeout_ > reader_clock::duration::zero()
+        && last_batch_sent_ + batch_timeout_ < reader_clock::now()) {
       VAST_DEBUG(this, "reached input timeout");
       break;
     }

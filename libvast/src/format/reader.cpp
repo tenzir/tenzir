@@ -42,6 +42,7 @@ reader::reader(caf::atom_value table_slice_type, const caf::settings& options)
       VAST_WARNING(this, "cannot set vast.import.read-timeout to",
                    *read_timeout_arg, "as it is not a valid duration");
   }
+  last_batch_sent_ = reader_clock::now();
 }
 
 reader::~reader() {

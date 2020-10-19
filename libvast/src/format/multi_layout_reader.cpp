@@ -45,6 +45,7 @@ caf::error multi_layout_reader::finish(consumer& f,
 }
 
 caf::error multi_layout_reader::finish(consumer& f, caf::error result) {
+  last_batch_sent_ = reader_clock::now();
   for (auto& kvp : builders_)
     if (auto err = finish(f, kvp.second))
       return err;

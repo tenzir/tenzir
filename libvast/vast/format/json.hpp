@@ -212,12 +212,11 @@ caf::error reader<Selector>::read_impl(size_t max_events, size_t max_slice_size,
   VAST_ASSERT(max_slice_size > 0);
   size_t produced = 0;
   table_slice_builder_ptr bptr = nullptr;
-  auto start = std::chrono::steady_clock::now();
   while (produced < max_events) {
     if (lines_->done())
       return finish(cons, make_error(ec::end_of_input, "input exhausted"));
-    if (batch_timeout_ > decltype(batch_timeout_)::zero()
-        && start + batch_timeout_ < std::chrono::steady_clock::now()) {
+    if (batch_timeout_ > reader_clock::duration::zero()
+        && last_batch_sent_ + batch_timeout_ < reader_clock::now()) {
       VAST_DEBUG(this, "reached input timeout");
       break;
     }

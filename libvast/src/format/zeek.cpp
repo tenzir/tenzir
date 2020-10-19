@@ -295,14 +295,12 @@ caf::error reader::read_impl(size_t max_events, size_t max_slice_size,
   std::vector<data> xs;
   // Counts successfully parsed records.
   size_t produced = 0;
-  // The timepoint before entring the reading loop.
-  auto start = std::chrono::steady_clock::now();
   // Loop until reaching EOF, a timeout, or the configured limit of records.
   while (produced < max_events) {
     if (lines_->done())
       return finish(f, make_error(ec::end_of_input, "input exhausted"));
-    if (batch_timeout_ > decltype(batch_timeout_)::zero()
-        && start + batch_timeout_ < std::chrono::steady_clock::now()) {
+    if (batch_timeout_ > reader_clock::duration::zero()
+        && last_batch_sent_ + batch_timeout_ < reader_clock::now()) {
       VAST_DEBUG(this, "reached input timeout");
       break;
     }
