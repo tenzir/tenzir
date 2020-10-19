@@ -65,11 +65,11 @@ bool table_slice_builder::recursive_add(const data& x, const type& t) {
 
 table_slice table_slice_builder::finish() {
   auto chunk = finish_impl();
+  reset();
   if (!chunk) {
     VAST_ERROR(__func__, "failed to build table slice:", render(chunk.error()));
     return {};
   }
-  reset();
   return table_slice{*chunk};
 }
 
