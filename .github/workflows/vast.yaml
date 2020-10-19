@@ -60,7 +60,7 @@ jobs:
       CCACHE_SLOPPINESS: 'file_macro,time_macros'
       CCACHE_DIR: '${{ github.workspace }}/.ccache'
       CCACHE_COMPRESS: true
-      CCACHE_COMPRESSLEVEL: 6
+      CCACHE_COMPRESSLEVEL: 9
       BUILD_DIR: build
     steps:
       - uses: actions/checkout@v2
