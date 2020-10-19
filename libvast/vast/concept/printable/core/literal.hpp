@@ -26,7 +26,7 @@ inline auto operator"" _P(char c) {
 }
 
 inline auto operator"" _P(const char* str) {
-  return literal_printer{str};
+  return literal_printer{std::string{str}};
 }
 
 inline auto operator"" _P(const char* str, size_t size) {

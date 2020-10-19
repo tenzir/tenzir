@@ -31,24 +31,25 @@ class literal_printer : public printer<literal_printer> {
 public:
   using attribute = unused_type;
 
-  literal_printer(bool b) : str_{b ? "T" : "F"} {
+  explicit literal_printer(bool b) : str_{b ? "T" : "F"} {
   }
 
   template <class T>
-  literal_printer(T x, enable_if_non_fp_arithmetic<T>* = nullptr)
+  explicit literal_printer(T x, enable_if_non_fp_arithmetic<T>* = nullptr)
     : str_{std::to_string(x)} {
   }
 
   template <class T>
-  literal_printer(T x, enable_if_fp<T>* = nullptr) : str_{std::to_string(x)} {
+  explicit literal_printer(T x, enable_if_fp<T>* = nullptr)
+    : str_{std::to_string(x)} {
     // Remove trailing zeros.
     str_.erase(str_.find_last_not_of('0') + 1, std::string::npos);
   }
 
-  literal_printer(char c) : str_{c} {
+  explicit literal_printer(char c) : str_{c} {
   }
 
-  literal_printer(std::string str) : str_(std::move(str)) {
+  explicit literal_printer(std::string str) : str_(std::move(str)) {
   }
 
   template <class Iterator>
