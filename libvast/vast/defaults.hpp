@@ -57,7 +57,7 @@ constexpr size_t max_events = 0;
 
 /// Read timoeut after which data is forwarded to the importer regardless of
 /// batching and table slices being unfinished.
-constexpr std::chrono::milliseconds read_timeout = std::chrono::seconds{10};
+constexpr std::chrono::milliseconds batch_timeout = std::chrono::seconds{10};
 
 /// Contains settings for the zeek subcommand.
 struct zeek {
