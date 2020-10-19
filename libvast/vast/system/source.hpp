@@ -282,7 +282,7 @@ source(caf::stateful_actor<source_state<Reader>>* self, Reader reader,
           // The sequence is 0, 20, 40, 80, 160, 320, 640, 1280.
           if (st.wakeup_delay == std::chrono::milliseconds::zero())
             st.wakeup_delay = std::chrono::milliseconds{20};
-          else if (st.wakeup_delay < std::chrono::milliseconds{1000})
+          else if (st.wakeup_delay < st.reader.batch_timeout_ / 2)
             st.wakeup_delay *= 2;
         }
         return;
