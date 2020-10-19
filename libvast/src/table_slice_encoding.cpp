@@ -24,6 +24,7 @@ const char* to_string(table_slice_encoding encoding) {
   static constexpr std::array descriptions = {
     "invalid",
     "msgpack",
+    "arrow",
   };
   using underlying = std::underlying_type_t<table_slice_encoding>;
   static_assert(descriptions.size()

@@ -122,6 +122,9 @@ table_slice_encoding table_slice::encoding() const noexcept {
                  [](const fbs::table_slice::msgpack::v0&) noexcept {
                    return table_slice_encoding::msgpack;
                  },
+                 [](const fbs::table_slice::arrow::v0&) noexcept {
+                   return table_slice_encoding::arrow;
+                 },
                },
                *this);
 }
@@ -146,6 +149,9 @@ table_slice::size_type table_slice::rows() const noexcept {
                  []() noexcept -> size_type { return {}; },
                  [](const fbs::table_slice::msgpack::v0& slice) noexcept
                  -> size_type { return msgpack_table_slice{slice}.columns(); },
+                 [](const fbs::table_slice::arrow::v0&) noexcept -> size_type {
+                   die("not yet implemented");
+                 },
                },
                *this);
 }
@@ -167,6 +173,9 @@ table_slice::size_type table_slice::columns() const noexcept {
                  []() noexcept -> size_type { return {}; },
                  [](const fbs::table_slice::msgpack::v0& slice) noexcept
                  -> size_type { return msgpack_table_slice{slice}.columns(); },
+                 [](const fbs::table_slice::arrow::v0&) noexcept -> size_type {
+                   die("not yet implemented");
+                 },
                },
                *this);
 }
@@ -184,12 +193,17 @@ table_slice_column table_slice::column(size_type column) && {
 // -- properties: layout -------------------------------------------------------
 
 record_type table_slice::layout() const noexcept {
-  return visit(detail::overload{
-                 []() noexcept -> record_type { return {}; },
-                 [](const fbs::table_slice::msgpack::v0& slice) noexcept
-                 -> record_type { return msgpack_table_slice{slice}.layout(); },
-               },
-               *this);
+  return visit(
+    detail::overload{
+      []() noexcept -> record_type { return {}; },
+      [](const fbs::table_slice::msgpack::v0& slice) noexcept -> record_type {
+        return msgpack_table_slice{slice}.layout();
+      },
+      [](const fbs::table_slice::arrow::v0&) noexcept -> record_type {
+        die("not yet implemented");
+      },
+    },
+    *this);
 }
 
 // -- properties: data access --------------------------------------------------
@@ -206,6 +220,9 @@ data_view table_slice::at(size_type row, size_type column) const {
       },
       [&](const fbs::table_slice::msgpack::v0& slice) noexcept -> data_view {
         return msgpack_table_slice{slice}.at(row, column);
+      },
+      [](const fbs::table_slice::arrow::v0&) noexcept -> data_view {
+        die("not yet implemented");
       },
     },
     *this);
@@ -335,17 +352,19 @@ ids evaluate(const expression&, const table_slice&) {
 
 void append_column_to_index(const table_slice_column& column,
                             value_index& idx) {
-  visit(detail::overload{
-          []() noexcept {
-            // An invalid slice cannot be added to a value index, so this is
-            // just a nop.
-          },
-          [&](const fbs::table_slice::msgpack::v0& slice) {
-            return msgpack_table_slice{slice}.append_column_to_index(
-              column.slice().offset(), column.index(), idx);
-          },
-        },
-        column.slice());
+  visit(
+    detail::overload{
+      []() noexcept {
+        // An invalid slice cannot be added to a value index, so this is
+        // just a nop.
+      },
+      [&](const fbs::table_slice::msgpack::v0& slice) {
+        return msgpack_table_slice{slice}.append_column_to_index(
+          column.slice().offset(), column.index(), idx);
+      },
+      [](const fbs::table_slice::arrow::v0&) { die("not yet implemented"); },
+    },
+    column.slice());
 }
 
 } // namespace v1

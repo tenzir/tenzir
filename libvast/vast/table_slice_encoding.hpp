@@ -23,6 +23,7 @@ namespace v1 {
 enum class table_slice_encoding : uint8_t {
   invalid, ///< An invalid table slice.
   msgpack, ///< A MessagePack-encoded table slice.
+  arrow,   ///< An Arrow-encoded table slice.
   COUNT,   ///< Not an encoding; this must always be the last entry.
 };
 

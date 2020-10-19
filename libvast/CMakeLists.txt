@@ -56,6 +56,8 @@ file(GLOB_RECURSE libvast_headers "${CMAKE_CURRENT_SOURCE_DIR}/vast/*.hpp")
 set(libvast_sources
     src/accountant/config.cpp
     src/address.cpp
+    src/arrow_table_slice.cpp
+    src/arrow_table_slice_builder.cpp 
     src/attribute.cpp
     src/banner.cpp
     src/base.cpp
@@ -220,8 +222,7 @@ set(libvast_sources
     src/wah_bitmap.cpp)
 
 if (VAST_HAVE_ARROW)
-  set(libvast_sources ${libvast_sources} src/arrow_table_slice.cpp
-                      src/arrow_table_slice_builder.cpp src/format/arrow.cpp)
+  set(libvast_sources ${libvast_sources} src/format/arrow.cpp)
 endif ()
 
 if (PCAP_FOUND)
