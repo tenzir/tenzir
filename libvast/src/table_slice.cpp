@@ -352,29 +352,109 @@ table_slice::size_type rows(const std::vector<table_slice>& slices) {
                                [](auto&& slice) { return slice.rows(); });
 }
 
-ids evaluate(const expression&, const table_slice&) {
-  die("not yet implemented");
-}
+namespace {
 
-// -- column operations --------------------------------------------------------
+struct row_evaluator {
+  row_evaluator(const table_slice& slice, size_t row)
+    : slice_{slice}, row_{row} {
+    // nop
+  }
 
-void append_column_to_index(const table_slice_column& column,
-                            value_index& idx) {
-  visit(detail::overload{
-          []() noexcept {
-            // An invalid slice cannot be added to a value index, so this is
-            // just a nop.
-          },
-          [&](const fbs::table_slice::msgpack::v0& slice) {
-            return msgpack_table_slice{slice}.append_column_to_index(
-              column.slice().offset(), column.index(), idx);
-          },
-          [&](const fbs::table_slice::arrow::v0& slice) {
-            return arrow_table_slice{slice}.append_column_to_index(
-              column.slice().offset(), column.index(), idx);
-          },
-        },
-        column.slice());
+  template <class T>
+  bool operator()(const data& d, const T& x) {
+    return (*this)(x, d);
+  }
+
+  template <class T, class U>
+  bool operator()(const T&, const U&) {
+    return false;
+  }
+
+  bool operator()(caf::none_t) {
+    return false;
+  }
+
+  bool operator()(const conjunction& c) {
+    for (auto& op : c)
+      if (!caf::visit(*this, op))
+        return false;
+    return true;
+  }
+
+  bool operator()(const disjunction& d) {
+    for (auto& op : d)
+      if (caf::visit(*this, op))
+        return true;
+    return false;
+  }
+
+  bool operator()(const negation& n) {
+    return !caf::visit(*this, n.expr());
+  }
+
+  bool operator()(const predicate& p) {
+    op_ = p.op;
+    return caf::visit(*this, p.lhs, p.rhs);
+  }
+
+  bool operator()(const attribute_extractor& e, const data& d) {
+    // TODO: Transform this AST node into a constant-time lookup node (e.g.,
+    // data_extractor). It's not necessary to iterate over the schema for every
+    // row; this should happen upfront.
+    if (e.attr == atom::type_v)
+      return evaluate(slice_.layout().name(), op_, d);
+    if (e.attr == atom::timestamp_v) {
+      for (size_t col = 0; col < slice_.layout().fields.size(); ++col) {
+        auto& field = slice_.layout().fields[col];
+        if (has_attribute(field.type, "timestamp")) {
+          if (!caf::holds_alternative<time_type>(field.type)) {
+            VAST_WARNING_ANON("got timestamp attribute for non-time type");
+            return false;
+          }
+        }
+        auto lhs = to_canonical(field.type, slice_.at(row_, col));
+        auto rhs = make_view(d);
+        return evaluate_view(lhs, op_, rhs);
+      }
+    }
+    return false;
+  }
+
+  bool operator()(const type_extractor&, const data&) {
+    die("type extractor should have been resolved at this point");
+  }
+
+  bool operator()(const field_extractor&, const data&) {
+    die("field extractor should have been resolved at this point");
+  }
+
+  bool operator()(const data_extractor& e, const data& d) {
+    VAST_ASSERT(e.offset.size() == 1);
+    if (e.type != slice_.layout()) // TODO: make this a precondition instead.
+      return false;
+    auto col = e.offset[0];
+    auto& field = slice_.layout().fields[col];
+    auto lhs = to_canonical(field.type, slice_.at(row_, col));
+    auto rhs = make_data_view(d);
+    return evaluate_view(lhs, op_, rhs);
+  }
+
+  const table_slice& slice_;
+  size_t row_;
+  relational_operator op_;
+};
+
+} // namespace
+
+ids evaluate(const expression& expr, const table_slice& slice) {
+  // TODO: switch to a column-based evaluation strategy where it makes sense.
+  ids result;
+  result.append(false, slice.offset());
+  for (size_t row = 0; row != slice.rows(); ++row) {
+    auto x = caf::visit(row_evaluator{slice, row}, expr);
+    result.append_bit(x);
+  }
+  return result;
 }
 
 } // namespace v1
