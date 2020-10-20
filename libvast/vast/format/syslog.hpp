@@ -261,7 +261,7 @@ public:
   /// @param table_slice_type The ID for table slice type to build.
   /// @param options Additional options.
   /// @param input The stream of Syslog messages.
-  reader(caf::atom_value table_slice_type, const caf::settings& options,
+  reader(table_slice_encoding table_slice_type, const caf::settings& options,
          std::unique_ptr<std::istream> input = nullptr);
 
   reader(const reader& other) = delete;

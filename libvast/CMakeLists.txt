@@ -207,7 +207,6 @@ set(libvast_sources
     src/table_slice_builder_factory.cpp
     src/table_slice_column.cpp
     src/table_slice_encoding.cpp
-    src/table_slice_factory.cpp
     src/table_slice_row.cpp
     src/taxonomies.cpp
     src/time.cpp

@@ -13,19 +13,19 @@
 
 #pragma once
 
-#include <iosfwd>
-#include <memory>
-#include <string_view>
-#include <vector>
-
-#include <caf/error.hpp>
-
 #include "vast/detail/overload.hpp"
 #include "vast/error.hpp"
 #include "vast/format/writer.hpp"
 #include "vast/policy/include_field_names.hpp"
 #include "vast/policy/omit_field_names.hpp"
 #include "vast/table_slice.hpp"
+
+#include <caf/error.hpp>
+
+#include <iosfwd>
+#include <memory>
+#include <string_view>
+#include <vector>
 
 namespace vast::format {
 
@@ -85,13 +85,13 @@ protected:
   /// @returns `ec::print_error` if `printer` fails to generate output,
   ///          otherwise `caf::none`.
   template <class Policy, class Printer>
-  caf::error print(Printer& printer, const table_slice& xs,
-                   std::string_view begin_of_line, std::string_view separator,
-                   std::string_view end_of_line) {
+  caf::error
+  print(Printer& printer, const table_slice& xs, std::string_view begin_of_line,
+        std::string_view separator, std::string_view end_of_line) {
     auto print_field = [&](auto& iter, size_t row, size_t column) {
       auto rep = [&](data_view x) {
         if constexpr (std::is_same_v<Policy, policy::include_field_names>)
-          return std::pair{xs.column_name(column), x};
+          return std::pair{xs.layout().fields[column].name, x};
         else if constexpr (std::is_same_v<Policy, policy::omit_field_names>)
           return x;
         else
@@ -99,8 +99,8 @@ protected:
                         "Unsupported policy: Expected either "
                         "include_field_names or omit_field_names");
       };
-      auto x = to_canonical(xs.layout().fields[column].type,
-                            xs.at(row, column));
+      auto x
+        = to_canonical(xs.layout().fields[column].type, xs.at(row, column));
       return printer.print(iter, rep(std::move(x)));
     };
     auto iter = std::back_inserter(buf_);

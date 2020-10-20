@@ -32,29 +32,29 @@ struct events {
   static constexpr size_t slice_size = 8;
 
   // TODO: remove these entirely; all operations should be on table slices.
-  static std::vector<table_slice_ptr> zeek_conn_log;
-  static std::vector<table_slice_ptr> zeek_dns_log;
-  static std::vector<table_slice_ptr> zeek_http_log;
-  static std::vector<table_slice_ptr> random;
+  static std::vector<table_slice> zeek_conn_log;
+  static std::vector<table_slice> zeek_dns_log;
+  static std::vector<table_slice> zeek_http_log;
+  static std::vector<table_slice> random;
 
-  static std::vector<table_slice_ptr> zeek_conn_log_full;
+  static std::vector<table_slice> zeek_conn_log_full;
 
   /// 10000 ascending integer values, starting at 0.
-  static std::vector<table_slice_ptr> ascending_integers;
+  static std::vector<table_slice> ascending_integers;
 
   /// 10000 integer values, alternating between 0 and 1.
-  static std::vector<table_slice_ptr> alternating_integers;
+  static std::vector<table_slice> alternating_integers;
 
   template <class... Ts>
   static std::vector<std::vector<data>> make_rows(Ts... xs) {
     return {std::vector<data>{data{std::move(xs)}}...};
   }
 
-  auto take(const std::vector<table_slice_ptr>& xs, size_t n) {
+  auto take(const std::vector<table_slice>& xs, size_t n) {
     VAST_ASSERT(n <= xs.size());
     auto first = xs.begin();
     auto last = first + n;
-    return std::vector<table_slice_ptr>{first, last};
+    return std::vector<table_slice>{first, last};
   }
 };
 

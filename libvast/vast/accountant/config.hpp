@@ -27,7 +27,6 @@ struct accountant_config {
     bool enable = true;
     // TODO: Switch to unsigned when moving to vast::record for transmitting.
     int64_t slice_size = 100;
-    caf::atom_value slice_type = defaults::import::table_slice_type;
   };
 
   struct file_sink {

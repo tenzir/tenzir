@@ -13,8 +13,6 @@
 
 #pragma once
 
-// -- v1 includes --------------------------------------------------------------
-
 #include "vast/fwd.hpp"
 #include "vast/table_slice.hpp"
 #include "vast/view.hpp"
@@ -22,8 +20,6 @@
 #include <caf/meta/type_name.hpp>
 
 namespace vast {
-
-namespace v1 {
 
 class table_slice_row final {
 public:
@@ -76,7 +72,5 @@ private:
   table_slice slice_ = {};
   table_slice::size_type row_ = 0;
 };
-
-} // namespace v1
 
 } // namespace vast

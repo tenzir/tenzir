@@ -23,8 +23,6 @@
 
 namespace vast {
 
-namespace v1 {
-
 /// Visit a table slice for to access its underlying versioned and
 /// encoding-specific FlatBuffers table.
 /// @param visitor An invocable object that is dispatched to.
@@ -64,9 +62,6 @@ auto visit(Visitor&& visitor, const table_slice& slice) noexcept(
     case fbs::table_slice::TableSlice::NONE: {
       return dispatch();
     }
-    case fbs::table_slice::TableSlice::generic_v0: {
-      die("unable to dispatch vast.fbs.table_slice.generic.v0");
-    }
     case fbs::table_slice::TableSlice::msgpack_v0: {
       return dispatch(*fbs_slice->table_slice_as_msgpack_v0());
     }
@@ -85,7 +80,5 @@ auto visit(Visitor&& visitor, const table_slice& slice) noexcept(
     }
   }
 }
-
-} // namespace v1
 
 } // namespace vast

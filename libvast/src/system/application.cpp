@@ -29,8 +29,8 @@
 #include "vast/system/configuration.hpp"
 #include "vast/system/count_command.hpp"
 #include "vast/system/explore_command.hpp"
-#include "vast/system/import_command.hpp"
 #include "vast/system/get_command.hpp"
+#include "vast/system/import_command.hpp"
 #include "vast/system/infer_command.hpp"
 #include "vast/system/pivot_command.hpp"
 #include "vast/system/remote_command.hpp"
@@ -191,8 +191,8 @@ auto make_import_command() {
   auto import_ = std::make_unique<command>(
     "import", "imports data from STDIN or file", documentation::vast_import,
     opts("?vast.import")
-      .add<caf::atom_value>("batch-encoding", "encoding type of table slices "
-                                              "(arrow or msgpack)")
+      .add<std::string>("batch-encoding", "encoding type of table slices "
+                                          "(arrow or msgpack)")
       .add<size_t>("batch-size", "upper bound for the size of a table slice")
       .add<std::string>("batch-timeout", "timeout after which batched "
                                          "table slices are forwarded")

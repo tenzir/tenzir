@@ -119,15 +119,15 @@ TEST_DISABLED(suricata) {
   auto input = std::make_unique<std::istringstream>(std::string{eve_log});
   reader_type reader{defaults::import::table_slice_type, caf::settings{},
                      std::move(input)};
-  std::vector<table_slice_ptr> slices;
+  std::vector<table_slice> slices;
   auto add_slice
-    = [&](table_slice_ptr ptr) { slices.emplace_back(std::move(ptr)); };
+    = [&](table_slice slice) { slices.emplace_back(std::move(slice)); };
   auto [err, num] = reader.read(2, 5, add_slice);
   CHECK_EQUAL(err, ec::end_of_input);
   REQUIRE_EQUAL(num, 2u);
-  CHECK_EQUAL(slices[0]->columns(), 36u);
-  CHECK_EQUAL(slices[0]->rows(), 2u);
-  CHECK(slices[0]->at(0, 19) == data{count{4520}});
+  CHECK_EQUAL(slices[0].columns(), 36u);
+  CHECK_EQUAL(slices[0].rows(), 2u);
+  CHECK(slices[0].at(0, 19) == data{count{4520}});
 }
 
 TEST(json hex number parser) {

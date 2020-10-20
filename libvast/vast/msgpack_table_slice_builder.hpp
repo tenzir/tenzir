@@ -36,8 +36,6 @@
 
 namespace vast {
 
-namespace v1 {
-
 class msgpack_table_slice_builder final : public table_slice_builder {
 public:
   // -- types and constants ----------------------------------------------------
@@ -101,79 +99,5 @@ private:
   /// The underlying MessagePack builder.
   msgpack::builder<input_validation_policy> msgpack_builder_;
 };
-
-} // namespace v1
-
-inline namespace v0 {
-
-class msgpack_table_slice_builder final : public vast::table_slice_builder {
-public:
-  // -- member types -----------------------------------------------------------
-
-  using super = vast::table_slice_builder;
-
-  // -- class properties -------------------------------------------------------
-
-  /// The default size of the buffer that the builder works with.
-  static constexpr size_t default_buffer_size = 8192;
-
-  /// @returns `msgpack_table_slice::class_id`
-  static caf::atom_value get_implementation_id() noexcept;
-
-  // -- factory functions ------------------------------------------------------
-
-  /// @returns a table_slice_builder instance.
-  static vast::table_slice_builder_ptr
-  make(vast::record_type layout, size_t initial_buffer_size
-                                 = default_buffer_size);
-
-  // -- constructors, destructors, and assignment operators --------------------
-
-  /// Constructs a MessagePack table slice.
-  /// @param layout The layout of the slice.
-  /// @param initial_buffer_size The buffer size the builder starts with.
-  explicit msgpack_table_slice_builder(vast::record_type layout,
-                                       size_t initial_buffer_size
-                                       = default_buffer_size);
-
-  ~msgpack_table_slice_builder() override;
-
-  // -- properties -------------------------------------------------------------
-
-  [[nodiscard]] vast::table_slice_ptr finish() override;
-
-  size_t rows() const noexcept override;
-
-  caf::atom_value implementation_id() const noexcept override;
-
-  template <class Inspector>
-  friend auto inspect(Inspector& f, msgpack_table_slice_builder& x) {
-    return f(caf::meta::type_name("vast.msgpack_table_slice_builder"), x.col_,
-             x.offset_table_, x.buffer_, x.builder_);
-  }
-
-protected:
-  bool add_impl(vast::data_view x) override;
-
-private:
-  // -- member variables -------------------------------------------------------
-
-  /// Current column index.
-  size_t col_;
-
-  /// Offsets from the beginning of the buffer to each row.
-  std::vector<size_t> offset_table_;
-
-  /// Elements encoded in MessagePack format.
-  std::vector<vast::byte> buffer_;
-
-#if VAST_ENABLE_ASSERTIONS
-  msgpack::builder<msgpack::input_validation> builder_;
-#else
-  msgpack::builder<msgpack::no_input_validation> builder_;
-#endif
-};
-
-} // namespace v0
 
 } // namespace vast

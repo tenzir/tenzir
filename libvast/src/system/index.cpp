@@ -88,8 +88,8 @@ using namespace std::chrono;
 // query_supervisor    ------------>  index     ----------------->   partition
 //                                                                      |
 //                                                  [indexer]           |
-//                                  (spawns     <-----------------------/     
-//                                   evaluators) 
+//                                  (spawns     <-----------------------/
+//                                   evaluators)
 //
 //                                                  curried_predicate
 //                                   evaluator  -------------------------------> indexer
@@ -508,34 +508,29 @@ index(caf::stateful_actor<index_state>* self, filesystem_type fs, path dir,
   self->state.stage = detail::attach_notifying_stream_stage(
     self,
     /* continuous = */ true, [=](caf::unit_t&) {},
-    [=](caf::unit_t&, caf::downstream<table_slice_ptr>& out,
-        table_slice_ptr x) {
-      if (!x) {
-        VAST_WARNING(self, "discards invalid table slice");
-        return;
-      }
-      self->state.stats.layouts[x->layout().name()].count += x->rows();
+    [=](caf::unit_t&, caf::downstream<table_slice>& out, table_slice x) {
+      self->state.stats.layouts[x.layout().name()].count += x.rows();
       auto& active = self->state.active_partition;
       if (!active.actor) {
         create_active_partition();
-      } else if (x->rows() > active.capacity) {
+      } else if (x.rows() > active.capacity) {
         VAST_DEBUG(self, "exceeds active capacity by",
-                   (x->rows() - active.capacity), "rows");
+                   (x.rows() - active.capacity), "rows");
         decomission_active_partition();
         self->state.flush_to_disk();
         create_active_partition();
       }
       out.push(x);
-      self->state.meta_idx.add(active.id, *x);
+      self->state.meta_idx.add(active.id, x);
       if (active.capacity == self->state.partition_capacity
-          && x->rows() > active.capacity) {
-        VAST_WARNING(self, "got table slice with", x->rows(),
+          && x.rows() > active.capacity) {
+        VAST_WARNING(self, "got table slice with", x.rows(),
                      "rows that exceeds the default partition capacity of",
                      self->state.partition_capacity, "rows");
         active.capacity = 0;
       } else {
-        VAST_ASSERT(active.capacity >= x->rows());
-        active.capacity -= x->rows();
+        VAST_ASSERT(active.capacity >= x.rows());
+        active.capacity -= x.rows();
         VAST_DEBUG(self, "reduces active partition capacity to",
                    (std::to_string(active.capacity) + '/'
                     + std::to_string(self->state.partition_capacity)),
@@ -588,7 +583,7 @@ index(caf::stateful_actor<index_state>* self, filesystem_type fs, path dir,
   // simply waits for a worker).
   self->set_default_handler(caf::skip);
   self->state.has_worker.assign(
-    [=](caf::stream<table_slice_ptr> in) {
+    [=](caf::stream<table_slice> in) {
       VAST_DEBUG(self, "got a new table slice stream");
       return self->state.stage->add_inbound_path(in);
     },
@@ -729,7 +724,7 @@ index(caf::stateful_actor<index_state>* self, filesystem_type fs, path dir,
       // Nothing to do.
       VAST_DEBUG(self, "queried partition", partition_id, "successfully");
     },
-    [=](caf::stream<table_slice_ptr> in) {
+    [=](caf::stream<table_slice> in) {
       VAST_DEBUG(self, "got a new source");
       return self->state.stage->add_inbound_path(in);
     },
@@ -752,7 +747,7 @@ index(caf::stateful_actor<index_state>* self, filesystem_type fs, path dir,
     [=](atom::done, uuid partition_id) {
       VAST_DEBUG(self, "queried partition", partition_id, "successfully");
     },
-    [=](caf::stream<table_slice_ptr> in) {
+    [=](caf::stream<table_slice> in) {
       VAST_DEBUG(self, "got a new source");
       return self->state.stage->add_inbound_path(in);
     },

@@ -63,9 +63,15 @@ vast::ids segment::ids() const {
   auto segment = fbs::GetSegment(chunk_->data());
   auto segment_v0 = segment->segment_as_v0();
   for (auto buffer : *segment_v0->slices()) {
-    auto slice = buffer->data_nested_root()->table_slice_as_generic_v0();
-    result.append_bits(false, slice->offset() - result.size());
-    result.append_bits(true, slice->rows());
+    auto slice = table_slice{};
+    if (auto err = unpack(*buffer, slice)) {
+      VAST_ERROR(this, "failed to unpack table slice");
+      continue;
+    }
+    // FIXME(mavam): get offset here
+    slice.offset(invalid_id);
+    result.append_bits(false, slice.offset() - result.size());
+    result.append_bits(true, slice.rows());
   }
   return result;
 }
@@ -80,20 +86,25 @@ chunk_ptr segment::chunk() const {
   return chunk_;
 }
 
-caf::expected<std::vector<table_slice_ptr>>
+caf::expected<std::vector<table_slice>>
 segment::lookup(const vast::ids& xs) const {
-  std::vector<table_slice_ptr> result;
-  auto f = [](auto buffer) {
-    auto slice = buffer->data_nested_root()->table_slice_as_generic_v0();
-    return std::pair{slice->offset(), slice->offset() + slice->rows()};
+  std::vector<table_slice> result;
+  auto f = [=](auto buffer) {
+    auto slice = table_slice{};
+    if (auto err = unpack(*buffer, slice)) {
+      VAST_ERROR(this, "failed to unpack table slice");
+      return std::pair{invalid_id, invalid_id};
+    }
+    // FIXME(mavam): get offset here
+    slice.offset(invalid_id);
+    return std::pair{slice.offset(), slice.offset() + slice.rows()};
   };
   auto g = [&](auto buffer) -> caf::error {
     // TODO: bind the lifetime of the table slice to the segment chunk. This
     // requires that table slices will be constructable from a chunk. Until
     // then, we stupidly deserialize the data into a new table slice.
-    table_slice_ptr slice;
-    if (auto err = unpack(
-          *buffer->data_nested_root()->table_slice_as_generic_v0(), slice))
+    table_slice slice;
+    if (auto err = unpack(*buffer, slice))
       return err;
     result.push_back(std::move(slice));
     return caf::none;

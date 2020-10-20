@@ -66,7 +66,7 @@ public:
   /// @param options Additional options.
   /// @param in Input stream that should be nullptr. Exists for compatibility
   ///           reasons with other readers.
-  explicit reader(caf::atom_value id, const caf::settings& options,
+  explicit reader(table_slice_encoding id, const caf::settings& options,
                   std::unique_ptr<std::istream> in = nullptr);
 
   void reset(std::unique_ptr<std::istream> in);

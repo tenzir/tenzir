@@ -21,7 +21,6 @@
 #include "vast/table_slice.hpp"
 #include "vast/table_slice_builder.hpp"
 #include "vast/table_slice_builder_factory.hpp"
-#include "vast/table_slice_factory.hpp"
 #include "vast/type.hpp"
 #include "vast/view.hpp"
 
@@ -49,7 +48,6 @@ public:
   template <class T, class Builder>
   void initialize() {
     using namespace vast;
-    factory<table_slice>::add<T>();
     factory<table_slice_builder>::add<Builder>(T::class_id);
     builder = factory<table_slice_builder>::make(T::class_id, layout);
     if (builder == nullptr)
@@ -66,7 +64,7 @@ private:
 
   caf::binary_serializer make_sink();
 
-  vast::table_slice_ptr make_slice();
+  vast::table_slice make_slice();
 
   vast::data_view at(size_t row, size_t col) const;
 

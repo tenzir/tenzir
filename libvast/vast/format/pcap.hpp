@@ -48,7 +48,7 @@ public:
   /// @param id The ID for table slice type to build.
   /// @param options Additional options.
   /// @param in Input stream (unused). Pass filename via options instead.
-  reader(caf::atom_value id, const caf::settings& options,
+  reader(table_slice_encoding id, const caf::settings& options,
          std::unique_ptr<std::istream> in = nullptr);
 
   void reset(std::unique_ptr<std::istream> in);

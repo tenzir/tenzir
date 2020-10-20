@@ -128,15 +128,15 @@ type_registry(type_registry_actor self, const path& dir) {
       VAST_TRACE(self, "sends out a status report");
       return self->state.status(v);
     },
-    [=](caf::stream<table_slice_ptr> in) {
+    [=](caf::stream<table_slice> in) {
       VAST_TRACE(self, "attaches to", VAST_ARG("stream", in));
       caf::attach_stream_sink(
         self, in,
         [=](caf::unit_t&) {
           // nop
         },
-        [=](caf::unit_t&, table_slice_ptr x) {
-          self->state.insert(std::move(x->layout()));
+        [=](caf::unit_t&, table_slice x) {
+          self->state.insert(std::move(x.layout()));
         });
     },
     [=](atom::put, vast::type x) {

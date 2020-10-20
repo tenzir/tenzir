@@ -60,7 +60,7 @@ struct exporter_state {
   std::unordered_map<type, expression> checkers;
 
   /// Caches results for the SINK.
-  std::vector<table_slice_ptr> results;
+  std::vector<table_slice> results;
 
   /// Stores the time point for when this actor got started via 'run'.
   std::chrono::system_clock::time_point start;

@@ -55,10 +55,10 @@ struct importer_state {
   };
 
   /// Type of incoming stream elements.
-  using input_type = table_slice_ptr;
+  using input_type = table_slice;
 
   /// Type of outgoing stream elements.
-  using output_type = table_slice_ptr;
+  using output_type = table_slice;
 
   /// Stream object for managing downstream actors.
   using downstream_manager = caf::broadcast_downstream_manager<output_type>;

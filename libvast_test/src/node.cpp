@@ -74,7 +74,7 @@ void node::ingest(const std::string& type) {
   MESSAGE("done ingesting logs");
 }
 
-std::vector<table_slice_ptr> node::query(std::string expr) {
+std::vector<table_slice> node::query(std::string expr) {
   MESSAGE("spawn an exporter and register ourselves as sink");
   auto exp = spawn_component("exporter", std::move(expr));
   self->monitor(exp);
@@ -82,11 +82,11 @@ std::vector<table_slice_ptr> node::query(std::string expr) {
   self->send(exp, atom::run_v);
   run();
   MESSAGE("fetch results from mailbox");
-  std::vector<table_slice_ptr> result;
+  std::vector<table_slice> result;
   bool running = true;
   self->receive_while(running)(
-    [&](table_slice_ptr slice) {
-      MESSAGE("... got " << slice->rows() << " events");
+    [&](table_slice slice) {
+      MESSAGE("... got " << slice.rows() << " events");
       result.push_back(std::move(slice));
     },
     [&](const uuid&, const system::query_status&) {

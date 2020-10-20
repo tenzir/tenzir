@@ -136,8 +136,8 @@ const char* writer::name() const {
 
 using namespace parser_literals;
 
-reader::reader(caf::atom_value table_slice_type, const caf::settings& options,
-               std::unique_ptr<std::istream> in)
+reader::reader(table_slice_encoding table_slice_type,
+               const caf::settings& options, std::unique_ptr<std::istream> in)
   : super(table_slice_type, options) {
   if (in != nullptr)
     reset(std::move(in));

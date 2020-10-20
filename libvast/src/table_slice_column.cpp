@@ -17,14 +17,23 @@
 
 namespace vast {
 
-namespace v1 {
-
 // -- constructors, destructors, and assignment operators ----------------------
 
 table_slice_column::table_slice_column(table_slice slice,
                                        table_slice::size_type column) noexcept
-  : slice_{slice}, column_{column} {
+  : slice_{std::move(slice)}, column_{column} {
   // nop
+}
+
+table_slice_column::table_slice_column(table_slice slice,
+                                       std::string_view name) noexcept {
+  for (size_t index = 0; index < slice.layout().fields.size(); ++index) {
+    if (slice.layout().fields[index].name == name) {
+      slice_ = std::move(slice);
+      column_ = index;
+      break;
+    }
+  }
 }
 
 table_slice_column::table_slice_column() noexcept = default;
@@ -78,7 +87,5 @@ data_view table_slice_column::operator[](table_slice::size_type row) const {
 std::string table_slice_column::name() const noexcept {
   return slice_.layout().fields[column_].name;
 }
-
-} // namespace v1
 
 } // namespace vast

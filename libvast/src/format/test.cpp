@@ -242,7 +242,7 @@ using default_randomizer = randomizer<std::mt19937_64>;
 
 } // namespace <anonymous>
 
-reader::reader(caf::atom_value id, const caf::settings& options,
+reader::reader(table_slice_encoding id, const caf::settings& options,
                std::unique_ptr<std::istream>)
   : super{id, options},
     generator_{vast::defaults::import::test::seed(options)},

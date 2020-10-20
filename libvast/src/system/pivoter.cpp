@@ -96,13 +96,13 @@ caf::behavior pivoter(caf::stateful_actor<pivoter_state>* self, caf::actor node,
     quit_if_done();
   });
   return {
-    [=](vast::table_slice_ptr slice) {
+    [=](vast::table_slice slice) {
       auto& st = self->state;
-      auto pivot_field = common_field(st, slice->layout());
+      auto pivot_field = common_field(st, slice.layout());
       if (!pivot_field)
         return;
       VAST_DEBUG(self, "uses", *pivot_field, "to extract", st.target, "events");
-      auto column = slice->column(pivot_field->name);
+      auto column = slice.column(pivot_field->name);
       auto xs = list{};
       for (size_t i = 0; i < column->rows(); ++i) {
         auto data = materialize((*column)[i]);

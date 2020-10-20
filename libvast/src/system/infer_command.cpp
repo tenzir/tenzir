@@ -52,7 +52,7 @@ template <class Reader>
 caf::expected<schema>
 infer(const std::string& input, const caf::settings& options) {
   record_type rec;
-  auto layout = [&](auto x) { rec = x->layout(); };
+  auto layout = [&](auto x) { rec = x.layout(); };
   auto table_slice_type = defaults::import::table_slice_type;
   auto stream = std::make_unique<std::istringstream>(input);
   auto reader = Reader{table_slice_type, options, std::move(stream)};

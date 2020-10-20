@@ -53,7 +53,7 @@ struct node : deterministic_actor_system_and_events {
   void ingest(const std::string& type);
 
   // Performs a historical query and returns the resulting events.
-  std::vector<table_slice_ptr> query(std::string expr);
+  std::vector<table_slice> query(std::string expr);
 
   caf::actor test_node;
 };

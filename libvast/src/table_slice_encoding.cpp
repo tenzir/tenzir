@@ -18,8 +18,6 @@
 
 namespace vast {
 
-namespace v1 {
-
 const char* to_string(table_slice_encoding encoding) {
   static constexpr std::array descriptions = {
     "invalid",
@@ -31,7 +29,5 @@ const char* to_string(table_slice_encoding encoding) {
                 == static_cast<underlying>(table_slice_encoding::COUNT));
   return descriptions[static_cast<underlying>(encoding)];
 }
-
-} // namespace v1
 
 } // namespace vast

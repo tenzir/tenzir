@@ -26,7 +26,6 @@
 #include "vast/defaults.hpp"
 #include "vast/detail/make_io_stream.hpp"
 #include "vast/detail/narrow.hpp"
-#include "vast/table_slice_header.hpp"
 
 #include <caf/sum_type.hpp>
 
@@ -81,9 +80,8 @@ TEST(arrow batch) {
   std::shared_ptr<arrow::RecordBatch> batch;
   while (reader->ReadNext(&batch).ok() && batch != nullptr) {
     REQUIRE_LESS(slice_id, zeek_conn_log.size());
-    table_slice_header hdr{layout, zeek_conn_log[slice_id]->rows(),
-                           zeek_conn_log[slice_id]->offset()};
-    CHECK_EQUAL(detail::narrow<size_t>(batch->num_rows()), hdr.rows);
+    auto& slice = zeek_conn_log[slice_id];
+    CHECK_EQUAL(detail::narrow<size_t>(batch->num_rows()), slice.rows());
     CHECK(batch->schema()->Equals(*arrow_schema));
     auto slice = caf::make_counted<arrow_table_slice>(std::move(hdr), batch);
     CHECK_EQUAL(*slice, *zeek_conn_log[slice_id]);

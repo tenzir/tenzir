@@ -113,9 +113,9 @@ caf::behavior active_indexer(caf::stateful_actor<indexer_state>* self,
           if (self->state.has_skip_attribute)
             return;
           for (auto& x : xs) {
-            for (size_t i = 0; i < x.slice->rows(); ++i) {
-              auto v = x.slice->at(i, x.column);
-              self->state.idx->append(v, x.slice->offset() + i);
+            for (size_t i = 0; i < x.slice.rows(); ++i) {
+              auto v = x.slice.at(i, x.column);
+              self->state.idx->append(v, x.slice.offset() + i);
             }
           }
         },

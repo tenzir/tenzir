@@ -25,6 +25,7 @@
 #include "vast/table_slice.hpp"
 #include "vast/table_slice_builder.hpp"
 #include "vast/table_slice_builder_factory.hpp"
+#include "vast/table_slice_column.hpp"
 
 #include <caf/event_based_actor.hpp>
 #include <caf/settings.hpp>
@@ -40,12 +41,12 @@ explorer_state::explorer_state(caf::event_based_actor*) {
   // nop
 }
 
-void explorer_state::forward_results(vast::table_slice_ptr slice) {
+void explorer_state::forward_results(vast::table_slice slice) {
   // Check which of the ids in this slice were already sent to the sink
   // and forward those that were not.
   vast::bitmap unseen;
-  for (size_t i = 0; i < slice->rows(); ++i) {
-    auto id = slice->offset() + i;
+  for (size_t i = 0; i < slice.rows(); ++i) {
+    auto id = slice.offset() + i;
     auto [_, new_] = returned_ids.insert(id);
     if (new_) {
       vast::ids tmp;
@@ -56,8 +57,8 @@ void explorer_state::forward_results(vast::table_slice_ptr slice) {
   }
   if (unseen.empty())
     return;
-  std::vector<table_slice_ptr> slices;
-  if (unseen.size() == slice->rows()) {
+  std::vector<table_slice> slices;
+  if (unseen.size() == slice.rows()) {
     slices.push_back(slice);
   } else {
     // If a slice was partially known, divide it up and forward only those
@@ -68,13 +69,13 @@ void explorer_state::forward_results(vast::table_slice_ptr slice) {
   for (auto slice : slices) {
     if (num_sent >= limits.total)
       break;
-    if (num_sent + slice->rows() <= limits.total) {
+    if (num_sent + slice.rows() <= limits.total) {
       self->send(sink, slice);
-      num_sent += slice->rows();
+      num_sent += slice.rows();
     } else {
       auto truncated = truncate(slice, limits.total - num_sent);
       self->send(sink, truncated);
-      num_sent += truncated->rows();
+      num_sent += truncated.rows();
     }
   }
   return;
@@ -114,7 +115,7 @@ explorer(caf::stateful_actor<explorer_state>* self, caf::actor node,
     quit_if_done();
   });
   return {
-    [=](vast::table_slice_ptr slice) {
+    [=](vast::table_slice slice) {
       auto& st = self->state;
       // TODO: Add some cleaner way to distinguish the different input streams,
       // maybe some 'tagged' stream in caf?
@@ -125,7 +126,7 @@ explorer(caf::stateful_actor<explorer_state>* self, caf::actor node,
       // Don't bother making new queries if we discard all results anyways.
       if (st.num_sent >= st.limits.total)
         return;
-      auto& layout = slice->layout();
+      auto& layout = slice.layout();
       auto it = std::find_if(layout.fields.begin(), layout.fields.end(),
                              [](const record_field& field) {
                                return has_attribute(field.type, "timestamp");
@@ -134,11 +135,11 @@ explorer(caf::stateful_actor<explorer_state>* self, caf::actor node,
         VAST_DEBUG(self, "could not find timestamp field in", layout);
         return;
       }
-      std::optional<table_slice::column_view> by_column;
+      std::optional<table_slice_column> by_column;
       if (st.by) {
         // Need to pivot from caf::optional to std::optional here, as the
         // former doesnt support emplace or value assignment.
-        if (auto vopt = slice->column(*st.by))
+        if (auto col = table_slice_column{slice, *st.by})
           by_column.emplace(*vopt);
         if (!by_column) {
           VAST_TRACE("skipping slice with", layout, "because it has no column",
@@ -147,7 +148,7 @@ explorer(caf::stateful_actor<explorer_state>* self, caf::actor node,
         }
       }
       VAST_DEBUG(self, "uses", it->name, "to construct timebox");
-      auto column = slice->column(it->name);
+      auto column = slice.column(it->name);
       VAST_ASSERT(column);
       for (size_t i = 0; i < column->rows(); ++i) {
         auto data_view = (*column)[i];

@@ -49,13 +49,13 @@ public:
   public:
     virtual ~consumer();
 
-    virtual void operator()(table_slice_ptr) = 0;
+    virtual void operator()(table_slice) = 0;
   };
 
   // -- constructors, destructors, and assignment operators --------------------
 
   /// @param id Implementation ID for the table slice builder.
-  reader(caf::atom_value table_slice_type, const caf::settings& options);
+  reader(table_slice_encoding table_slice_type, const caf::settings& options);
 
   virtual ~reader();
 
@@ -74,9 +74,9 @@ public:
     VAST_ASSERT(max_events > 0);
     VAST_ASSERT(max_slice_size > 0);
     struct consumer_impl : consumer {
-      void operator()(table_slice_ptr x) override {
-        produced += x->rows();
-        f_(std::move(x));
+      void operator()(table_slice slice) override {
+        produced += slice.rows();
+        f_(std::move(slice));
       }
       consumer_impl(F& fun) : f_(fun), produced(0) {
         // nop
@@ -112,7 +112,7 @@ protected:
                                consumer& f) = 0;
 
 public:
-  caf::atom_value table_slice_type_;
+  table_slice_encoding table_slice_type_;
   reader_clock::duration batch_timeout_ = vast::defaults::import::batch_timeout;
   reader_clock::duration read_timeout_ = vast::defaults::import::read_timeout;
 

@@ -13,17 +13,13 @@
 
 #include "vast/table_slice_row.hpp"
 
-#include "vast/table_slice.hpp"
-
 namespace vast {
-
-namespace v1 {
 
 // -- constructors, destructors, and assignment operators ----------------------
 
 table_slice_row::table_slice_row(table_slice slice,
                                  table_slice::size_type row) noexcept
-  : slice_{slice}, row_{row} {
+  : slice_{std::move(slice)}, row_{row} {
   // nop
 }
 
@@ -73,7 +69,5 @@ data_view table_slice_row::operator[](table_slice::size_type column) const {
   VAST_ASSERT(column < size());
   return slice_.at(row_, column);
 }
-
-} // namespace v1
 
 } // namespace vast

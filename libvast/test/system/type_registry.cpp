@@ -33,7 +33,7 @@ const vast::record_type mock_layout_a = vast::record_type{
   {"c", vast::real_type{}},
 }.name("mock");
 
-vast::table_slice_ptr make_data_a(std::string a, vast::count b, vast::real c) {
+vast::table_slice make_data_a(std::string a, vast::count b, vast::real c) {
   auto builder = factory<table_slice_builder>::make(
     defaults::import::table_slice_type, mock_layout_a);
   REQUIRE(builder->add(a, b, c));
@@ -47,7 +47,7 @@ const vast::record_type mock_layout_b = vast::record_type{
   {"d", vast::string_type{}},
 }.name("mock");
 
-vast::table_slice_ptr
+vast::table_slice
 make_data_b(std::string a, vast::count b, vast::real c, std::string d) {
   auto builder = factory<table_slice_builder>::make(
     defaults::import::table_slice_type, mock_layout_b);
@@ -56,7 +56,7 @@ make_data_b(std::string a, vast::count b, vast::real c, std::string d) {
 }
 
 template <class... Ts>
-vast::table_slice_ptr make_data(const vast::record_type& layout, Ts&&... ts) {
+vast::table_slice make_data(const vast::record_type& layout, Ts&&... ts) {
   auto builder = factory<table_slice_builder>::make(
     defaults::import::table_slice_type, layout);
   REQUIRE(builder->add((std::forward<Ts>(ts), ...)));

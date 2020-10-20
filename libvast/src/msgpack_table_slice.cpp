@@ -268,8 +268,6 @@ msgpack_map_view::value_type msgpack_map_view::at(size_type i) const {
 
 } // namespace
 
-namespace v1 {
-
 msgpack_table_slice::msgpack_table_slice(
   const fbs::table_slice::msgpack::v0& slice) noexcept
   : slice_{slice} {
@@ -323,77 +321,5 @@ void msgpack_table_slice::append_column_to_index(id offset,
     idx.append(std::move(x), offset + row);
   }
 }
-
-} // namespace v1
-
-inline namespace v0 {
-
-table_slice_ptr msgpack_table_slice::make(table_slice_header header) {
-  auto ptr = new msgpack_table_slice{std::move(header)};
-  return table_slice_ptr{ptr, false};
-}
-
-msgpack_table_slice* msgpack_table_slice::copy() const {
-  return new msgpack_table_slice{*this};
-}
-
-caf::error msgpack_table_slice::serialize(caf::serializer& sink) const {
-  return sink(offset_table_, chunk_);
-}
-
-caf::error msgpack_table_slice::deserialize(caf::deserializer& source) {
-  if (auto err = source(offset_table_, chunk_))
-    return err;
-  buffer_ = as_bytes(span{chunk_->data(), chunk_->size()});
-  return caf::none;
-}
-
-caf::error msgpack_table_slice::load(chunk_ptr chunk) {
-  VAST_ASSERT(chunk != nullptr);
-  // Setup a CAF deserializer.
-  caf::binary_deserializer source{nullptr, chunk->data(), chunk->size()};
-  // Deserialize offset table.
-  if (auto err = source(offset_table_))
-    return err;
-  // Assign buffer to msgpack data following the offset table. Since the buffer
-  // was previously serialized as chunk pointer (uint32_t size + data), we have
-  // to add add sizeof(uint32_t) bytes after deserializing the offset table to
-  // jump to directly jump to the msgpack data.
-  auto remaining_bytes = source.remaining();
-  auto deserializer_position = chunk->size() - remaining_bytes;
-  chunk_ = chunk->slice(deserializer_position + sizeof(uint32_t));
-  buffer_ = as_bytes(span{chunk_->data(), chunk_->size()});
-  return caf::none;
-}
-
-// There are only small gains we can get here from doing this manually since
-// MsgPack is a row-oriented format.
-void msgpack_table_slice::append_column_to_index(size_type col,
-                                                 value_index& idx) const {
-  for (size_t row = 0; row < rows(); ++row) {
-    auto row_offset = offset_table_[row];
-    auto xs = msgpack::overlay{buffer_.subspan(row_offset)};
-    xs.next(col);
-    auto x = decode(xs, layout().fields[col].type);
-    idx.append(x, offset() + row);
-  }
-}
-
-caf::atom_value msgpack_table_slice::implementation_id() const noexcept {
-  return class_id;
-}
-
-data_view msgpack_table_slice::at(size_type row, size_type col) const {
-  // First find the desired row...
-  VAST_ASSERT(row < offset_table_.size());
-  auto offset = offset_table_[row];
-  VAST_ASSERT(offset < static_cast<size_t>(buffer_.size()));
-  auto xs = msgpack::overlay{buffer_.subspan(offset)};
-  // ...then skip (decode) up to the desired column.
-  xs.next(col);
-  return decode(xs, layout().fields[col].type);
-}
-
-} // namespace v0
 
 } // namespace vast

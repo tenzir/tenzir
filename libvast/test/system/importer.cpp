@@ -36,24 +36,22 @@ using namespace vast;
 namespace {
 
 behavior dummy_sink(event_based_actor* self, size_t num_events, actor overseer) {
-  return {
-    [=](stream<table_slice_ptr> in) {
-      self->unbecome();
-      self->send(overseer, atom::ok_v);
-      self->make_sink(
-        in,
-        [=](std::vector<table_slice_ptr>&) {
-          // nop
-        },
-        [=](std::vector<table_slice_ptr>& xs, table_slice_ptr x) {
-          xs.emplace_back(std::move(x));
-          if (rows(xs) == num_events)
-            self->send(overseer, xs);
-          else if (rows(xs) > num_events)
-            FAIL("dummy sink received too many events");
-        });
-    }
-  };
+  return {[=](stream<table_slice> in) {
+    self->unbecome();
+    self->send(overseer, atom::ok_v);
+    self->make_sink(
+      in,
+      [=](std::vector<table_slice>&) {
+        // nop
+      },
+      [=](std::vector<table_slice>& xs, table_slice x) {
+        xs.emplace_back(std::move(x));
+        if (rows(xs) == num_events)
+          self->send(overseer, xs);
+        else if (rows(xs) > num_events)
+          FAIL("dummy sink received too many events");
+      });
+  }};
 }
 
 template <class Base>
@@ -99,8 +97,8 @@ struct importer_fixture : Base {
                              std::string{}, vast::system::accountant_type{});
   }
 
-  void verify(const std::vector<table_slice_ptr>& result,
-              const std::vector<table_slice_ptr>& reference) {
+  void verify(const std::vector<table_slice>& result,
+              const std::vector<table_slice>& reference) {
     auto xs = to_data(result);
     auto ys = to_data(reference);
     CHECK_EQUAL(xs, ys);
@@ -131,11 +129,11 @@ struct deterministic_fixture : deterministic_fixture_base {
   }
 
   auto fetch_result() {
-    if (!received<std::vector<table_slice_ptr>>(self))
+    if (!received<std::vector<table_slice>>(self))
       FAIL("no result available");
-    std::vector<table_slice_ptr> result;
+    std::vector<table_slice> result;
     self->receive(
-      [&](std::vector<table_slice_ptr>& xs) { result = std::move(xs); });
+      [&](std::vector<table_slice>& xs) { result = std::move(xs); });
     return result;
   }
 };
@@ -258,9 +256,9 @@ struct nondeterministic_fixture : nondeterministic_fixture_base {
   }
 
   auto fetch_result() {
-    std::vector<table_slice_ptr> result;
+    std::vector<table_slice> result;
     self->receive(
-      [&](std::vector<table_slice_ptr>& xs) { result = std::move(xs); });
+      [&](std::vector<table_slice>& xs) { result = std::move(xs); });
     return result;
   }
 };

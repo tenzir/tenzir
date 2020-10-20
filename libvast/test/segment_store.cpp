@@ -44,8 +44,8 @@ struct fixture : fixtures::deterministic_actor_system_and_events {
     // Check that ground truth is what we expect.
     if (zeek_conn_log.size() != 3u)
       FAIL("expected 3 slices in test data set");
-    if (zeek_conn_log[0]->rows() != 8 || zeek_conn_log[1]->rows() != 8
-        || zeek_conn_log[2]->rows() != 4)
+    if (zeek_conn_log[0].rows() != 8 || zeek_conn_log[1].rows() != 8
+        || zeek_conn_log[2].rows() != 4)
       FAIL("expected 8, 8 and 4 rows in data set");
   }
 
@@ -61,7 +61,7 @@ struct fixture : fixtures::deterministic_actor_system_and_events {
 
   /// Pushes all slices into the store. The slices will usually remain in the
   /// segment builder.
-  void put(const std::vector<table_slice_ptr>& slices) {
+  void put(const std::vector<table_slice>& slices) {
     for (auto& slice : slices)
       if (auto err = store->put(slice))
         FAIL("store->put failed: " << err);
@@ -69,7 +69,7 @@ struct fixture : fixtures::deterministic_actor_system_and_events {
 
   /// Pushes all slices into the store and makes sure the resulting segment
   /// gets flushed to disk but remains "hot", i.e., stays in the cache.
-  void put_hot(const std::vector<table_slice_ptr>& slices) {
+  void put_hot(const std::vector<table_slice>& slices) {
     put(slices);
     auto segment_id = store->active_id();
     auto files_before = segment_files().size();
@@ -85,7 +85,7 @@ struct fixture : fixtures::deterministic_actor_system_and_events {
 
   /// Pushes all slices into the store and makes sure the resulting segment
   /// gets flushed to disk without remaining in the cache.
-  void put_cold(const std::vector<table_slice_ptr>& slices) {
+  void put_cold(const std::vector<table_slice>& slices) {
     put(slices);
     auto segment_id = store->active_id();
     auto files_before = segment_files().size();
@@ -179,7 +179,7 @@ TEST(querying filled segment store) {
 
 TEST(sessionized extraction on empty segment store) {
   auto session = store->extract(make_ids({0, 6, 19, 21}));
-  std::vector<table_slice_ptr> slices;
+  std::vector<table_slice> slices;
   for (auto x = session->next(); x.engaged(); x = session->next())
     slices.emplace_back(unbox(x));
   CHECK_EQUAL(slices.size(), 0u);
@@ -188,7 +188,7 @@ TEST(sessionized extraction on empty segment store) {
 TEST(sessionized extraction on filled segment store) {
   put(zeek_conn_log);
   auto session = store->extract(make_ids({0, 6, 19, 21}));
-  std::vector<table_slice_ptr> slices;
+  std::vector<table_slice> slices;
   for (auto x = session->next(); x.engaged(); x = session->next())
     slices.emplace_back(unbox(x));
   REQUIRE_EQUAL(slices.size(), 2u);

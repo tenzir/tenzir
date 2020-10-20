@@ -57,7 +57,7 @@ struct generator {
                .name(std::move(name));
   }
 
-  table_slice_ptr operator()(size_t num) {
+  table_slice operator()(size_t num) {
     auto builder = factory<table_slice_builder>::make(
       defaults::import::table_slice_type, layout);
     REQUIRE(builder);
@@ -67,7 +67,7 @@ struct generator {
       CHECK(builder->add(make_data_view("foo")));
     }
     auto slice = builder->finish();
-    slice.unshared().offset(offset);
+    slice.offset(offset);
     offset += num;
     return slice;
   }
@@ -85,12 +85,12 @@ struct mock_partition {
   mock_partition(std::string name, uuid uid, size_t num) : id(std::move(uid)) {
     generator g{std::move(name), num_events_per_parttion * num};
     slice = g(num_events_per_parttion);
-    range.from = get_timestamp(slice->at(0, 0));
-    range.to = get_timestamp(slice->at(slice->rows() - 1, 0));
+    range.from = get_timestamp(slice.at(0, 0));
+    range.to = get_timestamp(slice.at(slice.rows() - 1, 0));
   }
 
   uuid id;
-  table_slice_ptr slice;
+  table_slice slice;
   interval range;
 };
 

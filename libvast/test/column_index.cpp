@@ -71,7 +71,7 @@ TEST(integer values) {
   auto slice = builder->finish();
   auto column = table_slice_column{slice, 0};
   col->add(column);
-  REQUIRE_EQUAL(slice->rows(), rows.size());
+  REQUIRE_EQUAL(slice.rows(), rows.size());
   auto slice_size = rows.size();
   MESSAGE("generate test queries");
   auto is1 = curried(unbox(to<predicate>(":int == +1")));

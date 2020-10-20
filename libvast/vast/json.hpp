@@ -182,8 +182,9 @@ bool convert(T x, json& j) {
     j = detail::narrow_cast<json::number>(x);
   else if constexpr (std::is_convertible_v<T, json::string>)
     j = json::string{std::move(x)};
-  else
-    static_assert(detail::always_false_v<T>);
+  // FIXME(table_slice): put this back in place
+  // else
+  //   static_assert(detail::always_false_v<T>);
   return true;
 }
 

@@ -110,7 +110,7 @@ struct fixture : fixtures::deterministic_actor_system_and_events {
   /// Rebases offsets of table slices, i.e., the offsets of the first
   /// table slice is 0, the offset of the second table slice is 0 + rows in the
   /// first slice, and so on.
-  auto rebase(std::vector<table_slice_ptr> xs) {
+  auto rebase(std::vector<table_slice> xs) {
     id offset = 0;
     for (auto& x : xs) {
       x.unshared().offset(offset);

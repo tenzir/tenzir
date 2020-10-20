@@ -13,24 +13,16 @@
 
 #pragma once
 
-// -- v1 includes --------------------------------------------------------------
-
 #include "vast/fwd.hpp"
 #include "vast/table_slice.hpp"
 #include "vast/view.hpp"
 
 #include <caf/meta/type_name.hpp>
 
-// -- v0 includes --------------------------------------------------------------
-
-#include "vast/fwd.hpp"
-#include "vast/table_slice.hpp"
-
-#include <cstdint>
+#include <string>
+#include <string_view>
 
 namespace vast {
-
-namespace v1 {
 
 class table_slice_column final {
 public:
@@ -40,6 +32,14 @@ public:
   /// @param slice The table slice to view.
   /// @param column The column index of the viewed slice.
   table_slice_column(table_slice slice, table_slice::size_type column) noexcept;
+
+  /// Constructs an iterable view on a column of a table slice.
+  /// @param slice The table slice to view.
+  /// @param name The column name of the viewed slice.
+  /// @note The owned slice is set to invalid if the name does not refer to a
+  /// valid column. Use `x.slice().encoding() != table_slice_encoding::invalid`
+  /// to check for failure.
+  table_slice_column(table_slice slice, std::string_view name) noexcept;
 
   /// Default-constructs an invalid table slice column.
   table_slice_column() noexcept;
@@ -87,28 +87,5 @@ private:
   table_slice slice_ = {};
   table_slice::size_type column_ = 0;
 };
-
-} // namespace v1
-
-inline namespace v0 {
-
-struct table_slice_column {
-  table_slice_column() {
-  }
-
-  table_slice_column(table_slice_ptr slice, size_t col)
-    : slice{std::move(slice)}, column{col} {
-    // nop
-  }
-  table_slice_ptr slice;
-  size_t column;
-
-  template <class Inspector>
-  friend auto inspect(Inspector& f, table_slice_column& x) {
-    return f(x.slice, x.column);
-  }
-};
-
-} // namespace v0
 
 } // namespace vast

@@ -21,7 +21,7 @@ namespace vast::format {
 /// Base class for readers that only have a single layout at any point in time.
 class single_layout_reader : public reader {
 public:
-  single_layout_reader(caf::atom_value table_slice_type,
+  single_layout_reader(table_slice_encoding table_slice_type,
                        const caf::settings& options);
 
   ~single_layout_reader() override;

@@ -35,8 +35,6 @@
 
 namespace vast {
 
-namespace v1 {
-
 // -- constructors, destructors, and assignment operators ----------------------
 
 table_slice_builder::table_slice_builder(record_type layout)
@@ -123,50 +121,5 @@ void intrusive_ptr_add_ref(const table_slice_builder* ptr) {
 void intrusive_ptr_release(const table_slice_builder* ptr) {
   intrusive_ptr_release(static_cast<const caf::ref_counted*>(ptr));
 }
-
-} // namespace v1
-
-inline namespace v0 {
-
-table_slice_builder::table_slice_builder(record_type layout)
-  : layout_(std::move(layout)) { // nop
-}
-
-table_slice_builder::~table_slice_builder() {
-  // nop
-}
-
-bool table_slice_builder::recursive_add(const data& x, const type& t) {
-  return caf::visit(
-    detail::overload{
-      [&](const list& xs, const record_type& rt) {
-        for (size_t i = 0; i < xs.size(); ++i) {
-          if (!recursive_add(xs[i], rt.fields[i].type))
-            return false;
-        }
-        return true;
-      },
-      [&](const auto&, const auto&) { return add(make_view(x)); },
-    },
-    x, t);
-}
-
-void table_slice_builder::reserve(size_t) {
-  // nop
-}
-
-size_t table_slice_builder::columns() const noexcept {
-  return layout_.fields.size();
-}
-
-void intrusive_ptr_add_ref(const table_slice_builder* ptr) {
-  intrusive_ptr_add_ref(static_cast<const caf::ref_counted*>(ptr));
-}
-
-void intrusive_ptr_release(const table_slice_builder* ptr) {
-  intrusive_ptr_release(static_cast<const caf::ref_counted*>(ptr));
-}
-
-} // namespace v0
 
 } // namespace vast

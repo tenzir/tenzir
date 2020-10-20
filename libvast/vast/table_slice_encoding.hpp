@@ -17,8 +17,6 @@
 
 namespace vast {
 
-namespace v1 {
-
 /// Tag for the unversioned encoding of a table slice.
 enum class table_slice_encoding : uint8_t {
   invalid, ///< An invalid table slice.
@@ -30,7 +28,5 @@ enum class table_slice_encoding : uint8_t {
 /// @returns A textual representation of the given encoding.
 /// @param encoding The encoding.
 const char* to_string(table_slice_encoding encoding);
-
-} // namespace v1
 
 } // namespace vast

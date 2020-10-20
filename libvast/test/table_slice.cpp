@@ -81,7 +81,7 @@ make_random_table_slices(std::vector<table_slice>::size_type num_slices,
 /// excessive memory allocations.
 /// @relates table_slice
 std::vector<std::vector<data>>
-to_data(const table_slice& slice, v1::table_slice::size_type first_row = 0,
+to_data(const table_slice& slice, table_slice::size_type first_row = 0,
         table_slice::size_type num_rows = 0) {
   VAST_ASSERT(first_row < slice.num_rows());
   VAST_ASSERT(num_rows <= slice.num_rows() - first_row);
@@ -127,11 +127,11 @@ TEST(random integer slices) {
   auto slices = unbox(make_random_table_slices(10, 10, layout));
   CHECK_EQUAL(slices.size(), 10u);
   CHECK(std::all_of(slices.begin(), slices.end(),
-                    [](auto& slice) { return slice->rows() == 10; }));
+                    [](auto& slice) { return slice.rows() == 10; }));
   std::vector<integer> values;
   for (auto& slice : slices)
-    for (size_t row = 0; row < slice->rows(); ++row)
-      values.emplace_back(get<integer>(slice->at(row, 0)));
+    for (size_t row = 0; row < slice.rows(); ++row)
+      values.emplace_back(get<integer>(slice.at(row, 0)));
   auto [lowest, highest] = std::minmax_element(values.begin(), values.end());
   CHECK_GREATER_EQUAL(*lowest, 100);
   CHECK_LESS_EQUAL(*highest, 200);
@@ -228,8 +228,8 @@ TEST(truncate) {
   sut.unshared().offset(100);
   auto truncated_events = [&](size_t num_rows) {
     auto sub_slice = truncate(sut, num_rows);
-    if (sub_slice->rows() != num_rows)
-      FAIL("expected " << num_rows << " rows, got " << sub_slice->rows());
+    if (sub_slice.rows() != num_rows)
+      FAIL("expected " << num_rows << " rows, got " << sub_slice.rows());
     return to_data(*sub_slice);
   };
   auto sub_slice = truncate(sut, 8);

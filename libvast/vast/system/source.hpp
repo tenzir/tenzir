@@ -68,8 +68,7 @@ template <class Reader, class Self = caf::event_based_actor>
 struct source_state {
   // -- member types -----------------------------------------------------------
 
-  using downstream_manager
-    = caf::broadcast_downstream_manager<table_slice_ptr>;
+  using downstream_manager = caf::broadcast_downstream_manager<table_slice>;
 
   // -- constructors, destructors, and assignment operators --------------------
 
@@ -248,11 +247,11 @@ source(caf::stateful_actor<source_state<Reader>>* self, Reader reader,
       self->send(self->state.accountant, "source.start", now);
     },
     // get next element
-    [=](caf::unit_t&, caf::downstream<table_slice_ptr>& out, size_t num) {
+    [=](caf::unit_t&, caf::downstream<table_slice>& out, size_t num) {
       auto& st = self->state;
       // Extract events until the source has exhausted its input or until
       // we have completed a batch.
-      auto push_slice = [&](table_slice_ptr x) { out.push(std::move(x)); };
+      auto push_slice = [&](table_slice x) { out.push(std::move(x)); };
       // We can produce up to num * table_slice_size events per run.
       auto events = num * table_slice_size;
       if (st.requested)

@@ -91,8 +91,18 @@ make_source(const Actor& self, caf::actor_system& sys, const invocation& inv,
   auto uri = caf::get_if<std::string>(&options, category + ".listen");
   auto file = caf::get_if<std::string>(&options, category + ".read");
   auto type = caf::get_if<std::string>(&options, category + ".type");
-  auto slice_type = get_or(options, "vast.import.batch-encoding",
-                           defaults::import::table_slice_type);
+  auto slice_type = defaults::import::table_slice_type;
+  auto slice_type_str
+    = caf::get_if<std::string>(&options, "vast.import.batch-encoding");
+  if (slice_type_str) {
+    if (*slice_type_str == "arrow")
+      slice_type = table_slice_encoding::arrow;
+    else if (*slice_type_str == "msgpack")
+      slice_type = table_slice_encoding::msgpack;
+    else
+      return make_error(ec::invalid_configuration,
+                        "invalid batch-encoding: " + *slice_type_str);
+  }
   auto slice_size = get_or(options, "vast.import.batch-size",
                            defaults::import::table_slice_size);
   if (slice_size == 0)

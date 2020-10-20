@@ -24,7 +24,8 @@ namespace vast::format {
 reader::consumer::~consumer() {
   // nop
 }
-reader::reader(caf::atom_value table_slice_type, const caf::settings& options)
+reader::reader(table_slice_encoding table_slice_type,
+               const caf::settings& options)
   : table_slice_type_(table_slice_type) {
   if (auto batch_timeout_arg
       = caf::get_if<std::string>(&options, "vast.import.batch-timeout")) {

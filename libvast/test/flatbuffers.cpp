@@ -12,6 +12,7 @@
  ******************************************************************************/
 
 #include "vast/chunk.hpp"
+#include "vast/defaults.hpp"
 #include "vast/detail/spawn_container_source.hpp"
 #include "vast/expression.hpp"
 #include "vast/fbs/index.hpp"
@@ -20,13 +21,13 @@
 #include "vast/fbs/uuid.hpp"
 #include "vast/fwd.hpp"
 #include "vast/meta_index.hpp"
-#include "vast/msgpack_table_slice.hpp"
-#include "vast/msgpack_table_slice_builder.hpp"
 #include "vast/span.hpp"
 #include "vast/system/index.hpp"
 #include "vast/system/partition.hpp"
 #include "vast/system/posix_filesystem.hpp"
-#include "vast/table_slice_header.hpp"
+#include "vast/table_slice.hpp"
+#include "vast/table_slice_builder.hpp"
+#include "vast/table_slice_builder_factory.hpp"
 #include "vast/type.hpp"
 #include "vast/uuid.hpp"
 
@@ -116,9 +117,10 @@ TEST(empty partition roundtrip) {
   // Prepare a mini meta index. The meta index only looks at the layout of the
   // table slices it gets, so we feed it with an empty table slice.
   auto meta_idx = vast::meta_index{};
-  vast::table_slice_header header;
-  header.layout = vast::record_type{{"x", vast::count_type{}}}.name("y");
-  auto slice = vast::msgpack_table_slice::make(header);
+  auto layout = vast::record_type{{"x", vast::count_type{}}}.name("y");
+  auto slice_builder = vast::factory<vast::table_slice_builder>::make(
+    vast::defaults::import::table_slice_type, layout);
+  auto slice = slice_builder->finish();
   REQUIRE(slice);
   state.meta_idx.add(state.id, *slice);
   // Serialize partition.
@@ -179,10 +181,11 @@ TEST(full partition roundtrip) {
   REQUIRE(partition);
   // Add data to the partition.
   auto layout = vast::record_type{{"x", vast::count_type{}}}.name("y");
-  vast::msgpack_table_slice_builder builder(layout);
-  CHECK(builder.add(0u));
-  auto slice = builder.finish();
-  auto data = std::vector<vast::table_slice_ptr>{slice};
+  auto builder = vast::factory<vast::table_slice_builder>::make(
+    vast::defaults::import::table_slice_type, layout);
+  CHECK(builder->add(0u));
+  auto slice = builder->finish();
+  auto data = std::vector<vast::table_slice>{slice};
   auto src = vast::detail::spawn_container_source(sys, data, partition);
   REQUIRE(src);
   run();
