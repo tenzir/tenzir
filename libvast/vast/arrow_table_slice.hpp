@@ -32,9 +32,49 @@
 
 namespace vast {
 
+// -- forward-declarations -----------------------------------------------------
+
+namespace fbs::table_slice::arrow {
+
+struct v0;
+
+} // namespace fbs::table_slice::arrow
+
 namespace v1 {
 
-class arrow_table_slice final {};
+/// A table slice that stores elements encoded in the
+/// [Arrow](https://arrow.org) format. The implementation stores data in
+/// column-major order.
+class arrow_table_slice final {
+public:
+  // -- constructors, destructors, and assignment operators --------------------
+
+  arrow_table_slice(const fbs::table_slice::arrow::v0& slice) noexcept;
+  ~arrow_table_slice() noexcept;
+
+  // -- table slice facade------------------------------------------------------
+
+  table_slice::size_type rows() const noexcept;
+
+  table_slice::size_type columns() const noexcept;
+
+  record_type layout() const noexcept;
+
+  data_view
+  at(table_slice::size_type row, table_slice::size_type column) const noexcept;
+
+  void append_column_to_index(id offset, table_slice::size_type column,
+                              value_index& idx) const;
+
+private:
+  // -- implementation details -------------------------------------------------
+
+  /// A reference to the underlying FlatBuffers table.
+  const fbs::table_slice::arrow::v0& slice_;
+
+  /// A pointer to the record batch.
+  std::shared_ptr<arrow::RecordBatch> record_batch_ = nullptr;
+};
 
 } // namespace v1
 
