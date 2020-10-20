@@ -57,8 +57,6 @@ namespace v1 {
 
 class arrow_table_slice;
 class arrow_table_slice_builder;
-class caf_table_slice;
-class caf_table_slice_builder;
 class msgpack_table_slice;
 class msgpack_table_slice_builder;
 class table_slice;
@@ -72,8 +70,6 @@ inline namespace v0 {
 
 class arrow_table_slice;
 class arrow_table_slice_builder;
-class caf_table_slice;
-class caf_table_slice_builder;
 class msgpack_table_slice;
 class msgpack_table_slice_builder;
 class table_slice;

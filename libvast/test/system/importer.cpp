@@ -18,7 +18,6 @@
 #include "vast/test/fixtures/actor_system_and_events.hpp"
 #include "vast/test/test.hpp"
 
-#include "vast/caf_table_slice_builder.hpp"
 #include "vast/concept/printable/stream.hpp"
 #include "vast/defaults.hpp"
 #include "vast/detail/make_io_stream.hpp"

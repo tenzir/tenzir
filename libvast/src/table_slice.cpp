@@ -31,8 +31,6 @@
 
 // -- v0 includes --------------------------------------------------------------
 
-#include "vast/caf_table_slice.hpp"
-#include "vast/caf_table_slice_builder.hpp"
 #include "vast/chunk.hpp"
 #include "vast/defaults.hpp"
 #include "vast/detail/append.hpp"

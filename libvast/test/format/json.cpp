@@ -12,6 +12,7 @@
  ******************************************************************************/
 
 #include "vast/format/json.hpp"
+
 #include "vast/format/json/suricata.hpp"
 
 #define SUITE format
@@ -20,10 +21,11 @@
 #include "vast/test/fixtures/events.hpp"
 #include "vast/test/test.hpp"
 
-#include "vast/caf_table_slice_builder.hpp"
 #include "vast/concept/parseable/to.hpp"
 #include "vast/concept/parseable/vast/json.hpp"
 #include "vast/concept/parseable/vast/time.hpp"
+#include "vast/table_slice_builder.hpp"
+#include "vast/table_slice_builder_factory.hpp"
 
 using namespace vast;
 using namespace std::string_literals;
@@ -80,7 +82,8 @@ TEST(json to data) {
                             {"mcs", map_type{count_type{}, string_type{}}}}
                   .name("layout");
   auto flat = flatten(layout);
-  auto builder = caf_table_slice_builder{flat};
+  auto builder = factory<table_slice_builder>::make(
+    defaults::import::table_slice_type, flat);
   std::string_view str = R"json({
     "b": true,
     "c": 424242,
@@ -102,7 +105,7 @@ TEST(json to data) {
   auto jn = unbox(to<json>(str));
   auto xs = caf::get<json::object>(jn);
   format::json::add(builder, xs, flat);
-  auto ptr = builder.finish();
+  auto ptr = builder->finish();
   REQUIRE(ptr);
   CHECK(ptr->at(0, 11) == data{enumeration{2}});
   auto reference = map{};
@@ -117,9 +120,8 @@ TEST_DISABLED(suricata) {
   reader_type reader{defaults::import::table_slice_type, caf::settings{},
                      std::move(input)};
   std::vector<table_slice_ptr> slices;
-  auto add_slice = [&](table_slice_ptr ptr) {
-    slices.emplace_back(std::move(ptr));
-  };
+  auto add_slice
+    = [&](table_slice_ptr ptr) { slices.emplace_back(std::move(ptr)); };
   auto [err, num] = reader.read(2, 5, add_slice);
   CHECK_EQUAL(err, ec::end_of_input);
   REQUIRE_EQUAL(num, 2u);

@@ -12,10 +12,11 @@
  ******************************************************************************/
 
 #define SUITE partition
+#include "vast/system/partition.hpp"
+
 #include "vast/test/fixtures/dummy_index.hpp"
 #include "vast/test/test.hpp"
 
-#include "vast/caf_table_slice.hpp"
 #include "vast/concept/parseable/to.hpp"
 #include "vast/concept/parseable/vast/expression.hpp"
 #include "vast/concept/printable/to_string.hpp"
@@ -25,7 +26,6 @@
 #include "vast/ids.hpp"
 #include "vast/system/evaluator.hpp"
 #include "vast/system/indexer.hpp"
-#include "vast/system/partition.hpp"
 #include "vast/table_slice.hpp"
 
 #include <caf/atom.hpp>
@@ -166,7 +166,7 @@ struct fixture : fixtures::dummy_index {
   partition_ptr put;
 };
 
-} // namespace <anonymous>
+} // namespace
 
 FIXTURE_SCOPE(partition_tests, fixture)
 
@@ -269,7 +269,12 @@ TEST_DISABLED(integer rows lookup) {
     integer_type col_type;
     record_type layout{{"value", col_type}};
     auto rows = make_rows(1, 2, 3, 1, 2, 3, 1, 2, 3);
-    ingest(caf_table_slice::make(layout, rows));
+    auto builder = factory<table_slice_builder>::make(
+      defaults::import::table_slice_type, layout);
+    for (const auto& row : rows)
+      for (const auto& field : row)
+        REQUIRE(builder->add(field));
+    ingest(builder->finish());
     MESSAGE("verify partition content");
     auto res = [&](auto... args) { return make_ids({args...}, rows.size()); };
     CHECK_EQUAL(query(":int == +1"), res(0u, 3u, 6u));
@@ -290,9 +295,8 @@ TEST_DISABLED(single partition zeek conn log lookup) {
     MESSAGE("ingest zeek conn logs");
     ingest(zeek_conn_log);
     MESSAGE("verify partition content");
-    auto res = [&](auto... args) {
-      return make_ids({args...}, zeek_conn_log.size());
-    };
+    auto res
+      = [&](auto... args) { return make_ids({args...}, zeek_conn_log.size()); };
     CHECK_EQUAL(rank(query("id.resp_p == 53/?")), 3u);
     CHECK_EQUAL(rank(query("id.resp_p == 137/?")), 5u);
     CHECK_EQUAL(rank(query("id.resp_p == 53/? || id.resp_p == 137/?")), 8u);

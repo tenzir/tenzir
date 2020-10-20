@@ -13,8 +13,6 @@
 
 #include "vast/table_slice_builder_factory.hpp"
 
-#include "vast/caf_table_slice.hpp"
-#include "vast/caf_table_slice_builder.hpp"
 #include "vast/config.hpp"
 #include "vast/msgpack_table_slice.hpp"
 #include "vast/msgpack_table_slice_builder.hpp"
@@ -37,7 +35,6 @@ void factory_traits<v1::table_slice_builder>::initialize() {
 
 void factory_traits<v0::table_slice_builder>::initialize() {
   using f = factory<v0::table_slice_builder>;
-  f::add<v0::caf_table_slice_builder>(v0::caf_table_slice::class_id);
   f::add<v0::msgpack_table_slice_builder>(v0::msgpack_table_slice::class_id);
 #if VAST_HAVE_ARROW
   f::add<v0::arrow_table_slice_builder>(v0::arrow_table_slice::class_id);

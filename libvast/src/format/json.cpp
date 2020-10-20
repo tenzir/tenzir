@@ -219,13 +219,13 @@ const char* writer::name() const {
   return "json-writer";
 }
 
-caf::error add(table_slice_builder& builder, const vast::json::object& xs,
+caf::error add(table_slice_builder_ptr builder, const vast::json::object& xs,
                const record_type& layout) {
   for (auto& field : layout.fields) {
     auto i = lookup(field.name, xs);
     // Non-existing fields are treated as empty (unset).
     if (!i) {
-      if (!builder.add(make_data_view(caf::none)))
+      if (!builder->add(make_data_view(caf::none)))
         return make_error(ec::unspecified, "failed to add caf::none to table "
                                            "slice builder");
       continue;
@@ -234,7 +234,7 @@ caf::error add(table_slice_builder& builder, const vast::json::object& xs,
     if (!x)
       return make_error(ec::convert_error, x.error().context(),
                         "could not convert", field.name, ":", to_string(*i));
-    if (!builder.add(make_data_view(*x)))
+    if (!builder->add(make_data_view(*x)))
       return make_error(ec::type_clash, "unexpected type", field.name, ":",
                         to_string(*i));
   }
