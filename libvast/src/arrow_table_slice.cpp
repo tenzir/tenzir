@@ -602,7 +602,8 @@ namespace v1 {
 arrow_table_slice::arrow_table_slice(
   const fbs::table_slice::arrow::v0& slice) noexcept
   : slice_{slice}, record_batch_{decode_record_batch(slice_.record_batch())} {
-  // nop
+  if (auto err = fbs::deserialize_bytes(slice_.layout(), layout_))
+    VAST_ERROR_ANON(__func__, "failed to deserialize layout:", render(err));
 }
 
 arrow_table_slice::~arrow_table_slice() noexcept = default;
@@ -615,13 +616,8 @@ table_slice::size_type arrow_table_slice::columns() const noexcept {
   return record_batch_->num_columns();
 }
 
-record_type arrow_table_slice::layout() const noexcept {
-  auto result = record_type{};
-  if (auto err = fbs::deserialize_bytes(slice_.layout(), result)) {
-    VAST_ERROR_ANON(__func__, "failed to deserialize layout:", render(err));
-    return {};
-  }
-  return result;
+const record_type& arrow_table_slice::layout() const noexcept {
+  return layout_;
 }
 
 data_view arrow_table_slice::at(table_slice::size_type row,

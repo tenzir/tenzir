@@ -70,7 +70,7 @@ table_slice table_slice_builder::finish() {
     VAST_ERROR(__func__, "failed to build table slice:", render(chunk.error()));
     return {};
   }
-  return table_slice{*chunk};
+  return table_slice{std::move(*chunk)};
 }
 
 void table_slice_builder::reset() {

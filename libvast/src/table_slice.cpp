@@ -79,26 +79,30 @@ table_slice::~table_slice() noexcept {
 }
 
 table_slice::table_slice(const table_slice& other) noexcept
-  : chunk_{other.chunk_}, offset_{other.offset_} {
+  : chunk_{other.chunk_}, offset_{other.offset_}, pimpl_{other.pimpl_} {
   ++num_instances_;
 }
 
 table_slice& table_slice::operator=(const table_slice& rhs) noexcept {
   chunk_ = rhs.chunk_;
   offset_ = rhs.offset_;
+  pimpl_ = rhs.pimpl_;
   ++num_instances_;
   return *this;
 }
 
 table_slice::table_slice(table_slice&& other) noexcept
   : chunk_{std::exchange(other.chunk_, {})},
-    offset_{std::exchange(other.offset_, invalid_id)} {
-  // nop
+    offset_{std::exchange(other.offset_, invalid_id)},
+    pimpl_{std::move(other.pimpl_)} {
+  other.pimpl_.invalid = nullptr;
 }
 
 table_slice& table_slice::operator=(table_slice&& rhs) noexcept {
   chunk_ = std::exchange(rhs.chunk_, {});
   offset_ = std::exchange(rhs.offset_, invalid_id);
+  pimpl_ = std::move(rhs.pimpl_);
+  rhs.pimpl_.invalid = nullptr;
   return *this;
 }
 
@@ -142,24 +146,24 @@ id table_slice::offset() const noexcept {
 /// Sets the offset in the ID space.
 void table_slice::offset(id offset) noexcept {
   // It is usually an error to set the offset when the table slice is shared.
-  VAST_ASSERT(chunk() && chunk()->unique());
+  VAST_ASSERT(chunk());
+  VAST_ASSERT(chunk()->unique());
   offset_ = std::move(offset);
 }
 
 // -- properties: rows ---------------------------------------------------------
 
 table_slice::size_type table_slice::rows() const noexcept {
-  return visit(
-    detail::overload{
-      []() noexcept -> size_type { return {}; },
-      [](const fbs::table_slice::msgpack::v0& slice) noexcept -> size_type {
-        return msgpack_table_slice{slice}.columns();
-      },
-      [](const fbs::table_slice::arrow::v0& slice) noexcept -> size_type {
-        return arrow_table_slice{slice}.columns();
-      },
-    },
-    *this);
+  return visit(detail::overload{
+                 []() noexcept -> size_type { return {}; },
+                 [&](const fbs::table_slice::msgpack::v0&) noexcept {
+                   return pimpl_.msgpack->rows();
+                 },
+                 [&](const fbs::table_slice::arrow::v0&) noexcept {
+                   return pimpl_.arrow->rows();
+                 },
+               },
+               *this);
 }
 
 table_slice_row table_slice::row(size_type row) const& {
@@ -175,17 +179,16 @@ table_slice_row table_slice::row(size_type row) && {
 // -- properties: columns ------------------------------------------------------
 
 table_slice::size_type table_slice::columns() const noexcept {
-  return visit(
-    detail::overload{
-      []() noexcept -> size_type { return {}; },
-      [](const fbs::table_slice::msgpack::v0& slice) noexcept -> size_type {
-        return msgpack_table_slice{slice}.columns();
-      },
-      [](const fbs::table_slice::arrow::v0& slice) noexcept -> size_type {
-        return arrow_table_slice{slice}.columns();
-      },
-    },
-    *this);
+  return visit(detail::overload{
+                 []() noexcept -> size_type { return {}; },
+                 [&](const fbs::table_slice::msgpack::v0&) noexcept {
+                   return pimpl_.msgpack->columns();
+                 },
+                 [&](const fbs::table_slice::arrow::v0&) noexcept {
+                   return pimpl_.arrow->columns();
+                 },
+               },
+               *this);
 }
 
 table_slice_column table_slice::column(size_type column) const& {
@@ -200,18 +203,20 @@ table_slice_column table_slice::column(size_type column) && {
 
 // -- properties: layout -------------------------------------------------------
 
-record_type table_slice::layout() const noexcept {
-  return visit(
-    detail::overload{
-      []() noexcept -> record_type { return {}; },
-      [](const fbs::table_slice::msgpack::v0& slice) noexcept -> record_type {
-        return msgpack_table_slice{slice}.layout();
-      },
-      [](const fbs::table_slice::arrow::v0& slice) noexcept -> record_type {
-        return arrow_table_slice{slice}.layout();
-      },
-    },
-    *this);
+const record_type& table_slice::layout() const noexcept {
+  return *visit(detail::overload{
+                  []() noexcept {
+                    static const auto result = record_type{};
+                    return &result;
+                  },
+                  [&](const fbs::table_slice::msgpack::v0&) noexcept {
+                    return &pimpl_.msgpack->layout();
+                  },
+                  [&](const fbs::table_slice::arrow::v0&) noexcept {
+                    return &pimpl_.arrow->layout();
+                  },
+                },
+                *this);
 }
 
 // -- properties: data access --------------------------------------------------
@@ -219,22 +224,39 @@ record_type table_slice::layout() const noexcept {
 data_view table_slice::at(size_type row, size_type column) const {
   VAST_ASSERT(row < rows());
   VAST_ASSERT(column < columns());
-  return visit(
-    detail::overload{
-      []() noexcept -> data_view {
-        // The preconditions imply that this handler can never be
-        // called.
-        die("logic error: invalid table slices cannot be accessed");
-      },
-      [&](const fbs::table_slice::msgpack::v0& slice) noexcept -> data_view {
-        return msgpack_table_slice{slice}.at(row, column);
-      },
-      [&](const fbs::table_slice::arrow::v0& slice) noexcept -> data_view {
-        return arrow_table_slice{slice}.at(row, column);
-      },
-    },
-    *this);
+  return visit(detail::overload{
+                 []() noexcept -> data_view {
+                   // The preconditions imply that this handler can never be
+                   // called.
+                   die("logic error: invalid table slices cannot be accessed");
+                 },
+                 [&](const fbs::table_slice::msgpack::v0&) noexcept {
+                   return pimpl_.msgpack->at(row, column);
+                 },
+                 [&](const fbs::table_slice::arrow::v0&) noexcept {
+                   return pimpl_.arrow->at(row, column);
+                 },
+               },
+               *this);
 }
+
+void table_slice::append_column_to_index(size_type column,
+                                         value_index& idx) const {
+  visit(detail::overload{
+          []() noexcept {
+            // An invalid slice cannot be added to a value index, so this is
+            // just a nop.
+          },
+          [&](const fbs::table_slice::msgpack::v0&) {
+            pimpl_.msgpack->append_column_to_index(offset(), column, idx);
+          },
+          [&](const fbs::table_slice::arrow::v0&) {
+            pimpl_.arrow->append_column_to_index(offset(), column, idx);
+          },
+        },
+        *this);
+}
+
 // -- type introspection -------------------------------------------------------
 
 const chunk_ptr& table_slice::chunk() const noexcept {
@@ -247,8 +269,24 @@ size_t table_slice::instances() noexcept {
 
 // -- implementation details ---------------------------------------------------
 
-table_slice::table_slice(chunk_ptr chunk) noexcept : chunk_{std::move(chunk)} {
+table_slice::table_slice(chunk_ptr&& chunk) noexcept
+  : chunk_{std::move(chunk)} {
   VAST_ASSERT(chunk_);
+  VAST_ASSERT(chunk_->unique());
+  visit(detail::overload{
+          []() noexcept {
+            // nop
+          },
+          [this](const fbs::table_slice::arrow::v0& slice) noexcept {
+            pimpl_.arrow = new arrow_table_slice{slice};
+            chunk_->add_deletion_step([this] { delete pimpl_.arrow; });
+          },
+          [this](const fbs::table_slice::msgpack::v0& slice) noexcept {
+            pimpl_.msgpack = new msgpack_table_slice{slice};
+            chunk_->add_deletion_step([this] { delete pimpl_.msgpack; });
+          },
+        },
+        *this);
 }
 
 // -- row operations -----------------------------------------------------------

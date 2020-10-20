@@ -273,7 +273,8 @@ namespace v1 {
 msgpack_table_slice::msgpack_table_slice(
   const fbs::table_slice::msgpack::v0& slice) noexcept
   : slice_{slice} {
-  // nop
+  if (auto err = fbs::deserialize_bytes(slice_.layout(), layout_))
+    VAST_ERROR_ANON(__func__, "failed to deserialize layout:", render(err));
 }
 
 msgpack_table_slice::~msgpack_table_slice() noexcept = default;
@@ -286,13 +287,8 @@ table_slice::size_type msgpack_table_slice::columns() const noexcept {
   return layout().fields.size();
 }
 
-record_type msgpack_table_slice::layout() const noexcept {
-  auto result = record_type{};
-  if (auto err = fbs::deserialize_bytes(slice_.layout(), result)) {
-    VAST_ERROR_ANON(__func__, "failed to deserialize layout:", render(err));
-    return {};
-  }
-  return result;
+const record_type& msgpack_table_slice::layout() const noexcept {
+  return layout_;
 }
 
 data_view

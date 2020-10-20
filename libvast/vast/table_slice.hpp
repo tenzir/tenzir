@@ -116,7 +116,7 @@ public:
   // -- properties: layout -----------------------------------------------------
 
   /// @returns The table layout.
-  record_type layout() const noexcept;
+  const record_type& layout() const noexcept;
 
   // -- properties: data access ------------------------------------------------
 
@@ -127,6 +127,13 @@ public:
   /// @pre `row < rows()`
   /// @pre `column < columns()`
   data_view at(size_type row, size_type column) const;
+
+  /// Appends all values in column `column` to `idx`.
+  /// @param column A view on a table slice column.
+  /// @param idx The value index to append `column` to.
+  /// @pre `column < columns()`
+  /// @relates table_slice
+  void append_column_to_index(size_type column, value_index& idx) const;
 
   // -- type introspection -----------------------------------------------------
 
@@ -152,15 +159,24 @@ private:
   /// Constructs a table slice from a chunk.
   /// @param chunk The chunk containing a blob of binary data.
   /// @pre `chunk`
+  /// @pre `chunk->unique()`
   /// @post `chunk()`
   /// @relates table_slice_builder
-  explicit table_slice(chunk_ptr chunk) noexcept;
+  explicit table_slice(chunk_ptr&& chunk) noexcept;
 
   /// The raw data of the table slice.
   chunk_ptr chunk_ = nullptr;
 
   /// The offset in the id space.
   id offset_ = invalid_id;
+
+  /// A pointer to the actual table slice implementation. The lifetime of the
+  /// implementation-specifics is tied to the lifetime of the chunk.
+  union {
+    void* invalid = nullptr;
+    msgpack_table_slice* msgpack;
+    arrow_table_slice* arrow;
+  } pimpl_;
 
   /// The number of in-memory table slices.
   inline static std::atomic<size_t> num_instances_ = 0;
@@ -218,14 +234,6 @@ table_slice::size_type rows(const std::vector<table_slice>& slices);
 /// @returns The set of row IDs in *slice* for which *expr* yields true.
 /// @relates table_slice
 ids evaluate(const expression& expr, const table_slice& slice);
-
-// -- column operations --------------------------------------------------------
-
-/// Appends all values in column `column` to `idx`.
-/// @param column A view on a table slice column.
-/// @param idx The value index to append `column` to.
-/// @relates table_slice
-void append_column_to_index(const table_slice_column& column, value_index& idx);
 
 } // namespace v1
 

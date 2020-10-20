@@ -62,7 +62,7 @@ public:
 
   table_slice::size_type columns() const noexcept;
 
-  record_type layout() const noexcept;
+  const record_type& layout() const noexcept;
 
   data_view
   at(table_slice::size_type row, table_slice::size_type column) const noexcept;
@@ -75,6 +75,9 @@ private:
 
   /// A reference to the underlying FlatBuffers table.
   const fbs::table_slice::msgpack::v0& slice_;
+
+  /// The layout of the slice.
+  record_type layout_ = {};
 };
 
 } // namespace v1
