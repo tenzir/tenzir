@@ -329,7 +329,7 @@ node_state::spawn_command(const invocation& inv,
   VAST_TRACE(inv);
   using std::begin;
   using std::end;
-  caf::response_promise rp;
+  auto rp = this_node->make_response_promise();
   // We configured the command to have the name of the component.
   auto inv_name_split = detail::split(inv.full_name, " ");
   VAST_ASSERT(inv_name_split.size() > 1);
@@ -382,16 +382,19 @@ node_state::spawn_command(const invocation& inv,
     return caf::make_message(*component);
   };
   auto handle_taxonomies = [=](const expression& e) mutable {
+    VAST_DEBUG(this_node, "received the substituted expression", e);
     spawn_inv.arguments = std::vector{to_string(e)};
     spawn_actually(spawn_inv);
   };
   // Retrieve taxonomies and delay spawning until the response arrives if we're
   // dealing with a query...
   auto query_handlers
-    = std::set<std::string>{"counter", "eraser", "exporter", "pivoter"};
+    = std::set<std::string>{"counter", "exporter", "pivoter", "explorer"};
   if (query_handlers.count(comp_type) > 0u) {
-    if (auto tr = this_node->state.registry.find_by_label("type_registry")) {
+    if (auto tr = this_node->state.registry.find_by_label("type-registry")) {
       auto expr = normalized_and_validated(spawn_inv.arguments);
+      if (!expr)
+        return make_message(expr.error());
       this_node
         ->request(caf::actor_cast<type_registry_type>(tr),
                   defaults::system::initial_request_timeout, atom::resolve_v,

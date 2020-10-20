@@ -15,6 +15,7 @@
 
 #include "vast/defaults.hpp"
 #include "vast/detail/fill_status_map.hpp"
+#include "vast/directory.hpp"
 #include "vast/error.hpp"
 #include "vast/event_types.hpp"
 #include "vast/load.hpp"
@@ -155,6 +156,35 @@ type_registry(type_registry_actor self, const path& dir) {
     [=](atom::put, taxonomies t) {
       VAST_TRACE("");
       self->state.taxonomies = std::move(t);
+    },
+    [=](atom::load) -> caf::result<atom::ok> {
+      VAST_DEBUG(self, "reloads taxonomies");
+      auto dirs = get_schema_dirs(self->system().config());
+      concepts_type acc;
+      for (const auto& dir : dirs) {
+        if (!exists(dir))
+          continue;
+        for (auto& file : directory{dir}) {
+          if (file.extension() != ".yml" && file.extension() != ".yaml")
+            continue;
+          switch (file.kind()) {
+            default:
+              continue;
+            case path::regular_file:
+            case path::symlink:
+              auto contents = load_contents(file);
+              if (!contents)
+                return contents.error();
+              auto yaml = from_yaml(*contents);
+              if (!yaml)
+                return yaml.error();
+              if (auto err = extract_concepts(*yaml, acc))
+                return err;
+          }
+        }
+      }
+      self->state.taxonomies = taxonomies{acc, models_type{}};
+      return atom::ok_v;
     },
     [=](atom::resolve, const expression& e) {
       return resolve(self->state.taxonomies, e, self->state.data);
