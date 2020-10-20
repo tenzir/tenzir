@@ -19,6 +19,9 @@
 #include "vast/test/test.hpp"
 
 #include "vast/ids.hpp"
+#include "vast/schema.hpp"
+#include "vast/table_slice_builder.hpp"
+#include "vast/table_slice_builder_factory.hpp"
 
 #include <caf/make_copy_on_write.hpp>
 #include <caf/test/dsl.hpp>
@@ -26,11 +29,100 @@
 using namespace vast;
 using namespace std::string_literals;
 
+namespace {
+
+#if 0
+
+/// Constructs table slices filled with random content for testing purposes.
+/// @param num_slices The number of table slices to generate.
+/// @param slice_size The number of rows per table slices.
+/// @param layout The layout of the table slice.
+/// @param offset The offset of the first table slize.
+/// @param seed The seed value for initializing the random-number generator.
+/// @returns a list of randomnly filled table slices or an error.
+/// @relates table_slice
+caf::expected<std::vector<table_slice>>
+make_random_table_slices(std::vector<table_slice>::size_type num_slices,
+                         table_slice::size_type slice_size,
+                         record_type layout, id offset = 0, size_t seed = 0) {
+  auto test_schema = schema{};
+  test_schema.add(layout);
+  // We have no access to the actor system, so we can only pick the default
+  // table slice type here. This ignores any user-defined overrides.
+  // However, this function is only meant for testing anyways.
+  auto opts = caf::settings{};
+  caf::put(opts, "vast.import.test.seed", seed);
+  caf::put(opts, "vast.import.max-events", std::numeric_limits<size_t>::max());
+  format::test::reader generator{defaults::import::table_slice_type,
+                                 std::move(opts), nullptr};
+  generator.schema(std::move(test_schema));
+  auto result = std::vector<table_slice>{};
+  auto add_slice = [&](table_slice&& slice) {
+    slice.offset(offset);
+    offset += slice.rows();
+    result.emplace_back(std::move(slice));
+  };
+  result.reserve(num_slices);
+  if (auto err
+      = generator.read(num_slices * slice_size, slice_size, add_slice).first)
+    return err;
+  return result;
+}
+
+/// Converts the table slice into a 2-D matrix in row-major order such that
+/// each row represents an event.
+/// @param slice The table slice to convert.
+/// @param first_row An offset to the first row to consider.
+/// @param num_rows Then number of rows to consider. (0 = all rows)
+/// @returns a 2-D matrix of data instances corresponding to *slice*.
+/// @pre `first_row < slice.num_rows()`
+/// @pre `num_rows <= slice.num_rows() - first_row`
+/// @note This function exists primarily for unit testing because it performs
+/// excessive memory allocations.
+/// @relates table_slice
+std::vector<std::vector<data>>
+to_data(const table_slice& slice, v1::table_slice::size_type first_row = 0,
+        table_slice::size_type num_rows = 0) {
+  VAST_ASSERT(first_row < slice.num_rows());
+  VAST_ASSERT(num_rows <= slice.num_rows() - first_row);
+  if (num_rows == 0)
+    num_rows = slice.num_rows() - first_row;
+  std::vector<std::vector<data>> result;
+  result.reserve(num_rows);
+  for (size_t i = 0; i < num_rows; ++i) {
+    std::vector<data> xs;
+    xs.reserve(slice.num_columns());
+    for (size_t j = 0; j < slice.num_columns(); ++j)
+      xs.emplace_back(materialize(slice.at(first_row + i, j)));
+    result.push_back(std::move(xs));
+  }
+  return result;
+}
+
+/// Converts the table slices into a 2-D matrix in row-major order such that
+/// each row represents an event.
+/// @param slices The table slices to convert.
+/// @note This function exists primarily for unit testing because it performs
+/// excessive memory allocations.
+/// @relates table_slice
+std::vector<std::vector<data>>
+to_data(const std::vector<table_slice>& slices) {
+  std::vector<std::vector<data>> result;
+  result.reserve(num_rows(slices));
+  for (auto& slice : slices)
+    detail::append(result, to_data(slice));
+  return result;
+}
+
+#endif
+
+} // namespace
+
 FIXTURE_SCOPE(table_slice_tests, fixtures::table_slices)
 
 TEST(random integer slices) {
-  record_type layout{
-    {"i", integer_type{}.attributes({{"default", "uniform(100,200)"}})}};
+  record_type layout{{"i", integer_type{}.attributes({{"default", "uniform(100,"
+                                                                  "200)"}})}};
   layout.name("test.integers");
   auto slices = unbox(make_random_table_slices(10, 10, layout));
   CHECK_EQUAL(slices.size(), 10u);
