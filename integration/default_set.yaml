@@ -263,6 +263,16 @@ tests:
       - command: -N export ascii
         input: queries/multi_addr.txt
 
+  Concepts:
+    tags: [concepts]
+    fixture: ServerTester
+    steps:
+      - command: import zeek
+        input: data/pcap/zeek/conn.log.gz
+      - command: import suricata
+        input: data/pcap/suricata/eve.json.gz
+      - command: count "ecs.source.ip == 192.168.168.100"
+
   Pivot:
     tags: [pivot]
     steps:
