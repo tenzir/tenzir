@@ -89,9 +89,12 @@ extract(Reader&& reader, table_slice::size_type slice_size) {
 template <class Reader>
 std::vector<table_slice_ptr>
 inhale(const char* filename, table_slice::size_type slice_size) {
+  caf::settings settings;
+  // A non-positive value disables the timeout. We need to do this because the
+  // deterministic actor system is messing with the clocks.
+  caf::put(settings, "vast.import.batch-timeout", "0s");
   auto input = std::make_unique<std::ifstream>(filename);
-  Reader reader{defaults::import::table_slice_type, caf::settings{},
-                std::move(input)};
+  Reader reader{defaults::import::table_slice_type, settings, std::move(input)};
   return extract(reader, slice_size);
 }
 

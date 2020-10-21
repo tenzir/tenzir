@@ -194,11 +194,11 @@ auto make_import_command() {
       .add<caf::atom_value>("batch-encoding", "encoding type of table slices "
                                               "(arrow or msgpack)")
       .add<size_t>("batch-size", "upper bound for the size of a table slice")
-      .add<std::string>("batch-timeout", "timoeut after which batched table "
-                                         "slices are forwarded")
+      .add<std::string>("batch-timeout", "timeout after which batched "
+                                         "table slices are forwarded")
+      .add<std::string>("read-timeout", "timeout for waiting for incoming data")
       .add<bool>("blocking,b", "block until the IMPORTER forwarded all data")
-      .add<size_t>("max-events,n", "the maximum number of events to "
-                                   "import"));
+      .add<size_t>("max-events,n", "the maximum number of events to import"));
   import_->add_subcommand("zeek", "imports Zeek logs from STDIN or file",
                           documentation::vast_import_zeek,
                           source_opts("?vast.import.zeek"));
@@ -273,10 +273,10 @@ auto make_spawn_source_command() {
       .add<caf::atom_value>("batch-encoding", "encoding type of table slices "
                                               "(arrow or msgpack)")
       .add<size_t>("batch-size", "upper bound for the size of a table slice")
-      .add<std::string>("batch-timeout", "timoeut after which batched table "
-                                         "slices are forwarded")
-      .add<size_t>("max-events,n", "the maximum number of events to "
-                                   "import"));
+      .add<std::string>("batch-timeout", "timeout after which batched "
+                                         "table slices are forwarded")
+      .add<std::string>("read-timeout", "timeout for waiting for incoming data")
+      .add<size_t>("max-events,n", "the maximum number of events to import"));
   spawn_source->add_subcommand("csv",
                                "creates a new CSV source inside the node",
                                documentation::vast_spawn_source_csv,

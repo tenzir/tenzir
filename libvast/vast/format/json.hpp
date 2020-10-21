@@ -15,9 +15,7 @@
 
 #include "vast/concept/hashable/hash_append.hpp"
 #include "vast/concept/hashable/xxhash.hpp"
-#include "vast/concept/parseable/to.hpp"
 #include "vast/concept/parseable/vast/json.hpp"
-#include "vast/concept/parseable/vast/time.hpp"
 #include "vast/defaults.hpp"
 #include "vast/detail/flat_map.hpp"
 #include "vast/detail/line_range.hpp"
@@ -122,9 +120,8 @@ public:
   /// @param table_slice_type The ID for table slice type to build.
   /// @param options Additional options.
   /// @param in The stream of JSON objects.
-  explicit reader(caf::atom_value table_slice_type,
-                  const caf::settings& options,
-                  std::unique_ptr<std::istream> in = nullptr);
+  reader(caf::atom_value table_slice_type, const caf::settings& options,
+         std::unique_ptr<std::istream> in = nullptr);
 
   void reset(std::unique_ptr<std::istream> in);
 
@@ -159,15 +156,7 @@ template <class Selector>
 reader<Selector>::reader(caf::atom_value table_slice_type,
                          const caf::settings& options,
                          std::unique_ptr<std::istream> in)
-  : super(table_slice_type) {
-  if (auto read_timeout_arg
-      = caf::get_if<std::string>(&options, "vast.import.batch-timeout")) {
-    if (auto read_timeout = to<decltype(read_timeout_)>(*read_timeout_arg))
-      read_timeout_ = *read_timeout;
-    else
-      VAST_WARNING(this, "cannot set vast.import.batch-timeout to",
-                   *read_timeout_arg, "as it is not a valid duration");
-  }
+  : super(table_slice_type, options) {
   if (in != nullptr)
     reset(std::move(in));
 }
@@ -222,28 +211,18 @@ caf::error reader<Selector>::read_impl(size_t max_events, size_t max_slice_size,
   VAST_ASSERT(max_slice_size > 0);
   size_t produced = 0;
   table_slice_builder_ptr bptr = nullptr;
-  auto next_line = [&, start = std::chrono::steady_clock::now()] {
-    auto remaining = start + read_timeout_ - std::chrono::steady_clock::now();
-    if (remaining < std::chrono::steady_clock::duration::zero())
-      return true;
-    if (!bptr || bptr->rows() == 0) {
-      lines_->next();
-      return false;
-    }
-    return lines_->next_timeout(remaining);
-  };
   while (produced < max_events) {
-    // EOF check.
     if (lines_->done())
       return finish(cons, make_error(ec::end_of_input, "input exhausted"));
-    auto timeout = next_line();
-    // We must check not only for a timeout but also whether any events were
-    // produced to work around CAF's assumption that sources are always able to
-    // generate events. Once `caf::stream_source` can handle empty batches
-    // gracefully, the second check should be removed.
-    if (timeout && produced > 0) {
+    if (batch_timeout_ > reader_clock::duration::zero()
+        && last_batch_sent_ + batch_timeout_ < reader_clock::now()) {
+      VAST_DEBUG(this, "reached input timeout");
+      break;
+    }
+    bool timed_out = lines_->next_timeout(read_timeout_);
+    if (timed_out) {
       VAST_DEBUG(this, "reached input timeout at line", lines_->line_number());
-      return finish(cons, ec::timeout);
+      return ec::timeout;
     }
     auto& line = lines_->get();
     ++num_lines_;

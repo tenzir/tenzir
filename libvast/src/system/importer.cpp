@@ -171,13 +171,6 @@ caf::behavior importer(importer_actor* self, path dir, archive_type archive,
     },
     [=](caf::unit_t&, caf::downstream<table_slice_ptr>& out,
         table_slice_ptr x) {
-      if (!x) {
-        // The source sometimes generates invalid table slices in order to avoid
-        // stalling, since CAF expects stream sources to always be able to
-        // generate events.
-        VAST_DEBUG(self, "discards invalid table slice");
-        return;
-      }
       VAST_TRACE(VAST_ARG(x));
       auto& st = self->state;
       auto t = timer::start(st.measurement_);

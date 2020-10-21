@@ -21,8 +21,9 @@
 
 namespace vast::format {
 
-multi_layout_reader::multi_layout_reader(caf::atom_value table_slice_type)
-  : reader(table_slice_type) {
+multi_layout_reader::multi_layout_reader(caf::atom_value table_slice_type,
+                                         const caf::settings& options)
+  : reader(table_slice_type, options) {
   // nop
 }
 
@@ -44,6 +45,7 @@ caf::error multi_layout_reader::finish(consumer& f,
 }
 
 caf::error multi_layout_reader::finish(consumer& f, caf::error result) {
+  last_batch_sent_ = reader_clock::now();
   for (auto& kvp : builders_)
     if (auto err = finish(f, kvp.second))
       return err;

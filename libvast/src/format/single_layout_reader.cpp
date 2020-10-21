@@ -19,10 +19,13 @@
 #include "vast/table_slice_builder.hpp"
 #include "vast/table_slice_builder_factory.hpp"
 
+#include <chrono>
+
 namespace vast::format {
 
-single_layout_reader::single_layout_reader(caf::atom_value table_slice_type)
-  : reader(table_slice_type) {
+single_layout_reader::single_layout_reader(caf::atom_value table_slice_type,
+                                           const caf::settings& options)
+  : reader(table_slice_type, options) {
   // nop
 }
 
@@ -31,6 +34,7 @@ single_layout_reader::~single_layout_reader() {
 }
 
 caf::error single_layout_reader::finish(consumer& f, caf::error result) {
+  last_batch_sent_ = reader_clock::now();
   if (builder_ != nullptr && builder_->rows() > 0) {
     auto ptr = builder_->finish();
     // Override error in case we encounter an error in the builder.
@@ -45,6 +49,7 @@ bool single_layout_reader::reset_builder(record_type layout) {
   VAST_TRACE(VAST_ARG(table_slice_type_), VAST_ARG(layout));
   builder_ = factory<table_slice_builder>::make(table_slice_type_,
                                                 std::move(layout));
+  last_batch_sent_ = reader_clock::now();
   return builder_ != nullptr;
 }
 

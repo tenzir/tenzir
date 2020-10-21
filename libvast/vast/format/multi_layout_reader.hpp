@@ -23,7 +23,8 @@ namespace vast::format {
 /// Base class for readers that deal with multiple layouts.
 class multi_layout_reader : public reader {
 public:
-  explicit multi_layout_reader(caf::atom_value table_slice_type);
+  multi_layout_reader(caf::atom_value table_slice_type,
+                      const caf::settings& options);
 
   ~multi_layout_reader() override;
 

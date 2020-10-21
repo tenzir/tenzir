@@ -200,18 +200,25 @@ struct fixture : fixtures::deterministic_actor_system {
     using reader_type = format::zeek::reader;
     auto settings = caf::settings{};
     caf::put(settings, "vast.import.batch-timeout", "200ms");
+    caf::put(settings, "vast.import.read-timeout", "200ms");
     reader_type reader{defaults::import::table_slice_type, std::move(settings),
                        std::move(input)};
     std::vector<table_slice_ptr> slices;
     auto add_slice = [&](table_slice_ptr ptr) {
       slices.emplace_back(std::move(ptr));
     };
-    auto [err, num] = reader.read(std::numeric_limits<size_t>::max(),
-                                  slice_size, add_slice);
+    auto num = 0u;
+    caf::error err;
+    do {
+      auto [err_, num_] = reader.read(std::numeric_limits<size_t>::max(),
+                                      slice_size, add_slice);
+      num += num_;
+      err = err_;
+      if (err == ec::timeout && !expect_timeout)
+        FAIL("Zeek reader timed out: " << render(err));
+    } while (err == ec::timeout);
     if (expect_eof && err != ec::end_of_input)
       FAIL("Zeek reader did not exhaust input: " << render(err));
-    if (expect_timeout && err != ec::timeout)
-      FAIL("Zeek reader did not time out: " << render(err));
     if (!expect_eof && !expect_timeout && err)
       FAIL("Zeek reader failed to parse input: " << render(err));
     if (num != num_events)

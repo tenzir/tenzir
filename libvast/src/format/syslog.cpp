@@ -13,8 +13,6 @@
 
 #include "vast/format/syslog.hpp"
 
-#include "vast/concept/parseable/to.hpp"
-#include "vast/concept/parseable/vast/time.hpp"
 #include "vast/error.hpp"
 #include "vast/fwd.hpp"
 #include "vast/type.hpp"
@@ -62,17 +60,9 @@ type make_unknown_type() {
 
 reader::reader(caf::atom_value table_slice_type, const caf::settings& options,
                std::unique_ptr<std::istream> in)
-  : super(table_slice_type),
+  : super(table_slice_type, options),
     syslog_rfc5424_type_{make_rfc5424_type()},
     syslog_unkown_type_{make_unknown_type()} {
-  if (auto read_timeout_arg
-      = caf::get_if<std::string>(&options, "vast.import.batch-timeout")) {
-    if (auto read_timeout = to<decltype(read_timeout_)>(*read_timeout_arg))
-      read_timeout_ = *read_timeout;
-    else
-      VAST_WARNING(this, "cannot set vast.import.batch-timeout to",
-                   *read_timeout_arg, "as it is not a valid duration");
-  }
   if (in != nullptr)
     reset(std::move(in));
 }
@@ -106,27 +96,19 @@ const char* reader::name() const {
 caf::error
 reader::read_impl(size_t max_events, size_t max_slice_size, consumer& f) {
   table_slice_builder_ptr bptr = nullptr;
-  auto next_line = [&, start = std::chrono::steady_clock::now()] {
-    auto remaining = start + read_timeout_ - std::chrono::steady_clock::now();
-    if (remaining < std::chrono::steady_clock::duration::zero())
-      return true;
-    if (!bptr || bptr->rows() == 0) {
-      lines_->next();
-      return false;
-    }
-    return lines_->next_timeout(remaining);
-  };
-  for (size_t produced = 0; produced < max_events;) {
+  size_t produced = 0;
+  while (produced < max_events) {
     if (lines_->done())
       return finish(f, make_error(ec::end_of_input, "input exhausted"));
-    auto timeout = next_line();
-    // We must check not only for a timeout but also whether any events were
-    // produced to work around CAF's assumption that sources are always able to
-    // generate events. Once `caf::stream_source` can handle empty batches
-    // gracefully, the second check should be removed.
-    if (timeout && produced > 0) {
+    if (batch_timeout_ > reader_clock::duration::zero()
+        && last_batch_sent_ + batch_timeout_ < reader_clock::now()) {
+      VAST_DEBUG(this, "reached input timeout");
+      break;
+    }
+    auto timed_out = lines_->next_timeout(read_timeout_);
+    if (timed_out) {
       VAST_DEBUG(this, "reached input timeout at line", lines_->line_number());
-      return finish(f, ec::timeout);
+      return ec::timeout;
     }
     auto& line = lines_->get();
     if (line.empty()) {
@@ -174,7 +156,7 @@ reader::read_impl(size_t max_events, size_t max_slice_size, consumer& f) {
     }
     ++produced;
   }
-  return caf::none;
+  return finish(f);
 }
 
 } // namespace syslog

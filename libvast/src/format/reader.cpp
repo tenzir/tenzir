@@ -13,14 +13,36 @@
 
 #include "vast/format/reader.hpp"
 
+#include "vast/concept/parseable/to.hpp"
+#include "vast/concept/parseable/vast/time.hpp"
+#include "vast/logger.hpp"
+
+#include <caf/settings.hpp>
+
 namespace vast::format {
 
 reader::consumer::~consumer() {
   // nop
 }
-reader::reader(caf::atom_value table_slice_type)
+reader::reader(caf::atom_value table_slice_type, const caf::settings& options)
   : table_slice_type_(table_slice_type) {
-  // nop
+  if (auto batch_timeout_arg
+      = caf::get_if<std::string>(&options, "vast.import.batch-timeout")) {
+    if (auto batch_timeout = to<decltype(batch_timeout_)>(*batch_timeout_arg))
+      batch_timeout_ = *batch_timeout;
+    else
+      VAST_WARNING(this, "cannot set vast.import.batch-timeout to",
+                   *batch_timeout_arg, "as it is not a valid duration");
+  }
+  if (auto read_timeout_arg
+      = caf::get_if<std::string>(&options, "vast.import.read-timeout")) {
+    if (auto read_timeout = to<decltype(batch_timeout_)>(*read_timeout_arg))
+      read_timeout_ = *read_timeout;
+    else
+      VAST_WARNING(this, "cannot set vast.import.read-timeout to",
+                   *read_timeout_arg, "as it is not a valid duration");
+  }
+  last_batch_sent_ = reader_clock::now();
 }
 
 reader::~reader() {

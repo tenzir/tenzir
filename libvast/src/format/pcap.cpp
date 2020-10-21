@@ -15,8 +15,6 @@
 
 #include "vast/byte.hpp"
 #include "vast/community_id.hpp"
-#include "vast/concept/parseable/to.hpp"
-#include "vast/concept/parseable/vast/time.hpp"
 #include "vast/defaults.hpp"
 #include "vast/detail/assert.hpp"
 #include "vast/detail/byte_swap.hpp"
@@ -62,7 +60,7 @@ inline const auto pcap_packet_type_community_id = make_packet_type(
 
 reader::reader(caf::atom_value id, const caf::settings& options,
                std::unique_ptr<std::istream>)
-  : super(id) {
+  : super(id, options) {
   using defaults_t = vast::defaults::import::pcap;
   using caf::get_if;
   std::string category = defaults_t::category;
@@ -85,14 +83,6 @@ reader::reader(caf::atom_value id, const caf::settings& options,
     = community_id_ ? pcap_packet_type_community_id : pcap_packet_type;
   last_stats_ = {};
   discard_count_ = 0;
-  if (auto read_timeout_arg
-      = caf::get_if<std::string>(&options, "vast.import.batch-timeout")) {
-    if (auto read_timeout = to<decltype(read_timeout_)>(*read_timeout_arg))
-      read_timeout_ = *read_timeout;
-    else
-      VAST_WARNING(this, "cannot set vast.import.batch-timeout to",
-                   *read_timeout_arg, "as it is not a valid duration");
-  }
 }
 
 void reader::reset(std::unique_ptr<std::istream>) {
@@ -257,17 +247,12 @@ caf::error reader::read_impl(size_t max_events, size_t max_slice_size,
     VAST_VERBOSE(this, "evicts flows after", max_age_, "s of inactivity");
     VAST_VERBOSE(this, "expires flow table every", expire_interval_, "s");
   }
-  auto start = std::chrono::steady_clock::now();
   auto produced = size_t{0};
   while (produced < max_events) {
-    // We must check not only for a timeout but also whether any events were
-    // produced to work around CAF's assumption that sources are always able to
-    // generate events. Once `caf::stream_source` can handle empty batches
-    // gracefully, the second check should be removed.
-    if (start + read_timeout_ < std::chrono::steady_clock::now()
-        && produced > 0) {
+    if (batch_timeout_ > reader_clock::duration::zero()
+        && last_batch_sent_ + batch_timeout_ < reader_clock::now()) {
       VAST_DEBUG(this, "reached input timeout");
-      return finish(f, ec::timeout);
+      break;
     }
     // Attempt to fetch next packet.
     const u_char* data;

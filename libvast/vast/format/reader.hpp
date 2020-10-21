@@ -14,15 +14,16 @@
 #pragma once
 
 #include "vast/defaults.hpp"
+#include "vast/detail/assert.hpp"
 #include "vast/fwd.hpp"
 #include "vast/system/report.hpp"
 #include "vast/table_slice.hpp"
-#include "vast/detail/assert.hpp"
 
 #include <caf/error.hpp>
 #include <caf/expected.hpp>
 #include <caf/fwd.hpp>
 
+#include <chrono>
 #include <cstddef>
 #include <string_view>
 
@@ -32,6 +33,8 @@ namespace vast::format {
 class reader {
 public:
   // -- member types -----------------------------------------------------------
+
+  using reader_clock = std::chrono::steady_clock;
 
   enum class inputs { file, inet };
 
@@ -52,7 +55,7 @@ public:
   // -- constructors, destructors, and assignment operators --------------------
 
   /// @param id Implementation ID for the table slice builder.
-  explicit reader(caf::atom_value table_slice_type);
+  reader(caf::atom_value table_slice_type, const caf::settings& options);
 
   virtual ~reader();
 
@@ -108,9 +111,13 @@ protected:
   virtual caf::error read_impl(size_t max_events, size_t max_slice_size,
                                consumer& f) = 0;
 
+public:
   caf::atom_value table_slice_type_;
-  std::chrono::steady_clock::duration read_timeout_
-    = vast::defaults::import::read_timeout;
+  reader_clock::duration batch_timeout_ = vast::defaults::import::batch_timeout;
+  reader_clock::duration read_timeout_ = vast::defaults::import::read_timeout;
+
+protected:
+  reader_clock::time_point last_batch_sent_;
 };
 
 } // namespace vast::format

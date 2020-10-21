@@ -11,6 +11,17 @@ Every entry has a category for which we use the following visual abbreviations:
 
 ## Unreleased
 
+- ⚠️ The new option `import.read-timeout` allows for setting an input timeout
+  for low volume sources. Reaching the timeout causes the current batch to be
+  forwarded immediately. This behavior was previously controlled by
+  `import.batch-timeout`, which now only controls the maximum buffer time
+  before the source forwards batches to the server.
+  [#1096](https://github.com/tenzir/vast/pull/1096)
+
+- 🐞 Sources that receive no or very little input do not block `vast status`
+  any longer.
+  [#1096](https://github.com/tenzir/vast/pull/1096)
+
 - ⚠️ VAST will now warn if a client command connects to a server that runs on a
   different version of the vast binary.
   [#1098](https://github.com/tenzir/vast/pull/1098)
@@ -54,7 +65,7 @@ Every entry has a category for which we use the following visual abbreviations:
 - ⚠️ The options that affect batches in the `import` command received new, more
   user-facing names: `import.table-slice-type`, `import.table-slice-size`, and
   `import.read-timeout` are now called `import.batch-encoding`,
-  `import.batch-size`, and `import.batch-timeout` respectively.
+  `import.batch-size`, and `import.read-timeout` respectively.
   [#1058](https://github.com/tenzir/vast/pull/1058)
 
 - 🐞 Stalled sources that were unable to generate new events no longer stop
