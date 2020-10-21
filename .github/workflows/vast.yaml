@@ -61,6 +61,7 @@ jobs:
       CCACHE_DIR: '${{ github.workspace }}/.ccache'
       CCACHE_COMPRESS: true
       CCACHE_COMPRESSLEVEL: 9
+      CCACHE_ABSSTDERR: true
       BUILD_DIR: build
     steps:
       - uses: actions/checkout@v2
@@ -198,6 +199,9 @@ jobs:
         run: |
           # Print statistics counter IDs and corresponding values.
           ccache --show-stats
+          # Print statistics about cache compression. Ignore failure because
+          # this is ccache>=4.0 only.
+          ccache --show-compression || true
 
       - name: Run Unit Tests
         env:
