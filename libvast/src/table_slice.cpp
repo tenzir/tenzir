@@ -199,6 +199,22 @@ table_slice_column table_slice::column(size_type column) && {
   return {std::move(*this), column};
 }
 
+caf::optional<table_slice_column>
+table_slice::column(std::string_view name) const& {
+  for (size_type column = 0; column < layout().fields.size(); ++column)
+    if (layout().fields[column].name == name)
+      return table_slice_column{*this, column};
+  return caf::none;
+}
+
+caf::optional<table_slice_column>
+table_slice::column(std::string_view name) && {
+  for (size_type column = 0; column < layout().fields.size(); ++column)
+    if (layout().fields[column].name == name)
+      return table_slice_column{*this, column};
+  return caf::none;
+}
+
 // -- properties: layout -------------------------------------------------------
 
 const record_type& table_slice::layout() const noexcept {
@@ -263,6 +279,13 @@ const chunk_ptr& table_slice::chunk() const noexcept {
 
 size_t table_slice::instances() noexcept {
   return table_slice::num_instances_;
+}
+
+caf::error unpack(const fbs::TableSliceBuffer& source, table_slice& dest) {
+  auto chunk = chunk::make(std::vector{
+    source.data()->Data(), source.data()->Data() + source.data()->size()});
+  dest = table_slice{std::move(chunk)};
+  return caf::none;
 }
 
 // -- implementation details ---------------------------------------------------

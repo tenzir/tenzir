@@ -13,37 +13,35 @@
 
 #pragma once
 
-// -- v1 includes --------------------------------------------------------------
-
 #include "vast/chunk.hpp"
 #include "vast/fwd.hpp"
 #include "vast/table_slice_encoding.hpp"
-#include "vast/view.hpp"
-
-#include <atomic>
-#include <utility>
-#include <vector>
-
-// -- v0 includes --------------------------------------------------------------
-
-#include "vast/fbs/table_slice.hpp"
-#include "vast/fwd.hpp"
-#include "vast/table_slice_header.hpp"
 #include "vast/type.hpp"
 #include "vast/view.hpp"
 
-#include <caf/fwd.hpp>
+#include <caf/meta/load_callback.hpp>
+#include <caf/meta/type_name.hpp>
 #include <caf/optional.hpp>
-#include <caf/ref_counted.hpp>
 
+#include <atomic>
 #include <cstddef>
 #include <limits>
+#include <optional>
 #include <string_view>
+#include <utility>
 #include <vector>
 
 namespace vast {
 
 namespace v1 {
+
+// -- forward-declarations -----------------------------------------------------
+
+namespace fbs {
+
+struct TableSliceBuffer;
+
+} // namespace fbs
 
 class table_slice final {
   friend class table_slice_builder;
@@ -113,6 +111,12 @@ public:
   table_slice_column column(size_type column) const&;
   table_slice_column column(size_type column) &&;
 
+  /// @returns An owning view on given column of a table slice, if a column with
+  /// the given name exists.
+  /// @param name The column name.
+  caf::optional<table_slice_column> column(std::string_view name) const&;
+  caf::optional<table_slice_column> column(std::string_view name) &&;
+
   // -- properties: layout -----------------------------------------------------
 
   /// @returns The table layout.
@@ -150,8 +154,22 @@ public:
   /// Inspection API.
   template <class Inspector>
   friend auto inspect(Inspector& f, table_slice& slice) {
-    return f(caf::meta::type_name("table_slice"), slice.chunk_, slice.offset_);
+    auto chunk = slice.chunk_;
+    auto offset = slice.offset_;
+    auto load = caf::meta::load_callback([&]() -> caf::error {
+      slice = table_slice{std::move(chunk)};
+      slice.offset(offset);
+      return caf::none;
+    });
+    return f(caf::meta::type_name("table_slice"), chunk, offset, load);
   }
+
+  /// Unpack a table slice from a nested FlatBuffer.
+  /// @param source FlatBuffer to unpack from
+  /// @param dest The table slice to unpack into
+  /// @returns An error on falure, or none.
+  friend caf::error
+  unpack(const fbs::TableSliceBuffer& source, table_slice& dest);
 
 private:
   // -- implementation details -------------------------------------------------
