@@ -307,7 +307,7 @@ caf:
     #  %t: thread id
     #  %a: actor id
     #  %%: '%'
-    file-format: %r %c %p %a %t %C %M %F:%L %m%n
+    file-format: %r %c %p %a %F:%L %m%n
     # Configures the minimum severity of messages written to the log file.
     # Possible values: quiet, error, warning, info, verbose, debug, trace.
     # File logging is only available for commands that start a node (e.g.,
