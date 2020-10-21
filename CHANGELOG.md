@@ -11,6 +11,11 @@ Every entry has a category for which we use the following visual abbreviations:
 
 ## Unreleased
 
+- 🧬 The query language now comes with support for concepts, the first part of
+  taxonomies. Concepts is a mechanism to unify the various naming schemes of
+  different data formats into a single, coherent nomenclature.
+  [#1102](https://github.com/tenzir/vast/pull/1102)
+
 - 🐞 The `vast status --detailed` command now correctly shows the status of all
   sources, i.e., `vast import` or `vast spawn source` commands.
   [#1109](https://github.com/tenzir/vast/pull/1109)
