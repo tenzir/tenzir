@@ -206,19 +206,15 @@ get_schema(const caf::settings& options, const std::string& category) {
   if (sc && sf)
     make_error(ec::invalid_configuration, "had both schema and schema-file "
                                           "provided");
-  auto update = [&]() -> caf::expected<vast::schema> {
-    if (sc)
-      return to<vast::schema>(*sc);
-    if (sf)
-      return load_schema(*sf);
-    return caf::no_error;
-  }();
-  if (!update) {
-    if (update.error() != caf::no_error)
-      return update.error();
-    else
-      return schema;
-  }
+  if (!sc && !sf)
+    return schema;
+  caf::expected<vast::schema> update = caf::no_error;
+  if (sc)
+    update = to<vast::schema>(*sc);
+  else
+    update = load_schema(*sf);
+  if (!update)
+    return update.error();
   return schema::combine(schema, *update);
 }
 
@@ -241,8 +237,7 @@ get_schema_dirs(const caf::actor_system_config& cfg) {
   }
   if (auto user_dirs
       = caf::get_if<std::vector<std::string>>(&cfg, "vast.schema-paths"))
-    std::copy(user_dirs->begin(), user_dirs->end(),
-              std::inserter(result, result.end()));
+    result.insert(user_dirs->begin(), user_dirs->end());
   return result;
 }
 
@@ -259,8 +254,10 @@ caf::expected<schema> load_schema(const detail::stable_set<path>& schema_dirs) {
   vast::schema types;
   VAST_VERBOSE_ANON("looking for schema files in", schema_dirs);
   for (const auto& dir : schema_dirs) {
-    if (!exists(dir))
+    if (!exists(dir)) {
+      VAST_DEBUG_ANON(__func__, "skips non-existing directory:", dir);
       continue;
+    }
     vast::schema directory_schema;
     for (auto f : directory(dir)) {
       if (f.extension() == ".schema" && exists(f)) {

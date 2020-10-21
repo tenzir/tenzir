@@ -33,10 +33,9 @@ maybe_actor spawn_type_registry(node_actor* self, spawn_arguments& args) {
   self->request(handle, defaults::system::initial_request_timeout, atom::load_v)
     .await([](atom::ok) {},
            [](caf::error err) {
-             if (err)
-               VAST_WARNING_ANON("Type registry is not able to load taxonomy "
-                                 "definitions:",
-                                 render(err));
+             VAST_WARNING_ANON("Type registry is not able to load taxonomy "
+                               "definitions:",
+                               render(err));
            });
   VAST_VERBOSE(self, "spawned the type-registry");
   if (auto accountant = self->state.registry.find_by_label("accountant"))

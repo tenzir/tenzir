@@ -158,9 +158,9 @@ type_registry(type_registry_actor self, const path& dir) {
       self->state.taxonomies = std::move(t);
     },
     [=](atom::load) -> caf::result<atom::ok> {
-      VAST_DEBUG(self, "reloads taxonomies");
+      VAST_DEBUG(self, "loads taxonomies");
       auto dirs = get_schema_dirs(self->system().config());
-      concepts_type acc;
+      concepts_type concepts;
       for (const auto& dir : dirs) {
         if (!exists(dir))
           continue;
@@ -178,12 +178,12 @@ type_registry(type_registry_actor self, const path& dir) {
               auto yaml = from_yaml(*contents);
               if (!yaml)
                 return yaml.error();
-              if (auto err = extract_concepts(*yaml, acc))
+              if (auto err = extract_concepts(*yaml, concepts))
                 return err;
           }
         }
       }
-      self->state.taxonomies = taxonomies{acc, models_type{}};
+      self->state.taxonomies = taxonomies{std::move(concepts), models_type{}};
       return atom::ok_v;
     },
     [=](atom::resolve, const expression& e) {

@@ -149,7 +149,7 @@ resolve_concepts(const concepts_type& concepts, const expression& e,
       }
       switch (d.size()) {
         case 0:
-          return expression{pred};
+          return expression{std::move(pred)};
         case 1:
           return d[0];
         default:
