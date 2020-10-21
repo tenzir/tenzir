@@ -33,7 +33,7 @@ namespace vast::system {
 maybe_actor spawn_exporter(node_actor* self, spawn_arguments& args) {
   VAST_TRACE(VAST_ARG(args));
   // Parse given expression.
-  auto expr = system::normalized_and_validated(args);
+  auto expr = get_expression(args);
   if (!expr)
     return expr.error();
   // Parse query options.

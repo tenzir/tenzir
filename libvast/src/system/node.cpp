@@ -363,10 +363,9 @@ node_state::spawn_command(const invocation& inv,
     spawn_inv.options["import"] = import_opt;
     caf::put(spawn_inv.options, "vast.import", import_opt);
   }
-  auto spawn_actually = [=](const invocation& spawn_inv) mutable {
+  auto spawn_actually = [=](spawn_arguments& args) mutable {
     // Spawn our new VAST component.
-    spawn_arguments args{spawn_inv, this_node->state.dir, label};
-    auto component = spawn_component(spawn_inv, args);
+    auto component = spawn_component(args.inv, args);
     if (!component) {
       if (component.error())
         VAST_WARNING(
@@ -381,15 +380,14 @@ node_state::spawn_command(const invocation& inv,
     rp.deliver(*component);
     return caf::make_message(*component);
   };
-  auto handle_taxonomies = [=](const expression& e) mutable {
+  auto handle_taxonomies = [=](expression e) mutable {
     VAST_DEBUG(this_node, "received the substituted expression", e);
-    spawn_inv.arguments = std::vector{to_string(e)};
-    spawn_actually(spawn_inv);
+    spawn_arguments args{spawn_inv, this_node->state.dir, label, std::move(e)};
+    spawn_actually(args);
   };
   // Retrieve taxonomies and delay spawning until the response arrives if we're
   // dealing with a query...
-  auto query_handlers
-    = std::set<std::string>{"counter", "exporter", "pivoter", "explorer"};
+  auto query_handlers = std::set<std::string>{"counter", "exporter", "pivoter"};
   if (query_handlers.count(comp_type) > 0u) {
     if (auto tr = this_node->state.registry.find_by_label("type-registry")) {
       auto expr = normalized_and_validated(spawn_inv.arguments);
@@ -404,7 +402,8 @@ node_state::spawn_command(const invocation& inv,
     }
   }
   // ... or spawn the component right away if not.
-  return spawn_actually(spawn_inv);
+  spawn_arguments args{spawn_inv, this_node->state.dir, label, std::nullopt};
+  return spawn_actually(args);
 }
 
 caf::behavior node(node_actor* self, std::string name, path dir,
