@@ -27,20 +27,19 @@ jobs:
         sudo apt-get -qq update
         sudo apt-get -qqy install libpcap-dev libssl-dev lsb-release
         # Install Apache Arrow (c.f. https://arrow.apache.org/install/)
-        wget https://apache.bintray.com/arrow/$(lsb_release --id --short | tr 'A-Z' 'a-z')/apache-arrow-archive-keyring-latest-$(lsb_release --codename --short).deb
-        sudo apt-get -qqy install ./apache-arrow-archive-keyring-latest-$(lsb_release --codename --short).deb
+        # TODO: Revert the commit that introduced this version pinning once ch20162
+        # is done and we can use latest upstream again.
+        wget https://apache.bintray.com/arrow/ubuntu/pool/focal/main/a/apache-arrow-archive-keyring/apache-arrow-archive-keyring_1.0.1-1_all.deb
+        sudo apt-get -qqy install ./apache-arrow-archive-keyring_1.0.1-1_all.deb
         sudo apt-get -qq update
-        sudo apt-get -qqy install libarrow-dev
+        sudo apt-get -qqy install libarrow-dev=1.0.1-1
 
     # Fetch latest successful build of the 'VAST' workflow, master branch
     - name: Fetch VAST
       run: |
-        artifacts_url=$(curl -sL https://api.github.com/repos/tenzir/vast/actions/workflows/vast.yml/runs | jq -er '.workflow_runs | map(select((.conclusion? == "success") and (.head_branch? == "master") and (.workflow_url? == "https://api.github.com/repos/tenzir/vast/actions/workflows/27406") )) | .[0].artifacts_url' )
-        zip_url=$(curl -sL $artifacts_url | jq -er '.artifacts[] | select(.name | contains("-gcc.tar.gz")) | .archive_download_url')
-        curl --header 'authorization: Bearer ${{ secrets.GITHUB_TOKEN }}' -sL $zip_url | funzip > vast.tar.gz
-        mkdir -p vast
-        chmod -R +w vast/  # Ensure `tar` has permissions to overwrite files
-        tar --strip 1 --overwrite -C vast/ -xzvf vast.tar.gz
+        curl -L -O https://storage.googleapis.com/tenzir-public-data/vast-static-builds/vast-static-latest.tar.gz
+        tar xfz vast-static-latest.tar.gz
+        sudo ln -sf "$PWD/bin/vast" /usr/bin/vast
 
     - name: Set up Python ${{ matrix.python-version }}
       uses: actions/setup-python@v1
