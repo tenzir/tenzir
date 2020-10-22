@@ -45,4 +45,14 @@ caf::behavior terminator(caf::stateful_actor<terminator_state>* self,
                          std::chrono::milliseconds grace_period,
                          std::chrono::milliseconds kill_timeout);
 
+extern template caf::behavior
+terminator<policy::sequential>(caf::stateful_actor<terminator_state>*,
+                               std::chrono::milliseconds,
+                               std::chrono::milliseconds);
+
+extern template caf::behavior
+terminator<policy::parallel>(caf::stateful_actor<terminator_state>*,
+                             std::chrono::milliseconds,
+                             std::chrono::milliseconds);
+
 } // namespace vast::system
