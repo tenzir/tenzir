@@ -33,14 +33,11 @@ void merge_settings_impl(const caf::settings& src, caf::settings& dst,
                           dst[key].as_dictionary(), policy, depth + 1);
     } else {
       if constexpr (std::is_same_v<Policy, policy::merge_lists_tag>) {
-        if (caf::holds_alternative<caf::config_value::list>(value)) {
+        if (caf::holds_alternative<caf::config_value::list>(value)
+            && caf::holds_alternative<caf::config_value::list>(dst[key])) {
           const auto& src_list = caf::get<caf::config_value::list>(value);
-          if (caf::holds_alternative<caf::config_value::list>(dst[key])) {
-            auto& dst_list = dst[key].as_list();
-            dst_list.insert(dst_list.end(), src_list.begin(), src_list.end());
-          } else {
-            dst.insert_or_assign(key, src_list);
-          }
+          auto& dst_list = dst[key].as_list();
+          dst_list.insert(dst_list.end(), src_list.begin(), src_list.end());
         } else {
           dst.insert_or_assign(key, value);
         }
