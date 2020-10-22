@@ -17,25 +17,26 @@
 
 namespace vast::policy {
 
-struct deep_tag {};
-struct shallow_tag {};
+struct merge_lists_tag {};
+struct overwrite_lists_tag {};
 
-inline static constexpr deep_tag deep{};
-inline static constexpr shallow_tag shallow{};
+inline static constexpr merge_lists_tag merge_lists{};
+inline static constexpr overwrite_lists_tag overwrite_lists{};
 
 } // namespace vast::policy
 
 namespace vast::detail {
 
 /// Merge settings of `src` into `dst`, overwriting existing values from `dst`
-/// if necessary. Passing `policy::deep` enables merging of nested arrays.
+/// if necessary. Passing `policy::merge_lists` enables merging of nested lists.
 void merge_settings(const caf::settings& src, caf::settings& dst,
-                    policy::shallow_tag policy = policy::shallow);
+                    policy::overwrite_lists_tag policy
+                    = policy::overwrite_lists);
 
 /// Merge settings of `src` into `dst`, overwriting existing values from `dst`
-/// if necessary. Passing `policy::deep` enables merging of nested arrays.
+/// if necessary. Passing `policy::merge_lists` enables merging of nested lists.
 void merge_settings(const caf::settings& src, caf::settings& dst,
-                    policy::deep_tag policy);
+                    policy::merge_lists_tag policy);
 
 /// Remove empty settings objects from the tree.
 /// Example:

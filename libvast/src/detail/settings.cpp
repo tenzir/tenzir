@@ -32,7 +32,7 @@ void merge_settings_impl(const caf::settings& src, caf::settings& dst,
       merge_settings_impl(caf::get<caf::settings>(value),
                           dst[key].as_dictionary(), policy, depth + 1);
     } else {
-      if constexpr (std::is_same_v<Policy, policy::deep_tag>) {
+      if constexpr (std::is_same_v<Policy, policy::merge_lists_tag>) {
         if (caf::holds_alternative<caf::config_value::list>(value)) {
           const auto& src_list = caf::get<caf::config_value::list>(value);
           if (caf::holds_alternative<caf::config_value::list>(dst[key])) {
@@ -44,7 +44,7 @@ void merge_settings_impl(const caf::settings& src, caf::settings& dst,
         } else {
           dst.insert_or_assign(key, value);
         }
-      } else if constexpr (std::is_same_v<Policy, policy::shallow_tag>) {
+      } else if constexpr (std::is_same_v<Policy, policy::overwrite_lists_tag>) {
         dst.insert_or_assign(key, value);
       } else {
         static_assert(detail::always_false_v<Policy>, "unsupported merge "
@@ -57,12 +57,12 @@ void merge_settings_impl(const caf::settings& src, caf::settings& dst,
 } // namespace
 
 void merge_settings(const caf::settings& src, caf::settings& dst,
-                    policy::shallow_tag policy) {
+                    policy::overwrite_lists_tag policy) {
   return merge_settings_impl(src, dst, policy);
 }
 
 void merge_settings(const caf::settings& src, caf::settings& dst,
-                    policy::deep_tag policy) {
+                    policy::merge_lists_tag policy) {
   return merge_settings_impl(src, dst, policy);
 }
 
