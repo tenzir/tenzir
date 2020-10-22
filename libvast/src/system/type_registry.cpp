@@ -47,6 +47,10 @@ type_registry_state::status(status_verbosity v) const {
                    [](const auto& x) { return x.first; });
     std::sort(keys.begin(), keys.end());
     caf::put(tr_status, "types", keys);
+    // The list of defined concepts
+    auto& concepts_status = put_dictionary(tr_status, "concepts");
+    for (auto& concept_ : taxonomies.concepts)
+      concepts_status[concept_.first] = concept_.second;
     // The usual per-component status.
     detail::fill_status_map(tr_status, self);
   }
