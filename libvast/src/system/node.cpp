@@ -150,7 +150,7 @@ void collect_component_status(node_actor* self,
         atom::status_v, v)
       .then(
         [=, lab = label](caf::config_value::dictionary& xs) mutable {
-          detail::merge_settings(xs, req_state->content);
+          detail::merge_settings(xs, req_state->content, policy::deep);
           // Both handlers have a copy of req_state.
           if (req_state.use_count() == 2)
             deliver(std::move(req_state));

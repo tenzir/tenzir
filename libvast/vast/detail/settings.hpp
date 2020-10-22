@@ -15,11 +15,27 @@
 
 #include <caf/settings.hpp>
 
+namespace vast::policy {
+
+struct deep_tag {};
+struct shallow_tag {};
+
+inline static constexpr deep_tag deep{};
+inline static constexpr shallow_tag shallow{};
+
+} // namespace vast::policy
+
 namespace vast::detail {
 
-/// Merge settings of `src` into `dst`, overwriting existing values
-/// from `dst` if necessary.
-void merge_settings(const caf::settings& src, caf::settings& dst);
+/// Merge settings of `src` into `dst`, overwriting existing values from `dst`
+/// if necessary. Passing `policy::deep` enables merging of nested arrays.
+void merge_settings(const caf::settings& src, caf::settings& dst,
+                    policy::shallow_tag policy = policy::shallow);
+
+/// Merge settings of `src` into `dst`, overwriting existing values from `dst`
+/// if necessary. Passing `policy::deep` enables merging of nested arrays.
+void merge_settings(const caf::settings& src, caf::settings& dst,
+                    policy::deep_tag policy);
 
 /// Remove empty settings objects from the tree.
 /// Example:
