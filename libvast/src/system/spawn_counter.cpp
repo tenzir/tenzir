@@ -34,7 +34,7 @@ maybe_actor
 spawn_counter(system::node_actor* self, system::spawn_arguments& args) {
   VAST_TRACE(VAST_ARG(args));
   // Parse given expression.
-  auto expr = system::normalized_and_validated(args);
+  auto expr = get_expression(args);
   if (!expr)
     return expr.error();
   auto [index, archive]

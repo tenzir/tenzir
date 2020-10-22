@@ -751,7 +751,7 @@ add_custom_target(
 file(
   GLOB schema_files
   RELATIVE "${CMAKE_CURRENT_SOURCE_DIR}"
-  "schema/*.schema")
+  "schema/*")
 foreach (x ${schema_files})
   add_custom_command(
     TARGET vast-schema

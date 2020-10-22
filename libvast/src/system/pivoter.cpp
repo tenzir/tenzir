@@ -24,6 +24,7 @@
 #include "vast/table_slice.hpp"
 
 #include <caf/event_based_actor.hpp>
+#include <caf/settings.hpp>
 
 namespace vast::system {
 
@@ -128,7 +129,10 @@ caf::behavior pivoter(caf::stateful_actor<pivoter_state>* self, caf::actor node,
       auto query = to_string(expr);
       VAST_DEBUG(self, "queries for", xs.size(), pivot_field->name);
       VAST_TRACE(self, "spawns new exporter with query", query);
-      auto exporter_invocation = invocation{{}, "spawn exporter", {query}};
+      auto exporter_options = caf::settings{};
+      caf::put(exporter_options, "vast.export.disable-taxonomies", true);
+      auto exporter_invocation
+        = invocation{std::move(exporter_options), "spawn exporter", {query}};
       self->send(st.node, exporter_invocation);
       st.running_exporters++;
     },

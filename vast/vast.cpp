@@ -75,29 +75,8 @@ int main(int argc, char** argv) {
     cfg.config_files.emplace_back(std::move(cfg.config_file_path));
   for (auto& path : cfg.config_files)
     VAST_INFO_ANON("loaded configuration file:", path);
-  using string_list = std::vector<std::string>;
-  auto schema_dirs = detail::stable_set<vast::path>{};
-  if (!caf::get_or(cfg, "vast.no-default-schema", false)) {
-    // Get filesystem path to the executable.
-    auto binary = detail::objectpath();
-    if (!binary) {
-      VAST_ERROR_ANON("failed to get program path");
-      return EXIT_FAILURE;
-    }
-#if !VAST_RELOCATABLE_INSTALL
-    schema_dirs.insert(VAST_DATADIR "/vast/schema");
-#endif
-    schema_dirs.insert(binary->parent().parent() / "share" / "vast" / "schema");
-    if (const char* xdg_data_home = std::getenv("XDG_DATA_HOME"))
-      schema_dirs.insert(path{xdg_data_home} / "vast" / "schema");
-    else if (const char* home = std::getenv("HOME"))
-      schema_dirs.insert(path{home} / ".local" / "share" / "vast" / "schema");
-  }
-  if (auto user_dirs = caf::get_if<string_list>(&cfg, "vast.schema-paths"))
-    std::copy(user_dirs->begin(), user_dirs->end(),
-              std::inserter(schema_dirs, schema_dirs.end()));
   // Load event types.
-  if (auto schema = load_schema(std::move(schema_dirs))) {
+  if (auto schema = load_schema(cfg)) {
     event_types::init(*std::move(schema));
   } else {
     VAST_ERROR_ANON("failed to read schema dirs:", render(schema.error()));

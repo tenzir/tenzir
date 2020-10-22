@@ -15,6 +15,7 @@
 
 #include "vast/aliases.hpp"
 #include "vast/command.hpp"
+#include "vast/expression.hpp"
 #include "vast/fwd.hpp"
 
 #include <caf/fwd.hpp>
@@ -35,6 +36,9 @@ struct spawn_arguments {
   /// Label for the new component.
   const std::string& label;
 
+  /// An optional expression for components that expect one.
+  std::optional<expression> expr;
+
   /// Returns whether CLI arguments are empty.
   bool empty() const noexcept {
     return inv.arguments.empty();
@@ -46,11 +50,11 @@ struct spawn_arguments {
 caf::expected<expression>
 normalized_and_validated(const std::vector<std::string>& args);
 
-caf::expected<expression> normalized_and_validated(const spawn_arguments& args);
-
 caf::expected<expression>
 normalized_and_validated(std::vector<std::string>::const_iterator begin,
                          std::vector<std::string>::const_iterator end);
+
+caf::expected<expression> get_expression(const spawn_arguments& args);
 
 /// Attemps to read a schema file and parse its content. Can either 1) return
 /// nothing if the user didn't specifiy a schema file in `args.options`, 2)

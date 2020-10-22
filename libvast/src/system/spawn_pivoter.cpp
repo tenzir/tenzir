@@ -29,11 +29,17 @@ maybe_actor spawn_pivoter(node_actor* self, spawn_arguments& args) {
   auto target_name = arguments[0];
   // Parse given expression.
   auto query_begin = std::next(arguments.begin());
-  auto expr = system::normalized_and_validated(query_begin, arguments.end());
-  if (!expr)
-    return expr.error();
-  auto handle = self->spawn(pivoter, self, target_name, *expr);
-  VAST_VERBOSE(self, "spawned a pivoter for", to_string(*expr));
+  expression expr;
+  if (args.expr)
+    expr = *args.expr;
+  else {
+    auto expr_ = system::normalized_and_validated(query_begin, arguments.end());
+    if (!expr_)
+      return expr_.error();
+    expr = *expr_;
+  }
+  auto handle = self->spawn(pivoter, self, target_name, expr);
+  VAST_VERBOSE(self, "spawned a pivoter for", to_string(expr));
   return handle;
 }
 

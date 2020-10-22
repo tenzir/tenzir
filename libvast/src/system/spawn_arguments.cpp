@@ -52,6 +52,15 @@ normalized_and_validated(const spawn_arguments& args) {
   return normalized_and_validated(arguments.begin(), arguments.end());
 }
 
+caf::expected<expression> get_expression(const spawn_arguments& args) {
+  if (args.expr)
+    return *args.expr;
+  auto expr = system::normalized_and_validated(args.inv.arguments);
+  if (!expr)
+    return expr.error();
+  return *expr;
+}
+
 caf::expected<caf::optional<schema>> read_schema(const spawn_arguments& args) {
   auto schema_file_ptr = caf::get_if<std::string>(&args.inv.options, "schema");
   if (!schema_file_ptr)

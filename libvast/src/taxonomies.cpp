@@ -126,7 +126,7 @@ resolve_concepts(const concepts_type& concepts, const expression& e,
         auto& x = *current;
         auto concept_ = concepts.find(x);
         if (concept_ != concepts.end()) {
-          // x is a concpept, push target items to the back of the log, we
+          // x is a concept, push target items to the back of the log, we
           // will check if they are concepts themselves later.
           auto& replacements = concept_->second;
           // ri abbreviates "replacement iterator".
@@ -149,7 +149,7 @@ resolve_concepts(const concepts_type& concepts, const expression& e,
       }
       switch (d.size()) {
         case 0:
-          return expression{};
+          return expression{std::move(pred)};
         case 1:
           return d[0];
         default:

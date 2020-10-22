@@ -82,6 +82,24 @@ private:
 
 bool convert(const schema& s, json& j);
 
+/// Loads the complete schema for an invocation by combining the configured
+/// schemas with the ones passed directly as command line options.
+/// @param options The set of command line options.
+/// @param category The position in the subcommand tree at which the option
+///                 is expected.
+/// @returns The parsed schema.
+caf::expected<schema>
+get_schema(const caf::settings& options, const std::string& category);
+
+/// Gathers the list of paths to traverse for loading schema or taxonomies data.
+/// @param cfg The application config.
+/// @returns The list of schema directories.
+detail::stable_set<vast::path>
+get_schema_dirs(const caf::actor_system_config& cfg);
+
+/// Loads a single schema file.
+/// @param sf The file path.
+/// @returns The parsed schema.
 caf::expected<schema> load_schema(const path& sf);
 
 /// Loads *.schema files from the given directories.
@@ -93,7 +111,8 @@ caf::expected<schema> load_schema(const path& sf);
 caf::expected<vast::schema>
 load_schema(const detail::stable_set<path>& schema_dirs);
 
-caf::expected<schema>
-get_schema(const caf::settings& options, const std::string& category);
+/// Loads schemas according to the configuration. This is a convenience wrapper
+/// around *get_schema_dirs* and *load_schema*.
+caf::expected<vast::schema> load_schema(const caf::actor_system_config& cfg);
 
 } // namespace vast
