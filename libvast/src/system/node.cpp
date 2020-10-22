@@ -74,7 +74,9 @@ namespace vast::system {
 
 namespace {
 
-// Local commands need access to the node actor.
+// This is a side-channel to communicate the self pointer into the spawn- and
+// send-command functions, whose interfaces are constrained by the command
+// factory.
 thread_local node_actor* this_node;
 
 // Convenience function for wrapping an error into a CAF message.
@@ -189,10 +191,10 @@ maybe_actor spawn_accountant(node_actor* self, spawn_arguments& args) {
 }
 
 caf::expected<caf::actor>
-spawn_component(const invocation& inv, spawn_arguments& args) {
+spawn_component(node_actor* self, const invocation& inv,
+                spawn_arguments& args) {
   VAST_TRACE(VAST_ARG(inv), VAST_ARG(args));
   using caf::atom_uint;
-  auto self = this_node;
   auto i = node_state::component_factory.find(inv.full_name);
   if (i == node_state::component_factory.end())
     return make_error(ec::unspecified, "invalid spawn component");
@@ -200,26 +202,27 @@ spawn_component(const invocation& inv, spawn_arguments& args) {
 }
 
 caf::message kill_command(const invocation& inv, caf::actor_system&) {
+  auto self = this_node;
   auto first = inv.arguments.begin();
   auto last = inv.arguments.end();
   if (std::distance(first, last) != 1)
     return make_error_msg(ec::syntax_error, "expected exactly one component "
                                             "argument");
-  auto rp = this_node->make_response_promise();
+  auto rp = self->make_response_promise();
   auto& label = *first;
-  auto component = this_node->state.registry.find_by_label(label);
+  auto component = self->state.registry.find_by_label(label);
   if (!component) {
     rp.deliver(make_error(ec::unspecified, "no such component: " + label));
   } else {
-    this_node->demonitor(component);
-    terminate<policy::parallel>(this_node, component)
+    self->demonitor(component);
+    terminate<policy::parallel>(self, component)
       .then(
         [=](atom::done) mutable {
-          VAST_DEBUG(this_node, "terminated component", label);
+          VAST_DEBUG(self, "terminated component", label);
           rp.deliver(atom::ok_v);
         },
         [=](const caf::error& err) mutable {
-          VAST_DEBUG(this_node, "terminated component", label);
+          VAST_DEBUG(self, "terminated component", label);
           rp.deliver(err);
         });
   }
@@ -329,7 +332,8 @@ node_state::spawn_command(const invocation& inv,
   VAST_TRACE(inv);
   using std::begin;
   using std::end;
-  auto rp = this_node->make_response_promise();
+  auto self = this_node;
+  auto rp = self->make_response_promise();
   // We configured the command to have the name of the component.
   auto inv_name_split = detail::split(inv.full_name, " ");
   VAST_ASSERT(inv_name_split.size() > 1);
@@ -339,7 +343,7 @@ node_state::spawn_command(const invocation& inv,
   if (auto label_ptr = caf::get_if<std::string>(&inv.options, "vast.spawn."
                                                               "label")) {
     label = *label_ptr;
-    if (this_node->state.registry.find_by_label(label)) {
+    if (self->state.registry.find_by_label(label)) {
       auto err = caf::make_error(ec::unspecified, "duplicate component label");
       rp.deliver(err);
       return caf::make_message(std::move(err));
@@ -347,11 +351,11 @@ node_state::spawn_command(const invocation& inv,
   } else {
     label = comp_type;
     if (!is_singleton(comp_type)) {
-      label = generate_label(this_node, comp_type);
-      VAST_DEBUG(this_node, "auto-generated new label:", label);
+      label = generate_label(self, comp_type);
+      VAST_DEBUG(self, "auto-generated new label:", label);
     }
   }
-  VAST_DEBUG(this_node, "spawns a", comp_type, "with the label", label);
+  VAST_DEBUG(self, "spawns a", comp_type, "with the label", label);
   auto spawn_inv = inv;
   if (comp_type == "source") {
     auto spawn_opt
@@ -365,7 +369,7 @@ node_state::spawn_command(const invocation& inv,
   }
   auto spawn_actually = [=](spawn_arguments& args) mutable {
     // Spawn our new VAST component.
-    auto component = spawn_component(args.inv, args);
+    auto component = spawn_component(self, args.inv, args);
     if (!component) {
       if (component.error())
         VAST_WARNING(
@@ -373,16 +377,16 @@ node_state::spawn_command(const invocation& inv,
       rp.deliver(component.error());
       return caf::make_message(std::move(component.error()));
     }
-    this_node->monitor(*component);
-    auto okay = this_node->state.registry.add(*component, std::move(comp_type),
-                                              std::move(label));
+    self->monitor(*component);
+    auto okay = self->state.registry.add(*component, std::move(comp_type),
+                                         std::move(label));
     VAST_ASSERT(okay);
     rp.deliver(*component);
     return caf::make_message(*component);
   };
   auto handle_taxonomies = [=](expression e) mutable {
-    VAST_DEBUG(this_node, "received the substituted expression", e);
-    spawn_arguments args{spawn_inv, this_node->state.dir, label, std::move(e)};
+    VAST_DEBUG(self, "received the substituted expression", e);
+    spawn_arguments args{spawn_inv, self->state.dir, label, std::move(e)};
     spawn_actually(args);
   };
   // Retrieve taxonomies and delay spawning until the response arrives if we're
@@ -391,11 +395,11 @@ node_state::spawn_command(const invocation& inv,
   if (query_handlers.count(comp_type) > 0u
       && !caf::get_or(spawn_inv.options,
                       "vast." + comp_type + ".disable-taxonomies", false)) {
-    if (auto tr = this_node->state.registry.find_by_label("type-registry")) {
+    if (auto tr = self->state.registry.find_by_label("type-registry")) {
       auto expr = normalized_and_validated(spawn_inv.arguments);
       if (!expr)
         return make_message(expr.error());
-      this_node
+      self
         ->request(caf::actor_cast<type_registry_type>(tr),
                   defaults::system::initial_request_timeout, atom::resolve_v,
                   std::move(*expr))
@@ -404,7 +408,7 @@ node_state::spawn_command(const invocation& inv,
     }
   }
   // ... or spawn the component right away if not.
-  spawn_arguments args{spawn_inv, this_node->state.dir, label, std::nullopt};
+  spawn_arguments args{spawn_inv, self->state.dir, label, std::nullopt};
   return spawn_actually(args);
 }
 
