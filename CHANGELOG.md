@@ -11,6 +11,10 @@ Every entry has a category for which we use the following visual abbreviations:
 
 ## Unreleased
 
+- ⚠️ Log files are now less verbose because class and function names are not
+  printed on every line.
+  [#1107](https://github.com/tenzir/vast/pull/1107)
+
 - ⚠️ The new option `import.read-timeout` allows for setting an input timeout
   for low volume sources. Reaching the timeout causes the current batch to be
   forwarded immediately. This behavior was previously controlled by

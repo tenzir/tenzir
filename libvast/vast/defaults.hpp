@@ -310,6 +310,8 @@ namespace logger {
 // TODO: Revisit when updating to CAF 0.18.
 constexpr const char* console_format = "%d %m";
 
+constexpr const char* file_format = "%r %c %p %a %F:%L %m%n";
+
 constexpr const caf::atom_value console_verbosity = caf::atom("info");
 
 constexpr const caf::atom_value file_verbosity = caf::atom("debug");
