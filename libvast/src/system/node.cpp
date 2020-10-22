@@ -388,7 +388,9 @@ node_state::spawn_command(const invocation& inv,
   // Retrieve taxonomies and delay spawning until the response arrives if we're
   // dealing with a query...
   auto query_handlers = std::set<std::string>{"counter", "exporter", "pivoter"};
-  if (query_handlers.count(comp_type) > 0u) {
+  if (query_handlers.count(comp_type) > 0u
+      && !caf::get_or(spawn_inv.options,
+                      "vast." + comp_type + ".disable-taxonomies", false)) {
     if (auto tr = this_node->state.registry.find_by_label("type-registry")) {
       auto expr = normalized_and_validated(spawn_inv.arguments);
       if (!expr)

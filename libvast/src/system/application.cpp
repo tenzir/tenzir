@@ -111,6 +111,7 @@ auto make_count_command() {
   return std::make_unique<command>(
     "count", "count hits for a query without exporting data", "",
     opts("?vast.count")
+      .add<bool>("disable-taxonomies", "don't substitute taxonomy identifiers")
       .add<bool>("estimate,e", "estimate an upper bound by "
                                "skipping candidate checks"));
 }
@@ -138,6 +139,7 @@ auto make_export_command() {
     opts("?vast.export")
       .add<bool>("continuous,c", "marks a query as continuous")
       .add<bool>("unified,u", "marks a query as unified")
+      .add<bool>("disable-taxonomies", "don't substitute taxonomy identifiers")
       .add<size_t>("max-events,n", "maximum number of results")
       .add<std::string>("read,r", "path for reading the query"));
   export_->add_subcommand("zeek", "exports query results in Zeek format",
@@ -254,6 +256,7 @@ auto make_pivot_command() {
     "pivot", "extracts related events of a given type",
     documentation::vast_pivot,
     make_pcap_options("?vast.pivot")
+      .add<bool>("disable-taxonomies", "don't substitute taxonomy identifiers")
       .add<std::string>("format", "output format "
                                   "(default: JSON)"));
   return pivot;
