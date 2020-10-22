@@ -11,6 +11,10 @@ Every entry has a category for which we use the following visual abbreviations:
 
 ## Unreleased
 
+- 🐞 The `vast status --detailed` command now correctly shows the status of all
+  sources, i.e., `vast import` or `vast spawn source` commands.
+  [#1109](https://github.com/tenzir/vast/pull/1109)
+
 - ⚠️ Log files are now less verbose because class and function names are not
   printed on every line.
   [#1107](https://github.com/tenzir/vast/pull/1107)
