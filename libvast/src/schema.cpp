@@ -219,17 +219,20 @@ get_schema(const caf::settings& options, const std::string& category) {
 }
 
 detail::stable_set<vast::path>
-get_schema_dirs(const caf::actor_system_config& cfg) {
+get_schema_dirs(const caf::actor_system_config& cfg,
+                std::vector<const void*> objpath_addresses) {
   detail::stable_set<vast::path> result;
   if (!caf::get_or(cfg, "vast.no-default-schema", false)) {
 #if !VAST_RELOCATABLE_INSTALL
     result.insert(VAST_DATADIR "/vast/schema");
 #endif
     // Get filesystem path to the executable.
-    if (auto binary = detail::objectpath())
-      result.insert(binary->parent().parent() / "share" / "vast" / "schema");
-    else
-      VAST_ERROR_ANON(__func__, "failed to get program path");
+    for (const void* addr : objpath_addresses) {
+      if (auto binary = detail::objectpath(addr))
+        result.insert(binary->parent().parent() / "share" / "vast" / "schema");
+      else
+        VAST_ERROR_ANON(__func__, "failed to get program path");
+    }
     if (const char* xdg_data_home = std::getenv("XDG_DATA_HOME"))
       result.insert(path{xdg_data_home} / "vast" / "schema");
     else if (const char* home = std::getenv("HOME"))
