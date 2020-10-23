@@ -93,9 +93,12 @@ get_schema(const caf::settings& options, const std::string& category);
 
 /// Gathers the list of paths to traverse for loading schema or taxonomies data.
 /// @param cfg The application config.
+/// @param objpath_addresses Addresses to locate the objectpath of for relative
+/// schema directories.
 /// @returns The list of schema directories.
 detail::stable_set<vast::path>
-get_schema_dirs(const caf::actor_system_config& cfg);
+get_schema_dirs(const caf::actor_system_config& cfg,
+                std::vector<const void*> objpath_addresses = {nullptr});
 
 /// Loads a single schema file.
 /// @param sf The file path.
