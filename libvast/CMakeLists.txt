@@ -129,6 +129,7 @@ set(libvast_sources
     src/io/save.cpp
     src/io/write.cpp
     src/json.cpp
+    src/layout_version.cpp
     src/logger.cpp
     src/meta_index.cpp
     src/msgpack.cpp
