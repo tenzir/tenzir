@@ -31,8 +31,6 @@ default_configuration::default_configuration() {
   set("logger.console-verbosity", defaults::logger::console_verbosity);
   set("logger.file-verbosity", defaults::logger::file_verbosity);
   set("logger.file-format", defaults::logger::file_format);
-  // Allow VAST clusters to form a mesh.
-  set("middleman.enable-automatic-connections", true);
 }
 
 } // namespace vast::system
