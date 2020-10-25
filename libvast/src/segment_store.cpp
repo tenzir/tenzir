@@ -211,7 +211,8 @@ caf::error segment_store::erase(const ids& xs) {
     // Remove stale state.
     segments_.erase_value(segment_id);
     // Create a new segment from the remaining slices.
-    segment_builder tmp_builder;
+    flatbuffers::FlatBufferBuilder tmp_flat_builder;
+    segment_builder tmp_builder{tmp_flat_builder};
     segment_builder* builder = &tmp_builder;
     if constexpr (std::is_same_v<decltype(seg), segment_builder&>) {
       // If `update` got called with a builder then we simply use that by
@@ -232,6 +233,7 @@ caf::error segment_store::erase(const ids& xs) {
     // Flush the new segment and remove the previous segment.
     if constexpr (std::is_same_v<decltype(seg), segment&>) {
       auto new_segment = builder->finish();
+      tmp_flat_builder.Clear();
       auto filename = segment_path() / to_string(new_segment.id());
       if (auto err = write(filename, new_segment.chunk()))
         VAST_ERROR(this, "failed to persist the new segment");
@@ -310,6 +312,7 @@ caf::error segment_store::flush() {
     return caf::none;
   VAST_DEBUG(this, "finishes current builder");
   auto seg = builder_.finish();
+  flat_builder_.Clear();
   auto filename = segment_path() / to_string(seg.id());
   if (auto err = write(filename, seg.chunk()))
     return err;

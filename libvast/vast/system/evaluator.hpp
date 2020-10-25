@@ -17,6 +17,7 @@
 #include "vast/expression.hpp"
 #include "vast/ids.hpp"
 #include "vast/offset.hpp"
+#include "vast/system/index.hpp"
 #include "vast/table_slice_column.hpp"
 #include "vast/uuid.hpp"
 
@@ -35,7 +36,8 @@ struct evaluator_state {
 
   evaluator_state(caf::event_based_actor* self);
 
-  void init(caf::actor client, expression expr, caf::response_promise promise);
+  void init(caf::actor client, caf::actor partition, expression expr,
+            caf::response_promise promise);
 
   /// Updates `predicate_hits` and may trigger re-evaluation of the expression
   /// tree.
@@ -70,6 +72,8 @@ struct evaluator_state {
   /// Stores the actor for sendings results to.
   caf::actor client;
 
+  caf::actor partition;
+
   /// Stores the original query expression.
   expression expr;
 
@@ -84,6 +88,6 @@ struct evaluator_state {
 /// actors, re-evaluates the expression and relays new hits to its sinks.
 /// @pre `!eval.empty()`
 caf::behavior evaluator(caf::stateful_actor<evaluator_state>* self,
-                        expression expr, evaluation_triples eval);
+                        expression expr, partition_evaluation eval);
 
 } // namespace vast::system

@@ -158,15 +158,15 @@ caf::error index_state::load_from_disk() {
           continue;
         }
         auto partition = fbs::GetPartition(chunk->data());
-        if (partition->partition_type() != fbs::partition::Partition::v0) {
+        if (partition->partition_type() != fbs::partition::Partition::v1) {
           VAST_WARNING(self, "found unsupported version for partition",
                        partition_uuid);
           continue;
         }
-        auto partition_v0 = partition->partition_as_v0();
-        VAST_ASSERT(partition_v0);
+        auto partition_v1 = partition->partition_as_v1();
+        VAST_ASSERT(partition_v1);
         partition_synopsis ps;
-        unpack(*partition_v0, ps);
+        unpack(*partition_v1, ps);
         VAST_DEBUG(self, "merging partition synopsis from", partition_uuid);
         meta_idx.merge(partition_uuid, std::move(ps));
       } else {
@@ -330,7 +330,8 @@ void await_evaluation_maps(
         [=](evaluation_triples triples) {
           auto received = ++shared_counter->received;
           if (!triples.empty()) {
-            shared_counter->pqm.emplace(partition_id, std::move(triples));
+            shared_counter->pqm.emplace(
+              partition_id, partition_evaluation{actor, std::move(triples)});
           } else {
             VAST_DEBUG(self, "received no evaluation triples from",
                        self->current_sender());

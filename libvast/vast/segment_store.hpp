@@ -130,7 +130,8 @@ private:
   mutable detail::cache<uuid, segment> cache_;
 
   /// Serializes table slices into contiguous chunks of memory.
-  segment_builder builder_;
+  flatbuffers::FlatBufferBuilder flat_builder_;
+  segment_builder builder_{flat_builder_};
 };
 
 } // namespace vast

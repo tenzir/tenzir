@@ -281,8 +281,8 @@ behavior exporter(stateful_actor<exporter_state>* self, expression expr,
       auto& qs = st.query;
       // Ignore this message until we got all lookup results from the ARCHIVE.
       // Otherwise, we can end up in weirdly interleaved state.
-      if (qs.lookups_issued != qs.lookups_complete)
-        return caf::skip;
+      // if (qs.lookups_issued != qs.lookups_complete)
+      //  return caf::skip;
       // Figure out if we're done by bumping the counter for `received` and
       // check whether it reaches `expected`.
       timespan runtime = system_clock::now() - st.start;

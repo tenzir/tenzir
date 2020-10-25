@@ -15,6 +15,7 @@
 
 #include "vast/aliases.hpp"
 #include "vast/chunk.hpp"
+#include "vast/fbs/segment.hpp"
 #include "vast/fwd.hpp"
 #include "vast/ids.hpp"
 #include "vast/uuid.hpp"
@@ -61,5 +62,8 @@ private:
 
   chunk_ptr chunk_;
 };
+
+caf::expected<std::vector<table_slice_ptr>>
+lookup_impl(const vast::fbs::segment::v0* segment_v0, const vast::ids& xs);
 
 } // namespace vast

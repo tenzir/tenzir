@@ -32,7 +32,7 @@ namespace vast {
 class segment_builder {
 public:
   /// Constructs a segment builder.
-  segment_builder();
+  explicit segment_builder(flatbuffers::FlatBufferBuilder& builder);
 
   /// Adds a table slice to the segment.
   /// @returns An error if adding the table slice failed.
@@ -40,6 +40,8 @@ public:
   ///      offset of the previously added table slice. This requirement enables
   ///      efficient lookup of table slices from a sequence of IDs.
   caf::error add(table_slice_ptr x);
+
+  flatbuffers::Offset<fbs::segment::v0> finish_concrete();
 
   /// Constructs a segment from previously added table slices.
   /// @post The builder can now be reused to contruct a new segment.
@@ -69,7 +71,7 @@ private:
   uuid id_;
   vast::id min_table_slice_offset_;
   uint64_t num_events_;
-  flatbuffers::FlatBufferBuilder builder_;
+  flatbuffers::FlatBufferBuilder& builder_;
   std::vector<flatbuffers::Offset<fbs::table_slice_buffer::v0>> flat_slices_;
   std::vector<table_slice_ptr> slices_; // For queries to an unfinished segment.
   std::vector<fbs::interval::v0> intervals_;

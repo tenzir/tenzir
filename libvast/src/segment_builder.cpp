@@ -29,7 +29,8 @@
 
 namespace vast {
 
-segment_builder::segment_builder() {
+segment_builder::segment_builder(flatbuffers::FlatBufferBuilder& builder)
+  : builder_{builder} {
   reset();
 }
 
@@ -51,7 +52,7 @@ caf::error segment_builder::add(table_slice_ptr x) {
   return caf::none;
 }
 
-segment segment_builder::finish() {
+flatbuffers::Offset<fbs::segment::v0> segment_builder::finish_concrete() {
   auto table_slices_offset = builder_.CreateVector(flat_slices_);
   auto uuid_offset = pack(builder_, id_);
   auto ids_offset = builder_.CreateVectorOfStructs(intervals_);
@@ -61,7 +62,11 @@ segment segment_builder::finish() {
   segment_v0_builder.add_uuid(*uuid_offset);
   segment_v0_builder.add_ids(ids_offset);
   segment_v0_builder.add_events(num_events_);
-  auto segment_v0_offset = segment_v0_builder.Finish();
+  return segment_v0_builder.Finish();
+}
+
+segment segment_builder::finish() {
+  auto segment_v0_offset = finish_concrete();
   fbs::SegmentBuilder segment_builder{builder_};
   segment_builder.add_segment_type(vast::fbs::segment::Segment::v0);
   segment_builder.add_segment(segment_v0_offset.Union());
@@ -112,7 +117,6 @@ void segment_builder::reset() {
   id_ = uuid::random();
   min_table_slice_offset_ = 0;
   num_events_ = 0;
-  builder_.Clear();
   flat_slices_.clear();
   intervals_.clear();
   slices_.clear();

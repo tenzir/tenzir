@@ -96,7 +96,12 @@ private:
   const index_state& state_;
 };
 
-using pending_query_map = detail::stable_map<uuid, evaluation_triples>;
+struct partition_evaluation {
+  caf::actor partition;
+  evaluation_triples eval;
+};
+
+using pending_query_map = detail::stable_map<uuid, partition_evaluation>;
 
 struct query_state {
   /// The UUID of the query.

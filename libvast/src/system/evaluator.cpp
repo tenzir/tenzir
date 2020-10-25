@@ -16,6 +16,7 @@
 #include "vast/expression_visitors.hpp"
 #include "vast/fwd.hpp"
 #include "vast/logger.hpp"
+#include "vast/table_slice.hpp"
 
 #include <caf/actor.hpp>
 #include <caf/behavior.hpp>
@@ -93,10 +94,11 @@ evaluator_state::evaluator_state(caf::event_based_actor* self) : self(self) {
   // nop
 }
 
-void evaluator_state::init(caf::actor client, expression expr,
-                           caf::response_promise promise) {
+void evaluator_state::init(caf::actor client, caf::actor partition,
+                           expression expr, caf::response_promise promise) {
   VAST_TRACE(VAST_ARG(client), VAST_ARG(expr), VAST_ARG(promise));
   this->client = std::move(client);
+  this->partition = std::move(partition);
   this->expr = std::move(expr);
   this->promise = std::move(promise);
 }
@@ -133,18 +135,27 @@ void evaluator_state::evaluate() {
   auto expr_hits = caf::visit(ids_evaluator{predicate_hits}, expr);
   VAST_DEBUG(self, "got predicate_hits:", predicate_hits,
              "expr_hits:", expr_hits);
-  auto delta = expr_hits - hits;
-  if (any<1>(delta)) {
-    hits |= delta;
-    self->send(client, std::move(delta));
-  }
+  hits |= expr_hits;
 }
 
 void evaluator_state::decrement_pending() {
   // We're done evaluating if all INDEXER actors have reported their hits.
   if (--pending_responses == 0) {
-    VAST_DEBUG(self, "completed expression evaluation");
-    promise.deliver(atom::done_v);
+    VAST_DEBUG(self, "completed expression evaluation with", rank(hits),
+               "hits");
+    self->request(partition, caf::infinite, hits)
+      .then(
+        [this](std::vector<table_slice_ptr> slices) {
+          VAST_DEBUG(self, "got", slices.size(), "slices");
+          for (auto& slice : slices)
+            for (auto& sub_slice : select(slice, hits))
+              self->send(client, sub_slice);
+          promise.deliver(atom::done_v);
+        },
+        [this](caf::error err) {
+          VAST_ERROR(self, "failed to retrieve slices:", render(err));
+          promise.deliver(atom::done_v);
+        });
   }
 }
 
@@ -155,16 +166,16 @@ evaluator_state::hits_for(const offset& position) {
 }
 
 caf::behavior evaluator(caf::stateful_actor<evaluator_state>* self,
-                        expression expr, evaluation_triples eval) {
-  VAST_TRACE(VAST_ARG(expr), VAST_ARG(eval));
-  VAST_ASSERT(!eval.empty());
+                        expression expr, partition_evaluation eval) {
+  VAST_TRACE(VAST_ARG(expr), VAST_ARG(eval.eval));
+  VAST_ASSERT(!eval.eval.empty());
   using std::get;
   using std::move;
   return {[=, expr{move(expr)}, eval{move(eval)}](caf::actor client) {
     auto& st = self->state;
-    st.init(client, move(expr), self->make_response_promise());
-    st.pending_responses += eval.size();
-    for (auto& triple : eval) {
+    st.init(client, eval.partition, move(expr), self->make_response_promise());
+    st.pending_responses += eval.eval.size();
+    for (auto& triple : eval.eval) {
       // No strucutured bindings available due to subsequent lambda. :-/
       // TODO: C++20
       auto& pos = get<0>(triple);

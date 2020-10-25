@@ -21,6 +21,7 @@
 #include "vast/meta_index.hpp"
 #include "vast/path.hpp"
 #include "vast/qualified_record_field.hpp"
+#include "vast/segment_builder.hpp"
 #include "vast/system/filesystem.hpp"
 #include "vast/system/instrumentation.hpp"
 #include "vast/table_slice_column.hpp"
@@ -110,6 +111,10 @@ struct active_partition_state {
   /// they get written into the flatbuffer.
   std::map<caf::actor_id, vast::chunk_ptr> chunks;
 
+  /// A builder for the embedded segment.
+  flatbuffers::FlatBufferBuilder builder;
+  segment_builder sbuilder{builder};
+
   /// A once_flag for things that need to be done only once at shutdown.
   std::once_flag shutdown_once;
 };
@@ -149,7 +154,9 @@ struct passive_partition_state {
   vast::chunk_ptr partition_chunk;
 
   /// A typed view into the `partition_chunk`.
-  const fbs::partition::v0* flatbuffer;
+  const fbs::partition::v1* flatbuffer;
+
+  vast::fbs::segment::v0* segment;
 
   /// Maps qualified fields to indexer actors. This is mutable since
   /// indexers are spawned lazily on first access.
@@ -159,11 +166,12 @@ struct passive_partition_state {
 // Flatbuffer support
 
 caf::expected<flatbuffers::Offset<fbs::Partition>>
-pack(flatbuffers::FlatBufferBuilder& builder, const active_partition_state& x);
+pack(flatbuffers::FlatBufferBuilder& builder, const active_partition_state& x,
+     flatbuffers::Offset<fbs::segment::v0> segment);
 
-caf::error unpack(const fbs::partition::v0& x, passive_partition_state& y);
+caf::error unpack(const fbs::partition::v1& x, passive_partition_state& y);
 
-caf::error unpack(const fbs::partition::v0& x, partition_synopsis& y);
+caf::error unpack(const fbs::partition::v1& x, partition_synopsis& y);
 
 // TODO: Use typed actors for the partition actors.
 

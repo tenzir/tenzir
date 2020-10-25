@@ -81,7 +81,8 @@ chunk_ptr segment::chunk() const {
 }
 
 caf::expected<std::vector<table_slice_ptr>>
-segment::lookup(const vast::ids& xs) const {
+lookup_impl(const vast::fbs::segment::v0* segment_v0, const vast::ids& xs) {
+  VAST_DEBUG_ANON("segment got request for", rank(xs), "events");
   std::vector<table_slice_ptr> result;
   auto f = [](auto buffer) {
     auto slice = buffer->data_nested_root();
@@ -97,13 +98,17 @@ segment::lookup(const vast::ids& xs) const {
     result.push_back(std::move(slice));
     return caf::none;
   };
-  auto segment = fbs::GetSegment(chunk_->data());
-  auto segment_v0 = segment->segment_as_v0();
   auto begin = segment_v0->slices()->begin();
   auto end = segment_v0->slices()->end();
   if (auto error = select_with(xs, begin, end, f, g))
     return error;
   return result;
+}
+
+caf::expected<std::vector<table_slice_ptr>>
+segment::lookup(const vast::ids& xs) const {
+  auto segment = fbs::GetSegment(chunk_->data());
+  return lookup_impl(segment->segment_as_v0(), xs);
 }
 
 segment::segment(chunk_ptr chk) : chunk_{std::move(chk)} {
