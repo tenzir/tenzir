@@ -26,7 +26,29 @@
 namespace vast {
 
 /// Maps concept names to the fields or concepts that implement them.
-using concepts_type = std::unordered_map<std::string, std::vector<std::string>>;
+struct concepts_type {
+  struct definition {
+    std::vector<std::string> fields;
+    std::vector<std::string> concepts;
+
+    friend bool operator==(const concepts_type::definition& lhs,
+                           const concepts_type::definition& rhs);
+
+    template <class Inspector>
+    friend auto inspect(Inspector& f, concepts_type::definition& cd) {
+      return f(caf::meta::type_name("concepts_definition"), cd.fields,
+               cd.concepts);
+    }
+  };
+  std::unordered_map<std::string, definition> data;
+
+  friend bool operator==(const concepts_type& lhs, const concepts_type& rhs);
+
+  template <class Inspector>
+  friend auto inspect(Inspector& f, concepts_type& c) {
+    return f(caf::meta::type_name("concepts"), c.data);
+  }
+};
 
 /// Converts a data record to a concept.
 caf::error convert(const data& d, concepts_type& out);

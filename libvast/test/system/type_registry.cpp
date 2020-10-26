@@ -125,8 +125,8 @@ TEST(type_registry) {
 
 TEST(taxonomies) {
   MESSAGE("setting a taxonomy");
-  auto c1 = concepts_type{{"foo", {"a.fo0", "b.foO", "x.foe"}},
-                          {"bar", {"a.b@r", "b.baR"}}};
+  auto c1 = concepts_type{{{"foo", {{"a.fo0", "b.foO", "x.foe"}, {}}},
+                           {"bar", {{"a.b@r", "b.baR"}, {}}}}};
   auto t1 = taxonomies{c1, models_type{}};
   self->send(aut, atom::put_v, t1);
   run();

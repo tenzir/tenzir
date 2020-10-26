@@ -49,8 +49,11 @@ type_registry_state::status(status_verbosity v) const {
     caf::put(tr_status, "types", keys);
     // The list of defined concepts
     auto& concepts_status = put_dictionary(tr_status, "concepts");
-    for (auto& concept_ : taxonomies.concepts)
-      concepts_status[concept_.first] = concept_.second;
+    for (auto& concept_ : taxonomies.concepts.data) {
+      auto& concept_status = put_dictionary(concepts_status, concept_.first);
+      concept_status["fields"] = concept_.second.fields;
+      concept_status["concepts"] = concept_.second.concepts;
+    }
     // The usual per-component status.
     detail::fill_status_map(tr_status, self);
   }
