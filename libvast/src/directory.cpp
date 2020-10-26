@@ -18,7 +18,6 @@
 #include "vast/detail/assert.hpp"
 #include "vast/detail/posix.hpp"
 #include "vast/detail/string.hpp"
-
 #include "vast/logger.hpp"
 
 #include <caf/streambuf.hpp>
@@ -67,6 +66,25 @@ bool directory::iterator::equals(const iterator& other) const {
 
 directory::directory(vast::path p)
   : path_{std::move(p)}, dir_{::opendir(path_.str().data())} {
+}
+
+directory::directory(directory&& d) : path_(std::move(d.path_)), dir_(nullptr) {
+  std::swap(dir_, d.dir_);
+}
+
+directory::directory(const directory& d) : directory(d.path_) {
+}
+
+directory& directory::operator=(const directory& other) {
+  directory tmp{other};
+  std::swap(*this, tmp);
+  return *this;
+}
+
+directory& directory::operator=(directory&& other) {
+  directory tmp{std::move(other)};
+  std::swap(*this, tmp);
+  return *this;
 }
 
 directory::~directory() {

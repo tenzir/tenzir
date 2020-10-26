@@ -25,6 +25,11 @@ vast:
   # Spawn a node instead of connecting to one.
   node: false
 
+  # The maximum number of segments cached by the archive.
+  segments: 10
+  # The maximum size per segment, in MiB.
+  max-segment-size: 128
+
   # Interval between two aging cycles.
   aging-frequency: 24h
   # Query for aging out obsolete data.

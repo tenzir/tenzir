@@ -19,6 +19,12 @@
 
 #ifdef VAST_POSIX
 #  include <dirent.h>
+#else
+
+namespace vast {
+struct DIR;
+} // namespace vast
+
 #endif
 
 namespace vast {
@@ -45,20 +51,23 @@ public:
   /// @param p The path to the directory.
   directory(vast::path p);
 
+  directory(directory&&);
+  directory(const directory&);
+
+  directory& operator=(const directory&);
+  directory& operator=(directory&&);
+
   ~directory();
 
   iterator begin() const;
   iterator end() const;
 
-  /// Retrieves the ::path for this file.
-  /// @returns The ::path for this file.
+  /// Retrieves the path for this file.
   const vast::path& path() const;
 
 private:
   vast::path path_;
-#ifdef VAST_POSIX
   DIR* dir_ = nullptr;
-#endif
 };
 
 /// Calculates the sum of the sizes of all regular files in the directory.
