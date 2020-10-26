@@ -14,6 +14,7 @@
 #include "vast/taxonomies.hpp"
 
 #include "vast/concept/printable/vast/data.hpp"
+#include "vast/detail/stable_set.hpp"
 #include "vast/error.hpp"
 #include "vast/expression.hpp"
 
@@ -42,10 +43,24 @@ caf::error convert(const data& d, concepts_type& out) {
         auto field = caf::get_if<std::string>(&f);
         if (!field)
           return make_error(ec::convert_error, "field is not a string:", f);
-        out[*name].push_back(*field);
+        out.data[*name].fields.push_back(*field);
       }
     } else {
-      return make_error(ec::convert_error, "fields is not a list:", d);
+      return make_error(ec::convert_error, "fields is not a list:", fs->second);
+    }
+    auto cs = c->find("concepts");
+    if (cs != c->end()) {
+      if (const auto& concepts = caf::get_if<list>(&cs->second)) {
+        for (auto& c : *concepts) {
+          auto concept_ = caf::get_if<std::string>(&c);
+          if (!concept_)
+            return make_error(ec::convert_error, "concept is not a string:", c);
+          out.data[*name].concepts.push_back(*concept_);
+        }
+      } else {
+        return make_error(ec::convert_error,
+                          "concepts is not a list:", cs->second);
+      }
     }
   } else {
     return make_error(ec::convert_error, "concept is not a record:", d);
@@ -73,6 +88,15 @@ caf::expected<concepts_type> extract_concepts(const data& d) {
   if (auto err = extract_concepts(d, result))
     return err;
   return result;
+}
+
+bool operator==(const concepts_type::definition& lhs,
+                const concepts_type::definition& rhs) {
+  return lhs.concepts == rhs.concepts && lhs.fields == rhs.fields;
+}
+
+bool operator==(const concepts_type& lhs, const concepts_type& rhs) {
+  return lhs.data == rhs.data;
 }
 
 bool operator==(const taxonomies& lhs, const taxonomies& rhs) {
@@ -111,41 +135,40 @@ resolve_concepts(const concepts_type& concepts, const expression& e,
       // This algorithm recursivly looks up items form the concepts map and
       // generates a predicate for every discovered name that is not a concept
       // itself.
-      disjunction d;
-      // The log of all fields that we tried to resolve to concepts already.
+      auto concept_ = concepts.data.find(field_name);
+      if (concept_ == concepts.data.end())
+        return expression{std::move(pred)};
+      // The log of all referenced concepts that we tried to resolve already.
       // This is a deque instead of a stable_set because we don't want
       // push_back to invalidate the `current` iterator.
       std::deque<std::string> log;
-      log.push_back(field_name);
-      // The log is partitioned into 3 segments:
-      //  1. The item we're presently looking for (current)
-      //  2. The items that have been looked for already. Those are not
-      //     discarded because we must not enqueue any items more than once
-      //  3. The items that still need to be looked for
-      for (auto current = log.begin(); current != log.end(); ++current) {
-        auto& x = *current;
-        auto concept_ = concepts.find(x);
-        if (concept_ != concepts.end()) {
-          // x is a concept, push target items to the back of the log, we
-          // will check if they are concepts themselves later.
-          auto& replacements = concept_->second;
-          // ri abbreviates "replacement iterator".
-          for (auto ri = replacements.begin(); ri != replacements.end(); ++ri) {
-            // We need to prevent duplicate additions to the queue for 2
-            // reasons:
-            //  1. We don't want to add the same predicate to the expression
-            //     twice
-            //  2. If the target is itself a concept and it was already looked
-            //     for, adding it again would create an infinite loop.
-            if (std::find(log.begin(), log.end(), *ri) == log.end())
-              log.push_back(*ri);
-          }
-        } else {
-          // x is not a concept, that means it is a field and we create a
-          // predicate for it.
-          if (!prune || contains(seen, x, op, data))
-            d.emplace_back(make_predicate(x));
+      // All fields that the concept is resolve to either directly or indirectly
+      // through referenced concepts.
+      detail::stable_set<std::string> target_fields;
+      auto handle_def = [&](const concepts_type::definition& def) {
+        // Create the union of all fields by inserting into the set.
+        target_fields.insert(def.fields.begin(), def.fields.end());
+        // Insert only those concepts into the queue that aren't in there yet,
+        // this prevents infinite loops through circular references between
+        // concepts.
+        for (auto& x : def.concepts) {
+          if (std::find(log.begin(), log.end(), x) == log.end())
+            log.push_back(x);
         }
+      };
+      handle_def(concept_->second);
+      // We iterate through the log while appending referenced concepts in
+      // handle_def.
+      for (auto current : log) {
+        auto ref_concept = concepts.data.find(current);
+        if (ref_concept != concepts.data.end())
+          handle_def(ref_concept->second);
+      }
+      // Transform the target_fields into new predicates.
+      disjunction d;
+      for (auto& x : target_fields) {
+        if (!prune || contains(seen, x, op, data))
+          d.emplace_back(make_predicate(std::move(x)));
       }
       switch (d.size()) {
         case 0:

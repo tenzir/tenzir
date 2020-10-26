@@ -16,7 +16,7 @@
 - concept:
     name: ecs.source.ip
     fields:
-      - sysmon.NetworkConnection.SourceIp
+    - sysmon.NetworkConnection.SourceIp
 
 - concept:
     name: ecs.source.ip
