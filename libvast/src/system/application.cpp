@@ -68,6 +68,12 @@ command::opts_builder add_index_opts(command::opts_builder ob) {
     .add<size_t>("max-queries,q", "maximum number of concurrent queries");
 }
 
+command::opts_builder add_archive_opts(command::opts_builder ob) {
+  return std::move(ob)
+    .add<size_t>("segments,s", "number of cached segments")
+    .add<size_t>("max-segment-size,m", "maximum segment size in MB");
+}
+
 auto make_root_command(std::string_view path) {
   // We're only interested in the application name, not in its path. For
   // example, argv[0] might contain "./build/release/bin/vast" and we are only
@@ -103,8 +109,10 @@ auto make_root_command(std::string_view path) {
         .add<std::string>("shutdown-grace-period",
                           "time to wait until component shutdown "
                           "finishes cleanly before inducing a hard kill");
+  ob = add_index_opts(std::move(ob));
+  ob = add_archive_opts(std::move(ob));
   return std::make_unique<command>(path, "", documentation::vast,
-                                   add_index_opts(std::move(ob)));
+                                   std::move(ob));
 }
 
 auto make_count_command() {
@@ -353,12 +361,8 @@ auto make_spawn_command() {
                                 documentation::vast_spawn, opts("?vast.spawn"));
   spawn->add_subcommand("accountant", "spawns the accountant", "",
                         opts("?vast.spawn.accountant"), false);
-  spawn->add_subcommand(
-    "archive", "creates a new archive", "",
-    opts("?vast.spawn.archive")
-      .add<size_t>("segments,s", "number of cached segments")
-      .add<size_t>("max-segment-size,m", "maximum segment size in MB"),
-    false);
+  spawn->add_subcommand("archive", "creates a new archive", "",
+                        add_archive_opts(opts("?vast.spawn.archive")), false);
   spawn->add_subcommand(
     "explorer", "creates a new explorer", "",
     opts("?vast.spawn.explorer")
