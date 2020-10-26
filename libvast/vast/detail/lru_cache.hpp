@@ -114,6 +114,14 @@ public:
     ;
   }
 
+  void drop(const Key& key) {
+    auto it = cache_items_map_.find(key);
+    if (it != cache_items_map_.end()) {
+      cache_items_list_.erase(it->second);
+      cache_items_map_.erase(it);
+    }
+  }
+
   bool contains(const Key& key) const {
     return cache_items_map_.find(key) != cache_items_map_.end();
   }

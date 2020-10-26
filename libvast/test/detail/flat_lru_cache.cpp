@@ -11,7 +11,7 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#define SUITE lru_cache
+#define SUITE flat_lru_cache
 #include "vast/test/test.hpp"
 
 #include "vast/detail/flat_lru_cache.hpp"
