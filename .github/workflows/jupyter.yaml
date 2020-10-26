@@ -25,7 +25,7 @@ jobs:
     - name: Install Dependencies
       run: |
         sudo apt-get -qq update
-        sudo apt-get -qqy install libpcap-dev libssl-dev lsb-release libsnappy-dev libbrotli-dev
+        sudo apt-get -qqy install libpcap-dev libssl-dev lsb-release libsnappy-dev libbrotli-dev liblz4-dev
         # Install Apache Arrow (c.f. https://arrow.apache.org/install/)
         wget https://apache.bintray.com/arrow/$(lsb_release --id --short | tr 'A-Z' 'a-z')/apache-arrow-archive-keyring-latest-$(lsb_release --codename --short).deb
         sudo apt-get -qqy install ./apache-arrow-archive-keyring-latest-$(lsb_release --codename --short).deb
