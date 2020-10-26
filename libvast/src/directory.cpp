@@ -19,6 +19,8 @@
 #include "vast/detail/posix.hpp"
 #include "vast/detail/string.hpp"
 
+#include "vast/logger.hpp"
+
 #include <caf/streambuf.hpp>
 
 #include <fstream>
@@ -30,7 +32,7 @@
 
 namespace vast {
 
-directory::iterator::iterator(directory* dir) : dir_{dir} {
+directory::iterator::iterator(const directory* dir) : dir_{dir} {
   increment();
 }
 
@@ -74,7 +76,7 @@ directory::~directory() {
 #endif
 }
 
-directory::iterator directory::begin() {
+directory::iterator directory::begin() const {
   return iterator{this};
 }
 
@@ -84,6 +86,26 @@ directory::iterator directory::end() const {
 
 const path& directory::path() const {
   return path_;
+}
+
+size_t recursive_size(const vast::directory& dir) {
+  size_t size = 0;
+  std::vector<vast::directory> stack{dir};
+  while (!stack.empty()) {
+    auto dir = std::move(stack.back());
+    stack.pop_back();
+    for (auto file : dir) {
+      if (file.is_regular_file()) {
+        if (auto sz = vast::file_size(file)) {
+          VAST_TRACE(file, "+=", *sz);
+          size += *sz;
+        }
+      } else if (file.is_directory()) {
+        stack.push_back(vast::directory{file});
+      }
+    }
+  }
+  return size;
 }
 
 } // namespace vast

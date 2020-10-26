@@ -30,7 +30,7 @@ public:
     : public detail::iterator_facade<iterator, std::input_iterator_tag,
                                      const path&, const path&> {
   public:
-    iterator(directory* dir = nullptr);
+    iterator(const directory* dir = nullptr);
 
     void increment();
     const path& dereference() const;
@@ -47,7 +47,7 @@ public:
 
   ~directory();
 
-  iterator begin();
+  iterator begin() const;
   iterator end() const;
 
   /// Retrieves the ::path for this file.
@@ -60,5 +60,10 @@ private:
   DIR* dir_ = nullptr;
 #endif
 };
+
+/// Calculates the sum of the sizes of all regular files in the directory.
+/// @param dir The directory to traverse.
+/// @returns The size of all regular files in *dir*.
+size_t recursive_size(const vast::directory& dir);
 
 } // namespace vast
