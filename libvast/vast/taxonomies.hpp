@@ -27,9 +27,9 @@ namespace vast {
 
 /// Maps concept names to the fields or concepts that implement them.
 struct concepts_type {
-  // The definition of a concept.
+  /// The definition of a concept.
   struct definition {
-    // The fields that the concept maps to.
+    /// The fields that the concept maps to.
     std::vector<std::string> fields;
     // Other concepts that are referenced. Their fields are also considered
     // during substitution.
@@ -45,7 +45,7 @@ struct concepts_type {
     }
   };
 
-  // A set of concept -name and -definition pairs.
+  /// A set of concept name and definition pairs.
   std::unordered_map<std::string, definition> data;
 
   friend bool operator==(const concepts_type& lhs, const concepts_type& rhs);
