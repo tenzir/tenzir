@@ -94,12 +94,10 @@ jobs:
           sudo apt-get -qq update
           sudo apt-get -qqy install ninja-build libpcap-dev libssl-dev lsb-release ccache libflatbuffers-dev libyaml-cpp-dev
           # Install Apache Arrow (c.f. https://arrow.apache.org/install/)
-          # TODO: Revert the commit that introduced this version pinning once ch20162
-          # is done and we can use latest upstream again.
-          wget https://apache.bintray.com/arrow/ubuntu/pool/focal/main/a/apache-arrow-archive-keyring/apache-arrow-archive-keyring_1.0.1-1_all.deb
-          sudo apt-get -qqy install ./apache-arrow-archive-keyring_1.0.1-1_all.deb
+          wget https://apache.bintray.com/arrow/$(lsb_release --id --short | tr 'A-Z' 'a-z')/apache-arrow-archive-keyring-latest-$(lsb_release --codename --short).deb
+          sudo apt-get -qqy install ./apache-arrow-archive-keyring-latest-$(lsb_release --codename --short).deb
           sudo apt-get -qq update
-          sudo apt-get -qqy install libarrow-dev=1.0.1-1
+          sudo apt-get -qqy install libarrow-dev
 
       - name: Install Dependencies (macOS)
         if: matrix.os.tag == 'macOS'

@@ -7,12 +7,10 @@ RUN apt-get -qq update && apt-get -qq install -y libasan5 libc++1 libc++abi1 \
   libpcap0.8 openssl lsb-release python3 python3-pip jq tcpdump rsync wget \
   libflatbuffers-dev libyaml-cpp-dev
 # Install Apache Arrow (c.f. https://arrow.apache.org/install/)
-# TODO: Revert the commit that introduced this version pinning once ch20162
-# is done and we can use latest upstream again.
-RUN wget https://apache.bintray.com/arrow/ubuntu/pool/focal/main/a/apache-arrow-archive-keyring/apache-arrow-archive-keyring_1.0.1-1_all.deb && \
-  apt-get -qqy install ./apache-arrow-archive-keyring_1.0.1-1_all.deb && \
+RUN wget https://apache.bintray.com/arrow/$(lsb_release --id --short | tr 'A-Z' 'a-z')/apache-arrow-archive-keyring-latest-$(lsb_release --codename --short).deb && \
+  apt-get -qqy install ./apache-arrow-archive-keyring-latest-$(lsb_release --codename --short).deb && \
   apt-get -qq update && \
-  apt-get -qqy install libarrow-dev=1.0.1-1
+  apt-get -qqy install libarrow-dev
 
 RUN pip3 install --upgrade pip && pip install --upgrade cmake && \
   cmake --version
