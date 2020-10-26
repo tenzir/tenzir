@@ -12,6 +12,10 @@ Every entry has a category for which we use the following visual abbreviations:
 
 ## Unreleased
 
+- 🎁 Building with Apache Arrow 2.0 is now supported. Older versions of Apache
+  Arrow still work; the `arrow` export format is unchanged.
+  [#1119](https://github.com/tenzir/vast/1119)
+
 - ⚡️ The on-disk format for table slices now supports versioning of table slice
   encodings. This breaking change makes it so that adding further encodings or
   adding new versions of existing encodings is possible without breaking again
@@ -102,7 +106,7 @@ Every entry has a category for which we use the following visual abbreviations:
   [#1103](https://github.com/tenzir/vast/pull/1103)
 
 - 🎁 The new script `splunk-to-vast` converts a splunk CIM model file in JSON
-  to a VAST taxonomy. For example, `splunk-to-vast < Network_Traffic.json` 
+  to a VAST taxonomy. For example, `splunk-to-vast < Network_Traffic.json`
   renders the concept definitions for the *Network Traffic* datamodel. The
   generated taxonomy does not include field definitions, which users should add
   separately according to their data formats.
