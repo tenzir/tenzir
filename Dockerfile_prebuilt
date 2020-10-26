@@ -5,7 +5,8 @@ ENV PREFIX /usr/local
 
 RUN apt-get -qq update && apt-get -qq install -y libasan5 libc++1 libc++abi1 \
   libpcap0.8 openssl lsb-release python3 python3-pip jq tcpdump rsync wget \
-  libflatbuffers-dev libyaml-cpp-dev libsnappy-dev libbrotli-dev liblz4-dev libzstd-dev
+  libflatbuffers-dev libyaml-cpp-dev libsnappy-dev libbrotli-dev liblz4-dev \
+  libzstd-dev libgrpc-dev
 # Install Apache Arrow (c.f. https://arrow.apache.org/install/)
 RUN wget https://apache.bintray.com/arrow/$(lsb_release --id --short | tr 'A-Z' 'a-z')/apache-arrow-archive-keyring-latest-$(lsb_release --codename --short).deb && \
   apt-get -qqy install ./apache-arrow-archive-keyring-latest-$(lsb_release --codename --short).deb && \
