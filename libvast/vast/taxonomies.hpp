@@ -36,7 +36,7 @@ struct concepts_type {
 
     template <class Inspector>
     friend auto inspect(Inspector& f, concepts_type::definition& cd) {
-      return f(caf::meta::type_name("concepts_definition"), cd.fields,
+      return f(caf::meta::type_name("concepts_type::definition"), cd.fields,
                cd.concepts);
     }
   };
@@ -46,7 +46,7 @@ struct concepts_type {
 
   template <class Inspector>
   friend auto inspect(Inspector& f, concepts_type& c) {
-    return f(caf::meta::type_name("concepts"), c.data);
+    return f(caf::meta::type_name("concepts_type"), c.data);
   }
 };
 
