@@ -11,6 +11,7 @@ Usage:
 import json
 import sys
 import yaml
+from yaml.representer import SafeRepresenter
 
 # Tweak pyyaml to support folded blocks.
 # See https://stackoverflow.com/a/20863889 for details.
@@ -25,9 +26,6 @@ def change_style(style, representer):
         return scalar
 
     return new_representer
-
-
-from yaml.representer import SafeRepresenter
 
 represent_folded_str = change_style(">", SafeRepresenter.represent_str)
 
