@@ -1,0 +1,67 @@
+#! /usr/bin/env python
+
+"""
+Converts a splunk CIM model to a VAS taxonomy.
+
+Usage:
+
+    splunk-to-vast < model.json > cim.yaml
+"""
+
+import json
+import sys
+import yaml
+
+# Tweak pyyaml to support folded blocks.
+# See https://stackoverflow.com/a/20863889 for details.
+class folded_str(str):
+    pass
+
+
+def change_style(style, representer):
+    def new_representer(dumper, data):
+        scalar = representer(dumper, data)
+        scalar.style = style
+        return scalar
+
+    return new_representer
+
+
+from yaml.representer import SafeRepresenter
+
+represent_folded_str = change_style(">", SafeRepresenter.represent_str)
+
+yaml.add_representer(folded_str, represent_folded_str)
+
+# Converts a CIM field to VAST concept.
+def to_concept(prefix, field):
+    return {
+        "concept": {
+            "name": f'{prefix}.{field["fieldName"]}',
+            "description": folded_str(field["comment"]["description"]),
+        }
+    }
+
+
+def main():
+    dump = lambda x: print(yaml.dump(x, sort_keys=False, width=72))
+    model = json.load(sys.stdin)
+    for object in model["objects"]:
+        name = object["objectName"]
+        fields = object["fields"]
+        if fields:
+            print(f"# {name}: extracted fields\n")
+            prefix = f"splunk.{name.lower()}"
+            # Convert plain 1-to-1 mappings.
+            dump([to_concept(prefix, x) for x in fields])
+        # Convert calculated fields.
+        calculations = object["calculations"]
+        if calculations:
+            print(f"# {name}: calculated fields\n")
+            for calculation in calculations:
+                output_fields = calculation["outputFields"]
+                dump([to_concept(prefix, x) for x in output_fields])
+
+
+if __name__ == "__main__":
+    main()
