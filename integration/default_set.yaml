@@ -405,27 +405,25 @@ tests:
   # disk monitor at the last import, but on the other hand it will also allow
   # us to catch changes that drastically change the space used by the on-disk
   # layout of the VAST data structures.
-  Disk monitor:
-    tags: [disk-quota]
-    fixture: DiskMonitorTester
-    # Disable on MacOS, since the additional `.DS_store` files throw off the size
-    # calculation.
-    condition: version | uname -s | grep -v Darwin
-    steps:
-      # We have to fix the batch-size to make sure the input arrives as a single
-      # table slice in archive and index.
-      - command: import --batch-size=8462 zeek
-        input: data/zeek/conn.log.gz
-      - command: import --batch-size=8462 zeek
-        input: data/zeek/conn.log.gz
-      - command: import --batch-size=8462 zeek
-        input: data/zeek/conn.log.gz
-      - command: import --batch-size=8462 zeek
-        input: data/zeek/conn.log.gz
-      # Table slices arent flushed until the next event arrives, so we top off
-      # the import with a tiny final table slice and give the disk monitor time
-      # to run.
-      - command: import zeek
-        input: data/zeek/snmp.log.gz
-        transformation: sleep 4
-      - command: count '#type == /zeek.*/'
+  # TODO: This is currently too unreliable, re-enable this once dcso/ch1927 is done.
+  # Disk monitor:
+  #   tags: [disk-quota]
+  #   fixture: DiskMonitorTester
+  #   steps:
+  #     # We have to fix the batch-size to make sure the input arrives as a single
+  #     # table slice in archive and index.
+  #     - command: import --batch-size=8462 zeek
+  #       input: data/zeek/conn.log.gz
+  #     - command: import --batch-size=8462 zeek
+  #       input: data/zeek/conn.log.gz
+  #     - command: import --batch-size=8462 zeek
+  #       input: data/zeek/conn.log.gz
+  #     - command: import --batch-size=8462 zeek
+  #       input: data/zeek/conn.log.gz
+  #     # Table slices arent flushed until the next event arrives, so we top off
+  #     # the import with a tiny final table slice and give the disk monitor time
+  #     # to run.
+  #     - command: import zeek
+  #       input: data/zeek/snmp.log.gz
+  #       transformation: sleep 4
+  #     - command: count '#type == /zeek.*/'
