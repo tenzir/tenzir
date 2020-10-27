@@ -12,6 +12,17 @@ Every entry has a category for which we use the following visual abbreviations:
 
 ## Unreleased
 
+- 🧬 A new *disk monitor* component can now monitor the database size and
+  delete data that exceeds a specified threshold. Once VAST reaches the maximum
+  amount of disk space, the disk monitor deletes the oldest data. The
+  command-line options `--disk-quota-high`, `--disk-quota-low`, and
+  `--disk-quota-check-interval` control the rotation behavior.
+  [#1103](https://github.com/tenzir/vast/pull/1103)
+
+- 🎁  The new options `vast.segments` and `vast.max-segment-size` control how the
+  archive generates segments.
+  [#1103](https://github.com/tenzir/vast/pull/1103)
+
 - 🎁 The new script `splunk-to-vast` converts a splunk CIM model file in JSON
   to a VAST taxonomy. For example, `splunk-to-vast < Network_Traffic.json` 
   renders the concept definitions for the *Network Traffic* datamodel. The
