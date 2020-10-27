@@ -31,12 +31,18 @@ class VAST:
             self.logger = logging.getLogger("vast")
             self.logger.setLevel(logging.DEBUG)
             ch = logging.StreamHandler()
-            ch.setFormatter(logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s"))
+            ch.setFormatter(
+                logging.Formatter(
+                    "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+                )
+            )
             self.logger.addHandler(ch)
         self.binary = binary
         self.endpoint = endpoint
         self.call_stack = []
-        self.logger.info(f"PyVAST: VAST client configured to use endpoint {self.endpoint}")
+        self.logger.info(
+            f"PyVAST: VAST client configured to use endpoint {self.endpoint}"
+        )
 
     async def __spawn(self, *args, stdin=None):
         """Spawns a process asynchronously."""
@@ -74,7 +80,7 @@ class VAST:
         if name.endswith("_"):
             # trim trailing underscores to overcome the 'import' keyword
             name = name[:-1]
-        self.call_stack.append(name.replace('_', '-'))
+        self.call_stack.append(name.replace("_", "-"))
 
         def method(*args, **kwargs):
             if kwargs:

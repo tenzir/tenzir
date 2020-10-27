@@ -16,12 +16,12 @@ some demo data before running this example.
 
 async def continuous_query_example():
     """
-        This example demonstrates how continuous queries of VAST can be wrapped
-        with the Python bindings.
+    This example demonstrates how continuous queries of VAST can be wrapped
+    with the Python bindings.
 
-        To spawn continuous events in VAST, first run this code and then, on a
-        different terminal, ingest new Zeek logs with VAST. That should update
-        the console that is running this example code.
+    To spawn continuous events in VAST, first run this code and then, on a
+    different terminal, ingest new Zeek logs with VAST. That should update
+    the console that is running this example code.
     """
     vast = VAST(binary="/opt/tenzir/bin/vast")
     proc = await vast.export(continuous=True).json('#type == "zeek.conn"').exec()
