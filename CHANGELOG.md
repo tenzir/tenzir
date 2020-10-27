@@ -11,6 +11,13 @@ Every entry has a category for which we use the following visual abbreviations:
 
 ## Unreleased
 
+- 🎁 The new script `splunk-to-vast` converts a splunk CIM model file in JSON
+  to a VAST taxonomy. For example, `splunk-to-vast < Network_Traffic.json` 
+  renders the concept definitions for the *Network Traffic* datamodel. The
+  generated taxonomy does not include field definitions, which users should add
+  separately according to their data formats.
+  [#1121](https://github.com/tenzir/vast/pull/1121)
+
 - 🐞 VAST no longer opens a random public port, which used to be enabled in
   the experimental VAST cluster mode in order to transparently establish a
   full mesh.
