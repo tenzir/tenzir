@@ -24,12 +24,19 @@ import logging
 class VAST:
     """A VAST node handle"""
 
-    def __init__(self, binary="vast", endpoint=None):
-        self.logger = logging.getLogger("vast")
+    def __init__(self, binary="vast", endpoint=None, logger=None):
+        if logger:
+            self.logger = logger
+        else:
+            self.logger = logging.getLogger("vast")
+            self.logger.setLevel(logging.DEBUG)
+            ch = logging.StreamHandler()
+            ch.setFormatter(logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s"))
+            self.logger.addHandler(ch)
         self.binary = binary
         self.endpoint = endpoint
         self.call_stack = []
-        self.logger.debug(f"VAST client configured to use endpoint {self.endpoint}")
+        self.logger.info(f"PyVAST: VAST client configured to use endpoint {self.endpoint}")
 
     async def __spawn(self, *args, stdin=None):
         """Spawns a process asynchronously."""
@@ -50,11 +57,11 @@ class VAST:
         return proc.returncode == 0
 
     async def exec(self, stdin=None):
-        self.logger.debug(f"Executing call stack: {self.call_stack}")
+        self.logger.debug(f"PyVAST: Executing call stack: {self.call_stack}")
         if not stdin:
             proc = await self.__spawn(*self.call_stack)
         else:
-            self.logger.debug(f"Forwarding stdin {stdin}")
+            self.logger.debug(f"PyVAST: Forwarding stdin {stdin}")
             proc = await self.__spawn(*self.call_stack, stdin=asyncio.subprocess.PIPE)
             proc.stdin.write(str(stdin).encode())
             await proc.stdin.drain()
