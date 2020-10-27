@@ -1,7 +1,7 @@
 #! /usr/bin/env python
 
 """
-Converts a splunk CIM model to a VAS taxonomy.
+Converts a splunk CIM model to a VAST taxonomy.
 
 Usage:
 
