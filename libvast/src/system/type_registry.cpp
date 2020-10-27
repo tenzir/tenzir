@@ -40,22 +40,27 @@ caf::dictionary<caf::config_value>
 type_registry_state::status(status_verbosity v) const {
   auto result = caf::settings{};
   auto& tr_status = put_dictionary(result, "type-registry");
-  if (v >= status_verbosity::debug) {
-    // Sorted list of all keys.
-    auto keys = std::vector<std::string>(data.size());
-    std::transform(data.begin(), data.end(), keys.begin(),
-                   [](const auto& x) { return x.first; });
-    std::sort(keys.begin(), keys.end());
-    caf::put(tr_status, "types", keys);
+  if (v >= status_verbosity::detailed) {
     // The list of defined concepts
     auto& concepts_status = put_dictionary(tr_status, "concepts");
     for (auto& [name, definition] : taxonomies.concepts.data) {
       auto& concept_status = put_dictionary(concepts_status, name);
-      concept_status["fields"] = definition.fields;
-      concept_status["concepts"] = definition.concepts;
+      concept_status["description"] = definition.description;
+      if (v >= status_verbosity::debug) {
+        concept_status["fields"] = definition.fields;
+        concept_status["concepts"] = definition.concepts;
+      }
     }
-    // The usual per-component status.
-    detail::fill_status_map(tr_status, self);
+    if (v >= status_verbosity::debug) {
+      // Sorted list of all keys.
+      auto keys = std::vector<std::string>(data.size());
+      std::transform(data.begin(), data.end(), keys.begin(),
+                     [](const auto& x) { return x.first; });
+      std::sort(keys.begin(), keys.end());
+      caf::put(tr_status, "types", keys);
+      // The usual per-component status.
+      detail::fill_status_map(tr_status, self);
+    }
   }
   return result;
 }
