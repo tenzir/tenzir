@@ -31,8 +31,8 @@ represent_folded_str = change_style(">", SafeRepresenter.represent_str)
 
 yaml.add_representer(folded_str, represent_folded_str)
 
-# Converts a CIM field to VAST concept.
 def to_concept(prefix, field):
+    """Converts a CIM field to VAST concept."""
     return {
         "concept": {
             "name": f'{prefix}.{field["fieldName"]}',
