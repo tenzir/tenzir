@@ -7,6 +7,7 @@ Every entry has a category for which we use the following visual abbreviations:
 - 🎁 feature
 - 🧬 experimental feature
 - ⚠️ change
+- ⚡️ breaking change
 - 🐞 bugfix
 
 ## Unreleased
@@ -64,7 +65,7 @@ Every entry has a category for which we use the following visual abbreviations:
   `vast.yaml.example` file for an explanation of the new layout.
   [#1073](https://github.com/tenzir/vast/pull/1073)
 
-- ⚠️ Data exported in the Apache Arrow format now contains the name of the
+- ⚡️ Data exported in the Apache Arrow format now contains the name of the
   payload record type in the metadata section of the schema.
   [#1072](https://github.com/tenzir/vast/pull/1072)
 
@@ -73,7 +74,7 @@ Every entry has a category for which we use the following visual abbreviations:
   instructions.
   [#863](https://github.com/tenzir/vast/pull/863)
 
-- ⚠️ The persistent storage format of the index now uses FlatBuffers.
+- ⚡️ The persistent storage format of the index now uses FlatBuffers.
   [#863](https://github.com/tenzir/vast/pull/863)
 
 - ⚠️ We refactored the index architecture to improve stability and
@@ -158,7 +159,7 @@ Every entry has a category for which we use the following visual abbreviations:
   if that fails after another timeout, the process will call `abort(3)`.
   [#1005](https://github.com/tenzir/vast/pull/1005)
 
-- ⚠️ We now bundle a patched version of CAF, with a changed ABI. This means that
+- ⚡️ We now bundle a patched version of CAF, with a changed ABI. This means that
   if you're linking against the bundled CAF library, you also need to distribute
   that library so that VAST can use it at runtime.  The versions are API
   compatible so linking against a system version of CAF is still possible and
@@ -228,7 +229,7 @@ Every entry has a category for which we use the following visual abbreviations:
 - ⚠️ VAST now recognizes `/etc/vast/schema` as an additional default directory
   for schema files. [#980](https://github.com/tenzir/vast/pull/980)
 
-- ⚠️ [FlatBuffers](https://google.github.io/flatbuffers/) is now a required
+- ⚡️ [FlatBuffers](https://google.github.io/flatbuffers/) is now a required
   dependency for VAST. The archive and the segment store use FlatBuffers to
   store and version their on-disk persistent state.
   [#972](https://github.com/tenzir/vast/pull/972)
