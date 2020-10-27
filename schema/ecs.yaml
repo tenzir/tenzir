@@ -1,5 +1,9 @@
 - concept:
     name: ecs.source.ip
+    description: "A source IP address"
+
+- concept:
+    name: ecs.source.ip
     fields:
     - suricata.alert.src_ip
     - suricata.dhcp.src_ip
