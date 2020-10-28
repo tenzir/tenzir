@@ -60,12 +60,12 @@ EXPOSE 42000/tcp
 
 RUN echo "Adding vast user" && useradd --system --user-group vast
 
-RUN mkdir -p /etc/vast /var/log/vast /var/db/vast
+RUN mkdir -p /etc/vast /var/log/vast /var/lib/vast
 COPY systemd/vast.yaml /etc/vast/vast.yaml
-RUN chown -R vast:vast /var/log/vast /var/db/vast
+RUN chown -R vast:vast /var/log/vast /var/lib/vast
 
-WORKDIR /var/db/vast
-VOLUME ["/var/db/vast"]
+WORKDIR /var/lib/vast
+VOLUME ["/var/lib/vast"]
 
 USER vast:vast
 ENTRYPOINT ["vast"]

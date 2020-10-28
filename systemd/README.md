@@ -20,8 +20,8 @@ Once the user exists, you should create the directory for VAST's persistent data
 storage and change the permissions such that it is owned by the new `vast` user.
 
 ```bash
-mkdir -p {/var/db/vast,/var/log/vast}
-chown -R vast:vast {/var/db/vast,/var/log/vast}
+mkdir -p {/var/lib/vast,/var/log/vast}
+chown -R vast:vast {/var/lib/vast,/var/log/vast}
 ```
 
 As described above, the systemd unit is configured to allow certain write paths

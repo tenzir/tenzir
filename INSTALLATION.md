@@ -91,8 +91,8 @@ directory for persistent data, make sure the `tenzir` user inside the container
 can write to it.
 
 ```sh
-mkdir -p /var/db/vast
-docker run -dt --name=vast --rm -p 42000:42000 -v /var/db/vast:/data tenzir/vast:latest start
+mkdir -p /var/lib/vast
+docker run -dt --name=vast --rm -p 42000:42000 -v /var/lib/vast:/var/lib/vast tenzir/vast:latest start
 ```
 
 ### macOS

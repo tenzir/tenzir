@@ -12,6 +12,9 @@ Every entry has a category for which we use the following visual abbreviations:
 
 ## Unreleased
 
+- ⚠️ The default database directory moved to `/var/lib/vast` for Linux deployments.
+  [#1116](https://github.com/tenzir/vast/pull/1116)
+
 - 🐞 The `lsvast` tool failed to print FlatBuffers schemas correctly. The output
   now renders correctly.
   [#1123](https://github.com/tenzir/vast/pull/1123)
