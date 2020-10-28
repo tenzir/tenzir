@@ -29,10 +29,14 @@ namespace vast {
 struct concepts_type {
   /// The definition of a concept.
   struct definition {
+    /// The description of the concept.
+    std::string description;
+
     /// The fields that the concept maps to.
     std::vector<std::string> fields;
-    // Other concepts that are referenced. Their fields are also considered
-    // during substitution.
+
+    /// Other concepts that are referenced. Their fields are also considered
+    /// during substitution.
     std::vector<std::string> concepts;
 
     friend bool operator==(const concepts_type::definition& lhs,

@@ -17,6 +17,7 @@
 #include "vast/detail/stable_set.hpp"
 #include "vast/error.hpp"
 #include "vast/expression.hpp"
+#include "vast/logger.hpp"
 
 #include <caf/deserializer.hpp>
 #include <caf/serializer.hpp>
@@ -34,19 +35,22 @@ caf::error convert(const data& d, concepts_type& out) {
       return make_error(ec::convert_error, "concept has no name:", d);
     auto name = caf::get_if<std::string>(&n->second);
     if (!name)
-      return make_error(ec::convert_error, "name is not a string:", *n);
+      return make_error(ec::convert_error, "concept name is not a string:", *n);
+    auto& dest = out.data[*name];
     auto fs = c->find("fields");
-    if (fs == c->end())
-      return make_error(ec::convert_error, "concept has no fields:", d);
-    if (const auto& fields = caf::get_if<list>(&fs->second)) {
-      for (auto& f : *fields) {
-        auto field = caf::get_if<std::string>(&f);
-        if (!field)
-          return make_error(ec::convert_error, "field is not a string:", f);
-        out.data[*name].fields.push_back(*field);
+    if (fs != c->end()) {
+      if (const auto& fields = caf::get_if<list>(&fs->second)) {
+        for (auto& f : *fields) {
+          auto field = caf::get_if<std::string>(&f);
+          if (!field)
+            return make_error(ec::convert_error, "field in", *name,
+                              "is not a string:", f);
+          dest.fields.push_back(*field);
+        }
+      } else {
+        return make_error(ec::convert_error, "fields in", *name,
+                          "is not a list:", fs->second);
       }
-    } else {
-      return make_error(ec::convert_error, "fields is not a list:", fs->second);
     }
     auto cs = c->find("concepts");
     if (cs != c->end()) {
@@ -54,12 +58,24 @@ caf::error convert(const data& d, concepts_type& out) {
         for (auto& c : *concepts) {
           auto concept_ = caf::get_if<std::string>(&c);
           if (!concept_)
-            return make_error(ec::convert_error, "concept is not a string:", c);
-          out.data[*name].concepts.push_back(*concept_);
+            return make_error(ec::convert_error, "concept in", *name,
+                              "is not a string:", c);
+          dest.concepts.push_back(*concept_);
         }
       } else {
-        return make_error(ec::convert_error,
-                          "concepts is not a list:", cs->second);
+        return make_error(ec::convert_error, "concepts in", *name,
+                          "is not a list:", cs->second);
+      }
+    }
+    auto desc = c->find("description");
+    if (desc != c->end()) {
+      if (auto description = caf::get_if<std::string>(&desc->second)) {
+        if (dest.description.empty())
+          dest.description = *description;
+        else if (dest.description != *description)
+          VAST_WARNING_ANON("encountered conflicting descriptions for",
+                            *name + ": \"" + dest.description + "\" and \""
+                              + *description + "\"");
       }
     }
   } else {
