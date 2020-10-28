@@ -88,7 +88,6 @@ type suricata.dhcp = record {
     assigned_ip: addr,
     client_ip: addr,
     dhcp_type: string,
-    assigned_ip: addr,
     client_id: string #index=hash,
     hostname: string,
     params: list<string>
@@ -339,7 +338,6 @@ type suricata.smb = record {
       user: string
     },
     changed: count,
-    status: string,
     size: count,
     disposition: string,
     server_guid: string,
