@@ -36,7 +36,7 @@ caf::error convert(const data& d, concepts_type& out) {
     auto name = caf::get_if<std::string>(&n->second);
     if (!name)
       return make_error(ec::convert_error, "concept name is not a string:", *n);
-    auto& dest = out.data[*name];
+    auto& dest = out[*name];
     auto fs = c->find("fields");
     if (fs != c->end()) {
       if (const auto& fields = caf::get_if<list>(&fs->second)) {
@@ -106,13 +106,8 @@ caf::expected<concepts_type> extract_concepts(const data& d) {
   return result;
 }
 
-bool operator==(const concepts_type::definition& lhs,
-                const concepts_type::definition& rhs) {
+bool operator==(const concept_& lhs, const concept_& rhs) {
   return lhs.concepts == rhs.concepts && lhs.fields == rhs.fields;
-}
-
-bool operator==(const concepts_type& lhs, const concepts_type& rhs) {
-  return lhs.data == rhs.data;
 }
 
 bool operator==(const taxonomies& lhs, const taxonomies& rhs) {
@@ -151,8 +146,8 @@ resolve_concepts(const concepts_type& concepts, const expression& e,
       // This algorithm recursivly looks up items form the concepts map and
       // generates a predicate for every discovered name that is not a concept
       // itself.
-      auto concept_ = concepts.data.find(field_name);
-      if (concept_ == concepts.data.end())
+      auto c = concepts.find(field_name);
+      if (c == concepts.end())
         return expression{std::move(pred)};
       // The log of all referenced concepts that we tried to resolve already.
       // This is a deque instead of a stable_set because we don't want
@@ -161,7 +156,7 @@ resolve_concepts(const concepts_type& concepts, const expression& e,
       // All fields that the concept is resolve to either directly or indirectly
       // through referenced concepts.
       detail::stable_set<std::string> target_fields;
-      auto handle_def = [&](const concepts_type::definition& def) {
+      auto handle_def = [&](const concept_& def) {
         // Create the union of all fields by inserting into the set.
         target_fields.insert(def.fields.begin(), def.fields.end());
         // Insert only those concepts into the queue that aren't in there yet,
@@ -172,12 +167,12 @@ resolve_concepts(const concepts_type& concepts, const expression& e,
             log.push_back(x);
         }
       };
-      handle_def(concept_->second);
+      handle_def(c->second);
       // We iterate through the log while appending referenced concepts in
       // handle_def.
       for (auto current : log) {
-        auto ref_concept = concepts.data.find(current);
-        if (ref_concept != concepts.data.end())
+        auto ref_concept = concepts.find(current);
+        if (ref_concept != concepts.end())
           handle_def(ref_concept->second);
       }
       // Transform the target_fields into new predicates.

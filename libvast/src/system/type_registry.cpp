@@ -43,7 +43,7 @@ type_registry_state::status(status_verbosity v) const {
   if (v >= status_verbosity::detailed) {
     // The list of defined concepts
     auto& concepts_status = put_dictionary(tr_status, "concepts");
-    for (auto& [name, definition] : taxonomies.concepts.data) {
+    for (auto& [name, definition] : taxonomies.concepts) {
       auto& concept_status = put_dictionary(concepts_status, name);
       concept_status["description"] = definition.description;
       if (v >= status_verbosity::debug) {
