@@ -24,7 +24,12 @@ setup(
     description="Python CLI wrapper for VAST - Visibility Across Space and Time",
     include_package_data=True,
     install_requires=[],
-    keywords=["vast", "pyvast", "open source", "network telemetry",],
+    keywords=[
+        "vast",
+        "pyvast",
+        "open source",
+        "network telemetry",
+    ],
     license="BSD 3-clause",
     long_description=long_description,
     long_description_content_type="text/markdown",

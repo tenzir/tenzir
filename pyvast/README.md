@@ -51,7 +51,27 @@ and the analogous `pyvast` commands.
   print(stdout)
   ```
 
-#### Full Example
+### Module Parameterization
+
+You can use PyVAST as Python module. After installing it via `pip`, simply
+import it normally in your Python application.
+
+```py
+from pyvast import VAST
+```
+
+Once imported, there are three optional keyword arguments to instruct PyVAST
+with: `binary`, `endpoint`, and `logger`. The `binary` keyword defaults to
+`"vast"`. In case the `vast` binary is not in your `$PATH`, set this to the
+actual path to the VAST binary. The `endpoint` keyword refers to the endpoint of
+the VAST node (e.g., `localhost:42000`). Lastly, use the `logger` keyword to
+provide a custom
+[logging.logger](https://docs.python.org/3/library/logging.html#logger-objects)
+object for your application.
+
+See also the full example below.
+
+### Full Example
 
 The following example shows a minimalistic working example with all required
 import statements.

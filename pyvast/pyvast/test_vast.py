@@ -8,8 +8,10 @@ import json
 
 class TestConnection(aiounittest.AsyncTestCase):
     def setUp(self):
-        self.vast = VAST(binary="/opt/tenzir/bin/vast") # default port
-        self.vast_disconnected = VAST(binary="/opt/tenzir/bin/vast", endpoint="localhost:44883") # closed / unbound port
+        self.vast = VAST(binary="/opt/tenzir/bin/vast")  # default port
+        self.vast_disconnected = VAST(
+            binary="/opt/tenzir/bin/vast", endpoint="localhost:44883"
+        )  # closed / unbound port
 
     async def test_connection(self):
         self.assertTrue(await self.vast.test_connection())
@@ -54,7 +56,7 @@ class TestCallStackCreation(unittest.TestCase):
 
     def test_underscore_replacement_in_subcommands(self):
         self.assertEqual(self.vast.call_stack, [])
-        self.vast.matcher().ioc_remove(name='foo', ioc='bar')
+        self.vast.matcher().ioc_remove(name="foo", ioc="bar")
         self.assertEqual(
             self.vast.call_stack, ["matcher", "ioc-remove", "--name=foo", "--ioc=bar"]
         )
