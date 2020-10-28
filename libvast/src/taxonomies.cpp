@@ -35,7 +35,7 @@ caf::error convert(const data& d, concepts_type& out) {
       return make_error(ec::convert_error, "concept has no name:", d);
     auto name = caf::get_if<std::string>(&n->second);
     if (!name)
-      return make_error(ec::convert_error, "name is not a string:", *n);
+      return make_error(ec::convert_error, "concept name is not a string:", *n);
     auto& dest = out.data[*name];
     auto fs = c->find("fields");
     if (fs != c->end()) {
@@ -43,12 +43,13 @@ caf::error convert(const data& d, concepts_type& out) {
         for (auto& f : *fields) {
           auto field = caf::get_if<std::string>(&f);
           if (!field)
-            return make_error(ec::convert_error, "field is not a string:", f);
+            return make_error(ec::convert_error, "field in", *name,
+                              "is not a string:", f);
           dest.fields.push_back(*field);
         }
       } else {
-        return make_error(ec::convert_error,
-                          "fields is not a list:", fs->second);
+        return make_error(ec::convert_error, "fields in", *name,
+                          "is not a list:", fs->second);
       }
     }
     auto cs = c->find("concepts");
@@ -57,12 +58,13 @@ caf::error convert(const data& d, concepts_type& out) {
         for (auto& c : *concepts) {
           auto concept_ = caf::get_if<std::string>(&c);
           if (!concept_)
-            return make_error(ec::convert_error, "concept is not a string:", c);
+            return make_error(ec::convert_error, "concept in", *name,
+                              "is not a string:", c);
           dest.concepts.push_back(*concept_);
         }
       } else {
-        return make_error(ec::convert_error,
-                          "concepts is not a list:", cs->second);
+        return make_error(ec::convert_error, "concepts in", *name,
+                          "is not a list:", cs->second);
       }
     }
     auto desc = c->find("description");
@@ -71,9 +73,9 @@ caf::error convert(const data& d, concepts_type& out) {
         if (dest.description.empty())
           dest.description = *description;
         else if (dest.description != *description)
-          VAST_WARNING_ANON("conflicting concept descriptions for", *name,
-                            ": \"" + dest.description + "\" and \"" + *description +
-                            "\"");
+          VAST_WARNING_ANON("encountered conflicting descriptions for",
+                            *name + ": \"" + dest.description + "\" and \""
+                              + *description + "\"");
       }
     }
   } else {

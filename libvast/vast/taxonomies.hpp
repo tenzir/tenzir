@@ -35,8 +35,8 @@ struct concepts_type {
     /// The fields that the concept maps to.
     std::vector<std::string> fields;
 
-    // Other concepts that are referenced. Their fields are also considered
-    // during substitution.
+    /// Other concepts that are referenced. Their fields are also considered
+    /// during substitution.
     std::vector<std::string> concepts;
 
     friend bool operator==(const concepts_type::definition& lhs,
