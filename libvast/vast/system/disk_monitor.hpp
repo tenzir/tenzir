@@ -12,7 +12,8 @@ namespace vast::system {
 // clang-format off
 using disk_monitor_type = caf::typed_actor<
   caf::reacts_to<atom::ping>,
-  caf::reacts_to<atom::erase>
+  caf::reacts_to<atom::erase>,
+  caf::replies_to<atom::status, status_verbosity>::with<caf::dictionary<caf::config_value>>
 >;
 // clang-format on
 

@@ -11,6 +11,7 @@
 #include "vast/uuid.hpp"
 
 #include <caf/detail/scope_guard.hpp>
+#include <caf/settings.hpp>
 #include <caf/typed_event_based_actor.hpp>
 
 #include <sys/stat.h>
@@ -126,6 +127,10 @@ disk_monitor(disk_monitor_type::stateful_pointer<disk_monitor_state> self,
           [=, sg = shared_guard](caf::error e) {
             VAST_WARNING(self, "failed to erase from index:", render(e));
           });
+    },
+    [=](atom::status, status_verbosity) {
+      // TODO: Return some useful information here.
+      return caf::settings{};
     },
   };
 }
