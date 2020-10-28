@@ -46,13 +46,13 @@ enum class Kind {
   Segment,
 };
 
-typedef void (*printer)(vast::path);
+typedef void (*printer)(vast::path, int);
 
-void print_unknown(vast::path);
-void print_vast_db(vast::path);
-void print_partition(vast::path);
-void print_index(vast::path);
-void print_segment(vast::path);
+void print_unknown(vast::path, int);
+void print_vast_db(vast::path, int);
+void print_partition(vast::path, int);
+void print_index(vast::path, int);
+void print_segment(vast::path, int);
 
 static const std::map<Kind, printer> printers = {
   {Kind::Unknown, print_unknown}, {Kind::DatabaseDir, print_vast_db},
@@ -122,43 +122,51 @@ std::ostream& operator<<(std::ostream& out, const vast::fbs::uuid::v0* uuid) {
   return out;
 }
 
-void print_unknown(vast::path path) {
-  std::cout << "(unknown " << path.str() << ")\n";
+void print_unknown(vast::path path, int indent) {
+  std::string spaces(indent, ' ');
+  std::cout << spaces << "(unknown " << path.str() << ")\n";
 }
 
-void print_vast_db(vast::path vast_db) {
+void print_vast_db(vast::path vast_db, int indent) {
   // TODO: We should have some versioning for the layout
   // of the vast.db directory itself, so we can still read
   // older versions.
   auto index_dir = vast_db / "index";
-  print_index(index_dir / "index.bin");
+  std::string spaces(indent, ' ');
+  std::cout << spaces << index_dir.str() << "/\n";
+  print_index(index_dir / "index.bin", indent + 2);
   for (auto file : vast::directory{index_dir}) {
     auto stem = file.basename(true).str();
     if (stem == "index")
       continue;
-    print_partition(file);
+    print_partition(file, indent + 2);
   }
   auto segments_dir = vast_db / "archive" / "segments";
+  std::cout << spaces << segments_dir.str() << "/\n";
   for (auto file : vast::directory{segments_dir}) {
-    print_segment(file);
+    print_segment(file, indent + 2);
   }
 }
 
-void print_partition_v0(const vast::fbs::partition::v0* partition) {
+void print_partition_v0(const vast::fbs::partition::v0* partition, int indent) {
   if (!partition) {
     std::cout << "(null)\n";
     return;
   }
+  std::string spaces(indent, ' ');
+  std::cout << spaces << "Partition\n";
   vast::uuid id;
   if (partition->uuid())
     unpack(*partition->uuid(), id);
-  std::cout << "  uuid: " << to_string(id) << "\n";
-  std::cout << "  offset: " << partition->offset() << "\n";
-  std::cout << "  events: " << partition->events() << "\n";
+  spaces += "  ";
+  std::cout << spaces << "uuid: " << to_string(id) << "\n";
+  std::cout << spaces << "offset: " << partition->offset() << "\n";
+  std::cout << spaces << "events: " << partition->events() << "\n";
+  spaces += "  ";
   for (auto type_ids : *partition->type_ids()) {
     auto name = type_ids->name()->c_str();
     auto ids_bytes = type_ids->ids();
-    std::cout << "  " << name << ": ";
+    std::cout << spaces << name << ": ";
     vast::ids restored_ids;
     caf::binary_deserializer bds(
       nullptr, reinterpret_cast<const char*>(ids_bytes->data()),
@@ -172,38 +180,39 @@ void print_partition_v0(const vast::fbs::partition::v0* partition) {
   // TODO: print combined_layout, indexes, and partition synopsis
 }
 
-void print_partition(vast::path path) {
+void print_partition(vast::path path, int indent) {
   auto partition = read_flatbuffer_file<vast::fbs::Partition>(path);
   if (!partition) {
     std::cout << "(error reading partition file " << path.str() << ")\n";
   }
-  if (!vast::fbs::PartitionBufferHasIdentifier(partition.get())) {
-    std::cout << "(invalid file identifier)\n";
-    return;
-  }
   switch (partition->partition_type()) {
     case vast::fbs::partition::Partition::v0:
-      print_partition_v0(partition->partition_as_v0());
+      print_partition_v0(partition->partition_as_v0(), indent);
       break;
     default:
       std::cout << "(unknown partition version)\n";
   }
 }
 
-void print_index_v0(const vast::fbs::index::v0* index) {
+void print_index_v0(const vast::fbs::index::v0* index, int indent) {
   if (!index) {
     std::cout << "(null)\n";
     return;
   }
-  std::cout << "layouts:\n";
+  std::string spaces(indent, ' ');
+  std::cout << spaces << "Index\n";
+  spaces += "  ";
+  std::cout << spaces << "layouts:\n";
+  spaces += "  ";
   if (!index->stats()) {
-    std::cout << "  (null)\n";
+    std::cout << "(null)\n";
   } else {
     for (auto stat : *index->stats())
-      std::cout << "  " << stat->name()->c_str() << ": " << stat->count()
+      std::cout << spaces << stat->name()->c_str() << ": " << stat->count()
                 << std::endl;
   }
-  std::cout << "partitions: ";
+  spaces.resize(spaces.size() - 2);
+  std::cout << spaces << "partitions: ";
   if (!index->partitions()) {
     std::cout << "(null)\n";
   } else {
@@ -214,44 +223,39 @@ void print_index_v0(const vast::fbs::index::v0* index) {
   }
 }
 
-void print_index(vast::path path) {
+void print_index(vast::path path, int indent) {
   auto index = read_flatbuffer_file<vast::fbs::Index>(path);
   if (!index) {
     std::cout << "(error reading index file " << path.str() << ")\n";
   }
-  if (!vast::fbs::IndexBufferHasIdentifier(index.get())) {
-    std::cout << "(invalid file identifier)\n";
-    return;
-  }
   switch (index->index_type()) {
     case vast::fbs::index::Index::v0:
-      print_index_v0(index->index_as_v0());
+      print_index_v0(index->index_as_v0(), indent);
       break;
     default:
       std::cout << "(unknown partition version)\n";
   }
 }
 
-void print_segment_v0(const vast::fbs::segment::v0* segment) {
+void print_segment_v0(const vast::fbs::segment::v0* segment, int indent = 0) {
   vast::uuid id;
   if (segment->uuid())
     unpack(*segment->uuid(), id);
-  std::cout << "  uuid: " << to_string(id) << "\n";
-  std::cout << "  events: " << segment->events() << "\n";
+  std::string spaces(indent, ' ');
+  std::cout << spaces << "Segment\n";
+  spaces += "  ";
+  std::cout << spaces << "uuid: " << to_string(id) << "\n";
+  std::cout << spaces << "events: " << segment->events() << "\n";
 }
 
-void print_segment(vast::path path) {
+void print_segment(vast::path path, int indent = 0) {
   auto segment = read_flatbuffer_file<vast::fbs::Segment>(path);
   if (!segment) {
     std::cout << "(error reading segment file " << path.str() << ")\n";
   }
-  if (!vast::fbs::SegmentBufferHasIdentifier(segment.get())) {
-    std::cout << "(invalid file identifier)\n";
-    return;
-  }
   switch (segment->segment_type()) {
     case vast::fbs::segment::Segment::v0:
-      print_segment_v0(segment->segment_as_v0());
+      print_segment_v0(segment->segment_as_v0(), indent);
       break;
     default:
       std::cout << "(unknown partition version)\n";
@@ -274,6 +278,6 @@ int main(int argc, char** argv) {
     return 1;
   }
   auto printer = printers.at(kind);
-  printer(path);
+  printer(path, 0);
   return 0;
 }

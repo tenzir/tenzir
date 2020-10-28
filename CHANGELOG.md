@@ -12,6 +12,10 @@ Every entry has a category for which we use the following visual abbreviations:
 
 ## Unreleased
 
+- 🐞 The `lsvast` tool failed to print FlatBuffers schemas correctly. The output
+  now renders correctly.
+  [#1123](https://github.com/tenzir/vast/pull/1123)
+
 - 🧬 A new *disk monitor* component can now monitor the database size and
   delete data that exceeds a specified threshold. Once VAST reaches the maximum
   amount of disk space, the disk monitor deletes the oldest data. The
