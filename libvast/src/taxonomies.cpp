@@ -72,7 +72,7 @@ caf::error convert(const data& d, concepts_type& out) {
           dest.description = *description;
         else if (dest.description != *description)
           VAST_WARNING_ANON("conflicting concept descriptions for", *name,
-                            ": \"", dest.description, "\" and \"", *description,
+                            ": \"" + dest.description + "\" and \"" + *description +
                             "\"");
       }
     }
