@@ -46,10 +46,11 @@ void meta_index::add(const uuid& partition, const table_slice& slice) {
     // Locate the relevant synopsis.
     auto& field = slice.layout().fields[col];
     auto key = qualified_record_field{slice.layout().name(), field};
-    auto it = part_syn.find(key);
-    if (it == part_syn.end())
+    auto& field_syn = part_syn.field_synopses_;
+    auto it = field_syn.find(key);
+    if (it == field_syn.end())
       // Attempt to create a synopsis if we have never seen this key before.
-      it = part_syn.emplace(std::move(key), make_synopsis(field)).first;
+      it = field_syn.emplace(std::move(key), make_synopsis(field)).first;
     // If there exists a synopsis for a field, add the entire column.
     if (auto& syn = it->second) {
       for (size_t row = 0; row < slice.rows(); ++row) {
@@ -59,6 +60,10 @@ void meta_index::add(const uuid& partition, const table_slice& slice) {
       }
     }
   }
+}
+
+void meta_index::erase(const uuid& partition) {
+  synopses_.erase(partition);
 }
 
 void meta_index::merge(const uuid& partition, partition_synopsis&& ps) {
@@ -133,7 +138,7 @@ std::vector<uuid> meta_index::lookup(const expression& expr) const {
         auto found_matching_synopsis = false;
         for (auto& [part_id, part_syn] : synopses_) {
           VAST_DEBUG(this, "checks", part_id, "for predicate", x);
-          for (auto& [field, syn] : part_syn) {
+          for (auto& [field, syn] : part_syn.field_synopses_) {
             if (syn && match(field)) {
               found_matching_synopsis = true;
               auto opt = syn->lookup(x.op, make_view(rhs));
@@ -161,7 +166,7 @@ std::vector<uuid> meta_index::lookup(const expression& expr) const {
             // at the layout names.
             result_type result;
             for (auto& [part_id, part_syn] : synopses_) {
-              for (auto& pair : part_syn) {
+              for (auto& pair : part_syn.field_synopses_) {
                 // TODO: provide an overload for view of evaluate() so that
                 // we can use string_view here. Fortunately type names are
                 // short, so we're probably not hitting the allocator due to
@@ -210,29 +215,10 @@ caf::settings& meta_index::factory_options() {
   return synopsis_options_;
 }
 
-caf::expected<flatbuffers::Offset<fbs::meta_index::v0>>
-pack(flatbuffers::FlatBufferBuilder& builder, const meta_index& x) {
-  std::vector<char> buffer;
-  caf::binary_serializer sink{nullptr, buffer};
-  if (auto error = sink(x))
-    return error;
-  auto data_ptr = reinterpret_cast<const uint8_t*>(buffer.data());
-  auto data = builder.CreateVector(data_ptr, buffer.size());
-  fbs::meta_index::v0Builder meta_index_builder{builder};
-  meta_index_builder.add_state(data);
-  return meta_index_builder.Finish();
-}
-
-caf::error unpack(const fbs::meta_index::v0& x, meta_index& y) {
-  auto ptr = reinterpret_cast<const char*>(x.state()->Data());
-  caf::binary_deserializer source{nullptr, ptr, x.state()->size()};
-  return source(y);
-}
-
 caf::expected<flatbuffers::Offset<fbs::partition_synopsis::v0>>
 pack(flatbuffers::FlatBufferBuilder& builder, const partition_synopsis& x) {
   std::vector<flatbuffers::Offset<fbs::synopsis::v0>> synopses;
-  for (auto& [fqf, synopsis] : x) {
+  for (auto& [fqf, synopsis] : x.field_synopses_) {
     auto maybe_synopsis = pack(builder, synopsis, fqf);
     if (!maybe_synopsis)
       return maybe_synopsis.error();
@@ -258,7 +244,7 @@ unpack(const fbs::partition_synopsis::v0& x, partition_synopsis& ps) {
     synopsis_ptr ptr;
     if (auto error = unpack(*synopsis, ptr))
       return error;
-    ps[qf] = std::move(ptr);
+    ps.field_synopses_[qf] = std::move(ptr);
   }
   return caf::none;
 }

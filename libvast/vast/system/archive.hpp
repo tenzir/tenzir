@@ -54,7 +54,7 @@ using archive_type = caf::typed_actor<
   caf::reacts_to<ids, receiver_type, uint64_t>,
   caf::replies_to<atom::status, status_verbosity>::with<caf::dictionary<caf::config_value>>,
   caf::reacts_to<atom::telemetry>,
-  caf::reacts_to<atom::erase, ids>
+  caf::replies_to<atom::erase, ids>::with<atom::done>
 >;
 // clang-format on
 

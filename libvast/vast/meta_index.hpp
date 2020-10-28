@@ -16,8 +16,10 @@
 #include "vast/fbs/index.hpp"
 #include "vast/fbs/partition.hpp"
 #include "vast/fwd.hpp"
+#include "vast/ids.hpp"
 #include "vast/qualified_record_field.hpp"
 #include "vast/synopsis.hpp"
+#include "vast/time_synopsis.hpp"
 #include "vast/type.hpp"
 #include "vast/uuid.hpp"
 
@@ -44,11 +46,14 @@ pack(flatbuffers::FlatBufferBuilder& builder,
 } // namespace system
 
 /// Contains one synopsis per partition column.
-//  TODO: Turn this into a proper struct with its own `add()` function.
+//  TODO: Turn this into a proper struct with its own `add()` function
+//        and its own `partition_synopsis.hpp` header.
 //        Then we could store this in the `active_partition_state` directly
 //        instead of using a meta_index with only one entry.
-struct partition_synopsis
-  : public std::unordered_map<qualified_record_field, synopsis_ptr> {};
+struct partition_synopsis {
+  /// Synopsis data structures for individual columns.
+  std::unordered_map<qualified_record_field, synopsis_ptr> field_synopses_;
+};
 
 /// The meta index is the first data structure that queries hit. The result
 /// represents a list of candidate partition IDs that may contain the desired
@@ -67,6 +72,9 @@ public:
   /// Adds new synopses for a partition in bulk. Used when
   /// re-building the meta index state at startup.
   void merge(const uuid& partition, partition_synopsis&&);
+
+  /// Erase this partition from the meta index.
+  void erase(const uuid& partition);
 
   /// Retrieves the list of candidate partition IDs for a given expression.
   /// @param expr The expression to lookup.
@@ -99,12 +107,6 @@ private:
 };
 
 // -- flatbuffer ---------------------------------------------------------------
-
-// TODO: Move these into some 'legacy' flatbuffer section
-caf::expected<flatbuffers::Offset<fbs::meta_index::v0>>
-pack(flatbuffers::FlatBufferBuilder& builder, const meta_index& x);
-
-caf::error unpack(const fbs::meta_index::v0& x, meta_index& y);
 
 caf::expected<flatbuffers::Offset<fbs::partition_synopsis::v0>>
 pack(flatbuffers::FlatBufferBuilder& builder, const partition_synopsis&);

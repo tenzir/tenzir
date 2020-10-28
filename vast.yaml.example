@@ -25,6 +25,11 @@ vast:
   # Spawn a node instead of connecting to one.
   node: false
 
+  # The maximum number of segments cached by the archive.
+  segments: 10
+  # The maximum size per segment, in MiB.
+  max-segment-size: 128
+
   # Interval between two aging cycles.
   aging-frequency: 24h
   # Query for aging out obsolete data.
@@ -54,6 +59,16 @@ vast:
   # A value of "0x", where "x" is any duration unit, means an infinite grace
   # period without escalation into a hard kill.
   shutdown-grace-period: "3m"
+
+  # The `vast start` command starts a new VAST server process.
+  start:
+    # Triggers removal of old data when the disk budget is exceeded.
+    disk-budget-high: 0K
+    # When the budget was exceeded, data is erased until the disk space
+    # is below this value.
+    disk-budget-low: 0K
+    # Seconds between successive disk space checks.
+    disk-budget-check-interval: 90
 
   # The `vast count` command counts hits for a query without exporting data.
   count:

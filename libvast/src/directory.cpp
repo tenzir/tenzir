@@ -18,6 +18,7 @@
 #include "vast/detail/assert.hpp"
 #include "vast/detail/posix.hpp"
 #include "vast/detail/string.hpp"
+#include "vast/logger.hpp"
 
 #include <caf/streambuf.hpp>
 
@@ -30,7 +31,7 @@
 
 namespace vast {
 
-directory::iterator::iterator(directory* dir) : dir_{dir} {
+directory::iterator::iterator(const directory* dir) : dir_{dir} {
   increment();
 }
 
@@ -67,6 +68,25 @@ directory::directory(vast::path p)
   : path_{std::move(p)}, dir_{::opendir(path_.str().data())} {
 }
 
+directory::directory(directory&& d) : path_(std::move(d.path_)), dir_(nullptr) {
+  std::swap(dir_, d.dir_);
+}
+
+directory::directory(const directory& d) : directory(d.path_) {
+}
+
+directory& directory::operator=(const directory& other) {
+  directory tmp{other};
+  std::swap(*this, tmp);
+  return *this;
+}
+
+directory& directory::operator=(directory&& other) {
+  directory tmp{std::move(other)};
+  std::swap(*this, tmp);
+  return *this;
+}
+
 directory::~directory() {
 #ifdef VAST_POSIX
   if (dir_)
@@ -74,7 +94,7 @@ directory::~directory() {
 #endif
 }
 
-directory::iterator directory::begin() {
+directory::iterator directory::begin() const {
   return iterator{this};
 }
 
@@ -84,6 +104,26 @@ directory::iterator directory::end() const {
 
 const path& directory::path() const {
   return path_;
+}
+
+size_t recursive_size(const vast::directory& dir) {
+  size_t size = 0;
+  std::vector<vast::directory> stack{dir};
+  while (!stack.empty()) {
+    auto dir = std::move(stack.back());
+    stack.pop_back();
+    for (auto file : dir) {
+      if (file.is_regular_file()) {
+        if (auto sz = vast::file_size(file)) {
+          VAST_TRACE(file, "+=", *sz);
+          size += *sz;
+        }
+      } else if (file.is_directory()) {
+        stack.push_back(vast::directory{file});
+      }
+    }
+  }
+  return size;
 }
 
 } // namespace vast

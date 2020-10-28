@@ -141,6 +141,7 @@ std::unique_ptr<store::lookup> segment_store::extract(const ids& xs) const {
 
 caf::error segment_store::erase(const ids& xs) {
   VAST_TRACE(VAST_ARG(xs));
+  VAST_VERBOSE_ANON("erasing", rank(xs), "ids from store");
   // Get affected segments.
   std::vector<uuid> candidates;
   if (auto err = select_segments(xs, candidates))
@@ -206,8 +207,8 @@ caf::error segment_store::erase(const ids& xs) {
       erased_events += drop(seg);
       return;
     }
-    VAST_DEBUG(this, "shrinks segment", segment_id, "from", slices.size(), "to",
-               new_slices.size(), "slices");
+    VAST_VERBOSE(this, "shrinks segment", segment_id, "from", slices.size(),
+                 "to", new_slices.size(), "slices");
     // Remove stale state.
     segments_.erase_value(segment_id);
     // Create a new segment from the remaining slices.

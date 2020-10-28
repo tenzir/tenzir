@@ -118,6 +118,8 @@ TEST(empty partition roundtrip) {
   auto meta_idx = vast::meta_index{};
   vast::table_slice_header header;
   header.layout = vast::record_type{{"x", vast::count_type{}}}.name("y");
+  header.offset = 0u;
+  header.rows = 0u;
   auto slice = vast::msgpack_table_slice::make(header);
   REQUIRE(slice);
   state.meta_idx.add(state.id, *slice);
@@ -150,7 +152,7 @@ TEST(empty partition roundtrip) {
   vast::partition_synopsis ps;
   auto error2 = vast::system::unpack(*partition_v0, ps);
   CHECK(!error2);
-  CHECK_EQUAL(ps.size(), 1u);
+  CHECK_EQUAL(ps.field_synopses_.size(), 1u);
   vast::meta_index recovered_meta_idx;
   recovered_meta_idx.merge(state.id, std::move(ps));
   // Check that lookups still work as expected.

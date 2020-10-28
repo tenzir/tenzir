@@ -36,12 +36,10 @@ maybe_actor spawn_archive(node_actor* self, spawn_arguments& args) {
   namespace sd = vast::defaults::system;
   if (!args.empty())
     return unexpected_arguments(args);
-  auto segments
-    = get_or(args.inv.options, "vast.spawn.archive.segments", sd::segments);
+  auto segments = get_or(args.inv.options, "vast.segments", sd::segments);
   auto max_segment_size
     = 1_MiB
-      * get_or(args.inv.options, "vast.spawn.archive.max-segment-size",
-               sd::max_segment_size);
+      * get_or(args.inv.options, "vast.max-segment-size", sd::max_segment_size);
   auto handle
     = self->spawn(archive, args.dir / args.label, segments, max_segment_size);
   VAST_VERBOSE(self, "spawned the archive");

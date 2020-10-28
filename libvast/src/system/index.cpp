@@ -57,10 +57,12 @@
 
 #include <flatbuffers/flatbuffers.h>
 
+#include <algorithm>
 #include <chrono>
 #include <ctime>
 #include <deque>
 #include <memory>
+#include <unistd.h>
 #include <unordered_set>
 
 #include "caf/error.hpp"
@@ -100,12 +102,16 @@ using namespace std::chrono;
 
 namespace vast::system {
 
+vast::path index_state::partition_path(const uuid& id) const {
+  return dir / to_string(id);
+}
+
 caf::actor partition_factory::operator()(const uuid& id) const {
   // Load partition from disk.
   VAST_ASSERT(std::find(state_.persisted_partitions.begin(),
                         state_.persisted_partitions.end(), id)
               != state_.persisted_partitions.end());
-  auto path = state_.dir / to_string(id);
+  auto path = state_.partition_path(id);
   VAST_DEBUG(state_.self, "loads partition", id, "for path", path);
   return state_.self->spawn(passive_partition, id, fs_, path);
 }
@@ -741,6 +747,59 @@ index(caf::stateful_actor<index_state>* self, filesystem_type fs, path dir,
     },
     [=](atom::subscribe, atom::flush, const caf::actor& listener) {
       self->state.add_flush_listener(listener);
+    },
+    [=](atom::erase, uuid partition_id) {
+      VAST_VERBOSE(self, "erases partition", partition_id);
+      caf::response_promise rp = self->make_response_promise();
+      auto path = self->state.partition_path(partition_id);
+      bool adjust_stats = true;
+      if (!self->state.persisted_partitions.count(partition_id)) {
+        if (!exists(path)) {
+          rp.deliver(make_error(ec::logic_error, "unknown partition"));
+          return;
+        }
+        // As a special case, if the partition exists on disk we just continue
+        // normally here, since this indicates a previous erasure did not go
+        // through cleanly.
+        adjust_stats = false;
+      }
+      self->state.inmem_partitions.drop(partition_id);
+      self->state.persisted_partitions.erase(partition_id);
+      self->request(self->state.filesystem, caf::infinite, atom::mmap_v, path)
+        .then(
+          [=](chunk_ptr chunk) mutable {
+            // Adjust layout stats by subtracting the events of the removed
+            // partition.
+            auto partition = fbs::GetPartition(chunk->data());
+            if (partition->partition_type() != fbs::partition::Partition::v0) {
+              rp.deliver(make_error(ec::format_error, "unexpected format "
+                                                      "version"));
+              return;
+            }
+            vast::ids all_ids;
+            auto partition_v0 = partition->partition_as_v0();
+            for (auto partition_stats : *partition_v0->type_ids()) {
+              auto name = partition_stats->name();
+              vast::ids ids;
+              if (auto error
+                  = fbs::deserialize_bytes(partition_stats->ids(), ids)) {
+                rp.deliver(make_error(ec::format_error, "could not deserialize "
+                                                        "ids: "
+                                                          + render(error)));
+                return;
+              }
+              all_ids |= ids;
+              if (adjust_stats)
+                self->state.stats.layouts[name->str()].count -= rank(ids);
+            }
+            // Note that mmap's will increase the reference count of a file, so
+            // unlinking should not affect indexers that are currently loaded
+            // and answering a query.
+            if (!rm(path))
+              VAST_WARNING(self, "could not unlink partition at", path);
+            rp.deliver(std::move(all_ids));
+          },
+          [=](caf::error e) mutable { rp.deliver(e); });
     });
   return {
     // The default behaviour

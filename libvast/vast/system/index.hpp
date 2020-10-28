@@ -138,6 +138,9 @@ struct index_state {
 
   path index_filename(path basename = {}) const;
 
+  // Maps partitions to their expected location on the file system.
+  vast::path partition_path(const uuid& id) const;
+
   // -- query handling
 
   bool worker_available();

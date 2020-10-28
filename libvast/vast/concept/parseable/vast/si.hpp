@@ -13,12 +13,13 @@
 
 #pragma once
 
-#include <type_traits>
-
 #include "vast/aliases.hpp"
 #include "vast/concept/parseable/core/parser.hpp"
 #include "vast/concept/parseable/numeric/integral.hpp"
+#include "vast/concept/parseable/string/char.hpp"
 #include "vast/si_literals.hpp"
+
+#include <type_traits>
 
 namespace vast {
 
@@ -55,6 +56,7 @@ namespace parsers {
 
 static auto const count = si_parser<vast::count>{};
 static auto const integer = si_parser<vast::integer>{};
+static auto const bytesize = count >> ~ch<'B'>;
 
 } // namespace parsers
 } // namespace vast
