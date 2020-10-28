@@ -110,6 +110,10 @@ bool operator==(const concept_& lhs, const concept_& rhs) {
   return lhs.concepts == rhs.concepts && lhs.fields == rhs.fields;
 }
 
+bool operator==(const model& lhs, const model& rhs) {
+  return lhs.models == rhs.models && lhs.concepts == rhs.concepts;
+}
+
 bool operator==(const taxonomies& lhs, const taxonomies& rhs) {
   return lhs.concepts == rhs.concepts && lhs.models == rhs.models;
 }

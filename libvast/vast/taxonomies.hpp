@@ -57,8 +57,28 @@ caf::error extract_concepts(const data& d, concepts_type& out);
 /// Extracts a concept definition from a data object.
 caf::expected<concepts_type> extract_concepts(const data& d);
 
-/// Maps model names to the concepts or models that implement them.
-using models_type = std::unordered_map<std::string, std::vector<std::string>>;
+/// The definition of a model.
+struct model {
+  /// The description of the model.
+  std::string description;
+
+  /// The concepts that the model is composed of.
+  std::vector<std::string> concepts;
+
+  /// Other models that are referenced. Their concepts must also be represented
+  /// for a layout to be considered.
+  std::vector<std::string> models;
+
+  friend bool operator==(const model& lhs, const model& rhs);
+
+  template <class Inspector>
+  friend auto inspect(Inspector& f, model& m) {
+    return f(caf::meta::type_name("model"), m.concepts);
+  }
+};
+
+/// Maps model names to their definitions.
+using models_type = std::unordered_map<std::string, model>;
 
 /// A taxonomy is a combination of concepts and models. VAST stores all
 /// configured taxonomies in memory together, hence the plural naming.
