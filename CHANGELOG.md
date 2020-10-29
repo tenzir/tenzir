@@ -10,7 +10,9 @@ Every entry has a category for which we use the following visual abbreviations:
 - ⚡️ breaking change
 - 🐞 bugfix
 
-## Unreleased
+<!-- ## Unreleased -->
+
+## [2020.10.29]
 
 - ⚠️ The default database directory moved to `/var/lib/vast` for Linux deployments.
   [#1116](https://github.com/tenzir/vast/pull/1116)
@@ -857,3 +859,4 @@ This is the first official release.
 [2020.07.28]: https://github.com/tenzir/vast/releases/tag/2020.07.28
 [2020.08.28]: https://github.com/tenzir/vast/releases/tag/2020.08.28
 [2020.09.30]: https://github.com/tenzir/vast/releases/tag/2020.09.30
+[2020.10.29]: https://github.com/tenzir/vast/releases/tag/2020.10.29
