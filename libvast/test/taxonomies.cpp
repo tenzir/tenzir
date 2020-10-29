@@ -60,3 +60,24 @@ TEST(concepts - cyclic definition) {
   auto result = resolve(t, exp);
   CHECK_EQUAL(result, ref);
 }
+
+TEST(models - convert from data) {
+  auto x = data{list{
+    record{{"model", record{{"name", "foo"},
+                            {"concepts", list{"a.fo0", "b.foO", "x.foe"}}}}},
+    record{{"model", record{{"name", "bar"},
+                            {"concepts", list{"a.bar", "b.baR"}},
+                            {"models", list{"foo"}}}}}}};
+  auto ref = models_type{{{"foo", {"", {"a.fo0", "b.foO", "x.foe"}, {}}},
+                          {"bar", {"", {"a.bar", "b.baR"}, {"foo"}}}}};
+  auto test = unbox(extract_models(x));
+  CHECK_EQUAL(test, ref);
+  auto x2 = data{list{
+    record{{"model", record{{"name", "foo"},
+                            {"concepts", list{"a.fo0", "b.foO", "x.foe"}}}}},
+    record{{"model",
+            record{{"name", "foo"}, {"concepts", list{"a.bar", "b.baR"}}}}}}};
+  auto test2 = extract_models(x2);
+  REQUIRE(!test2);
+  CHECK_EQUAL(test2.error(), ec::convert_error);
+}

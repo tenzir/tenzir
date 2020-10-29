@@ -80,6 +80,15 @@ struct model {
 /// Maps model names to their definitions.
 using models_type = std::unordered_map<std::string, model>;
 
+/// Converts a data record to a model.
+caf::error convert(const data& d, models_type& out);
+
+/// Extracts a model definition from a data object.
+caf::error extract_models(const data& d, models_type& out);
+
+/// Extracts a model definition from a data object.
+caf::expected<models_type> extract_models(const data& d);
+
 /// A taxonomy is a combination of concepts and models. VAST stores all
 /// configured taxonomies in memory together, hence the plural naming.
 struct taxonomies {

@@ -110,6 +110,87 @@ bool operator==(const concept_& lhs, const concept_& rhs) {
   return lhs.concepts == rhs.concepts && lhs.fields == rhs.fields;
 }
 
+caf::error convert(const data& d, models_type& out) {
+  if (const auto& c = caf::get_if<record>(&d)) {
+    auto n = c->find("name");
+    if (n == c->end())
+      return make_error(ec::convert_error, "concept has no name:", d);
+    auto name = caf::get_if<std::string>(&n->second);
+    if (!name)
+      return make_error(ec::convert_error, "concept name is not a string:", *n);
+    if (out.find(*name) != out.end())
+      return make_error(ec::convert_error,
+                        "models cannot have multiple definitions", *name);
+    auto& dest = out[*name];
+    auto cs = c->find("concepts");
+    if (cs != c->end()) {
+      if (const auto& concepts = caf::get_if<list>(&cs->second)) {
+        for (auto& c : *concepts) {
+          auto concept_ = caf::get_if<std::string>(&c);
+          if (!concept_)
+            return make_error(ec::convert_error, "concept in", *name,
+                              "is not a string:", c);
+          dest.concepts.push_back(*concept_);
+        }
+      } else {
+        return make_error(ec::convert_error, "concepts in", *name,
+                          "is not a list:", cs->second);
+      }
+    }
+    auto ms = c->find("models");
+    if (ms != c->end()) {
+      if (const auto& models = caf::get_if<list>(&ms->second)) {
+        for (auto& m : *models) {
+          auto model = caf::get_if<std::string>(&m);
+          if (!model)
+            return make_error(ec::convert_error, "model in", *name,
+                              "is not a string:", m);
+          dest.models.push_back(*model);
+        }
+      } else {
+        return make_error(ec::convert_error, "models in", *name,
+                          "is not a list:", ms->second);
+      }
+    }
+    auto desc = c->find("description");
+    if (desc != c->end()) {
+      if (auto description = caf::get_if<std::string>(&desc->second)) {
+        if (dest.description.empty())
+          dest.description = *description;
+        else if (dest.description != *description)
+          VAST_WARNING_ANON("encountered conflicting descriptions for",
+                            *name + ": \"" + dest.description + "\" and \""
+                              + *description + "\"");
+      }
+    }
+  } else {
+    return make_error(ec::convert_error, "concept is not a record:", d);
+  }
+  return caf::none;
+}
+
+caf::error extract_models(const data& d, models_type& out) {
+  if (const auto& xs = caf::get_if<list>(&d)) {
+    for (const auto& item : *xs) {
+      if (const auto& x = caf::get_if<record>(&item)) {
+        auto n = x->find("model");
+        if (n == x->end())
+          continue;
+        if (auto err = convert(n->second, out))
+          return err;
+      }
+    }
+  }
+  return caf::none;
+}
+
+caf::expected<models_type> extract_models(const data& d) {
+  models_type result;
+  if (auto err = extract_models(d, result))
+    return err;
+  return result;
+}
+
 bool operator==(const model& lhs, const model& rhs) {
   return lhs.models == rhs.models && lhs.concepts == rhs.concepts;
 }
