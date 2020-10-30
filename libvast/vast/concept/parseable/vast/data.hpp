@@ -48,9 +48,21 @@ private:
     auto ws = ignore(*parsers::space);
     auto x = ws >> ref(p) >> ws;
     auto kvp = x >> "->" >> x;
-    auto field = parsers::identifier >> ":" >> x;
     auto trailing_comma = ~(',' >> ws);
+    auto named_field = ws >> parsers::identifier >> ":" >> x;
     // clang-format off
+    auto unnamed_field = x ->* [](data value) {
+      return std::make_pair(std::string{}, std::move(value));
+    };
+    // A record can either be ordered with unnamed fields or unordered
+    // with named fields. Allowing a mixture of both would mean we'd
+    // have to deal with ambiguous inputs.
+    auto record_parser =
+        '<' >> ~as<record>(named_field % ',') >> trailing_comma >> '>'
+        // Creating a record with repeated field names technically violates
+        // the consistency of the underlying stable_map. We live with that
+        // until record is refactored into a proper type (FIXME).
+      | '<' >> ~as<record>(unnamed_field % ',') >> trailing_comma >> '>';
     p = parsers::time
       | parsers::duration
       | parsers::net
@@ -64,8 +76,9 @@ private:
       | parsers::pattern
       | '[' >> ~(x % ',') >> trailing_comma >> ']'
       | '{' >> ~as<map>(kvp % ',') >> trailing_comma >> '}'
-      | '<' >> ~as<record>(field % ',') >> trailing_comma >> '>'
+      | record_parser
       | as<caf::none_t>("nil"_p)
+      | as<caf::none_t>(parsers::ch<'_'>)
       ;
     // clang-format on
     return p;
