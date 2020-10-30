@@ -237,7 +237,7 @@ resolve_concepts(const concepts_map& concepts, const expression& e,
       // All fields that the concept resolves to either directly or indirectly
       // through referenced concepts.
       detail::stable_set<std::string> target_fields;
-      auto handle_def = [&](const concept_& def) {
+      auto load_definition = [&](const concept_& def) {
         // Create the union of all fields by inserting into the set.
         target_fields.insert(def.fields.begin(), def.fields.end());
         // Insert only those concepts into the queue that aren't in there yet,
@@ -248,12 +248,12 @@ resolve_concepts(const concepts_map& concepts, const expression& e,
             log.push_back(x);
         }
       };
-      handle_def(c->second);
+      load_definition(c->second);
       // We iterate through the log while appending referenced concepts in
-      // handle_def.
+      // load_definition.
       for (auto current : log)
         if (auto ref = concepts.find(current); ref != concepts.end())
-          handle_def(ref->second);
+          load_definition(ref->second);
       // Transform the target_fields into new predicates.
       disjunction d;
       for (auto& x : target_fields) {
