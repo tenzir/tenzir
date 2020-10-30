@@ -28,7 +28,7 @@
 
 namespace vast {
 
-caf::error convert(const data& d, concepts_type& out) {
+caf::error convert(const data& d, concepts_map& out) {
   if (const auto& c = caf::get_if<record>(&d)) {
     auto n = c->find("name");
     if (n == c->end())
@@ -84,7 +84,7 @@ caf::error convert(const data& d, concepts_type& out) {
   return caf::none;
 }
 
-caf::error extract_concepts(const data& d, concepts_type& out) {
+caf::error extract_concepts(const data& d, concepts_map& out) {
   if (const auto& xs = caf::get_if<list>(&d)) {
     for (const auto& item : *xs) {
       if (const auto& x = caf::get_if<record>(&item)) {
@@ -99,8 +99,8 @@ caf::error extract_concepts(const data& d, concepts_type& out) {
   return caf::none;
 }
 
-caf::expected<concepts_type> extract_concepts(const data& d) {
-  concepts_type result;
+caf::expected<concepts_map> extract_concepts(const data& d) {
+  concepts_map result;
   if (auto err = extract_concepts(d, result))
     return err;
   return result;
@@ -110,7 +110,7 @@ bool operator==(const concept_& lhs, const concept_& rhs) {
   return lhs.concepts == rhs.concepts && lhs.fields == rhs.fields;
 }
 
-caf::error convert(const data& d, models_type& out) {
+caf::error convert(const data& d, models_map& out) {
   if (const auto& c = caf::get_if<record>(&d)) {
     auto n = c->find("name");
     if (n == c->end())
@@ -169,7 +169,7 @@ caf::error convert(const data& d, models_type& out) {
   return caf::none;
 }
 
-caf::error extract_models(const data& d, models_type& out) {
+caf::error extract_models(const data& d, models_map& out) {
   if (const auto& xs = caf::get_if<list>(&d)) {
     for (const auto& item : *xs) {
       if (const auto& x = caf::get_if<record>(&item)) {
@@ -184,8 +184,8 @@ caf::error extract_models(const data& d, models_type& out) {
   return caf::none;
 }
 
-caf::expected<models_type> extract_models(const data& d) {
-  models_type result;
+caf::expected<models_map> extract_models(const data& d) {
+  models_map result;
   if (auto err = extract_models(d, result))
     return err;
   return result;
@@ -223,7 +223,7 @@ contains(const std::map<std::string, type_set>& seen, const std::string& x,
 }
 
 static expression
-resolve_concepts(const concepts_type& concepts, const expression& e,
+resolve_concepts(const concepts_map& concepts, const expression& e,
                  const std::map<std::string, type_set>& seen, bool prune) {
   return for_each_predicate(e, [&](const auto& pred) {
     auto run = [&](const std::string& field_name, relational_operator op,

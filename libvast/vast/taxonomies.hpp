@@ -46,16 +46,16 @@ struct concept_ {
 };
 
 /// Maps concept names to their definitions.
-using concepts_type = std::unordered_map<std::string, concept_>;
+using concepts_map = std::unordered_map<std::string, concept_>;
 
 /// Converts a data record to a concept.
-caf::error convert(const data& d, concepts_type& out);
+caf::error convert(const data& d, concepts_map& out);
 
 /// Extracts a concept definition from a data object.
-caf::error extract_concepts(const data& d, concepts_type& out);
+caf::error extract_concepts(const data& d, concepts_map& out);
 
 /// Extracts a concept definition from a data object.
-caf::expected<concepts_type> extract_concepts(const data& d);
+caf::expected<concepts_map> extract_concepts(const data& d);
 
 /// The definition of a model.
 struct model {
@@ -78,22 +78,22 @@ struct model {
 };
 
 /// Maps model names to their definitions.
-using models_type = std::unordered_map<std::string, model>;
+using models_map = std::unordered_map<std::string, model>;
 
 /// Converts a data record to a model.
-caf::error convert(const data& d, models_type& out);
+caf::error convert(const data& d, models_map& out);
 
 /// Extracts a model definition from a data object.
-caf::error extract_models(const data& d, models_type& out);
+caf::error extract_models(const data& d, models_map& out);
 
 /// Extracts a model definition from a data object.
-caf::expected<models_type> extract_models(const data& d);
+caf::expected<models_map> extract_models(const data& d);
 
 /// A taxonomy is a combination of concepts and models. VAST stores all
 /// configured taxonomies in memory together, hence the plural naming.
 struct taxonomies {
-  concepts_type concepts;
-  models_type models;
+  concepts_map concepts;
+  models_map models;
 
   friend bool operator==(const taxonomies& lhs, const taxonomies& rhs);
 
