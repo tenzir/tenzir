@@ -29,57 +29,55 @@
 namespace vast {
 
 caf::error convert(const data& d, concepts_map& out) {
-  if (const auto& c = caf::get_if<record>(&d)) {
-    auto n = c->find("name");
-    if (n == c->end())
-      return make_error(ec::convert_error, "concept has no name:", d);
-    auto name = caf::get_if<std::string>(&n->second);
-    if (!name)
-      return make_error(ec::convert_error, "concept name is not a string:", *n);
-    auto& dest = out[*name];
-    auto fs = c->find("fields");
-    if (fs != c->end()) {
-      if (const auto& fields = caf::get_if<list>(&fs->second)) {
-        for (auto& f : *fields) {
-          auto field = caf::get_if<std::string>(&f);
-          if (!field)
-            return make_error(ec::convert_error, "field in", *name,
-                              "is not a string:", f);
-          dest.fields.push_back(*field);
-        }
-      } else {
-        return make_error(ec::convert_error, "fields in", *name,
-                          "is not a list:", fs->second);
-      }
-    }
-    auto cs = c->find("concepts");
-    if (cs != c->end()) {
-      if (const auto& concepts = caf::get_if<list>(&cs->second)) {
-        for (auto& c : *concepts) {
-          auto concept_ = caf::get_if<std::string>(&c);
-          if (!concept_)
-            return make_error(ec::convert_error, "concept in", *name,
-                              "is not a string:", c);
-          dest.concepts.push_back(*concept_);
-        }
-      } else {
-        return make_error(ec::convert_error, "concepts in", *name,
-                          "is not a list:", cs->second);
-      }
-    }
-    auto desc = c->find("description");
-    if (desc != c->end()) {
-      if (auto description = caf::get_if<std::string>(&desc->second)) {
-        if (dest.description.empty())
-          dest.description = *description;
-        else if (dest.description != *description)
-          VAST_WARNING_ANON("encountered conflicting descriptions for",
-                            *name + ": \"" + dest.description + "\" and \""
-                              + *description + "\"");
-      }
-    }
-  } else {
+  const auto& c = caf::get_if<record>(&d);
+  if (!c)
     return make_error(ec::convert_error, "concept is not a record:", d);
+  auto name_data = c->find("name");
+  if (name_data == c->end())
+    return make_error(ec::convert_error, "concept has no name:", d);
+  auto name = caf::get_if<std::string>(&name_data->second);
+  if (!name)
+    return make_error(ec::convert_error,
+                      "concept name is not a string:", *name_data);
+  auto& dest = out[*name];
+  auto fs = c->find("fields");
+  if (fs != c->end()) {
+    const auto& fields = caf::get_if<list>(&fs->second);
+    if (!fields)
+      return make_error(ec::convert_error, "fields in", *name,
+                        "is not a list:", fs->second);
+    for (auto& f : *fields) {
+      auto field = caf::get_if<std::string>(&f);
+      if (!field)
+        return make_error(ec::convert_error, "field in", *name,
+                          "is not a string:", f);
+      dest.fields.push_back(*field);
+    }
+  }
+  auto cs = c->find("concepts");
+  if (cs != c->end()) {
+    const auto& concepts = caf::get_if<list>(&cs->second);
+    if (!concepts)
+      return make_error(ec::convert_error, "concepts in", *name,
+                        "is not a list:", cs->second);
+    for (auto& c : *concepts) {
+      auto concept_ = caf::get_if<std::string>(&c);
+      if (!concept_)
+        return make_error(ec::convert_error, "concept in", *name,
+                          "is not a string:", c);
+      dest.concepts.push_back(*concept_);
+    }
+  }
+  auto desc = c->find("description");
+  if (desc != c->end()) {
+    if (auto description = caf::get_if<std::string>(&desc->second)) {
+      if (dest.description.empty())
+        dest.description = *description;
+      else if (dest.description != *description)
+        VAST_WARNING_ANON("encountered conflicting descriptions for",
+                          *name + ": \"" + dest.description + "\" and \""
+                            + *description + "\"");
+    }
   }
   return caf::none;
 }
@@ -111,60 +109,58 @@ bool operator==(const concept_& lhs, const concept_& rhs) {
 }
 
 caf::error convert(const data& d, models_map& out) {
-  if (const auto& c = caf::get_if<record>(&d)) {
-    auto n = c->find("name");
-    if (n == c->end())
-      return make_error(ec::convert_error, "concept has no name:", d);
-    auto name = caf::get_if<std::string>(&n->second);
-    if (!name)
-      return make_error(ec::convert_error, "concept name is not a string:", *n);
-    if (out.find(*name) != out.end())
-      return make_error(ec::convert_error,
-                        "models cannot have multiple definitions", *name);
-    auto& dest = out[*name];
-    auto cs = c->find("concepts");
-    if (cs != c->end()) {
-      if (const auto& concepts = caf::get_if<list>(&cs->second)) {
-        for (auto& c : *concepts) {
-          auto concept_ = caf::get_if<std::string>(&c);
-          if (!concept_)
-            return make_error(ec::convert_error, "concept in", *name,
-                              "is not a string:", c);
-          dest.concepts.push_back(*concept_);
-        }
-      } else {
-        return make_error(ec::convert_error, "concepts in", *name,
-                          "is not a list:", cs->second);
-      }
-    }
-    auto ms = c->find("models");
-    if (ms != c->end()) {
-      if (const auto& models = caf::get_if<list>(&ms->second)) {
-        for (auto& m : *models) {
-          auto model = caf::get_if<std::string>(&m);
-          if (!model)
-            return make_error(ec::convert_error, "model in", *name,
-                              "is not a string:", m);
-          dest.models.push_back(*model);
-        }
-      } else {
-        return make_error(ec::convert_error, "models in", *name,
-                          "is not a list:", ms->second);
-      }
-    }
-    auto desc = c->find("description");
-    if (desc != c->end()) {
-      if (auto description = caf::get_if<std::string>(&desc->second)) {
-        if (dest.description.empty())
-          dest.description = *description;
-        else if (dest.description != *description)
-          VAST_WARNING_ANON("encountered conflicting descriptions for",
-                            *name + ": \"" + dest.description + "\" and \""
-                              + *description + "\"");
-      }
-    }
-  } else {
+  const auto& c = caf::get_if<record>(&d);
+  if (!c)
     return make_error(ec::convert_error, "concept is not a record:", d);
+  auto name_data = c->find("name");
+  if (name_data == c->end())
+    return make_error(ec::convert_error, "concept has no name:", d);
+  auto name = caf::get_if<std::string>(&name_data->second);
+  if (!name)
+    return make_error(ec::convert_error,
+                      "concept name is not a string:", *name_data);
+  if (out.find(*name) != out.end())
+    return make_error(ec::convert_error,
+                      "models cannot have multiple definitions", *name);
+  auto& dest = out[*name];
+  auto cs = c->find("concepts");
+  if (cs != c->end()) {
+    const auto& concepts = caf::get_if<list>(&cs->second);
+    if (!concepts)
+      return make_error(ec::convert_error, "concepts in", *name,
+                        "is not a list:", cs->second);
+    for (auto& c : *concepts) {
+      auto concept_ = caf::get_if<std::string>(&c);
+      if (!concept_)
+        return make_error(ec::convert_error, "concept in", *name,
+                          "is not a string:", c);
+      dest.concepts.push_back(*concept_);
+    }
+  }
+  auto ms = c->find("models");
+  if (ms != c->end()) {
+    const auto& models = caf::get_if<list>(&ms->second);
+    if (!models)
+      return make_error(ec::convert_error, "models in", *name,
+                        "is not a list:", ms->second);
+    for (auto& m : *models) {
+      auto model = caf::get_if<std::string>(&m);
+      if (!model)
+        return make_error(ec::convert_error, "model in", *name,
+                          "is not a string:", m);
+      dest.models.push_back(*model);
+    }
+  }
+  auto desc = c->find("description");
+  if (desc != c->end()) {
+    if (auto description = caf::get_if<std::string>(&desc->second)) {
+      if (dest.description.empty())
+        dest.description = *description;
+      else if (dest.description != *description)
+        VAST_WARNING_ANON("encountered conflicting descriptions for",
+                          *name + ": \"" + dest.description + "\" and \""
+                            + *description + "\"");
+    }
   }
   return caf::none;
 }
@@ -238,7 +234,7 @@ resolve_concepts(const concepts_map& concepts, const expression& e,
       // This is a deque instead of a stable_set because we don't want
       // push_back to invalidate the `current` iterator.
       std::deque<std::string> log;
-      // All fields that the concept is resolve to either directly or indirectly
+      // All fields that the concept resolves to either directly or indirectly
       // through referenced concepts.
       detail::stable_set<std::string> target_fields;
       auto handle_def = [&](const concept_& def) {
@@ -255,11 +251,9 @@ resolve_concepts(const concepts_map& concepts, const expression& e,
       handle_def(c->second);
       // We iterate through the log while appending referenced concepts in
       // handle_def.
-      for (auto current : log) {
-        auto ref_concept = concepts.find(current);
-        if (ref_concept != concepts.end())
-          handle_def(ref_concept->second);
-      }
+      for (auto current : log)
+        if (auto ref = concepts.find(current); ref != concepts.end())
+          handle_def(ref->second);
       // Transform the target_fields into new predicates.
       disjunction d;
       for (auto& x : target_fields) {
