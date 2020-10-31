@@ -65,7 +65,7 @@ caf::error segment_store::put(table_slice_ptr xs) {
   if (!segments_.inject(xs->offset(), xs->offset() + xs->rows(), builder_.id()))
     return make_error(ec::unspecified, "failed to update range_map");
   num_events_ += xs->rows();
-  if (builder_.table_slice_bytes() < max_segment_size_)
+  if (builder_.size() < max_segment_size_)
     return caf::none;
   // We have exceeded our maximum segment size and now finish.
   return flush();
@@ -324,7 +324,7 @@ void segment_store::inspect_status(caf::settings& xs, status_verbosity v) {
   using caf::put;
   if (v >= status_verbosity::info) {
     put(xs, "events", num_events_);
-    auto mem = builder_.table_slice_bytes();
+    auto mem = builder_.size();
     for (auto& segment : cache_)
       mem += segment.second.chunk()->size();
     put(xs, "memory-usage", mem);
@@ -336,7 +336,7 @@ void segment_store::inspect_status(caf::settings& xs, status_verbosity v) {
       cached.emplace_back(to_string(kvp.first));
     auto& current = put_dictionary(segments, "current");
     put(current, "uuid", to_string(builder_.id()));
-    put(current, "size", builder_.table_slice_bytes());
+    put(current, "size", builder_.size());
   }
 }
 
@@ -351,10 +351,10 @@ caf::error segment_store::register_segment(const path& filename) {
   auto chk = chunk::mmap(filename);
   if (!chk)
     return make_error(ec::filesystem_error, "failed to mmap chunk", filename);
-  auto s = fbs::as_flatbuffer<fbs::Segment>(as_bytes(chk));
-  if (s == nullptr)
+  auto s = segment{std::move(chk)};
+  if (!s)
     return make_error(ec::format_error, "segment integrity check failed");
-  auto s0 = s->segment_as_v0();
+  auto s0 = s.root()->segment_as_v0();
   num_events_ += s0->events();
   uuid segment_uuid;
   if (auto error = unpack(*s0->uuid(), segment_uuid))
@@ -372,7 +372,9 @@ caf::expected<segment> segment_store::load_segment(uuid id) const {
   auto chk = chunk::mmap(filename);
   if (!chk)
     return make_error(ec::filesystem_error, "failed to mmap chunk", filename);
-  return segment::make(std::move(chk));
+  if (auto s = segment{std::move(chk)})
+    return s;
+  return make_error(ec::format_error, "segment integrity check failed");
 }
 
 caf::error segment_store::select_segments(const ids& selection,
@@ -397,7 +399,7 @@ uint64_t segment_store::drop(segment& x) {
   // flatbuffers API. The (heavy-weight) altnerative here would be to create a
   // custom iterator so that a segment can be iterated as a list of table_slice
   // instances.
-  auto s = fbs::GetSegment(x.chunk()->data());
+  auto s = x.root();
   auto s0 = s->segment_as_v0();
   for (auto buffer : *s0->slices())
     erased_events += buffer->data_nested_root()->rows();
@@ -412,7 +414,7 @@ uint64_t segment_store::drop(segment& x) {
 uint64_t segment_store::drop(segment_builder& x) {
   uint64_t erased_events = 0;
   auto segment_id = x.id();
-  for (auto& slice : x.table_slices())
+  for (auto& slice : x.slices())
     erased_events += slice->rows();
   VAST_INFO(this, "erases segment under construction", segment_id);
   x.reset();

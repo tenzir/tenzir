@@ -15,6 +15,7 @@
 
 #include "vast/aliases.hpp"
 #include "vast/chunk.hpp"
+#include "vast/fbs/table.hpp"
 #include "vast/fwd.hpp"
 #include "vast/ids.hpp"
 #include "vast/uuid.hpp"
@@ -30,14 +31,10 @@
 namespace vast {
 
 /// A sequence of table slices.
-class segment {
-  friend segment_builder;
-
+class segment final : public fbs::table<segment, fbs::Segment> {
 public:
   /// Constructs a segment.
-  /// @param header The header of the segment.
-  /// @param chunk The chunk holding the segment data.
-  static caf::expected<segment> make(chunk_ptr chunk);
+  using table::table;
 
   /// @returns The unique ID of this segment.
   uuid id() const;
@@ -48,18 +45,10 @@ public:
   // @returns The number of table slices in this segment.
   size_t num_slices() const;
 
-  /// @returns The underlying chunk.
-  chunk_ptr chunk() const;
-
   /// Locates the table slices for a given set of IDs.
   /// @param xs The IDs to lookup.
   /// @returns The table slices according to *xs*.
   caf::expected<std::vector<table_slice_ptr>> lookup(const vast::ids& xs) const;
-
-private:
-  explicit segment(chunk_ptr chk);
-
-  chunk_ptr chunk_;
 };
 
 } // namespace vast

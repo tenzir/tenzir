@@ -18,6 +18,7 @@
 #include "vast/detail/assert.hpp"
 #include "vast/detail/byte_swap.hpp"
 #include "vast/detail/narrow.hpp"
+#include "vast/detail/overload.hpp"
 #include "vast/error.hpp"
 #include "vast/fbs/segment.hpp"
 #include "vast/fbs/utils.hpp"
@@ -31,82 +32,100 @@
 #include <caf/binary_deserializer.hpp>
 #include <caf/binary_serializer.hpp>
 
+#include <functional>
+#include <type_traits>
+
 namespace vast {
 
-using namespace binary_byte_literals;
+namespace {
 
-caf::expected<segment> segment::make(chunk_ptr chunk) {
-  VAST_ASSERT(chunk != nullptr);
-  auto s = fbs::GetSegment(chunk->data());
-  VAST_ASSERT(s); // `GetSegment` is just a cast, so this cant become null.
-  if (s->segment_type() != fbs::segment::Segment::v0)
-    return make_error(ec::format_error, "unsupported segment version");
-  auto vs = s->segment_as_v0();
-  // This check is an artifact from an earlier flatbuffer versioning
-  // scheme, where the version was stored as an inline field.
-  if (vs->version() != fbs::Version::v0)
-    return make_error(ec::format_error, "invalid v0 segment layout");
-  return segment{std::move(chunk)};
+template <class Visitor>
+auto visit(Visitor&& visitor, const segment* x) noexcept(
+  std::conjunction_v<
+    std::is_nothrow_invocable<Visitor>,
+    std::is_nothrow_invocable<Visitor, const fbs::segment::v0*>>) {
+  switch (x->root()->segment_type()) {
+    case fbs::segment::Segment::NONE:
+      return std::invoke(std::forward<Visitor>(visitor));
+    case fbs::segment::Segment::v0:
+      return std::invoke(std::forward<Visitor>(visitor),
+                         x->root()->segment_as_v0());
+  }
 }
 
+} // namespace
+
 uuid segment::id() const {
-  auto segment = fbs::GetSegment(chunk_->data());
-  auto segment_v0 = segment->segment_as_v0();
-  uuid result;
-  if (auto error = unpack(*segment_v0->uuid(), result))
-    VAST_ERROR_ANON("couldnt get uuid from segment:", error);
-  return result;
+  auto f = detail::overload{
+    []() noexcept { return uuid::nil(); },
+    [](const fbs::segment::v0* segment) {
+      auto result = uuid::nil();
+      if (auto err = unpack(*segment->uuid(), result))
+        VAST_ERROR_ANON("failed to get uuid from segment:", render(err));
+      return result;
+    },
+  };
+  return visit(std::move(f), this);
 }
 
 vast::ids segment::ids() const {
-  vast::ids result;
-  auto segment = fbs::GetSegment(chunk_->data());
-  auto segment_v0 = segment->segment_as_v0();
-  for (auto buffer : *segment_v0->slices()) {
-    auto slice = buffer->data_nested_root();
-    result.append_bits(false, slice->offset() - result.size());
-    result.append_bits(true, slice->rows());
-  }
-  return result;
+  auto f = detail::overload{
+    []() noexcept { return vast::ids{}; },
+    [](const fbs::segment::v0* segment) {
+      auto result = vast::ids{};
+      for (auto&& flat_slice : *segment->slices()) {
+        auto slice = flat_slice->data_nested_root();
+        result.append_bits(false, slice->offset() - result.size());
+        result.append_bits(true, slice->rows());
+      }
+      return result;
+    },
+  };
+  return visit(std::move(f), this);
 }
 
 size_t segment::num_slices() const {
-  auto segment = fbs::GetSegment(chunk_->data());
-  auto segment_v0 = segment->segment_as_v0();
-  return segment_v0->slices()->size();
-}
-
-chunk_ptr segment::chunk() const {
-  return chunk_;
+  auto f = detail::overload{
+    []() noexcept { return size_t{}; },
+    [](const fbs::segment::v0* segment) {
+      return detail::narrow_cast<size_t>(segment->slices()->size());
+    },
+  };
+  return visit(std::move(f), this);
 }
 
 caf::expected<std::vector<table_slice_ptr>>
 segment::lookup(const vast::ids& xs) const {
-  std::vector<table_slice_ptr> result;
-  auto f = [](auto buffer) {
-    auto slice = buffer->data_nested_root();
-    return std::pair{slice->offset(), slice->offset() + slice->rows()};
+  auto f = detail::overload{
+    []() noexcept -> caf::expected<std::vector<table_slice_ptr>> {
+      return caf::no_error;
+    },
+    [&](const fbs::segment::v0* segment)
+      -> caf::expected<std::vector<table_slice_ptr>> {
+      std::vector<table_slice_ptr> result;
+      auto f = [](auto buffer) {
+        auto slice = buffer->data_nested_root();
+        return std::pair{slice->offset(), slice->offset() + slice->rows()};
+      };
+      auto g = [&](auto buffer) -> caf::error {
+        // TODO: bind the lifetime of the table slice to the segment chunk.
+        // This requires that table slices will be constructable from a chunk.
+        // Until then, we stupidly deserialize the data into a new table
+        // slice.
+        table_slice_ptr slice;
+        if (auto err = unpack(*buffer->data_nested_root(), slice))
+          return err;
+        result.push_back(std::move(slice));
+        return caf::none;
+      };
+      auto begin = segment->slices()->begin();
+      auto end = segment->slices()->end();
+      if (auto error = select_with(xs, begin, end, f, g))
+        return error;
+      return result;
+    },
   };
-  auto g = [&](auto buffer) -> caf::error {
-    // TODO: bind the lifetime of the table slice to the segment chunk. This
-    // requires that table slices will be constructable from a chunk. Until
-    // then, we stupidly deserialize the data into a new table slice.
-    table_slice_ptr slice;
-    if (auto err = unpack(*buffer->data_nested_root(), slice))
-      return err;
-    result.push_back(std::move(slice));
-    return caf::none;
-  };
-  auto segment = fbs::GetSegment(chunk_->data());
-  auto segment_v0 = segment->segment_as_v0();
-  auto begin = segment_v0->slices()->begin();
-  auto end = segment_v0->slices()->end();
-  if (auto error = select_with(xs, begin, end, f, g))
-    return error;
-  return result;
-}
-
-segment::segment(chunk_ptr chk) : chunk_{std::move(chk)} {
+  return visit(std::move(f), this);
 }
 
 } // namespace vast

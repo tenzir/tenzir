@@ -63,6 +63,8 @@ class value_index;
 
 namespace fbs {
 
+struct Segment;
+
 template <class Derived, class Root>
 class table;
 

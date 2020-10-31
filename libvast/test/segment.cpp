@@ -54,10 +54,10 @@ TEST(serialization) {
   REQUIRE_EQUAL(save(nullptr, buf, x.chunk()), caf::none);
   REQUIRE_EQUAL(load(nullptr, buf, chk), caf::none);
   REQUIRE_NOT_EQUAL(chk, nullptr);
-  auto y = segment::make(chk);
+  auto y = segment{std::move(chk)};
   REQUIRE(y);
-  CHECK_EQUAL(x.ids(), y->ids());
-  CHECK_EQUAL(x.num_slices(), y->num_slices());
+  CHECK_EQUAL(x.ids(), y.ids());
+  CHECK_EQUAL(x.num_slices(), y.num_slices());
 }
 
 FIXTURE_SCOPE_END()

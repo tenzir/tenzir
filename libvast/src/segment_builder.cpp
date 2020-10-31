@@ -29,47 +29,29 @@
 
 namespace vast {
 
-segment_builder::segment_builder() {
-  reset();
-}
+segment_builder::segment_builder() noexcept = default;
 
-caf::error segment_builder::add(table_slice_ptr x) {
-  if (x->offset() < min_table_slice_offset_)
+caf::error segment_builder::add(table_slice_ptr slice) {
+  if (slice->offset() < min_table_slice_offset_)
     return make_error(ec::unspecified, "slice offsets not increasing");
-  auto slice = pack(builder_, x);
-  if (!slice)
-    return slice.error();
-  flat_slices_.push_back(*slice);
-  // This works only with monotonically increasing IDs.
-  if (!intervals_.empty() && intervals_.back().end() == x->offset())
+  // Flatten the slice.
+  auto flat_slice = pack(builder_, slice);
+  if (!flat_slice)
+    return flat_slice.error();
+  flat_slices_.push_back(*flat_slice);
+  // For slices with monotonically increasing IDs, adjust the end of the
+  // intervals range map.
+  if (!intervals_.empty() && intervals_.back().end() == slice->offset())
     intervals_.back()
-      = {intervals_.back().begin(), intervals_.back().end() + x->rows()};
+      = {intervals_.back().begin(), intervals_.back().end() + slice->rows()};
+  // Otherwise, create a new entry in the range map indicating a jump in the
+  // ID space.
   else
-    intervals_.emplace_back(x->offset(), x->offset() + x->rows());
-  num_events_ += x->rows();
-  slices_.push_back(x);
+    intervals_.emplace_back(slice->offset(), slice->offset() + slice->rows());
+  min_table_slice_offset_ = slice->offset();
+  num_events_ += slice->rows();
+  slices_.push_back(std::move(slice));
   return caf::none;
-}
-
-segment segment_builder::finish() {
-  auto table_slices_offset = builder_.CreateVector(flat_slices_);
-  auto uuid_offset = pack(builder_, id_);
-  auto ids_offset = builder_.CreateVectorOfStructs(intervals_);
-  fbs::segment::v0Builder segment_v0_builder{builder_};
-  segment_v0_builder.add_version(fbs::Version::v0);
-  segment_v0_builder.add_slices(table_slices_offset);
-  segment_v0_builder.add_uuid(*uuid_offset);
-  segment_v0_builder.add_ids(ids_offset);
-  segment_v0_builder.add_events(num_events_);
-  auto segment_v0_offset = segment_v0_builder.Finish();
-  fbs::SegmentBuilder segment_builder{builder_};
-  segment_builder.add_segment_type(vast::fbs::segment::Segment::v0);
-  segment_builder.add_segment(segment_v0_offset.Union());
-  auto segment_offset = segment_builder.Finish();
-  fbs::FinishSegmentBuffer(builder_, segment_offset);
-  auto chk = fbs::release(builder_);
-  reset();
-  return segment{std::move(chk)};
 }
 
 caf::expected<std::vector<table_slice_ptr>>
@@ -93,29 +75,34 @@ const uuid& segment_builder::id() const {
 
 vast::ids segment_builder::ids() const {
   vast::ids result;
-  for (auto x : slices_) {
-    result.append_bits(false, x->offset() - result.size());
-    result.append_bits(true, x->rows());
+  for (const auto& slice : slices_) {
+    result.append_bits(false, slice->offset() - result.size());
+    result.append_bits(true, slice->rows());
   }
   return result;
 }
 
-size_t segment_builder::table_slice_bytes() const {
-  return builder_.GetSize();
-}
-
-const std::vector<table_slice_ptr>& segment_builder::table_slices() const {
+const std::vector<table_slice_ptr>& segment_builder::slices() const {
   return slices_;
 }
 
-void segment_builder::reset() {
+void segment_builder::do_reset() {
   id_ = uuid::random();
   min_table_slice_offset_ = 0;
   num_events_ = 0;
-  builder_.Clear();
+  slices_.clear();
   flat_slices_.clear();
   intervals_.clear();
-  slices_.clear();
+}
+
+segment_builder::offset_type segment_builder::create() {
+  auto table_slices = builder_.CreateVector(flat_slices_);
+  auto uuid = pack(builder_, id_);
+  auto ids = builder_.CreateVectorOfStructs(intervals_);
+  auto segment_v0 = fbs::segment::Createv0(
+    builder_, fbs::Version::v0, table_slices, *uuid, ids, num_events_);
+  return fbs::CreateSegment(builder_, fbs::segment::Segment::v0,
+                            segment_v0.Union());
 }
 
 } // namespace vast

@@ -35,6 +35,7 @@ public:
   using table_type = Table;
   using derived_type = typename table_type::derived_type;
   using root_type = typename table_type::root_type;
+  using offset_type = typename flatbuffers::Offset<root_type>;
 
   /// The default initial huffer size.
   inline static constexpr auto default_initial_size = size_t{1024};
@@ -106,7 +107,7 @@ protected:
   /// @note To serialize data, you typically call one of the `Create*()`
   /// functions in the generated code. Do this in depth-first order to build up
   /// a tree to the root.
-  virtual flatbuffers::Offset<root_type> create() = 0;
+  virtual offset_type create() = 0;
 
   /// The underlying FlatBuffers builder.
   flatbuffers::FlatBufferBuilder builder_;
