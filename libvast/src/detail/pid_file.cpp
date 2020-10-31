@@ -14,12 +14,15 @@
 
 #include "vast/detail/pid_file.hpp"
 
+#include "vast/concept/parseable/numeric/integral.hpp"
+#include "vast/concept/parseable/to.hpp"
 #include "vast/concept/printable/numeric.hpp"
 #include "vast/concept/printable/to_string.hpp"
 #include "vast/detail/assert.hpp"
 #include "vast/detail/posix.hpp"
 #include "vast/detail/system.hpp"
 #include "vast/error.hpp"
+#include "vast/logger.hpp"
 
 #include <fcntl.h>
 #include <unistd.h>
@@ -29,16 +32,27 @@
 namespace vast::detail {
 
 caf::error acquire_pid_file(const path& filename) {
-  // If the file exists, we cannot continue.
+  auto pid = process_id();
+  // Check if the db directory is owned by an existing VAST process.
   if (exists(filename)) {
     // Attempt to read file to display an actionable error message.
     auto contents = load_contents(filename);
     if (!contents)
       return contents.error();
-    return make_error(ec::filesystem_error,
-                      "stale PID file found: ", filename.str(),
-                      "terminate process", *contents,
-                      "or remove PID file manually");
+    auto other_pid = to<int32_t>(*contents);
+    if (!other_pid)
+      return make_error(ec::parse_error,
+                        "unable to parse pid_file:", *contents);
+    // Safeguard in case the pid_file already belongs to this process.
+    if (*other_pid == pid)
+      return caf::none;
+    if (::getpgid(*other_pid) >= 0)
+      return make_error(ec::filesystem_error,
+                        "PID file found: ", filename.str(), "terminate process",
+                        *contents);
+    // The previous owner is deceased, print a warning an assume ownership.
+    VAST_WARNING_ANON("node detected an irregular shutdown of the previous "
+                      "process on the database directory");
   }
   // Open the file.
   auto fd = ::open(filename.str().c_str(), O_WRONLY | O_CREAT, 0600);
@@ -52,9 +66,9 @@ caf::error acquire_pid_file(const path& filename) {
                       "failed in flock(2):", strerror(errno));
   }
   // Write the PID in human readable form into the file.
-  auto pid = to_string(process_id());
-  VAST_ASSERT(!pid.empty());
-  if (::write(fd, pid.data(), pid.size()) < 0) {
+  auto pid_string = to_string(pid);
+  VAST_ASSERT(!pid_string.empty());
+  if (::write(fd, pid_string.data(), pid_string.size()) < 0) {
     ::close(fd);
     return make_error(ec::filesystem_error,
                       "failed in write(2):", strerror(errno));

@@ -10,7 +10,12 @@ Every entry has a category for which we use the following visual abbreviations:
 - ⚡️ breaking change
 - 🐞 bugfix
 
-<!-- ## Unreleased -->
+## Unreleased
+
+- ⚠️ VAST no longer requires you to manually remove a stale PID file from a
+  no-longer running `vast` process. Instead, VAST prints a warning and
+  overwrites the old PID file.
+  [#1128](https://github.com/tenzir/vast/pull/1128)
 
 ## [2020.10.29]
 
