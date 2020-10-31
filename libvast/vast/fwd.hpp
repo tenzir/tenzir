@@ -61,6 +61,13 @@ class type;
 class uuid;
 class value_index;
 
+namespace fbs {
+
+template <class Derived, class Root>
+class table;
+
+} // namespace fbs
+
 namespace format {
 
 class writer;
