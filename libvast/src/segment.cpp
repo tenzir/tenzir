@@ -19,6 +19,7 @@
 #include "vast/detail/byte_swap.hpp"
 #include "vast/detail/narrow.hpp"
 #include "vast/detail/overload.hpp"
+#include "vast/die.hpp"
 #include "vast/error.hpp"
 #include "vast/fbs/segment.hpp"
 #include "vast/fbs/utils.hpp"
@@ -51,6 +52,7 @@ auto visit(Visitor&& visitor, const segment* x) noexcept(
       return std::invoke(std::forward<Visitor>(visitor),
                          x->root()->segment_as_v0());
   }
+  die("unhandled segment type");
 }
 
 } // namespace
