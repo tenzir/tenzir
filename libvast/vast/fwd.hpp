@@ -66,6 +66,9 @@ namespace fbs {
 template <class Derived, class Root>
 class table;
 
+template <class Table, const char* (*FileIdentifier)()>
+class table_builder;
+
 } // namespace fbs
 
 namespace format {
