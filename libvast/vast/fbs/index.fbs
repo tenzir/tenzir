@@ -1,5 +1,4 @@
 include "uuid.fbs";
-include "version.fbs";
 
 namespace vast.fbs.layout_statistics;
 

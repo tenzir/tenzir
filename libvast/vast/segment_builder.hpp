@@ -70,9 +70,8 @@ private:
   vast::id min_table_slice_offset_ = 0;
   uint64_t num_events_ = 0;
   std::vector<table_slice_ptr> slices_ = {};
-  std::vector<flatbuffers::Offset<fbs::table_slice_buffer::v0>> flat_slices_
-    = {};
-  std::vector<fbs::interval::v0> intervals_ = {};
+  std::vector<flatbuffers::Offset<fbs::FlatTableSlice>> flat_slices_ = {};
+  std::vector<fbs::Interval> intervals_ = {};
 };
 
 } // namespace vast

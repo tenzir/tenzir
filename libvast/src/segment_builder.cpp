@@ -104,8 +104,8 @@ segment_builder::offset_type segment_builder::create() {
   auto table_slices = builder_.CreateVector(flat_slices_);
   auto uuid = pack(builder_, id_);
   auto ids = builder_.CreateVectorOfStructs(intervals_);
-  auto segment_v0 = fbs::segment::Createv0(
-    builder_, fbs::Version::v0, table_slices, *uuid, ids, num_events_);
+  auto segment_v0
+    = fbs::segment::Createv0(builder_, table_slices, *uuid, ids, num_events_);
   return fbs::CreateSegment(builder_, fbs::segment::Segment::v0,
                             segment_v0.Union());
 }

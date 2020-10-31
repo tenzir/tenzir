@@ -23,7 +23,6 @@
 #include "vast/error.hpp"
 #include "vast/fbs/segment.hpp"
 #include "vast/fbs/utils.hpp"
-#include "vast/fbs/version.hpp"
 #include "vast/fwd.hpp"
 #include "vast/ids.hpp"
 #include "vast/logger.hpp"

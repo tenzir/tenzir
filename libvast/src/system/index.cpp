@@ -33,7 +33,6 @@
 #include "vast/fbs/partition.hpp"
 #include "vast/fbs/utils.hpp"
 #include "vast/fbs/uuid.hpp"
-#include "vast/fbs/version.hpp"
 #include "vast/fwd.hpp"
 #include "vast/ids.hpp"
 #include "vast/io/read.hpp"

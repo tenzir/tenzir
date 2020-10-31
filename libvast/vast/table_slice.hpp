@@ -238,7 +238,7 @@ caf::error inspect(caf::deserializer& source, table_slice_ptr& ptr);
 /// @param builder The builder to pack *x* into.
 /// @param x The table slice to pack.
 /// @returns The flatbuffer offset in *builder*.
-caf::expected<flatbuffers::Offset<fbs::table_slice_buffer::v0>>
+caf::expected<flatbuffers::Offset<fbs::FlatTableSlice>>
 pack(flatbuffers::FlatBufferBuilder& builder, table_slice_ptr x);
 
 /// Unpacks a table slice from a flatbuffer.

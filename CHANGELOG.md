@@ -12,6 +12,9 @@ Every entry has a category for which we use the following visual abbreviations:
 
 ## Unreleased
 
+- ⚡️ The on-disk format of archived segments no longer includes redundant
+  versioning code. [#1131](https://github.com/tenzir/vast/pull/1131)
+
 - ⚠️ VAST no longer requires you to manually remove a stale PID file from a
   no-longer running `vast` process. Instead, VAST prints a warning and
   overwrites the old PID file.
@@ -38,7 +41,7 @@ Every entry has a category for which we use the following visual abbreviations:
   [#1103](https://github.com/tenzir/vast/pull/1103)
 
 - 🎁 The new script `splunk-to-vast` converts a splunk CIM model file in JSON
-  to a VAST taxonomy. For example, `splunk-to-vast < Network_Traffic.json` 
+  to a VAST taxonomy. For example, `splunk-to-vast < Network_Traffic.json`
   renders the concept definitions for the *Network Traffic* datamodel. The
   generated taxonomy does not include field definitions, which users should add
   separately according to their data formats.

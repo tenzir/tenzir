@@ -16,7 +16,6 @@
 #include "vast/byte.hpp"
 #include "vast/detail/type_traits.hpp"
 #include "vast/error.hpp"
-#include "vast/fbs/version.hpp"
 #include "vast/fwd.hpp"
 #include "vast/span.hpp"
 
