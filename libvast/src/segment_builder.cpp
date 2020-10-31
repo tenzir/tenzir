@@ -29,7 +29,9 @@
 
 namespace vast {
 
-segment_builder::segment_builder() noexcept = default;
+segment_builder::segment_builder() noexcept {
+  // nop
+}
 
 caf::error segment_builder::add(table_slice_ptr slice) {
   if (slice->offset() < min_table_slice_offset_)
