@@ -79,30 +79,51 @@ public:
     return chunk_ != nullptr;
   }
 
-  /// Access the underlying chunk.
-  const chunk_ptr& chunk() const& noexcept {
-    return chunk_;
+  /// Return a view on the underlying byte buffer.
+  /// @pre `x`
+  friend span<const byte> as_bytes(const table& x) noexcept {
+    VAST_ASSERT(x);
+    return as_bytes(x.chunk_);
+  }
+
+  /// Returns the size of the underlying chunk.
+  size_t size() const noexcept {
+    return *this ? chunk_->size() : 0;
   }
 
 protected:
-  // -- implementation utilities -----------------------------------------------
+  // -- opt-in properties ------------------------------------------------------
+
+  /// Queries whether there is exactly once reference.
+  bool unique() const noexcept {
+    return chunk_->unique();
+  }
+
+  /// Adds an additional step for deleting this table.
+  /// @param f Function object that gets called after all previous deletion
+  /// steps ran.
+  template <class F>
+  void add_deletion_step(F&& f) const noexcept {
+    chunk_->add_deletion_step(std::forward<F>(f));
+  }
+
+  /// Access the underlying chunk.
+  const chunk_ptr& chunk() const noexcept {
+    return chunk_;
+  }
+
+private:
+  // -- implementation details -------------------------------------------------
 
   /// Access the underlying FlatBuffers root table.
   /// @pre `*this`
+  /// @post `result != nullptr`
   const root_type* root() const noexcept {
     VAST_ASSERT(*this);
     auto result = flatbuffers::GetRoot<Root>(chunk_->data());
     VAST_ASSERT(result);
     return result;
   }
-
-  /// Steal the underlying chunk.
-  chunk_ptr chunk() && noexcept {
-    return std::exchange(chunk_, {});
-  }
-
-private:
-  // -- implementation details -------------------------------------------------
 
   /// The underlying chunk.
   chunk_ptr chunk_ = nullptr;

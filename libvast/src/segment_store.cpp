@@ -18,12 +18,15 @@
 #include "vast/concept/printable/vast/error.hpp"
 #include "vast/concept/printable/vast/filesystem.hpp"
 #include "vast/concept/printable/vast/uuid.hpp"
+#include "vast/detail/overload.hpp"
 #include "vast/directory.hpp"
 #include "vast/error.hpp"
 #include "vast/fbs/segment.hpp"
 #include "vast/fbs/utils.hpp"
 #include "vast/ids.hpp"
+#include "vast/io/save.hpp"
 #include "vast/logger.hpp"
+#include "vast/segment_visit.hpp"
 #include "vast/status.hpp"
 #include "vast/table_slice.hpp"
 
@@ -234,11 +237,11 @@ caf::error segment_store::erase(const ids& xs) {
     if constexpr (std::is_same_v<decltype(seg), segment&>) {
       auto new_segment = builder->finish();
       auto filename = segment_path() / to_string(new_segment.id());
-      if (auto err = write(filename, new_segment.chunk()))
+      if (auto err = io::save(filename, as_bytes(new_segment)))
         VAST_ERROR(this, "failed to persist the new segment");
       auto stale_filename = segment_path() / to_string(segment_id);
       // Schedule deletion of the segment file when releasing the chunk.
-      seg.chunk()->add_deletion_step([=] { rm(stale_filename); });
+      seg.add_deletion_step([=] { rm(stale_filename); });
     }
     // else: nothing to do, since we can continue filling the active segment.
   };
@@ -312,7 +315,7 @@ caf::error segment_store::flush() {
   VAST_DEBUG(this, "finishes current builder");
   auto seg = builder_.finish();
   auto filename = segment_path() / to_string(seg.id());
-  if (auto err = write(filename, seg.chunk()))
+  if (auto err = io::save(filename, as_bytes(seg)))
     return err;
   // Keep new segment in the cache.
   cache_.emplace(seg.id(), seg);
@@ -326,7 +329,7 @@ void segment_store::inspect_status(caf::settings& xs, status_verbosity v) {
     put(xs, "events", num_events_);
     auto mem = builder_.size();
     for (auto& segment : cache_)
-      mem += segment.second.chunk()->size();
+      mem += segment.second.size();
     put(xs, "memory-usage", mem);
   }
   if (v >= status_verbosity::detailed) {
@@ -351,19 +354,24 @@ caf::error segment_store::register_segment(const path& filename) {
   auto chk = chunk::mmap(filename);
   if (!chk)
     return make_error(ec::filesystem_error, "failed to mmap chunk", filename);
-  auto s = segment{std::move(chk)};
-  if (!s)
-    return make_error(ec::format_error, "segment integrity check failed");
-  auto s0 = s->segment_as_v0();
-  num_events_ += s0->events();
-  uuid segment_uuid;
-  if (auto error = unpack(*s0->uuid(), segment_uuid))
-    return error;
-  VAST_DEBUG(this, "found segment", segment_uuid);
-  for (auto interval : *s0->ids())
-    if (!segments_.inject(interval->begin(), interval->end(), segment_uuid))
-      return make_error(ec::unspecified, "failed to update range_map");
-  return caf::none;
+  auto x = segment{std::move(chk)};
+  auto f = detail::overload{
+    []() -> caf::error {
+      return make_error(ec::format_error, "segment integrity check failed");
+    },
+    [&](const fbs::segment::v0* v0) -> caf::error {
+      num_events_ += v0->events();
+      uuid segment_uuid;
+      if (auto error = unpack(*v0->uuid(), segment_uuid))
+        return error;
+      VAST_DEBUG(this, "found segment", segment_uuid);
+      for (auto interval : *v0->ids())
+        if (!segments_.inject(interval->begin(), interval->end(), segment_uuid))
+          return make_error(ec::unspecified, "failed to update range_map");
+      return caf::none;
+    },
+  };
+  return visit(std::move(f), x);
 }
 
 caf::expected<segment> segment_store::load_segment(uuid id) const {
@@ -395,19 +403,20 @@ caf::error segment_store::select_segments(const ids& selection,
 uint64_t segment_store::drop(segment& x) {
   uint64_t erased_events = 0;
   auto segment_id = x.id();
-  // TODO: discuss whether we want to allow accessing a segment through the
-  // flatbuffers API. The (heavy-weight) altnerative here would be to create a
-  // custom iterator so that a segment can be iterated as a list of table_slice
-  // instances.
-  auto s0 = x->segment_as_v0();
-  for (auto buffer : *s0->slices())
-    erased_events += buffer->data_nested_root()->rows();
-  VAST_INFO(this, "erases entire segment", segment_id);
-  // Schedule deletion of the segment file when releasing the chunk.
-  auto filename = segment_path() / to_string(segment_id);
-  x.chunk()->add_deletion_step([=] { rm(filename); });
-  segments_.erase_value(segment_id);
-  return erased_events;
+  auto f = detail::overload{
+    []() noexcept -> uint64_t { return 0; },
+    [&](const fbs::segment::v0* v0) -> uint64_t {
+      for (auto buffer : *v0->slices())
+        erased_events += buffer->data_nested_root()->rows();
+      VAST_INFO(this, "erases entire segment", segment_id);
+      // Schedule deletion of the segment file when releasing the chunk.
+      auto filename = segment_path() / to_string(segment_id);
+      x.add_deletion_step([=] { rm(filename); });
+      segments_.erase_value(segment_id);
+      return erased_events;
+    },
+  };
+  return visit(std::move(f), x);
 }
 
 uint64_t segment_store::drop(segment_builder& x) {

@@ -44,20 +44,4 @@ TEST(construction and querying) {
   CHECK_EQUAL(*slices[1], *zeek_conn_log[2]);
 }
 
-TEST(serialization) {
-  segment_builder builder;
-  auto slice = zeek_conn_log[0];
-  REQUIRE(!builder.add(slice));
-  auto x = builder.finish();
-  chunk_ptr chk;
-  std::vector<char> buf;
-  REQUIRE_EQUAL(save(nullptr, buf, x.chunk()), caf::none);
-  REQUIRE_EQUAL(load(nullptr, buf, chk), caf::none);
-  REQUIRE_NOT_EQUAL(chk, nullptr);
-  auto y = segment{std::move(chk)};
-  REQUIRE(y);
-  CHECK_EQUAL(x.ids(), y.ids());
-  CHECK_EQUAL(x.num_slices(), y.num_slices());
-}
-
 FIXTURE_SCOPE_END()

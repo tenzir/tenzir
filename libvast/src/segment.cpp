@@ -24,42 +24,17 @@
 #include "vast/fbs/segment.hpp"
 #include "vast/fbs/utils.hpp"
 #include "vast/fbs/version.hpp"
+#include "vast/fwd.hpp"
 #include "vast/ids.hpp"
 #include "vast/logger.hpp"
-#include "vast/si_literals.hpp"
+#include "vast/segment_visit.hpp"
 #include "vast/table_slice.hpp"
 #include "vast/uuid.hpp"
-
-#include <caf/binary_deserializer.hpp>
-#include <caf/binary_serializer.hpp>
-
-#include <functional>
-#include <type_traits>
 
 namespace vast {
 
 /// Explictly instantiate table template for segment.
 template class fbs::table<segment, fbs::Segment>;
-
-namespace {
-
-template <class Visitor>
-auto visit(Visitor&& visitor, const segment& x) noexcept(
-  std::conjunction_v<
-    std::is_nothrow_invocable<Visitor>,
-    std::is_nothrow_invocable<Visitor, const fbs::segment::v0*>>) {
-  if (!x)
-    return std::invoke(std::forward<Visitor>(visitor));
-  switch (x->segment_type()) {
-    case fbs::segment::Segment::NONE:
-      return std::invoke(std::forward<Visitor>(visitor));
-    case fbs::segment::Segment::v0:
-      return std::invoke(std::forward<Visitor>(visitor), x->segment_as_v0());
-  }
-  die("unhandled segment type");
-}
-
-} // namespace
 
 uuid segment::id() const {
   auto f = detail::overload{

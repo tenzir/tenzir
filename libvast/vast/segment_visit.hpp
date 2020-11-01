@@ -13,36 +13,30 @@
 
 #pragma once
 
-#include "vast/fbs/table.hpp"
+#include "vast/die.hpp"
+#include "vast/fbs/segment.hpp"
 #include "vast/fwd.hpp"
+#include "vast/segment.hpp"
 
-#include <vector>
+#include <functional>
+#include <type_traits>
 
 namespace vast {
 
-/// Defer table template instantiation for segment.
-extern template class fbs::table<segment, fbs::Segment>;
-
-/// A sequence of table slices.
-class segment final : public fbs::table<segment, fbs::Segment> {
-public:
-  /// Selectively opt-in to the table interface.
-  using table::add_deletion_step;
-  using table::table;
-
-  /// @returns The unique ID of this segment.
-  uuid id() const;
-
-  /// @returns the event IDs of all contained table slice.
-  vast::ids ids() const;
-
-  // @returns The number of table slices in this segment.
-  size_t num_slices() const;
-
-  /// Locates the table slices for a given set of IDs.
-  /// @param xs The IDs to lookup.
-  /// @returns The table slices according to *xs*.
-  caf::expected<std::vector<table_slice_ptr>> lookup(const vast::ids& xs) const;
-};
+template <class Visitor>
+auto visit(Visitor&& visitor, const segment& x) noexcept(
+  std::conjunction_v<
+    std::is_nothrow_invocable<Visitor>,
+    std::is_nothrow_invocable<Visitor, const fbs::segment::v0*>>) {
+  if (!x)
+    return std::invoke(std::forward<Visitor>(visitor));
+  switch (x->segment_type()) {
+    case fbs::segment::Segment::NONE:
+      return std::invoke(std::forward<Visitor>(visitor));
+    case fbs::segment::Segment::v0:
+      return std::invoke(std::forward<Visitor>(visitor), x->segment_as_v0());
+  }
+  die("unhandled segment type");
+}
 
 } // namespace vast
