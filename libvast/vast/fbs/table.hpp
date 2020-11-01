@@ -86,8 +86,8 @@ public:
     return as_bytes(x.chunk_);
   }
 
-  /// Returns the size of the underlying chunk.
-  size_t size() const noexcept {
+  /// Returns the size of the underlying chunk in Bytes.
+  size_t num_bytes() const noexcept {
     return *this ? chunk_->size() : 0;
   }
 

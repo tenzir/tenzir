@@ -53,7 +53,7 @@ public:
 
   /// @returns whether the store has no unwritten data pending.
   bool dirty() const noexcept {
-    return builder_.size() != 0;
+    return builder_.num_bytes() != 0;
   }
 
   /// @returns the ID of the active segment.

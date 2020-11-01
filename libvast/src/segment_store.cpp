@@ -68,7 +68,7 @@ caf::error segment_store::put(table_slice_ptr xs) {
   if (!segments_.inject(xs->offset(), xs->offset() + xs->rows(), builder_.id()))
     return make_error(ec::unspecified, "failed to update range_map");
   num_events_ += xs->rows();
-  if (builder_.size() < max_segment_size_)
+  if (builder_.num_bytes() < max_segment_size_)
     return caf::none;
   // We have exceeded our maximum segment size and now finish.
   return flush();
@@ -327,9 +327,9 @@ void segment_store::inspect_status(caf::settings& xs, status_verbosity v) {
   using caf::put;
   if (v >= status_verbosity::info) {
     put(xs, "events", num_events_);
-    auto mem = builder_.size();
+    auto mem = builder_.num_bytes();
     for (auto& segment : cache_)
-      mem += segment.second.size();
+      mem += segment.second.num_bytes();
     put(xs, "memory-usage", mem);
   }
   if (v >= status_verbosity::detailed) {
@@ -339,7 +339,7 @@ void segment_store::inspect_status(caf::settings& xs, status_verbosity v) {
       cached.emplace_back(to_string(kvp.first));
     auto& current = put_dictionary(segments, "current");
     put(current, "uuid", to_string(builder_.id()));
-    put(current, "size", builder_.size());
+    put(current, "size", builder_.num_bytes());
   }
 }
 

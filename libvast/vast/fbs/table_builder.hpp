@@ -89,8 +89,8 @@ public:
     return derived_type{std::move(chunk), std::forward<Args>(args)...};
   }
 
-  /// Returns the size of the builder in Bytes.
-  size_t size() const noexcept {
+  /// Returns the size of the accumulated builder state in Bytes.
+  size_t num_bytes() const noexcept {
     return detail::narrow_cast<size_t>(builder_.GetSize());
   }
 
