@@ -44,16 +44,18 @@ template class fbs::table<segment, fbs::Segment>;
 namespace {
 
 template <class Visitor>
-auto visit(Visitor&& visitor, const segment* x) noexcept(
+auto visit(Visitor&& visitor, const segment& x) noexcept(
   std::conjunction_v<
     std::is_nothrow_invocable<Visitor>,
     std::is_nothrow_invocable<Visitor, const fbs::segment::v0*>>) {
-  switch (x->root()->segment_type()) {
+  if (!x)
+    return std::invoke(std::forward<Visitor>(visitor));
+  switch (x.root()->segment_type()) {
     case fbs::segment::Segment::NONE:
       return std::invoke(std::forward<Visitor>(visitor));
     case fbs::segment::Segment::v0:
       return std::invoke(std::forward<Visitor>(visitor),
-                         x->root()->segment_as_v0());
+                         x.root()->segment_as_v0());
   }
   die("unhandled segment type");
 }
@@ -70,7 +72,7 @@ uuid segment::id() const {
       return result;
     },
   };
-  return visit(std::move(f), this);
+  return visit(std::move(f), *this);
 }
 
 vast::ids segment::ids() const {
@@ -86,7 +88,7 @@ vast::ids segment::ids() const {
       return result;
     },
   };
-  return visit(std::move(f), this);
+  return visit(std::move(f), *this);
 }
 
 size_t segment::num_slices() const {
@@ -96,7 +98,7 @@ size_t segment::num_slices() const {
       return detail::narrow_cast<size_t>(segment->slices()->size());
     },
   };
-  return visit(std::move(f), this);
+  return visit(std::move(f), *this);
 }
 
 caf::expected<std::vector<table_slice_ptr>>
@@ -130,7 +132,7 @@ segment::lookup(const vast::ids& xs) const {
       return result;
     },
   };
-  return visit(std::move(f), this);
+  return visit(std::move(f), *this);
 }
 
 } // namespace vast
