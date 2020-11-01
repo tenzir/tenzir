@@ -30,7 +30,7 @@ namespace vast {
 using segment_store_ptr = std::unique_ptr<segment_store>;
 
 /// A store that keeps its data in terms of segments.
-class segment_store : public store {
+class segment_store final : public store {
 public:
   // -- constructors, destructors, and assignment operators --------------------
 
@@ -42,7 +42,7 @@ public:
   static segment_store_ptr make(path dir, size_t max_segment_size,
                                 size_t in_memory_segments);
 
-  ~segment_store();
+  ~segment_store() override;
 
   // -- properties -------------------------------------------------------------
 
