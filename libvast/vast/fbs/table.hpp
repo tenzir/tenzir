@@ -17,6 +17,11 @@
 #include "vast/detail/assert.hpp"
 #include "vast/fwd.hpp"
 
+#include <caf/error.hpp>
+#include <caf/meta/load_callback.hpp>
+#include <caf/meta/save_callback.hpp>
+#include <caf/meta/type_name.hpp>
+
 #include <flatbuffers/flatbuffers.h>
 
 namespace vast::fbs {
@@ -45,7 +50,7 @@ public:
 
   // -- constructors, destructors, and assignment operators --------------------
 
-  /// Default-constructs an invalid FlatBuffers table. This
+  /// Default-constructs an invalid FlatBuffers table.
   /// @post `!*this`
   table() noexcept = default;
 
@@ -71,6 +76,24 @@ public:
   /// Default destructor.
   virtual ~table() noexcept = default;
 
+  // -- concepts ---------------------------------------------------------------
+
+  /// Return a view on the underlying byte buffer.
+  /// @pre `x`
+  friend span<const byte> as_bytes(const derived_type& x) noexcept {
+    VAST_ASSERT(x);
+    return as_bytes(x.chunk_);
+  }
+
+  /// Serialize/deserialize directly from/to the underlying byte buffer.
+  template <class Inspector>
+  friend auto inspect(Inspector& f, derived_type& x) ->
+    typename Inspector::result_type {
+    return f(caf::meta::type_name(table_name()), x.chunk_,
+             caf::meta::load_callback([&] { return x.load(); }),
+             caf::meta::save_callback([&] { return x.save(); }));
+  }
+
   // -- properties -------------------------------------------------------------
 
   /// Access the underlying FlatBuffers root table.
@@ -88,13 +111,6 @@ public:
   /// Check whether the FlatBuffers table is valid.
   explicit operator bool() const noexcept {
     return chunk_ != nullptr;
-  }
-
-  /// Return a view on the underlying byte buffer.
-  /// @pre `x`
-  friend span<const byte> as_bytes(const table& x) noexcept {
-    VAST_ASSERT(x);
-    return as_bytes(x.chunk_);
   }
 
   /// Returns the size of the underlying chunk in Bytes.
@@ -121,6 +137,18 @@ protected:
   /// Access the underlying chunk.
   const chunk_ptr& chunk() const noexcept {
     return chunk_;
+  }
+
+  /// Customization point for loading after deserialization of the chunk.
+  /// @note The default implementation does nothing.
+  virtual caf::error load() {
+    return caf::none;
+  }
+
+  /// Customization point for saving after serialization of the chunk.
+  /// @note The default implementation does nothing.
+  virtual caf::error save() {
+    return caf::none;
   }
 
 private:
