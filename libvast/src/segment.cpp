@@ -50,12 +50,11 @@ auto visit(Visitor&& visitor, const segment& x) noexcept(
     std::is_nothrow_invocable<Visitor, const fbs::segment::v0*>>) {
   if (!x)
     return std::invoke(std::forward<Visitor>(visitor));
-  switch (x.root()->segment_type()) {
+  switch (x->segment_type()) {
     case fbs::segment::Segment::NONE:
       return std::invoke(std::forward<Visitor>(visitor));
     case fbs::segment::Segment::v0:
-      return std::invoke(std::forward<Visitor>(visitor),
-                         x.root()->segment_as_v0());
+      return std::invoke(std::forward<Visitor>(visitor), x->segment_as_v0());
   }
   die("unhandled segment type");
 }

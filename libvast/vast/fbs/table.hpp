@@ -64,7 +64,31 @@ public:
 
   /// Access the underlying FlatBuffers root table.
   /// @pre `*this`
-  /// @post `result != nullptr
+  const root_type& operator*() const noexcept {
+    return *root();
+  }
+
+  /// Access the underlying FlatBuffers root table.
+  /// @pre `*this`
+  const root_type* operator->() const noexcept {
+    return root();
+  }
+
+  /// Check whether the FlatBuffers table is valid.
+  explicit operator bool() const noexcept {
+    return chunk_ != nullptr;
+  }
+
+  /// Access the underlying chunk.
+  const chunk_ptr& chunk() const& noexcept {
+    return chunk_;
+  }
+
+protected:
+  // -- implementation utilities -----------------------------------------------
+
+  /// Access the underlying FlatBuffers root table.
+  /// @pre `*this`
   const root_type* root() const noexcept {
     VAST_ASSERT(*this);
     auto result = flatbuffers::GetRoot<Root>(chunk_->data());
@@ -72,14 +96,9 @@ public:
     return result;
   }
 
-  /// Access the underlying chunk.
-  const chunk_ptr& chunk() const noexcept {
-    return chunk_;
-  }
-
-  /// Check whether the FlatBuffers table is valid.
-  explicit operator bool() const noexcept {
-    return chunk_ != nullptr;
+  /// Steal the underlying chunk.
+  chunk_ptr chunk() && noexcept {
+    return std::exchange(chunk_, {});
   }
 
 private:

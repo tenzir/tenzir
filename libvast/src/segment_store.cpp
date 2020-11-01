@@ -354,7 +354,7 @@ caf::error segment_store::register_segment(const path& filename) {
   auto s = segment{std::move(chk)};
   if (!s)
     return make_error(ec::format_error, "segment integrity check failed");
-  auto s0 = s.root()->segment_as_v0();
+  auto s0 = s->segment_as_v0();
   num_events_ += s0->events();
   uuid segment_uuid;
   if (auto error = unpack(*s0->uuid(), segment_uuid))
@@ -399,8 +399,7 @@ uint64_t segment_store::drop(segment& x) {
   // flatbuffers API. The (heavy-weight) altnerative here would be to create a
   // custom iterator so that a segment can be iterated as a list of table_slice
   // instances.
-  auto s = x.root();
-  auto s0 = s->segment_as_v0();
+  auto s0 = x->segment_as_v0();
   for (auto buffer : *s0->slices())
     erased_events += buffer->data_nested_root()->rows();
   VAST_INFO(this, "erases entire segment", segment_id);
