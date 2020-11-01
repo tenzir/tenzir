@@ -29,6 +29,9 @@
 
 namespace vast {
 
+/// Explictly instantiate table_builder template for segment.
+template class fbs::table_builder<segment, fbs::SegmentIdentifier>;
+
 segment_builder::segment_builder() noexcept {
   // nop
 }

@@ -38,6 +38,9 @@
 
 namespace vast {
 
+/// Explictly instantiate table template for segment.
+template class fbs::table<segment, fbs::Segment>;
+
 namespace {
 
 template <class Visitor>

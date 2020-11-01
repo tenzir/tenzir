@@ -28,6 +28,9 @@
 
 namespace vast {
 
+/// Defer table_builder template instantiation for segment.
+extern template class fbs::table_builder<segment, fbs::SegmentIdentifier>;
+
 /// A builder to create a segment from table slices.
 /// @relates segment
 class segment_builder final
