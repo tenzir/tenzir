@@ -21,10 +21,11 @@
 namespace vast {
 
 /// Defer table template instantiation for segment.
-extern template class fbs::table<segment, fbs::Segment>;
+extern template class fbs::table<segment, fbs::Segment, fbs::SegmentIdentifier>;
 
 /// A sequence of table slices.
-class segment final : public fbs::table<segment, fbs::Segment> {
+class segment final
+  : public fbs::table<segment, fbs::Segment, fbs::SegmentIdentifier> {
 public:
   /// Selectively opt-in to the table interface.
   using table::add_deletion_step;

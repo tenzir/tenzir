@@ -34,7 +34,7 @@
 namespace vast {
 
 /// Explictly instantiate table template for segment.
-template class fbs::table<segment, fbs::Segment>;
+template class fbs::table<segment, fbs::Segment, fbs::SegmentIdentifier>;
 
 uuid segment::id() const {
   auto f = detail::overload{

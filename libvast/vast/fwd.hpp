@@ -65,10 +65,12 @@ namespace fbs {
 
 struct Segment;
 
-template <class Derived, class Root>
+const char* SegmentIdentifier();
+
+template <class Derived, class Root, const char* (*FileIdentifier)()>
 class table;
 
-template <class Table, const char* (*FileIdentifier)()>
+template <class Table>
 class table_builder;
 
 } // namespace fbs

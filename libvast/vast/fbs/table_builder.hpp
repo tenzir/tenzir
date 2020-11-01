@@ -25,9 +25,7 @@ namespace vast::fbs {
 
 /// Movable builder for types that wrap a FlatBuffers table.
 /// @tparam Table The wrapped FlatBuffers table to build.
-/// @tparam FileIdentifier A pointer to the function that returns the
-/// FlatBuffers table's file identifier.
-template <class Table, const char* (*FileIdentifier)()>
+template <class Table>
 class table_builder {
 public:
   // -- types and constants ----------------------------------------------------
@@ -37,24 +35,23 @@ public:
   using root_type = typename table_type::root_type;
   using offset_type = typename flatbuffers::Offset<root_type>;
 
-  /// The default initial huffer size.
-  inline static constexpr auto default_initial_size = size_t{1024};
-
-  // -- sanity checks ----------------------------------------------------------
-
-  static_assert(
-    std::conjunction_v<
-      std::is_base_of<table<derived_type, root_type>, table_type>,
-      std::negation<std::is_same<table<derived_type, root_type>, table_type>>>,
-    "Table must be derived from fbs::table");
+  /// A pointer to the function that returns the underlying FlatBuffers table's
+  /// file identifier.
+  inline static constexpr auto file_identifier = table_type::file_identifier;
 
   // -- constructors, destructors, and assigmnent operators --------------------
 
   /// Construct a builder with an initial buffer size.
   /// @param initial_size The initial buffer size in Bytes.
-  explicit table_builder(size_t initial_size = default_initial_size) noexcept
+  explicit table_builder(size_t initial_size = 1024) noexcept
     : builder_{initial_size} {
-    // nop
+    // Sanity check whether CRTP was used correctly for Table, which must be
+    // derived from fbs::table for the fbs::table_builder to function.
+    using basic_table_type = table<derived_type, root_type, file_identifier>;
+    static_assert(std::conjunction_v<
+                    std::is_base_of<basic_table_type, table_type>,
+                    std::negation<std::is_same<basic_table_type, table_type>>>,
+                  "Table must be derived from fbs::table");
   }
 
   /// Forbid copy-construction and copy-assignment.
@@ -83,7 +80,7 @@ public:
   derived_type finish(Args&&... args) {
     static_assert(std::is_constructible_v<derived_type, chunk_ptr&&, Args...>,
                   "Table must be constructible from <chunk_ptr&&, Args...>");
-    builder_.Finish(create(), FileIdentifier());
+    builder_.Finish(create(), file_identifier());
     auto chunk = fbs::release(builder_);
     reset();
     return derived_type{std::move(chunk), std::forward<Args>(args)...};

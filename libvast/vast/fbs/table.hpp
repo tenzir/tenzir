@@ -24,13 +24,24 @@ namespace vast::fbs {
 /// Semi-regular base class for types that wrap a FlatBuffers table.
 /// @tparam Derived The type that wraps the FlatBuffers table for CRTP.
 /// @tparam Root The generated FlatBuffers table root type.
-template <class Derived, class Root>
+/// @tparam FileIdentifier A pointer to the function that returns the
+/// FlatBuffers table's file identifier.
+template <class Derived, class Root, const char* (*FileIdentifier)()>
 class table {
 public:
   // -- types and constants ----------------------------------------------------
 
   using derived_type = Derived;
   using root_type = Root;
+
+  /// A pointer to the function that returns the underlying FlatBuffers table's
+  /// file identifier.
+  inline static constexpr auto file_identifier = FileIdentifier;
+
+  /// Returns the underlying FlatBuffers table's fully qualified table name.
+  static constexpr const char* table_name() {
+    return root_type::GetFullyQualifiedName();
+  }
 
   // -- constructors, destructors, and assignment operators --------------------
 
@@ -44,7 +55,7 @@ public:
     if (chunk) {
       auto verifier = flatbuffers::Verifier{
         reinterpret_cast<const uint8_t*>(chunk->data()), chunk->size()};
-      if (verifier.template VerifyBuffer<root_type>())
+      if (verifier.template VerifyBuffer<root_type>(file_identifier()))
         chunk_ = std::move(chunk);
     }
   }
