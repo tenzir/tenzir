@@ -29,8 +29,8 @@
 #include "vast/system/configuration.hpp"
 #include "vast/system/count_command.hpp"
 #include "vast/system/explore_command.hpp"
-#include "vast/system/import_command.hpp"
 #include "vast/system/get_command.hpp"
+#include "vast/system/import_command.hpp"
 #include "vast/system/infer_command.hpp"
 #include "vast/system/pivot_command.hpp"
 #include "vast/system/remote_command.hpp"
@@ -97,6 +97,8 @@ auto make_root_command(std::string_view path) {
         .add<std::vector<std::string>>("schema-paths", schema_desc.c_str())
         .add<std::string>("db-directory,d", "directory for persistent state")
         .add<std::string>("log-file", "log filename")
+        .add<std::string>("client-log-file", "client log file (default: "
+                                             "disabled)")
         .add<std::string>("endpoint,e", "node endpoint")
         .add<std::string>("node-id,i", "the unique ID of this node")
         .add<bool>("node,N", "spawn a node instead of connecting to one")
