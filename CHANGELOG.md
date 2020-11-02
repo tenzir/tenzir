@@ -12,6 +12,10 @@ Every entry has a category for which we use the following visual abbreviations:
 
 ## Unreleased
 
+- 🎁 The option `vast.client-log-file` allows for re-enabling client logging. By
+  default, VAST only writes log files for the server process.
+  [#1132](https://github.com/tenzir/vast/pull/1332)
+
 - ⚠️ VAST no longer requires you to manually remove a stale PID file from a
   no-longer running `vast` process. Instead, VAST prints a warning and
   overwrites the old PID file.

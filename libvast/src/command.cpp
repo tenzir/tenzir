@@ -384,13 +384,24 @@ parse(const command& root, command::argument_iterator first,
 
 bool init_config(caf::actor_system_config& cfg, const invocation& from,
                  std::ostream& error_output) {
-  // Disable file logging for all commands that don't start a node,
-  // i.e., `vast start` and `vast -N ...`.
-  if (!(from.name() == "start"
-        || caf::get_or(from.options, "vast.node", false)))
-    cfg.set("logger.file-verbosity", caf::atom("quiet"));
   // Merge all CLI settings into the actor_system settings.
   detail::merge_settings(from.options, cfg.content);
+  // Disable file logging for all commands that don't start a node,
+  // i.e., `vast start` and `vast -N ...`.
+  bool is_server
+    = from.name() == "start" || caf::get_or(from.options, "vast.node", false);
+  if (!is_server) {
+    // Allow users to use `vast.client-log-file` to re-enable client logging.
+    if (auto fn = caf::get_if<std::string>(&from.options, "vast.client-log-"
+                                                          "file"))
+      cfg.set("logger.file-name", *fn);
+    else
+      cfg.set("logger.file-verbosity", caf::atom("quiet"));
+  } else {
+    // Allow users to use `vast.log-file` to set log filename
+    if (auto fn = caf::get_if<std::string>(&cfg, "vast.log-file"))
+      cfg.set("logger.file-name", *fn);
+  }
   // Allow users to use `vast.verbosity` to configure console verbosity.
   if (auto value = caf::get_if<caf::atom_value>(&from.options, "vast."
                                                                "verbosity")) {
@@ -412,9 +423,6 @@ bool init_config(caf::actor_system_config& cfg, const invocation& from,
     }
     cfg.set("logger.console-verbosity", *value);
   }
-  // Allow users to use `vast.log-file` to set log filename
-  if (auto fn = caf::get_if<std::string>(&cfg, "vast.log-file"))
-    cfg.set("logger.file-name", *fn);
   // Allow users to specify `verbose` log level.
   auto fixup_verbose_mode = [&](const std::string& option) {
     auto logopt = "logger." + option;
