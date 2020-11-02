@@ -1,0 +1,64 @@
+- concept:
+    name: net.src_ip
+    description: >-
+      The IP address of the connection originator
+- concept:
+    name: net.src_port
+    description: >-
+      The transport-layer port of the connection originator
+- concept:
+    name: net.dst_ip
+    description: >-
+      The IP address of the connection responder
+- concept:
+    name: net.dst_port
+    description: >-
+      The transport-layer port of the connection responder
+- concept:
+    name: net.proto
+    description: >-
+      The transport-layer protocol of a connection
+- concept:
+    name: net.app
+    description: >-
+      The application-layer protocol of a connection
+- concept:
+    name: net.community_id
+    description: >-
+      The Community ID for a connection
+- concept:
+    name: net.duration
+    description: >-
+      The time the connection lasted
+- concept:
+    name: net.src_bytes
+    description: >-
+      The number of applicatin-layer bytes sent by the connection originator
+- concept:
+    name: net.dst_bytes
+    description: >-
+      The number of applicatin-layer bytes sent by the connection responder
+- concept:
+    name: net.src_packets
+    description: >-
+      The number of IP packets sent by the connection originator
+- concept:
+    name: net.dst_packets
+    description: >-
+      The number of IP packets sent by the connection responder
+- concept:
+    name: net.src_mac
+    description: >-
+      The MAC address of the frame source
+- concept:
+    name: net.dst_mac
+    description: >-
+      The MAC address of the frame destination
+- concept:
+    name: net.outer_vlan
+    description: >-
+      The outer VLAN for a connection
+- concept:
+    name: net.inner_vlan
+    description: >-
+      The inner VLAN for a connection
