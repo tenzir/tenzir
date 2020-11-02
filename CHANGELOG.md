@@ -12,6 +12,10 @@ Every entry has a category for which we use the following visual abbreviations:
 
 ## Unreleased
 
+- ⚡️ The `splunkt-to-vast` script has a new name: `taxonomize`. The script now
+  also generates taxonomy declarations for Azure Sentinel.
+  [#1134](https://github.com/tenzir/vast/pull/1134)
+
 - ⚠️ VAST does not produce metrics by default any more. The option
   `--disable-metrics` has been renamed to `--enable-metrics` accordingly.
   [#1137](https://github.com/tenzir/vast/pull/1137)
