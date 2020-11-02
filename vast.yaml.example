@@ -11,8 +11,9 @@ vast:
   db-directory: "vast.db"
   # The file system path used for log files.
   #log-file: "<db-directory>/server.log"
-  # The file system path used for client log files. Note that this is disabled
-  # by default. If not specified no log files are written for clients at all.
+  # The file system path used for client log files relative to the current
+  # working directory of the client. Note that this is disabled by default. If
+  # not specified no log files are written for clients at all.
   #client-log-file: "client.log"
   # The size of an index shard.
   max-partition-size: 1000000

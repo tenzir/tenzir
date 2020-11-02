@@ -12,7 +12,7 @@ Every entry has a category for which we use the following visual abbreviations:
 
 ## Unreleased
 
-- 🎁 The option `vast.client-log-file` allows for re-enabling client logging. By
+- 🎁 The new option `vast.client-log-file` enables client-side logging. By
   default, VAST only writes log files for the server process.
   [#1132](https://github.com/tenzir/vast/pull/1332)
 
