@@ -1,6 +1,3 @@
-vast:
-  disable-metrics: true
-
 caf:
   logger:
     file-verbosity: trace
