@@ -1,17 +1,17 @@
 - concept:
-    name: net.src_ip
+    name: net.src.ip
     description: >-
       The IP address of the connection originator
 - concept:
-    name: net.src_port
+    name: net.src.port
     description: >-
       The transport-layer port of the connection originator
 - concept:
-    name: net.dst_ip
+    name: net.dst.ip
     description: >-
       The IP address of the connection responder
 - concept:
-    name: net.dst_port
+    name: net.dst.port
     description: >-
       The transport-layer port of the connection responder
 - concept:
@@ -31,29 +31,52 @@
     description: >-
       The time the connection lasted
 - concept:
-    name: net.src_bytes
+    name: net.src.bytes
     description: >-
       The number of applicatin-layer bytes sent by the connection originator
 - concept:
-    name: net.dst_bytes
+    name: net.dst.bytes
     description: >-
       The number of applicatin-layer bytes sent by the connection responder
 - concept:
-    name: net.src_packets
+    name: net.src.packets
     description: >-
       The number of IP packets sent by the connection originator
 - concept:
-    name: net.dst_packets
+    name: net.dst.packets
     description: >-
       The number of IP packets sent by the connection responder
 - concept:
-    name: net.src_mac
+    name: net.packets
+    description: >-
+      The number of IP packets in a connection.
+- concept:
+    name: net.src.mac
     description: >-
       The MAC address of the frame source
 - concept:
-    name: net.dst_mac
+    name: net.dst.mac
     description: >-
-      The MAC address of the frame destination
+      The MAC address of the frame destination.
+- concept:
+    name: net.src.hostname
+    description: >-
+      The hostname of the source.
+- concept:
+    name: net.dst.hostname
+    description: >-
+      The hostname of the destination.
+- concept:
+    name: net.hostname
+    description: >-
+      A hostname of a machine.
+    concepts: 
+      - net.dst.hostname
+      - net.src.hostname
+- concept:
+    name: net.uri
+    description: >-
+      A URI.
 - concept:
     name: net.outer_vlan
     description: >-
@@ -62,3 +85,10 @@
     name: net.inner_vlan
     description: >-
       The inner VLAN for a connection
+- concept:
+    name: net.vlan
+    description: >-
+      The VLAN for a connection
+    concepts:
+      - net.outer_vlan 
+      - net.inner_vlan 

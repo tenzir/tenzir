@@ -11,9 +11,13 @@
     description: >-
       The group of the file.
 - concept:
-    name: file.perm
+    name: file.perms
     description: >-
       The permissions of the file.
+- concept:
+    name: file.size
+    description: >-
+      The number of bytes the file occupies.
 - concept:
     name: file.ext
     description: >-

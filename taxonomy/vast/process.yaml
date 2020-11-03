@@ -1,7 +1,7 @@
 - concept:
     name: proc.guid
     description: >-
-      Process Guid of the process that got spawned/created (child)
+      Process GUID of the process that got spawned/created (child)
 - concept:
     name: proc.id
     description: >-
