@@ -364,7 +364,7 @@ source(caf::stateful_actor<source_state<Reader>>* self, Reader reader,
         st.mgr->push();
     },
     [=](atom::telemetry) {
-      VAST_VERBOSE(self, "got a telemetry atom");
+      VAST_DEBUG(self, "got a telemetry atom");
       auto& st = self->state;
       st.send_report();
       if (!st.mgr->done())
