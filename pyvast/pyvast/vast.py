@@ -40,7 +40,7 @@ class VAST:
         self.binary = binary
         self.endpoint = endpoint
         self.call_stack = []
-        self.logger.info(
+        self.logger.debug(
             f"PyVAST: VAST client configured to use endpoint {self.endpoint}"
         )
 
