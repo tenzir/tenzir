@@ -280,6 +280,7 @@ source(caf::stateful_actor<source_state<Reader>>* self, Reader reader,
           // message. Sending another one would create a parallel wakeup cycle.
           st.waiting_for_input = true;
           self->delayed_send(self, st.wakeup_delay, atom::wakeup_v);
+          VAST_DEBUG(self, "scheduled itself to resume after", st.wakeup_delay);
           // Exponential backoff for the wakeup calls.
           // For each consecutive invocation of this generate handler that does
           // not emit any events, we double the wakeup delay.
@@ -288,9 +289,8 @@ source(caf::stateful_actor<source_state<Reader>>* self, Reader reader,
             st.wakeup_delay = std::chrono::milliseconds{20};
           else if (st.wakeup_delay < st.reader.batch_timeout_ / 2)
             st.wakeup_delay *= 2;
-          VAST_DEBUG(self, "increases wakeup delay to", st.wakeup_delay);
         } else {
-          VAST_DEBUG(self, "timed out but was not already waiting for input");
+          VAST_DEBUG(self, "timed out but is already scheduled for wakeup");
         }
         return;
       }
@@ -305,7 +305,7 @@ source(caf::stateful_actor<source_state<Reader>>* self, Reader reader,
           VAST_DEBUG(self, "completed at end of input");
         return finish();
       }
-      VAST_DEBUG(self, "completed successfully");
+      VAST_DEBUG(self, "ended a generation round regularly");
     },
     // done?
     [=](const caf::unit_t&) { return self->state.done; });
