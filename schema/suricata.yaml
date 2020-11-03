@@ -1,0 +1,165 @@
+- concept:
+    name: net.src.ip
+    fields:
+      - suricata.alert.src_ip
+      - suricata.dhcp.src_ip
+      - suricata.dns.src_ip
+      - suricata.ftp.src_ip
+      - suricata.ftp_data.src_ip
+      - suricata.http.src_ip
+      - suricata.fileinfo.src_ip
+      - suricata.flow.src_ip
+      - suricata.krb5.src_ip
+      - suricata.netflow.src_ip
+      - suricata.smb.src_ip
+      - suricata.ssh.src_ip
+      - suricata.smtp.src_ip
+      - suricata.tls.src_ip
+- concept:
+    name: net.src.port
+    fields:
+      - suricata.alert.src_port
+      - suricata.dhcp.src_port
+      - suricata.dns.src_port
+      - suricata.ftp.src_port
+      - suricata.ftp_data.src_port
+      - suricata.http.src_port
+      - suricata.fileinfo.src_port
+      - suricata.flow.src_port
+      - suricata.krb5.src_port
+      - suricata.netflow.src_port
+      - suricata.smb.src_port
+      - suricata.ssh.src_port
+      - suricata.smtp.src_port
+      - suricata.tls.src_port
+- concept:
+    name: net.dst.ip
+    fields:
+      - suricata.alert.dest_ip
+      - suricata.dhcp.dest_ip
+      - suricata.dns.dest_ip
+      - suricata.ftp.dest_ip
+      - suricata.ftp_data.dest_ip
+      - suricata.http.dest_ip
+      - suricata.fileinfo.dest_ip
+      - suricata.flow.dest_ip
+      - suricata.krb5.dest_ip
+      - suricata.netflow.dest_ip
+      - suricata.smb.dest_ip
+      - suricata.ssh.dest_ip
+      - suricata.smtp.dest_ip
+      - suricata.tls.dest_ip
+- concept:
+    name: net.dst.port
+    fields:
+      - suricata.alert.dest_port
+      - suricata.dhcp.dest_port
+      - suricata.dns.dest_port
+      - suricata.ftp.dest_port
+      - suricata.ftp_data.dest_port
+      - suricata.http.dest_port
+      - suricata.fileinfo.dest_port
+      - suricata.flow.dest_port
+      - suricata.krb5.dest_port
+      - suricata.netflow.dest_port
+      - suricata.smb.dest_port
+      - suricata.ssh.dest_port
+      - suricata.smtp.dest_port
+      - suricata.tls.dest_port
+- concept:
+    name: net.proto
+    fields:
+      - suricata.alert.proto
+      - suricata.dhcp.proto
+      - suricata.dns.proto
+      - suricata.ftp.proto
+      - suricata.ftp_data.proto
+      - suricata.http.proto
+      - suricata.fileinfo.proto
+      - suricata.flow.proto
+      - suricata.krb5.proto
+      - suricata.netflow.proto
+      - suricata.smb.proto
+      - suricata.ssh.proto
+      - suricata.smtp.proto
+      - suricata.tls.proto
+- concept:
+    name: net.community_id
+    fields:
+      - suricata.alert.community_id
+      - suricata.dhcp.community_id
+      - suricata.dns.community_id
+      - suricata.ftp.community_id
+      - suricata.ftp_data.community_id
+      - suricata.http.community_id
+      - suricata.fileinfo.community_id
+      - suricata.flow.community_id
+      - suricata.krb5.community_id
+      - suricata.netflow.community_id
+      - suricata.smb.community_id
+      - suricata.ssh.community_id
+      - suricata.smtp.community_id
+      - suricata.tls.community_id
+- concept:
+    name: net.src.mac
+    fields:
+      - suricata.dhcp.dhcp.client_mac
+- concept:
+    name: net.src.bytes
+    fields:
+      - suricata.alert.flow.bytes_toserver
+      - suricata.flow.flow.bytes_toserver
+- concept:
+    name: net.dst.bytes
+    fields:
+      - suricata.alert.flow.bytes_toclient
+      - suricata.flow.flow.bytes_toclient
+- concept:
+    name: net.hostname
+    fields:
+      - suricata.fileinfo.http.hostname
+      - suricata.http.http.hostname
+      - suricata.dhcp.dhcp.hostname
+- concept:
+    name: net.uri
+    fields:
+      - suricata.http.http.url
+- concept:
+    name: net.vlan
+    fields:
+      - suricata.smb.vlan
+      - suricata.ssh.vlan
+      - suricata.krb5.vlan
+- concept:
+    name: net.packets
+    fields:
+      - suricata.alert.pcap_cnt
+      - suricata.dhcp.pcap_cnt
+      - suricata.dns.pcap_cnt
+      - suricata.fileinfo.pcap_cnt
+      - suricata.flow.pcap_cnt
+      - suricata.ftp.pcap_cnt
+      - suricata.ftp_data.pcap_cnt
+      - suricata.http.pcap_cnt
+      - suricata.netflow.pcap_cnt
+      - suricata.smb.pcap_cnt
+      - suricata.smtp.pcap_cnt
+      - suricata.tls.pcap_cnt
+- concept:
+    name: file.name
+    fields:
+      - suricata.ftp_data.ftp_data.filename
+      - suricata.fileinfo.fileinfo.filename
+      - suricata.smb.smb.filename
+- concept:
+    name: file.hash.md5
+    fields:
+      - suricata.fileinfo.fileinfo.md5
+- concept:
+    name: file.hash.sha1
+    fields:
+      - suricata.fileinfo.fileinfo.sha1
+- concept:
+    name: file.hash.sha256
+    fields:
+      - suricata.fileinfo.fileinfo.sha256
