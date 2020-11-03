@@ -337,7 +337,7 @@ type sysmon.DNSQuery = record {
     // Process Guid of the process that executed the DNS query
     ProcessGuid: string,
     // Process id of the process that executed the DNS query
-    ProcessId: string,
+    ProcessId: count,
     // DNS query name
     QueryName: string,
     // DNS query status
