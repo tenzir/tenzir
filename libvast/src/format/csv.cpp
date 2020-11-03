@@ -425,7 +425,7 @@ caf::error reader::read_impl(size_t max_events, size_t max_slice_size,
   if (!parser_) {
     bool timed_out = next_line();
     if (timed_out)
-      return ec::timeout;
+      return ec::stalled;
     auto p = read_header(lines_->get());
     if (!p)
       return p.error();
@@ -444,7 +444,7 @@ caf::error reader::read_impl(size_t max_events, size_t max_slice_size,
     }
     bool timed_out = next_line();
     if (timed_out)
-      return ec::timeout;
+      return ec::stalled;
     auto& line = lines_->get();
     if (line.empty()) {
       // Ignore empty lines.

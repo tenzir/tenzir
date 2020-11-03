@@ -38,6 +38,7 @@ const char* descriptions[] = {
   "format_error",
   "end_of_input",
   "timeout",
+  "stalled",
   "version_error",
   "syntax_error",
   "lookup_error",

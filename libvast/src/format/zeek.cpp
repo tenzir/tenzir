@@ -280,7 +280,7 @@ caf::error reader::read_impl(size_t max_events, size_t max_slice_size,
     VAST_ASSERT(layout_.fields.empty());
     auto timed_out = next_line();
     if (timed_out)
-      return ec::timeout;
+      return ec::stalled;
     if (auto err = parse_header())
       return err;
     if (!reset_builder(layout_))
@@ -306,7 +306,7 @@ caf::error reader::read_impl(size_t max_events, size_t max_slice_size,
     }
     auto timed_out = next_line();
     if (timed_out)
-      return ec::timeout;
+      return ec::stalled;
     // Parse curent line.
     auto& line = lines_->get();
     if (line.empty()) {

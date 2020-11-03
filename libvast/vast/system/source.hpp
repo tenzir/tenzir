@@ -274,7 +274,7 @@ source(caf::stateful_actor<source_state<Reader>>* self, Reader reader,
         VAST_DEBUG(self, "finished with", st.count, "events");
         return finish();
       }
-      if (err == ec::timeout) {
+      if (err == ec::stalled) {
         if (!st.waiting_for_input) {
           // This pull handler was invoked while we were waiting for a wakeup
           // message. Sending another one would create a parallel wakeup cycle.
@@ -358,7 +358,7 @@ source(caf::stateful_actor<source_state<Reader>>* self, Reader reader,
       VAST_VERBOSE(self, "wakes up to check for new input");
       auto& st = self->state;
       st.waiting_for_input = false;
-      // If we are here, the reader returned with ec::timeout the last time it
+      // If we are here, the reader returned with ec::stalled the last time it
       // was called. Let's check if we can read something now.
       if (st.mgr->generate_messages())
         st.mgr->push();
