@@ -249,7 +249,7 @@ caf::error reader::read_impl(size_t max_events, size_t max_slice_size,
   }
   auto produced = size_t{0};
   while (produced < max_events) {
-    if (batch_timeout_ > reader_clock::duration::zero()
+    if (produced > 0 && batch_timeout_ > reader_clock::duration::zero()
         && last_batch_sent_ + batch_timeout_ < reader_clock::now()) {
       VAST_DEBUG(this, "reached input timeout");
       break;

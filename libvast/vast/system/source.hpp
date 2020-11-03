@@ -250,6 +250,7 @@ source(caf::stateful_actor<source_state<Reader>>* self, Reader reader,
     },
     // get next element
     [=](caf::unit_t&, caf::downstream<table_slice_ptr>& out, size_t num) {
+      VAST_DEBUG(self, "tries to generate", num, "messages");
       auto& st = self->state;
       // Extract events until the source has exhausted its input or until
       // we have completed a batch.
@@ -261,6 +262,7 @@ source(caf::stateful_actor<source_state<Reader>>* self, Reader reader,
       auto t = timer::start(st.metrics);
       auto [err, produced] = st.reader.read(events, table_slice_size,
                                             push_slice);
+      VAST_DEBUG(self, "read", produced, "events");
       t.stop(produced);
       st.count += produced;
       auto finish = [&] {
@@ -268,8 +270,10 @@ source(caf::stateful_actor<source_state<Reader>>* self, Reader reader,
         st.send_report();
         self->quit();
       };
-      if (st.requested && st.count >= *st.requested)
+      if (st.requested && st.count >= *st.requested) {
+        VAST_DEBUG(self, "finished with", st.count, "events");
         return finish();
+      }
       if (err == ec::timeout) {
         if (!st.waiting_for_input) {
           // This pull handler was invoked while we were waiting for a wakeup
@@ -284,6 +288,9 @@ source(caf::stateful_actor<source_state<Reader>>* self, Reader reader,
             st.wakeup_delay = std::chrono::milliseconds{20};
           else if (st.wakeup_delay < st.reader.batch_timeout_ / 2)
             st.wakeup_delay *= 2;
+          VAST_DEBUG(self, "increases wakeup delay to", st.wakeup_delay);
+        } else {
+          VAST_DEBUG(self, "timed out but was not already waiting for input");
         }
         return;
       }
@@ -291,8 +298,11 @@ source(caf::stateful_actor<source_state<Reader>>* self, Reader reader,
       if (err != caf::none) {
         if (err != vast::ec::end_of_input)
           VAST_INFO(self, "completed with message:", render(err));
+        else
+          VAST_DEBUG(self, "completed at end of input");
         return finish();
       }
+      VAST_DEBUG(self, "completed successfully");
     },
     // done?
     [=](const caf::unit_t&) { return self->state.done; });
