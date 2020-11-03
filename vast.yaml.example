@@ -39,8 +39,8 @@ vast:
   # Query for aging out obsolete data.
   aging-query:
 
-  # Don't keep track of performance metrics.
-  disable-metrics: false
+  # Keep track of performance metrics.
+  enable-metrics: false
   # The configuration of the metrics reporting component.
   metrics:
     # Configures if and how metrics should be ingested back into VAST.

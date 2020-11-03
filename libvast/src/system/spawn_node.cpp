@@ -35,7 +35,7 @@ caf::expected<scope_linked_actor>
 spawn_node(caf::scoped_actor& self, const caf::settings& opts) {
   using namespace std::string_literals;
   // Fetch values from config.
-  auto accounting = !get_or(opts, "vast.disable-metrics", false);
+  auto accounting = get_or(opts, "vast.enable-metrics", false);
   auto id = get_or(opts, "vast.node-id", defaults::system::node_id);
   auto db_dir
     = get_or(opts, "vast.db-directory", defaults::system::db_directory);
