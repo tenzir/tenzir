@@ -295,7 +295,10 @@ source(caf::stateful_actor<source_state<Reader>>* self, Reader reader,
         return;
       }
       st.wakeup_delay = std::chrono::milliseconds::zero();
-      if (err != caf::none) {
+      if (err == ec::timeout) {
+        VAST_DEBUG(self, "reached batch timeout and flushes its buffers");
+        st.mgr->out().force_emit_batches();
+      } else if (err != caf::none) {
         if (err != vast::ec::end_of_input)
           VAST_INFO(self, "completed with message:", render(err));
         else

@@ -216,8 +216,8 @@ caf::error reader<Selector>::read_impl(size_t max_events, size_t max_slice_size,
       return finish(cons, make_error(ec::end_of_input, "input exhausted"));
     if (produced > 0 && batch_timeout_ > reader_clock::duration::zero()
         && last_batch_sent_ + batch_timeout_ < reader_clock::now()) {
-      VAST_DEBUG(this, "reached input timeout");
-      break;
+      VAST_DEBUG(this, "reached batch timeout");
+      return finish(cons, ec::timeout);
     }
     bool timed_out = lines_->next_timeout(read_timeout_);
     if (timed_out) {

@@ -251,8 +251,8 @@ caf::error reader::read_impl(size_t max_events, size_t max_slice_size,
   while (produced < max_events) {
     if (produced > 0 && batch_timeout_ > reader_clock::duration::zero()
         && last_batch_sent_ + batch_timeout_ < reader_clock::now()) {
-      VAST_DEBUG(this, "reached input timeout");
-      break;
+      VAST_DEBUG(this, "reached batch timeout");
+      return finish(f, ec::timeout);
     }
     // Attempt to fetch next packet.
     const u_char* data;
