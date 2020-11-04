@@ -60,19 +60,6 @@ table_slice::~table_slice() {
   --instance_count_;
 }
 
-record_type table_slice::layout(size_type first_column,
-                                size_type num_columns) const {
-  if (first_column >= columns())
-    return {};
-  auto col_begin = first_column;
-  auto col_end = num_columns == std::numeric_limits<size_type>::max()
-                   ? columns()
-                   : std::min(columns(), first_column + num_columns);
-  std::vector<record_field> sub_records{layout().fields.begin() + col_begin,
-                                        layout().fields.begin() + col_end};
-  return record_type{std::move(sub_records)};
-}
-
 caf::error table_slice::load(chunk_ptr chunk) {
   VAST_ASSERT(chunk != nullptr);
   auto data = const_cast<char*>(chunk->data()); // CAF won't touch it.
