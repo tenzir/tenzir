@@ -520,7 +520,8 @@ index(caf::stateful_actor<index_state>* self, filesystem_type fs, path dir,
         VAST_WARNING(self, "discards invalid table slice");
         return;
       }
-      self->state.stats.layouts[x->layout().name()].count += x->rows();
+      auto layout = x->layout();
+      self->state.stats.layouts[layout.name()].count += x->rows();
       auto& active = self->state.active_partition;
       if (!active.actor) {
         create_active_partition();

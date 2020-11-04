@@ -39,6 +39,38 @@
     run();                                                                     \
   }
 
+namespace vast {
+
+/// Constructs table slices filled with random content for testing purposes.
+/// @param num_slices The number of table slices to generate.
+/// @param slice_size The number of rows per table slices.
+/// @param layout The layout of the table slice.
+/// @param offset The offset of the first table slize.
+/// @param seed The seed value for initializing the random-number generator.
+/// @returns a list of randomnly filled table slices or an error.
+/// @relates table_slice
+caf::expected<std::vector<table_slice_ptr>>
+make_random_table_slices(size_t num_slices, size_t slice_size,
+                         record_type layout, id offset = 0, size_t seed = 0);
+
+/// Converts the table slice into a 2-D matrix in row-major order such that
+/// each row represents an event.
+/// @param slice The table slice to convert.
+/// @param first_row An offset to the first row to consider.
+/// @param num_rows Then number of rows to consider. (0 = all rows)
+/// @returns a 2-D matrix of data instances corresponding to *slice*.
+/// @requires first_row < slice->rows()
+/// @requires num_rows <= slice->rows() - first_row
+/// @note This function exists primarily for unit testing because it performs
+/// excessive memory allocations.
+std::vector<std::vector<data>>
+to_data(const table_slice& slice, size_t first_row = 0, size_t num_rows = 0);
+
+std::vector<std::vector<data>>
+to_data(const std::vector<table_slice_ptr>& slices);
+
+} // namespace vast
+
 namespace fixtures {
 
 class table_slices : public deterministic_actor_system_and_events {

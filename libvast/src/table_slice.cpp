@@ -19,12 +19,10 @@
 #include "vast/defaults.hpp"
 #include "vast/detail/assert.hpp"
 #include "vast/detail/byte_swap.hpp"
-#include "vast/detail/append.hpp"
 #include "vast/detail/overload.hpp"
 #include "vast/error.hpp"
 #include "vast/expression.hpp"
 #include "vast/factory.hpp"
-#include "vast/format/test.hpp"
 #include "vast/ids.hpp"
 #include "vast/logger.hpp"
 #include "vast/table_slice_builder.hpp"
@@ -51,72 +49,45 @@ namespace {
 
 using size_type = table_slice::size_type;
 
-auto cap (size_type pos, size_type num, size_type last) {
-  return num == table_slice::npos ? last : std::min(last, pos + num);
-}
-
 } // namespace <anonymous>
 
-table_slice::column_view::column_view(const table_slice& slice, size_t column)
-  : slice_(slice), column_(column) {
+// -- constructors, destructors, and assignment operators ----------------------
+
+table_slice::table_slice() noexcept {
+  ++instance_count_;
+}
+
+table_slice::table_slice(const table_slice& other) noexcept
+  : ref_counted(other), header_{other.header_} {
+  ++instance_count_;
+}
+
+table_slice& table_slice::operator=(const table_slice& rhs) noexcept {
+  header_ = rhs.header_;
+  ++instance_count_;
+  return *this;
+}
+
+table_slice::table_slice(table_slice&& other) noexcept
+  : header_{std::exchange(other.header_, {})} {
   // nop
 }
 
-data_view table_slice::column_view::operator[](size_t row) const {
-  VAST_ASSERT(row < rows());
-  return slice_.at(row, column_);
+table_slice& table_slice::operator=(table_slice&& rhs) noexcept {
+  header_ = std::exchange(rhs.header_, {});
+  return *this;
 }
 
-table_slice::row_view::row_view(const table_slice& slice, size_t row)
-  : slice_(slice), row_(row) {
-  // nop
-}
-
-data_view table_slice::row_view::operator[](size_t column) const {
-  VAST_ASSERT(column < columns());
-  return slice_.at(row_, column);
-}
-
-table_slice::table_slice(table_slice_header header)
+table_slice::table_slice(table_slice_header header) noexcept
   : header_{std::move(header)} {
   ++instance_count_;
 }
 
-table_slice::~table_slice() {
+table_slice::~table_slice() noexcept {
   --instance_count_;
 }
 
-std::atomic<size_t> table_slice::instance_count_{0u};
-
-record_type table_slice::layout(size_type first_column,
-                                size_type num_columns) const {
-  if (first_column >= columns())
-    return {};
-  auto col_begin = first_column;
-  auto col_end = cap(first_column, num_columns, columns());
-  std::vector<record_field> sub_records{layout().fields.begin() + col_begin,
-                                        layout().fields.begin() + col_end};
-  return record_type{std::move(sub_records)};
-}
-
-table_slice::row_view table_slice::row(size_t index) const {
-  VAST_ASSERT(index < rows());
-  return {*this, index};
-}
-
-table_slice::column_view table_slice::column(size_t index) const {
-  VAST_ASSERT(index < columns());
-  return {*this, index};
-}
-
-caf::optional<table_slice::column_view>
-table_slice::column(std::string_view name) const {
-  auto& fields = header_.layout.fields;
-  for (size_t index = 0; index < fields.size(); ++index)
-    if (fields[index].name == name)
-      return column_view{*this, index};
-  return caf::none;
-}
+// -- persistence --------------------------------------------------------------
 
 caf::error table_slice::load(chunk_ptr chunk) {
   VAST_ASSERT(chunk != nullptr);
@@ -125,11 +96,41 @@ caf::error table_slice::load(chunk_ptr chunk) {
   return deserialize(source);
 }
 
+// -- visitation ---------------------------------------------------------------
+
 void table_slice::append_column_to_index(size_type col,
                                          value_index& idx) const {
   for (size_type row = 0; row < rows(); ++row)
     idx.append(at(row, col), offset() + row);
 }
+
+// -- properties ---------------------------------------------------------------
+
+record_type table_slice::layout() const noexcept {
+  return header_.layout;
+}
+
+size_type table_slice::rows() const noexcept {
+  return header_.rows;
+}
+
+size_type table_slice::columns() const noexcept {
+  return header_.layout.fields.size();
+}
+
+id table_slice::offset() const noexcept {
+  return header_.offset;
+}
+
+void table_slice::offset(id offset) noexcept {
+  header_.offset = offset;
+}
+
+int table_slice::instances() {
+  return instance_count_;
+}
+
+// -- comparison operators -----------------------------------------------------
 
 bool operator==(const table_slice& x, const table_slice& y) {
   if (&x == &y)
@@ -144,24 +145,19 @@ bool operator==(const table_slice& x, const table_slice& y) {
   return true;
 }
 
-void intrusive_ptr_add_ref(const table_slice* ptr) {
-  intrusive_ptr_add_ref(static_cast<const caf::ref_counted*>(ptr));
+bool operator!=(const table_slice& x, const table_slice& y) {
+  return !(x == y);
 }
 
-void intrusive_ptr_release(const table_slice* ptr) {
-  intrusive_ptr_release(static_cast<const caf::ref_counted*>(ptr));
-}
-
-table_slice* intrusive_cow_ptr_unshare(table_slice*& ptr) {
-  return caf::default_intrusive_cow_ptr_unshare(ptr);
-}
+// -- concepts -----------------------------------------------------------------
 
 caf::error inspect(caf::serializer& sink, table_slice_ptr& ptr) {
   if (!ptr)
     return sink(caf::atom("NULL"));
-  return caf::error::eval([&] { return sink(ptr->implementation_id()); },
-                          [&] { return sink(ptr->header()); },
-                          [&] { return ptr->serialize(sink); });
+  return caf::error::eval(
+    [&] { return sink(ptr->implementation_id()); },
+    [&] { return sink(ptr->layout(), ptr->rows(), ptr->offset()); },
+    [&] { return ptr->serialize(sink); });
 }
 
 caf::error inspect(caf::deserializer& source, table_slice_ptr& ptr) {
@@ -173,7 +169,7 @@ caf::error inspect(caf::deserializer& source, table_slice_ptr& ptr) {
     return caf::none;
   }
   table_slice_header header;
-  if (auto err = source(header))
+  if (auto err = source(header.layout, header.rows, header.offset))
     return err;
   ptr = factory<table_slice>::make(id, std::move(header));
   if (!ptr)
@@ -238,32 +234,21 @@ caf::error unpack(const fbs::table_slice::v0& x, table_slice_ptr& y) {
   return source(y);
 }
 
-caf::expected<std::vector<table_slice_ptr>>
-make_random_table_slices(size_t num_slices, size_t slice_size,
-                         record_type layout, id offset, size_t seed) {
-  schema sc;
-  sc.add(layout);
-  // We have no access to the actor system, so we can only pick the default
-  // table slice type here. This ignores any user-defined overrides. However,
-  // this function is only meant for testing anyways.
-  caf::settings opts;
-  caf::put(opts, "vast.import.test.seed", seed);
-  caf::put(opts, "vast.import.max-events", std::numeric_limits<size_t>::max());
-  format::test::reader src{defaults::import::table_slice_type, std::move(opts),
-                           nullptr};
-  src.schema(std::move(sc));
-  std::vector<table_slice_ptr> result;
-  auto add_slice = [&](table_slice_ptr ptr) {
-    ptr.unshared().offset(offset);
-    offset += ptr->rows();
-    result.emplace_back(std::move(ptr));
-  };
-  result.reserve(num_slices);
-  if (auto err = src.read(num_slices * slice_size, slice_size, add_slice)
-                   .first)
-    return err;
-  return result;
+// -- intrusive_ptr facade -----------------------------------------------------
+
+void intrusive_ptr_add_ref(const table_slice* ptr) {
+  intrusive_ptr_add_ref(static_cast<const caf::ref_counted*>(ptr));
 }
+
+void intrusive_ptr_release(const table_slice* ptr) {
+  intrusive_ptr_release(static_cast<const caf::ref_counted*>(ptr));
+}
+
+table_slice* intrusive_cow_ptr_unshare(table_slice*& ptr) {
+  return caf::default_intrusive_cow_ptr_unshare(ptr);
+}
+
+// -- operators ----------------------------------------------------------------
 
 void select(std::vector<table_slice_ptr>& result, const table_slice_ptr& xs,
             const ids& selection) {
@@ -367,33 +352,6 @@ uint64_t rows(const std::vector<table_slice_ptr>& slices) {
   return result;
 }
 
-std::vector<std::vector<data>>
-to_data(const table_slice& slice, size_t first_row, size_t num_rows) {
-  VAST_ASSERT(first_row < slice.rows());
-  VAST_ASSERT(num_rows <= slice.rows() - first_row);
-  if (num_rows == 0)
-    num_rows = slice.rows() - first_row;
-  std::vector<std::vector<data>> result;
-  result.reserve(num_rows);
-  for (size_t i = 0; i < num_rows; ++i) {
-    std::vector<data> xs;
-    xs.reserve(slice.columns());
-    for (size_t j = 0; j < slice.columns(); ++j)
-      xs.emplace_back(materialize(slice.at(first_row + i, j)));
-    result.push_back(std::move(xs));
-  }
-  return result;
-}
-
-std::vector<std::vector<data>>
-to_data(const std::vector<table_slice_ptr>& slices) {
-  std::vector<std::vector<data>> result;
-  result.reserve(rows(slices));
-  for (auto& slice : slices)
-    detail::append(result, to_data(*slice));
-  return result;
-}
-
 namespace {
 
 struct row_evaluator {
@@ -443,11 +401,12 @@ struct row_evaluator {
     // TODO: Transform this AST node into a constant-time lookup node (e.g.,
     // data_extractor). It's not necessary to iterate over the schema for every
     // row; this should happen upfront.
+    auto layout = slice_.layout();
     if (e.attr == atom::type_v)
-      return evaluate(slice_.layout().name(), op_, d);
+      return evaluate(layout.name(), op_, d);
     if (e.attr == atom::timestamp_v) {
-      for (size_t col = 0; col < slice_.layout().fields.size(); ++col) {
-        auto& field = slice_.layout().fields[col];
+      for (size_t col = 0; col < layout.fields.size(); ++col) {
+        auto& field = layout.fields[col];
         if (has_attribute(field.type, "timestamp")) {
           if (!caf::holds_alternative<time_type>(field.type)) {
             VAST_WARNING_ANON("got timestamp attribute for non-time type");
@@ -472,10 +431,11 @@ struct row_evaluator {
 
   bool operator()(const data_extractor& e, const data& d) {
     VAST_ASSERT(e.offset.size() == 1);
-    if (e.type != slice_.layout()) // TODO: make this a precondition instead.
+    auto layout = slice_.layout();
+    if (e.type != layout) // TODO: make this a precondition instead.
       return false;
     auto col = e.offset[0];
-    auto& field = slice_.layout().fields[col];
+    auto& field = layout.fields[col];
     auto lhs = to_canonical(field.type, slice_.at(row_, col));
     auto rhs = make_data_view(d);
     return evaluate_view(lhs, op_, rhs);

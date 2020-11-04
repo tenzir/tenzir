@@ -43,7 +43,8 @@ TEST(syslog reader) {
                                      add_slice);
   REQUIRE_NOT_EQUAL(slice, nullptr);
   REQUIRE_EQUAL(produced, 5u);
-  CHECK_EQUAL(slice->layout().name(), "syslog.rfc5424");
+  auto layout = slice->layout();
+  CHECK_EQUAL(layout.name(), "syslog.rfc5424");
 }
 
 TEST(syslog header parser) {
