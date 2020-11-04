@@ -22,6 +22,7 @@
 #include "vast/caf_table_slice_builder.hpp"
 #include "vast/ids.hpp"
 #include "vast/table_slice_column.hpp"
+#include "vast/table_slice_row.hpp"
 
 #include <caf/make_copy_on_write.hpp>
 #include <caf/test/dsl.hpp>
@@ -129,10 +130,11 @@ TEST(column view) {
 TEST(row view) {
   auto sut = zeek_conn_log[0];
   for (size_t row = 0; row < sut->rows(); ++row) {
-    auto rview = sut->row(row);
-    CHECK_EQUAL(rview.row(), row);
-    CHECK_EQUAL(rview.columns(), sut->columns());
-    for (size_t column = 0; column < rview.columns(); ++column)
+    auto rview = table_slice_row{sut, row};
+    REQUIRE(rview.slice());
+    CHECK_EQUAL(rview.index(), row);
+    CHECK_EQUAL(rview.size(), sut->columns());
+    for (size_t column = 0; column < rview.size(); ++column)
       CHECK_EQUAL(rview[column], sut->at(row, column));
   }
 }
