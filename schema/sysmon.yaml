@@ -104,7 +104,6 @@
       - sysmon.FileCreate.TargetFilename
       - sysmon.FileCreateStreamHash.TargetFilename
       - sysmon.FileDelete.TargetFilename
-      - sysmon.FileDelete.TargetFilename
       - sysmon.ImageLoaded.OriginalFileName
       - sysmon.ProcessChangedFileCreationTime.TargetFilename
 - concept:

@@ -51,7 +51,11 @@ caf::error convert(const data& d, concepts_map& out) {
       if (!field)
         return make_error(ec::convert_error, "field in", *name,
                           "is not a string:", f);
-      dest.fields.push_back(*field);
+      if (std::count(dest.fields.begin(), dest.fields.end(), *field) > 0)
+        VAST_WARNING_ANON("encountered duplicate field for",
+                          *name + ": \"" + *field + "\"");
+      else
+        dest.fields.push_back(*field);
     }
   }
   auto cs = c->find("concepts");
