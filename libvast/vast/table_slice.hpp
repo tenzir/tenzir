@@ -134,11 +134,6 @@ public:
 
   // -- properties -------------------------------------------------------------
 
-  /// @returns the table slice header.
-  const table_slice_header& header() const noexcept {
-    return header_;
-  }
-
   /// @returns the table layout.
   const record_type& layout() const noexcept {
     return header_.layout;

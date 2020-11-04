@@ -28,10 +28,4 @@ struct table_slice_header {
   id offset = 0;
 };
 
-/// @relates table_slice_header
-template <class Inspector>
-auto inspect(Inspector& f, table_slice_header& x) {
-  return f(x.layout, x.rows, x.offset);
-}
-
 } // namespace vast
