@@ -251,10 +251,9 @@ resolve_concepts(const concepts_map& concepts, const expression& e,
         // Insert only those concepts into the queue that aren't in there yet,
         // this prevents infinite loops through circular references between
         // concepts.
-        for (auto& x : def.concepts) {
+        for (auto& x : def.concepts)
           if (std::find(log.begin(), log.end(), x) == log.end())
             log.push_back(x);
-        }
       };
       load_definition(c->second);
       // We iterate through the log while appending referenced concepts in
