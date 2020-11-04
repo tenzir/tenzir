@@ -143,7 +143,8 @@ public:
   /// @param x The flatbuffer to unpack.
   /// @param y The target to unpack *x* into.
   /// @returns An error iff the operation fails.
-  friend caf::error unpack(const fbs::table_slice::v0& x, table_slice_ptr& y);
+  friend caf::error
+  unpack(const fbs::table_slice::legacy::v0& x, table_slice_ptr& y);
 
 protected:
   // -- member variables -------------------------------------------------------

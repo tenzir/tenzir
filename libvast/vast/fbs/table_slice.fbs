@@ -1,4 +1,4 @@
-namespace vast.fbs;
+namespace vast.fbs.table_slice.legacy;
 
 /// The format of the binary table slice data.
 enum Encoding : byte {
@@ -6,9 +6,8 @@ enum Encoding : byte {
   MessagePack,
 }
 
-namespace vast.fbs.table_slice;
-
-/// A subset of rows of a table.
+/// An encoding for table slices using runtime dispatching for determining the
+/// underlying and unversioned encoding.
 table v0 {
   /// The offset in the 2^64 ID event space.
   offset: ulong;
@@ -26,9 +25,20 @@ table v0 {
   data: [ubyte];
 }
 
-root_type v0;
+namespace vast.fbs.table_slice;
+
+/// The union of all possible table slice encoding and version combinations.
+union TableSlice {
+  legacy.v0,
+}
 
 namespace vast.fbs;
+
+/// A horizontal partition of a table. A slice defines a tabular interface for
+/// accessing homogenous data independent of the concrete carrier format.
+table TableSlice {
+  table_slice: table_slice.TableSlice;
+}
 
 /// A vector of bytes that wraps a table slice.
 /// The extra wrapping makes it possible to append existing table slices as
@@ -36,5 +46,7 @@ namespace vast.fbs;
 /// receives a stream of table slices. Without the wrapping, we'd have to go
 /// through a new table slice builder for every slice.
 table FlatTableSlice {
-  data: [ubyte] (nested_flatbuffer: "vast.fbs.table_slice.v0");
+  data: [ubyte] (nested_flatbuffer: "TableSlice");
 }
+
+root_type TableSlice;
