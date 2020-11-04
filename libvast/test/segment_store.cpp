@@ -16,6 +16,7 @@
 #include "vast/segment_store.hpp"
 
 #include "vast/test/fixtures/actor_system_and_events.hpp"
+#include "vast/test/fixtures/table_slices.hpp"
 #include "vast/test/test.hpp"
 
 #include "vast/concept/printable/to_string.hpp"

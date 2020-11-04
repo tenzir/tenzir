@@ -248,18 +248,6 @@ caf::error unpack(const fbs::table_slice::v0& x, table_slice_ptr& y);
 
 // -- operations ---------------------------------------------------------------
 
-/// Constructs table slices filled with random content for testing purposes.
-/// @param num_slices The number of table slices to generate.
-/// @param slice_size The number of rows per table slices.
-/// @param layout The layout of the table slice.
-/// @param offset The offset of the first table slize.
-/// @param seed The seed value for initializing the random-number generator.
-/// @returns a list of randomnly filled table slices or an error.
-/// @relates table_slice
-caf::expected<std::vector<table_slice_ptr>>
-make_random_table_slices(size_t num_slices, size_t slice_size,
-                         record_type layout, id offset = 0, size_t seed = 0);
-
 /// Selects all rows in `xs` with event IDs in `selection` and appends produced
 /// table slices to `result`. Cuts `xs` into multiple slices if `selection`
 /// produces gaps.
@@ -304,22 +292,6 @@ std::pair<table_slice_ptr, table_slice_ptr> split(const table_slice_ptr& slice,
 /// @param slices The table slices to count.
 /// @returns The sum of rows across *slices*.
 uint64_t rows(const std::vector<table_slice_ptr>& slices);
-
-/// Converts the table slice into a 2-D matrix in row-major order such that
-/// each row represents an event.
-/// @param slice The table slice to convert.
-/// @param first_row An offset to the first row to consider.
-/// @param num_rows Then number of rows to consider. (0 = all rows)
-/// @returns a 2-D matrix of data instances corresponding to *slice*.
-/// @requires first_row < slice->rows()
-/// @requires num_rows <= slice->rows() - first_row
-/// @note This function exists primarily for unit testing because it performs
-/// excessive memory allocations.
-std::vector<std::vector<data>>
-to_data(const table_slice& slice, size_t first_row = 0, size_t num_rows = 0);
-
-std::vector<std::vector<data>>
-to_data(const std::vector<table_slice_ptr>& slices);
 
 /// Evaluates an expression over a table slice by applying it row-wise.
 /// @param expr The expression to evaluate.
