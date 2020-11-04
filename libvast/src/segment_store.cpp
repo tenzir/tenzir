@@ -18,6 +18,7 @@
 #include "vast/concept/printable/vast/error.hpp"
 #include "vast/concept/printable/vast/filesystem.hpp"
 #include "vast/concept/printable/vast/uuid.hpp"
+#include "vast/detail/overload.hpp"
 #include "vast/directory.hpp"
 #include "vast/error.hpp"
 #include "vast/fbs/segment.hpp"
@@ -26,6 +27,7 @@
 #include "vast/logger.hpp"
 #include "vast/status.hpp"
 #include "vast/table_slice.hpp"
+#include "vast/table_slice_visit.hpp"
 
 #include <caf/config_value.hpp>
 #include <caf/dictionary.hpp>
@@ -409,8 +411,12 @@ uint64_t segment_store::drop(segment& x) {
   auto s = fbs::GetSegment(x.chunk()->data());
   auto s0 = s->segment_as_v0();
   for (auto buffer : *s0->slices())
-    erased_events
-      += buffer->data_nested_root()->table_slice_as_legacy_v0()->rows();
+    visit(
+      detail::overload{[]() noexcept {},
+                       [&](const fbs::table_slice::legacy::v0* slice) noexcept {
+                         erased_events += slice->rows();
+                       }},
+      buffer->data_nested_root());
   VAST_INFO(this, "erases entire segment", segment_id);
   // Schedule deletion of the segment file when releasing the chunk.
   auto filename = segment_path() / to_string(segment_id);

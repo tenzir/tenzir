@@ -18,6 +18,7 @@
 #include "vast/detail/assert.hpp"
 #include "vast/detail/byte_swap.hpp"
 #include "vast/detail/narrow.hpp"
+#include "vast/detail/overload.hpp"
 #include "vast/error.hpp"
 #include "vast/fbs/segment.hpp"
 #include "vast/fbs/utils.hpp"
@@ -26,6 +27,7 @@
 #include "vast/logger.hpp"
 #include "vast/si_literals.hpp"
 #include "vast/table_slice.hpp"
+#include "vast/table_slice_visit.hpp"
 #include "vast/uuid.hpp"
 
 #include <caf/binary_deserializer.hpp>
@@ -63,9 +65,14 @@ vast::ids segment::ids() const {
   auto segment = fbs::GetSegment(chunk_->data());
   auto segment_v0 = segment->segment_as_v0();
   for (auto buffer : *segment_v0->slices()) {
-    auto slice = buffer->data_nested_root()->table_slice_as_legacy_v0();
-    result.append_bits(false, slice->offset() - result.size());
-    result.append_bits(true, slice->rows());
+    visit(
+      detail::overload{
+        [&](const fbs::table_slice::legacy::v0* slice) {
+          result.append_bits(false, slice->offset() - result.size());
+          result.append_bits(true, slice->rows());
+        },
+      },
+      buffer->data_nested_root());
   }
   return result;
 }
@@ -83,20 +90,31 @@ chunk_ptr segment::chunk() const {
 caf::expected<std::vector<table_slice_ptr>>
 segment::lookup(const vast::ids& xs) const {
   std::vector<table_slice_ptr> result;
-  auto f = [](auto buffer) {
-    auto slice = buffer->data_nested_root()->table_slice_as_legacy_v0();
-    return std::pair{slice->offset(), slice->offset() + slice->rows()};
+  auto f = [](auto buffer) noexcept {
+    return visit(
+      detail::overload{
+        [](const fbs::table_slice::legacy::v0* slice) noexcept {
+          return std::pair{slice->offset(), slice->offset() + slice->rows()};
+        },
+      },
+      buffer->data_nested_root());
   };
-  auto g = [&](auto buffer) -> caf::error {
-    // TODO: bind the lifetime of the table slice to the segment chunk. This
-    // requires that table slices will be constructable from a chunk. Until
-    // then, we stupidly deserialize the data into a new table slice.
-    table_slice_ptr slice;
-    if (auto err = unpack(
-          *buffer->data_nested_root()->table_slice_as_legacy_v0(), slice))
-      return err;
-    result.push_back(std::move(slice));
-    return caf::none;
+  auto g = [&](auto buffer) {
+    return visit(
+      detail::overload{
+        [&](const fbs::table_slice::legacy::v0* slice) -> caf::error {
+          // TODO: bind the lifetime of the table slice to the segment chunk.
+          // This requires that table slices will be constructable from a chunk.
+          // Until then, we stupidly deserialize the data into a new table
+          // slice.
+          table_slice_ptr new_slice;
+          if (auto err = unpack(*slice, new_slice))
+            return err;
+          result.push_back(std::move(std::move(new_slice)));
+          return caf::none;
+        },
+      },
+      buffer->data_nested_root());
   };
   auto segment = fbs::GetSegment(chunk_->data());
   auto segment_v0 = segment->segment_as_v0();
