@@ -382,11 +382,12 @@ struct row_evaluator {
     // TODO: Transform this AST node into a constant-time lookup node (e.g.,
     // data_extractor). It's not necessary to iterate over the schema for every
     // row; this should happen upfront.
+    auto&& layout = slice_.layout();
     if (e.attr == atom::type_v)
-      return evaluate(slice_.layout().name(), op_, d);
+      return evaluate(layout.name(), op_, d);
     if (e.attr == atom::timestamp_v) {
-      for (size_t col = 0; col < slice_.layout().fields.size(); ++col) {
-        auto& field = slice_.layout().fields[col];
+      for (size_t col = 0; col < layout.fields.size(); ++col) {
+        auto& field = layout.fields[col];
         if (has_attribute(field.type, "timestamp")) {
           if (!caf::holds_alternative<time_type>(field.type)) {
             VAST_WARNING_ANON("got timestamp attribute for non-time type");
@@ -411,10 +412,11 @@ struct row_evaluator {
 
   bool operator()(const data_extractor& e, const data& d) {
     VAST_ASSERT(e.offset.size() == 1);
-    if (e.type != slice_.layout()) // TODO: make this a precondition instead.
+    auto&& layout = slice_.layout();
+    if (e.type != layout) // TODO: make this a precondition instead.
       return false;
     auto col = e.offset[0];
-    auto& field = slice_.layout().fields[col];
+    auto& field = layout.fields[col];
     auto lhs = to_canonical(field.type, slice_.at(row_, col));
     auto rhs = make_data_view(d);
     return evaluate_view(lhs, op_, rhs);
