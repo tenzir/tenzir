@@ -51,16 +51,6 @@ using size_type = table_slice::size_type;
 
 } // namespace <anonymous>
 
-table_slice::column_view::column_view(const table_slice& slice, size_t column)
-  : slice_(slice), column_(column) {
-  // nop
-}
-
-data_view table_slice::column_view::operator[](size_t row) const {
-  VAST_ASSERT(row < rows());
-  return slice_.at(row, column_);
-}
-
 table_slice::row_view::row_view(const table_slice& slice, size_t row)
   : slice_(slice), row_(row) {
   // nop
@@ -96,20 +86,6 @@ record_type table_slice::layout(size_type first_column,
 table_slice::row_view table_slice::row(size_t index) const {
   VAST_ASSERT(index < rows());
   return {*this, index};
-}
-
-table_slice::column_view table_slice::column(size_t index) const {
-  VAST_ASSERT(index < columns());
-  return {*this, index};
-}
-
-caf::optional<table_slice::column_view>
-table_slice::column(std::string_view name) const {
-  auto& fields = header_.layout.fields;
-  for (size_t index = 0; index < fields.size(); ++index)
-    if (fields[index].name == name)
-      return column_view{*this, index};
-  return caf::none;
 }
 
 caf::error table_slice::load(chunk_ptr chunk) {

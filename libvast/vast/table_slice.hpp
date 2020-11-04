@@ -25,7 +25,6 @@
 
 #include <cstddef>
 #include <limits>
-#include <string_view>
 #include <vector>
 
 namespace vast {
@@ -37,34 +36,6 @@ public:
   // -- member types -----------------------------------------------------------
 
   using size_type = uint64_t;
-
-  /// Convenience helper for traversing a column.
-  class column_view {
-  public:
-    column_view(const table_slice& slice, size_t column);
-
-    /// @returns the data at given row.
-    data_view operator[](size_t row) const;
-
-    /// @returns the number of rows in the slice.
-    size_t rows() const noexcept {
-      return slice_.rows();
-    }
-
-    /// @returns the viewed table slice.
-    const table_slice& slice() const noexcept {
-      return slice_;
-    }
-
-    /// @returns the viewed column.
-    size_t column() const noexcept {
-      return column_;
-    }
-
-  private:
-    const table_slice& slice_;
-    size_t column_;
-  };
 
   /// Convenience helper for traversing a row.
   class row_view {
@@ -161,14 +132,6 @@ public:
   size_type columns() const noexcept {
     return header_.layout.fields.size();
   }
-
-  /// @returns a column view for the given `index`.
-  /// @pre `column < columns()`
-  column_view column(size_t index) const;
-
-  /// @returns a view for the column with given `name` on success, or `none` if
-  ///          no column matches the `name`.
-  caf::optional<column_view> column(std::string_view name) const;
 
   /// @returns the offset in the ID space.
   id offset() const noexcept {

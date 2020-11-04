@@ -21,6 +21,7 @@
 #include "vast/caf_table_slice.hpp"
 #include "vast/caf_table_slice_builder.hpp"
 #include "vast/ids.hpp"
+#include "vast/table_slice_column.hpp"
 
 #include <caf/make_copy_on_write.hpp>
 #include <caf/test/dsl.hpp>
@@ -112,12 +113,15 @@ TEST(random integer slices) {
 
 TEST(column view) {
   auto sut = zeek_conn_log[0];
-  CHECK_EQUAL(unbox(sut->column("ts")).column(), 0u);
+  auto ts_cview = table_slice_column::make(sut, "ts");
+  REQUIRE(ts_cview);
+  CHECK_EQUAL(ts_cview->index(), 0u);
   for (size_t column = 0; column < sut->columns(); ++column) {
-    auto cview = sut->column(column);
-    CHECK_EQUAL(cview.column(), column);
-    CHECK_EQUAL(cview.rows(), sut->rows());
-    for (size_t row = 0; row < cview.rows(); ++row)
+    auto cview = table_slice_column{sut, column};
+    REQUIRE(cview.slice());
+    CHECK_EQUAL(cview.index(), column);
+    CHECK_EQUAL(cview.size(), sut->rows());
+    for (size_t row = 0; row < cview.size(); ++row)
       CHECK_EQUAL(cview[row], sut->at(row, column));
   }
 }

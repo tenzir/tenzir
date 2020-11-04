@@ -22,6 +22,7 @@
 #include "vast/logger.hpp"
 #include "vast/system/exporter.hpp"
 #include "vast/table_slice.hpp"
+#include "vast/table_slice_column.hpp"
 
 #include <caf/event_based_actor.hpp>
 #include <caf/settings.hpp>
@@ -103,9 +104,10 @@ caf::behavior pivoter(caf::stateful_actor<pivoter_state>* self, caf::actor node,
       if (!pivot_field)
         return;
       VAST_DEBUG(self, "uses", *pivot_field, "to extract", st.target, "events");
-      auto column = slice->column(pivot_field->name);
+      auto column = table_slice_column::make(slice, pivot_field->name);
+      VAST_ASSERT(column);
       auto xs = list{};
-      for (size_t i = 0; i < column->rows(); ++i) {
+      for (size_t i = 0; i < column->size(); ++i) {
         auto data = materialize((*column)[i]);
         auto x = caf::get_if<std::string>(&data);
         // Skip if no value
