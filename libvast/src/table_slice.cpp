@@ -51,14 +51,24 @@ using size_type = table_slice::size_type;
 
 } // namespace <anonymous>
 
-table_slice::table_slice(table_slice_header header)
+// -- constructors, destructors, and assignment operators ----------------------
+
+table_slice::table_slice() noexcept = default;
+
+table_slice::table_slice(const table_slice& other) noexcept = default;
+
+table_slice& table_slice::operator=(const table_slice&) noexcept = default;
+
+table_slice::table_slice(table_slice_header header) noexcept
   : header_{std::move(header)} {
   ++instance_count_;
 }
 
-table_slice::~table_slice() {
+table_slice::~table_slice() noexcept {
   --instance_count_;
 }
+
+// -- persistence --------------------------------------------------------------
 
 caf::error table_slice::load(chunk_ptr chunk) {
   VAST_ASSERT(chunk != nullptr);
@@ -67,11 +77,41 @@ caf::error table_slice::load(chunk_ptr chunk) {
   return deserialize(source);
 }
 
+// -- visitation ---------------------------------------------------------------
+
 void table_slice::append_column_to_index(size_type col,
                                          value_index& idx) const {
   for (size_type row = 0; row < rows(); ++row)
     idx.append(at(row, col), offset() + row);
 }
+
+// -- properties ---------------------------------------------------------------
+
+const record_type& table_slice::layout() const noexcept {
+  return header_.layout;
+}
+
+size_type table_slice::rows() const noexcept {
+  return header_.rows;
+}
+
+size_type table_slice::columns() const noexcept {
+  return header_.layout.fields.size();
+}
+
+id table_slice::offset() const noexcept {
+  return header_.offset;
+}
+
+void table_slice::offset(id offset) noexcept {
+  header_.offset = offset;
+}
+
+int table_slice::instances() {
+  return instance_count_;
+}
+
+// -- comparison operators -----------------------------------------------------
 
 bool operator==(const table_slice& x, const table_slice& y) {
   if (&x == &y)
@@ -86,17 +126,11 @@ bool operator==(const table_slice& x, const table_slice& y) {
   return true;
 }
 
-void intrusive_ptr_add_ref(const table_slice* ptr) {
-  intrusive_ptr_add_ref(static_cast<const caf::ref_counted*>(ptr));
+bool operator!=(const table_slice& x, const table_slice& y) {
+  return !(x == y);
 }
 
-void intrusive_ptr_release(const table_slice* ptr) {
-  intrusive_ptr_release(static_cast<const caf::ref_counted*>(ptr));
-}
-
-table_slice* intrusive_cow_ptr_unshare(table_slice*& ptr) {
-  return caf::default_intrusive_cow_ptr_unshare(ptr);
-}
+// -- concepts -----------------------------------------------------------------
 
 caf::error inspect(caf::serializer& sink, table_slice_ptr& ptr) {
   if (!ptr)
@@ -180,6 +214,22 @@ caf::error unpack(const fbs::table_slice::v0& x, table_slice_ptr& y) {
   caf::binary_deserializer source{nullptr, ptr, x.data()->size()};
   return source(y);
 }
+
+// -- intrusive_ptr facade -----------------------------------------------------
+
+void intrusive_ptr_add_ref(const table_slice* ptr) {
+  intrusive_ptr_add_ref(static_cast<const caf::ref_counted*>(ptr));
+}
+
+void intrusive_ptr_release(const table_slice* ptr) {
+  intrusive_ptr_release(static_cast<const caf::ref_counted*>(ptr));
+}
+
+table_slice* intrusive_cow_ptr_unshare(table_slice*& ptr) {
+  return caf::default_intrusive_cow_ptr_unshare(ptr);
+}
+
+// -- operators ----------------------------------------------------------------
 
 void select(std::vector<table_slice_ptr>& result, const table_slice_ptr& xs,
             const ids& selection) {

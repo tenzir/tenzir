@@ -38,16 +38,21 @@ public:
 
   // -- constructors, destructors, and assignment operators --------------------
 
-  ~table_slice() override;
-
-  table_slice(const table_slice&) = default;
+  /// Destroy a table slice.
+  virtual ~table_slice() noexcept override;
 
   /// Default-constructs an empty table slice.
-  table_slice() = default;
+  table_slice() noexcept;
+
+  // Copy-construct a table slice.
+  table_slice(const table_slice&) noexcept;
+
+  // Copy-assigns a table slice.
+  table_slice& operator=(const table_slice&) noexcept;
 
   /// Constructs a table slice from a header.
   /// @param header The header of the table slice.
-  explicit table_slice(table_slice_header header = {});
+  explicit table_slice(table_slice_header header = {}) noexcept;
 
   /// Makes a copy of this slice.
   virtual table_slice* copy() const = 0;
@@ -72,37 +77,29 @@ public:
   // -- visitation -------------------------------------------------------------
 
   /// Appends all values in column `col` to `idx`.
+  /// @param `col` The index of the column to append.
+  /// @param `idx` the value index to append to.
   virtual void append_column_to_index(size_type col, value_index& idx) const;
 
   // -- properties -------------------------------------------------------------
 
-  /// @returns the table layout.
-  const record_type& layout() const noexcept {
-    return header_.layout;
-  }
+  /// @returns The table layout.
+  const record_type& layout() const noexcept;
 
-  /// @returns an identifier for the implementing class.
+  /// @returns An identifier for the implementing class.
   virtual caf::atom_value implementation_id() const noexcept = 0;
 
-  /// @returns the number of rows in the slice.
-  size_type rows() const noexcept {
-    return header_.rows;
-  }
+  /// @returns The number of rows in the slice.
+  size_type rows() const noexcept;
 
-  /// @returns the number of rows in the slice.
-  size_type columns() const noexcept {
-    return header_.layout.fields.size();
-  }
+  /// @returns The number of rows in the slice.
+  size_type columns() const noexcept;
 
-  /// @returns the offset in the ID space.
-  id offset() const noexcept {
-    return header_.offset;
-  }
+  /// @returns The offset in the ID space.
+  id offset() const noexcept;
 
   /// Sets the offset in the ID space.
-  void offset(id offset) noexcept {
-    header_.offset = offset;
-  }
+  void offset(id offset) noexcept;
 
   /// Retrieves data by specifying 2D-coordinates via row and column.
   /// @param row The row offset.
@@ -110,26 +107,49 @@ public:
   /// @pre `row < rows() && col < columns()`
   virtual data_view at(size_type row, size_type col) const = 0;
 
-  static int instances() {
-    return instance_count_;
-  }
+  /// @returns The number of in-memory table slices.
+  static int instances();
+
+  // -- comparison operators ---------------------------------------------------
+
+  /// @relates table_slice
+  friend bool operator==(const table_slice& x, const table_slice& y);
+
+  /// @relates table_slice
+  friend bool operator!=(const table_slice& x, const table_slice& y);
+
+  // -- concepts ---------------------------------------------------------------
+
+  /// @relates table_slice
+  friend caf::error inspect(caf::serializer& sink, table_slice_ptr& ptr);
+
+  /// @relates table_slice
+  friend caf::error inspect(caf::deserializer& source, table_slice_ptr& ptr);
+
+  /// Packs a table slice into a flatbuffer.
+  /// @param builder The builder to pack *x* into.
+  /// @param x The table slice to pack.
+  /// @returns The flatbuffer offset in *builder*.
+  friend caf::expected<flatbuffers::Offset<fbs::table_slice_buffer::v0>>
+  pack(flatbuffers::FlatBufferBuilder& builder, table_slice_ptr x);
+
+  /// Unpacks a table slice from a flatbuffer.
+  /// @param x The flatbuffer to unpack.
+  /// @param y The target to unpack *x* into.
+  /// @returns An error iff the operation fails.
+  friend caf::error unpack(const fbs::table_slice::v0& x, table_slice_ptr& y);
 
 protected:
   // -- member variables -------------------------------------------------------
 
   table_slice_header header_;
 
+  // -- implementation details -------------------------------------------------
 private:
   inline static std::atomic<size_t> instance_count_ = 0;
 };
 
-/// @relates table_slice
-bool operator==(const table_slice& x, const table_slice& y);
-
-/// @relates table_slice
-inline bool operator!=(const table_slice& x, const table_slice& y) {
-  return !(x == y);
-}
+// -- intrusive_ptr facade -----------------------------------------------------
 
 /// @relates table_slice
 void intrusive_ptr_add_ref(const table_slice* ptr);
@@ -139,25 +159,6 @@ void intrusive_ptr_release(const table_slice* ptr);
 
 /// @relates table_slice
 table_slice* intrusive_cow_ptr_unshare(table_slice*&);
-
-/// @relates table_slice
-caf::error inspect(caf::serializer& sink, table_slice_ptr& ptr);
-
-/// @relates table_slice
-caf::error inspect(caf::deserializer& source, table_slice_ptr& ptr);
-
-/// Packs a table slice into a flatbuffer.
-/// @param builder The builder to pack *x* into.
-/// @param x The table slice to pack.
-/// @returns The flatbuffer offset in *builder*.
-caf::expected<flatbuffers::Offset<fbs::table_slice_buffer::v0>>
-pack(flatbuffers::FlatBufferBuilder& builder, table_slice_ptr x);
-
-/// Unpacks a table slice from a flatbuffer.
-/// @param x The flatbuffer to unpack.
-/// @param y The target to unpack *x* into.
-/// @returns An error iff the operation fails.
-caf::error unpack(const fbs::table_slice::v0& x, table_slice_ptr& y);
 
 // -- operations ---------------------------------------------------------------
 
