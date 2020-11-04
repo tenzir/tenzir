@@ -38,8 +38,6 @@ public:
 
   using size_type = uint64_t;
 
-  static constexpr size_type npos = std::numeric_limits<size_type>::max();
-
   /// Convenience helper for traversing a column.
   class column_view {
   public:
@@ -151,8 +149,9 @@ public:
 
   /// @returns the layout for columns in range
   /// [first_column, first_column + num_columns).
-  record_type layout(size_type first_column,
-                     size_type num_columns = npos) const;
+  record_type
+  layout(size_type first_column, size_type num_columns
+                                 = std::numeric_limits<size_type>::max()) const;
 
   /// @returns the number of rows in the slice.
   size_type rows() const noexcept {
