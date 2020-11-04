@@ -43,7 +43,7 @@ table_slice_column::table_slice_column(table_slice_ptr slice,
 std::optional<table_slice_column>
 table_slice_column::make(table_slice_ptr slice,
                          std::string_view column) noexcept {
-  auto&& layout = slice->layout();
+  auto layout = slice->layout();
   for (size_t i = 0; i < layout.fields.size(); ++i)
     if (layout.fields[i].name == column)
       return table_slice_column{std::move(slice), i};

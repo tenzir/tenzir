@@ -84,7 +84,7 @@ public:
   // -- properties -------------------------------------------------------------
 
   /// @returns The table layout.
-  const record_type& layout() const noexcept;
+  record_type layout() const noexcept;
 
   /// @returns An identifier for the implementing class.
   virtual caf::atom_value implementation_id() const noexcept = 0;

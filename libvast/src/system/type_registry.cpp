@@ -149,7 +149,7 @@ type_registry(type_registry_actor self, const path& dir) {
           // nop
         },
         [=](caf::unit_t&, table_slice_ptr x) {
-          self->state.insert(std::move(x->layout()));
+          self->state.insert(x->layout());
         });
     },
     [=](atom::put, vast::type x) {

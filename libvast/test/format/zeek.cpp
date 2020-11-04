@@ -324,7 +324,8 @@ TEST(zeek reader - custom schema) {
   auto [err, num] = reader.read(20, 20, add_slice);
   CHECK_EQUAL(slices.size(), 1u);
   CHECK_EQUAL(slices[0]->rows(), 20u);
-  CHECK_EQUAL(slices[0]->layout(), expected);
+  auto layout = slices[0]->layout();
+  CHECK_EQUAL(layout, expected);
 }
 
 TEST(zeek reader - continous stream with partial slice) {
@@ -372,8 +373,10 @@ TEST(zeek writer) {
   for (auto& slice : zeek_http_log)
     if (auto err = writer.write(*slice))
       FAIL("failed to write HTTP log");
-  CHECK(exists(directory / zeek_conn_log[0]->layout().name() + ".log"));
-  CHECK(exists(directory / zeek_http_log[0]->layout().name() + ".log"));
+  auto conn_layout = zeek_conn_log[0]->layout();
+  CHECK(exists(directory / conn_layout.name() + ".log"));
+  auto http_layout = zeek_http_log[0]->layout();
+  CHECK(exists(directory / http_layout.name() + ".log"));
   // TODO: these tests should verify content as well.
 }
 

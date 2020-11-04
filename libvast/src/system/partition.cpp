@@ -187,7 +187,7 @@ evaluate(const PartitionState& state, const expression& expr) {
 
 bool partition_selector::operator()(const vast::qualified_record_field& filter,
                                     const table_slice_column& column) const {
-  auto& layout = column.slice()->layout();
+  auto layout = column.slice()->layout();
   vast::qualified_record_field fqf{layout.name(),
                                    layout.fields.at(column.index())};
   return filter == fqf;
@@ -358,7 +358,7 @@ active_partition(caf::stateful_actor<active_partition_state>* self, uuid id,
       static_assert(vast::invalid_id == std::numeric_limits<vast::id>::max());
       auto first = x->offset();
       auto last = x->offset() + x->rows();
-      auto&& layout = x->layout();
+      auto layout = x->layout();
       auto it = self->state.type_ids.emplace(layout.name(), vast::ids{}).first;
       auto& ids = it->second;
       VAST_ASSERT(first >= ids.size());
