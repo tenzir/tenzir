@@ -37,34 +37,6 @@ public:
 
   using size_type = uint64_t;
 
-  /// Convenience helper for traversing a row.
-  class row_view {
-  public:
-    row_view(const table_slice& slice, size_t row);
-
-    /// @returns the data at given column.
-    data_view operator[](size_t column) const;
-
-    /// @returns the number of columns in the slice.
-    size_t columns() const noexcept {
-      return slice_.columns();
-    }
-
-    /// @returns the viewed table slice.
-    const table_slice& slice() const noexcept {
-      return slice_;
-    }
-
-    /// @returns the viewed row.
-    size_t row() const noexcept {
-      return row_;
-    }
-
-  private:
-    const table_slice& slice_;
-    size_t row_;
-  };
-
   // -- constructors, destructors, and assignment operators --------------------
 
   ~table_slice() override;
@@ -123,10 +95,6 @@ public:
   size_type rows() const noexcept {
     return header_.rows;
   }
-
-  /// @returns a row view for the given `index`.
-  /// @pre `row < rows()`
-  row_view row(size_t index) const;
 
   /// @returns the number of rows in the slice.
   size_type columns() const noexcept {
