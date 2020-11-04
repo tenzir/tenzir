@@ -136,7 +136,7 @@ public:
   /// @param builder The builder to pack *x* into.
   /// @param x The table slice to pack.
   /// @returns The flatbuffer offset in *builder*.
-  friend caf::expected<flatbuffers::Offset<fbs::table_slice_buffer::v0>>
+  friend caf::expected<flatbuffers::Offset<fbs::FlatTableSlice>>
   pack(flatbuffers::FlatBufferBuilder& builder, table_slice_ptr x);
 
   /// Unpacks a table slice from a flatbuffer.
