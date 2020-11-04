@@ -44,8 +44,9 @@ void meta_index::add(const uuid& partition, const table_slice& slice) {
   auto& part_syn = synopses_[partition];
   for (size_t col = 0; col < slice.columns(); ++col) {
     // Locate the relevant synopsis.
-    auto& field = slice.layout().fields[col];
-    auto key = qualified_record_field{slice.layout().name(), field};
+    auto&& layout = slice.layout();
+    auto& field = layout.fields[col];
+    auto key = qualified_record_field{layout.name(), field};
     auto& field_syn = part_syn.field_synopses_;
     auto it = field_syn.find(key);
     if (it == field_syn.end())

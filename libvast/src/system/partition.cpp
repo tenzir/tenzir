@@ -358,8 +358,8 @@ active_partition(caf::stateful_actor<active_partition_state>* self, uuid id,
       static_assert(vast::invalid_id == std::numeric_limits<vast::id>::max());
       auto first = x->offset();
       auto last = x->offset() + x->rows();
-      auto it
-        = self->state.type_ids.emplace(x->layout().name(), vast::ids{}).first;
+      auto&& layout = x->layout();
+      auto it = self->state.type_ids.emplace(layout.name(), vast::ids{}).first;
       auto& ids = it->second;
       VAST_ASSERT(first >= ids.size());
       // Mark the ids of this table slice for the current type.
@@ -369,9 +369,9 @@ active_partition(caf::stateful_actor<active_partition_state>* self, uuid id,
       self->state.events += x->rows();
       self->state.meta_idx.add(id, *x);
       size_t col = 0;
-      VAST_ASSERT(!x->layout().fields.empty());
-      for (auto& field : x->layout().fields) {
-        auto qf = qualified_record_field{x->layout().name(), field};
+      VAST_ASSERT(!layout.fields.empty());
+      for (auto& field : layout.fields) {
+        auto qf = qualified_record_field{layout.name(), field};
         auto& idx = self->state.indexers[qf];
         if (!idx) {
           self->state.combined_layout.fields.push_back(as_record_field(qf));
