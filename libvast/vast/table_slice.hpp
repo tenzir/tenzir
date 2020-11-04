@@ -104,12 +104,6 @@ public:
     header_.offset = offset;
   }
 
-  /// @returns the name of a column.
-  /// @param column The column offset.
-  std::string_view column_name(size_t column) const noexcept {
-    return header_.layout.fields[column].name;
-  }
-
   /// Retrieves data by specifying 2D-coordinates via row and column.
   /// @param row The row offset.
   /// @param col The column offset.
