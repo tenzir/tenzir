@@ -24,7 +24,6 @@
 #include <caf/ref_counted.hpp>
 
 #include <cstddef>
-#include <limits>
 #include <vector>
 
 namespace vast {
@@ -84,12 +83,6 @@ public:
 
   /// @returns an identifier for the implementing class.
   virtual caf::atom_value implementation_id() const noexcept = 0;
-
-  /// @returns the layout for columns in range
-  /// [first_column, first_column + num_columns).
-  record_type
-  layout(size_type first_column, size_type num_columns
-                                 = std::numeric_limits<size_type>::max()) const;
 
   /// @returns the number of rows in the slice.
   size_type rows() const noexcept {
