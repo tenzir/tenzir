@@ -52,7 +52,7 @@ caf::error convert(const data& d, concepts_map& out) {
         return make_error(ec::convert_error, "field in", *name,
                           "is not a string:", f);
       if (std::count(dest.fields.begin(), dest.fields.end(), *field) > 0)
-        VAST_WARNING_ANON("encountered duplicate field for",
+        VAST_WARNING_ANON("ignoring duplicate field for",
                           *name + ": \"" + *field + "\"");
       else
         dest.fields.push_back(*field);
@@ -70,7 +70,7 @@ caf::error convert(const data& d, concepts_map& out) {
         return make_error(ec::convert_error, "concept in", *name,
                           "is not a string:", c);
       if (std::count(dest.fields.begin(), dest.fields.end(), *concept_) > 0)
-        VAST_WARNING_ANON("encountered duplicate concept for",
+        VAST_WARNING_ANON("ignoring duplicate concept for",
                           *name + ": \"" + *concept_ + "\"");
       else
         dest.fields.push_back(*concept_);
