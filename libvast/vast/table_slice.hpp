@@ -207,7 +207,7 @@ protected:
   table_slice_header header_;
 
 private:
-  static std::atomic<size_t> instance_count_;
+  inline static std::atomic<size_t> instance_count_ = 0;
 };
 
 /// @relates table_slice
