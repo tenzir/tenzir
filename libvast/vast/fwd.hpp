@@ -33,8 +33,6 @@ class address;
 class arrow_table_slice;
 class arrow_table_slice_builder;
 class bitmap;
-class caf_table_slice;
-class caf_table_slice_builder;
 class chunk;
 class column_index;
 class command;

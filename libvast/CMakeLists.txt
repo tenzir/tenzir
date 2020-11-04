@@ -63,8 +63,6 @@ set(libvast_sources
     src/bloom_filter_parameters.cpp
     src/bloom_filter_synopsis.cpp
     src/bool_synopsis.cpp
-    src/caf_table_slice.cpp
-    src/caf_table_slice_builder.cpp
     src/chunk.cpp
     src/command.cpp
     src/compression.cpp

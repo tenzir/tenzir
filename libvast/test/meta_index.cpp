@@ -18,14 +18,14 @@
 #include "vast/test/fixtures/actor_system.hpp"
 #include "vast/test/test.hpp"
 
-#include "vast/caf_table_slice_builder.hpp"
 #include "vast/concept/parseable/to.hpp"
 #include "vast/concept/parseable/vast/expression.hpp"
+#include "vast/defaults.hpp"
 #include "vast/detail/overload.hpp"
 #include "vast/synopsis.hpp"
 #include "vast/synopsis_factory.hpp"
 #include "vast/table_slice.hpp"
-#include "vast/table_slice_builder.hpp"
+#include "vast/table_slice_builder_factory.hpp"
 #include "vast/uuid.hpp"
 #include "vast/view.hpp"
 
@@ -57,7 +57,8 @@ struct generator {
   }
 
   table_slice_ptr operator()(size_t num) {
-    auto builder = caf_table_slice_builder::make(layout);
+    auto builder = factory<table_slice_builder>::make(
+      defaults::import::table_slice_type, layout);
     for (size_t i = 0; i < num; ++i) {
       vast::time ts = epoch + std::chrono::seconds(i + offset);
       CHECK(builder->add(make_data_view(ts)));
@@ -95,6 +96,8 @@ struct fixture {
   fixture() {
     MESSAGE("register synopsis factory");
     factory<synopsis>::initialize();
+    MESSAGE("register table_slice_builder factory");
+    factory<table_slice_builder>::initialize();
     MESSAGE("generate " << num_partitions << " UUIDs for the partitions");
     for (size_t i = 0; i < num_partitions; ++i)
       ids.emplace_back(uuid::random());
@@ -214,7 +217,8 @@ TEST(meta index with bool synopsis) {
   MESSAGE("generate slice data and add it to the meta index");
   meta_index meta_idx;
   auto layout = record_type{{"x", bool_type{}}}.name("test");
-  auto builder = caf_table_slice_builder::make(layout);
+  auto builder = factory<table_slice_builder>::make(
+    defaults::import::table_slice_type, layout);
   CHECK(builder->add(make_data_view(true)));
   auto slice = builder->finish();
   REQUIRE(slice != nullptr);
