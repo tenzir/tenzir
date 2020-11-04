@@ -47,6 +47,11 @@ Every entry has a category for which we use the following visual abbreviations:
 - ⚡️ The `splunk-to-vast` script has a new name: `taxonomize`. The script now
   also generates taxonomy declarations for Azure Sentinel.
   [#1134](https://github.com/tenzir/vast/pull/1134)
+=======
+- ⚡️ CAF-encoded table slices no longer exist. As such, the option
+  `vast.import.batch-encoding` now only supports `arrow` and `msgpack` as
+  arguments. [#1142](https://github.com/tenzir/vast/pull/1142)
+>>>>>>> 021ac93a4 (Add changelog entry)
 
 - ⚠️ VAST does not produce metrics by default any more. The option
   `--disable-metrics` has been renamed to `--enable-metrics` accordingly.
