@@ -42,6 +42,7 @@
       - sysmon.RegistryEventValueSet.ProcessId
 - concept:
     name: proc.name
+    fields:
       - sysmon.CreateRemoteThread.SourceImage
       - sysmon.CreateRemoteThread.TargetImage
       - sysmon.DNSQuery.Image
@@ -99,6 +100,7 @@
       - sysmon.ProcessAccess.SourceThreadId
 - concept:
     name: file.name
+    fields:
       - sysmon.FileCreate.TargetFilename
       - sysmon.FileCreateStreamHash.TargetFilename
       - sysmon.FileDelete.TargetFilename
