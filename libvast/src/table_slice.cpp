@@ -51,10 +51,6 @@ namespace {
 
 using size_type = table_slice::size_type;
 
-auto cap (size_type pos, size_type num, size_type last) {
-  return num == table_slice::npos ? last : std::min(last, pos + num);
-}
-
 } // namespace <anonymous>
 
 table_slice::column_view::column_view(const table_slice& slice, size_t column)
@@ -93,7 +89,9 @@ record_type table_slice::layout(size_type first_column,
   if (first_column >= columns())
     return {};
   auto col_begin = first_column;
-  auto col_end = cap(first_column, num_columns, columns());
+  auto col_end = num_columns == std::numeric_limits<size_type>::max()
+                   ? columns()
+                   : std::min(columns(), first_column + num_columns);
   std::vector<record_field> sub_records{layout().fields.begin() + col_begin,
                                         layout().fields.begin() + col_end};
   return record_type{std::move(sub_records)};
