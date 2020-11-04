@@ -87,7 +87,7 @@ void table_slice::append_column_to_index(size_type col,
 
 // -- properties ---------------------------------------------------------------
 
-const record_type& table_slice::layout() const noexcept {
+record_type table_slice::layout() const noexcept {
   return header_.layout;
 }
 
@@ -382,7 +382,7 @@ struct row_evaluator {
     // TODO: Transform this AST node into a constant-time lookup node (e.g.,
     // data_extractor). It's not necessary to iterate over the schema for every
     // row; this should happen upfront.
-    auto&& layout = slice_.layout();
+    auto layout = slice_.layout();
     if (e.attr == atom::type_v)
       return evaluate(layout.name(), op_, d);
     if (e.attr == atom::timestamp_v) {
@@ -412,7 +412,7 @@ struct row_evaluator {
 
   bool operator()(const data_extractor& e, const data& d) {
     VAST_ASSERT(e.offset.size() == 1);
-    auto&& layout = slice_.layout();
+    auto layout = slice_.layout();
     if (e.type != layout) // TODO: make this a precondition instead.
       return false;
     auto col = e.offset[0];

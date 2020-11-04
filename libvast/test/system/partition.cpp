@@ -137,7 +137,7 @@ struct fixture : fixtures::dummy_index {
                              [](auto slice) { return slice == nullptr; }));
     for (auto& slice : slices) {
       put->add(slice);
-      auto& layout = slice->layout();
+      auto layout = slice->layout();
       for (size_t column = 0; column < layout.fields.size(); ++column) {
         auto& field = layout.fields[column];
         auto fqf = qualified_record_field{layout.name(), field};
