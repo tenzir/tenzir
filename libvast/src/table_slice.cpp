@@ -153,9 +153,10 @@ table_slice* intrusive_cow_ptr_unshare(table_slice*& ptr) {
 caf::error inspect(caf::serializer& sink, table_slice_ptr& ptr) {
   if (!ptr)
     return sink(caf::atom("NULL"));
-  return caf::error::eval([&] { return sink(ptr->implementation_id()); },
-                          [&] { return sink(ptr->header()); },
-                          [&] { return ptr->serialize(sink); });
+  return caf::error::eval(
+    [&] { return sink(ptr->implementation_id()); },
+    [&] { return sink(ptr->layout(), ptr->rows(), ptr->offset()); },
+    [&] { return ptr->serialize(sink); });
 }
 
 caf::error inspect(caf::deserializer& source, table_slice_ptr& ptr) {
@@ -167,7 +168,7 @@ caf::error inspect(caf::deserializer& source, table_slice_ptr& ptr) {
     return caf::none;
   }
   table_slice_header header;
-  if (auto err = source(header))
+  if (auto err = source(header.layout, header.rows, header.offset))
     return err;
   ptr = factory<table_slice>::make(id, std::move(header));
   if (!ptr)
