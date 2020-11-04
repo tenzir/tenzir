@@ -38,6 +38,7 @@
 #include "vast/system/indexer.hpp"
 #include "vast/system/shutdown.hpp"
 #include "vast/system/terminate.hpp"
+#include "vast/table_slice.hpp"
 #include "vast/table_slice_column.hpp"
 #include "vast/time.hpp"
 #include "vast/type.hpp"
@@ -185,9 +186,10 @@ evaluate(const PartitionState& state, const expression& expr) {
 } // namespace
 
 bool partition_selector::operator()(const vast::qualified_record_field& filter,
-                                    const table_slice_column& x) const {
-  auto& layout = x.slice->layout();
-  vast::qualified_record_field fqf{layout.name(), layout.fields.at(x.column)};
+                                    const table_slice_column& column) const {
+  auto& layout = column.slice()->layout();
+  vast::qualified_record_field fqf{layout.name(),
+                                   layout.fields.at(column.index())};
   return filter == fqf;
 }
 

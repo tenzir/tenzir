@@ -28,6 +28,7 @@
 #include "vast/system/instrumentation.hpp"
 #include "vast/system/partition.hpp"
 #include "vast/system/report.hpp"
+#include "vast/table_slice.hpp"
 #include "vast/table_slice_column.hpp"
 #include "vast/value_index.hpp"
 #include "vast/value_index_factory.hpp"
@@ -104,7 +105,7 @@ caf::behavior active_indexer(caf::stateful_actor<indexer_state>* self,
         [=](caf::unit_t&) {
           // nop
         },
-        [=](caf::unit_t&, const std::vector<table_slice_column>& xs) {
+        [=](caf::unit_t&, const std::vector<table_slice_column>& columns) {
           VAST_ASSERT(self->state.idx != nullptr);
           // NOTE: It seems like having the `#skip` attribute should lead to
           // no index being created at all (as opposed to creating it and
@@ -112,12 +113,9 @@ caf::behavior active_indexer(caf::stateful_actor<indexer_state>* self,
           // implementation so we're keeping it for now.
           if (self->state.has_skip_attribute)
             return;
-          for (auto& x : xs) {
-            for (size_t i = 0; i < x.slice->rows(); ++i) {
-              auto v = x.slice->at(i, x.column);
-              self->state.idx->append(v, x.slice->offset() + i);
-            }
-          }
+          for (auto& column : columns)
+            for (size_t i = 0; i < column.size(); ++i)
+              self->state.idx->append(column[i], column.slice()->offset() + i);
         },
         [=](caf::unit_t&, const error& err) {
           if (err) {
