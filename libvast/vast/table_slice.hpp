@@ -38,21 +38,27 @@ public:
 
   // -- constructors, destructors, and assignment operators --------------------
 
-  /// Destroy a table slice.
-  virtual ~table_slice() noexcept override;
-
   /// Default-constructs an empty table slice.
   table_slice() noexcept;
 
   // Copy-construct a table slice.
-  table_slice(const table_slice&) noexcept;
+  table_slice(const table_slice& other) noexcept;
 
   // Copy-assigns a table slice.
-  table_slice& operator=(const table_slice&) noexcept;
+  table_slice& operator=(const table_slice& rhs) noexcept;
+
+  // Move-constructs a table slice.
+  table_slice(table_slice&& other) noexcept;
+
+  // Move-assigns a table slice.
+  table_slice& operator=(table_slice&& rhs) noexcept;
 
   /// Constructs a table slice from a header.
   /// @param header The header of the table slice.
   explicit table_slice(table_slice_header header = {}) noexcept;
+
+  /// Destroy a table slice.
+  virtual ~table_slice() noexcept override;
 
   /// Makes a copy of this slice.
   virtual table_slice* copy() const = 0;
@@ -142,7 +148,7 @@ public:
 protected:
   // -- member variables -------------------------------------------------------
 
-  table_slice_header header_;
+  table_slice_header header_ = {};
 
   // -- implementation details -------------------------------------------------
 private:
