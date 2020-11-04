@@ -1,12 +1,17 @@
 #! /usr/bin/env python
 
 """
-Generates a VAST taxonomy from other tools
+Generates VAST taxonomy declarations from CIMs of other tools.
 
-Example usage:
+Usage:
 
    taxonomize --splunk < model.json > splunk.yaml
    taxonomize --sentinel > sentinel.yaml
+
+The input requirements change with the tool-specific option. For example,
+--splunk requires the JSON file from the TA on stdin, whereas --sentinel does
+not process anything on stdin because the script downloads the declarations
+from a website.
 """
 
 import argparse
