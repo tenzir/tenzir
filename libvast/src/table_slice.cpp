@@ -13,8 +13,6 @@
 
 #include "vast/table_slice.hpp"
 
-#include "vast/caf_table_slice.hpp"
-#include "vast/caf_table_slice_builder.hpp"
 #include "vast/chunk.hpp"
 #include "vast/defaults.hpp"
 #include "vast/detail/assert.hpp"
@@ -194,8 +192,6 @@ pack(flatbuffers::FlatBufferBuilder& builder, table_slice_ptr x) {
   if (auto error = sink2(x))
     return error;
   auto transform = [](caf::atom_value x) -> caf::expected<fbs::Encoding> {
-    if (x == caf::atom("caf"))
-      return fbs::Encoding::CAF;
     if (x == caf::atom("arrow"))
       return fbs::Encoding::Arrow;
     if (x == caf::atom("msgpack"))

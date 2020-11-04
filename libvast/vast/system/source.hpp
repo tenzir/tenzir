@@ -13,7 +13,6 @@
 
 #pragma once
 
-#include "vast/caf_table_slice_builder.hpp"
 #include "vast/concept/printable/std/chrono.hpp"
 #include "vast/concept/printable/stream.hpp"
 #include "vast/concept/printable/to_string.hpp"
