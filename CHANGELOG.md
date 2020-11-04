@@ -12,9 +12,13 @@ Every entry has a category for which we use the following visual abbreviations:
 
 ## Unreleased
 
+- ⚠️ VAST does not produce metrics by default any more. The option
+  `--disable-metrics` has been renamed to `--enable-metrics` accordingly.
+  [#1137](https://github.com/tenzir/vast/pull/1137)
+
 - 🎁 The new option `vast.client-log-file` enables client-side logging. By
   default, VAST only writes log files for the server process.
-  [#1132](https://github.com/tenzir/vast/pull/1332)
+  [#1132](https://github.com/tenzir/vast/pull/1132)
 
 - ⚠️ VAST no longer requires you to manually remove a stale PID file from a
   no-longer running `vast` process. Instead, VAST prints a warning and
