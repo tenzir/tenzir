@@ -133,3 +133,8 @@
     name: net.dst.hostname
     fields:
       - sysmon.NetworkConnection.DestinationHostname
+- concept:
+    name: net.app
+    fields:
+      - sysmon.NetworkConnection.SourcePortName
+      - sysmon.NetworkConnection.DestinationPortName

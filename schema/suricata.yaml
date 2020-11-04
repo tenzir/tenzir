@@ -67,6 +67,23 @@
       - suricata.smtp.dest_port
       - suricata.tls.dest_port
 - concept:
+    name: net.app
+    fields:
+      - suricata.alert.alert.app_proto
+      - suricata.dhcp.event_type
+      - suricata.dns.event_type
+      - suricata.ftp.event_type
+      - suricata.ftp_data.event_type
+      - suricata.http.event_type
+      - suricata.fileinfo.app_proto
+      - suricata.flow.app_proto
+      - suricata.krb5.event_type
+      - suricata.netflow.app_proto
+      - suricata.smb.event_type
+      - suricata.ssh.event_type
+      - suricata.smtp.event_type
+      - suricata.tls.event_type
+- concept:
     name: net.proto
     fields:
       - suricata.alert.proto
