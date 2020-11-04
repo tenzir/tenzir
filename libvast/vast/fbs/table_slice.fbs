@@ -3,7 +3,6 @@ namespace vast.fbs;
 /// The format of the binary table slice data.
 enum Encoding : byte {
   Arrow,
-  CAF,
   MessagePack,
 }
 
