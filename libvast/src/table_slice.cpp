@@ -80,8 +80,6 @@ table_slice::~table_slice() {
   --instance_count_;
 }
 
-std::atomic<size_t> table_slice::instance_count_{0u};
-
 record_type table_slice::layout(size_type first_column,
                                 size_type num_columns) const {
   if (first_column >= columns())
