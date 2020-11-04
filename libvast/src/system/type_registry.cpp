@@ -184,6 +184,7 @@ type_registry(type_registry_actor self, const path& dir) {
               continue;
             case path::regular_file:
             case path::symlink:
+              VAST_DEBUG(self, "extracts taxonomies from", file);
               auto contents = load_contents(file);
               if (!contents)
                 return contents.error();
@@ -192,6 +193,12 @@ type_registry(type_registry_actor self, const path& dir) {
                 return yaml.error();
               if (auto err = extract_concepts(*yaml, concepts))
                 return err;
+              for (auto& [name, definition] : concepts) {
+                VAST_DEBUG(self, "extracted concept", name, "with",
+                           definition.fields.size(), "fields");
+                for (auto& field : definition.fields)
+                  VAST_TRACE(self, "uses concept mapping", name, "->", field);
+              }
           }
         }
       }
