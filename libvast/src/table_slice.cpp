@@ -191,11 +191,12 @@ pack(flatbuffers::FlatBufferBuilder& builder, table_slice_ptr x) {
   caf::binary_serializer sink2{nullptr, data_buffer};
   if (auto error = sink2(x))
     return error;
-  auto transform = [](caf::atom_value x) -> caf::expected<fbs::Encoding> {
+  auto transform =
+    [](caf::atom_value x) -> caf::expected<fbs::table_slice::legacy::Encoding> {
     if (x == caf::atom("arrow"))
-      return fbs::Encoding::Arrow;
+      return fbs::table_slice::legacy::Encoding::Arrow;
     if (x == caf::atom("msgpack"))
-      return fbs::Encoding::MessagePack;
+      return fbs::table_slice::legacy::Encoding::MessagePack;
     return make_error(ec::unspecified, "unsupported table slice type", x);
   };
   auto encoding = transform(x->implementation_id());
@@ -205,12 +206,17 @@ pack(flatbuffers::FlatBufferBuilder& builder, table_slice_ptr x) {
   auto layout = local_builder.CreateVector(layout_ptr, layout_buffer.size());
   auto data_ptr = reinterpret_cast<const uint8_t*>(data_buffer.data());
   auto data = local_builder.CreateVector(data_ptr, data_buffer.size());
-  fbs::table_slice::v0Builder table_slice_builder{local_builder};
-  table_slice_builder.add_offset(x->offset());
-  table_slice_builder.add_rows(x->rows());
-  table_slice_builder.add_layout(layout);
-  table_slice_builder.add_encoding(*encoding);
-  table_slice_builder.add_data(data);
+  fbs::table_slice::legacy::v0Builder legacy_v0_builder{local_builder};
+  legacy_v0_builder.add_offset(x->offset());
+  legacy_v0_builder.add_rows(x->rows());
+  legacy_v0_builder.add_layout(layout);
+  legacy_v0_builder.add_encoding(*encoding);
+  legacy_v0_builder.add_data(data);
+  auto legacy_v0_slice = legacy_v0_builder.Finish();
+  fbs::TableSliceBuilder table_slice_builder{local_builder};
+  table_slice_builder.add_table_slice_type(
+    fbs::table_slice::TableSlice::legacy_v0);
+  table_slice_builder.add_table_slice(legacy_v0_slice.Union());
   auto flat_slice = table_slice_builder.Finish();
   local_builder.Finish(flat_slice);
   auto buffer = span<const uint8_t>{local_builder.GetBufferPointer(),
@@ -224,7 +230,7 @@ pack(flatbuffers::FlatBufferBuilder& builder, table_slice_ptr x) {
 }
 
 // TODO: The dual to the note above applies here.
-caf::error unpack(const fbs::table_slice::v0& x, table_slice_ptr& y) {
+caf::error unpack(const fbs::table_slice::legacy::v0& x, table_slice_ptr& y) {
   auto ptr = reinterpret_cast<const char*>(x.data()->Data());
   caf::binary_deserializer source{nullptr, ptr, x.data()->size()};
   return source(y);
