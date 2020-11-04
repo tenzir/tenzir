@@ -43,7 +43,7 @@ table_slice_ptr factory_traits<table_slice>::make(chunk_ptr chunk) {
   // Deserialize the class ID and default-construct a table slice.
   caf::atom_value id;
   table_slice_header header;
-  if (auto err = source(id, header)) {
+  if (auto err = source(id, header.layout, header.rows, header.offset)) {
     VAST_ERROR_ANON(__func__, "failed to deserialize table slice meta data");
     return nullptr;
   }
