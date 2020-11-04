@@ -53,11 +53,30 @@ using size_type = table_slice::size_type;
 
 // -- constructors, destructors, and assignment operators ----------------------
 
-table_slice::table_slice() noexcept = default;
+table_slice::table_slice() noexcept {
+  ++instance_count_;
+}
 
-table_slice::table_slice(const table_slice& other) noexcept = default;
+table_slice::table_slice(const table_slice& other) noexcept
+  : ref_counted(other), header_{other.header_} {
+  ++instance_count_;
+}
 
-table_slice& table_slice::operator=(const table_slice&) noexcept = default;
+table_slice& table_slice::operator=(const table_slice& rhs) noexcept {
+  header_ = rhs.header_;
+  ++instance_count_;
+  return *this;
+}
+
+table_slice::table_slice(table_slice&& other) noexcept
+  : header_{std::exchange(other.header_, {})} {
+  // nop
+}
+
+table_slice& table_slice::operator=(table_slice&& rhs) noexcept {
+  header_ = std::exchange(rhs.header_, {});
+  return *this;
+}
 
 table_slice::table_slice(table_slice_header header) noexcept
   : header_{std::move(header)} {
