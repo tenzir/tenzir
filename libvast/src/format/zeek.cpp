@@ -636,24 +636,25 @@ public:
 
 caf::error writer::write(const table_slice& slice) {
   ostream_writer* child = nullptr;
+  auto&& layout = slice.layout();
   if (dir_.empty()) {
     if (writers_.empty()) {
       VAST_DEBUG(this, "creates a new stream for STDOUT");
       auto out = std::make_unique<detail::fdostream>(1);
-      writers_.emplace(slice.layout().name(),
+      writers_.emplace(layout.name(),
                        std::make_unique<writer_child>(std::move(out)));
     }
     child = writers_.begin()->second.get();
-    if (slice.layout() != previous_layout_) {
-      print_header(slice.layout(), child->out());
-      previous_layout_ = slice.layout();
+    if (layout != previous_layout_) {
+      print_header(layout, child->out());
+      previous_layout_ = std::move(layout);
     }
   } else {
-    auto i = writers_.find(slice.layout().name());
+    auto i = writers_.find(layout.name());
     if (i != writers_.end()) {
       child = i->second.get();
     } else {
-      VAST_DEBUG(this, "creates new stream for layout", slice.layout().name());
+      VAST_DEBUG(this, "creates new stream for layout", layout.name());
       if (!exists(dir_)) {
         if (auto err = mkdir(dir_))
           return err;
@@ -661,10 +662,10 @@ caf::error writer::write(const table_slice& slice) {
         return make_error(ec::format_error, "got existing non-directory path",
                           dir_);
       }
-      auto filename = dir_ / (slice.layout().name() + ".log");
+      auto filename = dir_ / (layout.name() + ".log");
       auto fos = std::make_unique<std::ofstream>(filename.str());
-      print_header(slice.layout(), *fos);
-      auto i = writers_.emplace(slice.layout().name(),
+      print_header(layout, *fos);
+      auto i = writers_.emplace(layout.name(),
                                 std::make_unique<writer_child>(std::move(fos)));
       child = i.first->second.get();
     }

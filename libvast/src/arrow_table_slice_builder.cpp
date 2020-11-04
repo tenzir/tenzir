@@ -512,10 +512,11 @@ arrow_table_slice_builder::make_arrow_type(const type& t) {
 
 arrow_table_slice_builder::arrow_table_slice_builder(record_type layout)
   : super{std::move(layout)}, col_{0}, rows_{0} {
-  VAST_ASSERT(this->layout().fields.size() > 0);
-  builders_.reserve(this->layout().fields.size());
+  auto&& this_layout = this->layout();
+  VAST_ASSERT(this_layout.fields.size() > 0);
+  builders_.reserve(this_layout.fields.size());
   auto pool = arrow::default_memory_pool();
-  for (auto& field : this->layout().fields)
+  for (auto& field : this_layout.fields)
     builders_.emplace_back(make_column_builder(field.type, pool));
 }
 
