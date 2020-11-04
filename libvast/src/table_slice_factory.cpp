@@ -13,7 +13,6 @@
 
 #include "vast/table_slice_factory.hpp"
 
-#include "vast/caf_table_slice.hpp"
 #include "vast/chunk.hpp"
 #include "vast/config.hpp"
 #include "vast/logger.hpp"
@@ -28,7 +27,6 @@
 namespace vast {
 
 void factory_traits<table_slice>::initialize() {
-  factory<table_slice>::add<caf_table_slice>();
   factory<table_slice>::add<msgpack_table_slice>();
 #if VAST_HAVE_ARROW
   factory<table_slice>::add<arrow_table_slice>();

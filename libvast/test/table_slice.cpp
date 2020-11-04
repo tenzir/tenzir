@@ -18,8 +18,6 @@
 #include "vast/test/fixtures/table_slices.hpp"
 #include "vast/test/test.hpp"
 
-#include "vast/caf_table_slice.hpp"
-#include "vast/caf_table_slice_builder.hpp"
 #include "vast/ids.hpp"
 #include "vast/table_slice_column.hpp"
 #include "vast/table_slice_row.hpp"
@@ -30,70 +28,7 @@
 using namespace vast;
 using namespace std::string_literals;
 
-namespace {
-
-class rebranded_table_slice : public caf_table_slice {
-public:
-  static constexpr caf::atom_value class_id = caf::atom("test");
-
-  static table_slice_ptr make(table_slice_header header) {
-    return caf::make_copy_on_write<rebranded_table_slice>(std::move(header));
-  }
-
-  explicit rebranded_table_slice(table_slice_header header)
-    : caf_table_slice{std::move(header)} {
-    // nop
-  }
-
-  caf::atom_value implementation_id() const noexcept override {
-    return class_id;
-  }
-};
-
-class rebranded_table_slice_builder : public caf_table_slice_builder {
-public:
-  using super = caf_table_slice_builder;
-
-  using table_slice_type = rebranded_table_slice;
-
-  rebranded_table_slice_builder(record_type layout) : super(std::move(layout)) {
-    // Eagerly initialize to make sure super does not create slices for us.
-    eager_init();
-  }
-
-  static table_slice_builder_ptr make(record_type layout) {
-    return caf::make_counted<rebranded_table_slice_builder>(std::move(layout));
-  }
-
-  table_slice_ptr finish() override {
-    auto result = super::finish();
-    eager_init();
-    return result;
-  }
-
-  caf::atom_value implementation_id() const noexcept override {
-    return get_implementation_id();
-  }
-
-  static caf::atom_value get_implementation_id() noexcept {
-    return rebranded_table_slice::class_id;
-  }
-
-private:
-  void eager_init() {
-    table_slice_header header{layout(), rows(), 0};
-    slice_.reset(new rebranded_table_slice{std::move(header)});
-    row_ = list(columns());
-    col_ = 0;
-  }
-};
-
-} // namespace <anonymous>
-
 FIXTURE_SCOPE(table_slice_tests, fixtures::table_slices)
-
-TEST_TABLE_SLICE(caf_table_slice)
-TEST_TABLE_SLICE(rebranded_table_slice)
 
 TEST(random integer slices) {
   record_type layout{

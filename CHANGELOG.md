@@ -12,6 +12,10 @@ Every entry has a category for which we use the following visual abbreviations:
 
 ## Unreleased
 
+- ⚡️ CAF-encoded table slices no longer exist. As such, the option
+  `vast.import.batch-encoding` now only supports `arrow` and `msgpack` as
+  arguments. [#1142](https://github.com/tenzir/vast/pull/1142)
+
 - ⚠️ VAST does not produce metrics by default any more. The option
   `--disable-metrics` has been renamed to `--enable-metrics` accordingly.
   [#1137](https://github.com/tenzir/vast/pull/1137)
