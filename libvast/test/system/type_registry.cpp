@@ -125,9 +125,9 @@ TEST(type_registry) {
 
 TEST(taxonomies) {
   MESSAGE("setting a taxonomy");
-  auto c1 = concepts_type{{{"foo", {"", {"a.fo0", "b.foO", "x.foe"}, {}}},
-                           {"bar", {"", {"a.b@r", "b.baR"}, {}}}}};
-  auto t1 = taxonomies{c1, models_type{}};
+  auto c1 = concepts_map{{{"foo", {"", {"a.fo0", "b.foO", "x.foe"}, {}}},
+                          {"bar", {"", {"a.b@r", "b.baR"}, {}}}}};
+  auto t1 = taxonomies{c1, models_map{}};
   self->send(aut, atom::put_v, t1);
   run();
   MESSAGE("collecting some types");

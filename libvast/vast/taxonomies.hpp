@@ -25,58 +25,75 @@
 
 namespace vast {
 
-/// Maps concept names to the fields or concepts that implement them.
-struct concepts_type {
-  /// The definition of a concept.
-  struct definition {
-    /// The description of the concept.
-    std::string description;
+/// The definition of a concept.
+struct concept_ {
+  /// The description of the concept.
+  std::string description;
 
-    /// The fields that the concept maps to.
-    std::vector<std::string> fields;
+  /// The fields that the concept maps to.
+  std::vector<std::string> fields;
 
-    /// Other concepts that are referenced. Their fields are also considered
-    /// during substitution.
-    std::vector<std::string> concepts;
+  /// Other concepts that are referenced. Their fields are also considered
+  /// during substitution.
+  std::vector<std::string> concepts;
 
-    friend bool operator==(const concepts_type::definition& lhs,
-                           const concepts_type::definition& rhs);
-
-    template <class Inspector>
-    friend auto inspect(Inspector& f, concepts_type::definition& cd) {
-      return f(caf::meta::type_name("concepts_type::definition"), cd.fields,
-               cd.concepts);
-    }
-  };
-
-  /// A set of concept name and definition pairs.
-  std::unordered_map<std::string, definition> data;
-
-  friend bool operator==(const concepts_type& lhs, const concepts_type& rhs);
+  friend bool operator==(const concept_& lhs, const concept_& rhs);
 
   template <class Inspector>
-  friend auto inspect(Inspector& f, concepts_type& c) {
-    return f(caf::meta::type_name("concepts_type"), c.data);
+  friend auto inspect(Inspector& f, concept_& c) {
+    return f(caf::meta::type_name("concept"), c.fields, c.concepts);
   }
 };
 
+/// Maps concept names to their definitions.
+using concepts_map = std::unordered_map<std::string, concept_>;
+
 /// Converts a data record to a concept.
-caf::error convert(const data& d, concepts_type& out);
+caf::error convert(const data& d, concepts_map& out);
 
 /// Extracts a concept definition from a data object.
-caf::error extract_concepts(const data& d, concepts_type& out);
+caf::error extract_concepts(const data& d, concepts_map& out);
 
 /// Extracts a concept definition from a data object.
-caf::expected<concepts_type> extract_concepts(const data& d);
+caf::expected<concepts_map> extract_concepts(const data& d);
 
-/// Maps model names to the concepts or models that implement them.
-using models_type = std::unordered_map<std::string, std::vector<std::string>>;
+/// The definition of a model.
+struct model {
+  /// The description of the model.
+  std::string description;
+
+  /// The concepts that the model is composed of.
+  std::vector<std::string> concepts;
+
+  /// Other models that are referenced. Their concepts must also be represented
+  /// for a layout to be considered.
+  std::vector<std::string> models;
+
+  friend bool operator==(const model& lhs, const model& rhs);
+
+  template <class Inspector>
+  friend auto inspect(Inspector& f, model& m) {
+    return f(caf::meta::type_name("model"), m.concepts);
+  }
+};
+
+/// Maps model names to their definitions.
+using models_map = std::unordered_map<std::string, model>;
+
+/// Converts a data record to a model.
+caf::error convert(const data& d, models_map& out);
+
+/// Extracts a model definition from a data object.
+caf::error extract_models(const data& d, models_map& out);
+
+/// Extracts a model definition from a data object.
+caf::expected<models_map> extract_models(const data& d);
 
 /// A taxonomy is a combination of concepts and models. VAST stores all
 /// configured taxonomies in memory together, hence the plural naming.
 struct taxonomies {
-  concepts_type concepts;
-  models_type models;
+  concepts_map concepts;
+  models_map models;
 
   friend bool operator==(const taxonomies& lhs, const taxonomies& rhs);
 
