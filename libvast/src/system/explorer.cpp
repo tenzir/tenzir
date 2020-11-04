@@ -25,6 +25,7 @@
 #include "vast/table_slice.hpp"
 #include "vast/table_slice_builder.hpp"
 #include "vast/table_slice_builder_factory.hpp"
+#include "vast/table_slice_column.hpp"
 
 #include <caf/event_based_actor.hpp>
 #include <caf/settings.hpp>
@@ -134,12 +135,12 @@ explorer(caf::stateful_actor<explorer_state>* self, caf::actor node,
         VAST_DEBUG(self, "could not find timestamp field in", layout);
         return;
       }
-      std::optional<table_slice::column_view> by_column;
+      std::optional<table_slice_column> by_column;
       if (st.by) {
         // Need to pivot from caf::optional to std::optional here, as the
         // former doesnt support emplace or value assignment.
-        if (auto vopt = slice->column(*st.by))
-          by_column.emplace(*vopt);
+        if (auto col = table_slice_column::make(slice, *st.by))
+          by_column.emplace(std::move(*col));
         if (!by_column) {
           VAST_TRACE("skipping slice with", layout, "because it has no column",
                      *st.by);
@@ -147,9 +148,9 @@ explorer(caf::stateful_actor<explorer_state>* self, caf::actor node,
         }
       }
       VAST_DEBUG(self, "uses", it->name, "to construct timebox");
-      auto column = slice->column(it->name);
+      auto column = table_slice_column::make(slice, it->name);
       VAST_ASSERT(column);
-      for (size_t i = 0; i < column->rows(); ++i) {
+      for (size_t i = 0; i < column->size(); ++i) {
         auto data_view = (*column)[i];
         auto x = caf::get_if<vast::time>(&data_view);
         // Skip if no value

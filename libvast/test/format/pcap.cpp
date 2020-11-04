@@ -12,17 +12,18 @@
  ******************************************************************************/
 
 #define SUITE format
-#include "vast/test/test.hpp"
-#include "vast/test/data.hpp"
-
-#include "vast/test/fixtures/actor_system.hpp"
-
 #include "vast/format/pcap.hpp"
+
+#include "vast/test/data.hpp"
+#include "vast/test/fixtures/actor_system.hpp"
+#include "vast/test/test.hpp"
 
 #include "vast/concept/parseable/to.hpp"
 #include "vast/concept/parseable/vast/address.hpp"
 #include "vast/defaults.hpp"
 #include "vast/error.hpp"
+#include "vast/table_slice.hpp"
+#include "vast/table_slice_column.hpp"
 
 using namespace vast;
 
@@ -92,9 +93,10 @@ TEST(PCAP read/write 1) {
   auto src_field = slice->at(43, 1);
   auto src = unbox(caf::get_if<view<address>>(&src_field));
   CHECK_EQUAL(src, unbox(to<address>("192.168.1.1")));
-  auto community_id_column = unbox(slice->column("community_id"));
+  auto community_id_column = table_slice_column::make(slice, "community_id");
+  REQUIRE(community_id_column);
   for (size_t row = 0; row < 44; ++row)
-    CHECK_VARIANT_EQUAL(community_id_column[row], community_ids[row]);
+    CHECK_VARIANT_EQUAL((*community_id_column)[row], community_ids[row]);
   MESSAGE("write out read packets");
   auto file = "vast-unit-test-nmap-vsn.pcap";
   format::pcap::writer writer{file};
