@@ -1,0 +1,141 @@
+- concept:
+    name: proc.guid
+    fields:
+      - sysmon.CreateRemoteThread.SourceProcessGuid
+      - sysmon.CreateRemoteThread.TargetProcessGuid
+      - sysmon.FileCreate.ProcessGuid
+      - sysmon.FileCreateStreamHash.ProcessGuid
+      - sysmon.FileDelete.ProcessGuid
+      - sysmon.ImageLoaded.ProcessGuid
+      - sysmon.NetworkConnection.ProcessGuid
+      - sysmon.PipeConnected.ProcessGuid
+      - sysmon.PipeCreated.ProcessGuid
+      - sysmon.ProcessAccess.SourceProcessGuid
+      - sysmon.ProcessAccess.TargetProcessGuid
+      - sysmon.ProcessChangedFileCreationTime.ProcessGuid
+      - sysmon.ProcessCreation.ProcessGuid
+      - sysmon.ProcessTerminated.ProcessGuid
+      - sysmon.RawAccessRead.ProcessGuid
+      - sysmon.RegistryEventKeyAndValueRename.ProcessGuid
+      - sysmon.RegistryEventObjectCreateAndDelete.ProcessGuid
+      - sysmon.RegistryEventValueSet.ProcessGuid
+- concept:
+    name: proc.id
+    fields:
+      - sysmon.CreateRemoteThread.SourceProcessId
+      - sysmon.CreateRemoteThread.TargetProcessId
+      - sysmon.FileCreate.ProcessId
+      - sysmon.FileCreateStreamHash.ProcessId
+      - sysmon.FileDelete.ProcessId
+      - sysmon.ImageLoaded.ProcessId
+      - sysmon.NetworkConnection.ProcessId
+      - sysmon.PipeConnected.ProcessId
+      - sysmon.PipeCreated.ProcessId
+      - sysmon.ProcessAccess.SourceProcessId
+      - sysmon.ProcessAccess.TargetProcessId
+      - sysmon.ProcessChangedFileCreationTime.ProcessId
+      - sysmon.ProcessCreation.ProcessId
+      - sysmon.ProcessTerminated.ProcessId
+      - sysmon.RawAccessRead.ProcessId
+      - sysmon.RegistryEventKeyAndValueRename.ProcessId
+      - sysmon.RegistryEventObjectCreateAndDelete.ProcessId
+      - sysmon.RegistryEventValueSet.ProcessId
+- concept:
+    name: proc.name
+    fields:
+      - sysmon.CreateRemoteThread.SourceImage
+      - sysmon.CreateRemoteThread.TargetImage
+      - sysmon.DNSQuery.Image
+      - sysmon.DriverLoaded.ImageLoaded
+      - sysmon.FileCreate.Image
+      - sysmon.FileCreateStreamHash.Image
+      - sysmon.FileDelete.Image
+      - sysmon.ImageLoaded.Image
+      - sysmon.ImageLoaded.ImageLoaded
+      - sysmon.NetworkConnection.Image
+      - sysmon.PipeConnected.Image
+      - sysmon.PipeCreated.Image
+      - sysmon.ProcessAccess.SourceImage
+      - sysmon.ProcessAccess.TargetImage
+      - sysmon.ProcessChangedFileCreationTime.Image
+      - sysmon.ProcessCreation.Image
+      - sysmon.ProcessTerminated.Image
+      - sysmon.RawAccessRead.Image
+      - sysmon.RegistryEventKeyAndValueRename.Image
+      - sysmon.RegistryEventObjectCreateAndDelete.Image
+      - sysmon.RegistryEventValueSet.Image
+- concept:
+    name: proc.user_name
+    fields:
+      - sysmon.FileDelete.User
+      - sysmon.NetworkConnection.User
+      - sysmon.ProcessCreation.User
+      - sysmon.WmiEventConsumer.User
+      - sysmon.WmiEventConsumerToFilter.User
+      - sysmon.WmiEventFilter.User
+- concept:
+    name: proc.user_id
+    fields:
+      - sysmon.ProcessCreation.LogonId
+- concept:
+    name: proc.user_guid
+    fields:
+      - sysmon.ProcessCreation.LogonGuid
+- concept:
+    name: proc.parent.id
+    fields:
+      - sysmon.ProcessCreation.ParentProcessId
+- concept:
+    name: proc.parent.guid
+    fields:
+      - sysmon.ProcessCreation.ParentProcessGuid
+- concept:
+    name: proc.parent.name
+    fields:
+      - sysmon.ProcessCreation.ParentImage
+- concept:
+    name: proc.thread.id
+    fields:
+      - sysmon.CreateRemoteThread.NewThreadId
+      - sysmon.ProcessAccess.SourceThreadId
+- concept:
+    name: file.name
+    fields:
+      - sysmon.FileCreate.TargetFilename
+      - sysmon.FileCreateStreamHash.TargetFilename
+      - sysmon.FileDelete.TargetFilename
+      - sysmon.ImageLoaded.OriginalFileName
+      - sysmon.ProcessChangedFileCreationTime.TargetFilename
+- concept:
+    name: net.src.ip
+    fields:
+      - sysmon.NetworkConnection.SourceIp
+- concept:
+    name: net.dst.ip
+    fields:
+      - sysmon.NetworkConnection.DestinationIp
+- concept:
+    name: net.src.port
+    fields:
+      - sysmon.NetworkConnection.SourcePort
+- concept:
+    name: net.dst.port
+    fields:
+      - sysmon.NetworkConnection.DestinationPort
+- concept:
+    name: net.proto
+    fields:
+      - sysmon.NetworkConnection.Protocol
+- concept:
+    name: net.src.hostname
+    fields:
+      - sysmon.NetworkConnection.SourceHostname
+- concept:
+    name: net.dst.hostname
+    fields:
+      - sysmon.NetworkConnection.DestinationHostname
+- concept:
+    name: net.app
+    fields:
+      - sysmon.NetworkConnection.SourcePortName
+      - sysmon.NetworkConnection.DestinationPortName

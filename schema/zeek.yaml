@@ -1,0 +1,138 @@
+- concept:
+    name: net.src.ip
+    fields:
+      - zeek.conn.id.orig_h
+      - zeek.dce_rpc.id.orig_h
+      - zeek.dnp3.id.orig_h
+      - zeek.dns.id.orig_h
+      - zeek.dpd.id.orig_h
+      - zeek.ftp.id.orig_h
+      - zeek.http.id.orig_h
+      - zeek.intel.id.orig_h
+      - zeek.irc.id.orig_h
+      - zeek.notice.id.orig_h
+      - zeek.ntlm.id.orig_h
+      - zeek.pe.id.orig_h
+      - zeek.radius.id.orig_h
+      - zeek.rdp.id.orig_h
+      - zeek.sip.id.orig_h
+      - zeek.smb.id.orig_h
+      - zeek.smtp.id.orig_h
+      - zeek.snmp.id.orig_h
+      - zeek.ssh.id.orig_h
+      - zeek.ssl.id.orig_h
+      - zeek.tunnel.id.orig_h
+      - zeek.weird.id.orig_h
+      - zeek.x509.id.orig_h
+- concept:
+    name: net.dst.ip
+    fields:
+      - zeek.conn.id.resp_h
+      - zeek.dce_rpc.id.resp_h
+      - zeek.dnp3.id.resp_h
+      - zeek.dns.id.resp_h
+      - zeek.dpd.id.resp_h
+      - zeek.ftp.id.resp_h
+      - zeek.http.id.resp_h
+      - zeek.intel.id.resp_h
+      - zeek.irc.id.resp_h
+      - zeek.notice.id.resp_h
+      - zeek.ntlm.id.resp_h
+      - zeek.pe.id.resp_h
+      - zeek.radius.id.resp_h
+      - zeek.rdp.id.resp_h
+      - zeek.sip.id.resp_h
+      - zeek.smb.id.resp_h
+      - zeek.smtp.id.resp_h
+      - zeek.snmp.id.resp_h
+      - zeek.ssh.id.resp_h
+      - zeek.ssl.id.resp_h
+      - zeek.tunnel.id.resp_h
+      - zeek.weird.id.resp_h
+      - zeek.x509.id.resp_h
+- concept:
+    name: net.src.port
+    fields:
+      - zeek.conn.id.orig_p
+      - zeek.dce_rpc.id.orig_p
+      - zeek.dnp3.id.orig_p
+      - zeek.dns.id.orig_p
+      - zeek.dpd.id.orig_p
+      - zeek.ftp.id.orig_p
+      - zeek.http.id.orig_p
+      - zeek.intel.id.orig_p
+      - zeek.irc.id.orig_p
+      - zeek.notice.id.orig_p
+      - zeek.ntlm.id.orig_p
+      - zeek.pe.id.orig_p
+      - zeek.radius.id.orig_p
+      - zeek.rdp.id.orig_p
+      - zeek.sip.id.orig_p
+      - zeek.smb.id.orig_p
+      - zeek.smtp.id.orig_p
+      - zeek.snmp.id.orig_p
+      - zeek.ssh.id.orig_p
+      - zeek.ssl.id.orig_p
+      - zeek.tunnel.id.orig_p
+      - zeek.weird.id.orig_p
+      - zeek.x509.id.orig_p
+- concept:
+    name: net.dst.port
+    fields:
+      - zeek.conn.id.resp_p
+      - zeek.dce_rpc.id.resp_p
+      - zeek.dnp3.id.resp_p
+      - zeek.dns.id.resp_p
+      - zeek.dpd.id.resp_p
+      - zeek.ftp.id.resp_p
+      - zeek.http.id.resp_p
+      - zeek.intel.id.resp_p
+      - zeek.irc.id.resp_p
+      - zeek.notice.id.resp_p
+      - zeek.ntlm.id.resp_p
+      - zeek.pe.id.resp_p
+      - zeek.radius.id.resp_p
+      - zeek.rdp.id.resp_p
+      - zeek.sip.id.resp_p
+      - zeek.smb.id.resp_p
+      - zeek.smtp.id.resp_p
+      - zeek.snmp.id.resp_p
+      - zeek.ssh.id.resp_p
+      - zeek.ssl.id.resp_p
+      - zeek.tunnel.id.resp_p
+      - zeek.weird.id.resp_p
+      - zeek.x509.id.resp_p
+- concept:
+    name: net.proto
+    fields:
+      - zeek.conn.proto
+      - zeek.dns.proto
+      - zeek.notice.proto
+- concept:
+    name: net.app
+    fields:
+      - zeek.conn.service
+- concept:
+    name: net.community_id
+    fields:
+      - zeek.conn.community_id
+- concept:
+    name: net.duration
+    fields:
+      - zeek.conn.duration
+- concept:
+    name: net.src.bytes
+    fields:
+      - zeek.conn.orig_bytes
+- concept:
+    name: net.dst.bytes
+    fields:
+      - zeek.conn.resp_bytes
+- concept:
+    name: net.src.packets
+    fields:
+      - zeek.conn.orig_pkts
+- concept:
+    name: net.dst.packets
+    fields:
+      - zeek.conn.resp_pkts

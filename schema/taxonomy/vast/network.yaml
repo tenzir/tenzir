@@ -1,0 +1,94 @@
+- concept:
+    name: net.src.ip
+    description: >-
+      The IP address of the connection originator
+- concept:
+    name: net.src.port
+    description: >-
+      The transport-layer port of the connection originator
+- concept:
+    name: net.dst.ip
+    description: >-
+      The IP address of the connection responder
+- concept:
+    name: net.dst.port
+    description: >-
+      The transport-layer port of the connection responder
+- concept:
+    name: net.proto
+    description: >-
+      The transport-layer protocol of a connection
+- concept:
+    name: net.app
+    description: >-
+      The application-layer protocol of a connection
+- concept:
+    name: net.community_id
+    description: >-
+      The Community ID for a connection
+- concept:
+    name: net.duration
+    description: >-
+      The time the connection lasted
+- concept:
+    name: net.src.bytes
+    description: >-
+      The number of applicatin-layer bytes sent by the connection originator
+- concept:
+    name: net.dst.bytes
+    description: >-
+      The number of applicatin-layer bytes sent by the connection responder
+- concept:
+    name: net.src.packets
+    description: >-
+      The number of IP packets sent by the connection originator
+- concept:
+    name: net.dst.packets
+    description: >-
+      The number of IP packets sent by the connection responder
+- concept:
+    name: net.packets
+    description: >-
+      The number of IP packets in a connection.
+- concept:
+    name: net.src.mac
+    description: >-
+      The MAC address of the frame source
+- concept:
+    name: net.dst.mac
+    description: >-
+      The MAC address of the frame destination.
+- concept:
+    name: net.src.hostname
+    description: >-
+      The hostname of the source.
+- concept:
+    name: net.dst.hostname
+    description: >-
+      The hostname of the destination.
+- concept:
+    name: net.hostname
+    description: >-
+      A hostname of a machine.
+    concepts: 
+      - net.dst.hostname
+      - net.src.hostname
+- concept:
+    name: net.uri
+    description: >-
+      A URI.
+- concept:
+    name: net.outer_vlan
+    description: >-
+      The outer VLAN for a connection
+- concept:
+    name: net.inner_vlan
+    description: >-
+      The inner VLAN for a connection
+- concept:
+    name: net.vlan
+    description: >-
+      The VLAN for a connection
+    concepts:
+      - net.outer_vlan 
+      - net.inner_vlan 

@@ -51,7 +51,11 @@ caf::error convert(const data& d, concepts_map& out) {
       if (!field)
         return make_error(ec::convert_error, "field in", *name,
                           "is not a string:", f);
-      dest.fields.push_back(*field);
+      if (std::count(dest.fields.begin(), dest.fields.end(), *field) > 0)
+        VAST_WARNING_ANON("ignoring duplicate field for",
+                          *name + ": \"" + *field + "\"");
+      else
+        dest.fields.push_back(*field);
     }
   }
   auto cs = c->find("concepts");
@@ -65,7 +69,11 @@ caf::error convert(const data& d, concepts_map& out) {
       if (!concept_)
         return make_error(ec::convert_error, "concept in", *name,
                           "is not a string:", c);
-      dest.concepts.push_back(*concept_);
+      if (std::count(dest.fields.begin(), dest.fields.end(), *concept_) > 0)
+        VAST_WARNING_ANON("ignoring duplicate concept for",
+                          *name + ": \"" + *concept_ + "\"");
+      else
+        dest.fields.push_back(*concept_);
     }
   }
   auto desc = c->find("description");
@@ -243,10 +251,9 @@ resolve_concepts(const concepts_map& concepts, const expression& e,
         // Insert only those concepts into the queue that aren't in there yet,
         // this prevents infinite loops through circular references between
         // concepts.
-        for (auto& x : def.concepts) {
+        for (auto& x : def.concepts)
           if (std::find(log.begin(), log.end(), x) == log.end())
             log.push_back(x);
-        }
       };
       load_definition(c->second);
       // We iterate through the log while appending referenced concepts in

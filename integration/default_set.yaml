@@ -292,7 +292,7 @@ tests:
         input: data/pcap/zeek/conn.log.gz
       - command: import suricata
         input: data/pcap/suricata/eve.json.gz
-      - command: count "ecs.source.ip == 192.168.168.100"
+      - command: count "net.src.ip == 192.168.168.100"
 
   Pivot:
     tags: [pivot]

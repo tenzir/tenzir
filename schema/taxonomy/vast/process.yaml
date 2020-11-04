@@ -1,0 +1,32 @@
+- concept:
+    name: proc.guid
+    description: >-
+      Process GUID of the spawned process
+- concept:
+    name: proc.id
+    description: >-
+      The process ID (PID) assigned by the OS
+- concept:
+    name: proc.parent_id
+    description: >-
+      The parent process ID that spawned this process
+- concept:
+    name: proc.path
+    description: >-
+      The full path to the process image
+- concept:
+    name: proc.user_id
+    description: >-
+      The ID of the user that spawned the process
+- concept:
+    name: proc.user_name
+    description: >-
+      The name of the user that spawned the process
+- concept:
+    name: proc.file_name
+    description: >-
+      The name of the file corresponding to the process image
+- concept:
+    name: proc.cwd
+    description: >-
+      The current working directory where the process was spawned

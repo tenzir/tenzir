@@ -1,0 +1,36 @@
+- concept:
+    name: file.name
+    description: >-
+      The name of the file.
+- concept:
+    name: file.owner
+    description: >-
+      The owner of the file.
+- concept:
+    name: file.group
+    description: >-
+      The group of the file.
+- concept:
+    name: file.perms
+    description: >-
+      The permissions of the file.
+- concept:
+    name: file.size
+    description: >-
+      The number of bytes the file occupies.
+- concept:
+    name: file.ext
+    description: >-
+      The extension of a file.
+- concept:
+    name: file.hash.md5
+    description: >-
+      The MD5 hash of the file.
+- concept:
+    name: file.hash.sha1
+    description: >-
+      The SHA1 hash of the file.
+- concept:
+    name: file.hash.sha256
+    description: >-
+      The SHA256 hash of the file.

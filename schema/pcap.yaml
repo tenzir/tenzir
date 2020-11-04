@@ -1,0 +1,20 @@
+- concept:
+    name: net.src.ip
+    fields:
+      - pcap.packet.src
+- concept:
+    name: net.dst.ip
+    fields:
+      - pcap.packet.dst
+- concept:
+    name: net.src.sport
+    fields:
+      - pcap.packet.sport
+- concept:
+    name: net.dst.port
+    fields:
+      - pcap.packet.dport
+- concept:
+    name: net.community_id
+    fields:
+      - pcap.packet.community_id

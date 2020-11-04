@@ -1,7 +1,8 @@
+# This is an example taxonomy to demonstrate how one could go after mapping
+# different concrete tools to ECS.
 - concept:
     name: ecs.source.ip
     description: "A source IP address"
-
 - concept:
     name: ecs.source.ip
     fields:
@@ -16,12 +17,10 @@
     - suricata.ssh.src_ip
     - suricata.smtp.src_ip
     - suricata.tls.src_ip
-
 - concept:
     name: ecs.source.ip
     fields:
     - sysmon.NetworkConnection.SourceIp
-
 - concept:
     name: ecs.source.ip
     fields:
