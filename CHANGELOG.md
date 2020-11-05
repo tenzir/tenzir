@@ -12,6 +12,9 @@ Every entry has a category for which we use the following visual abbreviations:
 
 ## Unreleased
 
+- 🐞 VAST no longer starts if the specified config file does not exist.
+  [#1147](https://github.com/tenzir/vast/pull/1147)
+
 - 🧬 VAST now ships with its own taxonomy and basic concept definitions for
   Suricata, Zeek, and Sysmon.
   [#1135](https://github.com/tenzir/vast/pull/1135)
