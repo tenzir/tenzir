@@ -35,11 +35,11 @@ Every entry has a category for which we use the following visual abbreviations:
 
 ## [2020.10.29]
 
-- 🎁 The expression language now accepts records in without field names. The
-  values are associated to fields in the order of the record definition.
-  Example: `id = <192.168.0.1, 41824, 143.51.53.13, 25, tcp>`
-  Note that expressionslike this don't work yet due to soon to be remediated
-  technical reasons.
+- 🎁 The expression language now accepts records without field names. For
+  example,`id == <192.168.0.1, 41824, 143.51.53.13, 25, "tcp">` is now valid
+  syntax and instantiates a record with 5 fields.
+  *Note: expressions with records currently do not execute. We will update this
+  changelog once the feature is complete.*
   [#1129](https://github.com/tenzir/vast/pull/1129)
 
 - ⚠️ The default database directory moved to `/var/lib/vast` for Linux deployments.
