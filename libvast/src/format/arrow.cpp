@@ -39,22 +39,22 @@ writer::~writer() {
   // nop
 }
 
-caf::error writer::write(const table_slice& slice) {
+caf::error writer::write(const table_slice_ptr& slice) {
   if (out_ == nullptr)
     return ec::filesystem_error;
-  if (!layout(slice.layout()))
+  if (!layout(slice->layout()))
     return ec::unspecified;
   // Convert the slice to Arrow if necessary.
-  if (slice.implementation_id() == arrow_table_slice::class_id) {
-    auto dref = static_cast<const arrow_table_slice&>(slice);
+  if (slice->implementation_id() == arrow_table_slice::class_id) {
+    auto dref = static_cast<const arrow_table_slice&>(*slice);
     if (auto err = write_arrow_batches(dref))
       return err;
   } else {
     // TODO: consider iterating the slice in its natural order (i.e., row major
     //       or column major).
-    for (size_t row = 0; row < slice.rows(); ++row)
-      for (size_t column = 0; column < slice.columns(); ++column)
-        if (!current_builder_->add(slice.at(row, column)))
+    for (size_t row = 0; row < slice->rows(); ++row)
+      for (size_t column = 0; column < slice->columns(); ++column)
+        if (!current_builder_->add(slice->at(row, column)))
           return ec::type_clash;
     auto slice_copy = current_builder_->finish();
     if (slice_copy == nullptr)

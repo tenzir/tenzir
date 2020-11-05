@@ -63,7 +63,7 @@ run(caf::scoped_actor& self, archive_type archive, const invocation& inv) {
     bool waiting = true;
     self->receive_while(waiting)
       // Message handlers.
-      ([&](table_slice_ptr slice) { (*writer)->write(*slice); },
+      ([&](table_slice_ptr slice) { (*writer)->write(slice); },
        [&](atom::done, const caf::error& err) {
          if (err)
            VAST_WARNING_ANON("failed to get table slice:", render(err));

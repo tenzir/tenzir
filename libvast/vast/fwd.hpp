@@ -40,6 +40,7 @@ class data;
 class ewah_bitstream;
 class expression;
 class json;
+class legacy_table_slice;
 class meta_index;
 class msgpack_table_slice;
 class msgpack_table_slice_builder;
@@ -53,7 +54,6 @@ class segment_store;
 class store;
 class subnet;
 class synopsis;
-class table_slice;
 class table_slice_builder;
 class table_slice_column;
 class type;
@@ -167,9 +167,9 @@ class scope_linked;
 
 // -- free functions -----------------------------------------------------------
 
-void intrusive_ptr_add_ref(const table_slice*);
-void intrusive_ptr_release(const table_slice*);
-table_slice* intrusive_cow_ptr_unshare(table_slice*&);
+void intrusive_ptr_add_ref(const legacy_table_slice*);
+void intrusive_ptr_release(const legacy_table_slice*);
+legacy_table_slice* intrusive_cow_ptr_unshare(legacy_table_slice*&);
 
 void intrusive_ptr_add_ref(const table_slice_builder*);
 void intrusive_ptr_release(const table_slice_builder*);
@@ -180,7 +180,7 @@ using chunk_ptr = caf::intrusive_ptr<chunk>;
 using column_index_ptr = std::unique_ptr<column_index>;
 using synopsis_ptr = std::unique_ptr<synopsis>;
 using table_slice_builder_ptr = caf::intrusive_ptr<table_slice_builder>;
-using table_slice_ptr = caf::intrusive_cow_ptr<table_slice>;
+using table_slice_ptr = caf::intrusive_cow_ptr<legacy_table_slice>;
 using value_index_ptr = std::unique_ptr<value_index>;
 
 // -- miscellaneous ------------------------------------------------------------

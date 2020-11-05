@@ -78,8 +78,8 @@ configuration::configuration() {
 #if VAST_USE_OPENCL
   load<caf::opencl::manager>();
 #endif
-  initialize_factories<synopsis, table_slice, table_slice_builder, value_index,
-                       format::writer>();
+  initialize_factories<synopsis, legacy_table_slice, table_slice_builder,
+                       value_index, format::writer>();
 }
 
 caf::error configuration::parse(int argc, char** argv) {

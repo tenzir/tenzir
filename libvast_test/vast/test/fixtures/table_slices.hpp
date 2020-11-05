@@ -64,7 +64,8 @@ make_random_table_slices(size_t num_slices, size_t slice_size,
 /// @note This function exists primarily for unit testing because it performs
 /// excessive memory allocations.
 std::vector<std::vector<data>>
-to_data(const table_slice& slice, size_t first_row = 0, size_t num_rows = 0);
+to_data(const table_slice_ptr& slice, size_t first_row = 0,
+        size_t num_rows = 0);
 
 std::vector<std::vector<data>>
 to_data(const std::vector<table_slice_ptr>& slices);
@@ -81,7 +82,7 @@ public:
   template <class T, class Builder>
   void initialize() {
     using namespace vast;
-    factory<table_slice>::add<T>();
+    factory<legacy_table_slice>::add<T>();
     factory<table_slice_builder>::add<Builder>(T::class_id);
     builder = factory<table_slice_builder>::make(T::class_id, layout);
     if (builder == nullptr)

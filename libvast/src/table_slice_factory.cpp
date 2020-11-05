@@ -26,14 +26,14 @@
 
 namespace vast {
 
-void factory_traits<table_slice>::initialize() {
-  factory<table_slice>::add<msgpack_table_slice>();
+void factory_traits<legacy_table_slice>::initialize() {
+  factory<legacy_table_slice>::add<msgpack_table_slice>();
 #if VAST_HAVE_ARROW
-  factory<table_slice>::add<arrow_table_slice>();
+  factory<legacy_table_slice>::add<arrow_table_slice>();
 #endif
 }
 
-table_slice_ptr factory_traits<table_slice>::make(chunk_ptr chunk) {
+table_slice_ptr factory_traits<legacy_table_slice>::make(chunk_ptr chunk) {
   if (chunk == nullptr)
     return nullptr;
   // Setup a CAF deserializer.
@@ -45,7 +45,7 @@ table_slice_ptr factory_traits<table_slice>::make(chunk_ptr chunk) {
     VAST_ERROR_ANON(__func__, "failed to deserialize table slice meta data");
     return nullptr;
   }
-  auto result = factory<table_slice>::make(id, std::move(header));
+  auto result = factory<legacy_table_slice>::make(id, std::move(header));
   if (!result) {
     VAST_ERROR_ANON(__func__, "failed to make table slice for:", to_string(id));
     return nullptr;

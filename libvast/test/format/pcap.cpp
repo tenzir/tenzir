@@ -102,7 +102,7 @@ TEST(PCAP read/write 1) {
   auto file = "vast-unit-test-nmap-vsn.pcap";
   format::pcap::writer writer{file};
   auto deleter = caf::detail::make_scope_guard([&] { rm(file); });
-  REQUIRE_EQUAL(writer.write(*slice), caf::none);
+  REQUIRE_EQUAL(writer.write(slice), caf::none);
 }
 
 TEST(PCAP read/write 2) {
@@ -137,7 +137,7 @@ TEST(PCAP read/write 2) {
   auto file = "vast-unit-test-workshop-2011-browse.pcap";
   format::pcap::writer writer{file};
   auto deleter = caf::detail::make_scope_guard([&] { rm(file); });
-  REQUIRE_EQUAL(writer.write(*slice), caf::none);
+  REQUIRE_EQUAL(writer.write(slice), caf::none);
 }
 
 FIXTURE_SCOPE_END()

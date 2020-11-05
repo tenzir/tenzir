@@ -85,7 +85,7 @@ caf::behavior sink(caf::stateful_actor<sink_state>* self,
         slice = truncate(slice, remaining);
       // Handle events.
       auto t = timer::start(st.measurement);
-      if (auto err = st.writer->write(*slice)) {
+      if (auto err = st.writer->write(slice)) {
         VAST_ERROR(self, self->system().render(err));
         self->quit(std::move(err));
         return;

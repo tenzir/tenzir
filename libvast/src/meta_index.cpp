@@ -35,16 +35,16 @@ void meta_index::add(const uuid& partition) {
   synopses_[partition];
 }
 
-void meta_index::add(const uuid& partition, const table_slice& slice) {
+void meta_index::add(const uuid& partition, const table_slice_ptr& slice) {
   auto make_synopsis = [&](const record_field& field) -> synopsis_ptr {
     return has_skip_attribute(field.type)
              ? nullptr
              : factory<synopsis>::make(field.type, synopsis_options_);
   };
   auto& part_syn = synopses_[partition];
-  for (size_t col = 0; col < slice.columns(); ++col) {
+  for (size_t col = 0; col < slice->columns(); ++col) {
     // Locate the relevant synopsis.
-    auto layout = slice.layout();
+    auto layout = slice->layout();
     auto& field = layout.fields[col];
     auto key = qualified_record_field{layout.name(), field};
     auto& field_syn = part_syn.field_synopses_;
@@ -54,8 +54,8 @@ void meta_index::add(const uuid& partition, const table_slice& slice) {
       it = field_syn.emplace(std::move(key), make_synopsis(field)).first;
     // If there exists a synopsis for a field, add the entire column.
     if (auto& syn = it->second) {
-      for (size_t row = 0; row < slice.rows(); ++row) {
-        auto view = slice.at(row, col);
+      for (size_t row = 0; row < slice->rows(); ++row) {
+        auto view = slice->at(row, col);
         if (!caf::holds_alternative<caf::none_t>(view))
           syn->add(std::move(view));
       }

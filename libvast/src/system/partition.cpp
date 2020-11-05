@@ -367,7 +367,7 @@ active_partition(caf::stateful_actor<active_partition_state>* self, uuid id,
       ids.append_bits(true, last - first);
       self->state.offset = std::min(x->offset(), self->state.offset);
       self->state.events += x->rows();
-      self->state.meta_idx.add(id, *x);
+      self->state.meta_idx.add(id, x);
       size_t col = 0;
       VAST_ASSERT(!layout.fields.empty());
       for (auto& field : layout.fields) {
