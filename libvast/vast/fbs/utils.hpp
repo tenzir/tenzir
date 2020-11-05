@@ -109,7 +109,6 @@ caf::error deserialize_bytes(const flatbuffers::Vector<Byte>* v, T& x) {
 /// @param xs The buffer to unpack a flatbuffer from.
 /// @returns A pointer to the unpacked flatbuffer of type `Flatbuffer` or
 ///          `nullptr` if verification failed.
-/// @relates unverified_unpack
 template <class Flatbuffer, size_t Extent = dynamic_extent>
 const Flatbuffer* as_flatbuffer(span<const byte, Extent> xs) {
   // Verify the buffer.
