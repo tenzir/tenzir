@@ -249,44 +249,44 @@ namespace {
 
 bool resolve_impl(std::vector<std::pair<offset, predicate>>& result,
                   const expression& expr, const type& t, offset& o) {
-  return caf::visit(detail::overload{
-                      [&](const auto& xs) { // conjunction or disjunction
-                        o.emplace_back(0);
-                        if (!xs.empty()) {
-                          if (!resolve_impl(result, xs[0], t, o))
-                            return false;
-                          for (size_t i = 1; i < xs.size(); ++i) {
-                            o.back() += 1;
-                            if (!resolve_impl(result, xs[i], t, o))
-                              return false;
-                          }
-                        }
-                        o.pop_back();
-                        return true;
-                      },
-                      [&](const negation& x) {
-                        o.emplace_back(0);
-                        if (!resolve_impl(result, x.expr(), t, o))
-                          return false;
-                        o.pop_back();
-                        return true;
-                      },
-                      [&](const predicate& x) {
-                        auto resolved = type_resolver{t}(x);
-                        // Abort on first type error and return a
-                        // default-constructed vector.
-                        if (!resolved)
-                          return false;
-                        for (auto& pred : caf::visit(predicatizer{}, *resolved))
-                          result.emplace_back(o, std::move(pred));
-                        return true;
-                      },
-                      [&](caf::none_t) {
-                        VAST_ASSERT(!"invalid expression node");
-                        return false;
-                      },
-                    },
-                    expr);
+  auto v = detail::overload{
+    [&](const auto& xs) { // conjunction or disjunction
+      o.emplace_back(0);
+      if (!xs.empty()) {
+        if (!resolve_impl(result, xs[0], t, o))
+          return false;
+        for (size_t i = 1; i < xs.size(); ++i) {
+          o.back() += 1;
+          if (!resolve_impl(result, xs[i], t, o))
+            return false;
+        }
+      }
+      o.pop_back();
+      return true;
+    },
+    [&](const negation& x) {
+      o.emplace_back(0);
+      if (!resolve_impl(result, x.expr(), t, o))
+        return false;
+      o.pop_back();
+      return true;
+    },
+    [&](const predicate& x) {
+      auto resolved = type_resolver{t}(x);
+      // Abort on first type error and return a
+      // default-constructed vector.
+      if (!resolved)
+        return false;
+      for (auto& pred : caf::visit(predicatizer{}, *resolved))
+        result.emplace_back(o, std::move(pred));
+      return true;
+    },
+    [&](caf::none_t) {
+      VAST_ASSERT(!"invalid expression node");
+      return false;
+    },
+  };
+  return caf::visit(v, expr);
 }
 
 } // namespace <anonymous>

@@ -66,4 +66,15 @@ TEST(data) {
   CHECK_EQUAL(to_data("{}"), map{});
   CHECK_EQUAL(to_data("{+1->T,+2->F}"), (map{{1, true}, {2, false}}));
   CHECK_EQUAL(to_data("{-1 -> T, -2 -> F}"), (map{{-1, true}, {-2, false}}));
+  MESSAGE("record - named fields");
+  CHECK_EQUAL(to_data("<>"), record{});
+  CHECK_EQUAL(to_data("<foo: 1>"), (record{{"foo", 1u}}));
+  CHECK_EQUAL(to_data("<foo: 1, bar: 2>"), (record{{"foo", 1u}, {"bar", 2u}}));
+  CHECK_EQUAL(to_data("<foo: 1, bar: <baz: 3>>"),
+              (record{{"foo", 1u}, {"bar", record{{"baz", 3u}}}}));
+  MESSAGE("record - ordered fields");
+  CHECK_EQUAL(to_data("<1>"), (record{{"", 1u}}));
+  CHECK_EQUAL(to_data("<_>"), (record{{"", caf::none}}));
+  CHECK_EQUAL(to_data("<_, /foo/>"),
+              (record{{"", caf::none}, {"", pattern{"foo"}}}));
 }
