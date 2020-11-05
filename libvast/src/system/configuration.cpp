@@ -102,6 +102,9 @@ caf::error configuration::parse(int argc, char** argv) {
   // Check for multiple config files in directories.
   std::unordered_set<path> config_dirs;
   for (const auto& config : config_files) {
+    if (!exists(config))
+      return caf::make_error(ec::no_such_file,
+                             "config file does not exist:", config.complete());
     auto dir = config.parent();
     if (config_dirs.count(dir))
       return caf::make_error(ec::parse_error, "found multiple config files in",
