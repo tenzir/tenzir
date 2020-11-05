@@ -67,10 +67,10 @@ vast:
   # The `vast start` command starts a new VAST server process.
   start:
     # Triggers removal of old data when the disk budget is exceeded.
-    disk-budget-high: 0K
+    disk-budget-high: 0k
     # When the budget was exceeded, data is erased until the disk space
     # is below this value.
-    disk-budget-low: 0K
+    disk-budget-low: 0k
     # Seconds between successive disk space checks.
     disk-budget-check-interval: 90
 
@@ -88,20 +88,20 @@ vast:
     # The maximum number of events to export.
     #max-events: <infinity>
     # Path for reading the query or "-" for reading from stdin.
-    read: -
+    read: "-"
 
     # The `vast export ascii` command exports events formatted in a plain-text
     # format that is internal to VAST.
     ascii:
       # Path to write events to or "-" for writing to stdout.
-      write: -
+      write: "-"
       # Treat the write option as a UNIX domain socket to connect to.
       uds: false
 
     # The `vast export csv` command exports events formatted as CSV.
     csv:
       # Path to write events to or "-" for writing to stdout.
-      write: -
+      write: "-"
       # Treat the write option as a UNIX domain socket to connect to.
       uds: false
 
@@ -109,7 +109,7 @@ vast:
     # delimited JSON).
     json:
       # Path to write events to or "-" for writing to stdout.
-      write: -
+      write: "-"
       # Treat the write option as a UNIX domain socket to connect to.
       uds: false
 
@@ -122,21 +122,21 @@ vast:
       # Flush to disk after this many packets.
       flush-interval: 10000
       # Path to write events to or "-" for writing to stdout.
-      write: -
+      write: "-"
       # Treat the write option as a UNIX domain socket to connect to.
       uds: false
 
     # The `vast export zeek` command exports events formatted as Zeek logs.
     zeek:
       # Path to write events to or "-" for writing to stdout.
-      write: -
+      write: "-"
       # Treat the write option as a UNIX domain socket to connect to.
       uds: false
 
   # The `vast infer` command tries to infer the schema from data.
   infer:
     # Path to read events from or "-" for reading from stdin.
-    read: -
+    read: "-"
     # Maximum number of bytes to buffer.
     buffer: 8192
 
@@ -180,7 +180,7 @@ vast:
       # The endpoint to listen on ("[host]:port/type").
       #listen: <none>
       # Path to file to read events from or "-" for stdin.
-      read: -
+      read: "-"
       # Treat the read option as a UNIX domain socket to connect to.
       uds: false
       # Path to an alternate schema.
@@ -193,7 +193,7 @@ vast:
       # The endpoint to listen on ("[host]:port/type").
       #listen: <none>
       # Path to file to read events from or "-" for stdin.
-      read: -
+      read: "-"
       # Treat the read option as a UNIX domain socket to connect to.
       uds: false
       # Path to an alternate schema.
@@ -223,7 +223,7 @@ vast:
       # The endpoint to listen on ("[host]:port/type").
       #listen: <none>
       # Path to file to read events from or "-" for stdin.
-      read: -
+      read: "-"
       # Treat the read option as a UNIX domain socket to connect to.
       uds: false
       # Path to an alternate schema.
@@ -236,7 +236,7 @@ vast:
       # The endpoint to listen on ("[host]:port/type").
       #listen: <none>
       # Path to file to read events from or "-" for stdin.
-      read: -
+      read: "-"
       # Treat the read option as a UNIX domain socket to connect to.
       uds: false
       # Path to an alternate schema.
@@ -249,7 +249,7 @@ vast:
       # The endpoint to listen on ("[host]:port/type").
       #listen: <none>
       # Path to file to read events from or "-" for stdin.
-      read: -
+      read: "-"
       # Treat the read option as a UNIX domain socket to connect to.
       uds: false
       # Path to an alternate schema.
@@ -265,7 +265,7 @@ vast:
       # The endpoint to listen on ("[host]:port/type").
       #listen: <none>
       # Path to file to read events from or "-" for stdin.
-      read: -
+      read: "-"
       # Treat the read option as a UNIX domain socket to connect to.
       uds: false
       # Path to an alternate schema.
@@ -279,7 +279,7 @@ vast:
       # The endpoint to listen on ("[host]:port/type").
       #listen: <none>
       # Path to file to read events from or "-" for stdin.
-      read: -
+      read: "-"
       # Treat the read option as a UNIX domain socket to connect to.
       uds: false
       # Path to an alternate schema.
@@ -326,7 +326,7 @@ caf:
     #  %t: thread id
     #  %a: actor id
     #  %%: '%'
-    file-format: %r %c %p %a %F:%L %m%n
+    file-format: "%r %c %p %a %F:%L %m%n"
     # Configures the minimum severity of messages written to the log file.
     # Possible values: quiet, error, warning, info, verbose, debug, trace.
     # File logging is only available for commands that start a node (e.g.,
@@ -338,7 +338,7 @@ caf:
     console: colored
     # Format for printing individual log entries to the console.
     # For a list of valid format specifiers, see file-format.
-    console-format: %d %m
+    console-format: "%d %m"
     # Configures the minimum severity of messages written to the console.
     # For a list of valid log levels, see file-verbosity.
     console-verbosity: info
