@@ -132,7 +132,7 @@ void collect_component_status(node_actor* self,
   auto& sys = self->system();
   auto& system = put_dictionary(req_state->content, "system");
   if (v >= status_verbosity::info) {
-    put(system, "in-memory-table-slices", table_slice::instances());
+    put(system, "in-memory-table-slices", legacy_table_slice::instances());
     put(system, "database-path", self->state.dir.str());
     detail::merge_settings(detail::get_status(), system);
   }

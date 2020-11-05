@@ -30,7 +30,7 @@ namespace vast {
 
 /// A horizontal partition of a table. A slice defines a tabular interface for
 /// accessing homogenous data independent of the concrete carrier format.
-class table_slice : public caf::ref_counted {
+class legacy_table_slice : public caf::ref_counted {
 public:
   // -- member types -----------------------------------------------------------
 
@@ -39,29 +39,29 @@ public:
   // -- constructors, destructors, and assignment operators --------------------
 
   /// Default-constructs an empty table slice.
-  table_slice() noexcept;
+  legacy_table_slice() noexcept;
 
   // Copy-construct a table slice.
-  table_slice(const table_slice& other) noexcept;
+  legacy_table_slice(const legacy_table_slice& other) noexcept;
 
   // Copy-assigns a table slice.
-  table_slice& operator=(const table_slice& rhs) noexcept;
+  legacy_table_slice& operator=(const legacy_table_slice& rhs) noexcept;
 
   // Move-constructs a table slice.
-  table_slice(table_slice&& other) noexcept;
+  legacy_table_slice(legacy_table_slice&& other) noexcept;
 
   // Move-assigns a table slice.
-  table_slice& operator=(table_slice&& rhs) noexcept;
+  legacy_table_slice& operator=(legacy_table_slice&& rhs) noexcept;
 
   /// Constructs a table slice from a header.
   /// @param header The header of the table slice.
-  explicit table_slice(table_slice_header header = {}) noexcept;
+  explicit legacy_table_slice(table_slice_header header = {}) noexcept;
 
   /// Destroy a table slice.
-  virtual ~table_slice() noexcept override;
+  virtual ~legacy_table_slice() noexcept override;
 
   /// Makes a copy of this slice.
-  virtual table_slice* copy() const = 0;
+  virtual legacy_table_slice* copy() const = 0;
 
   // -- persistence ------------------------------------------------------------
 
@@ -118,18 +118,20 @@ public:
 
   // -- comparison operators ---------------------------------------------------
 
-  /// @relates table_slice
-  friend bool operator==(const table_slice& x, const table_slice& y);
+  /// @relates legacy_table_slice
+  friend bool
+  operator==(const legacy_table_slice& x, const legacy_table_slice& y);
 
-  /// @relates table_slice
-  friend bool operator!=(const table_slice& x, const table_slice& y);
+  /// @relates legacy_table_slice
+  friend bool
+  operator!=(const legacy_table_slice& x, const legacy_table_slice& y);
 
   // -- concepts ---------------------------------------------------------------
 
-  /// @relates table_slice
+  /// @relates legacy_table_slice
   friend caf::error inspect(caf::serializer& sink, table_slice_ptr& ptr);
 
-  /// @relates table_slice
+  /// @relates legacy_table_slice
   friend caf::error inspect(caf::deserializer& source, table_slice_ptr& ptr);
 
   /// Packs a table slice into a flatbuffer.
@@ -158,14 +160,14 @@ private:
 
 // -- intrusive_ptr facade -----------------------------------------------------
 
-/// @relates table_slice
-void intrusive_ptr_add_ref(const table_slice* ptr);
+/// @relates legacy_table_slice
+void intrusive_ptr_add_ref(const legacy_table_slice* ptr);
 
-/// @relates table_slice
-void intrusive_ptr_release(const table_slice* ptr);
+/// @relates legacy_table_slice
+void intrusive_ptr_release(const legacy_table_slice* ptr);
 
-/// @relates table_slice
-table_slice* intrusive_cow_ptr_unshare(table_slice*&);
+/// @relates legacy_table_slice
+legacy_table_slice* intrusive_cow_ptr_unshare(legacy_table_slice*&);
 
 // -- operations ---------------------------------------------------------------
 
@@ -218,6 +220,6 @@ uint64_t rows(const std::vector<table_slice_ptr>& slices);
 /// @param expr The expression to evaluate.
 /// @param slice The table slice to apply *expr* on.
 /// @returns The set of row IDs in *slice* for which *expr* yields true.
-ids evaluate(const expression& expr, const table_slice& slice);
+ids evaluate(const expression& expr, const table_slice_ptr& slice);
 
 } // namespace vast

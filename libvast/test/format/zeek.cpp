@@ -368,10 +368,10 @@ TEST(zeek writer) {
   // Perform the writing.
   format::zeek::writer writer{directory};
   for (auto& slice : zeek_conn_log)
-    if (auto err = writer.write(*slice))
+    if (auto err = writer.write(slice))
       FAIL("failed to write conn log");
   for (auto& slice : zeek_http_log)
-    if (auto err = writer.write(*slice))
+    if (auto err = writer.write(slice))
       FAIL("failed to write HTTP log");
   auto conn_layout = zeek_conn_log[0]->layout();
   CHECK(exists(directory / conn_layout.name() + ".log"));

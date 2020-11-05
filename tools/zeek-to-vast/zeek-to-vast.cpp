@@ -197,23 +197,23 @@ public:
 
   using vast::format::writer::write;
 
-  caf::error write(const vast::table_slice& slice) override {
-    for (size_t row = 0; row < slice.rows(); ++row) {
+  caf::error write(const vast::table_slice_ptr& slice) override {
+    for (size_t row = 0; row < slice->rows(); ++row) {
       if (show_progress_)
         std::cerr << '.' << std::flush;
       // Assemble an event as a list of broker data values.
       broker::vector xs;
-      auto layout = slice.layout();
+      auto layout = slice->layout();
       auto columns = layout.fields.size();
       xs.reserve(columns);
       for (size_t col = 0; col < columns; ++col)
         // TODO: remove unnecessary materialization and operate on data views
         // instead.
-        xs.push_back(to_broker(materialize(slice.at(row, col))));
+        xs.push_back(to_broker(materialize(slice->at(row, col))));
       auto event = make_result_event(query_id_, std::move(xs));
       endpoint_->publish(data_topic, std::move(event));
     }
-    num_results_ += slice.rows();
+    num_results_ += slice->rows();
     return caf::none;
   }
 

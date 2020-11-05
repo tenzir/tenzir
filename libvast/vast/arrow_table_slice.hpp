@@ -29,7 +29,7 @@ namespace vast {
 /// A table slice that stores elements encoded in the
 /// [Arrow](https://arrow.org) format. The implementation stores data in
 /// column-major order.
-class arrow_table_slice final : public vast::table_slice {
+class arrow_table_slice final : public vast::legacy_table_slice {
 public:
   // -- friends ----------------------------------------------------------------
 
@@ -42,7 +42,7 @@ public:
   // -- member types -----------------------------------------------------------
 
   /// Base type.
-  using super = vast::table_slice;
+  using super = vast::legacy_table_slice;
 
   /// Unsigned integer type.
   using size_type = super::size_type;
@@ -78,7 +78,7 @@ public:
   }
 
 private:
-  using table_slice::table_slice;
+  using super::super;
 
   caf::error serialize_impl(caf::binary_serializer& sink) const;
 

@@ -122,7 +122,7 @@ TEST(empty partition roundtrip) {
   header.rows = 0u;
   auto slice = vast::msgpack_table_slice::make(header);
   REQUIRE(slice);
-  state.meta_idx.add(state.id, *slice);
+  state.meta_idx.add(state.id, slice);
   // Serialize partition.
   flatbuffers::FlatBufferBuilder builder;
   {

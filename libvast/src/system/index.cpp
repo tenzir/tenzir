@@ -533,7 +533,7 @@ index(caf::stateful_actor<index_state>* self, filesystem_type fs, path dir,
         create_active_partition();
       }
       out.push(x);
-      self->state.meta_idx.add(active.id, *x);
+      self->state.meta_idx.add(active.id, x);
       if (active.capacity == self->state.partition_capacity
           && x->rows() > active.capacity) {
         VAST_WARNING(self, "got table slice with", x->rows(),

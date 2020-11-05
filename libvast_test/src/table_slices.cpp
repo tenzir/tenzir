@@ -73,18 +73,18 @@ make_random_table_slices(size_t num_slices, size_t slice_size,
 /// @note This function exists primarily for unit testing because it performs
 /// excessive memory allocations.
 std::vector<std::vector<data>>
-to_data(const table_slice& slice, size_t first_row, size_t num_rows) {
-  VAST_ASSERT(first_row < slice.rows());
-  VAST_ASSERT(num_rows <= slice.rows() - first_row);
+to_data(const table_slice_ptr& slice, size_t first_row, size_t num_rows) {
+  VAST_ASSERT(first_row < slice->rows());
+  VAST_ASSERT(num_rows <= slice->rows() - first_row);
   if (num_rows == 0)
-    num_rows = slice.rows() - first_row;
+    num_rows = slice->rows() - first_row;
   std::vector<std::vector<data>> result;
   result.reserve(num_rows);
   for (size_t i = 0; i < num_rows; ++i) {
     std::vector<data> xs;
-    xs.reserve(slice.columns());
-    for (size_t j = 0; j < slice.columns(); ++j)
-      xs.emplace_back(materialize(slice.at(first_row + i, j)));
+    xs.reserve(slice->columns());
+    for (size_t j = 0; j < slice->columns(); ++j)
+      xs.emplace_back(materialize(slice->at(first_row + i, j)));
     result.push_back(std::move(xs));
   }
   return result;
@@ -95,7 +95,7 @@ to_data(const std::vector<table_slice_ptr>& slices) {
   std::vector<std::vector<data>> result;
   result.reserve(rows(slices));
   for (auto& slice : slices)
-    detail::append(result, to_data(*slice));
+    detail::append(result, to_data(slice));
   return result;
 }
 
@@ -106,7 +106,7 @@ namespace fixtures {
 
 table_slices::table_slices() {
   // Register factories.
-  factory<table_slice>::initialize();
+  factory<legacy_table_slice>::initialize();
   // Define our test layout.
   layout = record_type{
     {"a", bool_type{}},
@@ -351,7 +351,7 @@ void table_slices::test_load_from_chunk() {
   auto sink = make_sink();
   CHECK_EQUAL(sink(slice1), caf::none);
   auto chk = chunk::make(std::vector<char>{buf});
-  auto slice2 = factory<table_slice>::traits::make(chk);
+  auto slice2 = factory<legacy_table_slice>::traits::make(chk);
   REQUIRE_NOT_EQUAL(slice2, nullptr);
   CHECK_EQUAL(*slice1, *slice2);
 }

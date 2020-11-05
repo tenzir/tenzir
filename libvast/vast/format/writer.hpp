@@ -40,7 +40,7 @@ public:
   /// Processes a single batch of events.
   /// @param x The events to write wrapped in a table slice.
   /// @returns `caf::none` on success.
-  virtual caf::error write(const table_slice& x) = 0;
+  virtual caf::error write(const table_slice_ptr& x) = 0;
 
   /// Called periodically to flush state.
   /// @returns `caf::none` on success.

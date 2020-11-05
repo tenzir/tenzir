@@ -75,7 +75,7 @@ std::vector<table_slice_ptr> make_integers(size_t count) {
 
 template <class Reader>
 std::vector<table_slice_ptr>
-extract(Reader&& reader, table_slice::size_type slice_size) {
+extract(Reader&& reader, legacy_table_slice::size_type slice_size) {
   std::vector<table_slice_ptr> result;
   auto add_slice
     = [&](table_slice_ptr ptr) { result.emplace_back(std::move(ptr)); };
@@ -88,7 +88,7 @@ extract(Reader&& reader, table_slice::size_type slice_size) {
 
 template <class Reader>
 std::vector<table_slice_ptr>
-inhale(const char* filename, table_slice::size_type slice_size) {
+inhale(const char* filename, legacy_table_slice::size_type slice_size) {
   caf::settings settings;
   // A non-positive value disables the timeout. We need to do this because the
   // deterministic actor system is messing with the clocks.
@@ -113,7 +113,7 @@ events::events() {
   static bool initialized = false;
   if (initialized)
     return;
-  factory<table_slice>::initialize();
+  factory<legacy_table_slice>::initialize();
   factory<table_slice_builder>::initialize();
   initialized = true;
   // Create Zeek log data.

@@ -283,7 +283,7 @@ public:
   /// @param dir The path where to write the log file(s) to.
   writer(path dir);
 
-  error write(const table_slice& e) override;
+  error write(const table_slice_ptr& e) override;
 
   caf::expected<void> flush() override;
 

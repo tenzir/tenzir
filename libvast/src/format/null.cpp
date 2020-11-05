@@ -17,7 +17,7 @@
 
 namespace vast::format::null {
 
-caf::error writer::write(const table_slice&) {
+caf::error writer::write(const table_slice_ptr&) {
   return caf::none;
 }
 

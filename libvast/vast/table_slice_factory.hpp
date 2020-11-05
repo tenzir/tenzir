@@ -22,7 +22,7 @@
 namespace vast {
 
 template <>
-struct factory_traits<table_slice> {
+struct factory_traits<legacy_table_slice> {
   using result_type = table_slice_ptr;
   using key_type = caf::atom_value;
   using signature = result_type (*)(table_slice_header);
@@ -42,7 +42,7 @@ struct factory_traits<table_slice> {
   /// Constructs a table slice from a chunk. The beginning of the chunk must
   /// hold the implementation ID of the concrete table slice. This function
   /// reads the ID, constructs a new table slice with the given ID, and then
-  /// calls `table_slice::load` on the chunk.
+  /// calls `legacy_table_slice::load` on the chunk.
   /// @returns a table slice loaded from *chunk* or `nullptr` on failure.
   static result_type make(chunk_ptr chunk);
 };
