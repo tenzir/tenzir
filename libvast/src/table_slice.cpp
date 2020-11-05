@@ -45,49 +45,51 @@ namespace vast {
 
 namespace {
 
-using size_type = table_slice::size_type;
+using size_type = legacy_table_slice::size_type;
 
 } // namespace <anonymous>
 
 // -- constructors, destructors, and assignment operators ----------------------
 
-table_slice::table_slice() noexcept {
+legacy_table_slice::legacy_table_slice() noexcept {
   ++instance_count_;
 }
 
-table_slice::table_slice(const table_slice& other) noexcept
+legacy_table_slice::legacy_table_slice(const legacy_table_slice& other) noexcept
   : ref_counted(other), header_{other.header_} {
   ++instance_count_;
 }
 
-table_slice& table_slice::operator=(const table_slice& rhs) noexcept {
+legacy_table_slice&
+legacy_table_slice::operator=(const legacy_table_slice& rhs) noexcept {
   header_ = rhs.header_;
   ++instance_count_;
   return *this;
 }
 
-table_slice::table_slice(table_slice&& other) noexcept
+legacy_table_slice::legacy_table_slice(legacy_table_slice&& other) noexcept
   : header_{std::exchange(other.header_, {})} {
   // nop
 }
 
-table_slice& table_slice::operator=(table_slice&& rhs) noexcept {
+legacy_table_slice&
+legacy_table_slice::operator=(legacy_table_slice&& rhs) noexcept {
   header_ = std::exchange(rhs.header_, {});
   return *this;
 }
 
-table_slice::table_slice(table_slice_header header) noexcept
+legacy_table_slice::legacy_table_slice(table_slice_header header) noexcept
   : header_{std::move(header)} {
   ++instance_count_;
 }
 
-table_slice::~table_slice() noexcept {
+legacy_table_slice::~legacy_table_slice() noexcept {
   --instance_count_;
 }
 
 // -- persistence --------------------------------------------------------------
 
-caf::error table_slice::load(chunk_ptr chunk) {
+caf::error legacy_table_slice::load(chunk_ptr chunk) {
   VAST_ASSERT(chunk != nullptr);
   auto data = const_cast<char*>(chunk->data()); // CAF won't touch it.
   caf::binary_deserializer source{nullptr, data, chunk->size()};
@@ -96,41 +98,41 @@ caf::error table_slice::load(chunk_ptr chunk) {
 
 // -- visitation ---------------------------------------------------------------
 
-void table_slice::append_column_to_index(size_type col,
-                                         value_index& idx) const {
+void legacy_table_slice::append_column_to_index(size_type col,
+                                                value_index& idx) const {
   for (size_type row = 0; row < rows(); ++row)
     idx.append(at(row, col), offset() + row);
 }
 
 // -- properties ---------------------------------------------------------------
 
-record_type table_slice::layout() const noexcept {
+record_type legacy_table_slice::layout() const noexcept {
   return header_.layout;
 }
 
-size_type table_slice::rows() const noexcept {
+size_type legacy_table_slice::rows() const noexcept {
   return header_.rows;
 }
 
-size_type table_slice::columns() const noexcept {
+size_type legacy_table_slice::columns() const noexcept {
   return header_.layout.fields.size();
 }
 
-id table_slice::offset() const noexcept {
+id legacy_table_slice::offset() const noexcept {
   return header_.offset;
 }
 
-void table_slice::offset(id offset) noexcept {
+void legacy_table_slice::offset(id offset) noexcept {
   header_.offset = offset;
 }
 
-int table_slice::instances() {
+int legacy_table_slice::instances() {
   return instance_count_;
 }
 
 // -- comparison operators -----------------------------------------------------
 
-bool operator==(const table_slice& x, const table_slice& y) {
+bool operator==(const legacy_table_slice& x, const legacy_table_slice& y) {
   if (&x == &y)
     return true;
   if (x.rows() != y.rows() || x.columns() != y.columns()
@@ -143,7 +145,7 @@ bool operator==(const table_slice& x, const table_slice& y) {
   return true;
 }
 
-bool operator!=(const table_slice& x, const table_slice& y) {
+bool operator!=(const legacy_table_slice& x, const legacy_table_slice& y) {
   return !(x == y);
 }
 
@@ -169,7 +171,7 @@ caf::error inspect(caf::deserializer& source, table_slice_ptr& ptr) {
   table_slice_header header;
   if (auto err = source(header.layout, header.rows, header.offset))
     return err;
-  ptr = factory<table_slice>::make(id, std::move(header));
+  ptr = factory<legacy_table_slice>::make(id, std::move(header));
   if (!ptr)
     return ec::invalid_table_slice_type;
   return ptr.unshared().deserialize(source);
@@ -238,15 +240,15 @@ caf::error unpack(const fbs::table_slice::legacy::v0& x, table_slice_ptr& y) {
 
 // -- intrusive_ptr facade -----------------------------------------------------
 
-void intrusive_ptr_add_ref(const table_slice* ptr) {
+void intrusive_ptr_add_ref(const legacy_table_slice* ptr) {
   intrusive_ptr_add_ref(static_cast<const caf::ref_counted*>(ptr));
 }
 
-void intrusive_ptr_release(const table_slice* ptr) {
+void intrusive_ptr_release(const legacy_table_slice* ptr) {
   intrusive_ptr_release(static_cast<const caf::ref_counted*>(ptr));
 }
 
-table_slice* intrusive_cow_ptr_unshare(table_slice*& ptr) {
+legacy_table_slice* intrusive_cow_ptr_unshare(legacy_table_slice*& ptr) {
   return caf::default_intrusive_cow_ptr_unshare(ptr);
 }
 
@@ -357,7 +359,7 @@ uint64_t rows(const std::vector<table_slice_ptr>& slices) {
 namespace {
 
 struct row_evaluator {
-  row_evaluator(const table_slice& slice, size_t row)
+  row_evaluator(const table_slice_ptr& slice, size_t row)
     : slice_{slice}, row_{row} {
     // nop
   }
@@ -403,7 +405,7 @@ struct row_evaluator {
     // TODO: Transform this AST node into a constant-time lookup node (e.g.,
     // data_extractor). It's not necessary to iterate over the schema for every
     // row; this should happen upfront.
-    auto layout = slice_.layout();
+    auto layout = slice_->layout();
     if (e.attr == atom::type_v)
       return evaluate(layout.name(), op_, d);
     if (e.attr == atom::timestamp_v) {
@@ -415,7 +417,7 @@ struct row_evaluator {
             return false;
           }
         }
-        auto lhs = to_canonical(field.type, slice_.at(row_, col));
+        auto lhs = to_canonical(field.type, slice_->at(row_, col));
         auto rhs = make_view(d);
         return evaluate_view(lhs, op_, rhs);
       }
@@ -433,28 +435,28 @@ struct row_evaluator {
 
   bool operator()(const data_extractor& e, const data& d) {
     VAST_ASSERT(e.offset.size() == 1);
-    auto layout = slice_.layout();
+    auto layout = slice_->layout();
     if (e.type != layout) // TODO: make this a precondition instead.
       return false;
     auto col = e.offset[0];
     auto& field = layout.fields[col];
-    auto lhs = to_canonical(field.type, slice_.at(row_, col));
+    auto lhs = to_canonical(field.type, slice_->at(row_, col));
     auto rhs = make_data_view(d);
     return evaluate_view(lhs, op_, rhs);
   }
 
-  const table_slice& slice_;
+  const table_slice_ptr& slice_;
   size_t row_;
   relational_operator op_;
 };
 
 } // namespace
 
-ids evaluate(const expression& expr, const table_slice& slice) {
+ids evaluate(const expression& expr, const table_slice_ptr& slice) {
   // TODO: switch to a column-based evaluation strategy where it makes sense.
   ids result;
-  result.append(false, slice.offset());
-  for (size_t row = 0; row != slice.rows(); ++row) {
+  result.append(false, slice->offset());
+  for (size_t row = 0; row != slice->rows(); ++row) {
     auto x = caf::visit(row_evaluator{slice, row}, expr);
     result.append_bit(x);
   }

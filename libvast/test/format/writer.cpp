@@ -47,7 +47,7 @@ std::vector<std::string> generate(const std::vector<table_slice_ptr>& xs) {
   auto out = std::make_unique<std::ostream>(&sb);
   Writer writer{std::move(out)};
   for (auto& x : xs)
-    if (auto err = writer.write(*x))
+    if (auto err = writer.write(x))
       FAIL("failed to write event");
   writer.flush();
   REQUIRE(!str.empty());

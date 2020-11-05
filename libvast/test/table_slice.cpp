@@ -95,7 +95,7 @@ TEST(select prefix) {
   auto xs = select(sut, make_ids({{0, 150}}));
   REQUIRE_EQUAL(xs.size(), 1u);
   CHECK_EQUAL(xs[0]->rows(), 50u);
-  CHECK_EQUAL(to_data(*xs[0]), to_data(*sut, 0, 50));
+  CHECK_EQUAL(to_data(xs[0]), to_data(sut, 0, 50));
 }
 
 TEST(select off by one prefix) {
@@ -104,7 +104,7 @@ TEST(select off by one prefix) {
   auto xs = select(sut, make_ids({{101, 151}}));
   REQUIRE_EQUAL(xs.size(), 1u);
   CHECK_EQUAL(xs[0]->rows(), 50u);
-  CHECK_EQUAL(to_data(*xs[0]), to_data(*sut, 1, 50));
+  CHECK_EQUAL(to_data(xs[0]), to_data(sut, 1, 50));
 }
 
 TEST(select intermediates) {
@@ -113,9 +113,9 @@ TEST(select intermediates) {
   auto xs = select(sut, make_ids({{110, 120}, {170, 180}}));
   REQUIRE_EQUAL(xs.size(), 2u);
   CHECK_EQUAL(xs[0]->rows(), 10u);
-  CHECK_EQUAL(to_data(*xs[0]), to_data(*sut, 10, 10));
+  CHECK_EQUAL(to_data(xs[0]), to_data(sut, 10, 10));
   CHECK_EQUAL(xs[1]->rows(), 10u);
-  CHECK_EQUAL(to_data(*xs[1]), to_data(*sut, 70, 10));
+  CHECK_EQUAL(to_data(xs[1]), to_data(sut, 70, 10));
 }
 
 TEST(select off by one suffix) {
@@ -124,7 +124,7 @@ TEST(select off by one suffix) {
   auto xs = select(sut, make_ids({{149, 199}}));
   REQUIRE_EQUAL(xs.size(), 1u);
   CHECK_EQUAL(xs[0]->rows(), 50u);
-  CHECK_EQUAL(to_data(*xs[0]), to_data(*sut, 49, 50));
+  CHECK_EQUAL(to_data(xs[0]), to_data(sut, 49, 50));
 }
 
 TEST(select suffix) {
@@ -133,7 +133,7 @@ TEST(select suffix) {
   auto xs = select(sut, make_ids({{150, 300}}));
   REQUIRE_EQUAL(xs.size(), 1u);
   CHECK_EQUAL(xs[0]->rows(), 50u);
-  CHECK_EQUAL(to_data(*xs[0]), to_data(*sut, 50, 50));
+  CHECK_EQUAL(to_data(xs[0]), to_data(sut, 50, 50));
 }
 
 TEST(truncate) {
@@ -144,17 +144,17 @@ TEST(truncate) {
     auto sub_slice = truncate(sut, num_rows);
     if (sub_slice->rows() != num_rows)
       FAIL("expected " << num_rows << " rows, got " << sub_slice->rows());
-    return to_data(*sub_slice);
+    return to_data(sub_slice);
   };
   auto sub_slice = truncate(sut, 8);
   CHECK_EQUAL(*sub_slice, *sut);
-  CHECK_EQUAL(truncated_events(7), to_data(*sut, 0, 7));
-  CHECK_EQUAL(truncated_events(6), to_data(*sut, 0, 6));
-  CHECK_EQUAL(truncated_events(5), to_data(*sut, 0, 5));
-  CHECK_EQUAL(truncated_events(4), to_data(*sut, 0, 4));
-  CHECK_EQUAL(truncated_events(3), to_data(*sut, 0, 3));
-  CHECK_EQUAL(truncated_events(2), to_data(*sut, 0, 2));
-  CHECK_EQUAL(truncated_events(1), to_data(*sut, 0, 1));
+  CHECK_EQUAL(truncated_events(7), to_data(sut, 0, 7));
+  CHECK_EQUAL(truncated_events(6), to_data(sut, 0, 6));
+  CHECK_EQUAL(truncated_events(5), to_data(sut, 0, 5));
+  CHECK_EQUAL(truncated_events(4), to_data(sut, 0, 4));
+  CHECK_EQUAL(truncated_events(3), to_data(sut, 0, 3));
+  CHECK_EQUAL(truncated_events(2), to_data(sut, 0, 2));
+  CHECK_EQUAL(truncated_events(1), to_data(sut, 0, 1));
 }
 
 TEST(split) {
@@ -163,8 +163,8 @@ TEST(split) {
   sut.unshared().offset(100);
   // Splits `sut` using to_data.
   auto manual_split_sut = [&](size_t parition_point) {
-    return std::pair{to_data(*sut, 0, parition_point),
-                     to_data(*sut, parition_point)};
+    return std::pair{to_data(sut, 0, parition_point),
+                     to_data(sut, parition_point)};
   };
   // Splits `sut` using split() and then converting to events.
   auto split_sut = [&](size_t parition_point) {
@@ -172,7 +172,7 @@ TEST(split) {
     if (first->rows() + second->rows() != 8)
       FAIL("expected 8 rows in total, got "
            << (first->rows() + second->rows()));
-    return std::pair{to_data(*first), to_data(*second)};
+    return std::pair{to_data(first), to_data(second)};
   };
   // We compare the results of the two lambdas, meaning that it should make no
   // difference whether we split via `to_data` or `split`.

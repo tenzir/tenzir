@@ -60,7 +60,7 @@ TEST(arrow batch) {
   writer.out(stream);
   // Write conn log slices (as record batches) to the stream.
   for (auto& slice : zeek_conn_log)
-    writer.write(*slice);
+    writer.write(slice);
   // Cause the writer to close its current Arrow writer.
   writer.layout(record_type{});
   // Deserialize record batches, store them in arrow_table_slice objects, and

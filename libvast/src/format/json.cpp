@@ -210,7 +210,7 @@ const vast::json* lookup(std::string_view field, const vast::json::object& xs) {
 
 } // namespace
 
-caf::error writer::write(const table_slice& x) {
+caf::error writer::write(const table_slice_ptr& x) {
   json_printer<policy::oneline> printer;
   return print<policy::include_field_names>(printer, x, "{", ", ", "}");
 }

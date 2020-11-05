@@ -112,7 +112,7 @@ struct fixture {
     for (size_t i = 0; i < num_partitions; ++i) {
       auto name = i % 2 == 0 ? "foo"s : "foobar"s;
       auto& part = mock_partitions.emplace_back(std::move(name), ids[i], i);
-      meta_idx.add(part.id, *part.slice);
+      meta_idx.add(part.id, part.slice);
     }
     MESSAGE("verify generated timestamps");
     {
@@ -223,17 +223,17 @@ TEST(meta index with bool synopsis) {
   auto slice = builder->finish();
   REQUIRE(slice != nullptr);
   auto id1 = uuid::random();
-  meta_idx.add(id1, *slice);
+  meta_idx.add(id1, slice);
   CHECK(builder->add(make_data_view(false)));
   slice = builder->finish();
   REQUIRE(slice != nullptr);
   auto id2 = uuid::random();
-  meta_idx.add(id2, *slice);
+  meta_idx.add(id2, slice);
   CHECK(builder->add(make_data_view(caf::none)));
   slice = builder->finish();
   REQUIRE(slice != nullptr);
   auto id3 = uuid::random();
-  meta_idx.add(id3, *slice);
+  meta_idx.add(id3, slice);
   MESSAGE("test custom synopsis");
   auto lookup = [&](std::string_view expr) {
     return meta_idx.lookup(unbox(to<expression>(expr)));

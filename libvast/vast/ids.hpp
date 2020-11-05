@@ -43,6 +43,6 @@ ids make_ids(std::initializer_list<id_range> ranges, size_t min_size = 0,
              bool default_bit = false);
 
 /// Generates an ID set for the given table slice.
-ids make_ids(const table_slice& slice);
+ids make_ids(const table_slice_ptr& slice);
 
 } // namespace vast

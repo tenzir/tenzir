@@ -132,16 +132,16 @@ bool deep_compare(const Container& xs, const Container& ys) {
          && std::equal(xs.begin(), xs.end(), ys.begin(), cmp);
 }
 
-size_t num_rows(const table_slice& xs, size_t starting_row,
+size_t num_rows(const table_slice_ptr& xs, size_t starting_row,
                 size_t max_rows = std::numeric_limits<size_t>::max()) {
-  return std::min(detail::narrow<size_t>(xs.rows() - starting_row), max_rows);
+  return std::min(detail::narrow<size_t>(xs->rows() - starting_row), max_rows);
 }
 
 } // namespace
 
 #define CHECK_SLICE(xs, slice, ...)                                            \
-  CHECK_EQUAL(xs->rows(), num_rows(*zeek_conn_log[slice], __VA_ARGS__));       \
-  CHECK_EQUAL(to_data(*xs), to_data(*zeek_conn_log[slice], __VA_ARGS__))
+  CHECK_EQUAL(xs->rows(), num_rows(zeek_conn_log[slice], __VA_ARGS__));        \
+  CHECK_EQUAL(to_data(xs), to_data(zeek_conn_log[slice], __VA_ARGS__))
 
 FIXTURE_SCOPE(segment_store_tests, fixture)
 

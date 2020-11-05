@@ -55,19 +55,19 @@ FIXTURE_SCOPE(evaluation_tests, fixture)
 
 TEST(evaluation - attribute extractor - #timestamp) {
   auto expr = make_expr("#timestamp <= 2009-11-18T08:09");
-  auto ids = evaluate(expr, *zeek_conn_log_slice);
+  auto ids = evaluate(expr, zeek_conn_log_slice);
   CHECK_EQUAL(ids, make_ids({{0, 5}}, zeek_conn_log_slice->rows()));
 }
 
 TEST(evaluation - attribute extractor - #type) {
   auto expr = make_expr("#type == \"zeek.conn\"");
-  auto ids = evaluate(expr, *zeek_conn_log_slice);
+  auto ids = evaluate(expr, zeek_conn_log_slice);
   CHECK_EQUAL(ids, make_ids({{0, zeek_conn_log_slice->rows()}}));
 }
 
 TEST(evaluation - attribute extractor - #foo) {
   auto expr = make_expr("#foo == 42");
-  auto ids = evaluate(expr, *zeek_conn_log_slice);
+  auto ids = evaluate(expr, zeek_conn_log_slice);
   CHECK_EQUAL(ids.size(), zeek_conn_log_slice->rows());
   CHECK(all<0>(ids));
 }
@@ -75,14 +75,14 @@ TEST(evaluation - attribute extractor - #foo) {
 TEST(evaluation - type extractor - count) {
   // head -n 108 conn.log | grep '\t350\t' | wc -l
   auto expr = make_conn_expr(":count == 350");
-  auto ids = evaluate(expr, *zeek_conn_log_slice);
+  auto ids = evaluate(expr, zeek_conn_log_slice);
   CHECK_EQUAL(rank(ids), 18u);
 }
 
 TEST(evaluation - type extractor - string + duration) {
   // head -n 108 conn.log | awk '$8 == "http" && $9 > 30'
   auto expr = make_conn_expr("\"http\" in :string && :duration > 30s");
-  auto ids = evaluate(expr, *zeek_conn_log_slice);
+  auto ids = evaluate(expr, zeek_conn_log_slice);
   CHECK_EQUAL(rank(ids), 1u);
   auto id = select(ids, 1);
   REQUIRE_EQUAL(id, 97u);
@@ -92,7 +92,7 @@ TEST(evaluation - type extractor - string + duration) {
 TEST(evaluation - field extractor - orig_h + proto) {
   // head -n 108 conn.log | awk '$3 != "192.168.1.102" && $7 != "udp"'
   auto expr = make_conn_expr("orig_h != 192.168.1.102 && proto != \"udp\"");
-  auto ids = evaluate(expr, *zeek_conn_log_slice);
+  auto ids = evaluate(expr, zeek_conn_log_slice);
   REQUIRE_EQUAL(rank(ids), 10u);
   auto last = select(ids, -1);
   CHECK_EQUAL(zeek_conn_log_slice->at(last, 1), make_data_view("WfzxgFx2lWb"));
@@ -101,13 +101,13 @@ TEST(evaluation - field extractor - orig_h + proto) {
 TEST(evaluation - field extractor - service + orig_h) {
   auto str = "service == nil && orig_h == fe80::219:e3ff:fee7:5d23";
   auto expr = make_conn_expr(str);
-  auto ids = evaluate(expr, *zeek_conn_log_slice);
+  auto ids = evaluate(expr, zeek_conn_log_slice);
   REQUIRE_EQUAL(rank(ids), 2u);
 }
 
 TEST(evaluation - field extractor - nonexistant field) {
   auto expr = make_conn_expr("devnull != nil");
-  auto ids = evaluate(expr, *zeek_conn_log_slice);
+  auto ids = evaluate(expr, zeek_conn_log_slice);
   CHECK(all<0>(ids));
 }
 

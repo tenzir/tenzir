@@ -225,7 +225,7 @@ behavior exporter(stateful_actor<exporter_state>* self, expression expr,
     }
     auto& checker = it->second;
     // Perform candidate check, splitting the slice into subsets if needed.
-    auto selection = evaluate(checker, *slice);
+    auto selection = evaluate(checker, slice);
     auto selection_size = rank(selection);
     if (selection_size == 0) {
       // No rows qualify.

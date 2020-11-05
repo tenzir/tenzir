@@ -67,7 +67,7 @@ public:
   /// index.
   /// @param slice The table slice to extract data from.
   /// @param partition The partition ID that *slice* belongs to.
-  void add(const uuid& partition, const table_slice& slice);
+  void add(const uuid& partition, const table_slice_ptr& slice);
 
   /// Adds new synopses for a partition in bulk. Used when
   /// re-building the meta index state at startup.

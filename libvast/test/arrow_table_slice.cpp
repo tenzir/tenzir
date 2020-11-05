@@ -43,7 +43,7 @@ auto make_single_column_slice(const Ts&... xs) {
 }
 
 table_slice_ptr roundtrip(table_slice_ptr slice_ptr) {
-  factory<table_slice>::add<arrow_table_slice>();
+  factory<legacy_table_slice>::add<arrow_table_slice>();
   factory<table_slice_builder>::add<arrow_table_slice_builder>(
     arrow_table_slice::class_id);
   table_slice_ptr slice_copy;
@@ -337,7 +337,7 @@ TEST(single column - map) {
 
 TEST(single column - serialization) {
   using vast::factory;
-  factory<table_slice>::add<arrow_table_slice>();
+  factory<legacy_table_slice>::add<arrow_table_slice>();
   factory<table_slice_builder>::add<arrow_table_slice_builder>(
     arrow_table_slice::class_id);
   auto slice1 = make_single_column_slice<count_type>(0_c, 1_c, 2_c, 3_c);

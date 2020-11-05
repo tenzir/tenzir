@@ -62,7 +62,7 @@ void counter_state::init(expression expr, caf::actor index,
         }
       }
       // Perform the candidate check and count results.
-      auto num_results = rank(evaluate(it->second, *slice));
+      auto num_results = rank(evaluate(it->second, slice));
       if (num_results > 0)
         self_->send(client_, num_results);
     },

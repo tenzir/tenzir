@@ -37,7 +37,7 @@ using msgpack_table_slice_ptr = caf::intrusive_cow_ptr<msgpack_table_slice>;
 /// A table slice that stores elements encoded in
 /// [MessagePack](https://msgpack.org) format. The implementation stores data
 /// in row-major order.
-class msgpack_table_slice final : public vast::table_slice {
+class msgpack_table_slice final : public vast::legacy_table_slice {
 public:
   // -- friends ----------------------------------------------------------------
 
@@ -50,7 +50,7 @@ public:
   // -- member types -----------------------------------------------------------
 
   /// Base type.
-  using super = vast::table_slice;
+  using super = vast::legacy_table_slice;
 
   /// Unsigned integer type.
   using size_type = super::size_type;
@@ -77,7 +77,7 @@ public:
   vast::data_view at(size_type row, size_type col) const override;
 
 private:
-  using table_slice::table_slice;
+  using super::super;
 
   /// Offsets from the beginning of the buffer to each row.
   std::vector<size_t> offset_table_;

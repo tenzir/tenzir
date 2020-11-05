@@ -125,7 +125,7 @@ public:
 
   using format::writer::write;
 
-  caf::error write(const table_slice& slice) override;
+  caf::error write(const table_slice_ptr& slice) override;
 
   caf::expected<void> flush() override;
 

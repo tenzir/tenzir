@@ -620,7 +620,7 @@ public:
       *out_ << "#close" << separator << time_factory{} << '\n';
   }
 
-  error write(const table_slice& slice) override {
+  error write(const table_slice_ptr& slice) override {
     zeek_printer<std::back_insert_iterator<std::vector<char>>> p;
     return print<policy::omit_field_names>(p, slice, "",
                                            std::string_view{&separator, 1}, "");
@@ -633,9 +633,9 @@ public:
 
 } // namespace
 
-caf::error writer::write(const table_slice& slice) {
+caf::error writer::write(const table_slice_ptr& slice) {
   ostream_writer* child = nullptr;
-  auto layout = slice.layout();
+  auto layout = slice->layout();
   if (dir_.empty()) {
     if (writers_.empty()) {
       VAST_DEBUG(this, "creates a new stream for STDOUT");
