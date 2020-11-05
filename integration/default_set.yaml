@@ -6,12 +6,12 @@ fixtures:
       node0 = Server(self.cmd,
                      ['-e', f':{VAST_PORT}', '-i', 'node0', 'start'],
                      work_dir, name='node0', port=VAST_PORT,
-                     config_file=f'{self.config_file}')
+                     config_file=self.config_file')
       node1 = Server(self.cmd,
                      ['-e', ':42124',
                       '-i', 'node1', 'start'],
                      work_dir, name='node1', port=42124,
-                     config_file=f'{self.config_file}')
+                     config_file=self.config_file)
       cmd += ['-e', f':{VAST_PORT}']
 
     exit: | # python
@@ -23,7 +23,7 @@ fixtures:
       node = Server(self.cmd,
                     ['-e', f':{VAST_PORT}', '-i', 'node', 'start'],
                     work_dir, name='node', port=VAST_PORT,
-                    config_file=f'{self.config_file}')
+                    config_file=self.config_file)
       cmd += ['-e', f':{VAST_PORT}']
 
     exit: | # python
@@ -38,7 +38,7 @@ fixtures:
                      '--aging-query=:addr == 192.168.1.104',
                      'start'],
                     work_dir, name='node', port=VAST_PORT,
-                    config_file=f'{self.config_file}')
+                    config_file=self.config_file)
       cmd += ['-e', f':{VAST_PORT}']
 
     exit: | # python
@@ -59,7 +59,7 @@ fixtures:
                      '--disk-budget-high=5MiB',
                      '--disk-budget-low=2MiB'],
                     work_dir, name='node', port=VAST_PORT,
-                    config_file=f'{self.config_file}')
+                    config_file=self.config_file)
       cmd += ['-e', f':{VAST_PORT}']
 
     exit: | # python
