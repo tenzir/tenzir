@@ -67,14 +67,22 @@ jobs:
         service_account_key: ${{ secrets.GCP_SA_KEY }}
 
     - name: Upload Artifact to GCS
+      if: github.event_name != 'pull_request'
+      env:
+        PUBLIC_GCS_BUCKET: tenzir-public-data
+        STATIC_BINARY_FOLDER: vast-static-builds
+      run: |
+        gsutil cp "${{ env.BUILD_DIR }}/${{ steps.create_paths.outputs.artifact_name }}" "gs://${{ env.PUBLIC_GCS_BUCKET }}/${{ env.STATIC_BINARY_FOLDER }}/${{ steps.create_paths.outputs.artifact_name }}"
+
+    - name: Update 'vast-latest' symlink on GCS
+      if: github.event_name != 'pull_request' && github.event_name != 'repository_dispatch'
       env:
         PUBLIC_GCS_BUCKET: tenzir-public-data
         STATIC_BINARY_FOLDER: vast-static-builds
       run: |
         RELEASE_MONTH=$(echo "${{ steps.create_paths.outputs.artifact_name }}" | cut -d"-" -f2)
-        gsutil cp "${{ env.BUILD_DIR }}/${{ steps.create_paths.outputs.artifact_name }}" "gs://${{ env.PUBLIC_GCS_BUCKET }}/${{ env.STATIC_BINARY_FOLDER }}/vast-static-latest.tar.gz"
-        gsutil cp "gs://${{ env.PUBLIC_GCS_BUCKET }}/${{ env.STATIC_BINARY_FOLDER }}/vast-static-latest.tar.gz" "gs://${{ env.PUBLIC_GCS_BUCKET }}/${{ env.STATIC_BINARY_FOLDER }}/vast-${RELEASE_MONTH}-static-latest.tar.gz"
-        gsutil cp "gs://${{ env.PUBLIC_GCS_BUCKET }}/${{ env.STATIC_BINARY_FOLDER }}/vast-static-latest.tar.gz" "gs://${{ env.PUBLIC_GCS_BUCKET }}/${{ env.STATIC_BINARY_FOLDER }}/${{ steps.create_paths.outputs.artifact_name }}"
+        gsutil cp "gs://${{ env.PUBLIC_GCS_BUCKET }}/${{ env.STATIC_BINARY_FOLDER }}/${{ steps.create_paths.outputs.artifact_name }}" "gs://${{ env.PUBLIC_GCS_BUCKET }}/${{ env.STATIC_BINARY_FOLDER }}/vast-${RELEASE_MONTH}-static-latest.tar.gz"
+        gsutil cp "gs://${{ env.PUBLIC_GCS_BUCKET }}/${{ env.STATIC_BINARY_FOLDER }}/${{ steps.create_paths.outputs.artifact_name }}" "gs://${{ env.PUBLIC_GCS_BUCKET }}/${{ env.STATIC_BINARY_FOLDER }}/vast-static-latest.tar.gz""
 
     - name: Publish to GitHub Release
       if: github.event_name == 'release' && github.event.action == 'published'
