@@ -18,6 +18,17 @@ fixtures:
       node0.stop()
       node1.stop()
 
+  ExampleConfigFileTester:
+    enter: | # python
+      node = Server(self.cmd,
+                    ['-e', f':{VAST_PORT}', '-i', 'node', 'start'],
+                    work_dir, name='node', port=VAST_PORT,
+                    config_file='../vast.yaml.example')
+      cmd += ['-e', f':{VAST_PORT}']
+
+    exit: | # python
+      node.stop()
+
   ServerTester:
     enter: | # python
       node = Server(self.cmd,
@@ -397,6 +408,13 @@ tests:
       - command: import -b zeek
         input: data/zeek/conn.log.gz
       - command: count '#type ~ /suricata.*/'
+  Example config file:
+    tags: [import-export, zeek]
+    fixture: ExampleConfigFileTester
+    steps:
+      - command: import -b zeek
+        input: data/zeek/conn.log.gz
+      - command: export ascii 'net.app !in ["dns", "ftp", "http", "ssl"]'
   # The idea is import just enough to hit the high-water mark, wait, and then
   # verify that most of the partitions and segments were deleted by checking
   # the number of events left in the database. This test is a bit annoying as
