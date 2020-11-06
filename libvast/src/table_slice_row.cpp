@@ -32,7 +32,7 @@ table_slice_row::table_slice_row(table_slice_row&&) noexcept = default;
 table_slice_row&
 table_slice_row::operator=(table_slice_row&&) noexcept = default;
 
-table_slice_row::table_slice_row(table_slice_ptr slice, size_t row) noexcept
+table_slice_row::table_slice_row(table_slice slice, size_t row) noexcept
 
   : slice_{std::move(slice)}, row_{row} {
   // nop
@@ -47,7 +47,7 @@ size_t table_slice_row::size() const noexcept {
   return slice_->columns();
 }
 
-const table_slice_ptr& table_slice_row::slice() const noexcept {
+const table_slice& table_slice_row::slice() const noexcept {
   return slice_;
 }
 

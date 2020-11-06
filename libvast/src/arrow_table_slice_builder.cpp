@@ -534,10 +534,10 @@ bool arrow_table_slice_builder::add_impl(data_view x) {
   return true;
 }
 
-table_slice_ptr arrow_table_slice_builder::finish() {
+table_slice arrow_table_slice_builder::finish() {
   // Sanity check.
   if (col_ != 0)
-    return nullptr;
+    return {};
   // Generate Arrow schema from layout.
   auto schema = make_arrow_schema(layout());
   // Collect Arrow arrays for the record batch.
@@ -549,8 +549,8 @@ table_slice_ptr arrow_table_slice_builder::finish() {
   auto batch = arrow::RecordBatch::Make(schema, rows_, columns);
   table_slice_header hdr{layout(), rows_, 0};
   rows_ = 0;
-  return caf::make_copy_on_write<arrow_table_slice>(std::move(hdr),
-                                                    std::move(batch));
+  return table_slice{caf::make_copy_on_write<arrow_table_slice>(
+    std::move(hdr), std::move(batch))};
 }
 
 size_t arrow_table_slice_builder::rows() const noexcept {

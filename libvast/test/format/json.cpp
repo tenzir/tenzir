@@ -103,13 +103,13 @@ TEST(json to data) {
   auto jn = unbox(to<json>(str));
   auto xs = caf::get<json::object>(jn);
   format::json::add(*builder, xs, flat);
-  auto ptr = builder->finish();
-  REQUIRE(ptr);
-  CHECK(ptr->at(0, 11) == data{enumeration{2}});
+  auto slice = builder->finish();
+  REQUIRE_NOT_EQUAL(slice.encoding(), table_slice::encoding::none);
+  CHECK(slice->at(0, 11) == data{enumeration{2}});
   auto reference = map{};
   reference[count{1}] = data{"FOO"};
   reference[count{1024}] = data{"BAR!"};
-  CHECK_EQUAL(materialize(ptr->at(0, 17)), data{reference});
+  CHECK_EQUAL(materialize(slice->at(0, 17)), data{reference});
 }
 
 TEST_DISABLED(suricata) {
@@ -117,10 +117,9 @@ TEST_DISABLED(suricata) {
   auto input = std::make_unique<std::istringstream>(std::string{eve_log});
   reader_type reader{defaults::import::table_slice_type, caf::settings{},
                      std::move(input)};
-  std::vector<table_slice_ptr> slices;
-  auto add_slice = [&](table_slice_ptr ptr) {
-    slices.emplace_back(std::move(ptr));
-  };
+  std::vector<table_slice> slices;
+  auto add_slice
+    = [&](table_slice slice) { slices.emplace_back(std::move(slice)); };
   auto [err, num] = reader.read(2, 5, add_slice);
   CHECK_EQUAL(err, ec::end_of_input);
   REQUIRE_EQUAL(num, 2u);

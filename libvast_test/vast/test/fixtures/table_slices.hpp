@@ -49,7 +49,7 @@ namespace vast {
 /// @param seed The seed value for initializing the random-number generator.
 /// @returns a list of randomnly filled table slices or an error.
 /// @relates table_slice
-caf::expected<std::vector<table_slice_ptr>>
+caf::expected<std::vector<table_slice>>
 make_random_table_slices(size_t num_slices, size_t slice_size,
                          record_type layout, id offset = 0, size_t seed = 0);
 
@@ -64,11 +64,9 @@ make_random_table_slices(size_t num_slices, size_t slice_size,
 /// @note This function exists primarily for unit testing because it performs
 /// excessive memory allocations.
 std::vector<std::vector<data>>
-to_data(const table_slice_ptr& slice, size_t first_row = 0,
-        size_t num_rows = 0);
+to_data(const table_slice& slice, size_t first_row = 0, size_t num_rows = 0);
 
-std::vector<std::vector<data>>
-to_data(const std::vector<table_slice_ptr>& slices);
+std::vector<std::vector<data>> to_data(const std::vector<table_slice>& slices);
 
 } // namespace vast
 
@@ -99,7 +97,7 @@ private:
 
   caf::binary_serializer make_sink();
 
-  vast::table_slice_ptr make_slice();
+  vast::table_slice make_slice();
 
   vast::data_view at(size_t row, size_t col) const;
 

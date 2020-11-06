@@ -23,10 +23,10 @@ namespace vast {
 
 /// Prints a table slice as ID interval.
 struct table_slice_printer : printer<table_slice_printer> {
-  using attribute = table_slice_ptr;
+  using attribute = table_slice;
 
   template <class Iterator>
-  bool print(Iterator& out, const table_slice_ptr& x) const {
+  bool print(Iterator& out, const table_slice& x) const {
     using namespace printers;
     auto p = '[' << u64 << ',' << u64 << ')';
     return p(out, x->offset(), x->offset() + x->rows());
@@ -34,7 +34,7 @@ struct table_slice_printer : printer<table_slice_printer> {
 };
 
 template <>
-struct printer_registry<table_slice_ptr> {
+struct printer_registry<table_slice> {
   using type = table_slice_printer;
 };
 

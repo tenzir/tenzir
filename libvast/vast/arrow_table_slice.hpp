@@ -57,7 +57,7 @@ public:
 
   // -- factories --------------------------------------------------------------
 
-  static vast::table_slice_ptr make(vast::table_slice_header header);
+  static vast::legacy_table_slice_ptr make(vast::table_slice_header header);
 
   // -- properties -------------------------------------------------------------
 
@@ -85,8 +85,5 @@ private:
   /// The Arrow table containing all elements.
   record_batch_ptr batch_;
 };
-
-/// @relates arrow_table_slice
-using arrow_table_slice_ptr = caf::intrusive_cow_ptr<arrow_table_slice>;
 
 } // namespace vast

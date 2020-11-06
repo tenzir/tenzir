@@ -28,12 +28,6 @@
 
 namespace vast {
 
-class msgpack_table_slice;
-class msgpack_table_slice_builder;
-
-/// @relates msgpack_table_slice
-using msgpack_table_slice_ptr = caf::intrusive_cow_ptr<msgpack_table_slice>;
-
 /// A table slice that stores elements encoded in
 /// [MessagePack](https://msgpack.org) format. The implementation stores data
 /// in row-major order.
@@ -57,7 +51,7 @@ public:
 
   // -- factories --------------------------------------------------------------
 
-  static vast::table_slice_ptr make(vast::table_slice_header header);
+  static vast::legacy_table_slice_ptr make(vast::table_slice_header header);
 
   // -- properties -------------------------------------------------------------
 

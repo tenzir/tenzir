@@ -54,7 +54,8 @@ table_slice::table_slice() noexcept {
 // }
 
 // FIXME: Remove this when removing legacy table slices.
-table_slice::table_slice(table_slice_ptr&& slice) noexcept : slice_{slice} {
+table_slice::table_slice(legacy_table_slice_ptr&& slice) noexcept
+  : slice_{slice} {
   // nop
 }
 
@@ -77,7 +78,7 @@ table_slice::table_slice(const table_slice& other, enum encoding encoding,
         VAST_ASSERT(ok);
       }
     }
-    slice_ = builder->finish();
+    *this = builder->finish();
   };
   // FIXME: When switching to versioned encodings, perform re-encoding when the
   // encoding version is outdated, too.
@@ -217,7 +218,7 @@ data_view table_slice::at(table_slice::size_type row,
 // }
 
 // FIXME: Remove when switching to chunk_ptr for storing data.
-caf::expected<flatbuffers::Offset<fbs::table_slice_buffer::v0>>
+caf::expected<flatbuffers::Offset<fbs::FlatTableSlice>>
 pack(flatbuffers::FlatBufferBuilder& builder, const table_slice& x) {
   return pack(builder, x.slice_);
 }
@@ -332,7 +333,7 @@ bool operator!=(const legacy_table_slice& x, const legacy_table_slice& y) {
 
 // -- concepts -----------------------------------------------------------------
 
-caf::error inspect(caf::serializer& sink, table_slice_ptr& ptr) {
+caf::error inspect(caf::serializer& sink, legacy_table_slice_ptr& ptr) {
   if (!ptr)
     return sink(caf::atom("NULL"));
   return caf::error::eval(
@@ -341,7 +342,7 @@ caf::error inspect(caf::serializer& sink, table_slice_ptr& ptr) {
     [&] { return ptr->serialize(sink); });
 }
 
-caf::error inspect(caf::deserializer& source, table_slice_ptr& ptr) {
+caf::error inspect(caf::deserializer& source, legacy_table_slice_ptr& ptr) {
   caf::atom_value id;
   if (auto err = source(id))
     return err;
@@ -362,7 +363,7 @@ caf::error inspect(caf::deserializer& source, table_slice_ptr& ptr) {
 // slice and then calling GetTableSlice(buf). But until we touch the table
 // slice internals, we use this helper.
 caf::expected<flatbuffers::Offset<fbs::FlatTableSlice>>
-pack(flatbuffers::FlatBufferBuilder& builder, table_slice_ptr x) {
+pack(flatbuffers::FlatBufferBuilder& builder, legacy_table_slice_ptr x) {
   // This local builder instance will vanish once we can access the underlying
   // chunk of a table slice.
   flatbuffers::FlatBufferBuilder local_builder;
@@ -414,7 +415,7 @@ pack(flatbuffers::FlatBufferBuilder& builder, table_slice_ptr x) {
 
 // TODO: The dual to the note above applies here.
 caf::error
-unpack(const fbs::table_slice::legacy::v0& x, table_slice_ptr& y) {
+unpack(const fbs::table_slice::legacy::v0& x, legacy_table_slice_ptr& y) {
   auto ptr = reinterpret_cast<const char*>(x.data()->Data());
   caf::binary_deserializer source{nullptr, ptr, x.data()->size()};
   return source(y);
@@ -436,9 +437,9 @@ legacy_table_slice* intrusive_cow_ptr_unshare(legacy_table_slice*& ptr) {
 
 // -- operators ----------------------------------------------------------------
 
-void select(std::vector<table_slice_ptr>& result, const table_slice_ptr& xs,
+void select(std::vector<table_slice>& result, const table_slice& xs,
             const ids& selection) {
-  VAST_ASSERT(xs != nullptr);
+  VAST_ASSERT(xs.encoding() != table_slice::encoding::none);
   auto xs_ids = make_ids({{xs->offset(), xs->offset() + xs->rows()}});
   auto intersection = selection & xs_ids;
   auto intersection_rank = rank(intersection);
@@ -462,11 +463,11 @@ void select(std::vector<table_slice_ptr>& result, const table_slice_ptr& xs,
     if (builder->rows() == 0)
       return;
     auto slice = builder->finish();
-    if (slice == nullptr) {
+    if (slice.encoding() == table_slice::encoding::none) {
       VAST_WARNING(__func__, "got an empty slice");
       return;
     }
-    slice.unshared().offset(last_offset);
+    slice.offset(last_offset);
     result.emplace_back(std::move(slice));
   };
   auto last_id = last_offset - 1;
@@ -494,15 +495,14 @@ void select(std::vector<table_slice_ptr>& result, const table_slice_ptr& xs,
   push_slice();
 }
 
-std::vector<table_slice_ptr> select(const table_slice_ptr& xs,
-                                    const ids& selection) {
-  std::vector<table_slice_ptr> result;
+std::vector<table_slice> select(const table_slice& xs, const ids& selection) {
+  std::vector<table_slice> result;
   select(result, xs, selection);
   return result;
 }
 
-table_slice_ptr truncate(const table_slice_ptr& slice, size_t num_rows) {
-  VAST_ASSERT(slice != nullptr);
+table_slice truncate(const table_slice& slice, size_t num_rows) {
+  VAST_ASSERT(slice.encoding() != table_slice::encoding::none);
   VAST_ASSERT(num_rows > 0);
   if (slice->rows() <= num_rows)
     return slice;
@@ -512,13 +512,13 @@ table_slice_ptr truncate(const table_slice_ptr& slice, size_t num_rows) {
   return std::move(xs.back());
 }
 
-std::pair<table_slice_ptr, table_slice_ptr> split(const table_slice_ptr& slice,
-                                                  size_t partition_point) {
-  VAST_ASSERT(slice != nullptr);
+std::pair<table_slice, table_slice>
+split(const table_slice& slice, size_t partition_point) {
+  VAST_ASSERT(slice.encoding() != table_slice::encoding::none);
   if (partition_point == 0)
-    return {nullptr, slice};
+    return {{}, slice};
   if (partition_point >= slice->rows())
-    return {slice, nullptr};
+    return {slice, {}};
   auto first = slice->offset();
   auto mid = first + partition_point;
   auto last = first + slice->rows();
@@ -531,7 +531,7 @@ std::pair<table_slice_ptr, table_slice_ptr> split(const table_slice_ptr& slice,
   return {std::move(xs.front()), std::move(xs.back())};
 }
 
-uint64_t rows(const std::vector<table_slice_ptr>& slices) {
+uint64_t rows(const std::vector<table_slice>& slices) {
   auto result = uint64_t{0};
   for (auto& slice : slices)
     result += slice->rows();
@@ -541,7 +541,7 @@ uint64_t rows(const std::vector<table_slice_ptr>& slices) {
 namespace {
 
 struct row_evaluator {
-  row_evaluator(const table_slice_ptr& slice, size_t row)
+  row_evaluator(const table_slice& slice, size_t row)
     : slice_{slice}, row_{row} {
     // nop
   }
@@ -627,14 +627,14 @@ struct row_evaluator {
     return evaluate_view(lhs, op_, rhs);
   }
 
-  const table_slice_ptr& slice_;
+  const table_slice& slice_;
   size_t row_;
   relational_operator op_;
 };
 
 } // namespace
 
-ids evaluate(const expression& expr, const table_slice_ptr& slice) {
+ids evaluate(const expression& expr, const table_slice& slice) {
   // TODO: switch to a column-based evaluation strategy where it makes sense.
   ids result;
   result.append(false, slice->offset());

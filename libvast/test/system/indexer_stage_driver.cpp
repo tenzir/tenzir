@@ -47,7 +47,7 @@ auto sorted(Container xs) {
 
 thread_local std::vector<caf::actor> all_sinks;
 
-thread_local std::set<table_slice_ptr> all_slices;
+thread_local std::set<table_slice> all_slices;
 
 behavior dummy_sink(event_based_actor* self) {
   return {[=](stream<table_slice_column> in) {
@@ -77,7 +77,7 @@ behavior dummy_index(stateful_actor<index_state>* self, path dir) {
   VAST_TRACE(VAST_ARG(dir));
   self->state.init(dir, std::numeric_limits<size_t>::max(), 10, 5, true);
   self->state.factory = spawn_sink;
-  return {[=](stream<table_slice_ptr> in) {
+  return {[=](stream<table_slice> in) {
     auto mgr = self->make_continuous_stage<indexer_stage_driver>(self);
     mgr->add_inbound_path(in);
     self->unbecome();
@@ -126,7 +126,7 @@ struct fixture : fixtures::deterministic_actor_system_and_events {
   actor index;
 
   // Randomly picked table slices from the events fixture.
-  std::vector<table_slice_ptr> test_slices;
+  std::vector<table_slice> test_slices;
 
   // Keeps track how many layouts are in `test_slices`.
   size_t num_layouts;

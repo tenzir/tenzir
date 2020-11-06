@@ -472,7 +472,7 @@ writer::~writer() {
     ::pcap_close(pcap_);
 }
 
-caf::error writer::write(const table_slice_ptr& slice) {
+caf::error writer::write(const table_slice& slice) {
   if (!pcap_) {
 #ifdef PCAP_TSTAMP_PRECISION_NANO
     pcap_ = ::pcap_open_dead_with_tstamp_precision(DLT_RAW, snaplen_,

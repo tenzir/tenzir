@@ -87,9 +87,9 @@ chunk_ptr segment::chunk() const {
   return chunk_;
 }
 
-caf::expected<std::vector<table_slice_ptr>>
+caf::expected<std::vector<table_slice>>
 segment::lookup(const vast::ids& xs) const {
-  std::vector<table_slice_ptr> result;
+  std::vector<table_slice> result;
   auto f = [](auto buffer) noexcept {
     return visit(
       detail::overload{
@@ -107,10 +107,10 @@ segment::lookup(const vast::ids& xs) const {
           // This requires that table slices will be constructable from a chunk.
           // Until then, we stupidly deserialize the data into a new table
           // slice.
-          table_slice_ptr new_slice;
+          legacy_table_slice_ptr new_slice;
           if (auto err = unpack(*slice, new_slice))
             return err;
-          result.push_back(std::move(std::move(new_slice)));
+          result.push_back(table_slice{std::move(new_slice)});
           return caf::none;
         },
       },

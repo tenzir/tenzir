@@ -41,7 +41,7 @@ explorer_state::explorer_state(caf::event_based_actor*) {
   // nop
 }
 
-void explorer_state::forward_results(vast::table_slice_ptr slice) {
+void explorer_state::forward_results(vast::table_slice slice) {
   // Check which of the ids in this slice were already sent to the sink
   // and forward those that were not.
   vast::bitmap unseen;
@@ -57,7 +57,7 @@ void explorer_state::forward_results(vast::table_slice_ptr slice) {
   }
   if (unseen.empty())
     return;
-  std::vector<table_slice_ptr> slices;
+  std::vector<table_slice> slices;
   if (unseen.size() == slice->rows()) {
     slices.push_back(slice);
   } else {
@@ -115,7 +115,7 @@ explorer(caf::stateful_actor<explorer_state>* self, caf::actor node,
     quit_if_done();
   });
   return {
-    [=](vast::table_slice_ptr slice) {
+    [=](vast::table_slice slice) {
       auto& st = self->state;
       // TODO: Add some cleaner way to distinguish the different input streams,
       // maybe some 'tagged' stream in caf?

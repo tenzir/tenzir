@@ -35,11 +35,11 @@ caf::error multi_layout_reader::finish(consumer& f,
                                        table_slice_builder_ptr& builder_ptr,
                                        caf::error result) {
   if (builder_ptr != nullptr && builder_ptr->rows() > 0) {
-    auto ptr = builder_ptr->finish();
+    auto slice = builder_ptr->finish();
     // Override error in case we encounter an error in the builder.
-    if (ptr == nullptr)
+    if (slice.encoding() == table_slice::encoding::none)
       return make_error(ec::parse_error, "unable to finish current slice");
-    f(std::move(ptr));
+    f(std::move(slice));
   }
   return result;
 }

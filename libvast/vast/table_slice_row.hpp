@@ -14,6 +14,7 @@
 #pragma once
 
 #include "vast/fwd.hpp"
+#include "vast/table_slice.hpp"
 #include "vast/view.hpp"
 
 #include <caf/meta/type_name.hpp>
@@ -39,7 +40,7 @@ public:
   /// @param slice The slice to view.
   /// @param row The viewed row's index.
   /// @pre `row < slice->rows()`
-  table_slice_row(table_slice_ptr slice, size_t row) noexcept;
+  table_slice_row(table_slice slice, size_t row) noexcept;
 
   /// @returns the data at given column.
   /// @pre `column < size()`
@@ -49,7 +50,7 @@ public:
   size_t size() const noexcept;
 
   /// @returns the viewed table slice.
-  const table_slice_ptr& slice() const noexcept;
+  const table_slice& slice() const noexcept;
 
   /// @returns the viewed row's index.
   size_t index() const noexcept;
@@ -62,7 +63,7 @@ public:
   }
 
 private:
-  table_slice_ptr slice_ = nullptr;
+  table_slice slice_ = {};
   size_t row_ = 0;
 };
 

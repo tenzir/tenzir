@@ -33,7 +33,7 @@ segment_builder::segment_builder() {
   reset();
 }
 
-caf::error segment_builder::add(table_slice_ptr x) {
+caf::error segment_builder::add(table_slice x) {
   if (x->offset() < min_table_slice_offset_)
     return make_error(ec::unspecified, "slice offsets not increasing");
   auto slice = pack(builder_, x);
@@ -72,9 +72,9 @@ segment segment_builder::finish() {
   return segment{std::move(chk)};
 }
 
-caf::expected<std::vector<table_slice_ptr>>
+caf::expected<std::vector<table_slice>>
 segment_builder::lookup(const vast::ids& xs) const {
-  std::vector<table_slice_ptr> result;
+  std::vector<table_slice> result;
   auto f = [](auto& slice) {
     return std::pair{slice->offset(), slice->offset() + slice->rows()};
   };
@@ -104,7 +104,7 @@ size_t segment_builder::table_slice_bytes() const {
   return builder_.GetSize();
 }
 
-const std::vector<table_slice_ptr>& segment_builder::table_slices() const {
+const std::vector<table_slice>& segment_builder::table_slices() const {
   return slices_;
 }
 

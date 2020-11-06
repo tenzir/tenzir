@@ -68,7 +68,7 @@ public:
   // explicit table_slice(chunk_ptr&& chunk, enum verify verify) noexcept;
 
   // FIXME: Remove this when removing legacy table slices.
-  explicit table_slice(table_slice_ptr&& slice) noexcept;
+  explicit table_slice(legacy_table_slice_ptr&& slice) noexcept;
 
   /// Copy-construct a table slice.
   /// @param other The copied-from slice.
@@ -170,7 +170,7 @@ public:
   // friend span<const byte> as_bytes(const table_slice& x) noexcept;
 
   // FIXME: Remove when switching to chunk_ptr for storing data.
-  friend caf::expected<flatbuffers::Offset<fbs::table_slice_buffer::v0>>
+  friend caf::expected<flatbuffers::Offset<fbs::FlatTableSlice>>
   pack(flatbuffers::FlatBufferBuilder& builder, const table_slice& x);
 
   /// Opt-in to CAF's type inspection API.
@@ -184,11 +184,11 @@ private:
   // -- implementation details -------------------------------------------------
 
   // FIXME: Remove when switching to chunk_ptr for storing data.
-  table_slice_ptr slice_ = {};
+  legacy_table_slice_ptr slice_ = {};
 
   /// A pointer to the underlying chunk, which contains a `vast.fbs.TableSlice`
   /// FlatBuffers table.
-  // FIXME: Use chunk_ptr for storing data instead of table_slice_ptr.
+  // FIXME: Use chunk_ptr for storing data instead of legacy_table_slice_ptr.
   // chunk_ptr chunk_ = {};
 
   /// The offset of the table slice within its ID space.
@@ -303,24 +303,25 @@ public:
   // -- concepts ---------------------------------------------------------------
 
   /// @relates legacy_table_slice
-  friend caf::error inspect(caf::serializer& sink, table_slice_ptr& ptr);
+  friend caf::error inspect(caf::serializer& sink, legacy_table_slice_ptr& ptr);
 
   /// @relates legacy_table_slice
-  friend caf::error inspect(caf::deserializer& source, table_slice_ptr& ptr);
+  friend caf::error
+  inspect(caf::deserializer& source, legacy_table_slice_ptr& ptr);
 
   /// Packs a table slice into a flatbuffer.
   /// @param builder The builder to pack *x* into.
   /// @param x The table slice to pack.
   /// @returns The flatbuffer offset in *builder*.
   friend caf::expected<flatbuffers::Offset<fbs::FlatTableSlice>>
-  pack(flatbuffers::FlatBufferBuilder& builder, table_slice_ptr x);
+  pack(flatbuffers::FlatBufferBuilder& builder, legacy_table_slice_ptr x);
 
   /// Unpacks a table slice from a flatbuffer.
   /// @param x The flatbuffer to unpack.
   /// @param y The target to unpack *x* into.
   /// @returns An error iff the operation fails.
   friend caf::error
-  unpack(const fbs::table_slice::legacy::v0& x, table_slice_ptr& y);
+  unpack(const fbs::table_slice::legacy::v0& x, legacy_table_slice_ptr& y);
 
 protected:
   // -- member variables -------------------------------------------------------
@@ -352,7 +353,7 @@ legacy_table_slice* intrusive_cow_ptr_unshare(legacy_table_slice*&);
 /// @param xs The input table slice.
 /// @param selection ID set for selecting events from `xs`.
 /// @pre `xs != nullptr`
-void select(std::vector<table_slice_ptr>& result, const table_slice_ptr& xs,
+void select(std::vector<table_slice>& result, const table_slice& xs,
             const ids& selection);
 
 /// Selects all rows in `xs` with event IDs in `selection`. Cuts `xs` into
@@ -362,8 +363,7 @@ void select(std::vector<table_slice_ptr>& result, const table_slice_ptr& xs,
 /// @returns new table slices of the same implementation type as `xs` from
 ///          `selection`.
 /// @pre `xs != nullptr`
-std::vector<table_slice_ptr>
-select(const table_slice_ptr& xs, const ids& selection);
+std::vector<table_slice> select(const table_slice& xs, const ids& selection);
 
 /// Selects the first `num_rows` rows of `slice`.
 /// @param slice The input table slice.
@@ -372,7 +372,7 @@ select(const table_slice_ptr& xs, const ids& selection);
 ///          table slice of the first `num_rows` rows from `slice`.
 /// @pre `slice != nullptr`
 /// @pre `num_rows > 0`
-table_slice_ptr truncate(const table_slice_ptr& slice, size_t num_rows);
+table_slice truncate(const table_slice& slice, size_t num_rows);
 
 /// Splits a table slice into two slices such that the first slice contains the
 /// rows `[0, partition_point)` and the second slice contains the rows
@@ -382,18 +382,18 @@ table_slice_ptr truncate(const table_slice_ptr& slice, size_t num_rows);
 /// @returns two new table slices if `0 < partition_point < slice->rows()`,
 ///          otherwise returns `slice` and a `nullptr`.
 /// @pre `slice != nullptr`
-std::pair<table_slice_ptr, table_slice_ptr>
-split(const table_slice_ptr& slice, size_t partition_point);
+std::pair<table_slice, table_slice>
+split(const table_slice& slice, size_t partition_point);
 
 /// Counts the number of total rows of multiple table slices.
 /// @param slices The table slices to count.
 /// @returns The sum of rows across *slices*.
-uint64_t rows(const std::vector<table_slice_ptr>& slices);
+uint64_t rows(const std::vector<table_slice>& slices);
 
 /// Evaluates an expression over a table slice by applying it row-wise.
 /// @param expr The expression to evaluate.
 /// @param slice The table slice to apply *expr* on.
 /// @returns The set of row IDs in *slice* for which *expr* yields true.
-ids evaluate(const expression& expr, const table_slice_ptr& slice);
+ids evaluate(const expression& expr, const table_slice& slice);
 
 } // namespace vast

@@ -61,7 +61,7 @@ caf::behavior sink(caf::stateful_actor<sink_state>* self,
     self->quit(msg.reason);
   });
   return {
-    [=](table_slice_ptr slice) {
+    [=](table_slice slice) {
       VAST_DEBUG(self, "got:", slice->rows(), "events from",
                  self->current_sender());
       auto& st = self->state;
