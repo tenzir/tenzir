@@ -64,8 +64,7 @@ public:
   /// @param verify Controls whether the table should be verified.
   /// @note Constructs an invalid table slice if the verification of the
   /// FlatBuffers table fails.
-  // FIXME: Implement when switching to chunk_ptr for storing data.
-  // explicit table_slice(chunk_ptr&& chunk, enum verify verify) noexcept;
+  explicit table_slice(chunk_ptr&& chunk, enum verify verify) noexcept;
 
   // FIXME: Remove this when removing legacy table slices.
   explicit table_slice(legacy_table_slice_ptr&& slice) noexcept;

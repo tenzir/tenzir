@@ -26,6 +26,7 @@
 #include "vast/table_slice_builder.hpp"
 #include "vast/table_slice_builder_factory.hpp"
 #include "vast/table_slice_factory.hpp"
+#include "vast/table_slice_visit.hpp"
 #include "vast/value_index.hpp"
 
 #include <caf/actor_system.hpp>
@@ -53,9 +54,34 @@ table_slice::table_slice() noexcept {
   ++num_instances_;
 }
 
-// table_slice::table_slice(chunk_ptr&& chunk, enum verify verify) noexcept {
-//   FIXME: Implement when switching to chunk_ptr for storing data.
-// }
+table_slice::table_slice(chunk_ptr&& chunk, enum verify verify) noexcept {
+  ++num_instances_;
+  // If the chunk doesn't point to anything, construct an invalid table slice.
+  if (!chunk)
+    return;
+  // If the requested verification fails, construct an invalid table slice.
+  const auto data = reinterpret_cast<const uint8_t*>(chunk->data());
+  if (verify == verify::yes) {
+    auto verifier = flatbuffers::Verifier{data, chunk->size()};
+    if (!verifier.template VerifyBuffer<fbs::TableSlice>())
+      return;
+  }
+  visit(
+    detail::overload{
+      // If the table slice encoding is none, construct an invalid table slice.
+      []() noexcept {},
+      // For all other table slice encodings, construct a valid table slice.
+      [&](auto&& slice) noexcept {
+        legacy_table_slice_ptr tmp = nullptr;
+        if (unpack(*slice, tmp))
+          die("failed to unpack already verified slice");
+        slice_ = std::move(tmp);
+        // FIXME: When switching to chunk_ptr for storing data, do this instead:
+        //   chunk_ = std::move(chunk);
+      },
+    },
+    fbs::GetTableSlice(data));
+}
 
 // FIXME: Remove this when removing legacy table slices.
 table_slice::table_slice(legacy_table_slice_ptr&& slice) noexcept
