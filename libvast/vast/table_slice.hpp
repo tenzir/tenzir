@@ -118,11 +118,6 @@ public:
   operator!=(const table_slice& lhs, const table_slice& rhs) noexcept;
 
   // [[deprecated("transitional only")]]
-  inline const legacy_table_slice& operator*() const noexcept {
-    return *slice_;
-  }
-
-  // [[deprecated("transitional only")]]
   inline const legacy_table_slice_ptr& operator->() const noexcept {
     return slice_;
   }

@@ -75,7 +75,7 @@ TEST(zeek source) {
   MESSAGE("compare slices to auto-generates ones");
   REQUIRE_EQUAL(slices.size(), zeek_conn_log.size());
   for (size_t i = 0; i < slices.size(); ++i)
-    CHECK_EQUAL(*slices[i], *zeek_conn_log[i]);
+    CHECK_EQUAL(slices[i], zeek_conn_log[i]);
   MESSAGE("shutdown");
   self->send_exit(src, caf::exit_reason::user_shutdown);
   run();
