@@ -138,6 +138,14 @@
       - suricata.http.http.hostname
       - suricata.dhcp.dhcp.hostname
 - concept:
+    name: net.domain
+    fields:
+      # The rrname field may also include IP addresses, e.g., for reverse
+      # lookups.
+      - suricata.dns.dns.rrname
+      - suricata.tls.sni
+      - suricata.http.http.hostname
+- concept:
     name: net.uri
     fields:
       - suricata.http.http.url
