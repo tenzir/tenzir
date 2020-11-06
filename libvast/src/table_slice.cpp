@@ -43,11 +43,192 @@
 
 namespace vast {
 
+// -- constructors, destructors, and assignment operators ----------------------
+
+table_slice::table_slice() noexcept {
+  ++num_instances_;
+}
+
+// table_slice::table_slice(chunk_ptr&& chunk, enum verify verify) noexcept {
+//   FIXME: Implement when switching to chunk_ptr for storing data.
+// }
+
+// FIXME: Remove this when removing legacy table slices.
+table_slice::table_slice(table_slice_ptr&& slice) noexcept : slice_{slice} {
+  // nop
+}
+
+table_slice::table_slice(const table_slice& other) noexcept
+  : slice_{other.slice_} {
+  ++num_instances_;
+}
+
+table_slice::table_slice(const table_slice& other, enum encoding encoding,
+                         enum verify verify) noexcept {
+  ++num_instances_;
+  // A helper utility for rebuilding the existing slice with a new builder.
+  auto rebuild_slice = [&](auto&&... builder_args) {
+    auto builder = factory<table_slice_builder>::make(
+      std::forward<decltype(builder_args)>(builder_args)...);
+    VAST_ASSERT(builder);
+    for (size_type row = 0; row < other.rows(); ++row) {
+      for (size_type column = 0; column < other.columns(); ++column) {
+        auto ok = builder->add(other.at(row, column));
+        VAST_ASSERT(ok);
+      }
+    }
+    slice_ = builder->finish();
+  };
+  // FIXME: When switching to versioned encodings, perform re-encoding when the
+  // encoding version is outdated, too.
+  if (encoding == other.encoding()) {
+    slice_ = other.slice_;
+  } else {
+    switch (encoding) {
+      case encoding::none:
+        // Do nothing, we have an invalid table slice here.
+        break;
+      case encoding::arrow:
+        rebuild_slice(caf::atom("arrow"), other.layout());
+        break;
+      case encoding::msgpack:
+        rebuild_slice(caf::atom("msgpack"), other.layout());
+        break;
+    }
+    // FIXME: Verify the table contents here when switching to using the chunk.
+    VAST_IGNORE_UNUSED(verify);
+  }
+}
+
+table_slice& table_slice::operator=(const table_slice& rhs) noexcept {
+  ++num_instances_;
+  slice_ = rhs.slice_;
+  return *this;
+}
+
+table_slice::table_slice(table_slice&& other) noexcept
+  : slice_{std::exchange(other.slice_, {})} {
+  // nop
+}
+
+table_slice::table_slice(table_slice&& other, enum encoding encoding,
+                         enum verify verify) noexcept {
+  if (encoding == other.encoding()) {
+    // If the encoding matches, we can just move the data.
+    slice_ = std::exchange(other.slice_, {});
+  } else {
+    // Changing the encoding requires a copy, so we just delegate to the
+    // copy-constructor with re-encoding.
+    const auto& copy = std::exchange(other, {});
+    *this = table_slice{copy, encoding, verify};
+  }
+}
+
+table_slice& table_slice::operator=(table_slice&& rhs) noexcept {
+  slice_ = std::exchange(rhs.slice_, {});
+  return *this;
+}
+
+table_slice::~table_slice() noexcept {
+  --num_instances_;
+}
+
+// -- operators ----------------------------------------------------------------
+
+bool operator==(const table_slice& lhs, const table_slice& rhs) noexcept {
+  return *lhs.slice_ == *rhs.slice_;
+}
+
+bool operator!=(const table_slice& lhs, const table_slice& rhs) noexcept {
+  return !(lhs == rhs);
+}
+
+// -- properties ---------------------------------------------------------------
+
+enum table_slice::encoding table_slice::encoding() const noexcept {
+  if (slice_) {
+    auto id = slice_->implementation_id();
+    if (id == caf::atom("arrow"))
+      return encoding::arrow;
+    if (id == caf::atom("msgpack"))
+      return encoding::msgpack;
+  }
+  return encoding::none;
+}
+
+record_type table_slice::layout() const noexcept {
+  if (!slice_)
+    return {};
+  return slice_->layout();
+}
+
+table_slice::size_type table_slice::rows() const noexcept {
+  if (!slice_)
+    return 0;
+  return slice_->rows();
+}
+
+table_slice::size_type table_slice::columns() const noexcept {
+  if (!slice_)
+    return 0;
+  return slice_->columns();
+}
+
+id table_slice::offset() const noexcept {
+  if (!slice_)
+    return invalid_id;
+  return slice_->offset();
+}
+
+void table_slice::offset(id offset) noexcept {
+  VAST_ASSERT(encoding() != encoding::none);
+  slice_.unshared().offset(offset);
+}
+
+int table_slice::instances() noexcept {
+  return num_instances_;
+}
+
+// -- data access --------------------------------------------------------------
+
+/// Appends all values in column `column` to `index`.
+/// @param `column` The index of the column to append.
+/// @param `index` the value index to append to.
+void table_slice::append_column_to_index(table_slice::size_type column,
+                                         value_index& index) const {
+  return slice_->append_column_to_index(column, index);
+}
+
+/// Retrieves data by specifying 2D-coordinates via row and column.
+/// @param row The row offset.
+/// @param column The column offset.
+/// @pre `row < rows() && column < columns()`
+data_view table_slice::at(table_slice::size_type row,
+                          table_slice::size_type column) const {
+  VAST_ASSERT(row < rows());
+  VAST_ASSERT(column < columns());
+  return slice_->at(row, column);
+}
+
+// -- concepts -----------------------------------------------------------------
+
+// friend span<const byte> as_bytes(const table_slice& x) noexcept {
+//   FIXME: Implement when switching to chunk_ptr for storing data.
+// }
+
+// FIXME: Remove when switching to chunk_ptr for storing data.
+caf::expected<flatbuffers::Offset<fbs::table_slice_buffer::v0>>
+pack(flatbuffers::FlatBufferBuilder& builder, const table_slice& x) {
+  return pack(builder, x.slice_);
+}
+
+// -- legacy_table_slice -------------------------------------------------------
+
 namespace {
 
 using size_type = legacy_table_slice::size_type;
 
-} // namespace <anonymous>
+} // namespace
 
 // -- constructors, destructors, and assignment operators ----------------------
 
