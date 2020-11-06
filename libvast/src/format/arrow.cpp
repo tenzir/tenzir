@@ -45,25 +45,13 @@ caf::error writer::write(const table_slice& slice) {
   if (!layout(slice->layout()))
     return ec::unspecified;
   // Convert the slice to Arrow if necessary.
-  if (slice->implementation_id() == arrow_table_slice::class_id) {
-    auto dref = static_cast<const arrow_table_slice&>(*slice);
-    if (auto err = write_arrow_batches(dref))
-      return err;
-  } else {
-    // TODO: consider iterating the slice in its natural order (i.e., row major
-    //       or column major).
-    for (size_t row = 0; row < slice->rows(); ++row)
-      for (size_t column = 0; column < slice->columns(); ++column)
-        if (!current_builder_->add(slice->at(row, column)))
-          return ec::type_clash;
-    auto slice_copy = current_builder_->finish();
-    if (slice_copy.encoding() == table_slice::encoding::none)
-      return ec::invalid_table_slice_type;
-    VAST_ASSERT(slice_copy->implementation_id() == arrow_table_slice::class_id);
-    auto dref = static_cast<const arrow_table_slice&>(*slice_copy);
-    if (auto err = write_arrow_batches(dref))
-      return err;
-  }
+  auto arrow_slice
+    = table_slice{slice, table_slice::encoding::arrow, table_slice::verify::no};
+  // Get the Record Batch and print it.
+  auto batch = as_record_batch(arrow_slice);
+  VAST_ASSERT(batch != nullptr);
+  if (!current_batch_writer_->WriteRecordBatch(*batch).ok())
+    return ec::filesystem_error;
   return caf::none;
 }
 
@@ -90,14 +78,6 @@ bool writer::layout(const record_type& x) {
     return true;
   }
   return false;
-}
-
-caf::error writer::write_arrow_batches(const arrow_table_slice& x) {
-  auto batch = x.batch();
-  VAST_ASSERT(batch != nullptr);
-  if (!current_batch_writer_->WriteRecordBatch(*batch).ok())
-    return ec::filesystem_error;
-  return caf::none;
 }
 
 } // namespace vast::format::arrow

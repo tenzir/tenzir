@@ -13,21 +13,12 @@
 
 #pragma once
 
+#include "vast/fwd.hpp"
 #include "vast/table_slice.hpp"
 #include "vast/table_slice_builder.hpp"
 
 #include <memory>
 #include <vector>
-
-namespace arrow {
-
-class Array;
-class ArrayBuilder;
-class DataType;
-class MemoryPool;
-class Schema;
-
-} // namespace arrow
 
 namespace vast {
 

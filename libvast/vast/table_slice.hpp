@@ -164,6 +164,17 @@ public:
   /// @pre `row < rows() && column < columns()`
   data_view at(size_type row, size_type column) const;
 
+#if VAST_HAVE_ARROW
+
+  /// Converts a table slice to an Apache Arrow Record Batch.
+  /// @returns The pointer to the Record Batch on success, or `nullptr`.
+  /// @param x The table slice to convert.
+  /// @note Returns `nullptr` if `x.encoding() != table_slice::encoding::arrow`.
+  friend std::shared_ptr<arrow::RecordBatch>
+  as_record_batch(const table_slice& x);
+
+#endif // VAST_HAVE_ARROW
+
   // -- concepts ---------------------------------------------------------------
 
   // FIXME: Implement when switching to chunk_ptr for storing data.
