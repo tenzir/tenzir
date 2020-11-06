@@ -24,6 +24,21 @@
 
 #include <vector>
 
+#if VAST_HAVE_ARROW
+
+namespace arrow {
+
+class Array;
+class ArrayBuilder;
+class DataType;
+class MemoryPool;
+class RecordBatch;
+class Schema;
+
+} // namespace arrow
+
+#endif // VAST_HAVE_ARROW
+
 namespace vast {
 
 // -- classes ------------------------------------------------------------------
@@ -187,6 +202,8 @@ using value_index_ptr = std::unique_ptr<value_index>;
 // -- miscellaneous ------------------------------------------------------------
 
 using ids = bitmap; // temporary; until we have a real type for 'ids'
+
+// -- atoms --------------------------------------------------------------------
 
 namespace atom {
 

@@ -41,6 +41,10 @@
 
 #include <unordered_map>
 
+#if VAST_HAVE_ARROW
+#  include "vast/arrow_table_slice.hpp"
+#endif // VAST_HAVE_ARROW
+
 namespace vast {
 
 // -- constructors, destructors, and assignment operators ----------------------
@@ -210,6 +214,16 @@ data_view table_slice::at(table_slice::size_type row,
   VAST_ASSERT(column < columns());
   return slice_->at(row, column);
 }
+
+#if VAST_HAVE_ARROW
+
+std::shared_ptr<arrow::RecordBatch> as_record_batch(const table_slice& x) {
+  if (x.encoding() != table_slice::encoding::arrow)
+    return nullptr;
+  return static_cast<const arrow_table_slice&>(*x.slice_).batch();
+}
+
+#endif // VAST_HAVE_ARROW
 
 // -- concepts -----------------------------------------------------------------
 
