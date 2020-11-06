@@ -27,7 +27,6 @@
 #include "vast/logger.hpp"
 #include "vast/status.hpp"
 #include "vast/table_slice.hpp"
-#include "vast/table_slice_visit.hpp"
 
 #include <caf/config_value.hpp>
 #include <caf/dictionary.hpp>
@@ -401,13 +400,10 @@ uint64_t segment_store::drop(segment& x) {
   // instances.
   auto s = fbs::GetSegment(x.chunk()->data());
   auto s0 = s->segment_as_v0();
-  for (auto buffer : *s0->slices())
-    visit(
-      detail::overload{[]() noexcept {},
-                       [&](const fbs::table_slice::legacy::v0* slice) noexcept {
-                         erased_events += slice->rows();
-                       }},
-      buffer->data_nested_root());
+  for (auto flat_slice : *s0->slices()) {
+    auto slice = table_slice{*flat_slice, x.chunk(), table_slice::verify::no};
+    erased_events += slice.rows();
+  }
   VAST_INFO(this, "erases entire segment", segment_id);
   // Schedule deletion of the segment file when releasing the chunk.
   auto filename = segment_path() / to_string(segment_id);

@@ -27,7 +27,6 @@
 #include "vast/logger.hpp"
 #include "vast/si_literals.hpp"
 #include "vast/table_slice.hpp"
-#include "vast/table_slice_visit.hpp"
 #include "vast/uuid.hpp"
 
 #include <caf/binary_deserializer.hpp>
@@ -64,15 +63,10 @@ vast::ids segment::ids() const {
   vast::ids result;
   auto segment = fbs::GetSegment(chunk_->data());
   auto segment_v0 = segment->segment_as_v0();
-  for (auto buffer : *segment_v0->slices()) {
-    visit(
-      detail::overload{
-        [&](const fbs::table_slice::legacy::v0* slice) {
-          result.append_bits(false, slice->offset() - result.size());
-          result.append_bits(true, slice->rows());
-        },
-      },
-      buffer->data_nested_root());
+  for (auto flat_slice : *segment_v0->slices()) {
+    auto slice = table_slice{*flat_slice, chunk_, table_slice::verify::no};
+    result.append_bits(false, slice.offset() - result.size());
+    result.append_bits(true, slice.rows());
   }
   return result;
 }
@@ -90,31 +84,14 @@ chunk_ptr segment::chunk() const {
 caf::expected<std::vector<table_slice>>
 segment::lookup(const vast::ids& xs) const {
   std::vector<table_slice> result;
-  auto f = [](auto buffer) noexcept {
-    return visit(
-      detail::overload{
-        [](const fbs::table_slice::legacy::v0* slice) noexcept {
-          return std::pair{slice->offset(), slice->offset() + slice->rows()};
-        },
-      },
-      buffer->data_nested_root());
+  auto f = [&](auto flat_slice) noexcept {
+    auto slice = table_slice{*flat_slice, chunk_, table_slice::verify::no};
+    return std::pair{slice.offset(), slice.offset() + slice.rows()};
   };
-  auto g = [&](auto buffer) {
-    return visit(
-      detail::overload{
-        [&](const fbs::table_slice::legacy::v0* slice) -> caf::error {
-          // TODO: bind the lifetime of the table slice to the segment chunk.
-          // This requires that table slices will be constructable from a chunk.
-          // Until then, we stupidly deserialize the data into a new table
-          // slice.
-          legacy_table_slice_ptr new_slice;
-          if (auto err = unpack(*slice, new_slice))
-            return err;
-          result.push_back(table_slice{std::move(new_slice)});
-          return caf::none;
-        },
-      },
-      buffer->data_nested_root());
+  auto g = [&](auto flat_slice) {
+    auto slice = table_slice{*flat_slice, chunk_, table_slice::verify::no};
+    result.push_back(std::move(slice));
+    return caf::none;
   };
   auto segment = fbs::GetSegment(chunk_->data());
   auto segment_v0 = segment->segment_as_v0();
