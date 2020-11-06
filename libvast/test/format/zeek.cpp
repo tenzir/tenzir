@@ -269,14 +269,14 @@ TEST(zeek data parsing) {
 TEST(zeek reader - capture loss) {
   auto slices = read(capture_loss_10_events, 10, 10);
   REQUIRE_EQUAL(slices.size(), 1u);
-  CHECK_EQUAL(slices[0]->rows(), 10u);
+  CHECK_EQUAL(slices[0].rows(), 10u);
 }
 
 TEST(zeek reader - conn log) {
   auto slices = read(conn_log_100_events, 20, 100);
   CHECK_EQUAL(slices.size(), 5u);
   for (auto& slice : slices)
-    CHECK_EQUAL(slice->rows(), 20u);
+    CHECK_EQUAL(slice.rows(), 20u);
 }
 
 TEST(zeek reader - custom schema) {
@@ -322,8 +322,8 @@ TEST(zeek reader - custom schema) {
     = [&](table_slice slice) { slices.emplace_back(std::move(slice)); };
   auto [err, num] = reader.read(20, 20, add_slice);
   CHECK_EQUAL(slices.size(), 1u);
-  CHECK_EQUAL(slices[0]->rows(), 20u);
-  auto layout = slices[0]->layout();
+  CHECK_EQUAL(slices[0].rows(), 20u);
+  auto layout = slices[0].layout();
   CHECK_EQUAL(layout, expected);
 }
 
@@ -348,7 +348,7 @@ TEST(zeek reader - continous stream with partial slice) {
   t.join();
   CHECK_EQUAL(slices.size(), 1u);
   for (auto& slice : slices)
-    CHECK_EQUAL(slice->rows(), 10u);
+    CHECK_EQUAL(slice.rows(), 10u);
   ::close(pipefds[0]);
   ::close(pipefds[1]);
 }
@@ -372,9 +372,9 @@ TEST(zeek writer) {
   for (auto& slice : zeek_http_log)
     if (auto err = writer.write(slice))
       FAIL("failed to write HTTP log");
-  auto conn_layout = zeek_conn_log[0]->layout();
+  auto conn_layout = zeek_conn_log[0].layout();
   CHECK(exists(directory / conn_layout.name() + ".log"));
-  auto http_layout = zeek_http_log[0]->layout();
+  auto http_layout = zeek_http_log[0].layout();
   CHECK(exists(directory / http_layout.name() + ".log"));
   // TODO: these tests should verify content as well.
 }

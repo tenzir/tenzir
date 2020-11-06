@@ -145,7 +145,7 @@ TEST(eraser on mock INDEX) {
 }
 
 TEST(eraser on actual INDEX with Zeek conn logs) {
-  auto slice_size = zeek_conn_log_full[0]->rows();
+  auto slice_size = zeek_conn_log_full[0].rows();
   auto slices = take(zeek_conn_log_full, 4);
   MESSAGE("spawn INDEX ingest 4 slices with 100 rows (= 1 partition) each");
   auto fs = self->spawn(vast::system::posix_filesystem, directory);

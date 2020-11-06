@@ -43,7 +43,7 @@ struct fixture : fixtures::events {
 
   expression make_conn_expr(std::string_view str) const {
     auto expr = make_expr(str);
-    return unbox(tailor(expr, zeek_conn_log_slice->layout()));
+    return unbox(tailor(expr, zeek_conn_log_slice.layout()));
   }
 
   table_slice zeek_conn_log_slice;
@@ -56,19 +56,19 @@ FIXTURE_SCOPE(evaluation_tests, fixture)
 TEST(evaluation - attribute extractor - #timestamp) {
   auto expr = make_expr("#timestamp <= 2009-11-18T08:09");
   auto ids = evaluate(expr, zeek_conn_log_slice);
-  CHECK_EQUAL(ids, make_ids({{0, 5}}, zeek_conn_log_slice->rows()));
+  CHECK_EQUAL(ids, make_ids({{0, 5}}, zeek_conn_log_slice.rows()));
 }
 
 TEST(evaluation - attribute extractor - #type) {
   auto expr = make_expr("#type == \"zeek.conn\"");
   auto ids = evaluate(expr, zeek_conn_log_slice);
-  CHECK_EQUAL(ids, make_ids({{0, zeek_conn_log_slice->rows()}}));
+  CHECK_EQUAL(ids, make_ids({{0, zeek_conn_log_slice.rows()}}));
 }
 
 TEST(evaluation - attribute extractor - #foo) {
   auto expr = make_expr("#foo == 42");
   auto ids = evaluate(expr, zeek_conn_log_slice);
-  CHECK_EQUAL(ids.size(), zeek_conn_log_slice->rows());
+  CHECK_EQUAL(ids.size(), zeek_conn_log_slice.rows());
   CHECK(all<0>(ids));
 }
 
@@ -86,7 +86,7 @@ TEST(evaluation - type extractor - string + duration) {
   CHECK_EQUAL(rank(ids), 1u);
   auto id = select(ids, 1);
   REQUIRE_EQUAL(id, 97u);
-  CHECK_EQUAL(zeek_conn_log_slice->at(id, 1), make_data_view("jM8ATYNKqZg"));
+  CHECK_EQUAL(zeek_conn_log_slice.at(id, 1), make_data_view("jM8ATYNKqZg"));
 }
 
 TEST(evaluation - field extractor - orig_h + proto) {
@@ -95,7 +95,7 @@ TEST(evaluation - field extractor - orig_h + proto) {
   auto ids = evaluate(expr, zeek_conn_log_slice);
   REQUIRE_EQUAL(rank(ids), 10u);
   auto last = select(ids, -1);
-  CHECK_EQUAL(zeek_conn_log_slice->at(last, 1), make_data_view("WfzxgFx2lWb"));
+  CHECK_EQUAL(zeek_conn_log_slice.at(last, 1), make_data_view("WfzxgFx2lWb"));
 }
 
 TEST(evaluation - field extractor - service + orig_h) {

@@ -86,7 +86,7 @@ std::vector<table_slice> node::query(std::string expr) {
   bool running = true;
   self->receive_while(running)(
     [&](table_slice slice) {
-      MESSAGE("... got " << slice->rows() << " events");
+      MESSAGE("... got " << slice.rows() << " events");
       result.push_back(std::move(slice));
     },
     [&](const uuid&, const system::query_status&) {

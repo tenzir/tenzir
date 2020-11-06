@@ -115,7 +115,7 @@ caf::behavior active_indexer(caf::stateful_actor<indexer_state>* self,
             return;
           for (auto& column : columns)
             for (size_t i = 0; i < column.size(); ++i)
-              self->state.idx->append(column[i], column.slice()->offset() + i);
+              self->state.idx->append(column[i], column.slice().offset() + i);
         },
         [=](caf::unit_t&, const error& err) {
           if (err) {

@@ -40,7 +40,7 @@ public:
   /// Construct a view on a column of a table slice.
   /// @param slice The slice to view.
   /// @param column The viewed column's index.
-  /// @pre `column < slice->columns()`
+  /// @pre `column < slice.columns()`
   table_slice_column(table_slice slice, size_t column) noexcept;
 
   /// Construct a view on a column of a table slice.

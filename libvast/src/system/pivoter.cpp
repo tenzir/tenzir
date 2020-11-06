@@ -100,7 +100,7 @@ caf::behavior pivoter(caf::stateful_actor<pivoter_state>* self, caf::actor node,
   return {
     [=](vast::table_slice slice) {
       auto& st = self->state;
-      auto pivot_field = common_field(st, slice->layout());
+      auto pivot_field = common_field(st, slice.layout());
       if (!pivot_field)
         return;
       VAST_DEBUG(self, "uses", *pivot_field, "to extract", st.target, "events");

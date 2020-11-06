@@ -59,8 +59,8 @@ make_random_table_slices(size_t num_slices, size_t slice_size,
 /// @param first_row An offset to the first row to consider.
 /// @param num_rows Then number of rows to consider. (0 = all rows)
 /// @returns a 2-D matrix of data instances corresponding to *slice*.
-/// @requires first_row < slice->rows()
-/// @requires num_rows <= slice->rows() - first_row
+/// @requires first_row < slice.rows()
+/// @requires num_rows <= slice.rows() - first_row
 /// @note This function exists primarily for unit testing because it performs
 /// excessive memory allocations.
 std::vector<std::vector<data>>

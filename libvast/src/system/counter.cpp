@@ -50,11 +50,11 @@ void counter_state::init(expression expr, caf::actor index,
   behaviors_[collect_hits] = base.or_else(
     [this](table_slice slice) {
       // Construct a candidate checker if we don't have one for this type.
-      auto it = checkers_.find(slice->layout());
+      auto it = checkers_.find(slice.layout());
       if (it == checkers_.end()) {
-        if (auto x = tailor(expr_, slice->layout())) {
+        if (auto x = tailor(expr_, slice.layout())) {
           std::tie(it, std::ignore) = checkers_.emplace(
-            vast::record_type{slice->layout()}, std::move(*x));
+            vast::record_type{slice.layout()}, std::move(*x));
         } else {
           VAST_ERROR(self_, "failed to tailor expression:",
                      self_->system().render(x.error()));

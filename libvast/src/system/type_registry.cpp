@@ -148,7 +148,7 @@ type_registry(type_registry_actor self, const path& dir) {
         [=](caf::unit_t&) {
           // nop
         },
-        [=](caf::unit_t&, table_slice x) { self->state.insert(x->layout()); });
+        [=](caf::unit_t&, table_slice x) { self->state.insert(x.layout()); });
     },
     [=](atom::put, vast::type x) {
       VAST_TRACE(self, "tries to add", VAST_ARG("type", x.name()));

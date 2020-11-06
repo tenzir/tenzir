@@ -173,8 +173,8 @@ caf::behavior importer(importer_actor* self, path dir, archive_type archive,
       VAST_TRACE(VAST_ARG(x));
       auto& st = self->state;
       auto t = timer::start(st.measurement_);
-      VAST_ASSERT(x->rows() <= static_cast<size_t>(st.available_ids()));
-      auto events = x->rows();
+      VAST_ASSERT(x.rows() <= static_cast<size_t>(st.available_ids()));
+      auto events = x.rows();
       x.offset(st.next_id(events));
       out.push(std::move(x));
       t.stop(events);

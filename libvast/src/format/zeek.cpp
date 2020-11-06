@@ -636,7 +636,7 @@ public:
 
 caf::error writer::write(const table_slice& slice) {
   ostream_writer* child = nullptr;
-  auto layout = slice->layout();
+  auto layout = slice.layout();
   if (dir_.empty()) {
     if (writers_.empty()) {
       VAST_DEBUG(this, "creates a new stream for STDOUT");

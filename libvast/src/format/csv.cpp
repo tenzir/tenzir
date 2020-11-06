@@ -102,7 +102,7 @@ caf::error render(output_iterator& out, const view<data>& x) {
 caf::error writer::write(const table_slice& x) {
   constexpr char separator = writer::defaults::separator;
   // Print a new header each time we encounter a new layout.
-  auto layout = x->layout();
+  auto layout = x.layout();
   if (last_layout_ != layout.name()) {
     last_layout_ = layout.name();
     append("type");
@@ -115,14 +115,14 @@ caf::error writer::write(const table_slice& x) {
   }
   // Print the cell contents.
   auto iter = std::back_inserter(buf_);
-  for (size_t row = 0; row < x->rows(); ++row) {
+  for (size_t row = 0; row < x.rows(); ++row) {
     append(last_layout_);
     append(separator);
-    if (auto err = render(iter, x->at(row, 0)))
+    if (auto err = render(iter, x.at(row, 0)))
       return err;
-    for (size_t column = 1; column < x->columns(); ++column) {
+    for (size_t column = 1; column < x.columns(); ++column) {
       append(separator);
-      if (auto err = render(iter, x->at(row, column)))
+      if (auto err = render(iter, x.at(row, column)))
         return err;
     }
     append('\n');

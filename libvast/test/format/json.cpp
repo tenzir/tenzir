@@ -105,11 +105,11 @@ TEST(json to data) {
   format::json::add(*builder, xs, flat);
   auto slice = builder->finish();
   REQUIRE_NOT_EQUAL(slice.encoding(), table_slice::encoding::none);
-  CHECK(slice->at(0, 11) == data{enumeration{2}});
+  CHECK(slice.at(0, 11) == data{enumeration{2}});
   auto reference = map{};
   reference[count{1}] = data{"FOO"};
   reference[count{1024}] = data{"BAR!"};
-  CHECK_EQUAL(materialize(slice->at(0, 17)), data{reference});
+  CHECK_EQUAL(materialize(slice.at(0, 17)), data{reference});
 }
 
 TEST_DISABLED(suricata) {
@@ -123,9 +123,9 @@ TEST_DISABLED(suricata) {
   auto [err, num] = reader.read(2, 5, add_slice);
   CHECK_EQUAL(err, ec::end_of_input);
   REQUIRE_EQUAL(num, 2u);
-  CHECK_EQUAL(slices[0]->columns(), 36u);
-  CHECK_EQUAL(slices[0]->rows(), 2u);
-  CHECK(slices[0]->at(0, 19) == data{count{4520}});
+  CHECK_EQUAL(slices[0].columns(), 36u);
+  CHECK_EQUAL(slices[0].rows(), 2u);
+  CHECK(slices[0].at(0, 19) == data{count{4520}});
 }
 
 TEST(json hex number parser) {
