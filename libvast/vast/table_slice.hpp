@@ -66,6 +66,19 @@ public:
   /// FlatBuffers table fails.
   explicit table_slice(chunk_ptr&& chunk, enum verify verify) noexcept;
 
+  /// Construct a table slice from a flattened table slice embedded in a chunk,
+  /// and shares the chunk's lifetime.
+  /// @param flat_slice The `vast.fbs.FlatTableSlice` object.
+  /// @param chunk A chunk that must contain the `flat_slice` object.
+  /// @param verify Controls whether the table should be verified.
+  /// @pre `chunk`
+  /// @pre `flat_slice.data()->begin() >= chunk->begin()`
+  /// @pre `flat_slice.data()->end() <= chunk->end()`
+  /// @note Constructs an invalid table slice if the verification of the
+  /// FlatBuffers table fails.
+  table_slice(const fbs::FlatTableSlice& flat_slice, const chunk_ptr& chunk,
+              enum verify verify) noexcept;
+
   // FIXME: Remove this when removing legacy table slices.
   explicit table_slice(legacy_table_slice_ptr&& slice) noexcept;
 
