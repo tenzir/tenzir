@@ -44,7 +44,7 @@ namespace system {
 struct accountant_state {
   // -- member types -----------------------------------------------------------
 
-  using downstream_manager = caf::broadcast_downstream_manager<table_slice_ptr>;
+  using downstream_manager = caf::broadcast_downstream_manager<table_slice>;
 
   // -- member variables -------------------------------------------------------
 
@@ -59,7 +59,7 @@ struct accountant_state {
 
   // Buffers table_slices, acting as a adaptor between the push based
   // ACCOUNTANT interface and the pull based stream to the IMPORTER.
-  std::queue<table_slice_ptr> slice_buffer;
+  std::queue<table_slice> slice_buffer;
 
   // Takes care of transmitting batches.
   caf::stream_source_ptr<downstream_manager> mgr;
@@ -235,7 +235,7 @@ accountant(accountant_actor* self, accountant_config cfg) {
     // init
     [=](bool&) {},
     // get next element
-    [=](bool&, caf::downstream<table_slice_ptr>& out, size_t num) {
+    [=](bool&, caf::downstream<table_slice>& out, size_t num) {
       auto& st = *self->state;
       size_t produced = 0;
       while (num-- > 0 && !st.slice_buffer.empty()) {

@@ -344,15 +344,14 @@ active_partition(caf::stateful_actor<active_partition_state>* self, uuid id,
   self->state.meta_idx = std::move(meta_idx);
   self->state.meta_idx.add(id);
   // The active partition stage is a caf stream stage that takes
-  // a stream of `table_slice_ptr` as input and produces several
+  // a stream of `table_slice` as input and produces several
   // streams of `table_slice_column` as output.
   self->state.stage = caf::attach_continuous_stream_stage(
     self,
     [=](caf::unit_t&) {
       // nop
     },
-    [=](caf::unit_t&, caf::downstream<table_slice_column>& out,
-        table_slice_ptr x) {
+    [=](caf::unit_t&, caf::downstream<table_slice_column>& out, table_slice x) {
       // We rely on `invalid_id` actually being the highest possible id
       // when using `min()` below.
       static_assert(vast::invalid_id == std::numeric_limits<vast::id>::max());
@@ -435,7 +434,7 @@ active_partition(caf::stateful_actor<active_partition_state>* self, uuid id,
     shutdown<policy::parallel>(self, std::move(indexers));
   });
   return {
-    [=](caf::stream<table_slice_ptr> in) {
+    [=](caf::stream<table_slice> in) {
       self->state.streaming_initiated = true;
       return self->state.stage->add_inbound_path(in);
     },
@@ -524,7 +523,7 @@ passive_partition(caf::stateful_actor<passive_partition_state>* self, uuid id,
                   filesystem_type fs, vast::path path) {
   self->state.self = self;
   auto passive_partition_behavior = caf::behavior{
-    [=](caf::stream<table_slice_ptr>) {
+    [=](caf::stream<table_slice>) {
       VAST_ASSERT(!"read-only partition can not receive new table slices");
     },
     [=](atom::persist, const vast::path&) {

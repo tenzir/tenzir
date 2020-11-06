@@ -37,7 +37,7 @@ ids make_ids(std::initializer_list<id_range> ranges, size_t min_size,
   return result;
 }
 
-ids make_ids(const table_slice_ptr& slice) {
+ids make_ids(const table_slice& slice) {
   return make_ids({{slice->offset(), slice->offset() + slice->rows()}});
 }
 

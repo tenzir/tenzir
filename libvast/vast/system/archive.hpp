@@ -38,7 +38,7 @@ namespace vast::system {
 
 // clang-format off
 using receiver_type = caf::typed_actor<
-  caf::reacts_to<table_slice_ptr>,
+  caf::reacts_to<table_slice>,
   caf::reacts_to<atom::done, caf::error>
 >;
 // clang-format on
@@ -46,7 +46,7 @@ using receiver_type = caf::typed_actor<
 // clang-format off
 /// @relates archive
 using archive_type = caf::typed_actor<
-  caf::reacts_to<caf::stream<table_slice_ptr>>,
+  caf::reacts_to<caf::stream<table_slice>>,
   caf::reacts_to<atom::exporter, caf::actor>,
   caf::reacts_to<accountant_type>,
   caf::reacts_to<ids>,

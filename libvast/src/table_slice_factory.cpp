@@ -33,7 +33,8 @@ void factory_traits<legacy_table_slice>::initialize() {
 #endif
 }
 
-table_slice_ptr factory_traits<legacy_table_slice>::make(chunk_ptr chunk) {
+legacy_table_slice_ptr
+factory_traits<legacy_table_slice>::make(chunk_ptr chunk) {
   if (chunk == nullptr)
     return nullptr;
   // Setup a CAF deserializer.

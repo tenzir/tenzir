@@ -48,11 +48,11 @@ caf::error multi_layout_reader::finish(consumer& f,
                         VAST_ARG(batch_events_), VAST_ARG(rows));
       batch_events_ = 0;
     }
-    auto ptr = builder_ptr->finish();
+    auto slice = builder_ptr->finish();
     // Override error in case we encounter an error in the builder.
-    if (ptr == nullptr)
+    if (slice.encoding() == table_slice::encoding::none)
       return make_error(ec::parse_error, "unable to finish current slice");
-    f(std::move(ptr));
+    f(std::move(slice));
   }
   return result;
 }

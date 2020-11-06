@@ -48,7 +48,7 @@ void counter_state::init(expression expr, caf::actor index,
   self_->send(archive_, atom::exporter_v, self_);
   caf::message_handler base{behaviors_[collect_hits].as_behavior_impl()};
   behaviors_[collect_hits] = base.or_else(
-    [this](table_slice_ptr slice) {
+    [this](table_slice slice) {
       // Construct a candidate checker if we don't have one for this type.
       auto it = checkers_.find(slice->layout());
       if (it == checkers_.end()) {

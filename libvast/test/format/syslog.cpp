@@ -33,15 +33,15 @@ TEST(syslog reader) {
   auto in = detail::make_input_stream(artifacts::logs::syslog::syslog_msgs);
   format::syslog::reader reader{defaults::import::table_slice_type,
                                 caf::settings{}, std::move(*in)};
-  table_slice_ptr slice;
-  auto add_slice = [&](const table_slice_ptr& x) {
-    REQUIRE_EQUAL(slice, nullptr);
+  table_slice slice;
+  auto add_slice = [&](const table_slice& x) {
+    REQUIRE_EQUAL(slice.encoding(), table_slice::encoding::none);
     slice = x;
   };
   auto [err, produced] = reader.read(std::numeric_limits<size_t>::max(),
                                      100, // we expect only 5 events
                                      add_slice);
-  REQUIRE_NOT_EQUAL(slice, nullptr);
+  REQUIRE_NOT_EQUAL(slice.encoding(), table_slice::encoding::none);
   REQUIRE_EQUAL(produced, 5u);
   auto layout = slice->layout();
   CHECK_EQUAL(layout.name(), "syslog.rfc5424");

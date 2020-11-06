@@ -32,9 +32,9 @@ using namespace vast;
 
 namespace vast {
 
-table_slice_ptr msgpack_table_slice::make(table_slice_header header) {
+legacy_table_slice_ptr msgpack_table_slice::make(table_slice_header header) {
   auto ptr = new msgpack_table_slice{std::move(header)};
-  return table_slice_ptr{ptr, false};
+  return legacy_table_slice_ptr{ptr, false};
 }
 
 msgpack_table_slice* msgpack_table_slice::copy() const {

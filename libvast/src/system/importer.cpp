@@ -169,14 +169,13 @@ caf::behavior importer(importer_actor* self, path dir, archive_type archive,
     [](caf::unit_t&) {
       // nop
     },
-    [=](caf::unit_t&, caf::downstream<table_slice_ptr>& out,
-        table_slice_ptr x) {
+    [=](caf::unit_t&, caf::downstream<table_slice>& out, table_slice x) {
       VAST_TRACE(VAST_ARG(x));
       auto& st = self->state;
       auto t = timer::start(st.measurement_);
       VAST_ASSERT(x->rows() <= static_cast<size_t>(st.available_ids()));
       auto events = x->rows();
-      x.unshared().offset(st.next_id(events));
+      x.offset(st.next_id(events));
       out.push(std::move(x));
       t.stop(events);
     },

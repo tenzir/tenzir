@@ -98,7 +98,7 @@ caf::behavior pivoter(caf::stateful_actor<pivoter_state>* self, caf::actor node,
     quit_if_done();
   });
   return {
-    [=](vast::table_slice_ptr slice) {
+    [=](vast::table_slice slice) {
       auto& st = self->state;
       auto pivot_field = common_field(st, slice->layout());
       if (!pivot_field)

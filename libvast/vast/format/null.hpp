@@ -26,7 +26,7 @@ public:
 
   using super::super;
 
-  caf::error write(const table_slice_ptr&) override;
+  caf::error write(const table_slice&) override;
 
   const char* name() const override;
 };

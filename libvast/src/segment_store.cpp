@@ -60,13 +60,13 @@ segment_store::~segment_store() {
   // nop
 }
 
-caf::error segment_store::put(table_slice_ptr xs) {
+caf::error segment_store::put(table_slice xs) {
   VAST_TRACE(VAST_ARG(xs));
-  if (auto error = builder_.add(xs))
-    return error;
   if (!segments_.inject(xs->offset(), xs->offset() + xs->rows(), builder_.id()))
     return make_error(ec::unspecified, "failed to update range_map");
   num_events_ += xs->rows();
+  if (auto error = builder_.add(std::move(xs)))
+    return error;
   if (builder_.table_slice_bytes() < max_segment_size_)
     return caf::none;
   // We have exceeded our maximum segment size and now finish.
@@ -83,7 +83,7 @@ std::unique_ptr<store::lookup> segment_store::extract(const ids& xs) const {
       // nop
     }
 
-    caf::expected<table_slice_ptr> next() override {
+    caf::expected<table_slice> next() override {
       // Update the buffer if it has been consumed or the previous
       // refresh return an error.
       while (!buffer_ || it_ == buffer_->end()) {
@@ -97,7 +97,7 @@ std::unique_ptr<store::lookup> segment_store::extract(const ids& xs) const {
     }
 
   private:
-    caf::expected<std::vector<table_slice_ptr>> handle_segment() {
+    caf::expected<std::vector<table_slice>> handle_segment() {
       if (first_ == candidates_.end())
         return caf::no_error;
       auto& cand = *first_++;
@@ -122,8 +122,8 @@ std::unique_ptr<store::lookup> segment_store::extract(const ids& xs) const {
     ids xs_;
     std::vector<uuid> candidates_;
     uuid_iterator first_ = candidates_.begin();
-    caf::expected<std::vector<table_slice_ptr>> buffer_{caf::no_error};
-    std::vector<table_slice_ptr>::iterator it_;
+    caf::expected<std::vector<table_slice>> buffer_{caf::no_error};
+    std::vector<table_slice>::iterator it_;
   };
 
   VAST_TRACE(VAST_ARG(xs));
@@ -170,7 +170,7 @@ caf::error segment_store::erase(const ids& xs) {
       erased_events += drop(seg);
       return;
     }
-    std::vector<table_slice_ptr> slices;
+    std::vector<table_slice> slices;
     if (auto maybe_slices = seg.lookup(segment_ids)) {
       slices = std::move(*maybe_slices);
       if (slices.empty()) {
@@ -190,7 +190,7 @@ caf::error segment_store::erase(const ids& xs) {
     // keep for `select` in order to fill `new_slices` with the table slices
     // that remain after dropping all deleted IDs from the segment.
     auto keep_mask = ~xs;
-    std::vector<table_slice_ptr> new_slices;
+    std::vector<table_slice> new_slices;
     for (auto& slice : slices) {
       // Expand keep_mask on-the-fly if needed.
       auto max_id = slice->offset() + slice->rows();
@@ -267,7 +267,7 @@ caf::error segment_store::erase(const ids& xs) {
   return caf::none;
 }
 
-caf::expected<std::vector<table_slice_ptr>> segment_store::get(const ids& xs) {
+caf::expected<std::vector<table_slice>> segment_store::get(const ids& xs) {
   VAST_TRACE(VAST_ARG(xs));
   // Collect candidate segments by seeking through the ID set and
   // probing each ID interval.
@@ -275,14 +275,14 @@ caf::expected<std::vector<table_slice_ptr>> segment_store::get(const ids& xs) {
   if (auto err = select_segments(xs, candidates))
     return err;
   // Process candidates in reverse order for maximum LRU cache hits.
-  std::vector<table_slice_ptr> result;
+  std::vector<table_slice> result;
   VAST_DEBUG(this, "processes", candidates.size(), "candidates");
   std::partition(candidates.begin(), candidates.end(), [&](const auto& id) {
     return id == builder_.id() || cache_.find(id) != cache_.end();
   });
   for (auto cand = candidates.begin(); cand != candidates.end(); ++cand) {
     auto& id = *cand;
-    caf::expected<std::vector<table_slice_ptr>> slices{caf::no_error};
+    caf::expected<std::vector<table_slice>> slices{caf::no_error};
     if (id == builder_.id()) {
       VAST_DEBUG(this, "looks into the active segement", id);
       slices = builder_.lookup(xs);

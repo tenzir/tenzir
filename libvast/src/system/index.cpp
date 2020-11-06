@@ -514,12 +514,8 @@ index(caf::stateful_actor<index_state>* self, filesystem_type fs, path dir,
   self->state.stage = detail::attach_notifying_stream_stage(
     self,
     /* continuous = */ true, [=](caf::unit_t&) {},
-    [=](caf::unit_t&, caf::downstream<table_slice_ptr>& out,
-        table_slice_ptr x) {
-      if (!x) {
-        VAST_WARNING(self, "discards invalid table slice");
-        return;
-      }
+    [=](caf::unit_t&, caf::downstream<table_slice>& out, table_slice x) {
+      VAST_ASSERT(x.encoding() != table_slice::encoding::none);
       auto layout = x->layout();
       self->state.stats.layouts[layout.name()].count += x->rows();
       auto& active = self->state.active_partition;
@@ -595,7 +591,7 @@ index(caf::stateful_actor<index_state>* self, filesystem_type fs, path dir,
   // simply waits for a worker).
   self->set_default_handler(caf::skip);
   self->state.has_worker.assign(
-    [=](caf::stream<table_slice_ptr> in) {
+    [=](caf::stream<table_slice> in) {
       VAST_DEBUG(self, "got a new table slice stream");
       return self->state.stage->add_inbound_path(in);
     },
@@ -736,7 +732,7 @@ index(caf::stateful_actor<index_state>* self, filesystem_type fs, path dir,
       // Nothing to do.
       VAST_DEBUG(self, "queried partition", partition_id, "successfully");
     },
-    [=](caf::stream<table_slice_ptr> in) {
+    [=](caf::stream<table_slice> in) {
       VAST_DEBUG(self, "got a new source");
       return self->state.stage->add_inbound_path(in);
     },
@@ -812,7 +808,7 @@ index(caf::stateful_actor<index_state>* self, filesystem_type fs, path dir,
     [=](atom::done, uuid partition_id) {
       VAST_DEBUG(self, "queried partition", partition_id, "successfully");
     },
-    [=](caf::stream<table_slice_ptr> in) {
+    [=](caf::stream<table_slice> in) {
       VAST_DEBUG(self, "got a new source");
       return self->state.stage->add_inbound_path(in);
     },

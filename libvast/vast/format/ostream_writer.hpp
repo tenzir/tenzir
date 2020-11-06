@@ -85,9 +85,9 @@ protected:
   /// @returns `ec::print_error` if `printer` fails to generate output,
   ///          otherwise `caf::none`.
   template <class Policy, class Printer>
-  caf::error print(Printer& printer, const table_slice_ptr& xs,
-                   std::string_view begin_of_line, std::string_view separator,
-                   std::string_view end_of_line) {
+  caf::error
+  print(Printer& printer, const table_slice& xs, std::string_view begin_of_line,
+        std::string_view separator, std::string_view end_of_line) {
     auto layout = xs->layout();
     auto print_field = [&](auto& iter, size_t row, size_t column) {
       auto rep = [&](data_view x) {

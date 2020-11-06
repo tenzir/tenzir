@@ -56,7 +56,7 @@ struct generator {
                .name(std::move(name));
   }
 
-  table_slice_ptr operator()(size_t num) {
+  table_slice operator()(size_t num) {
     auto builder = factory<table_slice_builder>::make(
       defaults::import::table_slice_type, layout);
     for (size_t i = 0; i < num; ++i) {
@@ -65,7 +65,7 @@ struct generator {
       CHECK(builder->add(make_data_view("foo")));
     }
     auto slice = builder->finish();
-    slice.unshared().offset(offset);
+    slice.offset(offset);
     offset += num;
     return slice;
   }
@@ -88,7 +88,7 @@ struct mock_partition {
   }
 
   uuid id;
-  table_slice_ptr slice;
+  table_slice slice;
   interval range;
 };
 
@@ -221,17 +221,17 @@ TEST(meta index with bool synopsis) {
     defaults::import::table_slice_type, layout);
   CHECK(builder->add(make_data_view(true)));
   auto slice = builder->finish();
-  REQUIRE(slice != nullptr);
+  REQUIRE(slice.encoding() != table_slice::encoding::none);
   auto id1 = uuid::random();
   meta_idx.add(id1, slice);
   CHECK(builder->add(make_data_view(false)));
   slice = builder->finish();
-  REQUIRE(slice != nullptr);
+  REQUIRE(slice.encoding() != table_slice::encoding::none);
   auto id2 = uuid::random();
   meta_idx.add(id2, slice);
   CHECK(builder->add(make_data_view(caf::none)));
   slice = builder->finish();
-  REQUIRE(slice != nullptr);
+  REQUIRE(slice.encoding() != table_slice::encoding::none);
   auto id3 = uuid::random();
   meta_idx.add(id3, slice);
   MESSAGE("test custom synopsis");
