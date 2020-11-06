@@ -137,10 +137,10 @@ TEST(single column - equality) {
   CHECK_VARIANT_EQUAL(slice1->at(1, 0), slice2->at(1, 0));
   CHECK_VARIANT_EQUAL(slice1->at(2, 0), slice2->at(2, 0));
   CHECK_VARIANT_EQUAL(slice1->at(3, 0), slice2->at(3, 0));
-  CHECK_EQUAL(*slice1, *slice1);
-  CHECK_EQUAL(*slice1, *slice2);
-  CHECK_EQUAL(*slice2, *slice1);
-  CHECK_EQUAL(*slice2, *slice2);
+  CHECK_EQUAL(slice1, slice1);
+  CHECK_EQUAL(slice1, slice2);
+  CHECK_EQUAL(slice2, slice1);
+  CHECK_EQUAL(slice2, slice2);
 }
 
 TEST(single column - count) {
@@ -353,7 +353,7 @@ TEST(single column - serialization) {
   CHECK_VARIANT_EQUAL(slice2->at(1, 0), 1_c);
   CHECK_VARIANT_EQUAL(slice2->at(2, 0), 2_c);
   CHECK_VARIANT_EQUAL(slice2->at(3, 0), 3_c);
-  CHECK_VARIANT_EQUAL(*slice1, *slice2);
+  CHECK_VARIANT_EQUAL(slice1, slice2);
 }
 
 FIXTURE_SCOPE(arrow_table_slice_tests, fixtures::table_slices)

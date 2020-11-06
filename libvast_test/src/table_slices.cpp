@@ -283,14 +283,14 @@ void table_slices::test_equality() {
   MESSAGE(">> test equality");
   auto slice1 = make_slice();
   auto slice2 = make_slice();
-  CHECK_EQUAL(*slice1, *slice2);
+  CHECK_EQUAL(slice1, slice2);
 }
 
 void table_slices::test_copy() {
   MESSAGE(">> test copy");
   auto slice1 = make_slice();
   table_slice slice2{slice1};
-  CHECK_EQUAL(*slice1, *slice2);
+  CHECK_EQUAL(slice1, slice2);
 }
 
 void table_slices::test_manual_serialization() {
@@ -306,7 +306,7 @@ void table_slices::test_manual_serialization() {
   CHECK_EQUAL(inspect(source, slice2), caf::none);
   MESSAGE("check result of serialization roundtrip");
   REQUIRE_NOT_EQUAL(slice2.encoding(), table_slice::encoding::none);
-  CHECK_EQUAL(*slice1, *slice2);
+  CHECK_EQUAL(slice1, slice2);
 }
 
 void table_slices::test_smart_pointer_serialization() {
@@ -322,7 +322,7 @@ void table_slices::test_smart_pointer_serialization() {
   CHECK_EQUAL(source(slice2), caf::none);
   MESSAGE("check result of serialization roundtrip");
   REQUIRE_NOT_EQUAL(slice2.encoding(), table_slice::encoding::none);
-  CHECK_EQUAL(*slice1, *slice2);
+  CHECK_EQUAL(slice1, slice2);
 }
 
 void table_slices::test_message_serialization() {
@@ -338,7 +338,7 @@ void table_slices::test_message_serialization() {
   CHECK_EQUAL(source(slice2), caf::none);
   MESSAGE("check result of serialization roundtrip");
   REQUIRE(slice2.match_elements<table_slice>());
-  CHECK_EQUAL(*slice1.get_as<table_slice>(0), *slice2.get_as<table_slice>(0));
+  CHECK_EQUAL(slice1.get_as<table_slice>(0), slice2.get_as<table_slice>(0));
   CHECK_EQUAL(slice2.get_as<table_slice>(0)->implementation_id(),
               builder->implementation_id());
 }
@@ -349,9 +349,9 @@ void table_slices::test_load_from_chunk() {
   auto sink = make_sink();
   CHECK_EQUAL(sink(slice1), caf::none);
   auto chk = chunk::make(std::vector<char>{buf});
-  auto slice2 = factory<legacy_table_slice>::traits::make(chk);
-  REQUIRE_NOT_EQUAL(slice2, nullptr);
-  CHECK_EQUAL(*slice1, *slice2);
+  auto slice2 = table_slice{factory<legacy_table_slice>::traits::make(chk)};
+  REQUIRE_NOT_EQUAL(slice2.encoding(), table_slice::encoding::none);
+  CHECK_EQUAL(slice1, slice2);
 }
 
 void table_slices::test_append_column_to_index() {

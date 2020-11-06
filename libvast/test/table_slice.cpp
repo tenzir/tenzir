@@ -147,7 +147,7 @@ TEST(truncate) {
     return to_data(sub_slice);
   };
   auto sub_slice = truncate(sut, 8);
-  CHECK_EQUAL(*sub_slice, *sut);
+  CHECK_EQUAL(sub_slice, sut);
   CHECK_EQUAL(truncated_events(7), to_data(sut, 0, 7));
   CHECK_EQUAL(truncated_events(6), to_data(sut, 0, 6));
   CHECK_EQUAL(truncated_events(5), to_data(sut, 0, 5));
