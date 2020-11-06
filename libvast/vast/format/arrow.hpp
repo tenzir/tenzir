@@ -54,8 +54,6 @@ public:
   bool layout(const record_type& t);
 
 private:
-  caf::error write_arrow_batches(const arrow_table_slice& x);
-
   output_stream_ptr out_;
   record_type current_layout_;
   table_slice_builder_ptr current_builder_;
