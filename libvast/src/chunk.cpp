@@ -90,7 +90,7 @@ chunk::value_type chunk::operator[](size_type i) const {
 }
 
 chunk_ptr chunk::slice(size_type start, size_type length) const {
-  VAST_ASSERT(start + length < size());
+  VAST_ASSERT(start + length <= size());
   if (length == 0)
     length = size() - start;
   auto self = const_cast<chunk*>(this); // Atomic ref-counting is fine.
