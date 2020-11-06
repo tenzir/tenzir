@@ -36,11 +36,11 @@ single_layout_reader::~single_layout_reader() {
 caf::error single_layout_reader::finish(consumer& f, caf::error result) {
   last_batch_sent_ = reader_clock::now();
   if (builder_ != nullptr && builder_->rows() > 0) {
-    auto ptr = builder_->finish();
+    auto slice = builder_->finish();
     // Override error in case we encounter an error in the builder.
-    if (ptr == nullptr)
+    if (slice.encoding() == table_slice::encoding::none)
       return make_error(ec::parse_error, "unable to finish current slice");
-    f(std::move(ptr));
+    f(std::move(slice));
   }
   return result;
 }

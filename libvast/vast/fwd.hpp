@@ -54,6 +54,7 @@ class segment_store;
 class store;
 class subnet;
 class synopsis;
+class table_slice;
 class table_slice_builder;
 class table_slice_column;
 class type;
@@ -178,9 +179,9 @@ void intrusive_ptr_release(const table_slice_builder*);
 
 using chunk_ptr = caf::intrusive_ptr<chunk>;
 using column_index_ptr = std::unique_ptr<column_index>;
+using legacy_table_slice_ptr = caf::intrusive_cow_ptr<legacy_table_slice>;
 using synopsis_ptr = std::unique_ptr<synopsis>;
 using table_slice_builder_ptr = caf::intrusive_ptr<table_slice_builder>;
-using table_slice_ptr = caf::intrusive_cow_ptr<legacy_table_slice>;
 using value_index_ptr = std::unique_ptr<value_index>;
 
 // -- miscellaneous ------------------------------------------------------------
@@ -329,7 +330,7 @@ CAF_BEGIN_TYPE_ID_BLOCK(vast, caf::first_custom_type_id)
   VAST_ADD_TYPE_ID((vast::relational_operator))
   VAST_ADD_TYPE_ID((vast::schema))
   VAST_ADD_TYPE_ID((vast::status_verbosity))
-  VAST_ADD_TYPE_ID((vast::table_slice_ptr))
+  VAST_ADD_TYPE_ID((vast::table_slice))
   VAST_ADD_TYPE_ID((vast::type))
   VAST_ADD_TYPE_ID((vast::type_extractor))
   VAST_ADD_TYPE_ID((vast::type_set))
@@ -340,9 +341,9 @@ CAF_BEGIN_TYPE_ID_BLOCK(vast, caf::first_custom_type_id)
   VAST_ADD_TYPE_ID((vast::system::report))
 
   VAST_ADD_TYPE_ID((std::vector<uint32_t>) )
-  VAST_ADD_TYPE_ID((std::vector<vast::table_slice_ptr>) )
+  VAST_ADD_TYPE_ID((std::vector<vast::table_slice>) )
 
-  VAST_ADD_TYPE_ID((caf::stream<vast::table_slice_ptr>) )
+  VAST_ADD_TYPE_ID((caf::stream<vast::table_slice>) )
 
 CAF_END_TYPE_ID_BLOCK(vast)
 

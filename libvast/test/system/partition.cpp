@@ -78,7 +78,7 @@ struct fixture : fixtures::dummy_index {
     put = idx_state->make_partition();
   }
 
-  partition* get_active_partition(const table_slice_ptr&) {
+  partition* get_active_partition(const table_slice&) {
     return put.get();
   }
 
@@ -129,7 +129,7 @@ struct fixture : fixtures::dummy_index {
     return result;
   }
 
-  void ingest(std::vector<table_slice_ptr> slices) {
+  void ingest(std::vector<table_slice> slices) {
     VAST_ASSERT(put != nullptr);
     VAST_ASSERT(slices.size() > 0);
     VAST_ASSERT(std::none_of(slices.begin(), slices.end(),
@@ -148,7 +148,7 @@ struct fixture : fixtures::dummy_index {
     run();
   }
 
-  void ingest(table_slice_ptr slice) {
+  void ingest(table_slice slice) {
     ingest(std::vector{slice});
   }
 

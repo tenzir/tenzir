@@ -120,8 +120,8 @@ struct index_state {
   // -- type aliases -----------------------------------------------------------
 
   using index_stream_stage_ptr
-    = caf::stream_stage_ptr<table_slice_ptr,
-                            caf::broadcast_downstream_manager<table_slice_ptr>>;
+    = caf::stream_stage_ptr<table_slice,
+                            caf::broadcast_downstream_manager<table_slice>>;
 
   // -- constructor ------------------------------------------------------------
 

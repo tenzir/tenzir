@@ -36,7 +36,7 @@ namespace vast {
 /// @param seed The seed value for initializing the random-number generator.
 /// @returns a list of randomnly filled table slices or an error.
 /// @relates table_slice
-caf::expected<std::vector<table_slice_ptr>>
+caf::expected<std::vector<table_slice>>
 make_random_table_slices(size_t num_slices, size_t slice_size,
                          record_type layout, id offset, size_t seed) {
   schema sc;
@@ -50,11 +50,11 @@ make_random_table_slices(size_t num_slices, size_t slice_size,
   format::test::reader src{defaults::import::table_slice_type, std::move(opts),
                            nullptr};
   src.schema(std::move(sc));
-  std::vector<table_slice_ptr> result;
-  auto add_slice = [&](table_slice_ptr ptr) {
-    ptr.unshared().offset(offset);
-    offset += ptr->rows();
-    result.emplace_back(std::move(ptr));
+  std::vector<table_slice> result;
+  auto add_slice = [&](table_slice slice) {
+    slice.offset(offset);
+    offset += slice->rows();
+    result.emplace_back(std::move(slice));
   };
   result.reserve(num_slices);
   if (auto err = src.read(num_slices * slice_size, slice_size, add_slice).first)
@@ -73,7 +73,7 @@ make_random_table_slices(size_t num_slices, size_t slice_size,
 /// @note This function exists primarily for unit testing because it performs
 /// excessive memory allocations.
 std::vector<std::vector<data>>
-to_data(const table_slice_ptr& slice, size_t first_row, size_t num_rows) {
+to_data(const table_slice& slice, size_t first_row, size_t num_rows) {
   VAST_ASSERT(first_row < slice->rows());
   VAST_ASSERT(num_rows <= slice->rows() - first_row);
   if (num_rows == 0)
@@ -90,8 +90,7 @@ to_data(const table_slice_ptr& slice, size_t first_row, size_t num_rows) {
   return result;
 }
 
-std::vector<std::vector<data>>
-to_data(const std::vector<table_slice_ptr>& slices) {
+std::vector<std::vector<data>> to_data(const std::vector<table_slice>& slices) {
   std::vector<std::vector<data>> result;
   result.reserve(rows(slices));
   for (auto& slice : slices)
@@ -254,7 +253,7 @@ caf::binary_serializer table_slices::make_sink() {
   return caf::binary_serializer{sys, buf};
 }
 
-table_slice_ptr table_slices::make_slice() {
+table_slice table_slices::make_slice() {
   for (auto& xs : test_data)
     for (auto& x : xs)
       if (!builder->add(make_view(x)))
@@ -290,7 +289,7 @@ void table_slices::test_equality() {
 void table_slices::test_copy() {
   MESSAGE(">> test copy");
   auto slice1 = make_slice();
-  table_slice_ptr slice2{slice1->copy(), false};
+  table_slice slice2{slice1};
   CHECK_EQUAL(*slice1, *slice2);
 }
 
@@ -298,7 +297,7 @@ void table_slices::test_manual_serialization() {
   MESSAGE(">> test manual serialization via inspect");
   MESSAGE("make slices");
   auto slice1 = make_slice();
-  table_slice_ptr slice2;
+  table_slice slice2;
   MESSAGE("save content of the first slice into the buffer");
   auto sink = make_sink();
   CHECK_EQUAL(inspect(sink, slice1), caf::none);
@@ -306,7 +305,7 @@ void table_slices::test_manual_serialization() {
   auto source = make_source();
   CHECK_EQUAL(inspect(source, slice2), caf::none);
   MESSAGE("check result of serialization roundtrip");
-  REQUIRE_NOT_EQUAL(slice2, nullptr);
+  REQUIRE_NOT_EQUAL(slice2.encoding(), table_slice::encoding::none);
   CHECK_EQUAL(*slice1, *slice2);
 }
 
@@ -314,7 +313,7 @@ void table_slices::test_smart_pointer_serialization() {
   MESSAGE(">> test smart pointer serialization");
   MESSAGE("make slices");
   auto slice1 = make_slice();
-  table_slice_ptr slice2;
+  table_slice slice2;
   MESSAGE("save content of the first slice into the buffer");
   auto sink = make_sink();
   CHECK_EQUAL(sink(slice1), caf::none);
@@ -322,7 +321,7 @@ void table_slices::test_smart_pointer_serialization() {
   auto source = make_source();
   CHECK_EQUAL(source(slice2), caf::none);
   MESSAGE("check result of serialization roundtrip");
-  REQUIRE_NOT_EQUAL(slice2, nullptr);
+  REQUIRE_NOT_EQUAL(slice2.encoding(), table_slice::encoding::none);
   CHECK_EQUAL(*slice1, *slice2);
 }
 
@@ -338,10 +337,9 @@ void table_slices::test_message_serialization() {
   auto source = make_source();
   CHECK_EQUAL(source(slice2), caf::none);
   MESSAGE("check result of serialization roundtrip");
-  REQUIRE(slice2.match_elements<table_slice_ptr>());
-  CHECK_EQUAL(*slice1.get_as<table_slice_ptr>(0),
-              *slice2.get_as<table_slice_ptr>(0));
-  CHECK_EQUAL(slice2.get_as<table_slice_ptr>(0)->implementation_id(),
+  REQUIRE(slice2.match_elements<table_slice>());
+  CHECK_EQUAL(*slice1.get_as<table_slice>(0), *slice2.get_as<table_slice>(0));
+  CHECK_EQUAL(slice2.get_as<table_slice>(0)->implementation_id(),
               builder->implementation_id());
 }
 

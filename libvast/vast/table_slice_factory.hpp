@@ -23,7 +23,7 @@ namespace vast {
 
 template <>
 struct factory_traits<legacy_table_slice> {
-  using result_type = table_slice_ptr;
+  using result_type = legacy_table_slice_ptr;
   using key_type = caf::atom_value;
   using signature = result_type (*)(table_slice_header);
 

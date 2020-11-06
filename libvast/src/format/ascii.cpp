@@ -19,7 +19,7 @@
 
 namespace vast::format::ascii {
 
-caf::error writer::write(const table_slice_ptr& x) {
+caf::error writer::write(const table_slice& x) {
   data_view_printer printer;
   return print<policy::omit_field_names>(printer, x, "<", ", ", ">");
 }

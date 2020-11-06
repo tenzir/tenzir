@@ -38,7 +38,7 @@ struct explorer_state {
   explorer_state(caf::event_based_actor* self);
 
   /// Send the results to the sink, after removing duplicates.
-  void forward_results(vast::table_slice_ptr slice);
+  void forward_results(vast::table_slice slice);
 
   /// Maximum number of events to output.
   event_limits limits;

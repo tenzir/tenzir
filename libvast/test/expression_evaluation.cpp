@@ -34,7 +34,7 @@ namespace {
 struct fixture : fixtures::events {
   fixture() {
     zeek_conn_log_slice = zeek_conn_log_full[0];
-    zeek_conn_log_slice.unshared().offset(0); // make it easier to write tests
+    zeek_conn_log_slice.offset(0); // make it easier to write tests
   }
 
   expression make_expr(std::string_view str) const {
@@ -46,7 +46,7 @@ struct fixture : fixtures::events {
     return unbox(tailor(expr, zeek_conn_log_slice->layout()));
   }
 
-  table_slice_ptr zeek_conn_log_slice;
+  table_slice zeek_conn_log_slice;
 };
 
 } // namespace

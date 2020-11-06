@@ -57,13 +57,13 @@ const auto zeek_conn_m57_head = R"__(#separator \x09
 1258532331.365330	CCGBMdPGplqLzQCjg	fe80::219:e3ff:fee7:5d23	5353	ff02::fb	5353	udp	dns	0.100371	273	0	S0	-	-	0	D	2	369	0	0	-	1:JoBDvaK4Tt6BfWSKWPKaJTELr2M=)__";
 
 template <class Reader>
-std::vector<table_slice_ptr> inhale(const char* data) {
+std::vector<table_slice> inhale(const char* data) {
   auto input = std::make_unique<std::istringstream>(data);
   Reader reader{defaults::import::table_slice_type, caf::settings{},
                 std::move(input)};
-  std::vector<table_slice_ptr> slices;
+  std::vector<table_slice> slices;
   auto add_slice
-    = [&](table_slice_ptr ptr) { slices.emplace_back(std::move(ptr)); };
+    = [&](table_slice slice) { slices.emplace_back(std::move(slice)); };
   auto [err, produced]
     = reader.read(std::numeric_limits<size_t>::max(),
                   defaults::import::table_slice_size, add_slice);
@@ -104,7 +104,7 @@ struct fixture : fixtures::deterministic_actor_system {
     run();
   }
 
-  const std::vector<table_slice_ptr> slices
+  const std::vector<table_slice> slices
     = inhale<format::zeek::reader>(zeek_conn_m57_head);
 
   caf::actor node;

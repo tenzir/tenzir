@@ -37,7 +37,7 @@ namespace vast::system {
 using type_registry_type = caf::typed_actor<
   caf::reacts_to<atom::telemetry>,
   caf::replies_to<atom::status, status_verbosity>::with<caf::dictionary<caf::config_value>>,
-  caf::reacts_to<caf::stream<table_slice_ptr>>,
+  caf::reacts_to<caf::stream<table_slice>>,
   caf::reacts_to<atom::put, vast::type>,
   caf::reacts_to<atom::put, vast::schema>,
   caf::replies_to<atom::get>::with<type_set>,

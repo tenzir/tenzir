@@ -54,7 +54,7 @@ TEST(column view) {
   CHECK_EQUAL(ts_cview->index(), 0u);
   for (size_t column = 0; column < sut->columns(); ++column) {
     auto cview = table_slice_column{sut, column};
-    REQUIRE(cview.slice());
+    REQUIRE_NOT_EQUAL(cview.size(), 0u);
     CHECK_EQUAL(cview.index(), column);
     CHECK_EQUAL(cview.size(), sut->rows());
     for (size_t row = 0; row < cview.size(); ++row)
@@ -66,7 +66,7 @@ TEST(row view) {
   auto sut = zeek_conn_log[0];
   for (size_t row = 0; row < sut->rows(); ++row) {
     auto rview = table_slice_row{sut, row};
-    REQUIRE(rview.slice());
+    REQUIRE_NOT_EQUAL(rview.size(), 0u);
     CHECK_EQUAL(rview.index(), row);
     CHECK_EQUAL(rview.size(), sut->columns());
     for (size_t column = 0; column < rview.size(); ++column)
@@ -76,7 +76,7 @@ TEST(row view) {
 
 TEST(select all) {
   auto sut = zeek_conn_log_full[0];
-  sut.unshared().offset(100);
+  sut.offset(100);
   auto xs = select(sut, make_ids({{100, 200}}));
   REQUIRE_EQUAL(xs.size(), 1u);
   CHECK_EQUAL(xs[0], sut);
@@ -84,14 +84,14 @@ TEST(select all) {
 
 TEST(select none) {
   auto sut = zeek_conn_log_full[0];
-  sut.unshared().offset(100);
+  sut.offset(100);
   auto xs = select(sut, make_ids({{200, 300}}));
   CHECK_EQUAL(xs.size(), 0u);
 }
 
 TEST(select prefix) {
   auto sut = zeek_conn_log_full[0];
-  sut.unshared().offset(100);
+  sut.offset(100);
   auto xs = select(sut, make_ids({{0, 150}}));
   REQUIRE_EQUAL(xs.size(), 1u);
   CHECK_EQUAL(xs[0]->rows(), 50u);
@@ -100,7 +100,7 @@ TEST(select prefix) {
 
 TEST(select off by one prefix) {
   auto sut = zeek_conn_log_full[0];
-  sut.unshared().offset(100);
+  sut.offset(100);
   auto xs = select(sut, make_ids({{101, 151}}));
   REQUIRE_EQUAL(xs.size(), 1u);
   CHECK_EQUAL(xs[0]->rows(), 50u);
@@ -109,7 +109,7 @@ TEST(select off by one prefix) {
 
 TEST(select intermediates) {
   auto sut = zeek_conn_log_full[0];
-  sut.unshared().offset(100);
+  sut.offset(100);
   auto xs = select(sut, make_ids({{110, 120}, {170, 180}}));
   REQUIRE_EQUAL(xs.size(), 2u);
   CHECK_EQUAL(xs[0]->rows(), 10u);
@@ -120,7 +120,7 @@ TEST(select intermediates) {
 
 TEST(select off by one suffix) {
   auto sut = zeek_conn_log_full[0];
-  sut.unshared().offset(100);
+  sut.offset(100);
   auto xs = select(sut, make_ids({{149, 199}}));
   REQUIRE_EQUAL(xs.size(), 1u);
   CHECK_EQUAL(xs[0]->rows(), 50u);
@@ -129,7 +129,7 @@ TEST(select off by one suffix) {
 
 TEST(select suffix) {
   auto sut = zeek_conn_log_full[0];
-  sut.unshared().offset(100);
+  sut.offset(100);
   auto xs = select(sut, make_ids({{150, 300}}));
   REQUIRE_EQUAL(xs.size(), 1u);
   CHECK_EQUAL(xs[0]->rows(), 50u);
@@ -139,7 +139,7 @@ TEST(select suffix) {
 TEST(truncate) {
   auto sut = zeek_conn_log[0];
   REQUIRE_EQUAL(sut->rows(), 8u);
-  sut.unshared().offset(100);
+  sut.offset(100);
   auto truncated_events = [&](size_t num_rows) {
     auto sub_slice = truncate(sut, num_rows);
     if (sub_slice->rows() != num_rows)
@@ -160,7 +160,7 @@ TEST(truncate) {
 TEST(split) {
   auto sut = zeek_conn_log[0];
   REQUIRE_EQUAL(sut->rows(), 8u);
-  sut.unshared().offset(100);
+  sut.offset(100);
   // Splits `sut` using to_data.
   auto manual_split_sut = [&](size_t parition_point) {
     return std::pair{to_data(sut, 0, parition_point),

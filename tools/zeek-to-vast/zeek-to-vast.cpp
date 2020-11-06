@@ -197,7 +197,7 @@ public:
 
   using vast::format::writer::write;
 
-  caf::error write(const vast::table_slice_ptr& slice) override {
+  caf::error write(const vast::table_slice& slice) override {
     for (size_t row = 0; row < slice->rows(); ++row) {
       if (show_progress_)
         std::cerr << '.' << std::flush;

@@ -14,6 +14,7 @@
 #pragma once
 
 #include "vast/fwd.hpp"
+#include "vast/table_slice.hpp"
 #include "vast/view.hpp"
 
 #include <caf/meta/type_name.hpp>
@@ -40,13 +41,13 @@ public:
   /// @param slice The slice to view.
   /// @param column The viewed column's index.
   /// @pre `column < slice->columns()`
-  table_slice_column(table_slice_ptr slice, size_t column) noexcept;
+  table_slice_column(table_slice slice, size_t column) noexcept;
 
   /// Construct a view on a column of a table slice.
   /// @param slice The slice to view.
   /// @param column The viewed column's name.
   static std::optional<table_slice_column>
-  make(table_slice_ptr slice, std::string_view column) noexcept;
+  make(table_slice slice, std::string_view column) noexcept;
 
   /// @returns the data at given row.
   /// @pre `row < size()`
@@ -56,7 +57,7 @@ public:
   size_t size() const noexcept;
 
   /// @returns the viewed table slice.
-  const table_slice_ptr& slice() const noexcept;
+  const table_slice& slice() const noexcept;
 
   /// @returns the viewed column's index.
   size_t index() const noexcept;
@@ -70,7 +71,7 @@ public:
   }
 
 private:
-  table_slice_ptr slice_ = nullptr;
+  table_slice slice_ = {};
   size_t column_ = 0;
 };
 

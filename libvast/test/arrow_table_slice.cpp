@@ -31,7 +31,7 @@ auto make_slice(record_type layout, const Ts&... xs) {
   if (!ok)
     FAIL("builder failed to add given values");
   auto slice = builder->finish();
-  if (slice == nullptr)
+  if (slice.encoding() == table_slice::encoding::none)
     FAIL("builder failed to produce a table slice");
   return slice;
 }
@@ -42,14 +42,14 @@ auto make_single_column_slice(const Ts&... xs) {
   return make_slice(layout, xs...);
 }
 
-table_slice_ptr roundtrip(table_slice_ptr slice_ptr) {
+table_slice roundtrip(table_slice slice) {
   factory<legacy_table_slice>::add<arrow_table_slice>();
   factory<table_slice_builder>::add<arrow_table_slice_builder>(
     arrow_table_slice::class_id);
-  table_slice_ptr slice_copy;
+  table_slice slice_copy;
   std::vector<char> buf;
   caf::binary_serializer sink{nullptr, buf};
-  CHECK_EQUAL(inspect(sink, slice_ptr), caf::none);
+  CHECK_EQUAL(inspect(sink, slice), caf::none);
   caf::binary_deserializer source{nullptr, buf};
   CHECK_EQUAL(inspect(source, slice_copy), caf::none);
   return slice_copy;
@@ -150,7 +150,7 @@ TEST(single column - count) {
   CHECK_VARIANT_EQUAL(slice->at(1, 0), 1_c);
   CHECK_VARIANT_EQUAL(slice->at(2, 0), caf::none);
   CHECK_VARIANT_EQUAL(slice->at(3, 0), 3_c);
-  CHECK_ROUNDTRIP_DEREF(slice);
+  CHECK_ROUNDTRIP(slice);
 }
 
 TEST(single column - enumeration) {
@@ -159,7 +159,7 @@ TEST(single column - enumeration) {
   CHECK_VARIANT_EQUAL(slice->at(0, 0), 0_e);
   CHECK_VARIANT_EQUAL(slice->at(1, 0), 1_e);
   CHECK_VARIANT_EQUAL(slice->at(2, 0), caf::none);
-  CHECK_ROUNDTRIP_DEREF(slice);
+  CHECK_ROUNDTRIP(slice);
 }
 
 TEST(single column - integer) {
@@ -168,7 +168,7 @@ TEST(single column - integer) {
   CHECK_VARIANT_EQUAL(slice->at(0, 0), caf::none);
   CHECK_VARIANT_EQUAL(slice->at(1, 0), 1_i);
   CHECK_VARIANT_EQUAL(slice->at(2, 0), 2_i);
-  CHECK_ROUNDTRIP_DEREF(slice);
+  CHECK_ROUNDTRIP(slice);
 }
 
 TEST(single column - boolean) {
@@ -177,7 +177,7 @@ TEST(single column - boolean) {
   CHECK_VARIANT_EQUAL(slice->at(0, 0), false);
   CHECK_VARIANT_EQUAL(slice->at(1, 0), caf::none);
   CHECK_VARIANT_EQUAL(slice->at(2, 0), true);
-  CHECK_ROUNDTRIP_DEREF(slice);
+  CHECK_ROUNDTRIP(slice);
 }
 
 TEST(single column - real) {
@@ -186,7 +186,7 @@ TEST(single column - real) {
   CHECK_VARIANT_EQUAL(slice->at(0, 0), 1.23);
   CHECK_VARIANT_EQUAL(slice->at(1, 0), 3.21);
   CHECK_VARIANT_EQUAL(slice->at(2, 0), caf::none);
-  CHECK_ROUNDTRIP_DEREF(slice);
+  CHECK_ROUNDTRIP(slice);
 }
 
 TEST(single column - string) {
@@ -195,7 +195,7 @@ TEST(single column - string) {
   CHECK_VARIANT_EQUAL(slice->at(0, 0), "a"sv);
   CHECK_VARIANT_EQUAL(slice->at(1, 0), caf::none);
   CHECK_VARIANT_EQUAL(slice->at(2, 0), "c"sv);
-  CHECK_ROUNDTRIP_DEREF(slice);
+  CHECK_ROUNDTRIP(slice);
 }
 
 TEST(single column - pattern) {
@@ -206,7 +206,7 @@ TEST(single column - pattern) {
   CHECK_VARIANT_EQUAL(slice->at(0, 0), make_view(p1));
   CHECK_VARIANT_EQUAL(slice->at(1, 0), make_view(p2));
   CHECK_VARIANT_EQUAL(slice->at(2, 0), caf::none);
-  CHECK_ROUNDTRIP_DEREF(slice);
+  CHECK_ROUNDTRIP(slice);
 }
 
 TEST(single column - time) {
@@ -218,7 +218,7 @@ TEST(single column - time) {
   CHECK_VARIANT_EQUAL(slice->at(0, 0), epoch);
   CHECK_VARIANT_EQUAL(slice->at(1, 0), caf::none);
   CHECK_VARIANT_EQUAL(slice->at(2, 0), epoch + 48h);
-  CHECK_ROUNDTRIP_DEREF(slice);
+  CHECK_ROUNDTRIP(slice);
 }
 
 TEST(single column - duration) {
@@ -229,7 +229,7 @@ TEST(single column - duration) {
   CHECK_VARIANT_EQUAL(slice->at(0, 0), h0);
   CHECK_VARIANT_EQUAL(slice->at(1, 0), h12);
   CHECK_VARIANT_EQUAL(slice->at(2, 0), caf::none);
-  CHECK_ROUNDTRIP_DEREF(slice);
+  CHECK_ROUNDTRIP(slice);
 }
 
 TEST(single column - address) {
@@ -244,7 +244,7 @@ TEST(single column - address) {
   CHECK_VARIANT_EQUAL(slice->at(1, 0), a1);
   CHECK_VARIANT_EQUAL(slice->at(2, 0), a2);
   CHECK_VARIANT_EQUAL(slice->at(3, 0), a3);
-  CHECK_ROUNDTRIP_DEREF(slice);
+  CHECK_ROUNDTRIP(slice);
 }
 
 TEST(single column - subnet) {
@@ -259,7 +259,7 @@ TEST(single column - subnet) {
   CHECK_VARIANT_EQUAL(slice->at(1, 0), s2);
   CHECK_VARIANT_EQUAL(slice->at(2, 0), s3);
   CHECK_VARIANT_EQUAL(slice->at(3, 0), caf::none);
-  CHECK_ROUNDTRIP_DEREF(slice);
+  CHECK_ROUNDTRIP(slice);
 }
 
 TEST(single column - port) {
@@ -274,7 +274,7 @@ TEST(single column - port) {
   CHECK_VARIANT_EQUAL(slice->at(1, 0), p2);
   CHECK_VARIANT_EQUAL(slice->at(2, 0), caf::none);
   CHECK_VARIANT_EQUAL(slice->at(3, 0), p3);
-  CHECK_ROUNDTRIP_DEREF(slice);
+  CHECK_ROUNDTRIP(slice);
 }
 
 TEST(single column - list of integers) {
@@ -287,7 +287,7 @@ TEST(single column - list of integers) {
   CHECK_VARIANT_EQUAL(slice->at(0, 0), make_view(list1));
   CHECK_VARIANT_EQUAL(slice->at(1, 0), caf::none);
   CHECK_VARIANT_EQUAL(slice->at(2, 0), make_view(list2));
-  CHECK_ROUNDTRIP_DEREF(slice);
+  CHECK_ROUNDTRIP(slice);
 }
 
 TEST(single column - list of strings) {
@@ -300,7 +300,7 @@ TEST(single column - list of strings) {
   CHECK_VARIANT_EQUAL(slice->at(0, 0), make_view(list1));
   CHECK_VARIANT_EQUAL(slice->at(1, 0), make_view(list2));
   CHECK_VARIANT_EQUAL(slice->at(2, 0), caf::none);
-  CHECK_ROUNDTRIP_DEREF(slice);
+  CHECK_ROUNDTRIP(slice);
 }
 
 TEST(single column - list of list of integers) {
@@ -319,7 +319,7 @@ TEST(single column - list of list of integers) {
   CHECK_VARIANT_EQUAL(slice->at(0, 0), caf::none);
   CHECK_VARIANT_EQUAL(slice->at(1, 0), make_view(list1));
   CHECK_VARIANT_EQUAL(slice->at(2, 0), make_view(list2));
-  CHECK_ROUNDTRIP_DEREF(slice);
+  CHECK_ROUNDTRIP(slice);
 }
 
 TEST(single column - map) {
@@ -332,7 +332,7 @@ TEST(single column - map) {
   CHECK_VARIANT_EQUAL(slice->at(0, 0), make_view(map1));
   CHECK_VARIANT_EQUAL(slice->at(1, 0), make_view(map2));
   CHECK_VARIANT_EQUAL(slice->at(2, 0), caf::none);
-  CHECK_ROUNDTRIP_DEREF(slice);
+  CHECK_ROUNDTRIP(slice);
 }
 
 TEST(single column - serialization) {
@@ -341,7 +341,7 @@ TEST(single column - serialization) {
   factory<table_slice_builder>::add<arrow_table_slice_builder>(
     arrow_table_slice::class_id);
   auto slice1 = make_single_column_slice<count_type>(0_c, 1_c, 2_c, 3_c);
-  decltype(slice1) slice2 = nullptr;
+  decltype(slice1) slice2 = {};
   {
     std::vector<char> buf;
     caf::binary_serializer sink{nullptr, buf};

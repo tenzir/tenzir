@@ -77,10 +77,10 @@ TEST(PCAP read/write 1) {
   format::pcap::reader reader{defaults::import::table_slice_type,
                               std::move(settings)};
   size_t events_produced = 0;
-  table_slice_ptr slice;
-  auto add_slice = [&](const table_slice_ptr& x) {
-    REQUIRE(slice == nullptr);
-    REQUIRE(x != nullptr);
+  table_slice slice;
+  auto add_slice = [&](const table_slice& x) {
+    REQUIRE_EQUAL(slice.encoding(), table_slice::encoding::none);
+    REQUIRE_NOT_EQUAL(x.encoding(), table_slice::encoding::none);
     slice = x;
     events_produced = x->rows();
   };
@@ -119,15 +119,15 @@ TEST(PCAP read/write 2) {
   caf::put(settings, "vast.import.batch-timeout", "0s");
   format::pcap::reader reader{defaults::import::table_slice_type,
                               std::move(settings)};
-  table_slice_ptr slice;
-  auto add_slice = [&](const table_slice_ptr& x) {
-    REQUIRE_EQUAL(slice, nullptr);
+  table_slice slice{};
+  auto add_slice = [&](const table_slice& x) {
+    REQUIRE_EQUAL(slice.encoding(), table_slice::encoding::none);
     slice = x;
   };
   auto [err, produced] = reader.read(std::numeric_limits<size_t>::max(),
                                      100, // we expect only 36 events
                                      add_slice);
-  REQUIRE_NOT_EQUAL(slice, nullptr);
+  REQUIRE_NOT_EQUAL(slice.encoding(), table_slice::encoding::none);
   CHECK_EQUAL(err, ec::end_of_input);
   REQUIRE_EQUAL(produced, 36u);
   CHECK_EQUAL(slice->rows(), 36u);

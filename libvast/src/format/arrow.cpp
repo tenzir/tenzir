@@ -39,7 +39,7 @@ writer::~writer() {
   // nop
 }
 
-caf::error writer::write(const table_slice_ptr& slice) {
+caf::error writer::write(const table_slice& slice) {
   if (out_ == nullptr)
     return ec::filesystem_error;
   if (!layout(slice->layout()))
@@ -57,7 +57,7 @@ caf::error writer::write(const table_slice_ptr& slice) {
         if (!current_builder_->add(slice->at(row, column)))
           return ec::type_clash;
     auto slice_copy = current_builder_->finish();
-    if (slice_copy == nullptr)
+    if (slice_copy.encoding() == table_slice::encoding::none)
       return ec::invalid_table_slice_type;
     VAST_ASSERT(slice_copy->implementation_id() == arrow_table_slice::class_id);
     auto dref = static_cast<const arrow_table_slice&>(*slice_copy);

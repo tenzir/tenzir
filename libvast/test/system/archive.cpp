@@ -35,14 +35,14 @@ struct fixture : fixtures::deterministic_actor_system_and_events {
     self->send(a, atom::exporter_v, self);
   }
 
-  void push_to_archive(std::vector<table_slice_ptr> xs) {
+  void push_to_archive(std::vector<table_slice> xs) {
     vast::detail::spawn_container_source(sys, std::move(xs), a);
     run();
   }
 
-  std::vector<table_slice_ptr> query(const ids& ids) {
+  std::vector<table_slice> query(const ids& ids) {
     bool done = false;
-    std::vector<table_slice_ptr> result;
+    std::vector<table_slice> result;
     self->send(a, ids);
     run();
     self
@@ -51,12 +51,12 @@ struct fixture : fixtures::deterministic_actor_system_and_events {
           REQUIRE(!err);
           done = true;
         },
-        [&](table_slice_ptr slice) { result.push_back(std::move(slice)); })
+        [&](table_slice slice) { result.push_back(std::move(slice)); })
       .until(done);
     return result;
   }
 
-  std::vector<table_slice_ptr> query(std::initializer_list<id_range> ranges) {
+  std::vector<table_slice> query(std::initializer_list<id_range> ranges) {
     return query(make_ids(ranges));
   }
 };

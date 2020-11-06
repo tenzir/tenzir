@@ -131,10 +131,10 @@ bool msgpack_table_slice_builder::add_impl(data_view x) {
   return true;
 }
 
-table_slice_ptr msgpack_table_slice_builder::finish() {
+table_slice msgpack_table_slice_builder::finish() {
   // Sanity check.
   if (col_ != 0)
-    return nullptr;
+    return {};
   table_slice_header header;
   header.layout = layout();
   header.rows = offset_table_.size();
@@ -144,7 +144,7 @@ table_slice_ptr msgpack_table_slice_builder::finish() {
   ptr->buffer_ = as_bytes(span{ptr->chunk_->data(), ptr->chunk_->size()});
   offset_table_ = {};
   buffer_ = {};
-  return table_slice_ptr{ptr, false};
+  return table_slice{legacy_table_slice_ptr{ptr, false}};
 }
 
 size_t msgpack_table_slice_builder::rows() const noexcept {

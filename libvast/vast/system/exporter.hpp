@@ -21,6 +21,7 @@
 #include "vast/system/accountant.hpp"
 #include "vast/system/archive.hpp"
 #include "vast/system/query_status.hpp"
+#include "vast/table_slice.hpp"
 #include "vast/uuid.hpp"
 
 #include <chrono>
@@ -60,7 +61,7 @@ struct exporter_state {
   std::unordered_map<type, expression> checkers;
 
   /// Caches results for the SINK.
-  std::vector<table_slice_ptr> results;
+  std::vector<table_slice> results;
 
   /// Stores the time point for when this actor got started via 'run'.
   std::chrono::system_clock::time_point start;
