@@ -454,7 +454,7 @@ legacy_table_slice* intrusive_cow_ptr_unshare(legacy_table_slice*& ptr) {
 void select(std::vector<table_slice>& result, const table_slice& xs,
             const ids& selection) {
   VAST_ASSERT(xs.encoding() != table_slice::encoding::none);
-  auto xs_ids = make_ids({{xs->offset(), xs->offset() + xs->rows()}});
+  auto xs_ids = make_ids({{xs.offset(), xs.offset() + xs.rows()}});
   auto intersection = selection & xs_ids;
   auto intersection_rank = rank(intersection);
   // Do no rows qualify?
@@ -466,13 +466,24 @@ void select(std::vector<table_slice>& result, const table_slice& xs,
     return;
   }
   // Start slicing and dicing.
-  auto impl = xs->implementation_id();
-  auto builder = factory<table_slice_builder>::make(impl, xs->layout());
+  caf::atom_value impl;
+  switch (xs.encoding()) {
+    case table_slice::encoding::none:
+      impl = caf::atom("NULL");
+      break;
+    case table_slice::encoding::arrow:
+      impl = caf::atom("arrow");
+      break;
+    case table_slice::encoding::msgpack:
+      impl = caf::atom("msgpack");
+      break;
+  }
+  auto builder = factory<table_slice_builder>::make(impl, xs.layout());
   if (builder == nullptr) {
     VAST_ERROR(__func__, "failed to get a table slice builder for", impl);
     return;
   }
-  id last_offset = xs->offset();
+  id last_offset = xs.offset();
   auto push_slice = [&] {
     if (builder->rows() == 0)
       return;
@@ -494,11 +505,11 @@ void select(std::vector<table_slice>& result, const table_slice& xs,
     } else {
       ++last_id;
     }
-    VAST_ASSERT(id >= xs->offset());
-    auto row = id - xs->offset();
-    VAST_ASSERT(row < xs->rows());
-    for (size_t column = 0; column < xs->columns(); ++column) {
-      auto cell_value = xs->at(row, column);
+    VAST_ASSERT(id >= xs.offset());
+    auto row = id - xs.offset();
+    VAST_ASSERT(row < xs.rows());
+    for (size_t column = 0; column < xs.columns(); ++column) {
+      auto cell_value = xs.at(row, column);
       if (!builder->add(cell_value)) {
         VAST_ERROR(__func__, "failed to add data at column", column, "in row",
                    row, "to the builder:", cell_value);
@@ -518,9 +529,9 @@ std::vector<table_slice> select(const table_slice& xs, const ids& selection) {
 table_slice truncate(const table_slice& slice, size_t num_rows) {
   VAST_ASSERT(slice.encoding() != table_slice::encoding::none);
   VAST_ASSERT(num_rows > 0);
-  if (slice->rows() <= num_rows)
+  if (slice.rows() <= num_rows)
     return slice;
-  auto selection = make_ids({{slice->offset(), slice->offset() + num_rows}});
+  auto selection = make_ids({{slice.offset(), slice.offset() + num_rows}});
   auto xs = select(slice, selection);
   VAST_ASSERT(xs.size() == 1);
   return std::move(xs.back());
@@ -531,11 +542,11 @@ split(const table_slice& slice, size_t partition_point) {
   VAST_ASSERT(slice.encoding() != table_slice::encoding::none);
   if (partition_point == 0)
     return {{}, slice};
-  if (partition_point >= slice->rows())
+  if (partition_point >= slice.rows())
     return {slice, {}};
-  auto first = slice->offset();
+  auto first = slice.offset();
   auto mid = first + partition_point;
-  auto last = first + slice->rows();
+  auto last = first + slice.rows();
   // Create first table slice.
   auto xs = select(slice, make_ids({{first, mid}}));
   VAST_ASSERT(xs.size() == 1);
@@ -548,7 +559,7 @@ split(const table_slice& slice, size_t partition_point) {
 uint64_t rows(const std::vector<table_slice>& slices) {
   auto result = uint64_t{0};
   for (auto& slice : slices)
-    result += slice->rows();
+    result += slice.rows();
   return result;
 }
 
@@ -601,7 +612,7 @@ struct row_evaluator {
     // TODO: Transform this AST node into a constant-time lookup node (e.g.,
     // data_extractor). It's not necessary to iterate over the schema for every
     // row; this should happen upfront.
-    auto layout = slice_->layout();
+    auto layout = slice_.layout();
     if (e.attr == atom::type_v)
       return evaluate(layout.name(), op_, d);
     if (e.attr == atom::timestamp_v) {
@@ -613,7 +624,7 @@ struct row_evaluator {
             return false;
           }
         }
-        auto lhs = to_canonical(field.type, slice_->at(row_, col));
+        auto lhs = to_canonical(field.type, slice_.at(row_, col));
         auto rhs = make_view(d);
         return evaluate_view(lhs, op_, rhs);
       }
@@ -631,12 +642,12 @@ struct row_evaluator {
 
   bool operator()(const data_extractor& e, const data& d) {
     VAST_ASSERT(e.offset.size() == 1);
-    auto layout = slice_->layout();
+    auto layout = slice_.layout();
     if (e.type != layout) // TODO: make this a precondition instead.
       return false;
     auto col = e.offset[0];
     auto& field = layout.fields[col];
-    auto lhs = to_canonical(field.type, slice_->at(row_, col));
+    auto lhs = to_canonical(field.type, slice_.at(row_, col));
     auto rhs = make_data_view(d);
     return evaluate_view(lhs, op_, rhs);
   }
@@ -651,8 +662,8 @@ struct row_evaluator {
 ids evaluate(const expression& expr, const table_slice& slice) {
   // TODO: switch to a column-based evaluation strategy where it makes sense.
   ids result;
-  result.append(false, slice->offset());
-  for (size_t row = 0; row != slice->rows(); ++row) {
+  result.append(false, slice.offset());
+  for (size_t row = 0; row != slice.rows(); ++row) {
     auto x = caf::visit(row_evaluator{slice, row}, expr);
     result.append_bit(x);
   }

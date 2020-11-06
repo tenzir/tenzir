@@ -164,7 +164,7 @@ TEST(regression - zeek conn log service http) {
   auto& slices = zeek_conn_log_full;
   REQUIRE_EQUAL(slices.size(), http_per_100_events.size());
   REQUIRE(std::all_of(slices.begin(), prev(slices.end()),
-                      [](auto& slice) { return slice->rows() == 100; }));
+                      [](auto& slice) { return slice.rows() == 100; }));
   std::vector<std::pair<value_index_ptr, ids>> slice_stats;
   slice_stats.reserve(slices.size());
   size_t row_id = 0;
@@ -173,9 +173,9 @@ TEST(regression - zeek conn log service http) {
                                                         caf::settings{}),
                              ids(row_id, false));
     auto& [idx, expected] = slice_stats.back();
-    for (size_t row = 0; row < slice->rows(); ++row) {
+    for (size_t row = 0; row < slice.rows(); ++row) {
       // Column 7 is service.
-      auto x = slice->at(row, 7);
+      auto x = slice.at(row, 7);
       idx->append(x, row_id);
       expected.append_bit(is_http(x));
       ++row_id;
@@ -203,7 +203,7 @@ TEST(regression - manual value index for zeek conn log service http) {
   ewah_bitmap mask;
   // Get the slice that contains the events for [8000,8100).
   auto slice = zeek_conn_log_full[80];
-  for (size_t row = 0; row < slice->rows(); ++row) {
+  for (size_t row = 0; row < slice.rows(); ++row) {
     auto i = 8000 + row;
     auto f = detail::overload{
       [&](caf::none_t) {
@@ -227,7 +227,7 @@ TEST(regression - manual value index for zeek conn log service http) {
       [&](auto) { FAIL("unexpected service type"); },
     };
     // Column 7 is service.
-    caf::visit(f, slice->at(row, 7));
+    caf::visit(f, slice.at(row, 7));
   }
   REQUIRE_EQUAL(rank(mask), 100u);
   // Perform a manual index lookup for "http".

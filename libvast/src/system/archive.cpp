@@ -178,7 +178,7 @@ archive(archive_type::stateful_pointer<archive_state> self, path dir,
               VAST_ERROR(self, "failed to add table slice to store",
                          self->system().render(error));
             else
-              events += slice->rows();
+              events += slice.rows();
           }
           t.stop(events);
         },

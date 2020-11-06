@@ -486,17 +486,17 @@ caf::error writer::write(const table_slice& slice) {
     if (!dumper_)
       return make_error(ec::format_error, "failed to open pcap dumper");
   }
-  auto layout = slice->layout();
+  auto layout = slice.layout();
   if (!congruent(layout, pcap_packet_type)
       && !congruent(layout, pcap_packet_type_community_id))
     return make_error(ec::format_error, "invalid pcap packet type");
   // TODO: consider iterating in natural order for the slice.
-  for (size_t row = 0; row < slice->rows(); ++row) {
-    auto payload_field = slice->at(row, 6);
+  for (size_t row = 0; row < slice.rows(); ++row) {
+    auto payload_field = slice.at(row, 6);
     auto& payload = caf::get<view<std::string>>(payload_field);
     // Make PCAP header.
     ::pcap_pkthdr header;
-    auto ns_field = slice->at(row, 0);
+    auto ns_field = slice.at(row, 0);
     auto ns = caf::get<view<time>>(ns_field).time_since_epoch().count();
     header.ts.tv_sec = ns / 1000000000;
 #ifdef PCAP_TSTAMP_PRECISION_NANO

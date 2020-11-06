@@ -62,9 +62,9 @@ segment_store::~segment_store() {
 
 caf::error segment_store::put(table_slice xs) {
   VAST_TRACE(VAST_ARG(xs));
-  if (!segments_.inject(xs->offset(), xs->offset() + xs->rows(), builder_.id()))
+  if (!segments_.inject(xs.offset(), xs.offset() + xs.rows(), builder_.id()))
     return make_error(ec::unspecified, "failed to update range_map");
-  num_events_ += xs->rows();
+  num_events_ += xs.rows();
   if (auto error = builder_.add(std::move(xs)))
     return error;
   if (builder_.table_slice_bytes() < max_segment_size_)
@@ -193,15 +193,15 @@ caf::error segment_store::erase(const ids& xs) {
     std::vector<table_slice> new_slices;
     for (auto& slice : slices) {
       // Expand keep_mask on-the-fly if needed.
-      auto max_id = slice->offset() + slice->rows();
+      auto max_id = slice.offset() + slice.rows();
       if (keep_mask.size() < max_id)
         keep_mask.append_bits(true, max_id - keep_mask.size());
       size_t new_slices_size_before = new_slices.size();
       select(new_slices, slice, keep_mask);
       size_t remaining_rows = 0;
       for (size_t i = new_slices_size_before; i < new_slices.size(); ++i)
-        remaining_rows += new_slices[i]->rows();
-      erased_events += slice->rows() - remaining_rows;
+        remaining_rows += new_slices[i].rows();
+      erased_events += slice.rows() - remaining_rows;
     }
     if (new_slices.empty()) {
       VAST_WARNING(this, "was unable to generate any new slice for segment",
@@ -227,8 +227,8 @@ caf::error segment_store::erase(const ids& xs) {
     for (auto& slice : new_slices) {
       if (auto err = builder->add(slice)) {
         VAST_ERROR(this, "failed to add slice to builder:", err);
-      } else if (!segments_.inject(slice->offset(),
-                                   slice->offset() + slice->rows(),
+      } else if (!segments_.inject(slice.offset(),
+                                   slice.offset() + slice.rows(),
                                    builder->id()))
         VAST_ERROR(this, "failed to update range_map");
     }
@@ -420,7 +420,7 @@ uint64_t segment_store::drop(segment_builder& x) {
   uint64_t erased_events = 0;
   auto segment_id = x.id();
   for (auto& slice : x.table_slices())
-    erased_events += slice->rows();
+    erased_events += slice.rows();
   VAST_INFO(this, "erases segment under construction", segment_id);
   x.reset();
   segments_.erase_value(segment_id);

@@ -42,7 +42,7 @@ writer::~writer() {
 caf::error writer::write(const table_slice& slice) {
   if (out_ == nullptr)
     return ec::filesystem_error;
-  if (!layout(slice->layout()))
+  if (!layout(slice.layout()))
     return ec::unspecified;
   // Convert the slice to Arrow if necessary.
   auto arrow_slice

@@ -29,7 +29,7 @@ struct table_slice_printer : printer<table_slice_printer> {
   bool print(Iterator& out, const table_slice& x) const {
     using namespace printers;
     auto p = '[' << u64 << ',' << u64 << ')';
-    return p(out, x->offset(), x->offset() + x->rows());
+    return p(out, x.offset(), x.offset() + x.rows());
   }
 };
 

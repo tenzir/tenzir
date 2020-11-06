@@ -40,11 +40,11 @@ table_slice_row::table_slice_row(table_slice slice, size_t row) noexcept
 
 data_view table_slice_row::operator[](size_t column) const {
   VAST_ASSERT(column < size());
-  return slice_->at(row_, column);
+  return slice_.at(row_, column);
 }
 
 size_t table_slice_row::size() const noexcept {
-  return slice_->columns();
+  return slice_.columns();
 }
 
 const table_slice& table_slice_row::slice() const noexcept {

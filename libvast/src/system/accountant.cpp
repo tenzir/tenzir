@@ -85,7 +85,7 @@ void finish_slice(accountant_actor* self) {
   if (!st.builder || st.builder->rows() == 0)
     return;
   auto slice = st.builder->finish();
-  VAST_DEBUG(self, "generated slice with", slice->rows(), "rows");
+  VAST_DEBUG(self, "generated slice with", slice.rows(), "rows");
   st.slice_buffer.push(std::move(slice));
   st.mgr->advance();
 }
@@ -240,7 +240,7 @@ accountant(accountant_actor* self, accountant_config cfg) {
       size_t produced = 0;
       while (num-- > 0 && !st.slice_buffer.empty()) {
         auto& slice = st.slice_buffer.front();
-        produced += slice->rows();
+        produced += slice.rows();
         out.push(std::move(slice));
         st.slice_buffer.pop();
       }

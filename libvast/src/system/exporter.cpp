@@ -50,19 +50,19 @@ void ship_results(stateful_actor<exporter_state>* self) {
     // Fetch the next table slice. Either we grab the entire first slice in
     // st.results or we need to split it up.
     table_slice slice = {};
-    if (st.results[0]->rows() <= st.query.requested) {
+    if (st.results[0].rows() <= st.query.requested) {
       slice = std::move(st.results[0]);
       st.results.erase(st.results.begin());
     } else {
       auto [first, second] = split(st.results[0], st.query.requested);
       VAST_ASSERT(first.encoding() != table_slice::encoding::none);
       VAST_ASSERT(second.encoding() != table_slice::encoding::none);
-      VAST_ASSERT(first->rows() == st.query.requested);
+      VAST_ASSERT(first.rows() == st.query.requested);
       slice = std::move(first);
       st.results[0] = std::move(second);
     }
     // Ship the slice and update state.
-    auto rows = slice->rows();
+    auto rows = slice.rows();
     VAST_ASSERT(rows <= st.query.cached);
     st.query.cached -= rows;
     st.query.requested -= rows;
@@ -206,10 +206,10 @@ behavior exporter(stateful_actor<exporter_state>* self, expression expr,
   auto handle_batch = [=](table_slice slice) {
     VAST_ASSERT(slice.encoding() != table_slice::encoding::none);
     auto& st = self->state;
-    VAST_DEBUG(self, "got batch of", slice->rows(), "events");
+    VAST_DEBUG(self, "got batch of", slice.rows(), "events");
     auto sender = self->current_sender();
     // Construct a candidate checker if we don't have one for this type.
-    type t = slice->layout();
+    type t = slice.layout();
     auto it = st.checkers.find(t);
     if (it == st.checkers.end()) {
       auto x = tailor(st.expr, t);
@@ -222,7 +222,7 @@ behavior exporter(stateful_actor<exporter_state>* self, expression expr,
       }
       VAST_DEBUG(self, "tailored AST to", t, ':', x);
       std::tie(it, std::ignore)
-        = st.checkers.emplace(type{slice->layout()}, std::move(*x));
+        = st.checkers.emplace(type{slice.layout()}, std::move(*x));
     }
     auto& checker = it->second;
     // Perform candidate check, splitting the slice into subsets if needed.
@@ -235,7 +235,7 @@ behavior exporter(stateful_actor<exporter_state>* self, expression expr,
     st.query.cached += selection_size;
     select(st.results, slice, selection);
     // Ship slices to connected SINKs.
-    st.query.processed += slice->rows();
+    st.query.processed += slice.rows();
     ship_results(self);
   };
   return {

@@ -131,7 +131,7 @@ datagram_source(datagram_source_actor<Reader>* self,
       caf::arraybuf<> buf{msg.buf.data(), msg.buf.size()};
       st.reader.reset(std::make_unique<std::istream>(&buf));
       auto push_slice = [&](table_slice slice) {
-        VAST_DEBUG(self, "produced a slice with", slice->rows(), "rows");
+        VAST_DEBUG(self, "produced a slice with", slice.rows(), "rows");
         st.mgr->out().push(std::move(slice));
       };
       auto events = capacity * table_slice_size;

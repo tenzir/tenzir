@@ -114,7 +114,7 @@ struct fixture : fixtures::deterministic_actor_system_and_events {
     id offset = 0;
     for (auto& x : xs) {
       x.offset(offset);
-      offset += x->rows();
+      offset += x.rows();
     }
     return xs;
   }
@@ -158,7 +158,7 @@ TEST(iterable integer query result) {
   CHECK_EQUAL(hits, partitions);
   CHECK_EQUAL(scheduled, taste_count);
   ids expected_result;
-  expected_result.append_bits(false, alternating_integers[0]->offset());
+  expected_result.append_bits(false, alternating_integers[0].offset());
   for (size_t i = 0; i < (slice_size * partitions) / 2; ++i) {
     expected_result.append_bit(false);
     expected_result.append_bit(true);

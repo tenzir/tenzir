@@ -62,7 +62,7 @@ caf::behavior sink(caf::stateful_actor<sink_state>* self,
   });
   return {
     [=](table_slice slice) {
-      VAST_DEBUG(self, "got:", slice->rows(), "events from",
+      VAST_DEBUG(self, "got:", slice.rows(), "events from",
                  self->current_sender());
       auto& st = self->state;
       auto now = steady_clock::now();
@@ -81,7 +81,7 @@ caf::behavior sink(caf::stateful_actor<sink_state>* self,
       auto remaining = st.max_events - st.processed;
       if (remaining == 0)
         return reached_max_events();
-      if (slice->rows() > remaining)
+      if (slice.rows() > remaining)
         slice = truncate(slice, remaining);
       // Handle events.
       auto t = timer::start(st.measurement);
@@ -90,9 +90,9 @@ caf::behavior sink(caf::stateful_actor<sink_state>* self,
         self->quit(std::move(err));
         return;
       }
-      t.stop(slice->rows());
+      t.stop(slice.rows());
       // Stop when reaching configured limit.
-      st.processed += slice->rows();
+      st.processed += slice.rows();
       if (st.processed >= st.max_events)
         return reached_max_events();
       // Force flush if necessary.

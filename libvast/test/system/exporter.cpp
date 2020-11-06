@@ -110,8 +110,8 @@ struct fixture : fixture_base {
     bool running = true;
     self->receive_while(running)(
       [&](table_slice slice) {
-        MESSAGE("... got " << slice->rows() << " events");
-        total_events += slice->rows();
+        MESSAGE("... got " << slice.rows() << " events");
+        total_events += slice.rows();
         result.push_back(std::move(slice));
       },
       error_handler(),

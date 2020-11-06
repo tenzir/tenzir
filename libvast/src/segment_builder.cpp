@@ -34,19 +34,19 @@ segment_builder::segment_builder() {
 }
 
 caf::error segment_builder::add(table_slice x) {
-  if (x->offset() < min_table_slice_offset_)
+  if (x.offset() < min_table_slice_offset_)
     return make_error(ec::unspecified, "slice offsets not increasing");
   auto slice = pack(builder_, x);
   if (!slice)
     return slice.error();
   flat_slices_.push_back(*slice);
   // This works only with monotonically increasing IDs.
-  if (!intervals_.empty() && intervals_.back().end() == x->offset())
+  if (!intervals_.empty() && intervals_.back().end() == x.offset())
     intervals_.back()
-      = {intervals_.back().begin(), intervals_.back().end() + x->rows()};
+      = {intervals_.back().begin(), intervals_.back().end() + x.rows()};
   else
-    intervals_.emplace_back(x->offset(), x->offset() + x->rows());
-  num_events_ += x->rows();
+    intervals_.emplace_back(x.offset(), x.offset() + x.rows());
+  num_events_ += x.rows();
   slices_.push_back(x);
   return caf::none;
 }
@@ -76,7 +76,7 @@ caf::expected<std::vector<table_slice>>
 segment_builder::lookup(const vast::ids& xs) const {
   std::vector<table_slice> result;
   auto f = [](auto& slice) {
-    return std::pair{slice->offset(), slice->offset() + slice->rows()};
+    return std::pair{slice.offset(), slice.offset() + slice.rows()};
   };
   auto g = [&](auto& slice) {
     result.push_back(slice);
@@ -94,8 +94,8 @@ const uuid& segment_builder::id() const {
 vast::ids segment_builder::ids() const {
   vast::ids result;
   for (auto x : slices_) {
-    result.append_bits(false, x->offset() - result.size());
-    result.append_bits(true, x->rows());
+    result.append_bits(false, x.offset() - result.size());
+    result.append_bits(true, x.rows());
   }
   return result;
 }

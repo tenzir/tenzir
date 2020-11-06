@@ -117,11 +117,6 @@ public:
   friend bool
   operator!=(const table_slice& lhs, const table_slice& rhs) noexcept;
 
-  // [[deprecated("transitional only")]]
-  inline const legacy_table_slice_ptr& operator->() const noexcept {
-    return slice_;
-  }
-
   // -- properties -------------------------------------------------------------
 
   /// @returns The encoding of the slice.
@@ -374,7 +369,7 @@ std::vector<table_slice> select(const table_slice& xs, const ids& selection);
 /// Selects the first `num_rows` rows of `slice`.
 /// @param slice The input table slice.
 /// @param num_rows The number of rows to keep.
-/// @returns `slice` if `slice->rows() <= num_rows`, otherwise creates a new
+/// @returns `slice` if `slice.rows() <= num_rows`, otherwise creates a new
 ///          table slice of the first `num_rows` rows from `slice`.
 /// @pre `slice != nullptr`
 /// @pre `num_rows > 0`
@@ -382,10 +377,10 @@ table_slice truncate(const table_slice& slice, size_t num_rows);
 
 /// Splits a table slice into two slices such that the first slice contains the
 /// rows `[0, partition_point)` and the second slice contains the rows
-/// `[partition_point, n)`, where `n = slice->rows()`.
+/// `[partition_point, n)`, where `n = slice.rows()`.
 /// @param slice The input table slice.
 /// @param partition_point The index of the first row for the second slice.
-/// @returns two new table slices if `0 < partition_point < slice->rows()`,
+/// @returns two new table slices if `0 < partition_point < slice.rows()`,
 ///          otherwise returns `slice` and a `nullptr`.
 /// @pre `slice != nullptr`
 std::pair<table_slice, table_slice>
