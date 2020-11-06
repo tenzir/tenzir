@@ -75,7 +75,7 @@ public:
     VAST_ASSERT(max_slice_size > 0);
     struct consumer_impl : consumer {
       void operator()(table_slice x) override {
-        produced += x->rows();
+        produced += x.rows();
         f_(std::move(x));
       }
       consumer_impl(F& fun) : f_(fun), produced(0) {

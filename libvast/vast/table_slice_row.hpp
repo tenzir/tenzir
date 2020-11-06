@@ -39,7 +39,7 @@ public:
   /// Construct a view on a row of a table slice.
   /// @param slice The slice to view.
   /// @param row The viewed row's index.
-  /// @pre `row < slice->rows()`
+  /// @pre `row < slice.rows()`
   table_slice_row(table_slice slice, size_t row) noexcept;
 
   /// @returns the data at given column.

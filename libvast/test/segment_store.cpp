@@ -45,8 +45,8 @@ struct fixture : fixtures::deterministic_actor_system_and_events {
     // Check that ground truth is what we expect.
     if (zeek_conn_log.size() != 3u)
       FAIL("expected 3 slices in test data set");
-    if (zeek_conn_log[0]->rows() != 8 || zeek_conn_log[1]->rows() != 8
-        || zeek_conn_log[2]->rows() != 4)
+    if (zeek_conn_log[0].rows() != 8 || zeek_conn_log[1].rows() != 8
+        || zeek_conn_log[2].rows() != 4)
       FAIL("expected 8, 8 and 4 rows in data set");
   }
 
@@ -126,13 +126,13 @@ bool deep_compare(const Container& xs, const Container& ys) {
 
 size_t num_rows(const table_slice& xs, size_t starting_row,
                 size_t max_rows = std::numeric_limits<size_t>::max()) {
-  return std::min(detail::narrow<size_t>(xs->rows() - starting_row), max_rows);
+  return std::min(detail::narrow<size_t>(xs.rows() - starting_row), max_rows);
 }
 
 } // namespace
 
 #define CHECK_SLICE(xs, slice, ...)                                            \
-  CHECK_EQUAL(xs->rows(), num_rows(zeek_conn_log[slice], __VA_ARGS__));        \
+  CHECK_EQUAL(xs.rows(), num_rows(zeek_conn_log[slice], __VA_ARGS__));         \
   CHECK_EQUAL(to_data(xs), to_data(zeek_conn_log[slice], __VA_ARGS__))
 
 FIXTURE_SCOPE(segment_store_tests, fixture)

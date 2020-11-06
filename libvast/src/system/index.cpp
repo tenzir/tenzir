@@ -516,14 +516,14 @@ index(caf::stateful_actor<index_state>* self, filesystem_type fs, path dir,
     /* continuous = */ true, [=](caf::unit_t&) {},
     [=](caf::unit_t&, caf::downstream<table_slice>& out, table_slice x) {
       VAST_ASSERT(x.encoding() != table_slice::encoding::none);
-      auto layout = x->layout();
-      self->state.stats.layouts[layout.name()].count += x->rows();
+      auto layout = x.layout();
+      self->state.stats.layouts[layout.name()].count += x.rows();
       auto& active = self->state.active_partition;
       if (!active.actor) {
         create_active_partition();
-      } else if (x->rows() > active.capacity) {
+      } else if (x.rows() > active.capacity) {
         VAST_DEBUG(self, "exceeds active capacity by",
-                   (x->rows() - active.capacity), "rows");
+                   (x.rows() - active.capacity), "rows");
         decomission_active_partition();
         self->state.flush_to_disk();
         create_active_partition();
@@ -531,14 +531,14 @@ index(caf::stateful_actor<index_state>* self, filesystem_type fs, path dir,
       out.push(x);
       self->state.meta_idx.add(active.id, x);
       if (active.capacity == self->state.partition_capacity
-          && x->rows() > active.capacity) {
-        VAST_WARNING(self, "got table slice with", x->rows(),
+          && x.rows() > active.capacity) {
+        VAST_WARNING(self, "got table slice with", x.rows(),
                      "rows that exceeds the default partition capacity of",
                      self->state.partition_capacity, "rows");
         active.capacity = 0;
       } else {
-        VAST_ASSERT(active.capacity >= x->rows());
-        active.capacity -= x->rows();
+        VAST_ASSERT(active.capacity >= x.rows());
+        active.capacity -= x.rows();
         VAST_DEBUG(self, "reduces active partition capacity to",
                    (std::to_string(active.capacity) + '/'
                     + std::to_string(self->state.partition_capacity)),

@@ -121,7 +121,7 @@ events::events() {
   zeek_conn_log = inhale<format::zeek::reader>(
     artifacts::logs::zeek::small_conn, slice_size);
   REQUIRE_EQUAL(rows(zeek_conn_log), 20u);
-  auto layout = zeek_conn_log[0]->layout();
+  auto layout = zeek_conn_log[0].layout();
   CHECK_EQUAL(layout.name(), "zeek.conn");
   zeek_dns_log
     = inhale<format::zeek::reader>(artifacts::logs::zeek::dns, slice_size);
@@ -154,7 +154,7 @@ events::events() {
   auto assign_ids = [&](auto& slices) {
     for (auto& slice : slices) {
       slice.offset(i);
-      i += slice->rows();
+      i += slice.rows();
     }
   };
   assign_ids(zeek_conn_log);

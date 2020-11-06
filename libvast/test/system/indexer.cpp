@@ -53,7 +53,7 @@ struct fixture : fixtures::deterministic_actor_system_and_events {
     VAST_ASSERT(layout.fields.size() == 1);
     init(layout.fields[0].type);
     VAST_ASSERT(std::all_of(slices.begin(), slices.end(), [&](auto& slice) {
-      return slice->layout() == layout;
+      return slice.layout() == layout;
     }));
     std::vector<table_slice_column> slice_columns;
     for (auto& slice : slices)

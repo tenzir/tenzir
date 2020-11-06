@@ -45,8 +45,8 @@ void explorer_state::forward_results(vast::table_slice slice) {
   // Check which of the ids in this slice were already sent to the sink
   // and forward those that were not.
   vast::bitmap unseen;
-  for (size_t i = 0; i < slice->rows(); ++i) {
-    auto id = slice->offset() + i;
+  for (size_t i = 0; i < slice.rows(); ++i) {
+    auto id = slice.offset() + i;
     auto [_, new_] = returned_ids.insert(id);
     if (new_) {
       vast::ids tmp;
@@ -58,7 +58,7 @@ void explorer_state::forward_results(vast::table_slice slice) {
   if (unseen.empty())
     return;
   std::vector<table_slice> slices;
-  if (unseen.size() == slice->rows()) {
+  if (unseen.size() == slice.rows()) {
     slices.push_back(slice);
   } else {
     // If a slice was partially known, divide it up and forward only those
@@ -69,13 +69,13 @@ void explorer_state::forward_results(vast::table_slice slice) {
   for (auto slice : slices) {
     if (num_sent >= limits.total)
       break;
-    if (num_sent + slice->rows() <= limits.total) {
+    if (num_sent + slice.rows() <= limits.total) {
       self->send(sink, slice);
-      num_sent += slice->rows();
+      num_sent += slice.rows();
     } else {
       auto truncated = truncate(slice, limits.total - num_sent);
       self->send(sink, truncated);
-      num_sent += truncated->rows();
+      num_sent += truncated.rows();
     }
   }
   return;
@@ -126,7 +126,7 @@ explorer(caf::stateful_actor<explorer_state>* self, caf::actor node,
       // Don't bother making new queries if we discard all results anyways.
       if (st.num_sent >= st.limits.total)
         return;
-      auto layout = slice->layout();
+      auto layout = slice.layout();
       auto it = std::find_if(layout.fields.begin(), layout.fields.end(),
                              [](const record_field& field) {
                                return has_attribute(field.type, "timestamp");

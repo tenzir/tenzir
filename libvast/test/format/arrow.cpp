@@ -76,14 +76,14 @@ TEST(arrow batch) {
   auto reader_result = arrow::ipc::RecordBatchStreamReader::Open(&input_stream);
   REQUIRE_OK(reader_result);
   auto reader = *reader_result;
-  auto layout = zeek_conn_log[0]->layout();
+  auto layout = zeek_conn_log[0].layout();
   auto arrow_schema = arrow_table_slice_builder::make_arrow_schema(layout);
   size_t slice_id = 0;
   std::shared_ptr<arrow::RecordBatch> batch;
   while (reader->ReadNext(&batch).ok() && batch != nullptr) {
     REQUIRE_LESS(slice_id, zeek_conn_log.size());
-    table_slice_header hdr{layout, zeek_conn_log[slice_id]->rows(),
-                           zeek_conn_log[slice_id]->offset()};
+    table_slice_header hdr{layout, zeek_conn_log[slice_id].rows(),
+                           zeek_conn_log[slice_id].offset()};
     CHECK_EQUAL(detail::narrow<size_t>(batch->num_rows()), hdr.rows);
     CHECK(batch->schema()->Equals(*arrow_schema));
     auto slice = table_slice{legacy_table_slice_ptr{

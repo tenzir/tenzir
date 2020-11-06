@@ -121,22 +121,23 @@ TEST(manual table slice building) {
   record_type layout{{"map", map_type{integer_type{}, integer_type{}}},
                      {"int", integer_type{}}};
   table_slice_header hdr{layout, 2, 0};
-  auto slice = caf::make_counted<arrow_table_slice>(hdr, batch);
+  auto slice = table_slice{
+    legacy_table_slice_ptr{caf::make_counted<arrow_table_slice>(hdr, batch)}};
   map map1{{1_i, 10_i}, {2_i, 20_i}};
   map map2{{3_i, 30_i}};
-  CHECK_VARIANT_EQUAL(slice->at(0, 0), make_view(map1));
-  CHECK_VARIANT_EQUAL(slice->at(0, 1), 42_i);
-  CHECK_VARIANT_EQUAL(slice->at(1, 0), make_view(map2));
-  CHECK_VARIANT_EQUAL(slice->at(1, 1), 84_i);
+  CHECK_VARIANT_EQUAL(slice.at(0, 0), make_view(map1));
+  CHECK_VARIANT_EQUAL(slice.at(0, 1), 42_i);
+  CHECK_VARIANT_EQUAL(slice.at(1, 0), make_view(map2));
+  CHECK_VARIANT_EQUAL(slice.at(1, 1), 84_i);
 }
 
 TEST(single column - equality) {
   auto slice1 = make_single_column_slice<count_type>(0_c, 1_c, caf::none, 3_c);
   auto slice2 = make_single_column_slice<count_type>(0_c, 1_c, caf::none, 3_c);
-  CHECK_VARIANT_EQUAL(slice1->at(0, 0), slice2->at(0, 0));
-  CHECK_VARIANT_EQUAL(slice1->at(1, 0), slice2->at(1, 0));
-  CHECK_VARIANT_EQUAL(slice1->at(2, 0), slice2->at(2, 0));
-  CHECK_VARIANT_EQUAL(slice1->at(3, 0), slice2->at(3, 0));
+  CHECK_VARIANT_EQUAL(slice1.at(0, 0), slice2.at(0, 0));
+  CHECK_VARIANT_EQUAL(slice1.at(1, 0), slice2.at(1, 0));
+  CHECK_VARIANT_EQUAL(slice1.at(2, 0), slice2.at(2, 0));
+  CHECK_VARIANT_EQUAL(slice1.at(3, 0), slice2.at(3, 0));
   CHECK_EQUAL(slice1, slice1);
   CHECK_EQUAL(slice1, slice2);
   CHECK_EQUAL(slice2, slice1);
@@ -145,56 +146,56 @@ TEST(single column - equality) {
 
 TEST(single column - count) {
   auto slice = make_single_column_slice<count_type>(0_c, 1_c, caf::none, 3_c);
-  REQUIRE_EQUAL(slice->rows(), 4u);
-  CHECK_VARIANT_EQUAL(slice->at(0, 0), 0_c);
-  CHECK_VARIANT_EQUAL(slice->at(1, 0), 1_c);
-  CHECK_VARIANT_EQUAL(slice->at(2, 0), caf::none);
-  CHECK_VARIANT_EQUAL(slice->at(3, 0), 3_c);
+  REQUIRE_EQUAL(slice.rows(), 4u);
+  CHECK_VARIANT_EQUAL(slice.at(0, 0), 0_c);
+  CHECK_VARIANT_EQUAL(slice.at(1, 0), 1_c);
+  CHECK_VARIANT_EQUAL(slice.at(2, 0), caf::none);
+  CHECK_VARIANT_EQUAL(slice.at(3, 0), 3_c);
   CHECK_ROUNDTRIP(slice);
 }
 
 TEST(single column - enumeration) {
   auto slice = make_single_column_slice<enumeration_type>(0_e, 1_e, caf::none);
-  REQUIRE_EQUAL(slice->rows(), 3u);
-  CHECK_VARIANT_EQUAL(slice->at(0, 0), 0_e);
-  CHECK_VARIANT_EQUAL(slice->at(1, 0), 1_e);
-  CHECK_VARIANT_EQUAL(slice->at(2, 0), caf::none);
+  REQUIRE_EQUAL(slice.rows(), 3u);
+  CHECK_VARIANT_EQUAL(slice.at(0, 0), 0_e);
+  CHECK_VARIANT_EQUAL(slice.at(1, 0), 1_e);
+  CHECK_VARIANT_EQUAL(slice.at(2, 0), caf::none);
   CHECK_ROUNDTRIP(slice);
 }
 
 TEST(single column - integer) {
   auto slice = make_single_column_slice<integer_type>(caf::none, 1_i, 2_i);
-  REQUIRE_EQUAL(slice->rows(), 3u);
-  CHECK_VARIANT_EQUAL(slice->at(0, 0), caf::none);
-  CHECK_VARIANT_EQUAL(slice->at(1, 0), 1_i);
-  CHECK_VARIANT_EQUAL(slice->at(2, 0), 2_i);
+  REQUIRE_EQUAL(slice.rows(), 3u);
+  CHECK_VARIANT_EQUAL(slice.at(0, 0), caf::none);
+  CHECK_VARIANT_EQUAL(slice.at(1, 0), 1_i);
+  CHECK_VARIANT_EQUAL(slice.at(2, 0), 2_i);
   CHECK_ROUNDTRIP(slice);
 }
 
 TEST(single column - boolean) {
   auto slice = make_single_column_slice<bool_type>(false, caf::none, true);
-  REQUIRE_EQUAL(slice->rows(), 3u);
-  CHECK_VARIANT_EQUAL(slice->at(0, 0), false);
-  CHECK_VARIANT_EQUAL(slice->at(1, 0), caf::none);
-  CHECK_VARIANT_EQUAL(slice->at(2, 0), true);
+  REQUIRE_EQUAL(slice.rows(), 3u);
+  CHECK_VARIANT_EQUAL(slice.at(0, 0), false);
+  CHECK_VARIANT_EQUAL(slice.at(1, 0), caf::none);
+  CHECK_VARIANT_EQUAL(slice.at(2, 0), true);
   CHECK_ROUNDTRIP(slice);
 }
 
 TEST(single column - real) {
   auto slice = make_single_column_slice<real_type>(1.23, 3.21, caf::none);
-  REQUIRE_EQUAL(slice->rows(), 3u);
-  CHECK_VARIANT_EQUAL(slice->at(0, 0), 1.23);
-  CHECK_VARIANT_EQUAL(slice->at(1, 0), 3.21);
-  CHECK_VARIANT_EQUAL(slice->at(2, 0), caf::none);
+  REQUIRE_EQUAL(slice.rows(), 3u);
+  CHECK_VARIANT_EQUAL(slice.at(0, 0), 1.23);
+  CHECK_VARIANT_EQUAL(slice.at(1, 0), 3.21);
+  CHECK_VARIANT_EQUAL(slice.at(2, 0), caf::none);
   CHECK_ROUNDTRIP(slice);
 }
 
 TEST(single column - string) {
   auto slice = make_single_column_slice<string_type>("a"sv, caf::none, "c"sv);
-  REQUIRE_EQUAL(slice->rows(), 3u);
-  CHECK_VARIANT_EQUAL(slice->at(0, 0), "a"sv);
-  CHECK_VARIANT_EQUAL(slice->at(1, 0), caf::none);
-  CHECK_VARIANT_EQUAL(slice->at(2, 0), "c"sv);
+  REQUIRE_EQUAL(slice.rows(), 3u);
+  CHECK_VARIANT_EQUAL(slice.at(0, 0), "a"sv);
+  CHECK_VARIANT_EQUAL(slice.at(1, 0), caf::none);
+  CHECK_VARIANT_EQUAL(slice.at(2, 0), "c"sv);
   CHECK_ROUNDTRIP(slice);
 }
 
@@ -202,10 +203,10 @@ TEST(single column - pattern) {
   auto p1 = pattern("foo.ar");
   auto p2 = pattern("hello* world");
   auto slice = make_single_column_slice<pattern_type>(p1, p2, caf::none);
-  REQUIRE_EQUAL(slice->rows(), 3u);
-  CHECK_VARIANT_EQUAL(slice->at(0, 0), make_view(p1));
-  CHECK_VARIANT_EQUAL(slice->at(1, 0), make_view(p2));
-  CHECK_VARIANT_EQUAL(slice->at(2, 0), caf::none);
+  REQUIRE_EQUAL(slice.rows(), 3u);
+  CHECK_VARIANT_EQUAL(slice.at(0, 0), make_view(p1));
+  CHECK_VARIANT_EQUAL(slice.at(1, 0), make_view(p2));
+  CHECK_VARIANT_EQUAL(slice.at(2, 0), caf::none);
   CHECK_ROUNDTRIP(slice);
 }
 
@@ -214,10 +215,10 @@ TEST(single column - time) {
   auto epoch = ts{duration{0}};
   auto slice
     = make_single_column_slice<time_type>(epoch, caf::none, epoch + 48h);
-  REQUIRE_EQUAL(slice->rows(), 3u);
-  CHECK_VARIANT_EQUAL(slice->at(0, 0), epoch);
-  CHECK_VARIANT_EQUAL(slice->at(1, 0), caf::none);
-  CHECK_VARIANT_EQUAL(slice->at(2, 0), epoch + 48h);
+  REQUIRE_EQUAL(slice.rows(), 3u);
+  CHECK_VARIANT_EQUAL(slice.at(0, 0), epoch);
+  CHECK_VARIANT_EQUAL(slice.at(1, 0), caf::none);
+  CHECK_VARIANT_EQUAL(slice.at(2, 0), epoch + 48h);
   CHECK_ROUNDTRIP(slice);
 }
 
@@ -225,10 +226,10 @@ TEST(single column - duration) {
   auto h0 = duration{0};
   auto h12 = h0 + 12h;
   auto slice = make_single_column_slice<duration_type>(h0, h12, caf::none);
-  REQUIRE_EQUAL(slice->rows(), 3u);
-  CHECK_VARIANT_EQUAL(slice->at(0, 0), h0);
-  CHECK_VARIANT_EQUAL(slice->at(1, 0), h12);
-  CHECK_VARIANT_EQUAL(slice->at(2, 0), caf::none);
+  REQUIRE_EQUAL(slice.rows(), 3u);
+  CHECK_VARIANT_EQUAL(slice.at(0, 0), h0);
+  CHECK_VARIANT_EQUAL(slice.at(1, 0), h12);
+  CHECK_VARIANT_EQUAL(slice.at(2, 0), caf::none);
   CHECK_ROUNDTRIP(slice);
 }
 
@@ -239,11 +240,11 @@ TEST(single column - address) {
   auto a2 = unbox(to<address>("ff01:db8::202:b3ff:fe1e:8329"));
   auto a3 = unbox(to<address>("2001:db8::"));
   auto slice = make_single_column_slice<address_type>(caf::none, a1, a2, a3);
-  REQUIRE_EQUAL(slice->rows(), 4u);
-  CHECK_VARIANT_EQUAL(slice->at(0, 0), caf::none);
-  CHECK_VARIANT_EQUAL(slice->at(1, 0), a1);
-  CHECK_VARIANT_EQUAL(slice->at(2, 0), a2);
-  CHECK_VARIANT_EQUAL(slice->at(3, 0), a3);
+  REQUIRE_EQUAL(slice.rows(), 4u);
+  CHECK_VARIANT_EQUAL(slice.at(0, 0), caf::none);
+  CHECK_VARIANT_EQUAL(slice.at(1, 0), a1);
+  CHECK_VARIANT_EQUAL(slice.at(2, 0), a2);
+  CHECK_VARIANT_EQUAL(slice.at(3, 0), a3);
   CHECK_ROUNDTRIP(slice);
 }
 
@@ -254,11 +255,11 @@ TEST(single column - subnet) {
   auto s2 = unbox(to<subnet>("172.16.0.0/16"));
   auto s3 = unbox(to<subnet>("172.0.0.0/24"));
   auto slice = make_single_column_slice<subnet_type>(s1, s2, s3, caf::none);
-  REQUIRE_EQUAL(slice->rows(), 4u);
-  CHECK_VARIANT_EQUAL(slice->at(0, 0), s1);
-  CHECK_VARIANT_EQUAL(slice->at(1, 0), s2);
-  CHECK_VARIANT_EQUAL(slice->at(2, 0), s3);
-  CHECK_VARIANT_EQUAL(slice->at(3, 0), caf::none);
+  REQUIRE_EQUAL(slice.rows(), 4u);
+  CHECK_VARIANT_EQUAL(slice.at(0, 0), s1);
+  CHECK_VARIANT_EQUAL(slice.at(1, 0), s2);
+  CHECK_VARIANT_EQUAL(slice.at(2, 0), s3);
+  CHECK_VARIANT_EQUAL(slice.at(3, 0), caf::none);
   CHECK_ROUNDTRIP(slice);
 }
 
@@ -269,11 +270,11 @@ TEST(single column - port) {
   auto p2 = unbox(to<port>("2020/udp"));
   auto p3 = unbox(to<port>("8080/icmp"));
   auto slice = make_single_column_slice<port_type>(p1, p2, caf::none, p3);
-  REQUIRE_EQUAL(slice->rows(), 4u);
-  CHECK_VARIANT_EQUAL(slice->at(0, 0), p1);
-  CHECK_VARIANT_EQUAL(slice->at(1, 0), p2);
-  CHECK_VARIANT_EQUAL(slice->at(2, 0), caf::none);
-  CHECK_VARIANT_EQUAL(slice->at(3, 0), p3);
+  REQUIRE_EQUAL(slice.rows(), 4u);
+  CHECK_VARIANT_EQUAL(slice.at(0, 0), p1);
+  CHECK_VARIANT_EQUAL(slice.at(1, 0), p2);
+  CHECK_VARIANT_EQUAL(slice.at(2, 0), caf::none);
+  CHECK_VARIANT_EQUAL(slice.at(3, 0), p3);
   CHECK_ROUNDTRIP(slice);
 }
 
@@ -283,10 +284,10 @@ TEST(single column - list of integers) {
   list list1{1_i, 2_i, 3_i};
   list list2{10_i, 20_i};
   auto slice = make_slice(layout, list1, caf::none, list2);
-  REQUIRE_EQUAL(slice->rows(), 3u);
-  CHECK_VARIANT_EQUAL(slice->at(0, 0), make_view(list1));
-  CHECK_VARIANT_EQUAL(slice->at(1, 0), caf::none);
-  CHECK_VARIANT_EQUAL(slice->at(2, 0), make_view(list2));
+  REQUIRE_EQUAL(slice.rows(), 3u);
+  CHECK_VARIANT_EQUAL(slice.at(0, 0), make_view(list1));
+  CHECK_VARIANT_EQUAL(slice.at(1, 0), caf::none);
+  CHECK_VARIANT_EQUAL(slice.at(2, 0), make_view(list2));
   CHECK_ROUNDTRIP(slice);
 }
 
@@ -296,10 +297,10 @@ TEST(single column - list of strings) {
   list list1{"hello"s, "world"s};
   list list2{"a"s, "b"s, "c"s};
   auto slice = make_slice(layout, list1, list2, caf::none);
-  REQUIRE_EQUAL(slice->rows(), 3u);
-  CHECK_VARIANT_EQUAL(slice->at(0, 0), make_view(list1));
-  CHECK_VARIANT_EQUAL(slice->at(1, 0), make_view(list2));
-  CHECK_VARIANT_EQUAL(slice->at(2, 0), caf::none);
+  REQUIRE_EQUAL(slice.rows(), 3u);
+  CHECK_VARIANT_EQUAL(slice.at(0, 0), make_view(list1));
+  CHECK_VARIANT_EQUAL(slice.at(1, 0), make_view(list2));
+  CHECK_VARIANT_EQUAL(slice.at(2, 0), caf::none);
   CHECK_ROUNDTRIP(slice);
 }
 
@@ -315,10 +316,10 @@ TEST(single column - list of list of integers) {
   list list22{0_i, 1_i, 1_i, 2_i, 3_i, 5_i, 8_i, 13_i};
   list list2{list11, list12};
   auto slice = make_slice(layout, caf::none, list1, list2);
-  REQUIRE_EQUAL(slice->rows(), 3u);
-  CHECK_VARIANT_EQUAL(slice->at(0, 0), caf::none);
-  CHECK_VARIANT_EQUAL(slice->at(1, 0), make_view(list1));
-  CHECK_VARIANT_EQUAL(slice->at(2, 0), make_view(list2));
+  REQUIRE_EQUAL(slice.rows(), 3u);
+  CHECK_VARIANT_EQUAL(slice.at(0, 0), caf::none);
+  CHECK_VARIANT_EQUAL(slice.at(1, 0), make_view(list1));
+  CHECK_VARIANT_EQUAL(slice.at(2, 0), make_view(list2));
   CHECK_ROUNDTRIP(slice);
 }
 
@@ -328,10 +329,10 @@ TEST(single column - map) {
   map map1{{"foo"s, 42_c}, {"bar"s, 23_c}};
   map map2{{"a"s, 0_c}, {"b"s, 1_c}, {"c", 2_c}};
   auto slice = make_slice(layout, map1, map2, caf::none);
-  REQUIRE_EQUAL(slice->rows(), 3u);
-  CHECK_VARIANT_EQUAL(slice->at(0, 0), make_view(map1));
-  CHECK_VARIANT_EQUAL(slice->at(1, 0), make_view(map2));
-  CHECK_VARIANT_EQUAL(slice->at(2, 0), caf::none);
+  REQUIRE_EQUAL(slice.rows(), 3u);
+  CHECK_VARIANT_EQUAL(slice.at(0, 0), make_view(map1));
+  CHECK_VARIANT_EQUAL(slice.at(1, 0), make_view(map2));
+  CHECK_VARIANT_EQUAL(slice.at(2, 0), caf::none);
   CHECK_ROUNDTRIP(slice);
 }
 
@@ -349,10 +350,10 @@ TEST(single column - serialization) {
     caf::binary_deserializer source{nullptr, buf};
     CHECK_EQUAL(source(slice2), caf::none);
   }
-  CHECK_VARIANT_EQUAL(slice2->at(0, 0), 0_c);
-  CHECK_VARIANT_EQUAL(slice2->at(1, 0), 1_c);
-  CHECK_VARIANT_EQUAL(slice2->at(2, 0), 2_c);
-  CHECK_VARIANT_EQUAL(slice2->at(3, 0), 3_c);
+  CHECK_VARIANT_EQUAL(slice2.at(0, 0), 0_c);
+  CHECK_VARIANT_EQUAL(slice2.at(1, 0), 1_c);
+  CHECK_VARIANT_EQUAL(slice2.at(2, 0), 2_c);
+  CHECK_VARIANT_EQUAL(slice2.at(3, 0), 3_c);
   CHECK_VARIANT_EQUAL(slice1, slice2);
 }
 

@@ -93,7 +93,7 @@ TEST(zeek conn source) {
   run();
   auto& st = deref<test_sink_type>(snk).state;
   REQUIRE_EQUAL(st.slices.size(), 1u);
-  CHECK_EQUAL(st.slices.front()->rows(), 20u);
+  CHECK_EQUAL(st.slices.front().rows(), 20u);
   anon_send_exit(src, caf::exit_reason::user_shutdown);
   run();
 }
