@@ -413,7 +413,8 @@ pack(flatbuffers::FlatBufferBuilder& builder, table_slice_ptr x) {
 }
 
 // TODO: The dual to the note above applies here.
-caf::error unpack(const fbs::table_slice::legacy::v0& x, table_slice_ptr& y) {
+caf::error
+unpack(const fbs::table_slice::legacy::v0& x, table_slice_ptr& y) {
   auto ptr = reinterpret_cast<const char*>(x.data()->Data());
   caf::binary_deserializer source{nullptr, ptr, x.data()->size()};
   return source(y);
