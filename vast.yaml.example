@@ -15,9 +15,6 @@ vast:
   # working directory of the client. Note that this is disabled by default. If
   # not specified no log files are written for clients at all.
   #client-log-file: "client.log"
-  # The size of an index shard, expressed in number of events.
-  # This should be a power of 2.
-  max-partition-size: 1048576
   # The unique ID of this node.
   node-id: "node"
   # List of paths to look for schema files in ascending order of priority.
@@ -29,6 +26,17 @@ vast:
   no-default-schema: false
   # Spawn a node instead of connecting to one.
   node: false
+
+  # The size of an index shard, expressed in number of events.
+  # This should be a power of 2.
+  max-partition-size: 1048576
+  # The number of index shards that can be cached in memory.
+  max-resident-partitions: 10
+  # The number of index shards that are considered for the first evaluation
+  # round of a query.
+  max-taste-partitions: 5
+  # The amount of queries that can be executed in parallel.
+  max-queries: 10
 
   # The maximum number of segments cached by the archive.
   segments: 10
@@ -89,7 +97,10 @@ vast:
     # The maximum number of events to export.
     #max-events: <infinity>
     # Path for reading the query or "-" for reading from stdin.
-    read: "-"
+    # Note: Setting this option in the config file creates a conflict with
+    # `vast export` with a positional query argument. This option is only
+    # listed here for completeness.
+    #read: "-"
 
     # The `vast export ascii` command exports events formatted in a plain-text
     # format that is internal to VAST.
@@ -164,11 +175,11 @@ vast:
     # The maximum number of events to import.
     #max-events: <infinity>
     # Timeout after which buffered table slices are forwarded to the node.
-    batch-timeout: 1s
+    batch-timeout: 10s
     # Upper bound for the size of a table slice. A value of 0 causes the
     # batch-size to be unbounded, leaving control of batching to the
     # vast.import.read-timeout option only.
-    batch-size: 100
+    batch-size: 1000
     # Encoding type of table slices (arrow or msgpack).
     batch-encoding: arrow
     # Block until the importer forwarded all data.
