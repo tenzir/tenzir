@@ -34,6 +34,7 @@ LOGGER = logging.getLogger("VAST")
 VAST_PORT = 42024
 STEP_TIMEOUT = 30
 CURRENT_SUBPROCS: List[subprocess.Popen] = []
+SET_DIR = Path()
 
 
 class Fixture(NamedTuple):
@@ -54,6 +55,7 @@ class Condition(NamedTuple):
 class Test(NamedTuple):
     tags: Optional[str]
     condition: Optional[Condition]
+    config_file: Optional[str]
     fixture: Optional[str]
     steps: List[Union[Step, Condition]]
 
@@ -309,11 +311,18 @@ class Server:
         **kwargs,
     ):
         self.app = app
-        self.config_arg = f"--config={config_file}"
+        if config_file:
+            self.config_arg = f"--config={SET_DIR/config_file}"
+        else:
+            self.config_arg = None
         self.name = name
         self.cwd = work_dir / self.name
         self.port = port
-        LOGGER.debug("starting server fixture")
+        command = [self.app]
+        if self.config_arg:
+            command.append(self.config_arg)
+        command = command + args
+        LOGGER.info(f"starting server fixture: {command}")
         LOGGER.debug(f"waiting for port {self.port} to be available")
         if not wait.tcp.closed(self.port, timeout=5):
             raise RuntimeError("Port is blocked by another process.\nAborting tests...")
@@ -321,7 +330,7 @@ class Server:
         out = open(self.cwd / "out", "w")
         err = open(self.cwd / "err", "w")
         self.process = spawn(
-            [self.app, self.config_arg] + args,
+            command,
             cwd=self.cwd,
             stdout=out,
             stderr=err,
@@ -333,13 +342,17 @@ class Server:
 
     def stop(self):
         """Stops the server"""
-        LOGGER.debug("stopping server fixture")
+        command = [self.app]
+        if self.config_arg:
+            command.append(self.config_arg)
+        command = command + ["-e", f":{self.port}", "stop"]
+        LOGGER.debug(f"stopping server fixture: {command}")
         stop_out = open(self.cwd / "stop.out", "w")
         stop_err = open(self.cwd / "stop.err", "w")
         stop = 0
         try:
             stop = spawn(
-                [self.app, self.config_arg, "-e", f":{self.port}", "stop"],
+                command,
                 cwd=self.cwd,
                 stdout=stop_out,
                 stderr=stop_err,
@@ -410,7 +423,9 @@ class Tester:
         dummy_fixture = Fixture("pass", "pass")
         fixture = dummy_fixture if not test.fixture else self.fixtures.get(test.fixture)
         cmd = [self.cmd]
-        if self.config_file:
+        if test.config_file:
+            cmd.append(f"--config={test.config_file}")
+        elif self.config_file:
             cmd.append(f"--config={self.config_file}")
         fenter = Template(fixture.enter).substitute(locals())
         fexit = Template(fixture.exit).substitute(locals())
@@ -442,7 +457,7 @@ class Tester:
         return summary.dominant_state()
 
 
-def validate(data, set_dir):
+def validate(data):
     def is_file(path):
         return path.is_file()
 
@@ -456,16 +471,17 @@ def validate(data, set_dir):
         return Condition(guard["guard"])
 
     def to_test(data):
+        data["config_file"] = data.pop("config-file")
         return Test(**data)
 
     def absolute_path(path):
         absolute = Path(os.path.expanduser(path))
         if not absolute.is_absolute():
-            absolute = (set_dir / path).resolve()
+            absolute = (SET_DIR / path).resolve()
         return absolute
 
     def replace_path(raw_command):
-        return raw_command.replace("@.", str(set_dir))
+        return raw_command.replace("@.", str(SET_DIR))
 
     def to_command(raw_command):
         return shlex.split(replace_path(raw_command))
@@ -499,6 +515,7 @@ def validate(data, set_dir):
             {
                 schema.Optional("tags", default=None): [str],
                 schema.Optional("condition", default=None): schema.Use(Condition),
+                schema.Optional("config-file", default=None): schema.Use(absolute_path),
                 schema.Optional("fixture", default=None): str,
                 "steps": [schema.Or(step, guard)],
             },
@@ -660,9 +677,11 @@ def main():
         args.set = Path(__file__).resolve().parent / "default_set.yaml"
     args.set = args.set.resolve()
     LOGGER.debug(f"resolved test set path to {args.set}")
+    global SET_DIR
+    SET_DIR = args.set.parent
     test_file = open(args.set, "r")
     test_dict = yaml.full_load(test_file)
-    test_dec = validate(test_dict, args.set.parent)
+    test_dec = validate(test_dict)
     # Print tests.
     if args.list is not None:
         selection = tagselect(args.list, test_dec["tests"])
