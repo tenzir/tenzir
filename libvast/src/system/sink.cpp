@@ -24,6 +24,7 @@
 #include "vast/table_slice.hpp"
 
 #include <caf/event_based_actor.hpp>
+#include <caf/settings.hpp>
 
 namespace vast::system {
 
@@ -119,6 +120,19 @@ caf::behavior sink(caf::stateful_actor<sink_state>* self,
     [=](atom::statistics, const caf::actor& statistics_subscriber) {
       VAST_DEBUG(self, "sets statistics subscriber to", statistics_subscriber);
       self->state.statistics_subscriber = statistics_subscriber;
+    },
+    [=](atom::status, status_verbosity v) {
+      auto& st = self->state;
+      caf::settings result;
+      if (v >= status_verbosity::detailed) {
+        caf::settings sink_status;
+        if (st.writer)
+          put(sink_status, "format", st.writer->name());
+        put(sink_status, "processed", st.processed);
+        auto& xs = put_list(result, "sinks");
+        xs.emplace_back(std::move(sink_status));
+      }
+      return result;
     },
   };
 }
