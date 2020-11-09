@@ -17,35 +17,11 @@
 #include "vast/logger.hpp"
 #include "vast/msgpack_table_slice.hpp"
 
-#include <caf/make_copy_on_write.hpp>
-#include <caf/make_counted.hpp>
-
 #include <memory>
-
-using namespace vast;
 
 namespace vast {
 
-caf::atom_value msgpack_table_slice_builder::get_implementation_id() noexcept {
-  return msgpack_table_slice::class_id;
-}
-
-table_slice_builder_ptr
-msgpack_table_slice_builder::make(record_type layout,
-                                  size_t initial_buffer_size) {
-  return caf::make_counted<msgpack_table_slice_builder>(std::move(layout),
-                                                        initial_buffer_size);
-}
-
-msgpack_table_slice_builder::msgpack_table_slice_builder(
-  record_type layout, size_t initial_buffer_size)
-  : super{std::move(layout)}, col_{0}, builder_{buffer_} {
-  buffer_.reserve(initial_buffer_size);
-}
-
-msgpack_table_slice_builder::~msgpack_table_slice_builder() {
-  // nop
-}
+// -- utility functions --------------------------------------------------------
 
 namespace {
 
@@ -119,21 +95,25 @@ template <class Builder>
 
 } // namespace msgpack
 
-bool msgpack_table_slice_builder::add_impl(data_view x) {
-  // Check whether input is valid.
-  if (!type_check(layout().fields[col_].type, x))
-    return false;
-  if (col_ == 0)
-    offset_table_.push_back(buffer_.size());
-  col_ = (col_ + 1) % columns();
-  auto n = put(builder_, x);
-  VAST_ASSERT(n > 0);
-  return true;
+// -- constructors, destructors, and assignment operators ----------------------
+
+table_slice_builder_ptr
+msgpack_table_slice_builder::make(record_type layout,
+                                  size_t initial_buffer_size) {
+  return table_slice_builder_ptr{
+    new msgpack_table_slice_builder{std::move(layout), initial_buffer_size},
+    false};
 }
+
+msgpack_table_slice_builder::~msgpack_table_slice_builder() {
+  // nop
+}
+
+// -- properties ---------------------------------------------------------------
 
 table_slice msgpack_table_slice_builder::finish() {
   // Sanity check.
-  if (col_ != 0)
+  if (column_ != 0)
     return {};
   table_slice_header header;
   header.layout = layout();
@@ -153,7 +133,31 @@ size_t msgpack_table_slice_builder::rows() const noexcept {
 
 caf::atom_value
 msgpack_table_slice_builder::implementation_id() const noexcept {
-  return get_implementation_id();
+  return caf::atom("msgpack");
+}
+
+virtual void msgpack_table_slice_builder::reserve(size_t num_rows) {
+  offset_table_.reserve(num_rows);
+}
+
+// -- implementation details ---------------------------------------------------
+
+msgpack_table_slice_builder::msgpack_table_slice_builder(
+  record_type layout, size_t initial_buffer_size)
+  : table_slice_builder{std::move(layout)}, msgpack_builder_{buffer_} {
+  buffer_.reserve(initial_buffer_size);
+}
+
+bool msgpack_table_slice_builder::add_impl(data_view x) {
+  // Check whether input is valid.
+  if (!type_check(layout().fields[column_].type, x))
+    return false;
+  if (column_ == 0)
+    offset_table_.push_back(buffer_.size());
+  column_ = (column_ + 1) % columns();
+  auto n = put(msgpack_builder_, x);
+  VAST_ASSERT(n > 0);
+  return true;
 }
 
 } // namespace vast
