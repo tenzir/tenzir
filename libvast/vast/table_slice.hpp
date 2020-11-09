@@ -196,6 +196,10 @@ private:
 
   /// A pointer to the underlying chunk, which contains a `vast.fbs.TableSlice`
   /// FlatBuffers table.
+  /// @note On construction and destruction, the ref-count of `chunk_` is used
+  /// to determine whether the `num_instances_` counter should be increased or
+  /// decreased. This implies that the chunk must *never* be exposed outside of
+  /// `table_slice`.
   chunk_ptr chunk_ = {};
 
   // FIXME: Remove when removing legacy table slices.
