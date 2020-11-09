@@ -240,7 +240,6 @@ void table_slices::run() {
   test_manual_serialization();
   test_smart_pointer_serialization();
   test_message_serialization();
-  test_load_from_chunk();
   test_append_column_to_index();
 }
 
@@ -342,17 +341,6 @@ void table_slices::test_message_serialization() {
   // FIXME: Make the table slice builders use `table_slice::encoding` as key.
   // CHECK_EQUAL(slice2.get_as<table_slice>(0).encoding(),
   //             builder->implementation_id());
-}
-
-void table_slices::test_load_from_chunk() {
-  MESSAGE(">> test load from chunk");
-  auto slice1 = make_slice();
-  auto sink = make_sink();
-  CHECK_EQUAL(sink(slice1), caf::none);
-  auto chk = chunk::make(std::vector<char>{buf});
-  auto slice2 = table_slice{factory<legacy_table_slice>::traits::make(chk)};
-  REQUIRE_NOT_EQUAL(slice2.encoding(), table_slice::encoding::none);
-  CHECK_EQUAL(slice1, slice2);
 }
 
 void table_slices::test_append_column_to_index() {

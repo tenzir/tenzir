@@ -74,6 +74,7 @@ integer operator"" _i(unsigned long long int x) {
     FAIL("!! " #expression);
 
 TEST(manual table slice building) {
+  factory<legacy_table_slice>::add<arrow_table_slice>();
   using std::make_shared;
   using bptr = std::shared_ptr<arrow::ArrayBuilder>;
   using vast::map;
