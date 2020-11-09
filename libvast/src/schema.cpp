@@ -244,10 +244,10 @@ get_schema_dirs(const caf::actor_system_config& cfg,
   return result;
 }
 
-caf::expected<schema> load_schema(const path& sf) {
-  if (sf.empty())
+caf::expected<schema> load_schema(const path& schema_file) {
+  if (schema_file.empty())
     return make_error(ec::filesystem_error, "empty path");
-  auto str = load_contents(sf);
+  auto str = load_contents(schema_file);
   if (!str)
     return str.error();
   return to<schema>(*str);

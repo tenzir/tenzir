@@ -101,9 +101,9 @@ get_schema_dirs(const caf::actor_system_config& cfg,
                 std::vector<const void*> objpath_addresses = {nullptr});
 
 /// Loads a single schema file.
-/// @param sf The file path.
+/// @param schema_file The file path.
 /// @returns The parsed schema.
-caf::expected<schema> load_schema(const path& sf);
+caf::expected<schema> load_schema(const path& schema_file);
 
 /// Loads *.schema files from the given directories.
 /// @param schema_dirs The directories to load schemas from.
