@@ -133,12 +133,15 @@ table_slice rebuild_slice(const table_slice& slice, Args&&... args) {
 // -- constructors, destructors, and assignment operators ----------------------
 
 table_slice::table_slice() noexcept {
-  ++num_instances_;
+  // nop
 }
 
 table_slice::table_slice(chunk_ptr&& chunk, enum verify verify) noexcept
   : chunk_{verified_or_none(std::move(chunk), verify)} {
-  ++num_instances_;
+  if (chunk_ && chunk_->unique()) {
+    ++num_instances_;
+    chunk_->add_deletion_step([]() noexcept { --num_instances_; });
+  }
   visit(detail::overload{
           // Ignore everything...
           [](auto&&...) noexcept {},
@@ -160,15 +163,14 @@ table_slice::table_slice(const fbs::FlatTableSlice& flat_slice,
   const auto flat_slice_size = flat_slice.data()->size();
   VAST_ASSERT(flat_slice_begin >= parent_chunk->begin());
   VAST_ASSERT(flat_slice_begin + flat_slice_size <= parent_chunk->end());
-  ++num_instances_;
   auto chunk = parent_chunk->slice(flat_slice_begin - parent_chunk->begin(),
                                    flat_slice_size);
-  chunk_ = verified_or_none(std::move(chunk), verify);
+  // Delegate the sliced chunk to the constructor.
+  *this = table_slice{std::move(chunk), verify};
 }
 
 // FIXME: Remove this when removing legacy table slices.
 table_slice::table_slice(legacy_table_slice_ptr&& slice) noexcept {
-  ++num_instances_;
   if (slice) {
     flatbuffers::FlatBufferBuilder builder{};
     // Pack layout.
@@ -218,12 +220,10 @@ table_slice::table_slice(legacy_table_slice_ptr&& slice) noexcept {
 
 table_slice::table_slice(const table_slice& other) noexcept
   : chunk_{other.chunk_}, legacy_{other.legacy_} {
-  ++num_instances_;
 }
 
 table_slice::table_slice(const table_slice& other, enum encoding encoding,
                          enum verify verify) noexcept {
-  ++num_instances_;
   // FIXME: When switching to versioned encodings, perform re-encoding when the
   // encoding version is outdated, too.
   if (encoding == other.encoding()) {
@@ -247,7 +247,6 @@ table_slice::table_slice(const table_slice& other, enum encoding encoding,
 }
 
 table_slice& table_slice::operator=(const table_slice& rhs) noexcept {
-  ++num_instances_;
   chunk_ = rhs.chunk_;
   legacy_ = rhs.legacy_;
   return *this;
@@ -280,7 +279,7 @@ table_slice& table_slice::operator=(table_slice&& rhs) noexcept {
 }
 
 table_slice::~table_slice() noexcept {
-  --num_instances_;
+  // nop
 }
 
 // -- operators ----------------------------------------------------------------
