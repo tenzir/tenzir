@@ -14,6 +14,7 @@
 #include "vast/msgpack_table_slice_builder.hpp"
 
 #include "vast/detail/overload.hpp"
+#include "vast/fbs/utils.hpp"
 #include "vast/logger.hpp"
 #include "vast/msgpack_table_slice.hpp"
 
@@ -115,16 +116,30 @@ table_slice msgpack_table_slice_builder::finish() {
   // Sanity check.
   if (column_ != 0)
     return {};
-  table_slice_header header;
-  header.layout = layout();
-  header.rows = offset_table_.size();
-  auto ptr = new msgpack_table_slice{std::move(header)};
-  ptr->offset_table_ = std::move(offset_table_);
-  ptr->chunk_ = chunk::make(std::move(buffer_));
-  ptr->buffer_ = as_bytes(span{ptr->chunk_->data(), ptr->chunk_->size()});
+  // Pack layout.
+  auto layout_buffer = fbs::serialize_bytes(builder_, layout());
+  if (!layout_buffer)
+    die("failed to serialize layout:" + render(layout_buffer.error()));
+  // Pack offset table.
+  auto offset_table_buffer = builder_.CreateVector(offset_table_);
+  // Pack data.
+  auto data_buffer = builder_.CreateVector(
+    reinterpret_cast<const uint8_t*>(data_.data()), data_.size());
+  // Create MessagePack-encoded table slices.
+  auto msgpack_table_slice_buffer = fbs::table_slice::msgpack::Createv0(
+    builder_, invalid_id, *layout_buffer, offset_table_buffer, data_buffer);
+  // Create and finish table slice.
+  auto table_slice_buffer
+    = fbs::CreateTableSlice(builder_, fbs::table_slice::TableSlice::msgpack_v0,
+                            msgpack_table_slice_buffer.Union());
+  fbs::FinishTableSliceBuffer(builder_, table_slice_buffer);
+  // Reset the builder state.
   offset_table_ = {};
-  buffer_ = {};
-  return table_slice{legacy_table_slice_ptr{ptr, false}};
+  data_ = {};
+  msgpack_builder_.reset();
+  // Create the table slice from the chunk.
+  auto chunk = fbs::release(builder_);
+  return table_slice{std::move(chunk), table_slice::verify::no};
 }
 
 size_t msgpack_table_slice_builder::rows() const noexcept {
@@ -136,7 +151,7 @@ msgpack_table_slice_builder::implementation_id() const noexcept {
   return caf::atom("msgpack");
 }
 
-virtual void msgpack_table_slice_builder::reserve(size_t num_rows) {
+void msgpack_table_slice_builder::reserve(size_t num_rows) {
   offset_table_.reserve(num_rows);
 }
 
@@ -144,8 +159,8 @@ virtual void msgpack_table_slice_builder::reserve(size_t num_rows) {
 
 msgpack_table_slice_builder::msgpack_table_slice_builder(
   record_type layout, size_t initial_buffer_size)
-  : table_slice_builder{std::move(layout)}, msgpack_builder_{buffer_} {
-  buffer_.reserve(initial_buffer_size);
+  : table_slice_builder{std::move(layout)}, msgpack_builder_{data_}, builder_{} {
+  data_.reserve(initial_buffer_size);
 }
 
 bool msgpack_table_slice_builder::add_impl(data_view x) {
@@ -153,7 +168,7 @@ bool msgpack_table_slice_builder::add_impl(data_view x) {
   if (!type_check(layout().fields[column_].type, x))
     return false;
   if (column_ == 0)
-    offset_table_.push_back(buffer_.size());
+    offset_table_.push_back(data_.size());
   column_ = (column_ + 1) % columns();
   auto n = put(msgpack_builder_, x);
   VAST_ASSERT(n > 0);
