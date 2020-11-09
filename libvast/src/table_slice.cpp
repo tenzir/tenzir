@@ -21,6 +21,7 @@
 #include "vast/error.hpp"
 #include "vast/expression.hpp"
 #include "vast/factory.hpp"
+#include "vast/fbs/utils.hpp"
 #include "vast/ids.hpp"
 #include "vast/logger.hpp"
 #include "vast/table_slice_builder.hpp"
@@ -87,6 +88,46 @@ auto visit(Visitor&& visitor, const fbs::TableSlice* x) noexcept(
   die("unhandled table slice encoding");
 }
 
+/// Get a pointer to the `vast.fbs.TableSlice` inside the chunk.
+/// @param chunk The chunk to look at.
+const fbs::TableSlice* as_flatbuffer(const chunk_ptr& chunk) noexcept {
+  if (!chunk)
+    return nullptr;
+  return fbs::GetTableSlice(chunk->data());
+}
+
+/// Verifies that the chunk contains a valid `vast.fbs.TableSlice` FlatBuffers
+/// table and returns the `chunk` itself, or returns `nullptr`.
+/// @param chunk The chunk to verify.
+/// @param verify Whether to verify the chunk.
+/// @note This is a no-op if `verify == table_slice::verify::no`.
+chunk_ptr
+verified_or_none(chunk_ptr&& chunk, enum table_slice::verify verify) noexcept {
+  if (verify == table_slice::verify::yes && chunk) {
+    const auto data = reinterpret_cast<const uint8_t*>(chunk->data());
+    auto verifier = flatbuffers::Verifier{data, chunk->size()};
+    if (!verifier.template VerifyBuffer<fbs::TableSlice>())
+      chunk = {};
+  }
+  return std::move(chunk);
+}
+
+/// A helper utility for rebuilding an existing table slice with a new builder.
+/// @param slice The table slice to rebuild.
+/// @param args... Arguments to pass to the table slice builder factory.
+template <class... Args>
+table_slice rebuild_slice(const table_slice& slice, Args&&... args) {
+  auto builder
+    = factory<table_slice_builder>::make(std::forward<Args>(args)...);
+  if (!builder)
+    return {};
+  for (table_slice::size_type row = 0; row < slice.rows(); ++row)
+    for (table_slice::size_type column = 0; column < slice.columns(); ++column)
+      if (!builder->add(slice.at(row, column)))
+        return {};
+  return builder->finish();
+}
+
 } // namespace
 
 // -- constructors, destructors, and assignment operators ----------------------
@@ -95,101 +136,126 @@ table_slice::table_slice() noexcept {
   ++num_instances_;
 }
 
-table_slice::table_slice(chunk_ptr&& chunk, enum verify verify) noexcept {
+table_slice::table_slice(chunk_ptr&& chunk, enum verify verify) noexcept
+  : chunk_{verified_or_none(std::move(chunk), verify)} {
   ++num_instances_;
-  // If the chunk doesn't point to anything, construct an invalid table slice.
-  if (!chunk)
-    return;
-  // If the requested verification fails, construct an invalid table slice.
-  const auto data = reinterpret_cast<const uint8_t*>(chunk->data());
-  if (verify == verify::yes) {
-    auto verifier = flatbuffers::Verifier{data, chunk->size()};
-    if (!verifier.template VerifyBuffer<fbs::TableSlice>())
-      return;
-  }
-  visit(
-    detail::overload{
-      // If the table slice encoding is none, construct an invalid table slice.
-      []() noexcept {},
-      // For all other table slice encodings, construct a valid table slice.
-      [&](auto&& slice) noexcept {
-        legacy_table_slice_ptr tmp = nullptr;
-        if (unpack(*slice, tmp))
-          die("failed to unpack already verified slice");
-        slice_ = std::move(tmp);
-        // FIXME: When switching to chunk_ptr for storing data, do this instead:
-        //   chunk_ = std::move(chunk);
-      },
-    },
-    fbs::GetTableSlice(data));
+  visit(detail::overload{
+          // Ignore everything...
+          [](auto&&...) noexcept {},
+          // ... except for legacy encoded chunks.
+          [&](const fbs::table_slice::legacy::v0* slice) noexcept {
+            if (auto error = unpack(*slice, legacy_))
+              die("failed to unpack already verified legacy table slice: "
+                  + render(error));
+          },
+        },
+        as_flatbuffer(chunk_));
 }
 
 table_slice::table_slice(const fbs::FlatTableSlice& flat_slice,
-                         const chunk_ptr& chunk, enum verify verify) noexcept
-  : table_slice(
-    chunk->slice(reinterpret_cast<const char*>(flat_slice.data()->data())
-                   - chunk->data(),
-                 flat_slice.data()->size()),
-    verify) {
-  // nop
+                         const chunk_ptr& parent_chunk,
+                         enum verify verify) noexcept {
+  const auto flat_slice_begin
+    = reinterpret_cast<const char*>(flat_slice.data()->data());
+  const auto flat_slice_size = flat_slice.data()->size();
+  VAST_ASSERT(flat_slice_begin >= parent_chunk->begin());
+  VAST_ASSERT(flat_slice_begin + flat_slice_size <= parent_chunk->end());
+  ++num_instances_;
+  auto chunk = parent_chunk->slice(flat_slice_begin - parent_chunk->begin(),
+                                   flat_slice_size);
+  chunk_ = verified_or_none(std::move(chunk), verify);
 }
 
 // FIXME: Remove this when removing legacy table slices.
-table_slice::table_slice(legacy_table_slice_ptr&& slice) noexcept
-  : slice_{slice} {
-  // nop
+table_slice::table_slice(legacy_table_slice_ptr&& slice) noexcept {
+  ++num_instances_;
+  if (slice) {
+    flatbuffers::FlatBufferBuilder builder{};
+    // Pack layout.
+    std::vector<char> serialized_layout;
+    caf::binary_serializer layout_sink{nullptr, serialized_layout};
+    if (auto error = layout_sink(slice->layout()))
+      die("failed to pack legacy table slice: " + render(error));
+    auto layout_buffer = builder.CreateVector(
+      reinterpret_cast<const uint8_t*>(serialized_layout.data()),
+      serialized_layout.size());
+    // Pack data.
+    std::vector<char> serialized_data;
+    caf::binary_serializer data_sink{nullptr, serialized_data};
+    if (auto error = data_sink(slice))
+      die("failed to pack legacy table slice: " + render(error));
+    auto data_buffer = builder.CreateVector(
+      reinterpret_cast<const uint8_t*>(serialized_data.data()),
+      serialized_data.size());
+    // Transform encoding.
+    auto transform = [](caf::atom_value slice)
+      -> caf::expected<fbs::table_slice::legacy::Encoding> {
+      if (slice == caf::atom("arrow"))
+        return fbs::table_slice::legacy::Encoding::Arrow;
+      if (slice == caf::atom("msgpack"))
+        return fbs::table_slice::legacy::Encoding::MessagePack;
+      return make_error(ec::unspecified, "unsupported table slice type", slice);
+    };
+    auto encoding = transform(slice->implementation_id());
+    if (!encoding)
+      die("failed to pack legacy table slice: " + render(encoding.error()));
+    // Pack legacy table slice.
+    auto legacy_table_slice_buffer
+      = fbs::table_slice::legacy::Createv0(builder, slice->offset(),
+                                           slice->rows(), layout_buffer,
+                                           *encoding, data_buffer);
+    // Pack table slice.
+    auto table_slice_buffer
+      = fbs::CreateTableSlice(builder, fbs::table_slice::TableSlice::legacy_v0,
+                              legacy_table_slice_buffer.Union());
+    fbs::FinishTableSliceBuffer(builder, table_slice_buffer);
+    auto chunk = fbs::release(builder);
+    // Delegate the newly created chunk to the constructor.
+    *this = table_slice{std::move(chunk), verify::no};
+    VAST_ASSERT(*legacy_ == *slice);
+  }
 }
 
 table_slice::table_slice(const table_slice& other) noexcept
-  : slice_{other.slice_} {
+  : chunk_{other.chunk_}, legacy_{other.legacy_} {
   ++num_instances_;
 }
 
 table_slice::table_slice(const table_slice& other, enum encoding encoding,
                          enum verify verify) noexcept {
   ++num_instances_;
-  // A helper utility for rebuilding the existing slice with a new builder.
-  auto rebuild_slice = [&](auto&&... builder_args) {
-    auto builder = factory<table_slice_builder>::make(
-      std::forward<decltype(builder_args)>(builder_args)...);
-    VAST_ASSERT(builder);
-    for (size_type row = 0; row < other.rows(); ++row) {
-      for (size_type column = 0; column < other.columns(); ++column) {
-        auto ok = builder->add(other.at(row, column));
-        VAST_ASSERT(ok);
-      }
-    }
-    *this = builder->finish();
-  };
   // FIXME: When switching to versioned encodings, perform re-encoding when the
   // encoding version is outdated, too.
   if (encoding == other.encoding()) {
-    slice_ = other.slice_;
+    chunk_ = other.chunk_;
+    legacy_ = other.legacy_;
   } else {
     switch (encoding) {
       case encoding::none:
         // Do nothing, we have an invalid table slice here.
         break;
       case encoding::arrow:
-        rebuild_slice(caf::atom("arrow"), other.layout());
+        *this = rebuild_slice(other, caf::atom("arrow"), other.layout());
         break;
       case encoding::msgpack:
-        rebuild_slice(caf::atom("msgpack"), other.layout());
+        *this = rebuild_slice(other, caf::atom("msgpack"), other.layout());
         break;
     }
-    // FIXME: Verify the table contents here when switching to using the chunk.
-    VAST_IGNORE_UNUSED(verify);
+    // If requested, verify the chunk after performing re-encoding.
+    chunk_ = verified_or_none(std::move(chunk_), verify);
   }
 }
 
 table_slice& table_slice::operator=(const table_slice& rhs) noexcept {
   ++num_instances_;
-  slice_ = rhs.slice_;
+  chunk_ = rhs.chunk_;
+  legacy_ = rhs.legacy_;
   return *this;
 }
 
 table_slice::table_slice(table_slice&& other) noexcept
-  : slice_{std::exchange(other.slice_, {})} {
+  : chunk_{std::exchange(other.chunk_, {})},
+    legacy_{std::exchange(other.legacy_, {})} {
   // nop
 }
 
@@ -197,7 +263,8 @@ table_slice::table_slice(table_slice&& other, enum encoding encoding,
                          enum verify verify) noexcept {
   if (encoding == other.encoding()) {
     // If the encoding matches, we can just move the data.
-    slice_ = std::exchange(other.slice_, {});
+    chunk_ = std::exchange(other.chunk_, {});
+    legacy_ = std::exchange(other.legacy_, {});
   } else {
     // Changing the encoding requires a copy, so we just delegate to the
     // copy-constructor with re-encoding.
@@ -207,7 +274,8 @@ table_slice::table_slice(table_slice&& other, enum encoding encoding,
 }
 
 table_slice& table_slice::operator=(table_slice&& rhs) noexcept {
-  slice_ = std::exchange(rhs.slice_, {});
+  chunk_ = std::exchange(rhs.chunk_, {});
+  legacy_ = std::exchange(rhs.legacy_, {});
   return *this;
 }
 
@@ -218,7 +286,19 @@ table_slice::~table_slice() noexcept {
 // -- operators ----------------------------------------------------------------
 
 bool operator==(const table_slice& lhs, const table_slice& rhs) noexcept {
-  return *lhs.slice_ == *rhs.slice_;
+  // Check whether the slices point to the same chunk of data.
+  if (lhs.chunk_ == rhs.chunk_)
+    return true;
+  // Check whether the slices have different sizes or layouts.
+  if (lhs.rows() != rhs.rows() || lhs.columns() != rhs.columns()
+      || lhs.layout() != rhs.layout())
+    return false;
+  // Check whether the slices contain different data.
+  for (size_t row = 0; row < lhs.rows(); ++row)
+    for (size_t col = 0; col < lhs.columns(); ++col)
+      if (lhs.at(row, col) != rhs.at(row, col))
+        return false;
+  return true;
 }
 
 bool operator!=(const table_slice& lhs, const table_slice& rhs) noexcept {
@@ -228,43 +308,71 @@ bool operator!=(const table_slice& lhs, const table_slice& rhs) noexcept {
 // -- properties ---------------------------------------------------------------
 
 enum table_slice::encoding table_slice::encoding() const noexcept {
-  if (slice_) {
-    auto id = slice_->implementation_id();
-    if (id == caf::atom("arrow"))
-      return encoding::arrow;
-    if (id == caf::atom("msgpack"))
-      return encoding::msgpack;
-  }
-  return encoding::none;
+  auto f = detail::overload{
+    []() noexcept { return encoding::none; },
+    [&](const fbs::table_slice::legacy::v0*) noexcept {
+      if (legacy_->implementation_id() == caf::atom("arrow"))
+        return encoding::arrow;
+      if (legacy_->implementation_id() == caf::atom("msgpack"))
+        return encoding::msgpack;
+      return encoding::none;
+    },
+  };
+  return visit(f, as_flatbuffer(chunk_));
 }
 
 record_type table_slice::layout() const noexcept {
-  if (!slice_)
-    return {};
-  return slice_->layout();
+  auto f = detail::overload{
+    []() noexcept { return record_type{}; },
+    [&](const fbs::table_slice::legacy::v0*) noexcept {
+      return legacy_->layout();
+    },
+  };
+  return visit(f, as_flatbuffer(chunk_));
 }
 
 table_slice::size_type table_slice::rows() const noexcept {
-  if (!slice_)
-    return 0;
-  return slice_->rows();
+  auto f = detail::overload{
+    []() noexcept { return size_type{}; },
+    [&](const fbs::table_slice::legacy::v0*) noexcept {
+      return legacy_->rows();
+    },
+  };
+  return visit(f, as_flatbuffer(chunk_));
 }
 
 table_slice::size_type table_slice::columns() const noexcept {
-  if (!slice_)
-    return 0;
-  return slice_->columns();
+  auto f = detail::overload{
+    []() noexcept { return size_type{}; },
+    [&](const fbs::table_slice::legacy::v0*) noexcept {
+      return legacy_->columns();
+    },
+  };
+  return visit(f, as_flatbuffer(chunk_));
 }
 
 id table_slice::offset() const noexcept {
-  if (!slice_)
-    return invalid_id;
-  return slice_->offset();
+  auto f = detail::overload{
+    []() noexcept { return invalid_id; },
+    [&](const fbs::table_slice::legacy::v0*) noexcept {
+      return legacy_->offset();
+    },
+  };
+  return visit(f, as_flatbuffer(chunk_));
 }
 
 void table_slice::offset(id offset) noexcept {
   VAST_ASSERT(encoding() != encoding::none);
-  slice_.unshared().offset(offset);
+  auto f = detail::overload{
+    []() noexcept {
+      // nop
+    },
+    [&](const fbs::table_slice::legacy::v0*) noexcept {
+      legacy_.unshared().offset(offset);
+      *this = table_slice{std::move(legacy_)};
+    },
+  };
+  visit(f, as_flatbuffer(chunk_));
 }
 
 int table_slice::instances() noexcept {
@@ -278,7 +386,15 @@ int table_slice::instances() noexcept {
 /// @param `index` the value index to append to.
 void table_slice::append_column_to_index(table_slice::size_type column,
                                          value_index& index) const {
-  return slice_->append_column_to_index(column, index);
+  auto f = detail::overload{
+    []() noexcept {
+      // nop
+    },
+    [&](const fbs::table_slice::legacy::v0*) noexcept {
+      legacy_->append_column_to_index(column, index);
+    },
+  };
+  visit(f, as_flatbuffer(chunk_));
 }
 
 /// Retrieves data by specifying 2D-coordinates via row and column.
@@ -289,29 +405,35 @@ data_view table_slice::at(table_slice::size_type row,
                           table_slice::size_type column) const {
   VAST_ASSERT(row < rows());
   VAST_ASSERT(column < columns());
-  return slice_->at(row, column);
+  auto f = detail::overload{
+    [&](const fbs::table_slice::legacy::v0*) noexcept {
+      return legacy_->at(row, column);
+    },
+  };
+  return visit(f, as_flatbuffer(chunk_));
 }
 
 #if VAST_HAVE_ARROW
 
-std::shared_ptr<arrow::RecordBatch> as_record_batch(const table_slice& x) {
-  if (x.encoding() != table_slice::encoding::arrow)
-    return nullptr;
-  return static_cast<const arrow_table_slice&>(*x.slice_).batch();
+std::shared_ptr<arrow::RecordBatch> as_record_batch(const table_slice& slice) {
+  auto f = detail::overload{
+    []() noexcept -> std::shared_ptr<arrow::RecordBatch> { return nullptr; },
+    [&](const fbs::table_slice::legacy::v0*) noexcept
+    -> std::shared_ptr<arrow::RecordBatch> {
+      if (slice.legacy_->implementation_id() == caf::atom("arrow"))
+        return static_cast<const arrow_table_slice&>(*slice.legacy_).batch();
+      return nullptr;
+    },
+  };
+  return visit(f, as_flatbuffer(slice.chunk_));
 }
 
 #endif // VAST_HAVE_ARROW
 
 // -- concepts -----------------------------------------------------------------
 
-// friend span<const byte> as_bytes(const table_slice& x) noexcept {
-//   FIXME: Implement when switching to chunk_ptr for storing data.
-// }
-
-// FIXME: Remove when switching to chunk_ptr for storing data.
-caf::expected<flatbuffers::Offset<fbs::FlatTableSlice>>
-pack(flatbuffers::FlatBufferBuilder& builder, const table_slice& x) {
-  return pack(builder, x.slice_);
+span<const byte> as_bytes(const table_slice& slice) noexcept {
+  return as_bytes(slice.chunk_);
 }
 
 // -- legacy_table_slice -------------------------------------------------------

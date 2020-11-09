@@ -26,6 +26,7 @@
 #include "vast/synopsis_factory.hpp"
 #include "vast/table_slice.hpp"
 #include "vast/table_slice_builder_factory.hpp"
+#include "vast/table_slice_factory.hpp"
 #include "vast/uuid.hpp"
 #include "vast/view.hpp"
 
@@ -97,6 +98,7 @@ struct fixture {
     MESSAGE("register synopsis factory");
     factory<synopsis>::initialize();
     MESSAGE("register table_slice_builder factory");
+    factory<legacy_table_slice>::initialize();
     factory<table_slice_builder>::initialize();
     MESSAGE("generate " << num_partitions << " UUIDs for the partitions");
     for (size_t i = 0; i < num_partitions; ++i)

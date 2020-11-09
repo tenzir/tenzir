@@ -13,6 +13,7 @@
 
 #pragma once
 
+#include "vast/chunk.hpp"
 #include "vast/fbs/table_slice.hpp"
 #include "vast/fwd.hpp"
 #include "vast/table_slice_header.hpp"
@@ -69,15 +70,14 @@ public:
   /// Construct a table slice from a flattened table slice embedded in a chunk,
   /// and shares the chunk's lifetime.
   /// @param flat_slice The `vast.fbs.FlatTableSlice` object.
-  /// @param chunk A chunk that must contain the `flat_slice` object.
+  /// @param parent_chunk A chunk that must contain the `flat_slice` object.
   /// @param verify Controls whether the table should be verified.
-  /// @pre `chunk`
-  /// @pre `flat_slice.data()->begin() >= chunk->begin()`
-  /// @pre `flat_slice.data()->end() <= chunk->end()`
+  /// @pre `flat_slice.data()->begin() >= parent_chunk->begin()`
+  /// @pre `flat_slice.data()->end() <= parent_chunk->end()`
   /// @note Constructs an invalid table slice if the verification of the
   /// FlatBuffers table fails.
-  table_slice(const fbs::FlatTableSlice& flat_slice, const chunk_ptr& chunk,
-              enum verify verify) noexcept;
+  table_slice(const fbs::FlatTableSlice& flat_slice,
+              const chunk_ptr& parent_chunk, enum verify verify) noexcept;
 
   // FIXME: Remove this when removing legacy table slices.
   explicit table_slice(legacy_table_slice_ptr&& slice) noexcept;
@@ -179,30 +179,27 @@ public:
 
   // -- concepts ---------------------------------------------------------------
 
-  // FIXME: Implement when switching to chunk_ptr for storing data.
-  // friend span<const byte> as_bytes(const table_slice& x) noexcept;
-
-  // FIXME: Remove when switching to chunk_ptr for storing data.
-  friend caf::expected<flatbuffers::Offset<fbs::FlatTableSlice>>
-  pack(flatbuffers::FlatBufferBuilder& builder, const table_slice& x);
+  /// Returns an immutable view on the underlying binary representation of a
+  /// table slice.
+  /// @param slice The table slice to view.
+  friend span<const byte> as_bytes(const table_slice& slice) noexcept;
 
   /// Opt-in to CAF's type inspection API.
   template <class Inspector>
   friend auto inspect(Inspector& f, table_slice& x) ->
     typename Inspector::result_type {
-    return f(caf::meta::type_name("vast.table_slice"), x.slice_);
+    return f(caf::meta::type_name("vast.table_slice"), x.chunk_, x.legacy_);
   }
 
 private:
   // -- implementation details -------------------------------------------------
 
-  // FIXME: Remove when switching to chunk_ptr for storing data.
-  legacy_table_slice_ptr slice_ = {};
-
   /// A pointer to the underlying chunk, which contains a `vast.fbs.TableSlice`
   /// FlatBuffers table.
-  // FIXME: Use chunk_ptr for storing data instead of legacy_table_slice_ptr.
-  // chunk_ptr chunk_ = {};
+  chunk_ptr chunk_ = {};
+
+  // FIXME: Remove when removing legacy table slices.
+  legacy_table_slice_ptr legacy_ = {};
 
   /// The offset of the table slice within its ID space.
   /// @note Assigned by the importer on import and the archive on export and as
