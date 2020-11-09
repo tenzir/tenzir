@@ -744,23 +744,10 @@ add_custom_target(
 
 add_custom_target(
   vast-schema
-  COMMAND ${CMAKE_COMMAND} -E make_directory
-          "${CMAKE_BINARY_DIR}/share/vast/schema"
+  COMMAND
+    ${CMAKE_COMMAND} -E copy_directory "${CMAKE_CURRENT_SOURCE_DIR}/schema"
+    "${CMAKE_BINARY_DIR}/share/vast/schema/"
   COMMENT "Copying schema directory")
-
-file(
-  GLOB schema_files
-  RELATIVE "${CMAKE_CURRENT_SOURCE_DIR}"
-  "schema/*")
-foreach (x ${schema_files})
-  add_custom_command(
-    TARGET vast-schema
-    PRE_BUILD
-    COMMAND
-      ${CMAKE_COMMAND} -E copy_if_different "${CMAKE_CURRENT_SOURCE_DIR}/${x}"
-      "${CMAKE_BINARY_DIR}/share/vast/${x}"
-    COMMENT "Copying schema ${x}")
-endforeach ()
 
 add_subdirectory(libvast)
 if (NOT CMAKE_CROSS_COMPILING)
