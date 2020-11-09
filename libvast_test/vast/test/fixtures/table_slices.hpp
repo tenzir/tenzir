@@ -113,8 +113,6 @@ private:
 
   void test_message_serialization();
 
-  void test_load_from_chunk();
-
   void test_append_column_to_index();
 
   vast::record_type layout;

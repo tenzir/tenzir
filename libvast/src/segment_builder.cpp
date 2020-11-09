@@ -36,10 +36,9 @@ segment_builder::segment_builder() {
 caf::error segment_builder::add(table_slice x) {
   if (x.offset() < min_table_slice_offset_)
     return make_error(ec::unspecified, "slice offsets not increasing");
-  auto slice = pack(builder_, x);
-  if (!slice)
-    return slice.error();
-  flat_slices_.push_back(*slice);
+  auto bytes = fbs::pack_bytes(builder_, x);
+  auto slice = fbs::CreateFlatTableSlice(builder_, bytes);
+  flat_slices_.push_back(slice);
   // This works only with monotonically increasing IDs.
   if (!intervals_.empty() && intervals_.back().end() == x.offset())
     intervals_.back()
