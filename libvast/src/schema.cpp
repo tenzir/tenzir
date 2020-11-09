@@ -280,10 +280,7 @@ caf::expected<schema> load_schema(const detail::stable_set<path>& schema_dirs) {
         }
         case path::regular_file:
         case path::symlink: {
-          // Is there a side-effect of exists(f)? I'm not sure why it is here,
-          // given that f is the loop variable. The check seems superfluous and
-          // may be removed. --MV
-          if (f.extension() == ".schema" && exists(f)) {
+          if (f.extension() == ".schema") {
             VAST_VERBOSE_ANON("loading schema", f);
             auto schema = load_schema(f);
             if (!schema) {
