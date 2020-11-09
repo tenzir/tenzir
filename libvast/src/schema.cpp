@@ -263,12 +263,27 @@ caf::expected<schema> load_schema(const detail::stable_set<path>& schema_dirs) {
     }
     vast::schema directory_schema;
     for (auto f : directory(dir)) {
-      if (f.extension() == ".schema" && exists(f)) {
-        switch (f.kind()) {
-          default:
-            break;
-          case path::regular_file:
-          case path::symlink: {
+      switch (f.kind()) {
+        default:
+          break;
+        case path::directory: {
+          // Recurse.
+          auto result = load_schema(detail::stable_set<path>{f});
+          if (!result)
+            return result;
+          if (auto merged = schema::merge(directory_schema, *result))
+            directory_schema = std::move(*merged);
+          else
+            return make_error(ec::format_error, merged.error().context(),
+                              "in schema directory", f);
+          break;
+        }
+        case path::regular_file:
+        case path::symlink: {
+          // Is there a side-effect of exists(f)? I'm not sure why it is here,
+          // given that f is the loop variable. The check seems superfluous and
+          // may be removed. --MV
+          if (f.extension() == ".schema" && exists(f)) {
             VAST_VERBOSE_ANON("loading schema", f);
             auto schema = load_schema(f);
             if (!schema) {
