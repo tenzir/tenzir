@@ -64,6 +64,9 @@ vast::ids segment::ids() const {
   auto segment = fbs::GetSegment(chunk_->data());
   auto segment_v0 = segment->segment_as_v0();
   for (auto flat_slice : *segment_v0->slices()) {
+    // TODO: Store a separate offset table in the segment header to avoid lots
+    // of small disk reads, and generate the resulting `ids` bitmap from the
+    // offset table.
     auto slice = table_slice{*flat_slice, chunk_, table_slice::verify::no};
     result.append_bits(false, slice.offset() - result.size());
     result.append_bits(true, slice.rows());
@@ -85,6 +88,9 @@ caf::expected<std::vector<table_slice>>
 segment::lookup(const vast::ids& xs) const {
   std::vector<table_slice> result;
   auto f = [&](auto flat_slice) noexcept {
+    // TODO: Store a separate offset table in the segment header to avoid lots
+    // of small disk reads here. No need to slice the chunk unless we want to
+    // return the table slice itself.
     auto slice = table_slice{*flat_slice, chunk_, table_slice::verify::no};
     return std::pair{slice.offset(), slice.offset() + slice.rows()};
   };
