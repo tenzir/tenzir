@@ -17,6 +17,7 @@
 #include "vast/aliases.hpp"
 #include "vast/concept/hashable/uhash.hpp"
 #include "vast/concept/hashable/xxhash.hpp"
+#include "vast/defaults.hpp"
 #include "vast/detail/operators.hpp"
 #include "vast/offset.hpp"
 #include "vast/pattern.hpp"
@@ -341,6 +342,19 @@ caf::error convert(const data& x, caf::config_value& cv);
 /// @param str The string containing the YAML content
 /// @returns The parsed YAML as data, or an error.
 caf::expected<data> from_yaml(std::string_view str);
+
+/// Loads YAML from a file.
+/// @param file The file to load.
+/// @returns The parsed YAML or an error.
+caf::expected<data> load_yaml(const path& file);
+
+/// Loads all *.yml and *.yaml files in a given directory.
+/// @param dir The directory to traverse recursively.
+/// @param max_recursion The maximum number of nested directories to traverse
+/// before aborting.
+/// @returns The parsed YAML, one `data` instance per file, or an error.
+caf::expected<std::vector<std::pair<path, data>>>
+load_yaml_dir(const path& dir, size_t max_recursion = defaults::max_recursion);
 
 /// Prints data as YAML.
 /// @param x The data instance.

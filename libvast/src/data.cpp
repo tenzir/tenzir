@@ -21,11 +21,14 @@
 #include "vast/detail/overload.hpp"
 #include "vast/detail/string.hpp"
 #include "vast/detail/type_traits.hpp"
+#include "vast/directory.hpp"
 #include "vast/error.hpp"
 #include "vast/json.hpp"
+#include "vast/path.hpp"
 
 #include <caf/config_value.hpp>
 
+#include <iterator>
 #include <stdexcept>
 
 #include <yaml-cpp/yaml.h>
@@ -501,6 +504,50 @@ caf::expected<data> from_yaml(std::string_view str) {
   } catch (const std::logic_error& e) {
     return caf::make_error(ec::logic_error, e.what());
   }
+}
+
+caf::expected<data> load_yaml(const path& file) {
+  auto contents = load_contents(file);
+  if (!contents)
+    return contents.error();
+  if (auto yaml = from_yaml(*contents))
+    return yaml;
+  else
+    return caf::make_error(ec::parse_error, "failed to load YAML file", file,
+                           yaml.error().context());
+}
+
+caf::expected<std::vector<std::pair<path, data>>>
+load_yaml_dir(const path& dir, size_t max_recursion) {
+  if (max_recursion == 0)
+    return ec::recursion_limit_reached;
+  std::vector<std::pair<path, data>> result;
+  for (auto& file : directory{dir}) {
+    switch (file.kind()) {
+      default:
+        continue;
+      case path::directory: {
+        auto nested = load_yaml_dir(file, --max_recursion);
+        if (!nested)
+          return nested;
+        auto begin = std::make_move_iterator(nested->begin());
+        auto end = std::make_move_iterator(nested->end());
+        result.insert(result.end(), begin, end);
+        break;
+      }
+      case path::regular_file:
+      case path::symlink: {
+        if (file.extension() == ".yml" || file.extension() == ".yaml") {
+          if (auto yaml = load_yaml(file))
+            result.emplace_back(file, std::move(*yaml));
+          else
+            return yaml.error();
+        }
+        break;
+      }
+    }
+  }
+  return result;
 }
 
 namespace {

@@ -244,16 +244,19 @@ get_schema_dirs(const caf::actor_system_config& cfg,
   return result;
 }
 
-caf::expected<schema> load_schema(const path& sf) {
-  if (sf.empty())
+caf::expected<schema> load_schema(const path& schema_file) {
+  if (schema_file.empty())
     return make_error(ec::filesystem_error, "empty path");
-  auto str = load_contents(sf);
+  auto str = load_contents(schema_file);
   if (!str)
     return str.error();
   return to<schema>(*str);
 }
 
-caf::expected<schema> load_schema(const detail::stable_set<path>& schema_dirs) {
+caf::expected<schema>
+load_schema(const detail::stable_set<path>& schema_dirs, size_t max_recursion) {
+  if (max_recursion == 0)
+    return ec::recursion_limit_reached;
   vast::schema types;
   VAST_VERBOSE_ANON("loading schemas from", schema_dirs);
   for (const auto& dir : schema_dirs) {
@@ -263,13 +266,26 @@ caf::expected<schema> load_schema(const detail::stable_set<path>& schema_dirs) {
     }
     vast::schema directory_schema;
     for (auto f : directory(dir)) {
-      if (f.extension() == ".schema" && exists(f)) {
-        switch (f.kind()) {
-          default:
-            break;
-          case path::regular_file:
-          case path::symlink: {
-            VAST_VERBOSE_ANON("loading schema", f);
+      switch (f.kind()) {
+        default:
+          break;
+        case path::directory: {
+          // Recurse directories depth-first.
+          auto result
+            = load_schema(detail::stable_set<path>{f}, --max_recursion);
+          if (!result)
+            return result;
+          if (auto merged = schema::merge(directory_schema, *result))
+            directory_schema = std::move(*merged);
+          else
+            return make_error(ec::format_error, merged.error().context(),
+                              "in schema directory", f);
+          break;
+        }
+        case path::regular_file:
+        case path::symlink: {
+          if (f.extension() == ".schema") {
+            VAST_DEBUG_ANON("loading schema", f);
             auto schema = load_schema(f);
             if (!schema) {
               VAST_ERROR_ANON(__func__, render(schema.error()), f);

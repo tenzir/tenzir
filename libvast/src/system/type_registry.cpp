@@ -176,29 +176,20 @@ type_registry(type_registry_actor self, const path& dir) {
       for (const auto& dir : dirs) {
         if (!exists(dir))
           continue;
-        for (auto& file : directory{dir}) {
-          if (file.extension() != ".yml" && file.extension() != ".yaml")
-            continue;
-          switch (file.kind()) {
-            default:
-              continue;
-            case path::regular_file:
-            case path::symlink:
-              VAST_DEBUG(self, "extracts taxonomies from", file);
-              auto contents = load_contents(file);
-              if (!contents)
-                return contents.error();
-              auto yaml = from_yaml(*contents);
-              if (!yaml)
-                return yaml.error();
-              if (auto err = extract_concepts(*yaml, concepts))
-                return err;
-              for (auto& [name, definition] : concepts) {
-                VAST_DEBUG(self, "extracted concept", name, "with",
-                           definition.fields.size(), "fields");
-                for (auto& field : definition.fields)
-                  VAST_TRACE(self, "uses concept mapping", name, "->", field);
-              }
+        auto yamls = load_yaml_dir(dir);
+        if (!yamls)
+          return yamls.error();
+        for (auto& [file, yaml] : *yamls) {
+          VAST_DEBUG(self, "extracts concepts from", file);
+          if (auto err = extract_concepts(yaml, concepts))
+            return caf::make_error(ec::parse_error,
+                                   "failed to extract concepts from file", file,
+                                   err.context());
+          for (auto& [name, definition] : concepts) {
+            VAST_DEBUG(self, "extracted concept", name, "with",
+                       definition.fields.size(), "fields");
+            for (auto& field : definition.fields)
+              VAST_TRACE(self, "uses concept mapping", name, "->", field);
           }
         }
       }

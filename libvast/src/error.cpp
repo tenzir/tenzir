@@ -53,6 +53,7 @@ const char* descriptions[] = {
   "missing_subcommand",
   "missing_component",
   "unimplemented",
+  "recursion_limit_reached",
   "silent",
   "out_of_memory",
   "system_error",

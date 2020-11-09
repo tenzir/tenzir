@@ -12,6 +12,10 @@ Every entry has a category for which we use the following visual abbreviations:
 
 ## Unreleased
 
+- ⚠️ VAST now processes the schema directory recursively, as opposed to stopping
+  at nested directories.
+  [#1154](https://github.com/tenzir/vast/pull/1154)
+
 - 🐞 The `vast.yaml.example` contained syntax errors. The example config file
   now works again.
   [#1145](https://github.com/tenzir/vast/pull/1145)
