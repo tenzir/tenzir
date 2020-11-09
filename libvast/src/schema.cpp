@@ -255,7 +255,7 @@ caf::expected<schema> load_schema(const path& sf) {
 
 caf::expected<schema> load_schema(const detail::stable_set<path>& schema_dirs) {
   vast::schema types;
-  VAST_VERBOSE_ANON("looking for schema files in", schema_dirs);
+  VAST_VERBOSE_ANON("loading schemas from", schema_dirs);
   for (const auto& dir : schema_dirs) {
     if (!exists(dir)) {
       VAST_DEBUG_ANON(__func__, "skips non-existing directory:", dir);
@@ -269,6 +269,7 @@ caf::expected<schema> load_schema(const detail::stable_set<path>& schema_dirs) {
             break;
           case path::regular_file:
           case path::symlink: {
+            VAST_VERBOSE_ANON("loading schema", f);
             auto schema = load_schema(f);
             if (!schema) {
               VAST_ERROR_ANON(__func__, render(schema.error()), f);
