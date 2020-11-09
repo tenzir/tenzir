@@ -12,6 +12,10 @@ Every entry has a category for which we use the following visual abbreviations:
 
 ## Unreleased
 
+- 🐞 The output of `vast status --detailed` now contains informations about
+  runnings sinks, e.g., `vast export <format> <query>` processes.
+  [#1155](https://github.com/tenzir/vast/pull/1155)
+
 - ⚠️ VAST now processes the schema directory recursively, as opposed to stopping
   at nested directories.
   [#1154](https://github.com/tenzir/vast/pull/1154)
