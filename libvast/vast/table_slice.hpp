@@ -168,6 +168,9 @@ public:
 
 #if VAST_HAVE_ARROW
 
+  // FIXME: Introduce `as_arrow_table_slice` and `as_msgpack_table_slice`
+  // functions after removing `legacy_table_slice_ptr`, and remove this
+  // function.
   /// Converts a table slice to an Apache Arrow Record Batch.
   /// @returns The pointer to the Record Batch on success, or `nullptr`.
   /// @param x The table slice to convert.
