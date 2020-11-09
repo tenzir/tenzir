@@ -33,7 +33,7 @@ maybe_actor spawn_type_registry(node_actor* self, spawn_arguments& args) {
   self->request(handle, defaults::system::initial_request_timeout, atom::load_v)
     .await([](atom::ok) {},
            [](caf::error& err) {
-             VAST_WARNING_ANON("type-registry is not able to load taxonomy "
+             VAST_WARNING_ANON("type-registry failed to load taxonomy "
                                "definitions:",
                                render(std::move(err)));
            });
