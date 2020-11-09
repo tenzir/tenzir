@@ -712,7 +712,7 @@ set(LIBRARY_OUTPUT_PATH
     CACHE PATH "Single directory for all libraries")
 
 if (VAST_HAVE_ARROW)
-  set(REQUIREMENT_PYARROW "pip install pyarrow")
+  set(REQUIREMENT_PYARROW "python -m pip install pyarrow")
 endif ()
 file(
   GENERATE
@@ -731,8 +731,8 @@ file(
        python3 -m venv \"$env_dir\"
      fi
      . \"$env_dir/bin/activate\"
-     pip install --upgrade pip
-     pip install -r \"$base_dir/requirements.txt\"
+     python -m pip install --upgrade pip
+     python -m pip install -r \"$base_dir/requirements.txt\"
      ${REQUIREMENT_PYARROW}
      python \"$base_dir/integration.py\" --app \"$app\" -d vast-integration-test \"$@\""
 )
