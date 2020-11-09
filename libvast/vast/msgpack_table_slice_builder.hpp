@@ -31,9 +31,6 @@ public:
 
   // -- class properties -------------------------------------------------------
 
-  /// The default size of the buffer that the builder works with.
-  static constexpr size_t default_buffer_size = 8192;
-
   /// @returns `msgpack_table_slice::class_id`
   static caf::atom_value get_implementation_id() noexcept;
 
