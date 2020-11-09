@@ -351,7 +351,7 @@ caf::expected<data> load_yaml(const path& file);
 /// Loads all *.yml and *.yaml files in a given directory.
 /// @param dir The directory to traverse recursively.
 /// @param max_recursion The maximum number of nested directories to traverse
-///                      before aborting.
+/// before aborting.
 /// @returns The parsed YAML, one `data` instance per file, or an error.
 caf::expected<std::vector<std::pair<path, data>>>
 load_yaml_dir(const path& dir, size_t max_recursion = defaults::max_recursion);

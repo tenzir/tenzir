@@ -109,7 +109,7 @@ caf::expected<schema> load_schema(const path& schema_file);
 /// Loads *.schema files from the given directories.
 /// @param schema_dirs The directories to load schemas from.
 /// @param max_recursion The maximum number of nested directories to traverse
-///        before aborting.
+/// before aborting.
 /// @note Schemas from the same directory are merged, but directories are
 /// combined. It is designed so types that exist in later paths can override the
 /// earlier ones, but the same mechanism makes no sense inside of a single
