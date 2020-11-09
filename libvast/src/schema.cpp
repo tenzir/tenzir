@@ -267,7 +267,7 @@ caf::expected<schema> load_schema(const detail::stable_set<path>& schema_dirs) {
         default:
           break;
         case path::directory: {
-          // Recurse.
+          // Recurse directories depth-first.
           auto result = load_schema(detail::stable_set<path>{f});
           if (!result)
             return result;
