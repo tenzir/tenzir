@@ -22,6 +22,7 @@ Every entry has a category for which we use the following visual abbreviations:
 - 🧬 VAST now ships with its own taxonomy and basic concept definitions for
   Suricata, Zeek, and Sysmon.
   [#1135](https://github.com/tenzir/vast/pull/1135)
+  [#1150](https://github.com/tenzir/vast/pull/1150)
 
 - ⚡️ The `splunk-to-vast` script has a new name: `taxonomize`. The script now
   also generates taxonomy declarations for Azure Sentinel.

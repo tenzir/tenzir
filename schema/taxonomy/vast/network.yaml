@@ -74,6 +74,10 @@
       - net.dst.hostname
       - net.src.hostname
 - concept:
+    name: net.domain
+    description: >-
+      A domain name.
+- concept:
     name: net.uri
     description: >-
       A URI.

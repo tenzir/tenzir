@@ -136,3 +136,20 @@
     name: net.dst.packets
     fields:
       - zeek.conn.resp_pkts
+- concept:
+    name: net.hostname
+    fields:
+      - zeek.dhcp.host_name
+      - zeek.ntlm.hostname
+      - zeek.ntlm.server_dns_computer_name
+- concept:
+    name: net.uri
+    fields:
+      - zeek.http.uri
+      - zeek.http.referrer
+- concept:
+    name: net.domain
+    fields:
+      - zeek.dns.answers
+      - zeek.dns.query
+      - zeek.http.domain
