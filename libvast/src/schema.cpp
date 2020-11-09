@@ -253,7 +253,10 @@ caf::expected<schema> load_schema(const path& schema_file) {
   return to<schema>(*str);
 }
 
-caf::expected<schema> load_schema(const detail::stable_set<path>& schema_dirs) {
+caf::expected<schema>
+load_schema(const detail::stable_set<path>& schema_dirs, size_t max_recursion) {
+  if (max_recursion == 0)
+    return ec::recursion_limit_reached;
   vast::schema types;
   VAST_VERBOSE_ANON("loading schemas from", schema_dirs);
   for (const auto& dir : schema_dirs) {
@@ -268,7 +271,8 @@ caf::expected<schema> load_schema(const detail::stable_set<path>& schema_dirs) {
           break;
         case path::directory: {
           // Recurse directories depth-first.
-          auto result = load_schema(detail::stable_set<path>{f});
+          auto result
+            = load_schema(detail::stable_set<path>{f}, --max_recursion);
           if (!result)
             return result;
           if (auto merged = schema::merge(directory_schema, *result))

@@ -518,14 +518,16 @@ caf::expected<data> load_yaml(const path& file) {
 }
 
 caf::expected<std::vector<std::pair<path, data>>>
-load_yaml_dir(const path& dir) {
+load_yaml_dir(const path& dir, size_t max_recursion) {
+  if (max_recursion == 0)
+    return ec::recursion_limit_reached;
   std::vector<std::pair<path, data>> result;
   for (auto& file : directory{dir}) {
     switch (file.kind()) {
       default:
         continue;
       case path::directory: {
-        auto nested = load_yaml_dir(file);
+        auto nested = load_yaml_dir(file, --max_recursion);
         if (!nested)
           return nested;
         auto begin = std::make_move_iterator(nested->begin());

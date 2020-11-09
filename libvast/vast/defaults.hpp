@@ -24,6 +24,12 @@
 
 namespace vast::defaults {
 
+// -- global constants ---------------------------------------------------------
+
+/// Maximum depth in recursive function calls before bailing out.
+/// Note: the value must be > 0.
+constexpr size_t max_recursion = 100;
+
 // -- constants for the import command and its subcommands ---------------------
 
 /// Contains constants that are shared by two or more import subcommands.
