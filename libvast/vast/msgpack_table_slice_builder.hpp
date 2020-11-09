@@ -18,6 +18,8 @@
 #include "vast/table_slice.hpp"
 #include "vast/table_slice_builder.hpp"
 
+#include <flatbuffers/flatbuffers.h>
+
 #include <vector>
 
 namespace vast {
@@ -61,7 +63,7 @@ public:
     typename Inspector::result_type {
     return f(caf::meta::type_name("vast.msgpack_table_slice_builder"),
              static_cast<table_slice_builder&>(x), x.column_, x.offset_table_,
-             x.buffer_, x.msgpack_builder_);
+             x.data_, x.msgpack_builder_, x.builder_);
   }
 
 private:
@@ -83,13 +85,16 @@ private:
   size_t column_ = 0;
 
   /// Offsets from the beginning of the buffer to each row.
-  std::vector<size_t> offset_table_ = {};
+  std::vector<uint64_t> offset_table_ = {};
 
   /// Elements encoded in MessagePack format.
-  std::vector<byte> buffer_ = {};
+  std::vector<byte> data_ = {};
 
   /// The underlying MessagePack builder.
   msgpack::builder<input_validation> msgpack_builder_;
+
+  /// The underlying FlatBuffers builder.
+  flatbuffers::FlatBufferBuilder builder_;
 };
 
 } // namespace vast
