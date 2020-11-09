@@ -281,7 +281,7 @@ caf::expected<schema> load_schema(const detail::stable_set<path>& schema_dirs) {
         case path::regular_file:
         case path::symlink: {
           if (f.extension() == ".schema") {
-            VAST_VERBOSE_ANON("loading schema", f);
+            VAST_DEBUG_ANON("loading schema", f);
             auto schema = load_schema(f);
             if (!schema) {
               VAST_ERROR_ANON(__func__, render(schema.error()), f);
