@@ -12,6 +12,10 @@ Every entry has a category for which we use the following visual abbreviations:
 
 ## Unreleased
 
+- 🐞 The `vast.yaml.example` contained syntax errors. The example config file
+  now works again.
+  [#1145](https://github.com/tenzir/vast/pull/1145)
+
 - 🐞 VAST no longer starts if the specified config file does not exist.
   [#1147](https://github.com/tenzir/vast/pull/1147)
 

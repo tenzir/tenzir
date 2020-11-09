@@ -816,7 +816,10 @@ install(DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/schema"
         DESTINATION "${CMAKE_INSTALL_DATADIR}/vast")
 
 install(DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/integration"
-        DESTINATION "${CMAKE_INSTALL_DATADIR}/vast")
+        DESTINATION "${CMAKE_INSTALL_DATADIR}/vast"
+        PATTERN "integration/vast.yaml.example" EXCLUDE)
+install(FILES "${CMAKE_CURRENT_SOURCE_DIR}/vast.yaml.example"
+        DESTINATION "${CMAKE_INSTALL_DATADIR}/vast/integration")
 
 install(FILES "${CMAKE_CURRENT_SOURCE_DIR}/LICENSE"
         DESTINATION "${CMAKE_INSTALL_DOCDIR}/")
