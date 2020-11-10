@@ -25,7 +25,7 @@
 using namespace vast;
 
 TEST(deleter) {
-  char buf[100];
+  char buf[100] = {};
   auto i = 42;
   MESSAGE("owning chunk");
   auto deleter = [&]() { i = 0; };
@@ -47,7 +47,7 @@ TEST(access) {
 }
 
 TEST(slicing) {
-  char buf[100];
+  char buf[100] = {};
   auto x = chunk::copy(span{buf, sizeof(buf)});
   auto y = x->slice(50);
   auto z = y->slice(40, 5);
