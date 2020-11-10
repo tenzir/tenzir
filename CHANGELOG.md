@@ -15,7 +15,9 @@ Every entry has a category for which we use the following visual abbreviations:
 - ⚡️ The on-disk format for table slices now supports versioning of table slice
   encodings. This breaking change makes it so that adding further encodings or
   adding new versions of existing encodings is possible without breaking again
-  in the future. [#1143](https://github.com/tenzir/vast/pull/1143)
+  in the future.
+  [#1143](https://github.com/tenzir/vast/pull/1143)
+  [#1157](https://github.com/tenzir/vast/pull/1157)
 
 - ⚡️ CAF-encoded table slices no longer exist. As such, the option
   `vast.import.batch-encoding` now only supports `arrow` and `msgpack` as
