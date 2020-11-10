@@ -29,9 +29,6 @@ namespace vast.fbs.table_slice.msgpack;
 
 /// A table slice encoded with MessagePack.
 table v0 {
-  /// The offset in the 2^64 ID event space.
-  offset: ulong;
-
   /// The schema of the data.
   /// TODO: currently CAF binary; make this a separate table.
   layout: [ubyte];

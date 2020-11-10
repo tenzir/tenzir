@@ -43,14 +43,6 @@ public:
   /// @returns The number of columns in the slice.
   table_slice::size_type columns() const noexcept;
 
-  // FIXME: Remove this when storing the offset separately from the FlatBuffer.
-  /// @returns The offset in the ID space.
-  id offset() const noexcept;
-
-  // FIXME: Remove this when storing the offset separately from the FlatBuffer.
-  /// Sets the offset in the ID space.
-  void offset(id offset) noexcept;
-
   // -- data access ------------------------------------------------------------
 
   /// Appends all values in column `column` to `index`.

@@ -15,6 +15,8 @@
 
 #include "vast/bitmap.hpp"
 #include "vast/bitmap_algorithms.hpp"
+#include "vast/concept/printable/to_string.hpp"
+#include "vast/concept/printable/vast/table_slice.hpp"
 #include "vast/detail/assert.hpp"
 #include "vast/detail/byte_swap.hpp"
 #include "vast/detail/narrow.hpp"
@@ -63,13 +65,9 @@ vast::ids segment::ids() const {
   vast::ids result;
   auto segment = fbs::GetSegment(chunk_->data());
   auto segment_v0 = segment->segment_as_v0();
-  for (auto flat_slice : *segment_v0->slices()) {
-    // TODO: Store a separate offset table in the segment header to avoid lots
-    // of small disk reads, and generate the resulting `ids` bitmap from the
-    // offset table.
-    auto slice = table_slice{*flat_slice, chunk_, table_slice::verify::no};
-    result.append_bits(false, slice.offset() - result.size());
-    result.append_bits(true, slice.rows());
+  for (auto interval : *segment_v0->ids()) {
+    result.append_bits(false, interval->begin() - result.size());
+    result.append_bits(true, interval->end() - interval->begin());
   }
   return result;
 }
@@ -86,29 +84,49 @@ chunk_ptr segment::chunk() const {
 
 caf::expected<std::vector<table_slice>>
 segment::lookup(const vast::ids& xs) const {
+  // TODO: Store a separate offset table in the segment header to avoid lots of
+  // small disk reads, and generate the resulting id range for each table.
+  std::vector<table_slice> slices;
   std::vector<table_slice> result;
-  auto f = [&](auto flat_slice) noexcept {
-    // TODO: Store a separate offset table in the segment header to avoid lots
-    // of small disk reads here. No need to slice the chunk unless we want to
-    // return the table slice itself.
-    auto slice = table_slice{*flat_slice, chunk_, table_slice::verify::no};
+  auto f = [&](const table_slice& slice) noexcept {
+    VAST_ASSERT(slice.offset() != invalid_id);
     return std::pair{slice.offset(), slice.offset() + slice.rows()};
   };
-  auto g = [&](auto flat_slice) {
-    auto slice = table_slice{*flat_slice, chunk_, table_slice::verify::no};
-    result.push_back(std::move(slice));
+  auto g = [&](const table_slice& slice) {
+    VAST_DEBUG(this, "returns slice from lookup:", to_string(slice));
+    result.push_back(slice);
     return caf::none;
   };
-  auto segment = fbs::GetSegment(chunk_->data());
-  auto segment_v0 = segment->segment_as_v0();
-  auto begin = segment_v0->slices()->begin();
-  auto end = segment_v0->slices()->end();
-  if (auto error = select_with(xs, begin, end, f, g))
+  auto segment = fbs::GetSegment(chunk_->data())->segment_as_v0();
+  if (!segment)
+    return make_error(ec::format_error, "invalid segment version");
+  // Assign offsets to all table slices.
+  if (segment->ids()->size() == 0)
+    return make_error(ec::lookup_error, "encountered empty segment ids range");
+  slices.reserve(segment->slices()->size());
+  auto current_interval = segment->ids()->begin();
+  auto current_offset = current_interval->begin();
+  for (auto&& flat_slice : *segment->slices()) {
+    auto slice = table_slice{*flat_slice, chunk_, table_slice::verify::no};
+    slice.offset(current_offset);
+    VAST_DEBUG(this, "assigns offset", current_offset, "to slice with",
+               slice.rows(), "rows");
+    current_offset += slice.rows();
+    if (current_offset >= current_interval->end()
+        && current_interval != segment->ids()->end()) {
+      VAST_ASSERT(current_offset == current_interval->end());
+      current_offset = (++current_interval)->begin();
+    }
+    slices.push_back(std::move(slice));
+  }
+  // Select the subset of `slices` for the given ids `xs`.
+  if (auto error = select_with(xs, slices.begin(), slices.end(), f, g))
     return error;
   return result;
 }
 
 segment::segment(chunk_ptr chk) : chunk_{std::move(chk)} {
+  // nop
 }
 
 } // namespace vast
