@@ -21,6 +21,8 @@
 #include "vast/view.hpp"
 
 #include <caf/fwd.hpp>
+#include <caf/meta/load_callback.hpp>
+#include <caf/meta/type_name.hpp>
 #include <caf/optional.hpp>
 #include <caf/ref_counted.hpp>
 
@@ -191,7 +193,12 @@ public:
   template <class Inspector>
   friend auto inspect(Inspector& f, table_slice& x) ->
     typename Inspector::result_type {
-    return f(caf::meta::type_name("vast.table_slice"), x.chunk_, x.legacy_);
+    auto chunk = x.chunk_;
+    return f(caf::meta::type_name("vast.table_slice"), chunk, x.offset_,
+             caf::meta::load_callback([&]() noexcept -> caf::error {
+               x = table_slice{std::move(chunk), table_slice::verify::no};
+               return caf::none;
+             }));
   }
 
 private:
