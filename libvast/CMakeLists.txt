@@ -32,8 +32,7 @@ foreach (schema ${flatbuffers_schemas})
     OUTPUT ${desired_file}
     COMMAND
       flatbuffers::flatc -b --cpp --scoped-enums --gen-name-strings
-      -o ${flatbuffers_output_path}
-      ${schema}
+      --gen-mutable -o ${flatbuffers_output_path} ${schema}
     COMMAND ${CMAKE_COMMAND} -E rename ${output_file} ${desired_file}
     COMMAND ${CMAKE_COMMAND} -P ${rename_${basename}}
     DEPENDS ${schema}

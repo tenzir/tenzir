@@ -360,6 +360,6 @@ TEST(single column - serialization) {
 
 FIXTURE_SCOPE(arrow_table_slice_tests, fixtures::table_slices)
 
-TEST_TABLE_SLICE(arrow_table_slice)
+TEST_LEGACY_TABLE_SLICE(arrow_table_slice)
 
 FIXTURE_SCOPE_END()

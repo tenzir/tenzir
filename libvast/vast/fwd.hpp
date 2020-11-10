@@ -39,6 +39,19 @@ class Schema;
 
 #endif // VAST_HAVE_ARROW
 
+namespace fbs {
+
+struct FlatTableSlice;
+struct TableSlice;
+
+namespace table_slice::msgpack {
+
+struct v0;
+
+} // namespace table_slice::msgpack
+
+} // namespace fbs
+
 namespace vast {
 
 // -- classes ------------------------------------------------------------------
@@ -57,7 +70,6 @@ class expression;
 class json;
 class legacy_table_slice;
 class meta_index;
-class msgpack_table_slice;
 class msgpack_table_slice_builder;
 class path;
 class pattern;
@@ -177,6 +189,9 @@ using report = std::vector<data_point>;
 } // namespace system
 
 // -- templates ----------------------------------------------------------------
+
+template <class>
+class msgpack_table_slice;
 
 template <class>
 class scope_linked;

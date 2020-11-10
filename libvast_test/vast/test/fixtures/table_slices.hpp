@@ -25,6 +25,7 @@
 #include "vast/type.hpp"
 #include "vast/view.hpp"
 
+#include <caf/atom.hpp>
 #include <caf/binary_deserializer.hpp>
 #include <caf/binary_serializer.hpp>
 
@@ -32,10 +33,18 @@
 #include <tuple>
 #include <vector>
 
-// Helper macro to define a table-slice unit test.
-#define TEST_TABLE_SLICE(type)                                                 \
+/// Helper macro to define a table-slice unit test.
+#define TEST_TABLE_SLICE(builder, id)                                          \
   TEST(type) {                                                                 \
-    initialize<type, type ## _builder>();                                      \
+    initialize<builder>(caf::atom(id));                                        \
+    run();                                                                     \
+  }
+
+// FIXME: Remove when removing legacy table slices.
+/// Helper macro to define a table-slice unit test.
+#define TEST_LEGACY_TABLE_SLICE(type)                                          \
+  TEST(type) {                                                                 \
+    legacy_initialize<type, type##_builder>();                                 \
     run();                                                                     \
   }
 
@@ -76,9 +85,20 @@ class table_slices : public deterministic_actor_system_and_events {
 public:
   table_slices();
 
-  // Registers a table slice implementation.
+  /// Registers a table slice implementation.
+  template <class Builder>
+  void initialize(caf::atom_value id) {
+    using namespace vast;
+    factory<table_slice_builder>::add<Builder>(id);
+    builder = factory<table_slice_builder>::make(id, layout);
+    if (builder == nullptr)
+      FAIL("builder factory could not construct a valid instance");
+  }
+
+  // FIXME: Remove when removing legacy table slices.
+  /// Registers a table slice implementation.
   template <class T, class Builder>
-  void initialize() {
+  void legacy_initialize() {
     using namespace vast;
     factory<legacy_table_slice>::add<T>();
     factory<table_slice_builder>::add<Builder>(T::class_id);
