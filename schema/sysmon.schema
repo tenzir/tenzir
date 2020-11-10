@@ -561,9 +561,17 @@ type sysmon.RawAccessRead = record {
 // The following beats type definitions wrap the above raw sysmon events.
 // They are effectively a carrier of the Sysmon data that comes with some
 // additional meta data.
-//
-// The logstash filter configuration for the below defined Winlogbeat events
-// looks like this:
+// This configuration assumes that Sysmon events are wrapped in a JSON struct
+// that looks as follows:
+// {
+//   "event_data": { ... },
+//   "meta_data": { ... },
+// }
+// The `event_data` field wraps the Sysmon data. The `meta_data` field should
+// contain the fields `instance_id`, `hostname`, and `event_id` to comply with
+// this schema.
+// An example logstash filter configuration that generates `meta_data` and
+// `event_data` fields in the JSON output could look like this:
 //
 //     filter {
 //       if [winlog][provider_name] == "Microsoft-Windows-Sysmon" {
