@@ -89,7 +89,7 @@ TEST(PCAP read/write 1) {
                                      add_slice);
   CHECK_EQUAL(err, ec::end_of_input);
   REQUIRE_EQUAL(events_produced, 44u);
-  auto layout = slice.layout();
+  auto&& layout = slice.layout();
   CHECK_EQUAL(layout.name(), "pcap.packet");
   auto src_field = slice.at(43, 1);
   auto src = unbox(caf::get_if<view<address>>(&src_field));
@@ -131,7 +131,7 @@ TEST(PCAP read/write 2) {
   CHECK_EQUAL(err, ec::end_of_input);
   REQUIRE_EQUAL(produced, 36u);
   CHECK_EQUAL(slice.rows(), 36u);
-  auto layout = slice.layout();
+  auto&& layout = slice.layout();
   CHECK_EQUAL(layout.name(), "pcap.packet");
   MESSAGE("write out read packets");
   auto file = "vast-unit-test-workshop-2011-browse.pcap";

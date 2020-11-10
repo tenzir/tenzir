@@ -242,7 +242,7 @@ caf::error reader<Selector>::read_impl(size_t max_events, size_t max_slice_size,
     auto xs = caf::get_if<vast::json::object>(&j);
     if (!xs)
       return make_error(ec::type_clash, "not a json object");
-    auto layout = selector_(*xs);
+    auto&& layout = selector_(*xs);
     if (!layout) {
       if (num_unknown_layouts_ == 0)
         VAST_WARNING(this, "failed to find a matching type at line",

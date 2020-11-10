@@ -169,7 +169,7 @@ struct source_state {
           st.local_schema.clear();
           // Second, filter valid types from all available record types.
           for (auto& type : types.value)
-            if (auto layout = caf::get_if<vast::record_type>(&type))
+            if (auto&& layout = caf::get_if<vast::record_type>(&type))
               if (is_valid(*layout))
                 st.local_schema.add(std::move(*layout));
           // Third, try to set the new schema.

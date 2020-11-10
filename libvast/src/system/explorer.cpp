@@ -126,7 +126,7 @@ explorer(caf::stateful_actor<explorer_state>* self, caf::actor node,
       // Don't bother making new queries if we discard all results anyways.
       if (st.num_sent >= st.limits.total)
         return;
-      auto layout = slice.layout();
+      auto&& layout = slice.layout();
       auto it = std::find_if(layout.fields.begin(), layout.fields.end(),
                              [](const record_field& field) {
                                return has_attribute(field.type, "timestamp");
