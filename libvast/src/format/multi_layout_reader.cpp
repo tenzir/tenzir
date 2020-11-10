@@ -34,7 +34,20 @@ multi_layout_reader::~multi_layout_reader() {
 caf::error multi_layout_reader::finish(consumer& f,
                                        table_slice_builder_ptr& builder_ptr,
                                        caf::error result) {
-  if (builder_ptr != nullptr && builder_ptr->rows() > 0) {
+  auto rows = builder_ptr->rows();
+  if (builder_ptr != nullptr && rows > 0) {
+    if (batch_events_ >= rows) {
+      batch_events_ -= rows;
+    } else {
+      // This is a defensive mechanism to prevent wrap-around. If we run into
+      // this case we probably have a logic bug somewhere, but it is not an
+      // error, so there is no reason to treat it as one.
+      VAST_WARNING_ANON(*this,
+                        "detected a mismatch in the batch tracking "
+                        "logic",
+                        VAST_ARG(batch_events_), VAST_ARG(rows));
+      batch_events_ = 0;
+    }
     auto ptr = builder_ptr->finish();
     // Override error in case we encounter an error in the builder.
     if (ptr == nullptr)

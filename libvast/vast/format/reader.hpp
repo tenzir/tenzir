@@ -117,6 +117,7 @@ public:
   reader_clock::duration read_timeout_ = vast::defaults::import::read_timeout;
 
 protected:
+  size_t batch_events_ = 0;
   reader_clock::time_point last_batch_sent_;
 };
 

@@ -35,6 +35,7 @@ single_layout_reader::~single_layout_reader() {
 
 caf::error single_layout_reader::finish(consumer& f, caf::error result) {
   last_batch_sent_ = reader_clock::now();
+  batch_events_ = 0;
   if (builder_ != nullptr && builder_->rows() > 0) {
     auto ptr = builder_->finish();
     // Override error in case we encounter an error in the builder.
@@ -50,6 +51,7 @@ bool single_layout_reader::reset_builder(record_type layout) {
   builder_ = factory<table_slice_builder>::make(table_slice_type_,
                                                 std::move(layout));
   last_batch_sent_ = reader_clock::now();
+  batch_events_ = 0;
   return builder_ != nullptr;
 }
 
