@@ -258,18 +258,21 @@ msgpack_map_view::value_type msgpack_map_view::at(size_type i) const {
 template <class FlatBuffer>
 msgpack_table_slice<FlatBuffer>::msgpack_table_slice(
   const FlatBuffer& slice) noexcept
-  : slice_{slice} {
+  : slice_{slice}, state_{} {
+  if (auto err = fbs::deserialize_bytes(slice_.layout(), state_.layout))
+    die("failed to deserialize layout: " + render(err));
+}
+
+template <class FlatBuffer>
+msgpack_table_slice<FlatBuffer>::~msgpack_table_slice() noexcept {
   // nop
 }
 
 // -- properties -------------------------------------------------------------
 
 template <class FlatBuffer>
-record_type msgpack_table_slice<FlatBuffer>::layout() const noexcept {
-  auto result = record_type{};
-  if (auto err = fbs::deserialize_bytes(slice_.layout(), result))
-    VAST_ERROR_ANON(__func__, "failed to deserialize layout:", render(err));
-  return result;
+const record_type& msgpack_table_slice<FlatBuffer>::layout() const noexcept {
+  return state_.layout;
 }
 
 template <class FlatBuffer>

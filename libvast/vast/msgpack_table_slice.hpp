@@ -20,6 +20,18 @@
 
 namespace vast {
 
+/// Additional state needed for the implementation of MessagePack-encoded table
+/// slices that cannot easily be accessed from the underlying FlatBuffers table
+/// directly.
+template <class FlatBuffer>
+struct msgpack_table_slice_state;
+
+template <>
+struct msgpack_table_slice_state<fbs::table_slice::msgpack::v0> {
+  /// The deserialized table layout.
+  record_type layout;
+};
+
 /// A table slice that stores elements encoded in
 /// [MessagePack](https://msgpack.org) format. The implementation stores data
 /// in row-major order.
@@ -32,10 +44,13 @@ public:
   /// @param slice The encoding-specific FlatBuffers table.
   explicit msgpack_table_slice(const FlatBuffer& slice) noexcept;
 
+  /// Destroys a MessagePack-encoded table slice.
+  ~msgpack_table_slice() noexcept;
+
   // -- properties -------------------------------------------------------------
 
   /// @returns The table layout.
-  record_type layout() const noexcept;
+  const record_type& layout() const noexcept;
 
   /// @returns The number of rows in the slice.
   table_slice::size_type rows() const noexcept;
@@ -63,6 +78,9 @@ private:
 
   /// A const-reference to the underlying FlatBuffers table.
   const FlatBuffer& slice_;
+
+  /// Additional state needed for the implementation.
+  msgpack_table_slice_state<FlatBuffer> state_;
 };
 
 // -- template machinery -------------------------------------------------------

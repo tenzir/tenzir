@@ -203,7 +203,7 @@ public:
         std::cerr << '.' << std::flush;
       // Assemble an event as a list of broker data values.
       broker::vector xs;
-      auto layout = slice.layout();
+      auto&& layout = slice.layout();
       auto columns = layout.fields.size();
       xs.reserve(columns);
       for (size_t col = 0; col < columns; ++col)

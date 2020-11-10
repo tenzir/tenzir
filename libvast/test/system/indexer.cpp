@@ -49,7 +49,7 @@ struct fixture : fixtures::deterministic_actor_system_and_events {
 
   void ingest(std::vector<table_slice> slices) {
     VAST_ASSERT(slices.size() > 0);
-    auto layout = slices[0]->layout();
+    auto&& layout = slices[0]->layout();
     VAST_ASSERT(layout.fields.size() == 1);
     init(layout.fields[0].type);
     VAST_ASSERT(std::all_of(slices.begin(), slices.end(), [&](auto& slice) {
