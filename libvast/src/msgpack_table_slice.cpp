@@ -17,58 +17,17 @@
 #include "vast/detail/overload.hpp"
 #include "vast/detail/type_traits.hpp"
 #include "vast/die.hpp"
+#include "vast/fbs/table_slice.hpp"
+#include "vast/fbs/utils.hpp"
 #include "vast/logger.hpp"
 #include "vast/msgpack.hpp"
 #include "vast/value_index.hpp"
 
-#include <caf/binary_deserializer.hpp>
-#include <caf/deserializer.hpp>
-#include <caf/serializer.hpp>
-#include <caf/streambuf.hpp>
-
 #include <type_traits>
-
-using namespace vast;
 
 namespace vast {
 
-legacy_table_slice_ptr msgpack_table_slice::make(table_slice_header header) {
-  auto ptr = new msgpack_table_slice{std::move(header)};
-  return legacy_table_slice_ptr{ptr, false};
-}
-
-msgpack_table_slice* msgpack_table_slice::copy() const {
-  return new msgpack_table_slice{*this};
-}
-
-caf::error msgpack_table_slice::serialize(caf::serializer& sink) const {
-  return sink(offset_table_, chunk_);
-}
-
-caf::error msgpack_table_slice::deserialize(caf::deserializer& source) {
-  if (auto err = source(offset_table_, chunk_))
-    return err;
-  buffer_ = as_bytes(span{chunk_->data(), chunk_->size()});
-  return caf::none;
-}
-
-caf::error msgpack_table_slice::load(chunk_ptr chunk) {
-  VAST_ASSERT(chunk != nullptr);
-  // Setup a CAF deserializer.
-  caf::binary_deserializer source{nullptr, chunk->data(), chunk->size()};
-  // Deserialize offset table.
-  if (auto err = source(offset_table_))
-    return err;
-  // Assign buffer to msgpack data following the offset table. Since the buffer
-  // was previously serialized as chunk pointer (uint32_t size + data), we have
-  // to add add sizeof(uint32_t) bytes after deserializing the offset table to
-  // jump to directly jump to the msgpack data.
-  auto remaining_bytes = source.remaining();
-  auto deserializer_position = chunk->size() - remaining_bytes;
-  chunk_ = chunk->slice(deserializer_position + sizeof(uint32_t));
-  buffer_ = as_bytes(span{chunk_->data(), chunk_->size()});
-  return caf::none;
-}
+// -- utility functions --------------------------------------------------------
 
 namespace {
 
@@ -294,32 +253,86 @@ msgpack_map_view::value_type msgpack_map_view::at(size_type i) const {
 
 } // namespace
 
-// There are only small gains we can get here from doing this manually since
-// MsgPack is a row-oriented format.
-void msgpack_table_slice::append_column_to_index(size_type col,
-                                                 value_index& idx) const {
+// -- constructors, destructors, and assignment operators ----------------------
+
+template <class FlatBuffer>
+msgpack_table_slice<FlatBuffer>::msgpack_table_slice(
+  const FlatBuffer& slice) noexcept
+  : slice_{slice} {
+  // nop
+}
+
+// -- properties -------------------------------------------------------------
+
+template <class FlatBuffer>
+record_type msgpack_table_slice<FlatBuffer>::layout() const noexcept {
+  auto result = record_type{};
+  if (auto err = fbs::deserialize_bytes(slice_.layout(), result))
+    VAST_ERROR_ANON(__func__, "failed to deserialize layout:", render(err));
+  return result;
+}
+
+template <class FlatBuffer>
+table_slice::size_type msgpack_table_slice<FlatBuffer>::rows() const noexcept {
+  return slice_.offset_table()->size();
+}
+
+template <class FlatBuffer>
+table_slice::size_type
+msgpack_table_slice<FlatBuffer>::columns() const noexcept {
+  return layout().fields.size();
+}
+
+template <class FlatBuffer>
+id msgpack_table_slice<FlatBuffer>::offset() const noexcept {
+  return slice_.offset();
+}
+
+template <class FlatBuffer>
+void msgpack_table_slice<FlatBuffer>::offset(id offset) noexcept {
+  const_cast<FlatBuffer&>(slice_).mutate_offset(offset);
+}
+
+// -- data access ------------------------------------------------------------
+
+template <class FlatBuffer>
+void msgpack_table_slice<FlatBuffer>::append_column_to_index(
+  id offset, table_slice::size_type column, value_index& index) const {
+  const auto& offset_table = *slice_.offset_table();
+  auto data
+    = span<const byte>{reinterpret_cast<const byte*>(slice_.data()->data()),
+                       slice_.data()->size()};
+  auto type = layout().fields[column].type;
   for (size_t row = 0; row < rows(); ++row) {
-    auto row_offset = offset_table_[row];
-    auto xs = msgpack::overlay{buffer_.subspan(row_offset)};
-    xs.next(col);
-    auto x = decode(xs, layout().fields[col].type);
-    idx.append(x, offset() + row);
+    auto row_offset = offset_table[row];
+    auto xs = msgpack::overlay{data.subspan(row_offset)};
+    xs.next(column);
+    auto x = decode(xs, layout().fields[column].type);
+    index.append(std::move(x), offset + row);
   }
 }
 
-caf::atom_value msgpack_table_slice::implementation_id() const noexcept {
-  return class_id;
+template <class FlatBuffer>
+data_view
+msgpack_table_slice<FlatBuffer>::at(table_slice::size_type row,
+                                    table_slice::size_type column) const {
+  const auto& offset_table = *slice_.offset_table();
+  auto data
+    = span<const byte>{reinterpret_cast<const byte*>(slice_.data()->data()),
+                       slice_.data()->size()};
+  // First find the desired row...
+  VAST_ASSERT(row < offset_table.size());
+  auto offset = offset_table[row];
+  VAST_ASSERT(offset < static_cast<size_t>(data.size()));
+  auto xs = msgpack::overlay{data.subspan(offset)};
+  // ...then skip (decode) up to the desired column.
+  xs.next(column);
+  return decode(xs, layout().fields[column].type);
 }
 
-data_view msgpack_table_slice::at(size_type row, size_type col) const {
-  // First find the desired row...
-  VAST_ASSERT(row < offset_table_.size());
-  auto offset = offset_table_[row];
-  VAST_ASSERT(offset < static_cast<size_t>(buffer_.size()));
-  auto xs = msgpack::overlay{buffer_.subspan(offset)};
-  // ...then skip (decode) up to the desired column.
-  xs.next(col);
-  return decode(xs, layout().fields[col].type);
-}
+// -- template machinery -------------------------------------------------------
+
+/// Explicit template instantiations for all MessagePack encoding versions.
+template class msgpack_table_slice<fbs::table_slice::msgpack::v0>;
 
 } // namespace vast

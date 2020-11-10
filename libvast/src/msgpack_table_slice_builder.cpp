@@ -159,7 +159,9 @@ void msgpack_table_slice_builder::reserve(size_t num_rows) {
 
 msgpack_table_slice_builder::msgpack_table_slice_builder(
   record_type layout, size_t initial_buffer_size)
-  : table_slice_builder{std::move(layout)}, msgpack_builder_{data_}, builder_{} {
+  : table_slice_builder{std::move(layout)},
+    msgpack_builder_{data_},
+    builder_{initial_buffer_size} {
   data_.reserve(initial_buffer_size);
 }
 
@@ -174,5 +176,10 @@ bool msgpack_table_slice_builder::add_impl(data_view x) {
   VAST_ASSERT(n > 0);
   return true;
 }
+
+// -- template machinery -------------------------------------------------------
+
+/// Explicit template instantiations for all MessagePack encoding versions.
+template class msgpack_table_slice<fbs::table_slice::msgpack::v0>;
 
 } // namespace vast
