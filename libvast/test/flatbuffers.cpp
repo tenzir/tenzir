@@ -192,6 +192,7 @@ TEST(full partition roundtrip) {
   auto builder = vast::msgpack_table_slice_builder::make(layout);
   CHECK(builder->add(0u));
   auto slice = builder->finish();
+  slice.offset(0);
   auto data = std::vector<vast::table_slice>{slice};
   auto src = vast::detail::spawn_container_source(sys, data, partition);
   REQUIRE(src);

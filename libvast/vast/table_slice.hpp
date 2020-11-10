@@ -160,6 +160,7 @@ public:
   /// Appends all values in column `column` to `index`.
   /// @param `column` The index of the column to append.
   /// @param `index` the value index to append to.
+  /// @pre `offset() != invalid_id`
   void append_column_to_index(size_type column, value_index& index) const;
 
   /// Retrieves data by specifying 2D-coordinates via row and column.
