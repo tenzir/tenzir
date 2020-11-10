@@ -67,8 +67,8 @@ auto visit(Visitor&& visitor, const fbs::TableSlice* x) noexcept(
                      std::is_nothrow_invocable<Visitor>>,
     // Check whether the handlers for all other table slice encodings are
     // noexcept-specified. When adding a new encoding, add it here as well.
-    std::is_nothrow_invocable<Visitor, const fbs::table_slice::legacy::v0*>,
-    std::is_nothrow_invocable<Visitor, const fbs::table_slice::msgpack::v0*>>) {
+    std::is_nothrow_invocable<Visitor, const fbs::table_slice::legacy::v0&>,
+    std::is_nothrow_invocable<Visitor, const fbs::table_slice::msgpack::v0&>>) {
   if (!x) {
     if constexpr (std::is_invocable_v<Visitor>)
       return std::invoke(std::forward<Visitor>(visitor));
@@ -83,10 +83,10 @@ auto visit(Visitor&& visitor, const fbs::TableSlice* x) noexcept(
         die("visitor cannot handle table slices with an invalid encoding");
     case fbs::table_slice::TableSlice::legacy_v0:
       return std::invoke(std::forward<Visitor>(visitor),
-                         x->table_slice_as_legacy_v0());
+                         *x->table_slice_as_legacy_v0());
     case fbs::table_slice::TableSlice::msgpack_v0:
       return std::invoke(std::forward<Visitor>(visitor),
-                         x->table_slice_as_msgpack_v0());
+                         *x->table_slice_as_msgpack_v0());
   }
   // GCC-8 fails to recognize that this can never be reached, so we just call a
   // [[noreturn]] function.
@@ -151,8 +151,8 @@ table_slice::table_slice(chunk_ptr&& chunk, enum verify verify) noexcept
           // Ignore everything...
           [](auto&&...) noexcept {},
           // ... except for legacy encoded chunks.
-          [&](const fbs::table_slice::legacy::v0* slice) noexcept {
-            if (auto error = unpack(*slice, legacy_))
+          [&](const fbs::table_slice::legacy::v0& slice) noexcept {
+            if (auto error = unpack(slice, legacy_))
               die("failed to unpack already verified legacy table slice: "
                   + render(error));
           },
@@ -320,14 +320,14 @@ bool operator!=(const table_slice& lhs, const table_slice& rhs) noexcept {
 enum table_slice::encoding table_slice::encoding() const noexcept {
   auto f = detail::overload{
     []() noexcept { return encoding::none; },
-    [&](const fbs::table_slice::legacy::v0*) noexcept {
+    [&](const fbs::table_slice::legacy::v0&) noexcept {
       if (legacy_->implementation_id() == caf::atom("arrow"))
         return encoding::arrow;
       if (legacy_->implementation_id() == caf::atom("msgpack"))
         return encoding::msgpack;
       return encoding::none;
     },
-    [](const fbs::table_slice::msgpack::v0*) noexcept {
+    [](const fbs::table_slice::msgpack::v0&) noexcept {
       return encoding::msgpack;
     },
   };
@@ -337,11 +337,11 @@ enum table_slice::encoding table_slice::encoding() const noexcept {
 record_type table_slice::layout() const noexcept {
   auto f = detail::overload{
     []() noexcept { return record_type{}; },
-    [&](const fbs::table_slice::legacy::v0*) noexcept {
+    [&](const fbs::table_slice::legacy::v0&) noexcept {
       return legacy_->layout();
     },
-    [](const fbs::table_slice::msgpack::v0* slice) noexcept {
-      return msgpack_table_slice{*slice}.layout();
+    [](const fbs::table_slice::msgpack::v0& slice) noexcept {
+      return msgpack_table_slice{slice}.layout();
     },
   };
   return visit(f, as_flatbuffer(chunk_));
@@ -350,11 +350,11 @@ record_type table_slice::layout() const noexcept {
 table_slice::size_type table_slice::rows() const noexcept {
   auto f = detail::overload{
     []() noexcept { return size_type{}; },
-    [&](const fbs::table_slice::legacy::v0*) noexcept {
+    [&](const fbs::table_slice::legacy::v0&) noexcept {
       return legacy_->rows();
     },
-    [](const fbs::table_slice::msgpack::v0* slice) noexcept {
-      return msgpack_table_slice{*slice}.rows();
+    [](const fbs::table_slice::msgpack::v0& slice) noexcept {
+      return msgpack_table_slice{slice}.rows();
     },
   };
   return visit(f, as_flatbuffer(chunk_));
@@ -363,11 +363,11 @@ table_slice::size_type table_slice::rows() const noexcept {
 table_slice::size_type table_slice::columns() const noexcept {
   auto f = detail::overload{
     []() noexcept { return size_type{}; },
-    [&](const fbs::table_slice::legacy::v0*) noexcept {
+    [&](const fbs::table_slice::legacy::v0&) noexcept {
       return legacy_->columns();
     },
-    [](const fbs::table_slice::msgpack::v0* slice) noexcept {
-      return msgpack_table_slice{*slice}.columns();
+    [](const fbs::table_slice::msgpack::v0& slice) noexcept {
+      return msgpack_table_slice{slice}.columns();
     },
   };
   return visit(f, as_flatbuffer(chunk_));
@@ -376,10 +376,10 @@ table_slice::size_type table_slice::columns() const noexcept {
 id table_slice::offset() const noexcept {
   auto f = detail::overload{
     []() noexcept { return invalid_id; },
-    [&](const fbs::table_slice::legacy::v0*) noexcept {
+    [&](const fbs::table_slice::legacy::v0&) noexcept {
       return legacy_->offset();
     },
-    [&](const fbs::table_slice::msgpack::v0*) noexcept { return offset_; },
+    [&](const fbs::table_slice::msgpack::v0&) noexcept { return offset_; },
   };
   return visit(f, as_flatbuffer(chunk_));
 }
@@ -390,11 +390,11 @@ void table_slice::offset(id offset) noexcept {
     []() noexcept {
       // nop
     },
-    [&](const fbs::table_slice::legacy::v0*) noexcept {
+    [&](const fbs::table_slice::legacy::v0&) noexcept {
       legacy_.unshared().offset(offset);
       *this = table_slice{std::move(legacy_)};
     },
-    [&](const fbs::table_slice::msgpack::v0*) noexcept { offset_ = offset; },
+    [&](const fbs::table_slice::msgpack::v0&) noexcept { offset_ = offset; },
   };
   visit(f, as_flatbuffer(chunk_));
 }
@@ -414,12 +414,12 @@ void table_slice::append_column_to_index(table_slice::size_type column,
     []() noexcept {
       // nop
     },
-    [&](const fbs::table_slice::legacy::v0*) noexcept {
+    [&](const fbs::table_slice::legacy::v0&) noexcept {
       legacy_->append_column_to_index(column, index);
     },
-    [&](const fbs::table_slice::msgpack::v0* slice) noexcept {
-      return msgpack_table_slice{*slice}.append_column_to_index(offset(),
-                                                                column, index);
+    [&](const fbs::table_slice::msgpack::v0& slice) noexcept {
+      return msgpack_table_slice{slice}.append_column_to_index(offset(), column,
+                                                               index);
     },
   };
   visit(f, as_flatbuffer(chunk_));
@@ -434,11 +434,11 @@ data_view table_slice::at(table_slice::size_type row,
   VAST_ASSERT(row < rows());
   VAST_ASSERT(column < columns());
   auto f = detail::overload{
-    [&](const fbs::table_slice::legacy::v0*) noexcept {
+    [&](const fbs::table_slice::legacy::v0&) noexcept {
       return legacy_->at(row, column);
     },
-    [&](const fbs::table_slice::msgpack::v0* slice) noexcept {
-      return msgpack_table_slice{*slice}.at(row, column);
+    [&](const fbs::table_slice::msgpack::v0& slice) noexcept {
+      return msgpack_table_slice{slice}.at(row, column);
     },
   };
   return visit(f, as_flatbuffer(chunk_));
@@ -451,7 +451,7 @@ std::shared_ptr<arrow::RecordBatch> as_record_batch(const table_slice& slice) {
     [](auto&&...) noexcept -> std::shared_ptr<arrow::RecordBatch> {
       return nullptr;
     },
-    [&](const fbs::table_slice::legacy::v0*) noexcept
+    [&](const fbs::table_slice::legacy::v0&) noexcept
     -> std::shared_ptr<arrow::RecordBatch> {
       if (slice.legacy_->implementation_id() == caf::atom("arrow"))
         return static_cast<const arrow_table_slice&>(*slice.legacy_).batch();
