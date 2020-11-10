@@ -425,7 +425,7 @@ caf::error reader::read_impl(size_t max_events, size_t max_slice_size,
   if (!parser_) {
     bool timed_out = next_line();
     if (timed_out)
-      return ec::timeout;
+      return ec::stalled;
     auto p = read_header(lines_->get());
     if (!p)
       return p.error();
@@ -437,14 +437,14 @@ caf::error reader::read_impl(size_t max_events, size_t max_slice_size,
     // EOF check.
     if (lines_->done())
       return finish(callback, make_error(ec::end_of_input, "input exhausted"));
-    if (batch_timeout_ > reader_clock::duration::zero()
+    if (batch_events_ > 0 && batch_timeout_ > reader_clock::duration::zero()
         && last_batch_sent_ + batch_timeout_ < reader_clock::now()) {
-      VAST_DEBUG(this, "reached input timeout");
-      break;
+      VAST_DEBUG(this, "reached batch timeout");
+      return finish(callback, ec::timeout);
     }
     bool timed_out = next_line();
     if (timed_out)
-      return ec::timeout;
+      return ec::stalled;
     auto& line = lines_->get();
     if (line.empty()) {
       // Ignore empty lines.
@@ -460,6 +460,7 @@ caf::error reader::read_impl(size_t max_events, size_t max_slice_size,
       continue;
     }
     ++produced;
+    ++batch_events_;
     if (builder_->rows() == max_slice_size)
       if (auto err = finish(callback))
         return err;

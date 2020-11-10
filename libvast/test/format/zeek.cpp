@@ -196,7 +196,7 @@ std::string_view conn_log_100_events = R"__(#separator \x09
 struct fixture : fixtures::deterministic_actor_system {
   std::vector<table_slice_ptr>
   read(std::unique_ptr<std::istream> input, size_t slice_size,
-       size_t num_events, bool expect_eof, bool expect_timeout) {
+       size_t num_events, bool expect_eof, bool expect_stall) {
     using reader_type = format::zeek::reader;
     auto settings = caf::settings{};
     caf::put(settings, "vast.import.batch-timeout", "200ms");
@@ -214,12 +214,12 @@ struct fixture : fixtures::deterministic_actor_system {
                                       slice_size, add_slice);
       num += num_;
       err = err_;
-      if (err == ec::timeout && !expect_timeout)
+      if (err == ec::stalled && !expect_stall)
         FAIL("Zeek reader timed out: " << render(err));
-    } while (err == ec::timeout);
+    } while (err == ec::stalled);
     if (expect_eof && err != ec::end_of_input)
       FAIL("Zeek reader did not exhaust input: " << render(err));
-    if (!expect_eof && !expect_timeout && err)
+    if (!expect_eof && !expect_stall && err)
       FAIL("Zeek reader failed to parse input: " << render(err));
     if (num != num_events)
       FAIL("Zeek reader only produced " << num << " events, expected "
@@ -229,9 +229,9 @@ struct fixture : fixtures::deterministic_actor_system {
 
   std::vector<table_slice_ptr>
   read(std::string_view input, size_t slice_size, size_t num_events,
-       bool expect_eof = true, bool expect_timeout = false) {
+       bool expect_eof = true, bool expect_stall = false) {
     return read(std::make_unique<std::istringstream>(std::string{input}),
-                slice_size, num_events, expect_eof, expect_timeout);
+                slice_size, num_events, expect_eof, expect_stall);
   }
 };
 
@@ -336,9 +336,9 @@ TEST(zeek reader - continous stream with partial slice) {
   std::vector<table_slice_ptr> slices;
   std::thread t([&] {
     bool expect_eof = false;
-    bool expect_timeout = true;
+    bool expect_stall = true;
     slices = read(std::make_unique<std::istream>(&buf), 100, 10, expect_eof,
-                  expect_timeout);
+                  expect_stall);
   });
   // Write less than one full slice, leaving the pipe open.
   result

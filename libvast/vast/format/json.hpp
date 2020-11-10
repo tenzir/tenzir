@@ -214,15 +214,15 @@ caf::error reader<Selector>::read_impl(size_t max_events, size_t max_slice_size,
   while (produced < max_events) {
     if (lines_->done())
       return finish(cons, make_error(ec::end_of_input, "input exhausted"));
-    if (batch_timeout_ > reader_clock::duration::zero()
+    if (batch_events_ > 0 && batch_timeout_ > reader_clock::duration::zero()
         && last_batch_sent_ + batch_timeout_ < reader_clock::now()) {
-      VAST_DEBUG(this, "reached input timeout");
-      break;
+      VAST_DEBUG(this, "reached batch timeout");
+      return finish(cons, ec::timeout);
     }
     bool timed_out = lines_->next_timeout(read_timeout_);
     if (timed_out) {
-      VAST_DEBUG(this, "reached input timeout at line", lines_->line_number());
-      return ec::timeout;
+      VAST_DEBUG(this, "stalled at line", lines_->line_number());
+      return ec::stalled;
     }
     auto& line = lines_->get();
     ++num_lines_;
@@ -258,6 +258,7 @@ caf::error reader<Selector>::read_impl(size_t max_events, size_t max_slice_size,
       return finish(cons, err);
     }
     produced++;
+    batch_events_++;
     if (bptr->rows() == max_slice_size)
       if (auto err = finish(cons, bptr))
         return err;

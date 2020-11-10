@@ -280,7 +280,7 @@ caf::error reader::read_impl(size_t max_events, size_t max_slice_size,
     VAST_ASSERT(layout_.fields.empty());
     auto timed_out = next_line();
     if (timed_out)
-      return ec::timeout;
+      return ec::stalled;
     if (auto err = parse_header())
       return err;
     if (!reset_builder(layout_))
@@ -299,14 +299,14 @@ caf::error reader::read_impl(size_t max_events, size_t max_slice_size,
   while (produced < max_events) {
     if (lines_->done())
       return finish(f, make_error(ec::end_of_input, "input exhausted"));
-    if (batch_timeout_ > reader_clock::duration::zero()
+    if (batch_events_ > 0 && batch_timeout_ > reader_clock::duration::zero()
         && last_batch_sent_ + batch_timeout_ < reader_clock::now()) {
-      VAST_DEBUG(this, "reached input timeout");
-      break;
+      VAST_DEBUG(this, "reached batch timeout");
+      return finish(f, ec::timeout);
     }
     auto timed_out = next_line();
     if (timed_out)
-      return ec::timeout;
+      return ec::stalled;
     // Parse curent line.
     auto& line = lines_->get();
     if (line.empty()) {
@@ -367,6 +367,7 @@ caf::error reader::read_impl(size_t max_events, size_t max_slice_size,
         if (auto err = finish(f))
           return err;
       ++produced;
+      ++batch_events_;
     }
   }
   return finish(f);

@@ -12,6 +12,10 @@ Every entry has a category for which we use the following visual abbreviations:
 
 ## Unreleased
 
+- 🐞 `vast import` no longer stalls when it doesn't receive any data for more
+  than 10 seconds.
+  [#1136](https://github.com/tenzir/vast/pull/1136)
+
 - 🐞 The output of `vast status --detailed` now contains informations about
   runnings sinks, e.g., `vast export <format> <query>` processes.
   [#1155](https://github.com/tenzir/vast/pull/1155)

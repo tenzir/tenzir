@@ -100,15 +100,15 @@ reader::read_impl(size_t max_events, size_t max_slice_size, consumer& f) {
   while (produced < max_events) {
     if (lines_->done())
       return finish(f, make_error(ec::end_of_input, "input exhausted"));
-    if (batch_timeout_ > reader_clock::duration::zero()
+    if (batch_events_ > 0 && batch_timeout_ > reader_clock::duration::zero()
         && last_batch_sent_ + batch_timeout_ < reader_clock::now()) {
-      VAST_DEBUG(this, "reached input timeout");
-      break;
+      VAST_DEBUG(this, "reached batch timeout");
+      return finish(f, ec::timeout);
     }
     auto timed_out = lines_->next_timeout(read_timeout_);
     if (timed_out) {
-      VAST_DEBUG(this, "reached input timeout at line", lines_->line_number());
-      return ec::timeout;
+      VAST_DEBUG(this, "stalled at line", lines_->line_number());
+      return ec::stalled;
     }
     auto& line = lines_->get();
     if (line.empty()) {
@@ -155,6 +155,7 @@ reader::read_impl(size_t max_events, size_t max_slice_size, consumer& f) {
           return err;
     }
     ++produced;
+    ++batch_events_;
   }
   return finish(f);
 }

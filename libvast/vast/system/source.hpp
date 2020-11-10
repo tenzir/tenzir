@@ -250,6 +250,7 @@ source(caf::stateful_actor<source_state<Reader>>* self, Reader reader,
     },
     // get next element
     [=](caf::unit_t&, caf::downstream<table_slice_ptr>& out, size_t num) {
+      VAST_DEBUG(self, "tries to generate", num, "messages");
       auto& st = self->state;
       // Extract events until the source has exhausted its input or until
       // we have completed a batch.
@@ -261,6 +262,7 @@ source(caf::stateful_actor<source_state<Reader>>* self, Reader reader,
       auto t = timer::start(st.metrics);
       auto [err, produced] = st.reader.read(events, table_slice_size,
                                             push_slice);
+      VAST_DEBUG(self, "read", produced, "events");
       t.stop(produced);
       st.count += produced;
       auto finish = [&] {
@@ -268,14 +270,17 @@ source(caf::stateful_actor<source_state<Reader>>* self, Reader reader,
         st.send_report();
         self->quit();
       };
-      if (st.requested && st.count >= *st.requested)
+      if (st.requested && st.count >= *st.requested) {
+        VAST_DEBUG(self, "finished with", st.count, "events");
         return finish();
-      if (err == ec::timeout) {
+      }
+      if (err == ec::stalled) {
         if (!st.waiting_for_input) {
           // This pull handler was invoked while we were waiting for a wakeup
           // message. Sending another one would create a parallel wakeup cycle.
           st.waiting_for_input = true;
           self->delayed_send(self, st.wakeup_delay, atom::wakeup_v);
+          VAST_DEBUG(self, "scheduled itself to resume after", st.wakeup_delay);
           // Exponential backoff for the wakeup calls.
           // For each consecutive invocation of this generate handler that does
           // not emit any events, we double the wakeup delay.
@@ -284,15 +289,23 @@ source(caf::stateful_actor<source_state<Reader>>* self, Reader reader,
             st.wakeup_delay = std::chrono::milliseconds{20};
           else if (st.wakeup_delay < st.reader.batch_timeout_ / 2)
             st.wakeup_delay *= 2;
+        } else {
+          VAST_DEBUG(self, "timed out but is already scheduled for wakeup");
         }
         return;
       }
       st.wakeup_delay = std::chrono::milliseconds::zero();
-      if (err != caf::none) {
+      if (err == ec::timeout) {
+        VAST_DEBUG(self, "reached batch timeout and flushes its buffers");
+        st.mgr->out().force_emit_batches();
+      } else if (err != caf::none) {
         if (err != vast::ec::end_of_input)
           VAST_INFO(self, "completed with message:", render(err));
+        else
+          VAST_DEBUG(self, "completed at end of input");
         return finish();
       }
+      VAST_DEBUG(self, "ended a generation round regularly");
     },
     // done?
     [=](const caf::unit_t&) { return self->state.done; });
@@ -348,13 +361,13 @@ source(caf::stateful_actor<source_state<Reader>>* self, Reader reader,
       VAST_VERBOSE(self, "wakes up to check for new input");
       auto& st = self->state;
       st.waiting_for_input = false;
-      // If we are here, the reader returned with ec::timeout the last time it
+      // If we are here, the reader returned with ec::stalled the last time it
       // was called. Let's check if we can read something now.
       if (st.mgr->generate_messages())
         st.mgr->push();
     },
     [=](atom::telemetry) {
-      VAST_VERBOSE(self, "got a telemetry atom");
+      VAST_DEBUG(self, "got a telemetry atom");
       auto& st = self->state;
       st.send_report();
       if (!st.mgr->done())
