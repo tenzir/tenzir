@@ -405,15 +405,10 @@ int table_slice::instances() noexcept {
 
 // -- data access --------------------------------------------------------------
 
-/// Appends all values in column `column` to `index`.
-/// @param `column` The index of the column to append.
-/// @param `index` the value index to append to.
 void table_slice::append_column_to_index(table_slice::size_type column,
                                          value_index& index) const {
+  VAST_ASSERT(offset() != invalid_id);
   auto f = detail::overload{
-    []() noexcept {
-      // nop
-    },
     [&](const fbs::table_slice::legacy::v0&) noexcept {
       legacy_->append_column_to_index(column, index);
     },
@@ -425,10 +420,6 @@ void table_slice::append_column_to_index(table_slice::size_type column,
   visit(f, as_flatbuffer(chunk_));
 }
 
-/// Retrieves data by specifying 2D-coordinates via row and column.
-/// @param row The row offset.
-/// @param column The column offset.
-/// @pre `row < rows() && column < columns()`
 data_view table_slice::at(table_slice::size_type row,
                           table_slice::size_type column) const {
   VAST_ASSERT(row < rows());
