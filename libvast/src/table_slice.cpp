@@ -225,6 +225,7 @@ table_slice::table_slice(legacy_table_slice_ptr&& slice) noexcept {
 
 table_slice::table_slice(const table_slice& other) noexcept
   : chunk_{other.chunk_}, legacy_{other.legacy_} {
+  // nop
 }
 
 table_slice::table_slice(const table_slice& other, enum encoding encoding,
