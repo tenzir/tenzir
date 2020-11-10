@@ -224,7 +224,7 @@ table_slice::table_slice(legacy_table_slice_ptr&& slice) noexcept {
 }
 
 table_slice::table_slice(const table_slice& other) noexcept
-  : chunk_{other.chunk_}, legacy_{other.legacy_} {
+  : chunk_{other.chunk_}, legacy_{other.legacy_}, offset_{other.offset_} {
   // nop
 }
 
@@ -235,6 +235,7 @@ table_slice::table_slice(const table_slice& other, enum encoding encoding,
   if (encoding == other.encoding()) {
     chunk_ = other.chunk_;
     legacy_ = other.legacy_;
+    offset_ = other.offset_;
   } else {
     switch (encoding) {
       case encoding::none:
@@ -255,12 +256,14 @@ table_slice::table_slice(const table_slice& other, enum encoding encoding,
 table_slice& table_slice::operator=(const table_slice& rhs) noexcept {
   chunk_ = rhs.chunk_;
   legacy_ = rhs.legacy_;
+  offset_ = rhs.offset_;
   return *this;
 }
 
 table_slice::table_slice(table_slice&& other) noexcept
   : chunk_{std::exchange(other.chunk_, {})},
-    legacy_{std::exchange(other.legacy_, {})} {
+    legacy_{std::exchange(other.legacy_, {})},
+    offset_{std::exchange(other.offset_, invalid_id)} {
   // nop
 }
 
@@ -270,6 +273,7 @@ table_slice::table_slice(table_slice&& other, enum encoding encoding,
     // If the encoding matches, we can just move the data.
     chunk_ = std::exchange(other.chunk_, {});
     legacy_ = std::exchange(other.legacy_, {});
+    offset_ = std::exchange(other.offset_, invalid_id);
   } else {
     // Changing the encoding requires a copy, so we just delegate to the
     // copy-constructor with re-encoding.
@@ -281,6 +285,7 @@ table_slice::table_slice(table_slice&& other, enum encoding encoding,
 table_slice& table_slice::operator=(table_slice&& rhs) noexcept {
   chunk_ = std::exchange(rhs.chunk_, {});
   legacy_ = std::exchange(rhs.legacy_, {});
+  offset_ = std::exchange(rhs.offset_, invalid_id);
   return *this;
 }
 
@@ -374,9 +379,7 @@ id table_slice::offset() const noexcept {
     [&](const fbs::table_slice::legacy::v0*) noexcept {
       return legacy_->offset();
     },
-    [](const fbs::table_slice::msgpack::v0* slice) noexcept {
-      return msgpack_table_slice{*slice}.offset();
-    },
+    [&](const fbs::table_slice::msgpack::v0*) noexcept { return offset_; },
   };
   return visit(f, as_flatbuffer(chunk_));
 }
@@ -391,9 +394,7 @@ void table_slice::offset(id offset) noexcept {
       legacy_.unshared().offset(offset);
       *this = table_slice{std::move(legacy_)};
     },
-    [&](const fbs::table_slice::msgpack::v0* slice) noexcept {
-      return msgpack_table_slice{*slice}.offset(offset);
-    },
+    [&](const fbs::table_slice::msgpack::v0*) noexcept { offset_ = offset; },
   };
   visit(f, as_flatbuffer(chunk_));
 }

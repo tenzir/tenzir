@@ -127,7 +127,7 @@ table_slice msgpack_table_slice_builder::finish() {
     reinterpret_cast<const uint8_t*>(data_.data()), data_.size());
   // Create MessagePack-encoded table slices.
   auto msgpack_table_slice_buffer = fbs::table_slice::msgpack::Createv0(
-    builder_, invalid_id, *layout_buffer, offset_table_buffer, data_buffer);
+    builder_, *layout_buffer, offset_table_buffer, data_buffer);
   // Create and finish table slice.
   auto table_slice_buffer
     = fbs::CreateTableSlice(builder_, fbs::table_slice::TableSlice::msgpack_v0,

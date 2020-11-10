@@ -219,8 +219,7 @@ private:
   /// @note Assigned by the importer on import and the archive on export and as
   /// such not part of the FlatBuffers table. Binary representations of a table
   /// slice do not contain the offset.
-  // FIXME: Save offset separately from other data, as it must be mutable.
-  // id offset_ = invalid_id;
+  id offset_ = invalid_id;
 
   /// The number of in-memory table slices.
   inline static std::atomic<size_t> num_instances_ = {};
