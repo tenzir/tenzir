@@ -558,3 +558,161 @@ type sysmon.RawAccessRead = record {
     Device: string,
 }
 
+// The following beats type definitions wrap the above raw sysmon events.
+// They are effectively a carrier of the Sysmon data that comes with some
+// additional meta data.
+// This configuration assumes that Sysmon events are wrapped in a JSON struct
+// that looks as follows:
+// {
+//   "event_data": { ... },
+//   "meta_data": { ... },
+// }
+// The `event_data` field wraps the Sysmon data. The `meta_data` field should
+// contain the fields `instance_id`, `hostname`, and `event_id` to comply with
+// this schema.
+// An example logstash filter configuration that generates `meta_data` and
+// `event_data` fields in the JSON output could look like this:
+//
+//     filter {
+//       if [winlog][provider_name] == "Microsoft-Windows-Sysmon" {
+//         mutate {
+//           add_tag => [ "meta_data" ]
+//           copy => { "[winlog][event_data]" => "event_data" }
+//           copy => { "[cloud][instance][id]" => "[meta_data][instance_id]" }
+//           copy => { "[agent][hostname]" => "[meta_data][hostname]" }
+//           copy => { "[winlog][event_id]" => "[meta_data][event_id]" }
+//           copy => { "[community_id]" => "[meta_data][community_id]" }
+//         }
+//         prune {
+//           whitelist_names => [ "event_data", "meta_data" ]
+//         }
+//       }
+//     }
+
+type winlogbeat.meta_data = record {
+  instance_id: string #index=hash,
+  hostname: string,
+  event_id: count,
+}
+
+type winlogbeat.network_meta_data = record {
+  instance_id: string #index=hash,
+  hostname: string,
+  community_id: string #index=hash,
+  event_id: count,
+}
+
+type winlogbeat.ProcessCreation = record {
+  meta_data: winlogbeat.meta_data,
+  event_data: sysmon.ProcessCreation,
+}
+
+type winlogbeat.ProcessAccess = record {
+  meta_data: winlogbeat.meta_data,
+  event_data: sysmon.ProcessAccess,
+}
+
+type winlogbeat.FileCreate = record {
+  meta_data: winlogbeat.meta_data,
+  event_data: sysmon.FileCreate,
+}
+
+type winlogbeat.RegistryEventObjectCreateAndDelete = record {
+  meta_data: winlogbeat.meta_data,
+  event_data: sysmon.RegistryEventObjectCreateAndDelete,
+}
+
+type winlogbeat.RegistryEventValueSet = record {
+  meta_data: winlogbeat.meta_data,
+  event_data: sysmon.RegistryEventValueSet,
+}
+
+type winlogbeat.RegistryEventKeyAndValueRename = record {
+  meta_data: winlogbeat.meta_data,
+  event_data: sysmon.RegistryEventKeyAndValueRename,
+}
+
+type winlogbeat.FileCreateStreamHash = record {
+  meta_data: winlogbeat.meta_data,
+  event_data: sysmon.FileCreateStreamHash,
+}
+
+type winlogbeat.SysmonConfigStateChanged = record {
+  meta_data: winlogbeat.meta_data,
+  event_data: sysmon.SysmonConfigStateChanged,
+}
+
+type winlogbeat.PipeCreated = record {
+  meta_data: winlogbeat.meta_data,
+  event_data: sysmon.PipeCreated,
+}
+
+type winlogbeat.PipeConnected = record {
+  meta_data: winlogbeat.meta_data,
+  event_data: sysmon.PipeConnected,
+}
+
+type winlogbeat.WmiEventFilter = record {
+  meta_data: winlogbeat.meta_data,
+  event_data: sysmon.WmiEventFilter,
+}
+
+type winlogbeat.ProcessChangedFileCreationTime = record {
+  meta_data: winlogbeat.meta_data,
+  event_data: sysmon.ProcessChangedFileCreationTime,
+}
+
+type winlogbeat.WmiEventConsumer = record {
+  meta_data: winlogbeat.meta_data,
+  event_data: sysmon.WmiEventConsumer,
+}
+
+type winlogbeat.WmiEventConsumerToFilter = record {
+  meta_data: winlogbeat.meta_data,
+  event_data: sysmon.WmiEventConsumerToFilter,
+}
+
+type winlogbeat.DNSQuery = record {
+  meta_data: winlogbeat.meta_data,
+  event_data: sysmon.DNSQuery,
+}
+
+type winlogbeat.FileDelete = record {
+  meta_data: winlogbeat.meta_data,
+  event_data: sysmon.FileDelete,
+}
+
+type winlogbeat.NetworkConnection = record {
+  meta_data: winlogbeat.network_meta_data,
+  event_data: sysmon.NetworkConnection,
+}
+
+type winlogbeat.SysmonServiceStateChanged = record {
+  meta_data: winlogbeat.meta_data,
+  event_data: sysmon.SysmonServiceStateChanged,
+}
+
+type winlogbeat.ProcessTerminated = record {
+  meta_data: winlogbeat.meta_data,
+  event_data: sysmon.ProcessTerminated,
+}
+
+type winlogbeat.DriverLoaded = record {
+  meta_data: winlogbeat.meta_data,
+  event_data: sysmon.DriverLoaded,
+}
+
+type winlogbeat.ImageLoaded = record {
+  meta_data: winlogbeat.meta_data,
+  event_data: sysmon.ImageLoaded,
+}
+
+type winlogbeat.CreateRemoteThread = record {
+  meta_data: winlogbeat.meta_data,
+  event_data: sysmon.CreateRemoteThread,
+}
+
+type winlogbeat.RawAccessRead = record {
+  meta_data: winlogbeat.meta_data,
+  event_data: sysmon.RawAccessRead,
+}
