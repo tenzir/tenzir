@@ -18,6 +18,7 @@ Every entry has a category for which we use the following visual abbreviations:
   in the future.
   [#1143](https://github.com/tenzir/vast/pull/1143)
   [#1157](https://github.com/tenzir/vast/pull/1157)
+  [#1160](https://github.com/tenzir/vast/pull/1160)
 
 - ⚡️ CAF-encoded table slices no longer exist. As such, the option
   `vast.import.batch-encoding` now only supports `arrow` and `msgpack` as
