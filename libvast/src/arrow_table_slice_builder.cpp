@@ -534,7 +534,8 @@ bool arrow_table_slice_builder::add_impl(data_view x) {
   return true;
 }
 
-table_slice arrow_table_slice_builder::finish() {
+table_slice arrow_table_slice_builder::finish(
+  [[maybe_unused]] span<const byte> serialized_layout) {
   // Sanity check.
   if (col_ != 0)
     return {};
