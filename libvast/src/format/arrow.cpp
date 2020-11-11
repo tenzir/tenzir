@@ -25,6 +25,7 @@
 
 #include <caf/none.hpp>
 
+#include <arrow/util/config.h>
 #include <arrow/util/io_util.h>
 
 #include <stdexcept>
@@ -70,10 +71,14 @@ bool writer::layout(const record_type& x) {
   if (x.fields.empty())
     return true;
   current_layout_ = x;
-  auto schema = arrow_table_slice_builder::make_arrow_schema(x);
+  auto schema = make_arrow_schema(x);
   current_builder_ = arrow_table_slice_builder::make(x);
-  if (auto writer_result = ::arrow::ipc::NewStreamWriter(out_.get(), schema);
-      writer_result.ok()) {
+#if ARROW_VERSION_MAJOR >= 2
+  auto writer_result = ::arrow::ipc::MakeStreamWriter(out_.get(), schema);
+#else
+  auto writer_result = ::arrow::ipc::NewStreamWriter(out_.get(), schema);
+#endif
+  if (writer_result.ok()) {
     current_batch_writer_ = std::move(*writer_result);
     return true;
   }

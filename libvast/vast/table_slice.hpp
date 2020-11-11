@@ -240,6 +240,7 @@ private:
   union {
     const void* none = {};
     const msgpack_table_slice<fbs::table_slice::msgpack::v0>* msgpack_v0;
+    const arrow_table_slice<fbs::table_slice::arrow::v0>* arrow_v0;
   } state_;
 
   /// The number of in-memory table slices.

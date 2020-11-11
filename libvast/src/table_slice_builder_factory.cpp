@@ -28,7 +28,7 @@ void factory_traits<table_slice_builder>::initialize() {
   using f = factory<table_slice_builder>;
   f::add<msgpack_table_slice_builder>(caf::atom("msgpack"));
 #if VAST_HAVE_ARROW
-  f::add<arrow_table_slice_builder>(arrow_table_slice::class_id);
+  f::add<arrow_table_slice_builder>(caf::atom("arrow"));
 #endif
 }
 

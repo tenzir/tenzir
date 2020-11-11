@@ -44,11 +44,21 @@ namespace fbs {
 struct FlatTableSlice;
 struct TableSlice;
 
-namespace table_slice::msgpack {
+namespace table_slice {
+
+namespace msgpack {
 
 struct v0;
 
-} // namespace table_slice::msgpack
+} // namespace msgpack
+
+namespace arrow {
+
+struct v0;
+
+} // namespace arrow
+
+} // namespace table_slice
 
 } // namespace fbs
 
@@ -58,7 +68,6 @@ namespace vast {
 
 class abstract_type;
 class address;
-class arrow_table_slice;
 class arrow_table_slice_builder;
 class bitmap;
 class chunk;
@@ -189,6 +198,9 @@ using report = std::vector<data_point>;
 } // namespace system
 
 // -- templates ----------------------------------------------------------------
+
+template <class>
+class arrow_table_slice;
 
 template <class>
 class msgpack_table_slice;

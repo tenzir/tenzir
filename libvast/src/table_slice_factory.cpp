@@ -26,9 +26,6 @@
 namespace vast {
 
 void factory_traits<legacy_table_slice>::initialize() {
-#if VAST_HAVE_ARROW
-  factory<legacy_table_slice>::add<arrow_table_slice>();
-#endif
 }
 
 legacy_table_slice_ptr

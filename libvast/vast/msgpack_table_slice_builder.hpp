@@ -24,6 +24,8 @@
 
 namespace vast {
 
+/// A builder for table slices that store elements encoded in the
+/// [MessagePack](https://msgpack.org) format.
 class msgpack_table_slice_builder final : public table_slice_builder {
 public:
   // -- member types -----------------------------------------------------------
@@ -37,6 +39,9 @@ public:
   // -- constructors, destructors, and assignment operators --------------------
 
   /// Constructs a MessagePack table slice builder instance.
+  /// @param layout The layout of the slice.
+  /// @param initial_buffer_size The buffer size the builder starts with.
+  /// @returns A table_slice_builder instance.
   static table_slice_builder_ptr
   make(record_type layout, size_t initial_buffer_size = default_buffer_size);
 
@@ -61,7 +66,7 @@ public:
 
   /// Allows The table slice builder to allocate sufficient storage.
   /// @param `num_rows` The number of rows to allocate storage for.
-  virtual void reserve(size_t num_rows) override;
+  void reserve(size_t num_rows) override;
 
   template <class Inspector>
   friend auto inspect(Inspector& f, msgpack_table_slice_builder& x) ->
