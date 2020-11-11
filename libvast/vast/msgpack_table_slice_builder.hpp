@@ -45,8 +45,13 @@ public:
 
   // -- properties -------------------------------------------------------------
 
+  /// Constructs a MessagePack-encoded table slice.
+  /// @param serialized_layout An optional buffer that contains the
+  /// CAF-serialized layout; TODO: remove this when switching the type system to
+  /// be FlatBuffers-based.
   /// @returns A table slice from the accumulated calls to add.
-  [[nodiscard]] table_slice finish() override;
+  [[nodiscard]] table_slice
+  finish(span<const byte> serialized_layout = {}) override;
 
   /// @returns The current number of rows in the table slice.
   size_t rows() const noexcept override;

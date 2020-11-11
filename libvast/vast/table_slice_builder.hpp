@@ -13,7 +13,9 @@
 
 #pragma once
 
+#include "vast/byte.hpp"
 #include "vast/fwd.hpp"
+#include "vast/span.hpp"
 #include "vast/view.hpp"
 
 #include <caf/meta/type_name.hpp>
@@ -78,9 +80,14 @@ public:
   /// Constructs a table_slice from the currently accumulated state. After
   /// calling this function, implementations must reset their internal state
   /// such that subsequent calls to add will restart with a new table_slice.
+  /// @param serialized_layout An optional buffer that contains the
+  /// CAF-serialized layout; TODO: remove this when switching the type system to
+  /// be FlatBuffers-based.
   /// @returns A table slice from the accumulated calls to add.
   /// @note Returns an invalid table slice on failure.
-  [[nodiscard]] virtual table_slice finish() = 0;
+  [[nodiscard]] virtual table_slice
+  finish(span<const byte> serialized_layout = {})
+    = 0;
 
   /// @returns The current number of rows in the table slice.
   virtual size_t rows() const noexcept = 0;

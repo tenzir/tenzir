@@ -430,7 +430,7 @@ void table_slice::append_column_to_index(table_slice::size_type column,
       legacy_->append_column_to_index(column, index);
     },
     [&](const fbs::table_slice::msgpack::v0&) noexcept {
-      return state_.msgpack_v0->append_column_to_index(offset(), column, index);
+      state_.msgpack_v0->append_column_to_index(offset(), column, index);
     },
   };
   visit(f, as_flatbuffer(chunk_));
@@ -722,11 +722,21 @@ void select(std::vector<table_slice>& result, const table_slice& xs,
     VAST_ERROR(__func__, "failed to get a table slice builder for", impl);
     return;
   }
+  auto serialized_layout
+    = visit(detail::overload{
+              [](auto&&...) noexcept { return span<const byte>{}; },
+              [](const fbs::table_slice::msgpack::v0& slice) noexcept {
+                return span<const byte>{
+                  reinterpret_cast<const byte*>(slice.layout()->data()),
+                  slice.layout()->size()};
+              },
+            },
+            fbs::GetTableSlice(as_bytes(xs).data()));
   id last_offset = xs.offset();
   auto push_slice = [&] {
     if (builder->rows() == 0)
       return;
-    auto slice = builder->finish();
+    auto slice = builder->finish(serialized_layout);
     if (slice.encoding() == table_slice::encoding::none) {
       VAST_WARNING(__func__, "got an empty slice");
       return;
