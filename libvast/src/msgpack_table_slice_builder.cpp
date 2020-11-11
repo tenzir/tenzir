@@ -143,7 +143,7 @@ msgpack_table_slice_builder::finish(span<const byte> serialized_layout) {
   msgpack_builder_.reset();
   // Create the table slice from the chunk.
   auto chunk = fbs::release(builder_);
-  return table_slice{std::move(chunk), table_slice::verify::no};
+  return table_slice{std::move(chunk), table_slice::verify::no, layout()};
 }
 
 size_t msgpack_table_slice_builder::rows() const noexcept {

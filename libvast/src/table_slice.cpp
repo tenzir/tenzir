@@ -150,20 +150,42 @@ table_slice::table_slice(chunk_ptr&& chunk, enum verify verify) noexcept
         if (auto error = unpack(slice, legacy_))
           die("failed to unpack already verified legacy table slice: "
               + render(error));
-        chunk_->add_deletion_step(
-          [&]() noexcept { --num_instances_; });
+        chunk_->add_deletion_step([&]() noexcept { --num_instances_; });
       },
       [&](const fbs::table_slice::msgpack::v0& slice) noexcept {
         state_.msgpack_v0 = new msgpack_table_slice{slice};
-        chunk_->add_deletion_step(
-          [&, ptr = state_.msgpack_v0]() noexcept {
-            --num_instances_;
-            delete ptr;
-          });
+        chunk_->add_deletion_step([&, state = state_.msgpack_v0]() noexcept {
+          --num_instances_;
+          delete state;
+        });
       },
     };
     visit(f, as_flatbuffer(chunk_));
-  };
+  }
+}
+
+table_slice::table_slice(chunk_ptr&& chunk, enum verify verify,
+                         record_type layout) noexcept
+  : chunk_{verified_or_none(std::move(chunk), verify)} {
+  if (chunk_ && chunk_->unique()) {
+    ++num_instances_;
+    auto f = detail::overload{
+      [&](const fbs::table_slice::legacy::v0& slice) noexcept {
+        if (auto error = unpack(slice, legacy_))
+          die("failed to unpack already verified legacy table slice: "
+              + render(error));
+        chunk_->add_deletion_step([&]() noexcept { --num_instances_; });
+      },
+      [&](const fbs::table_slice::msgpack::v0& slice) noexcept {
+        state_.msgpack_v0 = new msgpack_table_slice{slice, std::move(layout)};
+        chunk_->add_deletion_step([&, state = state_.msgpack_v0]() noexcept {
+          --num_instances_;
+          delete state;
+        });
+      },
+    };
+    visit(f, as_flatbuffer(chunk_));
+  }
 }
 
 table_slice::table_slice(const fbs::FlatTableSlice& flat_slice,
@@ -224,7 +246,7 @@ table_slice::table_slice(legacy_table_slice_ptr&& slice) noexcept {
     fbs::FinishTableSliceBuffer(builder, table_slice_buffer);
     auto chunk = fbs::release(builder);
     // Delegate the newly created chunk to the constructor.
-    *this = table_slice{std::move(chunk), verify::no};
+    *this = table_slice{std::move(chunk), verify::no, slice->layout()};
     VAST_ASSERT(*legacy_ == *slice);
   }
 }

@@ -264,6 +264,13 @@ msgpack_table_slice<FlatBuffer>::msgpack_table_slice(
 }
 
 template <class FlatBuffer>
+msgpack_table_slice<FlatBuffer>::msgpack_table_slice(
+  const FlatBuffer& slice, record_type layout) noexcept
+  : slice_{slice}, state_{} {
+  state_.layout = std::move(layout);
+}
+
+template <class FlatBuffer>
 msgpack_table_slice<FlatBuffer>::~msgpack_table_slice() noexcept {
   // nop
 }
