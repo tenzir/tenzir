@@ -25,6 +25,24 @@ table v0 {
   data: [ubyte];
 }
 
+namespace vast.fbs.table_slice.arrow;
+
+/// A table slice encoded with Apache Arrow.
+table v0 {
+  /// The schema of the data.
+  /// TODO: The schema is already included in the record batch, but it cannot be
+  /// mapped 1-to-1 to VAST types. This can be resolved by using extension types
+  /// for Arrow. Additionally, this is currently CAF binary; make this a
+  /// separarate table.
+  layout: [ubyte];
+
+  /// The Arrow Schema containing the Record Batch layout.
+  schema: [ubyte];
+
+  /// The Arrow Recod Batch containing all data.
+  record_batch: [ubyte];
+}
+
 namespace vast.fbs.table_slice.msgpack;
 
 /// A table slice encoded with MessagePack.
@@ -45,6 +63,7 @@ namespace vast.fbs.table_slice;
 /// The union of all possible table slice encoding and version combinations.
 union TableSlice {
   legacy.v0,
+  arrow.v0,
   msgpack.v0,
 }
 

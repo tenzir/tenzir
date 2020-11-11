@@ -40,14 +40,6 @@
     run();                                                                     \
   }
 
-// FIXME: Remove when removing legacy table slices.
-/// Helper macro to define a table-slice unit test.
-#define TEST_LEGACY_TABLE_SLICE(type)                                          \
-  TEST(type) {                                                                 \
-    legacy_initialize<type, type##_builder>();                                 \
-    run();                                                                     \
-  }
-
 namespace vast {
 
 /// Constructs table slices filled with random content for testing purposes.

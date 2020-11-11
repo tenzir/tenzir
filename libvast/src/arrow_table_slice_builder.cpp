@@ -17,19 +17,18 @@
 #include "vast/detail/byte_swap.hpp"
 #include "vast/detail/narrow.hpp"
 #include "vast/detail/overload.hpp"
-
-#include <caf/make_copy_on_write.hpp>
-#include <caf/make_counted.hpp>
+#include "vast/die.hpp"
+#include "vast/fbs/table_slice.hpp"
+#include "vast/fbs/utils.hpp"
 
 #include <arrow/api.h>
-
-#include <memory>
-
-using namespace vast;
+#include <arrow/io/api.h>
+#include <arrow/ipc/api.h>
+#include <arrow/util/config.h>
 
 namespace vast {
 
-// -- column builder (cb) implementations --------------------------------------
+// -- column builder implementations ------------------------------------------
 
 namespace {
 
@@ -285,7 +284,7 @@ public:
   std::shared_ptr<arrow::Array> finish() override {
     std::shared_ptr<arrow::Array> result;
     if (!arrow_builder_->Finish(&result).ok())
-      throw std::logic_error("builder.Finish failed");
+      die("failed to finish Arrow column builder");
     return result;
   }
 
@@ -312,7 +311,7 @@ public:
   using data_type = typename type_traits<SequenceType>::data_type;
 
   sequence_column_builder(arrow::MemoryPool* pool,
-                          arrow_table_slice_builder::column_builder_ptr nested)
+                          std::unique_ptr<column_builder> nested)
     : nested_(std::move(nested)) {
     reset(pool, nested_->arrow_builder());
   }
@@ -336,7 +335,7 @@ public:
   std::shared_ptr<arrow::Array> finish() override {
     std::shared_ptr<arrow::Array> result;
     if (!arrow_builder_->Finish(&result).ok())
-      throw std::logic_error("builder.Finish failed");
+      die("failed to finish Arrow column builder");
     return result;
   }
 
@@ -353,7 +352,7 @@ private:
 
   std::shared_ptr<arrow::ListBuilder> arrow_builder_;
 
-  arrow_table_slice_builder::column_builder_ptr nested_;
+  std::unique_ptr<column_builder> nested_;
 };
 
 template <class VastType>
@@ -368,12 +367,10 @@ public:
 
   using data_type = view<map>;
 
-  using column_builder_ptr = arrow_table_slice_builder::column_builder_ptr;
-
   map_column_builder(arrow::MemoryPool* pool,
                      std::shared_ptr<arrow::DataType> struct_type,
-                     column_builder_ptr key_builder,
-                     column_builder_ptr val_builder)
+                     std::unique_ptr<column_builder> key_builder,
+                     std::unique_ptr<column_builder> val_builder)
     : key_builder_(std::move(key_builder)),
       val_builder_(std::move(val_builder)) {
     std::vector fields{key_builder_->arrow_builder(),
@@ -401,7 +398,7 @@ public:
   std::shared_ptr<arrow::Array> finish() override {
     std::shared_ptr<arrow::Array> result;
     if (!list_builder_->Finish(&result).ok())
-      throw std::logic_error("builder.Finish failed");
+      die("failed to finish Arrow column builder");
     return result;
   }
 
@@ -413,61 +410,157 @@ private:
   std::shared_ptr<arrow::StructBuilder> kvp_builder_;
   std::shared_ptr<arrow_builder_type> list_builder_;
 
-  column_builder_ptr key_builder_;
-  column_builder_ptr val_builder_;
+  std::unique_ptr<column_builder> key_builder_;
+  std::unique_ptr<column_builder> val_builder_;
 };
 
 } // namespace
 
-// -- table slice builder implementation ---------------------------------------
+// -- member types -------------------------------------------------------------
 
-arrow_table_slice_builder::column_builder::~column_builder() {
+arrow_table_slice_builder::column_builder::~column_builder() noexcept {
   // nop
 }
 
-caf::atom_value arrow_table_slice_builder::get_implementation_id() noexcept {
-  return arrow_table_slice::class_id;
-}
-
-table_slice_builder_ptr arrow_table_slice_builder::make(record_type layout) {
-  return caf::make_counted<arrow_table_slice_builder>(std::move(layout));
-}
-arrow_table_slice_builder::column_builder_ptr
-arrow_table_slice_builder::make_column_builder(const type& t,
-                                               arrow::MemoryPool* pool) {
+std::unique_ptr<arrow_table_slice_builder::column_builder>
+arrow_table_slice_builder::column_builder::make(const type& t,
+                                                arrow::MemoryPool* pool) {
   auto f = detail::overload{
-    [=](const auto& x) -> column_builder_ptr {
+    [=](const auto& x) -> std::unique_ptr<column_builder> {
       using type = std::decay_t<decltype(x)>;
       if constexpr (std::is_same_v<type, list_type>) {
-        auto nested = make_column_builder(x.value_type, pool);
-        auto ptr = new sequence_column_builder<type>(pool, std::move(nested));
-        return column_builder_ptr{ptr};
+        auto nested = column_builder::make(x.value_type, pool);
+        return std::make_unique<sequence_column_builder<type>>(
+          pool, std::move(nested));
       } else {
-        auto ptr = new column_builder_impl_t<std::decay_t<decltype(x)>>(pool);
-        return column_builder_ptr{ptr};
+        return std::make_unique<column_builder_impl_t<std::decay_t<decltype(x)>>>(
+          pool);
       }
     },
-    [=](const map_type& x) -> column_builder_ptr {
-      auto key_builder = make_column_builder(x.key_type, pool);
-      auto value_builder = make_column_builder(x.value_type, pool);
+    [=](const map_type& x) -> std::unique_ptr<column_builder> {
+      auto key_builder = column_builder::make(x.key_type, pool);
+      auto value_builder = column_builder::make(x.value_type, pool);
       record_type fields{{"key", x.key_type}, {"value", x.value_type}};
-      auto ptr = new map_column_builder(pool, make_arrow_type(fields),
-                                        std::move(key_builder),
-                                        std::move(value_builder));
-      return column_builder_ptr{ptr};
+      return std::make_unique<map_column_builder>(pool, make_arrow_type(fields),
+                                                  std::move(key_builder),
+                                                  std::move(value_builder));
     },
-    [=](const record_type&) -> column_builder_ptr {
-      throw std::logic_error("expected flat layout!");
+    [=](const record_type&) -> std::unique_ptr<column_builder> {
+      die("expected flat layout!");
     },
-    [=](const alias_type& x) -> column_builder_ptr {
-      return make_column_builder(x.value_type, pool);
+    [=](const alias_type& x) -> std::unique_ptr<column_builder> {
+      return column_builder::make(x.value_type, pool);
     },
   };
   return caf::visit(f, t);
 }
 
-std::shared_ptr<arrow::Schema>
-arrow_table_slice_builder::make_arrow_schema(const record_type& t) {
+// -- constructors, destructors, and assignment operators ----------------------
+
+table_slice_builder_ptr
+arrow_table_slice_builder::make(record_type layout,
+                                size_t initial_buffer_size) {
+  return table_slice_builder_ptr{
+    new arrow_table_slice_builder{std::move(layout), initial_buffer_size},
+    false};
+}
+
+arrow_table_slice_builder::~arrow_table_slice_builder() noexcept {
+  // nop
+}
+
+// -- properties ---------------------------------------------------------------
+
+table_slice arrow_table_slice_builder::finish(
+  [[maybe_unused]] span<const byte> serialized_layout) {
+  // Sanity check.
+  if (column_ != 0)
+    return {};
+  // Pack layout.
+  auto layout_buffer
+    = serialized_layout.empty()
+        ? *fbs::serialize_bytes(builder_, layout())
+        : builder_.CreateVector(
+          reinterpret_cast<const unsigned char*>(serialized_layout.data()),
+          serialized_layout.size());
+  // Pack schema.
+#if ARROW_VERSION_MAJOR >= 2
+  auto flat_schema = arrow::ipc::SerializeSchema(*schema_).ValueOrDie();
+#else
+  auto flat_schema
+    = arrow::ipc::SerializeSchema(*schema_, nullptr).ValueOrDie();
+#endif
+  auto schema_buffer
+    = builder_.CreateVector(flat_schema->data(), flat_schema->size());
+  // Pack record batch.
+  auto columns = std::vector<std::shared_ptr<arrow::Array>>{};
+  columns.reserve(column_builders_.size());
+  for (auto&& builder : column_builders_)
+    columns.emplace_back(builder->finish());
+  auto record_batch
+    = arrow::RecordBatch::Make(schema_, rows_, std::move(columns));
+  auto flat_record_batch
+    = arrow::ipc::SerializeRecordBatch(*record_batch,
+                                       arrow::ipc::IpcWriteOptions::Defaults())
+        .ValueOrDie();
+  auto record_batch_buffer = builder_.CreateVector(flat_record_batch->data(),
+                                                   flat_record_batch->size());
+  // Create Arrow-encoded table slices.
+  auto arrow_table_slice_buffer = fbs::table_slice::arrow::Createv0(
+    builder_, layout_buffer, schema_buffer, record_batch_buffer);
+  // Create and finish table slice.
+  auto table_slice_buffer
+    = fbs::CreateTableSlice(builder_, fbs::table_slice::TableSlice::arrow_v0,
+                            arrow_table_slice_buffer.Union());
+  fbs::FinishTableSliceBuffer(builder_, table_slice_buffer);
+  // Reset the builder state.
+  rows_ = {};
+  // Create the table slice from the chunk.
+  auto chunk = fbs::release(builder_);
+  return table_slice{std::move(chunk), table_slice::verify::no, layout()};
+}
+
+size_t arrow_table_slice_builder::rows() const noexcept {
+  return rows_;
+}
+
+caf::atom_value arrow_table_slice_builder::implementation_id() const noexcept {
+  return caf::atom("arrow");
+}
+
+void arrow_table_slice_builder::reserve([[maybe_unused]] size_t num_rows) {
+  // nop
+}
+
+// -- implementation details ---------------------------------------------------
+
+arrow_table_slice_builder::arrow_table_slice_builder(record_type layout,
+                                                     size_t initial_buffer_size)
+  : table_slice_builder{std::move(layout)},
+    schema_{make_arrow_schema(this->layout())},
+    builder_{initial_buffer_size} {
+  VAST_ASSERT(schema_);
+  VAST_ASSERT(schema_->num_fields()
+              == detail::narrow_cast<int>(this->layout().fields.size()));
+  column_builders_.reserve(this->layout().fields.size());
+  auto pool = arrow::default_memory_pool();
+  for (auto& field : this->layout().fields)
+    column_builders_.emplace_back(column_builder::make(field.type, pool));
+}
+
+bool arrow_table_slice_builder::add_impl(data_view x) {
+  if (!column_builders_[column_]->add(x))
+    return false;
+  if (++column_ == layout().fields.size()) {
+    ++rows_;
+    column_ = 0;
+  }
+  return true;
+}
+
+// -- utility functions --------------------------------------------------------
+
+std::shared_ptr<arrow::Schema> make_arrow_schema(const record_type& t) {
   std::vector<std::shared_ptr<arrow::Field>> arrow_fields;
   arrow_fields.reserve(t.fields.size());
   for (auto& field : t.fields) {
@@ -478,8 +571,7 @@ arrow_table_slice_builder::make_arrow_schema(const record_type& t) {
   return std::make_shared<arrow::Schema>(arrow_fields, metadata);
 }
 
-std::shared_ptr<arrow::DataType>
-arrow_table_slice_builder::make_arrow_type(const type& t) {
+std::shared_ptr<arrow::DataType> make_arrow_type(const type& t) {
   using data_type_ptr = std::shared_ptr<arrow::DataType>;
   auto f = detail::overload{
     [=](const auto& x) -> data_type_ptr {
@@ -508,58 +600,6 @@ arrow_table_slice_builder::make_arrow_type(const type& t) {
     },
   };
   return caf::visit(f, t);
-}
-
-arrow_table_slice_builder::arrow_table_slice_builder(record_type layout)
-  : super{std::move(layout)}, col_{0}, rows_{0} {
-  auto this_layout = this->layout();
-  VAST_ASSERT(this_layout.fields.size() > 0);
-  builders_.reserve(this_layout.fields.size());
-  auto pool = arrow::default_memory_pool();
-  for (auto& field : this_layout.fields)
-    builders_.emplace_back(make_column_builder(field.type, pool));
-}
-
-arrow_table_slice_builder::~arrow_table_slice_builder() {
-  // nop
-}
-
-bool arrow_table_slice_builder::add_impl(data_view x) {
-  if (!builders_[col_]->add(x))
-    return false;
-  if (++col_ == layout().fields.size()) {
-    ++rows_;
-    col_ = 0;
-  }
-  return true;
-}
-
-table_slice arrow_table_slice_builder::finish(
-  [[maybe_unused]] span<const byte> serialized_layout) {
-  // Sanity check.
-  if (col_ != 0)
-    return {};
-  // Generate Arrow schema from layout.
-  auto schema = make_arrow_schema(layout());
-  // Collect Arrow arrays for the record batch.
-  std::vector<std::shared_ptr<arrow::Array>> columns;
-  columns.reserve(builders_.size());
-  for (auto& builder : builders_)
-    columns.emplace_back(builder->finish());
-  // Done. Build record batch and table slice.
-  auto batch = arrow::RecordBatch::Make(schema, rows_, columns);
-  table_slice_header hdr{layout(), rows_, 0};
-  rows_ = 0;
-  return table_slice{caf::make_copy_on_write<arrow_table_slice>(
-    std::move(hdr), std::move(batch))};
-}
-
-size_t arrow_table_slice_builder::rows() const noexcept {
-  return rows_;
-}
-
-caf::atom_value arrow_table_slice_builder::implementation_id() const noexcept {
-  return get_implementation_id();
 }
 
 } // namespace vast
