@@ -17,6 +17,7 @@
 #include "vast/concept/parseable/vast/time.hpp"
 #include "vast/defaults.hpp"
 #include "vast/detail/pid_file.hpp"
+#include "vast/layout_version.hpp"
 #include "vast/logger.hpp"
 #include "vast/scope_linked.hpp"
 #include "vast/system/node.hpp"
@@ -40,11 +41,22 @@ spawn_node(caf::scoped_actor& self, const caf::settings& opts) {
   auto db_dir
     = get_or(opts, "vast.db-directory", defaults::system::db_directory);
   auto abs_dir = path{db_dir}.complete();
-  if (!exists(abs_dir))
+  if (!exists(abs_dir)) {
     if (auto err = mkdir(abs_dir))
       return make_error(ec::filesystem_error,
                         "unable to create db-directory:", abs_dir.str(),
                         err.context());
+  }
+  // Write VERSION file if it doesnt exist yet. Note that an empty db dir
+  // often already exists before the node is initialized, e.g., when the log
+  // output is written into the same directory.
+  if (auto err = initialize_layout_version(abs_dir))
+    return err;
+  // TODO(ch20326): Replace this with a more specific check in the components
+  // that rely on a specific layout.
+  if (read_layout_version(abs_dir) != layout_version::v0)
+    return make_error(ec::filesystem_error, "wrong or missing layout version "
+                                            "in db-directory");
   if (!abs_dir.is_writable())
     return make_error(ec::filesystem_error,
                       "unable to write to db-directory:", abs_dir.str());
