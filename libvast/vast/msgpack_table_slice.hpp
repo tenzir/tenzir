@@ -44,6 +44,12 @@ public:
   /// @param slice The encoding-specific FlatBuffers table.
   explicit msgpack_table_slice(const FlatBuffer& slice) noexcept;
 
+  /// Constructs a MessagePack-encoded table slice from a FlatBuffers table and
+  /// a known layout.
+  /// @param slice The encoding-specific FlatBuffers table.
+  /// @param layout The table layout.
+  msgpack_table_slice(const FlatBuffer& slice, record_type layout) noexcept;
+
   /// Destroys a MessagePack-encoded table slice.
   ~msgpack_table_slice() noexcept;
 
