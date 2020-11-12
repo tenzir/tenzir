@@ -45,11 +45,8 @@ caf::error writer::write(const table_slice& slice) {
     return ec::filesystem_error;
   if (!layout(slice.layout()))
     return ec::unspecified;
-  // Convert the slice to Arrow if necessary.
-  auto arrow_slice
-    = table_slice{slice, table_slice::encoding::arrow, table_slice::verify::no};
   // Get the Record Batch and print it.
-  auto batch = as_record_batch(arrow_slice);
+  auto batch = as_record_batch(slice);
   VAST_ASSERT(batch != nullptr);
   if (!current_batch_writer_->WriteRecordBatch(*batch).ok())
     return ec::filesystem_error;

@@ -531,8 +531,19 @@ data_view table_slice::at(table_slice::size_type row,
 
 std::shared_ptr<arrow::RecordBatch> as_record_batch(const table_slice& slice) {
   auto f = detail::overload{
-    [](auto&&...) noexcept -> std::shared_ptr<arrow::RecordBatch> {
-      return nullptr;
+    []() noexcept -> std::shared_ptr<arrow::RecordBatch> {
+      die("cannot access record batch of invalid table slice");
+    },
+    [&](auto&&) noexcept -> std::shared_ptr<arrow::RecordBatch> {
+      VAST_ASSERT(slice.encoding() != table_slice::encoding::arrow);
+      // Rebuild the slice as an Arrow-encoded table slice.
+      auto copy = table_slice(slice, table_slice::encoding::arrow,
+                              table_slice::verify::no);
+      // Bind the lifetime of the copy (and thus the returned Record Batch) to
+      // the lifetime of the original slice.
+      slice.chunk_->ref();
+      copy.chunk_->add_deletion_step([=]() noexcept { slice.chunk_->deref(); });
+      return as_record_batch(copy);
     },
     [&](const fbs::table_slice::arrow::v0&) noexcept {
       return slice.state_.arrow_v0->record_batch();
