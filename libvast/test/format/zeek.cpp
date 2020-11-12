@@ -323,7 +323,7 @@ TEST(zeek reader - custom schema) {
   auto [err, num] = reader.read(20, 20, add_slice);
   CHECK_EQUAL(slices.size(), 1u);
   CHECK_EQUAL(slices[0].rows(), 20u);
-  auto layout = slices[0].layout();
+  auto&& layout = slices[0].layout();
   CHECK_EQUAL(layout, expected);
 }
 

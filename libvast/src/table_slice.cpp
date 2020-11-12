@@ -145,19 +145,47 @@ table_slice::table_slice(chunk_ptr&& chunk, enum verify verify) noexcept
   : chunk_{verified_or_none(std::move(chunk), verify)} {
   if (chunk_ && chunk_->unique()) {
     ++num_instances_;
-    chunk_->add_deletion_step([]() noexcept { --num_instances_; });
+    auto f = detail::overload{
+      [&](const fbs::table_slice::legacy::v0& slice) noexcept {
+        if (auto error = unpack(slice, legacy_))
+          die("failed to unpack already verified legacy table slice: "
+              + render(error));
+        chunk_->add_deletion_step([&]() noexcept { --num_instances_; });
+      },
+      [&](const fbs::table_slice::msgpack::v0& slice) noexcept {
+        state_.msgpack_v0 = new msgpack_table_slice{slice};
+        chunk_->add_deletion_step([&, state = state_.msgpack_v0]() noexcept {
+          --num_instances_;
+          delete state;
+        });
+      },
+    };
+    visit(f, as_flatbuffer(chunk_));
   }
-  visit(detail::overload{
-          // Ignore everything...
-          [](auto&&...) noexcept {},
-          // ... except for legacy encoded chunks.
-          [&](const fbs::table_slice::legacy::v0& slice) noexcept {
-            if (auto error = unpack(slice, legacy_))
-              die("failed to unpack already verified legacy table slice: "
-                  + render(error));
-          },
-        },
-        as_flatbuffer(chunk_));
+}
+
+table_slice::table_slice(chunk_ptr&& chunk, enum verify verify,
+                         record_type layout) noexcept
+  : chunk_{verified_or_none(std::move(chunk), verify)} {
+  if (chunk_ && chunk_->unique()) {
+    ++num_instances_;
+    auto f = detail::overload{
+      [&](const fbs::table_slice::legacy::v0& slice) noexcept {
+        if (auto error = unpack(slice, legacy_))
+          die("failed to unpack already verified legacy table slice: "
+              + render(error));
+        chunk_->add_deletion_step([&]() noexcept { --num_instances_; });
+      },
+      [&](const fbs::table_slice::msgpack::v0& slice) noexcept {
+        state_.msgpack_v0 = new msgpack_table_slice{slice, std::move(layout)};
+        chunk_->add_deletion_step([&, state = state_.msgpack_v0]() noexcept {
+          --num_instances_;
+          delete state;
+        });
+      },
+    };
+    visit(f, as_flatbuffer(chunk_));
+  }
 }
 
 table_slice::table_slice(const fbs::FlatTableSlice& flat_slice,
@@ -218,13 +246,16 @@ table_slice::table_slice(legacy_table_slice_ptr&& slice) noexcept {
     fbs::FinishTableSliceBuffer(builder, table_slice_buffer);
     auto chunk = fbs::release(builder);
     // Delegate the newly created chunk to the constructor.
-    *this = table_slice{std::move(chunk), verify::no};
+    *this = table_slice{std::move(chunk), verify::no, slice->layout()};
     VAST_ASSERT(*legacy_ == *slice);
   }
 }
 
 table_slice::table_slice(const table_slice& other) noexcept
-  : chunk_{other.chunk_}, legacy_{other.legacy_}, offset_{other.offset_} {
+  : chunk_{other.chunk_},
+    legacy_{other.legacy_},
+    offset_{other.offset_},
+    state_{other.state_} {
   // nop
 }
 
@@ -236,6 +267,7 @@ table_slice::table_slice(const table_slice& other, enum encoding encoding,
     chunk_ = other.chunk_;
     legacy_ = other.legacy_;
     offset_ = other.offset_;
+    state_ = other.state_;
   } else {
     switch (encoding) {
       case encoding::none:
@@ -257,13 +289,15 @@ table_slice& table_slice::operator=(const table_slice& rhs) noexcept {
   chunk_ = rhs.chunk_;
   legacy_ = rhs.legacy_;
   offset_ = rhs.offset_;
+  state_ = rhs.state_;
   return *this;
 }
 
 table_slice::table_slice(table_slice&& other) noexcept
   : chunk_{std::exchange(other.chunk_, {})},
     legacy_{std::exchange(other.legacy_, {})},
-    offset_{std::exchange(other.offset_, invalid_id)} {
+    offset_{std::exchange(other.offset_, invalid_id)},
+    state_{std::exchange(other.state_, {})} {
   // nop
 }
 
@@ -274,6 +308,7 @@ table_slice::table_slice(table_slice&& other, enum encoding encoding,
     chunk_ = std::exchange(other.chunk_, {});
     legacy_ = std::exchange(other.legacy_, {});
     offset_ = std::exchange(other.offset_, invalid_id);
+    state_ = std::exchange(other.state_, {});
   } else {
     // Changing the encoding requires a copy, so we just delegate to the
     // copy-constructor with re-encoding.
@@ -286,6 +321,7 @@ table_slice& table_slice::operator=(table_slice&& rhs) noexcept {
   chunk_ = std::exchange(rhs.chunk_, {});
   legacy_ = std::exchange(rhs.legacy_, {});
   offset_ = std::exchange(rhs.offset_, invalid_id);
+  state_ = std::exchange(rhs.state_, {});
   return *this;
 }
 
@@ -334,17 +370,20 @@ enum table_slice::encoding table_slice::encoding() const noexcept {
   return visit(f, as_flatbuffer(chunk_));
 }
 
-record_type table_slice::layout() const noexcept {
+const record_type& table_slice::layout() const noexcept {
   auto f = detail::overload{
-    []() noexcept { return record_type{}; },
-    [&](const fbs::table_slice::legacy::v0&) noexcept {
-      return legacy_->layout();
+    []() noexcept {
+      static const auto empty_layout = record_type{};
+      return &empty_layout;
     },
-    [](const fbs::table_slice::msgpack::v0& slice) noexcept {
-      return msgpack_table_slice{slice}.layout();
+    [&](const fbs::table_slice::legacy::v0&) noexcept {
+      return &legacy_->layout();
+    },
+    [&](const fbs::table_slice::msgpack::v0&) noexcept {
+      return &state_.msgpack_v0->layout();
     },
   };
-  return visit(f, as_flatbuffer(chunk_));
+  return *visit(f, as_flatbuffer(chunk_));
 }
 
 table_slice::size_type table_slice::rows() const noexcept {
@@ -353,8 +392,8 @@ table_slice::size_type table_slice::rows() const noexcept {
     [&](const fbs::table_slice::legacy::v0&) noexcept {
       return legacy_->rows();
     },
-    [](const fbs::table_slice::msgpack::v0& slice) noexcept {
-      return msgpack_table_slice{slice}.rows();
+    [&](const fbs::table_slice::msgpack::v0&) noexcept {
+      return state_.msgpack_v0->rows();
     },
   };
   return visit(f, as_flatbuffer(chunk_));
@@ -366,8 +405,8 @@ table_slice::size_type table_slice::columns() const noexcept {
     [&](const fbs::table_slice::legacy::v0&) noexcept {
       return legacy_->columns();
     },
-    [](const fbs::table_slice::msgpack::v0& slice) noexcept {
-      return msgpack_table_slice{slice}.columns();
+    [&](const fbs::table_slice::msgpack::v0&) noexcept {
+      return state_.msgpack_v0->columns();
     },
   };
   return visit(f, as_flatbuffer(chunk_));
@@ -412,9 +451,8 @@ void table_slice::append_column_to_index(table_slice::size_type column,
     [&](const fbs::table_slice::legacy::v0&) noexcept {
       legacy_->append_column_to_index(column, index);
     },
-    [&](const fbs::table_slice::msgpack::v0& slice) noexcept {
-      return msgpack_table_slice{slice}.append_column_to_index(offset(), column,
-                                                               index);
+    [&](const fbs::table_slice::msgpack::v0&) noexcept {
+      state_.msgpack_v0->append_column_to_index(offset(), column, index);
     },
   };
   visit(f, as_flatbuffer(chunk_));
@@ -428,8 +466,8 @@ data_view table_slice::at(table_slice::size_type row,
     [&](const fbs::table_slice::legacy::v0&) noexcept {
       return legacy_->at(row, column);
     },
-    [&](const fbs::table_slice::msgpack::v0& slice) noexcept {
-      return msgpack_table_slice{slice}.at(row, column);
+    [&](const fbs::table_slice::msgpack::v0&) noexcept {
+      return state_.msgpack_v0->at(row, column);
     },
   };
   return visit(f, as_flatbuffer(chunk_));
@@ -525,7 +563,7 @@ void legacy_table_slice::append_column_to_index(size_type col,
 
 // -- properties ---------------------------------------------------------------
 
-record_type legacy_table_slice::layout() const noexcept {
+const record_type& legacy_table_slice::layout() const noexcept {
   return header_.layout;
 }
 
@@ -706,11 +744,21 @@ void select(std::vector<table_slice>& result, const table_slice& xs,
     VAST_ERROR(__func__, "failed to get a table slice builder for", impl);
     return;
   }
+  auto serialized_layout
+    = visit(detail::overload{
+              [](auto&&...) noexcept { return span<const byte>{}; },
+              [](const fbs::table_slice::msgpack::v0& slice) noexcept {
+                return span<const byte>{
+                  reinterpret_cast<const byte*>(slice.layout()->data()),
+                  slice.layout()->size()};
+              },
+            },
+            fbs::GetTableSlice(as_bytes(xs).data()));
   id last_offset = xs.offset();
   auto push_slice = [&] {
     if (builder->rows() == 0)
       return;
-    auto slice = builder->finish();
+    auto slice = builder->finish(serialized_layout);
     if (slice.encoding() == table_slice::encoding::none) {
       VAST_WARNING(__func__, "got an empty slice");
       return;
@@ -835,7 +883,7 @@ struct row_evaluator {
     // TODO: Transform this AST node into a constant-time lookup node (e.g.,
     // data_extractor). It's not necessary to iterate over the schema for every
     // row; this should happen upfront.
-    auto layout = slice_.layout();
+    auto&& layout = slice_.layout();
     if (e.attr == atom::type_v)
       return evaluate(layout.name(), op_, d);
     if (e.attr == atom::timestamp_v) {
@@ -865,7 +913,7 @@ struct row_evaluator {
 
   bool operator()(const data_extractor& e, const data& d) {
     VAST_ASSERT(e.offset.size() == 1);
-    auto layout = slice_.layout();
+    auto&& layout = slice_.layout();
     if (e.type != layout) // TODO: make this a precondition instead.
       return false;
     auto col = e.offset[0];

@@ -77,7 +77,8 @@ public:
 
   // -- properties -------------------------------------------------------------
 
-  [[nodiscard]] vast::table_slice finish() override;
+  [[nodiscard]] vast::table_slice
+  finish(span<const byte> serialized_layout = {}) override;
 
   size_t rows() const noexcept override;
 

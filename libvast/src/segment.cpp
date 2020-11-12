@@ -21,6 +21,7 @@
 #include "vast/detail/byte_swap.hpp"
 #include "vast/detail/narrow.hpp"
 #include "vast/detail/overload.hpp"
+#include "vast/detail/zip_iterator.hpp"
 #include "vast/error.hpp"
 #include "vast/fbs/segment.hpp"
 #include "vast/fbs/utils.hpp"
@@ -84,43 +85,36 @@ chunk_ptr segment::chunk() const {
 
 caf::expected<std::vector<table_slice>>
 segment::lookup(const vast::ids& xs) const {
-  // TODO: Store a separate offset table in the segment header to avoid lots of
-  // small disk reads, and generate the resulting id range for each table.
-  std::vector<table_slice> slices;
   std::vector<table_slice> result;
-  auto f = [&](const table_slice& slice) noexcept {
-    VAST_ASSERT(slice.offset() != invalid_id);
-    return std::pair{slice.offset(), slice.offset() + slice.rows()};
-  };
-  auto g = [&](const table_slice& slice) {
-    VAST_DEBUG(this, "returns slice from lookup:", to_string(slice));
-    result.push_back(slice);
-    return caf::none;
-  };
   auto segment = fbs::GetSegment(chunk_->data())->segment_as_v0();
   if (!segment)
     return make_error(ec::format_error, "invalid segment version");
-  // Assign offsets to all table slices.
-  if (segment->ids()->size() == 0)
-    return make_error(ec::lookup_error, "encountered empty segment ids range");
-  slices.reserve(segment->slices()->size());
-  auto current_interval = segment->ids()->begin();
-  auto current_offset = current_interval->begin();
-  for (auto&& flat_slice : *segment->slices()) {
+  VAST_ASSERT(segment->ids()->size() == segment->slices()->size());
+  auto f = [&](const auto& zip) noexcept {
+    auto&& interval = std::get<0>(zip);
+    return std::pair{interval->begin(), interval->end()};
+  };
+  auto g = [&](const auto& zip) {
+    auto&& [interval, flat_slice] = zip;
     auto slice = table_slice{*flat_slice, chunk_, table_slice::verify::no};
-    slice.offset(current_offset);
-    VAST_DEBUG(this, "assigns offset", current_offset, "to slice with",
-               slice.rows(), "rows");
-    current_offset += slice.rows();
-    if (current_offset >= current_interval->end()
-        && current_interval != segment->ids()->end()) {
-      VAST_ASSERT(current_offset == current_interval->end());
-      current_offset = (++current_interval)->begin();
-    }
-    slices.push_back(std::move(slice));
-  }
-  // Select the subset of `slices` for the given ids `xs`.
-  if (auto error = select_with(xs, slices.begin(), slices.end(), f, g))
+    slice.offset(interval->begin());
+    VAST_ASSERT(slice.offset() == interval->begin());
+    VAST_ASSERT(slice.offset() + slice.rows() == interval->end());
+    VAST_DEBUG(this, "returns slice from lookup:", to_string(slice));
+    result.push_back(std::move(slice));
+    return caf::none;
+  };
+  // TODO: We cannot iterate over `*segment->ids()` and `*segment->slices()`
+  // directly here, because the `flatbuffers::Vector<Offset<T>>` iterator
+  // dereferences to a temporary pointer. This works for normal iteration, but
+  // the `detail::zip` adapter tries to take the address of the pointer, which
+  // cannot work. We could improve this by adding a `select_with` overload that
+  // iterates over multiple ranges in lockstep.
+  auto intervals = std::vector(segment->ids()->begin(), segment->ids()->end());
+  auto flat_slices
+    = std::vector(segment->slices()->begin(), segment->slices()->end());
+  auto zipped = detail::zip(intervals, flat_slices);
+  if (auto error = select_with(xs, zipped.begin(), zipped.end(), f, g))
     return error;
   return result;
 }

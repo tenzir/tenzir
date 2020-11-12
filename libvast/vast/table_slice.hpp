@@ -69,6 +69,16 @@ public:
   /// FlatBuffers table fails.
   explicit table_slice(chunk_ptr&& chunk, enum verify verify) noexcept;
 
+  /// Construct a table slice from a chunk of data, which contains a
+  /// `vast.fbs.TableSlice` FlatBuffers table, and a known layout.
+  /// @param chunk A `vast.fbs.TableSlice` FlatBuffers table in a chunk.
+  /// @param verify Controls whether the table should be verified.
+  /// @param layout The known table layout.
+  /// @note Constructs an invalid table slice if the verification of the
+  /// FlatBuffers table fails.
+  explicit table_slice(chunk_ptr&& chunk, enum verify verify,
+                       record_type layout) noexcept;
+
   /// Construct a table slice from a flattened table slice embedded in a chunk,
   /// and shares the chunk's lifetime.
   /// @param flat_slice The `vast.fbs.FlatTableSlice` object.
@@ -137,7 +147,7 @@ public:
   enum encoding encoding() const noexcept;
 
   /// @returns The table layout.
-  record_type layout() const noexcept;
+  const record_type& layout() const noexcept;
 
   /// @returns The number of rows in the slice.
   size_type rows() const noexcept;
@@ -222,6 +232,16 @@ private:
   /// slice do not contain the offset.
   id offset_ = invalid_id;
 
+  /// A pointer to the table slice state. As long as the layout cannot be
+  /// represented from a FlatBuffers table directly, it is prohibitively
+  /// expensive to deserialize the layout.
+  /// TODO: Revisit the need for this hack after converting the type system to
+  /// use FlatBuffers.
+  union {
+    const void* none = {};
+    const msgpack_table_slice<fbs::table_slice::msgpack::v0>* msgpack_v0;
+  } state_;
+
   /// The number of in-memory table slices.
   inline static std::atomic<size_t> num_instances_ = {};
 };
@@ -288,7 +308,7 @@ public:
   // -- properties -------------------------------------------------------------
 
   /// @returns The table layout.
-  record_type layout() const noexcept;
+  const record_type& layout() const noexcept;
 
   /// @returns An identifier for the implementing class.
   virtual caf::atom_value implementation_id() const noexcept = 0;

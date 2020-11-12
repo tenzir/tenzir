@@ -112,14 +112,18 @@ msgpack_table_slice_builder::~msgpack_table_slice_builder() {
 
 // -- properties ---------------------------------------------------------------
 
-table_slice msgpack_table_slice_builder::finish() {
+table_slice
+msgpack_table_slice_builder::finish(span<const byte> serialized_layout) {
   // Sanity check.
   if (column_ != 0)
     return {};
   // Pack layout.
-  auto layout_buffer = fbs::serialize_bytes(builder_, layout());
-  if (!layout_buffer)
-    die("failed to serialize layout:" + render(layout_buffer.error()));
+  auto layout_buffer
+    = serialized_layout.empty()
+        ? *fbs::serialize_bytes(builder_, layout())
+        : builder_.CreateVector(
+          reinterpret_cast<const unsigned char*>(serialized_layout.data()),
+          serialized_layout.size());
   // Pack offset table.
   auto offset_table_buffer = builder_.CreateVector(offset_table_);
   // Pack data.
@@ -127,7 +131,7 @@ table_slice msgpack_table_slice_builder::finish() {
     reinterpret_cast<const uint8_t*>(data_.data()), data_.size());
   // Create MessagePack-encoded table slices.
   auto msgpack_table_slice_buffer = fbs::table_slice::msgpack::Createv0(
-    builder_, *layout_buffer, offset_table_buffer, data_buffer);
+    builder_, layout_buffer, offset_table_buffer, data_buffer);
   // Create and finish table slice.
   auto table_slice_buffer
     = fbs::CreateTableSlice(builder_, fbs::table_slice::TableSlice::msgpack_v0,
@@ -139,7 +143,7 @@ table_slice msgpack_table_slice_builder::finish() {
   msgpack_builder_.reset();
   // Create the table slice from the chunk.
   auto chunk = fbs::release(builder_);
-  return table_slice{std::move(chunk), table_slice::verify::no};
+  return table_slice{std::move(chunk), table_slice::verify::no, layout()};
 }
 
 size_t msgpack_table_slice_builder::rows() const noexcept {
