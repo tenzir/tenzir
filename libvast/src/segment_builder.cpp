@@ -39,12 +39,7 @@ caf::error segment_builder::add(table_slice x) {
   auto bytes = fbs::pack_bytes(builder_, x);
   auto slice = fbs::CreateFlatTableSlice(builder_, bytes);
   flat_slices_.push_back(slice);
-  // This works only with monotonically increasing IDs.
-  if (!intervals_.empty() && intervals_.back().end() == x.offset())
-    intervals_.back()
-      = {intervals_.back().begin(), intervals_.back().end() + x.rows()};
-  else
-    intervals_.emplace_back(x.offset(), x.offset() + x.rows());
+  intervals_.emplace_back(x.offset(), x.offset() + x.rows());
   num_events_ += x.rows();
   slices_.push_back(x);
   return caf::none;
