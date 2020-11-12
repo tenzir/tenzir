@@ -142,6 +142,8 @@
       - zeek.dhcp.host_name
       - zeek.ntlm.hostname
       - zeek.ntlm.server_dns_computer_name
+      - zeek.http.host
+      - zeek.software.host
 - concept:
     name: net.uri
     fields:
@@ -153,3 +155,5 @@
       - zeek.dns.answers
       - zeek.dns.query
       - zeek.http.domain
+      - zeek.dhcp.domain
+      - zeek.ntlm.domainname

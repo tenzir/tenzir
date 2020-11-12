@@ -137,6 +137,14 @@
       - suricata.fileinfo.http.hostname
       - suricata.http.http.hostname
       - suricata.dhcp.dhcp.hostname
+      - suricata.krb5.host
+      - suricata.smb.host
+      - suricata.smb.smb.ntlmssp.host
+      - suricata.ssh.host
+- concept:
+    name: net.domain
+    fields:
+      - suricata.smb.smb.ntlmssp.domain
 - concept:
     name: net.domain
     fields:
