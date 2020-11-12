@@ -16,7 +16,6 @@
 #include "vast/chunk.hpp"
 #include "vast/config.hpp"
 #include "vast/logger.hpp"
-#include "vast/msgpack_table_slice.hpp"
 
 #if VAST_HAVE_ARROW
 #  include "vast/arrow_table_slice.hpp"
@@ -27,7 +26,6 @@
 namespace vast {
 
 void factory_traits<legacy_table_slice>::initialize() {
-  factory<legacy_table_slice>::add<msgpack_table_slice>();
 #if VAST_HAVE_ARROW
   factory<legacy_table_slice>::add<arrow_table_slice>();
 #endif

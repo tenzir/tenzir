@@ -14,73 +14,88 @@
 #pragma once
 
 #include "vast/fwd.hpp"
+#include "vast/table_slice.hpp"
 
-#include <caf/fwd.hpp>
-#include <caf/intrusive_cow_ptr.hpp>
-
-#include <vector>
-
-#include <vast/byte.hpp>
-#include <vast/chunk.hpp>
-#include <vast/span.hpp>
-#include <vast/table_slice.hpp>
-#include <vast/view.hpp>
+#include <caf/meta/type_name.hpp>
 
 namespace vast {
+
+/// Additional state needed for the implementation of MessagePack-encoded table
+/// slices that cannot easily be accessed from the underlying FlatBuffers table
+/// directly.
+template <class FlatBuffer>
+struct msgpack_table_slice_state;
+
+template <>
+struct msgpack_table_slice_state<fbs::table_slice::msgpack::v0> {
+  /// The deserialized table layout.
+  record_type layout;
+};
 
 /// A table slice that stores elements encoded in
 /// [MessagePack](https://msgpack.org) format. The implementation stores data
 /// in row-major order.
-class msgpack_table_slice final : public vast::legacy_table_slice {
+template <class FlatBuffer>
+class msgpack_table_slice final {
 public:
-  // -- friends ----------------------------------------------------------------
+  // -- constructors, destructors, and assignment operators --------------------
 
-  friend msgpack_table_slice_builder;
+  /// Constructs a MessagePack-encoded table slice from a FlatBuffers table.
+  /// @param slice The encoding-specific FlatBuffers table.
+  explicit msgpack_table_slice(const FlatBuffer& slice) noexcept;
 
-  // -- constants --------------------------------------------------------------
+  /// Constructs a MessagePack-encoded table slice from a FlatBuffers table and
+  /// a known layout.
+  /// @param slice The encoding-specific FlatBuffers table.
+  /// @param layout The table layout.
+  msgpack_table_slice(const FlatBuffer& slice, record_type layout) noexcept;
 
-  static constexpr caf::atom_value class_id = caf::atom("msgpack");
-
-  // -- member types -----------------------------------------------------------
-
-  /// Base type.
-  using super = vast::legacy_table_slice;
-
-  /// Unsigned integer type.
-  using size_type = super::size_type;
-
-  // -- factories --------------------------------------------------------------
-
-  static vast::legacy_table_slice_ptr make(vast::table_slice_header header);
+  /// Destroys a MessagePack-encoded table slice.
+  ~msgpack_table_slice() noexcept;
 
   // -- properties -------------------------------------------------------------
 
-  msgpack_table_slice* copy() const override;
+  /// @returns The table layout.
+  const record_type& layout() const noexcept;
 
-  caf::error serialize(caf::serializer& sink) const override;
+  /// @returns The number of rows in the slice.
+  table_slice::size_type rows() const noexcept;
 
-  caf::error deserialize(caf::deserializer& source) override;
+  /// @returns The number of columns in the slice.
+  table_slice::size_type columns() const noexcept;
 
-  caf::error load(vast::chunk_ptr chunk) override;
+  // -- data access ------------------------------------------------------------
 
-  void
-  append_column_to_index(size_type col, vast::value_index& idx) const override;
+  /// Appends all values in column `column` to `index`.
+  /// @param `offset` The offset of the table slice in its ID space.
+  /// @param `column` The index of the column to append.
+  /// @param `index` the value index to append to.
+  void append_column_to_index(id offset, table_slice::size_type column,
+                              value_index& index) const;
 
-  caf::atom_value implementation_id() const noexcept override;
-
-  vast::data_view at(size_type row, size_type col) const override;
+  /// Retrieves data by specifying 2D-coordinates via row and column.
+  /// @param row The row offset.
+  /// @param column The column offset.
+  /// @pre `row < rows() && column < columns()`
+  data_view at(table_slice::size_type row, table_slice::size_type column) const;
 
 private:
-  using super::super;
+  // -- implementation details -------------------------------------------------
 
-  /// Offsets from the beginning of the buffer to each row.
-  std::vector<size_t> offset_table_;
+  /// A const-reference to the underlying FlatBuffers table.
+  const FlatBuffer& slice_;
 
-  /// The buffer that contains the MessagePack data.
-  vast::span<const vast::byte> buffer_;
-
-  /// The table slice after the header.
-  vast::chunk_ptr chunk_;
+  /// Additional state needed for the implementation.
+  msgpack_table_slice_state<FlatBuffer> state_;
 };
+
+// -- template machinery -------------------------------------------------------
+
+/// Explicit deduction guide (not needed as of C++20).
+template <class FlatBuffer>
+msgpack_table_slice(const FlatBuffer&) -> msgpack_table_slice<FlatBuffer>;
+
+/// Extern template declarations for all MessagePack encoding versions.
+extern template class msgpack_table_slice<fbs::table_slice::msgpack::v0>;
 
 } // namespace vast

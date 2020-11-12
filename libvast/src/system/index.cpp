@@ -516,7 +516,7 @@ index(caf::stateful_actor<index_state>* self, filesystem_type fs, path dir,
     /* continuous = */ true, [=](caf::unit_t&) {},
     [=](caf::unit_t&, caf::downstream<table_slice>& out, table_slice x) {
       VAST_ASSERT(x.encoding() != table_slice::encoding::none);
-      auto layout = x.layout();
+      auto&& layout = x.layout();
       self->state.stats.layouts[layout.name()].count += x.rows();
       auto& active = self->state.active_partition;
       if (!active.actor) {
