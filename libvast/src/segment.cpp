@@ -104,7 +104,12 @@ segment::lookup(const vast::ids& xs) const {
     result.push_back(std::move(slice));
     return caf::none;
   };
-  // TODO: Figure out why we cannot iteratore over `*segment->ids()` directly.
+  // TODO: We cannot iterate over `*segment->ids()` and `*segment->slices()`
+  // directly here, because the `flatbuffers::Vector<Offset<T>>` iterator
+  // dereferences to a temporary pointer. This works for normal iteration, but
+  // the `detail::zip` adapter tries to take the address of the pointer, which
+  // cannot work. We could improve this by adding a `select_with` overload that
+  // iterates over multiple ranges in lockstep.
   auto intervals = std::vector(segment->ids()->begin(), segment->ids()->end());
   auto flat_slices
     = std::vector(segment->slices()->begin(), segment->slices()->end());
