@@ -16,11 +16,10 @@
 #include "vast/chunk.hpp"
 #include "vast/defaults.hpp"
 #include "vast/detail/assert.hpp"
-#include "vast/detail/byte_swap.hpp"
 #include "vast/detail/overload.hpp"
 #include "vast/error.hpp"
 #include "vast/expression.hpp"
-#include "vast/factory.hpp"
+#include "vast/fbs/table_slice.hpp"
 #include "vast/fbs/utils.hpp"
 #include "vast/ids.hpp"
 #include "vast/logger.hpp"
@@ -28,19 +27,6 @@
 #include "vast/table_slice_builder.hpp"
 #include "vast/table_slice_builder_factory.hpp"
 #include "vast/value_index.hpp"
-
-#include <caf/actor_system.hpp>
-#include <caf/actor_system_config.hpp>
-#include <caf/binary_deserializer.hpp>
-#include <caf/binary_serializer.hpp>
-#include <caf/deserializer.hpp>
-#include <caf/error.hpp>
-#include <caf/execution_unit.hpp>
-#include <caf/sec.hpp>
-#include <caf/serializer.hpp>
-#include <caf/sum_type.hpp>
-
-#include <unordered_map>
 
 #if VAST_HAVE_ARROW
 #  include "vast/arrow_table_slice.hpp"

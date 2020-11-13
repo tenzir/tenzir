@@ -14,18 +14,13 @@
 #pragma once
 
 #include "vast/chunk.hpp"
-#include "vast/fbs/table_slice.hpp"
 #include "vast/fwd.hpp"
 #include "vast/type.hpp"
 #include "vast/view.hpp"
 
-#include <caf/fwd.hpp>
 #include <caf/meta/load_callback.hpp>
 #include <caf/meta/type_name.hpp>
-#include <caf/optional.hpp>
-#include <caf/ref_counted.hpp>
 
-#include <cstddef>
 #include <vector>
 
 namespace vast {
