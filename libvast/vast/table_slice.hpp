@@ -200,6 +200,16 @@ public:
              }));
   }
 
+  /// Selects all rows in `slice` with event IDs in `selection` and appends
+  /// produced table slices to `result`. Cuts `slice` into multiple slices if
+  /// `selection` produces gaps.
+  /// @param result The container for appending generated table slices.
+  /// @param slice The input table slice.
+  /// @param selection ID set for selecting events from `slice`.
+  /// @pre `slice.encoding() != table_slice::encoding::none`
+  friend void select(std::vector<table_slice>& result, const table_slice& slice,
+                     const ids& selection);
+
 private:
   // -- implementation details -------------------------------------------------
 
@@ -234,31 +244,21 @@ private:
 
 // -- operations ---------------------------------------------------------------
 
-/// Selects all rows in `xs` with event IDs in `selection` and appends produced
-/// table slices to `result`. Cuts `xs` into multiple slices if `selection`
-/// produces gaps.
-/// @param result The container for appending generated table slices.
-/// @param xs The input table slice.
-/// @param selection ID set for selecting events from `xs`.
-/// @pre `xs != nullptr`
-void select(std::vector<table_slice>& result, const table_slice& xs,
-            const ids& selection);
-
-/// Selects all rows in `xs` with event IDs in `selection`. Cuts `xs` into
+/// Selects all rows in `slice` with event IDs in `selection`. Cuts `slice` into
 /// multiple slices if `selection` produces gaps.
-/// @param xs The input table slice.
-/// @param selection ID set for selecting events from `xs`.
-/// @returns new table slices of the same implementation type as `xs` from
+/// @param slice The input table slice.
+/// @param selection ID set for selecting events from `slice`.
+/// @returns new table slices of the same implementation type as `slice` from
 ///          `selection`.
-/// @pre `xs != nullptr`
-std::vector<table_slice> select(const table_slice& xs, const ids& selection);
+/// @pre `slice.encoding() != table_slice::encoding::none`
+std::vector<table_slice> select(const table_slice& slice, const ids& selection);
 
 /// Selects the first `num_rows` rows of `slice`.
 /// @param slice The input table slice.
 /// @param num_rows The number of rows to keep.
 /// @returns `slice` if `slice.rows() <= num_rows`, otherwise creates a new
 ///          table slice of the first `num_rows` rows from `slice`.
-/// @pre `slice != nullptr`
+/// @pre `slice.encoding() != table_slice::encoding::none`
 /// @pre `num_rows > 0`
 table_slice truncate(const table_slice& slice, size_t num_rows);
 
@@ -268,8 +268,8 @@ table_slice truncate(const table_slice& slice, size_t num_rows);
 /// @param slice The input table slice.
 /// @param partition_point The index of the first row for the second slice.
 /// @returns two new table slices if `0 < partition_point < slice.rows()`,
-///          otherwise returns `slice` and a `nullptr`.
-/// @pre `slice != nullptr`
+///          otherwise returns `slice` and an invalid tbale slice.
+/// @pre `slice.encoding() != table_slice::encoding::none`
 std::pair<table_slice, table_slice>
 split(const table_slice& slice, size_t partition_point);
 

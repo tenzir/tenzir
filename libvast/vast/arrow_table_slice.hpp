@@ -59,6 +59,14 @@ public:
 
   // -- properties -------------------------------------------------------------
 
+  /// Whether the most recent version of the encoding is used.
+  inline static constexpr bool is_latest_version
+    = std::is_same_v<FlatBuffer, fbs::table_slice::arrow::v0>;
+
+  /// The encoding of the slice.
+  inline static constexpr enum table_slice::encoding encoding
+    = table_slice::encoding::arrow;
+
   /// @returns The table layout.
   const record_type& layout() const noexcept;
 
