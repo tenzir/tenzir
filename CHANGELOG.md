@@ -12,6 +12,10 @@ Every entry has a category for which we use the following visual abbreviations:
 
 ## Unreleased
 
+- ⚠️ The default segment size in the archive is now 1 GiB. This reduces
+  fragmentation of the archive meta data and speeds up VAST startup time.
+  [#1166](https://github.com/tenzir/vast/pull/1166)
+
 - 🎁 The new option `--print-bytesizes` of `lsvast` prints information about
   the size of certain fields of the flatbuffers inside a VAST database directory.
   [#1149](https://github.com/tenzir/vast/pull/1149)
