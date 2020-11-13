@@ -41,7 +41,7 @@ vast:
   # The maximum number of segments cached by the archive.
   segments: 10
   # The maximum size per segment, in MiB.
-  max-segment-size: 128
+  max-segment-size: 1024
 
   # Interval between two aging cycles.
   aging-frequency: 24h
