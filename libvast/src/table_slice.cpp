@@ -61,27 +61,17 @@ namespace {
 template <class Visitor>
 auto visit(Visitor&& visitor, const fbs::TableSlice* x) noexcept(
   std::conjunction_v<
-    // Check whether the handler for invalid encodings is noexcept-specified,
-    // if and only if it exists.
-    std::disjunction<std::negation<std::is_invocable<Visitor>>,
-                     std::is_nothrow_invocable<Visitor>>,
     // Check whether the handlers for all other table slice encodings are
     // noexcept-specified. When adding a new encoding, add it here as well.
+    std::is_nothrow_invocable<Visitor>,
     std::is_nothrow_invocable<Visitor, const fbs::table_slice::legacy::v0&>,
     std::is_nothrow_invocable<Visitor, const fbs::table_slice::arrow::v0&>,
     std::is_nothrow_invocable<Visitor, const fbs::table_slice::msgpack::v0&>>) {
-  if (!x) {
-    if constexpr (std::is_invocable_v<Visitor>)
-      return std::invoke(std::forward<Visitor>(visitor));
-    else
-      die("visitor cannot handle invalid table slices");
-  }
+  if (!x)
+    return std::invoke(std::forward<Visitor>(visitor));
   switch (x->table_slice_type()) {
     case fbs::table_slice::TableSlice::NONE:
-      if constexpr (std::is_invocable_v<Visitor>)
-        return std::invoke(std::forward<Visitor>(visitor));
-      else
-        die("visitor cannot handle table slices with an invalid encoding");
+      return std::invoke(std::forward<Visitor>(visitor));
     case fbs::table_slice::TableSlice::legacy_v0:
       return std::invoke(std::forward<Visitor>(visitor),
                          *x->table_slice_as_legacy_v0());
@@ -96,10 +86,7 @@ auto visit(Visitor&& visitor, const fbs::TableSlice* x) noexcept(
                         "this version of VAST does not support Apache Arrow; "
                         "data may be missing from exports");
       });
-      if constexpr (std::is_invocable_v<Visitor>)
-        return std::invoke(std::forward<Visitor>(visitor));
-      else
-        die("visitor cannot handle table slices with an invalid encoding");
+      return std::invoke(std::forward<Visitor>(visitor));
 #endif
     case fbs::table_slice::TableSlice::msgpack_v0:
       return std::invoke(std::forward<Visitor>(visitor),
@@ -165,6 +152,7 @@ table_slice::table_slice(chunk_ptr&& chunk, enum verify verify) noexcept
   if (chunk_ && chunk_->unique()) {
     ++num_instances_;
     auto f = detail::overload{
+      []() noexcept { die("invalid table slice encoding"); },
       [&](const fbs::table_slice::legacy::v0& slice) noexcept {
         if (auto error = unpack(slice, legacy_))
           die("failed to unpack already verified legacy table slice: "
@@ -196,6 +184,7 @@ table_slice::table_slice(chunk_ptr&& chunk, enum verify verify,
   if (chunk_ && chunk_->unique()) {
     ++num_instances_;
     auto f = detail::overload{
+      []() noexcept { die("invalid table slice encoding"); },
       [&](const fbs::table_slice::legacy::v0& slice) noexcept {
         if (auto error = unpack(slice, legacy_))
           die("failed to unpack already verified legacy table slice: "
@@ -473,9 +462,7 @@ id table_slice::offset() const noexcept {
 void table_slice::offset(id offset) noexcept {
   VAST_ASSERT(encoding() != encoding::none);
   auto f = detail::overload{
-    []() noexcept {
-      // nop
-    },
+    []() noexcept {},
     [&](const fbs::table_slice::legacy::v0&) noexcept {
       legacy_.unshared().offset(offset);
       *this = table_slice{std::move(legacy_)};
@@ -496,6 +483,9 @@ void table_slice::append_column_to_index(table_slice::size_type column,
                                          value_index& index) const {
   VAST_ASSERT(offset() != invalid_id);
   auto f = detail::overload{
+    []() noexcept {
+      die("cannot append column of invalid table slice to index");
+    },
     [&](const fbs::table_slice::legacy::v0&) noexcept {
       legacy_->append_column_to_index(column, index);
     },
@@ -514,6 +504,9 @@ data_view table_slice::at(table_slice::size_type row,
   VAST_ASSERT(row < rows());
   VAST_ASSERT(column < columns());
   auto f = detail::overload{
+    [&]() noexcept -> data_view {
+      die("cannot access data of invalid table slice");
+    },
     [&](const fbs::table_slice::legacy::v0&) noexcept {
       return legacy_->at(row, column);
     },
