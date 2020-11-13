@@ -24,6 +24,7 @@
 #include "vast/io/read.hpp"
 #include "vast/path.hpp"
 #include "vast/qualified_record_field.hpp"
+#include "vast/table_slice.hpp"
 #include "vast/type.hpp"
 #include "vast/uuid.hpp"
 
@@ -445,19 +446,22 @@ void print_segment_v0(const vast::fbs::segment::v0* segment,
   indented_scope _(indent);
   std::cout << indent << "uuid: " << to_string(id) << "\n";
   std::cout << indent << "events: " << segment->events() << "\n";
-
   if (formatting.verbosity >= output_verbosity::verbose) {
     std::cout << indent << "table_slices:\n";
     indented_scope _(indent);
     size_t total_size = 0;
-    for (auto slice : *segment->slices()) {
-      auto table_slice = slice->data_nested_root();
-      vast::record_type layout;
-      vast::fbs::deserialize_bytes(table_slice->layout(), layout);
-      std::cout << indent << layout.name() << ": " << table_slice->rows()
+    for (auto flat_slice : *segment->slices()) {
+      vast::chunk::size_type size = flat_slice->data()->size();
+      void* data = const_cast<void*>(
+        reinterpret_cast<const void*>(flat_slice->data()->data()));
+      vast::chunk::deleter_type deleter = [] {};
+      auto chunk = vast::chunk::make(size, data, deleter);
+      auto slice
+        = vast::table_slice(std::move(chunk), vast::table_slice::verify::no);
+      std::cout << indent << slice.layout().name() << ": " << slice.rows()
                 << " rows";
       if (formatting.print_bytesizes) {
-        auto size = slice->data()->size();
+        auto size = flat_slice->data()->size();
         std::cout << " (" << print_bytesize(size, formatting) << ")";
         total_size += size;
       }
