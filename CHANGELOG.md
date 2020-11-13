@@ -12,6 +12,10 @@ Every entry has a category for which we use the following visual abbreviations:
 
 ## Unreleased
 
+- 🎁 The new option `--print-bytesizes` of `lsvast` prints information about
+  the size of certain fields of the flatbuffers inside a VAST database directory.
+  [#1149](https://github.com/tenzir/vast/pull/1149)
+
 - 🐞 `vast import` no longer stalls when it doesn't receive any data for more
   than 10 seconds.
   [#1136](https://github.com/tenzir/vast/pull/1136)
