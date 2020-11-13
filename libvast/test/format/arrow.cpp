@@ -27,7 +27,6 @@
 #include "vast/detail/make_io_stream.hpp"
 #include "vast/detail/narrow.hpp"
 #include "vast/table_slice.hpp"
-#include "vast/table_slice_header.hpp"
 
 #include <caf/sum_type.hpp>
 

@@ -16,7 +16,6 @@
 #include "vast/chunk.hpp"
 #include "vast/fbs/table_slice.hpp"
 #include "vast/fwd.hpp"
-#include "vast/table_slice_header.hpp"
 #include "vast/type.hpp"
 #include "vast/view.hpp"
 
@@ -91,9 +90,6 @@ public:
   table_slice(const fbs::FlatTableSlice& flat_slice,
               const chunk_ptr& parent_chunk, enum verify verify) noexcept;
 
-  // FIXME: Remove this when removing legacy table slices.
-  explicit table_slice(legacy_table_slice_ptr&& slice) noexcept;
-
   /// Copy-construct a table slice.
   /// @param other The copied-from slice.
   table_slice(const table_slice& other) noexcept;
@@ -159,7 +155,6 @@ public:
   id offset() const noexcept;
 
   /// Sets the offset in the ID space.
-  /// @pre `encoding() != encoding::none`
   void offset(id offset) noexcept;
 
   /// @returns The number of in-memory table slices.
@@ -221,9 +216,6 @@ private:
   /// `table_slice`.
   chunk_ptr chunk_ = {};
 
-  // FIXME: Remove when removing legacy table slices.
-  legacy_table_slice_ptr legacy_ = {};
-
   /// The offset of the table slice within its ID space.
   /// @note Assigned by the importer on import and the archive on export and as
   /// such not part of the FlatBuffers table. Binary representations of a table
@@ -244,148 +236,6 @@ private:
   /// The number of in-memory table slices.
   inline static std::atomic<size_t> num_instances_ = {};
 };
-
-/// A horizontal partition of a table. A slice defines a tabular interface for
-/// accessing homogenous data independent of the concrete carrier format.
-class legacy_table_slice : public caf::ref_counted {
-public:
-  // -- member types -----------------------------------------------------------
-
-  using size_type = uint64_t;
-
-  // -- constructors, destructors, and assignment operators --------------------
-
-  /// Default-constructs an empty table slice.
-  legacy_table_slice() noexcept;
-
-  // Copy-construct a table slice.
-  legacy_table_slice(const legacy_table_slice& other) noexcept;
-
-  // Copy-assigns a table slice.
-  legacy_table_slice& operator=(const legacy_table_slice& rhs) noexcept;
-
-  // Move-constructs a table slice.
-  legacy_table_slice(legacy_table_slice&& other) noexcept;
-
-  // Move-assigns a table slice.
-  legacy_table_slice& operator=(legacy_table_slice&& rhs) noexcept;
-
-  /// Constructs a table slice from a header.
-  /// @param header The header of the table slice.
-  explicit legacy_table_slice(table_slice_header header = {}) noexcept;
-
-  /// Destroy a table slice.
-  virtual ~legacy_table_slice() noexcept override;
-
-  /// Makes a copy of this slice.
-  virtual legacy_table_slice* copy() const = 0;
-
-  // -- persistence ------------------------------------------------------------
-
-  /// Saves the contents (excluding the layout!) of this slice to `sink`.
-  virtual caf::error serialize(caf::serializer& sink) const = 0;
-
-  /// Loads the contents for this slice from `source`.
-  virtual caf::error deserialize(caf::deserializer& source) = 0;
-
-  /// Loads a table slice from a chunk. Note that the beginning of the chunk
-  /// data must point to the table slice data right after the implementation
-  /// ID. The default implementation dispatches to `deserialize` with a
-  /// `caf::binary_deserializer`.
-  /// @param chunk The chunk to convert into a table slice.
-  /// @returns An error if the operation fails and `none` otherwise.
-  /// @pre `chunk != nullptr`
-  virtual caf::error load(chunk_ptr chunk);
-
-  // -- visitation -------------------------------------------------------------
-
-  /// Appends all values in column `col` to `idx`.
-  /// @param `col` The index of the column to append.
-  /// @param `idx` the value index to append to.
-  virtual void append_column_to_index(size_type col, value_index& idx) const;
-
-  // -- properties -------------------------------------------------------------
-
-  /// @returns The table layout.
-  const record_type& layout() const noexcept;
-
-  /// @returns An identifier for the implementing class.
-  virtual caf::atom_value implementation_id() const noexcept = 0;
-
-  /// @returns The number of rows in the slice.
-  size_type rows() const noexcept;
-
-  /// @returns The number of rows in the slice.
-  size_type columns() const noexcept;
-
-  /// @returns The offset in the ID space.
-  id offset() const noexcept;
-
-  /// Sets the offset in the ID space.
-  void offset(id offset) noexcept;
-
-  /// Retrieves data by specifying 2D-coordinates via row and column.
-  /// @param row The row offset.
-  /// @param col The column offset.
-  /// @pre `row < rows() && col < columns()`
-  virtual data_view at(size_type row, size_type col) const = 0;
-
-  /// @returns The number of in-memory table slices.
-  static int instances();
-
-  // -- comparison operators ---------------------------------------------------
-
-  /// @relates legacy_table_slice
-  friend bool
-  operator==(const legacy_table_slice& x, const legacy_table_slice& y);
-
-  /// @relates legacy_table_slice
-  friend bool
-  operator!=(const legacy_table_slice& x, const legacy_table_slice& y);
-
-  // -- concepts ---------------------------------------------------------------
-
-  /// @relates legacy_table_slice
-  friend caf::error inspect(caf::serializer& sink, legacy_table_slice_ptr& ptr);
-
-  /// @relates legacy_table_slice
-  friend caf::error
-  inspect(caf::deserializer& source, legacy_table_slice_ptr& ptr);
-
-  /// Packs a table slice into a flatbuffer.
-  /// @param builder The builder to pack *x* into.
-  /// @param x The table slice to pack.
-  /// @returns The flatbuffer offset in *builder*.
-  friend caf::expected<flatbuffers::Offset<fbs::FlatTableSlice>>
-  pack(flatbuffers::FlatBufferBuilder& builder, legacy_table_slice_ptr x);
-
-  /// Unpacks a table slice from a flatbuffer.
-  /// @param x The flatbuffer to unpack.
-  /// @param y The target to unpack *x* into.
-  /// @returns An error iff the operation fails.
-  friend caf::error
-  unpack(const fbs::table_slice::legacy::v0& x, legacy_table_slice_ptr& y);
-
-protected:
-  // -- member variables -------------------------------------------------------
-
-  table_slice_header header_ = {};
-
-  // -- implementation details -------------------------------------------------
-private:
-  inline static std::atomic<size_t> instance_count_ = 0;
-};
-
-// -- intrusive_ptr facade -----------------------------------------------------
-
-/// @relates legacy_table_slice
-void intrusive_ptr_add_ref(const legacy_table_slice* ptr);
-
-/// @relates legacy_table_slice
-void intrusive_ptr_release(const legacy_table_slice* ptr);
-
-/// @relates legacy_table_slice
-legacy_table_slice* intrusive_cow_ptr_unshare(legacy_table_slice*&);
 
 // -- operations ---------------------------------------------------------------
 

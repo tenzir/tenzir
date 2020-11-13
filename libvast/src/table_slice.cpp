@@ -27,7 +27,6 @@
 #include "vast/msgpack_table_slice.hpp"
 #include "vast/table_slice_builder.hpp"
 #include "vast/table_slice_builder_factory.hpp"
-#include "vast/table_slice_factory.hpp"
 #include "vast/value_index.hpp"
 
 #include <caf/actor_system.hpp>
@@ -64,7 +63,6 @@ auto visit(Visitor&& visitor, const fbs::TableSlice* x) noexcept(
     // Check whether the handlers for all other table slice encodings are
     // noexcept-specified. When adding a new encoding, add it here as well.
     std::is_nothrow_invocable<Visitor>,
-    std::is_nothrow_invocable<Visitor, const fbs::table_slice::legacy::v0&>,
     std::is_nothrow_invocable<Visitor, const fbs::table_slice::arrow::v0&>,
     std::is_nothrow_invocable<Visitor, const fbs::table_slice::msgpack::v0&>>) {
   if (!x)
@@ -72,9 +70,6 @@ auto visit(Visitor&& visitor, const fbs::TableSlice* x) noexcept(
   switch (x->table_slice_type()) {
     case fbs::table_slice::TableSlice::NONE:
       return std::invoke(std::forward<Visitor>(visitor));
-    case fbs::table_slice::TableSlice::legacy_v0:
-      return std::invoke(std::forward<Visitor>(visitor),
-                         *x->table_slice_as_legacy_v0());
     case fbs::table_slice::TableSlice::arrow_v0:
 #if VAST_HAVE_ARROW
       return std::invoke(std::forward<Visitor>(visitor),
@@ -170,12 +165,6 @@ table_slice::table_slice(chunk_ptr&& chunk, enum verify verify) noexcept
     ++num_instances_;
     auto f = detail::overload{
       []() noexcept { die("invalid table slice encoding"); },
-      [&](const fbs::table_slice::legacy::v0& slice) noexcept {
-        if (auto error = unpack(slice, legacy_))
-          die("failed to unpack already verified legacy table slice: "
-              + render(error));
-        chunk_->add_deletion_step([&]() noexcept { --num_instances_; });
-      },
       [&](const auto& slice) noexcept {
         auto& state_ptr = state(slice, state_);
         state_ptr = new std::decay_t<decltype(*state_ptr)>{slice};
@@ -196,12 +185,6 @@ table_slice::table_slice(chunk_ptr&& chunk, enum verify verify,
     ++num_instances_;
     auto f = detail::overload{
       []() noexcept { die("invalid table slice encoding"); },
-      [&](const fbs::table_slice::legacy::v0& slice) noexcept {
-        if (auto error = unpack(slice, legacy_))
-          die("failed to unpack already verified legacy table slice: "
-              + render(error));
-        chunk_->add_deletion_step([&]() noexcept { --num_instances_; });
-      },
       [&](const auto& slice) noexcept {
         auto& state_ptr = state(slice, state_);
         state_ptr
@@ -230,60 +213,8 @@ table_slice::table_slice(const fbs::FlatTableSlice& flat_slice,
   *this = table_slice{std::move(chunk), verify};
 }
 
-// FIXME: Remove this when removing legacy table slices.
-table_slice::table_slice(legacy_table_slice_ptr&& slice) noexcept {
-  if (slice) {
-    flatbuffers::FlatBufferBuilder builder{};
-    // Pack layout.
-    std::vector<char> serialized_layout;
-    caf::binary_serializer layout_sink{nullptr, serialized_layout};
-    if (auto error = layout_sink(slice->layout()))
-      die("failed to pack legacy table slice: " + render(error));
-    auto layout_buffer = builder.CreateVector(
-      reinterpret_cast<const uint8_t*>(serialized_layout.data()),
-      serialized_layout.size());
-    // Pack data.
-    std::vector<char> serialized_data;
-    caf::binary_serializer data_sink{nullptr, serialized_data};
-    if (auto error = data_sink(slice))
-      die("failed to pack legacy table slice: " + render(error));
-    auto data_buffer = builder.CreateVector(
-      reinterpret_cast<const uint8_t*>(serialized_data.data()),
-      serialized_data.size());
-    // Transform encoding.
-    auto transform = [](caf::atom_value slice)
-      -> caf::expected<fbs::table_slice::legacy::Encoding> {
-      if (slice == caf::atom("arrow"))
-        return fbs::table_slice::legacy::Encoding::Arrow;
-      if (slice == caf::atom("msgpack"))
-        return fbs::table_slice::legacy::Encoding::MessagePack;
-      return make_error(ec::unspecified, "unsupported table slice type", slice);
-    };
-    auto encoding = transform(slice->implementation_id());
-    if (!encoding)
-      die("failed to pack legacy table slice: " + render(encoding.error()));
-    // Pack legacy table slice.
-    auto legacy_table_slice_buffer
-      = fbs::table_slice::legacy::Createv0(builder, slice->offset(),
-                                           slice->rows(), layout_buffer,
-                                           *encoding, data_buffer);
-    // Pack table slice.
-    auto table_slice_buffer
-      = fbs::CreateTableSlice(builder, fbs::table_slice::TableSlice::legacy_v0,
-                              legacy_table_slice_buffer.Union());
-    fbs::FinishTableSliceBuffer(builder, table_slice_buffer);
-    auto chunk = fbs::release(builder);
-    // Delegate the newly created chunk to the constructor.
-    *this = table_slice{std::move(chunk), verify::no, slice->layout()};
-    VAST_ASSERT(*legacy_ == *slice);
-  }
-}
-
 table_slice::table_slice(const table_slice& other) noexcept
-  : chunk_{other.chunk_},
-    legacy_{other.legacy_},
-    offset_{other.offset_},
-    state_{other.state_} {
+  : chunk_{other.chunk_}, offset_{other.offset_}, state_{other.state_} {
   // nop
 }
 
@@ -293,7 +224,6 @@ table_slice::table_slice(const table_slice& other, enum encoding encoding,
   // the encoding version is outdated, too.
   if (encoding == other.encoding()) {
     chunk_ = other.chunk_;
-    legacy_ = other.legacy_;
     offset_ = other.offset_;
     state_ = other.state_;
   } else {
@@ -315,7 +245,6 @@ table_slice::table_slice(const table_slice& other, enum encoding encoding,
 
 table_slice& table_slice::operator=(const table_slice& rhs) noexcept {
   chunk_ = rhs.chunk_;
-  legacy_ = rhs.legacy_;
   offset_ = rhs.offset_;
   state_ = rhs.state_;
   return *this;
@@ -323,7 +252,6 @@ table_slice& table_slice::operator=(const table_slice& rhs) noexcept {
 
 table_slice::table_slice(table_slice&& other) noexcept
   : chunk_{std::exchange(other.chunk_, {})},
-    legacy_{std::exchange(other.legacy_, {})},
     offset_{std::exchange(other.offset_, invalid_id)},
     state_{std::exchange(other.state_, {})} {
   // nop
@@ -334,7 +262,6 @@ table_slice::table_slice(table_slice&& other, enum encoding encoding,
   if (encoding == other.encoding()) {
     // If the encoding matches, we can just move the data.
     chunk_ = std::exchange(other.chunk_, {});
-    legacy_ = std::exchange(other.legacy_, {});
     offset_ = std::exchange(other.offset_, invalid_id);
     state_ = std::exchange(other.state_, {});
   } else {
@@ -347,7 +274,6 @@ table_slice::table_slice(table_slice&& other, enum encoding encoding,
 
 table_slice& table_slice::operator=(table_slice&& rhs) noexcept {
   chunk_ = std::exchange(rhs.chunk_, {});
-  legacy_ = std::exchange(rhs.legacy_, {});
   offset_ = std::exchange(rhs.offset_, invalid_id);
   state_ = std::exchange(rhs.state_, {});
   return *this;
@@ -384,13 +310,6 @@ bool operator!=(const table_slice& lhs, const table_slice& rhs) noexcept {
 enum table_slice::encoding table_slice::encoding() const noexcept {
   auto f = detail::overload{
     []() noexcept { return encoding::none; },
-    [&](const fbs::table_slice::legacy::v0&) noexcept {
-      if (legacy_->implementation_id() == caf::atom("arrow"))
-        return encoding::arrow;
-      if (legacy_->implementation_id() == caf::atom("msgpack"))
-        return encoding::msgpack;
-      return encoding::none;
-    },
     [](const fbs::table_slice::arrow::v0&) noexcept {
       // clang-format-fix
       return encoding::arrow;
@@ -408,9 +327,6 @@ const record_type& table_slice::layout() const noexcept {
       static const auto empty_layout = record_type{};
       return &empty_layout;
     },
-    [&](const fbs::table_slice::legacy::v0&) noexcept {
-      return &legacy_->layout();
-    },
     [&](const auto& slice) noexcept { return &state(slice, state_)->layout(); },
   };
   return *visit(f, as_flatbuffer(chunk_));
@@ -419,9 +335,6 @@ const record_type& table_slice::layout() const noexcept {
 table_slice::size_type table_slice::rows() const noexcept {
   auto f = detail::overload{
     []() noexcept { return size_type{}; },
-    [&](const fbs::table_slice::legacy::v0&) noexcept {
-      return legacy_->rows();
-    },
     [&](const auto& slice) noexcept { return state(slice, state_)->rows(); },
   };
   return visit(f, as_flatbuffer(chunk_));
@@ -430,36 +343,17 @@ table_slice::size_type table_slice::rows() const noexcept {
 table_slice::size_type table_slice::columns() const noexcept {
   auto f = detail::overload{
     []() noexcept { return size_type{}; },
-    [&](const fbs::table_slice::legacy::v0&) noexcept {
-      return legacy_->columns();
-    },
     [&](const auto& slice) noexcept { return state(slice, state_)->columns(); },
   };
   return visit(f, as_flatbuffer(chunk_));
 }
 
 id table_slice::offset() const noexcept {
-  auto f = detail::overload{
-    []() noexcept { return invalid_id; },
-    [&](const fbs::table_slice::legacy::v0&) noexcept {
-      return legacy_->offset();
-    },
-    [&](const auto&) noexcept { return offset_; },
-  };
-  return visit(f, as_flatbuffer(chunk_));
+  return offset_;
 }
 
 void table_slice::offset(id offset) noexcept {
-  VAST_ASSERT(encoding() != encoding::none);
-  auto f = detail::overload{
-    []() noexcept {},
-    [&](const fbs::table_slice::legacy::v0&) noexcept {
-      legacy_.unshared().offset(offset);
-      *this = table_slice{std::move(legacy_)};
-    },
-    [&](const auto&) noexcept { offset_ = offset; },
-  };
-  return visit(f, as_flatbuffer(chunk_));
+  offset_ = offset;
 }
 
 int table_slice::instances() noexcept {
@@ -474,9 +368,6 @@ void table_slice::append_column_to_index(table_slice::size_type column,
   auto f = detail::overload{
     []() noexcept {
       die("cannot append column of invalid table slice to index");
-    },
-    [&](const fbs::table_slice::legacy::v0&) noexcept {
-      legacy_->append_column_to_index(column, index);
     },
     [&](const auto& slice) noexcept {
       return state(slice, state_)
@@ -493,9 +384,6 @@ data_view table_slice::at(table_slice::size_type row,
   auto f = detail::overload{
     [&]() noexcept -> data_view {
       die("cannot access data of invalid table slice");
-    },
-    [&](const fbs::table_slice::legacy::v0&) noexcept {
-      return legacy_->at(row, column);
     },
     [&](const auto& slice) noexcept {
       return state(slice, state_)->at(row, column);
@@ -537,218 +425,6 @@ span<const byte> as_bytes(const table_slice& slice) noexcept {
   return as_bytes(slice.chunk_);
 }
 
-// -- legacy_table_slice -------------------------------------------------------
-
-namespace {
-
-using size_type = legacy_table_slice::size_type;
-
-} // namespace
-
-// -- constructors, destructors, and assignment operators ----------------------
-
-legacy_table_slice::legacy_table_slice() noexcept {
-  ++instance_count_;
-}
-
-legacy_table_slice::legacy_table_slice(const legacy_table_slice& other) noexcept
-  : ref_counted(other), header_{other.header_} {
-  ++instance_count_;
-}
-
-legacy_table_slice&
-legacy_table_slice::operator=(const legacy_table_slice& rhs) noexcept {
-  header_ = rhs.header_;
-  ++instance_count_;
-  return *this;
-}
-
-legacy_table_slice::legacy_table_slice(legacy_table_slice&& other) noexcept
-  : header_{std::exchange(other.header_, {})} {
-  // nop
-}
-
-legacy_table_slice&
-legacy_table_slice::operator=(legacy_table_slice&& rhs) noexcept {
-  header_ = std::exchange(rhs.header_, {});
-  return *this;
-}
-
-legacy_table_slice::legacy_table_slice(table_slice_header header) noexcept
-  : header_{std::move(header)} {
-  ++instance_count_;
-}
-
-legacy_table_slice::~legacy_table_slice() noexcept {
-  --instance_count_;
-}
-
-// -- persistence --------------------------------------------------------------
-
-caf::error legacy_table_slice::load(chunk_ptr chunk) {
-  VAST_ASSERT(chunk != nullptr);
-  auto data = const_cast<char*>(chunk->data()); // CAF won't touch it.
-  caf::binary_deserializer source{nullptr, data, chunk->size()};
-  return deserialize(source);
-}
-
-// -- visitation ---------------------------------------------------------------
-
-void legacy_table_slice::append_column_to_index(size_type col,
-                                                value_index& idx) const {
-  for (size_type row = 0; row < rows(); ++row)
-    idx.append(at(row, col), offset() + row);
-}
-
-// -- properties ---------------------------------------------------------------
-
-const record_type& legacy_table_slice::layout() const noexcept {
-  return header_.layout;
-}
-
-size_type legacy_table_slice::rows() const noexcept {
-  return header_.rows;
-}
-
-size_type legacy_table_slice::columns() const noexcept {
-  return header_.layout.fields.size();
-}
-
-id legacy_table_slice::offset() const noexcept {
-  return header_.offset;
-}
-
-void legacy_table_slice::offset(id offset) noexcept {
-  header_.offset = offset;
-}
-
-int legacy_table_slice::instances() {
-  return instance_count_;
-}
-
-// -- comparison operators -----------------------------------------------------
-
-bool operator==(const legacy_table_slice& x, const legacy_table_slice& y) {
-  if (&x == &y)
-    return true;
-  if (x.rows() != y.rows() || x.columns() != y.columns()
-      || x.layout() != y.layout())
-    return false;
-  for (size_t row = 0; row < x.rows(); ++row)
-    for (size_t col = 0; col < x.columns(); ++col)
-      if (x.at(row, col) != y.at(row, col))
-        return false;
-  return true;
-}
-
-bool operator!=(const legacy_table_slice& x, const legacy_table_slice& y) {
-  return !(x == y);
-}
-
-// -- concepts -----------------------------------------------------------------
-
-caf::error inspect(caf::serializer& sink, legacy_table_slice_ptr& ptr) {
-  if (!ptr)
-    return sink(caf::atom("NULL"));
-  return caf::error::eval(
-    [&] { return sink(ptr->implementation_id()); },
-    [&] { return sink(ptr->layout(), ptr->rows(), ptr->offset()); },
-    [&] { return ptr->serialize(sink); });
-}
-
-caf::error inspect(caf::deserializer& source, legacy_table_slice_ptr& ptr) {
-  caf::atom_value id;
-  if (auto err = source(id))
-    return err;
-  if (id == caf::atom("NULL")) {
-    ptr.reset();
-    return caf::none;
-  }
-  table_slice_header header;
-  if (auto err = source(header.layout, header.rows, header.offset))
-    return err;
-  ptr = factory<legacy_table_slice>::make(id, std::move(header));
-  if (!ptr)
-    return ec::invalid_table_slice_type;
-  return ptr.unshared().deserialize(source);
-}
-
-// TODO: this function will boil down to accessing the chunk inside the table
-// slice and then calling GetTableSlice(buf). But until we touch the table
-// slice internals, we use this helper.
-caf::expected<flatbuffers::Offset<fbs::FlatTableSlice>>
-pack(flatbuffers::FlatBufferBuilder& builder, legacy_table_slice_ptr x) {
-  // This local builder instance will vanish once we can access the underlying
-  // chunk of a table slice.
-  flatbuffers::FlatBufferBuilder local_builder;
-  std::vector<char> layout_buffer;
-  caf::binary_serializer sink1{nullptr, layout_buffer};
-  if (auto error = sink1(x->layout()))
-    return error;
-  std::vector<char> data_buffer;
-  caf::binary_serializer sink2{nullptr, data_buffer};
-  if (auto error = sink2(x))
-    return error;
-  auto transform =
-    [](caf::atom_value x) -> caf::expected<fbs::table_slice::legacy::Encoding> {
-    if (x == caf::atom("arrow"))
-      return fbs::table_slice::legacy::Encoding::Arrow;
-    if (x == caf::atom("msgpack"))
-      return fbs::table_slice::legacy::Encoding::MessagePack;
-    return make_error(ec::unspecified, "unsupported table slice type", x);
-  };
-  auto encoding = transform(x->implementation_id());
-  if (!encoding)
-    return encoding.error();
-  auto layout_ptr = reinterpret_cast<const uint8_t*>(layout_buffer.data());
-  auto layout = local_builder.CreateVector(layout_ptr, layout_buffer.size());
-  auto data_ptr = reinterpret_cast<const uint8_t*>(data_buffer.data());
-  auto data = local_builder.CreateVector(data_ptr, data_buffer.size());
-  fbs::table_slice::legacy::v0Builder legacy_v0_builder{local_builder};
-  legacy_v0_builder.add_offset(x->offset());
-  legacy_v0_builder.add_rows(x->rows());
-  legacy_v0_builder.add_layout(layout);
-  legacy_v0_builder.add_encoding(*encoding);
-  legacy_v0_builder.add_data(data);
-  auto legacy_v0_slice = legacy_v0_builder.Finish();
-  fbs::TableSliceBuilder table_slice_builder{local_builder};
-  table_slice_builder.add_table_slice_type(
-    fbs::table_slice::TableSlice::legacy_v0);
-  table_slice_builder.add_table_slice(legacy_v0_slice.Union());
-  auto flat_slice = table_slice_builder.Finish();
-  local_builder.Finish(flat_slice);
-  auto buffer = span<const uint8_t>{local_builder.GetBufferPointer(),
-                                    local_builder.GetSize()};
-  // This is the only code that will remain. All the stuff above will move
-  // into the respective table slice builders.
-  auto bytes = builder.CreateVector(buffer.data(), buffer.size());
-  fbs::FlatTableSliceBuilder flat_table_slice_builder{builder};
-  flat_table_slice_builder.add_data(bytes);
-  return flat_table_slice_builder.Finish();
-}
-
-// TODO: The dual to the note above applies here.
-caf::error
-unpack(const fbs::table_slice::legacy::v0& x, legacy_table_slice_ptr& y) {
-  auto ptr = reinterpret_cast<const char*>(x.data()->Data());
-  caf::binary_deserializer source{nullptr, ptr, x.data()->size()};
-  return source(y);
-}
-
-// -- intrusive_ptr facade -----------------------------------------------------
-
-void intrusive_ptr_add_ref(const legacy_table_slice* ptr) {
-  intrusive_ptr_add_ref(static_cast<const caf::ref_counted*>(ptr));
-}
-
-void intrusive_ptr_release(const legacy_table_slice* ptr) {
-  intrusive_ptr_release(static_cast<const caf::ref_counted*>(ptr));
-}
-
-legacy_table_slice* intrusive_cow_ptr_unshare(legacy_table_slice*& ptr) {
-  return caf::default_intrusive_cow_ptr_unshare(ptr);
-}
-
 // -- operators ----------------------------------------------------------------
 
 void select(std::vector<table_slice>& result, const table_slice& xs,
@@ -770,7 +446,6 @@ void select(std::vector<table_slice>& result, const table_slice& xs,
   span<const byte> serialized_layout = {};
   auto f = detail::overload{
     []() noexcept {},
-    [](const fbs::table_slice::legacy::v0&) noexcept {},
     [&](const fbs::table_slice::arrow::v0& slice) noexcept {
       impl = caf::atom("arrow");
       serialized_layout

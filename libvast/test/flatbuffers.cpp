@@ -29,8 +29,6 @@
 #include "vast/system/posix_filesystem.hpp"
 #include "vast/table_slice.hpp"
 #include "vast/table_slice_builder_factory.hpp"
-#include "vast/table_slice_factory.hpp"
-#include "vast/table_slice_header.hpp"
 #include "vast/type.hpp"
 #include "vast/uuid.hpp"
 
@@ -108,7 +106,6 @@ TEST(index roundtrip) {
 
 TEST(empty partition roundtrip) {
   // Init factory.
-  vast::factory<vast::legacy_table_slice>::initialize();
   vast::factory<vast::table_slice_builder>::initialize();
   // Create partition state.
   vast::system::active_partition_state state;
