@@ -19,7 +19,6 @@
 #include "vast/detail/append.hpp"
 #include "vast/format/test.hpp"
 #include "vast/span.hpp"
-#include "vast/table_slice_factory.hpp"
 #include "vast/value_index.hpp"
 #include "vast/value_index_factory.hpp"
 
@@ -104,8 +103,6 @@ namespace fixtures {
 
 
 table_slices::table_slices() {
-  // Register factories.
-  factory<legacy_table_slice>::initialize();
   // Define our test layout.
   layout = record_type{
     {"a", bool_type{}},

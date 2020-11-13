@@ -21,7 +21,6 @@
 #include "vast/table_slice.hpp"
 #include "vast/table_slice_builder.hpp"
 #include "vast/table_slice_builder_factory.hpp"
-#include "vast/table_slice_factory.hpp"
 #include "vast/type.hpp"
 #include "vast/view.hpp"
 
@@ -92,7 +91,6 @@ public:
   template <class T, class Builder>
   void legacy_initialize() {
     using namespace vast;
-    factory<legacy_table_slice>::add<T>();
     factory<table_slice_builder>::add<Builder>(T::class_id);
     builder = factory<table_slice_builder>::make(T::class_id, layout);
     if (builder == nullptr)

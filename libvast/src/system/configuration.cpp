@@ -27,7 +27,6 @@
 #include "vast/path.hpp"
 #include "vast/synopsis_factory.hpp"
 #include "vast/table_slice_builder_factory.hpp"
-#include "vast/table_slice_factory.hpp"
 #include "vast/value_index.hpp"
 #include "vast/value_index_factory.hpp"
 
@@ -78,8 +77,8 @@ configuration::configuration() {
 #if VAST_USE_OPENCL
   load<caf::opencl::manager>();
 #endif
-  initialize_factories<synopsis, legacy_table_slice, table_slice_builder,
-                       value_index, format::writer>();
+  initialize_factories<synopsis, table_slice_builder, value_index,
+                       format::writer>();
 }
 
 caf::error configuration::parse(int argc, char** argv) {

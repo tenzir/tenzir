@@ -22,7 +22,6 @@
 #include "vast/msgpack_table_slice_builder.hpp"
 #include "vast/table_slice_builder.hpp"
 #include "vast/table_slice_builder_factory.hpp"
-#include "vast/table_slice_factory.hpp"
 #include "vast/type.hpp"
 
 #include <caf/binary_deserializer.hpp>
@@ -75,7 +74,7 @@ std::vector<table_slice> make_integers(size_t count) {
 
 template <class Reader>
 std::vector<table_slice>
-extract(Reader&& reader, legacy_table_slice::size_type slice_size) {
+extract(Reader&& reader, table_slice::size_type slice_size) {
   std::vector<table_slice> result;
   auto add_slice
     = [&](table_slice slice) { result.emplace_back(std::move(slice)); };
@@ -88,7 +87,7 @@ extract(Reader&& reader, legacy_table_slice::size_type slice_size) {
 
 template <class Reader>
 std::vector<table_slice>
-inhale(const char* filename, legacy_table_slice::size_type slice_size) {
+inhale(const char* filename, table_slice::size_type slice_size) {
   caf::settings settings;
   // A non-positive value disables the timeout. We need to do this because the
   // deterministic actor system is messing with the clocks.
@@ -113,7 +112,6 @@ events::events() {
   static bool initialized = false;
   if (initialized)
     return;
-  factory<legacy_table_slice>::initialize();
   factory<table_slice_builder>::initialize();
   initialized = true;
   // Create Zeek log data.
