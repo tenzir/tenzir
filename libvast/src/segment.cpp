@@ -96,7 +96,7 @@ segment::lookup(const vast::ids& xs) const {
   };
   auto g = [&](const auto& zip) {
     auto&& [interval, flat_slice] = zip;
-    auto slice = table_slice{*flat_slice, chunk_, table_slice::verify::no};
+    auto slice = table_slice{*flat_slice, chunk_, table_slice::verify::yes};
     slice.offset(interval->begin());
     VAST_ASSERT(slice.offset() == interval->begin());
     VAST_ASSERT(slice.offset() + slice.rows() == interval->end());
