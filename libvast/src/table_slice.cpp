@@ -102,6 +102,23 @@ verified_or_none(chunk_ptr&& chunk, enum table_slice::verify verify) noexcept {
   return std::move(chunk);
 }
 
+/// A helper utility for converting table slice encoding to the corresponding
+/// builder id.
+/// @param encoding The table slice encoding to map.
+constexpr caf::atom_value builder_id(enum table_slice::encoding encoding) {
+  switch (encoding) {
+    case table_slice::encoding::none:
+      return caf::atom("NULL");
+    case table_slice::encoding::arrow:
+      return caf::atom("arrow");
+    case table_slice::encoding::msgpack:
+      return caf::atom("msgpack");
+  }
+  // GCC-8 fails to recognize that this can never be reached, so we just call a
+  // [[noreturn]] function.
+  die("unhandled table slice encoding");
+}
+
 /// A helper utility for rebuilding an existing table slice with a new builder.
 /// @param slice The table slice to rebuild.
 /// @param args... Arguments to pass to the table slice builder factory.
@@ -121,10 +138,11 @@ table_slice rebuild_slice(const table_slice& slice, Args&&... args) {
 }
 
 /// A helper utility for accessing the state of a table slice.
-/// @param slice The encoding-specific FlatBuffers table.
+/// @param encoded The encoding-specific FlatBuffers table.
 /// @param state The encoding-specific runtime state of the table slice.
 template <class Slice, class State>
-constexpr auto& state([[maybe_unused]] Slice&& slice, State&& state) noexcept {
+constexpr auto&
+state([[maybe_unused]] Slice&& encoded, State&& state) noexcept {
   using slice_type = std::decay_t<Slice>;
   if constexpr (std::is_same_v<slice_type, fbs::table_slice::arrow::v0>) {
     return std::forward<State>(state).arrow_v0;
@@ -151,9 +169,9 @@ table_slice::table_slice(chunk_ptr&& chunk, enum verify verify) noexcept
     ++num_instances_;
     auto f = detail::overload{
       []() noexcept { die("invalid table slice encoding"); },
-      [&](const auto& slice) noexcept {
-        auto& state_ptr = state(slice, state_);
-        state_ptr = new std::decay_t<decltype(*state_ptr)>{slice};
+      [&](const auto& encoded) noexcept {
+        auto& state_ptr = state(encoded, state_);
+        state_ptr = new std::decay_t<decltype(*state_ptr)>{encoded};
         chunk_->add_deletion_step([state_ptr]() noexcept {
           --num_instances_;
           delete state_ptr;
@@ -171,10 +189,10 @@ table_slice::table_slice(chunk_ptr&& chunk, enum verify verify,
     ++num_instances_;
     auto f = detail::overload{
       []() noexcept { die("invalid table slice encoding"); },
-      [&](const auto& slice) noexcept {
-        auto& state_ptr = state(slice, state_);
+      [&](const auto& encoded) noexcept {
+        auto& state_ptr = state(encoded, state_);
         state_ptr
-          = new std::decay_t<decltype(*state_ptr)>{slice, std::move(layout)};
+          = new std::decay_t<decltype(*state_ptr)>{encoded, std::move(layout)};
         chunk_->add_deletion_step([state_ptr]() noexcept {
           --num_instances_;
           delete state_ptr;
@@ -206,27 +224,8 @@ table_slice::table_slice(const table_slice& other) noexcept
 
 table_slice::table_slice(const table_slice& other, enum encoding encoding,
                          enum verify verify) noexcept {
-  // FIXME: When switching to versioned encodings, perform re-encoding when
-  // the encoding version is outdated, too.
-  if (encoding == other.encoding()) {
-    chunk_ = other.chunk_;
-    offset_ = other.offset_;
-    state_ = other.state_;
-  } else {
-    switch (encoding) {
-      case encoding::none:
-        // Do nothing, we have an invalid table slice here.
-        break;
-      case encoding::arrow:
-        *this = rebuild_slice(other, caf::atom("arrow"), other.layout());
-        break;
-      case encoding::msgpack:
-        *this = rebuild_slice(other, caf::atom("msgpack"), other.layout());
-        break;
-    }
-    // If requested, verify the chunk after performing re-encoding.
-    chunk_ = verified_or_none(std::move(chunk_), verify);
-  }
+  auto copy = other;
+  *this = table_slice{std::move(copy), encoding, verify};
 }
 
 table_slice& table_slice::operator=(const table_slice& rhs) noexcept {
@@ -245,17 +244,20 @@ table_slice::table_slice(table_slice&& other) noexcept
 
 table_slice::table_slice(table_slice&& other, enum encoding encoding,
                          enum verify verify) noexcept {
-  if (encoding == other.encoding()) {
-    // If the encoding matches, we can just move the data.
-    chunk_ = std::exchange(other.chunk_, {});
-    offset_ = std::exchange(other.offset_, invalid_id);
-    state_ = std::exchange(other.state_, {});
-  } else {
-    // Changing the encoding requires a copy, so we just delegate to the
-    // copy-constructor with re-encoding.
-    const auto& copy = std::exchange(other, {});
-    *this = table_slice{copy, encoding, verify};
-  }
+  auto f = detail::overload{
+    [&]() noexcept { *this = table_slice{}; },
+    [&](const auto& encoded) noexcept {
+      if (encoding == state(encoded, state_)->encoding
+          && state(encoded, state_)->is_latest_version) {
+        *this = std::exchange(other, {});
+        return;
+      } else
+        *this = rebuild_slice(other, builder_id(encoding), other.layout());
+    },
+  };
+  visit(f, as_flatbuffer(other.chunk_));
+  // If requested, verify the chunk after performing re-encoding.
+  chunk_ = verified_or_none(std::move(chunk_), verify);
 }
 
 table_slice& table_slice::operator=(table_slice&& rhs) noexcept {
@@ -296,12 +298,8 @@ bool operator!=(const table_slice& lhs, const table_slice& rhs) noexcept {
 enum table_slice::encoding table_slice::encoding() const noexcept {
   auto f = detail::overload{
     []() noexcept { return encoding::none; },
-    [](const fbs::table_slice::arrow::v0&) noexcept {
-      // clang-format-fix
-      return encoding::arrow;
-    },
-    [](const fbs::table_slice::msgpack::v0&) noexcept {
-      return encoding::msgpack;
+    [&](const auto& encoded) noexcept {
+      return state(encoded, state_)->encoding;
     },
   };
   return visit(f, as_flatbuffer(chunk_));
@@ -313,7 +311,9 @@ const record_type& table_slice::layout() const noexcept {
       static const auto empty_layout = record_type{};
       return &empty_layout;
     },
-    [&](const auto& slice) noexcept { return &state(slice, state_)->layout(); },
+    [&](const auto& encoded) noexcept {
+      return &state(encoded, state_)->layout();
+    },
   };
   return *visit(f, as_flatbuffer(chunk_));
 }
@@ -321,7 +321,9 @@ const record_type& table_slice::layout() const noexcept {
 table_slice::size_type table_slice::rows() const noexcept {
   auto f = detail::overload{
     []() noexcept { return size_type{}; },
-    [&](const auto& slice) noexcept { return state(slice, state_)->rows(); },
+    [&](const auto& encoded) noexcept {
+      return state(encoded, state_)->rows();
+    },
   };
   return visit(f, as_flatbuffer(chunk_));
 }
@@ -329,7 +331,9 @@ table_slice::size_type table_slice::rows() const noexcept {
 table_slice::size_type table_slice::columns() const noexcept {
   auto f = detail::overload{
     []() noexcept { return size_type{}; },
-    [&](const auto& slice) noexcept { return state(slice, state_)->columns(); },
+    [&](const auto& encoded) noexcept {
+      return state(encoded, state_)->columns();
+    },
   };
   return visit(f, as_flatbuffer(chunk_));
 }
@@ -355,8 +359,8 @@ void table_slice::append_column_to_index(table_slice::size_type column,
     []() noexcept {
       die("cannot append column of invalid table slice to index");
     },
-    [&](const auto& slice) noexcept {
-      return state(slice, state_)
+    [&](const auto& encoded) noexcept {
+      return state(encoded, state_)
         ->append_column_to_index(offset(), column, index);
     },
   };
@@ -371,8 +375,8 @@ data_view table_slice::at(table_slice::size_type row,
     [&]() noexcept -> data_view {
       die("cannot access data of invalid table slice");
     },
-    [&](const auto& slice) noexcept {
-      return state(slice, state_)->at(row, column);
+    [&](const auto& encoded) noexcept {
+      return state(encoded, state_)->at(row, column);
     },
   };
   return visit(f, as_flatbuffer(chunk_));
@@ -385,19 +389,25 @@ std::shared_ptr<arrow::RecordBatch> as_record_batch(const table_slice& slice) {
     []() noexcept -> std::shared_ptr<arrow::RecordBatch> {
       die("cannot access record batch of invalid table slice");
     },
-    [&](auto&&) noexcept -> std::shared_ptr<arrow::RecordBatch> {
-      VAST_ASSERT(slice.encoding() != table_slice::encoding::arrow);
-      // Rebuild the slice as an Arrow-encoded table slice.
-      auto copy = table_slice(slice, table_slice::encoding::arrow,
-                              table_slice::verify::no);
-      // Bind the lifetime of the copy (and thus the returned Record Batch) to
-      // the lifetime of the original slice.
-      slice.chunk_->ref();
-      copy.chunk_->add_deletion_step([=]() noexcept { slice.chunk_->deref(); });
-      return as_record_batch(copy);
-    },
-    [&](const fbs::table_slice::arrow::v0&) noexcept {
-      return slice.state_.arrow_v0->record_batch();
+    [&](const auto& encoded) noexcept -> std::shared_ptr<arrow::RecordBatch> {
+      // The following does not work on all compilers, hence the ugly
+      // decay+decltype workaround:
+      //   if constexpr (state(encoding, slice.state_)->encoding
+      //                 == table_slice::encoding::arrow) { ... }
+      if constexpr (std::decay_t<decltype(*state(encoded, slice.state_))>::encoding
+                    == table_slice::encoding::arrow) {
+        return state(encoded, slice.state_)->record_batch();
+      } else {
+        // Rebuild the slice as an Arrow-encoded table slice.
+        auto copy = table_slice(slice, table_slice::encoding::arrow,
+                                table_slice::verify::no);
+        // Bind the lifetime of the copy (and thus the returned Record Batch) to
+        // the lifetime of the original slice.
+        slice.chunk_->ref();
+        copy.chunk_->add_deletion_step(
+          [=]() noexcept { slice.chunk_->deref(); });
+        return as_record_batch(copy);
+      }
     },
   };
   return visit(f, as_flatbuffer(slice.chunk_));
@@ -411,12 +421,10 @@ span<const byte> as_bytes(const table_slice& slice) noexcept {
   return as_bytes(slice.chunk_);
 }
 
-// -- operators ----------------------------------------------------------------
-
-void select(std::vector<table_slice>& result, const table_slice& xs,
+void select(std::vector<table_slice>& result, const table_slice& slice,
             const ids& selection) {
-  VAST_ASSERT(xs.encoding() != table_slice::encoding::none);
-  auto xs_ids = make_ids({{xs.offset(), xs.offset() + xs.rows()}});
+  VAST_ASSERT(slice.encoding() != table_slice::encoding::none);
+  auto xs_ids = make_ids({{slice.offset(), slice.offset() + slice.rows()}});
   auto intersection = selection & xs_ids;
   auto intersection_rank = rank(intersection);
   // Do no rows qualify?
@@ -424,45 +432,44 @@ void select(std::vector<table_slice>& result, const table_slice& xs,
     return;
   // Do all rows qualify?
   if (rank(xs_ids) == intersection_rank) {
-    result.emplace_back(xs);
+    result.emplace_back(slice);
     return;
   }
   // Get the desired encoding, and the already serialized layout.
-  caf::atom_value impl = caf::atom("NULL");
-  span<const byte> serialized_layout = {};
   auto f = detail::overload{
-    []() noexcept {},
-    [&](const fbs::table_slice::arrow::v0& slice) noexcept {
-      impl = caf::atom("arrow");
-      serialized_layout
-        = {reinterpret_cast<const byte*>(slice.layout()->data()),
-           slice.layout()->size()};
+    []() noexcept -> std::pair<caf::atom_value, span<const byte>> {
+      die("cannot select from an invalid table slice");
     },
-    [&](const fbs::table_slice::msgpack::v0& slice) noexcept {
-      impl = caf::atom("msgpack");
-      serialized_layout
-        = {reinterpret_cast<const byte*>(slice.layout()->data()),
-           slice.layout()->size()};
+    [&](const auto& encoded) noexcept {
+      return std::pair{
+        builder_id(state(encoded, slice.state_)->encoding),
+        span{reinterpret_cast<const byte*>(encoded.layout()->data()),
+             encoded.layout()->size()}};
     },
   };
-  visit(f, fbs::GetTableSlice(as_bytes(xs).data()));
+  caf::atom_value implementation_id;
+  span<const byte> serialized_layout = {};
+  std::tie(implementation_id, serialized_layout)
+    = visit(f, as_flatbuffer(slice.chunk_));
   // Start slicing and dicing.
-  auto builder = factory<table_slice_builder>::make(impl, xs.layout());
+  auto builder
+    = factory<table_slice_builder>::make(implementation_id, slice.layout());
   if (builder == nullptr) {
-    VAST_ERROR(__func__, "failed to get a table slice builder for", impl);
+    VAST_ERROR(__func__, "failed to get a table slice builder for",
+               implementation_id);
     return;
   }
-  id last_offset = xs.offset();
+  id last_offset = slice.offset();
   auto push_slice = [&] {
     if (builder->rows() == 0)
       return;
-    auto slice = builder->finish(serialized_layout);
-    if (slice.encoding() == table_slice::encoding::none) {
+    auto new_slice = builder->finish(serialized_layout);
+    if (new_slice.encoding() == table_slice::encoding::none) {
       VAST_WARNING(__func__, "got an empty slice");
       return;
     }
-    slice.offset(last_offset);
-    result.emplace_back(std::move(slice));
+    new_slice.offset(last_offset);
+    result.emplace_back(std::move(new_slice));
   };
   auto last_id = last_offset - 1;
   for (auto id : select(intersection)) {
@@ -474,11 +481,11 @@ void select(std::vector<table_slice>& result, const table_slice& xs,
     } else {
       ++last_id;
     }
-    VAST_ASSERT(id >= xs.offset());
-    auto row = id - xs.offset();
-    VAST_ASSERT(row < xs.rows());
-    for (size_t column = 0; column < xs.columns(); ++column) {
-      auto cell_value = xs.at(row, column);
+    VAST_ASSERT(id >= slice.offset());
+    auto row = id - slice.offset();
+    VAST_ASSERT(row < slice.rows());
+    for (size_t column = 0; column < slice.columns(); ++column) {
+      auto cell_value = slice.at(row, column);
       if (!builder->add(cell_value)) {
         VAST_ERROR(__func__, "failed to add data at column", column, "in row",
                    row, "to the builder:", cell_value);
@@ -489,9 +496,12 @@ void select(std::vector<table_slice>& result, const table_slice& xs,
   push_slice();
 }
 
-std::vector<table_slice> select(const table_slice& xs, const ids& selection) {
+// -- operators ----------------------------------------------------------------
+
+std::vector<table_slice>
+select(const table_slice& slice, const ids& selection) {
   std::vector<table_slice> result;
-  select(result, xs, selection);
+  select(result, slice, selection);
   return result;
 }
 
