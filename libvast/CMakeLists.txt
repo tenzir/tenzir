@@ -241,6 +241,12 @@ target_include_directories(
   PUBLIC $<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}>
          $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
          $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>)
+
+if (CMAKE_BUILD_TYPE STREQUAL "Release"
+    OR CMAKE_BUILD_TYPE STREQUAL "MinSizeRel")
+  set_target_properties(libvast PROPERTIES INTERPROCEDURAL_OPTIMIZATION ON)
+endif ()
+
 target_include_directories(libvast PRIVATE "${PROJECT_SOURCE_DIR}/aux")
 
 add_dependencies(libvast vast-schema)
