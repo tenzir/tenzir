@@ -92,7 +92,7 @@ void type_registry_state::insert(vast::type layout) {
   if ([[maybe_unused]] auto [hint, success]
       = cont.insert(flatten(std::move(layout)));
       success)
-    VAST_VERBOSE(self, "registered", hint->name());
+    VAST_DEBUG(self, "registered", hint->name());
 }
 
 type_set type_registry_state::types() const {
