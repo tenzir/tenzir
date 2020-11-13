@@ -195,6 +195,9 @@ public:
     auto chunk = x.chunk_;
     return f(caf::meta::type_name("vast.table_slice"), chunk, x.offset_,
              caf::meta::load_callback([&]() noexcept -> caf::error {
+               // When VAST allows for external tools to hook directly into the
+               // table slice streams, this should be switched to verify if the
+               // chunk is unique.
                x = table_slice{std::move(chunk), table_slice::verify::no};
                return caf::none;
              }));
