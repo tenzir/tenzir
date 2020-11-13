@@ -17,19 +17,18 @@
 #include "vast/detail/byte_swap.hpp"
 #include "vast/detail/narrow.hpp"
 #include "vast/detail/overload.hpp"
+#include "vast/die.hpp"
 #include "vast/error.hpp"
 #include "vast/fbs/table_slice.hpp"
 #include "vast/fbs/utils.hpp"
 #include "vast/logger.hpp"
 #include "vast/value_index.hpp"
 
-#include <caf/binary_deserializer.hpp>
-#include <caf/binary_serializer.hpp>
-#include <caf/detail/type_list.hpp>
-
 #include <arrow/api.h>
 #include <arrow/io/api.h>
 #include <arrow/ipc/api.h>
+
+#include <type_traits>
 
 namespace vast {
 

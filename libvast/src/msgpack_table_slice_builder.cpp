@@ -14,6 +14,7 @@
 #include "vast/msgpack_table_slice_builder.hpp"
 
 #include "vast/detail/overload.hpp"
+#include "vast/fbs/table_slice.hpp"
 #include "vast/fbs/utils.hpp"
 #include "vast/logger.hpp"
 #include "vast/msgpack_table_slice.hpp"

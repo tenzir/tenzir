@@ -39,6 +39,8 @@ class Schema;
 
 #endif // VAST_HAVE_ARROW
 
+namespace vast {
+
 namespace fbs {
 
 struct FlatTableSlice;
@@ -61,8 +63,6 @@ struct v0;
 } // namespace table_slice
 
 } // namespace fbs
-
-namespace vast {
 
 // -- classes ------------------------------------------------------------------
 
