@@ -448,7 +448,7 @@ index(caf::stateful_actor<index_state>* self, filesystem_type fs, path dir,
              VAST_ARG(num_workers));
   VAST_VERBOSE(self, "initializes index in", dir,
                "with a maximum partition size of", partition_capacity,
-               "events");
+               "events and", max_inmem_partitions, "resident partitions");
   // Set members.
   self->state.self = self;
   self->state.filesystem = fs;

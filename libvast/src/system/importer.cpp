@@ -196,8 +196,6 @@ caf::behavior importer(importer_actor* self, path dir, archive_type archive,
       VAST_DEBUG(self, "registers accountant", archive);
       self->state.accountant = std::move(accountant);
       self->send(self->state.accountant, atom::announce_v, self->name());
-      self->delayed_send(self, defs::telemetry_rate, atom::telemetry_v);
-      self->state.last_report = stopwatch::now();
     },
     [=](atom::exporter, const caf::actor& exporter) {
       VAST_DEBUG(self, "registers exporter", exporter);
