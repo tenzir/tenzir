@@ -64,27 +64,27 @@ chunk_ptr chunk::mmap(const path& filename, size_type size, size_type offset) {
   return make(size, reinterpret_cast<value_type*>(map), deleter);
 }
 
-chunk::~chunk() {
+chunk::~chunk() noexcept {
   deleter_();
 }
 
-chunk::const_pointer chunk::data() const {
+chunk::const_pointer chunk::data() const noexcept {
   return data_;
 }
 
-chunk::size_type chunk::size() const {
+chunk::size_type chunk::size() const noexcept {
   return size_;
 }
 
-chunk::const_iterator chunk::begin() const {
+chunk::const_iterator chunk::begin() const noexcept {
   return data_;
 }
 
-chunk::const_iterator chunk::end() const {
+chunk::const_iterator chunk::end() const noexcept {
   return data_ + size_;
 }
 
-chunk::value_type chunk::operator[](size_type i) const {
+chunk::value_type chunk::operator[](size_type i) const noexcept {
   VAST_ASSERT(i < size());
   return data_[i];
 }
@@ -99,14 +99,12 @@ chunk_ptr chunk::slice(size_type start, size_type length) const {
   return make(length, data_ + start, deleter);
 }
 
-chunk::chunk(void* ptr, size_type size, deleter_type deleter)
-  : data_{reinterpret_cast<value_type*>(ptr)},
-    size_{size},
-    deleter_{deleter} {
+chunk::chunk(void* ptr, size_type size, deleter_type deleter) noexcept
+  : data_{reinterpret_cast<value_type*>(ptr)}, size_{size}, deleter_{deleter} {
   VAST_ASSERT(deleter_);
 }
 
-span<const byte> as_bytes(const chunk_ptr& x) {
+span<const byte> as_bytes(const chunk_ptr& x) noexcept {
   if (!x)
     return {};
   auto ptr = reinterpret_cast<const byte*>(x->data());
