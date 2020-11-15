@@ -25,7 +25,6 @@
 #include "vast/error.hpp"
 #include "vast/fbs/segment.hpp"
 #include "vast/fbs/utils.hpp"
-#include "vast/fbs/version.hpp"
 #include "vast/ids.hpp"
 #include "vast/logger.hpp"
 #include "vast/si_literals.hpp"
@@ -45,11 +44,6 @@ caf::expected<segment> segment::make(chunk_ptr chunk) {
   VAST_ASSERT(s); // `GetSegment` is just a cast, so this cant become null.
   if (s->segment_type() != fbs::segment::Segment::v0)
     return make_error(ec::format_error, "unsupported segment version");
-  auto vs = s->segment_as_v0();
-  // This check is an artifact from an earlier flatbuffer versioning
-  // scheme, where the version was stored as an inline field.
-  if (vs->version() != fbs::Version::v0)
-    return make_error(ec::format_error, "invalid v0 segment layout");
   return segment{std::move(chunk)};
 }
 

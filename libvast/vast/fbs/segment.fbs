@@ -1,5 +1,4 @@
 include "table_slice.fbs";
-include "version.fbs";
 include "uuid.fbs";
 
 namespace vast.fbs.interval;
@@ -17,9 +16,6 @@ namespace vast.fbs.segment;
 
 /// A bundled sequence of table slices.
 table v0 {
-  /// The version of the segment.
-  version: Version;
-
   /// The contained table slices.
   slices: [FlatTableSlice];
 

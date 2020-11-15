@@ -12,6 +12,10 @@ Every entry has a category for which we use the following visual abbreviations:
 
 ## Unreleased
 
+- ⚡️ Archive segments no longer include an additional, unnecessary version
+  identifier. We took the opportunity to clean this up bundled with the other
+  recent breaking changes. [#1168](https://github.com/tenzir/vast/pull/1168)
+
 - ⚡️ The on-disk format for table slices now supports versioning of table slice
   encodings. This breaking change makes it so that adding further encodings or
   adding new versions of existing encodings is possible without breaking again

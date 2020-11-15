@@ -1,5 +1,4 @@
 include "uuid.fbs";
-include "version.fbs";
 include "synopsis.fbs";
 
 namespace vast.fbs.value_index;
