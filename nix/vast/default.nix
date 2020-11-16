@@ -15,6 +15,7 @@
 , libyamlcpp
 , broker
 , jemalloc
+, libexecinfo
 , python3
 , jq
 , tcpdump
@@ -22,6 +23,7 @@
 , static ? stdenv.hostPlatform.isMusl
 , versionOverride ? null
 , disableTests ? true
+, buildType ? "Release"
 }:
 let
   isCross = stdenv.buildPlatform != stdenv.hostPlatform;
@@ -65,10 +67,13 @@ stdenv.mkDerivation rec {
 
   nativeBuildInputs = [ cmake cmake-format ];
   propagatedNativeBuildInputs = [ pkgconfig pandoc ];
-  buildInputs = [ libpcap jemalloc broker libyamlcpp ];
+  buildInputs = [ libpcap jemalloc broker libyamlcpp ]
+    # Required for backtrace on musl libc.
+    ++ lib.optional (static && buildType == "CI") libexecinfo;
   propagatedBuildInputs = [ arrow-cpp caf flatbuffers ];
 
   cmakeFlags = [
+    "-DCMAKE_BUILD_TYPE:STRING=${buildType}"
     "-DCMAKE_INSTALL_SYSCONFDIR:PATH=/etc"
     "-DCMAKE_FIND_PACKAGE_PREFER_CONFIG=ON"
     "-DCAF_ROOT_DIR=${caf}"
@@ -76,9 +81,14 @@ stdenv.mkDerivation rec {
     "-DVAST_VERSION_TAG=${version}"
     "-DVAST_USE_JEMALLOC=ON"
     "-DBROKER_ROOT_DIR=${broker}"
+  ] ++ lib.optionals (buildType == "CI") [
+    "-DVAST_ENABLE_ASSERTIONS=ON"
+    "-DENABLE_ADDRESS_SANITIZER=ON"
   ] ++ lib.optionals static [
     "-DVAST_STATIC_EXECUTABLE:BOOL=ON"
     "-DCMAKE_INTERPROCEDURAL_OPTIMIZATION:BOOL=ON"
+    # Workaround for false positives in LTO mode.
+    "-DCMAKE_CXX_FLAGS:STRING=-Wno-error=maybe-uninitialized"
   ] ++ lib.optional disableTests "-DBUILD_UNIT_TESTS=OFF";
 
   hardeningDisable = lib.optional static "pic";
