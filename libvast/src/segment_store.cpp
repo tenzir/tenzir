@@ -239,7 +239,7 @@ caf::error segment_store::erase(const ids& xs) {
         VAST_ERROR(this, "failed to persist the new segment");
       auto stale_filename = segment_path() / to_string(segment_id);
       // Schedule deletion of the segment file when releasing the chunk.
-      seg.chunk()->add_deletion_step([=] { rm(stale_filename); });
+      seg.chunk()->add_deletion_step([=]() noexcept { rm(stale_filename); });
     }
     // else: nothing to do, since we can continue filling the active segment.
   };
@@ -416,7 +416,7 @@ uint64_t segment_store::drop(segment& x) {
   VAST_INFO(this, "erases entire segment", segment_id);
   // Schedule deletion of the segment file when releasing the chunk.
   auto filename = segment_path() / to_string(segment_id);
-  x.chunk()->add_deletion_step([=] { rm(filename); });
+  x.chunk()->add_deletion_step([=]() noexcept { rm(filename); });
   segments_.erase_value(segment_id);
   return erased_events;
 }

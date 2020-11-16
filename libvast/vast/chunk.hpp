@@ -103,23 +103,23 @@ public:
   mmap(const path& filename, size_type size = 0, size_type offset = 0);
 
   /// Destroys the chunk and releases owned memory via the deleter.
-  ~chunk() override;
+  ~chunk() noexcept override;
 
   // -- container API ---------------------------------------------------------
 
   /// @returns The pointer to the chunk buffer.
-  const_pointer data() const;
+  const_pointer data() const noexcept;
 
   /// @returns The size of the chunk.
-  size_type size() const;
+  size_type size() const noexcept;
 
   // -- iteration -------------------------------------------------------------
 
   /// @returns A pointer to the first byte in the chunk.
-  const_iterator begin() const;
+  const_iterator begin() const noexcept;
 
   /// @returns A pointer to one past the last byte in the chunk.
-  const_iterator end() const;
+  const_iterator end() const noexcept;
 
   // -- accessors -------------------------------------------------------------
 
@@ -127,14 +127,15 @@ public:
   /// @param i The position of the byte.
   /// @returns The value at position *i*.
   /// @pre `i < size()`
-  value_type operator[](size_type i) const;
+  value_type operator[](size_type i) const noexcept;
 
   /// Casts the chunk data into a immutable pointer of a desired type.
   /// @tparam T the type to cast to.
   /// @param offset The offset to start at.
   /// @returns a pointer of type `const T*` at position *offset*.
   template <class T>
-  const T* as(size_type offset = 0) const {
+  const T* as(size_type offset = 0) const noexcept {
+    static_assert(std::is_trivial_v<T>, "'T' must be a trivial type");
     VAST_ASSERT(offset < size());
     auto ptr = data() + offset;
     return reinterpret_cast<const T*>(std::launder(ptr));
@@ -149,20 +150,23 @@ public:
   chunk_ptr slice(size_type start, size_type length = 0) const;
 
   /// Adds an additional step for deleting this chunk.
-  /// @param f Function object that gets called after all previous deletion
-  ///          steps ran.
-  template <class F>
-  void add_deletion_step(F f) {
-    auto g = [first = std::move(deleter_), second = std::move(f)] {
-      first();
-      second();
+  /// @param step Function object that gets called after all previous deletion
+  /// steps ran. It must be nothrow-invocable, as it gets called during the
+  /// destructor of chunk.
+  template <class Step>
+  void add_deletion_step(Step&& step) noexcept {
+    static_assert(std::is_nothrow_invocable_r_v<void, Step>,
+                  "'Step' must have the signature 'void () noexcept'");
+    auto g = [first = std::move(deleter_), second = std::forward<Step>(step)] {
+      std::invoke(std::move(first));
+      std::invoke(std::move(second));
     };
     deleter_ = std::move(g);
   }
 
   // -- concepts --------------------------------------------------------------
 
-  friend span<const byte> as_bytes(const chunk_ptr& x);
+  friend span<const byte> as_bytes(const chunk_ptr& x) noexcept;
 
   friend caf::error write(const path& filename, const chunk_ptr& x);
 
@@ -173,7 +177,7 @@ public:
   friend caf::error inspect(caf::deserializer& source, chunk_ptr& x);
 
 private:
-  chunk(void* ptr, size_type size, deleter_type deleter);
+  chunk(void* ptr, size_type size, deleter_type deleter) noexcept;
 
   pointer data_;
   size_type size_;
