@@ -59,6 +59,7 @@ public:
   /// `vast.fbs.TableSlice` FlatBuffers table.
   /// @param chunk A `vast.fbs.TableSlice` FlatBuffers table in a chunk.
   /// @param verify Controls whether the table should be verified.
+  /// @pre `!chunk || chunk->unique()`
   /// @note Constructs an invalid table slice if the verification of the
   /// FlatBuffers table fails.
   explicit table_slice(chunk_ptr&& chunk, enum verify verify) noexcept;
@@ -68,6 +69,7 @@ public:
   /// @param chunk A `vast.fbs.TableSlice` FlatBuffers table in a chunk.
   /// @param verify Controls whether the table should be verified.
   /// @param layout The known table layout.
+  /// @pre `!chunk || chunk->unique()`
   /// @note Constructs an invalid table slice if the verification of the
   /// FlatBuffers table fails.
   explicit table_slice(chunk_ptr&& chunk, enum verify verify,
@@ -132,7 +134,12 @@ public:
   id offset() const noexcept;
 
   /// Sets the offset in the ID space.
+  /// @pre `unique()`
   void offset(id offset) noexcept;
+
+  /// @returns Whether the underlying chunk is uniquely owned, i.e., this table
+  /// slice is not shared.
+  bool unique() const noexcept;
 
   /// @returns The number of in-memory table slices.
   static int instances() noexcept;
@@ -175,7 +182,7 @@ public:
   friend auto inspect(Inspector& f, table_slice& x) ->
     typename Inspector::result_type {
     auto chunk = x.chunk_;
-    return f(caf::meta::type_name("vast.table_slice"), chunk, x.offset_,
+    return f(caf::meta::type_name("vast.table_slice"), chunk,
              caf::meta::load_callback([&]() noexcept -> caf::error {
                // When VAST allows for external tools to hook directly into the
                // table slice streams, this should be switched to verify if the
@@ -216,21 +223,13 @@ private:
   /// `table_slice`.
   chunk_ptr chunk_ = {};
 
-  /// The offset of the table slice within its ID space.
-  /// @note Assigned by the importer on import and the archive on export and as
-  /// such not part of the FlatBuffers table. Binary representations of a table
-  /// slice do not contain the offset.
-  id offset_ = invalid_id;
-
-  /// A pointer to the table slice state. As long as the layout cannot be
-  /// represented from a FlatBuffers table directly, it is prohibitively
-  /// expensive to deserialize the layout.
-  /// TODO: Revisit the need for this hack after converting the type system to
-  /// use FlatBuffers.
+  /// A pointer to the additional table slice state that is not in the
+  /// encoding-specific FlatBuffers tables. This includes the offset of the
+  /// table slice within its ID space.
   union {
     const void* none = {};
-    const msgpack_table_slice<fbs::table_slice::msgpack::v0>* msgpack_v0;
-    const arrow_table_slice<fbs::table_slice::arrow::v0>* arrow_v0;
+    msgpack_table_slice<fbs::table_slice::msgpack::v0>* msgpack_v0;
+    arrow_table_slice<fbs::table_slice::arrow::v0>* arrow_v0;
   } state_;
 
   /// The number of in-memory table slices.

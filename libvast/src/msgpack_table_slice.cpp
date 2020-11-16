@@ -293,6 +293,16 @@ msgpack_table_slice<FlatBuffer>::columns() const noexcept {
   return layout().fields.size();
 }
 
+template <class FlatBuffer>
+id msgpack_table_slice<FlatBuffer>::offset() const noexcept {
+  return state_.offset;
+}
+
+template <class FlatBuffer>
+void msgpack_table_slice<FlatBuffer>::offset(id offset) noexcept {
+  state_.offset = offset;
+}
+
 // -- data access ------------------------------------------------------------
 
 template <class FlatBuffer>

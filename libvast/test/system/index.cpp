@@ -110,24 +110,25 @@ struct fixture : fixtures::deterministic_actor_system_and_events {
   /// Rebases offsets of table slices, i.e., the offsets of the first
   /// table slice is 0, the offset of the second table slice is 0 + rows in the
   /// first slice, and so on.
-  auto rebase(std::vector<table_slice> xs) {
+  auto rebase(std::vector<table_slice> slices) {
+    // Set incrementing offsets.
     id offset = 0;
-    for (auto& x : xs) {
-      x.offset(offset);
-      offset += x.rows();
+    for (auto& slice : slices) {
+      slice.offset(offset);
+      offset += slice.rows();
     }
-    return xs;
+    return slices;
   }
 
   // Handle to the INDEX actor.
   caf::actor index;
 };
 
-} // namespace <anonymous>
+} // namespace
 
 FIXTURE_SCOPE(index_tests, fixture)
 
-TEST(one-shot integer query result) {
+TEST(one - shot integer query result) {
   MESSAGE("fill first " << taste_count << " partitions");
   auto slices = rebase(first_n(alternating_integers, taste_count));
   REQUIRE_EQUAL(rows(slices), slice_size * taste_count);

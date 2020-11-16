@@ -30,11 +30,14 @@ struct arrow_table_slice_state;
 
 template <>
 struct arrow_table_slice_state<fbs::table_slice::arrow::v0> {
+  /// The offset of the table slice in its ID space.
+  id offset = invalid_id;
+
   /// The deserialized table layout.
-  record_type layout;
+  record_type layout = {};
 
   /// The deserialized Arrow Record Batch.
-  std::shared_ptr<arrow::RecordBatch> record_batch;
+  std::shared_ptr<arrow::RecordBatch> record_batch = {};
 };
 
 /// A table slice that stores elements encoded in the [Arrow](https://arrow.org)
@@ -75,6 +78,12 @@ public:
 
   /// @returns The number of columns in the slice.
   table_slice::size_type columns() const noexcept;
+
+  /// @returns The offset in the ID space.
+  id offset() const noexcept;
+
+  /// Sets the offset in the ID space.
+  void offset(id offset) noexcept;
 
   // -- data access ------------------------------------------------------------
 

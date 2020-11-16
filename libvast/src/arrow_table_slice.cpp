@@ -636,6 +636,16 @@ table_slice::size_type arrow_table_slice<FlatBuffer>::columns() const noexcept {
   return record_batch()->num_columns();
 }
 
+template <class FlatBuffer>
+id arrow_table_slice<FlatBuffer>::offset() const noexcept {
+  return state_.offset;
+}
+
+template <class FlatBuffer>
+void arrow_table_slice<FlatBuffer>::offset(id offset) noexcept {
+  state_.offset = offset;
+}
+
 // -- data access ------------------------------------------------------------
 
 template <class FlatBuffer>

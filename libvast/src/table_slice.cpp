@@ -152,7 +152,8 @@ table_slice::table_slice() noexcept {
 
 table_slice::table_slice(chunk_ptr&& chunk, enum verify verify) noexcept
   : chunk_{verified_or_none(std::move(chunk), verify)} {
-  if (chunk_ && chunk_->unique()) {
+  if (chunk_) {
+    VAST_ASSERT(chunk_->unique());
     ++num_instances_;
     auto f = detail::overload{
       []() noexcept { die("invalid table slice encoding"); },
@@ -172,7 +173,8 @@ table_slice::table_slice(chunk_ptr&& chunk, enum verify verify) noexcept
 table_slice::table_slice(chunk_ptr&& chunk, enum verify verify,
                          record_type layout) noexcept
   : chunk_{verified_or_none(std::move(chunk), verify)} {
-  if (chunk_ && chunk_->unique()) {
+  if (chunk_) {
+    VAST_ASSERT(chunk_->unique());
     ++num_instances_;
     auto f = detail::overload{
       []() noexcept { die("invalid table slice encoding"); },
@@ -205,27 +207,24 @@ table_slice::table_slice(const fbs::FlatTableSlice& flat_slice,
 }
 
 table_slice::table_slice(const table_slice& other) noexcept
-  : chunk_{other.chunk_}, offset_{other.offset_}, state_{other.state_} {
+  : chunk_{other.chunk_}, state_{other.state_} {
   // nop
 }
 
 table_slice& table_slice::operator=(const table_slice& rhs) noexcept {
   chunk_ = rhs.chunk_;
-  offset_ = rhs.offset_;
   state_ = rhs.state_;
   return *this;
 }
 
 table_slice::table_slice(table_slice&& other) noexcept
   : chunk_{std::exchange(other.chunk_, {})},
-    offset_{std::exchange(other.offset_, invalid_id)},
     state_{std::exchange(other.state_, {})} {
   // nop
 }
 
 table_slice& table_slice::operator=(table_slice&& rhs) noexcept {
   chunk_ = std::exchange(rhs.chunk_, {});
-  offset_ = std::exchange(rhs.offset_, invalid_id);
   state_ = std::exchange(rhs.state_, {});
   return *this;
 }
@@ -302,11 +301,33 @@ table_slice::size_type table_slice::columns() const noexcept {
 }
 
 id table_slice::offset() const noexcept {
-  return offset_;
+  auto f = detail::overload{
+    []() noexcept { return invalid_id; },
+    [&](const auto& encoded) noexcept {
+      return state(encoded, state_)->offset();
+    },
+  };
+  return visit(f, as_flatbuffer(chunk_));
 }
 
 void table_slice::offset(id offset) noexcept {
-  offset_ = offset;
+  if (unique()) {
+    auto f = detail::overload{
+      []() noexcept {},
+      [&](const auto& encoded) noexcept {
+        return state(encoded, state_)->offset(offset);
+      },
+    };
+    return visit(f, as_flatbuffer(chunk_));
+  } else {
+    auto copy = table_slice{chunk_->slice(0), table_slice::verify::no};
+    copy.offset(offset);
+    *this = std::move(copy);
+  }
+}
+
+bool table_slice::unique() const noexcept {
+  return !chunk_ || chunk_->unique();
 }
 
 int table_slice::instances() noexcept {

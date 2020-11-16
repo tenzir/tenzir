@@ -28,8 +28,11 @@ struct msgpack_table_slice_state;
 
 template <>
 struct msgpack_table_slice_state<fbs::table_slice::msgpack::v0> {
+  /// The offset of the table slice in its ID space.
+  id offset = invalid_id;
+
   /// The deserialized table layout.
-  record_type layout;
+  record_type layout = {};
 };
 
 /// A table slice that stores elements encoded in
@@ -71,6 +74,12 @@ public:
 
   /// @returns The number of columns in the slice.
   table_slice::size_type columns() const noexcept;
+
+  /// @returns The offset in the ID space.
+  id offset() const noexcept;
+
+  /// Sets the offset in the ID space.
+  void offset(id offset) noexcept;
 
   // -- data access ------------------------------------------------------------
 
