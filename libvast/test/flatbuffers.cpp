@@ -112,14 +112,15 @@ TEST(empty partition roundtrip) {
   state.id = vast::uuid::random();
   state.offset = 17;
   state.events = 23;
+  state.synopsis = std::make_shared<vast::partition_synopsis>();
   state.combined_layout
     = vast::record_type{{"x", vast::count_type{}}}.name("y");
   auto& ids = state.type_ids["x"];
   ids.append_bits(0, 3);
   ids.append_bits(1, 3);
-  // Prepare a mini meta index. The meta index only looks at the layout of the
-  // table slices it gets, so we feed it with an empty table slice.
-  auto meta_idx = vast::meta_index{};
+  // Prepare a layout for the partition synopsis. The meta index only
+  // looks at the layout of the table slices it gets, so we feed it
+  // with an empty table slice.
   auto layout = vast::record_type{{"x", vast::count_type{}}}.name("y");
   auto slice_builder = vast::factory<vast::table_slice_builder>::make(
     vast::defaults::import::table_slice_type, layout);
@@ -127,7 +128,7 @@ TEST(empty partition roundtrip) {
   auto slice = slice_builder->finish();
   slice.offset(0);
   REQUIRE_NOT_EQUAL(slice.encoding(), vast::table_slice::encoding::none);
-  state.meta_idx.add(state.id, slice);
+  state.synopsis->add(slice, caf::settings{});
   // Serialize partition.
   flatbuffers::FlatBufferBuilder builder;
   {
@@ -180,8 +181,9 @@ TEST(full partition roundtrip) {
     vast::system::posix_filesystem,
     directory); // `directory` is provided by the unit test fixture
   auto partition_uuid = vast::uuid::random();
-  auto partition = sys.spawn(vast::system::active_partition, partition_uuid, fs,
-                             caf::settings{}, vast::meta_index{});
+  auto partition = sys.spawn(vast::system::active_partition, partition_uuid,
+                             caf::optional<caf::actor>{}, fs, caf::settings{},
+                             caf::settings{});
   run();
   REQUIRE(partition);
   // Add data to the partition.

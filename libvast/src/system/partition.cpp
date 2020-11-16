@@ -13,6 +13,7 @@
 
 #include "vast/system/partition.hpp"
 
+#include "vast/address_synopsis.hpp"
 #include "vast/aliases.hpp"
 #include "vast/chunk.hpp"
 #include "vast/concept/hashable/xxhash.hpp"
@@ -30,6 +31,7 @@
 #include "vast/ids.hpp"
 #include "vast/load.hpp"
 #include "vast/logger.hpp"
+#include "vast/meta_index.hpp"
 #include "vast/qualified_record_field.hpp"
 #include "vast/save.hpp"
 #include "vast/synopsis.hpp"
@@ -60,8 +62,12 @@
 
 #include <flatbuffers/flatbuffers.h>
 
+#include <memory>
+
 using namespace std::chrono;
 using namespace caf;
+
+CAF_ALLOW_UNSAFE_MESSAGE_TYPE(std::shared_ptr<vast::partition_synopsis>)
 
 namespace vast::system {
 
@@ -244,9 +250,7 @@ pack(flatbuffers::FlatBufferBuilder& builder, const active_partition_state& x) {
   }
   auto type_ids = builder.CreateVector(tids);
   // Serialize synopses.
-  // A dummy entry is created in `spawn()`, so we can safely use `at()`.
-  auto& partition_synopsis = x.meta_idx.synopses_.at(x.id);
-  auto maybe_ps = pack(builder, partition_synopsis);
+  auto maybe_ps = pack(builder, *x.synopsis);
   if (!maybe_ps)
     return maybe_ps.error();
   fbs::partition::v0Builder v0_builder(builder);
@@ -338,17 +342,19 @@ caf::error unpack(const fbs::partition::v0& x, partition_synopsis& ps) {
 
 caf::behavior
 active_partition(caf::stateful_actor<active_partition_state>* self, uuid id,
-                 filesystem_type fs, caf::settings index_opts,
-                 meta_index meta_idx) {
+                 caf::optional<caf::actor> index, filesystem_type fs,
+                 caf::settings index_opts, caf::settings synopsis_opts) {
   self->state.self = self;
   self->state.name = "partition-" + to_string(id);
   self->state.id = id;
   self->state.offset = vast::invalid_id;
   self->state.events = 0;
   self->state.fs_actor = fs;
+  self->state.index_actor = index ? *index : nullptr;
   self->state.streaming_initiated = false;
-  self->state.meta_idx = std::move(meta_idx);
-  self->state.meta_idx.add(id);
+  self->state.synopsis = std::make_shared<partition_synopsis>();
+  self->state.synopsis_opts = std::move(synopsis_opts);
+  put(self->state.synopsis_opts, "buffer-ips", true);
   // The active partition stage is a caf stream stage that takes
   // a stream of `table_slice` as input and produces several
   // streams of `table_slice_column` as output.
@@ -373,7 +379,7 @@ active_partition(caf::stateful_actor<active_partition_state>* self, uuid id,
       ids.append_bits(true, last - first);
       self->state.offset = std::min(x.offset(), self->state.offset);
       self->state.events += x.rows();
-      self->state.meta_idx.add(id, x);
+      self->state.synopsis->add(x, self->state.synopsis_opts);
       size_t col = 0;
       VAST_ASSERT(!layout.fields.empty());
       for (auto& field : layout.fields) {
@@ -497,6 +503,9 @@ active_partition(caf::stateful_actor<active_partition_state>* self, uuid id,
                    self->state.indexers.size());
         return;
       }
+      // Shrink synopses for addr fields to optimal size.
+      self->state.synopsis->shrink();
+      // Create the partition flatbuffer.
       flatbuffers::FlatBufferBuilder builder;
       auto partition = pack(builder, self->state);
       if (!partition) {
@@ -509,6 +518,19 @@ active_partition(caf::stateful_actor<active_partition_state>* self, uuid id,
       auto fbchunk = fbs::release(builder);
       VAST_DEBUG(self, "persists partition with a total size of",
                  fbchunk->size(), "bytes");
+      // Relinquish ownership and send the shrinked synopsis to the index.
+      if (self->state.index_actor) {
+        self->send(self->state.index_actor, self->state.synopsis);
+        self->state.synopsis.reset();
+      }
+      // TODO: This is duplicating code from one of the `chunk` constructors,
+      // but otoh its maybe better to be explicit that we're creating a shared
+      // pointer here.
+      auto ys = std::make_shared<flatbuffers::DetachedBuffer>(std::move(fb));
+      auto deleter = [=]() mutable { ys.reset(); };
+      auto fbchunk = chunk::make(ys->size(), ys->data(), deleter);
+      VAST_DEBUG(self, "persists partition with a total size of", ys->size(),
+                 "bytes");
       self->state.persistence_promise.delegate(self->state.fs_actor,
                                                atom::write_v,
                                                *self->state.persist_path,

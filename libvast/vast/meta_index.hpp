@@ -51,6 +51,12 @@ pack(flatbuffers::FlatBufferBuilder& builder,
 //        Then we could store this in the `active_partition_state` directly
 //        instead of using a meta_index with only one entry.
 struct partition_synopsis {
+  /// Returns a new partition synopsis for the same data but optimized for
+  /// size.
+  void shrink();
+
+  void add(const table_slice& slice, const caf::settings& synopsis_options);
+
   /// Synopsis data structures for individual columns.
   std::unordered_map<qualified_record_field, synopsis_ptr> field_synopses_;
 };
@@ -60,9 +66,6 @@ struct partition_synopsis {
 /// data. The meta index may return false positives but never false negatives.
 class meta_index {
 public:
-  /// Adds an (empty) entry for the given partition.
-  void add(const uuid& partition);
-
   /// Adds all data from a table slice belonging to a given partition to the
   /// index.
   /// @param slice The table slice to extract data from.
@@ -72,6 +75,15 @@ public:
   /// Adds new synopses for a partition in bulk. Used when
   /// re-building the meta index state at startup.
   void merge(const uuid& partition, partition_synopsis&&);
+
+  /// Replaces an existing partition synopsis. Does nothing
+  /// if `partition` does not exist as a key.
+  void replace(const uuid& partition, std::unique_ptr<partition_synopsis>);
+
+  /// Returns the partition synopsis for a specific partition.
+  /// Note that most callers will prefer to use `lookup()` instead.
+  /// @pre `partition` must be a valid key for this meta index.
+  partition_synopsis& at(const uuid& partition);
 
   /// Erase this partition from the meta index.
   void erase(const uuid& partition);

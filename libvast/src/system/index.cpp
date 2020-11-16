@@ -466,11 +466,10 @@ index(caf::stateful_actor<index_state>* self, filesystem_type fs, path dir,
     auto id = uuid::random();
     caf::settings index_opts;
     index_opts["cardinality"] = partition_capacity;
-    meta_index local_meta_idx;
-    put(local_meta_idx.factory_options(), "max-partition-size",
-        partition_capacity);
-    auto part = self->spawn(active_partition, id, self->state.filesystem,
-                            index_opts, std::move(local_meta_idx));
+    auto part
+      = self->spawn(active_partition, id, caf::actor_cast<caf::actor>(self),
+                    self->state.filesystem, index_opts,
+                    self->state.meta_idx.factory_options());
     auto slot = self->state.stage->add_outbound_path(part);
     self->state.active_partition.actor = part;
     self->state.active_partition.stream_slot = slot;
@@ -739,6 +738,21 @@ index(caf::stateful_actor<index_state>* self, filesystem_type fs, path dir,
     },
     [=](atom::subscribe, atom::flush, const caf::actor& listener) {
       self->state.add_flush_listener(listener);
+    },
+    // The idea is that its safe to move from a `shared_ptr&` here since
+    // the unique owner of the pointer will be the message (which doesnt
+    // need it anymore).
+    // Semantically we want a unique_ptr here, but caf message types need
+    // to be copy constructible.
+    [=](atom::replace, uuid partition_id,
+        std::shared_ptr<partition_synopsis>& ps) {
+      if (!ps.unique()) {
+        VAST_WARNING(self, "ignores partition synopses thats still in use");
+        return;
+      }
+      auto pu = std::make_unique<partition_synopsis>();
+      std::swap(*ps, *pu);
+      self->state.meta_idx.replace(partition_id, std::move(pu));
     },
     [=](atom::erase, uuid partition_id) {
       VAST_VERBOSE(self, "erases partition", partition_id);

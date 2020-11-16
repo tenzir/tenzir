@@ -34,6 +34,7 @@
 #include <unordered_map>
 
 #include "caf/fwd.hpp"
+#include "caf/optional.hpp"
 
 namespace vast::system {
 
@@ -77,11 +78,15 @@ struct active_partition_state {
   /// Maps type names to IDs. Used the answer #type queries.
   std::unordered_map<std::string, ids> type_ids;
 
-  /// A local version of the meta index that only contains the entry
-  /// related for this partition. During startup, the INDEX reads all
-  /// of these from the flatbufferized state to build up the global
-  /// meta index.
-  meta_index meta_idx;
+  /// Partition synopsis for this partition. This is built up in parallel
+  /// to the one in the index, so it can be shrinked and serialized into
+  /// a `Partition` flatbuffer upon completion of this partition. Wrapped
+  /// into a unique_ptr so it can be sent to the index after its not needed
+  /// here anymore.
+  std::shared_ptr<partition_synopsis> synopsis;
+
+  /// Options to be used when adding events to the partition_synopsis.
+  caf::settings synopsis_opts;
 
   /// A readable name for this partition
   std::string name;
@@ -91,6 +96,9 @@ struct active_partition_state {
 
   /// The number of events in the partition.
   size_t events;
+
+  /// Actor handle of the index actor.
+  caf::actor index_actor;
 
   /// Actor handle of the filesystem actor.
   filesystem_type fs_actor;
@@ -171,10 +179,13 @@ caf::error unpack(const fbs::partition::v0& x, partition_synopsis& y);
 /// @param self The partition actor.
 /// @param id The UUID of this partition.
 /// @param fs The actor handle of the filesystem actor.
+/// @param index (optional) The actor handle of the index, to send the minified
+/// partitions to.
 /// @param index_opts Settings that are forwarded when creating indexers.
 caf::behavior
 active_partition(caf::stateful_actor<active_partition_state>* self, uuid id,
-                 filesystem_type fs, caf::settings index_opts, meta_index);
+                 caf::optional<caf::actor> index, filesystem_type fs,
+                 caf::settings index_opts, caf::settings synopsis_opts);
 
 /// Spawns a read-only partition.
 /// @param self The partition actor.
