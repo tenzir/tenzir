@@ -94,5 +94,14 @@
     description: >-
       The VLAN for a connection
     concepts:
-      - net.outer_vlan 
-      - net.inner_vlan 
+      - net.outer_vlan
+      - net.inner_vlan
+
+- model:
+    name: net.connection
+    concepts:
+      - net.src.ip
+      - net.src.port
+      - net.dst.ip
+      - net.dst.port
+      - net.proto
