@@ -89,15 +89,6 @@ public:
   /// @param other The copied-from slice.
   table_slice(const table_slice& other) noexcept;
 
-  /// Copy-construct a table slice with a given encoding, possibly re-encoding.
-  /// @param other The copied-from slice.
-  /// @param encoding The encoding to convert to.
-  /// @param verify_table Controls whether the table should be verified.
-  /// @note This function only re-encodes if necessary, i.e., the new encoding
-  /// is different from the existing one.
-  table_slice(const table_slice& other, enum encoding encoding,
-              enum verify verify) noexcept;
-
   /// Copy-assigns a table slice.
   /// @param rhs The copied-from slice.
   table_slice& operator=(const table_slice& rhs) noexcept;
@@ -105,15 +96,6 @@ public:
   /// Move-constructs a table slice.
   /// @param other The moved-from slice.
   table_slice(table_slice&& other) noexcept;
-
-  /// Move-construct a table slice with a given encoding, possibly re-encoding.
-  /// @param other The moved-from slice.
-  /// @param encoding The encoding to convert to.
-  /// @param verify Controls whether the table should be verified.
-  /// @note This function only re-encodes if necessary, i.e., the new encoding
-  /// is different from the existing one.
-  table_slice(table_slice&& other, enum encoding encoding,
-              enum verify verify) noexcept;
 
   /// Move-assigns a table slice.
   /// @param rhs The moved-from slice.
@@ -202,6 +184,16 @@ public:
                return caf::none;
              }));
   }
+
+  // -- operations -------------------------------------------------------------
+
+  /// Rebuilds a table slice with a given encoding if necessary.
+  /// @param slice The slice to rebuild.
+  /// @param encoding The encoding to convert to.
+  /// @note This function only rebuilds if necessary, i.e., the new encoding
+  /// is different from the existing one.
+  friend table_slice
+  rebuild(table_slice slice, enum encoding encoding) noexcept;
 
   /// Selects all rows in `slice` with event IDs in `selection` and appends
   /// produced table slices to `result`. Cuts `slice` into multiple slices if

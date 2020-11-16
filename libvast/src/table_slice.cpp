@@ -119,24 +119,6 @@ constexpr caf::atom_value builder_id(enum table_slice::encoding encoding) {
   die("unhandled table slice encoding");
 }
 
-/// A helper utility for rebuilding an existing table slice with a new builder.
-/// @param slice The table slice to rebuild.
-/// @param args... Arguments to pass to the table slice builder factory.
-template <class... Args>
-table_slice rebuild_slice(const table_slice& slice, Args&&... args) {
-  auto builder
-    = factory<table_slice_builder>::make(std::forward<Args>(args)...);
-  if (!builder)
-    return {};
-  for (table_slice::size_type row = 0; row < slice.rows(); ++row)
-    for (table_slice::size_type column = 0; column < slice.columns(); ++column)
-      if (!builder->add(slice.at(row, column)))
-        return {};
-  auto result = builder->finish();
-  result.offset(slice.offset());
-  return result;
-}
-
 /// A helper utility for accessing the state of a table slice.
 /// @param encoded The encoding-specific FlatBuffers table.
 /// @param state The encoding-specific runtime state of the table slice.
@@ -222,12 +204,6 @@ table_slice::table_slice(const table_slice& other) noexcept
   // nop
 }
 
-table_slice::table_slice(const table_slice& other, enum encoding encoding,
-                         enum verify verify) noexcept {
-  auto copy = other;
-  *this = table_slice{std::move(copy), encoding, verify};
-}
-
 table_slice& table_slice::operator=(const table_slice& rhs) noexcept {
   chunk_ = rhs.chunk_;
   offset_ = rhs.offset_;
@@ -240,24 +216,6 @@ table_slice::table_slice(table_slice&& other) noexcept
     offset_{std::exchange(other.offset_, invalid_id)},
     state_{std::exchange(other.state_, {})} {
   // nop
-}
-
-table_slice::table_slice(table_slice&& other, enum encoding encoding,
-                         enum verify verify) noexcept {
-  auto f = detail::overload{
-    [&]() noexcept { *this = table_slice{}; },
-    [&](const auto& encoded) noexcept {
-      if (encoding == state(encoded, state_)->encoding
-          && state(encoded, state_)->is_latest_version) {
-        *this = std::exchange(other, {});
-        return;
-      } else
-        *this = rebuild_slice(other, builder_id(encoding), other.layout());
-    },
-  };
-  visit(f, as_flatbuffer(other.chunk_));
-  // If requested, verify the chunk after performing re-encoding.
-  chunk_ = verified_or_none(std::move(chunk_), verify);
 }
 
 table_slice& table_slice::operator=(table_slice&& rhs) noexcept {
@@ -399,8 +357,7 @@ std::shared_ptr<arrow::RecordBatch> as_record_batch(const table_slice& slice) {
         return state(encoded, slice.state_)->record_batch();
       } else {
         // Rebuild the slice as an Arrow-encoded table slice.
-        auto copy = table_slice(slice, table_slice::encoding::arrow,
-                                table_slice::verify::no);
+        auto copy = rebuild(slice, table_slice::encoding::arrow);
         // Bind the lifetime of the copy (and thus the returned Record Batch) to
         // the lifetime of the original slice.
         slice.chunk_->ref();
@@ -419,6 +376,35 @@ std::shared_ptr<arrow::RecordBatch> as_record_batch(const table_slice& slice) {
 
 span<const byte> as_bytes(const table_slice& slice) noexcept {
   return as_bytes(slice.chunk_);
+}
+
+// -- operations ---------------------------------------------------------------
+
+table_slice
+rebuild(table_slice slice, enum table_slice::encoding encoding) noexcept {
+  auto f = detail::overload{
+    [&]() noexcept -> table_slice { return {}; },
+    [&](const auto& encoded) noexcept -> table_slice {
+      if (encoding == state(encoded, slice.state_)->encoding
+          && state(encoded, slice.state_)->is_latest_version) {
+        return std::move(slice);
+      } else {
+        auto builder = factory<table_slice_builder>::make(builder_id(encoding),
+                                                          slice.layout());
+        if (!builder)
+          return table_slice{};
+        for (table_slice::size_type row = 0; row < slice.rows(); ++row)
+          for (table_slice::size_type column = 0; column < slice.columns();
+               ++column)
+            if (!builder->add(slice.at(row, column)))
+              return {};
+        auto result = builder->finish();
+        result.offset(slice.offset());
+        return result;
+      }
+    },
+  };
+  return visit(f, as_flatbuffer(slice.chunk_));
 }
 
 void select(std::vector<table_slice>& result, const table_slice& slice,
@@ -495,8 +481,6 @@ void select(std::vector<table_slice>& result, const table_slice& slice,
   }
   push_slice();
 }
-
-// -- operators ----------------------------------------------------------------
 
 std::vector<table_slice>
 select(const table_slice& slice, const ids& selection) {
