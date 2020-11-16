@@ -17,9 +17,8 @@
 
 #include <cstdio>
 #include <cstring>
+#include <poll.h>
 #include <unistd.h>
-
-#include <sys/poll.h>
 
 namespace vast {
 namespace detail {

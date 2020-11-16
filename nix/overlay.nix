@@ -35,4 +35,5 @@ in {
   broker = final.callPackage ./broker {inherit stdenv; python = final.python3;};
   vast-source = final.nix-gitignore.gitignoreSource [] ./..;
   vast = final.callPackage ./vast {inherit stdenv;};
+  vast-ci = final.vast.override {buildType = "CI";};
 }

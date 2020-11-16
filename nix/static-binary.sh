@@ -26,6 +26,7 @@ else
 EOF
 fi
 
+echo running "nix-build --no-out-link -E \'${exp}\'"
 result=$(nix-build --no-out-link -E "${exp}")
 
 mkdir -p build
