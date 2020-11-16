@@ -13,16 +13,17 @@
 
 #pragma once
 
-#include <string>
-
 #include "vast/port.hpp"
+
+#include <optional>
+#include <string>
 
 namespace vast {
 
 /// A transport-layer endpoint consisting of host and port.
 struct endpoint {
-  std::string host;   ///< The hostname or IP address.
-  class port port;    ///< The transport-layer port.
+  std::string host;         ///< The hostname or IP address.
+  std::optional<class port> port; ///< The transport-layer port.
 };
 
 } // namespace vast

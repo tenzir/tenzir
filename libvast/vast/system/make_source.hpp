@@ -117,26 +117,29 @@ make_source(const Actor& self, caf::actor_system& sys, const invocation& inv,
     if (!vast::parsers::endpoint(*uri, ep))
       return make_error(vast::ec::parse_error, "unable to parse endpoint",
                         *uri);
-    if (ep.port.type() == port::unknown) {
+    if (!ep.port)
+      return make_error(vast::ec::invalid_configuration, "endpoint does not "
+                                                         "specify port");
+    if (ep.port->type() == port::unknown) {
       using inputs = vast::format::reader::inputs;
       if constexpr (Reader::defaults::input == inputs::inet) {
         endpoint default_ep;
         vast::parsers::endpoint(Reader::defaults::uri, default_ep);
-        ep.port = port{ep.port.number(), default_ep.port.type()};
+        ep.port = port{ep.port->number(), default_ep.port->type()};
       } else {
         // Fall back to tcp if we don't know anything else.
-        ep.port = port{ep.port.number(), port::tcp};
+        ep.port = port{ep.port->number(), port::tcp};
       }
     }
     reader = std::make_unique<Reader>(slice_type, options);
     VAST_INFO_ANON(reader->name(), "listens for data on",
-                   ep.host + ":" + to_string(ep.port));
-    switch (ep.port.type()) {
+                   ep.host + ":" + to_string(*ep.port));
+    switch (ep.port->type()) {
       default:
         return make_error(vast::ec::unimplemented,
-                          "port type not supported:", ep.port.type());
+                          "port type not supported:", ep.port->type());
       case port::udp:
-        udp_port = ep.port.number();
+        udp_port = ep.port->number();
         break;
     }
   } else {

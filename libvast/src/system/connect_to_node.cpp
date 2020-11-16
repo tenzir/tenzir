@@ -46,11 +46,14 @@ connect_to_node(scoped_actor& self, const caf::settings& opts) {
   auto endpoint_str = get_or(opts, "vast.endpoint", defaults::system::endpoint);
   if (!parsers::endpoint(endpoint_str, node_endpoint))
     return make_error(ec::parse_error, "invalid endpoint", endpoint_str);
-  if (node_endpoint.port.type() == port::port_type::unknown)
-    node_endpoint.port.type(port::tcp);
-  if (node_endpoint.port.type() != port::port_type::tcp)
+  // Default to port 42000/tcp if none is set.
+  if (!node_endpoint.port)
+    node_endpoint.port = port{defaults::system::endpoint_port, port::tcp};
+  if (node_endpoint.port->type() == port::port_type::unknown)
+    node_endpoint.port->type(port::tcp);
+  if (node_endpoint.port->type() != port::port_type::tcp)
     return make_error(ec::invalid_configuration, "invalid protocol",
-                      node_endpoint.port);
+                      *node_endpoint.port);
   VAST_DEBUG(self, "connects to remote node:", id);
   auto& sys_cfg = self->system().config();
   auto use_encryption = !sys_cfg.openssl_certificate.empty()
@@ -66,13 +69,13 @@ connect_to_node(scoped_actor& self, const caf::settings& opts) {
     if (use_encryption) {
 #if VAST_USE_OPENSSL
       return openssl::remote_actor(self->system(), node_endpoint.host,
-                                   node_endpoint.port.number());
+                                   node_endpoint.port->number());
 #else
       return make_error(ec::unspecified, "not compiled with OpenSSL support");
 #endif
     }
     auto& mm = self->system().middleman();
-    return mm.remote_actor(node_endpoint.host, node_endpoint.port.number());
+    return mm.remote_actor(node_endpoint.host, node_endpoint.port->number());
   }();
   if (!result)
     return result;
@@ -80,7 +83,7 @@ connect_to_node(scoped_actor& self, const caf::settings& opts) {
   if (caf::logger::current_logger()->accepts(VAST_LOG_LEVEL_WARNING,
                                              caf::atom("vast"))) {
     VAST_VERBOSE(self, "successfully connected to", node_endpoint.host, ':',
-                 to_string(node_endpoint.port));
+                 to_string(*node_endpoint.port));
     self
       ->request(*result, defaults::system::initial_request_timeout, atom::get_v,
                 atom::version_v)

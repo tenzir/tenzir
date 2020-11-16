@@ -12,6 +12,11 @@ Every entry has a category for which we use the following visual abbreviations:
 
 ## Unreleased
 
+- ⚠️ VAST now listens on port 42000 instead of letting the operating system
+  choose the port if the option `vast.endpoint` specifies an endpoint without a
+  port. To restore the old behavior, set the port to 0 explicitly.
+  [#1170](https://github.com/tenzir/vast/pull/1170)
+
 - ⚡️ Archive segments no longer include an additional, unnecessary version
   identifier. We took the opportunity to clean this up bundled with the other
   recent breaking changes. [#1168](https://github.com/tenzir/vast/pull/1168)
