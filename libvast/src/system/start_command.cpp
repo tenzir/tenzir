@@ -61,6 +61,9 @@ caf::message start_command_impl(start_command_extra_steps extra_steps,
   if (!parsers::endpoint(str, node_endpoint))
     return caf::make_message(
       make_error(ec::parse_error, "invalid endpoint", str));
+  // Default to port 42000/tcp if none is set.
+  if (!node_endpoint.port)
+    node_endpoint.port = port{defaults::system::endpoint_port, port::tcp};
   // Get a convenient and blocking way to interact with actors.
   caf::scoped_actor self{sys};
   // Spawn our node.
@@ -73,13 +76,13 @@ caf::message start_command_impl(start_command_extra_steps extra_steps,
   auto publish = [&]() -> caf::expected<uint16_t> {
     if (use_encryption)
 #if VAST_USE_OPENSSL
-      return caf::openssl::publish(node, node_endpoint.port.number(), host);
+      return caf::openssl::publish(node, node_endpoint.port->number(), host);
 #else
       return make_error(ec::unspecified, "not compiled with OpenSSL support");
 #endif
     auto& mm = sys.middleman();
     auto reuse_address = true;
-    return mm.publish(node, node_endpoint.port.number(), host, reuse_address);
+    return mm.publish(node, node_endpoint.port->number(), host, reuse_address);
   };
   auto bound_port = publish();
   if (!bound_port)

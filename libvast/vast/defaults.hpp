@@ -332,6 +332,9 @@ namespace system {
 /// Hostname or IP address and port of a remote node.
 constexpr std::string_view endpoint = "localhost:42000/tcp";
 
+/// Default port of a remote node.
+constexpr uint16_t endpoint_port = 42000;
+
 /// The unique ID of this node.
 constexpr std::string_view node_id = "node";
 
