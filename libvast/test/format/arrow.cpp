@@ -26,13 +26,13 @@
 #include "vast/defaults.hpp"
 #include "vast/detail/make_io_stream.hpp"
 #include "vast/detail/narrow.hpp"
-#include "vast/table_slice_header.hpp"
+#include "vast/table_slice.hpp"
 
 #include <caf/sum_type.hpp>
 
+#include <arrow/api.h>
 #include <arrow/io/memory.h>
 #include <arrow/ipc/reader.h>
-#include <arrow/memory_pool.h>
 
 #include <utility>
 
@@ -60,7 +60,7 @@ TEST(arrow batch) {
   writer.out(stream);
   // Write conn log slices (as record batches) to the stream.
   for (auto& slice : zeek_conn_log)
-    writer.write(*slice);
+    writer.write(slice);
   // Cause the writer to close its current Arrow writer.
   writer.layout(record_type{});
   // Deserialize record batches, store them in arrow_table_slice objects, and
@@ -75,18 +75,18 @@ TEST(arrow batch) {
   auto reader_result = arrow::ipc::RecordBatchStreamReader::Open(&input_stream);
   REQUIRE_OK(reader_result);
   auto reader = *reader_result;
-  auto layout = zeek_conn_log[0]->layout();
-  auto arrow_schema = arrow_table_slice_builder::make_arrow_schema(layout);
+  auto&& layout = zeek_conn_log[0].layout();
+  auto arrow_schema = make_arrow_schema(layout);
   size_t slice_id = 0;
   std::shared_ptr<arrow::RecordBatch> batch;
   while (reader->ReadNext(&batch).ok() && batch != nullptr) {
     REQUIRE_LESS(slice_id, zeek_conn_log.size());
-    table_slice_header hdr{layout, zeek_conn_log[slice_id]->rows(),
-                           zeek_conn_log[slice_id]->offset()};
-    CHECK_EQUAL(detail::narrow<size_t>(batch->num_rows()), hdr.rows);
+    auto slice
+      = table_slice{zeek_conn_log[slice_id], table_slice::encoding::arrow,
+                    table_slice::verify::yes};
+    CHECK_EQUAL(detail::narrow<size_t>(batch->num_rows()), slice.rows());
     CHECK(batch->schema()->Equals(*arrow_schema));
-    auto slice = caf::make_counted<arrow_table_slice>(std::move(hdr), batch);
-    CHECK_EQUAL(*slice, *zeek_conn_log[slice_id]);
+    CHECK_EQUAL(slice, zeek_conn_log[slice_id]);
     ++slice_id;
   }
   CHECK_EQUAL(slice_id, zeek_conn_log.size());

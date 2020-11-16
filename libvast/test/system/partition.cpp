@@ -15,7 +15,6 @@
 #include "vast/test/fixtures/dummy_index.hpp"
 #include "vast/test/test.hpp"
 
-#include "vast/caf_table_slice.hpp"
 #include "vast/concept/parseable/to.hpp"
 #include "vast/concept/parseable/vast/expression.hpp"
 #include "vast/concept/printable/to_string.hpp"
@@ -79,7 +78,7 @@ struct fixture : fixtures::dummy_index {
     put = idx_state->make_partition();
   }
 
-  partition* get_active_partition(const table_slice_ptr&) {
+  partition* get_active_partition(const table_slice&) {
     return put.get();
   }
 
@@ -130,14 +129,14 @@ struct fixture : fixtures::dummy_index {
     return result;
   }
 
-  void ingest(std::vector<table_slice_ptr> slices) {
+  void ingest(std::vector<table_slice> slices) {
     VAST_ASSERT(put != nullptr);
     VAST_ASSERT(slices.size() > 0);
     VAST_ASSERT(std::none_of(slices.begin(), slices.end(),
                              [](auto slice) { return slice == nullptr; }));
     for (auto& slice : slices) {
       put->add(slice);
-      auto& layout = slice->layout();
+      auto&& layout = slice.layout();
       for (size_t column = 0; column < layout.fields.size(); ++column) {
         auto& field = layout.fields[column];
         auto fqf = qualified_record_field{layout.name(), field};
@@ -149,7 +148,7 @@ struct fixture : fixtures::dummy_index {
     run();
   }
 
-  void ingest(table_slice_ptr slice) {
+  void ingest(table_slice slice) {
     ingest(std::vector{slice});
   }
 
@@ -269,7 +268,13 @@ TEST_DISABLED(integer rows lookup) {
     integer_type col_type;
     record_type layout{{"value", col_type}};
     auto rows = make_rows(1, 2, 3, 1, 2, 3, 1, 2, 3);
-    ingest(caf_table_slice::make(layout, rows));
+    auto builder = factory<table_slice_builder>::make(
+      defaults::import::table_slice_type, layout);
+    for (auto&& row : rows)
+      for (auto&& field : row)
+        REQUIRE(builder->add(field));
+    auto slice = builder->finish();
+    ingest(slice);
     MESSAGE("verify partition content");
     auto res = [&](auto... args) { return make_ids({args...}, rows.size()); };
     CHECK_EQUAL(query(":int == +1"), res(0u, 3u, 6u));

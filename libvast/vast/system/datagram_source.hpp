@@ -13,7 +13,6 @@
 
 #pragma once
 
-#include "vast/caf_table_slice.hpp"
 #include "vast/concept/printable/std/chrono.hpp"
 #include "vast/concept/printable/stream.hpp"
 #include "vast/concept/printable/vast/error.hpp"
@@ -111,7 +110,7 @@ datagram_source(datagram_source_actor<Reader>* self,
       self->state.start_time = std::chrono::system_clock::now();
     },
     // get next element
-    [](caf::unit_t&, caf::downstream<table_slice_ptr>&, size_t) {
+    [](caf::unit_t&, caf::downstream<table_slice>&, size_t) {
       // nop, new slices are generated in the new_datagram_msg handler
     },
     // done?
@@ -131,8 +130,8 @@ datagram_source(datagram_source_actor<Reader>* self,
       // we have completed a batch.
       caf::arraybuf<> buf{msg.buf.data(), msg.buf.size()};
       st.reader.reset(std::make_unique<std::istream>(&buf));
-      auto push_slice = [&](table_slice_ptr slice) {
-        VAST_DEBUG(self, "produced a slice with", slice->rows(), "rows");
+      auto push_slice = [&](table_slice slice) {
+        VAST_DEBUG(self, "produced a slice with", slice.rows(), "rows");
         st.mgr->out().push(std::move(slice));
       };
       auto events = capacity * table_slice_size;

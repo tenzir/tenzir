@@ -18,9 +18,9 @@
 #include "vast/test/fixtures/table_slices.hpp"
 #include "vast/test/test.hpp"
 
-#include "vast/caf_table_slice.hpp"
-#include "vast/caf_table_slice_builder.hpp"
 #include "vast/ids.hpp"
+#include "vast/table_slice_column.hpp"
+#include "vast/table_slice_row.hpp"
 
 #include <caf/make_copy_on_write.hpp>
 #include <caf/test/dsl.hpp>
@@ -28,70 +28,7 @@
 using namespace vast;
 using namespace std::string_literals;
 
-namespace {
-
-class rebranded_table_slice : public caf_table_slice {
-public:
-  static constexpr caf::atom_value class_id = caf::atom("test");
-
-  static table_slice_ptr make(table_slice_header header) {
-    return caf::make_copy_on_write<rebranded_table_slice>(std::move(header));
-  }
-
-  explicit rebranded_table_slice(table_slice_header header)
-    : caf_table_slice{std::move(header)} {
-    // nop
-  }
-
-  caf::atom_value implementation_id() const noexcept override {
-    return class_id;
-  }
-};
-
-class rebranded_table_slice_builder : public caf_table_slice_builder {
-public:
-  using super = caf_table_slice_builder;
-
-  using table_slice_type = rebranded_table_slice;
-
-  rebranded_table_slice_builder(record_type layout) : super(std::move(layout)) {
-    // Eagerly initialize to make sure super does not create slices for us.
-    eager_init();
-  }
-
-  static table_slice_builder_ptr make(record_type layout) {
-    return caf::make_counted<rebranded_table_slice_builder>(std::move(layout));
-  }
-
-  table_slice_ptr finish() override {
-    auto result = super::finish();
-    eager_init();
-    return result;
-  }
-
-  caf::atom_value implementation_id() const noexcept override {
-    return get_implementation_id();
-  }
-
-  static caf::atom_value get_implementation_id() noexcept {
-    return rebranded_table_slice::class_id;
-  }
-
-private:
-  void eager_init() {
-    table_slice_header header{layout(), rows(), 0};
-    slice_.reset(new rebranded_table_slice{std::move(header)});
-    row_ = list(columns());
-    col_ = 0;
-  }
-};
-
-} // namespace <anonymous>
-
 FIXTURE_SCOPE(table_slice_tests, fixtures::table_slices)
-
-TEST_TABLE_SLICE(caf_table_slice)
-TEST_TABLE_SLICE(rebranded_table_slice)
 
 TEST(random integer slices) {
   record_type layout{
@@ -100,11 +37,11 @@ TEST(random integer slices) {
   auto slices = unbox(make_random_table_slices(10, 10, layout));
   CHECK_EQUAL(slices.size(), 10u);
   CHECK(std::all_of(slices.begin(), slices.end(),
-                    [](auto& slice) { return slice->rows() == 10; }));
+                    [](auto& slice) { return slice.rows() == 10; }));
   std::vector<integer> values;
   for (auto& slice : slices)
-    for (size_t row = 0; row < slice->rows(); ++row)
-      values.emplace_back(get<integer>(slice->at(row, 0)));
+    for (size_t row = 0; row < slice.rows(); ++row)
+      values.emplace_back(get<integer>(slice.at(row, 0)));
   auto [lowest, highest] = std::minmax_element(values.begin(), values.end());
   CHECK_GREATER_EQUAL(*lowest, 100);
   CHECK_LESS_EQUAL(*highest, 200);
@@ -112,30 +49,34 @@ TEST(random integer slices) {
 
 TEST(column view) {
   auto sut = zeek_conn_log[0];
-  CHECK_EQUAL(unbox(sut->column("ts")).column(), 0u);
-  for (size_t column = 0; column < sut->columns(); ++column) {
-    auto cview = sut->column(column);
-    CHECK_EQUAL(cview.column(), column);
-    CHECK_EQUAL(cview.rows(), sut->rows());
-    for (size_t row = 0; row < cview.rows(); ++row)
-      CHECK_EQUAL(cview[row], sut->at(row, column));
+  auto ts_cview = table_slice_column::make(sut, "ts");
+  REQUIRE(ts_cview);
+  CHECK_EQUAL(ts_cview->index(), 0u);
+  for (size_t column = 0; column < sut.columns(); ++column) {
+    auto cview = table_slice_column{sut, column};
+    REQUIRE_NOT_EQUAL(cview.size(), 0u);
+    CHECK_EQUAL(cview.index(), column);
+    CHECK_EQUAL(cview.size(), sut.rows());
+    for (size_t row = 0; row < cview.size(); ++row)
+      CHECK_EQUAL(cview[row], sut.at(row, column));
   }
 }
 
 TEST(row view) {
   auto sut = zeek_conn_log[0];
-  for (size_t row = 0; row < sut->rows(); ++row) {
-    auto rview = sut->row(row);
-    CHECK_EQUAL(rview.row(), row);
-    CHECK_EQUAL(rview.columns(), sut->columns());
-    for (size_t column = 0; column < rview.columns(); ++column)
-      CHECK_EQUAL(rview[column], sut->at(row, column));
+  for (size_t row = 0; row < sut.rows(); ++row) {
+    auto rview = table_slice_row{sut, row};
+    REQUIRE_NOT_EQUAL(rview.size(), 0u);
+    CHECK_EQUAL(rview.index(), row);
+    CHECK_EQUAL(rview.size(), sut.columns());
+    for (size_t column = 0; column < rview.size(); ++column)
+      CHECK_EQUAL(rview[column], sut.at(row, column));
   }
 }
 
 TEST(select all) {
   auto sut = zeek_conn_log_full[0];
-  sut.unshared().offset(100);
+  sut.offset(100);
   auto xs = select(sut, make_ids({{100, 200}}));
   REQUIRE_EQUAL(xs.size(), 1u);
   CHECK_EQUAL(xs[0], sut);
@@ -143,95 +84,94 @@ TEST(select all) {
 
 TEST(select none) {
   auto sut = zeek_conn_log_full[0];
-  sut.unshared().offset(100);
+  sut.offset(100);
   auto xs = select(sut, make_ids({{200, 300}}));
   CHECK_EQUAL(xs.size(), 0u);
 }
 
 TEST(select prefix) {
   auto sut = zeek_conn_log_full[0];
-  sut.unshared().offset(100);
+  sut.offset(100);
   auto xs = select(sut, make_ids({{0, 150}}));
   REQUIRE_EQUAL(xs.size(), 1u);
-  CHECK_EQUAL(xs[0]->rows(), 50u);
-  CHECK_EQUAL(to_data(*xs[0]), to_data(*sut, 0, 50));
+  CHECK_EQUAL(xs[0].rows(), 50u);
+  CHECK_EQUAL(to_data(xs[0]), to_data(sut, 0, 50));
 }
 
 TEST(select off by one prefix) {
   auto sut = zeek_conn_log_full[0];
-  sut.unshared().offset(100);
+  sut.offset(100);
   auto xs = select(sut, make_ids({{101, 151}}));
   REQUIRE_EQUAL(xs.size(), 1u);
-  CHECK_EQUAL(xs[0]->rows(), 50u);
-  CHECK_EQUAL(to_data(*xs[0]), to_data(*sut, 1, 50));
+  CHECK_EQUAL(xs[0].rows(), 50u);
+  CHECK_EQUAL(to_data(xs[0]), to_data(sut, 1, 50));
 }
 
 TEST(select intermediates) {
   auto sut = zeek_conn_log_full[0];
-  sut.unshared().offset(100);
+  sut.offset(100);
   auto xs = select(sut, make_ids({{110, 120}, {170, 180}}));
   REQUIRE_EQUAL(xs.size(), 2u);
-  CHECK_EQUAL(xs[0]->rows(), 10u);
-  CHECK_EQUAL(to_data(*xs[0]), to_data(*sut, 10, 10));
-  CHECK_EQUAL(xs[1]->rows(), 10u);
-  CHECK_EQUAL(to_data(*xs[1]), to_data(*sut, 70, 10));
+  CHECK_EQUAL(xs[0].rows(), 10u);
+  CHECK_EQUAL(to_data(xs[0]), to_data(sut, 10, 10));
+  CHECK_EQUAL(xs[1].rows(), 10u);
+  CHECK_EQUAL(to_data(xs[1]), to_data(sut, 70, 10));
 }
 
 TEST(select off by one suffix) {
   auto sut = zeek_conn_log_full[0];
-  sut.unshared().offset(100);
+  sut.offset(100);
   auto xs = select(sut, make_ids({{149, 199}}));
   REQUIRE_EQUAL(xs.size(), 1u);
-  CHECK_EQUAL(xs[0]->rows(), 50u);
-  CHECK_EQUAL(to_data(*xs[0]), to_data(*sut, 49, 50));
+  CHECK_EQUAL(xs[0].rows(), 50u);
+  CHECK_EQUAL(to_data(xs[0]), to_data(sut, 49, 50));
 }
 
 TEST(select suffix) {
   auto sut = zeek_conn_log_full[0];
-  sut.unshared().offset(100);
+  sut.offset(100);
   auto xs = select(sut, make_ids({{150, 300}}));
   REQUIRE_EQUAL(xs.size(), 1u);
-  CHECK_EQUAL(xs[0]->rows(), 50u);
-  CHECK_EQUAL(to_data(*xs[0]), to_data(*sut, 50, 50));
+  CHECK_EQUAL(xs[0].rows(), 50u);
+  CHECK_EQUAL(to_data(xs[0]), to_data(sut, 50, 50));
 }
 
 TEST(truncate) {
   auto sut = zeek_conn_log[0];
-  REQUIRE_EQUAL(sut->rows(), 8u);
-  sut.unshared().offset(100);
+  REQUIRE_EQUAL(sut.rows(), 8u);
+  sut.offset(100);
   auto truncated_events = [&](size_t num_rows) {
     auto sub_slice = truncate(sut, num_rows);
-    if (sub_slice->rows() != num_rows)
-      FAIL("expected " << num_rows << " rows, got " << sub_slice->rows());
-    return to_data(*sub_slice);
+    if (sub_slice.rows() != num_rows)
+      FAIL("expected " << num_rows << " rows, got " << sub_slice.rows());
+    return to_data(sub_slice);
   };
   auto sub_slice = truncate(sut, 8);
-  CHECK_EQUAL(*sub_slice, *sut);
-  CHECK_EQUAL(truncated_events(7), to_data(*sut, 0, 7));
-  CHECK_EQUAL(truncated_events(6), to_data(*sut, 0, 6));
-  CHECK_EQUAL(truncated_events(5), to_data(*sut, 0, 5));
-  CHECK_EQUAL(truncated_events(4), to_data(*sut, 0, 4));
-  CHECK_EQUAL(truncated_events(3), to_data(*sut, 0, 3));
-  CHECK_EQUAL(truncated_events(2), to_data(*sut, 0, 2));
-  CHECK_EQUAL(truncated_events(1), to_data(*sut, 0, 1));
+  CHECK_EQUAL(sub_slice, sut);
+  CHECK_EQUAL(truncated_events(7), to_data(sut, 0, 7));
+  CHECK_EQUAL(truncated_events(6), to_data(sut, 0, 6));
+  CHECK_EQUAL(truncated_events(5), to_data(sut, 0, 5));
+  CHECK_EQUAL(truncated_events(4), to_data(sut, 0, 4));
+  CHECK_EQUAL(truncated_events(3), to_data(sut, 0, 3));
+  CHECK_EQUAL(truncated_events(2), to_data(sut, 0, 2));
+  CHECK_EQUAL(truncated_events(1), to_data(sut, 0, 1));
 }
 
 TEST(split) {
   auto sut = zeek_conn_log[0];
-  REQUIRE_EQUAL(sut->rows(), 8u);
-  sut.unshared().offset(100);
+  REQUIRE_EQUAL(sut.rows(), 8u);
+  sut.offset(100);
   // Splits `sut` using to_data.
   auto manual_split_sut = [&](size_t parition_point) {
-    return std::pair{to_data(*sut, 0, parition_point),
-                     to_data(*sut, parition_point)};
+    return std::pair{to_data(sut, 0, parition_point),
+                     to_data(sut, parition_point)};
   };
   // Splits `sut` using split() and then converting to events.
   auto split_sut = [&](size_t parition_point) {
     auto [first, second] = split(sut, parition_point);
-    if (first->rows() + second->rows() != 8)
-      FAIL("expected 8 rows in total, got "
-           << (first->rows() + second->rows()));
-    return std::pair{to_data(*first), to_data(*second)};
+    if (first.rows() + second.rows() != 8)
+      FAIL("expected 8 rows in total, got " << (first.rows() + second.rows()));
+    return std::pair{to_data(first), to_data(second)};
   };
   // We compare the results of the two lambdas, meaning that it should make no
   // difference whether we split via `to_data` or `split`.

@@ -41,13 +41,13 @@ auto first_zeek_conn_log_line = R"__({"ts": "2009-11-18T08:00:21.486539008", "ui
 // clang-format on
 
 template <class Writer>
-std::vector<std::string> generate(const std::vector<table_slice_ptr>& xs) {
+std::vector<std::string> generate(const std::vector<table_slice>& xs) {
   std::string str;
   caf::containerbuf<std::string> sb{str};
   auto out = std::make_unique<std::ostream>(&sb);
   Writer writer{std::move(out)};
   for (auto& x : xs)
-    if (auto err = writer.write(*x))
+    if (auto err = writer.write(x))
       FAIL("failed to write event");
   writer.flush();
   REQUIRE(!str.empty());

@@ -40,8 +40,8 @@ TEST(construction and querying) {
   MESSAGE("lookup IDs for some segments");
   auto slices = unbox(x.lookup(make_ids({0, 6, 19, 21})));
   REQUIRE_EQUAL(slices.size(), 2u); // [0,8), [16,24)
-  CHECK_EQUAL(*slices[0], *zeek_conn_log[0]);
-  CHECK_EQUAL(*slices[1], *zeek_conn_log[2]);
+  CHECK_EQUAL(slices[0], zeek_conn_log[0]);
+  CHECK_EQUAL(slices[1], zeek_conn_log[2]);
 }
 
 TEST(serialization) {

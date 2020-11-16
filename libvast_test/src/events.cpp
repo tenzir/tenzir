@@ -22,7 +22,6 @@
 #include "vast/msgpack_table_slice_builder.hpp"
 #include "vast/table_slice_builder.hpp"
 #include "vast/table_slice_builder_factory.hpp"
-#include "vast/table_slice_factory.hpp"
 #include "vast/type.hpp"
 
 #include <caf/binary_deserializer.hpp>
@@ -46,11 +45,11 @@ struct ascending {};
 struct alternating {};
 
 template <class Policy>
-std::vector<table_slice_ptr> make_integers(size_t count) {
+std::vector<table_slice> make_integers(size_t count) {
   auto layout = record_type{{"value", integer_type{}}}.name("test.int");
   auto builder = msgpack_table_slice_builder::make(layout);
   VAST_ASSERT(builder != nullptr);
-  std::vector<table_slice_ptr> result;
+  std::vector<table_slice> result;
   result.reserve(count);
   auto i = size_t{0};
   while (i < count) {
@@ -74,11 +73,11 @@ std::vector<table_slice_ptr> make_integers(size_t count) {
 }
 
 template <class Reader>
-std::vector<table_slice_ptr>
+std::vector<table_slice>
 extract(Reader&& reader, table_slice::size_type slice_size) {
-  std::vector<table_slice_ptr> result;
+  std::vector<table_slice> result;
   auto add_slice
-    = [&](table_slice_ptr ptr) { result.emplace_back(std::move(ptr)); };
+    = [&](table_slice slice) { result.emplace_back(std::move(slice)); };
   auto [err, produced]
     = reader.read(std::numeric_limits<size_t>::max(), slice_size, add_slice);
   if (err && err != ec::end_of_input)
@@ -87,7 +86,7 @@ extract(Reader&& reader, table_slice::size_type slice_size) {
 }
 
 template <class Reader>
-std::vector<table_slice_ptr>
+std::vector<table_slice>
 inhale(const char* filename, table_slice::size_type slice_size) {
   caf::settings settings;
   // A non-positive value disables the timeout. We need to do this because the
@@ -100,20 +99,19 @@ inhale(const char* filename, table_slice::size_type slice_size) {
 
 } // namespace
 
-std::vector<table_slice_ptr> events::zeek_conn_log;
-std::vector<table_slice_ptr> events::zeek_conn_log_full;
-std::vector<table_slice_ptr> events::zeek_dns_log;
-std::vector<table_slice_ptr> events::zeek_http_log;
-std::vector<table_slice_ptr> events::random;
-std::vector<table_slice_ptr> events::ascending_integers;
-std::vector<table_slice_ptr> events::alternating_integers;
+std::vector<table_slice> events::zeek_conn_log;
+std::vector<table_slice> events::zeek_conn_log_full;
+std::vector<table_slice> events::zeek_dns_log;
+std::vector<table_slice> events::zeek_http_log;
+std::vector<table_slice> events::random;
+std::vector<table_slice> events::ascending_integers;
+std::vector<table_slice> events::alternating_integers;
 
 events::events() {
   // Only read the fixture data once per process.
   static bool initialized = false;
   if (initialized)
     return;
-  factory<table_slice>::initialize();
   factory<table_slice_builder>::initialize();
   initialized = true;
   // Create Zeek log data.
@@ -121,7 +119,8 @@ events::events() {
   zeek_conn_log = inhale<format::zeek::reader>(
     artifacts::logs::zeek::small_conn, slice_size);
   REQUIRE_EQUAL(rows(zeek_conn_log), 20u);
-  CHECK_EQUAL(zeek_conn_log[0]->layout().name(), "zeek.conn");
+  auto&& layout = zeek_conn_log[0].layout();
+  CHECK_EQUAL(layout.name(), "zeek.conn");
   zeek_dns_log
     = inhale<format::zeek::reader>(artifacts::logs::zeek::dns, slice_size);
   REQUIRE_EQUAL(rows(zeek_dns_log), 32u);
@@ -152,8 +151,8 @@ events::events() {
   auto i = id{0};
   auto assign_ids = [&](auto& slices) {
     for (auto& slice : slices) {
-      slice.unshared().offset(i);
-      i += slice->rows();
+      slice.offset(i);
+      i += slice.rows();
     }
   };
   assign_ids(zeek_conn_log);

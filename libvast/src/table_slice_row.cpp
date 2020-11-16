@@ -11,40 +11,48 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#pragma once
+#include "vast/table_slice_row.hpp"
 
-#include <caf/atom.hpp>
-
-#include "vast/factory.hpp"
+#include "vast/detail/assert.hpp"
 #include "vast/table_slice.hpp"
-#include "vast/table_slice_header.hpp"
 
 namespace vast {
 
-template <>
-struct factory_traits<table_slice> {
-  using result_type = table_slice_ptr;
-  using key_type = caf::atom_value;
-  using signature = result_type (*)(table_slice_header);
+table_slice_row::table_slice_row() noexcept = default;
 
-  static void initialize();
+table_slice_row::~table_slice_row() noexcept = default;
 
-  template <class T>
-  static key_type key() {
-    return T::class_id;
-  }
+table_slice_row::table_slice_row(const table_slice_row&) noexcept = default;
 
-  template <class T>
-  static result_type make(table_slice_header header) {
-    return T::make(std::move(header));
-  }
+table_slice_row&
+table_slice_row::operator=(const table_slice_row&) noexcept = default;
 
-  /// Constructs a table slice from a chunk. The beginning of the chunk must
-  /// hold the implementation ID of the concrete table slice. This function
-  /// reads the ID, constructs a new table slice with the given ID, and then
-  /// calls `table_slice::load` on the chunk.
-  /// @returns a table slice loaded from *chunk* or `nullptr` on failure.
-  static result_type make(chunk_ptr chunk);
-};
+table_slice_row::table_slice_row(table_slice_row&&) noexcept = default;
+
+table_slice_row&
+table_slice_row::operator=(table_slice_row&&) noexcept = default;
+
+table_slice_row::table_slice_row(table_slice slice, size_t row) noexcept
+
+  : slice_{std::move(slice)}, row_{row} {
+  // nop
+}
+
+data_view table_slice_row::operator[](size_t column) const {
+  VAST_ASSERT(column < size());
+  return slice_.at(row_, column);
+}
+
+size_t table_slice_row::size() const noexcept {
+  return slice_.columns();
+}
+
+const table_slice& table_slice_row::slice() const noexcept {
+  return slice_;
+}
+
+size_t table_slice_row::index() const noexcept {
+  return row_;
+}
 
 } // namespace vast

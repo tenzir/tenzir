@@ -13,314 +13,273 @@
 
 #pragma once
 
-#include "vast/fbs/table_slice.hpp"
+#include "vast/chunk.hpp"
 #include "vast/fwd.hpp"
-#include "vast/table_slice_header.hpp"
 #include "vast/type.hpp"
 #include "vast/view.hpp"
 
-#include <caf/fwd.hpp>
-#include <caf/optional.hpp>
-#include <caf/ref_counted.hpp>
+#include <caf/meta/load_callback.hpp>
+#include <caf/meta/type_name.hpp>
 
-#include <cstddef>
-#include <limits>
-#include <string_view>
 #include <vector>
 
 namespace vast {
 
 /// A horizontal partition of a table. A slice defines a tabular interface for
 /// accessing homogenous data independent of the concrete carrier format.
-class table_slice : public caf::ref_counted {
+class table_slice final {
 public:
   // -- member types -----------------------------------------------------------
 
+  /// Platform-independent unsigned integer type used for sizes.
   using size_type = uint64_t;
 
-  static constexpr size_type npos = std::numeric_limits<size_type>::max();
-
-  /// Convenience helper for traversing a column.
-  class column_view {
-  public:
-    column_view(const table_slice& slice, size_t column);
-
-    /// @returns the data at given row.
-    data_view operator[](size_t row) const;
-
-    /// @returns the number of rows in the slice.
-    size_t rows() const noexcept {
-      return slice_.rows();
-    }
-
-    /// @returns the viewed table slice.
-    const table_slice& slice() const noexcept {
-      return slice_;
-    }
-
-    /// @returns the viewed column.
-    size_t column() const noexcept {
-      return column_;
-    }
-
-  private:
-    const table_slice& slice_;
-    size_t column_;
+  /// The possible encodings of a table slice.
+  /// @note This encoding is unversioned. Newly created table slices are
+  /// guaranteed to use the newest vesion of the encoding, while deserialized
+  /// table slices may use an older version.
+  enum class encoding : uint8_t {
+    none,    ///< No data is encoded; the table slice is empty or invalid.
+    arrow,   ///< The table slice is encoded using the Apache Arrow format.
+    msgpack, ///< The table slice is encoded using the MessagePack format.
   };
 
-  /// Convenience helper for traversing a row.
-  class row_view {
-  public:
-    row_view(const table_slice& slice, size_t row);
-
-    /// @returns the data at given column.
-    data_view operator[](size_t column) const;
-
-    /// @returns the number of columns in the slice.
-    size_t columns() const noexcept {
-      return slice_.columns();
-    }
-
-    /// @returns the viewed table slice.
-    const table_slice& slice() const noexcept {
-      return slice_;
-    }
-
-    /// @returns the viewed row.
-    size_t row() const noexcept {
-      return row_;
-    }
-
-  private:
-    const table_slice& slice_;
-    size_t row_;
+  /// Controls whether the underlying FlatBuffers table should be verified.
+  enum class verify : uint8_t {
+    no,  ///< Disable FlatBuffers table verification.
+    yes, ///< Enable FlatBuffers table verification.
   };
 
   // -- constructors, destructors, and assignment operators --------------------
 
-  ~table_slice() override;
-
-  table_slice(const table_slice&) = default;
-
   /// Default-constructs an empty table slice.
-  table_slice() = default;
+  table_slice() noexcept;
 
-  /// Constructs a table slice from a header.
-  /// @param header The header of the table slice.
-  explicit table_slice(table_slice_header header = {});
+  /// Construct a table slice from a chunk of data, which contains a
+  /// `vast.fbs.TableSlice` FlatBuffers table.
+  /// @param chunk A `vast.fbs.TableSlice` FlatBuffers table in a chunk.
+  /// @param verify Controls whether the table should be verified.
+  /// @note Constructs an invalid table slice if the verification of the
+  /// FlatBuffers table fails.
+  explicit table_slice(chunk_ptr&& chunk, enum verify verify) noexcept;
 
-  /// Makes a copy of this slice.
-  virtual table_slice* copy() const = 0;
+  /// Construct a table slice from a chunk of data, which contains a
+  /// `vast.fbs.TableSlice` FlatBuffers table, and a known layout.
+  /// @param chunk A `vast.fbs.TableSlice` FlatBuffers table in a chunk.
+  /// @param verify Controls whether the table should be verified.
+  /// @param layout The known table layout.
+  /// @note Constructs an invalid table slice if the verification of the
+  /// FlatBuffers table fails.
+  explicit table_slice(chunk_ptr&& chunk, enum verify verify,
+                       record_type layout) noexcept;
 
-  // -- persistence ------------------------------------------------------------
+  /// Construct a table slice from a flattened table slice embedded in a chunk,
+  /// and shares the chunk's lifetime.
+  /// @param flat_slice The `vast.fbs.FlatTableSlice` object.
+  /// @param parent_chunk A chunk that must contain the `flat_slice` object.
+  /// @param verify Controls whether the table should be verified.
+  /// @pre `flat_slice.data()->begin() >= parent_chunk->begin()`
+  /// @pre `flat_slice.data()->end() <= parent_chunk->end()`
+  /// @note Constructs an invalid table slice if the verification of the
+  /// FlatBuffers table fails.
+  table_slice(const fbs::FlatTableSlice& flat_slice,
+              const chunk_ptr& parent_chunk, enum verify verify) noexcept;
 
-  /// Saves the contents (excluding the layout!) of this slice to `sink`.
-  virtual caf::error serialize(caf::serializer& sink) const = 0;
+  /// Copy-construct a table slice.
+  /// @param other The copied-from slice.
+  table_slice(const table_slice& other) noexcept;
 
-  /// Loads the contents for this slice from `source`.
-  virtual caf::error deserialize(caf::deserializer& source) = 0;
+  /// Copy-construct a table slice with a given encoding, possibly re-encoding.
+  /// @param other The copied-from slice.
+  /// @param encoding The encoding to convert to.
+  /// @param verify_table Controls whether the table should be verified.
+  /// @note This function only re-encodes if necessary, i.e., the new encoding
+  /// is different from the existing one.
+  table_slice(const table_slice& other, enum encoding encoding,
+              enum verify verify) noexcept;
 
-  /// Loads a table slice from a chunk. Note that the beginning of the chunk
-  /// data must point to the table slice data right after the implementation
-  /// ID. The default implementation dispatches to `deserialize` with a
-  /// `caf::binary_deserializer`.
-  /// @param chunk The chunk to convert into a table slice.
-  /// @returns An error if the operation fails and `none` otherwise.
-  /// @pre `chunk != nullptr`
-  virtual caf::error load(chunk_ptr chunk);
+  /// Copy-assigns a table slice.
+  /// @param rhs The copied-from slice.
+  table_slice& operator=(const table_slice& rhs) noexcept;
 
-  // -- visitation -------------------------------------------------------------
+  /// Move-constructs a table slice.
+  /// @param other The moved-from slice.
+  table_slice(table_slice&& other) noexcept;
 
-  /// Appends all values in column `col` to `idx`.
-  virtual void append_column_to_index(size_type col, value_index& idx) const;
+  /// Move-construct a table slice with a given encoding, possibly re-encoding.
+  /// @param other The moved-from slice.
+  /// @param encoding The encoding to convert to.
+  /// @param verify Controls whether the table should be verified.
+  /// @note This function only re-encodes if necessary, i.e., the new encoding
+  /// is different from the existing one.
+  table_slice(table_slice&& other, enum encoding encoding,
+              enum verify verify) noexcept;
+
+  /// Move-assigns a table slice.
+  /// @param rhs The moved-from slice.
+  table_slice& operator=(table_slice&& rhs) noexcept;
+
+  /// Destroys a table slice.
+  ~table_slice() noexcept;
+
+  // -- opeerators -------------------------------------------------------------
+
+  /// Compare two table slices for equality.
+  friend bool
+  operator==(const table_slice& lhs, const table_slice& rhs) noexcept;
+
+  /// Compare two table slices for inequality.
+  friend bool
+  operator!=(const table_slice& lhs, const table_slice& rhs) noexcept;
 
   // -- properties -------------------------------------------------------------
 
-  /// @returns the table slice header.
-  const table_slice_header& header() const noexcept {
-    return header_;
-  }
+  /// @returns The encoding of the slice.
+  enum encoding encoding() const noexcept;
 
-  /// @returns the table layout.
-  const record_type& layout() const noexcept {
-    return header_.layout;
-  }
+  /// @returns The table layout.
+  const record_type& layout() const noexcept;
 
-  /// @returns an identifier for the implementing class.
-  virtual caf::atom_value implementation_id() const noexcept = 0;
+  /// @returns The number of rows in the slice.
+  size_type rows() const noexcept;
 
-  /// @returns the layout for columns in range
-  /// [first_column, first_column + num_columns).
-  record_type layout(size_type first_column,
-                     size_type num_columns = npos) const;
+  /// @returns The number of columns in the slice.
+  size_type columns() const noexcept;
 
-  /// @returns the number of rows in the slice.
-  size_type rows() const noexcept {
-    return header_.rows;
-  }
-
-  /// @returns a row view for the given `index`.
-  /// @pre `row < rows()`
-  row_view row(size_t index) const;
-
-  /// @returns the number of rows in the slice.
-  size_type columns() const noexcept {
-    return header_.layout.fields.size();
-  }
-
-  /// @returns a column view for the given `index`.
-  /// @pre `column < columns()`
-  column_view column(size_t index) const;
-
-  /// @returns a view for the column with given `name` on success, or `none` if
-  ///          no column matches the `name`.
-  caf::optional<column_view> column(std::string_view name) const;
-
-  /// @returns the offset in the ID space.
-  id offset() const noexcept {
-    return header_.offset;
-  }
+  /// @returns The offset in the ID space.
+  id offset() const noexcept;
 
   /// Sets the offset in the ID space.
-  void offset(id offset) noexcept {
-    header_.offset = offset;
-  }
+  void offset(id offset) noexcept;
 
-  /// @returns the name of a column.
-  /// @param column The column offset.
-  std::string_view column_name(size_t column) const noexcept {
-    return header_.layout.fields[column].name;
-  }
+  /// @returns The number of in-memory table slices.
+  static int instances() noexcept;
+
+  // -- data access ------------------------------------------------------------
+
+  /// Appends all values in column `column` to `index`.
+  /// @param `column` The index of the column to append.
+  /// @param `index` the value index to append to.
+  /// @pre `offset() != invalid_id`
+  void append_column_to_index(size_type column, value_index& index) const;
 
   /// Retrieves data by specifying 2D-coordinates via row and column.
   /// @param row The row offset.
-  /// @param col The column offset.
-  /// @pre `row < rows() && col < columns()`
-  virtual data_view at(size_type row, size_type col) const = 0;
+  /// @param column The column offset.
+  /// @pre `row < rows() && column < columns()`
+  data_view at(size_type row, size_type column) const;
 
-  static int instances() {
-    return instance_count_;
+#if VAST_HAVE_ARROW
+
+  /// Converts a table slice to an Apache Arrow Record Batch.
+  /// @returns The pointer to the Record Batch.
+  /// @param x The table slice to convert.
+  /// @note The lifetime of the returned Record Batch is bound to the lifetime
+  /// of the converted table slice.
+  friend std::shared_ptr<arrow::RecordBatch>
+  as_record_batch(const table_slice& x);
+
+#endif // VAST_HAVE_ARROW
+
+  // -- concepts ---------------------------------------------------------------
+
+  /// Returns an immutable view on the underlying binary representation of a
+  /// table slice.
+  /// @param slice The table slice to view.
+  friend span<const byte> as_bytes(const table_slice& slice) noexcept;
+
+  /// Opt-in to CAF's type inspection API.
+  template <class Inspector>
+  friend auto inspect(Inspector& f, table_slice& x) ->
+    typename Inspector::result_type {
+    auto chunk = x.chunk_;
+    return f(caf::meta::type_name("vast.table_slice"), chunk, x.offset_,
+             caf::meta::load_callback([&]() noexcept -> caf::error {
+               // When VAST allows for external tools to hook directly into the
+               // table slice streams, this should be switched to verify if the
+               // chunk is unique.
+               x = table_slice{std::move(chunk), table_slice::verify::no};
+               return caf::none;
+             }));
   }
 
-protected:
-  // -- member variables -------------------------------------------------------
-
-  table_slice_header header_;
+  /// Selects all rows in `slice` with event IDs in `selection` and appends
+  /// produced table slices to `result`. Cuts `slice` into multiple slices if
+  /// `selection` produces gaps.
+  /// @param result The container for appending generated table slices.
+  /// @param slice The input table slice.
+  /// @param selection ID set for selecting events from `slice`.
+  /// @pre `slice.encoding() != table_slice::encoding::none`
+  friend void select(std::vector<table_slice>& result, const table_slice& slice,
+                     const ids& selection);
 
 private:
-  static std::atomic<size_t> instance_count_;
+  // -- implementation details -------------------------------------------------
+
+  /// A pointer to the underlying chunk, which contains a `vast.fbs.TableSlice`
+  /// FlatBuffers table.
+  /// @note On construction and destruction, the ref-count of `chunk_` is used
+  /// to determine whether the `num_instances_` counter should be increased or
+  /// decreased. This implies that the chunk must *never* be exposed outside of
+  /// `table_slice`.
+  chunk_ptr chunk_ = {};
+
+  /// The offset of the table slice within its ID space.
+  /// @note Assigned by the importer on import and the archive on export and as
+  /// such not part of the FlatBuffers table. Binary representations of a table
+  /// slice do not contain the offset.
+  id offset_ = invalid_id;
+
+  /// A pointer to the table slice state. As long as the layout cannot be
+  /// represented from a FlatBuffers table directly, it is prohibitively
+  /// expensive to deserialize the layout.
+  /// TODO: Revisit the need for this hack after converting the type system to
+  /// use FlatBuffers.
+  union {
+    const void* none = {};
+    const msgpack_table_slice<fbs::table_slice::msgpack::v0>* msgpack_v0;
+    const arrow_table_slice<fbs::table_slice::arrow::v0>* arrow_v0;
+  } state_;
+
+  /// The number of in-memory table slices.
+  inline static std::atomic<size_t> num_instances_ = {};
 };
-
-/// @relates table_slice
-bool operator==(const table_slice& x, const table_slice& y);
-
-/// @relates table_slice
-inline bool operator!=(const table_slice& x, const table_slice& y) {
-  return !(x == y);
-}
-
-/// @relates table_slice
-void intrusive_ptr_add_ref(const table_slice* ptr);
-
-/// @relates table_slice
-void intrusive_ptr_release(const table_slice* ptr);
-
-/// @relates table_slice
-table_slice* intrusive_cow_ptr_unshare(table_slice*&);
-
-/// @relates table_slice
-caf::error inspect(caf::serializer& sink, table_slice_ptr& ptr);
-
-/// @relates table_slice
-caf::error inspect(caf::deserializer& source, table_slice_ptr& ptr);
-
-/// Packs a table slice into a flatbuffer.
-/// @param builder The builder to pack *x* into.
-/// @param x The table slice to pack.
-/// @returns The flatbuffer offset in *builder*.
-caf::expected<flatbuffers::Offset<fbs::table_slice_buffer::v0>>
-pack(flatbuffers::FlatBufferBuilder& builder, table_slice_ptr x);
-
-/// Unpacks a table slice from a flatbuffer.
-/// @param x The flatbuffer to unpack.
-/// @param y The target to unpack *x* into.
-/// @returns An error iff the operation fails.
-caf::error unpack(const fbs::table_slice::v0& x, table_slice_ptr& y);
 
 // -- operations ---------------------------------------------------------------
 
-/// Constructs table slices filled with random content for testing purposes.
-/// @param num_slices The number of table slices to generate.
-/// @param slice_size The number of rows per table slices.
-/// @param layout The layout of the table slice.
-/// @param offset The offset of the first table slize.
-/// @param seed The seed value for initializing the random-number generator.
-/// @returns a list of randomnly filled table slices or an error.
-/// @relates table_slice
-caf::expected<std::vector<table_slice_ptr>>
-make_random_table_slices(size_t num_slices, size_t slice_size,
-                         record_type layout, id offset = 0, size_t seed = 0);
-
-/// Selects all rows in `xs` with event IDs in `selection` and appends produced
-/// table slices to `result`. Cuts `xs` into multiple slices if `selection`
-/// produces gaps.
-/// @param result The container for appending generated table slices.
-/// @param xs The input table slice.
-/// @param selection ID set for selecting events from `xs`.
-/// @pre `xs != nullptr`
-void select(std::vector<table_slice_ptr>& result, const table_slice_ptr& xs,
-            const ids& selection);
-
-/// Selects all rows in `xs` with event IDs in `selection`. Cuts `xs` into
+/// Selects all rows in `slice` with event IDs in `selection`. Cuts `slice` into
 /// multiple slices if `selection` produces gaps.
-/// @param xs The input table slice.
-/// @param selection ID set for selecting events from `xs`.
-/// @returns new table slices of the same implementation type as `xs` from
+/// @param slice The input table slice.
+/// @param selection ID set for selecting events from `slice`.
+/// @returns new table slices of the same implementation type as `slice` from
 ///          `selection`.
-/// @pre `xs != nullptr`
-std::vector<table_slice_ptr> select(const table_slice_ptr& xs,
-                                    const ids& selection);
+/// @pre `slice.encoding() != table_slice::encoding::none`
+std::vector<table_slice> select(const table_slice& slice, const ids& selection);
 
 /// Selects the first `num_rows` rows of `slice`.
 /// @param slice The input table slice.
 /// @param num_rows The number of rows to keep.
-/// @returns `slice` if `slice->rows() <= num_rows`, otherwise creates a new
+/// @returns `slice` if `slice.rows() <= num_rows`, otherwise creates a new
 ///          table slice of the first `num_rows` rows from `slice`.
-/// @pre `slice != nullptr`
+/// @pre `slice.encoding() != table_slice::encoding::none`
 /// @pre `num_rows > 0`
-table_slice_ptr truncate(const table_slice_ptr& slice, size_t num_rows);
+table_slice truncate(const table_slice& slice, size_t num_rows);
 
 /// Splits a table slice into two slices such that the first slice contains the
 /// rows `[0, partition_point)` and the second slice contains the rows
-/// `[partition_point, n)`, where `n = slice->rows()`.
+/// `[partition_point, n)`, where `n = slice.rows()`.
 /// @param slice The input table slice.
 /// @param partition_point The index of the first row for the second slice.
-/// @returns two new table slices if `0 < partition_point < slice->rows()`,
-///          otherwise returns `slice` and a `nullptr`.
-/// @pre `slice != nullptr`
-std::pair<table_slice_ptr, table_slice_ptr> split(const table_slice_ptr& slice,
-                                                  size_t partition_point);
+/// @returns two new table slices if `0 < partition_point < slice.rows()`,
+///          otherwise returns `slice` and an invalid tbale slice.
+/// @pre `slice.encoding() != table_slice::encoding::none`
+std::pair<table_slice, table_slice>
+split(const table_slice& slice, size_t partition_point);
 
 /// Counts the number of total rows of multiple table slices.
 /// @param slices The table slices to count.
 /// @returns The sum of rows across *slices*.
-uint64_t rows(const std::vector<table_slice_ptr>& slices);
-
-/// Converts the table slice into a 2-D matrix in row-major order such that
-/// each row represents an event.
-/// @param slice The table slice to convert.
-/// @param first_row An offset to the first row to consider.
-/// @param num_rows Then number of rows to consider. (0 = all rows)
-/// @returns a 2-D matrix of data instances corresponding to *slice*.
-/// @requires first_row < slice->rows()
-/// @requires num_rows <= slice->rows() - first_row
-/// @note This function exists primarily for unit testing because it performs
-/// excessive memory allocations.
-std::vector<std::vector<data>>
-to_data(const table_slice& slice, size_t first_row = 0, size_t num_rows = 0);
-
-std::vector<std::vector<data>>
-to_data(const std::vector<table_slice_ptr>& slices);
+uint64_t rows(const std::vector<table_slice>& slices);
 
 /// Evaluates an expression over a table slice by applying it row-wise.
 /// @param expr The expression to evaluate.

@@ -32,7 +32,7 @@ public:
     /// this lookup session.
     /// @returns caf::no_error when finished.
     /// @returns A new table slice upon every invocation.
-    virtual caf::expected<table_slice_ptr> next() = 0;
+    virtual caf::expected<table_slice> next() = 0;
   };
 
   virtual ~store();
@@ -40,7 +40,7 @@ public:
   /// Adds a table slice to the store.
   /// @param xs The table slice to add.
   /// @returns No error on success.
-  virtual caf::error put(table_slice_ptr xs) = 0;
+  virtual caf::error put(table_slice xs) = 0;
 
   /// Starts an iterative extraction session.
   /// @param xs The IDs for the events to retrieve.
@@ -56,7 +56,7 @@ public:
   /// Retrieves a set of events.
   /// @param xs The IDs for the events to retrieve.
   /// @returns The table slice according to *xs*.
-  virtual caf::expected<std::vector<table_slice_ptr>> get(const ids& xs) = 0;
+  virtual caf::expected<std::vector<table_slice>> get(const ids& xs) = 0;
 
   /// Flushes in-memory state to persistent storage.
   /// @returns No error on success.

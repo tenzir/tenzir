@@ -13,7 +13,6 @@
 
 #pragma once
 
-#include "vast/caf_table_slice_builder.hpp"
 #include "vast/concept/printable/std/chrono.hpp"
 #include "vast/concept/printable/stream.hpp"
 #include "vast/concept/printable/to_string.hpp"
@@ -69,8 +68,7 @@ template <class Reader, class Self = caf::event_based_actor>
 struct source_state {
   // -- member types -----------------------------------------------------------
 
-  using downstream_manager
-    = caf::broadcast_downstream_manager<table_slice_ptr>;
+  using downstream_manager = caf::broadcast_downstream_manager<table_slice>;
 
   // -- constructors, destructors, and assignment operators --------------------
 
@@ -171,7 +169,7 @@ struct source_state {
           st.local_schema.clear();
           // Second, filter valid types from all available record types.
           for (auto& type : types.value)
-            if (auto layout = caf::get_if<vast::record_type>(&type))
+            if (auto&& layout = caf::get_if<vast::record_type>(&type))
               if (is_valid(*layout))
                 st.local_schema.add(std::move(*layout));
           // Third, try to set the new schema.
@@ -249,12 +247,12 @@ source(caf::stateful_actor<source_state<Reader>>* self, Reader reader,
       self->send(self->state.accountant, "source.start", now);
     },
     // get next element
-    [=](caf::unit_t&, caf::downstream<table_slice_ptr>& out, size_t num) {
+    [=](caf::unit_t&, caf::downstream<table_slice>& out, size_t num) {
       VAST_DEBUG(self, "tries to generate", num, "messages");
       auto& st = self->state;
       // Extract events until the source has exhausted its input or until
       // we have completed a batch.
-      auto push_slice = [&](table_slice_ptr x) { out.push(std::move(x)); };
+      auto push_slice = [&](table_slice slice) { out.push(std::move(slice)); };
       // We can produce up to num * table_slice_size events per run.
       auto events = num * table_slice_size;
       if (st.requested)

@@ -48,13 +48,13 @@ void counter_state::init(expression expr, caf::actor index,
   self_->send(archive_, atom::exporter_v, self_);
   caf::message_handler base{behaviors_[collect_hits].as_behavior_impl()};
   behaviors_[collect_hits] = base.or_else(
-    [this](table_slice_ptr slice) {
+    [this](table_slice slice) {
       // Construct a candidate checker if we don't have one for this type.
-      auto it = checkers_.find(slice->layout());
+      auto it = checkers_.find(slice.layout());
       if (it == checkers_.end()) {
-        if (auto x = tailor(expr_, slice->layout())) {
+        if (auto x = tailor(expr_, slice.layout())) {
           std::tie(it, std::ignore) = checkers_.emplace(
-            vast::record_type{slice->layout()}, std::move(*x));
+            vast::record_type{slice.layout()}, std::move(*x));
         } else {
           VAST_ERROR(self_, "failed to tailor expression:",
                      self_->system().render(x.error()));
@@ -62,7 +62,7 @@ void counter_state::init(expression expr, caf::actor index,
         }
       }
       // Perform the candidate check and count results.
-      auto num_results = rank(evaluate(it->second, *slice));
+      auto num_results = rank(evaluate(it->second, slice));
       if (num_results > 0)
         self_->send(client_, num_results);
     },

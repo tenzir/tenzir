@@ -194,7 +194,7 @@ std::string_view conn_log_100_events = R"__(#separator \x09
 #close	2014-05-23-18-02-35)__";
 
 struct fixture : fixtures::deterministic_actor_system {
-  std::vector<table_slice_ptr>
+  std::vector<table_slice>
   read(std::unique_ptr<std::istream> input, size_t slice_size,
        size_t num_events, bool expect_eof, bool expect_stall) {
     using reader_type = format::zeek::reader;
@@ -203,10 +203,9 @@ struct fixture : fixtures::deterministic_actor_system {
     caf::put(settings, "vast.import.read-timeout", "200ms");
     reader_type reader{defaults::import::table_slice_type, std::move(settings),
                        std::move(input)};
-    std::vector<table_slice_ptr> slices;
-    auto add_slice = [&](table_slice_ptr ptr) {
-      slices.emplace_back(std::move(ptr));
-    };
+    std::vector<table_slice> slices;
+    auto add_slice
+      = [&](table_slice slice) { slices.emplace_back(std::move(slice)); };
     auto num = 0u;
     caf::error err;
     do {
@@ -227,7 +226,7 @@ struct fixture : fixtures::deterministic_actor_system {
     return slices;
   }
 
-  std::vector<table_slice_ptr>
+  std::vector<table_slice>
   read(std::string_view input, size_t slice_size, size_t num_events,
        bool expect_eof = true, bool expect_stall = false) {
     return read(std::make_unique<std::istringstream>(std::string{input}),
@@ -270,14 +269,14 @@ TEST(zeek data parsing) {
 TEST(zeek reader - capture loss) {
   auto slices = read(capture_loss_10_events, 10, 10);
   REQUIRE_EQUAL(slices.size(), 1u);
-  CHECK_EQUAL(slices[0]->rows(), 10u);
+  CHECK_EQUAL(slices[0].rows(), 10u);
 }
 
 TEST(zeek reader - conn log) {
   auto slices = read(conn_log_100_events, 20, 100);
   CHECK_EQUAL(slices.size(), 5u);
   for (auto& slice : slices)
-    CHECK_EQUAL(slice->rows(), 20u);
+    CHECK_EQUAL(slice.rows(), 20u);
 }
 
 TEST(zeek reader - custom schema) {
@@ -318,13 +317,14 @@ TEST(zeek reader - custom schema) {
     defaults::import::table_slice_type, caf::settings{},
     std::make_unique<std::istringstream>(std::string{conn_log_100_events})};
   reader.schema(sch);
-  std::vector<table_slice_ptr> slices;
+  std::vector<table_slice> slices;
   auto add_slice
-    = [&](table_slice_ptr ptr) { slices.emplace_back(std::move(ptr)); };
+    = [&](table_slice slice) { slices.emplace_back(std::move(slice)); };
   auto [err, num] = reader.read(20, 20, add_slice);
   CHECK_EQUAL(slices.size(), 1u);
-  CHECK_EQUAL(slices[0]->rows(), 20u);
-  CHECK_EQUAL(slices[0]->layout(), expected);
+  CHECK_EQUAL(slices[0].rows(), 20u);
+  auto&& layout = slices[0].layout();
+  CHECK_EQUAL(layout, expected);
 }
 
 TEST(zeek reader - continous stream with partial slice) {
@@ -333,7 +333,7 @@ TEST(zeek reader - continous stream with partial slice) {
   REQUIRE_EQUAL(result, 0);
   auto [read_end, write_end] = pipefds;
   detail::fdinbuf buf(read_end);
-  std::vector<table_slice_ptr> slices;
+  std::vector<table_slice> slices;
   std::thread t([&] {
     bool expect_eof = false;
     bool expect_stall = true;
@@ -348,7 +348,7 @@ TEST(zeek reader - continous stream with partial slice) {
   t.join();
   CHECK_EQUAL(slices.size(), 1u);
   for (auto& slice : slices)
-    CHECK_EQUAL(slice->rows(), 10u);
+    CHECK_EQUAL(slice.rows(), 10u);
   ::close(pipefds[0]);
   ::close(pipefds[1]);
 }
@@ -367,13 +367,15 @@ TEST(zeek writer) {
   // Perform the writing.
   format::zeek::writer writer{directory};
   for (auto& slice : zeek_conn_log)
-    if (auto err = writer.write(*slice))
+    if (auto err = writer.write(slice))
       FAIL("failed to write conn log");
   for (auto& slice : zeek_http_log)
-    if (auto err = writer.write(*slice))
+    if (auto err = writer.write(slice))
       FAIL("failed to write HTTP log");
-  CHECK(exists(directory / zeek_conn_log[0]->layout().name() + ".log"));
-  CHECK(exists(directory / zeek_http_log[0]->layout().name() + ".log"));
+  auto conn_layout = zeek_conn_log[0].layout();
+  CHECK(exists(directory / conn_layout.name() + ".log"));
+  auto http_layout = zeek_http_log[0].layout();
+  CHECK(exists(directory / http_layout.name() + ".log"));
   // TODO: these tests should verify content as well.
 }
 

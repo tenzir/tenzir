@@ -18,7 +18,6 @@
 #include "vast/test/fixtures/actor_system_and_events.hpp"
 #include "vast/test/test.hpp"
 
-#include "vast/caf_table_slice.hpp"
 #include "vast/concept/parseable/to.hpp"
 #include "vast/concept/parseable/vast/expression.hpp"
 #include "vast/concept/printable/std/chrono.hpp"
@@ -111,11 +110,11 @@ struct fixture : fixtures::deterministic_actor_system_and_events {
   /// Rebases offsets of table slices, i.e., the offsets of the first
   /// table slice is 0, the offset of the second table slice is 0 + rows in the
   /// first slice, and so on.
-  auto rebase(std::vector<table_slice_ptr> xs) {
+  auto rebase(std::vector<table_slice> xs) {
     id offset = 0;
     for (auto& x : xs) {
-      x.unshared().offset(offset);
-      offset += x->rows();
+      x.offset(offset);
+      offset += x.rows();
     }
     return xs;
   }
@@ -159,7 +158,7 @@ TEST(iterable integer query result) {
   CHECK_EQUAL(hits, partitions);
   CHECK_EQUAL(scheduled, taste_count);
   ids expected_result;
-  expected_result.append_bits(false, alternating_integers[0]->offset());
+  expected_result.append_bits(false, alternating_integers[0].offset());
   for (size_t i = 0; i < (slice_size * partitions) / 2; ++i) {
     expected_result.append_bit(false);
     expected_result.append_bit(true);

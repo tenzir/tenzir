@@ -14,38 +14,16 @@
 #include "vast/msgpack_table_slice_builder.hpp"
 
 #include "vast/detail/overload.hpp"
+#include "vast/fbs/table_slice.hpp"
+#include "vast/fbs/utils.hpp"
 #include "vast/logger.hpp"
 #include "vast/msgpack_table_slice.hpp"
 
-#include <caf/make_copy_on_write.hpp>
-#include <caf/make_counted.hpp>
-
 #include <memory>
-
-using namespace vast;
 
 namespace vast {
 
-caf::atom_value msgpack_table_slice_builder::get_implementation_id() noexcept {
-  return msgpack_table_slice::class_id;
-}
-
-table_slice_builder_ptr
-msgpack_table_slice_builder::make(record_type layout,
-                                  size_t initial_buffer_size) {
-  return caf::make_counted<msgpack_table_slice_builder>(std::move(layout),
-                                                        initial_buffer_size);
-}
-
-msgpack_table_slice_builder::msgpack_table_slice_builder(
-  record_type layout, size_t initial_buffer_size)
-  : super{std::move(layout)}, col_{0}, builder_{buffer_} {
-  buffer_.reserve(initial_buffer_size);
-}
-
-msgpack_table_slice_builder::~msgpack_table_slice_builder() {
-  // nop
-}
+// -- utility functions --------------------------------------------------------
 
 namespace {
 
@@ -119,32 +97,54 @@ template <class Builder>
 
 } // namespace msgpack
 
-bool msgpack_table_slice_builder::add_impl(data_view x) {
-  // Check whether input is valid.
-  if (!type_check(layout().fields[col_].type, x))
-    return false;
-  if (col_ == 0)
-    offset_table_.push_back(buffer_.size());
-  col_ = (col_ + 1) % columns();
-  auto n = put(builder_, x);
-  VAST_ASSERT(n > 0);
-  return true;
+// -- constructors, destructors, and assignment operators ----------------------
+
+table_slice_builder_ptr
+msgpack_table_slice_builder::make(record_type layout,
+                                  size_t initial_buffer_size) {
+  return table_slice_builder_ptr{
+    new msgpack_table_slice_builder{std::move(layout), initial_buffer_size},
+    false};
 }
 
-table_slice_ptr msgpack_table_slice_builder::finish() {
+msgpack_table_slice_builder::~msgpack_table_slice_builder() {
+  // nop
+}
+
+// -- properties ---------------------------------------------------------------
+
+table_slice
+msgpack_table_slice_builder::finish(span<const byte> serialized_layout) {
   // Sanity check.
-  if (col_ != 0)
-    return nullptr;
-  table_slice_header header;
-  header.layout = layout();
-  header.rows = offset_table_.size();
-  auto ptr = new msgpack_table_slice{std::move(header)};
-  ptr->offset_table_ = std::move(offset_table_);
-  ptr->chunk_ = chunk::make(std::move(buffer_));
-  ptr->buffer_ = as_bytes(span{ptr->chunk_->data(), ptr->chunk_->size()});
+  if (column_ != 0)
+    return {};
+  // Pack layout.
+  auto layout_buffer
+    = serialized_layout.empty()
+        ? *fbs::serialize_bytes(builder_, layout())
+        : builder_.CreateVector(
+          reinterpret_cast<const unsigned char*>(serialized_layout.data()),
+          serialized_layout.size());
+  // Pack offset table.
+  auto offset_table_buffer = builder_.CreateVector(offset_table_);
+  // Pack data.
+  auto data_buffer = builder_.CreateVector(
+    reinterpret_cast<const uint8_t*>(data_.data()), data_.size());
+  // Create MessagePack-encoded table slices.
+  auto msgpack_table_slice_buffer = fbs::table_slice::msgpack::Createv0(
+    builder_, layout_buffer, offset_table_buffer, data_buffer);
+  // Create and finish table slice.
+  auto table_slice_buffer
+    = fbs::CreateTableSlice(builder_, fbs::table_slice::TableSlice::msgpack_v0,
+                            msgpack_table_slice_buffer.Union());
+  fbs::FinishTableSliceBuffer(builder_, table_slice_buffer);
+  // Reset the builder state.
   offset_table_ = {};
-  buffer_ = {};
-  return table_slice_ptr{ptr, false};
+  data_ = {};
+  msgpack_builder_.reset();
+  // Create the table slice from the chunk.
+  auto chunk = fbs::release(builder_);
+  return table_slice{std::move(chunk), table_slice::verify::no, layout()};
 }
 
 size_t msgpack_table_slice_builder::rows() const noexcept {
@@ -153,7 +153,38 @@ size_t msgpack_table_slice_builder::rows() const noexcept {
 
 caf::atom_value
 msgpack_table_slice_builder::implementation_id() const noexcept {
-  return get_implementation_id();
+  return caf::atom("msgpack");
 }
+
+void msgpack_table_slice_builder::reserve(size_t num_rows) {
+  offset_table_.reserve(num_rows);
+}
+
+// -- implementation details ---------------------------------------------------
+
+msgpack_table_slice_builder::msgpack_table_slice_builder(
+  record_type layout, size_t initial_buffer_size)
+  : table_slice_builder{std::move(layout)},
+    msgpack_builder_{data_},
+    builder_{initial_buffer_size} {
+  data_.reserve(initial_buffer_size);
+}
+
+bool msgpack_table_slice_builder::add_impl(data_view x) {
+  // Check whether input is valid.
+  if (!type_check(layout().fields[column_].type, x))
+    return false;
+  if (column_ == 0)
+    offset_table_.push_back(data_.size());
+  column_ = (column_ + 1) % columns();
+  auto n = put(msgpack_builder_, x);
+  VAST_ASSERT(n > 0);
+  return true;
+}
+
+// -- template machinery -------------------------------------------------------
+
+/// Explicit template instantiations for all MessagePack encoding versions.
+template class msgpack_table_slice<fbs::table_slice::msgpack::v0>;
 
 } // namespace vast

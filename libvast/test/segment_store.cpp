@@ -16,6 +16,7 @@
 #include "vast/segment_store.hpp"
 
 #include "vast/test/fixtures/actor_system_and_events.hpp"
+#include "vast/test/fixtures/table_slices.hpp"
 #include "vast/test/test.hpp"
 
 #include "vast/concept/printable/to_string.hpp"
@@ -44,8 +45,8 @@ struct fixture : fixtures::deterministic_actor_system_and_events {
     // Check that ground truth is what we expect.
     if (zeek_conn_log.size() != 3u)
       FAIL("expected 3 slices in test data set");
-    if (zeek_conn_log[0]->rows() != 8 || zeek_conn_log[1]->rows() != 8
-        || zeek_conn_log[2]->rows() != 4)
+    if (zeek_conn_log[0].rows() != 8 || zeek_conn_log[1].rows() != 8
+        || zeek_conn_log[2].rows() != 4)
       FAIL("expected 8, 8 and 4 rows in data set");
   }
 
@@ -61,7 +62,7 @@ struct fixture : fixtures::deterministic_actor_system_and_events {
 
   /// Pushes all slices into the store. The slices will usually remain in the
   /// segment builder.
-  void put(const std::vector<table_slice_ptr>& slices) {
+  void put(const std::vector<table_slice>& slices) {
     for (auto& slice : slices)
       if (auto err = store->put(slice))
         FAIL("store->put failed: " << err);
@@ -69,7 +70,7 @@ struct fixture : fixtures::deterministic_actor_system_and_events {
 
   /// Pushes all slices into the store and makes sure the resulting segment
   /// gets flushed to disk but remains "hot", i.e., stays in the cache.
-  void put_hot(const std::vector<table_slice_ptr>& slices) {
+  void put_hot(const std::vector<table_slice>& slices) {
     put(slices);
     auto segment_id = store->active_id();
     auto files_before = segment_files().size();
@@ -85,7 +86,7 @@ struct fixture : fixtures::deterministic_actor_system_and_events {
 
   /// Pushes all slices into the store and makes sure the resulting segment
   /// gets flushed to disk without remaining in the cache.
-  void put_cold(const std::vector<table_slice_ptr>& slices) {
+  void put_cold(const std::vector<table_slice>& slices) {
     put(slices);
     auto segment_id = store->active_id();
     auto files_before = segment_files().size();
@@ -116,17 +117,9 @@ struct fixture : fixtures::deterministic_actor_system_and_events {
   path segment_path;
 };
 
-/// @returns a reference to the value pointed to by `ptr`.
-template <class T>
-auto& val(T& ptr) {
-  if (ptr == nullptr)
-    FAIL("unexpected nullptr access");
-  return *ptr;
-}
-
 template <class Container>
 bool deep_compare(const Container& xs, const Container& ys) {
-  auto cmp = [](auto& x, auto& y) { return val(x) == val(y); };
+  auto cmp = [](auto& x, auto& y) { return x == y; };
   return xs.size() == ys.size()
          && std::equal(xs.begin(), xs.end(), ys.begin(), cmp);
 }
@@ -139,8 +132,8 @@ size_t num_rows(const table_slice& xs, size_t starting_row,
 } // namespace
 
 #define CHECK_SLICE(xs, slice, ...)                                            \
-  CHECK_EQUAL(xs->rows(), num_rows(*zeek_conn_log[slice], __VA_ARGS__));       \
-  CHECK_EQUAL(to_data(*xs), to_data(*zeek_conn_log[slice], __VA_ARGS__))
+  CHECK_EQUAL(xs.rows(), num_rows(zeek_conn_log[slice], __VA_ARGS__));         \
+  CHECK_EQUAL(to_data(xs), to_data(zeek_conn_log[slice], __VA_ARGS__))
 
 FIXTURE_SCOPE(segment_store_tests, fixture)
 
@@ -173,13 +166,13 @@ TEST(querying filled segment store) {
   CHECK(deep_compare(zeek_conn_log, get(everything)));
   auto slices = get(make_ids({0, 6, 19, 21}));
   REQUIRE_EQUAL(slices.size(), 2u);
-  CHECK_EQUAL(val(slices[0]), val(zeek_conn_log[0]));
-  CHECK_EQUAL(val(slices[1]), val(zeek_conn_log[2]));
+  CHECK_EQUAL(slices[0], zeek_conn_log[0]);
+  CHECK_EQUAL(slices[1], zeek_conn_log[2]);
 }
 
 TEST(sessionized extraction on empty segment store) {
   auto session = store->extract(make_ids({0, 6, 19, 21}));
-  std::vector<table_slice_ptr> slices;
+  std::vector<table_slice> slices;
   for (auto x = session->next(); x.engaged(); x = session->next())
     slices.emplace_back(unbox(x));
   CHECK_EQUAL(slices.size(), 0u);
@@ -188,12 +181,12 @@ TEST(sessionized extraction on empty segment store) {
 TEST(sessionized extraction on filled segment store) {
   put(zeek_conn_log);
   auto session = store->extract(make_ids({0, 6, 19, 21}));
-  std::vector<table_slice_ptr> slices;
+  std::vector<table_slice> slices;
   for (auto x = session->next(); x.engaged(); x = session->next())
     slices.emplace_back(unbox(x));
   REQUIRE_EQUAL(slices.size(), 2u);
-  CHECK_EQUAL(val(slices[0]).offset(), 0u);
-  CHECK_EQUAL(val(slices[1]).offset(), 16u);
+  CHECK_EQUAL(slices[0].offset(), 0u);
+  CHECK_EQUAL(slices[1].offset(), 16u);
 }
 
 TEST(erase on empty segment store) {

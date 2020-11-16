@@ -102,10 +102,11 @@ caf::error render(output_iterator& out, const view<data>& x) {
 caf::error writer::write(const table_slice& x) {
   constexpr char separator = writer::defaults::separator;
   // Print a new header each time we encounter a new layout.
-  if (last_layout_ != x.layout().name()) {
-    last_layout_ = x.layout().name();
+  auto&& layout = x.layout();
+  if (last_layout_ != layout.name()) {
+    last_layout_ = layout.name();
     append("type");
-    for (auto& field : x.layout().fields) {
+    for (auto& field : layout.fields) {
       append(separator);
       append(field.name);
     }
@@ -400,7 +401,7 @@ caf::expected<reader::parser_type> reader::read_header(std::string_view line) {
   auto f = b;
   if (!p(f, line.end(), columns))
     return make_error(ec::parse_error, "unable to parse csv header");
-  auto layout = make_layout(columns);
+  auto&& layout = make_layout(columns);
   if (!layout)
     return make_error(ec::parse_error, "unable to derive a layout");
   VAST_DEBUG_ANON("csv_reader derived layout", to_string(*layout));

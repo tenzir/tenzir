@@ -27,6 +27,7 @@
 #include "vast/system/archive.hpp"
 #include "vast/system/node_control.hpp"
 #include "vast/system/spawn_or_connect_to_node.hpp"
+#include "vast/table_slice.hpp"
 
 #include <caf/expected.hpp>
 #include <caf/scoped_actor.hpp>
@@ -63,7 +64,7 @@ run(caf::scoped_actor& self, archive_type archive, const invocation& inv) {
     bool waiting = true;
     self->receive_while(waiting)
       // Message handlers.
-      ([&](table_slice_ptr slice) { (*writer)->write(*slice); },
+      ([&](table_slice slice) { (*writer)->write(slice); },
        [&](atom::done, const caf::error& err) {
          if (err)
            VAST_WARNING_ANON("failed to get table slice:", render(err));

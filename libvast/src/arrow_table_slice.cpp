@@ -17,149 +17,20 @@
 #include "vast/detail/byte_swap.hpp"
 #include "vast/detail/narrow.hpp"
 #include "vast/detail/overload.hpp"
+#include "vast/die.hpp"
 #include "vast/error.hpp"
+#include "vast/fbs/table_slice.hpp"
+#include "vast/fbs/utils.hpp"
 #include "vast/logger.hpp"
 #include "vast/value_index.hpp"
 
-#include <caf/binary_deserializer.hpp>
-#include <caf/binary_serializer.hpp>
-#include <caf/detail/type_list.hpp>
-
+#include <arrow/api.h>
 #include <arrow/io/api.h>
-#include <arrow/ipc/reader.h>
-#include <arrow/ipc/writer.h>
+#include <arrow/ipc/api.h>
+
+#include <type_traits>
 
 namespace vast {
-
-arrow_table_slice::arrow_table_slice(table_slice_header header,
-                                     record_batch_ptr batch)
-  : super(std::move(header)), batch_(std::move(batch)) {
-  // nop
-}
-
-table_slice_ptr arrow_table_slice::make(table_slice_header header) {
-  return table_slice_ptr{new arrow_table_slice(std::move(header)), false};
-}
-
-arrow_table_slice* arrow_table_slice::copy() const {
-  return new arrow_table_slice(header_, batch_);
-}
-
-namespace {
-
-class arrow_output_stream : public arrow::io::OutputStream {
-public:
-  arrow_output_stream(caf::binary_serializer& sink) : sink_(sink) {
-    // nop
-  }
-
-  bool closed() const override {
-    return false;
-  }
-
-  arrow::Status Close() override {
-    return arrow::Status::OK();
-  }
-
-  arrow::Result<int64_t> Tell() const override {
-    return detail::narrow_cast<int64_t>(sink_.write_pos());
-  }
-
-  arrow::Status Write(const void* data, int64_t nbytes) override {
-    sink_.apply_raw(detail::narrow_cast<size_t>(nbytes),
-                    const_cast<void*>(data));
-    return arrow::Status::OK();
-  }
-
-private:
-  caf::binary_serializer& sink_;
-};
-
-class arrow_input_stream : public arrow::io::InputStream {
-public:
-  arrow_input_stream(caf::deserializer& source)
-    : source_(source), position_(0) {
-    // nop
-  }
-
-  bool closed() const override {
-    return false;
-  }
-
-  arrow::Status Close() override {
-    return arrow::Status::OK();
-  }
-
-  arrow::Result<int64_t> Tell() const override {
-    return position_;
-  }
-
-  arrow::Result<int64_t> Read(int64_t nbytes, void* out) override {
-    if (auto err = source_.apply_raw(detail::narrow_cast<size_t>(nbytes), out))
-      return arrow::Status::IOError("Past end of stream");
-    return nbytes;
-  }
-
-  arrow::Result<std::shared_ptr<arrow::Buffer>> Read(int64_t nbytes) override {
-    auto buffer_result = arrow::AllocateBuffer(nbytes);
-    if (!buffer_result.ok())
-      return buffer_result.status();
-    auto buffer = std::move(*buffer_result);
-    ARROW_RETURN_NOT_OK(Read(nbytes, buffer->mutable_data()));
-    return buffer;
-  }
-
-private:
-  caf::deserializer& source_;
-  int64_t position_;
-};
-
-} // namespace
-
-caf::error arrow_table_slice::serialize(caf::serializer& sink) const {
-  if (auto derived = dynamic_cast<caf::binary_serializer*>(&sink))
-    return serialize_impl(*derived);
-  std::vector<char> buf;
-  caf::binary_serializer binary_sink{nullptr, buf};
-  if (auto err = serialize_impl(binary_sink))
-    return err;
-  return sink.apply_raw(buf.size(), buf.data());
-}
-
-caf::error
-arrow_table_slice::serialize_impl(caf::binary_serializer& sink) const {
-  arrow_output_stream output_stream{sink};
-  if (rows() == 0)
-    return caf::none;
-  VAST_ASSERT(batch_ != nullptr);
-  auto writer_result
-    = arrow::ipc::NewStreamWriter(&output_stream, batch_->schema());
-  if (!writer_result.ok())
-    return ec::unspecified;
-  auto writer = std::move(*writer_result);
-  if (!writer->WriteRecordBatch(*batch_).ok())
-    return ec::unspecified;
-  return caf::none;
-}
-
-caf::error arrow_table_slice::deserialize(caf::deserializer& source) {
-  arrow_input_stream input_stream{source};
-  if (rows() == 0) {
-    batch_ = nullptr;
-    return caf::none;
-  }
-  auto reader_result = arrow::ipc::RecordBatchStreamReader::Open(&input_stream);
-  if (!reader_result.ok())
-    return ec::unspecified;
-  auto reader = std::move(*reader_result);
-  if (!reader->ReadNext(&batch_).ok())
-    return ec::unspecified;
-  return caf::none;
-}
-
-caf::atom_value arrow_table_slice::implementation_id() const noexcept {
-  return class_id;
-}
 
 namespace {
 
@@ -654,22 +525,144 @@ private:
   value_index& idx_;
 };
 
+// -- utility for converting Buffer to RecordBatch -----------------------------
+
+template <class Callback>
+class record_batch_listener final : public arrow::ipc::Listener {
+public:
+  record_batch_listener(Callback&& callback) noexcept
+    : callback_{std::forward<Callback>(callback)} {
+    // nop
+  }
+
+  virtual ~record_batch_listener() noexcept override = default;
+
+private:
+  arrow::Status OnRecordBatchDecoded(
+    std::shared_ptr<arrow::RecordBatch> record_batch) override {
+    std::invoke(callback_, std::move(record_batch));
+    return arrow::Status::OK();
+  }
+
+  Callback callback_;
+};
+
+template <class Callback>
+auto make_record_batch_listener(Callback&& callback) {
+  return std::make_shared<record_batch_listener<Callback>>(
+    std::forward<Callback>(callback));
+}
+
+class record_batch_decoder final {
+public:
+  record_batch_decoder() noexcept
+    : decoder_{make_record_batch_listener(
+      [&](std::shared_ptr<arrow::RecordBatch> record_batch) {
+        record_batch_ = std::move(record_batch);
+      })} {
+    // nop
+  }
+
+  template <class FlatSchema, class FlatRecordBatch>
+  std::shared_ptr<arrow::RecordBatch>
+  decode(const FlatSchema& flat_schema,
+         const FlatRecordBatch& flat_record_batch) noexcept {
+    VAST_ASSERT(!record_batch_);
+    if (auto status
+        = decoder_.Consume(flat_schema->data(), flat_schema->size());
+        !status.ok()) {
+      VAST_ERROR_ANON(__func__,
+                      "failed to decode Arrow Schema:", status.ToString());
+      return {};
+    }
+    if (auto status = decoder_.Consume(flat_record_batch->data(),
+                                       flat_record_batch->size());
+        !status.ok()) {
+      VAST_ERROR_ANON(
+        __func__, "failed to decode Arrow Record Batch:", status.ToString());
+      return {};
+    }
+    VAST_ASSERT(record_batch_);
+    return std::exchange(record_batch_, {});
+  }
+
+private:
+  arrow::ipc::StreamDecoder decoder_;
+  std::shared_ptr<arrow::RecordBatch> record_batch_ = nullptr;
+};
+
 } // namespace
 
-// -- remaining implementation of arrow_table_slice ----------------------------
+// -- constructors, destructors, and assignment operators ----------------------
 
-data_view arrow_table_slice::at(size_type row, size_type col) const {
-  VAST_ASSERT(row < rows());
-  VAST_ASSERT(col < columns());
-  auto arr = batch_->column(detail::narrow_cast<int>(col));
-  return value_at(layout().fields[col].type, *arr, row);
+template <class FlatBuffer>
+arrow_table_slice<FlatBuffer>::arrow_table_slice(
+  const FlatBuffer& slice) noexcept
+  : slice_{slice}, state_{} {
+  if (auto err = fbs::deserialize_bytes(slice_.layout(), state_.layout))
+    die("failed to deserialize layout: " + render(err));
+  auto decoder = record_batch_decoder{};
+  state_.record_batch = decoder.decode(slice.schema(), slice.record_batch());
 }
 
-void arrow_table_slice::append_column_to_index(size_type col,
-                                               value_index& idx) const {
-  index_applier f{offset(), idx};
-  auto arr = batch_->column(detail::narrow_cast<int>(col));
-  decode(layout().fields[col].type, *arr, f);
+template <class FlatBuffer>
+arrow_table_slice<FlatBuffer>::arrow_table_slice(const FlatBuffer& slice,
+                                                 record_type layout) noexcept
+  : slice_{slice}, state_{} {
+  state_.layout = std::move(layout);
+  auto decoder = record_batch_decoder{};
+  state_.record_batch = decoder.decode(slice.schema(), slice.record_batch());
 }
+
+template <class FlatBuffer>
+arrow_table_slice<FlatBuffer>::~arrow_table_slice() noexcept {
+  // nop
+}
+
+// -- properties -------------------------------------------------------------
+
+template <class FlatBuffer>
+const record_type& arrow_table_slice<FlatBuffer>::layout() const noexcept {
+  return state_.layout;
+}
+
+template <class FlatBuffer>
+table_slice::size_type arrow_table_slice<FlatBuffer>::rows() const noexcept {
+  return record_batch()->num_rows();
+}
+
+template <class FlatBuffer>
+table_slice::size_type arrow_table_slice<FlatBuffer>::columns() const noexcept {
+  return record_batch()->num_columns();
+}
+
+// -- data access ------------------------------------------------------------
+
+template <class FlatBuffer>
+void arrow_table_slice<FlatBuffer>::append_column_to_index(
+  id offset, table_slice::size_type column, value_index& index) const {
+  auto f = index_applier{offset, index};
+  auto array = record_batch()->column(detail::narrow_cast<int>(column));
+  decode(layout().fields[column].type, *array, f);
+}
+
+template <class FlatBuffer>
+data_view
+arrow_table_slice<FlatBuffer>::at(table_slice::size_type row,
+                                  table_slice::size_type column) const {
+  auto array = record_batch()->column(detail::narrow_cast<int>(column));
+  return value_at(layout().fields[column].type, *array, row);
+}
+
+template <class FlatBuffer>
+std::shared_ptr<arrow::RecordBatch>
+arrow_table_slice<FlatBuffer>::record_batch() const noexcept {
+  return state_.record_batch;
+}
+
+// -- template machinery -------------------------------------------------------
+
+/// Explicit template instantiations for all Arrow encoding versions.
+template class arrow_table_slice<fbs::table_slice::arrow::v0>;
 
 } // namespace vast

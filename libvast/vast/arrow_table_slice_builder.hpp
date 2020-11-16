@@ -13,99 +13,115 @@
 
 #pragma once
 
+#include "vast/fwd.hpp"
 #include "vast/table_slice.hpp"
 #include "vast/table_slice_builder.hpp"
+
+#include <flatbuffers/flatbuffers.h>
 
 #include <memory>
 #include <vector>
 
-namespace arrow {
-
-class Array;
-class ArrayBuilder;
-class DataType;
-class MemoryPool;
-class Schema;
-
-} // namespace arrow
-
 namespace vast {
 
-class arrow_table_slice_builder final : public vast::table_slice_builder {
+/// A builder for table slices that store elements encoded in the
+/// [Arrow](https://arrow.apache.org) format.
+class arrow_table_slice_builder final : public table_slice_builder {
 public:
   // -- member types -----------------------------------------------------------
 
-  /// Base type.
-  using super = vast::table_slice_builder;
-
   /// Wraps a type-specific Arrow builder.
   struct column_builder {
-    // -- constructors, destructors, and assignment operators ------------------
+    /// Destroys an Arrow column builder.
+    virtual ~column_builder() noexcept;
 
-    virtual ~column_builder();
+    /// Adds data to the column builder.
+    /// @param x The data to add.
+    /// @returns `true` on success.
+    virtual bool add(data_view x) = 0;
 
-    // -- pure virtual functions -----------------------------------------------
-
-    virtual bool add(vast::data_view x) = 0;
-
+    /// @returns An Arrow array from the accumulated calls to add.
     [[nodiscard]] virtual std::shared_ptr<arrow::Array> finish() = 0;
 
+    /// @returns The underlying array builder.
     virtual std::shared_ptr<arrow::ArrayBuilder> arrow_builder() const = 0;
+
+    /// Constructs an Arrow column builder.
+    /// @param t A type to create a column builder for.
+    /// @param pool The Arrow memory pool to use.
+    /// @returns A builder for columns of type `t`.
+    static std::unique_ptr<column_builder>
+    make(const type& t, arrow::MemoryPool* pool);
   };
-
-  using column_builder_ptr = std::unique_ptr<column_builder>;
-
-  // -- class properties -------------------------------------------------------
-
-  /// @returns `arrow_table_slice::class_id`
-  static caf::atom_value get_implementation_id() noexcept;
-
-  // -- factory functions ------------------------------------------------------
-
-  /// @returns a table_slice_builder instance.
-  static vast::table_slice_builder_ptr make(vast::record_type layout);
-
-  /// @returns a builder for columns of type `t`.
-  static column_builder_ptr
-  make_column_builder(const vast::type& t, arrow::MemoryPool* pool);
-
-  /// @returns an arrow representation of `t`.
-  static std::shared_ptr<arrow::Schema>
-  make_arrow_schema(const vast::record_type& t);
-
-  /// @returns an arrow representation of `t`.
-  static std::shared_ptr<arrow::DataType> make_arrow_type(const vast::type& t);
 
   // -- constructors, destructors, and assignment operators --------------------
 
-  /// Constructs an Arrow table slice.
+  /// Constructs an Arrow table slice builder instance.
   /// @param layout The layout of the slice.
-  explicit arrow_table_slice_builder(vast::record_type layout);
+  /// @param initial_buffer_size The buffer size the builder starts with.
+  /// @returns A table_slice_builder instance.
+  static table_slice_builder_ptr
+  make(record_type layout, size_t initial_buffer_size = default_buffer_size);
 
-  ~arrow_table_slice_builder() override;
+  /// Destroys an Arrow table slice builder.
+  ~arrow_table_slice_builder() noexcept override;
 
   // -- properties -------------------------------------------------------------
 
-  [[nodiscard]] vast::table_slice_ptr finish() override;
+  [[nodiscard]] table_slice
+  finish(span<const byte> serialized_layout = {}) override;
 
+  /// @returns The current number of rows in the table slice.
   size_t rows() const noexcept override;
 
+  /// @returns An identifier for the implementing class.
   caf::atom_value implementation_id() const noexcept override;
 
-protected:
-  bool add_impl(vast::data_view x) override;
+  /// Allows The table slice builder to allocate sufficient storage.
+  /// @param `num_rows` The number of rows to allocate storage for.
+  void reserve(size_t num_rows) override;
 
 private:
-  // -- member variables -------------------------------------------------------
+  // -- implementation details -------------------------------------------------
+
+  /// Constructs an Arrow table slice.
+  /// @param layout The layout of the slice.
+  /// @param initial_buffer_size The buffer size the builder starts with.
+  explicit arrow_table_slice_builder(record_type layout,
+                                     size_t initial_buffer_size
+                                     = default_buffer_size);
+
+  /// Adds data to the builder.
+  /// @param x The data to add.
+  /// @returns `true` on success.
+  bool add_impl(data_view x) override;
 
   /// Current column index.
-  size_t col_;
+  size_t column_ = 0;
 
   /// Number of filled rows.
-  size_t rows_;
+  size_t rows_ = 0;
 
-  /// Builders for columnar arrays.
-  std::vector<column_builder_ptr> builders_;
+  /// Schema of the Record Batch corresponding to the layout.
+  std::shared_ptr<arrow::Schema> schema_ = {};
+
+  /// Builders for columnar Arrow arrays.
+  std::vector<std::unique_ptr<column_builder>> column_builders_ = {};
+
+  /// The underlying FlatBuffers builder.
+  flatbuffers::FlatBufferBuilder builder_;
 };
+
+// -- utility functions --------------------------------------------------------
+
+/// Converts a VAST `record_type` to an Arrow `Schema`.
+/// @param t The record type to convert.
+/// @returns An arrow representation of `t`.
+std::shared_ptr<arrow::Schema> make_arrow_schema(const record_type& t);
+
+/// Converts a VAST `type` to an Arrow `DataType`.
+/// @param t The type to convert.
+/// @returns An arrow representation of `t`.
+std::shared_ptr<arrow::DataType> make_arrow_type(const type& t);
 
 } // namespace vast

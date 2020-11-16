@@ -30,7 +30,7 @@ using namespace vast::system;
 namespace {
 
 struct test_sink_state {
-  std::vector<table_slice_ptr> slices;
+  std::vector<table_slice> slices;
   inline static constexpr const char* name = "test-sink";
 };
 
@@ -38,22 +38,17 @@ using test_sink_type = caf::stateful_actor<test_sink_state>;
 
 caf::behavior test_sink(test_sink_type* self, caf::actor src) {
   self->send(src, atom::sink_v, self);
-  return {
-    [=](caf::stream<table_slice_ptr> in) {
-      return self->make_sink(
-        in,
-        [](caf::unit_t&) {
-          // nop
-        },
-        [=](caf::unit_t&, table_slice_ptr ptr) {
-          self->state.slices.emplace_back(std::move(ptr));
-        },
-        [=](caf::unit_t&, const error&) {
-          MESSAGE(self->name() << " is done");
-        }
-      );
-    }
-  };
+  return {[=](caf::stream<table_slice> in) {
+    return self->make_sink(
+      in,
+      [](caf::unit_t&) {
+        // nop
+      },
+      [=](caf::unit_t&, table_slice slice) {
+        self->state.slices.emplace_back(std::move(slice));
+      },
+      [=](caf::unit_t&, const error&) { MESSAGE(self->name() << " is done"); });
+  }};
 }
 
 } // namespace <anonymous>
@@ -80,7 +75,7 @@ TEST(zeek source) {
   MESSAGE("compare slices to auto-generates ones");
   REQUIRE_EQUAL(slices.size(), zeek_conn_log.size());
   for (size_t i = 0; i < slices.size(); ++i)
-    CHECK_EQUAL(*slices[i], *zeek_conn_log[i]);
+    CHECK_EQUAL(slices[i], zeek_conn_log[i]);
   MESSAGE("shutdown");
   self->send_exit(src, caf::exit_reason::user_shutdown);
   run();

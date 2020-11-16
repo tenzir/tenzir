@@ -49,19 +49,20 @@ void ship_results(stateful_actor<exporter_state>* self) {
     VAST_ASSERT(!st.results.empty());
     // Fetch the next table slice. Either we grab the entire first slice in
     // st.results or we need to split it up.
-    table_slice_ptr slice = nullptr;
-    if (st.results[0]->rows() <= st.query.requested) {
+    table_slice slice = {};
+    if (st.results[0].rows() <= st.query.requested) {
       slice = std::move(st.results[0]);
       st.results.erase(st.results.begin());
     } else {
       auto [first, second] = split(st.results[0], st.query.requested);
-      VAST_ASSERT(first != nullptr && second != nullptr);
-      VAST_ASSERT(first->rows() == st.query.requested);
+      VAST_ASSERT(first.encoding() != table_slice::encoding::none);
+      VAST_ASSERT(second.encoding() != table_slice::encoding::none);
+      VAST_ASSERT(first.rows() == st.query.requested);
       slice = std::move(first);
       st.results[0] = std::move(second);
     }
     // Ship the slice and update state.
-    auto rows = slice->rows();
+    auto rows = slice.rows();
     VAST_ASSERT(rows <= st.query.cached);
     st.query.cached -= rows;
     st.query.requested -= rows;
@@ -202,13 +203,13 @@ behavior exporter(stateful_actor<exporter_state>* self, expression expr,
     return qs.received == qs.expected
            && qs.lookups_issued == qs.lookups_complete;
   };
-  auto handle_batch = [=](table_slice_ptr slice) {
-    VAST_ASSERT(slice != nullptr);
+  auto handle_batch = [=](table_slice slice) {
+    VAST_ASSERT(slice.encoding() != table_slice::encoding::none);
     auto& st = self->state;
-    VAST_DEBUG(self, "got batch of", slice->rows(), "events");
+    VAST_DEBUG(self, "got batch of", slice.rows(), "events");
     auto sender = self->current_sender();
     // Construct a candidate checker if we don't have one for this type.
-    type t = slice->layout();
+    type t = slice.layout();
     auto it = st.checkers.find(t);
     if (it == st.checkers.end()) {
       auto x = tailor(st.expr, t);
@@ -221,11 +222,11 @@ behavior exporter(stateful_actor<exporter_state>* self, expression expr,
       }
       VAST_DEBUG(self, "tailored AST to", t, ':', x);
       std::tie(it, std::ignore)
-        = st.checkers.emplace(type{slice->layout()}, std::move(*x));
+        = st.checkers.emplace(type{slice.layout()}, std::move(*x));
     }
     auto& checker = it->second;
     // Perform candidate check, splitting the slice into subsets if needed.
-    auto selection = evaluate(checker, *slice);
+    auto selection = evaluate(checker, slice);
     auto selection_size = rank(selection);
     if (selection_size == 0) {
       // No rows qualify.
@@ -234,7 +235,7 @@ behavior exporter(stateful_actor<exporter_state>* self, expression expr,
     st.query.cached += selection_size;
     select(st.results, slice, selection);
     // Ship slices to connected SINKs.
-    st.query.processed += slice->rows();
+    st.query.processed += slice.rows();
     ship_results(self);
   };
   return {
@@ -272,7 +273,7 @@ behavior exporter(stateful_actor<exporter_state>* self, expression expr,
       }
       return caf::unit;
     },
-    [=](table_slice_ptr slice) {
+    [=](table_slice slice) {
       // Use the same handler as we use for streamed slices.
       handle_batch(std::move(slice));
     },
@@ -406,15 +407,13 @@ behavior exporter(stateful_actor<exporter_state>* self, expression expr,
                  statistics_subscriber);
       self->state.statistics_subscriber = statistics_subscriber;
     },
-    [=](caf::stream<table_slice_ptr> in) {
+    [=](caf::stream<table_slice> in) {
       return self->make_sink(
         in,
         [](caf::unit_t&) {
           // nop
         },
-        [=](caf::unit_t&, const table_slice_ptr& slice) {
-          handle_batch(slice);
-        },
+        [=](caf::unit_t&, const table_slice& slice) { handle_batch(slice); },
         [=](caf::unit_t&, const error& err) {
           if (err)
             VAST_ERROR(self, "got error during streaming:", err);

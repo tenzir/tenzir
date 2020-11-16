@@ -165,13 +165,13 @@ archive(archive_type::stateful_pointer<archive_state> self, path dir,
       // Continue working on the current session.
       self->send(self, xs, requester, session_id);
     },
-    [=](stream<table_slice_ptr> in) {
+    [=](stream<table_slice> in) {
       self->make_sink(
         in,
         [](unit_t&) {
           // nop
         },
-        [=](unit_t&, std::vector<table_slice_ptr>& batch) {
+        [=](unit_t&, std::vector<table_slice>& batch) {
           VAST_TRACE(self, "got", batch.size(), "table slices");
           auto t = timer::start(self->state.measurement);
           uint64_t events = 0;
@@ -180,7 +180,7 @@ archive(archive_type::stateful_pointer<archive_state> self, path dir,
               VAST_ERROR(self, "failed to add table slice to store",
                          self->system().render(error));
             else
-              events += slice->rows();
+              events += slice.rows();
           }
           t.stop(events);
         },

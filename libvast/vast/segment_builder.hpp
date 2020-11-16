@@ -39,7 +39,7 @@ public:
   /// @pre The table slice offset (`x.offset()`) must be greater than the
   ///      offset of the previously added table slice. This requirement enables
   ///      efficient lookup of table slices from a sequence of IDs.
-  caf::error add(table_slice_ptr x);
+  caf::error add(table_slice x);
 
   /// Constructs a segment from previously added table slices.
   /// @post The builder can now be reused to contruct a new segment.
@@ -48,7 +48,7 @@ public:
   /// Locates previously added table slices for a given set of IDs.
   /// @param xs The IDs to lookup.
   /// @returns The table slices according to *xs*.
-  caf::expected<std::vector<table_slice_ptr>> lookup(const vast::ids& xs) const;
+  caf::expected<std::vector<table_slice>> lookup(const vast::ids& xs) const;
 
   /// @returns The UUID for the segment under construction.
   const uuid& id() const;
@@ -60,7 +60,7 @@ public:
   size_t table_slice_bytes() const;
 
   /// @returns The currently buffered table slices.
-  const std::vector<table_slice_ptr>& table_slices() const;
+  const std::vector<table_slice>& table_slices() const;
 
   /// Resets the builder state to start with a new segment.
   void reset();
@@ -70,8 +70,8 @@ private:
   vast::id min_table_slice_offset_;
   uint64_t num_events_;
   flatbuffers::FlatBufferBuilder builder_;
-  std::vector<flatbuffers::Offset<fbs::table_slice_buffer::v0>> flat_slices_;
-  std::vector<table_slice_ptr> slices_; // For queries to an unfinished segment.
+  std::vector<flatbuffers::Offset<fbs::FlatTableSlice>> flat_slices_;
+  std::vector<table_slice> slices_; // For queries to an unfinished segment.
   std::vector<fbs::interval::v0> intervals_;
 };
 

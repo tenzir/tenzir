@@ -32,8 +32,7 @@ foreach (schema ${flatbuffers_schemas})
     OUTPUT ${desired_file}
     COMMAND
       flatbuffers::flatc -b --cpp --scoped-enums --gen-name-strings
-      -o ${flatbuffers_output_path}
-      ${schema}
+      -o ${flatbuffers_output_path} ${schema}
     COMMAND ${CMAKE_COMMAND} -E rename ${output_file} ${desired_file}
     COMMAND ${CMAKE_COMMAND} -P ${rename_${basename}}
     DEPENDS ${schema}
@@ -63,8 +62,6 @@ set(libvast_sources
     src/bloom_filter_parameters.cpp
     src/bloom_filter_synopsis.cpp
     src/bool_synopsis.cpp
-    src/caf_table_slice.cpp
-    src/caf_table_slice_builder.cpp
     src/chunk.cpp
     src/command.cpp
     src/compression.cpp
@@ -208,7 +205,8 @@ set(libvast_sources
     src/table_slice.cpp
     src/table_slice_builder.cpp
     src/table_slice_builder_factory.cpp
-    src/table_slice_factory.cpp
+    src/table_slice_column.cpp
+    src/table_slice_row.cpp
     src/taxonomies.cpp
     src/time.cpp
     src/time_synopsis.cpp

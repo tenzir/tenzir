@@ -21,10 +21,10 @@
 #include "vast/table_slice.hpp"
 #include "vast/table_slice_builder.hpp"
 #include "vast/table_slice_builder_factory.hpp"
-#include "vast/table_slice_factory.hpp"
 #include "vast/type.hpp"
 #include "vast/view.hpp"
 
+#include <caf/atom.hpp>
 #include <caf/binary_deserializer.hpp>
 #include <caf/binary_serializer.hpp>
 
@@ -32,12 +32,43 @@
 #include <tuple>
 #include <vector>
 
-// Helper macro to define a table-slice unit test.
-#define TEST_TABLE_SLICE(type)                                                 \
+/// Helper macro to define a table-slice unit test.
+#define TEST_TABLE_SLICE(builder, id)                                          \
   TEST(type) {                                                                 \
-    initialize<type, type ## _builder>();                                      \
+    initialize<builder>(caf::atom(id));                                        \
     run();                                                                     \
   }
+
+namespace vast {
+
+/// Constructs table slices filled with random content for testing purposes.
+/// @param num_slices The number of table slices to generate.
+/// @param slice_size The number of rows per table slices.
+/// @param layout The layout of the table slice.
+/// @param offset The offset of the first table slize.
+/// @param seed The seed value for initializing the random-number generator.
+/// @returns a list of randomnly filled table slices or an error.
+/// @relates table_slice
+caf::expected<std::vector<table_slice>>
+make_random_table_slices(size_t num_slices, size_t slice_size,
+                         record_type layout, id offset = 0, size_t seed = 0);
+
+/// Converts the table slice into a 2-D matrix in row-major order such that
+/// each row represents an event.
+/// @param slice The table slice to convert.
+/// @param first_row An offset to the first row to consider.
+/// @param num_rows Then number of rows to consider. (0 = all rows)
+/// @returns a 2-D matrix of data instances corresponding to *slice*.
+/// @requires first_row < slice.rows()
+/// @requires num_rows <= slice.rows() - first_row
+/// @note This function exists primarily for unit testing because it performs
+/// excessive memory allocations.
+std::vector<std::vector<data>>
+to_data(const table_slice& slice, size_t first_row = 0, size_t num_rows = 0);
+
+std::vector<std::vector<data>> to_data(const std::vector<table_slice>& slices);
+
+} // namespace vast
 
 namespace fixtures {
 
@@ -45,11 +76,21 @@ class table_slices : public deterministic_actor_system_and_events {
 public:
   table_slices();
 
-  // Registers a table slice implementation.
-  template <class T, class Builder>
-  void initialize() {
+  /// Registers a table slice implementation.
+  template <class Builder>
+  void initialize(caf::atom_value id) {
     using namespace vast;
-    factory<table_slice>::add<T>();
+    factory<table_slice_builder>::add<Builder>(id);
+    builder = factory<table_slice_builder>::make(id, layout);
+    if (builder == nullptr)
+      FAIL("builder factory could not construct a valid instance");
+  }
+
+  // FIXME: Remove when removing legacy table slices.
+  /// Registers a table slice implementation.
+  template <class T, class Builder>
+  void legacy_initialize() {
+    using namespace vast;
     factory<table_slice_builder>::add<Builder>(T::class_id);
     builder = factory<table_slice_builder>::make(T::class_id, layout);
     if (builder == nullptr)
@@ -66,7 +107,7 @@ private:
 
   caf::binary_serializer make_sink();
 
-  vast::table_slice_ptr make_slice();
+  vast::table_slice make_slice();
 
   vast::data_view at(size_t row, size_t col) const;
 
@@ -81,8 +122,6 @@ private:
   void test_smart_pointer_serialization();
 
   void test_message_serialization();
-
-  void test_load_from_chunk();
 
   void test_append_column_to_index();
 

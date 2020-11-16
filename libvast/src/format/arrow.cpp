@@ -25,6 +25,7 @@
 
 #include <caf/none.hpp>
 
+#include <arrow/util/config.h>
 #include <arrow/util/io_util.h>
 
 #include <stdexcept>
@@ -44,26 +45,11 @@ caf::error writer::write(const table_slice& slice) {
     return ec::filesystem_error;
   if (!layout(slice.layout()))
     return ec::unspecified;
-  // Convert the slice to Arrow if necessary.
-  if (slice.implementation_id() == arrow_table_slice::class_id) {
-    auto dref = static_cast<const arrow_table_slice&>(slice);
-    if (auto err = write_arrow_batches(dref))
-      return err;
-  } else {
-    // TODO: consider iterating the slice in its natural order (i.e., row major
-    //       or column major).
-    for (size_t row = 0; row < slice.rows(); ++row)
-      for (size_t column = 0; column < slice.columns(); ++column)
-        if (!current_builder_->add(slice.at(row, column)))
-          return ec::type_clash;
-    auto slice_copy = current_builder_->finish();
-    if (slice_copy == nullptr)
-      return ec::invalid_table_slice_type;
-    VAST_ASSERT(slice_copy->implementation_id() == arrow_table_slice::class_id);
-    auto dref = static_cast<const arrow_table_slice&>(*slice_copy);
-    if (auto err = write_arrow_batches(dref))
-      return err;
-  }
+  // Get the Record Batch and print it.
+  auto batch = as_record_batch(slice);
+  VAST_ASSERT(batch != nullptr);
+  if (!current_batch_writer_->WriteRecordBatch(*batch).ok())
+    return ec::filesystem_error;
   return caf::none;
 }
 
@@ -82,22 +68,18 @@ bool writer::layout(const record_type& x) {
   if (x.fields.empty())
     return true;
   current_layout_ = x;
-  auto schema = arrow_table_slice_builder::make_arrow_schema(x);
+  auto schema = make_arrow_schema(x);
   current_builder_ = arrow_table_slice_builder::make(x);
-  if (auto writer_result = ::arrow::ipc::NewStreamWriter(out_.get(), schema);
-      writer_result.ok()) {
+#if ARROW_VERSION_MAJOR >= 2
+  auto writer_result = ::arrow::ipc::MakeStreamWriter(out_.get(), schema);
+#else
+  auto writer_result = ::arrow::ipc::NewStreamWriter(out_.get(), schema);
+#endif
+  if (writer_result.ok()) {
     current_batch_writer_ = std::move(*writer_result);
     return true;
   }
   return false;
-}
-
-caf::error writer::write_arrow_batches(const arrow_table_slice& x) {
-  auto batch = x.batch();
-  VAST_ASSERT(batch != nullptr);
-  if (!current_batch_writer_->WriteRecordBatch(*batch).ok())
-    return ec::filesystem_error;
-  return caf::none;
 }
 
 } // namespace vast::format::arrow

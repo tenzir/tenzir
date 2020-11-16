@@ -54,7 +54,7 @@ public:
   /// Locates the table slices for a given set of IDs.
   /// @param xs The IDs to lookup.
   /// @returns The table slices according to *xs*.
-  caf::expected<std::vector<table_slice_ptr>> lookup(const vast::ids& xs) const;
+  caf::expected<std::vector<table_slice>> lookup(const vast::ids& xs) const;
 
 private:
   explicit segment(chunk_ptr chk);

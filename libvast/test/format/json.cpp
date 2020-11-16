@@ -20,10 +20,10 @@
 #include "vast/test/fixtures/events.hpp"
 #include "vast/test/test.hpp"
 
-#include "vast/caf_table_slice_builder.hpp"
 #include "vast/concept/parseable/to.hpp"
 #include "vast/concept/parseable/vast/json.hpp"
 #include "vast/concept/parseable/vast/time.hpp"
+#include "vast/table_slice_builder_factory.hpp"
 
 using namespace vast;
 using namespace std::string_literals;
@@ -80,7 +80,8 @@ TEST(json to data) {
                             {"mcs", map_type{count_type{}, string_type{}}}}
                   .name("layout");
   auto flat = flatten(layout);
-  auto builder = caf_table_slice_builder{flat};
+  auto builder = factory<table_slice_builder>::make(
+    defaults::import::table_slice_type, flat);
   std::string_view str = R"json({
     "b": true,
     "c": 424242,
@@ -101,14 +102,14 @@ TEST(json to data) {
   })json";
   auto jn = unbox(to<json>(str));
   auto xs = caf::get<json::object>(jn);
-  format::json::add(builder, xs, flat);
-  auto ptr = builder.finish();
-  REQUIRE(ptr);
-  CHECK(ptr->at(0, 11) == data{enumeration{2}});
+  format::json::add(*builder, xs, flat);
+  auto slice = builder->finish();
+  REQUIRE_NOT_EQUAL(slice.encoding(), table_slice::encoding::none);
+  CHECK(slice.at(0, 11) == data{enumeration{2}});
   auto reference = map{};
   reference[count{1}] = data{"FOO"};
   reference[count{1024}] = data{"BAR!"};
-  CHECK_EQUAL(materialize(ptr->at(0, 17)), data{reference});
+  CHECK_EQUAL(materialize(slice.at(0, 17)), data{reference});
 }
 
 TEST_DISABLED(suricata) {
@@ -116,16 +117,15 @@ TEST_DISABLED(suricata) {
   auto input = std::make_unique<std::istringstream>(std::string{eve_log});
   reader_type reader{defaults::import::table_slice_type, caf::settings{},
                      std::move(input)};
-  std::vector<table_slice_ptr> slices;
-  auto add_slice = [&](table_slice_ptr ptr) {
-    slices.emplace_back(std::move(ptr));
-  };
+  std::vector<table_slice> slices;
+  auto add_slice
+    = [&](table_slice slice) { slices.emplace_back(std::move(slice)); };
   auto [err, num] = reader.read(2, 5, add_slice);
   CHECK_EQUAL(err, ec::end_of_input);
   REQUIRE_EQUAL(num, 2u);
-  CHECK_EQUAL(slices[0]->columns(), 36u);
-  CHECK_EQUAL(slices[0]->rows(), 2u);
-  CHECK(slices[0]->at(0, 19) == data{count{4520}});
+  CHECK_EQUAL(slices[0].columns(), 36u);
+  CHECK_EQUAL(slices[0].rows(), 2u);
+  CHECK(slices[0].at(0, 19) == data{count{4520}});
 }
 
 TEST(json hex number parser) {

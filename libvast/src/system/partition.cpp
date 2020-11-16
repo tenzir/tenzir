@@ -38,6 +38,7 @@
 #include "vast/system/indexer.hpp"
 #include "vast/system/shutdown.hpp"
 #include "vast/system/terminate.hpp"
+#include "vast/table_slice.hpp"
 #include "vast/table_slice_column.hpp"
 #include "vast/time.hpp"
 #include "vast/type.hpp"
@@ -185,9 +186,11 @@ evaluate(const PartitionState& state, const expression& expr) {
 } // namespace
 
 bool partition_selector::operator()(const vast::qualified_record_field& filter,
-                                    const table_slice_column& x) const {
-  auto& layout = x.slice->layout();
-  vast::qualified_record_field fqf{layout.name(), layout.fields.at(x.column)};
+                                    const table_slice_column& column) const {
+  VAST_TRACE(VAST_ARG(filter), VAST_ARG(column));
+  auto&& layout = column.slice().layout();
+  vast::qualified_record_field fqf{layout.name(),
+                                   layout.fields.at(column.index())};
   return filter == fqf;
 }
 
@@ -342,34 +345,34 @@ active_partition(caf::stateful_actor<active_partition_state>* self, uuid id,
   self->state.meta_idx = std::move(meta_idx);
   self->state.meta_idx.add(id);
   // The active partition stage is a caf stream stage that takes
-  // a stream of `table_slice_ptr` as input and produces several
+  // a stream of `table_slice` as input and produces several
   // streams of `table_slice_column` as output.
   self->state.stage = caf::attach_continuous_stream_stage(
     self,
     [=](caf::unit_t&) {
       // nop
     },
-    [=](caf::unit_t&, caf::downstream<table_slice_column>& out,
-        table_slice_ptr x) {
+    [=](caf::unit_t&, caf::downstream<table_slice_column>& out, table_slice x) {
+      VAST_TRACE(VAST_ARG(out), VAST_ARG(x));
       // We rely on `invalid_id` actually being the highest possible id
       // when using `min()` below.
       static_assert(vast::invalid_id == std::numeric_limits<vast::id>::max());
-      auto first = x->offset();
-      auto last = x->offset() + x->rows();
-      auto it
-        = self->state.type_ids.emplace(x->layout().name(), vast::ids{}).first;
+      auto first = x.offset();
+      auto last = x.offset() + x.rows();
+      auto&& layout = x.layout();
+      auto it = self->state.type_ids.emplace(layout.name(), vast::ids{}).first;
       auto& ids = it->second;
       VAST_ASSERT(first >= ids.size());
       // Mark the ids of this table slice for the current type.
       ids.append_bits(false, first - ids.size());
       ids.append_bits(true, last - first);
-      self->state.offset = std::min(x->offset(), self->state.offset);
-      self->state.events += x->rows();
-      self->state.meta_idx.add(id, *x);
+      self->state.offset = std::min(x.offset(), self->state.offset);
+      self->state.events += x.rows();
+      self->state.meta_idx.add(id, x);
       size_t col = 0;
-      VAST_ASSERT(!x->layout().fields.empty());
-      for (auto& field : x->layout().fields) {
-        auto qf = qualified_record_field{x->layout().name(), field};
+      VAST_ASSERT(!layout.fields.empty());
+      for (auto& field : layout.fields) {
+        auto qf = qualified_record_field{layout.name(), field};
         auto& idx = self->state.indexers[qf];
         if (!idx) {
           self->state.combined_layout.fields.push_back(as_record_field(qf));
@@ -433,7 +436,7 @@ active_partition(caf::stateful_actor<active_partition_state>* self, uuid id,
     shutdown<policy::parallel>(self, std::move(indexers));
   });
   return {
-    [=](caf::stream<table_slice_ptr> in) {
+    [=](caf::stream<table_slice> in) {
       self->state.streaming_initiated = true;
       return self->state.stage->add_inbound_path(in);
     },
@@ -522,7 +525,7 @@ passive_partition(caf::stateful_actor<passive_partition_state>* self, uuid id,
                   filesystem_type fs, vast::path path) {
   self->state.self = self;
   auto passive_partition_behavior = caf::behavior{
-    [=](caf::stream<table_slice_ptr>) {
+    [=](caf::stream<table_slice>) {
       VAST_ASSERT(!"read-only partition can not receive new table slices");
     },
     [=](atom::persist, const vast::path&) {

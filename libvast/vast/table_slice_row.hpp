@@ -20,59 +20,51 @@
 #include <caf/meta/type_name.hpp>
 
 #include <cstdint>
-#include <optional>
 #include <string_view>
 
 namespace vast {
 
-/// Convenience helper for traversing a column of a table slice.
+/// Convenience helper for traversing a row of a table slice.
 /// @relates table_slice
-class table_slice_column {
+class table_slice_row {
 public:
   /// Defaulted constructors, destructors, and assignment operators.
-  table_slice_column() noexcept;
-  ~table_slice_column() noexcept;
-  table_slice_column(const table_slice_column&) noexcept;
-  table_slice_column& operator=(const table_slice_column&) noexcept;
-  table_slice_column(table_slice_column&&) noexcept;
-  table_slice_column& operator=(table_slice_column&&) noexcept;
+  table_slice_row() noexcept;
+  ~table_slice_row() noexcept;
+  table_slice_row(const table_slice_row&) noexcept;
+  table_slice_row& operator=(const table_slice_row&) noexcept;
+  table_slice_row(table_slice_row&&) noexcept;
+  table_slice_row& operator=(table_slice_row&&) noexcept;
 
-  /// Construct a view on a column of a table slice.
+  /// Construct a view on a row of a table slice.
   /// @param slice The slice to view.
-  /// @param column The viewed column's index.
-  /// @pre `column < slice.columns()`
-  table_slice_column(table_slice slice, size_t column) noexcept;
+  /// @param row The viewed row's index.
+  /// @pre `row < slice.rows()`
+  table_slice_row(table_slice slice, size_t row) noexcept;
 
-  /// Construct a view on a column of a table slice.
-  /// @param slice The slice to view.
-  /// @param column The viewed column's name.
-  static std::optional<table_slice_column>
-  make(table_slice slice, std::string_view column) noexcept;
+  /// @returns the data at given column.
+  /// @pre `column < size()`
+  data_view operator[](size_t column) const;
 
-  /// @returns the data at given row.
-  /// @pre `row < size()`
-  data_view operator[](size_t row) const;
-
-  /// @returns the number of rows in the column.
+  /// @returns the number of columns in the row.
   size_t size() const noexcept;
 
   /// @returns the viewed table slice.
   const table_slice& slice() const noexcept;
 
-  /// @returns the viewed column's index.
+  /// @returns the viewed row's index.
   size_t index() const noexcept;
 
   /// Opt-in to CAF's type inspection API.
   template <class Inspector>
-  friend auto inspect(Inspector& f, table_slice_column& x) ->
+  friend auto inspect(Inspector& f, table_slice_row& x) ->
     typename Inspector::result_type {
-    return f(caf::meta::type_name("vast.table_slice_column"), x.slice_,
-             x.column_);
+    return f(caf::meta::type_name("vast.table_slice_row"), x.slice_, x.row_);
   }
 
 private:
   table_slice slice_ = {};
-  size_t column_ = 0;
+  size_t row_ = 0;
 };
 
 } // namespace vast

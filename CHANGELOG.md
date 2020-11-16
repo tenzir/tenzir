@@ -12,6 +12,19 @@ Every entry has a category for which we use the following visual abbreviations:
 
 ## Unreleased
 
+- ⚡️ The on-disk format for table slices now supports versioning of table slice
+  encodings. This breaking change makes it so that adding further encodings or
+  adding new versions of existing encodings is possible without breaking again
+  in the future.
+  [#1143](https://github.com/tenzir/vast/pull/1143)
+  [#1157](https://github.com/tenzir/vast/pull/1157)
+  [#1160](https://github.com/tenzir/vast/pull/1160)
+  [#1165](https://github.com/tenzir/vast/pull/1165)
+
+- ⚡️ CAF-encoded table slices no longer exist. As such, the option
+  `vast.import.batch-encoding` now only supports `arrow` and `msgpack` as
+  arguments. [#1142](https://github.com/tenzir/vast/pull/1142)
+
 - ⚠️ The default segment size in the archive is now 1 GiB. This reduces
   fragmentation of the archive meta data and speeds up VAST startup time.
   [#1166](https://github.com/tenzir/vast/pull/1166)

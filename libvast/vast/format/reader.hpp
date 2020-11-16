@@ -49,7 +49,7 @@ public:
   public:
     virtual ~consumer();
 
-    virtual void operator()(table_slice_ptr) = 0;
+    virtual void operator()(table_slice) = 0;
   };
 
   // -- constructors, destructors, and assignment operators --------------------
@@ -74,8 +74,8 @@ public:
     VAST_ASSERT(max_events > 0);
     VAST_ASSERT(max_slice_size > 0);
     struct consumer_impl : consumer {
-      void operator()(table_slice_ptr x) override {
-        produced += x->rows();
+      void operator()(table_slice x) override {
+        produced += x.rows();
         f_(std::move(x));
       }
       consumer_impl(F& fun) : f_(fun), produced(0) {

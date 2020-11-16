@@ -487,8 +487,9 @@ caf::error writer::write(const table_slice& slice) {
     if (!dumper_)
       return make_error(ec::format_error, "failed to open pcap dumper");
   }
-  if (!congruent(slice.layout(), pcap_packet_type)
-      && !congruent(slice.layout(), pcap_packet_type_community_id))
+  auto&& layout = slice.layout();
+  if (!congruent(layout, pcap_packet_type)
+      && !congruent(layout, pcap_packet_type_community_id))
     return make_error(ec::format_error, "invalid pcap packet type");
   // TODO: consider iterating in natural order for the slice.
   for (size_t row = 0; row < slice.rows(); ++row) {

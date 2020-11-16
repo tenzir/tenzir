@@ -15,9 +15,13 @@
 
 #include "vast/bitmap.hpp"
 #include "vast/bitmap_algorithms.hpp"
+#include "vast/concept/printable/to_string.hpp"
+#include "vast/concept/printable/vast/table_slice.hpp"
 #include "vast/detail/assert.hpp"
 #include "vast/detail/byte_swap.hpp"
 #include "vast/detail/narrow.hpp"
+#include "vast/detail/overload.hpp"
+#include "vast/detail/zip_iterator.hpp"
 #include "vast/error.hpp"
 #include "vast/fbs/segment.hpp"
 #include "vast/fbs/utils.hpp"
@@ -62,10 +66,9 @@ vast::ids segment::ids() const {
   vast::ids result;
   auto segment = fbs::GetSegment(chunk_->data());
   auto segment_v0 = segment->segment_as_v0();
-  for (auto buffer : *segment_v0->slices()) {
-    auto slice = buffer->data_nested_root();
-    result.append_bits(false, slice->offset() - result.size());
-    result.append_bits(true, slice->rows());
+  for (auto interval : *segment_v0->ids()) {
+    result.append_bits(false, interval->begin() - result.size());
+    result.append_bits(true, interval->end() - interval->begin());
   }
   return result;
 }
@@ -80,33 +83,44 @@ chunk_ptr segment::chunk() const {
   return chunk_;
 }
 
-caf::expected<std::vector<table_slice_ptr>>
+caf::expected<std::vector<table_slice>>
 segment::lookup(const vast::ids& xs) const {
-  std::vector<table_slice_ptr> result;
-  auto f = [](auto buffer) {
-    auto slice = buffer->data_nested_root();
-    return std::pair{slice->offset(), slice->offset() + slice->rows()};
+  std::vector<table_slice> result;
+  auto segment = fbs::GetSegment(chunk_->data())->segment_as_v0();
+  if (!segment)
+    return make_error(ec::format_error, "invalid segment version");
+  VAST_ASSERT(segment->ids()->size() == segment->slices()->size());
+  auto f = [&](const auto& zip) noexcept {
+    auto&& interval = std::get<0>(zip);
+    return std::pair{interval->begin(), interval->end()};
   };
-  auto g = [&](auto buffer) -> caf::error {
-    // TODO: bind the lifetime of the table slice to the segment chunk. This
-    // requires that table slices will be constructable from a chunk. Until
-    // then, we stupidly deserialize the data into a new table slice.
-    table_slice_ptr slice;
-    if (auto err = unpack(*buffer->data_nested_root(), slice))
-      return err;
+  auto g = [&](const auto& zip) {
+    auto&& [interval, flat_slice] = zip;
+    auto slice = table_slice{*flat_slice, chunk_, table_slice::verify::yes};
+    slice.offset(interval->begin());
+    VAST_ASSERT(slice.offset() == interval->begin());
+    VAST_ASSERT(slice.offset() + slice.rows() == interval->end());
+    VAST_DEBUG(this, "returns slice from lookup:", to_string(slice));
     result.push_back(std::move(slice));
     return caf::none;
   };
-  auto segment = fbs::GetSegment(chunk_->data());
-  auto segment_v0 = segment->segment_as_v0();
-  auto begin = segment_v0->slices()->begin();
-  auto end = segment_v0->slices()->end();
-  if (auto error = select_with(xs, begin, end, f, g))
+  // TODO: We cannot iterate over `*segment->ids()` and `*segment->slices()`
+  // directly here, because the `flatbuffers::Vector<Offset<T>>` iterator
+  // dereferences to a temporary pointer. This works for normal iteration, but
+  // the `detail::zip` adapter tries to take the address of the pointer, which
+  // cannot work. We could improve this by adding a `select_with` overload that
+  // iterates over multiple ranges in lockstep.
+  auto intervals = std::vector(segment->ids()->begin(), segment->ids()->end());
+  auto flat_slices
+    = std::vector(segment->slices()->begin(), segment->slices()->end());
+  auto zipped = detail::zip(intervals, flat_slices);
+  if (auto error = select_with(xs, zipped.begin(), zipped.end(), f, g))
     return error;
   return result;
 }
 
 segment::segment(chunk_ptr chk) : chunk_{std::move(chk)} {
+  // nop
 }
 
 } // namespace vast

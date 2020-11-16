@@ -16,6 +16,7 @@
 #include "vast/system/exporter.hpp"
 
 #include "vast/test/fixtures/actor_system_and_events.hpp"
+#include "vast/test/fixtures/table_slices.hpp"
 #include "vast/test/test.hpp"
 
 #include "vast/concept/parseable/to.hpp"
@@ -104,13 +105,13 @@ struct fixture : fixture_base {
 
   auto fetch_results() {
     MESSAGE("fetching results");
-    std::vector<table_slice_ptr> result;
+    std::vector<table_slice> result;
     size_t total_events = 0;
     bool running = true;
     self->receive_while(running)(
-      [&](table_slice_ptr slice) {
-        MESSAGE("... got " << slice->rows() << " events");
-        total_events += slice->rows();
+      [&](table_slice slice) {
+        MESSAGE("... got " << slice.rows() << " events");
+        total_events += slice.rows();
         result.push_back(std::move(slice));
       },
       error_handler(),
@@ -121,7 +122,7 @@ struct fixture : fixture_base {
     return result;
   }
 
-  void verify(const std::vector<table_slice_ptr>& results) {
+  void verify(const std::vector<table_slice>& results) {
     auto xs = to_data(results);
     REQUIRE_EQUAL(xs.size(), 5u);
     std::sort(xs.begin(), xs.end());

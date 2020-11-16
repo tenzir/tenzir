@@ -12,17 +12,18 @@
  ******************************************************************************/
 
 #define SUITE format
-#include "vast/test/test.hpp"
-#include "vast/test/data.hpp"
-
-#include "vast/test/fixtures/actor_system.hpp"
-
 #include "vast/format/pcap.hpp"
+
+#include "vast/test/data.hpp"
+#include "vast/test/fixtures/actor_system.hpp"
+#include "vast/test/test.hpp"
 
 #include "vast/concept/parseable/to.hpp"
 #include "vast/concept/parseable/vast/address.hpp"
 #include "vast/defaults.hpp"
 #include "vast/error.hpp"
+#include "vast/table_slice.hpp"
+#include "vast/table_slice_column.hpp"
 
 using namespace vast;
 
@@ -76,30 +77,32 @@ TEST(PCAP read/write 1) {
   format::pcap::reader reader{defaults::import::table_slice_type,
                               std::move(settings)};
   size_t events_produced = 0;
-  table_slice_ptr slice;
-  auto add_slice = [&](const table_slice_ptr& x) {
-    REQUIRE(slice == nullptr);
-    REQUIRE(x != nullptr);
+  table_slice slice;
+  auto add_slice = [&](const table_slice& x) {
+    REQUIRE_EQUAL(slice.encoding(), table_slice::encoding::none);
+    REQUIRE_NOT_EQUAL(x.encoding(), table_slice::encoding::none);
     slice = x;
-    events_produced = x->rows();
+    events_produced = x.rows();
   };
   auto [err, produced] = reader.read(std::numeric_limits<size_t>::max(),
                                      100, // we expect only 44 events
                                      add_slice);
   CHECK_EQUAL(err, ec::end_of_input);
   REQUIRE_EQUAL(events_produced, 44u);
-  CHECK_EQUAL(slice->layout().name(), "pcap.packet");
-  auto src_field = slice->at(43, 1);
+  auto&& layout = slice.layout();
+  CHECK_EQUAL(layout.name(), "pcap.packet");
+  auto src_field = slice.at(43, 1);
   auto src = unbox(caf::get_if<view<address>>(&src_field));
   CHECK_EQUAL(src, unbox(to<address>("192.168.1.1")));
-  auto community_id_column = unbox(slice->column("community_id"));
+  auto community_id_column = table_slice_column::make(slice, "community_id");
+  REQUIRE(community_id_column);
   for (size_t row = 0; row < 44; ++row)
-    CHECK_VARIANT_EQUAL(community_id_column[row], community_ids[row]);
+    CHECK_VARIANT_EQUAL((*community_id_column)[row], community_ids[row]);
   MESSAGE("write out read packets");
   auto file = "vast-unit-test-nmap-vsn.pcap";
   format::pcap::writer writer{file};
   auto deleter = caf::detail::make_scope_guard([&] { rm(file); });
-  REQUIRE_EQUAL(writer.write(*slice), caf::none);
+  REQUIRE_EQUAL(writer.write(slice), caf::none);
 }
 
 TEST(PCAP read/write 2) {
@@ -116,24 +119,25 @@ TEST(PCAP read/write 2) {
   caf::put(settings, "vast.import.batch-timeout", "0s");
   format::pcap::reader reader{defaults::import::table_slice_type,
                               std::move(settings)};
-  table_slice_ptr slice;
-  auto add_slice = [&](const table_slice_ptr& x) {
-    REQUIRE_EQUAL(slice, nullptr);
+  table_slice slice{};
+  auto add_slice = [&](const table_slice& x) {
+    REQUIRE_EQUAL(slice.encoding(), table_slice::encoding::none);
     slice = x;
   };
   auto [err, produced] = reader.read(std::numeric_limits<size_t>::max(),
                                      100, // we expect only 36 events
                                      add_slice);
-  REQUIRE_NOT_EQUAL(slice, nullptr);
+  REQUIRE_NOT_EQUAL(slice.encoding(), table_slice::encoding::none);
   CHECK_EQUAL(err, ec::end_of_input);
   REQUIRE_EQUAL(produced, 36u);
-  CHECK_EQUAL(slice->rows(), 36u);
-  CHECK_EQUAL(slice->layout().name(), "pcap.packet");
+  CHECK_EQUAL(slice.rows(), 36u);
+  auto&& layout = slice.layout();
+  CHECK_EQUAL(layout.name(), "pcap.packet");
   MESSAGE("write out read packets");
   auto file = "vast-unit-test-workshop-2011-browse.pcap";
   format::pcap::writer writer{file};
   auto deleter = caf::detail::make_scope_guard([&] { rm(file); });
-  REQUIRE_EQUAL(writer.write(*slice), caf::none);
+  REQUIRE_EQUAL(writer.write(slice), caf::none);
 }
 
 FIXTURE_SCOPE_END()
