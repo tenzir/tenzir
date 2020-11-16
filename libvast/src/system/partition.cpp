@@ -187,11 +187,16 @@ evaluate(const PartitionState& state, const expression& expr) {
 
 bool partition_selector::operator()(const vast::qualified_record_field& filter,
                                     const table_slice_column& column) const {
-  VAST_TRACE(VAST_ARG(filter), VAST_ARG(column));
   auto&& layout = column.slice().layout();
-  vast::qualified_record_field fqf{layout.name(),
-                                   layout.fields.at(column.index())};
-  return filter == fqf;
+  // We don't create a temporary qualified_record_field here to avoid copying
+  // a string and a record field on the heap. Instead, we compare each part
+  // manually.
+  if (filter.layout_name != layout.name())
+    return false;
+  auto& field = layout.fields.at(column.index());
+  if (filter.field_name != field.name)
+    return false;
+  return filter.type == field.type;
 }
 
 caf::expected<flatbuffers::Offset<fbs::Partition>>
