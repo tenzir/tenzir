@@ -68,8 +68,8 @@ TEST(models - convert from data) {
     record{{"model", record{{"name", "bar"},
                             {"concepts", list{"a.bar", "b.baR"}},
                             {"models", list{"foo"}}}}}}};
-  auto ref = models_map{{{"foo", {"", {"a.fo0", "b.foO", "x.foe"}, {}}},
-                         {"bar", {"", {"a.bar", "b.baR"}, {"foo"}}}}};
+  auto ref = models_map{{{"foo", {"", {"a.fo0", "b.foO", "x.foe"}}},
+                         {"bar", {"", {"a.bar", "b.baR", "foo"}}}}};
   auto test = unbox(extract_models(x));
   CHECK_EQUAL(test, ref);
   auto x2 = data{list{

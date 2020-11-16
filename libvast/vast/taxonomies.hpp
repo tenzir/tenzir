@@ -62,18 +62,16 @@ struct model {
   /// The description of the model.
   std::string description;
 
-  /// The concepts that the model is composed of.
-  std::vector<std::string> concepts;
-
-  /// Other models that are referenced. Their concepts must also be represented
-  /// for a layout to be considered.
-  std::vector<std::string> models;
+  /// The ordered concepts and models that the model is composed of.
+  /// If an entry is another model, its concepts must also be represented  for
+  /// a layout to be considered.
+  std::vector<std::string> definition;
 
   friend bool operator==(const model& lhs, const model& rhs);
 
   template <class Inspector>
   friend auto inspect(Inspector& f, model& m) {
-    return f(caf::meta::type_name("model"), m.concepts);
+    return f(caf::meta::type_name("model"), m.description, m.definition);
   }
 };
 
