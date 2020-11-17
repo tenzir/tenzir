@@ -337,6 +337,58 @@ type suricata.netflow = record {
   app_proto: string
 }
 
+type suricata.nfs = record {
+  timestamp: time #timestamp,
+  flow_id: count #index=hash,
+  pcap_cnt: count,
+  vlan: list<count>,
+  in_iface: string,
+  src_ip: addr,
+  src_port: port,
+  dest_ip: addr,
+  dest_port: port,
+  proto: string,
+  event_type: string,
+  community_id: string #index=hash,
+  tx_id: count #index=hash,
+  rpc: record {
+    xid: count,
+    status: string,
+    auth_type: string,
+    creds: record {
+      machine_name: string,
+      uid: count,
+      gid: count
+    }
+  },
+  nfs: record {
+    version: count,
+    procedure: string,
+    filename: string,
+    hhash: string,
+    id: count,
+    file_tx: bool,
+    type: string,
+    status: string,
+    write: record {
+      first: bool,
+      last: bool,
+      last_xid: count,
+      chunks: count
+    },
+    rename: record {
+      from: string,
+      to: string
+    },
+    read: record {
+      first: bool,
+      last: bool,
+      last_xid: count,
+      chunks: count
+    }
+  }
+}
+
 type suricata.smb = record {
   timestamp: time #timestamp,
   flow_id: count #index=hash,
