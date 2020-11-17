@@ -48,8 +48,13 @@ auto visit(Visitor&& visitor, const fbs::TableSlice* x) noexcept(
   std::conjunction_v<
     // Check whether the handlers for all other table slice encodings are
     // noexcept-specified. When adding a new encoding, add it here as well.
+    // NOTE: GCC does not quite respect the C++ standard and instantiates
+    // 'Visitor' with the encoded table, which is why we need to take extra care
+    // of builds without VAST_HAVE_ARROW here.
     std::is_nothrow_invocable<Visitor>,
+#if VAST_HAVE_ARROW
     std::is_nothrow_invocable<Visitor, const fbs::table_slice::arrow::v0&>,
+#endif // VAST_HAVE_ARROW
     std::is_nothrow_invocable<Visitor, const fbs::table_slice::msgpack::v0&>>) {
   if (!x)
     return std::invoke(std::forward<Visitor>(visitor));
