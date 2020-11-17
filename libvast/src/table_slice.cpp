@@ -105,7 +105,7 @@ verified_or_none(chunk_ptr&& chunk, enum table_slice::verify verify) noexcept {
 /// A helper utility for converting table slice encoding to the corresponding
 /// builder id.
 /// @param encoding The table slice encoding to map.
-constexpr caf::atom_value builder_id(enum table_slice::encoding encoding) {
+caf::atom_value builder_id(enum table_slice::encoding encoding) {
   switch (encoding) {
     case table_slice::encoding::none:
       return caf::atom("NULL");
