@@ -12,6 +12,12 @@ Every entry has a category for which we use the following visual abbreviations:
 
 ## Unreleased
 
+- ⚠️ The Suricata schemas received an overhaul: there now exist `vlan` and
+  `in_iface` fields in all types. In addition, VAST ships with new types for
+  `ikev2`, `nfs`, `snmp`, and `tftp`.
+  [#1176](https://github.com/tenzir/vast/pull/1176)
+  [@satta](https://github.com/satta)
+
 - ⚠️ VAST now listens on port 42000 instead of letting the operating system
   choose the port if the option `vast.endpoint` specifies an endpoint without a
   port. To restore the old behavior, set the port to 0 explicitly.
