@@ -34,6 +34,12 @@ jobs:
         - tag: Ubuntu
           name: ubuntu-20.04
           extra-flags:
+          compiler: GCC-8
+          cc: gcc-8
+          cxx: g++-8
+        - tag: Ubuntu
+          name: ubuntu-20.04
+          extra-flags:
           compiler: Clang
           cc: clang-9
           cxx: clang++-9
