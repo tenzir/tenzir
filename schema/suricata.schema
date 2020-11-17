@@ -2,6 +2,8 @@ type suricata.component.common = record {
   timestamp: time #timestamp,
   flow_id: count #index=hash,
   pcap_cnt: count,
+  vlan: list<count>,
+  in_iface: string,
   src_ip: addr,
   src_port: port,
   dest_ip: addr,
@@ -32,6 +34,8 @@ type suricata.alert = record {
   timestamp: time #timestamp,
   flow_id: count #index=hash,
   pcap_cnt: count,
+  vlan: list<count>,
+  in_iface: string,
   src_ip: addr,
   src_port: port,
   dest_ip: addr,
@@ -74,6 +78,8 @@ type suricata.dhcp = record {
   timestamp: time #timestamp,
   flow_id: count #index=hash,
   pcap_cnt: count,
+  vlan: list<count>,
+  in_iface: string,
   src_ip: addr,
   src_port: port,
   dest_ip: addr,
@@ -98,6 +104,8 @@ type suricata.dns = record {
   timestamp: time #timestamp,
   flow_id: count #index=hash,
   pcap_cnt: count,
+  vlan: list<count>,
+  in_iface: string,
   src_ip: addr,
   src_port: port,
   dest_ip: addr,
@@ -125,6 +133,8 @@ type suricata.ftp = record{
   timestamp: time #timestamp,
   flow_id: count #index=hash,
   pcap_cnt: count,
+  vlan: list<count>,
+  in_iface: string,
   src_ip: addr,
   src_port: port,
   dest_ip: addr,
@@ -147,6 +157,8 @@ type suricata.ftp_data = record{
   timestamp: time #timestamp,
   flow_id: count #index=hash,
   pcap_cnt: count,
+  vlan: list<count>,
+  in_iface: string,
   src_ip: addr,
   src_port: port,
   dest_ip: addr,
@@ -164,6 +176,8 @@ type suricata.http = record {
   timestamp: time #timestamp,
   flow_id: count #index=hash,
   pcap_cnt: count,
+  vlan: list<count>,
+  in_iface: string,
   src_ip: addr,
   src_port: port,
   dest_ip: addr,
@@ -191,6 +205,8 @@ type suricata.fileinfo = record {
   timestamp: time #timestamp,
   flow_id: count #index=hash,
   pcap_cnt: count,
+  vlan: list<count>,
+  in_iface: string,
   src_ip: addr,
   src_port: port,
   dest_ip: addr,
@@ -231,6 +247,8 @@ type suricata.flow = record {
   timestamp: time #timestamp,
   flow_id: count #index=hash,
   pcap_cnt: count,
+  vlan: list<count>,
+  in_iface: string,
   src_ip: addr,
   src_port: port,
   dest_ip: addr,
@@ -242,11 +260,40 @@ type suricata.flow = record {
   app_proto: string
 }
 
+type suricata.ikev2 = record {
+  timestamp: time #timestamp,
+  flow_id: count #index=hash,
+  pcap_cnt: count,
+  vlan: list<count>,
+  in_iface: string,
+  src_ip: addr,
+  src_port: port,
+  dest_ip: addr,
+  dest_port: port,
+  proto: string,
+  event_type: string,
+  community_id: string #index=hash,
+  tx_id: count #index=hash,
+  ikev2: record {
+    version_major: count,
+    version_minor: count,
+    exchange_type: count,
+    message_id: count,
+    init_spi: string,
+    resp_spi: string,
+    role: string,
+    errors: count,
+    payload: list<string>,
+    notify: list<string>
+  }
+}
+
 type suricata.krb5 = record {
   timestamp: time #timestamp,
   flow_id: count #index=hash,
+  pcap_cnt: count,
+  vlan: list<count>,
   in_iface: string,
-  vlan: count,
   src_ip: addr,
   src_port: port,
   dest_ip: addr,
@@ -271,6 +318,8 @@ type suricata.netflow = record {
   timestamp: time #timestamp,
   flow_id: count #index=hash,
   pcap_cnt: count,
+  vlan: list<count>,
+  in_iface: string,
   src_ip: addr,
   src_port: port,
   dest_ip: addr,
@@ -288,11 +337,64 @@ type suricata.netflow = record {
   app_proto: string
 }
 
+type suricata.nfs = record {
+  timestamp: time #timestamp,
+  flow_id: count #index=hash,
+  pcap_cnt: count,
+  vlan: list<count>,
+  in_iface: string,
+  src_ip: addr,
+  src_port: port,
+  dest_ip: addr,
+  dest_port: port,
+  proto: string,
+  event_type: string,
+  community_id: string #index=hash,
+  tx_id: count #index=hash,
+  rpc: record {
+    xid: count,
+    status: string,
+    auth_type: string,
+    creds: record {
+      machine_name: string,
+      uid: count,
+      gid: count
+    }
+  },
+  nfs: record {
+    version: count,
+    procedure: string,
+    filename: string,
+    hhash: string,
+    id: count,
+    file_tx: bool,
+    type: string,
+    status: string,
+    write: record {
+      first: bool,
+      last: bool,
+      last_xid: count,
+      chunks: count
+    },
+    rename: record {
+      from: string,
+      to: string
+    },
+    read: record {
+      first: bool,
+      last: bool,
+      last_xid: count,
+      chunks: count
+    }
+  }
+}
+
 type suricata.smb = record {
   timestamp: time #timestamp,
   flow_id: count #index=hash,
+  pcap_cnt: count,
+  vlan: list<count>,
   in_iface: string,
-  vlan: count,
   src_ip: addr,
   src_port: port,
   dest_ip: addr,
@@ -360,8 +462,9 @@ type suricata.smb = record {
 type suricata.ssh = record {
   timestamp: time #timestamp,
   flow_id: count #index=hash,
+  pcap_cnt: count,
+  vlan: list<count>,
   in_iface: string,
-  vlan: count,
   src_ip: addr,
   src_port: port,
   dest_ip: addr,
@@ -386,6 +489,8 @@ type suricata.smtp = record {
   timestamp: time #timestamp,
   flow_id: count #index=hash,
   pcap_cnt: count,
+  vlan: list<count>,
+  in_iface: string,
   src_ip: addr,
   src_port: port,
   dest_ip: addr,
@@ -408,10 +513,55 @@ type suricata.smtp = record {
   }
 }
 
+type suricata.snmp = record {
+  timestamp: time #timestamp,
+  flow_id: count #index=hash,
+  pcap_cnt: count,
+  vlan: list<count>,
+  in_iface: string,
+  src_ip: addr,
+  src_port: port,
+  dest_ip: addr,
+  dest_port: port,
+  proto: string,
+  event_type: string,
+  community_id: string #index=hash,
+  tx_id: count #index=hash,
+  snmp: record {
+    version: count,
+    pdu_type: string,
+    vars: list<string>,
+    community: string
+  }
+}
+
+type suricata.tftp = record {
+  timestamp: time #timestamp,
+  flow_id: count #index=hash,
+  pcap_cnt: count,
+  vlan: list<count>,
+  in_iface: string,
+  src_ip: addr,
+  src_port: port,
+  dest_ip: addr,
+  dest_port: port,
+  proto: string,
+  event_type: string,
+  community_id: string #index=hash,
+  tx_id: count #index=hash,
+  snmp: record {
+    packet: string,
+    file: string,
+    mode: string
+  }
+}
+
 type suricata.tls = record {
   timestamp: time #timestamp,
   flow_id: count #index=hash,
   pcap_cnt: count,
+  vlan: list<count>,
+  in_iface: string,
   src_ip: addr,
   src_port: port,
   dest_ip: addr,
