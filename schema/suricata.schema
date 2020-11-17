@@ -549,7 +549,7 @@ type suricata.tftp = record {
   event_type: string,
   community_id: string #index=hash,
   tx_id: count #index=hash,
-  snmp: record {
+  tftp: record {
     packet: string,
     file: string,
     mode: string
