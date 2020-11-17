@@ -260,6 +260,34 @@ type suricata.flow = record {
   app_proto: string
 }
 
+type suricata.ikev2 = record {
+  timestamp: time #timestamp,
+  flow_id: count #index=hash,
+  pcap_cnt: count,
+  vlan: list<count>,
+  in_iface: string,
+  src_ip: addr,
+  src_port: port,
+  dest_ip: addr,
+  dest_port: port,
+  proto: string,
+  event_type: string,
+  community_id: string #index=hash,
+  tx_id: count #index=hash,
+  ikev2: record {
+    version_major: count,
+    version_minor: count,
+    exchange_type: count,
+    message_id: count,
+    init_spi: string,
+    resp_spi: string,
+    role: string,
+    errors: count,
+    payload: list<string>,
+    notify: list<string>
+  }
+}
+
 type suricata.krb5 = record {
   timestamp: time #timestamp,
   flow_id: count #index=hash,
