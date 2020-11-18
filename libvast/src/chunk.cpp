@@ -39,7 +39,7 @@ chunk_ptr chunk::make(size_type size) {
   return make(size, data, std::move(deleter));
 }
 
-chunk_ptr chunk::make(size_type size, void* data, deleter_type deleter) {
+chunk_ptr chunk::make(size_type size, const void* data, deleter_type deleter) {
   VAST_ASSERT(size > 0);
   return chunk_ptr{new chunk{data, size, deleter}, false};
 }
@@ -99,8 +99,10 @@ chunk_ptr chunk::slice(size_type start, size_type length) const {
   return make(length, data_ + start, deleter);
 }
 
-chunk::chunk(void* ptr, size_type size, deleter_type deleter) noexcept
-  : data_{reinterpret_cast<value_type*>(ptr)}, size_{size}, deleter_{deleter} {
+chunk::chunk(const void* ptr, size_type size, deleter_type deleter) noexcept
+  : data_{reinterpret_cast<pointer>(const_cast<void*>(ptr))},
+    size_{size},
+    deleter_{deleter} {
   VAST_ASSERT(deleter_);
 }
 
