@@ -8,7 +8,6 @@
 #include "vast/arrow_table_slice_builder.hpp"
 #include "vast/concept/parseable/to.hpp"
 #include "vast/concept/parseable/vast/address.hpp"
-#include "vast/concept/parseable/vast/port.hpp"
 #include "vast/concept/parseable/vast/subnet.hpp"
 #include "vast/type.hpp"
 
@@ -201,21 +200,6 @@ TEST(single column - subnet) {
   CHECK_VARIANT_EQUAL(slice.at(1, 0), s2);
   CHECK_VARIANT_EQUAL(slice.at(2, 0), s3);
   CHECK_VARIANT_EQUAL(slice.at(3, 0), caf::none);
-  CHECK_ROUNDTRIP(slice);
-}
-
-TEST(single column - port) {
-  using vast::port;
-  using vast::to;
-  auto p1 = unbox(to<port>("80/tcp"));
-  auto p2 = unbox(to<port>("2020/udp"));
-  auto p3 = unbox(to<port>("8080/icmp"));
-  auto slice = make_single_column_slice<port_type>(p1, p2, caf::none, p3);
-  REQUIRE_EQUAL(slice.rows(), 4u);
-  CHECK_VARIANT_EQUAL(slice.at(0, 0), p1);
-  CHECK_VARIANT_EQUAL(slice.at(1, 0), p2);
-  CHECK_VARIANT_EQUAL(slice.at(2, 0), caf::none);
-  CHECK_VARIANT_EQUAL(slice.at(3, 0), p3);
   CHECK_ROUNDTRIP(slice);
 }
 

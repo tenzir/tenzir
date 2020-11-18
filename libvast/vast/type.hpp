@@ -61,7 +61,6 @@ using concrete_types = caf::detail::type_list<
   pattern_type,
   address_type,
   subnet_type,
-  port_type,
   enumeration_type,
   list_type,
   map_type,
@@ -334,8 +333,6 @@ public:
       name = "vast.address_type";
     } else if constexpr (std::is_same_v<Derived, subnet_type>) {
       name = "vast.subnet_type";
-    } else if constexpr (std::is_same_v<Derived, port_type>) {
-      name = "vast.port_type";
     } else if constexpr (std::is_same_v<Derived, enumeration_type>) {
       name = "vast.enumeration_type";
     } else if constexpr (std::is_same_v<Derived, list_type>) {
@@ -484,10 +481,6 @@ struct address_type final : basic_type<address_type> {};
 /// A type for IP prefixes.
 /// @relates type
 struct subnet_type final : basic_type<subnet_type> {};
-
-/// A type for transport-layer ports.
-/// @relates type
-struct port_type final : basic_type<port_type> {};
 
 /// The enumeration type consisting of a fixed number of strings.
 /// @relates type
@@ -754,7 +747,6 @@ VAST_TYPE_TRAIT(time);
 VAST_TYPE_TRAIT(pattern);
 VAST_TYPE_TRAIT(address);
 VAST_TYPE_TRAIT(subnet);
-VAST_TYPE_TRAIT(port);
 VAST_TYPE_TRAIT(enumeration);
 VAST_TYPE_TRAIT(list);
 VAST_TYPE_TRAIT(map);
@@ -1040,7 +1032,6 @@ VAST_DEFINE_HASH_SPECIALIZATION(string_type);
 VAST_DEFINE_HASH_SPECIALIZATION(pattern_type);
 VAST_DEFINE_HASH_SPECIALIZATION(address_type);
 VAST_DEFINE_HASH_SPECIALIZATION(subnet_type);
-VAST_DEFINE_HASH_SPECIALIZATION(port_type);
 VAST_DEFINE_HASH_SPECIALIZATION(enumeration_type);
 VAST_DEFINE_HASH_SPECIALIZATION(list_type);
 VAST_DEFINE_HASH_SPECIALIZATION(map_type);

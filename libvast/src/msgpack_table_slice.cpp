@@ -192,15 +192,6 @@ data_view decode(msgpack::overlay& objects, const T& t) {
       auto length = *get<uint8_t>(inner.get());
       return data_view{view<subnet>{make_view(addr), length}};
     }
-  } else if constexpr (std::is_same_v<T, port_type>) {
-    if (auto xs = get<array_view>(o)) {
-      VAST_ASSERT(xs->size() == 2);
-      auto inner = xs->data();
-      auto n = *get<uint16_t>(inner.get());
-      inner.next();
-      auto t = static_cast<port::port_type>(*get<uint8_t>(inner.get()));
-      return make_data_view(port{n, t});
-    }
   } else if constexpr (std::is_same_v<T, enumeration_type>) {
     if (auto x = get<uint8_t>(o))
       return make_data_view(enumeration{*x});

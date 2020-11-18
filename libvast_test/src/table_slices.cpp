@@ -115,7 +115,6 @@ table_slices::table_slices() {
     {"h", pattern_type{}},
     {"i", address_type{}},
     {"j", subnet_type{}},
-    {"k", port_type{}},
     {"l", list_type{count_type{}}},
     {"n", map_type{count_type{}, bool_type{}}},
     // test_lists
@@ -129,7 +128,6 @@ table_slices::table_slices() {
     {"vh", list_type{pattern_type{}}},
     {"vi", list_type{address_type{}}},
     {"vj", list_type{subnet_type{}}},
-    {"vk", list_type{port_type{}}},
     // {"vl", list_type{list_type{count_type{}}}},
     // {"vm", list_type{map_type{count_type{}, bool_type{}}}},
     // -- test_maps_left
@@ -143,7 +141,6 @@ table_slices::table_slices() {
     {"mha", map_type{pattern_type{}, bool_type{}}},
     {"mia", map_type{address_type{}, bool_type{}}},
     {"mja", map_type{subnet_type{}, bool_type{}}},
-    {"mka", map_type{port_type{}, bool_type{}}},
     // {"mla", map_type{list_type{count_type{}}, bool_type{}}},
     // {"mna", map_type{map_type{count_type{}, bool_type{}}, bool_type{}}},
     // -- test_maps_right (intentionally no maa)
@@ -156,7 +153,6 @@ table_slices::table_slices() {
     {"mah", map_type{bool_type{}, pattern_type{}}},
     {"mai", map_type{bool_type{}, address_type{}}},
     {"maj", map_type{bool_type{}, subnet_type{}}},
-    {"mak", map_type{bool_type{}, port_type{}}},
     // {"mal", map_type{bool_type{}, list_type{count_type{}}}},
     // {"man", map_type{bool_type{}, map_type{count_type{}, bool_type{}}}},
   }.name("test");
@@ -173,7 +169,6 @@ table_slices::table_slices() {
     + ", [/foo.*bar/]"s // vh
     + ", [127.0.0.1]"s // vi
     + ", [10.0.0.0/8]"s // vj
-    + ", [80/tcp]"s // vk
     // + ", [[1, 2, 3]]"s // vl
     // + ", [{1 -> T, 2 -> F, 3 -> T}]"s // vm
     ;
@@ -188,7 +183,6 @@ table_slices::table_slices() {
     + ", {/foo.*bar/ -> T}"s // mha
     + ", {127.0.0.1 -> T}"s // mia
     + ", {10.0.0.0/8 -> T}"s // mja
-    + ", {80/tcp -> T}"s // mka
     // + ", {[1, 2, 3] -> T}"s // mla
     // + ", {{1 -> T, 2 -> F, 3 -> T} -> T}"s // mna
     ;
@@ -203,7 +197,6 @@ table_slices::table_slices() {
     + ", {T -> /foo.*bar/}"s // mah
     + ", {T -> 127.0.0.1}"s // mai
     + ", {T -> 10.0.0.0/8}"s // maj
-    + ", {T -> 80/tcp}"s // mak
     // + ", {T -> [1, 2, 3]}"s // mal
     // + ", {T -> {1 -> T, 2 -> F, 3 -> T}}"s // man
     ;
@@ -216,10 +209,10 @@ table_slices::table_slices() {
   // Initialize test data.
   auto rows = std::vector<std::string>{
     "[T, +7, 42, 4.2, 1337ms, 2018-12-24, \"foo\", /foo.*bar/, 127.0.0.1,"
-    " 10.0.0.0/8, 80/tcp, [1, 2, 3], {1 -> T, 2 -> F, 3 -> T}"
+    " 10.0.0.0/8, [1, 2, 3], {1 -> T, 2 -> F, 3 -> T}"
       + test_collections + "]",
     "[F, -7, 43, 0.42, -1337ms, 2018-12-25, \"bar\", nil, ::1, 64:ff9b::/96,"
-    " 53/udp, [], {}"
+    " [], {}"
       + test_collections + "]",
   };
   for (auto& row : rows) {

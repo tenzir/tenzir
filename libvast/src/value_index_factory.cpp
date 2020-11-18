@@ -23,7 +23,6 @@
 #include "vast/index/enumeration_index.hpp"
 #include "vast/index/hash_index.hpp"
 #include "vast/index/list_index.hpp"
-#include "vast/index/port_index.hpp"
 #include "vast/index/string_index.hpp"
 #include "vast/index/subnet_index.hpp"
 #include "vast/logger.hpp"
@@ -156,7 +155,6 @@ void factory_traits<value_index>::initialize() {
   add_value_index_factory<enumeration_type, enumeration_index>();
   add_value_index_factory<address_type, address_index>();
   add_value_index_factory<subnet_type, subnet_index>();
-  add_value_index_factory<port_type, port_index>();
   add_value_index_factory<string_type, string_index>();
   add_value_index_factory<list_type, list_index>();
 }

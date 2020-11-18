@@ -162,6 +162,7 @@ TEST(parseable - inline comments) {
 
 TEST(schema: zeek-style) {
   std::string str = R"__(
+    type port = count
     type zeek.ssl = record{
       ts: time,
       uid: string,
@@ -219,7 +220,6 @@ TEST(parseable - basic types global) {
     type t8 = pattern
     type t9 = addr
     type t10 = subnet
-    type t11 = port
     type foo = record{
       a1: t1,
       a2: t2,
@@ -231,13 +231,12 @@ TEST(parseable - basic types global) {
       a8: t8,
       a9: t9,
       a10: t10,
-      a11: t11
     }
   )__";
   schema sch;
   CHECK(parsers::schema(std::string{str}, sch));
   CHECK(sch.find("t1"));
-  CHECK(sch.find("t11"));
+  CHECK(sch.find("t10"));
   auto foo = sch.find("foo");
   REQUIRE(foo);
   auto r = get_if<record_type>(foo);
@@ -260,7 +259,6 @@ TEST(parseable - basic types local) {
       a8: pattern,
       a9: addr,
       a10: subnet,
-      a11: port
     }
   )__";
   schema sch;
@@ -269,16 +267,16 @@ TEST(parseable - basic types local) {
   REQUIRE(foo);
   auto r = get_if<record_type>(foo);
   REQUIRE(r);
-  auto p = r->at("a11");
+  auto p = r->at("a10");
   REQUIRE(p);
-  CHECK(holds_alternative<port_type>(*p));
+  CHECK(holds_alternative<subnet_type>(*p));
 }
 
 TEST(parseable - complex types global) {
   auto str = R"__(
     type enum_t = enum{x, y, z}
     type list_t = list<addr>
-    type map_t = map<port, addr>
+    type map_t = map<count, addr>
     type foo = record{
       e: enum_t,
       v: list_t,

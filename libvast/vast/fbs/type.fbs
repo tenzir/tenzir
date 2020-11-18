@@ -30,9 +30,6 @@ table AddressType {}
 /// A CIDR subnet.
 table SubnetType {}
 
-/// A transport-layer port.
-table PortType {}
-
 /// An enumeration type that can have one specific value.
 table EnumerationType {
   fields: [string];
@@ -82,7 +79,6 @@ union TypeVariant {
   pattern: PatternType,
   address: AddressType,
   subnet: SubnetType,
-  port: PortType,
   enumeration: EnumerationType,
   vector: VectorType,
   set: SetType,

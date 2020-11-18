@@ -14,7 +14,6 @@
 #include "vast/format/zeek.hpp"
 
 #include "vast/attribute.hpp"
-#include "vast/concept/parseable/vast/port.hpp"
 #include "vast/concept/printable/numeric.hpp"
 #include "vast/concept/printable/to_string.hpp"
 #include "vast/concept/printable/vast/data.hpp"
@@ -69,7 +68,11 @@ caf::expected<type> parse_type(std::string_view zeek_type) {
   else if (zeek_type == "subnet")
     t = subnet_type{};
   else if (zeek_type == "port")
-    t = port_type{};
+    // FIXME: once we ship with builtin type aliases, we should reference the
+    // port alias type here. Until then, we create the alias manually.
+    // See also:
+    // - src/format/pcap.cpp
+    t = count_type{}.name("port");
   if (caf::holds_alternative<none_type>(t)
       && (detail::starts_with(zeek_type, "vector")
           || detail::starts_with(zeek_type, "set")
@@ -99,6 +102,10 @@ struct zeek_type_printer {
   template <class T>
   std::string operator()(const T& x) const {
     return kind(x);
+  }
+
+  std::string operator()(const count_type& t) const {
+    return t.name() == "port" ? "port" : "count";
   }
 
   std::string operator()(const real_type&) const {
@@ -561,10 +568,6 @@ public:
         *out++ = c;
       }
     return true;
-  }
-
-  bool operator()(Iterator& out, const view<port>& p) const {
-    return (*this)(out, count{p.number()});
   }
 
   bool print(Iterator& out, const attribute& d) const {

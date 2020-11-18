@@ -23,7 +23,6 @@
 #include "vast/concept/printable/vast/address.hpp"
 #include "vast/concept/printable/vast/subnet.hpp"
 #include "vast/concept/printable/vast/pattern.hpp"
-#include "vast/concept/printable/vast/port.hpp"
 #include "vast/concept/printable/vast/none.hpp"
 #include "vast/concept/printable/vast/type.hpp"
 #include "vast/detail/escapers.hpp"

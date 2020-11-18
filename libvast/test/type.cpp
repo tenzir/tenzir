@@ -167,7 +167,6 @@ TEST(serialization) {
   CHECK_ROUNDTRIP(pattern_type{});
   CHECK_ROUNDTRIP(address_type{});
   CHECK_ROUNDTRIP(subnet_type{});
-  CHECK_ROUNDTRIP(port_type{});
   CHECK_ROUNDTRIP(enumeration_type{});
   CHECK_ROUNDTRIP(list_type{});
   CHECK_ROUNDTRIP(map_type{});
@@ -184,7 +183,6 @@ TEST(serialization) {
   CHECK_ROUNDTRIP(type{pattern_type{}});
   CHECK_ROUNDTRIP(type{address_type{}});
   CHECK_ROUNDTRIP(type{subnet_type{}});
-  CHECK_ROUNDTRIP(type{port_type{}});
   CHECK_ROUNDTRIP(type{enumeration_type{}});
   CHECK_ROUNDTRIP(type{list_type{}});
   CHECK_ROUNDTRIP(type{map_type{}});
@@ -194,7 +192,7 @@ TEST(serialization) {
                        {"y", address_type{}},
                        {"z", real_type{}.attributes({{"key", "value"}})}};
   // Make it recursive.
-  r = {{"a", map_type{string_type{}, port_type{}}},
+  r = {{"a", map_type{string_type{}, count_type{}}},
        {"b", list_type{bool_type{}}.name("foo")},
        {"c", r}};
   r.name("foo");
@@ -477,7 +475,6 @@ TEST(type_check) {
   TYPE_CHECK(pattern_type{}, pattern{"foo"});
   TYPE_CHECK(address_type{}, address{});
   TYPE_CHECK(subnet_type{}, subnet{});
-  TYPE_CHECK(port_type{}, port{});
   MESSAGE("complex types");
   TYPE_CHECK(enumeration_type{{"foo"}}, enumeration{0});
   TYPE_CHECK_FAIL(enumeration_type{{"foo"}}, enumeration{1});
@@ -492,6 +489,7 @@ TEST(type_check) {
   TYPE_CHECK(map_type{}, map{});
 }
 
+// clang-format off
 TEST(type_check - nested record) {
   data x = record{
     {"x", "foo"},
@@ -502,7 +500,7 @@ TEST(type_check - nested record) {
       }},
     }},
     {"str", "x"},
-    {"port", port{443, port::tcp}}
+    {"b", false}
   };
   type t = record_type{
     {"x", string_type{}},
@@ -513,11 +511,11 @@ TEST(type_check - nested record) {
       }},
     }},
     {"str", string_type{}},
-    {"port", port_type{}}
+    {"b", bool_type{}}
   };
   CHECK(type_check(t, x));
 }
-
+// clang-format on
 
 TEST(printable) {
   MESSAGE("basic types");
@@ -532,7 +530,6 @@ TEST(printable) {
   CHECK_EQUAL(to_string(pattern_type{}), "pattern");
   CHECK_EQUAL(to_string(address_type{}), "addr");
   CHECK_EQUAL(to_string(subnet_type{}), "subnet");
-  CHECK_EQUAL(to_string(port_type{}), "port");
   MESSAGE("enumeration_type");
   auto e = enumeration_type{{"foo", "bar", "baz"}};
   CHECK_EQUAL(to_string(e), "enum {foo, bar, baz}");
@@ -563,19 +560,19 @@ TEST(printable) {
   attr = {"skip"};
   CHECK_EQUAL(to_string(attr), "#skip");
   // Attributes on types.
-  auto s = list_type{port_type{}};
+  auto s = list_type{bool_type{}};
   s = s.attributes({attr, {"tokenize", "/rx/"}});
-  CHECK_EQUAL(to_string(s), "list<port> #skip #tokenize=/rx/");
+  CHECK_EQUAL(to_string(s), "list<bool> #skip #tokenize=/rx/");
   // Nested types
   t = s;
   t.attributes({attr});
   t = map_type{count_type{}, t};
-  CHECK_EQUAL(to_string(t), "map<count, list<port> #skip>");
+  CHECK_EQUAL(to_string(t), "map<count, list<bool> #skip>");
   MESSAGE("signature");
   t.name("jells");
   std::string sig;
   CHECK(printers::type<policy::signature>(sig, t));
-  CHECK_EQUAL(sig, "jells = map<count, list<port> #skip>");
+  CHECK_EQUAL(sig, "jells = map<count, list<bool> #skip>");
 }
 
 TEST(parseable) {
@@ -671,7 +668,7 @@ TEST(hashable) {
   CHECK_NOT_EQUAL(hash(type{bool_type{}}), hash(type{address_type{}}));
   auto x = record_type{
     {"x", integer_type{}}, {"y", string_type{}}, {"z", list_type{real_type{}}}};
-  CHECK_EQUAL(hash(x), 7434606127152318469ul);
+  CHECK_EQUAL(hash(x), 14779728178683051124ul);
   CHECK_EQUAL(to_digest(x), std::to_string(hash(type{x})));
 }
 

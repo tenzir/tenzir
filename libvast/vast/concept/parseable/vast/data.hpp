@@ -21,7 +21,6 @@
 #include "vast/concept/parseable/vast/address.hpp"
 #include "vast/concept/parseable/vast/identifier.hpp"
 #include "vast/concept/parseable/vast/pattern.hpp"
-#include "vast/concept/parseable/vast/port.hpp"
 #include "vast/concept/parseable/vast/si.hpp"
 #include "vast/concept/parseable/vast/subnet.hpp"
 #include "vast/concept/parseable/vast/time.hpp"
@@ -66,7 +65,6 @@ private:
     p = parsers::time
       | parsers::duration
       | parsers::net
-      | parsers::port
       | parsers::addr
       | parsers::real
       | parsers::count

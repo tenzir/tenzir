@@ -47,14 +47,13 @@ struct fixture : fixtures::deterministic_actor_system {
                   {"i", integer_type{}},
                   {"s", string_type{}},
                   {"a", address_type{}},
-                  {"p", port_type{}},
                   {"sn", subnet_type{}},
                   {"t", time_type{}},
                   {"d", duration_type{}},
                   {"d2", duration_type{}},
                   {"e", enumeration_type{{"FOO", "BAR", "BAZ"}}},
-                  {"vp", list_type{port_type{}}},
-                  {"vt", list_type{time_type{}}},
+                  {"lc", list_type{count_type{}}},
+                  {"lt", list_type{time_type{}}},
                   {"msa", map_type{string_type{}, address_type{}}},
                   {"mcs", map_type{count_type{}, string_type{}}}}
         .name("l2");
@@ -237,16 +236,15 @@ TEST(csv reader - map string->address) {
   CHECK_EQUAL(materialize(slices[0].at(0, 0)), data{m});
 }
 
-std::string_view l2_log_vp = R"__(vp
-[5555/tcp, 0/icmp]
+std::string_view l2_log_vp = R"__(lc
+[1, 2, 3, 4, 5]
 [])__";
 
-TEST(csv reader - list of port) {
+TEST(csv reader - list of count) {
   auto slices = run(l2_log_vp, 2, 100);
-  auto l2_vp = record_type{{"vp", list_type{port_type{}}}}.name("l2");
+  auto l2_vp = record_type{{"lc", list_type{count_type{}}}}.name("l2");
   REQUIRE_EQUAL(slices[0].layout(), l2_vp);
-  CHECK(slices[0].at(0, 0)
-        == data{list{unbox(to<port>("5555/tcp")), unbox(to<port>("0/icmp"))}});
+  CHECK(slices[0].at(0, 0) == data{list{1u, 2u, 3u, 4u, 5u}});
   CHECK(slices[0].at(1, 0) == data{list{}});
 }
 
@@ -274,11 +272,10 @@ TEST(csv reader - duration) {
   CHECK(slices[0].at(0, 0) == data{unbox(to<duration>("42s"))});
 }
 
-std::string_view l2_log_reord
-  = R"__(msa, c, r, i, b,  a,  p, sn, d,  e,  t, vp, vt
-{ foo=1.2.3.4, bar=2001:db8:: },424242,4.2,-1337,T,147.32.84.165,42/udp,192.168.0.1/24,42s,BAZ,2011-08-12+14:59:11.994970,[ 5555/tcp, 0/icmp ],[ 2019-04-30T11:46:13Z ])__";
+std::string_view l2_log_reord = R"__(msa, c, r, i, b,  a,  sn, d,  e,  t, lc, lt
+{ foo=1.2.3.4, bar=2001:db8:: },424242,4.2,-1337,T,147.32.84.165,192.168.0.1/24,42s,BAZ,2011-08-12+14:59:11.994970,[ 5555,0],[ 2019-04-30T11:46:13Z ])__";
 // FIXME: Parsing maps in csv is broken, see ch12358.
-//   = R"__(msa, c, r, i, b,  a,  p, sn, d,  e,  t,  vp, vt, mcs
+//   = R"__(msa, c, r, i, b,  a,  sn, d,  e,  t,  lc, lt, mcs
 // { foo=1.2.3.4, bar=2001:db8::
 // },424242,4.2,-1337,T,147.32.84.165,42/udp,192.168.0.1/24,42s,BAZ,2011-08-12+14:59:11.994970,
 // [ 5555/tcp, 0/icmp ],[ 2019-04-30T11:46:13Z ],{ 1=FOO, 1024=BAR! })__";
@@ -291,13 +288,12 @@ TEST(csv reader - reordered layout) {
                             {"i", integer_type{}},
                             {"b", bool_type{}},
                             {"a", address_type{}},
-                            {"p", port_type{}},
                             {"sn", subnet_type{}},
                             {"d", duration_type{}},
                             {"e", enumeration_type{{"FOO", "BAR", "BAZ"}}},
                             {"t", time_type{}},
-                            {"vp", list_type{port_type{}}},
-                            {"vt", list_type{time_type{}}},
+                            {"lc", list_type{count_type{}}},
+                            {"lt", list_type{time_type{}}},
                             // FIXME: Parsing maps in csv is broken, see ch12358.
                             // {"mcs", map_type{count_type{}, string_type{}}}
                             }
@@ -311,16 +307,13 @@ TEST(csv reader - reordered layout) {
   CHECK(slices[0].at(0, 3) == data{integer{-1337}});
   CHECK(slices[0].at(0, 4) == data{true});
   CHECK(slices[0].at(0, 5) == data{unbox(to<address>("147.32.84.165"))});
-  CHECK(slices[0].at(0, 6) == data{unbox(to<port>("42/udp"))});
-  CHECK(slices[0].at(0, 7) == data{unbox(to<subnet>("192.168.0.1/24"))});
-  CHECK(slices[0].at(0, 8) == data{unbox(to<duration>("42s"))});
-  CHECK(slices[0].at(0, 9) == data{enumeration{2}});
-  CHECK(slices[0].at(0, 10)
+  CHECK(slices[0].at(0, 6) == data{unbox(to<subnet>("192.168.0.1/24"))});
+  CHECK(slices[0].at(0, 7) == data{unbox(to<duration>("42s"))});
+  CHECK(slices[0].at(0, 8) == data{enumeration{2}});
+  CHECK(slices[0].at(0, 9)
         == data{unbox(to<vast::time>("2011-08-12+14:59:11.994970"))});
+  CHECK(slices[0].at(0, 10) == data{list{5555u, 0u}});
   CHECK(slices[0].at(0, 11)
-        == data{list{unbox(to<port>("5555/tcp")), unbox(to<port>("0/"
-                                                                 "icmp"))}});
-  CHECK(slices[0].at(0, 12)
         == data{list{unbox(to<vast::time>("2019-04-30T11:46:13Z"))}});
   auto m = map{};
   m[1u] = data{"FOO"};

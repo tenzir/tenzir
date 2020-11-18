@@ -113,12 +113,6 @@ struct zeek_parser {
     return parse(p);
   }
 
-  bool operator()(const port_type&) const {
-    static auto p = parsers::u16
-      ->* [](uint16_t x) { return port{x, port::unknown}; };
-    return parse(p);
-  }
-
   Iterator& f_;
   const Iterator& l_;
   Attribute& attr_;
@@ -191,10 +185,6 @@ struct zeek_parser_factory {
 
   result_type operator()(const subnet_type&) const {
     return parsers::net ->* [](subnet x) { return x; };
-  }
-
-  result_type operator()(const port_type&) const {
-    return parsers::u16 ->* [](uint16_t x) { return port{x, port::unknown}; };
   }
 
   result_type operator()(const list_type& t) const {

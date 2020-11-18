@@ -18,6 +18,8 @@
 #include "vast/concept/parseable/vast/endpoint.hpp"
 #include "vast/concept/parseable/vast/expression.hpp"
 #include "vast/concept/parseable/vast/schema.hpp"
+#include "vast/concept/printable/to_string.hpp"
+#include "vast/concept/printable/vast/port.hpp"
 #include "vast/defaults.hpp"
 #include "vast/detail/make_io_stream.hpp"
 #include "vast/detail/string.hpp"

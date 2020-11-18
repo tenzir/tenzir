@@ -21,7 +21,6 @@
 #include "vast/detail/operators.hpp"
 #include "vast/offset.hpp"
 #include "vast/pattern.hpp"
-#include "vast/port.hpp"
 #include "vast/subnet.hpp"
 #include "vast/time.hpp"
 #include "vast/type.hpp"
@@ -76,7 +75,6 @@ using to_data_type = std::conditional_t<
             || std::is_same_v<T, pattern>
             || std::is_same_v<T, address>
             || std::is_same_v<T, subnet>
-            || std::is_same_v<T, port>
             || std::is_same_v<T, list>
             || std::is_same_v<T, map>
             || std::is_same_v<T, record>,
@@ -125,7 +123,6 @@ public:
     pattern,
     address,
     subnet,
-    port,
     enumeration,
     list,
     map,
@@ -237,7 +234,6 @@ VAST_DATA_TRAIT(time);
 VAST_DATA_TRAIT(pattern);
 VAST_DATA_TRAIT(address);
 VAST_DATA_TRAIT(subnet);
-VAST_DATA_TRAIT(port);
 VAST_DATA_TRAIT(enumeration);
 VAST_DATA_TRAIT(list);
 VAST_DATA_TRAIT(map);

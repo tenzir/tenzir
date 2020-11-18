@@ -119,7 +119,6 @@ set(libvast_sources
     src/index/address_index.cpp
     src/index/enumeration_index.cpp
     src/index/list_index.cpp
-    src/index/port_index.cpp
     src/index/string_index.cpp
     src/index/subnet_index.cpp
     src/io/read.cpp
@@ -357,7 +356,6 @@ set(tests
     test/index/enumeration_index.cpp
     test/index/hash_index.cpp
     test/index/list_index.cpp
-    test/index/port_index.cpp
     test/index/string_index.cpp
     test/index/subnet_index.cpp
     test/iterator.cpp

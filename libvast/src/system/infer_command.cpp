@@ -16,7 +16,6 @@
 #include "vast/concept/parseable/to.hpp"
 #include "vast/concept/parseable/vast/address.hpp"
 #include "vast/concept/parseable/vast/json.hpp"
-#include "vast/concept/parseable/vast/port.hpp"
 #include "vast/concept/parseable/vast/subnet.hpp"
 #include "vast/concept/parseable/vast/time.hpp"
 #include "vast/concept/printable/stream.hpp"
@@ -88,8 +87,6 @@ type deduce(const json& j) {
         return subnet_type{};
       if (parsers::addr(x))
         return address_type{};
-      if (parsers::port(x))
-        return port_type{};
       if (parsers::ymdhms(x))
         return time_type{};
       if (parsers::duration(x))

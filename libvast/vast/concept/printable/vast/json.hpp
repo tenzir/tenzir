@@ -19,7 +19,6 @@
 #include "vast/concept/printable/print.hpp"
 #include "vast/concept/printable/std/chrono.hpp"
 #include "vast/concept/printable/string.hpp"
-#include "vast/concept/printable/vast/port.hpp"
 #include "vast/detail/escapers.hpp"
 #include "vast/json.hpp"
 #include "vast/time.hpp"
@@ -114,11 +113,6 @@ struct json_printer : printer<json_printer<TreePolicy, Indent, Padding>> {
 
     bool operator()(const view<pattern>& x) {
       return (*this)(x.string());
-    }
-
-    bool operator()(const view<port>& x) {
-      static auto p = '"' << make_printer<port>{} << '"';
-      return p.print(out_, x);
     }
 
     bool operator()(const view<duration>& x) {
