@@ -359,15 +359,22 @@ std::shared_ptr<arrow::RecordBatch> as_record_batch(const table_slice& slice) {
       //                 == table_slice::encoding::arrow) { ... }
       if constexpr (std::decay_t<decltype(*state(encoded, slice.state_))>::encoding
                     == table_slice::encoding::arrow) {
-        return state(encoded, slice.state_)->record_batch();
+        // Get the record batch first, then create a copy that shares the
+        // lifetime with the chunk.
+        auto batch = state(encoded, slice.state_)->record_batch();
+        auto result = std::shared_ptr<arrow::RecordBatch>{
+          batch.get(), [slice, batch](arrow::RecordBatch*) noexcept {
+            VAST_IGNORE_UNUSED(slice);
+            VAST_IGNORE_UNUSED(batch);
+          }};
+        return result;
       } else {
         // Rebuild the slice as an Arrow-encoded table slice.
         auto copy = rebuild(slice, table_slice::encoding::arrow);
         // Bind the lifetime of the copy (and thus the returned Record Batch) to
         // the lifetime of the original slice.
-        slice.chunk_->ref();
-        copy.chunk_->add_deletion_step(
-          [=]() noexcept { slice.chunk_->deref(); });
+        slice.chunk_->add_deletion_step(
+          [copy]() noexcept { VAST_IGNORE_UNUSED(copy); });
         return as_record_batch(copy);
       }
     },
