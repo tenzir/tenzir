@@ -115,9 +115,9 @@ msgpack_table_slice_builder::~msgpack_table_slice_builder() {
 
 table_slice
 msgpack_table_slice_builder::finish(span<const byte> serialized_layout) {
-  // Sanity check.
-  if (column_ != 0)
-    return {};
+  // Sanity check: If this triggers, the calls to add() did not match the number
+  // of fields in the layout.
+  VAST_ASSERT(column_ == 0);
   // Pack layout.
   auto layout_buffer
     = serialized_layout.empty()

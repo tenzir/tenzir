@@ -473,9 +473,9 @@ arrow_table_slice_builder::~arrow_table_slice_builder() noexcept {
 
 table_slice arrow_table_slice_builder::finish(
   [[maybe_unused]] span<const byte> serialized_layout) {
-  // Sanity check.
-  if (column_ != 0)
-    return {};
+  // Sanity check: If this triggers, the calls to add() did not match the number
+  // of fields in the layout.
+  VAST_ASSERT(column_ == 0);
   // Pack layout.
   auto layout_buffer
     = serialized_layout.empty()
