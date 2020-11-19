@@ -619,6 +619,8 @@ type suricata.tls = record {
   event_type: string,
   community_id: string #index=hash,
   tls: record {
+    sni: string,
+    session_resumed: bool,
     subject: string,
     issuerdn: string,
     serial: string,
