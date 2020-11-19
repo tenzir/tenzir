@@ -54,6 +54,7 @@ Usage: $0 [OPTION]... [VAR=VALUE]...
     --without-assertions    disable assertions
     --without-exceptions    disable C++ exceptions
     --with-asan             enable AddressSanitizer
+    --with-ubsan            enable Undefined Behavior Sanitizer
     --with-gcov             enable GCOV
 
   Required packages:
@@ -190,6 +191,9 @@ while [ $# -ne 0 ]; do
       ;;
     --with-asan)
       append_cache_entry ENABLE_ADDRESS_SANITIZER BOOL yes
+      ;;
+    --with-ubsan)
+      append_cache_entry ENABLE_UB_SANITIZER BOOL yes
       ;;
     --with-gcov)
       append_cache_entry ENABLE_GCOV BOOL yes

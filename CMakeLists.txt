@@ -322,6 +322,8 @@ else ()
   message(FATAL_ERROR "Unsupported compiler: ${CMAKE_CXX_COMPILER_ID}")
 endif ()
 
+option(ENABLE_ADDRESS_SANITIZER
+       "Insert pointer and reference checks into the generated binaries" OFF)
 if (ENABLE_ADDRESS_SANITIZER)
   set(CXXFLAGS_BACKUP "${CMAKE_CXX_FLAGS}")
   set(CMAKE_CXX_FLAGS "-fsanitize=address -fno-omit-frame-pointer")
@@ -334,6 +336,25 @@ if (ENABLE_ADDRESS_SANITIZER)
     message(STATUS "Enabling Address Sanitizer")
     set(ASAN_FOUND true)
     set(EXTRA_FLAGS "${EXTRA_FLAGS} -fsanitize=address -fno-omit-frame-pointer")
+  endif ()
+endif ()
+
+option(ENABLE_UB_SANITIZER
+       "Add run-time checks for undefined behavior into the generated binaries"
+       OFF)
+if (ENABLE_UB_SANITIZER)
+  set(CXXFLAGS_BACKUP "${CMAKE_CXX_FLAGS}")
+  set(CMAKE_CXX_FLAGS "-fsanitize=undefined")
+  try_run(program_result compilation_succeeded "${CMAKE_BINARY_DIR}"
+          "${CMAKE_CURRENT_SOURCE_DIR}/cmake/get_compiler_version.cpp")
+  set(CMAKE_CXX_FLAGS "${CXXFLAGS_BACKUP}")
+  if (NOT compilation_succeeded)
+    message(
+      STATUS "Undefined Behavior Sanitizer not available on selected compiler")
+  else ()
+    message(STATUS "Enabling Undefined Behavior Sanitizer")
+    set(UBSAN_FOUND true)
+    set(EXTRA_FLAGS "${EXTRA_FLAGS} -fsanitize=undefined")
   endif ()
 endif ()
 
@@ -847,6 +868,7 @@ endmacro ()
 display(SHOW_TIME_REPORT yes time_report_summary)
 display(VAST_ENABLE_ASSERTIONS yes assertions_summary)
 display(ASAN_FOUND yes asan_summary)
+display(UBSAN_FOUND yes ubsan_summary)
 display(ENABLE_GCOV yes gcov_summary)
 
 # Figure out whether we point to a build directory or a prefix.
@@ -885,6 +907,7 @@ set(summary
     "\nShow time report:    ${time_report_summary}"
     "\nAssertions:          ${assertions_summary}"
     "\nAddressSanitizer:    ${asan_summary}"
+    "\nUBSanitizer:         ${ubsan_summary}"
     "\ngcov:                ${gcov_summary}"
     "\n"
     "\nC compiler:          ${CMAKE_C_COMPILER_ID} ${CMAKE_C_COMPILER_VERSION}"
