@@ -100,7 +100,7 @@ chunk_ptr chunk::slice(size_type start, size_type length) const {
 }
 
 chunk::chunk(const void* ptr, size_type size, deleter_type deleter) noexcept
-  : data_{reinterpret_cast<pointer>(const_cast<void*>(ptr))},
+  : data_{static_cast<pointer>(const_cast<void*>(ptr))},
     size_{size},
     deleter_{deleter} {
   VAST_ASSERT(deleter_);
