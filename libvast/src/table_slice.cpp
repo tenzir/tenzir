@@ -372,9 +372,6 @@ std::shared_ptr<arrow::RecordBatch> as_record_batch(const table_slice& slice) {
       } else {
         // Rebuild the slice as an Arrow-encoded table slice.
         auto copy = rebuild(slice, table_slice::encoding::arrow);
-        // Bind the lifetime of the copy (and thus the returned Record Batch) to
-        // the lifetime of the original slice.
-        slice.chunk_->add_deletion_step(detail::keeper{copy});
         return as_record_batch(copy);
       }
     },
