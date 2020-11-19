@@ -34,4 +34,11 @@ struct keeper final : private std::tuple<Ts...> {
 template <class... Ts>
 keeper(Ts...) -> keeper<Ts...>;
 
+/// @returns A callable that does nothing, but keeps copies of passed variables.
+/// @param args Variables to keep copies of.
+template <class... Args>
+constexpr auto keep(Args&&... args) noexcept {
+  return keeper{std::forward<Args>(args)...};
+}
+
 } // namespace vast::detail

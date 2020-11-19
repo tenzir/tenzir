@@ -15,7 +15,7 @@
 
 #include "vast/byte.hpp"
 #include "vast/detail/assert.hpp"
-#include "vast/detail/keeper.hpp"
+#include "vast/detail/keep.hpp"
 #include "vast/detail/operators.hpp"
 #include "vast/detail/type_traits.hpp"
 #include "vast/die.hpp"
@@ -79,7 +79,7 @@ public:
     static_assert(sizeof(Byte) == 1);
     VAST_ASSERT(std::size(xs) != 0);
     auto shared = std::make_shared<std::vector<Byte>>(std::move(xs));
-    return make(shared->size(), shared->data(), detail::keeper{shared});
+    return make(shared->size(), shared->data(), detail::keep(shared));
   }
 
   // Construct a chunk by copying a range of bytes.

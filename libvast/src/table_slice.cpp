@@ -16,7 +16,7 @@
 #include "vast/chunk.hpp"
 #include "vast/defaults.hpp"
 #include "vast/detail/assert.hpp"
-#include "vast/detail/keeper.hpp"
+#include "vast/detail/keep.hpp"
 #include "vast/detail/overload.hpp"
 #include "vast/error.hpp"
 #include "vast/expression.hpp"
@@ -367,7 +367,7 @@ std::shared_ptr<arrow::RecordBatch> as_record_batch(const table_slice& slice) {
         // guarantee for the underlying Arrow Buffer object.
         auto batch = state(encoded, slice.state_)->record_batch();
         auto result = std::shared_ptr<arrow::RecordBatch>{
-          batch.get(), detail::keeper{batch, slice}};
+          batch.get(), detail::keep(batch, slice)};
         return result;
       } else {
         // Rebuild the slice as an Arrow-encoded table slice.
