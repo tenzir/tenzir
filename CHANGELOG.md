@@ -14,9 +14,11 @@ Every entry has a category for which we use the following visual abbreviations:
 
 - ⚠️ The Suricata schemas received an overhaul: there now exist `vlan` and
   `in_iface` fields in all types. In addition, VAST ships with new types for
-  `ikev2`, `nfs`, `snmp`, and `tftp`.
+  `ikev2`, `nfs`, `snmp`, `tftp` and `rdp`. The `tls` type gets support for the
+  additional `sni` and `session_resumed` fields.
   [#1176](https://github.com/tenzir/vast/pull/1176)
   [#1180](https://github.com/tenzir/vast/pull/1180)
+  [#1186](https://github.com/tenzir/vast/pull/1186)
   [@satta](https://github.com/satta)
 
 - ⚠️ VAST now listens on port 42000 instead of letting the operating system
