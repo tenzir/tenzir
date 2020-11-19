@@ -361,7 +361,10 @@ std::shared_ptr<arrow::RecordBatch> as_record_batch(const table_slice& slice) {
       if constexpr (std::decay_t<decltype(*state(encoded, slice.state_))>::encoding
                     == table_slice::encoding::arrow) {
         // Get the record batch first, then create a copy that shares the
-        // lifetime with the chunk.
+        // lifetime with the chunk and the original record batch. Capturing the
+        // chunk guarantees that the table slice is valid as long as the
+        // returned record batch is valid, and capturing the batch ensures that
+        // guarantee for the underlying Arrow Buffer object.
         auto batch = state(encoded, slice.state_)->record_batch();
         auto result = std::shared_ptr<arrow::RecordBatch>{
           batch.get(), detail::keeper{batch, slice}};
