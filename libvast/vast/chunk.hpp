@@ -15,6 +15,7 @@
 
 #include "vast/byte.hpp"
 #include "vast/detail/assert.hpp"
+#include "vast/detail/keeper.hpp"
 #include "vast/detail/operators.hpp"
 #include "vast/detail/type_traits.hpp"
 #include "vast/die.hpp"
@@ -77,21 +78,14 @@ public:
   static chunk_ptr make(std::vector<Byte>&& xs) {
     static_assert(sizeof(Byte) == 1);
     VAST_ASSERT(std::size(xs) != 0);
-    auto ys = std::make_shared<std::vector<Byte>>(std::move(xs));
-    auto deleter = [=]() mutable { ys.reset(); };
-    return make(ys->size(), ys->data(), deleter);
+    auto shared = std::make_shared<std::vector<Byte>>(std::move(xs));
+    return make(shared->size(), shared->data(), detail::keeper{shared});
   }
 
   // Construct a chunk by copying a range of bytes.
-  template <typename Byte>
-  static chunk_ptr copy(span<Byte> span) {
-    static_assert(sizeof(Byte) == 1);
-    auto size = span.size();
-    VAST_ASSERT(size > 0);
-    auto chunk = make(size);
-    if (chunk)
-      std::memcpy(chunk->data_, span.data(), size);
-    return chunk;
+  template <typename Byte, size_t Extent>
+  static chunk_ptr copy(span<Byte, Extent> span) {
+    return make(std::vector(span.begin(), span.end()));
   }
 
   /// Memory-maps a chunk from a read-only file.
@@ -157,7 +151,8 @@ public:
   void add_deletion_step(Step&& step) noexcept {
     static_assert(std::is_nothrow_invocable_r_v<void, Step>,
                   "'Step' must have the signature 'void () noexcept'");
-    auto g = [first = std::move(deleter_), second = std::forward<Step>(step)] {
+    auto g = [first = std::move(deleter_),
+              second = std::forward<Step>(step)]() noexcept {
       std::invoke(std::move(first));
       std::invoke(std::move(second));
     };

@@ -16,6 +16,7 @@
 #include "vast/chunk.hpp"
 #include "vast/defaults.hpp"
 #include "vast/detail/assert.hpp"
+#include "vast/detail/keeper.hpp"
 #include "vast/detail/overload.hpp"
 #include "vast/error.hpp"
 #include "vast/expression.hpp"
@@ -363,18 +364,14 @@ std::shared_ptr<arrow::RecordBatch> as_record_batch(const table_slice& slice) {
         // lifetime with the chunk.
         auto batch = state(encoded, slice.state_)->record_batch();
         auto result = std::shared_ptr<arrow::RecordBatch>{
-          batch.get(), [slice, batch](arrow::RecordBatch*) noexcept {
-            VAST_IGNORE_UNUSED(slice);
-            VAST_IGNORE_UNUSED(batch);
-          }};
+          batch.get(), detail::keeper{batch, slice}};
         return result;
       } else {
         // Rebuild the slice as an Arrow-encoded table slice.
         auto copy = rebuild(slice, table_slice::encoding::arrow);
         // Bind the lifetime of the copy (and thus the returned Record Batch) to
         // the lifetime of the original slice.
-        slice.chunk_->add_deletion_step(
-          [copy]() noexcept { VAST_IGNORE_UNUSED(copy); });
+        slice.chunk_->add_deletion_step(detail::keeper{copy});
         return as_record_batch(copy);
       }
     },
