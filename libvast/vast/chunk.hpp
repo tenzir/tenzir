@@ -63,7 +63,7 @@ public:
   /// @param deleter The function to delete the data.
   /// @returns A chunk pointer or `nullptr` on failure.
   /// @pre `size > 0 && static_cast<bool>(deleter)`
-  static chunk_ptr make(size_type size, void* data, deleter_type deleter);
+  static chunk_ptr make(size_type size, const void* data, deleter_type deleter);
 
   /// Construct a chunk from a std::vector of bytes.
   /// @param xs The std::vector of bytes.
@@ -177,7 +177,7 @@ public:
   friend caf::error inspect(caf::deserializer& source, chunk_ptr& x);
 
 private:
-  chunk(void* ptr, size_type size, deleter_type deleter) noexcept;
+  chunk(const void* ptr, size_type size, deleter_type deleter) noexcept;
 
   pointer data_;
   size_type size_;
