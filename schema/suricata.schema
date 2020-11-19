@@ -389,6 +389,55 @@ type suricata.nfs = record {
   }
 }
 
+type suricata.rdp = record {
+  timestamp: time #timestamp,
+  flow_id: count #index=hash,
+  pcap_cnt: count,
+  vlan: list<count>,
+  in_iface: string,
+  src_ip: addr,
+  src_port: port,
+  dest_ip: addr,
+  dest_port: port,
+  proto: string,
+  event_type: string,
+  community_id: string #index=hash,
+  rdp: record {
+    tx_id: count,
+    event_type: string,
+    protocol: string,
+    flags: list<string>,
+    error_code: count,
+    reason: list<string>,
+    cookie: string,
+    client: record {
+      version: string,
+      desktop_width: count,
+      desktop_height: count,
+      physical_width: count,
+      physical_height: count,
+      desktop_orientation: count,
+      scale_factor: count,
+      device_scale_factor: count,
+      color_depth: count,
+      keyboard_layout: string,
+      keyboard_type: string,
+      keyboard_subtype: count,
+      build: string,
+      client_name: string,
+      function_keys: count,
+      product_id: string,
+      capabilities: list<string>,
+      connection_hint: string,
+      ime: string,
+      id: string
+    },
+    server_supports: list<string>,
+    x509_serials: list<string>,
+    channels: list<string>
+  }
+}
+
 type suricata.smb = record {
   timestamp: time #timestamp,
   flow_id: count #index=hash,
