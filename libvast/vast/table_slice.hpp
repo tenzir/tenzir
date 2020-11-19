@@ -156,8 +156,6 @@ public:
   /// Converts a table slice to an Apache Arrow Record Batch.
   /// @returns The pointer to the Record Batch.
   /// @param x The table slice to convert.
-  /// @note The lifetime of the returned Record Batch is bound to the lifetime
-  /// of the converted table slice.
   friend std::shared_ptr<arrow::RecordBatch>
   as_record_batch(const table_slice& x);
 
