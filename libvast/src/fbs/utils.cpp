@@ -22,11 +22,13 @@
 namespace vast::fbs {
 
 chunk_ptr release(flatbuffers::FlatBufferBuilder& builder) {
-  size_t offset;
-  size_t size;
-  auto ptr = builder.ReleaseRaw(size, offset);
-  auto deleter = [=]() { flatbuffers::DefaultAllocator::dealloc(ptr, size); };
-  return chunk::make(size - offset, ptr + offset, deleter);
+  // A previous version of this function manually deleted the buffer in the
+  // deleter with `flatbuffers::DefaultAllocator::dealloc(...)` after using
+  // `builder.ReleaseRaw(...)`, which is not guaranteed to be safe. The detached
+  // buffer returned by `builder.Release()` deletes the buffer in its destructor
+  // with the correct allocator. This ensures that the chunk can correctly
+  // release the memory even if a non-default allocator is used.
+  return chunk::take(builder.Release());
 }
 
 flatbuffers::Verifier make_verifier(span<const byte> xs) {

@@ -23,7 +23,9 @@
 #include <caf/make_counted.hpp>
 #include <caf/serializer.hpp>
 
+#include <cstring>
 #include <fcntl.h>
+#include <memory>
 #include <tuple>
 #include <unistd.h>
 
@@ -32,16 +34,22 @@
 
 namespace vast {
 
-chunk_ptr chunk::make(size_type size) {
-  VAST_ASSERT(size > 0);
-  auto data = new value_type[size];
-  auto deleter = [=] { delete[] data; };
-  return make(size, data, std::move(deleter));
+// -- constructors, destructors, and assignment operators ----------------------
+
+chunk::~chunk() noexcept {
+  if (deleter_)
+    std::invoke(deleter_);
 }
 
-chunk_ptr chunk::make(size_type size, const void* data, deleter_type deleter) {
-  VAST_ASSERT(size > 0);
-  return chunk_ptr{new chunk{data, size, deleter}, false};
+// -- factory functions ------------------------------------------------------
+
+chunk_ptr
+chunk::make(const void* data, size_type size, deleter_type&& deleter) noexcept {
+  return make(view_type{static_cast<pointer>(data), size}, std::move(deleter));
+}
+
+chunk_ptr chunk::make(view_type view, deleter_type&& deleter) noexcept {
+  return chunk_ptr{new chunk{view, std::move(deleter)}, false};
 }
 
 chunk_ptr chunk::mmap(const path& filename, size_type size, size_type offset) {
@@ -60,51 +68,39 @@ chunk_ptr chunk::mmap(const path& filename, size_type size, size_type offset) {
   ::close(fd);
   if (map == MAP_FAILED)
     return {};
-  auto deleter = [=] { ::munmap(map, size); };
-  return make(size, reinterpret_cast<value_type*>(map), deleter);
+  auto deleter = [=]() noexcept { ::munmap(map, size); };
+  return make(map, size, std::move(deleter));
 }
 
-chunk::~chunk() noexcept {
-  deleter_();
-}
+// -- container facade ---------------------------------------------------------
 
-chunk::const_pointer chunk::data() const noexcept {
-  return data_;
+chunk::pointer chunk::data() const noexcept {
+  return view_.data();
 }
 
 chunk::size_type chunk::size() const noexcept {
-  return size_;
+  return view_.size();
 }
 
-chunk::const_iterator chunk::begin() const noexcept {
-  return data_;
+chunk::iterator chunk::begin() const noexcept {
+  return view_.begin();
 }
 
-chunk::const_iterator chunk::end() const noexcept {
-  return data_ + size_;
+chunk::iterator chunk::end() const noexcept {
+  return view_.end();
 }
 
-chunk::value_type chunk::operator[](size_type i) const noexcept {
-  VAST_ASSERT(i < size());
-  return data_[i];
-}
+// -- accessors ----------------------------------------------------------------
 
 chunk_ptr chunk::slice(size_type start, size_type length) const {
-  VAST_ASSERT(start + length <= size());
-  if (length == 0)
+  VAST_ASSERT(start < size());
+  if (length > size() - start)
     length = size() - start;
-  auto self = const_cast<chunk*>(this); // Atomic ref-counting is fine.
-  self->ref();
-  auto deleter = [=]() { self->deref(); };
-  return make(length, data_ + start, deleter);
+  this->ref();
+  return make(view_.subspan(start, length), [=]() noexcept { this->deref(); });
 }
 
-chunk::chunk(const void* ptr, size_type size, deleter_type deleter) noexcept
-  : data_{static_cast<pointer>(const_cast<void*>(ptr))},
-    size_{size},
-    deleter_{deleter} {
-  VAST_ASSERT(deleter_);
-}
+// -- concepts -----------------------------------------------------------------
 
 span<const byte> as_bytes(const chunk_ptr& x) noexcept {
   if (!x)
@@ -119,34 +115,56 @@ caf::error write(const path& filename, const chunk_ptr& x) {
 
 caf::error read(const path& filename, chunk_ptr& x) {
   auto size = file_size(filename);
-  if (!size)
+  if (!size) {
+    x = nullptr;
     return size.error();
-  x = chunk::make(*size);
-  // Okay, we just created it.
-  auto ptr = const_cast<byte*>(reinterpret_cast<const byte*>(x->data()));
-  return io::read(filename, span{ptr, *size});
+  }
+  auto buffer = std::make_unique<chunk::value_type[]>(*size);
+  auto view = span{buffer.get(), *size};
+  if (auto err = io::read(filename, view)) {
+    x = nullptr;
+    return err;
+  }
+  x = chunk::make(view, [buffer = std::move(buffer)]() noexcept {
+    static_cast<void>(buffer);
+  });
+  return caf::none;
 }
 
 caf::error inspect(caf::serializer& sink, const chunk_ptr& x) {
   using vast::detail::narrow;
   if (x == nullptr)
     return sink(uint32_t{0});
-  auto data = const_cast<chunk::pointer>(x->data());
-  return caf::error::eval([&] { return sink(narrow<uint32_t>(x->size())); },
-                          [&] { return sink.apply_raw(x->size(), data); });
+  return caf::error::eval(
+    [&] { return sink(narrow<uint32_t>(x->size())); },
+    [&] { return sink.apply_raw(x->size(), const_cast<byte*>(x->data())); });
 }
 
 caf::error inspect(caf::deserializer& source, chunk_ptr& x) {
-  uint32_t n;
-  if (auto err = source(n))
+  uint32_t size = 0;
+  if (auto err = source(size))
     return err;
-  if (n == 0) {
+  if (size == 0) {
     x = nullptr;
     return caf::none;
   }
-  x = chunk::make(n);
-  auto data = const_cast<chunk::pointer>(x->data());
-  return source.apply_raw(n, data);
+  auto buffer = std::make_unique<chunk::value_type[]>(size);
+  const auto data = buffer.get();
+  if (auto err = source.apply_raw(size, data)) {
+    x = nullptr;
+    return caf::none;
+  }
+  x = chunk::make(data, size, [buffer = std::move(buffer)]() noexcept {
+    static_cast<void>(buffer);
+  });
+  return caf::none;
+}
+
+// -- implementation details ---------------------------------------------------
+
+chunk::chunk(view_type view, deleter_type&& deleter) noexcept
+  : view_{view}, deleter_{std::move(deleter)} {
+  // nop
 }
 
 } // namespace vast

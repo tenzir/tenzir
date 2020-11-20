@@ -47,7 +47,7 @@ posix_filesystem(filesystem_type::stateful_pointer<posix_filesystem_state> self,
       if (auto bytes = io::read(path)) {
         ++self->state.stats.reads.successful;
         ++self->state.stats.reads.bytes += bytes->size();
-        return chunk::make(std::move(*bytes));
+        return chunk::take(std::move(*bytes));
       } else {
         ++self->state.stats.reads.failed;
         return bytes.error();
