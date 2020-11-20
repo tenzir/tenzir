@@ -506,15 +506,9 @@ active_partition(caf::stateful_actor<active_partition_state>* self, uuid id,
         return;
       }
       VAST_ASSERT(self->state.persist_path);
-      auto fb = builder.Release();
-      // TODO: This is duplicating code from one of the `chunk` constructors,
-      // but otoh its maybe better to be explicit that we're creating a shared
-      // pointer here.
-      auto ys = std::make_shared<flatbuffers::DetachedBuffer>(std::move(fb));
-      auto deleter = [=]() mutable { ys.reset(); };
-      auto fbchunk = chunk::make(ys->size(), ys->data(), deleter);
-      VAST_DEBUG(self, "persists partition with a total size of", ys->size(),
-                 "bytes");
+      auto fbchunk = fbs::release(builder);
+      VAST_DEBUG(self, "persists partition with a total size of",
+                 fbchunk->size(), "bytes");
       self->state.persistence_promise.delegate(self->state.fs_actor,
                                                atom::write_v,
                                                *self->state.persist_path,
