@@ -5,6 +5,9 @@ let
   stdenv = if prev.stdenv.isDarwin then final.llvmPackages_10.stdenv else final.stdenv;
 in {
   nix-gitDescribe = final.callPackage ./gitDescribe.nix {};
+  arrow-cpp-no-simd = (prev.arrow-cpp.override {enableShared = !static_stdenv;}).overrideAttrs (old: {
+    cmakeFlags = old.cmakeFlags ++ [ "-DARROW_SIMD_LEVEL=NONE" ];
+  });
   caf = let
     source = builtins.fromJSON (builtins.readFile ./caf/source.json);
     in (prev.caf.override {inherit stdenv;}).overrideAttrs (old: {
@@ -35,5 +38,8 @@ in {
   broker = final.callPackage ./broker {inherit stdenv; python = final.python3;};
   vast-source = final.nix-gitignore.gitignoreSource [] ./..;
   vast = final.callPackage ./vast {inherit stdenv;};
-  vast-ci = final.vast.override {buildType = "CI";};
+  vast-ci = final.vast.override {
+    buildType = "CI";
+    arrow-cpp = final.arrow-cpp-no-simd;
+  };
 }
