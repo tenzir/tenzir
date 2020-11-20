@@ -61,7 +61,10 @@ private:
         // Creating a record with repeated field names technically violates
         // the consistency of the underlying stable_map. We live with that
         // until record is refactored into a proper type (FIXME).
-      | '<' >> ~as<record>(unnamed_field % ',') >> trailing_comma >> '>';
+      | ('<' >> (unnamed_field % ',') >> trailing_comma >> '>')
+        ->* [](record::vector_type&& xs) {
+          return record::unsafe_coerce(std::move(xs));
+        };
     p = parsers::time
       | parsers::duration
       | parsers::net

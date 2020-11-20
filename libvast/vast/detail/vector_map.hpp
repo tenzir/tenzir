@@ -236,7 +236,15 @@ public:
     return xs.xs_;
   }
 
+  static vector_map unsafe_coerce(vector_type&& xs) {
+    return vector_map{std::move(xs)};
+  }
+
 private:
+  vector_map(vector_type&& xs) : xs_{std::move(xs)} {
+    // nop
+  }
+
   vector_type xs_;
 };
 
