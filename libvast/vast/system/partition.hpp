@@ -80,9 +80,11 @@ struct active_partition_state {
 
   /// Partition synopsis for this partition. This is built up in parallel
   /// to the one in the index, so it can be shrinked and serialized into
-  /// a `Partition` flatbuffer upon completion of this partition. Wrapped
-  /// into a unique_ptr so it can be sent to the index after its not needed
-  /// here anymore.
+  /// a `Partition` flatbuffer upon completion of this partition. Will be
+  /// sent back to the partition after persisting to minimize memory footprint
+  /// of the meta index.
+  /// Semantically this should be a unique_ptr, but caf requires message
+  /// types to be copy-constructible.
   std::shared_ptr<partition_synopsis> synopsis;
 
   /// Options to be used when adding events to the partition_synopsis.
@@ -179,13 +181,12 @@ caf::error unpack(const fbs::partition::v0& x, partition_synopsis& y);
 /// @param self The partition actor.
 /// @param id The UUID of this partition.
 /// @param fs The actor handle of the filesystem actor.
-/// @param index (optional) The actor handle of the index, to send the minified
-/// partitions to.
 /// @param index_opts Settings that are forwarded when creating indexers.
+/// @param synopsis_opts Settings that are forwarded when creating synopses.
 caf::behavior
 active_partition(caf::stateful_actor<active_partition_state>* self, uuid id,
-                 caf::optional<caf::actor> index, filesystem_type fs,
-                 caf::settings index_opts, caf::settings synopsis_opts);
+                 filesystem_type fs, caf::settings index_opts,
+                 caf::settings synopsis_opts);
 
 /// Spawns a read-only partition.
 /// @param self The partition actor.

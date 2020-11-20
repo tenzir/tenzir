@@ -181,9 +181,8 @@ TEST(full partition roundtrip) {
     vast::system::posix_filesystem,
     directory); // `directory` is provided by the unit test fixture
   auto partition_uuid = vast::uuid::random();
-  auto partition = sys.spawn(vast::system::active_partition, partition_uuid,
-                             caf::optional<caf::actor>{}, fs, caf::settings{},
-                             caf::settings{});
+  auto partition = sys.spawn(vast::system::active_partition, partition_uuid, fs,
+                             caf::settings{}, caf::settings{});
   run();
   REQUIRE(partition);
   // Add data to the partition.
@@ -199,8 +198,9 @@ TEST(full partition roundtrip) {
   // Persist the partition to disk;
   vast::path persist_path = "test-partition"; // will be interpreted relative to
                                               // the fs actor's root dir
-  auto persist_promise = self->request(partition, caf::infinite,
-                                       vast::atom::persist_v, persist_path);
+  auto persist_promise
+    = self->request(partition, caf::infinite, vast::atom::persist_v,
+                    persist_path, caf::actor{});
   run();
   persist_promise.receive([](vast::atom::ok) { CHECK("persisting done"); },
                           [](caf::error err) { FAIL(err); });

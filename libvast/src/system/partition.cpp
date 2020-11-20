@@ -342,15 +342,15 @@ caf::error unpack(const fbs::partition::v0& x, partition_synopsis& ps) {
 
 caf::behavior
 active_partition(caf::stateful_actor<active_partition_state>* self, uuid id,
-                 caf::optional<caf::actor> index, filesystem_type fs,
-                 caf::settings index_opts, caf::settings synopsis_opts) {
+                 filesystem_type fs, caf::settings index_opts,
+                 caf::settings synopsis_opts) {
   self->state.self = self;
   self->state.name = "partition-" + to_string(id);
   self->state.id = id;
   self->state.offset = vast::invalid_id;
   self->state.events = 0;
   self->state.fs_actor = fs;
-  self->state.index_actor = index ? *index : nullptr;
+  self->state.index_actor = nullptr;
   self->state.streaming_initiated = false;
   self->state.synopsis = std::make_shared<partition_synopsis>();
   self->state.synopsis_opts = std::move(synopsis_opts);
@@ -451,8 +451,9 @@ active_partition(caf::stateful_actor<active_partition_state>* self, uuid id,
       self->state.streaming_initiated = true;
       return self->state.stage->add_inbound_path(in);
     },
-    [=](atom::persist, const path& part_dir) {
+    [=](atom::persist, const path& part_dir, caf::actor index) {
       auto& st = self->state;
+      st.index_actor = index;
       // Using `source()` to check if the promise was already initialized.
       if (!st.persistence_promise.source())
         st.persistence_promise = self->make_response_promise();
@@ -467,7 +468,7 @@ active_partition(caf::stateful_actor<active_partition_state>* self, uuid id,
           || !self->state.stage->inbound_paths().empty()
           || !self->state.stage->idle()) {
         VAST_DEBUG(self, "waits for stream before persisting");
-        self->delayed_send(self, 50ms, atom::persist_v, part_dir);
+        self->delayed_send(self, 50ms, atom::persist_v, part_dir, index);
         return st.persistence_promise;
       }
       self->state.stage->out().fan_out_flush();
@@ -523,14 +524,6 @@ active_partition(caf::stateful_actor<active_partition_state>* self, uuid id,
         self->send(self->state.index_actor, self->state.synopsis);
         self->state.synopsis.reset();
       }
-      // TODO: This is duplicating code from one of the `chunk` constructors,
-      // but otoh its maybe better to be explicit that we're creating a shared
-      // pointer here.
-      auto ys = std::make_shared<flatbuffers::DetachedBuffer>(std::move(fb));
-      auto deleter = [=]() mutable { ys.reset(); };
-      auto fbchunk = chunk::make(ys->size(), ys->data(), deleter);
-      VAST_DEBUG(self, "persists partition with a total size of", ys->size(),
-                 "bytes");
       self->state.persistence_promise.delegate(self->state.fs_actor,
                                                atom::write_v,
                                                *self->state.persist_path,

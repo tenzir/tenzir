@@ -22,6 +22,7 @@
 
 #include <vast/address.hpp>
 #include <vast/detail/assert.hpp>
+#include <vast/error.hpp>
 #include <vast/logger.hpp>
 
 namespace vast {
@@ -54,64 +55,80 @@ public:
   }
 };
 
-/// A synopsis for IP addresses that stores a copy of the input to
-/// be able to construct a smaller bloom filter from this data at
-/// some point using the `shrink` function.
+/// A synopsis for IP addresses that stores a full copy of the input in a hash
+/// table to be able to construct a smaller bloom filter synopsis for this data
+/// at a later point in time using the `shrink` function.
 template <class HashFunction>
-class buffered_address_synopsis
-  : public bloom_filter_synopsis<address, HashFunction> {
+class buffered_address_synopsis : public synopsis {
 public:
-  using super = bloom_filter_synopsis<address, HashFunction>;
-
-  buffered_address_synopsis(type x, typename super::bloom_filter_type bf)
-    : super{std::move(x), std::move(bf)} {
+  buffered_address_synopsis(vast::type x, double p)
+    : synopsis{std::move(x)}, p_{p} {
   }
 
-  void add(data_view x) override {
-    auto addr_view = caf::get_if<view<address>>(&x);
-    VAST_ASSERT(addr_view);
-    ips_.push_back(*addr_view);
-    super::add(x);
-  }
-
-  synopsis_ptr shrink() override {
-    // The bloom_filter doesnt store its `p`, so we parse the type to get it,
-    // which was enriched with this information in `make_address_synopsis()`.
-    auto& type = this->type();
-    auto old_params = parse_parameters(type);
-    if (!old_params)
-      return nullptr;
-    std::sort(ips_.begin(), ips_.end());
-    auto end = std::unique(ips_.begin(), ips_.end());
-    auto begin = ips_.begin();
-    auto n = std::distance(begin, end);
-    ips_.resize(n);
+  synopsis_ptr shrink() const override {
     size_t next_power_of_two = 1ull;
     while (ips_.size() > next_power_of_two)
       next_power_of_two *= 2;
     bloom_filter_parameters params;
-    params.p = old_params->p;
+    params.p = p_;
     params.n = next_power_of_two;
-    VAST_DEBUG_ANON("shrinked address synopsis from", old_params->n, "to", n);
+    VAST_DEBUG_ANON("shrinked address synopsis to", params.n, "elements");
+    auto& type = this->type();
     auto shrinked_synopsis
       = make_address_synopsis<xxhash64>(type, std::move(params));
     if (!shrinked_synopsis)
       return nullptr;
-    for (auto it = begin; it != end; ++it)
-      shrinked_synopsis->add(*it);
+    for (auto addr : ips_)
+      shrinked_synopsis->add(addr);
     return shrinked_synopsis;
   }
 
+  // Implementation of the remainder of the `synopsis` API.
+  void add(data_view x) override {
+    auto addr_view = caf::get_if<view<address>>(&x);
+    VAST_ASSERT(addr_view);
+    ips_.insert(*addr_view);
+  }
+
+  caf::optional<bool>
+  lookup(relational_operator op, data_view rhs) const override {
+    switch (op) {
+      default:
+        return caf::none;
+      case equal:
+        return ips_.count(caf::get<view<address>>(rhs));
+      case in: {
+        if (auto xs = caf::get_if<view<list>>(&rhs)) {
+          for (auto x : **xs)
+            if (ips_.count(caf::get<view<address>>(x)))
+              return true;
+          return false;
+        }
+        return caf::none;
+      }
+    }
+  }
+
+  caf::error serialize(caf::serializer&) const override {
+    return make_error(ec::logic_error, "attempted to serialize a "
+                                       "buffered_address_synopsis; did you "
+                                       "forget to shrink?");
+  }
+
+  caf::error deserialize(caf::deserializer&) override {
+    return make_error(ec::logic_error, "attempted to deserialize a "
+                                       "buffered_address_synopsis");
+  }
+
   bool equals(const synopsis& other) const noexcept override {
-    if (typeid(other) != typeid(buffered_address_synopsis))
-      return false;
-    auto& rhs = static_cast<const buffered_address_synopsis&>(other);
-    return this->type() == rhs.type()
-           && this->bloom_filter_ == rhs.bloom_filter_;
+    if (auto* p = dynamic_cast<const buffered_address_synopsis*>(&other))
+      return ips_ == p->ips_;
+    return false;
   }
 
 private:
-  std::vector<vast::address> ips_;
+  double p_;
+  std::unordered_set<vast::address> ips_;
 };
 
 /// Factory to construct an IP address synopsis.
@@ -145,17 +162,14 @@ make_address_synopsis(vast::type type, bloom_filter_parameters params,
 /// @pre `caf::holds_alternative<address_type>(type)`.
 /// @relates address_synopsis
 template <class HashFunction>
-synopsis_ptr
-make_buffered_address_synopsis(vast::type type, bloom_filter_parameters params,
-                               std::vector<size_t> seeds = {}) {
+synopsis_ptr make_buffered_address_synopsis(vast::type type,
+                                            bloom_filter_parameters params) {
   VAST_ASSERT(caf::holds_alternative<address_type>(type));
-  auto x = make_bloom_filter<HashFunction>(std::move(params), std::move(seeds));
-  if (!x) {
-    VAST_WARNING_ANON(__func__, "failed to construct Bloom filter");
+  if (!params.p) {
     return nullptr;
   }
   using synopsis_type = buffered_address_synopsis<HashFunction>;
-  return std::make_unique<synopsis_type>(std::move(type), std::move(*x));
+  return std::make_unique<synopsis_type>(std::move(type), *params.p);
 }
 
 /// Factory to construct an IP address synopsis. This overload looks for a type
@@ -191,7 +205,6 @@ synopsis_ptr make_address_synopsis(vast::type type, const caf::settings& opts) {
   // Create either a a buffered_address_synopsis or a plain address synopsis
   // depending on the callers preference.
   auto buffered = caf::get_or(opts, "buffer-ips", false);
-  VAST_WARNING_ANON("options are", opts, "so we are", buffered);
   auto result
     = buffered
         ? make_buffered_address_synopsis<HashFunction>(std::move(t), params)

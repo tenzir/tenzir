@@ -51,14 +51,15 @@ public:
   /// the predicate.
   /// @param op The operator of the predicate.
   /// @param rhs The RHS of the predicate.
+  /// @pre: The query has already been type-checked.
   /// @returns The evaluation result of `*this op rhs`.
   virtual caf::optional<bool> lookup(relational_operator op,
                                      data_view rhs) const = 0;
 
   /// Returns a new synopsis with the same data but consuming less memory,
   /// or `nullptr` if that is not possible.
-  /// This only makes sense for the `buffered_address_synopsis`.
-  virtual synopsis_ptr shrink();
+  /// This currently only makes sense for the `buffered_address_synopsis`.
+  virtual synopsis_ptr shrink() const;
 
   /// Tests whether two objects are equal.
   virtual bool equals(const synopsis& other) const noexcept = 0;

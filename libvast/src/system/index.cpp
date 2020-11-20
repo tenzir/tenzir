@@ -466,10 +466,8 @@ index(caf::stateful_actor<index_state>* self, filesystem_type fs, path dir,
     auto id = uuid::random();
     caf::settings index_opts;
     index_opts["cardinality"] = partition_capacity;
-    auto part
-      = self->spawn(active_partition, id, caf::actor_cast<caf::actor>(self),
-                    self->state.filesystem, index_opts,
-                    self->state.meta_idx.factory_options());
+    auto part = self->spawn(active_partition, id, self->state.filesystem,
+                            index_opts, self->state.meta_idx.factory_options());
     auto slot = self->state.stage->add_outbound_path(part);
     self->state.active_partition.actor = part;
     self->state.active_partition.stream_slot = slot;
@@ -491,7 +489,9 @@ index(caf::stateful_actor<index_state>* self, filesystem_type fs, path dir,
     // Persist active partition asynchronously.
     auto part_dir = dir / to_string(id);
     VAST_DEBUG(self, "persists active partition to", part_dir);
-    self->request(actor, caf::infinite, atom::persist_v, part_dir)
+    self
+      ->request(actor, caf::infinite, atom::persist_v, part_dir,
+                caf::actor_cast<caf::actor>(self))
       .then(
         [=](atom::ok) {
           VAST_DEBUG(self, "successfully persisted partition", id);

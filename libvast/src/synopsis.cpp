@@ -42,7 +42,7 @@ const vast::type& synopsis::type() const {
   return type_;
 }
 
-synopsis_ptr synopsis::shrink() {
+synopsis_ptr synopsis::shrink() const {
   return nullptr;
 }
 
