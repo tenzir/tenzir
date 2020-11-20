@@ -1,3 +1,6 @@
+// Alias for transport-layer ports.
+type port = count
+
 type suricata.component.common = record {
   timestamp: time #timestamp,
   flow_id: count #index=hash,

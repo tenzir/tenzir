@@ -6,9 +6,9 @@ done with current reader, rows: 10
 duration: int64
 history: string
 id.orig_h: fixed_size_binary[16]
-id.orig_p: fixed_size_binary[3]
+id.orig_p: uint64
 id.resp_h: fixed_size_binary[16]
-id.resp_p: fixed_size_binary[3]
+id.resp_p: uint64
 local_orig: bool
 missed_bytes: uint64
 name: 'zeek.conn'
