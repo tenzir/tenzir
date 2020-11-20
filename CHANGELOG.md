@@ -12,6 +12,9 @@ Every entry has a category for which we use the following visual abbreviations:
 
 ## Unreleased
 
+- 🐞 VAST no longer blocks when an invalid query operation is issued.
+  [#1189](https://github.com/tenzir/vast/pull/1189)
+
 - ⚠️ The Suricata schemas received an overhaul: there now exist `vlan` and
   `in_iface` fields in all types. In addition, VAST ships with new types for
   `ikev2`, `nfs`, `snmp`, `tftp` and `rdp`. The `tls` type gets support for the
