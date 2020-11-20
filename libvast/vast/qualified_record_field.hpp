@@ -65,6 +65,10 @@ struct qualified_record_field
   }
 };
 
+// Converts from a `qualified_record_field` to a `record_field` by "forgetting"
+// the distinction between the layout name and the field name of the former,
+// and joining them together into one long field name. For example, the field
+// `dns.rrname` in layout `suricata.dns` becomes `suricata.dns.dns.rrname`.
 record_field as_record_field(const qualified_record_field& qf);
 
 } // namespace vast
