@@ -64,20 +64,79 @@ TEST(concepts - cyclic definition) {
 TEST(models - convert from data) {
   auto x = data{list{
     record{{"model", record{{"name", "foo"},
-                            {"concepts", list{"a.fo0", "b.foO", "x.foe"}}}}},
+                            {"definition", list{"a.fo0", "b.foO", "x.foe"}}}}},
     record{{"model", record{{"name", "bar"},
-                            {"concepts", list{"a.bar", "b.baR"}},
-                            {"models", list{"foo"}}}}}}};
+                            {"definition", list{"a.bar", "b.baR", "foo"}}}}}}};
   auto ref = models_map{{{"foo", {"", {"a.fo0", "b.foO", "x.foe"}}},
                          {"bar", {"", {"a.bar", "b.baR", "foo"}}}}};
   auto test = unbox(extract_models(x));
   CHECK_EQUAL(test, ref);
   auto x2 = data{list{
     record{{"model", record{{"name", "foo"},
-                            {"concepts", list{"a.fo0", "b.foO", "x.foe"}}}}},
+                            {"definition", list{"a.fo0", "b.foO", "x.foe"}}}}},
     record{{"model",
-            record{{"name", "foo"}, {"concepts", list{"a.bar", "b.baR"}}}}}}};
+            record{{"name", "foo"}, {"definition", list{"a.bar", "b.baR"}}}}}}};
   auto test2 = extract_models(x2);
   REQUIRE(!test2);
   CHECK_EQUAL(test2.error(), ec::convert_error);
+}
+
+TEST(models - simple) {
+  auto c = concepts_map{{{"foo", {"", {"a.fo0", "b.foO", "c.foe"}, {}}},
+                         {"bar", {"", {"a.bar", "b.baR"}, {}}},
+                         {"baz", {"", {"a.BAZ", "c.baz"}, {}}}}};
+  auto m = models_map{{{"x", {"", {"foo", "bar"}}},
+                       {"y", {"", {"x", "baz"}}},
+                       {"z", {"", {"y"}}}}};
+  auto t = taxonomies{std::move(c), std::move(m)};
+  {
+    MESSAGE("named");
+    auto exp = unbox(to<expression>("x == <foo: 1, bar: 2>"));
+    auto ref
+      = unbox(to<expression>("(a.fo0 == 1 || b.foO == 1 || c.foe == 1) && "
+                             "(a.bar == 2 || b.baR == 2)"));
+    auto result = resolve(t, exp);
+    CHECK_EQUAL(result, ref);
+  }
+  {
+    MESSAGE("named - subset");
+    auto exp = unbox(to<expression>("x == <bar: 2>"));
+    auto ref = unbox(to<expression>("a.bar == 2 || b.baR == 2"));
+    auto result = resolve(t, exp);
+    CHECK_EQUAL(result, ref);
+  }
+  {
+    MESSAGE("model composition - unnamed fields query");
+    auto exp = unbox(to<expression>("y == <bar: 2, baz: F>"));
+    auto ref = unbox(to<expression>("(a.bar == 2 || b.baR == 2) && (a.BAZ == F "
+                                    "|| c.baz == F)"));
+    auto result = resolve(t, exp);
+    CHECK_EQUAL(result, ref);
+  }
+  {
+    MESSAGE("unnamed");
+    auto exp = unbox(to<expression>("x == <1, 2>"));
+    auto ref
+      = unbox(to<expression>("(a.fo0 == 1 || b.foO == 1 || c.foe == 1) && "
+                             "(a.bar == 2 || b.baR == 2)"));
+    auto result = resolve(t, exp);
+    CHECK_EQUAL(result, ref);
+  }
+  {
+    MESSAGE("model composition - named fields query");
+    auto exp = unbox(to<expression>("y == <_, 2, F>"));
+    auto ref = unbox(to<expression>("(a.bar == 2 || b.baR == 2) && (a.BAZ == F "
+                                    "|| c.baz == F)"));
+    auto result = resolve(t, exp);
+    CHECK_EQUAL(result, ref);
+  }
+  {
+    MESSAGE("model composition - multiple nested models");
+    auto named = unbox(to<expression>("z == <bar: 2, baz: F>"));
+    auto unnamed = unbox(to<expression>("z == <_, 2, F>"));
+    auto ref = unbox(to<expression>("(a.bar == 2 || b.baR == 2) && (a.BAZ == F "
+                                    "|| c.baz == F)"));
+    CHECK_EQUAL(resolve(t, named), ref);
+    CHECK_EQUAL(resolve(t, unnamed), ref);
+  }
 }
