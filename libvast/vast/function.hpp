@@ -18,10 +18,11 @@
 // Original Revision: 87b28ccd33203e81ea30f1f706400b11bb2fe5ec
 // Includes code from https://github.com/Naios/function2
 
-#ifndef FU2_INCLUDED_FUNCTION2_HPP_
-#define FU2_INCLUDED_FUNCTION2_HPP_
+#pragma once
 
-#include <cassert>
+#include "vast/detail/assert.hpp"
+#include "vast/fwd.hpp"
+
 #include <cstddef>
 #include <cstdlib>
 #include <memory>
@@ -31,117 +32,118 @@
 
 // Defines:
 // - FU2_HAS_DISABLED_EXCEPTIONS
-#if defined(FU2_WITH_DISABLED_EXCEPTIONS) ||                                   \
-    defined(FU2_MACRO_DISABLE_EXCEPTIONS)
-#define FU2_HAS_DISABLED_EXCEPTIONS
+#if defined(FU2_WITH_DISABLED_EXCEPTIONS)                                      \
+  || defined(FU2_MACRO_DISABLE_EXCEPTIONS)
+#  define FU2_HAS_DISABLED_EXCEPTIONS
 #else // FU2_WITH_DISABLED_EXCEPTIONS
-#if defined(_MSC_VER)
-#if !defined(_HAS_EXCEPTIONS) || (_HAS_EXCEPTIONS == 0)
-#define FU2_HAS_DISABLED_EXCEPTIONS
-#endif
-#elif defined(__clang__)
-#if !(__EXCEPTIONS && __has_feature(cxx_exceptions))
-#define FU2_HAS_DISABLED_EXCEPTIONS
-#endif
-#elif defined(__GNUC__)
-#if !__EXCEPTIONS
-#define FU2_HAS_DISABLED_EXCEPTIONS
-#endif
-#endif
+#  if defined(_MSC_VER)
+#    if !defined(_HAS_EXCEPTIONS) || (_HAS_EXCEPTIONS == 0)
+#      define FU2_HAS_DISABLED_EXCEPTIONS
+#    endif
+#  elif defined(__clang__)
+#    if !(__EXCEPTIONS && __has_feature(cxx_exceptions))
+#      define FU2_HAS_DISABLED_EXCEPTIONS
+#    endif
+#  elif defined(__GNUC__)
+#    if !__EXCEPTIONS
+#      define FU2_HAS_DISABLED_EXCEPTIONS
+#    endif
+#  endif
 #endif // FU2_WITH_DISABLED_EXCEPTIONS
 // - FU2_HAS_NO_FUNCTIONAL_HEADER
-#if !defined(FU2_WITH_NO_FUNCTIONAL_HEADER) &&                                 \
-    !defined(FU2_NO_FUNCTIONAL_HEADER) &&                                      \
-    !defined(FU2_HAS_DISABLED_EXCEPTIONS)
-#include <functional>
+#if !defined(FU2_WITH_NO_FUNCTIONAL_HEADER)                                    \
+  && !defined(FU2_NO_FUNCTIONAL_HEADER)                                        \
+  && !defined(FU2_HAS_DISABLED_EXCEPTIONS)
+#  include <functional>
 #else
-#define FU2_HAS_NO_FUNCTIONAL_HEADER
+#  define FU2_HAS_NO_FUNCTIONAL_HEADER
 #endif
 // - FU2_HAS_CXX17_NOEXCEPT_FUNCTION_TYPE
 #if defined(FU2_WITH_CXX17_NOEXCEPT_FUNCTION_TYPE)
-#define FU2_HAS_CXX17_NOEXCEPT_FUNCTION_TYPE
+#  define FU2_HAS_CXX17_NOEXCEPT_FUNCTION_TYPE
 #else // FU2_WITH_CXX17_NOEXCEPT_FUNCTION_TYPE
-#if defined(_MSC_VER)
-#if defined(_HAS_CXX17) && _HAS_CXX17
-#define FU2_HAS_CXX17_NOEXCEPT_FUNCTION_TYPE
-#endif
-#elif defined(__cpp_noexcept_function_type)
-#define FU2_HAS_CXX17_NOEXCEPT_FUNCTION_TYPE
-#elif defined(__cplusplus) && (__cplusplus >= 201703L)
-#define FU2_HAS_CXX17_NOEXCEPT_FUNCTION_TYPE
-#endif
+#  if defined(_MSC_VER)
+#    if defined(_HAS_CXX17) && _HAS_CXX17
+#      define FU2_HAS_CXX17_NOEXCEPT_FUNCTION_TYPE
+#    endif
+#  elif defined(__cpp_noexcept_function_type)
+#    define FU2_HAS_CXX17_NOEXCEPT_FUNCTION_TYPE
+#  elif defined(__cplusplus) && (__cplusplus >= 201703L)
+#    define FU2_HAS_CXX17_NOEXCEPT_FUNCTION_TYPE
+#  endif
 #endif // FU2_WITH_CXX17_NOEXCEPT_FUNCTION_TYPE
 
 // - FU2_HAS_NO_EMPTY_PROPAGATION
 #if defined(FU2_WITH_NO_EMPTY_PROPAGATION)
-#define FU2_HAS_NO_EMPTY_PROPAGATION
+#  define FU2_HAS_NO_EMPTY_PROPAGATION
 #endif // FU2_WITH_NO_EMPTY_PROPAGATION
 
 #if !defined(FU2_HAS_DISABLED_EXCEPTIONS)
-#include <exception>
+#  include <exception>
 #endif
 
 #if defined(__cpp_constexpr) && (__cpp_constexpr >= 201304)
-#define FU2_DETAIL_CXX14_CONSTEXPR constexpr
+#  define FU2_DETAIL_CXX14_CONSTEXPR constexpr
 #elif defined(__clang__) && defined(__has_feature)
-#if __has_feature(__cxx_generic_lambdas__) &&                                  \
-    __has_feature(__cxx_relaxed_constexpr__)
-#define FU2_DETAIL_CXX14_CONSTEXPR constexpr
-#endif
+#  if __has_feature(__cxx_generic_lambdas__)                                   \
+    && __has_feature(__cxx_relaxed_constexpr__)
+#    define FU2_DETAIL_CXX14_CONSTEXPR constexpr
+#  endif
 #elif defined(_MSC_VER) && (_MSC_VER >= 1915) && (_MSVC_LANG >= 201402)
-#define FU2_DETAIL_CXX14_CONSTEXPR constexpr
+#  define FU2_DETAIL_CXX14_CONSTEXPR constexpr
 #endif
 #ifndef FU2_DETAIL_CXX14_CONSTEXPR
-#define FU2_DETAIL_CXX14_CONSTEXPR
+#  define FU2_DETAIL_CXX14_CONSTEXPR
 #endif
 
 /// Hint for the compiler that this point should be unreachable
 #if defined(_MSC_VER)
 // NOLINTNEXTLINE(cppcoreguidelines-macro-usage)
-#define FU2_DETAIL_UNREACHABLE_INTRINSIC() __assume(false)
+#  define FU2_DETAIL_UNREACHABLE_INTRINSIC() __assume(false)
 #elif defined(__GNUC__)
 // NOLINTNEXTLINE(cppcoreguidelines-macro-usage)
-#define FU2_DETAIL_UNREACHABLE_INTRINSIC() __builtin_unreachable()
+#  define FU2_DETAIL_UNREACHABLE_INTRINSIC() __builtin_unreachable()
 #elif defined(__has_builtin)
-#if __has_builtin(__builtin_unreachable)
+#  if __has_builtin(__builtin_unreachable)
 // NOLINTNEXTLINE(cppcoreguidelines-macro-usage)
-#define FU2_DETAIL_UNREACHABLE_INTRINSIC() __builtin_unreachable()
-#endif
+#    define FU2_DETAIL_UNREACHABLE_INTRINSIC() __builtin_unreachable()
+#  endif
 #endif
 #ifndef FU2_DETAIL_UNREACHABLE_INTRINSIC
 // NOLINTNEXTLINE(cppcoreguidelines-macro-usage)
-#define FU2_DETAIL_UNREACHABLE_INTRINSIC() abort()
+#  define FU2_DETAIL_UNREACHABLE_INTRINSIC() abort()
 #endif
 
 /// Causes the application to exit abnormally
 #if defined(_MSC_VER)
 // NOLINTNEXTLINE(cppcoreguidelines-macro-usage)
-#define FU2_DETAIL_TRAP() __debugbreak()
+#  define FU2_DETAIL_TRAP() __debugbreak()
 #elif defined(__GNUC__)
 // NOLINTNEXTLINE(cppcoreguidelines-macro-usage)
-#define FU2_DETAIL_TRAP() __builtin_trap()
+#  define FU2_DETAIL_TRAP() __builtin_trap()
 #elif defined(__has_builtin)
-#if __has_builtin(__builtin_trap)
+#  if __has_builtin(__builtin_trap)
 // NOLINTNEXTLINE(cppcoreguidelines-macro-usage)
-#define FU2_DETAIL_TRAP() __builtin_trap()
-#endif
+#    define FU2_DETAIL_TRAP() __builtin_trap()
+#  endif
 #endif
 #ifndef FU2_DETAIL_TRAP
 // NOLINTNEXTLINE(cppcoreguidelines-macro-usage)
-#define FU2_DETAIL_TRAP() *(volatile int*)0x11 = 0
+#  define FU2_DETAIL_TRAP() *(volatile int*) 0x11 = 0
 #endif
 
 #ifndef NDEBUG
 // NOLINTNEXTLINE(cppcoreguidelines-macro-usage)
-#define FU2_DETAIL_UNREACHABLE() ::fu2::detail::unreachable_debug()
+#  define FU2_DETAIL_UNREACHABLE() ::vast::detail::fu2::unreachable_debug()
 #else
 // NOLINTNEXTLINE(cppcoreguidelines-macro-usage)
-#define FU2_DETAIL_UNREACHABLE() FU2_DETAIL_UNREACHABLE_INTRINSIC()
+#  define FU2_DETAIL_UNREACHABLE() FU2_DETAIL_UNREACHABLE_INTRINSIC()
 #endif
 
-namespace fu2 {
-inline namespace abi_400 {
-namespace detail {
+namespace vast {
+
+namespace detail::fu2 {
+
 template <typename Config, typename Property>
 class function;
 
@@ -196,8 +198,8 @@ struct property {
   static constexpr auto const is_throwing = Throws;
 
   // Is true when the function throws an exception on empty invocation.
-  static constexpr auto const is_strong_exception_guaranteed =
-      HasStrongExceptGuarantee;
+  static constexpr auto const is_strong_exception_guaranteed
+    = HasStrongExceptGuarantee;
 };
 
 #ifndef NDEBUG
@@ -212,25 +214,22 @@ namespace invocation {
 /// Invokes the given callable object with the given arguments
 template <typename Callable, typename... Args>
 constexpr auto invoke(Callable&& callable, Args&&... args) noexcept(
-    noexcept(std::forward<Callable>(callable)(std::forward<Args>(args)...)))
-    -> decltype(std::forward<Callable>(callable)(std::forward<Args>(args)...)) {
-
+  noexcept(std::forward<Callable>(callable)(std::forward<Args>(args)...)))
+  -> decltype(std::forward<Callable>(callable)(std::forward<Args>(args)...)) {
   return std::forward<Callable>(callable)(std::forward<Args>(args)...);
 }
 /// Invokes the given member function pointer by reference
 template <typename T, typename Type, typename Self, typename... Args>
 constexpr auto invoke(Type T::*member, Self&& self, Args&&... args) noexcept(
-    noexcept((std::forward<Self>(self).*member)(std::forward<Args>(args)...)))
-    -> decltype((std::forward<Self>(self).*
-                 member)(std::forward<Args>(args)...)) {
+  noexcept((std::forward<Self>(self).*member)(std::forward<Args>(args)...)))
+  -> decltype((std::forward<Self>(self).*member)(std::forward<Args>(args)...)) {
   return (std::forward<Self>(self).*member)(std::forward<Args>(args)...);
 }
 /// Invokes the given member function pointer by pointer
 template <typename T, typename Type, typename Self, typename... Args>
 constexpr auto invoke(Type T::*member, Self&& self, Args&&... args) noexcept(
-    noexcept((std::forward<Self>(self)->*member)(std::forward<Args>(args)...)))
-    -> decltype(
-        (std::forward<Self>(self)->*member)(std::forward<Args>(args)...)) {
+  noexcept((std::forward<Self>(self)->*member)(std::forward<Args>(args)...)))
+  -> decltype((std::forward<Self>(self)->*member)(std::forward<Args>(args)...)) {
   return (std::forward<Self>(self)->*member)(std::forward<Args>(args)...);
 }
 /// Invokes the given pointer to a scalar member by reference
@@ -238,7 +237,7 @@ template <typename T, typename Type, typename Self>
 constexpr auto
 invoke(Type T::*member,
        Self&& self) noexcept(noexcept(std::forward<Self>(self).*member))
-    -> decltype(std::forward<Self>(self).*member) {
+  -> decltype(std::forward<Self>(self).*member) {
   return (std::forward<Self>(self).*member);
 }
 /// Invokes the given pointer to a scalar member by pointer
@@ -246,7 +245,7 @@ template <typename T, typename Type, typename Self>
 constexpr auto
 invoke(Type T::*member,
        Self&& self) noexcept(noexcept(std::forward<Self>(self)->*member))
-    -> decltype(std::forward<Self>(self)->*member) {
+  -> decltype(std::forward<Self>(self)->*member) {
   return std::forward<Self>(self)->*member;
 }
 
@@ -258,73 +257,40 @@ template <typename T, typename Args, typename = void>
 struct can_invoke : std::false_type {};
 template <typename T, typename... Args>
 struct can_invoke<T, identity<Args...>,
-                  decltype((void)std::declval<T>()(std::declval<Args>()...))>
-    : std::true_type {};
+                  decltype((void) std::declval<T>()(std::declval<Args>()...))>
+  : std::true_type {};
 template <typename Pointer, typename T, typename... Args>
 struct can_invoke<Pointer, identity<T&, Args...>,
-                  decltype((void)((std::declval<T&>().*std::declval<Pointer>())(
-                      std::declval<Args>()...)))> : std::true_type {};
+                  decltype((void) ((std::declval<T&>().*std::declval<Pointer>())(
+                    std::declval<Args>()...)))> : std::true_type {};
 template <typename Pointer, typename T, typename... Args>
 struct can_invoke<Pointer, identity<T&&, Args...>,
-                  decltype(
-                      (void)((std::declval<T&&>().*std::declval<Pointer>())(
-                          std::declval<Args>()...)))> : std::true_type {};
+                  decltype((void) ((std::declval<T&&>().*std::declval<Pointer>())(
+                    std::declval<Args>()...)))> : std::true_type {};
 template <typename Pointer, typename T, typename... Args>
 struct can_invoke<Pointer, identity<T*, Args...>,
-                  decltype(
-                      (void)((std::declval<T*>()->*std::declval<Pointer>())(
-                          std::declval<Args>()...)))> : std::true_type {};
+                  decltype((void) ((std::declval<T*>()->*std::declval<Pointer>())(
+                    std::declval<Args>()...)))> : std::true_type {};
 template <typename Pointer, typename T>
 struct can_invoke<Pointer, identity<T&>,
-                  decltype((void)(std::declval<T&>().*std::declval<Pointer>()))>
-    : std::true_type {};
+                  decltype((void) (std::declval<T&>().*std::declval<Pointer>()))>
+  : std::true_type {};
 template <typename Pointer, typename T>
 struct can_invoke<Pointer, identity<T&&>,
-                  decltype(
-                      (void)(std::declval<T&&>().*std::declval<Pointer>()))>
-    : std::true_type {};
+                  decltype((void) (std::declval<T&&>().*std::declval<Pointer>()))>
+  : std::true_type {};
 template <typename Pointer, typename T>
 struct can_invoke<Pointer, identity<T*>,
-                  decltype(
-                      (void)(std::declval<T*>()->*std::declval<Pointer>()))>
-    : std::true_type {};
+                  decltype((void) (std::declval<T*>()->*std::declval<Pointer>()))>
+  : std::true_type {};
 
 template <bool RequiresNoexcept, typename T, typename Args>
 struct is_noexcept_correct : std::true_type {};
 template <typename T, typename... Args>
 struct is_noexcept_correct<true, T, identity<Args...>>
-    : std::integral_constant<bool, noexcept(invoke(std::declval<T>(),
-                                                   std::declval<Args>()...))> {
-};
+  : std::integral_constant<bool, noexcept(invoke(std::declval<T>(),
+                                                 std::declval<Args>()...))> {};
 } // end namespace invocation
-
-namespace overloading {
-template <typename... Args>
-struct overload_impl;
-template <typename Current, typename Next, typename... Rest>
-struct overload_impl<Current, Next, Rest...> : Current,
-                                               overload_impl<Next, Rest...> {
-  explicit overload_impl(Current current, Next next, Rest... rest)
-      : Current(std::move(current)), overload_impl<Next, Rest...>(
-                                         std::move(next), std::move(rest)...) {
-  }
-
-  using Current::operator();
-  using overload_impl<Next, Rest...>::operator();
-};
-template <typename Current>
-struct overload_impl<Current> : Current {
-  explicit overload_impl(Current current) : Current(std::move(current)) {
-  }
-
-  using Current::operator();
-};
-
-template <typename... T>
-constexpr auto overload(T&&... callables) {
-  return overload_impl<std::decay_t<T>...>{std::forward<T>(callables)...};
-}
-} // namespace overloading
 
 /// Declares the namespace which provides the functionality to work with a
 /// type-erased object.
@@ -372,7 +338,7 @@ struct box : private Allocator {
   T value_;
 
   explicit box(T value, Allocator allocator)
-      : Allocator(std::move(allocator)), value_(std::move(value)) {
+    : Allocator(std::move(allocator)), value_(std::move(value)) {
   }
 
   box(box&&) = default;
@@ -388,7 +354,7 @@ struct box<false, T, Allocator> : private Allocator {
   T value_;
 
   explicit box(T value, Allocator allocator)
-      : Allocator(std::move(allocator)), value_(std::move(value)) {
+    : Allocator(std::move(allocator)), value_(std::move(value)) {
   }
 
   box(box&&) = default;
@@ -401,8 +367,8 @@ struct box<false, T, Allocator> : private Allocator {
 template <bool IsCopyable, typename T, typename Allocator>
 struct box_factory<box<IsCopyable, T, Allocator>> {
   using real_allocator =
-      typename std::allocator_traits<std::decay_t<Allocator>>::
-          template rebind_alloc<box<IsCopyable, T, Allocator>>;
+    typename std::allocator_traits<std::decay_t<Allocator>>::
+      template rebind_alloc<box<IsCopyable, T, Allocator>>;
 
   /// Allocates space through the boxed allocator
   static box<IsCopyable, T, Allocator>*
@@ -410,7 +376,7 @@ struct box_factory<box<IsCopyable, T, Allocator>> {
     real_allocator allocator(*static_cast<Allocator const*>(me));
 
     return static_cast<box<IsCopyable, T, Allocator>*>(
-        std::allocator_traits<real_allocator>::allocate(allocator, 1U));
+      std::allocator_traits<real_allocator>::allocate(allocator, 1U));
   }
 
   /// Destroys the box through the given allocator
@@ -427,7 +393,7 @@ template <bool IsCopyable, typename T, typename Allocator>
 auto make_box(std::integral_constant<bool, IsCopyable>, T&& value,
               Allocator&& allocator) {
   return box<IsCopyable, std::decay_t<T>, std::decay_t<Allocator>>(
-      std::forward<T>(value), std::forward<Allocator>(allocator));
+    std::forward<T>(value), std::forward<Allocator>(allocator));
 }
 
 template <typename T>
@@ -451,25 +417,25 @@ union data_accessor {
 };
 
 /// See opcode::op_fetch_empty
-static FU2_DETAIL_CXX14_CONSTEXPR void write_empty(data_accessor* accessor,
-                                                   bool empty) noexcept {
+static FU2_DETAIL_CXX14_CONSTEXPR void
+write_empty(data_accessor* accessor, bool empty) noexcept {
   accessor->inplace_storage_ = std::size_t(empty);
 }
 
 template <typename From, typename To>
-using transfer_const_t =
-    std::conditional_t<std::is_const<std::remove_pointer_t<From>>::value,
+using transfer_const_t
+  = std::conditional_t<std::is_const<std::remove_pointer_t<From>>::value,
                        std::add_const_t<To>, To>;
 template <typename From, typename To>
-using transfer_volatile_t =
-    std::conditional_t<std::is_volatile<std::remove_pointer_t<From>>::value,
+using transfer_volatile_t
+  = std::conditional_t<std::is_volatile<std::remove_pointer_t<From>>::value,
                        std::add_volatile_t<To>, To>;
 
 /// The retriever when the object is allocated inplace
 template <typename T, typename Accessor>
-FU2_DETAIL_CXX14_CONSTEXPR auto retrieve(std::true_type /*is_inplace*/,
-                                         Accessor from,
-                                         std::size_t from_capacity) {
+FU2_DETAIL_CXX14_CONSTEXPR auto
+retrieve(std::true_type /*is_inplace*/, Accessor from,
+         std::size_t from_capacity) {
   using type = transfer_const_t<Accessor, transfer_volatile_t<Accessor, void>>*;
 
   /// Process the command by using the data inside the internal capacity
@@ -483,13 +449,12 @@ FU2_DETAIL_CXX14_CONSTEXPR auto retrieve(std::true_type /*is_inplace*/,
 template <typename T, typename Accessor>
 constexpr auto retrieve(std::false_type /*is_inplace*/, Accessor from,
                         std::size_t /*from_capacity*/) {
-
   return from->ptr_;
 }
 
 namespace invocation_table {
 #if !defined(FU2_HAS_DISABLED_EXCEPTIONS)
-#if defined(FU2_HAS_NO_FUNCTIONAL_HEADER)
+#  if defined(FU2_HAS_NO_FUNCTIONAL_HEADER)
 struct bad_function_call : std::exception {
   bad_function_call() noexcept {
   }
@@ -498,33 +463,33 @@ struct bad_function_call : std::exception {
     return "bad function call";
   }
 };
-#else
+#  else
 using std::bad_function_call;
-#endif
+#  endif
 #endif
 
 #ifdef FU2_HAS_CXX17_NOEXCEPT_FUNCTION_TYPE
-#define FU2_DETAIL_EXPAND_QUALIFIERS_NOEXCEPT(F)                               \
-  F(, , noexcept, , &)                                                         \
-  F(const, , noexcept, , &)                                                    \
-  F(, volatile, noexcept, , &)                                                 \
-  F(const, volatile, noexcept, , &)                                            \
-  F(, , noexcept, &, &)                                                        \
-  F(const, , noexcept, &, &)                                                   \
-  F(, volatile, noexcept, &, &)                                                \
-  F(const, volatile, noexcept, &, &)                                           \
-  F(, , noexcept, &&, &&)                                                      \
-  F(const, , noexcept, &&, &&)                                                 \
-  F(, volatile, noexcept, &&, &&)                                              \
-  F(const, volatile, noexcept, &&, &&)
-#define FU2_DETAIL_EXPAND_CV_NOEXCEPT(F)                                       \
-  F(, , noexcept)                                                              \
-  F(const, , noexcept)                                                         \
-  F(, volatile, noexcept)                                                      \
-  F(const, volatile, noexcept)
+#  define FU2_DETAIL_EXPAND_QUALIFIERS_NOEXCEPT(F)                             \
+    F(, , noexcept, , &)                                                       \
+    F(const, , noexcept, , &)                                                  \
+    F(, volatile, noexcept, , &)                                               \
+    F(const, volatile, noexcept, , &)                                          \
+    F(, , noexcept, &, &)                                                      \
+    F(const, , noexcept, &, &)                                                 \
+    F(, volatile, noexcept, &, &)                                              \
+    F(const, volatile, noexcept, &, &)                                         \
+    F(, , noexcept, &&, &&)                                                    \
+    F(const, , noexcept, &&, &&)                                               \
+    F(, volatile, noexcept, &&, &&)                                            \
+    F(const, volatile, noexcept, &&, &&)
+#  define FU2_DETAIL_EXPAND_CV_NOEXCEPT(F)                                     \
+    F(, , noexcept)                                                            \
+    F(const, , noexcept)                                                       \
+    F(, volatile, noexcept)                                                    \
+    F(const, volatile, noexcept)
 #else // FU2_HAS_CXX17_NOEXCEPT_FUNCTION_TYPE
-#define FU2_DETAIL_EXPAND_QUALIFIERS_NOEXCEPT(F)
-#define FU2_DETAIL_EXPAND_CV_NOEXCEPT(F)
+#  define FU2_DETAIL_EXPAND_QUALIFIERS_NOEXCEPT(F)
+#  define FU2_DETAIL_EXPAND_CV_NOEXCEPT(F)
 #endif // FU2_HAS_CXX17_NOEXCEPT_FUNCTION_TYPE
 
 #define FU2_DETAIL_EXPAND_QUALIFIERS(F)                                        \
@@ -551,7 +516,7 @@ using std::bad_function_call;
 /// If the function is qualified as noexcept, the call will never throw
 template <bool IsNoexcept>
 [[noreturn]] void throw_or_abortnoexcept(
-    std::integral_constant<bool, IsNoexcept> /*is_throwing*/) noexcept {
+  std::integral_constant<bool, IsNoexcept> /*is_throwing*/) noexcept {
   std::abort();
 }
 /// Calls std::abort on empty function calls
@@ -577,8 +542,8 @@ using is_noexcept_noexcept = std::true_type;
 #define FU2_DEFINE_FUNCTION_TRAIT(CONST, VOLATILE, NOEXCEPT, OVL_REF, REF)     \
   template <typename Ret, typename... Args>                                    \
   struct function_trait<Ret(Args...) CONST VOLATILE OVL_REF NOEXCEPT> {        \
-    using pointer_type = Ret (*)(data_accessor CONST VOLATILE*,                \
-                                 std::size_t capacity, Args...);               \
+    using pointer_type                                                         \
+      = Ret (*)(data_accessor CONST VOLATILE*, std::size_t capacity, Args...); \
     template <typename T, bool IsInplace>                                      \
     struct internal_invoker {                                                  \
       static Ret invoke(data_accessor CONST VOLATILE* data,                    \
@@ -587,9 +552,9 @@ using is_noexcept_noexcept = std::true_type;
                                data, capacity);                                \
         auto box = static_cast<T CONST VOLATILE*>(obj);                        \
         return invocation::invoke(                                             \
-            static_cast<std::decay_t<decltype(box->value_)> CONST VOLATILE     \
-                            REF>(box->value_),                                 \
-            std::forward<Args>(args)...);                                      \
+          static_cast<std::decay_t<decltype(box->value_)> CONST VOLATILE REF>( \
+            box->value_),                                                      \
+          std::forward<Args>(args)...);                                        \
       }                                                                        \
     };                                                                         \
                                                                                \
@@ -597,7 +562,6 @@ using is_noexcept_noexcept = std::true_type;
     struct view_invoker {                                                      \
       static Ret invoke(data_accessor CONST VOLATILE* data, std::size_t,       \
                         Args... args) NOEXCEPT {                               \
-                                                                               \
         auto ptr = static_cast<void CONST VOLATILE*>(data->ptr_);              \
         return invocation::invoke(address_taker<T>::restore(ptr),              \
                                   std::forward<Args>(args)...);                \
@@ -662,8 +626,8 @@ struct invoke_table<First> {
 /// We generate a table in case of multiple function overloads
 template <typename First, typename Second, typename... Args>
 struct invoke_table<First, Second, Args...> {
-  using type =
-      std::tuple<function_pointer_of<First>, function_pointer_of<Second>,
+  using type
+    = std::tuple<function_pointer_of<First>, function_pointer_of<Second>,
                  function_pointer_of<Args>...> const*;
 
   /// Return the function pointer at the particular index
@@ -674,18 +638,16 @@ struct invoke_table<First, Second, Args...> {
 
   /// The invocation vtable for a present object
   template <typename T, bool IsInplace>
-  struct invocation_vtable : public std::tuple<function_pointer_of<First>,
-                                               function_pointer_of<Second>,
-                                               function_pointer_of<Args>...> {
+  struct invocation_vtable
+    : public std::tuple<function_pointer_of<First>, function_pointer_of<Second>,
+                        function_pointer_of<Args>...> {
     constexpr invocation_vtable() noexcept
-        : std::tuple<function_pointer_of<First>, function_pointer_of<Second>,
-                     function_pointer_of<Args>...>(std::make_tuple(
-              &function_trait<First>::template internal_invoker<
-                  T, IsInplace>::invoke,
-              &function_trait<Second>::template internal_invoker<
-                  T, IsInplace>::invoke,
-              &function_trait<Args>::template internal_invoker<
-                  T, IsInplace>::invoke...)) {
+      : std::tuple<function_pointer_of<First>, function_pointer_of<Second>,
+                   function_pointer_of<Args>...>(std::make_tuple(
+        &function_trait<First>::template internal_invoker<T, IsInplace>::invoke,
+        &function_trait<Second>::template internal_invoker<T, IsInplace>::invoke,
+        &function_trait<Args>::template internal_invoker<
+          T, IsInplace>::invoke...)) {
     }
   };
 
@@ -699,15 +661,14 @@ struct invoke_table<First, Second, Args...> {
   /// The invocation vtable for a present object
   template <typename T>
   struct invocation_view_vtable
-      : public std::tuple<function_pointer_of<First>,
-                          function_pointer_of<Second>,
-                          function_pointer_of<Args>...> {
+    : public std::tuple<function_pointer_of<First>, function_pointer_of<Second>,
+                        function_pointer_of<Args>...> {
     constexpr invocation_view_vtable() noexcept
-        : std::tuple<function_pointer_of<First>, function_pointer_of<Second>,
-                     function_pointer_of<Args>...>(std::make_tuple(
-              &function_trait<First>::template view_invoker<T>::invoke,
-              &function_trait<Second>::template view_invoker<T>::invoke,
-              &function_trait<Args>::template view_invoker<T>::invoke...)) {
+      : std::tuple<function_pointer_of<First>, function_pointer_of<Second>,
+                   function_pointer_of<Args>...>(std::make_tuple(
+        &function_trait<First>::template view_invoker<T>::invoke,
+        &function_trait<Second>::template view_invoker<T>::invoke,
+        &function_trait<Args>::template view_invoker<T>::invoke...)) {
     }
   };
 
@@ -720,18 +681,15 @@ struct invoke_table<First, Second, Args...> {
 
   /// The invocation table for an empty wrapper
   template <bool IsThrowing>
-  struct empty_vtable : public std::tuple<function_pointer_of<First>,
-                                          function_pointer_of<Second>,
-                                          function_pointer_of<Args>...> {
+  struct empty_vtable
+    : public std::tuple<function_pointer_of<First>, function_pointer_of<Second>,
+                        function_pointer_of<Args>...> {
     constexpr empty_vtable() noexcept
-        : std::tuple<function_pointer_of<First>, function_pointer_of<Second>,
-                     function_pointer_of<Args>...>(
-              std::make_tuple(&function_trait<First>::template empty_invoker<
-                                  IsThrowing>::invoke,
-                              &function_trait<Second>::template empty_invoker<
-                                  IsThrowing>::invoke,
-                              &function_trait<Args>::template empty_invoker<
-                                  IsThrowing>::invoke...)) {
+      : std::tuple<function_pointer_of<First>, function_pointer_of<Second>,
+                   function_pointer_of<Args>...>(std::make_tuple(
+        &function_trait<First>::template empty_invoker<IsThrowing>::invoke,
+        &function_trait<Second>::template empty_invoker<IsThrowing>::invoke,
+        &function_trait<Args>::template empty_invoker<IsThrowing>::invoke...)) {
     }
   };
 
@@ -752,8 +710,7 @@ class operator_impl;
   class operator_impl<Index, Function,                                         \
                       Ret(Args...) CONST VOLATILE OVL_REF NOEXCEPT, Next,      \
                       Signatures...>                                           \
-      : operator_impl<Index + 1, Function, Next, Signatures...> {              \
-                                                                               \
+    : operator_impl<Index + 1, Function, Next, Signatures...> {                \
     template <std::size_t, typename, typename...>                              \
     friend class operator_impl;                                                \
                                                                                \
@@ -774,16 +731,15 @@ class operator_impl;
       /* `std::decay_t<decltype(parent->erasure_)>` is a workaround for a   */ \
       /* compiler regression of MSVC 16.3.1, see #29 for details.           */ \
       return std::decay_t<decltype(parent->erasure_)>::template invoke<Index>( \
-          static_cast<erasure_t CONST VOLATILE REF>(parent->erasure_),         \
-          std::forward<Args>(args)...);                                        \
+        static_cast<erasure_t CONST VOLATILE REF>(parent->erasure_),           \
+        std::forward<Args>(args)...);                                          \
     }                                                                          \
   };                                                                           \
   template <std::size_t Index, typename Config, typename Property,             \
             typename Ret, typename... Args>                                    \
   class operator_impl<Index, function<Config, Property>,                       \
                       Ret(Args...) CONST VOLATILE OVL_REF NOEXCEPT>            \
-      : copyable<!Config::is_owning || Config::is_copyable> {                  \
-                                                                               \
+    : copyable<!Config::is_owning || Config::is_copyable> {                    \
     template <std::size_t, typename, typename...>                              \
     friend class operator_impl;                                                \
                                                                                \
@@ -796,15 +752,15 @@ class operator_impl;
     operator_impl& operator=(operator_impl&&) = default;                       \
                                                                                \
     Ret operator()(Args... args) CONST VOLATILE OVL_REF NOEXCEPT {             \
-      auto parent =                                                            \
-          static_cast<function<Config, Property> CONST VOLATILE*>(this);       \
+      auto parent                                                              \
+        = static_cast<function<Config, Property> CONST VOLATILE*>(this);       \
       using erasure_t = std::decay_t<decltype(parent->erasure_)>;              \
                                                                                \
       /* `std::decay_t<decltype(parent->erasure_)>` is a workaround for a   */ \
       /* compiler regression of MSVC 16.3.1, see #29 for details.           */ \
       return std::decay_t<decltype(parent->erasure_)>::template invoke<Index>( \
-          static_cast<erasure_t CONST VOLATILE REF>(parent->erasure_),         \
-          std::forward<Args>(args)...);                                        \
+        static_cast<erasure_t CONST VOLATILE REF>(parent->erasure_),           \
+        std::forward<Args>(args)...);                                          \
     }                                                                          \
   };
 
@@ -829,14 +785,12 @@ enum class opcode {
 /// optimized
 template <typename Property>
 class vtable;
-template <bool IsThrowing, bool HasStrongExceptGuarantee,
-          typename... FormalArgs>
+template <bool IsThrowing, bool HasStrongExceptGuarantee, typename... FormalArgs>
 class vtable<property<IsThrowing, HasStrongExceptGuarantee, FormalArgs...>> {
-  using command_function_t = void (*)(vtable* /*this*/, opcode /*op*/,
-                                      data_accessor* /*from*/,
-                                      std::size_t /*from_capacity*/,
-                                      data_accessor* /*to*/,
-                                      std::size_t /*to_capacity*/);
+  using command_function_t
+    = void (*)(vtable* /*this*/, opcode /*op*/, data_accessor* /*from*/,
+               std::size_t /*from_capacity*/, data_accessor* /*to*/,
+               std::size_t /*to_capacity*/);
 
   using invoke_table_t = invocation_table::invoke_table<FormalArgs...>;
 
@@ -845,21 +799,20 @@ class vtable<property<IsThrowing, HasStrongExceptGuarantee, FormalArgs...>> {
 
   template <typename T>
   struct trait {
-    static_assert(is_box<T>::value,
-                  "The trait must be specialized with a box!");
+    static_assert(is_box<T>::value, "The trait must be specialized with a "
+                                    "box!");
 
     /// The command table
     template <bool IsInplace>
     static void process_cmd(vtable* to_table, opcode op, data_accessor* from,
                             std::size_t from_capacity, data_accessor* to,
                             std::size_t to_capacity) {
-
       switch (op) {
         case opcode::op_move: {
           /// Retrieve the pointer to the object
           auto box = static_cast<T*>(retrieve<T>(
-              std::integral_constant<bool, IsInplace>{}, from, from_capacity));
-          assert(box && "The object must not be over aligned or null!");
+            std::integral_constant<bool, IsInplace>{}, from, from_capacity));
+          VAST_ASSERT(box && "The object must not be over aligned or null!");
 
           if (!IsInplace) {
             // Just swap both pointers if we allocated on the heap
@@ -885,11 +838,11 @@ class vtable<property<IsThrowing, HasStrongExceptGuarantee, FormalArgs...>> {
         }
         case opcode::op_copy: {
           auto box = static_cast<T const*>(retrieve<T>(
-              std::integral_constant<bool, IsInplace>{}, from, from_capacity));
-          assert(box && "The object must not be over aligned or null!");
+            std::integral_constant<bool, IsInplace>{}, from, from_capacity));
+          VAST_ASSERT(box && "The object must not be over aligned or null!");
 
-          assert(std::is_copy_constructible<T>::value &&
-                 "The box is required to be copyable here!");
+          VAST_ASSERT(std::is_copy_constructible<T>::value
+                      && "The box is required to be copyable here!");
 
           // Try to allocate the object inplace
           construct(std::is_copy_constructible<T>{}, *box, to_table, to,
@@ -898,10 +851,9 @@ class vtable<property<IsThrowing, HasStrongExceptGuarantee, FormalArgs...>> {
         }
         case opcode::op_destroy:
         case opcode::op_weak_destroy: {
-
-          assert(!to && !to_capacity && "Arg overflow!");
+          VAST_ASSERT(!to && !to_capacity && "Arg overflow!");
           auto box = static_cast<T*>(retrieve<T>(
-              std::integral_constant<bool, IsInplace>{}, from, from_capacity));
+            std::integral_constant<bool, IsInplace>{}, from, from_capacity));
 
           if (IsInplace) {
             box->~T();
@@ -934,8 +886,8 @@ class vtable<property<IsThrowing, HasStrongExceptGuarantee, FormalArgs...>> {
         to_table->template set_inplace<T>();
       } else {
         // Allocate the object through the allocator
-        to->ptr_ = storage =
-            box_factory<std::decay_t<Box>>::box_allocate(std::addressof(box));
+        to->ptr_ = storage
+          = box_factory<std::decay_t<Box>>::box_allocate(std::addressof(box));
         to_table->template set_allocated<T>();
       }
       new (storage) T(std::forward<Box>(box));
@@ -953,7 +905,6 @@ class vtable<property<IsThrowing, HasStrongExceptGuarantee, FormalArgs...>> {
   static void empty_cmd(vtable* to_table, opcode op, data_accessor* /*from*/,
                         std::size_t /*from_capacity*/, data_accessor* to,
                         std::size_t /*to_capacity*/) {
-
     switch (op) {
       case opcode::op_move:
       case opcode::op_copy: {
@@ -980,9 +931,8 @@ public:
 
   /// Initialize an object at the given position
   template <typename T>
-  static void init(vtable& table, T&& object, data_accessor* to,
-                   std::size_t to_capacity) {
-
+  static void
+  init(vtable& table, T&& object, data_accessor* to, std::size_t to_capacity) {
     trait<std::decay_t<T>>::construct(std::true_type{}, std::forward<T>(object),
                                       &table, to, to_capacity);
   }
@@ -996,9 +946,9 @@ public:
   }
 
   /// Destroys the object at the given position
-  void copy(vtable& to_table, data_accessor const* from,
-            std::size_t from_capacity, data_accessor* to,
-            std::size_t to_capacity) const {
+  void
+  copy(vtable& to_table, data_accessor const* from, std::size_t from_capacity,
+       data_accessor* to, std::size_t to_capacity) const {
     cmd_(&to_table, opcode::op_copy, const_cast<data_accessor*>(from),
          from_capacity, to, to_capacity);
   }
@@ -1074,7 +1024,7 @@ struct internal_capacity {
 };
 template <typename Capacity>
 struct internal_capacity<
-    Capacity, std::enable_if_t<(Capacity::capacity < sizeof(void*))>> {
+  Capacity, std::enable_if_t<(Capacity::capacity < sizeof(void*))>> {
   typedef struct {
     /// Tag to access the structure in a type-safe way
     data_accessor accessor_;
@@ -1148,32 +1098,32 @@ public:
   template <typename OtherConfig>
   FU2_DETAIL_CXX14_CONSTEXPR
   erasure(erasure<true, OtherConfig, Property> right) noexcept(
-      Property::is_strong_exception_guaranteed) {
+    Property::is_strong_exception_guaranteed) {
     right.vtable_.move(vtable_, right.opaque_ptr(), right.capacity(),
                        this->opaque_ptr(), capacity());
   }
 
   template <typename T, typename Allocator = std::allocator<std::decay_t<T>>>
-  FU2_DETAIL_CXX14_CONSTEXPR erasure(std::false_type /*use_bool_op*/,
-                                     T&& callable,
-                                     Allocator&& allocator = Allocator{}) {
+  FU2_DETAIL_CXX14_CONSTEXPR
+  erasure(std::false_type /*use_bool_op*/, T&& callable,
+          Allocator&& allocator = Allocator{}) {
     vtable_t::init(vtable_,
                    type_erasure::make_box(
-                       std::integral_constant<bool, Config::is_copyable>{},
-                       std::forward<T>(callable),
-                       std::forward<Allocator>(allocator)),
+                     std::integral_constant<bool, Config::is_copyable>{},
+                     std::forward<T>(callable),
+                     std::forward<Allocator>(allocator)),
                    this->opaque_ptr(), capacity());
   }
   template <typename T, typename Allocator = std::allocator<std::decay_t<T>>>
-  FU2_DETAIL_CXX14_CONSTEXPR erasure(std::true_type /*use_bool_op*/,
-                                     T&& callable,
-                                     Allocator&& allocator = Allocator{}) {
+  FU2_DETAIL_CXX14_CONSTEXPR
+  erasure(std::true_type /*use_bool_op*/, T&& callable,
+          Allocator&& allocator = Allocator{}) {
     if (bool(callable)) {
       vtable_t::init(vtable_,
                      type_erasure::make_box(
-                         std::integral_constant<bool, Config::is_copyable>{},
-                         std::forward<T>(callable),
-                         std::forward<Allocator>(allocator)),
+                       std::integral_constant<bool, Config::is_copyable>{},
+                       std::forward<T>(callable),
+                       std::forward<Allocator>(allocator)),
                      this->opaque_ptr(), capacity());
     } else {
       vtable_.set_empty();
@@ -1190,8 +1140,8 @@ public:
     return *this;
   }
 
-  FU2_DETAIL_CXX14_CONSTEXPR erasure& operator=(erasure&& right) noexcept(
-      Property::is_strong_exception_guaranteed) {
+  FU2_DETAIL_CXX14_CONSTEXPR erasure&
+  operator=(erasure&& right) noexcept(Property::is_strong_exception_guaranteed) {
     vtable_.weak_destroy(this->opaque_ptr(), capacity());
     right.vtable_.move(vtable_, right.opaque_ptr(), right.capacity(),
                        this->opaque_ptr(), capacity());
@@ -1208,7 +1158,7 @@ public:
   template <typename OtherConfig>
   FU2_DETAIL_CXX14_CONSTEXPR erasure&
   operator=(erasure<true, OtherConfig, Property> right) noexcept(
-      Property::is_strong_exception_guaranteed) {
+    Property::is_strong_exception_guaranteed) {
     vtable_.weak_destroy(this->opaque_ptr(), capacity());
     right.vtable_.move(vtable_, right.opaque_ptr(), right.capacity(),
                        this->opaque_ptr(), capacity());
@@ -1221,9 +1171,9 @@ public:
     vtable_.weak_destroy(this->opaque_ptr(), capacity());
     vtable_t::init(vtable_,
                    type_erasure::make_box(
-                       std::integral_constant<bool, Config::is_copyable>{},
-                       std::forward<T>(callable),
-                       std::forward<Allocator>(allocator)),
+                     std::integral_constant<bool, Config::is_copyable>{},
+                     std::forward<T>(callable),
+                     std::forward<Allocator>(allocator)),
                    this->opaque_ptr(), capacity());
   }
 
@@ -1251,8 +1201,8 @@ public:
   static constexpr decltype(auto) invoke(Erasure&& erasure, Args&&... args) {
     auto const capacity = erasure.capacity();
     return erasure.vtable_.template invoke<Index>(
-        std::forward<Erasure>(erasure).opaque_ptr(), capacity,
-        std::forward<Args>(args)...);
+      std::forward<Erasure>(erasure).opaque_ptr(), capacity,
+      std::forward<Args>(args)...);
   }
 };
 
@@ -1277,21 +1227,21 @@ class erasure<false, Config,
 public:
   // NOLINTNEXTLINE(cppcoreguidlines-pro-type-member-init)
   constexpr erasure() noexcept
-      : invoke_table_(
-            invoke_table_t::template get_empty_invocation_table<IsThrowing>()),
-        view_(nullptr) {
+    : invoke_table_(
+      invoke_table_t::template get_empty_invocation_table<IsThrowing>()),
+      view_(nullptr) {
   }
 
   // NOLINTNEXTLINE(cppcoreguidlines-pro-type-member-init)
   constexpr erasure(std::nullptr_t) noexcept
-      : invoke_table_(
-            invoke_table_t::template get_empty_invocation_table<IsThrowing>()),
-        view_(nullptr) {
+    : invoke_table_(
+      invoke_table_t::template get_empty_invocation_table<IsThrowing>()),
+      view_(nullptr) {
   }
 
   // NOLINTNEXTLINE(cppcoreguidlines-pro-type-member-init)
   constexpr erasure(erasure&& right) noexcept
-      : invoke_table_(right.invoke_table_), view_(right.view_) {
+    : invoke_table_(right.invoke_table_), view_(right.view_) {
   }
 
   constexpr erasure(erasure const& /*right*/) = default;
@@ -1299,15 +1249,15 @@ public:
   template <typename OtherConfig>
   // NOLINTNEXTLINE(cppcoreguidlines-pro-type-member-init)
   constexpr erasure(erasure<false, OtherConfig, property_t> right) noexcept
-      : invoke_table_(right.invoke_table_), view_(right.view_) {
+    : invoke_table_(right.invoke_table_), view_(right.view_) {
   }
 
   template <typename T>
   // NOLINTNEXTLINE(cppcoreguidlines-pro-type-member-init)
   constexpr erasure(std::false_type /*use_bool_op*/, T&& object)
-      : invoke_table_(invoke_table_t::template get_invocation_view_table_of<
-                      std::decay_t<T>>()),
-        view_(address_taker<std::decay_t<T>>::take(std::forward<T>(object))) {
+    : invoke_table_(
+      invoke_table_t::template get_invocation_view_table_of<std::decay_t<T>>()),
+      view_(address_taker<std::decay_t<T>>::take(std::forward<T>(object))) {
   }
   template <typename T>
   // NOLINTNEXTLINE(cppcoreguidlines-pro-type-member-init)
@@ -1319,8 +1269,8 @@ public:
 
   constexpr erasure&
   operator=(std::nullptr_t) noexcept(HasStrongExceptGuarantee) {
-    invoke_table_ =
-        invoke_table_t::template get_empty_invocation_table<IsThrowing>();
+    invoke_table_
+      = invoke_table_t::template get_empty_invocation_table<IsThrowing>();
     view_.ptr_ = nullptr;
     return *this;
   }
@@ -1344,10 +1294,10 @@ public:
 
   template <typename T>
   constexpr void assign(std::false_type /*use_bool_op*/, T&& callable) {
-    invoke_table_ = invoke_table_t::template get_invocation_view_table_of<
-        std::decay_t<T>>();
-    view_.ptr_ =
-        address_taker<std::decay_t<T>>::take(std::forward<T>(callable));
+    invoke_table_
+      = invoke_table_t::template get_invocation_view_table_of<std::decay_t<T>>();
+    view_.ptr_
+      = address_taker<std::decay_t<T>>::take(std::forward<T>(callable));
   }
   template <typename T>
   constexpr void assign(std::true_type /*use_bool_op*/, T&& callable) {
@@ -1374,25 +1324,23 @@ public:
 /// Deduces to a true_type if the type T provides the given signature and the
 /// signature is noexcept correct callable.
 template <typename T, typename Signature,
-          typename Trait =
-              type_erasure::invocation_table::function_trait<Signature>>
+          typename Trait
+          = type_erasure::invocation_table::function_trait<Signature>>
 struct accepts_one
-    : std::integral_constant<
-          bool, invocation::can_invoke<typename Trait::template callable<T>,
-                                       typename Trait::arguments>::value &&
-                    invocation::is_noexcept_correct<
-                        Trait::is_noexcept::value,
-                        typename Trait::template callable<T>,
-                        typename Trait::arguments>::value> {};
+  : std::integral_constant<
+      bool, invocation::can_invoke<typename Trait::template callable<T>,
+                                   typename Trait::arguments>::value
+              && invocation::is_noexcept_correct<
+                Trait::is_noexcept::value, typename Trait::template callable<T>,
+                typename Trait::arguments>::value> {};
 
 /// Deduces to a true_type if the type T provides all signatures
 template <typename T, typename Signatures, typename = void>
 struct accepts_all : std::false_type {};
 template <typename T, typename... Signatures>
-struct accepts_all<
-    T, identity<Signatures...>,
-    void_t<std::enable_if_t<accepts_one<T, Signatures>::value>...>>
-    : std::true_type {};
+struct accepts_all<T, identity<Signatures...>,
+                   void_t<std::enable_if_t<accepts_one<T, Signatures>::value>...>>
+  : std::true_type {};
 
 /// Deduces to a true_type if the type T is implementing operator bool()
 /// or if the type is convertible to bool directly, this also implements an
@@ -1406,37 +1354,37 @@ template <typename T, typename = void>
 struct has_bool_op : std::false_type {};
 template <typename T>
 struct has_bool_op<T, void_t<decltype(bool(std::declval<T>()))>>
-    : std::true_type {
-#ifndef NDEBUG
-  static_assert(!std::is_pointer<T>::value,
-                "Missing deduction for function pointer!");
-#endif
+  : std::true_type {
+#  ifndef NDEBUG
+  static_assert(!std::is_pointer<T>::value, "Missing deduction for function "
+                                            "pointer!");
+#  endif
 };
 
 template <typename T>
 struct use_bool_op : has_bool_op<T> {};
 
-#define FU2_DEFINE_USE_OP_TRAIT(CONST, VOLATILE, NOEXCEPT)                     \
-  template <typename Ret, typename... Args>                                    \
-  struct use_bool_op<Ret (*CONST VOLATILE)(Args...) NOEXCEPT>                  \
+#  define FU2_DEFINE_USE_OP_TRAIT(CONST, VOLATILE, NOEXCEPT)                   \
+    template <typename Ret, typename... Args>                                  \
+    struct use_bool_op<Ret (*CONST VOLATILE)(Args...) NOEXCEPT>                \
       : std::true_type {};
 
 FU2_DETAIL_EXPAND_CV(FU2_DEFINE_USE_OP_TRAIT)
-#undef FU2_DEFINE_USE_OP_TRAIT
+#  undef FU2_DEFINE_USE_OP_TRAIT
 
 template <typename Ret, typename... Args>
 struct use_bool_op<Ret(Args...)> : std::false_type {};
 
-#if defined(FU2_HAS_CXX17_NOEXCEPT_FUNCTION_TYPE)
+#  if defined(FU2_HAS_CXX17_NOEXCEPT_FUNCTION_TYPE)
 template <typename Ret, typename... Args>
 struct use_bool_op<Ret(Args...) noexcept> : std::false_type {};
-#endif
+#  endif
 #endif // FU2_HAS_NO_EMPTY_PROPAGATION
 
 template <typename Config, typename T>
 struct assert_wrong_copy_assign {
-  static_assert(!Config::is_owning || !Config::is_copyable ||
-                    std::is_copy_constructible<std::decay_t<T>>::value,
+  static_assert(!Config::is_owning || !Config::is_copyable
+                  || std::is_copy_constructible<std::decay_t<T>>::value,
                 "Can't wrap a non copyable object into a unique function!");
 
   using type = void;
@@ -1444,40 +1392,38 @@ struct assert_wrong_copy_assign {
 
 template <bool IsStrongExceptGuaranteed, typename T>
 struct assert_no_strong_except_guarantee {
-  static_assert(
-      !IsStrongExceptGuaranteed ||
-          (std::is_nothrow_move_constructible<T>::value &&
-           std::is_nothrow_destructible<T>::value),
-      "Can't wrap a object an object that has no strong exception guarantees "
-      "if this is required by the wrapper!");
+  static_assert(!IsStrongExceptGuaranteed
+                  || (std::is_nothrow_move_constructible<T>::value
+                      && std::is_nothrow_destructible<T>::value),
+                "Can't wrap a object an object that has no strong exception "
+                "guarantees "
+                "if this is required by the wrapper!");
 
   using type = void;
 };
 
 /// SFINAES out if the given callable is not copyable correct to the left one.
 template <typename LeftConfig, typename RightConfig>
-using enable_if_copyable_correct_t =
-    std::enable_if_t<(!LeftConfig::is_copyable || RightConfig::is_copyable)>;
+using enable_if_copyable_correct_t
+  = std::enable_if_t<(!LeftConfig::is_copyable || RightConfig::is_copyable)>;
 
 template <typename LeftConfig, typename RightConfig>
-using is_owning_correct =
-    std::integral_constant<bool,
+using is_owning_correct
+  = std::integral_constant<bool,
                            (LeftConfig::is_owning == RightConfig::is_owning)>;
 
 /// SFINAES out if the given function2 is not owning correct to this one
 template <typename LeftConfig, typename RightConfig>
-using enable_if_owning_correct_t =
-    std::enable_if_t<is_owning_correct<LeftConfig, RightConfig>::value>;
+using enable_if_owning_correct_t
+  = std::enable_if_t<is_owning_correct<LeftConfig, RightConfig>::value>;
 
 template <typename Config, bool IsThrowing, bool HasStrongExceptGuarantee,
           typename... Args>
 class function<Config, property<IsThrowing, HasStrongExceptGuarantee, Args...>>
-    : type_erasure::invocation_table::operator_impl<
-          0U,
-          function<Config,
-                   property<IsThrowing, HasStrongExceptGuarantee, Args...>>,
-          Args...> {
-
+  : type_erasure::invocation_table::operator_impl<
+      0U,
+      function<Config, property<IsThrowing, HasStrongExceptGuarantee, Args...>>,
+      Args...> {
   template <typename, typename>
   friend class function;
 
@@ -1485,38 +1431,38 @@ class function<Config, property<IsThrowing, HasStrongExceptGuarantee, Args...>>
   friend class type_erasure::invocation_table::operator_impl;
 
   using property_t = property<IsThrowing, HasStrongExceptGuarantee, Args...>;
-  using erasure_t =
-      type_erasure::erasure<Config::is_owning, Config, property_t>;
+  using erasure_t
+    = type_erasure::erasure<Config::is_owning, Config, property_t>;
 
   template <typename T>
-  using enable_if_can_accept_all_t =
-      std::enable_if_t<accepts_all<std::decay_t<T>, identity<Args...>>::value>;
+  using enable_if_can_accept_all_t
+    = std::enable_if_t<accepts_all<std::decay_t<T>, identity<Args...>>::value>;
 
   template <typename Function, typename = void>
   struct is_convertible_to_this : std::false_type {};
   template <typename RightConfig>
   struct is_convertible_to_this<
-      function<RightConfig, property_t>,
-      void_t<enable_if_copyable_correct_t<Config, RightConfig>,
-             enable_if_owning_correct_t<Config, RightConfig>>>
-      : std::true_type {};
+    function<RightConfig, property_t>,
+    void_t<enable_if_copyable_correct_t<Config, RightConfig>,
+           enable_if_owning_correct_t<Config, RightConfig>>> : std::true_type {
+  };
 
   template <typename T>
-  using enable_if_not_convertible_to_this =
-      std::enable_if_t<!is_convertible_to_this<std::decay_t<T>>::value>;
+  using enable_if_not_convertible_to_this
+    = std::enable_if_t<!is_convertible_to_this<std::decay_t<T>>::value>;
 
   template <typename T>
-  using enable_if_owning_t =
-      std::enable_if_t<std::is_same<T, T>::value && Config::is_owning>;
+  using enable_if_owning_t
+    = std::enable_if_t<std::is_same<T, T>::value && Config::is_owning>;
 
   template <typename T>
   using assert_wrong_copy_assign_t =
-      typename assert_wrong_copy_assign<Config, std::decay_t<T>>::type;
+    typename assert_wrong_copy_assign<Config, std::decay_t<T>>::type;
 
   template <typename T>
   using assert_no_strong_except_guarantee_t =
-      typename assert_no_strong_except_guarantee<HasStrongExceptGuarantee,
-                                                 std::decay_t<T>>::type;
+    typename assert_no_strong_except_guarantee<HasStrongExceptGuarantee,
+                                               std::decay_t<T>>::type;
 
   erasure_t erasure_;
 
@@ -1525,8 +1471,8 @@ public:
   function() = default;
   ~function() = default;
 
-  explicit FU2_DETAIL_CXX14_CONSTEXPR
-  function(function const& /*right*/) = default;
+  explicit FU2_DETAIL_CXX14_CONSTEXPR function(function const& /*right*/)
+    = default;
   explicit FU2_DETAIL_CXX14_CONSTEXPR function(function&& /*right*/) = default;
 
   /// Copy construction from another copyable function
@@ -1536,7 +1482,7 @@ public:
             enable_if_owning_correct_t<Config, RightConfig>* = nullptr>
   FU2_DETAIL_CXX14_CONSTEXPR
   function(function<RightConfig, property_t> const& right)
-      : erasure_(right.erasure_) {
+    : erasure_(right.erasure_) {
   }
 
   /// Move construction from another function
@@ -1544,7 +1490,7 @@ public:
             enable_if_copyable_correct_t<Config, RightConfig>* = nullptr,
             enable_if_owning_correct_t<Config, RightConfig>* = nullptr>
   FU2_DETAIL_CXX14_CONSTEXPR function(function<RightConfig, property_t>&& right)
-      : erasure_(std::move(right.erasure_)) {
+    : erasure_(std::move(right.erasure_)) {
   }
 
   /// Construction from a callable object which overloads the `()` operator
@@ -1554,7 +1500,7 @@ public:
             assert_wrong_copy_assign_t<T>* = nullptr,
             assert_no_strong_except_guarantee_t<T>* = nullptr>
   FU2_DETAIL_CXX14_CONSTEXPR function(T&& callable)
-      : erasure_(use_bool_op<unrefcv_t<T>>{}, std::forward<T>(callable)) {
+    : erasure_(use_bool_op<unrefcv_t<T>>{}, std::forward<T>(callable)) {
   }
   template <typename T, typename Allocator, //
             enable_if_not_convertible_to_this<T>* = nullptr,
@@ -1563,8 +1509,8 @@ public:
             assert_wrong_copy_assign_t<T>* = nullptr,
             assert_no_strong_except_guarantee_t<T>* = nullptr>
   FU2_DETAIL_CXX14_CONSTEXPR function(T&& callable, Allocator&& allocator)
-      : erasure_(use_bool_op<unrefcv_t<T>>{}, std::forward<T>(callable),
-                 std::forward<Allocator>(allocator)) {
+    : erasure_(use_bool_op<unrefcv_t<T>>{}, std::forward<T>(callable),
+               std::forward<Allocator>(allocator)) {
   }
 
   /// Empty constructs the function
@@ -1643,14 +1589,14 @@ public:
   }
 
   /// Swaps the left function with the right one
-  friend void swap(function& left,
-                   function& right) noexcept(HasStrongExceptGuarantee) {
+  friend void
+  swap(function& left, function& right) noexcept(HasStrongExceptGuarantee) {
     left.swap(right);
   }
 
   /// Calls the wrapped callable object
   using type_erasure::invocation_table::operator_impl<
-      0U, function<Config, property_t>, Args...>::operator();
+    0U, function<Config, property_t>, Args...>::operator();
 };
 
 template <typename Config, typename Property>
@@ -1675,14 +1621,14 @@ bool operator!=(std::nullptr_t, function<Config, Property> const& f) {
 
 // Default intended object size of the function
 using object_size = std::integral_constant<std::size_t, 32U>;
-} // namespace detail
-} // namespace abi_400
+
+} // namespace detail::fu2
 
 /// Can be passed to function_base as template argument which causes
 /// the internal small buffer to be sized according to the given size,
 /// and aligned with the given alignment.
-template <std::size_t Capacity,
-          std::size_t Alignment = alignof(std::max_align_t)>
+template <std::size_t Capacity, std::size_t Alignment
+                                = alignof(std::max_align_t)>
 struct capacity_fixed {
   static constexpr std::size_t capacity = Capacity;
   static constexpr std::size_t alignment = Alignment;
@@ -1690,7 +1636,7 @@ struct capacity_fixed {
 
 /// Default capacity for small functor optimization
 struct capacity_default
-    : capacity_fixed<detail::object_size::value - (2 * sizeof(void*))> {};
+  : capacity_fixed<detail::fu2::object_size::value - (2 * sizeof(void*))> {};
 
 /// Can be passed to function_base as template argument which causes
 /// the internal small buffer to be removed from the callable wrapper.
@@ -1741,9 +1687,9 @@ struct capacity_can_hold {
 ///
 template <bool IsOwning, bool IsCopyable, typename Capacity, bool IsThrowing,
           bool HasStrongExceptGuarantee, typename... Signatures>
-using function_base = detail::function<
-    detail::config<IsOwning, IsCopyable, Capacity>,
-    detail::property<IsThrowing, HasStrongExceptGuarantee, Signatures...>>;
+using function_base = detail::fu2::function<
+  detail::fu2::config<IsOwning, IsCopyable, Capacity>,
+  detail::fu2::property<IsThrowing, HasStrongExceptGuarantee, Signatures...>>;
 
 /// An owning copyable function wrapper for arbitrary callable types.
 template <typename... Signatures>
@@ -1773,26 +1719,10 @@ using function_view = function_base<false, true, capacity_default, //
 /// You may disable the inclusion of the functional header
 /// through defining `FU2_WITH_NO_FUNCTIONAL_HEADER`.
 ///
-using detail::type_erasure::invocation_table::bad_function_call;
+using detail::fu2::type_erasure::invocation_table::bad_function_call;
 #endif
 
-/// Returns a callable object, which unifies all callable objects
-/// that were passed to this function.
-///
-///   ```cpp
-///   auto overloaded = fu2::overload([](std::true_type) { return true; },
-///                                   [](std::false_type) { return false; });
-///   ```
-///
-/// \param  callables A pack of callable objects with arbitrary signatures.
-///
-/// \returns          A callable object which exposes the
-///
-template <typename... T>
-constexpr auto overload(T&&... callables) {
-  return detail::overloading::overload(std::forward<T>(callables)...);
-}
-} // namespace fu2
+} // namespace vast
 
 #undef FU2_DETAIL_EXPAND_QUALIFIERS
 #undef FU2_DETAIL_EXPAND_QUALIFIERS_NOEXCEPT
@@ -1801,5 +1731,3 @@ constexpr auto overload(T&&... callables) {
 #undef FU2_DETAIL_UNREACHABLE_INTRINSIC
 #undef FU2_DETAIL_TRAP
 #undef FU2_DETAIL_CXX14_CONSTEXPR
-
-#endif // FU2_INCLUDED_FUNCTION2_HPP_
