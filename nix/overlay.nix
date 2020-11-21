@@ -1,11 +1,11 @@
 final: prev:
 let
   inherit (final) lib;
-  static_stdenv = prev.stdenv.hostPlatform.isMusl;
+  inherit (final.stdenv.hostPlatform) isStatic;
   stdenv = if prev.stdenv.isDarwin then final.llvmPackages_10.stdenv else final.stdenv;
 in {
   nix-gitDescribe = final.callPackage ./gitDescribe.nix {};
-  arrow-cpp-no-simd = (prev.arrow-cpp.override {enableShared = !static_stdenv;}).overrideAttrs (old: {
+  arrow-cpp-no-simd = (prev.arrow-cpp.override {enableShared = !isStatic;}).overrideAttrs (old: {
     cmakeFlags = old.cmakeFlags ++ [ "-DARROW_SIMD_LEVEL=NONE" ];
   });
   caf = let
@@ -16,7 +16,7 @@ in {
     # is a required argument, and it has to be passed explicitly instead.
     src = lib.callPackageWith source final.fetchFromGitHub { inherit (source) sha256; };
     inherit (source) version;
-  } // lib.optionalAttrs static_stdenv {
+  } // lib.optionalAttrs isStatic {
     cmakeFlags = old.cmakeFlags ++ [
       "-DCAF_BUILD_STATIC=ON"
       "-DCAF_BUILD_STATIC_ONLY=ON"
