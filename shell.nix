@@ -18,5 +18,4 @@ mkShell ({
   ZSTD_ROOT = "${pkgs.zstd}";
 } // lib.optionalAttrs (stdenv.isLinux && !static_stdenv) {
   nativeBuildInputs = [ llvmPkgs.lldClang.bintools ];
-  NIX_CFLAGS_LINK = "-fuse-ld=lld";
 })
