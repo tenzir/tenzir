@@ -13,10 +13,12 @@
 
 #pragma once
 
+#include "vast/concept/hashable/uhash.hpp"
+#include "vast/concept/hashable/xxhash.hpp"
+#include "vast/detail/operators.hpp"
+
 #include <array>
 #include <string>
-
-#include "vast/detail/operators.hpp"
 
 namespace vast {
 
@@ -149,3 +151,14 @@ void hash_append(Hasher& h, const address& x) {
 }
 
 } // namespace vast
+
+namespace std {
+
+template <>
+struct hash<vast::address> {
+  size_t operator()(const vast::address& x) const {
+    return vast::uhash<vast::xxhash>{}(x);
+  }
+};
+
+} // namespace std

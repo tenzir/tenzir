@@ -42,6 +42,10 @@ const vast::type& synopsis::type() const {
   return type_;
 }
 
+synopsis_ptr synopsis::shrink() const {
+  return nullptr;
+}
+
 caf::error inspect(caf::serializer& sink, synopsis_ptr& ptr) {
   if (!ptr) {
     static type dummy;

@@ -25,10 +25,16 @@
 namespace vast {
 
 caf::optional<bloom_filter_parameters> evaluate(bloom_filter_parameters xs) {
-  VAST_ASSERT(!xs.m || *xs.m > 0);
-  VAST_ASSERT(!xs.n || *xs.n > 0);
-  VAST_ASSERT(!xs.k || *xs.k > 0);
-  VAST_ASSERT(!xs.p || (*xs.p > 0 && *xs.p < 1));
+  // Check basic invariants first.
+  if (xs.m && *xs.m <= 0)
+    return caf::none;
+  if (xs.n && *xs.n <= 0)
+    return caf::none;
+  if (xs.k && *xs.k <= 0)
+    return caf::none;
+  if (xs.p && (*xs.p < 0 || *xs.p > 1))
+    return caf::none;
+  // Test if we can compute the missing parameters.
   static const double ln2 = std::log(2.0);
   if (xs.m && xs.n && xs.k && !xs.p) {
     auto m = static_cast<double>(*xs.m);

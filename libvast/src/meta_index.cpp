@@ -31,27 +31,33 @@
 
 namespace vast {
 
-void meta_index::add(const uuid& partition) {
-  synopses_[partition];
+void partition_synopsis::shrink() {
+  for (auto& [field, synopsis] : field_synopses_) {
+    if (!synopsis)
+      continue;
+    auto shrinked_synopsis = synopsis->shrink();
+    if (!shrinked_synopsis)
+      continue;
+    synopsis.swap(shrinked_synopsis);
+  }
 }
 
-void meta_index::add(const uuid& partition, const table_slice& slice) {
+void partition_synopsis::add(const table_slice& slice,
+                             const caf::settings& synopsis_options) {
   auto make_synopsis = [&](const record_field& field) -> synopsis_ptr {
     return has_skip_attribute(field.type)
              ? nullptr
-             : factory<synopsis>::make(field.type, synopsis_options_);
+             : factory<synopsis>::make(field.type, synopsis_options);
   };
-  auto& part_syn = synopses_[partition];
   for (size_t col = 0; col < slice.columns(); ++col) {
     // Locate the relevant synopsis.
     auto&& layout = slice.layout();
     auto& field = layout.fields[col];
     auto key = qualified_record_field{layout.name(), field};
-    auto& field_syn = part_syn.field_synopses_;
-    auto it = field_syn.find(key);
-    if (it == field_syn.end())
+    auto it = field_synopses_.find(key);
+    if (it == field_synopses_.end())
       // Attempt to create a synopsis if we have never seen this key before.
-      it = field_syn.emplace(std::move(key), make_synopsis(field)).first;
+      it = field_synopses_.emplace(std::move(key), make_synopsis(field)).first;
     // If there exists a synopsis for a field, add the entire column.
     if (auto& syn = it->second) {
       for (size_t row = 0; row < slice.rows(); ++row) {
@@ -63,12 +69,29 @@ void meta_index::add(const uuid& partition, const table_slice& slice) {
   }
 }
 
+void meta_index::add(const uuid& partition, const table_slice& slice) {
+  auto& part_syn = synopses_[partition];
+  part_syn.add(slice, synopsis_options_);
+}
+
 void meta_index::erase(const uuid& partition) {
   synopses_.erase(partition);
 }
 
 void meta_index::merge(const uuid& partition, partition_synopsis&& ps) {
   synopses_[partition] = std::move(ps);
+}
+
+partition_synopsis& meta_index::at(const uuid& partition) {
+  return synopses_.at(partition);
+}
+
+void meta_index::replace(const uuid& partition,
+                         std::unique_ptr<partition_synopsis> ps) {
+  auto it = synopses_.find(partition);
+  if (it != synopses_.end()) {
+    it->second.field_synopses_.swap(ps->field_synopses_);
+  }
 }
 
 std::vector<uuid> meta_index::lookup(const expression& expr) const {
