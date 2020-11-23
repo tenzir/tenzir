@@ -400,8 +400,10 @@ node_state::spawn_command(const invocation& inv,
                       "vast." + comp_type + ".disable-taxonomies", false)) {
     if (auto tr = self->state.registry.find_by_label("type-registry")) {
       auto expr = normalized_and_validated(spawn_inv.arguments);
-      if (!expr)
+      if (!expr) {
+        rp.deliver(expr.error());
         return make_message(expr.error());
+      }
       self
         ->request(caf::actor_cast<type_registry_type>(tr),
                   defaults::system::initial_request_timeout, atom::resolve_v,
