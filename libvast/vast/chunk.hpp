@@ -27,7 +27,7 @@
 
 namespace vast {
 
-/// A contiguous block of memory; essentially a span of bytes with a deleter.
+/// A contiguous block of memory.
 class chunk final : public caf::ref_counted {
 public:
   // -- member types -----------------------------------------------------------
