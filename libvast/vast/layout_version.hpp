@@ -15,40 +15,17 @@
 
 #include "vast/path.hpp"
 
-// clang-format off
-
-// The version number defined here describes the structure, sequence and
-// organization of the database directory itself, independent of the binary
-// content of the individual files.
-//
-// Currently we only know one possible layout, as described below.
-//
-// # Layout v0
-//
-// vast.db/
-//   VERSION                                  - File containing the version of the db layout
-//   pid.lock                                 - File containing the PID of the current process
-//   index/
-//     index.bin                              - Index flatbuffer
-//     8bb0caba-eedc-41ce-b8c9-3419e99c9ff3   - Partition flatbuffers
-//     [...]
-//   archive/
-//     segments/
-//       d9513a65-9349-4c47-8e6d-4dcecf99327d - Segment flatbuffers
-//       [...]
-//   importer/
-//     current_id_block                       - The persisted current id block.
-//   type-registry/
-//     type-registry                          - Serialized state of the type
-//     registry
-
-// clang-format on
-
 namespace vast {
 
+/// This version number defines compatibility of persistent state with with
+/// prior directory layouts and contents. Breaking changes shall bump the
+/// version number. A breaking change includes the structure, sequence and
+/// organization of the database directory itself, as well irreconcilable
+/// changes in binary content.
 enum class layout_version : uint8_t {
   invalid,
   v0,
+  v1,
   count, // Number of enum values
 };
 

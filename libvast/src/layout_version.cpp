@@ -18,6 +18,7 @@ namespace {
 const char* descriptions[]{
   "invalid",
   "v0",
+  "v1",
 };
 
 static_assert(layout_version{std::size(descriptions)} == layout_version::count,
@@ -60,7 +61,7 @@ caf::error initialize_layout_version(const vast::path& dbdir) {
   if (exists(version_path))
     return ec::no_error;
   std::ofstream fs(version_path.str());
-  fs << to_string(layout_version::v0) << std::endl;
+  fs << to_string(layout_version::v1) << std::endl;
   if (!fs)
     return make_error(ec::filesystem_error, "could not write version file");
   return ec::no_error;
