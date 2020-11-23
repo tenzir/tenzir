@@ -42,16 +42,14 @@ type_registry_state::status(status_verbosity v) const {
   auto& tr_status = put_dictionary(result, "type-registry");
   if (v >= status_verbosity::detailed) {
     // The list of defined concepts
-    auto& concepts_status = put_dictionary(tr_status, "concepts");
-    for (auto& [name, definition] : taxonomies.concepts) {
-      auto& concept_status = put_dictionary(concepts_status, name);
-      concept_status["description"] = definition.description;
-      if (v >= status_verbosity::debug) {
+    if (v >= status_verbosity::debug) {
+      auto& concepts_status = put_dictionary(tr_status, "concepts");
+      for (auto& [name, definition] : taxonomies.concepts) {
+        auto& concept_status = put_dictionary(concepts_status, name);
+        concept_status["description"] = definition.description;
         concept_status["fields"] = definition.fields;
         concept_status["concepts"] = definition.concepts;
-      }
-    }
-    if (v >= status_verbosity::debug) {
+      } 
       // Sorted list of all keys.
       auto keys = std::vector<std::string>(data.size());
       std::transform(data.begin(), data.end(), keys.begin(),
