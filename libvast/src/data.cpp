@@ -311,7 +311,6 @@ json jsonize(const data& x) {
   return caf::visit(
     detail::overload{
       [&](const auto& y) { return to_json(y); },
-      [&](port p) { return json{p.number()}; }, // ignore port type
       [&](caf::none_t) { return json{}; },
       [&](const std::string& str) { return json{str}; },
     },
@@ -565,7 +564,6 @@ void print(YAML::Emitter& out, const data& x) {
     [&out](const pattern& x) { out << to_string(x); },
     [&out](const address& x) { out << to_string(x); },
     [&out](const subnet& x) { out << to_string(x); },
-    [&out](const port& x) { out << to_string(x); },
     [&out](const enumeration& x) { out << to_string(x); },
     [&out](const list& xs) {
       out << YAML::BeginSeq;

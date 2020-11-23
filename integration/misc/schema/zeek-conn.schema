@@ -1,3 +1,5 @@
+type port = count
+
 type zeek.conn.custom = record{
   ts: time #timestamp,
   uid: string,

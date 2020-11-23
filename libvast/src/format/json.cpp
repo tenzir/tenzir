@@ -14,7 +14,6 @@
 #include "vast/concept/parseable/vast/json.hpp"
 
 #include "vast/concept/parseable/vast/address.hpp"
-#include "vast/concept/parseable/vast/port.hpp"
 #include "vast/concept/parseable/vast/subnet.hpp"
 #include "vast/concept/parseable/vast/time.hpp"
 #include "vast/concept/printable/to_string.hpp"
@@ -55,10 +54,6 @@ struct convert {
 
   caf::expected<data> operator()(json::number n, const real_type&) const {
     return detail::narrow_cast<real>(n);
-  }
-
-  caf::expected<data> operator()(json::number n, const port_type&) const {
-    return port{detail::narrow_cast<port::number_type>(n)};
   }
 
   caf::expected<data> operator()(json::number s, const time_type&) const {
@@ -161,14 +156,6 @@ struct convert {
     }
     return make_error(ec::convert_error, "cannot convert from", str,
                       "to count");
-  }
-
-  caf::expected<data> operator()(json::string str, const port_type&) const {
-    if (port x; parsers::port(str, x))
-      return x;
-    if (port::number_type x; parsers::u16(str, x))
-      return port{x};
-    return make_error(ec::convert_error, "cannot convert from", str, "to port");
   }
 
   template <class T, class U>

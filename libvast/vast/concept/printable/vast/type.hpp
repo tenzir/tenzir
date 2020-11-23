@@ -77,7 +77,6 @@ VAST_DEFINE_BASIC_TYPE_PRINTER(string_type, "string")
 VAST_DEFINE_BASIC_TYPE_PRINTER(pattern_type, "pattern")
 VAST_DEFINE_BASIC_TYPE_PRINTER(address_type, "addr")
 VAST_DEFINE_BASIC_TYPE_PRINTER(subnet_type, "subnet")
-VAST_DEFINE_BASIC_TYPE_PRINTER(port_type, "port")
 #undef VAST_DEFINE_BASIC_TYPE_PRINTER
 
 // For the implementation, see below. (Must come after type due to recursion.)
@@ -143,7 +142,6 @@ struct type_printer : printer<type_printer<Policy>> {
              | pattern_type_printer{}
              | address_type_printer{}
              | subnet_type_printer{}
-             | port_type_printer{}
              | enumeration_type_printer{}
              | list_type_printer{}
              | map_type_printer{}

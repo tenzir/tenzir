@@ -224,36 +224,6 @@ struct column_builder_trait<subnet_type>
   }
 };
 
-template <>
-struct column_builder_trait<port_type>
-  : arrow::TypeTraits<arrow::FixedSizeBinaryType> {
-  // -- member types -----------------------------------------------------------
-
-  using super = arrow::TypeTraits<arrow::FixedSizeBinaryType>;
-
-  using data_type = port;
-
-  using view_type = view<data_type>;
-
-  using meta_type = port_type;
-
-  // -- static member functions ------------------------------------------------
-
-  static auto make_arrow_type() {
-    return std::make_shared<arrow::FixedSizeBinaryType>(3);
-  }
-
-  static bool append(typename super::BuilderType& builder, view_type x) {
-    // We store ports as uint16 (little endian) for the port itself plus an
-    // uint8 for the type.
-    uint16_t n = detail::to_network_order(x.number());
-    auto n_ptr = reinterpret_cast<uint8_t*>(&n);
-    std::array<uint8_t, 3> data{n_ptr[0], n_ptr[1],
-                                static_cast<uint8_t>(x.type())};
-    return builder.Append(data).ok();
-  }
-};
-
 template <class Trait>
 class column_builder_impl final
   : public arrow_table_slice_builder::column_builder {

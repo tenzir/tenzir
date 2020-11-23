@@ -70,6 +70,7 @@ set(libvast_sources
     src/concept/hashable/xxhash.cpp
     src/concept/parseable/vast/expression.cpp
     src/data.cpp
+    src/db_version.cpp
     src/defaults.cpp
     src/detail/add_message_types.cpp
     src/detail/base64.cpp
@@ -119,14 +120,12 @@ set(libvast_sources
     src/index/address_index.cpp
     src/index/enumeration_index.cpp
     src/index/list_index.cpp
-    src/index/port_index.cpp
     src/index/string_index.cpp
     src/index/subnet_index.cpp
     src/io/read.cpp
     src/io/save.cpp
     src/io/write.cpp
     src/json.cpp
-    src/layout_version.cpp
     src/logger.cpp
     src/meta_index.cpp
     src/msgpack.cpp
@@ -357,7 +356,6 @@ set(tests
     test/index/enumeration_index.cpp
     test/index/hash_index.cpp
     test/index/list_index.cpp
-    test/index/port_index.cpp
     test/index/string_index.cpp
     test/index/subnet_index.cpp
     test/iterator.cpp

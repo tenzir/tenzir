@@ -1,3 +1,6 @@
+// Alias for transport-layer ports.
+type port = count
+
 type zeek.conn_id = record{
   orig_h: addr,
   orig_p: port,

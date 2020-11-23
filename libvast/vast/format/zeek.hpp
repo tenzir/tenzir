@@ -113,12 +113,6 @@ struct zeek_parser {
     return parse(p);
   }
 
-  bool operator()(const port_type&) const {
-    static auto p = parsers::u16
-      ->* [](uint16_t x) { return port{x, port::unknown}; };
-    return parse(p);
-  }
-
   Iterator& f_;
   const Iterator& l_;
   Attribute& attr_;
@@ -193,10 +187,6 @@ struct zeek_parser_factory {
     return parsers::net ->* [](subnet x) { return x; };
   }
 
-  result_type operator()(const port_type&) const {
-    return parsers::u16 ->* [](uint16_t x) { return port{x, port::unknown}; };
-  }
-
   result_type operator()(const list_type& t) const {
     return (caf::visit(*this, t.value_type) % set_separator_)
              ->*[](std::vector<Attribute> x) { return list(std::move(x)); };
@@ -248,8 +238,6 @@ protected:
 private:
   using iterator_type = std::string_view::const_iterator;
 
-  void patch(std::vector<data>& xs);
-
   caf::error parse_header();
 
   std::unique_ptr<std::istream> input_;
@@ -262,7 +250,6 @@ private:
   type type_;
   record_type layout_;
   caf::optional<size_t> proto_field_;
-  std::vector<size_t> port_fields_;
   std::vector<rule<iterator_type, data>> parsers_;
 };
 

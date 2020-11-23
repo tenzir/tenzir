@@ -168,9 +168,8 @@ TEST(normalization) {
 }
 
 TEST(extractors) {
-  auto s = record_type{{"real", real_type{}},
-                       {"port", port_type{}},
-                       {"host", address_type{}}};
+  auto s = record_type{
+    {"real", real_type{}}, {"bool", bool_type{}}, {"host", address_type{}}};
   auto r = flatten(record_type{{"orig", s}, {"resp", s}});
   auto sn = unbox(to<subnet>("192.168.0.0/24"));
   {
@@ -228,13 +227,13 @@ TEST(validation - attribute extractor) {
 }
 
 TEST(validation - type extractor) {
-  auto expr = to<expression>(":port == 443/tcp");
+  auto expr = to<expression>(":bool == T");
   REQUIRE(expr);
   CHECK(caf::visit(validator{}, *expr));
   expr = to<expression>(":addr in 10.0.0.0/8");
   REQUIRE(expr);
   CHECK(caf::visit(validator{}, *expr));
-  expr = to<expression>(":port > -42");
+  expr = to<expression>(":bool > -42");
   REQUIRE(expr);
   CHECK(!caf::visit(validator{}, *expr));
 }
@@ -253,15 +252,12 @@ TEST(matcher) {
   CHECK(!match(":count == 42 && :real < 4.2", real_type{}));
   CHECK(match(":count == 42 || :real < 4.2", real_type{}));
   auto r = record_type{
-    {"x", real_type{}},
-    {"y", port_type{}},
-    {"z", address_type{}}
-  };
+    {"x", real_type{}}, {"y", bool_type{}}, {"z", address_type{}}};
   CHECK(match(":count == 42 || :real < 4.2", r));
-  CHECK(match(":port == 80/tcp && :real < 4.2", r));
+  CHECK(match(":bool == T && :real < 4.2", r));
   MESSAGE("field extractors");
-  CHECK(match("x < 4.2 || (y == 80/tcp && z in 10.0.0.0/8)", r));
-  CHECK(match("x < 4.2 && (y == 80/tcp || :bool == F)", r));
+  CHECK(match("x < 4.2 || (y == T && z in 10.0.0.0/8)", r));
+  CHECK(match("x < 4.2 && (y == F || :bool == F)", r));
   CHECK(!match("x < 4.2 && a == T", r));
   MESSAGE("attribute extractors");
   CHECK(!match("#type == \"foo\"", r));

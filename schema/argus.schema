@@ -1,3 +1,6 @@
+// Alias for transport-layer ports.
+type port = count
+
 type argus.cause = enum{
   Start,
   Status,
@@ -12,10 +15,10 @@ type argus.record = record{
   Flgs: string,                   // flgs
   Proto: string #index=hash,      // proto
   SrcAddr: string,                // saddr (MAC or IP)
-  Sport: count,                   // sport (TODO: switch to port type)
+  Sport: port,                    // sport
   Dir: string #index=hash,        // dir
   DstAddr: string,                // daddr (MAC or IP)
-  Dport: count,                   // dport (TODO: switch to port type)
+  Dport: port,                    // dport
   TotPkts: count,                 // pkts
   TotBytes: count,                // bytes
   State: string #index=hash,      // state

@@ -567,10 +567,6 @@ struct data_congruence_checker {
     return true;
   }
 
-  bool operator()(const port_type&, const port&) const {
-    return true;
-  }
-
   bool operator()(const enumeration_type& x, const std::string& y) const {
     return std::find(x.fields.begin(), x.fields.end(), y) != x.fields.end();
   }
@@ -784,9 +780,9 @@ std::string to_digest(const type& x) {
 namespace {
 
 const char* kind_tbl[] = {
-  "none",        "bool",   "int",     "count",   "real",   "duration",
-  "time",        "string", "pattern", "address", "subnet", "port",
-  "enumeration", "list",   "map",     "record",  "alias",
+  "none", "bool",   "int",     "count",   "real",   "duration",
+  "time", "string", "pattern", "address", "subnet", "enumeration",
+  "list", "map",    "record",  "alias",
 };
 
 using caf::detail::tl_size;

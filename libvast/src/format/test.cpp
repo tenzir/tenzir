@@ -193,13 +193,6 @@ struct randomizer {
     sn = {std::move(addr), unif(gen_)};
   }
 
-  void operator()(const port_type&, port& p) {
-    using port_type = std::underlying_type_t<port::port_type>;
-    std::uniform_int_distribution<port_type> unif{0, 3};
-    p.number(static_cast<port::number_type>(sample()));
-    p.type(static_cast<port::port_type>(unif(gen_)));
-  }
-
   // Can only be a record, because we don't support randomizing containers.
   void operator()(const record_type& r, list& xs) {
     for (auto i = 0u; i < xs.size(); ++i)
@@ -227,7 +220,6 @@ std::string_view builtin_schema = R"__(
     d: duration #default="uniform(100,200)",
     a: addr #default="uniform(0,2000000)",
     s: subnet #default="uniform(1000,2000)",
-    p: port #default="uniform(1,65384)"
   }
 )__";
 

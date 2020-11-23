@@ -26,22 +26,18 @@ TEST(copying views) {
   CHECK_VARIANT_EQUAL(view<integer>{42}, 42);
   CHECK_VARIANT_EQUAL(view<count>{42}, 42u);
   CHECK_VARIANT_EQUAL(view<real>{4.2}, 4.2);
-  CHECK_VARIANT_EQUAL(view<port>(53, port::udp), port(53, port::udp));
   MESSAGE("using make_view");
   CHECK_VARIANT_EQUAL(make_view(caf::none), caf::none);
   CHECK_VARIANT_EQUAL(make_view(true), true);
   CHECK_VARIANT_EQUAL(make_view(42), integer(42));
   CHECK_VARIANT_EQUAL(make_view(42u), count(42u));
   CHECK_VARIANT_EQUAL(make_view(4.2), real(4.2));
-  CHECK_VARIANT_EQUAL(make_view(port(53, port::udp)), port(53, port::udp));
   MESSAGE("copying from temporary data");
   CHECK_VARIANT_EQUAL(make_view(data{caf::none}), caf::none);
   CHECK_VARIANT_EQUAL(make_view(data{true}), true);
   CHECK_VARIANT_EQUAL(make_view(data{42}), integer(42));
   CHECK_VARIANT_EQUAL(make_view(data{42u}), count(42u));
   CHECK_VARIANT_EQUAL(make_view(data{4.2}), real(4.2));
-  CHECK_VARIANT_EQUAL(make_view(data(port(53, port::udp))),
-                      port(53, port::udp));
 }
 
 TEST(string literal view) {

@@ -97,8 +97,8 @@ tests:
         input: data/zeek/conn.log.gz
       - command: -N count ":addr == 192.168.1.104"
       - command: -N count -e ":addr == 192.168.1.104"
-      - command: -N count "resp_p == 80/tcp"
-      - command: -N count "resp_p != 80/tcp"
+      - command: -N count "resp_p == 80"
+      - command: -N count "resp_p != 80"
   Node Zeek conn log:
     tags: [node, import-export, zeek]
     steps:
@@ -106,7 +106,7 @@ tests:
         input: data/zeek/conn.log.gz
       - command: -N export ascii 'resp_h == 192.168.1.104'
       - command: -N export ascii 'orig_bytes > 1k && orig_bytes < 1Ki'
-      - command: -N export ascii ':string == "OrfTtuI5G4e" || :port == 67/udp'
+      - command: -N export ascii ':string == "OrfTtuI5G4e" || :count == 67' # TODO: make this :port == 67 once we support built-in type aliases
       - command: -N export ascii '#type == "zeek.conn" && resp_h == 192.168.1.104'
       - command: '-N export ascii "#type != \"zeek.conn\" && #type != \"vast.metrics\""'
       - command: -N export ascii '#type != "foobar" && resp_h == 192.168.1.104'
@@ -258,7 +258,7 @@ tests:
       - command: import -b pcap
         input: data/pcap/example.pcap.gz
       - command: export ascii ':addr in 192.168.168.0/24'
-      - command: export pcap 'sport > 60000/tcp && src !in 192.168.168.0/8'
+      - command: export pcap 'sport > 60000 && src !in 192.168.168.0/8'
 
   Manual 1 node:
     condition: version | jq -e '."PCAP"'
@@ -267,7 +267,7 @@ tests:
       - command: -N import pcap
         input: data/pcap/example.pcap.gz
       - command: -N export ascii ':addr in 192.168.168.0/24'
-      - command: -N export pcap 'sport > 60000/tcp && src !in 192.168.168.0/8'
+      - command: -N export pcap 'sport > 60000 && src !in 192.168.168.0/8'
       - command: -N status --detailed
         transformation: jq '.index.statistics'
 

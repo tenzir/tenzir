@@ -37,7 +37,7 @@ TEST(list) {
   REQUIRE(std::is_same_v<std::vector<data>, list>);
 }
 
-TEST(tables) {
+TEST(maps) {
   map ports{{"ssh", 22u}, {"http", 80u}, {"https", 443u}, {"imaps", 993u}};
   CHECK(ports.size() == 4);
   auto i = ports.find("ssh");
@@ -60,7 +60,7 @@ TEST(flatten) {
     }},
     {"e", record_type{
       {"f", address_type{}},
-      {"g", port_type{}}
+      {"g", count_type{}}
     }},
     {"h", bool_type{}}
   };
@@ -144,7 +144,6 @@ TEST(construction) {
   CHECK(caf::holds_alternative<pattern>(data{pattern{"foo"}}));
   CHECK(caf::holds_alternative<address>(data{address{}}));
   CHECK(caf::holds_alternative<subnet>(data{subnet{}}));
-  CHECK(caf::holds_alternative<port>(data{port{53, port::udp}}));
   CHECK(caf::holds_alternative<list>(data{list{}}));
   CHECK(caf::holds_alternative<map>(data{map{}}));
 }
@@ -218,9 +217,9 @@ TEST(evaluation - pattern matching) {
 
 TEST(serialization) {
   list xs;
-  xs.emplace_back(port{80, port::tcp});
-  xs.emplace_back(port{53, port::udp});
-  xs.emplace_back(port{8, port::icmp});
+  xs.emplace_back(count{80});
+  xs.emplace_back(count{53});
+  xs.emplace_back(count{8});
   auto x0 = data{xs};
   std::vector<char> buf;
   CHECK_EQUAL(save(nullptr, buf, x0), caf::none);
@@ -287,13 +286,6 @@ TEST(parseable) {
   CHECK(p(f, l, d));
   CHECK(f == l);
   CHECK(d == *to<address>("10.0.0.1"));
-  MESSAGE("port");
-  str = "22/tcp"s;
-  f = str.begin();
-  l = str.end();
-  CHECK(p(f, l, d));
-  CHECK(f == l);
-  CHECK(d == port{22, port::tcp});
   MESSAGE("list");
   str = "[42,4.2,nil]"s;
   f = str.begin();
@@ -310,7 +302,7 @@ TEST(parseable) {
   CHECK(d == map{{true, 1u}, {false, 0u}});
 }
 
-// clang-format on
+// clang-format off
 TEST(json) {
   MESSAGE("plain");
   data x = record{
@@ -321,8 +313,7 @@ TEST(json) {
         {"u", 1001u}
       }},
     }},
-    {"str", "x"},
-    {"port", port{443, port::tcp}}
+    {"str", "x"}
   };
   auto expected = json{json::object{
     {"x", json{"foo"}},
@@ -332,8 +323,7 @@ TEST(json) {
         {"u", json{1001}}
       }}},
     }}},
-    {"str", json{"x"}},
-    {"port", json{443}}
+    {"str", json{"x"}}
   }};
   CHECK_EQUAL(to_json(x), expected);
   MESSAGE("zipped");
@@ -345,8 +335,7 @@ TEST(json) {
         {"u", count_type{}}
       }},
     }},
-    {"str", string_type{}},
-    {"port", port_type{}}
+    {"str", string_type{}}
   };
   CHECK(type_check(t, x));
   expected = R"__({
@@ -357,8 +346,7 @@ TEST(json) {
       "u": 1001
     }
   },
-  "str": "x",
-  "port": 443
+  "str": "x"
 })__";
   CHECK_EQUAL(to_string(to_json(x, t)), expected);
 }
@@ -379,8 +367,7 @@ TEST(convert - caf::config_value) {
     {"uri", "https://tenzir.com/"},
     {"xs", list{1, 2, 3}},
     {"ys", list{1, "foo", 3.14}},
-    {"zs", list{record{{"z", true}}, map{{42u, 4.2}}}},
-    {"port", port{443, port::tcp}}
+    {"zs", list{record{{"z", true}}, map{{42u, 4.2}}}}
   };
   // clang-format on
   using namespace caf;
@@ -402,7 +389,6 @@ TEST(convert - caf::config_value) {
   auto z1 = config_value::dictionary{};
   z1.emplace("42", 4.2);
   y.emplace("zs", make_config_value_list(std::move(z0), std::move(z1)));
-  y.emplace("port", "443/tcp");
   CHECK_EQUAL(unbox(to<settings>(x)), y);
   CHECK_EQUAL(unbox(to<dictionary<config_value>>(x)), y);
 }

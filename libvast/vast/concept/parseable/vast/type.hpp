@@ -104,7 +104,6 @@ struct type_parser : parser<type_parser> {
       | "pattern" >> attr_list   ->* to_basic_type<pattern_type>
       | "addr" >> attr_list      ->* to_basic_type<address_type>
       | "subnet" >> attr_list    ->* to_basic_type<subnet_type>
-      | "port" >> attr_list      ->* to_basic_type<port_type>
       ;
     // Enumeration
     using enum_tuple = std::tuple<

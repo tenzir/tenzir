@@ -13,45 +13,33 @@
 
 #pragma once
 
-#include "vast/bitmap_index.hpp"
-#include "vast/coder.hpp"
-#include "vast/error.hpp"
-#include "vast/ewah_bitmap.hpp"
-#include "vast/ids.hpp"
-#include "vast/value_index.hpp"
-#include "vast/view.hpp"
-
-#include <caf/error.hpp>
-#include <caf/expected.hpp>
-#include <caf/fwd.hpp>
+#include "vast/path.hpp"
 
 namespace vast {
 
-/// An index for transport-layer ports.
-class port_index : public value_index {
-public:
-  using number_index
-    = bitmap_index<port::number_type,
-                   multi_level_coder<range_coder<ewah_bitmap>>>;
-
-  using protocol_index
-    = bitmap_index<std::underlying_type<port::port_type>::type,
-                   equality_coder<ewah_bitmap>>;
-
-  explicit port_index(vast::type t, caf::settings opts = {});
-
-  caf::error serialize(caf::serializer& sink) const override;
-
-  caf::error deserialize(caf::deserializer& source) override;
-
-private:
-  bool append_impl(data_view x, id pos) override;
-
-  caf::expected<ids>
-  lookup_impl(relational_operator op, data_view x) const override;
-
-  number_index num_;
-  protocol_index proto_;
+/// This version number defines compatibility of persistent state with with
+/// prior directory layouts and contents. Breaking changes shall bump the
+/// version number. A breaking change includes the structure, sequence and
+/// organization of the database directory itself, as well as incompatible
+/// changes in binary content.
+enum class db_version : uint8_t {
+  invalid,
+  v0,
+  v1,
+  latest = v1, // Alias for the latest version
+  count,       // Number of enum values
 };
+
+/// @relates db_version
+std::ostream& operator<<(std::ostream& str, const db_version& version);
+
+/// Reads the DB version from a database directory.
+/// @relates db_version
+db_version read_db_version(const vast::path& db_dir);
+
+/// Writes the current DB version if `db_dir/VERSION` does not
+/// exist yet.
+/// @relates db_version
+caf::error initialize_db_version(const vast::path& db_dir);
 
 } // namespace vast

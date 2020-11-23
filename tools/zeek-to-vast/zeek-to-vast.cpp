@@ -114,6 +114,10 @@ broker::data to_broker(const vast::data& data) {
   return caf::visit(
     vast::detail::overload{
       [](const auto& x) -> broker::data { return x; },
+      // TODO: use double-dispatch together with the type to differentiate when
+      // we should use broker::port vs. plain counts. Using single dispatch on
+      // the data alone is not sufficient to make a proper type conversion.
+      [](vast::count x) -> broker::data { return x; },
       [](caf::none_t) -> broker::data { return {}; },
       [](const vast::pattern& x) -> broker::data { return x.string(); },
       [](const vast::address& x) -> broker::data {
@@ -128,11 +132,6 @@ broker::data to_broker(const vast::data& data) {
         auto addr = broker::address{bytes, broker::address::family::ipv6,
                                     broker::address::byte_order::network};
         return broker::subnet(addr, x.length());
-      },
-      [](vast::port x) -> broker::data {
-        // We rely on the fact that port types don't change...ever.
-        auto protocol = static_cast<broker::port::protocol>(x.type());
-        return broker::port{x.number(), protocol};
       },
       [](vast::enumeration x) -> broker::data {
         // FIXME: here we face two different implementation approaches for

@@ -33,9 +33,9 @@ namespace {
 auto http = record_type{{"ts", time_type{}},
                         {"uid", string_type{}},
                         {"id.orig_h", address_type{}},
-                        {"id.orig_p", port_type{}},
+                        {"id.orig_p", count_type{}},
                         {"id.resp_h", address_type{}},
-                        {"id.resp_p", port_type{}},
+                        {"id.resp_p", count_type{}},
                         {"trans_depth", count_type{}},
                         {"method", string_type{}},
                         {"host", string_type{}},
@@ -66,14 +66,13 @@ TEST(json to data) {
                             {"i", integer_type{}},
                             {"s", string_type{}},
                             {"a", address_type{}},
-                            {"p", port_type{}},
                             {"sn", subnet_type{}},
                             {"t", time_type{}},
                             {"d", duration_type{}},
                             {"d2", duration_type{}},
                             {"e", enumeration_type{{"FOO", "BAR", "BAZ"}}},
-                            {"vp", list_type{port_type{}}},
-                            {"vt", list_type{time_type{}}},
+                            {"lc", list_type{count_type{}}},
+                            {"lt", list_type{time_type{}}},
                             {"rec", record_type{{"c", count_type{}},
                                                 {"s", string_type{}}}},
                             {"msa", map_type{string_type{}, address_type{}}},
@@ -88,14 +87,13 @@ TEST(json to data) {
     "r": 4.2,
     "i": -1337,
     "a": "147.32.84.165",
-    "p": "42/udp",
     "sn": "192.168.0.1/24",
     "t": "2011-08-12+14:59:11.994970",
     "d": "42s",
     "d2": 3.006088,
     "e": "BAZ",
-    "vp": [ 19, "5555/tcp", 0, "0/icmp" ],
-    "vt": [ 1556624773, "2019-04-30T11:46:13Z" ],
+    "lc": [ 19, 5555, 0 ],
+    "lt": [ 1556624773, "2019-04-30T11:46:13Z" ],
     "rec": { "c": 421, "s":"test" },
     "msa": { "foo": "1.2.3.4", "bar": "2001:db8::" },
     "mcs": { "1": "FOO", "1024": "BAR!" }
@@ -105,11 +103,11 @@ TEST(json to data) {
   format::json::add(*builder, xs, flat);
   auto slice = builder->finish();
   REQUIRE_NOT_EQUAL(slice.encoding(), table_slice::encoding::none);
-  CHECK(slice.at(0, 11) == data{enumeration{2}});
+  CHECK(slice.at(0, 10) == data{enumeration{2}});
   auto reference = map{};
   reference[count{1}] = data{"FOO"};
   reference[count{1024}] = data{"BAR!"};
-  CHECK_EQUAL(materialize(slice.at(0, 17)), data{reference});
+  CHECK_EQUAL(materialize(slice.at(0, 16)), data{reference});
 }
 
 TEST_DISABLED(suricata) {

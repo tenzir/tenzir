@@ -258,8 +258,6 @@ TEST(zeek data parsing) {
   CHECK(d == *to<address>("192.168.1.103"));
   CHECK(zeek_parse(subnet_type{}, "10.0.0.0/24", d));
   CHECK(d == *to<subnet>("10.0.0.0/24"));
-  CHECK(zeek_parse(port_type{}, "49329", d));
-  CHECK(d == port{49329, port::unknown});
   CHECK(zeek_parse(list_type{integer_type{}}, "49329", d));
   CHECK(d == list{49329});
   CHECK(zeek_parse(list_type{string_type{}}, "49329,42", d));
@@ -280,7 +278,8 @@ TEST(zeek reader - conn log) {
 }
 
 TEST(zeek reader - custom schema) {
-  std::string custom = R"__(
+  std::string custom_schema = R"__(
+    type port = count
     type zeek.conn = record{
       ts: time #test,
       uid: string #index=string, // clashing user attribute
@@ -290,8 +289,21 @@ TEST(zeek reader - custom schema) {
       community_id: string // not present in the data
     }
   )__";
-  auto sch = unbox(to<schema>(custom));
-  std::string eref = R"__(record{
+  auto sch = unbox(to<schema>(custom_schema));
+  using reader_type = format::zeek::reader;
+  reader_type reader{
+    defaults::import::table_slice_type, caf::settings{},
+    std::make_unique<std::istringstream>(std::string{conn_log_100_events})};
+  reader.schema(sch);
+  std::vector<table_slice> slices;
+  auto add_slice
+    = [&](table_slice slice) { slices.emplace_back(std::move(slice)); };
+  auto [err, num] = reader.read(20, 20, add_slice);
+  CHECK_EQUAL(slices.size(), 1u);
+  CHECK_EQUAL(slices[0].rows(), 20u);
+  std::string ref_schema = R"__(
+    type port = count
+    type zeek.conn = record{
       ts: time #test #timestamp,
       uid: string #index=string,
       id: record {orig_h: addr, orig_p: port, resp_h: addr, resp_p: port},
@@ -311,20 +323,9 @@ TEST(zeek reader - custom schema) {
       resp_ip_bytes: count,
       tunnel_parents: list<string>,
     })__";
-  auto expected = flatten(unbox(to<type>(eref)).name("zeek.conn"));
-  using reader_type = format::zeek::reader;
-  reader_type reader{
-    defaults::import::table_slice_type, caf::settings{},
-    std::make_unique<std::istringstream>(std::string{conn_log_100_events})};
-  reader.schema(sch);
-  std::vector<table_slice> slices;
-  auto add_slice
-    = [&](table_slice slice) { slices.emplace_back(std::move(slice)); };
-  auto [err, num] = reader.read(20, 20, add_slice);
-  CHECK_EQUAL(slices.size(), 1u);
-  CHECK_EQUAL(slices[0].rows(), 20u);
-  auto&& layout = slices[0].layout();
-  CHECK_EQUAL(layout, expected);
+  auto expected = unbox(to<schema>(ref_schema));
+  auto zeek_conn = unbox(expected.find("zeek.conn"));
+  CHECK_EQUAL(slices[0].layout(), flatten(zeek_conn));
 }
 
 TEST(zeek reader - continous stream with partial slice) {

@@ -42,11 +42,16 @@ namespace {
 
 template <class... RecordFields>
 inline type make_packet_type(RecordFields&&... record_fields) {
+  // FIXME: once we ship with builtin type aliases, we should reference the
+  // port alias type here. Until then, we create the alias manually.
+  // See also:
+  // - src/format/zeek.cpp
+  auto port_type = count_type{}.name("port");
   return record_type{{"time", time_type{}.attributes({{"timestamp"}})},
                      {"src", address_type{}},
                      {"dst", address_type{}},
-                     {"sport", port_type{}},
-                     {"dport", port_type{}},
+                     {"sport", port_type},
+                     {"dport", port_type},
                      std::forward<RecordFields>(record_fields)...,
                      {"payload", string_type{}.attributes({{"skip"}})}}
     .name("pcap.packet");
@@ -380,8 +385,9 @@ caf::error reader::read_impl(size_t max_events, size_t max_slice_size,
     auto packet = std::string_view{std::launder(layer3_ptr), layer3.size()};
     auto& cid = state(conn).community_id;
     if (!(builder_->add(ts) && builder_->add(conn.src_addr)
-          && builder_->add(conn.dst_addr) && builder_->add(conn.src_port)
-          && builder_->add(conn.dst_port)
+          && builder_->add(conn.dst_addr)
+          && builder_->add(conn.src_port.number())
+          && builder_->add(conn.dst_port.number())
           && (!community_id_ || builder_->add(std::string_view{cid}))
           && builder_->add(packet))) {
       return make_error(ec::parse_error, "unable to fill row");
@@ -410,8 +416,7 @@ caf::error reader::read_impl(size_t max_events, size_t max_slice_size,
 reader::flow_state& reader::state(const flow& x) {
   auto i = flows_.find(x);
   if (i == flows_.end()) {
-    auto cf = flow{x.src_addr, x.dst_addr, x.src_port, x.dst_port};
-    auto id = community_id::compute<policy::base64>(cf);
+    auto id = community_id::compute<policy::base64>(x);
     i = flows_.emplace(x, flow_state{0, 0, std::move(id)}).first;
   }
   return i->second;

@@ -119,14 +119,14 @@ TEST(parseable/printable - predicate) {
 TEST(parseable - expression) {
   expression expr;
   predicate p1{field_extractor{"x"}, equal, data{42u}};
-  predicate p2{type_extractor{port_type{}}, equal, data{port{53, port::udp}}};
+  predicate p2{type_extractor{real_type{}}, equal, data{real{5.3}}};
   predicate p3{field_extractor{"a"}, greater, field_extractor{"b"}};
   MESSAGE("conjunction");
-  CHECK(parsers::expr("x == 42 && :port == 53/udp"s, expr));
+  CHECK(parsers::expr("x == 42 && :real == 5.3"s, expr));
   CHECK_EQUAL(expr, expression(conjunction{p1, p2}));
-  CHECK(parsers::expr("x == 42 && :port == 53/udp && x == 42"s, expr));
+  CHECK(parsers::expr("x == 42 && :real == 5.3 && x == 42"s, expr));
   CHECK_EQUAL(expr, expression(conjunction{p1, p2, p1}));
-  CHECK(parsers::expr("x == 42 && ! :port == 53/udp && x == 42"s, expr));
+  CHECK(parsers::expr("x == 42 && ! :real == 5.3 && x == 42"s, expr));
   CHECK_EQUAL(expr, expression(conjunction{p1, negation{p2}, p1}));
   CHECK(parsers::expr("x > 0 && x < 42 && a.b == x.y"s, expr));
   CHECK(parsers::expr(
@@ -140,13 +140,13 @@ TEST(parseable - expression) {
   CHECK(caf::holds_alternative<attribute_extractor>(x0->lhs));
   CHECK(caf::holds_alternative<attribute_extractor>(x1->lhs));
   MESSAGE("disjunction");
-  CHECK(parsers::expr("x == 42 || :port == 53/udp || x == 42"s, expr));
+  CHECK(parsers::expr("x == 42 || :real == 5.3 || x == 42"s, expr));
   CHECK_EQUAL(expr, expression(disjunction{p1, p2, p1}));
   CHECK(parsers::expr("a==b || b==c || c==d"s, expr));
   MESSAGE("negation");
   CHECK(parsers::expr("! x == 42"s, expr));
   CHECK_EQUAL(expr, expression(negation{p1}));
-  CHECK(parsers::expr("!(x == 42 || :port == 53/udp)"s, expr));
+  CHECK(parsers::expr("!(x == 42 || :real == 5.3)"s, expr));
   CHECK_EQUAL(expr, expression(negation{disjunction{p1, p2}}));
   MESSAGE("parentheses");
   CHECK(parsers::expr("(x == 42)"s, expr));

@@ -125,9 +125,7 @@ template <class F>
 void decode(const type& t, const arrow::FixedSizeBinaryArray& arr, F& f) {
   DECODE_TRY_DISPATCH(address);
   DECODE_TRY_DISPATCH(subnet);
-  DECODE_TRY_DISPATCH(port);
-  VAST_WARNING(__func__,
-               "expected to decode an address, subnet, or port but got a",
+  VAST_WARNING(__func__, "expected to decode an address or subnet but got a",
                kind(t));
 }
 
@@ -277,13 +275,6 @@ auto subnet_at(const arrow::FixedSizeBinaryArray& arr, int64_t row) {
   return subnet{addr, bytes[16]};
 }
 
-auto port_at(const arrow::FixedSizeBinaryArray& arr, int64_t row) {
-  auto bytes = arr.raw_values() + (row * 3);
-  uint8_t n[2] = {bytes[0], bytes[1]};
-  return port(detail::to_host_order(*reinterpret_cast<uint16_t*>(n)),
-              static_cast<port::port_type>(bytes[2]));
-}
-
 auto timestamp_at(const arrow::TimestampArray& arr, int64_t row) {
   auto ts_value = static_cast<integer>(arr.Value(row));
   duration time_since_epoch{0};
@@ -387,12 +378,6 @@ public:
     result_ = subnet_at(arr, row_);
   }
 
-  void operator()(const arrow::FixedSizeBinaryArray& arr, const port_type&) {
-    if (arr.IsNull(row_))
-      return;
-    result_ = port_at(arr, row_);
-  }
-
   template <class T>
   void operator()(const arrow::StringArray& arr, const T&) {
     if (arr.IsNull(row_))
@@ -486,10 +471,6 @@ public:
 
   void operator()(const arrow::FixedSizeBinaryArray& arr, const subnet_type&) {
     apply(arr, subnet_at);
-  }
-
-  void operator()(const arrow::FixedSizeBinaryArray& arr, const port_type&) {
-    apply(arr, port_at);
   }
 
   void operator()(const arrow::StringArray& arr, const string_type&) {
