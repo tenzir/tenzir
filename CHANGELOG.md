@@ -25,7 +25,7 @@ Every entry has a category for which we use the following visual abbreviations:
 - 🐞 VAST no longer blocks when an invalid query operation is issued.
   [#1189](https://github.com/tenzir/vast/pull/1189)
 
-- 🎁 The storage required for index ip addresses has been optimized. This
+- 🎁 The storage required for index IP addresses has been optimized. This
   should result in significantly reduced memory usage over time, as well
   as faster restart times and reduced disk space requirements.
   [#1172](https://github.com/tenzir/vast/pull/1172)
