@@ -20,7 +20,7 @@ namespace vast {
 /// This version number defines compatibility of persistent state with with
 /// prior directory layouts and contents. Breaking changes shall bump the
 /// version number. A breaking change includes the structure, sequence and
-/// organization of the database directory itself, as well irreconcilable
+/// organization of the database directory itself, as well as incompatible
 /// changes in binary content.
 enum class db_version : uint8_t {
   invalid,
