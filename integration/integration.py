@@ -37,6 +37,13 @@ CURRENT_SUBPROCS: List[subprocess.Popen] = []
 SET_DIR = Path()
 
 
+class Result(Enum):
+    SUCCESS = 1  # Baseline comparison succeded.
+    FAILURE = 2  # Baseline mismatch.
+    ERROR = 3  # Crashes or returns with non-zero exit code.
+    TIMEOUT = 4 # Command timed out
+
+
 class Fixture(NamedTuple):
     enter: str
     exit: str
@@ -46,6 +53,7 @@ class Step(NamedTuple):
     command: List[str]
     input: Optional[Path]
     transformation: Optional[str]
+    expected_result: Optional[Result]
 
 
 class Condition(NamedTuple):
@@ -95,16 +103,22 @@ def spawn(*popenargs, **kwargs):
     return proc
 
 
-def try_wait(process, timeout):
+def try_wait(process, timeout, expected_result):
     """Wait for a specified time or terminate the process"""
     try:
         # Ignore SIGPIPE errors
         if process.wait(timeout) not in [0, -13]:
-            LOGGER.error(f"{process.args} returned {process.returncode}")
+            log = LOGGER.error
+            if expected_result == Result.ERROR:
+                log = LOGGER.debug
+            log(f"{process.args} returned {process.returncode}")
             return Result.ERROR
         return Result.SUCCESS
     except subprocess.TimeoutExpired:
-        LOGGER.error(f"timeout reached, terminating process")
+        log = LOGGER.error
+        if expected_result != Result.TIMEOUT:
+            log = LOGGER.debug
+        log(f"timeout reached, terminating process")
         process.terminate()
         return Result.TIMEOUT
 
@@ -127,18 +141,12 @@ def now():
     return time.process_time()
 
 
-class Result(Enum):
-    SUCCESS = 1  # Baseline comparison succeded.
-    FAILURE = 2  # Baseline mismatch.
-    ERROR = 3  # Crashes or returns with non-zero exit code.
-    TIMEOUT = 4 # Command timed out
-
-
 class TestSummary:
     """Stats keeper"""
 
     def __init__(self, step_count):
         self.step_count = step_count
+        self.unexpected_results = 0
         self.succeeded = 0
         self.failed = 0
         self.errors = 0
@@ -147,7 +155,7 @@ class TestSummary:
     def __repr__(self):
         return f"({self.step_count}/{self.succeeded}/{self.failed})"
 
-    def count(self, result):
+    def count(self, result, expected_result):
         """Count step result"""
         if result is Result.SUCCESS:
             self.succeeded += 1
@@ -159,6 +167,8 @@ class TestSummary:
             self.timeouts += 1
         else:
             pass
+        if result != expected_result:
+            self.unexpected_results += 1
 
     def dominant_state(self):
         """Reduce to a single Result"""
@@ -171,7 +181,7 @@ class TestSummary:
         return Result.SUCCESS
 
     def successful(self):
-        return self.step_count == self.succeeded
+        return self.unexpected_results == 0
 
 
 def empty(iterable):
@@ -193,7 +203,7 @@ def deduce_format(command):
     return "ascii"
 
 
-def run_step(basecmd, step_id, step, work_dir, baseline_dir, update_baseline):
+def run_step(basecmd, step_id, step, work_dir, baseline_dir, update_baseline, expected_result):
     try:
         stdout = work_dir / f"{step_id}.out"
         stderr = work_dir / f"{step_id}.err"
@@ -216,10 +226,10 @@ def run_step(basecmd, step_id, step, work_dir, baseline_dir, update_baseline):
                 incmd += ["cat", str(step.input)]
             info_string = " ".join(incmd) + " | " + info_string
             input_p = spawn(incmd, stdout=client.stdin)
-            result = try_wait(input_p, timeout=STEP_TIMEOUT - (now() - start_time))
+            result = try_wait(input_p, timeout=STEP_TIMEOUT - (now() - start_time), expected_result=expected_result)
             client.stdin.close()
-        result = try_wait(client, timeout=STEP_TIMEOUT - (now() - start_time))
-        if result is Result.ERROR:
+        result = try_wait(client, timeout=STEP_TIMEOUT - (now() - start_time), expected_result=expected_result)
+        if result is Result.ERROR and result != expected_result:
             LOGGER.debug("standard error:")
             for line in open(stderr).readlines()[-100:]:
                 LOGGER.debug(f"    {line}")
@@ -287,11 +297,13 @@ def run_step(basecmd, step_id, step, work_dir, baseline_dir, update_baseline):
                 )
             delta = list(diff)
             if delta:
-                LOGGER.error("baseline comparison failed")
-                sys.stdout.writelines(delta)
+                if expected_result != Result.FAILURE:
+                    LOGGER.error("baseline comparison failed")
+                    sys.stdout.writelines(delta)
                 return Result.FAILURE
     except subprocess.CalledProcessError as err:
-        LOGGER.error(err)
+        if expected_result != Result.ERROR:
+            LOGGER.error(err)
         return Result.ERROR
     return result
 
@@ -437,9 +449,9 @@ class Tester:
         for step in test.steps:
             step_id = "step_{:02d}".format(step_i)
             LOGGER.info(f"running step {step_i}: {step.command}")
-            result = run_step(cmd, step_id, step, work_dir, baseline_dir, self.update)
-            summary.count(result)
-            if result in [Result.ERROR, Result.TIMEOUT]:
+            result = run_step(cmd, step_id, step, work_dir, baseline_dir, self.update, step.expected_result)
+            summary.count(result, step.expected_result)
+            if result != step.expected_result:
                 LOGGER.error("skipping remaining steps after error")
                 break
             step_i += 1
@@ -486,6 +498,9 @@ def validate(data):
     def to_command(raw_command):
         return shlex.split(replace_path(raw_command))
 
+    def to_result(raw_result):
+        return Result[raw_result.upper()]
+
     fixture = schema.Schema(
         schema.And(
             {"enter": schema.And(str, len), "exit": schema.And(str, len)},
@@ -504,6 +519,9 @@ def validate(data):
                 ),
                 schema.Optional("transformation", default=None): schema.Use(
                     replace_path
+                ),
+                schema.Optional("expected_result", default=Result.SUCCESS): schema.Use(
+                    to_result
                 ),
             },
             schema.Use(to_step),

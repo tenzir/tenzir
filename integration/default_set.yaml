@@ -149,7 +149,14 @@ tests:
       - command: -N import zeek
         input: data/zeek/conn.log.gz
       - command: -N export json 'resp_h == 192.168.1.104'
-
+  Malformed Query:
+    tags: [export]
+    fixture: ServerTester
+    steps:
+      - command: export json 'yo thats not a query'
+        expected_result: error
+      - command: and thats not a command
+        expected_result: error
   Server Zeek conn log:
     tags: [server, import-export, zeek]
     fixture: ServerTester
