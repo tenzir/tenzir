@@ -46,13 +46,9 @@ pack(flatbuffers::FlatBufferBuilder& builder,
 } // namespace system
 
 /// Contains one synopsis per partition column.
-//  TODO: Turn this into a proper struct with its own `add()` function
-//        and its own `partition_synopsis.hpp` header.
-//        Then we could store this in the `active_partition_state` directly
-//        instead of using a meta_index with only one entry.
+//  TODO: Move this into a separate `partition_synopsis.hpp` header.
 struct partition_synopsis {
-  /// Returns a new partition synopsis for the same data but optimized for
-  /// size.
+  /// Optimizes the partition synopsis contents for size.
   void shrink();
 
   void add(const table_slice& slice, const caf::settings& synopsis_options);
