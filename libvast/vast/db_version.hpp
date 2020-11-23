@@ -22,20 +22,23 @@ namespace vast {
 /// version number. A breaking change includes the structure, sequence and
 /// organization of the database directory itself, as well irreconcilable
 /// changes in binary content.
-enum class layout_version : uint8_t {
+enum class db_version : uint8_t {
   invalid,
   v0,
   v1,
   count, // Number of enum values
 };
 
-std::ostream& operator<<(std::ostream& str, const layout_version& version);
+/// @relates db_version
+std::ostream& operator<<(std::ostream& str, const db_version& version);
 
-/// Read the layout version from a database directory.
-layout_version read_layout_version(const vast::path& dbdir);
+/// Reads the DB version from a database directory.
+/// @relates db_version
+db_version read_db_version(const vast::path& db_dir);
 
-/// Write the current layout version if `dbdir/VERSION` does not
+/// Writes the current DB version if `db_dir/VERSION` does not
 /// exist yet.
-caf::error initialize_layout_version(const vast::path& dbdir);
+/// @relates db_version
+caf::error initialize_db_version(const vast::path& db_dir);
 
 } // namespace vast

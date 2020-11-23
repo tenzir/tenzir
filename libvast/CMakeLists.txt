@@ -70,6 +70,7 @@ set(libvast_sources
     src/concept/hashable/xxhash.cpp
     src/concept/parseable/vast/expression.cpp
     src/data.cpp
+    src/db_version.cpp
     src/defaults.cpp
     src/detail/add_message_types.cpp
     src/detail/base64.cpp
@@ -125,7 +126,6 @@ set(libvast_sources
     src/io/save.cpp
     src/io/write.cpp
     src/json.cpp
-    src/layout_version.cpp
     src/logger.cpp
     src/meta_index.cpp
     src/msgpack.cpp
