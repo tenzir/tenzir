@@ -1,22 +1,23 @@
-{ nixpkgs ? import ./nix/pinned.nix, pkgs ? import ./nix { nixpkgs = nixpkgs; }, useClang ? pkgs.stdenv.isDarwin }:
+{ nixpkgs ? import ./nix/pinned.nix
+, pkgs ? import ./nix { nixpkgs = nixpkgs; }
+, useClang ? pkgs.stdenv.isDarwin
+}:
 let
   inherit (pkgs) lib;
   llvmPkgs = pkgs.buildPackages.llvmPackages_10;
-  stdenv = if useClang then llvmPkgs.libcxxStdenv else pkgs.stdenv;
-  static_stdenv = stdenv.hostPlatform.isMusl;
+  stdenv = if useClang then llvmPkgs.stdenv else pkgs.stdenv;
+  inherit (stdenv.hostPlatform) isStatic;
   mkShell = pkgs.mkShell.override { inherit stdenv; };
 in
 mkShell ({
   name = "vast-dev-" + (if useClang then "clang" else "gcc");
-  hardeningDisable = [ "fortify" ] ++ lib.optional static_stdenv "pic";
+  hardeningDisable = [ "fortify" ] ++ lib.optional isStatic "pic";
   inputsFrom = [ pkgs.vast ];
   shellHook = ''
     echo "Entering VAST environment"
   '';
-} // lib.optionalAttrs static_stdenv {
+} // lib.optionalAttrs isStatic {
   VAST_STATIC_EXECUTABLE = "ON";
-  ZSTD_ROOT = "${pkgs.zstd}";
-} // lib.optionalAttrs (stdenv.isLinux && !static_stdenv) {
+} // lib.optionalAttrs (stdenv.isLinux && !isStatic) {
   nativeBuildInputs = [ llvmPkgs.lldClang.bintools ];
-  NIX_CFLAGS_LINK = "-fuse-ld=lld";
 })

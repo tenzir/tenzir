@@ -20,12 +20,12 @@
 , jq
 , tcpdump
 , utillinux
-, static ? stdenv.hostPlatform.isMusl
 , versionOverride ? null
 , disableTests ? true
 , buildType ? "Release"
 }:
 let
+  inherit (stdenv.hostPlatform) isStatic;
   isCross = stdenv.buildPlatform != stdenv.hostPlatform;
 
   py3 = (let
@@ -69,7 +69,7 @@ stdenv.mkDerivation rec {
   propagatedNativeBuildInputs = [ pkgconfig pandoc ];
   buildInputs = [ libpcap jemalloc broker libyamlcpp ]
     # Required for backtrace on musl libc.
-    ++ lib.optional (static && buildType == "CI") libexecinfo;
+    ++ lib.optional (isStatic && buildType == "CI") libexecinfo;
   propagatedBuildInputs = [ arrow-cpp caf flatbuffers ];
 
   cmakeFlags = [
@@ -77,21 +77,21 @@ stdenv.mkDerivation rec {
     "-DCMAKE_INSTALL_SYSCONFDIR:PATH=/etc"
     "-DCMAKE_FIND_PACKAGE_PREFER_CONFIG=ON"
     "-DCAF_ROOT_DIR=${caf}"
-    "-DVAST_RELOCATABLE_INSTALL=${if static then "ON" else "OFF"}"
+    "-DVAST_RELOCATABLE_INSTALL=${if isStatic then "ON" else "OFF"}"
     "-DVAST_VERSION_TAG=${version}"
     "-DVAST_USE_JEMALLOC=ON"
     "-DBROKER_ROOT_DIR=${broker}"
   ] ++ lib.optionals (buildType == "CI") [
     "-DVAST_ENABLE_ASSERTIONS=ON"
     "-DENABLE_ADDRESS_SANITIZER=ON"
-  ] ++ lib.optionals static [
+  ] ++ lib.optionals isStatic [
     "-DVAST_STATIC_EXECUTABLE:BOOL=ON"
     "-DCMAKE_INTERPROCEDURAL_OPTIMIZATION:BOOL=ON"
     # Workaround for false positives in LTO mode.
     "-DCMAKE_CXX_FLAGS:STRING=-Wno-error=maybe-uninitialized"
   ] ++ lib.optional disableTests "-DBUILD_UNIT_TESTS=OFF";
 
-  hardeningDisable = lib.optional static "pic";
+  hardeningDisable = lib.optional isStatic "pic";
 
   doCheck = false;
   checkTarget = "test";
