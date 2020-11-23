@@ -451,7 +451,8 @@ void print_segment_v0(const vast::fbs::segment::v0* segment,
     indented_scope _(indent);
     size_t total_size = 0;
     for (auto flat_slice : *segment->slices()) {
-      auto chunk = vast::chunk::view(*flat_slice->data());
+      auto chunk = vast::chunk::make(flat_slice->data()->data(),
+                                     flat_slice->data()->size(), {});
       auto slice
         = vast::table_slice(std::move(chunk), vast::table_slice::verify::no);
       std::cout << indent << slice.layout().name() << ": " << slice.rows()

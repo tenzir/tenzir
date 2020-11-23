@@ -38,7 +38,7 @@ TEST(deleter) {
 
 TEST(access) {
   auto xs = std::vector<char>{'f', 'o', 'o'};
-  auto chk = chunk::take(std::move(xs));
+  auto chk = chunk::make(std::move(xs));
   REQUIRE_NOT_EQUAL(chk, nullptr);
   auto& x = *chk;
   CHECK_EQUAL(x.size(), 3u);
@@ -47,7 +47,7 @@ TEST(access) {
 
 TEST(slicing) {
   std::array<char, 100> buf = {};
-  auto x = chunk::take(std::move(buf));
+  auto x = chunk::make(std::move(buf));
   auto y = x->slice(50);
   auto z = y->slice(40, 5);
   CHECK_EQUAL(y->size(), 50u);
@@ -55,8 +55,8 @@ TEST(slicing) {
 }
 
 TEST(serialization) {
-  std::string_view str = "foobarbaz";
-  auto x = chunk::view(str);
+  std::string str = "foobarbaz";
+  auto x = chunk::make(std::move(str));
   std::vector<char> buf;
   CHECK_EQUAL(save(nullptr, buf, x), caf::none);
   chunk_ptr y;
@@ -66,18 +66,18 @@ TEST(serialization) {
 }
 
 TEST(as_bytes) {
-  std::string_view str = "foobarbaz";
+  std::string str = "foobarbaz";
   auto bytes
     = span{reinterpret_cast<const vast::byte*>(str.data()), str.size()};
-  auto x = chunk::view(str);
+  auto x = chunk::make(std::move(str));
   CHECK_EQUAL(bytes, as_bytes(x));
 }
 
 FIXTURE_SCOPE(chunk_tests, fixtures::filesystem)
 
 TEST(read / write) {
-  std::string_view str = "foobarbaz";
-  auto x = chunk::view(str);
+  std::string str = "foobarbaz";
+  auto x = chunk::make(std::move(str));
   auto filename = directory / "chunk";
   auto err = write(filename, x);
   CHECK_EQUAL(err, caf::none);

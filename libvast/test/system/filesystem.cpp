@@ -60,7 +60,7 @@ TEST(read) {
 TEST(write) {
   auto foo = "foo"s;
   auto copy = foo;
-  auto chk = chunk::take(std::move(copy));
+  auto chk = chunk::make(std::move(copy));
   REQUIRE(chk);
   auto filename = directory / foo;
   MESSAGE("write file via actor");

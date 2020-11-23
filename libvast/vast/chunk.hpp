@@ -67,39 +67,13 @@ public:
   /// @returns A chunk pointer or `nullptr` on failure.
   static chunk_ptr make(view_type view, deleter_type&& deleter) noexcept;
 
-  /// Construct a chunk that views a byte buffer.
-  /// @param buffer The byte buffer.
-  /// @note Use this function with caution! The returned chunk does not own the
-  /// viewed buffer.
-  /// @returns A chunk pointer or `nullptr` on failure.
-  template <class Buffer>
-  static auto view(const Buffer& buffer)
-    -> decltype(as_bytes(buffer), chunk_ptr{}) {
-    auto view = as_bytes(buffer);
-    return make(view, {});
-  }
-
-  /// Construct a chunk that views a byte buffer.
-  /// @param buffer The byte buffer.
-  /// @note Use this function with caution! The returned chunk does not own the
-  /// viewed buffer.
-  /// @returns A chunk pointer or `nullptr` on failure.
-  template <class Buffer, class = std::enable_if_t<
-                            sizeof(*std::data(std::declval<Buffer>())) == 1>>
-  static auto view(const Buffer& buffer)
-    -> decltype(std::data(buffer), std::size(buffer), chunk_ptr{}) {
-    const auto data = std::data(buffer);
-    const auto size = std::size(buffer);
-    return make(data, size, {});
-  }
-
   /// Construct a chunk from a byte buffer, and bind the lifetime of the chunk
   /// to the buffer.
   /// @param buffer The byte buffer.
   /// @returns A chunk pointer or `nullptr` on failure.
   template <class Buffer, class = std::enable_if_t<
                             std::negation_v<std::is_lvalue_reference<Buffer>>>>
-  static auto take(Buffer&& buffer) -> decltype(as_bytes(buffer), chunk_ptr{}) {
+  static auto make(Buffer&& buffer) -> decltype(as_bytes(buffer), chunk_ptr{}) {
     // If the buffer is trivially-move-assignable, put a copy on the heap first.
     if constexpr (std::is_trivially_move_assignable_v<Buffer>) {
       auto copy = std::make_unique<Buffer>(std::move(buffer));
@@ -123,7 +97,7 @@ public:
             class = std::enable_if_t<
               std::negation_v<std::is_lvalue_reference<
                 Buffer>> && sizeof(*std::data(std::declval<Buffer>())) == 1>>
-  static auto take(Buffer&& buffer)
+  static auto make(Buffer&& buffer)
     -> decltype(std::data(buffer), std::size(buffer), chunk_ptr{}) {
     // If the buffer is trivially-move-assignable, put a copy on the heap first.
     if constexpr (std::is_trivially_move_assignable_v<Buffer>) {
@@ -144,10 +118,10 @@ public:
 
   /// Avoid the common mistake of binding ownership to a span.
   template <class Byte, size_t Extent>
-  static auto take(span<Byte, Extent>&&) = delete;
+  static auto make(span<Byte, Extent>&&) = delete;
 
   /// Avoid the common mistake of binding ownership to a string view.
-  static auto take(std::string_view&&) = delete;
+  static auto make(std::string_view&&) = delete;
 
   /// Memory-maps a chunk from a read-only file.
   /// @param filename The name of the file to memory-map.
@@ -219,7 +193,7 @@ private:
   chunk(view_type view, deleter_type&& deleter) noexcept;
 
   /// A sized view on the raw data.
-  const span<const value_type> view_;
+  const view_type view_;
 
   /// The function to delete the data.
   deleter_type deleter_;

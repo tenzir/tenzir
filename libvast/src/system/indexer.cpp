@@ -53,7 +53,7 @@ vast::chunk_ptr chunkify(const value_index_ptr& idx) {
   auto error = sink(idx);
   if (error)
     return nullptr;
-  return chunk::take(std::move(buf));
+  return chunk::make(std::move(buf));
 }
 
 } // namespace

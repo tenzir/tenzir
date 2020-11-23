@@ -28,7 +28,7 @@ chunk_ptr release(flatbuffers::FlatBufferBuilder& builder) {
   // buffer returned by `builder.Release()` deletes the buffer in its destructor
   // with the correct allocator. This ensures that the chunk can correctly
   // release the memory even if a non-default allocator is used.
-  return chunk::take(builder.Release());
+  return chunk::make(builder.Release());
 }
 
 flatbuffers::Verifier make_verifier(span<const byte> xs) {
