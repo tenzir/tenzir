@@ -36,6 +36,10 @@ void bool_synopsis::add(data_view x) {
     false_ = true;
 }
 
+size_t bool_synopsis::size_bytes() const {
+  return sizeof(bool_synopsis);
+}
+
 caf::optional<bool> bool_synopsis::lookup(relational_operator op,
                                           data_view rhs) const {
   if (auto b = caf::get_if<view<bool>>(&rhs)) {

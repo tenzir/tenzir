@@ -90,6 +90,11 @@ public:
     ips_.insert(*addr_view);
   }
 
+  size_t size_bytes() const override {
+    return sizeof(buffered_address_synopsis)
+      + ips_.size() * sizeof(typename decltype(ips_)::node_type);
+  }
+
   caf::optional<bool>
   lookup(relational_operator op, data_view rhs) const override {
     switch (op) {

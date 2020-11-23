@@ -31,6 +31,8 @@ public:
 
   bool equals(const synopsis& other) const noexcept override;
 
+  size_t size_bytes() const override;
+
   caf::error serialize(caf::serializer& sink) const override;
 
   caf::error deserialize(caf::deserializer& source) override;

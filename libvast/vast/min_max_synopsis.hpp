@@ -82,6 +82,10 @@ public:
     }
   }
 
+  size_t size_bytes() const override {
+    return sizeof(min_max_synopsis);
+  }
+
   caf::error serialize(caf::serializer& sink) const override {
     return sink(min_, max_);
   }

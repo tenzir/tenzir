@@ -53,6 +53,10 @@ struct partition_synopsis {
 
   void add(const table_slice& slice, const caf::settings& synopsis_options);
 
+  /// @returns A best-effort estimate of the amount of memory used by this
+  ///          synopsis.
+  size_t size_bytes() const;
+
   /// Synopsis data structures for individual columns.
   std::unordered_map<qualified_record_field, synopsis_ptr> field_synopses_;
 };
@@ -88,6 +92,10 @@ public:
   /// @param expr The expression to lookup.
   /// @returns A vector of UUIDs representing candidate partitions.
   std::vector<uuid> lookup(const expression& expr) const;
+
+  /// @returns A best-effort estimate of the amount of memory used for this meta
+  /// index (in bytes).
+  size_t size_bytes() const;
 
   /// Gets the options for the synopsis factory.
   /// @returns A reference to the synopsis options.

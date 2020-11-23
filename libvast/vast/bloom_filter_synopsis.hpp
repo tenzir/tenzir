@@ -66,6 +66,10 @@ public:
     return this->type() == rhs.type() && bloom_filter_ == rhs.bloom_filter_;
   }
 
+  size_t size_bytes() const override {
+    return bloom_filter_.size_bytes();
+  }
+
   caf::error serialize(caf::serializer& sink) const override {
     return sink(bloom_filter_);
   }
