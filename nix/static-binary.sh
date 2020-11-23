@@ -3,13 +3,14 @@
 
 dir="$(dirname "$(readlink -f "$0")")"
 toplevel="$(git -C ${dir} rev-parse --show-toplevel)"
-desc="$(git -C ${dir} describe)"
+desc="$(git -C ${dir} describe --tags --long --abbrev=10 --dirty )"
 vast_rev="$(git -C "${toplevel}" rev-parse HEAD)"
 
 target="${STATIC_BINARY_TARGET:-vast}"
 
 if [ "$1" == "--use-head" ]; then
   source_json="$(nix-prefetch-github --rev=${vast_rev} tenzir vast)"
+  desc="$(git -C ${dir} describe --tags --long --abbrev=10 HEAD)"
   read -r -d '' exp <<EOF
   with import ${dir} {};
   pkgsStatic."${target}".override {

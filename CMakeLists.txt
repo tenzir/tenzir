@@ -9,7 +9,7 @@ cmake_minimum_required(VERSION 3.11...3.18 FATAL_ERROR)
 # Extract VERSION
 if (NOT VAST_VERSION_TAG)
   execute_process(
-    COMMAND "git" "describe" "--tags" "--long" "--dirty"
+    COMMAND "git" "describe" "--tags" "--long" "--dirty" "--abbrev=10"
     WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
     RESULT_VARIABLE git_describe_result
     OUTPUT_VARIABLE VAST_VERSION_TAG
