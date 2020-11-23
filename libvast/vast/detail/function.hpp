@@ -140,9 +140,9 @@
 #  define FU2_DETAIL_UNREACHABLE() FU2_DETAIL_UNREACHABLE_INTRINSIC()
 #endif
 
-namespace vast {
+namespace vast::detail {
 
-namespace detail::fu2 {
+namespace fu2 {
 
 template <typename Config, typename Property>
 class function;
@@ -1622,7 +1622,7 @@ bool operator!=(std::nullptr_t, function<Config, Property> const& f) {
 // Default intended object size of the function
 using object_size = std::integral_constant<std::size_t, 32U>;
 
-} // namespace detail::fu2
+} // namespace fu2
 
 /// Can be passed to function_base as template argument which causes
 /// the internal small buffer to be sized according to the given size,
@@ -1636,7 +1636,7 @@ struct capacity_fixed {
 
 /// Default capacity for small functor optimization
 struct capacity_default
-  : capacity_fixed<detail::fu2::object_size::value - (2 * sizeof(void*))> {};
+  : capacity_fixed<fu2::object_size::value - (2 * sizeof(void*))> {};
 
 /// Can be passed to function_base as template argument which causes
 /// the internal small buffer to be removed from the callable wrapper.
@@ -1687,9 +1687,9 @@ struct capacity_can_hold {
 ///
 template <bool IsOwning, bool IsCopyable, typename Capacity, bool IsThrowing,
           bool HasStrongExceptGuarantee, typename... Signatures>
-using function_base = detail::fu2::function<
-  detail::fu2::config<IsOwning, IsCopyable, Capacity>,
-  detail::fu2::property<IsThrowing, HasStrongExceptGuarantee, Signatures...>>;
+using function_base = fu2::function<
+  fu2::config<IsOwning, IsCopyable, Capacity>,
+  fu2::property<IsThrowing, HasStrongExceptGuarantee, Signatures...>>;
 
 /// An owning copyable function wrapper for arbitrary callable types.
 template <typename... Signatures>
@@ -1719,10 +1719,10 @@ using function_view = function_base<false, true, capacity_default, //
 /// You may disable the inclusion of the functional header
 /// through defining `FU2_WITH_NO_FUNCTIONAL_HEADER`.
 ///
-using detail::fu2::type_erasure::invocation_table::bad_function_call;
+using fu2::type_erasure::invocation_table::bad_function_call;
 #endif
 
-} // namespace vast
+} // namespace vast::detail
 
 #undef FU2_DETAIL_EXPAND_QUALIFIERS
 #undef FU2_DETAIL_EXPAND_QUALIFIERS_NOEXCEPT

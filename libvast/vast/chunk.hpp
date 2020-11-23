@@ -15,7 +15,7 @@
 
 #include "vast/byte.hpp"
 #include "vast/detail/assert.hpp"
-#include "vast/function.hpp"
+#include "vast/detail/function.hpp"
 #include "vast/fwd.hpp"
 #include "vast/span.hpp"
 
@@ -37,7 +37,7 @@ public:
   using pointer = typename view_type::pointer;
   using size_type = typename view_type::size_type;
   using iterator = typename view_type::iterator;
-  using deleter_type = unique_function<void() noexcept>;
+  using deleter_type = detail::unique_function<void() noexcept>;
 
   // -- constructors, destructors, and assignment operators --------------------
 
