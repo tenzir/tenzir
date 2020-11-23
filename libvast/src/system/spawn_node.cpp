@@ -54,7 +54,7 @@ spawn_node(caf::scoped_actor& self, const caf::settings& opts) {
     return err;
   // TODO(ch20326): Replace this with a more specific check in the components
   // that rely on a specific DB version.
-  if (read_db_version(abs_dir) != db_version::v0)
+  if (read_db_version(abs_dir) != db_version::latest)
     return make_error(ec::filesystem_error, "wrong or missing database version "
                                             "in db-directory");
   if (!abs_dir.is_writable())

@@ -26,7 +26,8 @@ enum class db_version : uint8_t {
   invalid,
   v0,
   v1,
-  count, // Number of enum values
+  latest = v1, // Alias for the latest version
+  count,       // Number of enum values
 };
 
 /// @relates db_version

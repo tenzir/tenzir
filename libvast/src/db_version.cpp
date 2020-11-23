@@ -78,7 +78,7 @@ caf::error initialize_db_version(const vast::path& db_dir) {
   if (exists(version_path))
     return ec::no_error;
   std::ofstream fs(version_path.str());
-  fs << to_string(db_version::v1) << std::endl;
+  fs << to_string(db_version::latest) << std::endl;
   if (!fs)
     return make_error(ec::filesystem_error, "could not write version file");
   return ec::no_error;
