@@ -68,7 +68,8 @@ make_data_b(std::string a, vast::count b, vast::real c, std::string d) {
   return make_data(mock_layout_b, a, b, c, d);
 }
 
-// This one is incompatible with the others.
+// This one is incompatible with the other mock layouts, because it is not a
+// superset of the others.
 const vast::record_type mock_layout_c = vast::record_type{
   {"a", vast::string_type{}},
 }.name("mock");

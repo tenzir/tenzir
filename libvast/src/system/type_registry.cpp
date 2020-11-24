@@ -98,45 +98,25 @@ caf::error type_registry_state::load_from_disk() {
 }
 
 void type_registry_state::insert(vast::type layout) {
-  auto flattened_layout = flatten(layout);
-  auto& old_layouts = data[flattened_layout.name()].value;
-  // Helper function.
-  auto is_compatible = [](const type& x) noexcept {
-    auto lhs = caf::get_if<record_type>(&x);
-    return [&, lhs](const type& y) noexcept {
-      auto rhs = caf::get_if<record_type>(&y);
-      // If they are not record types, check if they are congruent.
-      if (!lhs || !rhs)
-        return congruent(x, y);
-      // Check whether all fields of rhs exist in lhs, i.e., no new fields were
-      // added.
-      for (auto&& rf : rhs->fields) {
-        if (auto lf = lhs->find(rf.name)) {
-          // If there's a type mismatch, exit early as well.
-          if (!congruent(lf->type, rf.type))
-            return false;
-        } else {
-          // Not all fields of rhs exist in lhs. Exit early.
-          return false;
-        }
-      }
-      // We passed the test for all fields. Yay!
-      return true;
-    };
+  // Flatten all incoming types first.
+  auto new_layout = flatten(layout);
+  auto& old_layouts = data[new_layout.name()].value;
+  // Check whether the new layout is compatible with the old one, i.e., whether
+  // the new layout is a superset of all existing layouts. If it isn't, forget
+  // about old versions of the layout.
+  auto is_compatible = [&](const auto& old_layout) {
+    return is_superset(old_layout, new_layout);
   };
-  // Check whether the new layout is compatible with the old one. If it isn't,
-  // forget about old versions of the layout.
-  auto are_all_compatible = std::all_of(old_layouts.begin(), old_layouts.end(),
-                                        is_compatible(flattened_layout));
+  auto are_all_compatible
+    = std::all_of(old_layouts.begin(), old_layouts.end(), is_compatible);
   if (!are_all_compatible) {
-    VAST_WARNING(self, "detected an incompatible version of",
-                 flattened_layout.name(), "and forgets existing versions",
-                 flattened_layout.name());
+    VAST_WARNING(self, "detected an incompatible version of", new_layout.name(),
+                 "and forgets existing versions");
     old_layouts.clear();
   }
   // Insert into the existing bucket.
   if ([[maybe_unused]] auto [hint, success]
-      = old_layouts.insert(std::move(flattened_layout));
+      = old_layouts.insert(std::move(new_layout));
       success) {
     VAST_DEBUG(self, "registered", hint->name());
   }

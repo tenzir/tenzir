@@ -824,6 +824,12 @@ bool compatible(const type& lhs, relational_operator op, const data& rhs);
 /// @relates type data
 bool compatible(const data& lhs, relational_operator op, const type& rhs);
 
+/// Checks whether a type is a superset of another.
+/// @param x The first type.
+/// @param y The second type.
+/// @returns `true` *iff* *y* is a superset of *x*.
+bool is_superset(const type& x, const type& y);
+
 /// Checks whether data and type fit together.
 /// @param t The type that describes *d*.
 /// @param x The data to be checked against *t*.

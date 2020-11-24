@@ -704,6 +704,29 @@ bool compatible(const data& lhs, relational_operator op, const type& rhs) {
   return compatible(rhs, flip(op), lhs);
 }
 
+bool is_superset(const type& x, const type& y) {
+  auto sub = caf::get_if<record_type>(&x);
+  auto super = caf::get_if<record_type>(&y);
+  // If either of the types is not a record type, check if they are
+  // congruent instead.
+  if (!sub || !super)
+    return congruent(x, y);
+  // Check whether all fields of the subset exist in the superset, i.e., no new
+  // fields were added.
+  for (auto&& field : sub->fields) {
+    if (auto match = super->find(field.name)) {
+      // Perform the check recursively to support nested record txpes.
+      if (!is_superset(field.type, match->type))
+        return false;
+    } else {
+      // Not all fields of the subset exist in the superset; exit early.
+      return false;
+    }
+  }
+  // We passed the test for all fields. Yay!
+  return true;
+}
+
 // WARNING: making changes to the logic of this function requires adapting the
 // companion overload in view.cpp.
 bool type_check(const type& t, const data& x) {
