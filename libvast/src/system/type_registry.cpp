@@ -129,7 +129,7 @@ void type_registry_state::insert(vast::type layout) {
   auto are_all_compatible = std::all_of(old_layouts.begin(), old_layouts.end(),
                                         is_compatible(flattened_layout));
   if (!are_all_compatible) {
-    VAST_VERBOSE(self, "detected an incompatible version of",
+    VAST_WARNING(self, "detected an incompatible version of",
                  flattened_layout.name(), "and forgets existing versions",
                  flattened_layout.name());
     old_layouts.clear();
