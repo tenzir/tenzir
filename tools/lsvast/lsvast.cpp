@@ -451,6 +451,11 @@ void print_segment_v0(const vast::fbs::segment::v0* segment,
     indented_scope _(indent);
     size_t total_size = 0;
     for (auto flat_slice : *segment->slices()) {
+      // We're intentionally creating a chunk without a deleter here, i.e., a
+      // chunk that does not actually take ownership of its data. This is
+      // necessary because we're accessing `vast::fbs::Segment` directly instead
+      // of going through `vast::segment`, which has the necessary framing to
+      // give out table slices that share the segment's lifetime.
       auto chunk = vast::chunk::make(flat_slice->data()->data(),
                                      flat_slice->data()->size(), {});
       auto slice
