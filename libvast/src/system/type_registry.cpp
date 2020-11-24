@@ -104,9 +104,8 @@ void type_registry_state::insert(vast::type layout) {
   // Check whether the new layout is compatible with the old one, i.e., whether
   // the new layout is a superset of all existing layouts. If it isn't, forget
   // about old versions of the layout.
-  auto is_compatible = [&](const auto& old_layout) {
-    return is_superset(old_layout, new_layout);
-  };
+  auto is_compatible
+    = [&](const auto& old_layout) { return is_subset(old_layout, new_layout); };
   auto are_all_compatible
     = std::all_of(old_layouts.begin(), old_layouts.end(), is_compatible);
   if (!are_all_compatible) {
