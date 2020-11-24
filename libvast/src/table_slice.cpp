@@ -16,7 +16,6 @@
 #include "vast/chunk.hpp"
 #include "vast/defaults.hpp"
 #include "vast/detail/assert.hpp"
-#include "vast/detail/keep.hpp"
 #include "vast/detail/overload.hpp"
 #include "vast/error.hpp"
 #include "vast/expression.hpp"
@@ -159,11 +158,11 @@ table_slice::table_slice(chunk_ptr&& chunk, enum verify verify) noexcept
       []() noexcept { die("invalid table slice encoding"); },
       [&](const auto& encoded) noexcept {
         auto& state_ptr = state(encoded, state_);
-        state_ptr = new std::decay_t<decltype(*state_ptr)>{encoded};
-        chunk_->add_deletion_step([state_ptr]() noexcept {
-          --num_instances_;
-          delete state_ptr;
-        });
+        auto state
+          = std::make_unique<std::decay_t<decltype(*state_ptr)>>(encoded);
+        state_ptr = state.get();
+        chunk_->add_deletion_step(
+          [state = std::move(state)]() noexcept { --num_instances_; });
       },
     };
     visit(f, as_flatbuffer(chunk_));
@@ -179,12 +178,11 @@ table_slice::table_slice(chunk_ptr&& chunk, enum verify verify,
       []() noexcept { die("invalid table slice encoding"); },
       [&](const auto& encoded) noexcept {
         auto& state_ptr = state(encoded, state_);
-        state_ptr
-          = new std::decay_t<decltype(*state_ptr)>{encoded, std::move(layout)};
-        chunk_->add_deletion_step([state_ptr]() noexcept {
-          --num_instances_;
-          delete state_ptr;
-        });
+        auto state = std::make_unique<std::decay_t<decltype(*state_ptr)>>(
+          encoded, std::move(layout));
+        state_ptr = state.get();
+        chunk_->add_deletion_step(
+          [state = std::move(state)]() noexcept { --num_instances_; });
       },
     };
     visit(f, as_flatbuffer(chunk_));
@@ -195,11 +193,12 @@ table_slice::table_slice(const fbs::FlatTableSlice& flat_slice,
                          const chunk_ptr& parent_chunk,
                          enum verify verify) noexcept {
   const auto flat_slice_begin
-    = reinterpret_cast<const char*>(flat_slice.data()->data());
+    = reinterpret_cast<const byte*>(flat_slice.data()->data());
   const auto flat_slice_size = flat_slice.data()->size();
-  VAST_ASSERT(flat_slice_begin >= parent_chunk->begin());
-  VAST_ASSERT(flat_slice_begin + flat_slice_size <= parent_chunk->end());
-  auto chunk = parent_chunk->slice(flat_slice_begin - parent_chunk->begin(),
+  VAST_ASSERT(flat_slice_begin >= parent_chunk->data());
+  VAST_ASSERT(flat_slice_begin + flat_slice_size
+              <= parent_chunk->data() + parent_chunk->size());
+  auto chunk = parent_chunk->slice(flat_slice_begin - parent_chunk->data(),
                                    flat_slice_size);
   // Delegate the sliced chunk to the constructor.
   *this = table_slice{std::move(chunk), verify};
@@ -366,8 +365,13 @@ std::shared_ptr<arrow::RecordBatch> as_record_batch(const table_slice& slice) {
         // returned record batch is valid, and capturing the batch ensures that
         // guarantee for the underlying Arrow Buffer object.
         auto batch = state(encoded, slice.state_)->record_batch();
+        const auto data = batch.get();
         auto result = std::shared_ptr<arrow::RecordBatch>{
-          batch.get(), detail::keep(batch, slice)};
+          data,
+          [batch = std::move(batch), slice](arrow::RecordBatch*) noexcept {
+            static_cast<void>(batch);
+            static_cast<void>(slice);
+          }};
         return result;
       } else {
         // Rebuild the slice as an Arrow-encoded table slice.

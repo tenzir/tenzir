@@ -82,7 +82,6 @@ set(libvast_sources
     src/detail/fill_status_map.cpp
     src/detail/line_range.cpp
     src/detail/make_io_stream.cpp
-    src/detail/mmapbuf.cpp
     src/detail/pid_file.cpp
     src/detail/posix.cpp
     src/detail/process.cpp
@@ -361,7 +360,6 @@ set(tests
     test/iterator.cpp
     test/json.cpp
     test/meta_index.cpp
-    test/mmapbuf.cpp
     test/msgpack.cpp
     test/msgpack_table_slice.cpp
     test/offset.cpp

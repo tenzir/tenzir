@@ -15,78 +15,114 @@
 
 #include "vast/byte.hpp"
 #include "vast/detail/assert.hpp"
-#include "vast/detail/keep.hpp"
-#include "vast/detail/operators.hpp"
-#include "vast/detail/type_traits.hpp"
-#include "vast/die.hpp"
+#include "vast/detail/function.hpp"
 #include "vast/fwd.hpp"
 #include "vast/span.hpp"
 
-#include <caf/fwd.hpp>
 #include <caf/intrusive_ptr.hpp>
 #include <caf/ref_counted.hpp>
 
-#include <cstddef>
-#include <cstring>
-#include <functional>
-#include <memory>
-#include <string>
+#include <type_traits>
 #include <utility>
 
 namespace vast {
 
-/// A contiguous block of memory. A chunk must not be empty.
-class chunk : public caf::ref_counted {
-  chunk() = delete;
-  chunk& operator=(const chunk&) = delete;
-
+/// A reference-counted contiguous block of memory. A chunk supports custom
+/// deleters for custom deallocations when the last instance goes out of scope.
+class chunk final : public caf::ref_counted {
 public:
-  // -- member types ----------------------------------------------------------
+  // -- member types -----------------------------------------------------------
 
-  using value_type = char;
-  using pointer = value_type*;
-  using const_pointer = const value_type*;
-  using size_type = size_t;
-  using const_iterator = const char*;
-  using deleter_type = std::function<void()>;
+  using value_type = byte;
+  using view_type = span<const value_type>;
+  using pointer = typename view_type::pointer;
+  using size_type = typename view_type::size_type;
+  using iterator = typename view_type::iterator;
+  using deleter_type = detail::unique_function<void() noexcept>;
 
-  // -- factory functions -----------------------------------------------------
+  // -- constructors, destructors, and assignment operators --------------------
 
-  /// Constructs a chunk of a particular size using `::operator new`.
-  /// @param size The number of bytes to allocate.
-  /// @returns A chunk pointer or `nullptr` on failure.
-  /// @pre `size > 0`
-  static chunk_ptr make(size_type size);
+  /// Forbid all means of construction explicitly.
+  chunk() noexcept = delete;
+  chunk(const chunk&) noexcept = delete;
+  chunk& operator=(const chunk&) noexcept = delete;
+  chunk(chunk&&) noexcept = delete;
+  chunk& operator=(chunk&&) noexcept = delete;
+
+  /// Destroys the chunk and releases owned memory via the deleter.
+  ~chunk() noexcept override;
+
+  // -- factory functions ------------------------------------------------------
 
   /// Constructs a chunk of particular size and pointer to data.
-  /// @param size The number of bytes *data* points to.
   /// @param data The raw byte data.
+  /// @param size The number of bytes *data* points to.
   /// @param deleter The function to delete the data.
   /// @returns A chunk pointer or `nullptr` on failure.
-  /// @pre `size > 0 && static_cast<bool>(deleter)`
-  static chunk_ptr make(size_type size, const void* data, deleter_type deleter);
+  static chunk_ptr
+  make(const void* data, size_type size, deleter_type&& deleter) noexcept;
 
-  /// Construct a chunk from a std::vector of bytes.
-  /// @param xs The std::vector of bytes.
+  /// Constructs a chunk of particular size and pointer to data.
+  /// @param view The span holding the raw data.
+  /// @param deleter The function to delete the data.
   /// @returns A chunk pointer or `nullptr` on failure.
-  /// @pre `std::size(xs) != 0`
-  // FIXME: Make a type whitelist. This optimization only makes sense for owning
-  // containers of bytes that implement move constructors. (i.e. we want to
-  // allow vector<char>, vector<byte>, flatbuffer, etc. but not string_view,
-  // vast::span, etc.)
-  template <typename Byte>
-  static chunk_ptr make(std::vector<Byte>&& xs) {
-    static_assert(sizeof(Byte) == 1);
-    VAST_ASSERT(std::size(xs) != 0);
-    auto shared = std::make_shared<std::vector<Byte>>(std::move(xs));
-    return make(shared->size(), shared->data(), detail::keep(shared));
+  static chunk_ptr make(view_type view, deleter_type&& deleter) noexcept;
+
+  /// Construct a chunk from a byte buffer, and bind the lifetime of the chunk
+  /// to the buffer.
+  /// @param buffer The byte buffer.
+  /// @returns A chunk pointer or `nullptr` on failure.
+  template <class Buffer, class = std::enable_if_t<
+                            std::negation_v<std::is_lvalue_reference<Buffer>>>>
+  static auto make(Buffer&& buffer) -> decltype(as_bytes(buffer), chunk_ptr{}) {
+    // If the buffer is trivially-move-assignable, put a copy on the heap first.
+    if constexpr (std::is_trivially_move_assignable_v<Buffer>) {
+      auto copy = std::make_unique<Buffer>(std::move(buffer));
+      auto view = as_bytes(*copy);
+      return make(view, [copy = std::move(copy)]() noexcept {
+        static_cast<void>(copy);
+      });
+    } else {
+      auto view = as_bytes(buffer);
+      return make(view, [buffer = std::move(buffer)]() noexcept {
+        static_cast<void>(buffer);
+      });
+    }
   }
 
-  // Construct a chunk by copying a range of bytes.
-  template <typename Byte, size_t Extent>
-  static chunk_ptr copy(span<Byte, Extent> span) {
-    return make(std::vector(span.begin(), span.end()));
+  /// Construct a chunk from a byte buffer, and binds the lifetime of the chunk
+  /// to the buffer.
+  /// @param buffer The byte buffer.
+  /// @returns A chunk pointer or `nullptr` on failure.
+  template <class Buffer,
+            class = std::enable_if_t<
+              std::negation_v<std::is_lvalue_reference<
+                Buffer>> && sizeof(*std::data(std::declval<Buffer>())) == 1>>
+  static auto make(Buffer&& buffer)
+    -> decltype(std::data(buffer), std::size(buffer), chunk_ptr{}) {
+    // If the buffer is trivially-move-assignable, put a copy on the heap first.
+    if constexpr (std::is_trivially_move_assignable_v<Buffer>) {
+      auto copy = std::make_unique<Buffer>(std::move(buffer));
+      const auto data = std::data(*copy);
+      const auto size = std::size(*copy);
+      return make(data, size, [copy = std::move(copy)]() noexcept {
+        static_cast<void>(copy);
+      });
+    } else {
+      const auto data = std::data(buffer);
+      const auto size = std::size(buffer);
+      return make(data, size, [buffer = std::move(buffer)]() noexcept {
+        static_cast<void>(buffer);
+      });
+    }
   }
+
+  /// Avoid the common mistake of binding ownership to a span.
+  template <class Byte, size_t Extent>
+  static auto make(span<Byte, Extent>&&) = delete;
+
+  /// Avoid the common mistake of binding ownership to a string view.
+  static auto make(std::string_view&&) = delete;
 
   /// Memory-maps a chunk from a read-only file.
   /// @param filename The name of the file to memory-map.
@@ -96,52 +132,30 @@ public:
   static chunk_ptr
   mmap(const path& filename, size_type size = 0, size_type offset = 0);
 
-  /// Destroys the chunk and releases owned memory via the deleter.
-  ~chunk() noexcept override;
+  // -- container facade -------------------------------------------------------
 
-  // -- container API ---------------------------------------------------------
-
-  /// @returns The pointer to the chunk buffer.
-  const_pointer data() const noexcept;
+  /// @returns The pointer to the chunk.
+  pointer data() const noexcept;
 
   /// @returns The size of the chunk.
   size_type size() const noexcept;
 
-  // -- iteration -------------------------------------------------------------
-
   /// @returns A pointer to the first byte in the chunk.
-  const_iterator begin() const noexcept;
+  iterator begin() const noexcept;
 
   /// @returns A pointer to one past the last byte in the chunk.
-  const_iterator end() const noexcept;
+  iterator end() const noexcept;
 
-  // -- accessors -------------------------------------------------------------
-
-  /// Retrieves a value at given offset.
-  /// @param i The position of the byte.
-  /// @returns The value at position *i*.
-  /// @pre `i < size()`
-  value_type operator[](size_type i) const noexcept;
-
-  /// Casts the chunk data into a immutable pointer of a desired type.
-  /// @tparam T the type to cast to.
-  /// @param offset The offset to start at.
-  /// @returns a pointer of type `const T*` at position *offset*.
-  template <class T>
-  const T* as(size_type offset = 0) const noexcept {
-    static_assert(std::is_trivial_v<T>, "'T' must be a trivial type");
-    VAST_ASSERT(offset < size());
-    auto ptr = data() + offset;
-    return reinterpret_cast<const T*>(std::launder(ptr));
-  }
+  // -- accessors --------------------------------------------------------------
 
   /// Creates a new chunk that structurally shares the data of this chunk.
   /// @param start The offset from the beginning where to begin the new chunk.
-  /// @param length The length of the slice, beginning at *start*. If 0, the
-  ///               slice ranges from *start* to the end of the chunk.
+  /// @param length The length of the slice, beginning at *start*.
   /// @returns A new chunk over the subset.
-  /// @pre `start + length < size()`
-  chunk_ptr slice(size_type start, size_type length = 0) const;
+  /// @pre `start < size()`
+  chunk_ptr
+  slice(size_type start, size_type length
+                         = std::numeric_limits<size_type>::max()) const;
 
   /// Adds an additional step for deleting this chunk.
   /// @param step Function object that gets called after all previous deletion
@@ -151,41 +165,39 @@ public:
   void add_deletion_step(Step&& step) noexcept {
     static_assert(std::is_nothrow_invocable_r_v<void, Step>,
                   "'Step' must have the signature 'void () noexcept'");
-    auto g = [first = std::move(deleter_),
-              second = std::forward<Step>(step)]() noexcept {
-      std::invoke(std::move(first));
-      std::invoke(std::move(second));
-    };
-    deleter_ = std::move(g);
+    if (deleter_) {
+      auto g = [first = std::move(deleter_),
+                second = std::forward<Step>(step)]() mutable noexcept {
+        std::invoke(std::move(first));
+        std::invoke(std::move(second));
+      };
+      deleter_ = std::move(g);
+    } else {
+      deleter_ = std::move(step);
+    }
   }
 
   // -- concepts --------------------------------------------------------------
 
   friend span<const byte> as_bytes(const chunk_ptr& x) noexcept;
-
   friend caf::error write(const path& filename, const chunk_ptr& x);
-
   friend caf::error read(const path& filename, chunk_ptr& x);
-
   friend caf::error inspect(caf::serializer& sink, const chunk_ptr& x);
-
   friend caf::error inspect(caf::deserializer& source, chunk_ptr& x);
 
 private:
-  chunk(const void* ptr, size_type size, deleter_type deleter) noexcept;
+  // -- implementation details -------------------------------------------------
 
-  pointer data_;
-  size_type size_;
+  /// Constructs a chunk from a span and a deleter.
+  /// @param view The span holding the raw data.
+  /// @param deleter The function to delete the data.
+  chunk(view_type view, deleter_type&& deleter) noexcept;
+
+  /// A sized view on the raw data.
+  const view_type view_;
+
+  /// The function to delete the data.
   deleter_type deleter_;
 };
-
-// We need this template in order to be able to send chunks as messages,
-// but we never actually want to have to use it since it will only be invoked
-// if chunk messages would be sent over the network. And we only want to send
-// chunks around internally. So it is declared here but never defined, leading
-// to a linker error if its used.
-// TODO: Replace with a static assert.
-template <typename Inspector>
-typename Inspector::return_type inspect(Inspector&, chunk&);
 
 } // namespace vast
