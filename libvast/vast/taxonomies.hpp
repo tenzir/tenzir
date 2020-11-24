@@ -106,7 +106,7 @@ struct taxonomies {
 /// @param t The set of taxonomies to apply.
 /// @param e The original expression.
 /// @returns The sustitute expression.
-expression resolve(const taxonomies& t, const expression& e);
+caf::expected<expression> resolve(const taxonomies& t, const expression& e);
 
 /// Substitutes concept and model identifiers in field extractors with
 /// replacement expressions containing only concrete field names.
@@ -114,7 +114,7 @@ expression resolve(const taxonomies& t, const expression& e);
 /// @param e The original expression.
 /// @param seen The set of all types in the database.
 /// @returns The sustitute expression.
-expression resolve(const taxonomies& t, const expression& e,
-                   const std::map<std::string, type_set>& seen);
+caf::expected<expression> resolve(const taxonomies& t, const expression& e,
+                                  const std::map<std::string, type_set>& seen);
 
 } // namespace vast

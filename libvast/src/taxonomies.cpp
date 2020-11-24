@@ -213,10 +213,10 @@ contains(const std::map<std::string, type_set>& seen, const std::string& x,
   return false;
 }
 
-static expression
+static caf::expected<expression>
 resolve_concepts(const taxonomies& ts, const expression& e,
                  const std::map<std::string, type_set>& seen, bool prune) {
-  return for_each_predicate(e, [&](const auto& pred) {
+  return for_each_predicate(e, [&](const auto& pred) -> caf::expected<expression> {
     // TODO: Rename appropriately.
     auto run2 = [&](const std::string& field_name, relational_operator op,
                     const vast::data& data, auto make_predicate) {
@@ -266,7 +266,8 @@ resolve_concepts(const taxonomies& ts, const expression& e,
       }
     };
     auto run = [&](const std::string& field_name, relational_operator op,
-                   const vast::data& data, auto make_predicate) {
+                   const vast::data& data,
+                   auto make_predicate) -> caf::expected<expression> {
       auto r = caf::get_if<record>(&data);
       if (!r)
         // Models can only be compared to records, so if the data side is
@@ -281,7 +282,9 @@ resolve_concepts(const taxonomies& ts, const expression& e,
       conjunction c;
       auto named = !r->begin()->first.empty();
       if (named) {
-        VAST_ASSERT(r->size() <= it->second.definition.size());
+        // TODO: Nested records of the form
+        // <src_endpoint: <1.2.3.4, _>, process_filename: "svchost.exe">
+        // are currently not supported.
         for (auto& x : *r) {
           VAST_ASSERT(!x.first.empty());
           // TODO: Check that x.first is contained in it->second and return an
@@ -298,14 +301,24 @@ resolve_concepts(const taxonomies& ts, const expression& e,
           VAST_ASSERT(value_iterator->first.empty());
           {
             // Update the levels stack; explicit scope for clarity.
-            if (levels.top().first == levels.top().second)
+            while (levels.top().first == levels.top().second) {
               levels.pop();
-            if (levels.empty())
-              // The provided record is longer then the matched concept.
-              // TODO: This should be communicated to the user.
-              return expression{caf::none};
-            auto child_component = ts.models.find(*levels.top().first);
-            if (child_component != ts.models.end()) {
+              if (levels.empty())
+                // The provided record is longer then the matched concept.
+                // TODO: This error could be rendered in a way that makes it
+                // clear how the mismatch happened. For example:
+                //   src_ip, src_port,  dst_ip, dst_port, proto
+                // <      _,        _, 1.2.3.4,        _,     _, tcp>
+                //                                               ^~~
+                //                                               to many fields
+                //                                               provided
+                return make_error(ec::invalid_query, *r,
+                                  "doesn't match the model:", it->first);
+              ++levels.top().first;
+            }
+            for (auto child_component = ts.models.find(*levels.top().first);
+                 child_component != ts.models.end();
+                 child_component = ts.models.find(*levels.top().first)) {
               auto& child_def = child_component->second.definition;
               levels.emplace(child_def.begin(), child_def.end());
             }
@@ -317,6 +330,9 @@ resolve_concepts(const taxonomies& ts, const expression& e,
           c.emplace_back(run2(*levels.top().first, op, value_iterator->second,
                               make_predicate));
         }
+        // TODO: If the provided record is shorter than the model the missing
+        // fields are treated as if they are '_'. Consider treating this as
+        // an error.
       }
       switch (c.size()) {
         case 0:
@@ -350,12 +366,12 @@ resolve_concepts(const taxonomies& ts, const expression& e,
   });
 }
 
-expression resolve(const taxonomies& ts, const expression& e) {
+caf::expected<expression> resolve(const taxonomies& ts, const expression& e) {
   return resolve_concepts(ts, e, {}, false);
 }
 
-expression resolve(const taxonomies& ts, const expression& e,
-                   const std::map<std::string, type_set>& seen) {
+caf::expected<expression> resolve(const taxonomies& ts, const expression& e,
+                                  const std::map<std::string, type_set>& seen) {
   return resolve_concepts(ts, e, seen, true);
 }
 
