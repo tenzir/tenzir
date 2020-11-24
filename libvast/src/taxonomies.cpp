@@ -214,12 +214,13 @@ contains(const std::map<std::string, type_set>& seen, const std::string& x,
 }
 
 static caf::expected<expression>
-resolve_concepts(const taxonomies& ts, const expression& e,
-                 const std::map<std::string, type_set>& seen, bool prune) {
+resolve_impl(const taxonomies& ts, const expression& e,
+             const std::map<std::string, type_set>& seen, bool prune) {
   return for_each_predicate(e, [&](const auto& pred) -> caf::expected<expression> {
     // TODO: Rename appropriately.
-    auto run2 = [&](const std::string& field_name, relational_operator op,
-                    const vast::data& data, auto make_predicate) {
+    auto resolve_concepts = [&](const std::string& field_name,
+                                relational_operator op, const vast::data& data,
+                                auto make_predicate) {
       // This algorithm recursivly looks up items form the concepts map and
       // generates a predicate for every discovered name that is not a concept
       // itself.
@@ -265,19 +266,20 @@ resolve_concepts(const taxonomies& ts, const expression& e,
           return expression{d};
       }
     };
-    auto run = [&](const std::string& field_name, relational_operator op,
-                   const vast::data& data,
-                   auto make_predicate) -> caf::expected<expression> {
+    auto resolve_models
+      = [&](const std::string& field_name, relational_operator op,
+            const vast::data& data,
+            auto make_predicate) -> caf::expected<expression> {
       auto r = caf::get_if<record>(&data);
       if (!r)
         // Models can only be compared to records, so if the data side is
         // not a record, we move to the concept substitution phase directly.
-        return run2(field_name, op, data, make_predicate);
+        return resolve_concepts(field_name, op, data, make_predicate);
       if (r->empty())
         return expression{caf::none};
       auto it = ts.models.find(field_name);
       if (it == ts.models.end())
-        return run2(field_name, op, data, make_predicate);
+        return resolve_concepts(field_name, op, data, make_predicate);
       // We have a model predicate.
       conjunction c;
       auto named = !r->begin()->first.empty();
@@ -289,7 +291,8 @@ resolve_concepts(const taxonomies& ts, const expression& e,
           VAST_ASSERT(!x.first.empty());
           // TODO: Check that x.first is contained in it->second and return an
           // error if not.
-          c.emplace_back(run2(x.first, op, x.second, make_predicate));
+          c.emplace_back(
+            resolve_concepts(x.first, op, x.second, make_predicate));
         }
       } else {
         // TODO: Explain the tree iteration mechanism.
@@ -327,8 +330,8 @@ resolve_concepts(const taxonomies& ts, const expression& e,
           }
           if (caf::holds_alternative<caf::none_t>(value_iterator->second))
             continue;
-          c.emplace_back(run2(*levels.top().first, op, value_iterator->second,
-                              make_predicate));
+          c.emplace_back(resolve_concepts(
+            *levels.top().first, op, value_iterator->second, make_predicate));
         }
         // TODO: If the provided record is shorter than the model the missing
         // fields are treated as if they are '_'. Consider treating this as
@@ -346,20 +349,22 @@ resolve_concepts(const taxonomies& ts, const expression& e,
     };
     if (auto fe = caf::get_if<field_extractor>(&pred.lhs)) {
       if (auto data = caf::get_if<vast::data>(&pred.rhs)) {
-        return run(fe->field, pred.op, *data, [&](const vast::data& o) {
-          return [&](const std::string& item) {
-            return predicate{field_extractor{item}, pred.op, o};
-          };
-        });
+        return resolve_models(
+          fe->field, pred.op, *data, [&](const vast::data& o) {
+            return [&](const std::string& item) {
+              return predicate{field_extractor{item}, pred.op, o};
+            };
+          });
       }
     }
     if (auto fe = caf::get_if<field_extractor>(&pred.rhs)) {
       if (auto data = caf::get_if<vast::data>(&pred.lhs)) {
-        return run(fe->field, flip(pred.op), *data, [&](const vast::data& o) {
-          return [&](const std::string& item) {
-            return predicate{o, pred.op, field_extractor{item}};
-          };
-        });
+        return resolve_models(
+          fe->field, flip(pred.op), *data, [&](const vast::data& o) {
+            return [&](const std::string& item) {
+              return predicate{o, pred.op, field_extractor{item}};
+            };
+          });
       }
     }
     return expression{pred};
@@ -367,12 +372,12 @@ resolve_concepts(const taxonomies& ts, const expression& e,
 }
 
 caf::expected<expression> resolve(const taxonomies& ts, const expression& e) {
-  return resolve_concepts(ts, e, {}, false);
+  return resolve_impl(ts, e, {}, false);
 }
 
 caf::expected<expression> resolve(const taxonomies& ts, const expression& e,
                                   const std::map<std::string, type_set>& seen) {
-  return resolve_concepts(ts, e, seen, true);
+  return resolve_impl(ts, e, seen, true);
 }
 
 } // namespace vast
