@@ -25,10 +25,10 @@
 #include "vast/concept/printable/to_string.hpp"
 #include "vast/concept/printable/vast/expression.hpp"
 #include "vast/data.hpp"
+#include "vast/detail/deserialize.hpp"
+#include "vast/detail/serialize.hpp"
 #include "vast/detail/stable_map.hpp"
 #include "vast/expression_visitors.hpp"
-#include "vast/load.hpp"
-#include "vast/save.hpp"
 #include "vast/schema.hpp"
 
 #include <caf/test/dsl.hpp>
@@ -92,8 +92,8 @@ TEST(construction) {
 TEST(serialization) {
   expression ex0, ex1;
   std::vector<char> buf;
-  CHECK_EQUAL(save(nullptr, buf, expr0, expr1), caf::none);
-  CHECK_EQUAL(load(nullptr, buf, ex0, ex1), caf::none);
+  CHECK_EQUAL(detail::serialize(buf, expr0, expr1), caf::none);
+  CHECK_EQUAL(detail::deserialize(buf, ex0, ex1), caf::none);
   auto d = caf::get_if<disjunction>(&ex1);
   REQUIRE(d);
   REQUIRE(!d->empty());

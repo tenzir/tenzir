@@ -24,8 +24,8 @@
 #include "vast/concept/parseable/vast/time.hpp"
 #include "vast/concept/printable/to_string.hpp"
 #include "vast/concept/printable/vast/bitmap.hpp"
-#include "vast/load.hpp"
-#include "vast/save.hpp"
+#include "vast/detail/deserialize.hpp"
+#include "vast/detail/serialize.hpp"
 #include "vast/table_slice.hpp"
 #include "vast/value_index_factory.hpp"
 
@@ -70,9 +70,9 @@ TEST(real with custom binner) {
   CHECK_EQUAL(to_string(unbox(result)), "1110111");
   MESSAGE("serialization");
   std::vector<char> buf;
-  CHECK_EQUAL(save(nullptr, buf, idx), caf::none);
+  CHECK_EQUAL(detail::serialize(buf, idx), caf::none);
   auto idx2 = index_type{real_type{}, opts};
-  REQUIRE_EQUAL(load(nullptr, buf, idx2), caf::none);
+  REQUIRE_EQUAL(detail::deserialize(buf, idx2), caf::none);
   result = idx2.lookup(not_equal, make_data_view(4711.14));
   CHECK_EQUAL(to_string(unbox(result)), "1110111");
 }
@@ -136,9 +136,9 @@ TEST(time) {
   CHECK(to_string(unbox(eighteen)) == "000101");
   MESSAGE("serialization");
   std::vector<char> buf;
-  CHECK_EQUAL(save(nullptr, buf, idx), caf::none);
+  CHECK_EQUAL(detail::serialize(buf, idx), caf::none);
   arithmetic_index<vast::time> idx2{time_type{}, opts};
-  CHECK_EQUAL(load(nullptr, buf, idx2), caf::none);
+  CHECK_EQUAL(detail::deserialize(buf, idx2), caf::none);
   eighteen = idx2.lookup(greater_equal, make_data_view(unbox(ts)));
   CHECK(to_string(*eighteen) == "000101");
 }

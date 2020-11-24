@@ -23,8 +23,8 @@
 #include "vast/concept/parseable/vast/data.hpp"
 #include "vast/concept/printable/to_string.hpp"
 #include "vast/concept/printable/vast/bitmap.hpp"
-#include "vast/load.hpp"
-#include "vast/save.hpp"
+#include "vast/detail/deserialize.hpp"
+#include "vast/detail/serialize.hpp"
 #include "vast/subnet.hpp"
 #include "vast/table_slice.hpp"
 
@@ -94,9 +94,9 @@ TEST(address) {
   CHECK_EQUAL(to_string(unbox(idx.lookup(equal, make_data_view(x)))), str);
   MESSAGE("serialization");
   std::vector<char> buf;
-  CHECK_EQUAL(save(nullptr, buf, idx), caf::none);
+  CHECK_EQUAL(detail::serialize(buf, idx), caf::none);
   address_index idx2{address_type{}};
-  CHECK_EQUAL(load(nullptr, buf, idx2), caf::none);
+  CHECK_EQUAL(detail::deserialize(buf, idx2), caf::none);
   CHECK_EQUAL(to_string(unbox(idx2.lookup(equal, make_data_view(x)))), str);
 }
 

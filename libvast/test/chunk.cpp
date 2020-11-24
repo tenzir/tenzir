@@ -18,8 +18,8 @@
 #include "vast/test/fixtures/filesystem.hpp"
 #include "vast/test/test.hpp"
 
-#include "vast/load.hpp"
-#include "vast/save.hpp"
+#include "vast/detail/deserialize.hpp"
+#include "vast/detail/serialize.hpp"
 #include "vast/span.hpp"
 
 using namespace vast;
@@ -58,9 +58,9 @@ TEST(serialization) {
   std::string str = "foobarbaz";
   auto x = chunk::make(std::move(str));
   std::vector<char> buf;
-  CHECK_EQUAL(save(nullptr, buf, x), caf::none);
+  CHECK_EQUAL(detail::serialize(buf, x), caf::none);
   chunk_ptr y;
-  CHECK_EQUAL(load(nullptr, buf, y), caf::none);
+  CHECK_EQUAL(detail::deserialize(buf, y), caf::none);
   REQUIRE_NOT_EQUAL(y, nullptr);
   CHECK(std::equal(x->begin(), x->end(), y->begin(), y->end()));
 }

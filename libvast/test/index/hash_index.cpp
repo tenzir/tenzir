@@ -19,8 +19,8 @@
 
 #include "vast/concept/printable/to_string.hpp"
 #include "vast/concept/printable/vast/bitmap.hpp"
-#include "vast/load.hpp"
-#include "vast/save.hpp"
+#include "vast/detail/deserialize.hpp"
+#include "vast/detail/serialize.hpp"
 #include "vast/si_literals.hpp"
 #include "vast/value_index_factory.hpp"
 
@@ -56,9 +56,9 @@ TEST(serialization) {
   REQUIRE(x.append(make_data_view("bar")));
   REQUIRE(x.append(make_data_view("baz")));
   std::vector<char> buf;
-  REQUIRE(save(nullptr, buf, x) == caf::none);
+  REQUIRE(detail::serialize(buf, x) == caf::none);
   hash_index<1> y{string_type{}};
-  REQUIRE(load(nullptr, buf, y) == caf::none);
+  REQUIRE(detail::deserialize(buf, y) == caf::none);
   auto result = y.lookup(not_equal, make_data_view("bar"));
   CHECK_EQUAL(to_string(unbox(result)), "101");
   // Cannot append after deserialization.

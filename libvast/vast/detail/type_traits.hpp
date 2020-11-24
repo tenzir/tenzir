@@ -103,21 +103,6 @@ struct is_streambuf<
 template <class T>
 constexpr bool is_streambuf_v = is_streambuf<T>::value;
 
-
-/// Checks whether a type is container which consists of contiguous bytes.
-template <class T, class U = void>
-struct is_contiguous_byte_container : std::false_type {};
-
-template <class T>
-struct is_contiguous_byte_container<
-  T, std::enable_if_t<std::disjunction_v<
-       std::is_same<T, std::string>, std::is_same<T, std::vector<char>>,
-       std::is_same<T, std::vector<unsigned char>>>>> : std::true_type {};
-
-template <class T>
-constexpr bool is_contiguous_byte_container_v
-  = is_contiguous_byte_container<T>::value;
-
 // std::pair<T, U>
 
 template <class T>
@@ -139,15 +124,21 @@ using deref_t = detected_t<deref_t_helper, T>;
 
 // Types that work with std::data and std::size (= containers)
 
-template <typename T>
+template <class T>
 using std_data_t = decltype(std::data(std::declval<T>()));
 
-template <typename T>
+template <class T>
 using std_size_t = decltype(std::size(std::declval<T>()));
 
-template <typename T>
+template <class T>
 inline constexpr bool is_container
-  = is_detected_v<std_data_t, T> && is_detected_v<std_size_t, T>;
+  = is_detected_v<std_data_t, T>&& is_detected_v<std_size_t, T>;
+
+/// Contiguous byte buffers
+
+template <class T>
+inline constexpr bool is_byte_container_v
+  = is_container<T> && sizeof(deref_t<std_data_t<T>>) == 1;
 
 // -- SFINAE helpers ---------------------------------------------------------
 // http://bit.ly/uref-copy.

@@ -19,8 +19,8 @@
 
 #include "vast/concept/printable/to_string.hpp"
 #include "vast/concept/printable/vast/bitmap.hpp"
-#include "vast/load.hpp"
-#include "vast/save.hpp"
+#include "vast/detail/deserialize.hpp"
+#include "vast/detail/serialize.hpp"
 #include "vast/value_index_factory.hpp"
 
 #include <caf/test/dsl.hpp>
@@ -62,9 +62,9 @@ TEST(list) {
   CHECK_EQUAL(to_string(*idx.lookup(ni, make_data_view(x))), "00000000");
   MESSAGE("serialization");
   std::vector<char> buf;
-  CHECK_EQUAL(save(nullptr, buf, idx), caf::none);
+  CHECK_EQUAL(detail::serialize(buf, idx), caf::none);
   list_index idx2{container_type};
-  CHECK_EQUAL(load(nullptr, buf, idx2), caf::none);
+  CHECK_EQUAL(detail::deserialize(buf, idx2), caf::none);
   x = "foo";
   CHECK_EQUAL(to_string(*idx2.lookup(ni, make_data_view(x))), "11000000");
 }

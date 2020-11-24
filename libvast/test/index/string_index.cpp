@@ -20,9 +20,9 @@
 
 #include "vast/concept/printable/to_string.hpp"
 #include "vast/concept/printable/vast/bitmap.hpp"
+#include "vast/detail/deserialize.hpp"
 #include "vast/detail/overload.hpp"
-#include "vast/load.hpp"
-#include "vast/save.hpp"
+#include "vast/detail/serialize.hpp"
 #include "vast/table_slice.hpp"
 #include "vast/value_index_factory.hpp"
 
@@ -100,9 +100,9 @@ TEST(string) {
   CHECK_EQUAL(to_string(unbox(result)), "1111110000");
   MESSAGE("serialization");
   std::vector<char> buf;
-  CHECK_EQUAL(save(nullptr, buf, idx), caf::none);
+  CHECK_EQUAL(detail::serialize(buf, idx), caf::none);
   auto idx2 = string_index{string_type{}};
-  CHECK_EQUAL(load(nullptr, buf, idx2), caf::none);
+  CHECK_EQUAL(detail::deserialize(buf, idx2), caf::none);
   result = idx2.lookup(equal, make_data_view("foo"));
   CHECK_EQUAL(to_string(unbox(result)), "1001100000");
   result = idx2.lookup(equal, make_data_view("bar"));

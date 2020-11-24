@@ -13,25 +13,23 @@
 
 #pragma once
 
-#include "vast/byte.hpp"
-#include "vast/detail/type_traits.hpp"
-#include "vast/span.hpp"
+#include <caf/binary_serializer.hpp>
+#include <caf/error.hpp>
 
-#include <type_traits>
 #include <vector>
 
-namespace vast {
+namespace vast::detail {
 
-template <class T, class = std::enable_if_t<detail::is_byte_container_v<T>>>
-span<const byte> as_bytes(const T& xs) noexcept {
-  auto data = reinterpret_cast<const byte*>(std::data(xs));
-  return {data, std::size(xs) * sizeof(T)};
+/// Serializes a sequence of objects into a byte buffer.
+/// @param buffer The vector of bytes to write into.
+/// @param xs The objects to serialize.
+/// @returns The status of the operation.
+/// @relates detail::deserialize
+template <class Byte, class... Ts>
+caf::error serialize(std::vector<Byte>& buffer, Ts&&... xs) {
+  static_assert(sizeof(Byte) == 1, "can only serialize into byte vectors");
+  caf::binary_serializer serializer{nullptr, buffer};
+  return serializer(xs...);
 }
 
-template <class T, class = std::enable_if_t<detail::is_byte_container_v<T>>>
-span<byte> as_writeable_bytes(T& xs) noexcept {
-  auto data = reinterpret_cast<byte*>(std::data(xs));
-  return {data, std::size(xs) * sizeof(T)};
-}
-
-} // namespace vast
+} // namespace vast::detail

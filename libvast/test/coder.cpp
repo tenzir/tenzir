@@ -13,18 +13,19 @@
 
 #define SUITE coder
 
-#include "vast/test/test.hpp"
+#include "vast/coder.hpp"
+
 #include "vast/test/fixtures/actor_system.hpp"
+#include "vast/test/test.hpp"
 
 #include "vast/base.hpp"
-#include "vast/coder.hpp"
 #include "vast/concept/printable/to_string.hpp"
 #include "vast/concept/printable/vast/bitmap.hpp"
 #include "vast/concept/printable/vast/coder.hpp"
+#include "vast/detail/deserialize.hpp"
 #include "vast/detail/order.hpp"
-#include "vast/load.hpp"
+#include "vast/detail/serialize.hpp"
 #include "vast/null_bitmap.hpp"
-#include "vast/save.hpp"
 
 using namespace vast;
 
@@ -477,9 +478,9 @@ TEST(multi-level range coder) {
 TEST(serialization range coder) {
   range_coder<null_bitmap> x{100}, c;
   fill(x, 42, 84, 42, 21, 30);
-  std::string buf;
-  CHECK_EQUAL(save(nullptr, buf, x), caf::none);
-  CHECK_EQUAL(load(nullptr, buf, c), caf::none);
+  std::vector<char> buf;
+  CHECK_EQUAL(detail::serialize(buf, x), caf::none);
+  CHECK_EQUAL(detail::deserialize(buf, c), caf::none);
   CHECK_EQUAL(x, c);
   CHECK_DECODE(equal,     21, "00010");
   CHECK_DECODE(equal,     30, "00001");
@@ -502,10 +503,10 @@ TEST(serialization multi-level coder) {
   using coder_type = multi_level_coder<equality_coder<null_bitmap>>;
   auto x = coder_type{base{10, 10}};
   fill(x, 42, 84, 42, 21, 30);
-  std::string buf;
-  CHECK_EQUAL(save(nullptr, buf, x), caf::none);
+  std::vector<char> buf;
+  CHECK_EQUAL(detail::serialize(buf, x), caf::none);
   auto c = coder_type{};
-  CHECK_EQUAL(load(nullptr, buf, c), caf::none);
+  CHECK_EQUAL(detail::deserialize(buf, c), caf::none);
   CHECK_EQUAL(x, c);
   CHECK_DECODE(equal,     21, "00010");
   CHECK_DECODE(equal,     30, "00001");

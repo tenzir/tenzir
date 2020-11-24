@@ -13,25 +13,28 @@
 
 #pragma once
 
+#include "vast/as_bytes.hpp"
 #include "vast/byte.hpp"
 #include "vast/detail/type_traits.hpp"
 #include "vast/span.hpp"
 
-#include <type_traits>
-#include <vector>
+#include <caf/binary_deserializer.hpp>
+#include <caf/error.hpp>
 
-namespace vast {
+namespace vast::detail {
 
-template <class T, class = std::enable_if_t<detail::is_byte_container_v<T>>>
-span<const byte> as_bytes(const T& xs) noexcept {
-  auto data = reinterpret_cast<const byte*>(std::data(xs));
-  return {data, std::size(xs) * sizeof(T)};
+/// Deserializes a sequence of objects from a byte buffer.
+/// @param buffer The vector of bytes to read from.
+/// @param xs The object to deserialize.
+/// @returns The status of the operation.
+/// @relates detail::serialize
+template <class Buffer, class... Ts,
+          class = std::enable_if_t<detail::is_byte_container_v<Buffer>>>
+caf::error deserialize(const Buffer& buffer, Ts&&... xs) {
+  auto bytes = as_bytes(buffer);
+  auto data = reinterpret_cast<const char*>(bytes.data());
+  caf::binary_deserializer deserializer{nullptr, data, bytes.size()};
+  return deserializer(xs...);
 }
 
-template <class T, class = std::enable_if_t<detail::is_byte_container_v<T>>>
-span<byte> as_writeable_bytes(T& xs) noexcept {
-  auto data = reinterpret_cast<byte*>(std::data(xs));
-  return {data, std::size(xs) * sizeof(T)};
-}
-
-} // namespace vast
+} // namespace vast::detail

@@ -24,9 +24,9 @@
 #include "vast/concept/printable/vast/error.hpp"
 #include "vast/concept/printable/vast/json.hpp"
 #include "vast/concept/printable/vast/schema.hpp"
+#include "vast/detail/deserialize.hpp"
+#include "vast/detail/serialize.hpp"
 #include "vast/json.hpp"
-#include "vast/load.hpp"
-#include "vast/save.hpp"
 
 #include <caf/test/dsl.hpp>
 
@@ -117,9 +117,9 @@ TEST(serialization) {
   sch.add(t);
   // Save & load
   std::vector<char> buf;
-  CHECK_EQUAL(save(nullptr, buf, sch), caf::none);
+  CHECK_EQUAL(detail::serialize(buf, sch), caf::none);
   schema sch2;
-  CHECK_EQUAL(load(nullptr, buf, sch2), caf::none);
+  CHECK_EQUAL(detail::deserialize(buf, sch2), caf::none);
   // Check integrity
   auto u = sch2.find("foo");
   REQUIRE(u);

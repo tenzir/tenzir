@@ -13,14 +13,15 @@
 
 #define SUITE bitmap_index
 
+#include "vast/bitmap_index.hpp"
+
 #include "vast/test/test.hpp"
 
-#include "vast/bitmap_index.hpp"
 #include "vast/concept/printable/to_string.hpp"
 #include "vast/concept/printable/vast/bitmap.hpp"
-#include "vast/load.hpp"
+#include "vast/detail/deserialize.hpp"
+#include "vast/detail/serialize.hpp"
 #include "vast/null_bitmap.hpp"
-#include "vast/save.hpp"
 #include "vast/time.hpp"
 
 using namespace vast;
@@ -282,9 +283,9 @@ TEST(serialization) {
   bmi1.append(-100);
   CHECK_EQUAL(to_string(bmi1.lookup(not_equal, 100)), "11011");
   std::vector<char> buf;
-  CHECK_EQUAL(save(nullptr, buf, bmi1), caf::none);
+  CHECK_EQUAL(detail::serialize(buf, bmi1), caf::none);
   auto bmi2 = bitmap_index_type{};
-  CHECK_EQUAL(load(nullptr, buf, bmi2), caf::none);
+  CHECK_EQUAL(detail::deserialize(buf, bmi2), caf::none);
   CHECK(bmi1 == bmi2);
   CHECK_EQUAL(to_string(bmi2.lookup(not_equal, 100)), "11011");
 }

@@ -366,7 +366,6 @@ set(tests
     test/port.cpp
     test/printable.cpp
     test/range_map.cpp
-    test/save_load.cpp
     test/schema.cpp
     test/scope_linked.cpp
     test/segment.cpp

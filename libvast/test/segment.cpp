@@ -18,9 +18,9 @@
 #include "vast/test/fixtures/events.hpp"
 #include "vast/test/test.hpp"
 
+#include "vast/detail/deserialize.hpp"
+#include "vast/detail/serialize.hpp"
 #include "vast/ids.hpp"
-#include "vast/load.hpp"
-#include "vast/save.hpp"
 #include "vast/segment_builder.hpp"
 #include "vast/table_slice.hpp"
 
@@ -51,8 +51,8 @@ TEST(serialization) {
   auto x = builder.finish();
   chunk_ptr chk;
   std::vector<char> buf;
-  REQUIRE_EQUAL(save(nullptr, buf, x.chunk()), caf::none);
-  REQUIRE_EQUAL(load(nullptr, buf, chk), caf::none);
+  REQUIRE_EQUAL(detail::serialize(buf, x.chunk()), caf::none);
+  REQUIRE_EQUAL(detail::deserialize(buf, chk), caf::none);
   REQUIRE_NOT_EQUAL(chk, nullptr);
   auto y = segment::make(chk);
   REQUIRE(y);

@@ -13,11 +13,12 @@
 
 #define SUITE detail
 
+#include "vast/detail/cache.hpp"
+
 #include "vast/test/test.hpp"
 
-#include <vast/load.hpp>
-#include <vast/save.hpp>
-#include <vast/detail/cache.hpp>
+#include "vast/detail/deserialize.hpp"
+#include "vast/detail/serialize.hpp"
 
 using namespace vast;
 
@@ -79,9 +80,9 @@ TEST(LRU cache insertion) {
 
 TEST(cache serialization) {
   std::vector<char> buf;
-  CHECK_EQUAL(save(nullptr, buf, xs), caf::none);
+  CHECK_EQUAL(detail::serialize(buf, xs), caf::none);
   decltype(xs) ys;
-  CHECK_EQUAL(load(nullptr, buf, ys), caf::none);
+  CHECK_EQUAL(detail::deserialize(buf, ys), caf::none);
   CHECK(xs == ys);
 }
 
