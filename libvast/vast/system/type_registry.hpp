@@ -41,6 +41,7 @@ using type_registry_type = caf::typed_actor<
   caf::reacts_to<atom::put, vast::type>,
   caf::reacts_to<atom::put, vast::schema>,
   caf::replies_to<atom::get>::with<type_set>,
+  caf::replies_to<atom::get, atom::taxonomies>::with<taxonomies>,
   caf::reacts_to<atom::put, taxonomies>,
   caf::replies_to<atom::load>::with<atom::ok>,
   caf::replies_to<atom::resolve, expression>::with<expression>,

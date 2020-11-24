@@ -130,7 +130,9 @@ auto make_count_command() {
 auto make_dump_command() {
   // FIXME: Write command description.
   // FIXME: Write command documentation.
-  auto dump = std::make_unique<command>("dump", "", "", opts("?vast.dump"));
+  // FIXME: Write options documentation.
+  auto dump = std::make_unique<command>(
+    "dump", "", "", opts("?vast.dump").add<bool>("yaml", ""));
   dump->add_subcommand("concepts", "", "", opts("?vast.dump.concepts"));
   return dump;
 }

@@ -20,6 +20,7 @@
 #include "vast/concept/printable/to_string.hpp"
 #include "vast/concept/printable/vast/json.hpp"
 #include "vast/config.hpp"
+#include "vast/data.hpp"
 #include "vast/defaults.hpp"
 #include "vast/detail/assert.hpp"
 #include "vast/detail/process.hpp"
@@ -172,6 +173,7 @@ void collect_component_status(node_actor* self,
 } // namespace
 
 caf::message dump_command(const invocation& inv, caf::actor_system&) {
+  auto as_yaml = caf::get_or(inv.options, "vast.dump.yaml", false);
   if (inv.full_name == "dump concepts") {
     auto self = this_node;
     auto type_registry = caf::actor_cast<type_registry_actor>(
@@ -184,13 +186,43 @@ caf::message dump_command(const invocation& inv, caf::actor_system&) {
     self
       ->request<message_priority::high>(
         caf::actor_cast<caf::actor>(type_registry),
-        defaults::system::initial_request_timeout, atom::status_v,
-        status_verbosity::debug)
+        defaults::system::initial_request_timeout, atom::get_v,
+        atom::taxonomies_v)
       .then(
-        [=](caf::config_value::dictionary& xs) mutable {
-          detail::strip_settings(xs);
-          auto& result = xs["type-registry"].as_dictionary()["concepts"];
-          rp.deliver(to_string(to_json(std::move(result))));
+        [=](struct taxonomies taxonomies) mutable {
+          auto result = list{};
+          result.reserve(taxonomies.concepts.size());
+          for (auto& [name, definition] : taxonomies.concepts) {
+            auto fields = list{};
+            fields.reserve(definition.fields.size());
+            for (auto& field : definition.fields)
+              fields.push_back(std::move(field));
+            auto concepts = list{};
+            concepts.reserve(definition.concepts.size());
+            for (auto& concept : definition.concepts)
+              fields.push_back(std::move(concept));
+            auto concept = record{
+              {"concept",
+               record{
+                 {"name", std::move(name)},
+                 {"description", std::move(definition.description)},
+                 {"fields", std::move(fields)},
+                 {"concepts", std::move(concepts)},
+               }},
+            };
+            result.push_back(std::move(concept));
+          }
+          if (as_yaml) {
+            auto yaml = to_yaml(data{std::move(result)});
+            if (!yaml) {
+              request_error = std::move(yaml.error());
+              return;
+            }
+            rp.deliver(to_string(std::move(*yaml)));
+          } else {
+            auto json = to_json(data{std::move(result)});
+            rp.deliver(to_string(std::move(json)));
+          }
         },
         [=](caf::error& err) mutable { request_error = std::move(err); });
     if (request_error)
