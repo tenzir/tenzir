@@ -171,6 +171,36 @@ void collect_component_status(node_actor* self,
 
 } // namespace
 
+caf::message dump_command(const invocation& inv, caf::actor_system&) {
+  if (inv.full_name == "dump concepts") {
+    auto self = this_node;
+    auto type_registry = caf::actor_cast<type_registry_actor>(
+      self->state.registry.find_by_label(type_registry_state::name));
+    if (!type_registry)
+      return caf::make_message(
+        make_error(ec::missing_component, type_registry_state::name));
+    caf::error request_error = caf::none;
+    auto rp = self->make_response_promise();
+    self
+      ->request<message_priority::high>(
+        caf::actor_cast<caf::actor>(type_registry),
+        defaults::system::initial_request_timeout, atom::status_v,
+        status_verbosity::debug)
+      .then(
+        [=](caf::config_value::dictionary& xs) mutable {
+          detail::strip_settings(xs);
+          auto& result = xs["type-registry"].as_dictionary()["concepts"];
+          rp.deliver(to_string(to_json(std::move(result))));
+        },
+        [=](caf::error& err) mutable { request_error = std::move(err); });
+    if (request_error)
+      return caf::make_message(std::move(request_error));
+    return caf::none;
+  } else {
+    return caf::make_message(make_error(ec::invalid_subcommand, inv.full_name));
+  }
+}
+
 caf::message status_command(const invocation& inv, caf::actor_system&) {
   auto self = this_node;
   auto verbosity = status_verbosity::info;
@@ -294,6 +324,7 @@ auto make_command_factory() {
   // When updating this list, remember to update its counterpart in
   // application.cpp as well iff necessary
   return command::factory{
+    {"dump concepts", dump_command},
     {"kill", kill_command},
     {"send", send_command},
     {"spawn accountant", node_state::spawn_command},
@@ -375,8 +406,8 @@ node_state::spawn_command(const invocation& inv,
     auto component = spawn_component(self, args.inv, args);
     if (!component) {
       if (component.error())
-        VAST_WARNING(
-          __func__, "failed to spawn component:", render(component.error()));
+        VAST_WARNING(__func__,
+                     "failed to spawn component:", render(component.error()));
       rp.deliver(component.error());
       return caf::make_message(std::move(component.error()));
     }

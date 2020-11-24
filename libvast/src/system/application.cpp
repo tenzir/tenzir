@@ -118,12 +118,21 @@ auto make_root_command(std::string_view path) {
 }
 
 auto make_count_command() {
+  // FIXME: Write command documentation.
   return std::make_unique<command>(
     "count", "count hits for a query without exporting data", "",
     opts("?vast.count")
       .add<bool>("disable-taxonomies", "don't substitute taxonomy identifiers")
       .add<bool>("estimate,e", "estimate an upper bound by "
                                "skipping candidate checks"));
+}
+
+auto make_dump_command() {
+  // FIXME: Write command description.
+  // FIXME: Write command documentation.
+  auto dump = std::make_unique<command>("dump", "", "", opts("?vast.dump"));
+  dump->add_subcommand("concepts", "", "", opts("?vast.dump.concepts"));
+  return dump;
 }
 
 auto make_explore_command() {
@@ -426,6 +435,7 @@ auto make_command_factory() {
   // clang-format off
   return command::factory{
     {"count", count_command},
+    {"dump concepts", remote_command},
     {"explore", explore_command},
     {"export ascii", make_writer_command("ascii")},
     {"export csv", make_writer_command("csv")},
@@ -494,6 +504,7 @@ std::pair<std::unique_ptr<command>, command::factory>
 make_application(std::string_view path) {
   auto root = make_root_command(path);
   root->add_subcommand(make_count_command());
+  root->add_subcommand(make_dump_command());
   root->add_subcommand(make_export_command());
   root->add_subcommand(make_explore_command());
   root->add_subcommand(make_get_command());
