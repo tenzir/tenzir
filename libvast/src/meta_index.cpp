@@ -69,6 +69,20 @@ void partition_synopsis::add(const table_slice& slice,
   }
 }
 
+size_t partition_synopsis::size_bytes() const {
+  size_t result = 0;
+  for (auto& [field, synopsis] : field_synopses_)
+    result += synopsis ? synopsis->size_bytes() : 0ull;
+  return result;
+}
+
+size_t meta_index::size_bytes() const {
+  size_t result = 0;
+  for (auto& [id, partition_synopsis] : synopses_)
+    result += partition_synopsis.size_bytes();
+  return result;
+}
+
 void meta_index::add(const uuid& partition, const table_slice& slice) {
   auto& part_syn = synopses_[partition];
   part_syn.add(slice, synopsis_options_);

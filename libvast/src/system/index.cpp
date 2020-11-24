@@ -239,6 +239,7 @@ index_state::status(status_verbosity v) const {
       // Hence the fallback to low-level primitives.
       layout_object.insert_or_assign(name, std::move(xs));
     }
+    put(stats_object, "meta-index-bytes", meta_idx.size_bytes());
   }
   if (v >= status_verbosity::debug) {
     // Resident partitions.

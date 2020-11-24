@@ -486,9 +486,7 @@ bitvector<Block, Allocator>::max_size() const noexcept {
 template <class Block, class Allocator>
 typename bitvector<Block, Allocator>::size_type
 bitvector<Block, Allocator>::capacity() const noexcept {
-  auto c = blocks_.capacity() * word_type::width;
-  auto p = partial_bits();
-  return p == 0 ? c : c + word_type::width - p;
+  return blocks_.capacity() * word_type::width;
 }
 
 template <class Block, class Allocator>

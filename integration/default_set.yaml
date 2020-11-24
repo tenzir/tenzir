@@ -276,7 +276,7 @@ tests:
       - command: -N export ascii ':addr in 192.168.168.0/24'
       - command: -N export pcap 'sport > 60000 && src !in 192.168.168.0/8'
       - command: -N status --detailed
-        transformation: jq '.index.statistics'
+        transformation: jq '.index.statistics | del(."meta-index-bytes")'
 
   Manual 2:
     tags: [examples, disabled]
@@ -292,7 +292,7 @@ tests:
       - command: -N import pcap
         input: data/pcap/vlan.pcap.gz
       - command: -N status --detailed
-        transformation: jq '.index.statistics'
+        transformation: jq '.index.statistics | del(."meta-index-bytes")'
 
   Multi addr query:
     tags: [import-export, zeek]
