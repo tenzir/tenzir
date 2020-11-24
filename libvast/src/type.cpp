@@ -711,11 +711,10 @@ bool is_superset(const type& x, const type& y) {
   // congruent instead.
   if (!sub || !super)
     return congruent(x, y);
-  // Check whether all fields of the subset exist in the superset, i.e., no new
-  // fields were added.
-  for (auto&& field : sub->fields) {
+  // Check whether all fields of the subset exist in the superset.
+  for (const auto& field : sub->fields) {
     if (auto match = super->find(field.name)) {
-      // Perform the check recursively to support nested record txpes.
+      // Perform the check recursively to support nested record types.
       if (!is_superset(field.type, match->type))
         return false;
     } else {
@@ -723,7 +722,6 @@ bool is_superset(const type& x, const type& y) {
       return false;
     }
   }
-  // We passed the test for all fields. Yay!
   return true;
 }
 

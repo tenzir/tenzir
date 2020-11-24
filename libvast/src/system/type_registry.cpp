@@ -111,7 +111,7 @@ void type_registry_state::insert(vast::type layout) {
     = std::all_of(old_layouts.begin(), old_layouts.end(), is_compatible);
   if (!are_all_compatible) {
     VAST_WARNING(self, "detected an incompatible version of", new_layout.name(),
-                 "and forgets existing versions");
+                 "and deletes existing versions");
     old_layouts.clear();
   }
   // Insert into the existing bucket.
