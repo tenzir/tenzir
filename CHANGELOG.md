@@ -12,8 +12,8 @@ Every entry has a category for which we use the following visual abbreviations:
 
 ## Unreleased
 
-- 🐞 The type registry now detects and handles breaking chagens in schemas,
-  e.g., when a record type field type changes or a field is dropped from record.
+- 🐞 The type registry now detects and handles breaking changes in schemas,
+  e.g., when a field type changes or a field is dropped from record.
   [#1195](https://github.com/tenzir/vast/pull/1195)
 
 - 🎁 The new `dump` command prints configuration and schema-related information.

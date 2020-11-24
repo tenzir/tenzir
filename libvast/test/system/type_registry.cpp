@@ -68,16 +68,6 @@ make_data_b(std::string a, vast::count b, vast::real c, std::string d) {
   return make_data(mock_layout_b, a, b, c, d);
 }
 
-// This one is incompatible with the other mock layouts, because it is not a
-// superset of the others.
-const vast::record_type mock_layout_c = vast::record_type{
-  {"a", vast::string_type{}},
-}.name("mock");
-
-vast::table_slice make_data_c(std::string a) {
-  return make_data(mock_layout_c, a);
-}
-
 } // namespace
 
 struct fixture : fixtures::deterministic_actor_system_and_events {
@@ -129,7 +119,7 @@ TEST(type_registry) {
     bool done = false;
     self
       ->do_receive([&](vast::type_set result) {
-        size = result.value.size();
+        size = result.size();
         done = true;
       })
       .until(done);
@@ -143,32 +133,11 @@ TEST(type_registry) {
     bool done = false;
     self
       ->do_receive([&](vast::type_set result) {
-        size = result.value.size();
+        size = result.size();
         done = true;
       })
       .until(done);
     CHECK_EQUAL(size, 2u);
-  }
-  MESSAGE("importing incompatible mock data");
-  {
-    auto slices_c = std::vector{1000, make_data_c("1")};
-    vast::detail::spawn_container_source(sys, std::move(slices_c), aut);
-    run();
-    CHECK_EQUAL(state().data.size(), 1u);
-  }
-  MESSAGE("retrieving layouts");
-  {
-    size_t size = -1;
-    self->send(aut, atom::get_v);
-    run();
-    bool done = false;
-    self
-      ->do_receive([&](vast::type_set result) {
-        size = result.value.size();
-        done = true;
-      })
-      .until(done);
-    CHECK_EQUAL(size, 1u);
   }
   self->send_exit(aut, caf::exit_reason::user_shutdown);
 }

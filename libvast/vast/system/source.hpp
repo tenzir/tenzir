@@ -164,11 +164,11 @@ struct source_state {
           };
           // First, merge and de-duplicate the local schema with types from the
           // type-registry.
-          types.value.insert(std::make_move_iterator(st.local_schema.begin()),
-                             std::make_move_iterator(st.local_schema.end()));
+          types.insert(std::make_move_iterator(st.local_schema.begin()),
+                       std::make_move_iterator(st.local_schema.end()));
           st.local_schema.clear();
           // Second, filter valid types from all available record types.
-          for (auto& type : types.value)
+          for (auto& type : types)
             if (auto&& layout = caf::get_if<vast::record_type>(&type))
               if (is_valid(*layout))
                 st.local_schema.add(std::move(*layout));

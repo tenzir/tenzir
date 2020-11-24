@@ -212,7 +212,7 @@ contains(const std::map<std::string, type_set>& seen, const std::string& x,
     if (i != seen.end()) {
       // A prefix of x matches an existing layout.
       auto field = x.substr(pos + 1);
-      return std::any_of(i->second.value.begin(), i->second.value.end(),
+      return std::any_of(i->second.begin(), i->second.end(),
                          [&](const type& t) {
                            if (auto r = caf::get_if<record_type>(&t)) {
                              if (auto f = r->find(field))

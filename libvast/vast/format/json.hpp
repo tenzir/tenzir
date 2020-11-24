@@ -90,7 +90,7 @@ struct default_selector {
       for (auto& [k, v] : layout.fields)
         cache_entry.emplace_back(k);
       std::sort(cache_entry.begin(), cache_entry.end());
-      type_cache[cache_entry] = layout;
+      type_cache.insert({std::move(cache_entry), std::move(layout)});
     }
     return caf::none;
   }
