@@ -27,7 +27,8 @@
 
 namespace vast {
 
-/// A contiguous block of memory.
+/// A reference-counted contiguous block of memory. A chunk supports custom
+/// deleters for custom deallocations when the last instance goes out of scope.
 class chunk final : public caf::ref_counted {
 public:
   // -- member types -----------------------------------------------------------
