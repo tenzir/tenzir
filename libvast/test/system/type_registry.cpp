@@ -1,4 +1,15 @@
-// Copyright Tenzir GmbH. All rights reserved.
+/******************************************************************************
+ *                    _   _____   __________                                  *
+ *                   | | / / _ | / __/_  __/     Visibility                   *
+ *                   | |/ / __ |_\ \  / /          Across                     *
+ *                   |___/_/ |_/___/ /_/       Space and Time                 *
+ *                                                                            *
+ * This file is part of VAST. It is subject to the license terms in the       *
+ * LICENSE file found in the top-level directory of this distribution and at  *
+ * http://vast.io/license. No part of VAST, including this file, may be       *
+ * copied, modified, propagated, or distributed except according to the terms *
+ * contained in the LICENSE file.                                             *
+ ******************************************************************************/
 
 #define SUITE type_registry
 
@@ -57,6 +68,15 @@ make_data_b(std::string a, vast::count b, vast::real c, std::string d) {
   return make_data(mock_layout_b, a, b, c, d);
 }
 
+// This one is incompatible with the others.
+const vast::record_type mock_layout_c = vast::record_type{
+  {"a", vast::string_type{}},
+}.name("mock");
+
+vast::table_slice make_data_c(std::string a) {
+  return make_data(mock_layout_c, a);
+}
+
 } // namespace
 
 struct fixture : fixtures::deterministic_actor_system_and_events {
@@ -113,6 +133,41 @@ TEST(type_registry) {
       })
       .until(done);
     CHECK_EQUAL(size, 2u);
+  }
+  MESSAGE("retrieving layouts");
+  {
+    size_t size = -1;
+    self->send(aut, atom::get_v);
+    run();
+    bool done = false;
+    self
+      ->do_receive([&](vast::type_set result) {
+        size = result.value.size();
+        done = true;
+      })
+      .until(done);
+    CHECK_EQUAL(size, 2u);
+  }
+  MESSAGE("importing incompatible mock data");
+  {
+    auto slices_c = std::vector{1000, make_data_c("1")};
+    vast::detail::spawn_container_source(sys, std::move(slices_c), aut);
+    run();
+    CHECK_EQUAL(state().data.size(), 1u);
+  }
+  MESSAGE("retrieving layouts");
+  {
+    size_t size = -1;
+    self->send(aut, atom::get_v);
+    run();
+    bool done = false;
+    self
+      ->do_receive([&](vast::type_set result) {
+        size = result.value.size();
+        done = true;
+      })
+      .until(done);
+    CHECK_EQUAL(size, 1u);
   }
   self->send_exit(aut, caf::exit_reason::user_shutdown);
 }
