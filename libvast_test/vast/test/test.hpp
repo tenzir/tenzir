@@ -129,19 +129,19 @@ struct less_equal_compare {
 // `deterministic_actor_system` fixture.
 #define CHECK_ROUNDTRIP(expr)                                                  \
   {                                                                            \
-    auto x = expr;                                                             \
-    CHECK_EQUAL(roundtrip(x), x);                                              \
+    auto __x = expr;                                                           \
+    CHECK_EQUAL(roundtrip(__x), __x);                                          \
   }
 
 // Like `CHECK_ROUNDTRIP`, but compares the objects by dereferencing them via
 // `operator*` first.
 #define CHECK_ROUNDTRIP_DEREF(expr)                                            \
   {                                                                            \
-    auto x = expr;                                                             \
-    auto y = roundtrip(x);                                                     \
-    REQUIRE_NOT_EQUAL(x, nullptr);                                             \
-    REQUIRE_NOT_EQUAL(y, nullptr);                                             \
-    CHECK_EQUAL(*y, *x);                                                       \
+    auto __x = expr;                                                           \
+    auto __y = roundtrip(__x);                                                 \
+    REQUIRE_NOT_EQUAL(__x, nullptr);                                           \
+    REQUIRE_NOT_EQUAL(__y, nullptr);                                           \
+    CHECK_EQUAL(*__y, *__x);                                                   \
   }
 
 // -- global state -------------------------------------------------------------

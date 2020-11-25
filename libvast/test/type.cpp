@@ -28,8 +28,6 @@
 #include "vast/concept/printable/vast/type.hpp"
 #include "vast/data.hpp"
 #include "vast/json.hpp"
-#include "vast/load.hpp"
-#include "vast/save.hpp"
 
 #include <string_view>
 

@@ -13,11 +13,12 @@
 
 #define SUITE range_map
 
+#include "vast/detail/range_map.hpp"
+
 #include "vast/test/test.hpp"
 
-#include "vast/detail/range_map.hpp"
-#include "vast/load.hpp"
-#include "vast/save.hpp"
+#include "vast/detail/deserialize.hpp"
+#include "vast/detail/serialize.hpp"
 
 using namespace vast;
 using namespace vast::detail;
@@ -189,8 +190,8 @@ TEST(range_map serialization) {
   x.insert(80, 90, 'b');
   x.insert(20, 30, 'c');
   std::vector<char> buf;
-  CHECK_EQUAL(save(nullptr, buf, x), caf::none);
-  CHECK_EQUAL(load(nullptr, buf, y), caf::none);
+  CHECK_EQUAL(detail::serialize(buf, x), caf::none);
+  CHECK_EQUAL(detail::deserialize(buf, y), caf::none);
   REQUIRE_EQUAL(y.size(), 3u);
   auto i = y.lookup(50);
   REQUIRE(i);

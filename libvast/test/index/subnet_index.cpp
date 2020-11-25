@@ -23,8 +23,8 @@
 #include "vast/concept/parseable/vast/subnet.hpp"
 #include "vast/concept/printable/to_string.hpp"
 #include "vast/concept/printable/vast/bitmap.hpp"
-#include "vast/load.hpp"
-#include "vast/save.hpp"
+#include "vast/detail/deserialize.hpp"
+#include "vast/detail/serialize.hpp"
 
 #include <caf/test/dsl.hpp>
 
@@ -89,9 +89,9 @@ TEST(subnet) {
   CHECK_EQUAL(to_string(multi), "111100");
   MESSAGE("serialization");
   std::vector<char> buf;
-  CHECK_EQUAL(save(nullptr, buf, idx), caf::none);
+  CHECK_EQUAL(detail::serialize(buf, idx), caf::none);
   subnet_index idx2{subnet_type{}};
-  CHECK_EQUAL(load(nullptr, buf, idx2), caf::none);
+  CHECK_EQUAL(detail::deserialize(buf, idx2), caf::none);
   bm = idx2.lookup(not_equal, make_data_view(s1));
   CHECK_EQUAL(to_string(unbox(bm)), "101111");
 }

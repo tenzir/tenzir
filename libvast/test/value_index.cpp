@@ -25,8 +25,8 @@
 #include "vast/concept/parseable/vast/time.hpp"
 #include "vast/concept/printable/to_string.hpp"
 #include "vast/concept/printable/vast/bitmap.hpp"
-#include "vast/load.hpp"
-#include "vast/save.hpp"
+#include "vast/detail/deserialize.hpp"
+#include "vast/detail/serialize.hpp"
 #include "vast/table_slice.hpp"
 #include "vast/value_index_factory.hpp"
 
@@ -68,10 +68,10 @@ TEST(bool) {
   auto multi = unbox(idx->lookup(in, make_data_view(xs)));
   CHECK_EQUAL(to_string(multi), "11111111");
   MESSAGE("serialization");
-  std::string buf;
-  CHECK_EQUAL(save(nullptr, buf, idx), caf::none);
+  std::vector<char> buf;
+  CHECK_EQUAL(detail::serialize(buf, idx), caf::none);
   value_index_ptr idx2;
-  REQUIRE_EQUAL(load(nullptr, buf, idx2), caf::none);
+  REQUIRE_EQUAL(detail::deserialize(buf, idx2), caf::none);
   t = idx2->lookup(equal, make_data_view(true));
   CHECK_EQUAL(to_string(unbox(t)), "11010001");
 }
@@ -101,9 +101,9 @@ TEST(integer) {
   CHECK_EQUAL(to_string(multi), "0101011");
   MESSAGE("serialization");
   std::vector<char> buf;
-  CHECK_EQUAL(save(nullptr, buf, idx), caf::none);
+  CHECK_EQUAL(detail::serialize(buf, idx), caf::none);
   value_index_ptr idx2;
-  REQUIRE_EQUAL(load(nullptr, buf, idx2), caf::none);
+  REQUIRE_EQUAL(detail::deserialize(buf, idx2), caf::none);
   less_than_leet = idx2->lookup(less, make_data_view(31337));
   CHECK(to_string(unbox(less_than_leet)) == "1111011");
 }

@@ -64,7 +64,6 @@ set(libvast_sources
     src/bool_synopsis.cpp
     src/chunk.cpp
     src/command.cpp
-    src/compression.cpp
     src/concept/hashable/crc.cpp
     src/concept/hashable/sha1.cpp
     src/concept/hashable/xxhash.cpp
@@ -74,7 +73,6 @@ set(libvast_sources
     src/defaults.cpp
     src/detail/add_message_types.cpp
     src/detail/base64.cpp
-    src/detail/compressedbuf.cpp
     src/detail/fdinbuf.cpp
     src/detail/fdistream.cpp
     src/detail/fdostream.cpp
@@ -323,7 +321,6 @@ set(tests
     test/coder.cpp
     test/command.cpp
     test/community_id.cpp
-    test/compressedbuf.cpp
     test/data.cpp
     test/detail/algorithms.cpp
     test/detail/base64.cpp
@@ -369,7 +366,6 @@ set(tests
     test/port.cpp
     test/printable.cpp
     test/range_map.cpp
-    test/save_load.cpp
     test/schema.cpp
     test/scope_linked.cpp
     test/segment.cpp

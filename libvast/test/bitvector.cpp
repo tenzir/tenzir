@@ -13,14 +13,15 @@
 
 #define SUITE bitvector
 
+#include "vast/bitvector.hpp"
+
 #include "vast/test/test.hpp"
 
-#include "vast/bitvector.hpp"
 #include "vast/concept/printable/to_string.hpp"
 #include "vast/concept/printable/vast/bits.hpp"
 #include "vast/concept/printable/vast/bitvector.hpp"
-#include "vast/load.hpp"
-#include "vast/save.hpp"
+#include "vast/detail/deserialize.hpp"
+#include "vast/detail/serialize.hpp"
 
 using namespace vast;
 
@@ -39,7 +40,6 @@ TEST(copy construction) {
   y.pop_back();
   CHECK_EQUAL(x, y);
 }
-
 
 TEST(size construction) {
   bitvector<uint8_t> x(42);
@@ -210,8 +210,8 @@ TEST(serializable) {
   x.resize(1024, false);
   x[1000] = true;
   std::vector<char> buf;
-  CHECK_EQUAL(save(nullptr, buf, x), caf::none);
-  CHECK_EQUAL(load(nullptr, buf, y), caf::none);
+  CHECK_EQUAL(detail::serialize(buf, x), caf::none);
+  CHECK_EQUAL(detail::deserialize(buf, y), caf::none);
   REQUIRE_EQUAL(x, y);
   CHECK(y[1000]);
 }

@@ -13,32 +13,26 @@
 
 #pragma once
 
-#include <cstdint>
-#include <cstddef>
+#include "vast/byte.hpp"
+#include "vast/detail/type_traits.hpp"
+#include "vast/span.hpp"
 
-#include "vast/config.hpp"
+#include <type_traits>
 
 namespace vast {
 
-/// A compression algorithm identifier.
-enum class compression : int8_t {
-  null      = 0,
-  lz4       = 1,
-};
+template <class Buffer,
+          class = std::enable_if_t<detail::is_byte_container_v<Buffer>>>
+constexpr span<const byte> as_bytes(const Buffer& xs) noexcept {
+  const auto data = reinterpret_cast<const byte*>(std::data(xs));
+  return {data, std::size(xs)};
+}
 
-/// The LZ4 compression algorithm.
-namespace lz4 {
+template <class Buffer,
+          class = std::enable_if_t<detail::is_byte_container_v<Buffer>>>
+constexpr span<byte> as_writeable_bytes(Buffer& xs) noexcept {
+  const auto data = reinterpret_cast<byte*>(std::data(xs));
+  return {data, std::size(xs)};
+}
 
-/// @returns an upper bound for the compressed output.
-/// @param size The size of the uncompressed input.
-size_t compress_bound(size_t size);
-
-/// Compresses a contiguous byte sequence.
-size_t compress(const char* in, size_t in_size, char* out, size_t out_size);
-
-/// Uncompresses a contiguous byte sequence.
-size_t uncompress(const char* in, size_t in_size, char* out, size_t out_size);
-
-} // namespace lz4
 } // namespace vast
-

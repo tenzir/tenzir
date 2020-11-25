@@ -12,7 +12,6 @@ Repositories
 - [broker](https://github.com/zeek/broker) https://github.com/zeek/broker
 
 ### subtrees
-- [lz4](https://github.com/lz4/lz4): git@github.com:lz4/lz4.git
 - [robin-map](https://github.com/Tessil/robin-map/): git@github.com:Tessil/robin-map.git
 - [xxHash](https://github.com/Cyan4973/xxHash): git@github.com:Cyan4973/xxHash.git
 

@@ -15,23 +15,22 @@
 
 #include "vast/address_synopsis.hpp"
 
+#include "vast/test/fixtures/actor_system.hpp"
+#include "vast/test/synopsis.hpp"
+#include "vast/test/test.hpp"
+
+#include "vast/address.hpp"
+#include "vast/concept/hashable/hash_append.hpp"
+#include "vast/concept/hashable/xxhash.hpp"
+#include "vast/concept/parseable/to.hpp"
+#include "vast/concept/parseable/vast/address.hpp"
+#include "vast/si_literals.hpp"
+#include "vast/synopsis.hpp"
+#include "vast/synopsis_factory.hpp"
+#include "vast/type.hpp"
+
 #include <caf/actor_system.hpp>
 #include <caf/actor_system_config.hpp>
-
-#include <vast/address.hpp>
-#include <vast/concept/hashable/hash_append.hpp>
-#include <vast/concept/hashable/xxhash.hpp>
-#include <vast/concept/parseable/to.hpp>
-#include <vast/concept/parseable/vast/address.hpp>
-#include <vast/load.hpp>
-#include <vast/save.hpp>
-#include <vast/si_literals.hpp>
-#include <vast/synopsis.hpp>
-#include <vast/synopsis_factory.hpp>
-#include <vast/test/fixtures/actor_system.hpp>
-#include <vast/test/synopsis.hpp>
-#include <vast/test/test.hpp>
-#include <vast/type.hpp>
 
 using namespace std::string_literals;
 using namespace caf;

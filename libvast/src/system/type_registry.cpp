@@ -13,19 +13,22 @@
 
 #include "vast/system/type_registry.hpp"
 
+#include "vast/as_bytes.hpp"
 #include "vast/defaults.hpp"
 #include "vast/detail/fill_status_map.hpp"
 #include "vast/directory.hpp"
 #include "vast/error.hpp"
 #include "vast/event_types.hpp"
-#include "vast/load.hpp"
+#include "vast/io/read.hpp"
+#include "vast/io/save.hpp"
 #include "vast/logger.hpp"
-#include "vast/save.hpp"
 #include "vast/system/report.hpp"
 #include "vast/table_slice.hpp"
 
 #include <caf/atom.hpp>
 #include <caf/attach_stream_sink.hpp>
+#include <caf/binary_deserializer.hpp>
+#include <caf/binary_serializer.hpp>
 #include <caf/expected.hpp>
 #include <caf/settings.hpp>
 
@@ -69,7 +72,11 @@ vast::path type_registry_state::filename() const {
 }
 
 caf::error type_registry_state::save_to_disk() const {
-  return vast::save(&self->system(), filename(), data);
+  std::vector<char> buffer;
+  caf::binary_serializer sink{self->system(), buffer};
+  if (auto error = sink(data))
+    return error;
+  return io::save(filename(), as_bytes(buffer));
 }
 
 caf::error type_registry_state::load_from_disk() {
@@ -79,8 +86,12 @@ caf::error type_registry_state::load_from_disk() {
     return caf::none;
   }
   if (auto fname = filename(); exists(fname)) {
-    if (auto err = load(&self->system(), fname, data))
-      return err;
+    auto buffer = io::read(fname);
+    if (!buffer)
+      return buffer.error();
+    caf::binary_deserializer source{self->system(), *buffer};
+    if (auto error = source(data))
+      return error;
     VAST_DEBUG(self, "loaded state from disk");
   }
   return caf::none;

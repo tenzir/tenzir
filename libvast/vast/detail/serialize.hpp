@@ -11,28 +11,25 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#define LZ4_DISABLE_DEPRECATE_WARNINGS
-#define LZ4_FORCE_INLINE
-#include "lz4/lib/lz4.c"
+#pragma once
 
-#include "vast/compression.hpp"
-#include "vast/die.hpp"
+#include <caf/binary_serializer.hpp>
+#include <caf/error.hpp>
 
-namespace vast {
-namespace lz4 {
+#include <vector>
 
-size_t compress_bound(size_t size) {
-  return LZ4_compressBound(size);
+namespace vast::detail {
+
+/// Serializes a sequence of objects into a byte buffer.
+/// @param buffer The vector of bytes to write into.
+/// @param xs The objects to serialize.
+/// @returns The status of the operation.
+/// @relates detail::deserialize
+template <class Byte, class... Ts>
+caf::error serialize(std::vector<Byte>& buffer, Ts&&... xs) {
+  static_assert(sizeof(Byte) == 1, "can only serialize into byte vectors");
+  caf::binary_serializer serializer{nullptr, buffer};
+  return serializer(xs...);
 }
 
-size_t compress(const char* in, size_t in_size, char* out, size_t out_size) {
-  return LZ4_compress_default(in, out, in_size, out_size);
-}
-
-size_t uncompress(const char* in, size_t in_size, char* out, size_t out_size) {
-  return LZ4_decompress_safe(in, out, static_cast<int>(in_size),
-                             static_cast<int>(out_size));
-}
-
-} // namespace lz4
-} // namespace vast
+} // namespace vast::detail

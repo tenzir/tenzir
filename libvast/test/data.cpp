@@ -24,9 +24,9 @@
 #include "vast/concept/printable/to_string.hpp"
 #include "vast/concept/printable/vast/data.hpp"
 #include "vast/concept/printable/vast/json.hpp"
+#include "vast/detail/deserialize.hpp"
+#include "vast/detail/serialize.hpp"
 #include "vast/json.hpp"
-#include "vast/load.hpp"
-#include "vast/save.hpp"
 
 #include <caf/test/dsl.hpp>
 
@@ -222,10 +222,10 @@ TEST(serialization) {
   xs.emplace_back(count{8});
   auto x0 = data{xs};
   std::vector<char> buf;
-  CHECK_EQUAL(save(nullptr, buf, x0), caf::none);
+  CHECK_EQUAL(detail::serialize(buf, x0), caf::none);
   data x1;
-  CHECK_EQUAL(load(nullptr, buf, x1), caf::none);
-  CHECK(x0 == x1);
+  CHECK_EQUAL(detail::deserialize(buf, x1), caf::none);
+  CHECK_EQUAL(x0, x1);
 }
 
 TEST(printable) {

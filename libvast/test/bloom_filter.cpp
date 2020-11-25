@@ -20,8 +20,8 @@
 #include "vast/bloom_filter_parameters.hpp"
 #include "vast/concept/hashable/hash_append.hpp"
 #include "vast/concept/hashable/xxhash.hpp"
-#include "vast/load.hpp"
-#include "vast/save.hpp"
+#include "vast/detail/deserialize.hpp"
+#include "vast/detail/serialize.hpp"
 #include "vast/si_literals.hpp"
 
 #include <caf/actor_system.hpp>
@@ -145,11 +145,11 @@ TEST(simple_hasher) {
   CHECK_EQUAL(xs[0], 15516826743637085169ul);
   CHECK_EQUAL(xs[1], 1813822717707961023ul);
   MESSAGE("persistence");
-  std::string buf;
-  auto err = save(nullptr, buf, h);
+  std::vector<char> buf;
+  auto err = detail::serialize(buf, h);
   REQUIRE_EQUAL(err, caf::none);
   simple_hasher<xxhash64> g;
-  err = load(nullptr, buf, g);
+  err = detail::deserialize(buf, g);
   REQUIRE_EQUAL(err, caf::none);
   CHECK(h == g);
 }
@@ -164,11 +164,11 @@ TEST(double_hasher) {
   CHECK_EQUAL(xs[2], 8535038569602830417ul);
   CHECK_EQUAL(xs[3], 3408974221919105007ul);
   MESSAGE("persistence");
-  std::string buf;
-  auto err = save(nullptr, buf, h);
+  std::vector<char> buf;
+  auto err = detail::serialize(buf, h);
   REQUIRE_EQUAL(err, caf::none);
   double_hasher<xxhash64> g;
-  err = load(nullptr, buf, g);
+  err = detail::deserialize(buf, g);
   REQUIRE_EQUAL(err, caf::none);
   CHECK(h == g);
 }
@@ -207,11 +207,11 @@ TEST(bloom filter - simple hasher and partitioning) {
   CHECK(x.lookup("foo"));
   CHECK(x.lookup(3.14));
   MESSAGE("persistence");
-  std::string buf;
-  auto err = save(nullptr, buf, x);
+  std::vector<char> buf;
+  auto err = detail::serialize(buf, x);
   REQUIRE_EQUAL(err, caf::none);
   bloom_filter<xxhash, simple_hasher, policy::partitioning> y;
-  err = load(nullptr, buf, y);
+  err = detail::deserialize(buf, y);
   REQUIRE_EQUAL(err, caf::none);
   CHECK(x == y);
 }
