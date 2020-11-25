@@ -37,6 +37,7 @@ Every entry has a category for which we use the following visual abbreviations:
   instead. Since most `port` occurrences do not carry a known transport-layer
   type, and the type information exists typically in a separate field, removing
   `port` as native type streamlines the data model.
+  [#1187](https://github.com/tenzir/vast/pull/1187)
 
 - 🐞 VAST no longer blocks when an invalid query operation is issued.
   [#1189](https://github.com/tenzir/vast/pull/1189)
@@ -154,7 +155,7 @@ Every entry has a category for which we use the following visual abbreviations:
   [#1103](https://github.com/tenzir/vast/pull/1103)
 
 - 🎁 The new script `splunk-to-vast` converts a splunk CIM model file in JSON
-  to a VAST taxonomy. For example, `splunk-to-vast < Network_Traffic.json` 
+  to a VAST taxonomy. For example, `splunk-to-vast < Network_Traffic.json`
   renders the concept definitions for the *Network Traffic* datamodel. The
   generated taxonomy does not include field definitions, which users should add
   separately according to their data formats.
