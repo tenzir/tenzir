@@ -146,12 +146,15 @@ void collect_component_status(node_actor* self,
     detail::strip_settings(req_state->content);
     req_state->rp.deliver(to_string(to_json(req_state->content)));
   };
+  // The overload for 'request(...)' taking a 'std::chrono::duration' does not
+  // respect the specified message priority, so we convert to 'caf::duration' by
+  // hand.
+  const auto timeout = caf::duration{defaults::system::initial_request_timeout};
   // Send out requests and collects answers.
   for (auto& [label, component] : self->state.registry.components())
     self
-      ->request<message_priority::high>(
-        component.actor, defaults::system::initial_request_timeout,
-        atom::status_v, v)
+      ->request<message_priority::high>(component.actor, timeout,
+                                        atom::status_v, v)
       .then(
         [=, lab = label](caf::config_value::dictionary& xs) mutable {
           detail::merge_settings(xs, req_state->content, policy::merge_lists);
@@ -183,10 +186,14 @@ caf::message dump_command(const invocation& inv, caf::actor_system&) {
         make_error(ec::missing_component, type_registry_state::name));
     caf::error request_error = caf::none;
     auto rp = self->make_response_promise();
+    // The overload for 'request(...)' taking a 'std::chrono::duration' does not
+    // respect the specified message priority, so we convert to 'caf::duration'
+    // by hand.
+    const auto timeout
+      = caf::duration{defaults::system::initial_request_timeout};
     self
       ->request<message_priority::high>(
-        caf::actor_cast<caf::actor>(type_registry),
-        defaults::system::initial_request_timeout, atom::get_v,
+        caf::actor_cast<caf::actor>(type_registry), timeout, atom::get_v,
         atom::taxonomies_v)
       .then(
         [=](struct taxonomies taxonomies) mutable {
