@@ -128,12 +128,12 @@ auto make_count_command() {
 }
 
 auto make_dump_command() {
-  // FIXME: Write command description.
-  // FIXME: Write command documentation.
-  // FIXME: Write options documentation.
   auto dump = std::make_unique<command>(
-    "dump", "", "", opts("?vast.dump").add<bool>("yaml", ""));
-  dump->add_subcommand("concepts", "", "", opts("?vast.dump.concepts"));
+    "dump", "print configuration objects as JSON", documentation::vast_dump,
+    opts("?vast.dump").add<bool>("yaml", "format output as YAML"));
+  dump->add_subcommand("concepts", "print all registered concept definitions",
+                       documentation::vast_dump_concepts,
+                       opts("?vast.dump.concepts"));
   return dump;
 }
 
