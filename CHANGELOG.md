@@ -12,6 +12,11 @@ Every entry has a category for which we use the following visual abbreviations:
 
 ## Unreleased
 
+- 🎁 The new `dump` command prints configuration and schema-related information.
+  The initial implementation allows for printing all registered concepts as JSON
+  via `vast dump concepts`. The new flag `vast.dump.yaml` switches to YAML
+  output. [#1196](https://github.com/tenzir/vast/pull/1196)
+
 - ⚠️ Installed schema definitions now reside in `<datadir>/vast/schema/types`,
   taxonomy definitions in `<datadir>/vast/schema/taxonomy`, and concept
   definitions in `<datadir/vast/schema/concepts`, as opposed to them all being
