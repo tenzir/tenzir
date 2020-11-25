@@ -18,7 +18,6 @@
 #include "vast/span.hpp"
 
 #include <type_traits>
-#include <vector>
 
 namespace vast {
 

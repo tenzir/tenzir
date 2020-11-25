@@ -13,6 +13,7 @@
 
 #pragma once
 
+#include "vast/as_bytes.hpp"
 #include "vast/byte.hpp"
 #include "vast/detail/assert.hpp"
 #include "vast/detail/function.hpp"
@@ -22,7 +23,6 @@
 #include <caf/intrusive_ptr.hpp>
 #include <caf/ref_counted.hpp>
 
-#include <type_traits>
 #include <utility>
 
 namespace vast {
@@ -85,33 +85,6 @@ public:
     } else {
       auto view = as_bytes(buffer);
       return make(view, [buffer = std::move(buffer)]() noexcept {
-        static_cast<void>(buffer);
-      });
-    }
-  }
-
-  /// Construct a chunk from a byte buffer, and binds the lifetime of the chunk
-  /// to the buffer.
-  /// @param buffer The byte buffer.
-  /// @returns A chunk pointer or `nullptr` on failure.
-  template <class Buffer,
-            class = std::enable_if_t<
-              std::negation_v<std::is_lvalue_reference<
-                Buffer>> && sizeof(*std::data(std::declval<Buffer>())) == 1>>
-  static auto make(Buffer&& buffer)
-    -> decltype(std::data(buffer), std::size(buffer), chunk_ptr{}) {
-    // If the buffer is trivially-move-assignable, put a copy on the heap first.
-    if constexpr (std::is_trivially_move_assignable_v<Buffer>) {
-      auto copy = std::make_unique<Buffer>(std::move(buffer));
-      const auto data = std::data(*copy);
-      const auto size = std::size(*copy);
-      return make(data, size, [copy = std::move(copy)]() noexcept {
-        static_cast<void>(copy);
-      });
-    } else {
-      const auto data = std::data(buffer);
-      const auto size = std::size(buffer);
-      return make(data, size, [buffer = std::move(buffer)]() noexcept {
         static_cast<void>(buffer);
       });
     }
