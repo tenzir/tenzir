@@ -47,7 +47,7 @@ TEST(access) {
 
 TEST(slicing) {
   std::array<char, 100> buf = {};
-  auto x = chunk::make(std::move(buf));
+  auto x = chunk::copy(buf);
   auto y = x->slice(50);
   auto z = y->slice(40, 5);
   CHECK_EQUAL(y->size(), 50u);
