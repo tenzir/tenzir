@@ -43,7 +43,7 @@ namespace vast::format::syslog {
 template <class Parser>
 struct maybe_nil_parser : parser<maybe_nil_parser<Parser>> {
   using value_type = typename std::decay_t<Parser>::attribute;
-  using attribute = std::conditional_t<detail::is_container<value_type>,
+  using attribute = std::conditional_t<detail::is_container_v<value_type>,
                                        value_type, caf::optional<value_type>>;
 
   explicit maybe_nil_parser(Parser parser) : parser_{std::move(parser)} {

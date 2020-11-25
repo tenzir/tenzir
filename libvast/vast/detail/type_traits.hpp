@@ -130,15 +130,34 @@ using std_data_t = decltype(std::data(std::declval<T>()));
 template <class T>
 using std_size_t = decltype(std::size(std::declval<T>()));
 
+template <class T, class = void>
+struct is_container : std::false_type {};
+
 template <class T>
-inline constexpr bool is_container
-  = is_detected_v<std_data_t, T>&& is_detected_v<std_size_t, T>;
+struct is_container<
+  T,
+  std::enable_if_t<is_detected_v<std_data_t, T> && is_detected_v<std_size_t, T>>>
+  : std::true_type {};
+
+template <class T>
+inline constexpr bool is_container_v = is_container<T>::value;
 
 /// Contiguous byte buffers
 
+template <class T, class = void>
+struct is_byte_container : std::false_type {};
+
 template <class T>
-inline constexpr bool is_byte_container_v
-  = is_container<T> && sizeof(deref_t<std_data_t<T>>) == 1;
+struct is_byte_container<
+  T,
+  std::enable_if_t<
+    is_detected_v<
+      std_data_t,
+      T> && is_detected_v<std_size_t, T> && sizeof(deref_t<std_data_t<T>>) == 1>>
+  : std::true_type {};
+
+template <class T>
+inline constexpr bool is_byte_container_v = is_byte_container<T>::value;
 
 // -- SFINAE helpers ---------------------------------------------------------
 // http://bit.ly/uref-copy.
