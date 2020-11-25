@@ -85,8 +85,13 @@ vast:
 
   # The `vast count` command counts hits for a query without exporting data.
   count:
-    # Estimate an upper bound by skipping candidate checks
+    # Estimate an upper bound by skipping candidate checks.
     estimate: false
+
+  # The `vast dump` command prints configuration objects as JSON.
+  dump:
+    # Format output as YAML.
+    yaml: false
 
   # The `vast export` command exports query results to stdout or a file.
   export:
