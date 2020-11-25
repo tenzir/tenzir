@@ -43,13 +43,14 @@ type_registry_state::status(status_verbosity v) const {
   if (v >= status_verbosity::detailed) {
     // The list of defined concepts
     if (v >= status_verbosity::debug) {
-      auto& concepts_status = put_dictionary(tr_status, "concepts");
+      auto& concepts_status = put_list(tr_status, "concepts");
       for (auto& [name, definition] : taxonomies.concepts) {
-        auto& concept_status = put_dictionary(concepts_status, name);
+        auto& concept_status = concepts_status.emplace_back().as_dictionary();
+        concept_status["name"] = name;
         concept_status["description"] = definition.description;
         concept_status["fields"] = definition.fields;
         concept_status["concepts"] = definition.concepts;
-      } 
+      }
       // Sorted list of all keys.
       auto keys = std::vector<std::string>(data.size());
       std::transform(data.begin(), data.end(), keys.begin(),
@@ -164,6 +165,10 @@ type_registry(type_registry_actor self, const path& dir) {
     [=](atom::put, taxonomies t) {
       VAST_TRACE("");
       self->state.taxonomies = std::move(t);
+    },
+    [=](atom::get, atom::taxonomies) {
+      VAST_TRACE("");
+      return self->state.taxonomies;
     },
     [=](atom::load) -> caf::result<atom::ok> {
       VAST_DEBUG(self, "loads taxonomies");

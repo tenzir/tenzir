@@ -20,6 +20,7 @@
 #include "vast/concept/printable/to_string.hpp"
 #include "vast/concept/printable/vast/json.hpp"
 #include "vast/config.hpp"
+#include "vast/data.hpp"
 #include "vast/defaults.hpp"
 #include "vast/detail/assert.hpp"
 #include "vast/detail/process.hpp"
@@ -145,12 +146,15 @@ void collect_component_status(node_actor* self,
     detail::strip_settings(req_state->content);
     req_state->rp.deliver(to_string(to_json(req_state->content)));
   };
+  // The overload for 'request(...)' taking a 'std::chrono::duration' does not
+  // respect the specified message priority, so we convert to 'caf::duration' by
+  // hand.
+  const auto timeout = caf::duration{defaults::system::initial_request_timeout};
   // Send out requests and collects answers.
   for (auto& [label, component] : self->state.registry.components())
     self
-      ->request<message_priority::high>(
-        component.actor, defaults::system::initial_request_timeout,
-        atom::status_v, v)
+      ->request<message_priority::high>(component.actor, timeout,
+                                        atom::status_v, v)
       .then(
         [=, lab = label](caf::config_value::dictionary& xs) mutable {
           detail::merge_settings(xs, req_state->content, policy::merge_lists);
@@ -170,6 +174,68 @@ void collect_component_status(node_actor* self,
 }
 
 } // namespace
+
+caf::message dump_command(const invocation& inv, caf::actor_system&) {
+  auto as_yaml = caf::get_or(inv.options, "vast.dump.yaml", false);
+  if (inv.full_name == "dump concepts") {
+    auto self = this_node;
+    auto type_registry = caf::actor_cast<type_registry_type>(
+      self->state.registry.find_by_label(type_registry_state::name));
+    if (!type_registry)
+      return caf::make_message(
+        make_error(ec::missing_component, type_registry_state::name));
+    caf::error request_error = caf::none;
+    auto rp = self->make_response_promise();
+    // The overload for 'request(...)' taking a 'std::chrono::duration' does not
+    // respect the specified message priority, so we convert to 'caf::duration'
+    // by hand.
+    const auto timeout
+      = caf::duration{defaults::system::initial_request_timeout};
+    self
+      ->request<message_priority::high>(type_registry, timeout, atom::get_v,
+                                        atom::taxonomies_v)
+      .then(
+        [=](struct taxonomies taxonomies) mutable {
+          auto result = list{};
+          result.reserve(taxonomies.concepts.size());
+          for (auto& [name, definition] : taxonomies.concepts) {
+            auto fields = list{};
+            fields.reserve(definition.fields.size());
+            for (auto& field : definition.fields)
+              fields.push_back(std::move(field));
+            auto concepts = list{};
+            concepts.reserve(definition.concepts.size());
+            for (auto& concept : definition.concepts)
+              fields.push_back(std::move(concept));
+            auto concept = record{
+              {"concept",
+               record{
+                 {"name", std::move(name)},
+                 {"description", std::move(definition.description)},
+                 {"fields", std::move(fields)},
+                 {"concepts", std::move(concepts)},
+               }},
+            };
+            result.push_back(std::move(concept));
+          }
+          if (as_yaml) {
+            if (auto yaml = to_yaml(data{std::move(result)}))
+              rp.deliver(to_string(std::move(*yaml)));
+            else
+              request_error = std::move(yaml.error());
+          } else {
+            auto json = to_json(data{std::move(result)});
+            rp.deliver(to_string(std::move(json)));
+          }
+        },
+        [=](caf::error& err) mutable { request_error = std::move(err); });
+    if (request_error)
+      return caf::make_message(std::move(request_error));
+    return caf::none;
+  } else {
+    return caf::make_message(make_error(ec::invalid_subcommand, inv.full_name));
+  }
+}
 
 caf::message status_command(const invocation& inv, caf::actor_system&) {
   auto self = this_node;
@@ -294,6 +360,7 @@ auto make_command_factory() {
   // When updating this list, remember to update its counterpart in
   // application.cpp as well iff necessary
   return command::factory{
+    {"dump concepts", dump_command},
     {"kill", kill_command},
     {"send", send_command},
     {"spawn accountant", node_state::spawn_command},
@@ -375,8 +442,8 @@ node_state::spawn_command(const invocation& inv,
     auto component = spawn_component(self, args.inv, args);
     if (!component) {
       if (component.error())
-        VAST_WARNING(
-          __func__, "failed to spawn component:", render(component.error()));
+        VAST_WARNING(__func__,
+                     "failed to spawn component:", render(component.error()));
       rp.deliver(component.error());
       return caf::make_message(std::move(component.error()));
     }
