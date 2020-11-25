@@ -213,12 +213,10 @@ caf::message dump_command(const invocation& inv, caf::actor_system&) {
             result.push_back(std::move(concept));
           }
           if (as_yaml) {
-            auto yaml = to_yaml(data{std::move(result)});
-            if (!yaml) {
+            if (auto yaml = to_yaml(data{std::move(result)}))
+              rp.deliver(to_string(std::move(*yaml)));
+            else
               request_error = std::move(yaml.error());
-              return;
-            }
-            rp.deliver(to_string(std::move(*yaml)));
           } else {
             auto json = to_json(data{std::move(result)});
             rp.deliver(to_string(std::move(json)));
