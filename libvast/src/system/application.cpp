@@ -120,7 +120,8 @@ auto make_root_command(std::string_view path) {
 auto make_count_command() {
   // FIXME: Write command documentation.
   return std::make_unique<command>(
-    "count", "count hits for a query without exporting data", "",
+    "count", "count hits for a query without exporting data",
+    documentation::vast_count,
     opts("?vast.count")
       .add<bool>("disable-taxonomies", "don't substitute taxonomy identifiers")
       .add<bool>("estimate,e", "estimate an upper bound by "
