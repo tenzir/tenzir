@@ -21,16 +21,18 @@
 
 namespace vast {
 
-template <class T, class = std::enable_if_t<detail::is_byte_container_v<T>>>
-span<const byte> as_bytes(const T& xs) noexcept {
-  auto data = reinterpret_cast<const byte*>(std::data(xs));
-  return {data, std::size(xs) * sizeof(T)};
+template <class Buffer,
+          class = std::enable_if_t<detail::is_byte_container_v<Buffer>>>
+constexpr span<const byte> as_bytes(const Buffer& xs) noexcept {
+  const auto data = reinterpret_cast<const byte*>(std::data(xs));
+  return {data, std::size(xs)};
 }
 
-template <class T, class = std::enable_if_t<detail::is_byte_container_v<T>>>
-span<byte> as_writeable_bytes(T& xs) noexcept {
-  auto data = reinterpret_cast<byte*>(std::data(xs));
-  return {data, std::size(xs) * sizeof(T)};
+template <class Buffer,
+          class = std::enable_if_t<detail::is_byte_container_v<Buffer>>>
+constexpr span<byte> as_writeable_bytes(Buffer& xs) noexcept {
+  const auto data = reinterpret_cast<byte*>(std::data(xs));
+  return {data, std::size(xs)};
 }
 
 } // namespace vast
