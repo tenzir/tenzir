@@ -118,7 +118,6 @@ auto make_root_command(std::string_view path) {
 }
 
 auto make_count_command() {
-  // FIXME: Write command documentation.
   return std::make_unique<command>(
     "count", "count hits for a query without exporting data",
     documentation::vast_count,
