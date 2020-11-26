@@ -98,17 +98,20 @@ caf::error type_registry_state::load_from_disk() {
 }
 
 void type_registry_state::insert(vast::type layout) {
-  // Flatten all incoming types first.
-  auto new_layout = flatten(layout);
-  auto& old_layouts = data[new_layout.name()];
+  auto& old_layouts = data[layout.name()];
   // Insert into the existing bucket.
-  auto [hint, success] = old_layouts.insert(std::move(new_layout));
+  auto [hint, success] = old_layouts.insert(std::move(layout));
   if (success) {
     // Check whether the new layout is compatible with the latest, i.e., whether
     // the new layout is a superset of it.
-    if (old_layouts.begin() != hint && is_subset(*old_layouts.begin(), *hint))
-      VAST_WARNING(self, "detected an incompatible version of", hint->name());
-    VAST_DEBUG(self, "registered", hint->name());
+    if (old_layouts.begin() != hint) {
+      if (!is_subset(*old_layouts.begin(), *hint))
+        VAST_WARNING(self, "detected an incompatible layout change for",
+                     hint->name());
+      else
+        VAST_VERBOSE(self, "detected a layout change for", hint->name());
+    }
+    VAST_INFO(self, "registered", hint->name());
   }
   // Move the newly inserted layout to the front.
   std::rotate(old_layouts.begin(), hint, std::next(hint));
