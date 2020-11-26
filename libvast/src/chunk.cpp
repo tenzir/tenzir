@@ -105,8 +105,7 @@ chunk_ptr chunk::slice(size_type start, size_type length) const {
 span<const byte> as_bytes(const chunk_ptr& x) noexcept {
   if (!x)
     return {};
-  auto ptr = reinterpret_cast<const byte*>(x->data());
-  return span<const byte>{ptr, x->size()};
+  return as_bytes(*x);
 }
 
 caf::error write(const path& filename, const chunk_ptr& x) {
