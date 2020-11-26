@@ -155,13 +155,17 @@ Stream& operator<<(Stream& out, const time_factory& t) {
 }
 
 void print_header(const type& t, std::ostream& out) {
-  VAST_ASSERT(detail::starts_with(t.name(), type_name_prefix));
-  auto path = t.name().substr(type_name_prefix.size());
+  auto path = std::string_view{t.name()};
+  auto i = path.find('.');
+  if (i != path.npos) {
+    VAST_ASSERT(path.size() > 1);
+    path = path.substr(i + 1); // Ignore format name.
+  }
   out << "#separator " << separator << '\n'
       << "#set_separator" << separator << set_separator << '\n'
       << "#empty_field" << separator << empty_field << '\n'
       << "#unset_field" << separator << unset_field << '\n'
-      << "#path" << separator << path + '\n'
+      << "#path" << separator << path << '\n'
       << "#open" << separator << time_factory{} << '\n'
       << "#fields";
   auto r = caf::get<record_type>(t);
