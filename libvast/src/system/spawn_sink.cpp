@@ -82,7 +82,8 @@ maybe_actor spawn_zeek_sink(caf::local_actor* self, spawn_arguments& args) {
   if (!args.empty())
     return unexpected_arguments(args);
   auto writer = std::make_unique<format::zeek::writer>(
-    get_or(args.inv.options, category + ".write", defaults_t::write));
+    get_or(args.inv.options, category + ".write", defaults_t::write),
+    !caf::get_or(args.inv.options, category + ".no-timestamp-tags", false));
   return self->spawn(sink, std::move(writer), 0u);
 }
 

@@ -154,7 +154,7 @@ Stream& operator<<(Stream& out, const time_factory& t) {
   return out;
 }
 
-void print_header(const type& t, std::ostream& out) {
+void print_header(const type& t, std::ostream& out, bool show_timestamp_tags) {
   auto path = std::string_view{t.name()};
   auto i = path.find('.');
   if (i != path.npos) {
@@ -165,9 +165,10 @@ void print_header(const type& t, std::ostream& out) {
       << "#set_separator" << separator << set_separator << '\n'
       << "#empty_field" << separator << empty_field << '\n'
       << "#unset_field" << separator << unset_field << '\n'
-      << "#path" << separator << path << '\n'
-      << "#open" << separator << time_factory{} << '\n'
-      << "#fields";
+      << "#path" << separator << path << '\n';
+  if (show_timestamp_tags)
+    out << "#open" << separator << time_factory{} << '\n';
+  out << "#fields";
   auto r = caf::get<record_type>(t);
   for (auto& e : record_type::each{r})
     out << separator << to_string(e.key());
@@ -497,7 +498,8 @@ caf::error reader::parse_header() {
   return caf::none;
 }
 
-writer::writer(path dir) {
+writer::writer(path dir, bool show_timestamp_tags)
+  : show_timestamp_tags_{show_timestamp_tags} {
   if (dir != "-")
     dir_ = std::move(dir);
 }
@@ -588,10 +590,12 @@ class writer_child : public ostream_writer {
 public:
   using super = ostream_writer;
 
-  using super::super;
+  writer_child(std::unique_ptr<std::ostream> out, bool show_timestamp_tags)
+    : super{std::move(out)}, show_timestamp_tags_{show_timestamp_tags} {
+  }
 
   ~writer_child() override {
-    if (out_ != nullptr)
+    if (out_ != nullptr && show_timestamp_tags_)
       *out_ << "#close" << separator << time_factory{} << '\n';
   }
 
@@ -604,6 +608,8 @@ public:
   const char* name() const override {
     return "zeek-writer";
   }
+
+  bool show_timestamp_tags_;
 };
 
 } // namespace
@@ -615,12 +621,12 @@ caf::error writer::write(const table_slice& slice) {
     if (writers_.empty()) {
       VAST_DEBUG(this, "creates a new stream for STDOUT");
       auto out = std::make_unique<detail::fdostream>(1);
-      writers_.emplace(layout.name(),
-                       std::make_unique<writer_child>(std::move(out)));
+      writers_.emplace(layout.name(), std::make_unique<writer_child>(
+                                        std::move(out), show_timestamp_tags_));
     }
     child = writers_.begin()->second.get();
     if (layout != previous_layout_) {
-      print_header(layout, child->out());
+      print_header(layout, child->out(), show_timestamp_tags_);
       previous_layout_ = std::move(layout);
     }
   } else {
@@ -638,9 +644,10 @@ caf::error writer::write(const table_slice& slice) {
       }
       auto filename = dir_ / (layout.name() + ".log");
       auto fos = std::make_unique<std::ofstream>(filename.str());
-      print_header(layout, *fos);
-      auto i = writers_.emplace(layout.name(),
-                                std::make_unique<writer_child>(std::move(fos)));
+      print_header(layout, *fos, show_timestamp_tags_);
+      auto i = writers_.emplace(
+        layout.name(),
+        std::make_unique<writer_child>(std::move(fos), show_timestamp_tags_));
       child = i.first->second.get();
     }
   }

@@ -1,7 +1,5 @@
-#close	2020-11-26-15-24-33
 #empty_field	(empty)
 #fields	timestamp	flow_id	pcap_cnt	vlan	in_iface	src_ip	src_port	dest_ip	dest_port	proto	event_type	community_id	alert.app_proto	alert.action	alert.gid	alert.signature_id	alert.rev	alert.signature	alert.category	alert.severity	alert.source.ip	alert.source.port	alert.target.ip	alert.target.port	flow.pkts_toserver	flow.pkts_toclient	flow.bytes_toserver	flow.bytes_toclient	flow.start	flow.end	flow.age	flow.state	flow.reason	flow.alerted	payload	payload_printable	stream	packet	packet_info.linktype
-#open	2020-11-26-15-24-33
 #path	alert
 #separator 	
 #set_separator	,

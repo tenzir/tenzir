@@ -2,3 +2,7 @@ caf:
   logger:
     file-verbosity: trace
     component-blacklist: []
+vast:
+  export:
+    zeek:
+      no-timestamp-tags: true
