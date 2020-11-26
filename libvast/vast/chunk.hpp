@@ -99,8 +99,9 @@ public:
     -> decltype(as_bytes(buffer), chunk_ptr{}) {
     auto view = as_bytes(buffer);
     auto copy = std::make_unique<value_type[]>(view.size());
-    std::memcpy(copy.get(), view.data(), view.size());
-    return make(copy.get(), view.size(), [copy = std::move(copy)]() noexcept {
+    auto data = copy.get();
+    std::memcpy(data, view.data(), view.size());
+    return make(data, view.size(), [copy = std::move(copy)]() noexcept {
       static_cast<void>(copy);
     });
   }
