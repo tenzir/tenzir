@@ -543,7 +543,8 @@ index(caf::stateful_actor<index_state>* self, filesystem_type fs, path dir,
       // because the actor was destroyed; in this case we can't use `self`
       // anymore.
       if (err && err != caf::exit_reason::unreachable) {
-        VAST_ERROR(self, "aborts with error:", render(err));
+        if (err != caf::exit_reason::user_shutdown)
+          VAST_ERROR(self, "got a stream error:", render(err));
         // We can shutdown now because we only get a single stream from the
         // importer.
         self->send_exit(self, err);
