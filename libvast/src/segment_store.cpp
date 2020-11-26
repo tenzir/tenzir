@@ -51,7 +51,10 @@ segment_store::segment_store(path dir, uint64_t max_segment_size,
                              size_t in_memory_segments)
   : dir_{std::move(dir)},
     max_segment_size_{max_segment_size},
-    cache_{in_memory_segments} {
+    cache_{in_memory_segments},
+    // TODO: Make vast.max-segment-size a hard instead of a soft limit, such
+    // that we do not need to multiplay with an arbitrary value above 1 here.
+    builder_{detail::narrow_cast<size_t>(max_segment_size * 1.1)} {
   // nop
 }
 
@@ -212,8 +215,13 @@ caf::error segment_store::erase(const ids& xs) {
                  "to", new_slices.size(), "slices");
     // Remove stale state.
     segments_.erase_value(segment_id);
+    // Estimate the size of the new segment.
+    auto size_estimate = size_t{};
+    for (const auto& slice : new_slices)
+      size_estimate += as_bytes(slice).size();
+    size_estimate *= 1.1;
     // Create a new segment from the remaining slices.
-    segment_builder tmp_builder;
+    segment_builder tmp_builder{size_estimate};
     segment_builder* builder = &tmp_builder;
     if constexpr (std::is_same_v<decltype(seg), segment_builder&>) {
       // If `update` got called with a builder then we simply use that by

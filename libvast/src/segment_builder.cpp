@@ -29,7 +29,8 @@
 
 namespace vast {
 
-segment_builder::segment_builder() {
+segment_builder::segment_builder(size_t initial_buffer_size)
+  : builder_{initial_buffer_size} {
   reset();
 }
 

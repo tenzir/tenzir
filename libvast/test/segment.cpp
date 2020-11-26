@@ -31,7 +31,7 @@ using namespace vast;
 FIXTURE_SCOPE(segment_tests, fixtures::events)
 
 TEST(construction and querying) {
-  segment_builder builder;
+  segment_builder builder{1024};
   for (auto& slice : zeek_conn_log)
     if (auto err = builder.add(slice))
       FAIL(err);
@@ -45,7 +45,7 @@ TEST(construction and querying) {
 }
 
 TEST(serialization) {
-  segment_builder builder;
+  segment_builder builder{1024};
   auto slice = zeek_conn_log[0];
   REQUIRE(!builder.add(slice));
   auto x = builder.finish();
