@@ -36,10 +36,4 @@ flatbuffers::Verifier make_verifier(span<const byte> xs) {
   return flatbuffers::Verifier{data, xs.size()};
 }
 
-span<const byte> as_bytes(const flatbuffers::FlatBufferBuilder& builder) {
-  auto data = reinterpret_cast<const byte*>(builder.GetBufferPointer());
-  auto size = builder.GetSize();
-  return {data, size};
-}
-
 } // namespace vast::fbs
