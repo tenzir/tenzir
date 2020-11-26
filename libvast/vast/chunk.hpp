@@ -78,8 +78,8 @@ public:
               std::disjunction<std::is_lvalue_reference<Buffer>,
                                std::is_trivially_move_assignable<Buffer>>>>>
   static auto make(Buffer&& buffer) -> decltype(as_bytes(buffer), chunk_ptr{}) {
-    auto view = as_bytes(buffer);
-    return make(view, [buffer = std::move(buffer)]() noexcept {
+    const auto view = as_bytes(buffer);
+    return make(view, [buffer = std::exchange(buffer, {})]() noexcept {
       static_cast<void>(buffer);
     });
   }
@@ -97,9 +97,9 @@ public:
   template <class Buffer>
   static auto copy(const Buffer& buffer)
     -> decltype(as_bytes(buffer), chunk_ptr{}) {
-    auto view = as_bytes(buffer);
+    const auto view = as_bytes(buffer);
     auto copy = std::make_unique<value_type[]>(view.size());
-    auto data = copy.get();
+    const auto data = copy.get();
     std::memcpy(data, view.data(), view.size());
     return make(data, view.size(), [copy = std::move(copy)]() noexcept {
       static_cast<void>(copy);
