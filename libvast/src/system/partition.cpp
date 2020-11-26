@@ -519,7 +519,8 @@ active_partition(caf::stateful_actor<active_partition_state>* self, uuid id,
                  fbchunk->size(), "bytes");
       // Relinquish ownership and send the shrinked synopsis to the index.
       if (self->state.index_actor) {
-        self->send(self->state.index_actor, self->state.synopsis);
+        self->send(self->state.index_actor, atom::replace_v, self->state.id,
+                   self->state.synopsis);
         self->state.synopsis.reset();
       }
       self->state.persistence_promise.delegate(self->state.fs_actor,

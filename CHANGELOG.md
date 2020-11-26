@@ -46,6 +46,7 @@ Every entry has a category for which we use the following visual abbreviations:
   should result in significantly reduced memory usage over time, as well
   as faster restart times and reduced disk space requirements.
   [#1172](https://github.com/tenzir/vast/pull/1172)
+  [#1200](https://github.com/tenzir/vast/pull/1200)
 
 - ⚠️ The Suricata schemas received an overhaul: there now exist `vlan` and
   `in_iface` fields in all types. In addition, VAST ships with new types for

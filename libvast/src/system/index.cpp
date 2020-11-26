@@ -745,6 +745,7 @@ index(caf::stateful_actor<index_state>* self, filesystem_type fs, path dir,
     // to be copy constructible.
     [=](atom::replace, uuid partition_id,
         std::shared_ptr<partition_synopsis>& ps) {
+      VAST_DEBUG(self, "replaces synopsis for partition", partition_id);
       if (!ps.unique()) {
         VAST_WARNING(self, "ignores partition synopses thats still in use");
         return;
