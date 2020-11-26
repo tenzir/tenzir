@@ -567,13 +567,8 @@ struct record_field : detail::totally_ordered<record_field> {
   std::string name; ///< The name of the field.
   vast::type type;  ///< The type of the field.
 
-  friend bool operator==(const record_field& x, const record_field& y) {
-    return x.name == y.name && x.type == y.type;
-  }
-
-  friend bool operator<(const record_field& x, const record_field& y) {
-    return std::tie(x.name, x.type) < std::tie(y.name, y.type);
-  }
+  friend bool operator==(const record_field& x, const record_field& y);
+  friend bool operator<(const record_field& x, const record_field& y);
 
   template <class Inspector>
   friend auto inspect(Inspector& f, record_field& x) {

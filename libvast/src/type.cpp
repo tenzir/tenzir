@@ -145,6 +145,14 @@ bool operator<(const abstract_type& x, const abstract_type& y) {
 
 // -- record_type --------------------------------------------------------------
 
+bool operator==(const record_field& x, const record_field& y) {
+  return x.name == y.name && x.type == y.type;
+}
+
+bool operator<(const record_field& x, const record_field& y) {
+  return std::tie(x.name, x.type) < std::tie(y.name, y.type);
+}
+
 record_type::record_type(std::vector<record_field> xs) : fields{std::move(xs)} {
   // nop
 }
