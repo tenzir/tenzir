@@ -72,14 +72,18 @@ public:
   /// Construct a chunk from a byte buffer, and bind the lifetime of the chunk
   /// to the buffer.
   /// @param buffer The byte buffer.
+  /// @note This overload can only be selected if the buffer is an
+  /// rvalue-reference, is not trivially-constructible, and an overload of
+  /// *as_bytes* exists for the buffer. This is intended to guard against
+  /// accidental copies when calling this function.
   /// @returns A chunk pointer or `nullptr` on failure.
   template <class Buffer,
             class = std::enable_if_t<std::negation_v<
               std::disjunction<std::is_lvalue_reference<Buffer>,
                                std::is_trivially_move_assignable<Buffer>>>>>
   static auto make(Buffer&& buffer) -> decltype(as_bytes(buffer), chunk_ptr{}) {
-    auto view = as_bytes(buffer);
-    return make(view, [buffer = std::move(buffer)]() noexcept {
+    const auto view = as_bytes(buffer);
+    return make(view, [buffer = std::exchange(buffer, {})]() noexcept {
       static_cast<void>(buffer);
     });
   }
@@ -97,10 +101,11 @@ public:
   template <class Buffer>
   static auto copy(const Buffer& buffer)
     -> decltype(as_bytes(buffer), chunk_ptr{}) {
-    auto view = as_bytes(buffer);
+    const auto view = as_bytes(buffer);
     auto copy = std::make_unique<value_type[]>(view.size());
-    std::memcpy(copy.get(), view.data(), view.size());
-    return make(copy.get(), view.size(), [copy = std::move(copy)]() noexcept {
+    const auto data = copy.get();
+    std::memcpy(data, view.data(), view.size());
+    return make(data, view.size(), [copy = std::move(copy)]() noexcept {
       static_cast<void>(copy);
     });
   }

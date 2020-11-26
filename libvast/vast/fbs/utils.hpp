@@ -42,21 +42,6 @@ chunk_ptr release(flatbuffers::FlatBufferBuilder& builder);
 /// @param A verifier that is ready to use.
 flatbuffers::Verifier make_verifier(span<const byte> xs);
 
-/// Converts a flatbuffer vector of [u]int8_t into a byte span.
-/// @param xs The flatbuffer to convert.
-/// @returns A byte span of *xs*.
-template <size_t Extent = dynamic_extent, class T>
-span<const byte, Extent> as_bytes(const flatbuffers::Vector<T>& xs) {
-  static_assert(sizeof(T) == 1, "only byte vectors supported");
-  auto data = reinterpret_cast<const byte*>(xs.data());
-  return span<const byte, Extent>(data, Extent);
-}
-
-/// Retrieves the internal buffer of a builder.
-/// @param builder The builder to access.
-/// @returns A span of bytes of the buffer of *builder*.
-span<const byte> as_bytes(const flatbuffers::FlatBufferBuilder& builder);
-
 // -- generic (un)packing ----------------------------------------------------
 
 /// Adds a byte vector to builder for a type that is convertible to a byte
