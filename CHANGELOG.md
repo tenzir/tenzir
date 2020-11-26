@@ -12,6 +12,13 @@ Every entry has a category for which we use the following visual abbreviations:
 
 ## Unreleased
 
+- 🧬 The query language now supports models. Models combine a list of concepts
+  into a semantic unit that can be fulfiled by an event. If the type of an
+  event contains a field for every concept in a model. Turn to
+  [the documentation](https://docs.tenzir.com/vast/data-model/taxonomies/#models)
+  for more information.
+  [#1185](https://github.com/tenzir/vast/pull/1185)
+
 - 🐞 The type registry now detects and handles breaking changes in schemas,
   e.g., when a field type changes or a field is dropped from record.
   [#1195](https://github.com/tenzir/vast/pull/1195)
