@@ -32,7 +32,7 @@ namespace vast {
 class segment_builder {
 public:
   /// Constructs a segment builder.
-  segment_builder();
+  explicit segment_builder(size_t initial_buffer_size);
 
   /// Adds a table slice to the segment.
   /// @returns An error if adding the table slice failed.
