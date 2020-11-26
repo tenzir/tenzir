@@ -72,6 +72,10 @@ public:
   /// Construct a chunk from a byte buffer, and bind the lifetime of the chunk
   /// to the buffer.
   /// @param buffer The byte buffer.
+  /// @note This overload can only be selected if the buffer is an
+  /// rvalue-reference, is not trivially-constructible, and an overload of
+  /// *as_bytes* exists for the buffer. This is intended to guard against
+  /// accidental copies when calling this function.
   /// @returns A chunk pointer or `nullptr` on failure.
   template <class Buffer,
             class = std::enable_if_t<std::negation_v<
