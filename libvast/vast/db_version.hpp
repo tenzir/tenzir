@@ -42,4 +42,9 @@ db_version read_db_version(const vast::path& db_dir);
 /// @relates db_version
 caf::error initialize_db_version(const vast::path& db_dir);
 
+/// Returns a human-readable decription of all breaking changes that have been
+/// introduced to VAST since the passed version.
+/// @relates db_version
+std::string describe_breaking_changes_since(db_version);
+
 } // namespace vast

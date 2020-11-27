@@ -52,11 +52,14 @@ spawn_node(caf::scoped_actor& self, const caf::settings& opts) {
   // output is written into the same directory.
   if (auto err = initialize_db_version(abs_dir))
     return err;
-  // TODO(ch20326): Replace this with a more specific check in the components
-  // that rely on a specific DB version.
-  if (read_db_version(abs_dir) != db_version::latest)
-    return make_error(ec::filesystem_error, "wrong or missing database version "
-                                            "in db-directory");
+  if (auto version = read_db_version(abs_dir); version != db_version::latest) {
+    VAST_INFO_ANON("Cannot start VAST, breaking changes detected in the "
+                   "database directory");
+    auto reasons = describe_breaking_changes_since(version);
+    return make_error(
+      ec::breaking_change,
+      "breaking changes in the current database directory:", reasons);
+  }
   if (!abs_dir.is_writable())
     return make_error(ec::filesystem_error,
                       "unable to write to db-directory:", abs_dir.str());
