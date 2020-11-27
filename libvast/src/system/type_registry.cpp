@@ -54,6 +54,13 @@ type_registry_state::status(status_verbosity v) const {
         concept_status["fields"] = definition.fields;
         concept_status["concepts"] = definition.concepts;
       }
+      auto& models_status = put_list(tr_status, "models");
+      for (auto& [name, definition] : taxonomies.models) {
+        auto& model_status = models_status.emplace_back().as_dictionary();
+        model_status["name"] = name;
+        model_status["description"] = definition.description;
+        model_status["definition"] = definition.definition;
+      }
       // Sorted list of all keys.
       auto keys = std::vector<std::string>(data.size());
       std::transform(data.begin(), data.end(), keys.begin(),
