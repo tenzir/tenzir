@@ -294,6 +294,9 @@ resolve_impl(const taxonomies& ts, const expression& e,
           c.emplace_back(
             resolve_concepts(x.first, op, x.second, make_predicate));
         }
+        if (c.empty())
+          return make_error(ec::invalid_query, "empty record queries are not "
+                                               "supported yet");
       } else {
         // TODO: Explain the tree iteration mechanism.
         auto p = std::pair{it->second.definition.begin(),
@@ -311,9 +314,9 @@ resolve_impl(const taxonomies& ts, const expression& e,
                 // TODO: This error could be rendered in a way that makes it
                 // clear how the mismatch happened. For example:
                 //   src_ip, src_port,  dst_ip, dst_port, proto
-                // <      _,        _, 1.2.3.4,        _,     _, tcp>
-                //                                               ^~~
-                //                                               to many fields
+                // <      _,        _, 1.2.3.4,        _,     _, "tcp">
+                //                                               ^~~~~
+                //                                               too many fields
                 //                                               provided
                 return make_error(ec::invalid_query, *r,
                                   "doesn't match the model:", it->first);
@@ -333,14 +336,15 @@ resolve_impl(const taxonomies& ts, const expression& e,
           c.emplace_back(resolve_concepts(
             *levels.top().first, op, value_iterator->second, make_predicate));
         }
+        if (c.empty())
+          return make_error(ec::invalid_query, "placeholder only queries are "
+                                               "not supported yet");
         // TODO: If the provided record is shorter than the model the missing
         // fields are treated as if they are '_'. Consider treating this as
         // an error.
       }
+      VAST_ASSERT(!c.empty());
       switch (c.size()) {
-        case 0:
-          // TODO: Consider turning this into an error.
-          return expression{std::move(pred)};
         case 1:
           return c[0];
         default:

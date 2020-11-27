@@ -315,6 +315,10 @@ tests:
       # We omit the whitespace after the colon on purpose, otherwise pyyaml
       # thinks this is a key-value pair.
       - command: count 'net.connection == <net.src.ip:192.168.168.100, net.dst.port:80>'
+      # We currently don't support empty tuples. This will return all events
+      # from types that model a connection in the future.
+      - command: count "net.connection == <_, _, _, _, _>"
+        expected_result: error
 
   Pivot:
     tags: [pivot]
