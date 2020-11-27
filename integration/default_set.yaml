@@ -302,8 +302,8 @@ tests:
       - command: -N export ascii
         input: queries/multi_addr.txt
 
-  Concepts:
-    tags: [concepts]
+  Taxonomies:
+    tags: [concepts, models]
     fixture: ServerTester
     steps:
       - command: import zeek
@@ -311,6 +311,10 @@ tests:
       - command: import suricata
         input: data/pcap/suricata/eve.json.gz
       - command: count "net.src.ip == 192.168.168.100"
+      - command: count "net.connection == <192.168.168.100, _, 72.247.178.18, _, _>"
+      # We omit the whitespace after the colon on purpose, otherwise pyyaml
+      # thinks this is a key-value pair.
+      - command: count 'net.connection == <net.src.ip:192.168.168.100, net.dst.port:80>'
 
   Pivot:
     tags: [pivot]
