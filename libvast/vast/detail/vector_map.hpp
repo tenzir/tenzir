@@ -236,7 +236,13 @@ public:
     return xs.xs_;
   }
 
-  static vector_map unsafe_coerce(vector_type&& xs) {
+  // A factory that takes a regular vector of pairs and converts it to a
+  // vector_map. Explicitly unsafe because it can be used to produce a map with
+  // multiple entries for the same key, which breaks normal map semantics.
+  // This only exists to allow records of the form <1, 2, 3>, for which all
+  // field names are empty strings.
+  // TODO: Consider intruducing a tuple type in vast::data instead.
+  static vector_map make_unsafe(vector_type xs) {
     return vector_map{std::move(xs)};
   }
 

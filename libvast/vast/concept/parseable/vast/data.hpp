@@ -63,7 +63,7 @@ private:
         // until record is refactored into a proper type (FIXME).
       | ('<' >> (unnamed_field % ',') >> trailing_comma >> '>')
         ->* [](record::vector_type&& xs) {
-          return record::unsafe_coerce(std::move(xs));
+          return record::make_unsafe(std::move(xs));
         };
     p = parsers::time
       | parsers::duration
