@@ -99,7 +99,7 @@
 
 - model:
     name: net.connection
-    concepts:
+    definition:
       - net.src.ip
       - net.src.port
       - net.dst.ip
