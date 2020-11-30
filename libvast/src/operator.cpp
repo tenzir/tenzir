@@ -16,6 +16,27 @@
 
 namespace vast {
 
+bool negated(relational_operator op) {
+  switch (op) {
+    default:
+      die("missing case for relational operator");
+    case equal:
+    case match:
+    case less:
+    case less_equal:
+    case greater:
+    case greater_equal:
+    case in:
+    case ni:
+      return false;
+    case not_ni:
+    case not_in:
+    case not_equal:
+    case not_match:
+      return true;
+  }
+}
+
 relational_operator negate(relational_operator op) {
   switch (op) {
     default:

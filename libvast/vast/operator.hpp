@@ -58,6 +58,12 @@ enum bool_operator : uint8_t {
   logical_or,
 };
 
+/// Tests wheter a relational operator is negated.
+/// For example, `!=` is negated, but `==` is not.
+/// @param op The operator to negate.
+/// @returns `true` if the operator is negated.
+bool negated(relational_operator op);
+
 /// Negates a relational operator by creating the complent.
 /// For example, `==` becomes `!=`.
 /// @param op The operator to negate.
