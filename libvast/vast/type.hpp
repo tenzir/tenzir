@@ -567,13 +567,8 @@ struct record_field : detail::totally_ordered<record_field> {
   std::string name; ///< The name of the field.
   vast::type type;  ///< The type of the field.
 
-  friend bool operator==(const record_field& x, const record_field& y) {
-    return x.name == y.name && x.type == y.type;
-  }
-
-  friend bool operator<(const record_field& x, const record_field& y) {
-    return std::tie(x.name, x.type) < std::tie(y.name, y.type);
-  }
+  friend bool operator==(const record_field& x, const record_field& y);
+  friend bool operator<(const record_field& x, const record_field& y);
 
   template <class Inspector>
   friend auto inspect(Inspector& f, record_field& x) {
@@ -823,6 +818,13 @@ bool compatible(const type& lhs, relational_operator op, const data& rhs);
 
 /// @relates type data
 bool compatible(const data& lhs, relational_operator op, const type& rhs);
+
+/// Checks whether a type is a subset of another, i.e., whether all fields of
+/// the first type are contained within the second type.
+/// @param x The first type.
+/// @param y The second type.
+/// @returns `true` *iff* *x* is a subset of *y*.
+bool is_subset(const type& x, const type& y);
 
 /// Checks whether data and type fit together.
 /// @param t The type that describes *d*.

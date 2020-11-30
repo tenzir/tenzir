@@ -1,4 +1,15 @@
-// Copyright Tenzir GmbH. All rights reserved.
+/******************************************************************************
+ *                    _   _____   __________                                  *
+ *                   | | / / _ | / __/_  __/     Visibility                   *
+ *                   | |/ / __ |_\ \  / /          Across                     *
+ *                   |___/_/ |_/___/ /_/       Space and Time                 *
+ *                                                                            *
+ * This file is part of VAST. It is subject to the license terms in the       *
+ * LICENSE file found in the top-level directory of this distribution and at  *
+ * http://vast.io/license. No part of VAST, including this file, may be       *
+ * copied, modified, propagated, or distributed except according to the terms *
+ * contained in the LICENSE file.                                             *
+ ******************************************************************************/
 
 #define SUITE type_registry
 
@@ -108,7 +119,21 @@ TEST(type_registry) {
     bool done = false;
     self
       ->do_receive([&](vast::type_set result) {
-        size = result.value.size();
+        size = result.size();
+        done = true;
+      })
+      .until(done);
+    CHECK_EQUAL(size, 2u);
+  }
+  MESSAGE("retrieving layouts");
+  {
+    size_t size = -1;
+    self->send(aut, atom::get_v);
+    run();
+    bool done = false;
+    self
+      ->do_receive([&](vast::type_set result) {
+        size = result.size();
         done = true;
       })
       .until(done);

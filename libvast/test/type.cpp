@@ -456,6 +456,42 @@ TEST(congruence) {
   CHECK(congruent(a, r0));
 }
 
+TEST(subset) {
+  MESSAGE("basic");
+  auto i = integer_type{};
+  auto j = integer_type{};
+  CHECK(is_subset(i, j));
+  i = i.name("i");
+  j = j.name("j");
+  CHECK(is_subset(i, j));
+  auto c = count_type{};
+  c = c.name("c");
+  CHECK(is_subset(i, i));
+  CHECK(is_subset(i, j));
+  CHECK(!is_subset(i, c));
+  MESSAGE("records");
+  auto r0 = record_type{
+    {"a", address_type{}}, {"b", bool_type{}}, {"c", count_type{}}};
+  // Rename a field.
+  auto r1 = record_type{
+    {"a", address_type{}}, {"b", bool_type{}}, {"d", count_type{}}};
+  // Add a field.
+  auto r2 = record_type{{"a", address_type{}},
+                        {"b", bool_type{}},
+                        {"c", count_type{}},
+                        {"d", count_type{}}};
+  // Remove a field.
+  auto r3 = record_type{{"a", address_type{}}, {"c", count_type{}}};
+  // Change a field's type.
+  auto r4 = record_type{
+    {"a", pattern_type{}}, {"b", bool_type{}}, {"c", count_type{}}};
+  CHECK(is_subset(r0, r0));
+  CHECK(!is_subset(r0, r1));
+  CHECK(is_subset(r0, r2));
+  CHECK(!is_subset(r0, r3));
+  CHECK(!is_subset(r0, r4));
+}
+
 #define TYPE_CHECK(type, value) CHECK(type_check(type, data{value}));
 
 #define TYPE_CHECK_FAIL(type, value) CHECK(!type_check(type, data{value}));

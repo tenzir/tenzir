@@ -145,6 +145,14 @@ bool operator<(const abstract_type& x, const abstract_type& y) {
 
 // -- record_type --------------------------------------------------------------
 
+bool operator==(const record_field& x, const record_field& y) {
+  return x.name == y.name && x.type == y.type;
+}
+
+bool operator<(const record_field& x, const record_field& y) {
+  return std::tie(x.name, x.type) < std::tie(y.name, y.type);
+}
+
 record_type::record_type(std::vector<record_field> xs) : fields{std::move(xs)} {
   // nop
 }
@@ -702,6 +710,27 @@ bool compatible(const type& lhs, relational_operator op, const data& rhs) {
 
 bool compatible(const data& lhs, relational_operator op, const type& rhs) {
   return compatible(rhs, flip(op), lhs);
+}
+
+bool is_subset(const type& x, const type& y) {
+  auto sub = caf::get_if<record_type>(&x);
+  auto super = caf::get_if<record_type>(&y);
+  // If either of the types is not a record type, check if they are
+  // congruent instead.
+  if (!sub || !super)
+    return congruent(x, y);
+  // Check whether all fields of the subset exist in the superset.
+  for (const auto& field : sub->fields) {
+    if (auto match = super->find(field.name)) {
+      // Perform the check recursively to support nested record types.
+      if (!is_subset(field.type, match->type))
+        return false;
+    } else {
+      // Not all fields of the subset exist in the superset; exit early.
+      return false;
+    }
+  }
+  return true;
 }
 
 // WARNING: making changes to the logic of this function requires adapting the

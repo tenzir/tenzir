@@ -158,22 +158,23 @@ struct source_state {
     if (type_registry) {
       self->request(type_registry, caf::infinite, atom::get_v)
         .await([=](type_set types) {
-          auto& st = selfptr->state;
           auto is_valid = [&](const auto& layout) {
             return detail::starts_with(layout.name(), type_filter);
           };
           // First, merge and de-duplicate the local schema with types from the
           // type-registry.
-          types.value.insert(std::make_move_iterator(st.local_schema.begin()),
-                             std::make_move_iterator(st.local_schema.end()));
-          st.local_schema.clear();
-          // Second, filter valid types from all available record types.
-          for (auto& type : types.value)
+          auto merged_schema = schema{};
+          for (auto& type : local_schema)
             if (auto&& layout = caf::get_if<vast::record_type>(&type))
               if (is_valid(*layout))
-                st.local_schema.add(std::move(*layout));
+                merged_schema.add(std::move(*layout));
+          // Second, filter valid types from all available record types.
+          for (auto& type : types)
+            if (auto&& layout = caf::get_if<vast::record_type>(&type))
+              if (is_valid(*layout))
+                merged_schema.add(std::move(*layout));
           // Third, try to set the new schema.
-          if (auto err = reader.schema(std::move(st.local_schema));
+          if (auto err = reader.schema(std::move(merged_schema));
               err && err != caf::no_error)
             VAST_ERROR(self, "failed to set schema", err);
         });

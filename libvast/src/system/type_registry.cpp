@@ -98,21 +98,34 @@ caf::error type_registry_state::load_from_disk() {
 }
 
 void type_registry_state::insert(vast::type layout) {
-  auto& cont = data[layout.name()].value;
-  if ([[maybe_unused]] auto [hint, success]
-      = cont.insert(flatten(std::move(layout)));
-      success)
+  // FIXME: Remove this call to flatten when no longer flattening the table
+  // slice layout on ingest.
+  layout = flatten(std::move(layout));
+  auto& old_layouts = data[layout.name()];
+  // Insert into the existing bucket.
+  auto [hint, success] = old_layouts.insert(std::move(layout));
+  if (success) {
+    // Check whether the new layout is compatible with the latest, i.e., whether
+    // the new layout is a superset of it.
+    if (old_layouts.begin() != hint) {
+      if (!is_subset(*old_layouts.begin(), *hint))
+        VAST_WARNING(self, "detected an incompatible layout change for",
+                     hint->name());
+      else
+        VAST_INFO(self, "detected a layout change for", hint->name());
+    }
     VAST_DEBUG(self, "registered", hint->name());
+  }
+  // Move the newly inserted layout to the front.
+  std::rotate(old_layouts.begin(), hint, std::next(hint));
 }
 
 type_set type_registry_state::types() const {
-  auto result = std::unordered_set<vast::type>{};
-  // TODO: Replace merging logic once libc++ implements unordered_set::merge.
-  //   result.merge(data);
+  auto result = type_set{};
   for ([[maybe_unused]] auto& [k, v] : data)
-    for (auto& x : v.value)
+    for (auto& x : v)
       result.insert(x);
-  return {result};
+  return result;
 }
 
 type_registry_behavior
