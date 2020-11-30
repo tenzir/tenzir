@@ -163,18 +163,18 @@ struct source_state {
           };
           // First, merge and de-duplicate the local schema with types from the
           // type-registry.
-          schema s;
+          auto merged_schema = schema{};
           for (auto& type : local_schema)
             if (auto&& layout = caf::get_if<vast::record_type>(&type))
               if (is_valid(*layout))
-                s.add(std::move(*layout));
+                merged_schema.add(std::move(*layout));
           // Second, filter valid types from all available record types.
           for (auto& type : types)
             if (auto&& layout = caf::get_if<vast::record_type>(&type))
               if (is_valid(*layout))
-                s.add(std::move(*layout));
+                merged_schema.add(std::move(*layout));
           // Third, try to set the new schema.
-          if (auto err = reader.schema(std::move(s));
+          if (auto err = reader.schema(std::move(merged_schema));
               err && err != caf::no_error)
             VAST_ERROR(self, "failed to set schema", err);
         });
