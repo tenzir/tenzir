@@ -128,27 +128,55 @@ indexer_actor
 fetch_indexer(const PartitionState& state, const attribute_extractor& ex,
               relational_operator op, const data& x) {
   VAST_TRACE(VAST_ARG(ex), VAST_ARG(op), VAST_ARG(x));
+  ids row_ids;
   if (ex.attr == atom::type_v) {
     // We know the answer immediately: all IDs that are part of the table.
     // However, we still have to "lift" this result into an actor for the
     // EVALUATOR.
-    ids row_ids;
     for (auto& [name, ids] : state.type_ids)
       if (evaluate(name, op, x))
         row_ids |= ids;
-    // TODO: Spawning a one-shot actor is quite expensive. Maybe the
-    //       partition could instead maintain this actor lazily.
-    return state.self->spawn([row_ids]() -> indexer_actor::behavior_type {
-      return {
-        [=](const curried_predicate&) { return row_ids; },
-        [](atom::shutdown) {
-          VAST_DEBUG_ANON("one-shot indexer received shutdown request");
-        },
-      };
-    });
+  } else if (ex.attr == atom::field_v) {
+    auto s = caf::get_if<std::string>(&x);
+    if (!s) {
+      VAST_WARNING(state.self, "#field meta queries only support string "
+                               "comparisons");
+      return {};
+    }
+    auto neg = negated(op);
+    for (auto& field : record_type::each{state.combined_layout}) {
+      // As long as the combined layout is flattened, this must rely on
+      // a heuristic. We use the substring after the last dot for the
+      // field name.
+      // const auto& name = field.trace.back()->name;
+      auto fqn = field.key();
+      if (detail::ends_with(fqn, *s)) {
+        // Get ids.
+        for (auto& [layout_name, ids] : state.type_ids)
+          if (detail::starts_with(field.key(), layout_name))
+            row_ids |= ids;
+      }
+    }
+    if (neg) {
+      auto partition_ids = std::accumulate(
+        state.type_ids.begin(), state.type_ids.end(), ids{},
+        [](ids acc, const auto& x) { return acc | x.second; });
+      row_ids = partition_ids ^ row_ids;
+    }
+  } else {
+    VAST_WARNING(state.self, "got unsupported attribute:", ex.attr);
+    return {};
   }
-  VAST_WARNING(state.self, "got unsupported attribute:", ex.attr);
-  return {};
+  // TODO: Spawning a one-shot actor is quite expensive. Maybe the
+  //       partition could instead maintain this actor lazily.
+  return state.self->spawn([row_ids]() -> indexer_actor::behavior_type {
+    return {
+      [=](const curried_predicate&) { return row_ids; },
+      [](atom::shutdown) {
+        VAST_DEBUG_ANON("one-shot indexer received shutdown request");
+      },
+    };
+  });
 }
 
 /// Returns all INDEXERs that are involved in evaluating the expression.
