@@ -17,6 +17,7 @@
 #include "vast/defaults.hpp"
 #include "vast/detail/assert.hpp"
 #include "vast/detail/overload.hpp"
+#include "vast/detail/string.hpp"
 #include "vast/error.hpp"
 #include "vast/expression.hpp"
 #include "vast/fbs/table_slice.hpp"
@@ -589,8 +590,28 @@ struct row_evaluator {
     // data_extractor). It's not necessary to iterate over the schema for
     // every row; this should happen upfront.
     auto&& layout = slice_.layout();
+    // TODO: type and field queries don't produce false positives in the
+    // partition. Is there actually any reason to do the check here?
     if (e.attr == atom::type_v)
       return evaluate(layout.name(), op_, d);
+    if (e.attr == atom::field_v) {
+      auto s = caf::get_if<std::string>(&d);
+      if (!s) {
+        VAST_WARNING_ANON("#field can only compare with string");
+        return false;
+      }
+      auto result = false;
+      auto neg = negated(op_);
+      // auto abs_op = neg ? negate(op_) : op_;
+      for (auto& field : record_type::each{layout}) {
+        auto fqn = layout.name() + "." + field.key();
+        if (detail::ends_with(fqn, *s)) {
+          result = true;
+          break;
+        }
+      }
+      return neg ? !result : result;
+    }
     if (e.attr == atom::timestamp_v) {
       for (size_t col = 0; col < layout.fields.size(); ++col) {
         auto& field = layout.fields[col];

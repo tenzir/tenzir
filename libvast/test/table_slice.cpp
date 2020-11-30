@@ -18,6 +18,9 @@
 #include "vast/test/fixtures/table_slices.hpp"
 #include "vast/test/test.hpp"
 
+#include "vast/concept/parseable/to.hpp"
+#include "vast/concept/parseable/vast/expression.hpp"
+#include "vast/expression.hpp"
 #include "vast/ids.hpp"
 #include "vast/table_slice_column.hpp"
 #include "vast/table_slice_row.hpp"
@@ -182,6 +185,21 @@ TEST(split) {
   CHECK_EQUAL(split_sut(5), manual_split_sut(5));
   CHECK_EQUAL(split_sut(6), manual_split_sut(6));
   CHECK_EQUAL(split_sut(7), manual_split_sut(7));
+}
+
+TEST(evaluate) {
+  auto sut = zeek_conn_log[0];
+  sut.offset(0);
+  auto check_eval
+    = [&](std::string_view expr, std::initializer_list<id_range> id_init) {
+        auto ids = make_ids(std::move(id_init), sut.offset() + sut.rows());
+        auto exp = unbox(to<expression>(std::move(expr)));
+        CHECK_EQUAL(evaluate(exp, sut), ids);
+      };
+  check_eval("#type == \"zeek.conn\"", {{0, 8}});
+  check_eval("#type != \"zeek.conn\"", {});
+  check_eval("#field == \"orig_pkts\"", {{0, 8}});
+  check_eval("#field != \"orig_pkts\"", {});
 }
 
 FIXTURE_SCOPE_END()
