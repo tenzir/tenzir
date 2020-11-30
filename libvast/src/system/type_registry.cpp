@@ -109,9 +109,9 @@ void type_registry_state::insert(vast::type layout) {
         VAST_WARNING(self, "detected an incompatible layout change for",
                      hint->name());
       else
-        VAST_VERBOSE(self, "detected a layout change for", hint->name());
+        VAST_INFO(self, "detected a layout change for", hint->name());
     }
-    VAST_INFO(self, "registered", hint->name());
+    VAST_DEBUG(self, "registered", hint->name());
   }
   // Move the newly inserted layout to the front.
   std::rotate(old_layouts.begin(), hint, std::next(hint));
