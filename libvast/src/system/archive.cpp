@@ -185,9 +185,19 @@ archive(archive_type::stateful_pointer<archive_state> self, path dir,
           t.stop(events);
         },
         [=](unit_t&, const error& err) {
-          if (err) {
-            VAST_ERROR(self, "got a stream error:", self->system().render(err));
+          // We get an 'unreachable' error when the stream becomes unreachable
+          // because the actor was destroyed; in this case we can't use `self`
+          // anymore.
+          if (err && err != caf::exit_reason::unreachable) {
+            if (err != caf::exit_reason::user_shutdown)
+              VAST_ERROR(self, "got a stream error:", render(err));
+            else
+              VAST_DEBUG(self, "got a user shutdown error:", render(err));
+            // We can shutdown now because we only get a single stream from the
+            // importer.
+            self->send_exit(self, err);
           }
+          VAST_DEBUG_ANON("archive finalizes streaming");
         });
     },
     [=](accountant_type accountant) {
