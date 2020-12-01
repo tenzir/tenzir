@@ -545,6 +545,8 @@ index(caf::stateful_actor<index_state>* self, filesystem_type fs, path dir,
       if (err && err != caf::exit_reason::unreachable) {
         if (err != caf::exit_reason::user_shutdown)
           VAST_ERROR(self, "got a stream error:", render(err));
+        else
+          VAST_DEBUG(self, "got a user shutdown error:", render(err));
         // We can shutdown now because we only get a single stream from the
         // importer.
         self->send_exit(self, err);

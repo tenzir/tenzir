@@ -191,6 +191,8 @@ archive(archive_type::stateful_pointer<archive_state> self, path dir,
           if (err && err != caf::exit_reason::unreachable) {
             if (err != caf::exit_reason::user_shutdown)
               VAST_ERROR(self, "got a stream error:", render(err));
+            else
+              VAST_DEBUG(self, "got a user shutdown error:", render(err));
             // We can shutdown now because we only get a single stream from the
             // importer.
             self->send_exit(self, err);
