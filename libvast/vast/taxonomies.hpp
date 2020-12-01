@@ -62,18 +62,16 @@ struct model {
   /// The description of the model.
   std::string description;
 
-  /// The concepts that the model is composed of.
-  std::vector<std::string> concepts;
-
-  /// Other models that are referenced. Their concepts must also be represented
-  /// for a layout to be considered.
-  std::vector<std::string> models;
+  /// The ordered concepts and models that the model is composed of.
+  /// If an entry is another model, its concepts must also be represented  for
+  /// a layout to be considered.
+  std::vector<std::string> definition;
 
   friend bool operator==(const model& lhs, const model& rhs);
 
   template <class Inspector>
   friend auto inspect(Inspector& f, model& m) {
-    return f(caf::meta::type_name("model"), m.concepts);
+    return f(caf::meta::type_name("model"), m.description, m.definition);
   }
 };
 
@@ -108,7 +106,7 @@ struct taxonomies {
 /// @param t The set of taxonomies to apply.
 /// @param e The original expression.
 /// @returns The sustitute expression.
-expression resolve(const taxonomies& t, const expression& e);
+caf::expected<expression> resolve(const taxonomies& t, const expression& e);
 
 /// Substitutes concept and model identifiers in field extractors with
 /// replacement expressions containing only concrete field names.
@@ -116,7 +114,7 @@ expression resolve(const taxonomies& t, const expression& e);
 /// @param e The original expression.
 /// @param seen The set of all types in the database.
 /// @returns The sustitute expression.
-expression resolve(const taxonomies& t, const expression& e,
-                   const std::map<std::string, type_set>& seen);
+caf::expected<expression> resolve(const taxonomies& t, const expression& e,
+                                  const std::map<std::string, type_set>& seen);
 
 } // namespace vast

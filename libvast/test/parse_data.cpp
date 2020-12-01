@@ -71,8 +71,10 @@ TEST(data) {
   CHECK_EQUAL(to_data("<foo: 1, bar: <baz: 3>>"),
               (record{{"foo", 1u}, {"bar", record{{"baz", 3u}}}}));
   MESSAGE("record - ordered fields");
-  CHECK_EQUAL(to_data("<1>"), (record{{"", 1u}}));
-  CHECK_EQUAL(to_data("<_>"), (record{{"", caf::none}}));
-  CHECK_EQUAL(to_data("<_, /foo/>"),
-              (record{{"", caf::none}, {"", pattern{"foo"}}}));
+  CHECK_EQUAL(to_data("<1>"),
+              record::make_unsafe(record::vector_type{{"", 1u}}));
+  CHECK_EQUAL(to_data("<_>"),
+              record::make_unsafe(record::vector_type{{"", caf::none}}));
+  CHECK_EQUAL(to_data("<_, /foo/>"), record::make_unsafe(record::vector_type{
+                                       {"", caf::none}, {"", pattern{"foo"}}}));
 }

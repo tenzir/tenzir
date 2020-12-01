@@ -475,7 +475,10 @@ node_state::spawn_command(const invocation& inv,
         ->request(caf::actor_cast<type_registry_type>(tr),
                   defaults::system::initial_request_timeout, atom::resolve_v,
                   std::move(*expr))
-        .then(handle_taxonomies);
+        .then(handle_taxonomies, [=](caf::error err) mutable {
+          rp.deliver(err);
+          return make_message(err);
+        });
       return caf::none;
     }
   }

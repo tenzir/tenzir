@@ -279,27 +279,54 @@ auto inspect(Inspector&f, expression& x) {
 
 template <class F>
 struct predicate_transformer {
-  expression operator()(caf::none_t) const {
-    return caf::none;
+  using result_type = std::invoke_result_t<F, const predicate&>;
+
+  result_type operator()(caf::none_t) const {
+    return expression{caf::none};
   }
-  expression operator()(const conjunction& c) const {
+
+  result_type operator()(const conjunction& c) const {
     conjunction result;
-    for (auto& op : c)
-      result.push_back(caf::visit(*this, op));
+    for (auto& op : c) {
+      auto x = caf::visit(*this, op);
+      if constexpr (std::is_convertible_v<result_type, conjunction::value_type>) {
+        result.push_back(std::move(x));
+      } else {
+        if (!x)
+          return x;
+        else
+          result.push_back(std::move(*x));
+      }
+    }
     return result;
   }
 
-  expression operator()(const disjunction& d) const {
+  result_type operator()(const disjunction& c) const {
     disjunction result;
-    for (auto& op : d)
-      result.push_back(caf::visit(*this, op));
+    for (auto& op : c) {
+      auto x = caf::visit(*this, op);
+      if constexpr (std::is_convertible_v<result_type, disjunction::value_type>) {
+        result.push_back(std::move(x));
+      } else {
+        if (!x)
+          return x;
+        else
+          result.push_back(std::move(*x));
+      }
+    }
     return result;
   }
-  expression operator()(const negation& n) const {
-    return {negation{caf::visit(*this, n.expr())}};
+
+  result_type operator()(const negation& n) const {
+    auto x = caf::visit(*this, n.expr());
+    if constexpr (std::is_convertible_v<result_type, expression>) {
+      return {negation{std::move(x)}};
+    } else {
+      return {negation{std::move(*x)}};
+    }
   }
 
-  expression operator()(const predicate& p) const {
+  result_type operator()(const predicate& p) const {
     return f(p);
   }
 
@@ -311,7 +338,7 @@ struct predicate_transformer {
 /// @param f A callable that takes a predicate and returns an expression.
 /// @returns The transformed expression.
 template <typename F>
-expression for_each_predicate(const expression& e, F&& f) {
+auto for_each_predicate(const expression& e, F&& f) {
   auto v = predicate_transformer<F>{std::forward<F>(f)};
   return caf::visit(v, e);
 }
