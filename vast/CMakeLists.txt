@@ -11,6 +11,11 @@ add_executable(vast vast.cpp)
 target_link_libraries(vast PRIVATE vast::internal vast::libvast)
 install(TARGETS vast DESTINATION "${CMAKE_INSTALL_BINDIR}")
 
+# -- example plugin ------------------------------------------------------------
+
+# FIXME: hackathon yolo mode
+target_link_libraries(vast example)
+
 # -- init system integration ---------------------------------------------------
 
 # TODO: This should be behind an option, and work for macOS and Linux as well.
@@ -84,6 +89,7 @@ install(FILES "${PROJECT_SOURCE_DIR}/vast.yaml.example"
 # edit date. If pandoc+git is available, rebuild the man page.
 
 find_package(Pandoc)
+
 if (PANDOC_FOUND)
   set(man_page vast.1)
   set(man_generated "${CMAKE_CURRENT_BINARY_DIR}/${man_page}")

@@ -12,6 +12,7 @@
  ******************************************************************************/
 
 #include "vast/config.hpp"
+#include "vast/data.hpp"
 #include "vast/detail/process.hpp"
 #include "vast/detail/stable_set.hpp"
 #include "vast/detail/system.hpp"
@@ -19,6 +20,7 @@
 #include "vast/event_types.hpp"
 #include "vast/logger.hpp"
 #include "vast/path.hpp"
+#include "vast/plugin.hpp"
 #include "vast/schema.hpp"
 #include "vast/system/application.hpp"
 #include "vast/system/default_configuration.hpp"
@@ -50,7 +52,7 @@ int main(int argc, char** argv) {
     return EXIT_FAILURE;
   }
   // Application setup.
-  const auto [root, factory] = make_application(argv[0]);
+  const auto [root, cmd_factory] = make_application(argv[0]);
   if (!root)
     return EXIT_FAILURE;
   // Parse CLI.
@@ -82,8 +84,20 @@ int main(int argc, char** argv) {
     VAST_ERROR_ANON("failed to read schema dirs:", render(schema.error()));
     return EXIT_FAILURE;
   }
+  // Load plugins.
+  VAST_DEBUG_ANON("loading plugins");
+  std::vector<plugin_ptr> plugins;
+  auto example = plugin::make();
+  if (example)
+    plugins.push_back(std::move(example));
+  // Initialize plugins.
+  for (auto& plugin : plugins) {
+    VAST_VERBOSE_ANON("initializing plugin:", plugin->name());
+    auto config = data{}; // FIXME hackathon yolo mode
+    plugin->initialize(config);
+  }
   // Dispatch to root command.
-  auto result = run(*invocation, sys, factory);
+  auto result = run(*invocation, sys, cmd_factory);
   if (!result) {
     render_error(*root, result.error(), std::cerr);
     return EXIT_FAILURE;
