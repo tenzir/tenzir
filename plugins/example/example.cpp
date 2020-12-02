@@ -28,11 +28,23 @@ public:
   /// Teardown logic.
   ~example() override {
     VAST_WARNING_ANON("tearing down example plugin");
+    // TODO: keep a weak reference to the stream processor and try sending it
+    // an exit_msg here.
   }
 
   /// Process YAML configuration.
-  caf::error initialize(data /* config */) override {
+  caf::error initialize(data config) override {
     VAST_WARNING_ANON("initalizing example plugin");
+    if (auto r = caf::get_if<record>(&config)) {
+      for (auto& [k, v] : *r) {
+        if (k == "max-events") {
+          if (auto value = caf::get_if<integer>(&v)) {
+            VAST_WARNING_ANON("setting max-events =", v);
+            max_events_ = *value;
+          }
+        }
+      }
+    }
     return caf::none;
   }
 
@@ -59,6 +71,10 @@ public:
           [=](uint64_t& counter, table_slice slice) {
             counter += slice.rows();
             VAST_WARNING(self, "processed", counter, "cumulative events");
+            if (counter > max_events_) {
+              VAST_WARNING(self, "terminates after maximum event limit");
+              self->quit();
+            }
           },
           // Teardown hook for CAF stram.
           [=](uint64_t&, const caf::error& err) {
@@ -69,6 +85,9 @@ public:
     };
     return sys.spawn(processor);
   };
+
+private:
+  uint64_t max_events_ = std::numeric_limits<uint64_t>::max();
 };
 
 VAST_REGISTER_PLUGIN(example);

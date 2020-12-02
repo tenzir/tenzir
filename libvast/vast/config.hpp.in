@@ -19,7 +19,12 @@
 
 #define VAST_VERSION "@VAST_VERSION_TAG@"
 #define VAST_SYSCONFDIR "@CMAKE_INSTALL_FULL_SYSCONFDIR@"
+<<<<<<< HEAD
 #define VAST_DATADIR "@VAST_DATADIR@"
+=======
+#define VAST_DATADIR "@CMAKE_INSTALL_FULL_DATADIR@"
+#define VAST_LIBDIR "@CMAKE_INSTALL_FULL_LIBDIR@"
+>>>>>>> 20c75f063 (Implement configuration-based plugin loading)
 
 #include <caf/config.hpp>
 

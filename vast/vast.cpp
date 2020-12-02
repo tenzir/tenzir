@@ -11,11 +11,13 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
+#include "vast/concept/convertible/to.hpp"
 #include "vast/config.hpp"
 #include "vast/data.hpp"
 #include "vast/detail/process.hpp"
 #include "vast/detail/stable_set.hpp"
 #include "vast/detail/system.hpp"
+#include "vast/directory.hpp"
 #include "vast/error.hpp"
 #include "vast/event_types.hpp"
 #include "vast/logger.hpp"
@@ -40,8 +42,34 @@
 #  include <caf/openssl/manager.hpp>
 #endif
 
+using namespace std::string_literals;
 using namespace vast;
 using namespace vast::system;
+
+namespace vast::detail {
+
+// TODO: find a better location for this function.
+stable_set<path> get_plugin_dirs(const caf::actor_system_config& cfg) {
+  stable_set<path> result;
+#if !VAST_RELOCATABLE_INSTALL
+  result.insert(path{VAST_LIBDIR} / "vast" / "plugins");
+#endif
+  // FIXME: we technically should not use "lib" relative to the parent, because
+  // it may be lib64 or something else. CMAKE_INSTALL_LIBDIR is probably the
+  // best choice.
+  if (auto binary = objectpath(nullptr))
+    result.insert(binary->parent().parent() / "lib" / "vast" / "plugins");
+  else
+    VAST_ERROR_ANON(__func__, "failed to get program path");
+  if (const char* home = std::getenv("HOME"))
+    result.insert(path{home} / ".local" / "lib" / "vast" / "plugins");
+  if (auto user_dirs
+      = caf::get_if<std::vector<std::string>>(&cfg, "vast.plugin-paths"))
+    result.insert(user_dirs->begin(), user_dirs->end());
+  return result;
+}
+
+} // namespace vast::detail
 
 int main(int argc, char** argv) {
   // Set up our configuration, e.g., load of YAML config file(s).
@@ -85,14 +113,30 @@ int main(int argc, char** argv) {
     return EXIT_FAILURE;
   }
   // Load plugins.
-  VAST_DEBUG_ANON("loading plugins");
   std::vector<plugin_ptr> plugins;
-  plugins.emplace_back("./libexample.dylib");
-  // Initialize plugins.
+  auto plugin_dirs = detail::get_plugin_dirs(cfg);
+  for (auto& dir : plugin_dirs) {
+    VAST_VERBOSE_ANON("looking for plugins in", dir);
+    for (auto file : directory{dir}) {
+      if (file.extension() == ".so" || file.extension() == ".dylib") {
+        if (auto plugin = plugin_ptr{file.str().c_str()}) {
+          VAST_VERBOSE_ANON("loaded plugin:", file);
+          plugins.push_back(std::move(plugin));
+        } else {
+          VAST_ERROR_ANON("failed to load plugin", file);
+        }
+      }
+    }
+  }
+  // Initialize successfully loaded plugins.
   for (auto& plugin : plugins) {
     VAST_VERBOSE_ANON("initializing plugin:", plugin->name());
-    auto config = data{}; // FIXME hackathon yolo mode
-    plugin->initialize(config);
+    auto key = "plugins."s + plugin->name();
+    auto opts = caf::get_or<caf::settings>(cfg, key, caf::settings{});
+    if (auto config = to<data>(opts))
+      plugin->initialize(std::move(*config));
+    else
+      plugin->initialize(data{});
   }
   // Dispatch to root command.
   auto result = run(*invocation, sys, cmd_factory);

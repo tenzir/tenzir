@@ -450,6 +450,61 @@ caf::error convert(const data& d, caf::config_value& cv) {
   return caf::visit(f, d);
 }
 
+caf::error convert(const caf::dictionary<caf::config_value>& xs, record& ys) {
+  for (auto& [k, v] : xs) {
+    data y;
+    if (auto err = convert(v, y))
+      return err;
+    ys.emplace(k, std::move(y));
+  }
+  return caf::none;
+}
+
+caf::error convert(const caf::dictionary<caf::config_value>& xs, data& y) {
+  record result;
+  if (auto err = convert(xs, result))
+    return err;
+  y = std::move(result);
+  return caf::none;
+}
+
+caf::error convert(const caf::config_value& x, data& y) {
+  auto f = detail::overload{
+    [&](const auto& value) -> caf::error {
+      y = value;
+      return caf::none;
+    },
+    [&](caf::config_value::atom value) -> caf::error {
+      y = to_string(value);
+      return caf::none;
+    },
+    [&](caf::uri value) -> caf::error {
+      y = to_string(value);
+      return caf::none;
+    },
+    [&](const caf::config_value::list& xs) -> caf::error {
+      list result;
+      result.reserve(xs.size());
+      for (auto x : xs) {
+        data element;
+        if (auto err = convert(x, element))
+          return err;
+        result.push_back(std::move(element));
+      }
+      y = std::move(result);
+      return caf::none;
+    },
+    [&](const caf::config_value::dictionary& xs) -> caf::error {
+      record result;
+      if (auto err = convert(xs, result))
+        return err;
+      y = std::move(result);
+      return caf::none;
+    },
+  };
+  return caf::visit(f, x);
+}
+
 namespace {
 
 data parse(const YAML::Node& node) {
