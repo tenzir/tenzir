@@ -71,6 +71,4 @@ public:
   };
 };
 
-plugin_ptr plugin::make() {
-  return plugin_ptr{new example};
-}
+VAST_REGISTER_PLUGIN(example);

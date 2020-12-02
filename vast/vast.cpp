@@ -87,9 +87,7 @@ int main(int argc, char** argv) {
   // Load plugins.
   VAST_DEBUG_ANON("loading plugins");
   std::vector<plugin_ptr> plugins;
-  auto example = plugin::make();
-  if (example)
-    plugins.push_back(std::move(example));
+  plugins.emplace_back("./libexample.dylib");
   // Initialize plugins.
   for (auto& plugin : plugins) {
     VAST_VERBOSE_ANON("initializing plugin:", plugin->name());
@@ -109,5 +107,7 @@ int main(int argc, char** argv) {
       return EXIT_FAILURE;
     }
   }
+  // Teardown plugins.
+  plugins.clear();
   return EXIT_SUCCESS;
 }

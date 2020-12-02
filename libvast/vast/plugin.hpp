@@ -29,14 +29,10 @@ using stream_processor
   = caf::typed_actor<caf::reacts_to<caf::stream<table_slice>>>;
 
 class plugin;
-using plugin_ptr = std::unique_ptr<plugin>;
 
 /// The plugin base class.
 class plugin {
 public:
-  /// Entry point called by dlopen.
-  static plugin_ptr make();
-
   /// Destroys any runtime state that the plugin created. For example,
   /// de-register from existing components, deallocate memory.
   virtual ~plugin() = default;
@@ -55,4 +51,55 @@ public:
   }
 };
 
+/// @relates plugin
+class plugin_ptr final {
+public:
+  explicit plugin_ptr(const char* filename);
+
+  plugin_ptr(const plugin_ptr&) = delete;
+  plugin_ptr& operator=(const plugin_ptr&) = delete;
+
+  plugin_ptr(plugin_ptr&&) = default;
+  plugin_ptr& operator=(plugin_ptr&&) = default;
+
+  ~plugin_ptr() noexcept {
+    instance_.reset();
+    library_.reset();
+  }
+
+  explicit operator bool() noexcept {
+    return static_cast<bool>(instance_);
+  }
+
+  const plugin* operator->() const noexcept {
+    return instance_.get();
+  }
+
+  plugin* operator->() noexcept {
+    return instance_.get();
+  }
+
+  const plugin& operator*() const noexcept {
+    return *instance_;
+  }
+
+  plugin& operator&() noexcept {
+    return *instance_;
+  }
+
+private:
+  std::unique_ptr<plugin, void (*)(plugin*)> instance_
+    = {nullptr, [](plugin*) noexcept {}};
+  std::unique_ptr<void, void (*)(void*)> library_
+    = {nullptr, [](void*) noexcept {}};
+};
+
 } // namespace vast
+
+#define VAST_REGISTER_PLUGIN(name)                                             \
+  extern "C" plugin* create_plugin() {                                         \
+    return new name;                                                           \
+  }                                                                            \
+  extern "C" void destroy_plugin(class plugin* plugin) {                       \
+    delete plugin;                                                             \
+  }
