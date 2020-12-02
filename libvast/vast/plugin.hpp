@@ -16,10 +16,17 @@
 #include "vast/fwd.hpp"
 
 #include <caf/error.hpp>
+#include <caf/stream.hpp>
+#include <caf/typed_actor.hpp>
 
 #include <memory>
 
 namespace vast {
+
+/// The minimal actor interface that streaming plugins must implement.
+/// @relates plugin
+using stream_processor
+  = caf::typed_actor<caf::reacts_to<caf::stream<table_slice>>>;
 
 class plugin;
 using plugin_ptr = std::unique_ptr<plugin>;
@@ -40,6 +47,12 @@ public:
 
   /// Returns the unique name of the plugin.
   virtual const char* name() const = 0;
+
+  // FIXME: these should go into a sub-class or some category-specific mode.
+  // -- plugin-type-specific hooks -------------------------------------------
+  virtual stream_processor make_stream_processor(caf::actor_system&) const {
+    return stream_processor{};
+  }
 };
 
 } // namespace vast
