@@ -53,6 +53,7 @@ Usage: $0 [OPTION]... [VAR=VALUE]...
                             (quiet,error,warning,info,debug,trace)
     --without-assertions    disable assertions
     --without-exceptions    disable C++ exceptions
+    --without-dtrace        disable USDT tracepoints
     --with-asan             enable AddressSanitizer
     --with-ubsan            enable Undefined Behavior Sanitizer
     --with-gcov             enable GCOV
@@ -188,6 +189,12 @@ while [ $# -ne 0 ]; do
       ;;
     --without-exceptions)
       append_cache_entry NO_EXCEPTIONS BOOL yes
+      ;;
+    --without-dtrace)
+      # The USDT concept was invented for DTrace on Solaris, and thus for
+      # historical reasons the option to enable USDT support is commonly called
+      # `--with-dtrace`, even though on linux it has nothing to do with dtrace.
+      append_cache_entry VAST_DISABLE_SDT yes
       ;;
     --with-asan)
       append_cache_entry ENABLE_ADDRESS_SANITIZER BOOL yes

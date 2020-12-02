@@ -84,6 +84,7 @@ option(VAST_ENABLE_ASSERTIONS "Enable Assertions"
 # VAST installation. Concretely, it enables the dynamic binary and libraries to
 # use relative paths for loading their dependencies.
 option(VAST_RELOCATABLE_INSTALL "Enable relocatable installations" ON)
+option(VAST_DISABLE_SDT "Dont generate USDT tracepoint instrumentation" OFF)
 option(VAST_USE_BUNDLED_CAF "Always use the CAF submodule" OFF)
 option(ENABLE_ZEEK_TO_VAST "Build zeek-to-vast" ON)
 cmake_dependent_option(

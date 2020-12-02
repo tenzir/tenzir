@@ -14,6 +14,7 @@
 #pragma once
 
 #include "vast/config.hpp"
+#include "vast/detail/discard.hpp"
 #include "vast/detail/pp.hpp"
 #include "vast/detail/type_traits.hpp"
 
@@ -75,57 +76,6 @@ void fixup_logger(const system::configuration& cfg);
 
 #  define VAST_LOG(...) VAST_PP_OVERLOAD(VAST_LOG_, __VA_ARGS__)(__VA_ARGS__)
 
-// Ensures all args are used and syntactically valid, without evaluating them.
-
-#  define VAST_LOG_DISCARD_1(msg) static_cast<std::void_t<decltype((msg))>>(0)
-#  define VAST_LOG_DISCARD_2(m1, m2)                                           \
-    VAST_LOG_DISCARD_1((m1)), VAST_LOG_DISCARD_1((m2))
-#  define VAST_LOG_DISCARD_3(m1, m2, m3)                                       \
-    VAST_LOG_DISCARD_1((m1)), VAST_LOG_DISCARD_1((m2)), VAST_LOG_DISCARD_1((m3))
-#  define VAST_LOG_DISCARD_4(m1, m2, m3, m4)                                   \
-    VAST_LOG_DISCARD_1((m1)), VAST_LOG_DISCARD_1((m2)),                        \
-      VAST_LOG_DISCARD_1((m3)), VAST_LOG_DISCARD_1((m4))
-#  define VAST_LOG_DISCARD_5(m1, m2, m3, m4, m5)                               \
-    VAST_LOG_DISCARD_1((m1)), VAST_LOG_DISCARD_1((m2)),                        \
-      VAST_LOG_DISCARD_1((m3)), VAST_LOG_DISCARD_1((m4)),                      \
-      VAST_LOG_DISCARD_1((m5))
-#  define VAST_LOG_DISCARD_6(m1, m2, m3, m4, m5, m6)                           \
-    VAST_LOG_DISCARD_1((m1)), VAST_LOG_DISCARD_1((m2)),                        \
-      VAST_LOG_DISCARD_1((m3)), VAST_LOG_DISCARD_1((m4)),                      \
-      VAST_LOG_DISCARD_1((m5)), VAST_LOG_DISCARD_1((m6))
-#  define VAST_LOG_DISCARD_7(m1, m2, m3, m4, m5, m6, m7)                       \
-    VAST_LOG_DISCARD_1((m1)), VAST_LOG_DISCARD_1((m2)),                        \
-      VAST_LOG_DISCARD_1((m3)), VAST_LOG_DISCARD_1((m4)),                      \
-      VAST_LOG_DISCARD_1((m5)), VAST_LOG_DISCARD_1((m6)),                      \
-      VAST_LOG_DISCARD_1((m7))
-#  define VAST_LOG_DISCARD_8(m1, m2, m3, m4, m5, m6, m7, m8)                   \
-    VAST_LOG_DISCARD_1((m1)), VAST_LOG_DISCARD_1((m2)),                        \
-      VAST_LOG_DISCARD_1((m3)), VAST_LOG_DISCARD_1((m4)),                      \
-      VAST_LOG_DISCARD_1((m5)), VAST_LOG_DISCARD_1((m6)),                      \
-      VAST_LOG_DISCARD_1((m7)), VAST_LOG_DISCARD_1((m8))
-#  define VAST_LOG_DISCARD_9(m1, m2, m3, m4, m5, m6, m7, m8, m9)               \
-    VAST_LOG_DISCARD_1((m1)), VAST_LOG_DISCARD_1((m2)),                        \
-      VAST_LOG_DISCARD_1((m3)), VAST_LOG_DISCARD_1((m4)),                      \
-      VAST_LOG_DISCARD_1((m5)), VAST_LOG_DISCARD_1((m6)),                      \
-      VAST_LOG_DISCARD_1((m7)), VAST_LOG_DISCARD_1((m8)),                      \
-      VAST_LOG_DISCARD_1((m9))
-#  define VAST_LOG_DISCARD_10(m1, m2, m3, m4, m5, m6, m7, m8, m9, m10)         \
-    VAST_LOG_DISCARD_1((m1)), VAST_LOG_DISCARD_1((m2)),                        \
-      VAST_LOG_DISCARD_1((m3)), VAST_LOG_DISCARD_1((m4)),                      \
-      VAST_LOG_DISCARD_1((m5)), VAST_LOG_DISCARD_1((m6)),                      \
-      VAST_LOG_DISCARD_1((m7)), VAST_LOG_DISCARD_1((m8)),                      \
-      VAST_LOG_DISCARD_1((m9)), VAST_LOG_DISCARD_1((m10))
-#  define VAST_LOG_DISCARD_11(m1, m2, m3, m4, m5, m6, m7, m8, m9, m10, m11)    \
-    VAST_LOG_DISCARD_1((m1)), VAST_LOG_DISCARD_1((m2)),                        \
-      VAST_LOG_DISCARD_1((m3)), VAST_LOG_DISCARD_1((m4)),                      \
-      VAST_LOG_DISCARD_1((m5)), VAST_LOG_DISCARD_1((m6)),                      \
-      VAST_LOG_DISCARD_1((m7)), VAST_LOG_DISCARD_1((m8)),                      \
-      VAST_LOG_DISCARD_1((m9)), VAST_LOG_DISCARD_1((m10)),                     \
-      VAST_LOG_DISCARD_1((m11))
-
-#  define VAST_LOG_DISCARD_ARGS(...)                                           \
-    VAST_PP_OVERLOAD(VAST_LOG_DISCARD_, __VA_ARGS__)(__VA_ARGS__)
-
 namespace vast::detail {
 
 template <class T>
@@ -168,7 +118,7 @@ auto id_or_name(T&& x) {
 
 #  else // VAST_LOG_LEVEL > VAST_LOG_LEVEL_TRACE
 
-#    define VAST_TRACE(...) VAST_LOG_DISCARD_ARGS(__VA_ARGS__)
+#    define VAST_TRACE(...) VAST_DISCARD_ARGS(__VA_ARGS__)
 
 #  endif // VAST_LOG_LEVEL > VAST_LOG_LEVEL_TRACE
 
@@ -177,8 +127,8 @@ auto id_or_name(T&& x) {
       VAST_LOG_COMPONENT(VAST_LOG_LEVEL_ERROR, __VA_ARGS__)
 #    define VAST_ERROR_ANON(...) VAST_LOG(VAST_LOG_LEVEL_ERROR, __VA_ARGS__)
 #  else
-#    define VAST_ERROR(...) VAST_LOG_DISCARD_ARGS(__VA_ARGS__)
-#    define VAST_ERROR_ANON(...) VAST_LOG_DISCARD_ARGS(__VA_ARGS__)
+#    define VAST_ERROR(...) VAST_DISCARD_ARGS(__VA_ARGS__)
+#    define VAST_ERROR_ANON(...) VAST_DISCARD_ARGS(__VA_ARGS__)
 #  endif
 
 #  if VAST_LOG_LEVEL >= VAST_LOG_LEVEL_WARNING
@@ -186,16 +136,16 @@ auto id_or_name(T&& x) {
       VAST_LOG_COMPONENT(VAST_LOG_LEVEL_WARNING, __VA_ARGS__)
 #    define VAST_WARNING_ANON(...) VAST_LOG(VAST_LOG_LEVEL_WARNING, __VA_ARGS__)
 #  else
-#    define VAST_WARNING(...) VAST_LOG_DISCARD_ARGS(__VA_ARGS__)
-#    define VAST_WARNING_ANON(...) VAST_LOG_DISCARD_ARGS(__VA_ARGS__)
+#    define VAST_WARNING(...) VAST_DISCARD_ARGS(__VA_ARGS__)
+#    define VAST_WARNING_ANON(...) VAST_DISCARD_ARGS(__VA_ARGS__)
 #  endif
 
 #  if VAST_LOG_LEVEL >= VAST_LOG_LEVEL_INFO
 #    define VAST_INFO(...) VAST_LOG_COMPONENT(VAST_LOG_LEVEL_INFO, __VA_ARGS__)
 #    define VAST_INFO_ANON(...) VAST_LOG(VAST_LOG_LEVEL_INFO, __VA_ARGS__)
 #  else
-#    define VAST_INFO(...) VAST_LOG_DISCARD_ARGS(__VA_ARGS__)
-#    define VAST_INFO_ANON(...) VAST_LOG_DISCARD_ARGS(__VA_ARGS__)
+#    define VAST_INFO(...) VAST_DISCARD_ARGS(__VA_ARGS__)
+#    define VAST_INFO_ANON(...) VAST_DISCARD_ARGS(__VA_ARGS__)
 #  endif
 
 #  if VAST_LOG_LEVEL >= VAST_LOG_LEVEL_VERBOSE
@@ -203,8 +153,8 @@ auto id_or_name(T&& x) {
       VAST_LOG_COMPONENT(VAST_LOG_LEVEL_VERBOSE, __VA_ARGS__)
 #    define VAST_VERBOSE_ANON(...) VAST_LOG(VAST_LOG_LEVEL_VERBOSE, __VA_ARGS__)
 #  else
-#    define VAST_VERBOSE(...) VAST_LOG_DISCARD_ARGS(__VA_ARGS__)
-#    define VAST_VERBOSE_ANON(...) VAST_LOG_DISCARD_ARGS(__VA_ARGS__)
+#    define VAST_VERBOSE(...) VAST_DISCARD_ARGS(__VA_ARGS__)
+#    define VAST_VERBOSE_ANON(...) VAST_DISCARD_ARGS(__VA_ARGS__)
 #  endif
 
 #  if VAST_LOG_LEVEL >= VAST_LOG_LEVEL_DEBUG
@@ -212,32 +162,32 @@ auto id_or_name(T&& x) {
       VAST_LOG_COMPONENT(VAST_LOG_LEVEL_DEBUG, __VA_ARGS__)
 #    define VAST_DEBUG_ANON(...) VAST_LOG(VAST_LOG_LEVEL_DEBUG, __VA_ARGS__)
 #  else
-#    define VAST_DEBUG(...) VAST_LOG_DISCARD_ARGS(__VA_ARGS__)
-#    define VAST_DEBUG_ANON(...) VAST_LOG_DISCARD_ARGS(__VA_ARGS__)
+#    define VAST_DEBUG(...) VAST_DISCARD_ARGS(__VA_ARGS__)
+#    define VAST_DEBUG_ANON(...) VAST_DISCARD_ARGS(__VA_ARGS__)
 #  endif
 
 #else // defined(VAST_LOG_LEVEL)
 
-#  define VAST_LOG(...) VAST_LOG_DISCARD_ARGS(__VA_ARGS__)
+#  define VAST_LOG(...) VAST_DISCARD_ARGS(__VA_ARGS__)
 
-#  define VAST_LOG_COMPONENT(...) VAST_LOG_DISCARD_ARGS(__VA_ARGS__)
+#  define VAST_LOG_COMPONENT(...) VAST_DISCARD_ARGS(__VA_ARGS__)
 
-#  define VAST_TRACE(...) VAST_LOG_DISCARD_ARGS(__VA_ARGS__)
+#  define VAST_TRACE(...) VAST_DISCARD_ARGS(__VA_ARGS__)
 
-#  define VAST_ERROR(...) VAST_LOG_DISCARD_ARGS(__VA_ARGS__)
-#  define VAST_ERROR_ANON(...) VAST_LOG_DISCARD_ARGS(__VA_ARGS__)
+#  define VAST_ERROR(...) VAST_DISCARD_ARGS(__VA_ARGS__)
+#  define VAST_ERROR_ANON(...) VAST_DISCARD_ARGS(__VA_ARGS__)
 
-#  define VAST_WARNING(...) VAST_LOG_DISCARD_ARGS(__VA_ARGS__)
-#  define VAST_WARNING_ANON(...) VAST_LOG_DISCARD_ARGS(__VA_ARGS__)
+#  define VAST_WARNING(...) VAST_DISCARD_ARGS(__VA_ARGS__)
+#  define VAST_WARNING_ANON(...) VAST_DISCARD_ARGS(__VA_ARGS__)
 
-#  define VAST_INFO(...) VAST_LOG_DISCARD_ARGS(__VA_ARGS__)
-#  define VAST_INFO_ANON(...) VAST_LOG_DISCARD_ARGS(__VA_ARGS__)
+#  define VAST_INFO(...) VAST_DISCARD_ARGS(__VA_ARGS__)
+#  define VAST_INFO_ANON(...) VAST_DISCARD_ARGS(__VA_ARGS__)
 
-#  define VAST_VERBOSE(...) VAST_LOG_DISCARD_ARGS(__VA_ARGS__)
-#  define VAST_VERBOSE_ANON(...) VAST_LOG_DISCARD_ARGS(__VA_ARGS__)
+#  define VAST_VERBOSE(...) VAST_DISCARD_ARGS(__VA_ARGS__)
+#  define VAST_VERBOSE_ANON(...) VAST_DISCARD_ARGS(__VA_ARGS__)
 
-#  define VAST_DEBUG(...) VAST_LOG_DISCARD_ARGS(__VA_ARGS__)
-#  define VAST_DEBUG_ANON(...) VAST_LOG_DISCARD_ARGS(__VA_ARGS__)
+#  define VAST_DEBUG(...) VAST_DISCARD_ARGS(__VA_ARGS__)
+#  define VAST_DEBUG_ANON(...) VAST_DISCARD_ARGS(__VA_ARGS__)
 
 #endif // defined(VAST_LOG_LEVEL)
 

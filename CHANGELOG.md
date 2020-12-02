@@ -12,6 +12,12 @@ Every entry has a category for which we use the following visual abbreviations:
 
 ## Unreleased
 
+- 🎁 On Linux, VAST now contains a set of built-in USDT tracepoints that can
+  be used by tools like `perf` or `bpftrace` when debugging. Initially, we
+  provide the two tracepoints `chunk_make` and `chunk_destroy`, which trigger
+  every time a `vast::chunk` is created or destroyed.
+  [#1206](https://github.com/tenzir/vast/pull/1206)
+
 - 🧬 The query language now supports models. Models combine a list of concepts
   into a semantic unit that can be fulfiled by an event. If the type of an
   event contains a field for every concept in a model. Turn to
