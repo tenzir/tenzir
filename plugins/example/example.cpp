@@ -88,4 +88,4 @@ private:
   uint64_t max_events_ = std::numeric_limits<uint64_t>::max();
 };
 
-VAST_REGISTER_PLUGIN(example);
+VAST_REGISTER_PLUGIN(example, 0, 1, 0, 0);

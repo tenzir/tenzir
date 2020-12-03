@@ -19,9 +19,19 @@
 #include <caf/stream.hpp>
 #include <caf/typed_actor.hpp>
 
+#include <cstdint>
 #include <memory>
 
 namespace vast {
+
+extern "C" struct plugin_version {
+  uint16_t major;
+  uint16_t minor;
+  uint16_t patch;
+  uint16_t tweak;
+
+  friend bool operator<=(const plugin_version& lhs, const plugin_version& rhs);
+};
 
 /// The minimal actor interface that streaming plugins must implement.
 /// @relates plugin
@@ -33,6 +43,8 @@ class plugin;
 /// The plugin base class.
 class plugin {
 public:
+  constexpr static auto version = plugin_version{0, 1, 0, 0};
+
   /// Destroys any runtime state that the plugin created. For example,
   /// de-register from existing components, deallocate memory.
   virtual ~plugin() = default;
@@ -55,51 +67,35 @@ public:
 class plugin_ptr final {
 public:
   explicit plugin_ptr(const char* filename);
+  ~plugin_ptr() noexcept;
 
   plugin_ptr(const plugin_ptr&) = delete;
   plugin_ptr& operator=(const plugin_ptr&) = delete;
 
-  plugin_ptr(plugin_ptr&&) = default;
-  plugin_ptr& operator=(plugin_ptr&&) = default;
+  plugin_ptr(plugin_ptr&&);
+  plugin_ptr& operator=(plugin_ptr&&);
 
-  ~plugin_ptr() noexcept {
-    instance_.reset();
-    library_.reset();
-  }
-
-  explicit operator bool() noexcept {
-    return static_cast<bool>(instance_);
-  }
-
-  const plugin* operator->() const noexcept {
-    return instance_.get();
-  }
-
-  plugin* operator->() noexcept {
-    return instance_.get();
-  }
-
-  const plugin& operator*() const noexcept {
-    return *instance_;
-  }
-
-  plugin& operator&() noexcept {
-    return *instance_;
-  }
+  explicit operator bool() noexcept;
+  const plugin* operator->() const noexcept;
+  plugin* operator->() noexcept;
+  const plugin& operator*() const noexcept;
+  plugin& operator&() noexcept;
 
 private:
-  std::unique_ptr<plugin, void (*)(plugin*)> instance_
-    = {nullptr, [](plugin*) noexcept {}};
-  std::unique_ptr<void, void (*)(void*)> library_
-    = {nullptr, [](void*) noexcept {}};
+  void* library_ = {};
+  plugin* instance_ = {};
+  void (*deleter_)(plugin*) = {};
 };
 
 } // namespace vast
 
-#define VAST_REGISTER_PLUGIN(name)                                             \
-  extern "C" plugin* create_plugin() {                                         \
+#define VAST_REGISTER_PLUGIN(name, major, minor, tweak, patch)                 \
+  extern "C" ::vast::plugin* plugin_create() {                                 \
     return new name;                                                           \
   }                                                                            \
-  extern "C" void destroy_plugin(class plugin* plugin) {                       \
+  extern "C" void plugin_destroy(class ::vast::plugin* plugin) {               \
     delete plugin;                                                             \
+  }                                                                            \
+  extern "C" struct ::vast::plugin_version plugin_version() {                  \
+    return {major, minor, tweak, patch};                                       \
   }
