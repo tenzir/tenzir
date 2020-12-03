@@ -83,35 +83,6 @@ int main(int argc, char** argv) {
   const auto [root, cmd_factory] = make_application(argv[0]);
   if (!root)
     return EXIT_FAILURE;
-  // Parse CLI.
-  auto invocation
-    = parse(*root, cfg.command_line.begin(), cfg.command_line.end());
-  if (!invocation) {
-    if (invocation.error()) {
-      render_error(*root, invocation.error(), std::cerr);
-      return EXIT_FAILURE;
-    }
-    // Printing help/documentation returns a no_error, and we want to indicate
-    // success when printing the help/documentation texts.
-    return EXIT_SUCCESS;
-  }
-  // Initialize actor system (and thereby CAF's logger).
-  if (!init_config(cfg, *invocation, std::cerr))
-    return EXIT_FAILURE;
-  caf::actor_system sys{cfg};
-  fixup_logger(cfg);
-  // Print the configuration file(s) that were loaded.
-  if (!cfg.config_file_path.empty())
-    cfg.config_files.emplace_back(std::move(cfg.config_file_path));
-  for (auto& path : cfg.config_files)
-    VAST_INFO_ANON("loaded configuration file:", path);
-  // Load event types.
-  if (auto schema = load_schema(cfg)) {
-    event_types::init(*std::move(schema));
-  } else {
-    VAST_ERROR_ANON("failed to read schema dirs:", render(schema.error()));
-    return EXIT_FAILURE;
-  }
   // Load plugins.
   auto& plugins = plugins::get();
   auto plugin_dirs = detail::get_plugin_dirs(cfg);
@@ -144,6 +115,35 @@ int main(int argc, char** argv) {
       VAST_DEBUG_ANON("no configuration found for plugin", plugin->name());
       plugin->initialize(data{});
     }
+  }
+  // Parse CLI.
+  auto invocation
+    = parse(*root, cfg.command_line.begin(), cfg.command_line.end());
+  if (!invocation) {
+    if (invocation.error()) {
+      render_error(*root, invocation.error(), std::cerr);
+      return EXIT_FAILURE;
+    }
+    // Printing help/documentation returns a no_error, and we want to indicate
+    // success when printing the help/documentation texts.
+    return EXIT_SUCCESS;
+  }
+  // Initialize actor system (and thereby CAF's logger).
+  if (!init_config(cfg, *invocation, std::cerr))
+    return EXIT_FAILURE;
+  caf::actor_system sys{cfg};
+  fixup_logger(cfg);
+  // Print the configuration file(s) that were loaded.
+  if (!cfg.config_file_path.empty())
+    cfg.config_files.emplace_back(std::move(cfg.config_file_path));
+  for (auto& path : cfg.config_files)
+    VAST_INFO_ANON("loaded configuration file:", path);
+  // Load event types.
+  if (auto schema = load_schema(cfg)) {
+    event_types::init(*std::move(schema));
+  } else {
+    VAST_ERROR_ANON("failed to read schema dirs:", render(schema.error()));
+    return EXIT_FAILURE;
   }
   // Dispatch to root command.
   auto result = run(*invocation, sys, cmd_factory);
