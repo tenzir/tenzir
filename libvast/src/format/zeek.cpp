@@ -24,6 +24,7 @@
 #include "vast/detail/fdinbuf.hpp"
 #include "vast/detail/fdostream.hpp"
 #include "vast/detail/string.hpp"
+#include "vast/detail/tracepoint.hpp"
 #include "vast/error.hpp"
 #include "vast/logger.hpp"
 #include "vast/table_slice.hpp"
@@ -245,7 +246,10 @@ caf::error reader::read_impl(size_t max_events, size_t max_slice_size,
   VAST_ASSERT(max_events > 0);
   VAST_ASSERT(max_slice_size > 0);
   auto next_line = [&] {
+    const char* zeek_str = "zeek";
     auto timed_out = lines_->next_timeout(read_timeout_);
+    auto sz = lines_->line().size();
+    VAST_TRACEPOINT(zeek_bytes_read, zeek_str, sz, timed_out);
     if (timed_out)
       VAST_DEBUG(this, "reached input timeout at line", lines_->line_number());
     return timed_out;

@@ -20,6 +20,7 @@
 #include "vast/concept/printable/vast/filesystem.hpp"
 #include "vast/defaults.hpp"
 #include "vast/detail/fill_status_map.hpp"
+#include "vast/detail/tracepoint.hpp"
 #include "vast/fwd.hpp"
 #include "vast/logger.hpp"
 #include "vast/si_literals.hpp"
@@ -176,8 +177,10 @@ caf::behavior importer(importer_actor* self, path dir, archive_type archive,
       VAST_ASSERT(x.rows() <= static_cast<size_t>(st.available_ids()));
       auto events = x.rows();
       x.offset(st.next_id(events));
+      auto name = x.layout().name();
       out.push(std::move(x));
       t.stop(events);
+      VAST_TRACEPOINT(streaming_importer, events, name.c_str());
     },
     [=](caf::unit_t&, const error& err) {
       VAST_DEBUG(self, "stopped with message:", err);

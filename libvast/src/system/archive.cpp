@@ -20,6 +20,7 @@
 #include "vast/detail/assert.hpp"
 #include "vast/detail/bit_cast.hpp"
 #include "vast/detail/fill_status_map.hpp"
+#include "vast/detail/tracepoint.hpp"
 #include "vast/logger.hpp"
 #include "vast/segment_store.hpp"
 #include "vast/store.hpp"
@@ -183,6 +184,8 @@ archive(archive_type::stateful_pointer<archive_state> self, path dir,
               events += slice.rows();
           }
           t.stop(events);
+          auto m = self->state.measurement;
+          VAST_TRACEPOINT(streaming_archive, events, batch.size());
         },
         [=](unit_t&, const error& err) {
           // We get an 'unreachable' error when the stream becomes unreachable

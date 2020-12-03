@@ -27,6 +27,7 @@
 #include "vast/detail/fill_status_map.hpp"
 #include "vast/detail/narrow.hpp"
 #include "vast/detail/notifying_stream_manager.hpp"
+#include "vast/detail/tracepoint.hpp"
 #include "vast/error.hpp"
 #include "vast/expression_visitors.hpp"
 #include "vast/fbs/index.hpp"
@@ -510,7 +511,9 @@ index(caf::stateful_actor<index_state>* self, filesystem_type fs, path dir,
     [=](caf::unit_t&, caf::downstream<table_slice>& out, table_slice x) {
       VAST_ASSERT(x.encoding() != table_slice::encoding::none);
       auto&& layout = x.layout();
-      self->state.stats.layouts[layout.name()].count += x.rows();
+      auto events = x.rows();
+      VAST_TRACEPOINT(streaming_index, events);
+      self->state.stats.layouts[layout.name()].count += events;
       auto& active = self->state.active_partition;
       if (!active.actor) {
         create_active_partition();
