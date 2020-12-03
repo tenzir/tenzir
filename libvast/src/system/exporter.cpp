@@ -184,7 +184,8 @@ behavior exporter(stateful_actor<exporter_state>* self, expression expr,
       if (msg.reason != exit_reason::kill)
         report_statistics(self);
       // Sending 0 to the index means dropping further results.
-      self->send<message_priority::high>(st.index, st.id, 0);
+      self->send<message_priority::high>(st.index, st.id,
+                                         static_cast<uint32_t>(0));
       self->quit(msg.reason);
     }
   );
