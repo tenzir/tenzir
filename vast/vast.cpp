@@ -132,11 +132,17 @@ int main(int argc, char** argv) {
   for (auto& plugin : plugins) {
     VAST_VERBOSE_ANON("initializing plugin:", plugin->name());
     auto key = "plugins."s + plugin->name();
-    auto opts = caf::get_or<caf::settings>(cfg, key, caf::settings{});
-    if (auto config = to<data>(opts))
-      plugin->initialize(std::move(*config));
-    else
-      plugin->initialize(data{});
+    if (auto opts = caf::get_if<caf::settings>(&cfg, key)) {
+      if (auto config = to<data>(*opts)) {
+        VAST_DEBUG_ANON("initializing plugin with options:", *config);
+        plugin->initialize(std::move(*config));
+      } else {
+        VAST_ERROR_ANON("invalid plugin configuration for", plugin->name());
+      }
+    } else {
+      VAST_DEBUG_ANON("no configuration found for plugin", plugin->name());
+    }
+    plugin->initialize(data{});
   }
   // Dispatch to root command.
   auto result = run(*invocation, sys, cmd_factory);

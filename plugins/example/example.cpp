@@ -27,19 +27,18 @@ class example : public plugin {
 public:
   /// Teardown logic.
   ~example() override {
-    VAST_WARNING_ANON("tearing down example plugin");
+    VAST_VERBOSE_ANON("tearing down example plugin");
     // TODO: keep a weak reference to the stream processor and try sending it
     // an exit_msg here.
   }
 
   /// Process YAML configuration.
   caf::error initialize(data config) override {
-    VAST_WARNING_ANON("initalizing example plugin");
     if (auto r = caf::get_if<record>(&config)) {
       for (auto& [k, v] : *r) {
         if (k == "max-events") {
           if (auto value = caf::get_if<integer>(&v)) {
-            VAST_WARNING_ANON("setting max-events =", v);
+            VAST_VERBOSE_ANON("setting max-events =", v);
             max_events_ = *value;
           }
         }
@@ -59,27 +58,26 @@ public:
     auto processor
       = [=](stream_processor::pointer self) -> stream_processor::behavior_type {
       return [=](caf::stream<table_slice> in) {
-        VAST_WARNING(self, "hooks into stream");
+        VAST_VERBOSE(self, "hooks into stream");
         caf::attach_stream_sink(
           self, in,
           // Initialization hook for CAF stream.
           [=](uint64_t& counter) { // reset state
-            VAST_WARNING(self, "initialized stream");
+            VAST_VERBOSE(self, "initialized stream");
             counter = 0;
           },
           // Process one stream element at a time.
           [=](uint64_t& counter, table_slice slice) {
             counter += slice.rows();
-            VAST_WARNING(self, "processed", counter, "cumulative events");
             if (counter > max_events_) {
-              VAST_WARNING(self, "terminates after maximum event limit");
+              VAST_INFO(self, "terminates stream after", counter, "events");
               self->quit();
             }
           },
           // Teardown hook for CAF stram.
           [=](uint64_t&, const caf::error& err) {
             if (err)
-              VAST_ERROR(self, "finished with error", to_string(err));
+              VAST_ERROR(self, "finished stream with error", to_string(err));
           });
       };
     };
