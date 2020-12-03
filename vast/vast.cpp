@@ -113,11 +113,11 @@ int main(int argc, char** argv) {
     return EXIT_FAILURE;
   }
   // Load plugins.
-  std::vector<plugin_ptr> plugins;
+  auto& plugins = plugins::get();
   auto plugin_dirs = detail::get_plugin_dirs(cfg);
-  for (auto& dir : plugin_dirs) {
+  for (const auto& dir : plugin_dirs) {
     VAST_VERBOSE_ANON("looking for plugins in", dir);
-    for (auto file : directory{dir}) {
+    for (const auto& file : directory{dir}) {
       if (file.extension() == ".so" || file.extension() == ".dylib") {
         if (auto plugin = plugin_ptr{file.str().c_str()}) {
           VAST_VERBOSE_ANON("loaded plugin:", file);
@@ -138,11 +138,12 @@ int main(int argc, char** argv) {
         plugin->initialize(std::move(*config));
       } else {
         VAST_ERROR_ANON("invalid plugin configuration for", plugin->name());
+        plugin->initialize(data{});
       }
     } else {
       VAST_DEBUG_ANON("no configuration found for plugin", plugin->name());
+      plugin->initialize(data{});
     }
-    plugin->initialize(data{});
   }
   // Dispatch to root command.
   auto result = run(*invocation, sys, cmd_factory);
@@ -157,7 +158,5 @@ int main(int argc, char** argv) {
       return EXIT_FAILURE;
     }
   }
-  // Teardown plugins.
-  plugins.clear();
   return EXIT_SUCCESS;
 }

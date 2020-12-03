@@ -21,17 +21,34 @@
 
 namespace vast {
 
-bool operator<=(const plugin_version& lhs, const plugin_version& rhs) {
-  return std::tie(lhs.major, lhs.minor, lhs.patch, lhs.tweak)
-         <= std::tie(rhs.major, rhs.minor, rhs.patch, rhs.tweak);
+// -- plugin singleton ---------------------------------------------------------
+
+namespace plugins {
+
+std::vector<plugin_ptr>& get() noexcept {
+  static auto plugins = std::vector<plugin_ptr>{};
+  return plugins;
 }
 
-plugin_ptr::plugin_ptr(const char* filename) {
+} // namespace plugins
+
+// -- plugin version -----------------------------------------------------------
+
+bool has_required_version(const plugin_version& version) noexcept {
+  return std::tie(plugin::version.major, plugin::version.minor,
+                  plugin::version.patch, plugin::version.tweak)
+         <= std::tie(version.major, version.minor, version.patch,
+                     version.tweak);
+}
+
+// -- plugin_ptr ---------------------------------------------------------------
+
+plugin_ptr::plugin_ptr(const char* filename) noexcept {
   if (auto handle = dlopen(filename, RTLD_GLOBAL | RTLD_LAZY)) {
     library_ = handle;
     auto plugin_version = reinterpret_cast<::vast::plugin_version (*)()>(
       dlsym(library_, "plugin_version"));
-    if (plugin_version && plugin::version <= plugin_version()) {
+    if (plugin_version && has_required_version(plugin_version())) {
       auto plugin_create = reinterpret_cast<::vast::plugin* (*) ()>(
         dlsym(library_, "plugin_create"));
       auto plugin_destroy = reinterpret_cast<void (*)(::vast::plugin*)>(
@@ -51,19 +68,21 @@ plugin_ptr::~plugin_ptr() noexcept {
     deleter_(instance_);
     instance_ = {};
     deleter_ = {};
+  }
+  if (library_) {
     dlclose(library_);
     library_ = {};
   }
 }
 
-plugin_ptr::plugin_ptr(plugin_ptr&& other)
+plugin_ptr::plugin_ptr(plugin_ptr&& other) noexcept
   : library_{std::exchange(other.library_, {})},
     instance_{std::exchange(other.instance_, {})},
     deleter_{std::exchange(other.deleter_, {})} {
   // nop
 }
 
-plugin_ptr& plugin_ptr::operator=(plugin_ptr&& rhs) {
+plugin_ptr& plugin_ptr::operator=(plugin_ptr&& rhs) noexcept {
   library_ = std::exchange(rhs.library_, {});
   instance_ = std::exchange(rhs.instance_, {});
   deleter_ = std::exchange(rhs.deleter_, {});

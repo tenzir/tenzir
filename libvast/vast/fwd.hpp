@@ -82,6 +82,8 @@ class meta_index;
 class msgpack_table_slice_builder;
 class path;
 class pattern;
+class plugin;
+class plugin_ptr;
 class schema;
 class segment;
 class segment_builder;

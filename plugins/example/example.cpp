@@ -12,80 +12,121 @@
  ******************************************************************************/
 
 #include "vast/data.hpp"
+#include "vast/error.hpp"
 #include "vast/logger.hpp"
 #include "vast/plugin.hpp"
 #include "vast/table_slice.hpp"
 
+#include <caf/actor_cast.hpp>
 #include <caf/attach_stream_sink.hpp>
+#include <caf/typed_actor.hpp>
 #include <caf/typed_event_based_actor.hpp>
 
-// FIXME: hackathon yolo mode
 using namespace vast;
 
-/// An example plugin.
-class example : public plugin {
-public:
-  /// Teardown logic.
-  ~example() override {
-    VAST_VERBOSE_ANON("tearing down example plugin");
-    // TODO: keep a weak reference to the stream processor and try sending it
-    // an exit_msg here.
-  }
+// clang-format off
+using example_actor = caf::typed_actor<
+  caf::reacts_to<caf::stream<table_slice>>,
+  caf::reacts_to<atom::config, record>
+>;
+// clang-format on
 
-  /// Process YAML configuration.
-  caf::error initialize(data config) override {
-    if (auto r = caf::get_if<record>(&config)) {
-      for (auto& [k, v] : *r) {
-        if (k == "max-events") {
-          if (auto value = caf::get_if<integer>(&v)) {
-            VAST_VERBOSE_ANON("setting max-events =", v);
-            max_events_ = *value;
+struct example_actor_state {
+  uint64_t max_events = std::numeric_limits<uint64_t>::max();
+  bool done = false;
+
+  constexpr static inline auto name = "example";
+};
+
+example_actor::behavior_type
+spawn_example_actor(example_actor::stateful_pointer<example_actor_state> self) {
+  return {
+    [=](caf::stream<table_slice> in) {
+      VAST_TRACE(self, "hooks into stream", in);
+      caf::attach_stream_sink(
+        self, in,
+        // Initialization hook for CAF stream.
+        [=](uint64_t& counter) { // reset state
+          VAST_VERBOSE(self, "initialized stream");
+          counter = 0;
+        },
+        // Process one stream element at a time.
+        [=](uint64_t& counter, table_slice slice) {
+          // If we're already done, discard the remaining table slices in the
+          // stream.
+          if (self->state.done)
+            return;
+          // Accumulate the rows in our table slices.
+          counter += slice.rows();
+          if (counter >= self->state.max_events) {
+            VAST_INFO(self, "terminates stream after", counter, "events");
+            self->state.done = true;
+            self->quit();
+          }
+        },
+        // Teardown hook for CAF stram.
+        [=](uint64_t&, const caf::error& err) {
+          if (err && err != caf::exit_reason::user_shutdown) {
+            VAST_ERROR(self, "finished stream with error:", render(err));
+            return;
+          }
+        });
+    },
+    [=](atom::config, record config) {
+      VAST_TRACE(self, "sets configuration", config);
+      for (auto& [key, value] : config) {
+        if (key == "max-events") {
+          if (auto max_events = caf::get_if<integer>(&value)) {
+            VAST_VERBOSE(self, "sets max-events to", *max_events);
+            self->state.max_events = *max_events;
           }
         }
       }
-    }
+    },
+  };
+}
+
+/// An example plugin.
+class example final : public virtual import_plugin {
+public:
+  /// Loading logic.
+  example() {
+    // nop
+  }
+
+  /// Teardown logic.
+  ~example() override {
+    // nop
+  }
+
+  /// Initializes a plugin with its respective entries from the YAML config
+  /// file, i.e., `plugin.<NAME>`.
+  /// @param config The relevant subsection of the configuration.
+  caf::error initialize(data config) override {
+    if (auto r = caf::get_if<record>(&config))
+      config_ = *r;
     return caf::none;
   }
 
-  /// Unique name of the plugin.
+  /// Returns the unique name of the plugin.
   const char* name() const override {
     return "example";
   }
 
-  /// Construct a stream processor that hooks into the ingest path.
-  stream_processor
-  make_stream_processor(caf::actor_system& sys) const override {
-    auto processor
-      = [=](stream_processor::pointer self) -> stream_processor::behavior_type {
-      return [=](caf::stream<table_slice> in) {
-        VAST_VERBOSE(self, "hooks into stream");
-        caf::attach_stream_sink(
-          self, in,
-          // Initialization hook for CAF stream.
-          [=](uint64_t& counter) { // reset state
-            VAST_VERBOSE(self, "initialized stream");
-            counter = 0;
-          },
-          // Process one stream element at a time.
-          [=](uint64_t& counter, table_slice slice) {
-            counter += slice.rows();
-            if (counter > max_events_) {
-              VAST_INFO(self, "terminates stream after", counter, "events");
-              self->quit();
-            }
-          },
-          // Teardown hook for CAF stram.
-          [=](uint64_t&, const caf::error& err) {
-            if (err)
-              VAST_ERROR(self, "finished stream with error", to_string(err));
-          });
-      };
-    };
-    return sys.spawn(processor);
+  /// Creates an actor that hooks into the importer table slice stream.
+  /// @param sys The actor system context to spawn the actor in.
+  import_stream_sink_actor
+  make_import_stream_sink(caf::actor_system& sys) const override {
+    // Spawn the actor.
+    auto actor = sys.spawn(spawn_example_actor);
+    // Send the configuration to the actor.
+    if (!config_.empty())
+      caf::anon_send(actor, atom::config_v, config_);
+    return actor;
   };
 
 private:
-  uint64_t max_events_ = std::numeric_limits<uint64_t>::max();
+  record config_ = {};
 };
 
 VAST_REGISTER_PLUGIN(example, 0, 1, 0, 0);
