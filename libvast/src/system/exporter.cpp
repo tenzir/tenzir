@@ -228,6 +228,7 @@ behavior exporter(stateful_actor<exporter_state>* self, expression expr,
     }
     auto& checker = it->second;
     // Perform candidate check, splitting the slice into subsets if needed.
+    st.query.processed += slice.rows();
     auto selection = evaluate(checker, slice);
     auto selection_size = rank(selection);
     if (selection_size == 0) {
@@ -237,7 +238,6 @@ behavior exporter(stateful_actor<exporter_state>* self, expression expr,
     st.query.cached += selection_size;
     select(st.results, slice, selection);
     // Ship slices to connected SINKs.
-    st.query.processed += slice.rows();
     ship_results(self);
   };
   return {
