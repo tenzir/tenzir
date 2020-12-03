@@ -281,92 +281,130 @@ resolve_impl(const taxonomies& ts, const expression& e,
       if (it == ts.models.end())
         return resolve_concepts(field_name, op, data, make_predicate);
       // We have a model predicate.
-      conjunction c;
+      // ==========================
+      // The model definition forms a tree that contains models as non-leaf
+      // nodes and concepts as leafs. For model substition we need to iterate
+      // over the leafs in the order of definition, which is left to right.
+      // The levels stack is used to keep track of the current position at
+      // each level of the tree.
+      auto p
+        = std::pair{it->second.definition.begin(), it->second.definition.end()};
+      auto levels = std::stack{std::vector{std::move(p)}};
+      auto descend = [&] {
+        for (auto child_component = ts.models.find(*levels.top().first);
+             child_component != ts.models.end();
+             child_component = ts.models.find(*levels.top().first)) {
+          auto& child_def = child_component->second.definition;
+          levels.emplace(child_def.begin(), child_def.end());
+        }
+      };
+      descend();
+      auto next = [&] {
+        // Update the levels stack; explicit scope for clarity.
+        while (!levels.empty() && ++levels.top().first == levels.top().second)
+          levels.pop();
+        if (!levels.empty()) {
+          descend();
+          // Empty models ought to be rejected at load time.
+          VAST_ASSERT(levels.top().first != levels.top().second);
+        }
+      };
+      conjunction restricted;
+      conjunction unrestricted;
+      auto insert_meta_field_predicate = [&] {
+        auto make_meta_field_predicate = [&](const vast::data&) {
+          return [&](std::string item) {
+            return predicate{attribute_extractor{atom::field_v}, equal,
+                             vast::data{item}};
+          };
+        };
+        unrestricted.emplace_back(resolve_concepts(
+          *levels.top().first, op, caf::none, make_meta_field_predicate));
+      };
       auto named = !r->begin()->first.empty();
       if (named) {
         // TODO: Nested records of the form
         // <src_endpoint: <1.2.3.4, _>, process_filename: "svchost.exe">
         // are currently not supported.
-        for (auto& x : *r) {
-          VAST_ASSERT(!x.first.empty());
-          // TODO: Check that x.first is contained in it->second and return an
-          // error if not.
-          c.emplace_back(
-            resolve_concepts(x.first, op, x.second, make_predicate));
+        for (; !levels.empty(); next()) {
+          // TODO: Use `ends_with` for better ergonomics.
+          // TODO: Remove matched entries and check mismatched concepts.
+          auto concept_field = r->find(*levels.top().first);
+          if (concept_field == r->end())
+            insert_meta_field_predicate();
+          else
+            restricted.emplace_back(resolve_concepts(
+              *levels.top().first, op, concept_field->second, make_predicate));
         }
-        if (c.empty())
-          return make_error(ec::invalid_query, "empty record queries are not "
-                                               "supported yet");
       } else {
-        // TODO: Explain the tree iteration mechanism.
-        auto p = std::pair{it->second.definition.begin(),
-                           it->second.definition.end()};
-        auto levels = std::stack{std::vector{std::move(p)}};
-        for (auto value_iterator = r->begin(); value_iterator != r->end();
-             ++value_iterator, ++levels.top().first) {
-          VAST_ASSERT(value_iterator->first.empty());
-          {
-            // Update the levels stack; explicit scope for clarity.
-            while (levels.top().first == levels.top().second) {
-              levels.pop();
-              if (levels.empty())
-                // The provided record is longer then the matched concept.
-                // TODO: This error could be rendered in a way that makes it
-                // clear how the mismatch happened. For example:
-                //   src_ip, src_port,  dst_ip, dst_port, proto
-                // <      _,        _, 1.2.3.4,        _,     _, "tcp">
-                //                                               ^~~~~
-                //                                               too many fields
-                //                                               provided
-                return make_error(ec::invalid_query, *r,
-                                  "doesn't match the model:", it->first);
-              ++levels.top().first;
-            }
-            for (auto child_component = ts.models.find(*levels.top().first);
-                 child_component != ts.models.end();
-                 child_component = ts.models.find(*levels.top().first)) {
-              auto& child_def = child_component->second.definition;
-              levels.emplace(child_def.begin(), child_def.end());
-            }
-            // Empty models ought to be rejected at load time.
-            VAST_ASSERT(levels.top().first != levels.top().second);
-          }
+        auto value_iterator = r->begin();
+        for (; !levels.empty(); next(), ++value_iterator) {
+          if (value_iterator == r->end())
+            // The provided record is shorter than the matched concept.
+            // TODO: This error could be rendered in a way that makes it
+            // clear how the mismatch happened. For example:
+            //   src_ip, src_port,  dst_ip, dst_port, proto
+            // <      _,        _, 1.2.3.4,        _>
+            //                                        ^~~~~
+            //                                        not enough fields provided
+            return make_error(ec::invalid_query, *r,
+                              "doesn't match the model:", it->first);
           if (caf::holds_alternative<caf::none_t>(value_iterator->second))
-            continue;
-          c.emplace_back(resolve_concepts(
-            *levels.top().first, op, value_iterator->second, make_predicate));
+            insert_meta_field_predicate();
+          else
+            restricted.emplace_back(resolve_concepts(
+              *levels.top().first, op, value_iterator->second, make_predicate));
         }
-        if (c.empty())
-          return make_error(ec::invalid_query, "placeholder only queries are "
-                                               "not supported yet");
-        // TODO: If the provided record is shorter than the model the missing
-        // fields are treated as if they are '_'. Consider treating this as
-        // an error.
+        if (value_iterator != r->end()) {
+          // The provided record is longer than the matched concept.
+          // TODO: This error could be rendered in a way that makes it
+          // clear how the mismatch happened. For example:
+          //   src_ip, src_port,  dst_ip, dst_port, proto
+          // <      _,        _, 1.2.3.4,        _,     _, "tcp">
+          //                                               ^~~~~
+          //                                               too many fields
+          //                                               provided
+          return make_error(ec::invalid_query, *r,
+                            "doesn't match the model:", it->first);
+        }
       }
-      VAST_ASSERT(!c.empty());
-      switch (c.size()) {
-        case 1:
-          return c[0];
-        default:
-          return expression{c};
+      expression expr;
+      if (restricted.empty())
+        return unrestricted;
+      switch (restricted.size()) {
+        case 1: {
+          expr = restricted[0];
+          break;
+        }
+        default: {
+          expr = expression{std::move(restricted)};
+          break;
+        }
       }
+      if (negated(op))
+        expr = negation{std::move(expr)};
+      if (unrestricted.empty())
+        return expr;
+      unrestricted.push_back(expr);
+      return unrestricted;
     };
-    if (auto fe = caf::get_if<field_extractor>(&pred.lhs)) {
-      if (auto data = caf::get_if<vast::data>(&pred.rhs)) {
+    auto abs_op = negated(pred.op) ? negate(pred.op) : pred.op;
+    if (auto data = caf::get_if<vast::data>(&pred.rhs)) {
+      if (auto fe = caf::get_if<field_extractor>(&pred.lhs)) {
         return resolve_models(
           fe->field, pred.op, *data, [&](const vast::data& o) {
             return [&](const std::string& item) {
-              return predicate{field_extractor{item}, pred.op, o};
+              return predicate{field_extractor{item}, abs_op, o};
             };
           });
       }
     }
-    if (auto fe = caf::get_if<field_extractor>(&pred.rhs)) {
-      if (auto data = caf::get_if<vast::data>(&pred.lhs)) {
+    if (auto data = caf::get_if<vast::data>(&pred.lhs)) {
+      if (auto fe = caf::get_if<field_extractor>(&pred.rhs)) {
         return resolve_models(
           fe->field, flip(pred.op), *data, [&](const vast::data& o) {
             return [&](const std::string& item) {
-              return predicate{o, pred.op, field_extractor{item}};
+              return predicate{o, abs_op, field_extractor{item}};
             };
           });
       }
