@@ -197,6 +197,7 @@ bool index_state::worker_available() {
 }
 
 caf::actor index_state::next_worker() {
+  VAST_ASSERT(worker_available());
   auto result = std::move(idle_workers.back());
   idle_workers.pop_back();
   return result;
@@ -684,7 +685,8 @@ index(caf::stateful_actor<index_state>* self, filesystem_type fs, path dir,
       // below in the same actor context.
       await_evaluation_maps(
         self, iter->second.expression, actors,
-        [=](caf::expected<pending_query_map> maybe_pqm) {
+        [=, worker
+            = st.next_worker()](caf::expected<pending_query_map> maybe_pqm) {
           auto& st = self->state;
           auto iter = st.pending.find(query_id);
           if (iter == st.pending.end()) {
@@ -714,12 +716,17 @@ index(caf::stateful_actor<index_state>* self, filesystem_type fs, path dir,
           VAST_DEBUG(self, "schedules", qm.size(),
                      "more partition(s) for query id", query_id, "with",
                      query_state.partitions.size(), "partitions remaining");
-          self->send(st.next_worker(), query_state.expression, std::move(qm),
-                     client);
+          self->send(worker, query_state.expression, std::move(qm), client);
           // Cleanup if we exhausted all candidates.
           if (query_state.partitions.empty())
             st.pending.erase(iter);
         });
+      // If no more workers are available, revert to the default behavior.
+      if (!st.worker_available()) {
+        VAST_VERBOSE(self, "has no more workers available");
+        self->unbecome();
+        self->set_default_handler(caf::skip);
+      }
     },
     [=](atom::worker, caf::actor& worker) {
       self->state.idle_workers.emplace_back(std::move(worker));
@@ -815,7 +822,9 @@ index(caf::stateful_actor<index_state>* self, filesystem_type fs, path dir,
     [=](atom::worker, caf::actor& worker) {
       auto& st = self->state;
       st.idle_workers.emplace_back(std::move(worker));
+      VAST_VERBOSE(self, "now has workers available");
       self->become(caf::keep_behavior, st.has_worker);
+      self->set_default_handler(caf::print_and_drop);
     },
     [=](atom::done, uuid partition_id) {
       VAST_DEBUG(self, "queried partition", partition_id, "successfully");
