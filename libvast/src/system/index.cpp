@@ -204,7 +204,7 @@ caf::actor index_state::next_worker() {
   if (!worker_available()) {
     self->unbecome();
     self->set_default_handler(caf::skip);
-    VAST_WARNING(self, "waits for query supervisors to become available to "
+    VAST_VERBOSE(self, "waits for query supervisors to become available to "
                        "delegate work; consider increasing 'vast.max-queries'");
   }
   return result;
