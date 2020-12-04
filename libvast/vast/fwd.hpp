@@ -168,6 +168,7 @@ struct node_state;
 struct performance_sample;
 struct query_status;
 struct query_status;
+struct request_id;
 struct spawn_arguments;
 
 } // namespace system
@@ -376,6 +377,7 @@ CAF_BEGIN_TYPE_ID_BLOCK(vast, caf::first_custom_type_id)
   VAST_ADD_TYPE_ID((vast::system::performance_report))
   VAST_ADD_TYPE_ID((vast::system::query_status))
   VAST_ADD_TYPE_ID((vast::system::report))
+  VAST_ADD_TYPE_ID((vast::system::request_id))
 
   VAST_ADD_TYPE_ID((std::vector<uint32_t>) )
   VAST_ADD_TYPE_ID((std::vector<vast::table_slice>) )

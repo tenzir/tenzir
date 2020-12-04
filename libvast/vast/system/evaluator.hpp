@@ -15,8 +15,10 @@
 
 #include "vast/aliases.hpp"
 #include "vast/expression.hpp"
+#include "vast/fwd.hpp"
 #include "vast/ids.hpp"
 #include "vast/offset.hpp"
+#include "vast/system/request_id.hpp"
 #include "vast/table_slice_column.hpp"
 #include "vast/uuid.hpp"
 
@@ -72,6 +74,9 @@ struct evaluator_state {
 
   /// Stores the original query expression.
   expression expr;
+
+  /// The ID of the currently handled request.
+  struct request_id request_id;
 
   /// Allows us to respond to the COLLECTOR after finishing a lookup.
   caf::response_promise promise;

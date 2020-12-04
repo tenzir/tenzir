@@ -19,6 +19,7 @@
 #include "vast/store.hpp"
 #include "vast/system/accountant.hpp"
 #include "vast/system/instrumentation.hpp"
+#include "vast/system/request_id.hpp"
 
 #include <caf/fwd.hpp>
 #include <caf/replies_to.hpp>
@@ -38,8 +39,8 @@ namespace vast::system {
 
 // clang-format off
 using receiver_type = caf::typed_actor<
-  caf::reacts_to<table_slice>,
-  caf::reacts_to<atom::done, caf::error>
+  caf::reacts_to<table_slice, request_id>,
+  caf::reacts_to<atom::done, caf::error, request_id>
 >;
 // clang-format on
 
@@ -50,8 +51,9 @@ using archive_type = caf::typed_actor<
   caf::reacts_to<atom::exporter, caf::actor>,
   caf::reacts_to<accountant_type>,
   caf::reacts_to<ids>,
-  caf::reacts_to<ids, receiver_type>,
-  caf::reacts_to<ids, receiver_type, uint64_t>,
+  caf::reacts_to<ids, request_id>,
+  caf::reacts_to<ids, request_id, receiver_type>,
+  caf::reacts_to<ids, request_id, receiver_type, uint64_t>,
   caf::replies_to<atom::status, status_verbosity>::with<caf::dictionary<caf::config_value>>,
   caf::reacts_to<atom::telemetry>,
   caf::replies_to<atom::erase, ids>::with<atom::done>
@@ -61,7 +63,7 @@ using archive_type = caf::typed_actor<
 /// @relates archive
 struct archive_state {
   void send_report();
-  void next_session();
+  void next_session(struct request_id request_id);
   archive_type::stateful_pointer<archive_state> self;
   std::unique_ptr<vast::store> store;
   std::unique_ptr<vast::store::lookup> session;

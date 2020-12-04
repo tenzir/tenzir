@@ -27,8 +27,10 @@
 #include "vast/expression.hpp"
 #include "vast/fwd.hpp"
 #include "vast/ids.hpp"
+#include "vast/system/archive.hpp"
 #include "vast/system/index.hpp"
 #include "vast/system/posix_filesystem.hpp"
+#include "vast/system/request_id.hpp"
 #include "vast/table_slice.hpp"
 
 using namespace std::literals::chrono_literals;
@@ -57,7 +59,7 @@ struct mock_index_state {
 
 caf::behavior mock_index(caf::stateful_actor<mock_index_state>* self) {
   return {
-    [=](expression&) {
+    [=](expression&, struct system::request_id request_id) {
       auto& deltas = self->state.deltas;
       deltas = std::vector<ids>{
         make_ids({1, 3, 5}),    make_ids({7, 9, 11}),  make_ids({13, 15, 17}),
@@ -68,13 +70,13 @@ caf::behavior mock_index(caf::stateful_actor<mock_index_state>* self) {
       auto hdl = caf::actor_cast<caf::actor>(self->current_sender());
       self->send(hdl, query_id, uint32_t{7}, uint32_t{3});
       for (size_t i = 0; i < taste_count; ++i)
-        self->send(hdl, take_one(deltas));
+        self->send(hdl, take_one(deltas), request_id);
       self->send(hdl, atom::done_v);
     },
     [=](const uuid&, uint32_t n) {
       auto hdl = caf::actor_cast<caf::actor>(self->current_sender());
       for (size_t i = 0; i < n; ++i)
-        self->send(hdl, take_one(self->state.deltas));
+        self->send(hdl, take_one(self->state.deltas), system::request_id{});
       self->send(hdl, atom::done_v);
     },
   };
@@ -88,12 +90,14 @@ struct mock_archive_state {
 using mock_archive_actor = caf::stateful_actor<mock_archive_state>;
 
 caf::behavior mock_archive(mock_archive_actor* self) {
-  return {[=](atom::erase, ids hits) { self->state.hits = hits; }};
+  return {
+    [=](atom::erase, ids hits) { self->state.hits = hits; },
+  };
 }
 
 struct fixture : fixtures::deterministic_actor_system_and_events {
   fixture() : query_id(unbox(to<uuid>(uuid_str))) {
-    archive = sys.spawn(mock_archive);
+    archive = caf::actor_cast<system::archive_type>(sys.spawn(mock_archive));
     sched.run();
   }
 
@@ -106,13 +110,14 @@ struct fixture : fixtures::deterministic_actor_system_and_events {
   void spawn_aut(std::string query = "#time < 1 week ago") {
     if (index == nullptr)
       FAIL("cannot start AUT without INDEX");
-    aut = sys.spawn(vast::system::eraser, 6h, std::move(query), index, archive);
+    aut = sys.spawn(vast::system::eraser, 6h, std::move(query), index,
+                    caf::actor_cast<caf::actor>(archive));
     sched.run();
   }
 
   uuid query_id;
   caf::actor index;
-  caf::actor archive;
+  system::archive_type archive;
   caf::actor aut;
 };
 
@@ -125,21 +130,20 @@ TEST(eraser on mock INDEX) {
   spawn_aut();
   sched.trigger_timeouts();
   expect((atom::run), from(aut).to(aut));
-  expect((expression), from(aut).to(index));
-  expect((uuid, uint32_t, uint32_t),
-         from(index).to(aut).with(query_id, 7u, 3u));
-  expect((ids), from(index).to(aut));
-  expect((ids), from(index).to(aut));
-  expect((ids), from(index).to(aut));
-  expect((atom::done), from(index).to(aut));
+  expect((expression, system::request_id), from(aut).to(index));
+  expect((uuid, uint32_t, uint32_t), from(_).to(aut).with(query_id, 7u, 3u));
+  expect((ids, system::request_id), from(_).to(aut));
+  expect((ids, system::request_id), from(_).to(aut));
+  expect((ids, system::request_id), from(_).to(aut));
+  expect((atom::done), from(_).to(aut));
   expect((uuid, uint32_t), from(aut).to(index).with(query_id, 3u));
-  expect((ids), from(index).to(aut));
-  expect((ids), from(index).to(aut));
-  expect((ids), from(index).to(aut));
-  expect((atom::done), from(index).to(aut));
+  expect((ids, system::request_id), from(_).to(aut));
+  expect((ids, system::request_id), from(_).to(aut));
+  expect((ids, system::request_id), from(_).to(aut));
+  expect((atom::done), from(_).to(aut));
   expect((uuid, uint32_t), from(aut).to(index).with(query_id, 1u));
-  expect((ids), from(index).to(aut));
-  expect((atom::done), from(index).to(aut));
+  expect((ids, system::request_id), from(_).to(aut));
+  expect((atom::done), from(_).to(aut));
   expect((atom::erase, ids),
          from(aut).to(archive).with(_, make_ids({{1, 22}})));
 }
@@ -159,15 +163,15 @@ TEST(eraser on actual INDEX with Zeek conn logs) {
   spawn_aut(":addr == 192.168.1.104");
   sched.trigger_timeouts();
   expect((atom::run), from(aut).to(aut));
-  expect((expression), from(aut).to(index));
-  expect((uuid, uint32_t, uint32_t), from(index).to(aut).with(_, 4u, 3u));
+  expect((expression, system::request_id), from(aut).to(index));
+  expect((uuid, uint32_t, uint32_t), from(_).to(aut).with(_, 4u, 3u));
   sched.run_jobs_filtered(not_aut);
-  while (allow((ids), from(_).to(aut)))
+  while (allow((ids, system::request_id), from(_).to(aut)))
     ; // repeat
   expect((atom::done), from(_).to(aut));
   expect((uuid, uint32_t), from(aut).to(index).with(_, 1u));
   sched.run_jobs_filtered(not_aut);
-  while (allow((ids), from(_).to(aut)))
+  while (allow((ids, system::request_id), from(_).to(aut)))
     ; // repeat
   expect((atom::done), from(_).to(aut));
   expect((atom::erase, ids), from(aut).to(archive));

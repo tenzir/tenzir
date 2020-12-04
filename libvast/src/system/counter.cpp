@@ -15,6 +15,7 @@
 
 #include "vast/bitmap_algorithms.hpp"
 #include "vast/logger.hpp"
+#include "vast/system/request_id.hpp"
 #include "vast/table_slice.hpp"
 
 #include <caf/event_based_actor.hpp>
@@ -48,7 +49,7 @@ void counter_state::init(expression expr, caf::actor index,
   self_->send(archive_, atom::exporter_v, self_);
   caf::message_handler base{behaviors_[collect_hits].as_behavior_impl()};
   behaviors_[collect_hits] = base.or_else(
-    [this](table_slice slice) {
+    [this](table_slice slice, request_id) {
       // Construct a candidate checker if we don't have one for this type.
       auto it = checkers_.find(slice.layout());
       if (it == checkers_.end()) {
@@ -66,7 +67,7 @@ void counter_state::init(expression expr, caf::actor index,
       if (num_results > 0)
         self_->send(client_, num_results);
     },
-    [this](atom::done, const caf::error&) {
+    [this](atom::done, const caf::error&, request_id) {
       if (self_->current_sender() != archive_) {
         VAST_WARNING(self_, "received ('done', error) from unexpected actor");
         return;

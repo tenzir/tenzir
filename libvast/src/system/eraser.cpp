@@ -18,6 +18,7 @@
 #include "vast/expression.hpp"
 #include "vast/fwd.hpp"
 #include "vast/logger.hpp"
+#include "vast/system/request_id.hpp"
 
 #include <caf/event_based_actor.hpp>
 #include <caf/stateful_actor.hpp>
@@ -51,7 +52,7 @@ void eraser_state::init(caf::timespan interval, std::string query,
       VAST_ERROR(self_, "failed to normalize and validate", query_);
       return;
     }
-    self_->send(index_, std::move(*expr));
+    self_->send(index_, std::move(*expr), request_id{});
     transition_to(await_query_id);
   });
   // Trigger the delayed send message.

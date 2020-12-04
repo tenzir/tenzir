@@ -136,7 +136,7 @@ void evaluator_state::evaluate() {
   auto delta = expr_hits - hits;
   if (any<1>(delta)) {
     hits |= delta;
-    self->send(client, std::move(delta));
+    self->send(client, std::move(delta), request_id);
   }
 }
 
@@ -160,30 +160,34 @@ caf::behavior evaluator(caf::stateful_actor<evaluator_state>* self,
   VAST_ASSERT(!eval.empty());
   using std::get;
   using std::move;
-  return {[=, expr{move(expr)}, eval{move(eval)}](caf::actor client) {
-    auto& st = self->state;
-    st.init(client, move(expr), self->make_response_promise());
-    st.pending_responses += eval.size();
-    for (auto& triple : eval) {
-      // No strucutured bindings available due to subsequent lambda. :-/
-      // TODO: C++20
-      auto& pos = get<0>(triple);
-      auto& curried_pred = get<1>(triple);
-      auto& indexer = get<2>(triple);
-      ++st.predicate_hits[pos].first;
-      self->request(indexer, caf::infinite, curried_pred)
-        .then([=](const ids& hits) { self->state.handle_result(pos, hits); },
-              [=](const caf::error& err) {
-                self->state.handle_missing_result(pos, err);
-              });
-    }
-    if (st.pending_responses == 0) {
-      VAST_DEBUG(self, "has nothing to evaluate for expression");
-      st.promise.deliver(atom::done_v);
-    }
-    // We can only deal with exactly one expression/client at the moment.
-    self->unbecome();
-  }};
+  return {
+    [=, expr{move(expr)}, eval{move(eval)}](
+      caf::actor client, struct system::request_id request_id) {
+      auto& st = self->state;
+      st.request_id = request_id;
+      st.init(client, move(expr), self->make_response_promise());
+      st.pending_responses += eval.size();
+      for (auto& triple : eval) {
+        // No strucutured bindings available due to subsequent lambda. :-/
+        // TODO: C++20
+        auto& pos = get<0>(triple);
+        auto& curried_pred = get<1>(triple);
+        auto& indexer = get<2>(triple);
+        ++st.predicate_hits[pos].first;
+        self->request(indexer, caf::infinite, curried_pred)
+          .then([=](const ids& hits) { self->state.handle_result(pos, hits); },
+                [=](const caf::error& err) {
+                  self->state.handle_missing_result(pos, err);
+                });
+      }
+      if (st.pending_responses == 0) {
+        VAST_DEBUG(self, "has nothing to evaluate for expression");
+        st.promise.deliver(atom::done_v);
+      }
+      // We can only deal with exactly one expression/client at the moment.
+      self->unbecome();
+    },
+  };
 }
 
 } // namespace vast::system

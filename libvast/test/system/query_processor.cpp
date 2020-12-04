@@ -23,6 +23,7 @@
 #include "vast/concept/parseable/vast/uuid.hpp"
 #include "vast/fwd.hpp"
 #include "vast/ids.hpp"
+#include "vast/system/request_id.hpp"
 
 using namespace vast;
 
@@ -37,14 +38,16 @@ struct mock_index_state {
 };
 
 caf::behavior mock_index(caf::stateful_actor<mock_index_state>* self) {
-  return {[=](expression&) {
-    auto query_id = unbox(to<uuid>(uuid_str));
-    auto hdl = caf::actor_cast<caf::actor>(self->current_sender());
-    self->send(hdl, query_id, uint32_t{3}, uint32_t(7));
-    self->send(hdl, make_ids({1, 2, 4}));
-    self->send(hdl, make_ids({3, 5}));
-    self->send(hdl, atom::done_v);
-  }};
+  return {
+    [=](expression&) {
+      auto query_id = unbox(to<uuid>(uuid_str));
+      auto hdl = caf::actor_cast<caf::actor>(self->current_sender());
+      self->send(hdl, query_id, uint32_t{3}, uint32_t(7));
+      self->send(hdl, make_ids({1, 2, 4}), system::request_id{});
+      self->send(hdl, make_ids({3, 5}), system::request_id{});
+      self->send(hdl, atom::done_v);
+    },
+  };
 }
 
 class mock_processor : public system::query_processor {
@@ -99,9 +102,9 @@ TEST(state transitions) {
   self->send(aut, unbox(to<expression>(query_str)), index);
   expect((expression, caf::actor), from(self).to(aut));
   expect((expression), from(aut).to(index));
-  expect((uuid, uint32_t, uint32_t), from(index).to(aut));
-  expect((ids), from(index).to(aut));
-  expect((ids), from(index).to(aut));
+  expect((uuid, uint32_t, uint32_t), from(_).to(aut));
+  expect((ids, system::request_id), from(index).to(aut));
+  expect((ids, system::request_id), from(index).to(aut));
   expect((atom::done), from(index).to(aut));
   CHECK_EQUAL(mock_ref().log, expected_log);
   CHECK_EQUAL(mock_ref().hits, make_ids({{1, 6}}));

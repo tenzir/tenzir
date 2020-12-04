@@ -13,6 +13,8 @@
 
 #define SUITE evaluator
 
+#include "vast/system/evaluator.hpp"
+
 #include "vast/test/fixtures/actor_system_and_events.hpp"
 #include "vast/test/test.hpp"
 
@@ -20,7 +22,7 @@
 #include "vast/concept/parseable/vast/expression.hpp"
 #include "vast/expression.hpp"
 #include "vast/fwd.hpp"
-#include "vast/system/evaluator.hpp"
+#include "vast/system/request_id.hpp"
 
 #include <vector>
 
@@ -72,10 +74,10 @@ struct fixture : fixtures::deterministic_actor_system_and_events {
     layout.fields.emplace_back("y", count_type{});
     layout.name("test");
     // Spin up our dummies.
-    auto& x_indexers= indexers["x"];
+    auto& x_indexers = indexers["x"];
     add_indexer(x_indexers, {12, 42, 42, 17, 42, 75, 38, 11, 10});
     add_indexer(x_indexers, {42, 13, 17, 42, 99, 87, 23, 55, 11});
-    auto& y_indexers= indexers["y"];
+    auto& y_indexers = indexers["y"];
     add_indexer(y_indexers, {10, 10, 10, 10, 42, 10, 10, 10, 42});
     add_indexer(y_indexers, {10, 42, 10, 77, 42, 10, 10, 10, 10});
   }
@@ -94,21 +96,22 @@ struct fixture : fixtures::deterministic_actor_system_and_events {
     evaluation_triples triples;
     auto resolved = resolve(expr, layout);
     VAST_ASSERT(resolved.size() > 0);
-    for (auto& [expr_position, pred]: resolved) {
+    for (auto& [expr_position, pred] : resolved) {
       VAST_ASSERT(caf::holds_alternative<data_extractor>(pred.lhs));
       auto& dx = caf::get<data_extractor>(pred.lhs);
       std::string field_name = dx.offset.back() == 0 ? "x" : "y";
-      auto& xs =  indexers[field_name];
+      auto& xs = indexers[field_name];
       for (auto& x : xs)
         triples.emplace_back(expr_position, curried(pred), x);
     }
     auto eval = sys.spawn(system::evaluator, expr, std::move(triples));
-    self->send(eval, self);
+    self->send(eval, self, system::request_id{});
     run();
     ids result;
     bool got_done_atom = false;
     while (!self->mailbox().empty())
-      self->receive([&](const ids& hits) { result |= hits; },
+      self->receive([&](const ids& hits,
+                        system::request_id) { result |= hits; },
                     [&](atom::done) { got_done_atom = true; });
     if (!got_done_atom)
       FAIL("evaluator failed to send 'done'");

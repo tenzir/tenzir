@@ -11,30 +11,37 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#include "vast/detail/add_message_types.hpp"
+#pragma once
 
-#include "vast/bitmap.hpp"
-#include "vast/command.hpp"
-#include "vast/config.hpp"
-#include "vast/expression.hpp"
-#include "vast/operator.hpp"
-#include "vast/query_options.hpp"
-#include "vast/schema.hpp"
-#include "vast/system/component_registry.hpp"
-#include "vast/system/query_status.hpp"
-#include "vast/system/report.hpp"
-#include "vast/system/request_id.hpp"
-#include "vast/system/type_registry.hpp"
-#include "vast/table_slice.hpp"
-#include "vast/type.hpp"
-#include "vast/uuid.hpp"
+#include "vast/fwd.hpp"
 
-#include <caf/actor_system_config.hpp>
+#include <caf/meta/type_name.hpp>
 
-namespace vast::detail {
+#include <utility>
 
-void add_message_types(caf::actor_system_config& cfg) {
-  cfg.add_message_types<caf::id_block::vast>();
-}
+namespace vast::system {
 
-} // namespace vast::detail
+/// The unique identifier of a request.
+struct request_id {
+  /// Advances the request ID, and returns the current ID.
+  request_id advance() {
+    return std::exchange(*this, {key + 1});
+  }
+
+  /// The internal key of the request ID.
+  uint64_t key = 0;
+
+  /// Enable basic comparison for use as keys in containers.
+  friend bool operator<(const request_id& lhs, const request_id& rhs) {
+    return lhs.key < rhs.key;
+  }
+
+  /// Opt-in to CAF's type inspection API.
+  template <class Inspector>
+  friend auto inspect(Inspector& f, request_id& x) ->
+    typename Inspector::result_type {
+    return f(caf::meta::type_name("vast.system.request_id"), x.key);
+  }
+};
+
+} // namespace vast::system

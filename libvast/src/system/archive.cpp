@@ -36,7 +36,7 @@ using namespace caf;
 
 namespace vast::system {
 
-void archive_state::next_session() {
+void archive_state::next_session(struct request_id request_id) {
   // No requester means no work to do.
   if (requesters.empty()) {
     VAST_TRACE(self, "has no requesters");
@@ -51,7 +51,7 @@ void archive_state::next_session() {
   if (it == unhandled_ids.end()) {
     VAST_TRACE(self, "could not find an ids queue for the current requester");
     requesters.pop();
-    return next_session();
+    return next_session(request_id);
   }
   // There is a work queue for our current requester, but it is empty. Let's
   // clean house, dismiss the requester and try again.
@@ -59,12 +59,12 @@ void archive_state::next_session() {
     VAST_TRACE(self, "found an empty ids queue for the current requester");
     unhandled_ids.erase(it);
     requesters.pop();
-    return next_session();
+    return next_session(request_id);
   }
   // Start working on the next ids for the next requester.
   auto& next_ids = it->second.front();
   session = store->extract(next_ids);
-  self->send(self, next_ids, current_requester, ++session_id);
+  self->send(self, next_ids, request_id, current_requester, ++session_id);
   it->second.pop();
 }
 
@@ -114,16 +114,20 @@ archive(archive_type::stateful_pointer<archive_state> self, path dir,
   });
   return {
     [=](const ids& xs) {
+      return self->delegate(caf::actor_cast<archive_type>(self), xs,
+                            request_id{});
+    },
+    [=](const ids& xs, struct request_id request_id) {
       VAST_ASSERT(rank(xs) > 0);
       VAST_DEBUG(self, "got query for", rank(xs), "events in range [",
                  select(xs, 1), ',', (select(xs, -1) + 1), ')');
       if (auto requester
           = caf::actor_cast<receiver_type>(self->current_sender()))
-        self->send(self, xs, requester);
+        self->send(self, xs, request_id, requester);
       else
         VAST_ERROR(self, "dismisses query for unconforming sender");
     },
-    [=](const ids& xs, receiver_type requester) {
+    [=](const ids& xs, struct request_id request_id, receiver_type requester) {
       auto& st = self->state;
       if (st.active_exporters.count(requester->address()) == 0) {
         VAST_DEBUG(self, "dismisses query for inactive sender");
@@ -132,21 +136,23 @@ archive(archive_type::stateful_pointer<archive_state> self, path dir,
       st.requesters.push(requester);
       st.unhandled_ids[requester->address()].push(xs);
       if (!st.session)
-        st.next_session();
+        st.next_session(request_id);
     },
-    [=](const ids& xs, receiver_type requester, uint64_t session_id) {
+    [=](const ids& xs, struct request_id request_id, receiver_type requester,
+        uint64_t session_id) {
       auto& st = self->state;
       // If the export has since shut down, we need to invalidate the session.
       if (st.active_exporters.count(requester->address()) == 0) {
         VAST_DEBUG(self, "invalidates running query session for", requester);
-        st.next_session();
+        st.next_session(request_id);
         return;
       }
       if (!st.session || st.session_id != session_id) {
         VAST_DEBUG(self, "considers extraction finished for invalidated "
                          "session");
-        self->send(requester, atom::done_v, make_error(ec::no_error));
-        st.next_session();
+        self->send(requester, atom::done_v, make_error(ec::no_error),
+                   request_id);
+        st.next_session(request_id);
         return;
       }
       // Extract the next slice.
@@ -155,15 +161,15 @@ archive(archive_type::stateful_pointer<archive_state> self, path dir,
         auto err
           = slice.error() ? std::move(slice.error()) : make_error(ec::no_error);
         VAST_DEBUG(self, "finished extraction from the current session:", err);
-        self->send(requester, atom::done_v, std::move(err));
-        st.next_session();
+        self->send(requester, atom::done_v, std::move(err), request_id);
+        st.next_session(request_id);
         return;
       }
       // The slice may contain entries that are not selected by xs.
       for (auto& sub_slice : select(*slice, xs))
-        self->send(requester, sub_slice);
+        self->send(requester, sub_slice, request_id);
       // Continue working on the current session.
-      self->send(self, xs, requester, session_id);
+      self->send(self, xs, request_id, requester, session_id);
     },
     [=](stream<table_slice> in) {
       self->make_sink(

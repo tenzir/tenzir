@@ -78,6 +78,18 @@ struct exporter_state {
 
   /// Stores the user-defined export query.
   expression expr;
+
+  /// Stores the number of issues requests to index and archive.
+  request_id next_request_id = {};
+
+  /// Maps request id to a pair of request description and request start time.
+  std::map<request_id,
+           std::pair<std::string, std::chrono::system_clock::time_point>>
+    request_start;
+
+  /// Maps request id to a list durations. There exists a one-to-many
+  /// relationship between requests and replies to both index and archive.
+  std::map<request_id, std::vector<std::chrono::milliseconds>> request_duration;
 };
 
 /// The EXPORTER receives index hits, looks up the corresponding events in the

@@ -28,6 +28,7 @@
 #include "vast/system/archive.hpp"
 #include "vast/system/index.hpp"
 #include "vast/system/posix_filesystem.hpp"
+#include "vast/system/request_id.hpp"
 #include "vast/table_slice.hpp"
 #include "vast/uuid.hpp"
 
@@ -54,11 +55,13 @@ struct mock_client_state {
 using mock_client_actor = caf::stateful_actor<mock_client_state>;
 
 caf::behavior mock_client(mock_client_actor* self) {
-  return {[=](uint64_t x) {
-            CHECK(!self->state.received_done);
-            self->state.count += x;
-          },
-          [=](atom::done) { self->state.received_done = true; }};
+  return {
+    [=](uint64_t x) {
+      CHECK(!self->state.received_done);
+      self->state.count += x;
+    },
+    [=](atom::done) { self->state.received_done = true; },
+  };
 }
 
 struct fixture : fixtures::deterministic_actor_system_and_events {

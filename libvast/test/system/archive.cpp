@@ -47,11 +47,13 @@ struct fixture : fixtures::deterministic_actor_system_and_events {
     run();
     self
       ->do_receive(
-        [&](vast::atom::done, const caf::error& err) {
+        [&](vast::atom::done, const caf::error& err, system::request_id) {
           REQUIRE(!err);
           done = true;
         },
-        [&](table_slice slice) { result.push_back(std::move(slice)); })
+        [&](table_slice slice, system::request_id) {
+          result.push_back(std::move(slice));
+        })
       .until(done);
     return result;
   }

@@ -17,6 +17,7 @@
 #include "vast/fwd.hpp"
 #include "vast/ids.hpp"
 #include "vast/logger.hpp"
+#include "vast/system/request_id.hpp"
 
 #include <caf/event_based_actor.hpp>
 #include <caf/skip.hpp>
@@ -48,7 +49,11 @@ query_processor::query_processor(caf::event_based_actor* self)
     });
   behaviors_[collect_hits].assign(
     // Received from EVALUATOR actors while generating query hits.
-    [=](const ids& hits) {
+    [=](const ids& hits, system::request_id) {
+      // TODO: We probably shouldn't discard the request ID here. However, we
+      // should only do this after converting the query processor to the typed
+      // actor interface. Otherwise it's just too hard to track down all the
+      // behaviors that need to be adapted.
       process_hits(hits);
       // No transtion. We will receive a 'done' message after getting all hits.
     },

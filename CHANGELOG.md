@@ -12,6 +12,9 @@ Every entry has a category for which we use the following visual abbreviations:
 
 ## Unreleased
 
+- 🐞 The index no longer crashes when too many parallel queries are running.
+  [#1210](https://github.com/tenzir/vast/pull/1210)
+
 - 🎁 On Linux, VAST now contains a set of built-in USDT tracepoints that can
   be used by tools like `perf` or `bpftrace` when debugging. Initially, we
   provide the two tracepoints `chunk_make` and `chunk_destroy`, which trigger

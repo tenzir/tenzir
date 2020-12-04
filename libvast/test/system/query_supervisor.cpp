@@ -23,6 +23,7 @@
 #include "vast/expression.hpp"
 #include "vast/fwd.hpp"
 #include "vast/ids.hpp"
+#include "vast/system/request_id.hpp"
 
 using namespace vast;
 
@@ -30,14 +31,14 @@ namespace {
 
 caf::behavior dummy_evaluator(caf::event_based_actor* self, ids x) {
   return {
-    [=](const caf::actor& client) {
-      self->send(client, x);
+    [=](const caf::actor& client, struct system::request_id request_id) {
+      self->send(client, x, request_id);
       return atom::done_v;
-    }
+    },
   };
 }
 
-} // namespace <anonymous>
+} // namespace
 
 FIXTURE_SCOPE(query_supervisor_tests, fixtures::deterministic_actor_system)
 
@@ -54,13 +55,14 @@ TEST(lookup) {
   run();
   MESSAGE("fill query map and trigger supervisor");
   system::query_map qm{{uuid::random(), {e0, e1}}, {uuid::random(), {e2}}};
-  self->send(sv, unbox(to<expression>("x == 42")), std::move(qm), self);
+  self->send(sv, unbox(to<expression>("x == 42")), std::move(qm), self,
+             system::request_id{});
   run();
   MESSAGE("collect results");
   bool done = false;
   ids result;
   while (!done)
-    self->receive([&](const ids& x) { result |= x; },
+    self->receive([&](const ids& x, system::request_id) { result |= x; },
                   [&](atom::done) { done = true; });
   CHECK_EQUAL(result, make_ids({{0, 9}}));
   MESSAGE("after completion, the supervisor should register itself again");

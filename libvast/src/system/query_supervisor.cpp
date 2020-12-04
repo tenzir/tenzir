@@ -16,6 +16,7 @@
 #include "vast/expression.hpp"
 #include "vast/fwd.hpp"
 #include "vast/logger.hpp"
+#include "vast/system/request_id.hpp"
 
 #include <caf/event_based_actor.hpp>
 #include <caf/local_actor.hpp>
@@ -48,9 +49,10 @@ query_supervisor(caf::stateful_actor<query_supervisor_state>* self,
   // Ask master for initial work.
   self->send(master, atom::worker_v, self);
   return {
-    [=](const expression&, const query_map& qm, const caf::actor& client) {
-      VAST_DEBUG(self, "got a new query for", qm.size(), "partitions:",
-                 get_ids(qm));
+    [=](const expression&, const query_map& qm, const caf::actor& client,
+        system::request_id request_id) {
+      VAST_DEBUG(self, "got a new query for", qm.size(),
+                 "partitions:", get_ids(qm));
       VAST_ASSERT(!qm.empty());
       VAST_ASSERT(self->state.open_requests.empty());
       for (auto& kvp : qm) {
@@ -60,22 +62,24 @@ query_supervisor(caf::stateful_actor<query_supervisor_state>* self,
                    "EVALUATOR actor(s) for partition", id);
         self->state.open_requests.emplace(id, evaluators.size());
         for (auto& evaluator : evaluators)
-          self->request(evaluator, caf::infinite, client).then([=](atom::done) {
-            auto& num_evaluators = self->state.open_requests[id];
-            if (--num_evaluators == 0) {
-              VAST_DEBUG(self, "collected all results for partition", id);
-              self->state.open_requests.erase(id);
-              // Ask master for more work after receiving the last sub
-              // result.
-              if (self->state.open_requests.empty()) {
-                VAST_DEBUG(self, "collected all results for all partitions");
-                self->send(client, atom::done_v);
-                self->send(master, atom::worker_v, self);
+          self->request(evaluator, caf::infinite, client, request_id)
+            .then([=](atom::done) {
+              auto& num_evaluators = self->state.open_requests[id];
+              if (--num_evaluators == 0) {
+                VAST_DEBUG(self, "collected all results for partition", id);
+                self->state.open_requests.erase(id);
+                // Ask master for more work after receiving the last sub
+                // result.
+                if (self->state.open_requests.empty()) {
+                  VAST_DEBUG(self, "collected all results for all partitions");
+                  self->send(client, atom::done_v);
+                  self->send(master, atom::worker_v, self);
+                }
               }
-            }
-          });
+            });
       }
-    }};
+    },
+  };
 }
 
 } // namespace vast::system

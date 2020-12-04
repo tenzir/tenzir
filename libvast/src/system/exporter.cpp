@@ -144,10 +144,13 @@ void request_more_hits(stateful_actor<exporter_state>* self) {
   st.query.scheduled = n;
   // Request more hits from the INDEX.
   VAST_DEBUG(self, "asks index to process", n, "more partitions");
-  self->send(st.index, st.id, detail::narrow<uint32_t>(n));
+  auto request_id = self->state.next_request_id.advance();
+  self->state.request_start[request_id]
+    = {"query id to index", std::chrono::system_clock::now()};
+  self->send(st.index, st.id, request_id, detail::narrow<uint32_t>(n));
 }
 
-} // namespace <anonymous>
+} // namespace
 
 caf::settings status(stateful_actor<exporter_state>* self, status_verbosity v) {
   auto& st = self->state;
@@ -177,29 +180,37 @@ behavior exporter(stateful_actor<exporter_state>* self, expression expr,
   self->state.expr = std::move(expr);
   if (has_continuous_option(options))
     VAST_DEBUG(self, "has continuous query option");
-  self->set_exit_handler(
-    [=](const exit_msg& msg) {
-      VAST_DEBUG(self, "received exit from", msg.source, "with reason:", msg.reason);
-      auto& st = self->state;
-      if (msg.reason != exit_reason::kill)
-        report_statistics(self);
-      // Sending 0 to the index means dropping further results.
-      self->send<message_priority::high>(st.index, st.id,
-                                         static_cast<uint32_t>(0));
-      self->quit(msg.reason);
+  self->set_exit_handler([=](const exit_msg& msg) {
+    VAST_DEBUG(self, "received exit from", msg.source,
+               "with reason:", msg.reason);
+    auto& st = self->state;
+    // TODO: In addition to printing these debug messages, send the data in a
+    // post-processible form to the accountant.
+    for (auto&& [request_id, description_and_start] : st.request_start) {
+      auto&& [description, start] = description_and_start;
+      auto&& duration = st.request_duration[request_id];
+      VAST_DEBUG(self, "received replies for request", request_id.key,
+                 "(" + description + ") started at", start, "after", duration);
     }
-  );
-  self->set_down_handler(
-    [=](const down_msg& msg) {
-      VAST_DEBUG(self, "received DOWN from", msg.source);
-      if (has_continuous_option(self->state.options)
-          && (msg.source == self->state.archive
-              || msg.source == self->state.index))
-        report_statistics(self);
-      // Without sinks and resumable sessions, there's no reason to proceed.
-      self->quit(msg.reason);
-    }
-  );
+    if (msg.reason != exit_reason::kill)
+      report_statistics(self);
+    // Sending 0 to the index means dropping further results.
+    auto request_id = st.next_request_id.advance();
+    st.request_start[request_id]
+      = {"request drop from index", std::chrono::system_clock::now()};
+    self->send<message_priority::high>(st.index, st.id, request_id,
+                                       static_cast<uint32_t>(0));
+    self->quit(msg.reason);
+  });
+  self->set_down_handler([=](const down_msg& msg) {
+    VAST_DEBUG(self, "received DOWN from", msg.source);
+    if (has_continuous_option(self->state.options)
+        && (msg.source == self->state.archive
+            || msg.source == self->state.index))
+      report_statistics(self);
+    // Without sinks and resumable sessions, there's no reason to proceed.
+    self->quit(msg.reason);
+  });
   auto finished = [](const query_status& qs) -> bool {
     return qs.received == qs.expected
            && qs.lookups_issued == qs.lookups_complete;
@@ -242,12 +253,18 @@ behavior exporter(stateful_actor<exporter_state>* self, expression expr,
   return {
     // The INDEX (or the EVALUATOR, to be more precise) sends us a series of
     // `ids` in response to an expression (query), terminated by 'done'.
-    [=](ids& hits) -> caf::result<void> {
+    [=](ids& hits, struct request_id request_id) -> caf::result<void> {
       auto& st = self->state;
       // Skip results that arrive before we got our lookup handle from the
       // INDEX actor.
       if (st.query.expected == 0)
         return caf::skip;
+      if (st.request_start.count(request_id) > 0) {
+        auto diff = std::chrono::system_clock::now()
+                    - st.request_start[request_id].second;
+        st.request_duration[request_id].emplace_back(
+          std::chrono::duration_cast<std::chrono::milliseconds>(diff));
+      }
       // Add `hits` to the total result set and update all stats.
       timespan runtime = system_clock::now() - st.start;
       st.query.runtime = runtime;
@@ -270,11 +287,20 @@ behavior exporter(stateful_actor<exporter_state>* self, expression expr,
         VAST_DEBUG(self, "forwards hits to archive");
         // FIXME: restrict according to configured limit.
         ++st.query.lookups_issued;
-        self->send(st.archive, std::move(hits));
+        request_id = st.next_request_id.advance();
+        st.request_start[request_id]
+          = {"ids to archive", std::chrono::system_clock::now()};
+        self->send(st.archive, std::move(hits), request_id);
       }
       return caf::unit;
     },
-    [=](table_slice slice) {
+    [=](table_slice slice, struct request_id request_id) {
+      if (self->state.request_start.count(request_id) > 0) {
+        auto diff = std::chrono::system_clock::now()
+                    - self->state.request_start[request_id].second;
+        self->state.request_duration[request_id].emplace_back(
+          std::chrono::duration_cast<std::chrono::milliseconds>(diff));
+      }
       // Use the same handler as we use for streamed slices.
       handle_batch(std::move(slice));
     },
@@ -304,8 +330,15 @@ behavior exporter(stateful_actor<exporter_state>* self, expression expr,
       }
       return caf::unit;
     },
-    [=](atom::done, [[maybe_unused]] const caf::error& err) {
+    [=](atom::done, [[maybe_unused]] const caf::error& err,
+        struct request_id request_id) {
       auto& st = self->state;
+      if (st.request_start.count(request_id) > 0) {
+        auto diff = std::chrono::system_clock::now()
+                    - st.request_start[request_id].second;
+        st.request_duration[request_id].emplace_back(
+          std::chrono::duration_cast<std::chrono::milliseconds>(diff));
+      }
       if (self->current_sender() != st.archive) {
         VAST_WARNING(self, "received ('done', error) from unexpected actor");
         return;
@@ -388,9 +421,18 @@ behavior exporter(stateful_actor<exporter_state>* self, expression expr,
       self->state.start = system_clock::now();
       if (!has_historical_option(self->state.options))
         return;
-      self->request(self->state.index, infinite, self->state.expr)
+      auto request_id = self->state.next_request_id.advance();
+      self->state.request_start[request_id]
+        = {"expression to index", std::chrono::system_clock::now()};
+      self->request(self->state.index, infinite, self->state.expr, request_id)
         .then(
           [=](const uuid& lookup, uint32_t partitions, uint32_t scheduled) {
+            if (self->state.request_start.count(request_id) > 0) {
+              auto diff = std::chrono::system_clock::now()
+                          - self->state.request_start[request_id].second;
+              self->state.request_duration[request_id].emplace_back(
+                std::chrono::duration_cast<std::chrono::milliseconds>(diff));
+            }
             VAST_DEBUG(self, "got lookup handle", lookup, ", scheduled",
                        scheduled, '/', partitions, "partitions");
             self->state.id = lookup;
@@ -401,7 +443,15 @@ behavior exporter(stateful_actor<exporter_state>* self, expression expr,
               shutdown(self);
             }
           },
-          [=](const error& e) { shutdown(self, e); });
+          [=](const error& e) {
+            if (self->state.request_start.count(request_id) > 0) {
+              auto diff = std::chrono::system_clock::now()
+                          - self->state.request_start[request_id].second;
+              self->state.request_duration[request_id].emplace_back(
+                std::chrono::duration_cast<std::chrono::milliseconds>(diff));
+            }
+            shutdown(self, e);
+          });
     },
     [=](atom::statistics, const actor& statistics_subscriber) {
       VAST_DEBUG(self, "registers statistics subscriber",

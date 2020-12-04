@@ -45,6 +45,7 @@
 #include "vast/system/filesystem.hpp"
 #include "vast/system/partition.hpp"
 #include "vast/system/query_supervisor.hpp"
+#include "vast/system/request_id.hpp"
 #include "vast/system/shutdown.hpp"
 #include "vast/table_slice.hpp"
 #include "vast/value_index.hpp"
@@ -197,8 +198,16 @@ bool index_state::worker_available() {
 }
 
 caf::actor index_state::next_worker() {
+  VAST_ASSERT(worker_available());
   auto result = std::move(idle_workers.back());
   idle_workers.pop_back();
+  // If no more workers are available, revert to the default behavior.
+  if (!worker_available()) {
+    self->unbecome();
+    self->set_default_handler(caf::skip);
+    VAST_VERBOSE(self, "waits for query supervisors to become available to "
+                       "delegate work; consider increasing 'vast.max-queries'");
+  }
   return result;
 }
 
@@ -602,6 +611,10 @@ index(caf::stateful_actor<index_state>* self, filesystem_type fs, path dir,
     },
     // Query handling
     [=](vast::expression expr) {
+      self->delegate(caf::actor_cast<caf::actor>(self), std::move(expr),
+                     request_id{});
+    },
+    [=](vast::expression expr, struct request_id request_id) {
       auto& st = self->state;
       auto mid = self->current_message_id();
       auto sender = self->current_sender();
@@ -648,18 +661,20 @@ index(caf::stateful_actor<index_state>* self, filesystem_type fs, path dir,
       // However, the query_processor doesnt really care about the id
       // anyways, so hopefully that shouldnt make too big of a difference.
       respond(query_id, detail::narrow<uint32_t>(total), scheduled);
-      self->delegate(caf::actor_cast<caf::actor>(self), query_id, scheduled);
+      // FIXME: pass in proper request_id from exporter
+      self->delegate(caf::actor_cast<caf::actor>(self), query_id, request_id,
+                     scheduled);
       return;
     },
     [=](const uuid& query_id, uint32_t num_partitions) {
+      self->delegate(caf::actor_cast<caf::actor>(self), query_id, request_id{},
+                     num_partitions);
+    },
+    [=](const uuid& query_id, struct request_id request_id,
+        uint32_t num_partitions) {
       auto& st = self->state;
-      auto mid = self->current_message_id();
       auto sender = self->current_sender();
       auto client = caf::actor_cast<caf::actor>(sender);
-      auto respond = [=](auto&&... xs) {
-        unsafe_response(self, sender, {}, mid.response_id(),
-                        std::forward<decltype(xs)>(xs)...);
-      };
       // Sanity checks.
       if (!sender) {
         VAST_ERROR(self, "ignores an anonymous query");
@@ -682,6 +697,7 @@ index(caf::stateful_actor<index_state>* self, filesystem_type fs, path dir,
       // Send an evaluate atom to all the actors and collect the returned
       // evaluation triples in a `pending_query_map`, then run the continuation
       // below in the same actor context.
+      auto worker = st.next_worker();
       await_evaluation_maps(
         self, iter->second.expression, actors,
         [=](caf::expected<pending_query_map> maybe_pqm) {
@@ -714,8 +730,8 @@ index(caf::stateful_actor<index_state>* self, filesystem_type fs, path dir,
           VAST_DEBUG(self, "schedules", qm.size(),
                      "more partition(s) for query id", query_id, "with",
                      query_state.partitions.size(), "partitions remaining");
-          self->send(st.next_worker(), query_state.expression, std::move(qm),
-                     client);
+          self->send(worker, query_state.expression, std::move(qm), client,
+                     request_id);
           // Cleanup if we exhausted all candidates.
           if (query_state.partitions.empty())
             st.pending.erase(iter);
@@ -816,6 +832,8 @@ index(caf::stateful_actor<index_state>* self, filesystem_type fs, path dir,
       auto& st = self->state;
       st.idle_workers.emplace_back(std::move(worker));
       self->become(caf::keep_behavior, st.has_worker);
+      self->set_default_handler(caf::print_and_drop);
+      VAST_VERBOSE(self, "delegates work to query supervisors");
     },
     [=](atom::done, uuid partition_id) {
       VAST_DEBUG(self, "queried partition", partition_id, "successfully");

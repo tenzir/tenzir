@@ -28,6 +28,7 @@
 #include "vast/ids.hpp"
 #include "vast/query_options.hpp"
 #include "vast/system/posix_filesystem.hpp"
+#include "vast/system/request_id.hpp"
 #include "vast/table_slice.hpp"
 #include "vast/table_slice_builder.hpp"
 
@@ -78,14 +79,15 @@ struct fixture : fixtures::deterministic_actor_system_and_events {
     auto fetch = [&](size_t chunk) {
       auto done = false;
       while (!done)
-        self->receive([&](ids& sub_result) { result |= sub_result; },
-                      [&](atom::done) { done = true; },
-                      caf::others >> [](caf::message_view& msg)
-                        -> caf::result<caf::message> {
-                        FAIL("unexpected message: " << msg.content());
-                        return caf::none;
-                      },
-                      after(0s) >> [&] { FAIL("ran out of messages"); });
+        self->receive(
+          [&](ids& sub_result, system::request_id) { result |= sub_result; },
+          [&](atom::done) { done = true; },
+          caf::others >>
+            [](caf::message_view& msg) -> caf::result<caf::message> {
+            FAIL("unexpected message: " << msg.content());
+            return caf::none;
+          },
+          after(0s) >> [&] { FAIL("ran out of messages"); });
       if (!self->mailbox().empty())
         FAIL("mailbox not empty after receiving all 'done' messages");
       collected += chunk;
@@ -93,7 +95,7 @@ struct fixture : fixtures::deterministic_actor_system_and_events {
     fetch(scheduled);
     while (collected < hits) {
       auto chunk = std::min(hits - collected, taste_count);
-      self->send(index, query_id, chunk);
+      self->send(index, query_id, system::request_id{}, chunk);
       run();
       fetch(chunk);
     }
@@ -123,11 +125,11 @@ struct fixture : fixtures::deterministic_actor_system_and_events {
   caf::actor index;
 };
 
-} // namespace <anonymous>
+} // namespace
 
 FIXTURE_SCOPE(index_tests, fixture)
 
-TEST(one-shot integer query result) {
+TEST(one - shot integer query result) {
   MESSAGE("fill first " << taste_count << " partitions");
   auto slices = rebase(first_n(alternating_integers, taste_count));
   REQUIRE_EQUAL(rows(slices), slice_size * taste_count);
