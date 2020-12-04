@@ -194,30 +194,29 @@ std::vector<uuid> meta_index::lookup(const expression& expr) const {
         for (auto& [part_id, part_syn] : synopses_) {
           VAST_DEBUG(this, "checks", part_id, "for predicate", x);
           for (auto& [field, syn] : part_syn.field_synopses_) {
-            if (syn && match(field)) {
-              found_matching_synopsis = true;
-              auto opt = syn->lookup(x.op, make_view(rhs));
-              if (!opt || *opt) {
-                VAST_DEBUG(this, "selects", part_id, "at predicate", x);
-                result.push_back(part_id);
-                break;
-              }
-            }
-          }
-          for (auto& [type, syn] : part_syn.type_synopses_) {
-            if (syn) {
-              caf::visit(
-                [&](auto value, auto field_type) {
-                  if (data_to_type<decltype(value)>{} == field_type) {
-                    found_matching_synopsis = true;
-                    auto opt = syn->lookup(x.op, make_view(rhs));
-                    if (!opt || *opt) {
-                      VAST_DEBUG(this, "selects", part_id, "at predicate", x);
-                      result.push_back(part_id);
-                    }
+            if (match(field)) {
+              if (syn) {
+                found_matching_synopsis = true;
+                auto opt = syn->lookup(x.op, make_view(rhs));
+                if (!opt || *opt) {
+                  VAST_DEBUG(this, "selects", part_id, "at predicate", x);
+                  result.push_back(part_id);
+                  break;
+                }
+              } else {
+                // The field has no dedicated synopsis. Check if there is one
+                // for the type in general.
+                auto it = part_syn.type_synopses_.find(field.type);
+                if (it != part_syn.type_synopses_.end() && it->second) {
+                  found_matching_synopsis = true;
+                  auto opt = it->second->lookup(x.op, make_view(rhs));
+                  if (!opt || *opt) {
+                    VAST_DEBUG(this, "selects", part_id, "at predicate", x);
+                    result.push_back(part_id);
+                    break;
                   }
-                },
-                rhs, type);
+                }
+              }
             }
           }
         }
