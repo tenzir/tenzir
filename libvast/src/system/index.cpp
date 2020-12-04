@@ -200,6 +200,12 @@ caf::actor index_state::next_worker() {
   VAST_ASSERT(worker_available());
   auto result = std::move(idle_workers.back());
   idle_workers.pop_back();
+  // If no more workers are available, revert to the default behavior.
+  if (!worker_available()) {
+    VAST_VERBOSE(self, "has no more workers available");
+    self->unbecome();
+    self->set_default_handler(caf::skip);
+  }
   return result;
 }
 
@@ -683,10 +689,10 @@ index(caf::stateful_actor<index_state>* self, filesystem_type fs, path dir,
       // Send an evaluate atom to all the actors and collect the returned
       // evaluation triples in a `pending_query_map`, then run the continuation
       // below in the same actor context.
+      auto worker = st.next_worker();
       await_evaluation_maps(
         self, iter->second.expression, actors,
-        [=, worker
-            = st.next_worker()](caf::expected<pending_query_map> maybe_pqm) {
+        [=](caf::expected<pending_query_map> maybe_pqm) {
           auto& st = self->state;
           auto iter = st.pending.find(query_id);
           if (iter == st.pending.end()) {
@@ -721,12 +727,6 @@ index(caf::stateful_actor<index_state>* self, filesystem_type fs, path dir,
           if (query_state.partitions.empty())
             st.pending.erase(iter);
         });
-      // If no more workers are available, revert to the default behavior.
-      if (!st.worker_available()) {
-        VAST_VERBOSE(self, "has no more workers available");
-        self->unbecome();
-        self->set_default_handler(caf::skip);
-      }
     },
     [=](atom::worker, caf::actor& worker) {
       self->state.idle_workers.emplace_back(std::move(worker));
