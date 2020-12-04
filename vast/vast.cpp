@@ -80,7 +80,7 @@ int main(int argc, char** argv) {
     return EXIT_FAILURE;
   }
   // Application setup.
-  const auto [root, cmd_factory] = make_application(argv[0]);
+  auto [root, root_factory] = make_application(argv[0]);
   if (!root)
     return EXIT_FAILURE;
   // Load plugins.
@@ -116,6 +116,15 @@ int main(int argc, char** argv) {
       plugin->initialize(data{});
     }
   }
+  // Add additional commands from plugins.
+  for (auto& plugin : plugins) {
+    if (auto cp = plugin.as<command_plugin>()) {
+      auto&& [cmd, cmd_factory] = cp->make_command();
+      root->add_subcommand(std::move(cmd));
+      root_factory.insert(std::make_move_iterator(cmd_factory.begin()),
+                          std::make_move_iterator(cmd_factory.end()));
+    }
+  }
   // Parse CLI.
   auto invocation
     = parse(*root, cfg.command_line.begin(), cfg.command_line.end());
@@ -146,7 +155,7 @@ int main(int argc, char** argv) {
     return EXIT_FAILURE;
   }
   // Dispatch to root command.
-  auto result = run(*invocation, sys, cmd_factory);
+  auto result = run(*invocation, sys, root_factory);
   if (!result) {
     render_error(*root, result.error(), std::cerr);
     return EXIT_FAILURE;

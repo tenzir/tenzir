@@ -22,6 +22,8 @@
 #include <caf/typed_actor.hpp>
 #include <caf/typed_event_based_actor.hpp>
 
+#include <iostream>
+
 using namespace vast;
 
 // clang-format off
@@ -87,7 +89,8 @@ spawn_example_actor(example_actor::stateful_pointer<example_actor_state> self) {
 }
 
 /// An example plugin.
-class example final : public virtual import_plugin {
+class example final : public virtual import_plugin,
+                      public virtual command_plugin {
 public:
   /// Loading logic.
   example() {
@@ -125,8 +128,25 @@ public:
     return actor;
   };
 
+  /// Creates additional commands.
+  virtual std::pair<std::unique_ptr<command>, command::factory>
+  make_command() const override {
+    auto example = std::make_unique<command>(
+      "example", "help for the example plugin command",
+      "documentation for the example plugin command", command::opts());
+    auto example_command
+      = [](const invocation&, caf::actor_system&) -> caf::message {
+      std::cout << "Hello, world!" << std::endl;
+      return caf::none;
+    };
+    auto factory = command::factory{
+      {"example", example_command},
+    };
+    return {std::move(example), std::move(factory)};
+  };
+
 private:
   record config_ = {};
 };
 
-VAST_REGISTER_PLUGIN(example, 0, 1, 0, 0);
+VAST_REGISTER_PLUGIN(example, 0, 1, 0, 0)

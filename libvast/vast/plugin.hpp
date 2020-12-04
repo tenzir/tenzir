@@ -13,6 +13,7 @@
 
 #pragma once
 
+#include "vast/command.hpp"
 #include "vast/fwd.hpp"
 
 #include <caf/error.hpp>
@@ -92,6 +93,17 @@ public:
   /// @param sys The actor system context to spawn the actor in.
   virtual import_stream_sink_actor
   make_import_stream_sink(caf::actor_system& sys) const = 0;
+};
+
+// -- command plugin -----------------------------------------------------------
+
+/// A base class for plugins that add commands.
+/// @relates plugin
+class command_plugin : public virtual plugin {
+public:
+  /// Creates additional commands.
+  virtual std::pair<std::unique_ptr<command>, command::factory>
+  make_command() const = 0;
 };
 
 // -- plugin_ptr ---------------------------------------------------------------
