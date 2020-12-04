@@ -91,7 +91,10 @@ public:
 
   size_t size_bytes() const override {
     return sizeof(buffered_string_synopsis)
-           + strings_.size() * sizeof(typename decltype(strings_)::node_type);
+           + std::accumulate(strings_.begin(), strings_.end(), 0u,
+                             [](size_t acc, const std::string& s) {
+                               return acc + s.size();
+                             });
   }
 
   caf::optional<bool>
