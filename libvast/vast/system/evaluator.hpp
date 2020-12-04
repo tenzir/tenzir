@@ -13,29 +13,32 @@
 
 #pragma once
 
-#include "vast/aliases.hpp"
+// #include "vast/aliases.hpp"
 #include "vast/expression.hpp"
 #include "vast/ids.hpp"
-#include "vast/offset.hpp"
-#include "vast/table_slice_column.hpp"
-#include "vast/uuid.hpp"
+// #include "vast/offset.hpp"
+// #include "vast/uuid.hpp"
+#include "vast/fwd.hpp"
 
-#include <caf/actor.hpp>
-#include <caf/fwd.hpp>
+#include <caf/typed_event_based_actor.hpp>
 #include <caf/typed_response_promise.hpp>
 
-#include <unordered_map>
-#include <vector>
+#include <map>
+#include <utility>
 
 namespace vast::system {
+
+using evaluator_client_actor
+  = caf::typed_actor<caf::reacts_to<ids>, caf::reacts_to<atom::done>>;
+
+using evaluator_actor
+  = caf::typed_actor<caf::replies_to<evaluator_client_actor>::with<atom::done>>;
 
 /// @relates evaluator
 struct evaluator_state {
   using predicate_hits_map = std::map<offset, std::pair<size_t, ids>>;
 
-  evaluator_state(caf::event_based_actor* self);
-
-  void init(caf::actor client, expression expr, caf::response_promise promise);
+  evaluator_state(evaluator_actor::stateful_pointer<evaluator_state> self);
 
   /// Updates `predicate_hits` and may trigger re-evaluation of the expression
   /// tree.
@@ -65,16 +68,16 @@ struct evaluator_state {
   ids hits;
 
   /// Points to the parent actor.
-  caf::event_based_actor* self;
+  evaluator_actor::pointer self;
 
   /// Stores the actor for sendings results to.
-  caf::actor client;
+  evaluator_client_actor client;
 
   /// Stores the original query expression.
   expression expr;
 
   /// Allows us to respond to the COLLECTOR after finishing a lookup.
-  caf::response_promise promise;
+  caf::typed_response_promise<atom::done> promise;
 
   /// Gives this actor a recognizable name in logging output.
   static inline const char* name = "evaluator";
@@ -83,7 +86,8 @@ struct evaluator_state {
 /// Wraps a query expression in an actor. Upon receiving hits from INDEXER
 /// actors, re-evaluates the expression and relays new hits to its sinks.
 /// @pre `!eval.empty()`
-caf::behavior evaluator(caf::stateful_actor<evaluator_state>* self,
-                        expression expr, evaluation_triples eval);
+evaluator_actor::behavior_type
+evaluator(evaluator_actor::stateful_pointer<evaluator_state> self,
+          expression expr, evaluation_triples eval);
 
 } // namespace vast::system

@@ -49,7 +49,8 @@ query_supervisor_actor::behavior_type query_supervisor(
   // Ask master for initial work.
   self->send(master, atom::worker_v, self);
   return {
-    [=](const expression&, const query_map& qm, const caf::actor& client) {
+    [=](const expression&, const query_map& qm,
+        const evaluator_client_actor& client) {
       VAST_DEBUG(self, "got a new query for", qm.size(),
                  "partitions:", get_ids(qm));
       VAST_ASSERT(!qm.empty());
@@ -70,7 +71,7 @@ query_supervisor_actor::behavior_type query_supervisor(
               // result.
               if (self->state.open_requests.empty()) {
                 VAST_DEBUG(self, "collected all results for all partitions");
-                caf::anon_send(client, atom::done_v);
+                self->send(client, atom::done_v);
                 self->send(master, atom::worker_v, self);
               }
             }

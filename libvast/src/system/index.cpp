@@ -366,7 +366,8 @@ query_map
 index_state::launch_evaluators(pending_query_map& pqm, expression expr) {
   query_map result;
   for (auto& [id, eval] : pqm) {
-    std::vector<caf::actor> xs{self->spawn(evaluator, expr, std::move(eval))};
+    std::vector<evaluator_actor> xs{
+      self->spawn(evaluator, expr, std::move(eval))};
     result.emplace(id, std::move(xs));
   }
   pqm.clear();
@@ -669,7 +670,7 @@ index(caf::stateful_actor<index_state>* self, filesystem_type fs, path dir,
       auto& st = self->state;
       auto mid = self->current_message_id();
       auto sender = self->current_sender();
-      auto client = caf::actor_cast<caf::actor>(sender);
+      auto client = caf::actor_cast<evaluator_client_actor>(sender);
       auto respond = [=](auto&&... xs) {
         unsafe_response(self, sender, {}, mid.response_id(),
                         std::forward<decltype(xs)>(xs)...);
