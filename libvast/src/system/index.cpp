@@ -197,8 +197,16 @@ bool index_state::worker_available() {
 }
 
 caf::actor index_state::next_worker() {
+  VAST_ASSERT(worker_available());
   auto result = std::move(idle_workers.back());
   idle_workers.pop_back();
+  // If no more workers are available, revert to the default behavior.
+  if (!worker_available()) {
+    self->unbecome();
+    self->set_default_handler(caf::skip);
+    VAST_VERBOSE(self, "waits for query supervisors to become available to "
+                       "delegate work; consider increasing 'vast.max-queries'");
+  }
   return result;
 }
 
@@ -682,6 +690,7 @@ index(caf::stateful_actor<index_state>* self, filesystem_type fs, path dir,
       // Send an evaluate atom to all the actors and collect the returned
       // evaluation triples in a `pending_query_map`, then run the continuation
       // below in the same actor context.
+      auto worker = st.next_worker();
       await_evaluation_maps(
         self, iter->second.expression, actors,
         [=](caf::expected<pending_query_map> maybe_pqm) {
@@ -714,8 +723,7 @@ index(caf::stateful_actor<index_state>* self, filesystem_type fs, path dir,
           VAST_DEBUG(self, "schedules", qm.size(),
                      "more partition(s) for query id", query_id, "with",
                      query_state.partitions.size(), "partitions remaining");
-          self->send(st.next_worker(), query_state.expression, std::move(qm),
-                     client);
+          self->send(worker, query_state.expression, std::move(qm), client);
           // Cleanup if we exhausted all candidates.
           if (query_state.partitions.empty())
             st.pending.erase(iter);
@@ -816,6 +824,8 @@ index(caf::stateful_actor<index_state>* self, filesystem_type fs, path dir,
       auto& st = self->state;
       st.idle_workers.emplace_back(std::move(worker));
       self->become(caf::keep_behavior, st.has_worker);
+      self->set_default_handler(caf::print_and_drop);
+      VAST_VERBOSE(self, "delegates work to query supervisors");
     },
     [=](atom::done, uuid partition_id) {
       VAST_DEBUG(self, "queried partition", partition_id, "successfully");
