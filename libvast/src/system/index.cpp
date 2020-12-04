@@ -196,7 +196,7 @@ bool index_state::worker_available() {
   return !idle_workers.empty();
 }
 
-caf::actor index_state::next_worker() {
+query_supervisor_actor index_state::next_worker() {
   VAST_ASSERT(worker_available());
   auto result = std::move(idle_workers.back());
   idle_workers.pop_back();
@@ -590,7 +590,9 @@ index(caf::stateful_actor<index_state>* self, filesystem_type fs, path dir,
   });
   // Launch workers for resolving queries.
   for (size_t i = 0; i < num_workers; ++i)
-    self->spawn(query_supervisor, self);
+    // FIXME: Remove the actor_cast when converting the index to a typed actor.
+    self->spawn(query_supervisor,
+                caf::actor_cast<query_supervisor_master_actor>(self));
   // We switch between has_worker behavior and the default behavior (which
   // simply waits for a worker).
   self->set_default_handler(caf::skip);
@@ -733,7 +735,7 @@ index(caf::stateful_actor<index_state>* self, filesystem_type fs, path dir,
             st.pending.erase(iter);
         });
     },
-    [=](atom::worker, caf::actor& worker) {
+    [=](atom::worker, query_supervisor_actor& worker) {
       self->state.idle_workers.emplace_back(std::move(worker));
     },
     [=](atom::done, uuid partition_id) {
@@ -824,7 +826,7 @@ index(caf::stateful_actor<index_state>* self, filesystem_type fs, path dir,
     });
   return {
     // The default behaviour
-    [=](atom::worker, caf::actor& worker) {
+    [=](atom::worker, query_supervisor_actor& worker) {
       auto& st = self->state;
       st.idle_workers.emplace_back(std::move(worker));
       self->become(caf::keep_behavior, st.has_worker);

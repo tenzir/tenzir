@@ -33,19 +33,21 @@ caf::behavior dummy_evaluator(caf::event_based_actor* self, ids x) {
     [=](const caf::actor& client) {
       self->send(client, x);
       return atom::done_v;
-    }
+    },
   };
 }
 
-} // namespace <anonymous>
+} // namespace
 
 FIXTURE_SCOPE(query_supervisor_tests, fixtures::deterministic_actor_system)
 
 TEST(lookup) {
   MESSAGE("spawn supervisor, it should register itself as a worker on launch");
-  auto sv = sys.spawn(system::query_supervisor, self);
+  auto sv
+    = sys.spawn(system::query_supervisor,
+                caf::actor_cast<system::query_supervisor_master_actor>(self));
   run();
-  expect((caf::atom_value, caf::actor),
+  expect((caf::atom_value, system::query_supervisor_actor),
          from(sv).to(self).with(atom::worker_v, sv));
   MESSAGE("spawn evaluators");
   auto e0 = sys.spawn(dummy_evaluator, make_ids({0, 2, 4, 6, 8}));
@@ -64,7 +66,7 @@ TEST(lookup) {
                   [&](atom::done) { done = true; });
   CHECK_EQUAL(result, make_ids({{0, 9}}));
   MESSAGE("after completion, the supervisor should register itself again");
-  expect((caf::atom_value, caf::actor),
+  expect((caf::atom_value, system::query_supervisor_actor),
          from(sv).to(self).with(atom::worker_v, sv));
 }
 

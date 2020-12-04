@@ -145,7 +145,7 @@ struct index_state {
 
   bool worker_available();
 
-  caf::actor next_worker();
+  query_supervisor_actor next_worker();
 
   /// Get the actor handles for up to `num_partitions` PARTITION actors,
   /// spawning them if needed.
@@ -210,7 +210,7 @@ struct index_state {
   std::unordered_map<uuid, query_state> pending;
 
   /// Caches idle workers.
-  std::vector<caf::actor> idle_workers;
+  std::vector<query_supervisor_actor> idle_workers;
 
   /// The meta index.
   meta_index meta_idx;
