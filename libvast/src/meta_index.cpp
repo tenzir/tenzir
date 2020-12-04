@@ -219,6 +219,31 @@ std::vector<uuid> meta_index::lookup(const expression& expr) const {
             // Re-establish potentially violated invariant.
             std::sort(result.begin(), result.end());
             return result;
+          } else if (lhs.attr == atom::field_v) {
+            // We don't have to look into the synopses for type queries, just
+            // at the layout names.
+            result_type result;
+            auto s = caf::get_if<std::string>(&d);
+            if (!s) {
+              VAST_WARNING_ANON("#field meta queries only support string "
+                                "comparisons");
+            } else {
+              for (auto& [part_id, part_syn] : synopses_) {
+                bool match = false;
+                for (auto& pair : part_syn.field_synopses_) {
+                  auto fqn = pair.first.fqn();
+                  if (detail::ends_with(fqn, *s)) {
+                    match = true;
+                    break;
+                  }
+                }
+                if (!negated(x.op) == match)
+                  result.push_back(part_id);
+              }
+            }
+            // Re-establish potentially violated invariant.
+            std::sort(result.begin(), result.end());
+            return result;
           }
           VAST_WARNING(this, "cannot process attribute extractor:", lhs.attr);
           return all_partitions();
