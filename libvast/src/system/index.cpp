@@ -202,9 +202,10 @@ caf::actor index_state::next_worker() {
   idle_workers.pop_back();
   // If no more workers are available, revert to the default behavior.
   if (!worker_available()) {
-    VAST_VERBOSE(self, "has no more workers available");
     self->unbecome();
     self->set_default_handler(caf::skip);
+    VAST_WARNING(self, "waits for query supervisors to become available to "
+                       "delegate work; consider increasing 'vast.max-queries'");
   }
   return result;
 }
@@ -822,9 +823,9 @@ index(caf::stateful_actor<index_state>* self, filesystem_type fs, path dir,
     [=](atom::worker, caf::actor& worker) {
       auto& st = self->state;
       st.idle_workers.emplace_back(std::move(worker));
-      VAST_VERBOSE(self, "now has workers available");
       self->become(caf::keep_behavior, st.has_worker);
       self->set_default_handler(caf::print_and_drop);
+      VAST_VERBOSE(self, "delegates work to query supervisors");
     },
     [=](atom::done, uuid partition_id) {
       VAST_DEBUG(self, "queried partition", partition_id, "successfully");
