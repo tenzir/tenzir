@@ -76,6 +76,8 @@ void partition_synopsis::add(const table_slice& slice,
       if (auto& syn = it->second)
         add_column(syn);
     } else { // type == string
+      auto key = qualified_record_field{layout.name(), field};
+      field_synopses_[key] = nullptr;
       auto tt = type_synopses_.find(field.type);
       if (tt == type_synopses_.end())
         tt = type_synopses_.emplace(field.type, make_synopsis(field)).first;
