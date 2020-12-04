@@ -52,6 +52,13 @@ void partition_synopsis::add(const table_slice& slice,
              : factory<synopsis>::make(field.type, synopsis_options);
   };
   for (size_t col = 0; col < slice.columns(); ++col) {
+    auto add_row = [&](const synopsis_ptr& syn) {
+      for (size_t row = 0; row < slice.rows(); ++row) {
+        auto view = slice.at(row, col);
+        if (!caf::holds_alternative<caf::none_t>(view))
+          syn->add(std::move(view));
+      }
+    };
     // Locate the relevant synopsis.
     auto&& layout = slice.layout();
     auto& field = layout.fields[col];
@@ -61,13 +68,13 @@ void partition_synopsis::add(const table_slice& slice,
       // Attempt to create a synopsis if we have never seen this key before.
       it = field_synopses_.emplace(std::move(key), make_synopsis(field)).first;
     // If there exists a synopsis for a field, add the entire column.
-    if (auto& syn = it->second) {
-      for (size_t row = 0; row < slice.rows(); ++row) {
-        auto view = slice.at(row, col);
-        if (!caf::holds_alternative<caf::none_t>(view))
-          syn->add(std::move(view));
-      }
-    }
+    if (auto& syn = it->second)
+      add_row(syn);
+    auto tt = type_synopses_.find(field.type);
+    if (tt == type_synopses_.end())
+      tt = type_synopses_.emplace(field.type, make_synopsis(field)).first;
+    if (auto& syn = tt->second)
+      add_row(syn);
   }
 }
 
