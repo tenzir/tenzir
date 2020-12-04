@@ -12,6 +12,10 @@ Every entry has a category for which we use the following visual abbreviations:
 
 ## Unreleased
 
+- 🐞 The index now correctly drops further results when queries finish early,
+  thus improving the performance of queries for a limited number of events.
+  [#1209](https://github.com/tenzir/vast/pull/1209)
+
 - 🐞 The index no longer crashes when too many parallel queries are running.
   [#1210](https://github.com/tenzir/vast/pull/1210)
 
