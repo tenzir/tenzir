@@ -216,7 +216,7 @@ TEST(full partition roundtrip) {
     auto rp = self->request(readonly_partition, caf::infinite, expression);
     run();
     rp.receive(
-      [&](vast::evaluation_triples triples) {
+      [&](vast::system::evaluation_triples triples) {
         CHECK_EQUAL(triples.size(), expected_indexers);
         for (auto triple : triples) {
           auto curried_predicate = get<1>(triple);

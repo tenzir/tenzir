@@ -70,13 +70,13 @@ CAF_ALLOW_UNSAFE_MESSAGE_TYPE(std::shared_ptr<vast::partition_synopsis>)
 
 namespace vast::system {
 
-caf::actor active_partition_state::indexer_at(size_t position) const {
+indexer_actor active_partition_state::indexer_at(size_t position) const {
   VAST_ASSERT(position < indexers.size());
   return as_vector(indexers)[position].second;
 }
 
 /// Gets the INDEXER at a certain position in the `indexers` stable map.
-caf::actor passive_partition_state::indexer_at(size_t position) const {
+indexer_actor passive_partition_state::indexer_at(size_t position) const {
   VAST_ASSERT(position < indexers.size());
   auto& indexer = indexers[position];
   // Deserialize the value index and spawn a passive_indexer lazily when it is
@@ -89,7 +89,7 @@ caf::actor passive_partition_state::indexer_at(size_t position) const {
     if (auto error = fbs::deserialize_bytes(data, state_ptr)) {
       VAST_ERROR(self, "failed to deserialize indexer at", position,
                  "with error:", render(error));
-      return nullptr;
+      return {};
     }
     indexer = self->spawn(passive_indexer, id, std::move(state_ptr));
   }
@@ -105,19 +105,20 @@ namespace {
 /// @relates active_partition_state
 /// @relates passive_partition_state
 template <typename PartitionState>
-caf::actor fetch_indexer(const PartitionState& state, const data_extractor& dx,
-                         relational_operator op, const data& x) {
+indexer_actor
+fetch_indexer(const PartitionState& state, const data_extractor& dx,
+              relational_operator op, const data& x) {
   VAST_TRACE(VAST_ARG(dx), VAST_ARG(op), VAST_ARG(x));
   // Sanity check.
   if (dx.offset.empty())
-    return nullptr;
+    return {};
   auto& r = caf::get<record_type>(dx.type);
   auto k = r.resolve(dx.offset);
   VAST_ASSERT(k);
   auto index = r.flat_index_at(dx.offset);
   if (!index) {
     VAST_DEBUG(state.self, "got invalid offset for record type", dx.type);
-    return nullptr;
+    return {};
   }
   return state.indexer_at(*index);
 }
@@ -129,7 +130,7 @@ caf::actor fetch_indexer(const PartitionState& state, const data_extractor& dx,
 /// @relates active_partition_state
 /// @relates passive_partition_state
 template <typename PartitionState>
-caf::actor
+indexer_actor
 fetch_indexer(const PartitionState& state, const attribute_extractor& ex,
               relational_operator op, const data& x) {
   VAST_TRACE(VAST_ARG(ex), VAST_ARG(op), VAST_ARG(x));
@@ -143,12 +144,23 @@ fetch_indexer(const PartitionState& state, const attribute_extractor& ex,
         row_ids |= ids;
     // TODO: Spawning a one-shot actor is quite expensive. Maybe the
     //       partition could instead maintain this actor lazily.
-    return state.self->spawn([row_ids]() -> caf::behavior {
-      return [=](const curried_predicate&) { return row_ids; };
+    return state.self->spawn([row_ids]() -> indexer_actor::behavior_type {
+      return {
+        [](caf::stream<table_slice_column>) {
+          die("received incoming stream as one-shot indexer");
+        },
+        [](atom::snapshot) -> caf::result<chunk_ptr> {
+          die("received snapshot request as one-shot indexer");
+        },
+        [=](const curried_predicate&) { return row_ids; },
+        [](atom::shutdown) {
+          die("received shutdown request as one-shot indexer");
+        },
+      };
     });
   }
   VAST_WARNING(state.self, "got unsupported attribute:", ex.attr);
-  return nullptr;
+  return {};
 }
 
 /// Returns all INDEXERs that are involved in evaluating the expression.
@@ -176,7 +188,7 @@ evaluate(const PartitionState& state, const expression& expr) {
         return get_indexer_handle(dx, x);
       },
       [](const auto&, const auto&) {
-        return caf::actor{}; // clang-format fix
+        return indexer_actor{}; // clang-format fix
       },
     };
     // Package the predicate, its position in the query and the required
@@ -438,11 +450,14 @@ active_partition(caf::stateful_actor<active_partition_state>* self, uuid id,
       return;
     }
     VAST_VERBOSE(self, "shuts down after persisting partition state");
+    // TODO: We must actor_cast to caf::actor here because 'shutdown' operates
+    // on 'std::vector<caf::actor>' only. That should probably be generalized in
+    // the future.
     auto indexers = std::vector<caf::actor>{};
-    for ([[maybe_unused]] auto& [_, idx] : self->state.indexers) {
-      indexers.push_back(idx);
-    }
-    self->state.indexers.clear();
+    indexers.reserve(self->state.indexers.size());
+    for ([[maybe_unused]] auto&& [qf, indexer] :
+         std::exchange(self->state.indexers, {}))
+      indexers.push_back(caf::actor_cast<caf::actor>(std::move(indexer)));
     shutdown<policy::parallel>(self, std::move(indexers));
   });
   return {
@@ -550,10 +565,15 @@ passive_partition(caf::stateful_actor<passive_partition_state>* self, uuid id,
   self->set_exit_handler([=](const caf::exit_msg& msg) {
     VAST_DEBUG(self, "received EXIT from", msg.source,
                "with reason:", msg.reason);
-    auto indexers = self->state.indexers;
     // Receiving an EXIT message does not need to coincide with the state being
     // destructed, so we explicitly clear the vector to release the references.
-    self->state.indexers.clear();
+    // TODO: We must actor_cast to caf::actor here because 'terminate' operates
+    // on 'std::vector<caf::actor>' only. That should probably be generalized in
+    // the future.
+    auto indexers = std::vector<caf::actor>{};
+    indexers.reserve(self->state.indexers.size());
+    for (auto&& indexer : std::exchange(self->state.indexers, {}))
+      indexers.push_back(caf::actor_cast<caf::actor>(std::move(indexer)));
     if (msg.reason != caf::exit_reason::user_shutdown) {
       self->quit(msg.reason);
       return;

@@ -71,14 +71,4 @@ using cli_argument_iterator = std::vector<std::string>::const_iterator;
 /// an error.
 using maybe_actor = caf::expected<caf::actor>;
 
-/// Bundles an offset into an expression under evaluation to the curried
-/// representation of the ::predicate at that position in the expression and
-/// the INDEXER actor responsible for answering the (curried) predicate.
-using evaluation_triple = std::tuple<offset, curried_predicate, caf::actor>;
-
-using evaluation_triples = std::vector<evaluation_triple>;
-
-/// Maps layouts to a list of evaluation triples.
-using evaluation_map = std::map<type, std::vector<evaluation_triple>>;
-
 } // namespace vast

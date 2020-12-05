@@ -58,49 +58,22 @@ vast::chunk_ptr chunkify(const value_index_ptr& idx) {
 
 } // namespace
 
-caf::behavior passive_indexer(caf::stateful_actor<indexer_state>* self,
-                              uuid partition_id, value_index_ptr idx) {
-  if (!idx) {
-    VAST_ERROR(self, "got invalid value index pointer");
-    self->quit(make_error(ec::end_of_input, "invalid value index pointer"));
-    return {};
-  }
-  self->state.name = "indexer-" + to_string(idx->type());
-  self->state.partition_id = partition_id;
-  self->state.idx = std::move(idx);
-  return {
-    [=](caf::stream<table_slice_column>) {
-      VAST_ASSERT(!"received incoming stream as read-only indexer");
-    },
-    [=](atom::snapshot) {
-      VAST_ASSERT(!"received snapshot request as read-only indexer");
-    },
-    [=](const curried_predicate& pred) {
-      VAST_DEBUG(self, "got predicate:", pred);
-      VAST_ASSERT(self->state.idx);
-      auto& idx = *self->state.idx;
-      auto rep = to_internal(idx.type(), make_view(pred.rhs));
-      return idx.lookup(pred.op, rep);
-    },
-    [=](atom::shutdown) { self->quit(caf::exit_reason::user_shutdown); },
-  };
-}
-
-caf::behavior active_indexer(caf::stateful_actor<indexer_state>* self,
-                             type index_type, caf::settings index_opts) {
+indexer_actor::behavior_type
+active_indexer(indexer_actor::stateful_pointer<indexer_state> self,
+               type index_type, caf::settings index_opts) {
   self->state.name = "indexer-" + to_string(index_type);
   self->state.has_skip_attribute = vast::has_skip_attribute(index_type);
   self->state.idx = factory<value_index>::make(index_type, index_opts);
   if (!self->state.idx) {
     VAST_ERROR(self, "failed to construct value index");
     self->quit(make_error(ec::unspecified, "failed to construct value index"));
-    return {};
+    return indexer_actor::behavior_type::make_empty_behavior();
   }
   return {
     [=](caf::stream<table_slice_column> in) {
       VAST_DEBUG(self, "got a new stream");
       self->state.stream_initiated = true;
-      return caf::attach_stream_sink(
+      caf::attach_stream_sink(
         self, in,
         [=](caf::unit_t&) {
           // nop
@@ -140,7 +113,7 @@ caf::behavior active_indexer(caf::stateful_actor<indexer_state>* self,
     [=](atom::snapshot) {
       // The partition is only allowed to send a single snapshot atom.
       VAST_ASSERT(!self->state.promise.pending());
-      self->state.promise = self->make_response_promise();
+      self->state.promise = self->make_response_promise<chunk_ptr>();
       // Checking 'idle()' is not enough, since we emprically can
       // have data that was flushed in the upstream stage but is not
       // yet visible to the sink.
@@ -154,6 +127,35 @@ caf::behavior active_indexer(caf::stateful_actor<indexer_state>* self,
     [=](atom::shutdown) {
       self->quit(caf::exit_reason::user_shutdown); // clang-format fix
     },
+  };
+}
+
+indexer_actor::behavior_type
+passive_indexer(indexer_actor::stateful_pointer<indexer_state> self,
+                uuid partition_id, value_index_ptr idx) {
+  if (!idx) {
+    VAST_ERROR(self, "got invalid value index pointer");
+    self->quit(make_error(ec::end_of_input, "invalid value index pointer"));
+    return indexer_actor::behavior_type::make_empty_behavior();
+  }
+  self->state.name = "indexer-" + to_string(idx->type());
+  self->state.partition_id = partition_id;
+  self->state.idx = std::move(idx);
+  return {
+    [=](caf::stream<table_slice_column>) {
+      die("received incoming stream as read-only indexer");
+    },
+    [=](atom::snapshot) -> caf::result<chunk_ptr> {
+      die("received snapshot request as read-only indexer");
+    },
+    [=](const curried_predicate& pred) {
+      VAST_DEBUG(self, "got predicate:", pred);
+      VAST_ASSERT(self->state.idx);
+      auto& idx = *self->state.idx;
+      auto rep = to_internal(idx.type(), make_view(pred.rhs));
+      return idx.lookup(pred.op, rep);
+    },
+    [=](atom::shutdown) { self->quit(caf::exit_reason::user_shutdown); },
   };
 }
 

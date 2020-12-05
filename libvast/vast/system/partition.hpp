@@ -22,6 +22,7 @@
 #include "vast/path.hpp"
 #include "vast/qualified_record_field.hpp"
 #include "vast/system/filesystem.hpp"
+#include "vast/system/indexer.hpp"
 #include "vast/system/instrumentation.hpp"
 #include "vast/table_slice_column.hpp"
 #include "vast/type.hpp"
@@ -29,12 +30,11 @@
 #include "vast/value_index.hpp"
 
 #include <caf/event_based_actor.hpp>
+#include <caf/fwd.hpp>
+#include <caf/optional.hpp>
 #include <caf/stream_slot.hpp>
 
 #include <unordered_map>
-
-#include "caf/fwd.hpp"
-#include "caf/optional.hpp"
 
 namespace vast::system {
 
@@ -52,7 +52,7 @@ struct active_partition_state {
     caf::broadcast_downstream_manager<
       table_slice_column, vast::qualified_record_field, partition_selector>>;
 
-  caf::actor indexer_at(size_t position) const;
+  indexer_actor indexer_at(size_t position) const;
 
   /// Data Members
 
@@ -73,7 +73,7 @@ struct active_partition_state {
 
   /// Maps qualified fields to indexer actors.
   //  TODO: Should we use the tsl map here for heterogenous key lookup?
-  detail::stable_map<qualified_record_field, caf::actor> indexers;
+  detail::stable_map<qualified_record_field, indexer_actor> indexers;
 
   /// Maps type names to IDs. Used the answer #type queries.
   std::unordered_map<std::string, ids> type_ids;
@@ -132,7 +132,7 @@ struct active_partition_state {
 struct passive_partition_state {
   using recovered_indexer = std::pair<qualified_record_field, value_index_ptr>;
 
-  caf::actor indexer_at(size_t position) const;
+  indexer_actor indexer_at(size_t position) const;
 
   /// Pointer to the parent actor.
   caf::stateful_actor<passive_partition_state>* self;
@@ -163,7 +163,7 @@ struct passive_partition_state {
 
   /// Maps qualified fields to indexer actors. This is mutable since
   /// indexers are spawned lazily on first access.
-  mutable std::vector<caf::actor> indexers;
+  mutable std::vector<indexer_actor> indexers;
 };
 
 // Flatbuffer support

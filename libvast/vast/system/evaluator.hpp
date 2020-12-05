@@ -13,12 +13,10 @@
 
 #pragma once
 
-// #include "vast/aliases.hpp"
 #include "vast/expression.hpp"
-#include "vast/ids.hpp"
-// #include "vast/offset.hpp"
-// #include "vast/uuid.hpp"
 #include "vast/fwd.hpp"
+#include "vast/ids.hpp"
+#include "vast/system/indexer.hpp"
 
 #include <caf/typed_event_based_actor.hpp>
 #include <caf/typed_response_promise.hpp>
@@ -27,6 +25,16 @@
 #include <utility>
 
 namespace vast::system {
+
+/// Bundles an offset into an expression under evaluation to the curried
+/// representation of the ::predicate at that position in the expression and
+/// the INDEXER actor responsible for answering the (curried) predicate.
+using evaluation_triple = std::tuple<offset, curried_predicate, indexer_actor>;
+
+using evaluation_triples = std::vector<evaluation_triple>;
+
+/// Maps layouts to a list of evaluation triples.
+using evaluation_map = std::map<type, std::vector<evaluation_triple>>;
 
 using evaluator_client_actor
   = caf::typed_actor<caf::reacts_to<ids>, caf::reacts_to<atom::done>>;
