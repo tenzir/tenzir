@@ -643,6 +643,10 @@ index(caf::stateful_actor<index_state>* self, filesystem_type fs, path dir,
       }
       // Allows the client to query further results after initial taste.
       auto query_id = uuid::random();
+      // Ensure the query id is unique.
+      while (st.pending.find(query_id) != st.pending.end()
+             || query_id == uuid::nil())
+        query_id = uuid::random();
       auto total = candidates.size();
       auto scheduled = detail::narrow<uint32_t>(
         std::min(candidates.size(), st.taste_partitions));
