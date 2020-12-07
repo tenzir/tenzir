@@ -159,7 +159,13 @@ void print_header(const type& t, std::ostream& out, bool show_timestamp_tags) {
   auto i = path.find('.');
   if (i != path.npos) {
     VAST_ASSERT(path.size() > 1);
-    path = path.substr(i + 1); // Ignore format name.
+    // To ensure that the printed output conforms to standard Zeek naming
+    // practices, we strip VAST's internal "zeek." type prefix such that the
+    // output is, e.g., "#path conn" instead of "#path zeek.conn". For all
+    // non-Zeek types, we keep the prefix to avoid conflicts in tools that work
+    // with Zeek TSV.
+    if (path.compare(0, 4, "zeek") == 0)
+      path = path.substr(i + 1); // Ignore format name.
   }
   out << "#separator " << separator << '\n'
       << "#set_separator" << separator << set_separator << '\n'
