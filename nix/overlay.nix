@@ -35,6 +35,9 @@ in {
     NIX_CFLAGS_COMPILE = "-std=c++17";
     dontStrip = true;
   });
+  jemalloc = prev.jemalloc.overrideAttrs (old: {
+    configureFlags = old.configureFlags ++ [ "--enable-prof" "--enable-stats" ];
+  });
   broker = final.callPackage ./broker {inherit stdenv; python = final.python3;};
   vast-source = final.nix-gitignore.gitignoreSource [] ./..;
   vast = final.callPackage ./vast {inherit stdenv;};
