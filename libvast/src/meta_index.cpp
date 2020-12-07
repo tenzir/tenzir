@@ -332,6 +332,14 @@ pack(flatbuffers::FlatBufferBuilder& builder, const partition_synopsis& x) {
       return maybe_synopsis.error();
     synopses.push_back(*maybe_synopsis);
   }
+  for (auto& [type, synopsis] : x.type_synopses_) {
+    qualified_record_field fqf;
+    fqf.type = type;
+    auto maybe_synopsis = pack(builder, synopsis, fqf);
+    if (!maybe_synopsis)
+      return maybe_synopsis.error();
+    synopses.push_back(*maybe_synopsis);
+  }
   auto synopses_vector = builder.CreateVector(synopses);
   fbs::partition_synopsis::v0Builder ps_builder(builder);
   ps_builder.add_synopses(synopses_vector);
@@ -352,7 +360,11 @@ unpack(const fbs::partition_synopsis::v0& x, partition_synopsis& ps) {
     synopsis_ptr ptr;
     if (auto error = unpack(*synopsis, ptr))
       return error;
-    ps.field_synopses_[qf] = std::move(ptr);
+    if (!qf.field_name.empty())
+      ps.field_synopses_[qf] = std::move(ptr);
+    else
+      ps.type_synopses_[qf.type] = std::move(ptr);
+
   }
   return caf::none;
 }
