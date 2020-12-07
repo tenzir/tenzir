@@ -44,6 +44,15 @@ void partition_synopsis::shrink() {
       continue;
     synopsis.swap(shrinked_synopsis);
   }
+  // TODO: Make a utility function instead of copy/pasting
+  for (auto& [field, synopsis] : type_synopses_) {
+    if (!synopsis)
+      continue;
+    auto shrinked_synopsis = synopsis->shrink();
+    if (!shrinked_synopsis)
+      continue;
+    synopsis.swap(shrinked_synopsis);
+  }
 }
 
 void partition_synopsis::add(const table_slice& slice,
