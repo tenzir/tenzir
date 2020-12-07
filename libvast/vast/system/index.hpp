@@ -23,6 +23,7 @@
 #include "vast/status.hpp"
 #include "vast/system/accountant.hpp"
 #include "vast/system/filesystem.hpp"
+#include "vast/system/index_actor.hpp"
 #include "vast/system/partition.hpp"
 #include "vast/system/query_supervisor.hpp"
 #include "vast/uuid.hpp"
@@ -124,7 +125,7 @@ struct index_state {
 
   // -- constructor ------------------------------------------------------------
 
-  explicit index_state(caf::stateful_actor<index_state>* self);
+  explicit index_state(index_actor::pointer self);
 
   // -- persistence ------------------------------------------------------------
 
@@ -140,7 +141,7 @@ struct index_state {
   // Maps partitions to their expected location on the file system.
   vast::path partition_path(const uuid& id) const;
 
-  // -- query handling
+  // -- query handling ---------------------------------------------------------
 
   bool worker_available();
 
@@ -159,7 +160,7 @@ struct index_state {
   // -- flush handling ---------------------------------------------------
 
   /// Adds a new flush listener.
-  void add_flush_listener(caf::actor listener);
+  void add_flush_listener(flush_listener_actor listener);
 
   /// Sends a notification to all listeners and clears the listeners list.
   void notify_flush_listeners();
@@ -167,14 +168,10 @@ struct index_state {
   // -- data members ----------------------------------------------------------
 
   /// Pointer to the parent actor.
-  caf::stateful_actor<index_state>* self;
+  index_actor::pointer self;
 
   /// The streaming stage.
   index_stream_stage_ptr stage;
-
-  /// Allows the index to multiplex between waiting for ready workers and
-  /// queries.
-  caf::behavior has_worker;
 
   /// The single active (read/write) partition.
   active_partition_info active_partition = {};
@@ -224,7 +221,7 @@ struct index_state {
   accountant_type accountant;
 
   /// List of actors that wait for the next flush event.
-  std::vector<caf::actor> flush_listeners;
+  std::vector<flush_listener_actor> flush_listeners;
 
   /// Actor handle of the filesystem actor.
   filesystem_type filesystem;
@@ -245,9 +242,9 @@ pack(flatbuffers::FlatBufferBuilder& builder, const index_state& x);
 /// @param dir The directory of the index.
 /// @param partition_capacity The maximum number of events per partition.
 /// @pre `partition_capacity > 0
-caf::behavior
-index(caf::stateful_actor<index_state>* self, filesystem_type fs, path dir,
-      size_t partition_capacity, size_t in_mem_partitions,
+index_actor::behavior_type
+index(index_actor::stateful_pointer<index_state> self, filesystem_type fs,
+      path dir, size_t partition_capacity, size_t in_mem_partitions,
       size_t taste_partitions, size_t num_workers);
 
 } // namespace vast::system

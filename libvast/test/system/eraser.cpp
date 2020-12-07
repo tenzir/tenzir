@@ -27,6 +27,7 @@
 #include "vast/expression.hpp"
 #include "vast/fwd.hpp"
 #include "vast/ids.hpp"
+#include "vast/system/archive.hpp"
 #include "vast/system/index.hpp"
 #include "vast/system/posix_filesystem.hpp"
 #include "vast/table_slice.hpp"
@@ -55,8 +56,23 @@ struct mock_index_state {
   std::vector<ids> deltas;
 };
 
-caf::behavior mock_index(caf::stateful_actor<mock_index_state>* self) {
+system::index_actor::behavior_type
+mock_index(system::index_actor::stateful_pointer<mock_index_state> self) {
   return {
+    [=](atom::worker, system::query_supervisor_actor) {
+      FAIL("no mock implementation available");
+    },
+    [=](atom::done, uuid) { FAIL("no mock implementation available"); },
+    [=](caf::stream<table_slice>) -> caf::inbound_stream_slot<table_slice> {
+      FAIL("no mock implementation available");
+    },
+    [=](system::accountant_type) { FAIL("no mock implementation available"); },
+    [=](atom::status, status_verbosity) -> caf::config_value::dictionary {
+      FAIL("no mock implementation available");
+    },
+    [=](atom::subscribe, atom::flush, system::flush_listener_actor) {
+      FAIL("no mock implementation available");
+    },
     [=](expression&) {
       auto& deltas = self->state.deltas;
       deltas = std::vector<ids>{
@@ -65,18 +81,24 @@ caf::behavior mock_index(caf::stateful_actor<mock_index_state>* self) {
         make_ids({19, 20, 21}),
       };
       auto query_id = unbox(to<uuid>(uuid_str));
+      auto anon_self = caf::actor_cast<caf::event_based_actor*>(self);
       auto hdl = caf::actor_cast<caf::actor>(self->current_sender());
-      self->send(hdl, query_id, uint32_t{7}, uint32_t{3});
+      anon_self->send(hdl, query_id, uint32_t{7}, uint32_t{3});
       for (size_t i = 0; i < taste_count; ++i)
-        self->send(hdl, take_one(deltas));
-      self->send(hdl, atom::done_v);
+        anon_self->send(hdl, take_one(deltas));
+      anon_self->send(hdl, atom::done_v);
     },
     [=](const uuid&, uint32_t n) {
+      auto anon_self = caf::actor_cast<caf::event_based_actor*>(self);
       auto hdl = caf::actor_cast<caf::actor>(self->current_sender());
       for (size_t i = 0; i < n; ++i)
-        self->send(hdl, take_one(self->state.deltas));
-      self->send(hdl, atom::done_v);
+        anon_self->send(hdl, take_one(self->state.deltas));
+      anon_self->send(hdl, atom::done_v);
     },
+    [=](atom::replace, uuid, std::shared_ptr<partition_synopsis>) {
+      FAIL("no mock implementation available");
+    },
+    [=](atom::erase, uuid) -> ids { FAIL("no mock implementation available"); },
   };
 }
 
@@ -85,10 +107,30 @@ struct mock_archive_state {
   static inline constexpr const char* name = "mock-archive";
 };
 
-using mock_archive_actor = caf::stateful_actor<mock_archive_state>;
-
-caf::behavior mock_archive(mock_archive_actor* self) {
-  return {[=](atom::erase, ids hits) { self->state.hits = hits; }};
+system::archive_type::behavior_type
+mock_archive(system::archive_type::stateful_pointer<mock_archive_state> self) {
+  return {
+    [=](caf::stream<table_slice>) { FAIL("no mock implementation available"); },
+    [=](atom::exporter, caf::actor) {
+      FAIL("no mock implementation available");
+    },
+    [=](system::accountant_type) { FAIL("no mock implementation available"); },
+    [=](ids) { FAIL("no mock implementation available"); },
+    [=](ids, system::receiver_type) {
+      FAIL("no mock implementation available");
+    },
+    [=](ids, system::receiver_type, uint64_t) {
+      FAIL("no mock implementation available");
+    },
+    [=](atom::status, status_verbosity) -> caf::config_value::dictionary {
+      FAIL("no mock implementation available");
+    },
+    [=](atom::telemetry) { FAIL("no mock implementation available"); },
+    [=](atom::erase, ids hits) {
+      self->state.hits = hits;
+      return atom::done_v;
+    },
+  };
 }
 
 struct fixture : fixtures::deterministic_actor_system_and_events {
@@ -111,8 +153,8 @@ struct fixture : fixtures::deterministic_actor_system_and_events {
   }
 
   uuid query_id;
-  caf::actor index;
-  caf::actor archive;
+  system::index_actor index;
+  system::archive_type archive;
   caf::actor aut;
 };
 
@@ -128,18 +170,18 @@ TEST(eraser on mock INDEX) {
   expect((expression), from(aut).to(index));
   expect((uuid, uint32_t, uint32_t),
          from(index).to(aut).with(query_id, 7u, 3u));
-  expect((ids), from(index).to(aut));
-  expect((ids), from(index).to(aut));
-  expect((ids), from(index).to(aut));
-  expect((atom::done), from(index).to(aut));
+  expect((ids), from(_).to(aut));
+  expect((ids), from(_).to(aut));
+  expect((ids), from(_).to(aut));
+  expect((atom::done), from(_).to(aut));
   expect((uuid, uint32_t), from(aut).to(index).with(query_id, 3u));
-  expect((ids), from(index).to(aut));
-  expect((ids), from(index).to(aut));
-  expect((ids), from(index).to(aut));
-  expect((atom::done), from(index).to(aut));
+  expect((ids), from(_).to(aut));
+  expect((ids), from(_).to(aut));
+  expect((ids), from(_).to(aut));
+  expect((atom::done), from(_).to(aut));
   expect((uuid, uint32_t), from(aut).to(index).with(query_id, 1u));
-  expect((ids), from(index).to(aut));
-  expect((atom::done), from(index).to(aut));
+  expect((ids), from(_).to(aut));
+  expect((atom::done), from(_).to(aut));
   expect((atom::erase, ids),
          from(aut).to(archive).with(_, make_ids({{1, 22}})));
 }
@@ -171,13 +213,18 @@ TEST(eraser on actual INDEX with Zeek conn logs) {
     ; // repeat
   expect((atom::done), from(_).to(aut));
   expect((atom::erase, ids), from(aut).to(archive));
+  expect((atom::done), from(_).to(aut));
   REQUIRE(!sched.has_job());
   // The magic number 133 was computed via:
   // bro-cut < libvast_test/artifacts/logs/zeek/conn.log
   //   | head -n 400
   //   | grep 192.168.1.104
   //   | wc -l
-  CHECK_EQUAL(rank(deref<mock_archive_actor>(archive).state.hits), 133u);
+  CHECK_EQUAL(
+    rank(caf::actor_cast<
+           system::archive_type::stateful_pointer<mock_archive_state>>(archive)
+           ->state.hits),
+    133u);
 }
 
 FIXTURE_SCOPE_END()

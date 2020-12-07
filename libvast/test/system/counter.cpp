@@ -95,7 +95,7 @@ struct fixture : fixtures::deterministic_actor_system_and_events {
     sched.run_once();
   }
 
-  caf::actor index;
+  system::index_actor index;
   system::archive_type archive;
   caf::actor client;
   caf::actor aut;

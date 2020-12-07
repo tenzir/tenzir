@@ -13,15 +13,16 @@
 
 #pragma once
 
-#include <array>
-#include <cstddef>
-#include <cstdint>
+#include "vast/fwd.hpp"
+#include "vast/system/index_actor.hpp"
+#include "vast/uuid.hpp"
 
 #include <caf/behavior.hpp>
 #include <caf/fwd.hpp>
 
-#include "vast/fwd.hpp"
-#include "vast/uuid.hpp"
+#include <array>
+#include <cstddef>
+#include <cstdint>
 
 namespace vast::system {
 
@@ -93,7 +94,7 @@ public:
   /// Sends the query `expr` to `index` and transitions from `idle` to
   /// `await_query_id`.
   /// @pre `state() == idle`
-  void start(expression expr, caf::actor index);
+  void start(expression expr, index_actor index);
 
   /// @pre `state() == collect_hits`
   /// @pre `n > 0`
@@ -152,7 +153,7 @@ protected:
   uuid query_id_;
 
   /// Our INDEX for querying and collecting more hits.
-  caf::actor index_;
+  index_actor index_;
 
   /// Keeps track of how many partitions were processed.
   struct {

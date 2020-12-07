@@ -37,8 +37,7 @@ using query_supervisor_actor = caf::typed_actor<
 
 /// The QUERY SUPERVISOR MASTER actor.
 using query_supervisor_master_actor
-  = caf::typed_actor<caf::reacts_to<atom::worker, query_supervisor_actor>,
-                     caf::reacts_to<atom::done>>;
+  = caf::typed_actor<caf::reacts_to<atom::worker, query_supervisor_actor>>;
 
 /// The internal state of a QUERY SUPERVISOR actor.
 struct query_supervisor_state {

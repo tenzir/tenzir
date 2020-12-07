@@ -121,7 +121,7 @@ partition_factory::partition_factory(index_state& state) : state_{state} {
   // nop
 }
 
-index_state::index_state(caf::stateful_actor<index_state>* self)
+index_state::index_state(index_actor::pointer self)
   : self{self}, inmem_partitions{0, partition_factory{*this}} {
 }
 
@@ -200,17 +200,13 @@ query_supervisor_actor index_state::next_worker() {
   VAST_ASSERT(worker_available());
   auto result = std::move(idle_workers.back());
   idle_workers.pop_back();
-  // If no more workers are available, revert to the default behavior.
-  if (!worker_available()) {
-    self->unbecome();
-    self->set_default_handler(caf::skip);
+  if (!worker_available())
     VAST_VERBOSE(self, "waits for query supervisors to become available to "
                        "delegate work; consider increasing 'vast.max-queries'");
-  }
   return result;
 }
 
-void index_state::add_flush_listener(caf::actor listener) {
+void index_state::add_flush_listener(flush_listener_actor listener) {
   VAST_DEBUG(self, "adds a new 'flush' subscriber:", listener);
   flush_listeners.emplace_back(std::move(listener));
   detail::notify_listeners_if_clean(*this, *stage);
@@ -326,7 +322,7 @@ index_state::collect_query_actors(query_state& lookup,
 //   expected<map from U to X>
 template <typename Continuation>
 void await_evaluation_maps(
-  caf::stateful_actor<index_state>* self, const expression& expr,
+  index_actor::pointer self, const expression& expr,
   const std::vector<std::pair<vast::uuid, partition_actor>>& actors,
   Continuation then) {
   struct counter {
@@ -442,9 +438,9 @@ void index_state::flush_to_disk() {
       });
 }
 
-caf::behavior
-index(caf::stateful_actor<index_state>* self, filesystem_type fs, path dir,
-      size_t partition_capacity, size_t max_inmem_partitions,
+index_actor::behavior_type
+index(index_actor::stateful_pointer<index_state> self, filesystem_type fs,
+      path dir, size_t partition_capacity, size_t max_inmem_partitions,
       size_t taste_partitions, size_t num_workers) {
   VAST_TRACE(VAST_ARG(fs), VAST_ARG(dir), VAST_ARG(partition_capacity),
              VAST_ARG(max_inmem_partitions), VAST_ARG(taste_partitions),
@@ -464,7 +460,7 @@ index(caf::stateful_actor<index_state>* self, filesystem_type fs, path dir,
   if (auto err = self->state.load_from_disk()) {
     VAST_ERROR(self, "failed to load index state from disk:", render(err));
     self->quit(err);
-    return {};
+    return index_actor::behavior_type::make_empty_behavior();
   }
   // This option must be kept in sync with vast/address_synopsis.hpp.
   put(self->state.meta_idx.factory_options(), "max-partition-size",
@@ -496,9 +492,7 @@ index(caf::stateful_actor<index_state>* self, filesystem_type fs, path dir,
     // Persist active partition asynchronously.
     auto part_dir = dir / to_string(id);
     VAST_DEBUG(self, "persists active partition to", part_dir);
-    self
-      ->request(actor, caf::infinite, atom::persist_v, part_dir,
-                caf::actor_cast<caf::actor>(self))
+    self->request(actor, caf::infinite, atom::persist_v, part_dir, self)
       .then(
         [=](atom::ok) {
           VAST_DEBUG(self, "successfully persisted partition", id);
@@ -593,36 +587,42 @@ index(caf::stateful_actor<index_state>* self, filesystem_type fs, path dir,
   });
   // Launch workers for resolving queries.
   for (size_t i = 0; i < num_workers; ++i)
-    // FIXME: Remove the actor_cast when converting the index to a typed actor.
-    self->spawn(query_supervisor,
-                caf::actor_cast<query_supervisor_master_actor>(self));
-  // We switch between has_worker behavior and the default behavior (which
-  // simply waits for a worker).
-  self->set_default_handler(caf::skip);
-  self->state.has_worker.assign(
+    self->spawn(query_supervisor, self);
+  return {
+    [=](atom::worker, query_supervisor_actor& worker) {
+      if (!self->state.worker_available())
+        VAST_DEBUG(self, "delegates work to query supervisors");
+      self->state.idle_workers.push_back(std::move(worker));
+    },
+    [=](atom::done, uuid partition_id) {
+      VAST_DEBUG(self, "queried partition", partition_id, "successfully");
+    },
     [=](caf::stream<table_slice> in) {
-      VAST_DEBUG(self, "got a new table slice stream");
+      VAST_DEBUG(self, "got a new stream source");
       return self->state.stage->add_inbound_path(in);
     },
-    // The partition delegates the actual writing to the filesystem actor,
-    // so we dont really get more information than a binary ok/not-ok here.
-    [=](caf::result<atom::ok> write_result) {
-      if (write_result.err)
-        VAST_ERROR(self,
-                   "could not persist partition:", render(write_result.err));
-      else
-        VAST_DEBUG(self, "successfully persisted partition");
+    [=](accountant_type accountant) {
+      self->state.accountant = std::move(accountant);
     },
-    // Query handling
-    [=](vast::expression expr) {
-      auto& st = self->state;
+    [=](atom::status, status_verbosity v) -> caf::config_value::dictionary {
+      return self->state.status(v);
+    },
+    [=](atom::subscribe, atom::flush, flush_listener_actor listener) {
+      self->state.add_flush_listener(listener);
+    },
+    [=](vast::expression expr) -> caf::result<void> {
+      // TODO: This check is not required technically, but we use the query
+      // supervisor availability to rate-limit meta-index lookups. Do we really
+      // need this?
+      if (!self->state.worker_available())
+        return caf::skip;
+      // Query handling
       auto mid = self->current_message_id();
       auto sender = self->current_sender();
       auto client = caf::actor_cast<caf::actor>(sender);
-      // TODO: As far as I can tell, this is used in order to "respond" to
-      // the message and to still continue with the function afterwards.
-      // At some point this should be changed to a proper solution for that
-      // problem.
+      // TODO: This is used in order to "respond" to the message and to still
+      // continue with the function afterwards. At some point this should be
+      // changed to a proper solution for that problem, e.g., streaming.
       auto respond = [=](auto&&... xs) {
         unsafe_response(self, sender, {}, mid.response_id(),
                         std::forward<decltype(xs)>(xs)...);
@@ -631,32 +631,32 @@ index(caf::stateful_actor<index_state>* self, filesystem_type fs, path dir,
       // Makes sure that clients always receive a 'done' message.
       auto no_result = [=] {
         respond(uuid::nil(), uint32_t{0}, uint32_t{0});
-        self->send(client, atom::done_v);
+        caf::anon_send(client, atom::done_v);
       };
       // Sanity check.
       if (!sender) {
         VAST_WARNING(self, "ignores an anonymous query");
         respond(caf::sec::invalid_argument);
-        return;
+        return {};
       }
       // Get all potentially matching partitions.
-      auto candidates = st.meta_idx.lookup(expr);
+      auto candidates = self->state.meta_idx.lookup(expr);
       if (candidates.empty()) {
         VAST_DEBUG(self, "returns without result: no partitions qualify");
         no_result();
-        return;
+        return {};
       }
       // Allows the client to query further results after initial taste.
       auto query_id = uuid::random();
       // Ensure the query id is unique.
-      while (st.pending.find(query_id) != st.pending.end()
+      while (self->state.pending.find(query_id) != self->state.pending.end()
              || query_id == uuid::nil())
         query_id = uuid::random();
       auto total = candidates.size();
       auto scheduled = detail::narrow<uint32_t>(
-        std::min(candidates.size(), st.taste_partitions));
+        std::min(candidates.size(), self->state.taste_partitions));
       auto lookup = query_state{query_id, expr, std::move(candidates)};
-      auto result = st.pending.emplace(query_id, std::move(lookup));
+      auto result = self->state.pending.emplace(query_id, std::move(lookup));
       VAST_ASSERT(result.second);
       // NOTE: The previous version of the index used to do much more
       // validation before assigning a query id; in particular it did
@@ -666,40 +666,37 @@ index(caf::stateful_actor<index_state>* self, filesystem_type fs, path dir,
       // anyways, so hopefully that shouldnt make too big of a difference.
       respond(query_id, detail::narrow<uint32_t>(total), scheduled);
       self->delegate(caf::actor_cast<caf::actor>(self), query_id, scheduled);
-      return;
+      return {};
     },
-    [=](const uuid& query_id, uint32_t num_partitions) {
-      auto& st = self->state;
-      auto mid = self->current_message_id();
+    [=](const uuid& query_id, uint32_t num_partitions) -> caf::result<void> {
+      if (!self->state.worker_available())
+        return caf::skip;
       auto sender = self->current_sender();
       auto client = caf::actor_cast<evaluator_client_actor>(sender);
-      auto respond = [=](auto&&... xs) {
-        unsafe_response(self, sender, {}, mid.response_id(),
-                        std::forward<decltype(xs)>(xs)...);
-      };
       // Sanity checks.
       if (!sender) {
         VAST_ERROR(self, "ignores an anonymous query");
-        return;
+        return {};
       }
       // A zero as second argument means the client drops further results.
       if (num_partitions == 0) {
         VAST_DEBUG(self, "drops remaining results for query id", query_id);
-        st.pending.erase(query_id);
-        return;
+        self->state.pending.erase(query_id);
+        return {};
       }
-      auto iter = st.pending.find(query_id);
-      if (iter == st.pending.end()) {
+      auto iter = self->state.pending.find(query_id);
+      if (iter == self->state.pending.end()) {
         VAST_WARNING(self, "drops query for unknown query id", query_id);
         self->send(client, atom::done_v);
-        return;
+        return {};
       }
       // Get partition actors, spawning new ones if needed.
-      auto actors = st.collect_query_actors(iter->second, num_partitions);
+      auto actors
+        = self->state.collect_query_actors(iter->second, num_partitions);
       // Send an evaluate atom to all the actors and collect the returned
       // evaluation triples in a `pending_query_map`, then run the continuation
       // below in the same actor context.
-      auto worker = st.next_worker();
+      auto worker = self->state.next_worker();
       await_evaluation_maps(
         self, iter->second.expression, actors,
         [=](caf::expected<pending_query_map> maybe_pqm) {
@@ -737,52 +734,34 @@ index(caf::stateful_actor<index_state>* self, filesystem_type fs, path dir,
           if (query_state.partitions.empty())
             st.pending.erase(iter);
         });
+      return {};
     },
-    [=](atom::worker, query_supervisor_actor& worker) {
-      self->state.idle_workers.emplace_back(std::move(worker));
-    },
-    [=](atom::done, uuid partition_id) {
-      // Nothing to do.
-      VAST_DEBUG(self, "queried partition", partition_id, "successfully");
-    },
-    [=](caf::stream<table_slice> in) {
-      VAST_DEBUG(self, "got a new source");
-      return self->state.stage->add_inbound_path(in);
-    },
-    [=](accountant_type accountant) {
-      self->state.accountant = std::move(accountant);
-    },
-    [=](atom::status, status_verbosity v) -> caf::config_value::dictionary {
-      return self->state.status(v);
-    },
-    [=](atom::subscribe, atom::flush, const caf::actor& listener) {
-      self->state.add_flush_listener(listener);
-    },
-    // The idea is that its safe to move from a `shared_ptr&` here since
-    // the unique owner of the pointer will be the message (which doesnt
-    // need it anymore).
-    // Semantically we want a unique_ptr here, but caf message types need
-    // to be copy constructible.
     [=](atom::replace, uuid partition_id,
-        std::shared_ptr<partition_synopsis>& ps) {
+        std::shared_ptr<partition_synopsis>& ps) -> caf::result<void> {
+      // The idea is that its safe to move from a `shared_ptr&` here since
+      // the unique owner of the pointer will be the message (which doesnt
+      // need it anymore).
+      // Semantically we want a unique_ptr here, but caf message types need
+      // to be copy constructible.
       VAST_DEBUG(self, "replaces synopsis for partition", partition_id);
       if (!ps.unique()) {
         VAST_WARNING(self, "ignores partition synopses thats still in use");
-        return;
+        return {};
       }
       auto pu = std::make_unique<partition_synopsis>();
       std::swap(*ps, *pu);
       self->state.meta_idx.replace(partition_id, std::move(pu));
+      return {};
     },
-    [=](atom::erase, uuid partition_id) {
+    [=](atom::erase, uuid partition_id) -> caf::result<ids> {
       VAST_VERBOSE(self, "erases partition", partition_id);
-      caf::response_promise rp = self->make_response_promise();
+      auto rp = self->make_response_promise<ids>();
       auto path = self->state.partition_path(partition_id);
       bool adjust_stats = true;
       if (!self->state.persisted_partitions.count(partition_id)) {
         if (!exists(path)) {
           rp.deliver(make_error(ec::logic_error, "unknown partition"));
-          return;
+          return rp;
         }
         // As a special case, if the partition exists on disk we just continue
         // normally here, since this indicates a previous erasure did not go
@@ -826,31 +805,7 @@ index(caf::stateful_actor<index_state>* self, filesystem_type fs, path dir,
             rp.deliver(std::move(all_ids));
           },
           [=](caf::error e) mutable { rp.deliver(e); });
-    });
-  return {
-    // The default behaviour
-    [=](atom::worker, query_supervisor_actor& worker) {
-      auto& st = self->state;
-      st.idle_workers.emplace_back(std::move(worker));
-      self->become(caf::keep_behavior, st.has_worker);
-      self->set_default_handler(caf::print_and_drop);
-      VAST_VERBOSE(self, "delegates work to query supervisors");
-    },
-    [=](atom::done, uuid partition_id) {
-      VAST_DEBUG(self, "queried partition", partition_id, "successfully");
-    },
-    [=](caf::stream<table_slice> in) {
-      VAST_DEBUG(self, "got a new source");
-      return self->state.stage->add_inbound_path(in);
-    },
-    [=](accountant_type accountant) {
-      self->state.accountant = std::move(accountant);
-    },
-    [=](atom::status, status_verbosity v) -> caf::config_value::dictionary {
-      return self->state.status(v);
-    },
-    [=](atom::subscribe, atom::flush, const caf::actor& listener) {
-      self->state.add_flush_listener(listener);
+      return rp;
     },
   };
 }

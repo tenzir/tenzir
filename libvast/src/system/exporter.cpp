@@ -366,7 +366,7 @@ behavior exporter(stateful_actor<exporter_state>* self, expression expr,
       if (has_historical_option(self->state.options))
         self->send(archive, atom::exporter_v, self);
     },
-    [=](atom::index, const actor& index) {
+    [=](atom::index, const index_actor& index) {
       VAST_DEBUG(self, "registers index", index);
       self->state.index = index;
       if (has_continuous_option(self->state.options))
@@ -388,7 +388,14 @@ behavior exporter(stateful_actor<exporter_state>* self, expression expr,
       self->state.start = system_clock::now();
       if (!has_historical_option(self->state.options))
         return;
-      self->request(self->state.index, infinite, self->state.expr)
+      // FIXME: The index replies to expressions by manually sending back to the
+      // sender, which does not work with request(...).then(...) style of
+      // communication for typed actors. Hence, we must actor_cast here.
+      // Ideally, we would change that index handler to actually return the
+      // desired value.
+      self
+        ->request(caf::actor_cast<caf::actor>(self->state.index), infinite,
+                  self->state.expr)
         .then(
           [=](const uuid& lookup, uint32_t partitions, uint32_t scheduled) {
             VAST_DEBUG(self, "got lookup handle", lookup, ", scheduled",

@@ -37,7 +37,7 @@ disk_monitor_type::behavior_type
 disk_monitor(disk_monitor_type::stateful_pointer<disk_monitor_state> self,
              size_t hiwater, size_t lowater,
              std::chrono::seconds disk_scan_interval, const vast::path& dbdir,
-             archive_type archive, caf::actor index) {
+             archive_type archive, index_actor index) {
   VAST_TRACE(VAST_ARG(hiwater), VAST_ARG(lowater), VAST_ARG(dbdir));
   using namespace std::string_literals;
   self->state.high_water_mark = hiwater;

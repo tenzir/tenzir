@@ -4,8 +4,9 @@
 #include "vast/fwd.hpp"
 #include "vast/path.hpp"
 #include "vast/system/archive.hpp"
+#include "vast/system/index_actor.hpp"
 
-#include <caf/typed_actor.hpp>
+#include <caf/typed_event_based_actor.hpp>
 
 namespace vast::system {
 
@@ -33,7 +34,7 @@ struct disk_monitor_state {
   archive_type archive;
 
   /// Node handle of the INDEX.
-  caf::actor index;
+  index_actor index;
 
   constexpr static const char* name = "disk_monitor";
 };
@@ -50,6 +51,6 @@ disk_monitor_type::behavior_type
 disk_monitor(disk_monitor_type::stateful_pointer<disk_monitor_state> self,
              size_t high_water, size_t low_water,
              std::chrono::seconds scan_interval, const vast::path& db_dir,
-             archive_type archive, caf::actor index);
+             archive_type archive, index_actor index);
 
 } // namespace vast::system

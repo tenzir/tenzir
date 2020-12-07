@@ -150,7 +150,7 @@ void importer_state::send_report() {
 }
 
 caf::behavior importer(importer_actor* self, path dir, archive_type archive,
-                       caf::actor index, type_registry_type type_registry) {
+                       index_actor index, type_registry_type type_registry) {
   VAST_TRACE(VAST_ARG(dir));
   self->state.dir = dir;
   auto err = self->state.read_state();
@@ -210,7 +210,7 @@ caf::behavior importer(importer_actor* self, path dir, archive_type archive,
       VAST_DEBUG(self, "adds a new sink:", self->current_sender());
       st.stg->add_outbound_path(subscriber);
     },
-    [=](atom::subscribe, atom::flush, caf::actor& listener) {
+    [=](atom::subscribe, atom::flush, flush_listener_actor listener) {
       VAST_ASSERT(self->state.stg != nullptr);
       self->send(index, atom::subscribe_v, atom::flush_v, listener);
     },

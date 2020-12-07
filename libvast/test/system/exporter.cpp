@@ -47,8 +47,9 @@ struct fixture : fixture_base {
   }
 
   ~fixture() {
-    for (auto& hdl : {index, importer, exporter})
+    for (auto& hdl : {importer, exporter})
       self->send_exit(hdl, exit_reason::user_shutdown);
+    self->send_exit(index, exit_reason::user_shutdown);
     self->send_exit(archive, exit_reason::user_shutdown);
     run();
   }
@@ -131,7 +132,7 @@ struct fixture : fixture_base {
   }
 
   system::type_registry_type type_registry;
-  actor index;
+  system::index_actor index;
   system::archive_type archive;
   actor importer;
   actor exporter;

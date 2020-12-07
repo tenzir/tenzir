@@ -40,7 +40,8 @@ maybe_actor spawn_importer(node_actor* self, spawn_arguments& args) {
   if (!type_registry)
     return make_error(ec::missing_component, "type-registry");
   auto handle = self->spawn(importer, args.dir / args.label,
-                            caf::actor_cast<archive_type>(archive), index,
+                            caf::actor_cast<archive_type>(archive),
+                            caf::actor_cast<index_actor>(index),
                             caf::actor_cast<type_registry_type>(type_registry));
   VAST_VERBOSE(self, "spawned the importer");
   if (auto accountant = self->state.registry.find_by_label("accountant")) {

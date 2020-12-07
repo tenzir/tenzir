@@ -23,6 +23,7 @@
 #include "vast/qualified_record_field.hpp"
 #include "vast/system/evaluator.hpp"
 #include "vast/system/filesystem.hpp"
+#include "vast/system/index_actor.hpp"
 #include "vast/system/indexer.hpp"
 #include "vast/system/instrumentation.hpp"
 #include "vast/table_slice_column.hpp"
@@ -51,7 +52,7 @@ struct partition_selector {
 using partition_actor = caf::typed_actor<
   caf::replies_to<caf::stream<table_slice>>
     ::with<caf::inbound_stream_slot<table_slice>>,
-  caf::replies_to<atom::persist, path, caf::actor>
+  caf::replies_to<atom::persist, path, index_actor>
     ::with<atom::ok>,
   caf::reacts_to<atom::persist, atom::resume>,
   caf::reacts_to<chunk_ptr>,
@@ -114,7 +115,7 @@ struct active_partition_state {
   size_t events;
 
   /// Actor handle of the index actor.
-  caf::actor index_actor;
+  index_actor index;
 
   /// Actor handle of the filesystem actor.
   filesystem_type fs_actor;

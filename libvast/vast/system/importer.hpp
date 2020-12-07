@@ -19,6 +19,7 @@
 #include "vast/status.hpp"
 #include "vast/system/accountant.hpp"
 #include "vast/system/archive.hpp"
+#include "vast/system/index_actor.hpp"
 #include "vast/system/instrumentation.hpp"
 #include "vast/system/type_registry.hpp"
 
@@ -107,7 +108,7 @@ struct importer_state {
   stopwatch::time_point last_report;
 
   /// The index actor.
-  caf::actor index;
+  index_actor index;
 
   accountant_type accountant;
 
@@ -126,6 +127,6 @@ using importer_actor = caf::stateful_actor<importer_state>;
 /// @param batch_size The initial number of IDs to request when replenishing.
 /// @param type_registry A handle to the type-registry module.
 caf::behavior importer(importer_actor* self, path dir, archive_type archive,
-                       caf::actor index, type_registry_type type_registry);
+                       index_actor index, type_registry_type type_registry);
 
 } // namespace vast::system

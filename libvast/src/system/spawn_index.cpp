@@ -46,7 +46,7 @@ maybe_actor spawn_index(node_actor* self, spawn_arguments& args) {
   VAST_VERBOSE(self, "spawned the index");
   if (auto accountant = self->state.registry.find_by_label("accountant"))
     self->send(handle, caf::actor_cast<accountant_type>(accountant));
-  return handle;
+  return caf::actor_cast<caf::actor>(handle);
 }
 
 } // namespace vast::system

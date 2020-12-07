@@ -34,7 +34,7 @@
 #include "vast/qualified_record_field.hpp"
 #include "vast/synopsis.hpp"
 #include "vast/system/filesystem.hpp"
-#include "vast/system/index.hpp"
+#include "vast/system/index_actor.hpp"
 #include "vast/system/indexer.hpp"
 #include "vast/system/shutdown.hpp"
 #include "vast/system/terminate.hpp"
@@ -361,7 +361,7 @@ active_partition(partition_actor::stateful_pointer<active_partition_state> self,
   self->state.offset = vast::invalid_id;
   self->state.events = 0;
   self->state.fs_actor = fs;
-  self->state.index_actor = nullptr;
+  self->state.index = nullptr;
   self->state.streaming_initiated = false;
   self->state.synopsis = std::make_shared<partition_synopsis>();
   self->state.synopsis_opts = std::move(synopsis_opts);
@@ -465,8 +465,12 @@ active_partition(partition_actor::stateful_pointer<active_partition_state> self,
       self->state.streaming_initiated = true;
       return self->state.stage->add_inbound_path(in);
     },
-    [=](atom::persist, const path& part_dir, caf::actor index) {
-      self->state.index_actor = index;
+    [=](atom::persist, const path& part_dir, index_actor index) {
+      // Ensure that the response promise has not already been initialized.
+      VAST_ASSERT(
+        !static_cast<caf::response_promise&>(self->state.persistence_promise)
+           .source());
+      self->state.index = index;
       self->state.persist_path = part_dir;
       self->state.persisted_indexers = 0;
       self->state.persistence_promise = self->make_response_promise<atom::ok>();
@@ -533,10 +537,9 @@ active_partition(partition_actor::stateful_pointer<active_partition_state> self,
       VAST_DEBUG(self, "persists partition with a total size of",
                  fbchunk->size(), "bytes");
       // Relinquish ownership and send the shrinked synopsis to the index.
-      if (self->state.index_actor) {
-        // FIXME: Use self->send once the index is a typed actor.
-        caf::anon_send(self->state.index_actor, atom::replace_v, self->state.id,
-                       self->state.synopsis);
+      if (self->state.index) {
+        self->send(self->state.index, atom::replace_v, self->state.id,
+                   self->state.synopsis);
         self->state.synopsis.reset();
       }
       self->state.persistence_promise.delegate(self->state.fs_actor,
@@ -592,7 +595,7 @@ partition_actor::behavior_type passive_partition(
       -> caf::result<caf::inbound_stream_slot<table_slice>> {
       die("received inbound table slice stream as passive partition");
     },
-    [=](atom::persist, vast::path, caf::actor) -> caf::result<atom::ok> {
+    [=](atom::persist, vast::path, index_actor) -> caf::result<atom::ok> {
       die("received persist request as passive partition");
     },
     [=](atom::persist, atom::resume) {

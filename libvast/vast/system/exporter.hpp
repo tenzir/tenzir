@@ -20,6 +20,7 @@
 #include "vast/status.hpp"
 #include "vast/system/accountant.hpp"
 #include "vast/system/archive.hpp"
+#include "vast/system/index_actor.hpp"
 #include "vast/system/query_status.hpp"
 #include "vast/table_slice.hpp"
 #include "vast/uuid.hpp"
@@ -42,7 +43,7 @@ struct exporter_state {
   archive_type archive;
 
   /// Stores a handle to the INDEX for querying results.
-  caf::actor index;
+  index_actor index;
 
   /// Stores a handle to the SINK that processes results.
   caf::actor sink;

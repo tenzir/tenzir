@@ -25,6 +25,7 @@
 #include "vast/msgpack_table_slice_builder.hpp"
 #include "vast/span.hpp"
 #include "vast/system/index.hpp"
+#include "vast/system/index_actor.hpp"
 #include "vast/system/partition.hpp"
 #include "vast/system/posix_filesystem.hpp"
 #include "vast/table_slice.hpp"
@@ -200,7 +201,7 @@ TEST(full partition roundtrip) {
                                               // the fs actor's root dir
   auto persist_promise
     = self->request(partition, caf::infinite, vast::atom::persist_v,
-                    persist_path, caf::actor{});
+                    persist_path, vast::system::index_actor{});
   run();
   persist_promise.receive([](vast::atom::ok) { CHECK("persisting done"); },
                           [](caf::error err) { FAIL(err); });
