@@ -303,6 +303,12 @@ vast:
       #schema-file: <none>
       # An alternate schema as a string.
       #schema: <none>
+      # Flag to indicate whether the output should contain #open/#close tags.
+      # Zeek writes these tags in its logs such that users can gain insight
+      # when Zeek processed the corresponding data. By default, VAST
+      # does the same. Settings this flag to true skips printing these tags,
+      # which may help when fully deterministic output is desired.
+      #disable-timestamp-tags: false
 
   # The `vast pivot` command extracts related events of a given type.
   # For additionally available options, see export.pcap.
