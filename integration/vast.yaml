@@ -5,4 +5,4 @@ caf:
 vast:
   export:
     zeek:
-      no-timestamp-tags: true
+      disable-timestamp-tags: true
