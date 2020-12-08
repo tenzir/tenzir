@@ -12,6 +12,11 @@ Every entry has a category for which we use the following visual abbreviations:
 
 ## Unreleased
 
+- ⚠️ The `zeek` export format now strips off the prefix `zeek.` to ensure full
+  compatibility with regular Zeek output. For all non-Zeek types, the prefix
+  remains intact.
+  [#1205](https://github.com/tenzir/vast/pull/1205)
+
 - 🐞 The index now correctly drops further results when queries finish early,
   thus improving the performance of queries for a limited number of events.
   [#1209](https://github.com/tenzir/vast/pull/1209)
