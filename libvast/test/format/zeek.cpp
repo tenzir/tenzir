@@ -366,7 +366,7 @@ FIXTURE_SCOPE(zeek_writer_tests, writer_fixture)
 
 TEST(zeek writer) {
   // Perform the writing.
-  format::zeek::writer writer{directory};
+  format::zeek::writer writer{directory, false};
   for (auto& slice : zeek_conn_log)
     if (auto err = writer.write(slice))
       FAIL("failed to write conn log");
