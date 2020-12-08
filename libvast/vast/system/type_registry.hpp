@@ -34,7 +34,7 @@
 namespace vast::system {
 
 // clang-format off
-using type_registry_type = caf::typed_actor<
+using type_registry_actor = caf::typed_actor<
   caf::reacts_to<atom::telemetry>,
   caf::replies_to<atom::status, status_verbosity>::with<caf::dictionary<caf::config_value>>,
   caf::reacts_to<caf::stream<table_slice>>,
@@ -48,13 +48,6 @@ using type_registry_type = caf::typed_actor<
   caf::reacts_to<accountant_actor>
 >;
 // clang-format on
-
-struct type_registry_state;
-
-using type_registry_actor
-  = type_registry_type::stateful_pointer<type_registry_state>;
-
-using type_registry_behavior = type_registry_type::behavior_type;
 
 struct type_registry_state {
   /// The name of the actor.
@@ -81,13 +74,15 @@ struct type_registry_state {
   /// Get a list of known types from the registry.
   type_set types() const;
 
-  type_registry_actor self = {};
+  type_registry_actor::pointer self = {};
   accountant_actor accountant = {};
   std::map<std::string, type_set> data = {};
   vast::taxonomies taxonomies = {};
   vast::path dir = {};
 };
 
-type_registry_behavior type_registry(type_registry_actor self, const path& dir);
+type_registry_actor::behavior_type
+type_registry(type_registry_actor::stateful_pointer<type_registry_state> self,
+              const path& dir);
 
 } // namespace vast::system

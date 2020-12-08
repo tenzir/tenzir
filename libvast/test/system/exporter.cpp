@@ -131,7 +131,7 @@ struct fixture : fixture_base {
     CHECK_EQUAL(xs[4][1], "07mJRfg5RU5");
   }
 
-  system::type_registry_type type_registry;
+  system::type_registry_actor type_registry;
   system::index_actor index;
   system::archive_type archive;
   actor importer;

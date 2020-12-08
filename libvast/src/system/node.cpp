@@ -179,7 +179,7 @@ caf::message dump_command(const invocation& inv, caf::actor_system&) {
   auto as_yaml = caf::get_or(inv.options, "vast.dump.yaml", false);
   if (inv.full_name == "dump concepts") {
     auto self = this_node;
-    auto type_registry = caf::actor_cast<type_registry_type>(
+    auto type_registry = caf::actor_cast<type_registry_actor>(
       self->state.registry.find_by_label(type_registry_state::name));
     if (!type_registry)
       return caf::make_message(
@@ -472,7 +472,7 @@ node_state::spawn_command(const invocation& inv,
         return make_message(expr.error());
       }
       self
-        ->request(caf::actor_cast<type_registry_type>(tr),
+        ->request(caf::actor_cast<type_registry_actor>(tr),
                   defaults::system::initial_request_timeout, atom::resolve_v,
                   std::move(*expr))
         .then(handle_taxonomies, [=](caf::error err) mutable {

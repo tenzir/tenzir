@@ -135,8 +135,9 @@ type_set type_registry_state::types() const {
   return result;
 }
 
-type_registry_behavior
-type_registry(type_registry_actor self, const path& dir) {
+type_registry_actor::behavior_type
+type_registry(type_registry_actor::stateful_pointer<type_registry_state> self,
+              const path& dir) {
   self->state.self = self;
   self->state.dir = dir;
   // Register the exit handler.
@@ -153,8 +154,7 @@ type_registry(type_registry_actor self, const path& dir) {
   if (auto err = self->state.load_from_disk())
     self->quit(std::move(err));
   // Load loaded schema types from the singleton.
-  auto schema = vast::event_types::get();
-  if (schema)
+  if (auto schema = vast::event_types::get())
     self->send(self, atom::put_v, *schema);
   // The behavior of the type-registry.
   return {
@@ -232,11 +232,12 @@ type_registry(type_registry_actor self, const path& dir) {
             VAST_DEBUG(self, "extracted model", name, "with",
                        definition.definition.size(), "fields");
             VAST_TRACE(self, "uses model mapping", name, "->",
-                definition.definition);
+                       definition.definition);
           }
         }
       }
-      self->state.taxonomies = taxonomies{std::move(concepts), std::move(models)};
+      self->state.taxonomies
+        = taxonomies{std::move(concepts), std::move(models)};
       return atom::ok_v;
     },
     [=](atom::resolve, const expression& e) {
@@ -249,7 +250,8 @@ type_registry(type_registry_actor self, const path& dir) {
       self->send(self->state.accountant, atom::announce_v, self->name());
       self->delayed_send(self, defaults::system::telemetry_rate,
                          atom::telemetry_v);
-    }};
+    },
+  };
 }
 
 } // namespace vast::system

@@ -72,7 +72,7 @@ TEST(zeek conn source) {
   mpx.provide_datagram_servant(8080, hdl);
   auto src
     = mm.spawn_broker(datagram_source<bf::reader>, uint16_t{8080},
-                      std::move(reader), 100u, caf::none, type_registry_type{},
+                      std::move(reader), 100u, caf::none, type_registry_actor{},
                       vast::schema{}, std::string{}, accountant_actor{});
   run();
   MESSAGE("start sink and initialize stream");

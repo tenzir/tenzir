@@ -127,6 +127,6 @@ using importer_actor = caf::stateful_actor<importer_state>;
 /// @param batch_size The initial number of IDs to request when replenishing.
 /// @param type_registry A handle to the type-registry module.
 caf::behavior importer(importer_actor* self, path dir, archive_type archive,
-                       index_actor index, type_registry_type type_registry);
+                       index_actor index, type_registry_actor type_registry);
 
 } // namespace vast::system

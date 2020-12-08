@@ -63,7 +63,7 @@ struct importer_fixture : Base {
     this->directory /= "importer";
     importer = this->self->spawn(system::importer, this->directory,
                                  system::archive_type{}, system::index_actor{},
-                                 system::type_registry_type{});
+                                 system::type_registry_actor{});
   }
 
   ~importer_fixture() {
@@ -93,8 +93,9 @@ struct importer_fixture : Base {
                       std::move(stream)};
     return this->self->spawn(system::source<bf::reader>, std::move(reader),
                              slice_size, caf::none,
-                             vast::system::type_registry_type{}, vast::schema{},
-                             std::string{}, vast::system::accountant_actor{});
+                             vast::system::type_registry_actor{},
+                             vast::schema{}, std::string{},
+                             vast::system::accountant_actor{});
   }
 
   void verify(const std::vector<table_slice>& result,

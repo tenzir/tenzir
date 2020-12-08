@@ -88,7 +88,7 @@ caf::behavior
 datagram_source(datagram_source_actor<Reader>* self,
                 uint16_t udp_listening_port, Reader reader,
                 size_t table_slice_size, caf::optional<size_t> max_events,
-                type_registry_type type_registry, vast::schema local_schema,
+                type_registry_actor type_registry, vast::schema local_schema,
                 std::string type_filter, accountant_actor accountant) {
   // Try to open requested UDP port.
   auto udp_res = self->add_udp_datagram_servant(udp_listening_port);

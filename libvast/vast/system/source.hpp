@@ -140,7 +140,7 @@ struct source_state {
   /// Initializes the state.
   template <class T>
   void init(T* selfptr, Reader rd, caf::optional<size_t> max_events,
-            type_registry_type type_registry, vast::schema sch,
+            type_registry_actor type_registry, vast::schema sch,
             std::string type_filter, accountant_actor acc) {
     // Create the reader.
     self = selfptr;
@@ -227,7 +227,7 @@ template <class Reader>
 caf::behavior
 source(caf::stateful_actor<source_state<Reader>>* self, Reader reader,
        size_t table_slice_size, caf::optional<size_t> max_events,
-       type_registry_type type_registry, vast::schema local_schema,
+       type_registry_actor type_registry, vast::schema local_schema,
        std::string type_filter, accountant_actor accountant) {
   VAST_TRACE(VAST_ARG(self));
   // Initialize state.

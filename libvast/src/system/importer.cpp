@@ -150,7 +150,7 @@ void importer_state::send_report() {
 }
 
 caf::behavior importer(importer_actor* self, path dir, archive_type archive,
-                       index_actor index, type_registry_type type_registry) {
+                       index_actor index, type_registry_actor type_registry) {
   VAST_TRACE(VAST_ARG(dir));
   self->state.dir = dir;
   auto err = self->state.read_state();

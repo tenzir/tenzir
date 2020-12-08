@@ -66,7 +66,7 @@ caf::message import_command(const invocation& inv, caf::actor_system& sys) {
   // Start the source.
   auto src_result = make_source<Reader, Defaults>(
     self, sys, inv, caf::actor_cast<accountant_actor>(accountant),
-    caf::actor_cast<type_registry_type>(type_registry), importer);
+    caf::actor_cast<type_registry_actor>(type_registry), importer);
   if (!src_result)
     return caf::make_message(std::move(src_result.error()));
   auto src = std::move(src_result->src);
