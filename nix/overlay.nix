@@ -4,9 +4,20 @@ let
   inherit (final.stdenv.hostPlatform) isStatic;
   stdenv = if prev.stdenv.isDarwin then final.llvmPackages_10.stdenv else final.stdenv;
 in {
+  musl = prev.musl.overrideAttrs (old: {
+    CFLAGS = old.CFLAGS ++ [ "-fno-omit-frame-pointer" ];
+  });
   nix-gitDescribe = final.callPackage ./gitDescribe.nix {};
+  arrow-cpp = (prev.arrow-cpp.override {enableShared = !isStatic;}).overrideAttrs (old: {
+    cmakeFlags = old.cmakeFlags ++ [
+      "-DARROW_CXXFLAGS=-fno-omit-frame-pointer"
+    ];
+  });
   arrow-cpp-no-simd = (prev.arrow-cpp.override {enableShared = !isStatic;}).overrideAttrs (old: {
-    cmakeFlags = old.cmakeFlags ++ [ "-DARROW_SIMD_LEVEL=NONE" ];
+    cmakeFlags = old.cmakeFlags ++ [
+      "-DARROW_CXXFLAGS=-fno-omit-frame-pointer"
+      "-DARROW_SIMD_LEVEL=NONE"
+    ];
   });
   caf = let
     source = builtins.fromJSON (builtins.readFile ./caf/source.json);
@@ -16,6 +27,13 @@ in {
     # is a required argument, and it has to be passed explicitly instead.
     src = lib.callPackageWith source final.fetchFromGitHub { inherit (source) sha256; };
     inherit (source) version;
+    NIX_CFLAGS_COMPILE = "-fno-omit-frame-pointer"
+    # Building statically implies using -flto. Since we produce a final binary with
+    # link time optimizaitons in VAST, we need to make sure that type definitions that
+    # are parsed in both projects are the same, otherwise the compiler will complain
+    # at the optimization stage.
+    # TODO: Remove when updating to CAF 0.18.
+    + lib.optionalString isStatic " -std=c++17";
   } // lib.optionalAttrs isStatic {
     cmakeFlags = old.cmakeFlags ++ [
       "-DCAF_BUILD_STATIC=ON"
@@ -27,15 +45,10 @@ in {
     hardeningDisable = [
       "pic"
     ];
-    # Building statically implies using -flto. Since we produce a final binary with
-    # link time optimizaitons in VAST, we need to make sure that type definitions that
-    # are parsed in both projects are the same, otherwise the compiler will complain
-    # at the optimization stage.
-    # TODO: Remove when updating to CAF 0.18.
-    NIX_CFLAGS_COMPILE = "-std=c++17";
     dontStrip = true;
   });
   jemalloc = prev.jemalloc.overrideAttrs (old: {
+    EXTRA_CFLAGS = (old.EXTRA_CFLAGS or "") + " -fno-omit-frame-pointer";
     configureFlags = old.configureFlags ++ [ "--enable-prof" "--enable-stats" ];
   });
   broker = final.callPackage ./broker {inherit stdenv; python = final.python3;};
