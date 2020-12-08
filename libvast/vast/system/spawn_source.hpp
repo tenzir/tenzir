@@ -45,7 +45,7 @@ maybe_actor spawn_source(node_actor* self, spawn_arguments& args) {
     return make_error(ec::missing_component, "type-registry");
   auto src_result = make_source<Reader, Defaults, caf::detached>(
     self, self->system(), args.inv,
-    caf::actor_cast<accountant_type>(accountant),
+    caf::actor_cast<accountant_actor>(accountant),
     caf::actor_cast<type_registry_type>(type_registry), importer);
   if (!src_result)
     return src_result.error();

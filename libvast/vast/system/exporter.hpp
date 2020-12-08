@@ -53,7 +53,7 @@ struct exporter_state {
   caf::actor statistics_subscriber;
 
   /// Stores a handle to the ACCOUNTANT that collects various statistics.
-  accountant_type accountant;
+  accountant_actor accountant;
 
   /// Stores hits from the INDEX.
   ids hits;

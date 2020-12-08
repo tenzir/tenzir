@@ -97,7 +97,7 @@ caf::message pivot_command(const invocation& inv, caf::actor_system& sys) {
   auto& [accountant] = *components;
   if (accountant) {
     VAST_DEBUG(inv.full_name, "assigns accountant to sink");
-    self->send(sink, caf::actor_cast<accountant_type>(accountant));
+    self->send(sink, caf::actor_cast<accountant_actor>(accountant));
   }
   caf::error err;
   self->monitor(sink);

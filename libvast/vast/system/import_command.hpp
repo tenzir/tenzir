@@ -65,7 +65,7 @@ caf::message import_command(const invocation& inv, caf::actor_system& sys) {
     sig_mon_thread, sys, defaults::system::signal_monitoring_interval, self);
   // Start the source.
   auto src_result = make_source<Reader, Defaults>(
-    self, sys, inv, caf::actor_cast<accountant_type>(accountant),
+    self, sys, inv, caf::actor_cast<accountant_actor>(accountant),
     caf::actor_cast<type_registry_type>(type_registry), importer);
   if (!src_result)
     return caf::make_message(std::move(src_result.error()));

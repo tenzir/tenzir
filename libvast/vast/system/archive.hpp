@@ -48,7 +48,7 @@ using receiver_type = caf::typed_actor<
 using archive_type = caf::typed_actor<
   caf::reacts_to<caf::stream<table_slice>>,
   caf::reacts_to<atom::exporter, caf::actor>,
-  caf::reacts_to<accountant_type>,
+  caf::reacts_to<accountant_actor>,
   caf::reacts_to<ids>,
   caf::reacts_to<ids, receiver_type>,
   caf::reacts_to<ids, receiver_type, uint64_t>,
@@ -70,7 +70,7 @@ struct archive_state {
   std::unordered_map<caf::actor_addr, std::queue<ids>> unhandled_ids;
   std::unordered_set<caf::actor_addr> active_exporters;
   vast::system::measurement measurement;
-  accountant_type accountant;
+  accountant_actor accountant;
   static inline const char* name = "archive";
 };
 

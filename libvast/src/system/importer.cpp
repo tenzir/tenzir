@@ -191,7 +191,7 @@ caf::behavior importer(importer_actor* self, path dir, archive_type archive,
     self->state.stg->add_outbound_path(index);
   }
   return {
-    [=](accountant_type accountant) {
+    [=](accountant_actor accountant) {
       VAST_DEBUG(self, "registers accountant", archive);
       self->state.accountant = std::move(accountant);
       self->send(self->state.accountant, atom::announce_v, self->name());

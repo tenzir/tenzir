@@ -79,7 +79,7 @@ template <class Reader, class Defaults,
           class Actor>
 caf::expected<make_source_result>
 make_source(const Actor& self, caf::actor_system& sys, const invocation& inv,
-            accountant_type accountant, type_registry_type type_registry,
+            accountant_actor accountant, type_registry_type type_registry,
             caf::actor importer) {
   if (!importer)
     return make_error(ec::missing_component, "importer");

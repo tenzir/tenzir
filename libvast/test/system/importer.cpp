@@ -94,7 +94,7 @@ struct importer_fixture : Base {
     return this->self->spawn(system::source<bf::reader>, std::move(reader),
                              slice_size, caf::none,
                              vast::system::type_registry_type{}, vast::schema{},
-                             std::string{}, vast::system::accountant_type{});
+                             std::string{}, vast::system::accountant_actor{});
   }
 
   void verify(const std::vector<table_slice>& result,

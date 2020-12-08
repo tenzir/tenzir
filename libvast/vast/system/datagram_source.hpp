@@ -82,14 +82,14 @@ using datagram_source_actor = caf::stateful_actor<datagram_source_state<Reader>,
 /// @param type_registry The actor handle for the type-registry component.
 /// @oaram local_schema Additional local schemas to consider.
 /// @param type_filter Restriction for considered types.
-/// @param accountant_type The actor handle for the accountant component.
+/// @param accountant_actor The actor handle for the accountant component.
 template <class Reader>
 caf::behavior
 datagram_source(datagram_source_actor<Reader>* self,
                 uint16_t udp_listening_port, Reader reader,
                 size_t table_slice_size, caf::optional<size_t> max_events,
                 type_registry_type type_registry, vast::schema local_schema,
-                std::string type_filter, accountant_type accountant) {
+                std::string type_filter, accountant_actor accountant) {
   // Try to open requested UDP port.
   auto udp_res = self->add_udp_datagram_servant(udp_listening_port);
   if (!udp_res) {
@@ -151,7 +151,7 @@ datagram_source(datagram_source_actor<Reader>* self,
       if (st.done)
         st.send_report();
     },
-    [=](accountant_type accountant) {
+    [=](accountant_actor accountant) {
       VAST_DEBUG(self, "sets accountant to", accountant);
       auto& st = self->state;
       st.accountant = std::move(accountant);

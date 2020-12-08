@@ -200,7 +200,7 @@ archive(archive_type::stateful_pointer<archive_state> self, path dir,
           VAST_DEBUG_ANON("archive finalizes streaming");
         });
     },
-    [=](accountant_type accountant) {
+    [=](accountant_actor accountant) {
       namespace defs = defaults::system;
       self->state.accountant = std::move(accountant);
       self->send(self->state.accountant, atom::announce_v, self->name());

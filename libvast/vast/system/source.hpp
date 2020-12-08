@@ -92,7 +92,7 @@ struct source_state {
   std::unordered_map<type, expression> checkers;
 
   /// Actor for collecting statistics.
-  accountant_type accountant;
+  accountant_actor accountant;
 
   /// Actor that receives events.
   caf::actor sink;
@@ -141,7 +141,7 @@ struct source_state {
   template <class T>
   void init(T* selfptr, Reader rd, caf::optional<size_t> max_events,
             type_registry_type type_registry, vast::schema sch,
-            std::string type_filter, accountant_type acc) {
+            std::string type_filter, accountant_actor acc) {
     // Create the reader.
     self = selfptr;
     name = reader.name();
@@ -222,13 +222,13 @@ struct source_state {
 /// @param type_registry The actor handle for the type-registry component.
 /// @oaram local_schema Additional local schemas to consider.
 /// @param type_filter Restriction for considered types.
-/// @param accountant_type The actor handle for the accountant component.
+/// @param accountant_actor The actor handle for the accountant component.
 template <class Reader>
 caf::behavior
 source(caf::stateful_actor<source_state<Reader>>* self, Reader reader,
        size_t table_slice_size, caf::optional<size_t> max_events,
        type_registry_type type_registry, vast::schema local_schema,
-       std::string type_filter, accountant_type accountant) {
+       std::string type_filter, accountant_actor accountant) {
   VAST_TRACE(VAST_ARG(self));
   // Initialize state.
   auto& st = self->state;

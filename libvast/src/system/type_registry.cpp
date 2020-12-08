@@ -242,10 +242,10 @@ type_registry(type_registry_actor self, const path& dir) {
     [=](atom::resolve, const expression& e) {
       return resolve(self->state.taxonomies, e, self->state.data);
     },
-    [=](accountant_type accountant) {
+    [=](accountant_actor accountant) {
       VAST_ASSERT(accountant);
       VAST_DEBUG(self, "connects to", VAST_ARG(accountant));
-      self->state.accountant = caf::actor_cast<accountant_type>(accountant);
+      self->state.accountant = accountant;
       self->send(self->state.accountant, atom::announce_v, self->name());
       self->delayed_send(self, defaults::system::telemetry_rate,
                          atom::telemetry_v);

@@ -31,7 +31,7 @@ using index_actor = caf::typed_actor<
   caf::reacts_to<atom::done, uuid>,
   caf::replies_to<caf::stream<table_slice>>
     ::with<caf::inbound_stream_slot<table_slice>>,
-  caf::reacts_to<accountant_type>,
+  caf::reacts_to<accountant_actor>,
   caf::replies_to<atom::status, status_verbosity>
     ::with<caf::config_value::dictionary>,
   caf::reacts_to<atom::subscribe, atom::flush, flush_listener_actor>,

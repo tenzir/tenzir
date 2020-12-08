@@ -34,7 +34,7 @@ struct sink_state {
   uint64_t max_events = 0;
   caf::event_based_actor* self;
   caf::actor statistics_subscriber;
-  accountant_type accountant;
+  accountant_actor accountant;
   vast::system::measurement measurement;
   format::writer_ptr writer;
   const char* name = "writer";

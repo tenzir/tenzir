@@ -45,7 +45,7 @@ using type_registry_type = caf::typed_actor<
   caf::reacts_to<atom::put, taxonomies>,
   caf::replies_to<atom::load>::with<atom::ok>,
   caf::replies_to<atom::resolve, expression>::with<expression>,
-  caf::reacts_to<accountant_type>
+  caf::reacts_to<accountant_actor>
 >;
 // clang-format on
 
@@ -82,7 +82,7 @@ struct type_registry_state {
   type_set types() const;
 
   type_registry_actor self = {};
-  accountant_type accountant = {};
+  accountant_actor accountant = {};
   std::map<std::string, type_set> data = {};
   vast::taxonomies taxonomies = {};
   vast::path dir = {};

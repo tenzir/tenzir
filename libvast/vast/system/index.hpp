@@ -218,7 +218,7 @@ struct index_state {
   index_statistics stats;
 
   // Handle of the accountant.
-  accountant_type accountant;
+  accountant_actor accountant;
 
   /// List of actors that wait for the next flush event.
   std::vector<flush_listener_actor> flush_listeners;

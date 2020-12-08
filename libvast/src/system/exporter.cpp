@@ -353,7 +353,7 @@ behavior exporter(stateful_actor<exporter_state>* self, expression expr,
       request_more_hits(self);
     },
     [=](atom::status, status_verbosity v) { return status(self, v); },
-    [=](accountant_type accountant) {
+    [=](accountant_actor accountant) {
       self->state.accountant = std::move(accountant);
       self->send(self->state.accountant, atom::announce_v, self->name());
     },

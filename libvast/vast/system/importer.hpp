@@ -110,7 +110,7 @@ struct importer_state {
   /// The index actor.
   index_actor index;
 
-  accountant_type accountant;
+  accountant_actor accountant;
 
   /// Name of this actor in log events.
   static inline const char* name = "importer";

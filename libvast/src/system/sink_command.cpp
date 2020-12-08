@@ -97,7 +97,7 @@ sink_command(const invocation& inv, actor_system& sys, caf::actor snk) {
   auto& [accountant] = *components;
   if (accountant) {
     VAST_DEBUG(inv.full_name, "assigns accountant to new sink");
-    self->send(snk, actor_cast<accountant_type>(accountant));
+    self->send(snk, actor_cast<accountant_actor>(accountant));
   }
   // Register sink at the node.
   self->send(node, atom::put_v, snk, "sink");

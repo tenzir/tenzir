@@ -46,7 +46,7 @@ maybe_actor spawn_importer(node_actor* self, spawn_arguments& args) {
   VAST_VERBOSE(self, "spawned the importer");
   if (auto accountant = self->state.registry.find_by_label("accountant")) {
     self->send(handle, atom::telemetry_v);
-    self->send(handle, caf::actor_cast<accountant_type>(accountant));
+    self->send(handle, caf::actor_cast<accountant_actor>(accountant));
   } else if (auto logger = caf::logger::current_logger();
              logger && logger->console_verbosity() >= VAST_LOG_LEVEL_VERBOSE) {
     // Initiate periodic rate logging.

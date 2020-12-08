@@ -52,7 +52,7 @@ maybe_actor spawn_exporter(node_actor* self, spawn_arguments& args) {
     = self->state.registry.find_by_label("accountant", "importer", "archive",
                                          "index");
   if (accountant)
-    self->send(handle, caf::actor_cast<accountant_type>(accountant));
+    self->send(handle, caf::actor_cast<accountant_actor>(accountant));
   if (importer && has_continuous_option(query_opts))
     self->send(handle, atom::importer_v, std::vector{importer});
   if (archive) {

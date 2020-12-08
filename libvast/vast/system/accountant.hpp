@@ -23,14 +23,14 @@ namespace vast::system {
 
 // Forward declarations
 struct accountant_config;
-struct accountant_state;
+struct accountant_state_impl;
 
 struct accountant_state_deleter {
-  void operator()(accountant_state* st);
+  void operator()(accountant_state_impl* ptr);
 };
 
-struct accountant_state_ptr
-  : std::unique_ptr<accountant_state, accountant_state_deleter> {
+struct accountant_state
+  : public std::unique_ptr<accountant_state_impl, accountant_state_deleter> {
   using unique_ptr::unique_ptr;
 
   // Name of the ACCOUNTANT actor.
@@ -39,7 +39,7 @@ struct accountant_state_ptr
 
 // clang-format off
 /// @relates accountant
-using accountant_type = caf::typed_actor<
+using accountant_actor = caf::typed_actor<
   caf::replies_to<atom::config, accountant_config>
     ::with<atom::ok>,
   caf::reacts_to<atom::announce, std::string>,
@@ -58,8 +58,8 @@ using accountant_type = caf::typed_actor<
 /// Accumulates various performance metrics in a key-value format and writes
 /// them to VAST table slices.
 /// @param self The actor handle.
-accountant_type::behavior_type
-accountant(accountant_type::stateful_pointer<accountant_state_ptr> self,
+accountant_actor::behavior_type
+accountant(accountant_actor::stateful_pointer<accountant_state> self,
            accountant_config cfg);
 
 } // namespace vast::system

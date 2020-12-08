@@ -601,7 +601,7 @@ index(index_actor::stateful_pointer<index_state> self, filesystem_type fs,
       VAST_DEBUG(self, "got a new stream source");
       return self->state.stage->add_inbound_path(in);
     },
-    [=](accountant_type accountant) {
+    [=](accountant_actor accountant) {
       self->state.accountant = std::move(accountant);
     },
     [=](atom::status, status_verbosity v) -> caf::config_value::dictionary {
