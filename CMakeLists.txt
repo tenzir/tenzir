@@ -93,8 +93,9 @@ option(VAST_STATIC_EXECUTABLE "Link VAST statically"
        $ENV{VAST_STATIC_EXECUTABLE})
 option(VAST_USE_JEMALLOC "Use jemalloc instead of libc malloc"
        "${VAST_STATIC_EXECUTABLE}")
-option(VAST_ENABLE_BUILDID
-       "Include a unique identifier into the elf notes section" ON)
+cmake_dependent_option(
+  VAST_ENABLE_BUILDID "Include a unique identifier into the elf notes section"
+  ON "CMAKE_EXECUTABLE_FORMAT STREQUAL ELF" OFF)
 cmake_dependent_option(
   BUILD_SHARED_LIBS "Build shared libraries instead of static" ON
   "NOT VAST_STATIC_EXECUTABLE" OFF)
