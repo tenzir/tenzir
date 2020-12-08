@@ -353,14 +353,14 @@ caf::error unpack(const fbs::partition::v0& x, partition_synopsis& ps) {
 
 partition_actor::behavior_type
 active_partition(partition_actor::stateful_pointer<active_partition_state> self,
-                 uuid id, filesystem_type fs, caf::settings index_opts,
+                 uuid id, filesystem_actor filesystem, caf::settings index_opts,
                  caf::settings synopsis_opts) {
   self->state.self = self;
   self->state.name = "partition-" + to_string(id);
   self->state.id = id;
   self->state.offset = vast::invalid_id;
   self->state.events = 0;
-  self->state.fs_actor = fs;
+  self->state.filesystem = std::move(filesystem);
   self->state.index = nullptr;
   self->state.streaming_initiated = false;
   self->state.synopsis = std::make_shared<partition_synopsis>();
@@ -542,7 +542,7 @@ active_partition(partition_actor::stateful_pointer<active_partition_state> self,
                    self->state.synopsis);
         self->state.synopsis.reset();
       }
-      self->state.persistence_promise.delegate(self->state.fs_actor,
+      self->state.persistence_promise.delegate(self->state.filesystem,
                                                atom::write_v,
                                                *self->state.persist_path,
                                                fbchunk);
@@ -554,12 +554,12 @@ active_partition(partition_actor::stateful_pointer<active_partition_state> self,
 
 partition_actor::behavior_type passive_partition(
   partition_actor::stateful_pointer<passive_partition_state> self, uuid id,
-  filesystem_type fs, vast::path path) {
+  filesystem_actor filesystem, vast::path path) {
   self->state.self = self;
   // We send a "read" to the fs actor and upon receiving the result deserialize
   // the flatbuffer and switch to the "normal" partition behavior for responding
   // to queries.
-  self->send(fs, atom::mmap_v, path);
+  self->send(filesystem, atom::mmap_v, path);
   self->set_exit_handler([=](const caf::exit_msg& msg) {
     VAST_DEBUG(self, "received EXIT from", msg.source,
                "with reason:", msg.reason);

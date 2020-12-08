@@ -36,8 +36,7 @@ struct posix_filesystem_state {
 /// @param root The filesystem root. The actor prepends this path to all
 ///             operations that include a path parameter.
 /// @returns The actor behavior.
-filesystem_type::behavior_type
-posix_filesystem(filesystem_type::stateful_pointer<posix_filesystem_state> self,
-                 path root);
+filesystem_actor::behavior_type posix_filesystem(
+  filesystem_actor::stateful_pointer<posix_filesystem_state> self, path root);
 
 } // namespace vast::system

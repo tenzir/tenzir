@@ -110,11 +110,11 @@ partition_actor partition_factory::operator()(const uuid& id) const {
               != state_.persisted_partitions.end());
   auto path = state_.partition_path(id);
   VAST_DEBUG(state_.self, "loads partition", id, "for path", path);
-  return state_.self->spawn(passive_partition, id, fs_, path);
+  return state_.self->spawn(passive_partition, id, filesystem_, path);
 }
 
-filesystem_type& partition_factory::fs() {
-  return fs_;
+filesystem_actor& partition_factory::filesystem() {
+  return filesystem_;
 }
 
 partition_factory::partition_factory(index_state& state) : state_{state} {
@@ -439,10 +439,11 @@ void index_state::flush_to_disk() {
 }
 
 index_actor::behavior_type
-index(index_actor::stateful_pointer<index_state> self, filesystem_type fs,
-      path dir, size_t partition_capacity, size_t max_inmem_partitions,
-      size_t taste_partitions, size_t num_workers) {
-  VAST_TRACE(VAST_ARG(fs), VAST_ARG(dir), VAST_ARG(partition_capacity),
+index(index_actor::stateful_pointer<index_state> self,
+      filesystem_actor filesystem, path dir, size_t partition_capacity,
+      size_t max_inmem_partitions, size_t taste_partitions,
+      size_t num_workers) {
+  VAST_TRACE(VAST_ARG(filesystem), VAST_ARG(dir), VAST_ARG(partition_capacity),
              VAST_ARG(max_inmem_partitions), VAST_ARG(taste_partitions),
              VAST_ARG(num_workers));
   VAST_VERBOSE(self, "initializes index in", dir,
@@ -450,11 +451,11 @@ index(index_actor::stateful_pointer<index_state> self, filesystem_type fs,
                "events and", max_inmem_partitions, "resident partitions");
   // Set members.
   self->state.self = self;
-  self->state.filesystem = fs;
+  self->state.filesystem = std::move(filesystem);
   self->state.dir = dir;
   self->state.partition_capacity = partition_capacity;
   self->state.taste_partitions = taste_partitions;
-  self->state.inmem_partitions.factory().fs() = fs;
+  self->state.inmem_partitions.factory().filesystem() = self->state.filesystem;
   self->state.inmem_partitions.resize(max_inmem_partitions);
   // Read persistent state.
   if (auto err = self->state.load_from_disk()) {

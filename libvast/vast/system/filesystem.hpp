@@ -42,16 +42,20 @@ struct filesystem_statistics {
 /// The interface for file system I/O. The filesystem actor implementation must
 /// interpret all operations that contain paths *relative* to its own root
 /// directory.
-using filesystem_type = caf::typed_actor<
+using filesystem_actor = caf::typed_actor<
   // Writes a chunk of data to a given path. Creates intermediate directories
   // if needed.
-  caf::replies_to<atom::write, path, chunk_ptr>::with<atom::ok>,
+  caf::replies_to<atom::write, path, chunk_ptr>
+    ::with<atom::ok>,
   // Reads a chunk of data from a given path and returns the chunk.
-  caf::replies_to<atom::read, path>::with<chunk_ptr>,
+  caf::replies_to<atom::read, path>
+    ::with<chunk_ptr>,
   // Memory-maps a file.
-  caf::replies_to<atom::mmap, path>::with<chunk_ptr>,
+  caf::replies_to<atom::mmap, path>
+    ::with<chunk_ptr>,
   // Reports statistics of filesystem interactions.
-  caf::replies_to<atom::status, status_verbosity>::with<caf::dictionary<caf::config_value>>
+  caf::replies_to<atom::status, status_verbosity>
+    ::with<caf::dictionary<caf::config_value>>
 >;
 
 // clang-format on

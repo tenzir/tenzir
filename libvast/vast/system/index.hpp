@@ -87,12 +87,12 @@ class partition_factory {
 public:
   explicit partition_factory(index_state& state);
 
-  filesystem_type& fs(); // getter/setter
+  filesystem_actor& filesystem(); // getter/setter
 
   partition_actor operator()(const uuid& id) const;
 
 private:
-  filesystem_type fs_;
+  filesystem_actor filesystem_;
   const index_state& state_;
 };
 
@@ -224,7 +224,7 @@ struct index_state {
   std::vector<flush_listener_actor> flush_listeners;
 
   /// Actor handle of the filesystem actor.
-  filesystem_type filesystem;
+  filesystem_actor filesystem;
 
   static inline const char* name = "index";
 };
@@ -237,14 +237,14 @@ caf::expected<flatbuffers::Offset<fbs::Index>>
 pack(flatbuffers::FlatBufferBuilder& builder, const index_state& x);
 
 /// Indexes events in horizontal partitions.
-/// @param fs The filesystem actor. Not used by the index itself but forwarded
-/// to partitions.
+/// @param filesystem The filesystem actor. Not used by the index itself but
+/// forwarded to partitions.
 /// @param dir The directory of the index.
 /// @param partition_capacity The maximum number of events per partition.
 /// @pre `partition_capacity > 0
 index_actor::behavior_type
-index(index_actor::stateful_pointer<index_state> self, filesystem_type fs,
-      path dir, size_t partition_capacity, size_t in_mem_partitions,
-      size_t taste_partitions, size_t num_workers);
+index(index_actor::stateful_pointer<index_state> self,
+      filesystem_actor filesystem, path dir, size_t partition_capacity,
+      size_t in_mem_partitions, size_t taste_partitions, size_t num_workers);
 
 } // namespace vast::system

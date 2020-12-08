@@ -118,7 +118,7 @@ struct active_partition_state {
   index_actor index;
 
   /// Actor handle of the filesystem actor.
-  filesystem_type fs_actor;
+  filesystem_actor filesystem;
 
   /// Promise that gets satisfied when the partition state was serialized
   /// and written to disk.
@@ -198,21 +198,21 @@ caf::error unpack(const fbs::partition::v0& x, partition_synopsis& y);
 /// Spawns a partition.
 /// @param self The partition actor.
 /// @param id The UUID of this partition.
-/// @param fs The actor handle of the filesystem actor.
+/// @param filesystem The actor handle of the filesystem actor.
 /// @param index_opts Settings that are forwarded when creating indexers.
 /// @param synopsis_opts Settings that are forwarded when creating synopses.
 partition_actor::behavior_type
 active_partition(partition_actor::stateful_pointer<active_partition_state> self,
-                 uuid id, filesystem_type fs, caf::settings index_opts,
+                 uuid id, filesystem_actor filesystem, caf::settings index_opts,
                  caf::settings synopsis_opts);
 
 /// Spawns a read-only partition.
 /// @param self The partition actor.
 /// @param id The UUID of this partition.
-/// @param fs The actor handle of the filesystem actor.
+/// @param filesystem The actor handle of the filesystem actor.
 /// @param path The path where the partition flatbuffer can be found.
 partition_actor::behavior_type passive_partition(
   partition_actor::stateful_pointer<passive_partition_state> self, uuid id,
-  filesystem_type fs, vast::path path);
+  filesystem_actor filesystem, vast::path path);
 
 } // namespace vast::system

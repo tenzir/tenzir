@@ -31,10 +31,10 @@ namespace {
 
 struct fixture : fixtures::deterministic_actor_system {
   fixture() {
-    fs = self->spawn<caf::detached>(posix_filesystem, directory);
+    filesystem = self->spawn<caf::detached>(posix_filesystem, directory);
   }
 
-  filesystem_type fs;
+  filesystem_actor filesystem;
 };
 
 } // namespace
@@ -49,7 +49,7 @@ TEST(read) {
   auto err = io::write(filename, as_bytes(bytes));
   REQUIRE(err == caf::none);
   MESSAGE("read file via actor");
-  self->request(fs, caf::infinite, atom::read_v, path{foo})
+  self->request(filesystem, caf::infinite, atom::read_v, path{foo})
     .receive(
       [&](const chunk_ptr& chk) {
         CHECK_EQUAL(as_bytes(chk), as_bytes(bytes));
@@ -64,7 +64,7 @@ TEST(write) {
   REQUIRE(chk);
   auto filename = directory / foo;
   MESSAGE("write file via actor");
-  self->request(fs, caf::infinite, atom::write_v, path{foo}, chk)
+  self->request(filesystem, caf::infinite, atom::write_v, path{foo}, chk)
     .receive(
       [&](atom::ok) {
         // all good
@@ -82,7 +82,7 @@ TEST(mmap) {
   auto bytes = span<const char>{foo.data(), foo.size()};
   auto err = io::write(filename, as_bytes(bytes));
   MESSAGE("mmap file via actor");
-  self->request(fs, caf::infinite, atom::mmap_v, path{foo})
+  self->request(filesystem, caf::infinite, atom::mmap_v, path{foo})
     .receive(
       [&](const chunk_ptr& chk) {
         CHECK_EQUAL(as_bytes(chk), as_bytes(bytes));
@@ -92,13 +92,15 @@ TEST(mmap) {
 
 TEST(status) {
   MESSAGE("create file");
-  self->request(fs, caf::infinite, atom::read_v, path{"not-there"})
+  self->request(filesystem, caf::infinite, atom::read_v, path{"not-there"})
     .receive(
       [&](const chunk_ptr&) { FAIL("should not receive chunk on failure"); },
       [&](const caf::error&) {
         // expected
       });
-  self->request(fs, caf::infinite, atom::status_v, status_verbosity::debug)
+  self
+    ->request(filesystem, caf::infinite, atom::status_v,
+              status_verbosity::debug)
     .receive(
       [&](const caf::dictionary<caf::config_value>& status) {
         auto failed
