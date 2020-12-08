@@ -104,12 +104,26 @@ class Splunk:
                     result += yamlify([make(name, x) for x in output_fields])
         return result
 
+class ECS:
+    def __init__(self, prefix = "ecs"):
+        self.prefix = prefix
+
+    def parse(self, data):
+        parsed_yaml = yaml.safe_load(data)[0]
+        field_type = parsed_yaml['name']
+        self.prefix = "{}.{}".format(self.prefix, field_type)
+        make = lambda row: make_concept(self.prefix, row['name'], row['description'])
+        concepts = [make(x) for x in parsed_yaml['fields']]
+        return yamlify(concepts)
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--sentinel", action="store_true",
                         help="generate Azure Sentinel taxonomy")
     parser.add_argument("--splunk", action="store_true",
                         help="generate splunk CIM taxonomy")
+    parser.add_argument("--ecs", action="store_true",
+                        help="generate ECS taxonomy")
     args = parser.parse_args()
     if args.sentinel:
         sentinel = Sentinel()
@@ -117,6 +131,9 @@ def main():
     elif args.splunk:
         splunk = Splunk()
         print(splunk.parse(sys.stdin))
+    elif args.ecs:
+        ecs = ECS()
+        print(ecs.parse(sys.stdin))
     else:
         print("missing taxonomy, see --help for options", file=sys.stderr)
         sys.exit(1)
