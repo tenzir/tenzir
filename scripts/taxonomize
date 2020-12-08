@@ -17,6 +17,7 @@ from a website.
 import argparse
 import json
 import pandas
+import inflection
 import re
 import sys
 import yaml
@@ -55,6 +56,53 @@ def make_concept(prefix, name, description=None):
     if description:
         result["concept"]["description"] = folded_str(description)
     return result
+
+class ECS():
+    def make_url(self, field):
+        return "https://www.elastic.co/guide/en/ecs/current/ecs-{}.html".format(field)
+
+    def __init__(self, prefix = "ECS.network"):
+        self.prefix = prefix
+
+    def parse(self, field):
+        # There is exactly one table on this page.
+        table = pandas.read_html(self.make_url(field), match="Field")[0]
+        # clean = lambda x: x.replace(u"\u2019", "'")
+        make = lambda row: make_concept(self.prefix, row[1], row[2])
+        # There is a bogous NaN entry in the last row, so we only consider
+        # strings.
+        concepts = [make(x) for x in table.itertuples()]
+        return yamlify(concepts)
+
+class ECSFieldRef:
+    URL = "https://www.elastic.co/guide/en/ecs/current/ecs-field-reference.html"
+
+    def convertField(self, name):
+        if name == "Autonomous System":
+            return "as"
+        if name == "Operating System":
+            return "os"
+        if name == "PE Header":
+            return "pe"
+        if name == "x509 Certificate":
+            return "x509"
+        # parameterize replaces spaces with a '-'
+        # underscore makes it proper snake_case
+        return inflection.underscore(inflection.parameterize(name))
+
+    def __init__(self, prefix = "ECS.network"):
+        self.prefix = prefix
+
+    def parse(self, addDescriptions):
+        # There is exactly one table on this page.
+        table = pandas.read_html(self.URL, match="Field Set")[0]
+        # clean = lambda x: x.replace(u"\u2019", "'")
+        make = lambda row: "{}: {}".format(self.convertField(row[1]), row[2]) if addDescriptions else self.convertField(row[1])
+
+        # There is a bogous NaN entry in the last row, so we only consider
+        # strings.
+        concepts = [make(x) for x in table.itertuples()]
+        return "\n".join(concepts)
 
 class Sentinel:
     URL = "https://docs.microsoft.com/en-us/azure/sentinel/normalization-schema"
@@ -106,12 +154,29 @@ class Splunk:
 
 def main():
     parser = argparse.ArgumentParser()
+    # Top Level
     parser.add_argument("--sentinel", action="store_true",
                         help="generate Azure Sentinel taxonomy")
     parser.add_argument("--splunk", action="store_true",
                         help="generate splunk CIM taxonomy")
+
+    # ecs namespace
+    ecs = parser.add_subparsers(dest="ecs").add_parser("ecs")
+    ecs.add_argument("--info", action="store_true",
+                    help="an overview of available fields and description")
+    ecs.add_argument("--fields", action="store_true",
+                    help="an overview of available fields")
+    ecs.add_argument("-f", "--field", type=str,
+                    help="generate ECS taxonomie for a given field")
     args = parser.parse_args()
-    if args.sentinel:
+    if args.ecs == 'ecs':
+        if args.info:
+            print(ECSFieldRef().parse(True))
+        elif args.fields:
+            print(ECSFieldRef().parse(False))
+        elif args.field is not None:
+            print(ECS().parse(args.field))
+    elif args.sentinel:
         sentinel = Sentinel()
         print(sentinel.parse())
     elif args.splunk:
