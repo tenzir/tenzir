@@ -37,6 +37,8 @@ vast:
   max-taste-partitions: 5
   # The amount of queries that can be executed in parallel.
   max-queries: 10
+  # The false positive rate for lossy structures in the meta index.
+  meta-index-fprate: 0.01
 
   # The maximum number of segments cached by the archive.
   segments: 10

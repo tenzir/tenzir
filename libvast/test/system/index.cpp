@@ -43,12 +43,14 @@ struct fixture : fixtures::deterministic_actor_system_and_events {
   static constexpr uint32_t in_mem_partitions = 8;
   static constexpr uint32_t taste_count = 4;
   static constexpr size_t num_query_supervisors = 1;
+  static constexpr double meta_index_fprate = 0.01;
 
   fixture() {
     directory /= "index";
     auto fs = self->spawn(system::posix_filesystem, directory);
     index = self->spawn(system::index, fs, directory / "index", slice_size,
-                        in_mem_partitions, taste_count, num_query_supervisors);
+                        in_mem_partitions, taste_count, num_query_supervisors,
+                        meta_index_fprate);
   }
 
   ~fixture() {

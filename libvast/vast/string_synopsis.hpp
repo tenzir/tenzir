@@ -201,7 +201,8 @@ synopsis_ptr make_string_synopsis(vast::type type, const caf::settings& opts) {
   }
   bloom_filter_parameters params;
   params.n = *max_part_size;
-  params.p = defaults::system::string_synopsis_fprate;
+  params.p = caf::get_or(opts, "string-synopsis-fprate",
+                         defaults::system::string_synopsis_fprate);
   // Because VAST deserializes a synopsis with empty options and
   // construction of an string synopsis fails without any sizing
   // information, we augment the type with the synopsis options.

@@ -35,10 +35,12 @@ maybe_actor spawn_index(node_actor* self, spawn_arguments& args) {
   namespace sd = vast::defaults::system;
   auto handle = self->spawn(
     index, filesystem, args.dir / args.label,
+    // TODO: Pass these options as a vast::data object instead.
     opt("vast.max-partition-size", sd::max_partition_size),
     opt("vast.max-resident-partitions", sd::max_in_mem_partitions),
     opt("vast.max-taste-partitions", sd::taste_partitions),
-    opt("vast.max-queries", sd::num_query_supervisors));
+    opt("vast.max-queries", sd::num_query_supervisors),
+    opt("vast.meta-index-fprate", sd::string_synopsis_fprate));
   VAST_VERBOSE(self, "spawned the index");
   if (auto accountant = self->state.registry.find_by_label("accountant"))
     self->send(handle, caf::actor_cast<accountant_actor>(accountant));
