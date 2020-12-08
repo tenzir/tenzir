@@ -149,7 +149,7 @@ void importer_state::send_report() {
   last_report = now;
 }
 
-caf::behavior importer(importer_actor* self, path dir, archive_type archive,
+caf::behavior importer(importer_actor* self, path dir, archive_actor archive,
                        index_actor index, type_registry_actor type_registry) {
   VAST_TRACE(VAST_ARG(dir));
   self->state.dir = dir;

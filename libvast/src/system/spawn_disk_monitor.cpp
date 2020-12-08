@@ -60,7 +60,7 @@ spawn_disk_monitor(system::node_actor* self, spawn_arguments& args) {
                                             "directory");
   auto handle = self->spawn(disk_monitor, hiwater, lowater,
                             std::chrono::seconds{interval}, abs_dir,
-                            caf::actor_cast<archive_type>(archive),
+                            caf::actor_cast<archive_actor>(archive),
                             caf::actor_cast<index_actor>(index));
   VAST_VERBOSE(self, "spawned a disk monitor");
   return caf::actor_cast<caf::actor>(handle);

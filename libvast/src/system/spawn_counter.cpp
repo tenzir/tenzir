@@ -46,7 +46,7 @@ spawn_counter(system::node_actor* self, system::spawn_arguments& args) {
     return make_error(ec::missing_component, "archive");
   auto estimate = caf::get_or(args.inv.options, "vast.count.estimate", false);
   auto handle = self->spawn(counter, *expr, caf::actor_cast<index_actor>(index),
-                            caf::actor_cast<archive_type>(archive), estimate);
+                            caf::actor_cast<archive_actor>(archive), estimate);
   VAST_VERBOSE(self, "spawned a counter for", *expr);
   return handle;
 }

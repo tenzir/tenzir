@@ -357,7 +357,7 @@ behavior exporter(stateful_actor<exporter_state>* self, expression expr,
       self->state.accountant = std::move(accountant);
       self->send(self->state.accountant, atom::announce_v, self->name());
     },
-    [=](const archive_type& archive) {
+    [=](const archive_actor& archive) {
       VAST_DEBUG(self, "registers archive", archive);
       self->state.archive = archive;
       if (has_continuous_option(self->state.options))

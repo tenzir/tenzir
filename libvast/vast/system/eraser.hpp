@@ -39,7 +39,7 @@ public:
   eraser_state(caf::event_based_actor* self);
 
   void init(caf::timespan interval, std::string query, index_actor index,
-            archive_type archive);
+            archive_actor archive);
 
 protected:
   // -- implementation hooks ---------------------------------------------------
@@ -63,7 +63,7 @@ private:
   std::string query_;
 
   /// Points to the ARCHIVE that needs periodic pruning.
-  archive_type archive_;
+  archive_actor archive_;
 
   /// Collects hits until all deltas arrived.
   ids hits_;
@@ -84,6 +84,6 @@ private:
 /// @param archive A handle to the ARCHIVE that needs periodic pruning.
 caf::behavior
 eraser(caf::stateful_actor<eraser_state>* self, caf::timespan interval,
-       std::string query, index_actor index, archive_type archive);
+       std::string query, index_actor index, archive_actor archive);
 
 } // namespace vast::system

@@ -40,7 +40,7 @@ public:
 
   counter_state(caf::event_based_actor* self);
 
-  void init(expression expr, index_actor index, archive_type archive,
+  void init(expression expr, index_actor index, archive_actor archive,
             bool skip_candidate_check);
 
 protected:
@@ -60,7 +60,7 @@ private:
   expression expr_;
 
   /// Points to the ARCHIVE for performing candidate checks.
-  archive_type archive_;
+  archive_actor archive_;
 
   /// Points to the client actor that launched the query.
   caf::actor client_;
@@ -77,6 +77,6 @@ private:
 
 caf::behavior
 counter(caf::stateful_actor<counter_state>* self, expression expr,
-        index_actor index, archive_type archive, bool skip_candidate_check);
+        index_actor index, archive_actor archive, bool skip_candidate_check);
 
 } // namespace vast::system

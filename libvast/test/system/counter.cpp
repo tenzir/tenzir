@@ -96,7 +96,7 @@ struct fixture : fixtures::deterministic_actor_system_and_events {
   }
 
   system::index_actor index;
-  system::archive_type archive;
+  system::archive_actor archive;
   caf::actor client;
   caf::actor aut;
 };

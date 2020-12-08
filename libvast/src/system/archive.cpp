@@ -87,8 +87,8 @@ void archive_state::send_report() {
   }
 }
 
-archive_type::behavior_type
-archive(archive_type::stateful_pointer<archive_state> self, path dir,
+archive_actor::behavior_type
+archive(archive_actor::stateful_pointer<archive_state> self, path dir,
         size_t capacity, size_t max_segment_size) {
   // TODO: make the choice of store configurable. For most flexibility, it
   // probably makes sense to pass a unique_ptr<stor> directory to the spawn

@@ -47,7 +47,7 @@ ids to_ids(const count& x) {
 }
 
 caf::error
-run(caf::scoped_actor& self, archive_type archive, const invocation& inv) {
+run(caf::scoped_actor& self, archive_actor archive, const invocation& inv) {
   using namespace std::string_literals;
   auto output_format = get_or(inv.options, "vast.get.format", "json"s);
   auto writer = format::writer::make(output_format, inv.options);
@@ -92,7 +92,7 @@ get_command(const invocation& inv, caf::actor_system& sys) {
   auto components = get_node_components(self, node, "archive");
   if (!components)
     return caf::make_message(std::move(components.error()));
-  auto archive = caf::actor_cast<archive_type>((*components)[0]);
+  auto archive = caf::actor_cast<archive_actor>((*components)[0]);
   VAST_ASSERT(archive);
   self->send(archive, atom::exporter_v, self);
   auto err = run(self, archive, inv);

@@ -31,7 +31,7 @@ struct disk_monitor_state {
   bool purging;
 
   /// Node handle of the ARCHIVE.
-  archive_type archive;
+  archive_actor archive;
 
   /// Node handle of the INDEX.
   index_actor index;
@@ -51,6 +51,6 @@ disk_monitor_type::behavior_type
 disk_monitor(disk_monitor_type::stateful_pointer<disk_monitor_state> self,
              size_t high_water, size_t low_water,
              std::chrono::seconds scan_interval, const vast::path& db_dir,
-             archive_type archive, index_actor index);
+             archive_actor archive, index_actor index);
 
 } // namespace vast::system

@@ -40,7 +40,7 @@ struct exporter_state {
   // -- member variables -------------------------------------------------------
 
   /// Stores a handle to the ARCHIVE for fetching candidates.
-  archive_type archive;
+  archive_actor archive;
 
   /// Stores a handle to the INDEX for querying results.
   index_actor index;

@@ -107,8 +107,8 @@ struct mock_archive_state {
   static inline constexpr const char* name = "mock-archive";
 };
 
-system::archive_type::behavior_type
-mock_archive(system::archive_type::stateful_pointer<mock_archive_state> self) {
+system::archive_actor::behavior_type
+mock_archive(system::archive_actor::stateful_pointer<mock_archive_state> self) {
   return {
     [=](caf::stream<table_slice>) { FAIL("no mock implementation available"); },
     [=](atom::exporter, caf::actor) {
@@ -154,7 +154,7 @@ struct fixture : fixtures::deterministic_actor_system_and_events {
 
   uuid query_id;
   system::index_actor index;
-  system::archive_type archive;
+  system::archive_actor archive;
   caf::actor aut;
 };
 
@@ -222,7 +222,7 @@ TEST(eraser on actual INDEX with Zeek conn logs) {
   //   | wc -l
   CHECK_EQUAL(
     rank(caf::actor_cast<
-           system::archive_type::stateful_pointer<mock_archive_state>>(archive)
+           system::archive_actor::stateful_pointer<mock_archive_state>>(archive)
            ->state.hits),
     133u);
 }

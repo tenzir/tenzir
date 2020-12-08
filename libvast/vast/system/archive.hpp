@@ -45,7 +45,7 @@ using receiver_type = caf::typed_actor<
 
 // clang-format off
 /// @relates archive
-using archive_type = caf::typed_actor<
+using archive_actor = caf::typed_actor<
   caf::reacts_to<caf::stream<table_slice>>,
   caf::reacts_to<atom::exporter, caf::actor>,
   caf::reacts_to<accountant_actor>,
@@ -62,7 +62,7 @@ using archive_type = caf::typed_actor<
 struct archive_state {
   void send_report();
   void next_session();
-  archive_type::stateful_pointer<archive_state> self;
+  archive_actor::pointer self;
   std::unique_ptr<vast::store> store;
   std::unique_ptr<vast::store::lookup> session;
   uint64_t session_id = 0;
@@ -80,8 +80,8 @@ struct archive_state {
 /// @param capacity The number of segments to cache in memory.
 /// @param max_segment_size The maximum segment size in bytes.
 /// @pre `max_segment_size > 0`
-archive_type::behavior_type
-archive(archive_type::stateful_pointer<archive_state> self, path dir,
+archive_actor::behavior_type
+archive(archive_actor::stateful_pointer<archive_state> self, path dir,
         size_t capacity, size_t max_segment_size);
 
 } // namespace vast::system

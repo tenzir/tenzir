@@ -133,7 +133,7 @@ struct fixture : fixture_base {
 
   system::type_registry_actor type_registry;
   system::index_actor index;
-  system::archive_type archive;
+  system::archive_actor archive;
   actor importer;
   actor exporter;
   expression expr;

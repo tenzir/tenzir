@@ -57,7 +57,7 @@ maybe_actor spawn_exporter(node_actor* self, spawn_arguments& args) {
     self->send(handle, atom::importer_v, std::vector{importer});
   if (archive) {
     VAST_DEBUG(self, "connects archive to new exporter");
-    self->send(handle, caf::actor_cast<archive_type>(archive));
+    self->send(handle, caf::actor_cast<archive_actor>(archive));
   }
   if (index) {
     VAST_DEBUG(self, "connects index to new exporter");

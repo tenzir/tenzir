@@ -62,7 +62,7 @@ struct importer_fixture : Base {
     MESSAGE("spawn importer");
     this->directory /= "importer";
     importer = this->self->spawn(system::importer, this->directory,
-                                 system::archive_type{}, system::index_actor{},
+                                 system::archive_actor{}, system::index_actor{},
                                  system::type_registry_actor{});
   }
 

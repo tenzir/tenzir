@@ -41,7 +41,7 @@ maybe_actor spawn_importer(node_actor* self, spawn_arguments& args) {
     return make_error(ec::missing_component, "type-registry");
   auto handle
     = self->spawn(importer, args.dir / args.label,
-                  caf::actor_cast<archive_type>(archive),
+                  caf::actor_cast<archive_actor>(archive),
                   caf::actor_cast<index_actor>(index),
                   caf::actor_cast<type_registry_actor>(type_registry));
   VAST_VERBOSE(self, "spawned the importer");
