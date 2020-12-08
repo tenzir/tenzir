@@ -351,9 +351,9 @@ caf::error unpack(const fbs::partition::v0& x, partition_synopsis& ps) {
   return unpack(*x.partition_synopsis(), ps);
 }
 
-caf::behavior
-active_partition(caf::stateful_actor<active_partition_state>* self, uuid id,
-                 filesystem_type fs, caf::settings index_opts,
+partition_actor::behavior_type
+active_partition(partition_actor::stateful_pointer<active_partition_state> self,
+                 uuid id, filesystem_type fs, caf::settings index_opts,
                  caf::settings synopsis_opts) {
   self->state.self = self;
   self->state.name = "partition-" + to_string(id);
@@ -442,17 +442,17 @@ active_partition(caf::stateful_actor<active_partition_state>* self, uuid id,
     // Delay shutdown if we're currently in the process of persisting.
     if (self->state.persistence_promise.pending()) {
       std::call_once(self->state.shutdown_once, [=] {
-        VAST_DEBUG(self,
-                   "delays partition shutdown because it is still writing "
-                   "to disk");
+        VAST_DEBUG(self, "delays partition shutdown because it is still "
+                         "writing to disk");
       });
-      self->delayed_send(self, std::chrono::milliseconds(100), msg);
+      using namespace std::chrono_literals;
+      caf::delayed_anon_send(caf::actor_cast<caf::actor>(self), 100ms, msg);
       return;
     }
     VAST_VERBOSE(self, "shuts down after persisting partition state");
     // TODO: We must actor_cast to caf::actor here because 'shutdown' operates
-    // on 'std::vector<caf::actor>' only. That should probably be generalized in
-    // the future.
+    // on 'std::vector<caf::actor>' only. That should probably be generalized
+    // in the future.
     auto indexers = std::vector<caf::actor>{};
     indexers.reserve(self->state.indexers.size());
     for ([[maybe_unused]] auto&& [qf, indexer] :
@@ -466,38 +466,37 @@ active_partition(caf::stateful_actor<active_partition_state>* self, uuid id,
       return self->state.stage->add_inbound_path(in);
     },
     [=](atom::persist, const path& part_dir, caf::actor index) {
-      auto& st = self->state;
-      st.index_actor = index;
-      // Using `source()` to check if the promise was already initialized.
-      if (!st.persistence_promise.source())
-        st.persistence_promise = self->make_response_promise();
-      st.persist_path = part_dir;
-      st.persisted_indexers = 0;
+      self->state.index_actor = index;
+      self->state.persist_path = part_dir;
+      self->state.persisted_indexers = 0;
+      self->state.persistence_promise = self->make_response_promise<atom::ok>();
+      // We use a high message priority here because we want to start persisting
+      // as soon as possible in order to avoid shutdown delay.
+      self->send<caf::message_priority::high>(self, atom::persist_v,
+                                              atom::resume_v);
+      return self->state.persistence_promise;
+    },
+    [=](atom::persist, atom::resume) {
       // Wait for outstanding data to avoid data loss.
-      // TODO: Maybe a more elegant design would be to send a, say,
-      // `resume` atom when finalizing the stream, but then the case
-      // where the stream finishes before persisting starts becomes more
-      // complicated.
       if (!self->state.streaming_initiated
           || !self->state.stage->inbound_paths().empty()
           || !self->state.stage->idle()) {
         VAST_DEBUG(self, "waits for stream before persisting");
-        self->delayed_send(self, 50ms, atom::persist_v, part_dir, index);
-        return st.persistence_promise;
+        self->delayed_send(self, 50ms, atom::persist_v, atom::resume_v);
+        return;
       }
       self->state.stage->out().fan_out_flush();
       self->state.stage->out().force_emit_batches();
       self->state.stage->out().close();
-      if (st.indexers.empty()) {
-        st.persistence_promise.deliver(
+      if (self->state.indexers.empty()) {
+        self->state.persistence_promise.deliver(
           make_error(ec::logic_error, "partition has no indexers"));
-        return st.persistence_promise;
+        return;
       }
-      VAST_DEBUG(self, "sends 'snapshot' to", st.indexers.size(), "indexers");
-      for (auto& kv : st.indexers) {
+      VAST_DEBUG(self, "sends 'snapshot' to", self->state.indexers.size(),
+                 "indexers");
+      for (auto& kv : self->state.indexers)
         self->send(kv.second, atom::snapshot_v);
-      }
-      return st.persistence_promise;
     },
     // Semantically this is the "response" to the "request" represented by the
     // snapshot atom.
@@ -535,8 +534,9 @@ active_partition(caf::stateful_actor<active_partition_state>* self, uuid id,
                  fbchunk->size(), "bytes");
       // Relinquish ownership and send the shrinked synopsis to the index.
       if (self->state.index_actor) {
-        self->send(self->state.index_actor, atom::replace_v, self->state.id,
-                   self->state.synopsis);
+        // FIXME: Use self->send once the index is a typed actor.
+        caf::anon_send(self->state.index_actor, atom::replace_v, self->state.id,
+                       self->state.synopsis);
         self->state.synopsis.reset();
       }
       self->state.persistence_promise.delegate(self->state.fs_actor,
@@ -549,27 +549,23 @@ active_partition(caf::stateful_actor<active_partition_state>* self, uuid id,
   };
 }
 
-caf::behavior
-passive_partition(caf::stateful_actor<passive_partition_state>* self, uuid id,
-                  filesystem_type fs, vast::path path) {
+partition_actor::behavior_type passive_partition(
+  partition_actor::stateful_pointer<passive_partition_state> self, uuid id,
+  filesystem_type fs, vast::path path) {
   self->state.self = self;
-  auto passive_partition_behavior = caf::behavior{
-    [=](caf::stream<table_slice>) {
-      VAST_ASSERT(!"read-only partition can not receive new table slices");
-    },
-    [=](atom::persist, const vast::path&) {
-      VAST_ASSERT(!"read-only partition does not need to be persisted");
-    },
-    [=](const expression& expr) { return evaluate(self->state, expr); },
-  };
+  // We send a "read" to the fs actor and upon receiving the result deserialize
+  // the flatbuffer and switch to the "normal" partition behavior for responding
+  // to queries.
+  self->send(fs, atom::mmap_v, path);
   self->set_exit_handler([=](const caf::exit_msg& msg) {
     VAST_DEBUG(self, "received EXIT from", msg.source,
                "with reason:", msg.reason);
-    // Receiving an EXIT message does not need to coincide with the state being
-    // destructed, so we explicitly clear the vector to release the references.
-    // TODO: We must actor_cast to caf::actor here because 'terminate' operates
-    // on 'std::vector<caf::actor>' only. That should probably be generalized in
-    // the future.
+    // Receiving an EXIT message does not need to coincide with the state
+    // being destructed, so we explicitly clear the vector to release the
+    // references.
+    // TODO: We must actor_cast to caf::actor here because 'terminate'
+    // operates on 'std::vector<caf::actor>' only. That should probably be
+    // generalized in the future.
     auto indexers = std::vector<caf::actor>{};
     indexers.reserve(self->state.indexers.size());
     for (auto&& indexer : std::exchange(self->state.indexers, {}))
@@ -591,17 +587,27 @@ passive_partition(caf::stateful_actor<passive_partition_state>* self, uuid id,
           self->quit(err);
         });
   });
-  // We send a "read" to the fs actor and upon receiving the result deserialize
-  // the flatbuffer and switch to the "normal" partition behavior for responding
-  // to queries. The `skip` default handler is used to buffer all messages
-  // arriving until then.
-  self->set_default_handler(skip);
-  self->send(caf::actor_cast<caf::actor>(fs), atom::mmap_v, path);
   return {
-    [=](vast::chunk_ptr chunk) {
+    [=](caf::stream<table_slice>)
+      -> caf::result<caf::inbound_stream_slot<table_slice>> {
+      die("received inbound table slice stream as passive partition");
+    },
+    [=](atom::persist, vast::path, caf::actor) -> caf::result<atom::ok> {
+      die("received persist request as passive partition");
+    },
+    [=](atom::persist, atom::resume) {
+      die("received persist request as passive partition");
+    },
+    [=](chunk_ptr chunk) {
+      VAST_TRACE(self, VAST_ARG(chunk));
+      if (self->state.partition_chunk) {
+        VAST_WARNING(self, "ignores duplicate chunk");
+        return;
+      }
       if (!chunk) {
         VAST_ERROR(self, "got invalid chunk");
-        return self->quit();
+        self->quit();
+        return;
       }
       // FlatBuffers <= 1.11 does not correctly use '::flatbuffers::soffset_t'
       // over 'soffset_t' in FLATBUFFERS_MAX_BUFFER_SIZE.
@@ -617,26 +623,37 @@ passive_partition(caf::stateful_actor<passive_partition_state>* self, uuid id,
       if (partition->partition_type() != fbs::partition::Partition::v0) {
         VAST_ERROR(self, "found partition with invalid version of type:",
                    partition->GetFullyQualifiedName());
-        return self->quit();
+        self->quit();
+        return;
       }
       auto partition_v0 = partition->partition_as_v0();
       self->state.partition_chunk = chunk;
       self->state.flatbuffer = partition_v0;
       if (auto error = unpack(*self->state.flatbuffer, self->state)) {
         VAST_ERROR(self, "failed to unpack partition:", render(error));
-        return self->quit(std::move(error));
+        self->quit(std::move(error));
+        return;
       }
       if (id != self->state.id)
         VAST_WARNING(self, "encountered partition id mismatch: restored",
                      self->state.id, "from disk, expected", id);
-      // Switch to "normal" partition mode
-      self->become(passive_partition_behavior);
-      self->set_default_handler(caf::print_and_drop);
+      // Delegate all deferred evaluations now that we have the partition chunk.
+      VAST_DEBUG(self, "delegates", self->state.deferred_evaluations.size(),
+                 "deferred evaluations");
+      for (auto&& [expr, rp] :
+           std::exchange(self->state.deferred_evaluations, {}))
+        rp.delegate(static_cast<partition_actor>(self), std::move(expr));
     },
-    [=](const caf::error& err) {
-      VAST_ERROR(self, "failed to load partition", id,
-                 "with error:", render(err));
-      self->quit(err);
+    [=](const expression& expr) -> caf::result<evaluation_triples> {
+      VAST_TRACE(self, VAST_ARG(expr));
+      if (!self->state.partition_chunk)
+        return self->state.deferred_evaluations
+          .emplace_back(expr, self->make_response_promise<evaluation_triples>())
+          .second;
+      // We can safely assert that if we have the partition chunk already, all
+      // deferred evaluations were taken care of.
+      VAST_ASSERT(self->state.deferred_evaluations.empty());
+      return evaluate(self->state, expr);
     },
   };
 }

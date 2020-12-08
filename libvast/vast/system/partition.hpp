@@ -21,6 +21,7 @@
 #include "vast/meta_index.hpp"
 #include "vast/path.hpp"
 #include "vast/qualified_record_field.hpp"
+#include "vast/system/evaluator.hpp"
 #include "vast/system/filesystem.hpp"
 #include "vast/system/indexer.hpp"
 #include "vast/system/instrumentation.hpp"
@@ -29,10 +30,11 @@
 #include "vast/uuid.hpp"
 #include "vast/value_index.hpp"
 
-#include <caf/event_based_actor.hpp>
 #include <caf/fwd.hpp>
 #include <caf/optional.hpp>
 #include <caf/stream_slot.hpp>
+#include <caf/typed_event_based_actor.hpp>
+#include <caf/typed_response_promise.hpp>
 
 #include <unordered_map>
 
@@ -44,6 +46,18 @@ struct partition_selector {
   bool operator()(const vast::qualified_record_field& filter,
                   const table_slice_column& x) const;
 };
+
+// clang-format off
+using partition_actor = caf::typed_actor<
+  caf::replies_to<caf::stream<table_slice>>
+    ::with<caf::inbound_stream_slot<table_slice>>,
+  caf::replies_to<atom::persist, path, caf::actor>
+    ::with<atom::ok>,
+  caf::reacts_to<atom::persist, atom::resume>,
+  caf::reacts_to<chunk_ptr>,
+  caf::replies_to<expression>::with<evaluation_triples>
+>;
+// clang-format on
 
 /// The state of the active partition actor.
 struct active_partition_state {
@@ -57,7 +71,7 @@ struct active_partition_state {
   /// Data Members
 
   /// Pointer to the parent actor.
-  caf::stateful_actor<active_partition_state>* self;
+  partition_actor::pointer self;
 
   /// Uniquely identifies this partition.
   uuid id;
@@ -107,7 +121,7 @@ struct active_partition_state {
 
   /// Promise that gets satisfied when the partition state was serialized
   /// and written to disk.
-  caf::response_promise persistence_promise;
+  caf::typed_response_promise<atom::ok> persistence_promise;
 
   /// Path where the index state is written.
   std::optional<path> persist_path;
@@ -135,7 +149,7 @@ struct passive_partition_state {
   indexer_actor indexer_at(size_t position) const;
 
   /// Pointer to the parent actor.
-  caf::stateful_actor<passive_partition_state>* self;
+  partition_actor::pointer self;
 
   /// Uniquely identifies this partition.
   uuid id;
@@ -158,6 +172,11 @@ struct passive_partition_state {
   /// The raw memory of the partition, used to spawn indexers on demand.
   vast::chunk_ptr partition_chunk;
 
+  /// Stores a list of expressions that could not be answered immediately.
+  std::vector<
+    std::pair<expression, caf::typed_response_promise<evaluation_triples>>>
+    deferred_evaluations;
+
   /// A typed view into the `partition_chunk`.
   const fbs::partition::v0* flatbuffer;
 
@@ -175,17 +194,15 @@ caf::error unpack(const fbs::partition::v0& x, passive_partition_state& y);
 
 caf::error unpack(const fbs::partition::v0& x, partition_synopsis& y);
 
-// TODO: Use typed actors for the partition actors.
-
 /// Spawns a partition.
 /// @param self The partition actor.
 /// @param id The UUID of this partition.
 /// @param fs The actor handle of the filesystem actor.
 /// @param index_opts Settings that are forwarded when creating indexers.
 /// @param synopsis_opts Settings that are forwarded when creating synopses.
-caf::behavior
-active_partition(caf::stateful_actor<active_partition_state>* self, uuid id,
-                 filesystem_type fs, caf::settings index_opts,
+partition_actor::behavior_type
+active_partition(partition_actor::stateful_pointer<active_partition_state> self,
+                 uuid id, filesystem_type fs, caf::settings index_opts,
                  caf::settings synopsis_opts);
 
 /// Spawns a read-only partition.
@@ -193,8 +210,8 @@ active_partition(caf::stateful_actor<active_partition_state>* self, uuid id,
 /// @param id The UUID of this partition.
 /// @param fs The actor handle of the filesystem actor.
 /// @param path The path where the partition flatbuffer can be found.
-caf::behavior
-passive_partition(caf::stateful_actor<passive_partition_state>* self, uuid id,
-                  filesystem_type fs, vast::path path);
+partition_actor::behavior_type passive_partition(
+  partition_actor::stateful_pointer<passive_partition_state> self, uuid id,
+  filesystem_type fs, vast::path path);
 
 } // namespace vast::system

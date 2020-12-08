@@ -87,8 +87,8 @@ using namespace std::chrono;
 // query_supervisor    ------------>  index     ----------------->   partition
 //                                                                      |
 //                                                  [indexer]           |
-//                                  (spawns     <-----------------------/     
-//                                   evaluators) 
+//                                  (spawns     <-----------------------/
+//                                   evaluators)
 //
 //                                                  curried_predicate
 //                                   evaluator  -------------------------------> indexer
@@ -103,7 +103,7 @@ vast::path index_state::partition_path(const uuid& id) const {
   return dir / to_string(id);
 }
 
-caf::actor partition_factory::operator()(const uuid& id) const {
+partition_actor partition_factory::operator()(const uuid& id) const {
   // Load partition from disk.
   VAST_ASSERT(std::find(state_.persisted_partitions.begin(),
                         state_.persisted_partitions.end(), id)
@@ -264,11 +264,11 @@ index_state::status(status_verbosity v) const {
   return result;
 }
 
-std::vector<std::pair<uuid, caf::actor>>
+std::vector<std::pair<uuid, partition_actor>>
 index_state::collect_query_actors(query_state& lookup,
                                   uint32_t num_partitions) {
   VAST_TRACE(VAST_ARG(lookup), VAST_ARG(num_partitions));
-  std::vector<std::pair<uuid, caf::actor>> result;
+  std::vector<std::pair<uuid, partition_actor>> result;
   if (num_partitions == 0 || lookup.partitions.empty())
     return result;
   // Prefer partitions that are already available in RAM.
@@ -281,10 +281,10 @@ index_state::collect_query_actors(query_state& lookup,
   std::partition(lookup.partitions.begin(), lookup.partitions.end(),
                  partition_is_loaded);
   // Helper function to spin up EVALUATOR actors for a single partition.
-  auto spin_up = [&](const uuid& partition_id) -> caf::actor {
+  auto spin_up = [&](const uuid& partition_id) -> partition_actor {
     // We need to first check whether the ID is the active partition or one
     // of our unpersisted ones. Only then can we dispatch to our LRU cache.
-    caf::actor part;
+    partition_actor part;
     if (active_partition.actor != nullptr
         && active_partition.id == partition_id)
       part = active_partition.actor;
@@ -327,7 +327,7 @@ index_state::collect_query_actors(query_state& lookup,
 template <typename Continuation>
 void await_evaluation_maps(
   caf::stateful_actor<index_state>* self, const expression& expr,
-  const std::vector<std::pair<vast::uuid, caf::actor>>& actors,
+  const std::vector<std::pair<vast::uuid, partition_actor>>& actors,
   Continuation then) {
   struct counter {
     size_t received;
@@ -486,8 +486,7 @@ index(caf::stateful_actor<index_state>* self, filesystem_type fs, path dir,
   auto decomission_active_partition = [=] {
     auto& active = self->state.active_partition;
     auto id = active.id;
-    caf::actor actor = nullptr;
-    std::swap(actor, active.actor);
+    auto actor = std::exchange(active.actor, {});
     self->state.unpersisted[id] = actor;
     // Send buffered batches.
     self->state.stage->out().fan_out_flush();
@@ -574,12 +573,15 @@ index(caf::stateful_actor<index_state>* self, filesystem_type fs, path dir,
     if (self->state.active_partition.actor)
       decomission_active_partition();
     // Collect partitions for termination.
+    // TODO: We must actor_cast to caf::actor here because 'shutdown' operates
+    // on 'std::vector<caf::actor>' only. That should probably be generalized in
+    // the future.
     std::vector<caf::actor> partitions;
     partitions.reserve(self->state.inmem_partitions.size() + 1);
     for ([[maybe_unused]] auto& [_, part] : self->state.unpersisted)
-      partitions.push_back(part);
+      partitions.push_back(caf::actor_cast<caf::actor>(part));
     for ([[maybe_unused]] auto& [_, part] : self->state.inmem_partitions)
-      partitions.push_back(part);
+      partitions.push_back(caf::actor_cast<caf::actor>(part));
     self->state.flush_to_disk();
     // Receiving an EXIT message does not need to coincide with the state being
     // destructed, so we explicitly clear the tables to release the references.

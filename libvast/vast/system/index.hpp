@@ -32,18 +32,17 @@
 #include <caf/fwd.hpp>
 #include <caf/meta/omittable_if_empty.hpp>
 #include <caf/meta/type_name.hpp>
+#include <caf/response_promise.hpp>
 
 #include <unordered_map>
 #include <vector>
-
-#include "caf/response_promise.hpp"
 
 namespace vast::system {
 
 /// The state of the active partition.
 struct active_partition_info {
   /// The partition actor.
-  caf::actor actor;
+  partition_actor actor;
 
   /// The slot ID that identifies the partition in the stream.
   caf::stream_slot stream_slot;
@@ -89,7 +88,7 @@ public:
 
   filesystem_type& fs(); // getter/setter
 
-  caf::actor operator()(const uuid& id) const;
+  partition_actor operator()(const uuid& id) const;
 
 private:
   filesystem_type fs_;
@@ -149,7 +148,7 @@ struct index_state {
 
   /// Get the actor handles for up to `num_partitions` PARTITION actors,
   /// spawning them if needed.
-  std::vector<std::pair<uuid, caf::actor>>
+  std::vector<std::pair<uuid, partition_actor>>
   collect_query_actors(query_state& lookup, uint32_t num_partitions);
 
   /// Spawns one evaluator for each partition.
@@ -186,12 +185,12 @@ struct index_state {
   // Then (assuming the query interface for both types of partition stays
   // identical) we could just use the same cache for unpersisted partitions and
   // unpin them after they're safely on disk.
-  std::unordered_map<uuid, caf::actor> unpersisted;
+  std::unordered_map<uuid, partition_actor> unpersisted;
 
   /// The set of passive (read-only) partitions currently loaded into memory.
   /// Uses the `partition_factory` to load new partitions as needed, and evicts
   /// old entries when the size exceeds `max_inmem_partitions`.
-  detail::lru_cache<uuid, caf::actor, partition_factory> inmem_partitions;
+  detail::lru_cache<uuid, partition_actor, partition_factory> inmem_partitions;
 
   /// The set of partitions that exist on disk.
   std::unordered_set<uuid> persisted_partitions;
