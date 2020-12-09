@@ -13,9 +13,13 @@
 
 #pragma once
 
+#include "vast/bitvector.hpp"
 #include "vast/bloom_filter_parameters.hpp"
+#include "vast/detail/operators.hpp"
 #include "vast/hasher.hpp"
 
+#include <caf/meta/load_callback.hpp>
+#include <caf/meta/type_name.hpp>
 #include <caf/optional.hpp>
 
 #include <climits>
@@ -24,9 +28,6 @@
 #include <type_traits>
 #include <utility>
 #include <vector>
-
-#include <vast/bitvector.hpp>
-#include <vast/detail/operators.hpp>
 
 namespace vast::policy {
 
@@ -110,7 +111,15 @@ public:
 
   template <class Inspector>
   friend auto inspect(Inspector& f, bloom_filter& x) {
-    return f(caf::meta::type_name("bloom_filter"), x.hasher_, x.bits_);
+    auto load_callback = caf::meta::load_callback([&]() -> caf::error {
+      // When deserializing into a vector that was already bigger than
+      // required, CAF will reuse the storage but not release the
+      // excess afterwards.
+      x.bits_.shrink_to_fit();
+      return caf::none;
+    });
+    return f(caf::meta::type_name("bloom_filter"), x.hasher_, x.bits_,
+             std::move(load_callback));
   }
 
 private:
