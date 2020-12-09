@@ -27,12 +27,12 @@
 
 namespace vast {
 
-namespace {
+namespace detail {
 
 // Because VAST deserializes a synopsis with empty options and
 // construction of an address synopsis fails without any sizing
 // information, we augment the type with the synopsis options.
-type annotate_type(type type, const bloom_filter_parameters& params) {
+inline type annotate_type(type type, const bloom_filter_parameters& params) {
   using namespace std::string_literals;
   auto v = "bloomfilter("s + std::to_string(*params.n) + ','
            + std::to_string(*params.p) + ')';
@@ -40,7 +40,7 @@ type annotate_type(type type, const bloom_filter_parameters& params) {
   return std::move(type).attributes({{"synopsis", std::move(v)}});
 }
 
-} // namespace
+} // namespace detail
 
 template <class HashFunction>
 synopsis_ptr
@@ -88,7 +88,7 @@ public:
     params.p = p_;
     params.n = next_power_of_two;
     VAST_DEBUG_ANON("shrinked address synopsis to", params.n, "elements");
-    auto type = annotate_type(this->type(), params);
+    auto type = detail::annotate_type(this->type(), params);
     auto shrinked_synopsis
       = make_address_synopsis<xxhash64>(type, std::move(params));
     if (!shrinked_synopsis)
@@ -215,7 +215,7 @@ synopsis_ptr make_address_synopsis(vast::type type, const caf::settings& opts) {
   bloom_filter_parameters params;
   params.n = *max_part_size;
   params.p = defaults::system::address_synopsis_fprate;
-  auto annotated_type = annotate_type(type, params);
+  auto annotated_type = detail::annotate_type(type, params);
   // Create either a a buffered_address_synopsis or a plain address synopsis
   // depending on the callers preference.
   auto buffered = caf::get_or(opts, "buffer-ips", false);
