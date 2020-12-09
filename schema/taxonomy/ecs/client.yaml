@@ -1,32 +1,32 @@
 - concept:
-    name: ecs.source.address
+    name: ecs.client.address
     description: >
-      Some event source addresses are defined ambiguously. The event will
+      Some event client addresses are defined ambiguously. The event will
       sometimes list an IP, a domain or a unix socket.  You should always
       store the raw address in the `.address` field.
 
       Then it should be duplicated to `.ip` or `.domain`, depending on which
       one it is.
 - concept:
-    name: ecs.source.ip
+    name: ecs.client.ip
     description: >
-      IP address of the source (IPv4 or IPv6).
+      IP address of the client (IPv4 or IPv6).
 - concept:
-    name: ecs.source.port
+    name: ecs.client.port
     description: >
-      Port of the source.
+      Port of the client.
 - concept:
-    name: ecs.source.mac
+    name: ecs.client.mac
     description: >
-      MAC address of the source.
+      MAC address of the client.
 - concept:
-    name: ecs.source.domain
+    name: ecs.client.domain
     description: >
-      Source domain.
+      Client domain.
 - concept:
-    name: ecs.source.registered_domain
+    name: ecs.client.registered_domain
     description: >
-      The highest registered source domain, stripped of the subdomain.
+      The highest registered client domain, stripped of the subdomain.
 
       For example, the registered domain for "foo.example.com" is "example.com".
 
@@ -34,7 +34,7 @@
       list (http://publicsuffix.org). Trying to approximate this by simply
       taking the last two labels will not work well for TLDs such as "co.uk".
 - concept:
-    name: ecs.source.top_level_domain
+    name: ecs.client.top_level_domain
     description: >
       The effective top level domain (eTLD), also known as the domain suffix,
       is the last part of the domain name. For example, the top level domain
@@ -45,7 +45,7 @@
       taking the last label will not work well for effective TLDs such as
       "co.uk".
 - concept:
-    name: ecs.source.subdomain
+    name: ecs.client.subdomain
     description: >
       The subdomain portion of a fully qualified domain name includes all
       of the names except the host name under the registered_domain.  In a
@@ -57,25 +57,25 @@
       If the domain has multiple levels of subdomain, such as "sub2.sub1.example.com",
       the subdomain field should contain "sub2.sub1", with no trailing period.
 - concept:
-    name: ecs.source.bytes
+    name: ecs.client.bytes
     description: >
-      Bytes sent from the source to the destination.
+      Bytes sent from the client to the server.
 - concept:
-    name: ecs.source.packets
+    name: ecs.client.packets
     description: >
-      Packets sent from the source to the destination.
+      Packets sent from the client to the server.
 - concept:
-    name: ecs.source.nat.ip
+    name: ecs.client.nat.ip
     description: >
-      Translated ip of source based NAT sessions (e.g. internal client to
-      internet)
+      Translated IP of source based NAT sessions (e.g. internal client to
+      internet).
 
       Typically connections traversing load balancers, firewalls, or routers.
 - concept:
-    name: ecs.source.nat.port
+    name: ecs.client.nat.port
     description: >
-      Translated port of source based NAT sessions. (e.g. internal client
-      to internet)
+      Translated port of source based NAT sessions (e.g. internal client to
+      internet).
 
-      Typically used with load balancers, firewalls, or routers.
+      Typically connections traversing load balancers, firewalls, or routers.
 

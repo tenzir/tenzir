@@ -1,0 +1,9 @@
+- concept:
+    name: ecs.organization.name
+    description: >
+      Organization name.
+- concept:
+    name: ecs.organization.id
+    description: >
+      Unique identifier for the organization.
+

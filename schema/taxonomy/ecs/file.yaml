@@ -1,0 +1,110 @@
+- concept:
+    name: ecs.file.name
+    description: >-
+      Name of the file including the extension, without the directory.
+- concept:
+    name: ecs.file.attributes
+    description: >
+      Array of file attributes.
+
+      Attributes names will vary by platform. Here's a non-exhaustive list
+      of values that are expected in this field: archive, compressed, directory,
+      encrypted, execute, hidden, read, readonly, system, write.
+- concept:
+    name: ecs.file.directory
+    description: >
+      Directory where the file is located. It should include the drive letter,
+      when appropriate.
+- concept:
+    name: ecs.file.drive_letter
+    description: >
+      Drive letter where the file is located. This field is only relevant
+      on Windows.
+
+      The value should be uppercase, and not include the colon.
+- concept:
+    name: ecs.file.path
+    description: >
+      Full path to the file, including the file name. It should include the
+      drive letter, when appropriate.
+- concept:
+    name: ecs.file.target_path
+    description: >-
+      Target path for symlinks.
+- concept:
+    name: ecs.file.extension
+    description: >
+      File extension, excluding the leading dot.
+
+      Note that when the file name has multiple extensions (example.tar.gz),
+      only the last one should be captured ("gz", not "tar.gz").
+- concept:
+    name: ecs.file.type
+    description: >-
+      File type (file, dir, or symlink).
+- concept:
+    name: ecs.file.device
+    description: >-
+      Device that is the source of the file.
+- concept:
+    name: ecs.file.inode
+    description: >-
+      Inode representing the file in the filesystem.
+- concept:
+    name: ecs.file.uid
+    description: >
+      The user ID (UID) or security identifier (SID) of the file owner.
+- concept:
+    name: ecs.file.owner
+    description: >-
+      File owner's username.
+- concept:
+    name: ecs.file.gid
+    description: >-
+      Primary group ID (GID) of the file.
+- concept:
+    name: ecs.file.group
+    description: >-
+      Primary group name of the file.
+- concept:
+    name: ecs.file.mode
+    description: >-
+      Mode of the file in octal representation.
+- concept:
+    name: ecs.file.size
+    description: >
+      File size in bytes.
+
+      Only relevant when `file.type` is "file".
+- concept:
+    name: ecs.file.mtime
+    description: >-
+      Last time the file content was modified.
+- concept:
+    name: ecs.file.ctime
+    description: >
+      Last time the file attributes or metadata changed.
+
+      Note that changes to the file content will update `mtime`. This implies
+      `ctime` will be adjusted at the same time, since `mtime` is an attribute
+      of the file.
+- concept:
+    name: ecs.file.created
+    description: >
+      File creation time.
+
+      Note that not all filesystems store the creation time.
+- concept:
+    name: ecs.file.accessed
+    description: >
+      Last time the file was accessed.
+
+      Note that not all filesystems keep track of access time.
+- concept:
+    name: ecs.file.mime_type
+    description: >
+      MIME type should identify the format of the file or stream of bytes
+      using https://www.iana.org/assignments/media-types/media-types.xhtml[IANA
+      official types], where possible. When more than one type is applicable,
+      the most specific type should be used.
+

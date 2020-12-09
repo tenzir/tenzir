@@ -1,0 +1,34 @@
+- concept:
+    name: ecs.user.id
+    description: >
+      Unique identifier of the user.
+- concept:
+    name: ecs.user.name
+    description: >
+      Short name or login of the user.
+- concept:
+    name: ecs.user.full_name
+    description: >
+      User's full name, if available.
+- concept:
+    name: ecs.user.email
+    description: >
+      User email address.
+- concept:
+    name: ecs.user.hash
+    description: >
+      Unique user hash to correlate information for a user in anonymized form.
+
+      Useful if `user.id` or `user.name` contain confidential information
+      and cannot be used.
+- concept:
+    name: ecs.user.domain
+    description: >
+      Name of the directory the user is a member of.
+
+      For example, an LDAP or Active Directory domain name.
+- concept:
+    name: ecs.user.roles
+    description: >
+      Array of user roles at the time of the event.
+

@@ -1,0 +1,10 @@
+- concept:
+    name: ecs.as.number
+    description: >
+      Unique number allocated to the autonomous system. The autonomous system
+      number (ASN) uniquely identifies each network on the Internet.
+- concept:
+    name: ecs.as.organization.name
+    description: >
+      Organization name.
+

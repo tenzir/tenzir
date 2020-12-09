@@ -1,0 +1,37 @@
+- concept:
+    name: ecs.os.type
+    description: >
+      Use the `os.type` field to categorize the operating system into one
+      of the broad commercial families.
+
+      One of these following values should be used (lowercase): linux, macos,
+      unix, windows.
+
+      If the OS you're dealing with is not in the list, the field should not
+      be populated. Please let us know by opening an issue with ECS, to propose
+      its addition.
+- concept:
+    name: ecs.os.platform
+    description: >
+      Operating system platform (such centos, ubuntu, windows).
+- concept:
+    name: ecs.os.name
+    description: >
+      Operating system name, without the version.
+- concept:
+    name: ecs.os.full
+    description: >
+      Operating system name, including the version or code name.
+- concept:
+    name: ecs.os.family
+    description: >
+      OS family (such as redhat, debian, freebsd, windows).
+- concept:
+    name: ecs.os.version
+    description: >
+      Operating system version as a raw string.
+- concept:
+    name: ecs.os.kernel
+    description: >
+      Operating system kernel version as a raw string.
+

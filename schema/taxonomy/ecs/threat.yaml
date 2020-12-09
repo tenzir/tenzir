@@ -1,0 +1,46 @@
+- concept:
+    name: ecs.threat.framework
+    description: >
+      Name of the threat framework used to further categorize and classify
+      the tactic and technique of the reported threat. Framework classification
+      can be provided by detecting systems, evaluated at ingest time, or retrospectively
+      tagged to events.
+- concept:
+    name: ecs.threat.tactic.id
+    description: "The id of tactic used by this threat. You can use a MITRE\
+      \ ATT&CK\xAE tactic, for example. (ex. https://attack.mitre.org/tactics/TA0002/\
+      \ )\n"
+- concept:
+    name: ecs.threat.tactic.name
+    description: "Name of the type of tactic used by this threat. You can\
+      \ use a MITRE ATT&CK\xAE tactic, for example. (ex. https://attack.mitre.org/tactics/TA0002/)\n"
+- concept:
+    name: ecs.threat.tactic.reference
+    description: "The reference url of tactic used by this threat. You can\
+      \ use a MITRE ATT&CK\xAE tactic, for example. (ex. https://attack.mitre.org/tactics/TA0002/\
+      \ )\n"
+- concept:
+    name: ecs.threat.technique.id
+    description: "The id of technique used by this threat. You can use a MITRE\
+      \ ATT&CK\xAE technique, for example. (ex. https://attack.mitre.org/techniques/T1059/)\n"
+- concept:
+    name: ecs.threat.technique.name
+    description: "The name of technique used by this threat. You can use a\
+      \ MITRE ATT&CK\xAE technique, for example. (ex. https://attack.mitre.org/techniques/T1059/)\n"
+- concept:
+    name: ecs.threat.technique.reference
+    description: "The reference url of technique used by this threat. You\
+      \ can use a MITRE ATT&CK\xAE technique, for example. (ex. https://attack.mitre.org/techniques/T1059/)\n"
+- concept:
+    name: ecs.threat.technique.subtechnique.id
+    description: "The full id of subtechnique used by this threat. You can\
+      \ use a MITRE ATT&CK\xAE subtechnique, for example. (ex. https://attack.mitre.org/techniques/T1059/001/)\n"
+- concept:
+    name: ecs.threat.technique.subtechnique.name
+    description: "The name of subtechnique used by this threat. You can use\
+      \ a MITRE ATT&CK\xAE subtechnique, for example. (ex. https://attack.mitre.org/techniques/T1059/001/)\n"
+- concept:
+    name: ecs.threat.technique.subtechnique.reference
+    description: "The reference url of subtechnique used by this threat. You\
+      \ can use a MITRE ATT&CK\xAE subtechnique, for example. (ex. https://attack.mitre.org/techniques/T1059/001/)\n"
+

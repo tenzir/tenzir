@@ -1,0 +1,9 @@
+- concept:
+    name: ecs.vlan.id
+    description: >
+      VLAN ID as reported by the observer.
+- concept:
+    name: ecs.vlan.name
+    description: >
+      Optional VLAN name as reported by the observer.
+

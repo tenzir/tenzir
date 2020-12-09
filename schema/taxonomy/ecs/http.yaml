@@ -1,0 +1,67 @@
+- concept:
+    name: ecs.http.request.method
+    description: >
+      HTTP request method.
+
+      Prior to ECS 1.6.0 the following guidance was provided:
+
+      "The field value must be normalized to lowercase for querying."
+
+      As of ECS 1.6.0, the guidance is deprecated because the original case
+      of the method may be useful in anomaly detection.  Original case will
+      be mandated in ECS 2.0.0
+- concept:
+    name: ecs.http.request.mime_type
+    description: >
+      Mime type of the body of the request.
+
+      This value must only be populated based on the content of the request
+      body, not on the `Content-Type` header. Comparing the mime type of a
+      request with the request's Content-Type header can be helpful in detecting
+      threats or misconfigured clients.
+- concept:
+    name: ecs.http.request.body.content
+    description: >
+      The full HTTP request body.
+- concept:
+    name: ecs.http.request.referrer
+    description: >
+      Referrer for this HTTP request.
+- concept:
+    name: ecs.http.response.status_code
+    description: >
+      HTTP response status code.
+- concept:
+    name: ecs.http.response.mime_type
+    description: >
+      Mime type of the body of the response.
+
+      This value must only be populated based on the content of the response
+      body, not on the `Content-Type` header. Comparing the mime type of a
+      response with the response's Content-Type header can be helpful in detecting
+      misconfigured servers.
+- concept:
+    name: ecs.http.response.body.content
+    description: >
+      The full HTTP response body.
+- concept:
+    name: ecs.http.version
+    description: >
+      HTTP version.
+- concept:
+    name: ecs.http.request.bytes
+    description: >
+      Total size in bytes of the request (body and headers).
+- concept:
+    name: ecs.http.request.body.bytes
+    description: >
+      Size in bytes of the request body.
+- concept:
+    name: ecs.http.response.bytes
+    description: >
+      Total size in bytes of the response (body and headers).
+- concept:
+    name: ecs.http.response.body.bytes
+    description: >
+      Size in bytes of the response body.
+

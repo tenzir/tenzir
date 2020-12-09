@@ -1,0 +1,17 @@
+- concept:
+    name: ecs.hash.md5
+    description: >-
+      MD5 hash.
+- concept:
+    name: ecs.hash.sha1
+    description: >-
+      SHA1 hash.
+- concept:
+    name: ecs.hash.sha256
+    description: >-
+      SHA256 hash.
+- concept:
+    name: ecs.hash.sha512
+    description: >-
+      SHA512 hash.
+

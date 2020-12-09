@@ -1,0 +1,11 @@
+- concept:
+    name: ecs.dll.name
+    description: >
+      Name of the library.
+
+      This generally maps to the name of the file on disk.
+- concept:
+    name: ecs.dll.path
+    description: >-
+      Full file path of the library.
+

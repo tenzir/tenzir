@@ -1,0 +1,15 @@
+- concept:
+    name: ecs.group.id
+    description: >
+      Unique identifier for the group on the system/platform.
+- concept:
+    name: ecs.group.name
+    description: >
+      Name of the group.
+- concept:
+    name: ecs.group.domain
+    description: >
+      Name of the directory the group is a member of.
+
+      For example, an LDAP or Active Directory domain name.
+

@@ -1,0 +1,20 @@
+- concept:
+    name: ecs.related.ip
+    description: >
+      All of the IPs seen on your event.
+- concept:
+    name: ecs.related.user
+    description: >
+      All the user names seen on your event.
+- concept:
+    name: ecs.related.hash
+    description: >
+      All the hashes seen on your event. Populating this field, then using
+      it to search for hashes can help in situations where you're unsure what
+      the hash algorithm is (and therefore which key name to search).
+- concept:
+    name: ecs.related.hosts
+    description: >
+      All hostnames or other host identifiers seen on your event. Example
+      identifiers include FQDNs, domain names, workstation names, or aliases.
+

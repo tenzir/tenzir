@@ -1,0 +1,21 @@
+- concept:
+    name: ecs.error.id
+    description: >
+      Unique identifier for the error.
+- concept:
+    name: ecs.error.message
+    description: >
+      Error message.
+- concept:
+    name: ecs.error.code
+    description: >
+      Error code describing the error.
+- concept:
+    name: ecs.error.type
+    description: >
+      The type of the error, for example the class name of the exception.
+- concept:
+    name: ecs.error.stack_trace
+    description: >
+      The stack trace of this error in plain text.
+

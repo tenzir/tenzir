@@ -1,0 +1,57 @@
+- concept:
+    name: ecs.host.hostname
+    description: >
+      Hostname of the host.
+
+      It normally contains what the `hostname` command returns on the host
+      machine.
+- concept:
+    name: ecs.host.name
+    description: >
+      Name of the host.
+
+      It can contain what `hostname` returns on Unix systems, the fully qualified
+      domain name, or a name specified by the user. The sender decides which
+      value to use.
+- concept:
+    name: ecs.host.id
+    description: >
+      Unique host id.
+
+      As hostname is not always unique, use values that are meaningful in
+      your environment.
+
+      Example: The current usage of `beat.name`.
+- concept:
+    name: ecs.host.ip
+    description: >
+      Host ip addresses.
+- concept:
+    name: ecs.host.mac
+    description: >
+      Host mac addresses.
+- concept:
+    name: ecs.host.type
+    description: >
+      Type of host.
+
+      For Cloud providers this can be the machine type like `t2.medium`. If
+      vm, this could be the container, for example, or other information meaningful
+      in your environment.
+- concept:
+    name: ecs.host.uptime
+    description: >
+      Seconds the host has been up.
+- concept:
+    name: ecs.host.architecture
+    description: >
+      Operating system architecture.
+- concept:
+    name: ecs.host.domain
+    description: >
+      Name of the domain of which the host is a member.
+
+      For example, on Windows this could be the host's Active Directory domain
+      or NetBIOS domain name. For Linux this could be the domain of the host's
+      LDAP provider.
+

@@ -1,0 +1,61 @@
+- concept:
+    name: ecs.package.name
+    description: >-
+      Package name
+- concept:
+    name: ecs.package.version
+    description: >-
+      Package version
+- concept:
+    name: ecs.package.build_version
+    description: >
+      Additional information about the build version of the installed package.
+
+      For example use the commit SHA of a non-released package.
+- concept:
+    name: ecs.package.description
+    description: >-
+      Description of the package.
+- concept:
+    name: ecs.package.size
+    description: >-
+      Package size in bytes.
+- concept:
+    name: ecs.package.installed
+    description: >-
+      Time when package was installed.
+- concept:
+    name: ecs.package.path
+    description: >-
+      Path where the package is installed.
+- concept:
+    name: ecs.package.architecture
+    description: >-
+      Package architecture.
+- concept:
+    name: ecs.package.checksum
+    description: >-
+      Checksum of the installed package for verification.
+- concept:
+    name: ecs.package.install_scope
+    description: >-
+      Indicating how the package was installed, e.g. user-local, global.
+- concept:
+    name: ecs.package.license
+    description: >
+      License under which the package was released.
+
+      Use a short name, e.g. the license identifier from SPDX License List
+      where possible (https://spdx.org/licenses/).
+- concept:
+    name: ecs.package.reference
+    description: >
+      Home page or reference URL of the software in this package, if available.
+- concept:
+    name: ecs.package.type
+    description: >
+      Type of package.
+
+      This should contain the package file type, rather than the package manager
+      name. Examples: rpm, dpkg, brew, npm, gem, nupkg, jar.
+

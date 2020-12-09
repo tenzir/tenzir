@@ -1,0 +1,51 @@
+- concept:
+    name: ecs.cloud.provider
+    description: >
+      Name of the cloud provider. Example values are aws, azure, gcp, or digitalocean.
+- concept:
+    name: ecs.cloud.availability_zone
+    description: >
+      Availability zone in which this host is running.
+- concept:
+    name: ecs.cloud.region
+    description: >
+      Region in which this host is running.
+- concept:
+    name: ecs.cloud.instance.id
+    description: >
+      Instance ID of the host machine.
+- concept:
+    name: ecs.cloud.instance.name
+    description: >
+      Instance name of the host machine.
+- concept:
+    name: ecs.cloud.machine.type
+    description: >
+      Machine type of the host machine.
+- concept:
+    name: ecs.cloud.account.id
+    description: >
+      The cloud account or organization id used to identify different entities
+      in a multi-tenant environment.
+
+      Examples: AWS account id, Google Cloud ORG Id, or other unique identifier.
+- concept:
+    name: ecs.cloud.account.name
+    description: >
+      The cloud account name or alias used to identify different entities
+      in a multi-tenant environment.
+
+      Examples: AWS account name, Google Cloud ORG display name.
+- concept:
+    name: ecs.cloud.project.id
+    description: >
+      The cloud project identifier.
+
+      Examples: Google Cloud Project id, Azure Project id.
+- concept:
+    name: ecs.cloud.project.name
+    description: >
+      The cloud project name.
+
+      Examples: Google Cloud Project name, Azure Project name.
+

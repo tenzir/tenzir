@@ -1,0 +1,71 @@
+- concept:
+    name: ecs.observer.mac
+    description: >
+      MAC addresses of the observer
+- concept:
+    name: ecs.observer.ip
+    description: >
+      IP addresses of the observer.
+- concept:
+    name: ecs.observer.hostname
+    description: >
+      Hostname of the observer.
+- concept:
+    name: ecs.observer.name
+    description: >
+      Custom name of the observer.
+
+      This is a name that can be given to an observer. This can be helpful
+      for example if multiple firewalls of the same model are used in an organization.
+
+      If no custom name is needed, the field can be left empty.
+- concept:
+    name: ecs.observer.product
+    description: >
+      The product name of the observer.
+- concept:
+    name: ecs.observer.vendor
+    description: >
+      Vendor name of the observer.
+- concept:
+    name: ecs.observer.version
+    description: >
+      Observer version.
+- concept:
+    name: ecs.observer.serial_number
+    description: >
+      Observer serial number.
+- concept:
+    name: ecs.observer.type
+    description: >
+      The type of the observer the data is coming from.
+
+      There is no predefined list of observer types. Some examples are `forwarder`,
+      `firewall`, `ids`, `ips`, `proxy`, `poller`, `sensor`, `APM server`.
+- concept:
+    name: ecs.observer.ingress
+    description: >
+      Observer.ingress holds information like interface number and name, vlan,
+      and zone information to  classify ingress traffic.  Single armed monitoring
+      such as a network sensor on a span port should  only use observer.ingress
+      to categorize traffic.
+- concept:
+    name: ecs.observer.ingress.zone
+    description: >
+      Network zone of incoming traffic as reported by the observer to categorize
+      the source area of ingress  traffic. e.g. internal, External, DMZ, HR,
+      Legal, etc.
+- concept:
+    name: ecs.observer.egress
+    description: >
+      Observer.egress holds information like interface number and name, vlan,
+      and zone information to  classify egress traffic.  Single armed monitoring
+      such as a network sensor on a span port should  only use observer.ingress
+      to categorize traffic.
+- concept:
+    name: ecs.observer.egress.zone
+    description: >
+      Network zone of outbound traffic as reported by the observer to categorize
+      the destination area of egress  traffic, e.g. Internal, External, DMZ,
+      HR, Legal, etc.
+

@@ -1,0 +1,149 @@
+- concept:
+    name: ecs.tls.version
+    description: >-
+      Numeric part of the version parsed from the original string.
+- concept:
+    name: ecs.tls.version_protocol
+    description: >-
+      Normalized lowercase protocol name parsed from original string.
+- concept:
+    name: ecs.tls.cipher
+    description: >-
+      String indicating the cipher used during the current connection.
+- concept:
+    name: ecs.tls.curve
+    description: >-
+      String indicating the curve used for the given cipher, when applicable.
+- concept:
+    name: ecs.tls.resumed
+    description: >-
+      Boolean flag indicating if this TLS connection was resumed from an existing
+      TLS negotiation.
+- concept:
+    name: ecs.tls.established
+    description: >
+      Boolean flag indicating if the TLS negotiation was successful and transitioned
+      to an encrypted tunnel.
+- concept:
+    name: ecs.tls.next_protocol
+    description: >
+      String indicating the protocol being tunneled. Per the values in the
+      IANA registry (https://www.iana.org/assignments/tls-extensiontype-values/tls-extensiontype-values.xhtml#alpn-protocol-ids),
+      this string should be lower case.
+- concept:
+    name: ecs.tls.client.ja3
+    description: >-
+      A hash that identifies clients based on how they perform an SSL/TLS
+      handshake.
+- concept:
+    name: ecs.tls.client.server_name
+    description: >
+      Also called an SNI, this tells the server which hostname to which the
+      client is attempting to connect to. When this value is available, it
+      should get copied to `destination.domain`.
+- concept:
+    name: ecs.tls.client.supported_ciphers
+    description: >-
+      Array of ciphers offered by the client during the client hello.
+- concept:
+    name: ecs.tls.client.subject
+    description: >-
+      Distinguished name of subject of the x.509 certificate presented by
+      the client.
+- concept:
+    name: ecs.tls.client.issuer
+    description: >-
+      Distinguished name of subject of the issuer of the x.509 certificate
+      presented by the client.
+- concept:
+    name: ecs.tls.client.not_before
+    description: >-
+      Date/Time indicating when client certificate is first considered valid.
+- concept:
+    name: ecs.tls.client.not_after
+    description: >-
+      Date/Time indicating when client certificate is no longer considered
+      valid.
+- concept:
+    name: ecs.tls.client.certificate_chain
+    description: >
+      Array of PEM-encoded certificates that make up the certificate chain
+      offered by the client. This is usually mutually-exclusive of `client.certificate`
+      since that value should be the first certificate in the chain.
+- concept:
+    name: ecs.tls.client.certificate
+    description: >
+      PEM-encoded stand-alone certificate offered by the client. This is usually
+      mutually-exclusive of `client.certificate_chain` since this value also
+      exists in that list.
+- concept:
+    name: ecs.tls.client.hash.md5
+    description: >
+      Certificate fingerprint using the MD5 digest of DER-encoded version
+      of certificate offered by the client. For consistency with other hash
+      values, this value should be formatted as an uppercase hash.
+- concept:
+    name: ecs.tls.client.hash.sha1
+    description: >
+      Certificate fingerprint using the SHA1 digest of DER-encoded version
+      of certificate offered by the client. For consistency with other hash
+      values, this value should be formatted as an uppercase hash.
+- concept:
+    name: ecs.tls.client.hash.sha256
+    description: >
+      Certificate fingerprint using the SHA256 digest of DER-encoded version
+      of certificate offered by the client. For consistency with other hash
+      values, this value should be formatted as an uppercase hash.
+- concept:
+    name: ecs.tls.server.ja3s
+    description: >-
+      A hash that identifies servers based on how they perform an SSL/TLS
+      handshake.
+- concept:
+    name: ecs.tls.server.subject
+    description: >-
+      Subject of the x.509 certificate presented by the server.
+- concept:
+    name: ecs.tls.server.issuer
+    description: >-
+      Subject of the issuer of the x.509 certificate presented by the server.
+- concept:
+    name: ecs.tls.server.not_before
+    description: >-
+      Timestamp indicating when server certificate is first considered valid.
+- concept:
+    name: ecs.tls.server.not_after
+    description: >-
+      Timestamp indicating when server certificate is no longer considered
+      valid.
+- concept:
+    name: ecs.tls.server.certificate_chain
+    description: >
+      Array of PEM-encoded certificates that make up the certificate chain
+      offered by the server. This is usually mutually-exclusive of `server.certificate`
+      since that value should be the first certificate in the chain.
+- concept:
+    name: ecs.tls.server.certificate
+    description: >
+      PEM-encoded stand-alone certificate offered by the server. This is usually
+      mutually-exclusive of `server.certificate_chain` since this value also
+      exists in that list.
+- concept:
+    name: ecs.tls.server.hash.md5
+    description: >
+      Certificate fingerprint using the MD5 digest of DER-encoded version
+      of certificate offered by the server. For consistency with other hash
+      values, this value should be formatted as an uppercase hash.
+- concept:
+    name: ecs.tls.server.hash.sha1
+    description: >
+      Certificate fingerprint using the SHA1 digest of DER-encoded version
+      of certificate offered by the server. For consistency with other hash
+      values, this value should be formatted as an uppercase hash.
+- concept:
+    name: ecs.tls.server.hash.sha256
+    description: >
+      Certificate fingerprint using the SHA256 digest of DER-encoded version
+      of certificate offered by the server. For consistency with other hash
+      values, this value should be formatted as an uppercase hash.
+

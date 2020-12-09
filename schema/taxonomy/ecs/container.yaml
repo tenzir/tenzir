@@ -1,0 +1,25 @@
+- concept:
+    name: ecs.container.runtime
+    description: >
+      Runtime managing this container.
+- concept:
+    name: ecs.container.id
+    description: >
+      Unique container id.
+- concept:
+    name: ecs.container.image.name
+    description: >
+      Name of the image the container was built on.
+- concept:
+    name: ecs.container.image.tag
+    description: >
+      Container image tags.
+- concept:
+    name: ecs.container.name
+    description: >
+      Container name.
+- concept:
+    name: ecs.container.labels
+    description: >
+      Image labels.
+

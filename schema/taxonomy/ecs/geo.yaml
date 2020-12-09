@@ -1,0 +1,39 @@
+- concept:
+    name: ecs.geo.location
+    description: >
+      Longitude and latitude.
+- concept:
+    name: ecs.geo.continent_name
+    description: >
+      Name of the continent.
+- concept:
+    name: ecs.geo.country_name
+    description: >
+      Country name.
+- concept:
+    name: ecs.geo.region_name
+    description: >
+      Region name.
+- concept:
+    name: ecs.geo.city_name
+    description: >
+      City name.
+- concept:
+    name: ecs.geo.country_iso_code
+    description: >
+      Country ISO code.
+- concept:
+    name: ecs.geo.region_iso_code
+    description: >
+      Region ISO code.
+- concept:
+    name: ecs.geo.name
+    description: >
+      User-defined description of a location, at the level of granularity
+      they care about.
+
+      Could be the name of their data centers, the floor number, if this describes
+      a local physical entity, city names.
+
+      Not typically used in automated geolocation.
+

@@ -1,0 +1,17 @@
+- concept:
+    name: ecs.user_agent.original
+    description: >
+      Unparsed user_agent string.
+- concept:
+    name: ecs.user_agent.name
+    description: >
+      Name of the user agent.
+- concept:
+    name: ecs.user_agent.version
+    description: >
+      Version of the user agent.
+- concept:
+    name: ecs.user_agent.device.name
+    description: >
+      Name of the device.
+

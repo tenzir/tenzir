@@ -1,0 +1,34 @@
+- concept:
+    name: ecs.pe.original_file_name
+    description: >-
+      Internal name of the file, provided at compile-time.
+- concept:
+    name: ecs.pe.file_version
+    description: >-
+      Internal version of the file, provided at compile-time.
+- concept:
+    name: ecs.pe.description
+    description: >-
+      Internal description of the file, provided at compile-time.
+- concept:
+    name: ecs.pe.product
+    description: >-
+      Internal product name of the file, provided at compile-time.
+- concept:
+    name: ecs.pe.company
+    description: >-
+      Internal company name of the file, provided at compile-time.
+- concept:
+    name: ecs.pe.imphash
+    description: >
+      A hash of the imports in a PE file. An imphash -- or import hash --
+      can be used to fingerprint binaries even after recompilation or other
+      code-level transformations have occurred, which would change more traditional
+      hash values.
+
+      Learn more at https://www.fireeye.com/blog/threat-research/2014/01/tracking-malware-import-hashing.html.
+- concept:
+    name: ecs.pe.architecture
+    description: >-
+      CPU architecture target for the file.
+
