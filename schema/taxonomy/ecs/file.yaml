@@ -2,6 +2,8 @@
     name: ecs.file.name
     description: >-
       Name of the file including the extension, without the directory.
+    concepts:
+      - file.name
 - concept:
     name: ecs.file.attributes
     description: >
@@ -38,6 +40,8 @@
 
       Note that when the file name has multiple extensions (example.tar.gz),
       only the last one should be captured ("gz", not "tar.gz").
+    concepts:
+      - file.ext
 - concept:
     name: ecs.file.type
     description: >-
@@ -76,6 +80,8 @@
       File size in bytes.
 
       Only relevant when `file.type` is "file".
+    concepts:
+      - file.size
 - concept:
     name: ecs.file.mtime
     description: >-

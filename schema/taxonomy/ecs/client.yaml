@@ -11,6 +11,8 @@
     name: ecs.client.ip
     description: >
       IP address of the client (IPv4 or IPv6).
+    - concepts:
+      net.src.ip
 - concept:
     name: ecs.client.port
     description: >
@@ -19,10 +21,14 @@
     name: ecs.client.mac
     description: >
       MAC address of the client.
+    - concepts:
+      net.src.mac
 - concept:
     name: ecs.client.domain
     description: >
       Client domain.
+    - concepts:
+      net.src.domain
 - concept:
     name: ecs.client.registered_domain
     description: >

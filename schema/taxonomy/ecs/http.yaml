@@ -52,6 +52,8 @@
     name: ecs.http.request.bytes
     description: >
       Total size in bytes of the request (body and headers).
+    concepts:
+      - net.src.bytes
 - concept:
     name: ecs.http.request.body.bytes
     description: >
@@ -60,6 +62,8 @@
     name: ecs.http.response.bytes
     description: >
       Total size in bytes of the response (body and headers).
+    concepts:
+      - net.dst.bytes
 - concept:
     name: ecs.http.response.body.bytes
     description: >
