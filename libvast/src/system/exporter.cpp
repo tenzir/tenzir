@@ -73,6 +73,14 @@ void ship_results(stateful_actor<exporter_state>* self) {
 
 void report_statistics(stateful_actor<exporter_state>* self) {
   auto& st = self->state;
+  // TODO: In addition to printing these debug messages, send the data in a
+  // post-processible form to the accountant.
+  for (auto&& [request_id, description_and_start] : st.request_start) {
+    auto&& [description, start] = description_and_start;
+    auto&& duration = st.request_duration[request_id];
+    VAST_DEBUG(self, "received replies for request", request_id.key,
+               "(" + description + ") started at", start, "after", duration);
+  }
   if (st.statistics_subscriber)
     self->send(st.statistics_subscriber, st.name, st.query);
   if (st.accountant) {
@@ -184,29 +192,22 @@ behavior exporter(stateful_actor<exporter_state>* self, expression expr,
     VAST_DEBUG(self, "received exit from", msg.source,
                "with reason:", msg.reason);
     auto& st = self->state;
-    // TODO: In addition to printing these debug messages, send the data in a
-    // post-processible form to the accountant.
-    for (auto&& [request_id, description_and_start] : st.request_start) {
-      auto&& [description, start] = description_and_start;
-      auto&& duration = st.request_duration[request_id];
-      VAST_DEBUG(self, "received replies for request", request_id.key,
-                 "(" + description + ") started at", start, "after", duration);
-    }
-    if (msg.reason != exit_reason::kill)
-      report_statistics(self);
     // Sending 0 to the index means dropping further results.
     auto request_id = st.next_request_id.advance();
     st.request_start[request_id]
       = {"request drop from index", std::chrono::system_clock::now()};
     self->send<message_priority::high>(st.index, st.id, request_id,
                                        static_cast<uint32_t>(0));
+    if (msg.reason != exit_reason::kill)
+      report_statistics(self);
     self->quit(msg.reason);
   });
   self->set_down_handler([=](const down_msg& msg) {
     VAST_DEBUG(self, "received DOWN from", msg.source);
-    if (has_continuous_option(self->state.options)
-        && (msg.source == self->state.archive
-            || msg.source == self->state.index))
+    if ((has_continuous_option(self->state.options)
+         && (msg.source == self->state.archive
+             || msg.source == self->state.index))
+        || msg.source == self->state.sink)
       report_statistics(self);
     // Without sinks and resumable sessions, there's no reason to proceed.
     self->quit(msg.reason);
