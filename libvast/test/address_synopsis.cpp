@@ -54,15 +54,16 @@ struct fixture : fixtures::deterministic_actor_system {
   caf::settings opts;
 };
 
+auto to_addr_view(std::string_view str) {
+  return make_data_view(unbox(to<address>(str)));
+}
+
 } // namespace
 
 FIXTURE_SCOPE(address_filter_synopsis_tests, fixture)
 
 TEST(construction via custom factory) {
-  using namespace nft;
-  auto to_addr_view = [](std::string_view str) {
-    return make_data_view(unbox(to<address>(str)));
-  };
+  using namespace vast::test::nft;
   // Minimally sized Bloom filter to test expected collisions.
   auto t = address_type{}.attributes({{"synopsis", "bloomfilter(1,0.1)"}});
   auto x = factory<synopsis>::make(t, opts);
@@ -85,6 +86,30 @@ TEST(construction based on partition size) {
   auto ptr = factory<synopsis>::make(address_type{}, opts);
   REQUIRE_NOT_EQUAL(ptr, nullptr);
   CHECK_ROUNDTRIP_DEREF(std::move(ptr));
+}
+
+TEST(updated params after shrinking) {
+  opts["buffer-ips"] = true;
+  opts["max-partition-size"] = 1_Mi;
+  auto ptr = factory<synopsis>::make(address_type{}, opts);
+  ptr->add(to_addr_view("192.168.0.1"));
+  ptr->add(to_addr_view("192.168.0.2"));
+  ptr->add(to_addr_view("192.168.0.3"));
+  ptr->add(to_addr_view("192.168.0.4"));
+  ptr->add(to_addr_view("192.168.0.5"));
+  auto shrinked = ptr->shrink();
+  auto type = shrinked->type();
+  auto params = unbox(parse_parameters(type));
+  // The size will be rounded up to the next power of two.
+  CHECK_EQUAL(*params.n, 8u);
+  auto recovered = roundtrip(std::move(shrinked));
+  REQUIRE(recovered);
+  auto recovered_params = unbox(parse_parameters(type));
+  CHECK_EQUAL(*recovered_params.n, 8u);
+  auto r1 = unbox(recovered->lookup(equal, to_addr_view("192.168.0.1")));
+  auto r2 = unbox(recovered->lookup(equal, to_addr_view("255.255.255.255")));
+  CHECK(r1);
+  CHECK(!r2);
 }
 
 FIXTURE_SCOPE_END()
