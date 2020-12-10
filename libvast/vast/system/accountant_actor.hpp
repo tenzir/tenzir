@@ -14,6 +14,8 @@
 #pragma once
 
 #include "vast/fwd.hpp"
+
+#include "vast/aliases.hpp"
 #include "vast/system/status_client_actor.hpp"
 #include "vast/time.hpp"
 
@@ -23,26 +25,26 @@ namespace vast::system {
 
 /// The ACCOUNTANT actor interface.
 using accountant_actor = caf::typed_actor<
-  // FIXME: docs
+  // Update the configuration of the ACCOUNTANT.
   caf::replies_to<atom::config, accountant_config>::with< //
     atom::ok>,
-  // FIXME: docs
+  // Registers the sender with the ACCOUNTANT.
   caf::reacts_to<atom::announce, std::string>,
-  // FIXME: docs
+  // Record duration metric.
   caf::reacts_to<std::string, duration>,
-  // FIXME: docs
+  // Record time metric.
   caf::reacts_to<std::string, time>,
-  // FIXME: docs
-  caf::reacts_to<std::string, int64_t>,
-  // FIXME: docs
-  caf::reacts_to<std::string, uint64_t>,
-  // FIXME: docs
-  caf::reacts_to<std::string, double>,
-  // FIXME: docs
+  // Record integer metric.
+  caf::reacts_to<std::string, integer>,
+  // Record count metric.
+  caf::reacts_to<std::string, count>,
+  // Record real metric.
+  caf::reacts_to<std::string, real>,
+  // Record a metrics report.
   caf::reacts_to<report>,
-  // FIXME: docs
+  // Record a performance report.
   caf::reacts_to<performance_report>,
-  // FIXME: docs
+  // The internal telemetry loop of the ACCOUNTANT.
   caf::reacts_to<atom::telemetry>>
   // Conform to the procotol of the STATUS CLIENT actor.
   ::extend_with<status_client_actor>;

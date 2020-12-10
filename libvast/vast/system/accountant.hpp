@@ -14,9 +14,8 @@
 #pragma once
 
 #include "vast/fwd.hpp"
-#include "vast/system/accountant_actor.hpp"
 
-#include <caf/typed_actor.hpp>
+#include "vast/system/accountant_actor.hpp"
 
 namespace vast::system {
 

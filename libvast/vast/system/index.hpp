@@ -13,12 +13,12 @@
 
 #pragma once
 
-#include "vast/detail/flat_lru_cache.hpp"
+#include "vast/fwd.hpp"
+
 #include "vast/detail/lru_cache.hpp"
 #include "vast/detail/stable_map.hpp"
 #include "vast/expression.hpp"
 #include "vast/fbs/index.hpp"
-#include "vast/fwd.hpp"
 #include "vast/meta_index.hpp"
 #include "vast/system/accountant.hpp"
 #include "vast/system/filesystem_actor.hpp"

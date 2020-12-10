@@ -25,7 +25,6 @@
 #include "vast/system/report.hpp"
 #include "vast/table_slice.hpp"
 
-#include <caf/atom.hpp>
 #include <caf/attach_stream_sink.hpp>
 #include <caf/binary_deserializer.hpp>
 #include <caf/binary_serializer.hpp>
@@ -171,14 +170,15 @@ type_registry(type_registry_actor::stateful_pointer<type_registry_state> self,
       VAST_TRACE(self, "sends out a status report");
       return self->state.status(v);
     },
-    [=](caf::stream<table_slice> in) {
+    [=](caf::stream<table_slice> in) -> caf::inbound_stream_slot<table_slice> {
       VAST_TRACE(self, "attaches to", VAST_ARG("stream", in));
-      caf::attach_stream_sink(
+      auto result = caf::attach_stream_sink(
         self, in,
         [=](caf::unit_t&) {
           // nop
         },
         [=](caf::unit_t&, table_slice x) { self->state.insert(x.layout()); });
+      return result.inbound_slot();
     },
     [=](atom::put, vast::type x) {
       VAST_TRACE(self, "tries to add", VAST_ARG("type", x.name()));

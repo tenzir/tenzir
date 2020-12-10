@@ -14,25 +14,25 @@
 #pragma once
 
 #include "vast/fwd.hpp"
+
 #include "vast/system/index_actor.hpp"
 #include "vast/system/partition_actor.hpp"
 
-#include <caf/meta/type_name.hpp>
 #include <caf/typed_actor.hpp>
 
 namespace vast::system {
 
 /// The interface of an ACTIVE PARTITION actor.
 using active_partition_actor = caf::typed_actor<
-  // Hook into the table slice stream.
+  // Hooks into the table slice stream.
   caf::replies_to<caf::stream<table_slice>>::with< //
     caf::inbound_stream_slot<table_slice>>,
-  // Persist the active partition at the specified path.
+  // Persists the active partition at the specified path.
   caf::replies_to<atom::persist, path, index_actor>::with< //
     atom::ok>,
   // A repeatedly called continuation of the persist request.
   caf::reacts_to<atom::persist, atom::resume>>
-  // Conform to the protocol of the *partition_actor*.
+  // Conform to the protocol of the PARTITION.
   ::extend_with<partition_actor>;
 
 } // namespace vast::system

@@ -21,9 +21,9 @@ namespace vast::system {
 
 /// The INDEXER actor interface.
 using indexer_actor = caf::typed_actor<
-  // FIXME: docs
+  // Returns the ids for the given predicate.
   caf::replies_to<curried_predicate>::with<ids>,
-  // FIXME: docs
+  // Requests the INDEXER to shut down.
   caf::reacts_to<atom::shutdown>>;
 
 } // namespace vast::system

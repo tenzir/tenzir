@@ -14,6 +14,7 @@
 #pragma once
 
 #include "vast/fwd.hpp"
+
 #include "vast/system/evaluator_actor.hpp"
 #include "vast/uuid.hpp"
 
@@ -30,7 +31,8 @@ using query_map
 
 /// The QUERY SUPERVISOR actor interface.
 using query_supervisor_actor = caf::typed_actor<
-  // FIXME: docs
+  // Supervise the evaluation of a query by the EVALUATOR actors, and forward
+  // the results to the INDEX CLIENT.
   caf::reacts_to<expression, query_map, index_client_actor>>;
 
 } // namespace vast::system

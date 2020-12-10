@@ -13,13 +13,13 @@
 
 #pragma once
 
-#include "vast/expression.hpp"
 #include "vast/fwd.hpp"
+
+#include "vast/expression.hpp"
 #include "vast/ids.hpp"
 #include "vast/system/evaluation_triple.hpp"
 #include "vast/system/evaluator_actor.hpp"
 #include "vast/system/index_client_actor.hpp"
-#include "vast/system/indexer.hpp"
 
 #include <utility>
 #include <vector>
@@ -76,7 +76,7 @@ struct evaluator_state {
 };
 
 /// Wraps a query expression in an actor. Upon receiving hits from INDEXER
-/// actors, re-evaluates the expression and relays new hits to its sinks.
+/// actors, re-evaluates the expression and relays new hits to the INDEX CLIENT.
 /// @pre `!eval.empty()`
 evaluator_actor::behavior_type
 evaluator(evaluator_actor::stateful_pointer<evaluator_state> self,

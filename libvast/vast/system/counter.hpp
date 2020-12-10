@@ -13,14 +13,13 @@
 
 #pragma once
 
-#include "vast/expression.hpp"
 #include "vast/fwd.hpp"
+
+#include "vast/expression.hpp"
 #include "vast/ids.hpp"
-#include "vast/system/archive.hpp"
+#include "vast/system/archive_actor.hpp"
 #include "vast/system/index_actor.hpp"
 #include "vast/system/query_processor.hpp"
-
-#include <caf/fwd.hpp>
 
 #include <unordered_map>
 

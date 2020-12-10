@@ -14,25 +14,17 @@
 #pragma once
 
 #include "vast/fwd.hpp"
+
 #include "vast/ids.hpp"
 #include "vast/store.hpp"
-#include "vast/system/accountant.hpp"
+#include "vast/system/accountant_actor.hpp"
 #include "vast/system/archive_actor.hpp"
 #include "vast/system/instrumentation.hpp"
 
-#include <caf/fwd.hpp>
-#include <caf/replies_to.hpp>
-#include <caf/stateful_actor.hpp>
-#include <caf/typed_actor.hpp>
-#include <caf/typed_event_based_actor.hpp>
-
-#include <chrono>
 #include <memory>
 #include <queue>
 #include <unordered_map>
 #include <unordered_set>
-#include <utility>
-#include <vector>
 
 namespace vast::system {
 
@@ -41,8 +33,8 @@ struct archive_state {
   void send_report();
   void next_session();
   archive_actor::pointer self;
-  std::unique_ptr<vast::store> store;
-  std::unique_ptr<vast::store::lookup> session;
+  std::unique_ptr<store> store;
+  std::unique_ptr<store::lookup> session;
   uint64_t session_id = 0;
   std::queue<archive_client_actor> requesters;
   std::unordered_map<caf::actor_addr, std::queue<ids>> unhandled_ids;

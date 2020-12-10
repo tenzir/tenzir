@@ -18,7 +18,7 @@
 #include "vast/defaults.hpp"
 #include "vast/logger.hpp"
 #include "vast/query_options.hpp"
-#include "vast/system/archive.hpp"
+#include "vast/system/archive_actor.hpp"
 #include "vast/system/exporter.hpp"
 #include "vast/system/node.hpp"
 #include "vast/system/spawn_arguments.hpp"

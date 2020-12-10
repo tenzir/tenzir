@@ -14,6 +14,7 @@
 #pragma once
 
 #include "vast/fwd.hpp"
+
 #include "vast/system/indexer_actor.hpp"
 
 #include <caf/typed_event_based_actor.hpp>
@@ -22,10 +23,10 @@ namespace vast::system {
 
 /// The ACTIVE INDEXER actor interface.
 using active_indexer_actor = caf::typed_actor<
-  // FIXME: docs
+  // Hooks into the table slice column stream.
   caf::replies_to<caf::stream<table_slice_column>>::with<
     caf::inbound_stream_slot<table_slice_column>>,
-  // FIXME: docs
+  // Finalizes the ACTIVE INDEXER into a chunk, which containes an INDEXER.
   caf::replies_to<atom::snapshot>::with<chunk_ptr>>
   // Conform the the INDEXER ACTOR interface.
   ::extend_with<indexer_actor>;

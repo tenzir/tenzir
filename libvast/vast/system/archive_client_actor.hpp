@@ -19,10 +19,12 @@
 
 namespace vast::system {
 
+/// The ARCHIVE CLIENT actor interface.
 using archive_client_actor = caf::typed_actor<
-  // FIXME: docs
+  // An ARCHIVE CLIENT receives table slices from the ARCHIVE for partial query
+  // hits.
   caf::reacts_to<table_slice>,
-  // FIXME: docs
+  // An ARCHIVE CLIENT receives (done, error) when the query finished.
   caf::reacts_to<atom::done, caf::error>>;
 
 } // namespace vast::system

@@ -18,7 +18,7 @@
 #include "vast/error.hpp"
 #include "vast/logger.hpp"
 #include "vast/scope_linked.hpp"
-#include "vast/system/accountant.hpp"
+#include "vast/system/accountant_actor.hpp"
 #include "vast/system/make_sink.hpp"
 #include "vast/system/node_control.hpp"
 #include "vast/system/read_query.hpp"

@@ -14,16 +14,16 @@
 #pragma once
 
 #include "vast/fwd.hpp"
+
 #include "vast/system/index_client_actor.hpp"
 
-#include <caf/meta/type_name.hpp>
 #include <caf/typed_event_based_actor.hpp>
 
 namespace vast::system {
 
 /// The EVALUATOR actor interface.
 using evaluator_actor = caf::typed_actor<
-  // FIXME: docs.
+  // Re-evaluates the expression and relays new hits to the INDEX CLIENT.
   caf::replies_to<index_client_actor>::with<atom::done>>;
 
 } // namespace vast::system

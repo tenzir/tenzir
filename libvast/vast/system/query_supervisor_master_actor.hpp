@@ -14,6 +14,7 @@
 #pragma once
 
 #include "vast/fwd.hpp"
+
 #include "vast/system/query_supervisor_actor.hpp"
 
 #include <caf/typed_actor.hpp>
@@ -22,7 +23,7 @@ namespace vast::system {
 
 /// The QUERY SUPERVISOR MASTER actor interface.
 using query_supervisor_master_actor = caf::typed_actor<
-  // FIXME: docs
+  // Enlist the QUERY SUPERVISOR as an available worker.
   caf::reacts_to<atom::worker, query_supervisor_actor>>;
 
 } // namespace vast::system

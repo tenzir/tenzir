@@ -16,14 +16,9 @@
 #include "vast/detail/stable_map.hpp"
 #include "vast/fwd.hpp"
 
-#include <caf/fwd.hpp>
-
 #include <cstdint>
 #include <limits>
-#include <map>
 #include <string>
-#include <tuple>
-#include <utility>
 #include <vector>
 
 namespace vast {

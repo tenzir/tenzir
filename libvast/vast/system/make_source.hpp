@@ -13,6 +13,8 @@
 
 #pragma once
 
+#include "vast/fwd.hpp"
+
 #include "vast/command.hpp"
 #include "vast/concept/parseable/to.hpp"
 #include "vast/concept/parseable/vast/endpoint.hpp"
@@ -26,18 +28,14 @@
 #include "vast/endpoint.hpp"
 #include "vast/error.hpp"
 #include "vast/expression.hpp"
-#include "vast/fwd.hpp"
 #include "vast/logger.hpp"
 #include "vast/schema.hpp"
-#include "vast/system/accountant.hpp"
+#include "vast/system/accountant_actor.hpp"
 #include "vast/system/datagram_source.hpp"
 #include "vast/system/signal_monitor.hpp"
 #include "vast/system/source.hpp"
-#include "vast/system/type_registry.hpp"
+#include "vast/system/type_registry_actor.hpp"
 
-#include <caf/actor.hpp>
-#include <caf/actor_cast.hpp>
-#include <caf/actor_system.hpp>
 #include <caf/io/middleman.hpp>
 #include <caf/settings.hpp>
 #include <caf/spawn_options.hpp>

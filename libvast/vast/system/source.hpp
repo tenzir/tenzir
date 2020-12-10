@@ -13,6 +13,8 @@
 
 #pragma once
 
+#include "vast/fwd.hpp"
+
 #include "vast/concept/printable/std/chrono.hpp"
 #include "vast/concept/printable/stream.hpp"
 #include "vast/concept/printable/to_string.hpp"
@@ -25,24 +27,21 @@
 #include "vast/error.hpp"
 #include "vast/expression.hpp"
 #include "vast/expression_visitors.hpp"
-#include "vast/fwd.hpp"
 #include "vast/logger.hpp"
 #include "vast/schema.hpp"
-#include "vast/system/accountant.hpp"
+#include "vast/system/accountant_actor.hpp"
 #include "vast/system/instrumentation.hpp"
 #include "vast/system/report.hpp"
-#include "vast/system/type_registry.hpp"
+#include "vast/system/type_registry_actor.hpp"
 #include "vast/table_slice.hpp"
-#include "vast/table_slice_builder.hpp"
 #include "vast/table_slice_builder_factory.hpp"
+#include "vast/type_set.hpp"
 
-#include <caf/actor_system_config.hpp>
 #include <caf/broadcast_downstream_manager.hpp>
 #include <caf/downstream.hpp>
 #include <caf/event_based_actor.hpp>
 #include <caf/expected.hpp>
-#include <caf/none.hpp>
-#include <caf/send.hpp>
+#include <caf/settings.hpp>
 #include <caf/stateful_actor.hpp>
 #include <caf/stream_source.hpp>
 
@@ -259,8 +258,8 @@ source(caf::stateful_actor<source_state<Reader>>* self, Reader reader,
       if (st.requested)
         events = std::min(events, *st.requested - st.count);
       auto t = timer::start(st.metrics);
-      auto [err, produced] = st.reader.read(events, table_slice_size,
-                                            push_slice);
+      auto [err, produced]
+        = st.reader.read(events, table_slice_size, push_slice);
       VAST_DEBUG(self, "read", produced, "events");
       t.stop(produced);
       st.count += produced;

@@ -14,6 +14,7 @@
 #pragma once
 
 #include "vast/fwd.hpp"
+
 #include "vast/system/accountant_actor.hpp"
 
 #include <caf/typed_event_based_actor.hpp>
@@ -22,31 +23,31 @@ namespace vast::system {
 
 /// The TYPE REGISTRY actor interface.
 using type_registry_actor = caf::typed_actor<
-  // FIXME: docs
+  // The internal telemetry loop of the TYPE REGISTRY.
   caf::reacts_to<atom::telemetry>,
-  // FIXME: docs
-  caf::replies_to<atom::status, status_verbosity>::with< //
-    caf::dictionary<caf::config_value>>,
-  // FIXME: docs
-  caf::reacts_to<caf::stream<table_slice>>,
-  // FIXME: docs
+  // Hooks into the table slice stream.
+  caf::replies_to<caf::stream<table_slice>>::with< //
+    caf::inbound_stream_slot<table_slice>>,
+  // Registers the given type.
   caf::reacts_to<atom::put, vast::type>,
-  // FIXME: docs
+  // Registers all types in the given schema.
   caf::reacts_to<atom::put, vast::schema>,
-  // FIXME: docs
+  // Retrieves all known types.
   caf::replies_to<atom::get>::with<type_set>,
-  // FIXME: docs
+  // Registers the given taxonomies.
+  caf::reacts_to<atom::put, taxonomies>,
+  // Retrieves the known taxonomies.
   caf::replies_to<atom::get, atom::taxonomies>::with< //
     taxonomies>,
-  // FIXME: docs
-  caf::reacts_to<atom::put, taxonomies>,
-  // FIXME: docs
+  // Loads the taxonomies on disk.
   caf::replies_to<atom::load>::with< //
     atom::ok>,
-  // FIXME: docs
+  // Resolves an expression in terms of the known taxonomies.
   caf::replies_to<atom::resolve, expression>::with< //
     expression>,
-  // FIXME: docs
-  caf::reacts_to<accountant_actor>>;
+  // Registers the TYPE REGISTRY with the ACCOUNTANT.
+  caf::reacts_to<accountant_actor>>
+  // Conform to the procotol of the STATUS CLIENT actor.
+  ::extend_with<status_client_actor>;
 
 } // namespace vast::system

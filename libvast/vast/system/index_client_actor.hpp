@@ -21,9 +21,9 @@ namespace vast::system {
 
 /// The INDEX CLIENT actor interface.
 using index_client_actor = caf::typed_actor<
-  // FIXME: docs
+  // Receives ids from the INDEX for partial query hits.
   caf::reacts_to<ids>,
-  // FIXME: docs
+  // Receives done from the INDEX when the query finished.
   caf::reacts_to<atom::done>>;
 
 } // namespace vast::system

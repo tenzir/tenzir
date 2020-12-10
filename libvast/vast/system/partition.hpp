@@ -13,10 +13,11 @@
 
 #pragma once
 
+#include "vast/fwd.hpp"
+
 #include "vast/aliases.hpp"
 #include "vast/expression.hpp"
 #include "vast/fbs/partition.hpp"
-#include "vast/fwd.hpp"
 #include "vast/ids.hpp"
 #include "vast/meta_index.hpp"
 #include "vast/path.hpp"
@@ -33,7 +34,6 @@
 #include "vast/uuid.hpp"
 #include "vast/value_index.hpp"
 
-#include <caf/fwd.hpp>
 #include <caf/optional.hpp>
 #include <caf/stream_slot.hpp>
 

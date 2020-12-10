@@ -4,19 +4,12 @@
 #include "vast/defaults.hpp"
 #include "vast/logger.hpp"
 #include "vast/path.hpp"
+#include "vast/system/archive_actor.hpp"
 #include "vast/system/disk_monitor.hpp"
+#include "vast/system/index_actor.hpp"
 #include "vast/system/node.hpp"
 #include "vast/system/node_control.hpp"
 #include "vast/system/spawn_arguments.hpp"
-
-#include <caf/actor.hpp>
-#include <caf/event_based_actor.hpp>
-#include <caf/expected.hpp>
-#include <caf/scoped_actor.hpp>
-#include <caf/settings.hpp>
-#include <caf/typed_event_based_actor.hpp>
-
-#include "caf/error.hpp"
 
 namespace vast::system {
 

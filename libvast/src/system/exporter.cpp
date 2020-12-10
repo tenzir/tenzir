@@ -13,6 +13,8 @@
 
 #include "vast/system/exporter.hpp"
 
+#include "vast/fwd.hpp"
+
 #include "vast/concept/printable/std/chrono.hpp"
 #include "vast/concept/printable/to_string.hpp"
 #include "vast/concept/printable/vast/bitmap.hpp"
@@ -22,9 +24,8 @@
 #include "vast/detail/fill_status_map.hpp"
 #include "vast/detail/narrow.hpp"
 #include "vast/expression_visitors.hpp"
-#include "vast/fwd.hpp"
 #include "vast/logger.hpp"
-#include "vast/system/archive.hpp"
+#include "vast/system/archive_actor.hpp"
 #include "vast/system/query_status.hpp"
 #include "vast/system/report.hpp"
 #include "vast/table_slice.hpp"

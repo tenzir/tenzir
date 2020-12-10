@@ -17,7 +17,8 @@
 #include "vast/error.hpp"
 #include "vast/logger.hpp"
 #include "vast/si_literals.hpp"
-#include "vast/system/archive.hpp"
+#include "vast/system/accountant_actor.hpp"
+#include "vast/system/archive_actor.hpp"
 #include "vast/system/node.hpp"
 #include "vast/system/spawn_arguments.hpp"
 

@@ -14,6 +14,7 @@
 #pragma once
 
 #include "vast/fwd.hpp"
+
 #include "vast/meta_index.hpp"
 #include "vast/system/accountant.hpp"
 #include "vast/system/query_supervisor_master_actor.hpp"
@@ -27,22 +28,22 @@ namespace vast::system {
 
 /// The INDEX actor interface.
 using index_actor = caf::typed_actor<
-  // FIXME: docs
+  // Triggered when the INDEX finished querying a PARTITION.
   caf::reacts_to<atom::done, uuid>,
-  // FIXME: docs
+  // Hooks into the table slice stream.
   caf::replies_to<caf::stream<table_slice>>::with<
     caf::inbound_stream_slot<table_slice>>,
-  // FIXME: docs
+  // Registers the ARCHIVE with the ACCOUNTANT.
   caf::reacts_to<accountant_actor>,
-  // FIXME: docs
+  // Subscribes a FLUSH LISTENER to the INDEX.
   caf::reacts_to<atom::subscribe, atom::flush, wrapped_flush_listener>,
-  // FIXME: docs
+  // Evaluatates an expression.
   caf::reacts_to<expression>,
-  // FIXME: docs
+  // Queries PARTITION actors for a given query id.
   caf::reacts_to<uuid, uint32_t>,
-  // FIXME: docs
+  // Replaces the SYNOPSIS of the PARTITION witht he given partition id.
   caf::reacts_to<atom::replace, uuid, std::shared_ptr<partition_synopsis>>,
-  // FIXME: docs
+  // Erases the given events from the INDEX, and returns their ids.
   caf::replies_to<atom::erase, uuid>::with<ids>>
   // Conform to the protocol of the QUERY SUPERVISOR MASTER actor.
   ::extend_with<query_supervisor_master_actor>

@@ -13,8 +13,9 @@
 
 #include "vast/system/query_supervisor.hpp"
 
-#include "vast/expression.hpp"
 #include "vast/fwd.hpp"
+
+#include "vast/expression.hpp"
 #include "vast/logger.hpp"
 #include "vast/system/index_client_actor.hpp"
 #include "vast/system/query_supervisor_master_actor.hpp"

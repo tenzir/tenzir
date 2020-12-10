@@ -13,6 +13,8 @@
 
 #include "vast/system/partition.hpp"
 
+#include "vast/fwd.hpp"
+
 #include "vast/address_synopsis.hpp"
 #include "vast/aliases.hpp"
 #include "vast/chunk.hpp"
@@ -27,7 +29,6 @@
 #include "vast/fbs/partition.hpp"
 #include "vast/fbs/utils.hpp"
 #include "vast/fbs/uuid.hpp"
-#include "vast/fwd.hpp"
 #include "vast/ids.hpp"
 #include "vast/logger.hpp"
 #include "vast/meta_index.hpp"
@@ -44,19 +45,11 @@
 #include "vast/type.hpp"
 #include "vast/value_index.hpp"
 
-#include <caf/actor_system.hpp>
 #include <caf/attach_continuous_stream_stage.hpp>
 #include <caf/broadcast_downstream_manager.hpp>
 #include <caf/deserializer.hpp>
 #include <caf/error.hpp>
-#include <caf/event_based_actor.hpp>
-#include <caf/exit_reason.hpp>
-#include <caf/fwd.hpp>
-#include <caf/local_actor.hpp>
-#include <caf/make_counted.hpp>
-#include <caf/scheduled_actor.hpp>
 #include <caf/sec.hpp>
-#include <caf/stateful_actor.hpp>
 
 #include <flatbuffers/base.h> // FLATBUFFERS_MAX_BUFFER_SIZE
 #include <flatbuffers/flatbuffers.h>

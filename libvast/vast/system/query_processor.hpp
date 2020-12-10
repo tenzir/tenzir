@@ -14,11 +14,11 @@
 #pragma once
 
 #include "vast/fwd.hpp"
+
 #include "vast/system/index_actor.hpp"
 #include "vast/uuid.hpp"
 
 #include <caf/behavior.hpp>
-#include <caf/fwd.hpp>
 
 #include <array>
 #include <cstddef>

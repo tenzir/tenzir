@@ -15,13 +15,14 @@
 
 #include "vast/system/query_processor.hpp"
 
+#include "vast/fwd.hpp"
+
 #include "vast/test/fixtures/actor_system.hpp"
 #include "vast/test/test.hpp"
 
 #include "vast/concept/parseable/to.hpp"
 #include "vast/concept/parseable/vast/expression.hpp"
 #include "vast/concept/parseable/vast/uuid.hpp"
-#include "vast/fwd.hpp"
 #include "vast/ids.hpp"
 #include "vast/system/flush_listener_actor.hpp"
 #include "vast/system/index_actor.hpp"

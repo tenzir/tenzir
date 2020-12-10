@@ -13,10 +13,11 @@
 
 #pragma once
 
-#include "vast/fbs/partition.hpp"
 #include "vast/fwd.hpp"
+
+#include "vast/fbs/partition.hpp"
 #include "vast/path.hpp"
-#include "vast/system/accountant.hpp"
+#include "vast/system/accountant_actor.hpp"
 #include "vast/system/active_indexer_actor.hpp"
 #include "vast/system/filesystem_actor.hpp"
 #include "vast/system/indexer_actor.hpp"

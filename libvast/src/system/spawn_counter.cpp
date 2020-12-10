@@ -16,7 +16,7 @@
 #include "vast/defaults.hpp"
 #include "vast/error.hpp"
 #include "vast/logger.hpp"
-#include "vast/system/archive.hpp"
+#include "vast/system/archive_actor.hpp"
 #include "vast/system/counter.hpp"
 #include "vast/system/index_actor.hpp"
 #include "vast/system/node.hpp"

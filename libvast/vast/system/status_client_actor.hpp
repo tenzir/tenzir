@@ -19,9 +19,10 @@
 
 namespace vast::system {
 
+/// The verbosity level of a status request.
 enum class status_verbosity { info, detailed, debug };
 
-// The STATUS CLIENT actor interface.
+/// The STATUS CLIENT actor interface.
 using status_client_actor = caf::typed_actor<
   // Reply to a status request from the NODE.
   caf::replies_to<atom::status, status_verbosity>::with< //

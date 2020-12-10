@@ -13,6 +13,8 @@
 
 #include "vast/system/importer.hpp"
 
+#include "vast/fwd.hpp"
+
 #include "vast/concept/printable/numeric/integral.hpp"
 #include "vast/concept/printable/std/chrono.hpp"
 #include "vast/concept/printable/to_string.hpp"
@@ -20,12 +22,11 @@
 #include "vast/concept/printable/vast/filesystem.hpp"
 #include "vast/defaults.hpp"
 #include "vast/detail/fill_status_map.hpp"
-#include "vast/fwd.hpp"
 #include "vast/logger.hpp"
 #include "vast/si_literals.hpp"
 #include "vast/system/flush_listener_actor.hpp"
 #include "vast/system/report.hpp"
-#include "vast/system/type_registry.hpp"
+#include "vast/system/type_registry_actor.hpp"
 #include "vast/table_slice.hpp"
 
 #include <caf/atom.hpp>
@@ -213,7 +214,7 @@ caf::behavior importer(importer_actor* self, path dir, archive_actor archive,
     },
     [=](atom::subscribe, atom::flush, wrapped_flush_listener listener) {
       VAST_ASSERT(self->state.stg != nullptr);
-      self->send(index, atom::subscribe_v, atom::flush_v, listener);
+      self->send(index, atom::subscribe_v, atom::flush_v, std::move(listener));
     },
     [=](atom::status, status_verbosity v) { return self->state.status(v); },
     [=](atom::telemetry) {

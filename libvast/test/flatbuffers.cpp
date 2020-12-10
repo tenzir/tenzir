@@ -11,6 +11,8 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
+#include "vast/fwd.hpp"
+
 #include "vast/chunk.hpp"
 #include "vast/defaults.hpp"
 #include "vast/detail/spawn_container_source.hpp"
@@ -19,7 +21,6 @@
 #include "vast/fbs/partition.hpp"
 #include "vast/fbs/utils.hpp"
 #include "vast/fbs/uuid.hpp"
-#include "vast/fwd.hpp"
 #include "vast/meta_index.hpp"
 #include "vast/msgpack_table_slice.hpp"
 #include "vast/msgpack_table_slice_builder.hpp"

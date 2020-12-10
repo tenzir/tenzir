@@ -13,8 +13,9 @@
 
 #pragma once
 
-#include "vast/expression.hpp"
 #include "vast/fwd.hpp"
+
+#include "vast/expression.hpp"
 #include "vast/path.hpp"
 #include "vast/schema.hpp"
 #include "vast/system/accountant_actor.hpp"

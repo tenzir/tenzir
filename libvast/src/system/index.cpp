@@ -13,6 +13,8 @@
 
 #include "vast/system/index.hpp"
 
+#include "vast/fwd.hpp"
+
 #include "vast/chunk.hpp"
 #include "vast/concept/parseable/to.hpp"
 #include "vast/concept/printable/to_string.hpp"
@@ -33,13 +35,12 @@
 #include "vast/fbs/partition.hpp"
 #include "vast/fbs/utils.hpp"
 #include "vast/fbs/uuid.hpp"
-#include "vast/fwd.hpp"
 #include "vast/ids.hpp"
 #include "vast/io/read.hpp"
 #include "vast/io/save.hpp"
 #include "vast/json.hpp"
 #include "vast/logger.hpp"
-#include "vast/system/accountant.hpp"
+#include "vast/system/accountant_actor.hpp"
 #include "vast/system/evaluator.hpp"
 #include "vast/system/filesystem_actor.hpp"
 #include "vast/system/partition.hpp"
@@ -48,22 +49,15 @@
 #include "vast/table_slice.hpp"
 #include "vast/value_index.hpp"
 
-#include <caf/make_counted.hpp>
-#include <caf/stateful_actor.hpp>
+#include <caf/error.hpp>
 
 #include <flatbuffers/flatbuffers.h>
 
 #include <algorithm>
 #include <chrono>
 #include <ctime>
-#include <deque>
 #include <memory>
 #include <unistd.h>
-#include <unordered_set>
-
-#include "caf/error.hpp"
-#include "caf/response_promise.hpp"
-#include "caf/scheduled_actor.hpp"
 
 using namespace std::chrono;
 

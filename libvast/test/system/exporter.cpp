@@ -28,6 +28,7 @@
 #include "vast/system/importer.hpp"
 #include "vast/system/index.hpp"
 #include "vast/system/posix_filesystem.hpp"
+#include "vast/system/type_registry.hpp"
 #include "vast/table_slice.hpp"
 
 using namespace caf;

@@ -14,6 +14,7 @@
 #pragma once
 
 #include "vast/fwd.hpp"
+
 #include "vast/logger.hpp"
 #include "vast/system/make_source.hpp"
 #include "vast/system/node.hpp"

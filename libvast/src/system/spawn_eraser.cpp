@@ -23,8 +23,6 @@
 #include "vast/system/node.hpp"
 #include "vast/system/spawn_arguments.hpp"
 
-#include <caf/settings.hpp>
-
 namespace vast::system {
 
 maybe_actor

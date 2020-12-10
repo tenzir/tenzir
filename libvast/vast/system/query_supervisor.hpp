@@ -14,8 +14,8 @@
 #pragma once
 
 #include "vast/fwd.hpp"
+
 #include "vast/ids.hpp"
-#include "vast/system/evaluator.hpp"
 #include "vast/system/query_supervisor_actor.hpp"
 #include "vast/system/query_supervisor_master_actor.hpp"
 #include "vast/uuid.hpp"

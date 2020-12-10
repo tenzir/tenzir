@@ -14,6 +14,7 @@
 #pragma once
 
 #include "vast/fwd.hpp"
+
 #include "vast/system/evaluation_triple.hpp"
 
 #include <caf/typed_event_based_actor.hpp>

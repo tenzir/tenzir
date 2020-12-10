@@ -13,6 +13,8 @@
 
 #include "vast/system/get_command.hpp"
 
+#include "vast/fwd.hpp"
+
 #include "vast/aliases.hpp"
 #include "vast/concept/parseable/to.hpp"
 #include "vast/concept/parseable/vast/si.hpp"
@@ -20,11 +22,10 @@
 #include "vast/detail/assert.hpp"
 #include "vast/detail/make_io_stream.hpp"
 #include "vast/format/writer.hpp"
-#include "vast/fwd.hpp"
 #include "vast/ids.hpp"
 #include "vast/logger.hpp"
 #include "vast/scope_linked.hpp"
-#include "vast/system/archive.hpp"
+#include "vast/system/archive_actor.hpp"
 #include "vast/system/node_control.hpp"
 #include "vast/system/spawn_or_connect_to_node.hpp"
 #include "vast/table_slice.hpp"

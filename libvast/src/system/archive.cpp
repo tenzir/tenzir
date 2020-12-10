@@ -18,7 +18,6 @@
 #include "vast/concept/printable/to_string.hpp"
 #include "vast/defaults.hpp"
 #include "vast/detail/assert.hpp"
-#include "vast/detail/bit_cast.hpp"
 #include "vast/detail/fill_status_map.hpp"
 #include "vast/logger.hpp"
 #include "vast/segment_store.hpp"

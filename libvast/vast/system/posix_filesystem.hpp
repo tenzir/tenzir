@@ -13,6 +13,8 @@
 
 #pragma once
 
+#include "vast/fwd.hpp"
+
 #include "vast/path.hpp"
 #include "vast/system/filesystem_actor.hpp"
 #include "vast/system/filesystem_statistics.hpp"

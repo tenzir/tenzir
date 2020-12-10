@@ -20,10 +20,6 @@
 #include "vast/system/node.hpp"
 #include "vast/system/spawn_arguments.hpp"
 
-#include <caf/actor.hpp>
-#include <caf/expected.hpp>
-#include <caf/settings.hpp>
-
 namespace vast::system {
 
 maybe_actor spawn_index(node_actor* self, spawn_arguments& args) {

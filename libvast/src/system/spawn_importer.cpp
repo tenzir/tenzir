@@ -16,14 +16,11 @@
 #include "vast/defaults.hpp"
 #include "vast/detail/assert.hpp"
 #include "vast/logger.hpp"
+#include "vast/system/archive_actor.hpp"
 #include "vast/system/importer.hpp"
+#include "vast/system/index_actor.hpp"
 #include "vast/system/node.hpp"
 #include "vast/system/spawn_arguments.hpp"
-
-#include <caf/actor.hpp>
-#include <caf/actor_system_config.hpp>
-#include <caf/expected.hpp>
-#include <caf/settings.hpp>
 
 namespace vast::system {
 

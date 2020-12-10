@@ -17,7 +17,6 @@
 #include "vast/fwd.hpp"
 #include "vast/logger.hpp"
 
-#include <caf/actor.hpp>
 #include <caf/behavior.hpp>
 #include <caf/event_based_actor.hpp>
 #include <caf/stateful_actor.hpp>

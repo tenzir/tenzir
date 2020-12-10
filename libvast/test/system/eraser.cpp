@@ -15,6 +15,8 @@
 
 #include "vast/system/eraser.hpp"
 
+#include "vast/fwd.hpp"
+
 #include "vast/test/fixtures/actor_system_and_events.hpp"
 #include "vast/test/test.hpp"
 
@@ -25,7 +27,6 @@
 #include "vast/detail/spawn_container_source.hpp"
 #include "vast/error.hpp"
 #include "vast/expression.hpp"
-#include "vast/fwd.hpp"
 #include "vast/ids.hpp"
 #include "vast/system/archive.hpp"
 #include "vast/system/index.hpp"

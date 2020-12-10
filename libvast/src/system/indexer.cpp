@@ -13,6 +13,8 @@
 
 #include "vast/system/indexer.hpp"
 
+#include "vast/fwd.hpp"
+
 #include "vast/chunk.hpp"
 #include "vast/concept/printable/stream.hpp"
 #include "vast/concept/printable/to_string.hpp"
@@ -21,12 +23,11 @@
 #include "vast/defaults.hpp"
 #include "vast/detail/assert.hpp"
 #include "vast/expression.hpp"
-#include "vast/fwd.hpp"
 #include "vast/logger.hpp"
 #include "vast/path.hpp"
 #include "vast/system/accountant.hpp"
 #include "vast/system/instrumentation.hpp"
-#include "vast/system/partition.hpp"
+#include "vast/system/partition_actor.hpp"
 #include "vast/system/report.hpp"
 #include "vast/table_slice.hpp"
 #include "vast/table_slice_column.hpp"
@@ -35,13 +36,9 @@
 #include "vast/view.hpp"
 
 #include <caf/attach_stream_sink.hpp>
+#include <caf/binary_serializer.hpp>
 
 #include <flatbuffers/flatbuffers.h>
-
-#include "caf/binary_serializer.hpp"
-#include "caf/response_promise.hpp"
-#include "caf/skip.hpp"
-#include "caf/stateful_actor.hpp"
 
 namespace vast::system {
 
