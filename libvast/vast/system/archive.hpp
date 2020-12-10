@@ -18,6 +18,7 @@
 #include "vast/status.hpp"
 #include "vast/store.hpp"
 #include "vast/system/accountant.hpp"
+#include "vast/system/archive_actor.hpp"
 #include "vast/system/instrumentation.hpp"
 
 #include <caf/fwd.hpp>
@@ -36,27 +37,38 @@
 
 namespace vast::system {
 
-// clang-format off
-using receiver_type = caf::typed_actor<
+using archive_client_actor = caf::typed_actor<
+  // FIXME: docs
   caf::reacts_to<table_slice>,
-  caf::reacts_to<atom::done, caf::error>
->;
-// clang-format on
+  // FIXME: docs
+  caf::reacts_to<atom::done, caf::error>>;
 
-// clang-format off
 /// @relates archive
 using archive_actor = caf::typed_actor<
-  caf::reacts_to<caf::stream<table_slice>>,
+  // FIXME: docs
+  caf::replies_to<caf::stream<table_slice>>::with<
+    // FIXME: docs
+    caf::inbound_stream_slot<table_slice>>,
+  // FIXME: docs
   caf::reacts_to<atom::exporter, caf::actor>,
+  // FIXME: docs
   caf::reacts_to<accountant_actor>,
+  // FIXME: docs
   caf::reacts_to<ids>,
-  caf::reacts_to<ids, receiver_type>,
-  caf::reacts_to<ids, receiver_type, uint64_t>,
-  caf::replies_to<atom::status, status_verbosity>::with<caf::dictionary<caf::config_value>>,
+  // FIXME: docs
+  caf::reacts_to<ids, archive_client_actor>,
+  // FIXME: docs
+  caf::reacts_to<ids, archive_client_actor, uint64_t>,
+  // FIXME: docs
+  caf::replies_to<atom::status, status_verbosity>::with<
+    // FIXME: docs
+    caf::dictionary<caf::config_value>>,
+  // FIXME: docs
   caf::reacts_to<atom::telemetry>,
-  caf::replies_to<atom::erase, ids>::with<atom::done>
->;
-// clang-format on
+  // FIXME: docs
+  caf::replies_to<atom::erase, ids>::with<
+    // FIXME:docs
+    atom::done>>;
 
 /// @relates archive
 struct archive_state {
@@ -66,7 +78,7 @@ struct archive_state {
   std::unique_ptr<vast::store> store;
   std::unique_ptr<vast::store::lookup> session;
   uint64_t session_id = 0;
-  std::queue<receiver_type> requesters;
+  std::queue<archive_client_actor> requesters;
   std::unordered_map<caf::actor_addr, std::queue<ids>> unhandled_ids;
   std::unordered_set<caf::actor_addr> active_exporters;
   vast::system::measurement measurement;

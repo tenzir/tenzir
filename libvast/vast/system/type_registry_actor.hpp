@@ -14,26 +14,39 @@
 #pragma once
 
 #include "vast/fwd.hpp"
+#include "vast/system/accountant_actor.hpp"
 
-#include <caf/meta/type_name.hpp>
 #include <caf/typed_event_based_actor.hpp>
 
 namespace vast::system {
 
-/// A flush listener actor listens for flushes.
-using flush_listener_actor = caf::typed_actor<
-  // Reacts to the requested flush message.
-  caf::reacts_to<atom::flush>>;
-
-/// Contains a flush_listener_actor; this allows for sending them over the wire.
-struct wrapped_flush_listener {
-  flush_listener_actor actor;
-
-  template <class Inspector>
-  friend auto inspect(Inspector& f, wrapped_flush_listener& x) {
-    return f(caf::meta::type_name("vast.system.wrapped_flush_listener"),
-             x.actor);
-  }
-};
+/// The TYPE REGISTRY actor interface.
+using type_registry_actor = caf::typed_actor<
+  // FIXME: docs
+  caf::reacts_to<atom::telemetry>,
+  // FIXME: docs
+  caf::replies_to<atom::status, status_verbosity>::with< //
+    caf::dictionary<caf::config_value>>,
+  // FIXME: docs
+  caf::reacts_to<caf::stream<table_slice>>,
+  // FIXME: docs
+  caf::reacts_to<atom::put, vast::type>,
+  // FIXME: docs
+  caf::reacts_to<atom::put, vast::schema>,
+  // FIXME: docs
+  caf::replies_to<atom::get>::with<type_set>,
+  // FIXME: docs
+  caf::replies_to<atom::get, atom::taxonomies>::with< //
+    taxonomies>,
+  // FIXME: docs
+  caf::reacts_to<atom::put, taxonomies>,
+  // FIXME: docs
+  caf::replies_to<atom::load>::with< //
+    atom::ok>,
+  // FIXME: docs
+  caf::replies_to<atom::resolve, expression>::with< //
+    expression>,
+  // FIXME: docs
+  caf::reacts_to<accountant_actor>>;
 
 } // namespace vast::system

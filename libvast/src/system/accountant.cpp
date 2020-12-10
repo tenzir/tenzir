@@ -23,6 +23,7 @@
 #include "vast/detail/make_io_stream.hpp"
 #include "vast/error.hpp"
 #include "vast/logger.hpp"
+#include "vast/status.hpp"
 #include "vast/system/report.hpp"
 #include "vast/table_slice.hpp"
 #include "vast/table_slice_builder_factory.hpp"

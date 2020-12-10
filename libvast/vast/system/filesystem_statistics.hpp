@@ -14,11 +14,8 @@
 #pragma once
 
 #include "vast/fwd.hpp"
-#include "vast/status.hpp"
 
-#include <caf/fwd.hpp>
-#include <caf/replies_to.hpp>
-#include <caf/typed_actor.hpp>
+#include <caf/meta/type_name.hpp>
 
 #include <cstdint>
 
@@ -26,38 +23,29 @@ namespace vast::system {
 
 /// Statistics about filesystem operations.
 struct filesystem_statistics {
-  struct ops_statistics {
+  struct ops {
     uint64_t successful = 0;
     uint64_t failed = 0;
     uint64_t bytes = 0;
+
+    template <class Inspector>
+    friend auto inspect(Inspector& f, ops& x) ->
+      typename Inspector::result_type {
+      return f(caf::meta::type_name("vast.system.filesystem_statistics.ops"),
+               x.successful, x.failed, x.bytes);
+    }
   };
 
-  ops_statistics writes;
-  ops_statistics reads;
-  ops_statistics mmaps;
+  ops writes;
+  ops reads;
+  ops mmaps;
+
+  template <class Inspector>
+  friend auto inspect(Inspector& f, filesystem_statistics& x) ->
+    typename Inspector::result_type {
+    return f(caf::meta::type_name("vast.system.filesystem_statistics"),
+             x.writes, x.reads, x.mmaps);
+  }
 };
-
-// clang-format off
-
-/// The interface for file system I/O. The filesystem actor implementation must
-/// interpret all operations that contain paths *relative* to its own root
-/// directory.
-using filesystem_actor = caf::typed_actor<
-  // Writes a chunk of data to a given path. Creates intermediate directories
-  // if needed.
-  caf::replies_to<atom::write, path, chunk_ptr>
-    ::with<atom::ok>,
-  // Reads a chunk of data from a given path and returns the chunk.
-  caf::replies_to<atom::read, path>
-    ::with<chunk_ptr>,
-  // Memory-maps a file.
-  caf::replies_to<atom::mmap, path>
-    ::with<chunk_ptr>,
-  // Reports statistics of filesystem interactions.
-  caf::replies_to<atom::status, status_verbosity>
-    ::with<caf::dictionary<caf::config_value>>
->;
-
-// clang-format on
 
 } // namespace vast::system

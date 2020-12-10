@@ -123,6 +123,7 @@ struct address_type;
 struct alias_type;
 struct attribute_extractor;
 struct bool_type;
+struct concept_;
 struct conjunction;
 struct count_type;
 struct curried_predicate;
@@ -130,12 +131,13 @@ struct data_extractor;
 struct disjunction;
 struct duration_type;
 struct enumeration_type;
+struct field_extractor;
 struct flow;
 struct integer_type;
 struct invocation;
-struct field_extractor;
 struct list_type;
 struct map_type;
+struct model;
 struct negation;
 struct none_type;
 struct offset;
@@ -144,15 +146,17 @@ struct predicate;
 struct qualified_record_field;
 struct real_type;
 struct record_type;
-struct string_type;
 struct status;
+struct string_type;
 struct subnet_type;
+struct taxonomies;
 struct time_type;
 struct type_extractor;
 struct type_set;
 
 namespace system {
 
+struct accountant_config;
 struct active_partition_state;
 struct passive_partition_state;
 struct index_state;
@@ -169,6 +173,7 @@ struct performance_sample;
 struct query_status;
 struct query_status;
 struct spawn_arguments;
+struct wrapped_flush_listener;
 
 } // namespace system
 
@@ -248,10 +253,9 @@ VAST_CAF_ATOM_ALIAS(subscribe)
 
 } // namespace vast
 
-#define VAST_ADD_ATOM(name, text) CAF_ADD_ATOM(vast, vast::atom, name, text)
-#define VAST_ADD_TYPE_ID(type) CAF_ADD_TYPE_ID(vast, type)
-
 CAF_BEGIN_TYPE_ID_BLOCK(vast, caf::first_custom_type_id)
+
+#define VAST_ADD_ATOM(name, text) CAF_ADD_ATOM(vast, vast::atom, name, text)
 
   // -- generic atoms ------------------------------------------------------------
 
@@ -343,12 +347,16 @@ CAF_BEGIN_TYPE_ID_BLOCK(vast, caf::first_custom_type_id)
   VAST_ADD_ATOM(tracker, "tracker")
   VAST_ADD_ATOM(worker, "worker")
 
-  // -- attribute atoms ----------------------------------------------------------
+  // -- attribute atoms --------------------------------------------------------
 
   VAST_ADD_ATOM(timestamp, "timestamp")
   VAST_ADD_ATOM(type, "type")
 
-  // -- type announcements -------------------------------------------------------
+#undef VAST_ADD_ATOM
+
+  // -- type announcements -----------------------------------------------------
+
+#define VAST_ADD_TYPE_ID(type) CAF_ADD_TYPE_ID(vast, type)
 
   VAST_ADD_TYPE_ID((vast::attribute_extractor))
   VAST_ADD_TYPE_ID((vast::bitmap))
@@ -377,13 +385,13 @@ CAF_BEGIN_TYPE_ID_BLOCK(vast, caf::first_custom_type_id)
   VAST_ADD_TYPE_ID((vast::system::performance_report))
   VAST_ADD_TYPE_ID((vast::system::query_status))
   VAST_ADD_TYPE_ID((vast::system::report))
+  VAST_ADD_TYPE_ID((vast::system::wrapped_flush_listener))
 
   VAST_ADD_TYPE_ID((std::vector<uint32_t>) )
   VAST_ADD_TYPE_ID((std::vector<vast::table_slice>) )
 
   VAST_ADD_TYPE_ID((caf::stream<vast::table_slice>) )
 
-CAF_END_TYPE_ID_BLOCK(vast)
-
-#undef VAST_ADD_ATOM
 #undef VAST_ADD_TYPE_ID
+
+CAF_END_TYPE_ID_BLOCK(vast)

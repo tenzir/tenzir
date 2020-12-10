@@ -23,6 +23,7 @@
 #include "vast/fwd.hpp"
 #include "vast/logger.hpp"
 #include "vast/si_literals.hpp"
+#include "vast/system/flush_listener_actor.hpp"
 #include "vast/system/report.hpp"
 #include "vast/system/type_registry.hpp"
 #include "vast/table_slice.hpp"
@@ -210,7 +211,7 @@ caf::behavior importer(importer_actor* self, path dir, archive_actor archive,
       VAST_DEBUG(self, "adds a new sink:", self->current_sender());
       st.stg->add_outbound_path(subscriber);
     },
-    [=](atom::subscribe, atom::flush, flush_listener_actor listener) {
+    [=](atom::subscribe, atom::flush, wrapped_flush_listener listener) {
       VAST_ASSERT(self->state.stg != nullptr);
       self->send(index, atom::subscribe_v, atom::flush_v, listener);
     },

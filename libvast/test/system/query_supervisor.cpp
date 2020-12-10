@@ -31,7 +31,7 @@ namespace {
 system::evaluator_actor::behavior_type
 dummy_evaluator(system::evaluator_actor::pointer self, ids x) {
   return {
-    [=](const system::evaluator_client_actor& client) {
+    [=](const system::index_client_actor& client) {
       self->send(client, x);
       return atom::done_v;
     },
@@ -58,7 +58,7 @@ TEST(lookup) {
   MESSAGE("fill query map and trigger supervisor");
   system::query_map qm{{uuid::random(), {e0, e1}}, {uuid::random(), {e2}}};
   self->send(sv, unbox(to<expression>("x == 42")), std::move(qm),
-             caf::actor_cast<system::evaluator_client_actor>(self));
+             caf::actor_cast<system::index_client_actor>(self));
   run();
   MESSAGE("collect results");
   bool done = false;

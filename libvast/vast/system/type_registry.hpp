@@ -18,36 +18,19 @@
 #include "vast/path.hpp"
 #include "vast/schema.hpp"
 #include "vast/status.hpp"
-#include "vast/system/accountant.hpp"
+#include "vast/system/accountant_actor.hpp"
+#include "vast/system/type_registry_actor.hpp"
 #include "vast/taxonomies.hpp"
 #include "vast/type.hpp"
 #include "vast/type_set.hpp"
 
 #include <caf/expected.hpp>
-#include <caf/typed_actor.hpp>
-#include <caf/typed_event_based_actor.hpp>
 
 #include <map>
 #include <string>
 #include <unordered_set>
 
 namespace vast::system {
-
-// clang-format off
-using type_registry_actor = caf::typed_actor<
-  caf::reacts_to<atom::telemetry>,
-  caf::replies_to<atom::status, status_verbosity>::with<caf::dictionary<caf::config_value>>,
-  caf::reacts_to<caf::stream<table_slice>>,
-  caf::reacts_to<atom::put, vast::type>,
-  caf::reacts_to<atom::put, vast::schema>,
-  caf::replies_to<atom::get>::with<type_set>,
-  caf::replies_to<atom::get, atom::taxonomies>::with<taxonomies>,
-  caf::reacts_to<atom::put, taxonomies>,
-  caf::replies_to<atom::load>::with<atom::ok>,
-  caf::replies_to<atom::resolve, expression>::with<expression>,
-  caf::reacts_to<accountant_actor>
->;
-// clang-format on
 
 struct type_registry_state {
   /// The name of the actor.

@@ -150,12 +150,12 @@ evaluator_state::hits_for(const offset& position) {
 
 evaluator_actor::behavior_type
 evaluator(evaluator_actor::stateful_pointer<evaluator_state> self,
-          expression expr, evaluation_triples eval) {
+          expression expr, std::vector<evaluation_triple> eval) {
   VAST_TRACE(VAST_ARG(expr), VAST_ARG(eval));
   VAST_ASSERT(!eval.empty());
   return {
     [=, expr = std::move(expr),
-     eval = std::move(eval)](evaluator_client_actor client) {
+     eval = std::move(eval)](index_client_actor client) {
       auto& st = self->state;
       st.client = client;
       st.expr = std::move(expr);

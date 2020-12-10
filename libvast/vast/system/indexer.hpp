@@ -17,23 +17,16 @@
 #include "vast/fwd.hpp"
 #include "vast/path.hpp"
 #include "vast/system/accountant.hpp"
-#include "vast/system/filesystem.hpp"
+#include "vast/system/active_indexer_actor.hpp"
+#include "vast/system/filesystem_actor.hpp"
+#include "vast/system/indexer_actor.hpp"
 #include "vast/system/instrumentation.hpp"
 #include "vast/type.hpp"
 #include "vast/uuid.hpp"
 
-#include <caf/actor.hpp>
-#include <caf/typed_event_based_actor.hpp>
-
 #include <string>
 
 namespace vast::system {
-
-using indexer_actor
-  = caf::typed_actor<caf::reacts_to<caf::stream<table_slice_column>>,
-                     caf::replies_to<atom::snapshot>::with<chunk_ptr>,
-                     caf::replies_to<curried_predicate>::with<ids>,
-                     caf::reacts_to<atom::shutdown>>;
 
 // TODO: Create a separate `passive_indexer_state`, similar to how partitions
 // are handled.
@@ -59,8 +52,8 @@ struct indexer_state {
 };
 
 /// Indexes a table slice column with a single value index.
-indexer_actor::behavior_type
-active_indexer(indexer_actor::stateful_pointer<indexer_state> self,
+active_indexer_actor::behavior_type
+active_indexer(active_indexer_actor::stateful_pointer<indexer_state> self,
                type index_type, caf::settings index_opts);
 
 /// An indexer that was recovered from on-disk state. It can only respond

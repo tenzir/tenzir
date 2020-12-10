@@ -64,12 +64,6 @@ ids select(const counts& xs, curried_predicate pred) {
 // Dummy actor representing an INDEXER for field `x`.
 vast::system::indexer_actor::behavior_type dummy_indexer(counts xs) {
   return {
-    [](caf::stream<table_slice_column>) {
-      FAIL("received incoming stream as dummy indexer");
-    },
-    [](atom::snapshot) -> caf::result<chunk_ptr> {
-      FAIL("received snapshot request as dummy indexer");
-    },
     [xs = std::move(xs)](curried_predicate pred) { return select(xs, pred); },
     [](atom::shutdown) { FAIL("received shutdown request as dummy indexer"); },
   };
@@ -100,7 +94,7 @@ struct fixture : fixtures::deterministic_actor_system_and_events {
 
   ids query(std::string_view expr_str) {
     auto expr = unbox(to<expression>(expr_str));
-    system::evaluation_triples triples;
+    std::vector<system::evaluation_triple> triples;
     auto resolved = resolve(expr, layout);
     VAST_ASSERT(resolved.size() > 0);
     for (auto& [expr_position, pred] : resolved) {
@@ -112,7 +106,7 @@ struct fixture : fixtures::deterministic_actor_system_and_events {
         triples.emplace_back(expr_position, curried(pred), x);
     }
     auto eval = sys.spawn(system::evaluator, expr, std::move(triples));
-    self->send(eval, caf::actor_cast<system::evaluator_client_actor>(self));
+    self->send(eval, caf::actor_cast<system::index_client_actor>(self));
     run();
     ids result;
     bool got_done_atom = false;

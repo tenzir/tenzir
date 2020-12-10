@@ -42,7 +42,7 @@
 #include "vast/status.hpp"
 #include "vast/system/accountant.hpp"
 #include "vast/system/evaluator.hpp"
-#include "vast/system/filesystem.hpp"
+#include "vast/system/filesystem_actor.hpp"
 #include "vast/system/partition.hpp"
 #include "vast/system/query_supervisor.hpp"
 #include "vast/system/shutdown.hpp"
@@ -335,7 +335,7 @@ void await_evaluation_maps(
     auto& partition_id = id; // Can't use structured binding inside lambda.
     self->request(actor, caf::infinite, expr)
       .then(
-        [=](evaluation_triples triples) {
+        [=](std::vector<evaluation_triple> triples) {
           auto received = ++shared_counter->received;
           if (!triples.empty()) {
             shared_counter->pqm.emplace(partition_id, std::move(triples));
@@ -590,10 +590,10 @@ index(index_actor::stateful_pointer<index_state> self,
   for (size_t i = 0; i < num_workers; ++i)
     self->spawn(query_supervisor, self);
   return {
-    [=](atom::worker, query_supervisor_actor& worker) {
+    [=](atom::worker, query_supervisor_actor worker) {
       if (!self->state.worker_available())
         VAST_DEBUG(self, "delegates work to query supervisors");
-      self->state.idle_workers.push_back(std::move(worker));
+      self->state.idle_workers.emplace_back(std::move(worker));
     },
     [=](atom::done, uuid partition_id) {
       VAST_DEBUG(self, "queried partition", partition_id, "successfully");
@@ -608,8 +608,8 @@ index(index_actor::stateful_pointer<index_state> self,
     [=](atom::status, status_verbosity v) -> caf::config_value::dictionary {
       return self->state.status(v);
     },
-    [=](atom::subscribe, atom::flush, flush_listener_actor listener) {
-      self->state.add_flush_listener(listener);
+    [=](atom::subscribe, atom::flush, wrapped_flush_listener listener) {
+      self->state.add_flush_listener(listener.actor);
     },
     [=](vast::expression expr) -> caf::result<void> {
       // TODO: This check is not required technically, but we use the query
@@ -673,7 +673,7 @@ index(index_actor::stateful_pointer<index_state> self,
       if (!self->state.worker_available())
         return caf::skip;
       auto sender = self->current_sender();
-      auto client = caf::actor_cast<evaluator_client_actor>(sender);
+      auto client = caf::actor_cast<index_client_actor>(sender);
       // Sanity checks.
       if (!sender) {
         VAST_ERROR(self, "ignores an anonymous query");

@@ -58,8 +58,8 @@ vast::chunk_ptr chunkify(const value_index_ptr& idx) {
 
 } // namespace
 
-indexer_actor::behavior_type
-active_indexer(indexer_actor::stateful_pointer<indexer_state> self,
+active_indexer_actor::behavior_type
+active_indexer(active_indexer_actor::stateful_pointer<indexer_state> self,
                type index_type, caf::settings index_opts) {
   self->state.name = "indexer-" + to_string(index_type);
   self->state.has_skip_attribute = vast::has_skip_attribute(index_type);
@@ -67,13 +67,14 @@ active_indexer(indexer_actor::stateful_pointer<indexer_state> self,
   if (!self->state.idx) {
     VAST_ERROR(self, "failed to construct value index");
     self->quit(make_error(ec::unspecified, "failed to construct value index"));
-    return indexer_actor::behavior_type::make_empty_behavior();
+    return active_indexer_actor::behavior_type::make_empty_behavior();
   }
   return {
-    [=](caf::stream<table_slice_column> in) {
+    [=](caf::stream<table_slice_column> in)
+      -> caf::inbound_stream_slot<table_slice_column> {
       VAST_DEBUG(self, "got a new stream");
       self->state.stream_initiated = true;
-      caf::attach_stream_sink(
+      auto result = caf::attach_stream_sink(
         self, in,
         [=](caf::unit_t&) {
           // nop
@@ -102,6 +103,7 @@ active_indexer(indexer_actor::stateful_pointer<indexer_state> self,
           if (self->state.promise.pending())
             self->state.promise.deliver(chunkify(self->state.idx));
         });
+      return result.inbound_slot();
     },
     [=](const curried_predicate& pred) {
       VAST_DEBUG(self, "got predicate:", pred);
@@ -142,12 +144,6 @@ passive_indexer(indexer_actor::stateful_pointer<indexer_state> self,
   self->state.partition_id = partition_id;
   self->state.idx = std::move(idx);
   return {
-    [=](caf::stream<table_slice_column>) {
-      die("received incoming stream as read-only indexer");
-    },
-    [=](atom::snapshot) -> caf::result<chunk_ptr> {
-      die("received snapshot request as read-only indexer");
-    },
     [=](const curried_predicate& pred) {
       VAST_DEBUG(self, "got predicate:", pred);
       VAST_ASSERT(self->state.idx);

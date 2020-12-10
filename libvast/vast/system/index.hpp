@@ -22,7 +22,8 @@
 #include "vast/meta_index.hpp"
 #include "vast/status.hpp"
 #include "vast/system/accountant.hpp"
-#include "vast/system/filesystem.hpp"
+#include "vast/system/filesystem_actor.hpp"
+#include "vast/system/flush_listener_actor.hpp"
 #include "vast/system/index_actor.hpp"
 #include "vast/system/partition.hpp"
 #include "vast/system/query_supervisor.hpp"
@@ -43,7 +44,7 @@ namespace vast::system {
 /// The state of the active partition.
 struct active_partition_info {
   /// The partition actor.
-  partition_actor actor;
+  active_partition_actor actor;
 
   /// The slot ID that identifies the partition in the stream.
   caf::stream_slot stream_slot;
@@ -96,7 +97,8 @@ private:
   const index_state& state_;
 };
 
-using pending_query_map = detail::stable_map<uuid, evaluation_triples>;
+using pending_query_map
+  = detail::stable_map<uuid, std::vector<evaluation_triple>>;
 
 struct query_state {
   /// The UUID of the query.

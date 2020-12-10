@@ -70,7 +70,7 @@ mock_index(system::index_actor::stateful_pointer<mock_index_state> self) {
     [=](atom::status, status_verbosity) -> caf::config_value::dictionary {
       FAIL("no mock implementation available");
     },
-    [=](atom::subscribe, atom::flush, system::flush_listener_actor) {
+    [=](atom::subscribe, atom::flush, system::wrapped_flush_listener) {
       FAIL("no mock implementation available");
     },
     [=](expression&) {
@@ -110,16 +110,18 @@ struct mock_archive_state {
 system::archive_actor::behavior_type
 mock_archive(system::archive_actor::stateful_pointer<mock_archive_state> self) {
   return {
-    [=](caf::stream<table_slice>) { FAIL("no mock implementation available"); },
+    [=](caf::stream<table_slice>) -> caf::inbound_stream_slot<table_slice> {
+      FAIL("no mock implementation available");
+    },
     [=](atom::exporter, caf::actor) {
       FAIL("no mock implementation available");
     },
     [=](system::accountant_actor) { FAIL("no mock implementation available"); },
     [=](ids) { FAIL("no mock implementation available"); },
-    [=](ids, system::receiver_type) {
+    [=](ids, system::archive_client_actor) {
       FAIL("no mock implementation available");
     },
-    [=](ids, system::receiver_type, uint64_t) {
+    [=](ids, system::archive_client_actor, uint64_t) {
       FAIL("no mock implementation available");
     },
     [=](atom::status, status_verbosity) -> caf::config_value::dictionary {

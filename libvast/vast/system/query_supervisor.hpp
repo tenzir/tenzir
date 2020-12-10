@@ -16,28 +16,16 @@
 #include "vast/fwd.hpp"
 #include "vast/ids.hpp"
 #include "vast/system/evaluator.hpp"
+#include "vast/system/query_supervisor_actor.hpp"
+#include "vast/system/query_supervisor_master_actor.hpp"
 #include "vast/uuid.hpp"
 
 #include <caf/detail/unordered_flat_map.hpp>
-#include <caf/typed_actor.hpp>
-#include <caf/typed_event_based_actor.hpp>
 
 #include <cstdint>
 #include <string>
 
 namespace vast::system {
-
-/// Maps partition IDs to EVALUATOR actors.
-using query_map
-  = caf::detail::unordered_flat_map<uuid, std::vector<evaluator_actor>>;
-
-/// The QUERY SUPERVISOR actor.
-using query_supervisor_actor = caf::typed_actor<
-  caf::reacts_to<expression, query_map, evaluator_client_actor>>;
-
-/// The QUERY SUPERVISOR MASTER actor.
-using query_supervisor_master_actor
-  = caf::typed_actor<caf::reacts_to<atom::worker, query_supervisor_actor>>;
 
 /// The internal state of a QUERY SUPERVISOR actor.
 struct query_supervisor_state {

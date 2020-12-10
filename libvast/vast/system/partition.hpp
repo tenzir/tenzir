@@ -21,11 +21,13 @@
 #include "vast/meta_index.hpp"
 #include "vast/path.hpp"
 #include "vast/qualified_record_field.hpp"
+#include "vast/system/active_partition_actor.hpp"
 #include "vast/system/evaluator.hpp"
-#include "vast/system/filesystem.hpp"
+#include "vast/system/filesystem_actor.hpp"
 #include "vast/system/index_actor.hpp"
 #include "vast/system/indexer.hpp"
 #include "vast/system/instrumentation.hpp"
+#include "vast/system/partition_actor.hpp"
 #include "vast/table_slice_column.hpp"
 #include "vast/type.hpp"
 #include "vast/uuid.hpp"
@@ -34,45 +36,36 @@
 #include <caf/fwd.hpp>
 #include <caf/optional.hpp>
 #include <caf/stream_slot.hpp>
-#include <caf/typed_event_based_actor.hpp>
-#include <caf/typed_response_promise.hpp>
 
 #include <unordered_map>
+#include <vector>
 
 namespace vast::system {
 
 /// Helper class used to route table slice columns to the correct indexer
 /// in the CAF stream stage.
 struct partition_selector {
-  bool operator()(const vast::qualified_record_field& filter,
+  bool operator()(const qualified_record_field& filter,
                   const table_slice_column& x) const;
 };
 
-// clang-format off
-using partition_actor = caf::typed_actor<
-  caf::replies_to<caf::stream<table_slice>>
-    ::with<caf::inbound_stream_slot<table_slice>>,
-  caf::replies_to<atom::persist, path, index_actor>
-    ::with<atom::ok>,
-  caf::reacts_to<atom::persist, atom::resume>,
-  caf::reacts_to<chunk_ptr>,
-  caf::replies_to<expression>::with<evaluation_triples>
->;
-// clang-format on
-
-/// The state of the active partition actor.
+/// The state of the ACTIVE PARTITION actor.
 struct active_partition_state {
+  // -- member types -----------------------------------------------------------
+
   using partition_stream_stage_ptr = caf::stream_stage_ptr<
     table_slice,
     caf::broadcast_downstream_manager<
       table_slice_column, vast::qualified_record_field, partition_selector>>;
 
-  indexer_actor indexer_at(size_t position) const;
+  // -- utility functions ------------------------------------------------------
 
-  /// Data Members
+  active_indexer_actor indexer_at(size_t position) const;
+
+  // -- data members -----------------------------------------------------------
 
   /// Pointer to the parent actor.
-  partition_actor::pointer self;
+  active_partition_actor::pointer self;
 
   /// Uniquely identifies this partition.
   uuid id;
@@ -88,7 +81,7 @@ struct active_partition_state {
 
   /// Maps qualified fields to indexer actors.
   //  TODO: Should we use the tsl map here for heterogenous key lookup?
-  detail::stable_map<qualified_record_field, indexer_actor> indexers;
+  detail::stable_map<qualified_record_field, active_indexer_actor> indexers;
 
   /// Maps type names to IDs. Used the answer #type queries.
   std::unordered_map<std::string, ids> type_ids;
@@ -145,9 +138,15 @@ struct active_partition_state {
 // state without any intermediate deserialization step,
 // like yandex::mms or cap'n proto.
 struct passive_partition_state {
+  // -- member types -----------------------------------------------------------
+
   using recovered_indexer = std::pair<qualified_record_field, value_index_ptr>;
 
+  // -- utility functions ------------------------------------------------------
+
   indexer_actor indexer_at(size_t position) const;
+
+  // -- data members -----------------------------------------------------------
 
   /// Pointer to the parent actor.
   partition_actor::pointer self;
@@ -171,11 +170,11 @@ struct passive_partition_state {
   size_t events;
 
   /// The raw memory of the partition, used to spawn indexers on demand.
-  vast::chunk_ptr partition_chunk;
+  chunk_ptr partition_chunk;
 
   /// Stores a list of expressions that could not be answered immediately.
-  std::vector<
-    std::pair<expression, caf::typed_response_promise<evaluation_triples>>>
+  std::vector<std::pair<
+    expression, caf::typed_response_promise<std::vector<evaluation_triple>>>>
     deferred_evaluations;
 
   /// A typed view into the `partition_chunk`.
@@ -186,7 +185,7 @@ struct passive_partition_state {
   mutable std::vector<indexer_actor> indexers;
 };
 
-// Flatbuffer support
+// -- flatbuffers --------------------------------------------------------------
 
 caf::expected<flatbuffers::Offset<fbs::Partition>>
 pack(flatbuffers::FlatBufferBuilder& builder, const active_partition_state& x);
@@ -195,16 +194,18 @@ caf::error unpack(const fbs::partition::v0& x, passive_partition_state& y);
 
 caf::error unpack(const fbs::partition::v0& x, partition_synopsis& y);
 
+// -- behavior -----------------------------------------------------------------
+
 /// Spawns a partition.
 /// @param self The partition actor.
 /// @param id The UUID of this partition.
 /// @param filesystem The actor handle of the filesystem actor.
 /// @param index_opts Settings that are forwarded when creating indexers.
 /// @param synopsis_opts Settings that are forwarded when creating synopses.
-partition_actor::behavior_type
-active_partition(partition_actor::stateful_pointer<active_partition_state> self,
-                 uuid id, filesystem_actor filesystem, caf::settings index_opts,
-                 caf::settings synopsis_opts);
+active_partition_actor::behavior_type active_partition(
+  active_partition_actor::stateful_pointer<active_partition_state> self,
+  uuid id, filesystem_actor filesystem, caf::settings index_opts,
+  caf::settings synopsis_opts);
 
 /// Spawns a read-only partition.
 /// @param self The partition actor.

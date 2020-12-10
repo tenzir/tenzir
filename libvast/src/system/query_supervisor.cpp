@@ -16,10 +16,8 @@
 #include "vast/expression.hpp"
 #include "vast/fwd.hpp"
 #include "vast/logger.hpp"
-
-#include <caf/event_based_actor.hpp>
-#include <caf/local_actor.hpp>
-#include <caf/stateful_actor.hpp>
+#include "vast/system/index_client_actor.hpp"
+#include "vast/system/query_supervisor_master_actor.hpp"
 
 #include <algorithm>
 
@@ -50,7 +48,7 @@ query_supervisor_actor::behavior_type query_supervisor(
   self->send(master, atom::worker_v, self);
   return {
     [=](const expression&, const query_map& qm,
-        const evaluator_client_actor& client) {
+        const index_client_actor& client) {
       VAST_DEBUG(self, "got a new query for", qm.size(),
                  "partitions:", get_ids(qm));
       VAST_ASSERT(!qm.empty());
@@ -77,7 +75,8 @@ query_supervisor_actor::behavior_type query_supervisor(
             }
           });
       }
-    }};
+    },
+  };
 }
 
 } // namespace vast::system

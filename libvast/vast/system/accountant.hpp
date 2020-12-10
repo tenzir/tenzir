@@ -14,15 +14,13 @@
 #pragma once
 
 #include "vast/fwd.hpp"
-#include "vast/status.hpp"
-#include "vast/time.hpp"
+#include "vast/system/accountant_actor.hpp"
 
 #include <caf/typed_actor.hpp>
 
 namespace vast::system {
 
 // Forward declarations
-struct accountant_config;
 struct accountant_state_impl;
 
 struct accountant_state_deleter {
@@ -36,24 +34,6 @@ struct accountant_state
   // Name of the ACCOUNTANT actor.
   static constexpr const char* name = "accountant";
 };
-
-// clang-format off
-/// @relates accountant
-using accountant_actor = caf::typed_actor<
-  caf::replies_to<atom::config, accountant_config>
-    ::with<atom::ok>,
-  caf::reacts_to<atom::announce, std::string>,
-  caf::reacts_to<std::string, duration>,
-  caf::reacts_to<std::string, time>,
-  caf::reacts_to<std::string, int64_t>,
-  caf::reacts_to<std::string, uint64_t>,
-  caf::reacts_to<std::string, double>,
-  caf::reacts_to<report>,
-  caf::reacts_to<performance_report>,
-  caf::replies_to<atom::status, status_verbosity>
-    ::with<caf::dictionary<caf::config_value>>,
-  caf::reacts_to<atom::telemetry>>;
-// clang-format on
 
 /// Accumulates various performance metrics in a key-value format and writes
 /// them to VAST table slices.

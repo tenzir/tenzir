@@ -16,31 +16,15 @@
 #include "vast/expression.hpp"
 #include "vast/fwd.hpp"
 #include "vast/ids.hpp"
+#include "vast/system/evaluation_triple.hpp"
+#include "vast/system/evaluator_actor.hpp"
+#include "vast/system/index_client_actor.hpp"
 #include "vast/system/indexer.hpp"
 
-#include <caf/typed_event_based_actor.hpp>
-#include <caf/typed_response_promise.hpp>
-
-#include <map>
 #include <utility>
+#include <vector>
 
 namespace vast::system {
-
-/// Bundles an offset into an expression under evaluation to the curried
-/// representation of the ::predicate at that position in the expression and
-/// the INDEXER actor responsible for answering the (curried) predicate.
-using evaluation_triple = std::tuple<offset, curried_predicate, indexer_actor>;
-
-using evaluation_triples = std::vector<evaluation_triple>;
-
-/// Maps layouts to a list of evaluation triples.
-using evaluation_map = std::map<type, std::vector<evaluation_triple>>;
-
-using evaluator_client_actor
-  = caf::typed_actor<caf::reacts_to<ids>, caf::reacts_to<atom::done>>;
-
-using evaluator_actor
-  = caf::typed_actor<caf::replies_to<evaluator_client_actor>::with<atom::done>>;
 
 /// @relates evaluator
 struct evaluator_state {
@@ -79,7 +63,7 @@ struct evaluator_state {
   evaluator_actor::pointer self;
 
   /// Stores the actor for sendings results to.
-  evaluator_client_actor client;
+  index_client_actor client;
 
   /// Stores the original query expression.
   expression expr;
@@ -96,6 +80,6 @@ struct evaluator_state {
 /// @pre `!eval.empty()`
 evaluator_actor::behavior_type
 evaluator(evaluator_actor::stateful_pointer<evaluator_state> self,
-          expression expr, evaluation_triples eval);
+          expression expr, std::vector<evaluation_triple> eval);
 
 } // namespace vast::system
