@@ -58,6 +58,7 @@
 #include <caf/sec.hpp>
 #include <caf/stateful_actor.hpp>
 
+#include <flatbuffers/base.h> // FLATBUFFERS_MAX_BUFFER_SIZE
 #include <flatbuffers/flatbuffers.h>
 
 #include <memory>
@@ -580,6 +581,15 @@ passive_partition(caf::stateful_actor<passive_partition_state>* self, uuid id,
     [=](vast::chunk_ptr chunk) {
       if (!chunk) {
         VAST_ERROR(self, "got invalid chunk");
+        return self->quit();
+      }
+      // FlatBuffers <= 1.11 does not correctly use '::flatbuffers::soffset_t'
+      // over 'soffset_t' in FLATBUFFERS_MAX_BUFFER_SIZE.
+      using ::flatbuffers::soffset_t;
+      if (chunk->size() >= FLATBUFFERS_MAX_BUFFER_SIZE) {
+        VAST_ERROR("failed to load partition at", path, "because its size of",
+                   chunk->size(), "exceeds the maximum allowed size of",
+                   FLATBUFFERS_MAX_BUFFER_SIZE);
         return self->quit();
       }
       // Deserialize chunk from the filesystem actor

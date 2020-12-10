@@ -390,7 +390,13 @@ caf::expected<segment> segment_store::load_segment(uuid id) const {
   auto chk = chunk::mmap(filename);
   if (!chk)
     return make_error(ec::filesystem_error, "failed to mmap chunk", filename);
-  return segment::make(std::move(chk));
+  if (auto segment = segment::make(std::move(chk))) {
+    return segment;
+  } else {
+    VAST_ERROR(this, "failed to load segment at", filename,
+               "with error:", render(segment.error()));
+    return std::move(segment.error());
+  }
 }
 
 caf::error segment_store::select_segments(const ids& selection,
