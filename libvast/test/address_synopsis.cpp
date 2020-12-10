@@ -97,12 +97,12 @@ TEST(updated params after shrinking) {
   ptr->add(to_addr_view("192.168.0.3"));
   ptr->add(to_addr_view("192.168.0.4"));
   ptr->add(to_addr_view("192.168.0.5"));
-  auto shrinked = ptr->shrink();
-  auto type = shrinked->type();
+  auto shrunk = ptr->shrink();
+  auto type = shrunk->type();
   auto params = unbox(parse_parameters(type));
   // The size will be rounded up to the next power of two.
   CHECK_EQUAL(*params.n, 8u);
-  auto recovered = roundtrip(std::move(shrinked));
+  auto recovered = roundtrip(std::move(shrunk));
   REQUIRE(recovered);
   auto recovered_params = unbox(parse_parameters(type));
   CHECK_EQUAL(*recovered_params.n, 8u);

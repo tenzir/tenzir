@@ -206,6 +206,8 @@ std::vector<uuid> meta_index::lookup(const expression& expr) const {
           VAST_DEBUG(this, "checks", part_id, "for predicate", x);
           for (auto& [field, syn] : part_syn.field_synopses_) {
             if (match(field)) {
+              // We rely on having a field -> nullptr mapping here for the
+              // fields that don't have their own synopsis.
               if (syn) {
                 found_matching_synopsis = true;
                 auto opt = syn->lookup(x.op, make_view(rhs));
