@@ -97,7 +97,7 @@ jobs:
         if: matrix.os.tag == 'Ubuntu'
         run: |
           sudo apt-get -qq update
-          sudo apt-get -qqy install ninja-build libpcap-dev libssl-dev lsb-release ccache libflatbuffers-dev libyaml-cpp-dev
+          sudo apt-get -qqy install ninja-build libpcap-dev libssl-dev lsb-release ccache libflatbuffers-dev libyaml-cpp-dev libspdlog-dev
           # Install Apache Arrow (c.f. https://arrow.apache.org/install/)
           # TODO: Revert the commit that introduced this version pinning once ch20162
           # is done and we can use latest upstream again.
@@ -124,7 +124,7 @@ jobs:
           HOMEBREW_NO_AUTO_UPDATE: 1
         run: |
           brew --version
-          brew install libpcap tcpdump rsync pandoc apache-arrow pkg-config ninja ccache gnu-sed flatbuffers yaml-cpp simdjson
+          brew install libpcap tcpdump rsync pandoc apache-arrow pkg-config ninja ccache gnu-sed flatbuffers yaml-cpp simdjson spdlog
 
       - name: Configure Environment
         id: configure_env
