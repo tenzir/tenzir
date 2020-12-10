@@ -25,6 +25,9 @@ RUN echo "deb http://www.deb-multimedia.org buster main" | tee -a /etc/apt/sourc
   apt-get -qq update
 RUN apt-get -qqy install libflatbuffers-dev flatbuffers-compiler-dev
 
+# spdlog
+RUN apt-get -qqy -t buster-backports install libspdlog-dev
+
 # Apache Arrow (c.f. https://arrow.apache.org/install/)
 # TODO: Arrow CMake is broken for 2.0 on Debian/Ubuntu. Switch to 3.0 once available
 RUN wget https://apache.bintray.com/arrow/debian/pool/buster/main/a/apache-arrow-archive-keyring/apache-arrow-archive-keyring_1.0.1-1_all.deb && \
