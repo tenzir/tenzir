@@ -14,6 +14,7 @@
 #pragma once
 
 #include "vast/fwd.hpp"
+#include "vast/system/accountant_actor.hpp"
 #include "vast/system/archive_client_actor.hpp"
 #include "vast/system/status_client_actor.hpp"
 

@@ -16,10 +16,12 @@
 
 #include <sys/stat.h>
 
+namespace vast::system {
+
 namespace {
 
 struct partition_diskstate {
-  vast::uuid id;
+  uuid id;
   off_t filesize;
   time_t mtime;
 };
@@ -31,12 +33,10 @@ std::shared_ptr<caf::detail::scope_guard<Fun>> make_shared_guard(Fun f) {
 
 } // namespace
 
-namespace vast::system {
-
-disk_monitor_type::behavior_type
-disk_monitor(disk_monitor_type::stateful_pointer<disk_monitor_state> self,
+disk_monitor_actor::behavior_type
+disk_monitor(disk_monitor_actor::stateful_pointer<disk_monitor_state> self,
              size_t hiwater, size_t lowater,
-             std::chrono::seconds disk_scan_interval, const vast::path& dbdir,
+             std::chrono::seconds disk_scan_interval, const path& dbdir,
              archive_actor archive, index_actor index) {
   VAST_TRACE(VAST_ARG(hiwater), VAST_ARG(lowater), VAST_ARG(dbdir));
   using namespace std::string_literals;
@@ -71,14 +71,14 @@ disk_monitor(disk_monitor_type::stateful_pointer<disk_monitor_state> self,
       // have finished or we encountered an error.
       auto shared_guard
         = make_shared_guard([=] { self->state.purging = false; });
-      vast::directory index_dir = dbdir / "index";
+      directory index_dir = dbdir / "index";
       // TODO(ch20006): Add some check on the overall structure on the db dir.
       std::vector<partition_diskstate> partitions;
       for (auto file : index_dir) {
         auto partition = file.basename().str();
         if (partition == "index.bin")
           continue;
-        vast::uuid id;
+        uuid id;
         if (!parsers::uuid(partition, id)) {
           VAST_VERBOSE(self, "failed to find partition", partition);
           continue;
@@ -102,7 +102,7 @@ disk_monitor(disk_monitor_type::stateful_pointer<disk_monitor_state> self,
       VAST_VERBOSE(self, "erases partition", oldest.id, "from index");
       self->request(index, caf::infinite, atom::erase_v, oldest.id)
         .then(
-          [=, sg = shared_guard](vast::ids erased_ids) {
+          [=, sg = shared_guard](ids erased_ids) {
             // TODO: It would be more natural if we could chain these futures,
             // instead of nesting them.
             VAST_VERBOSE(self, "erases removed ids from archive");
