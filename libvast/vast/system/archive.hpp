@@ -15,7 +15,6 @@
 
 #include "vast/fwd.hpp"
 #include "vast/ids.hpp"
-#include "vast/status.hpp"
 #include "vast/store.hpp"
 #include "vast/system/accountant.hpp"
 #include "vast/system/archive_actor.hpp"
@@ -36,39 +35,6 @@
 #include <vector>
 
 namespace vast::system {
-
-using archive_client_actor = caf::typed_actor<
-  // FIXME: docs
-  caf::reacts_to<table_slice>,
-  // FIXME: docs
-  caf::reacts_to<atom::done, caf::error>>;
-
-/// @relates archive
-using archive_actor = caf::typed_actor<
-  // FIXME: docs
-  caf::replies_to<caf::stream<table_slice>>::with<
-    // FIXME: docs
-    caf::inbound_stream_slot<table_slice>>,
-  // FIXME: docs
-  caf::reacts_to<atom::exporter, caf::actor>,
-  // FIXME: docs
-  caf::reacts_to<accountant_actor>,
-  // FIXME: docs
-  caf::reacts_to<ids>,
-  // FIXME: docs
-  caf::reacts_to<ids, archive_client_actor>,
-  // FIXME: docs
-  caf::reacts_to<ids, archive_client_actor, uint64_t>,
-  // FIXME: docs
-  caf::replies_to<atom::status, status_verbosity>::with<
-    // FIXME: docs
-    caf::dictionary<caf::config_value>>,
-  // FIXME: docs
-  caf::reacts_to<atom::telemetry>,
-  // FIXME: docs
-  caf::replies_to<atom::erase, ids>::with<
-    // FIXME:docs
-    atom::done>>;
 
 /// @relates archive
 struct archive_state {

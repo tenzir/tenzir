@@ -17,7 +17,6 @@
 #include "vast/expression.hpp"
 #include "vast/ids.hpp"
 #include "vast/query_options.hpp"
-#include "vast/status.hpp"
 #include "vast/system/accountant.hpp"
 #include "vast/system/archive.hpp"
 #include "vast/system/index_actor.hpp"

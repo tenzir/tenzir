@@ -15,6 +15,7 @@
 
 #include "vast/fwd.hpp"
 #include "vast/system/archive_client_actor.hpp"
+#include "vast/system/status_client_actor.hpp"
 
 #include <caf/typed_event_based_actor.hpp>
 
@@ -35,12 +36,11 @@ using archive_actor = caf::typed_actor<
   // FIXME: docs
   caf::reacts_to<ids, archive_client_actor, uint64_t>,
   // FIXME: docs
-  caf::replies_to<atom::status, status_verbosity>::with< //
-    caf::dictionary<caf::config_value>>,
-  // FIXME: docs
   caf::reacts_to<atom::telemetry>,
   // FIXME: docs
   caf::replies_to<atom::erase, ids>::with< //
-    atom::done>>;
+    atom::done>>
+  // Conform to the procotol of the STATUS CLIENT actor.
+  ::extend_with<status_client_actor>;
 
 } // namespace vast::system

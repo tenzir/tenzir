@@ -187,7 +187,12 @@ enum relational_operator : uint8_t;
 
 enum class ec : uint8_t;
 enum class query_options : uint32_t;
+
+namespace system {
+
 enum class status_verbosity;
+
+} // namespace system
 
 // -- aliases ------------------------------------------------------------------
 
@@ -375,7 +380,6 @@ CAF_BEGIN_TYPE_ID_BLOCK(vast, caf::first_custom_type_id)
   VAST_ADD_TYPE_ID((vast::query_options))
   VAST_ADD_TYPE_ID((vast::relational_operator))
   VAST_ADD_TYPE_ID((vast::schema))
-  VAST_ADD_TYPE_ID((vast::status_verbosity))
   VAST_ADD_TYPE_ID((vast::table_slice))
   VAST_ADD_TYPE_ID((vast::type))
   VAST_ADD_TYPE_ID((vast::type_extractor))
@@ -385,6 +389,7 @@ CAF_BEGIN_TYPE_ID_BLOCK(vast, caf::first_custom_type_id)
   VAST_ADD_TYPE_ID((vast::system::performance_report))
   VAST_ADD_TYPE_ID((vast::system::query_status))
   VAST_ADD_TYPE_ID((vast::system::report))
+  VAST_ADD_TYPE_ID((vast::system::status_verbosity))
   VAST_ADD_TYPE_ID((vast::system::wrapped_flush_listener))
 
   VAST_ADD_TYPE_ID((std::vector<uint32_t>) )

@@ -85,7 +85,7 @@ public:
 
   caf::error flush() override;
 
-  void inspect_status(caf::settings& xs, status_verbosity v) override;
+  void inspect_status(caf::settings& xs, system::status_verbosity v) override;
 
 private:
   segment_store(path dir, uint64_t max_segment_size, size_t in_memory_segments);

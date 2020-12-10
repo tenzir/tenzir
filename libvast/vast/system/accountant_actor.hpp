@@ -14,6 +14,7 @@
 #pragma once
 
 #include "vast/fwd.hpp"
+#include "vast/system/status_client_actor.hpp"
 #include "vast/time.hpp"
 
 #include <caf/typed_actor.hpp>
@@ -42,9 +43,8 @@ using accountant_actor = caf::typed_actor<
   // FIXME: docs
   caf::reacts_to<performance_report>,
   // FIXME: docs
-  caf::replies_to<atom::status, status_verbosity>::with< //
-    caf::dictionary<caf::config_value>>,
-  // FIXME: docs
-  caf::reacts_to<atom::telemetry>>;
+  caf::reacts_to<atom::telemetry>>
+  // Conform to the procotol of the STATUS CLIENT actor.
+  ::extend_with<status_client_actor>;
 
 } // namespace vast::system

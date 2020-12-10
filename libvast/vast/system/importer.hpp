@@ -16,7 +16,6 @@
 #include "vast/aliases.hpp"
 #include "vast/data.hpp"
 #include "vast/path.hpp"
-#include "vast/status.hpp"
 #include "vast/system/accountant.hpp"
 #include "vast/system/archive.hpp"
 #include "vast/system/index_actor.hpp"

@@ -20,7 +20,6 @@
 #include "vast/fbs/index.hpp"
 #include "vast/fwd.hpp"
 #include "vast/meta_index.hpp"
-#include "vast/status.hpp"
 #include "vast/system/accountant.hpp"
 #include "vast/system/filesystem_actor.hpp"
 #include "vast/system/flush_listener_actor.hpp"

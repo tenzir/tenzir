@@ -19,7 +19,6 @@
 #include "vast/concept/printable/vast/uuid.hpp"
 #include "vast/format/writer.hpp"
 #include "vast/logger.hpp"
-#include "vast/status.hpp"
 #include "vast/system/instrumentation.hpp"
 #include "vast/system/report.hpp"
 #include "vast/table_slice.hpp"

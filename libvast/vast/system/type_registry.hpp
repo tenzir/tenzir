@@ -17,7 +17,6 @@
 #include "vast/fwd.hpp"
 #include "vast/path.hpp"
 #include "vast/schema.hpp"
-#include "vast/status.hpp"
 #include "vast/system/accountant_actor.hpp"
 #include "vast/system/type_registry_actor.hpp"
 #include "vast/taxonomies.hpp"

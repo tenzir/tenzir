@@ -17,8 +17,8 @@
 #include "vast/meta_index.hpp"
 #include "vast/system/accountant.hpp"
 #include "vast/system/query_supervisor_master_actor.hpp"
+#include "vast/system/status_client_actor.hpp"
 
-#include <caf/config_value.hpp>
 #include <caf/typed_event_based_actor.hpp>
 
 #include <memory>
@@ -27,9 +27,6 @@ namespace vast::system {
 
 /// The INDEX actor interface.
 using index_actor = caf::typed_actor<
-  // FIXME: docs
-  caf::replies_to<atom::status, status_verbosity>::with< //
-    caf::config_value::dictionary>,
   // FIXME: docs
   caf::reacts_to<atom::done, uuid>,
   // FIXME: docs
@@ -47,7 +44,9 @@ using index_actor = caf::typed_actor<
   caf::reacts_to<atom::replace, uuid, std::shared_ptr<partition_synopsis>>,
   // FIXME: docs
   caf::replies_to<atom::erase, uuid>::with<ids>>
-  // Conform to the protocol of the query supervisor master actor.
-  ::extend_with<query_supervisor_master_actor>;
+  // Conform to the protocol of the QUERY SUPERVISOR MASTER actor.
+  ::extend_with<query_supervisor_master_actor>
+  // Conform to the procol of the STATUS CLIENT actor.
+  ::extend_with<status_client_actor>;
 
 } // namespace vast::system

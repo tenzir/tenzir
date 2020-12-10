@@ -13,8 +13,18 @@
 
 #pragma once
 
-namespace vast {
+#include "vast/fwd.hpp"
+
+#include <caf/typed_event_based_actor.hpp>
+
+namespace vast::system {
 
 enum class status_verbosity { info, detailed, debug };
 
-} // namespace vast
+// The STATUS CLIENT actor interface.
+using status_client_actor = caf::typed_actor<
+  // Reply to a status request from the NODE.
+  caf::replies_to<atom::status, status_verbosity>::with< //
+    caf::dictionary<caf::config_value>>>;
+
+} // namespace vast::system

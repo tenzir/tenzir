@@ -14,6 +14,7 @@
 #pragma once
 
 #include "vast/fwd.hpp"
+#include "vast/system/status_client_actor.hpp"
 
 #include <caf/typed_event_based_actor.hpp>
 
@@ -32,9 +33,8 @@ using filesystem_actor = caf::typed_actor<
     chunk_ptr>,
   // Memory-maps a file.
   caf::replies_to<atom::mmap, path>::with< //
-    chunk_ptr>,
-  // Reports statistics of filesystem interactions.
-  caf::replies_to<atom::status, status_verbosity>::with< //
-    caf::dictionary<caf::config_value>>>;
+    chunk_ptr>>
+  // Conform to the procotol of the STATUS CLIENT actor.
+  ::extend_with<status_client_actor>;
 
 } // namespace vast::system

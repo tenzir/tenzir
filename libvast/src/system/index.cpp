@@ -39,7 +39,6 @@
 #include "vast/io/save.hpp"
 #include "vast/json.hpp"
 #include "vast/logger.hpp"
-#include "vast/status.hpp"
 #include "vast/system/accountant.hpp"
 #include "vast/system/evaluator.hpp"
 #include "vast/system/filesystem_actor.hpp"
