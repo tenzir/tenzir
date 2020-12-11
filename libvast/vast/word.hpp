@@ -422,30 +422,21 @@ static constexpr auto find_prev(T x, detail::word_size_type<T> i)
 template <bool Bit = true, class T>
 static constexpr auto select(T x, detail::word_size_type<T> i)
 -> std::enable_if_t<
-  Bit && detail::is_unsigned_integral_v<T>,
+  detail::is_unsigned_integral_v<T>,
   detail::word_size_type<T>
 > {
   // TODO: make this efficient and branch-free. There is one implementation
   // that counts from the right for 64-bit here:
   // http://graphics.stanford.edu/~seander/bithacks.html
+  const auto pred = [](const auto&... args){
+    if constexpr(Bit) 
+      return word<T>::test(args...);
+    else 
+      return !word<T>::test(args...);
+  };
   auto cum = 0u;
   for (auto j = 0u; j < word<T>::width; ++j)
-    if (word<T>::test(x, j))
-      if (++cum == i)
-        return j;
-  return word<T>::npos;
-}
-
-template <bool Bit, class T>
-static constexpr auto select(T x, detail::word_size_type<T> i)
--> std::enable_if_t<
-  !Bit && detail::is_unsigned_integral_v<T>,
-  detail::word_size_type<T>
-> {
-  // TODO: see note above.
-  auto cum = 0u;
-  for (auto j = 0u; j < word<T>::width; ++j)
-    if (!word<T>::test(x, j))
+    if (pred(x, j))
       if (++cum == i)
         return j;
   return word<T>::npos;
