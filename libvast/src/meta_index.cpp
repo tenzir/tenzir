@@ -17,12 +17,14 @@
 #include "vast/detail/overload.hpp"
 #include "vast/detail/set_operations.hpp"
 #include "vast/detail/string.hpp"
+#include "vast/detail/tracepoint.hpp"
 #include "vast/expression.hpp"
 #include "vast/fbs/utils.hpp"
 #include "vast/fwd.hpp"
 #include "vast/logger.hpp"
 #include "vast/synopsis.hpp"
 #include "vast/synopsis_factory.hpp"
+#include "vast/system/instrumentation.hpp"
 #include "vast/table_slice.hpp"
 #include "vast/time.hpp"
 
@@ -110,6 +112,7 @@ void meta_index::replace(const uuid& partition,
 
 std::vector<uuid> meta_index::lookup(const expression& expr) const {
   VAST_ASSERT(!caf::holds_alternative<caf::none_t>(expr));
+  auto start = system::stopwatch::now();
   // TODO: we could consider a flat_set<uuid> here, which would then have
   // overloads for inplace intersection/union and simplify the implementation
   // of this function a bit. This would also simplify the maintainance of a
@@ -276,7 +279,13 @@ std::vector<uuid> meta_index::lookup(const expression& expr) const {
       return all_partitions();
     },
   };
-  return caf::visit(f, expr);
+  auto result = caf::visit(f, expr);
+  auto delta = std::chrono::duration_cast<std::chrono::microseconds>(
+    system::stopwatch::now() - start);
+  VAST_DEBUG_ANON("meta index lookup found", result.size(), "candidates in",
+                  delta.count(), "microseconds");
+  VAST_TRACEPOINT(meta_index_lookup, delta.count(), result.size());
+  return result;
 }
 
 caf::settings& meta_index::factory_options() {
