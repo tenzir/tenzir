@@ -49,6 +49,7 @@
 #include "vast/table_slice.hpp"
 #include "vast/value_index.hpp"
 
+#include <caf/after.hpp>
 #include <caf/error.hpp>
 
 #include <flatbuffers/flatbuffers.h>
@@ -58,8 +59,6 @@
 #include <ctime>
 #include <memory>
 #include <unistd.h>
-
-using namespace std::chrono;
 
 // clang-format off
 //
@@ -613,7 +612,7 @@ index(index_actor::stateful_pointer<index_state> self,
       // Query handling
       auto mid = self->current_message_id();
       auto sender = self->current_sender();
-      auto client = caf::actor_cast<caf::actor>(sender);
+      auto client = caf::actor_cast<index_client_actor>(sender);
       // TODO: This is used in order to "respond" to the message and to still
       // continue with the function afterwards. At some point this should be
       // changed to a proper solution for that problem, e.g., streaming.
@@ -625,7 +624,7 @@ index(index_actor::stateful_pointer<index_state> self,
       // Makes sure that clients always receive a 'done' message.
       auto no_result = [=] {
         respond(uuid::nil(), uint32_t{0}, uint32_t{0});
-        caf::anon_send(client, atom::done_v);
+        self->send(client, atom::done_v);
       };
       // Sanity check.
       if (!sender) {
@@ -649,7 +648,7 @@ index(index_actor::stateful_pointer<index_state> self,
       auto total = candidates.size();
       auto scheduled = detail::narrow<uint32_t>(
         std::min(candidates.size(), self->state.taste_partitions));
-      auto lookup = query_state{query_id, expr, std::move(candidates)};
+      auto lookup = query_state{client, query_id, expr, std::move(candidates)};
       auto result = self->state.pending.emplace(query_id, std::move(lookup));
       VAST_ASSERT(result.second);
       // NOTE: The previous version of the index used to do much more
@@ -801,6 +800,27 @@ index(index_actor::stateful_pointer<index_state> self,
           [=](caf::error e) mutable { rp.deliver(e); });
       return rp;
     },
+    // This message handler is invoked when no messages were handled for
+    // at least the specified amount of time.
+    caf::after(std::chrono::seconds{1}) >>
+      [=] {
+        if (!self->state.pending.empty()) {
+          if (self->state.worker_available()) {
+            // Empirically, this can happen, but we were unable to find out why
+            // exactly, because we were unable to reproduce the issue.
+            VAST_ERROR(self, "is idle with", self->state.idle_workers.size(),
+                       "workers, but has", self->state.pending.size(),
+                       "pending queries; removes all pending queries");
+            for ([[maybe_unused]] auto&& [id, lookup] :
+                 std::exchange(self->state.pending, {}))
+              self->send(lookup.client, atom::done_v);
+          } else {
+            VAST_DEBUG(self, "is idle with", self->state.idle_workers.size(),
+                       "workers, and", self->state.pending.size(),
+                       "pending queries");
+          }
+        }
+      },
   };
 }
 

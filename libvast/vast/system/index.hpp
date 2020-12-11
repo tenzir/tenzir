@@ -100,6 +100,9 @@ using pending_query_map
   = detail::stable_map<uuid, std::vector<evaluation_triple>>;
 
 struct query_state {
+  /// The INDEX CLIENT of the query.
+  index_client_actor client;
+
   /// The UUID of the query.
   vast::uuid id;
 
@@ -111,7 +114,7 @@ struct query_state {
 
   template <class Inspector>
   friend auto inspect(Inspector& f, query_state& x) {
-    return f(caf::meta::type_name("query_state"), x.id, x.expression,
+    return f(caf::meta::type_name("query_state"), x.client, x.id, x.expression,
              caf::meta::omittable_if_empty(), x.partitions);
   }
 };

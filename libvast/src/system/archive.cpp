@@ -25,6 +25,7 @@
 #include "vast/system/report.hpp"
 #include "vast/table_slice.hpp"
 
+#include <caf/after.hpp>
 #include <caf/config_value.hpp>
 #include <caf/expected.hpp>
 #include <caf/settings.hpp>
@@ -232,6 +233,22 @@ archive(archive_actor::stateful_pointer<archive_state> self, path dir,
         VAST_ERROR(self, "failed to erase events:", self->system().render(err));
       return atom::done_v;
     },
+    // This message handler is invoked when no messages were handled for
+    // at least the specified amount of time.
+    caf::after(std::chrono::seconds{1}) >>
+      [=] {
+        if (!self->state.unhandled_ids.empty()) {
+          VAST_ERROR(self, "is idle with unhandled ids from",
+                     self->state.unhandled_ids.size(),
+                     "clients; clears all pending work");
+          for (auto [addr, ids] :
+               std::exchange(self->state.unhandled_ids, {})) {
+            self->send(caf::actor_cast<archive_client_actor>(addr),
+                       atom::done_v, make_error(ec::logic_error));
+            self->state.active_exporters.erase(addr);
+          }
+        }
+      },
   };
 }
 
