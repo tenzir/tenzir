@@ -146,7 +146,7 @@ struct index_state {
 
   bool worker_available();
 
-  query_supervisor_actor next_worker();
+  std::optional<query_supervisor_actor> next_worker();
 
   /// Get the actor handles for up to `num_partitions` PARTITION actors,
   /// spawning them if needed.

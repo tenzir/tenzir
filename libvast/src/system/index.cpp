@@ -189,13 +189,14 @@ bool index_state::worker_available() {
   return !idle_workers.empty();
 }
 
-query_supervisor_actor index_state::next_worker() {
-  VAST_ASSERT(worker_available());
-  auto result = std::move(idle_workers.back());
-  idle_workers.pop_back();
-  if (!worker_available())
+std::optional<query_supervisor_actor> index_state::next_worker() {
+  if (!worker_available()) {
     VAST_VERBOSE(self, "waits for query supervisors to become available to "
                        "delegate work; consider increasing 'vast.max-queries'");
+    return std::nullopt;
+  }
+  auto result = std::move(idle_workers.back());
+  idle_workers.pop_back();
   return result;
 }
 
@@ -682,9 +683,9 @@ index(index_actor::stateful_pointer<index_state> self,
         self->send(client, atom::done_v);
         return {};
       }
-      if (!self->state.worker_available())
-        return caf::skip;
       auto worker = self->state.next_worker();
+      if (!worker)
+        return caf::skip;
       // Get partition actors, spawning new ones if needed.
       auto actors
         = self->state.collect_query_actors(iter->second, num_partitions);
@@ -693,7 +694,8 @@ index(index_actor::stateful_pointer<index_state> self,
       // below in the same actor context.
       await_evaluation_maps(
         self, iter->second.expression, actors,
-        [=](caf::expected<pending_query_map> maybe_pqm) {
+        [=, worker
+            = std::move(*worker)](caf::expected<pending_query_map> maybe_pqm) {
           auto& st = self->state;
           auto drop = [&] {
             self->state.idle_workers.emplace_back(std::move(worker));
