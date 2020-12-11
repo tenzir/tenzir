@@ -451,7 +451,7 @@ class Tester:
             LOGGER.info(f"running step {step_i}: {step.command}")
             result = run_step(cmd, step_id, step, work_dir, baseline_dir, self.update, step.expected_result)
             summary.count(result, step.expected_result)
-            if result != step.expected_result:
+            if not self.args.keep_going and result != step.expected_result:
                 LOGGER.error("skipping remaining steps after error")
                 break
             step_i += 1
@@ -629,6 +629,12 @@ def main():
         default="run_<current_ISO_timestamp>",
         type=Path,
         help="The basedir for the test runs",
+    )
+    parser.add_argument(
+        "-k",
+        "--keep-going",
+        action="store_true",
+        help="Continue to evaluate in case of a failed test"
     )
     parser.add_argument(
         "-K", "--keep", action="store_true", help="Keep artifacts of successful runs"
