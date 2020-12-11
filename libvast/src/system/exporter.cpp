@@ -389,7 +389,7 @@ behavior exporter(stateful_actor<exporter_state>* self, expression expr,
       self->state.start = system_clock::now();
       if (!has_historical_option(self->state.options))
         return;
-      // FIXME: The index replies to expressions by manually sending back to the
+      // TODO: The index replies to expressions by manually sending back to the
       // sender, which does not work with request(...).then(...) style of
       // communication for typed actors. Hence, we must actor_cast here.
       // Ideally, we would change that index handler to actually return the

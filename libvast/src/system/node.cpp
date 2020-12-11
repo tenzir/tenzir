@@ -183,8 +183,8 @@ caf::message dump_command(const invocation& inv, caf::actor_system&) {
     auto type_registry = caf::actor_cast<type_registry_actor>(
       self->state.registry.find_by_label("type-registry"));
     if (!type_registry)
-      return caf::make_message(make_error(ec::missing_component, "type-"
-                                                                 "registry"));
+      return caf::make_message(make_error(ec::missing_component, //
+                                          "type-registry"));
     caf::error request_error = caf::none;
     auto rp = self->make_response_promise();
     // The overload for 'request(...)' taking a 'std::chrono::duration' does not

@@ -142,7 +142,7 @@ fetch_indexer(const PartitionState& state, const attribute_extractor& ex,
       return {
         [=](const curried_predicate&) { return row_ids; },
         [](atom::shutdown) {
-          die("received shutdown request as one-shot indexer");
+          VAST_DEBUG_ANON("one-shot-indexer received shutdown request");
         },
       };
     });
@@ -434,6 +434,12 @@ active_partition_actor::behavior_type active_partition(
                          "writing to disk");
       });
       using namespace std::chrono_literals;
+      // Ideally, we would use a self->delayed_delegate(self, ...) here, but CAF
+      // does not have this functionality. Since we do not care about the return
+      // value as the partition outselves, and the handler we delegate to
+      // already uses a response promise, we send the message anonymously. We
+      // also need to actor_cast self, since sending an exit message to a typed
+      // actor without using self->send_exit is not supported.
       caf::delayed_anon_send(caf::actor_cast<caf::actor>(self), 100ms, msg);
       return;
     }
@@ -443,8 +449,8 @@ active_partition_actor::behavior_type active_partition(
     // in the future.
     auto indexers = std::vector<caf::actor>{};
     indexers.reserve(self->state.indexers.size());
-    for ([[maybe_unused]] auto&& [qf, indexer] :
-         std::exchange(self->state.indexers, {}))
+    auto copy = std::exchange(self->state.indexers, {});
+    for ([[maybe_unused]] auto&& [qf, indexer] : std::move(copy))
       indexers.push_back(caf::actor_cast<caf::actor>(std::move(indexer)));
     shutdown<policy::parallel>(self, std::move(indexers));
   });
@@ -537,6 +543,7 @@ active_partition_actor::behavior_type active_partition(
             [=](caf::error err) {
               VAST_ERROR(self, "failed to persist indexer for", kv.first.fqn(),
                          "with error:", render(err));
+              ++self->state.persisted_indexers;
               self->state.persistence_promise.deliver(std::move(err));
             });
       }
@@ -632,6 +639,15 @@ partition_actor::behavior_type passive_partition(
       },
       [=](caf::error err) {
         VAST_ERROR(self, "failed to load partition:", render(err));
+        // Deliver the error for all deferred evaluations.
+        for (auto&& [expr, rp] :
+             std::exchange(self->state.deferred_evaluations, {})) {
+          // Because of a deficiency in the typed_response_promise API, we must
+          // access the underlying response_promise to deliver the error.
+          caf::response_promise& untyped_rp = rp;
+          untyped_rp.deliver(static_cast<partition_actor>(self), err);
+        }
+        // Quit the partition.
         self->quit(std::move(err));
       });
   return {

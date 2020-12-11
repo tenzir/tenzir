@@ -79,15 +79,6 @@ public:
     return {find_by_label(l0), find_by_label(l1), find_by_label(ls)...};
   }
 
-  /// Locates multiple components by actor type.
-  /// @tparam Handle the actor type.
-  /// @returns An array of components.
-  template <class... Handles>
-  std::tuple<Handles...> find() {
-    return std::tuple<Handles...>{
-      caf::actor_cast<Handles>(find_by_label(Handles::name))...};
-  }
-
   /// Finds all components for a given type.
   /// @param type The component type.
   /// @returns A vector of all components of the given *type* or the empty

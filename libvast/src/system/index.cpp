@@ -731,7 +731,7 @@ index(index_actor::stateful_pointer<index_state> self,
       return {};
     },
     [=](atom::replace, uuid partition_id,
-        std::shared_ptr<partition_synopsis>& ps) -> caf::result<void> {
+        std::shared_ptr<partition_synopsis>& ps) {
       // The idea is that its safe to move from a `shared_ptr&` here since
       // the unique owner of the pointer will be the message (which doesnt
       // need it anymore).
@@ -740,12 +740,12 @@ index(index_actor::stateful_pointer<index_state> self,
       VAST_DEBUG(self, "replaces synopsis for partition", partition_id);
       if (!ps.unique()) {
         VAST_WARNING(self, "ignores partition synopses thats still in use");
-        return {};
+        // TODO: Should this return caf::skip?
+        return;
       }
       auto pu = std::make_unique<partition_synopsis>();
       std::swap(*ps, *pu);
       self->state.meta_idx.replace(partition_id, std::move(pu));
-      return {};
     },
     [=](atom::erase, uuid partition_id) -> caf::result<ids> {
       VAST_VERBOSE(self, "erases partition", partition_id);

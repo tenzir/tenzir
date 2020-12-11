@@ -13,8 +13,9 @@
 
 #pragma once
 
-#include "vast/detail/stable_map.hpp"
 #include "vast/fwd.hpp"
+
+#include "vast/detail/stable_map.hpp"
 
 #include <cstdint>
 #include <limits>
