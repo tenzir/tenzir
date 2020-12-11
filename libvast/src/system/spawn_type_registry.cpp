@@ -15,14 +15,10 @@
 
 #include "vast/defaults.hpp"
 #include "vast/logger.hpp"
-#include "vast/system/accountant.hpp"
+#include "vast/system/accountant_actor.hpp"
 #include "vast/system/node.hpp"
 #include "vast/system/spawn_arguments.hpp"
 #include "vast/system/type_registry.hpp"
-
-#include <caf/actor.hpp>
-#include <caf/expected.hpp>
-#include <caf/settings.hpp>
 
 namespace vast::system {
 
@@ -39,7 +35,7 @@ maybe_actor spawn_type_registry(node_actor* self, spawn_arguments& args) {
            });
   VAST_VERBOSE(self, "spawned the type-registry");
   if (auto accountant = self->state.registry.find_by_label("accountant"))
-    self->send(handle, caf::actor_cast<accountant_type>(accountant));
+    self->send(handle, caf::actor_cast<accountant_actor>(accountant));
   return caf::actor_cast<caf::actor>(handle);
 }
 

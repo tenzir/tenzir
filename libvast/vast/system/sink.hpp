@@ -14,11 +14,11 @@
 #pragma once
 
 #include "vast/fwd.hpp"
-#include "vast/system/accountant.hpp"
+
+#include "vast/system/accountant_actor.hpp"
 #include "vast/system/instrumentation.hpp"
 
 #include <caf/behavior.hpp>
-#include <caf/fwd.hpp>
 #include <caf/stateful_actor.hpp>
 
 #include <chrono>
@@ -34,7 +34,7 @@ struct sink_state {
   uint64_t max_events = 0;
   caf::event_based_actor* self;
   caf::actor statistics_subscriber;
-  accountant_type accountant;
+  accountant_actor accountant;
   vast::system::measurement measurement;
   format::writer_ptr writer;
   const char* name = "writer";

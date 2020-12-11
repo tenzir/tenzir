@@ -13,18 +13,17 @@
 
 #pragma once
 
-#include "vast/fbs/partition.hpp"
 #include "vast/fwd.hpp"
+
+#include "vast/fbs/partition.hpp"
 #include "vast/path.hpp"
-#include "vast/system/accountant.hpp"
-#include "vast/system/filesystem.hpp"
+#include "vast/system/accountant_actor.hpp"
+#include "vast/system/active_indexer_actor.hpp"
+#include "vast/system/filesystem_actor.hpp"
+#include "vast/system/indexer_actor.hpp"
 #include "vast/system/instrumentation.hpp"
 #include "vast/type.hpp"
 #include "vast/uuid.hpp"
-
-#include <caf/actor.hpp>
-#include <caf/event_based_actor.hpp>
-#include <caf/stateful_actor.hpp>
 
 #include <string>
 
@@ -50,16 +49,18 @@ struct indexer_state {
   bool stream_initiated;
 
   /// The response promise for a snapshot atom.
-  caf::response_promise promise;
+  caf::typed_response_promise<chunk_ptr> promise;
 };
 
 /// Indexes a table slice column with a single value index.
-caf::behavior active_indexer(caf::stateful_actor<indexer_state>* self,
-                             type index_type, caf::settings index_opts);
+active_indexer_actor::behavior_type
+active_indexer(active_indexer_actor::stateful_pointer<indexer_state> self,
+               type index_type, caf::settings index_opts);
 
 /// An indexer that was recovered from on-disk state. It can only respond
 /// to queries, but not add eny more entries.
-caf::behavior passive_indexer(caf::stateful_actor<indexer_state>* self,
-                              uuid partition_id, value_index_ptr idx);
+indexer_actor::behavior_type
+passive_indexer(indexer_actor::stateful_pointer<indexer_state> self,
+                uuid partition_id, value_index_ptr idx);
 
 } // namespace vast::system

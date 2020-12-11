@@ -17,7 +17,8 @@
 #include "vast/error.hpp"
 #include "vast/logger.hpp"
 #include "vast/si_literals.hpp"
-#include "vast/system/archive.hpp"
+#include "vast/system/accountant_actor.hpp"
+#include "vast/system/archive_actor.hpp"
 #include "vast/system/node.hpp"
 #include "vast/system/spawn_arguments.hpp"
 
@@ -44,7 +45,7 @@ maybe_actor spawn_archive(node_actor* self, spawn_arguments& args) {
     = self->spawn(archive, args.dir / args.label, segments, max_segment_size);
   VAST_VERBOSE(self, "spawned the archive");
   if (auto accountant = self->state.registry.find_by_label("accountant"))
-    self->send(handle, caf::actor_cast<accountant_type>(accountant));
+    self->send(handle, caf::actor_cast<accountant_actor>(accountant));
   return caf::actor_cast<caf::actor>(handle);
 }
 

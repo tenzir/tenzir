@@ -25,9 +25,8 @@ counter_state::counter_state(caf::event_based_actor* self) : super(self) {
   // nop
 }
 
-void counter_state::init(expression expr, caf::actor index,
-                         system::archive_type archive,
-                         bool skip_candidate_check) {
+void counter_state::init(expression expr, index_actor index,
+                         archive_actor archive, bool skip_candidate_check) {
   skip_candidate_check_ = skip_candidate_check;
   expr_ = std::move(expr);
   archive_ = std::move(archive);
@@ -102,9 +101,9 @@ void counter_state::process_end_of_hits() {
   self_->quit();
 }
 
-caf::behavior counter(caf::stateful_actor<counter_state>* self, expression expr,
-                      caf::actor index, system::archive_type archive,
-                      bool skip_candidate_check) {
+caf::behavior
+counter(caf::stateful_actor<counter_state>* self, expression expr,
+        index_actor index, archive_actor archive, bool skip_candidate_check) {
   self->state.init(std::move(expr), std::move(index), std::move(archive),
                    skip_candidate_check);
   return self->state.behavior();

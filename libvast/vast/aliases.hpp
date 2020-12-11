@@ -13,17 +13,13 @@
 
 #pragma once
 
-#include "vast/detail/stable_map.hpp"
 #include "vast/fwd.hpp"
 
-#include <caf/fwd.hpp>
+#include "vast/detail/stable_map.hpp"
 
 #include <cstdint>
 #include <limits>
-#include <map>
 #include <string>
-#include <tuple>
-#include <utility>
 #include <vector>
 
 namespace vast {
@@ -70,15 +66,5 @@ using cli_argument_iterator = std::vector<std::string>::const_iterator;
 /// Convenience alias for function return types that either return an actor or
 /// an error.
 using maybe_actor = caf::expected<caf::actor>;
-
-/// Bundles an offset into an expression under evaluation to the curried
-/// representation of the ::predicate at that position in the expression and
-/// the INDEXER actor responsible for answering the (curried) predicate.
-using evaluation_triple = std::tuple<offset, curried_predicate, caf::actor>;
-
-using evaluation_triples = std::vector<evaluation_triple>;
-
-/// Maps layouts to a list of evaluation triples.
-using evaluation_map = std::map<type, std::vector<evaluation_triple>>;
 
 } // namespace vast

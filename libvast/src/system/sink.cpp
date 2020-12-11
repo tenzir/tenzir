@@ -111,7 +111,7 @@ caf::behavior sink(caf::stateful_actor<sink_state>* self,
         VAST_WARNING(self, "ignores new limit of", max,
                      "(already processed", self->state.processed, " events)");
     },
-    [=](accountant_type accountant) {
+    [=](accountant_actor accountant) {
       VAST_DEBUG(self, "sets accountant to", accountant);
       auto& st = self->state;
       st.accountant = std::move(accountant);

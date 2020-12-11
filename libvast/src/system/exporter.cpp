@@ -13,6 +13,8 @@
 
 #include "vast/system/exporter.hpp"
 
+#include "vast/fwd.hpp"
+
 #include "vast/concept/printable/std/chrono.hpp"
 #include "vast/concept/printable/to_string.hpp"
 #include "vast/concept/printable/vast/bitmap.hpp"
@@ -22,9 +24,8 @@
 #include "vast/detail/fill_status_map.hpp"
 #include "vast/detail/narrow.hpp"
 #include "vast/expression_visitors.hpp"
-#include "vast/fwd.hpp"
 #include "vast/logger.hpp"
-#include "vast/system/archive.hpp"
+#include "vast/system/archive_actor.hpp"
 #include "vast/system/query_status.hpp"
 #include "vast/system/report.hpp"
 #include "vast/table_slice.hpp"
@@ -353,11 +354,11 @@ behavior exporter(stateful_actor<exporter_state>* self, expression expr,
       request_more_hits(self);
     },
     [=](atom::status, status_verbosity v) { return status(self, v); },
-    [=](accountant_type accountant) {
+    [=](accountant_actor accountant) {
       self->state.accountant = std::move(accountant);
       self->send(self->state.accountant, atom::announce_v, self->name());
     },
-    [=](const archive_type& archive) {
+    [=](const archive_actor& archive) {
       VAST_DEBUG(self, "registers archive", archive);
       self->state.archive = archive;
       if (has_continuous_option(self->state.options))
@@ -366,7 +367,7 @@ behavior exporter(stateful_actor<exporter_state>* self, expression expr,
       if (has_historical_option(self->state.options))
         self->send(archive, atom::exporter_v, self);
     },
-    [=](atom::index, const actor& index) {
+    [=](atom::index, const index_actor& index) {
       VAST_DEBUG(self, "registers index", index);
       self->state.index = index;
       if (has_continuous_option(self->state.options))
@@ -388,7 +389,14 @@ behavior exporter(stateful_actor<exporter_state>* self, expression expr,
       self->state.start = system_clock::now();
       if (!has_historical_option(self->state.options))
         return;
-      self->request(self->state.index, infinite, self->state.expr)
+      // TODO: The index replies to expressions by manually sending back to the
+      // sender, which does not work with request(...).then(...) style of
+      // communication for typed actors. Hence, we must actor_cast here.
+      // Ideally, we would change that index handler to actually return the
+      // desired value.
+      self
+        ->request(caf::actor_cast<caf::actor>(self->state.index), infinite,
+                  self->state.expr)
         .then(
           [=](const uuid& lookup, uint32_t partitions, uint32_t scheduled) {
             VAST_DEBUG(self, "got lookup handle", lookup, ", scheduled",

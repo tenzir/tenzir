@@ -13,6 +13,8 @@
 
 #pragma once
 
+#include "vast/fwd.hpp"
+
 #include "vast/command.hpp"
 #include "vast/concept/parseable/to.hpp"
 #include "vast/concept/parseable/vast/endpoint.hpp"
@@ -26,18 +28,14 @@
 #include "vast/endpoint.hpp"
 #include "vast/error.hpp"
 #include "vast/expression.hpp"
-#include "vast/fwd.hpp"
 #include "vast/logger.hpp"
 #include "vast/schema.hpp"
-#include "vast/system/accountant.hpp"
+#include "vast/system/accountant_actor.hpp"
 #include "vast/system/datagram_source.hpp"
 #include "vast/system/signal_monitor.hpp"
 #include "vast/system/source.hpp"
-#include "vast/system/type_registry.hpp"
+#include "vast/system/type_registry_actor.hpp"
 
-#include <caf/actor.hpp>
-#include <caf/actor_cast.hpp>
-#include <caf/actor_system.hpp>
 #include <caf/io/middleman.hpp>
 #include <caf/settings.hpp>
 #include <caf/spawn_options.hpp>
@@ -79,7 +77,7 @@ template <class Reader, class Defaults,
           class Actor>
 caf::expected<make_source_result>
 make_source(const Actor& self, caf::actor_system& sys, const invocation& inv,
-            accountant_type accountant, type_registry_type type_registry,
+            accountant_actor accountant, type_registry_actor type_registry,
             caf::actor importer) {
   if (!importer)
     return make_error(ec::missing_component, "importer");

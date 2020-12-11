@@ -13,6 +13,8 @@
 
 #pragma once
 
+#include "vast/fwd.hpp"
+
 #include "vast/concept/printable/std/chrono.hpp"
 #include "vast/concept/printable/stream.hpp"
 #include "vast/concept/printable/vast/error.hpp"
@@ -22,22 +24,17 @@
 #include "vast/error.hpp"
 #include "vast/expression.hpp"
 #include "vast/expression_visitors.hpp"
-#include "vast/fwd.hpp"
 #include "vast/logger.hpp"
 #include "vast/schema.hpp"
-#include "vast/system/accountant.hpp"
+#include "vast/system/accountant_actor.hpp"
 #include "vast/system/source.hpp"
 #include "vast/table_slice.hpp"
-#include "vast/table_slice_builder.hpp"
 #include "vast/table_slice_builder_factory.hpp"
 
-#include <caf/actor_system_config.hpp>
-#include <caf/broadcast_downstream_manager.hpp>
 #include <caf/downstream.hpp>
 #include <caf/event_based_actor.hpp>
 #include <caf/expected.hpp>
 #include <caf/io/broker.hpp>
-#include <caf/none.hpp>
 #include <caf/stateful_actor.hpp>
 #include <caf/stream_source.hpp>
 #include <caf/streambuf.hpp>
@@ -82,14 +79,14 @@ using datagram_source_actor = caf::stateful_actor<datagram_source_state<Reader>,
 /// @param type_registry The actor handle for the type-registry component.
 /// @oaram local_schema Additional local schemas to consider.
 /// @param type_filter Restriction for considered types.
-/// @param accountant_type The actor handle for the accountant component.
+/// @param accountant_actor The actor handle for the accountant component.
 template <class Reader>
 caf::behavior
 datagram_source(datagram_source_actor<Reader>* self,
                 uint16_t udp_listening_port, Reader reader,
                 size_t table_slice_size, caf::optional<size_t> max_events,
-                type_registry_type type_registry, vast::schema local_schema,
-                std::string type_filter, accountant_type accountant) {
+                type_registry_actor type_registry, vast::schema local_schema,
+                std::string type_filter, accountant_actor accountant) {
   // Try to open requested UDP port.
   auto udp_res = self->add_udp_datagram_servant(udp_listening_port);
   if (!udp_res) {
@@ -151,7 +148,7 @@ datagram_source(datagram_source_actor<Reader>* self,
       if (st.done)
         st.send_report();
     },
-    [=](accountant_type accountant) {
+    [=](accountant_actor accountant) {
       VAST_DEBUG(self, "sets accountant to", accountant);
       auto& st = self->state;
       st.accountant = std::move(accountant);

@@ -21,6 +21,7 @@
 #include "vast/query_options.hpp"
 #include "vast/schema.hpp"
 #include "vast/system/component_registry.hpp"
+#include "vast/system/flush_listener_actor.hpp"
 #include "vast/system/query_status.hpp"
 #include "vast/system/report.hpp"
 #include "vast/system/type_registry.hpp"

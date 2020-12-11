@@ -13,6 +13,8 @@
 
 #pragma once
 
+#include "vast/fwd.hpp"
+
 #include "vast/concept/printable/std/chrono.hpp"
 #include "vast/concept/printable/stream.hpp"
 #include "vast/concept/printable/to_string.hpp"
@@ -25,24 +27,21 @@
 #include "vast/error.hpp"
 #include "vast/expression.hpp"
 #include "vast/expression_visitors.hpp"
-#include "vast/fwd.hpp"
 #include "vast/logger.hpp"
 #include "vast/schema.hpp"
-#include "vast/system/accountant.hpp"
+#include "vast/system/accountant_actor.hpp"
 #include "vast/system/instrumentation.hpp"
 #include "vast/system/report.hpp"
-#include "vast/system/type_registry.hpp"
+#include "vast/system/type_registry_actor.hpp"
 #include "vast/table_slice.hpp"
-#include "vast/table_slice_builder.hpp"
 #include "vast/table_slice_builder_factory.hpp"
+#include "vast/type_set.hpp"
 
-#include <caf/actor_system_config.hpp>
 #include <caf/broadcast_downstream_manager.hpp>
 #include <caf/downstream.hpp>
 #include <caf/event_based_actor.hpp>
 #include <caf/expected.hpp>
-#include <caf/none.hpp>
-#include <caf/send.hpp>
+#include <caf/settings.hpp>
 #include <caf/stateful_actor.hpp>
 #include <caf/stream_source.hpp>
 
@@ -92,7 +91,7 @@ struct source_state {
   std::unordered_map<type, expression> checkers;
 
   /// Actor for collecting statistics.
-  accountant_type accountant;
+  accountant_actor accountant;
 
   /// Actor that receives events.
   caf::actor sink;
@@ -140,8 +139,8 @@ struct source_state {
   /// Initializes the state.
   template <class T>
   void init(T* selfptr, Reader rd, caf::optional<size_t> max_events,
-            type_registry_type type_registry, vast::schema sch,
-            std::string type_filter, accountant_type acc) {
+            type_registry_actor type_registry, vast::schema sch,
+            std::string type_filter, accountant_actor acc) {
     // Create the reader.
     self = selfptr;
     name = reader.name();
@@ -222,13 +221,13 @@ struct source_state {
 /// @param type_registry The actor handle for the type-registry component.
 /// @oaram local_schema Additional local schemas to consider.
 /// @param type_filter Restriction for considered types.
-/// @param accountant_type The actor handle for the accountant component.
+/// @param accountant_actor The actor handle for the accountant component.
 template <class Reader>
 caf::behavior
 source(caf::stateful_actor<source_state<Reader>>* self, Reader reader,
        size_t table_slice_size, caf::optional<size_t> max_events,
-       type_registry_type type_registry, vast::schema local_schema,
-       std::string type_filter, accountant_type accountant) {
+       type_registry_actor type_registry, vast::schema local_schema,
+       std::string type_filter, accountant_actor accountant) {
   VAST_TRACE(VAST_ARG(self));
   // Initialize state.
   auto& st = self->state;
@@ -259,8 +258,8 @@ source(caf::stateful_actor<source_state<Reader>>* self, Reader reader,
       if (st.requested)
         events = std::min(events, *st.requested - st.count);
       auto t = timer::start(st.metrics);
-      auto [err, produced] = st.reader.read(events, table_slice_size,
-                                            push_slice);
+      auto [err, produced]
+        = st.reader.read(events, table_slice_size, push_slice);
       VAST_DEBUG(self, "read", produced, "events");
       t.stop(produced);
       st.count += produced;

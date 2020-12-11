@@ -18,7 +18,7 @@
 #include "vast/defaults.hpp"
 #include "vast/logger.hpp"
 #include "vast/query_options.hpp"
-#include "vast/system/archive.hpp"
+#include "vast/system/archive_actor.hpp"
 #include "vast/system/exporter.hpp"
 #include "vast/system/node.hpp"
 #include "vast/system/spawn_arguments.hpp"
@@ -48,18 +48,20 @@ maybe_actor spawn_exporter(node_actor* self, spawn_arguments& args) {
   auto handle = self->spawn(exporter, *expr, query_opts);
   VAST_VERBOSE(self, "spawned an exporter for", to_string(*expr));
   // Wire the exporter to all components.
-  if (auto accountant = self->state.registry.find_by_label("accountant"))
-    self->send(handle, caf::actor_cast<accountant_type>(accountant));
-  if (has_continuous_option(query_opts))
-    if (auto importer = self->state.registry.find_by_label("importer"))
-      self->send(handle, atom::importer_v, std::vector{importer});
-  for (auto& a : self->state.registry.find_by_type("archive")) {
+  auto [accountant, importer, archive, index]
+    = self->state.registry.find_by_label("accountant", "importer", "archive",
+                                         "index");
+  if (accountant)
+    self->send(handle, caf::actor_cast<accountant_actor>(accountant));
+  if (importer && has_continuous_option(query_opts))
+    self->send(handle, atom::importer_v, std::vector{importer});
+  if (archive) {
     VAST_DEBUG(self, "connects archive to new exporter");
-    self->send(handle, caf::actor_cast<archive_type>(a));
+    self->send(handle, caf::actor_cast<archive_actor>(archive));
   }
-  for (auto& a : self->state.registry.find_by_type("index")) {
+  if (index) {
     VAST_DEBUG(self, "connects index to new exporter");
-    self->send(handle, atom::index_v, a);
+    self->send(handle, atom::index_v, caf::actor_cast<index_actor>(index));
   }
   // Setting max-events to 0 means infinite.
   auto max_events = get_or(args.inv.options, "vast.export.max-events",

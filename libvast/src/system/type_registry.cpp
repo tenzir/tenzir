@@ -25,7 +25,6 @@
 #include "vast/system/report.hpp"
 #include "vast/table_slice.hpp"
 
-#include <caf/atom.hpp>
 #include <caf/attach_stream_sink.hpp>
 #include <caf/binary_deserializer.hpp>
 #include <caf/binary_serializer.hpp>
@@ -135,8 +134,9 @@ type_set type_registry_state::types() const {
   return result;
 }
 
-type_registry_behavior
-type_registry(type_registry_actor self, const path& dir) {
+type_registry_actor::behavior_type
+type_registry(type_registry_actor::stateful_pointer<type_registry_state> self,
+              const path& dir) {
   self->state.self = self;
   self->state.dir = dir;
   // Register the exit handler.
@@ -153,8 +153,7 @@ type_registry(type_registry_actor self, const path& dir) {
   if (auto err = self->state.load_from_disk())
     self->quit(std::move(err));
   // Load loaded schema types from the singleton.
-  auto schema = vast::event_types::get();
-  if (schema)
+  if (auto schema = vast::event_types::get())
     self->send(self, atom::put_v, *schema);
   // The behavior of the type-registry.
   return {
@@ -171,14 +170,15 @@ type_registry(type_registry_actor self, const path& dir) {
       VAST_TRACE(self, "sends out a status report");
       return self->state.status(v);
     },
-    [=](caf::stream<table_slice> in) {
+    [=](caf::stream<table_slice> in) -> caf::inbound_stream_slot<table_slice> {
       VAST_TRACE(self, "attaches to", VAST_ARG("stream", in));
-      caf::attach_stream_sink(
+      auto result = caf::attach_stream_sink(
         self, in,
         [=](caf::unit_t&) {
           // nop
         },
         [=](caf::unit_t&, table_slice x) { self->state.insert(x.layout()); });
+      return result.inbound_slot();
     },
     [=](atom::put, vast::type x) {
       VAST_TRACE(self, "tries to add", VAST_ARG("type", x.name()));
@@ -232,24 +232,26 @@ type_registry(type_registry_actor self, const path& dir) {
             VAST_DEBUG(self, "extracted model", name, "with",
                        definition.definition.size(), "fields");
             VAST_TRACE(self, "uses model mapping", name, "->",
-                definition.definition);
+                       definition.definition);
           }
         }
       }
-      self->state.taxonomies = taxonomies{std::move(concepts), std::move(models)};
+      self->state.taxonomies
+        = taxonomies{std::move(concepts), std::move(models)};
       return atom::ok_v;
     },
     [=](atom::resolve, const expression& e) {
       return resolve(self->state.taxonomies, e, self->state.data);
     },
-    [=](accountant_type accountant) {
+    [=](accountant_actor accountant) {
       VAST_ASSERT(accountant);
       VAST_DEBUG(self, "connects to", VAST_ARG(accountant));
-      self->state.accountant = caf::actor_cast<accountant_type>(accountant);
+      self->state.accountant = accountant;
       self->send(self->state.accountant, atom::announce_v, self->name());
       self->delayed_send(self, defaults::system::telemetry_rate,
                          atom::telemetry_v);
-    }};
+    },
+  };
 }
 
 } // namespace vast::system

@@ -4,19 +4,12 @@
 #include "vast/defaults.hpp"
 #include "vast/logger.hpp"
 #include "vast/path.hpp"
+#include "vast/system/archive_actor.hpp"
 #include "vast/system/disk_monitor.hpp"
+#include "vast/system/index_actor.hpp"
 #include "vast/system/node.hpp"
 #include "vast/system/node_control.hpp"
 #include "vast/system/spawn_arguments.hpp"
-
-#include <caf/actor.hpp>
-#include <caf/event_based_actor.hpp>
-#include <caf/expected.hpp>
-#include <caf/scoped_actor.hpp>
-#include <caf/settings.hpp>
-#include <caf/typed_event_based_actor.hpp>
-
-#include "caf/error.hpp"
 
 namespace vast::system {
 
@@ -60,7 +53,8 @@ spawn_disk_monitor(system::node_actor* self, spawn_arguments& args) {
                                             "directory");
   auto handle = self->spawn(disk_monitor, hiwater, lowater,
                             std::chrono::seconds{interval}, abs_dir,
-                            caf::actor_cast<archive_type>(archive), index);
+                            caf::actor_cast<archive_actor>(archive),
+                            caf::actor_cast<index_actor>(index));
   VAST_VERBOSE(self, "spawned a disk monitor");
   return caf::actor_cast<caf::actor>(handle);
 }

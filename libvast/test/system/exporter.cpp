@@ -24,10 +24,11 @@
 #include "vast/detail/spawn_container_source.hpp"
 #include "vast/query_options.hpp"
 #include "vast/system/archive.hpp"
-#include "vast/system/filesystem.hpp"
+#include "vast/system/filesystem_actor.hpp"
 #include "vast/system/importer.hpp"
 #include "vast/system/index.hpp"
 #include "vast/system/posix_filesystem.hpp"
+#include "vast/system/type_registry.hpp"
 #include "vast/table_slice.hpp"
 
 using namespace caf;
@@ -47,8 +48,9 @@ struct fixture : fixture_base {
   }
 
   ~fixture() {
-    for (auto& hdl : {index, importer, exporter})
+    for (auto& hdl : {importer, exporter})
       self->send_exit(hdl, exit_reason::user_shutdown);
+    self->send_exit(index, exit_reason::user_shutdown);
     self->send_exit(archive, exit_reason::user_shutdown);
     run();
   }
@@ -130,9 +132,9 @@ struct fixture : fixture_base {
     CHECK_EQUAL(xs[4][1], "07mJRfg5RU5");
   }
 
-  system::type_registry_type type_registry;
-  actor index;
-  system::archive_type archive;
+  system::type_registry_actor type_registry;
+  system::index_actor index;
+  system::archive_actor archive;
   actor importer;
   actor exporter;
   expression expr;

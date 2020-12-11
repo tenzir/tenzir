@@ -13,6 +13,8 @@
 
 #include "vast/system/importer.hpp"
 
+#include "vast/fwd.hpp"
+
 #include "vast/concept/printable/numeric/integral.hpp"
 #include "vast/concept/printable/std/chrono.hpp"
 #include "vast/concept/printable/to_string.hpp"
@@ -20,11 +22,11 @@
 #include "vast/concept/printable/vast/filesystem.hpp"
 #include "vast/defaults.hpp"
 #include "vast/detail/fill_status_map.hpp"
-#include "vast/fwd.hpp"
 #include "vast/logger.hpp"
 #include "vast/si_literals.hpp"
+#include "vast/system/flush_listener_actor.hpp"
 #include "vast/system/report.hpp"
-#include "vast/system/type_registry.hpp"
+#include "vast/system/type_registry_actor.hpp"
 #include "vast/table_slice.hpp"
 
 #include <caf/atom.hpp>
@@ -149,8 +151,8 @@ void importer_state::send_report() {
   last_report = now;
 }
 
-caf::behavior importer(importer_actor* self, path dir, archive_type archive,
-                       caf::actor index, type_registry_type type_registry) {
+caf::behavior importer(importer_actor* self, path dir, archive_actor archive,
+                       index_actor index, type_registry_actor type_registry) {
   VAST_TRACE(VAST_ARG(dir));
   self->state.dir = dir;
   auto err = self->state.read_state();
@@ -191,7 +193,7 @@ caf::behavior importer(importer_actor* self, path dir, archive_type archive,
     self->state.stg->add_outbound_path(index);
   }
   return {
-    [=](accountant_type accountant) {
+    [=](accountant_actor accountant) {
       VAST_DEBUG(self, "registers accountant", archive);
       self->state.accountant = std::move(accountant);
       self->send(self->state.accountant, atom::announce_v, self->name());
@@ -210,9 +212,9 @@ caf::behavior importer(importer_actor* self, path dir, archive_type archive,
       VAST_DEBUG(self, "adds a new sink:", self->current_sender());
       st.stg->add_outbound_path(subscriber);
     },
-    [=](atom::subscribe, atom::flush, caf::actor& listener) {
+    [=](atom::subscribe, atom::flush, wrapped_flush_listener listener) {
       VAST_ASSERT(self->state.stg != nullptr);
-      self->send(index, atom::subscribe_v, atom::flush_v, listener);
+      self->send(index, atom::subscribe_v, atom::flush_v, std::move(listener));
     },
     [=](atom::status, status_verbosity v) { return self->state.status(v); },
     [=](atom::telemetry) {

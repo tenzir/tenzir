@@ -16,14 +16,11 @@
 #include "vast/defaults.hpp"
 #include "vast/detail/assert.hpp"
 #include "vast/logger.hpp"
+#include "vast/system/archive_actor.hpp"
 #include "vast/system/importer.hpp"
+#include "vast/system/index_actor.hpp"
 #include "vast/system/node.hpp"
 #include "vast/system/spawn_arguments.hpp"
-
-#include <caf/actor.hpp>
-#include <caf/actor_system_config.hpp>
-#include <caf/expected.hpp>
-#include <caf/settings.hpp>
 
 namespace vast::system {
 
@@ -39,13 +36,15 @@ maybe_actor spawn_importer(node_actor* self, spawn_arguments& args) {
     return make_error(ec::missing_component, "index");
   if (!type_registry)
     return make_error(ec::missing_component, "type-registry");
-  auto handle = self->spawn(importer, args.dir / args.label,
-                            caf::actor_cast<archive_type>(archive), index,
-                            caf::actor_cast<type_registry_type>(type_registry));
+  auto handle
+    = self->spawn(importer, args.dir / args.label,
+                  caf::actor_cast<archive_actor>(archive),
+                  caf::actor_cast<index_actor>(index),
+                  caf::actor_cast<type_registry_actor>(type_registry));
   VAST_VERBOSE(self, "spawned the importer");
   if (auto accountant = self->state.registry.find_by_label("accountant")) {
     self->send(handle, atom::telemetry_v);
-    self->send(handle, caf::actor_cast<accountant_type>(accountant));
+    self->send(handle, caf::actor_cast<accountant_actor>(accountant));
   } else if (auto logger = caf::logger::current_logger();
              logger && logger->console_verbosity() >= VAST_LOG_LEVEL_VERBOSE) {
     // Initiate periodic rate logging.

@@ -25,7 +25,6 @@
 #include "vast/fbs/utils.hpp"
 #include "vast/ids.hpp"
 #include "vast/logger.hpp"
-#include "vast/status.hpp"
 #include "vast/table_slice.hpp"
 
 #include <caf/config_value.hpp>
@@ -329,16 +328,17 @@ caf::error segment_store::flush() {
   return caf::none;
 }
 
-void segment_store::inspect_status(caf::settings& xs, status_verbosity v) {
+void segment_store::inspect_status(caf::settings& xs,
+                                   system::status_verbosity v) {
   using caf::put;
-  if (v >= status_verbosity::info) {
+  if (v >= system::status_verbosity::info) {
     put(xs, "events", num_events_);
     auto mem = builder_.table_slice_bytes();
     for (auto& segment : cache_)
       mem += segment.second.chunk()->size();
     put(xs, "memory-usage", mem);
   }
-  if (v >= status_verbosity::detailed) {
+  if (v >= system::status_verbosity::detailed) {
     auto& segments = put_dictionary(xs, "segments");
     auto& cached = put_list(segments, "cached");
     for (auto& kvp : cache_)

@@ -27,18 +27,20 @@ Cpp11BracedListStyle: true
 FixNamespaceComments: true
 IncludeBlocks: Regroup
 IncludeCategories:
-  - Regex:           '^"vast/test/'
+  - Regex:           '^"vast/fwd.hpp'
     Priority:        1
-  - Regex:           '^"vast/'
+  - Regex:           '^"vast/test/'
     Priority:        2
-  - Regex:           '^<caf/'
+  - Regex:           '^"vast/'
     Priority:        3
-  - Regex:           '^<arrow/'
+  - Regex:           '^<caf/'
     Priority:        4
-  - Regex:           '^<flatbuffers/'
+  - Regex:           '^<arrow/'
     Priority:        5
-  - Regex:           '<[[:alnum:]_.]+>'
+  - Regex:           '^<flatbuffers/'
     Priority:        6
+  - Regex:           '<[[:alnum:]_.]+>'
+    Priority:        7
 IndentCaseLabels: true
 IndentPPDirectives: AfterHash
 IndentWidth: 2

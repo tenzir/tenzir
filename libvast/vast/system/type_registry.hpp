@@ -13,48 +13,24 @@
 
 #pragma once
 
-#include "vast/expression.hpp"
 #include "vast/fwd.hpp"
+
+#include "vast/expression.hpp"
 #include "vast/path.hpp"
 #include "vast/schema.hpp"
-#include "vast/status.hpp"
-#include "vast/system/accountant.hpp"
+#include "vast/system/accountant_actor.hpp"
+#include "vast/system/type_registry_actor.hpp"
 #include "vast/taxonomies.hpp"
 #include "vast/type.hpp"
 #include "vast/type_set.hpp"
 
 #include <caf/expected.hpp>
-#include <caf/typed_actor.hpp>
-#include <caf/typed_event_based_actor.hpp>
 
 #include <map>
 #include <string>
 #include <unordered_set>
 
 namespace vast::system {
-
-// clang-format off
-using type_registry_type = caf::typed_actor<
-  caf::reacts_to<atom::telemetry>,
-  caf::replies_to<atom::status, status_verbosity>::with<caf::dictionary<caf::config_value>>,
-  caf::reacts_to<caf::stream<table_slice>>,
-  caf::reacts_to<atom::put, vast::type>,
-  caf::reacts_to<atom::put, vast::schema>,
-  caf::replies_to<atom::get>::with<type_set>,
-  caf::replies_to<atom::get, atom::taxonomies>::with<taxonomies>,
-  caf::reacts_to<atom::put, taxonomies>,
-  caf::replies_to<atom::load>::with<atom::ok>,
-  caf::replies_to<atom::resolve, expression>::with<expression>,
-  caf::reacts_to<accountant_type>
->;
-// clang-format on
-
-struct type_registry_state;
-
-using type_registry_actor
-  = type_registry_type::stateful_pointer<type_registry_state>;
-
-using type_registry_behavior = type_registry_type::behavior_type;
 
 struct type_registry_state {
   /// The name of the actor.
@@ -81,13 +57,15 @@ struct type_registry_state {
   /// Get a list of known types from the registry.
   type_set types() const;
 
-  type_registry_actor self = {};
-  accountant_type accountant = {};
+  type_registry_actor::pointer self = {};
+  accountant_actor accountant = {};
   std::map<std::string, type_set> data = {};
   vast::taxonomies taxonomies = {};
   vast::path dir = {};
 };
 
-type_registry_behavior type_registry(type_registry_actor self, const path& dir);
+type_registry_actor::behavior_type
+type_registry(type_registry_actor::stateful_pointer<type_registry_state> self,
+              const path& dir);
 
 } // namespace vast::system

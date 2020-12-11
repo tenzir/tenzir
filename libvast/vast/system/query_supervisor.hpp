@@ -13,27 +13,24 @@
 
 #pragma once
 
+#include "vast/fwd.hpp"
+
+#include "vast/ids.hpp"
+#include "vast/system/query_supervisor_actor.hpp"
+#include "vast/system/query_supervisor_master_actor.hpp"
+#include "vast/uuid.hpp"
+
+#include <caf/detail/unordered_flat_map.hpp>
+
 #include <cstdint>
 #include <string>
 
-#include <caf/detail/unordered_flat_map.hpp>
-#include <caf/fwd.hpp>
-
-#include "vast/ids.hpp"
-#include "vast/uuid.hpp"
-
 namespace vast::system {
 
-/// Maps partition IDs to EVALUATOR actors.
-using query_map = caf::detail::unordered_flat_map<uuid,
-                                                  std::vector<caf::actor>>;
-
+/// The internal state of a QUERY SUPERVISOR actor.
 struct query_supervisor_state {
-  // -- constructors, destructors, and assignment operators --------------------
-
-  query_supervisor_state(caf::local_actor* self);
-
-  // -- meber variables --------------------------------------------------------
+  explicit query_supervisor_state(
+    query_supervisor_actor::stateful_pointer<query_supervisor_state> self);
 
   /// Maps partition IDs to the number of outstanding responses.
   caf::detail::unordered_flat_map<uuid, size_t> open_requests;
@@ -42,8 +39,11 @@ struct query_supervisor_state {
   std::string name;
 };
 
-caf::behavior
-query_supervisor(caf::stateful_actor<query_supervisor_state>* self,
-                 caf::actor master);
+/// Returns the behavior of a QUERY SUPERVISOR actor.
+/// @param self The stateful self pointer to the QUERY SUPERVISOR.
+/// @param master The actor this QUERY SUPERVISOR reports to.
+query_supervisor_actor::behavior_type query_supervisor(
+  query_supervisor_actor::stateful_pointer<query_supervisor_state> self,
+  query_supervisor_master_actor master);
 
 } // namespace vast::system

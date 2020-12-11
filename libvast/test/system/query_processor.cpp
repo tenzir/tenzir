@@ -15,14 +15,17 @@
 
 #include "vast/system/query_processor.hpp"
 
+#include "vast/fwd.hpp"
+
 #include "vast/test/fixtures/actor_system.hpp"
 #include "vast/test/test.hpp"
 
 #include "vast/concept/parseable/to.hpp"
 #include "vast/concept/parseable/vast/expression.hpp"
 #include "vast/concept/parseable/vast/uuid.hpp"
-#include "vast/fwd.hpp"
 #include "vast/ids.hpp"
+#include "vast/system/flush_listener_actor.hpp"
+#include "vast/system/index_actor.hpp"
 
 using namespace vast;
 
@@ -36,15 +39,39 @@ struct mock_index_state {
   static inline constexpr const char* name = "mock-index";
 };
 
-caf::behavior mock_index(caf::stateful_actor<mock_index_state>* self) {
-  return {[=](expression&) {
-    auto query_id = unbox(to<uuid>(uuid_str));
-    auto hdl = caf::actor_cast<caf::actor>(self->current_sender());
-    self->send(hdl, query_id, uint32_t{3}, uint32_t(7));
-    self->send(hdl, make_ids({1, 2, 4}));
-    self->send(hdl, make_ids({3, 5}));
-    self->send(hdl, atom::done_v);
-  }};
+system::index_actor::behavior_type
+mock_index(system::index_actor::stateful_pointer<mock_index_state> self) {
+  return {
+    [=](atom::worker, system::query_supervisor_actor) {
+      FAIL("no mock implementation available");
+    },
+    [=](atom::done, uuid) { FAIL("no mock implementation available"); },
+    [=](caf::stream<table_slice>) -> caf::inbound_stream_slot<table_slice> {
+      FAIL("no mock implementation available");
+    },
+    [=](system::accountant_actor) { FAIL("no mock implementation available"); },
+    [=](atom::status,
+        system::status_verbosity) -> caf::config_value::dictionary {
+      FAIL("no mock implementation available");
+    },
+    [=](atom::subscribe, atom::flush, system::wrapped_flush_listener) {
+      FAIL("no mock implementation available");
+    },
+    [=](expression&) {
+      auto query_id = unbox(to<uuid>(uuid_str));
+      auto anon_self = caf::actor_cast<caf::event_based_actor*>(self);
+      auto hdl = caf::actor_cast<caf::actor>(self->current_sender());
+      anon_self->send(hdl, query_id, uint32_t{3}, uint32_t(7));
+      anon_self->send(hdl, make_ids({1, 2, 4}));
+      anon_self->send(hdl, make_ids({3, 5}));
+      anon_self->send(hdl, atom::done_v);
+    },
+    [=](const uuid&, uint32_t) { FAIL("no mock implementation available"); },
+    [=](atom::replace, uuid, std::shared_ptr<partition_synopsis>) {
+      FAIL("no mock implementation available");
+    },
+    [=](atom::erase, uuid) -> ids { FAIL("no mock implementation available"); },
+  };
 }
 
 class mock_processor : public system::query_processor {
@@ -82,7 +109,7 @@ struct fixture : fixtures::deterministic_actor_system {
   }
 
   uuid query_id;
-  caf::actor index;
+  system::index_actor index;
   caf::actor aut;
 };
 
@@ -97,7 +124,7 @@ TEST(state transitions) {
     "collect_hits -> idle",
   };
   self->send(aut, unbox(to<expression>(query_str)), index);
-  expect((expression, caf::actor), from(self).to(aut));
+  expect((expression, system::index_actor), from(self).to(aut));
   expect((expression), from(aut).to(index));
   expect((uuid, uint32_t, uint32_t), from(index).to(aut));
   expect((ids), from(index).to(aut));

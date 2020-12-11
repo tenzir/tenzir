@@ -38,8 +38,8 @@ dummy_indexer(caf::stateful_actor<dummy_index::dummy_indexer_state>*) {
 }
 
 caf::actor
-spawn_dummy_indexer(caf::local_actor* self, system::accountant_type, path, type,
-                    caf::settings, caf::actor, uuid, std::string) {
+spawn_dummy_indexer(caf::local_actor* self, system::accountant_actor, path,
+                    type, caf::settings, caf::actor, uuid, std::string) {
   return self->spawn(dummy_indexer);
 }
 

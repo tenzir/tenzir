@@ -23,8 +23,6 @@
 #include "vast/system/node.hpp"
 #include "vast/system/spawn_arguments.hpp"
 
-#include <caf/settings.hpp>
-
 namespace vast::system {
 
 maybe_actor
@@ -57,8 +55,9 @@ spawn_eraser(system::node_actor* self, system::spawn_arguments& args) {
   if (!archive)
     return make_error(ec::missing_component, "archive");
   // Spawn the eraser.
-  auto handle
-    = self->spawn(eraser, aging_frequency, eraser_query, index, archive);
+  auto handle = self->spawn(eraser, aging_frequency, eraser_query,
+                            caf::actor_cast<index_actor>(index),
+                            caf::actor_cast<archive_actor>(archive));
   VAST_VERBOSE(self, "spawned an eraser for", eraser_query);
   return handle;
 }

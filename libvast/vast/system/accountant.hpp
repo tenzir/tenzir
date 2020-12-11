@@ -14,52 +14,31 @@
 #pragma once
 
 #include "vast/fwd.hpp"
-#include "vast/status.hpp"
-#include "vast/time.hpp"
 
-#include <caf/typed_actor.hpp>
+#include "vast/system/accountant_actor.hpp"
 
 namespace vast::system {
 
 // Forward declarations
-struct accountant_config;
-struct accountant_state;
+struct accountant_state_impl;
 
 struct accountant_state_deleter {
-  void operator()(accountant_state* st);
+  void operator()(accountant_state_impl* ptr);
 };
 
-struct accountant_state_ptr
-  : std::unique_ptr<accountant_state, accountant_state_deleter> {
+struct accountant_state
+  : public std::unique_ptr<accountant_state_impl, accountant_state_deleter> {
   using unique_ptr::unique_ptr;
 
   // Name of the ACCOUNTANT actor.
   static constexpr const char* name = "accountant";
 };
 
-// clang-format off
-/// @relates accountant
-using accountant_type = caf::typed_actor<
-  caf::replies_to<atom::config, accountant_config>
-    ::with<atom::ok>,
-  caf::reacts_to<atom::announce, std::string>,
-  caf::reacts_to<std::string, duration>,
-  caf::reacts_to<std::string, time>,
-  caf::reacts_to<std::string, int64_t>,
-  caf::reacts_to<std::string, uint64_t>,
-  caf::reacts_to<std::string, double>,
-  caf::reacts_to<report>,
-  caf::reacts_to<performance_report>,
-  caf::replies_to<atom::status, status_verbosity>
-    ::with<caf::dictionary<caf::config_value>>,
-  caf::reacts_to<atom::telemetry>>;
-// clang-format on
-
 /// Accumulates various performance metrics in a key-value format and writes
 /// them to VAST table slices.
 /// @param self The actor handle.
-accountant_type::behavior_type
-accountant(accountant_type::stateful_pointer<accountant_state_ptr> self,
+accountant_actor::behavior_type
+accountant(accountant_actor::stateful_pointer<accountant_state> self,
            accountant_config cfg);
 
 } // namespace vast::system

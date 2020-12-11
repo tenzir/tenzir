@@ -30,7 +30,7 @@ eraser_state::eraser_state(caf::event_based_actor* self) : super{self} {
 }
 
 void eraser_state::init(caf::timespan interval, std::string query,
-                        caf::actor index, caf::actor archive) {
+                        index_actor index, archive_actor archive) {
   VAST_TRACE(VAST_ARG(interval), VAST_ARG(query), VAST_ARG(index),
              VAST_ARG(archive));
   // Set member variables.
@@ -95,7 +95,7 @@ void eraser_state::process_end_of_hits() {
 
 caf::behavior
 eraser(caf::stateful_actor<eraser_state>* self, caf::timespan interval,
-       std::string query, caf::actor index, caf::actor archive) {
+       std::string query, index_actor index, archive_actor archive) {
   VAST_TRACE(VAST_ARG(self), VAST_ARG(interval), VAST_ARG(query),
              VAST_ARG(index), VAST_ARG(archive));
   auto& st = self->state;

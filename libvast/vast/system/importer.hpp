@@ -16,11 +16,11 @@
 #include "vast/aliases.hpp"
 #include "vast/data.hpp"
 #include "vast/path.hpp"
-#include "vast/status.hpp"
-#include "vast/system/accountant.hpp"
-#include "vast/system/archive.hpp"
+#include "vast/system/accountant_actor.hpp"
+#include "vast/system/archive_actor.hpp"
+#include "vast/system/index_actor.hpp"
 #include "vast/system/instrumentation.hpp"
-#include "vast/system/type_registry.hpp"
+#include "vast/system/type_registry_actor.hpp"
 
 #include <caf/event_based_actor.hpp>
 #include <caf/stateful_actor.hpp>
@@ -107,9 +107,9 @@ struct importer_state {
   stopwatch::time_point last_report;
 
   /// The index actor.
-  caf::actor index;
+  index_actor index;
 
-  accountant_type accountant;
+  accountant_actor accountant;
 
   /// Name of this actor in log events.
   static inline const char* name = "importer";
@@ -125,7 +125,7 @@ using importer_actor = caf::stateful_actor<importer_state>;
 /// @param index A handle to the INDEX.
 /// @param batch_size The initial number of IDs to request when replenishing.
 /// @param type_registry A handle to the type-registry module.
-caf::behavior importer(importer_actor* self, path dir, archive_type archive,
-                       caf::actor index, type_registry_type type_registry);
+caf::behavior importer(importer_actor* self, path dir, archive_actor archive,
+                       index_actor index, type_registry_actor type_registry);
 
 } // namespace vast::system

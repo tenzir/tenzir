@@ -13,13 +13,12 @@
 
 #include "vast/system/query_supervisor.hpp"
 
-#include "vast/expression.hpp"
 #include "vast/fwd.hpp"
-#include "vast/logger.hpp"
 
-#include <caf/event_based_actor.hpp>
-#include <caf/local_actor.hpp>
-#include <caf/stateful_actor.hpp>
+#include "vast/expression.hpp"
+#include "vast/logger.hpp"
+#include "vast/system/index_client_actor.hpp"
+#include "vast/system/query_supervisor_master_actor.hpp"
 
 #include <algorithm>
 
@@ -37,20 +36,22 @@ namespace {
 
 } // namespace
 
-query_supervisor_state::query_supervisor_state(caf::local_actor* self)
+query_supervisor_state::query_supervisor_state(
+  query_supervisor_actor::stateful_pointer<query_supervisor_state> self)
   : name("query_supervisor-") {
   name += std::to_string(self->id());
 }
 
-caf::behavior
-query_supervisor(caf::stateful_actor<query_supervisor_state>* self,
-                 caf::actor master) {
+query_supervisor_actor::behavior_type query_supervisor(
+  query_supervisor_actor::stateful_pointer<query_supervisor_state> self,
+  query_supervisor_master_actor master) {
   // Ask master for initial work.
   self->send(master, atom::worker_v, self);
   return {
-    [=](const expression&, const query_map& qm, const caf::actor& client) {
-      VAST_DEBUG(self, "got a new query for", qm.size(), "partitions:",
-                 get_ids(qm));
+    [=](const expression&, const query_map& qm,
+        const index_client_actor& client) {
+      VAST_DEBUG(self, "got a new query for", qm.size(),
+                 "partitions:", get_ids(qm));
       VAST_ASSERT(!qm.empty());
       VAST_ASSERT(self->state.open_requests.empty());
       for (auto& kvp : qm) {
@@ -75,7 +76,8 @@ query_supervisor(caf::stateful_actor<query_supervisor_state>* self,
             }
           });
       }
-    }};
+    },
+  };
 }
 
 } // namespace vast::system

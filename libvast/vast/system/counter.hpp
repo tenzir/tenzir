@@ -13,23 +13,23 @@
 
 #pragma once
 
-#include "vast/expression.hpp"
 #include "vast/fwd.hpp"
-#include "vast/ids.hpp"
-#include "vast/system/archive.hpp"
-#include "vast/system/query_processor.hpp"
 
-#include <caf/fwd.hpp>
+#include "vast/expression.hpp"
+#include "vast/ids.hpp"
+#include "vast/system/archive_actor.hpp"
+#include "vast/system/index_actor.hpp"
+#include "vast/system/query_processor.hpp"
 
 #include <unordered_map>
 
 namespace vast::system {
 
-class counter_state : public system::query_processor {
+class counter_state : public query_processor {
 public:
   // -- member types -----------------------------------------------------------
 
-  using super = system::query_processor;
+  using super = query_processor;
 
   // -- constants --------------------------------------------------------------
 
@@ -39,7 +39,7 @@ public:
 
   counter_state(caf::event_based_actor* self);
 
-  void init(expression expr, caf::actor index, system::archive_type archive,
+  void init(expression expr, index_actor index, archive_actor archive,
             bool skip_candidate_check);
 
 protected:
@@ -59,7 +59,7 @@ private:
   expression expr_;
 
   /// Points to the ARCHIVE for performing candidate checks.
-  system::archive_type archive_;
+  archive_actor archive_;
 
   /// Points to the client actor that launched the query.
   caf::actor client_;
@@ -74,8 +74,8 @@ private:
   std::unordered_map<type, expression> checkers_;
 };
 
-caf::behavior counter(caf::stateful_actor<counter_state>* self, expression expr,
-                      caf::actor index, system::archive_type archive,
-                      bool skip_candidate_check);
+caf::behavior
+counter(caf::stateful_actor<counter_state>* self, expression expr,
+        index_actor index, archive_actor archive, bool skip_candidate_check);
 
 } // namespace vast::system

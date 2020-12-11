@@ -25,6 +25,7 @@
 #include "vast/detail/spawn_container_source.hpp"
 #include "vast/format/zeek.hpp"
 #include "vast/system/archive.hpp"
+#include "vast/system/index_actor.hpp"
 #include "vast/system/source.hpp"
 #include "vast/system/type_registry.hpp"
 #include "vast/table_slice.hpp"
@@ -60,11 +61,9 @@ struct importer_fixture : Base {
   importer_fixture(size_t table_slice_size) : slice_size(table_slice_size) {
     MESSAGE("spawn importer");
     this->directory /= "importer";
-    using vast::system::archive_type;
-    using vast::system::type_registry_type;
-    importer
-      = this->self->spawn(system::importer, this->directory, archive_type{},
-                          caf::actor{}, type_registry_type{});
+    importer = this->self->spawn(system::importer, this->directory,
+                                 system::archive_actor{}, system::index_actor{},
+                                 system::type_registry_actor{});
   }
 
   ~importer_fixture() {
@@ -94,8 +93,9 @@ struct importer_fixture : Base {
                       std::move(stream)};
     return this->self->spawn(system::source<bf::reader>, std::move(reader),
                              slice_size, caf::none,
-                             vast::system::type_registry_type{}, vast::schema{},
-                             std::string{}, vast::system::accountant_type{});
+                             vast::system::type_registry_actor{},
+                             vast::schema{}, std::string{},
+                             vast::system::accountant_actor{});
   }
 
   void verify(const std::vector<table_slice>& result,

@@ -17,15 +17,14 @@
 #include "vast/expression.hpp"
 #include "vast/ids.hpp"
 #include "vast/query_options.hpp"
-#include "vast/status.hpp"
-#include "vast/system/accountant.hpp"
-#include "vast/system/archive.hpp"
+#include "vast/system/accountant_actor.hpp"
+#include "vast/system/archive_actor.hpp"
+#include "vast/system/index_actor.hpp"
 #include "vast/system/query_status.hpp"
 #include "vast/table_slice.hpp"
 #include "vast/uuid.hpp"
 
 #include <chrono>
-#include <deque>
 #include <memory>
 #include <unordered_map>
 
@@ -39,10 +38,10 @@ struct exporter_state {
   // -- member variables -------------------------------------------------------
 
   /// Stores a handle to the ARCHIVE for fetching candidates.
-  archive_type archive;
+  archive_actor archive;
 
   /// Stores a handle to the INDEX for querying results.
-  caf::actor index;
+  index_actor index;
 
   /// Stores a handle to the SINK that processes results.
   caf::actor sink;
@@ -52,7 +51,7 @@ struct exporter_state {
   caf::actor statistics_subscriber;
 
   /// Stores a handle to the ACCOUNTANT that collects various statistics.
-  accountant_type accountant;
+  accountant_actor accountant;
 
   /// Stores hits from the INDEX.
   ids hits;

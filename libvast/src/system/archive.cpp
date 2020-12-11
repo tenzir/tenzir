@@ -18,7 +18,6 @@
 #include "vast/concept/printable/to_string.hpp"
 #include "vast/defaults.hpp"
 #include "vast/detail/assert.hpp"
-#include "vast/detail/bit_cast.hpp"
 #include "vast/detail/fill_status_map.hpp"
 #include "vast/logger.hpp"
 #include "vast/segment_store.hpp"
@@ -29,6 +28,7 @@
 #include <caf/config_value.hpp>
 #include <caf/expected.hpp>
 #include <caf/settings.hpp>
+#include <caf/stream_sink.hpp>
 
 #include <algorithm>
 
@@ -87,8 +87,8 @@ void archive_state::send_report() {
   }
 }
 
-archive_type::behavior_type
-archive(archive_type::stateful_pointer<archive_state> self, path dir,
+archive_actor::behavior_type
+archive(archive_actor::stateful_pointer<archive_state> self, path dir,
         size_t capacity, size_t max_segment_size) {
   // TODO: make the choice of store configurable. For most flexibility, it
   // probably makes sense to pass a unique_ptr<stor> directory to the spawn
@@ -118,12 +118,12 @@ archive(archive_type::stateful_pointer<archive_state> self, path dir,
       VAST_DEBUG(self, "got query for", rank(xs), "events in range [",
                  select(xs, 1), ',', (select(xs, -1) + 1), ')');
       if (auto requester
-          = caf::actor_cast<receiver_type>(self->current_sender()))
+          = caf::actor_cast<archive_client_actor>(self->current_sender()))
         self->send(self, xs, requester);
       else
         VAST_ERROR(self, "dismisses query for unconforming sender");
     },
-    [=](const ids& xs, receiver_type requester) {
+    [=](const ids& xs, archive_client_actor requester) {
       auto& st = self->state;
       if (st.active_exporters.count(requester->address()) == 0) {
         VAST_DEBUG(self, "dismisses query for inactive sender");
@@ -134,7 +134,7 @@ archive(archive_type::stateful_pointer<archive_state> self, path dir,
       if (!st.session)
         st.next_session();
     },
-    [=](const ids& xs, receiver_type requester, uint64_t session_id) {
+    [=](const ids& xs, archive_client_actor requester, uint64_t session_id) {
       auto& st = self->state;
       // If the export has since shut down, we need to invalidate the session.
       if (st.active_exporters.count(requester->address()) == 0) {
@@ -165,42 +165,45 @@ archive(archive_type::stateful_pointer<archive_state> self, path dir,
       // Continue working on the current session.
       self->send(self, xs, requester, session_id);
     },
-    [=](stream<table_slice> in) {
-      self->make_sink(
-        in,
-        [](unit_t&) {
-          // nop
-        },
-        [=](unit_t&, std::vector<table_slice>& batch) {
-          VAST_TRACE(self, "got", batch.size(), "table slices");
-          auto t = timer::start(self->state.measurement);
-          uint64_t events = 0;
-          for (auto& slice : batch) {
-            if (auto error = self->state.store->put(slice))
-              VAST_ERROR(self, "failed to add table slice to store",
-                         self->system().render(error));
-            else
-              events += slice.rows();
-          }
-          t.stop(events);
-        },
-        [=](unit_t&, const error& err) {
-          // We get an 'unreachable' error when the stream becomes unreachable
-          // because the actor was destroyed; in this case we can't use `self`
-          // anymore.
-          if (err && err != caf::exit_reason::unreachable) {
-            if (err != caf::exit_reason::user_shutdown)
-              VAST_ERROR(self, "got a stream error:", render(err));
-            else
-              VAST_DEBUG(self, "got a user shutdown error:", render(err));
-            // We can shutdown now because we only get a single stream from the
-            // importer.
-            self->send_exit(self, err);
-          }
-          VAST_DEBUG_ANON("archive finalizes streaming");
-        });
+    [=](caf::stream<table_slice> in) -> caf::inbound_stream_slot<table_slice> {
+      VAST_DEBUG(self, "got a new stream source");
+      return self
+        ->make_sink(
+          in,
+          [](unit_t&) {
+            // nop
+          },
+          [=](unit_t&, std::vector<table_slice>& batch) {
+            VAST_TRACE(self, "got", batch.size(), "table slices");
+            auto t = timer::start(self->state.measurement);
+            uint64_t events = 0;
+            for (auto& slice : batch) {
+              if (auto error = self->state.store->put(slice))
+                VAST_ERROR(self, "failed to add table slice to store",
+                           self->system().render(error));
+              else
+                events += slice.rows();
+            }
+            t.stop(events);
+          },
+          [=](unit_t&, const error& err) {
+            // We get an 'unreachable' error when the stream becomes unreachable
+            // because the actor was destroyed; in this case we can't use `self`
+            // anymore.
+            if (err && err != caf::exit_reason::unreachable) {
+              if (err != caf::exit_reason::user_shutdown)
+                VAST_ERROR(self, "got a stream error:", render(err));
+              else
+                VAST_DEBUG(self, "got a user shutdown error:", render(err));
+              // We can shutdown now because we only get a single stream from
+              // the importer.
+              self->send_exit(self, err);
+            }
+            VAST_DEBUG_ANON("archive finalizes streaming");
+          })
+        .inbound_slot();
     },
-    [=](accountant_type accountant) {
+    [=](accountant_actor accountant) {
       namespace defs = defaults::system;
       self->state.accountant = std::move(accountant);
       self->send(self->state.accountant, atom::announce_v, self->name());

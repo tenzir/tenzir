@@ -14,7 +14,9 @@
 #pragma once
 
 #include "vast/fwd.hpp"
+
 #include "vast/ids.hpp"
+#include "vast/system/archive_actor.hpp"
 #include "vast/system/query_processor.hpp"
 
 #include <string>
@@ -23,7 +25,7 @@ namespace vast::system {
 
 /// Periodically queries the INDEX with a configurable expression and erases
 /// all hits from the ARCHIVE.
-class eraser_state : public system::query_processor {
+class eraser_state : public query_processor {
 public:
   // -- member types -----------------------------------------------------------
 
@@ -37,8 +39,8 @@ public:
 
   eraser_state(caf::event_based_actor* self);
 
-  void init(caf::timespan interval, std::string query, caf::actor index,
-            caf::actor archive);
+  void init(caf::timespan interval, std::string query, index_actor index,
+            archive_actor archive);
 
 protected:
   // -- implementation hooks ---------------------------------------------------
@@ -62,7 +64,7 @@ private:
   std::string query_;
 
   /// Points to the ARCHIVE that needs periodic pruning.
-  caf::actor archive_;
+  archive_actor archive_;
 
   /// Collects hits until all deltas arrived.
   ids hits_;
@@ -83,6 +85,6 @@ private:
 /// @param archive A handle to the ARCHIVE that needs periodic pruning.
 caf::behavior
 eraser(caf::stateful_actor<eraser_state>* self, caf::timespan interval,
-       std::string query, caf::actor index, caf::actor archive);
+       std::string query, index_actor index, archive_actor archive);
 
 } // namespace vast::system

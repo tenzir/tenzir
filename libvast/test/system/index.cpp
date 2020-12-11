@@ -120,7 +120,7 @@ struct fixture : fixtures::deterministic_actor_system_and_events {
   }
 
   // Handle to the INDEX actor.
-  caf::actor index;
+  system::index_actor index;
 };
 
 } // namespace <anonymous>

@@ -28,7 +28,7 @@ using namespace vast;
 namespace {
 
 struct fixture : fixtures::deterministic_actor_system_and_events {
-  system::archive_type a;
+  system::archive_actor a;
 
   fixture() {
     a = self->spawn(system::archive, directory, 10, 1024 * 1024);

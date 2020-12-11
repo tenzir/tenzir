@@ -17,7 +17,6 @@
 #include "vast/fwd.hpp"
 #include "vast/logger.hpp"
 
-#include <caf/actor.hpp>
 #include <caf/behavior.hpp>
 #include <caf/event_based_actor.hpp>
 #include <caf/stateful_actor.hpp>
@@ -89,16 +88,10 @@ private:
 
 } // namespace
 
-evaluator_state::evaluator_state(caf::event_based_actor* self) : self(self) {
+evaluator_state::evaluator_state(
+  evaluator_actor::stateful_pointer<evaluator_state> self)
+  : self{self} {
   // nop
-}
-
-void evaluator_state::init(caf::actor client, expression expr,
-                           caf::response_promise promise) {
-  VAST_TRACE(VAST_ARG(client), VAST_ARG(expr), VAST_ARG(promise));
-  this->client = std::move(client);
-  this->expr = std::move(expr);
-  this->promise = std::move(promise);
 }
 
 void evaluator_state::handle_result(const offset& position, const ids& result) {
@@ -154,36 +147,41 @@ evaluator_state::hits_for(const offset& position) {
   return i != predicate_hits.end() ? &i->second : nullptr;
 }
 
-caf::behavior evaluator(caf::stateful_actor<evaluator_state>* self,
-                        expression expr, evaluation_triples eval) {
+evaluator_actor::behavior_type
+evaluator(evaluator_actor::stateful_pointer<evaluator_state> self,
+          expression expr, std::vector<evaluation_triple> eval) {
   VAST_TRACE(VAST_ARG(expr), VAST_ARG(eval));
   VAST_ASSERT(!eval.empty());
-  using std::get;
-  using std::move;
-  return {[=, expr{move(expr)}, eval{move(eval)}](caf::actor client) {
-    auto& st = self->state;
-    st.init(client, move(expr), self->make_response_promise());
-    st.pending_responses += eval.size();
-    for (auto& triple : eval) {
-      // No strucutured bindings available due to subsequent lambda. :-/
-      // TODO: C++20
-      auto& pos = get<0>(triple);
-      auto& curried_pred = get<1>(triple);
-      auto& indexer = get<2>(triple);
-      ++st.predicate_hits[pos].first;
-      self->request(indexer, caf::infinite, curried_pred)
-        .then([=](const ids& hits) { self->state.handle_result(pos, hits); },
-              [=](const caf::error& err) {
-                self->state.handle_missing_result(pos, err);
-              });
-    }
-    if (st.pending_responses == 0) {
-      VAST_DEBUG(self, "has nothing to evaluate for expression");
-      st.promise.deliver(atom::done_v);
-    }
-    // We can only deal with exactly one expression/client at the moment.
-    self->unbecome();
-  }};
+  return {
+    [=, expr = std::move(expr),
+     eval = std::move(eval)](index_client_actor client) {
+      auto& st = self->state;
+      st.client = client;
+      st.expr = std::move(expr);
+      st.promise = self->make_response_promise<atom::done>();
+      st.pending_responses += eval.size();
+      for (auto& triple : eval) {
+        // No strucutured bindings available due to subsequent lambda. :-/
+        // TODO: C++20
+        auto& pos = std::get<0>(triple);
+        auto& curried_pred = std::get<1>(triple);
+        auto& indexer = std::get<2>(triple);
+        ++st.predicate_hits[pos].first;
+        self->request(indexer, caf::infinite, curried_pred)
+          .then([=](const ids& hits) { self->state.handle_result(pos, hits); },
+                [=](const caf::error& err) {
+                  self->state.handle_missing_result(pos, err);
+                });
+      }
+      if (st.pending_responses == 0) {
+        VAST_DEBUG(self, "has nothing to evaluate for expression");
+        st.promise.deliver(atom::done_v);
+      }
+      // We can only deal with exactly one expression/client at the moment.
+      self->unbecome();
+      return st.promise;
+    },
+  };
 }
 
 } // namespace vast::system

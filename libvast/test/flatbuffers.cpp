@@ -11,6 +11,8 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
+#include "vast/fwd.hpp"
+
 #include "vast/chunk.hpp"
 #include "vast/defaults.hpp"
 #include "vast/detail/spawn_container_source.hpp"
@@ -19,12 +21,12 @@
 #include "vast/fbs/partition.hpp"
 #include "vast/fbs/utils.hpp"
 #include "vast/fbs/uuid.hpp"
-#include "vast/fwd.hpp"
 #include "vast/meta_index.hpp"
 #include "vast/msgpack_table_slice.hpp"
 #include "vast/msgpack_table_slice_builder.hpp"
 #include "vast/span.hpp"
 #include "vast/system/index.hpp"
+#include "vast/system/index_actor.hpp"
 #include "vast/system/partition.hpp"
 #include "vast/system/posix_filesystem.hpp"
 #include "vast/table_slice.hpp"
@@ -200,7 +202,7 @@ TEST(full partition roundtrip) {
                                               // the fs actor's root dir
   auto persist_promise
     = self->request(partition, caf::infinite, vast::atom::persist_v,
-                    persist_path, caf::actor{});
+                    persist_path, vast::system::index_actor{});
   run();
   persist_promise.receive([](vast::atom::ok) { CHECK("persisting done"); },
                           [](caf::error err) { FAIL(err); });
@@ -216,7 +218,7 @@ TEST(full partition roundtrip) {
     auto rp = self->request(readonly_partition, caf::infinite, expression);
     run();
     rp.receive(
-      [&](vast::evaluation_triples triples) {
+      [&](std::vector<vast::system::evaluation_triple> triples) {
         CHECK_EQUAL(triples.size(), expected_indexers);
         for (auto triple : triples) {
           auto curried_predicate = get<1>(triple);

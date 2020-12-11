@@ -1,25 +1,30 @@
-// Experimental actor to monitor disk space usage
+/******************************************************************************
+ *                    _   _____   __________                                  *
+ *                   | | / / _ | / __/_  __/     Visibility                   *
+ *                   | |/ / __ |_\ \  / /          Across                     *
+ *                   |___/_/ |_/___/ /_/       Space and Time                 *
+ *                                                                            *
+ * This file is part of VAST. It is subject to the license terms in the       *
+ * LICENSE file found in the top-level directory of this distribution and at  *
+ * http://vast.io/license. No part of VAST, including this file, may be       *
+ * copied, modified, propagated, or distributed except according to the terms *
+ * contained in the LICENSE file.                                             *
+ ******************************************************************************/
+
 #pragma once
 
 #include "vast/fwd.hpp"
-#include "vast/path.hpp"
-#include "vast/system/archive.hpp"
 
-#include <caf/typed_actor.hpp>
+#include "vast/path.hpp"
+#include "vast/system/archive_actor.hpp"
+#include "vast/system/disk_monitor_actor.hpp"
+#include "vast/system/index_actor.hpp"
 
 namespace vast::system {
 
-// clang-format off
-using disk_monitor_type = caf::typed_actor<
-  caf::reacts_to<atom::ping>,
-  caf::reacts_to<atom::erase>,
-  caf::replies_to<atom::status, status_verbosity>::with<caf::dictionary<caf::config_value>>
->;
-// clang-format on
-
 struct disk_monitor_state {
   /// The path to the database directory.
-  vast::path dbdir;
+  path dbdir;
 
   /// When current disk space is above the high water mark, stuff
   /// is deleted until we get below the low water mark.
@@ -30,10 +35,10 @@ struct disk_monitor_state {
   bool purging;
 
   /// Node handle of the ARCHIVE.
-  archive_type archive;
+  archive_actor archive;
 
   /// Node handle of the INDEX.
-  caf::actor index;
+  index_actor index;
 
   constexpr static const char* name = "disk_monitor";
 };
@@ -46,10 +51,10 @@ struct disk_monitor_state {
 /// @param db_dir The path to the database directory.
 /// @param archive The actor handle of the ARCHIVE.
 /// @param index The actor handle of the INDEX.
-disk_monitor_type::behavior_type
-disk_monitor(disk_monitor_type::stateful_pointer<disk_monitor_state> self,
+disk_monitor_actor::behavior_type
+disk_monitor(disk_monitor_actor::stateful_pointer<disk_monitor_state> self,
              size_t high_water, size_t low_water,
-             std::chrono::seconds scan_interval, const vast::path& db_dir,
-             archive_type archive, caf::actor index);
+             std::chrono::seconds scan_interval, const path& db_dir,
+             archive_actor archive, index_actor index);
 
 } // namespace vast::system

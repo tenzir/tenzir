@@ -13,16 +13,17 @@
 
 #pragma once
 
-#include "vast/detail/flat_lru_cache.hpp"
+#include "vast/fwd.hpp"
+
 #include "vast/detail/lru_cache.hpp"
 #include "vast/detail/stable_map.hpp"
 #include "vast/expression.hpp"
 #include "vast/fbs/index.hpp"
-#include "vast/fwd.hpp"
 #include "vast/meta_index.hpp"
-#include "vast/status.hpp"
 #include "vast/system/accountant.hpp"
-#include "vast/system/filesystem.hpp"
+#include "vast/system/filesystem_actor.hpp"
+#include "vast/system/flush_listener_actor.hpp"
+#include "vast/system/index_actor.hpp"
 #include "vast/system/partition.hpp"
 #include "vast/system/query_supervisor.hpp"
 #include "vast/uuid.hpp"
@@ -32,18 +33,17 @@
 #include <caf/fwd.hpp>
 #include <caf/meta/omittable_if_empty.hpp>
 #include <caf/meta/type_name.hpp>
+#include <caf/response_promise.hpp>
 
 #include <unordered_map>
 #include <vector>
-
-#include "caf/response_promise.hpp"
 
 namespace vast::system {
 
 /// The state of the active partition.
 struct active_partition_info {
   /// The partition actor.
-  caf::actor actor;
+  active_partition_actor actor;
 
   /// The slot ID that identifies the partition in the stream.
   caf::stream_slot stream_slot;
@@ -87,16 +87,17 @@ class partition_factory {
 public:
   explicit partition_factory(index_state& state);
 
-  filesystem_type& fs(); // getter/setter
+  filesystem_actor& filesystem(); // getter/setter
 
-  caf::actor operator()(const uuid& id) const;
+  partition_actor operator()(const uuid& id) const;
 
 private:
-  filesystem_type fs_;
+  filesystem_actor filesystem_;
   const index_state& state_;
 };
 
-using pending_query_map = detail::stable_map<uuid, evaluation_triples>;
+using pending_query_map
+  = detail::stable_map<uuid, std::vector<evaluation_triple>>;
 
 struct query_state {
   /// The UUID of the query.
@@ -125,7 +126,7 @@ struct index_state {
 
   // -- constructor ------------------------------------------------------------
 
-  explicit index_state(caf::stateful_actor<index_state>* self);
+  explicit index_state(index_actor::pointer self);
 
   // -- persistence ------------------------------------------------------------
 
@@ -141,15 +142,15 @@ struct index_state {
   // Maps partitions to their expected location on the file system.
   vast::path partition_path(const uuid& id) const;
 
-  // -- query handling
+  // -- query handling ---------------------------------------------------------
 
   bool worker_available();
 
-  caf::actor next_worker();
+  query_supervisor_actor next_worker();
 
   /// Get the actor handles for up to `num_partitions` PARTITION actors,
   /// spawning them if needed.
-  std::vector<std::pair<uuid, caf::actor>>
+  std::vector<std::pair<uuid, partition_actor>>
   collect_query_actors(query_state& lookup, uint32_t num_partitions);
 
   /// Spawns one evaluator for each partition.
@@ -160,7 +161,7 @@ struct index_state {
   // -- flush handling ---------------------------------------------------
 
   /// Adds a new flush listener.
-  void add_flush_listener(caf::actor listener);
+  void add_flush_listener(flush_listener_actor listener);
 
   /// Sends a notification to all listeners and clears the listeners list.
   void notify_flush_listeners();
@@ -168,14 +169,10 @@ struct index_state {
   // -- data members ----------------------------------------------------------
 
   /// Pointer to the parent actor.
-  caf::stateful_actor<index_state>* self;
+  index_actor::pointer self;
 
   /// The streaming stage.
   index_stream_stage_ptr stage;
-
-  /// Allows the index to multiplex between waiting for ready workers and
-  /// queries.
-  caf::behavior has_worker;
 
   /// The single active (read/write) partition.
   active_partition_info active_partition = {};
@@ -186,12 +183,12 @@ struct index_state {
   // Then (assuming the query interface for both types of partition stays
   // identical) we could just use the same cache for unpersisted partitions and
   // unpin them after they're safely on disk.
-  std::unordered_map<uuid, caf::actor> unpersisted;
+  std::unordered_map<uuid, partition_actor> unpersisted;
 
   /// The set of passive (read-only) partitions currently loaded into memory.
   /// Uses the `partition_factory` to load new partitions as needed, and evicts
   /// old entries when the size exceeds `max_inmem_partitions`.
-  detail::lru_cache<uuid, caf::actor, partition_factory> inmem_partitions;
+  detail::lru_cache<uuid, partition_actor, partition_factory> inmem_partitions;
 
   /// The set of partitions that exist on disk.
   std::unordered_set<uuid> persisted_partitions;
@@ -210,7 +207,7 @@ struct index_state {
   std::unordered_map<uuid, query_state> pending;
 
   /// Caches idle workers.
-  std::vector<caf::actor> idle_workers;
+  std::vector<query_supervisor_actor> idle_workers;
 
   /// The meta index.
   meta_index meta_idx;
@@ -222,13 +219,13 @@ struct index_state {
   index_statistics stats;
 
   // Handle of the accountant.
-  accountant_type accountant;
+  accountant_actor accountant;
 
   /// List of actors that wait for the next flush event.
-  std::vector<caf::actor> flush_listeners;
+  std::vector<flush_listener_actor> flush_listeners;
 
   /// Actor handle of the filesystem actor.
-  filesystem_type filesystem;
+  filesystem_actor filesystem;
 
   static inline const char* name = "index";
 };
@@ -241,14 +238,14 @@ caf::expected<flatbuffers::Offset<fbs::Index>>
 pack(flatbuffers::FlatBufferBuilder& builder, const index_state& x);
 
 /// Indexes events in horizontal partitions.
-/// @param fs The filesystem actor. Not used by the index itself but forwarded
-/// to partitions.
+/// @param filesystem The filesystem actor. Not used by the index itself but
+/// forwarded to partitions.
 /// @param dir The directory of the index.
 /// @param partition_capacity The maximum number of events per partition.
 /// @pre `partition_capacity > 0
-caf::behavior
-index(caf::stateful_actor<index_state>* self, filesystem_type fs, path dir,
-      size_t partition_capacity, size_t in_mem_partitions,
-      size_t taste_partitions, size_t num_workers);
+index_actor::behavior_type
+index(index_actor::stateful_pointer<index_state> self,
+      filesystem_actor filesystem, path dir, size_t partition_capacity,
+      size_t in_mem_partitions, size_t taste_partitions, size_t num_workers);
 
 } // namespace vast::system

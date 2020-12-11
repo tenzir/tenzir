@@ -83,20 +83,20 @@ struct fixture : fixtures::deterministic_actor_system_and_events {
     self->send_exit(aut, caf::exit_reason::user_shutdown);
   }
 
-  using type_registry_actor
-    = system::type_registry_type::stateful_pointer<system::type_registry_state>;
+  using stateful_type_registry_actor_pointer
+    = system::type_registry_actor::stateful_pointer<system::type_registry_state>;
 
-  system::type_registry_type spawn_aut() {
+  system::type_registry_actor spawn_aut() {
     auto handle = sys.spawn(system::type_registry, directory);
     sched.run();
     return handle;
   }
 
   system::type_registry_state& state() {
-    return caf::actor_cast<type_registry_actor>(aut)->state;
+    return caf::actor_cast<stateful_type_registry_actor_pointer>(aut)->state;
   }
 
-  system::type_registry_type aut;
+  system::type_registry_actor aut;
 };
 
 FIXTURE_SCOPE(type_registry_tests, fixture)

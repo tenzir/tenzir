@@ -13,6 +13,8 @@
 
 #pragma once
 
+#include "vast/fwd.hpp"
+
 #include <caf/actor.hpp>
 #include <caf/actor_cast.hpp>
 #include <caf/meta/type_name.hpp>

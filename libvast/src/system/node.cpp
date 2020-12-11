@@ -13,6 +13,8 @@
 
 #include "vast/system/node.hpp"
 
+#include "vast/fwd.hpp"
+
 #include "vast/accountant/config.hpp"
 #include "vast/concept/parseable/to.hpp"
 #include "vast/concept/parseable/vast/endpoint.hpp"
@@ -31,7 +33,6 @@
 #include "vast/format/syslog.hpp"
 #include "vast/format/test.hpp"
 #include "vast/format/zeek.hpp"
-#include "vast/fwd.hpp"
 #include "vast/json.hpp"
 #include "vast/logger.hpp"
 #include "vast/system/accountant.hpp"
@@ -179,11 +180,11 @@ caf::message dump_command(const invocation& inv, caf::actor_system&) {
   auto as_yaml = caf::get_or(inv.options, "vast.dump.yaml", false);
   if (inv.full_name == "dump concepts") {
     auto self = this_node;
-    auto type_registry = caf::actor_cast<type_registry_type>(
-      self->state.registry.find_by_label(type_registry_state::name));
+    auto type_registry = caf::actor_cast<type_registry_actor>(
+      self->state.registry.find_by_label("type-registry"));
     if (!type_registry)
-      return caf::make_message(
-        make_error(ec::missing_component, type_registry_state::name));
+      return caf::make_message(make_error(ec::missing_component, //
+                                          "type-registry"));
     caf::error request_error = caf::none;
     auto rp = self->make_response_promise();
     // The overload for 'request(...)' taking a 'std::chrono::duration' does not
@@ -472,7 +473,7 @@ node_state::spawn_command(const invocation& inv,
         return make_message(expr.error());
       }
       self
-        ->request(caf::actor_cast<type_registry_type>(tr),
+        ->request(caf::actor_cast<type_registry_actor>(tr),
                   defaults::system::initial_request_timeout, atom::resolve_v,
                   std::move(*expr))
         .then(handle_taxonomies, [=](caf::error err) mutable {
