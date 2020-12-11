@@ -142,7 +142,7 @@ fetch_indexer(const PartitionState& state, const attribute_extractor& ex,
       return {
         [=](const curried_predicate&) { return row_ids; },
         [](atom::shutdown) {
-          VAST_DEBUG_ANON("one-shot-indexer received shutdown request");
+          VAST_DEBUG_ANON("one-shot indexer received shutdown request");
         },
       };
     });
@@ -436,7 +436,7 @@ active_partition_actor::behavior_type active_partition(
       using namespace std::chrono_literals;
       // Ideally, we would use a self->delayed_delegate(self, ...) here, but CAF
       // does not have this functionality. Since we do not care about the return
-      // value as the partition outselves, and the handler we delegate to
+      // value of the partition outselves, and the handler we delegate to
       // already uses a response promise, we send the message anonymously. We
       // also need to actor_cast self, since sending an exit message to a typed
       // actor without using self->send_exit is not supported.
@@ -498,11 +498,16 @@ active_partition_actor::behavior_type active_partition(
           .then(
             [=](chunk_ptr chunk) {
               ++self->state.persisted_indexers;
+              if (!self->state.persistence_promise.pending()) {
+                VAST_WARNING(self, "ignores persisted indexer because the "
+                                   "persistence promise is already fulfilled");
+                return;
+              }
               auto sender = self->current_sender()->id();
               if (!chunk) {
-                // TODO: If any indexer reports an error, should we abandon the
-                // whole partition or still persist the remaining chunks?
                 VAST_ERROR(self, "failed to persist indexer", sender);
+                self->state.persistence_promise.deliver(caf::make_error(
+                  ec::unspecified, "failed to persist indexer", sender));
                 return;
               }
               VAST_DEBUG(self, "got chunk from", sender);
@@ -544,7 +549,8 @@ active_partition_actor::behavior_type active_partition(
               VAST_ERROR(self, "failed to persist indexer for", kv.first.fqn(),
                          "with error:", render(err));
               ++self->state.persisted_indexers;
-              self->state.persistence_promise.deliver(std::move(err));
+              if (!self->state.persistence_promise.pending())
+                self->state.persistence_promise.deliver(std::move(err));
             });
       }
     },
