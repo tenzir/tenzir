@@ -33,8 +33,8 @@ struct archive_state {
   void send_report();
   void next_session();
   archive_actor::pointer self;
-  std::unique_ptr<store> store;
-  std::unique_ptr<store::lookup> session;
+  std::unique_ptr<vast::store> store;
+  std::unique_ptr<vast::store::lookup> session;
   uint64_t session_id = 0;
   std::queue<archive_client_actor> requesters;
   std::unordered_map<caf::actor_addr, std::queue<ids>> unhandled_ids;
