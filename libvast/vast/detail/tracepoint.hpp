@@ -27,7 +27,7 @@
 //
 // Notable changes from the upstream version:
 //  * Add a written overview to the top of the file.
-//  * Add `VAST_TRACEPOINT_USDT()` convenience macro.
+//  * Add `VAST_TRACEPOINT()` convenience macro.
 //  * Use `VAST_DISABLE_SDT` macro instead of `FOLLY_DISABLE_SDT` to disable
 //    this feature.
 //  * Add pragmas to ignore warnings for GNU extensions when using clang.
@@ -36,18 +36,19 @@
 
 // # Overview
 //
-// A USDT (userspace software-defined tracepoint/userspace dynamic tracepoint)
-// is a code instrumentation mechanism provided by the linux kernel to allow
-// tracing software to measure and account specific developer-defined events in
-// user space code and libraries.
+// A USDT (userspace statically-defined tracepoint) is a code instrumentation
+// mechanism provided by the kernel to allow tracing software to measure
+// and account specific developer-defined events in user space code and
+// libraries. Historically, the idea originated with DTrace tool in Solaris
+// and was adapted for the linux kernel around 2015.
 //
 // On a high level, it works by inserting interrupts at specific points in the
 // code to jump to a kernel handler, which generates trace events, optionally
 // records some context, and asynchronously forwards these events to tracing
 // programs like `perf` or `bpftrace`.
 //
-// The main entry point for users is the `VAST_USDT()` macro defined at the
-// bottom of this file.
+// The main entry point for users is the `VAST_TRACEPOINT()` macro defined at
+// the bottom of this file.
 //
 //
 // # Inner Workings
@@ -242,9 +243,16 @@
     !VAST_DISABLE_SDT
 
 /// Defines a USDT trace point for provider 'vast' with given parameters.
-/// @param name The name of the trace point. An invocation
-///             `VAST_TRACEPOINT_USDT(foo)` will create a tracepoint that can be
-///             accessed as `%sdt_vast:foo` by `perf probe` etc.
+/// @param name The name of the trace point. Different tracing tools use
+///             different naming conventions on how to refer to a USDT that
+///             was creating using the invocation `VAST_TRACEPOINT(foo)`:
+///
+///               perf probe:        `sdt_vast:foo` or `%foo`
+///               bpftrace:          `usdt:/path/to/libvast.so:vast:foo`
+///               bpftrace (<= 0.8): `usdt:/path/to/libvast.so:foo`
+///               bcc:               `USDT("/path/to/libvast.so")
+///                                     .enable_probe("foo", "foo_handler")`
+///
 /// @param args Further arguments. These must be "simple" arguments like
 ///             integers or pointers, and no more than the number of available
 ///             registers.
@@ -256,9 +264,9 @@
 // not, for example to allow preparation of expensive tracepoint arguments.
 //
 // This works by adding an additional section called ".probes" into the ELF
-// file, that contains the number 0 by default. Every tracer that monitors a
-// given tracepoint is supposed to increase that number by one, and to decrease
-// it again when it is finished.
+// file, that contains space for one number per tracepoint, initialized to 0.
+// Every tracer that monitors a given tracepoint is supposed to increase that
+// number by one, and to decrease it again when it is finished.
 //
 // Note that USDTs with semaphores can only be enabled at runtime and not at
 // file level, since the semaphore count will be specific to the running
