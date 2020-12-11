@@ -17,6 +17,10 @@ Every entry has a category for which we use the following visual abbreviations:
   remains intact.
   [#1205](https://github.com/tenzir/vast/pull/1205)
 
+- 🐞 The index no longer causes exporters to deadlock when the meta index
+  produces false positives.
+  [#1225](https://github.com/tenzir/vast/pull/1225)
+
 - 🐞 The index now correctly drops further results when queries finish early,
   thus improving the performance of queries for a limited number of events.
   [#1209](https://github.com/tenzir/vast/pull/1209)
