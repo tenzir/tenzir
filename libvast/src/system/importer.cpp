@@ -38,6 +38,64 @@
 
 namespace vast::system {
 
+namespace {
+
+class driver : public importer_state::driver_base {
+public:
+  using super = importer_state::driver_base;
+
+  using pointer = importer_actor*;
+
+  driver(importer_state::downstream_manager& out, pointer self)
+    : super(out), self_(self) {
+    // nop
+  }
+
+  void process(caf::downstream<output_type>& out,
+               std::vector<input_type>& xs) override {
+    VAST_TRACE(VAST_ARG(xs));
+    auto& st = self_->state;
+    uint64_t events = 0;
+    auto t = timer::start(st.measurement_);
+    for (auto& x : xs) {
+      VAST_ASSERT(x.rows() <= static_cast<size_t>(st.available_ids()));
+      auto rows = x.rows();
+      events += rows;
+      x.offset(st.next_id(rows));
+      out.push(std::move(x));
+    }
+    t.stop(events);
+  }
+
+  void finalize(const error& err) override {
+    VAST_DEBUG(self_, "stopped with message:", render(err));
+  }
+
+  pointer self() const {
+    return self_;
+  }
+
+private:
+  pointer self_;
+};
+
+class manager : public caf::detail::stream_stage_impl<driver> {
+public:
+  using super = caf::detail::stream_stage_impl<driver>;
+
+  manager(importer_actor* self) : caf::stream_manager(self), super(self, self) {
+    // nop
+  }
+};
+
+caf::intrusive_ptr<manager> make_importer_stage(importer_actor* self) {
+  auto result = caf::make_counted<manager>(self);
+  result->continuous(true);
+  return result;
+}
+
+} // namespace
+
 importer_state::importer_state(caf::event_based_actor* self_ptr)
   : self(self_ptr) {
   // nop
@@ -166,24 +224,7 @@ caf::behavior importer(importer_actor* self, path dir, archive_actor archive,
     self->state.send_report();
     self->quit(msg.reason);
   });
-  self->state.stg = caf::attach_continuous_stream_stage(
-    self,
-    [](caf::unit_t&) {
-      // nop
-    },
-    [=](caf::unit_t&, caf::downstream<table_slice>& out, table_slice x) {
-      VAST_TRACE(VAST_ARG(x));
-      auto& st = self->state;
-      auto t = timer::start(st.measurement_);
-      VAST_ASSERT(x.rows() <= static_cast<size_t>(st.available_ids()));
-      auto events = x.rows();
-      x.offset(st.next_id(events));
-      out.push(std::move(x));
-      t.stop(events);
-    },
-    [=](caf::unit_t&, const error& err) {
-      VAST_DEBUG(self, "stopped with message:", err);
-    });
+  self->state.stg = make_importer_stage(self);
   if (type_registry)
     self->state.stg->add_outbound_path(type_registry);
   if (archive)
