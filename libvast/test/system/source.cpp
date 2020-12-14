@@ -38,7 +38,7 @@ using test_sink_type = caf::stateful_actor<test_sink_state>;
 
 caf::behavior test_sink(test_sink_type* self, caf::actor src) {
   self->send(src, atom::sink_v, self);
-  return {[=](caf::stream<table_slice> in) {
+  return {[=](caf::stream<table_slice> in, const std::string&) {
     return self->make_sink(
       in,
       [](caf::unit_t&) {
