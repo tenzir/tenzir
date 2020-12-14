@@ -103,6 +103,10 @@ struct importer_state {
   /// Pointer to the owning actor.
   caf::event_based_actor* self;
 
+  std::string inbound_description;
+
+  std::unordered_map<caf::inbound_path*, std::string> inbound_descriptions;
+
   measurement measurement_;
   stopwatch::time_point last_report;
 

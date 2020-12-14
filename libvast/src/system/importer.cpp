@@ -86,6 +86,20 @@ public:
   manager(importer_actor* self) : caf::stream_manager(self), super(self, self) {
     // nop
   }
+
+  void register_input_path(caf::inbound_path* ptr) override {
+    auto& st = driver_.self()->state;
+    st.inbound_descriptions[ptr] = std::move(st.inbound_description);
+    VAST_INFO_ANON("importer adds", st.inbound_descriptions[ptr], "source");
+    super::register_input_path(ptr);
+  }
+
+  void deregister_input_path(caf::inbound_path* ptr) noexcept override {
+    auto& st = driver_.self()->state;
+    VAST_INFO_ANON("importer removes", st.inbound_descriptions[ptr], "source");
+    st.inbound_descriptions.erase(ptr);
+    super::deregister_input_path(ptr);
+  }
 };
 
 caf::intrusive_ptr<manager> make_importer_stage(importer_actor* self) {
@@ -243,9 +257,10 @@ caf::behavior importer(importer_actor* self, path dir, archive_actor archive,
       VAST_DEBUG(self, "registers exporter", exporter);
       return self->state.stg->add_outbound_path(exporter);
     },
-    [=](caf::stream<importer_state::input_type>& in) {
+    [=](caf::stream<importer_state::input_type>& in, std::string desc) {
       auto& st = self->state;
       VAST_DEBUG(self, "adds a new source:", self->current_sender());
+      st.inbound_description = std::move(desc);
       st.stg->add_inbound_path(in);
     },
     [=](atom::add, const caf::actor& subscriber) {

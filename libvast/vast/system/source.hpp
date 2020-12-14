@@ -340,7 +340,7 @@ source(caf::stateful_actor<source_state<Reader>>* self, Reader reader,
       self->delayed_send(self, defaults::system::telemetry_rate,
                          atom::telemetry_v);
       // Start streaming.
-      st.mgr->add_outbound_path(st.sink);
+      st.mgr->add_outbound_path(st.sink, std::make_tuple(st.reader.name()));
     },
     [=](atom::status, status_verbosity v) {
       auto& st = self->state;
