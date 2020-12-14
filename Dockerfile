@@ -1,4 +1,4 @@
-FROM debian:buster-slim as builder
+FROM debian:buster-backports as builder
 LABEL maintainer="engineering@tenzir.com"
 LABEL builder=true
 
