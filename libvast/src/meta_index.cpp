@@ -229,15 +229,21 @@ std::vector<uuid> meta_index::lookup(const expression& expr) const {
                                 "comparisons");
             } else {
               for (auto& [part_id, part_syn] : synopses_) {
-                bool match = false;
-                for (auto& pair : part_syn.field_synopses_) {
-                  auto fqn = pair.first.fqn();
-                  if (detail::ends_with(fqn, *s)) {
-                    match = true;
-                    break;
+                // Compare the desired field name with each field in the
+                // partition.
+                auto matching = [&] {
+                  for (auto& pair : part_syn.field_synopses_) {
+                    auto fqn = pair.first.fqn();
+                    if (detail::ends_with(fqn, *s)) {
+                      return true;
+                    }
                   }
-                }
-                if (!negated(x.op) == match)
+                  return false;
+                }();
+                // Only insert the partition if both sides are equal, i.e. the
+                // operator is "positive" and matching is true, or both are
+                // negative.
+                if (!is_negated(x.op) == matching)
                   result.push_back(part_id);
               }
             }

@@ -16,10 +16,8 @@
 
 namespace vast {
 
-bool negated(relational_operator op) {
+bool is_negated(relational_operator op) {
   switch (op) {
-    default:
-      die("missing case for relational operator");
     case equal:
     case match:
     case less:
@@ -35,12 +33,11 @@ bool negated(relational_operator op) {
     case not_match:
       return true;
   }
+  die("missing case for relational operator");
 }
 
 relational_operator negate(relational_operator op) {
   switch (op) {
-    default:
-      die("missing case for relational operator");
     case match:
       return not_match;
     case not_match:
@@ -66,12 +63,11 @@ relational_operator negate(relational_operator op) {
     case not_ni:
       return ni;
   }
+  die("missing case for relational operator");
 }
 
 relational_operator flip(relational_operator op) {
   switch (op) {
-    default:
-      die("missing case for relational operator");
     case match:
     case not_match:
     case equal:
@@ -94,6 +90,7 @@ relational_operator flip(relational_operator op) {
     case not_ni:
       return not_in;
   }
+  die("missing case for relational operator");
 }
 
 } // namespace vast

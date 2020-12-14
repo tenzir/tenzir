@@ -287,9 +287,9 @@ resolve_impl(const taxonomies& ts, const expression& e,
       // over the leafs in the order of definition, which is left to right.
       // The levels stack is used to keep track of the current position at
       // each level of the tree.
-      auto p
+      auto level_1
         = std::pair{it->second.definition.begin(), it->second.definition.end()};
-      auto levels = std::stack{std::vector{std::move(p)}};
+      auto levels = std::stack{std::vector{std::move(level_1)}};
       auto descend = [&] {
         for (auto child_component = ts.models.find(*levels.top().first);
              child_component != ts.models.end();
@@ -298,9 +298,9 @@ resolve_impl(const taxonomies& ts, const expression& e,
           levels.emplace(child_def.begin(), child_def.end());
         }
       };
-      // We move the cursor to the leftmost leaf in the tree.
+      // Move the cursor to the leftmost leaf in the tree.
       descend();
-      auto next = [&] {
+      auto next_leaf = [&] {
         // Update the levels stack; explicit scope for clarity.
         while (!levels.empty() && ++levels.top().first == levels.top().second)
           levels.pop();
@@ -310,9 +310,12 @@ resolve_impl(const taxonomies& ts, const expression& e,
           VAST_ASSERT(levels.top().first != levels.top().second);
         }
       };
+      // The conjunction for all model concepts that are restriced by a value in
+      // rec.
       conjunction restricted;
+      // The conjunction for all model concepts that aren't specified in rec.
       conjunction unrestricted;
-      auto abs_op = negated(op) ? negate(op) : op;
+      auto abs_op = is_negated(op) ? negate(op) : op;
       auto insert_meta_field_predicate = [&] {
         auto make_meta_field_predicate
           = [&](relational_operator op, const vast::data&) {
@@ -329,7 +332,7 @@ resolve_impl(const taxonomies& ts, const expression& e,
         // TODO: Nested records of the form
         // <src_endpoint: <1.2.3.4, _>, process_filename: "svchost.exe">
         // are currently not supported.
-        for (; !levels.empty(); next()) {
+        for (; !levels.empty(); next_leaf()) {
           // TODO: Use `ends_with` for better ergonomics.
           // TODO: Remove matched entries and check mismatched concepts.
           auto concept_field = r->find(*levels.top().first);
@@ -342,7 +345,7 @@ resolve_impl(const taxonomies& ts, const expression& e,
         }
       } else {
         auto value_iterator = r->begin();
-        for (; !levels.empty(); next(), ++value_iterator) {
+        for (; !levels.empty(); next_leaf(), ++value_iterator) {
           if (value_iterator == r->end())
             // The provided record is shorter than the matched concept.
             // TODO: This error could be rendered in a way that makes it
@@ -387,7 +390,7 @@ resolve_impl(const taxonomies& ts, const expression& e,
           break;
         }
       }
-      if (negated(op))
+      if (is_negated(op))
         expr = negation{std::move(expr)};
       if (unrestricted.empty())
         return expr;

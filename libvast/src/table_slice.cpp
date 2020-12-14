@@ -601,7 +601,7 @@ struct row_evaluator {
         return false;
       }
       auto result = false;
-      auto neg = negated(op_);
+      auto neg = is_negated(op_);
       // auto abs_op = neg ? negate(op_) : op_;
       for (auto& field : record_type::each{layout}) {
         auto fqn = layout.name() + "." + field.key();

@@ -143,8 +143,8 @@ fetch_indexer(const PartitionState& state, const attribute_extractor& ex,
                                "comparisons");
       return {};
     }
-    auto neg = negated(op);
-    for (auto& field : record_type::each{state.combined_layout}) {
+    auto neg = is_negated(op);
+    for (const auto& field : record_type::each{state.combined_layout}) {
       // As long as the combined layout is flattened, this must rely on
       // a heuristic. We use the substring after the last dot for the
       // field name.
@@ -152,7 +152,7 @@ fetch_indexer(const PartitionState& state, const attribute_extractor& ex,
       auto fqn = field.key();
       if (detail::ends_with(fqn, *s)) {
         // Get ids.
-        for (auto& [layout_name, ids] : state.type_ids)
+        for (const auto& [layout_name, ids] : state.type_ids)
           if (detail::starts_with(field.key(), layout_name))
             row_ids |= ids;
       }
