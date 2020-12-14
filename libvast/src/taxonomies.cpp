@@ -252,7 +252,7 @@ resolve_impl(const taxonomies& ts, const expression& e,
           load_definition(ref->second);
       // Transform the target_fields into new predicates.
       disjunction d;
-      auto make_pred = make_predicate(data);
+      auto make_pred = make_predicate(op, data);
       for (auto& x : target_fields) {
         if (!prune || contains(seen, x, op, data))
           d.emplace_back(make_pred(std::move(x)));
@@ -298,6 +298,7 @@ resolve_impl(const taxonomies& ts, const expression& e,
           levels.emplace(child_def.begin(), child_def.end());
         }
       };
+      // We move the cursor to the leftmost leaf in the tree.
       descend();
       auto next = [&] {
         // Update the levels stack; explicit scope for clarity.
@@ -311,15 +312,17 @@ resolve_impl(const taxonomies& ts, const expression& e,
       };
       conjunction restricted;
       conjunction unrestricted;
+      auto abs_op = negated(op) ? negate(op) : op;
       auto insert_meta_field_predicate = [&] {
-        auto make_meta_field_predicate = [&](const vast::data&) {
-          return [&](std::string item) {
-            return predicate{attribute_extractor{atom::field_v}, equal,
-                             vast::data{item}};
-          };
-        };
+        auto make_meta_field_predicate
+          = [&](relational_operator op, const vast::data&) {
+              return [&, op](std::string item) {
+                return predicate{attribute_extractor{atom::field_v}, op,
+                                 vast::data{item}};
+              };
+            };
         unrestricted.emplace_back(resolve_concepts(
-          *levels.top().first, op, caf::none, make_meta_field_predicate));
+          *levels.top().first, equal, caf::none, make_meta_field_predicate));
       };
       auto named = !r->begin()->first.empty();
       if (named) {
@@ -333,8 +336,9 @@ resolve_impl(const taxonomies& ts, const expression& e,
           if (concept_field == r->end())
             insert_meta_field_predicate();
           else
-            restricted.emplace_back(resolve_concepts(
-              *levels.top().first, op, concept_field->second, make_predicate));
+            restricted.emplace_back(
+              resolve_concepts(*levels.top().first, abs_op,
+                               concept_field->second, make_predicate));
         }
       } else {
         auto value_iterator = r->begin();
@@ -352,8 +356,9 @@ resolve_impl(const taxonomies& ts, const expression& e,
           if (caf::holds_alternative<caf::none_t>(value_iterator->second))
             insert_meta_field_predicate();
           else
-            restricted.emplace_back(resolve_concepts(
-              *levels.top().first, op, value_iterator->second, make_predicate));
+            restricted.emplace_back(
+              resolve_concepts(*levels.top().first, abs_op,
+                               value_iterator->second, make_predicate));
         }
         if (value_iterator != r->end()) {
           // The provided record is longer than the matched concept.
@@ -369,9 +374,10 @@ resolve_impl(const taxonomies& ts, const expression& e,
         }
       }
       expression expr;
-      if (restricted.empty())
-        return unrestricted;
       switch (restricted.size()) {
+        case 0: {
+          return unrestricted;
+        }
         case 1: {
           expr = restricted[0];
           break;
@@ -388,13 +394,13 @@ resolve_impl(const taxonomies& ts, const expression& e,
       unrestricted.push_back(expr);
       return unrestricted;
     };
-    auto abs_op = negated(pred.op) ? negate(pred.op) : pred.op;
     if (auto data = caf::get_if<vast::data>(&pred.rhs)) {
       if (auto fe = caf::get_if<field_extractor>(&pred.lhs)) {
         return resolve_models(
-          fe->field, pred.op, *data, [&](const vast::data& o) {
-            return [&](const std::string& item) {
-              return predicate{field_extractor{item}, abs_op, o};
+          fe->field, pred.op, *data,
+          [&](relational_operator op, const vast::data& o) {
+            return [&, op](const std::string& item) {
+              return predicate{field_extractor{item}, op, o};
             };
           });
       }
@@ -402,9 +408,10 @@ resolve_impl(const taxonomies& ts, const expression& e,
     if (auto data = caf::get_if<vast::data>(&pred.lhs)) {
       if (auto fe = caf::get_if<field_extractor>(&pred.rhs)) {
         return resolve_models(
-          fe->field, flip(pred.op), *data, [&](const vast::data& o) {
-            return [&](const std::string& item) {
-              return predicate{o, abs_op, field_extractor{item}};
+          fe->field, pred.op, *data,
+          [&](relational_operator op, const vast::data& o) {
+            return [&, op](const std::string& item) {
+              return predicate{o, op, field_extractor{item}};
             };
           });
       }
