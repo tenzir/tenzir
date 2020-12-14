@@ -157,3 +157,4 @@
       - zeek.http.domain
       - zeek.dhcp.domain
       - zeek.ntlm.domainname
+      - zeek.ssl.server_name
