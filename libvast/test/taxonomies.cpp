@@ -101,15 +101,23 @@ TEST(models - simple) {
   {
     MESSAGE("named - subset");
     auto exp = unbox(to<expression>("x == <bar: 2>"));
-    auto ref = unbox(to<expression>("a.bar == 2 || b.baR == 2"));
+    // clang-format off
+    auto ref = unbox(to<expression>(
+          "(#field == \"a.fo0\" || #field == \"b.foO\" || #field == \"c.foe\")"
+          " && (a.bar == 2 || b.baR == 2)"));
+    // clang-format on
     auto result = resolve(t, exp);
     CHECK_EQUAL(result, ref);
   }
   {
     MESSAGE("model composition - unnamed fields query");
     auto exp = unbox(to<expression>("y == <bar: 2, baz: F>"));
-    auto ref = unbox(to<expression>("(a.bar == 2 || b.baR == 2) && (a.BAZ == F "
-                                    "|| c.baz == F)"));
+    // clang-format off
+    auto ref = unbox(to<expression>(
+          "(#field == \"a.fo0\" || #field == \"b.foO\" || #field == \"c.foe\")"
+          " && (    (a.bar == 2 || b.baR == 2)"
+               " && (a.BAZ == F || c.baz == F))"));
+    // clang-format on
     auto result = resolve(t, exp);
     CHECK_EQUAL(result, ref);
   }
@@ -125,8 +133,12 @@ TEST(models - simple) {
   {
     MESSAGE("model composition - named fields query");
     auto exp = unbox(to<expression>("y == <_, 2, F>"));
-    auto ref = unbox(to<expression>("(a.bar == 2 || b.baR == 2) && (a.BAZ == F "
-                                    "|| c.baz == F)"));
+    // clang-format off
+    auto ref = unbox(to<expression>(
+          "(#field == \"a.fo0\" || #field == \"b.foO\" || #field == \"c.foe\")"
+          " && (   (a.bar == 2 || b.baR == 2)"
+              " && (a.BAZ == F || c.baz == F))"));
+    // clang-format on
     auto result = resolve(t, exp);
     CHECK_EQUAL(result, ref);
   }
@@ -134,8 +146,12 @@ TEST(models - simple) {
     MESSAGE("model composition - multiple nested models");
     auto named = unbox(to<expression>("z == <bar: 2, baz: F>"));
     auto unnamed = unbox(to<expression>("z == <_, 2, F>"));
-    auto ref = unbox(to<expression>("(a.bar == 2 || b.baR == 2) && (a.BAZ == F "
-                                    "|| c.baz == F)"));
+    // clang-format off
+    auto ref = unbox(to<expression>(
+          "(#field == \"a.fo0\" || #field == \"b.foO\" || #field == \"c.foe\")"
+          " && (   (a.bar == 2 || b.baR == 2)"
+              " && (a.BAZ == F || c.baz == F))"));
+    // clang-format on
     CHECK_EQUAL(resolve(t, named), ref);
     CHECK_EQUAL(resolve(t, unnamed), ref);
   }
