@@ -183,64 +183,78 @@ void collect_component_status(node_actor* self,
 
 caf::message dump_command(const invocation& inv, caf::actor_system&) {
   auto as_yaml = caf::get_or(inv.options, "vast.dump.yaml", false);
-  if (inv.full_name == "dump concepts") {
-    auto self = this_node;
-    auto type_registry = caf::actor_cast<type_registry_actor>(
-      self->state.registry.find_by_label("type-registry"));
-    if (!type_registry)
-      return caf::make_message(make_error(ec::missing_component, //
-                                          "type-registry"));
-    caf::error request_error = caf::none;
-    auto rp = self->make_response_promise();
-    // The overload for 'request(...)' taking a 'std::chrono::duration' does not
-    // respect the specified message priority, so we convert to 'caf::duration'
-    // by hand.
-    const auto timeout
-      = caf::duration{defaults::system::initial_request_timeout};
-    self
-      ->request<message_priority::high>(type_registry, timeout, atom::get_v,
-                                        atom::taxonomies_v)
-      .then(
-        [=](struct taxonomies taxonomies) mutable {
-          auto result = list{};
-          result.reserve(taxonomies.concepts.size());
-          for (auto& [name, definition] : taxonomies.concepts) {
+  auto self = this_node;
+  auto type_registry = caf::actor_cast<type_registry_actor>(
+    self->state.registry.find_by_label("type-registry"));
+  if (!type_registry)
+    return caf::make_message(make_error(ec::missing_component, //
+                                        "type-registry"));
+  caf::error request_error = caf::none;
+  auto rp = self->make_response_promise();
+  // The overload for 'request(...)' taking a 'std::chrono::duration' does not
+  // respect the specified message priority, so we convert to 'caf::duration'
+  // by hand.
+  const auto timeout = caf::duration{defaults::system::initial_request_timeout};
+  self
+    ->request<message_priority::high>(type_registry, timeout, atom::get_v,
+                                      atom::taxonomies_v)
+    .then(
+      [=](struct taxonomies taxonomies) mutable {
+        auto result = list{};
+        result.reserve(taxonomies.concepts.size());
+        if (inv.full_name == "dump" || inv.full_name == "dump concepts") {
+          for (auto& [name, concept] : taxonomies.concepts) {
             auto fields = list{};
-            fields.reserve(definition.fields.size());
-            for (auto& field : definition.fields)
+            fields.reserve(concept.fields.size());
+            for (auto& field : concept.fields)
               fields.push_back(std::move(field));
             auto concepts = list{};
-            concepts.reserve(definition.concepts.size());
-            for (auto& concept : definition.concepts)
+            concepts.reserve(concept.concepts.size());
+            for (auto& concept : concept.concepts)
               concepts.push_back(std::move(concept));
-            auto concept = record{
+            auto entry = record{
               {"concept",
                record{
                  {"name", std::move(name)},
-                 {"description", std::move(definition.description)},
+                 {"description", std::move(concept.description)},
                  {"fields", std::move(fields)},
                  {"concepts", std::move(concepts)},
                }},
             };
-            result.push_back(std::move(concept));
+            result.push_back(std::move(entry));
           }
-          if (as_yaml) {
-            if (auto yaml = to_yaml(data{std::move(result)}))
-              rp.deliver(to_string(std::move(*yaml)));
-            else
-              request_error = std::move(yaml.error());
-          } else {
-            auto json = to_json(data{std::move(result)});
-            rp.deliver(to_string(std::move(json)));
+        }
+        if (inv.full_name == "dump" || inv.full_name == "dump models") {
+          for (auto& [name, model] : taxonomies.models) {
+            auto definition = list{};
+            definition.reserve(model.definition.size());
+            for (auto& definition_entry : model.definition)
+              definition.push_back(std::move(definition_entry));
+            auto entry = record{
+              {"model",
+               record{
+                 {"name", std::move(name)},
+                 {"description", std::move(model.description)},
+                 {"definition", std::move(definition)},
+               }},
+            };
+            result.push_back(std::move(entry));
           }
-        },
-        [=](caf::error& err) mutable { request_error = std::move(err); });
-    if (request_error)
-      return caf::make_message(std::move(request_error));
-    return caf::none;
-  } else {
-    return caf::make_message(make_error(ec::invalid_subcommand, inv.full_name));
-  }
+        }
+        if (as_yaml) {
+          if (auto yaml = to_yaml(data{std::move(result)}))
+            rp.deliver(to_string(std::move(*yaml)));
+          else
+            request_error = std::move(yaml.error());
+        } else {
+          auto json = to_json(data{std::move(result)});
+          rp.deliver(to_string(std::move(json)));
+        }
+      },
+      [=](caf::error& err) mutable { request_error = std::move(err); });
+  if (request_error)
+    return caf::make_message(std::move(request_error));
+  return caf::none;
 }
 
 caf::message status_command(const invocation& inv, caf::actor_system&) {
@@ -366,7 +380,9 @@ auto make_command_factory() {
   // When updating this list, remember to update its counterpart in
   // application.cpp as well iff necessary
   return command::factory{
+    {"dump", dump_command},
     {"dump concepts", dump_command},
+    {"dump models", dump_command},
     {"kill", kill_command},
     {"send", send_command},
     {"spawn accountant", node_state::spawn_command},

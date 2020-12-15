@@ -134,6 +134,9 @@ auto make_dump_command() {
   dump->add_subcommand("concepts", "print all registered concept definitions",
                        documentation::vast_dump_concepts,
                        opts("?vast.dump.concepts"));
+  dump->add_subcommand("models", "print all registered model definitions",
+                       documentation::vast_dump_concepts,
+                       opts("?vast.dump.concepts"));
   return dump;
 }
 
@@ -437,7 +440,9 @@ auto make_command_factory() {
   // clang-format off
   return command::factory{
     {"count", count_command},
+    {"dump", remote_command},
     {"dump concepts", remote_command},
+    {"dump models", remote_command},
     {"explore", explore_command},
     {"export ascii", make_writer_command("ascii")},
     {"export csv", make_writer_command("csv")},
