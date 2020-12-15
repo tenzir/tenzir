@@ -564,7 +564,9 @@ def run(args, test_dec):
     explicit_tests = {}
     if args.test:
         # Create a subset with only the submitted tests present as keys
-        explicit_tests = {k: tests[k] for k in tests.keys() & args.test}
+        lower = {t.lower() for t in args.test}
+        exists = lambda x: any(re.search(k, x.lower()) for k in lower)
+        explicit_tests = {k: tests[k] for k in tests.keys() if exists(k)}
     if not args.test or args.tag:
         selected_tests = tagselect(args.tag, tests)
     tests = dict(selected_tests, **explicit_tests)
