@@ -385,7 +385,7 @@ behavior exporter(stateful_actor<exporter_state>* self, expression expr,
           self->send(x, atom::exporter_v, self);
     },
     [=](atom::run) {
-      VAST_INFO(self, "executes query:", to_string(self->state.expr));
+      VAST_VERBOSE(self, "executes query:", to_string(self->state.expr));
       self->state.start = system_clock::now();
       if (!has_historical_option(self->state.options))
         return;
@@ -399,8 +399,8 @@ behavior exporter(stateful_actor<exporter_state>* self, expression expr,
                   self->state.expr)
         .then(
           [=](const uuid& lookup, uint32_t partitions, uint32_t scheduled) {
-            VAST_DEBUG(self, "got lookup handle", lookup, ", scheduled",
-                       scheduled, '/', partitions, "partitions");
+            VAST_VERBOSE(self, "got lookup handle", lookup, ", scheduled",
+                         scheduled, '/', partitions, "partitions");
             self->state.id = lookup;
             if (partitions > 0) {
               self->state.query.expected = partitions;
