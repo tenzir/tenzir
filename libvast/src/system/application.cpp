@@ -135,8 +135,8 @@ auto make_dump_command() {
                        documentation::vast_dump_concepts,
                        opts("?vast.dump.concepts"));
   dump->add_subcommand("models", "print all registered model definitions",
-                       documentation::vast_dump_concepts,
-                       opts("?vast.dump.concepts"));
+                       documentation::vast_dump_models,
+                       opts("?vast.dump.models"));
   return dump;
 }
 
