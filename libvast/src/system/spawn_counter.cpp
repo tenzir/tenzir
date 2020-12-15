@@ -13,6 +13,8 @@
 
 #include "vast/system/spawn_counter.hpp"
 
+#include "vast/concept/printable/to_string.hpp"
+#include "vast/concept/printable/vast/expression.hpp"
 #include "vast/defaults.hpp"
 #include "vast/error.hpp"
 #include "vast/logger.hpp"
@@ -47,7 +49,7 @@ spawn_counter(system::node_actor* self, system::spawn_arguments& args) {
   auto estimate = caf::get_or(args.inv.options, "vast.count.estimate", false);
   auto handle = self->spawn(counter, *expr, caf::actor_cast<index_actor>(index),
                             caf::actor_cast<archive_actor>(archive), estimate);
-  VAST_VERBOSE(self, "spawned a counter for", *expr);
+  VAST_VERBOSE(self, "spawned a counter for", to_string(*expr));
   return handle;
 }
 

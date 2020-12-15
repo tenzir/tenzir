@@ -456,7 +456,7 @@ node_state::spawn_command(const invocation& inv,
     return caf::make_message(*component);
   };
   auto handle_taxonomies = [=](expression e) mutable {
-    VAST_DEBUG(self, "received the substituted expression", e);
+    VAST_DEBUG(self, "received the substituted expression", to_string(e));
     spawn_arguments args{spawn_inv, self->state.dir, label, std::move(e)};
     spawn_actually(args);
   };

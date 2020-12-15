@@ -354,6 +354,7 @@ CAF_BEGIN_TYPE_ID_BLOCK(vast, caf::first_custom_type_id)
 
   // -- attribute atoms --------------------------------------------------------
 
+  VAST_ADD_ATOM(field, "field")
   VAST_ADD_ATOM(timestamp, "timestamp")
   VAST_ADD_ATOM(type, "type")
 

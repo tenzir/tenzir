@@ -131,6 +131,8 @@ type_set type_registry_state::types() const {
   for ([[maybe_unused]] auto& [k, v] : data)
     for (auto& x : v)
       result.insert(x);
+  for (auto& x : configuration_schema)
+    result.insert(x);
   return result;
 }
 
@@ -153,8 +155,9 @@ type_registry(type_registry_actor::stateful_pointer<type_registry_state> self,
   if (auto err = self->state.load_from_disk())
     self->quit(std::move(err));
   // Load loaded schema types from the singleton.
+  // TODO: Move to the load handler and re-parse the files.
   if (auto schema = vast::event_types::get())
-    self->send(self, atom::put_v, *schema);
+    self->state.configuration_schema = *schema;
   // The behavior of the type-registry.
   return {
     [=](atom::telemetry) {
