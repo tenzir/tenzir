@@ -324,6 +324,7 @@ tests:
   Taxonomy dump:
     tags: [concepts, models]
     steps:
+      - command: -N dump concepts
       - command: -N dump --yaml models
 
   Pivot:
