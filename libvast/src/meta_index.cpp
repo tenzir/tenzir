@@ -228,15 +228,14 @@ std::vector<uuid> meta_index::lookup(const expression& expr) const {
               VAST_WARNING_ANON("#field meta queries only support string "
                                 "comparisons");
             } else {
-              for (auto& [part_id, part_syn] : synopses_) {
+              for (const auto& synopsis : synopses_) {
                 // Compare the desired field name with each field in the
                 // partition.
                 auto matching = [&] {
-                  for (auto& pair : part_syn.field_synopses_) {
+                  for (const auto& pair : synopsis.second.field_synopses_) {
                     auto fqn = pair.first.fqn();
-                    if (detail::ends_with(fqn, *s)) {
+                    if (detail::ends_with(fqn, *s))
                       return true;
-                    }
                   }
                   return false;
                 }();
@@ -244,7 +243,7 @@ std::vector<uuid> meta_index::lookup(const expression& expr) const {
                 // operator is "positive" and matching is true, or both are
                 // negative.
                 if (!is_negated(x.op) == matching)
-                  result.push_back(part_id);
+                  result.push_back(synopsis.first);
               }
             }
             // Re-establish potentially violated invariant.
