@@ -253,6 +253,7 @@ if (VAST_USE_OPENSSL)
 endif ()
 
 target_link_libraries(libvast PRIVATE yaml-cpp)
+target_link_libraries(libvast PRIVATE simdjson::simdjson)
 
 target_link_libraries(libvast PUBLIC ${flatbuffers_target})
 add_dependencies(libvast libvast_flatbuffers)

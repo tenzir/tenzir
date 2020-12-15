@@ -516,6 +516,15 @@ find_package(yaml-cpp 0.6.2 REQUIRED HINTS ${YAML_CPP_ROOT})
 get_filename_component(yaml_cpp_dir "${YAML_CPP_INCLUDE_DIR}" ABSOLUTE)
 get_filename_component(yaml_cpp_dir "${yaml_cpp_dir}" DIRECTORY)
 
+find_package(simdjson REQUIRED HINTS ${SIMDJSON_ROOT})
+if (NOT SIMDJSON_INCLUDE_DIR)
+  get_target_property(SIMDJSON_INCLUDE_DIR
+                      simdjson::simdjson-headers
+                      INTERFACE_INCLUDE_DIRECTORIES)
+endif ()
+get_filename_component(simdjson_dir "${SIMDJSON_INCLUDE_DIR}" ABSOLUTE)
+get_filename_component(simdjson_dir "${simdjson_dir}" DIRECTORY)
+
 if (NOT VAST_USE_BUNDLED_CAF)
   # Try to find the required CAF components first...
   find_package(
@@ -891,6 +900,7 @@ display(VAST_HAVE_BROKER "${broker_dir}" broker_summary)
 display(Arrow_FOUND "${arrow_dir}" arrow_summary)
 display(PCAP_FOUND "${PCAP_INCLUDE_DIR}" pcap_summary)
 display(YAML_CPP_INCLUDE_DIR "${yaml_cpp_dir}" yaml_cpp_summary)
+display(SIMDJSON_INCLUDE_DIR "${simdjson_dir}" simdjson_summary)
 display(DOXYGEN_FOUND yes doxygen_summary)
 display(PANDOC_FOUND yes pandoc_summary)
 display(VAST_USE_JEMALLOC "${jemalloc_INCLUDE_DIR}" jemalloc_summary)
@@ -928,6 +938,7 @@ set(summary
     "\n"
     "\nFlatBuffers:         ${flatbuffers_dir}"
     "\nyaml-cpp:            ${yaml_cpp_summary}"
+    "\nsimdjson:            ${simdjson_summary}"
     "\nCAF:                 ${caf_summary}"
     "\nArrow:               ${arrow_summary}"
     "\nBroker:              ${broker_summary}"
