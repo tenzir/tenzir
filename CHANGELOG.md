@@ -12,6 +12,10 @@ Every entry has a category for which we use the following visual abbreviations:
 
 ## Unreleased
 
+- 🐞 The summary log message of `vast export` now contains the correct number
+  of candidate events.
+  [#1228](https://github.com/tenzir/vast/pull/1228)
+
 - 🧬 The expression language gained support for the `#field` meta extractor.
   It is the complement for `#type` and uses suffix matching for field names
   at the layout level.
