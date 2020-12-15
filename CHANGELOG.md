@@ -12,6 +12,10 @@ Every entry has a category for which we use the following visual abbreviations:
 
 ## Unreleased
 
+- 🐞 Concepts that reference other concepts are now loaded correctly from their
+  definition.
+  [#1236](https://github.com/tenzir/vast/pull/1236)
+
 - 🐞 The `vast status` command does not collect status information from sources
   and sinks any longer. They were often too busy to respond, leading to a long
   delay before the command completed.

@@ -212,7 +212,7 @@ caf::message dump_command(const invocation& inv, caf::actor_system&) {
             auto concepts = list{};
             concepts.reserve(definition.concepts.size());
             for (auto& concept : definition.concepts)
-              fields.push_back(std::move(concept));
+              concepts.push_back(std::move(concept));
             auto concept = record{
               {"concept",
                record{
