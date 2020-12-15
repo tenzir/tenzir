@@ -54,18 +54,6 @@ struct importer_state {
     id end;
   };
 
-  /// Type of incoming stream elements.
-  using input_type = table_slice;
-
-  /// Type of outgoing stream elements.
-  using output_type = table_slice;
-
-  /// Stream object for managing downstream actors.
-  using downstream_manager = caf::broadcast_downstream_manager<output_type>;
-
-  /// Base type for stream drivers implementing the importer.
-  using driver_base = caf::stream_stage_driver<input_type, downstream_manager>;
-
   importer_state(caf::event_based_actor* self_ptr);
 
   ~importer_state();
@@ -98,10 +86,16 @@ struct importer_state {
   path dir;
 
   /// The continous stage that moves data from all sources to all subscribers.
-  caf::stream_stage_ptr<input_type, downstream_manager> stg;
+  caf::stream_stage_ptr<table_slice,
+                        caf::broadcast_downstream_manager<table_slice>>
+    stage;
 
   /// Pointer to the owning actor.
   caf::event_based_actor* self;
+
+  std::string inbound_description = "anonymous";
+
+  std::unordered_map<caf::inbound_path*, std::string> inbound_descriptions;
 
   measurement measurement_;
   stopwatch::time_point last_report;

@@ -38,6 +38,74 @@
 
 namespace vast::system {
 
+namespace {
+
+class driver : public caf::stream_stage_driver<
+                 table_slice, caf::broadcast_downstream_manager<table_slice>> {
+public:
+  driver(caf::broadcast_downstream_manager<table_slice>& out,
+         importer_state& state)
+    : stream_stage_driver(out), state{state} {
+    // nop
+  }
+
+  void process(caf::downstream<table_slice>& out,
+               std::vector<table_slice>& slices) override {
+    VAST_TRACE(VAST_ARG(slices));
+    uint64_t events = 0;
+    auto t = timer::start(state.measurement_);
+    for (auto&& slice : std::exchange(slices, {})) {
+      VAST_ASSERT(slice.rows() <= static_cast<size_t>(state.available_ids()));
+      auto rows = slice.rows();
+      events += rows;
+      slice.offset(state.next_id(rows));
+      out.push(std::move(slice));
+    }
+    t.stop(events);
+  }
+
+  void finalize(const error& err) override {
+    VAST_DEBUG(state.self, "stopped with message:", render(err));
+  }
+
+  importer_state& state;
+};
+
+class stream_stage : public caf::detail::stream_stage_impl<driver> {
+public:
+  /// Constructs the import stream stage.
+  /// @note This must explictly initialize the stream_manager because it does
+  /// not provide a default constructor, and for reason unbeknownst to me the
+  /// forwaring in the stream_stage_impl does not suffice.
+  stream_stage(importer_actor* self)
+    : stream_manager(self), stream_stage_impl(self, self->state) {
+    // nop
+  }
+
+  void register_input_path(caf::inbound_path* ptr) override {
+    driver_.state.inbound_descriptions[ptr]
+      = std::exchange(driver_.state.inbound_description, "anonymous");
+    VAST_INFO(driver_.state.self, "adds",
+              driver_.state.inbound_descriptions[ptr], "source");
+    super::register_input_path(ptr);
+  }
+
+  void deregister_input_path(caf::inbound_path* ptr) noexcept override {
+    VAST_INFO(driver_.state.self, "removes",
+              driver_.state.inbound_descriptions[ptr], "source");
+    driver_.state.inbound_descriptions.erase(ptr);
+    super::deregister_input_path(ptr);
+  }
+};
+
+caf::intrusive_ptr<stream_stage> make_importer_stage(importer_actor* self) {
+  auto result = caf::make_counted<stream_stage>(self);
+  result->continuous(true);
+  return result;
+}
+
+} // namespace
+
 importer_state::importer_state(caf::event_based_actor* self_ptr)
   : self(self_ptr) {
   // nop
@@ -166,31 +234,14 @@ caf::behavior importer(importer_actor* self, path dir, archive_actor archive,
     self->state.send_report();
     self->quit(msg.reason);
   });
-  self->state.stg = caf::attach_continuous_stream_stage(
-    self,
-    [](caf::unit_t&) {
-      // nop
-    },
-    [=](caf::unit_t&, caf::downstream<table_slice>& out, table_slice x) {
-      VAST_TRACE(VAST_ARG(x));
-      auto& st = self->state;
-      auto t = timer::start(st.measurement_);
-      VAST_ASSERT(x.rows() <= static_cast<size_t>(st.available_ids()));
-      auto events = x.rows();
-      x.offset(st.next_id(events));
-      out.push(std::move(x));
-      t.stop(events);
-    },
-    [=](caf::unit_t&, const error& err) {
-      VAST_DEBUG(self, "stopped with message:", err);
-    });
+  self->state.stage = make_importer_stage(self);
   if (type_registry)
-    self->state.stg->add_outbound_path(type_registry);
+    self->state.stage->add_outbound_path(type_registry);
   if (archive)
-    self->state.stg->add_outbound_path(archive);
+    self->state.stage->add_outbound_path(archive);
   if (index) {
     self->state.index = index;
-    self->state.stg->add_outbound_path(index);
+    self->state.stage->add_outbound_path(index);
   }
   return {
     [=](accountant_actor accountant) {
@@ -200,20 +251,24 @@ caf::behavior importer(importer_actor* self, path dir, archive_actor archive,
     },
     [=](atom::exporter, const caf::actor& exporter) {
       VAST_DEBUG(self, "registers exporter", exporter);
-      return self->state.stg->add_outbound_path(exporter);
+      return self->state.stage->add_outbound_path(exporter);
     },
-    [=](caf::stream<importer_state::input_type>& in) {
-      auto& st = self->state;
+    [=](caf::stream<table_slice> in) {
       VAST_DEBUG(self, "adds a new source:", self->current_sender());
-      st.stg->add_inbound_path(in);
+      self->state.stage->add_inbound_path(in);
+    },
+    [=](caf::stream<table_slice> in, std::string desc) {
+      VAST_DEBUG(self, "adds a new source:", self->current_sender());
+      self->state.inbound_description = std::move(desc);
+      self->state.stage->add_inbound_path(in);
     },
     [=](atom::add, const caf::actor& subscriber) {
       auto& st = self->state;
       VAST_DEBUG(self, "adds a new sink:", self->current_sender());
-      st.stg->add_outbound_path(subscriber);
+      st.stage->add_outbound_path(subscriber);
     },
     [=](atom::subscribe, atom::flush, wrapped_flush_listener listener) {
-      VAST_ASSERT(self->state.stg != nullptr);
+      VAST_ASSERT(self->state.stage != nullptr);
       self->send(index, atom::subscribe_v, atom::flush_v, std::move(listener));
     },
     [=](atom::status, status_verbosity v) { return self->state.status(v); },

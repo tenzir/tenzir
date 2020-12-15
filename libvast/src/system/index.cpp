@@ -529,10 +529,6 @@ index(index_actor::stateful_pointer<index_state> self,
       } else {
         VAST_ASSERT(active.capacity >= x.rows());
         active.capacity -= x.rows();
-        VAST_DEBUG(self, "reduces active partition capacity to",
-                   (std::to_string(active.capacity) + '/'
-                    + std::to_string(self->state.partition_capacity)),
-                   "rows");
       }
     },
     [=](caf::unit_t&, const caf::error& err) {
