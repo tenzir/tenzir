@@ -435,8 +435,8 @@ void index_state::flush_to_disk() {
 index_actor::behavior_type
 index(index_actor::stateful_pointer<index_state> self,
       filesystem_actor filesystem, path dir, size_t partition_capacity,
-      size_t max_inmem_partitions, size_t taste_partitions,
-      size_t num_workers, double meta_index_fprate) {
+      size_t max_inmem_partitions, size_t taste_partitions, size_t num_workers,
+      double meta_index_fprate) {
   VAST_TRACE(VAST_ARG(filesystem), VAST_ARG(dir), VAST_ARG(partition_capacity),
              VAST_ARG(max_inmem_partitions), VAST_ARG(taste_partitions),
              VAST_ARG(num_workers));

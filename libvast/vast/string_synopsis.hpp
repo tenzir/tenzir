@@ -13,9 +13,10 @@
 
 #pragma once
 
+#include "vast/fwd.hpp"
+
 #include "vast/bloom_filter_parameters.hpp"
 #include "vast/bloom_filter_synopsis.hpp"
-#include "vast/fwd.hpp"
 
 #include <caf/config_value.hpp>
 #include <caf/settings.hpp>
