@@ -1,3 +1,5 @@
+find_package(Doxygen QUIET)
+
 # API documentation
 if (DOXYGEN_FOUND)
   set(doxyfile ${CMAKE_CURRENT_BINARY_DIR}/Doxyfile)

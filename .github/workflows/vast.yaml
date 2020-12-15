@@ -98,7 +98,7 @@ jobs:
         if: matrix.os.tag == 'Ubuntu'
         run: |
           sudo apt-get -qq update
-          sudo apt-get -qqy install ninja-build libpcap-dev libssl-dev lsb-release ccache libflatbuffers-dev libyaml-cpp-dev
+          sudo apt-get -qqy install ninja-build libpcap-dev libssl-dev lsb-release ccache libflatbuffers-dev libyaml-cpp-dev libxxhash-dev
           # Install Apache Arrow (c.f. https://arrow.apache.org/install/)
           # TODO: Revert the commit that introduced this version pinning once ch20162
           # is done and we can use latest upstream again.
@@ -116,7 +116,7 @@ jobs:
           HOMEBREW_NO_AUTO_UPDATE: 1
         run: |
           brew --version
-          brew install libpcap tcpdump rsync pandoc apache-arrow pkg-config ninja ccache gnu-sed flatbuffers yaml-cpp
+          brew install libpcap tcpdump rsync pandoc apache-arrow pkg-config ninja ccache gnu-sed flatbuffers yaml-cpp xxhash
 
       - name: Configure Environment
         id: configure_env
@@ -196,6 +196,11 @@ jobs:
             --prefix="${PWD}/opt/vast" \
             --build-dir="$BUILD_DIR" \
             --package-name="$PACKAGE_NAME" \
+            --with-lsvast \
+            --with-dscat \
+            --with-zeek-to-vast \
+            --with-bundled-caf \
+            --with-bundled-broker \
             ${{ matrix.os.extra-flags }} \
             ${{ github.event.action == 'published' && matrix.configure.flags || matrix.configure.ci-flags }}
 

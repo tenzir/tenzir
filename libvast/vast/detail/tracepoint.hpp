@@ -28,8 +28,8 @@
 // Notable changes from the upstream version:
 //  * Add a written overview to the top of the file.
 //  * Add `VAST_TRACEPOINT()` convenience macro.
-//  * Use `VAST_DISABLE_SDT` macro instead of `FOLLY_DISABLE_SDT` to disable
-//    this feature.
+//  * Use `VAST_ENABLE_SDT` macro instead of `FOLLY_DISABLE_SDT` to enable or
+//    disable this feature.
 //  * Add pragmas to ignore warnings for GNU extensions when using clang.
 
 #pragma once
@@ -240,7 +240,7 @@
 
 
 #if defined(__ELF__) && (defined(__x86_64__) || defined(__i386__)) && \
-    !VAST_DISABLE_SDT
+    VAST_ENABLE_SDT
 
 /// Defines a USDT trace point for provider 'vast' with given parameters.
 /// @param name The name of the trace point. Different tracing tools use

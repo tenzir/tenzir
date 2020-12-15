@@ -11,29 +11,31 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#include "vast/format/pcap.hpp"
+#if VAST_HAVE_PCAP
 
-#include "vast/byte.hpp"
-#include "vast/community_id.hpp"
-#include "vast/defaults.hpp"
-#include "vast/detail/assert.hpp"
-#include "vast/detail/byte_swap.hpp"
-#include "vast/error.hpp"
-#include "vast/ether_type.hpp"
-#include "vast/logger.hpp"
-#include "vast/path.hpp"
-#include "vast/span.hpp"
-#include "vast/table_slice.hpp"
-#include "vast/table_slice_builder.hpp"
+#  include "vast/format/pcap.hpp"
 
-#include <caf/config_value.hpp>
-#include <caf/settings.hpp>
+#  include "vast/byte.hpp"
+#  include "vast/community_id.hpp"
+#  include "vast/defaults.hpp"
+#  include "vast/detail/assert.hpp"
+#  include "vast/detail/byte_swap.hpp"
+#  include "vast/error.hpp"
+#  include "vast/ether_type.hpp"
+#  include "vast/logger.hpp"
+#  include "vast/path.hpp"
+#  include "vast/span.hpp"
+#  include "vast/table_slice.hpp"
+#  include "vast/table_slice_builder.hpp"
 
-#include <string>
-#include <thread>
-#include <utility>
+#  include <caf/config_value.hpp>
+#  include <caf/settings.hpp>
 
-#include <netinet/in.h>
+#  include <string>
+#  include <thread>
+#  include <utility>
+
+#  include <netinet/in.h>
 
 namespace vast {
 namespace format {
@@ -539,3 +541,5 @@ const char* writer::name() const {
 } // namespace pcap
 } // namespace format
 } // namespace vast
+
+#endif // VAST_HAVE_PCAP

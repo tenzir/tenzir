@@ -13,6 +13,7 @@
 , arrow-cpp
 , flatbuffers
 , libyamlcpp
+, xxHash
 , broker
 , jemalloc
 , libexecinfo
@@ -67,7 +68,7 @@ stdenv.mkDerivation rec {
 
   nativeBuildInputs = [ cmake cmake-format ];
   propagatedNativeBuildInputs = [ pkgconfig pandoc ];
-  buildInputs = [ libpcap jemalloc broker libyamlcpp ]
+  buildInputs = [ libpcap jemalloc broker libyamlcpp xxHash ]
     # Required for backtrace on musl libc.
     ++ lib.optional (isStatic && buildType == "CI") libexecinfo;
   propagatedBuildInputs = [ arrow-cpp caf flatbuffers ];
@@ -77,19 +78,19 @@ stdenv.mkDerivation rec {
     "-DCMAKE_INSTALL_SYSCONFDIR:PATH=/etc"
     "-DCMAKE_FIND_PACKAGE_PREFER_CONFIG=ON"
     "-DCAF_ROOT_DIR=${caf}"
-    "-DVAST_RELOCATABLE_INSTALL=${if isStatic then "ON" else "OFF"}"
+    "-DVAST_ENABLE_RELOCATABLE_INSTALLATIONS=${if isStatic then "ON" else "OFF"}"
     "-DVAST_VERSION_TAG=${version}"
-    "-DVAST_USE_JEMALLOC=ON"
+    "-DVAST_ENABLE_JEMALLOC=ON"
     "-DBROKER_ROOT_DIR=${broker}"
   ] ++ lib.optionals (buildType == "CI") [
     "-DVAST_ENABLE_ASSERTIONS=ON"
-    "-DENABLE_ADDRESS_SANITIZER=ON"
+    "-DVAST_ENABLE_ASAN=ON"
   ] ++ lib.optionals isStatic [
-    "-DVAST_STATIC_EXECUTABLE:BOOL=ON"
+    "-DVAST_ENABLE_STATIC_EXECUTABLE:BOOL=ON"
     "-DCMAKE_INTERPROCEDURAL_OPTIMIZATION:BOOL=ON"
     # Workaround for false positives in LTO mode.
     "-DCMAKE_CXX_FLAGS:STRING=-Wno-error=maybe-uninitialized"
-  ] ++ lib.optional disableTests "-DBUILD_UNIT_TESTS=OFF";
+  ] ++ lib.optional disableTests "-VAST_ENABLE_UNIT_TESTS=OFF";
 
   hardeningDisable = lib.optional isStatic "pic";
 

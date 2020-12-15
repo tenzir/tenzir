@@ -11,13 +11,15 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#define XXH_ACCEPT_NULL_INPUT_POINTER
-#define XXH_PRIVATE_API
-#define XXH_STATIC_LINKING_ONLY
-#include "xxhash/xxhash.h"
+#define XXH_ACCEPT_NULL_INPUT_POINTER 1
+#define XXH_PRIVATE_API 1
+#define XXH_STATIC_LINKING_ONLY 1
 
 #include "vast/concept/hashable/xxhash.hpp"
+
 #include "vast/detail/assert.hpp"
+
+#include <xxhash.h>
 
 namespace vast {
 

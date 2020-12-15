@@ -1,13 +1,5 @@
 #pragma once
 
-#cmakedefine01 VAST_ENABLE_ASSERTIONS
-#cmakedefine01 VAST_HAVE_PCAP
-#cmakedefine01 VAST_HAVE_ARROW
-#cmakedefine01 VAST_HAVE_BROCCOLI
-#cmakedefine01 VAST_USE_JEMALLOC
-#cmakedefine01 VAST_USE_OPENCL
-#cmakedefine01 VAST_USE_OPENSSL
-#cmakedefine01 VAST_RELOCATABLE_INSTALL
 #define VAST_VERSION "@VAST_VERSION_TAG@"
 #define VAST_SYSCONFDIR "@CMAKE_INSTALL_FULL_SYSCONFDIR@"
 #define VAST_DATADIR "@CMAKE_INSTALL_FULL_DATADIR@"
@@ -56,10 +48,6 @@
 #endif
 #ifdef CAF_POSIX
 #  define VAST_POSIX 1
-#endif
-
-#ifdef CAF_NO_EXCEPTIONS
-#define VAST_NO_EXCEPTIONS 1
 #endif
 
 // Convenience macros

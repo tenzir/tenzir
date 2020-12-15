@@ -1,11 +1,42 @@
-# ----------------------------------------------------------------------------
-# flattbuffers
-# ----------------------------------------------------------------------------
+# -- bundled dependencies ------------------------------------------------------
+
+# TODO: VAST bundles robin-map in its aux directory, because we need at least
+# 0.6.2, which is not widely available on package managers. We should
+# investigate switching to a different map, e.g., from folly or abseil.
+
+add_subdirectory(aux/robin-map)
+export(
+  EXPORT tsl-robin-mapTargets
+  FILE tsl-robin-mapTargets.cmake
+  NAMESPACE tsl::)
+install(
+  EXPORT tsl-robin-mapTargets
+  DESTINATION "${CMAKE_INSTALL_FULL_LIBDIR}/cmake/vast"
+  NAMESPACE tsl::)
+string(APPEND VAST_EXTRA_TARGETS_FILES
+       "\ninclude(\"\${CMAKE_CURRENT_LIST_DIR}/tsl-robin-mapTargets.cmake\")")
+
+# -- flattbuffers ---------------------------------------------------------------
+
+# TODO: Split into separate library that is linked against libvast publicly,
+# e.g., libvast-fbs, which itself links against flatbuffers publicly.
+
+find_package(Flatbuffers REQUIRED CONFIG)
+string(APPEND VAST_FIND_DEPENDENCY_LIST
+       "\nfind_package(Flatbuffers REQUIRED CONFIG)")
+if (TARGET flatbuffers::flatbuffers)
+  set(flatbuffers_target flatbuffers::flatbuffers)
+elseif (NOT VAST_ENABLE_STATIC_EXECUTABLE AND TARGET
+                                              flatbuffers::flatbuffers_shared)
+  set(flatbuffers_target flatbuffers::flatbuffers_shared)
+else ()
+  message(FATAL_ERROR "No suiteable imported target for Flatbuffers found")
+endif ()
 
 file(GLOB flatbuffers_schemas CONFIGURE_DEPENDS
-     ${CMAKE_CURRENT_SOURCE_DIR}/vast/fbs/*.fbs
-     ${CMAKE_CURRENT_SOURCE_DIR}/vast/fbs/legacy/*.fbs)
-set(flatbuffers_output_path ${CMAKE_CURRENT_BINARY_DIR}/vast/fbs)
+     "${CMAKE_CURRENT_SOURCE_DIR}/vast/fbs/*.fbs"
+     "${CMAKE_CURRENT_SOURCE_DIR}/vast/fbs/legacy/*.fbs")
+set(flatbuffers_output_path "${CMAKE_CURRENT_BINARY_DIR}/vast/fbs")
 
 add_custom_target(libvast_flatbuffers)
 
@@ -30,9 +61,8 @@ foreach (schema ${flatbuffers_schemas})
   # Compile and rename schema.
   add_custom_command(
     OUTPUT ${desired_file}
-    COMMAND
-      flatbuffers::flatc -b --cpp --scoped-enums --gen-name-strings
-      -o ${flatbuffers_output_path} ${schema}
+    COMMAND flatbuffers::flatc -b --cpp --scoped-enums --gen-name-strings -o
+            ${flatbuffers_output_path} ${schema}
     COMMAND ${CMAKE_COMMAND} -E rename ${output_file} ${desired_file}
     COMMAND ${CMAKE_COMMAND} -P ${rename_${basename}}
     DEPENDS ${schema}
@@ -41,423 +71,307 @@ foreach (schema ${flatbuffers_schemas})
   add_dependencies(libvast_flatbuffers flatbuffers_${basename})
 endforeach ()
 
-# ----------------------------------------------------------------------------
-# libvast
-# ----------------------------------------------------------------------------
+# -- arrow ---------------------------------------------------------------------
 
-configure_file(${CMAKE_CURRENT_SOURCE_DIR}/vast/config.hpp.in
-               ${CMAKE_CURRENT_BINARY_DIR}/vast/config.hpp)
-
-# Some CMake generators (e.g., XCode) require header files in addition to the
-# sources.
-file(GLOB_RECURSE libvast_headers "${CMAKE_CURRENT_SOURCE_DIR}/vast/*.hpp")
-
-set(libvast_sources
-    src/accountant/config.cpp
-    src/address.cpp
-    src/attribute.cpp
-    src/banner.cpp
-    src/base.cpp
-    src/bitmap.cpp
-    src/bloom_filter_parameters.cpp
-    src/bloom_filter_synopsis.cpp
-    src/bool_synopsis.cpp
-    src/chunk.cpp
-    src/command.cpp
-    src/concept/hashable/crc.cpp
-    src/concept/hashable/sha1.cpp
-    src/concept/hashable/xxhash.cpp
-    src/concept/parseable/vast/expression.cpp
-    src/data.cpp
-    src/db_version.cpp
-    src/defaults.cpp
-    src/detail/add_message_types.cpp
-    src/detail/base64.cpp
-    src/detail/fdinbuf.cpp
-    src/detail/fdistream.cpp
-    src/detail/fdostream.cpp
-    src/detail/fdoutbuf.cpp
-    src/detail/fill_status_map.cpp
-    src/detail/line_range.cpp
-    src/detail/make_io_stream.cpp
-    src/detail/pid_file.cpp
-    src/detail/posix.cpp
-    src/detail/process.cpp
-    src/detail/settings.cpp
-    src/detail/string.cpp
-    src/detail/system.cpp
-    src/detail/terminal.cpp
-    src/die.cpp
-    src/directory.cpp
-    src/error.cpp
-    src/ether_type.cpp
-    src/event_types.cpp
-    src/ewah_bitmap.cpp
-    src/expression.cpp
-    src/expression_visitors.cpp
-    src/fbs/utils.cpp
-    src/file.cpp
-    src/flow.cpp
-    src/format/ascii.cpp
-    src/format/csv.cpp
-    src/format/json.cpp
-    src/format/multi_layout_reader.cpp
-    src/format/null.cpp
-    src/format/ostream_writer.cpp
-    src/format/reader.cpp
-    src/format/single_layout_reader.cpp
-    src/format/syslog.cpp
-    src/format/test.cpp
-    src/format/writer.cpp
-    src/format/writer_factory.cpp
-    src/format/zeek.cpp
-    src/http.cpp
-    src/icmp.cpp
-    src/ids.cpp
-    src/index/address_index.cpp
-    src/index/enumeration_index.cpp
-    src/index/list_index.cpp
-    src/index/string_index.cpp
-    src/index/subnet_index.cpp
-    src/io/read.cpp
-    src/io/save.cpp
-    src/io/write.cpp
-    src/json.cpp
-    src/logger.cpp
-    src/meta_index.cpp
-    src/msgpack.cpp
-    src/msgpack_table_slice.cpp
-    src/msgpack_table_slice_builder.cpp
-    src/null_bitmap.cpp
-    src/operator.cpp
-    src/path.cpp
-    src/pattern.cpp
-    src/port.cpp
-    src/qualified_record_field.cpp
-    src/schema.cpp
-    src/segment.cpp
-    src/segment_builder.cpp
-    src/segment_store.cpp
-    src/store.cpp
-    src/subnet.cpp
-    src/synopsis.cpp
-    src/synopsis_factory.cpp
-    src/systemd.cpp
-    src/system/accountant.cpp
-    src/system/application.cpp
-    src/system/archive.cpp
-    src/system/configuration.cpp
-    src/system/connect_to_node.cpp
-    src/system/component_registry.cpp
-    src/system/count_command.cpp
-    src/system/counter.cpp
-    src/system/default_configuration.cpp
-    src/system/disk_monitor.cpp
-    src/system/eraser.cpp
-    src/system/evaluator.cpp
-    src/system/explore_command.cpp
-    src/system/explorer.cpp
-    src/system/exporter.cpp
-    src/system/get_command.cpp
-    src/system/importer.cpp
-    src/system/index.cpp
-    src/system/indexer.cpp
-    src/system/infer_command.cpp
-    src/system/make_sink.cpp
-    src/system/node.cpp
-    src/system/partition.cpp
-    src/system/pivot_command.cpp
-    src/system/pivoter.cpp
-    src/system/posix_filesystem.cpp
-    src/system/query_processor.cpp
-    src/system/query_supervisor.cpp
-    src/system/read_query.cpp
-    src/system/remote_command.cpp
-    src/system/shutdown.cpp
-    src/system/signal_monitor.cpp
-    src/system/sink.cpp
-    src/system/sink_command.cpp
-    src/system/spawn_archive.cpp
-    src/system/spawn_arguments.cpp
-    src/system/spawn_counter.cpp
-    src/system/spawn_disk_monitor.cpp
-    src/system/spawn_eraser.cpp
-    src/system/spawn_explorer.cpp
-    src/system/spawn_exporter.cpp
-    src/system/spawn_importer.cpp
-    src/system/spawn_index.cpp
-    src/system/spawn_node.cpp
-    src/system/spawn_or_connect_to_node.cpp
-    src/system/spawn_pivoter.cpp
-    src/system/spawn_sink.cpp
-    src/system/spawn_type_registry.cpp
-    src/system/start_command.cpp
-    src/system/stop_command.cpp
-    src/system/task.cpp
-    src/system/terminator.cpp
-    src/system/type_registry.cpp
-    src/system/version_command.cpp
-    src/system/writer_command.cpp
-    src/table_slice.cpp
-    src/table_slice_builder.cpp
-    src/table_slice_builder_factory.cpp
-    src/table_slice_column.cpp
-    src/table_slice_row.cpp
-    src/taxonomies.cpp
-    src/time.cpp
-    src/time_synopsis.cpp
-    src/type.cpp
-    src/uuid.cpp
-    src/value_index.cpp
-    src/value_index_factory.cpp
-    src/view.cpp
-    src/wah_bitmap.cpp)
-
-if (VAST_HAVE_ARROW)
-  set(libvast_sources ${libvast_sources} src/arrow_table_slice.cpp
-                      src/arrow_table_slice_builder.cpp src/format/arrow.cpp)
+cmake_dependent_option(VAST_ENABLE_ARROW "Build with Apache Arrow support" ON
+                       "NOT ${CMAKE_SYSTEM_NAME} STREQUAL \"FreeBSD\"" OFF)
+add_feature_info("VAST_ENABLE_ARROW" VAST_ENABLE_ARROW
+                 "build with Apache Arrow support.")
+if (VAST_ENABLE_ARROW)
+  if (NOT ARROW_ROOT_DIR AND VAST_PREFIX)
+    set(ARROW_ROOT_DIR ${VAST_PREFIX})
+  endif ()
+  if (ARROW_ROOT_DIR)
+    set(Arrow_ROOT ${ARROW_ROOT_DIR})
+  endif ()
+  find_package(Arrow 0.17 REQUIRED QUIET CONFIG)
+  string(APPEND VAST_FIND_DEPENDENCY_LIST
+         "\nfind_package(Arrow REQUIRED QUIET CONFIG)")
+  if (BUILD_SHARED_LIBS)
+    set(ARROW_LIBRARY arrow_shared)
+  else ()
+    set(ARROW_LIBRARY arrow_static)
+  endif ()
 endif ()
 
-if (PCAP_FOUND)
-  set(libvast_sources ${libvast_sources} src/system/pcap_writer_command.cpp
-                      src/format/pcap.cpp)
+# -- pcap ----------------------------------------------------------------------
+
+option(VAST_ENABLE_PCAP "Build with PCAP support" ON)
+add_feature_info("VAST_ENABLE_PCAP" VAST_ENABLE_PCAP "build with PCAP support.")
+if (VAST_ENABLE_PCAP)
+  if (NOT PCAP_ROOT_DIR AND VAST_PREFIX)
+    set(PCAP_ROOT_DIR ${VAST_PREFIX})
+  endif ()
+  find_package(PCAP REQUIRED QUIET)
+  provide_find_module(PCAP)
+  string(APPEND VAST_FIND_DEPENDENCY_LIST "\nfind_package(PCAP REQUIRED QUIET)")
 endif ()
 
-add_library(libvast ${libvast_sources} ${libvast_headers})
+# -- log level -----------------------------------------------------------------
+
+# Choose a deafult log level based on build type.
+if (CMAKE_BUILD_TYPE STREQUAL Release)
+  set(VAST_LOG_LEVEL_DEFAULT "DEBUG")
+elseif (CMAKE_BUILD_TYPE STREQUAL MinSizeRel)
+  set(VAST_LOG_LEVEL_DEFAULT "DEBUG")
+elseif (CMAKE_BUILD_TYPE STREQUAL RelWithDebInfo)
+  set(VAST_LOG_LEVEL_DEFAULT "DEBUG")
+else ()
+  set(VAST_LOG_LEVEL_DEFAULT "TRACE")
+endif ()
+
+# Make sure log level is defined and all-uppercase.
+set(VAST_LOG_LEVEL_DOC "maximum log level available at runtime")
+if (NOT VAST_LOG_LEVEL)
+  set(VAST_LOG_LEVEL
+      "${VAST_LOG_LEVEL_DEFAULT}"
+      CACHE STRING "${VAST_LOG_LEVEL_DOC}")
+elseif (NOT VAST_LOG_LEVEL STREQUAL "$CACHE{VAST_LOG_LEVEL}")
+  # Override cached variable when re-running CMake.
+  string(TOUPPER "${VAST_LOG_LEVEL}" VAST_LOG_LEVEL)
+  set(VAST_LOG_LEVEL
+      "${VAST_LOG_LEVEL}"
+      CACHE STRING "${VAST_LOG_LEVEL_DOC}" FORCE)
+endif ()
+
+set(VAST_CAF_LOG_LEVEL
+    "WARNING"
+    CACHE STRING ${VAST_LOG_LEVEL_DOC})
+
+# Raise an error for invalid log levels.
+set(validLogLevels
+    QUIET
+    ERROR
+    WARNING
+    INFO
+    VERBOSE
+    DEBUG
+    TRACE)
+list(FIND validLogLevels "${VAST_LOG_LEVEL}" logLevelIndex)
+if (logLevelIndex LESS 0)
+  message(FATAL_ERROR "Invalid log level: \"${VAST_LOG_LEVEL}\"")
+endif ()
+
+# -- caf -----------------------------------------------------------------------
+
+# TODO: Require CAF to be installed.
+
+option(VAST_ENABLE_BUNDLED_CAF "Always use the CAF submodule" OFF)
+add_feature_info("VAST_ENABLE_BUNDLED_CAF" VAST_ENABLE_BUNDLED_CAF
+                 "always use the CAF submodule.")
+if (NOT VAST_ENABLE_BUNDLED_CAF)
+  # Try to find the required CAF components first...
+  find_package(
+    CAF 0.17.6 EXACT
+    COMPONENTS core io test
+    QUIET)
+endif ()
+if (CAF_FOUND)
+  message(STATUS "Found CAF")
+  provide_find_module(CAF)
+  string(APPEND VAST_FIND_DEPENDENCY_LIST
+         "\nfind_package(CAF COMPONENTS core io test REQUIRED QUIET)")
+  set(CAF_FOUND_SAVE ${CAF_FOUND})
+  # ...and then optional components.
+  find_package(
+    CAF
+    COMPONENTS openssl
+    QUIET)
+  if (CAF_LIBRARY_OPENSSL)
+    message(STATUS "Found CAF's OpenSSL module, enabling OpenSSL support")
+    set(VAST_USE_OPENSSL true)
+    string(APPEND VAST_FIND_DEPENDENCY_LIST
+           "\nfind_package(CAF COMPONENTS openssl REQUIRED QUIET)")
+  endif ()
+  set(CAF_FOUND ${CAF_FOUND_SAVE})
+elseif (EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/aux/caf/CMakeLists.txt)
+  set(CAF_LOG_LEVEL ${VAST_CAF_LOG_LEVEL})
+  set(CAF_NO_AUTO_LIBCPP TRUE)
+  set(CAF_NO_OPENCL TRUE)
+  set(CAF_NO_EXAMPLES TRUE)
+  set(CAF_NO_UNIT_TESTS TRUE)
+  set(CAF_NO_PYTHON TRUE)
+  set(CAF_NO_TOOLS TRUE)
+  if (BUILD_SHARED_LIBS)
+    set(_linkage_suffix shared)
+  else ()
+    set(_linkage_suffix static)
+    set(CAF_BUILD_STATIC TRUE)
+    set(CAF_BUILD_STATIC_ONLY TRUE)
+  endif ()
+  add_subdirectory(aux/caf)
+  set_target_properties(libcaf_core_${_linkage_suffix} PROPERTIES EXPORT_NAME
+                                                                  core)
+  add_library(caf::core ALIAS libcaf_core_${_linkage_suffix})
+  set_target_properties(libcaf_io_${_linkage_suffix} PROPERTIES EXPORT_NAME io)
+  target_compile_options(
+    libcaf_io_${_linkage_suffix} PRIVATE -Wno-maybe-uninitialized
+                                         -Wno-unknown-warning-option)
+  find_package(Threads REQUIRED)
+  target_link_libraries(libcaf_io_${_linkage_suffix} Threads::Threads)
+  add_library(caf::io ALIAS libcaf_io_${_linkage_suffix})
+  install(
+    TARGETS libcaf_core_${_linkage_suffix} libcaf_io_${_linkage_suffix}
+    EXPORT CAFTargets
+    ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
+    LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
+    RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
+  if (TARGET libcaf_openssl_${_linkage_suffix})
+    target_include_directories(
+      libcaf_openssl_${_linkage_suffix}
+      PUBLIC
+        $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/aux/caf/libcaf_openssl>
+        $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>)
+    set_target_properties(libcaf_openssl_${_linkage_suffix}
+                          PROPERTIES EXPORT_NAME openssl)
+    add_library(caf::openssl ALIAS libcaf_openssl_${_linkage_suffix})
+    install(
+      TARGETS libcaf_openssl_${_linkage_suffix}
+      EXPORT CAFTargets
+      ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
+      LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
+      RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
+    set(VAST_USE_OPENSSL true)
+  endif ()
+  add_library(libcaf_test INTERFACE)
+  target_link_libraries(libcaf_test INTERFACE caf::core)
+  target_include_directories(
+    libcaf_test
+    INTERFACE
+      "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/aux/caf/libcaf_test>"
+      "$<INSTALL_INTERFACE:${CMAKE_INSTALL_FULL_INCLUDEDIR}>")
+  set_target_properties(libcaf_test PROPERTIES EXPORT_NAME test)
+  add_library(caf::test ALIAS libcaf_test)
+  install(
+    TARGETS libcaf_test
+    EXPORT CAFTargets
+    ARCHIVE DESTINATION ${CMAKE_INSTALL_FULL_LIBDIR}
+    LIBRARY DESTINATION ${CMAKE_INSTALL_FULL_LIBDIR}
+    RUNTIME DESTINATION ${CMAKE_INSTALL_FULL_BINDIR})
+  set(caf_dir ${CMAKE_CURRENT_SOURCE_DIR}/aux/caf)
+  export(
+    EXPORT CAFTargets
+    FILE CAFTargets.cmake
+    NAMESPACE caf::)
+  install(
+    EXPORT CAFTargets
+    DESTINATION "${CMAKE_INSTALL_FULL_LIBDIR}/cmake/vast"
+    NAMESPACE caf::)
+  string(APPEND VAST_EXTRA_TARGETS_FILES
+         "\ninclude(\"\${CMAKE_CURRENT_LIST_DIR}/CAFTargets.cmake\")")
+  set(CAF_FOUND true)
+else ()
+  message(
+    FATAL_ERROR
+      "CAF not found, either use -DCAF_ROOT_DIR=... or initialize the libvast/aux/caf submodule"
+  )
+endif ()
+
+if (VAST_RELOCATABLE_INSTALL
+    AND BUILD_SHARED_LIBS
+    AND CAF_LIBRARY_CORE)
+  # Copy CAF libraries to installation directory
+  get_filename_component(CAF_LIBDIR ${CAF_LIBRARY_CORE} PATH)
+  file(GLOB CAF_INSTALLED_LIBRARIES "${CAF_LIBDIR}/libcaf*.so")
+  install(FILES ${CAF_INSTALLED_LIBRARIES}
+          DESTINATION "${CMAKE_INSTALL_FULL_LIBDIR}")
+endif ()
+
+# -- source files --------------------------------------------------------------
+
+configure_file("${CMAKE_CURRENT_SOURCE_DIR}/vast/config.hpp.in"
+               "${CMAKE_CURRENT_BINARY_DIR}/vast/config.hpp")
+
+file(GLOB_RECURSE libvast_sources CONFIGURE_DEPENDS
+     "${CMAKE_CURRENT_SOURCE_DIR}/src/*.cpp"
+     "${CMAKE_CURRENT_SOURCE_DIR}/vast/*.hpp")
+
+# -- libvast -------------------------------------------------------------------
+
+add_library(libvast ${libvast_sources})
+add_library(vast::libvast ALIAS libvast)
+target_link_libraries(libvast PRIVATE libvast_internal)
+
+set_target_properties(
+  libvast_internal
+  PROPERTIES INTERPROCEDURAL_OPTIMIZATION_RELEASE ON
+             CXX_STANDARD 17
+             CXX_STANDARD_REQUIRED ON
+             CXX_EXTENSIONS OFF)
+
 set_target_properties(
   libvast
-  PROPERTIES SOVERSION "${VERSION_YEAR}" VERSION
-                                         "${VERSION_YEAR}.${VERSION_MONTH}"
+  PROPERTIES SOVERSION "${VAST_VERSION_MAJOR}"
+             VERSION "${VAST_VERSION_MAJOR}.${VAST_VERSION_MINOR}"
              OUTPUT_NAME vast)
 
 target_include_directories(
   libvast
   PUBLIC $<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}>
          $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
-         $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>)
+         $<INSTALL_INTERFACE:${CMAKE_INSTALL_FULL_INCLUDEDIR}>)
 
-if (CMAKE_BUILD_TYPE STREQUAL "Release"
-    OR CMAKE_BUILD_TYPE STREQUAL "MinSizeRel")
-  set_target_properties(libvast PROPERTIES INTERPROCEDURAL_OPTIMIZATION ON)
-endif ()
-
-target_include_directories(libvast PRIVATE "${PROJECT_SOURCE_DIR}/aux")
-
-add_dependencies(libvast vast-schema)
-
-target_link_libraries(libvast PUBLIC tsl::robin_map)
-
+# Link against CAF.
 target_link_libraries(libvast PUBLIC caf::core caf::io)
 if (VAST_USE_OPENSSL)
   target_link_libraries(libvast PUBLIC caf::openssl)
 endif ()
 
-target_link_libraries(libvast PRIVATE yaml-cpp)
-
+# Link against FlatBuffers.
 target_link_libraries(libvast PUBLIC ${flatbuffers_target})
 add_dependencies(libvast libvast_flatbuffers)
 
-if (VAST_ENABLE_ASSERTIONS)
-  target_include_directories(libvast PUBLIC ${Backtrace_INCLUDE_DIRECTORIES})
-  target_link_libraries(libvast PUBLIC ${Backtrace_LIBRARIES})
+# Link against yaml-cpp.
+find_package(yaml-cpp 0.6.2 REQUIRED HINTS ${YAML_CPP_ROOT})
+target_link_libraries(libvast PRIVATE yaml-cpp)
+
+# Link against xxhash.
+find_package(xxhash 0.6 REQUIRED QUIET)
+provide_find_module(xxhash)
+string(APPEND VAST_FIND_DEPENDENCY_LIST
+       "\nfind_package(xxhash 0.6 REQUIRED QUIET)")
+message(STATUS "${xxhash_INCLUDE_DIR}")
+target_link_libraries(libvast PRIVATE xxhash::xxhash)
+
+# Link against robin-map.
+target_link_libraries(libvast PUBLIC tsl::robin_map)
+
+# Link against Apache Arrow.
+if (VAST_ENABLE_ARROW)
+  target_compile_definitions(libvast PRIVATE VAST_HAVE_ARROW=1)
+  target_link_libraries(libvast PRIVATE ${ARROW_LIBRARY})
 endif ()
 
-if (VAST_HAVE_ARROW)
-  target_link_libraries(libvast PUBLIC ${ARROW_LIBRARY})
-endif ()
-
-if (PCAP_FOUND)
+# Link against PCAP.
+if (VAST_ENABLE_PCAP)
+  target_compile_definitions(libvast PRIVATE VAST_HAVE_PCAP=1)
   target_link_libraries(libvast PRIVATE pcap::pcap)
 endif ()
 
-if (VAST_USE_JEMALLOC)
-  target_link_libraries(libvast PRIVATE jemalloc::jemalloc_)
-endif ()
-
-if (BUILD_SHARED_LIBS AND "${CMAKE_SYSTEM_NAME}" MATCHES "Linux")
-  target_link_libraries(libvast PUBLIC dl)
+# TODO: Should we move the bundled schemas to libvast?
+if (TARGET vast-schema)
+  add_dependencies(libvast vast-schema)
 endif ()
 
 # Install libvast in PREFIX/lib and headers in PREFIX/include/vast.
 install(
   TARGETS libvast
   EXPORT VASTTargets
-  ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
-  LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
-  RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
+  ARCHIVE DESTINATION ${CMAKE_INSTALL_FULL_LIBDIR}
+  LIBRARY DESTINATION ${CMAKE_INSTALL_FULL_LIBDIR}
+  RUNTIME DESTINATION ${CMAKE_INSTALL_FULL_BINDIR})
+
 install(
   DIRECTORY vast
-  DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
+  DESTINATION ${CMAKE_INSTALL_FULL_INCLUDEDIR}
   FILES_MATCHING
   PATTERN "*.hpp")
 
 # Install generated config and flatbuffers headers.
 install(
   DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/vast"
-  DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
+  DESTINATION ${CMAKE_INSTALL_FULL_INCLUDEDIR}
   FILES_MATCHING
   PATTERN "*.hpp")
 
-add_library(vast::libvast ALIAS libvast)
-
-# ----------------------------------------------------------------------------
-# unit tests
-# ----------------------------------------------------------------------------
-
-set(tests
-    test/address.cpp
-    test/address_synopsis.cpp
-    test/binner.cpp
-    test/bitmap.cpp
-    test/bitmap_algorithms.cpp
-    test/bitmap_index.cpp
-    test/bits.cpp
-    test/bitvector.cpp
-    test/bloom_filter.cpp
-    test/bloom_filter_synopsis.cpp
-    test/byte.cpp
-    test/cache.cpp
-    test/chunk.cpp
-    test/coder.cpp
-    test/command.cpp
-    test/community_id.cpp
-    test/data.cpp
-    test/detail/algorithms.cpp
-    test/detail/base64.cpp
-    test/detail/column_iterator.cpp
-    test/detail/flat_lru_cache.cpp
-    test/detail/flat_map.cpp
-    test/detail/lru_cache.cpp
-    test/detail/operators.cpp
-    test/detail/set_operations.cpp
-    test/endpoint.cpp
-    test/error.cpp
-    test/expression.cpp
-    test/expression_evaluation.cpp
-    test/expression_parseable.cpp
-    test/factory.cpp
-    test/filesystem.cpp
-    test/flatbuffers.cpp
-    test/flow.cpp
-    test/format/csv.cpp
-    test/format/json.cpp
-    test/format/syslog.cpp
-    test/format/writer.cpp
-    test/format/zeek.cpp
-    test/hash.cpp
-    test/http.cpp
-    test/ids.cpp
-    test/index/address_index.cpp
-    test/index/arithmetic_index.cpp
-    test/index/enumeration_index.cpp
-    test/index/hash_index.cpp
-    test/index/list_index.cpp
-    test/index/string_index.cpp
-    test/index/subnet_index.cpp
-    test/iterator.cpp
-    test/json.cpp
-    test/meta_index.cpp
-    test/msgpack.cpp
-    test/msgpack_table_slice.cpp
-    test/offset.cpp
-    test/parse_data.cpp
-    test/parseable.cpp
-    test/pattern.cpp
-    test/port.cpp
-    test/printable.cpp
-    test/range_map.cpp
-    test/schema.cpp
-    test/scope_linked.cpp
-    test/segment.cpp
-    test/segment_store.cpp
-    test/span.cpp
-    test/stack.cpp
-    test/string.cpp
-    test/subnet.cpp
-    test/synopsis.cpp
-    test/system/archive.cpp
-    test/system/counter.cpp
-    test/system/datagram_source.cpp
-    test/system/eraser.cpp
-    test/system/evaluator.cpp
-    test/system/explorer.cpp
-    test/system/exporter.cpp
-    test/system/filesystem.cpp
-    test/system/importer.cpp
-    test/system/index.cpp
-    test/system/pivoter.cpp
-    test/system/queries.cpp
-    test/system/query_processor.cpp
-    test/system/query_supervisor.cpp
-    test/system/sink.cpp
-    test/system/source.cpp
-    test/system/task.cpp
-    test/system/terminate.cpp
-    test/system/type_registry.cpp
-    test/table_slice.cpp
-    test/taxonomies.cpp
-    test/time.cpp
-    test/type.cpp
-    test/uuid.cpp
-    test/value_index.cpp
-    test/vector_map.cpp
-    test/vector_set.cpp
-    test/view.cpp
-    test/word.cpp
-    test/yaml.cpp)
-
-if (VAST_HAVE_ARROW)
-  set(tests ${tests} test/format/arrow.cpp test/arrow_table_slice.cpp)
-endif ()
-
-if (PCAP_FOUND)
-  set(tests ${tests} test/format/pcap.cpp)
-endif ()
-
-#
-# Generate CMake tests
-#
-
-if (BUILD_UNIT_TESTS)
-  # Add vast-test executable.
-  add_executable(vast-test ${tests})
-  target_link_libraries(vast-test libvast_test libvast
-                        ${CMAKE_THREAD_LIBS_INIT})
-
-  if (VAST_HAVE_ARROW)
-    target_link_libraries(vast-test ${ARROW_LIBRARY})
-  endif ()
-
-  if (PCAP_FOUND)
-    target_link_libraries(vast-test pcap::pcap)
-  endif ()
-
-  add_test(NAME build_vast_test
-           COMMAND "${CMAKE_COMMAND}" --build "${CMAKE_BINARY_DIR}" --config
-                   "$<CONFIG>" --target vast-test)
-  set_tests_properties(build_vast_test PROPERTIES FIXTURES_SETUP
-                                                  vast_unit_test_fixture)
-  # Helper macro to construct a CMake test from a VAST test suite.
-  macro (make_test suite)
-    string(REPLACE " " "_" test_name ${suite})
-    add_test(NAME ${test_name} COMMAND vast-test -v 3 -r 600 -s "^${suite}$"
-                                       ${ARGN})
-    set_tests_properties(${test_name} PROPERTIES FIXTURES_REQUIRED
-                                                 vast_unit_test_fixture)
-  endmacro ()
-  # Find all test suites.
-  foreach (test ${tests})
-    file(STRINGS ${test} contents)
-    foreach (line ${contents})
-      if ("${line}" MATCHES "SUITE")
-        string(REGEX REPLACE "#define SUITE \(.*\)" "\\1" suite ${line})
-        list(APPEND suites ${suite})
-      endif ()
-    endforeach ()
-  endforeach ()
-  list(REMOVE_DUPLICATES suites)
-  # Enable unit testing via CMake/CTest and add all test suites.
-  foreach (suite ${suites})
-    make_test("${suite}")
-  endforeach ()
-endif ()
+add_subdirectory(test)

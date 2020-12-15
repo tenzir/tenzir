@@ -11,20 +11,22 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#include "vast/arrow_table_slice_builder.hpp"
+#if VAST_HAVE_ARROW
 
-#include "vast/arrow_table_slice.hpp"
-#include "vast/detail/byte_swap.hpp"
-#include "vast/detail/narrow.hpp"
-#include "vast/detail/overload.hpp"
-#include "vast/die.hpp"
-#include "vast/fbs/table_slice.hpp"
-#include "vast/fbs/utils.hpp"
+#  include "vast/arrow_table_slice_builder.hpp"
 
-#include <arrow/api.h>
-#include <arrow/io/api.h>
-#include <arrow/ipc/api.h>
-#include <arrow/util/config.h>
+#  include "vast/arrow_table_slice.hpp"
+#  include "vast/detail/byte_swap.hpp"
+#  include "vast/detail/narrow.hpp"
+#  include "vast/detail/overload.hpp"
+#  include "vast/die.hpp"
+#  include "vast/fbs/table_slice.hpp"
+#  include "vast/fbs/utils.hpp"
+
+#  include <arrow/api.h>
+#  include <arrow/io/api.h>
+#  include <arrow/ipc/api.h>
+#  include <arrow/util/config.h>
 
 namespace vast {
 
@@ -573,3 +575,5 @@ std::shared_ptr<arrow::DataType> make_arrow_type(const type& t) {
 }
 
 } // namespace vast
+
+#endif // VAST_HAVE_ARROW
