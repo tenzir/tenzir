@@ -15,3 +15,5 @@ To dump all models in YAML format, use:
 vast dump --yaml models
 ```
 
+Specifying `dump` alone without a subcommand shows the concatenated output from
+all subcommands.
