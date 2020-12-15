@@ -74,7 +74,7 @@ caf::error convert(const data& d, concepts_map& out) {
         VAST_WARNING_ANON("ignoring duplicate concept for",
                           *name + ": \"" + *concept_ + "\"");
       else
-        dest.fields.push_back(*concept_);
+        dest.concepts.push_back(*concept_);
     }
   }
   auto desc = c->find("description");
