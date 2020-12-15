@@ -152,7 +152,11 @@ void collect_component_status(node_actor* self,
   // hand.
   const auto timeout = caf::duration{defaults::system::initial_request_timeout};
   // Send out requests and collects answers.
-  for (auto& [label, component] : self->state.registry.components())
+  for (auto& [label, component] : self->state.registry.components()) {
+    // Requests to busy sources and sinks can easily delay the combined response
+    // because the status requests don't get scheduled soon enough.
+    if (component.type == "source" || component.type == "sink")
+      continue;
     self
       ->request<message_priority::high>(component.actor, timeout,
                                         atom::status_v, v)
@@ -172,6 +176,7 @@ void collect_component_status(node_actor* self,
           if (req_state.use_count() == 2)
             deliver(std::move(req_state));
         });
+  }
 }
 
 } // namespace
