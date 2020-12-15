@@ -12,7 +12,7 @@ Every entry has a category for which we use the following visual abbreviations:
 
 ## Unreleased
 
-- 🐞 The `vast status` command does not collect status information form sources
+- 🐞 The `vast status` command does not collect status information from sources
   and sinks any longer. They were often too busy to respond, leading to a long
   delay before the command completed.
   [#1234](https://github.com/tenzir/vast/pull/1234)
