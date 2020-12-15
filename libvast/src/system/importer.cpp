@@ -186,6 +186,9 @@ importer_state::status(status_verbosity v) const {
     caf::put(importer_status, "ids.available", to_string(available_ids()));
     caf::put(importer_status, "ids.block.next", to_string(current.next));
     caf::put(importer_status, "ids.block.end", to_string(current.end));
+    auto& sources_status = put_list(importer_status, "sources");
+    for (const auto& kv : inbound_descriptions)
+      sources_status.emplace_back(kv.second);
   }
   // General state such as open streams.
   if (v >= status_verbosity::debug)
