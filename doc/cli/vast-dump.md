@@ -6,5 +6,12 @@ For example, to see all registered concept definitions, use the following
 command:
 
 ```
-vast dump --yaml concepts
+vast dump concepts
 ```
+
+To dump all models in YAML format, use:
+
+```
+vast dump --yaml models
+```
+
