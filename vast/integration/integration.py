@@ -11,6 +11,7 @@ import itertools
 import json
 import logging
 import os
+import re
 import shlex
 import shutil
 import signal
@@ -25,7 +26,6 @@ from string import Template
 from typing import Callable, List, NamedTuple, Optional, TypeVar, Union
 
 import coloredlogs
-import jsondiff
 import packages.wait as wait
 import schema
 import yaml
@@ -192,15 +192,9 @@ def empty(iterable):
     return False
 
 
-def deduce_format(command):
+def is_non_deterministic(command):
     positionals = list(filter(lambda x: x[0] != "-", command))
-    if positionals[0] == "export":
-        if positionals[1] == "json":
-            # Pythons JSON parser does not handle ldjson, so we fall back to ascii
-            return "ascii"
-    if positionals[0] == "status":
-        return "json"
-    return "ascii"
+    return bool(re.match(r"exp(ort|lore)|get|pivot", positionals[0]))
 
 
 def run_step(basecmd, step_id, step, work_dir, baseline_dir, update_baseline, expected_result):
@@ -236,7 +230,7 @@ def run_step(basecmd, step_id, step, work_dir, baseline_dir, update_baseline, ex
             return result
         # Perform baseline update or comparison.
         baseline = baseline_dir / f"{step_id}.ref"
-        output_format = deduce_format(step.command)
+        sort_output = is_non_deterministic(step.command)
         if update_baseline:
             LOGGER.info("updating baseline")
             if not baseline_dir.exists():
@@ -261,40 +255,23 @@ def run_step(basecmd, step_id, step, work_dir, baseline_dir, update_baseline, ex
             else:
                 out = out_handle.read()
             diff = None
-            if output_format == "json":
-                output_object = json.loads(out)
-                if update_baseline:
-                    json.dump(output_object, open(baseline, "w"))
-                    return Result.SUCCESS
-                if not baseline.exists():
-                    diff = jsondiff.diff({}, output_object)
-                else:
-                    with open(baseline) as ref_handle:
-                        baseline_object = json.load(ref_handle)
-                        diff = jsondiff.diff(baseline_object, output_object)
-                if diff == {}:
-                    diff = []
-                else:
-                    diff = str(diff) + "\n"
-            else:
-                # ascii
-                output_lines = out.splitlines(keepends=True)
-                # We sort ascii output for determinism
+            output_lines = out.splitlines(keepends=True)
+            if sort_output:
                 output_lines = sorted(output_lines)
-                if update_baseline:
-                    with open(baseline, "w") as ref_handle:
-                        for line in output_lines:
-                            ref_handle.write(line)
-                    return Result.SUCCESS
-                baseline_lines = []
-                if baseline.exists():
-                    baseline_lines = open(baseline).readlines()
-                diff = difflib.unified_diff(
-                    baseline_lines,
-                    output_lines,
-                    fromfile=str(baseline),
-                    tofile=str(stdout),
-                )
+            if update_baseline:
+                with open(baseline, "w") as ref_handle:
+                    for line in output_lines:
+                        ref_handle.write(line)
+                return Result.SUCCESS
+            baseline_lines = []
+            if baseline.exists():
+                baseline_lines = open(baseline).readlines()
+            diff = difflib.unified_diff(
+                baseline_lines,
+                output_lines,
+                fromfile=str(baseline),
+                tofile=str(stdout),
+            )
             delta = list(diff)
             if delta:
                 if expected_result != Result.FAILURE:
