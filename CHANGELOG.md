@@ -10,10 +10,12 @@ Every entry has a category for which we use the following visual abbreviations:
 - ⚡️ breaking change
 - 🐞 bugfix
 
-## Unreleased
+<!-- ## Unreleased -->
 
-- 🎁 A new type-level synopsis structure in the meta-index now massively
-  speeds up string queries with very few results.
+## [2020.12.16]
+
+- 🎁 Low-selectivity queries of string (in)equality queries now run up to 30x
+  faster, thanks to more intelligent selection of relevant index partitions.
   [#1214](https://github.com/tenzir/vast/pull/1214)
 
 - ⚡️ The build configuration of VAST received a major overhaul. Inclusion of
@@ -30,12 +32,6 @@ Every entry has a category for which we use the following visual abbreviations:
   and sinks any longer. They were often too busy to respond, leading to a long
   delay before the command completed.
   [#1234](https://github.com/tenzir/vast/pull/1234)
-
-- 🎁 A new tracepoint `meta_index_lookup(us, candidates)` can be used, that
-  is called whenever a meta index lookup is completed. It gets two arguments,
-  the number of microseconds spent resolving the lookup and the number of
-  candidates returned.
-  [#1227](https://github.com/tenzir/vast/pull/1227)
 
 - 🐞 The summary log message of `vast export` now contains the correct number
   of candidate events.
@@ -1056,3 +1052,4 @@ This is the first official release.
 [2020.08.28]: https://github.com/tenzir/vast/releases/tag/2020.08.28
 [2020.09.30]: https://github.com/tenzir/vast/releases/tag/2020.09.30
 [2020.10.29]: https://github.com/tenzir/vast/releases/tag/2020.10.29
+[2020.10.29]: https://github.com/tenzir/vast/releases/tag/2020.12.16

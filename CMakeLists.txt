@@ -7,7 +7,7 @@ list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
 
 # Helper utility for retrieving the project version from 'git-describe', that is
 # bundled with VAST.
-set(VAST_VERSION_FALLBACK "2020.10.29-0-")
+set(VAST_VERSION_FALLBACK "2020.12.16-0-")
 include(VASTGitVersion)
 
 # Create the VAST project.
@@ -515,7 +515,7 @@ install(
 write_basic_package_version_file(
   "${CMAKE_CURRENT_BINARY_DIR}/VASTConfigVersion.cmake"
   VERSION
-    "${VAST_VERSION_MAJOR}.${VAST_VERSION_MINOR}.${VAST_VERSION_PATCH}.${VAST_VERSION_TWEAK}"
+    "${VAST_VERSION_MAJOR}.${VAST_VERSION_MINOR}.${VAST_VERSION_PATCH}"
   COMPATIBILITY ExactVersion)
 
 configure_package_config_file(
