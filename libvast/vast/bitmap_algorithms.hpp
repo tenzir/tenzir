@@ -585,7 +585,7 @@ bool any(const Bitmap& bm) {
     using word_type = typename Bitmap::word_type;
     for (auto b : bit_range(bm)) {
       auto x = b.data();
-      if (b.size() <= word_type::width)
+      if (b.size() < word_type::width)
         x |= word_type::msb_fill(word_type::width - b.size());
       if (x != word_type::all)
         return true;
