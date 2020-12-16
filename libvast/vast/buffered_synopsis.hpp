@@ -37,7 +37,9 @@ struct buffered_synopsis_traits {
 /// A synopsis that stores a full copy of the input in a hash table to be able
 /// to construct a smaller bloom filter synopsis for this data at a later
 /// point in time using the `shrink` function.
-//  This is currently used for the active partition, to be able
+/// @note This is currently used for the active partition: The input is buffered
+/// and converted to a bloom filter when the partition is converted to a passive
+/// partition and no more entries are expected to be added.
 template <class T, class HashFunction>
 class buffered_synopsis final : public synopsis {
 public:
@@ -45,6 +47,7 @@ public:
   using view_type = view<T>;
 
   buffered_synopsis(vast::type x, double p) : synopsis{std::move(x)}, p_{p} {
+    // nop
   }
 
   synopsis_ptr shrink() const override {

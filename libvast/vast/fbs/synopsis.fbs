@@ -29,7 +29,7 @@ namespace vast.fbs.synopsis;
 
 table v0 {
   /// The caf-serialized record field for this synopsis.
-  /// If the name is blank, this is interpreted as a type synopsis (for this PoC)
+  /// If the name is blank, this is interpreted as a type synopsis.
   // TODO: Use the `Type` flatbuffer once available.
   qualified_record_field: [ubyte];
 
@@ -46,15 +46,8 @@ table v0 {
 namespace vast.fbs.partition_synopsis;
 
 table v0 {
-  // Synopses for individual fields
+  /// Synopses for individual fields.
+  // TODO: Split this into separate vectors for field synopses
+  // and type synopses.
   synopses: [synopsis.v0];
 }
-
-/// TODO
-/// table v1 {
-///   /// Synopses for individual fields
-///   field_synopses: [synopsis.v0];
-/// 
-///   /// Synopses for types
-///   type_synopses: [synopsis.v0];
-/// }
