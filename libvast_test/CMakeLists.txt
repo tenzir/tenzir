@@ -1,10 +1,11 @@
+# TODO: Figure out whether this is really necessary.
+if (CMAKE_CROSS_COMPILING)
+  return()
+endif ()
+
 add_library(
-  libvast_test STATIC
-  src/actor_system.cpp
-  src/events.cpp
-  src/node.cpp
-  src/symbols.cpp
-  src/table_slices.cpp)
+  libvast_test STATIC src/actor_system.cpp src/events.cpp src/node.cpp
+                      src/symbols.cpp src/table_slices.cpp)
 target_compile_definitions(
   libvast_test
   PUBLIC
@@ -16,7 +17,10 @@ target_include_directories(
                       $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>)
 target_include_directories(libvast_test
                            PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/vast/test)
-target_link_libraries(libvast_test PUBLIC caf::test libvast)
+target_link_libraries(
+  libvast_test
+  PUBLIC caf::test vast::libvast
+  PRIVATE vast::internal)
 set(isExe $<STREQUAL:$<TARGET_PROPERTY:TYPE>,EXECUTABLE>)
 target_sources(
   libvast_test
@@ -26,9 +30,10 @@ target_sources(
 )
 set_target_properties(
   libvast_test
-  PROPERTIES SOVERSION "${VERSION_YEAR}" VERSION
-                                         "${VERSION_YEAR}.${VERSION_MONTH}"
-             OUTPUT_NAME vast_test EXPORT_NAME test)
+  PROPERTIES SOVERSION "${VERSION_YEAR}"
+             VERSION "${VERSION_YEAR}.${VERSION_MONTH}"
+             OUTPUT_NAME vast_test
+             EXPORT_NAME test)
 add_library(vast::test ALIAS libvast_test)
 install(
   TARGETS libvast_test

@@ -12,6 +12,12 @@ Every entry has a category for which we use the following visual abbreviations:
 
 ## Unreleased
 
+- ⚡️ The build configuration of VAST received a major overhaul. Inclusion of
+  libvast in other procects via `add_subdirectory(path/to/vast)` is now easily
+  possible. The names of all build options were aligned, and the new build
+  summary shows all available options.
+  [#1175](https://github.com/tenzir/vast/pull/1175)
+
 - 🐞 Concepts that reference other concepts are now loaded correctly from their
   definition.
   [#1236](https://github.com/tenzir/vast/pull/1236)

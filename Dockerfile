@@ -25,10 +25,8 @@ RUN apt-get -qqy install libflatbuffers-dev flatbuffers-compiler-dev
 
 # VAST
 WORKDIR $BUILD_DIR/vast
-COPY aux ./aux
 COPY cmake ./cmake
 COPY doc ./doc
-COPY integration ./integration
 COPY libvast ./libvast
 COPY libvast_test ./libvast_test
 COPY schema ./schema

@@ -19,6 +19,9 @@ in {
       "-DARROW_SIMD_LEVEL=NONE"
     ];
   });
+  xxHash = if !isStatic then prev.xxHash else prev.xxHash.overrideAttrs (old: {
+    patches = [ ./xxHash/static.patch ];
+  });
   caf = let
     source = builtins.fromJSON (builtins.readFile ./caf/source.json);
     in (prev.caf.override {inherit stdenv;}).overrideAttrs (old: {

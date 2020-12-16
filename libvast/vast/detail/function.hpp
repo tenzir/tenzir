@@ -14,7 +14,7 @@
 // function2, adapted for libvast.
 //
 // Original Author: Denis Blank <denis.blank@outlook.com>
-// Original License: Bost Software License, Version 1.0
+// Original License: Boost Software License, Version 1.0
 // Original Revision: 87b28ccd33203e81ea30f1f706400b11bb2fe5ec
 // Includes code from https://github.com/Naios/function2
 

@@ -11,24 +11,26 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#include "vast/format/arrow.hpp"
+#if VAST_HAVE_ARROW
 
-#include "vast/arrow_table_slice.hpp"
-#include "vast/arrow_table_slice_builder.hpp"
-#include "vast/detail/assert.hpp"
-#include "vast/detail/byte_swap.hpp"
-#include "vast/detail/fdoutbuf.hpp"
-#include "vast/detail/string.hpp"
-#include "vast/error.hpp"
-#include "vast/table_slice_builder.hpp"
-#include "vast/type.hpp"
+#  include "vast/format/arrow.hpp"
 
-#include <caf/none.hpp>
+#  include "vast/arrow_table_slice.hpp"
+#  include "vast/arrow_table_slice_builder.hpp"
+#  include "vast/detail/assert.hpp"
+#  include "vast/detail/byte_swap.hpp"
+#  include "vast/detail/fdoutbuf.hpp"
+#  include "vast/detail/string.hpp"
+#  include "vast/error.hpp"
+#  include "vast/table_slice_builder.hpp"
+#  include "vast/type.hpp"
 
-#include <arrow/util/config.h>
-#include <arrow/util/io_util.h>
+#  include <caf/none.hpp>
 
-#include <stdexcept>
+#  include <arrow/util/config.h>
+#  include <arrow/util/io_util.h>
+
+#  include <stdexcept>
 
 namespace vast::format::arrow {
 
@@ -83,3 +85,5 @@ bool writer::layout(const record_type& x) {
 }
 
 } // namespace vast::format::arrow
+
+#endif // VAST_HAVE_ARROW

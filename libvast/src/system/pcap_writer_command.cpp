@@ -11,27 +11,29 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#include "vast/system/pcap_writer_command.hpp"
+#if VAST_HAVE_PCAP
 
-#include <string>
-#include <string_view>
+#  include "vast/system/pcap_writer_command.hpp"
 
-#include <caf/event_based_actor.hpp>
-#include <caf/scoped_actor.hpp>
-#include <caf/settings.hpp>
-#include <caf/stateful_actor.hpp>
-#include <caf/typed_event_based_actor.hpp>
+#  include "vast/defaults.hpp"
+#  include "vast/detail/assert.hpp"
+#  include "vast/error.hpp"
+#  include "vast/format/pcap.hpp"
+#  include "vast/logger.hpp"
+#  include "vast/scope_linked.hpp"
+#  include "vast/system/signal_monitor.hpp"
+#  include "vast/system/sink.hpp"
+#  include "vast/system/sink_command.hpp"
+#  include "vast/system/spawn_or_connect_to_node.hpp"
 
-#include "vast/defaults.hpp"
-#include "vast/detail/assert.hpp"
-#include "vast/error.hpp"
-#include "vast/format/pcap.hpp"
-#include "vast/logger.hpp"
-#include "vast/scope_linked.hpp"
-#include "vast/system/signal_monitor.hpp"
-#include "vast/system/sink.hpp"
-#include "vast/system/sink_command.hpp"
-#include "vast/system/spawn_or_connect_to_node.hpp"
+#  include <caf/event_based_actor.hpp>
+#  include <caf/scoped_actor.hpp>
+#  include <caf/settings.hpp>
+#  include <caf/stateful_actor.hpp>
+#  include <caf/typed_event_based_actor.hpp>
+
+#  include <string>
+#  include <string_view>
 
 namespace vast::system {
 
@@ -53,3 +55,5 @@ pcap_writer_command(const invocation& inv, caf::actor_system& sys) {
 }
 
 } // namespace vast::system
+
+#endif // VAST_HAVE_PCAP

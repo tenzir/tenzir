@@ -12,18 +12,21 @@
  ******************************************************************************/
 
 #define SUITE format
-#include "vast/format/pcap.hpp"
 
-#include "vast/test/data.hpp"
-#include "vast/test/fixtures/actor_system.hpp"
-#include "vast/test/test.hpp"
+#if VAST_HAVE_PCAP
 
-#include "vast/concept/parseable/to.hpp"
-#include "vast/concept/parseable/vast/address.hpp"
-#include "vast/defaults.hpp"
-#include "vast/error.hpp"
-#include "vast/table_slice.hpp"
-#include "vast/table_slice_column.hpp"
+#  include "vast/format/pcap.hpp"
+
+#  include "vast/test/data.hpp"
+#  include "vast/test/fixtures/actor_system.hpp"
+#  include "vast/test/test.hpp"
+
+#  include "vast/concept/parseable/to.hpp"
+#  include "vast/concept/parseable/vast/address.hpp"
+#  include "vast/defaults.hpp"
+#  include "vast/error.hpp"
+#  include "vast/table_slice.hpp"
+#  include "vast/table_slice_column.hpp"
 
 using namespace vast;
 
@@ -141,3 +144,5 @@ TEST(PCAP read/write 2) {
 }
 
 FIXTURE_SCOPE_END()
+
+#endif // VAST_HAVE_PCAP

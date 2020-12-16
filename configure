@@ -42,9 +42,9 @@ Usage: $0 [OPTION]... [VAR=VALUE]...
     --show-time-report      show where the compiler spends its time
     --more-warnings         enables most warnings on GCC and Clang
     --without-tests         build without unit tests
-    --without-zeek-to-vast  build without zeek-to-vast
-    --without-lsvast        build without lsvast
-    --with-type-id-checks   build with compile-time type-id checks
+    --with-zeek-to-vast     build without zeek-to-vast
+    --with-lsvast           build without lsvast
+    --with-dscat            build without lsvast
 
   Debugging:
     --log-level=LEVEL       maximum compile-time log level
@@ -56,7 +56,6 @@ Usage: $0 [OPTION]... [VAR=VALUE]...
     --without-dtrace        disable USDT tracepoints
     --with-asan             enable AddressSanitizer
     --with-ubsan            enable Undefined Behavior Sanitizer
-    --with-gcov             enable GCOV
 
   Required packages:
     --with-arrow=PATH       path to Apache Arrow install root
@@ -94,8 +93,7 @@ append_cache_entry() {
 # Set defaults
 builddir=build
 CMakeCacheEntries=""
-append_cache_entry CMAKE_INSTALL_PREFIX PATH   ${CMAKE_INSTALL_PREFIX:-/usr/local}
-append_cache_entry CMAKE_BUILD_TYPE     STRING ${CMAKE_BUILD_TYPE:-RelWithDebInfo}
+append_cache_entry CMAKE_BUILD_TYPE STRING ${CMAKE_BUILD_TYPE:-RelWithDebInfo}
 
 # Parse custom environment variable to initialize CMakeGenerator.
 if [ -n "$CMAKE_GENERATOR" ]; then
@@ -119,11 +117,12 @@ while [ $# -ne 0 ]; do
       ;;
 # -- Installation options ------------------------------------------------------
     --prefix=*)
+      # TODO: We should remove VAST_PREFIX.
       append_cache_entry VAST_PREFIX PATH "$optarg"
       append_cache_entry CMAKE_INSTALL_PREFIX PATH "$optarg"
       ;;
     --without-relocatable)
-      append_cache_entry VAST_RELOCATABLE_INSTALL BOOL no
+      append_cache_entry VAST_ENABLE_RELOCATABLE_INSTALLTIONS BOOL no
       ;;
     --package-name=*)
       append_cache_entry CPACK_PACKAGE_FILE_NAME STRING "$optarg"
@@ -133,7 +132,7 @@ while [ $# -ne 0 ]; do
 # -- Convenience options -------------------------------------------------------
     --debug)
       append_cache_entry CMAKE_BUILD_TYPE STRING Debug
-      append_cache_entry ENABLE_ADDRESS_SANITIZER BOOL yes
+      append_cache_entry VAST_ENABLE_ASAN BOOL yes
       # TODO: eventually, we also want to enable MORE_WARNINGS
       ;;
     --release)
@@ -141,7 +140,7 @@ while [ $# -ne 0 ]; do
       ;;
     --ci-build)
       append_cache_entry CMAKE_BUILD_TYPE STRING CI
-      append_cache_entry ENABLE_ADDRESS_SANITIZER BOOL yes
+      append_cache_entry VAST_ENABLE_ASAN BOOL yes
       append_cache_entry VAST_ENABLE_ASSERTIONS BOOL yes
       ;;
 # -- Build options -------------------------------------------------------------
@@ -154,23 +153,23 @@ while [ $# -ne 0 ]; do
     --build-type=*)
       append_cache_entry CMAKE_BUILD_TYPE STRING "$optarg"
       ;;
-    --extra-flags=*)
-      append_cache_entry EXTRA_FLAGS STRING "$optarg"
-      ;;
     --show-time-report)
-      append_cache_entry SHOW_TIME_REPORT BOOL yes
+      append_cache_entry VAST_ENABLE_TIME_REPORT BOOL yes
       ;;
     --more-warnings)
-      append_cache_entry MORE_WARNINGS BOOL yes
+      append_cache_entry VAST_ENABLE_MORE_WARNINGS BOOL yes
       ;;
     --without-tests)
-      append_cache_entry BUILD_UNIT_TESTS BOOL no
+      append_cache_entry VAST_ENABLE_UNIT_TESTS BOOL no
       ;;
-    --without-zeek-to-vast)
-      append_cache_entry ENABLE_ZEEK_TO_VAST BOOL no
+    --with-zeek-to-vast)
+      append_cache_entry VAST_ENABLE_ZEEK_TO_VAST BOOL yes
       ;;
-    --without-lsvast)
-      append_cache_entry VAST_BUILD_LSVAST BOOL no
+    --with-dscat)
+      append_cache_entry VAST_ENABLE_DSCAT BOOL yes
+      ;;
+    --with-lsvast)
+      append_cache_entry VAST_ENABLE_LSVAST BOOL yes
       ;;
     --with-type-id-checks)
       append_cache_entry CAF_ENABLE_TYPE_ID_CHECKS BOOL yes
@@ -188,35 +187,32 @@ while [ $# -ne 0 ]; do
       append_cache_entry VAST_ENABLE_ASSERTIONS BOOL no
       ;;
     --without-exceptions)
-      append_cache_entry NO_EXCEPTIONS BOOL yes
+      append_cache_entry VAST_ENABLE_EXCEPTIONS BOOL no
       ;;
     --without-dtrace)
       # The USDT concept was invented for DTrace on Solaris, and thus for
       # historical reasons the option to enable USDT support is commonly called
       # `--with-dtrace`, even though on linux it has nothing to do with dtrace.
-      append_cache_entry VAST_DISABLE_SDT yes
+      append_cache_entry VAST_ENABLE_SDT no
       ;;
     --with-asan)
-      append_cache_entry ENABLE_ADDRESS_SANITIZER BOOL yes
+      append_cache_entry VAST_ENABLE_ASAN BOOL yes
       ;;
     --with-ubsan)
-      append_cache_entry ENABLE_UB_SANITIZER BOOL yes
-      ;;
-    --with-gcov)
-      append_cache_entry ENABLE_GCOV BOOL yes
+      append_cache_entry VAST_ENABLE_UBSAN BOOL yes
       ;;
 # -- Required packages ---------------------------------------------------------
     --with-arrow=*)
       append_cache_entry ARROW_ROOT_DIR PATH "$optarg"
       ;;
     --without-arrow)
-      append_cache_entry VAST_NO_ARROW BOOL yes
+      append_cache_entry VAST_ENABLE_ARROW BOOL no
       ;;
     --with-caf=*)
       append_cache_entry CAF_ROOT_DIR PATH "$optarg"
       ;;
     --with-bundled-caf)
-      append_cache_entry VAST_USE_BUNDLED_CAF BOOL yes
+      append_cache_entry VAST_ENABLE_BUNDLED_CAF BOOL yes
       ;;
     --with-flatbuffers=*)
       append_cache_entry FLATBUFFERS_ROOT_DIR PATH "$optarg"
@@ -229,13 +225,13 @@ while [ $# -ne 0 ]; do
       append_cache_entry BROKER_ROOT_DIR PATH "$optarg"
       ;;
     --with-bundled-broker)
-      append_cache_entry VAST_USE_BUNDLED_BROKER BOOL yes
+      append_cache_entry VAST_ENABLE_BUNDLED_BROKER BOOL yes
       ;;
     --with-doxygen=*)
       append_cache_entry Doxygen_ROOT_DIR PATH "$optarg"
       ;;
     --with-jemalloc|--with-jemalloc=*)
-      append_cache_entry VAST_USE_JEMALLOC BOOL yes
+      append_cache_entry VAST_ENABLE_JEMALLOC BOOL yes
       append_cache_entry jemalloc_ROOT_DIR PATH "$optarg"
       ;;
     --with-openssl=*)

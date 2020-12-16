@@ -1,20 +1,35 @@
+/******************************************************************************
+ *                    _   _____   __________                                  *
+ *                   | | / / _ | / __/_  __/     Visibility                   *
+ *                   | |/ / __ |_\ \  / /          Across                     *
+ *                   |___/_/ |_/___/ /_/       Space and Time                 *
+ *                                                                            *
+ * This file is part of VAST. It is subject to the license terms in the       *
+ * LICENSE file found in the top-level directory of this distribution and at  *
+ * http://vast.io/license. No part of VAST, including this file, may be       *
+ * copied, modified, propagated, or distributed except according to the terms *
+ * contained in the LICENSE file.                                             *
+ ******************************************************************************/
+
 #define SUITE arrow_table_slice
 
-#include "vast/arrow_table_slice.hpp"
+#if VAST_HAVE_ARROW
 
-#include "vast/test/fixtures/table_slices.hpp"
-#include "vast/test/test.hpp"
+#  include "vast/arrow_table_slice.hpp"
 
-#include "vast/arrow_table_slice_builder.hpp"
-#include "vast/concept/parseable/to.hpp"
-#include "vast/concept/parseable/vast/address.hpp"
-#include "vast/concept/parseable/vast/subnet.hpp"
-#include "vast/type.hpp"
+#  include "vast/test/fixtures/table_slices.hpp"
+#  include "vast/test/test.hpp"
 
-#include <caf/make_copy_on_write.hpp>
-#include <caf/test/dsl.hpp>
+#  include "vast/arrow_table_slice_builder.hpp"
+#  include "vast/concept/parseable/to.hpp"
+#  include "vast/concept/parseable/vast/address.hpp"
+#  include "vast/concept/parseable/vast/subnet.hpp"
+#  include "vast/type.hpp"
 
-#include <arrow/api.h>
+#  include <caf/make_copy_on_write.hpp>
+#  include <caf/test/dsl.hpp>
+
+#  include <arrow/api.h>
 
 using namespace vast;
 using namespace std::chrono_literals;
@@ -286,3 +301,5 @@ FIXTURE_SCOPE(arrow_table_slice_tests, fixtures::table_slices)
 TEST_TABLE_SLICE(arrow_table_slice_builder, "arrow")
 
 FIXTURE_SCOPE_END()
+
+#endif // VAST_HAVE_ARROW

@@ -1,6 +1,11 @@
-include_directories(${CMAKE_SOURCE_DIR}/libvast)
-include_directories(${CMAKE_BINARY_DIR}/libvast)
+option(VAST_ENABLE_DSCAT "Build the dscat utility" OFF)
+add_feature_info("VAST_ENABLE_DSCAT" VAST_ENABLE_DSCAT "build the dscat utility.")
+
+if (NOT VAST_ENABLE_DSCAT)
+  return()
+endif ()
 
 add_executable(dscat dscat.cpp)
-target_link_libraries(dscat libvast caf::core)
-install(TARGETS dscat DESTINATION bin)
+target_link_libraries(dscat PRIVATE vast::libvast vast::internal
+                                    caf::core)
+install(TARGETS dscat DESTINATION "${CMAKE_INSTALL_FULL_BINDIR}")

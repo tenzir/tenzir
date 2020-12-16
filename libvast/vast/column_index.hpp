@@ -13,6 +13,8 @@
 
 #pragma once
 
+#include "vast/fwd.hpp"
+
 #include "vast/bitmap.hpp"
 #include "vast/expression.hpp"
 #include "vast/path.hpp"
@@ -26,8 +28,6 @@
 #include <memory>
 
 namespace vast {
-
-struct table_slice_column;
 
 // -- free functions -----------------------------------------------------------
 

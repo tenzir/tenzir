@@ -196,6 +196,11 @@ jobs:
             --prefix="${PWD}/opt/vast" \
             --build-dir="$BUILD_DIR" \
             --package-name="$PACKAGE_NAME" \
+            --with-lsvast \
+            --with-dscat \
+            --with-zeek-to-vast \
+            --with-bundled-caf \
+            --with-bundled-broker \
             ${{ matrix.os.extra-flags }} \
             ${{ github.event.action == 'published' && matrix.configure.flags || matrix.configure.ci-flags }}
 

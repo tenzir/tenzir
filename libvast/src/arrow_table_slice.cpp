@@ -11,24 +11,26 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#include "vast/arrow_table_slice.hpp"
+#if VAST_HAVE_ARROW
 
-#include "vast/arrow_table_slice_builder.hpp"
-#include "vast/detail/byte_swap.hpp"
-#include "vast/detail/narrow.hpp"
-#include "vast/detail/overload.hpp"
-#include "vast/die.hpp"
-#include "vast/error.hpp"
-#include "vast/fbs/table_slice.hpp"
-#include "vast/fbs/utils.hpp"
-#include "vast/logger.hpp"
-#include "vast/value_index.hpp"
+#  include "vast/arrow_table_slice.hpp"
 
-#include <arrow/api.h>
-#include <arrow/io/api.h>
-#include <arrow/ipc/api.h>
+#  include "vast/arrow_table_slice_builder.hpp"
+#  include "vast/detail/byte_swap.hpp"
+#  include "vast/detail/narrow.hpp"
+#  include "vast/detail/overload.hpp"
+#  include "vast/die.hpp"
+#  include "vast/error.hpp"
+#  include "vast/fbs/table_slice.hpp"
+#  include "vast/fbs/utils.hpp"
+#  include "vast/logger.hpp"
+#  include "vast/value_index.hpp"
 
-#include <type_traits>
+#  include <arrow/api.h>
+#  include <arrow/io/api.h>
+#  include <arrow/ipc/api.h>
+
+#  include <type_traits>
 
 namespace vast {
 
@@ -647,3 +649,5 @@ arrow_table_slice<FlatBuffer>::record_batch() const noexcept {
 template class arrow_table_slice<fbs::table_slice::arrow::v0>;
 
 } // namespace vast
+
+#endif // VAST_HAVE_ARROW
