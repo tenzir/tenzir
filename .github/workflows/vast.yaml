@@ -116,7 +116,8 @@ jobs:
           cmake ..
           cmake --build .
           cmake --build . --target amalgamate
-          cmake --build . --target install
+          sudo cmake --build . --target install
+          cd ..
           rm v0.6.1.tar.gz
           rm -rf simdjson-0.6.1
 
