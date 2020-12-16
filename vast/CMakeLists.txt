@@ -75,7 +75,7 @@ install(FILES "${CMAKE_CURRENT_SOURCE_DIR}/vast.yaml.example"
 # TODO: Keep a copy of the man page in the repository such that we know the last
 # edit date. If pandoc+git is available, rebuild the man page.
 
-find_package(Pandoc QUIET)
+find_package(Pandoc)
 if (PANDOC_FOUND)
   set(man_page vast.1)
   set(man_generated "${CMAKE_CURRENT_BINARY_DIR}/${man_page}")

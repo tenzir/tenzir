@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 3.14...3.19 FATAL_ERROR)
 
 # Get the version tag from 'git describe' if it is not set explicitly.
 if (NOT VAST_VERSION_TAG)
-  find_package(Git QUIET)
+  find_package(Git)
   if (Git_FOUND AND EXISTS ${CMAKE_SOURCE_DIR}/.git)
     execute_process(
       COMMAND "${GIT_EXECUTABLE}" describe --tags --long --dirty

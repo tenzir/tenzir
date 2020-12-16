@@ -84,9 +84,9 @@ if (VAST_ENABLE_ARROW)
   if (ARROW_ROOT_DIR)
     set(Arrow_ROOT ${ARROW_ROOT_DIR})
   endif ()
-  find_package(Arrow 0.17 REQUIRED QUIET CONFIG)
+  find_package(Arrow 0.17 REQUIRED CONFIG)
   string(APPEND VAST_FIND_DEPENDENCY_LIST
-         "\nfind_package(Arrow REQUIRED QUIET CONFIG)")
+         "\nfind_package(Arrow REQUIRED CONFIG)")
   if (BUILD_SHARED_LIBS)
     set(ARROW_LIBRARY arrow_shared)
   else ()
@@ -102,9 +102,9 @@ if (VAST_ENABLE_PCAP)
   if (NOT PCAP_ROOT_DIR AND VAST_PREFIX)
     set(PCAP_ROOT_DIR ${VAST_PREFIX})
   endif ()
-  find_package(PCAP REQUIRED QUIET)
+  find_package(PCAP REQUIRED)
   provide_find_module(PCAP)
-  string(APPEND VAST_FIND_DEPENDENCY_LIST "\nfind_package(PCAP REQUIRED QUIET)")
+  string(APPEND VAST_FIND_DEPENDENCY_LIST "\nfind_package(PCAP REQUIRED)")
 endif ()
 
 # -- log level -----------------------------------------------------------------
@@ -170,18 +170,18 @@ if (CAF_FOUND)
   message(STATUS "Found CAF")
   provide_find_module(CAF)
   string(APPEND VAST_FIND_DEPENDENCY_LIST
-         "\nfind_package(CAF COMPONENTS core io test REQUIRED QUIET)")
+         "\nfind_package(CAF COMPONENTS core io test REQUIRED)")
   set(CAF_FOUND_SAVE ${CAF_FOUND})
   # ...and then optional components.
   find_package(
     CAF
     COMPONENTS openssl
-    QUIET)
+   )
   if (CAF_LIBRARY_OPENSSL)
     message(STATUS "Found CAF's OpenSSL module, enabling OpenSSL support")
     set(VAST_USE_OPENSSL true)
     string(APPEND VAST_FIND_DEPENDENCY_LIST
-           "\nfind_package(CAF COMPONENTS openssl REQUIRED QUIET)")
+           "\nfind_package(CAF COMPONENTS openssl REQUIRED)")
   endif ()
   set(CAF_FOUND ${CAF_FOUND_SAVE})
 elseif (EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/aux/caf/CMakeLists.txt)
@@ -326,10 +326,10 @@ find_package(yaml-cpp 0.6.2 REQUIRED HINTS ${YAML_CPP_ROOT})
 target_link_libraries(libvast PRIVATE yaml-cpp)
 
 # Link against xxhash.
-find_package(xxhash 0.6 REQUIRED QUIET)
+find_package(xxhash 0.6 REQUIRED)
 provide_find_module(xxhash)
 string(APPEND VAST_FIND_DEPENDENCY_LIST
-       "\nfind_package(xxhash 0.6 REQUIRED QUIET)")
+       "\nfind_package(xxhash 0.6 REQUIRED)")
 message(STATUS "${xxhash_INCLUDE_DIR}")
 target_link_libraries(libvast PRIVATE xxhash::xxhash)
 

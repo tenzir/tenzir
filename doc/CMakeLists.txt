@@ -1,4 +1,4 @@
-find_package(Doxygen QUIET)
+find_package(Doxygen)
 
 # API documentation
 if (DOXYGEN_FOUND)
