@@ -80,6 +80,8 @@ stdenv.mkDerivation rec {
     "-DVAST_ENABLE_RELOCATABLE_INSTALLATIONS=${if isStatic then "ON" else "OFF"}"
     "-DVAST_VERSION_TAG=${version}"
     "-DVAST_ENABLE_JEMALLOC=ON"
+    "-DVAST_ENABLE_ZEEK_TO_VAST=ON"
+    "-DVAST_ENABLE_LSVAST=ON"
     "-DBROKER_ROOT_DIR=${broker}"
   ] ++ lib.optionals (buildType == "CI") [
     "-DVAST_ENABLE_ASSERTIONS=ON"
@@ -89,7 +91,7 @@ stdenv.mkDerivation rec {
     "-DCMAKE_INTERPROCEDURAL_OPTIMIZATION:BOOL=ON"
     # Workaround for false positives in LTO mode.
     "-DCMAKE_CXX_FLAGS:STRING=-Wno-error=maybe-uninitialized"
-  ] ++ lib.optional disableTests "-VAST_ENABLE_UNIT_TESTS=OFF";
+  ] ++ lib.optional disableTests "-DVAST_ENABLE_UNIT_TESTS=OFF";
 
   hardeningDisable = lib.optional isStatic "pic";
 
@@ -101,7 +103,7 @@ stdenv.mkDerivation rec {
   doInstallCheck = true;
   installCheckInputs = [ py3 jq tcpdump ];
   installCheckPhase = ''
-    python ../integration/integration.py --app ${placeholder "out"}/bin/vast
+    python ../vast/integration/integration.py --app ${placeholder "out"}/bin/vast
   '';
 
   meta = with lib; {

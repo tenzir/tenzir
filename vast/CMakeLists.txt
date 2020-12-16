@@ -62,11 +62,11 @@ add_custom_target(
   USES_TERMINAL)
 
 install(
-  DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/vast/integration"
+  DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/integration"
   DESTINATION "${CMAKE_INSTALL_FULL_DATADIR}/vast"
   PATTERN "integration/vast.yaml.example" EXCLUDE)
 
-install(FILES "${CMAKE_CURRENT_SOURCE_DIR}/vast.yaml.example"
+install(FILES "${PROJECT_SOURCE_DIR}/vast.yaml.example"
         DESTINATION "${CMAKE_INSTALL_FULL_DATADIR}/vast/integration")
 
 # -- man page ------------------------------------------------------------------
