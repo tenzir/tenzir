@@ -178,7 +178,7 @@ struct accountant_state_impl {
   }
 
   void apply_config(accountant_config cfg) {
-    auto& old = cfg;
+    auto& old = this->cfg;
     // Act on file sink config.
     bool start_file_sink = cfg.file_sink.enable && !old.file_sink.enable;
     bool stop_file_sink = !cfg.file_sink.enable && old.file_sink.enable;
