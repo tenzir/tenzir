@@ -11,7 +11,6 @@ import itertools
 import json
 import logging
 import os
-import re
 import shlex
 import shutil
 import signal
@@ -194,7 +193,7 @@ def empty(iterable):
 
 def is_non_deterministic(command):
     positionals = list(filter(lambda x: x[0] != "-", command))
-    return bool(re.match(r"exp(ort|lore)|get|pivot", positionals[0]))
+    return positionals[0] in {"export", "explore", "get", "pivot"}
 
 
 def run_step(basecmd, step_id, step, work_dir, baseline_dir, update_baseline, expected_result):
