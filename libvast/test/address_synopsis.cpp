@@ -89,7 +89,7 @@ TEST(construction based on partition size) {
 }
 
 TEST(updated params after shrinking) {
-  opts["buffer-ips"] = true;
+  opts["buffer-input-data"] = true;
   opts["max-partition-size"] = 1_Mi;
   auto ptr = factory<synopsis>::make(address_type{}, opts);
   ptr->add(to_addr_view("192.168.0.1"));

@@ -436,7 +436,7 @@ index_actor::behavior_type
 index(index_actor::stateful_pointer<index_state> self,
       filesystem_actor filesystem, path dir, size_t partition_capacity,
       size_t max_inmem_partitions, size_t taste_partitions, size_t num_workers,
-      double meta_index_fprate) {
+      double meta_index_fp_rate) {
   VAST_TRACE(VAST_ARG(filesystem), VAST_ARG(dir), VAST_ARG(partition_capacity),
              VAST_ARG(max_inmem_partitions), VAST_ARG(taste_partitions),
              VAST_ARG(num_workers));
@@ -460,8 +460,8 @@ index(index_actor::stateful_pointer<index_state> self,
   // This option must be kept in sync with vast/address_synopsis.hpp.
   auto& meta_index_options = self->state.meta_idx.factory_options();
   put(meta_index_options, "max-partition-size", partition_capacity);
-  put(meta_index_options, "address-synopsis-fprate", meta_index_fprate);
-  put(meta_index_options, "string-synopsis-fprate", meta_index_fprate);
+  put(meta_index_options, "address-synopsis-fp-rate", meta_index_fp_rate);
+  put(meta_index_options, "string-synopsis-fp-rate", meta_index_fp_rate);
   // Creates a new active partition and updates index state.
   auto create_active_partition = [=] {
     auto id = uuid::random();

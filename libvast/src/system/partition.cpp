@@ -381,7 +381,7 @@ active_partition_actor::behavior_type active_partition(
   self->state.streaming_initiated = false;
   self->state.synopsis = std::make_shared<partition_synopsis>();
   self->state.synopsis_opts = std::move(synopsis_opts);
-  put(self->state.synopsis_opts, "buffer-ips", true);
+  put(self->state.synopsis_opts, "buffer-input-data", true);
   // The active partition stage is a caf stream stage that takes
   // a stream of `table_slice` as input and produces several
   // streams of `table_slice_column` as output.

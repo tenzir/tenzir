@@ -211,14 +211,13 @@ TEST(attribute extractor - type) {
   CHECK_EQUAL(lookup("#type !~ /x/"), ids);
 }
 
-FIXTURE_SCOPE_END()
-
 TEST(meta index with bool synopsis) {
   MESSAGE("generate slice data and add it to the meta index");
   meta_index meta_idx;
   auto layout = record_type{{"x", bool_type{}}}.name("test");
   auto builder = factory<table_slice_builder>::make(
     defaults::import::table_slice_type, layout);
+  REQUIRE(builder);
   CHECK(builder->add(make_data_view(true)));
   auto slice = builder->finish();
   REQUIRE(slice.encoding() != table_slice::encoding::none);
@@ -250,13 +249,12 @@ TEST(meta index with bool synopsis) {
   CHECK_EQUAL(lookup(":bool != F"), expected1);
   CHECK_EQUAL(lookup(":bool == F"), expected2);
   CHECK_EQUAL(lookup(":bool != T"), expected2);
-  auto all = std::vector<uuid>{id1, id2, id3};
-  std::sort(all.begin(), all.end());
   // Invalid schema: y does not a valid field
-  CHECK_EQUAL(lookup("y == T"), all);
-  CHECK_EQUAL(lookup("y != F"), all);
-  CHECK_EQUAL(lookup("y == F"), all);
-  CHECK_EQUAL(lookup("y != T"), all);
+  auto none = std::vector<uuid>{};
+  CHECK_EQUAL(lookup("y == T"), none);
+  CHECK_EQUAL(lookup("y != F"), none);
+  CHECK_EQUAL(lookup("y == F"), none);
+  CHECK_EQUAL(lookup("y != T"), none);
 }
 
 TEST(option setting and retrieval) {
@@ -266,3 +264,5 @@ TEST(option setting and retrieval) {
   auto x = caf::get_if<caf::config_value::integer>(&opts["foo"]);
   CHECK_EQUAL(unbox(x), 42);
 }
+
+FIXTURE_SCOPE_END()

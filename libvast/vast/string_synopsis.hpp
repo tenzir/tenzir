@@ -17,6 +17,7 @@
 
 #include "vast/bloom_filter_parameters.hpp"
 #include "vast/bloom_filter_synopsis.hpp"
+#include "vast/buffered_synopsis.hpp"
 
 #include <caf/config_value.hpp>
 #include <caf/settings.hpp>
@@ -55,89 +56,27 @@ public:
   }
 };
 
-/// A synopsis for strings that stores a full copy of the input in a hash
-/// table to be able to construct a smaller bloom filter synopsis for this data
-/// at a later point in time using the `shrink` function.
-template <class HashFunction>
-class buffered_string_synopsis : public synopsis {
-public:
-  buffered_string_synopsis(vast::type x, double p)
-    : synopsis{std::move(x)}, p_{p} {
+/// @relates buffered_synopsis_traits
+template <>
+struct buffered_synopsis_traits<std::string> {
+  template <typename HashFunction>
+  static synopsis_ptr make(vast::type type, bloom_filter_parameters p,
+                           std::vector<size_t> seeds = {}) {
+    return make_string_synopsis<HashFunction>(std::move(type), std::move(p),
+                                              std::move(seeds));
   }
 
-  synopsis_ptr shrink() const override {
-    size_t next_power_of_two = 1ull;
-    while (strings_.size() > next_power_of_two)
-      next_power_of_two *= 2;
-    bloom_filter_parameters params;
-    params.p = p_;
-    params.n = next_power_of_two;
-    VAST_DEBUG_ANON("shrinked string synopsis to", params.n, "elements");
-    auto& type = this->type();
-    auto shrinked_synopsis
-      = make_string_synopsis<xxhash64>(type, std::move(params));
-    if (!shrinked_synopsis)
-      return nullptr;
-    for (auto& s : strings_)
-      shrinked_synopsis->add(make_view(s));
-    return shrinked_synopsis;
+  static size_t size_bytes(const std::unordered_set<std::string>& x) {
+    using node_type = typename std::decay_t<decltype(x)>::node_type;
+    size_t result = 0;
+    for (auto& s : x)
+      result += sizeof(node_type) + s.size();
+    return result;
   }
-
-  // Implementation of the remainder of the `synopsis` API.
-  void add(data_view x) override {
-    auto sv = caf::get_if<view<std::string>>(&x);
-    VAST_ASSERT(sv);
-    strings_.insert(materialize(*sv));
-  }
-
-  size_t size_bytes() const override {
-    return sizeof(buffered_string_synopsis)
-           + std::accumulate(strings_.begin(), strings_.end(), 0u,
-                             [](size_t acc, const std::string& s) {
-                               return acc + s.size();
-                             });
-  }
-
-  caf::optional<bool>
-  lookup(relational_operator op, data_view rhs) const override {
-    switch (op) {
-      default:
-        return caf::none;
-      case equal:
-        return strings_.count(materialize(caf::get<std::string_view>(rhs)));
-      case in: {
-        if (auto xs = caf::get_if<view<list>>(&rhs)) {
-          for (auto x : **xs)
-            if (strings_.count(materialize(caf::get<std::string_view>(x))))
-              return true;
-          return false;
-        }
-        return caf::none;
-      }
-    }
-  }
-
-  caf::error serialize(caf::serializer&) const override {
-    return make_error(ec::logic_error, "attempted to serialize a "
-                                       "buffered_string_synopsis; did you "
-                                       "forget to shrink?");
-  }
-
-  caf::error deserialize(caf::deserializer&) override {
-    return make_error(ec::logic_error, "attempted to deserialize a "
-                                       "buffered_string_synopsis");
-  }
-
-  bool equals(const synopsis& other) const noexcept override {
-    if (auto* p = dynamic_cast<const buffered_string_synopsis*>(&other))
-      return strings_ == p->strings_;
-    return false;
-  }
-
-private:
-  double p_;
-  std::unordered_set<std::string> strings_;
 };
+
+template <typename Hash>
+using buffered_string_synopsis = buffered_synopsis<std::string, Hash>;
 
 /// Factory to construct a string synopsis.
 /// @tparam HashFunction The hash function to use for the Bloom filter.
@@ -202,22 +141,16 @@ synopsis_ptr make_string_synopsis(vast::type type, const caf::settings& opts) {
   }
   bloom_filter_parameters params;
   params.n = *max_part_size;
-  params.p = caf::get_or(opts, "string-synopsis-fprate",
-                         defaults::system::string_synopsis_fprate);
-  // Because VAST deserializes a synopsis with empty options and
-  // construction of an string synopsis fails without any sizing
-  // information, we augment the type with the synopsis options.
-  using namespace std::string_literals;
-  auto v = "bloomfilter("s + std::to_string(*params.n) + ','
-           + std::to_string(*params.p) + ')';
-  auto t = type.attributes({{"synopsis", std::move(v)}});
+  params.p = caf::get_or(opts, "string-synopsis-fp-rate",
+                         defaults::system::string_synopsis_fp_rate);
+  auto annotated_type = annotate_parameters(type, params);
   // Create either a a buffered_string_synopsis or a plain string synopsis
   // depending on the callers preference.
-  auto buffered = caf::get_or(opts, "buffer-ips", false);
+  auto buffered = caf::get_or(opts, "buffer-input-data", false);
   auto result
     = buffered
-        ? make_buffered_string_synopsis<HashFunction>(std::move(t), params)
-        : make_string_synopsis<HashFunction>(std::move(t), params);
+        ? make_buffered_string_synopsis<HashFunction>(std::move(type), params)
+        : make_string_synopsis<HashFunction>(std::move(annotated_type), params);
   if (!result)
     VAST_ERROR_ANON(__func__,
                     "failed to evaluate Bloom filter parameters:", params.n,

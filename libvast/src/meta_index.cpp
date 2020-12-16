@@ -89,9 +89,10 @@ void partition_synopsis::add(const table_slice& slice,
     } else { // type == string
       auto key = qualified_record_field{layout.name(), field};
       field_synopses_[key] = nullptr;
-      auto tt = type_synopses_.find(field.type);
+      auto cleaned_type = vast::type{field.type}.attributes({});
+      auto tt = type_synopses_.find(cleaned_type);
       if (tt == type_synopses_.end())
-        tt = type_synopses_.emplace(field.type, make_synopsis(field)).first;
+        tt = type_synopses_.emplace(cleaned_type, make_synopsis(field)).first;
       if (auto& syn = tt->second)
         add_column(syn);
     }
@@ -206,9 +207,9 @@ std::vector<uuid> meta_index::lookup(const expression& expr) const {
         auto& rhs = caf::get<data>(x.rhs);
         result_type result;
         for (auto& [part_id, part_syn] : synopses_) {
-          VAST_DEBUG(this, "checks", part_id, "for predicate", x);
           for (auto& [field, syn] : part_syn.field_synopses_) {
             if (match(field)) {
+              auto cleaned_type = vast::type{field.type}.attributes({});
               // We rely on having a field -> nullptr mapping here for the
               // fields that don't have their own synopsis.
               if (syn) {
@@ -220,7 +221,7 @@ std::vector<uuid> meta_index::lookup(const expression& expr) const {
                 }
                 // The field has no dedicated synopsis. Check if there is one
                 // for the type in general.
-              } else if (auto it = part_syn.type_synopses_.find(field.type);
+              } else if (auto it = part_syn.type_synopses_.find(cleaned_type);
                          it != part_syn.type_synopses_.end() && it->second) {
                 auto opt = it->second->lookup(x.op, make_view(rhs));
                 if (!opt || *opt) {
@@ -237,6 +238,9 @@ std::vector<uuid> meta_index::lookup(const expression& expr) const {
             }
           }
         }
+        VAST_DEBUG(this, "checked", synopses_.size(),
+                   "partitions for predicate", x, "and got", result.size(),
+                   "results");
         // Some calling paths require the result to be sorted.
         std::sort(result.begin(), result.end());
         return result;
