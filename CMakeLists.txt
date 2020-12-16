@@ -232,7 +232,7 @@ add_feature_info(
 
 option(VAST_ENABLE_STATIC_EXECUTABLE "Link VAST statically."
        $ENV{VAST_ENABLE_STATIC_EXECUTABLE})
-add_feature_info("VAST_ENABLE_STATIC_EXECUTABLE" BUILD_SHARED_LIBS
+add_feature_info("VAST_ENABLE_STATIC_EXECUTABLE" VAST_ENABLE_STATIC_EXECUTABLE
                  "link VAST statically.")
 if (VAST_ENABLE_STATIC_EXECUTABLE)
   target_link_libraries(libvast_internal INTERFACE -static-libgcc
