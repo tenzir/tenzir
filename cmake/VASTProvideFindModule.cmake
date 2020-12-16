@@ -6,7 +6,7 @@ macro (provide_find_module name)
     configure_file("${PROJECT_SOURCE_DIR}/cmake/Find${name}.cmake" ${CMAKE_BINARY_DIR} COPYONLY)
     install(
       FILES "${CMAKE_BINARY_DIR}/Find${name}.cmake"
-      DESTINATION ${INSTALL_VAST_CMAKEDIR}
+      DESTINATION "${CMAKE_INSTALL_FULL_LIBDIR}/cmake/vast"
       COMPONENT dev)
   endif ()
 endmacro ()

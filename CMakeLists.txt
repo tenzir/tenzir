@@ -41,13 +41,6 @@ include(VASTMacDependencyPaths)
 include(VASTProvideFindModule)
 include(VASTUtilities)
 
-# -- augment GNUInstallDirs ----------------------------------------------------
-
-set(CMAKE_INSTALL_CMAKEDIR
-    "${CMAKE_INSTALL_LIBDIR}/cmake"
-    CACHE PATH "Base directory for installing cmake specific artifacts")
-set(INSTALL_VAST_CMAKEDIR "${CMAKE_INSTALL_CMAKEDIR}/vast")
-
 # -- project configuration -----------------------------------------------------
 
 # Determine whether we're building VAST a subproject. This is used to determine
