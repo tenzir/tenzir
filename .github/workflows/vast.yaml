@@ -117,9 +117,6 @@ jobs:
           cmake --build .
           cmake --build . --target amalgamate
           sudo cmake --build . --target install
-          cd ..
-          rm v0.6.1.tar.gz
-          rm -rf simdjson-0.6.1
 
       - name: Install Dependencies (macOS)
         if: matrix.os.tag == 'macOS'
