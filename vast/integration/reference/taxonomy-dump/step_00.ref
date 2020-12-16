@@ -1,218 +1,44 @@
 [
   {
     "concept": {
-      "name": "net.src.sport",
-      "description": "",
+      "name": "ecs.source.ip",
+      "description": "A source IP address",
       "fields": [
-        "pcap.packet.sport"
+        "suricata.alert.src_ip",
+        "suricata.dhcp.src_ip",
+        "suricata.dns.src_ip",
+        "suricata.ftp.src_ip",
+        "suricata.http.src_ip",
+        "suricata.krb5.src_ip",
+        "suricata.netflow.src_ip",
+        "suricata.smb.src_ip",
+        "suricata.ssh.src_ip",
+        "suricata.smtp.src_ip",
+        "suricata.tls.src_ip",
+        "sysmon.NetworkConnection.SourceIp",
+        "zeek.conn.id.orig_h",
+        "zeek.dce_rpc.id.orig_h",
+        "zeek.dnp3.id.orig_h",
+        "zeek.dpd.id.orig_h",
+        "zeek.ftp.id.orig_h",
+        "zeek.http.id.orig_h",
+        "zeek.intel.id.orig_h",
+        "zeek.irc.id.orig_h",
+        "zeek.notice.id.orig_h",
+        "zeek.ntlm.id.orig_h",
+        "zeek.pe.id.orig_h",
+        "zeek.radius.id.orig_h",
+        "zeek.rdp.id.orig_h",
+        "zeek.sip.id.orig_h",
+        "zeek.smb.id.orig_h",
+        "zeek.smtp.id.orig_h",
+        "zeek.snmp.id.orig_h",
+        "zeek.ssh.id.orig_h",
+        "zeek.ssl.id.orig_h",
+        "zeek.tunnel.id.orig_h",
+        "zeek.weird.id.orig_h",
+        "zeek.x509.id.orig_h"
       ],
-      "concepts": []
-    }
-  },
-  {
-    "concept": {
-      "name": "net.dst.port",
-      "description": "The transport-layer port of the connection responder",
-      "fields": [
-        "suricata.alert.dest_port",
-        "suricata.dhcp.dest_port",
-        "suricata.dns.dest_port",
-        "suricata.ftp.dest_port",
-        "suricata.ftp_data.dest_port",
-        "suricata.http.dest_port",
-        "suricata.fileinfo.dest_port",
-        "suricata.flow.dest_port",
-        "suricata.krb5.dest_port",
-        "suricata.netflow.dest_port",
-        "suricata.smb.dest_port",
-        "suricata.ssh.dest_port",
-        "suricata.smtp.dest_port",
-        "suricata.tls.dest_port",
-        "zeek.conn.id.resp_p",
-        "zeek.dce_rpc.id.resp_p",
-        "zeek.dnp3.id.resp_p",
-        "zeek.dns.id.resp_p",
-        "zeek.dpd.id.resp_p",
-        "zeek.ftp.id.resp_p",
-        "zeek.http.id.resp_p",
-        "zeek.intel.id.resp_p",
-        "zeek.irc.id.resp_p",
-        "zeek.notice.id.resp_p",
-        "zeek.ntlm.id.resp_p",
-        "zeek.pe.id.resp_p",
-        "zeek.radius.id.resp_p",
-        "zeek.rdp.id.resp_p",
-        "zeek.sip.id.resp_p",
-        "zeek.smb.id.resp_p",
-        "zeek.smtp.id.resp_p",
-        "zeek.snmp.id.resp_p",
-        "zeek.ssh.id.resp_p",
-        "zeek.ssl.id.resp_p",
-        "zeek.tunnel.id.resp_p",
-        "zeek.weird.id.resp_p",
-        "zeek.x509.id.resp_p",
-        "sysmon.NetworkConnection.DestinationPort",
-        "pcap.packet.dport"
-      ],
-      "concepts": []
-    }
-  },
-  {
-    "concept": {
-      "name": "proc.parent.name",
-      "description": "",
-      "fields": [
-        "sysmon.ProcessCreation.ParentImage"
-      ],
-      "concepts": []
-    }
-  },
-  {
-    "concept": {
-      "name": "proc.parent.guid",
-      "description": "",
-      "fields": [
-        "sysmon.ProcessCreation.ParentProcessGuid"
-      ],
-      "concepts": []
-    }
-  },
-  {
-    "concept": {
-      "name": "proc.parent.id",
-      "description": "",
-      "fields": [
-        "sysmon.ProcessCreation.ParentProcessId"
-      ],
-      "concepts": []
-    }
-  },
-  {
-    "concept": {
-      "name": "proc.user_guid",
-      "description": "",
-      "fields": [
-        "sysmon.ProcessCreation.LogonGuid"
-      ],
-      "concepts": []
-    }
-  },
-  {
-    "concept": {
-      "name": "proc.cwd",
-      "description": "The current working directory where the process was spawned",
-      "fields": [],
-      "concepts": []
-    }
-  },
-  {
-    "concept": {
-      "name": "net.hostname",
-      "description": "A hostname of a machine.",
-      "fields": [
-        "net.dst.hostname",
-        "net.src.hostname",
-        "suricata.fileinfo.http.hostname",
-        "suricata.http.http.hostname",
-        "suricata.dhcp.dhcp.hostname",
-        "suricata.krb5.host",
-        "suricata.smb.host",
-        "suricata.smb.smb.ntlmssp.host",
-        "suricata.ssh.host",
-        "zeek.dhcp.host_name",
-        "zeek.ntlm.hostname",
-        "zeek.ntlm.server_dns_computer_name",
-        "zeek.http.host",
-        "zeek.software.host"
-      ],
-      "concepts": []
-    }
-  },
-  {
-    "concept": {
-      "name": "proc.file_name",
-      "description": "The name of the file corresponding to the process image",
-      "fields": [],
-      "concepts": []
-    }
-  },
-  {
-    "concept": {
-      "name": "proc.user_name",
-      "description": "The name of the user that spawned the process",
-      "fields": [
-        "sysmon.FileDelete.User",
-        "sysmon.NetworkConnection.User",
-        "sysmon.ProcessCreation.User",
-        "sysmon.WmiEventConsumer.User",
-        "sysmon.WmiEventConsumerToFilter.User",
-        "sysmon.WmiEventFilter.User"
-      ],
-      "concepts": []
-    }
-  },
-  {
-    "concept": {
-      "name": "proc.path",
-      "description": "The full path to the process image",
-      "fields": [],
-      "concepts": []
-    }
-  },
-  {
-    "concept": {
-      "name": "proc.parent_id",
-      "description": "The parent process ID that spawned this process",
-      "fields": [],
-      "concepts": []
-    }
-  },
-  {
-    "concept": {
-      "name": "proc.id",
-      "description": "The process ID (PID) assigned by the OS",
-      "fields": [
-        "sysmon.CreateRemoteThread.SourceProcessId",
-        "sysmon.CreateRemoteThread.TargetProcessId",
-        "sysmon.FileCreate.ProcessId",
-        "sysmon.FileCreateStreamHash.ProcessId",
-        "sysmon.FileDelete.ProcessId",
-        "sysmon.ImageLoaded.ProcessId",
-        "sysmon.NetworkConnection.ProcessId",
-        "sysmon.PipeConnected.ProcessId",
-        "sysmon.PipeCreated.ProcessId",
-        "sysmon.ProcessAccess.SourceProcessId",
-        "sysmon.ProcessAccess.TargetProcessId",
-        "sysmon.ProcessChangedFileCreationTime.ProcessId",
-        "sysmon.ProcessCreation.ProcessId",
-        "sysmon.ProcessTerminated.ProcessId",
-        "sysmon.RawAccessRead.ProcessId",
-        "sysmon.RegistryEventKeyAndValueRename.ProcessId",
-        "sysmon.RegistryEventObjectCreateAndDelete.ProcessId",
-        "sysmon.RegistryEventValueSet.ProcessId"
-      ],
-      "concepts": []
-    }
-  },
-  {
-    "concept": {
-      "name": "net.vlan",
-      "description": "The VLAN for a connection",
-      "fields": [
-        "net.outer_vlan",
-        "net.inner_vlan",
-        "suricata.smb.vlan",
-        "suricata.ssh.vlan",
-        "suricata.krb5.vlan"
-      ],
-      "concepts": []
-    }
-  },
-  {
-    "concept": {
-      "name": "net.outer_vlan",
-      "description": "The outer VLAN for a connection",
-      "fields": [],
       "concepts": []
     }
   },
@@ -235,11 +61,25 @@
   },
   {
     "concept": {
-      "name": "net.dst.hostname",
-      "description": "The hostname of the destination.",
-      "fields": [
-        "sysmon.NetworkConnection.DestinationHostname"
-      ],
+      "name": "file.owner",
+      "description": "The owner of the file.",
+      "fields": [],
+      "concepts": []
+    }
+  },
+  {
+    "concept": {
+      "name": "file.group",
+      "description": "The group of the file.",
+      "fields": [],
+      "concepts": []
+    }
+  },
+  {
+    "concept": {
+      "name": "file.perms",
+      "description": "The permissions of the file.",
+      "fields": [],
       "concepts": []
     }
   },
@@ -253,66 +93,133 @@
   },
   {
     "concept": {
-      "name": "net.src.hostname",
-      "description": "The hostname of the source.",
+      "name": "file.ext",
+      "description": "The extension of a file.",
+      "fields": [],
+      "concepts": []
+    }
+  },
+  {
+    "concept": {
+      "name": "file.hash.md5",
+      "description": "The MD5 hash of the file.",
       "fields": [
-        "sysmon.NetworkConnection.SourceHostname"
+        "suricata.fileinfo.fileinfo.md5"
       ],
       "concepts": []
     }
   },
   {
     "concept": {
-      "name": "proc.guid",
-      "description": "Process GUID of the spawned process",
+      "name": "file.hash.sha1",
+      "description": "The SHA1 hash of the file.",
       "fields": [
-        "sysmon.CreateRemoteThread.SourceProcessGuid",
-        "sysmon.CreateRemoteThread.TargetProcessGuid",
-        "sysmon.FileCreate.ProcessGuid",
-        "sysmon.FileCreateStreamHash.ProcessGuid",
-        "sysmon.FileDelete.ProcessGuid",
-        "sysmon.ImageLoaded.ProcessGuid",
-        "sysmon.NetworkConnection.ProcessGuid",
-        "sysmon.PipeConnected.ProcessGuid",
-        "sysmon.PipeCreated.ProcessGuid",
-        "sysmon.ProcessAccess.SourceProcessGuid",
-        "sysmon.ProcessAccess.TargetProcessGuid",
-        "sysmon.ProcessChangedFileCreationTime.ProcessGuid",
-        "sysmon.ProcessCreation.ProcessGuid",
-        "sysmon.ProcessTerminated.ProcessGuid",
-        "sysmon.RawAccessRead.ProcessGuid",
-        "sysmon.RegistryEventKeyAndValueRename.ProcessGuid",
-        "sysmon.RegistryEventObjectCreateAndDelete.ProcessGuid",
-        "sysmon.RegistryEventValueSet.ProcessGuid"
+        "suricata.fileinfo.fileinfo.sha1"
       ],
       "concepts": []
     }
   },
   {
     "concept": {
-      "name": "net.domain",
-      "description": "A domain name.",
+      "name": "file.hash.sha256",
+      "description": "The SHA256 hash of the file.",
       "fields": [
-        "suricata.smb.smb.ntlmssp.domain",
-        "suricata.dns.dns.rrname",
-        "suricata.tls.sni",
-        "suricata.http.http.hostname",
-        "zeek.dns.answers",
-        "zeek.dns.query",
-        "zeek.http.domain",
-        "zeek.dhcp.domain",
-        "zeek.ntlm.domainname",
-        "zeek.ssl.server_name"
+        "suricata.fileinfo.fileinfo.sha256"
       ],
       "concepts": []
     }
   },
   {
     "concept": {
-      "name": "net.src.mac",
-      "description": "The MAC address of the frame source",
+      "name": "net.src.ip",
+      "description": "The IP address of the connection originator",
       "fields": [
-        "suricata.dhcp.dhcp.client_mac"
+        "suricata.alert.src_ip",
+        "suricata.dhcp.src_ip",
+        "suricata.dns.src_ip",
+        "suricata.ftp.src_ip",
+        "suricata.ftp_data.src_ip",
+        "suricata.http.src_ip",
+        "suricata.fileinfo.src_ip",
+        "suricata.flow.src_ip",
+        "suricata.krb5.src_ip",
+        "suricata.netflow.src_ip",
+        "suricata.smb.src_ip",
+        "suricata.ssh.src_ip",
+        "suricata.smtp.src_ip",
+        "suricata.tls.src_ip",
+        "zeek.conn.id.orig_h",
+        "zeek.dce_rpc.id.orig_h",
+        "zeek.dnp3.id.orig_h",
+        "zeek.dns.id.orig_h",
+        "zeek.dpd.id.orig_h",
+        "zeek.ftp.id.orig_h",
+        "zeek.http.id.orig_h",
+        "zeek.intel.id.orig_h",
+        "zeek.irc.id.orig_h",
+        "zeek.notice.id.orig_h",
+        "zeek.ntlm.id.orig_h",
+        "zeek.pe.id.orig_h",
+        "zeek.radius.id.orig_h",
+        "zeek.rdp.id.orig_h",
+        "zeek.sip.id.orig_h",
+        "zeek.smb.id.orig_h",
+        "zeek.smtp.id.orig_h",
+        "zeek.snmp.id.orig_h",
+        "zeek.ssh.id.orig_h",
+        "zeek.ssl.id.orig_h",
+        "zeek.tunnel.id.orig_h",
+        "zeek.weird.id.orig_h",
+        "zeek.x509.id.orig_h",
+        "sysmon.NetworkConnection.SourceIp",
+        "pcap.packet.src"
+      ],
+      "concepts": []
+    }
+  },
+  {
+    "concept": {
+      "name": "net.src.port",
+      "description": "The transport-layer port of the connection originator",
+      "fields": [
+        "suricata.alert.src_port",
+        "suricata.dhcp.src_port",
+        "suricata.dns.src_port",
+        "suricata.ftp.src_port",
+        "suricata.ftp_data.src_port",
+        "suricata.http.src_port",
+        "suricata.fileinfo.src_port",
+        "suricata.flow.src_port",
+        "suricata.krb5.src_port",
+        "suricata.netflow.src_port",
+        "suricata.smb.src_port",
+        "suricata.ssh.src_port",
+        "suricata.smtp.src_port",
+        "suricata.tls.src_port",
+        "zeek.conn.id.orig_p",
+        "zeek.dce_rpc.id.orig_p",
+        "zeek.dnp3.id.orig_p",
+        "zeek.dns.id.orig_p",
+        "zeek.dpd.id.orig_p",
+        "zeek.ftp.id.orig_p",
+        "zeek.http.id.orig_p",
+        "zeek.intel.id.orig_p",
+        "zeek.irc.id.orig_p",
+        "zeek.notice.id.orig_p",
+        "zeek.ntlm.id.orig_p",
+        "zeek.pe.id.orig_p",
+        "zeek.radius.id.orig_p",
+        "zeek.rdp.id.orig_p",
+        "zeek.sip.id.orig_p",
+        "zeek.smb.id.orig_p",
+        "zeek.smtp.id.orig_p",
+        "zeek.snmp.id.orig_p",
+        "zeek.ssh.id.orig_p",
+        "zeek.ssl.id.orig_p",
+        "zeek.tunnel.id.orig_p",
+        "zeek.weird.id.orig_p",
+        "zeek.x509.id.orig_p",
+        "sysmon.NetworkConnection.SourcePort"
       ],
       "concepts": []
     }
@@ -367,120 +274,126 @@
   },
   {
     "concept": {
-      "name": "net.dst.packets",
-      "description": "The number of IP packets sent by the connection responder",
+      "name": "net.dst.port",
+      "description": "The transport-layer port of the connection responder",
       "fields": [
-        "zeek.conn.resp_pkts"
+        "suricata.alert.dest_port",
+        "suricata.dhcp.dest_port",
+        "suricata.dns.dest_port",
+        "suricata.ftp.dest_port",
+        "suricata.ftp_data.dest_port",
+        "suricata.http.dest_port",
+        "suricata.fileinfo.dest_port",
+        "suricata.flow.dest_port",
+        "suricata.krb5.dest_port",
+        "suricata.netflow.dest_port",
+        "suricata.smb.dest_port",
+        "suricata.ssh.dest_port",
+        "suricata.smtp.dest_port",
+        "suricata.tls.dest_port",
+        "zeek.conn.id.resp_p",
+        "zeek.dce_rpc.id.resp_p",
+        "zeek.dnp3.id.resp_p",
+        "zeek.dns.id.resp_p",
+        "zeek.dpd.id.resp_p",
+        "zeek.ftp.id.resp_p",
+        "zeek.http.id.resp_p",
+        "zeek.intel.id.resp_p",
+        "zeek.irc.id.resp_p",
+        "zeek.notice.id.resp_p",
+        "zeek.ntlm.id.resp_p",
+        "zeek.pe.id.resp_p",
+        "zeek.radius.id.resp_p",
+        "zeek.rdp.id.resp_p",
+        "zeek.sip.id.resp_p",
+        "zeek.smb.id.resp_p",
+        "zeek.smtp.id.resp_p",
+        "zeek.snmp.id.resp_p",
+        "zeek.ssh.id.resp_p",
+        "zeek.ssl.id.resp_p",
+        "zeek.tunnel.id.resp_p",
+        "zeek.weird.id.resp_p",
+        "zeek.x509.id.resp_p",
+        "sysmon.NetworkConnection.DestinationPort",
+        "pcap.packet.dport"
       ],
       "concepts": []
     }
   },
   {
     "concept": {
-      "name": "proc.user_id",
-      "description": "The ID of the user that spawned the process",
+      "name": "net.proto",
+      "description": "The transport-layer protocol of a connection",
       "fields": [
-        "sysmon.ProcessCreation.LogonId"
+        "suricata.alert.proto",
+        "suricata.dhcp.proto",
+        "suricata.dns.proto",
+        "suricata.ftp.proto",
+        "suricata.ftp_data.proto",
+        "suricata.http.proto",
+        "suricata.fileinfo.proto",
+        "suricata.flow.proto",
+        "suricata.krb5.proto",
+        "suricata.netflow.proto",
+        "suricata.smb.proto",
+        "suricata.ssh.proto",
+        "suricata.smtp.proto",
+        "suricata.tls.proto",
+        "zeek.conn.proto",
+        "zeek.dns.proto",
+        "zeek.notice.proto",
+        "sysmon.NetworkConnection.Protocol"
       ],
       "concepts": []
     }
   },
   {
     "concept": {
-      "name": "net.src.packets",
-      "description": "The number of IP packets sent by the connection originator",
+      "name": "net.app",
+      "description": "The application-layer protocol of a connection",
       "fields": [
-        "zeek.conn.orig_pkts"
+        "suricata.alert.alert.app_proto",
+        "suricata.dhcp.event_type",
+        "suricata.dns.event_type",
+        "suricata.ftp.event_type",
+        "suricata.ftp_data.event_type",
+        "suricata.http.event_type",
+        "suricata.fileinfo.app_proto",
+        "suricata.flow.app_proto",
+        "suricata.krb5.event_type",
+        "suricata.netflow.app_proto",
+        "suricata.smb.event_type",
+        "suricata.ssh.event_type",
+        "suricata.smtp.event_type",
+        "suricata.tls.event_type",
+        "zeek.conn.service",
+        "sysmon.NetworkConnection.SourcePortName",
+        "sysmon.NetworkConnection.DestinationPortName"
       ],
       "concepts": []
     }
   },
   {
     "concept": {
-      "name": "ecs.source.ip",
-      "description": "A source IP address",
+      "name": "net.community_id",
+      "description": "The Community ID for a connection",
       "fields": [
-        "suricata.alert.src_ip",
-        "suricata.dhcp.src_ip",
-        "suricata.dns.src_ip",
-        "suricata.ftp.src_ip",
-        "suricata.http.src_ip",
-        "suricata.krb5.src_ip",
-        "suricata.netflow.src_ip",
-        "suricata.smb.src_ip",
-        "suricata.ssh.src_ip",
-        "suricata.smtp.src_ip",
-        "suricata.tls.src_ip",
-        "sysmon.NetworkConnection.SourceIp",
-        "zeek.conn.id.orig_h",
-        "zeek.dce_rpc.id.orig_h",
-        "zeek.dnp3.id.orig_h",
-        "zeek.dpd.id.orig_h",
-        "zeek.ftp.id.orig_h",
-        "zeek.http.id.orig_h",
-        "zeek.intel.id.orig_h",
-        "zeek.irc.id.orig_h",
-        "zeek.notice.id.orig_h",
-        "zeek.ntlm.id.orig_h",
-        "zeek.pe.id.orig_h",
-        "zeek.radius.id.orig_h",
-        "zeek.rdp.id.orig_h",
-        "zeek.sip.id.orig_h",
-        "zeek.smb.id.orig_h",
-        "zeek.smtp.id.orig_h",
-        "zeek.snmp.id.orig_h",
-        "zeek.ssh.id.orig_h",
-        "zeek.ssl.id.orig_h",
-        "zeek.tunnel.id.orig_h",
-        "zeek.weird.id.orig_h",
-        "zeek.x509.id.orig_h"
-      ],
-      "concepts": []
-    }
-  },
-  {
-    "concept": {
-      "name": "net.src.port",
-      "description": "The transport-layer port of the connection originator",
-      "fields": [
-        "suricata.alert.src_port",
-        "suricata.dhcp.src_port",
-        "suricata.dns.src_port",
-        "suricata.ftp.src_port",
-        "suricata.ftp_data.src_port",
-        "suricata.http.src_port",
-        "suricata.fileinfo.src_port",
-        "suricata.flow.src_port",
-        "suricata.krb5.src_port",
-        "suricata.netflow.src_port",
-        "suricata.smb.src_port",
-        "suricata.ssh.src_port",
-        "suricata.smtp.src_port",
-        "suricata.tls.src_port",
-        "zeek.conn.id.orig_p",
-        "zeek.dce_rpc.id.orig_p",
-        "zeek.dnp3.id.orig_p",
-        "zeek.dns.id.orig_p",
-        "zeek.dpd.id.orig_p",
-        "zeek.ftp.id.orig_p",
-        "zeek.http.id.orig_p",
-        "zeek.intel.id.orig_p",
-        "zeek.irc.id.orig_p",
-        "zeek.notice.id.orig_p",
-        "zeek.ntlm.id.orig_p",
-        "zeek.pe.id.orig_p",
-        "zeek.radius.id.orig_p",
-        "zeek.rdp.id.orig_p",
-        "zeek.sip.id.orig_p",
-        "zeek.smb.id.orig_p",
-        "zeek.smtp.id.orig_p",
-        "zeek.snmp.id.orig_p",
-        "zeek.ssh.id.orig_p",
-        "zeek.ssl.id.orig_p",
-        "zeek.tunnel.id.orig_p",
-        "zeek.weird.id.orig_p",
-        "zeek.x509.id.orig_p",
-        "sysmon.NetworkConnection.SourcePort"
+        "suricata.alert.community_id",
+        "suricata.dhcp.community_id",
+        "suricata.dns.community_id",
+        "suricata.ftp.community_id",
+        "suricata.ftp_data.community_id",
+        "suricata.http.community_id",
+        "suricata.fileinfo.community_id",
+        "suricata.flow.community_id",
+        "suricata.krb5.community_id",
+        "suricata.netflow.community_id",
+        "suricata.smb.community_id",
+        "suricata.ssh.community_id",
+        "suricata.smtp.community_id",
+        "suricata.tls.community_id",
+        "zeek.conn.community_id",
+        "pcap.packet.community_id"
       ],
       "concepts": []
     }
@@ -497,31 +410,44 @@
   },
   {
     "concept": {
-      "name": "proc.thread.id",
-      "description": "",
+      "name": "net.src.bytes",
+      "description": "The number of applicatin-layer bytes sent by the connection originator",
       "fields": [
-        "sysmon.CreateRemoteThread.NewThreadId",
-        "sysmon.ProcessAccess.SourceThreadId"
+        "suricata.alert.flow.bytes_toserver",
+        "suricata.flow.flow.bytes_toserver",
+        "zeek.conn.orig_bytes"
       ],
       "concepts": []
     }
   },
   {
     "concept": {
-      "name": "file.hash.sha1",
-      "description": "The SHA1 hash of the file.",
+      "name": "net.dst.bytes",
+      "description": "The number of applicatin-layer bytes sent by the connection responder",
       "fields": [
-        "suricata.fileinfo.fileinfo.sha1"
+        "suricata.alert.flow.bytes_toclient",
+        "suricata.flow.flow.bytes_toclient",
+        "zeek.conn.resp_bytes"
       ],
       "concepts": []
     }
   },
   {
     "concept": {
-      "name": "file.hash.sha256",
-      "description": "The SHA256 hash of the file.",
+      "name": "net.src.packets",
+      "description": "The number of IP packets sent by the connection originator",
       "fields": [
-        "suricata.fileinfo.fileinfo.sha256"
+        "zeek.conn.orig_pkts"
+      ],
+      "concepts": []
+    }
+  },
+  {
+    "concept": {
+      "name": "net.dst.packets",
+      "description": "The number of IP packets sent by the connection responder",
+      "fields": [
+        "zeek.conn.resp_pkts"
       ],
       "concepts": []
     }
@@ -549,12 +475,10 @@
   },
   {
     "concept": {
-      "name": "net.src.bytes",
-      "description": "The number of applicatin-layer bytes sent by the connection originator",
+      "name": "net.src.mac",
+      "description": "The MAC address of the frame source",
       "fields": [
-        "suricata.alert.flow.bytes_toserver",
-        "suricata.flow.flow.bytes_toserver",
-        "zeek.conn.orig_bytes"
+        "suricata.dhcp.dhcp.client_mac"
       ],
       "concepts": []
     }
@@ -569,75 +493,216 @@
   },
   {
     "concept": {
-      "name": "net.src.ip",
-      "description": "The IP address of the connection originator",
+      "name": "net.src.hostname",
+      "description": "The hostname of the source.",
       "fields": [
-        "suricata.alert.src_ip",
-        "suricata.dhcp.src_ip",
-        "suricata.dns.src_ip",
-        "suricata.ftp.src_ip",
-        "suricata.ftp_data.src_ip",
-        "suricata.http.src_ip",
-        "suricata.fileinfo.src_ip",
-        "suricata.flow.src_ip",
-        "suricata.krb5.src_ip",
-        "suricata.netflow.src_ip",
-        "suricata.smb.src_ip",
-        "suricata.ssh.src_ip",
-        "suricata.smtp.src_ip",
-        "suricata.tls.src_ip",
-        "zeek.conn.id.orig_h",
-        "zeek.dce_rpc.id.orig_h",
-        "zeek.dnp3.id.orig_h",
-        "zeek.dns.id.orig_h",
-        "zeek.dpd.id.orig_h",
-        "zeek.ftp.id.orig_h",
-        "zeek.http.id.orig_h",
-        "zeek.intel.id.orig_h",
-        "zeek.irc.id.orig_h",
-        "zeek.notice.id.orig_h",
-        "zeek.ntlm.id.orig_h",
-        "zeek.pe.id.orig_h",
-        "zeek.radius.id.orig_h",
-        "zeek.rdp.id.orig_h",
-        "zeek.sip.id.orig_h",
-        "zeek.smb.id.orig_h",
-        "zeek.smtp.id.orig_h",
-        "zeek.snmp.id.orig_h",
-        "zeek.ssh.id.orig_h",
-        "zeek.ssl.id.orig_h",
-        "zeek.tunnel.id.orig_h",
-        "zeek.weird.id.orig_h",
-        "zeek.x509.id.orig_h",
-        "sysmon.NetworkConnection.SourceIp",
-        "pcap.packet.src"
+        "sysmon.NetworkConnection.SourceHostname"
       ],
       "concepts": []
     }
   },
   {
     "concept": {
-      "name": "file.ext",
-      "description": "The extension of a file.",
-      "fields": [],
-      "concepts": []
-    }
-  },
-  {
-    "concept": {
-      "name": "file.perms",
-      "description": "The permissions of the file.",
-      "fields": [],
-      "concepts": []
-    }
-  },
-  {
-    "concept": {
-      "name": "file.hash.md5",
-      "description": "The MD5 hash of the file.",
+      "name": "net.dst.hostname",
+      "description": "The hostname of the destination.",
       "fields": [
-        "suricata.fileinfo.fileinfo.md5"
+        "sysmon.NetworkConnection.DestinationHostname"
       ],
+      "concepts": []
+    }
+  },
+  {
+    "concept": {
+      "name": "net.hostname",
+      "description": "A hostname of a machine.",
+      "fields": [
+        "net.dst.hostname",
+        "net.src.hostname",
+        "suricata.fileinfo.http.hostname",
+        "suricata.http.http.hostname",
+        "suricata.dhcp.dhcp.hostname",
+        "suricata.krb5.host",
+        "suricata.smb.host",
+        "suricata.smb.smb.ntlmssp.host",
+        "suricata.ssh.host",
+        "zeek.dhcp.host_name",
+        "zeek.ntlm.hostname",
+        "zeek.ntlm.server_dns_computer_name",
+        "zeek.http.host",
+        "zeek.software.host"
+      ],
+      "concepts": []
+    }
+  },
+  {
+    "concept": {
+      "name": "net.domain",
+      "description": "A domain name.",
+      "fields": [
+        "suricata.smb.smb.ntlmssp.domain",
+        "suricata.dns.dns.rrname",
+        "suricata.tls.sni",
+        "suricata.http.http.hostname",
+        "zeek.dns.answers",
+        "zeek.dns.query",
+        "zeek.http.domain",
+        "zeek.dhcp.domain",
+        "zeek.ntlm.domainname",
+        "zeek.ssl.server_name"
+      ],
+      "concepts": []
+    }
+  },
+  {
+    "concept": {
+      "name": "net.uri",
+      "description": "A URI.",
+      "fields": [
+        "suricata.http.http.url",
+        "zeek.http.uri",
+        "zeek.http.referrer"
+      ],
+      "concepts": []
+    }
+  },
+  {
+    "concept": {
+      "name": "net.outer_vlan",
+      "description": "The outer VLAN for a connection",
+      "fields": [],
+      "concepts": []
+    }
+  },
+  {
+    "concept": {
+      "name": "net.inner_vlan",
+      "description": "The inner VLAN for a connection",
+      "fields": [],
+      "concepts": []
+    }
+  },
+  {
+    "concept": {
+      "name": "net.vlan",
+      "description": "The VLAN for a connection",
+      "fields": [
+        "net.outer_vlan",
+        "net.inner_vlan",
+        "suricata.smb.vlan",
+        "suricata.ssh.vlan",
+        "suricata.krb5.vlan"
+      ],
+      "concepts": []
+    }
+  },
+  {
+    "concept": {
+      "name": "proc.guid",
+      "description": "Process GUID of the spawned process",
+      "fields": [
+        "sysmon.CreateRemoteThread.SourceProcessGuid",
+        "sysmon.CreateRemoteThread.TargetProcessGuid",
+        "sysmon.FileCreate.ProcessGuid",
+        "sysmon.FileCreateStreamHash.ProcessGuid",
+        "sysmon.FileDelete.ProcessGuid",
+        "sysmon.ImageLoaded.ProcessGuid",
+        "sysmon.NetworkConnection.ProcessGuid",
+        "sysmon.PipeConnected.ProcessGuid",
+        "sysmon.PipeCreated.ProcessGuid",
+        "sysmon.ProcessAccess.SourceProcessGuid",
+        "sysmon.ProcessAccess.TargetProcessGuid",
+        "sysmon.ProcessChangedFileCreationTime.ProcessGuid",
+        "sysmon.ProcessCreation.ProcessGuid",
+        "sysmon.ProcessTerminated.ProcessGuid",
+        "sysmon.RawAccessRead.ProcessGuid",
+        "sysmon.RegistryEventKeyAndValueRename.ProcessGuid",
+        "sysmon.RegistryEventObjectCreateAndDelete.ProcessGuid",
+        "sysmon.RegistryEventValueSet.ProcessGuid"
+      ],
+      "concepts": []
+    }
+  },
+  {
+    "concept": {
+      "name": "proc.id",
+      "description": "The process ID (PID) assigned by the OS",
+      "fields": [
+        "sysmon.CreateRemoteThread.SourceProcessId",
+        "sysmon.CreateRemoteThread.TargetProcessId",
+        "sysmon.FileCreate.ProcessId",
+        "sysmon.FileCreateStreamHash.ProcessId",
+        "sysmon.FileDelete.ProcessId",
+        "sysmon.ImageLoaded.ProcessId",
+        "sysmon.NetworkConnection.ProcessId",
+        "sysmon.PipeConnected.ProcessId",
+        "sysmon.PipeCreated.ProcessId",
+        "sysmon.ProcessAccess.SourceProcessId",
+        "sysmon.ProcessAccess.TargetProcessId",
+        "sysmon.ProcessChangedFileCreationTime.ProcessId",
+        "sysmon.ProcessCreation.ProcessId",
+        "sysmon.ProcessTerminated.ProcessId",
+        "sysmon.RawAccessRead.ProcessId",
+        "sysmon.RegistryEventKeyAndValueRename.ProcessId",
+        "sysmon.RegistryEventObjectCreateAndDelete.ProcessId",
+        "sysmon.RegistryEventValueSet.ProcessId"
+      ],
+      "concepts": []
+    }
+  },
+  {
+    "concept": {
+      "name": "proc.parent_id",
+      "description": "The parent process ID that spawned this process",
+      "fields": [],
+      "concepts": []
+    }
+  },
+  {
+    "concept": {
+      "name": "proc.path",
+      "description": "The full path to the process image",
+      "fields": [],
+      "concepts": []
+    }
+  },
+  {
+    "concept": {
+      "name": "proc.user_id",
+      "description": "The ID of the user that spawned the process",
+      "fields": [
+        "sysmon.ProcessCreation.LogonId"
+      ],
+      "concepts": []
+    }
+  },
+  {
+    "concept": {
+      "name": "proc.user_name",
+      "description": "The name of the user that spawned the process",
+      "fields": [
+        "sysmon.FileDelete.User",
+        "sysmon.NetworkConnection.User",
+        "sysmon.ProcessCreation.User",
+        "sysmon.WmiEventConsumer.User",
+        "sysmon.WmiEventConsumerToFilter.User",
+        "sysmon.WmiEventFilter.User"
+      ],
+      "concepts": []
+    }
+  },
+  {
+    "concept": {
+      "name": "proc.file_name",
+      "description": "The name of the file corresponding to the process image",
+      "fields": [],
+      "concepts": []
+    }
+  },
+  {
+    "concept": {
+      "name": "proc.cwd",
+      "description": "The current working directory where the process was spawned",
+      "fields": [],
       "concepts": []
     }
   },
@@ -673,127 +738,62 @@
   },
   {
     "concept": {
-      "name": "net.community_id",
-      "description": "The Community ID for a connection",
+      "name": "proc.user_guid",
+      "description": "",
       "fields": [
-        "suricata.alert.community_id",
-        "suricata.dhcp.community_id",
-        "suricata.dns.community_id",
-        "suricata.ftp.community_id",
-        "suricata.ftp_data.community_id",
-        "suricata.http.community_id",
-        "suricata.fileinfo.community_id",
-        "suricata.flow.community_id",
-        "suricata.krb5.community_id",
-        "suricata.netflow.community_id",
-        "suricata.smb.community_id",
-        "suricata.ssh.community_id",
-        "suricata.smtp.community_id",
-        "suricata.tls.community_id",
-        "zeek.conn.community_id",
-        "pcap.packet.community_id"
+        "sysmon.ProcessCreation.LogonGuid"
       ],
       "concepts": []
     }
   },
   {
     "concept": {
-      "name": "net.dst.bytes",
-      "description": "The number of applicatin-layer bytes sent by the connection responder",
+      "name": "proc.parent.id",
+      "description": "",
       "fields": [
-        "suricata.alert.flow.bytes_toclient",
-        "suricata.flow.flow.bytes_toclient",
-        "zeek.conn.resp_bytes"
+        "sysmon.ProcessCreation.ParentProcessId"
       ],
       "concepts": []
     }
   },
   {
     "concept": {
-      "name": "file.group",
-      "description": "The group of the file.",
-      "fields": [],
-      "concepts": []
-    }
-  },
-  {
-    "concept": {
-      "name": "net.app",
-      "description": "The application-layer protocol of a connection",
+      "name": "proc.parent.guid",
+      "description": "",
       "fields": [
-        "suricata.alert.alert.app_proto",
-        "suricata.dhcp.event_type",
-        "suricata.dns.event_type",
-        "suricata.ftp.event_type",
-        "suricata.ftp_data.event_type",
-        "suricata.http.event_type",
-        "suricata.fileinfo.app_proto",
-        "suricata.flow.app_proto",
-        "suricata.krb5.event_type",
-        "suricata.netflow.app_proto",
-        "suricata.smb.event_type",
-        "suricata.ssh.event_type",
-        "suricata.smtp.event_type",
-        "suricata.tls.event_type",
-        "zeek.conn.service",
-        "sysmon.NetworkConnection.SourcePortName",
-        "sysmon.NetworkConnection.DestinationPortName"
+        "sysmon.ProcessCreation.ParentProcessGuid"
       ],
       "concepts": []
     }
   },
   {
     "concept": {
-      "name": "net.inner_vlan",
-      "description": "The inner VLAN for a connection",
-      "fields": [],
-      "concepts": []
-    }
-  },
-  {
-    "concept": {
-      "name": "net.proto",
-      "description": "The transport-layer protocol of a connection",
+      "name": "proc.parent.name",
+      "description": "",
       "fields": [
-        "suricata.alert.proto",
-        "suricata.dhcp.proto",
-        "suricata.dns.proto",
-        "suricata.ftp.proto",
-        "suricata.ftp_data.proto",
-        "suricata.http.proto",
-        "suricata.fileinfo.proto",
-        "suricata.flow.proto",
-        "suricata.krb5.proto",
-        "suricata.netflow.proto",
-        "suricata.smb.proto",
-        "suricata.ssh.proto",
-        "suricata.smtp.proto",
-        "suricata.tls.proto",
-        "zeek.conn.proto",
-        "zeek.dns.proto",
-        "zeek.notice.proto",
-        "sysmon.NetworkConnection.Protocol"
+        "sysmon.ProcessCreation.ParentImage"
       ],
       "concepts": []
     }
   },
   {
     "concept": {
-      "name": "net.uri",
-      "description": "A URI.",
+      "name": "proc.thread.id",
+      "description": "",
       "fields": [
-        "suricata.http.http.url",
-        "zeek.http.uri",
-        "zeek.http.referrer"
+        "sysmon.CreateRemoteThread.NewThreadId",
+        "sysmon.ProcessAccess.SourceThreadId"
       ],
       "concepts": []
     }
   },
   {
     "concept": {
-      "name": "file.owner",
-      "description": "The owner of the file.",
-      "fields": [],
+      "name": "net.src.sport",
+      "description": "",
+      "fields": [
+        "pcap.packet.sport"
+      ],
       "concepts": []
     }
   }
