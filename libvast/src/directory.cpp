@@ -18,6 +18,7 @@
 #include "vast/detail/assert.hpp"
 #include "vast/detail/posix.hpp"
 #include "vast/detail/string.hpp"
+#include "vast/error.hpp"
 #include "vast/logger.hpp"
 
 #include <caf/streambuf.hpp>
@@ -124,6 +125,34 @@ size_t recursive_size(const vast::directory& dir) {
     }
   }
   return size;
+}
+
+std::vector<path>
+filter_dir(const path& dir, const std::regex& filter, size_t max_recursion) {
+  std::vector<path> result;
+  if (max_recursion == 0)
+    return result;
+  for (auto& f : directory(dir)) {
+    switch (f.kind()) {
+      default: {
+        if (std::regex_search(f.str(), filter))
+          result.push_back(f);
+        break;
+      }
+      case path::directory: {
+        // Recurse directories depth-first.
+        auto paths = filter_dir(f, filter, --max_recursion);
+        if (!paths.empty()) {
+          auto begin = std::make_move_iterator(paths.begin());
+          auto end = std::make_move_iterator(paths.end());
+          result.insert(result.end(), begin, end);
+          std::sort(result.begin(), result.end());
+        }
+        break;
+      }
+    }
+  }
+  return result;
 }
 
 } // namespace vast

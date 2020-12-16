@@ -521,31 +521,12 @@ load_yaml_dir(const path& dir, size_t max_recursion) {
   if (max_recursion == 0)
     return ec::recursion_limit_reached;
   std::vector<std::pair<path, data>> result;
-  for (auto& file : directory{dir}) {
-    switch (file.kind()) {
-      default:
-        continue;
-      case path::directory: {
-        auto nested = load_yaml_dir(file, --max_recursion);
-        if (!nested)
-          return nested;
-        auto begin = std::make_move_iterator(nested->begin());
-        auto end = std::make_move_iterator(nested->end());
-        result.insert(result.end(), begin, end);
-        break;
-      }
-      case path::regular_file:
-      case path::symlink: {
-        if (file.extension() == ".yml" || file.extension() == ".yaml") {
-          if (auto yaml = load_yaml(file))
-            result.emplace_back(file, std::move(*yaml));
-          else
-            return yaml.error();
-        }
-        break;
-      }
-    }
-  }
+  auto yaml_files = filter_dir(dir, std::regex{"\\.ya?ml$"}, max_recursion);
+  for (auto& file : yaml_files)
+    if (auto yaml = load_yaml(file))
+      result.emplace_back(std::move(file), std::move(*yaml));
+    else
+      return yaml.error();
   return result;
 }
 
