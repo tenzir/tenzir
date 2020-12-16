@@ -1,0 +1,9 @@
+- model:
+    name: net.connection
+    description: ""
+    definition:
+      - net.src.ip
+      - net.src.port
+      - net.dst.ip
+      - net.dst.port
+      - net.proto

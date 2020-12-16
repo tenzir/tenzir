@@ -14,13 +14,14 @@
 #pragma once
 
 #include "vast/fwd.hpp"
+
+#include "vast/detail/stable_map.hpp"
 #include "vast/type_set.hpp"
 
 #include <caf/meta/type_name.hpp>
 
 #include <memory>
 #include <string>
-#include <unordered_map>
 #include <vector>
 
 namespace vast {
@@ -46,7 +47,7 @@ struct concept_ {
 };
 
 /// Maps concept names to their definitions.
-using concepts_map = std::unordered_map<std::string, concept_>;
+using concepts_map = detail::stable_map<std::string, concept_>;
 
 /// Converts a data record to a concept.
 caf::error convert(const data& d, concepts_map& out);
@@ -76,7 +77,7 @@ struct model {
 };
 
 /// Maps model names to their definitions.
-using models_map = std::unordered_map<std::string, model>;
+using models_map = detail::stable_map<std::string, model>;
 
 /// Converts a data record to a model.
 caf::error convert(const data& d, models_map& out);

@@ -1,1 +1,5 @@
-{"zeek.conn": {"count": 34090}}
+{
+  "zeek.conn": {
+    "count": 34090
+  }
+}

@@ -14,6 +14,7 @@
 #pragma once
 
 #include "vast/config.hpp"
+#include "vast/defaults.hpp"
 #include "vast/detail/iterator.hpp"
 #include "vast/path.hpp"
 
@@ -26,6 +27,8 @@ struct DIR;
 } // namespace vast
 
 #endif
+
+#include <regex>
 
 namespace vast {
 
@@ -74,5 +77,15 @@ private:
 /// @param dir The directory to traverse.
 /// @returns The size of all regular files in *dir*.
 size_t recursive_size(const vast::directory& dir);
+
+/// Recursively traverses a directory and lists all file names that match a
+/// given filter expresssion.
+/// @param dir The directory to enumerate.
+/// @param filter A pattern to apply on the filename of every file in *dir*.
+/// @param max_recursion The maximum number of nested directories to traverse.
+/// @returns A list of file that match *filter*.
+std::vector<path>
+filter_dir(const path& dir, const std::regex& filter = std::regex{".*"},
+           size_t max_recursion = defaults::max_recursion);
 
 } // namespace vast

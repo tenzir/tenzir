@@ -258,47 +258,27 @@ load_schema(const detail::stable_set<path>& schema_dirs, size_t max_recursion) {
   if (max_recursion == 0)
     return ec::recursion_limit_reached;
   vast::schema types;
-  VAST_VERBOSE_ANON("loading schemas from", schema_dirs);
   for (const auto& dir : schema_dirs) {
+    VAST_VERBOSE_ANON("loading schemas from", dir);
     if (!exists(dir)) {
       VAST_DEBUG_ANON(__func__, "skips non-existing directory:", dir);
       continue;
     }
     vast::schema directory_schema;
-    for (auto f : directory(dir)) {
-      switch (f.kind()) {
-        default:
-          break;
-        case path::directory: {
-          // Recurse directories depth-first.
-          auto result
-            = load_schema(detail::stable_set<path>{f}, --max_recursion);
-          if (!result)
-            return result;
-          if (auto merged = schema::merge(directory_schema, *result))
-            directory_schema = std::move(*merged);
-          else
-            return make_error(ec::format_error, merged.error().context(),
-                              "in schema directory", f);
-          break;
-        }
-        case path::regular_file:
-        case path::symlink: {
-          if (f.extension() == ".schema") {
-            VAST_DEBUG_ANON("loading schema", f);
-            auto schema = load_schema(f);
-            if (!schema) {
-              VAST_ERROR_ANON(__func__, render(schema.error()), f);
-              continue;
-            }
-            if (auto merged = schema::merge(directory_schema, *schema))
-              directory_schema = std::move(*merged);
-            else
-              return make_error(ec::format_error, merged.error().context(),
-                                "in schema file", f);
-          }
-        }
+    auto schema_files
+      = filter_dir(dir, std::regex{"\\.schema$"}, max_recursion);
+    for (auto f : schema_files) {
+      VAST_DEBUG_ANON("loading schema", f);
+      auto schema = load_schema(f);
+      if (!schema) {
+        VAST_ERROR_ANON(__func__, render(schema.error()), f);
+        continue;
       }
+      if (auto merged = schema::merge(directory_schema, *schema))
+        directory_schema = std::move(*merged);
+      else
+        return make_error(ec::format_error, merged.error().context(),
+                          "in schema file", f);
     }
     types = schema::combine(types, directory_schema);
   }

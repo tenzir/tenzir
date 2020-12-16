@@ -303,7 +303,7 @@ tests:
       - command: -N export ascii
         input: queries/multi_addr.txt
 
-  Taxonomies:
+  Taxonomy queries:
     tags: [concepts, models]
     fixture: ServerTester
     steps:
@@ -320,6 +320,12 @@ tests:
       - command: count "net.connection == <_, _, _, _, _>"
       - command: count "net.connection == <_, _, _, 80, _>"
       - command: count "net.connection != <_, _, _, 80, _>"
+
+  Taxonomy dump:
+    tags: [concepts, models]
+    steps:
+      - command: -N dump concepts
+      - command: -N dump --yaml models
 
   Pivot:
     tags: [pivot]
