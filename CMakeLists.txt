@@ -187,8 +187,8 @@ add_feature_info("VAST_ENABLE_ASSERTIONS" VAST_ENABLE_ASSERTIONS
 if (VAST_ENABLE_ASSERTIONS)
   find_package(Backtrace REQUIRED)
   target_include_directories(libvast_internal
-                             PUBLIC ${Backtrace_INCLUDE_DIRECTORIES})
-  target_link_libraries(libvast_internal PUBLIC ${Backtrace_LIBRARIES})
+    INTERFACE ${Backtrace_INCLUDE_DIRECTORIES})
+  target_link_libraries(libvast_internal INTERFACE ${Backtrace_LIBRARIES})
 endif ()
 
 unset(_VAST_ENABLE_ASSERTIONS_DEFAULT)
