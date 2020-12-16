@@ -228,7 +228,7 @@ jobs:
           echo "::set-output name=status::true"
           if ! cmake --build "$BUILD_DIR" --target integration; then
             echo "::set-output name=status::false"
-            tar -czf "$PACKAGE_NAME.tar.gz" -C build vast-integration-test
+            tar -czf "$PACKAGE_NAME.tar.gz" -C build/vast vast-integration-test
             exit 1
           fi
 
