@@ -82,6 +82,15 @@ protected:
   bloom_filter<HashFunction> bloom_filter_;
 };
 
+// Because VAST deserializes a synopsis with empty options and
+// construction of an address synopsis fails without any sizing
+// information, we augment the type with the synopsis options.
+
+/// Creates a new type annotation from a set of bloom filter parameters.
+/// @returns The provided type with a new `#synopsis=bloom_filter(n,p)`
+///          attribute. Note that all previous attributes are discarded.
+type annotate_parameters(type type, const bloom_filter_parameters& params);
+
 /// Parses Bloom filter parameters from type attributes of the form
 /// `#synopsis=bloom_filter(n,p)`.
 /// @param x The type whose attributes to parse.

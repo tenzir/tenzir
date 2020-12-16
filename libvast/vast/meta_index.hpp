@@ -57,6 +57,9 @@ struct partition_synopsis {
   ///          synopsis.
   size_t size_bytes() const;
 
+  /// Synopsis data structures for types.
+  std::unordered_map<type, synopsis_ptr> type_synopses_;
+
   /// Synopsis data structures for individual columns.
   std::unordered_map<qualified_record_field, synopsis_ptr> field_synopses_;
 };

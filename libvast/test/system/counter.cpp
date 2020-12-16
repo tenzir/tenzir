@@ -67,7 +67,7 @@ struct fixture : fixtures::deterministic_actor_system_and_events {
     MESSAGE("spawn INDEX ingest 4 slices with 100 rows (= 1 partition) each");
     auto fs = self->spawn(vast::system::posix_filesystem, directory);
     index = self->spawn(system::index, fs, directory / "index",
-                        defaults::import::table_slice_size, 100, 3, 1);
+                        defaults::import::table_slice_size, 100, 3, 1, 0.01);
     archive = self->spawn(system::archive, directory / "archive",
                           defaults::system::segments,
                           defaults::system::max_segment_size);

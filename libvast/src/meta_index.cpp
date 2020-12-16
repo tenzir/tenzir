@@ -13,6 +13,8 @@
 
 #include "vast/meta_index.hpp"
 
+#include "vast/fwd.hpp"
+
 #include "vast/data.hpp"
 #include "vast/detail/overload.hpp"
 #include "vast/detail/set_operations.hpp"
@@ -20,7 +22,6 @@
 #include "vast/detail/tracepoint.hpp"
 #include "vast/expression.hpp"
 #include "vast/fbs/utils.hpp"
-#include "vast/fwd.hpp"
 #include "vast/logger.hpp"
 #include "vast/synopsis.hpp"
 #include "vast/synopsis_factory.hpp"
@@ -31,10 +32,21 @@
 #include <caf/binary_deserializer.hpp>
 #include <caf/binary_serializer.hpp>
 
+#include <type_traits>
+
 namespace vast {
 
 void partition_synopsis::shrink() {
   for (auto& [field, synopsis] : field_synopses_) {
+    if (!synopsis)
+      continue;
+    auto shrinked_synopsis = synopsis->shrink();
+    if (!shrinked_synopsis)
+      continue;
+    synopsis.swap(shrinked_synopsis);
+  }
+  // TODO: Make a utility function instead of copy/pasting
+  for (auto& [field, synopsis] : type_synopses_) {
     if (!synopsis)
       continue;
     auto shrinked_synopsis = synopsis->shrink();
@@ -52,21 +64,37 @@ void partition_synopsis::add(const table_slice& slice,
              : factory<synopsis>::make(field.type, synopsis_options);
   };
   for (size_t col = 0; col < slice.columns(); ++col) {
-    // Locate the relevant synopsis.
-    auto&& layout = slice.layout();
-    auto& field = layout.fields[col];
-    auto key = qualified_record_field{layout.name(), field};
-    auto it = field_synopses_.find(key);
-    if (it == field_synopses_.end())
-      // Attempt to create a synopsis if we have never seen this key before.
-      it = field_synopses_.emplace(std::move(key), make_synopsis(field)).first;
-    // If there exists a synopsis for a field, add the entire column.
-    if (auto& syn = it->second) {
+    auto add_column = [&](const synopsis_ptr& syn) {
       for (size_t row = 0; row < slice.rows(); ++row) {
         auto view = slice.at(row, col);
         if (!caf::holds_alternative<caf::none_t>(view))
           syn->add(std::move(view));
       }
+    };
+    auto&& layout = slice.layout();
+    auto& field = layout.fields[col];
+    auto& type = field.type;
+    if (!caf::holds_alternative<string_type>(type)) {
+      // Locate the relevant synopsis.
+      auto key = qualified_record_field{layout.name(), field};
+      auto it = field_synopses_.find(key);
+      if (it == field_synopses_.end()) {
+        // Attempt to create a synopsis if we have never seen this key before.
+        it
+          = field_synopses_.emplace(std::move(key), make_synopsis(field)).first;
+      }
+      // If there exists a synopsis for a field, add the entire column.
+      if (auto& syn = it->second)
+        add_column(syn);
+    } else { // type == string
+      auto key = qualified_record_field{layout.name(), field};
+      field_synopses_[key] = nullptr;
+      auto cleaned_type = vast::type{field.type}.attributes({});
+      auto tt = type_synopses_.find(cleaned_type);
+      if (tt == type_synopses_.end())
+        tt = type_synopses_.emplace(cleaned_type, make_synopsis(field)).first;
+      if (auto& syn = tt->second)
+        add_column(syn);
     }
   }
 }
@@ -165,6 +193,8 @@ std::vector<uuid> meta_index::lookup(const expression& expr) const {
       // We cannot handle negations, because a synopsis may return false
       // positives, and negating such a result may cause false
       // negatives.
+      // TODO: The above statement seems to only apply to bloom filter
+      // synopses, but it should be possible to handle time or bool synopses.
       return all_partitions();
     },
     [&](const predicate& x) -> result_type {
@@ -176,24 +206,44 @@ std::vector<uuid> meta_index::lookup(const expression& expr) const {
         VAST_ASSERT(caf::holds_alternative<data>(x.rhs));
         auto& rhs = caf::get<data>(x.rhs);
         result_type result;
-        auto found_matching_synopsis = false;
         for (auto& [part_id, part_syn] : synopses_) {
-          VAST_DEBUG(this, "checks", part_id, "for predicate", x);
           for (auto& [field, syn] : part_syn.field_synopses_) {
-            if (syn && match(field)) {
-              found_matching_synopsis = true;
-              auto opt = syn->lookup(x.op, make_view(rhs));
-              if (!opt || *opt) {
-                VAST_DEBUG(this, "selects", part_id, "at predicate", x);
+            if (match(field)) {
+              auto cleaned_type = vast::type{field.type}.attributes({});
+              // We rely on having a field -> nullptr mapping here for the
+              // fields that don't have their own synopsis.
+              if (syn) {
+                auto opt = syn->lookup(x.op, make_view(rhs));
+                if (!opt || *opt) {
+                  VAST_DEBUG(this, "selects", part_id, "at predicate", x);
+                  result.push_back(part_id);
+                  break;
+                }
+                // The field has no dedicated synopsis. Check if there is one
+                // for the type in general.
+              } else if (auto it = part_syn.type_synopses_.find(cleaned_type);
+                         it != part_syn.type_synopses_.end() && it->second) {
+                auto opt = it->second->lookup(x.op, make_view(rhs));
+                if (!opt || *opt) {
+                  VAST_DEBUG(this, "selects", part_id, "at predicate", x);
+                  result.push_back(part_id);
+                  break;
+                }
+              } else {
+                // The meta index couldn't rule out this partition, so we have
+                // to include it in the result set.
                 result.push_back(part_id);
                 break;
               }
             }
           }
         }
-        // Re-establish potentially violated invariant.
+        VAST_DEBUG(this, "checked", synopses_.size(),
+                   "partitions for predicate", x, "and got", result.size(),
+                   "results");
+        // Some calling paths require the result to be sorted.
         std::sort(result.begin(), result.end());
-        return found_matching_synopsis ? result : all_partitions();
+        return result;
       };
       auto extract_expr = detail::overload{
         [&](const attribute_extractor& lhs, const data& d) -> result_type {
@@ -301,6 +351,14 @@ pack(flatbuffers::FlatBufferBuilder& builder, const partition_synopsis& x) {
       return maybe_synopsis.error();
     synopses.push_back(*maybe_synopsis);
   }
+  for (auto& [type, synopsis] : x.type_synopses_) {
+    qualified_record_field fqf;
+    fqf.type = type;
+    auto maybe_synopsis = pack(builder, synopsis, fqf);
+    if (!maybe_synopsis)
+      return maybe_synopsis.error();
+    synopses.push_back(*maybe_synopsis);
+  }
   auto synopses_vector = builder.CreateVector(synopses);
   fbs::partition_synopsis::v0Builder ps_builder(builder);
   ps_builder.add_synopses(synopses_vector);
@@ -321,7 +379,10 @@ unpack(const fbs::partition_synopsis::v0& x, partition_synopsis& ps) {
     synopsis_ptr ptr;
     if (auto error = unpack(*synopsis, ptr))
       return error;
-    ps.field_synopses_[qf] = std::move(ptr);
+    if (!qf.field_name.empty())
+      ps.field_synopses_[qf] = std::move(ptr);
+    else
+      ps.type_synopses_[qf.type] = std::move(ptr);
   }
   return caf::none;
 }
