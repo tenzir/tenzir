@@ -78,7 +78,7 @@ type suricata.alert = record {
 }
 
 type suricata.dcerpc_interface = record {
-  uuid: string,
+  uuid: string #index=hash,
   version: string,
   ack_result: count
 }
