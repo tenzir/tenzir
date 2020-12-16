@@ -85,7 +85,6 @@ stdenv.mkDerivation rec {
     "-DBROKER_ROOT_DIR=${broker}"
   ] ++ lib.optionals (buildType == "CI") [
     "-DVAST_ENABLE_ASSERTIONS=ON"
-    "-DVAST_ENABLE_ASAN=ON"
   ] ++ lib.optionals isStatic [
     "-DVAST_ENABLE_STATIC_EXECUTABLE:BOOL=ON"
     "-DCMAKE_INTERPROCEDURAL_OPTIMIZATION:BOOL=ON"
