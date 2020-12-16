@@ -13,7 +13,7 @@ ENV DEBIAN_FRONTEND noninteractive
 RUN apt-get -qq update && apt-get -qqy install \
   build-essential gcc-8 g++-8 ninja-build libbenchmark-dev libpcap-dev tcpdump \
   libssl-dev python3-dev python3-pip python3-venv git-core jq gnupg2 \
-  libyaml-cpp-dev libxxhash-dev
+  libyaml-cpp-dev
 RUN pip3 install --upgrade pip && pip install --upgrade cmake && \
   cmake --version
 
@@ -25,10 +25,8 @@ RUN apt-get -qqy install libflatbuffers-dev flatbuffers-compiler-dev
 
 # VAST
 WORKDIR $BUILD_DIR/vast
-COPY aux ./aux
 COPY cmake ./cmake
 COPY doc ./doc
-COPY integration ./integration
 COPY libvast ./libvast
 COPY libvast_test ./libvast_test
 COPY schema ./schema

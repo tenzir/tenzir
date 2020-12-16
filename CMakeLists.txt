@@ -7,15 +7,8 @@ list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
 
 # Helper utility for retrieving the project version from 'git-describe', that is
 # bundled with VAST.
+set(VAST_VERSION_FALLBACK "2020.10.29-0-")
 include(VASTGitVersion)
-
-# Sets the fallback version of VAST. This version number is only used if the
-# version cannot be retrieved using 'git-describe'
-if (NOT DEFINED ENV{VAST_VERSION_TAG})
-  option(VAST_VERSION_TAG "Sets the fallback version of VAST" "2020.10.29-0-")
-else ()
-  set(VAST_VERSION_TAG "${ENV{VAST_VERSION_TAG}}")
-endif ()
 
 # Create the VAST project.
 project(
@@ -135,7 +128,8 @@ target_compile_options(
             -Werror=switch
             $<$<CONFIG:CI>:-Werror
             -Wno-error=deprecated
-            -Wno-error=deprecated-declarations>)
+            -Wno-error=deprecated-declarations>
+            $<$<CXX_COMPILER_ID:GNU>:-Wno-redundant-move>)
 
 # -- build id ------------------------------------------------------------------
 
@@ -210,8 +204,7 @@ add_feature_info(
 if (VAST_ENABLE_ASAN)
   target_compile_options(libvast_internal INTERFACE -fsanitize=address
                                                     -fno-omit-frame-pointer)
-  target_link_libraries(libvast_internal INTERFACE -fsanitize=address
-                                                   -fno-omit-frame-pointer)
+  target_link_libraries(libvast_internal INTERFACE -fsanitize=address)
 endif ()
 
 # Undefined Behavior Sanitizer
@@ -252,7 +245,7 @@ cmake_dependent_option(
 add_feature_info("BUILD_SHARED_LIBS" BUILD_SHARED_LIBS
                  "build shared instead of static library.")
 if (BUILD_SHARED_LIBS AND "${CMAKE_SYSTEM_NAME}" MATCHES "Linux")
-  target_link_libraries(libvast_internal PUBLIC dl)
+  target_link_libraries(libvast_internal INTERFACE dl)
 endif ()
 
 if (VAST_STATIC_EXECUTABLE AND BUILD_SHARED_LIBS)
@@ -339,8 +332,7 @@ endif ()
 
 # -- additional warnings -------------------------------------------------------
 
-option(VAST_ENABLE_MORE_WARNINGS "Enable addditional warnings"
-       "${VAST_ENABLE_STATIC_EXECUTABLE}")
+option(VAST_ENABLE_MORE_WARNINGS "Enable addditional warnings" OFF)
 add_feature_info("VAST_ENABLE_MORE_WARNINGS" VAST_ENABLE_MORE_WARNINGS
                  "enable additional warnings.")
 if (VAST_ENABLE_MORE_WARNINGS)
@@ -457,6 +449,26 @@ else ()
   message(WARNING "Unsupported compiler: ${CMAKE_CXX_COMPILER_ID}")
 endif ()
 
+# -- schemas -------------------------------------------------------------------
+
+add_custom_target(
+  vast-schema
+  COMMAND
+    ${CMAKE_COMMAND} -E copy_directory "${CMAKE_CURRENT_SOURCE_DIR}/schema"
+    "${CMAKE_BINARY_DIR}/share/vast/schema/"
+  COMMENT "Copying schema directory")
+
+option(VAST_ENABLE_BUNDLED_SCHEMAS "Install bundled schemas with VAST" ON)
+add_feature_info("VAST_ENABLE_BUNDLED_SCHEMAS" VAST_ENABLE_BUNDLED_SCHEMAS
+                 "install bundled schemas with VAST.")
+if (VAST_ENABLE_BUNDLED_SCHEMAS)
+  install(DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/schema"
+          DESTINATION "${CMAKE_INSTALL_FULL_DATADIR}/vast")
+endif ()
+
+install(FILES "${CMAKE_CURRENT_SOURCE_DIR}/vast.yaml.example"
+        DESTINATION "${CMAKE_INSTALL_FULL_DATADIR}/vast/")
+
 # -- documentation headers -----------------------------------------------------
 
 # TODO: Move this to libvast/CMakeLists.txt, somehow.
@@ -526,26 +538,6 @@ if (VAST_ENABLE_CORELIGHT_CAT)
   install(FILES "${CMAKE_CURRENT_SOURCE_DIR}/scripts/corelight-cat"
           DESTINATION ${CMAKE_INSTALL_FULL_BINDIR})
 endif ()
-
-# -- schemas -------------------------------------------------------------------
-
-add_custom_target(
-  vast-schema
-  COMMAND
-    ${CMAKE_COMMAND} -E copy_directory "${CMAKE_CURRENT_SOURCE_DIR}/schema"
-    "${CMAKE_BINARY_DIR}/share/vast/schema/"
-  COMMENT "Copying schema directory")
-
-option(VAST_ENABLE_BUNDLED_SCHEMAS "Install bundled schemas with VAST" ON)
-add_feature_info("VAST_ENABLE_BUNDLED_SCHEMAS" VAST_ENABLE_BUNDLED_SCHEMAS
-                 "install bundled schemas with VAST.")
-if (VAST_ENABLE_BUNDLED_SCHEMAS)
-  install(DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/schema"
-          DESTINATION "${CMAKE_INSTALL_FULL_DATADIR}/vast")
-endif ()
-
-install(FILES "${CMAKE_CURRENT_SOURCE_DIR}/vast.yaml.example"
-        DESTINATION "${CMAKE_INSTALL_FULL_DATADIR}/vast/")
 
 # -- docdir --------------------------------------------------------------------
 

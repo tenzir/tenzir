@@ -27,6 +27,8 @@ if (NOT BUILD_SHARED_LIBS)
   set(suffix "_static")
 endif ()
 
+find_package(Threads REQUIRED)
+
 # iterate over user-defined components
 foreach (comp ${CAF_FIND_COMPONENTS})
   # we use uppercase letters only for variable names
@@ -135,15 +137,15 @@ if (CAF_FOUND)
     set_target_properties(
       caf::core
       PROPERTIES IMPORTED_LOCATION "${CAF_LIBRARY_CORE}"
-                 INTERFACE_INCLUDE_DIRECTORIES "${CAF_INCLUDE_DIR_CORE}")
+                 INTERFACE_INCLUDE_DIRECTORIES "${CAF_INCLUDE_DIR_CORE}"
+                 INTERFACE_LINK_LIBRARIES "Threads::Threads")
   endif ()
   if (CAF_io_FOUND AND NOT TARGET caf::io)
     add_library(caf::io UNKNOWN IMPORTED GLOBAL)
     set_target_properties(
       caf::io
       PROPERTIES IMPORTED_LOCATION "${CAF_LIBRARY_IO}"
-                 INTERFACE_INCLUDE_DIRECTORIES "${CAF_INCLUDE_DIR_IO}"
-                 INTERFACE_LINK_LIBRARIES "caf::core;Threads::Threads")
+                 INTERFACE_INCLUDE_DIRECTORIES "${CAF_INCLUDE_DIR_IO}")
   endif ()
   if (CAF_openssl_FOUND AND NOT TARGET caf::openssl)
     add_library(caf::openssl UNKNOWN IMPORTED GLOBAL)

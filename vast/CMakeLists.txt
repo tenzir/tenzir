@@ -1,6 +1,7 @@
 option(VAST_ENABLE_VAST "Build the standalone vast binary"
-       "$<NOT:${VAST_IS_SUBPROJECT}>")
-     add_feature_info("VAST_ENABLE_VAST" VAST_ENABLE_VAST "build the standalone vast binary.")
+       "${VAST_IS_NOT_SUBPROJECT}")
+add_feature_info("VAST_ENABLE_VAST" VAST_ENABLE_VAST
+                 "build the standalone vast binary.")
 
 if (NOT VAST_ENABLE_VAST)
   return()
@@ -51,7 +52,7 @@ file(
      . \"$env_dir/bin/activate\"
      python -m pip install --upgrade pip
      python -m pip install -r \"$base_dir/requirements.txt\"
-     $<VAST_ENABLE_ARROW:python -m pip install pyarrow>
+     $<$<BOOL:<${VAST_ENABLE_ARROW}>:python -m pip install pyarrow>
      python \"$base_dir/integration.py\" --app \"$app\" -d vast-integration-test \"$@\""
 )
 
@@ -66,7 +67,7 @@ install(
   PATTERN "integration/vast.yaml.example" EXCLUDE)
 
 install(FILES "${CMAKE_CURRENT_SOURCE_DIR}/vast.yaml.example"
-  DESTINATION "${CMAKE_INSTALL_FULL_DATADIR}/vast/integration")
+        DESTINATION "${CMAKE_INSTALL_FULL_DATADIR}/vast/integration")
 
 # -- man page ------------------------------------------------------------------
 
@@ -99,5 +100,3 @@ if (PANDOC_FOUND)
     DESTINATION "${CMAKE_INSTALL_MANDIR}/man1"
     OPTIONAL)
 endif ()
-
-add_dependencies(man vast)

@@ -173,10 +173,7 @@ if (CAF_FOUND)
          "\nfind_package(CAF COMPONENTS core io test REQUIRED)")
   set(CAF_FOUND_SAVE ${CAF_FOUND})
   # ...and then optional components.
-  find_package(
-    CAF
-    COMPONENTS openssl
-   )
+  find_package(CAF COMPONENTS openssl)
   if (CAF_LIBRARY_OPENSSL)
     message(STATUS "Found CAF's OpenSSL module, enabling OpenSSL support")
     set(VAST_USE_OPENSSL true)
@@ -200,9 +197,14 @@ elseif (EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/aux/caf/CMakeLists.txt)
     set(CAF_BUILD_STATIC_ONLY TRUE)
   endif ()
   add_subdirectory(aux/caf)
-  set_target_properties(libcaf_core_${_linkage_suffix} PROPERTIES EXPORT_NAME
-                                                                  core)
+  set_target_properties(
+    libcaf_core_${_linkage_suffix}
+    PROPERTIES EXPORT_NAME core
+               CXX_STANDARD 17
+               CXX_STANDARD_REQUIRED ON
+               CXX_EXTENSIONS OFF)
   add_library(caf::core ALIAS libcaf_core_${_linkage_suffix})
+  target_compile_features(libcaf_core_${_linkage_suffix} INTERFACE cxx_std_17)
   set_target_properties(libcaf_io_${_linkage_suffix} PROPERTIES EXPORT_NAME io)
   target_compile_options(
     libcaf_io_${_linkage_suffix} PRIVATE -Wno-maybe-uninitialized
@@ -293,7 +295,7 @@ add_library(vast::libvast ALIAS libvast)
 target_link_libraries(libvast PRIVATE libvast_internal)
 
 set_target_properties(
-  libvast_internal
+  libvast
   PROPERTIES INTERPROCEDURAL_OPTIMIZATION_RELEASE ON
              CXX_STANDARD 17
              CXX_STANDARD_REQUIRED ON
@@ -324,14 +326,6 @@ add_dependencies(libvast libvast_flatbuffers)
 # Link against yaml-cpp.
 find_package(yaml-cpp 0.6.2 REQUIRED HINTS ${YAML_CPP_ROOT})
 target_link_libraries(libvast PRIVATE yaml-cpp)
-
-# Link against xxhash.
-find_package(xxhash 0.6 REQUIRED)
-provide_find_module(xxhash)
-string(APPEND VAST_FIND_DEPENDENCY_LIST
-       "\nfind_package(xxhash 0.6 REQUIRED)")
-message(STATUS "${xxhash_INCLUDE_DIR}")
-target_link_libraries(libvast PRIVATE xxhash::xxhash)
 
 # Link against robin-map.
 target_link_libraries(libvast PUBLIC tsl::robin_map)
