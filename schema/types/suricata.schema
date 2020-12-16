@@ -77,6 +77,43 @@ type suricata.alert = record {
   }
 }
 
+type suricata.dcerpc_interface = record {
+  uuid: string,
+  version: string,
+  ack_result: count
+}
+
+type suricata.dcerpc = record {
+  timestamp: time #timestamp,
+  flow_id: count #index=hash,
+  pcap_cnt: count,
+  vlan: list<count>,
+  in_iface: string,
+  src_ip: addr,
+  src_port: port,
+  dest_ip: addr,
+  dest_port: port,
+  proto: string,
+  event_type: string,
+  community_id: string #index=hash,
+  dcerpc: record {
+    request: string,
+    response: string,
+    call_id: count,
+    rpc_version: string,
+//    interfaces: list<suricata.dcerpc_interface>,
+    req: record {
+      opnum: count,
+      frag_cnt: count,
+      stub_data_size: count
+    },
+    res: record {
+      frag_cnt: count,
+      stub_data_size: count
+    }
+  }
+}
+
 type suricata.dhcp = record {
   timestamp: time #timestamp,
   flow_id: count #index=hash,
@@ -438,6 +475,30 @@ type suricata.rdp = record {
     server_supports: list<string>,
     x509_serials: list<string>,
     channels: list<string>
+  }
+}
+
+type suricata.sip = record {
+  timestamp: time #timestamp,
+  flow_id: count #index=hash,
+  pcap_cnt: count,
+  vlan: list<count>,
+  in_iface: string,
+  src_ip: addr,
+  src_port: port,
+  dest_ip: addr,
+  dest_port: port,
+  proto: string,
+  event_type: string,
+  community_id: string #index=hash,
+  sip: record {
+    method: string,
+    uri: string,
+    version: string,
+    request_line: string,
+    response_line: string,
+    code: string,
+    reason: string
   }
 }
 
