@@ -92,8 +92,8 @@ auto make_root_command(std::string_view path) {
   auto ob
     = opts("?vast")
         .add<std::string>("config", "path to a configuration file")
-        .add<caf::atom_value>("verbosity,v", "output verbosity level on the "
-                                             "console")
+        .add<caf::atom_value>("verbosity", "output verbosity level on the "
+                                           "console")
         .add<std::vector<std::string>>("schema-paths", schema_desc.c_str())
         .add<std::string>("db-directory,d", "directory for persistent state")
         .add<std::string>("log-file", "log filename")
