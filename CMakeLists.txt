@@ -82,7 +82,7 @@ if (POLICY CMP0042)
   if (APPLE AND NOT DEFINED CMAKE_MACOSX_RPATH)
     set(CMAKE_SKIP_BUILD_RPATH FALSE)
     set(CMAKE_BUILD_WITH_INSTALL_RPATH FALSE)
-    if (NOT VAST_RELOCATABLE_INSTALL)
+    if (NOT VAST_ENABLE_RELOCATABLE_INSTALLATIONS)
       set(CMAKE_INSTALL_RPATH_USE_LINK_PATH TRUE)
     endif ()
   endif ()
@@ -252,18 +252,18 @@ endif ()
 
 cmake_dependent_option(
   BUILD_SHARED_LIBS "Build shared instead of static libraries" ON
-  "NOT VAST_STATIC_EXECUTABLE" OFF)
+  "NOT VAST_ENABLE_STATIC_EXECUTABLE" OFF)
 add_feature_info("BUILD_SHARED_LIBS" BUILD_SHARED_LIBS
                  "build shared instead of static library.")
 if (BUILD_SHARED_LIBS AND "${CMAKE_SYSTEM_NAME}" MATCHES "Linux")
   target_link_libraries(libvast_internal INTERFACE dl)
 endif ()
 
-if (VAST_STATIC_EXECUTABLE AND BUILD_SHARED_LIBS)
+if (VAST_ENABLE_STATIC_EXECUTABLE AND BUILD_SHARED_LIBS)
   message(FATAL_ERROR "Cannot create static binary with dynamic libraries")
 endif ()
 
-if (VAST_RELOCATABLE_INSTALL AND NOT VAST_STATIC_EXECUTABLE)
+if (VAST_ENABLE_RELOCATABLE_INSTALLATIONS AND NOT VAST_ENABLE_STATIC_EXECUTABLE)
   if (APPLE)
     set_target_properties(
       libvast_internal
