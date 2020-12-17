@@ -18,11 +18,22 @@ project(
   DESCRIPTION "Visibility Across Space and Time"
   LANGUAGES C CXX)
 
+# Strip - and -0- suffixes from the version tag.
+string(REGEX REPLACE "^(.*)[-0-|-]\\\$" "\\1" VAST_VERSION_TAG
+                     "${VAST_VERSION_TAG}")
+
 # -- sanity checks -------------------------------------------------------------
 
 # Prohibit in-source builds.
 if ("${CMAKE_SOURCE_DIR}" STREQUAL "${CMAKE_BINARY_DIR}")
   message(FATAL_ERROR "In-source builds are not allowed.")
+endif ()
+
+# Ensure that CMAKE_INSTALL_PREFIX is not a relative path.
+if (NOT IS_ABSOLUTE "${CMAKE_INSTALL_PREFIX}")
+  message(
+    FATAL_ERROR
+      "CMAKE_INSTALL_PREFIX must be an absolute path: ${CMAKE_INSTALL_PREFIX}")
 endif ()
 
 # -- includes ------------------------------------------------------------------
@@ -71,7 +82,7 @@ if (POLICY CMP0042)
   if (APPLE AND NOT DEFINED CMAKE_MACOSX_RPATH)
     set(CMAKE_SKIP_BUILD_RPATH FALSE)
     set(CMAKE_BUILD_WITH_INSTALL_RPATH FALSE)
-    if (NOT VAST_RELOCATABLE_INSTALL)
+    if (NOT VAST_ENABLE_RELOCATABLE_INSTALLATIONS)
       set(CMAKE_INSTALL_RPATH_USE_LINK_PATH TRUE)
     endif ()
   endif ()
@@ -187,7 +198,7 @@ add_feature_info("VAST_ENABLE_ASSERTIONS" VAST_ENABLE_ASSERTIONS
 if (VAST_ENABLE_ASSERTIONS)
   find_package(Backtrace REQUIRED)
   target_include_directories(libvast_internal
-    INTERFACE ${Backtrace_INCLUDE_DIRECTORIES})
+                             INTERFACE ${Backtrace_INCLUDE_DIRECTORIES})
   target_link_libraries(libvast_internal INTERFACE ${Backtrace_LIBRARIES})
 endif ()
 
@@ -241,31 +252,27 @@ endif ()
 
 cmake_dependent_option(
   BUILD_SHARED_LIBS "Build shared instead of static libraries" ON
-  "NOT VAST_STATIC_EXECUTABLE" OFF)
+  "NOT VAST_ENABLE_STATIC_EXECUTABLE" OFF)
 add_feature_info("BUILD_SHARED_LIBS" BUILD_SHARED_LIBS
                  "build shared instead of static library.")
 if (BUILD_SHARED_LIBS AND "${CMAKE_SYSTEM_NAME}" MATCHES "Linux")
   target_link_libraries(libvast_internal INTERFACE dl)
 endif ()
 
-if (VAST_STATIC_EXECUTABLE AND BUILD_SHARED_LIBS)
+if (VAST_ENABLE_STATIC_EXECUTABLE AND BUILD_SHARED_LIBS)
   message(FATAL_ERROR "Cannot create static binary with dynamic libraries")
 endif ()
 
-if (VAST_RELOCATABLE_INSTALL AND NOT VAST_STATIC_EXECUTABLE)
+if (VAST_ENABLE_RELOCATABLE_INSTALLATIONS AND NOT VAST_ENABLE_STATIC_EXECUTABLE)
+  # Note that we cannot use the target property INSTALL_RPATH on
+  # libvast_internal, because it is an interface library. We should probably fix
+  # this by making the config header part of libvast_internal so it is not just
+  # an interface library.
   if (APPLE)
-    set_target_properties(
-      libvast_internal
-      PROPERTIES
-        INSTALL_RPATH
-        "@executable_path/../${CMAKE_INSTALL_LIBDIR};${CMAKE_INSTALL_RPATH}")
+    list(PREPEND CMAKE_INSTALL_RPATH
+         "@executable_path/../${CMAKE_INSTALL_LIBDIR}")
   else ()
-    # Remove escaping of ${ORIGIN} when requiring CMake>=3.16. See CMP0095.
-    set_target_properties(
-      libvast_internal
-      PROPERTIES
-        INSTALL_RPATH
-        "\\\${ORIGIN}/../${CMAKE_INSTALL_LIBDIR};${CMAKE_INSTALL_RPATH}")
+    list(PREPEND CMAKE_INSTALL_RPATH "$ORIGIN/../${CMAKE_INSTALL_LIBDIR}")
   endif ()
 endif ()
 
@@ -514,8 +521,7 @@ install(
 
 write_basic_package_version_file(
   "${CMAKE_CURRENT_BINARY_DIR}/VASTConfigVersion.cmake"
-  VERSION
-    "${VAST_VERSION_MAJOR}.${VAST_VERSION_MINOR}.${VAST_VERSION_PATCH}"
+  VERSION "${VAST_VERSION_MAJOR}.${VAST_VERSION_MINOR}.${VAST_VERSION_PATCH}"
   COMPATIBILITY ExactVersion)
 
 configure_package_config_file(

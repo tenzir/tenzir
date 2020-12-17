@@ -269,7 +269,7 @@ else ()
   )
 endif ()
 
-if (VAST_RELOCATABLE_INSTALL
+if (VAST_ENABLE_RELOCATABLE_INSTALLATIONS
     AND BUILD_SHARED_LIBS
     AND CAF_LIBRARY_CORE)
   # Copy CAF libraries to installation directory
