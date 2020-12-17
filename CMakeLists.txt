@@ -18,6 +18,10 @@ project(
   DESCRIPTION "Visibility Across Space and Time"
   LANGUAGES C CXX)
 
+# Strip - and -0- suffixes from the version tag.
+string(REGEX REPLACE "^(.*)[-0-|-]\\\$" "\\1" VAST_VERSION_TAG
+  "${VAST_VERSION_TAG}")
+
 # -- sanity checks -------------------------------------------------------------
 
 # Prohibit in-source builds.
