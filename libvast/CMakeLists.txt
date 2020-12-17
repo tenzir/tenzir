@@ -327,6 +327,10 @@ add_dependencies(libvast libvast_flatbuffers)
 find_package(yaml-cpp 0.6.2 REQUIRED HINTS ${YAML_CPP_ROOT})
 target_link_libraries(libvast PRIVATE yaml-cpp)
 
+# Link against simdjson.
+find_package(simdjson REQUIRED HINTS ${SIMDJSON_ROOT})
+target_link_libraries(libvast PRIVATE simdjson::simdjson)
+
 # Link against robin-map.
 target_link_libraries(libvast PUBLIC tsl::robin_map)
 
