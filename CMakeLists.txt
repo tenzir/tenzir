@@ -20,7 +20,7 @@ project(
 
 # Strip - and -0- suffixes from the version tag.
 string(REGEX REPLACE "^(.*)[-0-|-]\\\$" "\\1" VAST_VERSION_TAG
-  "${VAST_VERSION_TAG}")
+                     "${VAST_VERSION_TAG}")
 
 # -- sanity checks -------------------------------------------------------------
 
@@ -264,19 +264,15 @@ if (VAST_ENABLE_STATIC_EXECUTABLE AND BUILD_SHARED_LIBS)
 endif ()
 
 if (VAST_ENABLE_RELOCATABLE_INSTALLATIONS AND NOT VAST_ENABLE_STATIC_EXECUTABLE)
+  # Note that we cannot use the target property INSTALL_RPATH on
+  # libvast_internal, because it is an interface library. We should probably fix
+  # this by making the config header part of libvast_internal so it is not just
+  # an interface library.
   if (APPLE)
-    set_target_properties(
-      libvast_internal
-      PROPERTIES
-        INSTALL_RPATH
-        "@executable_path/../${CMAKE_INSTALL_LIBDIR};${CMAKE_INSTALL_RPATH}")
+    list(PREPEND CMAKE_INSTALL_RPATH
+         "@executable_path/../${CMAKE_INSTALL_LIBDIR}")
   else ()
-    # Remove escaping of ${ORIGIN} when requiring CMake>=3.16. See CMP0095.
-    set_target_properties(
-      libvast_internal
-      PROPERTIES
-        INSTALL_RPATH
-        "\\\${ORIGIN}/../${CMAKE_INSTALL_LIBDIR};${CMAKE_INSTALL_RPATH}")
+    list(PREPEND CMAKE_INSTALL_RPATH "$ORIGIN/../${CMAKE_INSTALL_LIBDIR}")
   endif ()
 endif ()
 
