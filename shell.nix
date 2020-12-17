@@ -13,6 +13,8 @@ mkShell ({
   name = "vast-dev-" + (if useClang then "clang" else "gcc");
   hardeningDisable = [ "fortify" ] ++ lib.optional isStatic "pic";
   inputsFrom = [ pkgs.vast ];
+  # To build libcaf_openssl with bundled CAF.
+  buildInputs = [ pkgs.openssl ];
   shellHook = ''
     echo "Entering VAST environment"
   '';
