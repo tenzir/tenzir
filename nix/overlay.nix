@@ -55,6 +55,11 @@ in {
     configureFlags = old.configureFlags ++ [ "--enable-prof" "--enable-stats" ];
   });
   broker = final.callPackage ./broker {inherit stdenv; python = final.python3;};
+  simdjson = prev.simdjson.overrideAttrs (old: {
+    cmakeFlags = old.cmakeFlags ++ [
+      "-DSIMDJSON_BUILD_STATIC=ON"
+    ];
+  });
   vast-source = final.nix-gitignore.gitignoreSource [] ./..;
   vast = final.callPackage ./vast {inherit stdenv;};
   vast-ci = final.vast.override {
