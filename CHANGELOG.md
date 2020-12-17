@@ -10,7 +10,11 @@ Every entry has a category for which we use the following visual abbreviations:
 - ⚡️ breaking change
 - 🐞 bugfix
 
-<!-- ## Unreleased -->
+## Unreleased
+
+- 🎁 The new short options `-v`, `-vv`, `-vvv`, `-q`, `-qq`, and `-qqq` map onto
+  the existing verbosity levels.
+  [#1244](https://github.com/tenzir/vast/pull&1244)
 
 ## [2020.12.16]
 
