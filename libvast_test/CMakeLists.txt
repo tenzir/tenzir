@@ -26,7 +26,7 @@ target_sources(
   libvast_test
   INTERFACE
     "$<${isExe}:$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/src/main.cpp>>"
-    "$<${isExe}:$<INSTALL_INTERFACE:${_IMPORT_PREFIX}/${CMAKE_INSTALL_DATADIR}/vast/test/main.cpp>>"
+    "$<${isExe}:$<INSTALL_INTERFACE:$<INSTALL_PREFIX>/${CMAKE_INSTALL_DATADIR}/vast/test/main.cpp>>"
 )
 set_target_properties(
   libvast_test
