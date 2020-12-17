@@ -99,9 +99,8 @@ class bits : detail::equality_comparable<bits<T>> {
   /// Checks whether all bits have the same value.
   /// @returns `true` if the bits are either all 0 or all 1.
   bool homogeneous() const {
-    return size_ == word<T>::width
-      ? word<T>::all_or_none(data_)
-      : word<T>::all_or_none(data_, size_);
+    return size_ >= word<T>::width ? word<T>::all_or_none(data_)
+                                   : word<T>::all_or_none(data_, size_);
   }
 
   /// Accesses the i-th bit in the bit sequence.

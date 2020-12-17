@@ -143,8 +143,8 @@ struct source_state {
             std::string type_filter, accountant_actor acc) {
     // Create the reader.
     self = selfptr;
-    name = reader.name();
     new (&reader) Reader(std::move(rd));
+    name = reader.name();
     reader_initialized = true;
     requested = std::move(max_events);
     local_schema = std::move(sch);
