@@ -25,6 +25,13 @@ if ("${CMAKE_SOURCE_DIR}" STREQUAL "${CMAKE_BINARY_DIR}")
   message(FATAL_ERROR "In-source builds are not allowed.")
 endif ()
 
+# Ensure that CMAKE_INSTALL_PREFIX is not a relative path.
+if (NOT IS_ABSOLUTE "${CMAKE_INSTALL_PREFIX}")
+  message(
+    FATAL_ERROR
+      "CMAKE_INSTALL_PREFIX must be an absolute path: ${CMAKE_INSTALL_PREFIX}")
+endif ()
+
 # -- includes ------------------------------------------------------------------
 
 include(CMakeDependentOption)
@@ -187,7 +194,7 @@ add_feature_info("VAST_ENABLE_ASSERTIONS" VAST_ENABLE_ASSERTIONS
 if (VAST_ENABLE_ASSERTIONS)
   find_package(Backtrace REQUIRED)
   target_include_directories(libvast_internal
-    INTERFACE ${Backtrace_INCLUDE_DIRECTORIES})
+                             INTERFACE ${Backtrace_INCLUDE_DIRECTORIES})
   target_link_libraries(libvast_internal INTERFACE ${Backtrace_LIBRARIES})
 endif ()
 
@@ -514,8 +521,7 @@ install(
 
 write_basic_package_version_file(
   "${CMAKE_CURRENT_BINARY_DIR}/VASTConfigVersion.cmake"
-  VERSION
-    "${VAST_VERSION_MAJOR}.${VAST_VERSION_MINOR}.${VAST_VERSION_PATCH}"
+  VERSION "${VAST_VERSION_MAJOR}.${VAST_VERSION_MINOR}.${VAST_VERSION_PATCH}"
   COMPATIBILITY ExactVersion)
 
 configure_package_config_file(

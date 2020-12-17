@@ -117,9 +117,7 @@ while [ $# -ne 0 ]; do
       ;;
 # -- Installation options ------------------------------------------------------
     --prefix=*)
-      # TODO: We should remove VAST_PREFIX.
-      append_cache_entry VAST_PREFIX PATH "$optarg"
-      append_cache_entry CMAKE_INSTALL_PREFIX PATH "$optarg"
+      prefix="$optarg"
       ;;
     --without-relocatable)
       append_cache_entry VAST_ENABLE_RELOCATABLE_INSTALLTIONS BOOL no
@@ -257,6 +255,27 @@ if [ -d "$builddir" ]; then
   fi
 else
   mkdir -p "$builddir"
+fi
+
+if [ ! -z "$prefix" ]; then
+  case "$prefix" in
+    /*)
+      absolute_prefix="$prefix"
+      ;;
+    *)
+      case "$builddir" in
+        /*)
+          absolute_prefix="$builddir/$prefix"
+          ;;
+        *)
+          absolute_prefix="$PWD/$builddir/$prefix"
+          ;;
+      esac
+      ;;
+  esac
+  # TODO: We should remove VAST_PREFIX.
+  append_cache_entry VAST_PREFIX PATH "$absolute_prefix"
+  append_cache_entry CMAKE_INSTALL_PREFIX PATH "$absolute_prefix"
 fi
 
 cd "$builddir"
