@@ -85,6 +85,17 @@ caf::error configuration::parse(int argc, char** argv) {
   VAST_ASSERT(argc > 0);
   VAST_ASSERT(argv != nullptr);
   command_line.assign(argv + 1, argv + argc);
+  // Translate -qqq to -vvv to the corresponding log levels. Note that the lhs
+  // of the replacements may not be a valid option for any command.
+  const auto replacements = std::vector<std::pair<std::string, std::string>>{
+    {"-qqq", "--verbosity=quiet"}, {"-qq", "--verbosity=error"},
+    {"-q", "--verbosity=warning"}, {"-v", "--verbosity=verbose"},
+    {"-vv", "--verbosity=debug"},  {"-vvv", "--verbosity=trace"},
+  };
+  for (auto& option : command_line)
+    for (const auto& [old, new_] : replacements)
+      if (option == old)
+        option = new_;
   // Move CAF options to the end of the command line, parse them, and then
   // remove them.
   auto is_vast_opt = [](auto& x) { return !detail::starts_with(x, "--caf."); };
