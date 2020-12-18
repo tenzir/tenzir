@@ -32,9 +32,6 @@
 
 #include <caf/io/middleman.hpp>
 #include <caf/message_builder.hpp>
-#if VAST_USE_OPENCL
-#  include <caf/opencl/manager.hpp>
-#endif
 #if VAST_USE_OPENSSL
 #  include <caf/openssl/manager.hpp>
 #endif
@@ -57,10 +54,6 @@ configuration::configuration() {
   detail::add_message_types(*this);
   // Load I/O module.
   load<caf::io::middleman>();
-  // GPU acceleration.
-#if VAST_USE_OPENCL
-  load<caf::opencl::manager>();
-#endif
   initialize_factories<synopsis, table_slice_builder, value_index,
                        format::writer>();
 }
