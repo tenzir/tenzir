@@ -26,7 +26,7 @@
 #  include "vast/format/pcap.hpp"
 #endif
 
-#if VAST_HAVE_ARROW
+#if VAST_ENABLE_ARROW
 #  include "vast/format/arrow.hpp"
 #endif
 
@@ -67,7 +67,7 @@ void factory_traits<format::writer>::initialize() {
 #if VAST_ENABLE_PCAP
   fac::add("pcap", make_writer<pcap::writer>);
 #endif
-#if VAST_HAVE_ARROW
+#if VAST_ENABLE_ARROW
   fac::add("arrow", make_writer<arrow::writer>);
 #endif
 }

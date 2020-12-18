@@ -39,7 +39,7 @@
 #include "vast/system/version_command.hpp"
 #include "vast/system/writer_command.hpp"
 
-#if VAST_HAVE_ARROW
+#if VAST_ENABLE_ARROW
 #  include "vast/format/arrow.hpp"
 #endif
 
@@ -182,7 +182,7 @@ auto make_export_command() {
                           "exports query without printing them (debug option)",
                           documentation::vast_export_null,
                           sink_opts("?vast.export.null"));
-#if VAST_HAVE_ARROW
+#if VAST_ENABLE_ARROW
   // The Arrow export does not support --write or --uds, so we don't use the
   // sink_opts here intentionally.
   export_->add_subcommand("arrow", "exports query results in Arrow format",
@@ -448,7 +448,7 @@ auto make_command_factory() {
     {"export csv", make_writer_command("csv")},
     {"export json", make_writer_command("json")},
     {"export null", make_writer_command("null")},
-#if VAST_HAVE_ARROW
+#if VAST_ENABLE_ARROW
     {"export arrow", make_writer_command("arrow")},
 #endif
 #if VAST_ENABLE_PCAP

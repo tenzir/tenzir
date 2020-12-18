@@ -151,7 +151,7 @@ public:
   /// @pre `row < rows() && column < columns()`
   data_view at(size_type row, size_type column) const;
 
-#if VAST_HAVE_ARROW
+#if VAST_ENABLE_ARROW
 
   /// Converts a table slice to an Apache Arrow Record Batch.
   /// @returns The pointer to the Record Batch.
@@ -159,7 +159,7 @@ public:
   friend std::shared_ptr<arrow::RecordBatch>
   as_record_batch(const table_slice& x);
 
-#endif // VAST_HAVE_ARROW
+#endif // VAST_ENABLE_ARROW
 
   // -- concepts ---------------------------------------------------------------
 

@@ -19,7 +19,7 @@
 #include "vast/json.hpp"
 #include "vast/logger.hpp"
 
-#if VAST_HAVE_ARROW
+#if VAST_ENABLE_ARROW
 #  include <arrow/util/config.h>
 #endif
 
@@ -27,7 +27,7 @@
 #  include <pcap/pcap.h>
 #endif
 
-#if VAST_HAVE_JEMALLOC
+#if VAST_ENABLE_JEMALLOC
 #  include <jemalloc/jemalloc.h>
 #endif
 
@@ -45,7 +45,7 @@ json::object retrieve_versions() {
   caf_v << CAF_MAJOR_VERSION << '.' << CAF_MINOR_VERSION << '.'
         << CAF_PATCH_VERSION;
   result["CAF"] = caf_v.str();
-#if VAST_HAVE_ARROW
+#if VAST_ENABLE_ARROW
   std::ostringstream arrow_v;
   arrow_v << ARROW_VERSION_MAJOR << '.' << ARROW_VERSION_MINOR << '.'
           << ARROW_VERSION_PATCH;
@@ -58,7 +58,7 @@ json::object retrieve_versions() {
 #else
   result["PCAP"] = json{};
 #endif
-#if VAST_HAVE_JEMALLOC
+#if VAST_ENABLE_JEMALLOC
   result["jemalloc"] = JEMALLOC_VERSION;
 #else
   result["jemalloc"] = json{};

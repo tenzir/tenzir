@@ -13,7 +13,7 @@
 
 #define SUITE arrow
 
-#if VAST_HAVE_ARROW
+#if VAST_ENABLE_ARROW
 
 #  include "vast/format/arrow.hpp"
 
@@ -94,4 +94,4 @@ TEST(arrow batch) {
 
 FIXTURE_SCOPE_END()
 
-#endif // VAST_HAVE_ARROW
+#endif // VAST_ENABLE_ARROW

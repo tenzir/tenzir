@@ -287,7 +287,7 @@ if (VAST_ENABLE_JEMALLOC)
   find_package(jemalloc REQUIRED)
   provide_find_module(jemalloc)
   string(APPEND VAST_FIND_DEPENDENCY_LIST "\nfind_package(jemalloc REQUIRED)")
-  target_compile_definitions(libvast_internal INTERFACE VAST_HAVE_JEMALLOC=1)
+  target_compile_definitions(libvast_internal INTERFACE VAST_ENABLE_JEMALLOC=1)
   target_link_libraries(libvast_internal INTERFACE jemalloc::jemalloc_)
 endif ()
 
