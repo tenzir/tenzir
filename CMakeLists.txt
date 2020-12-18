@@ -67,6 +67,17 @@ else ()
 endif ()
 unset(_VAST_PARENT_DIRECTORY)
 
+# -- relocatable installations ----------------------------------------------
+
+# Setting this option removes configuration dependent absolute paths from the
+# VAST installation. Concretely, it enables the dynamic binary and libraries to
+# use relative paths for loading their dependencies.
+option(VAST_ENABLE_RELOCATABLE_INSTALLATIONS "Enable relocatable installations"
+       ON)
+add_feature_info(
+  "VAST_ENABLE_RELOCATABLE_INSTALLATIONS" VAST_ENABLE_RELOCATABLE_INSTALLATIONS
+  "enable relocatable installations.")
+
 # -- silence policy-related warnings -------------------------------------------
 
 # TODO: When updating to CAF 0.18, this should no longer be needed.
@@ -82,6 +93,7 @@ if (POLICY CMP0042)
   if (APPLE AND NOT DEFINED CMAKE_MACOSX_RPATH)
     set(CMAKE_SKIP_BUILD_RPATH FALSE)
     set(CMAKE_BUILD_WITH_INSTALL_RPATH FALSE)
+    # TODO: Verify that this is indeed correct.
     if (NOT VAST_ENABLE_RELOCATABLE_INSTALLATIONS)
       set(CMAKE_INSTALL_RPATH_USE_LINK_PATH TRUE)
     endif ()
@@ -221,16 +233,7 @@ if (VAST_ENABLE_UBSAN)
   target_link_libraries(libvast_internal INTERFACE -fsanitize=undefined)
 endif ()
 
-# -- relocatability and static build support -----------------------------------
-
-# Setting this option removes configuration dependent absolute paths from the
-# VAST installation. Concretely, it enables the dynamic binary and libraries to
-# use relative paths for loading their dependencies.
-option(VAST_ENABLE_RELOCATABLE_INSTALLATIONS "Enable relocatable installations"
-       ON)
-add_feature_info(
-  "VAST_ENABLE_RELOCATABLE_INSTALLATIONS" VAST_ENABLE_RELOCATABLE_INSTALLATIONS
-  "enable relocatable installations.")
+# -- static build support -----------------------------------
 
 option(VAST_ENABLE_STATIC_EXECUTABLE "Link VAST statically."
        $ENV{VAST_ENABLE_STATIC_EXECUTABLE})

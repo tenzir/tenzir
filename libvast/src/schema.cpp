@@ -223,7 +223,7 @@ get_schema_dirs(const caf::actor_system_config& cfg,
                 std::vector<const void*> objpath_addresses) {
   detail::stable_set<vast::path> result;
   if (!caf::get_or(cfg, "vast.no-default-schema", false)) {
-#if !VAST_RELOCATABLE_INSTALL
+#if !VAST_ENABLE_RELOCATABLE_INSTALLATIONS
     result.insert(VAST_DATADIR "/vast/schema");
 #endif
     // Get filesystem path to the executable.
