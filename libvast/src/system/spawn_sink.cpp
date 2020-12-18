@@ -20,9 +20,9 @@
 #include "vast/system/sink.hpp"
 #include "vast/system/spawn_arguments.hpp"
 
-#if VAST_HAVE_PCAP
+#if VAST_ENABLE_PCAP
 #  include "vast/format/pcap.hpp"
-#endif // VAST_HAVE_PCAP
+#endif // VAST_ENABLE_PCAP
 
 #include <caf/actor.hpp>
 #include <caf/event_based_actor.hpp>
@@ -57,9 +57,9 @@ maybe_actor spawn_pcap_sink([[maybe_unused]] caf::local_actor* self,
                             [[maybe_unused]] spawn_arguments& args) {
   using defaults_t = defaults::export_::pcap;
   std::string category = defaults_t::category;
-#if !VAST_HAVE_PCAP
+#if !VAST_ENABLE_PCAP
   return make_error(ec::unspecified, "not compiled with pcap support");
-#else // VAST_HAVE_PCAP
+#else // VAST_ENABLE_PCAP
   // Bail out early for bogus invocations.
   if (caf::get_or(args.inv.options, "vast.node", false))
     return make_error(ec::parse_error, "cannot start a local node");
@@ -70,7 +70,7 @@ maybe_actor spawn_pcap_sink([[maybe_unused]] caf::local_actor* self,
     caf::get_or(args.inv.options, category + ".flush-interval",
                 defaults_t::flush_interval));
   return self->spawn(sink, std::move(writer), 0u);
-#endif // VAST_HAVE_PCAP
+#endif // VAST_ENABLE_PCAP
 }
 
 maybe_actor spawn_zeek_sink(caf::local_actor* self, spawn_arguments& args) {

@@ -25,7 +25,7 @@
 #include "vast/system/signal_monitor.hpp"
 #include "vast/system/spawn_or_connect_to_node.hpp"
 
-#if VAST_HAVE_PCAP
+#if VAST_ENABLE_PCAP
 #  include "vast/format/pcap.hpp"
 #endif
 

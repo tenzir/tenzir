@@ -30,7 +30,7 @@ if (VAST_ENABLE_ARROW)
 endif ()
 
 if (VAST_ENABLE_PCAP)
-  target_compile_definitions(libvast PRIVATE VAST_HAVE_PCAP=1)
+  target_compile_definitions(libvast PRIVATE VAST_ENABLE_PCAP=1)
   target_link_libraries(vast-test PRIVATE pcap::pcap)
 endif ()
 

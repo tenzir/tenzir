@@ -11,7 +11,7 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#if VAST_HAVE_PCAP
+#if VAST_ENABLE_PCAP
 
 #  include "vast/format/pcap.hpp"
 
@@ -542,4 +542,4 @@ const char* writer::name() const {
 } // namespace format
 } // namespace vast
 
-#endif // VAST_HAVE_PCAP
+#endif // VAST_ENABLE_PCAP

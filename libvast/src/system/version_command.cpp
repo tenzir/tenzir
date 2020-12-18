@@ -23,7 +23,7 @@
 #  include <arrow/util/config.h>
 #endif
 
-#if VAST_HAVE_PCAP
+#if VAST_ENABLE_PCAP
 #  include <pcap/pcap.h>
 #endif
 
@@ -53,7 +53,7 @@ json::object retrieve_versions() {
 #else
   result["Apache Arrow"] = json{};
 #endif
-#if VAST_HAVE_PCAP
+#if VAST_ENABLE_PCAP
   result["PCAP"] = pcap_lib_version();
 #else
   result["PCAP"] = json{};
