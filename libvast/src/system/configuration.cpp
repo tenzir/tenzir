@@ -32,7 +32,7 @@
 
 #include <caf/io/middleman.hpp>
 #include <caf/message_builder.hpp>
-#if VAST_USE_OPENSSL
+#if VAST_ENABLE_OPENSSL
 #  include <caf/openssl/manager.hpp>
 #endif
 

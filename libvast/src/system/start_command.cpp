@@ -23,9 +23,9 @@
 
 #include <csignal>
 #include <thread>
-#if VAST_USE_OPENSSL
+#if VAST_ENABLE_OPENSSL
 #  include <caf/openssl/all.hpp>
-#endif // VAST_USE_OPENSSL
+#endif // VAST_ENABLE_OPENSSL
 
 #include "vast/concept/parseable/vast/endpoint.hpp"
 #include "vast/defaults.hpp"
@@ -75,7 +75,7 @@ caf::message start_command_impl(start_command_extra_steps extra_steps,
   auto host = node_endpoint.host.empty() ? "localhost" : node_endpoint.host.c_str();
   auto publish = [&]() -> caf::expected<uint16_t> {
     if (use_encryption)
-#if VAST_USE_OPENSSL
+#if VAST_ENABLE_OPENSSL
       return caf::openssl::publish(node, node_endpoint.port->number(), host);
 #else
       return make_error(ec::unspecified, "not compiled with OpenSSL support");
