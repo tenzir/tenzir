@@ -56,7 +56,7 @@ in {
   });
   broker = final.callPackage ./broker {inherit stdenv; python = final.python3;};
   simdjson = prev.simdjson.overrideAttrs (old: {
-    cmakeFlags = old.cmakeFlags ++ [
+    cmakeFlags = old.cmakeFlags ++ lib.optionals isStatic [
       "-DSIMDJSON_BUILD_STATIC=ON"
     ];
   });
