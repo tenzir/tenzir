@@ -327,7 +327,7 @@ void table_slices::test_message_serialization() {
   MESSAGE("check result of serialization roundtrip");
   REQUIRE(slice2.match_elements<table_slice>());
   CHECK_EQUAL(slice1.get_as<table_slice>(0), slice2.get_as<table_slice>(0));
-  // FIXME: Make the table slice builders use `table_slice::encoding` as key.
+  // FIXME: Make the table slice builders use `table_slice_encoding` as key.
   // CHECK_EQUAL(slice2.get_as<table_slice>(0).encoding(),
   //             builder->implementation_id());
 }
