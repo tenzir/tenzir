@@ -16,7 +16,7 @@
 #include "vast/config.hpp"
 
 #if VAST_ENABLE_ASSERTIONS
-#  if defined(VAST_WINDOWS)
+#  if VAST_WINDOWS
 #    include <cstdio>
 #    include <cstdlib>
 #    define VAST_ASSERT(expr)                                                  \
@@ -25,7 +25,7 @@
         ::abort();                                                             \
       }                                                                        \
       static_cast<void>(0)
-#  else // defined(VAST_LINUX) || defined(VAST_MACOS) || defined(VAST_BSD)
+#  else // VAST_LINUX || VAST_MACOS || VAST_BSD
 #    include <cstdio>
 #    include <cstdlib>
 #    include <execinfo.h>

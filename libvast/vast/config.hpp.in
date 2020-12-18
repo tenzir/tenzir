@@ -35,19 +35,33 @@
      _Pragma("GCC diagnostic ignored \"-Wvla\"")
 #endif
 
-#if defined(CAF_MACOS)
-#  define VAST_MACOS 1
-#elif defined(CAF_LINUX)
-#  define VAST_LINUX 1
-#elif defined(CAF_BSD)
+#ifdef CAF_BSD
 #  define VAST_BSD 1
-#elif defined(CAF_WINDOWS)
+#else
+#  define VAST_BSD 0
+#endif
+#ifdef CAF_LINUX
+#  define VAST_LINUX 1
+#else
+#  define VAST_LINUX 0
+#endif
+#ifdef CAF_MACOS
+#  define VAST_MACOS 1
+#else
+#  define VAST_MACOS 0
+#endif
+#ifdef CAF_WINDOWS
 #  define VAST_WINDOWS 1
 #else
+#  define VAST_WINDOWS 0
+#endif
+#if !(VAST_BSD || VAST_LINUX || VAST_MACOS || VAST_WINDOWS)
 #  error platform not supported
 #endif
 #ifdef CAF_POSIX
 #  define VAST_POSIX 1
+#else
+#  define VAST_POSIX 0
 #endif
 
 // Convenience macros
