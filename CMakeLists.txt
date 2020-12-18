@@ -319,9 +319,13 @@ if (VAST_ENABLE_DEVELOPER_MODE)
   set(CMAKE_VERBOSE_MAKEFILE
       OFF
       CACHE STRING "Show all outputs including compiler lines." FORCE)
+endif ()
 
+if (VAST_ENABLE_DEVELOPER_MODE OR VAST_ENABLE_BUILDID)
   # Relocate debug paths to a common prefix for CCache users that work from
   # multiple worktrees.
+  # The debug paths affect the build-id, we rewrite them to get a more
+  # reproducible build.
   target_compile_options(
     libvast_internal
     INTERFACE "-fdebug-prefix-map=${CMAKE_CURRENT_SOURCE_DIR}=.")
