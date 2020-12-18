@@ -203,6 +203,7 @@ if (VAST_ENABLE_ASSERTIONS)
   target_include_directories(libvast_internal
                              INTERFACE ${Backtrace_INCLUDE_DIRECTORIES})
   target_link_libraries(libvast_internal INTERFACE ${Backtrace_LIBRARIES})
+  target_compile_definitions(libvast_internal INTERFACE VAST_ENABLE_ASSERTIONS=1)
 endif ()
 
 unset(_VAST_ENABLE_ASSERTIONS_DEFAULT)
