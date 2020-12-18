@@ -35,7 +35,7 @@
 /// Helper macro to define a table-slice unit test.
 #define TEST_TABLE_SLICE(builder, id)                                          \
   TEST(type) {                                                                 \
-    initialize<builder>(caf::atom(id));                                        \
+    initialize<builder>(table_slice_encoding::id);                             \
     run();                                                                     \
   }
 
@@ -78,7 +78,7 @@ public:
 
   /// Registers a table slice implementation.
   template <class Builder>
-  void initialize(caf::atom_value id) {
+  void initialize(vast::table_slice_encoding id) {
     using namespace vast;
     factory<table_slice_builder>::add<Builder>(id);
     builder = factory<table_slice_builder>::make(id, layout);

@@ -498,8 +498,9 @@ size_t arrow_table_slice_builder::rows() const noexcept {
   return rows_;
 }
 
-caf::atom_value arrow_table_slice_builder::implementation_id() const noexcept {
-  return caf::atom("arrow");
+table_slice_encoding
+arrow_table_slice_builder::implementation_id() const noexcept {
+  return table_slice_encoding::arrow;
 }
 
 void arrow_table_slice_builder::reserve([[maybe_unused]] size_t num_rows) {

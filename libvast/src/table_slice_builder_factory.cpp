@@ -26,9 +26,9 @@ namespace vast {
 
 void factory_traits<table_slice_builder>::initialize() {
   using f = factory<table_slice_builder>;
-  f::add<msgpack_table_slice_builder>(caf::atom("msgpack"));
+  f::add<msgpack_table_slice_builder>(table_slice_encoding::msgpack);
 #if VAST_ENABLE_ARROW
-  f::add<arrow_table_slice_builder>(caf::atom("arrow"));
+  f::add<arrow_table_slice_builder>(table_slice_encoding::arrow);
 #endif
 }
 

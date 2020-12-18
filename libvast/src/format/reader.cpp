@@ -14,6 +14,7 @@
 #include "vast/format/reader.hpp"
 
 #include "vast/concept/parseable/to.hpp"
+#include "vast/concept/parseable/vast/table_slice_encoding.hpp"
 #include "vast/concept/parseable/vast/time.hpp"
 #include "vast/logger.hpp"
 
@@ -25,8 +26,14 @@ reader::consumer::~consumer() {
   // nop
 }
 reader::reader(const caf::settings& options) {
-  table_slice_type_ = caf::get_or(options, "vast.import.batch-encoding",
-                                  vast::defaults::import::table_slice_type);
+  if (auto batch_encoding_arg
+      = caf::get_if<std::string>(&options, "vast.import.batch-encoding")) {
+    if (auto batch_encoding = to<table_slice_encoding>(*batch_encoding_arg))
+      table_slice_type_ = *batch_encoding;
+    else
+      VAST_WARNING(this, "cannot set vast.import.batch-encoding to",
+                   *batch_encoding_arg, "as it is not a valid encoding");
+  }
   if (auto batch_timeout_arg
       = caf::get_if<std::string>(&options, "vast.import.batch-timeout")) {
     if (auto batch_timeout = to<decltype(batch_timeout_)>(*batch_timeout_arg))

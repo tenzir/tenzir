@@ -13,6 +13,8 @@
 
 #pragma once
 
+#include "vast/fwd.hpp"
+
 #include "vast/config.hpp" // Needed for VAST_ENABLE_ARROW
 
 #include <caf/atom.hpp>
@@ -49,12 +51,12 @@ constexpr size_t table_slice_size = 1000;
 #if VAST_ENABLE_ARROW
 
 /// The default table slice type when arrow is available.
-constexpr caf::atom_value table_slice_type = caf::atom("arrow");
+constexpr auto table_slice_type = table_slice_encoding::arrow;
 
 #else // VAST_ENABLE_ARROW
 
 /// The default table slice type when arrow is unavailable.
-constexpr caf::atom_value table_slice_type = caf::atom("msgpack");
+constexpr auto table_slice_type = table_slice_encoding::msgpack;
 
 #endif // VAST_ENABLE_ARROW
 

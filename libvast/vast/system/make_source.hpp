@@ -16,10 +16,12 @@
 #include "vast/fwd.hpp"
 
 #include "vast/command.hpp"
+#include "vast/component_config.hpp"
 #include "vast/concept/parseable/to.hpp"
 #include "vast/concept/parseable/vast/endpoint.hpp"
 #include "vast/concept/parseable/vast/expression.hpp"
 #include "vast/concept/parseable/vast/schema.hpp"
+#include "vast/concept/parseable/vast/table_slice_encoding.hpp"
 #include "vast/concept/printable/to_string.hpp"
 #include "vast/concept/printable/vast/port.hpp"
 #include "vast/defaults.hpp"
@@ -91,8 +93,9 @@ make_source(const Actor& self, caf::actor_system& sys, const invocation& inv,
   auto uri = caf::get_if<std::string>(&options, category + ".listen");
   auto file = caf::get_if<std::string>(&options, category + ".read");
   auto type = caf::get_if<std::string>(&options, category + ".type");
-  auto slice_type = get_or(options, "vast.import.batch-encoding",
-                           defaults::import::table_slice_type);
+  table_slice_encoding encoding;
+  if (!extract_settings(encoding, options, "vast.import.batch-encoding"))
+    encoding = defaults::import::table_slice_type;
   auto slice_size = get_or(options, "vast.import.batch-size",
                            defaults::import::table_slice_size);
   if (slice_size == 0)
@@ -155,9 +158,9 @@ make_source(const Actor& self, caf::actor_system& sys, const invocation& inv,
   if (!reader)
     return make_error(ec::invalid_result, "failed to spawn reader");
   if (slice_size == std::numeric_limits<decltype(slice_size)>::max())
-    VAST_VERBOSE_ANON(reader->name(), "produces", slice_type, "table slices");
+    VAST_VERBOSE_ANON(reader->name(), "produces", encoding, "table slices");
   else
-    VAST_VERBOSE_ANON(reader->name(), "produces", slice_type,
+    VAST_VERBOSE_ANON(reader->name(), "produces", encoding,
                       "table slices of at most", slice_size, "events");
   // Spawn the source, falling back to the default spawn function.
   auto local_schema = schema ? std::move(*schema) : vast::schema{};

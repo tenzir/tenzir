@@ -111,18 +111,8 @@ verified_or_none(chunk_ptr&& chunk, enum table_slice::verify verify) noexcept {
 /// A helper utility for converting table slice encoding to the corresponding
 /// builder id.
 /// @param encoding The table slice encoding to map.
-caf::atom_value builder_id(enum table_slice::encoding encoding) {
-  switch (encoding) {
-    case table_slice::encoding::none:
-      return caf::atom("NULL");
-    case table_slice::encoding::arrow:
-      return caf::atom("arrow");
-    case table_slice::encoding::msgpack:
-      return caf::atom("msgpack");
-  }
-  // GCC-8 fails to recognize that this can never be reached, so we just call a
-  // [[noreturn]] function.
-  die("unhandled table slice encoding");
+table_slice_encoding builder_id(enum table_slice_encoding encoding) {
+  return encoding;
 }
 
 /// A helper utility for accessing the state of a table slice.
@@ -437,7 +427,7 @@ void select(std::vector<table_slice>& result, const table_slice& slice,
   }
   // Get the desired encoding, and the already serialized layout.
   auto f = detail::overload{
-    []() noexcept -> std::pair<caf::atom_value, span<const byte>> {
+    []() noexcept -> std::pair<table_slice_encoding, span<const byte>> {
       die("cannot select from an invalid table slice");
     },
     [&](const auto& encoded) noexcept {
@@ -447,7 +437,7 @@ void select(std::vector<table_slice>& result, const table_slice& slice,
              encoded.layout()->size()}};
     },
   };
-  caf::atom_value implementation_id;
+  table_slice_encoding implementation_id;
   span<const byte> serialized_layout = {};
   std::tie(implementation_id, serialized_layout)
     = visit(f, as_flatbuffer(slice.chunk_));

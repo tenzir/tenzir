@@ -75,7 +75,7 @@ public:
   size_t rows() const noexcept override;
 
   /// @returns An identifier for the implementing class.
-  caf::atom_value implementation_id() const noexcept override;
+  table_slice_encoding implementation_id() const noexcept override;
 
   /// Allows The table slice builder to allocate sufficient storage.
   /// @param `num_rows` The number of rows to allocate storage for.

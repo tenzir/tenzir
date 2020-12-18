@@ -145,9 +145,9 @@ size_t msgpack_table_slice_builder::rows() const noexcept {
   return offset_table_.size();
 }
 
-caf::atom_value
+table_slice_encoding
 msgpack_table_slice_builder::implementation_id() const noexcept {
-  return caf::atom("msgpack");
+  return table_slice_encoding::arrow;
 }
 
 void msgpack_table_slice_builder::reserve(size_t num_rows) {
