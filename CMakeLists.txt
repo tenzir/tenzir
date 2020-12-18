@@ -137,6 +137,7 @@ target_compile_options(
             -Wextra
             -pedantic
             -Werror=switch
+            -Wundef
             $<$<CONFIG:CI>:-Werror
             -Wno-error=deprecated
             -Wno-error=deprecated-declarations>
