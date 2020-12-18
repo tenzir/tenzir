@@ -33,8 +33,21 @@
 
 #define VAST_LOG_LEVEL VAST_LOG_LEVEL_@VAST_LOG_LEVEL@
 
+// TODO: Move everything below to a more appropriate place.
+
 #if defined(CAF_CLANG)
 #  define VAST_CLANG 1
+#else
+#  define VAST_CLANG 0
+#endif
+
+#if defined(CAF_GCC)
+#  define VAST_GCC 1
+#else
+#  define VAST_GCC 0
+#endif
+
+#if VAST_CLANG
 #  define VAST_DIAGNOSTIC_PUSH  _Pragma("clang diagnostic push")
 #  define VAST_DIAGNOSTIC_POP   _Pragma("clang diagnostic pop")
 #  define VAST_DIAGNOSTIC_IGNORE_DEPRECATED                                 \
@@ -42,8 +55,7 @@
 #  define VAST_DIAGNOSTIC_IGNORE_VLA_EXTENSION                              \
      _Pragma("clang diagnostic ignored \"-Wvla-extension\"")                \
      _Pragma("clang diagnostic ignored \"-Wgnu-folding-constant\"")
-#elif defined(CAF_GCC)
-#  define VAST_GCC 1
+#elif VAST_GCC
 #  define VAST_DIAGNOSTIC_PUSH  _Pragma("GCC diagnostic push")
 #  define VAST_DIAGNOSTIC_POP   _Pragma("GCC diagnostic pop")
 #  define VAST_DIAGNOSTIC_IGNORE_DEPRECATED                                 \
