@@ -12,6 +12,10 @@ Every entry has a category for which we use the following visual abbreviations:
 
 ## Unreleased
 
+- 🐞 Invalid Arrow table slices read from disk no longer trigger a segmentation
+  fault. Instead, the invalid on-disk state is ignored.
+  [#1247](https://github.com/tenzir/vast/pull/1247)
+
 - 🐞 Manually specified configuration files may now reside in the default
   location directories. Configuration files can now be symlinked.
   [#1248](https://github.com/tenzir/vast/pull/1248)
