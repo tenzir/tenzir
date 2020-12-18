@@ -30,13 +30,11 @@
 
 namespace vast::detail {
 
-#if !VAST_NO_EXCEPTIONS
 /// @relates narrow
 struct narrowing_error : std::runtime_error {
   using super = std::runtime_error;
   using super::super;
 };
-#endif // VAST_NO_EXCEPTIONS
 
 /// A searchable way to do narrowing casts of values.
 template <class T, class U>

@@ -163,16 +163,6 @@ if (VAST_ENABLE_SDT)
   target_compile_definitions(libvast_internal INTERFACE VAST_ENABLE_SDT=1)
 endif ()
 
-# -- exceptions ----------------------------------------------------------------
-
-option(VAST_ENABLE_EXCEPTIONS "Enable C++ exceptions" ON)
-add_feature_info("VAST_ENABLE_EXCEPTIONS" VAST_ENABLE_EXCEPTIONS
-                 "use C++ exceptions.")
-if (NOT VAST_ENABLE_EXCEPTIONS)
-  target_compile_definitions(libvast_internal INTERFACE VAST_NO_EXCEPTIONS=1)
-  target_compile_options(libvast_internal INTERFACE "-fno-exceptions")
-endif ()
-
 # -- build profiling -----------------------------------------------------------
 
 option(VAST_ENABLE_TIME_REPORT
