@@ -294,7 +294,7 @@ void table_slices::test_manual_serialization() {
   auto source = make_source();
   CHECK_EQUAL(inspect(source, slice2), caf::none);
   MESSAGE("check result of serialization roundtrip");
-  REQUIRE_NOT_EQUAL(slice2.encoding(), table_slice::encoding::none);
+  REQUIRE_NOT_EQUAL(slice2.encoding(), table_slice_encoding::none);
   CHECK_EQUAL(slice1, slice2);
 }
 
@@ -310,7 +310,7 @@ void table_slices::test_smart_pointer_serialization() {
   auto source = make_source();
   CHECK_EQUAL(source(slice2), caf::none);
   MESSAGE("check result of serialization roundtrip");
-  REQUIRE_NOT_EQUAL(slice2.encoding(), table_slice::encoding::none);
+  REQUIRE_NOT_EQUAL(slice2.encoding(), table_slice_encoding::none);
   CHECK_EQUAL(slice1, slice2);
 }
 

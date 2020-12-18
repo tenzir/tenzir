@@ -64,6 +64,18 @@ struct v0;
 
 } // namespace fbs
 
+// -- enums --------------------------------------------------------------------
+
+/// The possible encodings of a table slice.
+/// @note This encoding is unversioned. Newly created table slices are
+/// guaranteed to use the newest vesion of the encoding, while deserialized
+/// table slices may use an older version.
+enum class table_slice_encoding : uint8_t {
+  none,    ///< No data is encoded; the table slice is empty or invalid.
+  arrow,   ///< The table slice is encoded using the Apache Arrow format.
+  msgpack, ///< The table slice is encoded using the MessagePack format.
+};
+
 // -- classes ------------------------------------------------------------------
 
 class abstract_type;

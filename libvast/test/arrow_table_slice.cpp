@@ -47,7 +47,7 @@ auto make_slice(record_type layout, const Ts&... xs) {
   if (!ok)
     FAIL("builder failed to add given values");
   auto slice = builder->finish();
-  if (slice.encoding() == table_slice::encoding::none)
+  if (slice.encoding() == table_slice_encoding::none)
     FAIL("builder failed to produce a table slice");
   return slice;
 }

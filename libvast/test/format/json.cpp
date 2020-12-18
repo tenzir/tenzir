@@ -102,7 +102,7 @@ TEST(json to data) {
   auto xs = caf::get<json::object>(jn);
   format::json::add(*builder, xs, flat);
   auto slice = builder->finish();
-  REQUIRE_NOT_EQUAL(slice.encoding(), table_slice::encoding::none);
+  REQUIRE_NOT_EQUAL(slice.encoding(), table_slice_encoding::none);
   CHECK(slice.at(0, 10) == data{enumeration{2}});
   auto reference = map{};
   reference[count{1}] = data{"FOO"};

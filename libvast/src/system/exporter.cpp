@@ -56,8 +56,8 @@ void ship_results(stateful_actor<exporter_state>* self) {
       st.results.erase(st.results.begin());
     } else {
       auto [first, second] = split(st.results[0], st.query.requested);
-      VAST_ASSERT(first.encoding() != table_slice::encoding::none);
-      VAST_ASSERT(second.encoding() != table_slice::encoding::none);
+      VAST_ASSERT(first.encoding() != table_slice_encoding::none);
+      VAST_ASSERT(second.encoding() != table_slice_encoding::none);
       VAST_ASSERT(first.rows() == st.query.requested);
       slice = std::move(first);
       st.results[0] = std::move(second);
@@ -206,7 +206,7 @@ behavior exporter(stateful_actor<exporter_state>* self, expression expr,
            && qs.lookups_issued == qs.lookups_complete;
   };
   auto handle_batch = [=](table_slice slice) {
-    VAST_ASSERT(slice.encoding() != table_slice::encoding::none);
+    VAST_ASSERT(slice.encoding() != table_slice_encoding::none);
     auto& st = self->state;
     VAST_DEBUG(self, "got batch of", slice.rows(), "events");
     auto sender = self->current_sender();

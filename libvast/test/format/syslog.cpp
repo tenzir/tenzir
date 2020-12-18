@@ -35,13 +35,13 @@ TEST(syslog reader) {
                                 caf::settings{}, std::move(*in)};
   table_slice slice;
   auto add_slice = [&](const table_slice& x) {
-    REQUIRE_EQUAL(slice.encoding(), table_slice::encoding::none);
+    REQUIRE_EQUAL(slice.encoding(), table_slice_encoding::none);
     slice = x;
   };
   auto [err, produced] = reader.read(std::numeric_limits<size_t>::max(),
                                      100, // we expect only 5 events
                                      add_slice);
-  REQUIRE_NOT_EQUAL(slice.encoding(), table_slice::encoding::none);
+  REQUIRE_NOT_EQUAL(slice.encoding(), table_slice_encoding::none);
   REQUIRE_EQUAL(produced, 5u);
   auto&& layout = slice.layout();
   CHECK_EQUAL(layout.name(), "syslog.rfc5424");

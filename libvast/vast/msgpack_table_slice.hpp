@@ -60,8 +60,8 @@ public:
     = std::is_same_v<FlatBuffer, fbs::table_slice::msgpack::v0>;
 
   /// The encoding of the slice.
-  inline static constexpr enum table_slice::encoding encoding
-    = table_slice::encoding::msgpack;
+  inline static constexpr enum table_slice_encoding encoding
+    = table_slice_encoding::msgpack;
 
   /// @returns The table layout.
   const record_type& layout() const noexcept;
