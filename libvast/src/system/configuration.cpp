@@ -138,11 +138,6 @@ caf::error configuration::parse(int argc, char** argv) {
                           "cannot find configuration file: " + config.str());
     }
   }
-  // Remove all non-existent config files.
-  config_files.erase(
-    std::remove_if(config_files.begin(), config_files.end(),
-                   [](auto&& p) { return !p.is_regular_file(); }),
-    config_files.end());
   // Parse and merge all configuration files.
   record merged_config;
   for (const auto& config : config_files) {
