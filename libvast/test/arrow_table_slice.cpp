@@ -13,6 +13,8 @@
 
 #define SUITE arrow_table_slice
 
+#include "vast/config.hpp"
+
 #if VAST_ENABLE_ARROW
 
 #  include "vast/arrow_table_slice.hpp"

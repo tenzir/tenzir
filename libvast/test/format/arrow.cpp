@@ -13,6 +13,8 @@
 
 #define SUITE arrow
 
+#include "vast/config.hpp"
+
 #if VAST_ENABLE_ARROW
 
 #  include "vast/format/arrow.hpp"

@@ -345,13 +345,11 @@ target_link_libraries(libvast PUBLIC tsl::robin_map)
 
 # Link against Apache Arrow.
 if (VAST_ENABLE_ARROW)
-  target_compile_definitions(libvast PRIVATE VAST_ENABLE_ARROW=1)
   target_link_libraries(libvast PRIVATE ${ARROW_LIBRARY})
 endif ()
 
 # Link against PCAP.
 if (VAST_ENABLE_PCAP)
-  target_compile_definitions(libvast PRIVATE VAST_ENABLE_PCAP=1)
   target_link_libraries(libvast PRIVATE pcap::pcap)
 endif ()
 

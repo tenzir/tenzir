@@ -25,12 +25,10 @@ target_link_libraries(vast-test PRIVATE libvast_test libvast libvast_internal
 
 
 if (VAST_ENABLE_ARROW)
-  target_compile_definitions(libvast PRIVATE VAST_ENABLE_ARROW=1)
   target_link_libraries(vast-test PRIVATE ${ARROW_LIBRARY})
 endif ()
 
 if (VAST_ENABLE_PCAP)
-  target_compile_definitions(libvast PRIVATE VAST_ENABLE_PCAP=1)
   target_link_libraries(vast-test PRIVATE pcap::pcap)
 endif ()
 

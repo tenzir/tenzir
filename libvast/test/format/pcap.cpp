@@ -13,6 +13,8 @@
 
 #define SUITE format
 
+#include "vast/config.hpp"
+
 #if VAST_ENABLE_PCAP
 
 #  include "vast/format/pcap.hpp"

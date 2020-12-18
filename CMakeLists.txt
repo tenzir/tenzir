@@ -171,9 +171,6 @@ endif ()
 option(VAST_ENABLE_SDT "Generate USDT tracepoint instrumentation" ON)
 add_feature_info("VAST_ENABLE_SDT" VAST_ENABLE_SDT
                  "generate USDT tracepoint instrumentation.")
-if (VAST_ENABLE_SDT)
-  target_compile_definitions(libvast_internal INTERFACE VAST_ENABLE_SDT=1)
-endif ()
 
 # -- build profiling -----------------------------------------------------------
 
@@ -203,7 +200,6 @@ if (VAST_ENABLE_ASSERTIONS)
   target_include_directories(libvast_internal
                              INTERFACE ${Backtrace_INCLUDE_DIRECTORIES})
   target_link_libraries(libvast_internal INTERFACE ${Backtrace_LIBRARIES})
-  target_compile_definitions(libvast_internal INTERFACE VAST_ENABLE_ASSERTIONS=1)
 endif ()
 
 unset(_VAST_ENABLE_ASSERTIONS_DEFAULT)
@@ -281,7 +277,6 @@ if (VAST_ENABLE_JEMALLOC)
   find_package(jemalloc REQUIRED)
   provide_find_module(jemalloc)
   string(APPEND VAST_FIND_DEPENDENCY_LIST "\nfind_package(jemalloc REQUIRED)")
-  target_compile_definitions(libvast_internal INTERFACE VAST_ENABLE_JEMALLOC=1)
   target_link_libraries(libvast_internal INTERFACE jemalloc::jemalloc_)
 endif ()
 
