@@ -13,22 +13,36 @@
 
 #pragma once
 
-#include "vast/concept/parseable/vast/address.hpp"
-#include "vast/concept/parseable/vast/base.hpp"
-#include "vast/concept/parseable/vast/data.hpp"
-#include "vast/concept/parseable/vast/endpoint.hpp"
-#include "vast/concept/parseable/vast/expression.hpp"
-#include "vast/concept/parseable/vast/http.hpp"
-#include "vast/concept/parseable/vast/identifier.hpp"
-#include "vast/concept/parseable/vast/json.hpp"
-#include "vast/concept/parseable/vast/offset.hpp"
-#include "vast/concept/parseable/vast/pattern.hpp"
-#include "vast/concept/parseable/vast/port.hpp"
-#include "vast/concept/parseable/vast/schema.hpp"
-#include "vast/concept/parseable/vast/si.hpp"
-#include "vast/concept/parseable/vast/subnet.hpp"
-#include "vast/concept/parseable/vast/table_slice_encoding.hpp"
-#include "vast/concept/parseable/vast/time.hpp"
-#include "vast/concept/parseable/vast/type.hpp"
-#include "vast/concept/parseable/vast/uri.hpp"
-#include "vast/concept/parseable/vast/uuid.hpp"
+#include "vast/fwd.hpp"
+
+#include "vast/concept/parseable/core/literal.hpp"
+#include "vast/concept/parseable/core/parser.hpp"
+#include "vast/concept/parseable/string/char.hpp"
+
+namespace vast {
+
+struct table_slice_encoding_parser : parser<table_slice_encoding_parser> {
+  using attribute = table_slice_encoding;
+
+  template <class Iterator, class Attribute>
+  bool parse(Iterator& f, const Iterator& l, Attribute& a) const {
+    using namespace parser_literals;
+    // clang-format off
+    auto p = "arrow"_p ->* [] { return table_slice_encoding::arrow; }
+           | "msgpack"_p ->* [] { return table_slice_encoding::msgpack; };
+    // clang-format on
+    return p(f, l, a);
+  }
+};
+
+template <>
+struct parser_registry<table_slice_encoding> {
+  using type = table_slice_encoding_parser;
+};
+
+namespace parsers {
+
+static auto const table_slice_encoding = table_slice_encoding_parser{};
+
+} // namespace parsers
+} // namespace vast
