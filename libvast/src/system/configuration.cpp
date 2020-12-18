@@ -55,22 +55,6 @@ void initialize_factories() {
 
 configuration::configuration() {
   detail::add_message_types(*this);
-  // Instead of the CAF-supplied `config_file_path`, we use our own
-  // `config_files` variable in order to support multiple configuration files.
-  auto add_configs = [&](auto&& dir) {
-    config_files.emplace_back(dir / "vast.yml");
-    config_files.emplace_back(dir / "vast.yaml");
-  };
-  if (const char* xdg_config_home = std::getenv("XDG_CONFIG_HOME"))
-    add_configs(path{xdg_config_home} / "vast");
-  else if (const char* home = std::getenv("HOME"))
-    add_configs(path{home} / ".config" / "vast");
-  add_configs(VAST_SYSCONFDIR / path{"vast"});
-  // Remove all non-existent config files.
-  config_files.erase(
-    std::remove_if(config_files.begin(), config_files.end(),
-                   [](auto&& p) { return !p.is_regular_file(); }),
-    config_files.end());
   // Load I/O module.
   load<caf::io::middleman>();
   // GPU acceleration.
@@ -104,11 +88,6 @@ caf::error configuration::parse(int argc, char** argv) {
   std::vector<std::string> caf_args;
   std::move(caf_opt, command_line.end(), std::back_inserter(caf_args));
   command_line.erase(caf_opt, command_line.end());
-  // If the user provided a config file on the command line, we attempt to
-  // parse it last.
-  for (auto& arg : command_line)
-    if (detail::starts_with(arg, "--config="))
-      config_files.push_back(arg.substr(9));
   // Check for multiple config files in directories.
   std::unordered_set<path> config_dirs;
   for (const auto& config : config_files) {
@@ -122,6 +101,48 @@ caf::error configuration::parse(int argc, char** argv) {
     else
       config_dirs.insert(std::move(dir));
   }
+  // Instead of the CAF-supplied `config_file_path`, we use our own
+  // `config_files` variable in order to support multiple configuration files.
+  auto add_configs = [&](auto&& dir) -> caf::error {
+    auto conf_yaml = dir / "vast.yaml";
+    auto conf_yml = dir / "vast.yml";
+    auto exists_conf_yaml = exists(conf_yaml);
+    auto exists_conf_yml = exists(conf_yml);
+    if (exists_conf_yaml && exists_conf_yml)
+      return caf::make_error(
+        ec::invalid_configuration,
+        "detected both 'vast.yaml' and 'vast.yml' files in " + dir.str());
+    else if (exists_conf_yaml)
+      config_files.emplace_back(std::move(conf_yaml));
+    else if (exists_conf_yml)
+      config_files.emplace_back(std::move(conf_yml));
+    return caf::none;
+  };
+  if (const char* xdg_config_home = std::getenv("XDG_CONFIG_HOME")) {
+    if (auto err = add_configs(path{xdg_config_home} / "vast"))
+      return err;
+  } else if (const char* home = std::getenv("HOME")) {
+    if (auto err = add_configs(path{home} / ".config" / "vast"))
+      return err;
+  }
+  if (auto err = add_configs(VAST_SYSCONFDIR / path{"vast"}))
+    return err;
+  // If the user provided a config file on the command line, we attempt to
+  // parse it last.
+  for (auto& arg : command_line) {
+    if (detail::starts_with(arg, "--config=")) {
+      if (auto config = path{arg.substr(9)}; exists(config))
+        config_files.push_back(std::move(config));
+      else
+        return make_error(ec::invalid_configuration,
+                          "cannot find configuration file: " + config.str());
+    }
+  }
+  // Remove all non-existent config files.
+  config_files.erase(
+    std::remove_if(config_files.begin(), config_files.end(),
+                   [](auto&& p) { return !p.is_regular_file(); }),
+    config_files.end());
   // Parse and merge all configuration files.
   record merged_config;
   for (const auto& config : config_files) {
