@@ -79,8 +79,7 @@ TEST(PCAP read/write 1) {
   // A non-positive value disables the timeout. We need to do this because the
   // deterministic actor system is messing with the clocks.
   caf::put(settings, "vast.import.batch-timeout", "0s");
-  format::pcap::reader reader{defaults::import::table_slice_type,
-                              std::move(settings)};
+  format::pcap::reader reader{std::move(settings)};
   size_t events_produced = 0;
   table_slice slice;
   auto add_slice = [&](const table_slice& x) {
@@ -122,8 +121,7 @@ TEST(PCAP read/write 2) {
   // A non-positive value disables the timeout. We need to do this because the
   // deterministic actor system is messing with the clocks.
   caf::put(settings, "vast.import.batch-timeout", "0s");
-  format::pcap::reader reader{defaults::import::table_slice_type,
-                              std::move(settings)};
+  format::pcap::reader reader{std::move(settings)};
   table_slice slice{};
   auto add_slice = [&](const table_slice& x) {
     REQUIRE_EQUAL(slice.encoding(), table_slice_encoding::none);

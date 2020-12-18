@@ -131,7 +131,7 @@ make_source(const Actor& self, caf::actor_system& sys, const invocation& inv,
         ep.port = port{ep.port->number(), port::tcp};
       }
     }
-    reader = std::make_unique<Reader>(slice_type, options);
+    reader = std::make_unique<Reader>(options);
     VAST_INFO_ANON(reader->name(), "listens for data on",
                    ep.host + ":" + to_string(*ep.port));
     switch (ep.port->type()) {
@@ -146,7 +146,7 @@ make_source(const Actor& self, caf::actor_system& sys, const invocation& inv,
     auto in = detail::make_input_stream<Defaults>(options);
     if (!in)
       return in.error();
-    reader = std::make_unique<Reader>(slice_type, options, std::move(*in));
+    reader = std::make_unique<Reader>(options, std::move(*in));
     if (*file == "-")
       VAST_INFO_ANON(reader->name(), "reads data from STDIN");
     else

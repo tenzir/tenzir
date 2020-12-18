@@ -71,8 +71,7 @@ struct fixture : fixtures::deterministic_actor_system {
   std::vector<table_slice>
   run(std::string_view data, size_t max_events, size_t max_slice_size) {
     auto in = std::make_unique<std::istringstream>(std::string{data});
-    format::csv::reader reader{defaults::import::table_slice_type, options,
-                               std::move(in)};
+    format::csv::reader reader{options, std::move(in)};
     reader.schema(s);
     std::vector<table_slice> slices;
     auto add_slice

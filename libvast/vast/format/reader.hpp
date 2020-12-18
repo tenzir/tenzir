@@ -55,7 +55,7 @@ public:
   // -- constructors, destructors, and assignment operators --------------------
 
   /// @param id Implementation ID for the table slice builder.
-  reader(caf::atom_value table_slice_type, const caf::settings& options);
+  reader(const caf::settings& options);
 
   virtual ~reader();
 

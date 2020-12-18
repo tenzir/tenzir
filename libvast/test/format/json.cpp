@@ -113,8 +113,7 @@ TEST(json to data) {
 TEST_DISABLED(suricata) {
   using reader_type = format::json::reader<format::json::suricata>;
   auto input = std::make_unique<std::istringstream>(std::string{eve_log});
-  reader_type reader{defaults::import::table_slice_type, caf::settings{},
-                     std::move(input)};
+  reader_type reader{caf::settings{}, std::move(input)};
   std::vector<table_slice> slices;
   auto add_slice
     = [&](table_slice slice) { slices.emplace_back(std::move(slice)); };

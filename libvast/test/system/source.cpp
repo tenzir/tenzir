@@ -59,8 +59,7 @@ TEST(zeek source) {
   MESSAGE("start reader");
   auto stream = unbox(
     detail::make_input_stream(artifacts::logs::zeek::small_conn));
-  format::zeek::reader reader{defaults::import::table_slice_type,
-                              caf::settings{}, std::move(stream)};
+  format::zeek::reader reader{caf::settings{}, std::move(stream)};
   MESSAGE("start source for producing table slices of size 10");
   auto src = self->spawn(source<format::zeek::reader>, std::move(reader),
                          events::slice_size, caf::none,

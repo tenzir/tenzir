@@ -218,9 +218,8 @@ void add_hash_index_attribute(record_type& layout) {
 
 } // namespace
 
-reader::reader(caf::atom_value table_slice_type, const caf::settings& options,
-               std::unique_ptr<std::istream> in)
-  : super(table_slice_type, options) {
+reader::reader(const caf::settings& options, std::unique_ptr<std::istream> in)
+  : super(options) {
   if (in != nullptr)
     reset(std::move(in));
 }

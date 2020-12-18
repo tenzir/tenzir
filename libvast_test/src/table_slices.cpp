@@ -46,8 +46,7 @@ make_random_table_slices(size_t num_slices, size_t slice_size,
   caf::settings opts;
   caf::put(opts, "vast.import.test.seed", seed);
   caf::put(opts, "vast.import.max-events", std::numeric_limits<size_t>::max());
-  format::test::reader src{defaults::import::table_slice_type, std::move(opts),
-                           nullptr};
+  format::test::reader src{std::move(opts), nullptr};
   src.schema(std::move(sc));
   std::vector<table_slice> result;
   auto add_slice = [&](table_slice slice) {

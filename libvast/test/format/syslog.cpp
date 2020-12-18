@@ -31,8 +31,7 @@ using namespace vast;
 FIXTURE_SCOPE(syslog_tests, fixtures::deterministic_actor_system)
 TEST(syslog reader) {
   auto in = detail::make_input_stream(artifacts::logs::syslog::syslog_msgs);
-  format::syslog::reader reader{defaults::import::table_slice_type,
-                                caf::settings{}, std::move(*in)};
+  format::syslog::reader reader{caf::settings{}, std::move(*in)};
   table_slice slice;
   auto add_slice = [&](const table_slice& x) {
     REQUIRE_EQUAL(slice.encoding(), table_slice_encoding::none);
