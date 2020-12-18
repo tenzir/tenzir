@@ -613,14 +613,14 @@ template <class FlatBuffer>
 table_slice::size_type arrow_table_slice<FlatBuffer>::rows() const noexcept {
   if (auto&& batch = record_batch())
     return batch->num_rows();
-  return {};
+  return 0;
 }
 
 template <class FlatBuffer>
 table_slice::size_type arrow_table_slice<FlatBuffer>::columns() const noexcept {
   if (auto&& batch = record_batch())
     return batch->num_columns();
-  return {};
+  return 0;
 }
 
 // -- data access ------------------------------------------------------------
