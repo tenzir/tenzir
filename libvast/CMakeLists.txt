@@ -231,7 +231,7 @@ if (NOT CAF_FOUND)
                  CXX_STANDARD 17
                  CXX_STANDARD_REQUIRED ON
                  CXX_EXTENSIONS OFF)
-    add_library(caf::core ALIAS libcaf_core_${_linkage_suffix})
+      add_library(CAF::core ALIAS libcaf_core_${_linkage_suffix})
     target_compile_features(libcaf_core_${_linkage_suffix} INTERFACE cxx_std_17)
     set_target_properties(libcaf_io_${_linkage_suffix} PROPERTIES EXPORT_NAME
                                                                   io)
@@ -240,7 +240,7 @@ if (NOT CAF_FOUND)
                                            -Wno-unknown-warning-option)
     find_package(Threads REQUIRED)
     target_link_libraries(libcaf_io_${_linkage_suffix} Threads::Threads)
-    add_library(caf::io ALIAS libcaf_io_${_linkage_suffix})
+    add_library(CAF::io ALIAS libcaf_io_${_linkage_suffix})
     install(
       TARGETS libcaf_core_${_linkage_suffix} libcaf_io_${_linkage_suffix}
       EXPORT CAFTargets
@@ -255,7 +255,7 @@ if (NOT CAF_FOUND)
           $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>)
       set_target_properties(libcaf_openssl_${_linkage_suffix}
                             PROPERTIES EXPORT_NAME openssl)
-      add_library(caf::openssl ALIAS libcaf_openssl_${_linkage_suffix})
+      add_library(CAF::openssl ALIAS libcaf_openssl_${_linkage_suffix})
       install(
         TARGETS libcaf_openssl_${_linkage_suffix}
         EXPORT CAFTargets
@@ -264,14 +264,14 @@ if (NOT CAF_FOUND)
         RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
     endif ()
     add_library(libcaf_test INTERFACE)
-    target_link_libraries(libcaf_test INTERFACE caf::core)
+    target_link_libraries(libcaf_test INTERFACE CAF::core)
     target_include_directories(
       libcaf_test
       INTERFACE
         "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/aux/caf/libcaf_test>"
         "$<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>")
     set_target_properties(libcaf_test PROPERTIES EXPORT_NAME test)
-    add_library(caf::test ALIAS libcaf_test)
+    add_library(CAF::test ALIAS libcaf_test)
     install(
       TARGETS libcaf_test
       EXPORT CAFTargets
@@ -282,7 +282,7 @@ if (NOT CAF_FOUND)
     export(
       EXPORT CAFTargets
       FILE CAFTargets.cmake
-      NAMESPACE caf::)
+      NAMESPACE CAF::)
     add_custom_target(
       caf-targets-link
       COMMAND
@@ -293,7 +293,7 @@ if (NOT CAF_FOUND)
     install(
       EXPORT CAFTargets
       DESTINATION "${CMAKE_INSTALL_LIBDIR}/cmake/vast"
-      NAMESPACE caf::)
+      NAMESPACE CAF::)
     string(APPEND VAST_EXTRA_TARGETS_FILES
            "\ninclude(\"\${CMAKE_CURRENT_LIST_DIR}/CAFTargets.cmake\")")
     set(CAF_FOUND true)
@@ -345,9 +345,9 @@ target_include_directories(
          $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>)
 
 # Link against CAF.
-target_link_libraries(libvast PUBLIC caf::core caf::io)
+target_link_libraries(libvast PUBLIC CAF::core CAF::io)
 if (VAST_ENABLE_OPENSSL)
-  target_link_libraries(libvast PUBLIC caf::openssl)
+  target_link_libraries(libvast PUBLIC CAF::openssl)
 endif ()
 if (VAST_ENABLE_BUNDLED_CAF)
   add_dependencies(libvast caf-targets-link)

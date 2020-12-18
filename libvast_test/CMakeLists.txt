@@ -19,7 +19,7 @@ target_include_directories(libvast_test
                            PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/vast/test)
 target_link_libraries(
   libvast_test
-  PUBLIC caf::test vast::libvast
+  PUBLIC CAF::test vast::libvast
   PRIVATE vast::internal)
 set(isExe $<STREQUAL:$<TARGET_PROPERTY:TYPE>,EXECUTABLE>)
 target_sources(
