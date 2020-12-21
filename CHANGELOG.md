@@ -12,6 +12,10 @@ Every entry has a category for which we use the following visual abbreviations:
 
 ## Unreleased
 
+- 🐞 Values in JSON fields that can't be converted to the type that is specified
+  in the schema won't cause the containing event to be dropped any longer.
+  [#1250](https://github.com/tenzir/vast/pull/1250)
+
 - 🐞 Invalid Arrow table slices read from disk no longer trigger a segmentation
   fault. Instead, the invalid on-disk state is ignored.
   [#1247](https://github.com/tenzir/vast/pull/1247)
