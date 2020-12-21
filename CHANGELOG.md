@@ -12,6 +12,10 @@ Every entry has a category for which we use the following visual abbreviations:
 
 ## Unreleased
 
+- 🐞 For JSON input, any data loss that is caused by type mismatches is now
+  reduced to a minimum.
+  [#1250](https://github.com/tenzir/vast/pull/1250)
+
 - 🐞 Invalid Arrow table slices read from disk no longer trigger a segmentation
   fault. Instead, the invalid on-disk state is ignored.
   [#1247](https://github.com/tenzir/vast/pull/1247)
