@@ -11,7 +11,9 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#if VAST_HAVE_PCAP
+#include "vast/config.hpp"
+
+#if VAST_ENABLE_PCAP
 
 #  include "vast/system/pcap_writer_command.hpp"
 
@@ -56,4 +58,4 @@ pcap_writer_command(const invocation& inv, caf::actor_system& sys) {
 
 } // namespace vast::system
 
-#endif // VAST_HAVE_PCAP
+#endif // VAST_ENABLE_PCAP

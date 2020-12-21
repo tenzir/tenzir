@@ -58,7 +58,7 @@
 #include "vast/table_slice.hpp"
 #include "vast/taxonomies.hpp"
 
-#if VAST_HAVE_PCAP
+#if VAST_ENABLE_PCAP
 #  include "vast/format/pcap.hpp"
 #endif
 
@@ -350,7 +350,7 @@ auto make_component_factory() {
       {"spawn source json",
        lift_component_factory<
          spawn_source<format::json::reader<>, defaults::import::json>>()},
-#if VAST_HAVE_PCAP
+#if VAST_ENABLE_PCAP
       {"spawn source pcap",
        lift_component_factory<
          spawn_source<format::pcap::reader, defaults::import::pcap>>()},

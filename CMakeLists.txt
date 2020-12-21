@@ -67,6 +67,23 @@ else ()
 endif ()
 unset(_VAST_PARENT_DIRECTORY)
 
+# -- library flavor ------------------------------------------------------------
+
+option(BUILD_SHARED_LIBS "Build shared instead of static libraries" ON)
+add_feature_info("BUILD_SHARED_LIBS" BUILD_SHARED_LIBS
+                 "build shared instead of static libraries.\n")
+
+# -- relocatable installations ----------------------------------------------
+
+# Setting this option removes configuration dependent absolute paths from the
+# VAST installation. Concretely, it enables the dynamic binary and libraries to
+# use relative paths for loading their dependencies.
+option(VAST_ENABLE_RELOCATABLE_INSTALLATIONS "Enable relocatable installations"
+       ON)
+add_feature_info(
+  "VAST_ENABLE_RELOCATABLE_INSTALLATIONS" VAST_ENABLE_RELOCATABLE_INSTALLATIONS
+  "enable relocatable installations.")
+
 # -- silence policy-related warnings -------------------------------------------
 
 # TODO: When updating to CAF 0.18, this should no longer be needed.
@@ -82,6 +99,7 @@ if (POLICY CMP0042)
   if (APPLE AND NOT DEFINED CMAKE_MACOSX_RPATH)
     set(CMAKE_SKIP_BUILD_RPATH FALSE)
     set(CMAKE_BUILD_WITH_INSTALL_RPATH FALSE)
+    # TODO: Verify that this is indeed correct.
     if (NOT VAST_ENABLE_RELOCATABLE_INSTALLATIONS)
       set(CMAKE_INSTALL_RPATH_USE_LINK_PATH TRUE)
     endif ()
@@ -113,6 +131,10 @@ if (${CMAKE_SYSTEM_NAME} MATCHES "FreeBSD")
                                _GLIBCXX_USE_C99_MATH_TR1)
 endif ()
 
+if (BUILD_SHARED_LIBS AND "${CMAKE_SYSTEM_NAME}" MATCHES "Linux")
+  target_link_libraries(libvast_internal INTERFACE dl)
+endif ()
+
 # -- optimizations -------------------------------------------------------------
 
 # TODO add option to disable SSE
@@ -137,6 +159,7 @@ target_compile_options(
             -Wextra
             -pedantic
             -Werror=switch
+            -Wundef
             $<$<CONFIG:CI>:-Werror
             -Wno-error=deprecated
             -Wno-error=deprecated-declarations>
@@ -158,19 +181,6 @@ endif ()
 option(VAST_ENABLE_SDT "Generate USDT tracepoint instrumentation" ON)
 add_feature_info("VAST_ENABLE_SDT" VAST_ENABLE_SDT
                  "generate USDT tracepoint instrumentation.")
-if (VAST_ENABLE_SDT)
-  target_compile_definitions(libvast_internal INTERFACE VAST_ENABLE_SDT=1)
-endif ()
-
-# -- exceptions ----------------------------------------------------------------
-
-option(VAST_ENABLE_EXCEPTIONS "Enable C++ exceptions" ON)
-add_feature_info("VAST_ENABLE_EXCEPTIONS" VAST_ENABLE_EXCEPTIONS
-                 "use C++ exceptions.")
-if (NOT VAST_ENABLE_EXCEPTIONS)
-  target_compile_definitions(libvast_internal INTERFACE VAST_NO_EXCEPTIONS=1)
-  target_compile_options(libvast_internal INTERFACE "-fno-exceptions")
-endif ()
 
 # -- build profiling -----------------------------------------------------------
 
@@ -230,33 +240,16 @@ if (VAST_ENABLE_UBSAN)
   target_link_libraries(libvast_internal INTERFACE -fsanitize=undefined)
 endif ()
 
-# -- relocatability and static build support -----------------------------------
+# -- static build support -----------------------------------
 
-# Setting this option removes configuration dependent absolute paths from the
-# VAST installation. Concretely, it enables the dynamic binary and libraries to
-# use relative paths for loading their dependencies.
-option(VAST_ENABLE_RELOCATABLE_INSTALLATIONS "Enable relocatable installations"
-       ON)
-add_feature_info(
-  "VAST_ENABLE_RELOCATABLE_INSTALLATIONS" VAST_ENABLE_RELOCATABLE_INSTALLATIONS
-  "enable relocatable installations.")
-
-option(VAST_ENABLE_STATIC_EXECUTABLE "Link VAST statically."
-       $ENV{VAST_ENABLE_STATIC_EXECUTABLE})
+cmake_dependent_option(
+  VAST_ENABLE_STATIC_EXECUTABLE "Link VAST statically."
+  "$ENV{VAST_ENABLE_STATIC_EXECUTABLE}" "NOT BUILD_SHARED_LIBS" OFF)
 add_feature_info("VAST_ENABLE_STATIC_EXECUTABLE" VAST_ENABLE_STATIC_EXECUTABLE
                  "link VAST statically.")
 if (VAST_ENABLE_STATIC_EXECUTABLE)
   target_link_libraries(libvast_internal INTERFACE -static-libgcc
                                                    -static-libstdc++ -static)
-endif ()
-
-cmake_dependent_option(
-  BUILD_SHARED_LIBS "Build shared instead of static libraries" ON
-  "NOT VAST_ENABLE_STATIC_EXECUTABLE" OFF)
-add_feature_info("BUILD_SHARED_LIBS" BUILD_SHARED_LIBS
-                 "build shared instead of static library.")
-if (BUILD_SHARED_LIBS AND "${CMAKE_SYSTEM_NAME}" MATCHES "Linux")
-  target_link_libraries(libvast_internal INTERFACE dl)
 endif ()
 
 if (VAST_ENABLE_STATIC_EXECUTABLE AND BUILD_SHARED_LIBS)
@@ -286,7 +279,6 @@ if (VAST_ENABLE_JEMALLOC)
   find_package(jemalloc REQUIRED)
   provide_find_module(jemalloc)
   string(APPEND VAST_FIND_DEPENDENCY_LIST "\nfind_package(jemalloc REQUIRED)")
-  target_compile_definitions(libvast_internal INTERFACE VAST_HAVE_JEMALLOC=1)
   target_link_libraries(libvast_internal INTERFACE jemalloc::jemalloc_)
 endif ()
 
@@ -329,9 +321,13 @@ if (VAST_ENABLE_DEVELOPER_MODE)
   set(CMAKE_VERBOSE_MAKEFILE
       OFF
       CACHE STRING "Show all outputs including compiler lines." FORCE)
+endif ()
 
+if (VAST_ENABLE_DEVELOPER_MODE OR VAST_ENABLE_BUILDID)
   # Relocate debug paths to a common prefix for CCache users that work from
   # multiple worktrees.
+  # The debug paths affect the build-id, we rewrite them to get a more
+  # reproducible build.
   target_compile_options(
     libvast_internal
     INTERFACE "-fdebug-prefix-map=${CMAKE_CURRENT_SOURCE_DIR}=.")
@@ -473,6 +469,10 @@ if (VAST_ENABLE_BUNDLED_SCHEMAS)
           DESTINATION "${CMAKE_INSTALL_FULL_DATADIR}/vast")
 endif ()
 
+if (NOT VAST_DATADIR)
+  set(VAST_DATADIR "${CMAKE_INSTALL_FULL_DATADIR}")
+endif ()
+
 install(FILES "${CMAKE_CURRENT_SOURCE_DIR}/vast.yaml.example"
         DESTINATION "${CMAKE_INSTALL_FULL_DATADIR}/vast/")
 
@@ -562,6 +562,7 @@ feature_summary(
 
 # Print the feature summary if we're not a subproject.
 if (NOT VAST_IS_SUBPROJECT)
+  message("\n")
   feature_summary(WHAT ENABLED_FEATURES DISABLED_FEATURES
                   INCLUDE_QUIET_PACKAGES)
 endif ()

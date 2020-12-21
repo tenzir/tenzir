@@ -131,7 +131,6 @@ endif ()
 mark_as_advanced(CAF_ROOT_DIR CAF_LIBRARIES CAF_INCLUDE_DIRS)
 
 if (CAF_FOUND)
-  message(STATUS "CREATING CAF TARGETS")
   if (CAF_core_FOUND AND NOT TARGET caf::core)
     add_library(caf::core UNKNOWN IMPORTED GLOBAL)
     set_target_properties(

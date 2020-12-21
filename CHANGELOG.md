@@ -12,6 +12,10 @@ Every entry has a category for which we use the following visual abbreviations:
 
 ## Unreleased
 
+- 🐞 For relocatable installations, the list of schema loading paths does not
+  include a build-time configured path any more.
+  [#1249](https://github.com/tenzir/vast/pull/1249)
+
 - 🐞 Values in JSON fields that can't be converted to the type that is specified
   in the schema won't cause the containing event to be dropped any longer.
   [#1250](https://github.com/tenzir/vast/pull/1250)

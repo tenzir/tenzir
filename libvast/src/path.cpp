@@ -26,7 +26,7 @@
 #include <fstream>
 #include <iterator>
 
-#ifdef VAST_POSIX
+#if VAST_POSIX
 #  include <cerrno>
 #  include <cstdio>
 #  include <cstring>
@@ -62,7 +62,7 @@ namespace vast {
 constexpr const char* path::separator;
 
 path path::current() {
-#ifdef VAST_POSIX
+#if VAST_POSIX
   char buf[max_len];
   return ::getcwd(buf, max_len);
 #else
@@ -101,7 +101,7 @@ bool path::empty() const {
 }
 
 path path::root() const {
-#ifdef VAST_POSIX
+#if VAST_POSIX
   if (!empty() && str_[0] == *separator)
     return str_.size() > 1 && str_[1] == *separator ? "//" : separator;
 #endif
@@ -194,7 +194,7 @@ const std::string& path::str() const {
 }
 
 path::type path::kind() const {
-#ifdef VAST_POSIX
+#if VAST_POSIX
   struct stat st;
   if (::lstat(str_.data(), &st))
     return unknown;
@@ -262,7 +262,7 @@ std::vector<path> split(const path& p) {
 }
 
 bool exists(const path& p) {
-#ifdef VAST_POSIX
+#if VAST_POSIX
   struct stat st;
   return ::lstat(p.str().data(), &st) == 0;
 #else

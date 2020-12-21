@@ -35,7 +35,7 @@ class path : detail::totally_ordered<path>,
   friend access;
 
 public:
-#ifdef VAST_WINDOWS
+#if VAST_WINDOWS
   static constexpr const char* separator = "\\";
 #else
   static constexpr const char* separator = "/";

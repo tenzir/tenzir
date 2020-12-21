@@ -18,7 +18,7 @@
 #include "vast/detail/iterator.hpp"
 #include "vast/path.hpp"
 
-#ifdef VAST_POSIX
+#if VAST_POSIX
 #  include <dirent.h>
 #else
 

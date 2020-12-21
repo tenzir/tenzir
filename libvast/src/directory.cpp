@@ -26,7 +26,7 @@
 #include <fstream>
 #include <iterator>
 
-#ifdef VAST_POSIX
+#if VAST_POSIX
 #  include <sys/types.h>
 #endif // VAST_POSIX
 
@@ -39,7 +39,7 @@ directory::iterator::iterator(const directory* dir) : dir_{dir} {
 void directory::iterator::increment() {
   if (!dir_)
     return;
-#ifdef VAST_POSIX
+#if VAST_POSIX
   if (!dir_->dir_) {
     dir_ = nullptr;
   } else if (auto ent = ::readdir(dir_->dir_)) {
@@ -89,7 +89,7 @@ directory& directory::operator=(directory&& other) {
 }
 
 directory::~directory() {
-#ifdef VAST_POSIX
+#if VAST_POSIX
   if (dir_)
     ::closedir(dir_);
 #endif

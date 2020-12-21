@@ -24,7 +24,7 @@
 
 #include <vector>
 
-#if VAST_HAVE_ARROW
+#if VAST_ENABLE_ARROW
 
 namespace arrow {
 
@@ -37,7 +37,7 @@ class Schema;
 
 } // namespace arrow
 
-#endif // VAST_HAVE_ARROW
+#endif // VAST_ENABLE_ARROW
 
 namespace vast {
 

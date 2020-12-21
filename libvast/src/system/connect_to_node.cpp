@@ -22,7 +22,7 @@
 #include <caf/scoped_actor.hpp>
 #include <caf/settings.hpp>
 
-#if VAST_USE_OPENSSL
+#if VAST_ENABLE_OPENSSL
 #  include <caf/openssl/all.hpp>
 #endif
 
@@ -67,7 +67,7 @@ connect_to_node(scoped_actor& self, const caf::settings& opts) {
   VAST_INFO_ANON("connecting to VAST node", endpoint_str);
   auto result = [&]() -> caf::expected<caf::actor> {
     if (use_encryption) {
-#if VAST_USE_OPENSSL
+#if VAST_ENABLE_OPENSSL
       return openssl::remote_actor(self->system(), node_endpoint.host,
                                    node_endpoint.port->number());
 #else

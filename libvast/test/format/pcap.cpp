@@ -13,7 +13,9 @@
 
 #define SUITE format
 
-#if VAST_HAVE_PCAP
+#include "vast/config.hpp"
+
+#if VAST_ENABLE_PCAP
 
 #  include "vast/format/pcap.hpp"
 
@@ -145,4 +147,4 @@ TEST(PCAP read/write 2) {
 
 FIXTURE_SCOPE_END()
 
-#endif // VAST_HAVE_PCAP
+#endif // VAST_ENABLE_PCAP

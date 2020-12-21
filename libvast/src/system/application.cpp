@@ -39,11 +39,11 @@
 #include "vast/system/version_command.hpp"
 #include "vast/system/writer_command.hpp"
 
-#if VAST_HAVE_ARROW
+#if VAST_ENABLE_ARROW
 #  include "vast/format/arrow.hpp"
 #endif
 
-#if VAST_HAVE_PCAP
+#if VAST_ENABLE_PCAP
 #  include "vast/format/pcap.hpp"
 #  include "vast/system/pcap_writer_command.hpp"
 #endif
@@ -182,7 +182,7 @@ auto make_export_command() {
                           "exports query without printing them (debug option)",
                           documentation::vast_export_null,
                           sink_opts("?vast.export.null"));
-#if VAST_HAVE_ARROW
+#if VAST_ENABLE_ARROW
   // The Arrow export does not support --write or --uds, so we don't use the
   // sink_opts here intentionally.
   export_->add_subcommand("arrow", "exports query results in Arrow format",
@@ -190,7 +190,7 @@ auto make_export_command() {
                           opts("?vast.export.arrow"));
 
 #endif
-#if VAST_HAVE_PCAP
+#if VAST_ENABLE_PCAP
   export_->add_subcommand("pcap", "exports query results in PCAP format",
                           documentation::vast_export_pcap,
                           make_pcap_options("?vast.export.pcap"));
@@ -244,7 +244,7 @@ auto make_import_command() {
     "test", "imports random data for testing or benchmarking",
     documentation::vast_import_test,
     source_opts("?vast.import.test").add<size_t>("seed", "the PRNG seed"));
-#if VAST_HAVE_PCAP
+#if VAST_ENABLE_PCAP
   import_->add_subcommand(
     "pcap", "imports PCAP logs from STDIN or file",
     documentation::vast_import_pcap,
@@ -312,7 +312,7 @@ auto make_spawn_source_command() {
                                "creates a new JSON source inside the node",
                                documentation::vast_spawn_source_json,
                                source_opts("?vast.spawn.source.json"));
-#if VAST_HAVE_PCAP
+#if VAST_ENABLE_PCAP
   spawn_source->add_subcommand(
     "pcap", "creates a new PCAP source inside the node",
     documentation::vast_spawn_source_pcap,
@@ -448,10 +448,10 @@ auto make_command_factory() {
     {"export csv", make_writer_command("csv")},
     {"export json", make_writer_command("json")},
     {"export null", make_writer_command("null")},
-#if VAST_HAVE_ARROW
+#if VAST_ENABLE_ARROW
     {"export arrow", make_writer_command("arrow")},
 #endif
-#if VAST_HAVE_PCAP
+#if VAST_ENABLE_PCAP
     {"export pcap", pcap_writer_command},
 #endif
     {"export zeek", make_writer_command("zeek")},
@@ -460,7 +460,7 @@ auto make_command_factory() {
     {"import csv", import_command<format::csv::reader, defaults::import::csv>},
     {"import json", import_command<format::json::reader<>,
       defaults::import::json>},
-#if VAST_HAVE_PCAP
+#if VAST_ENABLE_PCAP
     {"import pcap", import_command<format::pcap::reader,
       defaults::import::pcap>},
 #endif

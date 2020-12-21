@@ -29,9 +29,9 @@
 #include "vast/table_slice_builder_factory.hpp"
 #include "vast/value_index.hpp"
 
-#if VAST_HAVE_ARROW
+#if VAST_ENABLE_ARROW
 #  include "vast/arrow_table_slice.hpp"
-#endif // VAST_HAVE_ARROW
+#endif // VAST_ENABLE_ARROW
 
 namespace vast {
 
@@ -51,11 +51,11 @@ auto visit(Visitor&& visitor, const fbs::TableSlice* x) noexcept(
     // noexcept-specified. When adding a new encoding, add it here as well.
     // NOTE: GCC does not quite respect the C++ standard and instantiates
     // 'Visitor' with the encoded table, which is why we need to take extra care
-    // of builds without VAST_HAVE_ARROW here.
+    // of builds without VAST_ENABLE_ARROW here.
     std::is_nothrow_invocable<Visitor>,
-#if VAST_HAVE_ARROW
+#if VAST_ENABLE_ARROW
     std::is_nothrow_invocable<Visitor, const fbs::table_slice::arrow::v0&>,
-#endif // VAST_HAVE_ARROW
+#endif // VAST_ENABLE_ARROW
     std::is_nothrow_invocable<Visitor, const fbs::table_slice::msgpack::v0&>>) {
   if (!x)
     return std::invoke(std::forward<Visitor>(visitor));
@@ -63,7 +63,7 @@ auto visit(Visitor&& visitor, const fbs::TableSlice* x) noexcept(
     case fbs::table_slice::TableSlice::NONE:
       return std::invoke(std::forward<Visitor>(visitor));
     case fbs::table_slice::TableSlice::arrow_v0:
-#if VAST_HAVE_ARROW
+#if VAST_ENABLE_ARROW
       return std::invoke(std::forward<Visitor>(visitor),
                          *x->table_slice_as_arrow_v0());
 #else
@@ -346,7 +346,7 @@ data_view table_slice::at(table_slice::size_type row,
   return visit(f, as_flatbuffer(chunk_));
 }
 
-#if VAST_HAVE_ARROW
+#if VAST_ENABLE_ARROW
 
 std::shared_ptr<arrow::RecordBatch> as_record_batch(const table_slice& slice) {
   auto f = detail::overload{
@@ -384,7 +384,7 @@ std::shared_ptr<arrow::RecordBatch> as_record_batch(const table_slice& slice) {
   return visit(f, as_flatbuffer(slice.chunk_));
 }
 
-#endif // VAST_HAVE_ARROW
+#endif // VAST_ENABLE_ARROW
 
 // -- concepts -----------------------------------------------------------------
 

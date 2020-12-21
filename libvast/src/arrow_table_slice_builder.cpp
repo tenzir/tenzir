@@ -11,7 +11,9 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#if VAST_HAVE_ARROW
+#include "vast/config.hpp"
+
+#if VAST_ENABLE_ARROW
 
 #  include "vast/arrow_table_slice_builder.hpp"
 
@@ -576,4 +578,4 @@ std::shared_ptr<arrow::DataType> make_arrow_type(const type& t) {
 
 } // namespace vast
 
-#endif // VAST_HAVE_ARROW
+#endif // VAST_ENABLE_ARROW

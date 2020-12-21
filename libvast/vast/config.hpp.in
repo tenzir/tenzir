@@ -1,8 +1,25 @@
 #pragma once
 
+#cmakedefine01 VAST_ENABLE_ARROW
+#cmakedefine01 VAST_ENABLE_ASAN
+#cmakedefine01 VAST_ENABLE_ASSERTIONS
+#cmakedefine01 VAST_ENABLE_BUILDID
+#cmakedefine01 VAST_ENABLE_BUNDLED_BROKER
+#cmakedefine01 VAST_ENABLE_BUNDLED_CAF
+#cmakedefine01 VAST_ENABLE_DEVELOPER_MODE
+#cmakedefine01 VAST_ENABLE_EXCEPTIONS
+#cmakedefine01 VAST_ENABLE_JEMALLOC
+#cmakedefine01 VAST_ENABLE_OPENSSL
+#cmakedefine01 VAST_ENABLE_PCAP
+#cmakedefine01 VAST_ENABLE_RELOCATABLE_INSTALLATIONS
+#cmakedefine01 VAST_ENABLE_SDT
+#cmakedefine01 VAST_ENABLE_STATIC_EXECUTABLE
+#cmakedefine01 VAST_ENABLE_UBSAN
+#cmakedefine01 VAST_ENABLE_UNIT_TESTS
+
 #define VAST_VERSION "@VAST_VERSION_TAG@"
 #define VAST_SYSCONFDIR "@CMAKE_INSTALL_FULL_SYSCONFDIR@"
-#define VAST_DATADIR "@CMAKE_INSTALL_FULL_DATADIR@"
+#define VAST_DATADIR "@VAST_DATADIR@"
 
 #include <caf/config.hpp>
 
@@ -16,8 +33,21 @@
 
 #define VAST_LOG_LEVEL VAST_LOG_LEVEL_@VAST_LOG_LEVEL@
 
+// TODO: Move everything below to a more appropriate place.
+
 #if defined(CAF_CLANG)
 #  define VAST_CLANG 1
+#else
+#  define VAST_CLANG 0
+#endif
+
+#if defined(CAF_GCC)
+#  define VAST_GCC 1
+#else
+#  define VAST_GCC 0
+#endif
+
+#if VAST_CLANG
 #  define VAST_DIAGNOSTIC_PUSH  _Pragma("clang diagnostic push")
 #  define VAST_DIAGNOSTIC_POP   _Pragma("clang diagnostic pop")
 #  define VAST_DIAGNOSTIC_IGNORE_DEPRECATED                                 \
@@ -25,8 +55,7 @@
 #  define VAST_DIAGNOSTIC_IGNORE_VLA_EXTENSION                              \
      _Pragma("clang diagnostic ignored \"-Wvla-extension\"")                \
      _Pragma("clang diagnostic ignored \"-Wgnu-folding-constant\"")
-#elif defined(CAF_GCC)
-#  define VAST_GCC 1
+#elif VAST_GCC
 #  define VAST_DIAGNOSTIC_PUSH  _Pragma("GCC diagnostic push")
 #  define VAST_DIAGNOSTIC_POP   _Pragma("GCC diagnostic pop")
 #  define VAST_DIAGNOSTIC_IGNORE_DEPRECATED                                 \
@@ -35,19 +64,33 @@
      _Pragma("GCC diagnostic ignored \"-Wvla\"")
 #endif
 
-#if defined(CAF_MACOS)
-#  define VAST_MACOS 1
-#elif defined(CAF_LINUX)
-#  define VAST_LINUX 1
-#elif defined(CAF_BSD)
+#ifdef CAF_BSD
 #  define VAST_BSD 1
-#elif defined(CAF_WINDOWS)
+#else
+#  define VAST_BSD 0
+#endif
+#ifdef CAF_LINUX
+#  define VAST_LINUX 1
+#else
+#  define VAST_LINUX 0
+#endif
+#ifdef CAF_MACOS
+#  define VAST_MACOS 1
+#else
+#  define VAST_MACOS 0
+#endif
+#ifdef CAF_WINDOWS
 #  define VAST_WINDOWS 1
 #else
+#  define VAST_WINDOWS 0
+#endif
+#if !(VAST_BSD || VAST_LINUX || VAST_MACOS || VAST_WINDOWS)
 #  error platform not supported
 #endif
 #ifdef CAF_POSIX
 #  define VAST_POSIX 1
+#else
+#  define VAST_POSIX 0
 #endif
 
 // Convenience macros

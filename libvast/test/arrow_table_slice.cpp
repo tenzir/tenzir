@@ -13,7 +13,9 @@
 
 #define SUITE arrow_table_slice
 
-#if VAST_HAVE_ARROW
+#include "vast/config.hpp"
+
+#if VAST_ENABLE_ARROW
 
 #  include "vast/arrow_table_slice.hpp"
 
@@ -302,4 +304,4 @@ TEST_TABLE_SLICE(arrow_table_slice_builder, "arrow")
 
 FIXTURE_SCOPE_END()
 
-#endif // VAST_HAVE_ARROW
+#endif // VAST_ENABLE_ARROW
