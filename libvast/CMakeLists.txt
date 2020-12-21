@@ -233,24 +233,24 @@ if (NOT CAF_FOUND)
     install(
       TARGETS libcaf_core_${_linkage_suffix} libcaf_io_${_linkage_suffix}
       EXPORT CAFTargets
-      ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
-      LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
-      RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
+      ARCHIVE DESTINATION ${CMAKE_INSTALL_FULL_LIBDIR}
+      LIBRARY DESTINATION ${CMAKE_INSTALL_FULL_LIBDIR}
+      RUNTIME DESTINATION ${CMAKE_INSTALL_FULL_BINDIR})
     if (VAST_ENABLE_OPENSSL)
       target_include_directories(
         libcaf_openssl_${_linkage_suffix}
         PUBLIC
           $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/aux/caf/libcaf_openssl>
-          $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>)
+          $<INSTALL_INTERFACE:${CMAKE_INSTALL_FULL_INCLUDEDIR}>)
       set_target_properties(libcaf_openssl_${_linkage_suffix}
                             PROPERTIES EXPORT_NAME openssl)
       add_library(caf::openssl ALIAS libcaf_openssl_${_linkage_suffix})
       install(
         TARGETS libcaf_openssl_${_linkage_suffix}
         EXPORT CAFTargets
-        ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
-        LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
-        RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
+        ARCHIVE DESTINATION ${CMAKE_INSTALL_FULL_LIBDIR}
+        LIBRARY DESTINATION ${CMAKE_INSTALL_FULL_LIBDIR}
+        RUNTIME DESTINATION ${CMAKE_INSTALL_FULL_BINDIR})
     endif ()
     add_library(libcaf_test INTERFACE)
     target_link_libraries(libcaf_test INTERFACE caf::core)

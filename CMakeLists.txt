@@ -67,6 +67,12 @@ else ()
 endif ()
 unset(_VAST_PARENT_DIRECTORY)
 
+# -- library flavor ------------------------------------------------------------
+
+option(BUILD_SHARED_LIBS "Build shared instead of static libraries" ON)
+add_feature_info("BUILD_SHARED_LIBS" BUILD_SHARED_LIBS
+                 "build shared instead of static libraries.\n")
+
 # -- relocatable installations ----------------------------------------------
 
 # Setting this option removes configuration dependent absolute paths from the
@@ -123,6 +129,10 @@ if (${CMAKE_SYSTEM_NAME} MATCHES "FreeBSD")
   target_compile_definitions(
     libvast_internal INTERFACE _GLIBCXX_USE_C99 _GLIBCXX_USE_C99_MATH
                                _GLIBCXX_USE_C99_MATH_TR1)
+endif ()
+
+if (BUILD_SHARED_LIBS AND "${CMAKE_SYSTEM_NAME}" MATCHES "Linux")
+  target_link_libraries(libvast_internal INTERFACE dl)
 endif ()
 
 # -- optimizations -------------------------------------------------------------
@@ -232,22 +242,14 @@ endif ()
 
 # -- static build support -----------------------------------
 
-option(VAST_ENABLE_STATIC_EXECUTABLE "Link VAST statically."
-       $ENV{VAST_ENABLE_STATIC_EXECUTABLE})
+cmake_dependent_option(
+  VAST_ENABLE_STATIC_EXECUTABLE "Link VAST statically."
+  "$ENV{VAST_ENABLE_STATIC_EXECUTABLE}" "NOT BUILD_SHARED_LIBS" OFF)
 add_feature_info("VAST_ENABLE_STATIC_EXECUTABLE" VAST_ENABLE_STATIC_EXECUTABLE
                  "link VAST statically.")
 if (VAST_ENABLE_STATIC_EXECUTABLE)
   target_link_libraries(libvast_internal INTERFACE -static-libgcc
                                                    -static-libstdc++ -static)
-endif ()
-
-cmake_dependent_option(
-  BUILD_SHARED_LIBS "Build shared instead of static libraries" ON
-  "NOT VAST_ENABLE_STATIC_EXECUTABLE" OFF)
-add_feature_info("BUILD_SHARED_LIBS" BUILD_SHARED_LIBS
-                 "build shared instead of static library.")
-if (BUILD_SHARED_LIBS AND "${CMAKE_SYSTEM_NAME}" MATCHES "Linux")
-  target_link_libraries(libvast_internal INTERFACE dl)
 endif ()
 
 if (VAST_ENABLE_STATIC_EXECUTABLE AND BUILD_SHARED_LIBS)
@@ -560,6 +562,7 @@ feature_summary(
 
 # Print the feature summary if we're not a subproject.
 if (NOT VAST_IS_SUBPROJECT)
+  message("\n")
   feature_summary(WHAT ENABLED_FEATURES DISABLED_FEATURES
                   INCLUDE_QUIET_PACKAGES)
 endif ()
