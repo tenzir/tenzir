@@ -165,10 +165,9 @@ struct convert {
       // `null`, we always want to return VAST `nil`.
       return caf::none;
     } else {
-      VAST_ERROR_ANON("json-reader cannot convert from",
-                      caf::detail::pretty_type_name(typeid(T)), "to",
-                      caf::detail::pretty_type_name(typeid(U)));
-      return make_error(ec::syntax_error, "invalid json type");
+      return make_error(ec::convert_error,
+                        caf::detail::pretty_type_name(typeid(T)), "to",
+                        caf::detail::pretty_type_name(typeid(U)));
     }
   }
 };
@@ -223,8 +222,7 @@ caf::error add(table_slice_builder& builder, const vast::json::object& xs,
       if (!err)
         err = make_error(ec::convert_error);
       err.context() += x.error().context();
-      err.context() += caf::make_message("could not convert", field.name, ":",
-                                         to_string(*i));
+      err.context() += caf::make_message(field.name, "is", to_string(*i), ";");
       x = caf::none;
     }
     if (!builder.add(make_data_view(*x)))

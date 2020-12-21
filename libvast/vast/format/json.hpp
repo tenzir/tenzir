@@ -257,7 +257,7 @@ caf::error reader<Selector>::read_impl(size_t max_events, size_t max_slice_size,
       if (err == ec::convert_error) {
         if (num_invalid_lines_ == 0)
           VAST_WARNING(this, "failed to convert value(s) in line",
-                       lines_->line_number(), ":", line, err);
+                       lines_->line_number(), ":", render(err));
         ++num_invalid_lines_;
       } else {
         err.context() += caf::make_message("line", lines_->line_number());
