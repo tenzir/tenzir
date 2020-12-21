@@ -12,8 +12,8 @@ Every entry has a category for which we use the following visual abbreviations:
 
 ## Unreleased
 
-- 🐞 For JSON input, any data loss that is caused by type mismatches is now
-  reduced to a minimum.
+- 🐞 Values in JSON fields that can't be converted to the type that is specified
+  in the schema won't cause the containing event to be dropped any longer.
   [#1250](https://github.com/tenzir/vast/pull/1250)
 
 - 🐞 Invalid Arrow table slices read from disk no longer trigger a segmentation
