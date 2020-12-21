@@ -208,6 +208,7 @@ const char* writer::name() const {
 
 caf::error add(table_slice_builder& builder, const vast::json::object& xs,
                const record_type& layout) {
+  caf::error err = caf::none;
   for (auto& field : layout.fields) {
     auto i = lookup(field.name, xs);
     // Non-existing fields are treated as empty (unset).
@@ -218,14 +219,19 @@ caf::error add(table_slice_builder& builder, const vast::json::object& xs,
       continue;
     }
     auto x = caf::visit(convert{}, *i, field.type);
-    if (!x)
-      return make_error(ec::convert_error, x.error().context(),
-                        "could not convert", field.name, ":", to_string(*i));
+    if (!x) {
+      if (!err)
+        err = make_error(ec::convert_error);
+      err.context() += x.error().context();
+      err.context() += caf::make_message("could not convert", field.name, ":",
+                                         to_string(*i));
+      x = caf::none;
+    }
     if (!builder.add(make_data_view(*x)))
       return make_error(ec::type_clash, "unexpected type", field.name, ":",
                         to_string(*i));
   }
-  return caf::none;
+  return err;
 }
 
 } // namespace vast::format::json

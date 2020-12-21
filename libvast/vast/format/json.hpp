@@ -254,8 +254,15 @@ caf::error reader<Selector>::read_impl(size_t max_events, size_t max_slice_size,
     if (bptr == nullptr)
       return make_error(ec::parse_error, "unable to get a builder");
     if (auto err = add(*bptr, *xs, *layout)) {
-      err.context() += caf::make_message("line", lines_->line_number());
-      return finish(cons, err);
+      if (err == ec::convert_error) {
+        if (num_invalid_lines_ == 0)
+          VAST_WARNING(this, "failed to convert value(s) in line",
+                       lines_->line_number(), ":", line, err);
+        ++num_invalid_lines_;
+      } else {
+        err.context() += caf::make_message("line", lines_->line_number());
+        return finish(cons, err);
+      }
     }
     produced++;
     batch_events_++;
