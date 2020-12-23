@@ -220,7 +220,7 @@ evaluate(const PartitionState& state, const expression& expr) {
 
 bool partition_selector::operator()(const qualified_record_field& filter,
                                     const table_slice_column& column) const {
-  auto&& layout = column.slice().layout();
+  auto&& layout = flatten(column.slice().layout());
   // We don't create a temporary qualified_record_field here to avoid copying
   // a string and a record field on the heap. Instead, we compare each part
   // manually.
@@ -397,7 +397,7 @@ active_partition_actor::behavior_type active_partition(
       static_assert(invalid_id == std::numeric_limits<vast::id>::max());
       auto first = x.offset();
       auto last = x.offset() + x.rows();
-      auto&& layout = x.layout();
+      auto layout = flatten(x.layout());
       auto it = self->state.type_ids.emplace(layout.name(), ids{}).first;
       auto& ids = it->second;
       VAST_ASSERT(first >= ids.size());

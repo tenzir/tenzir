@@ -159,6 +159,7 @@ void msgpack_table_slice_builder::reserve(size_t num_rows) {
 msgpack_table_slice_builder::msgpack_table_slice_builder(
   record_type layout, size_t initial_buffer_size)
   : table_slice_builder{std::move(layout)},
+    flat_layout_{flatten(this->layout())},
     msgpack_builder_{data_},
     builder_{initial_buffer_size} {
   data_.reserve(initial_buffer_size);
@@ -166,7 +167,7 @@ msgpack_table_slice_builder::msgpack_table_slice_builder(
 
 bool msgpack_table_slice_builder::add_impl(data_view x) {
   // Check whether input is valid.
-  if (!type_check(layout().fields[column_].type, x))
+  if (!type_check(flat_layout_.fields[column_].type, x))
     return false;
   if (column_ == 0)
     offset_table_.push_back(data_.size());

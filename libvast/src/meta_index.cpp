@@ -71,7 +71,7 @@ void partition_synopsis::add(const table_slice& slice,
           syn->add(std::move(view));
       }
     };
-    auto&& layout = slice.layout();
+    auto layout = flatten(slice.layout());
     auto& field = layout.fields[col];
     auto& type = field.type;
     if (!caf::holds_alternative<string_type>(type)) {

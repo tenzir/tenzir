@@ -94,6 +94,9 @@ private:
   /// Current column index.
   size_t column_ = 0;
 
+  /// A flattened representation of the layout.
+  record_type flat_layout_;
+
   /// Offsets from the beginning of the buffer to each row.
   std::vector<uint64_t> offset_table_ = {};
 

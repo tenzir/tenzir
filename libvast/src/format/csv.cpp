@@ -159,7 +159,7 @@ void reader::reset(std::unique_ptr<std::istream> in) {
 caf::error reader::schema(vast::schema s) {
   for (auto& t : s) {
     if (auto r = caf::get_if<record_type>(&t))
-      schema_.add(flatten(*r));
+      schema_.add(*r);
     else
       schema_.add(t);
   }

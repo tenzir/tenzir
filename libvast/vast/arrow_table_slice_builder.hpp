@@ -103,6 +103,9 @@ private:
   size_t rows_ = 0;
 
   /// Schema of the Record Batch corresponding to the layout.
+  record_type flat_layout_;
+
+  /// Schema of the Record Batch corresponding to the layout.
   std::shared_ptr<arrow::Schema> schema_ = {};
 
   /// Builders for columnar Arrow arrays.

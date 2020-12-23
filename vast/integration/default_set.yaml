@@ -489,7 +489,11 @@ tests:
         input: data/json/sysmon.json
       - command: -N status --detailed
         transformation: jq '.index.statistics.layouts | del(."vast.metrics")'
+      - command: -N import suricata
+        input: data/suricata/eve.json
       - command: -N export json '"®" in :string'
+      - command: -N export json '#type ni "suricata"'
+
   Heterogenous JSONL import simdjson:
     tags: [import, json, sysmon]
     steps:
@@ -498,6 +502,7 @@ tests:
       - command: -N status --detailed
         transformation: jq '.index.statistics.layouts | del(."vast.metrics")'
       - command: -N export json '"®" in :string'
+
   Zeek conn log aging:
     tags: [import-export, aging, zeek]
     fixture: AgingTester

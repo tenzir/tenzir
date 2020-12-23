@@ -83,7 +83,7 @@ struct field_selector {
       if (sn[0] == Specification::prefix)
         // The temporary string can be dropped with c++20.
         // See https://wg21.link/p0919.
-        types[std::string{sn[1]}] = flatten(*r);
+        types[std::string{sn[1]}] = *r;
     }
     return caf::none;
   }

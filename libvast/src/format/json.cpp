@@ -208,7 +208,8 @@ const char* writer::name() const {
 caf::error add(table_slice_builder& builder, const vast::json::object& xs,
                const record_type& layout) {
   caf::error err = caf::none;
-  for (auto& field : layout.fields) {
+  auto flat_layout = flatten(layout);
+  for (auto& field : flat_layout.fields) {
     auto i = lookup(field.name, xs);
     // Non-existing fields are treated as empty (unset).
     if (!i) {

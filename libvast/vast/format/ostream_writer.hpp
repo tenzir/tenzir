@@ -88,6 +88,7 @@ protected:
   caf::error
   print(Printer& printer, const table_slice& xs, std::string_view begin_of_line,
         std::string_view separator, std::string_view end_of_line) {
+    // auto&& layout = flatten(xs.layout());
     auto&& layout = xs.layout();
     auto print_field = [&](auto& iter, size_t row, size_t column) {
       auto rep = [&](data_view x) {

@@ -104,9 +104,6 @@ caf::error type_registry_state::load_from_disk() {
 }
 
 void type_registry_state::insert(vast::type layout) {
-  // FIXME: Remove this call to flatten when no longer flattening the table
-  // slice layout on ingest.
-  layout = flatten(std::move(layout));
   auto& old_layouts = data[layout.name()];
   // Insert into the existing bucket.
   auto [hint, success] = old_layouts.insert(std::move(layout));
