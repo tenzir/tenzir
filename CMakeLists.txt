@@ -466,15 +466,15 @@ add_feature_info("VAST_ENABLE_BUNDLED_SCHEMAS" VAST_ENABLE_BUNDLED_SCHEMAS
                  "install bundled schemas with VAST.")
 if (VAST_ENABLE_BUNDLED_SCHEMAS)
   install(DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/schema"
-          DESTINATION "${CMAKE_INSTALL_FULL_DATADIR}/vast")
+          DESTINATION "${CMAKE_INSTALL_DATADIR}/vast")
 endif ()
 
 if (NOT VAST_DATADIR)
-  set(VAST_DATADIR "${CMAKE_INSTALL_FULL_DATADIR}")
+  set(VAST_DATADIR "${CMAKE_INSTALL_DATADIR}")
 endif ()
 
 install(FILES "${CMAKE_CURRENT_SOURCE_DIR}/vast.yaml.example"
-        DESTINATION "${CMAKE_INSTALL_FULL_DATADIR}/vast/")
+        DESTINATION "${CMAKE_INSTALL_DATADIR}/vast/")
 
 # -- documentation headers -----------------------------------------------------
 
@@ -516,7 +516,7 @@ export(
 
 install(
   EXPORT VASTTargets
-  DESTINATION "${CMAKE_INSTALL_FULL_LIBDIR}/cmake/vast"
+  DESTINATION "${CMAKE_INSTALL_LIBDIR}/cmake/vast"
   NAMESPACE vast::)
 
 write_basic_package_version_file(
@@ -527,11 +527,11 @@ write_basic_package_version_file(
 configure_package_config_file(
   "${CMAKE_CURRENT_SOURCE_DIR}/cmake/VASTConfig.cmake.in"
   "${CMAKE_CURRENT_BINARY_DIR}/VASTConfig.cmake"
-  INSTALL_DESTINATION "${CMAKE_INSTALL_FULL_LIBDIR}/cmake/vast")
+  INSTALL_DESTINATION "${CMAKE_INSTALL_LIBDIR}/cmake/vast")
 
 install(FILES "${CMAKE_CURRENT_BINARY_DIR}/VASTConfig.cmake"
               "${CMAKE_CURRENT_BINARY_DIR}/VASTConfigVersion.cmake"
-        DESTINATION "${CMAKE_INSTALL_FULL_LIBDIR}/cmake/vast")
+        DESTINATION "${CMAKE_INSTALL_LIBDIR}/cmake/vast")
 
 # -- scripts -------------------------------------------------------------------
 
@@ -542,7 +542,7 @@ add_feature_info("VAST_ENABLE_CORELIGHT_CAT" VAST_ENABLE_CORELIGHT_CAT
                  "install corelight-cat with VAST.")
 if (VAST_ENABLE_CORELIGHT_CAT)
   install(FILES "${CMAKE_CURRENT_SOURCE_DIR}/scripts/corelight-cat"
-          DESTINATION ${CMAKE_INSTALL_FULL_BINDIR})
+          DESTINATION ${CMAKE_INSTALL_BINDIR})
 endif ()
 
 # -- docdir --------------------------------------------------------------------
@@ -550,7 +550,7 @@ endif ()
 # Install LICENSE and README. This can intentionally not be disabled.
 install(FILES "${CMAKE_CURRENT_SOURCE_DIR}/LICENSE"
               "${CMAKE_CURRENT_SOURCE_DIR}/README.md"
-        DESTINATION "${CMAKE_INSTALL_FULL_DOCDIR}")
+        DESTINATION "${CMAKE_INSTALL_DOCDIR}")
 
 # -- feature summary -----------------------------------------------------------
 

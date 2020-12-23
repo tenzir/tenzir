@@ -8,4 +8,4 @@ endif ()
 
 add_executable(lsvast lsvast.cpp)
 target_link_libraries(lsvast PRIVATE vast::libvast vast::internal)
-install(TARGETS lsvast DESTINATION "${CMAKE_INSTALL_FULL_BINDIR}")
+install(TARGETS lsvast DESTINATION "${CMAKE_INSTALL_BINDIR}")

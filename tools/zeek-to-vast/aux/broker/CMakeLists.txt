@@ -78,9 +78,11 @@ target_include_directories(
   PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/broker/3rdparty)
 set_target_properties(
   broker
-  PROPERTIES CXX_STANDARD 17 SOVERSION ${BROKER_SOVERSION}
+  PROPERTIES CXX_STANDARD 17
+             SOVERSION ${BROKER_SOVERSION}
              VERSION ${BROKER_VERSION_MAJOR}.${BROKER_VERSION_MINOR}
-             MACOSX_RPATH true OUTPUT_NAME broker)
+             MACOSX_RPATH true
+             OUTPUT_NAME broker)
 target_compile_definitions(broker PRIVATE SQLITE_OMIT_LOAD_EXTENSION)
 # For Clang 10, we need to additionally silence -Wimplicit-int-float-conversion,
 # since it is not included in the ignored warnings list for -isystem yet.
