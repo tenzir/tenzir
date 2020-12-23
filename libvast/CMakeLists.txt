@@ -9,6 +9,13 @@ export(
   EXPORT tsl-robin-mapTargets
   FILE tsl-robin-mapTargets.cmake
   NAMESPACE tsl::)
+add_custom_target(
+  tsl-robin-map-targets-link
+  COMMAND
+    ${CMAKE_COMMAND} -E create_symlink
+    "${CMAKE_CURRENT_BINARY_DIR}/tsl-robin-mapTargets.cmake"
+    "${CMAKE_BINARY_DIR}/tsl-robin-mapTargets.cmake"
+  COMMENT "Linking tsl-robin-map targets")
 install(
   EXPORT tsl-robin-mapTargets
   DESTINATION "${CMAKE_INSTALL_FULL_LIBDIR}/cmake/vast"
@@ -103,8 +110,10 @@ if (VAST_ENABLE_PCAP)
     set(PCAP_ROOT_DIR ${VAST_PREFIX})
   endif ()
   find_package(PCAP REQUIRED)
-  provide_find_module(PCAP)
-  string(APPEND VAST_FIND_DEPENDENCY_LIST "\nfind_package(PCAP REQUIRED)")
+  if (NOT BUILD_SHARED_LIBS)
+    provide_find_module(PCAP)
+    string(APPEND VAST_FIND_DEPENDENCY_LIST "\nfind_package(PCAP REQUIRED)")
+  endif ()
 endif ()
 
 # -- log level -----------------------------------------------------------------
@@ -196,7 +205,8 @@ if (NOT CAF_FOUND)
       FATAL_ERROR
         "CAF not found, either use -DCAF_ROOT_DIR=... or initialize the libvast/aux/caf submodule"
     )
-  else()
+  else ()
+    set(VAST_ENABLE_BUNDLED_CAF ON)
     set(CAF_LOG_LEVEL ${VAST_CAF_LOG_LEVEL})
     set(CAF_NO_AUTO_LIBCPP TRUE)
     set(CAF_NO_OPENCL TRUE)
@@ -223,7 +233,8 @@ if (NOT CAF_FOUND)
                  CXX_EXTENSIONS OFF)
     add_library(caf::core ALIAS libcaf_core_${_linkage_suffix})
     target_compile_features(libcaf_core_${_linkage_suffix} INTERFACE cxx_std_17)
-    set_target_properties(libcaf_io_${_linkage_suffix} PROPERTIES EXPORT_NAME io)
+    set_target_properties(libcaf_io_${_linkage_suffix} PROPERTIES EXPORT_NAME
+                                                                  io)
     target_compile_options(
       libcaf_io_${_linkage_suffix} PRIVATE -Wno-maybe-uninitialized
                                            -Wno-unknown-warning-option)
@@ -272,6 +283,13 @@ if (NOT CAF_FOUND)
       EXPORT CAFTargets
       FILE CAFTargets.cmake
       NAMESPACE caf::)
+    add_custom_target(
+      caf-targets-link
+      COMMAND
+        ${CMAKE_COMMAND} -E create_symlink
+        "${CMAKE_CURRENT_BINARY_DIR}/CAFTargets.cmake"
+        "${CMAKE_BINARY_DIR}/CAFTargets.cmake"
+      COMMENT "Linking CAF targets")
     install(
       EXPORT CAFTargets
       DESTINATION "${CMAKE_INSTALL_FULL_LIBDIR}/cmake/vast"
@@ -279,7 +297,7 @@ if (NOT CAF_FOUND)
     string(APPEND VAST_EXTRA_TARGETS_FILES
            "\ninclude(\"\${CMAKE_CURRENT_LIST_DIR}/CAFTargets.cmake\")")
     set(CAF_FOUND true)
-  endif()
+  endif ()
 endif ()
 
 if (VAST_ENABLE_RELOCATABLE_INSTALLATIONS
@@ -331,6 +349,9 @@ target_link_libraries(libvast PUBLIC caf::core caf::io)
 if (VAST_ENABLE_OPENSSL)
   target_link_libraries(libvast PUBLIC caf::openssl)
 endif ()
+if (VAST_ENABLE_BUNDLED_CAF)
+  add_dependencies(libvast caf-targets-link)
+endif ()
 
 # Link against FlatBuffers.
 target_link_libraries(libvast PUBLIC ${flatbuffers_target})
@@ -342,6 +363,7 @@ target_link_libraries(libvast PRIVATE yaml-cpp)
 
 # Link against robin-map.
 target_link_libraries(libvast PUBLIC tsl::robin_map)
+add_dependencies(libvast tsl-robin-map-targets-link)
 
 # Link against Apache Arrow.
 if (VAST_ENABLE_ARROW)
@@ -380,3 +402,10 @@ install(
   PATTERN "*.hpp")
 
 add_subdirectory(test)
+
+set(VAST_FIND_DEPENDENCY_LIST
+    "${VAST_FIND_DEPENDENCY_LIST}"
+    PARENT_SCOPE)
+set(VAST_EXTRA_TARGETS_FILES
+    "${VAST_EXTRA_TARGETS_FILES}"
+    PARENT_SCOPE)
