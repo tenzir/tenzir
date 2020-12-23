@@ -37,4 +37,4 @@ endif ()
 add_executable(zeek-to-vast zeek-to-vast.cpp)
 target_link_libraries(zeek-to-vast PRIVATE vast::libvast vast::internal
                                            zeek::broker caf::core)
-install(TARGETS zeek-to-vast DESTINATION "${CMAKE_INSTALL_FULL_BINDIR}")
+install(TARGETS zeek-to-vast DESTINATION "${CMAKE_INSTALL_BINDIR}")

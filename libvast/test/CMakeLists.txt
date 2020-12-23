@@ -23,7 +23,6 @@ target_link_libraries(vast-test PRIVATE -fno-sanitize=address)
 target_link_libraries(vast-test PRIVATE libvast_test libvast libvast_internal
                                         ${CMAKE_THREAD_LIBS_INIT})
 
-
 if (VAST_ENABLE_ARROW)
   target_link_libraries(vast-test PRIVATE ${ARROW_LIBRARY})
 endif ()

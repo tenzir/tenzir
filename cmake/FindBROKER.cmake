@@ -31,14 +31,11 @@ if (BROKER_INCLUDE_DIRS)
   # Extract the version.
   file(READ "${BROKER_INCLUDE_DIRS}/broker/version.hh" VERSION_HH)
   # get line containing the version
-  string(REGEX MATCH " major = [0-9]+;" BROKER_VERSION_MAJOR
-               "${VERSION_HH}")
+  string(REGEX MATCH " major = [0-9]+;" BROKER_VERSION_MAJOR "${VERSION_HH}")
   string(REGEX MATCH "[0-9]+" BROKER_VERSION_MAJOR "${BROKER_VERSION_MAJOR}")
-  string(REGEX MATCH " minor = [0-9]+;" BROKER_VERSION_MINOR
-               "${VERSION_HH}")
+  string(REGEX MATCH " minor = [0-9]+;" BROKER_VERSION_MINOR "${VERSION_HH}")
   string(REGEX MATCH "[0-9]+" BROKER_VERSION_MINOR "${BROKER_VERSION_MINOR}")
-  string(REGEX MATCH " patch = [0-9]+;" BROKER_VERSION_PATCH
-               "${VERSION_HH}")
+  string(REGEX MATCH " patch = [0-9]+;" BROKER_VERSION_PATCH "${VERSION_HH}")
   string(REGEX MATCH "[0-9]+" BROKER_VERSION_PATCH "${BROKER_VERSION_PATCH}")
   set(BROKER_VERSION
       "${BROKER_VERSION_MAJOR}.${BROKER_VERSION_MINOR}.${BROKER_VERSION_PATCH}")

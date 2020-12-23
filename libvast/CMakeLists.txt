@@ -18,7 +18,7 @@ add_custom_target(
   COMMENT "Linking tsl-robin-map targets")
 install(
   EXPORT tsl-robin-mapTargets
-  DESTINATION "${CMAKE_INSTALL_FULL_LIBDIR}/cmake/vast"
+  DESTINATION "${CMAKE_INSTALL_LIBDIR}/cmake/vast"
   NAMESPACE tsl::)
 string(APPEND VAST_EXTRA_TARGETS_FILES
        "\ninclude(\"\${CMAKE_CURRENT_LIST_DIR}/tsl-robin-mapTargets.cmake\")")
@@ -244,24 +244,24 @@ if (NOT CAF_FOUND)
     install(
       TARGETS libcaf_core_${_linkage_suffix} libcaf_io_${_linkage_suffix}
       EXPORT CAFTargets
-      ARCHIVE DESTINATION ${CMAKE_INSTALL_FULL_LIBDIR}
-      LIBRARY DESTINATION ${CMAKE_INSTALL_FULL_LIBDIR}
-      RUNTIME DESTINATION ${CMAKE_INSTALL_FULL_BINDIR})
+      ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
+      LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
+      RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
     if (VAST_ENABLE_OPENSSL)
       target_include_directories(
         libcaf_openssl_${_linkage_suffix}
         PUBLIC
           $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/aux/caf/libcaf_openssl>
-          $<INSTALL_INTERFACE:${CMAKE_INSTALL_FULL_INCLUDEDIR}>)
+          $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>)
       set_target_properties(libcaf_openssl_${_linkage_suffix}
                             PROPERTIES EXPORT_NAME openssl)
       add_library(caf::openssl ALIAS libcaf_openssl_${_linkage_suffix})
       install(
         TARGETS libcaf_openssl_${_linkage_suffix}
         EXPORT CAFTargets
-        ARCHIVE DESTINATION ${CMAKE_INSTALL_FULL_LIBDIR}
-        LIBRARY DESTINATION ${CMAKE_INSTALL_FULL_LIBDIR}
-        RUNTIME DESTINATION ${CMAKE_INSTALL_FULL_BINDIR})
+        ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
+        LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
+        RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
     endif ()
     add_library(libcaf_test INTERFACE)
     target_link_libraries(libcaf_test INTERFACE caf::core)
@@ -269,15 +269,15 @@ if (NOT CAF_FOUND)
       libcaf_test
       INTERFACE
         "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/aux/caf/libcaf_test>"
-        "$<INSTALL_INTERFACE:${CMAKE_INSTALL_FULL_INCLUDEDIR}>")
+        "$<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>")
     set_target_properties(libcaf_test PROPERTIES EXPORT_NAME test)
     add_library(caf::test ALIAS libcaf_test)
     install(
       TARGETS libcaf_test
       EXPORT CAFTargets
-      ARCHIVE DESTINATION ${CMAKE_INSTALL_FULL_LIBDIR}
-      LIBRARY DESTINATION ${CMAKE_INSTALL_FULL_LIBDIR}
-      RUNTIME DESTINATION ${CMAKE_INSTALL_FULL_BINDIR})
+      ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
+      LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
+      RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
     set(caf_dir ${CMAKE_CURRENT_SOURCE_DIR}/aux/caf)
     export(
       EXPORT CAFTargets
@@ -292,7 +292,7 @@ if (NOT CAF_FOUND)
       COMMENT "Linking CAF targets")
     install(
       EXPORT CAFTargets
-      DESTINATION "${CMAKE_INSTALL_FULL_LIBDIR}/cmake/vast"
+      DESTINATION "${CMAKE_INSTALL_LIBDIR}/cmake/vast"
       NAMESPACE caf::)
     string(APPEND VAST_EXTRA_TARGETS_FILES
            "\ninclude(\"\${CMAKE_CURRENT_LIST_DIR}/CAFTargets.cmake\")")
@@ -307,7 +307,7 @@ if (VAST_ENABLE_RELOCATABLE_INSTALLATIONS
   get_filename_component(CAF_LIBDIR ${CAF_LIBRARY_CORE} PATH)
   file(GLOB CAF_INSTALLED_LIBRARIES "${CAF_LIBDIR}/libcaf*.so")
   install(FILES ${CAF_INSTALLED_LIBRARIES}
-          DESTINATION "${CMAKE_INSTALL_FULL_LIBDIR}")
+          DESTINATION "${CMAKE_INSTALL_LIBDIR}")
 endif ()
 
 # -- source files --------------------------------------------------------------
@@ -342,7 +342,7 @@ target_include_directories(
   libvast
   PUBLIC $<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}>
          $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
-         $<INSTALL_INTERFACE:${CMAKE_INSTALL_FULL_INCLUDEDIR}>)
+         $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>)
 
 # Link against CAF.
 target_link_libraries(libvast PUBLIC caf::core caf::io)
@@ -384,20 +384,20 @@ endif ()
 install(
   TARGETS libvast
   EXPORT VASTTargets
-  ARCHIVE DESTINATION ${CMAKE_INSTALL_FULL_LIBDIR}
-  LIBRARY DESTINATION ${CMAKE_INSTALL_FULL_LIBDIR}
-  RUNTIME DESTINATION ${CMAKE_INSTALL_FULL_BINDIR})
+  ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
+  LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
+  RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
 
 install(
   DIRECTORY vast
-  DESTINATION ${CMAKE_INSTALL_FULL_INCLUDEDIR}
+  DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
   FILES_MATCHING
   PATTERN "*.hpp")
 
 # Install generated config and flatbuffers headers.
 install(
   DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/vast"
-  DESTINATION ${CMAKE_INSTALL_FULL_INCLUDEDIR}
+  DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
   FILES_MATCHING
   PATTERN "*.hpp")
 
