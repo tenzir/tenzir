@@ -15,7 +15,7 @@
 
 #include "vast/concept/hashable/hash_append.hpp"
 #include "vast/concept/hashable/xxhash.hpp"
-#include "vast/concept/parseable/vast/json.hpp"
+// #include "vast/concept/parseable/vast/json.hpp" // TO DELETE?
 #include "vast/defaults.hpp"
 #include "vast/detail/flat_map.hpp"
 #include "vast/detail/line_range.hpp"
@@ -24,7 +24,8 @@
 #include "vast/format/multi_layout_reader.hpp"
 #include "vast/format/ostream_writer.hpp"
 #include "vast/fwd.hpp"
-#include "vast/json.hpp"
+#include "vast/json.hpp" // TO DELETE?
+#include "vast/view.hpp" // Added
 #include "vast/logger.hpp"
 #include "vast/schema.hpp"
 
@@ -34,45 +35,76 @@
 
 #include <chrono>
 
-namespace vast::format::json {
+#include <simdjson.h>
 
-class writer : public ostream_writer {
-public:
-  using defaults = vast::defaults::export_::json;
+namespace vast::format::simdjson {
 
-  using super = ostream_writer;
+// class writer : public ostream_writer {
+// public:
+//   using defaults = vast::defaults::export_::json;
 
-  using super::super;
+//   using super = ostream_writer;
 
-  caf::error write(const table_slice& x) override;
+//   using super::super;
 
-  const char* name() const override;
-};
+//   caf::error write(const table_slice& x) override;
+
+//   const char* name() const override;
+// };
 
 /// Adds a JSON object to a table slice builder according to a given layout.
 /// @param builder The builder to add the JSON object to.
 /// @param xs The JSON object to add to *builder.
 /// @param layout The record type describing *xs*.
 /// @returns An error iff the operation failed.
-caf::error add(table_slice_builder& builder, const vast::json::object& xs,
+caf::error add(table_slice_builder& builder, const ::simdjson::dom::object& xs,
                const record_type& layout);
 
 /// @relates reader
 struct default_selector {
-  caf::optional<record_type> operator()(const vast::json::object& obj) const {
+private:
+  template <typename Prefix>
+  static void make_names_layout_impl(std::vector<std::string> & entries,
+                                Prefix & prefix,
+                                const ::simdjson::dom::object& obj) {
+    for( const auto & f: obj)
+    {
+      prefix.emplace_back(f.key);
+      if(f.value.type() != ::simdjson::dom::element_type::OBJECT)
+      {
+        entries.emplace_back(detail::join(prefix.begin(), prefix.end(), "."));
+      }
+      else
+      {
+        make_names_layout_impl(entries, prefix, f.value);
+      }
+      prefix.pop_back();
+    }
+  }
+
+  static auto make_names_layout( const ::simdjson::dom::object& obj) {
+    std::vector<std::string> entries;
+    entries.reserve(100);
+    auto prefix = detail::stack_vector<std::string_view, 64>{};
+
+    make_names_layout_impl(entries, prefix, obj);
+
+    std::sort(entries.begin(), entries.end());
+    return entries;
+  }
+
+public:
+
+  caf::optional<record_type> operator()(const ::simdjson::dom::object& obj) const {
     if (type_cache.empty())
       return caf::none;
     // Iff there is only one type in the type cache, allow the JSON reader to
     // use it despite not being an exact match.
     if (type_cache.size() == 1)
       return type_cache.begin()->second;
-    std::vector<std::string> cache_entry;
-    auto build_cache_entry = [&cache_entry](auto& prefix, const vast::json&) {
-      cache_entry.emplace_back(detail::join(prefix.begin(), prefix.end(), "."));
-    };
-    each_field(vast::json{obj}, build_cache_entry);
-    std::sort(cache_entry.begin(), cache_entry.end());
-    if (auto search_result = type_cache.find(cache_entry);
+    // const auto cache_entry = make_names_layout(object);
+
+    if (auto search_result = type_cache.find(make_names_layout(obj));
         search_result != type_cache.end())
       return search_result->second;
     return caf::none;
@@ -142,6 +174,11 @@ private:
 
   Selector selector_;
   std::unique_ptr<std::istream> input_;
+
+  // https://simdjson.org/api/0.7.0/classsimdjson_1_1dom_1_1parser.html
+  // Parser is designed to be reused.
+  ::simdjson::dom::parser json_parser_;
+
   std::unique_ptr<detail::line_range> lines_;
   caf::optional<size_t> proto_field_;
   std::vector<size_t> port_fields_;
@@ -211,6 +248,7 @@ caf::error reader<Selector>::read_impl(size_t max_events, size_t max_slice_size,
   VAST_ASSERT(max_slice_size > 0);
   size_t produced = 0;
   table_slice_builder_ptr bptr = nullptr;
+
   while (produced < max_events) {
     if (lines_->done())
       return finish(cons, make_error(ec::end_of_input, "input exhausted"));
@@ -231,18 +269,18 @@ caf::error reader<Selector>::read_impl(size_t max_events, size_t max_slice_size,
       VAST_DEBUG(this, "ignores empty line at", lines_->line_number());
       continue;
     }
-    vast::json j;
-    if (!parsers::json(line, j)) {
+    const auto [j, parsed_er] = json_parser_.parse(line);
+    if (parsed_er != ::simdjson::SUCCESS) {
       if (num_invalid_lines_ == 0)
         VAST_WARNING(this, "failed to parse line", lines_->line_number(), ":",
                      line);
       ++num_invalid_lines_;
       continue;
     }
-    auto xs = caf::get_if<vast::json::object>(&j);
-    if (!xs)
+    const auto [xs,to_object_er] = j.get_object();
+    if (to_object_er != ::simdjson::SUCCESS)
       return make_error(ec::type_clash, "not a json object");
-    auto&& layout = selector_(*xs);
+    auto&& layout = selector_(xs);
     if (!layout) {
       if (num_unknown_layouts_ == 0)
         VAST_WARNING(this, "failed to find a matching type at line",
@@ -253,7 +291,7 @@ caf::error reader<Selector>::read_impl(size_t max_events, size_t max_slice_size,
     bptr = builder(*layout);
     if (bptr == nullptr)
       return make_error(ec::parse_error, "unable to get a builder");
-    if (auto err = add(*bptr, *xs, *layout)) {
+    if (auto err = add(*bptr, xs, *layout)) {
       err.context() += caf::make_message("line", lines_->line_number());
       return finish(cons, err);
     }
