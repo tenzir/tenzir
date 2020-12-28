@@ -26,6 +26,7 @@
 #include "vast/detail/string.hpp"
 #include "vast/error.hpp"
 #include "vast/logger.hpp"
+#include "vast/policy/flatten_layout.hpp"
 #include "vast/table_slice.hpp"
 #include "vast/table_slice_builder.hpp"
 #include "vast/type.hpp"
@@ -602,8 +603,8 @@ public:
 
   error write(const table_slice& slice) override {
     zeek_printer<std::back_insert_iterator<std::vector<char>>> p;
-    return print<policy::omit_field_names>(p, slice, "",
-                                           std::string_view{&separator, 1}, "");
+    return print<policy::flatten_layout>(
+      p, slice, {std::string_view{&separator, 1}, "", "", ""});
   }
 
   const char* name() const override {

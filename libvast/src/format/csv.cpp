@@ -102,7 +102,7 @@ caf::error render(output_iterator& out, const view<data>& x) {
 caf::error writer::write(const table_slice& x) {
   constexpr char separator = writer::defaults::separator;
   // Print a new header each time we encounter a new layout.
-  auto&& layout = x.layout();
+  auto&& layout = flatten(x.layout());
   if (last_layout_ != layout.name()) {
     last_layout_ = layout.name();
     append("type");

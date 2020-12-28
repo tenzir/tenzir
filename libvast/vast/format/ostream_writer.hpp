@@ -13,19 +13,20 @@
 
 #pragma once
 
+#include "vast/detail/overload.hpp"
+#include "vast/error.hpp"
+#include "vast/format/writer.hpp"
+#include "vast/policy/flatten_layout.hpp"
+#include "vast/policy/include_field_names.hpp"
+#include "vast/table_slice.hpp"
+#include "vast/table_slice_row.hpp"
+
+#include <caf/error.hpp>
+
 #include <iosfwd>
 #include <memory>
 #include <string_view>
 #include <vector>
-
-#include <caf/error.hpp>
-
-#include "vast/detail/overload.hpp"
-#include "vast/error.hpp"
-#include "vast/format/writer.hpp"
-#include "vast/policy/include_field_names.hpp"
-#include "vast/policy/omit_field_names.hpp"
-#include "vast/table_slice.hpp"
 
 namespace vast::format {
 
@@ -58,6 +59,13 @@ public:
   std::ostream& out();
 
 protected:
+  struct line_elements {
+    std::string_view separator;
+    std::string_view kv_separator;
+    std::string_view begin_of_line;
+    std::string_view end_of_line;
+  };
+
   /// Appends `x` to `buf_`.
   void append(std::string_view x) {
     buf_.insert(buf_.end(), x.begin(), x.end());
@@ -68,12 +76,50 @@ protected:
     buf_.emplace_back(x);
   }
 
+  template <class... Policies, class Printer>
+  caf::error
+  print_record(Printer& printer, const line_elements& le,
+               const record_type& layout, table_slice_row row, size_t pos) {
+    auto print_field = [&](auto& iter, const record_field& f, size_t column) {
+      auto rep = [&](data_view x) {
+        if constexpr (detail::is_any_v<policy::include_field_names, Policies...>)
+          return std::pair{std::string_view{f.name}, x};
+        else
+          return x;
+      };
+      auto x = to_canonical(f.type, row[column]);
+      return printer.print(iter, rep(std::move(x)));
+    };
+    auto iter = std::back_inserter(buf_);
+    append(le.begin_of_line);
+    auto start = 0;
+    for (const auto& f : layout.fields) {
+      if (!!start++)
+        append(le.separator);
+      if (const auto& r = caf::get_if<record_type>(&f.type)) {
+        if constexpr (detail::is_any_v<policy::include_field_names,
+                                       Policies...>) {
+          append(f.name);
+          append(le.kv_separator);
+        }
+        if (auto err = print_record<Policies...>(printer, le, *r, row, pos))
+          return err;
+      } else {
+        if (!print_field(iter, f, pos++))
+          return ec::print_error;
+      }
+    }
+    append(le.end_of_line);
+    return caf::none;
+  }
+
   /// Prints a table slice using the given VAST printer. This function assumes
   /// a human-readable output where each row in the slice gets printed to a
   /// single line.
-  /// @tparam Policy either ::include_field_names to repeat the field name for
-  ///         each value (e.g., JSON output) or ::omit_field_names to print the
-  ///         values only after an initial header (e.g., Zeek output).
+  /// @tparam Policies... accepted tags are ::include_field_names to repeat the
+  ///         field name for each value (e.g., JSON output) and
+  ///         ::flatten_layout to flatten nested records into the top level
+  ///         event.
   /// @param printer The VAST printer for generating formatted output.
   /// @param xs The table slice for printing.
   /// @param begin_of_line Prefix for each printed line. For example, a JSON
@@ -84,37 +130,19 @@ protected:
   ///        writer would end each line with a '}'.
   /// @returns `ec::print_error` if `printer` fails to generate output,
   ///          otherwise `caf::none`.
-  template <class Policy, class Printer>
+  template <class... Policies, class Printer>
   caf::error
-  print(Printer& printer, const table_slice& xs, std::string_view begin_of_line,
-        std::string_view separator, std::string_view end_of_line) {
-    // auto&& layout = flatten(xs.layout());
-    auto&& layout = xs.layout();
-    auto print_field = [&](auto& iter, size_t row, size_t column) {
-      auto rep = [&](data_view x) {
-        if constexpr (std::is_same_v<Policy, policy::include_field_names>)
-          return std::pair{std::string_view{layout.fields[column].name}, x};
-        else if constexpr (std::is_same_v<Policy, policy::omit_field_names>)
-          return x;
-        else
-          static_assert(detail::always_false_v<Policy>,
-                        "Unsupported policy: Expected either "
-                        "include_field_names or omit_field_names");
-      };
-      auto x = to_canonical(layout.fields[column].type, xs.at(row, column));
-      return printer.print(iter, rep(std::move(x)));
-    };
-    auto iter = std::back_inserter(buf_);
+  print(Printer& printer, const table_slice& xs, const line_elements& le) {
+    auto&& layout = [&]() {
+      if constexpr (detail::is_any_v<policy::flatten_layout, Policies...>)
+        return flatten(xs.layout());
+      else
+        return xs.layout();
+    }();
     for (size_t row = 0; row < xs.rows(); ++row) {
-      append(begin_of_line);
-      if (!print_field(iter, row, 0))
-        return ec::print_error;
-      for (size_t column = 1; column < xs.columns(); ++column) {
-        append(separator);
-        if (!print_field(iter, row, column))
-          return ec::print_error;
-      }
-      append(end_of_line);
+      if (auto err = print_record<Policies...>(printer, le, layout,
+                                               table_slice_row{xs, row}, 0))
+        return err;
       append('\n');
       write_buf();
     }

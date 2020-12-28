@@ -16,6 +16,6 @@
 namespace vast::policy {
 
 /// Tag type to configure a ::writer.
-struct omit_field_names {};
+struct flatten_layout {};
 
 } // namespace vast::policy
