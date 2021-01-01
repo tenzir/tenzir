@@ -21,6 +21,7 @@ target_compile_options(vast-test PRIVATE -fno-sanitize=address)
 target_link_libraries(vast-test PRIVATE -fno-sanitize=address)
 
 target_link_libraries(vast-test PRIVATE libvast_test libvast libvast_internal
+                                        simdjson::simdjson
                                         ${CMAKE_THREAD_LIBS_INIT})
 
 
