@@ -250,7 +250,7 @@ caf::behavior importer(importer_actor* self, path dir, archive_actor archive,
   for (auto&& plugin : plugins::get())
     if (auto p = plugin.as<import_plugin>())
       if (auto sink = p->make_import_stream_sink(self->system()))
-        self->state.stg->add_outbound_path(sink);
+        self->state.stage->add_outbound_path(sink);
   return {
     [=](accountant_actor accountant) {
       VAST_DEBUG(self, "registers accountant", archive);

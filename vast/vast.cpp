@@ -51,7 +51,7 @@ namespace vast::detail {
 // TODO: find a better location for this function.
 stable_set<path> get_plugin_dirs(const caf::actor_system_config& cfg) {
   stable_set<path> result;
-#if !VAST_RELOCATABLE_INSTALL
+#if !VAST_ENABLE_RELOCATABLE_INSTALLATIONS
   result.insert(path{VAST_LIBDIR} / "vast" / "plugins");
 #endif
   // FIXME: we technically should not use "lib" relative to the parent, because
