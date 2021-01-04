@@ -65,9 +65,8 @@ sink_command(const invocation& inv, actor_system& sys, caf::actor snk) {
     auto expr = to<expression>(*query);
     if (!expr)
       return make_message(expr.error());
-    auto attr = caf::atom_from_string("type");
-    auto extractor = attribute_extractor{attr};
-    auto pred = predicate{extractor, equal, data{"pcap.packet"}};
+    auto pred = predicate{attribute_extractor{atom::type_v}, equal,
+                          data{"pcap.packet"}};
     auto ast = conjunction{std::move(pred), std::move(*expr)};
     *query = to_string(ast);
     VAST_DEBUG(&inv, "transformed expression to", *query);
