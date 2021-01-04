@@ -16,10 +16,6 @@ file(GLOB_RECURSE test_headers CONFIGURE_DEPENDS
 # Add vast-test executable.
 add_executable(vast-test ${test_sources} ${test_headers})
 
-# TODO: vast-test fails with Address Santiizer.
-target_compile_options(vast-test PRIVATE -fno-sanitize=address)
-target_link_libraries(vast-test PRIVATE -fno-sanitize=address)
-
 target_link_libraries(vast-test PRIVATE libvast_test libvast libvast_internal
                                         ${CMAKE_THREAD_LIBS_INIT})
 
