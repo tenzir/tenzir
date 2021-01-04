@@ -9,6 +9,8 @@ on:
     paths:
       - '.github/workflows/static-binary.yaml'
       - 'nix/**'
+      - '**.cmake'
+      - '**CMakeLists.txt'
   release:
     types: published
 
