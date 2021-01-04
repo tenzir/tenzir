@@ -23,6 +23,7 @@
 #include "vast/format/json.hpp"
 #include "vast/format/json/suricata.hpp"
 #include "vast/format/null.hpp"
+#include "vast/format/simdjson.hpp"
 #include "vast/format/syslog.hpp"
 #include "vast/format/test.hpp"
 #include "vast/format/zeek.hpp"
@@ -233,10 +234,10 @@ auto make_import_command() {
                           source_opts("?vast.import.csv"));
   import_->add_subcommand("json", "imports JSON with schema",
                           documentation::vast_import_json,
-                          source_opts("?vast.import.json"));
+                          source_opts_json("?vast.import.json"));
   import_->add_subcommand("suricata", "imports suricata eve json",
                           documentation::vast_import_suricata,
-                          source_opts("?vast.import.suricata"));
+                          source_opts_json("?vast.import.suricata"));
   import_->add_subcommand("syslog", "imports syslog messages",
                           documentation::vast_import_syslog,
                           source_opts("?vast.import.syslog"));
@@ -458,15 +459,22 @@ auto make_command_factory() {
     {"get", get_command},
     {"infer", infer_command},
     {"import csv", import_command<format::csv::reader, defaults::import::csv>},
-    {"import json", import_command<format::json::reader<>,
+    // {"import json", import_command<format::json::reader<>,
+    //   defaults::import::json>},
+    {"import json", import_command_json<format::json::reader<>,
+      format::simdjson::reader<>,
       defaults::import::json>},
 #if VAST_HAVE_PCAP
     {"import pcap", import_command<format::pcap::reader,
       defaults::import::pcap>},
 #endif
-    {"import suricata", import_command<
+    {"import suricata", import_command_json<
       format::json::reader<format::json::suricata>,
+      format::simdjson::reader<format::json::suricata>,
       defaults::import::suricata>},
+    // {"import suricata", import_command<
+    //   format::json::reader<format::json::suricata>,
+    //   defaults::import::suricata>},
     {"import syslog", import_command<format::syslog::reader,
       defaults::import::syslog>},
     {"import test", import_command<format::test::reader,
@@ -566,6 +574,11 @@ command::opts_builder source_opts(std::string_view category) {
     .add<std::string>("schema,S", "alternate schema as string")
     .add<std::string>("type,t", "filter event type based on prefix matching")
     .add<bool>("uds,d", "treat -r as listening UNIX domain socket");
+}
+
+command::opts_builder source_opts_json(std::string_view category) {
+  return source_opts(category).add<bool>("simdjson", "Use simdjson for JSON "
+                                                     "parsing");
 }
 
 command::opts_builder sink_opts(std::string_view category) {

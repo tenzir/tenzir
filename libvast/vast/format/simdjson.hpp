@@ -16,6 +16,8 @@
 #include "vast/concept/hashable/hash_append.hpp"
 #include "vast/concept/hashable/xxhash.hpp"
 // #include "vast/concept/parseable/vast/json.hpp" // TO DELETE?
+#include "vast/fwd.hpp"
+
 #include "vast/defaults.hpp"
 #include "vast/detail/flat_map.hpp"
 #include "vast/detail/line_range.hpp"
@@ -23,18 +25,16 @@
 #include "vast/error.hpp"
 #include "vast/format/multi_layout_reader.hpp"
 #include "vast/format/ostream_writer.hpp"
-#include "vast/fwd.hpp"
 #include "vast/json.hpp" // TO DELETE?
-#include "vast/view.hpp" // Added
 #include "vast/logger.hpp"
 #include "vast/schema.hpp"
+#include "vast/view.hpp" // Added
 
 #include <caf/expected.hpp>
 #include <caf/fwd.hpp>
 #include <caf/settings.hpp>
 
 #include <chrono>
-
 #include <simdjson.h>
 
 namespace vast::format::simdjson {
@@ -64,25 +64,21 @@ caf::error add(table_slice_builder& builder, const ::simdjson::dom::object& xs,
 struct default_selector {
 private:
   template <typename Prefix>
-  static void make_names_layout_impl(std::vector<std::string> & entries,
-                                Prefix & prefix,
-                                const ::simdjson::dom::object& obj) {
-    for( const auto & f: obj)
-    {
+  static void
+  make_names_layout_impl(std::vector<std::string>& entries, Prefix& prefix,
+                         const ::simdjson::dom::object& obj) {
+    for (const auto& f : obj) {
       prefix.emplace_back(f.key);
-      if(f.value.type() != ::simdjson::dom::element_type::OBJECT)
-      {
+      if (f.value.type() != ::simdjson::dom::element_type::OBJECT) {
         entries.emplace_back(detail::join(prefix.begin(), prefix.end(), "."));
-      }
-      else
-      {
+      } else {
         make_names_layout_impl(entries, prefix, f.value);
       }
       prefix.pop_back();
     }
   }
 
-  static auto make_names_layout( const ::simdjson::dom::object& obj) {
+  static auto make_names_layout(const ::simdjson::dom::object& obj) {
     std::vector<std::string> entries;
     entries.reserve(100);
     auto prefix = detail::stack_vector<std::string_view, 64>{};
@@ -94,15 +90,14 @@ private:
   }
 
 public:
-
-  caf::optional<record_type> operator()(const ::simdjson::dom::object& obj) const {
+  caf::optional<record_type>
+  operator()(const ::simdjson::dom::object& obj) const {
     if (type_cache.empty())
       return caf::none;
     // Iff there is only one type in the type cache, allow the JSON reader to
     // use it despite not being an exact match.
     if (type_cache.size() == 1)
       return type_cache.begin()->second;
-    // const auto cache_entry = make_names_layout(object);
 
     if (auto search_result = type_cache.find(make_names_layout(obj));
         search_result != type_cache.end())
@@ -166,8 +161,8 @@ public:
   vast::system::report status() const override;
 
 protected:
-  caf::error read_impl(size_t max_events, size_t max_slice_size,
-                       consumer& f) override;
+  caf::error
+  read_impl(size_t max_events, size_t max_slice_size, consumer& f) override;
 
 private:
   using iterator_type = std::string_view::const_iterator;
@@ -277,7 +272,7 @@ caf::error reader<Selector>::read_impl(size_t max_events, size_t max_slice_size,
       ++num_invalid_lines_;
       continue;
     }
-    const auto [xs,to_object_er] = j.get_object();
+    const auto [xs, to_object_er] = j.get_object();
     if (to_object_er != ::simdjson::SUCCESS)
       return make_error(ec::type_clash, "not a json object");
     auto&& layout = selector_(xs);
@@ -304,4 +299,4 @@ caf::error reader<Selector>::read_impl(size_t max_events, size_t max_slice_size,
   return finish(cons);
 }
 
-} // namespace vast::format::json
+} // namespace vast::format::simdjson

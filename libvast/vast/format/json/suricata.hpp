@@ -19,6 +19,7 @@
 #include "vast/logger.hpp"
 #include "vast/schema.hpp"
 
+#include <simdjson.h>
 #include <unordered_map>
 
 namespace vast::format::json {
@@ -44,6 +45,26 @@ struct suricata {
     }
     auto type = it->second;
     return type;
+  }
+
+  caf::optional<vast::record_type>
+  operator()(const ::simdjson::dom::object& j) {
+    auto el = j.at_key("event_type");
+    if (el.error())
+      return caf::none;
+
+    auto event_type = el.value().get_string();
+    if (event_type.error()) {
+      VAST_WARNING(this, "got an event_type field with a non-string value");
+      return caf::none;
+    }
+    auto it = types.find(std::string{event_type.value()});
+    if (it == types.end()) {
+      VAST_VERBOSE(this, "does not have a layout for event_type",
+                   std::string{event_type.value()});
+      return caf::none;
+    }
+    return it->second;
   }
 
   caf::error schema(const vast::schema& s) {
