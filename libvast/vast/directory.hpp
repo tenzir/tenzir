@@ -15,6 +15,7 @@
 
 #include "vast/config.hpp"
 #include "vast/defaults.hpp"
+#include "vast/detail/function.hpp"
 #include "vast/detail/iterator.hpp"
 #include "vast/path.hpp"
 
@@ -83,7 +84,8 @@ size_t recursive_size(const vast::directory& dir);
 /// file in *dir*, which allows for filtering specific files.
 /// @param max_recursion The maximum number of nested directories to traverse.
 /// @returns A list of file that match *filter*.
-std::vector<path> filter_dir(const path& dir, bool (*filter)(const path&) = {},
-                             size_t max_recursion = defaults::max_recursion);
+std::vector<path>
+filter_dir(const path& dir, detail::function<bool(const path&)> filter = {},
+           size_t max_recursion = defaults::max_recursion);
 
 } // namespace vast
