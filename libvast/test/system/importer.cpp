@@ -125,7 +125,7 @@ struct deterministic_fixture : deterministic_fixture_base {
 
   void fetch_ok() override {
     run();
-    expect((atom_value), from(_).to(self).with(atom::ok::value));
+    expect((atom::ok), from(_).to(self).with(atom::ok::value));
   }
 
   auto fetch_result() {
