@@ -234,9 +234,8 @@ using default_randomizer = randomizer<std::mt19937_64>;
 
 } // namespace <anonymous>
 
-reader::reader(caf::atom_value id, const caf::settings& options,
-               std::unique_ptr<std::istream>)
-  : super{id, options},
+reader::reader(const caf::settings& options, std::unique_ptr<std::istream>)
+  : super{options},
     generator_{vast::defaults::import::test::seed(options)},
     num_events_{caf::get_or(options, "vast.import.max-events",
                             vast::defaults::import::max_events)} {

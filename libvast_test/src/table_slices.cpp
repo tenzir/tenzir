@@ -46,8 +46,7 @@ make_random_table_slices(size_t num_slices, size_t slice_size,
   caf::settings opts;
   caf::put(opts, "vast.import.test.seed", seed);
   caf::put(opts, "vast.import.max-events", std::numeric_limits<size_t>::max());
-  format::test::reader src{defaults::import::table_slice_type, std::move(opts),
-                           nullptr};
+  format::test::reader src{std::move(opts), nullptr};
   src.schema(std::move(sc));
   std::vector<table_slice> result;
   auto add_slice = [&](table_slice slice) {
@@ -294,7 +293,7 @@ void table_slices::test_manual_serialization() {
   auto source = make_source();
   CHECK_EQUAL(inspect(source, slice2), caf::none);
   MESSAGE("check result of serialization roundtrip");
-  REQUIRE_NOT_EQUAL(slice2.encoding(), table_slice::encoding::none);
+  REQUIRE_NOT_EQUAL(slice2.encoding(), table_slice_encoding::none);
   CHECK_EQUAL(slice1, slice2);
 }
 
@@ -310,7 +309,7 @@ void table_slices::test_smart_pointer_serialization() {
   auto source = make_source();
   CHECK_EQUAL(source(slice2), caf::none);
   MESSAGE("check result of serialization roundtrip");
-  REQUIRE_NOT_EQUAL(slice2.encoding(), table_slice::encoding::none);
+  REQUIRE_NOT_EQUAL(slice2.encoding(), table_slice_encoding::none);
   CHECK_EQUAL(slice1, slice2);
 }
 
@@ -328,7 +327,7 @@ void table_slices::test_message_serialization() {
   MESSAGE("check result of serialization roundtrip");
   REQUIRE(slice2.match_elements<table_slice>());
   CHECK_EQUAL(slice1.get_as<table_slice>(0), slice2.get_as<table_slice>(0));
-  // FIXME: Make the table slice builders use `table_slice::encoding` as key.
+  // FIXME: Make the table slice builders use `table_slice_encoding` as key.
   // CHECK_EQUAL(slice2.get_as<table_slice>(0).encoding(),
   //             builder->implementation_id());
 }

@@ -13,31 +13,18 @@
 
 #pragma once
 
-#include <caf/atom.hpp>
-
-#include "vast/factory.hpp"
-#include "vast/table_slice_builder.hpp"
-#include "vast/type.hpp"
+#include <cstdint>
 
 namespace vast {
 
-template <>
-struct factory_traits<table_slice_builder> {
-  using result_type = table_slice_builder_ptr;
-  using key_type = table_slice_encoding;
-  using signature = result_type (*)(record_type);
-
-  static void initialize();
-
-  template <class T>
-  static key_type key() {
-    return T::get_implementation_id();
-  }
-
-  template <class T>
-  static result_type make(record_type layout) {
-    return T::make(std::move(layout));
-  }
+/// The possible encodings of a table slice.
+/// @note This encoding is unversioned. Newly created table slices are
+/// guaranteed to use the newest vesion of the encoding, while deserialized
+/// table slices may use an older version.
+enum class table_slice_encoding : uint8_t {
+  none,    ///< No data is encoded; the table slice is empty or invalid.
+  arrow,   ///< The table slice is encoded using the Apache Arrow format.
+  msgpack, ///< The table slice is encoded using the MessagePack format.
 };
 
 } // namespace vast

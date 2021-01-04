@@ -91,7 +91,7 @@ target_compile_options(
   PRIVATE -Wno-implicit-int-float-conversion -Wno-maybe-uninitialized
           -Wno-missing-field-initializers -Wno-unknown-warning-option
           -Wno-unused -Wno-unused-parameter)
-target_link_libraries(broker PUBLIC caf::core caf::io caf::openssl)
+target_link_libraries(broker PUBLIC CAF::core CAF::io CAF::openssl)
 install(TARGETS broker DESTINATION ${INSTALL_LIB_DIR})
 
 add_library(zeek::broker ALIAS broker)

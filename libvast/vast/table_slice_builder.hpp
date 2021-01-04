@@ -99,7 +99,7 @@ public:
   const record_type& layout() const noexcept;
 
   /// @returns An identifier for the implementing class.
-  virtual caf::atom_value implementation_id() const noexcept = 0;
+  virtual table_slice_encoding implementation_id() const noexcept = 0;
 
   /// Allows The table slice builder to allocate sufficient storage.
   /// @param `num_rows` The number of rows to allocate storage for.

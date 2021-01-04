@@ -13,31 +13,36 @@
 
 #pragma once
 
-#include <caf/atom.hpp>
+#include "vast/fwd.hpp"
 
-#include "vast/factory.hpp"
-#include "vast/table_slice_builder.hpp"
-#include "vast/type.hpp"
+#include "vast/concept/parseable/core/literal.hpp"
+#include "vast/concept/parseable/core/parser.hpp"
+#include "vast/concept/parseable/string/char.hpp"
 
 namespace vast {
 
-template <>
-struct factory_traits<table_slice_builder> {
-  using result_type = table_slice_builder_ptr;
-  using key_type = table_slice_encoding;
-  using signature = result_type (*)(record_type);
+struct table_slice_encoding_parser : parser<table_slice_encoding_parser> {
+  using attribute = table_slice_encoding;
 
-  static void initialize();
-
-  template <class T>
-  static key_type key() {
-    return T::get_implementation_id();
-  }
-
-  template <class T>
-  static result_type make(record_type layout) {
-    return T::make(std::move(layout));
+  template <class Iterator, class Attribute>
+  bool parse(Iterator& f, const Iterator& l, Attribute& a) const {
+    using namespace parser_literals;
+    // clang-format off
+    auto p = "arrow"_p ->* [] { return table_slice_encoding::arrow; }
+           | "msgpack"_p ->* [] { return table_slice_encoding::msgpack; };
+    // clang-format on
+    return p(f, l, a);
   }
 };
 
+template <>
+struct parser_registry<table_slice_encoding> {
+  using type = table_slice_encoding_parser;
+};
+
+namespace parsers {
+
+static auto const table_slice_encoding = table_slice_encoding_parser{};
+
+} // namespace parsers
 } // namespace vast

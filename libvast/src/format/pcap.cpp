@@ -67,9 +67,8 @@ inline const auto pcap_packet_type_community_id = make_packet_type(
 
 } // namespace <anonymous>
 
-reader::reader(caf::atom_value id, const caf::settings& options,
-               std::unique_ptr<std::istream>)
-  : super(id, options) {
+reader::reader(const caf::settings& options, std::unique_ptr<std::istream>)
+  : super(options) {
   using defaults_t = vast::defaults::import::pcap;
   using caf::get_if;
   std::string category = defaults_t::category;

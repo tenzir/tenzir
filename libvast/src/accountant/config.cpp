@@ -15,6 +15,7 @@
 
 #include "vast/component_config.hpp"
 #include "vast/concept/parseable/detail/posix.hpp"
+#include "vast/concept/parseable/vast/table_slice_encoding.hpp"
 
 namespace vast::system {
 

@@ -79,13 +79,12 @@ TEST(PCAP read/write 1) {
   // A non-positive value disables the timeout. We need to do this because the
   // deterministic actor system is messing with the clocks.
   caf::put(settings, "vast.import.batch-timeout", "0s");
-  format::pcap::reader reader{defaults::import::table_slice_type,
-                              std::move(settings)};
+  format::pcap::reader reader{std::move(settings)};
   size_t events_produced = 0;
   table_slice slice;
   auto add_slice = [&](const table_slice& x) {
-    REQUIRE_EQUAL(slice.encoding(), table_slice::encoding::none);
-    REQUIRE_NOT_EQUAL(x.encoding(), table_slice::encoding::none);
+    REQUIRE_EQUAL(slice.encoding(), table_slice_encoding::none);
+    REQUIRE_NOT_EQUAL(x.encoding(), table_slice_encoding::none);
     slice = x;
     events_produced = x.rows();
   };
@@ -122,17 +121,16 @@ TEST(PCAP read/write 2) {
   // A non-positive value disables the timeout. We need to do this because the
   // deterministic actor system is messing with the clocks.
   caf::put(settings, "vast.import.batch-timeout", "0s");
-  format::pcap::reader reader{defaults::import::table_slice_type,
-                              std::move(settings)};
+  format::pcap::reader reader{std::move(settings)};
   table_slice slice{};
   auto add_slice = [&](const table_slice& x) {
-    REQUIRE_EQUAL(slice.encoding(), table_slice::encoding::none);
+    REQUIRE_EQUAL(slice.encoding(), table_slice_encoding::none);
     slice = x;
   };
   auto [err, produced] = reader.read(std::numeric_limits<size_t>::max(),
                                      100, // we expect only 36 events
                                      add_slice);
-  REQUIRE_NOT_EQUAL(slice.encoding(), table_slice::encoding::none);
+  REQUIRE_NOT_EQUAL(slice.encoding(), table_slice_encoding::none);
   CHECK_EQUAL(err, ec::end_of_input);
   REQUIRE_EQUAL(produced, 36u);
   CHECK_EQUAL(slice.rows(), 36u);

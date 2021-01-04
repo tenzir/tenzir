@@ -507,7 +507,7 @@ index(index_actor::stateful_pointer<index_state> self,
     self,
     /* continuous = */ true, [=](caf::unit_t&) {},
     [=](caf::unit_t&, caf::downstream<table_slice>& out, table_slice x) {
-      VAST_ASSERT(x.encoding() != table_slice::encoding::none);
+      VAST_ASSERT(x.encoding() != table_slice_encoding::none);
       auto&& layout = x.layout();
       self->state.stats.layouts[layout.name()].count += x.rows();
       auto& active = self->state.active_partition;

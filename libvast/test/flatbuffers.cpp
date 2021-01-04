@@ -129,7 +129,7 @@ TEST(empty partition roundtrip) {
   REQUIRE(slice_builder);
   auto slice = slice_builder->finish();
   slice.offset(0);
-  REQUIRE_NOT_EQUAL(slice.encoding(), vast::table_slice::encoding::none);
+  REQUIRE_NOT_EQUAL(slice.encoding(), vast::table_slice_encoding::none);
   state.synopsis->add(slice, caf::settings{});
   // Serialize partition.
   flatbuffers::FlatBufferBuilder builder;

@@ -48,7 +48,7 @@ TEST(lookup) {
     = sys.spawn(system::query_supervisor,
                 caf::actor_cast<system::query_supervisor_master_actor>(self));
   run();
-  expect((caf::atom_value, system::query_supervisor_actor),
+  expect((atom::worker, system::query_supervisor_actor),
          from(sv).to(self).with(atom::worker_v, sv));
   MESSAGE("spawn evaluators");
   auto e0 = sys.spawn(dummy_evaluator, make_ids({0, 2, 4, 6, 8}));
@@ -68,7 +68,7 @@ TEST(lookup) {
                   [&](atom::done) { done = true; });
   CHECK_EQUAL(result, make_ids({{0, 9}}));
   MESSAGE("after completion, the supervisor should register itself again");
-  expect((caf::atom_value, system::query_supervisor_actor),
+  expect((atom::worker, system::query_supervisor_actor),
          from(sv).to(self).with(atom::worker_v, sv));
 }
 

@@ -111,18 +111,8 @@ verified_or_none(chunk_ptr&& chunk, enum table_slice::verify verify) noexcept {
 /// A helper utility for converting table slice encoding to the corresponding
 /// builder id.
 /// @param encoding The table slice encoding to map.
-caf::atom_value builder_id(enum table_slice::encoding encoding) {
-  switch (encoding) {
-    case table_slice::encoding::none:
-      return caf::atom("NULL");
-    case table_slice::encoding::arrow:
-      return caf::atom("arrow");
-    case table_slice::encoding::msgpack:
-      return caf::atom("msgpack");
-  }
-  // GCC-8 fails to recognize that this can never be reached, so we just call a
-  // [[noreturn]] function.
-  die("unhandled table slice encoding");
+table_slice_encoding builder_id(enum table_slice_encoding encoding) {
+  return encoding;
 }
 
 /// A helper utility for accessing the state of a table slice.
@@ -259,9 +249,9 @@ bool operator!=(const table_slice& lhs, const table_slice& rhs) noexcept {
 
 // -- properties ---------------------------------------------------------------
 
-enum table_slice::encoding table_slice::encoding() const noexcept {
+enum table_slice_encoding table_slice::encoding() const noexcept {
   auto f = detail::overload{
-    []() noexcept { return encoding::none; },
+    []() noexcept { return table_slice_encoding::none; },
     [&](const auto& encoded) noexcept {
       return state(encoded, state_)->encoding;
     },
@@ -357,9 +347,9 @@ std::shared_ptr<arrow::RecordBatch> as_record_batch(const table_slice& slice) {
       // The following does not work on all compilers, hence the ugly
       // decay+decltype workaround:
       //   if constexpr (state(encoding, slice.state_)->encoding
-      //                 == table_slice::encoding::arrow) { ... }
+      //                 == table_slice_encoding::arrow) { ... }
       if constexpr (std::decay_t<decltype(*state(encoded, slice.state_))>::encoding
-                    == table_slice::encoding::arrow) {
+                    == table_slice_encoding::arrow) {
         // Get the record batch first, then create a copy that shares the
         // lifetime with the chunk and the original record batch. Capturing the
         // chunk guarantees that the table slice is valid as long as the
@@ -376,7 +366,7 @@ std::shared_ptr<arrow::RecordBatch> as_record_batch(const table_slice& slice) {
         return result;
       } else {
         // Rebuild the slice as an Arrow-encoded table slice.
-        auto copy = rebuild(slice, table_slice::encoding::arrow);
+        auto copy = rebuild(slice, table_slice_encoding::arrow);
         return as_record_batch(copy);
       }
     },
@@ -395,7 +385,7 @@ span<const byte> as_bytes(const table_slice& slice) noexcept {
 // -- operations ---------------------------------------------------------------
 
 table_slice
-rebuild(table_slice slice, enum table_slice::encoding encoding) noexcept {
+rebuild(table_slice slice, enum table_slice_encoding encoding) noexcept {
   auto f = detail::overload{
     [&]() noexcept -> table_slice { return {}; },
     [&](const auto& encoded) noexcept -> table_slice {
@@ -423,7 +413,7 @@ rebuild(table_slice slice, enum table_slice::encoding encoding) noexcept {
 
 void select(std::vector<table_slice>& result, const table_slice& slice,
             const ids& selection) {
-  VAST_ASSERT(slice.encoding() != table_slice::encoding::none);
+  VAST_ASSERT(slice.encoding() != table_slice_encoding::none);
   auto xs_ids = make_ids({{slice.offset(), slice.offset() + slice.rows()}});
   auto intersection = selection & xs_ids;
   auto intersection_rank = rank(intersection);
@@ -437,7 +427,7 @@ void select(std::vector<table_slice>& result, const table_slice& slice,
   }
   // Get the desired encoding, and the already serialized layout.
   auto f = detail::overload{
-    []() noexcept -> std::pair<caf::atom_value, span<const byte>> {
+    []() noexcept -> std::pair<table_slice_encoding, span<const byte>> {
       die("cannot select from an invalid table slice");
     },
     [&](const auto& encoded) noexcept {
@@ -447,7 +437,7 @@ void select(std::vector<table_slice>& result, const table_slice& slice,
              encoded.layout()->size()}};
     },
   };
-  caf::atom_value implementation_id;
+  table_slice_encoding implementation_id;
   span<const byte> serialized_layout = {};
   std::tie(implementation_id, serialized_layout)
     = visit(f, as_flatbuffer(slice.chunk_));
@@ -464,7 +454,7 @@ void select(std::vector<table_slice>& result, const table_slice& slice,
     if (builder->rows() == 0)
       return;
     auto new_slice = builder->finish(serialized_layout);
-    if (new_slice.encoding() == table_slice::encoding::none) {
+    if (new_slice.encoding() == table_slice_encoding::none) {
       VAST_WARNING(__func__, "got an empty slice");
       return;
     }
@@ -504,7 +494,7 @@ select(const table_slice& slice, const ids& selection) {
 }
 
 table_slice truncate(const table_slice& slice, size_t num_rows) {
-  VAST_ASSERT(slice.encoding() != table_slice::encoding::none);
+  VAST_ASSERT(slice.encoding() != table_slice_encoding::none);
   VAST_ASSERT(num_rows > 0);
   if (slice.rows() <= num_rows)
     return slice;
@@ -516,7 +506,7 @@ table_slice truncate(const table_slice& slice, size_t num_rows) {
 
 std::pair<table_slice, table_slice>
 split(const table_slice& slice, size_t partition_point) {
-  VAST_ASSERT(slice.encoding() != table_slice::encoding::none);
+  VAST_ASSERT(slice.encoding() != table_slice_encoding::none);
   if (partition_point == 0)
     return {{}, slice};
   if (partition_point >= slice.rows())

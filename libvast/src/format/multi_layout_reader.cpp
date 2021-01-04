@@ -21,9 +21,8 @@
 
 namespace vast::format {
 
-multi_layout_reader::multi_layout_reader(caf::atom_value table_slice_type,
-                                         const caf::settings& options)
-  : reader(table_slice_type, options) {
+multi_layout_reader::multi_layout_reader(const caf::settings& options)
+  : reader(options) {
   // nop
 }
 
@@ -50,7 +49,7 @@ caf::error multi_layout_reader::finish(consumer& f,
     }
     auto slice = builder_ptr->finish();
     // Override error in case we encounter an error in the builder.
-    if (slice.encoding() == table_slice::encoding::none)
+    if (slice.encoding() == table_slice_encoding::none)
       return make_error(ec::parse_error, "unable to finish current slice");
     f(std::move(slice));
   }

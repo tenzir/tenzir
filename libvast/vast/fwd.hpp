@@ -22,6 +22,7 @@
 #include <caf/intrusive_ptr.hpp>
 #include <caf/type_id.hpp>
 
+#include <cstdint>
 #include <vector>
 
 #if VAST_ENABLE_ARROW
@@ -187,6 +188,7 @@ enum relational_operator : uint8_t;
 
 enum class ec : uint8_t;
 enum class query_options : uint32_t;
+enum class table_slice_encoding : uint8_t;
 
 namespace system {
 

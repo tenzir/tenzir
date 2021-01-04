@@ -102,7 +102,7 @@ TEST(json to data) {
   auto xs = caf::get<json::object>(jn);
   format::json::add(*builder, xs, flat);
   auto slice = builder->finish();
-  REQUIRE_NOT_EQUAL(slice.encoding(), table_slice::encoding::none);
+  REQUIRE_NOT_EQUAL(slice.encoding(), table_slice_encoding::none);
   CHECK(slice.at(0, 10) == data{enumeration{2}});
   auto reference = map{};
   reference[count{1}] = data{"FOO"};
@@ -113,8 +113,7 @@ TEST(json to data) {
 TEST_DISABLED(suricata) {
   using reader_type = format::json::reader<format::json::suricata>;
   auto input = std::make_unique<std::istringstream>(std::string{eve_log});
-  reader_type reader{defaults::import::table_slice_type, caf::settings{},
-                     std::move(input)};
+  reader_type reader{caf::settings{}, std::move(input)};
   std::vector<table_slice> slices;
   auto add_slice
     = [&](table_slice slice) { slices.emplace_back(std::move(slice)); };

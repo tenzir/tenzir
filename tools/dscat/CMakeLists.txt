@@ -7,5 +7,5 @@ if (NOT VAST_ENABLE_DSCAT)
 endif ()
 
 add_executable(dscat dscat.cpp)
-target_link_libraries(dscat PRIVATE vast::libvast vast::internal caf::core)
+target_link_libraries(dscat PRIVATE vast::libvast vast::internal CAF::core)
 install(TARGETS dscat DESTINATION "${CMAKE_INSTALL_BINDIR}")
