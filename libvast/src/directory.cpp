@@ -128,14 +128,14 @@ size_t recursive_size(const vast::directory& dir) {
 }
 
 std::vector<path>
-filter_dir(const path& dir, const std::regex& filter, size_t max_recursion) {
+filter_dir(const path& dir, bool (*filter)(const path&), size_t max_recursion) {
   std::vector<path> result;
   if (max_recursion == 0)
     return result;
   for (auto& f : directory(dir)) {
     switch (f.kind()) {
       default: {
-        if (std::regex_search(f.str(), filter))
+        if (!filter || filter(f))
           result.push_back(f);
         break;
       }

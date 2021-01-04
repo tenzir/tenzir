@@ -28,8 +28,6 @@ struct DIR;
 
 #endif
 
-#include <regex>
-
 namespace vast {
 
 /// An ordered sequence of all the directory entries in a particular directory.
@@ -81,11 +79,11 @@ size_t recursive_size(const vast::directory& dir);
 /// Recursively traverses a directory and lists all file names that match a
 /// given filter expresssion.
 /// @param dir The directory to enumerate.
-/// @param filter A pattern to apply on the filename of every file in *dir*.
+/// @param filter An optional filter function to apply on the filename of every
+/// file in *dir*, which allows for filtering specific files.
 /// @param max_recursion The maximum number of nested directories to traverse.
 /// @returns A list of file that match *filter*.
-std::vector<path>
-filter_dir(const path& dir, const std::regex& filter = std::regex{".*"},
-           size_t max_recursion = defaults::max_recursion);
+std::vector<path> filter_dir(const path& dir, bool (*filter)(const path&) = {},
+                             size_t max_recursion = defaults::max_recursion);
 
 } // namespace vast
