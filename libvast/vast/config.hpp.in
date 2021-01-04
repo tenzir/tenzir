@@ -31,7 +31,10 @@
 #define VAST_LOG_LEVEL_DEBUG CAF_LOG_LEVEL_DEBUG
 #define VAST_LOG_LEVEL_TRACE CAF_LOG_LEVEL_TRACE
 
+// clang-format off
+// clang-format tries to seperate the @ with a space, hence we disable it here.
 #define VAST_LOG_LEVEL VAST_LOG_LEVEL_@VAST_LOG_LEVEL@
+// clang-format on
 
 // TODO: Move everything below to a more appropriate place.
 
@@ -48,20 +51,23 @@
 #endif
 
 #if VAST_CLANG
-#  define VAST_DIAGNOSTIC_PUSH  _Pragma("clang diagnostic push")
-#  define VAST_DIAGNOSTIC_POP   _Pragma("clang diagnostic pop")
-#  define VAST_DIAGNOSTIC_IGNORE_DEPRECATED                                 \
-     _Pragma("clang diagnostic ignored \"-Wdeprecated\"")
-#  define VAST_DIAGNOSTIC_IGNORE_VLA_EXTENSION                              \
-     _Pragma("clang diagnostic ignored \"-Wvla-extension\"")                \
-     _Pragma("clang diagnostic ignored \"-Wgnu-folding-constant\"")
+#  define VAST_DIAGNOSTIC_PUSH _Pragma("clang diagnostic push")
+#  define VAST_DIAGNOSTIC_POP _Pragma("clang diagnostic pop")
+#  define VAST_DIAGNOSTIC_IGNORE_DEPRECATED                                    \
+    _Pragma("clang diagnostic ignored \"-Wdeprecated\"")
+#  define VAST_DIAGNOSTIC_IGNORE_VLA_EXTENSION                                 \
+    _Pragma("clang diagnostic ignored \"-Wvla-extension\"")                    \
+      _Pragma("clang diagnostic ignored \"-Wgnu-folding-constant\"")
+#  define VAST_DIAGNOSTIC_IGNORE_ADDRESS /* nop */
 #elif VAST_GCC
-#  define VAST_DIAGNOSTIC_PUSH  _Pragma("GCC diagnostic push")
-#  define VAST_DIAGNOSTIC_POP   _Pragma("GCC diagnostic pop")
-#  define VAST_DIAGNOSTIC_IGNORE_DEPRECATED                                 \
-     _Pragma("GCC diagnostic ignored \"-Wdeprecated\"")
-#  define VAST_DIAGNOSTIC_IGNORE_VLA_EXTENSION                              \
-     _Pragma("GCC diagnostic ignored \"-Wvla\"")
+#  define VAST_DIAGNOSTIC_PUSH _Pragma("GCC diagnostic push")
+#  define VAST_DIAGNOSTIC_POP _Pragma("GCC diagnostic pop")
+#  define VAST_DIAGNOSTIC_IGNORE_DEPRECATED                                    \
+    _Pragma("GCC diagnostic ignored \"-Wdeprecated\"")
+#  define VAST_DIAGNOSTIC_IGNORE_VLA_EXTENSION                                 \
+    _Pragma("GCC diagnostic ignored \"-Wvla\"")
+#  define VAST_DIAGNOSTIC_IGNORE_ADDRESS                                       \
+    _Pragma("GCC diagnostic ignored \"-Waddress\"")
 #endif
 
 #ifdef CAF_BSD
