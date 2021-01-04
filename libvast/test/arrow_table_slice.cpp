@@ -59,8 +59,8 @@ auto make_single_column_slice(const Ts&... xs) {
 }
 
 table_slice roundtrip(table_slice slice) {
-  factory<table_slice_builder>::add<arrow_table_slice_builder>(caf::atom("arro"
-                                                                         "w"));
+  factory<table_slice_builder>::add<arrow_table_slice_builder>(
+    table_slice_encoding::arrow);
   table_slice slice_copy;
   std::vector<char> buf;
   caf::binary_serializer sink{nullptr, buf};
@@ -279,9 +279,8 @@ TEST(single column - map) {
 }
 
 TEST(single column - serialization) {
-  using vast::factory;
-  factory<table_slice_builder>::add<arrow_table_slice_builder>(caf::atom("arro"
-                                                                         "w"));
+  factory<table_slice_builder>::add<arrow_table_slice_builder>(
+    table_slice_encoding::arrow);
   auto slice1 = make_single_column_slice<count_type>(0_c, 1_c, 2_c, 3_c);
   decltype(slice1) slice2 = {};
   {
