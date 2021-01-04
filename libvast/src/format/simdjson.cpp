@@ -16,6 +16,7 @@
 #include "vast/concept/parseable/vast/address.hpp"
 #include "vast/concept/parseable/vast/subnet.hpp"
 #include "vast/concept/parseable/vast/time.hpp"
+#include "vast/concept/parseable/vast/json.hpp"
 #include "vast/concept/printable/to_string.hpp"
 #include "vast/concept/printable/vast/data.hpp"
 #include "vast/concept/printable/vast/json.hpp"
@@ -118,17 +119,15 @@ type_biassed_convert_impl<integer, type_id<integer_type>()>(integer n,
 template <>
 caf::expected<data>
 type_biassed_convert_impl<std::string_view, type_id<integer_type>()>(
-  std::string_view s, const type& t) {
-  // Reparse string as JSON element.
-  // ngrodzitski: that approach kind of bad in cases like:
-  // "\"\"\"\"\"42\"\"\"\"\"", which are unlikely, but can be handled later.
-  ::simdjson::dom::parser parser;
-  auto r = parser.parse(s);
-  if (r.error())
-    make_error(ec::convert_error, "cannot convert from", std::string{s},
-               "to integer");
-
-  return convert(r.value(), t);
+  std::string_view s, const type& ) {
+  // simdjson cannot be reused here as it doesn't accept hex numbers.
+  if (integer x; parsers::json_int(s, x))
+    return x;
+  if (real x; parsers::json_number(s, x)) {
+    VAST_WARNING_ANON("json-reader narrowed", std::string{s}, "to type int");
+    return detail::narrow_cast<integer>(x);
+  }
+  return make_error(ec::convert_error, "cannot convert from", std::string{s}, "to int");
 }
 
 // COUNT Conversions
@@ -148,14 +147,15 @@ type_biassed_convert_impl<integer, type_id<count_type>()>(integer n,
 template <>
 caf::expected<data>
 type_biassed_convert_impl<std::string_view, type_id<count_type>()>(
-  std::string_view s, const type& t) {
-  ::simdjson::dom::parser parser;
-  auto r = parser.parse(s);
-  if (r.error())
-    make_error(ec::convert_error, "cannot convert from", std::string{s},
-               "to count");
-
-  return convert(r.value(), t);
+  std::string_view s, const type& ) {
+  if (count x; parsers::json_count(s, x))
+    return x;
+  if (real x; parsers::json_number(s, x)) {
+    VAST_WARNING_ANON("json-reader narrowed", std::string{s}, "to type count");
+    return detail::narrow_cast<count>(x);
+  }
+  return make_error(ec::convert_error, "cannot convert from", std::string{s},
+                    "to count");
 }
 
 // REAL Conversions
@@ -181,14 +181,10 @@ type_biassed_convert_impl<count, type_id<real_type>()>(count n, const type&) {
 template <>
 caf::expected<data>
 type_biassed_convert_impl<std::string_view, type_id<real_type>()>(
-  std::string_view s, const type& t) {
-  ::simdjson::dom::parser parser;
-  auto r = parser.parse(s);
-  if (r.error())
-    make_error(ec::convert_error, "cannot convert from", std::string{s},
-               "to count");
-
-  return convert(r.value(), t);
+  std::string_view s, const type& ) {
+  if (real x; parsers::json_number(s, x))
+    return x;
+  return make_error(ec::convert_error, "cannot convert from", std::string{s}, "to real");
 }
 
 // Time conversions
@@ -438,8 +434,11 @@ caf::error add(table_slice_builder& builder, const ::simdjson::dom::object& xs,
 
     auto x = convert(el, field.type);
     if (!x)
+    {
       return make_error(ec::convert_error, x.error().context(),
                         "could not convert", field.name);
+      std::exit(1);
+    }
 
     if (!builder.add(make_data_view(*x)))
       return make_error(ec::type_clash, "unexpected type", field.name);
