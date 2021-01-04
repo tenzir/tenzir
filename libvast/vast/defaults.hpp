@@ -16,6 +16,7 @@
 #include "vast/fwd.hpp"
 
 #include "vast/config.hpp" // Needed for VAST_ENABLE_ARROW
+#include "vast/table_slice_encoding.hpp"
 
 #include <caf/atom.hpp>
 #include <caf/fwd.hpp>

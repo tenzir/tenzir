@@ -13,8 +13,10 @@
 
 #pragma once
 
-#include "vast/chunk.hpp"
 #include "vast/fwd.hpp"
+
+#include "vast/chunk.hpp"
+#include "vast/table_slice_encoding.hpp"
 #include "vast/type.hpp"
 #include "vast/view.hpp"
 
