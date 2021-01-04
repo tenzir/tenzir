@@ -280,6 +280,7 @@ if (VAST_ENABLE_JEMALLOC)
   provide_find_module(jemalloc)
   string(APPEND VAST_FIND_DEPENDENCY_LIST "\nfind_package(jemalloc REQUIRED)")
   target_link_libraries(libvast_internal INTERFACE jemalloc::jemalloc_)
+  dependency_summary("jemalloc" "${jemalloc_INCLUDE_DIR}")
 endif ()
 
 # -- developer mode ------------------------------------------------------------
@@ -560,9 +561,42 @@ feature_summary(
   FILENAME ${CMAKE_CURRENT_BINARY_DIR}/summary.log
   APPEND)
 
-# Print the feature summary if we're not a subproject.
+# Print the feature and build summary if we're not a subproject.
 if (NOT VAST_IS_SUBPROJECT)
   message("\n")
   feature_summary(WHAT ENABLED_FEATURES DISABLED_FEATURES
                   INCLUDE_QUIET_PACKAGES)
+  message(STATUS "Build summary:\n")
+  message(" * Version: ${VAST_VERSION_TAG}")
+  message("")
+  message(" * Build Type: ${CMAKE_BUILD_TYPE}")
+  message(" * Source Directory: ${CMAKE_SOURCE_DIR}")
+  message(" * Binary Directory: ${CMAKE_BINARY_DIR}\n")
+  foreach (lang IN ITEMS C CXX)
+    set(_lang_compiler "${CMAKE_${lang}_COMPILER}")
+    set(_lang_compiler_info
+        "${CMAKE_${lang}_COMPILER_ID} ${CMAKE_${lang}_COMPILER_VERSION}")
+    set(_lang_flags
+        "${CMAKE_${lang}_FLAGS} ${CMAKE_${lang}_FLAGS_${CMAKE_BUILD_TYPE}}
+      ${CMAKE_CPP_FLAGS} ${CMAKE_CPP_FLAGS_${CMAKE_BUILD_TYPE}}")
+    string(STRIP "${_lang_flags}" _lang_flags)
+    if (_lang_flags)
+      message(
+        " * ${lang} Compiler: ${_lang_compiler} (${_lang_compiler_info} with ${_lang_flags})"
+      )
+    else ()
+      message(" * ${lang} Compiler: ${_lang_compiler} (${_lang_compiler_info})")
+    endif ()
+  endforeach ()
+  message(" * Linker: ${CMAKE_LINKER}")
+  message(" * Archiver: ${CMAKE_AR}")
+  get_property(VAST_DEPENDENCY_SUMMARY GLOBAL
+               PROPERTY VAST_DEPENDENCY_SUMMARY_PROPERTY)
+  if (VAST_DEPENDENCY_SUMMARY)
+    message("")
+    foreach (dependency_summary_entry IN LISTS VAST_DEPENDENCY_SUMMARY)
+      message("${dependency_summary_entry}")
+    endforeach ()
+  endif ()
+  message("")
 endif ()
