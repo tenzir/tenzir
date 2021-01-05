@@ -21,7 +21,8 @@
 #include "vast/format/ascii.hpp"
 #include "vast/format/csv.hpp"
 #include "vast/format/json.hpp"
-#include "vast/format/json/suricata.hpp"
+#include "vast/format/json/default_selector.hpp"
+#include "vast/format/json/suricata_selector.hpp"
 #include "vast/format/null.hpp"
 #include "vast/format/syslog.hpp"
 #include "vast/format/test.hpp"
@@ -458,14 +459,15 @@ auto make_command_factory() {
     {"get", get_command},
     {"infer", infer_command},
     {"import csv", import_command<format::csv::reader, defaults::import::csv>},
-    {"import json", import_command<format::json::reader<>,
+    {"import json",
+    import_command<format::json::reader<format::json::default_selector>,
       defaults::import::json>},
 #if VAST_ENABLE_PCAP
     {"import pcap", import_command<format::pcap::reader,
       defaults::import::pcap>},
 #endif
     {"import suricata", import_command<
-      format::json::reader<format::json::suricata>,
+      format::json::reader<format::json::suricata_selector>,
       defaults::import::suricata>},
     {"import syslog", import_command<format::syslog::reader,
       defaults::import::syslog>},

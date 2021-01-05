@@ -12,7 +12,9 @@
  ******************************************************************************/
 
 #include "vast/format/json.hpp"
-#include "vast/format/json/suricata.hpp"
+
+#include "vast/format/json/default_selector.hpp"
+#include "vast/format/json/suricata_selector.hpp"
 
 #define SUITE format
 
@@ -111,7 +113,7 @@ TEST(json to data) {
 }
 
 TEST_DISABLED(suricata) {
-  using reader_type = format::json::reader<format::json::suricata>;
+  using reader_type = format::json::reader<format::json::suricata_selector>;
   auto input = std::make_unique<std::istringstream>(std::string{eve_log});
   reader_type reader{caf::settings{}, std::move(input)};
   std::vector<table_slice> slices;

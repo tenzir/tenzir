@@ -29,7 +29,8 @@
 #include "vast/detail/settings.hpp"
 #include "vast/format/csv.hpp"
 #include "vast/format/json.hpp"
-#include "vast/format/json/suricata.hpp"
+#include "vast/format/json/default_selector.hpp"
+#include "vast/format/json/suricata_selector.hpp"
 #include "vast/format/syslog.hpp"
 #include "vast/format/test.hpp"
 #include "vast/format/zeek.hpp"
@@ -349,7 +350,8 @@ auto make_component_factory() {
          spawn_source<format::csv::reader, defaults::import::csv>>()},
       {"spawn source json",
        lift_component_factory<
-         spawn_source<format::json::reader<>, defaults::import::json>>()},
+         spawn_source<format::json::reader<format::json::default_selector>,
+                      defaults::import::json>>()},
 #if VAST_ENABLE_PCAP
       {"spawn source pcap",
        lift_component_factory<
@@ -357,7 +359,7 @@ auto make_component_factory() {
 #endif
       {"spawn source suricata",
        lift_component_factory<
-         spawn_source<format::json::reader<format::json::suricata>,
+         spawn_source<format::json::reader<format::json::suricata_selector>,
                       defaults::import::suricata>>()},
       {"spawn source syslog",
        lift_component_factory<

@@ -13,23 +13,19 @@
 
 #pragma once
 
-#include "vast/concept/hashable/hash_append.hpp"
-#include "vast/concept/hashable/xxhash.hpp"
+#include "vast/fwd.hpp"
+
 #include "vast/concept/parseable/vast/json.hpp"
 #include "vast/defaults.hpp"
-#include "vast/detail/flat_map.hpp"
 #include "vast/detail/line_range.hpp"
-#include "vast/detail/string.hpp"
 #include "vast/error.hpp"
 #include "vast/format/multi_layout_reader.hpp"
 #include "vast/format/ostream_writer.hpp"
-#include "vast/fwd.hpp"
 #include "vast/json.hpp"
 #include "vast/logger.hpp"
 #include "vast/schema.hpp"
 
 #include <caf/expected.hpp>
-#include <caf/fwd.hpp>
 #include <caf/settings.hpp>
 
 #include <chrono>
@@ -57,61 +53,9 @@ public:
 caf::error add(table_slice_builder& builder, const vast::json::object& xs,
                const record_type& layout);
 
-/// @relates reader
-struct default_selector {
-  caf::optional<record_type> operator()(const vast::json::object& obj) const {
-    if (type_cache.empty())
-      return caf::none;
-    // Iff there is only one type in the type cache, allow the JSON reader to
-    // use it despite not being an exact match.
-    if (type_cache.size() == 1)
-      return type_cache.begin()->second;
-    std::vector<std::string> cache_entry;
-    auto build_cache_entry = [&cache_entry](auto& prefix, const vast::json&) {
-      cache_entry.emplace_back(detail::join(prefix.begin(), prefix.end(), "."));
-    };
-    each_field(vast::json{obj}, build_cache_entry);
-    std::sort(cache_entry.begin(), cache_entry.end());
-    if (auto search_result = type_cache.find(cache_entry);
-        search_result != type_cache.end())
-      return search_result->second;
-    return caf::none;
-  }
-
-  caf::error schema(vast::schema sch) {
-    if (sch.empty())
-      return make_error(ec::invalid_configuration, "no schema provided or type "
-                                                   "too restricted");
-    for (auto& entry : sch) {
-      if (!caf::holds_alternative<record_type>(entry))
-        continue;
-      auto layout = flatten(caf::get<record_type>(entry));
-      std::vector<std::string> cache_entry;
-      for (auto& [k, v] : layout.fields)
-        cache_entry.emplace_back(k);
-      std::sort(cache_entry.begin(), cache_entry.end());
-      type_cache.insert({std::move(cache_entry), std::move(layout)});
-    }
-    return caf::none;
-  }
-
-  vast::schema schema() const {
-    vast::schema result;
-    for (const auto& [k, v] : type_cache)
-      result.add(v);
-    return result;
-  }
-
-  static const char* name() {
-    return "json-reader";
-  }
-
-  detail::flat_map<std::vector<std::string>, record_type> type_cache = {};
-};
-
 /// A reader for JSON data. It operates with a *selector* to determine the
 /// mapping of JSON object to the appropriate record type in the schema.
-template <class Selector = default_selector>
+template <class Selector>
 class reader final : public multi_layout_reader {
 public:
   using super = multi_layout_reader;
@@ -133,8 +77,8 @@ public:
   vast::system::report status() const override;
 
 protected:
-  caf::error read_impl(size_t max_events, size_t max_slice_size,
-                       consumer& f) override;
+  caf::error
+  read_impl(size_t max_events, size_t max_slice_size, consumer& f) override;
 
 private:
   using iterator_type = std::string_view::const_iterator;
