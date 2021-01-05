@@ -19,6 +19,7 @@
 #include "vast/logger.hpp"
 #include "vast/scope_linked.hpp"
 #include "vast/system/accountant_actor.hpp"
+#include "vast/system/exporter_actor.hpp"
 #include "vast/system/make_sink.hpp"
 #include "vast/system/node_control.hpp"
 #include "vast/system/read_query.hpp"
@@ -76,11 +77,12 @@ caf::message pivot_command(const invocation& inv, caf::actor_system& sys) {
   // Spawn exporter at the node.
   auto spawn_exporter = invocation{inv.options, "spawn exporter", {*query}};
   VAST_DEBUG(&inv, "spawns exporter with parameters:", spawn_exporter);
-  auto exp = spawn_at_node(self, node, spawn_exporter);
-  if (!exp)
-    return caf::make_message(std::move(exp.error()));
-  auto exp_guard = caf::detail::make_scope_guard(
-    [&] { self->send_exit(*exp, caf::exit_reason::user_shutdown); });
+  auto maybe_exporter = spawn_at_node(self, node, spawn_exporter);
+  if (!maybe_exporter)
+    return caf::make_message(std::move(maybe_exporter.error()));
+  auto exporter = caf::actor_cast<exporter_actor>(std::move(*maybe_exporter));
+  auto exporter_guard = caf::detail::make_scope_guard(
+    [&] { self->send_exit(exporter, caf::exit_reason::user_shutdown); });
   // Spawn pivoter at the node.
   auto spawn_pivoter
     = invocation{inv.options, "spawn pivoter", {inv.arguments[0], *query}};
@@ -103,11 +105,11 @@ caf::message pivot_command(const invocation& inv, caf::actor_system& sys) {
   self->monitor(sink);
   self->monitor(*piv);
   // Start the exporter.
-  self->send(*exp, atom::sink_v, *piv);
+  self->send(exporter, atom::sink_v, *piv);
   // (Ab)use query_statistics as done message.
-  self->send(*exp, atom::statistics_v, *piv);
+  self->send(exporter, atom::statistics_v, *piv);
   self->send(*piv, atom::sink_v, sink);
-  self->send(*exp, atom::run_v);
+  self->send(exporter, atom::run_v);
   auto stop = false;
   self
     ->do_receive(

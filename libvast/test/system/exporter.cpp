@@ -48,8 +48,8 @@ struct fixture : fixture_base {
   }
 
   ~fixture() {
-    for (auto& hdl : {importer, exporter})
-      self->send_exit(hdl, exit_reason::user_shutdown);
+    self->send_exit(importer, exit_reason::user_shutdown);
+    self->send_exit(exporter, exit_reason::user_shutdown);
     self->send_exit(index, exit_reason::user_shutdown);
     self->send_exit(archive, exit_reason::user_shutdown);
     run();
@@ -94,7 +94,7 @@ struct fixture : fixture_base {
   void exporter_setup(query_options opts) {
     spawn_exporter(opts);
     send(exporter, archive);
-    send(exporter, atom::index_v, index);
+    send(exporter, index);
     send(exporter, atom::sink_v, self);
     send(exporter, atom::run_v);
     send(exporter, atom::extract_v);
@@ -137,7 +137,7 @@ struct fixture : fixture_base {
   system::index_actor index;
   system::archive_actor archive;
   actor importer;
-  actor exporter;
+  system::exporter_actor exporter;
   expression expr;
 };
 
@@ -188,7 +188,7 @@ TEST(continuous query with importer) {
   importer_setup();
   MESSAGE("prepare exporter for continous query");
   exporter_setup(continuous);
-  send(importer, atom::exporter_v, exporter);
+  send(importer, atom::exporter_v, caf::actor_cast<caf::actor>(exporter));
   MESSAGE("ingest conn.log via importer");
   // Again: copy because we musn't mutate static test data.
   vast::detail::spawn_container_source(sys, zeek_conn_log, importer);
@@ -202,7 +202,7 @@ TEST(continuous query with mismatching importer) {
   MESSAGE("prepare exporter for continous query");
   expr = unbox(to<expression>("foo.bar == \"baz\""));
   exporter_setup(continuous);
-  send(importer, atom::exporter_v, exporter);
+  send(importer, atom::exporter_v, caf::actor_cast<caf::actor>(exporter));
   MESSAGE("ingest conn.log via importer");
   // Again: copy because we musn't mutate static test data.
   vast::detail::spawn_container_source(sys, zeek_conn_log, importer);

@@ -23,6 +23,7 @@
 #include "vast/detail/assert.hpp"
 #include "vast/detail/fill_status_map.hpp"
 #include "vast/detail/narrow.hpp"
+#include "vast/error.hpp"
 #include "vast/expression_visitors.hpp"
 #include "vast/logger.hpp"
 #include "vast/system/archive_actor.hpp"
@@ -37,7 +38,7 @@ namespace vast::system {
 
 namespace {
 
-void ship_results(caf::stateful_actor<exporter_state>* self) {
+void ship_results(exporter_actor::stateful_pointer<exporter_state> self) {
   VAST_TRACE("");
   auto& st = self->state;
   VAST_DEBUG(self, "relays", st.query.cached, "events");
@@ -63,14 +64,14 @@ void ship_results(caf::stateful_actor<exporter_state>* self) {
     st.query.cached -= rows;
     st.query.requested -= rows;
     st.query.shipped += rows;
-    self->send(st.sink, std::move(slice));
+    self->anon_send(st.sink, std::move(slice));
   }
 }
 
-void report_statistics(caf::stateful_actor<exporter_state>* self) {
+void report_statistics(exporter_actor::stateful_pointer<exporter_state> self) {
   auto& st = self->state;
   if (st.statistics_subscriber)
-    self->send(st.statistics_subscriber, st.name, st.query);
+    self->anon_send(st.statistics_subscriber, st.name, st.query);
   if (st.accountant) {
     auto hits = rank(st.hits);
     auto processed = st.query.processed;
@@ -87,19 +88,20 @@ void report_statistics(caf::stateful_actor<exporter_state>* self) {
   }
 }
 
-void shutdown(caf::stateful_actor<exporter_state>* self, caf::error err) {
-  VAST_DEBUG(self, "initiates shutdown with error", self->system().render(err));
+void shutdown(exporter_actor::stateful_pointer<exporter_state> self,
+              caf::error err) {
+  VAST_DEBUG(self, "initiates shutdown with error", render(err));
   self->send_exit(self, std::move(err));
 }
 
-void shutdown(caf::stateful_actor<exporter_state>* self) {
+void shutdown(exporter_actor::stateful_pointer<exporter_state> self) {
   if (has_continuous_option(self->state.options))
     return;
   VAST_DEBUG(self, "initiates shutdown");
   self->send_exit(self, caf::exit_reason::normal);
 }
 
-void request_more_hits(caf::stateful_actor<exporter_state>* self) {
+void request_more_hits(exporter_actor::stateful_pointer<exporter_state> self) {
   auto& st = self->state;
   // Sanity check.
   if (!has_historical_option(st.options)) {
@@ -143,33 +145,45 @@ void request_more_hits(caf::stateful_actor<exporter_state>* self) {
   self->send(st.index, st.id, detail::narrow<uint32_t>(n));
 }
 
-} // namespace
-
-caf::settings
-status(caf::stateful_actor<exporter_state>* self, status_verbosity v) {
-  auto& st = self->state;
-  auto result = caf::settings{};
-  auto& exporter_status = put_dictionary(result, "exporter");
-  if (v >= status_verbosity::info) {
-    caf::settings exp;
-    put(exp, "expression", to_string(st.expr));
-    auto& xs = put_list(result, "queries");
-    xs.emplace_back(std::move(exp));
+void handle_batch(exporter_actor::stateful_pointer<exporter_state> self,
+                  table_slice slice) {
+  VAST_ASSERT(slice.encoding() != table_slice_encoding::none);
+  VAST_DEBUG(self, "got batch of", slice.rows(), "events");
+  // Construct a candidate checker if we don't have one for this type.
+  type t = slice.layout();
+  auto it = self->state.checkers.find(t);
+  if (it == self->state.checkers.end()) {
+    auto x = tailor(self->state.expr, t);
+    if (!x) {
+      VAST_ERROR(self, "failed to tailor expression:", render(x.error()));
+      ship_results(self);
+      shutdown(self);
+      return;
+    }
+    VAST_DEBUG(self, "tailored AST to", t, ':', x);
+    std::tie(it, std::ignore)
+      = self->state.checkers.emplace(type{slice.layout()}, std::move(*x));
   }
-  if (v >= status_verbosity::detailed) {
-    caf::settings exp;
-    put(exp, "expression", to_string(st.expr));
-    put(exp, "hits", rank(st.hits));
-    put(exp, "start", caf::deep_to_string(st.start));
-    auto& xs = put_list(result, "queries");
-    xs.emplace_back(std::move(exp));
-    detail::fill_status_map(exporter_status, self);
+  auto& checker = it->second;
+  // Perform candidate check, splitting the slice into subsets if needed.
+  self->state.query.processed += slice.rows();
+  auto selection = evaluate(checker, slice);
+  auto selection_size = rank(selection);
+  if (selection_size == 0) {
+    // No rows qualify.
+    return;
   }
-  return result;
+  self->state.query.cached += selection_size;
+  select(self->state.results, slice, selection);
+  // Ship slices to connected SINKs.
+  ship_results(self);
 }
 
-caf::behavior exporter(caf::stateful_actor<exporter_state>* self,
-                       expression expr, query_options options) {
+} // namespace
+
+exporter_actor::behavior_type
+exporter(exporter_actor::stateful_pointer<exporter_state> self, expression expr,
+         query_options options) {
   self->state.options = options;
   self->state.expr = std::move(expr);
   if (has_continuous_option(options))
@@ -197,41 +211,6 @@ caf::behavior exporter(caf::stateful_actor<exporter_state>* self,
   auto finished = [](const query_status& qs) -> bool {
     return qs.received == qs.expected
            && qs.lookups_issued == qs.lookups_complete;
-  };
-  auto handle_batch = [=](table_slice slice) {
-    VAST_ASSERT(slice.encoding() != table_slice_encoding::none);
-    auto& st = self->state;
-    VAST_DEBUG(self, "got batch of", slice.rows(), "events");
-    auto sender = self->current_sender();
-    // Construct a candidate checker if we don't have one for this type.
-    type t = slice.layout();
-    auto it = st.checkers.find(t);
-    if (it == st.checkers.end()) {
-      auto x = tailor(st.expr, t);
-      if (!x) {
-        VAST_ERROR(self, "failed to tailor expression:",
-                   self->system().render(x.error()));
-        ship_results(self);
-        shutdown(self);
-        return;
-      }
-      VAST_DEBUG(self, "tailored AST to", t, ':', x);
-      std::tie(it, std::ignore)
-        = st.checkers.emplace(type{slice.layout()}, std::move(*x));
-    }
-    auto& checker = it->second;
-    // Perform candidate check, splitting the slice into subsets if needed.
-    st.query.processed += slice.rows();
-    auto selection = evaluate(checker, slice);
-    auto selection_size = rank(selection);
-    if (selection_size == 0) {
-      // No rows qualify.
-      return;
-    }
-    st.query.cached += selection_size;
-    select(st.results, slice, selection);
-    // Ship slices to connected SINKs.
-    ship_results(self);
   };
   return {
     // The INDEX (or the EVALUATOR, to be more precise) sends us a series of
@@ -268,20 +247,17 @@ caf::behavior exporter(caf::stateful_actor<exporter_state>* self,
       }
       return caf::unit;
     },
-    [=](table_slice slice) {
-      // Use the same handler as we use for streamed slices.
-      handle_batch(std::move(slice));
-    },
+    [=](table_slice slice) { handle_batch(self, std::move(slice)); },
     [=](atom::done) -> caf::result<void> {
-      auto& st = self->state;
-      auto& qs = st.query;
+      auto& qs = self->state.query;
       // Ignore this message until we got all lookup results from the ARCHIVE.
       // Otherwise, we can end up in weirdly interleaved state.
       if (qs.lookups_issued != qs.lookups_complete)
         return caf::skip;
       // Figure out if we're done by bumping the counter for `received` and
       // check whether it reaches `expected`.
-      caf::timespan runtime = std::chrono::system_clock::now() - st.start;
+      caf::timespan runtime
+        = std::chrono::system_clock::now() - self->state.start;
       qs.runtime = runtime;
       qs.received += qs.scheduled;
       if (qs.received < qs.expected) {
@@ -291,20 +267,16 @@ caf::behavior exporter(caf::stateful_actor<exporter_state>* self,
       } else {
         VAST_DEBUG(self, "received all hits from", qs.expected,
                    "partition(s) in", vast::to_string(runtime));
-        if (st.accountant)
-          self->send(st.accountant, "exporter.hits.runtime", runtime);
+        if (self->state.accountant)
+          self->send(self->state.accountant, "exporter.hits.runtime", runtime);
         if (finished(qs))
           shutdown(self);
       }
       return caf::unit;
     },
-    [=](atom::done, [[maybe_unused]] const caf::error& err) {
-      auto& st = self->state;
-      if (self->current_sender() != st.archive) {
-        VAST_WARNING(self, "received ('done', error) from unexpected actor");
-        return;
-      }
-      auto& qs = st.query;
+    [=](atom::done, const caf::error& err) {
+      VAST_ASSERT(self->current_sender() == self->state.archive);
+      auto& qs = self->state.query;
       ++qs.lookups_complete;
       VAST_DEBUG(self, "received done from archive:", VAST_ARG(err),
                  VAST_ARG("query", qs));
@@ -312,29 +284,30 @@ caf::behavior exporter(caf::stateful_actor<exporter_state>* self,
       // hits first. Hence, we can never be finished here.
       VAST_ASSERT(!finished(qs));
     },
-    [=](atom::extract) {
+    [=](atom::extract) -> caf::result<void> {
       auto& qs = self->state.query;
       // Sanity check.
       VAST_DEBUG(self, "got request to extract all events");
       if (qs.requested == max_events) {
         VAST_WARNING(self, "ignores extract request, already getting all");
-        return;
+        return {};
       }
       // Configure state to get all remaining partition results.
       qs.requested = max_events;
       ship_results(self);
       request_more_hits(self);
+      return {};
     },
-    [=](atom::extract, uint64_t requested_results) {
+    [=](atom::extract, uint64_t requested_results) -> caf::result<void> {
       auto& qs = self->state.query;
       // Sanity checks.
       if (requested_results == 0) {
         VAST_WARNING(self, "ignores extract request for 0 results");
-        return;
+        return {};
       }
       if (qs.requested == max_events) {
         VAST_WARNING(self, "ignores extract request, already getting all");
-        return;
+        return {};
       }
       VAST_ASSERT(qs.requested < max_events);
       // Configure state to get up to `requested_results` more events.
@@ -345,26 +318,48 @@ caf::behavior exporter(caf::stateful_actor<exporter_state>* self,
       qs.requested += n;
       ship_results(self);
       request_more_hits(self);
+      return {};
     },
-    [=](atom::status, status_verbosity v) { return status(self, v); },
+    [=](atom::status, status_verbosity v) {
+      auto& st = self->state;
+      auto result = caf::settings{};
+      auto& exporter_status = put_dictionary(result, "exporter");
+      if (v >= status_verbosity::info) {
+        caf::settings exp;
+        put(exp, "expression", to_string(st.expr));
+        auto& xs = put_list(result, "queries");
+        xs.emplace_back(std::move(exp));
+      }
+      if (v >= status_verbosity::detailed) {
+        caf::settings exp;
+        put(exp, "expression", to_string(st.expr));
+        put(exp, "hits", rank(st.hits));
+        put(exp, "start", caf::deep_to_string(st.start));
+        auto& xs = put_list(result, "queries");
+        xs.emplace_back(std::move(exp));
+        detail::fill_status_map(exporter_status, self);
+      }
+      return result;
+    },
     [=](accountant_actor accountant) {
       self->state.accountant = std::move(accountant);
       self->send(self->state.accountant, atom::announce_v, self->name());
     },
-    [=](const archive_actor& archive) {
+    [=](archive_actor archive) {
       VAST_DEBUG(self, "registers archive", archive);
-      self->state.archive = archive;
+      self->state.archive = std::move(archive);
       if (has_continuous_option(self->state.options))
-        self->monitor(archive);
+        self->monitor(self->state.archive);
       // Register self at the archive
       if (has_historical_option(self->state.options))
-        self->send(archive, atom::exporter_v, self);
+        self->send(self->state.archive, atom::exporter_v,
+                   caf::actor_cast<caf::actor>(self));
     },
-    [=](atom::index, const index_actor& index) {
+    [=](index_actor index) {
       VAST_DEBUG(self, "registers index", index);
-      self->state.index = index;
+      self->state.index = std::move(index);
       if (has_continuous_option(self->state.options))
-        self->monitor(index);
+        self->monitor(self->state.index);
     },
     [=](atom::sink, const caf::actor& sink) {
       VAST_DEBUG(self, "registers sink", sink);
@@ -375,7 +370,8 @@ caf::behavior exporter(caf::stateful_actor<exporter_state>* self,
       // Register for events at running IMPORTERs.
       if (has_continuous_option(self->state.options))
         for (auto& x : importers)
-          self->send(x, atom::exporter_v, self);
+          self->anon_send(x, atom::exporter_v,
+                          caf::actor_cast<caf::actor>(self));
     },
     [=](atom::run) {
       VAST_VERBOSE(self, "executes query:", to_string(self->state.expr));
@@ -409,17 +405,21 @@ caf::behavior exporter(caf::stateful_actor<exporter_state>* self,
                  statistics_subscriber);
       self->state.statistics_subscriber = statistics_subscriber;
     },
-    [=](caf::stream<table_slice> in) {
-      return self->make_sink(
-        in,
-        [](caf::unit_t&) {
-          // nop
-        },
-        [=](caf::unit_t&, const table_slice& slice) { handle_batch(slice); },
-        [=](caf::unit_t&, const error& err) {
-          if (err)
-            VAST_ERROR(self, "got error during streaming:", err);
-        });
+    [=](caf::stream<table_slice> in) -> caf::inbound_stream_slot<table_slice> {
+      return self
+        ->make_sink(
+          in,
+          [](caf::unit_t&) {
+            // nop
+          },
+          [=](caf::unit_t&, table_slice slice) {
+            handle_batch(self, std::move(slice));
+          },
+          [=](caf::unit_t&, const error& err) {
+            if (err)
+              VAST_ERROR(self, "got error during streaming:", err);
+          })
+        .inbound_slot();
     },
   };
 }

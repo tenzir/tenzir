@@ -13,14 +13,16 @@
 
 #include "vast/system/pivoter.hpp"
 
+#include "vast/fwd.hpp"
+
 #include "vast/command.hpp"
 #include "vast/concept/printable/to_string.hpp"
 #include "vast/concept/printable/vast/expression.hpp"
 #include "vast/detail/string.hpp"
 #include "vast/expression.hpp"
-#include "vast/fwd.hpp"
 #include "vast/logger.hpp"
-#include "vast/system/exporter.hpp"
+#include "vast/system/exporter_actor.hpp"
+#include "vast/system/query_status.hpp"
 #include "vast/table_slice.hpp"
 #include "vast/table_slice_column.hpp"
 
@@ -135,17 +137,23 @@ caf::behavior pivoter(caf::stateful_actor<pivoter_state>* self, caf::actor node,
       caf::put(exporter_options, "vast.export.disable-taxonomies", true);
       auto exporter_invocation
         = invocation{std::move(exporter_options), "spawn exporter", {query}};
-      self->send(st.node, exporter_invocation);
-      st.running_exporters++;
+      ++self->state.running_exporters;
+      self->request(st.node, caf::infinite, exporter_invocation)
+        .then(
+          [=](caf::actor handle) {
+            auto exporter = caf::actor_cast<exporter_actor>(std::move(handle));
+            VAST_DEBUG(self, "registers exporter", exporter);
+            self->monitor(exporter);
+            self->send(exporter, atom::sink_v, self->state.sink);
+            self->send(exporter, atom::run_v);
+          },
+          [=](caf::error error) {
+            VAST_ERROR(self, "failed to spawn exporter:", render(error));
+            --self->state.running_exporters;
+          });
+      ;
     },
-    [=](caf::actor exp) {
-      VAST_DEBUG(self, "registers exporter", exp);
-      auto& st = self->state;
-      self->monitor(exp);
-      self->send(exp, atom::sink_v, st.sink);
-      self->send(exp, atom::run_v);
-    },
-    [=]([[maybe_unused]] std::string name, query_status) {
+    [=](std::string name, query_status) {
       VAST_DEBUG(self, "received final status from", name);
       self->state.initial_query_completed = true;
       quit_if_done();

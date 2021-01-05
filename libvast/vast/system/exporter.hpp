@@ -13,20 +13,16 @@
 
 #pragma once
 
+#include "vast/fwd.hpp"
+
 #include "vast/aliases.hpp"
 #include "vast/expression.hpp"
 #include "vast/ids.hpp"
 #include "vast/query_options.hpp"
-#include "vast/system/accountant_actor.hpp"
-#include "vast/system/archive_actor.hpp"
-#include "vast/system/index_actor.hpp"
+#include "vast/system/exporter_actor.hpp"
 #include "vast/system/query_status.hpp"
 #include "vast/table_slice.hpp"
 #include "vast/uuid.hpp"
-
-#include <chrono>
-#include <memory>
-#include <unordered_map>
 
 namespace vast::system {
 
@@ -82,10 +78,11 @@ struct exporter_state {
 /// The EXPORTER receives index hits, looks up the corresponding events in the
 /// archive, and performs a candidate check to select the resulting stream of
 /// matching events.
-/// @param self The actor handle.
-/// @param ast The AST of query.
-/// @param qos The query options.
-caf::behavior exporter(caf::stateful_actor<exporter_state>* self,
-                       expression expr, query_options opts);
+/// @param self The actor handle of the exporter.
+/// @param expr The AST of the query.
+/// @param opts The query options.
+exporter_actor::behavior_type
+exporter(exporter_actor::stateful_pointer<exporter_state> self, expression expr,
+         query_options opts);
 
 } // namespace vast::system

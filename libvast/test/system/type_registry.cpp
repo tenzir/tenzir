@@ -23,7 +23,7 @@
 #include "vast/defaults.hpp"
 #include "vast/detail/notifying_stream_manager.hpp"
 #include "vast/detail/spawn_container_source.hpp"
-#include "vast/system/exporter.hpp"
+#include "vast/system/exporter_actor.hpp"
 #include "vast/system/importer.hpp"
 #include "vast/table_slice.hpp"
 #include "vast/table_slice_builder_factory.hpp"
