@@ -89,7 +89,7 @@ spawn_example_actor(example_actor::stateful_pointer<example_actor_state> self) {
 }
 
 /// An example plugin.
-class example final : public virtual import_plugin,
+class example final : public virtual analyzer_plugin,
                       public virtual command_plugin {
 public:
   /// Loading logic.
@@ -116,10 +116,9 @@ public:
     return "example";
   }
 
-  /// Creates an actor that hooks into the importer table slice stream.
+  /// Creates an actor that hooks into the input table slice stream.
   /// @param sys The actor system context to spawn the actor in.
-  import_stream_sink_actor
-  make_import_stream_sink(caf::actor_system& sys) const override {
+  analyzer_actor make_analyzer(caf::actor_system& sys) const override {
     // Spawn the actor.
     auto actor = sys.spawn(spawn_example_actor);
     // Send the configuration to the actor.

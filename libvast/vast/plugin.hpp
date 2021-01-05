@@ -79,20 +79,20 @@ public:
   virtual const char* name() const = 0;
 };
 
-// -- import plugin ------------------------------------------------------------
+// -- analyzer plugin ----------------------------------------------------------
 
-/// A base class for plugins that hook into the importer stream.
+/// A base class for plugins that hook into the input stream.
 /// @relates plugin
-class import_plugin : public virtual plugin {
+class analyzer_plugin : public virtual plugin {
 public:
   /// The minimal actor interface that streaming plugins must implement.
-  using import_stream_sink_actor
+  using analyzer_actor
     = caf::typed_actor<caf::reacts_to<caf::stream<table_slice>>>;
 
-  /// Creates an actor that hooks into the importer table slice stream.
+  /// Creates an actor that hooks into the input table slice stream.
   /// @param sys The actor system context to spawn the actor in.
-  virtual import_stream_sink_actor
-  make_import_stream_sink(caf::actor_system& sys) const = 0;
+  /// @returns The actor handle to the analyzer.
+  virtual analyzer_actor make_analyzer(caf::actor_system& sys) const = 0;
 };
 
 // -- command plugin -----------------------------------------------------------

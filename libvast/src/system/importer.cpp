@@ -248,9 +248,9 @@ caf::behavior importer(importer_actor* self, path dir, archive_actor archive,
     self->state.stage->add_outbound_path(index);
   }
   for (auto&& plugin : plugins::get())
-    if (auto p = plugin.as<import_plugin>())
-      if (auto sink = p->make_import_stream_sink(self->system()))
-        self->state.stage->add_outbound_path(sink);
+    if (auto p = plugin.as<analyzer_plugin>())
+      if (auto analyzer = p->make_analyzer(self->system()))
+        self->state.stage->add_outbound_path(analyzer);
   return {
     [=](accountant_actor accountant) {
       VAST_DEBUG(self, "registers accountant", archive);
