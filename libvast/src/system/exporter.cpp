@@ -37,8 +37,7 @@ using namespace std::chrono;
 using namespace std::string_literals;
 using namespace caf;
 
-namespace vast {
-namespace system {
+namespace vast::system {
 
 namespace {
 
@@ -148,7 +147,7 @@ void request_more_hits(stateful_actor<exporter_state>* self) {
   self->send(st.index, st.id, detail::narrow<uint32_t>(n));
 }
 
-} // namespace <anonymous>
+} // namespace
 
 caf::settings status(stateful_actor<exporter_state>* self, status_verbosity v) {
   auto& st = self->state;
@@ -178,29 +177,26 @@ behavior exporter(stateful_actor<exporter_state>* self, expression expr,
   self->state.expr = std::move(expr);
   if (has_continuous_option(options))
     VAST_DEBUG(self, "has continuous query option");
-  self->set_exit_handler(
-    [=](const exit_msg& msg) {
-      VAST_DEBUG(self, "received exit from", msg.source, "with reason:", msg.reason);
-      auto& st = self->state;
-      if (msg.reason != exit_reason::kill)
-        report_statistics(self);
-      // Sending 0 to the index means dropping further results.
-      self->send<message_priority::high>(st.index, st.id,
-                                         static_cast<uint32_t>(0));
-      self->quit(msg.reason);
-    }
-  );
-  self->set_down_handler(
-    [=](const down_msg& msg) {
-      VAST_DEBUG(self, "received DOWN from", msg.source);
-      if (has_continuous_option(self->state.options)
-          && (msg.source == self->state.archive
-              || msg.source == self->state.index))
-        report_statistics(self);
-      // Without sinks and resumable sessions, there's no reason to proceed.
-      self->quit(msg.reason);
-    }
-  );
+  self->set_exit_handler([=](const exit_msg& msg) {
+    VAST_DEBUG(self, "received exit from", msg.source,
+               "with reason:", msg.reason);
+    auto& st = self->state;
+    if (msg.reason != exit_reason::kill)
+      report_statistics(self);
+    // Sending 0 to the index means dropping further results.
+    self->send<message_priority::high>(st.index, st.id,
+                                       static_cast<uint32_t>(0));
+    self->quit(msg.reason);
+  });
+  self->set_down_handler([=](const down_msg& msg) {
+    VAST_DEBUG(self, "received DOWN from", msg.source);
+    if (has_continuous_option(self->state.options)
+        && (msg.source == self->state.archive
+            || msg.source == self->state.index))
+      report_statistics(self);
+    // Without sinks and resumable sessions, there's no reason to proceed.
+    self->quit(msg.reason);
+  });
   auto finished = [](const query_status& qs) -> bool {
     return qs.received == qs.expected
            && qs.lookups_issued == qs.lookups_complete;
@@ -431,5 +427,4 @@ behavior exporter(stateful_actor<exporter_state>* self, expression expr,
   };
 }
 
-} // namespace system
-} // namespace vast
+} // namespace vast::system
