@@ -12,6 +12,9 @@ Every entry has a category for which we use the following visual abbreviations:
 
 ## Unreleased
 
+- 🎁 The new `import zeek-json` command allows for importing line-delimited Zeek
+  JSON logs with a `_path` field. [#1259](https://github.com/tenzir/vast/1259)
+
 - 🧬 VAST now offers a plugin framework to support efficient customization
   points at various places of the data processing pipeline. There exist several
   base classes that define an interface, such as adding a new command or
