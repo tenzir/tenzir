@@ -1,5 +1,7 @@
 The `import zeek` command consumes [Zeek](https://zeek.org) logs in
-tab-separated value (TSV) style.
+tab-separated value (TSV) style, and the `import zeek-json` command consumes
+Zeek logs as [line-delimited
+JSON](https://en.wikipedia.org/wiki/JSON_streaming#Line-delimited_JSON) objects.
 
 Here's an example of a typical Zeek `conn.log`:
 

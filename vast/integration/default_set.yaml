@@ -143,6 +143,12 @@ tests:
       - command: -N import zeek
         input: data/zeek/snmp.log.gz
       - command: -N export ascii 'duration >= 3s'
+  Node Zeek JSON:
+    tags: [node, import-export, zeek, json]
+    steps:
+      - command: -N import -b zeek-json
+        input: data/zeek/zeek.json
+      - command: -N export json '#type ni "zeek"'
   Export json:
     tags: [json, zeek]
     steps:

@@ -23,6 +23,7 @@
 #include "vast/format/json.hpp"
 #include "vast/format/json/default_selector.hpp"
 #include "vast/format/json/suricata_selector.hpp"
+#include "vast/format/json/zeek_selector.hpp"
 #include "vast/format/null.hpp"
 #include "vast/format/syslog.hpp"
 #include "vast/format/test.hpp"
@@ -226,7 +227,11 @@ auto make_import_command() {
       .add<std::string>("read-timeout", "timeout for waiting for incoming data")
       .add<bool>("blocking,b", "block until the IMPORTER forwarded all data")
       .add<size_t>("max-events,n", "the maximum number of events to import"));
-  import_->add_subcommand("zeek", "imports Zeek logs from STDIN or file",
+  import_->add_subcommand("zeek", "imports Zeek TSV logs from STDIN or file",
+                          documentation::vast_import_zeek,
+                          source_opts("?vast.import.zeek"));
+  import_->add_subcommand("zeek-json",
+                          "imports Zeek JSON logs from STDIN or file",
                           documentation::vast_import_zeek,
                           source_opts("?vast.import.zeek"));
   import_->add_subcommand("csv", "imports CSV logs from STDIN or file",
@@ -475,6 +480,9 @@ auto make_command_factory() {
       defaults::import::test>},
     {"import zeek", import_command<format::zeek::reader,
       defaults::import::zeek>},
+    {"import zeek-json", import_command<
+      format::json::reader<format::json::zeek_selector>,
+      defaults::import::zeek>},
     {"kill", remote_command},
     {"peer", remote_command},
     {"pivot", pivot_command},
@@ -499,6 +507,7 @@ auto make_command_factory() {
     {"spawn source syslog", remote_command},
     {"spawn source test", remote_command},
     {"spawn source zeek", remote_command},
+    {"spawn source zeek-json", remote_command},
     {"start", start_command},
     {"status", remote_command},
     {"stop", stop_command},

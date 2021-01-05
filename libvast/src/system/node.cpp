@@ -31,6 +31,7 @@
 #include "vast/format/json.hpp"
 #include "vast/format/json/default_selector.hpp"
 #include "vast/format/json/suricata_selector.hpp"
+#include "vast/format/json/zeek_selector.hpp"
 #include "vast/format/syslog.hpp"
 #include "vast/format/test.hpp"
 #include "vast/format/zeek.hpp"
@@ -370,6 +371,10 @@ auto make_component_factory() {
       {"spawn source zeek",
        lift_component_factory<
          spawn_source<format::zeek::reader, defaults::import::zeek>>()},
+      {"spawn source zeek-json",
+       lift_component_factory<
+         spawn_source<format::json::reader<format::json::zeek_selector>,
+                      defaults::import::zeek>>()},
       {"spawn sink pcap", lift_component_factory<spawn_pcap_sink>()},
       {"spawn sink zeek", lift_component_factory<spawn_zeek_sink>()},
       {"spawn sink csv", lift_component_factory<spawn_csv_sink>()},
@@ -410,6 +415,7 @@ auto make_command_factory() {
     {"spawn source syslog", node_state::spawn_command},
     {"spawn source test", node_state::spawn_command},
     {"spawn source zeek", node_state::spawn_command},
+    {"spawn source zeek-json", node_state::spawn_command},
     {"status", status_command},
   };
 }
