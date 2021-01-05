@@ -327,9 +327,9 @@ tests:
     tags: [concepts, models]
     fixture: ServerTester
     steps:
-      - command: import zeek
+      - command: import -b zeek
         input: data/pcap/zeek/conn.log.gz
-      - command: import suricata
+      - command: import -b suricata
         input: data/pcap/suricata/eve.json.gz
       - command: count "net.src.ip == 192.168.168.100"
       - command: count "net.connection == <192.168.168.100, _, 72.247.178.18, _, _>"
