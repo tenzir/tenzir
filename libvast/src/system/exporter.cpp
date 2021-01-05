@@ -33,15 +33,11 @@
 #include <caf/event_based_actor.hpp>
 #include <caf/settings.hpp>
 
-using namespace std::chrono;
-using namespace std::string_literals;
-using namespace caf;
-
 namespace vast::system {
 
 namespace {
 
-void ship_results(stateful_actor<exporter_state>* self) {
+void ship_results(caf::stateful_actor<exporter_state>* self) {
   VAST_TRACE("");
   auto& st = self->state;
   VAST_DEBUG(self, "relays", st.query.cached, "events");
@@ -71,7 +67,7 @@ void ship_results(stateful_actor<exporter_state>* self) {
   }
 }
 
-void report_statistics(stateful_actor<exporter_state>* self) {
+void report_statistics(caf::stateful_actor<exporter_state>* self) {
   auto& st = self->state;
   if (st.statistics_subscriber)
     self->send(st.statistics_subscriber, st.name, st.query);
@@ -91,19 +87,19 @@ void report_statistics(stateful_actor<exporter_state>* self) {
   }
 }
 
-void shutdown(stateful_actor<exporter_state>* self, caf::error err) {
+void shutdown(caf::stateful_actor<exporter_state>* self, caf::error err) {
   VAST_DEBUG(self, "initiates shutdown with error", self->system().render(err));
   self->send_exit(self, std::move(err));
 }
 
-void shutdown(stateful_actor<exporter_state>* self) {
+void shutdown(caf::stateful_actor<exporter_state>* self) {
   if (has_continuous_option(self->state.options))
     return;
   VAST_DEBUG(self, "initiates shutdown");
-  self->send_exit(self, exit_reason::normal);
+  self->send_exit(self, caf::exit_reason::normal);
 }
 
-void request_more_hits(stateful_actor<exporter_state>* self) {
+void request_more_hits(caf::stateful_actor<exporter_state>* self) {
   auto& st = self->state;
   // Sanity check.
   if (!has_historical_option(st.options)) {
@@ -149,7 +145,8 @@ void request_more_hits(stateful_actor<exporter_state>* self) {
 
 } // namespace
 
-caf::settings status(stateful_actor<exporter_state>* self, status_verbosity v) {
+caf::settings
+status(caf::stateful_actor<exporter_state>* self, status_verbosity v) {
   auto& st = self->state;
   auto result = caf::settings{};
   auto& exporter_status = put_dictionary(result, "exporter");
@@ -171,24 +168,24 @@ caf::settings status(stateful_actor<exporter_state>* self, status_verbosity v) {
   return result;
 }
 
-behavior exporter(stateful_actor<exporter_state>* self, expression expr,
-                  query_options options) {
+caf::behavior exporter(caf::stateful_actor<exporter_state>* self,
+                       expression expr, query_options options) {
   self->state.options = options;
   self->state.expr = std::move(expr);
   if (has_continuous_option(options))
     VAST_DEBUG(self, "has continuous query option");
-  self->set_exit_handler([=](const exit_msg& msg) {
+  self->set_exit_handler([=](const caf::exit_msg& msg) {
     VAST_DEBUG(self, "received exit from", msg.source,
                "with reason:", msg.reason);
     auto& st = self->state;
-    if (msg.reason != exit_reason::kill)
+    if (msg.reason != caf::exit_reason::kill)
       report_statistics(self);
     // Sending 0 to the index means dropping further results.
-    self->send<message_priority::high>(st.index, st.id,
-                                       static_cast<uint32_t>(0));
+    self->send<caf::message_priority::high>(st.index, st.id,
+                                            static_cast<uint32_t>(0));
     self->quit(msg.reason);
   });
-  self->set_down_handler([=](const down_msg& msg) {
+  self->set_down_handler([=](const caf::down_msg& msg) {
     VAST_DEBUG(self, "received DOWN from", msg.source);
     if (has_continuous_option(self->state.options)
         && (msg.source == self->state.archive
@@ -246,7 +243,7 @@ behavior exporter(stateful_actor<exporter_state>* self, expression expr,
       if (st.query.expected == 0)
         return caf::skip;
       // Add `hits` to the total result set and update all stats.
-      timespan runtime = system_clock::now() - st.start;
+      caf::timespan runtime = std::chrono::system_clock::now() - st.start;
       st.query.runtime = runtime;
       auto count = rank(hits);
       if (st.accountant) {
@@ -284,7 +281,7 @@ behavior exporter(stateful_actor<exporter_state>* self, expression expr,
         return caf::skip;
       // Figure out if we're done by bumping the counter for `received` and
       // check whether it reaches `expected`.
-      timespan runtime = system_clock::now() - st.start;
+      caf::timespan runtime = std::chrono::system_clock::now() - st.start;
       qs.runtime = runtime;
       qs.received += qs.scheduled;
       if (qs.received < qs.expected) {
@@ -369,12 +366,12 @@ behavior exporter(stateful_actor<exporter_state>* self, expression expr,
       if (has_continuous_option(self->state.options))
         self->monitor(index);
     },
-    [=](atom::sink, const actor& sink) {
+    [=](atom::sink, const caf::actor& sink) {
       VAST_DEBUG(self, "registers sink", sink);
       self->state.sink = sink;
       self->monitor(self->state.sink);
     },
-    [=](atom::importer, const std::vector<actor>& importers) {
+    [=](atom::importer, const std::vector<caf::actor>& importers) {
       // Register for events at running IMPORTERs.
       if (has_continuous_option(self->state.options))
         for (auto& x : importers)
@@ -382,7 +379,7 @@ behavior exporter(stateful_actor<exporter_state>* self, expression expr,
     },
     [=](atom::run) {
       VAST_VERBOSE(self, "executes query:", to_string(self->state.expr));
-      self->state.start = system_clock::now();
+      self->state.start = std::chrono::system_clock::now();
       if (!has_historical_option(self->state.options))
         return;
       // TODO: The index replies to expressions by manually sending back to the
@@ -391,7 +388,7 @@ behavior exporter(stateful_actor<exporter_state>* self, expression expr,
       // Ideally, we would change that index handler to actually return the
       // desired value.
       self
-        ->request(caf::actor_cast<caf::actor>(self->state.index), infinite,
+        ->request(caf::actor_cast<caf::actor>(self->state.index), caf::infinite,
                   self->state.expr)
         .then(
           [=](const uuid& lookup, uint32_t partitions, uint32_t scheduled) {
@@ -407,7 +404,7 @@ behavior exporter(stateful_actor<exporter_state>* self, expression expr,
           },
           [=](const error& e) { shutdown(self, e); });
     },
-    [=](atom::statistics, const actor& statistics_subscriber) {
+    [=](atom::statistics, const caf::actor& statistics_subscriber) {
       VAST_DEBUG(self, "registers statistics subscriber",
                  statistics_subscriber);
       self->state.statistics_subscriber = statistics_subscriber;
