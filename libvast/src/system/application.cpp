@@ -21,7 +21,9 @@
 #include "vast/format/ascii.hpp"
 #include "vast/format/csv.hpp"
 #include "vast/format/json.hpp"
-#include "vast/format/json/suricata.hpp"
+#include "vast/format/json/default_selector.hpp"
+#include "vast/format/json/suricata_selector.hpp"
+#include "vast/format/json/zeek_selector.hpp"
 #include "vast/format/null.hpp"
 #include "vast/format/syslog.hpp"
 #include "vast/format/test.hpp"
@@ -225,7 +227,11 @@ auto make_import_command() {
       .add<std::string>("read-timeout", "timeout for waiting for incoming data")
       .add<bool>("blocking,b", "block until the IMPORTER forwarded all data")
       .add<size_t>("max-events,n", "the maximum number of events to import"));
-  import_->add_subcommand("zeek", "imports Zeek logs from STDIN or file",
+  import_->add_subcommand("zeek", "imports Zeek TSV logs from STDIN or file",
+                          documentation::vast_import_zeek,
+                          source_opts("?vast.import.zeek"));
+  import_->add_subcommand("zeek-json",
+                          "imports Zeek JSON logs from STDIN or file",
                           documentation::vast_import_zeek,
                           source_opts("?vast.import.zeek"));
   import_->add_subcommand("csv", "imports CSV logs from STDIN or file",
@@ -458,20 +464,24 @@ auto make_command_factory() {
     {"get", get_command},
     {"infer", infer_command},
     {"import csv", import_command<format::csv::reader, defaults::import::csv>},
-    {"import json", import_command<format::json::reader<>,
+    {"import json",
+    import_command<format::json::reader<format::json::default_selector>,
       defaults::import::json>},
 #if VAST_ENABLE_PCAP
     {"import pcap", import_command<format::pcap::reader,
       defaults::import::pcap>},
 #endif
     {"import suricata", import_command<
-      format::json::reader<format::json::suricata>,
+      format::json::reader<format::json::suricata_selector>,
       defaults::import::suricata>},
     {"import syslog", import_command<format::syslog::reader,
       defaults::import::syslog>},
     {"import test", import_command<format::test::reader,
       defaults::import::test>},
     {"import zeek", import_command<format::zeek::reader,
+      defaults::import::zeek>},
+    {"import zeek-json", import_command<
+      format::json::reader<format::json::zeek_selector>,
       defaults::import::zeek>},
     {"kill", remote_command},
     {"peer", remote_command},
@@ -497,6 +507,7 @@ auto make_command_factory() {
     {"spawn source syslog", remote_command},
     {"spawn source test", remote_command},
     {"spawn source zeek", remote_command},
+    {"spawn source zeek-json", remote_command},
     {"start", start_command},
     {"status", remote_command},
     {"stop", stop_command},

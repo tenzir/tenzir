@@ -23,23 +23,28 @@
 
 namespace vast::format::json {
 
-struct suricata {
-  suricata() {
+template <class Specification>
+struct field_selector {
+  field_selector() {
     // nop
   }
 
   caf::optional<vast::record_type> operator()(const vast::json::object& j) {
-    auto i = j.find("event_type");
+    auto i = j.find(Specification::field);
     if (i == j.end())
       return caf::none;
-    auto event_type = caf::get_if<vast::json::string>(&i->second);
-    if (!event_type) {
-      VAST_WARNING(this, "got an event_type field with a non-string value");
+    auto field = caf::get_if<vast::json::string>(&i->second);
+    if (!field) {
+      VAST_WARNING(this, "got a", Specification::field,
+                   "field with a non-string value");
       return caf::none;
     }
-    auto it = types.find(*event_type);
+    auto it = types.find(*field);
     if (it == types.end()) {
-      VAST_VERBOSE(this, "does not have a layout for event_type", *event_type);
+      // Keep a list of failed keys to avoid spamming the user with warnings.
+      if (unknown_types.insert(*field).second)
+        VAST_WARNING(this, "does not have a layout for", Specification::field,
+                     *field);
       return caf::none;
     }
     auto type = it->second;
@@ -54,7 +59,7 @@ struct suricata {
       auto r = caf::get_if<record_type>(&t);
       if (!r)
         continue;
-      if (sn[0] == "suricata")
+      if (sn[0] == Specification::prefix)
         // The temporary string can be dropped with c++20.
         // See https://wg21.link/p0919.
         types[std::string{sn[1]}] = flatten(*r);
@@ -69,11 +74,11 @@ struct suricata {
     return result;
   }
 
-  static const char* name() {
-    return "suricata-reader";
-  }
-
+  /// A map of all seen types.
   std::unordered_map<std::string, record_type> types;
+
+  /// A set of all unknown types; used to avoid printing duplicate warnings.
+  std::unordered_set<std::string> unknown_types;
 };
 
 } // namespace vast::format::json
