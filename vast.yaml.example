@@ -58,7 +58,7 @@ vast:
     self_sink:
       enable: true
       slice_size: 100
-      # slice_type: 'arrow'
+      # slice_type: arrow
     # Configures if and where metrics should be written to a file.
     file_sink:
       enable: false
