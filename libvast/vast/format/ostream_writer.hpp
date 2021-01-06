@@ -40,8 +40,6 @@ public:
 
   explicit ostream_writer(ostream_ptr out);
 
-  ostream_writer() = default;
-
   ostream_writer(ostream_writer&&) = default;
 
   ostream_writer& operator=(ostream_writer&&) = default;

@@ -112,8 +112,6 @@ class writer : public format::writer {
 public:
   using defaults = vast::defaults::export_::pcap;
 
-  writer() = default;
-
   /// Constructs a PCAP writer.
   /// @param options The configuration options for the writer.
   explicit writer(const caf::settings& options);
