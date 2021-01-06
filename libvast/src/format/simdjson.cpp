@@ -265,7 +265,7 @@ type_biassed_convert_impl<::simdjson::dom::array, type_id<list_type>()>(
   list xs;
   xs.reserve(a.size());
 
-  for (const auto& x : a) {
+  for (const auto x : a) {
     if (auto elem = convert(x, v.value_type))
       xs.push_back(*std::move(elem));
     else
@@ -283,7 +283,7 @@ type_biassed_convert_impl<::simdjson::dom::object, type_id<map_type>()>(
 
   map xs;
   xs.reserve(o.size());
-  for (auto& [k, v] : o) {
+  for (auto [k, v] : o) {
     // TODO: Properly unwrap the key type instead of wrapping is in json.
     auto key = convert_from_impl<std::string_view>(k, m.key_type);
     if (!key)
