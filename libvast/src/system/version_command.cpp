@@ -18,6 +18,7 @@
 #include "vast/config.hpp"
 #include "vast/json.hpp"
 #include "vast/logger.hpp"
+#include "vast/plugin.hpp"
 
 #if VAST_ENABLE_ARROW
 #  include <arrow/util/config.h>
@@ -63,6 +64,10 @@ json::object retrieve_versions() {
 #else
   result["jemalloc"] = json{};
 #endif
+  json::object plugin_versions;
+  for (auto& plugin : plugins::get())
+    plugin_versions[plugin->name()] = to_string(plugin.version());
+  result["plugins"] = std::move(plugin_versions);
   return result;
 }
 
