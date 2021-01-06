@@ -12,6 +12,10 @@ Every entry has a category for which we use the following visual abbreviations:
 
 ## Unreleased
 
+- 🎁 VAST queries now also accept `nanoseconds`, `microseconds`, `milliseconds`
+  `seconds` and `minutes` as units for a duration.
+  [#1265](https://github.com/tenzir/vast/pull/1265)
+
 - 🎁 The new `import zeek-json` command allows for importing line-delimited Zeek
   JSON logs as produced by the
   [json-streaming-logs](https://github.com/corelight/json-streaming-logs)
