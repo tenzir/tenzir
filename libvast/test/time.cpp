@@ -46,7 +46,6 @@ TEST(positive durations) {
   check_duration("42 nsecs", 42ns);
   check_duration("42nsec", 42ns);
   check_duration("42ns", 42ns);
-  check_duration("42ns", 42ns);
   MESSAGE("microseconds");
   check_duration("42 microseconds", 42us);
   check_duration("42 usecs", 42us);
