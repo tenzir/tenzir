@@ -43,6 +43,17 @@ struct qualified_record_field
     VAST_ASSERT(!field_name.empty());
   }
 
+  /// Constructs a qualified record field by prepending the layout name to a
+  /// range state.
+  qualified_record_field(std::string record_name,
+                         const record_type::each::range_state& field)
+    : layout_name{std::move(record_name)},
+      field_name{field.key()},
+      type{field.type()} {
+    VAST_ASSERT(!layout_name.empty());
+    VAST_ASSERT(!field_name.empty());
+  }
+
   /// Retrieves the full-qualified name, i.e., the record typename concatenated
   /// with the field name.
   std::string fqn() const {
