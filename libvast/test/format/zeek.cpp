@@ -364,7 +364,9 @@ FIXTURE_SCOPE(zeek_writer_tests, writer_fixture)
 
 TEST(zeek writer) {
   // Perform the writing.
-  format::zeek::writer writer{directory, false};
+  caf::settings options;
+  caf::put(options, "vast.export.zeek.write", directory.str());
+  format::zeek::writer writer{options};
   for (auto& slice : zeek_conn_log)
     if (auto err = writer.write(slice))
       FAIL("failed to write conn log");

@@ -501,10 +501,12 @@ caf::error reader::parse_header() {
   return caf::none;
 }
 
-writer::writer(path dir, bool show_timestamp_tags)
-  : show_timestamp_tags_{show_timestamp_tags} {
-  if (dir != "-")
-    dir_ = std::move(dir);
+writer::writer(const caf::settings& options) {
+  auto output = get_or(options, "vast.export.zeek.write", defaults::write);
+  if (output != "-")
+    dir_ = std::move(output);
+  show_timestamp_tags_
+    = !caf::get_or(options, "vast.export.zeek.disable-timestamp-tags", false);
 }
 
 writer::~writer() {

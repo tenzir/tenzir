@@ -65,27 +65,9 @@ maybe_actor spawn_pcap_sink([[maybe_unused]] caf::local_actor* self,
     return make_error(ec::parse_error, "cannot start a local node");
   if (!args.empty())
     return unexpected_arguments(args);
-  auto writer = std::make_unique<format::pcap::writer>(
-    caf::get_or(args.inv.options, category + ".write", defaults_t::write),
-    caf::get_or(args.inv.options, category + ".flush-interval",
-                defaults_t::flush_interval));
+  auto writer = std::make_unique<format::pcap::writer>(args.inv.options);
   return self->spawn(sink, std::move(writer), 0u);
 #endif // VAST_ENABLE_PCAP
-}
-
-maybe_actor spawn_zeek_sink(caf::local_actor* self, spawn_arguments& args) {
-  using defaults_t = defaults::export_::zeek;
-  // Bail out early for bogus invocations.
-  if (caf::get_or(args.inv.options, "vast.node", false))
-    return make_error(ec::parse_error, "cannot start a local node");
-  std::string category = defaults_t::category;
-  if (!args.empty())
-    return unexpected_arguments(args);
-  auto writer = std::make_unique<format::zeek::writer>(
-    get_or(args.inv.options, category + ".write", defaults_t::write),
-    !caf::get_or(args.inv.options, category + ".disable-timestamp-tags",
-                 false));
-  return self->spawn(sink, std::move(writer), 0u);
 }
 
 maybe_actor spawn_ascii_sink(caf::local_actor* self, spawn_arguments& args) {
@@ -98,6 +80,10 @@ maybe_actor spawn_csv_sink(caf::local_actor* self, spawn_arguments& args) {
 
 maybe_actor spawn_json_sink(caf::local_actor* self, spawn_arguments& args) {
   return spawn_generic_sink(self, args, "json"s);
+}
+
+maybe_actor spawn_zeek_sink(caf::local_actor* self, spawn_arguments& args) {
+  return spawn_generic_sink(self, args, "zeek"s);
 }
 
 } // namespace vast::system

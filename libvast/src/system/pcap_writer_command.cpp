@@ -43,15 +43,9 @@ caf::message
 pcap_writer_command(const invocation& inv, caf::actor_system& sys) {
   VAST_TRACE(inv);
   auto& options = inv.options;
-  using caf::get_or;
-  using defaults_t = defaults::export_::pcap;
-  std::string category = defaults_t::category;
-  auto limit
-    = get_or(options, "vast.export.max-events", defaults::export_::max_events);
-  auto output = get_or(options, category + ".write", defaults_t::write);
-  auto flush
-    = get_or(options, category + ".flush-interval", defaults_t::flush_interval);
-  auto writer = std::make_unique<format::pcap::writer>(output, flush);
+  auto limit = caf::get_or(options, "vast.export.max-events",
+                           defaults::export_::max_events);
+  auto writer = std::make_unique<format::pcap::writer>(options);
   auto snk = sys.spawn(sink, std::move(writer), limit);
   return sink_command(inv, sys, std::move(snk));
 }

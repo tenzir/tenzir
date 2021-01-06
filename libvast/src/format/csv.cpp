@@ -99,6 +99,10 @@ caf::error render(output_iterator& out, const view<data>& x) {
 
 } // namespace
 
+writer::writer(ostream_ptr out, const caf::settings&) : super{std::move(out)} {
+  // nop
+}
+
 caf::error writer::write(const table_slice& x) {
   constexpr char separator = writer::defaults::separator;
   // Print a new header each time we encounter a new layout.

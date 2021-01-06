@@ -266,11 +266,8 @@ public:
   ~writer() override;
 
   /// Constructs a Zeek writer.
-  /// @param dir The path where to write the log file(s) to.
-  /// @param show_timestamp_tags Flag to control whether to include comments
-  /// with `#open` and `#close` tags in the output. Setting this flag to
-  /// `false` produces a deterministic output.
-  writer(path dir, bool show_timestamp_tags);
+  /// @param options The configuration options for the writer.
+  explicit writer(const caf::settings& options);
 
   error write(const table_slice& e) override;
 

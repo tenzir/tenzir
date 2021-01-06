@@ -22,6 +22,7 @@
 #include "vast/data.hpp"
 #include "vast/format/json.hpp"
 #include "vast/logger.hpp"
+#include "vast/policy/flatten_layout.hpp"
 #include "vast/policy/include_field_names.hpp"
 #include "vast/table_slice.hpp"
 #include "vast/table_slice_builder.hpp"
@@ -196,9 +197,19 @@ const vast::json* lookup(std::string_view field, const vast::json::object& xs) {
 
 } // namespace
 
+writer::writer(ostream_ptr out, const caf::settings& options)
+  : super{std::move(out)} {
+  flatten_ = get_or(options, "vast.export.json.flatten", false);
+}
+
 caf::error writer::write(const table_slice& x) {
   json_printer<policy::oneline> printer;
-  return print<policy::include_field_names>(printer, x, {", ", ": ", "{", "}"});
+  if (flatten_)
+    return print<policy::include_field_names, policy::flatten_layout>(
+      printer, x, {", ", ": ", "{", "}"});
+  else
+    return print<policy::include_field_names>(printer, x,
+                                              {", ", ": ", "{", "}"});
 }
 
 const char* writer::name() const {

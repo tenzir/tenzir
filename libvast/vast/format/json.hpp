@@ -1,5 +1,5 @@
 /******************************************************************************
- *                    _   _____   __________                                  *
+ i                    _   _____   __________                                  *
  *                   | | / / _ | / __/_  __/     Visibility                   *
  *                   | |/ / __ |_\ \  / /          Across                     *
  *                   |___/_/ |_/___/ /_/       Space and Time                 *
@@ -38,11 +38,14 @@ public:
 
   using super = ostream_writer;
 
-  using super::super;
+  writer(ostream_ptr out, const caf::settings& options);
 
   caf::error write(const table_slice& x) override;
 
   const char* name() const override;
+
+private:
+  bool flatten_ = false;
 };
 
 /// Adds a JSON object to a table slice builder according to a given layout.

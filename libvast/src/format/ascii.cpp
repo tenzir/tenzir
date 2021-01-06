@@ -19,6 +19,10 @@
 
 namespace vast::format::ascii {
 
+writer::writer(ostream_ptr out, const caf::settings&) : super{std::move(out)} {
+  // nop
+}
+
 caf::error writer::write(const table_slice& x) {
   data_view_printer printer;
   return print<policy::flatten_layout>(printer, x, {", ", ": ", "<", ">"});

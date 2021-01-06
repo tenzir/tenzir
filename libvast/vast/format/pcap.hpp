@@ -115,10 +115,8 @@ public:
   writer() = default;
 
   /// Constructs a PCAP writer.
-  /// @param trace The path where to write the trace file.
-  /// @param flush_interval The number of packets after which to flush to disk.
-  /// @param snaplen The snapshot length in bytes.
-  writer(std::string trace, size_t flush_interval = -1, size_t snaplen = 65535);
+  /// @param options The configuration options for the writer.
+  explicit writer(const caf::settings& options);
 
   ~writer();
 
