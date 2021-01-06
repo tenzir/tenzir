@@ -380,6 +380,19 @@ caf::optional<size_t> record_type::flat_index_at(offset o) const {
   return flat_index + *sub_result;
 }
 
+caf::optional<offset> record_type::offset_from_index(size_t i) const {
+  auto e = each(*this);
+  auto it = e.begin();
+  auto end = e.end();
+  for (size_t j = 0; j < i; ++j, ++it) {
+    if (it == end)
+      return caf::none;
+  }
+  if (it == end)
+    return caf::none;
+  return it->offset;
+}
+
 record_type flatten(const record_type& rec) {
   /// Make a copy of the original to keep name and attributes.
   record_type result = rec;

@@ -648,6 +648,10 @@ struct record_type final : recursive_type<record_type> {
   /// @param o The offset to resolve.
   caf::optional<size_t> flat_index_at(offset o) const;
 
+  /// Converts an index for the flattened representation into an offset.
+  /// @param i The index to resolve.
+  caf::optional<offset> offset_from_index(size_t i) const;
+
   friend bool operator==(const record_type& x, const record_type& y);
   friend bool operator<(const record_type& x, const record_type& y);
 
