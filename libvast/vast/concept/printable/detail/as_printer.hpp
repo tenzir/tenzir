@@ -48,6 +48,8 @@ constexpr auto as_printer(T x) -> std::enable_if_t<is_printer_v<T>, T> {
 
 // -- binary ------------------------------------------------------------------
 
+// clang-format off
+
 template <class T>
 constexpr bool is_convertible_to_unary_printer_v =
   std::is_convertible_v<T, std::string>
@@ -87,11 +89,23 @@ using make_binary_printer =
   >;
 
 template <template <class, class> class Binaryprinter, class T, class U>
-make_binary_printer<
-  Binaryprinter, decltype(as_printer(std::declval<T&>())),
-  decltype(as_printer(std::declval<U&>()))> constexpr as_printer(T&& x, U&& y) {
+std::enable_if_t<
+  // Require that at least one of the arguments already is a printer (as opposed
+  // to merely being convertible to a printer). This prevent statements like `1 << 4`
+  // being parseable as a sequence printer of two literal printers.
+  std::disjunction_v<
+    is_printer<std::decay_t<T>>,
+    is_printer<std::decay_t<U>>>,
+  make_binary_printer<
+    Binaryprinter,
+    decltype(as_printer(std::declval<T&>())),
+    decltype(as_printer(std::declval<U&>()))>
+>
+constexpr as_printer(T&& x, U&& y) {
   return {as_printer(std::forward<T>(x)), as_printer(std::forward<U>(y))};
 }
+
+// clang-format on
 
 } // namespace detail
 } // namespace vast
