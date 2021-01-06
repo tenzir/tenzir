@@ -208,9 +208,8 @@ const char* writer::name() const {
 caf::error add(table_slice_builder& builder, const vast::json::object& xs,
                const record_type& layout) {
   caf::error err = caf::none;
-  auto flat_layout = flatten(layout);
-  for (auto& field : flat_layout.fields) {
-    auto i = lookup(field.name, xs);
+  for (auto& field : record_type::each(layout)) {
+    auto i = lookup(field.key(), xs);
     // Non-existing fields are treated as empty (unset).
     if (!i) {
       if (!builder.add(make_data_view(caf::none)))
@@ -218,16 +217,16 @@ caf::error add(table_slice_builder& builder, const vast::json::object& xs,
                                            "slice builder");
       continue;
     }
-    auto x = caf::visit(convert{}, *i, field.type);
+    auto x = caf::visit(convert{}, *i, field.type());
     if (!x) {
       if (!err)
         err = make_error(ec::convert_error);
       err.context() += x.error().context();
-      err.context() += caf::make_message(field.name, "is", to_string(*i), ";");
+      err.context() += caf::make_message(field.key(), "is", to_string(*i), ";");
       x = caf::none;
     }
     if (!builder.add(make_data_view(*x)))
-      return make_error(ec::type_clash, "unexpected type", field.name, ":",
+      return make_error(ec::type_clash, "unexpected type", field.key(), ":",
                         to_string(*i));
   }
   return err;
