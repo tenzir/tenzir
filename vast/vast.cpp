@@ -91,8 +91,18 @@ int main(int argc, char** argv) {
     for (const auto& file : directory{dir}) {
       if (file.extension() == ".so" || file.extension() == ".dylib") {
         if (auto plugin = plugin_ptr{file.str().c_str()}) {
-          VAST_VERBOSE_ANON("loaded plugin:", file);
-          plugins.push_back(std::move(plugin));
+          auto same_plugin_name = [name = plugin->name()](const auto& other) {
+            return other->name() == name;
+          };
+          if (std::none_of(plugins.begin(), plugins.end(), same_plugin_name)) {
+            VAST_VERBOSE_ANON("loaded plugin:", file);
+            plugins.push_back(std::move(plugin));
+          } else {
+            VAST_ERROR_ANON("failed to load plugin", file,
+                            "because another plugin already uses the name",
+                            plugin->name());
+            return EXIT_FAILURE;
+          }
         } else {
           VAST_ERROR_ANON("failed to load plugin", file);
         }
