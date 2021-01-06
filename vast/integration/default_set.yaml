@@ -242,7 +242,7 @@ tests:
         input: data/json/conn.log.json.gz
       - command: -N export ascii 'duration > 6s'
       - command: -N export ascii '#timestamp >= 2011-08-15T03:48'
-  Node json zeek conn (simdjson):
+  Node json zeek conn simdjson:
     tags: [node, import-export, zeek, json, simdjson]
     steps:
       - command: -N import json -s @./misc/schema/zeek-conn.schema -t zeek.conn.custom --simdjson
@@ -256,7 +256,7 @@ tests:
       - command: -N export ascii 'src_ip == 147.32.84.165'
       - command: -N export csv '#type ~ /suricata.*/'
       - command: -N export zeek '#type ~ /suricata.alert/'
-  Node suricata alert (simdjson):
+  Node suricata alert simdjson:
     tags: [node, import-export, suricata, eve]
     steps:
       - command: -N import suricata -r @./data/suricata/eve.json --simdjson
@@ -335,7 +335,7 @@ tests:
       - command: count "net.connection == <_, _, _, 80, _>"
       - command: count "net.connection != <_, _, _, 80, _>"
 
-  Taxonomy queries (simdjson):
+  Taxonomy queries simdjson:
     tags: [concepts, models]
     fixture: ServerTester
     steps:
@@ -383,7 +383,7 @@ tests:
         input: data/pcap/example.pcap.gz
       - command: -N pivot --format=pcap pcap.packet 'dest_ip == 72.247.178.18'
         transformation: tcpdump -n -tt -r -
-  Pivot (simdjson):
+  Pivot simdjson:
     tags: [pivot]
     steps:
       - command: -N import suricata --simdjson
@@ -446,7 +446,7 @@ tests:
         transformation: wc -l | tr -d ' '
       - command: -N explore --max-events-query=1 --max-events-context=2 --before=10years --after=10years '#type == /suricata.*/'
         transformation: wc -l | tr -d ' '
-  Explore Suricata With Overlap (simdjson):
+  Explore Suricata With Overlap simdjson:
     tags: [explore, suricata]
     steps:
       - command: -N import suricata --simdjson
@@ -483,7 +483,7 @@ tests:
       - command: -N status --detailed
         transformation: jq '.index.statistics.layouts | del(."vast.metrics")'
       - command: -N export json '"®" in :string'
-  Heterogenous JSONL import (simdjson):
+  Heterogenous JSONL import simdjson:
     tags: [import, json, sysmon]
     steps:
       - command: -N import json --simdjson
