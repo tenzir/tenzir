@@ -65,7 +65,7 @@ struct parser_traits {
 /// (known as one of simdjson element_type) to an internal data type.
 template <typename JsonType, int ConcreteTypeIndex>
 caf::expected<data>
-type_biassed_convert_impl(adjusted_json_param_t<JsonType> j, const type&) {
+type_biased_convert_impl(adjusted_json_param_t<JsonType> j, const type&) {
   using ptraits = parser_traits<JsonType, ConcreteTypeIndex>;
 
   if constexpr (ptraits::can_be_parsed) {
@@ -91,13 +91,13 @@ type_biassed_convert_impl(adjusted_json_param_t<JsonType> j, const type&) {
 // BOOL Convertions.
 template <>
 caf::expected<data>
-type_biassed_convert_impl<bool, type_id<bool_type>()>(bool b, const type&) {
+type_biased_convert_impl<bool, type_id<bool_type>()>(bool b, const type&) {
   return b;
 }
 
 template <>
 caf::expected<data>
-type_biassed_convert_impl<std::string_view, type_id<bool_type>()>(
+type_biased_convert_impl<std::string_view, type_id<bool_type>()>(
   std::string_view s, const type&) {
   if (s == "true")
     return true;
@@ -111,14 +111,14 @@ type_biassed_convert_impl<std::string_view, type_id<bool_type>()>(
 // INTEGER Conversions
 template <>
 caf::expected<data>
-type_biassed_convert_impl<integer, type_id<integer_type>()>(integer n,
+type_biased_convert_impl<integer, type_id<integer_type>()>(integer n,
                                                             const type&) {
   return n;
 }
 
 template <>
 caf::expected<data>
-type_biassed_convert_impl<std::string_view, type_id<integer_type>()>(
+type_biased_convert_impl<std::string_view, type_id<integer_type>()>(
   std::string_view s, const type& ) {
   // simdjson cannot be reused here as it doesn't accept hex numbers.
   if (integer x; parsers::json_int(s, x))
@@ -133,20 +133,20 @@ type_biassed_convert_impl<std::string_view, type_id<integer_type>()>(
 // COUNT Conversions
 template <>
 caf::expected<data>
-type_biassed_convert_impl<count, type_id<count_type>()>(count n, const type&) {
+type_biased_convert_impl<count, type_id<count_type>()>(count n, const type&) {
   return n;
 }
 
 template <>
 caf::expected<data>
-type_biassed_convert_impl<integer, type_id<count_type>()>(integer n,
+type_biased_convert_impl<integer, type_id<count_type>()>(integer n,
                                                           const type&) {
   return detail::narrow_cast<count>(n);
 }
 
 template <>
 caf::expected<data>
-type_biassed_convert_impl<std::string_view, type_id<count_type>()>(
+type_biased_convert_impl<std::string_view, type_id<count_type>()>(
   std::string_view s, const type& ) {
   if (count x; parsers::json_count(s, x))
     return x;
@@ -161,26 +161,26 @@ type_biassed_convert_impl<std::string_view, type_id<count_type>()>(
 // REAL Conversions
 template <>
 caf::expected<data>
-type_biassed_convert_impl<real, type_id<real_type>()>(real n, const type&) {
+type_biased_convert_impl<real, type_id<real_type>()>(real n, const type&) {
   return n;
 }
 
 template <>
 caf::expected<data>
-type_biassed_convert_impl<integer, type_id<real_type>()>(integer n,
+type_biased_convert_impl<integer, type_id<real_type>()>(integer n,
                                                          const type&) {
   return detail::narrow_cast<real>(n);
 }
 
 template <>
 caf::expected<data>
-type_biassed_convert_impl<count, type_id<real_type>()>(count n, const type&) {
+type_biased_convert_impl<count, type_id<real_type>()>(count n, const type&) {
   return detail::narrow_cast<real>(n);
 }
 
 template <>
 caf::expected<data>
-type_biassed_convert_impl<std::string_view, type_id<real_type>()>(
+type_biased_convert_impl<std::string_view, type_id<real_type>()>(
   std::string_view s, const type& ) {
   if (real x; parsers::json_number(s, x))
     return x;
@@ -190,7 +190,7 @@ type_biassed_convert_impl<std::string_view, type_id<real_type>()>(
 // Time conversions
 template <>
 caf::expected<data>
-type_biassed_convert_impl<integer, type_id<time_type>()>(integer s,
+type_biased_convert_impl<integer, type_id<time_type>()>(integer s,
                                                          const type&) {
   auto secs = std::chrono::duration<real>(s);
   return time{std::chrono::duration_cast<duration>(secs)};
@@ -198,14 +198,14 @@ type_biassed_convert_impl<integer, type_id<time_type>()>(integer s,
 
 template <>
 caf::expected<data>
-type_biassed_convert_impl<count, type_id<time_type>()>(count s, const type&) {
+type_biased_convert_impl<count, type_id<time_type>()>(count s, const type&) {
   auto secs = std::chrono::duration<real>(s);
   return time{std::chrono::duration_cast<duration>(secs)};
 }
 
 template <>
 caf::expected<data>
-type_biassed_convert_impl<real, type_id<time_type>()>(real s, const type&) {
+type_biased_convert_impl<real, type_id<time_type>()>(real s, const type&) {
   auto secs = std::chrono::duration<real>(s);
   return time{std::chrono::duration_cast<duration>(secs)};
 }
@@ -213,7 +213,7 @@ type_biassed_convert_impl<real, type_id<time_type>()>(real s, const type&) {
 // Duration conversions
 template <>
 caf::expected<data>
-type_biassed_convert_impl<integer, type_id<duration_type>()>(integer s,
+type_biased_convert_impl<integer, type_id<duration_type>()>(integer s,
                                                              const type&) {
   auto secs = std::chrono::duration<real>(s);
   return std::chrono::duration_cast<duration>(secs);
@@ -221,7 +221,7 @@ type_biassed_convert_impl<integer, type_id<duration_type>()>(integer s,
 
 template <>
 caf::expected<data>
-type_biassed_convert_impl<count, type_id<duration_type>()>(count s,
+type_biased_convert_impl<count, type_id<duration_type>()>(count s,
                                                            const type&) {
   auto secs = std::chrono::duration<real>(s);
   return std::chrono::duration_cast<duration>(secs);
@@ -229,7 +229,7 @@ type_biassed_convert_impl<count, type_id<duration_type>()>(count s,
 
 template <>
 caf::expected<data>
-type_biassed_convert_impl<real, type_id<duration_type>()>(real s, const type&) {
+type_biased_convert_impl<real, type_id<duration_type>()>(real s, const type&) {
   auto secs = std::chrono::duration<real>(s);
   return std::chrono::duration_cast<duration>(secs);
 }
@@ -237,7 +237,7 @@ type_biassed_convert_impl<real, type_id<duration_type>()>(real s, const type&) {
 // STRING Conversions
 template <>
 caf::expected<data>
-type_biassed_convert_impl<std::string_view, type_id<string_type>()>(
+type_biased_convert_impl<std::string_view, type_id<string_type>()>(
   std::string_view s, const type&) {
   return std::string{s};
 }
@@ -245,7 +245,7 @@ type_biassed_convert_impl<std::string_view, type_id<string_type>()>(
 // ENUMERATION Conversions
 template <>
 caf::expected<data>
-type_biassed_convert_impl<std::string_view, type_id<enumeration_type>()>(
+type_biased_convert_impl<std::string_view, type_id<enumeration_type>()>(
   std::string_view s, const type& t) {
   const auto& e = dynamic_cast<const enumeration_type&>(*t);
 
@@ -258,7 +258,7 @@ type_biassed_convert_impl<std::string_view, type_id<enumeration_type>()>(
 // ARRAY Conversions
 template <>
 caf::expected<data>
-type_biassed_convert_impl<::simdjson::dom::array, type_id<list_type>()>(
+type_biased_convert_impl<::simdjson::dom::array, type_id<list_type>()>(
   const ::simdjson::dom::array& a, const type& t) {
   const auto& v = dynamic_cast<const list_type&>(*t);
 
@@ -277,7 +277,7 @@ type_biassed_convert_impl<::simdjson::dom::array, type_id<list_type>()>(
 // MAP Conversions
 template <>
 caf::expected<data>
-type_biassed_convert_impl<::simdjson::dom::object, type_id<map_type>()>(
+type_biased_convert_impl<::simdjson::dom::object, type_id<map_type>()>(
   const ::simdjson::dom::object& o, const type& t) {
   const auto& m = dynamic_cast<const map_type&>(*t);
 
@@ -297,7 +297,7 @@ type_biassed_convert_impl<::simdjson::dom::object, type_id<map_type>()>(
 }
 
 /// A converter from a given JSON type to data.
-/// Relies on a specification of type_biassed_convert_impl template function.
+/// Relies on a specification of type_biased_convert_impl template function.
 /// If no specialiation from a given JSON type to data is provided
 /// the the default implementation is used (which returns error).
 template <typename JsonType>
@@ -323,7 +323,7 @@ struct from_json_x_converter {
   static constexpr callbacks_array
   make_callbacks_array_impl(std::index_sequence<ConcreteTypeIndex...>) noexcept {
     callbacks_array result
-      = {type_biassed_convert_impl<JsonType, ConcreteTypeIndex>...};
+      = {type_biased_convert_impl<JsonType, ConcreteTypeIndex>...};
     return result;
   }
 
