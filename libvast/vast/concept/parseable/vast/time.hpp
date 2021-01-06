@@ -43,34 +43,39 @@ struct duration_parser : parser<duration_parser<Rep, Period>> {
     using namespace parser_literals;
     using namespace std::chrono;
     auto unit
-      = "nsecs"_p ->* [] { return cast(nanoseconds(1)); }
-      | "nsec"_p  ->* [] { return cast(nanoseconds(1)); }
-      | "ns"_p    ->* [] { return cast(nanoseconds(1)); }
-      | "usecs"_p ->* [] { return cast(microseconds(1)); }
-      | "usec"_p  ->* [] { return cast(microseconds(1)); }
-      | "us"_p    ->* [] { return cast(microseconds(1)); }
-      | "msecs"_p ->* [] { return cast(milliseconds(1)); }
-      | "msec"_p  ->* [] { return cast(milliseconds(1)); }
-      | "ms"_p    ->* [] { return cast(milliseconds(1)); }
-      | "secs"_p  ->* [] { return cast(seconds(1)); }
-      | "sec"_p   ->* [] { return cast(seconds(1)); }
-      | "s"_p     ->* [] { return cast(seconds(1)); }
-      | "mins"_p  ->* [] { return cast(minutes(1)); }
-      | "min"_p   ->* [] { return cast(minutes(1)); }
-      | "m"_p     ->* [] { return cast(minutes(1)); }
-      | "hrs"_p   ->* [] { return cast(hours(1)); }
-      | "hours"_p ->* [] { return cast(hours(1)); }
-      | "hour"_p  ->* [] { return cast(hours(1)); }
-      | "h"_p     ->* [] { return cast(hours(1)); }
-      | "days"_p  ->* [] { return cast(hours(24)); }
-      | "day"_p   ->* [] { return cast(hours(24)); }
-      | "d"_p     ->* [] { return cast(hours(24)); }
-      | "weeks"_p ->* [] { return cast(hours(24 * 7)); }
-      | "week"_p  ->* [] { return cast(hours(24 * 7)); }
-      | "w"_p     ->* [] { return cast(hours(24 * 7)); }
-      | "years"_p ->* [] { return cast(hours(24 * 365)); }
-      | "year"_p  ->* [] { return cast(hours(24 * 365)); }
-      | "y"_p     ->* [] { return cast(hours(24 * 365)); }
+      = "nanoseconds"_p  ->* [] { return cast(nanoseconds(1)); }
+      | "nsecs"_p        ->* [] { return cast(nanoseconds(1)); }
+      | "nsec"_p         ->* [] { return cast(nanoseconds(1)); }
+      | "ns"_p           ->* [] { return cast(nanoseconds(1)); }
+      | "microseconds"_p ->* [] { return cast(microseconds(1)); }
+      | "usecs"_p        ->* [] { return cast(microseconds(1)); }
+      | "usec"_p         ->* [] { return cast(microseconds(1)); }
+      | "us"_p           ->* [] { return cast(microseconds(1)); }
+      | "milliseconds"_p ->* [] { return cast(milliseconds(1)); }
+      | "msecs"_p        ->* [] { return cast(milliseconds(1)); }
+      | "msec"_p         ->* [] { return cast(milliseconds(1)); }
+      | "ms"_p           ->* [] { return cast(milliseconds(1)); }
+      | "seconds"_p      ->* [] { return cast(seconds(1)); }
+      | "secs"_p         ->* [] { return cast(seconds(1)); }
+      | "sec"_p          ->* [] { return cast(seconds(1)); }
+      | "s"_p            ->* [] { return cast(seconds(1)); }
+      | "minutes"_p      ->* [] { return cast(minutes(1)); }
+      | "mins"_p         ->* [] { return cast(minutes(1)); }
+      | "min"_p          ->* [] { return cast(minutes(1)); }
+      | "m"_p            ->* [] { return cast(minutes(1)); }
+      | "hours"_p        ->* [] { return cast(hours(1)); }
+      | "hour"_p         ->* [] { return cast(hours(1)); }
+      | "hrs"_p          ->* [] { return cast(hours(1)); }
+      | "h"_p            ->* [] { return cast(hours(1)); }
+      | "days"_p         ->* [] { return cast(hours(24)); }
+      | "day"_p          ->* [] { return cast(hours(24)); }
+      | "d"_p            ->* [] { return cast(hours(24)); }
+      | "weeks"_p        ->* [] { return cast(hours(24 * 7)); }
+      | "week"_p         ->* [] { return cast(hours(24 * 7)); }
+      | "w"_p            ->* [] { return cast(hours(24 * 7)); }
+      | "years"_p        ->* [] { return cast(hours(24 * 365)); }
+      | "year"_p         ->* [] { return cast(hours(24 * 365)); }
+      | "y"_p            ->* [] { return cast(hours(24 * 365)); }
       ;
     if constexpr (std::is_same_v<Attribute, unused_type>) {
       auto p = ignore(real_opt_dot) >> ignore(*space) >> unit;
