@@ -6,6 +6,8 @@ on:
     - Dockerfile
     - .github/workflows/vast-docker.yaml
     - .github/workflows/vast.yaml
+    - '**.cmake'
+    - '**CMakeLists.txt'
   release:
     types: published
 
