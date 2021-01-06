@@ -41,15 +41,15 @@ namespace {
 json::object retrieve_versions() {
   json::object result;
   result["VAST"] = VAST_VERSION;
-  std::ostringstream caf_v;
-  caf_v << CAF_MAJOR_VERSION << '.' << CAF_MINOR_VERSION << '.'
-        << CAF_PATCH_VERSION;
-  result["CAF"] = caf_v.str();
+  std::ostringstream caf_version;
+  caf_version << CAF_MAJOR_VERSION << '.' << CAF_MINOR_VERSION << '.'
+              << CAF_PATCH_VERSION;
+  result["CAF"] = caf_version.str();
 #if VAST_ENABLE_ARROW
-  std::ostringstream arrow_v;
-  arrow_v << ARROW_VERSION_MAJOR << '.' << ARROW_VERSION_MINOR << '.'
-          << ARROW_VERSION_PATCH;
-  result["Apache Arrow"] = arrow_v.str();
+  std::ostringstream arrow_version;
+  arrow_version << ARROW_VERSION_MAJOR << '.' << ARROW_VERSION_MINOR << '.'
+                << ARROW_VERSION_PATCH;
+  result["Apache Arrow"] = arrow_version.str();
 #else
   result["Apache Arrow"] = json{};
 #endif
