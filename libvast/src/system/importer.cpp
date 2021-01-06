@@ -247,7 +247,7 @@ caf::behavior importer(importer_actor* self, path dir, archive_actor archive,
     self->state.index = index;
     self->state.stage->add_outbound_path(index);
   }
-  for (auto&& plugin : plugins::get())
+  for (auto& plugin : plugins::get())
     if (auto p = plugin.as<analyzer_plugin>())
       if (auto analyzer = p->make_analyzer(self->system()))
         self->state.stage->add_outbound_path(analyzer);
