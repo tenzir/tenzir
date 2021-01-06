@@ -196,6 +196,7 @@ jobs:
             --prefix="${PWD}/opt/vast" \
             --build-dir="$BUILD_DIR" \
             --package-name="$PACKAGE_NAME" \
+            --with-example-plugin \
             --with-lsvast \
             --with-dscat \
             --with-zeek-to-vast \

@@ -474,6 +474,14 @@ if (NOT VAST_DATADIR)
   set(VAST_DATADIR "${CMAKE_INSTALL_DATADIR}")
 endif ()
 
+if (NOT VAST_SYSCONFDIR)
+  set(VAST_SYSCONFDIR "${CMAKE_INSTALL_SYSCONFDIR}")
+endif ()
+
+if (NOT VAST_LIBDIR)
+  set(VAST_LIBDIR "${CMAKE_INSTALL_LIBDIR}")
+endif ()
+
 install(FILES "${CMAKE_CURRENT_SOURCE_DIR}/vast.yaml.example"
         DESTINATION "${CMAKE_INSTALL_DATADIR}/vast/")
 
@@ -504,6 +512,7 @@ file(WRITE ${CMAKE_CURRENT_BINARY_DIR}/libvast/vast/documentation.hpp
 
 add_subdirectory(libvast)
 add_subdirectory(libvast_test)
+add_subdirectory(plugins)
 add_subdirectory(tools)
 add_subdirectory(doc)
 add_subdirectory(vast)

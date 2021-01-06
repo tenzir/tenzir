@@ -42,9 +42,10 @@ Usage: $0 [OPTION]... [VAR=VALUE]...
     --show-time-report      show where the compiler spends its time
     --more-warnings         enables most warnings on GCC and Clang
     --without-tests         build without unit tests
-    --with-zeek-to-vast     build without zeek-to-vast
-    --with-lsvast           build without lsvast
-    --with-dscat            build without lsvast
+    --with-zeek-to-vast     build with zeek-to-vast
+    --with-lsvast           build with lsvast
+    --with-dscat            build with dscat
+    --with-example-plugin   build with example plugin
 
   Debugging:
     --log-level=LEVEL       maximum compile-time log level
@@ -168,6 +169,9 @@ while [ $# -ne 0 ]; do
       ;;
     --with-lsvast)
       append_cache_entry VAST_ENABLE_LSVAST BOOL yes
+      ;;
+    --with-example-plugin)
+      append_cache_entry VAST_ENABLE_EXAMPLE_PLUGIN BOOL yes
       ;;
     --with-type-id-checks)
       append_cache_entry CAF_ENABLE_TYPE_ID_CHECKS BOOL yes

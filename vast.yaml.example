@@ -15,15 +15,19 @@ vast:
   # working directory of the client. Note that this is disabled by default. If
   # not specified no log files are written for clients at all.
   #client-log-file: "client.log"
-  # The unique ID of this node.
-  node-id: "node"
   # List of paths to look for schema files in ascending order of priority.
   # Note: Automatically prepended with
   #  ["<binary_directory>/../share/vast/schema", "/etc/vast/schema"].
   # Use the no-default-schema option to turn off this mechanism.
   #schema-paths: []
+  # The directories from which to load pluging at startup. VAST considers every
+  # file that ends in *.so or *.dylib as plugin and attempts to load them via
+  # dlopen(3).
+  plugin-paths: []
   # Don't load the default schema definitions.
   no-default-schema: false
+  # The unique ID of this node.
+  node-id: "node"
   # Spawn a node instead of connecting to one.
   node: false
 
@@ -329,6 +333,14 @@ vast:
   get:
     # The output format.
     format: json
+
+# The below plugins section contains configuration options for dynamically
+# loaded VAST plugins. A plugin has a unique name and the sub-section must
+# match the exact name for the options to be passed correctly to the plugin
+# initialization logic.
+plugins:
+  example:
+    max-events: 42
 
 # The below settings are internal to CAF, and are not checked by VAST directly.
 # Please be careful when changing these options. Note that some CAF options may
