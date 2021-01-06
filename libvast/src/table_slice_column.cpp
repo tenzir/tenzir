@@ -37,7 +37,10 @@ table_slice_column::table_slice_column(table_slice slice,
                                        size_t column) noexcept
 
   : slice_{std::move(slice)}, column_{column} {
-  // nop
+  auto& layout = slice_.layout();
+  auto offset = layout.offset_from_index(column_);
+  VAST_ASSERT(offset);
+  type_ = *layout.at(*offset);
 }
 
 std::optional<table_slice_column>
@@ -51,7 +54,7 @@ table_slice_column::make(table_slice slice, std::string_view column) noexcept {
 
 data_view table_slice_column::operator[](size_t row) const {
   VAST_ASSERT(row < size());
-  return slice_.at(row, column_);
+  return slice_.at(row, column_, type_);
 }
 
 size_t table_slice_column::size() const noexcept {

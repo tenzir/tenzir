@@ -73,6 +73,7 @@ public:
 private:
   table_slice slice_ = {};
   size_t column_ = 0;
+  type type_ = {};
 };
 
 } // namespace vast

@@ -321,6 +321,22 @@ msgpack_table_slice<FlatBuffer>::at(table_slice::size_type row,
   return decode(xs, *state_.layout.at(*layout_offset));
 }
 
+template <class FlatBuffer>
+data_view msgpack_table_slice<FlatBuffer>::at(table_slice::size_type row,
+                                              table_slice::size_type column,
+                                              const type& t) const {
+  const auto& offset_table = *slice_.offset_table();
+  auto view = as_bytes(*slice_.data());
+  // First find the desired row...
+  VAST_ASSERT(row < offset_table.size());
+  auto offset = offset_table[row];
+  VAST_ASSERT(offset < static_cast<size_t>(view.size()));
+  auto xs = msgpack::overlay{view.subspan(offset)};
+  // ...then skip (decode) up to the desired column.
+  xs.next(column);
+  return decode(xs, t);
+}
+
 // -- template machinery -------------------------------------------------------
 
 /// Explicit template instantiations for all MessagePack encoding versions.

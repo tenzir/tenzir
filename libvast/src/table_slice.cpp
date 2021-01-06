@@ -336,6 +336,21 @@ data_view table_slice::at(table_slice::size_type row,
   return visit(f, as_flatbuffer(chunk_));
 }
 
+data_view table_slice::at(table_slice::size_type row,
+                          table_slice::size_type column, const type& t) const {
+  VAST_ASSERT(row < rows());
+  VAST_ASSERT(column < columns());
+  auto f = detail::overload{
+    [&]() noexcept -> data_view {
+      die("cannot access data of invalid table slice");
+    },
+    [&](const auto& encoded) noexcept {
+      return state(encoded, state_)->at(row, column, t);
+    },
+  };
+  return visit(f, as_flatbuffer(chunk_));
+}
+
 #if VAST_ENABLE_ARROW
 
 std::shared_ptr<arrow::RecordBatch> as_record_batch(const table_slice& slice) {

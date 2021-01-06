@@ -652,6 +652,16 @@ arrow_table_slice<FlatBuffer>::at(table_slice::size_type row,
 }
 
 template <class FlatBuffer>
+data_view arrow_table_slice<FlatBuffer>::at(table_slice::size_type row,
+                                            table_slice::size_type column,
+                                            const type& t) const {
+  auto&& batch = record_batch();
+  VAST_ASSERT(batch);
+  auto array = batch->column(detail::narrow_cast<int>(column));
+  return value_at(t, *array, row);
+}
+
+template <class FlatBuffer>
 std::shared_ptr<arrow::RecordBatch>
 arrow_table_slice<FlatBuffer>::record_batch() const noexcept {
   return state_.record_batch;
