@@ -35,10 +35,10 @@ std::vector<plugin_ptr>& get() noexcept {
 // -- plugin version -----------------------------------------------------------
 
 bool has_required_version(const plugin_version& version) noexcept {
-  return std::tie(plugin::version.major, plugin::version.minor,
-                  plugin::version.patch, plugin::version.tweak)
-         <= std::tie(version.major, version.minor, version.patch,
-                     version.tweak);
+  return plugin::version.major == version.major
+         && std::tie(plugin::version.minor, plugin::version.patch,
+                     plugin::version.tweak)
+              <= std::tie(version.minor, version.patch, version.tweak);
 }
 
 // -- plugin_ptr ---------------------------------------------------------------
