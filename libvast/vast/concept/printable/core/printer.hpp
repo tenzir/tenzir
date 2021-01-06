@@ -109,7 +109,10 @@ constexpr bool has_printer_v
 /// Checks whether a given type is-a printer, i.e., derived from
 /// ::vast::printer.
 template <class T>
-constexpr bool is_printer_v = std::is_base_of_v<printer<T>, T>;
+using is_printer = std::is_base_of<printer<T>, T>;
+
+template <class T>
+constexpr bool is_printer_v = is_printer<T>::value;
 
 } // namespace vast
 
