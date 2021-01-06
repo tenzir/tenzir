@@ -585,6 +585,7 @@ struct record_type final : recursive_type<record_type> {
   public:
     struct range_state {
       std::string key() const;
+      const class type& type() const;
       size_t depth() const;
 
       detail::stack_vector<const record_field*, 64> trace;

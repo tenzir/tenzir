@@ -162,6 +162,10 @@ record_type::record_type(std::initializer_list<record_field> xs)
   // nop
 }
 
+const type& record_type::each::range_state::type() const {
+  return trace.back()->type;
+}
+
 std::string record_type::each::range_state::key() const {
   return detail::join(trace.begin(), trace.end(), ".",
                       [](auto field) { return field->name; });
