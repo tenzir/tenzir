@@ -70,6 +70,14 @@ TEST(positive durations) {
   check_duration("42 hours", 42h);
   check_duration("42hour", 42h);
   check_duration("42h", 42h);
+  MESSAGE("weeks");
+  check_duration("1 weeks", 168h);
+  check_duration("1week", 168h);
+  check_duration("1w", 168h);
+  MESSAGE("years");
+  check_duration("1 years", 8760h);
+  check_duration("1year", 8760h);
+  check_duration("1y", 8760h);
 }
 
 TEST(negative durations) {
