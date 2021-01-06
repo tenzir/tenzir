@@ -13,8 +13,9 @@
 
 #pragma once
 
-#include "vast/command.hpp"
 #include "vast/fwd.hpp"
+
+#include "vast/command.hpp"
 
 #include <caf/error.hpp>
 #include <caf/stream.hpp>
@@ -166,12 +167,12 @@ private:
 // -- helper macros ------------------------------------------------------------
 
 #define VAST_REGISTER_PLUGIN(name, major, minor, tweak, patch)                 \
-  extern "C" ::vast::plugin* plugin_create() {                                 \
+  extern "C" ::vast::plugin* vast_plugin_create() {                            \
     return new name;                                                           \
   }                                                                            \
-  extern "C" void plugin_destroy(class ::vast::plugin* plugin) {               \
+  extern "C" void vast_plugin_destroy(class ::vast::plugin* plugin) {          \
     delete plugin;                                                             \
   }                                                                            \
-  extern "C" struct ::vast::plugin_version plugin_version() {                  \
+  extern "C" struct ::vast::plugin_version vast_plugin_version() {             \
     return {major, minor, tweak, patch};                                       \
   }

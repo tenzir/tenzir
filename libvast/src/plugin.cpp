@@ -47,12 +47,12 @@ plugin_ptr::plugin_ptr(const char* filename) noexcept {
   if (auto handle = dlopen(filename, RTLD_GLOBAL | RTLD_LAZY)) {
     library_ = handle;
     auto plugin_version = reinterpret_cast<::vast::plugin_version (*)()>(
-      dlsym(library_, "plugin_version"));
+      dlsym(library_, "vast_plugin_version"));
     if (plugin_version && has_required_version(plugin_version())) {
       auto plugin_create = reinterpret_cast<::vast::plugin* (*) ()>(
-        dlsym(library_, "plugin_create"));
+        dlsym(library_, "vast_plugin_create"));
       auto plugin_destroy = reinterpret_cast<void (*)(::vast::plugin*)>(
-        dlsym(library_, "plugin_destroy"));
+        dlsym(library_, "vast_plugin_destroy"));
       if (plugin_create && plugin_destroy) {
         instance_ = plugin_create();
         deleter_ = plugin_destroy;
