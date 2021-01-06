@@ -142,7 +142,7 @@ TEST(empty partition roundtrip) {
   auto sz = builder.GetSize();
   vast::span span(ptr, sz);
   // Deserialize partition.
-  vast::system::passive_partition_state readonly_state;
+  vast::system::passive_partition_state readonly_state = {};
   auto partition = vast::fbs::GetPartition(span.data());
   REQUIRE(partition);
   REQUIRE_EQUAL(partition->partition_type(),

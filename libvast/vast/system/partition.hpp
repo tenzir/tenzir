@@ -65,7 +65,7 @@ struct active_partition_state {
   // -- data members -----------------------------------------------------------
 
   /// Pointer to the parent actor.
-  active_partition_actor::pointer self;
+  active_partition_actor::pointer self = nullptr;
 
   /// Uniquely identifies this partition.
   uuid id;
@@ -149,7 +149,7 @@ struct passive_partition_state {
   // -- data members -----------------------------------------------------------
 
   /// Pointer to the parent actor.
-  partition_actor::pointer self;
+  partition_actor::pointer self = nullptr;
 
   /// Uniquely identifies this partition.
   uuid id;
