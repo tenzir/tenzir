@@ -67,7 +67,7 @@ private:
   static void
   make_names_layout_impl(std::vector<std::string>& entries, Prefix& prefix,
                          const ::simdjson::dom::object& obj) {
-    for (const auto& f : obj) {
+    for (const auto f : obj) {
       prefix.emplace_back(f.key);
       if (f.value.type() != ::simdjson::dom::element_type::OBJECT) {
         entries.emplace_back(detail::join(prefix.begin(), prefix.end(), "."));
