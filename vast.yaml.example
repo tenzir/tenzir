@@ -58,7 +58,7 @@ vast:
     self_sink:
       enable: true
       slice_size: 100
-      slice_type: 'arrow'
+      # slice_type: 'arrow'
     # Configures if and where metrics should be written to a file.
     file_sink:
       enable: false
@@ -188,7 +188,7 @@ vast:
     # vast.import.read-timeout option only.
     batch-size: 1000
     # Encoding type of table slices (arrow or msgpack).
-    batch-encoding: arrow
+    # batch-encoding: arrow
     # Block until the importer forwarded all data.
     blocking: false
     # The amount of time that each read iteration waits for new input.
