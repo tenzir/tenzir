@@ -13,7 +13,13 @@ Every entry has a category for which we use the following visual abbreviations:
 ## Unreleased
 
 - 🎁 The new `import zeek-json` command allows for importing line-delimited Zeek
-  JSON logs with a `_path` field. [#1259](https://github.com/tenzir/vast/1259)
+  JSON logs as produced by the
+  [json-streaming-logs](https://github.com/corelight/json-streaming-logs)
+  package. Unlike stock Zeek JSON logs, where one file contains exactly one log
+  type, the streaming format contains different log event types in a single
+  stream and uses an additional `_path` field to disambiguate the log type. For
+  stock Zeek JSON logs, use the existing `import json` with the `-t` flag to
+  specify the log type.  [#1259](https://github.com/tenzir/vast/1259)
 
 - 🧬 VAST now offers a plugin framework to support efficient customization
   points at various places of the data processing pipeline. There exist several

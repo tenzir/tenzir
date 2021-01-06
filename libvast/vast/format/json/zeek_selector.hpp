@@ -17,9 +17,10 @@
 
 namespace vast::format::json {
 
-constexpr field_selector_specification zeek_selector_specification() noexcept {
-  return {"_path", "zeek", "zeek-json-reader"};
-}
+struct zeek_selector_specification {
+  static constexpr auto field = "_path";
+  static constexpr auto prefix = "zeek";
+};
 
 using zeek_selector = field_selector<zeek_selector_specification>;
 

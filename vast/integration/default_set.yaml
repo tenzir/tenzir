@@ -148,7 +148,7 @@ tests:
     steps:
       - command: -N import -b zeek-json
         input: data/zeek/zeek.json
-      - command: -N export json '#type ni "zeek"'
+      - command: '-N export json "\"zeek\" in #type"'
   Export json:
     tags: [json, zeek]
     steps:

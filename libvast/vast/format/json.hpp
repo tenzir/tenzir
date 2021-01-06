@@ -122,7 +122,7 @@ vast::schema reader<Selector>::schema() const {
 
 template <class Selector>
 const char* reader<Selector>::name() const {
-  return Selector::name();
+  return "json-reader";
 }
 
 template <class Selector>

@@ -17,10 +17,10 @@
 
 namespace vast::format::json {
 
-constexpr field_selector_specification
-suricata_selector_specification() noexcept {
-  return {"event_type", "suricata", "suricata-json-reader"};
-}
+struct suricata_selector_specification {
+  static constexpr auto field = "event_type";
+  static constexpr auto prefix = "suricata";
+};
 
 using suricata_selector = field_selector<suricata_selector_specification>;
 
