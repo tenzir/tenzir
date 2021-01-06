@@ -91,10 +91,10 @@ int main(int argc, char** argv) {
     for (const auto& file : directory{dir}) {
       if (file.extension() == ".so" || file.extension() == ".dylib") {
         if (auto plugin = plugin_ptr{file.str().c_str()}) {
-          auto same_plugin_name = [name = plugin->name()](const auto& other) {
+          auto has_same_name = [name = plugin->name()](const auto& other) {
             return other->name() == name;
           };
-          if (std::none_of(plugins.begin(), plugins.end(), same_plugin_name)) {
+          if (std::none_of(plugins.begin(), plugins.end(), has_same_name)) {
             VAST_VERBOSE_ANON("loaded plugin:", file);
             plugins.push_back(std::move(plugin));
           } else {
