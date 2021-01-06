@@ -39,19 +39,6 @@
 
 namespace vast::format::simdjson {
 
-// class writer : public ostream_writer {
-// public:
-//   using defaults = vast::defaults::export_::json;
-
-//   using super = ostream_writer;
-
-//   using super::super;
-
-//   caf::error write(const table_slice& x) override;
-
-//   const char* name() const override;
-// };
-
 /// Adds a JSON object to a table slice builder according to a given layout.
 /// @param builder The builder to add the JSON object to.
 /// @param xs The JSON object to add to *builder.

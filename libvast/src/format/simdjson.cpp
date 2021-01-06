@@ -411,15 +411,6 @@ lookup(std::string_view field, const ::simdjson::dom::object& xs) {
 
 } // namespace
 
-// caf::error writer::write(const table_slice& x) {
-//   json_printer<policy::oneline> printer;
-//   return print<policy::include_field_names>(printer, x, "{", ", ", "}");
-// }
-
-// const char* writer::name() const {
-//   return "json-writer";
-// }
-
 caf::error add(table_slice_builder& builder, const ::simdjson::dom::object& xs,
                const record_type& layout) {
   for (auto& field : layout.fields) {
