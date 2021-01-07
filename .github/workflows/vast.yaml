@@ -219,6 +219,10 @@ jobs:
       - name: Run Unit Tests
         env:
           CTEST_OUTPUT_ON_FAILURE: YES
+          # On macOS, there is a possibly false positive container overflow in
+          # caf::detail::get_mac_address that we did not manage to understand
+          # entirely, so we disable that check for macOS only (ch21254).
+          ASAN_OPTIONS: ${{ matrix.os.tag == 'macOS' && 'detect_container_overflow=0' || '' }}
         run: |
           cmake --build "$BUILD_DIR" --target test
 
