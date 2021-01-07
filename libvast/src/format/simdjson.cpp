@@ -20,6 +20,7 @@
 #include "vast/concept/printable/to_string.hpp"
 #include "vast/concept/printable/vast/data.hpp"
 #include "vast/concept/printable/vast/json.hpp"
+#include "vast/concept/printable/stream.hpp"
 #include "vast/data.hpp"
 #include "vast/logger.hpp"
 #include "vast/policy/include_field_names.hpp"
@@ -35,23 +36,27 @@
 namespace vast::format::simdjson {
 namespace {
 
-template <typename JsonType>
-struct adjusted_json_param {
-  using type = std::conditional_t<
-    std::is_arithmetic_v<JsonType> || std::is_same_v<JsonType, std::string_view>,
-    JsonType, const JsonType&>;
-};
+// Conversion Implementation Details
+//
+// The task is the following:
+// Simdjson values comes in a set of types provided by the lib
+// based on JSON specification (lets say it is a J-set),
+// Vast data (variant based type) has its own (and a richer) set of types
+// (lets say it is a D-set),
+// and the task is to perform conversion from a value of a J-set type
+// to a certain value of D-set type which is defined by layout specification
+//
+// Under above conditions we are to orginize a "map" function
+// from J-set typed value to a D-set. Not all the convertions are possible
+// and more to say most of the J*D convertions are not possible, and only
+// certain slots in the J*D table.
 
-template <typename JsonType>
-using adjusted_json_param_t = typename adjusted_json_param<JsonType>::type;
-
-template <typename T>
-caf::expected<data>
-convert_from_impl(adjusted_json_param_t<T> v, const type& t);
+template <class T>
+caf::expected<data> convert_from_impl(T v, const type& t);
 
 caf::expected<data> convert(const ::simdjson::dom::element& e, const type& t);
 
-template <typename JsonType, int ConcreteTypeIndex>
+template <class JsonType, int ConcreteTypeIndex>
 struct parser_traits {
   using from_type = JsonType;
   using to_meta_type = caf::detail::tl_at_t<concrete_types, ConcreteTypeIndex>;
@@ -63,12 +68,14 @@ struct parser_traits {
 
 /// A default implementation ot conversion from JSON type
 /// (known as one of simdjson element_type) to an internal data type.
-template <typename JsonType, int ConcreteTypeIndex>
+template <class JsonType, int ConcreteTypeIndex>
 caf::expected<data>
-type_biased_convert_impl(adjusted_json_param_t<JsonType> j, const type&) {
+type_biased_convert_impl(JsonType j, const type& t) {
   using ptraits = parser_traits<JsonType, ConcreteTypeIndex>;
 
   if constexpr (ptraits::can_be_parsed) {
+    static_cast<void>(t);
+
     using value_type = typename ptraits::to_type;
     value_type x;
     if (!make_parser<value_type>{}(std::string{j}, x))
@@ -82,7 +89,7 @@ type_biased_convert_impl(adjusted_json_param_t<JsonType> j, const type&) {
     // ngrodzitski: Once fmt is available message can be improved.
     // as simdjson has a `ostream<<element_type` which makes it
     // "serializable" to fmt.
-    VAST_ERROR_ANON("json-reader cannot convert field  to a propper type");
+    VAST_ERROR_ANON("json-reader cannot convert field  to a propper type", t);
 
     return make_error(ec::syntax_error, "conversion not implemented");
   }
@@ -112,7 +119,7 @@ type_biased_convert_impl<std::string_view, type_id<bool_type>()>(
 template <>
 caf::expected<data>
 type_biased_convert_impl<integer, type_id<integer_type>()>(integer n,
-                                                            const type&) {
+                                                           const type&) {
   return n;
 }
 
@@ -259,7 +266,7 @@ type_biased_convert_impl<std::string_view, type_id<enumeration_type>()>(
 template <>
 caf::expected<data>
 type_biased_convert_impl<::simdjson::dom::array, type_id<list_type>()>(
-  const ::simdjson::dom::array& a, const type& t) {
+  ::simdjson::dom::array a, const type& t) {
   const auto& v = dynamic_cast<const list_type&>(*t);
 
   list xs;
@@ -278,7 +285,7 @@ type_biased_convert_impl<::simdjson::dom::array, type_id<list_type>()>(
 template <>
 caf::expected<data>
 type_biased_convert_impl<::simdjson::dom::object, type_id<map_type>()>(
-  const ::simdjson::dom::object& o, const type& t) {
+  ::simdjson::dom::object o, const type& t) {
   const auto& m = dynamic_cast<const map_type&>(*t);
 
   map xs;
@@ -300,13 +307,12 @@ type_biased_convert_impl<::simdjson::dom::object, type_id<map_type>()>(
 /// Relies on a specification of type_biased_convert_impl template function.
 /// If no specialiation from a given JSON type to data is provided
 /// the the default implementation is used (which returns error).
-template <typename JsonType>
+template <class JsonType>
 struct from_json_x_converter {
   /// Converter callback.
   /// This is an alias for function which takes an instance of JsonType
   /// and returns data innstance or an error.
-  using converter_callback
-    = caf::expected<data> (*)(adjusted_json_param_t<JsonType>, const type& t);
+  using converter_callback = caf::expected<data> (*)(JsonType, const type& t);
 
   /// A list of types which are possible destination types
   /// in the scope of conversion from JSON
@@ -340,8 +346,7 @@ using converter_callback
   = caf::expected<data> (*)(const ::simdjson::dom::element&, const type& t);
 
 template <typename T>
-caf::expected<data>
-convert_from_impl(adjusted_json_param_t<T> v, const type& t) {
+caf::expected<data> convert_from_impl(T v, const type& t) {
   const auto type_index = t->index();
 
   using converter = from_json_x_converter<T>;
