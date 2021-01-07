@@ -44,7 +44,7 @@ TEST(random integer slices) {
   std::vector<integer> values;
   for (auto& slice : slices)
     for (size_t row = 0; row < slice.rows(); ++row)
-      values.emplace_back(get<integer>(slice.at(row, 0)));
+      values.emplace_back(get<integer>(slice.at(row, 0, integer_type{})));
   auto [lowest, highest] = std::minmax_element(values.begin(), values.end());
   CHECK_GREATER_EQUAL(*lowest, 100);
   CHECK_LESS_EQUAL(*highest, 200);
@@ -54,6 +54,7 @@ TEST(column view) {
   auto sut = zeek_conn_log[0];
   auto ts_cview = table_slice_column::make(sut, "ts");
   REQUIRE(ts_cview);
+  auto flat_layout = flatten(sut.layout());
   CHECK_EQUAL(ts_cview->index(), 0u);
   for (size_t column = 0; column < sut.columns(); ++column) {
     auto cview = table_slice_column{sut, column};
@@ -61,19 +62,22 @@ TEST(column view) {
     CHECK_EQUAL(cview.index(), column);
     CHECK_EQUAL(cview.size(), sut.rows());
     for (size_t row = 0; row < cview.size(); ++row)
-      CHECK_EQUAL(cview[row], sut.at(row, column));
+      CHECK_EQUAL(cview[row],
+                  sut.at(row, column, flat_layout.fields[column].type));
   }
 }
 
 TEST(row view) {
   auto sut = zeek_conn_log[0];
+  auto flat_layout = flatten(sut.layout());
   for (size_t row = 0; row < sut.rows(); ++row) {
     auto rview = table_slice_row{sut, row};
     REQUIRE_NOT_EQUAL(rview.size(), 0u);
     CHECK_EQUAL(rview.index(), row);
     CHECK_EQUAL(rview.size(), sut.columns());
     for (size_t column = 0; column < rview.size(); ++column)
-      CHECK_EQUAL(rview[column], sut.at(row, column));
+      CHECK_EQUAL(rview[column],
+                  sut.at(row, column, flat_layout.fields[column].type));
   }
 }
 

@@ -113,7 +113,7 @@ TEST(regression - build an address index from zeek events) {
   for (auto& slice : zeek_conn_log_full) {
     for (size_t row = 0; row < slice.rows(); ++row) {
       // Column 2 is orig_h.
-      if (!idx.append(slice.at(row, 2), row_id))
+      if (!idx.append(slice.at(row, 2, address_type{}), row_id))
         FAIL("appending to the value_index failed!");
       if (++row_id == 6464) {
         // The last ID should be 720 at this point.
@@ -138,7 +138,7 @@ TEST(regression - manual address bitmap index from bitmaps) {
   for (auto& slice : zeek_conn_log_full) {
     for (size_t row = 0; row < slice.rows(); ++row) {
       // Column 2 is orig_h.
-      auto x = caf::get<view<address>>(slice.at(row, 2));
+      auto x = caf::get<view<address>>(slice.at(row, 2, address_type{}));
       for (auto i = 0u; i < 4; ++i) {
         auto byte = x.data()[i + 12];
         for (auto j = 0u; j < 8; ++j)
@@ -173,7 +173,7 @@ TEST(regression - manual address bitmap index from 4 byte indexes) {
   for (auto& slice : zeek_conn_log_full) {
     for (size_t row = 0; row < slice.rows(); ++row) {
       // Column 2 is orig_h.
-      auto x = caf::get<view<address>>(slice.at(row, 2));
+      auto x = caf::get<view<address>>(slice.at(row, 2, address_type{}));
       for (auto i = 0u; i < 4; ++i) {
         auto byte = x.data()[i + 12];
         idx[i].append(byte);

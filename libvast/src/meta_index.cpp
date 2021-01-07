@@ -66,14 +66,14 @@ void partition_synopsis::add(const table_slice& slice,
   auto each = record_type::each(layout);
   auto field_it = each.begin();
   for (size_t col = 0; col < slice.columns(); ++col, ++field_it) {
+    auto& type = field_it->type();
     auto add_column = [&](const synopsis_ptr& syn) {
       for (size_t row = 0; row < slice.rows(); ++row) {
-        auto view = slice.at(row, col);
+        auto view = slice.at(row, col, type);
         if (!caf::holds_alternative<caf::none_t>(view))
           syn->add(std::move(view));
       }
     };
-    auto& type = field_it->type();
     auto key = qualified_record_field{layout.name(), *field_it};
     if (!caf::holds_alternative<string_type>(type)) {
       // Locate the relevant synopsis.

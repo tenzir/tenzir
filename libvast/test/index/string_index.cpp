@@ -175,7 +175,7 @@ TEST(regression - zeek conn log service http) {
     auto& [idx, expected] = slice_stats.back();
     for (size_t row = 0; row < slice.rows(); ++row) {
       // Column 7 is service.
-      auto x = slice.at(row, 7);
+      auto x = slice.at(row, 7, string_type{});
       idx->append(x, row_id);
       expected.append_bit(is_http(x));
       ++row_id;
@@ -227,7 +227,7 @@ TEST(regression - manual value index for zeek conn log service http) {
       [&](auto) { FAIL("unexpected service type"); },
     };
     // Column 7 is service.
-    caf::visit(f, slice.at(row, 7));
+    caf::visit(f, slice.at(row, 7, string_type{}));
   }
   REQUIRE_EQUAL(rank(mask), 100u);
   // Perform a manual index lookup for "http".
