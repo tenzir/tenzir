@@ -390,7 +390,8 @@ type_resolver::operator()(const field_extractor& ex, const data& d) {
         return make_error(ec::type_clash, *t, op_, d);
     }
     for (auto& offset : suffixes) {
-      auto x = data_extractor{type_, std::move(offset)};
+      auto t = r->at(offset);
+      auto x = data_extractor{std::move(*t), std::move(offset)};
       connective.emplace_back(predicate{std::move(x), op_, d});
     }
     // Second, try to interpret the field as the name of a single type.

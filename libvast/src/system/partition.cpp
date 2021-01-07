@@ -106,15 +106,11 @@ fetch_indexer(const PartitionState& state, const data_extractor& dx,
   // Sanity check.
   if (dx.offset.empty())
     return {};
-  auto& r = caf::get<record_type>(dx.type);
-  auto k = r.resolve(dx.offset);
-  VAST_ASSERT(k);
-  auto index = r.flat_index_at(dx.offset);
-  if (!index) {
-    VAST_DEBUG(state.self, "got invalid offset for record type", dx.type);
-    return {};
-  }
-  return state.indexer_at(*index);
+  if (auto index = state.combined_layout.flat_index_at(dx.offset))
+    return state.indexer_at(*index);
+  VAST_WARNING(state.self, "got invalid offset for the combined layout",
+               state.combined_layout);
+  return {};
 }
 
 /// Retrieves an INDEXER for a predicate with a data extractor.

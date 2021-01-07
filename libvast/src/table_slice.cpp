@@ -643,13 +643,9 @@ struct row_evaluator {
   }
 
   bool operator()(const data_extractor& e, const data& d) {
-    VAST_ASSERT(e.offset.size() == 1);
-    auto&& layout = slice_.layout();
-    if (e.type != layout) // TODO: make this a precondition instead.
-      return false;
-    auto col = e.offset[0];
-    auto& field = layout.fields[col];
-    auto lhs = to_canonical(field.type, slice_.at(row_, col));
+    auto col = slice_.layout().flat_index_at(e.offset);
+    VAST_ASSERT(col);
+    auto lhs = to_canonical(e.type, slice_.at(row_, *col, e.type));
     auto rhs = make_data_view(d);
     return evaluate_view(lhs, op_, rhs);
   }

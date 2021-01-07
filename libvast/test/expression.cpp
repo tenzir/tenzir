@@ -173,8 +173,10 @@ TEST(extractors) {
   auto r = flatten(record_type{{"orig", s}, {"resp", s}});
   auto sn = unbox(to<subnet>("192.168.0.0/24"));
   {
-    auto pred0 = predicate{data_extractor{r, offset{2}}, in, data{sn}};
-    auto pred1 = predicate{data_extractor{r, offset{5}}, in, data{sn}};
+    auto pred0
+      = predicate{data_extractor{address_type{}, offset{2}}, in, data{sn}};
+    auto pred1
+      = predicate{data_extractor{address_type{}, offset{5}}, in, data{sn}};
     auto normalized = disjunction{pred0, pred1};
     MESSAGE("type extractor - distribution");
     auto expr = unbox(to<expression>(":addr in 192.168.0.0/24"));
@@ -186,8 +188,10 @@ TEST(extractors) {
     CHECK_EQUAL(resolved, normalized);
   }
   {
-    auto pred0 = predicate{data_extractor{r, offset{2}}, not_in, data{sn}};
-    auto pred1 = predicate{data_extractor{r, offset{5}}, not_in, data{sn}};
+    auto pred0
+      = predicate{data_extractor{address_type{}, offset{2}}, not_in, data{sn}};
+    auto pred1
+      = predicate{data_extractor{address_type{}, offset{5}}, not_in, data{sn}};
     auto normalized = conjunction{pred0, pred1};
     MESSAGE("type extractor - distribution with negation");
     auto expr = unbox(to<expression>(":addr !in 192.168.0.0/24"));
