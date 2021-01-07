@@ -14,13 +14,13 @@
 #include "vast/format/simdjson.hpp"
 
 #include "vast/concept/parseable/vast/address.hpp"
+#include "vast/concept/parseable/vast/json.hpp"
 #include "vast/concept/parseable/vast/subnet.hpp"
 #include "vast/concept/parseable/vast/time.hpp"
-#include "vast/concept/parseable/vast/json.hpp"
+#include "vast/concept/printable/stream.hpp"
 #include "vast/concept/printable/to_string.hpp"
 #include "vast/concept/printable/vast/data.hpp"
 #include "vast/concept/printable/vast/json.hpp"
-#include "vast/concept/printable/stream.hpp"
 #include "vast/data.hpp"
 #include "vast/logger.hpp"
 #include "vast/policy/include_field_names.hpp"
@@ -46,21 +46,41 @@ namespace {
 // and the task is to perform conversion from a value of a J-set type
 // to a certain value of D-set type which is defined by layout specification
 //
-// Under above conditions we are to orginize a "map" function
-// from J-set typed value to a D-set. Not all the convertions are possible
-// and more to say most of the J*D convertions are not possible, and only
+// Under above conditions we are to organize a "map" function
+// from J-set typed value to a D-set. Not all the conversions are possible
+// and more to say most of the J*D conversions are not possible, and only
 // certain slots in the J*D table.
+//
+// For a given J type `from_json_x_converter<J>` provides an array
+// of converter callbacks. Each index in this array corresponds to
+// some type in the list defined by vast::data::type.
+// Each callback is a function `type_biased_convert_impl<J,D>`
+// There is a default implementation that handles
+// * identity mapping if J, D types match;
+// * parses value of type D from J which is string
+//   if parsing is available for D;
+// * return error.
+//
+// For the cases of a specific conversion is required a necessary
+// template specialization is provided.
+//
+// So the process of converting has 2 phases:
+// * select convert function;
+// * perform convert function.
+//
+// Selecting conversion function is in essence two times lookup.
+// First lookup for J type `convert(const ::simdjson::dom::element& e, const
+// type& t)` and the second if for target D type.
 
 template <class T>
 caf::expected<data> convert_from_impl(T v, const type& t);
 
 caf::expected<data> convert(const ::simdjson::dom::element& e, const type& t);
 
-template <class JsonType, int ConcreteTypeIndex>
+template <class JsonType, class VastType>
 struct parser_traits {
   using from_type = JsonType;
-  using to_meta_type = caf::detail::tl_at_t<concrete_types, ConcreteTypeIndex>;
-  using to_type = type_to_data<to_meta_type>;
+  using to_type = VastType;
 
   static constexpr auto can_be_parsed
     = std::is_same_v<from_type, std::string_view> && has_parser_v<to_type>;
@@ -68,14 +88,17 @@ struct parser_traits {
 
 /// A default implementation ot conversion from JSON type
 /// (known as one of simdjson element_type) to an internal data type.
-template <class JsonType, int ConcreteTypeIndex>
-caf::expected<data>
-type_biased_convert_impl(JsonType j, const type& t) {
-  using ptraits = parser_traits<JsonType, ConcreteTypeIndex>;
+template <class JsonType, class VastType>
+caf::expected<data> type_biased_convert_impl(JsonType j, const type& t) {
+  using ptraits = parser_traits<JsonType, VastType>;
+  static_cast<void>(t);
+  static_cast<void>(j);
 
-  if constexpr (ptraits::can_be_parsed) {
-    static_cast<void>(t);
-
+  if constexpr (std::is_same_v<JsonType, VastType>) {
+    // No convertion needed case.
+    return j;
+  } else if constexpr (ptraits::can_be_parsed) {
+    // Value can be parsed from string.
     using value_type = typename ptraits::to_type;
     value_type x;
     if (!make_parser<value_type>{}(std::string{j}, x))
@@ -85,10 +108,7 @@ type_biased_convert_impl(JsonType j, const type& t) {
 
     return x;
   } else {
-    static_cast<void>(j);
-    // ngrodzitski: Once fmt is available message can be improved.
-    // as simdjson has a `ostream<<element_type` which makes it
-    // "serializable" to fmt.
+    // No conversion case.
     VAST_ERROR_ANON("json-reader cannot convert field  to a propper type", t);
 
     return make_error(ec::syntax_error, "conversion not implemented");
@@ -98,14 +118,8 @@ type_biased_convert_impl(JsonType j, const type& t) {
 // BOOL Convertions.
 template <>
 caf::expected<data>
-type_biased_convert_impl<bool, type_id<bool_type>()>(bool b, const type&) {
-  return b;
-}
-
-template <>
-caf::expected<data>
-type_biased_convert_impl<std::string_view, type_id<bool_type>()>(
-  std::string_view s, const type&) {
+type_biased_convert_impl<std::string_view, bool>(std::string_view s,
+                                                 const type&) {
   if (s == "true")
     return true;
   else if (s == "false")
@@ -118,15 +132,8 @@ type_biased_convert_impl<std::string_view, type_id<bool_type>()>(
 // INTEGER Conversions
 template <>
 caf::expected<data>
-type_biased_convert_impl<integer, type_id<integer_type>()>(integer n,
-                                                           const type&) {
-  return n;
-}
-
-template <>
-caf::expected<data>
-type_biased_convert_impl<std::string_view, type_id<integer_type>()>(
-  std::string_view s, const type& ) {
+type_biased_convert_impl<std::string_view, integer>(std::string_view s,
+                                                    const type&) {
   // simdjson cannot be reused here as it doesn't accept hex numbers.
   if (integer x; parsers::json_int(s, x))
     return x;
@@ -134,27 +141,21 @@ type_biased_convert_impl<std::string_view, type_id<integer_type>()>(
     VAST_WARNING_ANON("json-reader narrowed", std::string{s}, "to type int");
     return detail::narrow_cast<integer>(x);
   }
-  return make_error(ec::convert_error, "cannot convert from", std::string{s}, "to int");
+  return make_error(ec::convert_error, "cannot convert from", std::string{s},
+                    "to int");
 }
 
 // COUNT Conversions
 template <>
 caf::expected<data>
-type_biased_convert_impl<count, type_id<count_type>()>(count n, const type&) {
-  return n;
-}
-
-template <>
-caf::expected<data>
-type_biased_convert_impl<integer, type_id<count_type>()>(integer n,
-                                                          const type&) {
+type_biased_convert_impl<integer, count>(integer n, const type&) {
   return detail::narrow_cast<count>(n);
 }
 
 template <>
 caf::expected<data>
-type_biased_convert_impl<std::string_view, type_id<count_type>()>(
-  std::string_view s, const type& ) {
+type_biased_convert_impl<std::string_view, count>(std::string_view s,
+                                                  const type&) {
   if (count x; parsers::json_count(s, x))
     return x;
   if (real x; parsers::json_number(s, x)) {
@@ -168,51 +169,43 @@ type_biased_convert_impl<std::string_view, type_id<count_type>()>(
 // REAL Conversions
 template <>
 caf::expected<data>
-type_biased_convert_impl<real, type_id<real_type>()>(real n, const type&) {
-  return n;
-}
-
-template <>
-caf::expected<data>
-type_biased_convert_impl<integer, type_id<real_type>()>(integer n,
-                                                         const type&) {
+type_biased_convert_impl<integer, real>(integer n, const type&) {
   return detail::narrow_cast<real>(n);
 }
 
 template <>
 caf::expected<data>
-type_biased_convert_impl<count, type_id<real_type>()>(count n, const type&) {
+type_biased_convert_impl<count, real>(count n, const type&) {
   return detail::narrow_cast<real>(n);
 }
 
 template <>
 caf::expected<data>
-type_biased_convert_impl<std::string_view, type_id<real_type>()>(
-  std::string_view s, const type& ) {
+type_biased_convert_impl<std::string_view, real>(std::string_view s,
+                                                 const type&) {
   if (real x; parsers::json_number(s, x))
     return x;
-  return make_error(ec::convert_error, "cannot convert from", std::string{s}, "to real");
+  return make_error(ec::convert_error, "cannot convert from", std::string{s},
+                    "to real");
 }
 
 // Time conversions
 template <>
 caf::expected<data>
-type_biased_convert_impl<integer, type_id<time_type>()>(integer s,
-                                                         const type&) {
+type_biased_convert_impl<integer, time>(integer s, const type&) {
   auto secs = std::chrono::duration<real>(s);
   return time{std::chrono::duration_cast<duration>(secs)};
 }
 
 template <>
 caf::expected<data>
-type_biased_convert_impl<count, type_id<time_type>()>(count s, const type&) {
+type_biased_convert_impl<count, time>(count s, const type&) {
   auto secs = std::chrono::duration<real>(s);
   return time{std::chrono::duration_cast<duration>(secs)};
 }
 
 template <>
-caf::expected<data>
-type_biased_convert_impl<real, type_id<time_type>()>(real s, const type&) {
+caf::expected<data> type_biased_convert_impl<real, time>(real s, const type&) {
   auto secs = std::chrono::duration<real>(s);
   return time{std::chrono::duration_cast<duration>(secs)};
 }
@@ -220,23 +213,21 @@ type_biased_convert_impl<real, type_id<time_type>()>(real s, const type&) {
 // Duration conversions
 template <>
 caf::expected<data>
-type_biased_convert_impl<integer, type_id<duration_type>()>(integer s,
-                                                             const type&) {
+type_biased_convert_impl<integer, duration>(integer s, const type&) {
   auto secs = std::chrono::duration<real>(s);
   return std::chrono::duration_cast<duration>(secs);
 }
 
 template <>
 caf::expected<data>
-type_biased_convert_impl<count, type_id<duration_type>()>(count s,
-                                                           const type&) {
+type_biased_convert_impl<count, duration>(count s, const type&) {
   auto secs = std::chrono::duration<real>(s);
   return std::chrono::duration_cast<duration>(secs);
 }
 
 template <>
 caf::expected<data>
-type_biased_convert_impl<real, type_id<duration_type>()>(real s, const type&) {
+type_biased_convert_impl<real, duration>(real s, const type&) {
   auto secs = std::chrono::duration<real>(s);
   return std::chrono::duration_cast<duration>(secs);
 }
@@ -244,16 +235,16 @@ type_biased_convert_impl<real, type_id<duration_type>()>(real s, const type&) {
 // STRING Conversions
 template <>
 caf::expected<data>
-type_biased_convert_impl<std::string_view, type_id<string_type>()>(
-  std::string_view s, const type&) {
+type_biased_convert_impl<std::string_view, std::string>(std::string_view s,
+                                                        const type&) {
   return std::string{s};
 }
 
 // ENUMERATION Conversions
 template <>
 caf::expected<data>
-type_biased_convert_impl<std::string_view, type_id<enumeration_type>()>(
-  std::string_view s, const type& t) {
+type_biased_convert_impl<std::string_view, enumeration>(std::string_view s,
+                                                        const type& t) {
   const auto& e = dynamic_cast<const enumeration_type&>(*t);
 
   const auto i = std::find(e.fields.begin(), e.fields.end(), s);
@@ -265,8 +256,8 @@ type_biased_convert_impl<std::string_view, type_id<enumeration_type>()>(
 // ARRAY Conversions
 template <>
 caf::expected<data>
-type_biased_convert_impl<::simdjson::dom::array, type_id<list_type>()>(
-  ::simdjson::dom::array a, const type& t) {
+type_biased_convert_impl<::simdjson::dom::array, list>(::simdjson::dom::array a,
+                                                       const type& t) {
   const auto& v = dynamic_cast<const list_type&>(*t);
 
   list xs;
@@ -283,8 +274,7 @@ type_biased_convert_impl<::simdjson::dom::array, type_id<list_type>()>(
 
 // MAP Conversions
 template <>
-caf::expected<data>
-type_biased_convert_impl<::simdjson::dom::object, type_id<map_type>()>(
+caf::expected<data> type_biased_convert_impl<::simdjson::dom::object, map>(
   ::simdjson::dom::object o, const type& t) {
   const auto& m = dynamic_cast<const map_type&>(*t);
 
@@ -303,10 +293,12 @@ type_biased_convert_impl<::simdjson::dom::object, type_id<map_type>()>(
   return xs;
 }
 
-/// A converter from a given JSON type to data.
+/// A converter from a given JSON type to vast::data.
 /// Relies on a specification of type_biased_convert_impl template function.
 /// If no specialiation from a given JSON type to data is provided
-/// the the default implementation is used (which returns error).
+/// the the default implementation is used which does one of the following
+/// returns a untouched value if source and dest type mach, performs string
+/// parsing if possible or return error.
 template <class JsonType>
 struct from_json_x_converter {
   /// Converter callback.
@@ -316,20 +308,23 @@ struct from_json_x_converter {
 
   /// A list of types which are possible destination types
   /// in the scope of conversion from JSON
-  using dest_types_list = concrete_types;
+  using dest_types_list = data::types;
+
+  template <std::size_t N>
+  using dest_type_at_t = typename caf::detail::tl_at_t<dest_types_list, N>;
 
   /// A total number of types possible with data.
   /// This is also exactly the nubmer of possible conversion cases.
   static constexpr std::size_t dest_types_count
-    = type_id<caf::detail::tl_back_t<dest_types_list>>() + 1UL;
+    = caf::detail::tl_size<dest_types_list>::value;
 
   using callbacks_array = std::array<converter_callback, dest_types_count>;
 
   template <std::size_t... ConcreteTypeIndex>
   static constexpr callbacks_array
   make_callbacks_array_impl(std::index_sequence<ConcreteTypeIndex...>) noexcept {
-    callbacks_array result
-      = {type_biased_convert_impl<JsonType, ConcreteTypeIndex>...};
+    callbacks_array result = {
+      type_biased_convert_impl<JsonType, dest_type_at_t<ConcreteTypeIndex>>...};
     return result;
   }
 
@@ -341,9 +336,6 @@ struct from_json_x_converter {
 
   static constexpr callbacks_array callbacks = make_callbacks_array();
 };
-
-using converter_callback
-  = caf::expected<data> (*)(const ::simdjson::dom::element&, const type& t);
 
 template <typename T>
 caf::expected<data> convert_from_impl(T v, const type& t) {
@@ -429,8 +421,7 @@ caf::error add(table_slice_builder& builder, const ::simdjson::dom::object& xs,
     }
 
     auto x = convert(el, field.type);
-    if (!x)
-    {
+    if (!x) {
       return make_error(ec::convert_error, x.error().context(),
                         "could not convert", field.name);
       std::exit(1);
