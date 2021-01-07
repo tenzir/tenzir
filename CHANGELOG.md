@@ -1092,4 +1092,4 @@ This is the first official release.
 [2020.08.28]: https://github.com/tenzir/vast/releases/tag/2020.08.28
 [2020.09.30]: https://github.com/tenzir/vast/releases/tag/2020.09.30
 [2020.10.29]: https://github.com/tenzir/vast/releases/tag/2020.10.29
-[2020.10.29]: https://github.com/tenzir/vast/releases/tag/2020.12.16
+[2020.12.16]: https://github.com/tenzir/vast/releases/tag/2020.12.16
