@@ -203,10 +203,7 @@ caf::expected<expression> normalize_and_validate(const expression& expr) {
 caf::expected<expression> tailor(const expression& expr, const type& t) {
   if (caf::holds_alternative<caf::none_t>(expr))
     return make_error(ec::unspecified, "invalid expression");
-  auto x = caf::visit(type_resolver{t}, expr);
-  if (!x)
-    return x.error();
-  return caf::visit(type_pruner{t}, *x);
+  return caf::visit(type_resolver{t}, expr);
 }
 
 namespace {

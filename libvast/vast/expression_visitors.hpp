@@ -153,21 +153,6 @@ struct type_resolver {
   const type& type_;
 };
 
-// Tailors an expression to a specific type by pruning all unecessary branches
-// and resolving fields into the corresponding data extractors.
-struct type_pruner {
-  explicit type_pruner(const type& event_type);
-
-  expression operator()(caf::none_t);
-  expression operator()(const conjunction& c);
-  expression operator()(const disjunction& d);
-  expression operator()(const negation& n);
-  expression operator()(const predicate& p);
-
-  relational_operator op_;
-  const type& type_;
-};
-
 /// Checks whether a [resolved](@ref type_extractor) expression matches a given
 /// type. That is, this visitor tests whether an expression consists of a
 /// viable set of predicates for a type. For conjunctions, all operands must
