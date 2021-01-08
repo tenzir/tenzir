@@ -104,6 +104,8 @@ caf::message start_command_impl(start_command_extra_steps extra_steps,
   caf::error err;
   auto stop = false;
   self->monitor(node);
+  // A single line of output to publish out address for scripts.
+  std::cout << listen_addr << std::endl;
   self
     ->do_receive(
       [&](caf::down_msg& msg) {
