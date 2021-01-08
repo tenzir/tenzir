@@ -24,6 +24,7 @@
 #include "vast/logger.hpp"
 #include "vast/scope_linked.hpp"
 #include "vast/system/accountant_actor.hpp"
+#include "vast/system/exporter_actor.hpp"
 #include "vast/system/node_control.hpp"
 #include "vast/system/query_status.hpp"
 #include "vast/system/read_query.hpp"
@@ -77,8 +78,8 @@ sink_command(const invocation& inv, actor_system& sys, caf::actor snk) {
   if (auto err = caf::get_if<caf::error>(&node_opt))
     return caf::make_message(std::move(*err));
   auto& node = caf::holds_alternative<caf::actor>(node_opt)
-               ? caf::get<caf::actor>(node_opt)
-               : caf::get<scope_linked_actor>(node_opt).get();
+                 ? caf::get<caf::actor>(node_opt)
+                 : caf::get<scope_linked_actor>(node_opt).get();
   VAST_ASSERT(node != nullptr);
   // Start signal monitor.
   std::thread sig_mon_thread;
@@ -86,9 +87,10 @@ sink_command(const invocation& inv, actor_system& sys, caf::actor snk) {
     sig_mon_thread, sys, defaults::system::signal_monitoring_interval, self);
   auto spawn_exporter = invocation{inv.options, "spawn exporter", {*query}};
   VAST_DEBUG(&inv, "spawns exporter with parameters:", spawn_exporter);
-  auto exp = spawn_at_node(self, node, spawn_exporter);
-  if (!exp)
-    return caf::make_message(std::move(exp.error()));
+  auto maybe_exporter = spawn_at_node(self, node, spawn_exporter);
+  if (!maybe_exporter)
+    return caf::make_message(std::move(maybe_exporter.error()));
+  auto exporter = caf::actor_cast<exporter_actor>(std::move(*maybe_exporter));
   // Register the accountant at the sink.
   auto components = get_node_components(self, node, "accountant");
   if (!components)
@@ -101,13 +103,13 @@ sink_command(const invocation& inv, actor_system& sys, caf::actor snk) {
   // Register sink at the node.
   self->send(node, atom::put_v, snk, "sink");
   // Register self as the statistics actor.
-  self->send(*exp, atom::statistics_v, self);
+  self->send(exporter, atom::statistics_v, self);
   self->send(snk, atom::statistics_v, self);
   // Start the exporter.
-  self->send(*exp, atom::sink_v, snk);
-  self->send(*exp, atom::run_v);
+  self->send(exporter, atom::sink_v, snk);
+  self->send(exporter, atom::run_v);
   self->monitor(snk);
-  self->monitor(*exp);
+  self->monitor(exporter);
   guard.disable();
   caf::error err;
   auto waiting_for_final_report = false;
@@ -119,12 +121,12 @@ sink_command(const invocation& inv, actor_system& sys, caf::actor snk) {
         if (msg.source == node) {
           VAST_DEBUG(inv.full_name, "received DOWN from node");
           self->send_exit(snk, exit_reason::user_shutdown);
-        } else if (msg.source == *exp) {
+        } else if (msg.source == exporter) {
           VAST_DEBUG(inv.full_name, "received DOWN from exporter");
           self->send_exit(snk, exit_reason::user_shutdown);
         } else if (msg.source == snk) {
           VAST_DEBUG(inv.full_name, "received DOWN from sink");
-          self->send_exit(*exp, exit_reason::user_shutdown);
+          self->send_exit(exporter, exit_reason::user_shutdown);
           stop = false;
           waiting_for_final_report = true;
         } else {
@@ -170,7 +172,7 @@ sink_command(const invocation& inv, actor_system& sys, caf::actor snk) {
       [&](atom::signal, int signal) {
         VAST_DEBUG(inv.full_name, "got", ::strsignal(signal));
         if (signal == SIGINT || signal == SIGTERM) {
-          self->send_exit(*exp, exit_reason::user_shutdown);
+          self->send_exit(exporter, exit_reason::user_shutdown);
           self->send_exit(snk, exit_reason::user_shutdown);
         }
       })

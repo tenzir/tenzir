@@ -61,7 +61,7 @@ maybe_actor spawn_exporter(node_actor* self, spawn_arguments& args) {
   }
   if (index) {
     VAST_DEBUG(self, "connects index to new exporter");
-    self->send(handle, atom::index_v, caf::actor_cast<index_actor>(index));
+    self->send(handle, caf::actor_cast<index_actor>(index));
   }
   // Setting max-events to 0 means infinite.
   auto max_events = get_or(args.inv.options, "vast.export.max-events",
@@ -70,7 +70,7 @@ maybe_actor spawn_exporter(node_actor* self, spawn_arguments& args) {
     self->send(handle, atom::extract_v, static_cast<uint64_t>(max_events));
   else
     self->send(handle, atom::extract_v);
-  return handle;
+  return caf::actor_cast<caf::actor>(handle);
 }
 
 } // namespace vast::system
