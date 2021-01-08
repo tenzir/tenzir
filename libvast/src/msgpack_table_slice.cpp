@@ -329,6 +329,7 @@ data_view msgpack_table_slice<FlatBuffer>::at(table_slice::size_type row,
   auto view = as_bytes(*slice_.data());
   // First find the desired row...
   VAST_ASSERT(row < offset_table.size());
+  VAST_ASSERT(*state_.layout.at(*state_.layout.offset_from_index(column)) == t);
   auto offset = offset_table[row];
   VAST_ASSERT(offset < static_cast<size_t>(view.size()));
   auto xs = msgpack::overlay{view.subspan(offset)};

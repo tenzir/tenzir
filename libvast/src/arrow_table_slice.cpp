@@ -655,6 +655,7 @@ template <class FlatBuffer>
 data_view arrow_table_slice<FlatBuffer>::at(table_slice::size_type row,
                                             table_slice::size_type column,
                                             const type& t) const {
+  VAST_ASSERT(*state_.layout.at(*state_.layout.offset_from_index(column)) == t);
   auto&& batch = record_batch();
   VAST_ASSERT(batch);
   auto array = batch->column(detail::narrow_cast<int>(column));
