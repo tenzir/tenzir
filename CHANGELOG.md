@@ -31,6 +31,7 @@ Every entry has a category for which we use the following visual abbreviations:
   spawning a new actor that processes the incoming stream of data. The
   directory `plugins/example` contains an example plugin.
   [#1208](https://github.com/tenzir/vast/pull/1208)
+  [#1264](https://github.com/tenzir/vast/pull/1264)
 
 - 🐞 For relocatable installations, the list of schema loading paths does not
   include a build-time configured path any more.

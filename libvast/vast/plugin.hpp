@@ -46,6 +46,9 @@ extern "C" struct plugin_version {
   uint16_t tweak;
 };
 
+/// @relates plugin_version
+std::string to_string(plugin_version x);
+
 /// Checks if a version meets the plugin version requirements.
 /// @param version The version to compare against the requirements.
 bool has_required_version(const plugin_version& version) noexcept;
@@ -154,6 +157,9 @@ public:
                                                      "from 'vast::plugin'");
     return dynamic_cast<Plugin*>(instance_);
   }
+
+  /// Returns the plugin version.
+  plugin_version version() const;
 
 private:
   /// Implementation details.

@@ -34,6 +34,19 @@ std::vector<plugin_ptr>& get() noexcept {
 
 // -- plugin version -----------------------------------------------------------
 
+std::string to_string(plugin_version x) {
+  using std::to_string;
+  std::string result;
+  result += to_string(x.major);
+  result += '.';
+  result += to_string(x.major);
+  result += '.';
+  result += to_string(x.patch);
+  result += '-';
+  result += to_string(x.tweak);
+  return result;
+}
+
 bool has_required_version(const plugin_version& version) noexcept {
   return plugin::version.major == version.major
          && std::tie(plugin::version.minor, plugin::version.patch,
@@ -107,6 +120,13 @@ const plugin& plugin_ptr::operator*() const noexcept {
 
 plugin& plugin_ptr::operator&() noexcept {
   return *instance_;
+}
+
+plugin_version plugin_ptr::version() const {
+  auto version_function = reinterpret_cast<::vast::plugin_version (*)()>(
+    dlsym(library_, "vast_plugin_version"));
+  VAST_ASSERT(version_function != nullptr);
+  return version_function();
 }
 
 } // namespace vast
