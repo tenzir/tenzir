@@ -77,7 +77,7 @@ protected:
   template <class... Policies, class Printer>
   caf::error
   print_record(Printer& printer, const line_elements& le,
-               const record_type& layout, table_slice_row row, size_t pos) {
+               const record_type& layout, table_slice_row row, size_t& pos) {
     auto print_field = [&](auto& iter, const record_field& f, size_t column) {
       auto rep = [&](data_view x) {
         if constexpr (detail::is_any_v<policy::include_field_names, Policies...>)
@@ -138,8 +138,9 @@ protected:
         return xs.layout();
     }();
     for (size_t row = 0; row < xs.rows(); ++row) {
+      size_t pos = 0;
       if (auto err = print_record<Policies...>(printer, le, layout,
-                                               table_slice_row{xs, row}, 0))
+                                               table_slice_row{xs, row}, pos))
         return err;
       append('\n');
       write_buf();
