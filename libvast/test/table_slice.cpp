@@ -34,8 +34,8 @@ using namespace std::string_literals;
 FIXTURE_SCOPE(table_slice_tests, fixtures::table_slices)
 
 TEST(random integer slices) {
-  record_type layout{
-    {"i", integer_type{}.attributes({{"default", "uniform(100,200)"}})}};
+  auto t = integer_type{}.attributes({{"default", "uniform(100,200)"}});
+  record_type layout{{"i", t}};
   layout.name("test.integers");
   auto slices = unbox(make_random_table_slices(10, 10, layout));
   CHECK_EQUAL(slices.size(), 10u);
@@ -44,7 +44,7 @@ TEST(random integer slices) {
   std::vector<integer> values;
   for (auto& slice : slices)
     for (size_t row = 0; row < slice.rows(); ++row)
-      values.emplace_back(get<integer>(slice.at(row, 0, integer_type{})));
+      values.emplace_back(get<integer>(slice.at(row, 0, t)));
   auto [lowest, highest] = std::minmax_element(values.begin(), values.end());
   CHECK_GREATER_EQUAL(*lowest, 100);
   CHECK_LESS_EQUAL(*highest, 200);

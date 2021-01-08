@@ -632,7 +632,9 @@ struct row_evaluator {
             return false;
           }
         }
-        auto lhs = to_canonical(field.type, slice_.at(row_, col, time_type{}));
+        auto lhs = to_canonical(
+          field.type,
+          slice_.at(row_, col, time_type{}.attributes({{"timestamp"}})));
         auto rhs = make_view(d);
         return evaluate_view(lhs, op_, rhs);
       }
