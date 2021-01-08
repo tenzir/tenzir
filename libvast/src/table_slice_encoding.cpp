@@ -11,25 +11,23 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#pragma once
+#include "vast/table_slice_encoding.hpp"
 
-#include "vast/fwd.hpp"
-
-#include <string>
+#include "vast/die.hpp"
 
 namespace vast {
 
-/// The possible encodings of a table slice.
-/// @note This encoding is unversioned. Newly created table slices are
-/// guaranteed to use the newest vesion of the encoding, while deserialized
-/// table slices may use an older version.
-enum class table_slice_encoding : uint8_t {
-  none,    ///< No data is encoded; the table slice is empty or invalid.
-  arrow,   ///< The table slice is encoded using the Apache Arrow format.
-  msgpack, ///< The table slice is encoded using the MessagePack format.
-};
-
-/// @relates table_slice_encoding
-std::string to_string(table_slice_encoding encoding) noexcept;
+std::string to_string(table_slice_encoding encoding) noexcept {
+  switch (encoding) {
+    case table_slice_encoding::none:
+      return "none";
+    case table_slice_encoding::arrow:
+      return "arrow";
+    case table_slice_encoding::msgpack:
+      return "msgpack";
+  }
+  // Make gcc happy, this code is actually unreachable.
+  die("unhandled table slice encoding");
+}
 
 } // namespace vast

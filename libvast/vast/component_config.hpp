@@ -29,6 +29,9 @@ namespace vast {
 template <class T>
 bool extract_settings(T& to, const caf::settings& from, std::string_view path) {
   auto cv = caf::get_if(&from, path);
+  // TODO: It doesn't make much sense to indicate success if the key doesn't
+  // exist, but we have other code that depends on it. We should clean this up
+  // in the future.
   if (!cv)
     return true;
   if constexpr (caf::detail::tl_contains<caf::config_value::variant_type::types,
