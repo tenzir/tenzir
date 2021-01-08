@@ -93,9 +93,10 @@ make_source(const Actor& self, caf::actor_system& sys, const invocation& inv,
   auto uri = caf::get_if<std::string>(&options, category + ".listen");
   auto file = caf::get_if<std::string>(&options, category + ".read");
   auto type = caf::get_if<std::string>(&options, category + ".type");
-  table_slice_encoding encoding;
+  auto encoding = table_slice_encoding::none;
   if (!extract_settings(encoding, options, "vast.import.batch-encoding"))
     encoding = defaults::import::table_slice_type;
+  VAST_ASSERT(encoding != table_slice_encoding::none);
   auto slice_size = get_or(options, "vast.import.batch-size",
                            defaults::import::table_slice_size);
   if (slice_size == 0)
