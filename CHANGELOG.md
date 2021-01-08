@@ -26,6 +26,9 @@ Every entry has a category for which we use the following visual abbreviations:
 - ⚠️ Plugins must now be built against the exact same version of libvast that
   VAST is built against. [#1275](https://github.com/tenzir/vast/pull/1275)
 
+- ⚠️ `vast start` now prints the endpoint it is listening on on `stdout`.
+  [#1271](https://github.com/tenzir/vast/pull/1271)
+
 - 🎁 VAST queries now also accept `nanoseconds`, `microseconds`, `milliseconds`
   `seconds` and `minutes` as units for a duration.
   [#1265](https://github.com/tenzir/vast/pull/1265)
