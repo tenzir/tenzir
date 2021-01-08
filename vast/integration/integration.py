@@ -224,15 +224,15 @@ def run_step(basecmd, step_id, step, work_dir, baseline_dir, update_baseline, ex
             client.stdin.close()
         result = try_wait(client, timeout=STEP_TIMEOUT - (now() - start_time), expected_result=expected_result)
         if result is Result.ERROR and result != expected_result:
-            LOGGER.debug("standard error:")
+            LOGGER.warning("standard error:")
             for line in open(stderr).readlines()[-100:]:
-                LOGGER.debug(f"    {line}")
+                LOGGER.warning(f"    {line}")
             return result
         # Perform baseline update or comparison.
         baseline = baseline_dir / f"{step_id}.ref"
         sort_output = is_non_deterministic(step.command)
         if update_baseline:
-            LOGGER.info("updating baseline")
+            LOGGER.debug("updating baseline")
             if not baseline_dir.exists():
                 baseline_dir.mkdir(parents=True)
         else:
@@ -275,7 +275,7 @@ def run_step(basecmd, step_id, step, work_dir, baseline_dir, update_baseline, ex
             delta = list(diff)
             if delta:
                 if expected_result != Result.FAILURE:
-                    LOGGER.error("baseline comparison failed")
+                    LOGGER.warning("baseline comparison failed")
                     sys.stdout.writelines(delta)
                 return Result.FAILURE
     except subprocess.CalledProcessError as err:
@@ -311,7 +311,7 @@ class Server:
         if self.config_arg:
             command.append(self.config_arg)
         command = command + args
-        LOGGER.info(f"starting server fixture: {command}")
+        LOGGER.debug(f"starting server fixture: {command}")
         LOGGER.debug(f"waiting for port {self.port} to be available")
         if not wait.tcp.closed(self.port, timeout=5):
             raise RuntimeError("Port is blocked by another process.\nAborting tests...")
@@ -425,17 +425,17 @@ class Tester:
             run_flamegraph(self.args, svg_file)
         for step in test.steps:
             step_id = "step_{:02d}".format(step_i)
-            LOGGER.info(f"running step {step_i}: {step.command}")
+            LOGGER.debug(f"running step {step_i}: {step.command}")
             result = run_step(cmd, step_id, step, work_dir, baseline_dir, self.update, step.expected_result)
             summary.count(result, step.expected_result)
             if not self.args.keep_going and result != step.expected_result:
-                LOGGER.error("skipping remaining steps after error")
+                LOGGER.warning("skipping remaining steps after error")
                 break
             step_i += 1
         exec(fexit)
         # Summarize result.
         if summary.successful():
-            LOGGER.debug(f"ran all {summary.step_count} steps successfully")
+            LOGGER.info(f"ran all {summary.step_count} steps successfully")
             if not self.args.keep:
                 LOGGER.debug(f"removing working directory {work_dir}")
                 shutil.rmtree(work_dir)
@@ -651,7 +651,7 @@ def main():
         help="Path to flamegraph script",
     )
     parser.add_argument(
-        "-v", "--verbosity", default="DEBUG", help="Set the logging verbosity"
+        "-v", "--verbosity", default="INFO", help="Set the logging verbosity"
     )
     args = parser.parse_args()
     # Setup logging.
