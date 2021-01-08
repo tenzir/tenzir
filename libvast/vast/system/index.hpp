@@ -153,11 +153,6 @@ struct index_state {
   std::vector<std::pair<uuid, partition_actor>>
   collect_query_actors(query_state& lookup, uint32_t num_partitions);
 
-  /// Spawns one evaluator for each partition.
-  /// @returns a query map for passing to INDEX workers over the spawned
-  ///          EVALUATOR actors.
-  query_map launch_evaluators(pending_query_map& pqm, expression expr);
-
   // -- flush handling ---------------------------------------------------
 
   /// Adds a new flush listener.

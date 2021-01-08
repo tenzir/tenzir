@@ -76,18 +76,30 @@ using namespace std::chrono;
 // receives an expression and loads the partitions that might contain relevant
 // results into memory.
 //
-//                     expression                atom::evaluate
-// query_supervisor    ------------>  index     ----------------->   partition
-//                                                                      |
-//                                                  [indexer]           |
-//                                  (spawns     <-----------------------/
-//                                   evaluators)
+//    expression                                lookup()
+//   ------------>  index                  --------------------> meta_index
+//                                                                 |
+//     query_id,                                                   |
+//     scheduled,                                                  |
+//     remaining                                    [uuid]         |
+//   <-----------  (creates query state)  <------------------------/
+//                            |
+//                            |  query_id, n_taste
+//                            |
+//    query_id, n             v                   expression, client
+//   ------------> (spawn n partitions) --------------------------------> partition
+//                                                                            |
+//                                                      ids                   |
+//   <------------------------------------------------------------------------/
+//                                                      ids                   |
+//   <------------------------------------------------------------------------/
+//                                                                            |
 //
-//                                                  curried_predicate
-//                                   evaluator  -------------------------------> indexer
+//                                                                          [...]
 //
-//                                                      ids
-//                     <--------------------------------------------------------
+//                                                      atom::done            |
+//   <------------------------------------------------------------------------/
+//
 // clang-format on
 
 namespace vast::system {
@@ -299,68 +311,7 @@ index_state::collect_query_actors(query_state& lookup,
   }
   lookup.partitions.erase(lookup.partitions.begin(), it);
   VAST_DEBUG(self, "launched", result.size(),
-             "await handlers to fill the pending query map");
-  return result;
-}
-
-/// Sends an `evaluate` atom to all partition actors passed into this function,
-/// and collects the resulting
-/// @param c Continuation that takes a single argument of type
-/// `caf::expected<pending_query_map>`. The continuation will be called in the
-/// context of `self`.
-//
-// TODO: At some point we should add some more template magic on top of
-// this and turn it into a generic functions that maps
-//
-//   (map from U to A, request param pack R, result handler with param X) ->
-//   expected<map from U to X>
-template <typename Continuation>
-void await_evaluation_maps(
-  index_actor::pointer self, const expression& expr,
-  const std::vector<std::pair<vast::uuid, partition_actor>>& actors,
-  Continuation then) {
-  struct counter {
-    size_t received;
-    pending_query_map pqm;
-  };
-  auto expected = actors.size();
-  auto shared_counter = std::make_shared<counter>();
-  for (auto& [id, actor] : actors) {
-    auto& partition_id = id; // Can't use structured binding inside lambda.
-    self->request(actor, caf::infinite, expr)
-      .then(
-        [=](std::vector<evaluation_triple> triples) {
-          auto received = ++shared_counter->received;
-          if (!triples.empty()) {
-            shared_counter->pqm.emplace(partition_id, std::move(triples));
-          } else {
-            VAST_DEBUG(self, "received no evaluation triples from",
-                       self->current_sender());
-          }
-          if (received == expected)
-            then(std::move(shared_counter->pqm));
-        },
-        [=](const caf::error& err) {
-          auto received = ++shared_counter->received;
-          // TODO: Add a way to signal to the caller that he is only getting
-          // partial results because some of the partitions error'ed out.
-          VAST_ERROR(self, "failed to get evaluation triples from partition",
-                     partition_id, "with error:", render(err));
-          if (received == expected)
-            then(std::move(shared_counter->pqm));
-        });
-  }
-}
-
-query_map
-index_state::launch_evaluators(pending_query_map& pqm, expression expr) {
-  query_map result;
-  for (auto& [id, eval] : pqm) {
-    std::vector<evaluator_actor> xs{
-      self->spawn(evaluator, expr, std::move(eval))};
-    result.emplace(id, std::move(xs));
-  }
-  pqm.clear();
+             "partition actors to evaluate query");
   return result;
 }
 
@@ -681,54 +632,22 @@ index(index_actor::stateful_pointer<index_state> self,
         self->send(client, atom::done_v);
         return {};
       }
+      auto& query_state = iter->second;
       auto worker = self->state.next_worker();
       if (!worker)
         return caf::skip;
       // Get partition actors, spawning new ones if needed.
       auto actors
-        = self->state.collect_query_actors(iter->second, num_partitions);
-      // Send an evaluate atom to all the actors and collect the returned
-      // evaluation triples in a `pending_query_map`, then run the continuation
-      // below in the same actor context.
-      await_evaluation_maps(
-        self, iter->second.expression, actors,
-        [=, worker
-            = std::move(*worker)](caf::expected<pending_query_map> maybe_pqm) {
-          auto& st = self->state;
-          auto drop = [&] {
-            self->state.idle_workers.emplace_back(std::move(worker));
-            self->send(client, atom::done_v);
-          };
-          auto iter = st.pending.find(query_id);
-          if (iter == st.pending.end()) {
-            VAST_WARNING(self, "ignores continuation for unknown query id",
-                         query_id);
-            return drop();
-          }
-          auto& query_state = iter->second;
-          if (!maybe_pqm) {
-            VAST_ERROR(self, "failed to collect pending query map:",
-                       render(maybe_pqm.error()));
-            return drop();
-          }
-          auto& pqm = *maybe_pqm;
-          if (pqm.empty()) {
-            VAST_DEBUG(self, "returns without result: no partitions qualify");
-            if (query_state.partitions.empty())
-              st.pending.erase(iter);
-            return drop();
-          }
-          auto qm = st.launch_evaluators(pqm, query_state.expression);
-          // Delegate to query supervisor (uses up this worker) and report
-          // query ID + some stats to the client.
-          VAST_DEBUG(self, "schedules", qm.size(),
-                     "more partition(s) for query id", query_id, "with",
-                     query_state.partitions.size(), "partitions remaining");
-          self->send(worker, query_state.expression, std::move(qm), client);
-          // Cleanup if we exhausted all candidates.
-          if (query_state.partitions.empty())
-            st.pending.erase(iter);
-        });
+        = self->state.collect_query_actors(query_state, num_partitions);
+      // Delegate to query supervisor (uses up this worker) and report
+      // query ID + some stats to the client.
+      VAST_DEBUG(self, "schedules", actors.size(),
+                 "more partition(s) for query id", query_id, "with",
+                 query_state.partitions.size(), "partitions remaining");
+      self->send(*worker, query_state.expression, std::move(actors), client);
+      // Cleanup if we exhausted all candidates.
+      if (query_state.partitions.empty())
+        self->state.pending.erase(iter);
       return {};
     },
     [=](atom::replace, uuid partition_id,

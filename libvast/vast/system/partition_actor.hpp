@@ -16,6 +16,7 @@
 #include "vast/fwd.hpp"
 
 #include "vast/system/evaluation_triple.hpp"
+#include "vast/system/index_client_actor.hpp"
 
 #include <caf/typed_event_based_actor.hpp>
 
@@ -26,6 +27,8 @@ namespace vast::system {
 /// The PARTITION actor interface.
 using partition_actor = caf::typed_actor<
   // Evaluate the given expression, returning the relevant evaluation triples.
-  caf::replies_to<expression>::with<std::vector<evaluation_triple>>>;
+  // TODO: Passing the `index_client_actor` here is an historical artifact,
+  //       a cleaner API would be to just return the evaluated `vast::ids`.
+  caf::replies_to<expression, index_client_actor>::with<atom::done>>;
 
 } // namespace vast::system

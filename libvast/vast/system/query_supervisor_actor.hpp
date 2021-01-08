@@ -15,7 +15,9 @@
 
 #include "vast/fwd.hpp"
 
-#include "vast/system/evaluator_actor.hpp"
+#include "vast/system/index_client_actor.hpp"
+// #include "vast/system/evaluator_actor.hpp"
+#include "vast/system/partition_actor.hpp"
 #include "vast/uuid.hpp"
 
 #include <caf/detail/unordered_flat_map.hpp>
@@ -25,14 +27,12 @@
 
 namespace vast::system {
 
-/// Maps partition IDs to EVALUATOR actors.
-using query_map
-  = caf::detail::unordered_flat_map<uuid, std::vector<evaluator_actor>>;
+/// FIXME: comment
+using query_map = std::vector<std::pair<uuid, partition_actor>>;
 
 /// The QUERY SUPERVISOR actor interface.
 using query_supervisor_actor = caf::typed_actor<
-  // Supervise the evaluation of a query by the EVALUATOR actors, and forward
-  // the results to the INDEX CLIENT.
+  // FIXME: comment
   caf::reacts_to<expression, query_map, index_client_actor>>;
 
 } // namespace vast::system

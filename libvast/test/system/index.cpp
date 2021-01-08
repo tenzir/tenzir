@@ -15,6 +15,8 @@
 
 #include "vast/system/index.hpp"
 
+#include "vast/fwd.hpp"
+
 #include "vast/test/fixtures/actor_system_and_events.hpp"
 #include "vast/test/test.hpp"
 
@@ -24,12 +26,13 @@
 #include "vast/concept/printable/to_string.hpp"
 #include "vast/detail/spawn_container_source.hpp"
 #include "vast/detail/spawn_generator_source.hpp"
-#include "vast/fwd.hpp"
 #include "vast/ids.hpp"
 #include "vast/query_options.hpp"
 #include "vast/system/posix_filesystem.hpp"
 #include "vast/table_slice.hpp"
 #include "vast/table_slice_builder.hpp"
+
+#include <iostream>
 
 using caf::after;
 using std::chrono_literals::operator""s;
