@@ -329,9 +329,10 @@ tests:
 
   Taxonomy dump:
     tags: [concepts, models]
+    fixture: ServerTester
     steps:
-      - command: -N dump concepts
-      - command: -N dump --yaml models
+      - command: dump concepts
+      - command: dump --yaml models
 
   Pivot:
     tags: [pivot]
