@@ -16,7 +16,6 @@
 #include "vast/fwd.hpp"
 
 #include "vast/expression.hpp"
-#include "vast/system/exporter_actor.hpp"
 #include "vast/system/node.hpp"
 #include "vast/type.hpp"
 
