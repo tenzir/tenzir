@@ -13,6 +13,8 @@
 
 #include "vast/table_slice_encoding.hpp"
 
+#include "vast/die.hpp"
+
 namespace vast {
 
 std::string to_string(table_slice_encoding encoding) noexcept {
@@ -24,6 +26,8 @@ std::string to_string(table_slice_encoding encoding) noexcept {
     case table_slice_encoding::msgpack:
       return "msgpack";
   }
+  // Make gcc happy, this code is actually unreachable.
+  die("unhandled table slice encoding");
 }
 
 } // namespace vast
