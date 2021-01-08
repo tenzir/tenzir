@@ -58,7 +58,7 @@ file(
 
 add_custom_target(
   integration
-  COMMAND /bin/sh "${CMAKE_CURRENT_BINARY_DIR}/integration_$<CONFIG>.sh" "-v DEBUG"
+  COMMAND /bin/sh "${CMAKE_CURRENT_BINARY_DIR}/integration_$<CONFIG>.sh" "-v" "DEBUG"
   USES_TERMINAL)
 
 add_custom_target(
