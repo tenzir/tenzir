@@ -94,7 +94,7 @@ TEST(simdjson to data) {
     "d": "42s",
     "d2": 3.006088,
     "e": "BAZ",
-    "lc": [ 19, 5555, 0 ],
+    "lc": [ "0x3e7", 19, 5555, 0 ],
     "lt": [ 1556624773, "2019-04-30T11:46:13Z" ],
     "rec": { "c": 421, "s":"test" },
     "msa": { "foo": "1.2.3.4", "bar": "2001:db8::" },
@@ -132,7 +132,7 @@ TEST(simdjson to data) {
 
   CHECK(slice.at(0, 10) == data{enumeration{2}});
 
-  const list lc = {data{count{19}}, data{count{5555}}, data{count{0}}};
+  const list lc = {data{count{0x3e7}}, data{count{19}}, data{count{5555}}, data{count{0}}};
   CHECK(slice.at(0, 11) == data{lc});
   CHECK(slice.at(0, 13) == data{count{421}});
   CHECK(slice.at(0, 14) == data{std::string{"test"}});
