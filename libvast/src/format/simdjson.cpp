@@ -424,7 +424,6 @@ caf::error add(table_slice_builder& builder, const ::simdjson::dom::object& xs,
     if (!x) {
       return make_error(ec::convert_error, x.error().context(),
                         "could not convert", field.name);
-      std::exit(1);
     }
 
     if (!builder.add(make_data_view(*x)))
