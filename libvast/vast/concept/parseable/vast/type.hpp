@@ -40,7 +40,7 @@ public:
     if (name.empty() || name != t.name())
       return false;
     t.name(name);
-    symbols_.symbols.insert({name, t});
+    symbols_.symbols.emplace(name, t);
     return true;
   }
 
