@@ -740,7 +740,7 @@ index(index_actor::stateful_pointer<index_state> self,
       // to be copy constructible.
       VAST_DEBUG(self, "replaces synopsis for partition", partition_id);
       if (!ps.unique()) {
-        VAST_WARNING(self, "ignores partition synopses thats still in use");
+        VAST_WARNING(self, "ignores partition synopsis that is still in use");
         // TODO: Should this return caf::skip?
         return;
       }

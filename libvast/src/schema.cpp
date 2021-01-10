@@ -37,9 +37,9 @@ caf::expected<schema> schema::merge(const schema& s1, const schema& s2) {
   for (auto& t : s1) {
     if (auto u = s2.find(t.name())) {
       if (t != *u && t.name() == u->name())
-        // Type clash: cannot accomodate two types with same name.
+        // Type clash: cannot accommodate two types with same name.
         return make_error(ec::format_error,
-                          "type clash: cannot accomodate two types with the "
+                          "type clash: cannot accommodate two types with the "
                           "same name:",
                           t.name());
     } else {

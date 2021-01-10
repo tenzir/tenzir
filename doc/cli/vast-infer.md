@@ -1,7 +1,7 @@
 The `infer` command attempts to derive a schema from user input. Upon success,
 it prints a schema template to standard output.
 
-The `infer` command allows for infering schemas for the Zeek TSV and JSON
+The `infer` command allows for inferring schemas for the Zeek TSV and JSON
 formats. Note that the input is required to be JSON, and unlike other VAST
 commands, JSONL (newline-delimited JSON) is not supported.
 
