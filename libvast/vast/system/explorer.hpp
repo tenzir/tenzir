@@ -13,8 +13,9 @@
 
 #pragma once
 
-#include "vast/expression.hpp"
 #include "vast/fwd.hpp"
+
+#include "vast/expression.hpp"
 #include "vast/system/node.hpp"
 #include "vast/type.hpp"
 
@@ -67,7 +68,7 @@ struct explorer_state {
   bool initial_query_completed = false;
 
   /// A handle to the exporter sending us the results of the original query.
-  caf::actor initial_query_exporter;
+  caf::actor_addr initial_exporter = {};
 
   /// Pointer to the parent actor.
   caf::stateful_actor<explorer_state>* self;

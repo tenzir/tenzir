@@ -143,6 +143,12 @@ tests:
       - command: -N import zeek
         input: data/zeek/snmp.log.gz
       - command: -N export ascii 'duration >= 3s'
+  Node Zeek JSON:
+    tags: [node, import-export, zeek, json]
+    steps:
+      - command: -N import -b zeek-json
+        input: data/zeek/zeek.json
+      - command: '-N export json "\"zeek\" in #type"'
   Export json:
     tags: [json, zeek]
     steps:
@@ -355,9 +361,10 @@ tests:
 
   Taxonomy dump:
     tags: [concepts, models]
+    fixture: ServerTester
     steps:
-      - command: -N dump concepts
-      - command: -N dump --yaml models
+      - command: dump concepts
+      - command: dump --yaml models
 
   Pivot:
     tags: [pivot]

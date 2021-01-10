@@ -20,6 +20,7 @@
 #include "vast/concept/printable/vast/schema.hpp"
 #include "vast/concept/printable/vast/type.hpp"
 #include "vast/detail/process.hpp"
+#include "vast/detail/string.hpp"
 #include "vast/directory.hpp"
 #include "vast/error.hpp"
 #include "vast/event_types.hpp"
@@ -223,7 +224,7 @@ get_schema_dirs(const caf::actor_system_config& cfg,
                 std::vector<const void*> objpath_addresses) {
   detail::stable_set<vast::path> result;
   if (!caf::get_or(cfg, "vast.no-default-schema", false)) {
-#if !VAST_RELOCATABLE_INSTALL
+#if !VAST_ENABLE_RELOCATABLE_INSTALLATIONS
     result.insert(VAST_DATADIR "/vast/schema");
 #endif
     // Get filesystem path to the executable.
@@ -265,8 +266,9 @@ load_schema(const detail::stable_set<path>& schema_dirs, size_t max_recursion) {
       continue;
     }
     vast::schema directory_schema;
-    auto schema_files
-      = filter_dir(dir, std::regex{"\\.schema$"}, max_recursion);
+    auto filter
+      = [](const path& f) { return detail::ends_with(f.str(), ".schema"); };
+    auto schema_files = filter_dir(dir, std::move(filter), max_recursion);
     for (auto f : schema_files) {
       VAST_DEBUG_ANON("loading schema", f);
       auto schema = load_schema(f);

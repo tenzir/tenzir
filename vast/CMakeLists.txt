@@ -9,7 +9,7 @@ endif ()
 
 add_executable(vast vast.cpp)
 target_link_libraries(vast PRIVATE vast::internal vast::libvast)
-install(TARGETS vast DESTINATION "${CMAKE_INSTALL_FULL_BINDIR}")
+install(TARGETS vast DESTINATION "${CMAKE_INSTALL_BINDIR}")
 
 # -- init system integration ---------------------------------------------------
 
@@ -61,13 +61,20 @@ add_custom_target(
   COMMAND /bin/sh "${CMAKE_CURRENT_BINARY_DIR}/integration_$<CONFIG>.sh"
   USES_TERMINAL)
 
+add_custom_target(
+  link-integration-directory ALL
+  COMMAND
+    ${CMAKE_COMMAND} -E create_symlink "${CMAKE_CURRENT_SOURCE_DIR}/integration"
+    "${CMAKE_BINARY_DIR}/share/vast/integration"
+  COMMENT "Linking integration test directory")
+
 install(
   DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/integration"
-  DESTINATION "${CMAKE_INSTALL_FULL_DATADIR}/vast"
+  DESTINATION "${CMAKE_INSTALL_DATADIR}/vast"
   PATTERN "integration/vast.yaml.example" EXCLUDE)
 
 install(FILES "${PROJECT_SOURCE_DIR}/vast.yaml.example"
-        DESTINATION "${CMAKE_INSTALL_FULL_DATADIR}/vast/integration")
+        DESTINATION "${CMAKE_INSTALL_DATADIR}/vast/integration")
 
 # -- man page ------------------------------------------------------------------
 

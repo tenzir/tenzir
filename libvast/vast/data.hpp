@@ -332,6 +332,10 @@ caf::error convert(const record& xs, caf::dictionary<caf::config_value>& ys);
 caf::error convert(const record& xs, caf::config_value& cv);
 caf::error convert(const data& x, caf::config_value& cv);
 
+caf::error convert(const caf::dictionary<caf::config_value>& xs, record& ys);
+caf::error convert(const caf::dictionary<caf::config_value>& xs, data& y);
+caf::error convert(const caf::config_value& x, data& y);
+
 // -- YAML -------------------------------------------------------------
 
 /// Parses YAML into a data.

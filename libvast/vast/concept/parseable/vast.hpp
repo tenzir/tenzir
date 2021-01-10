@@ -27,6 +27,7 @@
 #include "vast/concept/parseable/vast/schema.hpp"
 #include "vast/concept/parseable/vast/si.hpp"
 #include "vast/concept/parseable/vast/subnet.hpp"
+#include "vast/concept/parseable/vast/table_slice_encoding.hpp"
 #include "vast/concept/parseable/vast/time.hpp"
 #include "vast/concept/parseable/vast/type.hpp"
 #include "vast/concept/parseable/vast/uri.hpp"

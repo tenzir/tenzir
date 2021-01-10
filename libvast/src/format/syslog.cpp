@@ -58,9 +58,8 @@ type make_unknown_type() {
 
 } // namespace
 
-reader::reader(caf::atom_value table_slice_type, const caf::settings& options,
-               std::unique_ptr<std::istream> in)
-  : super(table_slice_type, options),
+reader::reader(const caf::settings& options, std::unique_ptr<std::istream> in)
+  : super(options),
     syslog_rfc5424_type_{make_rfc5424_type()},
     syslog_unkown_type_{make_unknown_type()} {
   if (in != nullptr)

@@ -11,7 +11,9 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#if VAST_HAVE_PCAP
+#include "vast/config.hpp"
+
+#if VAST_ENABLE_PCAP
 
 #  include "vast/format/pcap.hpp"
 
@@ -65,9 +67,8 @@ inline const auto pcap_packet_type_community_id = make_packet_type(
 
 } // namespace <anonymous>
 
-reader::reader(caf::atom_value id, const caf::settings& options,
-               std::unique_ptr<std::istream>)
-  : super(id, options) {
+reader::reader(const caf::settings& options, std::unique_ptr<std::istream>)
+  : super(options) {
   using defaults_t = vast::defaults::import::pcap;
   using caf::get_if;
   std::string category = defaults_t::category;
@@ -542,4 +543,4 @@ const char* writer::name() const {
 } // namespace format
 } // namespace vast
 
-#endif // VAST_HAVE_PCAP
+#endif // VAST_ENABLE_PCAP

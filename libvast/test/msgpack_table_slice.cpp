@@ -24,6 +24,6 @@ using namespace vast;
 
 FIXTURE_SCOPE(msgpack_table_slice_tests, fixtures::table_slices)
 
-TEST_TABLE_SLICE(msgpack_table_slice_builder, "msgpack")
+TEST_TABLE_SLICE(msgpack_table_slice_builder, msgpack)
 
 FIXTURE_SCOPE_END()

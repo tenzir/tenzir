@@ -13,7 +13,9 @@
 
 #define SUITE arrow_table_slice
 
-#if VAST_HAVE_ARROW
+#include "vast/config.hpp"
+
+#if VAST_ENABLE_ARROW
 
 #  include "vast/arrow_table_slice.hpp"
 
@@ -45,7 +47,7 @@ auto make_slice(record_type layout, const Ts&... xs) {
   if (!ok)
     FAIL("builder failed to add given values");
   auto slice = builder->finish();
-  if (slice.encoding() == table_slice::encoding::none)
+  if (slice.encoding() == table_slice_encoding::none)
     FAIL("builder failed to produce a table slice");
   return slice;
 }
@@ -57,8 +59,8 @@ auto make_single_column_slice(const Ts&... xs) {
 }
 
 table_slice roundtrip(table_slice slice) {
-  factory<table_slice_builder>::add<arrow_table_slice_builder>(caf::atom("arro"
-                                                                         "w"));
+  factory<table_slice_builder>::add<arrow_table_slice_builder>(
+    table_slice_encoding::arrow);
   table_slice slice_copy;
   std::vector<char> buf;
   caf::binary_serializer sink{nullptr, buf};
@@ -277,9 +279,8 @@ TEST(single column - map) {
 }
 
 TEST(single column - serialization) {
-  using vast::factory;
-  factory<table_slice_builder>::add<arrow_table_slice_builder>(caf::atom("arro"
-                                                                         "w"));
+  factory<table_slice_builder>::add<arrow_table_slice_builder>(
+    table_slice_encoding::arrow);
   auto slice1 = make_single_column_slice<count_type>(0_c, 1_c, 2_c, 3_c);
   decltype(slice1) slice2 = {};
   {
@@ -298,8 +299,8 @@ TEST(single column - serialization) {
 
 FIXTURE_SCOPE(arrow_table_slice_tests, fixtures::table_slices)
 
-TEST_TABLE_SLICE(arrow_table_slice_builder, "arrow")
+TEST_TABLE_SLICE(arrow_table_slice_builder, arrow)
 
 FIXTURE_SCOPE_END()
 
-#endif // VAST_HAVE_ARROW
+#endif // VAST_ENABLE_ARROW

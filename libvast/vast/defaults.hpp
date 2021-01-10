@@ -13,7 +13,10 @@
 
 #pragma once
 
-#include "vast/config.hpp" // Needed for VAST_HAVE_ARROW
+#include "vast/fwd.hpp"
+
+#include "vast/config.hpp" // Needed for VAST_ENABLE_ARROW
+#include "vast/table_slice_encoding.hpp"
 
 #include <caf/atom.hpp>
 #include <caf/fwd.hpp>
@@ -46,17 +49,17 @@ namespace import {
 /// Maximum size for sources that generate table slices.
 constexpr size_t table_slice_size = 1000;
 
-#if VAST_HAVE_ARROW
+#if VAST_ENABLE_ARROW
 
 /// The default table slice type when arrow is available.
-constexpr caf::atom_value table_slice_type = caf::atom("arrow");
+constexpr auto table_slice_type = table_slice_encoding::arrow;
 
-#else // VAST_HAVE_ARROW
+#else // VAST_ENABLE_ARROW
 
 /// The default table slice type when arrow is unavailable.
-constexpr caf::atom_value table_slice_type = caf::atom("msgpack");
+constexpr auto table_slice_type = table_slice_encoding::msgpack;
 
-#endif // VAST_HAVE_ARROW
+#endif // VAST_ENABLE_ARROW
 
 /// Maximum number of results.
 constexpr size_t max_events = 0;

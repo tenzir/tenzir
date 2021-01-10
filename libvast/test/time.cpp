@@ -42,23 +42,27 @@ void check_duration(const Input& str, T x) {
 
 TEST(positive durations) {
   MESSAGE("nanoseconds");
+  check_duration("42 nanoseconds", 42ns);
   check_duration("42 nsecs", 42ns);
   check_duration("42nsec", 42ns);
   check_duration("42ns", 42ns);
-  check_duration("42ns", 42ns);
   MESSAGE("microseconds");
+  check_duration("42 microseconds", 42us);
   check_duration("42 usecs", 42us);
   check_duration("42usec", 42us);
   check_duration("42us", 42us);
   MESSAGE("milliseconds");
+  check_duration("42 milliseconds", 42ms);
   check_duration("42 msecs", 42ms);
   check_duration("42msec", 42ms);
   check_duration("42ms", 42ms);
   MESSAGE("seconds");
+  check_duration("42 seconds", 42s);
   check_duration("42 secs", 42s);
   check_duration("42sec", 42s);
   check_duration("42s", 42s);
   MESSAGE("minutes");
+  check_duration("42 minutes", 42min);
   check_duration("42 mins", 42min);
   check_duration("42min", 42min);
   check_duration("42m", 42min);
@@ -66,6 +70,14 @@ TEST(positive durations) {
   check_duration("42 hours", 42h);
   check_duration("42hour", 42h);
   check_duration("42h", 42h);
+  MESSAGE("weeks");
+  check_duration("1 weeks", 168h);
+  check_duration("1week", 168h);
+  check_duration("1w", 168h);
+  MESSAGE("years");
+  check_duration("1 years", 8760h);
+  check_duration("1year", 8760h);
+  check_duration("1y", 8760h);
 }
 
 TEST(negative durations) {

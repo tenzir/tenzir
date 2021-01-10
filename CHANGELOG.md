@@ -12,9 +12,46 @@ Every entry has a category for which we use the following visual abbreviations:
 
 ## Unreleased
 
+- 🎁 VAST queries now also accept `nanoseconds`, `microseconds`, `milliseconds`
+  `seconds` and `minutes` as units for a duration.
+  [#1265](https://github.com/tenzir/vast/pull/1265)
+
+- 🎁 The new `import zeek-json` command allows for importing line-delimited Zeek
+  JSON logs as produced by the
+  [json-streaming-logs](https://github.com/corelight/json-streaming-logs)
+  package. Unlike stock Zeek JSON logs, where one file contains exactly one log
+  type, the streaming format contains different log event types in a single
+  stream and uses an additional `_path` field to disambiguate the log type. For
+  stock Zeek JSON logs, use the existing `import json` with the `-t` flag to
+  specify the log type.  [#1259](https://github.com/tenzir/vast/1259)
+
+- 🧬 VAST now offers a plugin framework to support efficient customization
+  points at various places of the data processing pipeline. There exist several
+  base classes that define an interface, such as adding a new command or
+  spawning a new actor that processes the incoming stream of data. The
+  directory `plugins/example` contains an example plugin.
+  [#1208](https://github.com/tenzir/vast/pull/1208)
+  [#1264](https://github.com/tenzir/vast/pull/1264)
+
+- 🐞 For relocatable installations, the list of schema loading paths does not
+  include a build-time configured path any more.
+  [#1249](https://github.com/tenzir/vast/pull/1249)
+
+- 🐞 Values in JSON fields that can't be converted to the type that is specified
+  in the schema won't cause the containing event to be dropped any longer.
+  [#1250](https://github.com/tenzir/vast/pull/1250)
+
+- 🐞 Invalid Arrow table slices read from disk no longer trigger a segmentation
+  fault. Instead, the invalid on-disk state is ignored.
+  [#1247](https://github.com/tenzir/vast/pull/1247)
+
+- 🐞 Manually specified configuration files may now reside in the default
+  location directories. Configuration files can now be symlinked.
+  [#1248](https://github.com/tenzir/vast/pull/1248)
+
 - 🎁 The new short options `-v`, `-vv`, `-vvv`, `-q`, `-qq`, and `-qqq` map onto
   the existing verbosity levels.
-  [#1244](https://github.com/tenzir/vast/pull&1244)
+  [#1244](https://github.com/tenzir/vast/pull/1244)
 
 ## [2020.12.16]
 
@@ -1056,4 +1093,4 @@ This is the first official release.
 [2020.08.28]: https://github.com/tenzir/vast/releases/tag/2020.08.28
 [2020.09.30]: https://github.com/tenzir/vast/releases/tag/2020.09.30
 [2020.10.29]: https://github.com/tenzir/vast/releases/tag/2020.10.29
-[2020.10.29]: https://github.com/tenzir/vast/releases/tag/2020.12.16
+[2020.12.16]: https://github.com/tenzir/vast/releases/tag/2020.12.16

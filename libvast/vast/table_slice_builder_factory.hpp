@@ -24,7 +24,7 @@ namespace vast {
 template <>
 struct factory_traits<table_slice_builder> {
   using result_type = table_slice_builder_ptr;
-  using key_type = caf::atom_value;
+  using key_type = table_slice_encoding;
   using signature = result_type (*)(record_type);
 
   static void initialize();

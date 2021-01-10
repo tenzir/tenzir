@@ -67,6 +67,23 @@ else ()
 endif ()
 unset(_VAST_PARENT_DIRECTORY)
 
+# -- library flavor ------------------------------------------------------------
+
+option(BUILD_SHARED_LIBS "Build shared instead of static libraries" ON)
+add_feature_info("BUILD_SHARED_LIBS" BUILD_SHARED_LIBS
+                 "build shared instead of static libraries.\n")
+
+# -- relocatable installations ----------------------------------------------
+
+# Setting this option removes configuration dependent absolute paths from the
+# VAST installation. Concretely, it enables the dynamic binary and libraries to
+# use relative paths for loading their dependencies.
+option(VAST_ENABLE_RELOCATABLE_INSTALLATIONS "Enable relocatable installations"
+       ON)
+add_feature_info(
+  "VAST_ENABLE_RELOCATABLE_INSTALLATIONS" VAST_ENABLE_RELOCATABLE_INSTALLATIONS
+  "enable relocatable installations.")
+
 # -- silence policy-related warnings -------------------------------------------
 
 # TODO: When updating to CAF 0.18, this should no longer be needed.
@@ -82,6 +99,7 @@ if (POLICY CMP0042)
   if (APPLE AND NOT DEFINED CMAKE_MACOSX_RPATH)
     set(CMAKE_SKIP_BUILD_RPATH FALSE)
     set(CMAKE_BUILD_WITH_INSTALL_RPATH FALSE)
+    # TODO: Verify that this is indeed correct.
     if (NOT VAST_ENABLE_RELOCATABLE_INSTALLATIONS)
       set(CMAKE_INSTALL_RPATH_USE_LINK_PATH TRUE)
     endif ()
@@ -113,6 +131,10 @@ if (${CMAKE_SYSTEM_NAME} MATCHES "FreeBSD")
                                _GLIBCXX_USE_C99_MATH_TR1)
 endif ()
 
+if (BUILD_SHARED_LIBS AND "${CMAKE_SYSTEM_NAME}" MATCHES "Linux")
+  target_link_libraries(libvast_internal INTERFACE dl)
+endif ()
+
 # -- optimizations -------------------------------------------------------------
 
 # TODO add option to disable SSE
@@ -137,6 +159,7 @@ target_compile_options(
             -Wextra
             -pedantic
             -Werror=switch
+            -Wundef
             $<$<CONFIG:CI>:-Werror
             -Wno-error=deprecated
             -Wno-error=deprecated-declarations>
@@ -158,19 +181,6 @@ endif ()
 option(VAST_ENABLE_SDT "Generate USDT tracepoint instrumentation" ON)
 add_feature_info("VAST_ENABLE_SDT" VAST_ENABLE_SDT
                  "generate USDT tracepoint instrumentation.")
-if (VAST_ENABLE_SDT)
-  target_compile_definitions(libvast_internal INTERFACE VAST_ENABLE_SDT=1)
-endif ()
-
-# -- exceptions ----------------------------------------------------------------
-
-option(VAST_ENABLE_EXCEPTIONS "Enable C++ exceptions" ON)
-add_feature_info("VAST_ENABLE_EXCEPTIONS" VAST_ENABLE_EXCEPTIONS
-                 "use C++ exceptions.")
-if (NOT VAST_ENABLE_EXCEPTIONS)
-  target_compile_definitions(libvast_internal INTERFACE VAST_NO_EXCEPTIONS=1)
-  target_compile_options(libvast_internal INTERFACE "-fno-exceptions")
-endif ()
 
 # -- build profiling -----------------------------------------------------------
 
@@ -230,33 +240,16 @@ if (VAST_ENABLE_UBSAN)
   target_link_libraries(libvast_internal INTERFACE -fsanitize=undefined)
 endif ()
 
-# -- relocatability and static build support -----------------------------------
+# -- static build support -----------------------------------
 
-# Setting this option removes configuration dependent absolute paths from the
-# VAST installation. Concretely, it enables the dynamic binary and libraries to
-# use relative paths for loading their dependencies.
-option(VAST_ENABLE_RELOCATABLE_INSTALLATIONS "Enable relocatable installations"
-       ON)
-add_feature_info(
-  "VAST_ENABLE_RELOCATABLE_INSTALLATIONS" VAST_ENABLE_RELOCATABLE_INSTALLATIONS
-  "enable relocatable installations.")
-
-option(VAST_ENABLE_STATIC_EXECUTABLE "Link VAST statically."
-       $ENV{VAST_ENABLE_STATIC_EXECUTABLE})
+cmake_dependent_option(
+  VAST_ENABLE_STATIC_EXECUTABLE "Link VAST statically."
+  "$ENV{VAST_ENABLE_STATIC_EXECUTABLE}" "NOT BUILD_SHARED_LIBS" OFF)
 add_feature_info("VAST_ENABLE_STATIC_EXECUTABLE" VAST_ENABLE_STATIC_EXECUTABLE
                  "link VAST statically.")
 if (VAST_ENABLE_STATIC_EXECUTABLE)
   target_link_libraries(libvast_internal INTERFACE -static-libgcc
                                                    -static-libstdc++ -static)
-endif ()
-
-cmake_dependent_option(
-  BUILD_SHARED_LIBS "Build shared instead of static libraries" ON
-  "NOT VAST_ENABLE_STATIC_EXECUTABLE" OFF)
-add_feature_info("BUILD_SHARED_LIBS" BUILD_SHARED_LIBS
-                 "build shared instead of static library.")
-if (BUILD_SHARED_LIBS AND "${CMAKE_SYSTEM_NAME}" MATCHES "Linux")
-  target_link_libraries(libvast_internal INTERFACE dl)
 endif ()
 
 if (VAST_ENABLE_STATIC_EXECUTABLE AND BUILD_SHARED_LIBS)
@@ -286,8 +279,8 @@ if (VAST_ENABLE_JEMALLOC)
   find_package(jemalloc REQUIRED)
   provide_find_module(jemalloc)
   string(APPEND VAST_FIND_DEPENDENCY_LIST "\nfind_package(jemalloc REQUIRED)")
-  target_compile_definitions(libvast_internal INTERFACE VAST_HAVE_JEMALLOC=1)
   target_link_libraries(libvast_internal INTERFACE jemalloc::jemalloc_)
+  dependency_summary("jemalloc" "${jemalloc_INCLUDE_DIR}")
 endif ()
 
 # -- developer mode ------------------------------------------------------------
@@ -329,9 +322,13 @@ if (VAST_ENABLE_DEVELOPER_MODE)
   set(CMAKE_VERBOSE_MAKEFILE
       OFF
       CACHE STRING "Show all outputs including compiler lines." FORCE)
+endif ()
 
+if (VAST_ENABLE_DEVELOPER_MODE OR VAST_ENABLE_BUILDID)
   # Relocate debug paths to a common prefix for CCache users that work from
   # multiple worktrees.
+  # The debug paths affect the build-id, we rewrite them to get a more
+  # reproducible build.
   target_compile_options(
     libvast_internal
     INTERFACE "-fdebug-prefix-map=${CMAKE_CURRENT_SOURCE_DIR}=.")
@@ -470,11 +467,23 @@ add_feature_info("VAST_ENABLE_BUNDLED_SCHEMAS" VAST_ENABLE_BUNDLED_SCHEMAS
                  "install bundled schemas with VAST.")
 if (VAST_ENABLE_BUNDLED_SCHEMAS)
   install(DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/schema"
-          DESTINATION "${CMAKE_INSTALL_FULL_DATADIR}/vast")
+          DESTINATION "${CMAKE_INSTALL_DATADIR}/vast")
+endif ()
+
+if (NOT VAST_DATADIR)
+  set(VAST_DATADIR "${CMAKE_INSTALL_DATADIR}")
+endif ()
+
+if (NOT VAST_SYSCONFDIR)
+  set(VAST_SYSCONFDIR "${CMAKE_INSTALL_SYSCONFDIR}")
+endif ()
+
+if (NOT VAST_LIBDIR)
+  set(VAST_LIBDIR "${CMAKE_INSTALL_LIBDIR}")
 endif ()
 
 install(FILES "${CMAKE_CURRENT_SOURCE_DIR}/vast.yaml.example"
-        DESTINATION "${CMAKE_INSTALL_FULL_DATADIR}/vast/")
+        DESTINATION "${CMAKE_INSTALL_DATADIR}/vast/")
 
 # -- documentation headers -----------------------------------------------------
 
@@ -503,6 +512,7 @@ file(WRITE ${CMAKE_CURRENT_BINARY_DIR}/libvast/vast/documentation.hpp
 
 add_subdirectory(libvast)
 add_subdirectory(libvast_test)
+add_subdirectory(plugins)
 add_subdirectory(tools)
 add_subdirectory(doc)
 add_subdirectory(vast)
@@ -516,7 +526,7 @@ export(
 
 install(
   EXPORT VASTTargets
-  DESTINATION "${CMAKE_INSTALL_FULL_LIBDIR}/cmake/vast"
+  DESTINATION "${CMAKE_INSTALL_LIBDIR}/cmake/vast"
   NAMESPACE vast::)
 
 write_basic_package_version_file(
@@ -527,11 +537,11 @@ write_basic_package_version_file(
 configure_package_config_file(
   "${CMAKE_CURRENT_SOURCE_DIR}/cmake/VASTConfig.cmake.in"
   "${CMAKE_CURRENT_BINARY_DIR}/VASTConfig.cmake"
-  INSTALL_DESTINATION "${CMAKE_INSTALL_FULL_LIBDIR}/cmake/vast")
+  INSTALL_DESTINATION "${CMAKE_INSTALL_LIBDIR}/cmake/vast")
 
 install(FILES "${CMAKE_CURRENT_BINARY_DIR}/VASTConfig.cmake"
               "${CMAKE_CURRENT_BINARY_DIR}/VASTConfigVersion.cmake"
-        DESTINATION "${CMAKE_INSTALL_FULL_LIBDIR}/cmake/vast")
+        DESTINATION "${CMAKE_INSTALL_LIBDIR}/cmake/vast")
 
 # -- scripts -------------------------------------------------------------------
 
@@ -542,7 +552,7 @@ add_feature_info("VAST_ENABLE_CORELIGHT_CAT" VAST_ENABLE_CORELIGHT_CAT
                  "install corelight-cat with VAST.")
 if (VAST_ENABLE_CORELIGHT_CAT)
   install(FILES "${CMAKE_CURRENT_SOURCE_DIR}/scripts/corelight-cat"
-          DESTINATION ${CMAKE_INSTALL_FULL_BINDIR})
+          DESTINATION ${CMAKE_INSTALL_BINDIR})
 endif ()
 
 # -- docdir --------------------------------------------------------------------
@@ -550,7 +560,7 @@ endif ()
 # Install LICENSE and README. This can intentionally not be disabled.
 install(FILES "${CMAKE_CURRENT_SOURCE_DIR}/LICENSE"
               "${CMAKE_CURRENT_SOURCE_DIR}/README.md"
-        DESTINATION "${CMAKE_INSTALL_FULL_DOCDIR}")
+        DESTINATION "${CMAKE_INSTALL_DOCDIR}")
 
 # -- feature summary -----------------------------------------------------------
 
@@ -560,8 +570,42 @@ feature_summary(
   FILENAME ${CMAKE_CURRENT_BINARY_DIR}/summary.log
   APPEND)
 
-# Print the feature summary if we're not a subproject.
+# Print the feature and build summary if we're not a subproject.
 if (NOT VAST_IS_SUBPROJECT)
+  message("\n")
   feature_summary(WHAT ENABLED_FEATURES DISABLED_FEATURES
                   INCLUDE_QUIET_PACKAGES)
+  message(STATUS "Build summary:\n")
+  message(" * Version: ${VAST_VERSION_TAG}")
+  message("")
+  message(" * Build Type: ${CMAKE_BUILD_TYPE}")
+  message(" * Source Directory: ${CMAKE_SOURCE_DIR}")
+  message(" * Binary Directory: ${CMAKE_BINARY_DIR}\n")
+  foreach (lang IN ITEMS C CXX)
+    set(_lang_compiler "${CMAKE_${lang}_COMPILER}")
+    set(_lang_compiler_info
+        "${CMAKE_${lang}_COMPILER_ID} ${CMAKE_${lang}_COMPILER_VERSION}")
+    set(_lang_flags
+        "${CMAKE_${lang}_FLAGS} ${CMAKE_${lang}_FLAGS_${CMAKE_BUILD_TYPE}}
+      ${CMAKE_CPP_FLAGS} ${CMAKE_CPP_FLAGS_${CMAKE_BUILD_TYPE}}")
+    string(STRIP "${_lang_flags}" _lang_flags)
+    if (_lang_flags)
+      message(
+        " * ${lang} Compiler: ${_lang_compiler} (${_lang_compiler_info} with ${_lang_flags})"
+      )
+    else ()
+      message(" * ${lang} Compiler: ${_lang_compiler} (${_lang_compiler_info})")
+    endif ()
+  endforeach ()
+  message(" * Linker: ${CMAKE_LINKER}")
+  message(" * Archiver: ${CMAKE_AR}")
+  get_property(VAST_DEPENDENCY_SUMMARY GLOBAL
+               PROPERTY VAST_DEPENDENCY_SUMMARY_PROPERTY)
+  if (VAST_DEPENDENCY_SUMMARY)
+    message("")
+    foreach (dependency_summary_entry IN LISTS VAST_DEPENDENCY_SUMMARY)
+      message("${dependency_summary_entry}")
+    endforeach ()
+  endif ()
+  message("")
 endif ()

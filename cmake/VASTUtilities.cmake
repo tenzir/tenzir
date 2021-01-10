@@ -52,3 +52,15 @@ macro (install_symlink _filepath _sympath)
                     \"${_rel}\" \"\${_dst}\")
   ")
 endmacro (install_symlink)
+
+# Helper utility for printing the status of dependencies.
+macro (dependency_summary name what)
+  get_property(VAST_DEPENDENCY_SUMMARY GLOBAL
+               PROPERTY VAST_DEPENDENCY_SUMMARY_PROPERTY)
+  if ("${what}" STREQUAL "" OR "${what}" MATCHES "-NOTFOUND$")
+    set(what "Not found")
+  endif ()
+  list(APPEND VAST_DEPENDENCY_SUMMARY " * ${name}: ${what}")
+  set_property(GLOBAL PROPERTY VAST_DEPENDENCY_SUMMARY_PROPERTY
+                               "${VAST_DEPENDENCY_SUMMARY}")
+endmacro ()

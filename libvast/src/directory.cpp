@@ -26,7 +26,7 @@
 #include <fstream>
 #include <iterator>
 
-#ifdef VAST_POSIX
+#if VAST_POSIX
 #  include <sys/types.h>
 #endif // VAST_POSIX
 
@@ -39,7 +39,7 @@ directory::iterator::iterator(const directory* dir) : dir_{dir} {
 void directory::iterator::increment() {
   if (!dir_)
     return;
-#ifdef VAST_POSIX
+#if VAST_POSIX
   if (!dir_->dir_) {
     dir_ = nullptr;
   } else if (auto ent = ::readdir(dir_->dir_)) {
@@ -89,7 +89,7 @@ directory& directory::operator=(directory&& other) {
 }
 
 directory::~directory() {
-#ifdef VAST_POSIX
+#if VAST_POSIX
   if (dir_)
     ::closedir(dir_);
 #endif
@@ -128,14 +128,15 @@ size_t recursive_size(const vast::directory& dir) {
 }
 
 std::vector<path>
-filter_dir(const path& dir, const std::regex& filter, size_t max_recursion) {
+filter_dir(const path& dir, detail::function<bool(const path&)> filter,
+           size_t max_recursion) {
   std::vector<path> result;
   if (max_recursion == 0)
     return result;
   for (auto& f : directory(dir)) {
     switch (f.kind()) {
       default: {
-        if (std::regex_search(f.str(), filter))
+        if (!filter || filter(f))
           result.push_back(f);
         break;
       }

@@ -29,7 +29,9 @@
 #include "vast/detail/settings.hpp"
 #include "vast/format/csv.hpp"
 #include "vast/format/json.hpp"
-#include "vast/format/json/suricata.hpp"
+#include "vast/format/json/default_selector.hpp"
+#include "vast/format/json/suricata_selector.hpp"
+#include "vast/format/json/zeek_selector.hpp"
 #include "vast/format/syslog.hpp"
 #include "vast/format/test.hpp"
 #include "vast/format/zeek.hpp"
@@ -58,7 +60,7 @@
 #include "vast/table_slice.hpp"
 #include "vast/taxonomies.hpp"
 
-#if VAST_HAVE_PCAP
+#if VAST_ENABLE_PCAP
 #  include "vast/format/pcap.hpp"
 #endif
 
@@ -349,15 +351,16 @@ auto make_component_factory() {
          spawn_source<format::csv::reader, defaults::import::csv>>()},
       {"spawn source json",
        lift_component_factory<
-         spawn_source<format::json::reader<>, defaults::import::json>>()},
-#if VAST_HAVE_PCAP
+         spawn_source<format::json::reader<format::json::default_selector>,
+                      defaults::import::json>>()},
+#if VAST_ENABLE_PCAP
       {"spawn source pcap",
        lift_component_factory<
          spawn_source<format::pcap::reader, defaults::import::pcap>>()},
 #endif
       {"spawn source suricata",
        lift_component_factory<
-         spawn_source<format::json::reader<format::json::suricata>,
+         spawn_source<format::json::reader<format::json::suricata_selector>,
                       defaults::import::suricata>>()},
       {"spawn source syslog",
        lift_component_factory<
@@ -368,6 +371,10 @@ auto make_component_factory() {
       {"spawn source zeek",
        lift_component_factory<
          spawn_source<format::zeek::reader, defaults::import::zeek>>()},
+      {"spawn source zeek-json",
+       lift_component_factory<
+         spawn_source<format::json::reader<format::json::zeek_selector>,
+                      defaults::import::zeek>>()},
       {"spawn sink pcap", lift_component_factory<spawn_pcap_sink>()},
       {"spawn sink zeek", lift_component_factory<spawn_zeek_sink>()},
       {"spawn sink csv", lift_component_factory<spawn_csv_sink>()},
@@ -408,6 +415,7 @@ auto make_command_factory() {
     {"spawn source syslog", node_state::spawn_command},
     {"spawn source test", node_state::spawn_command},
     {"spawn source zeek", node_state::spawn_command},
+    {"spawn source zeek-json", node_state::spawn_command},
     {"status", status_command},
   };
 }

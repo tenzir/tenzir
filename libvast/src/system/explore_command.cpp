@@ -17,6 +17,7 @@
 #include "vast/error.hpp"
 #include "vast/logger.hpp"
 #include "vast/scope_linked.hpp"
+#include "vast/system/exporter_actor.hpp"
 #include "vast/system/make_sink.hpp"
 #include "vast/system/node_control.hpp"
 #include "vast/system/read_query.hpp"
@@ -84,12 +85,13 @@ caf::message explore_command(const invocation& inv, caf::actor_system& sys) {
     caf::put(spawn_exporter.options, "vast.export.max-events",
              max_events_search);
   VAST_DEBUG(&inv, "spawns exporter with parameters:", spawn_exporter);
-  auto exporter = spawn_at_node(self, node, spawn_exporter);
-  if (!exporter)
-    return caf::make_message(std::move(exporter.error()));
+  auto maybe_exporter = spawn_at_node(self, node, spawn_exporter);
+  if (!maybe_exporter)
+    return caf::make_message(std::move(maybe_exporter.error()));
+  auto exporter = caf::actor_cast<exporter_actor>(std::move(*maybe_exporter));
   auto exporter_guard = caf::detail::make_scope_guard([&] {
     VAST_DEBUG(self, "sending exit to exporter");
-    self->send_exit(*exporter, caf::exit_reason::user_shutdown);
+    self->send_exit(exporter, caf::exit_reason::user_shutdown);
   });
   // Spawn explorer at the node.
   auto explorer_options = inv.options;
@@ -103,13 +105,18 @@ caf::message explore_command(const invocation& inv, caf::actor_system& sys) {
     self->send_exit(*explorer, caf::exit_reason::user_shutdown);
   });
   self->monitor(*explorer);
-  self->send(*explorer, atom::provision_v, *exporter);
+  // TODO: We want to be able to send the exporter_actor directly to the
+  // explorer here, but that requires adding a type ID for exporter_actor. We
+  // must re-think where we define typed actor interfaces to make them sendable
+  // over the wire.
+  self->send(*explorer, atom::provision_v,
+             caf::actor_cast<caf::actor>(exporter));
   // Set the explorer as sink for the initial query exporter.
-  self->send(*exporter, atom::sink_v, *explorer);
+  self->send(exporter, atom::sink_v, *explorer);
   // (Ab)use query_statistics as done message.
-  self->send(*exporter, atom::statistics_v, *explorer);
+  self->send(exporter, atom::statistics_v, *explorer);
   self->send(*explorer, atom::sink_v, sink);
-  self->send(*exporter, atom::run_v);
+  self->send(exporter, atom::run_v);
   caf::error err;
   auto stop = false;
   self

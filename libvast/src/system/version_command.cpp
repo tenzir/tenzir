@@ -18,16 +18,17 @@
 #include "vast/config.hpp"
 #include "vast/json.hpp"
 #include "vast/logger.hpp"
+#include "vast/plugin.hpp"
 
-#if VAST_HAVE_ARROW
+#if VAST_ENABLE_ARROW
 #  include <arrow/util/config.h>
 #endif
 
-#if VAST_HAVE_PCAP
+#if VAST_ENABLE_PCAP
 #  include <pcap/pcap.h>
 #endif
 
-#if VAST_HAVE_JEMALLOC
+#if VAST_ENABLE_JEMALLOC
 #  include <jemalloc/jemalloc.h>
 #endif
 
@@ -41,28 +42,32 @@ namespace {
 json::object retrieve_versions() {
   json::object result;
   result["VAST"] = VAST_VERSION;
-  std::ostringstream caf_v;
-  caf_v << CAF_MAJOR_VERSION << '.' << CAF_MINOR_VERSION << '.'
-        << CAF_PATCH_VERSION;
-  result["CAF"] = caf_v.str();
-#if VAST_HAVE_ARROW
-  std::ostringstream arrow_v;
-  arrow_v << ARROW_VERSION_MAJOR << '.' << ARROW_VERSION_MINOR << '.'
-          << ARROW_VERSION_PATCH;
-  result["Apache Arrow"] = arrow_v.str();
+  std::ostringstream caf_version;
+  caf_version << CAF_MAJOR_VERSION << '.' << CAF_MINOR_VERSION << '.'
+              << CAF_PATCH_VERSION;
+  result["CAF"] = caf_version.str();
+#if VAST_ENABLE_ARROW
+  std::ostringstream arrow_version;
+  arrow_version << ARROW_VERSION_MAJOR << '.' << ARROW_VERSION_MINOR << '.'
+                << ARROW_VERSION_PATCH;
+  result["Apache Arrow"] = arrow_version.str();
 #else
   result["Apache Arrow"] = json{};
 #endif
-#if VAST_HAVE_PCAP
+#if VAST_ENABLE_PCAP
   result["PCAP"] = pcap_lib_version();
 #else
   result["PCAP"] = json{};
 #endif
-#if VAST_HAVE_JEMALLOC
+#if VAST_ENABLE_JEMALLOC
   result["jemalloc"] = JEMALLOC_VERSION;
 #else
   result["jemalloc"] = json{};
 #endif
+  json::object plugin_versions;
+  for (auto& plugin : plugins::get())
+    plugin_versions[plugin->name()] = to_string(plugin.version());
+  result["plugins"] = std::move(plugin_versions);
   return result;
 }
 

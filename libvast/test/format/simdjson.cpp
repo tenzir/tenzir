@@ -13,7 +13,7 @@
 
 #include "vast/format/simdjson.hpp"
 
-#include "vast/format/json/suricata.hpp"
+#include "vast/format/json/suricata_selector.hpp"
 
 #define SUITE format
 
@@ -107,7 +107,7 @@ TEST(simdjson to data) {
   CHECK(obj.error() == ::simdjson::SUCCESS);
   format::simdjson::add(*builder, obj.value(), flat);
   auto slice = builder->finish();
-  REQUIRE_NOT_EQUAL(slice.encoding(), table_slice::encoding::none);
+  REQUIRE_NOT_EQUAL(slice.encoding(), table_slice_encoding::none);
   CHECK(slice.at(0, 0) == data{true});
   CHECK(slice.at(0, 1) == data{count{424242}});
 
@@ -143,10 +143,9 @@ TEST(simdjson to data) {
 }
 
 TEST_DISABLED(simdjson suricata) {
-  using reader_type = format::simdjson::reader<format::json::suricata>;
+  using reader_type = format::simdjson::reader<format::json::suricata_selector>;
   auto input = std::make_unique<std::istringstream>(std::string{eve_log});
-  reader_type reader{defaults::import::table_slice_type, caf::settings{},
-                     std::move(input)};
+  reader_type reader{caf::settings{}, std::move(input)};
   std::vector<table_slice> slices;
   auto add_slice
     = [&](table_slice slice) { slices.emplace_back(std::move(slice)); };
