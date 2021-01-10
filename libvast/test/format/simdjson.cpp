@@ -87,7 +87,7 @@ TEST(simdjson to data) {
     "c": 424242,
     "r": 4.2,
     "i": -1337,
-    "s": "0123456789\r\n",
+    "s": "0123456789®\r\n",
     "a": "147.32.84.165",
     "sn": "192.168.0.1/24",
     "t": "2011-08-12+14:59:11.994970",
@@ -100,7 +100,6 @@ TEST(simdjson to data) {
     "msa": { "foo": "1.2.3.4", "bar": "2001:db8::" },
     "mcs": { "1": "FOO", "1024": "BAR!" }
   })json";
-
   ::simdjson::dom::parser p;
   auto el = p.parse(str);
   CHECK(el.error() == ::simdjson::SUCCESS);
@@ -119,7 +118,7 @@ TEST(simdjson to data) {
   CHECK(std::abs(r - real{4.2}) < 0.000001);
 
   CHECK(slice.at(0, 3) == data{integer{-1337}});
-  CHECK_EQUAL(slice.at(0, 4),data{std::string{"0123456789\r\n"}});
+  CHECK_EQUAL(slice.at(0, 4),data{std::string{"0123456789®\r\n"}});
 
   std::array<std::uint8_t, 4> addr1{147, 32, 84, 165};
   CHECK(slice.at(0, 5)
