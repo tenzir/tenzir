@@ -48,7 +48,10 @@ std::string to_string(plugin_version x) {
 }
 
 bool has_required_version(const plugin_version& version) noexcept {
-  return plugin::version.major == version.major
+  return !std::strcmp(plugin::version.libvast_version, version.libvast_version)
+         && !std::strcmp(plugin::version.libvast_build_tree_hash,
+                         version.libvast_build_tree_hash)
+         && plugin::version.major == version.major
          && std::tie(plugin::version.minor, plugin::version.patch,
                      plugin::version.tweak)
               <= std::tie(version.minor, version.patch, version.tweak);
