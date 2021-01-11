@@ -27,6 +27,7 @@
 #include "vast/span.hpp"
 #include "vast/system/index.hpp"
 #include "vast/system/index_actor.hpp"
+#include "vast/system/index_client_actor.hpp"
 #include "vast/system/partition.hpp"
 #include "vast/system/posix_filesystem.hpp"
 #include "vast/table_slice.hpp"
@@ -213,26 +214,30 @@ TEST(full partition roundtrip) {
                                       partition_uuid, fs, persist_path);
   REQUIRE(readonly_partition);
   run();
+  // A minimal `partition_client_actor`that stores the results in a local
+  // variable.
+  auto dummy_client = [](std::shared_ptr<vast::ids> ids)
+    -> vast::system::partition_client_actor::behavior_type {
+    return {
+      [ids](const vast::ids& hits) { *ids |= hits; },
+    };
+  };
   auto test_expression
-    = [&](const vast::expression& /*expression*/, size_t /*expected_indexers*/,
-          size_t /*expected_ids*/) {
-        // FIXME
+    = [&](const vast::expression& expression, size_t expected_ids) {
+        bool done;
+        auto results = std::make_shared<vast::ids>();
+        auto dummy = self->spawn(dummy_client, results);
+        auto rp
+          = self->request(readonly_partition, caf::infinite, expression, dummy);
+        run();
+        rp.receive([&done](vast::atom::done) { done = true; },
+                   [](caf::error) { REQUIRE(false); });
+        run();
+        self->send_exit(dummy, caf::exit_reason::user_shutdown);
+        run();
+        CHECK_EQUAL(done, true);
+        CHECK_EQUAL(rank(*results), expected_ids);
         return true;
-        // auto rp = self->request(readonly_partition, caf::infinite,
-        // expression); run(); rp.receive(
-        //   [&](std::vector<vast::system::evaluation_triple> triples) {
-        //     CHECK_EQUAL(triples.size(), expected_indexers);
-        //     for (auto triple : triples) {
-        //       auto curried_predicate = get<1>(triple);
-        //       auto actor = get<2>(triple);
-        //       CHECK(actor);
-        //       auto rp = self->request(actor, caf::infinite,
-        //       curried_predicate); run(); rp.receive(
-        //         [&](vast::ids ids) { CHECK_EQUAL(rank(ids), expected_ids); },
-        //         [](caf::error) { CHECK(false); });
-        //     }
-        //   },
-        //   [](caf::error) { CHECK(false); });
       };
   auto x_equals_zero = vast::expression{
     vast::predicate{vast::field_extractor{".x"}, vast::equal, vast::data{0u}}};
@@ -246,16 +251,16 @@ TEST(full partition roundtrip) {
                     vast::data{"foo"}}};
   // For the query `x == 0`, we expect one indexer (for field x) and one
   // result.
-  test_expression(x_equals_zero, 1, 1);
+  test_expression(x_equals_zero, 1);
   // For the query `x == 1`, we expect one indexer (for field x) and zero
   // results.
-  test_expression(x_equals_one, 1, 0);
+  test_expression(x_equals_one, 0);
   // For the query `#type == "x"`, we expect one indexer (a one-shot indexer
   // for type queries) and one result.
-  test_expression(type_equals_y, 1, 1);
+  test_expression(type_equals_y, 1);
   // For the query `#type == "foo"`, we expect one indexer (a one-shot
   // indexer for type queries) and no results.
-  test_expression(type_equals_foo, 1, 0);
+  test_expression(type_equals_foo, 0);
   // Shut down test actors.
   self->send_exit(readonly_partition, caf::exit_reason::user_shutdown);
   self->send_exit(fs, caf::exit_reason::user_shutdown);

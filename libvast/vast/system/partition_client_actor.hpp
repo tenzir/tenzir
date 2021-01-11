@@ -1,5 +1,5 @@
 /******************************************************************************
-
+ *                    _   _____   __________                                  *
  *                   | | / / _ | / __/_  __/     Visibility                   *
  *                   | |/ / __ |_\ \  / /          Across                     *
  *                   |___/_/ |_/___/ /_/       Space and Time                 *
@@ -15,20 +15,15 @@
 
 #include "vast/fwd.hpp"
 
-#include "vast/system/evaluation_triple.hpp"
-#include "vast/system/index_client_actor.hpp"
-
 #include <caf/typed_event_based_actor.hpp>
-
-#include <vector>
 
 namespace vast::system {
 
-/// The PARTITION actor interface.
-using partition_actor = caf::typed_actor<
-  // Evaluate the given expression, returning the relevant evaluation triples.
-  // TODO: Passing the `index_client_actor` here is an historical artifact,
-  //       a cleaner API would be to just return the evaluated `vast::ids`.
-  caf::replies_to<expression, partition_client_actor>::with<atom::done>>;
+/// The PARTITION CLIENT actor interface.
+using partition_client_actor = caf::typed_actor<
+	// The client receives several sets of ids followed by a final
+	// `atom::done`, which as sent as response message to the
+    // higher-level request.
+	caf::reacts_to<ids>>;
 
 } // namespace vast::system

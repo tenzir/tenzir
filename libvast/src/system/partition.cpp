@@ -583,7 +583,7 @@ active_partition_actor::behavior_type active_partition(
       }
     },
     [=](const expression& expr,
-        index_client_actor client) -> caf::result<atom::done> {
+        partition_client_actor client) -> caf::result<atom::done> {
       auto triples = evaluate(self->state, expr);
       if (triples.empty())
         return atom::done_v;
@@ -694,7 +694,7 @@ partition_actor::behavior_type passive_partition(
       });
   return {
     [=](const expression& expr,
-        index_client_actor client) -> caf::result<atom::done> {
+        partition_client_actor client) -> caf::result<atom::done> {
       VAST_TRACE(self, VAST_ARG(expr));
       if (!self->state.partition_chunk)
         return get<2>(self->state.deferred_evaluations.emplace_back(

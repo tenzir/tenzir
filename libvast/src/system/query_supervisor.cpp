@@ -58,7 +58,10 @@ query_supervisor_actor::behavior_type query_supervisor(
       for (auto& [id, partition] : qm) {
         self->state.open_requests.emplace(id, 1 /*qm.size()*/);
         // TODO: Add a proper configurable timeout.
-        self->request(partition, caf::infinite, expr, client)
+        // TODO: Handle the error case for the `then()` handler.
+        self
+          ->request(partition, caf::infinite, expr,
+                    caf::actor_cast<partition_client_actor>(client))
           .then([=, id = id](atom::done) {
             auto& num_evaluators = self->state.open_requests[id];
             if (--num_evaluators == 0) {

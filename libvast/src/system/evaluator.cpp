@@ -154,7 +154,7 @@ evaluator(evaluator_actor::stateful_pointer<evaluator_state> self,
   VAST_ASSERT(!eval.empty());
   return {
     [=, expr = std::move(expr),
-     eval = std::move(eval)](index_client_actor client) {
+     eval = std::move(eval)](partition_client_actor client) {
       auto& st = self->state;
       st.client = client;
       st.expr = std::move(expr);

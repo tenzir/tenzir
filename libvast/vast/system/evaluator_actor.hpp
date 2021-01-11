@@ -24,6 +24,6 @@ namespace vast::system {
 /// The EVALUATOR actor interface.
 using evaluator_actor = caf::typed_actor<
   // Re-evaluates the expression and relays new hits to the INDEX CLIENT.
-  caf::replies_to<index_client_actor>::with<atom::done>>;
+  caf::replies_to<partition_client_actor>::with<atom::done>>;
 
 } // namespace vast::system

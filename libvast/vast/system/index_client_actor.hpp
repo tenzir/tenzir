@@ -19,11 +19,17 @@
 
 namespace vast::system {
 
+/// The PARTITION CLIENT actor interface.
+// FIXME: Move into separate header.
+using partition_client_actor = caf::typed_actor<caf::reacts_to<ids>>;
+
 /// The INDEX CLIENT actor interface.
 using index_client_actor = caf::typed_actor<
   // Receives ids from the INDEX for partial query hits.
-  caf::reacts_to<ids>,
+  // caf::reacts_to<ids>,
   // Receives done from the INDEX when the query finished.
-  caf::reacts_to<atom::done>>;
+  caf::reacts_to<atom::done>>
+  // FIXME: comment
+  ::extend_with<partition_client_actor>;
 
 } // namespace vast::system
