@@ -244,7 +244,7 @@ TEST(quoted string - trailing quote after escaped escape) {
 
 TEST(symbol table) {
   symbol_table<int> sym{{"foo", 42}, {"bar", 84}, {"foobar", 1337}};
-  int i;
+  int i = 0;
   CHECK(sym("foo", i));
   CHECK(i == 42);
   CHECK(sym("bar", i));
