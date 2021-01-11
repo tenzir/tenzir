@@ -16,7 +16,6 @@
 #include "vast/fwd.hpp"
 
 #include "vast/system/index_client_actor.hpp"
-// #include "vast/system/evaluator_actor.hpp"
 #include "vast/system/partition_actor.hpp"
 #include "vast/uuid.hpp"
 
@@ -27,12 +26,14 @@
 
 namespace vast::system {
 
-/// FIXME: comment
+/// A set of relevant partition actors, and their uuids.
 using query_map = std::vector<std::pair<uuid, partition_actor>>;
 
 /// The QUERY SUPERVISOR actor interface.
 using query_supervisor_actor = caf::typed_actor<
-  // FIXME: comment
+  /// Reacts to an expression and a set of relevant partitions by
+  /// sending several `vast::ids` to the index_client_actor, followed
+  /// by a final `atom::done`.
   caf::reacts_to<expression, query_map, index_client_actor>>;
 
 } // namespace vast::system
