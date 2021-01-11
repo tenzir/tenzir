@@ -14,6 +14,7 @@
 #pragma once
 
 #include "vast/concept/parseable/core/parser.hpp"
+#include "vast/detail/assert.hpp"
 #include "vast/detail/flat_map.hpp"
 
 #include <algorithm>
@@ -42,6 +43,7 @@ struct symbol_table : parser<symbol_table<T>> {
     auto max_len = size_t{0};
     for (auto i = symbols.begin(); i != symbols.end(); ++i) {
       auto& [k, v] = *i;
+      VAST_ASSERT(!k.empty());
       if (std::mismatch(k.begin(), k.end(), f, l).first == k.end()) {
         if (k.size() > max_len) {
           match = i;

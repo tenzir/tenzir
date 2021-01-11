@@ -47,9 +47,10 @@ struct schema_parser : parser<schema_parser> {
       if (!ty.name().empty())
         ty = alias_type{ty}; // TODO: attributes
       ty.name(name);
-      symbols.add(name, ty);
+      symbols.add(name, ty); // FIXME: check return value
       return ty;
     };
+    // We can't use & because the operand is a parser, and our DSL overloads &.
     auto tp = type_parser{std::addressof(symbols)};
     // clang-format off
     auto decl = ("type" >> skp >> id >> skp >> '=' >> skp >> tp) ->* to_type;
