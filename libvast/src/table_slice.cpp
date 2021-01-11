@@ -239,7 +239,7 @@ bool operator==(const table_slice& lhs, const table_slice& rhs) noexcept {
   // Check whether the slices contain different data.
   auto flat_layout = flatten(lhs.layout());
   for (size_t row = 0; row < lhs.rows(); ++row)
-    for (size_t col = 0; col < lhs.columns(); ++col)
+    for (size_t col = 0; col < flat_layout.fields.size(); ++col)
       if (lhs.at(row, col, flat_layout.fields[col].type)
           != rhs.at(row, col, flat_layout.fields[col].type))
         return false;
@@ -417,8 +417,8 @@ rebuild(table_slice slice, enum table_slice_encoding encoding) noexcept {
           return table_slice{};
         auto flat_layout = flatten(slice.layout());
         for (table_slice::size_type row = 0; row < slice.rows(); ++row)
-          for (table_slice::size_type column = 0; column < slice.columns();
-               ++column)
+          for (table_slice::size_type column = 0;
+               column < flat_layout.fields.size(); ++column)
             if (!builder->add(
                   slice.at(row, column, flat_layout.fields[column].type)))
               return {};
@@ -495,7 +495,7 @@ void select(std::vector<table_slice>& result, const table_slice& slice,
     VAST_ASSERT(id >= slice.offset());
     auto row = id - slice.offset();
     VAST_ASSERT(row < slice.rows());
-    for (size_t column = 0; column < slice.columns(); ++column) {
+    for (size_t column = 0; column < flat_layout.fields.size(); ++column) {
       auto cell_value = slice.at(row, column, flat_layout.fields[column].type);
       if (!builder->add(cell_value)) {
         VAST_ERROR(__func__, "failed to add data at column", column, "in row",

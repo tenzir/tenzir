@@ -445,6 +445,10 @@ arrow_table_slice_builder::~arrow_table_slice_builder() noexcept {
 
 // -- properties ---------------------------------------------------------------
 
+size_t arrow_table_slice_builder::columns() const noexcept {
+  return flat_layout_.fields.size();
+}
+
 table_slice arrow_table_slice_builder::finish(
   [[maybe_unused]] span<const byte> serialized_layout) {
   // Sanity check: If this triggers, the calls to add() did not match the number

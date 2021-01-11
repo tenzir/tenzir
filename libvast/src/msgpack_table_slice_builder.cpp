@@ -107,6 +107,10 @@ msgpack_table_slice_builder::~msgpack_table_slice_builder() {
 
 // -- properties ---------------------------------------------------------------
 
+size_t msgpack_table_slice_builder::columns() const noexcept {
+  return flat_layout_.fields.size();
+}
+
 table_slice
 msgpack_table_slice_builder::finish(span<const byte> serialized_layout) {
   // Sanity check: If this triggers, the calls to add() did not match the number

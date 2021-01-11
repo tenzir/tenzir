@@ -58,6 +58,9 @@ public:
   [[nodiscard]] table_slice
   finish(span<const byte> serialized_layout = {}) override;
 
+  /// @returns The number of columns in the table slice.
+  size_t columns() const noexcept;
+
   /// @returns The current number of rows in the table slice.
   size_t rows() const noexcept override;
 

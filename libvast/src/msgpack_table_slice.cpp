@@ -281,7 +281,7 @@ table_slice::size_type msgpack_table_slice<FlatBuffer>::rows() const noexcept {
 template <class FlatBuffer>
 table_slice::size_type
 msgpack_table_slice<FlatBuffer>::columns() const noexcept {
-  return layout().fields.size();
+  return flatten(layout()).fields.size();
 }
 
 // -- data access ------------------------------------------------------------
