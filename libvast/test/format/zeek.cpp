@@ -199,7 +199,7 @@ struct fixture : fixtures::deterministic_actor_system {
        size_t num_events, bool expect_eof, bool expect_stall) {
     using reader_type = format::zeek::reader;
     auto settings = caf::settings{};
-    caf::put(settings, "vast.import.batch-timeout", "200ms");
+    caf::put(settings, "vast.import.batch-timeout", "500ms");
     caf::put(settings, "vast.import.read-timeout", "200ms");
     reader_type reader{std::move(settings), std::move(input)};
     std::vector<table_slice> slices;
@@ -343,6 +343,37 @@ TEST(zeek reader - continous stream with partial slice) {
   result
     = ::write(write_end, &conn_log_10_events[0], conn_log_10_events.size());
   REQUIRE_EQUAL(static_cast<size_t>(result), conn_log_10_events.size());
+  // Expect that we will see the results before the test times out.
+  t.join();
+  CHECK_EQUAL(slices.size(), 1u);
+  for (auto& slice : slices)
+    CHECK_EQUAL(slice.rows(), 10u);
+  ::close(pipefds[0]);
+  ::close(pipefds[1]);
+}
+
+TEST(zeek reader - slowly submitted input) {
+  using namespace std::chrono_literals;
+  int pipefds[2];
+  auto result = ::pipe(pipefds);
+  REQUIRE_EQUAL(result, 0);
+  auto [read_end, write_end] = pipefds;
+  detail::fdinbuf buf(read_end);
+  std::vector<table_slice> slices;
+  std::thread t([&] {
+    bool expect_eof = false;
+    bool expect_stall = true;
+    slices = read(std::make_unique<std::istream>(&buf), 10, 10, expect_eof,
+                  expect_stall);
+  });
+  // Write less than one full slice, leaving the pipe open.
+  size_t cutoff = 953;
+  result = ::write(write_end, &conn_log_10_events[0], cutoff);
+  REQUIRE_EQUAL(static_cast<size_t>(result), cutoff);
+  std::this_thread::sleep_for(250ms);
+  size_t rest = conn_log_10_events.size() - cutoff;
+  result = ::write(write_end, &conn_log_10_events[cutoff], rest);
+  REQUIRE_EQUAL(static_cast<size_t>(result), rest);
   // Expect that we will see the results before the test times out.
   t.join();
   CHECK_EQUAL(slices.size(), 1u);
