@@ -15,6 +15,7 @@
 
 #include "vast/detail/fdinbuf.hpp"
 #include "vast/detail/getline_generic.hpp"
+#include "vast/logger.hpp"
 
 namespace vast {
 namespace detail {
@@ -26,34 +27,43 @@ const std::string& line_range::get() const {
   return line_;
 }
 
-void line_range::next() {
-  VAST_ASSERT(!done());
-  line_.clear();
+void line_range::next_impl() {
   if (!input_)
     return;
   // Get the next non-empty line.
-  while (line_.empty())
+  do {
     if (detail::getline_generic(input_, line_))
       ++line_number_;
     else
       break;
+  } while (line_.empty());
+}
+
+void line_range::next() {
+  VAST_ASSERT(!done());
+  line_.clear();
+  next_impl();
 }
 
 bool line_range::next_timeout(std::chrono::milliseconds timeout) {
   auto* p = dynamic_cast<fdinbuf*>(input_.rdbuf());
   if (p)
     p->read_timeout() = timeout;
+  // Clear if the previous read did not time out.
+  if (!timed_out_)
+    line_.clear();
   // Try to read next line.
-  next();
-  bool timed_out = false;
+  next_impl();
+  timed_out_ = false;
   if (p) {
-    timed_out = p->timed_out();
+    timed_out_ = p->timed_out();
     p->read_timeout() = std::nullopt;
     // Clear error state if the read timed out
-    if (!input_ && timed_out)
+    if (timed_out_) {
       input_.clear();
+    }
   }
-  return timed_out;
+  return timed_out_;
 }
 
 bool line_range::done() const {

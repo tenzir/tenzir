@@ -28,13 +28,13 @@ namespace vast::detail {
 /// Get one line from the istream `is`, ignoring the current platform
 /// delimiter and recognizing any of `\n`, `\r\n` and `\r` instead.
 inline std::istream& getline_generic(std::istream& is, std::string& t) {
-  t.clear();
   // The characters in the stream are read one-by-one using a std::streambuf.
   // That is faster than reading them one-by-one using the std::istream.
   // Code that uses streambuf this way must be guarded by a sentry object.
   std::istream::sentry sentry(is, true);
   if (!sentry)
     return is;
+  size_t n = 0;
   std::streambuf* sb = is.rdbuf();
   while (t.size() < t.max_size()) {
     int c = sb->sbumpc();
@@ -49,11 +49,12 @@ inline std::istream& getline_generic(std::istream& is, std::string& t) {
         is.setstate(std::ios::eofbit);
         // If `std::getline` extracts no characters, failbit is set.
         // (21.4.8.9/7.9 [string.io])
-        if (t.empty())
+        if (n == 0)
           is.setstate(std::ios::failbit);
         return is;
       default:
         t += static_cast<char>(c);
+        n++;
     }
   }
   // After `str.max_size()` are stored by `std::getline`, failbit is set.
