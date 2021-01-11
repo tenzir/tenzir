@@ -44,12 +44,12 @@ namespace {
 // Vast data (variant based type) has its own (and a richer) set of types
 // (lets say it is a D-set),
 // and the task is to perform conversion from a value of a J-set type
-// to a certain value of D-set type which is defined by layout specification
+// to a certain value of D-set type which is defined by layout specification.
 //
 // Under above conditions we are to organize a "map" function
-// from J-set typed value to a D-set. Not all the conversions are possible
-// and more to say most of the J*D conversions are not possible, and only
-// certain slots in the J*D table.
+// from J-set typed value to a D-set typed value. Not all the conversions
+// are possible and more to say most of the J*D conversions are not possible,
+// and only certain slots in the J*D table has a meaning.
 //
 // For a given J type `from_json_x_converter<J>` provides an array
 // of converter callbacks. Each index in this array corresponds to
@@ -59,7 +59,7 @@ namespace {
 // * identity mapping if J, D types match;
 // * parses value of type D from J which is string
 //   if parsing is available for D;
-// * return error.
+// * returns error.
 //
 // For the cases of a specific conversion is required a necessary
 // template specialization is provided.
@@ -70,7 +70,7 @@ namespace {
 //
 // Selecting conversion function is in essence two times lookup.
 // First lookup for J type `convert(const ::simdjson::dom::element& e, const
-// type& t)` and the second if for target D type.
+// type& t)` and the second is for target D type.
 
 template <class T>
 caf::expected<data> convert_from_impl(T v, const type& t);
@@ -105,12 +105,10 @@ caf::expected<data> type_biased_convert_impl(JsonType j, const type& t) {
       return make_error(ec::parse_error, "unable to parse",
                         caf::detail::pretty_type_name(typeid(value_type)), ":",
                         std::string{j});
-
     return x;
   } else {
     // No conversion case.
     VAST_ERROR_ANON("json-reader cannot convert field  to a propper type", t);
-
     return make_error(ec::syntax_error, "conversion not implemented");
   }
 }
@@ -134,7 +132,7 @@ template <>
 caf::expected<data>
 type_biased_convert_impl<std::string_view, integer>(std::string_view s,
                                                     const type&) {
-  // simdjson cannot be reused here as it doesn't accept hex numbers.
+  // Simdjson cannot be reused here as it doesn't accept hex numbers.
   if (integer x; parsers::json_int(s, x))
     return x;
   if (real x; parsers::json_number(s, x)) {
@@ -189,47 +187,47 @@ type_biased_convert_impl<std::string_view, real>(std::string_view s,
                     "to real");
 }
 
-// Time conversions
-template <>
-caf::expected<data>
-type_biased_convert_impl<integer, time>(integer s, const type&) {
-  auto secs = std::chrono::duration<real>(s);
-  return time{std::chrono::duration_cast<duration>(secs)};
-}
-
-template <>
-caf::expected<data>
-type_biased_convert_impl<count, time>(count s, const type&) {
-  auto secs = std::chrono::duration<real>(s);
-  return time{std::chrono::duration_cast<duration>(secs)};
-}
-
-template <>
-caf::expected<data> type_biased_convert_impl<real, time>(real s, const type&) {
-  auto secs = std::chrono::duration<real>(s);
-  return time{std::chrono::duration_cast<duration>(secs)};
-}
-
 // Duration conversions
+template <typename NumberType>
+auto to_duration_convert_impl( NumberType s) {
+  auto secs = std::chrono::duration<real>(s);
+  return std::chrono::duration_cast<duration>(secs);
+}
+
 template <>
 caf::expected<data>
 type_biased_convert_impl<integer, duration>(integer s, const type&) {
-  auto secs = std::chrono::duration<real>(s);
-  return std::chrono::duration_cast<duration>(secs);
+  return to_duration_convert_impl(s);
 }
 
 template <>
 caf::expected<data>
 type_biased_convert_impl<count, duration>(count s, const type&) {
-  auto secs = std::chrono::duration<real>(s);
-  return std::chrono::duration_cast<duration>(secs);
+  return to_duration_convert_impl(s);
 }
 
 template <>
 caf::expected<data>
 type_biased_convert_impl<real, duration>(real s, const type&) {
-  auto secs = std::chrono::duration<real>(s);
-  return std::chrono::duration_cast<duration>(secs);
+  return to_duration_convert_impl(s);
+}
+
+// Time conversions
+template <>
+caf::expected<data>
+type_biased_convert_impl<integer, time>(integer s, const type&) {
+  return time{to_duration_convert_impl(s)};
+}
+
+template <>
+caf::expected<data>
+type_biased_convert_impl<count, time>(count s, const type&) {
+  return time{to_duration_convert_impl(s)};
+}
+
+template <>
+caf::expected<data> type_biased_convert_impl<real, time>(real s, const type&) {
+  return time{to_duration_convert_impl(s)};
 }
 
 // STRING Conversions
@@ -294,11 +292,11 @@ caf::expected<data> type_biased_convert_impl<::simdjson::dom::object, map>(
 }
 
 /// A converter from a given JSON type to vast::data.
-/// Relies on a specification of type_biased_convert_impl template function.
+/// Relies on a specialization of type_biased_convert_impl template function.
 /// If no specialiation from a given JSON type to data is provided
 /// the the default implementation is used which does one of the following
 /// returns a untouched value if source and dest type mach, performs string
-/// parsing if possible or return error.
+/// parsing if possible or returns an error.
 template <class JsonType>
 struct from_json_x_converter {
   /// Converter callback.
@@ -314,7 +312,7 @@ struct from_json_x_converter {
   using dest_type_at_t = typename caf::detail::tl_at_t<dest_types_list, N>;
 
   /// A total number of types possible with data.
-  /// This is also exactly the nubmer of possible conversion cases.
+  /// This is also exactly the number of possible conversion cases.
   static constexpr std::size_t dest_types_count
     = caf::detail::tl_size<dest_types_list>::value;
 
@@ -385,7 +383,7 @@ caf::expected<data> convert(const ::simdjson::dom::element& e, const type& t) {
 ::simdjson::simdjson_result<::simdjson::dom::element>
 lookup(std::string_view field, const ::simdjson::dom::object& xs) {
   VAST_ASSERT(!field.empty());
-  auto i = field.find('.');
+  const auto i = field.find('.');
   if (i == std::string_view::npos)
     return xs.at_key(field);
 
