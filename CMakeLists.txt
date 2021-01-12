@@ -36,6 +36,28 @@ if (NOT IS_ABSOLUTE "${CMAKE_INSTALL_PREFIX}")
       "CMAKE_INSTALL_PREFIX must be an absolute path: ${CMAKE_INSTALL_PREFIX}")
 endif ()
 
+# -- build tree hash -----------------------------------------------------------
+
+file(GLOB_RECURSE hash_files CONFIGURE_DEPENDS "libvast/*" "cmake/*"
+     "CMakeLists.txt")
+
+list(FILTER hash_files EXCLUDE REGEX
+     "^${CMAKE_CURRENT_SOURCE_DIR}/libvast/aux/")
+
+list(
+  SORT hash_files
+  COMPARE FILE_BASENAME
+  CASE INSENSITIVE)
+
+foreach (hash_file IN LISTS hash_files)
+  if (EXISTS "${hash_file}" AND NOT IS_DIRECTORY "${hash_file}")
+    file(MD5 "${hash_file}" hash)
+    list(APPEND hashes "${hash}")
+  endif ()
+endforeach ()
+
+string(MD5 VAST_BUILD_TREE_HASH "${hashes}")
+
 # -- includes ------------------------------------------------------------------
 
 include(CMakeDependentOption)
@@ -577,6 +599,7 @@ if (NOT VAST_IS_SUBPROJECT)
                   INCLUDE_QUIET_PACKAGES)
   message(STATUS "Build summary:\n")
   message(" * Version: ${VAST_VERSION_TAG}")
+  message(" * Build Tree Hash: ${VAST_BUILD_TREE_HASH}")
   message("")
   message(" * Build Type: ${CMAKE_BUILD_TYPE}")
   message(" * Source Directory: ${CMAKE_SOURCE_DIR}")
