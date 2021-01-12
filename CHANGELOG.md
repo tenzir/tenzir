@@ -52,8 +52,9 @@ Every entry has a category for which we use the following visual abbreviations:
   location directories. Configuration files can now be symlinked.
   [#1248](https://github.com/tenzir/vast/pull/1248)
 
-- 🎁 The new short options `-v`, `-vv`, `-vvv`, `-q`, `-qq`, and `-qqq` map onto
-  the existing verbosity levels.
+- ⚡️ The new short options `-v`, `-vv`, `-vvv`, `-q`, `-qq`, and `-qqq` map onto
+  the existing verbosity levels. The existing short syntax, e.g., `-v debug`,
+  no longer works.
   [#1244](https://github.com/tenzir/vast/pull/1244)
 
 ## [2020.12.16]
