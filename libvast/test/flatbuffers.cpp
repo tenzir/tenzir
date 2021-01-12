@@ -249,17 +249,13 @@ TEST(full partition roundtrip) {
   auto type_equals_foo = vast::expression{
     vast::predicate{vast::attribute_extractor{vast::atom::type_v}, vast::equal,
                     vast::data{"foo"}}};
-  // For the query `x == 0`, we expect one indexer (for field x) and one
-  // result.
+  // For the query `x == 0`, we expect one result.
   test_expression(x_equals_zero, 1);
-  // For the query `x == 1`, we expect one indexer (for field x) and zero
-  // results.
+  // For the query `x == 1`, we expect zero results.
   test_expression(x_equals_one, 0);
-  // For the query `#type == "x"`, we expect one indexer (a one-shot indexer
-  // for type queries) and one result.
+  // For the query `#type == "x"`, we expect one result.
   test_expression(type_equals_y, 1);
-  // For the query `#type == "foo"`, we expect one indexer (a one-shot
-  // indexer for type queries) and no results.
+  // For the query `#type == "foo"`, we expect no results.
   test_expression(type_equals_foo, 0);
   // Shut down test actors.
   self->send_exit(readonly_partition, caf::exit_reason::user_shutdown);

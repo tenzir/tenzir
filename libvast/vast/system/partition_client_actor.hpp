@@ -20,10 +20,10 @@
 namespace vast::system {
 
 /// The PARTITION CLIENT actor interface.
-using partition_client_actor = caf::typed_actor<
-	// The client receives several sets of ids followed by a final
-	// `atom::done`, which as sent as response message to the
-    // higher-level request.
-	caf::reacts_to<ids>>;
+// The client sends an expression to the partition and receives several sets
+// of ids followed by a final `atom::done` which as sent as response to the
+// expression. This interface provides the callback for the middle part of
+// this sequence.
+using partition_client_actor = caf::typed_actor<caf::reacts_to<ids>>;
 
 } // namespace vast::system

@@ -32,8 +32,6 @@
 #include "vast/table_slice.hpp"
 #include "vast/table_slice_builder.hpp"
 
-#include <iostream>
-
 using caf::after;
 using std::chrono_literals::operator""s;
 
