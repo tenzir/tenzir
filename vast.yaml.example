@@ -82,7 +82,8 @@ vast:
   # The `vast start` command starts a new VAST server process.
   start:
     # Prints the endpoint for clients when the server is ready to accept
-    # connections.
+    # connections. This comes in handy when letting the OS choose an available
+    # random port, i.e., when specifying 0 as port value.
     print-endpoint: false
     # Triggers removal of old data when the disk budget is exceeded.
     disk-budget-high: 0GiB
