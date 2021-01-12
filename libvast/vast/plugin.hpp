@@ -16,6 +16,7 @@
 #include "vast/fwd.hpp"
 
 #include "vast/command.hpp"
+#include "vast/config.hpp"
 
 #include <caf/error.hpp>
 #include <caf/stream.hpp>
@@ -44,14 +45,6 @@ extern "C" struct plugin_version {
   uint16_t minor;
   uint16_t patch;
   uint16_t tweak;
-
-  /// An additional field containing the version of the libvast that is linked
-  /// against. Should compare equal to VAST_VERSION.
-  const char* libvast_version;
-
-  /// An additional field containing the hash of the build tree of the libvast
-  /// that is linked against. Should compare equal to VAST_BUILD_TREE_HASH.
-  const char* libvast_build_tree_hash;
 };
 
 /// @relates plugin_version
@@ -66,8 +59,7 @@ bool has_required_version(const plugin_version& version) noexcept;
 template <class Inspector>
 auto inspect(Inspector& f, plugin_version& x) ->
   typename Inspector::result_type {
-  return f(x.major, x.minor, x.patch, x.tweak, x.libvast_version,
-           x.libvast_build_tree_hash);
+  return f(x.major, x.minor, x.patch, x.tweak);
 }
 
 // -- plugin -------------------------------------------------------------------
@@ -77,8 +69,7 @@ class plugin {
 public:
   /// The current version of the plugin API. When registering a plugin, set the
   /// corresponding plugin version in the `VAST_REGISTER_PLUGIN` macro.
-  constexpr static auto version
-    = plugin_version{0, 1, 0, 0, VAST_VERSION, VAST_BUILD_TREE_HASH};
+  constexpr static auto version = plugin_version{0, 1, 0, 0};
 
   /// Destroys any runtime state that the plugin created. For example,
   /// de-register from existing components, deallocate memory.
@@ -190,5 +181,11 @@ private:
     delete plugin;                                                             \
   }                                                                            \
   extern "C" struct ::vast::plugin_version vast_plugin_version() {             \
-    return {major, minor, tweak, patch, VAST_VERSION, VAST_BUILD_TREE_HASH};   \
+    return {major, minor, tweak, patch};                                       \
+  }                                                                            \
+  extern "C" const char* vast_libvast_version() {                              \
+    return VAST_VERSION;                                                       \
+  }                                                                            \
+  extern "C" const char* vast_libvast_build_tree_hash() {                      \
+    return VAST_BUILD_TREE_HASH;                                               \
   }

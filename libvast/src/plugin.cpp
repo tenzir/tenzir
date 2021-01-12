@@ -48,10 +48,7 @@ std::string to_string(plugin_version x) {
 }
 
 bool has_required_version(const plugin_version& version) noexcept {
-  return !std::strcmp(plugin::version.libvast_version, version.libvast_version)
-         && !std::strcmp(plugin::version.libvast_build_tree_hash,
-                         version.libvast_build_tree_hash)
-         && plugin::version.major == version.major
+  return plugin::version.major == version.major
          && std::tie(plugin::version.minor, plugin::version.patch,
                      plugin::version.tweak)
               <= std::tie(version.minor, version.patch, version.tweak);
@@ -62,17 +59,30 @@ bool has_required_version(const plugin_version& version) noexcept {
 plugin_ptr::plugin_ptr(const char* filename) noexcept {
   if (auto handle = dlopen(filename, RTLD_GLOBAL | RTLD_LAZY)) {
     library_ = handle;
+    // Check vast_libvast_version.
+    auto libvast_version = reinterpret_cast<const char* (*) ()>(
+      dlsym(library_, "vast_libvast_version"));
+    if (!libvast_version || strcmp(libvast_version(), VAST_VERSION))
+      return;
+    // Check vast_libvast_build_tree_hash.
+    auto libvast_build_tree_hash = reinterpret_cast<const char* (*) ()>(
+      dlsym(library_, "vast_libvast_build_tree_hash"));
+    if (!libvast_build_tree_hash
+        || strcmp(libvast_build_tree_hash(), VAST_BUILD_TREE_HASH))
+      return;
+    // Check vast_plugin_version.
     auto plugin_version = reinterpret_cast<::vast::plugin_version (*)()>(
       dlsym(library_, "vast_plugin_version"));
-    if (plugin_version && has_required_version(plugin_version())) {
-      auto plugin_create = reinterpret_cast<::vast::plugin* (*) ()>(
-        dlsym(library_, "vast_plugin_create"));
-      auto plugin_destroy = reinterpret_cast<void (*)(::vast::plugin*)>(
-        dlsym(library_, "vast_plugin_destroy"));
-      if (plugin_create && plugin_destroy) {
-        instance_ = plugin_create();
-        deleter_ = plugin_destroy;
-      }
+    if (!plugin_version || !has_required_version(plugin_version()))
+      return;
+    // Create plugin.
+    auto plugin_create = reinterpret_cast<::vast::plugin* (*) ()>(
+      dlsym(library_, "vast_plugin_create"));
+    auto plugin_destroy = reinterpret_cast<void (*)(::vast::plugin*)>(
+      dlsym(library_, "vast_plugin_destroy"));
+    if (plugin_create && plugin_destroy) {
+      instance_ = plugin_create();
+      deleter_ = plugin_destroy;
     }
   }
 }
