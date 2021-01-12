@@ -119,7 +119,7 @@ class plugin_ptr final {
 public:
   /// Load a plugin from the specified library filename.
   /// @param filename The filename that's passed to 'dlopen'.
-  explicit plugin_ptr(const char* filename) noexcept;
+  static caf::expected<plugin_ptr> make(const char* filename) noexcept;
 
   /// Unload a plugin and its required resources.
   ~plugin_ptr() noexcept;
@@ -163,6 +163,10 @@ public:
   plugin_version version() const;
 
 private:
+  /// Create a plugin_ptr.
+  plugin_ptr(void* library, plugin* instance,
+             void (*deleter)(plugin*)) noexcept;
+
   /// Implementation details.
   void* library_ = {};
   plugin* instance_ = {};

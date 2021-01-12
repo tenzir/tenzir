@@ -14,6 +14,9 @@
 #include "vast/plugin.hpp"
 
 #include "vast/detail/assert.hpp"
+#include "vast/error.hpp"
+
+#include <caf/expected.hpp>
 
 #include <dlfcn.h>
 #include <memory>
@@ -56,35 +59,53 @@ bool has_required_version(const plugin_version& version) noexcept {
 
 // -- plugin_ptr ---------------------------------------------------------------
 
-plugin_ptr::plugin_ptr(const char* filename) noexcept {
-  if (auto handle = dlopen(filename, RTLD_GLOBAL | RTLD_LAZY)) {
-    library_ = handle;
-    // Check vast_libvast_version.
-    auto libvast_version = reinterpret_cast<const char* (*) ()>(
-      dlsym(library_, "vast_libvast_version"));
-    if (!libvast_version || strcmp(libvast_version(), VAST_VERSION))
-      return;
-    // Check vast_libvast_build_tree_hash.
-    auto libvast_build_tree_hash = reinterpret_cast<const char* (*) ()>(
-      dlsym(library_, "vast_libvast_build_tree_hash"));
-    if (!libvast_build_tree_hash
-        || strcmp(libvast_build_tree_hash(), VAST_BUILD_TREE_HASH))
-      return;
-    // Check vast_plugin_version.
-    auto plugin_version = reinterpret_cast<::vast::plugin_version (*)()>(
-      dlsym(library_, "vast_plugin_version"));
-    if (!plugin_version || !has_required_version(plugin_version()))
-      return;
-    // Create plugin.
-    auto plugin_create = reinterpret_cast<::vast::plugin* (*) ()>(
-      dlsym(library_, "vast_plugin_create"));
-    auto plugin_destroy = reinterpret_cast<void (*)(::vast::plugin*)>(
-      dlsym(library_, "vast_plugin_destroy"));
-    if (plugin_create && plugin_destroy) {
-      instance_ = plugin_create();
-      deleter_ = plugin_destroy;
-    }
-  }
+caf::expected<plugin_ptr> plugin_ptr::make(const char* filename) noexcept {
+  auto library = dlopen(filename, RTLD_GLOBAL | RTLD_LAZY);
+  if (!library)
+    return caf::make_error(ec::system_error, "failed to load plugin", filename,
+                           dlerror());
+  auto libvast_version = reinterpret_cast<const char* (*) ()>(
+    dlsym(library, "vast_libvast_version"));
+  if (!libvast_version)
+    return caf::make_error(ec::system_error,
+                           "failed to resolve symbol vast_libvast_version in",
+                           filename, dlerror());
+  if (strcmp(libvast_version(), VAST_VERSION))
+    return caf::make_error(ec::version_error, "libvast version mismatch in",
+                           filename, libvast_version(), VAST_VERSION);
+  auto libvast_build_tree_hash = reinterpret_cast<const char* (*) ()>(
+    dlsym(library, "vast_libvast_build_tree_hash"));
+  if (!libvast_build_tree_hash)
+    return caf::make_error(ec::system_error,
+                           "failed to resolve symbol "
+                           "vast_libvast_build_tree_hash in",
+                           filename, dlerror());
+  if (strcmp(libvast_build_tree_hash(), VAST_BUILD_TREE_HASH))
+    return caf::make_error(ec::version_error,
+                           "libvast build tree hash mismatch in", filename,
+                           libvast_build_tree_hash(), VAST_BUILD_TREE_HASH);
+  auto plugin_version = reinterpret_cast<::vast::plugin_version (*)()>(
+    dlsym(library, "vast_plugin_version"));
+  if (!plugin_version)
+    return caf::make_error(ec::system_error,
+                           "failed to resolve symbol vast_plugin_version in",
+                           filename, dlerror());
+  if (!has_required_version(plugin_version()))
+    return caf::make_error(ec::version_error, "plugin version mismatch",
+                           filename, plugin_version(), plugin::version);
+  auto plugin_create = reinterpret_cast<::vast::plugin* (*) ()>(
+    dlsym(library, "vast_plugin_create"));
+  if (!plugin_create)
+    return caf::make_error(ec::system_error,
+                           "failed to resolve symbol vast_plugin_create in",
+                           filename, dlerror());
+  auto plugin_destroy = reinterpret_cast<void (*)(::vast::plugin*)>(
+    dlsym(library, "vast_plugin_destroy"));
+  if (!plugin_destroy)
+    return caf::make_error(ec::system_error,
+                           "failed to resolve symbol vast_plugin_destroy in",
+                           filename, dlerror());
+  return plugin_ptr{library, plugin_create(), plugin_destroy};
 }
 
 plugin_ptr::~plugin_ptr() noexcept {
@@ -135,11 +156,17 @@ plugin& plugin_ptr::operator&() noexcept {
   return *instance_;
 }
 
+plugin_ptr::plugin_ptr(void* library, plugin* instance,
+                       void (*deleter)(plugin*)) noexcept
+  : library_{library}, instance_{instance}, deleter_{deleter} {
+  // nop
+}
+
 plugin_version plugin_ptr::version() const {
-  auto version_function = reinterpret_cast<::vast::plugin_version (*)()>(
+  auto plugin_version = reinterpret_cast<::vast::plugin_version (*)()>(
     dlsym(library_, "vast_plugin_version"));
-  VAST_ASSERT(version_function != nullptr);
-  return version_function();
+  VAST_ASSERT(plugin_version);
+  return plugin_version();
 }
 
 } // namespace vast
