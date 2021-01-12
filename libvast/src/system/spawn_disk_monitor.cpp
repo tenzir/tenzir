@@ -22,15 +22,24 @@ spawn_disk_monitor(system::node_actor* self, spawn_arguments& args) {
     return make_error(ec::missing_component, "index");
   if (!archive)
     return make_error(ec::missing_component, "archive");
-  auto hiwater_str
-    = caf::get_or(args.inv.options, "vast.start.disk-budget-high", "0KiB");
-  auto lowater_str
-    = caf::get_or(args.inv.options, "vast.start.disk-budget-low", "0KiB");
-  // TODO: This
+  auto opts = args.inv.options;
+  caf::put_missing(opts, "vast.start.disk-budget-high", "0KiB");
+  caf::put_missing(opts, "vast.start.disk-budget-low", "0KiB");
+  // TODO: Also allow integer arguments. Currently we insist on a string because
+  // `caf::get_or` below will silently take the default value of "0KiB" if the key
+  // is not a string. (e.g. `disk-budget-high: 6T`)
+  if (!caf::holds_alternative<std::string>(opts, "vast.start.disk-budget-high"))
+    return make_error(ec::invalid_argument, "could not parse disk-budget-high "
+                                            "as byte size");
+  if (!caf::holds_alternative<std::string>(opts, "vast.start.disk-budget-low"))
+    return make_error(ec::invalid_argument, "could not parse disk-budget-low "
+                                            "as byte size");
+  auto hiwater_str = caf::get<std::string>(opts, "vast.start.disk-budget-high");
+  auto lowater_str = caf::get<std::string>(opts, "vast.start.disk-budget-low");
   auto default_seconds
     = std::chrono::seconds{defaults::system::disk_scan_interval}.count();
-  auto interval = caf::get_or(
-    args.inv.options, "vast.start.disk-budget-check-interval", default_seconds);
+  auto interval = caf::get_or(opts, "vast.start.disk-budget-check-interval",
+                              default_seconds);
   uint64_t hiwater, lowater;
   if (!parsers::bytesize(hiwater_str, hiwater))
     return make_error(ec::parse_error,
@@ -45,8 +54,8 @@ spawn_disk_monitor(system::node_actor* self, spawn_arguments& args) {
   // Set low == high as the default value.
   if (!lowater)
     lowater = hiwater;
-  auto db_dir = caf::get_or(args.inv.options, "vast.db-directory",
-                            defaults::system::db_directory);
+  auto db_dir
+    = caf::get_or(opts, "vast.db-directory", defaults::system::db_directory);
   auto abs_dir = path{db_dir}.complete();
   if (!exists(abs_dir))
     return make_error(ec::filesystem_error, "could not find database "
