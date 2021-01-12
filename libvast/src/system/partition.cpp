@@ -720,7 +720,9 @@ partition_actor::behavior_type passive_partition(
       return self->delegate(eval, client);
     },
     [=](atom::status, status_verbosity /*v*/) -> caf::config_value::dictionary {
-      return {};
+      caf::settings result;
+      caf::put(result, "size", self->state.partition_chunk->size());
+      return result;
     },
   };
 }
