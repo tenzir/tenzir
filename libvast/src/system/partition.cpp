@@ -35,6 +35,7 @@
 #include "vast/synopsis.hpp"
 #include "vast/system/indexer.hpp"
 #include "vast/system/shutdown.hpp"
+#include "vast/system/status_verbosity.hpp"
 #include "vast/system/terminate.hpp"
 #include "vast/table_slice.hpp"
 #include "vast/table_slice_column.hpp"
@@ -597,6 +598,9 @@ active_partition_actor::behavior_type active_partition(
       auto eval = self->spawn(evaluator, expr, self, triples);
       return self->delegate(eval, client);
     },
+    [=](atom::status, status_verbosity /*v*/) -> caf::config_value::dictionary {
+      return {};
+    },
   };
 }
 
@@ -714,6 +718,9 @@ partition_actor::behavior_type passive_partition(
         return atom::done_v;
       auto eval = self->spawn(evaluator, expr, self, triples);
       return self->delegate(eval, client);
+    },
+    [=](atom::status, status_verbosity /*v*/) -> caf::config_value::dictionary {
+      return {};
     },
   };
 }
