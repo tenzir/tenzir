@@ -81,6 +81,9 @@ vast:
 
   # The `vast start` command starts a new VAST server process.
   start:
+    # Prints the endpoint for clients when the server is ready to accept
+    # connections.
+    print-endpoint: false
     # Triggers removal of old data when the disk budget is exceeded.
     disk-budget-high: 0GiB
     # When the budget was exceeded, data is erased until the disk space

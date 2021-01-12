@@ -424,6 +424,7 @@ auto make_start_command() {
   return std::make_unique<command>(
     "start", "starts a node", documentation::vast_start,
     opts("?vast.start")
+      .add<bool>("print-endpoint", "print the client endpoint on stdout")
       .add<size_t>("disk-budget-check-interval", "time between two disk size "
                                                  "scans")
       .add<std::string>("disk-budget-high", "high-water mark for disk budget")

@@ -1,7 +1,7 @@
 The `start` command spins up a VAST node. Starting a node is the first step when
 deploying VAST as a continuously running server. The process runs in the
-foreground and uses standard error for logging. The endpoint for connecting
-clients is printed on standard output when the node is ready.
+foreground and uses standard error for logging. Standard output remains unused,
+unless the `--print-endpoint` option is enabled.
 
 By default, the `start` command creates a `vast.db` directory in the current
 working directory. It is recommended to set the options for the node in the
