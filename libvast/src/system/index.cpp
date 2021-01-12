@@ -280,12 +280,13 @@ void index_state::decomission_active_partition() {
       });
 }
 
-caf::dictionary<caf::config_value>
+caf::typed_response_promise<caf::settings>
 index_state::status(status_verbosity v) const {
   using caf::put;
   using caf::put_dictionary;
   using caf::put_list;
   auto result = caf::settings{};
+  auto rp = self->make_response_promise<caf::settings>();
   auto& index_status = put_dictionary(result, "index");
   if (v >= status_verbosity::info) {
     // nop
@@ -309,15 +310,16 @@ index_state::status(status_verbosity v) const {
     if (active_partition.actor != nullptr)
       partitions.emplace("active", to_string(active_partition.id));
     auto& cached = put_list(partitions, "cached");
-    for (auto& kv : inmem_partitions)
-      cached.emplace_back(to_string(kv.first));
+    for (auto& [id, actor] : inmem_partitions)
+      cached.emplace_back(to_string(id));
     auto& unpersisted = put_list(partitions, "unpersisted");
     for (auto& kvp : this->unpersisted)
       unpersisted.emplace_back(to_string(kvp.first));
     // General state such as open streams.
     detail::fill_status_map(index_status, self);
   }
-  return result;
+  rp.deliver(result);
+  return rp;
 }
 
 std::vector<std::pair<uuid, partition_actor>>
@@ -712,7 +714,7 @@ index(index_actor::stateful_pointer<index_state> self,
       self->state.idle_workers.emplace_back(std::move(worker));
     },
     // -- status_client_actor --------------------------------------------------
-    [=](atom::status, status_verbosity v) -> caf::config_value::dictionary {
+    [=](atom::status, status_verbosity v) { //
       return self->state.status(v);
     },
   };
