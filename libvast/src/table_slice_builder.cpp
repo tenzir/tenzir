@@ -51,7 +51,7 @@ bool table_slice_builder::recursive_add(const data& x, const type& t) {
 }
 
 size_t table_slice_builder::columns() const noexcept {
-  return flatten(layout_).fields.size();
+  return layout_.num_leaves();
 }
 
 const record_type& table_slice_builder::layout() const noexcept {

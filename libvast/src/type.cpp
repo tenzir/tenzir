@@ -212,6 +212,22 @@ const record_type::each::range_state& record_type::each::get() const {
   return state_;
 }
 
+size_t record_type::num_leaves() const {
+  size_t count = 0;
+  for (auto& [name, type] : fields) {
+    if (const auto& child = caf::get_if<record_type>(&type))
+      count += child->num_leaves();
+    else if (const auto& alias = caf::get_if<alias_type>(&type))
+      if (const auto& child = caf::get_if<record_type>(&alias->value_type))
+        count += child->num_leaves();
+      else
+        count++;
+    else
+      count++;
+  }
+  return count;
+}
+
 caf::optional<offset> record_type::resolve(std::string_view key) const {
   offset result;
   if (key.empty())

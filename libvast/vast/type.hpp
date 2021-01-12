@@ -611,6 +611,11 @@ struct record_type final : recursive_type<record_type> {
   /// Constructs a record type from a list of fields.
   record_type(std::initializer_list<record_field> xs);
 
+  /// Calculates the number of basic types that can be found when traversing the
+  /// tree. An faster version of `flatten(*this).fields.size()` or
+  /// `auto rng = each{*this}; std::distance(rng.begin(), rng.end())`
+  size_t num_leaves() const;
+
   /// Attemps to resolve a key to an offset.
   /// @param key The key to resolve.
   /// @returns The offset corresponding to *key*.

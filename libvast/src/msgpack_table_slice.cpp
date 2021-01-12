@@ -252,6 +252,7 @@ msgpack_table_slice<FlatBuffer>::msgpack_table_slice(
   : slice_{slice}, state_{} {
   if (auto err = fbs::deserialize_bytes(slice_.layout(), state_.layout))
     die("failed to deserialize layout: " + render(err));
+  state_.columns = state_.layout.num_leaves();
 }
 
 template <class FlatBuffer>
@@ -259,6 +260,7 @@ msgpack_table_slice<FlatBuffer>::msgpack_table_slice(
   const FlatBuffer& slice, record_type layout) noexcept
   : slice_{slice}, state_{} {
   state_.layout = std::move(layout);
+  state_.columns = state_.layout.num_leaves();
 }
 
 template <class FlatBuffer>
@@ -281,7 +283,7 @@ table_slice::size_type msgpack_table_slice<FlatBuffer>::rows() const noexcept {
 template <class FlatBuffer>
 table_slice::size_type
 msgpack_table_slice<FlatBuffer>::columns() const noexcept {
-  return flatten(layout()).fields.size();
+  return state_.columns;
 }
 
 // -- data access ------------------------------------------------------------

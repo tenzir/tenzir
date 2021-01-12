@@ -30,6 +30,7 @@ template <>
 struct msgpack_table_slice_state<fbs::table_slice::msgpack::v0> {
   /// The deserialized table layout.
   record_type layout;
+  size_t columns;
 };
 
 /// A table slice that stores elements encoded in
