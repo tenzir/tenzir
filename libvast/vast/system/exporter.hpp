@@ -59,7 +59,10 @@ struct exporter_state {
   std::vector<table_slice> results;
 
   /// Stores the time point for when this actor got started via 'run'.
+  //  We store two time points so we can use guaranteed positive durations
+  // for runtime computations and display a wall-clock time as the "start time".
   std::chrono::system_clock::time_point start;
+  std::chrono::steady_clock::time_point start_steady;
 
   /// Stores various meta information about the progress we made on the query.
   query_status query;
@@ -73,6 +76,9 @@ struct exporter_state {
 
   /// Stores the user-defined export query.
   expression expr;
+
+  /// The cached result of `to_string(expr)`.
+  std::string expr_string;
 };
 
 /// The EXPORTER receives index hits, looks up the corresponding events in the

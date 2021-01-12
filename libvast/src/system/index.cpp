@@ -29,6 +29,7 @@
 #include "vast/detail/fill_status_map.hpp"
 #include "vast/detail/narrow.hpp"
 #include "vast/detail/notifying_stream_manager.hpp"
+#include "vast/detail/tracepoint.hpp"
 #include "vast/error.hpp"
 #include "vast/expression_visitors.hpp"
 #include "vast/fbs/index.hpp"
@@ -584,6 +585,7 @@ index(index_actor::stateful_pointer<index_state> self,
         return {};
       }
       // Get all potentially matching partitions.
+      VAST_TRACEPOINT(index_lookup_start, sender->id());
       auto candidates = self->state.meta_idx.lookup(expr);
       if (candidates.empty()) {
         VAST_DEBUG(self, "returns without result: no partitions qualify");

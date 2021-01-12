@@ -1,0 +1,230 @@
+#! /usr/bin/python3
+# @lint-avoid-python-3-compatibility-imports
+#
+# querysnoop Visualize query processing pipeline
+
+from __future__ import print_function
+from bcc import BPF, USDT
+import sys
+import time
+import argparse
+import signal
+from subprocess import call
+
+# arguments
+examples = """examples:
+    ./querysnoop.bcc            # TODO: description
+"""
+parser = argparse.ArgumentParser(
+    description="Top event counts in VAST importer",
+    formatter_class=argparse.RawDescriptionHelpFormatter,
+    epilog=examples)
+parser.add_argument("-C", "--noclear", action="store_true",
+    help="don't clear the screen")
+parser.add_argument("-r", "--maxrows", default=20,
+    help="maximum rows to print, default 20")
+parser.add_argument("interval", nargs="?", default=1,
+    help="output interval, in seconds")
+parser.add_argument("count", nargs="?", default=99999999,
+    help="number of outputs")
+parser.add_argument("--ebpf", action="store_true",
+    help=argparse.SUPPRESS)
+args = parser.parse_args()
+interval = int(args.interval)
+countdown = int(args.count)
+maxrows = int(args.maxrows)
+clear = not int(args.noclear)
+
+def signal_ignore(signal_value, frame):
+    print()
+
+u = USDT(path="/home/benno/src/vast/build/lib/libvast.so.2020.12")
+# TODO: Later versions of bcc allow writing 'vast:streaming_importer' to explicitly specify
+#       the provider, but the one from ubuntu doesn't have that feature yet.
+u.enable_probe("exporter_query_start", "exporter_query_start_handler")
+u.enable_probe("index_lookup_start", "index_lookup_start_handler")
+u.enable_probe("meta_index_lookup", "meta_index_lookup_handler")
+u.enable_probe("exporter_query_scheduled", "exporter_query_scheduled_handler")
+u.enable_probe("exporter_done", "exporter_done_handler")
+
+bpf_text = """
+#include <uapi/linux/ptrace.h>
+
+typedef uint64_t actor_id_t;
+typedef uint64_t timestamp_t;
+
+struct query_state_t {
+  // Query data
+  char query_id[16];
+  char expression[128];
+  uint64_t meta_idx_candidates;
+
+  // Instantaneous timestamps
+  timestamp_t exporter_query_start_ts;
+  timestamp_t index_lookup_start_ts;
+  timestamp_t meta_index_lookup_ts;
+
+  // Durations
+  uint64_t meta_idx_us; // meta idx lookup time in microsends
+  uint64_t initial_request_us; // time until initial taste is scheduled, in microseconds
+};
+
+// Track up to 128 on-going and 1024 finished queries at the same time.
+const u64 max_live_queries = 128;
+const u64 max_finished_queries = 1024;
+
+// We use the actor id of the exporter as primary key, since the query id is
+// only assigned halfway into the processing pipeline. This means we need to
+// take care to remove the entry when processing is done, since the actor id
+// could be reassigned to a new exporter actor.
+BPF_HASH(qstates, actor_id_t, struct query_state_t, max_live_queries);
+
+// TODO: From kernel 5.8, the recommended output API is to use a ringbuf:
+// BPF_RINGBUF_OUTPUT(finished_queries, 16);
+// TODO: From kernel 4.20, we can use a queue instead of an ARRAY
+// BPF_QUEUE(finished_queries, struct query_state_t, 512);
+
+BPF_HASH(finished_queries, u64, struct query_state_t, max_finished_queries);
+
+// TODO: There's probably a better way to implement this.
+const int global_meta_idx_actor = 0;
+//#define global_meta_idx_actor 0
+const int global_finished_cursor = 1;
+BPF_ARRAY(global_variables, u64, 2);
+
+void exporter_query_start_handler(struct pt_regs *ctx) {
+  uint64_t actor_id = 0;
+  uint64_t str = 0;
+  uint64_t zero = 0;
+  struct query_state_t qstate = {0};
+  // Note that `bpf_usdt_readarg()` can only be called directly in the entry
+  // point, so we can't move it in a static helper function.
+  bpf_usdt_readarg(1, ctx, &actor_id);
+  bpf_usdt_readarg(2, ctx, &str);
+
+  struct query_state_t* leaf = qstates.lookup_or_try_init(&actor_id, &qstate);
+  if (!leaf)
+    return;
+
+  leaf->exporter_query_start_ts = bpf_ktime_get_ns();
+  // Starting from linux 5.5, this should be bpf_probe_read_user() instead.
+  bpf_probe_read_str(&leaf->expression, sizeof(leaf->expression), (void *)str);
+}
+
+void index_lookup_start_handler(struct pt_regs *ctx) {
+  u64 actor_id = 0;
+  bpf_usdt_readarg(1, ctx, &actor_id);
+
+  int idx = global_meta_idx_actor;
+  global_variables.update(&idx, &actor_id);
+
+  struct query_state_t* leaf = qstates.lookup(&actor_id);
+  if (!leaf)
+    return;
+
+  leaf->index_lookup_start_ts = bpf_ktime_get_ns();
+}
+
+void meta_index_lookup_handler(struct pt_regs *ctx) {
+  u64 delta = 0;
+  u64 candidates = 0;
+  bpf_usdt_readarg(1, ctx, &delta);
+  bpf_usdt_readarg(2, ctx, &candidates);
+  //int idx = global_meta_idx_actor;
+  int idx = 0;
+  u64* actor_id1 = global_variables.lookup(&idx);
+
+  if (!actor_id1)
+    return;
+
+  struct query_state_t* leaf = qstates.lookup(actor_id1);
+  if (!leaf)
+    return;
+
+  leaf->meta_index_lookup_ts = bpf_ktime_get_ns();
+  leaf->meta_idx_us = delta;
+  leaf->meta_idx_candidates = candidates;
+}
+
+void exporter_query_scheduled_handler(struct pt_regs *ctx) {
+  u64 delta;
+  u64 str;
+  u64 partitions;
+  u64 actor_id;
+
+  bpf_usdt_readarg(1, ctx, &actor_id);
+  bpf_usdt_readarg(2, ctx, &delta);
+  bpf_usdt_readarg(3, ctx, &str);
+  bpf_usdt_readarg(4, ctx, &partitions);
+
+  struct query_state_t* leaf = qstates.lookup(&actor_id);
+  if (!leaf)
+    return;
+
+  // Starting from linux 5.5, this should be bpf_probe_read_user() instead.
+  bpf_probe_read_str(&leaf->query_id, sizeof(leaf->query_id), (void *)str);
+  leaf->initial_request_us = delta;
+}
+
+void exporter_done_handler(struct pt_regs *ctx) {
+  u64 actor_id;
+  bpf_usdt_readarg(1, ctx, &actor_id);
+  struct query_state_t copy;
+  struct query_state_t* leaf = qstates.lookup(&actor_id);
+  if (!leaf)
+    return;
+  copy = *leaf;
+  qstates.delete(&actor_id);
+  
+  int idx = global_finished_cursor;
+  u64* cursor = global_variables.lookup(&idx);
+  if (!cursor)
+    return;
+
+  finished_queries.insert(cursor, &copy);
+  u64 updated = (*cursor + 1) % max_finished_queries;
+  global_variables.update(&idx, &updated);
+}
+
+"""
+
+
+if args.ebpf:
+    print(bpf_text)
+    exit()
+
+# def callback(ctx, data, size):
+#   qs = b['finished_queries'].query_state_t(data)
+#   print("%16-s %128-s with %d meta idx candidates\n", qs.query_id, qs.expression, qs.meta_idx_candidates)
+# b['finished_queries'].open_ring_buffer()
+# [...]
+# while 1:
+#     b.ring_buffer_poll()
+#     time.sleep(0.5)
+
+b = BPF(text=bpf_text, usdt_contexts=[u])
+
+
+print('Tracing... Output every %d secs. Hit Ctrl-C to end' % interval)
+def id_to_string(qid):
+  if len(qid) == 0:
+      return "(none)"
+  return "%x%x" % (qid[0], qid[1])
+
+all_queries = []
+
+try:
+    while 1:
+        call("clear")
+        print("%10s %56s %s" % ("QUERY", "EXPRESSION", "CANDIDATES"))
+        live_queries = b.get_table("qstates")
+        queries = b.get_table("finished_queries")
+        for _, v in queries.items():
+          all_queries.append(v)
+        queries.clear()
+
+        for q in reversed(all_queries):
+            print("%16s %56s %d" % (id_to_string(q.query_id), q.expression, q.meta_idx_candidates))
+        time.sleep(0.5)
+except KeyboardInterrupt:
+    sys.exit()

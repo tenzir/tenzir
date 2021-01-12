@@ -23,6 +23,7 @@
 #include "vast/detail/assert.hpp"
 #include "vast/detail/fill_status_map.hpp"
 #include "vast/detail/narrow.hpp"
+#include "vast/detail/tracepoint.hpp"
 #include "vast/error.hpp"
 #include "vast/expression_visitors.hpp"
 #include "vast/logger.hpp"
@@ -98,6 +99,7 @@ void shutdown(exporter_actor::stateful_pointer<exporter_state> self) {
   if (has_continuous_option(self->state.options))
     return;
   VAST_DEBUG(self, "initiates shutdown");
+  VAST_TRACEPOINT(exporter_done, self->id());
   self->send_exit(self, caf::exit_reason::normal);
 }
 
@@ -186,6 +188,7 @@ exporter(exporter_actor::stateful_pointer<exporter_state> self, expression expr,
          query_options options) {
   self->state.options = options;
   self->state.expr = std::move(expr);
+  self->state.expr_string = to_string(self->state.expr);
   if (has_continuous_option(options))
     VAST_DEBUG(self, "has continuous query option");
   self->set_exit_handler([=](const caf::exit_msg& msg) {
@@ -283,6 +286,7 @@ exporter(exporter_actor::stateful_pointer<exporter_state> self, expression expr,
       // We skip 'done' messages of the query supervisors until we process all
       // hits first. Hence, we can never be finished here.
       VAST_ASSERT(!finished(qs));
+      VAST_TRACEPOINT(exporter_archive_done, self->id()); // FIXME: remove or use
     },
     [=](atom::extract) -> caf::result<void> {
       auto& qs = self->state.query;
@@ -326,13 +330,13 @@ exporter(exporter_actor::stateful_pointer<exporter_state> self, expression expr,
       auto& exporter_status = put_dictionary(result, "exporter");
       if (v >= status_verbosity::info) {
         caf::settings exp;
-        put(exp, "expression", to_string(st.expr));
+        put(exp, "expression", st.expr_string);
         auto& xs = put_list(result, "queries");
         xs.emplace_back(std::move(exp));
       }
       if (v >= status_verbosity::detailed) {
         caf::settings exp;
-        put(exp, "expression", to_string(st.expr));
+        put(exp, "expression", st.expr_string);
         put(exp, "hits", rank(st.hits));
         put(exp, "start", caf::deep_to_string(st.start));
         auto& xs = put_list(result, "queries");
@@ -374,10 +378,13 @@ exporter(exporter_actor::stateful_pointer<exporter_state> self, expression expr,
                           caf::actor_cast<caf::actor>(self));
     },
     [=](atom::run) {
-      VAST_VERBOSE(self, "executes query:", to_string(self->state.expr));
+      VAST_VERBOSE(self, "executes query:", self->state.expr_string);
       self->state.start = std::chrono::system_clock::now();
+      self->state.start_steady = std::chrono::steady_clock::now();
       if (!has_historical_option(self->state.options))
         return;
+      VAST_TRACEPOINT(exporter_query_start, self->id(),
+                      self->state.expr_string.c_str());
       // TODO: The index replies to expressions by manually sending back to the
       // sender, which does not work with request(...).then(...) style of
       // communication for typed actors. Hence, we must actor_cast here.
@@ -390,6 +397,10 @@ exporter(exporter_actor::stateful_pointer<exporter_state> self, expression expr,
           [=](const uuid& lookup, uint32_t partitions, uint32_t scheduled) {
             VAST_VERBOSE(self, "got lookup handle", lookup, ", scheduled",
                          scheduled, '/', partitions, "partitions");
+            auto delta = std::chrono::duration_cast<std::chrono::microseconds>(
+              system::stopwatch::now() - self->state.start_steady);
+            VAST_TRACEPOINT(exporter_query_scheduled, self->id(), delta, &*lookup.begin(),
+                            partitions);
             self->state.id = lookup;
             if (partitions > 0) {
               self->state.query.expected = partitions;

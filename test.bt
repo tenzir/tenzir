@@ -1,0 +1,5 @@
+#!/usr/bin/bpftrace
+
+usdt:/home/benno/src/vast/build/lib/libvast.so.2020.12:vast:exporter_done {
+  printf("done!\n")
+}
