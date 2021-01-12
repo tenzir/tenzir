@@ -285,9 +285,22 @@ index_state::status(status_verbosity v) const {
   using caf::put;
   using caf::put_dictionary;
   using caf::put_list;
-  auto result = caf::settings{};
-  auto rp = self->make_response_promise<caf::settings>();
+  struct req_state_t {
+    // Promise to the original client request.
+    caf::typed_response_promise<caf::settings> rp;
+    // Maps nodes to a map associating components with status information.
+    caf::settings content;
+    size_t size = 0;
+  };
+  auto req_state = std::make_shared<req_state_t>();
+  req_state->rp = self->make_response_promise<caf::settings>();
+  auto& result = req_state->content;
   auto& index_status = put_dictionary(result, "index");
+  auto deliver = [&](auto&& req_state) {
+    put(index_status, "sum_partition_bytes", req_state->size);
+    req_state->rp.deliver(req_state->content);
+  };
+  bool deferred = false;
   if (v >= status_verbosity::info) {
     // nop
   }
@@ -302,24 +315,56 @@ index_state::status(status_verbosity v) const {
       // Hence the fallback to low-level primitives.
       layout_object.insert_or_assign(name, std::move(xs));
     }
-    put(stats_object, "meta-index-bytes", meta_idx.size_bytes());
-  }
-  if (v >= status_verbosity::debug) {
-    // Resident partitions.
+    put(index_status, "meta-index-bytes", meta_idx.size_bytes());
+    put(index_status, "num_active_partitions",
+        active_partition.actor == nullptr ? 0 : 1);
+    put(index_status, "num_cached_partitions", inmem_partitions.size());
+    put(index_status, "num_unpersisted_partitions", unpersisted.size());
     auto& partitions = put_dictionary(index_status, "partitions");
+    auto partition_status = [&](const uuid& id, partition_actor pa,
+                                caf::config_value::list& xs) {
+      deferred = true;
+      self->request(pa, caf::infinite, atom::status_v, v)
+        .then(
+          [=, &xs](caf::dictionary<caf::config_value> part_status) {
+            auto& ps = xs.emplace_back().as_dictionary();
+            put(ps, "id", to_string(id));
+            if (auto s
+                = caf::get_if<caf::config_value::integer>(&part_status, "size"))
+              req_state->size += *s;
+            if (v >= status_verbosity::debug)
+              put(ps, "data", std::move(part_status));
+            // Both handlers have a copy of req_state.
+            if (req_state.use_count() == 2)
+              deliver(std::move(req_state));
+          },
+          [=, &xs](caf::error err) {
+            VAST_WARNING(self, "failed to retrieve status from", id, ":",
+                         render(err));
+            auto& ps = xs.emplace_back().as_dictionary();
+            put(ps, "id", to_string(id));
+            put(ps, "error", render(err));
+            // Both handlers have a copy of req_state.
+            if (req_state.use_count() == 2)
+              deliver(std::move(req_state));
+          });
+    };
+    // Resident partitions.
+    auto& active = put_list(partitions, "active");
     if (active_partition.actor != nullptr)
-      partitions.emplace("active", to_string(active_partition.id));
+      partition_status(active_partition.id, active_partition.actor, active);
     auto& cached = put_list(partitions, "cached");
     for (auto& [id, actor] : inmem_partitions)
-      cached.emplace_back(to_string(id));
+      partition_status(id, actor, cached);
     auto& unpersisted = put_list(partitions, "unpersisted");
-    for (auto& kvp : this->unpersisted)
-      unpersisted.emplace_back(to_string(kvp.first));
+    for (auto& [id, actor] : this->unpersisted)
+      partition_status(id, actor, unpersisted);
     // General state such as open streams.
     detail::fill_status_map(index_status, self);
   }
-  rp.deliver(result);
-  return rp;
+  if (!deferred)
+    deliver(std::move(req_state));
+  return req_state->rp;
 }
 
 std::vector<std::pair<uuid, partition_actor>>
