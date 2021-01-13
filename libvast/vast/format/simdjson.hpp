@@ -190,7 +190,7 @@ caf::error reader<Selector>::read_impl(size_t max_events, size_t max_slice_size,
       ++num_unknown_layouts_;
       continue;
     }
-    bptr = bptr(*layout);
+    bptr = builder(*layout);
     if (bptr == nullptr)
       return make_error(ec::parse_error, "unable to get a builder");
     if (auto err = add(*bptr, xs, *layout)) {
