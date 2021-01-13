@@ -366,7 +366,7 @@ TEST(zeek reader - slowly submitted input) {
     slices = read(std::make_unique<std::istream>(&buf), 10, 10, expect_eof,
                   expect_stall);
   });
-  // Write less than one full slice, leaving the pipe open.
+  // Submit the input partially, then wait before submitting the rest.
   size_t cutoff = 953;
   result = ::write(write_end, &conn_log_10_events[0], cutoff);
   REQUIRE_EQUAL(static_cast<size_t>(result), cutoff);
