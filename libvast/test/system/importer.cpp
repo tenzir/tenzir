@@ -89,8 +89,7 @@ struct importer_fixture : Base {
     namespace bf = format::zeek;
     auto stream = unbox(
       vast::detail::make_input_stream(artifacts::logs::zeek::small_conn));
-    bf::reader reader{vast::defaults::import::table_slice_type, caf::settings{},
-                      std::move(stream)};
+    bf::reader reader{caf::settings{}, std::move(stream)};
     return this->self->spawn(system::source<bf::reader>, std::move(reader),
                              slice_size, caf::none,
                              vast::system::type_registry_actor{},
@@ -126,7 +125,7 @@ struct deterministic_fixture : deterministic_fixture_base {
 
   void fetch_ok() override {
     run();
-    expect((atom_value), from(_).to(self).with(atom::ok::value));
+    expect((atom::ok), from(_).to(self).with(atom::ok::value));
   }
 
   auto fetch_result() {

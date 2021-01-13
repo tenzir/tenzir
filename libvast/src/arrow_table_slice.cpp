@@ -11,7 +11,9 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#if VAST_HAVE_ARROW
+#include "vast/config.hpp"
+
+#if VAST_ENABLE_ARROW
 
 #  include "vast/arrow_table_slice.hpp"
 
@@ -95,9 +97,9 @@ private:
 // -- decoding of Arrow column arrays ------------------------------------------
 
 // Safe ourselves redundant boilerplate code for dispatching to the visitor.
-#define DECODE_TRY_DISPATCH(vast_type)                                         \
-  if (auto dt = caf::get_if<vast_type##_type>(&t))                             \
-  return f(arr, *dt)
+#  define DECODE_TRY_DISPATCH(vast_type)                                       \
+    if (auto dt = caf::get_if<vast_type##_type>(&t))                           \
+    return f(arr, *dt)
 
 template <class F>
 void decode(const type& t, const arrow::BooleanArray& arr, F& f) {
@@ -227,7 +229,7 @@ void decode(const type& t, const arrow::Array& arr, F& f) {
   }
 }
 
-#undef DECODE_TRY_DISPATCH
+#  undef DECODE_TRY_DISPATCH
 
 // -- access to a single element -----------------------------------------------
 
@@ -611,12 +613,16 @@ const record_type& arrow_table_slice<FlatBuffer>::layout() const noexcept {
 
 template <class FlatBuffer>
 table_slice::size_type arrow_table_slice<FlatBuffer>::rows() const noexcept {
-  return record_batch()->num_rows();
+  if (auto&& batch = record_batch())
+    return batch->num_rows();
+  return 0;
 }
 
 template <class FlatBuffer>
 table_slice::size_type arrow_table_slice<FlatBuffer>::columns() const noexcept {
-  return record_batch()->num_columns();
+  if (auto&& batch = record_batch())
+    return batch->num_columns();
+  return 0;
 }
 
 // -- data access ------------------------------------------------------------
@@ -624,16 +630,20 @@ table_slice::size_type arrow_table_slice<FlatBuffer>::columns() const noexcept {
 template <class FlatBuffer>
 void arrow_table_slice<FlatBuffer>::append_column_to_index(
   id offset, table_slice::size_type column, value_index& index) const {
-  auto f = index_applier{offset, index};
-  auto array = record_batch()->column(detail::narrow_cast<int>(column));
-  decode(layout().fields[column].type, *array, f);
+  if (auto&& batch = record_batch()) {
+    auto f = index_applier{offset, index};
+    auto array = batch->column(detail::narrow_cast<int>(column));
+    decode(layout().fields[column].type, *array, f);
+  }
 }
 
 template <class FlatBuffer>
 data_view
 arrow_table_slice<FlatBuffer>::at(table_slice::size_type row,
                                   table_slice::size_type column) const {
-  auto array = record_batch()->column(detail::narrow_cast<int>(column));
+  auto&& batch = record_batch();
+  VAST_ASSERT(batch);
+  auto array = batch->column(detail::narrow_cast<int>(column));
   return value_at(layout().fields[column].type, *array, row);
 }
 
@@ -650,4 +660,4 @@ template class arrow_table_slice<fbs::table_slice::arrow::v0>;
 
 } // namespace vast
 
-#endif // VAST_HAVE_ARROW
+#endif // VAST_ENABLE_ARROW

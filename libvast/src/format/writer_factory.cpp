@@ -22,11 +22,11 @@
 #include "vast/format/writer.hpp"
 #include "vast/format/zeek.hpp"
 
-#if VAST_HAVE_PCAP
+#if VAST_ENABLE_PCAP
 #  include "vast/format/pcap.hpp"
 #endif
 
-#if VAST_HAVE_ARROW
+#if VAST_ENABLE_ARROW
 #  include "vast/format/arrow.hpp"
 #endif
 
@@ -43,7 +43,7 @@ make_writer(const caf::settings& options) {
     if (!out)
       return out.error();
     return std::make_unique<Writer>(std::move(*out));
-#if VAST_HAVE_PCAP
+#if VAST_ENABLE_PCAP
   } else if constexpr (std::is_same_v<Writer, format::pcap::writer>) {
     auto output
       = get_or(options, defaults::category + ".write"s, defaults::write);
@@ -64,10 +64,10 @@ void factory_traits<format::writer>::initialize() {
   fac::add("json", make_writer<format::json::writer>);
   fac::add("null", make_writer<null::writer>);
   fac::add("zeek", make_writer<zeek::writer>);
-#if VAST_HAVE_PCAP
+#if VAST_ENABLE_PCAP
   fac::add("pcap", make_writer<pcap::writer>);
 #endif
-#if VAST_HAVE_ARROW
+#if VAST_ENABLE_ARROW
   fac::add("arrow", make_writer<arrow::writer>);
 #endif
 }

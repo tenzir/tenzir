@@ -45,11 +45,10 @@ public:
   using super = single_layout_reader;
 
   /// Constructs a PCAP reader.
-  /// @param id The ID for table slice type to build.
   /// @param options Additional options.
   /// @param in Input stream (unused). Pass filename via options instead.
-  reader(caf::atom_value id, const caf::settings& options,
-         std::unique_ptr<std::istream> in = nullptr);
+  reader(const caf::settings& options, std::unique_ptr<std::istream> in
+                                       = nullptr);
 
   void reset(std::unique_ptr<std::istream> in);
 

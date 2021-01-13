@@ -17,7 +17,7 @@
 #include "vast/msgpack_table_slice.hpp"
 #include "vast/msgpack_table_slice_builder.hpp"
 
-#if VAST_HAVE_ARROW
+#if VAST_ENABLE_ARROW
 #  include "vast/arrow_table_slice.hpp"
 #  include "vast/arrow_table_slice_builder.hpp"
 #endif
@@ -26,9 +26,9 @@ namespace vast {
 
 void factory_traits<table_slice_builder>::initialize() {
   using f = factory<table_slice_builder>;
-  f::add<msgpack_table_slice_builder>(caf::atom("msgpack"));
-#if VAST_HAVE_ARROW
-  f::add<arrow_table_slice_builder>(caf::atom("arrow"));
+  f::add<msgpack_table_slice_builder>(table_slice_encoding::msgpack);
+#if VAST_ENABLE_ARROW
+  f::add<arrow_table_slice_builder>(table_slice_encoding::arrow);
 #endif
 }
 

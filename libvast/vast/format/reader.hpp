@@ -55,7 +55,7 @@ public:
   // -- constructors, destructors, and assignment operators --------------------
 
   /// @param id Implementation ID for the table slice builder.
-  reader(caf::atom_value table_slice_type, const caf::settings& options);
+  reader(const caf::settings& options);
 
   virtual ~reader();
 
@@ -112,7 +112,8 @@ protected:
                                consumer& f) = 0;
 
 public:
-  caf::atom_value table_slice_type_;
+  table_slice_encoding table_slice_type_
+    = vast::defaults::import::table_slice_type;
   reader_clock::duration batch_timeout_ = vast::defaults::import::batch_timeout;
   reader_clock::duration read_timeout_ = vast::defaults::import::read_timeout;
 

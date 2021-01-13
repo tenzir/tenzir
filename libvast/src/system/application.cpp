@@ -21,8 +21,11 @@
 #include "vast/format/ascii.hpp"
 #include "vast/format/csv.hpp"
 #include "vast/format/json.hpp"
-#include "vast/format/json/suricata.hpp"
+#include "vast/format/json/default_selector.hpp"
+#include "vast/format/json/suricata_selector.hpp"
+#include "vast/format/json/zeek_selector.hpp"
 #include "vast/format/null.hpp"
+#include "vast/format/simdjson.hpp"
 #include "vast/format/syslog.hpp"
 #include "vast/format/test.hpp"
 #include "vast/format/zeek.hpp"
@@ -39,11 +42,11 @@
 #include "vast/system/version_command.hpp"
 #include "vast/system/writer_command.hpp"
 
-#if VAST_HAVE_ARROW
+#if VAST_ENABLE_ARROW
 #  include "vast/format/arrow.hpp"
 #endif
 
-#if VAST_HAVE_PCAP
+#if VAST_ENABLE_PCAP
 #  include "vast/format/pcap.hpp"
 #  include "vast/system/pcap_writer_command.hpp"
 #endif
@@ -182,7 +185,7 @@ auto make_export_command() {
                           "exports query without printing them (debug option)",
                           documentation::vast_export_null,
                           sink_opts("?vast.export.null"));
-#if VAST_HAVE_ARROW
+#if VAST_ENABLE_ARROW
   // The Arrow export does not support --write or --uds, so we don't use the
   // sink_opts here intentionally.
   export_->add_subcommand("arrow", "exports query results in Arrow format",
@@ -190,7 +193,7 @@ auto make_export_command() {
                           opts("?vast.export.arrow"));
 
 #endif
-#if VAST_HAVE_PCAP
+#if VAST_ENABLE_PCAP
   export_->add_subcommand("pcap", "exports query results in PCAP format",
                           documentation::vast_export_pcap,
                           make_pcap_options("?vast.export.pcap"));
@@ -217,15 +220,19 @@ auto make_import_command() {
   auto import_ = std::make_unique<command>(
     "import", "imports data from STDIN or file", documentation::vast_import,
     opts("?vast.import")
-      .add<caf::atom_value>("batch-encoding", "encoding type of table slices "
-                                              "(arrow or msgpack)")
+      .add<std::string>("batch-encoding", "encoding type of table slices "
+                                          "(arrow or msgpack)")
       .add<size_t>("batch-size", "upper bound for the size of a table slice")
       .add<std::string>("batch-timeout", "timeout after which batched "
                                          "table slices are forwarded")
       .add<std::string>("read-timeout", "timeout for waiting for incoming data")
       .add<bool>("blocking,b", "block until the IMPORTER forwarded all data")
       .add<size_t>("max-events,n", "the maximum number of events to import"));
-  import_->add_subcommand("zeek", "imports Zeek logs from STDIN or file",
+  import_->add_subcommand("zeek", "imports Zeek TSV logs from STDIN or file",
+                          documentation::vast_import_zeek,
+                          source_opts("?vast.import.zeek"));
+  import_->add_subcommand("zeek-json",
+                          "imports Zeek JSON logs from STDIN or file",
                           documentation::vast_import_zeek,
                           source_opts("?vast.import.zeek"));
   import_->add_subcommand("csv", "imports CSV logs from STDIN or file",
@@ -233,10 +240,10 @@ auto make_import_command() {
                           source_opts("?vast.import.csv"));
   import_->add_subcommand("json", "imports JSON with schema",
                           documentation::vast_import_json,
-                          source_opts("?vast.import.json"));
+                          source_opts_json("?vast.import.json"));
   import_->add_subcommand("suricata", "imports suricata eve json",
                           documentation::vast_import_suricata,
-                          source_opts("?vast.import.suricata"));
+                          source_opts_json("?vast.import.suricata"));
   import_->add_subcommand("syslog", "imports syslog messages",
                           documentation::vast_import_syslog,
                           source_opts("?vast.import.syslog"));
@@ -244,7 +251,7 @@ auto make_import_command() {
     "test", "imports random data for testing or benchmarking",
     documentation::vast_import_test,
     source_opts("?vast.import.test").add<size_t>("seed", "the PRNG seed"));
-#if VAST_HAVE_PCAP
+#if VAST_ENABLE_PCAP
   import_->add_subcommand(
     "pcap", "imports PCAP logs from STDIN or file",
     documentation::vast_import_pcap,
@@ -297,8 +304,8 @@ auto make_spawn_source_command() {
     "source", "creates a new source inside the node",
     documentation::vast_spawn_source,
     opts("?vast.spawn.source")
-      .add<caf::atom_value>("batch-encoding", "encoding type of table slices "
-                                              "(arrow or msgpack)")
+      .add<std::string>("batch-encoding", "encoding type of table slices "
+                                          "(arrow or msgpack)")
       .add<size_t>("batch-size", "upper bound for the size of a table slice")
       .add<std::string>("batch-timeout", "timeout after which batched "
                                          "table slices are forwarded")
@@ -312,7 +319,7 @@ auto make_spawn_source_command() {
                                "creates a new JSON source inside the node",
                                documentation::vast_spawn_source_json,
                                source_opts("?vast.spawn.source.json"));
-#if VAST_HAVE_PCAP
+#if VAST_ENABLE_PCAP
   spawn_source->add_subcommand(
     "pcap", "creates a new PCAP source inside the node",
     documentation::vast_spawn_source_pcap,
@@ -448,30 +455,36 @@ auto make_command_factory() {
     {"export csv", make_writer_command("csv")},
     {"export json", make_writer_command("json")},
     {"export null", make_writer_command("null")},
-#if VAST_HAVE_ARROW
+#if VAST_ENABLE_ARROW
     {"export arrow", make_writer_command("arrow")},
 #endif
-#if VAST_HAVE_PCAP
+#if VAST_ENABLE_PCAP
     {"export pcap", pcap_writer_command},
 #endif
     {"export zeek", make_writer_command("zeek")},
     {"get", get_command},
     {"infer", infer_command},
     {"import csv", import_command<format::csv::reader, defaults::import::csv>},
-    {"import json", import_command<format::json::reader<>,
+    {"import json", import_command_json<
+      format::json::reader<format::json::default_selector>,
+      format::simdjson::reader<format::json::default_selector>,
       defaults::import::json>},
-#if VAST_HAVE_PCAP
+#if VAST_ENABLE_PCAP
     {"import pcap", import_command<format::pcap::reader,
       defaults::import::pcap>},
 #endif
-    {"import suricata", import_command<
-      format::json::reader<format::json::suricata>,
+    {"import suricata", import_command_json<
+      format::json::reader<format::json::suricata_selector>,
+      format::simdjson::reader<format::json::suricata_selector>,
       defaults::import::suricata>},
     {"import syslog", import_command<format::syslog::reader,
       defaults::import::syslog>},
     {"import test", import_command<format::test::reader,
       defaults::import::test>},
     {"import zeek", import_command<format::zeek::reader,
+      defaults::import::zeek>},
+    {"import zeek-json", import_command<
+      format::json::reader<format::json::zeek_selector>,
       defaults::import::zeek>},
     {"kill", remote_command},
     {"peer", remote_command},
@@ -497,6 +510,7 @@ auto make_command_factory() {
     {"spawn source syslog", remote_command},
     {"spawn source test", remote_command},
     {"spawn source zeek", remote_command},
+    {"spawn source zeek-json", remote_command},
     {"start", start_command},
     {"status", remote_command},
     {"stop", stop_command},
@@ -566,6 +580,11 @@ command::opts_builder source_opts(std::string_view category) {
     .add<std::string>("schema,S", "alternate schema as string")
     .add<std::string>("type,t", "filter event type based on prefix matching")
     .add<bool>("uds,d", "treat -r as listening UNIX domain socket");
+}
+
+command::opts_builder source_opts_json(std::string_view category) {
+  return source_opts(category).add<bool>("simdjson", "Use simdjson for JSON "
+                                                     "parsing");
 }
 
 command::opts_builder sink_opts(std::string_view category) {

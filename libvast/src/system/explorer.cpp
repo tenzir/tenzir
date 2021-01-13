@@ -13,15 +13,17 @@
 
 #include "vast/system/explorer.hpp"
 
+#include "vast/fwd.hpp"
+
 #include "vast/command.hpp"
 #include "vast/concept/printable/to_string.hpp"
 #include "vast/concept/printable/vast/expression.hpp"
 #include "vast/defaults.hpp"
 #include "vast/detail/string.hpp"
 #include "vast/expression.hpp"
-#include "vast/fwd.hpp"
 #include "vast/logger.hpp"
-#include "vast/system/exporter.hpp"
+#include "vast/system/exporter_actor.hpp"
+#include "vast/system/query_status.hpp"
 #include "vast/table_slice.hpp"
 #include "vast/table_slice_builder.hpp"
 #include "vast/table_slice_builder_factory.hpp"
@@ -115,11 +117,15 @@ explorer(caf::stateful_actor<explorer_state>* self, caf::actor node,
     quit_if_done();
   });
   return {
-    [=](vast::table_slice slice) {
+    [=](table_slice slice) {
       auto& st = self->state;
       // TODO: Add some cleaner way to distinguish the different input streams,
       // maybe some 'tagged' stream in caf?
-      if (self->current_sender() != st.initial_query_exporter) {
+      if (!st.initial_exporter) {
+        VAST_ERROR(self, "received table slices before an initial exporter");
+        return;
+      }
+      if (self->current_sender() != st.initial_exporter) {
         st.forward_results(slice);
         return;
       }
@@ -200,18 +206,24 @@ explorer(caf::stateful_actor<explorer_state>* self, caf::actor node,
         if (st.limits.per_result)
           caf::put(exporter_invocation.options, "vast.export.max-events",
                    st.limits.per_result);
-        self->send(st.node, exporter_invocation);
-        ++st.running_exporters;
+        ++self->state.running_exporters;
+        self->request(st.node, caf::infinite, exporter_invocation)
+          .then(
+            [=](caf::actor handle) {
+              auto exporter = caf::actor_cast<exporter_actor>(handle);
+              VAST_DEBUG(self, "registers exporter", exporter);
+              self->monitor(exporter);
+              self->send(exporter, atom::sink_v, self);
+              self->send(exporter, atom::run_v);
+            },
+            [=](caf::error error) {
+              VAST_ERROR(self, "failed to spawn exporter:", render(error));
+              --self->state.running_exporters;
+            });
       }
     },
-    [=](atom::provision, caf::actor exp) {
-      self->state.initial_query_exporter = exp;
-    },
-    [=](caf::actor exp) {
-      VAST_DEBUG(self, "registers exporter", exp);
-      self->monitor(exp);
-      self->send(exp, atom::sink_v, self);
-      self->send(exp, atom::run_v);
+    [=](atom::provision, caf::actor exporter) {
+      self->state.initial_exporter = exporter.address();
     },
     [=]([[maybe_unused]] std::string name, query_status) {
       VAST_DEBUG(self, "received final status from", name);

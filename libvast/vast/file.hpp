@@ -30,7 +30,7 @@ class file {
 
 public:
 /// The native type of a file.
-#ifdef VAST_POSIX
+#if VAST_POSIX
   typedef int native_type;
 #else
   typedef void native_type;

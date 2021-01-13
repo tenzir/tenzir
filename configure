@@ -42,9 +42,10 @@ Usage: $0 [OPTION]... [VAR=VALUE]...
     --show-time-report      show where the compiler spends its time
     --more-warnings         enables most warnings on GCC and Clang
     --without-tests         build without unit tests
-    --with-zeek-to-vast     build without zeek-to-vast
-    --with-lsvast           build without lsvast
-    --with-dscat            build without lsvast
+    --with-zeek-to-vast     build with zeek-to-vast
+    --with-lsvast           build with lsvast
+    --with-dscat            build with dscat
+    --with-example-plugin   build with example plugin
 
   Debugging:
     --log-level=LEVEL       maximum compile-time log level
@@ -64,6 +65,7 @@ Usage: $0 [OPTION]... [VAR=VALUE]...
     --with-bundled-caf      build CAF from the submodule
     --with-flatbuffers=PATH path to flatbuffers install root
     --with-yaml-cpp=PATH    path to yaml-cpp install root
+    --with-simdjson=PATH    path to simdjson install root
 
   Optional packages:
     --with-broker=PATH      path to Broker install root (required for
@@ -120,7 +122,7 @@ while [ $# -ne 0 ]; do
       prefix="$optarg"
       ;;
     --without-relocatable)
-      append_cache_entry VAST_ENABLE_RELOCATABLE_INSTALLTIONS BOOL no
+      append_cache_entry VAST_ENABLE_RELOCATABLE_INSTALLATIONS BOOL no
       ;;
     --package-name=*)
       append_cache_entry CPACK_PACKAGE_FILE_NAME STRING "$optarg"
@@ -168,6 +170,9 @@ while [ $# -ne 0 ]; do
       ;;
     --with-lsvast)
       append_cache_entry VAST_ENABLE_LSVAST BOOL yes
+      ;;
+    --with-example-plugin)
+      append_cache_entry VAST_ENABLE_EXAMPLE_PLUGIN BOOL yes
       ;;
     --with-type-id-checks)
       append_cache_entry CAF_ENABLE_TYPE_ID_CHECKS BOOL yes
@@ -217,6 +222,9 @@ while [ $# -ne 0 ]; do
       ;;
     --with-yaml-cpp=*)
       append_cache_entry YAML_CPP_ROOT PATH "$optarg"
+      ;;
+    --with-simdjson=*)
+      append_cache_entry SIMDJSON_ROOT PATH "$optarg"
       ;;
 # -- Optional packages ---------------------------------------------------------
     --with-broker=*)

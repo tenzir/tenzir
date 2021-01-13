@@ -48,7 +48,6 @@ TEST(stable_map membership) {
   CHECK_EQUAL(xs.count("baz"), 1u);
 }
 
-#if !VAST_NO_EXCEPTIONS
 TEST(stable_map at) {
   CHECK_EQUAL(xs.at("foo"), 42);
   auto exception = std::out_of_range{""};
@@ -59,7 +58,6 @@ TEST(stable_map at) {
   }
   CHECK_EQUAL(exception.what(), "vast::detail::vector_map::at out of range"sv);
 }
-#endif // VAST_NO_EXCEPTIONS
 
 TEST(stable_map insert) {
   xs.clear();

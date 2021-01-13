@@ -450,6 +450,61 @@ caf::error convert(const data& d, caf::config_value& cv) {
   return caf::visit(f, d);
 }
 
+caf::error convert(const caf::dictionary<caf::config_value>& xs, record& ys) {
+  for (auto& [k, v] : xs) {
+    data y;
+    if (auto err = convert(v, y))
+      return err;
+    ys.emplace(k, std::move(y));
+  }
+  return caf::none;
+}
+
+caf::error convert(const caf::dictionary<caf::config_value>& xs, data& y) {
+  record result;
+  if (auto err = convert(xs, result))
+    return err;
+  y = std::move(result);
+  return caf::none;
+}
+
+caf::error convert(const caf::config_value& x, data& y) {
+  auto f = detail::overload{
+    [&](const auto& value) -> caf::error {
+      y = value;
+      return caf::none;
+    },
+    [&](caf::config_value::atom value) -> caf::error {
+      y = to_string(value);
+      return caf::none;
+    },
+    [&](caf::uri value) -> caf::error {
+      y = to_string(value);
+      return caf::none;
+    },
+    [&](const caf::config_value::list& xs) -> caf::error {
+      list result;
+      result.reserve(xs.size());
+      for (auto x : xs) {
+        data element;
+        if (auto err = convert(x, element))
+          return err;
+        result.push_back(std::move(element));
+      }
+      y = std::move(result);
+      return caf::none;
+    },
+    [&](const caf::config_value::dictionary& xs) -> caf::error {
+      record result;
+      if (auto err = convert(xs, result))
+        return err;
+      y = std::move(result);
+      return caf::none;
+    },
+  };
+  return caf::visit(f, x);
+}
+
 namespace {
 
 data parse(const YAML::Node& node) {
@@ -521,7 +576,11 @@ load_yaml_dir(const path& dir, size_t max_recursion) {
   if (max_recursion == 0)
     return ec::recursion_limit_reached;
   std::vector<std::pair<path, data>> result;
-  auto yaml_files = filter_dir(dir, std::regex{"\\.ya?ml$"}, max_recursion);
+  auto filter = [](const path& f) {
+    return detail::ends_with(f.str(), ".yaml")
+           || detail::ends_with(f.str(), ".yml");
+  };
+  auto yaml_files = filter_dir(dir, std::move(filter), max_recursion);
   for (auto& file : yaml_files)
     if (auto yaml = load_yaml(file))
       result.emplace_back(std::move(file), std::move(*yaml));

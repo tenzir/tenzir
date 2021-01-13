@@ -93,7 +93,7 @@ inhale(const char* filename, table_slice::size_type slice_size) {
   // deterministic actor system is messing with the clocks.
   caf::put(settings, "vast.import.batch-timeout", "0s");
   auto input = std::make_unique<std::ifstream>(filename);
-  Reader reader{defaults::import::table_slice_type, settings, std::move(input)};
+  Reader reader{settings, std::move(input)};
   return extract(reader, slice_size);
 }
 
@@ -138,8 +138,7 @@ events::events() {
   caf::settings opts;
   caf::put(opts, "vast.import.test.seed", std::size_t{42});
   caf::put(opts, "vast.import.max-events", std::size_t{1000});
-  vast::format::test::reader rd{defaults::import::table_slice_type,
-                                std::move(opts), nullptr};
+  vast::format::test::reader rd{std::move(opts), nullptr};
   random = extract(rd, slice_size);
   REQUIRE_EQUAL(rows(random), 1000u);
   // Create integer test data.

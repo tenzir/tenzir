@@ -14,12 +14,12 @@ target_compile_definitions(
 )
 target_include_directories(
   libvast_test PUBLIC $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
-                      $<INSTALL_INTERFACE:${CMAKE_INSTALL_FULL_INCLUDEDIR}>)
+                      $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>)
 target_include_directories(libvast_test
                            PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/vast/test)
 target_link_libraries(
   libvast_test
-  PUBLIC caf::test vast::libvast
+  PUBLIC CAF::test vast::libvast
   PRIVATE vast::internal)
 set(isExe $<STREQUAL:$<TARGET_PROPERTY:TYPE>,EXECUTABLE>)
 target_sources(
@@ -38,12 +38,11 @@ add_library(vast::test ALIAS libvast_test)
 install(
   TARGETS libvast_test
   EXPORT VASTTargets
-  ARCHIVE DESTINATION ${CMAKE_INSTALL_FULL_LIBDIR}
-  LIBRARY DESTINATION ${CMAKE_INSTALL_FULL_LIBDIR}
-  RUNTIME DESTINATION ${CMAKE_INSTALL_FULL_BINDIR})
-install(FILES src/main.cpp
-        DESTINATION "${CMAKE_INSTALL_FULL_DATADIR}/vast/test")
+  ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
+  LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
+  RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
+install(FILES src/main.cpp DESTINATION "${CMAKE_INSTALL_DATADIR}/vast/test")
 install(DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/vast"
-        DESTINATION "${CMAKE_INSTALL_FULL_INCLUDEDIR}")
+        DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}")
 install(DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/artifacts"
-        DESTINATION "${CMAKE_INSTALL_FULL_DATADIR}/vast/test")
+        DESTINATION "${CMAKE_INSTALL_DATADIR}/vast/test")

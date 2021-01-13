@@ -201,8 +201,7 @@ struct fixture : fixtures::deterministic_actor_system {
     auto settings = caf::settings{};
     caf::put(settings, "vast.import.batch-timeout", "200ms");
     caf::put(settings, "vast.import.read-timeout", "200ms");
-    reader_type reader{defaults::import::table_slice_type, std::move(settings),
-                       std::move(input)};
+    reader_type reader{std::move(settings), std::move(input)};
     std::vector<table_slice> slices;
     auto add_slice
       = [&](table_slice slice) { slices.emplace_back(std::move(slice)); };
@@ -291,9 +290,8 @@ TEST(zeek reader - custom schema) {
   )__";
   auto sch = unbox(to<schema>(custom_schema));
   using reader_type = format::zeek::reader;
-  reader_type reader{
-    defaults::import::table_slice_type, caf::settings{},
-    std::make_unique<std::istringstream>(std::string{conn_log_100_events})};
+  reader_type reader{caf::settings{}, std::make_unique<std::istringstream>(
+                                        std::string{conn_log_100_events})};
   reader.schema(sch);
   std::vector<table_slice> slices;
   auto add_slice

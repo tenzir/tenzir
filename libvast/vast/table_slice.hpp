@@ -13,8 +13,10 @@
 
 #pragma once
 
-#include "vast/chunk.hpp"
 #include "vast/fwd.hpp"
+
+#include "vast/chunk.hpp"
+#include "vast/table_slice_encoding.hpp"
 #include "vast/type.hpp"
 #include "vast/view.hpp"
 
@@ -33,16 +35,6 @@ public:
 
   /// Platform-independent unsigned integer type used for sizes.
   using size_type = uint64_t;
-
-  /// The possible encodings of a table slice.
-  /// @note This encoding is unversioned. Newly created table slices are
-  /// guaranteed to use the newest vesion of the encoding, while deserialized
-  /// table slices may use an older version.
-  enum class encoding : uint8_t {
-    none,    ///< No data is encoded; the table slice is empty or invalid.
-    arrow,   ///< The table slice is encoded using the Apache Arrow format.
-    msgpack, ///< The table slice is encoded using the MessagePack format.
-  };
 
   /// Controls whether the underlying FlatBuffers table should be verified.
   enum class verify : uint8_t {
@@ -117,7 +109,7 @@ public:
   // -- properties -------------------------------------------------------------
 
   /// @returns The encoding of the slice.
-  enum encoding encoding() const noexcept;
+  enum table_slice_encoding encoding() const noexcept;
 
   /// @returns The table layout.
   const record_type& layout() const noexcept;
@@ -151,7 +143,7 @@ public:
   /// @pre `row < rows() && column < columns()`
   data_view at(size_type row, size_type column) const;
 
-#if VAST_HAVE_ARROW
+#if VAST_ENABLE_ARROW
 
   /// Converts a table slice to an Apache Arrow Record Batch.
   /// @returns The pointer to the Record Batch.
@@ -159,7 +151,7 @@ public:
   friend std::shared_ptr<arrow::RecordBatch>
   as_record_batch(const table_slice& x);
 
-#endif // VAST_HAVE_ARROW
+#endif // VAST_ENABLE_ARROW
 
   // -- concepts ---------------------------------------------------------------
 
@@ -191,7 +183,7 @@ public:
   /// @note This function only rebuilds if necessary, i.e., the new encoding
   /// is different from the existing one.
   friend table_slice
-  rebuild(table_slice slice, enum encoding encoding) noexcept;
+  rebuild(table_slice slice, enum table_slice_encoding encoding) noexcept;
 
   /// Selects all rows in `slice` with event IDs in `selection` and appends
   /// produced table slices to `result`. Cuts `slice` into multiple slices if
@@ -199,7 +191,7 @@ public:
   /// @param result The container for appending generated table slices.
   /// @param slice The input table slice.
   /// @param selection ID set for selecting events from `slice`.
-  /// @pre `slice.encoding() != table_slice::encoding::none`
+  /// @pre `slice.encoding() != table_slice_encoding::none`
   friend void select(std::vector<table_slice>& result, const table_slice& slice,
                      const ids& selection);
 
@@ -243,7 +235,7 @@ private:
 /// @param selection ID set for selecting events from `slice`.
 /// @returns new table slices of the same implementation type as `slice` from
 ///          `selection`.
-/// @pre `slice.encoding() != table_slice::encoding::none`
+/// @pre `slice.encoding() != table_slice_encoding::none`
 std::vector<table_slice> select(const table_slice& slice, const ids& selection);
 
 /// Selects the first `num_rows` rows of `slice`.
@@ -251,7 +243,7 @@ std::vector<table_slice> select(const table_slice& slice, const ids& selection);
 /// @param num_rows The number of rows to keep.
 /// @returns `slice` if `slice.rows() <= num_rows`, otherwise creates a new
 ///          table slice of the first `num_rows` rows from `slice`.
-/// @pre `slice.encoding() != table_slice::encoding::none`
+/// @pre `slice.encoding() != table_slice_encoding::none`
 /// @pre `num_rows > 0`
 table_slice truncate(const table_slice& slice, size_t num_rows);
 
@@ -262,7 +254,7 @@ table_slice truncate(const table_slice& slice, size_t num_rows);
 /// @param partition_point The index of the first row for the second slice.
 /// @returns two new table slices if `0 < partition_point < slice.rows()`,
 ///          otherwise returns `slice` and an invalid tbale slice.
-/// @pre `slice.encoding() != table_slice::encoding::none`
+/// @pre `slice.encoding() != table_slice_encoding::none`
 std::pair<table_slice, table_slice>
 split(const table_slice& slice, size_t partition_point);
 

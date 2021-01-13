@@ -138,7 +138,7 @@ caf::expected<path> objectpath_dynamic(const void* addr) {
 }
 
 caf::expected<path> objectpath_static() {
-#ifdef VAST_LINUX
+#if VAST_LINUX
   struct stat sb;
   auto self = "/proc/self/exe";
   if (lstat(self, &sb) == -1)

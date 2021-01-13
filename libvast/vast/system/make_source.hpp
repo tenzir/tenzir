@@ -16,10 +16,12 @@
 #include "vast/fwd.hpp"
 
 #include "vast/command.hpp"
+#include "vast/component_config.hpp"
 #include "vast/concept/parseable/to.hpp"
 #include "vast/concept/parseable/vast/endpoint.hpp"
 #include "vast/concept/parseable/vast/expression.hpp"
 #include "vast/concept/parseable/vast/schema.hpp"
+#include "vast/concept/parseable/vast/table_slice_encoding.hpp"
 #include "vast/concept/printable/to_string.hpp"
 #include "vast/concept/printable/vast/port.hpp"
 #include "vast/defaults.hpp"
@@ -91,8 +93,11 @@ make_source(const Actor& self, caf::actor_system& sys, const invocation& inv,
   auto uri = caf::get_if<std::string>(&options, category + ".listen");
   auto file = caf::get_if<std::string>(&options, category + ".read");
   auto type = caf::get_if<std::string>(&options, category + ".type");
-  auto slice_type = get_or(options, "vast.import.batch-encoding",
-                           defaults::import::table_slice_type);
+  auto encoding = defaults::import::table_slice_type;
+  if (!extract_settings(encoding, options, "vast.import.batch-encoding"))
+    return make_error(ec::invalid_configuration, "failed to extract "
+                                                 "batch-encoding option");
+  VAST_ASSERT(encoding != table_slice_encoding::none);
   auto slice_size = get_or(options, "vast.import.batch-size",
                            defaults::import::table_slice_size);
   if (slice_size == 0)
@@ -131,7 +136,7 @@ make_source(const Actor& self, caf::actor_system& sys, const invocation& inv,
         ep.port = port{ep.port->number(), port::tcp};
       }
     }
-    reader = std::make_unique<Reader>(slice_type, options);
+    reader = std::make_unique<Reader>(options);
     VAST_INFO_ANON(reader->name(), "listens for data on",
                    ep.host + ":" + to_string(*ep.port));
     switch (ep.port->type()) {
@@ -146,7 +151,7 @@ make_source(const Actor& self, caf::actor_system& sys, const invocation& inv,
     auto in = detail::make_input_stream<Defaults>(options);
     if (!in)
       return in.error();
-    reader = std::make_unique<Reader>(slice_type, options, std::move(*in));
+    reader = std::make_unique<Reader>(options, std::move(*in));
     if (*file == "-")
       VAST_INFO_ANON(reader->name(), "reads data from STDIN");
     else
@@ -155,9 +160,9 @@ make_source(const Actor& self, caf::actor_system& sys, const invocation& inv,
   if (!reader)
     return make_error(ec::invalid_result, "failed to spawn reader");
   if (slice_size == std::numeric_limits<decltype(slice_size)>::max())
-    VAST_VERBOSE_ANON(reader->name(), "produces", slice_type, "table slices");
+    VAST_VERBOSE_ANON(reader->name(), "produces", encoding, "table slices");
   else
-    VAST_VERBOSE_ANON(reader->name(), "produces", slice_type,
+    VAST_VERBOSE_ANON(reader->name(), "produces", encoding,
                       "table slices of at most", slice_size, "events");
   // Spawn the source, falling back to the default spawn function.
   auto local_schema = schema ? std::move(*schema) : vast::schema{};

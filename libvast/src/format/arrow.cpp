@@ -11,7 +11,9 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#if VAST_HAVE_ARROW
+#include "vast/config.hpp"
+
+#if VAST_ENABLE_ARROW
 
 #  include "vast/format/arrow.hpp"
 
@@ -86,4 +88,4 @@ bool writer::layout(const record_type& x) {
 
 } // namespace vast::format::arrow
 
-#endif // VAST_HAVE_ARROW
+#endif // VAST_ENABLE_ARROW

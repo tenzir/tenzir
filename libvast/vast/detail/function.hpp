@@ -20,8 +20,9 @@
 
 #pragma once
 
-#include "vast/detail/assert.hpp"
 #include "vast/fwd.hpp"
+
+#include "vast/detail/assert.hpp"
 
 #include <cstddef>
 #include <cstdlib>
@@ -1114,6 +1115,11 @@ public:
                      std::forward<Allocator>(allocator)),
                    this->opaque_ptr(), capacity());
   }
+
+  VAST_DIAGNOSTIC_PUSH
+  // False positive when bool(callable) can never be false.
+  VAST_DIAGNOSTIC_IGNORE_ADDRESS
+
   template <typename T, typename Allocator = std::allocator<std::decay_t<T>>>
   FU2_DETAIL_CXX14_CONSTEXPR
   erasure(std::true_type /*use_bool_op*/, T&& callable,
@@ -1129,6 +1135,8 @@ public:
       vtable_.set_empty();
     }
   }
+
+  VAST_DIAGNOSTIC_POP
 
   ~erasure() {
     vtable_.weak_destroy(this->opaque_ptr(), capacity());
