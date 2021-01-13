@@ -189,7 +189,7 @@ type_biased_convert_impl<std::string_view, real>(std::string_view s,
 
 // Duration conversions
 template <typename NumberType>
-auto to_duration_convert_impl( NumberType s) {
+auto to_duration_convert_impl(NumberType s) {
   auto secs = std::chrono::duration<real>(s);
   return std::chrono::duration_cast<duration>(secs);
 }

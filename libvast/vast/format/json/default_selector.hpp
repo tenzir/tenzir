@@ -61,7 +61,6 @@ private:
   }
 
 public:
-
   caf::optional<record_type> operator()(const vast::json::object& obj) const {
     if (type_cache.empty())
       return caf::none;

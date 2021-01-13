@@ -118,7 +118,7 @@ TEST(simdjson to data) {
   CHECK(std::abs(r - real{4.2}) < 0.000001);
 
   CHECK(slice.at(0, 3) == data{integer{-1337}});
-  CHECK_EQUAL(slice.at(0, 4),data{std::string{"0123456789®\r\n"}});
+  CHECK_EQUAL(slice.at(0, 4), data{std::string{"0123456789®\r\n"}});
 
   std::array<std::uint8_t, 4> addr1{147, 32, 84, 165};
   CHECK(slice.at(0, 5)
@@ -131,7 +131,8 @@ TEST(simdjson to data) {
 
   CHECK(slice.at(0, 10) == data{enumeration{2}});
 
-  const list lc = {data{count{0x3e7}}, data{count{19}}, data{count{5555}}, data{count{0}}};
+  const list lc
+    = {data{count{0x3e7}}, data{count{19}}, data{count{5555}}, data{count{0}}};
   CHECK(slice.at(0, 11) == data{lc});
   CHECK(slice.at(0, 13) == data{count{421}});
   CHECK(slice.at(0, 14) == data{std::string{"test"}});
