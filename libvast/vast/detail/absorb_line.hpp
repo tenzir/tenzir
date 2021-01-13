@@ -27,7 +27,8 @@ namespace vast::detail {
 
 /// Get one line from the istream `is`, ignoring the current platform
 /// delimiter and recognizing any of `\n`, `\r\n` and `\r` instead.
-inline std::istream& getline_generic(std::istream& is, std::string& t) {
+/// This version is further modified to append to preexisting content in `t`.
+inline std::istream& absorb_line(std::istream& is, std::string& t) {
   // The characters in the stream are read one-by-one using a std::streambuf.
   // That is faster than reading them one-by-one using the std::istream.
   // Code that uses streambuf this way must be guarded by a sentry object.

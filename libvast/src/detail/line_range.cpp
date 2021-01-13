@@ -13,8 +13,8 @@
 
 #include "vast/detail/line_range.hpp"
 
+#include "vast/detail/absorb_line.hpp"
 #include "vast/detail/fdinbuf.hpp"
-#include "vast/detail/getline_generic.hpp"
 #include "vast/logger.hpp"
 
 namespace vast {
@@ -32,7 +32,7 @@ void line_range::next_impl() {
     return;
   // Get the next non-empty line.
   do {
-    if (detail::getline_generic(input_, line_))
+    if (detail::absorb_line(input_, line_))
       ++line_number_;
     else
       break;
