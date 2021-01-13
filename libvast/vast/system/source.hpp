@@ -252,9 +252,7 @@ source(caf::stateful_actor<source_state<Reader>>* self, Reader reader,
       auto& st = self->state;
       // Extract events until the source has exhausted its input or until
       // we have completed a batch.
-      auto push_slice = [&](table_slice slice) {
-        out.push(std::move(slice));
-      };
+      auto push_slice = [&](table_slice slice) { out.push(std::move(slice)); };
       // We can produce up to num * table_slice_size events per run.
       auto events = num * table_slice_size;
       if (st.requested)
