@@ -28,9 +28,36 @@
 #include <caf/expected.hpp>
 #include <caf/optional.hpp>
 
+#include <simdjson.h>
+
 namespace vast::format::json {
 
 struct default_selector {
+private:
+  template <typename Prefix>
+  static void
+  make_names_layout_impl(std::vector<std::string>& entries, Prefix& prefix,
+                         const ::simdjson::dom::object& obj) {
+    for (const auto f : obj) {
+      prefix.emplace_back(f.key);
+      if (f.value.type() != ::simdjson::dom::element_type::OBJECT)
+        entries.emplace_back(detail::join(prefix.begin(), prefix.end(), "."));
+      else
+        make_names_layout_impl(entries, prefix, f.value);
+      prefix.pop_back();
+    }
+  }
+
+  static auto make_names_layout(const ::simdjson::dom::object& obj) {
+    std::vector<std::string> entries;
+    entries.reserve(100);
+    auto prefix = detail::stack_vector<std::string_view, 64>{};
+    make_names_layout_impl(entries, prefix, obj);
+    std::sort(entries.begin(), entries.end());
+    return entries;
+  }
+
+public:
   caf::optional<record_type> operator()(const vast::json::object& obj) const {
     if (type_cache.empty())
       return caf::none;
@@ -45,6 +72,20 @@ struct default_selector {
     each_field(vast::json{obj}, build_cache_entry);
     std::sort(cache_entry.begin(), cache_entry.end());
     if (auto search_result = type_cache.find(cache_entry);
+        search_result != type_cache.end())
+      return search_result->second;
+    return caf::none;
+  }
+
+  caf::optional<record_type>
+  operator()(const ::simdjson::dom::object& obj) const {
+    if (type_cache.empty())
+      return caf::none;
+    // Iff there is only one type in the type cache, allow the JSON reader to
+    // use it despite not being an exact match.
+    if (type_cache.size() == 1)
+      return type_cache.begin()->second;
+    if (auto search_result = type_cache.find(make_names_layout(obj));
         search_result != type_cache.end())
       return search_result->second;
     return caf::none;

@@ -106,6 +106,15 @@ jobs:
           sudo apt-get -qqy install ./apache-arrow-archive-keyring_1.0.1-1_all.deb
           sudo apt-get -qq update
           sudo apt-get -qqy install libarrow-dev=1.0.1-1
+          # Ubuntu 2020 has an old version of simdjson, so simdjson v0.6.1
+          # is installed manually.
+          wget https://github.com/simdjson/simdjson/archive/v0.6.1.tar.gz
+          tar xf v0.6.1.tar.gz
+          cd simdjson-0.6.1
+          cmake -Bbuild
+          cmake --build build --parallel
+          cmake --build build --target amalgamate
+          sudo cmake --build build --target install
 
       - name: Install Dependencies (macOS)
         if: matrix.os.tag == 'macOS'
@@ -116,7 +125,7 @@ jobs:
           HOMEBREW_NO_AUTO_UPDATE: 1
         run: |
           brew --version
-          brew install libpcap tcpdump rsync pandoc apache-arrow pkg-config ninja ccache gnu-sed flatbuffers yaml-cpp
+          brew install libpcap tcpdump rsync pandoc apache-arrow pkg-config ninja ccache gnu-sed flatbuffers yaml-cpp simdjson
 
       - name: Configure Environment
         id: configure_env

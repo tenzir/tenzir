@@ -26,8 +26,8 @@ spawn_disk_monitor(system::node_actor* self, spawn_arguments& args) {
   caf::put_missing(opts, "vast.start.disk-budget-high", "0KiB");
   caf::put_missing(opts, "vast.start.disk-budget-low", "0KiB");
   // TODO: Also allow integer arguments. Currently we insist on a string because
-  // `caf::get_or` below will silently take the default value of "0KiB" if the key
-  // is not a string. (e.g. `disk-budget-high: 6T`)
+  // `caf::get_or` below will silently take the default value of "0KiB" if the
+  // key is not a string. (e.g. `disk-budget-high: 6T`)
   if (!caf::holds_alternative<std::string>(opts, "vast.start.disk-budget-high"))
     return make_error(ec::invalid_argument, "could not parse disk-budget-high "
                                             "as byte size");

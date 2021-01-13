@@ -1,4 +1,4 @@
-FROM debian:buster-slim as builder
+FROM debian:buster-backports as builder
 LABEL maintainer="engineering@tenzir.com"
 LABEL builder=true
 
@@ -13,7 +13,7 @@ ENV DEBIAN_FRONTEND noninteractive
 RUN apt-get -qq update && apt-get -qqy install \
   build-essential gcc-8 g++-8 ninja-build libbenchmark-dev libpcap-dev tcpdump \
   libssl-dev python3-dev python3-pip python3-venv git-core jq gnupg2 \
-  libyaml-cpp-dev
+  libyaml-cpp-dev libsimdjson-dev
 RUN pip3 install --upgrade pip && pip install --upgrade cmake && \
   cmake --version
 

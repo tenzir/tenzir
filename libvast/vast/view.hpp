@@ -141,7 +141,7 @@ struct view_trait<record> {
 };
 
 // clang-format off
-/// A type-erased view over variout types of data.
+/// A type-erased view over various types of data.
 /// @relates view_trait
 using data_view = caf::variant<
   view<caf::none_t>,

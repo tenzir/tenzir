@@ -1,5 +1,5 @@
 #!/usr/bin/env nix-shell
-#!nix-shell -I nixpkgs=https://github.com/NixOS/nixpkgs/archive/30d7b9341291dbe1e3361a5cca9052ee1437bc97.tar.gz -i bash -p git nix coreutils nix-prefetch-github
+#!nix-shell -I nixpkgs=https://github.com/NixOS/nixpkgs/archive/d4776f5826366c59eec5377f36bb4d74b54276bd.tar.gz -i bash -p git nix coreutils nix-prefetch-github
 
 dir="$(dirname "$(readlink -f "$0")")"
 toplevel="$(git -C ${dir} rev-parse --show-toplevel)"

@@ -5,7 +5,8 @@ ENV PREFIX /usr/local
 
 RUN apt-get -qq update && apt-get -qq install -y libasan5 libc++1 libc++abi1 \
   libpcap0.8 openssl lsb-release python3 python3-pip jq tcpdump rsync wget \
-  libflatbuffers-dev libyaml-cpp-dev libxxhash-dev
+  libflatbuffers-dev libyaml-cpp-dev
+
 # Install Apache Arrow (c.f. https://arrow.apache.org/install/)
 # TODO: Revert the commit that introduced this version pinning once ch20162
 # is done and we can use latest upstream again.
@@ -16,6 +17,16 @@ RUN wget https://apache.bintray.com/arrow/ubuntu/pool/focal/main/a/apache-arrow-
 
 RUN pip3 install --upgrade pip && pip install --upgrade cmake && \
   cmake --version
+
+# ubuntu:20.04 has an old version of simdjson, so simdjson v0.6.1 is installed
+# manually.
+RUN wget https://github.com/simdjson/simdjson/archive/v0.6.1.tar.gz && \
+  tar xf v0.6.1.tar.gz && \
+  cd simdjson-0.6.1 && \
+  cmake -Bbuild && \
+  cmake --build build --parallel && \
+  cmake --build build --target amalgamate && \
+  cmake --build build --target install
 
 COPY opt/vast /opt/vast
 RUN rsync -avh /opt/vast/* $PREFIX

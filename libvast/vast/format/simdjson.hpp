@@ -15,42 +15,34 @@
 
 #include "vast/fwd.hpp"
 
-#include "vast/concept/parseable/vast/json.hpp"
+#include "vast/concept/hashable/hash_append.hpp"
+#include "vast/concept/hashable/xxhash.hpp"
 #include "vast/defaults.hpp"
+#include "vast/detail/flat_map.hpp"
 #include "vast/detail/line_range.hpp"
+#include "vast/detail/string.hpp"
 #include "vast/error.hpp"
 #include "vast/format/multi_layout_reader.hpp"
 #include "vast/format/ostream_writer.hpp"
-#include "vast/json.hpp"
 #include "vast/logger.hpp"
 #include "vast/schema.hpp"
+#include "vast/view.hpp"
 
 #include <caf/expected.hpp>
+#include <caf/fwd.hpp>
 #include <caf/settings.hpp>
 
 #include <chrono>
+#include <simdjson.h>
 
-namespace vast::format::json {
-
-class writer : public ostream_writer {
-public:
-  using defaults = vast::defaults::export_::json;
-
-  using super = ostream_writer;
-
-  using super::super;
-
-  caf::error write(const table_slice& x) override;
-
-  const char* name() const override;
-};
+namespace vast::format::simdjson {
 
 /// Adds a JSON object to a table slice builder according to a given layout.
 /// @param builder The builder to add the JSON object to.
 /// @param xs The JSON object to add to *builder.
 /// @param layout The record type describing *xs*.
 /// @returns An error iff the operation failed.
-caf::error add(table_slice_builder& builder, const vast::json::object& xs,
+caf::error add(table_slice_builder& bptr, const ::simdjson::dom::object& xs,
                const record_type& layout);
 
 /// A reader for JSON data. It operates with a *selector* to determine the
@@ -61,6 +53,7 @@ public:
   using super = multi_layout_reader;
 
   /// Constructs a JSON reader.
+  /// @param table_slice_type The ID for table slice type to build.
   /// @param options Additional options.
   /// @param in The stream of JSON objects.
   reader(const caf::settings& options, std::unique_ptr<std::istream> in
@@ -85,6 +78,11 @@ private:
 
   Selector selector_;
   std::unique_ptr<std::istream> input_;
+
+  // https://simdjson.org/api/0.7.0/classsimdjson_1_1dom_1_1parser.html
+  // Parser is designed to be reused.
+  ::simdjson::dom::parser json_parser_;
+
   std::unique_ptr<detail::line_range> lines_;
   caf::optional<size_t> proto_field_;
   std::vector<size_t> port_fields_;
@@ -173,18 +171,18 @@ caf::error reader<Selector>::read_impl(size_t max_events, size_t max_slice_size,
       VAST_DEBUG(this, "ignores empty line at", lines_->line_number());
       continue;
     }
-    vast::json j;
-    if (!parsers::json(line, j)) {
+    const auto [j, parse_error] = json_parser_.parse(line);
+    if (parse_error != ::simdjson::SUCCESS) {
       if (num_invalid_lines_ == 0)
         VAST_WARNING(this, "failed to parse line", lines_->line_number(), ":",
                      line);
       ++num_invalid_lines_;
       continue;
     }
-    auto xs = caf::get_if<vast::json::object>(&j);
-    if (!xs)
+    const auto [xs, get_object_error] = j.get_object();
+    if (get_object_error != ::simdjson::SUCCESS)
       return make_error(ec::type_clash, "not a json object");
-    auto&& layout = selector_(*xs);
+    auto&& layout = selector_(xs);
     if (!layout) {
       if (num_unknown_layouts_ == 0)
         VAST_WARNING(this, "failed to find a matching type at line",
@@ -195,16 +193,9 @@ caf::error reader<Selector>::read_impl(size_t max_events, size_t max_slice_size,
     bptr = builder(*layout);
     if (bptr == nullptr)
       return make_error(ec::parse_error, "unable to get a builder");
-    if (auto err = add(*bptr, *xs, *layout)) {
-      if (err == ec::convert_error) {
-        if (num_invalid_lines_ == 0)
-          VAST_WARNING(this, "failed to convert value(s) in line",
-                       lines_->line_number(), ":", render(err));
-        ++num_invalid_lines_;
-      } else {
-        err.context() += caf::make_message("line", lines_->line_number());
-        return finish(cons, err);
-      }
+    if (auto err = add(*bptr, xs, *layout)) {
+      err.context() += caf::make_message("line", lines_->line_number());
+      return finish(cons, err);
     }
     produced++;
     batch_events_++;
@@ -215,4 +206,4 @@ caf::error reader<Selector>::read_impl(size_t max_events, size_t max_slice_size,
   return finish(cons);
 }
 
-} // namespace vast::format::json
+} // namespace vast::format::simdjson
