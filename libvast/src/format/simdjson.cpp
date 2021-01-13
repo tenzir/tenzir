@@ -374,8 +374,8 @@ lookup(std::string_view field, const ::simdjson::dom::object& xs) {
 
 caf::error add(table_slice_builder& builder, const ::simdjson::dom::object& xs,
                const record_type& layout) {
-  for (auto& field : layout.fields) {
-    auto [el, er] = lookup(field.name, xs);
+  for (auto& field : record_type::each(layout)) {
+    auto [el, er] = lookup(field.key(), xs);
     // Non-existing fields are treated as empty (unset).
     if (er != ::simdjson::SUCCESS) {
       if (!builder.add(make_data_view(caf::none)))
@@ -383,12 +383,12 @@ caf::error add(table_slice_builder& builder, const ::simdjson::dom::object& xs,
                                            "slice builder");
       continue;
     }
-    auto x = convert(el, field.type);
+    auto x = convert(el, field.type());
     if (!x)
       return make_error(ec::convert_error, x.error().context(),
-                        "could not convert", field.name);
+                        "could not convert", field.key());
     if (!builder.add(make_data_view(*x)))
-      return make_error(ec::type_clash, "unexpected type", field.name);
+      return make_error(ec::type_clash, "unexpected type", field.key());
   }
   return caf::none;
 }
