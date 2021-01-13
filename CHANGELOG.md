@@ -12,19 +12,19 @@ Every entry has a category for which we use the following visual abbreviations:
 
 ## Unreleased
 
-
-- 🧬 VAST now relies on [simdjson](https://github.com/simdjson/simdjson) for
-  JSON parsing. The substantial gains in throughput shift the bottleneck of
-  the ingest path from parsing input to indexing at the node. To use the (yet
-  experimental) feature, use `vast import json|suricata --simdjson`.
-  [#1230](https://github.com/tenzir/vast/pull/1230)
-  [#1246](https://github.com/tenzir/vast/pull/1246)
-  [@ngrodzitski](https://github.com/ngrodzitski)
-
 - ⚠️ VAST now preserves nested JSON objects in events instead of formatting them
   in a flattened form when exporting data with `vast export json`. The old
   behavior can be enabled with `vast export json --flatten`.
   [#1257](https://github.com/tenzir/vast/pull/1257)
+
+- 🧬 VAST now relies on [simdjson](https://github.com/simdjson/simdjson) for
+  JSON parsing. The substantial gains in throughput shift the bottleneck of
+  the ingest path from parsing input to indexing at the node. To use the (yet
+  experimental) feature, use `vast import json|suricata|zeek-json --simdjson`.
+  [#1230](https://github.com/tenzir/vast/pull/1230)
+  [#1246](https://github.com/tenzir/vast/pull/1246)
+  [#1281](https://github.com/tenzir/vast/pull/1281)
+  [@ngrodzitski](https://github.com/ngrodzitski)
 
 - 🐞 Disk monitor quota settings not ending in a 'B' used to be silently
   discarded.
