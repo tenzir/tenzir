@@ -62,9 +62,10 @@ query_supervisor_actor::behavior_type query_supervisor(
           ->request(partition, caf::infinite, expr,
                     static_cast<const partition_client_actor&>(client))
           .then(
-            [=, id = id](atom::done) {
+            [=](atom::done) {
               if (--self->state.open_requests == 0) {
-                VAST_DEBUG(self, "collected all results for partition", id);
+                VAST_DEBUG(self, "collected all results for the current batch "
+                                 "of partitions");
                 // Ask master for more work after receiving the last sub
                 // result.
                 // TODO: We should schedule a new partition as soon as the
