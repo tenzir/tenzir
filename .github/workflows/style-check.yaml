@@ -9,10 +9,8 @@ jobs:
     steps:
 
     - uses: actions/checkout@v2
-
-    - name: Fetch Master
-      run: |
-        git fetch origin master
+      with:
+        fetch-depth: 0
 
     - uses: actions/setup-python@v1
       with:
@@ -20,14 +18,12 @@ jobs:
 
     - name: Clang Format
       run: |
-        set -x
         pip install --upgrade pip clang-format
         git diff -U0 --no-color $(git merge-base origin/master HEAD) |
           scripts/clang-format-diff.py -p1
 
     - name: CMake Format
       run: |
-        set -x
         pip install --upgrade pip cmake_format
         git diff --name-only --no-color --diff-filter=ACM $(git merge-base origin/master HEAD) -- "**CMakelists.txt" "**.cmake" |
           xargs cmake-format --in-place
@@ -35,7 +31,6 @@ jobs:
 
     - name: Black
       run: |
-        set -x
         pip install --upgrade pip black
         # Note: black fails when it doesn't have to do anything.
         git diff --name-only --no-color --diff-filter=ACM $(git merge-base origin/master HEAD) |
