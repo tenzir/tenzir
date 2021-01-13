@@ -12,14 +12,13 @@ Every entry has a category for which we use the following visual abbreviations:
 
 ## Unreleased
 
-- 🧬 As a first step to increasing the performance of our JSON import, VAST now
-  relies on [simdjson](https://github.com/simdjson/simdjson) to parse NDJSON.
-  To use the (yet experimental) feature, use `vast import json|suricata
-  --simdjson`. Special thanks to [@ngrodzitski](https://github.com/ngrodzitski)
-  for all the work on this integration.
+- 🧬 VAST now relies on [simdjson](https://github.com/simdjson/simdjson) for
+  JSON parsing. The substantial gains in throughput shift the bottleneck of
+  the ingest path from parsing input to indexing at the node. To use the (yet
+  experimental) feature, use `vast import json|suricata --simdjson`.
   [#1230](https://github.com/tenzir/vast/pull/1230)
   [#1246](https://github.com/tenzir/vast/pull/1246)
-
+  [@ngrodzitski](https://github.com/ngrodzitski)
 - 🐞 Disk monitor quota settings not ending in a 'B' used to be silently
   discarded.
   [#1278](https://github.com/tenzir/vast/pull/1278)
