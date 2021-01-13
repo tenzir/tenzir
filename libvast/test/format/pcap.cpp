@@ -95,7 +95,7 @@ TEST(PCAP read/write 1) {
   REQUIRE_EQUAL(events_produced, 44u);
   auto&& layout = slice.layout();
   CHECK_EQUAL(layout.name(), "pcap.packet");
-  auto src_field = slice.at(43, 1);
+  auto src_field = slice.at(43, 1, address_type{});
   auto src = unbox(caf::get_if<view<address>>(&src_field));
   CHECK_EQUAL(src, unbox(to<address>("192.168.1.1")));
   auto community_id_column = table_slice_column::make(slice, "community_id");
@@ -104,7 +104,8 @@ TEST(PCAP read/write 1) {
     CHECK_VARIANT_EQUAL((*community_id_column)[row], community_ids[row]);
   MESSAGE("write out read packets");
   auto file = "vast-unit-test-nmap-vsn.pcap";
-  format::pcap::writer writer{file};
+  caf::put(settings, "vast.export.pcap.write", file);
+  format::pcap::writer writer{settings};
   auto deleter = caf::detail::make_scope_guard([&] { rm(file); });
   REQUIRE_EQUAL(writer.write(slice), caf::none);
 }
@@ -138,7 +139,8 @@ TEST(PCAP read/write 2) {
   CHECK_EQUAL(layout.name(), "pcap.packet");
   MESSAGE("write out read packets");
   auto file = "vast-unit-test-workshop-2011-browse.pcap";
-  format::pcap::writer writer{file};
+  caf::put(settings, "vast.export.pcap.write", file);
+  format::pcap::writer writer{settings};
   auto deleter = caf::detail::make_scope_guard([&] { rm(file); });
   REQUIRE_EQUAL(writer.write(slice), caf::none);
 }

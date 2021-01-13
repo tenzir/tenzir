@@ -252,6 +252,7 @@ msgpack_table_slice<FlatBuffer>::msgpack_table_slice(
   : slice_{slice}, state_{} {
   if (auto err = fbs::deserialize_bytes(slice_.layout(), state_.layout))
     die("failed to deserialize layout: " + render(err));
+  state_.columns = state_.layout.num_leaves();
 }
 
 template <class FlatBuffer>
@@ -259,6 +260,7 @@ msgpack_table_slice<FlatBuffer>::msgpack_table_slice(
   const FlatBuffer& slice, record_type layout) noexcept
   : slice_{slice}, state_{} {
   state_.layout = std::move(layout);
+  state_.columns = state_.layout.num_leaves();
 }
 
 template <class FlatBuffer>
@@ -281,7 +283,7 @@ table_slice::size_type msgpack_table_slice<FlatBuffer>::rows() const noexcept {
 template <class FlatBuffer>
 table_slice::size_type
 msgpack_table_slice<FlatBuffer>::columns() const noexcept {
-  return layout().fields.size();
+  return state_.columns;
 }
 
 // -- data access ------------------------------------------------------------
@@ -291,12 +293,14 @@ void msgpack_table_slice<FlatBuffer>::append_column_to_index(
   id offset, table_slice::size_type column, value_index& index) const {
   const auto& offset_table = *slice_.offset_table();
   auto view = as_bytes(*slice_.data());
-  auto type = layout().fields[column].type;
+  auto layout_offset = state_.layout.offset_from_index(column);
+  VAST_ASSERT(layout_offset);
+  auto type = state_.layout.at(*layout_offset);
   for (size_t row = 0; row < rows(); ++row) {
     auto row_offset = offset_table[row];
     auto xs = msgpack::overlay{view.subspan(row_offset)};
     xs.next(column);
-    auto x = decode(xs, layout().fields[column].type);
+    auto x = decode(xs, *type);
     index.append(std::move(x), offset + row);
   }
 }
@@ -314,7 +318,26 @@ msgpack_table_slice<FlatBuffer>::at(table_slice::size_type row,
   auto xs = msgpack::overlay{view.subspan(offset)};
   // ...then skip (decode) up to the desired column.
   xs.next(column);
-  return decode(xs, layout().fields[column].type);
+  auto layout_offset = state_.layout.offset_from_index(column);
+  VAST_ASSERT(layout_offset);
+  return decode(xs, *state_.layout.at(*layout_offset));
+}
+
+template <class FlatBuffer>
+data_view msgpack_table_slice<FlatBuffer>::at(table_slice::size_type row,
+                                              table_slice::size_type column,
+                                              const type& t) const {
+  const auto& offset_table = *slice_.offset_table();
+  auto view = as_bytes(*slice_.data());
+  // First find the desired row...
+  VAST_ASSERT(row < offset_table.size());
+  VAST_ASSERT(*state_.layout.at(*state_.layout.offset_from_index(column)) == t);
+  auto offset = offset_table[row];
+  VAST_ASSERT(offset < static_cast<size_t>(view.size()));
+  auto xs = msgpack::overlay{view.subspan(offset)};
+  // ...then skip (decode) up to the desired column.
+  xs.next(column);
+  return decode(xs, t);
 }
 
 // -- template machinery -------------------------------------------------------

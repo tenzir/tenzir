@@ -58,41 +58,39 @@ void partition_synopsis::shrink() {
 
 void partition_synopsis::add(const table_slice& slice,
                              const caf::settings& synopsis_options) {
-  auto make_synopsis = [&](const record_field& field) -> synopsis_ptr {
-    return has_skip_attribute(field.type)
-             ? nullptr
-             : factory<synopsis>::make(field.type, synopsis_options);
+  auto make_synopsis = [&](const type& t) -> synopsis_ptr {
+    return has_skip_attribute(t) ? nullptr
+                                 : factory<synopsis>::make(t, synopsis_options);
   };
-  for (size_t col = 0; col < slice.columns(); ++col) {
+  auto& layout = slice.layout();
+  auto each = record_type::each(layout);
+  auto field_it = each.begin();
+  for (size_t col = 0; col < slice.columns(); ++col, ++field_it) {
+    auto& type = field_it->type();
     auto add_column = [&](const synopsis_ptr& syn) {
       for (size_t row = 0; row < slice.rows(); ++row) {
-        auto view = slice.at(row, col);
+        auto view = slice.at(row, col, type);
         if (!caf::holds_alternative<caf::none_t>(view))
           syn->add(std::move(view));
       }
     };
-    auto&& layout = slice.layout();
-    auto& field = layout.fields[col];
-    auto& type = field.type;
+    auto key = qualified_record_field{layout.name(), *field_it};
     if (!caf::holds_alternative<string_type>(type)) {
       // Locate the relevant synopsis.
-      auto key = qualified_record_field{layout.name(), field};
       auto it = field_synopses_.find(key);
       if (it == field_synopses_.end()) {
         // Attempt to create a synopsis if we have never seen this key before.
-        it
-          = field_synopses_.emplace(std::move(key), make_synopsis(field)).first;
+        it = field_synopses_.emplace(std::move(key), make_synopsis(type)).first;
       }
       // If there exists a synopsis for a field, add the entire column.
       if (auto& syn = it->second)
         add_column(syn);
     } else { // type == string
-      auto key = qualified_record_field{layout.name(), field};
       field_synopses_[key] = nullptr;
-      auto cleaned_type = vast::type{field.type}.attributes({});
+      auto cleaned_type = vast::type{field_it->type()}.attributes({});
       auto tt = type_synopses_.find(cleaned_type);
       if (tt == type_synopses_.end())
-        tt = type_synopses_.emplace(cleaned_type, make_synopsis(field)).first;
+        tt = type_synopses_.emplace(cleaned_type, make_synopsis(type)).first;
       if (auto& syn = tt->second)
         add_column(syn);
     }

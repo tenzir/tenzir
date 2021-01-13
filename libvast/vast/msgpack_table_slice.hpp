@@ -30,6 +30,7 @@ template <>
 struct msgpack_table_slice_state<fbs::table_slice::msgpack::v0> {
   /// The deserialized table layout.
   record_type layout;
+  size_t columns;
 };
 
 /// A table slice that stores elements encoded in
@@ -86,6 +87,14 @@ public:
   /// @param column The column offset.
   /// @pre `row < rows() && column < columns()`
   data_view at(table_slice::size_type row, table_slice::size_type column) const;
+
+  /// Retrieves data by specifying 2D-coordinates via row and column.
+  /// @param row The row offset.
+  /// @param column The column offset.
+  /// @param t The type of the value to be retrieved.
+  /// @pre `row < rows() && column < columns()`
+  data_view at(table_slice::size_type row, table_slice::size_type column,
+               const type& t) const;
 
 private:
   // -- implementation details -------------------------------------------------

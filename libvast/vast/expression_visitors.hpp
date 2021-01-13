@@ -129,15 +129,16 @@ struct type_resolver {
   template <class Function>
   caf::expected<expression> resolve_extractor(Function f, const data& x) const {
     std::vector<expression> connective;
-    auto make_predicate = [&](offset off) {
-      return predicate{data_extractor{type_, off}, op_, x};
+    auto make_predicate = [&](type t, offset off) {
+      return predicate{data_extractor{std::move(t), off}, op_, x};
     };
     if (auto r = caf::get_if<record_type>(&type_)) {
       for (auto& i : record_type::each{*r})
         if (f(i.trace.back()->type))
-          connective.emplace_back(make_predicate(i.offset));
+          connective.emplace_back(
+            make_predicate(i.trace.back()->type, i.offset));
     } else if (f(type_)) {
-      connective.emplace_back(make_predicate(offset{}));
+      connective.emplace_back(make_predicate(type_, offset{}));
     }
     if (connective.empty())
       return expression{}; // did not resolve
@@ -148,21 +149,6 @@ struct type_resolver {
     else
       return {disjunction{std::move(connective)}};
   }
-
-  relational_operator op_;
-  const type& type_;
-};
-
-// Tailors an expression to a specific type by pruning all unecessary branches
-// and resolving fields into the corresponding data extractors.
-struct type_pruner {
-  explicit type_pruner(const type& event_type);
-
-  expression operator()(caf::none_t);
-  expression operator()(const conjunction& c);
-  expression operator()(const disjunction& d);
-  expression operator()(const negation& n);
-  expression operator()(const predicate& p);
 
   relational_operator op_;
   const type& type_;

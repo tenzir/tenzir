@@ -43,6 +43,8 @@ public:
   writer& operator=(writer&&) = default;
   ~writer() override;
 
+  explicit writer(const caf::settings& options);
+
   caf::error write(const table_slice& x) override;
 
   const char* name() const override;

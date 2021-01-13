@@ -40,6 +40,10 @@ writer::writer() {
   out_ = std::make_shared<::arrow::io::StdoutStream>();
 }
 
+writer::writer(const caf::settings&) {
+  out_ = std::make_shared<::arrow::io::StdoutStream>();
+}
+
 writer::~writer() {
   // nop
 }

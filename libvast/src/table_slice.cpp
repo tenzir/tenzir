@@ -227,6 +227,7 @@ table_slice::~table_slice() noexcept {
 
 // -- operators ----------------------------------------------------------------
 
+// TODO: Dispatch to optimized implementations if the encodings are the same.
 bool operator==(const table_slice& lhs, const table_slice& rhs) noexcept {
   // Check whether the slices point to the same chunk of data.
   if (lhs.chunk_ == rhs.chunk_)
@@ -236,9 +237,11 @@ bool operator==(const table_slice& lhs, const table_slice& rhs) noexcept {
       || lhs.layout() != rhs.layout())
     return false;
   // Check whether the slices contain different data.
+  auto flat_layout = flatten(lhs.layout());
   for (size_t row = 0; row < lhs.rows(); ++row)
-    for (size_t col = 0; col < lhs.columns(); ++col)
-      if (lhs.at(row, col) != rhs.at(row, col))
+    for (size_t col = 0; col < flat_layout.fields.size(); ++col)
+      if (lhs.at(row, col, flat_layout.fields[col].type)
+          != rhs.at(row, col, flat_layout.fields[col].type))
         return false;
   return true;
 }
@@ -336,6 +339,21 @@ data_view table_slice::at(table_slice::size_type row,
   return visit(f, as_flatbuffer(chunk_));
 }
 
+data_view table_slice::at(table_slice::size_type row,
+                          table_slice::size_type column, const type& t) const {
+  VAST_ASSERT(row < rows());
+  VAST_ASSERT(column < columns());
+  auto f = detail::overload{
+    [&]() noexcept -> data_view {
+      die("cannot access data of invalid table slice");
+    },
+    [&](const auto& encoded) noexcept {
+      return state(encoded, state_)->at(row, column, t);
+    },
+  };
+  return visit(f, as_flatbuffer(chunk_));
+}
+
 #if VAST_ENABLE_ARROW
 
 std::shared_ptr<arrow::RecordBatch> as_record_batch(const table_slice& slice) {
@@ -397,10 +415,12 @@ rebuild(table_slice slice, enum table_slice_encoding encoding) noexcept {
                                                           slice.layout());
         if (!builder)
           return table_slice{};
+        auto flat_layout = flatten(slice.layout());
         for (table_slice::size_type row = 0; row < slice.rows(); ++row)
-          for (table_slice::size_type column = 0; column < slice.columns();
-               ++column)
-            if (!builder->add(slice.at(row, column)))
+          for (table_slice::size_type column = 0;
+               column < flat_layout.fields.size(); ++column)
+            if (!builder->add(
+                  slice.at(row, column, flat_layout.fields[column].type)))
               return {};
         auto result = builder->finish();
         result.offset(slice.offset());
@@ -461,6 +481,7 @@ void select(std::vector<table_slice>& result, const table_slice& slice,
     new_slice.offset(last_offset);
     result.emplace_back(std::move(new_slice));
   };
+  auto flat_layout = flatten(slice.layout());
   auto last_id = last_offset - 1;
   for (auto id : select(intersection)) {
     // Finish last slice when hitting non-consecutive IDs.
@@ -474,8 +495,8 @@ void select(std::vector<table_slice>& result, const table_slice& slice,
     VAST_ASSERT(id >= slice.offset());
     auto row = id - slice.offset();
     VAST_ASSERT(row < slice.rows());
-    for (size_t column = 0; column < slice.columns(); ++column) {
-      auto cell_value = slice.at(row, column);
+    for (size_t column = 0; column < flat_layout.fields.size(); ++column) {
+      auto cell_value = slice.at(row, column, flat_layout.fields[column].type);
       if (!builder->add(cell_value)) {
         VAST_ERROR(__func__, "failed to add data at column", column, "in row",
                    row, "to the builder:", cell_value);
@@ -611,7 +632,9 @@ struct row_evaluator {
             return false;
           }
         }
-        auto lhs = to_canonical(field.type, slice_.at(row_, col));
+        auto lhs = to_canonical(
+          field.type,
+          slice_.at(row_, col, time_type{}.attributes({{"timestamp"}})));
         auto rhs = make_view(d);
         return evaluate_view(lhs, op_, rhs);
       }
@@ -628,13 +651,9 @@ struct row_evaluator {
   }
 
   bool operator()(const data_extractor& e, const data& d) {
-    VAST_ASSERT(e.offset.size() == 1);
-    auto&& layout = slice_.layout();
-    if (e.type != layout) // TODO: make this a precondition instead.
-      return false;
-    auto col = e.offset[0];
-    auto& field = layout.fields[col];
-    auto lhs = to_canonical(field.type, slice_.at(row_, col));
+    auto col = slice_.layout().flat_index_at(e.offset);
+    VAST_ASSERT(col);
+    auto lhs = to_canonical(e.type, slice_.at(row_, *col, e.type));
     auto rhs = make_data_view(d);
     return evaluate_view(lhs, op_, rhs);
   }

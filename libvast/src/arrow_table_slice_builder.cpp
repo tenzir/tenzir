@@ -445,6 +445,10 @@ arrow_table_slice_builder::~arrow_table_slice_builder() noexcept {
 
 // -- properties ---------------------------------------------------------------
 
+size_t arrow_table_slice_builder::columns() const noexcept {
+  return flat_layout_.fields.size();
+}
+
 table_slice arrow_table_slice_builder::finish(
   [[maybe_unused]] span<const byte> serialized_layout) {
   // Sanity check: If this triggers, the calls to add() did not match the number
@@ -512,21 +516,22 @@ void arrow_table_slice_builder::reserve([[maybe_unused]] size_t num_rows) {
 arrow_table_slice_builder::arrow_table_slice_builder(record_type layout,
                                                      size_t initial_buffer_size)
   : table_slice_builder{std::move(layout)},
-    schema_{make_arrow_schema(this->layout())},
+    flat_layout_{flatten(this->layout())},
+    schema_{make_arrow_schema(this->flat_layout_)},
     builder_{initial_buffer_size} {
   VAST_ASSERT(schema_);
   VAST_ASSERT(schema_->num_fields()
-              == detail::narrow_cast<int>(this->layout().fields.size()));
-  column_builders_.reserve(this->layout().fields.size());
+              == detail::narrow_cast<int>(flat_layout_.fields.size()));
+  column_builders_.reserve(flat_layout_.fields.size());
   auto pool = arrow::default_memory_pool();
-  for (auto& field : this->layout().fields)
+  for (auto& field : flat_layout_.fields)
     column_builders_.emplace_back(column_builder::make(field.type, pool));
 }
 
 bool arrow_table_slice_builder::add_impl(data_view x) {
   if (!column_builders_[column_]->add(x))
     return false;
-  if (++column_ == layout().fields.size()) {
+  if (++column_ == flat_layout_.fields.size()) {
     ++rows_;
     column_ = 0;
   }

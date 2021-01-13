@@ -71,6 +71,9 @@ public:
   [[nodiscard]] table_slice
   finish(span<const byte> serialized_layout = {}) override;
 
+  /// @returns The number of columns in the table slice.
+  size_t columns() const noexcept;
+
   /// @returns The current number of rows in the table slice.
   size_t rows() const noexcept override;
 
@@ -101,6 +104,9 @@ private:
 
   /// Number of filled rows.
   size_t rows_ = 0;
+
+  /// Schema of the Record Batch corresponding to the layout.
+  record_type flat_layout_;
 
   /// Schema of the Record Batch corresponding to the layout.
   std::shared_ptr<arrow::Schema> schema_ = {};

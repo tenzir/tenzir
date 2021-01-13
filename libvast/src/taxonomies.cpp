@@ -18,6 +18,7 @@
 #include "vast/error.hpp"
 #include "vast/expression.hpp"
 #include "vast/logger.hpp"
+#include "vast/type.hpp"
 
 #include <caf/deserializer.hpp>
 #include <caf/serializer.hpp>
@@ -199,14 +200,15 @@ contains(const std::map<std::string, type_set>& seen, const std::string& x,
     if (i != seen.end()) {
       // A prefix of x matches an existing layout.
       auto field = x.substr(pos + 1);
-      return std::any_of(i->second.begin(), i->second.end(),
-                         [&](const type& t) {
-                           if (auto r = caf::get_if<record_type>(&t)) {
-                             if (auto f = r->find(field))
-                               return compatible(f->type, op, data);
-                           }
-                           return false;
-                         });
+      return std::any_of(
+        i->second.begin(), i->second.end(), [&](const type& t) {
+          if (const auto& layout = caf::get_if<record_type>(&t)) {
+            auto flat_layout = flatten(*layout);
+            if (auto f = flat_layout.find(field))
+              return compatible(f->type, op, data);
+          }
+          return false;
+        });
     }
     ++pos;
   }

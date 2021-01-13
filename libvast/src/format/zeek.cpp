@@ -26,6 +26,7 @@
 #include "vast/detail/string.hpp"
 #include "vast/error.hpp"
 #include "vast/logger.hpp"
+#include "vast/policy/flatten_layout.hpp"
 #include "vast/table_slice.hpp"
 #include "vast/table_slice_builder.hpp"
 #include "vast/type.hpp"
@@ -423,6 +424,7 @@ caf::error reader::parse_header() {
   auto types = detail::split(header[6], separator_);
   if (fields.size() != types.size())
     return make_error(ec::format_error, "fields and types have different size");
+  // TODO: Consider unflattening the incoming layout.
   std::vector<record_field> record_fields;
   proto_field_ = caf::none;
   for (auto i = 0u; i < fields.size(); ++i) {
@@ -499,10 +501,12 @@ caf::error reader::parse_header() {
   return caf::none;
 }
 
-writer::writer(path dir, bool show_timestamp_tags)
-  : show_timestamp_tags_{show_timestamp_tags} {
-  if (dir != "-")
-    dir_ = std::move(dir);
+writer::writer(const caf::settings& options) {
+  auto output = get_or(options, "vast.export.zeek.write", defaults::write);
+  if (output != "-")
+    dir_ = std::move(output);
+  show_timestamp_tags_
+    = !caf::get_or(options, "vast.export.zeek.disable-timestamp-tags", false);
 }
 
 writer::~writer() {
@@ -602,8 +606,8 @@ public:
 
   error write(const table_slice& slice) override {
     zeek_printer<std::back_insert_iterator<std::vector<char>>> p;
-    return print<policy::omit_field_names>(p, slice, "",
-                                           std::string_view{&separator, 1}, "");
+    return print<policy::flatten_layout>(
+      p, slice, {std::string_view{&separator, 1}, "", "", ""});
   }
 
   const char* name() const override {

@@ -17,6 +17,9 @@
 
 namespace vast::format::null {
 
+writer::writer(ostream_ptr out, const caf::settings&) : super{std::move(out)} {
+}
+
 caf::error writer::write(const table_slice&) {
   return caf::none;
 }

@@ -41,7 +41,7 @@ class Result(Enum):
     SUCCESS = 1  # Baseline comparison succeded.
     FAILURE = 2  # Baseline mismatch.
     ERROR = 3  # Crashes or returns with non-zero exit code.
-    TIMEOUT = 4 # Command timed out
+    TIMEOUT = 4  # Command timed out
 
 
 class Fixture(NamedTuple):
@@ -96,7 +96,7 @@ signal.signal(signal.SIGALRM, timeout_handler)
 # TODO tobim: check if asyncio would be a better approach
 def spawn(*popenargs, **kwargs):
     """Helper function around the Popen constructor
-       that puts the created process into a registry
+    that puts the created process into a registry
     """
     proc = subprocess.Popen(*popenargs, **kwargs)
     CURRENT_SUBPROCS.append(proc)
@@ -197,7 +197,9 @@ def is_non_deterministic(command):
     return positionals[0] in {"export", "explore", "get", "pivot"}
 
 
-def run_step(basecmd, step_id, step, work_dir, baseline_dir, update_baseline, expected_result):
+def run_step(
+    basecmd, step_id, step, work_dir, baseline_dir, update_baseline, expected_result
+):
     try:
         stdout = work_dir / f"{step_id}.out"
         stderr = work_dir / f"{step_id}.err"
@@ -220,19 +222,27 @@ def run_step(basecmd, step_id, step, work_dir, baseline_dir, update_baseline, ex
                 incmd += ["cat", str(step.input)]
             info_string = " ".join(incmd) + " | " + info_string
             input_p = spawn(incmd, stdout=client.stdin)
-            result = try_wait(input_p, timeout=STEP_TIMEOUT - (now() - start_time), expected_result=expected_result)
+            result = try_wait(
+                input_p,
+                timeout=STEP_TIMEOUT - (now() - start_time),
+                expected_result=expected_result,
+            )
             client.stdin.close()
-        result = try_wait(client, timeout=STEP_TIMEOUT - (now() - start_time), expected_result=expected_result)
+        result = try_wait(
+            client,
+            timeout=STEP_TIMEOUT - (now() - start_time),
+            expected_result=expected_result,
+        )
         if result is Result.ERROR and result != expected_result:
-            LOGGER.debug("standard error:")
+            LOGGER.warning("standard error:")
             for line in open(stderr).readlines()[-100:]:
-                LOGGER.debug(f"    {line}")
+                LOGGER.warning(f"    {line}")
             return result
         # Perform baseline update or comparison.
         baseline = baseline_dir / f"{step_id}.ref"
         sort_output = is_non_deterministic(step.command)
         if update_baseline:
-            LOGGER.info("updating baseline")
+            LOGGER.debug("updating baseline")
             if not baseline_dir.exists():
                 baseline_dir.mkdir(parents=True)
         else:
@@ -275,7 +285,7 @@ def run_step(basecmd, step_id, step, work_dir, baseline_dir, update_baseline, ex
             delta = list(diff)
             if delta:
                 if expected_result != Result.FAILURE:
-                    LOGGER.error("baseline comparison failed")
+                    LOGGER.warning("baseline comparison failed")
                     sys.stdout.writelines(delta)
                 return Result.FAILURE
     except subprocess.CalledProcessError as err:
@@ -286,8 +296,7 @@ def run_step(basecmd, step_id, step, work_dir, baseline_dir, update_baseline, ex
 
 
 class Server:
-    """Server fixture implementation details
-    """
+    """Server fixture implementation details"""
 
     def __init__(
         self,
@@ -311,7 +320,7 @@ class Server:
         if self.config_arg:
             command.append(self.config_arg)
         command = command + args
-        LOGGER.info(f"starting server fixture: {command}")
+        LOGGER.debug(f"starting server fixture: {command}")
         LOGGER.debug(f"waiting for port {self.port} to be available")
         if not wait.tcp.closed(self.port, timeout=5):
             raise RuntimeError("Port is blocked by another process.\nAborting tests...")
@@ -355,8 +364,7 @@ class Server:
 
 
 class Tester:
-    """Test runner
-    """
+    """Test runner"""
 
     def __init__(self, args, fixtures, config_file):
         self.args = args
@@ -425,17 +433,25 @@ class Tester:
             run_flamegraph(self.args, svg_file)
         for step in test.steps:
             step_id = "step_{:02d}".format(step_i)
-            LOGGER.info(f"running step {step_i}: {step.command}")
-            result = run_step(cmd, step_id, step, work_dir, baseline_dir, self.update, step.expected_result)
+            LOGGER.debug(f"running step {step_i}: {step.command}")
+            result = run_step(
+                cmd,
+                step_id,
+                step,
+                work_dir,
+                baseline_dir,
+                self.update,
+                step.expected_result,
+            )
             summary.count(result, step.expected_result)
             if not self.args.keep_going and result != step.expected_result:
-                LOGGER.error("skipping remaining steps after error")
+                LOGGER.warning("skipping remaining steps after error")
                 break
             step_i += 1
         exec(fexit)
         # Summarize result.
         if summary.successful():
-            LOGGER.debug(f"ran all {summary.step_count} steps successfully")
+            LOGGER.info(f"ran all {summary.step_count} steps successfully")
             if not self.args.keep:
                 LOGGER.debug(f"removing working directory {work_dir}")
                 shutil.rmtree(work_dir)
@@ -566,7 +582,8 @@ def run(args, test_dec):
                         if i < args.repetitions - 1:
                             # Try again.
                             LOGGER.warning(
-                                f"Re-running test {name} {i+2}/{args.repetitions}")
+                                f"Re-running test {name} {i+2}/{args.repetitions}"
+                            )
                             continue
                     if test_result is not Result.SUCCESS:
                         result = False
@@ -613,7 +630,7 @@ def main():
         "-k",
         "--keep-going",
         action="store_true",
-        help="Continue to evaluate in case of a failed test"
+        help="Continue to evaluate in case of a failed test",
     )
     parser.add_argument(
         "-K", "--keep", action="store_true", help="Keep artifacts of successful runs"
@@ -651,7 +668,7 @@ def main():
         help="Path to flamegraph script",
     )
     parser.add_argument(
-        "-v", "--verbosity", default="DEBUG", help="Set the logging verbosity"
+        "-v", "--verbosity", default="INFO", help="Set the logging verbosity"
     )
     args = parser.parse_args()
     # Setup logging.

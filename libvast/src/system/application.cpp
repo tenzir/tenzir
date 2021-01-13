@@ -180,7 +180,9 @@ auto make_export_command() {
                           sink_opts("?vast.export.ascii"));
   export_->add_subcommand("json", "exports query results in JSON format",
                           documentation::vast_export_json,
-                          sink_opts("?vast.export.json"));
+                          sink_opts("?vast.export.json")
+                            .add<bool>("flatten", "flatten nested objects into "
+                                                  "the top-level"));
   export_->add_subcommand("null",
                           "exports query without printing them (debug option)",
                           documentation::vast_export_null,

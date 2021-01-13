@@ -22,6 +22,7 @@
 #include "vast/data.hpp"
 #include "vast/format/json.hpp"
 #include "vast/logger.hpp"
+#include "vast/policy/flatten_layout.hpp"
 #include "vast/policy/include_field_names.hpp"
 #include "vast/table_slice.hpp"
 #include "vast/table_slice_builder.hpp"
@@ -196,9 +197,19 @@ const vast::json* lookup(std::string_view field, const vast::json::object& xs) {
 
 } // namespace
 
+writer::writer(ostream_ptr out, const caf::settings& options)
+  : super{std::move(out)} {
+  flatten_ = get_or(options, "vast.export.json.flatten", false);
+}
+
 caf::error writer::write(const table_slice& x) {
   json_printer<policy::oneline> printer;
-  return print<policy::include_field_names>(printer, x, "{", ", ", "}");
+  if (flatten_)
+    return print<policy::include_field_names, policy::flatten_layout>(
+      printer, x, {", ", ": ", "{", "}"});
+  else
+    return print<policy::include_field_names>(printer, x,
+                                              {", ", ": ", "{", "}"});
 }
 
 const char* writer::name() const {
@@ -208,8 +219,8 @@ const char* writer::name() const {
 caf::error add(table_slice_builder& builder, const vast::json::object& xs,
                const record_type& layout) {
   caf::error err = caf::none;
-  for (auto& field : layout.fields) {
-    auto i = lookup(field.name, xs);
+  for (auto& field : record_type::each(layout)) {
+    auto i = lookup(field.key(), xs);
     // Non-existing fields are treated as empty (unset).
     if (!i) {
       if (!builder.add(make_data_view(caf::none)))
@@ -217,16 +228,16 @@ caf::error add(table_slice_builder& builder, const vast::json::object& xs,
                                            "slice builder");
       continue;
     }
-    auto x = caf::visit(convert{}, *i, field.type);
+    auto x = caf::visit(convert{}, *i, field.type());
     if (!x) {
       if (!err)
         err = make_error(ec::convert_error);
       err.context() += x.error().context();
-      err.context() += caf::make_message(field.name, "is", to_string(*i), ";");
+      err.context() += caf::make_message(field.key(), "is", to_string(*i), ";");
       x = caf::none;
     }
     if (!builder.add(make_data_view(*x)))
-      return make_error(ec::type_clash, "unexpected type", field.name, ":",
+      return make_error(ec::type_clash, "unexpected type", field.key(), ":",
                         to_string(*i));
   }
   return err;

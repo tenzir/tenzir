@@ -33,7 +33,6 @@
 
 #include "type_test.hpp"
 
-using caf::get;
 using caf::get_if;
 using caf::holds_alternative;
 
@@ -216,6 +215,8 @@ TEST(record range) {
             {"b", bool_type{}}}}
   };
   // clang-format on
+  MESSAGE("check the number of leaves");
+  CHECK_EQUAL(r.num_leaves(), 6u);
   MESSAGE("check types of record r");
   auto record_index = r.index();
   CHECK_EQUAL(at(r, 0)->index(), record_index);

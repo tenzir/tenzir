@@ -99,6 +99,10 @@ caf::error render(output_iterator& out, const view<data>& x) {
 
 } // namespace
 
+writer::writer(ostream_ptr out, const caf::settings&) : super{std::move(out)} {
+  // nop
+}
+
 caf::error writer::write(const table_slice& x) {
   constexpr char separator = writer::defaults::separator;
   // Print a new header each time we encounter a new layout.
@@ -106,23 +110,22 @@ caf::error writer::write(const table_slice& x) {
   if (last_layout_ != layout.name()) {
     last_layout_ = layout.name();
     append("type");
-    for (auto& field : layout.fields) {
+    for (auto& field : record_type::each(layout)) {
       append(separator);
-      append(field.name);
+      append(field.key());
     }
     append('\n');
     write_buf();
   }
+  auto flat_layout = flatten(layout);
   // Print the cell contents.
   auto iter = std::back_inserter(buf_);
   for (size_t row = 0; row < x.rows(); ++row) {
     append(last_layout_);
-    append(separator);
-    if (auto err = render(iter, x.at(row, 0)))
-      return err;
-    for (size_t column = 1; column < x.columns(); ++column) {
+    for (size_t column = 0; column < x.columns(); ++column) {
       append(separator);
-      if (auto err = render(iter, x.at(row, column)))
+      if (auto err
+          = render(iter, x.at(row, column, flat_layout.fields[column].type)))
         return err;
     }
     append('\n');
@@ -159,7 +162,7 @@ void reader::reset(std::unique_ptr<std::istream> in) {
 caf::error reader::schema(vast::schema s) {
   for (auto& t : s) {
     if (auto r = caf::get_if<record_type>(&t))
-      schema_.add(flatten(*r));
+      schema_.add(*r);
     else
       schema_.add(t);
   }

@@ -58,6 +58,9 @@ public:
   [[nodiscard]] table_slice
   finish(span<const byte> serialized_layout = {}) override;
 
+  /// @returns The number of columns in the table slice.
+  size_t columns() const noexcept;
+
   /// @returns The current number of rows in the table slice.
   size_t rows() const noexcept override;
 
@@ -93,6 +96,9 @@ private:
 
   /// Current column index.
   size_t column_ = 0;
+
+  /// A flattened representation of the layout.
+  record_type flat_layout_;
 
   /// Offsets from the beginning of the buffer to each row.
   std::vector<uint64_t> offset_table_ = {};

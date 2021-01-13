@@ -78,11 +78,13 @@ to_data(const table_slice& slice, size_t first_row, size_t num_rows) {
     num_rows = slice.rows() - first_row;
   std::vector<std::vector<data>> result;
   result.reserve(num_rows);
+  auto fl = flatten(slice.layout());
   for (size_t i = 0; i < num_rows; ++i) {
     std::vector<data> xs;
     xs.reserve(slice.columns());
     for (size_t j = 0; j < slice.columns(); ++j)
-      xs.emplace_back(materialize(slice.at(first_row + i, j)));
+      xs.emplace_back(
+        materialize(slice.at(first_row + i, j, fl.fields[j].type)));
     result.push_back(std::move(xs));
   }
   return result;
@@ -259,11 +261,14 @@ void table_slices::test_add() {
   MESSAGE(">> test table_slice_builder::add");
   auto slice = make_slice();
   CHECK_EQUAL(slice.rows(), 2u);
-  CHECK_EQUAL(slice.columns(), layout.fields.size());
+  auto flat_layout = flatten(layout);
+  CHECK_EQUAL(slice.columns(), flat_layout.fields.size());
+
   for (size_t row = 0; row < slice.rows(); ++row)
     for (size_t col = 0; col < slice.columns(); ++col) {
       MESSAGE("checking value at (" << row << ',' << col << ')');
-      CHECK_EQUAL(slice.at(row, col), at(row, col));
+      CHECK_EQUAL(slice.at(row, col, flat_layout.fields[col].type),
+                  at(row, col));
     }
 }
 

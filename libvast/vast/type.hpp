@@ -585,6 +585,7 @@ struct record_type final : recursive_type<record_type> {
   public:
     struct range_state {
       std::string key() const;
+      const class type& type() const;
       size_t depth() const;
 
       detail::stack_vector<const record_field*, 64> trace;
@@ -609,6 +610,11 @@ struct record_type final : recursive_type<record_type> {
 
   /// Constructs a record type from a list of fields.
   record_type(std::initializer_list<record_field> xs);
+
+  /// Calculates the number of basic types that can be found when traversing the
+  /// tree. An faster version of `flatten(*this).fields.size()` or
+  /// `auto rng = each{*this}; std::distance(rng.begin(), rng.end())`
+  size_t num_leaves() const;
 
   /// Attemps to resolve a key to an offset.
   /// @param key The key to resolve.
@@ -635,18 +641,20 @@ struct record_type final : recursive_type<record_type> {
   /// Retrieves the type at a given key.
   /// @param key The key to resolve.
   /// @returns The type at key *key* or `nullptr` if *key* doesn't resolve.
-  // TODO: return caf::optional<type> instead.
   const type* at(std::string_view key) const;
 
   /// Retrieves the type at a given offset.
   /// @param o The offset to resolve.
   /// @returns The type at offset *o* or `nullptr` if *o* doesn't resolve.
-  // TODO: return caf::optional<type> instead.
   const type* at(const offset& o) const;
 
   /// Converts an offset into an index for the flattened representation.
   /// @param o The offset to resolve.
   caf::optional<size_t> flat_index_at(offset o) const;
+
+  /// Converts an index for the flattened representation into an offset.
+  /// @param i The index to resolve.
+  caf::optional<offset> offset_from_index(size_t i) const;
 
   friend bool operator==(const record_type& x, const record_type& y);
   friend bool operator<(const record_type& x, const record_type& y);

@@ -83,8 +83,10 @@ struct mock_partition {
   mock_partition(std::string name, uuid uid, size_t num) : id(std::move(uid)) {
     generator g{std::move(name), num_events_per_parttion * num};
     slice = g(num_events_per_parttion);
-    range.from = get_timestamp(slice.at(0, 0));
-    range.to = get_timestamp(slice.at(slice.rows() - 1, 0));
+    range.from
+      = get_timestamp(slice.at(0, 0, time_type{}.attributes({{"timestamp"}})));
+    range.to = get_timestamp(
+      slice.at(slice.rows() - 1, 0, time_type{}.attributes({{"timestamp"}})));
   }
 
   uuid id;

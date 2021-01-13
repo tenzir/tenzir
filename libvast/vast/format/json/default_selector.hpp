@@ -98,7 +98,7 @@ public:
     for (auto& entry : sch) {
       if (!caf::holds_alternative<record_type>(entry))
         continue;
-      auto layout = flatten(caf::get<record_type>(entry));
+      auto layout = caf::get<record_type>(entry);
       std::vector<std::string> cache_entry;
       for (auto& [k, v] : layout.fields)
         cache_entry.emplace_back(k);

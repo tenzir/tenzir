@@ -24,7 +24,7 @@ public:
 
   using super = format::ostream_writer;
 
-  using super::super;
+  writer(ostream_ptr out, const caf::settings& options);
 
   caf::error write(const table_slice& x) override;
 

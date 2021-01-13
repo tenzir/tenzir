@@ -143,6 +143,16 @@ public:
   /// @pre `row < rows() && column < columns()`
   data_view at(size_type row, size_type column) const;
 
+  /// Retrieves data by specifying 2D-coordinates via row and column. This
+  /// overload provides an optimized access path in case the type of the
+  /// element is already known.
+  /// @param row The row offset.
+  /// @param column The column offset.
+  /// @param t The type of the value to be retrieved.
+  /// @pre `row < rows() && column < columns()`
+  /// @pre `t == *layout().at(*layout:).offset_from_index(column)) == t`
+  data_view at(size_type row, size_type column, const type& t) const;
+
 #if VAST_ENABLE_ARROW
 
   /// Converts a table slice to an Apache Arrow Record Batch.
