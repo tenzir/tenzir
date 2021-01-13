@@ -148,7 +148,7 @@ vast::system::report reader<Selector>::status() const {
 template <class Selector>
 caf::error reader<Selector>::read_impl(size_t max_events, size_t max_slice_size,
                                        consumer& cons) {
-  VAST_TRACE("json-reader", VAST_ARG(max_events), VAST_ARG(max_slice_size));
+  VAST_TRACE(VAST_ARG(max_events), VAST_ARG(max_slice_size));
   VAST_ASSERT(max_events > 0);
   VAST_ASSERT(max_slice_size > 0);
   size_t produced = 0;

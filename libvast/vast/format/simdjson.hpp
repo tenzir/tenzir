@@ -13,11 +13,10 @@
 
 #pragma once
 
-#include "vast/concept/hashable/hash_append.hpp"
-#include "vast/concept/hashable/xxhash.hpp"
-// #include "vast/concept/parseable/vast/json.hpp" // TO DELETE?
 #include "vast/fwd.hpp"
 
+#include "vast/concept/hashable/hash_append.hpp"
+#include "vast/concept/hashable/xxhash.hpp"
 #include "vast/defaults.hpp"
 #include "vast/detail/flat_map.hpp"
 #include "vast/detail/line_range.hpp"
@@ -25,10 +24,9 @@
 #include "vast/error.hpp"
 #include "vast/format/multi_layout_reader.hpp"
 #include "vast/format/ostream_writer.hpp"
-#include "vast/json.hpp" // TO DELETE?
 #include "vast/logger.hpp"
 #include "vast/schema.hpp"
-#include "vast/view.hpp" // Added
+#include "vast/view.hpp"
 
 #include <caf/expected.hpp>
 #include <caf/fwd.hpp>
@@ -44,7 +42,7 @@ namespace vast::format::simdjson {
 /// @param xs The JSON object to add to *builder.
 /// @param layout The record type describing *xs*.
 /// @returns An error iff the operation failed.
-caf::error add(table_slice_builder& builder, const ::simdjson::dom::object& xs,
+caf::error add(table_slice_builder& bptr, const ::simdjson::dom::object& xs,
                const record_type& layout);
 
 /// A reader for JSON data. It operates with a *selector* to determine the
@@ -148,12 +146,11 @@ vast::system::report reader<Selector>::status() const {
 template <class Selector>
 caf::error reader<Selector>::read_impl(size_t max_events, size_t max_slice_size,
                                        consumer& cons) {
-  VAST_TRACE("json-reader", VAST_ARG(max_events), VAST_ARG(max_slice_size));
+  VAST_TRACE(VAST_ARG(max_events), VAST_ARG(max_slice_size));
   VAST_ASSERT(max_events > 0);
   VAST_ASSERT(max_slice_size > 0);
   size_t produced = 0;
   table_slice_builder_ptr bptr = nullptr;
-
   while (produced < max_events) {
     if (lines_->done())
       return finish(cons, make_error(ec::end_of_input, "input exhausted"));
@@ -174,16 +171,16 @@ caf::error reader<Selector>::read_impl(size_t max_events, size_t max_slice_size,
       VAST_DEBUG(this, "ignores empty line at", lines_->line_number());
       continue;
     }
-    const auto [j, parsed_er] = json_parser_.parse(line);
-    if (parsed_er != ::simdjson::SUCCESS) {
+    const auto [j, parse_error] = json_parser_.parse(line);
+    if (parse_error != ::simdjson::SUCCESS) {
       if (num_invalid_lines_ == 0)
         VAST_WARNING(this, "failed to parse line", lines_->line_number(), ":",
                      line);
       ++num_invalid_lines_;
       continue;
     }
-    const auto [xs, to_object_er] = j.get_object();
-    if (to_object_er != ::simdjson::SUCCESS)
+    const auto [xs, get_object_error] = j.get_object();
+    if (get_object_error != ::simdjson::SUCCESS)
       return make_error(ec::type_clash, "not a json object");
     auto&& layout = selector_(xs);
     if (!layout) {
@@ -193,7 +190,7 @@ caf::error reader<Selector>::read_impl(size_t max_events, size_t max_slice_size,
       ++num_unknown_layouts_;
       continue;
     }
-    bptr = builder(*layout);
+    bptr = bptr(*layout);
     if (bptr == nullptr)
       return make_error(ec::parse_error, "unable to get a builder");
     if (auto err = add(*bptr, xs, *layout)) {

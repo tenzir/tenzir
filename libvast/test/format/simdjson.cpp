@@ -110,33 +110,26 @@ TEST(simdjson to data) {
   REQUIRE_NOT_EQUAL(slice.encoding(), table_slice_encoding::none);
   CHECK(slice.at(0, 0) == data{true});
   CHECK(slice.at(0, 1) == data{count{424242}});
-
   CHECK(slice.at(0, 2).is<real>());
   const auto r = slice.at(0, 2).get_data().get(
     std::integral_constant<
       int, caf::detail::tl_index_of<data::types, real>::value>());
   CHECK(std::abs(r - real{4.2}) < 0.000001);
-
   CHECK(slice.at(0, 3) == data{integer{-1337}});
   CHECK_EQUAL(slice.at(0, 4), data{std::string{"0123456789®\r\n"}});
-
   std::array<std::uint8_t, 4> addr1{147, 32, 84, 165};
   CHECK(slice.at(0, 5)
         == data{address::v4(addr1.data(), address::byte_order::network)});
-
   std::array<std::uint8_t, 4> addr2{192, 168, 0, 1};
   CHECK(slice.at(0, 6)
         == data{
           subnet{address::v4(addr2.data(), address::byte_order::network), 24}});
-
   CHECK(slice.at(0, 10) == data{enumeration{2}});
-
   const list lc
     = {data{count{0x3e7}}, data{count{19}}, data{count{5555}}, data{count{0}}};
   CHECK(slice.at(0, 11) == data{lc});
   CHECK(slice.at(0, 13) == data{count{421}});
   CHECK(slice.at(0, 14) == data{std::string{"test"}});
-
   auto reference = map{};
   reference[count{1}] = data{"FOO"};
   reference[count{1024}] = data{"BAR!"};
