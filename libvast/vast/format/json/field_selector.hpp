@@ -57,7 +57,6 @@ struct field_selector {
     auto el = j.at_key(Specification::field);
     if (el.error())
       return caf::none;
-
     auto event_type = el.value().get_string();
     if (event_type.error()) {
       VAST_WARNING(this, "got a", Specification::field,

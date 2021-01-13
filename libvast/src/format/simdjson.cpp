@@ -256,7 +256,7 @@ caf::expected<data> type_biased_convert_impl<::simdjson::dom::object, map>(
   map xs;
   xs.reserve(o.size());
   for (auto [k, v] : o) {
-    // TODO: Properly unwrap the key type instead of wrapping it in json.
+    // TODO: Properly unwrap the key type instead of wrapping it in JSON.
     auto key = convert_from_impl<std::string_view>(k, m.key_type);
     if (!key)
       return key.error();

@@ -98,7 +98,7 @@ jobs:
         if: matrix.os.tag == 'Ubuntu'
         run: |
           sudo apt-get -qq update
-          sudo apt-get -qqy install ninja-build libpcap-dev libssl-dev lsb-release ccache libflatbuffers-dev libyaml-cpp-dev libsimdjson-dev
+          sudo apt-get -qqy install ninja-build libpcap-dev libssl-dev lsb-release ccache libflatbuffers-dev libyaml-cpp-dev
           # Install Apache Arrow (c.f. https://arrow.apache.org/install/)
           # TODO: Revert the commit that introduced this version pinning once ch20162
           # is done and we can use latest upstream again.

@@ -17,7 +17,6 @@ file(GLOB_RECURSE test_headers CONFIGURE_DEPENDS
 add_executable(vast-test ${test_sources} ${test_headers})
 
 target_link_libraries(vast-test PRIVATE libvast_test libvast libvast_internal
-                                        simdjson::simdjson
                                         ${CMAKE_THREAD_LIBS_INIT})
 
 if (VAST_ENABLE_ARROW)

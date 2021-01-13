@@ -373,7 +373,7 @@ dependency_summary("yaml-cpp" "${yaml_cpp_dir}")
 
 # Link against simdjson.
 find_package(simdjson REQUIRED HINTS ${SIMDJSON_ROOT})
-target_link_libraries(libvast PRIVATE simdjson::simdjson)
+target_link_libraries(libvast PUBLIC simdjson::simdjson)
 
 # Link against robin-map.
 target_link_libraries(libvast PUBLIC tsl::robin_map)

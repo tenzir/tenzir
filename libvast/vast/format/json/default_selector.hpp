@@ -40,11 +40,10 @@ private:
                          const ::simdjson::dom::object& obj) {
     for (const auto f : obj) {
       prefix.emplace_back(f.key);
-      if (f.value.type() != ::simdjson::dom::element_type::OBJECT) {
+      if (f.value.type() != ::simdjson::dom::element_type::OBJECT)
         entries.emplace_back(detail::join(prefix.begin(), prefix.end(), "."));
-      } else {
+      else
         make_names_layout_impl(entries, prefix, f.value);
-      }
       prefix.pop_back();
     }
   }
@@ -53,9 +52,7 @@ private:
     std::vector<std::string> entries;
     entries.reserve(100);
     auto prefix = detail::stack_vector<std::string_view, 64>{};
-
     make_names_layout_impl(entries, prefix, obj);
-
     std::sort(entries.begin(), entries.end());
     return entries;
   }
@@ -88,7 +85,6 @@ public:
     // use it despite not being an exact match.
     if (type_cache.size() == 1)
       return type_cache.begin()->second;
-
     if (auto search_result = type_cache.find(make_names_layout(obj));
         search_result != type_cache.end())
       return search_result->second;
