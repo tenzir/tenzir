@@ -15,6 +15,9 @@ RUN wget https://apache.bintray.com/arrow/ubuntu/pool/focal/main/a/apache-arrow-
   apt-get -qq update && \
   apt-get -qqy install libarrow-dev=1.0.1-1
 
+RUN pip3 install --upgrade pip && pip install --upgrade cmake && \
+  cmake --version
+
 # ubuntu:20.04 has an old version of simdjson, so simdjson v0.6.1 is installed
 # manually.
 RUN wget https://github.com/simdjson/simdjson/archive/v0.6.1.tar.gz && \
@@ -24,9 +27,6 @@ RUN wget https://github.com/simdjson/simdjson/archive/v0.6.1.tar.gz && \
   cmake --build build --parallel && \
   cmake --build build --target amalgamate && \
   sudo cmake --build build --target install
-
-RUN pip3 install --upgrade pip && pip install --upgrade cmake && \
-  cmake --version
 
 COPY opt/vast /opt/vast
 RUN rsync -avh /opt/vast/* $PREFIX
