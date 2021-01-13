@@ -136,12 +136,9 @@ public:
 
 private:
   template <class U, class B>
-  using is_shiftable =
-    std::integral_constant<
-      bool,
-      (detail::is_precision_binner<B>{} || detail::is_decimal_binner<B>{})
-        && std::is_floating_point<U>{}
-    >;
+  using is_shiftable = std::bool_constant<(detail::is_precision_binner<B>{}
+                                           || detail::is_decimal_binner<B>{})
+                                          && std::is_floating_point<U>{}>;
 
   template <class U, class B = binner_type>
   static auto transform(U x)

@@ -44,8 +44,8 @@ constexpr T narrow_cast(U&& u) noexcept {
 
 template <class T, class U>
 struct is_same_signedness
-  : public std::integral_constant<bool, std::is_signed<T>::value
-                                          == std::is_signed<U>::value> {};
+  : public std::bool_constant<std::is_signed<T>::value
+                              == std::is_signed<U>::value> {};
 
 /// A checked version of narrow_cast that throws if the cast changed the value.
 template <class T, class U>

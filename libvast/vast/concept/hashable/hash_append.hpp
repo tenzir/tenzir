@@ -59,39 +59,31 @@ namespace detail {
 
 template <class T>
 struct is_uniquely_represented
-  : std::integral_constant<bool, std::is_integral<T>{}
-                                 || std::is_enum<T> {}
-                                 || std::is_pointer<T>{}> {};
+  : std::bool_constant<std::is_integral<T>{} || std::is_enum<T>{}
+                       || std::is_pointer<T>{}> {};
 
 template <class T>
 struct is_uniquely_represented<T const> : is_uniquely_represented<T> {};
 
 template <class T, class U>
 struct is_uniquely_represented<std::pair<T, U>>
-  : std::integral_constant<
-      bool,
-      is_uniquely_represented<T>{}
-        && is_uniquely_represented<U>{}
-        && sizeof(T) + sizeof(U) == sizeof(std::pair<T, U>)
-     > {};
+  : std::bool_constant<is_uniquely_represented<T>{}
+                       && is_uniquely_represented<U>{}
+                       && sizeof(T) + sizeof(U) == sizeof(std::pair<T, U>)> {};
 
-template <class ...T>
+template <class... T>
 struct is_uniquely_represented<std::tuple<T...>>
-  : std::integral_constant<
-      bool,
-      std::conjunction_v<is_uniquely_represented<T>...>
-        && detail::sum<sizeof(T)...>{} == sizeof(std::tuple<T...>)
-    > {};
+  : std::bool_constant<
+      std::conjunction_v<is_uniquely_represented<
+        T>...> && detail::sum<sizeof(T)...>{} == sizeof(std::tuple<T...>)> {};
 
 template <class T, size_t N>
 struct is_uniquely_represented<T[N]> : is_uniquely_represented<T> {};
 
 template <class T, size_t N>
 struct is_uniquely_represented<std::array<T, N>>
-  : std::integral_constant<
-      bool,
-      is_uniquely_represented<T>{} && sizeof(T) * N == sizeof(std::array<T, N>)
-    > {};
+  : std::bool_constant<is_uniquely_represented<T>{}
+                       && sizeof(T) * N == sizeof(std::array<T, N>)> {};
 
 // -- helpers ----------------------------------------------------------------
 
@@ -113,19 +105,13 @@ void maybe_reverse_bytes(T& x, Hasher&) {
 
 template <class T, class Hasher>
 struct is_contiguously_hashable
-  : std::integral_constant<
-      bool,
-      is_uniquely_represented<T>{}
-        && (sizeof(T) == 1 || Hasher::endian == host_endian)
-    > {};
+  : std::bool_constant<is_uniquely_represented<T>{}
+                       && (sizeof(T) == 1 || Hasher::endian == host_endian)> {};
 
 template <class T, size_t N, class Hasher>
 struct is_contiguously_hashable<T[N], Hasher>
-  : std::integral_constant<
-      bool,
-      is_uniquely_represented<T[N]>{}
-        && (sizeof(T) == 1 || Hasher::endian == host_endian)
-    > {};
+  : std::bool_constant<is_uniquely_represented<T[N]>{}
+                       && (sizeof(T) == 1 || Hasher::endian == host_endian)> {};
 
 template <class T, class Hasher>
 constexpr bool is_contiguously_hashable_v

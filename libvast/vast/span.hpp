@@ -74,8 +74,8 @@ constexpr auto is_std_array_v = is_std_array<T>::value;
 
 template <size_t From, size_t To>
 struct is_allowed_extent_conversion
-  : public std::integral_constant<bool, From == To || From == dynamic_extent
-                                          || To == dynamic_extent> {};
+  : public std::bool_constant<From == To || From == dynamic_extent
+                              || To == dynamic_extent> {};
 
 template <size_t From, size_t To>
 constexpr auto is_allowed_extent_conversion_v = is_allowed_extent_conversion<
@@ -83,9 +83,7 @@ constexpr auto is_allowed_extent_conversion_v = is_allowed_extent_conversion<
 
 template <class From, class To>
 struct is_allowed_element_type_conversion
-  : public std::integral_constant<bool,
-                                  std::is_convertible_v<From (*)[], To (*)[]>> {
-};
+  : public std::bool_constant<std::is_convertible_v<From (*)[], To (*)[]>> {};
 
 template <class Span, bool IsConst>
 class span_iterator {
