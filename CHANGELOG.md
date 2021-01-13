@@ -12,6 +12,9 @@ Every entry has a category for which we use the following visual abbreviations:
 
 ## Unreleased
 
+- ⚠️ Plugins must now be built against the exact same version of libvast that
+  VAST is built against. [#1275](https://github.com/tenzir/vast/pull/1275)
+
 - 🎁 VAST queries now also accept `nanoseconds`, `microseconds`, `milliseconds`
   `seconds` and `minutes` as units for a duration.
   [#1265](https://github.com/tenzir/vast/pull/1265)
@@ -49,8 +52,9 @@ Every entry has a category for which we use the following visual abbreviations:
   location directories. Configuration files can now be symlinked.
   [#1248](https://github.com/tenzir/vast/pull/1248)
 
-- 🎁 The new short options `-v`, `-vv`, `-vvv`, `-q`, `-qq`, and `-qqq` map onto
-  the existing verbosity levels.
+- ⚡️ The new short options `-v`, `-vv`, `-vvv`, `-q`, `-qq`, and `-qqq` map onto
+  the existing verbosity levels. The existing short syntax, e.g., `-v debug`,
+  no longer works.
   [#1244](https://github.com/tenzir/vast/pull/1244)
 
 ## [2020.12.16]

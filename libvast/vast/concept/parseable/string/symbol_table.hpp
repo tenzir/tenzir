@@ -13,42 +13,52 @@
 
 #pragma once
 
-#include "vast/detail/radix_tree.hpp"
-
 #include "vast/concept/parseable/core/parser.hpp"
+#include "vast/detail/assert.hpp"
+#include "vast/detail/flat_map.hpp"
+
+#include <algorithm>
+#include <iterator>
+#include <string>
+#include <utility>
 
 namespace vast {
 
-/// A dynamic parser which acts as an associative array. For symbols sharing
-/// the same prefix, the parser returns the longest match.
+/// A dynamic parser which acts as an associative array.
 template <class T>
 struct symbol_table : parser<symbol_table<T>> {
   using attribute = T;
 
   symbol_table() = default;
 
-  symbol_table(std::initializer_list<std::pair<const std::string, T>> init)
+  explicit symbol_table(std::initializer_list<std::pair<std::string, T>> init)
     : symbols(init) {
   }
 
   template <class Iterator, class Attribute>
   bool parse(Iterator& f, const Iterator& l, Attribute& a) const {
-    auto input = std::string{f, l};
-    auto prefixes = symbols.prefix_of(input);
-    if (prefixes.empty())
+    // Do a O(n) search over the symbol table and keep track of the longest
+    // match. This is a poorman's version of a ternary search trie.
+    auto match = symbols.end();
+    auto max_len = size_t{0};
+    for (auto i = symbols.begin(); i != symbols.end(); ++i) {
+      auto& [k, v] = *i;
+      VAST_ASSERT(!k.empty());
+      if (std::mismatch(k.begin(), k.end(), f, l).first == k.end()) {
+        if (k.size() > max_len) {
+          match = i;
+          max_len = k.size();
+        }
+      }
+    }
+    if (match == symbols.end())
       return false;
-    auto longest_match = std::max_element(
-      prefixes.begin(),
-      prefixes.end(),
-      [](auto x, auto y) { return x->first.size() < y->first.size(); }
-    );
-    a = (*longest_match)->second;
-    std::advance(f, (*longest_match)->first.size());
+    a = match->second;
+    std::advance(f, max_len);
     return true;
   }
 
-  detail::radix_tree<T> symbols;
+  detail::flat_map<std::string, T> symbols;
 };
 
 } // namespace vast
-

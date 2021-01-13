@@ -103,7 +103,7 @@ std::unique_ptr<store::lookup> segment_store::extract(const ids& xs) const {
         return caf::no_error;
       auto& cand = *first_++;
       if (cand == store_.builder_.id()) {
-        VAST_DEBUG(this, "looks into the active segement", cand);
+        VAST_DEBUG(this, "looks into the active segment", cand);
         return store_.builder_.lookup(xs_);
       }
       auto i = store_.cache_.find(cand);
@@ -254,14 +254,14 @@ caf::error segment_store::erase(const ids& xs) {
   for (auto& candidate : candidates) {
     auto j = cache_.find(candidate);
     if (j != cache_.end()) {
-      VAST_DEBUG(this, "erases from the cached segement", candidate);
+      VAST_DEBUG(this, "erases from the cached segment", candidate);
       impl(j->second);
       cache_.erase(j);
     } else if (candidate == builder_.id()) {
-      VAST_DEBUG(this, "erases from the active segement", candidate);
+      VAST_DEBUG(this, "erases from the active segment", candidate);
       impl(builder_);
     } else if (auto s = load_segment(candidate)) {
-      VAST_DEBUG(this, "erases from the segement", candidate);
+      VAST_DEBUG(this, "erases from the segment", candidate);
       impl(*s);
     }
   }
@@ -290,7 +290,7 @@ caf::expected<std::vector<table_slice>> segment_store::get(const ids& xs) {
     auto& id = *cand;
     caf::expected<std::vector<table_slice>> slices{caf::no_error};
     if (id == builder_.id()) {
-      VAST_DEBUG(this, "looks into the active segement", id);
+      VAST_DEBUG(this, "looks into the active segment", id);
       slices = builder_.lookup(xs);
     } else {
       auto i = cache_.find(id);

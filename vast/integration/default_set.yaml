@@ -159,9 +159,9 @@ tests:
     tags: [export]
     fixture: ServerTester
     steps:
-      - command: export json 'yo thats not a query'
+      - command: export json 'yo that is not a query'
         expected_result: error
-      - command: and thats not a command
+      - command: and that is not a command
         expected_result: error
   Server Zeek conn log:
     tags: [server, import-export, zeek]
