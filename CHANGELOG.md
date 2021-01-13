@@ -12,6 +12,14 @@ Every entry has a category for which we use the following visual abbreviations:
 
 ## Unreleased
 
+- 🧬 As a first step to increasing the performance of our JSON import, VAST now
+  relies on [simdjson](https://github.com/simdjson/simdjson) to parse NDJSON.
+  To use the (yet experimental) feature, use `vast import json|suricata
+  --simdjson`. Special thanks to [@ngrodzitski](https://github.com/ngrodzitski)
+  for all the work on this integration.
+  [#1230](https://github.com/tenzir/vast/pull/1230)
+  [#1246](https://github.com/tenzir/vast/pull/1246)
+
 - ⚠️ Plugins must now be built against the exact same version of libvast that
   VAST is built against. [#1275](https://github.com/tenzir/vast/pull/1275)
 
