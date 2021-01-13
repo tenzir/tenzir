@@ -26,7 +26,7 @@ RUN wget https://github.com/simdjson/simdjson/archive/v0.6.1.tar.gz && \
   cmake -Bbuild && \
   cmake --build build --parallel && \
   cmake --build build --target amalgamate && \
-  sudo cmake --build build --target install
+  cmake --build build --target install
 
 COPY opt/vast /opt/vast
 RUN rsync -avh /opt/vast/* $PREFIX
