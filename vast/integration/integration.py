@@ -41,7 +41,7 @@ class Result(Enum):
     SUCCESS = 1  # Baseline comparison succeded.
     FAILURE = 2  # Baseline mismatch.
     ERROR = 3  # Crashes or returns with non-zero exit code.
-    TIMEOUT = 4 # Command timed out
+    TIMEOUT = 4  # Command timed out
 
 
 class Fixture(NamedTuple):
@@ -96,7 +96,7 @@ signal.signal(signal.SIGALRM, timeout_handler)
 # TODO tobim: check if asyncio would be a better approach
 def spawn(*popenargs, **kwargs):
     """Helper function around the Popen constructor
-       that puts the created process into a registry
+    that puts the created process into a registry
     """
     proc = subprocess.Popen(*popenargs, **kwargs)
     CURRENT_SUBPROCS.append(proc)
@@ -197,7 +197,9 @@ def is_non_deterministic(command):
     return positionals[0] in {"export", "explore", "get", "pivot"}
 
 
-def run_step(basecmd, step_id, step, work_dir, baseline_dir, update_baseline, expected_result):
+def run_step(
+    basecmd, step_id, step, work_dir, baseline_dir, update_baseline, expected_result
+):
     try:
         stdout = work_dir / f"{step_id}.out"
         stderr = work_dir / f"{step_id}.err"
@@ -220,9 +222,17 @@ def run_step(basecmd, step_id, step, work_dir, baseline_dir, update_baseline, ex
                 incmd += ["cat", str(step.input)]
             info_string = " ".join(incmd) + " | " + info_string
             input_p = spawn(incmd, stdout=client.stdin)
-            result = try_wait(input_p, timeout=STEP_TIMEOUT - (now() - start_time), expected_result=expected_result)
+            result = try_wait(
+                input_p,
+                timeout=STEP_TIMEOUT - (now() - start_time),
+                expected_result=expected_result,
+            )
             client.stdin.close()
-        result = try_wait(client, timeout=STEP_TIMEOUT - (now() - start_time), expected_result=expected_result)
+        result = try_wait(
+            client,
+            timeout=STEP_TIMEOUT - (now() - start_time),
+            expected_result=expected_result,
+        )
         if result is Result.ERROR and result != expected_result:
             LOGGER.warning("standard error:")
             for line in open(stderr).readlines()[-100:]:
@@ -286,8 +296,7 @@ def run_step(basecmd, step_id, step, work_dir, baseline_dir, update_baseline, ex
 
 
 class Server:
-    """Server fixture implementation details
-    """
+    """Server fixture implementation details"""
 
     def __init__(
         self,
@@ -355,8 +364,7 @@ class Server:
 
 
 class Tester:
-    """Test runner
-    """
+    """Test runner"""
 
     def __init__(self, args, fixtures, config_file):
         self.args = args
@@ -426,7 +434,15 @@ class Tester:
         for step in test.steps:
             step_id = "step_{:02d}".format(step_i)
             LOGGER.debug(f"running step {step_i}: {step.command}")
-            result = run_step(cmd, step_id, step, work_dir, baseline_dir, self.update, step.expected_result)
+            result = run_step(
+                cmd,
+                step_id,
+                step,
+                work_dir,
+                baseline_dir,
+                self.update,
+                step.expected_result,
+            )
             summary.count(result, step.expected_result)
             if not self.args.keep_going and result != step.expected_result:
                 LOGGER.warning("skipping remaining steps after error")
@@ -566,7 +582,8 @@ def run(args, test_dec):
                         if i < args.repetitions - 1:
                             # Try again.
                             LOGGER.warning(
-                                f"Re-running test {name} {i+2}/{args.repetitions}")
+                                f"Re-running test {name} {i+2}/{args.repetitions}"
+                            )
                             continue
                     if test_result is not Result.SUCCESS:
                         result = False
@@ -613,7 +630,7 @@ def main():
         "-k",
         "--keep-going",
         action="store_true",
-        help="Continue to evaluate in case of a failed test"
+        help="Continue to evaluate in case of a failed test",
     )
     parser.add_argument(
         "-K", "--keep", action="store_true", help="Keep artifacts of successful runs"
