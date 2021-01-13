@@ -30,6 +30,10 @@ Every entry has a category for which we use the following visual abbreviations:
   discarded.
   [#1278](https://github.com/tenzir/vast/pull/1278)
 
+- 🐞 Line based imports now correctly handle read timeouts that occur in the
+  middle of a line.
+  [#1276](https://github.com/tenzir/vast/pull/1276)
+
 - ⚠️ Plugins must now be built against the exact same version of libvast that
   VAST is built against. [#1275](https://github.com/tenzir/vast/pull/1275)
 
