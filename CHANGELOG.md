@@ -20,6 +20,10 @@ Every entry has a category for which we use the following visual abbreviations:
   [#1230](https://github.com/tenzir/vast/pull/1230)
   [#1246](https://github.com/tenzir/vast/pull/1246)
 
+- 🐞 Disk monitor quota settings not ending in a 'B' used to be silently
+  discarded.
+  [#1278](https://github.com/tenzir/vast/pull/1278)
+
 - ⚠️ Plugins must now be built against the exact same version of libvast that
   VAST is built against. [#1275](https://github.com/tenzir/vast/pull/1275)
 
