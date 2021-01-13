@@ -81,6 +81,15 @@ struct zeek {
   static constexpr auto read = shared::read;
 };
 
+/// Contains settings for the zeek-json subcommand.
+struct zeek_json {
+  /// Nested category in config files for this subcommand.
+  static constexpr const char* category = "vast.import.zeek-json";
+
+  /// Path for reading input events.
+  static constexpr auto read = shared::read;
+};
+
 /// Contains settings for the csv subcommand.
 struct csv {
   /// Nested category in config files for this subcommand.

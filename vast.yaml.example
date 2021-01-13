@@ -227,6 +227,8 @@ vast:
       #schema-file: <none>
       # An alternate schema as a string.
       #schema: <none>
+      # Use simdjson for parsing.
+      #simdjson: false
 
     # The `vast import pcap` command imports PCAP logs.
     pcap:
@@ -270,6 +272,8 @@ vast:
       #schema-file: <none>
       # An alternate schema as a string.
       #schema: <none>
+      # Use simdjson for parsing.
+      #simdjson: false
 
     # The `vast import syslog` command imports Syslog entries.
     syslog:
@@ -319,6 +323,21 @@ vast:
       # does the same. Settings this flag to true skips printing these tags,
       # which may help when fully deterministic output is desired.
       #disable-timestamp-tags: false
+    
+    # The `vast import zeek-json` command imports Zeek streaming JSON.
+    zeek-json:
+      # The endpoint to listen on ("[host]:port/type").
+      #listen: <none>
+      # Path to file to read events from or "-" for stdin.
+      read: "-"
+      # Treat the read option as a UNIX domain socket to connect to.
+      uds: false
+      # Path to an alternate schema.
+      #schema-file: <none>
+      # An alternate schema as a string.
+      #schema: <none>
+      # Use simdjson for parsing.
+      #simdjson: false
 
   # The `vast pivot` command extracts related events of a given type.
   # For additionally available options, see export.pcap.
