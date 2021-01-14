@@ -107,6 +107,9 @@ public:
 class command_plugin : public virtual plugin {
 public:
   /// Creates additional commands.
+  /// @note VAST calls this function before initializing the plugin, which means
+  /// that this function cannot depend on any plugin state. The logger is
+  /// unavailable when this function is called.
   virtual std::pair<std::unique_ptr<command>, command::factory>
   make_command() const = 0;
 };
