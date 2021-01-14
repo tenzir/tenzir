@@ -361,19 +361,17 @@ dependency_summary("CAF" "${caf_dir}")
 # Link against FlatBuffers.
 target_link_libraries(libvast PUBLIC ${flatbuffers_target})
 add_dependencies(libvast libvast_flatbuffers)
-get_target_property(flatbuffers_dir ${flatbuffers_target}
-                    INTERFACE_INCLUDE_DIRECTORIES)
-dependency_summary("FlatBuffers" ${flatbuffers_dir})
+dependency_summary("FlatBuffers" ${flatbuffers_target})
 
 # Link against yaml-cpp.
 find_package(yaml-cpp 0.6.2 REQUIRED HINTS ${YAML_CPP_ROOT})
 target_link_libraries(libvast PRIVATE yaml-cpp)
-get_filename_component(yaml_cpp_dir "${YAML_CPP_INCLUDE_DIR}" ABSOLUTE)
-dependency_summary("yaml-cpp" "${yaml_cpp_dir}")
+dependency_summary("yaml-cpp" yaml-cpp)
 
 # Link against simdjson.
 find_package(simdjson REQUIRED HINTS ${SIMDJSON_ROOT})
 target_link_libraries(libvast PUBLIC simdjson::simdjson)
+dependency_summary("simdjson" simdjson::simdjson)
 
 # Link against robin-map.
 target_link_libraries(libvast PUBLIC tsl::robin_map)
@@ -382,14 +380,13 @@ add_dependencies(libvast tsl-robin-map-targets-link)
 # Link against Apache Arrow.
 if (VAST_ENABLE_ARROW)
   target_link_libraries(libvast PRIVATE ${ARROW_LIBRARY})
-  get_target_property(arrow_dir ${ARROW_LIBRARY} INTERFACE_INCLUDE_DIRECTORIES)
-  dependency_summary("Apache Arrow" "${arrow_dir}")
+  dependency_summary("Apache Arrow" ${ARROW_LIBRARY})
 endif ()
 
 # Link against PCAP.
 if (VAST_ENABLE_PCAP)
   target_link_libraries(libvast PRIVATE pcap::pcap)
-  dependency_summary("PCAP" "${PCAP_INCLUDE_DIR}")
+  dependency_summary("PCAP" pcap::pcap)
 endif ()
 
 # TODO: Should we move the bundled schemas to libvast?
