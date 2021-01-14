@@ -1,11 +1,9 @@
-option(VAST_ENABLE_EXAMPLE_PLUGIN "Build example plugin" OFF)
-add_feature_info("VAST_ENABLE_EXAMPLE_PLUGIN" VAST_ENABLE_EXAMPLE_PLUGIN
-                 "build example plugin.")
-
-if (NOT VAST_ENABLE_EXAMPLE_PLUGIN)
-  return()
-endif ()
-
+# Create a library target for our plugin.
 add_library(example example.cpp)
+
+# Link against both libvast and against libvast_internal. The latter is
+# optional, but recommended to enable a better development experience.
 target_link_libraries(example PRIVATE vast::libvast vast::internal)
+
+# Install the plugin library to <libdir>/vast/plugins.
 install(TARGETS example DESTINATION "${CMAKE_INSTALL_LIBDIR}/vast/plugins")
