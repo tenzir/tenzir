@@ -29,6 +29,7 @@ public:
 
   const std::string& get() const;
 
+  void next_impl();
   void next();
 
   // This is only supported if input_ uses a detail::fdinbuf as its streambuf,
@@ -52,6 +53,7 @@ private:
   std::istream& input_;
   std::string line_;
   size_t line_number_ = 0;
+  bool timed_out_ = false;
 };
 
 } // namespace vast::detail
