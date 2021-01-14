@@ -29,9 +29,6 @@ namespace vast::detail {
 template <bool B>
 using bool_constant = std::integral_constant<bool, B>;
 
-template <class...>
-using void_t = void;
-
 // -- Library Fundamentals v2 ------------------------------------------------
 
 struct nonesuch {
@@ -55,7 +52,7 @@ struct detector {
 };
 
 template <class Default, template<class...> class Op, class... Args>
-struct detector<Default, void_t<Op<Args...>>, Op, Args...> {
+struct detector<Default, std::void_t<Op<Args...>>, Op, Args...> {
   using value_t = std::true_type;
   using type = Op<Args...>;
 };
