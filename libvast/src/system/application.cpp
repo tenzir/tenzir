@@ -236,7 +236,7 @@ auto make_import_command() {
   import_->add_subcommand("zeek-json",
                           "imports Zeek JSON logs from STDIN or file",
                           documentation::vast_import_zeek,
-                          source_opts("?vast.import.zeek"));
+                          source_opts_json("?vast.import.zeek-json"));
   import_->add_subcommand("csv", "imports CSV logs from STDIN or file",
                           documentation::vast_import_csv,
                           source_opts("?vast.import.csv"));
@@ -486,9 +486,10 @@ auto make_command_factory() {
       defaults::import::test>},
     {"import zeek", import_command<format::zeek::reader,
       defaults::import::zeek>},
-    {"import zeek-json", import_command<
+    {"import zeek-json", import_command_json<
       format::json::reader<format::json::zeek_selector>,
-      defaults::import::zeek>},
+      format::simdjson::reader<format::json::zeek_selector>,
+      defaults::import::zeek_json>},
     {"kill", remote_command},
     {"peer", remote_command},
     {"pivot", pivot_command},
