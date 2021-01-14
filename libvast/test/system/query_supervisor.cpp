@@ -15,23 +15,25 @@
 
 #include "vast/system/query_supervisor.hpp"
 
+#include "vast/fwd.hpp"
+
 #include "vast/test/fixtures/actor_system.hpp"
 #include "vast/test/test.hpp"
 
 #include "vast/concept/parseable/to.hpp"
 #include "vast/concept/parseable/vast/expression.hpp"
 #include "vast/expression.hpp"
-#include "vast/fwd.hpp"
 #include "vast/ids.hpp"
+#include "vast/system/evaluator_actor.hpp"
 
 using namespace vast;
 
 namespace {
 
-system::evaluator_actor::behavior_type
-dummy_evaluator(system::evaluator_actor::pointer self, ids x) {
+system::partition_actor::behavior_type
+dummy_partition(system::partition_actor::pointer self, ids x) {
   return {
-    [=](const system::index_client_actor& client) {
+    [=](const vast::expression&, const system::partition_client_actor& client) {
       self->send(client, x);
       return atom::done_v;
     },
@@ -50,13 +52,14 @@ TEST(lookup) {
   run();
   expect((atom::worker, system::query_supervisor_actor),
          from(sv).to(self).with(atom::worker_v, sv));
-  MESSAGE("spawn evaluators");
-  auto e0 = sys.spawn(dummy_evaluator, make_ids({0, 2, 4, 6, 8}));
-  auto e1 = sys.spawn(dummy_evaluator, make_ids({1, 7}));
-  auto e2 = sys.spawn(dummy_evaluator, make_ids({3, 5}));
+  MESSAGE("spawn partitions");
+  auto p0 = sys.spawn(dummy_partition, make_ids({0, 2, 4, 6, 8}));
+  auto p1 = sys.spawn(dummy_partition, make_ids({1, 7}));
+  auto p2 = sys.spawn(dummy_partition, make_ids({3, 5}));
   run();
   MESSAGE("fill query map and trigger supervisor");
-  system::query_map qm{{uuid::random(), {e0, e1}}, {uuid::random(), {e2}}};
+  system::query_map qm{
+    {uuid::random(), p0}, {uuid::random(), p1}, {uuid::random(), p2}};
   self->send(sv, unbox(to<expression>("x == 42")), std::move(qm),
              caf::actor_cast<system::index_client_actor>(self));
   run();

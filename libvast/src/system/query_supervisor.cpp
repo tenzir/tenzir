@@ -38,7 +38,7 @@ namespace {
 
 query_supervisor_state::query_supervisor_state(
   query_supervisor_actor::stateful_pointer<query_supervisor_state> self)
-  : name("query_supervisor-") {
+  : open_requests(0), name("query_supervisor-") {
   name += std::to_string(self->id());
 }
 
@@ -48,33 +48,42 @@ query_supervisor_actor::behavior_type query_supervisor(
   // Ask master for initial work.
   self->send(master, atom::worker_v, self);
   return {
-    [=](const expression&, const query_map& qm,
+    [=](const expression& expr,
+        const std::vector<std::pair<uuid, partition_actor>>& qm,
         const index_client_actor& client) {
       VAST_DEBUG(self, "got a new query for", qm.size(),
                  "partitions:", get_ids(qm));
       VAST_ASSERT(!qm.empty());
-      VAST_ASSERT(self->state.open_requests.empty());
-      for (auto& kvp : qm) {
-        auto& id = kvp.first;
-        auto& evaluators = kvp.second;
-        VAST_DEBUG(self, "asks", evaluators.size(),
-                   "EVALUATOR actor(s) for partition", id);
-        self->state.open_requests.emplace(id, evaluators.size());
-        for (auto& evaluator : evaluators)
-          self->request(evaluator, caf::infinite, client).then([=](atom::done) {
-            auto& num_evaluators = self->state.open_requests[id];
-            if (--num_evaluators == 0) {
-              VAST_DEBUG(self, "collected all results for partition", id);
-              self->state.open_requests.erase(id);
-              // Ask master for more work after receiving the last sub
-              // result.
-              if (self->state.open_requests.empty()) {
-                VAST_DEBUG(self, "collected all results for all partitions");
+      VAST_ASSERT(self->state.open_requests == 0);
+      for (auto& [id, partition] : qm) {
+        ++self->state.open_requests;
+        // TODO: Add a proper configurable timeout.
+        self
+          ->request(partition, caf::infinite, expr,
+                    static_cast<const partition_client_actor&>(client))
+          .then(
+            [=](atom::done) {
+              if (--self->state.open_requests == 0) {
+                VAST_DEBUG(self, "collected all results for the current batch "
+                                 "of partitions");
+                // Ask master for more work after receiving the last sub
+                // result.
+                // TODO: We should schedule a new partition as soon as the
+                // prvious one has finished, otherwise each batch will be as
+                // slow as the worst case of the batch.
                 self->send(client, atom::done_v);
                 self->send(master, atom::worker_v, self);
               }
-            }
-          });
+            },
+            [=](const caf::error& e) {
+              // TODO: Add a proper error handling path to escalate the error to
+              // the client.
+              VAST_ERROR(self, "encountered error while supervising query", e);
+              if (--self->state.open_requests == 0) {
+                self->send(client, atom::done_v);
+                self->send(master, atom::worker_v, self);
+              }
+            });
       }
     },
   };

@@ -578,7 +578,14 @@ active_partition_actor::behavior_type active_partition(
             });
       }
     },
-    [=](const expression& expr) { return evaluate(self->state, expr); },
+    [=](const expression& expr,
+        partition_client_actor client) -> caf::result<atom::done> {
+      auto triples = evaluate(self->state, expr);
+      if (triples.empty())
+        return atom::done_v;
+      auto eval = self->spawn(evaluator, expr, triples);
+      return self->delegate(eval, client);
+    },
   };
 }
 
@@ -663,14 +670,15 @@ partition_actor::behavior_type passive_partition(
         // Delegate all deferred evaluations now that we have the partition chunk.
         VAST_DEBUG(self, "delegates", self->state.deferred_evaluations.size(),
                    "deferred evaluations");
-        for (auto&& [expr, rp] :
+        for (auto&& [expr, client, rp] :
              std::exchange(self->state.deferred_evaluations, {}))
-          rp.delegate(static_cast<partition_actor>(self), std::move(expr));
+          rp.delegate(static_cast<partition_actor>(self), std::move(expr),
+                      client);
       },
       [=](caf::error err) {
         VAST_ERROR(self, "failed to load partition:", render(err));
         // Deliver the error for all deferred evaluations.
-        for (auto&& [expr, rp] :
+        for (auto&& [expr, client, rp] :
              std::exchange(self->state.deferred_evaluations, {})) {
           // Because of a deficiency in the typed_response_promise API, we must
           // access the underlying response_promise to deliver the error.
@@ -681,17 +689,20 @@ partition_actor::behavior_type passive_partition(
         self->quit(std::move(err));
       });
   return {
-    [=](const expression& expr) -> caf::result<std::vector<evaluation_triple>> {
+    [=](const expression& expr,
+        partition_client_actor client) -> caf::result<atom::done> {
       VAST_TRACE(self, VAST_ARG(expr));
       if (!self->state.partition_chunk)
-        return self->state.deferred_evaluations
-          .emplace_back(
-            expr, self->make_response_promise<std::vector<evaluation_triple>>())
-          .second;
+        return get<2>(self->state.deferred_evaluations.emplace_back(
+          expr, client, self->make_response_promise<atom::done>()));
       // We can safely assert that if we have the partition chunk already, all
       // deferred evaluations were taken care of.
       VAST_ASSERT(self->state.deferred_evaluations.empty());
-      return evaluate(self->state, expr);
+      auto triples = evaluate(self->state, expr);
+      if (triples.empty())
+        return atom::done_v;
+      auto eval = self->spawn(evaluator, expr, triples);
+      return self->delegate(eval, client);
     },
   };
 }

@@ -33,7 +33,7 @@ struct query_supervisor_state {
     query_supervisor_actor::stateful_pointer<query_supervisor_state> self);
 
   /// Maps partition IDs to the number of outstanding responses.
-  caf::detail::unordered_flat_map<uuid, size_t> open_requests;
+  size_t open_requests;
 
   // Gives the query_supervisor a unique, human-readable name in log output.
   std::string name;

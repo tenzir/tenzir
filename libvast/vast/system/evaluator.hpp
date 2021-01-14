@@ -63,7 +63,7 @@ struct evaluator_state {
   evaluator_actor::pointer self;
 
   /// Stores the actor for sendings results to.
-  index_client_actor client;
+  partition_client_actor client;
 
   /// Stores the original query expression.
   expression expr;
