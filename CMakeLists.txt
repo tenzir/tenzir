@@ -302,7 +302,7 @@ if (VAST_ENABLE_JEMALLOC)
   provide_find_module(jemalloc)
   string(APPEND VAST_FIND_DEPENDENCY_LIST "\nfind_package(jemalloc REQUIRED)")
   target_link_libraries(libvast_internal INTERFACE jemalloc::jemalloc_)
-  dependency_summary("jemalloc" "${jemalloc_INCLUDE_DIR}")
+  dependency_summary("jemalloc" jemalloc::jemalloc_)
 endif ()
 
 # -- developer mode ------------------------------------------------------------
