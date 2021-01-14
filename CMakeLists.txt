@@ -534,10 +534,13 @@ file(WRITE ${CMAKE_CURRENT_BINARY_DIR}/libvast/vast/documentation.hpp
 
 add_subdirectory(libvast)
 add_subdirectory(libvast_test)
-add_subdirectory(plugins)
 add_subdirectory(tools)
 add_subdirectory(doc)
 add_subdirectory(vast)
+
+# -- add plugins ---------------------------------------------------------------
+
+add_subdirectory(examples/plugins/example)
 
 # -- cmake export/config installations -----------------------------------------
 

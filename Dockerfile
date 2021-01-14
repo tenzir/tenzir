@@ -29,7 +29,7 @@ COPY cmake ./cmake
 COPY doc ./doc
 COPY libvast ./libvast
 COPY libvast_test ./libvast_test
-COPY plugins ./plugins
+COPY examples ./examples
 COPY schema ./schema
 COPY scripts ./scripts
 COPY tools ./tools
