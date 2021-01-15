@@ -175,10 +175,10 @@ int main(int argc, char** argv) {
   for (auto& file : cfg.config_files)
     VAST_INFO_ANON("loaded configuration file:", file);
   // Print the plugins that were loaded, and errors that occured during loading.
-  for (auto&& file : std::exchange(loaded_plugin_paths, {}))
-    VAST_VERBOSE_ANON("loaded plugin:", std::move(file));
-  for (auto&& err : std::exchange(plugin_load_errors, {}))
-    VAST_ERROR_ANON("failed to load plugin:", render(std::move(err)));
+  for (const auto& file : loaded_plugin_paths)
+    VAST_VERBOSE_ANON("loaded plugin:", file);
+  for (const auto& err : plugin_load_errors)
+    VAST_ERROR_ANON("failed to load plugin:", render(err));
   // Initialize successfully loaded plugins.
   for (auto& plugin : plugins) {
     auto key = "plugins."s + plugin->name();
