@@ -84,7 +84,7 @@ install(FILES "${PROJECT_SOURCE_DIR}/vast.yaml.example"
 # -- add plugins ---------------------------------------------------------------
 
 option(VAST_PLUGINS "Specify a list of plugins to build with VAST" "")
-file (REMOVE "${CMAKE_CURRENT_BINARY_DIR}/plugin_integration.sh")
+file (WRITE "${CMAKE_CURRENT_BINARY_DIR}/plugin_integration.sh" "")
 foreach (plugin_source_dir IN LISTS VAST_PLUGINS)
   # Note that we must explicitly specify a binary directory, because the plugin
   # source directory may not be a subdirectory of the current list directory.
