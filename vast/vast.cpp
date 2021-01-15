@@ -12,6 +12,8 @@
  ******************************************************************************/
 
 #include "vast/concept/convertible/to.hpp"
+#include "vast/concept/printable/to_string.hpp"
+#include "vast/concept/printable/vast/data.hpp"
 #include "vast/config.hpp"
 #include "vast/data.hpp"
 #include "vast/detail/process.hpp"
@@ -86,45 +88,31 @@ int main(int argc, char** argv) {
   // Load plugins.
   auto& plugins = plugins::get();
   auto plugin_dirs = detail::get_plugin_dirs(cfg);
+  // We need the below variables because we cannot log here, they are used for
+  // deferred log statements essentially.
+  auto plugin_load_errors = std::vector<caf::error>{};
+  auto loaded_plugin_paths = std::vector<path>{};
   for (const auto& dir : plugin_dirs) {
-    VAST_VERBOSE_ANON("looking for plugins in", dir);
     for (const auto& file : directory{dir}) {
       if (file.extension() == ".so" || file.extension() == ".dylib") {
         if (auto plugin = plugin_ptr::make(file.str().c_str())) {
           VAST_ASSERT(*plugin);
           auto has_same_name = [name = (*plugin)->name()](const auto& other) {
-            return other->name() == name;
+            return !std::strcmp(name, other->name());
           };
           if (std::none_of(plugins.begin(), plugins.end(), has_same_name)) {
-            VAST_VERBOSE_ANON("loaded plugin:", file);
+            loaded_plugin_paths.push_back(std::move(file));
             plugins.push_back(std::move(*plugin));
           } else {
-            VAST_ERROR_ANON("failed to load plugin", file,
-                            "because another plugin already uses the name",
-                            (*plugin)->name());
+            std::cerr << "failed to load plugin " << file.str()
+                      << " because another plugin already uses the name "
+                      << (*plugin)->name() << std::endl;
             return EXIT_FAILURE;
           }
         } else {
-          VAST_ERROR_ANON("failed to load plugin:", plugin.error());
+          plugin_load_errors.push_back(std::move(plugin.error()));
         }
       }
-    }
-  }
-  // Initialize successfully loaded plugins.
-  for (auto& plugin : plugins) {
-    VAST_VERBOSE_ANON("initializing plugin:", plugin->name());
-    auto key = "plugins."s + plugin->name();
-    if (auto opts = caf::get_if<caf::settings>(&cfg, key)) {
-      if (auto config = to<data>(*opts)) {
-        VAST_DEBUG_ANON("initializing plugin with options:", *config);
-        plugin->initialize(std::move(*config));
-      } else {
-        VAST_ERROR_ANON("invalid plugin configuration for", plugin->name());
-        plugin->initialize(data{});
-      }
-    } else {
-      VAST_DEBUG_ANON("no configuration found for plugin", plugin->name());
-      plugin->initialize(data{});
     }
   }
   // Add additional commands from plugins.
@@ -158,6 +146,28 @@ int main(int argc, char** argv) {
     cfg.config_files.emplace_back(std::move(cfg.config_file_path));
   for (auto& path : cfg.config_files)
     VAST_INFO_ANON("loaded configuration file:", path);
+  // Print the plugins that were loaded, and errors that occured during loading.
+  for (auto&& path : std::exchange(loaded_plugin_paths, {}))
+    VAST_VERBOSE_ANON("loaded plugin:", std::move(path));
+  for (auto&& err : std::exchange(plugin_load_errors, {}))
+    VAST_ERROR_ANON("failed to load plugin:", render(std::move(err)));
+  // Initialize successfully loaded plugins.
+  for (auto& plugin : plugins) {
+    auto key = "plugins."s + plugin->name();
+    if (auto opts = caf::get_if<caf::settings>(&cfg, key)) {
+      if (auto config = to<data>(*opts)) {
+        VAST_DEBUG_ANON("initializing plugin with options:", *config);
+        plugin->initialize(std::move(*config));
+      } else {
+        VAST_ERROR_ANON("invalid plugin configuration for plugin",
+                        plugin->name());
+        plugin->initialize(data{});
+      }
+    } else {
+      VAST_DEBUG_ANON("no configuration found for plugin", plugin->name());
+      plugin->initialize(data{});
+    }
+  }
   // Load event types.
   if (auto schema = load_schema(cfg)) {
     event_types::init(*std::move(schema));

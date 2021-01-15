@@ -16,6 +16,7 @@ __pycache__/
 /vast.db/
 /vast*.log
 /vast-unit-test/
+/vast-integration-test*/
 
 # PyVAST build artifacts
 /pyvast/build/

@@ -58,9 +58,10 @@ Every entry has a category for which we use the following visual abbreviations:
   points at various places of the data processing pipeline. There exist several
   base classes that define an interface, such as adding a new command or
   spawning a new actor that processes the incoming stream of data. The
-  directory `plugins/example` contains an example plugin.
+  directory `examples/plugins/example` contains an example plugin.
   [#1208](https://github.com/tenzir/vast/pull/1208)
   [#1264](https://github.com/tenzir/vast/pull/1264)
+  [#1282](https://github.com/tenzir/vast/pull/1282)
 
 - 🐞 For relocatable installations, the list of schema loading paths does not
   include a build-time configured path any more.

@@ -172,7 +172,19 @@ while [ $# -ne 0 ]; do
       append_cache_entry VAST_ENABLE_LSVAST BOOL yes
       ;;
     --with-example-plugin)
-      append_cache_entry VAST_ENABLE_EXAMPLE_PLUGIN BOOL yes
+      if [ -z "${plugins}" ]; then
+        plugins="$PWD/examples/plugins/example"
+      else
+        plugins="${plugins};$PWD/examples/plugins/example"
+      fi
+      ;;
+    --with-plugin=*)
+      optarg="$(cd "$(dirname "$optarg")"; pwd)/$(basename "$optarg")"
+      if [ -z "${plugins}" ]; then
+        plugins="${optarg}"
+      else
+        plugins="${plugins};${optarg}"
+      fi
       ;;
     --with-type-id-checks)
       append_cache_entry CAF_ENABLE_TYPE_ID_CHECKS BOOL yes
@@ -264,6 +276,8 @@ if [ -d "$builddir" ]; then
 else
   mkdir -p "$builddir"
 fi
+
+append_cache_entry VAST_PLUGINS STRING "${plugins}"
 
 if [ ! -z "$prefix" ]; then
   case "$prefix" in
