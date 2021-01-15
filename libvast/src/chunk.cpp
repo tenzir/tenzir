@@ -86,6 +86,21 @@ chunk::size_type chunk::size() const noexcept {
   return view_.size();
 }
 
+caf::expected<chunk::size_type> chunk::incore() const noexcept {
+  auto sz = sysconf(_SC_PAGESIZE);
+  auto pages = (size() / sz) + !!(size() % sz);
+  auto buf = std::vector(pages, (unsigned char) 0);
+  if (mincore(const_cast<value_type*>(data()), size(), buf.data()))
+    return caf::make_error(ec::system_error,
+                           "failed in mincore(2):", std::strerror(errno));
+  auto in_memory = std::accumulate(buf.begin(), buf.end(), 0ul,
+                                   [](auto acc, auto current) {
+                                     return acc + (current & 0x1);
+                                   })
+                   * sz;
+  return in_memory;
+}
+
 chunk::iterator chunk::begin() const noexcept {
   return view_.begin();
 }

@@ -126,6 +126,9 @@ public:
   /// @returns The size of the chunk.
   size_type size() const noexcept;
 
+  /// @returns The size of the chunk.
+  caf::expected<chunk::size_type> incore() const noexcept;
+
   /// @returns A pointer to the first byte in the chunk.
   iterator begin() const noexcept;
 

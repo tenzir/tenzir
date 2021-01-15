@@ -290,14 +290,14 @@ index_state::status(status_verbosity v) const {
     caf::typed_response_promise<caf::settings> rp;
     // Maps nodes to a map associating components with status information.
     caf::settings content;
-    size_t size = 0;
+    size_t memory_usage = 0;
   };
   auto req_state = std::make_shared<req_state_t>();
   req_state->rp = self->make_response_promise<caf::settings>();
   auto& result = req_state->content;
   auto& index_status = put_dictionary(result, "index");
   auto deliver = [&](auto&& req_state) {
-    put(index_status, "sum_partition_bytes", req_state->size);
+    put(index_status, "sum_partition_bytes", req_state->memory_usage);
     req_state->rp.deliver(req_state->content);
   };
   bool deferred = false;
@@ -329,9 +329,9 @@ index_state::status(status_verbosity v) const {
           [=, &xs](caf::dictionary<caf::config_value> part_status) {
             auto& ps = xs.emplace_back().as_dictionary();
             put(ps, "id", to_string(id));
-            if (auto s
-                = caf::get_if<caf::config_value::integer>(&part_status, "size"))
-              req_state->size += *s;
+            if (auto s = caf::get_if<caf::config_value::integer>(
+                  &part_status, "memory-usage"))
+              req_state->memory_usage += *s;
             if (v >= status_verbosity::debug)
               put(ps, "data", std::move(part_status));
             // Both handlers have a copy of req_state.
@@ -350,13 +350,16 @@ index_state::status(status_verbosity v) const {
           });
     };
     // Resident partitions.
-    auto& active = put_list(partitions, "active");
+    auto& active = caf::put_list(partitions, "active");
+    active.reserve(1);
     if (active_partition.actor != nullptr)
       partition_status(active_partition.id, active_partition.actor, active);
     auto& cached = put_list(partitions, "cached");
+    cached.reserve(inmem_partitions.size());
     for (auto& [id, actor] : inmem_partitions)
       partition_status(id, actor, cached);
     auto& unpersisted = put_list(partitions, "unpersisted");
+    unpersisted.reserve(this->unpersisted.size());
     for (auto& [id, actor] : this->unpersisted)
       partition_status(id, actor, unpersisted);
     // General state such as open streams.

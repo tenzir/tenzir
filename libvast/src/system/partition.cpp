@@ -720,8 +720,26 @@ partition_actor::behavior_type passive_partition(
       return self->delegate(eval, client);
     },
     [=](atom::status, status_verbosity /*v*/) -> caf::config_value::dictionary {
+      const auto& st = self->state;
       caf::settings result;
-      caf::put(result, "size", self->state.partition_chunk->size());
+      caf::put(result, "size", st.partition_chunk->size());
+      size_t mem_indexers = 0;
+      for (size_t i = 0; i < st.indexers.size(); ++i) {
+        if (st.indexers[i])
+          mem_indexers
+            += sizeof(indexer_state)
+               + st.flatbuffer->indexes()->Get(i)->index()->data()->size();
+      }
+      caf::put(result, "memory-usage-indexers", mem_indexers);
+      auto x = st.partition_chunk->incore();
+      if (!x) {
+        caf::put(result, "memory-usage-incore", render(x.error()));
+        caf::put(result, "memory-usage",
+                 st.partition_chunk->size() + mem_indexers + sizeof(st));
+      } else {
+        caf::put(result, "memory-usage-incore", *x);
+        caf::put(result, "memory-usage", *x + mem_indexers + sizeof(st));
+      }
       return result;
     },
   };
