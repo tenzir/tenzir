@@ -1,0 +1,6 @@
+tests:
+  Example:
+    tags: [plugin]
+    steps:
+      - command: version
+        transformation: jq '.plugins.example'

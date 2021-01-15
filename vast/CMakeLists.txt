@@ -56,7 +56,9 @@ file(
      python \"$base_dir/integration.py\" \
       --app \"$app\" \
       --directory vast-integration-test \
-      \"$@\"")
+      \"$@\"
+      . \"${CMAKE_CURRENT_BINARY_DIR}/plugin_integration.sh\""
+      )
 
 add_custom_target(
   integration
@@ -90,6 +92,16 @@ foreach (plugin_source_dir IN LISTS VAST_PLUGINS)
   get_filename_component(plugin_name "${plugin_source_dir}" NAME)
   set(plugin_binary_dir "plugin-${plugin_name}-${plugin_path_hash}")
   add_subdirectory("${plugin_source_dir}" "${plugin_binary_dir}")
+  if (EXISTS "${plugin_source_dir}/integration.yaml")
+    file(
+      APPEND
+      "${CMAKE_CURRENT_BINARY_DIR}/plugin_integration.sh"
+      "python \"\$base_dir/integration.py\" \
+      --app \"\$app\" \
+      --set \"${plugin_source_dir}/integration.yaml\" \
+      --directory \"vast-integration-test-${plugin_binary_dir}\" \
+      \"\$@\"")
+  endif ()
 endforeach ()
 
 # -- man page ------------------------------------------------------------------
