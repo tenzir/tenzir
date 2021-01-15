@@ -108,6 +108,9 @@ auto make_root_command(std::string_view path) {
         .add<bool>("enable-metrics", "keep track of performance metrics")
         .add<bool>("no-default-schema", "don't load the default schema "
                                         "definitions")
+        .add<std::vector<std::string>>("plugin-paths", "additional directories "
+                                                       "to load plugins from")
+        .add<std::vector<std::string>>("plugins", "plugins to load at startup")
         .add<std::string>("aging-frequency", "interval between two aging "
                                              "cycles")
         .add<std::string>("aging-query", "query for aging out obsolete data")

@@ -20,10 +20,12 @@ vast:
   #  ["<binary_directory>/../share/vast/schema", "/etc/vast/schema"].
   # Use the no-default-schema option to turn off this mechanism.
   #schema-paths: []
-  # The directories from which to load pluging at startup. VAST considers every
-  # file that ends in *.so or *.dylib as plugin and attempts to load them via
-  # dlopen(3).
+  # Additional directories to load plugins specified using `vast.plugins` from.
   plugin-paths: []
+  # The plugins to load at startup. For relative paths, VAST tries to find the
+  # files in the specified `vast.plugin-paths`.
+  # Note: Add libexample or libexample here to load the example plugin.
+  plugins: []
   # Don't load the default schema definitions.
   no-default-schema: false
   # The unique ID of this node.
