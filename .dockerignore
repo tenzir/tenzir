@@ -1,7 +1,6 @@
 */*/.git*
 *.md
 !*README.md
-examples/
 nix/
 pyvast/
 .clangd/
