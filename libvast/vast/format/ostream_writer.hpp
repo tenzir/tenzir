@@ -97,7 +97,8 @@ protected:
       if (const auto& r = caf::get_if<record_type>(&f.type)) {
         if constexpr (detail::is_any_v<policy::include_field_names,
                                        Policies...>) {
-          append(f.name);
+          if (!printer.print(iter, f.name))
+            return ec::print_error;
           append(le.kv_separator);
         }
         if (auto err = print_record<Policies...>(printer, le, *r, row, pos))
