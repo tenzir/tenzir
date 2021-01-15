@@ -156,7 +156,7 @@ int main(int argc, char** argv) {
     auto key = "plugins."s + plugin->name();
     if (auto opts = caf::get_if<caf::settings>(&cfg, key)) {
       if (auto config = to<data>(*opts)) {
-        VAST_VERBOSE_ANON("initializing plugin with options:", *config);
+        VAST_DEBUG_ANON("initializing plugin with options:", *config);
         plugin->initialize(std::move(*config));
       } else {
         VAST_ERROR_ANON("invalid plugin configuration for plugin",
@@ -164,7 +164,7 @@ int main(int argc, char** argv) {
         plugin->initialize(data{});
       }
     } else {
-      VAST_VERBOSE_ANON("no configuration found for plugin", plugin->name());
+      VAST_DEBUG_ANON("no configuration found for plugin", plugin->name());
       plugin->initialize(data{});
     }
   }
