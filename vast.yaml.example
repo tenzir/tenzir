@@ -139,6 +139,8 @@ vast:
       write: "-"
       # Treat the write option as a UNIX domain socket to connect to.
       uds: false
+      # Flatten nested objects into the top-level object.
+      flatten: false
 
     # The `vast export arrow` command exports events in the Apache Arrow format.
     # Unlike other export formats, arrow is always printed to stdout.
