@@ -538,16 +538,6 @@ add_subdirectory(tools)
 add_subdirectory(doc)
 add_subdirectory(vast)
 
-# -- add plugins ---------------------------------------------------------------
-
-option(VAST_PLUGINS "Specify a list of plugins to build with VAST" "")
-foreach (plugin_source_dir IN LISTS VAST_PLUGINS)
-  # Note that we must explicitly specify a binary directory, because the plugin
-  # source directory may not be a subdirectory of the current list directory.
-  string(MD5 plugin_binary_dir "${plugin_source_dir}")
-  add_subdirectory("${plugin_source_dir}" "plugin-${plugin_binary_dir}")
-endforeach ()
-
 # -- cmake export/config installations -----------------------------------------
 
 export(

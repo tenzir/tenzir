@@ -173,12 +173,13 @@ while [ $# -ne 0 ]; do
       ;;
     --with-example-plugin)
       if [ -z "${plugins}" ]; then
-        plugins="examples/plugins/example"
+        plugins="$PWD/examples/plugins/example"
       else
-        plugins="${plugins};examples/plugins/example"
+        plugins="${plugins};$PWD/examples/plugins/example"
       fi
       ;;
     --with-plugin=*)
+      optarg="$(cd "$(dirname "$optarg")"; pwd)/$(basename "$optarg")"
       if [ -z "${plugins}" ]; then
         plugins="${optarg}"
       else
