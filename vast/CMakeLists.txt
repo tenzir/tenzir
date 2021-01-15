@@ -85,25 +85,27 @@ install(FILES "${PROJECT_SOURCE_DIR}/vast.yaml.example"
 
 option(VAST_PLUGINS "Specify a list of plugins to build with VAST" "")
 file (WRITE "${CMAKE_CURRENT_BINARY_DIR}/plugin_integration.sh" "")
-foreach (plugin_source_dir IN LISTS VAST_PLUGINS)
-  # Note that we must explicitly specify a binary directory, because the plugin
-  # source directory may not be a subdirectory of the current list directory.
-  string(MD5 plugin_path_hash "${plugin_source_dir}")
-  string(SUBSTRING "${plugin_path_hash}" 0 8 plugin_path_hash)
-  get_filename_component(plugin_name "${plugin_source_dir}" NAME)
-  set(plugin_binary_dir "plugin-${plugin_name}-${plugin_path_hash}")
-  add_subdirectory("${plugin_source_dir}" "${plugin_binary_dir}")
-  if (EXISTS "${plugin_source_dir}/integration/tests.yaml")
-    file(
-      APPEND
-      "${CMAKE_CURRENT_BINARY_DIR}/plugin_integration.sh"
-      "python \"\$base_dir/integration.py\" \
-      --app \"\$app\" \
-      --set \"${plugin_source_dir}/integration/tests.yaml\" \
-      --directory \"vast-integration-test-${plugin_binary_dir}\" \
-      \"\$@\"\n")
-  endif ()
-endforeach ()
+if (VAST_PLUGINS)
+  foreach (plugin_source_dir IN LISTS VAST_PLUGINS)
+    # Note that we must explicitly specify a binary directory, because the plugin
+    # source directory may not be a subdirectory of the current list directory.
+    string(MD5 plugin_path_hash "${plugin_source_dir}")
+    string(SUBSTRING "${plugin_path_hash}" 0 8 plugin_path_hash)
+    get_filename_component(plugin_name "${plugin_source_dir}" NAME)
+    set(plugin_binary_dir "plugin-${plugin_name}-${plugin_path_hash}")
+    add_subdirectory("${plugin_source_dir}" "${plugin_binary_dir}")
+    if (EXISTS "${plugin_source_dir}/integration/tests.yaml")
+      file(
+        APPEND
+        "${CMAKE_CURRENT_BINARY_DIR}/plugin_integration.sh"
+        "python \"\$base_dir/integration.py\" \
+        --app \"\$app\" \
+        --set \"${plugin_source_dir}/integration/tests.yaml\" \
+        --directory \"vast-integration-test-${plugin_binary_dir}\" \
+        \"\$@\"\n")
+    endif ()
+  endforeach ()
+endif ()
 
 # -- man page ------------------------------------------------------------------
 
