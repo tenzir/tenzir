@@ -92,27 +92,55 @@ int main(int argc, char** argv) {
   // deferred log statements essentially.
   auto plugin_load_errors = std::vector<caf::error>{};
   auto loaded_plugin_paths = std::vector<path>{};
-  for (const auto& dir : plugin_dirs) {
-    for (const auto& file : directory{dir}) {
-      if (file.extension() == ".so" || file.extension() == ".dylib") {
-        if (auto plugin = plugin_ptr::make(file.str().c_str())) {
-          VAST_ASSERT(*plugin);
-          auto has_same_name = [name = (*plugin)->name()](const auto& other) {
-            return !std::strcmp(name, other->name());
-          };
-          if (std::none_of(plugins.begin(), plugins.end(), has_same_name)) {
-            loaded_plugin_paths.push_back(std::move(file));
-            plugins.push_back(std::move(*plugin));
-          } else {
-            std::cerr << "failed to load plugin " << file.str()
-                      << " because another plugin already uses the name "
-                      << (*plugin)->name() << std::endl;
-            return EXIT_FAILURE;
-          }
-        } else {
-          plugin_load_errors.push_back(std::move(plugin.error()));
-        }
+  auto plugin_files
+    = caf::get_or(cfg, "vast.plugins", std::vector<std::string>{});
+  auto load_plugin = [&](path file) {
+#if VAST_MACOS
+    if (file.extension() == "")
+      file = file.str() + ".dylib";
+#else
+    if (file.extension() == "")
+      file = file.str() + ".so";
+#endif
+    if (!exists(file))
+      return false;
+    if (auto plugin = plugin_ptr::make(file.str().c_str())) {
+      VAST_ASSERT(*plugin);
+      auto has_same_name = [name = (*plugin)->name()](const auto& other) {
+        return !std::strcmp(name, other->name());
+      };
+      if (std::none_of(plugins.begin(), plugins.end(), has_same_name)) {
+        loaded_plugin_paths.push_back(std::move(file));
+        plugins.push_back(std::move(*plugin));
+        return true;
+      } else {
+        std::cerr << "failed to load plugin " << file.str()
+                  << " because another plugin already uses the name "
+                  << (*plugin)->name() << std::endl;
+        std::exit(EXIT_FAILURE);
       }
+    } else {
+      plugin_load_errors.push_back(std::move(plugin.error()));
+    }
+    return false;
+  };
+  for (const auto& plugin_file : plugin_files) {
+    // First, check if the plugin file is specified as an absolute path.
+    if (load_plugin(plugin_file))
+      continue;
+    // Second, check if the plugin file is specified relative to the specified
+    // plugin directories.
+    auto plugin_found = false;
+    for (const auto& dir : plugin_dirs) {
+      auto file = dir / plugin_file;
+      if (load_plugin(file)) {
+        plugin_found = true;
+        break;
+      }
+    }
+    if (!plugin_found) {
+      std::cerr << "failed to find plugin: " << plugin_file << std::endl;
+      return EXIT_FAILURE;
     }
   }
   // Add additional commands from plugins.
@@ -144,11 +172,11 @@ int main(int argc, char** argv) {
   // Print the configuration file(s) that were loaded.
   if (!cfg.config_file_path.empty())
     cfg.config_files.emplace_back(std::move(cfg.config_file_path));
-  for (auto& path : cfg.config_files)
-    VAST_INFO_ANON("loaded configuration file:", path);
+  for (auto& file : cfg.config_files)
+    VAST_INFO_ANON("loaded configuration file:", file);
   // Print the plugins that were loaded, and errors that occured during loading.
-  for (auto&& path : std::exchange(loaded_plugin_paths, {}))
-    VAST_VERBOSE_ANON("loaded plugin:", std::move(path));
+  for (auto&& file : std::exchange(loaded_plugin_paths, {}))
+    VAST_VERBOSE_ANON("loaded plugin:", std::move(file));
   for (auto&& err : std::exchange(plugin_load_errors, {}))
     VAST_ERROR_ANON("failed to load plugin:", render(std::move(err)));
   // Initialize successfully loaded plugins.

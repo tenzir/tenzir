@@ -1,3 +1,5 @@
+config-file: vast.yaml
+
 tests:
   Example:
     tags: [plugin]
