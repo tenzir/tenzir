@@ -366,10 +366,10 @@ pack(flatbuffers::FlatBufferBuilder& builder, const partition_synopsis& x) {
 caf::error
 unpack(const fbs::partition_synopsis::v0& x, partition_synopsis& ps) {
   if (!x.synopses())
-    return make_error(ec::format_error, "missing synopses");
+    return caf::make_error(ec::format_error, "missing synopses");
   for (auto synopsis : *x.synopses()) {
     if (!synopsis)
-      return make_error(ec::format_error, "synopsis is null");
+      return caf::make_error(ec::format_error, "synopsis is null");
     qualified_record_field qf;
     if (auto error
         = fbs::deserialize_bytes(synopsis->qualified_record_field(), qf))

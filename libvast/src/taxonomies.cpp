@@ -33,26 +33,26 @@ namespace vast {
 caf::error convert(const data& d, concepts_map& out) {
   const auto& c = caf::get_if<record>(&d);
   if (!c)
-    return make_error(ec::convert_error, "concept is not a record:", d);
+    return caf::make_error(ec::convert_error, "concept is not a record:", d);
   auto name_data = c->find("name");
   if (name_data == c->end())
-    return make_error(ec::convert_error, "concept has no name:", d);
+    return caf::make_error(ec::convert_error, "concept has no name:", d);
   auto name = caf::get_if<std::string>(&name_data->second);
   if (!name)
-    return make_error(ec::convert_error,
-                      "concept name is not a string:", *name_data);
+    return caf::make_error(ec::convert_error,
+                           "concept name is not a string:", *name_data);
   auto& dest = out[*name];
   auto fs = c->find("fields");
   if (fs != c->end()) {
     const auto& fields = caf::get_if<list>(&fs->second);
     if (!fields)
-      return make_error(ec::convert_error, "fields in", *name,
-                        "is not a list:", fs->second);
+      return caf::make_error(ec::convert_error, "fields in", *name,
+                             "is not a list:", fs->second);
     for (auto& f : *fields) {
       auto field = caf::get_if<std::string>(&f);
       if (!field)
-        return make_error(ec::convert_error, "field in", *name,
-                          "is not a string:", f);
+        return caf::make_error(ec::convert_error, "field in", *name,
+                               "is not a string:", f);
       if (std::count(dest.fields.begin(), dest.fields.end(), *field) > 0)
         VAST_WARNING_ANON("ignoring duplicate field for",
                           *name + ": \"" + *field + "\"");
@@ -64,13 +64,13 @@ caf::error convert(const data& d, concepts_map& out) {
   if (cs != c->end()) {
     const auto& concepts = caf::get_if<list>(&cs->second);
     if (!concepts)
-      return make_error(ec::convert_error, "concepts in", *name,
-                        "is not a list:", cs->second);
+      return caf::make_error(ec::convert_error, "concepts in", *name,
+                             "is not a list:", cs->second);
     for (auto& c : *concepts) {
       auto concept_ = caf::get_if<std::string>(&c);
       if (!concept_)
-        return make_error(ec::convert_error, "concept in", *name,
-                          "is not a string:", c);
+        return caf::make_error(ec::convert_error, "concept in", *name,
+                               "is not a string:", c);
       if (std::count(dest.fields.begin(), dest.fields.end(), *concept_) > 0)
         VAST_WARNING_ANON("ignoring duplicate concept for",
                           *name + ": \"" + *concept_ + "\"");
@@ -121,29 +121,29 @@ bool operator==(const concept_& lhs, const concept_& rhs) {
 caf::error convert(const data& d, models_map& out) {
   const auto& c = caf::get_if<record>(&d);
   if (!c)
-    return make_error(ec::convert_error, "concept is not a record:", d);
+    return caf::make_error(ec::convert_error, "concept is not a record:", d);
   auto name_data = c->find("name");
   if (name_data == c->end())
-    return make_error(ec::convert_error, "concept has no name:", d);
+    return caf::make_error(ec::convert_error, "concept has no name:", d);
   auto name = caf::get_if<std::string>(&name_data->second);
   if (!name)
-    return make_error(ec::convert_error,
-                      "concept name is not a string:", *name_data);
+    return caf::make_error(ec::convert_error,
+                           "concept name is not a string:", *name_data);
   if (out.find(*name) != out.end())
-    return make_error(ec::convert_error,
-                      "models cannot have multiple definitions", *name);
+    return caf::make_error(ec::convert_error,
+                           "models cannot have multiple definitions", *name);
   auto& dest = out[*name];
   auto def = c->find("definition");
   if (def != c->end()) {
     const auto& def_list = caf::get_if<list>(&def->second);
     if (!def_list)
-      return make_error(ec::convert_error, "definition in", *name,
-                        "is not a list:", def->second);
+      return caf::make_error(ec::convert_error, "definition in", *name,
+                             "is not a list:", def->second);
     for (auto& x : *def_list) {
       auto component = caf::get_if<std::string>(&x);
       if (!component)
-        return make_error(ec::convert_error, "component in", *name,
-                          "is not a string:", x);
+        return caf::make_error(ec::convert_error, "component in", *name,
+                               "is not a string:", x);
       dest.definition.push_back(*component);
     }
   }
@@ -356,8 +356,8 @@ resolve_impl(const taxonomies& ts, const expression& e,
             // <      _,        _, 1.2.3.4,        _>
             //                                        ^~~~~
             //                                        not enough fields provided
-            return make_error(ec::invalid_query, *r,
-                              "doesn't match the model:", it->first);
+            return caf::make_error(ec::invalid_query, *r,
+                                   "doesn't match the model:", it->first);
           if (caf::holds_alternative<caf::none_t>(value_iterator->second))
             insert_meta_field_predicate();
           else
@@ -374,8 +374,8 @@ resolve_impl(const taxonomies& ts, const expression& e,
           //                                               ^~~~~
           //                                               too many fields
           //                                               provided
-          return make_error(ec::invalid_query, *r,
-                            "doesn't match the model:", it->first);
+          return caf::make_error(ec::invalid_query, *r,
+                                 "doesn't match the model:", it->first);
         }
       }
       expression expr;

@@ -30,7 +30,7 @@ auto to(From&& from, Opts&&... opts)
                       caf::expected<std::string>> {
   std::string str;
   if (!print(std::back_inserter(str), from, std::forward<Opts>(opts)...))
-    return make_error(ec::print_error);
+    return caf::make_error(ec::print_error);
   return str;
 }
 

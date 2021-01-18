@@ -93,14 +93,14 @@ caf::expected<data> type_biased_convert_impl(JsonType j, const type& t) {
     using value_type = typename ptraits::to_type;
     value_type x;
     if (auto p = make_parser<value_type>{}; !p(std::string{j}, x))
-      return make_error(ec::parse_error, "unable to parse",
-                        caf::detail::pretty_type_name(typeid(value_type)), ":",
-                        std::string{j});
+      return caf::make_error(ec::parse_error, "unable to parse",
+                             caf::detail::pretty_type_name(typeid(value_type)),
+                             ":", std::string{j});
     return x;
   } else {
     // No conversion available.
     VAST_ERROR_ANON("json-reader cannot convert field  to a propper type", t);
-    return make_error(ec::syntax_error, "conversion not implemented");
+    return caf::make_error(ec::syntax_error, "conversion not implemented");
   }
 }
 
@@ -112,8 +112,8 @@ type_biased_convert_impl<std::string_view, bool>(std::string_view s,
     return true;
   else if (s == "false")
     return false;
-  return make_error(ec::convert_error, "cannot convert from", std::string{s},
-                    "to bool");
+  return caf::make_error(ec::convert_error, "cannot convert from",
+                         std::string{s}, "to bool");
 }
 
 template <>
@@ -127,8 +127,8 @@ type_biased_convert_impl<std::string_view, integer>(std::string_view s,
     VAST_WARNING_ANON("json-reader narrowed", std::string{s}, "to type int");
     return detail::narrow_cast<integer>(x);
   }
-  return make_error(ec::convert_error, "cannot convert from", std::string{s},
-                    "to int");
+  return caf::make_error(ec::convert_error, "cannot convert from",
+                         std::string{s}, "to int");
 }
 
 template <>
@@ -147,8 +147,8 @@ type_biased_convert_impl<std::string_view, count>(std::string_view s,
     VAST_WARNING_ANON("json-reader narrowed", std::string{s}, "to type count");
     return detail::narrow_cast<count>(x);
   }
-  return make_error(ec::convert_error, "cannot convert from", std::string{s},
-                    "to count");
+  return caf::make_error(ec::convert_error, "cannot convert from",
+                         std::string{s}, "to count");
 }
 
 template <>
@@ -169,8 +169,8 @@ type_biased_convert_impl<std::string_view, real>(std::string_view s,
                                                  const type&) {
   if (real x; parsers::json_number(s, x))
     return x;
-  return make_error(ec::convert_error, "cannot convert from", std::string{s},
-                    "to real");
+  return caf::make_error(ec::convert_error, "cannot convert from",
+                         std::string{s}, "to real");
 }
 
 template <typename NumberType>
@@ -229,7 +229,7 @@ type_biased_convert_impl<std::string_view, enumeration>(std::string_view s,
 
   const auto i = std::find(e.fields.begin(), e.fields.end(), s);
   if (i == e.fields.end())
-    return make_error(ec::parse_error, "invalid:", std::string{s});
+    return caf::make_error(ec::parse_error, "invalid:", std::string{s});
   return detail::narrow_cast<enumeration>(std::distance(e.fields.begin(), i));
 }
 
@@ -319,7 +319,7 @@ caf::expected<data> convert_from_impl(T v, const type& t) {
   if (0L <= type_index
       && static_cast<int>(converter::dest_types_count) > type_index)
     return converter::callbacks[type_index](v, t);
-  return make_error(ec::syntax_error, "invalid field type");
+  return caf::make_error(ec::syntax_error, "invalid field type");
 }
 
 template <typename T>
@@ -348,7 +348,7 @@ caf::expected<data> convert(const ::simdjson::dom::element& e, const type& t) {
     case ::simdjson::dom::element_type::NULL_VALUE:
       return caf::none;
   }
-  return make_error(ec::syntax_error, "invalid json type");
+  return caf::make_error(ec::syntax_error, "invalid json type");
 }
 
 ::simdjson::simdjson_result<::simdjson::dom::element>
@@ -379,16 +379,17 @@ caf::error add(table_slice_builder& builder, const ::simdjson::dom::object& xs,
     // Non-existing fields are treated as empty (unset).
     if (er != ::simdjson::SUCCESS) {
       if (!builder.add(make_data_view(caf::none)))
-        return make_error(ec::unspecified, "failed to add caf::none to table "
-                                           "slice builder");
+        return caf::make_error(ec::unspecified,
+                               "failed to add caf::none to table "
+                               "slice builder");
       continue;
     }
     auto x = convert(el, field.type());
     if (!x)
-      return make_error(ec::convert_error, x.error().context(),
-                        "could not convert", field.key());
+      return caf::make_error(ec::convert_error, x.error().context(),
+                             "could not convert", field.key());
     if (!builder.add(make_data_view(*x)))
-      return make_error(ec::type_clash, "unexpected type", field.key());
+      return caf::make_error(ec::type_clash, "unexpected type", field.key());
   }
   return caf::none;
 }

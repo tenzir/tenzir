@@ -42,7 +42,7 @@ void complete(Actor self, const actor_addr& a) {
   auto w = self->state.workers.find(a);
   if (w == self->state.workers.end()) {
     VAST_ERROR(self, "got completion signal from unknown actor:", a);
-    self->quit(make_error(ec::unspecified, "got DONE from unknown actor"));
+    self->quit(caf::make_error(ec::unspecified, "got DONE from unknown actor"));
   } else if (--w->second == 0) {
     self->demonitor(a);
     self->state.workers.erase(w);

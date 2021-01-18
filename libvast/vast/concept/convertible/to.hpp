@@ -38,7 +38,7 @@ auto to(From&& from, Opts&&... opts)
     caf::expected<To> result{To()};
     if (convert(from, *result, std::forward<Opts>(opts)...))
       return result;
-    return make_error(ec::convert_error);
+    return caf::make_error(ec::convert_error);
   } else if constexpr (std::is_same_v<return_type, caf::error>) {
     To result;
     if (auto err = convert(from, result, std::forward<Opts>(opts)...))

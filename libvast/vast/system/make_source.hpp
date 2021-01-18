@@ -82,7 +82,7 @@ make_source(const Actor& self, caf::actor_system& sys, const invocation& inv,
             accountant_actor accountant, type_registry_actor type_registry,
             caf::actor importer) {
   if (!importer)
-    return make_error(ec::missing_component, "importer");
+    return caf::make_error(ec::missing_component, "importer");
   // Placeholder thingies.
   auto udp_port = std::optional<uint16_t>{};
   auto reader = std::unique_ptr<Reader>{nullptr};
@@ -95,8 +95,8 @@ make_source(const Actor& self, caf::actor_system& sys, const invocation& inv,
   auto type = caf::get_if<std::string>(&options, category + ".type");
   auto encoding = defaults::import::table_slice_type;
   if (!extract_settings(encoding, options, "vast.import.batch-encoding"))
-    return make_error(ec::invalid_configuration, "failed to extract "
-                                                 "batch-encoding option");
+    return caf::make_error(ec::invalid_configuration, "failed to extract "
+                                                      "batch-encoding option");
   VAST_ASSERT(encoding != table_slice_encoding::none);
   auto slice_size = get_or(options, "vast.import.batch-size",
                            defaults::import::table_slice_size);
@@ -108,8 +108,9 @@ make_source(const Actor& self, caf::actor_system& sys, const invocation& inv,
     return schema.error();
   // Discern the input source (file, stream, or socket).
   if (uri && file)
-    return make_error(ec::invalid_configuration, "only one source possible (-r "
-                                                 "or -l)");
+    return caf::make_error(ec::invalid_configuration,
+                           "only one source possible (-r "
+                           "or -l)");
   if (!uri && !file) {
     using inputs = vast::format::reader::inputs;
     if constexpr (Reader::defaults::input == inputs::inet)
@@ -120,11 +121,12 @@ make_source(const Actor& self, caf::actor_system& sys, const invocation& inv,
   if (uri) {
     endpoint ep;
     if (!vast::parsers::endpoint(*uri, ep))
-      return make_error(vast::ec::parse_error, "unable to parse endpoint",
-                        *uri);
+      return caf::make_error(vast::ec::parse_error, "unable to parse endpoint",
+                             *uri);
     if (!ep.port)
-      return make_error(vast::ec::invalid_configuration, "endpoint does not "
-                                                         "specify port");
+      return caf::make_error(vast::ec::invalid_configuration,
+                             "endpoint does not "
+                             "specify port");
     if (ep.port->type() == port::unknown) {
       using inputs = vast::format::reader::inputs;
       if constexpr (Reader::defaults::input == inputs::inet) {
@@ -141,8 +143,8 @@ make_source(const Actor& self, caf::actor_system& sys, const invocation& inv,
                    ep.host + ":" + to_string(*ep.port));
     switch (ep.port->type()) {
       default:
-        return make_error(vast::ec::unimplemented,
-                          "port type not supported:", ep.port->type());
+        return caf::make_error(vast::ec::unimplemented,
+                               "port type not supported:", ep.port->type());
       case port::udp:
         udp_port = ep.port->number();
         break;
@@ -158,7 +160,7 @@ make_source(const Actor& self, caf::actor_system& sys, const invocation& inv,
       VAST_INFO_ANON(reader->name(), "reads data from", *file);
   }
   if (!reader)
-    return make_error(ec::invalid_result, "failed to spawn reader");
+    return caf::make_error(ec::invalid_result, "failed to spawn reader");
   if (slice_size == std::numeric_limits<decltype(slice_size)>::max())
     VAST_VERBOSE_ANON(reader->name(), "produces", encoding, "table slices");
   else

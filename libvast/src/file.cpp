@@ -39,16 +39,17 @@ file::~file() {
 
 caf::expected<void> file::open(open_mode mode, bool append) {
   if (is_open_)
-    return make_error(ec::filesystem_error, "file already open");
+    return caf::make_error(ec::filesystem_error, "file already open");
   if (mode == read_only && append)
-    return make_error(ec::filesystem_error, "cannot open file in read and "
-                                            "append mode simultaneously");
+    return caf::make_error(ec::filesystem_error, "cannot open file in read and "
+                                                 "append mode simultaneously");
 #if VAST_POSIX
   // Support reading from STDIN and writing to STDOUT.
   if (path_ == "-") {
     if (mode == read_write)
-      return make_error(ec::filesystem_error, "cannot open - in read/write "
-                                              "mode");
+      return caf::make_error(ec::filesystem_error,
+                             "cannot open - in read/write "
+                             "mode");
     handle_ = ::fileno(mode == read_only ? stdin : stdout);
     is_open_ = true;
     return {};
@@ -56,7 +57,7 @@ caf::expected<void> file::open(open_mode mode, bool append) {
   int flags = 0;
   switch (mode) {
     case invalid:
-      return make_error(ec::filesystem_error, "invalid open mode");
+      return caf::make_error(ec::filesystem_error, "invalid open mode");
     case read_write:
       flags = O_CREAT | O_RDWR;
       break;
@@ -72,18 +73,19 @@ caf::expected<void> file::open(open_mode mode, bool append) {
   errno = 0;
   if (mode != read_only && !exists(path_.parent())) {
     if (auto err = mkdir(path_.parent()))
-      return make_error(ec::filesystem_error,
-                        "failed to create parent directory: ", err.context());
+      return caf::make_error(
+        ec::filesystem_error,
+        "failed to create parent directory: ", err.context());
   }
   handle_ = ::open(path_.str().data(), flags, 0644);
   if (handle_ != -1) {
     is_open_ = true;
     return {};
   }
-  return make_error(ec::filesystem_error,
-                    "failed in open(2):", std::strerror(errno));
+  return caf::make_error(ec::filesystem_error,
+                         "failed in open(2):", std::strerror(errno));
 #else
-  return make_error(ec::filesystem_error, "not yet implemented");
+  return caf::make_error(ec::filesystem_error, "not yet implemented");
 #endif // VAST_POSIX
 }
 
@@ -102,18 +104,18 @@ bool file::is_open() const {
 
 caf::expected<size_t> file::read(void* sink, size_t bytes) {
   if (!is_open_)
-    return make_error(ec::filesystem_error, "file is not open", path_);
+    return caf::make_error(ec::filesystem_error, "file is not open", path_);
   return detail::read(handle_, sink, bytes);
 }
 
 caf::error file::write(const void* source, size_t bytes) {
   if (!is_open_)
-    return make_error(ec::filesystem_error, "file is not open", path_);
+    return caf::make_error(ec::filesystem_error, "file is not open", path_);
   auto count = detail::write(handle_, source, bytes);
   if (!count)
     return count.error();
   if (*count != bytes)
-    return make_error(ec::filesystem_error, "incomplete read", path_);
+    return caf::make_error(ec::filesystem_error, "incomplete read", path_);
   return caf::none;
 }
 

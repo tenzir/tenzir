@@ -78,9 +78,9 @@ struct convert {
     using value_type = type_to_data<T>;
     value_type x;
     if (!make_parser<value_type>{}(s, x))
-      return make_error(ec::parse_error, "unable to parse",
-                        caf::detail::pretty_type_name(typeid(value_type)), ":",
-                        s);
+      return caf::make_error(ec::parse_error, "unable to parse",
+                             caf::detail::pretty_type_name(typeid(value_type)),
+                             ":", s);
     return x;
   }
 
@@ -88,7 +88,7 @@ struct convert {
   operator()(const json::string& s, const enumeration_type& e) const {
     auto i = std::find(e.fields.begin(), e.fields.end(), s);
     if (i == e.fields.end())
-      return make_error(ec::parse_error, "invalid:", s);
+      return caf::make_error(ec::parse_error, "invalid:", s);
     return detail::narrow_cast<enumeration>(std::distance(e.fields.begin(), i));
   }
 
@@ -126,14 +126,16 @@ struct convert {
   operator()(const json::string& str, const bool_type&) const {
     if (bool x; parsers::json_boolean(str, x))
       return x;
-    return make_error(ec::convert_error, "cannot convert from", str, "to bool");
+    return caf::make_error(ec::convert_error, "cannot convert from", str,
+                           "to bool");
   }
 
   caf::expected<data>
   operator()(const json::string& str, const real_type&) const {
     if (real x; parsers::json_number(str, x))
       return x;
-    return make_error(ec::convert_error, "cannot convert from", str, "to real");
+    return caf::make_error(ec::convert_error, "cannot convert from", str,
+                           "to real");
   }
 
   caf::expected<data>
@@ -144,7 +146,8 @@ struct convert {
       VAST_WARNING_ANON("json-reader narrowed", str, "to type int");
       return detail::narrow_cast<integer>(x);
     }
-    return make_error(ec::convert_error, "cannot convert from", str, "to int");
+    return caf::make_error(ec::convert_error, "cannot convert from", str,
+                           "to int");
   }
 
   caf::expected<data>
@@ -155,8 +158,8 @@ struct convert {
       VAST_WARNING_ANON("json-reader narrowed", str, "to type count");
       return detail::narrow_cast<count>(x);
     }
-    return make_error(ec::convert_error, "cannot convert from", str,
-                      "to count");
+    return caf::make_error(ec::convert_error, "cannot convert from", str,
+                           "to count");
   }
 
   template <class T, class U>
@@ -166,9 +169,9 @@ struct convert {
       // `null`, we always want to return VAST `nil`.
       return caf::none;
     } else {
-      return make_error(ec::convert_error,
-                        caf::detail::pretty_type_name(typeid(T)), "to",
-                        caf::detail::pretty_type_name(typeid(U)));
+      return caf::make_error(ec::convert_error,
+                             caf::detail::pretty_type_name(typeid(T)), "to",
+                             caf::detail::pretty_type_name(typeid(U)));
     }
   }
 };
@@ -224,21 +227,22 @@ caf::error add(table_slice_builder& builder, const vast::json::object& xs,
     // Non-existing fields are treated as empty (unset).
     if (!i) {
       if (!builder.add(make_data_view(caf::none)))
-        return make_error(ec::unspecified, "failed to add caf::none to table "
-                                           "slice builder");
+        return caf::make_error(ec::unspecified,
+                               "failed to add caf::none to table "
+                               "slice builder");
       continue;
     }
     auto x = caf::visit(convert{}, *i, field.type());
     if (!x) {
       if (!err)
-        err = make_error(ec::convert_error);
+        err = caf::make_error(ec::convert_error);
       err.context() += x.error().context();
       err.context() += caf::make_message(field.key(), "is", to_string(*i), ";");
       x = caf::none;
     }
     if (!builder.add(make_data_view(*x)))
-      return make_error(ec::type_clash, "unexpected type", field.key(), ":",
-                        to_string(*i));
+      return caf::make_error(ec::type_clash, "unexpected type", field.key(),
+                             ":", to_string(*i));
   }
   return err;
 }

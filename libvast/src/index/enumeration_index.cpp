@@ -52,11 +52,11 @@ caf::expected<ids>
 enumeration_index::lookup_impl(relational_operator op, data_view d) const {
   auto f = detail::overload{
     [&](auto x) -> caf::expected<ids> {
-      return make_error(ec::type_clash, materialize(x));
+      return caf::make_error(ec::type_clash, materialize(x));
     },
     [&](view<enumeration> x) -> caf::expected<ids> {
       if (op == in || op == not_in)
-        return make_error(ec::unsupported_operator, op);
+        return caf::make_error(ec::unsupported_operator, op);
       return index_.lookup(op, x);
     },
     [&](view<list> xs) { return detail::container_lookup(*this, op, xs); },

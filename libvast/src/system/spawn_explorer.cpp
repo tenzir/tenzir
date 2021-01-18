@@ -40,31 +40,32 @@ caf::error explorer_validate_args(const caf::settings& args) {
   auto after_arg = caf::get_if<std::string>(&args, "vast.explore.after");
   auto by_arg = caf::get_if(&args, "vast.explore.by");
   if (!before_arg && !after_arg && !by_arg)
-    return make_error(ec::invalid_configuration, "At least one of '--before', "
-                                                 "'--after', or '--by' must be "
-                                                 "present.");
+    return caf::make_error(ec::invalid_configuration,
+                           "At least one of '--before', "
+                           "'--after', or '--by' must be "
+                           "present.");
   vast::duration before = vast::duration{0s};
   vast::duration after = vast::duration{0s};
   if (before_arg) {
     auto d = to<vast::duration>(*before_arg);
     if (!d)
-      return make_error(ec::invalid_argument, "Could not parse", *before_arg,
-                        "as duration.");
+      return caf::make_error(ec::invalid_argument, "Could not parse",
+                             *before_arg, "as duration.");
     before = *d;
   }
   if (after_arg) {
     auto d = to<vast::duration>(*after_arg);
     if (!d)
-      return make_error(ec::invalid_argument, "Could not parse", *after_arg,
-                        "as duration.");
+      return caf::make_error(ec::invalid_argument, "Could not parse",
+                             *after_arg, "as duration.");
     after = *d;
   }
   if (!by_arg) {
     if (before <= 0s && after <= 0s)
-      return make_error(ec::invalid_argument,
-                        "At least one of '--before' or '--after' must be "
-                        "greater than 0 "
-                        "if no spatial constraint was specified.");
+      return caf::make_error(ec::invalid_argument,
+                             "At least one of '--before' or '--after' must be "
+                             "greater than 0 "
+                             "if no spatial constraint was specified.");
   }
   return caf::none;
 }

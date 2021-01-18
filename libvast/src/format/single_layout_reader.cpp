@@ -39,7 +39,7 @@ caf::error single_layout_reader::finish(consumer& f, caf::error result) {
     auto slice = builder_->finish();
     // Override error in case we encounter an error in the builder.
     if (slice.encoding() == table_slice_encoding::none)
-      return make_error(ec::parse_error, "unable to finish current slice");
+      return caf::make_error(ec::parse_error, "unable to finish current slice");
     f(std::move(slice));
   }
   return result;

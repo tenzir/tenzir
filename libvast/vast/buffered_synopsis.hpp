@@ -103,14 +103,14 @@ public:
   }
 
   caf::error serialize(caf::serializer&) const override {
-    return make_error(ec::logic_error, "attempted to serialize a "
-                                       "buffered_string_synopsis; did you "
-                                       "forget to shrink?");
+    return caf::make_error(ec::logic_error, "attempted to serialize a "
+                                            "buffered_string_synopsis; did you "
+                                            "forget to shrink?");
   }
 
   caf::error deserialize(caf::deserializer&) override {
-    return make_error(ec::logic_error, "attempted to deserialize a "
-                                       "buffered_string_synopsis");
+    return caf::make_error(ec::logic_error, "attempted to deserialize a "
+                                            "buffered_string_synopsis");
   }
 
   bool equals(const synopsis& other) const noexcept override {

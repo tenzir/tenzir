@@ -128,9 +128,9 @@ namespace {
 caf::expected<path> objectpath_dynamic(const void* addr) {
   Dl_info info;
   if (!dladdr(addr, &info))
-    return make_error(ec::unspecified, "failed to execute dladdr()");
+    return caf::make_error(ec::unspecified, "failed to execute dladdr()");
   if (!info.dli_fname)
-    return make_error(ec::unspecified, "addr not in an mmapped region");
+    return caf::make_error(ec::unspecified, "addr not in an mmapped region");
   // FIXME: On Linux, if addr is inside the main executable,
   // dli_fname seems to be the same argv[0] instead of the full path.
   // We should detect and return an error in that case.
@@ -142,14 +142,14 @@ caf::expected<path> objectpath_static() {
   struct stat sb;
   auto self = "/proc/self/exe";
   if (lstat(self, &sb) == -1)
-    return make_error(ec::unspecified, "lstat() returned with error");
+    return caf::make_error(ec::unspecified, "lstat() returned with error");
   auto size = sb.st_size ? sb.st_size + 1 : PATH_MAX;
   std::vector<char> buf(size);
   if (readlink(self, buf.data(), size) == -1)
-    return make_error(ec::unspecified, "readlink() returned with error");
+    return caf::make_error(ec::unspecified, "readlink() returned with error");
   return path{buf.data()};
 #else
-  return make_error(ec::unimplemented);
+  return caf::make_error(ec::unimplemented);
 #endif
 }
 

@@ -60,27 +60,26 @@ protected:
     event e;
     for (size_t events = 0; events < max_events; ++events) {
       if (lines_->done())
-        return finish(f, make_error(ec::end_of_input, "input exhausted"));
+        return finish(f, caf::make_error(ec::end_of_input, "input exhausted"));
       if (!parser_(lines_->get(), e))
-        return finish(f, make_error(ec::parse_error, "line",
-                                    lines_->line_number()));
+        return finish(f, caf::make_error(ec::parse_error, "line",
+                                         lines_->line_number()));
       if (builder_ == nullptr || builder_->layout() != e.type()) {
         VAST_ASSERT(caf::holds_alternative<record_type>(e.type()));
         if (builder_ != nullptr)
           if (auto err = finish(f))
             return err;
         if (!reset_builder(caf::get<record_type>(e.type())))
-          return make_error(ec::parse_error,
-                            "unable to create a builder for layout at line",
-                            lines_->line_number());
+          return caf::make_error(
+            ec::parse_error, "unable to create a builder for layout at line",
+            lines_->line_number());
       }
       VAST_ASSERT(builder_ != nullptr);
       if (!builder_->recursive_add(e.data(), e.type()))
-        return finish(f,
-                      make_error(ec::parse_error,
-                                 "recursive_add failed to add content at line",
-                                 lines_->line_number(),
-                                 std::string{lines_->get()}));
+        return finish(f, caf::make_error(
+                           ec::parse_error,
+                           "recursive_add failed to add content at line",
+                           lines_->line_number(), std::string{lines_->get()}));
       if (builder_->rows() == max_slice_size)
         if (auto err = finish(f))
           return err;

@@ -226,8 +226,8 @@ private:
                 result.emplace_back(find_digest(x));
               return result;
             } else {
-              return make_error(ec::type_clash, "expected list on RHS",
-                                materialize(x));
+              return caf::make_error(ec::type_clash, "expected list on RHS",
+                                     materialize(x));
             }
           },
         },
@@ -245,7 +245,7 @@ private:
       };
       return op == in ? scan(in_pred) : scan(not_in_pred);
     }
-    return make_error(ec::unsupported_operator, op);
+    return caf::make_error(ec::unsupported_operator, op);
   }
 
   bool immutable() const {

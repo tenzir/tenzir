@@ -217,7 +217,7 @@ std::vector<predicate> predicatizer::operator()(const predicate& pred) const {
 }
 
 caf::expected<void> validator::operator()(caf::none_t) {
-  return make_error(ec::syntax_error, "nil expression is invalid");
+  return caf::make_error(ec::syntax_error, "nil expression is invalid");
 }
 
 caf::expected<void> validator::operator()(const conjunction& c) {
@@ -250,9 +250,9 @@ caf::expected<void> validator::operator()(const predicate& p) {
       try {
         [[maybe_unused]] auto r = std::regex{pat->string()};
       } catch (const std::regex_error& err) {
-        return make_error(ec::syntax_error,
-                          "failed to create regular expression from pattern",
-                          pat->string(), err.what());
+        return caf::make_error(
+          ec::syntax_error, "failed to create regular expression from pattern",
+          pat->string(), err.what());
       }
   return caf::visit(*this, p.lhs, p.rhs);
 }
@@ -262,22 +262,23 @@ operator()(const attribute_extractor& ex, const data& d) {
   if (ex.attr == atom::type_v
       && !(caf::holds_alternative<std::string>(d)
            || caf::holds_alternative<pattern>(d)))
-    return make_error(ec::syntax_error,
-                      "type attribute extractor requires string or pattern "
-                      "operand",
-                      ex.attr, op_, d);
+    return caf::make_error(ec::syntax_error,
+                           "type attribute extractor requires string or "
+                           "pattern "
+                           "operand",
+                           ex.attr, op_, d);
   else if (ex.attr == atom::timestamp_v && !caf::holds_alternative<time>(d))
-    return make_error(ec::syntax_error,
-                      "time attribute extractor requires timestamp operand",
-                      ex.attr, op_, d);
+    return caf::make_error(
+      ec::syntax_error, "time attribute extractor requires timestamp operand",
+      ex.attr, op_, d);
   return caf::no_error;
 }
 
 caf::expected<void> validator::
 operator()(const type_extractor& ex, const data& d) {
   if (!compatible(ex.type, op_, d))
-    return make_error(ec::syntax_error, "type extractor type check failure",
-                      ex.type, op_, d);
+    return caf::make_error(
+      ec::syntax_error, "type extractor type check failure", ex.type, op_, d);
   return caf::no_error;
 }
 
@@ -351,7 +352,7 @@ type_resolver::operator()(const attribute_extractor& ex, const data& d) {
     // Perform a basic type check. We could make it a pre-condition that this
     // should have been tested earlier.
     if (!caf::holds_alternative<time>(d))
-      return make_error(ec::type_clash, ex.attr, op_, d);
+      return caf::make_error(ec::type_clash, ex.attr, op_, d);
   } else {
     // We're leaving all other attributes alone, because they may operate at a
     // different granularity (e.g., #type).
@@ -387,7 +388,7 @@ type_resolver::operator()(const field_extractor& ex, const data& d) {
       auto t = r->at(offset);
       VAST_ASSERT(t);
       if (!compatible(*t, op_, d))
-        return make_error(ec::type_clash, *t, op_, d);
+        return caf::make_error(ec::type_clash, *t, op_, d);
     }
     for (auto& offset : suffixes) {
       auto t = r->at(offset);
@@ -397,7 +398,7 @@ type_resolver::operator()(const field_extractor& ex, const data& d) {
     // Second, try to interpret the field as the name of a single type.
   } else if (ex.field == type_.name()) {
     if (!compatible(type_, op_, d))
-      return make_error(ec::type_clash, type_, op_, d);
+      return caf::make_error(ec::type_clash, type_, op_, d);
     auto x = data_extractor{type_, {}};
     connective.emplace_back(predicate{std::move(x), op_, d});
   }

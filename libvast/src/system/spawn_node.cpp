@@ -43,9 +43,9 @@ spawn_node(caf::scoped_actor& self, const caf::settings& opts) {
   auto abs_dir = path{db_dir}.complete();
   if (!exists(abs_dir)) {
     if (auto err = mkdir(abs_dir))
-      return make_error(ec::filesystem_error,
-                        "unable to create db-directory:", abs_dir.str(),
-                        err.context());
+      return caf::make_error(ec::filesystem_error,
+                             "unable to create db-directory:", abs_dir.str(),
+                             err.context());
   }
   // Write VERSION file if it doesnt exist yet. Note that an empty db dir
   // often already exists before the node is initialized, e.g., when the log
@@ -56,13 +56,13 @@ spawn_node(caf::scoped_actor& self, const caf::settings& opts) {
     VAST_INFO_ANON("Cannot start VAST, breaking changes detected in the "
                    "database directory");
     auto reasons = describe_breaking_changes_since(version);
-    return make_error(
+    return caf::make_error(
       ec::breaking_change,
       "breaking changes in the current database directory:", reasons);
   }
   if (!abs_dir.is_writable())
-    return make_error(ec::filesystem_error,
-                      "unable to write to db-directory:", abs_dir.str());
+    return caf::make_error(ec::filesystem_error,
+                           "unable to write to db-directory:", abs_dir.str());
   // Acquire PID lock.
   auto pid_file = abs_dir / "pid.lock";
   VAST_DEBUG_ANON(__func__, "acquires PID lock", pid_file.str());

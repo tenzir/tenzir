@@ -43,9 +43,9 @@ spawn_counter(system::node_actor* self, system::spawn_arguments& args) {
   auto [index, archive]
     = self->state.registry.find_by_label("index", "archive");
   if (!index)
-    return make_error(ec::missing_component, "index");
+    return caf::make_error(ec::missing_component, "index");
   if (!archive)
-    return make_error(ec::missing_component, "archive");
+    return caf::make_error(ec::missing_component, "archive");
   auto estimate = caf::get_or(args.inv.options, "vast.count.estimate", false);
   auto handle = self->spawn(counter, *expr, caf::actor_cast<index_actor>(index),
                             caf::actor_cast<archive_actor>(archive), estimate);

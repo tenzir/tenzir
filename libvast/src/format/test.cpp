@@ -48,7 +48,8 @@ caf::expected<distribution> make_distribution(const type& t) {
   double p0, p1;
   auto tie = std::tie(name, p0, p1);
   if (!parser(*i->value, tie))
-    return make_error(ec::parse_error, "invalid distribution specification");
+    return caf::make_error(ec::parse_error, "invalid distribution "
+                                            "specification");
   if (name == "uniform") {
     if (holds_alternative<integer_type>(t))
       return {std::uniform_int_distribution<integer>{static_cast<integer>(p0),
@@ -64,7 +65,7 @@ caf::expected<distribution> make_distribution(const type& t) {
     return {std::normal_distribution<long double>{p0, p1}};
   if (name == "pareto")
     return {detail::pareto_distribution<long double>{p0, p1}};
-  return make_error(ec::parse_error, "unknown distribution", name);
+  return caf::make_error(ec::parse_error, "unknown distribution", name);
 }
 
 struct initializer {
@@ -253,7 +254,7 @@ void reader::reset(std::unique_ptr<std::istream>) {
 
 caf::error reader::schema(vast::schema sch) {
   if (sch.empty())
-    return make_error(ec::format_error, "empty schema");
+    return caf::make_error(ec::format_error, "empty schema");
   std::unordered_map<type, blueprint> blueprints;
   auto subset = vast::schema{};
   for (auto& t : sch) {
@@ -264,13 +265,13 @@ caf::error reader::schema(vast::schema sch) {
     if (auto bp = make_blueprint(t))
       blueprints.emplace(t, std::move(*bp));
     else
-      return make_error(ec::format_error, "failed to create blueprint", t);
+      return caf::make_error(ec::format_error, "failed to create blueprint", t);
     if (auto ptr = builder(t); ptr == nullptr)
-      return make_error(ec::format_error,
-                        "failed to create table slize builder", t);
+      return caf::make_error(ec::format_error,
+                             "failed to create table slize builder", t);
   }
   if (subset.empty())
-    return make_error(ec::format_error, "no test type in schema");
+    return caf::make_error(ec::format_error, "no test type in schema");
   schema_ = std::move(subset);
   blueprints_ = std::move(blueprints);
   next_ = schema_.begin();
@@ -295,7 +296,7 @@ caf::error reader::read_impl(size_t max_events, size_t max_slice_size,
       return err;
   VAST_ASSERT(next_ != schema_.end());
   if (num_events_ == 0)
-    return make_error(ec::end_of_input, "completed generation of events");
+    return caf::make_error(ec::end_of_input, "completed generation of events");
   // Loop until we reach the `max_events` limit or exhaust the configured
   // `num_events_` threshold.
   size_t produced = 0;
@@ -311,8 +312,8 @@ caf::error reader::read_impl(size_t max_events, size_t max_slice_size,
       visit(default_randomizer{bp.distributions, generator_}, t, bp.data);
       if (!ptr->recursive_add(bp.data, t)) {
         VAST_ERROR(this, "failed to add blueprint data to slice builder");
-        return make_error(ec::format_error,
-                          "failed to add blueprint data to slice builder");
+        return caf::make_error(ec::format_error, "failed to add blueprint data "
+                                                 "to slice builder");
       }
     }
     // Emit table slice.
@@ -320,7 +321,8 @@ caf::error reader::read_impl(size_t max_events, size_t max_slice_size,
       return err;
     // Check for EOF and prepare for next iteration.
     if (num_events_ == rows)
-      return make_error(ec::end_of_input, "completed generation of events");
+      return caf::make_error(ec::end_of_input, "completed generation of "
+                                               "events");
     num_events_ -= rows;
     produced += rows;
     if (schema_.size() > 1) {

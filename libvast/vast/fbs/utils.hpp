@@ -78,7 +78,7 @@ template <class T, class Byte = uint8_t>
 caf::error deserialize_bytes(const flatbuffers::Vector<Byte>* v, T& x) {
   static_assert(detail::is_any_v<Byte, int8_t, uint8_t>);
   if (!v)
-    return make_error(ec::format_error, "no input");
+    return caf::make_error(ec::format_error, "no input");
   caf::binary_deserializer sink(
     nullptr, reinterpret_cast<const char*>(v->data()), v->size());
   if (auto error = sink(x))
@@ -137,7 +137,7 @@ template <class Flatbuffer, size_t Extent = dynamic_extent, class T>
 caf::error unwrap(span<const byte, Extent> xs, T& x) {
   if (auto flatbuf = as_flatbuffer<Flatbuffer>(xs))
     return unpack(*flatbuf, x);
-  return make_error(ec::unspecified, "flatbuffer verification failed");
+  return caf::make_error(ec::unspecified, "flatbuffer verification failed");
 }
 
 /// Unwraps a flatbuffer and returns a new object. This function works as the

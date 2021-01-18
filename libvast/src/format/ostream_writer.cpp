@@ -27,10 +27,10 @@ ostream_writer::~ostream_writer() {
 
 caf::expected<void> ostream_writer::flush() {
   if (out_ == nullptr)
-    return make_error(ec::format_error, "no output stream available");
+    return caf::make_error(ec::format_error, "no output stream available");
   out_->flush();
   if (!*out_)
-    return make_error(ec::format_error, "failed to flush");
+    return caf::make_error(ec::format_error, "failed to flush");
   return caf::unit;
 }
 

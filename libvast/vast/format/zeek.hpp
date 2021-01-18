@@ -267,7 +267,7 @@ public:
   /// @param options The configuration options for the writer.
   explicit writer(const caf::settings& options);
 
-  error write(const table_slice& e) override;
+  caf::error write(const table_slice& e) override;
 
   caf::expected<void> flush() override;
 

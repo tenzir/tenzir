@@ -65,7 +65,7 @@ public:
     t.stop(events);
   }
 
-  void finalize(const error& err) override {
+  void finalize(const caf::error& err) override {
     VAST_DEBUG(state.self, "stopped with message:", render(err));
   }
 
@@ -123,8 +123,8 @@ caf::error importer_state::read_state() {
     std::ifstream state_file{to_string(file)};
     state_file >> current.end;
     if (!state_file)
-      return make_error(ec::parse_error, "unable to read importer state file",
-                        file.str());
+      return caf::make_error(ec::parse_error,
+                             "unable to read importer state file", file.str());
     state_file >> current.next;
     if (!state_file) {
       VAST_WARNING(self, "did not find next ID position in state file; "

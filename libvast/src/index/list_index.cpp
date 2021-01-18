@@ -85,7 +85,7 @@ bool list_index::append_impl(data_view x, id pos) {
 caf::expected<ids>
 list_index::lookup_impl(relational_operator op, data_view x) const {
   if (!(op == ni || op == not_ni))
-    return make_error(ec::unsupported_operator, op);
+    return caf::make_error(ec::unsupported_operator, op);
   if (elements_.empty())
     return ids{};
   auto result = elements_[0]->lookup(equal, x);

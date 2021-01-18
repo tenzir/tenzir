@@ -90,7 +90,8 @@ caf::error render(output_iterator& out, const view<list>& xs) {
 }
 
 caf::error render(output_iterator&, const view<map>&) {
-  return make_error(ec::unimplemented, "CSV writer does not support map types");
+  return caf::make_error(ec::unimplemented, "CSV writer does not support map "
+                                            "types");
 }
 
 caf::error render(output_iterator& out, const view<data>& x) {
@@ -402,16 +403,17 @@ caf::expected<reader::parser_type> reader::read_header(std::string_view line) {
   auto b = line.begin();
   auto f = b;
   if (!p(f, line.end(), columns))
-    return make_error(ec::parse_error, "unable to parse csv header");
+    return caf::make_error(ec::parse_error, "unable to parse csv header");
   auto&& layout = make_layout(columns);
   if (!layout)
-    return make_error(ec::parse_error, "unable to derive a layout");
+    return caf::make_error(ec::parse_error, "unable to derive a layout");
   VAST_DEBUG_ANON("csv_reader derived layout", to_string(*layout));
   if (!reset_builder(*layout))
-    return make_error(ec::parse_error, "unable to create a builder for layout");
+    return caf::make_error(ec::parse_error, "unable to create a builder for "
+                                            "layout");
   auto parser = make_csv_parser<iterator_type>(*layout, builder_, opt_);
   if (!parser)
-    return make_error(ec::parse_error, "unable to generate a parser");
+    return caf::make_error(ec::parse_error, "unable to generate a parser");
   return *parser;
 }
 
@@ -439,7 +441,8 @@ caf::error reader::read_impl(size_t max_events, size_t max_slice_size,
   while (produced < max_events) {
     // EOF check.
     if (lines_->done())
-      return finish(callback, make_error(ec::end_of_input, "input exhausted"));
+      return finish(callback, caf::make_error(ec::end_of_input, "input "
+                                                                "exhausted"));
     if (batch_events_ > 0 && batch_timeout_ > reader_clock::duration::zero()
         && last_batch_sent_ + batch_timeout_ < reader_clock::now()) {
       VAST_DEBUG(this, "reached batch timeout");

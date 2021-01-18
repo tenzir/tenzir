@@ -111,7 +111,7 @@ pack(flatbuffers::FlatBufferBuilder& builder, const synopsis_ptr& synopsis,
     synopsis_builder.add_opaque_synopsis(opaque_synopsis);
     return synopsis_builder.Finish();
   }
-  return make_error(ec::logic_error, "unreachable");
+  return caf::make_error(ec::logic_error, "unreachable");
 }
 
 caf::error unpack(const fbs::synopsis::v0& synopsis, synopsis_ptr& ptr) {
@@ -129,7 +129,7 @@ caf::error unpack(const fbs::synopsis::v0& synopsis, synopsis_ptr& ptr) {
     if (auto error = sink(ptr))
       return error;
   } else {
-    return make_error(ec::format_error, "no synopsis type");
+    return caf::make_error(ec::format_error, "no synopsis type");
   }
   return caf::none;
 }

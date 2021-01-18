@@ -84,8 +84,8 @@ caf::expected<type> parse_type(std::string_view zeek_type) {
     auto open = zeek_type.find("[");
     auto close = zeek_type.rfind("]");
     if (open == std::string::npos || close == std::string::npos)
-      return make_error(ec::format_error, "missing container brackets:",
-                        std::string{zeek_type});
+      return caf::make_error(ec::format_error, "missing container brackets:",
+                             std::string{zeek_type});
     auto elem = parse_type(zeek_type.substr(open + 1, close - open - 1));
     if (!elem)
       return elem.error();
@@ -94,8 +94,8 @@ caf::expected<type> parse_type(std::string_view zeek_type) {
     t = list_type{*elem};
   }
   if (caf::holds_alternative<none_type>(t))
-    return make_error(ec::format_error, "failed to parse type: ",
-                      std::string{zeek_type});
+    return caf::make_error(ec::format_error,
+                           "failed to parse type: ", std::string{zeek_type});
   return t;
 }
 
@@ -259,7 +259,7 @@ caf::error reader::read_impl(size_t max_events, size_t max_slice_size,
   };
   // EOF check.
   if (lines_->done())
-    return make_error(ec::end_of_input, "input exhausted");
+    return caf::make_error(ec::end_of_input, "input exhausted");
   // Make sure we have a builder.
   if (builder_ == nullptr) {
     VAST_ASSERT(layout_.fields.empty());
@@ -269,12 +269,12 @@ caf::error reader::read_impl(size_t max_events, size_t max_slice_size,
     if (auto err = parse_header())
       return err;
     if (!reset_builder(layout_))
-      return make_error(ec::parse_error,
-                        "unable to create a bulider for parsed layout at",
-                        lines_->line_number());
+      return caf::make_error(ec::parse_error,
+                             "unable to create a bulider for parsed layout at",
+                             lines_->line_number());
     // EOF check.
     if (lines_->done())
-      return make_error(ec::end_of_input, "input exhausted");
+      return caf::make_error(ec::end_of_input, "input exhausted");
   }
   // Local buffer for parsing records.
   std::vector<data> xs;
@@ -283,7 +283,7 @@ caf::error reader::read_impl(size_t max_events, size_t max_slice_size,
   // Loop until reaching EOF, a timeout, or the configured limit of records.
   while (produced < max_events) {
     if (lines_->done())
-      return finish(f, make_error(ec::end_of_input, "input exhausted"));
+      return finish(f, caf::make_error(ec::end_of_input, "input exhausted"));
     if (batch_events_ > 0 && batch_timeout_ > reader_clock::duration::zero()
         && last_batch_sent_ + batch_timeout_ < reader_clock::now()) {
       VAST_DEBUG(this, "reached batch timeout");
@@ -307,9 +307,9 @@ caf::error reader::read_impl(size_t max_events, size_t max_slice_size,
       if (auto err = parse_header())
         return err;
       if (!reset_builder(layout_))
-        return make_error(ec::parse_error,
-                          "unable to create a bulider for parsed layout at",
-                          lines_->line_number());
+        return caf::make_error(
+          ec::parse_error, "unable to create a bulider for parsed layout at",
+          lines_->line_number());
     } else if (detail::starts_with(line, "#")) {
       // Ignore comments.
       VAST_DEBUG(this, "ignores comment at line", lines_->line_number());
@@ -337,15 +337,15 @@ caf::error reader::read_impl(size_t max_events, size_t max_slice_size,
         else if (is_empty(i))
           xs[i] = construct(layout_.fields[i].type);
         else if (!parsers_[i](fields[i], xs[i]))
-            return finish(f, make_error(ec::parse_error, "field", i, "line",
-                                        lines_->line_number(),
-                                        std::string{fields[i]}));
+          return finish(f, caf::make_error(ec::parse_error, "field", i, "line",
+                                           lines_->line_number(),
+                                           std::string{fields[i]}));
       }
       for (size_t i = 0; i < fields.size(); ++i) {
         if (!builder_->add(make_data_view(xs[i])))
-          return finish(f, make_error(ec::type_clash, "field", i, "line",
-                                      lines_->line_number(),
-                                      std::string{fields[i]}));
+          return finish(f, caf::make_error(ec::type_clash, "field", i, "line",
+                                           lines_->line_number(),
+                                           std::string{fields[i]}));
       }
       if (builder_->rows() == max_slice_size)
         if (auto err = finish(f))
@@ -365,17 +365,18 @@ parse_header_line(const std::string& line, const std::string& sep,
   auto s = detail::split(line, sep, "", 1);
   if (!(s.size() == 2
         && std::equal(prefix.begin(), prefix.end(), s[0].begin(), s[0].end())))
-    return make_error(ec::format_error, "got invalid header line: " + line);
+    return caf::make_error(ec::format_error,
+                           "got invalid header line: " + line);
   return std::string{s[1]};
 }
 
 caf::error reader::parse_header() {
   // Parse #separator.
   if (lines_->done())
-    return make_error(ec::format_error, "not enough header lines");
+    return caf::make_error(ec::format_error, "not enough header lines");
   auto pos = lines_->get().find("#separator ");
   if (pos != 0)
-    return make_error(ec::format_error, "invalid #separator line");
+    return caf::make_error(ec::format_error, "invalid #separator line");
   pos += 11;
   separator_.clear();
   while (pos != std::string::npos) {
@@ -401,18 +402,18 @@ caf::error reader::parse_header() {
   for (auto i = 0u; i < header.size(); ++i) {
     lines_->next();
     if (lines_->done())
-      return make_error(ec::format_error, "not enough header lines");
+      return caf::make_error(ec::format_error, "not enough header lines");
     auto& line = lines_->get();
     pos = line.find(prefixes[i]);
     if (pos != 0)
-      return make_error(ec::format_error, "invalid header line, expected",
-                        prefixes[i]);
+      return caf::make_error(ec::format_error, "invalid header line, expected",
+                             prefixes[i]);
     pos = line.find(separator_);
     if (pos == std::string::npos)
-      return make_error(ec::format_error, "invalid separator in header line",
-                        line);
+      return caf::make_error(ec::format_error,
+                             "invalid separator in header line", line);
     if (pos + separator_.size() >= line.size())
-      return make_error(ec::format_error, "missing header content:", line);
+      return caf::make_error(ec::format_error, "missing header content:", line);
     header[i] = line.substr(pos + separator_.size());
   }
   // Assign header values.
@@ -423,7 +424,8 @@ caf::error reader::parse_header() {
   auto fields = detail::split(header[5], separator_);
   auto types = detail::split(header[6], separator_);
   if (fields.size() != types.size())
-    return make_error(ec::format_error, "fields and types have different size");
+    return caf::make_error(ec::format_error, "fields and types have different "
+                                             "size");
   // TODO: Consider unflattening the incoming layout.
   std::vector<record_field> record_fields;
   proto_field_ = caf::none;
@@ -450,8 +452,9 @@ caf::error reader::parse_header() {
   if (auto t = schema_.find(layout_.name())) {
     auto r = caf::get_if<record_type>(t);
     if (!r)
-      return make_error(ec::format_error, "the zeek reader expects records for "
-                                          "the top level types in the schema");
+      return caf::make_error(ec::format_error,
+                             "the zeek reader expects records for "
+                             "the top level types in the schema");
     auto flat = flatten(*r);
     for (auto& f : flat.fields) {
       auto i = std::find_if(layout_.fields.begin(), layout_.fields.end(),
@@ -604,7 +607,7 @@ public:
       *out_ << "#close" << separator << time_factory{} << '\n';
   }
 
-  error write(const table_slice& slice) override {
+  caf::error write(const table_slice& slice) override {
     zeek_printer<std::back_insert_iterator<std::vector<char>>> p;
     return print<policy::flatten_layout>(
       p, slice, {std::string_view{&separator, 1}, "", "", ""});
@@ -644,8 +647,8 @@ caf::error writer::write(const table_slice& slice) {
         if (auto err = mkdir(dir_))
           return err;
       } else if (!dir_.is_directory()) {
-        return make_error(ec::format_error, "got existing non-directory path",
-                          dir_);
+        return caf::make_error(ec::format_error,
+                               "got existing non-directory path", dir_);
       }
       auto filename = dir_ / (layout.name() + ".log");
       auto fos = std::make_unique<std::ofstream>(filename.str());

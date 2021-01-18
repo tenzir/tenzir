@@ -60,7 +60,7 @@ run(caf::scoped_actor& self, archive_actor archive, const invocation& inv) {
   for (auto& c : inv.arguments) {
     auto i = to<count>(c);
     if (!i)
-      return make_error(ec::parse_error, c, "is not a positive integer");
+      return caf::make_error(ec::parse_error, c, "is not a positive integer");
     self->send(archive, to_ids(*i));
     bool waiting = true;
     self->receive_while(waiting)

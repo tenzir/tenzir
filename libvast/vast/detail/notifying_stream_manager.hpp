@@ -55,12 +55,12 @@ public:
     notify_listeners_if_clean(state(), *this);
   }
 
-  void input_closed(error reason) override {
+  void input_closed(caf::error reason) override {
     super::input_closed(std::move(reason));
     notify_listeners_if_clean(state(), *this);
   }
 
-  void finalize(const error& reason) override {
+  void finalize(const caf::error& reason) override {
     super::finalize(reason);
     state().notify_flush_listeners();
   }

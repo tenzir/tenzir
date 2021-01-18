@@ -142,7 +142,7 @@ private:
   lookup_impl(relational_operator op, data_view d) const override {
     auto f = detail::overload{
       [&](auto x) -> caf::expected<ids> {
-        return make_error(ec::type_clash, value_type{}, materialize(x));
+        return caf::make_error(ec::type_clash, value_type{}, materialize(x));
       },
       [&](view<bool> x) -> caf::expected<ids> { return bmi_.lookup(op, x); },
       [&](view<integer> x) -> caf::expected<ids> { return bmi_.lookup(op, x); },

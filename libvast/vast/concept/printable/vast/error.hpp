@@ -20,17 +20,17 @@
 namespace vast {
 
 struct error_printer : printer<error_printer> {
-  using attribute = error;
+  using attribute = caf::error;
 
   template <class Iterator>
-  bool print(Iterator& out, const error& e) const {
+  bool print(Iterator& out, const caf::error& e) const {
     auto msg = to_string(e);
     return printers::str.print(out, msg);
   }
 };
 
 template <>
-struct printer_registry<error> {
+struct printer_registry<caf::error> {
   using type = error_printer;
 };
 

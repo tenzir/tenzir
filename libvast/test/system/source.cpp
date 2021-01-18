@@ -47,7 +47,9 @@ caf::behavior test_sink(test_sink_type* self, caf::actor src) {
       [=](caf::unit_t&, table_slice slice) {
         self->state.slices.emplace_back(std::move(slice));
       },
-      [=](caf::unit_t&, const error&) { MESSAGE(self->name() << " is done"); });
+      [=](caf::unit_t&, const caf::error&) {
+        MESSAGE(self->name() << " is done");
+      });
   }};
 }
 

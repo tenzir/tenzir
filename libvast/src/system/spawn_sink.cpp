@@ -42,7 +42,7 @@ maybe_actor spawn_generic_sink(caf::local_actor* self, spawn_arguments& args,
                                std::string output_format) {
   // Bail out early for bogus invocations.
   if (caf::get_or(args.inv.options, "vast.node", false))
-    return make_error(ec::parse_error, "cannot start a local node");
+    return caf::make_error(ec::parse_error, "cannot start a local node");
   if (!args.empty())
     return unexpected_arguments(args);
   auto writer = format::writer::make(output_format, args.inv.options);
@@ -58,11 +58,11 @@ maybe_actor spawn_pcap_sink([[maybe_unused]] caf::local_actor* self,
   using defaults_t = defaults::export_::pcap;
   std::string category = defaults_t::category;
 #if !VAST_ENABLE_PCAP
-  return make_error(ec::unspecified, "not compiled with pcap support");
+  return caf::make_error(ec::unspecified, "not compiled with pcap support");
 #else // VAST_ENABLE_PCAP
   // Bail out early for bogus invocations.
   if (caf::get_or(args.inv.options, "vast.node", false))
-    return make_error(ec::parse_error, "cannot start a local node");
+    return caf::make_error(ec::parse_error, "cannot start a local node");
   if (!args.empty())
     return unexpected_arguments(args);
   auto writer = std::make_unique<format::pcap::writer>(args.inv.options);

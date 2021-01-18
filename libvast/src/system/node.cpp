@@ -86,7 +86,7 @@ thread_local node_actor* this_node;
 
 // Convenience function for wrapping an error into a CAF message.
 auto make_error_msg(ec code, std::string msg) {
-  return caf::make_message(make_error(code, std::move(msg)));
+  return caf::make_message(caf::make_error(code, std::move(msg)));
 }
 
 /// Helper function to determine whether a component can be spawned at most
@@ -189,8 +189,8 @@ caf::message dump_command(const invocation& inv, caf::actor_system&) {
   auto type_registry = caf::actor_cast<type_registry_actor>(
     self->state.registry.find_by_label("type-registry"));
   if (!type_registry)
-    return caf::make_message(make_error(ec::missing_component, //
-                                        "type-registry"));
+    return caf::make_message(caf::make_error(ec::missing_component, //
+                                             "type-registry"));
   caf::error request_error = caf::none;
   auto rp = self->make_response_promise();
   // The overload for 'request(...)' taking a 'std::chrono::duration' does not
@@ -286,7 +286,7 @@ spawn_component(node_actor* self, const invocation& inv,
   using caf::atom_uint;
   auto i = node_state::component_factory.find(inv.full_name);
   if (i == node_state::component_factory.end())
-    return make_error(ec::unspecified, "invalid spawn component");
+    return caf::make_error(ec::unspecified, "invalid spawn component");
   return i->second(self, args);
 }
 
@@ -301,7 +301,7 @@ caf::message kill_command(const invocation& inv, caf::actor_system&) {
   auto& label = *first;
   auto component = self->state.registry.find_by_label(label);
   if (!component) {
-    rp.deliver(make_error(ec::unspecified, "no such component: " + label));
+    rp.deliver(caf::make_error(ec::unspecified, "no such component: " + label));
   } else {
     self->demonitor(component);
     terminate<policy::parallel>(self, component)
@@ -619,12 +619,12 @@ caf::behavior node(node_actor* self, std::string name, path dir,
       // Check if the new component is a singleton.
       auto& registry = self->state.registry;
       if (is_singleton(type) && registry.find_by_label(type))
-        return make_error(ec::unspecified, "component already exists");
+        return caf::make_error(ec::unspecified, "component already exists");
       // Generate label
       auto label = generate_label(self, type);
       VAST_DEBUG(self, "generated new component label", label);
       if (!registry.add(component, type, label))
-        return make_error(ec::unspecified, "failed to add component");
+        return caf::make_error(ec::unspecified, "failed to add component");
       self->monitor(component);
       return atom::ok_v;
     },

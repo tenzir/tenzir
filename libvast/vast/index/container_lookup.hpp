@@ -56,7 +56,7 @@ container_lookup_impl(const Index& idx, relational_operator op,
         return result;
     }
   } else {
-    return make_error(ec::unsupported_operator, op);
+    return caf::make_error(ec::unsupported_operator, op);
   }
   return result;
 }
