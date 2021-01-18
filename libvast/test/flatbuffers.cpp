@@ -184,8 +184,10 @@ TEST(full partition roundtrip) {
     vast::system::posix_filesystem,
     directory); // `directory` is provided by the unit test fixture
   auto partition_uuid = vast::uuid::random();
-  auto partition = sys.spawn(vast::system::active_partition, partition_uuid, fs,
-                             caf::settings{}, caf::settings{});
+  auto sequence_number = 1ull;
+  auto partition
+    = sys.spawn(vast::system::active_partition, partition_uuid, sequence_number,
+                fs, caf::settings{}, caf::settings{});
   run();
   REQUIRE(partition);
   // Add data to the partition.

@@ -128,14 +128,6 @@ partition_synopsis& meta_index::at(const uuid& partition) {
   return synopses_.at(partition);
 }
 
-void meta_index::replace(const uuid& partition,
-                         std::unique_ptr<partition_synopsis> ps) {
-  auto it = synopses_.find(partition);
-  if (it != synopses_.end()) {
-    it->second.field_synopses_.swap(ps->field_synopses_);
-  }
-}
-
 std::vector<uuid> meta_index::lookup(const expression& expr) const {
   VAST_ASSERT(!caf::holds_alternative<caf::none_t>(expr));
   auto start = system::stopwatch::now();

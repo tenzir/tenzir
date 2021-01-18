@@ -38,11 +38,12 @@ using index_actor = caf::typed_actor<
   // Subscribes a FLUSH LISTENER to the INDEX.
   caf::reacts_to<atom::subscribe, atom::flush, wrapped_flush_listener>,
   // Evaluatates an expression.
-  caf::reacts_to<expression>,
+  caf::reacts_to<expression>, caf::reacts_to<expression, size_t>, // private
   // Queries PARTITION actors for a given query id.
   caf::reacts_to<uuid, uint32_t>,
   // Replaces the SYNOPSIS of the PARTITION witht he given partition id.
-  caf::reacts_to<atom::replace, uuid, std::shared_ptr<partition_synopsis>>,
+  caf::reacts_to<atom::replace, uuid, size_t,
+                 std::shared_ptr<partition_synopsis>>,
   // Erases the given events from the INDEX, and returns their ids.
   caf::replies_to<atom::erase, uuid>::with<ids>>
   // Conform to the protocol of the QUERY SUPERVISOR MASTER actor.

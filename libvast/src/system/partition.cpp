@@ -365,11 +365,12 @@ caf::error unpack(const fbs::partition::v0& x, partition_synopsis& ps) {
 
 active_partition_actor::behavior_type active_partition(
   active_partition_actor::stateful_pointer<active_partition_state> self,
-  uuid id, filesystem_actor filesystem, caf::settings index_opts,
-  caf::settings synopsis_opts) {
+  uuid id, size_t sequence_number, filesystem_actor filesystem,
+  caf::settings index_opts, caf::settings synopsis_opts) {
   self->state.self = self;
   self->state.name = "partition-" + to_string(id);
   self->state.id = id;
+  self->state.sequence_number = sequence_number;
   self->state.offset = invalid_id;
   self->state.events = 0;
   self->state.filesystem = std::move(filesystem);
@@ -561,7 +562,7 @@ active_partition_actor::behavior_type active_partition(
               // Relinquish ownership and send the shrinked synopsis to the index.
               if (self->state.index) {
                 self->send(self->state.index, atom::replace_v, self->state.id,
-                           self->state.synopsis);
+                           self->state.sequence_number, self->state.synopsis);
                 self->state.synopsis.reset();
               }
               self->state.persistence_promise.delegate(

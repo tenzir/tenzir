@@ -70,18 +70,12 @@ struct partition_synopsis {
 class meta_index {
 public:
   /// Adds all data from a table slice belonging to a given partition to the
-  /// index.
-  /// @param slice The table slice to extract data from.
-  /// @param partition The partition ID that *slice* belongs to.
+  /// index. Only used in unit tests.
+  // TODO: Remove this and use `merge()` in unit tests instead.
   void add(const uuid& partition, const table_slice& slice);
 
-  /// Adds new synopses for a partition in bulk. Used when
-  /// re-building the meta index state at startup.
+  /// Adds new synopses for a partition in bulk.
   void merge(const uuid& partition, partition_synopsis&&);
-
-  /// Replaces an existing partition synopsis. Does nothing
-  /// if `partition` does not exist as a key.
-  void replace(const uuid& partition, std::unique_ptr<partition_synopsis>);
 
   /// Returns the partition synopsis for a specific partition.
   /// Note that most callers will prefer to use `lookup()` instead.

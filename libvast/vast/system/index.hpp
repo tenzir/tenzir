@@ -178,6 +178,8 @@ struct index_state {
   // Then (assuming the query interface for both types of partition stays
   // identical) we could just use the same cache for unpersisted partitions and
   // unpin them after they're safely on disk.
+  // TODO: We should unify this with the meta index handling, so we mark a
+  // partition as persisted at the same time we receive the partition synopsis.
   std::unordered_map<uuid, partition_actor> unpersisted;
 
   /// The set of passive (read-only) partitions currently loaded into memory.
@@ -187,6 +189,12 @@ struct index_state {
 
   /// The set of partitions that exist on disk.
   std::unordered_set<uuid> persisted_partitions;
+
+  /// The sequence number of the current active partition.
+  size_t sequence_number;
+
+  /// The sequence number of the most recently received partition synopsis.
+  size_t received_sequence_number;
 
   /// The maximum number of events that a partition can hold.
   size_t partition_capacity;

@@ -50,6 +50,7 @@
 #include "vast/value_index.hpp"
 
 #include <caf/error.hpp>
+#include <caf/typed_response_promise.hpp>
 
 #include <flatbuffers/flatbuffers.h>
 
@@ -399,6 +400,8 @@ index(index_actor::stateful_pointer<index_state> self,
   self->state.filesystem = std::move(filesystem);
   self->state.dir = dir;
   self->state.partition_capacity = partition_capacity;
+  self->state.sequence_number = 0;
+  self->state.received_sequence_number = 0;
   self->state.taste_partitions = taste_partitions;
   self->state.inmem_partitions.factory().filesystem() = self->state.filesystem;
   self->state.inmem_partitions.resize(max_inmem_partitions);
@@ -418,8 +421,10 @@ index(index_actor::stateful_pointer<index_state> self,
     auto id = uuid::random();
     caf::settings index_opts;
     index_opts["cardinality"] = partition_capacity;
-    auto part = self->spawn(active_partition, id, self->state.filesystem,
-                            index_opts, self->state.meta_idx.factory_options());
+    auto part_sequence_number = ++self->state.sequence_number;
+    auto part = self->spawn(active_partition, id, part_sequence_number,
+                            self->state.filesystem, index_opts,
+                            self->state.meta_idx.factory_options());
     auto slot = self->state.stage->add_outbound_path(part);
     self->state.active_partition.actor = part;
     self->state.active_partition.stream_slot = slot;
@@ -472,7 +477,6 @@ index(index_actor::stateful_pointer<index_state> self,
         create_active_partition();
       }
       out.push(x);
-      self->state.meta_idx.add(active.id, x);
       if (active.capacity == self->state.partition_capacity
           && x.rows() > active.capacity) {
         VAST_WARNING(self, "got table slice with", x.rows(),
@@ -555,6 +559,11 @@ index(index_actor::stateful_pointer<index_state> self,
       self->state.add_flush_listener(listener.actor);
     },
     [=](vast::expression expr) -> caf::result<void> {
+      return self->delegate(static_cast<index_actor>(self), std::move(expr),
+                            self->state.sequence_number);
+    },
+    [=](vast::expression expr,
+        size_t target_sequence_number) -> caf::result<void> {
       // TODO: This check is not required technically, but we use the query
       // supervisor availability to rate-limit meta-index lookups. Do we really
       // need this?
@@ -583,8 +592,15 @@ index(index_actor::stateful_pointer<index_state> self,
         respond(caf::sec::invalid_argument);
         return {};
       }
+      // TODO: This assumes partition synopses arrive in order in the index,
+      // a safer algorithm would be to tie this to membership in
+      // `self->unpersisted`. (see also note in index.hpp)
+      if (self->state.received_sequence_number + 1 < target_sequence_number)
+        return caf::skip;
       // Get all potentially matching partitions.
       auto candidates = self->state.meta_idx.lookup(expr);
+      if (self->state.received_sequence_number < target_sequence_number)
+        candidates.push_back(self->state.active_partition.id);
       if (candidates.empty()) {
         VAST_DEBUG(self, "returns without result: no partitions qualify");
         no_result();
@@ -646,12 +662,13 @@ index(index_actor::stateful_pointer<index_state> self,
                  query_state.partitions.size(), "partitions remaining");
       self->send(*worker, query_state.expression, std::move(actors), client);
       // Cleanup if we exhausted all candidates.
-      if (query_state.partitions.empty())
+      if (query_state.partitions.empty()) {
         self->state.pending.erase(iter);
+      }
       return {};
     },
-    [=](atom::replace, uuid partition_id,
-        std::shared_ptr<partition_synopsis>& ps) {
+    [=](atom::replace, uuid partition_id, size_t sequence_number,
+        std::shared_ptr<partition_synopsis>& ps) -> caf::result<void> {
       // The idea is that its safe to move from a `shared_ptr&` here since
       // the unique owner of the pointer will be the message (which doesnt
       // need it anymore).
@@ -659,13 +676,16 @@ index(index_actor::stateful_pointer<index_state> self,
       // to be copy constructible.
       VAST_DEBUG(self, "replaces synopsis for partition", partition_id);
       if (!ps.unique()) {
-        VAST_WARNING(self, "ignores partition synopsis that is still in use");
-        // TODO: Should this return caf::skip?
-        return;
+        VAST_DEBUG(self, "skips partition synopsis that is still in use");
+        return caf::skip;
       }
-      auto pu = std::make_unique<partition_synopsis>();
-      std::swap(*ps, *pu);
-      self->state.meta_idx.replace(partition_id, std::move(pu));
+      self->state.meta_idx.merge(partition_id, std::move(*ps));
+      auto& current = self->state.received_sequence_number;
+      if (sequence_number + 1 != current)
+        VAST_WARNING(self, "received out of order sequence number",
+                     sequence_number, "when current is", current);
+      current = std::max(current, sequence_number);
+      return {};
     },
     [=](atom::erase, uuid partition_id) -> caf::result<ids> {
       VAST_VERBOSE(self, "erases partition", partition_id);

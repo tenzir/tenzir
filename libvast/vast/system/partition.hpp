@@ -70,6 +70,9 @@ struct active_partition_state {
   /// Uniquely identifies this partition.
   uuid id;
 
+  /// The sequence number of this partition, as assigned by the index.
+  size_t sequence_number;
+
   /// The streaming stage.
   partition_stream_stage_ptr stage;
 
@@ -204,8 +207,8 @@ caf::error unpack(const fbs::partition::v0& x, partition_synopsis& y);
 /// @param synopsis_opts Settings that are forwarded when creating synopses.
 active_partition_actor::behavior_type active_partition(
   active_partition_actor::stateful_pointer<active_partition_state> self,
-  uuid id, filesystem_actor filesystem, caf::settings index_opts,
-  caf::settings synopsis_opts);
+  uuid id, size_t sequence_number, filesystem_actor filesystem,
+  caf::settings index_opts, caf::settings synopsis_opts);
 
 /// Spawns a read-only partition.
 /// @param self The partition actor.

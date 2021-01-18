@@ -90,6 +90,7 @@ mock_index(system::index_actor::stateful_pointer<mock_index_state> self) {
         anon_self->send(hdl, take_one(deltas));
       anon_self->send(hdl, atom::done_v);
     },
+    [=](expression&, size_t) { FAIL("no mock implementation available"); },
     [=](const uuid&, uint32_t n) {
       auto anon_self = caf::actor_cast<caf::event_based_actor*>(self);
       auto hdl = caf::actor_cast<caf::actor>(self->current_sender());
@@ -97,7 +98,7 @@ mock_index(system::index_actor::stateful_pointer<mock_index_state> self) {
         anon_self->send(hdl, take_one(self->state.deltas));
       anon_self->send(hdl, atom::done_v);
     },
-    [=](atom::replace, uuid, std::shared_ptr<partition_synopsis>) {
+    [=](atom::replace, uuid, size_t, std::shared_ptr<partition_synopsis>) {
       FAIL("no mock implementation available");
     },
     [=](atom::erase, uuid) -> ids { FAIL("no mock implementation available"); },
@@ -207,6 +208,7 @@ TEST(eraser on actual INDEX with Zeek conn logs) {
   sched.trigger_timeouts();
   expect((atom::run), from(aut).to(aut));
   expect((expression), from(aut).to(index));
+  expect((expression, size_t), from(aut).to(index)); // index delegates to self.
   expect((uuid, uint32_t, uint32_t), from(index).to(aut).with(_, 4u, 3u));
   sched.run_jobs_filtered(not_aut);
   while (allow((ids), from(_).to(aut)))
