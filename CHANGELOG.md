@@ -12,6 +12,11 @@ Every entry has a category for which we use the following visual abbreviations:
 
 ## Unreleased
 
+- ⚠️ The options `vast.schema-paths` and `vast.plugin-paths` are now named
+  `vast.schema-dirs` and `vast.plugin-dirs` respectively. The old options are
+  deprecated, and will be removed in a future release.
+  [#1287](https://github.com/tenzir/vast/pull/1287)
+
 - ⚠️ VAST now preserves nested JSON objects in events instead of formatting them
   in a flattened form when exporting data with `vast export json`. The old
   behavior can be enabled with `vast export json --flatten`.
