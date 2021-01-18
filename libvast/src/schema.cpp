@@ -239,9 +239,15 @@ get_schema_dirs(const caf::actor_system_config& cfg,
     else if (const char* home = std::getenv("HOME"))
       result.insert(path{home} / ".local" / "share" / "vast" / "schema");
   }
-  if (auto user_dirs
-      = caf::get_if<std::vector<std::string>>(&cfg, "vast.schema-paths"))
-    result.insert(user_dirs->begin(), user_dirs->end());
+  if (auto dirs = caf::get_if<std::vector<std::string>>( //
+        &cfg, "vast.schema-dirs"))
+    result.insert(dirs->begin(), dirs->end());
+  if (auto dirs = caf::get_if<std::vector<std::string>>( //
+        &cfg, "vast.schema-paths")) {
+    VAST_WARNING_ANON(__func__, "encountered deprecated vast.schema-paths "
+                                "option; use vast.schema-dirs instead.");
+    result.insert(dirs->begin(), dirs->end());
+  }
   return result;
 }
 

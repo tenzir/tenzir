@@ -85,7 +85,7 @@ auto make_root_command(std::string_view path) {
   // For documentation, we use the complete man-page formatted as Markdown
   auto binary = detail::objectpath();
   auto schema_desc
-    = "list of paths to look for schema files ([/etc/vast/schema"s;
+    = "list of directories to look for schema files ([/etc/vast/schema"s;
   if (binary) {
     auto relative_schema_dir
       = binary->parent().parent() / "share" / "vast" / "schema";
@@ -97,7 +97,7 @@ auto make_root_command(std::string_view path) {
         .add<std::string>("config", "path to a configuration file")
         .add<caf::atom_value>("verbosity", "output verbosity level on the "
                                            "console")
-        .add<std::vector<std::string>>("schema-paths", schema_desc.c_str())
+        .add<std::vector<std::string>>("schema-dirs", schema_desc.c_str())
         .add<std::string>("db-directory,d", "directory for persistent state")
         .add<std::string>("log-file", "log filename")
         .add<std::string>("client-log-file", "client log file (default: "
@@ -108,8 +108,8 @@ auto make_root_command(std::string_view path) {
         .add<bool>("enable-metrics", "keep track of performance metrics")
         .add<bool>("no-default-schema", "don't load the default schema "
                                         "definitions")
-        .add<std::vector<std::string>>("plugin-paths", "additional directories "
-                                                       "to load plugins from")
+        .add<std::vector<std::string>>("plugin-dirs", "additional directories "
+                                                      "to load plugins from")
         .add<std::vector<std::string>>("plugins", "plugins to load at startup")
         .add<std::string>("aging-frequency", "interval between two aging "
                                              "cycles")
