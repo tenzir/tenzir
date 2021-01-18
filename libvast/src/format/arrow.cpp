@@ -15,8 +15,6 @@
 
 #if VAST_ENABLE_ARROW
 
-#  include "vast/format/arrow.hpp"
-
 #  include "vast/arrow_table_slice.hpp"
 #  include "vast/arrow_table_slice_builder.hpp"
 #  include "vast/detail/assert.hpp"
@@ -24,6 +22,7 @@
 #  include "vast/detail/fdoutbuf.hpp"
 #  include "vast/detail/string.hpp"
 #  include "vast/error.hpp"
+#  include "vast/format/arrow.hpp"
 #  include "vast/table_slice_builder.hpp"
 #  include "vast/type.hpp"
 
@@ -50,14 +49,16 @@ writer::~writer() {
 
 caf::error writer::write(const table_slice& slice) {
   if (out_ == nullptr)
-    return ec::filesystem_error;
+    return caf::make_error(ec::filesystem_error, "invalid arrow output stream");
   if (!layout(slice.layout()))
-    return ec::unspecified;
+    return caf::make_error(ec::logic_error, "failed to update layout");
   // Get the Record Batch and print it.
   auto batch = as_record_batch(slice);
   VAST_ASSERT(batch != nullptr);
-  if (!current_batch_writer_->WriteRecordBatch(*batch).ok())
-    return ec::filesystem_error;
+  if (auto status = current_batch_writer_->WriteRecordBatch(*batch);
+      !status.ok())
+    return caf::make_error(ec::filesystem_error, "failed to write record batch",
+                           status.ToString());
   return caf::none;
 }
 
@@ -66,23 +67,24 @@ const char* writer::name() const {
 }
 
 bool writer::layout(const record_type& x) {
-  if (current_layout_ == x)
+  auto layout = flatten(x);
+  if (current_layout_ == layout)
     return true;
   if (current_batch_writer_ != nullptr) {
     if (!current_batch_writer_->Close().ok())
       return false;
     current_batch_writer_ = nullptr;
   }
-  if (x.fields.empty())
+  if (layout.fields.empty())
     return true;
-  current_layout_ = x;
-  auto schema = make_arrow_schema(x);
-  current_builder_ = arrow_table_slice_builder::make(x);
-#if ARROW_VERSION_MAJOR >= 2
+  current_layout_ = layout;
+  auto schema = make_arrow_schema(layout);
+  current_builder_ = arrow_table_slice_builder::make(layout);
+#  if ARROW_VERSION_MAJOR >= 2
   auto writer_result = ::arrow::ipc::MakeStreamWriter(out_.get(), schema);
-#else
+#  else
   auto writer_result = ::arrow::ipc::NewStreamWriter(out_.get(), schema);
-#endif
+#  endif
   if (writer_result.ok()) {
     current_batch_writer_ = std::move(*writer_result);
     return true;
