@@ -65,9 +65,9 @@ stable_set<path> get_plugin_dirs(const caf::actor_system_config& cfg) {
     VAST_ERROR_ANON(__func__, "failed to get program path");
   if (const char* home = std::getenv("HOME"))
     result.insert(path{home} / ".local" / "lib" / "vast" / "plugins");
-  if (auto user_dirs
-      = caf::get_if<std::vector<std::string>>(&cfg, "vast.plugin-paths"))
-    result.insert(user_dirs->begin(), user_dirs->end());
+  if (auto dirs = caf::get_if<std::vector<std::string>>( //
+        &cfg, "vast.plugin-dirs"))
+    result.insert(dirs->begin(), dirs->end());
   return result;
 }
 
