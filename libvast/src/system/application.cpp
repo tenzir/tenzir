@@ -98,6 +98,8 @@ auto make_root_command(std::string_view path) {
         .add<caf::atom_value>("verbosity", "output verbosity level on the "
                                            "console")
         .add<std::vector<std::string>>("schema-dirs", schema_desc.c_str())
+        .add<std::vector<std::string>>("schema-paths", "deprecated; use "
+                                                       "schema-dirs instead")
         .add<std::string>("db-directory,d", "directory for persistent state")
         .add<std::string>("log-file", "log filename")
         .add<std::string>("client-log-file", "client log file (default: "
@@ -110,6 +112,8 @@ auto make_root_command(std::string_view path) {
                                         "definitions")
         .add<std::vector<std::string>>("plugin-dirs", "additional directories "
                                                       "to load plugins from")
+        .add<std::vector<std::string>>("plugin-paths", "deprecated; use "
+                                                       "plugin-dirs instead")
         .add<std::vector<std::string>>("plugins", "plugins to load at startup")
         .add<std::string>("aging-frequency", "interval between two aging "
                                              "cycles")
