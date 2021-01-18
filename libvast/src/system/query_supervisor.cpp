@@ -53,7 +53,13 @@ query_supervisor_actor::behavior_type query_supervisor(
         const index_client_actor& client) {
       VAST_DEBUG(self, "got a new query for", qm.size(),
                  "partitions:", get_ids(qm));
-      VAST_ASSERT(!qm.empty());
+      // TODO: We can save one message here if we handle this case in the
+      // partition immediately.
+      if (qm.empty()) {
+        self->send(client, atom::done_v);
+        self->send(master, atom::worker_v, self);
+        return;
+      }
       VAST_ASSERT(self->state.open_requests == 0);
       for (auto& [id, partition] : qm) {
         ++self->state.open_requests;
