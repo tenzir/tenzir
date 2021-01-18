@@ -18,7 +18,6 @@ Primitive VAST types are mapped to Arrow types as follows:
   |   enumeration  |  Uint64Type          |
   |   address      |  FixedSizeBinary(16) |
   |   subnet       |  FixedSizeBinary(17) |
-  |   port         |  FixedSizeBinary(3)  |
 
 The name of the event_type present in a record batch is encoded into the
 metadata field of the schema at the key "name".
