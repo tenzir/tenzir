@@ -45,6 +45,8 @@ u.enable_probe("exporter_query_start", "exporter_query_start_handler")
 u.enable_probe("index_lookup_start", "index_lookup_start_handler")
 u.enable_probe("meta_index_lookup", "meta_index_lookup_handler")
 u.enable_probe("exporter_query_scheduled", "exporter_query_scheduled_handler")
+u.enable_probe("exporter_ids", "exporter_ids_handler")
+u.enable_probe("exporter_table_slice", "exporter_table_slice_handler")
 u.enable_probe("exporter_done", "exporter_done_handler")
 
 bpf_text = """
@@ -64,9 +66,25 @@ struct query_state_t {
   timestamp_t index_lookup_start_ts;
   timestamp_t meta_index_lookup_ts;
 
+  timestamp_t request_ts; // last time we requested hits
+
   // Durations
   uint64_t meta_idx_us; // meta idx lookup time in microsends
   uint64_t initial_request_us; // time until initial taste is scheduled, in microseconds
+};
+
+struct ids_t {
+  timestamp_t start;
+  char query_id[16]; // we match these by query id, since a query that returns results must surely have ids
+  u64 first;
+  u64 last;
+};
+
+struct table_slice_t {
+  timestamp_t received;
+  char query_id[16]; // see above
+  u64 offset;
+  u64 size;
 };
 
 // Track up to 128 on-going and 1024 finished queries at the same time.
@@ -85,10 +103,12 @@ BPF_HASH(qstates, actor_id_t, struct query_state_t, max_live_queries);
 // BPF_QUEUE(finished_queries, struct query_state_t, 512);
 
 BPF_HASH(finished_queries, u64, struct query_state_t, max_finished_queries);
+BPF_HASH(idranges, struct ids_t, 512*max_live_queries);
+BPF_HASH(tsranges, struct table_slice_t, 512*max_live_queries);
 
-// TODO: There's probably a better way to implement this.
+// TODO: Apparently array's are "the" way to implement global variables, but
+// it seems to be more common to declare one 1-element array per variable.
 const int global_meta_idx_actor = 0;
-//#define global_meta_idx_actor 0
 const int global_finished_cursor = 1;
 BPF_ARRAY(global_variables, u64, 2);
 
@@ -166,9 +186,37 @@ void exporter_query_scheduled_handler(struct pt_regs *ctx) {
   leaf->initial_request_us = delta;
 }
 
+void exporter_ids_handler(struct pt_regs *ctx) {
+  u64 actor_id;
+  u64 count;
+  u64 first;
+  u64 last;
+
+  bpf_usdt_readarg(1, ctx, &actor_id);
+  bpf_usdt_readarg(2, ctx, &count);
+  bpf_usdt_readarg(3, ctx, &first);
+  bpf_usdt_readarg(4, ctx, &last);
+
+
+}
+
+void exporter_table_slice_handler(struct pt_regs *ctx) {
+  u64 actor_id;
+  u64 offset;
+  u64 rows;
+
+  bpf_usdt_readarg(1, ctx, &actor_id);
+  bpf_usdt_readarg(2, ctx, &offset);
+  bpf_usdt_readarg(3, ctx, &rows);
+
+
+}
+
 void exporter_done_handler(struct pt_regs *ctx) {
   u64 actor_id;
+
   bpf_usdt_readarg(1, ctx, &actor_id);
+
   struct query_state_t copy;
   struct query_state_t* leaf = qstates.lookup(&actor_id);
   if (!leaf)
@@ -209,7 +257,7 @@ print('Tracing... Output every %d secs. Hit Ctrl-C to end' % interval)
 def id_to_string(qid):
   if len(qid) == 0:
       return "(none)"
-  return "%x%x" % (qid[0], qid[1])
+  return "".join("%x" % c for c in qid)
 
 all_queries = []
 

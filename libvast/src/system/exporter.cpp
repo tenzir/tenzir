@@ -144,6 +144,7 @@ void request_more_hits(exporter_actor::stateful_pointer<exporter_state> self) {
   st.query.scheduled = n;
   // Request more hits from the INDEX.
   VAST_DEBUG(self, "asks index to process", n, "more partitions");
+  VAST_TRACEPOINT(exporter_request_hits, self->id(), n);
   self->send(st.index, st.id, detail::narrow<uint32_t>(n));
 }
 
@@ -228,6 +229,8 @@ exporter(exporter_actor::stateful_pointer<exporter_state> self, expression expr,
       caf::timespan runtime = std::chrono::system_clock::now() - st.start;
       st.query.runtime = runtime;
       auto count = rank(hits);
+      auto [first, last] = frame(hits);
+      VAST_TRACEPOINT(exporter_ids, self->id(), count, first, last);
       if (st.accountant) {
         auto r = report{};
         if (st.hits.empty())
@@ -250,7 +253,10 @@ exporter(exporter_actor::stateful_pointer<exporter_state> self, expression expr,
       }
       return caf::unit;
     },
-    [=](table_slice slice) { handle_batch(self, std::move(slice)); },
+    [=](table_slice slice) { 
+      VAST_TRACEPOINT(exporter_table_slice, self->id(), slice.offset(), slice.rows());
+      handle_batch(self, std::move(slice));
+    },
     [=](atom::done) -> caf::result<void> {
       auto& qs = self->state.query;
       // Ignore this message until we got all lookup results from the ARCHIVE.
