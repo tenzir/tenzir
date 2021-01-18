@@ -112,8 +112,6 @@ auto make_root_command(std::string_view path) {
                                         "definitions")
         .add<std::vector<std::string>>("plugin-dirs", "additional directories "
                                                       "to load plugins from")
-        .add<std::vector<std::string>>("plugin-paths", "deprecated; use "
-                                                       "plugin-dirs instead")
         .add<std::vector<std::string>>("plugins", "plugins to load at startup")
         .add<std::string>("aging-frequency", "interval between two aging "
                                              "cycles")

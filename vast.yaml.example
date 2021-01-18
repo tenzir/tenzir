@@ -15,7 +15,7 @@ vast:
   # working directory of the client. Note that this is disabled by default. If
   # not specified no log files are written for clients at all.
   #client-log-file: "client.log"
-  # List of dirs to look for schema files in ascending order of priority.
+  # List of directories to look for schema files in ascending order of priority.
   # Note: Automatically prepended with
   #  ["<binary_directory>/../share/vast/schema", "/etc/vast/schema"].
   # Use the no-default-schema option to turn off this mechanism.
@@ -327,7 +327,7 @@ vast:
       # does the same. Settings this flag to true skips printing these tags,
       # which may help when fully deterministic output is desired.
       #disable-timestamp-tags: false
-    
+
     # The `vast import zeek-json` command imports Zeek streaming JSON.
     zeek-json:
       # The endpoint to listen on ("[host]:port/type").
