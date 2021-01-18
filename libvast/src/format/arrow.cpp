@@ -49,7 +49,7 @@ writer::~writer() {
 
 caf::error writer::write(const table_slice& slice) {
   if (out_ == nullptr)
-    return caf::make_error(ec::filesystem_error, "invalid arrow output stream");
+    return caf::make_error(ec::logic_error, "invalid arrow output stream");
   if (!layout(slice.layout()))
     return caf::make_error(ec::logic_error, "failed to update layout");
   // Get the Record Batch and print it.
@@ -57,7 +57,7 @@ caf::error writer::write(const table_slice& slice) {
   VAST_ASSERT(batch != nullptr);
   if (auto status = current_batch_writer_->WriteRecordBatch(*batch);
       !status.ok())
-    return caf::make_error(ec::filesystem_error, "failed to write record batch",
+    return caf::make_error(ec::unspecified, "failed to write record batch",
                            status.ToString());
   return caf::none;
 }
