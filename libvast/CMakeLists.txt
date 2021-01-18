@@ -364,11 +364,13 @@ add_dependencies(libvast libvast_flatbuffers)
 dependency_summary("FlatBuffers" ${flatbuffers_target})
 
 # Link against yaml-cpp.
+option(YAML_CPP_ROOT "Install root of yaml-cpp" "")
 find_package(yaml-cpp 0.6.2 REQUIRED HINTS ${YAML_CPP_ROOT})
 target_link_libraries(libvast PRIVATE yaml-cpp)
 dependency_summary("yaml-cpp" yaml-cpp)
 
 # Link against simdjson.
+option(SIMDJSON_ROOT "Install root of simdjson" "")
 find_package(simdjson REQUIRED HINTS ${SIMDJSON_ROOT})
 target_link_libraries(libvast PUBLIC simdjson::simdjson)
 dependency_summary("simdjson" simdjson::simdjson)
