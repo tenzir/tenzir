@@ -71,9 +71,8 @@ jobs:
     - name: Configure GCloud Credentials
       uses: google-github-actions/setup-gcloud@master
       with:
-        version: '275.0.0'
-        service_account_email: ${{ secrets.GCP_SA_EMAIL }}
         service_account_key: ${{ secrets.GCP_SA_KEY }}
+        export_default_credentials: true
 
     - name: Upload Artifact to GCS
       if: github.event_name != 'pull_request'
