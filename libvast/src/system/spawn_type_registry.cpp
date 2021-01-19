@@ -15,7 +15,6 @@
 
 #include "vast/defaults.hpp"
 #include "vast/logger.hpp"
-#include "vast/system/accountant_actor.hpp"
 #include "vast/system/node.hpp"
 #include "vast/system/spawn_arguments.hpp"
 #include "vast/system/type_registry.hpp"

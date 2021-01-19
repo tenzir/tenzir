@@ -15,25 +15,9 @@
 
 #include "vast/fwd.hpp"
 
-#include "vast/system/index_client_actor.hpp"
-#include "vast/system/partition_actor.hpp"
-#include "vast/uuid.hpp"
-
-#include <caf/detail/unordered_flat_map.hpp>
-#include <caf/typed_actor.hpp>
-
-#include <vector>
-
 namespace vast::system {
 
-/// A set of relevant partition actors, and their uuids.
-using query_map = std::vector<std::pair<uuid, partition_actor>>;
-
-/// The QUERY SUPERVISOR actor interface.
-using query_supervisor_actor = caf::typed_actor<
-  /// Reacts to an expression and a set of relevant partitions by
-  /// sending several `vast::ids` to the index_client_actor, followed
-  /// by a final `atom::done`.
-  caf::reacts_to<expression, query_map, index_client_actor>>;
+/// The verbosity level of a status request.
+enum class status_verbosity { info, detailed, debug };
 
 } // namespace vast::system

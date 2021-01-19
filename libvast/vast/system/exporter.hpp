@@ -19,10 +19,13 @@
 #include "vast/expression.hpp"
 #include "vast/ids.hpp"
 #include "vast/query_options.hpp"
-#include "vast/system/exporter_actor.hpp"
 #include "vast/system/query_status.hpp"
 #include "vast/table_slice.hpp"
 #include "vast/uuid.hpp"
+
+#include <caf/actor.hpp>
+#include <caf/scheduled_actor.hpp>
+#include <caf/typed_event_based_actor.hpp>
 
 namespace vast::system {
 

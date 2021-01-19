@@ -25,10 +25,10 @@
 #include "vast/detail/spawn_container_source.hpp"
 #include "vast/format/zeek.hpp"
 #include "vast/system/archive.hpp"
-#include "vast/system/index_actor.hpp"
 #include "vast/system/source.hpp"
 #include "vast/system/type_registry.hpp"
 #include "vast/table_slice.hpp"
+#include "vast/uuid.hpp"
 
 using namespace caf;
 using namespace vast;

@@ -24,8 +24,8 @@
 #include "vast/concept/parseable/vast/expression.hpp"
 #include "vast/concept/parseable/vast/uuid.hpp"
 #include "vast/ids.hpp"
-#include "vast/system/flush_listener_actor.hpp"
-#include "vast/system/index_actor.hpp"
+
+#include <caf/typed_event_based_actor.hpp>
 
 using namespace vast;
 
@@ -54,7 +54,7 @@ mock_index(system::index_actor::stateful_pointer<mock_index_state> self) {
         system::status_verbosity) -> caf::config_value::dictionary {
       FAIL("no mock implementation available");
     },
-    [=](atom::subscribe, atom::flush, system::wrapped_flush_listener) {
+    [=](atom::subscribe, atom::flush, system::flush_listener_actor) {
       FAIL("no mock implementation available");
     },
     [=](expression&) {

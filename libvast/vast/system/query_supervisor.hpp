@@ -16,11 +16,12 @@
 #include "vast/fwd.hpp"
 
 #include "vast/ids.hpp"
-#include "vast/system/query_supervisor_actor.hpp"
-#include "vast/system/query_supervisor_master_actor.hpp"
 #include "vast/uuid.hpp"
 
 #include <caf/detail/unordered_flat_map.hpp>
+#include <caf/event_based_actor.hpp>
+#include <caf/scheduled_actor.hpp>
+#include <caf/typed_event_based_actor.hpp>
 
 #include <cstdint>
 #include <string>

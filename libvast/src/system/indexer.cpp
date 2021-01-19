@@ -27,7 +27,6 @@
 #include "vast/path.hpp"
 #include "vast/system/accountant.hpp"
 #include "vast/system/instrumentation.hpp"
-#include "vast/system/partition_actor.hpp"
 #include "vast/system/report.hpp"
 #include "vast/table_slice.hpp"
 #include "vast/table_slice_column.hpp"

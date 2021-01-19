@@ -24,7 +24,6 @@
 #include "vast/detail/spawn_container_source.hpp"
 #include "vast/query_options.hpp"
 #include "vast/system/archive.hpp"
-#include "vast/system/filesystem_actor.hpp"
 #include "vast/system/importer.hpp"
 #include "vast/system/index.hpp"
 #include "vast/system/posix_filesystem.hpp"

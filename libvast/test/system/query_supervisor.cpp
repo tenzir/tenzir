@@ -24,7 +24,9 @@
 #include "vast/concept/parseable/vast/expression.hpp"
 #include "vast/expression.hpp"
 #include "vast/ids.hpp"
-#include "vast/system/evaluator_actor.hpp"
+#include "vast/uuid.hpp"
+
+#include <caf/typed_event_based_actor.hpp>
 
 using namespace vast;
 

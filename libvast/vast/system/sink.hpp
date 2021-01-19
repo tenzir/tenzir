@@ -15,10 +15,10 @@
 
 #include "vast/fwd.hpp"
 
-#include "vast/system/accountant_actor.hpp"
 #include "vast/system/instrumentation.hpp"
 
 #include <caf/behavior.hpp>
+#include <caf/event_based_actor.hpp>
 #include <caf/stateful_actor.hpp>
 
 #include <chrono>

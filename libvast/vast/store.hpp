@@ -15,8 +15,6 @@
 
 #include "vast/fwd.hpp"
 
-#include "vast/system/status_client_actor.hpp"
-
 #include <caf/expected.hpp>
 
 namespace vast {

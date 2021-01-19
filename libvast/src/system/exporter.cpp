@@ -26,13 +26,14 @@
 #include "vast/error.hpp"
 #include "vast/expression_visitors.hpp"
 #include "vast/logger.hpp"
-#include "vast/system/archive_actor.hpp"
 #include "vast/system/query_status.hpp"
 #include "vast/system/report.hpp"
+#include "vast/system/status_verbosity.hpp"
 #include "vast/table_slice.hpp"
 
-#include <caf/event_based_actor.hpp>
 #include <caf/settings.hpp>
+#include <caf/stream_slot.hpp>
+#include <caf/typed_event_based_actor.hpp>
 
 namespace vast::system {
 
@@ -213,77 +214,6 @@ exporter(exporter_actor::stateful_pointer<exporter_state> self, expression expr,
            && qs.lookups_issued == qs.lookups_complete;
   };
   return {
-    // The INDEX (or the EVALUATOR, to be more precise) sends us a series of
-    // `ids` in response to an expression (query), terminated by 'done'.
-    [=](ids& hits) -> caf::result<void> {
-      auto& st = self->state;
-      // Skip results that arrive before we got our lookup handle from the
-      // INDEX actor.
-      if (st.query.expected == 0)
-        return caf::skip;
-      // Add `hits` to the total result set and update all stats.
-      caf::timespan runtime = std::chrono::system_clock::now() - st.start;
-      st.query.runtime = runtime;
-      auto count = rank(hits);
-      if (st.accountant) {
-        auto r = report{};
-        if (st.hits.empty())
-          r.push_back({"exporter.hits.first", runtime});
-        r.push_back({"exporter.hits.arrived", runtime});
-        r.push_back({"exporter.hits.count", count});
-        self->send(st.accountant, r);
-      }
-      if (count == 0) {
-        VAST_WARNING(self, "got empty hits");
-      } else {
-        VAST_ASSERT(rank(st.hits & hits) == 0);
-        VAST_DEBUG(self, "got", count, "index hits in [", (select(hits, 1)),
-                   ',', (select(hits, -1) + 1), ')');
-        st.hits |= hits;
-        VAST_DEBUG(self, "forwards hits to archive");
-        // FIXME: restrict according to configured limit.
-        ++st.query.lookups_issued;
-        self->send(st.archive, std::move(hits));
-      }
-      return caf::unit;
-    },
-    [=](table_slice slice) { handle_batch(self, std::move(slice)); },
-    [=](atom::done) -> caf::result<void> {
-      auto& qs = self->state.query;
-      // Ignore this message until we got all lookup results from the ARCHIVE.
-      // Otherwise, we can end up in weirdly interleaved state.
-      if (qs.lookups_issued != qs.lookups_complete)
-        return caf::skip;
-      // Figure out if we're done by bumping the counter for `received` and
-      // check whether it reaches `expected`.
-      caf::timespan runtime
-        = std::chrono::system_clock::now() - self->state.start;
-      qs.runtime = runtime;
-      qs.received += qs.scheduled;
-      if (qs.received < qs.expected) {
-        VAST_DEBUG(self, "received hits from", qs.received, '/', qs.expected,
-                   "partitions");
-        request_more_hits(self);
-      } else {
-        VAST_DEBUG(self, "received all hits from", qs.expected,
-                   "partition(s) in", vast::to_string(runtime));
-        if (self->state.accountant)
-          self->send(self->state.accountant, "exporter.hits.runtime", runtime);
-        if (finished(qs))
-          shutdown(self);
-      }
-      return caf::unit;
-    },
-    [=](atom::done, const caf::error& err) {
-      VAST_ASSERT(self->current_sender() == self->state.archive);
-      auto& qs = self->state.query;
-      ++qs.lookups_complete;
-      VAST_DEBUG(self, "received done from archive:", VAST_ARG(err),
-                 VAST_ARG("query", qs));
-      // We skip 'done' messages of the query supervisors until we process all
-      // hits first. Hence, we can never be finished here.
-      VAST_ASSERT(!finished(qs));
-    },
     [=](atom::extract) -> caf::result<void> {
       auto& qs = self->state.query;
       // Sanity check.
@@ -319,27 +249,6 @@ exporter(exporter_actor::stateful_pointer<exporter_state> self, expression expr,
       ship_results(self);
       request_more_hits(self);
       return {};
-    },
-    [=](atom::status, status_verbosity v) {
-      auto& st = self->state;
-      auto result = caf::settings{};
-      auto& exporter_status = put_dictionary(result, "exporter");
-      if (v >= status_verbosity::info) {
-        caf::settings exp;
-        put(exp, "expression", to_string(st.expr));
-        auto& xs = put_list(result, "queries");
-        xs.emplace_back(std::move(exp));
-      }
-      if (v >= status_verbosity::detailed) {
-        caf::settings exp;
-        put(exp, "expression", to_string(st.expr));
-        put(exp, "hits", rank(st.hits));
-        put(exp, "start", caf::deep_to_string(st.start));
-        auto& xs = put_list(result, "queries");
-        xs.emplace_back(std::move(exp));
-        detail::fill_status_map(exporter_status, self);
-      }
-      return result;
     },
     [=](accountant_actor accountant) {
       self->state.accountant = std::move(accountant);
@@ -420,6 +329,103 @@ exporter(exporter_actor::stateful_pointer<exporter_state> self, expression expr,
               VAST_ERROR(self, "got error during streaming:", err);
           })
         .inbound_slot();
+    },
+    // -- status_client_actor --------------------------------------------------
+    [=](atom::status, status_verbosity v) {
+      auto& st = self->state;
+      auto result = caf::settings{};
+      auto& exporter_status = put_dictionary(result, "exporter");
+      if (v >= status_verbosity::info) {
+        caf::settings exp;
+        put(exp, "expression", to_string(st.expr));
+        auto& xs = put_list(result, "queries");
+        xs.emplace_back(std::move(exp));
+      }
+      if (v >= status_verbosity::detailed) {
+        caf::settings exp;
+        put(exp, "expression", to_string(st.expr));
+        put(exp, "hits", rank(st.hits));
+        put(exp, "start", caf::deep_to_string(st.start));
+        auto& xs = put_list(result, "queries");
+        xs.emplace_back(std::move(exp));
+        detail::fill_status_map(exporter_status, self);
+      }
+      return result;
+    },
+    // -- archive_client_actor -------------------------------------------------
+    [=](table_slice slice) { //
+      handle_batch(self, std::move(slice));
+    },
+    [=](atom::done, const caf::error& err) {
+      VAST_ASSERT(self->current_sender() == self->state.archive);
+      auto& qs = self->state.query;
+      ++qs.lookups_complete;
+      VAST_DEBUG(self, "received done from archive:", VAST_ARG(err),
+                 VAST_ARG("query", qs));
+      // We skip 'done' messages of the query supervisors until we process all
+      // hits first. Hence, we can never be finished here.
+      VAST_ASSERT(!finished(qs));
+    },
+    // -- index_client_actor ---------------------------------------------------
+    // The INDEX (or the EVALUATOR, to be more precise) sends us a series of
+    // `ids` in response to an expression (query), terminated by 'done'.
+    [=](const ids& hits) -> caf::result<void> {
+      auto& st = self->state;
+      // Skip results that arrive before we got our lookup handle from the
+      // INDEX actor.
+      if (st.query.expected == 0)
+        return caf::skip;
+      // Add `hits` to the total result set and update all stats.
+      caf::timespan runtime = std::chrono::system_clock::now() - st.start;
+      st.query.runtime = runtime;
+      auto count = rank(hits);
+      if (st.accountant) {
+        auto r = report{};
+        if (st.hits.empty())
+          r.push_back({"exporter.hits.first", runtime});
+        r.push_back({"exporter.hits.arrived", runtime});
+        r.push_back({"exporter.hits.count", count});
+        self->send(st.accountant, r);
+      }
+      if (count == 0) {
+        VAST_WARNING(self, "got empty hits");
+      } else {
+        VAST_ASSERT(rank(st.hits & hits) == 0);
+        VAST_DEBUG(self, "got", count, "index hits in [", (select(hits, 1)),
+                   ',', (select(hits, -1) + 1), ')');
+        st.hits |= hits;
+        VAST_DEBUG(self, "forwards hits to archive");
+        // FIXME: restrict according to configured limit.
+        ++st.query.lookups_issued;
+        self->send(st.archive, std::move(hits));
+      }
+      return {};
+    },
+    [=](atom::done) -> caf::result<void> {
+      auto& qs = self->state.query;
+      // Ignore this message until we got all lookup results from the ARCHIVE.
+      // Otherwise, we can end up in weirdly interleaved state.
+      if (qs.lookups_issued != qs.lookups_complete)
+        return caf::skip;
+      // Figure out if we're done by bumping the counter for `received` and
+      // check whether it reaches `expected`.
+      caf::timespan runtime
+        = std::chrono::system_clock::now() - self->state.start;
+      qs.runtime = runtime;
+      qs.received += qs.scheduled;
+      if (qs.received < qs.expected) {
+        VAST_DEBUG(self, "received hits from", qs.received, '/', qs.expected,
+                   "partitions");
+        request_more_hits(self);
+      } else {
+        VAST_DEBUG(self, "received all hits from", qs.expected,
+                   "partition(s) in", vast::to_string(runtime));
+        if (self->state.accountant)
+          self->send(self->state.accountant, "exporter.hits.runtime", runtime);
+        if (finished(qs))
+          shutdown(self);
+      }
+      return {};
     },
   };
 }

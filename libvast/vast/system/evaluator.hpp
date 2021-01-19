@@ -18,8 +18,8 @@
 #include "vast/expression.hpp"
 #include "vast/ids.hpp"
 #include "vast/system/evaluation_triple.hpp"
-#include "vast/system/evaluator_actor.hpp"
-#include "vast/system/index_client_actor.hpp"
+
+#include <caf/typed_event_based_actor.hpp>
 
 #include <utility>
 #include <vector>

@@ -25,7 +25,6 @@
 #include "vast/ids.hpp"
 #include "vast/logger.hpp"
 #include "vast/scope_linked.hpp"
-#include "vast/system/archive_actor.hpp"
 #include "vast/system/node_control.hpp"
 #include "vast/system/spawn_or_connect_to_node.hpp"
 #include "vast/table_slice.hpp"

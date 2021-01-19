@@ -17,13 +17,11 @@
 
 #include "vast/fbs/partition.hpp"
 #include "vast/path.hpp"
-#include "vast/system/accountant_actor.hpp"
-#include "vast/system/active_indexer_actor.hpp"
-#include "vast/system/filesystem_actor.hpp"
-#include "vast/system/indexer_actor.hpp"
 #include "vast/system/instrumentation.hpp"
 #include "vast/type.hpp"
 #include "vast/uuid.hpp"
+
+#include <caf/typed_event_based_actor.hpp>
 
 #include <string>
 

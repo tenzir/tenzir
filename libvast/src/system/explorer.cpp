@@ -22,12 +22,12 @@
 #include "vast/detail/string.hpp"
 #include "vast/expression.hpp"
 #include "vast/logger.hpp"
-#include "vast/system/exporter_actor.hpp"
 #include "vast/system/query_status.hpp"
 #include "vast/table_slice.hpp"
 #include "vast/table_slice_builder.hpp"
 #include "vast/table_slice_builder_factory.hpp"
 #include "vast/table_slice_column.hpp"
+#include "vast/uuid.hpp"
 
 #include <caf/event_based_actor.hpp>
 #include <caf/settings.hpp>
@@ -222,7 +222,7 @@ explorer(caf::stateful_actor<explorer_state>* self, caf::actor node,
             });
       }
     },
-    [=](atom::provision, caf::actor exporter) {
+    [=](atom::provision, exporter_actor exporter) {
       self->state.initial_exporter = exporter.address();
     },
     [=]([[maybe_unused]] std::string name, query_status) {

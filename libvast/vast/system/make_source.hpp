@@ -32,11 +32,9 @@
 #include "vast/expression.hpp"
 #include "vast/logger.hpp"
 #include "vast/schema.hpp"
-#include "vast/system/accountant_actor.hpp"
 #include "vast/system/datagram_source.hpp"
 #include "vast/system/signal_monitor.hpp"
 #include "vast/system/source.hpp"
-#include "vast/system/type_registry_actor.hpp"
 
 #include <caf/io/middleman.hpp>
 #include <caf/settings.hpp>

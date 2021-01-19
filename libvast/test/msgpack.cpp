@@ -61,6 +61,7 @@ void check_value(object o, T x) {
 } // namespace
 
 TEST(format) {
+  using vast::msgpack::format;
   CHECK(is_fixstr(format{0b1010'0000}));
   CHECK(is_fixstr(format{0b1010'0001}));
   CHECK(is_fixstr(format{0b1011'1111}));
@@ -81,6 +82,7 @@ TEST(nil) {
 }
 
 TEST(invalid format) {
+  using vast::msgpack::format;
   auto never_used = static_cast<format>(0xc1);
   buf.push_back(byte{never_used});
   check_value(object{buf}, never_used);

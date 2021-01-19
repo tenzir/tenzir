@@ -22,13 +22,9 @@
 #include "vast/meta_index.hpp"
 #include "vast/path.hpp"
 #include "vast/qualified_record_field.hpp"
-#include "vast/system/active_partition_actor.hpp"
 #include "vast/system/evaluator.hpp"
-#include "vast/system/filesystem_actor.hpp"
-#include "vast/system/index_actor.hpp"
 #include "vast/system/indexer.hpp"
 #include "vast/system/instrumentation.hpp"
-#include "vast/system/partition_actor.hpp"
 #include "vast/table_slice_column.hpp"
 #include "vast/type.hpp"
 #include "vast/uuid.hpp"
@@ -36,6 +32,7 @@
 
 #include <caf/optional.hpp>
 #include <caf/stream_slot.hpp>
+#include <caf/typed_event_based_actor.hpp>
 
 #include <unordered_map>
 #include <vector>
