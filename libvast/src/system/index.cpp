@@ -606,12 +606,6 @@ index(index_actor::stateful_pointer<index_state> self,
       auto lookup = query_state{query_id, expr, std::move(candidates)};
       auto result = self->state.pending.emplace(query_id, std::move(lookup));
       VAST_ASSERT(result.second);
-      // NOTE: The previous version of the index used to do much more
-      // validation before assigning a query id; in particular it did
-      // evaluate the entries of the pending query map and checked that
-      // at least one of them actually produced an evaluation triple.
-      // However, the query_processor doesnt really care about the id
-      // anyways, so hopefully that shouldnt make too big of a difference.
       respond(query_id, detail::narrow<uint32_t>(total), scheduled);
       self->delegate(caf::actor_cast<caf::actor>(self), query_id, scheduled);
       return {};
