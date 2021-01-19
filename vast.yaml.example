@@ -9,16 +9,43 @@ vast:
   endpoint: "localhost:42000"
   # The file system path used for persistent state.
   db-directory: "vast.db"
+
   # The file system path used for log files.
   #log-file: "<db-directory>/server.log"
+
   # The file system path used for client log files relative to the current
   # working directory of the client. Note that this is disabled by default. If
   # not specified no log files are written for clients at all.
   #client-log-file: "client.log"
+
+  # Format for printing individual log entries to the log-file.
+  # For a list of valid format specifiers, see spdlog format specification.
+  # file-format:
+
+  # Configures the minimum severity of messages written to the log file.
+  # Possible values: quiet, error, warning, info, verbose, debug, trace.
+  # File logging is only available for commands that start a node (e.g.,
+  # vast start). The levels above 'verbose' are usually not available in
+  # release builds.
+  # file-verbosity: debug
+
+  # Mode for console log output generation.
+  # Possible values: always, automatic, never. (default automatic)
+  # console: automatic
+
+  # Format for printing individual log entries to the console.
+  # For a list of valid format specifiers, see spdlog format specification.
+  # console-format:
+
+  # Configures the minimum severity of messages written to the console.
+  # For a list of valid log levels, see file-verbosity.
+  #console-verbosity: info
+
   # List of directories to look for schema files in ascending order of priority.
   # Note: Automatically prepended with
   #  ["<binary_directory>/../share/vast/schema", "/etc/vast/schema"].
   # Use the no-default-schema option to turn off this mechanism.
+
   #schema-dirs: []
   # Additional directories to load plugins specified using `vast.plugins` from.
   plugin-dirs: []

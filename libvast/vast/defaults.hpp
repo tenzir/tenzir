@@ -323,12 +323,9 @@ constexpr size_t max_container_elements = 256;
 // -- constants for the logger -------------------------------------------------
 namespace logger {
 
-// CAF uses its own string_view that does not come with conversion operators
-// from std::string_view, so we use const char* instead.
-// TODO: Revisit when updating to CAF 0.18.
-constexpr const char* console_format = "%d %m";
+constexpr const char* log_file = "server.log";
 
-constexpr const char* file_format = "%r %c %p %a %F:%L %m%n";
+constexpr const char* log_format = "%^%Y-%m-%dT%T.%e%z %v%$";
 
 constexpr const caf::atom_value console_verbosity = caf::atom("info");
 
