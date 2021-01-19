@@ -21,6 +21,7 @@ Every entry has a category for which we use the following visual abbreviations:
   in a flattened form when exporting data with `vast export json`. The old
   behavior can be enabled with `vast export json --flatten`.
   [#1257](https://github.com/tenzir/vast/pull/1257)
+  [#1289](https://github.com/tenzir/vast/pull/1289)
 
 - 🧬 VAST now relies on [simdjson](https://github.com/simdjson/simdjson) for
   JSON parsing. The substantial gains in throughput shift the bottleneck of

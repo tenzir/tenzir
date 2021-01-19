@@ -17,6 +17,7 @@
 #include "vast/concept/printable/stream.hpp"
 #include "vast/concept/printable/to_string.hpp"
 #include "vast/concept/printable/vast/uuid.hpp"
+#include "vast/error.hpp"
 #include "vast/format/writer.hpp"
 #include "vast/logger.hpp"
 #include "vast/system/instrumentation.hpp"
@@ -87,7 +88,7 @@ caf::behavior sink(caf::stateful_actor<sink_state>* self,
       // Handle events.
       auto t = timer::start(st.measurement);
       if (auto err = st.writer->write(slice)) {
-        VAST_ERROR(self, self->system().render(err));
+        VAST_ERROR(self, render(err));
         self->quit(std::move(err));
         return;
       }

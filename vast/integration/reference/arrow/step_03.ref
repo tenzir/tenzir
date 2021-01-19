@@ -1,0 +1,31 @@
+  child 0, item: uint64
+-- schema metadata --
+community_id: string
+dest_ip: fixed_size_binary[16]
+dest_port: uint64
+done with all readers
+done with current reader, rows: 1
+event_type: string
+flow_id: uint64
+http.hostname: string
+http.http_content_type: string
+http.http_method: string
+http.http_port: uint64
+http.http_refer: string
+http.http_user_agent: string
+http.length: uint64
+http.protocol: string
+http.redirect: string
+http.status: uint64
+http.url: string
+in_iface: string
+name: 'suricata.http'
+open next reader
+open next reader
+pcap_cnt: uint64
+proto: string
+src_ip: fixed_size_binary[16]
+src_port: uint64
+timestamp: timestamp[ns]
+tx_id: uint64
+vlan: list<item: uint64>
