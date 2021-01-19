@@ -96,6 +96,7 @@ struct accountant_state_impl {
       return;
     auto slice = builder->finish();
     VAST_DEBUG(self, "generated slice with", slice.rows(), "rows");
+
     slice_buffer.push(std::move(slice));
     mgr->advance();
   }

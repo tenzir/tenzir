@@ -66,6 +66,7 @@ Usage: $0 [OPTION]... [VAR=VALUE]...
     --with-flatbuffers=PATH path to flatbuffers install root
     --with-yaml-cpp=PATH    path to yaml-cpp install root
     --with-simdjson=PATH    path to simdjson install root
+    --with-spdlog=PATH      path to spdlog install root
 
   Optional packages:
     --with-broker=PATH      path to Broker install root (required for
@@ -237,6 +238,9 @@ while [ $# -ne 0 ]; do
       ;;
     --with-simdjson=*)
       append_cache_entry SIMDJSON_ROOT PATH "$optarg"
+      ;;
+    --with-spdlog=*)
+      append_cache_entry spdlog_ROOT PATH "$optarg"
       ;;
 # -- Optional packages ---------------------------------------------------------
     --with-broker=*)
