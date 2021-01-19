@@ -28,14 +28,24 @@ namespace vast {
 
 namespace {
 
-const char* descriptions[]{
+const char* descriptions[] = {
   "invalid",
   "v0",
   "v1",
 };
 
+const char* explanations[] = {
+  // v0 -> v1
+  "The dedicated `port` type was removed from VAST. To update, adjust all"
+  " custom schemas containing a field of type 'port' to include"
+  " 'type port = count' and reimport all data that contained a 'port' field.",
+};
+
 static_assert(db_version{std::size(descriptions)} == db_version::count,
               "Mismatch between number of DB versions and descriptions");
+
+static_assert(std::size(descriptions) - 2 == std::size(explanations),
+              "No explanation provided for a breaking change");
 
 const char* to_string(db_version v) {
   return descriptions[static_cast<uint8_t>(v)];
@@ -82,6 +92,22 @@ caf::error initialize_db_version(const vast::path& db_dir) {
   if (!fs)
     return make_error(ec::filesystem_error, "could not write version file");
   return ec::no_error;
+}
+
+std::string describe_breaking_changes_since(db_version since) {
+  if (since == db_version::invalid)
+    return "invalid version";
+  if (since == db_version::latest)
+    return ""; // no breaking changes
+  std::string result;
+  auto idx = static_cast<uint8_t>(since);
+  auto end = static_cast<uint8_t>(db_version::latest);
+  while (idx < end) {
+    result += explanations[idx - 1];
+    result += "\n";
+    ++idx;
+  }
+  return result;
 }
 
 } // namespace vast

@@ -9,11 +9,13 @@ ENV BUILD_TYPE Release
 ENV BUILD_DIR /tmp/src
 ENV DEBIAN_FRONTEND noninteractive
 
+
 # Compiler and dependency setup
 RUN apt-get -qq update && apt-get -qqy install \
   build-essential gcc-8 g++-8 ninja-build libbenchmark-dev libpcap-dev tcpdump \
   libssl-dev python3-dev python3-pip python3-venv git-core jq gnupg2 \
   libyaml-cpp-dev
+
 RUN pip3 install --upgrade pip && pip install --upgrade cmake && \
   cmake --version
 
@@ -22,6 +24,10 @@ RUN echo "deb http://www.deb-multimedia.org buster main" | tee -a /etc/apt/sourc
   apt-key adv --keyserver hkp://pool.sks-keyservers.net:80 --recv-keys 5C808C2B65558117 && \
   apt-get -qq update
 RUN apt-get -qqy install libflatbuffers-dev flatbuffers-compiler-dev
+
+# spdlog
+RUN echo "deb http://deb.debian.org/debian buster-backports main" | tee -a /etc/apt/sources.list && apt-get -qq update
+RUN apt-get -qqy  -t buster-backports install libspdlog-dev libfmt-dev
 
 # VAST
 WORKDIR $BUILD_DIR/vast

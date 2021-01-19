@@ -15,6 +15,7 @@
 #include "vast/detail/process.hpp"
 #include "vast/detail/stable_set.hpp"
 #include "vast/detail/system.hpp"
+#include "vast/detail/settings.hpp"
 #include "vast/error.hpp"
 #include "vast/event_types.hpp"
 #include "vast/logger.hpp"
@@ -65,12 +66,14 @@ int main(int argc, char** argv) {
     // success when printing the help/documentation texts.
     return EXIT_SUCCESS;
   }
-  // Initialize actor system (and thereby CAF's logger).
-  if (!init_config(cfg, *invocation, std::cerr))
-    return EXIT_FAILURE;
+
+  auto log_context = vast::create_log_context(*invocation, cfg.content) ;
+  if (!log_context)
+    return EXIT_FAILURE ;
+
+  vast::detail::merge_settings((*invocation).options, cfg.content);
   caf::actor_system sys{cfg};
-  fixup_logger(cfg);
-  // Print the configuration file(s) that were loaded.
+
   if (!cfg.config_file_path.empty())
     cfg.config_files.emplace_back(std::move(cfg.config_file_path));
   for (auto& path : cfg.config_files)

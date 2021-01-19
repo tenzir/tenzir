@@ -58,6 +58,7 @@ const char* descriptions[] = {
   "silent",
   "out_of_memory",
   "system_error",
+  "breaking_change",
 };
 
 static_assert(ec{std::size(descriptions)} == ec::ec_count,

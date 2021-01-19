@@ -84,6 +84,7 @@ option(VAST_ENABLE_ASSERTIONS "Enable Assertions"
 # VAST installation. Concretely, it enables the dynamic binary and libraries to
 # use relative paths for loading their dependencies.
 option(VAST_RELOCATABLE_INSTALL "Enable relocatable installations" ON)
+option(VAST_DISABLE_SDT "Dont generate USDT tracepoint instrumentation" OFF)
 option(VAST_USE_BUNDLED_CAF "Always use the CAF submodule" OFF)
 option(ENABLE_ZEEK_TO_VAST "Build zeek-to-vast" ON)
 cmake_dependent_option(
@@ -93,6 +94,9 @@ option(VAST_STATIC_EXECUTABLE "Link VAST statically"
        $ENV{VAST_STATIC_EXECUTABLE})
 option(VAST_USE_JEMALLOC "Use jemalloc instead of libc malloc"
        "${VAST_STATIC_EXECUTABLE}")
+cmake_dependent_option(
+  VAST_ENABLE_BUILDID "Include a unique identifier into the elf notes section"
+  ON "CMAKE_EXECUTABLE_FORMAT STREQUAL ELF" OFF)
 cmake_dependent_option(
   BUILD_SHARED_LIBS "Build shared libraries instead of static" ON
   "NOT VAST_STATIC_EXECUTABLE" OFF)
@@ -236,6 +240,10 @@ endmacro ()
 # Respect environment variables.
 set(LDFLAGS "$ENV{LDFLAGS}")
 set(ARFLAGS "$ENV{ARFLAGS}")
+
+if (VAST_ENABLE_BUILDID)
+  string(APPEND LDFLAGS " -Wl,--build-id")
+endif ()
 
 set(CMAKE_CXX_STANDARD 17)
 
@@ -507,6 +515,13 @@ get_filename_component(flatbuffers_dir ${flatbuffers_dir} DIRECTORY) # <prefix>
 find_package(yaml-cpp 0.6.2 REQUIRED HINTS ${YAML_CPP_ROOT})
 get_filename_component(yaml_cpp_dir "${YAML_CPP_INCLUDE_DIR}" ABSOLUTE)
 get_filename_component(yaml_cpp_dir "${yaml_cpp_dir}" DIRECTORY)
+
+option(SPDLOG_FMT_EXTERNAL "Use spdlog with external libfmt" OFF)
+find_package(spdlog 1.5.0 REQUIRED)
+if (SPDLOG_FMT_EXTERNAL)
+  find_package(fmt 5.2.1 REQUIRED)
+endif()
+
 
 if (NOT VAST_USE_BUNDLED_CAF)
   # Try to find the required CAF components first...

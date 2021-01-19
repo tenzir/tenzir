@@ -91,6 +91,8 @@ enum class ec : uint8_t {
   out_of_memory,
   /// An error from interacting with the operating system.
   system_error,
+  /// An breaking version change.
+  breaking_change,
   /// No error; number of error codes.
   ec_count,
 };

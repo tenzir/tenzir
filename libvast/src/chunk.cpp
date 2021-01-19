@@ -14,6 +14,7 @@
 #include "vast/chunk.hpp"
 
 #include "vast/detail/narrow.hpp"
+#include "vast/detail/tracepoint.hpp"
 #include "vast/error.hpp"
 #include "vast/io/read.hpp"
 #include "vast/io/save.hpp"
@@ -37,6 +38,9 @@ namespace vast {
 // -- constructors, destructors, and assignment operators ----------------------
 
 chunk::~chunk() noexcept {
+  auto data = view_.data();
+  auto sz = view_.size();
+  VAST_TRACEPOINT(chunk_delete, data, sz);
   if (deleter_)
     std::invoke(deleter_);
 }
@@ -163,7 +167,9 @@ caf::error inspect(caf::deserializer& source, chunk_ptr& x) {
 
 chunk::chunk(view_type view, deleter_type&& deleter) noexcept
   : view_{view}, deleter_{std::move(deleter)} {
-  // nop
+  auto data = view.data();
+  auto sz = view.size();
+  VAST_TRACEPOINT(chunk_make, data, sz);
 }
 
 } // namespace vast

@@ -60,16 +60,16 @@ void check_value(object o, T x) {
 
 } // namespace
 
-TEST(format) {
-  CHECK(is_fixstr(format{0b1010'0000}));
-  CHECK(is_fixstr(format{0b1010'0001}));
-  CHECK(is_fixstr(format{0b1011'1111}));
-  CHECK(is_fixarray(format{0b1001'0000}));
-  CHECK(is_fixarray(format{0b1001'1011}));
-  CHECK(is_fixarray(format{0b1001'1111}));
-  CHECK(is_fixmap(format{0b1000'0000}));
-  CHECK(is_fixmap(format{0b1000'1011}));
-  CHECK(is_fixmap(format{0b1000'1111}));
+TEST(format) { // error: reference to 'format' is ambiguous
+  CHECK(is_fixstr(vast::msgpack::format{0b1010'0000}));
+  CHECK(is_fixstr(vast::msgpack::format{0b1010'0001}));
+  CHECK(is_fixstr(vast::msgpack::format{0b1011'1111}));
+  CHECK(is_fixarray(vast::msgpack::format{0b1001'0000}));
+  CHECK(is_fixarray(vast::msgpack::format{0b1001'1011}));
+  CHECK(is_fixarray(vast::msgpack::format{0b1001'1111}));
+  CHECK(is_fixmap(vast::msgpack::format{0b1000'0000}));
+  CHECK(is_fixmap(vast::msgpack::format{0b1000'1011}));
+  CHECK(is_fixmap(vast::msgpack::format{0b1000'1111}));
 }
 
 FIXTURE_SCOPE(msgpack_tests, fixture)
@@ -81,7 +81,7 @@ TEST(nil) {
 }
 
 TEST(invalid format) {
-  auto never_used = static_cast<format>(0xc1);
+  auto never_used = static_cast<vast::msgpack::format>(0xc1);
   buf.push_back(byte{never_used});
   check_value(object{buf}, never_used);
 }

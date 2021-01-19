@@ -5,7 +5,7 @@ ENV PREFIX /usr/local
 
 RUN apt-get -qq update && apt-get -qq install -y libasan5 libc++1 libc++abi1 \
   libpcap0.8 openssl lsb-release python3 python3-pip jq tcpdump rsync wget \
-  libflatbuffers-dev libyaml-cpp-dev
+  libflatbuffers-dev libyaml-cpp-dev libspdlog-dev
 # Install Apache Arrow (c.f. https://arrow.apache.org/install/)
 # TODO: Revert the commit that introduced this version pinning once ch20162
 # is done and we can use latest upstream again.

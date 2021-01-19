@@ -268,7 +268,10 @@ public:
 
   /// Constructs a Zeek writer.
   /// @param dir The path where to write the log file(s) to.
-  writer(path dir);
+  /// @param show_timestamp_tags Flag to control whether to include comments
+  /// with `#open` and `#close` tags in the output. Setting this flag to
+  /// `false` produces a deterministic output.
+  writer(path dir, bool show_timestamp_tags);
 
   error write(const table_slice& e) override;
 
@@ -279,6 +282,7 @@ public:
 private:
   path dir_;
   type previous_layout_;
+  bool show_timestamp_tags_;
 
   /// One writer for each layout.
   std::unordered_map<std::string, ostream_writer_ptr> writers_;

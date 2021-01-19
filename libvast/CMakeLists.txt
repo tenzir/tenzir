@@ -254,6 +254,13 @@ endif ()
 
 target_link_libraries(libvast PRIVATE yaml-cpp)
 
+target_link_libraries(libvast PUBLIC spdlog::spdlog)
+
+if (SPDLOG_FMT_EXTERNAL)
+  target_link_libraries(libvast PUBLIC fmt::fmt)
+  target_compile_definitions(libvast PUBLIC SPDLOG_FMT_EXTERNAL)
+endif ()
+
 target_link_libraries(libvast PUBLIC ${flatbuffers_target})
 add_dependencies(libvast libvast_flatbuffers)
 

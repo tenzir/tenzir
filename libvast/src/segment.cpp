@@ -34,12 +34,21 @@
 #include <caf/binary_deserializer.hpp>
 #include <caf/binary_serializer.hpp>
 
+#include <flatbuffers/base.h> // FLATBUFFERS_MAX_BUFFER_SIZE
+
 namespace vast {
 
 using namespace binary_byte_literals;
 
 caf::expected<segment> segment::make(chunk_ptr chunk) {
   VAST_ASSERT(chunk != nullptr);
+  // FlatBuffers <= 1.11 does not correctly use '::flatbuffers::soffset_t' over
+  // 'soffset_t' in FLATBUFFERS_MAX_BUFFER_SIZE.
+  using ::flatbuffers::soffset_t;
+  if (chunk->size() >= FLATBUFFERS_MAX_BUFFER_SIZE)
+    return make_error(ec::format_error, "cannot read segment because its size",
+                      chunk->size(), "exceeds the maximum allowed size of",
+                      FLATBUFFERS_MAX_BUFFER_SIZE);
   auto s = fbs::GetSegment(chunk->data());
   VAST_ASSERT(s); // `GetSegment` is just a cast, so this cant become null.
   if (s->segment_type() != fbs::segment::Segment::v0)

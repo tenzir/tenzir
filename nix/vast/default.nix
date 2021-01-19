@@ -12,6 +12,7 @@
 , libpcap
 , arrow-cpp
 , flatbuffers
+, spdlog
 , libyamlcpp
 , broker
 , jemalloc
@@ -67,7 +68,7 @@ stdenv.mkDerivation rec {
 
   nativeBuildInputs = [ cmake cmake-format ];
   propagatedNativeBuildInputs = [ pkgconfig pandoc ];
-  buildInputs = [ libpcap jemalloc broker libyamlcpp ]
+  buildInputs = [ libpcap jemalloc broker libyamlcpp spdlog ]
     # Required for backtrace on musl libc.
     ++ lib.optional (isStatic && buildType == "CI") libexecinfo;
   propagatedBuildInputs = [ arrow-cpp caf flatbuffers ];

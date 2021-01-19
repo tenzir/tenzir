@@ -110,7 +110,10 @@ auto make_root_command(std::string_view path) {
         .add<std::string>("aging-query", "query for aging out obsolete data")
         .add<std::string>("shutdown-grace-period",
                           "time to wait until component shutdown "
-                          "finishes cleanly before inducing a hard kill");
+                          "finishes cleanly before inducing a hard kill")
+        ;
+
+
   ob = add_index_opts(std::move(ob));
   ob = add_archive_opts(std::move(ob));
   return std::make_unique<command>(path, "", documentation::vast,
