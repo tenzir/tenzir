@@ -106,4 +106,11 @@ address_index::lookup_impl(relational_operator op, data_view d) const {
     d);
 }
 
+size_t address_index::memusage_impl() const {
+  auto acc = v4_.memusage();
+  for (const auto& byte_index : bytes_)
+    acc += byte_index.memusage();
+  return acc;
+}
+
 } // namespace vast

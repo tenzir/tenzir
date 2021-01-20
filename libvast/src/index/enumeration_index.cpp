@@ -64,4 +64,8 @@ enumeration_index::lookup_impl(relational_operator op, data_view d) const {
   return caf::visit(f, d);
 }
 
+size_t enumeration_index::memusage_impl() const {
+  return index_.memusage();
+}
+
 } // namespace vast

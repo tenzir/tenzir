@@ -129,4 +129,8 @@ subnet_index::lookup_impl(relational_operator op, data_view d) const {
     d);
 }
 
+size_t subnet_index::memusage_impl() const {
+  return network_.memusage() + length_.memusage();
+}
+
 } // namespace vast

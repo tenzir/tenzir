@@ -51,6 +51,8 @@ private:
   caf::expected<ids>
   lookup_impl(relational_operator op, data_view x) const override;
 
+  size_t memusage_impl() const override;
+
   std::vector<value_index_ptr> elements_;
   size_t max_size_;
   size_bitmap_index size_;

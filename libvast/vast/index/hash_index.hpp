@@ -248,6 +248,12 @@ private:
     return caf::make_error(ec::unsupported_operator, op);
   }
 
+  size_t memusage_impl() const override {
+    return digests_.capacity() * sizeof(digest_type)
+           + unique_digests_.size() * sizeof(key)
+           + seeds_.size() * sizeof(typename decltype(seeds_)::value_type);
+  }
+
   bool immutable() const {
     return unique_digests_.empty() && !digests_.empty();
   }

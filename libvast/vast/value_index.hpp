@@ -61,6 +61,8 @@ public:
   /// @returns The result of the lookup or an error upon failure.
   caf::expected<ids> lookup(relational_operator op, data_view x) const;
 
+  size_t memusage() const;
+
   /// Merges another value index with this one.
   /// @param other The value index to merge.
   /// @returns `true` on success.
@@ -91,6 +93,8 @@ private:
 
   virtual caf::expected<ids>
   lookup_impl(relational_operator op, data_view x) const = 0;
+
+  virtual size_t memusage_impl() const = 0;
 
   ewah_bitmap mask_;         ///< The position of all values excluding nil.
   ewah_bitmap none_;         ///< The positions of nil values.

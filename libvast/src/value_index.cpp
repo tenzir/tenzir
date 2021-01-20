@@ -84,6 +84,10 @@ value_index::lookup(relational_operator op, data_view x) const {
   return std::move(*result);
 }
 
+size_t value_index::memusage() const {
+  return mask_.memusage() + none_.memusage() + memusage_impl();
+}
+
 value_index::size_type value_index::offset() const {
   return std::max(none_.size(), mask_.size());
 }
