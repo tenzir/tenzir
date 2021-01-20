@@ -126,6 +126,11 @@ active_indexer(active_indexer_actor::stateful_pointer<indexer_state> self,
     [=](atom::shutdown) {
       self->quit(caf::exit_reason::user_shutdown); // clang-format fix
     },
+    [=](atom::status, status_verbosity) {
+      caf::settings result;
+      put(result, "memory-usage", self->state.idx->memusage());
+      return result;
+    },
   };
 }
 

@@ -598,8 +598,54 @@ active_partition_actor::behavior_type active_partition(
       auto eval = self->spawn(evaluator, expr, self, triples);
       return self->delegate(eval, client);
     },
-    [=](atom::status, status_verbosity /*v*/) -> caf::config_value::dictionary {
-      return {};
+    [=](atom::status,
+        status_verbosity v) -> caf::typed_response_promise<caf::settings> {
+      struct req_state_t {
+        // Promise to the original client request.
+        caf::typed_response_promise<caf::settings> rp;
+        // Maps nodes to a map associating components with status information.
+        caf::settings content;
+        size_t memory_usage = 0;
+      };
+      auto req_state = std::make_shared<req_state_t>();
+      req_state->rp = self->make_response_promise<caf::settings>();
+      auto deliver = [&](auto&& req_state) {
+        put(req_state->content, "memory-usage", req_state->memory_usage);
+        req_state->rp.deliver(req_state->content);
+      };
+      bool deferred = false;
+      auto& indexer_states = put_list(req_state->content, "indexers");
+      for (auto& i : self->state.indexers) {
+        deferred = true;
+        self->request(i.second, caf::infinite, atom::status_v, v)
+          .then(
+            [=, &indexer_states](
+              caf::dictionary<caf::config_value> indexer_status) {
+              auto& ps = indexer_states.emplace_back().as_dictionary();
+              put(ps, "field", i.first.fqn());
+              if (auto s = caf::get_if<caf::config_value::integer>(
+                    &indexer_status, "memory-usage"))
+                req_state->memory_usage += *s;
+              if (v >= status_verbosity::debug)
+                put(ps, "data", std::move(indexer_status));
+              // Both handlers have a copy of req_state.
+              if (req_state.use_count() == 2)
+                deliver(std::move(req_state));
+            },
+            [=, &indexer_states](caf::error err) {
+              VAST_WARNING(self, "failed to retrieve status from",
+                           i.first.fqn(), ":", render(err));
+              auto& ps = indexer_states.emplace_back().as_dictionary();
+              put(ps, "id", to_string(id));
+              put(ps, "error", render(err));
+              // Both handlers have a copy of req_state.
+              if (req_state.use_count() == 2)
+                deliver(std::move(req_state));
+            });
+      }
+      if (!deferred)
+        deliver(std::move(req_state));
+      return req_state->rp;
     },
   };
 }

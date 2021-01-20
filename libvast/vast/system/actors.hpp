@@ -118,7 +118,9 @@ using active_indexer_actor = typed_actor_fwd<
   // Finalizes the ACTIVE INDEXER into a chunk, which containes an INDEXER.
   caf::replies_to<atom::snapshot>::with<chunk_ptr>>
   // Conform the the INDEXER ACTOR interface.
-  ::extend_with<indexer_actor>::unwrap;
+  ::extend_with<indexer_actor>
+  // Conform to the procol of the STATUS CLIENT actor.
+  ::extend_with<status_client_actor>::unwrap;
 
 /// The ACCOUNTANT actor interface.
 using accountant_actor = typed_actor_fwd<
