@@ -18,6 +18,8 @@ jobs:
   docker:
     name: Build Docker Image
     runs-on: ubuntu-20.04
+    env:
+      DOCKER_BUILDKIT: 1
     steps:
 
     - uses: actions/checkout@v2
