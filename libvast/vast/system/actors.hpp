@@ -164,8 +164,6 @@ using index_actor = typed_actor_fwd<
   caf::reacts_to<expression>,
   // Queries PARTITION actors for a given query id.
   caf::reacts_to<uuid, uint32_t>,
-  // Replaces the SYNOPSIS of the PARTITION witht he given partition id.
-  caf::reacts_to<atom::replace, uuid, std::shared_ptr<partition_synopsis>>,
   // Erases the given events from the INDEX, and returns their ids.
   caf::replies_to<atom::erase, uuid>::with<ids>>
   // Conform to the protocol of the QUERY SUPERVISOR MASTER actor.
@@ -260,8 +258,8 @@ using active_partition_actor = typed_actor_fwd<
   caf::replies_to<caf::stream<table_slice>>::with< //
     caf::inbound_stream_slot<table_slice>>,
   // Persists the active partition at the specified path.
-  caf::replies_to<atom::persist, path, index_actor>::with< //
-    atom::ok>,
+  caf::replies_to<atom::persist, path>::with< //
+    std::shared_ptr<partition_synopsis>>,
   // A repeatedly called continuation of the persist request.
   caf::reacts_to<atom::persist, atom::resume>>
   // Conform to the protocol of the PARTITION.

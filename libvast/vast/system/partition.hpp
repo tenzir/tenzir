@@ -105,15 +105,13 @@ struct active_partition_state {
   /// The number of events in the partition.
   size_t events;
 
-  /// Actor handle of the index actor.
-  index_actor index;
-
   /// Actor handle of the filesystem actor.
   filesystem_actor filesystem;
 
-  /// Promise that gets satisfied when the partition state was serialized
+  /// Promise that gets satisfied after the partition state was serialized
   /// and written to disk.
-  caf::typed_response_promise<atom::ok> persistence_promise;
+  caf::typed_response_promise<std::shared_ptr<partition_synopsis>>
+    persistence_promise;
 
   /// Path where the index state is written.
   std::optional<path> persist_path;

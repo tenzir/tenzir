@@ -21,6 +21,8 @@
 #include "vast/system/spawn_arguments.hpp"
 #include "vast/uuid.hpp"
 
+#include <caf/settings.hpp>
+
 namespace vast::system {
 
 maybe_actor spawn_importer(node_actor* self, spawn_arguments& args) {

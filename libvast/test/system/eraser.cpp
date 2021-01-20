@@ -101,9 +101,6 @@ mock_index(system::index_actor::stateful_pointer<mock_index_state> self) {
         anon_self->send(hdl, take_one(self->state.deltas));
       anon_self->send(hdl, atom::done_v);
     },
-    [=](atom::replace, uuid, std::shared_ptr<partition_synopsis>) {
-      FAIL("no mock implementation available");
-    },
     [=](atom::erase, uuid) -> ids { FAIL("no mock implementation available"); },
   };
 }
