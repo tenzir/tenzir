@@ -41,6 +41,8 @@ public:
 
   size_type size() const;
 
+  size_t memusage() const;
+
   // -- modifiers ------------------------------------------------------------
 
   void append_bit(bool bit);

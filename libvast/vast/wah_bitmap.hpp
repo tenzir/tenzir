@@ -93,6 +93,8 @@ public:
 
   size_type size() const;
 
+  size_t memusage() const;
+
   const block_vector& blocks() const;
 
   // -- modifiers ------------------------------------------------------------

@@ -30,6 +30,10 @@ wah_bitmap::size_type wah_bitmap::size() const {
   return num_bits_;
 }
 
+size_t wah_bitmap::memusage() const {
+  return blocks_.capacity() * sizeof(block_type);
+}
+
 const wah_bitmap::block_vector& wah_bitmap::blocks() const {
   return blocks_;
 }

@@ -40,6 +40,10 @@ size_t base::size() const {
   return values_.size();
 }
 
+size_t base::memusage() const {
+  return values_.capacity() * sizeof(value_type);
+}
+
 typename base::value_type& base::operator[](size_t i) {
   return values_[i];
 }

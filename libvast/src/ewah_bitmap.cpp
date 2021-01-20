@@ -27,6 +27,10 @@ ewah_bitmap::size_type ewah_bitmap::size() const {
   return num_bits_;
 }
 
+size_t ewah_bitmap::memusage() const {
+  return blocks_.capacity() * sizeof(block_type);
+}
+
 const ewah_bitmap::block_vector& ewah_bitmap::blocks() const {
   return blocks_;
 }
