@@ -60,6 +60,12 @@ in {
       "-DSIMDJSON_BUILD_STATIC=ON"
     ];
   });
+  spdlog = prev.spdlog.overrideAttrs (old: {
+    cmakeFlags = old.cmakeFlags ++ lib.optionals isStatic [
+      "-DSPDLOG_BUILD_STATIC=ON"
+      "-DSPDLOG_BUILD_SHARED=OFF"
+    ];
+  });
   vast-source = final.nix-gitignore.gitignoreSource [] ./..;
   vast = final.callPackage ./vast {inherit stdenv;};
   vast-ci = final.vast.override {
