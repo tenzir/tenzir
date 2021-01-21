@@ -103,6 +103,12 @@ get_schema_dirs(const caf::actor_system_config& cfg,
 /// @returns The parsed schema.
 caf::expected<schema> load_schema(const path& schema_file);
 
+class type_table;
+
+caf::expected<schema>
+load_schema(const path& schema_file, const type_table& global_symbols,
+            type_table& local_symbols);
+
 /// Loads *.schema files from the given directories.
 /// @param schema_dirs The directories to load schemas from.
 /// @param max_recursion The maximum number of nested directories to traverse

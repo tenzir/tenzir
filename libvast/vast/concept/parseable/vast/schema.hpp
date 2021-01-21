@@ -23,8 +23,13 @@
 
 namespace vast {
 
-struct schema_parser : parser<schema_parser> {
+struct shared_schema_parser : parser<shared_schema_parser> {
   using attribute = schema;
+
+  shared_schema_parser(const type_table& gs, type_table& ls)
+    : global_symbols{gs}, local_symbols{ls} {
+    // nop
+  }
 
   /// The parser for an identifier.
   // clang-format off
@@ -39,7 +44,6 @@ struct schema_parser : parser<schema_parser> {
 
   template <class Iterator>
   bool parse(Iterator& f, const Iterator& l, schema& sch) const {
-    type_table symbols;
     auto to_type = [&](std::tuple<std::string, type> t) -> type {
       auto& [name, ty] = t;
       // If the type has already a name, we're dealing with a symbol and have
@@ -47,11 +51,11 @@ struct schema_parser : parser<schema_parser> {
       if (!ty.name().empty())
         ty = alias_type{ty}; // TODO: attributes
       ty.name(name);
-      symbols.add(name, ty); // FIXME: check return value
+      local_symbols.add(name, ty); // FIXME: check return value
       return ty;
     };
     // We can't use & because the operand is a parser, and our DSL overloads &.
-    auto tp = type_parser{std::addressof(symbols)};
+    auto tp = type_parser{std::addressof(local_symbols)};
     // clang-format off
     auto decl = ("type" >> skp >> id >> skp >> '=' >> skp >> tp) ->* to_type;
     // clang-format on
@@ -64,6 +68,21 @@ struct schema_parser : parser<schema_parser> {
       if (!sch.add(t))
         return false;
     return true;
+  }
+
+  const type_table& global_symbols;
+  type_table& local_symbols;
+};
+
+struct schema_parser : parser<schema_parser> {
+  using attribute = schema;
+
+  template <class Iterator>
+  bool parse(Iterator& f, const Iterator& l, schema& sch) const {
+    type_table gs;
+    type_table ls;
+    auto p = shared_schema_parser{gs, ls};
+    return p(f, l, sch);
   }
 };
 

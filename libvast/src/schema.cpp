@@ -263,10 +263,26 @@ caf::expected<schema> load_schema(const path& schema_file) {
 }
 
 caf::expected<schema>
+load_schema(const path& schema_file, const type_table& global_symbols,
+            type_table& local_symbols) {
+  if (schema_file.empty())
+    return caf::make_error(ec::filesystem_error, "empty path");
+  auto str = load_contents(schema_file);
+  if (!str)
+    return str.error();
+  auto p = shared_schema_parser{global_symbols, local_symbols};
+  schema result;
+  if (!p(*str, result))
+    return caf::make_error(ec::parse_error, "failed at", schema_file);
+  return result;
+}
+
+caf::expected<schema>
 load_schema(const detail::stable_set<path>& schema_dirs, size_t max_recursion) {
   if (max_recursion == 0)
     return ec::recursion_limit_reached;
   vast::schema types;
+  type_table global_symbols;
   for (const auto& dir : schema_dirs) {
     VAST_VERBOSE("loading schemas from {}", dir);
     if (!exists(dir)) {
@@ -277,9 +293,10 @@ load_schema(const detail::stable_set<path>& schema_dirs, size_t max_recursion) {
     auto filter
       = [](const path& f) { return detail::ends_with(f.str(), ".schema"); };
     auto schema_files = filter_dir(dir, std::move(filter), max_recursion);
+    type_table local_symbols;
     for (auto f : schema_files) {
       VAST_DEBUG("loading schema {}", f);
-      auto schema = load_schema(f);
+      auto schema = load_schema(f, global_symbols, local_symbols);
       if (!schema) {
         VAST_ERROR("{} {} {}", __func__, render(schema.error()), f);
         continue;
@@ -290,6 +307,8 @@ load_schema(const detail::stable_set<path>& schema_dirs, size_t max_recursion) {
         return caf::make_error(ec::format_error, merged.error().context(),
                                "in schema file", f);
     }
+    local_symbols.merge(std::move(global_symbols));
+    global_symbols = std::move(local_symbols);
     types = schema::combine(types, directory_schema);
   }
   return types;
