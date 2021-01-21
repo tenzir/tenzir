@@ -87,9 +87,14 @@ chunk::size_type chunk::size() const noexcept {
 }
 
 caf::expected<chunk::size_type> chunk::incore() const noexcept {
+#if VAST_LINUX || VAST_BSD || VAST_MACOS
   auto sz = sysconf(_SC_PAGESIZE);
   auto pages = (size() / sz) + !!(size() % sz);
-  auto buf = std::vector(pages, (unsigned char) 0);
+#  if VAST_LINUX
+  auto buf = std::vector(pages, static_cast<unsigned char>(0));
+#  else
+  auto buf = std::vector(pages, '\0');
+#  endif
   if (mincore(const_cast<value_type*>(data()), size(), buf.data()))
     return caf::make_error(ec::system_error,
                            "failed in mincore(2):", std::strerror(errno));
@@ -99,6 +104,9 @@ caf::expected<chunk::size_type> chunk::incore() const noexcept {
                                    })
                    * sz;
   return in_memory;
+#else
+  return caf::make_error(ec::unimplemented);
+#endif
 }
 
 chunk::iterator chunk::begin() const noexcept {
