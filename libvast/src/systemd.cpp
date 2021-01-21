@@ -29,9 +29,9 @@ caf::error notify_ready() {
   VAST_VERBOSE_ANON("notifying systemd at", notify_socket_env);
   int socket = ::socket(AF_UNIX, SOCK_DGRAM | SOCK_CLOEXEC, 0);
   if (socket < 0)
-    return make_error(ec::system_error, "failed to create unix socket");
+    return caf::make_error(ec::system_error, "failed to create unix socket");
   if (detail::uds_sendmsg(socket, notify_socket_env, "READY=1\n") < 0)
-    return make_error(ec::system_error, "failed to send ready message");
+    return caf::make_error(ec::system_error, "failed to send ready message");
   return caf::none;
 }
 

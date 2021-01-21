@@ -45,15 +45,15 @@ connect_to_node(scoped_actor& self, const caf::settings& opts) {
   endpoint node_endpoint;
   auto endpoint_str = get_or(opts, "vast.endpoint", defaults::system::endpoint);
   if (!parsers::endpoint(endpoint_str, node_endpoint))
-    return make_error(ec::parse_error, "invalid endpoint", endpoint_str);
+    return caf::make_error(ec::parse_error, "invalid endpoint", endpoint_str);
   // Default to port 42000/tcp if none is set.
   if (!node_endpoint.port)
     node_endpoint.port = port{defaults::system::endpoint_port, port::tcp};
   if (node_endpoint.port->type() == port::port_type::unknown)
     node_endpoint.port->type(port::tcp);
   if (node_endpoint.port->type() != port::port_type::tcp)
-    return make_error(ec::invalid_configuration, "invalid protocol",
-                      *node_endpoint.port);
+    return caf::make_error(ec::invalid_configuration, "invalid protocol",
+                           *node_endpoint.port);
   VAST_DEBUG(self, "connects to remote node:", id);
   auto& sys_cfg = self->system().config();
   auto use_encryption = !sys_cfg.openssl_certificate.empty()
@@ -71,7 +71,8 @@ connect_to_node(scoped_actor& self, const caf::settings& opts) {
       return openssl::remote_actor(self->system(), node_endpoint.host,
                                    node_endpoint.port->number());
 #else
-      return make_error(ec::unspecified, "not compiled with OpenSSL support");
+      return caf::make_error(ec::unspecified, "not compiled with OpenSSL "
+                                              "support");
 #endif
     }
     auto& mm = self->system().middleman();

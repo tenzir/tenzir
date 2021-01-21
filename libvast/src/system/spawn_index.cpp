@@ -31,7 +31,7 @@ maybe_actor spawn_index(node_actor* self, spawn_arguments& args) {
   auto filesystem = caf::actor_cast<filesystem_actor>(
     self->state.registry.find_by_label("filesystem"));
   if (!filesystem)
-    return make_error(ec::lookup_error, "failed to find filesystem actor");
+    return caf::make_error(ec::lookup_error, "failed to find filesystem actor");
   namespace sd = vast::defaults::system;
   auto handle = self->spawn(
     index, filesystem, args.dir / args.label,

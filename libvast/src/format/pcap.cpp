@@ -208,10 +208,10 @@ caf::error reader::read_impl(size_t max_events, size_t max_slice_size,
   VAST_ASSERT(max_slice_size > 0);
   if (builder_ == nullptr) {
     if (!caf::holds_alternative<record_type>(packet_type_))
-      return make_error(ec::parse_error, "illegal packet type");
+      return caf::make_error(ec::parse_error, "illegal packet type");
     if (!reset_builder(caf::get<record_type>(packet_type_)))
-      return make_error(ec::parse_error,
-                        "unable to create builder for packet type");
+      return caf::make_error(ec::parse_error, "unable to create builder for "
+                                              "packet type");
   }
   // Local buffer for storing error messages.
   char buf[PCAP_ERRBUF_SIZE];
@@ -221,8 +221,8 @@ caf::error reader::read_impl(size_t max_events, size_t max_slice_size,
     if (interface_) {
       pcap_ = ::pcap_open_live(interface_->c_str(), snaplen_, 1, 1000, buf);
       if (!pcap_) {
-        return make_error(ec::format_error, "failed to open interface",
-                          *interface_, ":", buf);
+        return caf::make_error(ec::format_error, "failed to open interface",
+                               *interface_, ":", buf);
       }
       if (pseudo_realtime_ > 0) {
         pseudo_realtime_ = 0;
@@ -230,7 +230,7 @@ caf::error reader::read_impl(size_t max_events, size_t max_slice_size,
       }
       VAST_INFO(this, "listens on interface", *interface_);
     } else if (input_ != "-" && !exists(input_)) {
-      return make_error(ec::format_error, "no such file: ", input_);
+      return caf::make_error(ec::format_error, "no such file: ", input_);
     } else {
 #ifdef PCAP_TSTAMP_PRECISION_NANO
       pcap_ = ::
@@ -242,8 +242,8 @@ caf::error reader::read_impl(size_t max_events, size_t max_slice_size,
 #endif
       if (!pcap_) {
         flows_.clear();
-        return make_error(ec::format_error, "failed to open pcap file ", input_,
-                          ": ", std::string{buf});
+        return caf::make_error(ec::format_error, "failed to open pcap file ",
+                               input_, ": ", std::string{buf});
       }
       VAST_INFO(this, "reads trace from", input_);
       if (pseudo_realtime_ > 0)
@@ -271,19 +271,20 @@ caf::error reader::read_impl(size_t max_events, size_t max_slice_size,
     if (r == 0)
       return finish(f, caf::none); // timed out
     if (r == -2)
-      return finish(f, make_error(ec::end_of_input, "reached end of trace"));
+      return finish(f, caf::make_error(ec::end_of_input, "reached end of "
+                                                         "trace"));
     if (r == -1) {
       auto err = std::string{::pcap_geterr(pcap_)};
       ::pcap_close(pcap_);
       pcap_ = nullptr;
-      return finish(f, make_error(ec::format_error,
-                                  "failed to get next packet: ", err));
+      return finish(f, caf::make_error(ec::format_error,
+                                       "failed to get next packet: ", err));
     }
     // Parse frame.
     span<const byte> frame{reinterpret_cast<const byte*>(data), header->len};
     frame = decapsulate(frame, frame_type::ethernet);
     if (frame.empty())
-      return make_error(ec::format_error, "failed to decapsulate frame");
+      return caf::make_error(ec::format_error, "failed to decapsulate frame");
     constexpr size_t ethernet_header_size = 14;
     auto layer3 = frame.subspan<ethernet_header_size>();
     span<const byte> layer4;
@@ -299,11 +300,11 @@ caf::error reader::read_impl(size_t max_events, size_t max_slice_size,
       case ether_type::ipv4: {
         constexpr size_t ipv4_header_size = 20;
         if (header->len < ethernet_header_size + ipv4_header_size)
-          return make_error(ec::format_error, "IPv4 header too short");
+          return caf::make_error(ec::format_error, "IPv4 header too short");
         size_t header_size = (to_integer<uint8_t>(layer3[0]) & 0x0f) * 4;
         if (header_size < ipv4_header_size)
-          return make_error(ec::format_error,
-                            "IPv4 header too short: ", header_size, " bytes");
+          return caf::make_error(
+            ec::format_error, "IPv4 header too short: ", header_size, " bytes");
         auto orig_h
           = reinterpret_cast<const uint32_t*>(std::launder(layer3.data() + 12));
         auto resp_h
@@ -316,7 +317,7 @@ caf::error reader::read_impl(size_t max_events, size_t max_slice_size,
       }
       case ether_type::ipv6: {
         if (header->len < ethernet_header_size + 40)
-          return make_error(ec::format_error, "IPv6 header too short");
+          return caf::make_error(ec::format_error, "IPv6 header too short");
         auto orig_h
           = reinterpret_cast<const uint32_t*>(std::launder(layer3.data() + 8));
         auto resp_h
@@ -393,7 +394,7 @@ caf::error reader::read_impl(size_t max_events, size_t max_slice_size,
           && builder_->add(conn.dst_port.number())
           && (!community_id_ || builder_->add(std::string_view{cid}))
           && builder_->add(packet))) {
-      return make_error(ec::parse_error, "unable to fill row");
+      return caf::make_error(ec::parse_error, "unable to fill row");
     }
     ++produced;
     ++batch_events_;
@@ -492,15 +493,15 @@ caf::error writer::write(const table_slice& slice) {
     pcap_ = ::pcap_open_dead(DLT_RAW, snaplen_);
 #endif
     if (!pcap_)
-      return make_error(ec::format_error, "failed to open pcap handle");
+      return caf::make_error(ec::format_error, "failed to open pcap handle");
     dumper_ = ::pcap_dump_open(pcap_, trace_.c_str());
     if (!dumper_)
-      return make_error(ec::format_error, "failed to open pcap dumper");
+      return caf::make_error(ec::format_error, "failed to open pcap dumper");
   }
   auto&& layout = slice.layout();
   if (!congruent(layout, pcap_packet_type)
       && !congruent(layout, pcap_packet_type_community_id))
-    return make_error(ec::format_error, "invalid pcap packet type");
+    return caf::make_error(ec::format_error, "invalid pcap packet type");
   // TODO: consider iterating in natural order for the slice.
   for (size_t row = 0; row < slice.rows(); ++row) {
     auto payload_field = slice.at(row, 6, *pcap_packet_type.at("payload"));
@@ -530,10 +531,10 @@ caf::error writer::write(const table_slice& slice) {
 
 caf::expected<void> writer::flush() {
   if (!dumper_)
-    return make_error(ec::format_error, "pcap dumper not open");
+    return caf::make_error(ec::format_error, "pcap dumper not open");
   VAST_DEBUG(this, "flushes at packet", total_packets_);
   if (::pcap_dump_flush(dumper_) == -1)
-    return make_error(ec::format_error, "failed to flush");
+    return caf::make_error(ec::format_error, "failed to flush");
   return caf::no_error;
 }
 

@@ -81,8 +81,8 @@ db_version read_db_version(const vast::path& db_dir) {
 
 caf::error initialize_db_version(const vast::path& db_dir) {
   if (!exists(db_dir))
-    return make_error(ec::filesystem_error,
-                      "db-directory does not exist:", db_dir.str());
+    return caf::make_error(ec::filesystem_error,
+                           "db-directory does not exist:", db_dir.str());
   auto version_path = db_dir / "VERSION";
   // Do nothing if a VERSION file already exists.
   if (exists(version_path))
@@ -90,7 +90,8 @@ caf::error initialize_db_version(const vast::path& db_dir) {
   std::ofstream fs(version_path.str());
   fs << to_string(db_version::latest) << std::endl;
   if (!fs)
-    return make_error(ec::filesystem_error, "could not write version file");
+    return caf::make_error(ec::filesystem_error, "could not write version "
+                                                 "file");
   return ec::no_error;
 }
 

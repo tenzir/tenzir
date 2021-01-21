@@ -46,8 +46,9 @@ caf::message start_command_impl(start_command_extra_steps extra_steps,
   VAST_TRACE(inv);
   // Bail out early for bogus invocations.
   if (caf::get_or(inv.options, "vast.node", false))
-    return caf::make_message(make_error(ec::parse_error, "cannot start a local "
-                                                         "node"));
+    return caf::make_message(caf::make_error(ec::parse_error, "cannot start a "
+                                                              "local "
+                                                              "node"));
   // Fetch SSL settings from config.
   auto& sys_cfg = sys.config();
   auto use_encryption = !sys_cfg.openssl_certificate.empty()
@@ -60,7 +61,7 @@ caf::message start_command_impl(start_command_extra_steps extra_steps,
   auto str = get_or(inv.options, "vast.endpoint", defaults::system::endpoint);
   if (!parsers::endpoint(str, node_endpoint))
     return caf::make_message(
-      make_error(ec::parse_error, "invalid endpoint", str));
+      caf::make_error(ec::parse_error, "invalid endpoint", str));
   // Default to port 42000/tcp if none is set.
   if (!node_endpoint.port)
     node_endpoint.port = port{defaults::system::endpoint_port, port::tcp};
@@ -78,7 +79,8 @@ caf::message start_command_impl(start_command_extra_steps extra_steps,
 #if VAST_ENABLE_OPENSSL
       return caf::openssl::publish(node, node_endpoint.port->number(), host);
 #else
-      return make_error(ec::unspecified, "not compiled with OpenSSL support");
+      return caf::make_error(ec::unspecified, "not compiled with OpenSSL "
+                                              "support");
 #endif
     auto& mm = sys.middleman();
     auto reuse_address = true;

@@ -31,11 +31,11 @@ maybe_actor spawn_importer(node_actor* self, spawn_arguments& args) {
   auto [archive, index, type_registry]
     = self->state.registry.find_by_label("archive", "index", "type-registry");
   if (!archive)
-    return make_error(ec::missing_component, "archive");
+    return caf::make_error(ec::missing_component, "archive");
   if (!index)
-    return make_error(ec::missing_component, "index");
+    return caf::make_error(ec::missing_component, "index");
   if (!type_registry)
-    return make_error(ec::missing_component, "type-registry");
+    return caf::make_error(ec::missing_component, "type-registry");
   auto handle
     = self->spawn(importer, args.dir / args.label,
                   caf::actor_cast<archive_actor>(archive),

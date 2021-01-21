@@ -38,10 +38,11 @@ caf::expected<schema> schema::merge(const schema& s1, const schema& s2) {
     if (auto u = s2.find(t.name())) {
       if (t != *u && t.name() == u->name())
         // Type clash: cannot accommodate two types with same name.
-        return make_error(ec::format_error,
-                          "type clash: cannot accommodate two types with the "
-                          "same name:",
-                          t.name());
+        return caf::make_error(ec::format_error,
+                               "type clash: cannot accommodate two types with "
+                               "the "
+                               "same name:",
+                               t.name());
     } else {
       result.types_.push_back(t);
     }
@@ -205,8 +206,9 @@ get_schema(const caf::settings& options, const std::string& category) {
   auto sc = caf::get_if<std::string>(&options, category + ".schema");
   auto sf = caf::get_if<std::string>(&options, category + ".schema-file");
   if (sc && sf)
-    make_error(ec::invalid_configuration, "had both schema and schema-file "
-                                          "provided");
+    caf::make_error(ec::invalid_configuration,
+                    "had both schema and schema-file "
+                    "provided");
   if (!sc && !sf)
     return schema;
   caf::expected<vast::schema> update = caf::no_error;
@@ -253,7 +255,7 @@ get_schema_dirs(const caf::actor_system_config& cfg,
 
 caf::expected<schema> load_schema(const path& schema_file) {
   if (schema_file.empty())
-    return make_error(ec::filesystem_error, "empty path");
+    return caf::make_error(ec::filesystem_error, "empty path");
   auto str = load_contents(schema_file);
   if (!str)
     return str.error();
@@ -285,8 +287,8 @@ load_schema(const detail::stable_set<path>& schema_dirs, size_t max_recursion) {
       if (auto merged = schema::merge(directory_schema, *schema))
         directory_schema = std::move(*merged);
       else
-        return make_error(ec::format_error, merged.error().context(),
-                          "in schema file", f);
+        return caf::make_error(ec::format_error, merged.error().context(),
+                               "in schema file", f);
     }
     types = schema::combine(types, directory_schema);
   }

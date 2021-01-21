@@ -122,7 +122,7 @@ pack(flatbuffers::FlatBufferBuilder& builder, const uuid& x) {
 
 caf::error unpack(const fbs::uuid::v0& x, uuid& y) {
   if (x.data()->size() != uuid::num_bytes)
-    return make_error(ec::format_error, "wrong uuid format");
+    return caf::make_error(ec::format_error, "wrong uuid format");
   span<const byte, uuid::num_bytes> bytes{
     reinterpret_cast<const byte*>(x.data()->data()), x.data()->size()};
   y = uuid{bytes};

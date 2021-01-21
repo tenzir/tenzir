@@ -22,7 +22,7 @@ namespace vast::io {
 caf::error write(const path& filename, span<const byte> xs) {
   file f{filename};
   if (!f.open(file::write_only))
-    return make_error(ec::filesystem_error, "failed open file");
+    return caf::make_error(ec::filesystem_error, "failed open file");
   return f.write(xs.data(), xs.size());
 }
 

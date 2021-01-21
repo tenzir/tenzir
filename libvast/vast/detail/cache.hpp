@@ -233,7 +233,7 @@ public:
 
   template <class Inspector>
   friend auto inspect(Inspector& f, cache& c) {
-    auto load = [&]() -> error {
+    auto load = [&]() -> caf::error {
       for (auto i = c.xs_.begin(); i != c.xs_.end(); ++i)
         c.tracker_.emplace(i->first, i);
       return {};

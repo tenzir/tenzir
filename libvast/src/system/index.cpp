@@ -148,7 +148,7 @@ caf::error index_state::load_from_disk() {
     // code into an `unpack()` function.
     auto index = fbs::GetIndex(buffer->data());
     if (index->index_type() != fbs::index::Index::v0)
-      return make_error(ec::format_error, "invalid index version");
+      return caf::make_error(ec::format_error, "invalid index version");
     auto index_v0 = index->index_as_v0();
     auto partition_uuids = index_v0->partitions();
     VAST_ASSERT(partition_uuids);
@@ -185,7 +185,8 @@ caf::error index_state::load_from_disk() {
     }
     auto stats = index_v0->stats();
     if (!stats)
-      return make_error(ec::format_error, "no stats in persisted index state");
+      return caf::make_error(ec::format_error, "no stats in persisted index "
+                                               "state");
     for (const auto stat : *stats) {
       this->stats.layouts[stat->name()->str()]
         = layout_statistics{stat->count()};
@@ -674,7 +675,7 @@ index(index_actor::stateful_pointer<index_state> self,
       bool adjust_stats = true;
       if (!self->state.persisted_partitions.count(partition_id)) {
         if (!exists(path)) {
-          rp.deliver(make_error(ec::logic_error, "unknown partition"));
+          rp.deliver(caf::make_error(ec::logic_error, "unknown partition"));
           return rp;
         }
         // As a special case, if the partition exists on disk we just continue
@@ -691,8 +692,8 @@ index(index_actor::stateful_pointer<index_state> self,
             // partition.
             auto partition = fbs::GetPartition(chunk->data());
             if (partition->partition_type() != fbs::partition::Partition::v0) {
-              rp.deliver(make_error(ec::format_error, "unexpected format "
-                                                      "version"));
+              rp.deliver(caf::make_error(ec::format_error, "unexpected format "
+                                                           "version"));
               return;
             }
             vast::ids all_ids;
@@ -702,9 +703,10 @@ index(index_actor::stateful_pointer<index_state> self,
               vast::ids ids;
               if (auto error
                   = fbs::deserialize_bytes(partition_stats->ids(), ids)) {
-                rp.deliver(make_error(ec::format_error, "could not deserialize "
-                                                        "ids: "
-                                                          + render(error)));
+                rp.deliver(
+                  caf::make_error(ec::format_error, "could not deserialize "
+                                                    "ids: "
+                                                      + render(error)));
                 return;
               }
               all_ids |= ids;

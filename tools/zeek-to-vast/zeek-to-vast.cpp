@@ -233,21 +233,26 @@ parse_query_event(const broker::data& x) {
   std::pair<std::string, std::string> result;
   auto event = broker::zeek::Event(x);
   if (event.name() != "VAST::query")
-    return make_error(vast::ec::parse_error, "invalid event name", event.name());
+    return caf::make_error(vast::ec::parse_error, "invalid event name",
+                           event.name());
   if (event.args().size() != 2)
-    return make_error(vast::ec::parse_error, "invalid number of arguments");
+    return caf::make_error(vast::ec::parse_error, "invalid number of "
+                                                  "arguments");
   auto query_id = caf::get_if<std::string>(&event.args()[0]);
   if (!query_id)
-    return make_error(vast::ec::parse_error, "invalid type of 1st argument");
+    return caf::make_error(vast::ec::parse_error, "invalid type of 1st "
+                                                  "argument");
   result.first = *query_id;
   if (!vast::parsers::uuid(*query_id))
-    return make_error(vast::ec::parse_error, "invalid query UUID", *query_id);
+    return caf::make_error(vast::ec::parse_error, "invalid query UUID",
+                           *query_id);
   auto expression = caf::get_if<std::string>(&event.args()[1]);
   if (!expression)
-    return make_error(vast::ec::parse_error, "invalid type of 2nd argument");
+    return caf::make_error(vast::ec::parse_error, "invalid type of 2nd "
+                                                  "argument");
   if (!vast::parsers::expr(*expression))
-    return make_error(vast::ec::parse_error, "invalid query expression",
-                      *expression);
+    return caf::make_error(vast::ec::parse_error, "invalid query expression",
+                           *expression);
   result.second = *expression;
   return result;
 }

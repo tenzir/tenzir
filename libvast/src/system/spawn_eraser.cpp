@@ -51,9 +51,9 @@ spawn_eraser(system::node_actor* self, system::spawn_arguments& args) {
   auto [index, archive]
     = self->state.registry.find_by_label("index", "archive");
   if (!index)
-    return make_error(ec::missing_component, "index");
+    return caf::make_error(ec::missing_component, "index");
   if (!archive)
-    return make_error(ec::missing_component, "archive");
+    return caf::make_error(ec::missing_component, "archive");
   // Spawn the eraser.
   auto handle = self->spawn(eraser, aging_frequency, eraser_query,
                             caf::actor_cast<index_actor>(index),

@@ -398,7 +398,7 @@ exporter(exporter_actor::stateful_pointer<exporter_state> self, expression expr,
               shutdown(self);
             }
           },
-          [=](const error& e) { shutdown(self, e); });
+          [=](const caf::error& e) { shutdown(self, e); });
     },
     [=](atom::statistics, const caf::actor& statistics_subscriber) {
       VAST_DEBUG(self, "registers statistics subscriber",
@@ -415,7 +415,7 @@ exporter(exporter_actor::stateful_pointer<exporter_state> self, expression expr,
           [=](caf::unit_t&, table_slice slice) {
             handle_batch(self, std::move(slice));
           },
-          [=](caf::unit_t&, const error& err) {
+          [=](caf::unit_t&, const caf::error& err) {
             if (err)
               VAST_ERROR(self, "got error during streaming:", err);
           })

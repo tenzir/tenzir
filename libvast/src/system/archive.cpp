@@ -145,15 +145,15 @@ archive(archive_actor::stateful_pointer<archive_state> self, path dir,
       if (!st.session || st.session_id != session_id) {
         VAST_DEBUG(self, "considers extraction finished for invalidated "
                          "session");
-        self->send(requester, atom::done_v, make_error(ec::no_error));
+        self->send(requester, atom::done_v, caf::make_error(ec::no_error));
         st.next_session();
         return;
       }
       // Extract the next slice.
       auto slice = st.session->next();
       if (!slice) {
-        auto err
-          = slice.error() ? std::move(slice.error()) : make_error(ec::no_error);
+        auto err = slice.error() ? std::move(slice.error())
+                                 : caf::make_error(ec::no_error);
         VAST_DEBUG(self, "finished extraction from the current session:", err);
         self->send(requester, atom::done_v, std::move(err));
         st.next_session();

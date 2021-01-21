@@ -20,9 +20,6 @@
 
 namespace vast {
 
-using caf::error;
-using caf::make_error;
-
 /// VAST's error codes.
 enum class ec : uint8_t {
   /// No error.

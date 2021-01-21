@@ -272,8 +272,8 @@ bool exists(const path& p) {
 
 caf::error create_symlink(const path& target, const path& link) {
   if (::symlink(target.str().c_str(), link.str().c_str()))
-    return make_error(ec::filesystem_error,
-                      "failed in symlink(2):", std::strerror(errno));
+    return caf::make_error(ec::filesystem_error,
+                           "failed in symlink(2):", std::strerror(errno));
   return caf::none;
 }
 
@@ -295,26 +295,27 @@ bool rm(const path& p) {
 caf::error mkdir(const path& p) {
   auto components = split(p);
   if (components.empty())
-    return make_error(ec::filesystem_error, "cannot mkdir empty path");
+    return caf::make_error(ec::filesystem_error, "cannot mkdir empty path");
   path c;
   for (auto& comp : components) {
     c /= comp;
     if (exists(c)) {
       auto kind = c.kind();
       if (!(kind == path::directory || kind == path::symlink))
-        return make_error(ec::filesystem_error,
-                          "not a directory or symlink:", c);
+        return caf::make_error(ec::filesystem_error,
+                               "not a directory or symlink:", c);
     } else {
       if (!VAST_CREATE_DIRECTORY(c.str().data())) {
         // Because there exists a TOCTTOU issue here, we have to check again.
         if (errno == EEXIST) {
           auto kind = c.kind();
           if (!(kind == path::directory || kind == path::symlink))
-            return make_error(ec::filesystem_error,
-                              "not a directory or symlink:", c);
+            return caf::make_error(ec::filesystem_error,
+                                   "not a directory or symlink:", c);
         } else {
-          return make_error(ec::filesystem_error,
-                            "failed in mkdir(2):", std::strerror(errno), c);
+          return caf::make_error(ec::filesystem_error,
+                                 "failed in mkdir(2):", std::strerror(errno),
+                                 c);
         }
       }
     }
@@ -325,7 +326,7 @@ caf::error mkdir(const path& p) {
 caf::expected<std::uintmax_t> file_size(const path& p) noexcept {
   struct stat st;
   if (::lstat(p.str().data(), &st) < 0)
-    return make_error(ec::filesystem_error, "file does not exist");
+    return caf::make_error(ec::filesystem_error, "file does not exist");
   // TODO: before returning, we may want to check whether we're dealing with a
   // regular file.
   return st.st_size;
@@ -337,8 +338,8 @@ caf::expected<std::string> load_contents(const path& p) {
   std::ostream out{&obuf};
   std::ifstream in{p.str()};
   if (!in)
-    return make_error(ec::filesystem_error,
-                      "failed to read from file " + p.str());
+    return caf::make_error(ec::filesystem_error,
+                           "failed to read from file " + p.str());
   out << in.rdbuf();
   return contents;
 }

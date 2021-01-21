@@ -117,14 +117,15 @@ caf::expected<schema> infer_json(const std::string& input) {
   // Try JSONLD.
   auto lines = detail::split(input, "\r\n");
   if (lines.empty())
-    return make_error(ec::parse_error, "failed to get first line of input");
+    return caf::make_error(ec::parse_error, "failed to get first line of "
+                                            "input");
   auto x = to<json>(lines[0]);
   if (!x)
-    return make_error(ec::parse_error, "failed to parse JSON value");
+    return caf::make_error(ec::parse_error, "failed to parse JSON value");
   auto deduced = deduce(*x);
   auto rec_ptr = caf::get_if<record_type>(&deduced);
   if (!rec_ptr)
-    return make_error(ec::parse_error, "could not parse JSON object");
+    return caf::make_error(ec::parse_error, "could not parse JSON object");
   auto rec = std::move(*rec_ptr);
   rec.name("json"); // TODO: decide (and document) what name we want here
   schema result;

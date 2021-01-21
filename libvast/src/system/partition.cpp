@@ -240,8 +240,8 @@ pack(flatbuffers::FlatBufferBuilder& builder, const active_partition_state& x) {
     auto actor_id = actor.id();
     auto chunk_it = x.chunks.find(actor_id);
     if (chunk_it == x.chunks.end())
-      return make_error(ec::logic_error,
-                        "no chunk for for actor id " + to_string(actor_id));
+      return caf::make_error(ec::logic_error, "no chunk for for actor id "
+                                                + to_string(actor_id));
     auto& chunk = chunk_it->second;
     auto data = builder.CreateVector(
       reinterpret_cast<const uint8_t*>(chunk->data()), chunk->size());
@@ -297,26 +297,31 @@ caf::error
 unpack(const fbs::partition::v0& partition, passive_partition_state& state) {
   // Check that all fields exist.
   if (!partition.uuid())
-    return make_error(ec::format_error, "missing 'uuid' field in partition "
-                                        "flatbuffer");
+    return caf::make_error(ec::format_error,
+                           "missing 'uuid' field in partition "
+                           "flatbuffer");
   auto combined_layout = partition.combined_layout();
   if (!combined_layout)
-    return make_error(ec::format_error, "missing 'layouts' field in partition "
-                                        "flatbuffer");
+    return caf::make_error(ec::format_error,
+                           "missing 'layouts' field in partition "
+                           "flatbuffer");
   auto indexes = partition.indexes();
   if (!indexes)
-    return make_error(ec::format_error, "missing 'indexes' field in partition "
-                                        "flatbuffer");
+    return caf::make_error(ec::format_error,
+                           "missing 'indexes' field in partition "
+                           "flatbuffer");
   for (auto qualified_index : *indexes) {
     if (!qualified_index->qualified_field_name())
-      return make_error(ec::format_error, "missing field name in qualified "
-                                          "index");
+      return caf::make_error(ec::format_error,
+                             "missing field name in qualified "
+                             "index");
     auto index = qualified_index->index();
     if (!index)
-      return make_error(ec::format_error, "missing index name in qualified "
-                                          "index");
+      return caf::make_error(ec::format_error,
+                             "missing index name in qualified "
+                             "index");
     if (!index->data())
-      return make_error(ec::format_error, "missing data in index");
+      return caf::make_error(ec::format_error, "missing data in index");
   }
   if (auto error = unpack(*partition.uuid(), state.id))
     return error;
@@ -333,7 +338,7 @@ unpack(const fbs::partition::v0& partition, passive_partition_state& state) {
                "found incoherent number of indexers in deserialized state;",
                state.combined_layout.fields.size(), "fields for",
                indexes->size(), "indexes");
-    return make_error(ec::format_error, "incoherent number of indexers");
+    return caf::make_error(ec::format_error, "incoherent number of indexers");
   }
   // We only create dummy entries here, since the positions of the `indexers`
   // vector must be the same as in `combined_layout`. The actual indexers are
@@ -357,9 +362,9 @@ unpack(const fbs::partition::v0& partition, passive_partition_state& state) {
 
 caf::error unpack(const fbs::partition::v0& x, partition_synopsis& ps) {
   if (!x.partition_synopsis())
-    return make_error(ec::format_error, "missing partition synopsis");
+    return caf::make_error(ec::format_error, "missing partition synopsis");
   if (!x.type_ids())
-    return make_error(ec::format_error, "missing type_ids");
+    return caf::make_error(ec::format_error, "missing type_ids");
   return unpack(*x.partition_synopsis(), ps);
 }
 
@@ -512,7 +517,7 @@ active_partition_actor::behavior_type active_partition(
       self->state.stage->out().close();
       if (self->state.indexers.empty()) {
         self->state.persistence_promise.deliver(
-          make_error(ec::logic_error, "partition has no indexers"));
+          caf::make_error(ec::logic_error, "partition has no indexers"));
         return;
       }
       VAST_DEBUG(self, "sends 'snapshot' to", self->state.indexers.size(),
