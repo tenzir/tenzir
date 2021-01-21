@@ -57,8 +57,7 @@ file(
       --app \"$app\" \
       --directory vast-integration-test \
       \"$@\"
-      . \"${CMAKE_CURRENT_BINARY_DIR}/plugin_integration.sh\""
-      )
+      . \"${CMAKE_CURRENT_BINARY_DIR}/plugin_integration.sh\"")
 
 add_custom_target(
   integration
@@ -84,9 +83,16 @@ install(FILES "${PROJECT_SOURCE_DIR}/vast.yaml.example"
 # -- add plugins ---------------------------------------------------------------
 
 option(VAST_PLUGINS "Specify a list of plugins to build with VAST" "")
-file (WRITE "${CMAKE_CURRENT_BINARY_DIR}/plugin_integration.sh" "")
+file(WRITE "${CMAKE_CURRENT_BINARY_DIR}/plugin_integration.sh" "")
 if (VAST_PLUGINS)
   foreach (plugin_source_dir IN LISTS VAST_PLUGINS)
+    if (NOT IS_ABSOLUTE "${plugin_source_dir}"
+        OR NOT EXISTS "${plugin_source_dir}/CMakeLists.txt")
+      message(
+        FATAL_ERROR
+          "Specified plugin \"${plugin_source_dir}\" must be an absolute path to an existing directory that contains a CMakeLists.txt file."
+      )
+    endif ()
     # Note that we must explicitly specify a binary directory, because the plugin
     # source directory may not be a subdirectory of the current list directory.
     string(MD5 plugin_path_hash "${plugin_source_dir}")
@@ -96,8 +102,7 @@ if (VAST_PLUGINS)
     add_subdirectory("${plugin_source_dir}" "${plugin_binary_dir}")
     if (EXISTS "${plugin_source_dir}/integration/tests.yaml")
       file(
-        APPEND
-        "${CMAKE_CURRENT_BINARY_DIR}/plugin_integration.sh"
+        APPEND "${CMAKE_CURRENT_BINARY_DIR}/plugin_integration.sh"
         "python \"\$base_dir/integration.py\" \
         --app \"\$app\" \
         --set \"${plugin_source_dir}/integration/tests.yaml\" \
