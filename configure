@@ -173,9 +173,9 @@ while [ $# -ne 0 ]; do
       ;;
     --with-example-plugin)
       if [ -z "${plugins}" ]; then
-        plugins="$PWD/examples/plugins/example"
+        plugins="${sourcedir}/examples/plugins/example"
       else
-        plugins="${plugins};$PWD/examples/plugins/example"
+        plugins="${plugins};${sourcedir}/examples/plugins/example"
       fi
       ;;
     --with-plugin=*)
