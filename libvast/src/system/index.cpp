@@ -297,7 +297,7 @@ index_state::status(status_verbosity v) const {
   auto& result = req_state->content;
   auto& index_status = put_dictionary(result, "index");
   auto deliver = [&](auto&& req_state) {
-    put(index_status, "sum_partition_bytes", req_state->memory_usage);
+    put(index_status, "sum-partition-bytes", req_state->memory_usage);
     req_state->rp.deliver(req_state->content);
   };
   bool deferred = false;
@@ -316,10 +316,10 @@ index_state::status(status_verbosity v) const {
       layout_object.insert_or_assign(name, std::move(xs));
     }
     put(index_status, "meta-index-bytes", meta_idx.size_bytes());
-    put(index_status, "num_active_partitions",
+    put(index_status, "num-active-partitions",
         active_partition.actor == nullptr ? 0 : 1);
-    put(index_status, "num_cached_partitions", inmem_partitions.size());
-    put(index_status, "num_unpersisted_partitions", unpersisted.size());
+    put(index_status, "num-cached-partitions", inmem_partitions.size());
+    put(index_status, "num-unpersisted-partitions", unpersisted.size());
     auto& partitions = put_dictionary(index_status, "partitions");
     auto partition_status
       = [&](const uuid& id, partition_actor pa, caf::config_value::list& xs) {
