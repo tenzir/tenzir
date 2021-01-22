@@ -25,8 +25,6 @@
 #include <cstdint>
 #include <vector>
 
-// -- define helper macros -----------------------------------------------------
-
 #define VAST_CAF_ATOM_ALIAS(name)                                              \
   using name = caf::name##_atom;                                               \
   [[maybe_unused]] constexpr inline auto name##_v = caf::name##_atom_v;
@@ -184,27 +182,6 @@ class inbound_stream_slot;
 
 } // namespace caf
 
-// -- vast::fbs ----------------------------------------------------------------
-
-namespace vast::fbs {
-
-struct FlatTableSlice;
-struct TableSlice;
-
-} // namespace vast::fbs
-
-namespace vast::fbs::table_slice::msgpack {
-
-struct v0;
-
-} // namespace vast::fbs::table_slice::msgpack
-
-namespace vast::fbs::table_slice::arrow {
-
-struct v0;
-
-} // namespace vast::fbs::table_slice::arrow
-
 // -- vast ---------------------------------------------------------------------
 
 namespace vast {
@@ -322,21 +299,38 @@ using real = double;
 /// Enumeration type.
 using enumeration = uint8_t;
 
-} // namespace vast
+namespace fbs {
 
-// -- vast::format -------------------------------------------------------------
+struct FlatTableSlice;
+struct TableSlice;
 
-namespace vast::format {
+namespace table_slice {
+
+namespace msgpack {
+
+struct v0;
+
+} // namespace msgpack
+
+namespace arrow {
+
+struct v0;
+
+} // namespace arrow
+
+} // namespace table_slice
+
+} // namespace fbs
+
+namespace format {
 
 class writer;
 
 using writer_ptr = std::unique_ptr<writer>;
 
-} // namespace vast::format
+} // namespace format
 
-// -- vast::system -------------------------------------------------------------
-
-namespace vast::system {
+namespace system {
 
 class application;
 class configuration;
@@ -372,7 +366,9 @@ using node_actor = caf::stateful_actor<node_state>;
 using performance_report = std::vector<performance_sample>;
 using report = std::vector<data_point>;
 
-} // namespace vast::system
+} // namespace system
+
+} // namespace vast
 
 // -- type announcements -------------------------------------------------------
 
@@ -412,8 +408,6 @@ CAF_BEGIN_TYPE_ID_BLOCK(vast_types, caf::id_block::vast_atoms_last_type_id + 1)
   VAST_ADD_TYPE_ID((caf::stream<vast::table_slice>) )
 
 CAF_END_TYPE_ID_BLOCK(vast_types)
-
-  // -- undefine helper macros ---------------------------------------------------
 
 #undef VAST_CAF_ATOM_ALIAS
 #undef VAST_ADD_ATOM

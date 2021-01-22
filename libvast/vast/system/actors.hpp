@@ -17,11 +17,7 @@
 
 #include <caf/replies_to.hpp>
 
-// -- define helper macros -----------------------------------------------------
-
 #define VAST_ADD_TYPE_ID(type) CAF_ADD_TYPE_ID(vast_actors, type)
-
-// -- typed actors -------------------------------------------------------------
 
 namespace vast::system {
 
@@ -327,7 +323,5 @@ CAF_BEGIN_TYPE_ID_BLOCK(vast_actors, caf::id_block::vast_types_last_type_id + 1)
   VAST_ADD_TYPE_ID((vast::system::type_registry_actor))
 
 CAF_END_TYPE_ID_BLOCK(vast_actors)
-
-  // -- undefine helper macros ---------------------------------------------------
 
 #undef VAST_ADD_TYPE_ID
