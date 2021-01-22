@@ -30,20 +30,19 @@
 #include "vast/table_slice.hpp"
 #include "vast/uuid.hpp"
 
-#include <caf/typed_event_based_actor.hpp>
-
 using namespace vast;
 
 // -- scaffold for both test setups --------------------------------------------
 
 namespace {
 
-caf::behavior dummy_sink(caf::event_based_actor* self, size_t num_events,
-                         caf::actor overseer) {
+system::slice_stream_receiver::behavior_type
+dummy_sink(system::slice_stream_receiver::pointer self, size_t num_events,
+           caf::actor overseer) {
   return {[=](caf::stream<table_slice> in) {
     self->unbecome();
-    self->send(overseer, atom::ok_v);
-    self->make_sink(
+    anon_send(overseer, atom::ok_v);
+    auto sink = self->make_sink(
       in,
       [=](std::vector<table_slice>&) {
         // nop
@@ -51,10 +50,11 @@ caf::behavior dummy_sink(caf::event_based_actor* self, size_t num_events,
       [=](std::vector<table_slice>& xs, table_slice x) {
         xs.emplace_back(std::move(x));
         if (rows(xs) == num_events)
-          self->send(overseer, xs);
+          anon_send(overseer, xs);
         else if (rows(xs) > num_events)
           FAIL("dummy sink received too many events");
       });
+    return caf::inbound_stream_slot<table_slice>{sink.inbound_slot()};
   }};
 }
 
@@ -69,13 +69,13 @@ struct importer_fixture : Base {
   }
 
   ~importer_fixture() {
-    anon_send_exit(importer, caf::exit_reason::user_shutdown);
+    this->self->send_exit(importer, caf::exit_reason::user_shutdown);
   }
 
   auto add_sink() {
     auto snk
       = this->self->spawn(dummy_sink, rows(this->zeek_conn_log), this->self);
-    anon_send(importer, atom::add_v, snk);
+    this->self->send(importer, snk);
     fetch_ok();
     return snk;
   }

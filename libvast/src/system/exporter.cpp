@@ -275,22 +275,6 @@ exporter(exporter_actor::stateful_pointer<exporter_state> self, expression expr,
       self->state.sink = sink;
       self->monitor(self->state.sink);
     },
-    [=](atom::importer, const std::vector<caf::actor>& importers) {
-      // Register for events at running IMPORTERs.
-      if (has_continuous_option(self->state.options))
-        for (auto& importer : importers)
-          self
-            ->request(caf::actor_cast<importer_actor>(importer), caf::infinite,
-                      static_cast<exporter_actor>(self))
-            .then(
-              [=](caf::outbound_stream_slot<table_slice>) {
-                // nop
-              },
-              [=](caf::error err) {
-                VAST_ERROR(self, "failed to register for events from importer",
-                           importer, "with error:", render(err));
-              });
-    },
     [=](atom::run) {
       VAST_VERBOSE(self, "executes query:", to_string(self->state.expr));
       self->state.start = std::chrono::system_clock::now();

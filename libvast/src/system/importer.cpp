@@ -261,13 +261,8 @@ importer(importer_actor::stateful_pointer<importer_state> self, path dir,
       self->state.accountant = std::move(accountant);
       self->send(self->state.accountant, atom::announce_v, self->name());
     },
-    // Register the EXPORTER actor as a sink.
-    [=](exporter_actor exporter) {
-      VAST_DEBUG(self, "registers exporter", exporter);
-      return self->state.stage->add_outbound_path(std::move(exporter));
-    },
     // Add a new sink.
-    [=](atom::add, const caf::actor& subscriber) {
+    [=](const slice_stream_receiver& subscriber) {
       auto& st = self->state;
       VAST_DEBUG(self, "adds a new sink:", subscriber);
       return st.stage->add_outbound_path(subscriber);

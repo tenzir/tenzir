@@ -186,7 +186,7 @@ TEST(continuous query with importer) {
   importer_setup();
   MESSAGE("prepare exporter for continous query");
   exporter_setup(continuous);
-  send(importer, exporter);
+  send(importer, static_cast<system::slice_stream_receiver>(exporter));
   MESSAGE("ingest conn.log via importer");
   // Again: copy because we musn't mutate static test data.
   vast::detail::spawn_container_source(sys, zeek_conn_log, importer);
@@ -200,7 +200,7 @@ TEST(continuous query with mismatching importer) {
   MESSAGE("prepare exporter for continous query");
   expr = unbox(to<expression>("foo.bar == \"baz\""));
   exporter_setup(continuous);
-  send(importer, exporter);
+  send(importer, static_cast<system::slice_stream_receiver>(exporter));
   MESSAGE("ingest conn.log via importer");
   // Again: copy because we musn't mutate static test data.
   vast::detail::spawn_container_source(sys, zeek_conn_log, importer);
