@@ -15,6 +15,7 @@
 
 #include "vast/fwd.hpp"
 
+#include "vast/atoms.hpp"
 #include "vast/concept/printable/numeric/integral.hpp"
 #include "vast/concept/printable/std/chrono.hpp"
 #include "vast/concept/printable/to_string.hpp"
@@ -25,12 +26,11 @@
 #include "vast/logger.hpp"
 #include "vast/plugin.hpp"
 #include "vast/si_literals.hpp"
-#include "vast/system/flush_listener_actor.hpp"
 #include "vast/system/report.hpp"
-#include "vast/system/type_registry_actor.hpp"
+#include "vast/system/status_verbosity.hpp"
 #include "vast/table_slice.hpp"
+#include "vast/uuid.hpp"
 
-#include <caf/atom.hpp>
 #include <caf/attach_continuous_stream_stage.hpp>
 #include <caf/config_value.hpp>
 #include <caf/settings.hpp>
@@ -275,7 +275,7 @@ caf::behavior importer(importer_actor* self, path dir, archive_actor archive,
       VAST_DEBUG(self, "adds a new sink:", self->current_sender());
       st.stage->add_outbound_path(subscriber);
     },
-    [=](atom::subscribe, atom::flush, wrapped_flush_listener listener) {
+    [=](atom::subscribe, atom::flush, flush_listener_actor listener) {
       VAST_ASSERT(self->state.stage != nullptr);
       self->send(index, atom::subscribe_v, atom::flush_v, std::move(listener));
     },

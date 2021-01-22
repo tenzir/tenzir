@@ -4,12 +4,13 @@
 #include "vast/defaults.hpp"
 #include "vast/logger.hpp"
 #include "vast/path.hpp"
-#include "vast/system/archive_actor.hpp"
 #include "vast/system/disk_monitor.hpp"
-#include "vast/system/index_actor.hpp"
 #include "vast/system/node.hpp"
 #include "vast/system/node_control.hpp"
 #include "vast/system/spawn_arguments.hpp"
+#include "vast/uuid.hpp"
+
+#include <caf/settings.hpp>
 
 namespace vast::system {
 

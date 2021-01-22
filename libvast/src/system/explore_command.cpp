@@ -17,7 +17,6 @@
 #include "vast/error.hpp"
 #include "vast/logger.hpp"
 #include "vast/scope_linked.hpp"
-#include "vast/system/exporter_actor.hpp"
 #include "vast/system/make_sink.hpp"
 #include "vast/system/node_control.hpp"
 #include "vast/system/read_query.hpp"
@@ -25,6 +24,7 @@
 #include "vast/system/sink.hpp"
 #include "vast/system/spawn_explorer.hpp"
 #include "vast/system/spawn_or_connect_to_node.hpp"
+#include "vast/uuid.hpp"
 
 #include <caf/actor.hpp>
 #include <caf/event_based_actor.hpp>
@@ -109,8 +109,7 @@ caf::message explore_command(const invocation& inv, caf::actor_system& sys) {
   // explorer here, but that requires adding a type ID for exporter_actor. We
   // must re-think where we define typed actor interfaces to make them sendable
   // over the wire.
-  self->send(*explorer, atom::provision_v,
-             caf::actor_cast<caf::actor>(exporter));
+  self->send(*explorer, atom::provision_v, exporter);
   // Set the explorer as sink for the initial query exporter.
   self->send(exporter, atom::sink_v, *explorer);
   // (Ab)use query_statistics as done message.

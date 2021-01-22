@@ -17,9 +17,11 @@
 
 #include "vast/ids.hpp"
 #include "vast/store.hpp"
-#include "vast/system/accountant_actor.hpp"
-#include "vast/system/archive_actor.hpp"
+#include "vast/system/actors.hpp"
 #include "vast/system/instrumentation.hpp"
+
+#include <caf/actor_addr.hpp>
+#include <caf/typed_event_based_actor.hpp>
 
 #include <memory>
 #include <queue>

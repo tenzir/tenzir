@@ -15,8 +15,6 @@
 
 #include "vast/fwd.hpp"
 
-#include "vast/system/indexer_actor.hpp"
-
 #include <tuple>
 
 namespace vast::system {

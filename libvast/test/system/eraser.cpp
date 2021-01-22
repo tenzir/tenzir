@@ -28,10 +28,14 @@
 #include "vast/error.hpp"
 #include "vast/expression.hpp"
 #include "vast/ids.hpp"
+#include "vast/system/actors.hpp"
 #include "vast/system/archive.hpp"
 #include "vast/system/index.hpp"
 #include "vast/system/posix_filesystem.hpp"
 #include "vast/table_slice.hpp"
+#include "vast/uuid.hpp"
+
+#include <caf/typed_event_based_actor.hpp>
 
 using namespace std::literals::chrono_literals;
 using namespace vast;
@@ -72,7 +76,7 @@ mock_index(system::index_actor::stateful_pointer<mock_index_state> self) {
         system::status_verbosity) -> caf::config_value::dictionary {
       FAIL("no mock implementation available");
     },
-    [=](atom::subscribe, atom::flush, system::wrapped_flush_listener) {
+    [=](atom::subscribe, atom::flush, system::flush_listener_actor) {
       FAIL("no mock implementation available");
     },
     [=](expression&) {

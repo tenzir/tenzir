@@ -40,16 +40,18 @@
 #include "vast/io/save.hpp"
 #include "vast/json.hpp"
 #include "vast/logger.hpp"
-#include "vast/system/accountant_actor.hpp"
+#include "vast/meta_index.hpp"
 #include "vast/system/evaluator.hpp"
-#include "vast/system/filesystem_actor.hpp"
 #include "vast/system/partition.hpp"
 #include "vast/system/query_supervisor.hpp"
 #include "vast/system/shutdown.hpp"
+#include "vast/system/status_verbosity.hpp"
 #include "vast/table_slice.hpp"
+#include "vast/uuid.hpp"
 #include "vast/value_index.hpp"
 
 #include <caf/error.hpp>
+#include <caf/typed_event_based_actor.hpp>
 
 #include <flatbuffers/flatbuffers.h>
 
@@ -532,28 +534,21 @@ index(index_actor::stateful_pointer<index_state> self,
   });
   // Launch workers for resolving queries.
   for (size_t i = 0; i < num_workers; ++i)
-    self->spawn(query_supervisor, self);
+    self->spawn(query_supervisor,
+                caf::actor_cast<query_supervisor_master_actor>(self));
   return {
-    [=](atom::worker, query_supervisor_actor worker) {
-      if (!self->state.worker_available())
-        VAST_DEBUG(self, "delegates work to query supervisors");
-      self->state.idle_workers.emplace_back(std::move(worker));
-    },
     [=](atom::done, uuid partition_id) {
       VAST_DEBUG(self, "queried partition", partition_id, "successfully");
     },
-    [=](caf::stream<table_slice> in) {
+    [=](caf::stream<table_slice> in) -> caf::inbound_stream_slot<table_slice> {
       VAST_DEBUG(self, "got a new stream source");
       return self->state.stage->add_inbound_path(in);
     },
     [=](accountant_actor accountant) {
       self->state.accountant = std::move(accountant);
     },
-    [=](atom::status, status_verbosity v) -> caf::config_value::dictionary {
-      return self->state.status(v);
-    },
-    [=](atom::subscribe, atom::flush, wrapped_flush_listener listener) {
-      self->state.add_flush_listener(listener.actor);
+    [=](atom::subscribe, atom::flush, flush_listener_actor listener) {
+      self->state.add_flush_listener(std::move(listener));
     },
     [=](vast::expression expr) -> caf::result<void> {
       // TODO: This check is not required technically, but we use the query
@@ -722,6 +717,16 @@ index(index_actor::stateful_pointer<index_state> self,
           },
           [=](caf::error e) mutable { rp.deliver(e); });
       return rp;
+    },
+    // -- query_supervisor_master_actor ----------------------------------------
+    [=](atom::worker, query_supervisor_actor worker) {
+      if (!self->state.worker_available())
+        VAST_DEBUG(self, "delegates work to query supervisors");
+      self->state.idle_workers.emplace_back(std::move(worker));
+    },
+    // -- status_client_actor --------------------------------------------------
+    [=](atom::status, status_verbosity v) -> caf::config_value::dictionary {
+      return self->state.status(v);
     },
   };
 }

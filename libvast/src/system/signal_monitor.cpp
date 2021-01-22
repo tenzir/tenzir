@@ -14,6 +14,8 @@
 #include "vast/system/signal_monitor.hpp"
 
 #include "vast/fwd.hpp"
+
+#include "vast/atoms.hpp"
 #include "vast/logger.hpp"
 
 #include <caf/actor.hpp>

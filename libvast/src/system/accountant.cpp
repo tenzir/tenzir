@@ -25,6 +25,7 @@
 #include "vast/logger.hpp"
 #include "vast/path.hpp"
 #include "vast/system/report.hpp"
+#include "vast/system/status_verbosity.hpp"
 #include "vast/table_slice.hpp"
 #include "vast/table_slice_builder_factory.hpp"
 #include "vast/time.hpp"

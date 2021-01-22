@@ -13,15 +13,17 @@
 
 #include "vast/detail/add_message_types.hpp"
 
+#include "vast/atoms.hpp"
 #include "vast/bitmap.hpp"
 #include "vast/command.hpp"
 #include "vast/config.hpp"
 #include "vast/expression.hpp"
+#include "vast/meta_index.hpp"
 #include "vast/operator.hpp"
 #include "vast/query_options.hpp"
 #include "vast/schema.hpp"
+#include "vast/system/actors.hpp"
 #include "vast/system/component_registry.hpp"
-#include "vast/system/flush_listener_actor.hpp"
 #include "vast/system/query_status.hpp"
 #include "vast/system/report.hpp"
 #include "vast/system/type_registry.hpp"
@@ -30,11 +32,14 @@
 #include "vast/uuid.hpp"
 
 #include <caf/actor_system_config.hpp>
+#include <caf/typed_event_based_actor.hpp>
 
 namespace vast::detail {
 
 void add_message_types(caf::actor_system_config& cfg) {
-  cfg.add_message_types<caf::id_block::vast>();
+  cfg.add_message_types<caf::id_block::vast_types>();
+  cfg.add_message_types<caf::id_block::vast_atoms>();
+  cfg.add_message_types<caf::id_block::vast_actors>();
 }
 
 } // namespace vast::detail

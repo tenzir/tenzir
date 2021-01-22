@@ -24,18 +24,6 @@
 
 namespace vast {
 
-/// Signed integer type.
-using integer = int64_t;
-
-/// Unsigned integer type.
-using count = uint64_t;
-
-/// Floating point type.
-using real = double;
-
-/// Enumeration type.
-using enumeration = uint8_t;
-
 /// A random-access sequence of data.
 using list = std::vector<data>;
 

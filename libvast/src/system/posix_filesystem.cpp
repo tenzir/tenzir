@@ -17,6 +17,7 @@
 #include "vast/detail/assert.hpp"
 #include "vast/io/read.hpp"
 #include "vast/io/save.hpp"
+#include "vast/system/status_verbosity.hpp"
 
 #include <caf/config_value.hpp>
 #include <caf/dictionary.hpp>

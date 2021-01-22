@@ -13,18 +13,19 @@
 
 #pragma once
 
+#include "vast/fwd.hpp"
+
 #include "vast/test/fixtures/actor_system_and_events.hpp"
 #include "vast/test/test.hpp"
 
 #include "vast/aliases.hpp"
-#include "vast/fwd.hpp"
+#include "vast/atoms.hpp"
 #include "vast/table_slice.hpp"
 #include "vast/table_slice_builder.hpp"
 #include "vast/table_slice_builder_factory.hpp"
 #include "vast/type.hpp"
 #include "vast/view.hpp"
 
-#include <caf/atom.hpp>
 #include <caf/binary_deserializer.hpp>
 #include <caf/binary_serializer.hpp>
 

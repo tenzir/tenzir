@@ -73,8 +73,6 @@
 #include <fstream>
 #include <sstream>
 
-using namespace caf;
-
 namespace vast::system {
 
 namespace {
@@ -160,8 +158,8 @@ void collect_component_status(node_actor* self,
     if (component.type == "source" || component.type == "sink")
       continue;
     self
-      ->request<message_priority::high>(component.actor, timeout,
-                                        atom::status_v, v)
+      ->request<caf::message_priority::high>(component.actor, timeout,
+                                             atom::status_v, v)
       .then(
         [=, lab = label](caf::config_value::dictionary& xs) mutable {
           detail::merge_settings(xs, req_state->content, policy::merge_lists);
@@ -198,8 +196,8 @@ caf::message dump_command(const invocation& inv, caf::actor_system&) {
   // by hand.
   const auto timeout = caf::duration{defaults::system::initial_request_timeout};
   self
-    ->request<message_priority::high>(type_registry, timeout, atom::get_v,
-                                      atom::taxonomies_v)
+    ->request<caf::message_priority::high>(type_registry, timeout, atom::get_v,
+                                           atom::taxonomies_v)
     .then(
       [=](struct taxonomies taxonomies) mutable {
         auto result = list{};
@@ -320,7 +318,7 @@ caf::message kill_command(const invocation& inv, caf::actor_system&) {
 
 /// Lifts a factory function that accepts `local_actor*` as first argument
 /// to a function accpeting `node_actor*` instead.
-template <maybe_actor (*Fun)(local_actor*, spawn_arguments&)>
+template <maybe_actor (*Fun)(caf::local_actor*, spawn_arguments&)>
 node_state::component_factory_fun lift_component_factory() {
   return [](node_actor* self, spawn_arguments& args) {
     // Delegate to lifted function.
@@ -539,10 +537,11 @@ caf::behavior node(node_actor* self, std::string name, path dir,
     node_state::command_factory = std::move(extra);
   }
   // Initialize the file system with the node directory as root.
-  auto fs = self->spawn<linked + detached>(posix_filesystem, self->state.dir);
+  auto fs = self->spawn<caf::linked + caf::detached>(posix_filesystem,
+                                                     self->state.dir);
   self->state.registry.add(caf::actor_cast<caf::actor>(fs), "filesystem");
   // Remove monitored components.
-  self->set_down_handler([=](const down_msg& msg) {
+  self->set_down_handler([=](const caf::down_msg& msg) {
     VAST_DEBUG(self, "got DOWN from", msg.source);
     auto component = caf::actor_cast<caf::actor>(msg.source);
     auto type = self->state.registry.find_type_for(component);
@@ -557,7 +556,7 @@ caf::behavior node(node_actor* self, std::string name, path dir,
     self->state.registry.remove(component);
   });
   // Terminate deterministically on shutdown.
-  self->set_exit_handler([=](const exit_msg& msg) {
+  self->set_exit_handler([=](const caf::exit_msg& msg) {
     VAST_DEBUG(self, "got EXIT from", msg.source);
     auto& registry = self->state.registry;
     std::vector<caf::actor> actors;
@@ -613,8 +612,8 @@ caf::behavior node(node_actor* self, std::string name, path dir,
       this_node = self;
       return run(inv, self->system(), node_state::command_factory);
     },
-    [=](atom::put, const actor& component,
-        const std::string& type) -> result<atom::ok> {
+    [=](atom::put, const caf::actor& component,
+        const std::string& type) -> caf::result<atom::ok> {
       VAST_DEBUG(self, "got new", type);
       // Check if the new component is a singleton.
       auto& registry = self->state.registry;

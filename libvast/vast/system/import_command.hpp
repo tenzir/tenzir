@@ -20,8 +20,7 @@
 #include "vast/error.hpp"
 #include "vast/logger.hpp"
 #include "vast/scope_linked.hpp"
-#include "vast/system/accountant_actor.hpp"
-#include "vast/system/flush_listener_actor.hpp"
+#include "vast/system/actors.hpp"
 #include "vast/system/make_source.hpp"
 #include "vast/system/node_control.hpp"
 #include "vast/system/signal_monitor.hpp"
@@ -98,8 +97,7 @@ caf::message import_command(const invocation& inv, caf::actor_system& sys) {
           VAST_DEBUG(name, "received DOWN from source");
           if (caf::get_or(inv.options, "vast.import.blocking", false))
             self->send(importer, atom::subscribe_v, atom::flush::value,
-                       wrapped_flush_listener{
-                         caf::actor_cast<flush_listener_actor>(self)});
+                       caf::actor_cast<flush_listener_actor>(self));
           else
             stop = true;
         } else {

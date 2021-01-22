@@ -21,19 +21,17 @@
 #include "vast/fbs/index.hpp"
 #include "vast/meta_index.hpp"
 #include "vast/system/accountant.hpp"
-#include "vast/system/filesystem_actor.hpp"
-#include "vast/system/flush_listener_actor.hpp"
-#include "vast/system/index_actor.hpp"
+#include "vast/system/actors.hpp"
 #include "vast/system/partition.hpp"
-#include "vast/system/query_supervisor.hpp"
 #include "vast/uuid.hpp"
 
 #include <caf/actor.hpp>
 #include <caf/behavior.hpp>
-#include <caf/fwd.hpp>
+#include <caf/event_based_actor.hpp>
 #include <caf/meta/omittable_if_empty.hpp>
 #include <caf/meta/type_name.hpp>
 #include <caf/response_promise.hpp>
+#include <caf/typed_event_based_actor.hpp>
 
 #include <unordered_map>
 #include <vector>

@@ -13,8 +13,9 @@
 
 #include "vast/system/query_processor.hpp"
 
-#include "vast/expression.hpp"
 #include "vast/fwd.hpp"
+
+#include "vast/expression.hpp"
 #include "vast/ids.hpp"
 #include "vast/logger.hpp"
 

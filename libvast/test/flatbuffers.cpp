@@ -26,8 +26,6 @@
 #include "vast/msgpack_table_slice_builder.hpp"
 #include "vast/span.hpp"
 #include "vast/system/index.hpp"
-#include "vast/system/index_actor.hpp"
-#include "vast/system/index_client_actor.hpp"
 #include "vast/system/partition.hpp"
 #include "vast/system/posix_filesystem.hpp"
 #include "vast/table_slice.hpp"

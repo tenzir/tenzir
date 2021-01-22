@@ -34,8 +34,6 @@
 #include "vast/meta_index.hpp"
 #include "vast/qualified_record_field.hpp"
 #include "vast/synopsis.hpp"
-#include "vast/system/filesystem_actor.hpp"
-#include "vast/system/index_actor.hpp"
 #include "vast/system/indexer.hpp"
 #include "vast/system/shutdown.hpp"
 #include "vast/system/terminate.hpp"
