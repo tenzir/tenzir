@@ -152,7 +152,7 @@ caf::message import_command_json_with_benchmark(const invocation& inv,
         inv, sys);
 
     return caf::make_message(
-      make_error(ec::invalid_configuration, "unknown benchmark value"));
+      caf::make_error(ec::invalid_configuration, "unknown benchmark value"));
   }
 
   return import_command_json<
