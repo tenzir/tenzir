@@ -205,6 +205,7 @@ def run_step(
         stderr = work_dir / f"{step_id}.err"
         cmd = basecmd + step.command
         info_string = " ".join(map(str, cmd))
+        LOGGER.debug(f"!!!!!!!!!!!!!!!!!!!! {basecmd + step.command} \n\n")
         client = spawn(
             basecmd + step.command,
             stdin=subprocess.PIPE,

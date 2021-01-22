@@ -19,12 +19,12 @@
 #include "vast/defaults.hpp"
 #include "vast/detail/line_range.hpp"
 #include "vast/error.hpp"
-#include "vast/format/bench.hpp"
 #include "vast/format/multi_layout_reader.hpp"
 #include "vast/format/ostream_writer.hpp"
 #include "vast/json.hpp"
 #include "vast/logger.hpp"
 #include "vast/schema.hpp"
+#include "vast/system/instrumentation.hpp"
 
 #include <caf/expected.hpp>
 #include <caf/settings.hpp>
@@ -59,7 +59,7 @@ caf::error add(table_slice_builder& builder, const vast::json::object& xs,
 
 /// A reader for JSON data. It operates with a *selector* to determine the
 /// mapping of JSON object to the appropriate record type in the schema.
-template <class Selector, class BenchmarkMixin = bench::noop_benchmark_mixin>
+template <class Selector, class BenchmarkMixin = system::noop_benchmark_mixin>
 class reader final : public multi_layout_reader {
 public:
   using super = multi_layout_reader;
@@ -79,6 +79,11 @@ public:
   const char* name() const override;
 
   vast::system::report status() const override;
+
+  void
+  append_benchmark_metrics(std::vector<system::measurement>& measurements) {
+    benchmark_.append_benchmark_metrics(measurements);
+  }
 
 protected:
   caf::error

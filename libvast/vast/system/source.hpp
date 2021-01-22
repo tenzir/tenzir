@@ -195,14 +195,22 @@ struct source_state {
     // Send the source-specific performance metrics to the accountant.
     if (metrics.events > 0) {
       auto r = performance_report{{{std::string{name}, metrics}}};
+      if constexpr (system::has_benchmark_metrics<Reader>{}) {
+        std::vector<measurement> measurements;
+        reader.append_benchmark_metrics(measurements);
+        for (auto i = 0U; i < measurements.size(); ++i) {
+          r.push_back({std::string{name} + "-step-" + std::to_string(i),
+                       measurements[i]});
+        }
+      }
 #if VAST_LOG_LEVEL >= VAST_LOG_LEVEL_INFO
       for (const auto& [key, m] : r) {
         if (auto rate = m.rate_per_sec(); std::isfinite(rate))
-          VAST_INFO(self, "produced", m.events, "events at a rate of",
+          VAST_INFO(key, "produced", m.events, "events at a rate of",
                     static_cast<uint64_t>(rate), "events/sec in",
                     to_string(m.duration));
         else
-          VAST_INFO(self, "produced", m.events, "events in",
+          VAST_INFO(key, "produced", m.events, "events in",
                     to_string(m.duration));
       }
 #endif

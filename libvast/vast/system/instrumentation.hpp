@@ -66,6 +66,10 @@ struct timer {
     return timer{m};
   }
 
+  void restart() {
+    start_ = stopwatch::now();
+  }
+
   void stop(uint64_t events) {
     auto elapsed = stopwatch::now() - start_;
     m_ += {elapsed, events};
@@ -75,5 +79,123 @@ private:
   stopwatch::time_point start_ = stopwatch::now();
   measurement& m_;
 };
+
+/// A collapsable benchmark mixin.
+/// Defines all methods empty.
+struct noop_benchmark_mixin {
+  /// An iteration tracker that has noop implementation.
+  struct iteration_tracker {
+    constexpr void next_step() const noexcept {
+    }
+  };
+
+  template <class... Args>
+  constexpr void append_benchmark_metrics(Args&&...) const noexcept {
+  }
+
+  constexpr iteration_tracker make_iteration_tracker() const noexcept {
+    return {};
+  }
+};
+
+/// A real measuring  benchmark mixin based on `timer`.
+/// Coniders the number of steps is equal to N.
+template <int N>
+class timer_benchmark_mixin {
+public:
+  void append_benchmark_metrics(std::vector<measurement>& measurements) {
+    measurements.insert(measurements.end(), measurements_.begin(),
+                        measurements_.end());
+  }
+
+  friend class iteration_tracker;
+  class iteration_tracker {
+  public:
+    explicit iteration_tracker(timer_benchmark_mixin& totals) noexcept
+      : totals_{totals} {
+    }
+
+    void next_step() noexcept {
+      t.stop(1);
+      totals_.measurements_[current_step_++] += m;
+      m = {};
+      t.restart();
+    }
+
+  private:
+    int current_step_ = 0;
+    measurement m{};
+    timer t{m};
+    timer_benchmark_mixin& totals_;
+  };
+
+  constexpr iteration_tracker make_iteration_tracker() noexcept {
+    return iteration_tracker{*this};
+  }
+
+private:
+  std::array<measurement, N> measurements_;
+};
+
+/// A real measuring  benchmark mixin based on `timespec`.
+/// Coniders the number of steps is equal to N.
+template <int N>
+class timespec_benchmark_mixin {
+public:
+  void append_benchmark_metrics(std::vector<measurement>& measurements) {
+    for (auto i = 0; i < N; ++i) {
+      measurements.emplace_back(std::chrono::nanoseconds(events_durations[i]),
+                                events_for_step[i]);
+    }
+  }
+
+  friend class iteration_tracker;
+  class iteration_tracker {
+    static auto now() noexcept {
+      timespec t;
+      clock_gettime(CLOCK_MONOTONIC, &t);
+      return static_cast<uint64_t>(t.tv_sec) * 1000000000ULL + t.tv_nsec;
+    }
+
+  public:
+    explicit iteration_tracker(timespec_benchmark_mixin& totals) noexcept
+      : totals_{totals} {
+    }
+
+    ~iteration_tracker() noexcept {
+      for (auto i = 0; i < current_step_; ++i) {
+        totals_.events_for_step[i] += 1;
+        totals_.events_durations[i] += durations_[i];
+      }
+    }
+
+    void next_step() noexcept {
+      durations_[current_step_++] = now() - current_step_started_at_;
+      current_step_started_at_ = now();
+    }
+
+  private:
+    std::array<std::uint64_t, N> durations_;
+    int current_step_ = 0;
+    std::uint64_t current_step_started_at_ = now();
+    timespec_benchmark_mixin& totals_;
+  };
+
+  constexpr iteration_tracker make_iteration_tracker() noexcept {
+    return iteration_tracker{*this};
+  }
+
+private:
+  std::array<std::size_t, N> events_for_step{};
+  std::array<std::uint64_t, N> events_durations{};
+};
+
+template <class Reader, class = void>
+struct has_benchmark_metrics : std::false_type {};
+
+template <class Reader>
+struct has_benchmark_metrics<
+  Reader, std::void_t<decltype(std::declval<Reader>().append_benchmark_metrics(
+            std::declval<std::vector<measurement>&>()))>> : std::true_type {};
 
 } // namespace vast::system

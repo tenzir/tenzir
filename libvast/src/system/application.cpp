@@ -599,7 +599,7 @@ command::opts_builder source_opts_json(std::string_view category) {
     .add<bool>("simdjson", "Use simdjson for JSON "
                            "parsing")
     .add<std::string>("benchmark", "Benchmark type "
-                                   "(cycleclock or timespec)");
+                                   "(timer or timespec)");
 }
 
 command::opts_builder sink_opts(std::string_view category) {
