@@ -180,11 +180,20 @@ while [ $# -ne 0 ]; do
       fi
       ;;
     --with-plugin=*)
-      optarg="$(cd "$(dirname "$optarg")"; pwd)/$(basename "$optarg")"
+      plugin_parent_dir="$(dirname "$optarg")"
+      if ! [ -d "$plugin_parent_dir" ]; then
+        >&2 echo "not a directory: $plugin_parent_dir"
+        exit 1
+      fi
+      plugin_dir="$(cd "$plugin_parent_dir"; pwd)/$(basename "$optarg")"
+      if ! [ -d "$plugin_dir" ]; then
+        >&2 echo "not a directory: $plugin_dir"
+        exit 1
+      fi
       if [ -z "${plugins}" ]; then
-        plugins="${optarg}"
+        plugins="${plugin_dir}"
       else
-        plugins="${plugins};${optarg}"
+        plugins="${plugins};${plugin_dir}"
       fi
       ;;
     --with-type-id-checks)
