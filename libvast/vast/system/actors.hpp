@@ -15,6 +15,8 @@
 
 #include "vast/fwd.hpp"
 
+#include "vast/atoms.hpp"
+
 #include <caf/replies_to.hpp>
 
 #define VAST_ADD_TYPE_ID(type) CAF_ADD_TYPE_ID(vast_actors, type)
@@ -299,7 +301,7 @@ using exporter_actor = typed_actor_fwd<
 
 // -- type announcements -------------------------------------------------------
 
-CAF_BEGIN_TYPE_ID_BLOCK(vast_actors, caf::id_block::vast_types::end)
+CAF_BEGIN_TYPE_ID_BLOCK(vast_actors, caf::id_block::vast_atoms::end)
 
   VAST_ADD_TYPE_ID((vast::system::accountant_actor))
   VAST_ADD_TYPE_ID((vast::system::active_indexer_actor))

@@ -13,27 +13,25 @@
 
 #pragma once
 
-#include <memory>
-#include <string>
-#include <type_traits>
-#include <vector>
+#include "vast/atoms.hpp"
+#include "vast/concept/hashable/uhash.hpp"
+#include "vast/concept/hashable/xxhash.hpp"
+#include "vast/data.hpp"
+#include "vast/detail/operators.hpp"
+#include "vast/offset.hpp"
+#include "vast/operator.hpp"
+#include "vast/type.hpp"
 
-#include <caf/atom.hpp>
 #include <caf/default_sum_type_access.hpp>
 #include <caf/detail/type_list.hpp>
 #include <caf/meta/type_name.hpp>
 #include <caf/none.hpp>
 #include <caf/variant.hpp>
 
-#include "vast/data.hpp"
-#include "vast/offset.hpp"
-#include "vast/operator.hpp"
-#include "vast/type.hpp"
-
-#include "vast/concept/hashable/uhash.hpp"
-#include "vast/concept/hashable/xxhash.hpp"
-
-#include "vast/detail/operators.hpp"
+#include <memory>
+#include <string>
+#include <type_traits>
+#include <vector>
 
 namespace vast {
 

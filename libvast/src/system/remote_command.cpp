@@ -13,6 +13,7 @@
 
 #include "vast/system/remote_command.hpp"
 
+#include "vast/atoms.hpp"
 #include "vast/detail/narrow.hpp"
 #include "vast/error.hpp"
 #include "vast/logger.hpp"

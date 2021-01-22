@@ -13,9 +13,11 @@
 
 #include "vast/system/terminator.hpp"
 
+#include "vast/fwd.hpp"
+
+#include "vast/atoms.hpp"
 #include "vast/detail/assert.hpp"
 #include "vast/error.hpp"
-#include "vast/fwd.hpp"
 #include "vast/logger.hpp"
 
 #include <caf/behavior.hpp>

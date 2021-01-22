@@ -13,13 +13,15 @@
 
 #include "vast/json.hpp"
 
-#include <type_traits>
+#include "vast/fwd.hpp"
 
-#include <caf/atom.hpp>
-#include <caf/config_value.hpp>
-
+#include "vast/atoms.hpp"
 #include "vast/detail/overload.hpp"
 #include "vast/detail/type_traits.hpp"
+
+#include <caf/config_value.hpp>
+
+#include <type_traits>
 
 namespace vast {
 
@@ -34,7 +36,8 @@ bool convert(const caf::config_value& x, json& j) {
         return convert(deep_to_string(y), j);
       else
         return convert(y, j);
-    }, x);
+    },
+    x);
 }
 
 json::object combine(const json::object& lhs, const json::object& rhs) {

@@ -15,6 +15,7 @@
 
 #include "vast/fwd.hpp"
 
+#include "vast/atoms.hpp"
 #include "vast/concept/printable/numeric/integral.hpp"
 #include "vast/concept/printable/std/chrono.hpp"
 #include "vast/concept/printable/to_string.hpp"
@@ -30,7 +31,6 @@
 #include "vast/table_slice.hpp"
 #include "vast/uuid.hpp"
 
-#include <caf/atom.hpp>
 #include <caf/attach_continuous_stream_stage.hpp>
 #include <caf/config_value.hpp>
 #include <caf/settings.hpp>

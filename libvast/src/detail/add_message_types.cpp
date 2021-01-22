@@ -13,6 +13,7 @@
 
 #include "vast/detail/add_message_types.hpp"
 
+#include "vast/atoms.hpp"
 #include "vast/bitmap.hpp"
 #include "vast/command.hpp"
 #include "vast/config.hpp"
@@ -36,8 +37,8 @@
 namespace vast::detail {
 
 void add_message_types(caf::actor_system_config& cfg) {
-  cfg.add_message_types<caf::id_block::vast_atoms>();
   cfg.add_message_types<caf::id_block::vast_types>();
+  cfg.add_message_types<caf::id_block::vast_atoms>();
   cfg.add_message_types<caf::id_block::vast_actors>();
 }
 
