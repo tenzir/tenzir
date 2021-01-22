@@ -30,7 +30,6 @@
 #include "vast/system/type_registry.hpp"
 #include "vast/table_slice.hpp"
 
-using namespace caf;
 using namespace vast;
 
 using std::string;
@@ -47,10 +46,10 @@ struct fixture : fixture_base {
   }
 
   ~fixture() {
-    self->send_exit(importer, exit_reason::user_shutdown);
-    self->send_exit(exporter, exit_reason::user_shutdown);
-    self->send_exit(index, exit_reason::user_shutdown);
-    self->send_exit(archive, exit_reason::user_shutdown);
+    self->send_exit(importer, caf::exit_reason::user_shutdown);
+    self->send_exit(exporter, caf::exit_reason::user_shutdown);
+    self->send_exit(index, caf::exit_reason::user_shutdown);
+    self->send_exit(archive, caf::exit_reason::user_shutdown);
     run();
   }
 
@@ -118,7 +117,7 @@ struct fixture : fixture_base {
       },
       error_handler(),
       // Do a one-pass can over the mailbox without waiting for messages.
-      after(0ms) >> [&] { running = false; });
+      caf::after(0ms) >> [&] { running = false; });
 
     MESSAGE("got " << total_events << " events in total");
     return result;
@@ -135,7 +134,7 @@ struct fixture : fixture_base {
   system::type_registry_actor type_registry;
   system::index_actor index;
   system::archive_actor archive;
-  actor importer;
+  system::importer_actor importer;
   system::exporter_actor exporter;
   expression expr;
 };
@@ -187,7 +186,7 @@ TEST(continuous query with importer) {
   importer_setup();
   MESSAGE("prepare exporter for continous query");
   exporter_setup(continuous);
-  send(importer, atom::exporter_v, caf::actor_cast<caf::actor>(exporter));
+  send(importer, exporter);
   MESSAGE("ingest conn.log via importer");
   // Again: copy because we musn't mutate static test data.
   vast::detail::spawn_container_source(sys, zeek_conn_log, importer);
@@ -201,7 +200,7 @@ TEST(continuous query with mismatching importer) {
   MESSAGE("prepare exporter for continous query");
   expr = unbox(to<expression>("foo.bar == \"baz\""));
   exporter_setup(continuous);
-  send(importer, atom::exporter_v, caf::actor_cast<caf::actor>(exporter));
+  send(importer, exporter);
   MESSAGE("ingest conn.log via importer");
   // Again: copy because we musn't mutate static test data.
   vast::detail::spawn_container_source(sys, zeek_conn_log, importer);

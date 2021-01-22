@@ -50,11 +50,11 @@ maybe_actor spawn_importer(node_actor* self, spawn_arguments& args) {
     // TODO: Implement live-reloading of the importer configuration.
     self->send(handle, atom::telemetry_v);
   }
-  for (auto& a : self->state.registry.find_by_type("source")) {
+  for (auto& source : self->state.registry.find_by_type("source")) {
     VAST_DEBUG(self, "connects source to new importer");
-    self->send(a, atom::sink_v, handle);
+    self->send(source, atom::sink_v, caf::actor_cast<caf::actor>(handle));
   }
-  return handle;
+  return caf::actor_cast<caf::actor>(handle);
 }
 
 } // namespace vast::system

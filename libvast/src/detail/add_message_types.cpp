@@ -32,6 +32,7 @@
 #include "vast/uuid.hpp"
 
 #include <caf/actor_system_config.hpp>
+#include <caf/stream_slot.hpp>
 #include <caf/typed_event_based_actor.hpp>
 
 namespace vast::detail {

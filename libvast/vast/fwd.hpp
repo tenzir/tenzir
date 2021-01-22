@@ -52,8 +52,11 @@ class Schema;
 
 namespace caf {
 
-template <class In>
+template <class>
 class inbound_stream_slot;
+
+template <class, class...>
+class outbound_stream_slot;
 
 } // namespace caf
 
