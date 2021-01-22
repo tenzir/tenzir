@@ -17,6 +17,7 @@
 
 #include "vast/ids.hpp"
 #include "vast/store.hpp"
+#include "vast/system/actors.hpp"
 #include "vast/system/instrumentation.hpp"
 
 #include <caf/actor_addr.hpp>

@@ -18,6 +18,7 @@
 #include "vast/expression.hpp"
 #include "vast/path.hpp"
 #include "vast/schema.hpp"
+#include "vast/system/actors.hpp"
 #include "vast/taxonomies.hpp"
 #include "vast/type.hpp"
 #include "vast/type_set.hpp"

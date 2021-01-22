@@ -29,6 +29,7 @@
 #include "vast/expression_visitors.hpp"
 #include "vast/logger.hpp"
 #include "vast/schema.hpp"
+#include "vast/system/actors.hpp"
 #include "vast/system/instrumentation.hpp"
 #include "vast/system/report.hpp"
 #include "vast/system/status_verbosity.hpp"

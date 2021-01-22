@@ -15,6 +15,8 @@
 
 #include "vast/fwd.hpp"
 
+#include "vast/system/actors.hpp"
+
 #include <caf/typed_event_based_actor.hpp>
 
 namespace vast::system {

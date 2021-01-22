@@ -22,6 +22,7 @@
 #include "vast/meta_index.hpp"
 #include "vast/path.hpp"
 #include "vast/qualified_record_field.hpp"
+#include "vast/system/actors.hpp"
 #include "vast/system/evaluator.hpp"
 #include "vast/system/indexer.hpp"
 #include "vast/system/instrumentation.hpp"

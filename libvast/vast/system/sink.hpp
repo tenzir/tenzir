@@ -15,6 +15,7 @@
 
 #include "vast/fwd.hpp"
 
+#include "vast/system/actors.hpp"
 #include "vast/system/instrumentation.hpp"
 
 #include <caf/behavior.hpp>

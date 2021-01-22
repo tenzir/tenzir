@@ -17,6 +17,7 @@
 
 #include "vast/fbs/partition.hpp"
 #include "vast/path.hpp"
+#include "vast/system/actors.hpp"
 #include "vast/system/instrumentation.hpp"
 #include "vast/type.hpp"
 #include "vast/uuid.hpp"

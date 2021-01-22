@@ -21,6 +21,7 @@
 #include "vast/operator.hpp"
 #include "vast/query_options.hpp"
 #include "vast/schema.hpp"
+#include "vast/system/actors.hpp"
 #include "vast/system/component_registry.hpp"
 #include "vast/system/query_status.hpp"
 #include "vast/system/report.hpp"
@@ -37,6 +38,7 @@ namespace vast::detail {
 void add_message_types(caf::actor_system_config& cfg) {
   cfg.add_message_types<caf::id_block::vast_atoms>();
   cfg.add_message_types<caf::id_block::vast_types>();
+  cfg.add_message_types<caf::id_block::vast_actors>();
 }
 
 } // namespace vast::detail

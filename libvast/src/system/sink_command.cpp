@@ -23,6 +23,7 @@
 #include "vast/expression.hpp"
 #include "vast/logger.hpp"
 #include "vast/scope_linked.hpp"
+#include "vast/system/actors.hpp"
 #include "vast/system/node_control.hpp"
 #include "vast/system/query_status.hpp"
 #include "vast/system/read_query.hpp"
@@ -43,16 +44,15 @@
 #include <string>
 
 using namespace std::chrono_literals;
-using namespace caf;
 
 namespace vast::system {
 
 caf::message
-sink_command(const invocation& inv, actor_system& sys, caf::actor snk) {
+sink_command(const invocation& inv, caf::actor_system& sys, caf::actor snk) {
   // Get a convenient and blocking way to interact with actors.
-  scoped_actor self{sys};
+  caf::scoped_actor self{sys};
   auto guard = caf::detail::make_scope_guard(
-    [&] { self->send_exit(snk, exit_reason::user_shutdown); });
+    [&] { self->send_exit(snk, caf::exit_reason::user_shutdown); });
   // Read query from input file, STDIN or CLI arguments.
   auto query = read_query(inv, "vast.export.read");
   if (!query)
@@ -97,7 +97,7 @@ sink_command(const invocation& inv, actor_system& sys, caf::actor snk) {
   auto& [accountant] = *components;
   if (accountant) {
     VAST_DEBUG(inv.full_name, "assigns accountant to new sink");
-    self->send(snk, actor_cast<accountant_actor>(accountant));
+    self->send(snk, caf::actor_cast<accountant_actor>(accountant));
   }
   // Register sink at the node.
   self->send(node, atom::put_v, snk, "sink");
@@ -115,23 +115,23 @@ sink_command(const invocation& inv, actor_system& sys, caf::actor snk) {
   auto stop = false;
   self
     ->do_receive(
-      [&](down_msg& msg) {
+      [&](caf::down_msg& msg) {
         stop = true;
         if (msg.source == node) {
           VAST_DEBUG(inv.full_name, "received DOWN from node");
-          self->send_exit(snk, exit_reason::user_shutdown);
+          self->send_exit(snk, caf::exit_reason::user_shutdown);
         } else if (msg.source == exporter) {
           VAST_DEBUG(inv.full_name, "received DOWN from exporter");
-          self->send_exit(snk, exit_reason::user_shutdown);
+          self->send_exit(snk, caf::exit_reason::user_shutdown);
         } else if (msg.source == snk) {
           VAST_DEBUG(inv.full_name, "received DOWN from sink");
-          self->send_exit(exporter, exit_reason::user_shutdown);
+          self->send_exit(exporter, caf::exit_reason::user_shutdown);
           stop = false;
           waiting_for_final_report = true;
         } else {
           VAST_ASSERT(!"received DOWN from inexplicable actor");
         }
-        if (msg.reason && msg.reason != exit_reason::user_shutdown) {
+        if (msg.reason && msg.reason != caf::exit_reason::user_shutdown) {
           VAST_WARNING(inv.full_name, "received error message:",
                        self->system().render(msg.reason));
           err = std::move(msg.reason);
@@ -171,8 +171,8 @@ sink_command(const invocation& inv, actor_system& sys, caf::actor snk) {
       [&](atom::signal, int signal) {
         VAST_DEBUG(inv.full_name, "got", ::strsignal(signal));
         if (signal == SIGINT || signal == SIGTERM) {
-          self->send_exit(exporter, exit_reason::user_shutdown);
-          self->send_exit(snk, exit_reason::user_shutdown);
+          self->send_exit(exporter, caf::exit_reason::user_shutdown);
+          self->send_exit(snk, caf::exit_reason::user_shutdown);
         }
       })
     .until([&] { return stop; });

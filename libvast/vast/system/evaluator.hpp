@@ -17,6 +17,7 @@
 
 #include "vast/expression.hpp"
 #include "vast/ids.hpp"
+#include "vast/system/actors.hpp"
 #include "vast/system/evaluation_triple.hpp"
 
 #include <caf/typed_event_based_actor.hpp>

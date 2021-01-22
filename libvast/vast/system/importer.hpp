@@ -16,6 +16,7 @@
 #include "vast/aliases.hpp"
 #include "vast/data.hpp"
 #include "vast/path.hpp"
+#include "vast/system/actors.hpp"
 #include "vast/system/instrumentation.hpp"
 
 #include <caf/event_based_actor.hpp>

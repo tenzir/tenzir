@@ -19,6 +19,7 @@
 #include "vast/expression.hpp"
 #include "vast/ids.hpp"
 #include "vast/query_options.hpp"
+#include "vast/system/actors.hpp"
 #include "vast/system/query_status.hpp"
 #include "vast/table_slice.hpp"
 #include "vast/uuid.hpp"
