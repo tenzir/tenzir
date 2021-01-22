@@ -370,7 +370,7 @@ using report = std::vector<data_point>;
 
 // -- type announcements -------------------------------------------------------
 
-CAF_BEGIN_TYPE_ID_BLOCK(vast_types, caf::id_block::vast_atoms_last_type_id + 1)
+CAF_BEGIN_TYPE_ID_BLOCK(vast_types, caf::id_block::vast_atoms::end)
 
   VAST_ADD_TYPE_ID((vast::attribute_extractor))
   VAST_ADD_TYPE_ID((vast::bitmap))

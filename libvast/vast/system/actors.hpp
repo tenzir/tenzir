@@ -299,7 +299,7 @@ using exporter_actor = typed_actor_fwd<
 
 // -- type announcements -------------------------------------------------------
 
-CAF_BEGIN_TYPE_ID_BLOCK(vast_actors, caf::id_block::vast_types_last_type_id + 1)
+CAF_BEGIN_TYPE_ID_BLOCK(vast_actors, caf::id_block::vast_types::end)
 
   VAST_ADD_TYPE_ID((vast::system::accountant_actor))
   VAST_ADD_TYPE_ID((vast::system::active_indexer_actor))
