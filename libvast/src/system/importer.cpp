@@ -226,10 +226,10 @@ void importer_state::send_report() {
 
 importer_actor::behavior_type
 importer(importer_actor::stateful_pointer<importer_state> self, path dir,
-         archive_actor archive, index_actor index,
-         type_registry_actor type_registry) {
+         const archive_actor& archive, index_actor index,
+         const type_registry_actor& type_registry) {
   VAST_TRACE(VAST_ARG(dir));
-  self->state.dir = dir;
+  self->state.dir = std::move(dir);
   auto err = self->state.read_state();
   if (err) {
     VAST_ERROR(self, "failed to load state:", render(err));
@@ -247,8 +247,8 @@ importer(importer_actor::stateful_pointer<importer_state> self, path dir,
   if (archive)
     self->state.stage->add_outbound_path(archive);
   if (index) {
-    self->state.index = index;
-    self->state.stage->add_outbound_path(index);
+    self->state.index = std::move(index);
+    self->state.stage->add_outbound_path(self->state.index);
   }
   for (auto& plugin : plugins::get())
     if (auto p = plugin.as<analyzer_plugin>())
@@ -257,7 +257,7 @@ importer(importer_actor::stateful_pointer<importer_state> self, path dir,
   return {
     // Register the ACCOUNTANT actor.
     [=](accountant_actor accountant) {
-      VAST_DEBUG(self, "registers accountant", archive);
+      VAST_DEBUG(self, "registers accountant", accountant);
       self->state.accountant = std::move(accountant);
       self->send(self->state.accountant, atom::announce_v, self->name());
     },
@@ -269,7 +269,7 @@ importer(importer_actor::stateful_pointer<importer_state> self, path dir,
     // Add a new sink.
     [=](atom::add, const caf::actor& subscriber) {
       auto& st = self->state;
-      VAST_DEBUG(self, "adds a new sink:", self->current_sender());
+      VAST_DEBUG(self, "adds a new sink:", subscriber);
       return st.stage->add_outbound_path(subscriber);
     },
     // Add a new source.
