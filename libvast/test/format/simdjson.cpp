@@ -136,20 +136,20 @@ TEST(simdjson to data) {
   CHECK_EQUAL(materialize(slice.at(0, 16)), data{reference});
 }
 
-TEST_DISABLED(simdjson suricata) {
-  using reader_type = format::simdjson::reader<format::json::suricata_selector>;
-  auto input = std::make_unique<std::istringstream>(std::string{eve_log});
-  reader_type reader{caf::settings{}, std::move(input)};
-  std::vector<table_slice> slices;
-  auto add_slice
-    = [&](table_slice slice) { slices.emplace_back(std::move(slice)); };
-  auto [err, num] = reader.read(2, 5, add_slice);
-  CHECK_EQUAL(err, ec::end_of_input);
-  REQUIRE_EQUAL(num, 2u);
-  CHECK_EQUAL(slices[0].columns(), 36u);
-  CHECK_EQUAL(slices[0].rows(), 2u);
-  CHECK(slices[0].at(0, 19) == data{count{4520}});
-}
+// TEST_DISABLED(simdjson suricata) {
+//   using reader_type =
+//   format::simdjson::reader<format::json::suricata_selector>; auto input =
+//   std::make_unique<std::istringstream>(std::string{eve_log}); reader_type
+//   reader{caf::settings{}, std::move(input)}; std::vector<table_slice> slices;
+//   auto add_slice
+//     = [&](table_slice slice) { slices.emplace_back(std::move(slice)); };
+//   auto [err, num] = reader.read(2, 5, add_slice);
+//   CHECK_EQUAL(err, ec::end_of_input);
+//   REQUIRE_EQUAL(num, 2u);
+//   CHECK_EQUAL(slices[0].columns(), 36u);
+//   CHECK_EQUAL(slices[0].rows(), 2u);
+//   CHECK(slices[0].at(0, 19) == data{count{4520}});
+// }
 
 // TEST(json hex number parser) {
 //   using namespace parsers;

@@ -120,11 +120,41 @@ caf::message import_command(const invocation& inv, caf::actor_system& sys) {
 template <class Reader, class SimdjsonReader, class Defaults>
 caf::message
 import_command_json(const invocation& inv, caf::actor_system& sys) {
-  auto use_simdjson = caf::get_or(
+  const auto use_simdjson = caf::get_or(
     inv.options, Defaults::category + std::string{".simdjson"}, false);
+
   if (use_simdjson)
     return import_command<SimdjsonReader, Defaults>(inv, sys);
   return import_command<Reader, Defaults>(inv, sys);
+}
+
+template <template <class S, class B> class Reader,
+          template <class S, class B> class SimdjsonReader, typename Selector,
+          class Defaults>
+caf::message import_command_json_with_benchmark(const invocation& inv,
+                                                caf::actor_system& sys) {
+  const auto bench_value = caf::get_if<std::string>(
+    &inv.options, Defaults::category + std::string{".benchmark"});
+  if (bench_value) {
+    if (*bench_value == "cycleclock")
+      return import_command_json<
+        Reader<Selector, format::bench::cycleclock_benchmark_mixin<4>>,
+        SimdjsonReader<Selector, format::bench::cycleclock_benchmark_mixin<4>>,
+        Defaults>(inv, sys);
+    else if (*bench_value == "timespec")
+      return import_command_json<
+        Reader<Selector, format::bench::timespec_benchmark_mixin<4>>,
+        SimdjsonReader<Selector, format::bench::timespec_benchmark_mixin<4>>,
+        Defaults>(inv, sys);
+
+    return caf::make_message(
+      make_error(ec::invalid_configuration, "unknown benchmark value"));
+  }
+
+  return import_command_json<
+    Reader<Selector, format::bench::noop_benchmark_mixin>,
+    SimdjsonReader<Selector, format::bench::noop_benchmark_mixin>, Defaults>(
+    inv, sys);
 }
 
 } // namespace vast::system

@@ -473,17 +473,19 @@ auto make_command_factory() {
     {"get", get_command},
     {"infer", infer_command},
     {"import csv", import_command<format::csv::reader, defaults::import::csv>},
-    {"import json", import_command_json<
-      format::json::reader<format::json::default_selector>,
-      format::simdjson::reader<format::json::default_selector>,
+    {"import json", import_command_json_with_benchmark<
+      format::json::reader,
+      format::simdjson::reader,
+      format::json::default_selector,
       defaults::import::json>},
 #if VAST_ENABLE_PCAP
     {"import pcap", import_command<format::pcap::reader,
       defaults::import::pcap>},
 #endif
-    {"import suricata", import_command_json<
-      format::json::reader<format::json::suricata_selector>,
-      format::simdjson::reader<format::json::suricata_selector>,
+    {"import suricata", import_command_json_with_benchmark<
+      format::json::reader,
+      format::simdjson::reader,
+      format::json::suricata_selector,
       defaults::import::suricata>},
     {"import syslog", import_command<format::syslog::reader,
       defaults::import::syslog>},
@@ -491,9 +493,10 @@ auto make_command_factory() {
       defaults::import::test>},
     {"import zeek", import_command<format::zeek::reader,
       defaults::import::zeek>},
-    {"import zeek-json", import_command_json<
-      format::json::reader<format::json::zeek_selector>,
-      format::simdjson::reader<format::json::zeek_selector>,
+    {"import zeek-json", import_command_json_with_benchmark<
+      format::json::reader,
+      format::simdjson::reader,
+      format::json::zeek_selector,
       defaults::import::zeek_json>},
     {"kill", remote_command},
     {"peer", remote_command},
@@ -592,8 +595,11 @@ command::opts_builder source_opts(std::string_view category) {
 }
 
 command::opts_builder source_opts_json(std::string_view category) {
-  return source_opts(category).add<bool>("simdjson", "Use simdjson for JSON "
-                                                     "parsing");
+  return source_opts(category)
+    .add<bool>("simdjson", "Use simdjson for JSON "
+                           "parsing")
+    .add<std::string>("benchmark", "Benchmark type "
+                                   "(cycleclock or timespec)");
 }
 
 command::opts_builder sink_opts(std::string_view category) {

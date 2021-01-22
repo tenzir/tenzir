@@ -22,9 +22,9 @@
 #include "vast/detail/line_range.hpp"
 #include "vast/detail/string.hpp"
 #include "vast/error.hpp"
+#include "vast/format/bench.hpp"
 #include "vast/format/multi_layout_reader.hpp"
 #include "vast/format/ostream_writer.hpp"
-#include "vast/format/bench.hpp"
 #include "vast/logger.hpp"
 #include "vast/schema.hpp"
 #include "vast/view.hpp"
@@ -48,7 +48,7 @@ caf::error add(table_slice_builder& bptr, const ::simdjson::dom::object& xs,
 
 /// A reader for JSON data. It operates with a *selector* to determine the
 /// mapping of JSON object to the appropriate record type in the schema.
-template <class Selector, class BenchmarkMixin = bench::cycleclock_benchmark_mixin<4> >
+template <class Selector, class BenchmarkMixin>
 class reader final : public multi_layout_reader {
 public:
   using super = multi_layout_reader;
@@ -90,7 +90,8 @@ private:
   mutable size_t num_invalid_lines_ = 0;
   mutable size_t num_unknown_layouts_ = 0;
   mutable size_t num_lines_ = 0;
-  // For non benchmark setup size for value can be optimized out when C++20 is available
+  // For non benchmark setup size for value can be optimized out when C++20 is
+  // available
   // https://en.cppreference.com/w/cpp/language/attributes/no_unique_address
   BenchmarkMixin benchmark_;
 };
@@ -99,7 +100,7 @@ private:
 
 template <class Selector, class BenchmarkMixin>
 reader<Selector, BenchmarkMixin>::reader(const caf::settings& options,
-                         std::unique_ptr<std::istream> in)
+                                         std::unique_ptr<std::istream> in)
   : super(options) {
   if (in != nullptr)
     reset(std::move(in));
@@ -148,8 +149,9 @@ vast::system::report reader<Selector, BenchmarkMixin>::status() const {
 }
 
 template <class Selector, class BenchmarkMixin>
-caf::error reader<Selector, BenchmarkMixin>::read_impl(size_t max_events, size_t max_slice_size,
-                                       consumer& cons) {
+caf::error reader<Selector, BenchmarkMixin>::read_impl(size_t max_events,
+                                                       size_t max_slice_size,
+                                                       consumer& cons) {
   VAST_TRACE(VAST_ARG(max_events), VAST_ARG(max_slice_size));
   VAST_ASSERT(max_events > 0);
   VAST_ASSERT(max_slice_size > 0);
@@ -205,6 +207,7 @@ caf::error reader<Selector, BenchmarkMixin>::read_impl(size_t max_events, size_t
       err.context() += caf::make_message("line", lines_->line_number());
       return finish(cons, err);
     }
+    it_tracker.next_step();
     produced++;
     batch_events_++;
     if (bptr->rows() == max_slice_size)

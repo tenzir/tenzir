@@ -19,6 +19,7 @@
 #include "vast/defaults.hpp"
 #include "vast/detail/line_range.hpp"
 #include "vast/error.hpp"
+#include "vast/format/bench.hpp"
 #include "vast/format/multi_layout_reader.hpp"
 #include "vast/format/ostream_writer.hpp"
 #include "vast/json.hpp"
@@ -58,7 +59,7 @@ caf::error add(table_slice_builder& builder, const vast::json::object& xs,
 
 /// A reader for JSON data. It operates with a *selector* to determine the
 /// mapping of JSON object to the appropriate record type in the schema.
-template <class Selector>
+template <class Selector, class BenchmarkMixin = bench::noop_benchmark_mixin>
 class reader final : public multi_layout_reader {
 public:
   using super = multi_layout_reader;
@@ -94,42 +95,46 @@ private:
   mutable size_t num_invalid_lines_ = 0;
   mutable size_t num_unknown_layouts_ = 0;
   mutable size_t num_lines_ = 0;
+  // For non benchmark setup size for value can be optimized out when C++20 is
+  // available
+  // https://en.cppreference.com/w/cpp/language/attributes/no_unique_address
+  BenchmarkMixin benchmark_;
 };
 
 // -- implementation ----------------------------------------------------------
 
-template <class Selector>
-reader<Selector>::reader(const caf::settings& options,
-                         std::unique_ptr<std::istream> in)
+template <class Selector, class BenchmarkMixin>
+reader<Selector, BenchmarkMixin>::reader(const caf::settings& options,
+                                         std::unique_ptr<std::istream> in)
   : super(options) {
   if (in != nullptr)
     reset(std::move(in));
 }
 
-template <class Selector>
-void reader<Selector>::reset(std::unique_ptr<std::istream> in) {
+template <class Selector, class BenchmarkMixin>
+void reader<Selector, BenchmarkMixin>::reset(std::unique_ptr<std::istream> in) {
   VAST_ASSERT(in != nullptr);
   input_ = std::move(in);
   lines_ = std::make_unique<detail::line_range>(*input_);
 }
 
-template <class Selector>
-caf::error reader<Selector>::schema(vast::schema s) {
+template <class Selector, class BenchmarkMixin>
+caf::error reader<Selector, BenchmarkMixin>::schema(vast::schema s) {
   return selector_.schema(std::move(s));
 }
 
-template <class Selector>
-vast::schema reader<Selector>::schema() const {
+template <class Selector, class BenchmarkMixin>
+vast::schema reader<Selector, BenchmarkMixin>::schema() const {
   return selector_.schema();
 }
 
-template <class Selector>
-const char* reader<Selector>::name() const {
+template <class Selector, class BenchmarkMixin>
+const char* reader<Selector, BenchmarkMixin>::name() const {
   return "json-reader";
 }
 
-template <class Selector>
-vast::system::report reader<Selector>::status() const {
+template <class Selector, class BenchmarkMixin>
+vast::system::report reader<Selector, BenchmarkMixin>::status() const {
   using namespace std::string_literals;
   uint64_t invalid_line = num_invalid_lines_;
   uint64_t unknown_layout = num_unknown_layouts_;
@@ -148,9 +153,10 @@ vast::system::report reader<Selector>::status() const {
   };
 }
 
-template <class Selector>
-caf::error reader<Selector>::read_impl(size_t max_events, size_t max_slice_size,
-                                       consumer& cons) {
+template <class Selector, class BenchmarkMixin>
+caf::error reader<Selector, BenchmarkMixin>::read_impl(size_t max_events,
+                                                       size_t max_slice_size,
+                                                       consumer& cons) {
   VAST_TRACE(VAST_ARG(max_events), VAST_ARG(max_slice_size));
   VAST_ASSERT(max_events > 0);
   VAST_ASSERT(max_slice_size > 0);
@@ -164,6 +170,7 @@ caf::error reader<Selector>::read_impl(size_t max_events, size_t max_slice_size,
       VAST_DEBUG(this, "reached batch timeout");
       return finish(cons, ec::timeout);
     }
+    auto it_tracker = benchmark_.make_iteration_tracker();
     bool timed_out = lines_->next_timeout(read_timeout_);
     if (timed_out) {
       VAST_DEBUG(this, "stalled at line", lines_->line_number());
@@ -176,6 +183,7 @@ caf::error reader<Selector>::read_impl(size_t max_events, size_t max_slice_size,
       VAST_DEBUG(this, "ignores empty line at", lines_->line_number());
       continue;
     }
+    it_tracker.next_step();
     vast::json j;
     if (!parsers::json(line, j)) {
       if (num_invalid_lines_ == 0)
@@ -187,6 +195,7 @@ caf::error reader<Selector>::read_impl(size_t max_events, size_t max_slice_size,
     auto xs = caf::get_if<vast::json::object>(&j);
     if (!xs)
       return caf::make_error(ec::type_clash, "not a json object");
+    it_tracker.next_step();
     auto&& layout = selector_(*xs);
     if (!layout) {
       if (num_unknown_layouts_ == 0)
@@ -195,6 +204,7 @@ caf::error reader<Selector>::read_impl(size_t max_events, size_t max_slice_size,
       ++num_unknown_layouts_;
       continue;
     }
+    it_tracker.next_step();
     bptr = builder(*layout);
     if (bptr == nullptr)
       return caf::make_error(ec::parse_error, "unable to get a builder");
@@ -209,6 +219,7 @@ caf::error reader<Selector>::read_impl(size_t max_events, size_t max_slice_size,
         return finish(cons, err);
       }
     }
+    it_tracker.next_step();
     produced++;
     batch_events_++;
     if (bptr->rows() == max_slice_size)
