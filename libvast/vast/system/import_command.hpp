@@ -133,26 +133,18 @@ template <template <class S, class B> class Reader,
           class Defaults>
 caf::message import_command_json_with_benchmark(const invocation& inv,
                                                 caf::actor_system& sys) {
-  const auto bench_value = caf::get_if<std::string>(
-    &inv.options, Defaults::category + std::string{".benchmark"});
+  const auto bench_value = caf::get_or(
+    inv.options, Defaults::category + std::string{".benchmark"}, false);
+
   if (bench_value) {
-    static_assert(
-      system::has_benchmark_metrics<
-        SimdjsonReader<Selector, system::timer_benchmark_mixin<4>>>{});
+    using json_reader_t = Reader<Selector, system::timer_benchmark_mixin<4>>;
+    using simdjson_reader_t
+      = SimdjsonReader<Selector, system::timer_benchmark_mixin<4>>;
+    static_assert(system::has_benchmark_metrics<json_reader_t>{});
+    static_assert(system::has_benchmark_metrics<simdjson_reader_t>{});
 
-    if (*bench_value == "timer")
-      return import_command_json<
-        Reader<Selector, system::timer_benchmark_mixin<4>>,
-        SimdjsonReader<Selector, system::timer_benchmark_mixin<4>>, Defaults>(
-        inv, sys);
-    else if (*bench_value == "timespec")
-      return import_command_json<
-        Reader<Selector, system::timespec_benchmark_mixin<4>>,
-        SimdjsonReader<Selector, system::timespec_benchmark_mixin<4>>, Defaults>(
-        inv, sys);
-
-    return caf::make_message(
-      caf::make_error(ec::invalid_configuration, "unknown benchmark value"));
+    return import_command_json<json_reader_t, simdjson_reader_t, Defaults>(inv,
+                                                                           sys);
   }
 
   return import_command_json<

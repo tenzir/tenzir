@@ -596,10 +596,8 @@ command::opts_builder source_opts(std::string_view category) {
 
 command::opts_builder source_opts_json(std::string_view category) {
   return source_opts(category)
-    .add<bool>("simdjson", "Use simdjson for JSON "
-                           "parsing")
-    .add<std::string>("benchmark", "Benchmark type "
-                                   "(timer or timespec)");
+    .add<bool>("simdjson", "Use simdjson for JSON parsing")
+    .add<bool>("benchmark", "Benchmark import operation");
 }
 
 command::opts_builder sink_opts(std::string_view category) {

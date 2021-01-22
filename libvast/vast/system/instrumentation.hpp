@@ -137,59 +137,6 @@ private:
   std::array<measurement, N> measurements_;
 };
 
-/// A real measuring  benchmark mixin based on `timespec`.
-/// Coniders the number of steps is equal to N.
-template <int N>
-class timespec_benchmark_mixin {
-public:
-  void append_benchmark_metrics(std::vector<measurement>& measurements) {
-    for (auto i = 0; i < N; ++i) {
-      measurements.emplace_back(std::chrono::nanoseconds(events_durations[i]),
-                                events_for_step[i]);
-    }
-  }
-
-  friend class iteration_tracker;
-  class iteration_tracker {
-    static auto now() noexcept {
-      timespec t;
-      clock_gettime(CLOCK_MONOTONIC, &t);
-      return static_cast<uint64_t>(t.tv_sec) * 1000000000ULL + t.tv_nsec;
-    }
-
-  public:
-    explicit iteration_tracker(timespec_benchmark_mixin& totals) noexcept
-      : totals_{totals} {
-    }
-
-    ~iteration_tracker() noexcept {
-      for (auto i = 0; i < current_step_; ++i) {
-        totals_.events_for_step[i] += 1;
-        totals_.events_durations[i] += durations_[i];
-      }
-    }
-
-    void next_step() noexcept {
-      durations_[current_step_++] = now() - current_step_started_at_;
-      current_step_started_at_ = now();
-    }
-
-  private:
-    std::array<std::uint64_t, N> durations_;
-    int current_step_ = 0;
-    std::uint64_t current_step_started_at_ = now();
-    timespec_benchmark_mixin& totals_;
-  };
-
-  constexpr iteration_tracker make_iteration_tracker() noexcept {
-    return iteration_tracker{*this};
-  }
-
-private:
-  std::array<std::size_t, N> events_for_step{};
-  std::array<std::uint64_t, N> events_durations{};
-};
-
 template <class Reader, class = void>
 struct has_benchmark_metrics : std::false_type {};
 
