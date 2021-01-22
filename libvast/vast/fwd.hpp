@@ -18,7 +18,6 @@
 #include <caf/atom.hpp>
 #include <caf/config.hpp>
 #include <caf/fwd.hpp>
-#include <caf/intrusive_ptr.hpp>
 #include <caf/type_id.hpp>
 
 #include <cstdint>
