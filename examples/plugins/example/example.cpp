@@ -127,7 +127,7 @@ public:
   };
 
   /// Creates additional commands.
-  virtual std::pair<std::unique_ptr<command>, command::factory>
+  std::pair<std::unique_ptr<command>, command::factory>
   make_command() const override {
     auto example = std::make_unique<command>(
       "example", "help for the example plugin command",
