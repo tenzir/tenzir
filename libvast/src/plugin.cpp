@@ -42,7 +42,7 @@ std::string to_string(plugin_version x) {
   std::string result;
   result += to_string(x.major);
   result += '.';
-  result += to_string(x.major);
+  result += to_string(x.minor);
   result += '.';
   result += to_string(x.patch);
   result += '-';

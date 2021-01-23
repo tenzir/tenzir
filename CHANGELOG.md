@@ -69,6 +69,7 @@ Every entry has a category for which we use the following visual abbreviations:
   [#1264](https://github.com/tenzir/vast/pull/1264)
   [#1282](https://github.com/tenzir/vast/pull/1282)
   [#1285](https://github.com/tenzir/vast/pull/1285)
+  [#1302](https://github.com/tenzir/vast/pull/1302)
 
 - 🐞 For relocatable installations, the list of schema loading paths does not
   include a build-time configured path any more.
