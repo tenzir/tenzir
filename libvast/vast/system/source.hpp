@@ -94,7 +94,7 @@ struct source_state {
   accountant_actor accountant;
 
   /// Actor that receives events.
-  caf::actor sink;
+  stream_sink_actor<table_slice, std::string> sink;
 
   /// Wraps the format-specific parser.
   union {
@@ -149,7 +149,7 @@ struct source_state {
     requested = std::move(max_events);
     local_schema = std::move(sch);
     accountant = std::move(acc);
-    sink = {};
+    sink = nullptr;
     done = false;
     // Register with the accountant.
     self->send(accountant, atom::announce_v, name);
@@ -322,7 +322,7 @@ source(caf::stateful_actor<source_state<Reader>>* self, Reader reader,
       // self->state.filter = std::move(expr);
       VAST_WARNING(self, "does not currently implement filter expressions");
     },
-    [=](atom::sink, const caf::actor& sink) {
+    [=](stream_sink_actor<table_slice, std::string> sink) {
       VAST_ASSERT(sink);
       VAST_DEBUG(self, "registers", VAST_ARG(sink));
       // TODO: Currently, we use a broadcast downstream manager. We need to
@@ -340,7 +340,8 @@ source(caf::stateful_actor<source_state<Reader>>* self, Reader reader,
       self->delayed_send(self, defaults::system::telemetry_rate,
                          atom::telemetry_v);
       // Start streaming.
-      st.mgr->add_outbound_path(st.sink, std::make_tuple(st.reader.name()));
+      auto name = std::string{st.reader.name()};
+      st.mgr->add_outbound_path(st.sink, std::make_tuple(std::move(name)));
     },
     [=](atom::status, status_verbosity v) {
       auto& st = self->state;

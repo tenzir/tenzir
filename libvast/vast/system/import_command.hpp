@@ -55,12 +55,11 @@ caf::message import_command(const invocation& inv, caf::actor_system& sys) {
     return caf::make_message(std::move(components.error()));
   auto& [accountant, type_registry, importer] = *components;
   if (!type_registry)
-    return caf::make_message(caf::make_error(ec::missing_component, "type-"
-                                                                    "registr"
-                                                                    "y"));
+    return caf::make_message(caf::make_error( //
+      ec::missing_component, "type-registry"));
   if (!importer)
-    return caf::make_message(caf::make_error(ec::missing_component, "importe"
-                                                                    "r"));
+    return caf::make_message(caf::make_error( //
+      ec::missing_component, "importer"));
   // Start signal monitor.
   std::thread sig_mon_thread;
   auto guard = system::signal_monitor::run_guarded(
@@ -68,7 +67,8 @@ caf::message import_command(const invocation& inv, caf::actor_system& sys) {
   // Start the source.
   auto src_result = make_source<Reader, Defaults>(
     self, sys, inv, caf::actor_cast<accountant_actor>(accountant),
-    caf::actor_cast<type_registry_actor>(type_registry), importer);
+    caf::actor_cast<type_registry_actor>(type_registry),
+    caf::actor_cast<importer_actor>(importer));
   if (!src_result)
     return caf::make_message(std::move(src_result.error()));
   auto src = std::move(src_result->src);

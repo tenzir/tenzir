@@ -36,26 +36,28 @@ using namespace vast;
 
 namespace {
 
-system::slice_stream_receiver::behavior_type
-dummy_sink(system::slice_stream_receiver::pointer self, size_t num_events,
-           caf::actor overseer) {
-  return {[=](caf::stream<table_slice> in) {
-    self->unbecome();
-    anon_send(overseer, atom::ok_v);
-    auto sink = self->make_sink(
-      in,
-      [=](std::vector<table_slice>&) {
-        // nop
-      },
-      [=](std::vector<table_slice>& xs, table_slice x) {
-        xs.emplace_back(std::move(x));
-        if (rows(xs) == num_events)
-          anon_send(overseer, xs);
-        else if (rows(xs) > num_events)
-          FAIL("dummy sink received too many events");
-      });
-    return caf::inbound_stream_slot<table_slice>{sink.inbound_slot()};
-  }};
+system::stream_sink_actor<table_slice>::behavior_type
+dummy_sink(system::stream_sink_actor<table_slice>::pointer self,
+           size_t num_events, caf::actor overseer) {
+  return {
+    [=](caf::stream<table_slice> in) {
+      self->unbecome();
+      anon_send(overseer, atom::ok_v);
+      auto sink = self->make_sink(
+        in,
+        [=](std::vector<table_slice>&) {
+          // nop
+        },
+        [=](std::vector<table_slice>& xs, table_slice x) {
+          xs.emplace_back(std::move(x));
+          if (rows(xs) == num_events)
+            anon_send(overseer, xs);
+          else if (rows(xs) > num_events)
+            FAIL("dummy sink received too many events");
+        });
+      return caf::inbound_stream_slot<table_slice>{sink.inbound_slot()};
+    },
+  };
 }
 
 template <class Base>
@@ -179,7 +181,9 @@ TEST(deterministic importer with one sink and zeek source) {
   MESSAGE("spawn zeek source");
   auto src = make_zeek_source();
   consume_message();
-  self->send(src, atom::sink_v, caf::actor_cast<caf::actor>(importer));
+  self->send(
+    src,
+    static_cast<system::stream_sink_actor<table_slice, std::string>>(importer));
   MESSAGE("loop until importer becomes idle");
   run();
   MESSAGE("verify results");
@@ -193,7 +197,9 @@ TEST(deterministic importer with two sinks and zeek source) {
   MESSAGE("spawn zeek source");
   auto src = make_zeek_source();
   consume_message();
-  self->send(src, atom::sink_v, caf::actor_cast<caf::actor>(importer));
+  self->send(
+    src,
+    static_cast<system::stream_sink_actor<table_slice, std::string>>(importer));
   MESSAGE("loop until importer becomes idle");
   run();
   MESSAGE("verify results");
@@ -209,7 +215,9 @@ TEST(deterministic importer with one sink and failing zeek source) {
   MESSAGE("spawn zeek source");
   auto src = make_zeek_source();
   consume_message();
-  self->send(src, atom::sink_v, caf::actor_cast<caf::actor>(importer));
+  self->send(
+    src,
+    static_cast<system::stream_sink_actor<table_slice, std::string>>(importer));
   MESSAGE("loop until first ack_batch");
   if (!allow((caf::upstream_msg::ack_batch), from(importer).to(src)))
     sched.run_once();
@@ -296,7 +304,9 @@ TEST(nondeterministic importer with one sink and zeek source) {
   add_sink();
   MESSAGE("spawn zeek source");
   auto src = make_zeek_source();
-  self->send(src, atom::sink_v, caf::actor_cast<caf::actor>(importer));
+  self->send(
+    src,
+    static_cast<system::stream_sink_actor<table_slice, std::string>>(importer));
   MESSAGE("verify results");
   verify(fetch_result(), zeek_conn_log);
 }
@@ -307,7 +317,9 @@ TEST(nondeterministic importer with two sinks and zeek source) {
   add_sink();
   MESSAGE("spawn zeek source");
   auto src = make_zeek_source();
-  self->send(src, atom::sink_v, caf::actor_cast<caf::actor>(importer));
+  self->send(
+    src,
+    static_cast<system::stream_sink_actor<table_slice, std::string>>(importer));
   MESSAGE("verify results");
   auto result = fetch_result();
   MESSAGE("got first result");
