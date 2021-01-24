@@ -38,8 +38,15 @@ endif ()
 
 # -- build tree hash -----------------------------------------------------------
 
-file(GLOB_RECURSE hash_files CONFIGURE_DEPENDS "libvast/*" "cmake/*"
-     "CMakeLists.txt")
+file(
+  GLOB_RECURSE
+  hash_files
+  CONFIGURE_DEPENDS
+  "libvast/*.hpp"
+  "libvast/*.hpp.in"
+  "libvast/*.cpp"
+  "cmake/*"
+  "CMakeLists.txt")
 
 list(FILTER hash_files EXCLUDE REGEX
      "^${CMAKE_CURRENT_SOURCE_DIR}/libvast/aux/")
