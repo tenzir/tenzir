@@ -12,6 +12,10 @@ Every entry has a category for which we use the following visual abbreviations:
 
 ## Unreleased
 
+- 🐞 A potential race condition that could lead to a hanging export if
+  a partition was persisted just as it was scanned no longer exists.
+  [#1295](https://github.com/tenzir/vast/pull/1295)
+
 - ⚠️ The options `vast.schema-paths` and `vast.plugin-paths` are now named
   `vast.schema-dirs` and `vast.plugin-dirs` respectively. The old options are
   deprecated and will be removed in a future release.

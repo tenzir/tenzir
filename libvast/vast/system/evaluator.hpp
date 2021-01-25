@@ -63,6 +63,9 @@ struct evaluator_state {
   /// Points to the parent actor.
   evaluator_actor::pointer self;
 
+  /// Extend the lifetime of the partition until the evaluator is finished.
+  partition_actor partition;
+
   /// Stores the actor for sendings results to.
   partition_client_actor client;
 
@@ -81,6 +84,7 @@ struct evaluator_state {
 /// @pre `!eval.empty()`
 evaluator_actor::behavior_type
 evaluator(evaluator_actor::stateful_pointer<evaluator_state> self,
-          expression expr, std::vector<evaluation_triple> eval);
+          expression expr, partition_actor parent,
+          std::vector<evaluation_triple> eval);
 
 } // namespace vast::system

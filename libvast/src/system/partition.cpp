@@ -428,7 +428,9 @@ active_partition_actor::behavior_type active_partition(
       // anymore.
       if (err && err != caf::exit_reason::unreachable) {
         VAST_ERROR(self, "aborts with error:", render(err));
-        self->send_exit(self, err);
+        // We don't exit here, since there might be outstanding evaluators who
+        // still need our indexers.
+        return;
       }
       VAST_DEBUG_ANON("partition", id, "finalized streaming");
     },
@@ -586,7 +588,7 @@ active_partition_actor::behavior_type active_partition(
       auto triples = evaluate(self->state, expr);
       if (triples.empty())
         return atom::done_v;
-      auto eval = self->spawn(evaluator, expr, triples);
+      auto eval = self->spawn(evaluator, expr, self, triples);
       return self->delegate(eval, client);
     },
   };
@@ -704,7 +706,7 @@ partition_actor::behavior_type passive_partition(
       auto triples = evaluate(self->state, expr);
       if (triples.empty())
         return atom::done_v;
-      auto eval = self->spawn(evaluator, expr, triples);
+      auto eval = self->spawn(evaluator, expr, self, triples);
       return self->delegate(eval, client);
     },
   };
