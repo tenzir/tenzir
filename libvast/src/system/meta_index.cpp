@@ -11,9 +11,7 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#include "vast/meta_index.hpp"
-
-#include "vast/fwd.hpp"
+#include "vast/system/meta_index.hpp"
 
 #include "vast/data.hpp"
 #include "vast/detail/overload.hpp"
@@ -33,7 +31,7 @@
 
 #include <type_traits>
 
-namespace vast {
+namespace vast::system {
 
 size_t meta_index::memusage() const {
   size_t result = 0;
@@ -263,49 +261,4 @@ std::vector<uuid> meta_index::lookup(const expression& expr) const {
   return result;
 }
 
-caf::expected<flatbuffers::Offset<fbs::partition_synopsis::v0>>
-pack(flatbuffers::FlatBufferBuilder& builder, const partition_synopsis& x) {
-  std::vector<flatbuffers::Offset<fbs::synopsis::v0>> synopses;
-  for (auto& [fqf, synopsis] : x.field_synopses_) {
-    auto maybe_synopsis = pack(builder, synopsis, fqf);
-    if (!maybe_synopsis)
-      return maybe_synopsis.error();
-    synopses.push_back(*maybe_synopsis);
-  }
-  for (auto& [type, synopsis] : x.type_synopses_) {
-    qualified_record_field fqf;
-    fqf.type = type;
-    auto maybe_synopsis = pack(builder, synopsis, fqf);
-    if (!maybe_synopsis)
-      return maybe_synopsis.error();
-    synopses.push_back(*maybe_synopsis);
-  }
-  auto synopses_vector = builder.CreateVector(synopses);
-  fbs::partition_synopsis::v0Builder ps_builder(builder);
-  ps_builder.add_synopses(synopses_vector);
-  return ps_builder.Finish();
-}
-
-caf::error
-unpack(const fbs::partition_synopsis::v0& x, partition_synopsis& ps) {
-  if (!x.synopses())
-    return caf::make_error(ec::format_error, "missing synopses");
-  for (auto synopsis : *x.synopses()) {
-    if (!synopsis)
-      return caf::make_error(ec::format_error, "synopsis is null");
-    qualified_record_field qf;
-    if (auto error
-        = fbs::deserialize_bytes(synopsis->qualified_record_field(), qf))
-      return error;
-    synopsis_ptr ptr;
-    if (auto error = unpack(*synopsis, ptr))
-      return error;
-    if (!qf.field_name.empty())
-      ps.field_synopses_[qf] = std::move(ptr);
-    else
-      ps.type_synopses_[qf.type] = std::move(ptr);
-  }
-  return caf::none;
-}
-
-} // namespace vast
+} // namespace vast::system

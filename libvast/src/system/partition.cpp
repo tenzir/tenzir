@@ -55,9 +55,6 @@
 
 #include <memory>
 
-using namespace std::chrono;
-using namespace caf;
-
 CAF_ALLOW_UNSAFE_MESSAGE_TYPE(std::shared_ptr<vast::partition_synopsis>)
 
 namespace vast::system {
@@ -439,7 +436,7 @@ active_partition_actor::behavior_type active_partition(
     // indexers, and compute the qualified record field name for each. A
     // specialized downstream manager could optimize this by using e.g. a map
     // from qualified record fields to downstream indexers.
-    caf::policy::arg<broadcast_downstream_manager<
+    caf::policy::arg<caf::broadcast_downstream_manager<
       table_slice_column, vast::qualified_record_field, partition_selector>>{});
   self->set_exit_handler([=](const caf::exit_msg& msg) {
     VAST_DEBUG("{} received EXIT from {} with reason: {}", self, msg.source,
@@ -508,6 +505,7 @@ active_partition_actor::behavior_type active_partition(
           || !self->state.stage->inbound_paths().empty()
           || !self->state.stage->idle()) {
         VAST_DEBUG("{} waits for stream before persisting", self);
+        using namespace std::chrono_literals;
         self->delayed_send(self, 50ms, atom::internal_v, atom::persist_v,
                            atom::resume_v);
         return;
@@ -792,7 +790,7 @@ partition_actor::behavior_type passive_partition(
            partition_client_actor client) -> caf::result<atom::done> {
       VAST_TRACE_SCOPE("{} {}", self, VAST_ARG(expr));
       if (!self->state.partition_chunk)
-        return get<2>(self->state.deferred_evaluations.emplace_back(
+        return std::get<2>(self->state.deferred_evaluations.emplace_back(
           expr, client, self->make_response_promise<atom::done>()));
       // We can safely assert that if we have the partition chunk already, all
       // deferred evaluations were taken care of.

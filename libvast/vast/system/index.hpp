@@ -19,9 +19,9 @@
 #include "vast/detail/stable_map.hpp"
 #include "vast/expression.hpp"
 #include "vast/fbs/index.hpp"
-#include "vast/meta_index.hpp"
 #include "vast/system/accountant.hpp"
 #include "vast/system/actors.hpp"
+#include "vast/system/meta_index.hpp"
 #include "vast/system/partition.hpp"
 #include "vast/uuid.hpp"
 
