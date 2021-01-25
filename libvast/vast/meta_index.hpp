@@ -73,16 +73,12 @@ public:
   /// index (in bytes).
   size_t size_bytes() const;
 
-  /// Gets the options for the synopsis factory.
-  /// @returns A reference to the synopsis options.
-  caf::settings& factory_options();
-
   // -- concepts ---------------------------------------------------------------
 
   // Allow debug printing meta_index instances.
   template <class Inspector>
   friend auto inspect(Inspector& f, meta_index& x) {
-    return f(x.synopsis_options_, x.synopses_);
+    return f(x.synopses_);
   }
 
   // Allow the partition to directly serialize the relevant synopses.
@@ -93,9 +89,6 @@ public:
 private:
   /// Maps a partition ID to the synopses for that partition.
   std::unordered_map<uuid, partition_synopsis> synopses_;
-
-  /// Settings for the synopsis factory.
-  caf::settings synopsis_options_;
 };
 
 } // namespace vast

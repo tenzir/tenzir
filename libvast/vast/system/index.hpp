@@ -219,7 +219,7 @@ struct index_state {
   /// Statistics about processed data.
   index_statistics stats;
 
-  // Handle of the accountant.
+  /// Handle of the accountant.
   accountant_actor accountant;
 
   /// List of actors that wait for the next flush event.
@@ -227,6 +227,9 @@ struct index_state {
 
   /// Actor handle of the filesystem actor.
   filesystem_actor filesystem;
+
+  // The false positive rate for the meta index.
+  double meta_index_fp_rate;
 
   static inline const char* name = "index";
 };
