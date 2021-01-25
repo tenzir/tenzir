@@ -229,6 +229,51 @@ void index_state::notify_flush_listeners() {
   flush_listeners.clear();
 }
 
+void index_state::create_active_partition() {
+  auto id = uuid::random();
+  caf::settings index_opts;
+  index_opts["cardinality"] = partition_capacity;
+  active_partition.actor
+    = self->spawn(::vast::system::active_partition, id, filesystem, index_opts,
+                  meta_idx.factory_options());
+  active_partition.stream_slot
+    = stage->add_outbound_path(active_partition.actor);
+  active_partition.capacity = partition_capacity;
+  active_partition.id = id;
+  VAST_DEBUG(self, "created new partition", id);
+}
+
+void index_state::decomission_active_partition() {
+  auto id = active_partition.id;
+  auto actor = std::exchange(active_partition.actor, {});
+  unpersisted[id] = actor;
+  // Send buffered batches.
+  stage->out().fan_out_flush();
+  stage->out().force_emit_batches();
+  // Remove active partition from the stream.
+  stage->out().close(active_partition.stream_slot);
+  // Persist active partition asynchronously.
+  auto part_dir = dir / to_string(id);
+  VAST_DEBUG(self, "persists active partition to", part_dir);
+  self->request(actor, caf::infinite, atom::persist_v, part_dir)
+    .then(
+      [=](std::shared_ptr<partition_synopsis>& ps) {
+        VAST_DEBUG(self, "successfully persisted partition", id);
+        // Semantically ps is a unique_ptr, and the partition releases its
+        // copy before sending. We use shared_ptr for the transport because
+        // CAF message types must be copy-constructible.
+        VAST_ASSERT(ps.use_count() == 1);
+        meta_idx.merge(id, std::move(*ps));
+        unpersisted.erase(id);
+        persisted_partitions.insert(id);
+      },
+      [=](const caf::error& err) {
+        VAST_ERROR(self, "failed to persist partition", id,
+                   "with error:", render(err));
+        self->quit(err);
+      });
+}
+
 caf::dictionary<caf::config_value>
 index_state::status(status_verbosity v) const {
   using caf::put;
@@ -416,51 +461,6 @@ index(index_actor::stateful_pointer<index_state> self,
   put(meta_index_options, "max-partition-size", partition_capacity);
   put(meta_index_options, "address-synopsis-fp-rate", meta_index_fp_rate);
   put(meta_index_options, "string-synopsis-fp-rate", meta_index_fp_rate);
-  // Creates a new active partition and updates index state.
-  auto create_active_partition = [=] {
-    auto id = uuid::random();
-    caf::settings index_opts;
-    index_opts["cardinality"] = partition_capacity;
-    auto part = self->spawn(active_partition, id, self->state.filesystem,
-                            index_opts, self->state.meta_idx.factory_options());
-    auto slot = self->state.stage->add_outbound_path(part);
-    self->state.active_partition.actor = part;
-    self->state.active_partition.stream_slot = slot;
-    self->state.active_partition.capacity = partition_capacity;
-    self->state.active_partition.id = id;
-    VAST_DEBUG(self, "created new partition", id);
-  };
-  auto decomission_active_partition = [=] {
-    auto& active = self->state.active_partition;
-    auto id = active.id;
-    auto actor = std::exchange(active.actor, {});
-    self->state.unpersisted[id] = actor;
-    // Send buffered batches.
-    self->state.stage->out().fan_out_flush();
-    self->state.stage->out().force_emit_batches();
-    // Remove active partition from the stream.
-    self->state.stage->out().close(active.stream_slot);
-    // Persist active partition asynchronously.
-    auto part_dir = dir / to_string(id);
-    VAST_DEBUG(self, "persists active partition to", part_dir);
-    self->request(actor, caf::infinite, atom::persist_v, part_dir)
-      .then(
-        [=](std::shared_ptr<partition_synopsis>& ps) {
-          VAST_DEBUG(self, "successfully persisted partition", id);
-          // Semantically ps is a unique_ptr, and the partition releases its
-          // copy before sending. We use shared_ptr for the transport because
-          // CAF message types must be copy-constructible.
-          VAST_ASSERT(ps.use_count() == 1);
-          self->state.meta_idx.merge(id, std::move(*ps));
-          self->state.unpersisted.erase(id);
-          self->state.persisted_partitions.insert(id);
-        },
-        [=](const caf::error& err) {
-          VAST_ERROR(self, "failed to persist partition", id,
-                     "with error:", render(err));
-          self->quit(err);
-        });
-  };
   // Setup stream manager.
   self->state.stage = detail::attach_notifying_stream_stage(
     self,
@@ -471,13 +471,13 @@ index(index_actor::stateful_pointer<index_state> self,
       self->state.stats.layouts[layout.name()].count += x.rows();
       auto& active = self->state.active_partition;
       if (!active.actor) {
-        create_active_partition();
+        self->state.create_active_partition();
       } else if (x.rows() > active.capacity) {
         VAST_DEBUG(self, "exceeds active capacity by",
                    (x.rows() - active.capacity), "rows");
-        decomission_active_partition();
+        self->state.decomission_active_partition();
         self->state.flush_to_disk();
-        create_active_partition();
+        self->state.create_active_partition();
       }
       out.push(x);
       if (active.capacity == self->state.partition_capacity
@@ -516,7 +516,7 @@ index(index_actor::stateful_pointer<index_state> self,
     self->state.stage->shutdown();
     // Bring down active partition.
     if (self->state.active_partition.actor)
-      decomission_active_partition();
+      self->state.decomission_active_partition();
     // Collect partitions for termination.
     // TODO: We must actor_cast to caf::actor here because 'shutdown' operates
     // on 'std::vector<caf::actor>' only. That should probably be generalized in
