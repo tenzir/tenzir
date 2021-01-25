@@ -33,26 +33,26 @@
 
 namespace vast::system {
 
-size_t meta_index::memusage() const {
+size_t meta_index_state::memusage() const {
   size_t result = 0;
-  for (auto& [id, partition_synopsis] : synopses_)
+  for (auto& [id, partition_synopsis] : synopses)
     result += partition_synopsis.memusage();
   return result;
 }
 
-void meta_index::erase(const uuid& partition) {
-  synopses_.erase(partition);
+void meta_index_state::erase(const uuid& partition) {
+  synopses.erase(partition);
 }
 
-void meta_index::merge(const uuid& partition, partition_synopsis&& ps) {
-  synopses_[partition] = std::move(ps);
+void meta_index_state::merge(const uuid& partition, partition_synopsis&& ps) {
+  synopses[partition] = std::move(ps);
 }
 
-partition_synopsis& meta_index::at(const uuid& partition) {
-  return synopses_.at(partition);
+partition_synopsis& meta_index_state::at(const uuid& partition) {
+  return synopses.at(partition);
 }
 
-std::vector<uuid> meta_index::lookup(const expression& expr) const {
+std::vector<uuid> meta_index_state::lookup(const expression& expr) const {
   VAST_ASSERT(!caf::holds_alternative<caf::none_t>(expr));
   auto start = system::stopwatch::now();
   // TODO: we could consider a flat_set<uuid> here, which would then have
@@ -67,10 +67,10 @@ std::vector<uuid> meta_index::lookup(const expression& expr) const {
   using result_type = std::vector<uuid>;
   result_type memoized_partitions;
   auto all_partitions = [&] {
-    if (!memoized_partitions.empty() || synopses_.empty())
+    if (!memoized_partitions.empty() || synopses.empty())
       return memoized_partitions;
-    memoized_partitions.reserve(synopses_.size());
-    std::transform(synopses_.begin(), synopses_.end(),
+    memoized_partitions.reserve(synopses.size());
+    std::transform(synopses.begin(), synopses.end(),
                    std::back_inserter(memoized_partitions),
                    [](auto& x) { return x.first; });
     std::sort(memoized_partitions.begin(), memoized_partitions.end());
@@ -96,7 +96,7 @@ std::vector<uuid> meta_index::lookup(const expression& expr) const {
       for (auto& op : x) {
         auto xs = lookup(op);
         VAST_ASSERT(std::is_sorted(xs.begin(), xs.end()));
-        if (xs.size() == synopses_.size())
+        if (xs.size() == synopses.size())
           return xs; // short-circuit
         detail::inplace_unify(result, xs);
         VAST_ASSERT(std::is_sorted(result.begin(), result.end()));
@@ -120,7 +120,7 @@ std::vector<uuid> meta_index::lookup(const expression& expr) const {
         VAST_ASSERT(caf::holds_alternative<data>(x.rhs));
         auto& rhs = caf::get<data>(x.rhs);
         result_type result;
-        for (auto& [part_id, part_syn] : synopses_) {
+        for (auto& [part_id, part_syn] : synopses) {
           for (auto& [field, syn] : part_syn.field_synopses_) {
             if (match(field)) {
               auto cleaned_type = vast::type{field.type}.attributes({});
@@ -154,9 +154,9 @@ std::vector<uuid> meta_index::lookup(const expression& expr) const {
             }
           }
         }
-        VAST_DEBUG(
-          "{} checked {} partitions for predicate {} and got {} results",
-          detail::pretty_type_name(this), synopses_.size(), x, result.size());
+        VAST_DEBUG("{} checked {} partitions for predicate {} and got results",
+                   detail::pretty_type_name(this), synopses.size(), x,
+                   result.size());
         // Some calling paths require the result to be sorted.
         std::sort(result.begin(), result.end());
         return result;
@@ -167,7 +167,7 @@ std::vector<uuid> meta_index::lookup(const expression& expr) const {
             // We don't have to look into the synopses for type queries, just
             // at the layout names.
             result_type result;
-            for (auto& [part_id, part_syn] : synopses_) {
+            for (auto& [part_id, part_syn] : synopses) {
               for (auto& pair : part_syn.field_synopses_) {
                 // TODO: provide an overload for view of evaluate() so that
                 // we can use string_view here. Fortunately type names are
@@ -192,7 +192,7 @@ std::vector<uuid> meta_index::lookup(const expression& expr) const {
               VAST_WARN("#field meta queries only support string "
                         "comparisons");
             } else {
-              for (const auto& synopsis : synopses_) {
+              for (const auto& synopsis : synopses) {
                 // Compare the desired field name with each field in the
                 // partition.
                 auto matching = [&] {
@@ -259,6 +259,27 @@ std::vector<uuid> meta_index::lookup(const expression& expr) const {
              result.size(), delta.count());
   VAST_TRACEPOINT(meta_index_lookup, delta.count(), result.size());
   return result;
+}
+
+meta_index_actor::behavior_type
+meta_index(meta_index_actor::stateful_pointer<meta_index_state> self) {
+  self->state.self = self;
+  return {
+    [=](uuid partition,
+        std::shared_ptr<partition_synopsis> synopsis) -> atom::ok {
+      VAST_TRACE("{} {} {}", self, VAST_ARG(partition), VAST_ARG(synopsis));
+      self->state.merge(std::move(partition), std::move(*synopsis));
+      return atom::ok_v;
+    },
+    [=](expression expr) -> std::vector<uuid> {
+      VAST_TRACE("{} {}", self, VAST_ARG(expr));
+      return self->state.lookup(expr);
+    },
+    [=](atom::status, status_verbosity) -> caf::settings {
+      // TODO: implement
+      return {};
+    },
+  };
 }
 
 } // namespace vast::system

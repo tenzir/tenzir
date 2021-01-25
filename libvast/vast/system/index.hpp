@@ -213,8 +213,8 @@ struct index_state {
   /// Caches idle workers.
   std::vector<query_supervisor_actor> idle_workers;
 
-  /// The meta index.
-  meta_index meta_idx;
+  /// The META INDEX actor.
+  meta_index_actor meta_index;
 
   /// The directory for persistent state.
   path dir;

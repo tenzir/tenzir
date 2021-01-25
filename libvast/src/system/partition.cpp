@@ -55,8 +55,6 @@
 
 #include <memory>
 
-CAF_ALLOW_UNSAFE_MESSAGE_TYPE(std::shared_ptr<vast::partition_synopsis>)
-
 namespace vast::system {
 
 /// Gets the ACTIVE INDEXER at a certain position.
