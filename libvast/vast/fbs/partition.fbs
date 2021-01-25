@@ -18,7 +18,7 @@ namespace vast.fbs.qualified_value_index;
 
 table v0 {
   /// The full-qualified field name, e.g., "zeek.conn.id.orig_h".
-  qualified_field_name: string;
+  field_name: string;
 
   /// The value index for the given field.
   index: value_index.v0;

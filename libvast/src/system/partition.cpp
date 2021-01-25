@@ -243,12 +243,12 @@ pack(flatbuffers::FlatBufferBuilder& builder, const active_partition_state& x) {
     auto& chunk = chunk_it->second;
     auto data = builder.CreateVector(
       reinterpret_cast<const uint8_t*>(chunk->data()), chunk->size());
-    auto fqf = builder.CreateString(qf.field_name);
+    auto fieldname = builder.CreateString(qf.field_name);
     fbs::value_index::v0Builder vbuilder(builder);
     vbuilder.add_data(data);
     auto vindex = vbuilder.Finish();
     fbs::qualified_value_index::v0Builder qbuilder(builder);
-    qbuilder.add_qualified_field_name(fqf);
+    qbuilder.add_field_name(fieldname);
     qbuilder.add_index(vindex);
     auto qindex = qbuilder.Finish();
     indices.push_back(qindex);
@@ -309,7 +309,7 @@ unpack(const fbs::partition::v0& partition, passive_partition_state& state) {
                            "missing 'indexes' field in partition "
                            "flatbuffer");
   for (auto qualified_index : *indexes) {
-    if (!qualified_index->qualified_field_name())
+    if (!qualified_index->field_name())
       return caf::make_error(ec::format_error,
                              "missing field name in qualified "
                              "index");
