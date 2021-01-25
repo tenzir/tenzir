@@ -21,33 +21,29 @@
 #include "vast/partition_synopsis.hpp"
 #include "vast/qualified_record_field.hpp"
 #include "vast/synopsis.hpp"
+#include "vast/system/actors.hpp"
 #include "vast/time_synopsis.hpp"
 #include "vast/type.hpp"
 #include "vast/uuid.hpp"
 
-#include <caf/fwd.hpp>
 #include <caf/settings.hpp>
+#include <caf/typed_event_based_actor.hpp>
 
-#include <flatbuffers/flatbuffers.h>
-
-#include <functional>
 #include <string>
 #include <unordered_map>
-#include <unordered_set>
 #include <vector>
 
 namespace vast::system {
 
-// Forward declaration to be able to `friend` this function.
-caf::expected<flatbuffers::Offset<fbs::Partition>>
-pack(flatbuffers::FlatBufferBuilder& builder,
-     const system::active_partition_state& x);
-
-/// The meta index is the first data structure that queries hit. The result
-/// represents a list of candidate partition IDs that may contain the desired
-/// data. The meta index may return false positives but never false negatives.
-class meta_index {
+/// The state of the META INDEX actor.
+struct meta_index_state {
 public:
+  // -- concepts ---------------------------------------------------------------
+
+  constexpr static auto name = "meta-index";
+
+  // -- utility functions ------------------------------------------------------
+
   /// Adds new synopses for a partition in bulk. Used when
   /// re-building the meta index state at startup.
   void merge(const uuid& partition, partition_synopsis&&);
@@ -69,22 +65,20 @@ public:
   /// index (in bytes).
   size_t memusage() const;
 
-  // -- concepts ---------------------------------------------------------------
+  // -- data members -----------------------------------------------------------
 
-  // Allow debug printing meta_index instances.
-  template <class Inspector>
-  friend auto inspect(Inspector& f, meta_index& x) {
-    return f(x.synopses_);
-  }
+  /// A pointer to the parent actor.
+  meta_index_actor::pointer self;
 
-  // Allow the partition to directly serialize the relevant synopses.
-  friend caf::expected<flatbuffers::Offset<fbs::Partition>>
-  pack(flatbuffers::FlatBufferBuilder& builder,
-       const system::active_partition_state& x);
-
-private:
   /// Maps a partition ID to the synopses for that partition.
-  std::unordered_map<uuid, partition_synopsis> synopses_;
+  std::unordered_map<uuid, partition_synopsis> synopses;
 };
+
+/// The META INDEX is the first index actor that queries hit. The result
+/// represents a list of candidate partition IDs that may contain the desired
+/// data. The META INDEX may return false positives but never false negatives.
+/// @param self The actor handle.
+meta_index_actor::behavior_type
+meta_index(meta_index_actor::stateful_pointer<meta_index_state> self);
 
 } // namespace vast::system

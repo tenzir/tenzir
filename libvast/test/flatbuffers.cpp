@@ -106,6 +106,8 @@ TEST(index roundtrip) {
   CHECK_EQUAL(stats->Get(0)->count(), 54931u);
 }
 
+FIXTURE_SCOPE(partition_roundtrips, fixtures::deterministic_actor_system)
+
 TEST(empty partition roundtrip) {
   // Init factory.
   vast::factory<vast::table_slice_builder>::initialize();
@@ -120,7 +122,7 @@ TEST(empty partition roundtrip) {
   auto& ids = state.type_ids["x"];
   ids.append_bits(0, 3);
   ids.append_bits(1, 3);
-  // Prepare a layout for the partition synopsis. The meta index only
+  // Prepare a layout for the partition synopsis. The partition synopsis only
   // looks at the layout of the table slices it gets, so we feed it
   // with an empty table slice.
   auto layout = vast::record_type{{"x", vast::count_type{}}}.name("y");
@@ -142,37 +144,43 @@ TEST(empty partition roundtrip) {
   auto sz = builder.GetSize();
   vast::span span(ptr, sz);
   // Deserialize partition.
-  vast::system::passive_partition_state readonly_state = {};
+  vast::system::passive_partition_state recovered_state = {};
   auto partition = vast::fbs::GetPartition(span.data());
   REQUIRE(partition);
   REQUIRE_EQUAL(partition->partition_type(),
                 vast::fbs::partition::Partition::v0);
   auto partition_v0 = partition->partition_as_v0();
   REQUIRE(partition_v0);
-  auto error = unpack(*partition_v0, readonly_state);
+  auto error = unpack(*partition_v0, recovered_state);
   CHECK(!error);
-  CHECK_EQUAL(readonly_state.id, state.id);
-  CHECK_EQUAL(readonly_state.offset, state.offset);
-  CHECK_EQUAL(readonly_state.events, state.events);
-  CHECK_EQUAL(readonly_state.combined_layout, state.combined_layout);
-  CHECK_EQUAL(readonly_state.type_ids, state.type_ids);
+  CHECK_EQUAL(recovered_state.id, state.id);
+  CHECK_EQUAL(recovered_state.offset, state.offset);
+  CHECK_EQUAL(recovered_state.events, state.events);
+  CHECK_EQUAL(recovered_state.combined_layout, state.combined_layout);
+  CHECK_EQUAL(recovered_state.type_ids, state.type_ids);
   // Deserialize meta index state from this partition.
-  vast::partition_synopsis ps;
-  auto error2 = vast::system::unpack(*partition_v0, ps);
+  auto ps = std::make_shared<vast::partition_synopsis>();
+  auto error2 = vast::system::unpack(*partition_v0, *ps);
   CHECK(!error2);
-  CHECK_EQUAL(ps.field_synopses_.size(), 1u);
-  vast::system::meta_index recovered_meta_idx;
-  recovered_meta_idx.merge(state.id, std::move(ps));
-  // Check that lookups still work as expected.
-  auto candidates = recovered_meta_idx.lookup(vast::expression{
-    vast::predicate{vast::field_extractor{".x"},
-                    vast::relational_operator::equal, vast::data{0u}},
-  });
-  REQUIRE_EQUAL(candidates.size(), 1u);
-  CHECK_EQUAL(candidates[0], state.id);
+  CHECK_EQUAL(ps->field_synopses_.size(), 1u);
+  auto meta_index = self->spawn(vast::system::meta_index);
+  auto rp = self->request(meta_index, caf::infinite, vast::atom::merge_v,
+                          recovered_state.id, ps);
+  run();
+  rp.receive([=](vast::atom::ok) {}, [=](const caf::error& err) { FAIL(err); });
+  auto rp2
+    = self->request(meta_index, caf::infinite,
+                    vast::expression{vast::predicate{
+                      vast::field_extractor{".x"},
+                      vast::relational_operator::equal, vast::data{0u}}});
+  run();
+  rp2.receive(
+    [&](const std::vector<vast::uuid>& candidates) {
+      REQUIRE_EQUAL(candidates.size(), 1ull);
+      CHECK_EQUAL(candidates[0], state.id);
+    },
+    [=](const caf::error& err) { FAIL(err); });
 }
-
-FIXTURE_SCOPE(foo, fixtures::deterministic_actor_system)
 
 // This test spawns a partition, fills it with some test data, then persists
 // the partition to disk, restores it from the persisted on-disk state, and

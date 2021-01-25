@@ -163,6 +163,17 @@ using query_supervisor_master_actor = typed_actor_fwd<
   // Enlist the QUERY SUPERVISOR as an available worker.
   caf::reacts_to<atom::worker, query_supervisor_actor>>::unwrap;
 
+/// The META INDEX actor interface.
+using meta_index_actor = typed_actor_fwd<
+  // TODO: docs
+  caf::replies_to<uuid, std::shared_ptr<partition_synopsis>>::with< //
+    atom::ok>,
+  // TODO: docs
+  caf::replies_to<expression>::with< //
+    std::vector<uuid>>>
+  // Conform to the protocol of the STATUS CLIENT actor.
+  ::extend_with<status_client_actor>::unwrap;
+
 /// The INDEX actor interface.
 using index_actor = typed_actor_fwd<
   // Triggered when the INDEX finished querying a PARTITION.
@@ -386,5 +397,7 @@ CAF_BEGIN_TYPE_ID_BLOCK(vast_actors, caf::id_block::vast_atoms::end)
   VAST_ADD_TYPE_ID((vast::system::type_registry_actor))
 
 CAF_END_TYPE_ID_BLOCK(vast_actors)
+
+CAF_ALLOW_UNSAFE_MESSAGE_TYPE(std::shared_ptr<vast::partition_synopsis>)
 
 #undef VAST_ADD_TYPE_ID

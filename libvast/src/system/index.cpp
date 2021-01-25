@@ -53,7 +53,9 @@
 #include "vast/value_index.hpp"
 
 #include <caf/error.hpp>
+#include <caf/response_promise.hpp>
 #include <caf/typed_event_based_actor.hpp>
+#include <caf/typed_response_promise.hpp>
 
 #include <flatbuffers/flatbuffers.h>
 
@@ -227,7 +229,21 @@ caf::error index_state::load_from_disk() {
                                                  "version");
       if (auto error = unpack(*ps_flatbuffer->partition_synopsis_as_v0(), ps))
         return error;
-      meta_idx.merge(partition_uuid, std::move(ps));
+      self
+        ->request<caf::message_priority::high>(
+          meta_index, caf::infinite, partition_uuid,
+          std::make_shared<partition_synopsis>(std::move(ps)))
+        .then(
+          [=](atom::ok) {
+            VAST_DEBUG("{} received ok for request to merge partition "
+                         "synopsis from {}",
+                         self, partition_uuid);
+          },
+          [=](caf::error err) {
+            VAST_ERROR("{} received error for request to merge partition "
+                       "synopsis from {}",
+                       self, partition_uuid, render(err));
+          });
       persisted_partitions.insert(partition_uuid);
     }
     auto stats = index_v0->stats();
@@ -239,7 +255,7 @@ caf::error index_state::load_from_disk() {
         = layout_statistics{stat->count()};
     }
   } else {
-    VAST_WARN("{} found existing database dir {} without index "
+    VAST_INFO("{} found existing database dir {} without index "
               "statefile, "
               "will start with fresh state",
               self, dir);
@@ -318,9 +334,21 @@ void index_state::decomission_active_partition() {
         // copy before sending. We use shared_ptr for the transport because
         // CAF message types must be copy-constructible.
         VAST_ASSERT(ps.use_count() == 1);
-        meta_idx.merge(id, std::move(*ps));
-        unpersisted.erase(id);
-        persisted_partitions.insert(id);
+        self
+          ->request<caf::message_priority::high>(meta_index, caf::infinite, id,
+                                                 std::move(ps))
+          .then(
+            [=](atom::ok) {
+              VAST_DEBUG("{} received ok for request to persist partition {}",
+                         self, id);
+              unpersisted.erase(id);
+              persisted_partitions.insert(id);
+            },
+            [=](caf::error err) {
+              VAST_DEBUG("{} received error for request to persist partition "
+                         "{}: {}",
+                         self, id, render(err));
+            });
       },
       [=](const caf::error& err) {
         VAST_ERROR("{} failed to persist partition {} with error: {}", self, id,
@@ -363,7 +391,8 @@ index_state::status(status_verbosity v) const {
       // Hence the fallback to low-level primitives.
       layout_object.insert_or_assign(name, std::move(xs));
     }
-    put(index_status, "meta-index-bytes", meta_idx.memusage());
+    // FIXME: forward status request to META INDEX here and merge the result.
+    // put(index_status, "meta-index-bytes", meta_idx.memusage());
     put(index_status, "num-active-partitions",
         active_partition.actor == nullptr ? 0 : 1);
     put(index_status, "num-cached-partitions", inmem_partitions.size());
@@ -558,6 +587,7 @@ index(index_actor::stateful_pointer<index_state> self,
   // Set members.
   self->state.self = self;
   self->state.filesystem = std::move(filesystem);
+  self->state.meta_index = self->spawn<caf::lazy_init>(meta_index);
   self->state.dir = dir;
   self->state.synopsisdir = meta_index_dir;
   self->state.partition_capacity = partition_capacity;
@@ -698,32 +728,54 @@ index(index_actor::stateful_pointer<index_state> self,
         respond(caf::sec::invalid_argument);
         return {};
       }
-      // Get all potentially matching partitions.
-      auto candidates = self->state.meta_idx.lookup(expr);
+      std::vector<uuid> candidates;
       if (self->state.active_partition.actor)
         candidates.push_back(self->state.active_partition.id);
       for (const auto& [id, _] : self->state.unpersisted)
         candidates.push_back(id);
-      if (candidates.empty()) {
-        VAST_DEBUG("{} returns without result: no partitions qualify", self);
-        no_result();
-        return {};
-      }
-      // Allows the client to query further results after initial taste.
-      auto query_id = uuid::random();
-      // Ensure the query id is unique.
-      while (self->state.pending.find(query_id) != self->state.pending.end()
-             || query_id == uuid::nil())
-        query_id = uuid::random();
-      auto total = candidates.size();
-      auto scheduled = detail::narrow<uint32_t>(
-        std::min(candidates.size(), self->state.taste_partitions));
-      auto lookup = query_state{query_id, expr, std::move(candidates)};
-      auto result = self->state.pending.emplace(query_id, std::move(lookup));
-      VAST_ASSERT(result.second);
-      respond(query_id, detail::narrow<uint32_t>(total), scheduled);
-      self->delegate(caf::actor_cast<caf::actor>(self), query_id, scheduled);
-      return {};
+      auto rp = self->make_response_promise<void>();
+      // Get all potentially matching partitions.
+      self->request(self->state.meta_index, caf::infinite, expr)
+        .then(
+          [=, candidates = std::move(candidates)](
+            std::vector<uuid> midx_candidates) mutable {
+            VAST_DEBUG("{} got initial candidates {} and from meta-index {}",
+                       self, candidates, midx_candidates);
+            candidates.insert(candidates.end(), midx_candidates.begin(),
+                              midx_candidates.end());
+            if (candidates.empty()) {
+              VAST_DEBUG("{} returns without result: no partitions qualify",
+                         self);
+              no_result();
+              // TODO: When updating to CAF 0.18, remove the use of the untyped
+              // response promise and call deliver without arguments.
+              auto& untyped_rp = static_cast<caf::response_promise&>(rp);
+              untyped_rp.deliver(caf::unit);
+              return;
+            }
+            // Allows the client to query further results after initial taste.
+            auto query_id = uuid::random();
+            // Ensure the query id is unique.
+            while (self->state.pending.find(query_id)
+                     != self->state.pending.end()
+                   || query_id == uuid::nil())
+              query_id = uuid::random();
+            auto total = candidates.size();
+            auto scheduled = detail::narrow<uint32_t>(
+              std::min(candidates.size(), self->state.taste_partitions));
+            auto lookup = query_state{query_id, expr, std::move(candidates)};
+            auto result
+              = self->state.pending.emplace(query_id, std::move(lookup));
+            VAST_ASSERT(result.second);
+            respond(query_id, detail::narrow<uint32_t>(total), scheduled);
+            rp.delegate(caf::actor_cast<caf::actor>(self), query_id, scheduled);
+          },
+          [=](caf::error err) mutable {
+            VAST_ERROR("{} failed to receive candidates from meta-index: {}",
+                       self, render(err));
+            rp.deliver(std::move(err));
+          });
+      return rp;
     },
     [self](const uuid& query_id, uint32_t num_partitions) -> caf::result<void> {
       auto sender = self->current_sender();
