@@ -21,11 +21,11 @@
 #include "vast/fbs/partition.hpp"
 #include "vast/fbs/utils.hpp"
 #include "vast/fbs/uuid.hpp"
-#include "vast/meta_index.hpp"
 #include "vast/msgpack_table_slice.hpp"
 #include "vast/msgpack_table_slice_builder.hpp"
 #include "vast/span.hpp"
 #include "vast/system/index.hpp"
+#include "vast/system/meta_index.hpp"
 #include "vast/system/partition.hpp"
 #include "vast/system/posix_filesystem.hpp"
 #include "vast/table_slice.hpp"
@@ -161,7 +161,7 @@ TEST(empty partition roundtrip) {
   auto error2 = vast::system::unpack(*partition_v0, ps);
   CHECK(!error2);
   CHECK_EQUAL(ps.field_synopses_.size(), 1u);
-  vast::meta_index recovered_meta_idx;
+  vast::system::meta_index recovered_meta_idx;
   recovered_meta_idx.merge(state.id, std::move(ps));
   // Check that lookups still work as expected.
   auto candidates = recovered_meta_idx.lookup(vast::expression{

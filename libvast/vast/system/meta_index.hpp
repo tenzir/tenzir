@@ -36,16 +36,12 @@
 #include <unordered_set>
 #include <vector>
 
-namespace vast {
-
-namespace system {
+namespace vast::system {
 
 // Forward declaration to be able to `friend` this function.
 caf::expected<flatbuffers::Offset<fbs::Partition>>
 pack(flatbuffers::FlatBufferBuilder& builder,
      const system::active_partition_state& x);
-
-} // namespace system
 
 /// The meta index is the first data structure that queries hit. The result
 /// represents a list of candidate partition IDs that may contain the desired
@@ -83,12 +79,12 @@ public:
 
   // Allow the partition to directly serialize the relevant synopses.
   friend caf::expected<flatbuffers::Offset<fbs::Partition>>
-  vast::system::pack(flatbuffers::FlatBufferBuilder& builder,
-                     const system::active_partition_state& x);
+  pack(flatbuffers::FlatBufferBuilder& builder,
+       const system::active_partition_state& x);
 
 private:
   /// Maps a partition ID to the synopses for that partition.
   std::unordered_map<uuid, partition_synopsis> synopses_;
 };
 
-} // namespace vast
+} // namespace vast::system

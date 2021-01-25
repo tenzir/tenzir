@@ -13,7 +13,7 @@
 
 #define SUITE meta_index
 
-#include "vast/meta_index.hpp"
+#include "vast/system/meta_index.hpp"
 
 #include "vast/test/fixtures/actor_system.hpp"
 #include "vast/test/test.hpp"
@@ -30,6 +30,7 @@
 #include "vast/view.hpp"
 
 using namespace vast;
+using namespace vast::system;
 
 using std::literals::operator""s;
 
