@@ -38,8 +38,7 @@ namespace {
 
 query_supervisor_state::query_supervisor_state(
   query_supervisor_actor::stateful_pointer<query_supervisor_state> self)
-  : open_requests(0), name("query_supervisor-") {
-  name += std::to_string(self->id());
+  : open_requests(0), log_identifier(std::to_string(self->id())) {
 }
 
 query_supervisor_actor::behavior_type query_supervisor(
@@ -51,9 +50,15 @@ query_supervisor_actor::behavior_type query_supervisor(
     [=](const expression& expr,
         const std::vector<std::pair<uuid, partition_actor>>& qm,
         const index_client_actor& client) {
-      VAST_DEBUG(self, "got a new query for", qm.size(),
-                 "partitions:", get_ids(qm));
-      VAST_ASSERT(!qm.empty());
+      VAST_DEBUG(self, self->state.log_identifier, "got a new query for",
+                 qm.size(), "partitions:", get_ids(qm));
+      // TODO: We can save one message here if we handle this case in the
+      // partition immediately.
+      if (qm.empty()) {
+        self->send(client, atom::done_v);
+        self->send(master, atom::worker_v, self);
+        return;
+      }
       VAST_ASSERT(self->state.open_requests == 0);
       for (auto& [id, partition] : qm) {
         ++self->state.open_requests;
@@ -64,8 +69,9 @@ query_supervisor_actor::behavior_type query_supervisor(
           .then(
             [=](atom::done) {
               if (--self->state.open_requests == 0) {
-                VAST_DEBUG(self, "collected all results for the current batch "
-                                 "of partitions");
+                VAST_DEBUG(self, self->state.log_identifier,
+                           "collected all results for the current batch "
+                           "of partitions");
                 // Ask master for more work after receiving the last sub
                 // result.
                 // TODO: We should schedule a new partition as soon as the
@@ -78,7 +84,8 @@ query_supervisor_actor::behavior_type query_supervisor(
             [=](const caf::error& e) {
               // TODO: Add a proper error handling path to escalate the error to
               // the client.
-              VAST_ERROR(self, "encountered error while supervising query", e);
+              VAST_ERROR(self, self->state.log_identifier,
+                         "encountered error while supervising query", e);
               if (--self->state.open_requests == 0) {
                 self->send(client, atom::done_v);
                 self->send(master, atom::worker_v, self);

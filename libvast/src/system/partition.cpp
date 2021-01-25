@@ -31,7 +31,6 @@
 #include "vast/fbs/uuid.hpp"
 #include "vast/ids.hpp"
 #include "vast/logger.hpp"
-#include "vast/meta_index.hpp"
 #include "vast/qualified_record_field.hpp"
 #include "vast/synopsis.hpp"
 #include "vast/system/indexer.hpp"
@@ -376,7 +375,6 @@ active_partition_actor::behavior_type active_partition(
   self->state.offset = invalid_id;
   self->state.events = 0;
   self->state.filesystem = std::move(filesystem);
-  self->state.index = nullptr;
   self->state.streaming_initiated = false;
   self->state.synopsis = std::make_shared<partition_synopsis>();
   self->state.synopsis_opts = std::move(synopsis_opts);
@@ -488,15 +486,15 @@ active_partition_actor::behavior_type active_partition(
       self->state.streaming_initiated = true;
       return self->state.stage->add_inbound_path(in);
     },
-    [=](atom::persist, const path& part_dir, index_actor index) {
+    [=](atom::persist, const path& part_dir) {
       // Ensure that the response promise has not already been initialized.
       VAST_ASSERT(
         !static_cast<caf::response_promise&>(self->state.persistence_promise)
            .source());
-      self->state.index = index;
       self->state.persist_path = part_dir;
       self->state.persisted_indexers = 0;
-      self->state.persistence_promise = self->make_response_promise<atom::ok>();
+      self->state.persistence_promise
+        = self->make_response_promise<std::shared_ptr<partition_synopsis>>();
       // We use a high message priority here because we want to start persisting
       // as soon as possible in order to avoid shutdown delay.
       self->send<caf::message_priority::high>(self, atom::persist_v,
@@ -563,15 +561,21 @@ active_partition_actor::behavior_type active_partition(
               auto fbchunk = fbs::release(builder);
               VAST_DEBUG(self, "persists partition with a total size of",
                          fbchunk->size(), "bytes");
-              // Relinquish ownership and send the shrinked synopsis to the index.
-              if (self->state.index) {
-                self->send(self->state.index, atom::replace_v, self->state.id,
-                           self->state.synopsis);
-                self->state.synopsis.reset();
-              }
-              self->state.persistence_promise.delegate(
-                self->state.filesystem, atom::write_v,
-                *self->state.persist_path, fbchunk);
+              // TODO: Add a proper timeout.
+              self
+                ->request(self->state.filesystem, caf::infinite, atom::write_v,
+                          *self->state.persist_path, fbchunk)
+                .then(
+                  [=](atom::ok) {
+                    // Relinquish ownership and send the shrunken synopsis to
+                    // the index.
+                    self->state.persistence_promise.deliver(
+                      self->state.synopsis);
+                    self->state.synopsis.reset();
+                  },
+                  [=](caf::error e) {
+                    self->state.persistence_promise.deliver(std::move(e));
+                  });
               return;
             },
             [=](caf::error err) {
@@ -585,6 +589,8 @@ active_partition_actor::behavior_type active_partition(
     },
     [=](const expression& expr,
         partition_client_actor client) -> caf::result<atom::done> {
+      // TODO: We should do a candidate check using `self->state.synopsis` and
+      // return early if that doesn't yield any results.
       auto triples = evaluate(self->state, expr);
       if (triples.empty())
         return atom::done_v;

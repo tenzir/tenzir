@@ -443,10 +443,15 @@ index(index_actor::stateful_pointer<index_state> self,
     // Persist active partition asynchronously.
     auto part_dir = dir / to_string(id);
     VAST_DEBUG(self, "persists active partition to", part_dir);
-    self->request(actor, caf::infinite, atom::persist_v, part_dir, self)
+    self->request(actor, caf::infinite, atom::persist_v, part_dir)
       .then(
-        [=](atom::ok) {
+        [=](std::shared_ptr<partition_synopsis>& ps) {
           VAST_DEBUG(self, "successfully persisted partition", id);
+          // Semantically ps is a unique_ptr, and the partition releases its
+          // copy before sending. We use shared_ptr for the transport because
+          // CAF message types must be copy-constructible.
+          VAST_ASSERT(ps.use_count() == 1);
+          self->state.meta_idx.merge(id, std::move(*ps));
           self->state.unpersisted.erase(id);
           self->state.persisted_partitions.insert(id);
         },
@@ -475,7 +480,6 @@ index(index_actor::stateful_pointer<index_state> self,
         create_active_partition();
       }
       out.push(x);
-      self->state.meta_idx.add(active.id, x);
       if (active.capacity == self->state.partition_capacity
           && x.rows() > active.capacity) {
         VAST_WARNING(self, "got table slice with", x.rows(),
@@ -581,6 +585,10 @@ index(index_actor::stateful_pointer<index_state> self,
       }
       // Get all potentially matching partitions.
       auto candidates = self->state.meta_idx.lookup(expr);
+      if (self->state.active_partition.actor)
+        candidates.push_back(self->state.active_partition.id);
+      for (const auto& [id, _] : self->state.unpersisted)
+        candidates.push_back(id);
       if (candidates.empty()) {
         VAST_DEBUG(self, "returns without result: no partitions qualify");
         no_result();
@@ -598,12 +606,6 @@ index(index_actor::stateful_pointer<index_state> self,
       auto lookup = query_state{query_id, expr, std::move(candidates)};
       auto result = self->state.pending.emplace(query_id, std::move(lookup));
       VAST_ASSERT(result.second);
-      // NOTE: The previous version of the index used to do much more
-      // validation before assigning a query id; in particular it did
-      // evaluate the entries of the pending query map and checked that
-      // at least one of them actually produced an evaluation triple.
-      // However, the query_processor doesnt really care about the id
-      // anyways, so hopefully that shouldnt make too big of a difference.
       respond(query_id, detail::narrow<uint32_t>(total), scheduled);
       self->delegate(caf::actor_cast<caf::actor>(self), query_id, scheduled);
       return {};
@@ -645,23 +647,6 @@ index(index_actor::stateful_pointer<index_state> self,
       if (query_state.partitions.empty())
         self->state.pending.erase(iter);
       return {};
-    },
-    [=](atom::replace, uuid partition_id,
-        std::shared_ptr<partition_synopsis>& ps) {
-      // The idea is that its safe to move from a `shared_ptr&` here since
-      // the unique owner of the pointer will be the message (which doesnt
-      // need it anymore).
-      // Semantically we want a unique_ptr here, but caf message types need
-      // to be copy constructible.
-      VAST_DEBUG(self, "replaces synopsis for partition", partition_id);
-      if (!ps.unique()) {
-        VAST_WARNING(self, "ignores partition synopsis that is still in use");
-        // TODO: Should this return caf::skip?
-        return;
-      }
-      auto pu = std::make_unique<partition_synopsis>();
-      std::swap(*ps, *pu);
-      self->state.meta_idx.replace(partition_id, std::move(pu));
     },
     [=](atom::erase, uuid partition_id) -> caf::result<ids> {
       VAST_VERBOSE(self, "erases partition", partition_id);

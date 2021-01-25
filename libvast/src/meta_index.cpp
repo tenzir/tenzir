@@ -24,7 +24,6 @@
 #include "vast/fbs/utils.hpp"
 #include "vast/logger.hpp"
 #include "vast/synopsis.hpp"
-#include "vast/synopsis_factory.hpp"
 #include "vast/system/instrumentation.hpp"
 #include "vast/table_slice.hpp"
 #include "vast/time.hpp"
@@ -36,84 +35,11 @@
 
 namespace vast {
 
-void partition_synopsis::shrink() {
-  for (auto& [field, synopsis] : field_synopses_) {
-    if (!synopsis)
-      continue;
-    auto shrinked_synopsis = synopsis->shrink();
-    if (!shrinked_synopsis)
-      continue;
-    synopsis.swap(shrinked_synopsis);
-  }
-  // TODO: Make a utility function instead of copy/pasting
-  for (auto& [field, synopsis] : type_synopses_) {
-    if (!synopsis)
-      continue;
-    auto shrinked_synopsis = synopsis->shrink();
-    if (!shrinked_synopsis)
-      continue;
-    synopsis.swap(shrinked_synopsis);
-  }
-}
-
-void partition_synopsis::add(const table_slice& slice,
-                             const caf::settings& synopsis_options) {
-  auto make_synopsis = [&](const type& t) -> synopsis_ptr {
-    return has_skip_attribute(t) ? nullptr
-                                 : factory<synopsis>::make(t, synopsis_options);
-  };
-  auto& layout = slice.layout();
-  auto each = record_type::each(layout);
-  auto field_it = each.begin();
-  for (size_t col = 0; col < slice.columns(); ++col, ++field_it) {
-    auto& type = field_it->type();
-    auto add_column = [&](const synopsis_ptr& syn) {
-      for (size_t row = 0; row < slice.rows(); ++row) {
-        auto view = slice.at(row, col, type);
-        if (!caf::holds_alternative<caf::none_t>(view))
-          syn->add(std::move(view));
-      }
-    };
-    auto key = qualified_record_field{layout.name(), *field_it};
-    if (!caf::holds_alternative<string_type>(type)) {
-      // Locate the relevant synopsis.
-      auto it = field_synopses_.find(key);
-      if (it == field_synopses_.end()) {
-        // Attempt to create a synopsis if we have never seen this key before.
-        it = field_synopses_.emplace(std::move(key), make_synopsis(type)).first;
-      }
-      // If there exists a synopsis for a field, add the entire column.
-      if (auto& syn = it->second)
-        add_column(syn);
-    } else { // type == string
-      field_synopses_[key] = nullptr;
-      auto cleaned_type = vast::type{field_it->type()}.attributes({});
-      auto tt = type_synopses_.find(cleaned_type);
-      if (tt == type_synopses_.end())
-        tt = type_synopses_.emplace(cleaned_type, make_synopsis(type)).first;
-      if (auto& syn = tt->second)
-        add_column(syn);
-    }
-  }
-}
-
-size_t partition_synopsis::size_bytes() const {
-  size_t result = 0;
-  for (auto& [field, synopsis] : field_synopses_)
-    result += synopsis ? synopsis->size_bytes() : 0ull;
-  return result;
-}
-
 size_t meta_index::size_bytes() const {
   size_t result = 0;
   for (auto& [id, partition_synopsis] : synopses_)
     result += partition_synopsis.size_bytes();
   return result;
-}
-
-void meta_index::add(const uuid& partition, const table_slice& slice) {
-  auto& part_syn = synopses_[partition];
-  part_syn.add(slice, synopsis_options_);
 }
 
 void meta_index::erase(const uuid& partition) {
@@ -126,14 +52,6 @@ void meta_index::merge(const uuid& partition, partition_synopsis&& ps) {
 
 partition_synopsis& meta_index::at(const uuid& partition) {
   return synopses_.at(partition);
-}
-
-void meta_index::replace(const uuid& partition,
-                         std::unique_ptr<partition_synopsis> ps) {
-  auto it = synopses_.find(partition);
-  if (it != synopses_.end()) {
-    it->second.field_synopses_.swap(ps->field_synopses_);
-  }
 }
 
 std::vector<uuid> meta_index::lookup(const expression& expr) const {
