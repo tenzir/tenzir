@@ -38,7 +38,9 @@ struct query_supervisor_state {
   size_t open_requests;
 
   // Gives the query_supervisor a unique, human-readable name in log output.
-  std::string name;
+  std::string log_identifier;
+
+  static inline const char* name = "query-supervisor";
 };
 
 /// Returns the behavior of a QUERY SUPERVISOR actor.
