@@ -151,7 +151,7 @@ struct index_state {
   std::vector<std::pair<uuid, partition_actor>>
   collect_query_actors(query_state& lookup, uint32_t num_partitions);
 
-  // -- flush handling ---------------------------------------------------
+  // -- flush handling ---------------------------------------------------------
 
   /// Adds a new flush listener.
   void add_flush_listener(flush_listener_actor listener);
@@ -159,7 +159,15 @@ struct index_state {
   /// Sends a notification to all listeners and clears the listeners list.
   void notify_flush_listeners();
 
-  // -- data members ----------------------------------------------------------
+  // -- partition handling -----------------------------------------------------
+
+  /// Creates a new active partition.
+  void create_active_partition();
+
+  /// Decommissions the active partition.
+  void decomission_active_partition();
+
+  // -- data members -----------------------------------------------------------
 
   /// Pointer to the parent actor.
   index_actor::pointer self;
