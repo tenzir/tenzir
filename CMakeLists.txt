@@ -587,6 +587,7 @@ endif ()
 
 # Install LICENSE and README. This can intentionally not be disabled.
 install(FILES "${CMAKE_CURRENT_SOURCE_DIR}/LICENSE"
+              "${CMAKE_CURRENT_SOURCE_DIR}/LICENSE.3rdparty"
               "${CMAKE_CURRENT_SOURCE_DIR}/README.md"
         DESTINATION "${CMAKE_INSTALL_DOCDIR}")
 
