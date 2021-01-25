@@ -19,7 +19,7 @@
 #include "vast/expression.hpp"
 #include "vast/fbs/partition.hpp"
 #include "vast/ids.hpp"
-#include "vast/meta_index.hpp"
+#include "vast/partition_synopsis.hpp"
 #include "vast/path.hpp"
 #include "vast/qualified_record_field.hpp"
 #include "vast/system/actors.hpp"

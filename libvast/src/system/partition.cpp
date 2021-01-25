@@ -31,7 +31,6 @@
 #include "vast/fbs/uuid.hpp"
 #include "vast/ids.hpp"
 #include "vast/logger.hpp"
-#include "vast/meta_index.hpp"
 #include "vast/qualified_record_field.hpp"
 #include "vast/synopsis.hpp"
 #include "vast/system/indexer.hpp"
