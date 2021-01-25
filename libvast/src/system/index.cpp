@@ -235,7 +235,7 @@ void index_state::create_active_partition() {
   index_opts["cardinality"] = partition_capacity;
   active_partition.actor
     = self->spawn(::vast::system::active_partition, id, filesystem, index_opts,
-                  meta_idx.factory_options());
+                  synopsis_options);
   active_partition.stream_slot
     = stage->add_outbound_path(active_partition.actor);
   active_partition.capacity = partition_capacity;
@@ -457,10 +457,11 @@ index(index_actor::stateful_pointer<index_state> self,
     return index_actor::behavior_type::make_empty_behavior();
   }
   // This option must be kept in sync with vast/address_synopsis.hpp.
-  auto& meta_index_options = self->state.meta_idx.factory_options();
-  put(meta_index_options, "max-partition-size", partition_capacity);
-  put(meta_index_options, "address-synopsis-fp-rate", meta_index_fp_rate);
-  put(meta_index_options, "string-synopsis-fp-rate", meta_index_fp_rate);
+  put(self->state.synopsis_options, "max-partition-size", partition_capacity);
+  put(self->state.synopsis_options, "address-synopsis-fp-rate",
+      meta_index_fp_rate);
+  put(self->state.synopsis_options, "string-synopsis-fp-rate",
+      meta_index_fp_rate);
   // Setup stream manager.
   self->state.stage = detail::attach_notifying_stream_stage(
     self,

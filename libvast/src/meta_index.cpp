@@ -254,10 +254,6 @@ std::vector<uuid> meta_index::lookup(const expression& expr) const {
   return result;
 }
 
-caf::settings& meta_index::factory_options() {
-  return synopsis_options_;
-}
-
 caf::expected<flatbuffers::Offset<fbs::partition_synopsis::v0>>
 pack(flatbuffers::FlatBufferBuilder& builder, const partition_synopsis& x) {
   std::vector<flatbuffers::Offset<fbs::synopsis::v0>> synopses;

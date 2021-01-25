@@ -219,7 +219,7 @@ struct index_state {
   /// Statistics about processed data.
   index_statistics stats;
 
-  // Handle of the accountant.
+  /// Handle of the accountant.
   accountant_actor accountant;
 
   /// List of actors that wait for the next flush event.
@@ -227,6 +227,9 @@ struct index_state {
 
   /// Actor handle of the filesystem actor.
   filesystem_actor filesystem;
+
+  /// Settings for the synopsis factory, handed down to partitions.
+  caf::settings synopsis_options;
 
   static inline const char* name = "index";
 };
