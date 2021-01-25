@@ -286,7 +286,8 @@ importer(importer_actor::stateful_pointer<importer_state> self, path dir,
     // Register a FLUSH LISTENER actor.
     [=](atom::subscribe, atom::flush, flush_listener_actor listener) {
       VAST_ASSERT(self->state.stage != nullptr);
-      self->send(index, atom::subscribe_v, atom::flush_v, std::move(listener));
+      self->send(self->state.index, atom::subscribe_v, atom::flush_v,
+                 std::move(listener));
     },
     // The internal telemetry loop of the IMPORTER.
     [=](atom::telemetry) {
