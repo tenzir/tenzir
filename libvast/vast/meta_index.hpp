@@ -95,6 +95,7 @@ private:
   std::unordered_map<uuid, partition_synopsis> synopses_;
 
   /// Settings for the synopsis factory.
+  //  TODO: the
   caf::settings synopsis_options_;
 };
 

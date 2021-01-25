@@ -30,6 +30,8 @@
 #include "vast/meta_index.hpp"
 #include "vast/path.hpp"
 #include "vast/qualified_record_field.hpp"
+#include "vast/synopsis.hpp"
+#include "vast/synopsis_factory.hpp"
 #include "vast/system/partition.hpp"
 #include "vast/table_slice.hpp"
 #include "vast/type.hpp"
@@ -77,11 +79,13 @@ static caf::settings get_status_proc() {
 }
 
 int main(int argc, char** argv) {
-  if (argc < 2) {
-    std::cerr << "Usage: " << argv[0] << " <path/to/vast.db>\n";
+  factory<synopsis>::initialize(); // argh :(
+
+  if (argc < 3) {
+    std::cerr << "Usage: " << argv[0]
+              << " <path/to/vast.db> <output_filename>\n";
     return 1;
   }
-
   auto dbdir = vast::path{argv[1]};
   if (!exists(dbdir)) {
     std::cerr << "directory not found\n";
@@ -93,6 +97,8 @@ int main(int argc, char** argv) {
     std::cerr << "file not found: " << fname.str() << std::endl;
     return 1;
   }
+  auto out_filename = vast::path{argv[2]};
+  std::ofstream out(argv[2], std::ios::binary);
   std::cout << "loading state from" << fname.str() << std::endl;
   auto buffer = io::read(fname);
   if (!buffer) {
@@ -107,7 +113,7 @@ int main(int argc, char** argv) {
     std::cerr << "invalid index version\n";
     return 1;
   }
-  meta_index meta_idx;
+  // meta_index meta_idx;
   auto index_v0 = index->index_as_v0();
   auto partition_uuids = index_v0->partitions();
   VAST_ASSERT(partition_uuids);
@@ -117,8 +123,6 @@ int main(int argc, char** argv) {
     unpack(*uuid_fb, partition_uuid);
     auto partition_path = dir / to_string(partition_uuid);
     if (exists(partition_path)) {
-      // persisted_partitions.insert(partition_uuid);
-      // Use blocking operations here since this is part of the startup.
       auto chunk = chunk::mmap(partition_path);
       if (!chunk) {
         std::cerr << "could not mmap partition at" << partition_path.str()
@@ -133,11 +137,36 @@ int main(int argc, char** argv) {
       }
       auto partition_v0 = partition->partition_as_v0();
       VAST_ASSERT(partition_v0);
-      partition_synopsis ps;
-      system::unpack(*partition_v0, ps);
-      std::cout << "merging partition synopsis from"
-                << to_string(partition_uuid) << std::endl;
-      meta_idx.merge(partition_uuid, std::move(ps));
+      auto synopses = partition_v0->partition_synopsis()->synopses();
+      for (auto s : *synopses) {
+        vast::synopsis_ptr ptr;
+        if (auto error = unpack(*s, ptr)) {
+          std::cerr << "error deserializing synopsis: " << render(error)
+                    << std::endl;
+          continue;
+        }
+        if (!ptr)
+          continue;
+        std::vector<char> buf;
+        caf::binary_serializer source(nullptr, buf);
+        if (auto error = source(ptr)) {
+          std::cerr << "error deserializing synopsis\n";
+          continue;
+        }
+        std::cout << "partition " << to_string(partition_uuid)
+                  << to_string(ptr->type())
+                  << " synopsis "
+                     "size "
+                  << ptr->size_bytes() << " offset " << out.tellp()
+                  << std::endl;
+        out.write(&buf[0], buf.size());
+        out.flush();
+      }
+      // partition_synopsis ps;
+      // system::unpack(*partition_v0, ps);
+      // std::cout << "merging partition synopsis from"
+      //           << to_string(partition_uuid) << std::endl;
+      // meta_idx.merge(partition_uuid, std::move(ps));
     } else {
       std::cerr << "found partition" << to_string(partition_uuid)
                 << "in the index state but not on disk; this may have been "

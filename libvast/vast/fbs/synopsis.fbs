@@ -51,3 +51,13 @@ table v0 {
   // and type synopses.
   synopses: [synopsis.v0];
 }
+
+// namespace vast.fbs;
+// 
+// table AllSynopses {
+//   partition_synopses: [partition_synopsis.v0];  
+// }
+// 
+// root_type AllSynopses;
+// 
+// file_identifier "asyn";
