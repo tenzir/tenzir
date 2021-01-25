@@ -53,7 +53,8 @@ maybe_actor spawn_exporter(node_actor* self, spawn_arguments& args) {
   if (accountant)
     self->send(handle, caf::actor_cast<accountant_actor>(accountant));
   if (importer && has_continuous_option(query_opts))
-    self->send(importer, handle);
+    self->send(caf::actor_cast<importer_actor>(importer),
+               static_cast<stream_sink_actor<table_slice>>(handle));
   if (archive) {
     VAST_DEBUG(self, "connects archive to new exporter");
     self->send(handle, caf::actor_cast<archive_actor>(archive));
