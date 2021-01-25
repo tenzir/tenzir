@@ -111,7 +111,8 @@ jobs:
           tar xf v0.6.1.tar.gz
           cd simdjson-0.6.1
           cmake -Bbuild
-          cmake --build build --parallel
+          cmake --build build --target simdjson --parallel
+          cmake --build build --target simdjson-singleheader --parallel
           cmake --build build --target amalgamate
           sudo cmake --build build --target install
 
