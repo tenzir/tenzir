@@ -25,7 +25,6 @@
 #include "vast/system/node_control.hpp"
 #include "vast/system/signal_monitor.hpp"
 #include "vast/system/spawn_or_connect_to_node.hpp"
-#include "vast/system/type_registry.hpp"
 
 #include <caf/make_message.hpp>
 
@@ -49,8 +48,8 @@ caf::message import_command(const invocation& inv, caf::actor_system& sys) {
                  : caf::get<scope_linked_actor>(node_opt).get();
   VAST_DEBUG(inv.full_name, "got node");
   // Get node components.
-  auto components = get_node_components(self, node, "accountant",
-                                        "type-registry", "importer");
+  auto components = get_typed_node_components< //
+    accountant_actor, type_registry_actor, importer_actor>(self, node);
   if (!components)
     return caf::make_message(std::move(components.error()));
   auto& [accountant, type_registry, importer] = *components;
@@ -65,10 +64,8 @@ caf::message import_command(const invocation& inv, caf::actor_system& sys) {
   auto guard = system::signal_monitor::run_guarded(
     sig_mon_thread, sys, defaults::system::signal_monitoring_interval, self);
   // Start the source.
-  auto src_result = make_source<Reader, Defaults>(
-    self, sys, inv, caf::actor_cast<accountant_actor>(accountant),
-    caf::actor_cast<type_registry_actor>(type_registry),
-    caf::actor_cast<importer_actor>(importer));
+  auto src_result = make_source<Reader, Defaults>(self, sys, inv, accountant,
+                                                  type_registry, importer);
   if (!src_result)
     return caf::make_message(std::move(src_result.error()));
   auto src = std::move(src_result->src);
