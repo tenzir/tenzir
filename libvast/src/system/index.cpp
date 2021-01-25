@@ -233,6 +233,12 @@ void index_state::create_active_partition() {
   auto id = uuid::random();
   caf::settings index_opts;
   index_opts["cardinality"] = partition_capacity;
+  // These options must be kept in sync with vast/address_synopsis.hpp and
+  // vast/string_synopsis.hpp respectively.
+  auto synopsis_options = caf::settings{};
+  put(synopsis_options, "max-partition-size", partition_capacity);
+  put(synopsis_options, "address-synopsis-fp-rate", meta_index_fp_rate);
+  put(synopsis_options, "string-synopsis-fp-rate", meta_index_fp_rate);
   active_partition.actor
     = self->spawn(::vast::system::active_partition, id, filesystem, index_opts,
                   synopsis_options);
@@ -438,7 +444,7 @@ index(index_actor::stateful_pointer<index_state> self,
       double meta_index_fp_rate) {
   VAST_TRACE(VAST_ARG(filesystem), VAST_ARG(dir), VAST_ARG(partition_capacity),
              VAST_ARG(max_inmem_partitions), VAST_ARG(taste_partitions),
-             VAST_ARG(num_workers));
+             VAST_ARG(num_workers), VAST_ARG(meta_index_fp_rate));
   VAST_VERBOSE(self, "initializes index in", dir,
                "with a maximum partition size of", partition_capacity,
                "events and", max_inmem_partitions, "resident partitions");
@@ -450,18 +456,13 @@ index(index_actor::stateful_pointer<index_state> self,
   self->state.taste_partitions = taste_partitions;
   self->state.inmem_partitions.factory().filesystem() = self->state.filesystem;
   self->state.inmem_partitions.resize(max_inmem_partitions);
+  self->state.meta_index_fp_rate = meta_index_fp_rate;
   // Read persistent state.
   if (auto err = self->state.load_from_disk()) {
     VAST_ERROR(self, "failed to load index state from disk:", render(err));
     self->quit(err);
     return index_actor::behavior_type::make_empty_behavior();
   }
-  // This option must be kept in sync with vast/address_synopsis.hpp.
-  put(self->state.synopsis_options, "max-partition-size", partition_capacity);
-  put(self->state.synopsis_options, "address-synopsis-fp-rate",
-      meta_index_fp_rate);
-  put(self->state.synopsis_options, "string-synopsis-fp-rate",
-      meta_index_fp_rate);
   // Setup stream manager.
   self->state.stage = detail::attach_notifying_stream_stage(
     self,

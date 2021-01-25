@@ -228,8 +228,8 @@ struct index_state {
   /// Actor handle of the filesystem actor.
   filesystem_actor filesystem;
 
-  /// Settings for the synopsis factory, handed down to partitions.
-  caf::settings synopsis_options;
+  // The false positive rate for the meta index.
+  double meta_index_fp_rate;
 
   static inline const char* name = "index";
 };
