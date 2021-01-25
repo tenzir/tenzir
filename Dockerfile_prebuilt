@@ -24,7 +24,8 @@ RUN wget https://github.com/simdjson/simdjson/archive/v0.6.1.tar.gz && \
   tar xf v0.6.1.tar.gz && \
   cd simdjson-0.6.1 && \
   cmake -Bbuild && \
-  cmake --build build --parallel && \
+  cmake --build build --target simdjson --parallel && \
+  cmake --build build --target simdjson-singleheader --parallel && \
   cmake --build build --target amalgamate && \
   cmake --build build --target install
 
