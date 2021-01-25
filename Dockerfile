@@ -34,7 +34,7 @@ COPY schema ./schema
 COPY scripts ./scripts
 COPY tools ./tools
 COPY vast ./vast
-COPY .clang-format .cmake-format LICENSE README.md BANNER CMakeLists.txt configure vast.yaml.example ./
+COPY .clang-format .cmake-format LICENSE LICENSE.3rdparty README.md BANNER CMakeLists.txt configure vast.yaml.example ./
 RUN ./configure \
     --prefix=$PREFIX \
     --build-type=$BUILD_TYPE \
