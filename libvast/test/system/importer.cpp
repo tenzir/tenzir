@@ -30,15 +30,17 @@
 #include "vast/table_slice.hpp"
 #include "vast/uuid.hpp"
 
-using namespace caf;
+#include <caf/typed_event_based_actor.hpp>
+
 using namespace vast;
 
 // -- scaffold for both test setups --------------------------------------------
 
 namespace {
 
-behavior dummy_sink(event_based_actor* self, size_t num_events, actor overseer) {
-  return {[=](stream<table_slice> in) {
+caf::behavior dummy_sink(caf::event_based_actor* self, size_t num_events,
+                         caf::actor overseer) {
+  return {[=](caf::stream<table_slice> in) {
     self->unbecome();
     self->send(overseer, atom::ok_v);
     self->make_sink(
@@ -67,7 +69,7 @@ struct importer_fixture : Base {
   }
 
   ~importer_fixture() {
-    anon_send_exit(importer, exit_reason::user_shutdown);
+    anon_send_exit(importer, caf::exit_reason::user_shutdown);
   }
 
   auto add_sink() {
@@ -105,10 +107,10 @@ struct importer_fixture : Base {
   }
 
   size_t slice_size;
-  actor importer;
+  system::importer_actor importer;
 };
 
-} // namespace <anonymous>
+} // namespace
 
 // -- deterministic testing ----------------------------------------------------
 
@@ -138,7 +140,7 @@ struct deterministic_fixture : deterministic_fixture_base {
   }
 };
 
-} // namespace <anonymous>
+} // namespace
 
 FIXTURE_SCOPE(deterministic_import_tests, deterministic_fixture)
 
@@ -177,7 +179,7 @@ TEST(deterministic importer with one sink and zeek source) {
   MESSAGE("spawn zeek source");
   auto src = make_zeek_source();
   consume_message();
-  self->send(src, atom::sink_v, importer);
+  self->send(src, atom::sink_v, caf::actor_cast<caf::actor>(importer));
   MESSAGE("loop until importer becomes idle");
   run();
   MESSAGE("verify results");
@@ -191,7 +193,7 @@ TEST(deterministic importer with two sinks and zeek source) {
   MESSAGE("spawn zeek source");
   auto src = make_zeek_source();
   consume_message();
-  self->send(src, atom::sink_v, importer);
+  self->send(src, atom::sink_v, caf::actor_cast<caf::actor>(importer));
   MESSAGE("loop until importer becomes idle");
   run();
   MESSAGE("verify results");
@@ -207,31 +209,29 @@ TEST(deterministic importer with one sink and failing zeek source) {
   MESSAGE("spawn zeek source");
   auto src = make_zeek_source();
   consume_message();
-  self->send(src, atom::sink_v, importer);
+  self->send(src, atom::sink_v, caf::actor_cast<caf::actor>(importer));
   MESSAGE("loop until first ack_batch");
-  if (!allow((upstream_msg::ack_batch), from(importer).to(src)))
+  if (!allow((caf::upstream_msg::ack_batch), from(importer).to(src)))
     sched.run_once();
   MESSAGE("kill the source");
-  self->send_exit(src, exit_reason::kill);
-  expect((exit_msg), from(self).to(src));
+  self->send_exit(src, caf::exit_reason::kill);
+  expect((caf::exit_msg), from(self).to(src));
   MESSAGE("loop until we see the forced_close");
-  if (!allow((downstream_msg::forced_close), from(src).to(importer)))
+  if (!allow((caf::downstream_msg::forced_close), from(src).to(importer)))
     sched.run_once();
   MESSAGE("make sure importer and sink remain unaffected");
   self->monitor(snk);
   self->monitor(importer);
   do {
-    disallow((downstream_msg::forced_close), from(importer).to(snk));
+    disallow((caf::downstream_msg::forced_close), from(importer).to(snk));
   } while (sched.try_run_once());
   using namespace std::chrono_literals;
   self->receive(
-    [](const down_msg& x) {
-      FAIL("unexpected down message: " << x);
-    },
-    after(0s) >> [] {
-      // nop
-    }
-  );
+    [](const caf::down_msg& x) { FAIL("unexpected down message: " << x); },
+    caf::after(0s) >>
+      [] {
+        // nop
+      });
 }
 
 FIXTURE_SCOPE_END()
@@ -263,7 +263,7 @@ struct nondeterministic_fixture : nondeterministic_fixture_base {
   }
 };
 
-} // namespace <anonymous>
+} // namespace
 
 FIXTURE_SCOPE(nondeterministic_import_tests, nondeterministic_fixture)
 
@@ -296,7 +296,7 @@ TEST(nondeterministic importer with one sink and zeek source) {
   add_sink();
   MESSAGE("spawn zeek source");
   auto src = make_zeek_source();
-  self->send(src, atom::sink_v, importer);
+  self->send(src, atom::sink_v, caf::actor_cast<caf::actor>(importer));
   MESSAGE("verify results");
   verify(fetch_result(), zeek_conn_log);
 }
@@ -307,7 +307,7 @@ TEST(nondeterministic importer with two sinks and zeek source) {
   add_sink();
   MESSAGE("spawn zeek source");
   auto src = make_zeek_source();
-  self->send(src, atom::sink_v, importer);
+  self->send(src, atom::sink_v, caf::actor_cast<caf::actor>(importer));
   MESSAGE("verify results");
   auto result = fetch_result();
   MESSAGE("got first result");

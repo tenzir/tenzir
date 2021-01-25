@@ -279,6 +279,10 @@ using exporter_actor = typed_actor_fwd<
   // Register the SINK actor.
   caf::reacts_to<atom::sink, caf::actor>,
   // Register a list of IMPORTER actors.
+  // FIXME: This cannot take an importer_actor, because that'd introduce a
+  // cyclic dependency between the importer_actor and exporter_actor
+  // declarations. We should improve the logic of wiring up the importers with
+  // continuous exporters, e.g., by having the node deal with the issue.
   caf::reacts_to<atom::importer, std::vector<caf::actor>>,
   // Execute previously registered query.
   caf::reacts_to<atom::run>,
@@ -294,6 +298,29 @@ using exporter_actor = typed_actor_fwd<
   ::extend_with<archive_client_actor>
   // Conform to the protocol of the INDEX CLIENT actor.
   ::extend_with<index_client_actor>::unwrap;
+
+/// The interface of an IMPORTER actor.
+using importer_actor = typed_actor_fwd<
+  // Register the ACCOUNTANT actor.
+  caf::reacts_to<accountant_actor>,
+  // Register the EXPORTER actor as a sink.
+  caf::replies_to<exporter_actor>::with< //
+    caf::outbound_stream_slot<table_slice>>,
+  // Add a new sink.
+  caf::replies_to<atom::add, caf::actor>::with< //
+    caf::outbound_stream_slot<table_slice>>,
+  // Add a new source.
+  caf::replies_to<caf::stream<table_slice>>::with< //
+    caf::inbound_stream_slot<table_slice>>,
+  // Add a new source with a description.
+  caf::replies_to<caf::stream<table_slice>, std::string>::with< //
+    caf::inbound_stream_slot<table_slice>>,
+  // Register a FLUSH LISTENER actor.
+  caf::reacts_to<atom::subscribe, atom::flush, flush_listener_actor>,
+  // The internal telemetry loop of the IMPORTER.
+  caf::reacts_to<atom::telemetry>>
+  // Conform to the protocol of the STATUS CLIENT actor.
+  ::extend_with<status_client_actor>::unwrap;
 
 } // namespace vast::system
 
@@ -314,6 +341,7 @@ CAF_BEGIN_TYPE_ID_BLOCK(vast_actors, caf::id_block::vast_atoms::end)
   VAST_ADD_TYPE_ID((vast::system::index_actor))
   VAST_ADD_TYPE_ID((vast::system::index_client_actor))
   VAST_ADD_TYPE_ID((vast::system::indexer_actor))
+  VAST_ADD_TYPE_ID((vast::system::importer_actor))
   VAST_ADD_TYPE_ID((vast::system::partition_actor))
   VAST_ADD_TYPE_ID((vast::system::partition_client_actor))
   VAST_ADD_TYPE_ID((vast::system::query_map))

@@ -23,6 +23,7 @@
 #include "vast/concept/printable/vast/filesystem.hpp"
 #include "vast/defaults.hpp"
 #include "vast/detail/fill_status_map.hpp"
+#include "vast/error.hpp"
 #include "vast/logger.hpp"
 #include "vast/plugin.hpp"
 #include "vast/si_literals.hpp"
@@ -78,7 +79,7 @@ public:
   /// @note This must explictly initialize the stream_manager because it does
   /// not provide a default constructor, and for reason unbeknownst to me the
   /// forwaring in the stream_stage_impl does not suffice.
-  stream_stage(importer_actor* self)
+  stream_stage(importer_actor::stateful_pointer<importer_state> self)
     : stream_manager(self), stream_stage_impl(self, self->state) {
     // nop
   }
@@ -99,7 +100,8 @@ public:
   }
 };
 
-caf::intrusive_ptr<stream_stage> make_importer_stage(importer_actor* self) {
+caf::intrusive_ptr<stream_stage>
+make_importer_stage(importer_actor::stateful_pointer<importer_state> self) {
   auto result = caf::make_counted<stream_stage>(self);
   result->continuous(true);
   return result;
@@ -107,8 +109,7 @@ caf::intrusive_ptr<stream_stage> make_importer_stage(importer_actor* self) {
 
 } // namespace
 
-importer_state::importer_state(caf::event_based_actor* self_ptr)
-  : self(self_ptr) {
+importer_state::importer_state(importer_actor::pointer self) : self{self} {
   // nop
 }
 
@@ -223,15 +224,17 @@ void importer_state::send_report() {
   last_report = now;
 }
 
-caf::behavior importer(importer_actor* self, path dir, archive_actor archive,
-                       index_actor index, type_registry_actor type_registry) {
+importer_actor::behavior_type
+importer(importer_actor::stateful_pointer<importer_state> self, path dir,
+         const archive_actor& archive, index_actor index,
+         const type_registry_actor& type_registry) {
   VAST_TRACE(VAST_ARG(dir));
-  self->state.dir = dir;
+  self->state.dir = std::move(dir);
   auto err = self->state.read_state();
   if (err) {
-    VAST_ERROR(self, "failed to load state:", self->system().render(err));
+    VAST_ERROR(self, "failed to load state:", render(err));
     self->quit(std::move(err));
-    return {};
+    return importer_actor::behavior_type::make_empty_behavior();
   }
   namespace defs = defaults::system;
   self->set_exit_handler([=](const caf::exit_msg& msg) {
@@ -244,45 +247,56 @@ caf::behavior importer(importer_actor* self, path dir, archive_actor archive,
   if (archive)
     self->state.stage->add_outbound_path(archive);
   if (index) {
-    self->state.index = index;
-    self->state.stage->add_outbound_path(index);
+    self->state.index = std::move(index);
+    self->state.stage->add_outbound_path(self->state.index);
   }
   for (auto& plugin : plugins::get())
     if (auto p = plugin.as<analyzer_plugin>())
       if (auto analyzer = p->make_analyzer(self->system()))
         self->state.stage->add_outbound_path(analyzer);
   return {
+    // Register the ACCOUNTANT actor.
     [=](accountant_actor accountant) {
-      VAST_DEBUG(self, "registers accountant", archive);
+      VAST_DEBUG(self, "registers accountant", accountant);
       self->state.accountant = std::move(accountant);
       self->send(self->state.accountant, atom::announce_v, self->name());
     },
-    [=](atom::exporter, const caf::actor& exporter) {
+    // Register the EXPORTER actor as a sink.
+    [=](exporter_actor exporter) {
       VAST_DEBUG(self, "registers exporter", exporter);
-      return self->state.stage->add_outbound_path(exporter);
+      return self->state.stage->add_outbound_path(std::move(exporter));
     },
+    // Add a new sink.
+    [=](atom::add, const caf::actor& subscriber) {
+      auto& st = self->state;
+      VAST_DEBUG(self, "adds a new sink:", subscriber);
+      return st.stage->add_outbound_path(subscriber);
+    },
+    // Add a new source.
     [=](caf::stream<table_slice> in) {
       VAST_DEBUG(self, "adds a new source:", self->current_sender());
-      self->state.stage->add_inbound_path(in);
+      return self->state.stage->add_inbound_path(in);
     },
+    // Add a new source with a description.
     [=](caf::stream<table_slice> in, std::string desc) {
       VAST_DEBUG(self, "adds a new source:", self->current_sender());
       self->state.inbound_description = std::move(desc);
-      self->state.stage->add_inbound_path(in);
+      return self->state.stage->add_inbound_path(in);
     },
-    [=](atom::add, const caf::actor& subscriber) {
-      auto& st = self->state;
-      VAST_DEBUG(self, "adds a new sink:", self->current_sender());
-      st.stage->add_outbound_path(subscriber);
-    },
+    // Register a FLUSH LISTENER actor.
     [=](atom::subscribe, atom::flush, flush_listener_actor listener) {
       VAST_ASSERT(self->state.stage != nullptr);
-      self->send(index, atom::subscribe_v, atom::flush_v, std::move(listener));
+      self->send(self->state.index, atom::subscribe_v, atom::flush_v,
+                 std::move(listener));
     },
-    [=](atom::status, status_verbosity v) { return self->state.status(v); },
+    // The internal telemetry loop of the IMPORTER.
     [=](atom::telemetry) {
       self->state.send_report();
       self->delayed_send(self, defs::telemetry_rate, atom::telemetry_v);
+    },
+    // -- status_client_actor --------------------------------------------------
+    [=](atom::status, status_verbosity v) { //
+      return self->state.status(v);
     },
   };
 }
