@@ -81,6 +81,10 @@ struct coder {
   /// @returns The size of the coder measured in number of entries.
   size_type size() const;
 
+  /// Retrieves the amout of memory that is occupied by the coder.
+  /// @returns The size of the coder measured in heap bytes used.
+  size_t memusage() const;
+
   /// Retrieves the coder-specific bitmap storage.
   auto& storage() const;
 };
@@ -133,6 +137,10 @@ public:
     return bitmap_.size();
   }
 
+  size_t memusage() const {
+    return bitmap_.memusage();
+  }
+
   const Bitmap& storage() const {
     return bitmap_;
   }
@@ -171,6 +179,13 @@ public:
 
   auto size() const {
     return size_;
+  }
+
+  size_t memusage() const {
+    size_t acc = 0;
+    for (const auto& bitmap : bitmaps_)
+      acc += bitmap.memusage();
+    return acc;
   }
 
   auto& storage() const {
@@ -540,6 +555,15 @@ public:
 
   size_type size() const {
     return coders_.empty() ? 0 : coders_[0].size();
+  }
+
+  size_t memusage() const {
+    size_t acc = 0;
+    acc += base_.memusage();
+    acc += xs_.capacity() * sizeof(value_type);
+    for (const auto& coder : coders_)
+      acc += coder.memusage();
+    return acc;
   }
 
   auto& storage() const {

@@ -24,6 +24,7 @@
 #include "vast/concept/printable/vast/table_slice.hpp"
 #include "vast/concept/printable/vast/uuid.hpp"
 #include "vast/detail/assert.hpp"
+#include "vast/detail/settings.hpp"
 #include "vast/expression.hpp"
 #include "vast/expression_visitors.hpp"
 #include "vast/fbs/partition.hpp"
@@ -35,6 +36,7 @@
 #include "vast/synopsis.hpp"
 #include "vast/system/indexer.hpp"
 #include "vast/system/shutdown.hpp"
+#include "vast/system/status_verbosity.hpp"
 #include "vast/system/terminate.hpp"
 #include "vast/table_slice.hpp"
 #include "vast/table_slice_column.hpp"
@@ -597,6 +599,56 @@ active_partition_actor::behavior_type active_partition(
       auto eval = self->spawn(evaluator, expr, self, triples);
       return self->delegate(eval, client);
     },
+    [=](atom::status,
+        status_verbosity v) -> caf::typed_response_promise<caf::settings> {
+      struct req_state_t {
+        // Promise to the original client request.
+        caf::typed_response_promise<caf::settings> rp;
+        // Maps nodes to a map associating components with status information.
+        caf::settings content;
+        size_t memory_usage = 0;
+      };
+      auto req_state = std::make_shared<req_state_t>();
+      req_state->rp = self->make_response_promise<caf::settings>();
+      auto deliver = [](auto&& req_state) {
+        put(req_state.content, "memory-usage", req_state.memory_usage);
+        req_state.rp.deliver(req_state.content);
+      };
+      bool deferred = false;
+      auto& indexer_states = put_list(req_state->content, "indexers");
+      for (auto& i : self->state.indexers) {
+        deferred = true;
+        self
+          ->request<caf::message_priority::high>(i.second, caf::infinite,
+                                                 atom::status_v, v)
+          .then(
+            [=, &indexer_states](const caf::settings& indexer_status) {
+              auto& ps = indexer_states.emplace_back().as_dictionary();
+              put(ps, "field", i.first.fqn());
+              if (auto s = caf::get_if<caf::config_value::integer>(
+                    &indexer_status, "memory-usage"))
+                req_state->memory_usage += *s;
+              if (v >= status_verbosity::debug)
+                detail::merge_settings(indexer_status, ps);
+              // Both handlers have a copy of req_state.
+              if (req_state.use_count() == 2)
+                deliver(std::move(*req_state));
+            },
+            [=, &indexer_states](const caf::error& err) {
+              VAST_WARNING(self, "failed to retrieve status from",
+                           i.first.fqn(), ":", render(err));
+              auto& ps = indexer_states.emplace_back().as_dictionary();
+              put(ps, "id", to_string(id));
+              put(ps, "error", render(err));
+              // Both handlers have a copy of req_state.
+              if (req_state.use_count() == 2)
+                deliver(std::move(*req_state));
+            });
+      }
+      if (!deferred)
+        deliver(std::move(*req_state));
+      return req_state->rp;
+    },
   };
 }
 
@@ -714,6 +766,29 @@ partition_actor::behavior_type passive_partition(
         return atom::done_v;
       auto eval = self->spawn(evaluator, expr, self, triples);
       return self->delegate(eval, client);
+    },
+    [=](atom::status, status_verbosity /*v*/) -> caf::config_value::dictionary {
+      const auto& st = self->state;
+      caf::settings result;
+      caf::put(result, "size", st.partition_chunk->size());
+      size_t mem_indexers = 0;
+      for (size_t i = 0; i < st.indexers.size(); ++i) {
+        if (st.indexers[i])
+          mem_indexers
+            += sizeof(indexer_state)
+               + st.flatbuffer->indexes()->Get(i)->index()->data()->size();
+      }
+      caf::put(result, "memory-usage-indexers", mem_indexers);
+      auto x = st.partition_chunk->incore();
+      if (!x) {
+        caf::put(result, "memory-usage-incore", render(x.error()));
+        caf::put(result, "memory-usage",
+                 st.partition_chunk->size() + mem_indexers + sizeof(st));
+      } else {
+        caf::put(result, "memory-usage-incore", *x);
+        caf::put(result, "memory-usage", *x + mem_indexers + sizeof(st));
+      }
+      return result;
     },
   };
 }

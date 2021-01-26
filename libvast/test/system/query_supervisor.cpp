@@ -39,6 +39,7 @@ dummy_partition(system::partition_actor::pointer self, ids x) {
       self->send(client, x);
       return atom::done_v;
     },
+    [=](atom::status, system::status_verbosity) { return caf::settings{}; },
   };
 }
 

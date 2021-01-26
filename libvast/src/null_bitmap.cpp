@@ -27,6 +27,10 @@ null_bitmap::size_type null_bitmap::size() const {
   return bitvector_.size();
 }
 
+size_t null_bitmap::memusage() const {
+  return bitvector_.capacity() * sizeof(block_type);
+}
+
 void null_bitmap::append_bit(bool bit) {
   bitvector_.push_back(bit);
 }

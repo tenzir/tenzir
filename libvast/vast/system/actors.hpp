@@ -82,12 +82,20 @@ using index_client_actor = typed_actor_fwd<
   // Receives ids from the INDEX for partial query hits.
   ::extend_with<partition_client_actor>::unwrap;
 
+/// The STATUS CLIENT actor interface.
+using status_client_actor = typed_actor_fwd<
+  // Reply to a status request from the NODE.
+  caf::replies_to<atom::status, status_verbosity>::with< //
+    caf::dictionary<caf::config_value>>>::unwrap;
+
 /// The PARTITION actor interface.
 using partition_actor = typed_actor_fwd<
   // Evaluate the given expression, returning the relevant evaluation triples.
   // TODO: Passing the `partition_client_actor` here is an historical artifact,
   // a cleaner API would be to just return the evaluated `vast::ids`.
-  caf::replies_to<expression, partition_client_actor>::with<atom::done>>::unwrap;
+  caf::replies_to<expression, partition_client_actor>::with<atom::done>>
+  // Conform to the procol of the STATUS CLIENT actor.
+  ::extend_with<status_client_actor>::unwrap;
 
 /// A set of relevant partition actors, and their uuids.
 // TODO: Move this elsewhere.
@@ -105,12 +113,6 @@ using evaluator_actor = typed_actor_fwd<
   // Re-evaluates the expression and relays new hits to the PARTITION CLIENT.
   caf::replies_to<partition_client_actor>::with<atom::done>>::unwrap;
 
-/// The STATUS CLIENT actor interface.
-using status_client_actor = typed_actor_fwd<
-  // Reply to a status request from the NODE.
-  caf::replies_to<atom::status, status_verbosity>::with< //
-    caf::dictionary<caf::config_value>>>::unwrap;
-
 /// The INDEXER actor interface.
 using indexer_actor = typed_actor_fwd<
   // Returns the ids for the given predicate.
@@ -126,7 +128,9 @@ using active_indexer_actor = typed_actor_fwd<
   // Finalizes the ACTIVE INDEXER into a chunk, which containes an INDEXER.
   caf::replies_to<atom::snapshot>::with<chunk_ptr>>
   // Conform the the INDEXER ACTOR interface.
-  ::extend_with<indexer_actor>::unwrap;
+  ::extend_with<indexer_actor>
+  // Conform to the procol of the STATUS CLIENT actor.
+  ::extend_with<status_client_actor>::unwrap;
 
 /// The ACCOUNTANT actor interface.
 using accountant_actor = typed_actor_fwd<

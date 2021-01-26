@@ -126,6 +126,10 @@ public:
   /// @returns The size of the chunk.
   size_type size() const noexcept;
 
+  /// @returns The amount of bytes that are currently reciding in active memory,
+  ///          i.e. how much of the chunk is "paged-in".
+  caf::expected<chunk::size_type> incore() const noexcept;
+
   /// @returns A pointer to the first byte in the chunk.
   iterator begin() const noexcept;
 

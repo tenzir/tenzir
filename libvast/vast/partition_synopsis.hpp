@@ -31,7 +31,7 @@ struct partition_synopsis {
   /// Estimate the memory footprint of this partition synopsis.
   /// @returns A best-effort estimate of the amount of memory used by this
   ///          synopsis.
-  size_t size_bytes() const;
+  size_t memusage() const;
 
   /// Synopsis data structures for types.
   std::unordered_map<type, synopsis_ptr> type_synopses_;

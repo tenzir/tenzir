@@ -66,7 +66,7 @@ struct buffered_synopsis_traits<std::string> {
                                               std::move(seeds));
   }
 
-  static size_t size_bytes(const std::unordered_set<std::string>& x) {
+  static size_t memusage(const std::unordered_set<std::string>& x) {
     using node_type = typename std::decay_t<decltype(x)>::node_type;
     size_t result = 0;
     for (auto& s : x)

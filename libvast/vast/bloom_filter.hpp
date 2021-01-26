@@ -96,7 +96,7 @@ public:
   }
 
   /// @returns An estimate for amount of memory (in bytes) used by this filter.
-  size_t size_bytes() const {
+  size_t memusage() const {
     return sizeof(bloom_filter) + bits_.capacity() / CHAR_BIT;
   }
 

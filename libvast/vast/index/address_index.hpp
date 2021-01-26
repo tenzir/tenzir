@@ -48,6 +48,8 @@ private:
   caf::expected<ids>
   lookup_impl(relational_operator op, data_view x) const override;
 
+  size_t memusage_impl() const override;
+
   std::array<byte_index, 16> bytes_;
   type_index v4_;
 };

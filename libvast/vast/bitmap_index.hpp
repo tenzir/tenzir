@@ -107,6 +107,12 @@ public:
     return coder_.size();
   }
 
+  /// Retrieves the bitmap index memory usage.
+  /// @returns The number of bytes occupied by this instance.
+  size_type memusage() const {
+    return coder_.memusage();
+  }
+
   /// Checks whether the bitmap index is empty.
   /// @returns `true` *iff* the bitmap index has 0 entries.
   bool empty() const {

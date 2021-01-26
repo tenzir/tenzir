@@ -131,7 +131,7 @@ struct index_state {
   caf::error load_from_disk();
 
   /// @returns various status metrics.
-  caf::dictionary<caf::config_value> status(status_verbosity v) const;
+  caf::typed_response_promise<caf::settings> status(status_verbosity v) const;
 
   void flush_to_disk();
 

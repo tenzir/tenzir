@@ -130,4 +130,11 @@ string_index::lookup_impl(relational_operator op, data_view x) const {
   return caf::visit(f, x);
 }
 
+size_t string_index::memusage_impl() const {
+  size_t acc = length_.memusage();
+  for (const auto& char_index : chars_)
+    acc += char_index.memusage();
+  return acc;
+}
+
 } // namespace vast

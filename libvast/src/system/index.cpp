@@ -29,6 +29,7 @@
 #include "vast/detail/fill_status_map.hpp"
 #include "vast/detail/narrow.hpp"
 #include "vast/detail/notifying_stream_manager.hpp"
+#include "vast/detail/settings.hpp"
 #include "vast/error.hpp"
 #include "vast/expression_visitors.hpp"
 #include "vast/fbs/index.hpp"
@@ -280,13 +281,26 @@ void index_state::decomission_active_partition() {
       });
 }
 
-caf::dictionary<caf::config_value>
+caf::typed_response_promise<caf::settings>
 index_state::status(status_verbosity v) const {
   using caf::put;
   using caf::put_dictionary;
   using caf::put_list;
-  auto result = caf::settings{};
-  auto& index_status = put_dictionary(result, "index");
+  struct req_state_t {
+    // Promise to the original client request.
+    caf::typed_response_promise<caf::settings> rp;
+    // Maps nodes to a map associating components with status information.
+    caf::settings content;
+    size_t memory_usage = 0;
+  };
+  auto req_state = std::make_shared<req_state_t>();
+  req_state->rp = self->make_response_promise<caf::settings>();
+  auto& index_status = put_dictionary(req_state->content, "index");
+  auto deliver = [&index_status](auto&& req_state) {
+    put(index_status, "sum-partition-bytes", req_state.memory_usage);
+    req_state.rp.deliver(req_state.content);
+  };
+  bool deferred = false;
   if (v >= status_verbosity::info) {
     // nop
   }
@@ -301,23 +315,61 @@ index_state::status(status_verbosity v) const {
       // Hence the fallback to low-level primitives.
       layout_object.insert_or_assign(name, std::move(xs));
     }
-    put(stats_object, "meta-index-bytes", meta_idx.size_bytes());
-  }
-  if (v >= status_verbosity::debug) {
-    // Resident partitions.
+    put(index_status, "meta-index-bytes", meta_idx.memusage());
+    put(index_status, "num-active-partitions",
+        active_partition.actor == nullptr ? 0 : 1);
+    put(index_status, "num-cached-partitions", inmem_partitions.size());
+    put(index_status, "num-unpersisted-partitions", unpersisted.size());
     auto& partitions = put_dictionary(index_status, "partitions");
+    auto partition_status = [&](const uuid& id, const partition_actor& pa,
+                                caf::config_value::list& xs) {
+      deferred = true;
+      self
+        ->request<caf::message_priority::high>(pa, caf::infinite,
+                                               atom::status_v, v)
+        .then(
+          [=, &xs](const caf::settings& part_status) {
+            auto& ps = xs.emplace_back().as_dictionary();
+            put(ps, "id", to_string(id));
+            if (auto s = caf::get_if<caf::config_value::integer>(
+                  &part_status, "memory-usage"))
+              req_state->memory_usage += *s;
+            if (v >= status_verbosity::debug)
+              detail::merge_settings(part_status, ps);
+            // Both handlers have a copy of req_state.
+            if (req_state.use_count() == 2)
+              deliver(std::move(*req_state));
+          },
+          [=, &xs](const caf::error& err) {
+            VAST_WARNING(self, "failed to retrieve status from", id, ":",
+                         render(err));
+            auto& ps = xs.emplace_back().as_dictionary();
+            put(ps, "id", to_string(id));
+            put(ps, "error", render(err));
+            // Both handlers have a copy of req_state.
+            if (req_state.use_count() == 2)
+              deliver(std::move(*req_state));
+          });
+    };
+    // Resident partitions.
+    auto& active = caf::put_list(partitions, "active");
+    active.reserve(1);
     if (active_partition.actor != nullptr)
-      partitions.emplace("active", to_string(active_partition.id));
+      partition_status(active_partition.id, active_partition.actor, active);
     auto& cached = put_list(partitions, "cached");
-    for (auto& kv : inmem_partitions)
-      cached.emplace_back(to_string(kv.first));
+    cached.reserve(inmem_partitions.size());
+    for (auto& [id, actor] : inmem_partitions)
+      partition_status(id, actor, cached);
     auto& unpersisted = put_list(partitions, "unpersisted");
-    for (auto& kvp : this->unpersisted)
-      unpersisted.emplace_back(to_string(kvp.first));
+    unpersisted.reserve(this->unpersisted.size());
+    for (auto& [id, actor] : this->unpersisted)
+      partition_status(id, actor, unpersisted);
     // General state such as open streams.
     detail::fill_status_map(index_status, self);
   }
-  return result;
+  if (!deferred)
+    deliver(std::move(*req_state));
+  return req_state->rp;
 }
 
 std::vector<std::pair<uuid, partition_actor>>
@@ -712,7 +764,7 @@ index(index_actor::stateful_pointer<index_state> self,
       self->state.idle_workers.emplace_back(std::move(worker));
     },
     // -- status_client_actor --------------------------------------------------
-    [=](atom::status, status_verbosity v) -> caf::config_value::dictionary {
+    [=](atom::status, status_verbosity v) { //
       return self->state.status(v);
     },
   };

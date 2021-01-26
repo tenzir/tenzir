@@ -159,6 +159,10 @@ private:
     return caf::visit(f, d);
   };
 
+  size_t memusage_impl() const override {
+    return bmi_.memusage();
+  }
+
   bitmap_index_type bmi_;
 };
 

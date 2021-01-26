@@ -78,10 +78,10 @@ void partition_synopsis::add(const table_slice& slice,
   }
 }
 
-size_t partition_synopsis::size_bytes() const {
+size_t partition_synopsis::memusage() const {
   size_t result = 0;
   for (auto& [field, synopsis] : field_synopses_)
-    result += synopsis ? synopsis->size_bytes() : 0ull;
+    result += synopsis ? synopsis->memusage() : 0ull;
   return result;
 }
 
