@@ -232,7 +232,7 @@ if (NOT CAF_FOUND)
                  CXX_STANDARD 17
                  CXX_STANDARD_REQUIRED ON
                  CXX_EXTENSIONS OFF)
-      add_library(CAF::core ALIAS libcaf_core_${_linkage_suffix})
+    add_library(CAF::core ALIAS libcaf_core_${_linkage_suffix})
     target_compile_features(libcaf_core_${_linkage_suffix} INTERFACE cxx_std_17)
     set_target_properties(libcaf_io_${_linkage_suffix} PROPERTIES EXPORT_NAME
                                                                   io)
@@ -372,7 +372,16 @@ dependency_summary("yaml-cpp" yaml-cpp)
 
 # Link against simdjson.
 option(SIMDJSON_ROOT "Install root of simdjson" "")
-find_package(simdjson REQUIRED HINTS ${SIMDJSON_ROOT})
+find_package(
+  simdjson
+  REQUIRED
+  HINTS
+  "${SIMDJSON_ROOT}"
+  # simdjson 0.8.0 exports it package configuration file under the wrong name,
+  # so we look for "simdjson-targets.cmake" as well.
+  CONFIGS
+  "simdjson-config.cmake"
+  "simdjson-targets.cmake")
 target_link_libraries(libvast PUBLIC simdjson::simdjson)
 dependency_summary("simdjson" simdjson::simdjson)
 
