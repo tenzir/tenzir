@@ -321,35 +321,34 @@ index_state::status(status_verbosity v) const {
     put(index_status, "num-cached-partitions", inmem_partitions.size());
     put(index_status, "num-unpersisted-partitions", unpersisted.size());
     auto& partitions = put_dictionary(index_status, "partitions");
-    auto partition_status
-      = [&](const uuid& id, const partition_actor& pa,
-            caf::config_value::list& xs) {
-          deferred = true;
-          self->request(pa, caf::infinite, atom::status_v, v)
-            .then(
-              [=, &xs](const caf::settings& part_status) {
-                auto& ps = xs.emplace_back().as_dictionary();
-                put(ps, "id", to_string(id));
-                if (auto s = caf::get_if<caf::config_value::integer>(
-                      &part_status, "memory-usage"))
-                  req_state->memory_usage += *s;
-                if (v >= status_verbosity::debug)
-                  detail::merge_settings(part_status, ps);
-                // Both handlers have a copy of req_state.
-                if (req_state.use_count() == 2)
-                  deliver(std::move(*req_state));
-              },
-              [=, &xs](const caf::error& err) {
-                VAST_WARNING(self, "failed to retrieve status from", id, ":",
-                             render(err));
-                auto& ps = xs.emplace_back().as_dictionary();
-                put(ps, "id", to_string(id));
-                put(ps, "error", render(err));
-                // Both handlers have a copy of req_state.
-                if (req_state.use_count() == 2)
-                  deliver(std::move(*req_state));
-              });
-        };
+    auto partition_status = [&](const uuid& id, const partition_actor& pa,
+                                caf::config_value::list& xs) {
+      deferred = true;
+      self->request(pa, caf::infinite, atom::status_v, v)
+        .then(
+          [=, &xs](const caf::settings& part_status) {
+            auto& ps = xs.emplace_back().as_dictionary();
+            put(ps, "id", to_string(id));
+            if (auto s = caf::get_if<caf::config_value::integer>(
+                  &part_status, "memory-usage"))
+              req_state->memory_usage += *s;
+            if (v >= status_verbosity::debug)
+              detail::merge_settings(part_status, ps);
+            // Both handlers have a copy of req_state.
+            if (req_state.use_count() == 2)
+              deliver(std::move(*req_state));
+          },
+          [=, &xs](const caf::error& err) {
+            VAST_WARNING(self, "failed to retrieve status from", id, ":",
+                         render(err));
+            auto& ps = xs.emplace_back().as_dictionary();
+            put(ps, "id", to_string(id));
+            put(ps, "error", render(err));
+            // Both handlers have a copy of req_state.
+            if (req_state.use_count() == 2)
+              deliver(std::move(*req_state));
+          });
+    };
     // Resident partitions.
     auto& active = caf::put_list(partitions, "active");
     active.reserve(1);
