@@ -13,9 +13,9 @@
 
 #pragma once
 
-#include <string>
-
 #include "vast/concept/parseable/core/parser.hpp"
+
+#include <string_view>
 
 namespace vast {
 
