@@ -29,6 +29,7 @@
 #include "vast/detail/fill_status_map.hpp"
 #include "vast/detail/narrow.hpp"
 #include "vast/detail/notifying_stream_manager.hpp"
+#include "vast/detail/settings.hpp"
 #include "vast/error.hpp"
 #include "vast/expression_visitors.hpp"
 #include "vast/fbs/index.hpp"
@@ -294,11 +295,10 @@ index_state::status(status_verbosity v) const {
   };
   auto req_state = std::make_shared<req_state_t>();
   req_state->rp = self->make_response_promise<caf::settings>();
-  auto& result = req_state->content;
-  auto& index_status = put_dictionary(result, "index");
-  auto deliver = [&](auto&& req_state) {
-    put(index_status, "sum-partition-bytes", req_state->memory_usage);
-    req_state->rp.deliver(req_state->content);
+  auto& index_status = put_dictionary(req_state->content, "index");
+  auto deliver = [&index_status](auto&& req_state) {
+    put(index_status, "sum-partition-bytes", req_state.memory_usage);
+    req_state.rp.deliver(req_state.content);
   };
   bool deferred = false;
   if (v >= status_verbosity::info) {
@@ -322,23 +322,24 @@ index_state::status(status_verbosity v) const {
     put(index_status, "num-unpersisted-partitions", unpersisted.size());
     auto& partitions = put_dictionary(index_status, "partitions");
     auto partition_status
-      = [&](const uuid& id, partition_actor pa, caf::config_value::list& xs) {
+      = [&](const uuid& id, const partition_actor& pa,
+            caf::config_value::list& xs) {
           deferred = true;
           self->request(pa, caf::infinite, atom::status_v, v)
             .then(
-              [=, &xs](caf::dictionary<caf::config_value> part_status) {
+              [=, &xs](const caf::settings& part_status) {
                 auto& ps = xs.emplace_back().as_dictionary();
                 put(ps, "id", to_string(id));
                 if (auto s = caf::get_if<caf::config_value::integer>(
                       &part_status, "memory-usage"))
                   req_state->memory_usage += *s;
                 if (v >= status_verbosity::debug)
-                  put(ps, "data", std::move(part_status));
+                  detail::merge_settings(part_status, ps);
                 // Both handlers have a copy of req_state.
                 if (req_state.use_count() == 2)
-                  deliver(std::move(req_state));
+                  deliver(std::move(*req_state));
               },
-              [=, &xs](caf::error err) {
+              [=, &xs](const caf::error& err) {
                 VAST_WARNING(self, "failed to retrieve status from", id, ":",
                              render(err));
                 auto& ps = xs.emplace_back().as_dictionary();
@@ -346,7 +347,7 @@ index_state::status(status_verbosity v) const {
                 put(ps, "error", render(err));
                 // Both handlers have a copy of req_state.
                 if (req_state.use_count() == 2)
-                  deliver(std::move(req_state));
+                  deliver(std::move(*req_state));
               });
         };
     // Resident partitions.
@@ -366,7 +367,7 @@ index_state::status(status_verbosity v) const {
     detail::fill_status_map(index_status, self);
   }
   if (!deferred)
-    deliver(std::move(req_state));
+    deliver(std::move(*req_state));
   return req_state->rp;
 }
 
