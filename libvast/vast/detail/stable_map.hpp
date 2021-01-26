@@ -36,4 +36,6 @@ struct stable_map_policy {
   }
 };
 
+// Note: The alias definition for stable_map is in `vast/fwd.hpp`.
+
 } // namespace vast::detail
