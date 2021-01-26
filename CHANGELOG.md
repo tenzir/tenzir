@@ -38,6 +38,7 @@ Every entry has a category for which we use the following visual abbreviations:
   [#1230](https://github.com/tenzir/vast/pull/1230)
   [#1246](https://github.com/tenzir/vast/pull/1246)
   [#1281](https://github.com/tenzir/vast/pull/1281)
+  [#1314](https://github.com/tenzir/vast/pull/1314)
   [@ngrodzitski](https://github.com/ngrodzitski)
 
 - 🐞 Disk monitor quota settings not ending in a 'B' used to be silently
