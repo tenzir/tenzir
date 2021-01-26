@@ -13,6 +13,7 @@
 
 #include "vast/atoms.hpp"
 #include "vast/detail/assert.hpp"
+#include "vast/detail/tuple_map.hpp"
 #include "vast/error.hpp"
 
 #include <caf/actor.hpp>
@@ -37,6 +38,8 @@ spawn_at_node(caf::scoped_actor& self, caf::actor node, Arguments&&... xs) {
 
 /// Look up components by category. Returns the first actor of each
 /// category name passed in `names`.
+/// TODO: Replace all usages of get_node_components with
+/// get_typed_node_components.
 template <class... Names>
 caf::expected<std::array<caf::actor, sizeof...(Names)>>
 get_node_components(caf::scoped_actor& self, const caf::actor& node,
@@ -56,24 +59,6 @@ get_node_components(caf::scoped_actor& self, const caf::actor& node,
       },
       [&](caf::error& e) { result = std::move(e); });
   return result;
-}
-
-template <class Tuple, class F, class Range, size_t... Is>
-Tuple tuple_map_impl(Range&& xs, F&& f, std::index_sequence<Is...>) {
-  return std::make_tuple(
-    (f.template operator()<std::tuple_element_t<Is, Tuple>>(
-      std::forward<decltype(xs[Is])>(xs[Is])))...);
-}
-
-/// Turn a random access range into a tuple by applying f to every element of
-/// xs. The type of the tuple element at position `n` is supplied for the nth
-/// element of xs.
-template <class Tuple, class F, class Range>
-Tuple tuple_map(Range&& xs, F&& f) {
-  constexpr auto tuple_size = std::tuple_size_v<Tuple>;
-  VAST_ASSERT(xs.size() == tuple_size);
-  return tuple_map_impl<Tuple>(std::forward<Range>(xs), std::forward<F>(f),
-                               std::make_index_sequence<tuple_size>{});
 }
 
 struct actor_cast_wrapper {
@@ -106,10 +91,12 @@ get_typed_node_components(caf::scoped_actor& self, const caf::actor& node) {
               std::move(labels))
     .receive(
       [&](std::vector<caf::actor> components) {
-        result
-          = tuple_map<result_t>(std::move(components), actor_cast_wrapper{});
+        result = detail::tuple_map<result_t>(std::move(components),
+                                             actor_cast_wrapper{});
       },
-      [&](caf::error& e) { result = std::move(e); });
+      [&](caf::error& e) { //
+        result = std::move(e);
+      });
   return result;
 }
 
