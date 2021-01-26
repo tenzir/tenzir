@@ -261,27 +261,10 @@ importer(importer_actor::stateful_pointer<importer_state> self, path dir,
       self->state.accountant = std::move(accountant);
       self->send(self->state.accountant, atom::announce_v, self->name());
     },
-    // Register the EXPORTER actor as a sink.
-    [=](exporter_actor exporter) {
-      VAST_DEBUG(self, "registers exporter", exporter);
-      return self->state.stage->add_outbound_path(std::move(exporter));
-    },
     // Add a new sink.
-    [=](atom::add, const caf::actor& subscriber) {
-      auto& st = self->state;
-      VAST_DEBUG(self, "adds a new sink:", subscriber);
-      return st.stage->add_outbound_path(subscriber);
-    },
-    // Add a new source.
-    [=](caf::stream<table_slice> in) {
-      VAST_DEBUG(self, "adds a new source:", self->current_sender());
-      return self->state.stage->add_inbound_path(in);
-    },
-    // Add a new source with a description.
-    [=](caf::stream<table_slice> in, std::string desc) {
-      VAST_DEBUG(self, "adds a new source:", self->current_sender());
-      self->state.inbound_description = std::move(desc);
-      return self->state.stage->add_inbound_path(in);
+    [=](stream_sink_actor<table_slice> sink) {
+      VAST_DEBUG(self, "adds a new sink:", sink);
+      return self->state.stage->add_outbound_path(std::move(sink));
     },
     // Register a FLUSH LISTENER actor.
     [=](atom::subscribe, atom::flush, flush_listener_actor listener) {
@@ -293,6 +276,17 @@ importer(importer_actor::stateful_pointer<importer_state> self, path dir,
     [=](atom::telemetry) {
       self->state.send_report();
       self->delayed_send(self, defs::telemetry_rate, atom::telemetry_v);
+    },
+    // -- stream_sink_actor<table_slice> ---------------------------------------
+    [=](caf::stream<table_slice> in) {
+      VAST_DEBUG(self, "adds a new source:", self->current_sender());
+      return self->state.stage->add_inbound_path(in);
+    },
+    // -- stream_sink_actor<table_slice, std::string> --------------------------
+    [=](caf::stream<table_slice> in, std::string desc) {
+      self->state.inbound_description = std::move(desc);
+      VAST_DEBUG(self, "adds a new", desc, "source:", self->current_sender());
+      return self->state.stage->add_inbound_path(in);
     },
     // -- status_client_actor --------------------------------------------------
     [=](atom::status, status_verbosity v) { //

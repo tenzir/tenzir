@@ -30,6 +30,7 @@
 #include "vast/endpoint.hpp"
 #include "vast/error.hpp"
 #include "vast/expression.hpp"
+#include "vast/format/reader.hpp"
 #include "vast/logger.hpp"
 #include "vast/schema.hpp"
 #include "vast/system/datagram_source.hpp"
@@ -78,7 +79,7 @@ template <class Reader, class Defaults,
 caf::expected<make_source_result>
 make_source(const Actor& self, caf::actor_system& sys, const invocation& inv,
             accountant_actor accountant, type_registry_actor type_registry,
-            caf::actor importer) {
+            importer_actor importer) {
   if (!importer)
     return caf::make_error(ec::missing_component, "importer");
   // Placeholder thingies.
@@ -188,7 +189,8 @@ make_source(const Actor& self, caf::actor_system& sys, const invocation& inv,
   }
   // Connect source to importer.
   VAST_DEBUG(inv.full_name, "connects to", VAST_ARG(importer));
-  self->send(src, atom::sink_v, importer);
+  self->send(
+    src, static_cast<stream_sink_actor<table_slice, std::string>>(importer));
   return make_source_result{src, reader->name()};
 }
 

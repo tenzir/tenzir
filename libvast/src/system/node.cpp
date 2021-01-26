@@ -628,19 +628,29 @@ caf::behavior node(node_actor* self, std::string name, path dir,
       return atom::ok_v;
     },
     [=](atom::get, atom::type, const std::string& type) {
-      return self->state.registry.find_by_type(type);
-    },
-    [=](atom::get, atom::label, const std::string& label) {
-      return self->state.registry.find_by_label(label);
-    },
-    [=](atom::get, atom::label, const std::vector<std::string>& labels) {
-      std::vector<caf::actor> result;
-      result.reserve(labels.size());
-      for (auto& label : labels)
-        result.push_back(self->state.registry.find_by_label(label));
+      VAST_DEBUG(self, "got a request for a component of type", type);
+      auto result = self->state.registry.find_by_type(type);
+      VAST_DEBUG(self, "responds to the request for", type, "with", result);
       return result;
     },
-    [=](atom::get, atom::version) { return VAST_VERSION; },
+    [=](atom::get, atom::label, const std::string& label) {
+      VAST_DEBUG(self, "got a request for the component", label);
+      auto result = self->state.registry.find_by_label(label);
+      VAST_DEBUG(self, "responds to the request for", label, "with", result);
+      return result;
+    },
+    [=](atom::get, atom::label, const std::vector<std::string>& labels) {
+      VAST_DEBUG(self, "got a request for the components", labels);
+      std::vector<caf::actor> result;
+      result.reserve(labels.size());
+      for (const auto& label : labels)
+        result.push_back(self->state.registry.find_by_label(label));
+      VAST_DEBUG(self, "responds to the request for", labels, "with", result);
+      return result;
+    },
+    [=](atom::get, atom::version) { //
+      return VAST_VERSION;
+    },
     [=](atom::signal, int signal) {
       VAST_IGNORE_UNUSED(signal);
       VAST_WARNING(self, "got signal", ::strsignal(signal));
