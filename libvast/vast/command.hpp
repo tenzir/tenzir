@@ -14,6 +14,7 @@
 #pragma once
 
 #include "vast/detail/string.hpp"
+#include "vast/documentation.hpp"
 #include "vast/fwd.hpp"
 
 #include <caf/config_option_set.hpp>

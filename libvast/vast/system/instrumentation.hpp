@@ -104,8 +104,7 @@ template <int N>
 class timer_benchmark_mixin {
 public:
   void append_benchmark_metrics(std::vector<measurement>& measurements) {
-    measurements.insert(measurements.end(), measurements_.begin(),
-                        measurements_.end());
+    measurements.assign(measurements_.begin(), measurements_.end());
   }
 
   friend class iteration_tracker;
@@ -134,6 +133,7 @@ public:
   }
 
 private:
+  // Measurements for each step.
   std::array<measurement, N> measurements_;
 };
 

@@ -548,6 +548,7 @@ add_subdirectory(libvast_test)
 add_subdirectory(tools)
 add_subdirectory(doc)
 add_subdirectory(vast)
+add_subdirectory(vast_json_benchmark)
 
 # -- cmake export/config installations -----------------------------------------
 
