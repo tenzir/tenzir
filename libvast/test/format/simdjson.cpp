@@ -102,9 +102,9 @@ TEST(simdjson to data) {
   })json";
   ::simdjson::dom::parser p;
   auto el = p.parse(str);
-  CHECK(el.error() == ::simdjson::SUCCESS);
+  CHECK(el.error() == ::simdjson::error_code::SUCCESS);
   auto obj = el.value().get_object();
-  CHECK(obj.error() == ::simdjson::SUCCESS);
+  CHECK(obj.error() == ::simdjson::error_code::SUCCESS);
   format::simdjson::add(*builder, obj.value(), flat);
   auto slice = builder->finish();
   REQUIRE_NOT_EQUAL(slice.encoding(), table_slice_encoding::none);
