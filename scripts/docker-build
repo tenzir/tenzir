@@ -2,14 +2,12 @@
 
 # A simple script to build VAST inside a Debian Buster Docker image and export
 # the artifacts as tar.gz files.
-# The script accepts an optional branch or tag name to build.
-# Usage example: ./scipts/docker-build <BRANCH>
 
 set -x
 
 VERSION=${1:-$(git describe)}
 
-if ! docker build -t tenzir/vast:${VERSION} --build-arg BRANCH=${1:-master} .; then
+if ! DOCKER_BUILDKIT=1 docker build -t tenzir/vast:${VERSION} .; then
   echo Error building docker image
   exit 1
 fi

@@ -12,6 +12,13 @@ Every entry has a category for which we use the following visual abbreviations:
 
 ## Unreleased
 
+- ⚡️ The GitHub CI now runs on Debian Buster and produces Debian artifacts
+  instead of Ubuntu artifacts. Similarly, the Docker images we provide on
+  [dockerhub](https://hub.docker.com/r/tenzir/vast) use Debian Buster as
+  base image. To build Docker images locally, users now must set
+  `DOCKER_BUILDKIT=1` in the build environment.
+  [#1294](https://github.com/tenzir/vast/pull/1294)
+
 - 🎁 The output of `vast status` now contains detailed memory usage information
   about active and cached partitions.
   [#1297](https://github.com/tenzir/vast/pull/1297)
