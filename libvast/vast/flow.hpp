@@ -41,7 +41,7 @@ struct flow {
 /// @return An instance of a flow.
 /// @relates flow
 inline flow make_flow(address src_addr, address dst_addr, uint16_t src_port,
-                      uint16_t dst_port, port::port_type protocol) {
+                      uint16_t dst_port, port_type protocol) {
   return {src_addr, dst_addr, port{src_port, protocol},
           port{dst_port, protocol}};
 }
@@ -53,7 +53,7 @@ inline flow make_flow(address src_addr, address dst_addr, uint16_t src_port,
 /// @param dst_port The transport-layer port of the flow destination.
 /// @return An instance of a flow.
 /// @relates flow
-template <port::port_type Protocol>
+template <port_type Protocol>
 flow make_flow(address src_addr, address dst_addr, uint16_t src_port,
                uint16_t dst_port) {
   return make_flow(src_addr, dst_addr, src_port, dst_port, Protocol);
@@ -67,9 +67,9 @@ flow make_flow(address src_addr, address dst_addr, uint16_t src_port,
 /// @param protocol The transport-layer protocol in use.
 /// @return An instance of a flow.
 /// @relates flow
-caf::optional<flow> make_flow(std::string_view src_addr,
-                              std::string_view dst_addr, uint16_t src_port,
-                              uint16_t dst_port, port::port_type protocol);
+caf::optional<flow>
+make_flow(std::string_view src_addr, std::string_view dst_addr,
+          uint16_t src_port, uint16_t dst_port, port_type protocol);
 
 /// Factory function to construct a flow.
 /// @param src_addr The IP address of the flow source as string.
@@ -78,7 +78,7 @@ caf::optional<flow> make_flow(std::string_view src_addr,
 /// @param dst_port The transport-layer port of the flow destination.
 /// @return An instance of a flow.
 /// @relates flow
-template <port::port_type Protocol>
+template <port_type Protocol>
 auto make_flow(std::string_view src_addr, std::string_view dst_addr,
                uint16_t src_port, uint16_t dst_port) {
   return make_flow(src_addr, dst_addr, src_port, dst_port, Protocol);
@@ -87,7 +87,7 @@ auto make_flow(std::string_view src_addr, std::string_view dst_addr,
 /// @returns the protocol of a flow tuple.
 /// @param x The flow to extract the protocol from.
 /// @relates flow
-port::port_type protocol(const flow& x);
+port_type protocol(const flow& x);
 
 /// @returns a hash value for a flow tuple.
 /// @param x The flow to compute the hash value from.

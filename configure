@@ -196,9 +196,6 @@ while [ $# -ne 0 ]; do
         plugins="${plugins};${plugin_dir}"
       fi
       ;;
-    --with-type-id-checks)
-      append_cache_entry CAF_ENABLE_TYPE_ID_CHECKS BOOL yes
-      ;;
 # -- Debugging -----------------------------------------------------------------
     --log-level=*)
       append_cache_entry VAST_LOG_LEVEL STRING \

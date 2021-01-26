@@ -351,6 +351,9 @@ if (VAST_ENABLE_DEVELOPER_MODE)
   set(CMAKE_VERBOSE_MAKEFILE
       OFF
       CACHE STRING "Show all outputs including compiler lines." FORCE)
+
+  # Enable CAF's compile-time type ID checks.
+  set(CAF_ENABLE_TYPE_ID_CHECKS YES)
 endif ()
 
 if (VAST_ENABLE_DEVELOPER_MODE OR VAST_ENABLE_BUILDID)

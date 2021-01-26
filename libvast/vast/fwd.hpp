@@ -81,6 +81,7 @@ class path;
 class pattern;
 class plugin;
 class plugin_ptr;
+class port;
 class schema;
 class segment;
 class segment_builder;
@@ -119,6 +120,7 @@ struct none_type;
 struct offset;
 struct partition_synopsis;
 struct pattern_type;
+struct plugin_version;
 struct predicate;
 struct qualified_record_field;
 struct real_type;
@@ -136,6 +138,7 @@ enum bool_operator : uint8_t;
 enum relational_operator : uint8_t;
 
 enum class ec : uint8_t;
+enum class port_type : uint8_t;
 enum class query_options : uint32_t;
 enum class table_slice_encoding : uint8_t;
 
@@ -200,6 +203,20 @@ struct v0;
 
 } // namespace fbs
 
+namespace detail {
+
+struct stable_map_policy;
+
+template <class, class, class, class>
+class vector_map;
+
+/// A map abstraction over an unsorted `std::vector`.
+template <class Key, class T,
+          class Allocator = std::allocator<std::pair<Key, T>>>
+using stable_map = vector_map<Key, T, Allocator, stable_map_policy>;
+
+} // namespace detail
+
 namespace format {
 
 class writer;
@@ -252,8 +269,10 @@ using report = std::vector<data_point>;
 
 CAF_BEGIN_TYPE_ID_BLOCK(vast_types, caf::first_custom_type_id)
 
+  VAST_ADD_TYPE_ID((vast::address))
   VAST_ADD_TYPE_ID((vast::attribute_extractor))
   VAST_ADD_TYPE_ID((vast::bitmap))
+  VAST_ADD_TYPE_ID((vast::chunk_ptr))
   VAST_ADD_TYPE_ID((vast::conjunction))
   VAST_ADD_TYPE_ID((vast::curried_predicate))
   VAST_ADD_TYPE_ID((vast::data))
@@ -265,25 +284,38 @@ CAF_BEGIN_TYPE_ID_BLOCK(vast_types, caf::first_custom_type_id)
   VAST_ADD_TYPE_ID((vast::invocation))
   VAST_ADD_TYPE_ID((vast::negation))
   VAST_ADD_TYPE_ID((vast::path))
+  VAST_ADD_TYPE_ID((vast::pattern))
+  VAST_ADD_TYPE_ID((vast::plugin_version))
+  VAST_ADD_TYPE_ID((vast::port))
+  VAST_ADD_TYPE_ID((vast::port_type))
   VAST_ADD_TYPE_ID((vast::predicate))
   VAST_ADD_TYPE_ID((vast::query_options))
   VAST_ADD_TYPE_ID((vast::relational_operator))
   VAST_ADD_TYPE_ID((vast::schema))
+  VAST_ADD_TYPE_ID((vast::subnet))
   VAST_ADD_TYPE_ID((vast::table_slice))
+  VAST_ADD_TYPE_ID((vast::taxonomies))
   VAST_ADD_TYPE_ID((vast::type))
   VAST_ADD_TYPE_ID((vast::type_extractor))
   VAST_ADD_TYPE_ID((vast::type_set))
   VAST_ADD_TYPE_ID((vast::uuid))
+
+  VAST_ADD_TYPE_ID((vast::detail::stable_map<std::string, vast::data>) )
+  VAST_ADD_TYPE_ID((vast::detail::stable_map<vast::data, vast::data>) )
 
   VAST_ADD_TYPE_ID((vast::system::performance_report))
   VAST_ADD_TYPE_ID((vast::system::query_status))
   VAST_ADD_TYPE_ID((vast::system::report))
   VAST_ADD_TYPE_ID((vast::system::status_verbosity))
 
+  VAST_ADD_TYPE_ID((std::pair<std::string, vast::data>) )
   VAST_ADD_TYPE_ID((std::vector<uint32_t>) )
+  VAST_ADD_TYPE_ID((std::vector<std::string>) )
   VAST_ADD_TYPE_ID((std::vector<vast::table_slice>) )
+  VAST_ADD_TYPE_ID((std::vector<vast::table_slice_column>) )
 
   VAST_ADD_TYPE_ID((caf::stream<vast::table_slice>) )
+  VAST_ADD_TYPE_ID((caf::stream<vast::table_slice_column>) )
 
 CAF_END_TYPE_ID_BLOCK(vast_types)
 

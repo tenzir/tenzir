@@ -21,7 +21,7 @@
 namespace vast {
 
 port::port() {
-  type(unknown);
+  type(port_type::unknown);
 }
 
 port::port(number_type n, port_type t) {
@@ -33,7 +33,7 @@ port::number_type port::number() const {
   return data_ >> 16;
 }
 
-port::port_type port::type() const {
+port_type port::type() const {
   return static_cast<port_type>(data_ & 0xFF);
 }
 
@@ -48,9 +48,8 @@ void port::type(port_type t) {
 
 bool operator==(const port& x, const port& y) {
   return x.number() == y.number()
-         && (x.type() == y.type()
-             || x.type() == port::unknown
-             || y.type() == port::unknown);
+         && (x.type() == y.type() || x.type() == port_type::unknown
+             || y.type() == port_type::unknown);
 }
 
 bool operator<(const port& x, const port& y) {

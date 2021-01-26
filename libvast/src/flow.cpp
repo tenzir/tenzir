@@ -20,9 +20,9 @@
 
 namespace vast {
 
-caf::optional<flow> make_flow(std::string_view src_addr,
-                              std::string_view dst_addr, uint16_t src_port,
-                              uint16_t dst_port, port::port_type protocol) {
+caf::optional<flow>
+make_flow(std::string_view src_addr, std::string_view dst_addr,
+          uint16_t src_port, uint16_t dst_port, port_type protocol) {
   using parsers::addr;
   flow result;
   if (!addr(src_addr, result.src_addr) || !addr(dst_addr, result.dst_addr))
@@ -37,7 +37,7 @@ bool operator==(const flow& x, const flow& y) {
          && x.src_port == y.src_port && x.dst_port == y.dst_port;
 }
 
-port::port_type protocol(const flow& x) {
+port_type protocol(const flow& x) {
   VAST_ASSERT(x.src_port.type() == x.dst_port.type());
   return x.src_port.type();
 }

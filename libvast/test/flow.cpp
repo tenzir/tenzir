@@ -55,8 +55,8 @@ TEST(distinct port) {
   CHECK_EQUAL(tcp_flow.dst_addr, udp_flow.dst_addr);
   CHECK_EQUAL(tcp_flow.src_port.number(), udp_flow.src_port.number());
   CHECK_EQUAL(tcp_flow.dst_port.number(), udp_flow.dst_port.number());
-  CHECK_EQUAL(protocol(tcp_flow), port::tcp);
-  CHECK_EQUAL(protocol(udp_flow), port::udp);
+  CHECK_EQUAL(protocol(tcp_flow), port_type::tcp);
+  CHECK_EQUAL(protocol(udp_flow), port_type::udp);
   CHECK_NOT_EQUAL(tcp_flow, udp_flow);
   CHECK_NOT_EQUAL(hash(tcp_flow), hash(udp_flow));
 }

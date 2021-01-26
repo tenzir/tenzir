@@ -21,20 +21,20 @@ namespace vast {
 
 class json;
 
+/// The transport layer type.
+enum class port_type : uint8_t {
+  icmp = 1,
+  tcp = 6,
+  udp = 17,
+  icmp6 = 58,
+  sctp = 132,
+  unknown = 255,
+};
+
 /// A transport-layer port.
 class port : detail::totally_ordered<port> {
 public:
   using number_type = uint16_t;
-
-  /// The transport layer type.
-  enum port_type : uint8_t {
-    icmp = 1,
-    tcp = 6,
-    udp = 17,
-    icmp6 = 58,
-    sctp = 132,
-    unknown = 255,
-  };
 
   /// Constructs the empty port, i.e., `0/unknown`.
   port();
@@ -42,7 +42,7 @@ public:
   /// Constructs a port.
   /// @param n The port number.
   /// @param t The port type.
-  port(number_type n, port_type t = unknown);
+  port(number_type n, port_type t = port_type::unknown);
 
   /// Retrieves the port number.
   /// @returns The port number.

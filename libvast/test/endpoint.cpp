@@ -49,18 +49,18 @@ TEST(parseable - port only) {
   CHECK_EQUAL(*x.port, 42000);
   CHECK(parsers::endpoint(":12345/tcp", x));
   CHECK_EQUAL(x.host, "foo");
-  CHECK_EQUAL(*x.port, (vast::port{12345, port::tcp}));
+  CHECK_EQUAL(*x.port, (vast::port{12345, port_type::tcp}));
 }
 
 TEST(parseable - host and port) {
   CHECK(parsers::endpoint("10.0.0.1:80", x));
   CHECK_EQUAL(x.host, "10.0.0.1");
   CHECK_EQUAL(*x.port, 80);
-  CHECK_EQUAL(x.port->type(), port::unknown);
+  CHECK_EQUAL(x.port->type(), port_type::unknown);
   CHECK(parsers::endpoint("10.0.0.1:9995/udp", x));
   CHECK_EQUAL(x.host, "10.0.0.1");
   CHECK_EQUAL(x.port->number(), 9995);
-  CHECK_EQUAL(x.port->type(), port::udp);
+  CHECK_EQUAL(x.port->type(), port_type::udp);
 }
 
 FIXTURE_SCOPE_END()
