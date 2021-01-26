@@ -12,6 +12,10 @@ Every entry has a category for which we use the following visual abbreviations:
 
 ## Unreleased
 
+- 🎁 The output of `vast status` now contains detailed memory usage information
+  about active and cached partitions.
+  [#1297](https://github.com/tenzir/vast/pull/1297)
+
 - 🎁 VAST installations now bundle a LICENSE.3rdparty file alongside the regular
   LICENSE file that lists all embedded code that is under a separate license.
   [#1306](https://github.com/tenzir/vast/pull/1306)
