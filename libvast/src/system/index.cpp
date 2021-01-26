@@ -324,7 +324,9 @@ index_state::status(status_verbosity v) const {
     auto partition_status = [&](const uuid& id, const partition_actor& pa,
                                 caf::config_value::list& xs) {
       deferred = true;
-      self->request(pa, caf::infinite, atom::status_v, v)
+      self
+        ->request<caf::message_priority::high>(pa, caf::infinite,
+                                               atom::status_v, v)
         .then(
           [=, &xs](const caf::settings& part_status) {
             auto& ps = xs.emplace_back().as_dictionary();

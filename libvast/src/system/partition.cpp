@@ -618,7 +618,9 @@ active_partition_actor::behavior_type active_partition(
       auto& indexer_states = put_list(req_state->content, "indexers");
       for (auto& i : self->state.indexers) {
         deferred = true;
-        self->request(i.second, caf::infinite, atom::status_v, v)
+        self
+          ->request<caf::message_priority::high>(i.second, caf::infinite,
+                                                 atom::status_v, v)
           .then(
             [=, &indexer_states](const caf::settings& indexer_status) {
               auto& ps = indexer_states.emplace_back().as_dictionary();
