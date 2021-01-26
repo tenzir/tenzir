@@ -68,7 +68,7 @@ struct buffered_synopsis_traits<vast::address> {
   }
 
   // Estimate the size in bytes for an unordered_set of T.
-  static size_t size_bytes(const std::unordered_set<vast::address>& x) {
+  static size_t memusage(const std::unordered_set<vast::address>& x) {
     using node_type = typename std::decay_t<decltype(x)>::node_type;
     return x.size() * sizeof(node_type);
   }

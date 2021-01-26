@@ -35,10 +35,10 @@
 
 namespace vast {
 
-size_t meta_index::size_bytes() const {
+size_t meta_index::memusage() const {
   size_t result = 0;
   for (auto& [id, partition_synopsis] : synopses_)
-    result += partition_synopsis.size_bytes();
+    result += partition_synopsis.memusage();
   return result;
 }
 

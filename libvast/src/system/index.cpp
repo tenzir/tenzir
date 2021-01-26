@@ -315,7 +315,7 @@ index_state::status(status_verbosity v) const {
       // Hence the fallback to low-level primitives.
       layout_object.insert_or_assign(name, std::move(xs));
     }
-    put(index_status, "meta-index-bytes", meta_idx.size_bytes());
+    put(index_status, "meta-index-bytes", meta_idx.memusage());
     put(index_status, "num-active-partitions",
         active_partition.actor == nullptr ? 0 : 1);
     put(index_status, "num-cached-partitions", inmem_partitions.size());

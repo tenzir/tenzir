@@ -82,7 +82,7 @@ public:
     }
   }
 
-  size_t size_bytes() const override {
+  size_t memusage() const override {
     return sizeof(min_max_synopsis);
   }
 

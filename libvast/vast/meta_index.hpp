@@ -71,7 +71,7 @@ public:
 
   /// @returns A best-effort estimate of the amount of memory used for this meta
   /// index (in bytes).
-  size_t size_bytes() const;
+  size_t memusage() const;
 
   // -- concepts ---------------------------------------------------------------
 

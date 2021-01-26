@@ -31,7 +31,7 @@ struct buffered_synopsis_traits {
     = delete;
 
   // Estimate the size in bytes for an unordered_set of T.
-  static size_t size_bytes(const std::unordered_set<T>&) = delete;
+  static size_t memusage(const std::unordered_set<T>&) = delete;
 };
 
 /// A synopsis that stores a full copy of the input in a hash table to be able
@@ -78,8 +78,8 @@ public:
     data_.insert(materialize(*v));
   }
 
-  size_t size_bytes() const override {
-    return sizeof(p_) + buffered_synopsis_traits<T>::size_bytes(data_);
+  size_t memusage() const override {
+    return sizeof(p_) + buffered_synopsis_traits<T>::memusage(data_);
   }
 
   caf::optional<bool>

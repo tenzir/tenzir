@@ -405,7 +405,7 @@ public:
   constexpr index_type size() const noexcept {
     return storage_.size();
   }
-  constexpr index_type size_bytes() const noexcept {
+  constexpr index_type memusage() const noexcept {
     return size() * detail::narrow_cast<index_type>(sizeof(element_type));
   }
   constexpr bool empty() const noexcept {
@@ -569,15 +569,14 @@ constexpr size_t calculate_byte_size() {
 template <class ElementType, size_t Extent>
 span<const byte, calculate_byte_size<ElementType, Extent>()>
 as_bytes(span<ElementType, Extent> s) noexcept {
-  return {reinterpret_cast<const byte*>(std::launder(s.data())),
-          s.size_bytes()};
+  return {reinterpret_cast<const byte*>(std::launder(s.data())), s.memusage()};
 }
 
 template <class ElementType, size_t Extent,
           class = std::enable_if_t<!std::is_const_v<ElementType>>>
 span<byte, calculate_byte_size<ElementType, Extent>()>
 as_writeable_bytes(span<ElementType, Extent> s) noexcept {
-  return {reinterpret_cast<byte*>(std::launder(s.data())), s.size_bytes()};
+  return {reinterpret_cast<byte*>(std::launder(s.data())), s.memusage()};
 }
 
 } // namespace vast
