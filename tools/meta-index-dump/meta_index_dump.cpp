@@ -16,7 +16,6 @@
 #include "vast/concept/parseable/numeric.hpp"
 #include "vast/concept/parseable/string.hpp"
 #include "vast/concept/parseable/vast/si.hpp"
-#include "vast/concept/parseable/vast/uuid.hpp"
 #include "vast/concept/printable/to_string.hpp"
 #include "vast/concept/printable/vast/type.hpp"
 #include "vast/concept/printable/vast/uuid.hpp"
@@ -84,53 +83,45 @@ int main(int argc, char** argv) {
 
   if (argc < 3) {
     std::cerr << "Usage: " << argv[0]
-              << " <path/to/partition> <output_filename>\n";
+              << " <path/to/vast.db> <output_filename>\n";
     return 1;
   }
-
-  // auto dbdir = vast::path{argv[1]};
-  // if (!exists(dbdir)) {
-  //   std::cerr << "directory not found\n";
-  //   return 1;
-  // }
-  // auto dir = dbdir / "index";
-  // auto fname = dir / "index.bin";
-  // if (!exists(fname)) {
-  //   std::cerr << "file not found: " << fname.str() << std::endl;
-  //   return 1;
-  // }
+  auto dbdir = vast::path{argv[1]};
+  if (!exists(dbdir)) {
+    std::cerr << "directory not found\n";
+    return 1;
+  }
+  auto dir = dbdir / "index";
+  auto fname = dir / "index.bin";
+  if (!exists(fname)) {
+    std::cerr << "file not found: " << fname.str() << std::endl;
+    return 1;
+  }
   auto out_filename = vast::path{argv[2]};
   std::ofstream out(argv[2], std::ios::binary);
-  // std::cout << "loading state from" << fname.str() << std::endl;
-  // auto buffer = io::read(fname);
-  // if (!buffer) {
-  //   std::cerr << "failed to read index file:" << render(buffer.error())
-  //             << std::endl;
-  //   return 1;
-  // }
-  // // TODO: Create a `index_ondisk_state` struct and move this part of the
-  // // code into an `unpack()` function.
-  // auto index = fbs::GetIndex(buffer->data());
-  // if (index->index_type() != fbs::index::Index::v0) {
-  //   std::cerr << "invalid index version\n";
-  //   return 1;
-  // }
-
-  meta_index meta_idx;
-  // auto index_v0 = index->index_as_v0();
-  // auto partition_uuids = index_v0->partitions();
-  // VAST_ASSERT(partition_uuids);
-  auto path = vast::path{argv[1]};
-  std::vector<vast::path> partitions;
-  for (int i = 0; i < 100; ++i)
-    partitions.push_back(path / ("partition" + std::to_string(i + 1)));
-  // for (auto uuid_fb : *partition_uuids) {
-  for (auto partition_path : partitions) {
-    auto partition_uuid = uuid::random(); // whatever
-    // VAST_ASSERT(uuid_fb);
-    // vast::uuid partition_uuid;
-    // unpack(*uuid_fb, partition_uuid);
-    // auto partition_path = dir / to_string(partition_uuid);
+  std::cout << "loading state from" << fname.str() << std::endl;
+  auto buffer = io::read(fname);
+  if (!buffer) {
+    std::cerr << "failed to read index file:" << render(buffer.error())
+              << std::endl;
+    return 1;
+  }
+  // TODO: Create a `index_ondisk_state` struct and move this part of the
+  // code into an `unpack()` function.
+  auto index = fbs::GetIndex(buffer->data());
+  if (index->index_type() != fbs::index::Index::v0) {
+    std::cerr << "invalid index version\n";
+    return 1;
+  }
+  // meta_index meta_idx;
+  auto index_v0 = index->index_as_v0();
+  auto partition_uuids = index_v0->partitions();
+  VAST_ASSERT(partition_uuids);
+  for (auto uuid_fb : *partition_uuids) {
+    VAST_ASSERT(uuid_fb);
+    vast::uuid partition_uuid;
+    unpack(*uuid_fb, partition_uuid);
+    auto partition_path = dir / to_string(partition_uuid);
     if (exists(partition_path)) {
       auto chunk = chunk::mmap(partition_path);
       if (!chunk) {
@@ -141,8 +132,7 @@ int main(int argc, char** argv) {
       auto partition = fbs::GetPartition(chunk->data());
       if (partition->partition_type() != fbs::partition::Partition::v0) {
         std::cerr << "found unsupported version for partition"
-                  << /*to_string(partition_uuid)*/ partition_path.str()
-                  << std::endl;
+                  << to_string(partition_uuid) << std::endl;
         continue;
       }
       auto partition_v0 = partition->partition_as_v0();
@@ -167,16 +157,16 @@ int main(int argc, char** argv) {
                   << to_string(ptr->type())
                   << " synopsis "
                      "size "
-                  << buf.size() << "(orig " << ptr->size_bytes() << ") offset "
-                  << out.tellp() << std::endl;
+                  << ptr->size_bytes() << " offset " << out.tellp()
+                  << std::endl;
         out.write(&buf[0], buf.size());
         out.flush();
       }
-      partition_synopsis ps;
-      system::unpack(*partition_v0, ps);
+      // partition_synopsis ps;
+      // system::unpack(*partition_v0, ps);
       // std::cout << "merging partition synopsis from"
-      // << to_string(partition_uuid) << std::endl;
-      meta_idx.merge(partition_uuid, std::move(ps));
+      //           << to_string(partition_uuid) << std::endl;
+      // meta_idx.merge(partition_uuid, std::move(ps));
     } else {
       std::cerr << "found partition" << to_string(partition_uuid)
                 << "in the index state but not on disk; this may have been "
