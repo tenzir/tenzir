@@ -10,7 +10,9 @@ Every entry has a category for which we use the following visual abbreviations:
 - ⚡️ breaking change
 - 🐞 bugfix
 
-## Unreleased
+<!-- ## Unreleased -->
+
+## [2021.01.28]
 
 - ⚡️ The GitHub CI now runs on Debian Buster and produces Debian artifacts
   instead of Ubuntu artifacts. Similarly, the Docker images we provide on
@@ -1156,3 +1158,4 @@ This is the first official release.
 [2020.09.30]: https://github.com/tenzir/vast/releases/tag/2020.09.30
 [2020.10.29]: https://github.com/tenzir/vast/releases/tag/2020.10.29
 [2020.12.16]: https://github.com/tenzir/vast/releases/tag/2020.12.16
+[2021.01.28]: https://github.com/tenzir/vast/releases/tag/2021.01.28
