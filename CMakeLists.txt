@@ -351,6 +351,10 @@ if (VAST_ENABLE_DEVELOPER_MODE)
   set(CMAKE_VERBOSE_MAKEFILE
       OFF
       CACHE STRING "Show all outputs including compiler lines." FORCE)
+
+  # Enable CAF's compile-time type ID checks.
+  target_compile_definitions(libvast_internal
+                             INTERFACE CAF_ENABLE_TYPE_ID_CHECKS)
 endif ()
 
 if (VAST_ENABLE_DEVELOPER_MODE OR VAST_ENABLE_BUILDID)
@@ -586,10 +590,11 @@ endif ()
 # -- docdir --------------------------------------------------------------------
 
 # Install LICENSE and README. This can intentionally not be disabled.
-install(FILES "${CMAKE_CURRENT_SOURCE_DIR}/LICENSE"
-              "${CMAKE_CURRENT_SOURCE_DIR}/LICENSE.3rdparty"
-              "${CMAKE_CURRENT_SOURCE_DIR}/README.md"
-        DESTINATION "${CMAKE_INSTALL_DOCDIR}")
+install(
+  FILES "${CMAKE_CURRENT_SOURCE_DIR}/LICENSE"
+        "${CMAKE_CURRENT_SOURCE_DIR}/LICENSE.3rdparty"
+        "${CMAKE_CURRENT_SOURCE_DIR}/README.md"
+  DESTINATION "${CMAKE_INSTALL_DOCDIR}")
 
 # -- feature summary -----------------------------------------------------------
 

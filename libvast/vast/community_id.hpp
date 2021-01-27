@@ -63,12 +63,12 @@ void community_id_hash_append(Hasher& hasher, const flow& x) {
   auto is_one_way = false;
   // Normalize ICMP and ICMP6. Source and destination port map to ICMP
   // message type and message code.
-  if (protocol(x) == port::port_type::icmp) {
+  if (protocol(x) == port_type::icmp) {
     if (auto p = dual(detail::narrow_cast<icmp_type>(src_port_num)))
       dst_port_num = static_cast<uint16_t>(*p);
     else
       is_one_way = true;
-  } else if (protocol(x) == port::port_type::icmp6) {
+  } else if (protocol(x) == port_type::icmp6) {
     if (auto p = dual(detail::narrow_cast<icmp6_type>(src_port_num)))
       dst_port_num = static_cast<uint16_t>(*p);
     else

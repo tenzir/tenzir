@@ -64,7 +64,7 @@ caf::message start_command_impl(start_command_extra_steps extra_steps,
       caf::make_error(ec::parse_error, "invalid endpoint", str));
   // Default to port 42000/tcp if none is set.
   if (!node_endpoint.port)
-    node_endpoint.port = port{defaults::system::endpoint_port, port::tcp};
+    node_endpoint.port = port{defaults::system::endpoint_port, port_type::tcp};
   // Get a convenient and blocking way to interact with actors.
   caf::scoped_actor self{sys};
   // Spawn our node.

@@ -339,8 +339,8 @@ caf::error reader::read_impl(size_t max_events, size_t max_slice_size,
         = *reinterpret_cast<const uint16_t*>(std::launder(layer4.data() + 2));
       orig_p = detail::to_host_order(orig_p);
       resp_p = detail::to_host_order(resp_p);
-      conn.src_port = {orig_p, port::tcp};
-      conn.dst_port = {resp_p, port::tcp};
+      conn.src_port = {orig_p, port_type::tcp};
+      conn.dst_port = {resp_p, port_type::tcp};
       auto data_offset
         = *reinterpret_cast<const uint8_t*>(std::launder(layer4.data() + 12))
           >> 4;
@@ -353,15 +353,15 @@ caf::error reader::read_impl(size_t max_events, size_t max_slice_size,
         = *reinterpret_cast<const uint16_t*>(std::launder(layer4.data() + 2));
       orig_p = detail::to_host_order(orig_p);
       resp_p = detail::to_host_order(resp_p);
-      conn.src_port = {orig_p, port::udp};
-      conn.dst_port = {resp_p, port::udp};
+      conn.src_port = {orig_p, port_type::udp};
+      conn.dst_port = {resp_p, port_type::udp};
       payload_size -= 8;
     } else if (layer4_proto == IPPROTO_ICMP) {
       VAST_ASSERT(!layer4.empty());
       auto message_type = to_integer<uint8_t>(layer4[0]);
       auto message_code = to_integer<uint8_t>(layer4[1]);
-      conn.src_port = {message_type, port::icmp};
-      conn.dst_port = {message_code, port::icmp};
+      conn.src_port = {message_type, port_type::icmp};
+      conn.dst_port = {message_code, port_type::icmp};
       payload_size -= 8; // TODO: account for variable-size data.
     }
     // Parse packet timestamp

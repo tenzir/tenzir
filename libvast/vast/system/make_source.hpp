@@ -126,7 +126,7 @@ make_source(const Actor& self, caf::actor_system& sys, const invocation& inv,
       return caf::make_error(vast::ec::invalid_configuration,
                              "endpoint does not "
                              "specify port");
-    if (ep.port->type() == port::unknown) {
+    if (ep.port->type() == port_type::unknown) {
       using inputs = vast::format::reader::inputs;
       if constexpr (Reader::defaults::input == inputs::inet) {
         endpoint default_ep;
@@ -134,7 +134,7 @@ make_source(const Actor& self, caf::actor_system& sys, const invocation& inv,
         ep.port = port{ep.port->number(), default_ep.port->type()};
       } else {
         // Fall back to tcp if we don't know anything else.
-        ep.port = port{ep.port->number(), port::tcp};
+        ep.port = port{ep.port->number(), port_type::tcp};
       }
     }
     reader = std::make_unique<Reader>(options);
@@ -144,7 +144,7 @@ make_source(const Actor& self, caf::actor_system& sys, const invocation& inv,
       default:
         return caf::make_error(vast::ec::unimplemented,
                                "port type not supported:", ep.port->type());
-      case port::udp:
+      case port_type::udp:
         udp_port = ep.port->number();
         break;
     }

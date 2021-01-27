@@ -48,10 +48,10 @@ connect_to_node(scoped_actor& self, const caf::settings& opts) {
     return caf::make_error(ec::parse_error, "invalid endpoint", endpoint_str);
   // Default to port 42000/tcp if none is set.
   if (!node_endpoint.port)
-    node_endpoint.port = port{defaults::system::endpoint_port, port::tcp};
-  if (node_endpoint.port->type() == port::port_type::unknown)
-    node_endpoint.port->type(port::tcp);
-  if (node_endpoint.port->type() != port::port_type::tcp)
+    node_endpoint.port = port{defaults::system::endpoint_port, port_type::tcp};
+  if (node_endpoint.port->type() == port_type::unknown)
+    node_endpoint.port->type(port_type::tcp);
+  if (node_endpoint.port->type() != port_type::tcp)
     return caf::make_error(ec::invalid_configuration, "invalid protocol",
                            *node_endpoint.port);
   VAST_DEBUG(self, "connects to remote node:", id);
