@@ -15,10 +15,10 @@ This changelog documents all notable user-facing changes of VAST.
 
 ### ⚡️ Breaking Changes
 
-- The GitHub CI now runs on Debian Buster and produces Debian artifacts
+- The GitHub CI changed to Debian Buster and produces Debian artifacts
   instead of Ubuntu artifacts. Similarly, the Docker images we provide on
   [dockerhub](https://hub.docker.com/r/tenzir/vast) use Debian Buster as
-  base image. To build Docker images locally, users now must set
+  base image. To build Docker images locally, users must set
   `DOCKER_BUILDKIT=1` in the build environment.
   [#1294](https://github.com/tenzir/vast/pull/1294)
 
@@ -28,23 +28,23 @@ This changelog documents all notable user-facing changes of VAST.
 
 ### ⚠️ Changes
 
-- The options `vast.schema-paths` is now named `vast.schema-dirs`. The old
+- The option `vast.schema-paths` is renamed to `vast.schema-dirs`. The old
   option is deprecated and will be removed in a future release.
   [#1287](https://github.com/tenzir/vast/pull/1287)
 
-- VAST now preserves nested JSON objects in events instead of formatting them
+- VAST preserves nested JSON objects in events instead of formatting them
   in a flattened form when exporting data with `vast export json`. The old
   behavior can be enabled with `vast export json --flatten`.
   [#1257](https://github.com/tenzir/vast/pull/1257)
   [#1289](https://github.com/tenzir/vast/pull/1289)
 
-- `vast start` now prints the endpoint it is listening on, provided the user
-  added the `--print-endpoint` option.
+- `vast start` prints the endpoint it is listening on when providing the option
+  `--print-endpoint`.
   [#1271](https://github.com/tenzir/vast/pull/1271)
 
 ### 🧬 Experimental Features
 
-- VAST now relies on [simdjson](https://github.com/simdjson/simdjson) for
+- VAST relies on [simdjson](https://github.com/simdjson/simdjson) for
   JSON parsing. The substantial gains in throughput shift the bottleneck of
   the ingest path from parsing input to indexing at the node. To use the (yet
   experimental) feature, use `vast import json|suricata|zeek-json --simdjson`.
@@ -55,9 +55,9 @@ This changelog documents all notable user-facing changes of VAST.
   [#1315](https://github.com/tenzir/vast/pull/1315)
   [@ngrodzitski](https://github.com/ngrodzitski)
 
-- VAST now offers a plugin framework to support efficient customization
+- VAST features a new plugin framework to support efficient customization
   points at various places of the data processing pipeline. There exist several
-  base classes that define an interface, such as adding a new command or
+  base classes that define an interface, e.g., for adding new commands or
   spawning a new actor that processes the incoming stream of data. The
   directory `examples/plugins/example` contains an example plugin.
   [#1208](https://github.com/tenzir/vast/pull/1208)
@@ -72,15 +72,15 @@ This changelog documents all notable user-facing changes of VAST.
 
 ### 🎁 Features
 
-- The output of `vast status` now contains detailed memory usage information
+- The output of `vast status` contains detailed memory usage information
   about active and cached partitions.
   [#1297](https://github.com/tenzir/vast/pull/1297)
 
-- VAST installations now bundle a LICENSE.3rdparty file alongside the regular
+- VAST installations bundle a LICENSE.3rdparty file alongside the regular
   LICENSE file that lists all embedded code that is under a separate license.
   [#1306](https://github.com/tenzir/vast/pull/1306)
 
-- VAST queries now also accept `nanoseconds`, `microseconds`, `milliseconds`
+- VAST queries also accept `nanoseconds`, `microseconds`, `milliseconds`
   `seconds` and `minutes` as units for a duration.
   [#1265](https://github.com/tenzir/vast/pull/1265)
 
@@ -102,7 +102,7 @@ This changelog documents all notable user-facing changes of VAST.
 - Disk monitor quota settings not ending in a 'B' are no longer silently
   discarded. [#1278](https://github.com/tenzir/vast/pull/1278)
 
-- Line based imports now correctly handle read timeouts that occur in the
+- Line based imports correctly handle read timeouts that occur in the
   middle of a line. [#1276](https://github.com/tenzir/vast/pull/1276)
 
 - For relocatable installations, the list of schema loading paths does not
@@ -117,8 +117,8 @@ This changelog documents all notable user-facing changes of VAST.
   fault. Instead, the invalid on-disk state is ignored.
   [#1247](https://github.com/tenzir/vast/pull/1247)
 
-- Manually specified configuration files may now reside in the default
-  location directories. Configuration files can now be symlinked.
+- Manually specified configuration files may reside in the default
+  location directories. Configuration files can be symlinked.
   [#1248](https://github.com/tenzir/vast/pull/1248)
 
 ## [2020.12.16]
