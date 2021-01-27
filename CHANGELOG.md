@@ -33,9 +33,8 @@ Every entry has a category for which we use the following visual abbreviations:
   a partition was persisted just as it was scanned no longer exists.
   [#1295](https://github.com/tenzir/vast/pull/1295)
 
-- ⚠️ The options `vast.schema-paths` and `vast.plugin-paths` are now named
-  `vast.schema-dirs` and `vast.plugin-dirs` respectively. The old options are
-  deprecated and will be removed in a future release.
+- ⚠️ The options `vast.schema-paths` is now named `vast.schema-dirs`. The old
+  option is deprecated and will be removed in a future release.
   [#1287](https://github.com/tenzir/vast/pull/1287)
 
 - ⚠️ VAST now preserves nested JSON objects in events instead of formatting them
@@ -55,16 +54,11 @@ Every entry has a category for which we use the following visual abbreviations:
   [#1315](https://github.com/tenzir/vast/pull/1315)
   [@ngrodzitski](https://github.com/ngrodzitski)
 
-- 🐞 Disk monitor quota settings not ending in a 'B' used to be silently
-  discarded.
-  [#1278](https://github.com/tenzir/vast/pull/1278)
+- 🐞 Disk monitor quota settings not ending in a 'B' are no longer silently
+  discarded. [#1278](https://github.com/tenzir/vast/pull/1278)
 
 - 🐞 Line based imports now correctly handle read timeouts that occur in the
-  middle of a line.
-  [#1276](https://github.com/tenzir/vast/pull/1276)
-
-- ⚠️ Plugins must now be built against the exact same version of libvast that
-  VAST is built against. [#1275](https://github.com/tenzir/vast/pull/1275)
+  middle of a line. [#1276](https://github.com/tenzir/vast/pull/1276)
 
 - ⚠️ `vast start` now prints the endpoint it is listening on, provided the user
   added the `--print-endpoint` option.
@@ -90,8 +84,10 @@ Every entry has a category for which we use the following visual abbreviations:
   directory `examples/plugins/example` contains an example plugin.
   [#1208](https://github.com/tenzir/vast/pull/1208)
   [#1264](https://github.com/tenzir/vast/pull/1264)
+  [#1275](https://github.com/tenzir/vast/pull/1275)
   [#1282](https://github.com/tenzir/vast/pull/1282)
   [#1285](https://github.com/tenzir/vast/pull/1285)
+  [#1287](https://github.com/tenzir/vast/pull/1287)
   [#1302](https://github.com/tenzir/vast/pull/1302)
   [#1307](https://github.com/tenzir/vast/pull/1307)
   [#1316](https://github.com/tenzir/vast/pull/1316)
@@ -114,8 +110,7 @@ Every entry has a category for which we use the following visual abbreviations:
 
 - ⚡️ The new short options `-v`, `-vv`, `-vvv`, `-q`, `-qq`, and `-qqq` map onto
   the existing verbosity levels. The existing short syntax, e.g., `-v debug`,
-  no longer works.
-  [#1244](https://github.com/tenzir/vast/pull/1244)
+  no longer works. [#1244](https://github.com/tenzir/vast/pull/1244)
 
 ## [2020.12.16]
 
