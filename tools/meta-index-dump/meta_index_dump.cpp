@@ -117,7 +117,10 @@ int main(int argc, char** argv) {
   auto index_v0 = index->index_as_v0();
   auto partition_uuids = index_v0->partitions();
   VAST_ASSERT(partition_uuids);
+  size_t n = 0;
   for (auto uuid_fb : *partition_uuids) {
+    if (++n > 100)
+      break;
     VAST_ASSERT(uuid_fb);
     vast::uuid partition_uuid;
     unpack(*uuid_fb, partition_uuid);
