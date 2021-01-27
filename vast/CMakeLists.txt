@@ -68,6 +68,8 @@ add_custom_target(
 add_custom_target(
   link-integration-directory ALL
   COMMAND
+    ${CMAKE_COMMAND} -E make_directory "${CMAKE_BINARY_DIR}/share/vast"
+  COMMAND
     ${CMAKE_COMMAND} -E create_symlink "${CMAKE_CURRENT_SOURCE_DIR}/integration"
     "${CMAKE_BINARY_DIR}/share/vast/integration"
   COMMENT "Linking integration test directory")
