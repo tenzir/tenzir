@@ -12,6 +12,7 @@
  ******************************************************************************/
 
 #include "vast/atoms.hpp"
+#include "vast/uuid.hpp"
 #include "vast/concept/convertible/to.hpp"
 #include "vast/concept/printable/to_string.hpp"
 #include "vast/concept/printable/vast/data.hpp"
@@ -32,8 +33,10 @@
 #include "vast/logger.hpp"
 #include "vast/path.hpp"
 #include "vast/plugin.hpp"
+#include "vast/table_slice.hpp"
 #include "vast/schema.hpp"
 #include "vast/system/application.hpp"
+#include "vast/system/importer.hpp"
 #include "vast/system/default_configuration.hpp"
 #include "vast/system/import_command.hpp"
 
@@ -133,19 +136,29 @@ struct perfect_sink_state {
   inline static constexpr const char* name = "perfect-sink";
 };
 
-using perfect_sink_type = caf::stateful_actor<perfect_sink_state>;
 
-caf::behavior perfect_sink(perfect_sink_type* self) {
-  return {[=](caf::stream<table_slice> in, const std::string&) {
-    return self->make_sink(
-      in,
-      [](caf::unit_t&) {
-        // nop
-      },
-      [=](caf::unit_t&, table_slice) {},
-      [=](caf::unit_t&, const caf::error&) {});
-  }};
+system::stream_sink_actor<table_slice>::behavior_type
+perfect_sink(system::stream_sink_actor<table_slice>::pointer self) {
+  return {
+    [=](caf::stream<table_slice> in) {
+      // self->unbecome();
+      auto sink = self->make_sink(
+        in,
+        [=](std::vector<table_slice>&) {
+          // nop
+        },
+        [=](std::vector<table_slice>& , table_slice ) {
+          // nop
+        }
+      );
+      return caf::inbound_stream_slot<table_slice>{sink.inbound_slot()};
+    },
+  };
+
 }
+
+system::importer_actor importer;
+
 
 template <class Reader, class Defaults>
 caf::message
@@ -165,11 +178,21 @@ local_import_command(const invocation& inv, caf::actor_system& sys) {
   std::thread sig_mon_thread;
   auto guard = system::signal_monitor::run_guarded(
     sig_mon_thread, sys, defaults::system::signal_monitoring_interval, self);
-  auto importer = self->spawn(perfect_sink);
+
+  auto importer = self->spawn(system::importer, vast::path{"directory"},
+                              system::archive_actor{}, system::index_actor{},
+                              system::type_registry_actor{});
+
+  auto snk = self->spawn(perfect_sink);
+  self->send(importer, snk);
+
   // Start the source.
   auto src_result = make_source<Reader, Defaults>(
-    self, sys, inv, vast::system::accountant_actor{},
-    vast::system::type_registry_actor{}, importer);
+    self, sys, inv, system::accountant_actor{}, system::type_registry_actor{}, importer);
+
+
+
+
   if (!src_result)
     return caf::make_message(std::move(src_result.error()));
   auto src = std::move(src_result->src);
