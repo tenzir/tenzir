@@ -2,48 +2,49 @@
 
 This changelog documents all notable user-facing changes of VAST.
 
-Every entry has a category for which we use the following visual abbreviations:
-
-- 🎁 feature
-- 🧬 experimental feature
-- ⚠️ change
-- ⚡️ breaking change
-- 🐞 bugfix
-
-<!-- ## Unreleased -->
+<!--
+## Unreleased
+### ⚡️ Breaking Changes
+### ⚠️ Changes
+### 🧬 Experimental Features
+### 🎁 Features
+### 🐞 Bug Fixes
+-->
 
 ## [2021.01.28]
 
-- ⚡️ The GitHub CI now runs on Debian Buster and produces Debian artifacts
+### ⚡️ Breaking Changes
+
+- The GitHub CI now runs on Debian Buster and produces Debian artifacts
   instead of Ubuntu artifacts. Similarly, the Docker images we provide on
   [dockerhub](https://hub.docker.com/r/tenzir/vast) use Debian Buster as
   base image. To build Docker images locally, users now must set
   `DOCKER_BUILDKIT=1` in the build environment.
   [#1294](https://github.com/tenzir/vast/pull/1294)
 
-- 🎁 The output of `vast status` now contains detailed memory usage information
-  about active and cached partitions.
-  [#1297](https://github.com/tenzir/vast/pull/1297)
+- The new short options `-v`, `-vv`, `-vvv`, `-q`, `-qq`, and `-qqq` map onto
+  the existing verbosity levels. The existing short syntax, e.g., `-v debug`,
+  no longer works. [#1244](https://github.com/tenzir/vast/pull/1244)
 
-- 🎁 VAST installations now bundle a LICENSE.3rdparty file alongside the regular
-  LICENSE file that lists all embedded code that is under a separate license.
-  [#1306](https://github.com/tenzir/vast/pull/1306)
+### ⚠️ Changes
 
-- 🐞 A potential race condition that could lead to a hanging export if
-  a partition was persisted just as it was scanned no longer exists.
-  [#1295](https://github.com/tenzir/vast/pull/1295)
-
-- ⚠️ The options `vast.schema-paths` is now named `vast.schema-dirs`. The old
+- The options `vast.schema-paths` is now named `vast.schema-dirs`. The old
   option is deprecated and will be removed in a future release.
   [#1287](https://github.com/tenzir/vast/pull/1287)
 
-- ⚠️ VAST now preserves nested JSON objects in events instead of formatting them
+- VAST now preserves nested JSON objects in events instead of formatting them
   in a flattened form when exporting data with `vast export json`. The old
   behavior can be enabled with `vast export json --flatten`.
   [#1257](https://github.com/tenzir/vast/pull/1257)
   [#1289](https://github.com/tenzir/vast/pull/1289)
 
-- 🧬 VAST now relies on [simdjson](https://github.com/simdjson/simdjson) for
+- `vast start` now prints the endpoint it is listening on, provided the user
+  added the `--print-endpoint` option.
+  [#1271](https://github.com/tenzir/vast/pull/1271)
+
+### 🧬 Experimental Features
+
+- VAST now relies on [simdjson](https://github.com/simdjson/simdjson) for
   JSON parsing. The substantial gains in throughput shift the bottleneck of
   the ingest path from parsing input to indexing at the node. To use the (yet
   experimental) feature, use `vast import json|suricata|zeek-json --simdjson`.
@@ -54,30 +55,7 @@ Every entry has a category for which we use the following visual abbreviations:
   [#1315](https://github.com/tenzir/vast/pull/1315)
   [@ngrodzitski](https://github.com/ngrodzitski)
 
-- 🐞 Disk monitor quota settings not ending in a 'B' are no longer silently
-  discarded. [#1278](https://github.com/tenzir/vast/pull/1278)
-
-- 🐞 Line based imports now correctly handle read timeouts that occur in the
-  middle of a line. [#1276](https://github.com/tenzir/vast/pull/1276)
-
-- ⚠️ `vast start` now prints the endpoint it is listening on, provided the user
-  added the `--print-endpoint` option.
-  [#1271](https://github.com/tenzir/vast/pull/1271)
-
-- 🎁 VAST queries now also accept `nanoseconds`, `microseconds`, `milliseconds`
-  `seconds` and `minutes` as units for a duration.
-  [#1265](https://github.com/tenzir/vast/pull/1265)
-
-- 🎁 The new `import zeek-json` command allows for importing line-delimited Zeek
-  JSON logs as produced by the
-  [json-streaming-logs](https://github.com/corelight/json-streaming-logs)
-  package. Unlike stock Zeek JSON logs, where one file contains exactly one log
-  type, the streaming format contains different log event types in a single
-  stream and uses an additional `_path` field to disambiguate the log type. For
-  stock Zeek JSON logs, use the existing `import json` with the `-t` flag to
-  specify the log type.  [#1259](https://github.com/tenzir/vast/1259)
-
-- 🧬 VAST now offers a plugin framework to support efficient customization
+- VAST now offers a plugin framework to support efficient customization
   points at various places of the data processing pipeline. There exist several
   base classes that define an interface, such as adding a new command or
   spawning a new actor that processes the incoming stream of data. The
@@ -92,25 +70,56 @@ Every entry has a category for which we use the following visual abbreviations:
   [#1307](https://github.com/tenzir/vast/pull/1307)
   [#1316](https://github.com/tenzir/vast/pull/1316)
 
-- 🐞 For relocatable installations, the list of schema loading paths does not
+### 🎁 Features
+
+- The output of `vast status` now contains detailed memory usage information
+  about active and cached partitions.
+  [#1297](https://github.com/tenzir/vast/pull/1297)
+
+- VAST installations now bundle a LICENSE.3rdparty file alongside the regular
+  LICENSE file that lists all embedded code that is under a separate license.
+  [#1306](https://github.com/tenzir/vast/pull/1306)
+
+- VAST queries now also accept `nanoseconds`, `microseconds`, `milliseconds`
+  `seconds` and `minutes` as units for a duration.
+  [#1265](https://github.com/tenzir/vast/pull/1265)
+
+- The new `import zeek-json` command allows for importing line-delimited Zeek
+  JSON logs as produced by the
+  [json-streaming-logs](https://github.com/corelight/json-streaming-logs)
+  package. Unlike stock Zeek JSON logs, where one file contains exactly one log
+  type, the streaming format contains different log event types in a single
+  stream and uses an additional `_path` field to disambiguate the log type. For
+  stock Zeek JSON logs, use the existing `import json` with the `-t` flag to
+  specify the log type.  [#1259](https://github.com/tenzir/vast/1259)
+
+### 🐞 Bug Fixes
+
+- A potential race condition that could lead to a hanging export if
+  a partition was persisted just as it was scanned no longer exists.
+  [#1295](https://github.com/tenzir/vast/pull/1295)
+
+- Disk monitor quota settings not ending in a 'B' are no longer silently
+  discarded. [#1278](https://github.com/tenzir/vast/pull/1278)
+
+- Line based imports now correctly handle read timeouts that occur in the
+  middle of a line. [#1276](https://github.com/tenzir/vast/pull/1276)
+
+- For relocatable installations, the list of schema loading paths does not
   include a build-time configured path any more.
   [#1249](https://github.com/tenzir/vast/pull/1249)
 
-- 🐞 Values in JSON fields that can't be converted to the type that is specified
+- Values in JSON fields that can't be converted to the type that is specified
   in the schema won't cause the containing event to be dropped any longer.
   [#1250](https://github.com/tenzir/vast/pull/1250)
 
-- 🐞 Invalid Arrow table slices read from disk no longer trigger a segmentation
+- Invalid Arrow table slices read from disk no longer trigger a segmentation
   fault. Instead, the invalid on-disk state is ignored.
   [#1247](https://github.com/tenzir/vast/pull/1247)
 
-- 🐞 Manually specified configuration files may now reside in the default
+- Manually specified configuration files may now reside in the default
   location directories. Configuration files can now be symlinked.
   [#1248](https://github.com/tenzir/vast/pull/1248)
-
-- ⚡️ The new short options `-v`, `-vv`, `-vvv`, `-q`, `-qq`, and `-qqq` map onto
-  the existing verbosity levels. The existing short syntax, e.g., `-v debug`,
-  no longer works. [#1244](https://github.com/tenzir/vast/pull/1244)
 
 ## [2020.12.16]
 
