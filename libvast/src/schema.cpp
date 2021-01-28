@@ -268,7 +268,7 @@ load_schema(const detail::stable_set<path>& schema_dirs, size_t max_recursion) {
     return ec::recursion_limit_reached;
   vast::schema types;
   for (const auto& dir : schema_dirs) {
-    VAST_VERBOSE_ANON("loading schemas from", dir);
+    VAST_LOG_SPD_VERBOSE("loading schemas from {}", dir);
     if (!exists(dir)) {
       VAST_LOG_SPD_DEBUG("{} skips non-existing directory: {}", __func__, dir);
       continue;

@@ -235,7 +235,8 @@ source(caf::stateful_actor<source_state<Reader>>* self, Reader reader,
           std::move(type_registry), std::move(local_schema),
           std::move(type_filter), std::move(accountant));
   self->set_exit_handler([=](const caf::exit_msg& msg) {
-    VAST_VERBOSE(self, "received EXIT from", msg.source);
+    VAST_LOG_SPD_VERBOSE("{} received EXIT from {}", detail::id_or_name(self),
+                         msg.source);
     self->state.done = true;
     self->quit(msg.reason);
   });
@@ -367,7 +368,8 @@ source(caf::stateful_actor<source_state<Reader>>* self, Reader reader,
       return result;
     },
     [=](atom::wakeup) {
-      VAST_VERBOSE(self, "wakes up to check for new input");
+      VAST_LOG_SPD_VERBOSE("{} wakes up to check for new input",
+                           detail::id_or_name(self));
       auto& st = self->state;
       st.waiting_for_input = false;
       // If we are here, the reader returned with ec::stalled the last time it

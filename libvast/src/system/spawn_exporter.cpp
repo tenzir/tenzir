@@ -45,7 +45,8 @@ maybe_actor spawn_exporter(node_actor* self, spawn_arguments& args) {
   if (query_opts == no_query_options)
     query_opts = historical;
   auto handle = self->spawn(exporter, *expr, query_opts);
-  VAST_VERBOSE(self, "spawned an exporter for", to_string(*expr));
+  VAST_LOG_SPD_VERBOSE("{} spawned an exporter for {}",
+                       detail::id_or_name(self), to_string(*expr));
   // Wire the exporter to all components.
   auto [accountant, importer, archive, index]
     = self->state.registry.find_by_label("accountant", "importer", "archive",

@@ -121,7 +121,8 @@ importer_state::~importer_state() {
 caf::error importer_state::read_state() {
   auto file = dir / "current_id_block";
   if (exists(file)) {
-    VAST_VERBOSE(self, "reads persistent state from", file);
+    VAST_LOG_SPD_VERBOSE("{} reads persistent state from {}",
+                         detail::id_or_name(self), file);
     std::ifstream state_file{to_string(file)};
     state_file >> current.end;
     if (!state_file)
@@ -134,7 +135,8 @@ caf::error importer_state::read_state() {
       current.next = current.end;
     }
   } else {
-    VAST_VERBOSE(self, "did not find a state file at", file);
+    VAST_LOG_SPD_VERBOSE("{} did not find a state file at {}",
+                         detail::id_or_name(self), file);
     current.end = 0;
     current.next = 0;
   }
@@ -150,9 +152,11 @@ caf::error importer_state::write_state(write_mode mode) {
   state_file << current.end;
   if (mode == write_mode::with_next) {
     state_file << " " << current.next;
-    VAST_VERBOSE(self, "persisted next available ID at", current.next);
+    VAST_LOG_SPD_VERBOSE("{} persisted next available ID at {}",
+                         detail::id_or_name(self), current.next);
   } else {
-    VAST_VERBOSE(self, "persisted ID block boundary at", current.end);
+    VAST_LOG_SPD_VERBOSE("{} persisted ID block boundary at {}",
+                         detail::id_or_name(self), current.end);
   }
   return caf::none;
 }
@@ -210,12 +214,14 @@ void importer_state::send_report() {
 #if VAST_LOG_LEVEL >= VAST_LOG_LEVEL_VERBOSE
     auto beat = [&](const auto& sample) {
       if (auto rate = sample.value.rate_per_sec(); std::isfinite(rate))
-        VAST_VERBOSE(self, "handled", sample.value.events,
-                     "events at a rate of", static_cast<uint64_t>(rate),
-                     "events/sec in", to_string(sample.value.duration));
+        VAST_LOG_SPD_VERBOSE(
+          "{} handled {} events at a rate of {} events/sec in {}",
+          detail::id_or_name(self), sample.value.events,
+          static_cast<uint64_t>(rate), to_string(sample.value.duration));
       else
-        VAST_VERBOSE(self, "handled", sample.value.events, "events in",
-                     to_string(sample.value.duration));
+        VAST_LOG_SPD_VERBOSE("{} handled {} events in {}",
+                             detail::id_or_name(self), sample.value.events,
+                             to_string(sample.value.duration));
     };
     beat(r[1]);
 #endif

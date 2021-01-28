@@ -181,7 +181,7 @@ int main(int argc, char** argv) {
     VAST_INFO_ANON("loaded configuration file:", file);
   // Print the plugins that were loaded, and errors that occured during loading.
   for (const auto& file : loaded_plugin_paths)
-    VAST_VERBOSE_ANON("loaded plugin:", file);
+    VAST_LOG_SPD_VERBOSE("loaded plugin: {}", file);
   for (const auto& err : plugin_load_errors)
     VAST_ERROR_ANON("failed to load plugin:", render(err));
   // Initialize successfully loaded plugins.

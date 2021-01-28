@@ -51,7 +51,9 @@ spawn_disk_monitor(system::node_actor* self, spawn_arguments& args) {
     return caf::make_error(ec::parse_error,
                            "could not parse disk budget: " + lowater_str);
   if (!hiwater) {
-    VAST_VERBOSE(self, "not spawning disk_monitor because no limit configured");
+    VAST_LOG_SPD_VERBOSE("{} not spawning disk_monitor because no limit "
+                         "configured",
+                         detail::id_or_name(self));
     return ec::no_error;
   }
   // Set low == high as the default value.
@@ -67,7 +69,7 @@ spawn_disk_monitor(system::node_actor* self, spawn_arguments& args) {
                             std::chrono::seconds{interval}, abs_dir,
                             caf::actor_cast<archive_actor>(archive),
                             caf::actor_cast<index_actor>(index));
-  VAST_VERBOSE(self, "spawned a disk monitor");
+  VAST_LOG_SPD_VERBOSE("{} spawned a disk monitor", detail::id_or_name(self));
   return caf::actor_cast<caf::actor>(handle);
 }
 

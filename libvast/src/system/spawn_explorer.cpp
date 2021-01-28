@@ -96,7 +96,7 @@ maybe_actor spawn_explorer(node_actor* self, spawn_arguments& args) {
   limits.per_result = caf::get_or(options, "vast.explore.max-events-context",
                                   defaults::explore::max_events_context);
   auto handle = self->spawn(explorer, self, limits, before, after, by);
-  VAST_VERBOSE(self, "spawned an explorer");
+  VAST_LOG_SPD_VERBOSE("{} spawned an explorer", detail::id_or_name(self));
   return handle;
 }
 
