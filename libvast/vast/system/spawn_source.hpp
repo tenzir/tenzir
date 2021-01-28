@@ -29,7 +29,8 @@ namespace vast::system {
 /// @returns a handle to the spawned actor on success, an error otherwise
 template <class Reader, class Defaults = typename Reader::defaults>
 maybe_actor spawn_source(node_actor* self, spawn_arguments& args) {
-  VAST_TRACE(VAST_ARG("node", self), VAST_ARG(args));
+  VAST_LOG_SPD_TRACE("{}  {}", detail::id_or_name(VAST_ARG("node", self)),
+                     VAST_ARG(args));
   auto& options = args.inv.options;
   // Bail out early for bogus invocations.
   if (caf::get_or(options, "vast.node", false))

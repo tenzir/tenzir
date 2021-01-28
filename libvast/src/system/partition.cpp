@@ -102,7 +102,8 @@ template <typename PartitionState>
 indexer_actor
 fetch_indexer(const PartitionState& state, const data_extractor& dx,
               relational_operator op, const data& x) {
-  VAST_TRACE(VAST_ARG(dx), VAST_ARG(op), VAST_ARG(x));
+  VAST_LOG_SPD_TRACE("{}  {}  {}", detail::id_or_name(VAST_ARG(dx)),
+                     VAST_ARG(op), VAST_ARG(x));
   // Sanity check.
   if (dx.offset.empty())
     return {};
@@ -123,7 +124,8 @@ template <typename PartitionState>
 indexer_actor
 fetch_indexer(const PartitionState& state, const attribute_extractor& ex,
               relational_operator op, const data& x) {
-  VAST_TRACE(VAST_ARG(ex), VAST_ARG(op), VAST_ARG(x));
+  VAST_LOG_SPD_TRACE("{}  {}  {}", detail::id_or_name(VAST_ARG(ex)),
+                     VAST_ARG(op), VAST_ARG(x));
   ids row_ids;
   if (ex.attr == atom::type_v) {
     // We know the answer immediately: all IDs that are part of the table.
@@ -394,7 +396,8 @@ active_partition_actor::behavior_type active_partition(
       // nop
     },
     [=](caf::unit_t&, caf::downstream<table_slice_column>& out, table_slice x) {
-      VAST_TRACE(VAST_ARG(out), VAST_ARG(x));
+      VAST_LOG_SPD_TRACE("{}  {}", detail::id_or_name(VAST_ARG(out)),
+                         VAST_ARG(x));
       // We rely on `invalid_id` actually being the highest possible id
       // when using `min()` below.
       static_assert(invalid_id == std::numeric_limits<vast::id>::max());
@@ -710,7 +713,7 @@ partition_actor::behavior_type passive_partition(
   self->request(filesystem, caf::infinite, atom::mmap_v, path)
     .then(
       [=](chunk_ptr chunk) {
-        VAST_TRACE(self, VAST_ARG(chunk));
+        VAST_LOG_SPD_TRACE("{}  {}", detail::id_or_name(self), VAST_ARG(chunk));
         if (self->state.partition_chunk) {
           VAST_LOG_SPD_WARN("{} ignores duplicate chunk",
                             detail::id_or_name(self));
@@ -779,7 +782,7 @@ partition_actor::behavior_type passive_partition(
   return {
     [=](const expression& expr,
         partition_client_actor client) -> caf::result<atom::done> {
-      VAST_TRACE(self, VAST_ARG(expr));
+      VAST_LOG_SPD_TRACE("{}  {}", detail::id_or_name(self), VAST_ARG(expr));
       if (!self->state.partition_chunk)
         return get<2>(self->state.deferred_evaluations.emplace_back(
           expr, client, self->make_response_promise<atom::done>()));

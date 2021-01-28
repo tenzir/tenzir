@@ -37,8 +37,8 @@ namespace vast {
 // TODO: return expected<segment_store_ptr> for better error propagation.
 segment_store_ptr segment_store::make(path dir, size_t max_segment_size,
                                       size_t in_memory_segments) {
-  VAST_TRACE(VAST_ARG(dir), VAST_ARG(max_segment_size),
-             VAST_ARG(in_memory_segments));
+  VAST_LOG_SPD_TRACE("{}  {}  {}", detail::id_or_name(VAST_ARG(dir)),
+                     VAST_ARG(max_segment_size), VAST_ARG(in_memory_segments));
   VAST_ASSERT(max_segment_size > 0);
   auto result = segment_store_ptr{
     new segment_store{std::move(dir), max_segment_size, in_memory_segments}};
@@ -63,7 +63,7 @@ segment_store::~segment_store() {
 }
 
 caf::error segment_store::put(table_slice xs) {
-  VAST_TRACE(VAST_ARG(xs));
+  VAST_LOG_SPD_TRACE("{}", detail::id_or_name(VAST_ARG(xs)));
   if (!segments_.inject(xs.offset(), xs.offset() + xs.rows(), builder_.id()))
     return caf::make_error(ec::unspecified, "failed to update range_map");
   num_events_ += xs.rows();
@@ -131,7 +131,7 @@ std::unique_ptr<store::lookup> segment_store::extract(const ids& xs) const {
     std::vector<table_slice>::iterator it_;
   };
 
-  VAST_TRACE(VAST_ARG(xs));
+  VAST_LOG_SPD_TRACE("{}", detail::id_or_name(VAST_ARG(xs)));
   // Collect candidate segments by seeking through the ID set and
   // probing each ID interval.
   std::vector<uuid> candidates;
@@ -149,7 +149,7 @@ std::unique_ptr<store::lookup> segment_store::extract(const ids& xs) const {
 }
 
 caf::error segment_store::erase(const ids& xs) {
-  VAST_TRACE(VAST_ARG(xs));
+  VAST_LOG_SPD_TRACE("{}", detail::id_or_name(VAST_ARG(xs)));
   VAST_LOG_SPD_VERBOSE("erasing {} ids from store", rank(xs));
   // Get affected segments.
   std::vector<uuid> candidates;
@@ -291,7 +291,7 @@ caf::error segment_store::erase(const ids& xs) {
 }
 
 caf::expected<std::vector<table_slice>> segment_store::get(const ids& xs) {
-  VAST_TRACE(VAST_ARG(xs));
+  VAST_LOG_SPD_TRACE("{}", detail::id_or_name(VAST_ARG(xs)));
   // Collect candidate segments by seeking through the ID set and
   // probing each ID interval.
   std::vector<uuid> candidates;

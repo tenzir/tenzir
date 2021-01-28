@@ -180,7 +180,7 @@ const char* reader::name() const {
 
 caf::optional<record_type>
 reader::make_layout(const std::vector<std::string>& names) {
-  VAST_TRACE(VAST_ARG(names));
+  VAST_LOG_SPD_TRACE("{}", detail::id_or_name(VAST_ARG(names)));
   for (auto& t : schema_) {
     if (auto r = caf::get_if<record_type>(&t)) {
       auto select_fields = [&]() -> caf::optional<record_type> {

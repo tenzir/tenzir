@@ -40,7 +40,7 @@ namespace vast::system {
 namespace {
 
 void ship_results(exporter_actor::stateful_pointer<exporter_state> self) {
-  VAST_TRACE("");
+  VAST_LOG_SPD_TRACE("{}", detail::id_or_name(""));
   auto& st = self->state;
   VAST_LOG_SPD_DEBUG("{} relays {} events", detail::id_or_name(self),
                      st.query.cached);

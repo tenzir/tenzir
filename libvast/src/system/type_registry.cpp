@@ -164,19 +164,22 @@ type_registry(type_registry_actor::stateful_pointer<type_registry_state> self,
   return {
     [=](atom::telemetry) {
       if (auto telemetry = self->state.telemetry(); !telemetry.empty()) {
-        VAST_TRACE(self, "sends out a telemetry report to the",
-                   VAST_ARG("accountant", self->state.accountant));
+        VAST_LOG_SPD_TRACE("{} sends out a telemetry report to the {}",
+                           detail::id_or_name(self),
+                           VAST_ARG("accountant", self->state.accountant));
         self->send(self->state.accountant, std::move(telemetry));
       }
       self->delayed_send(self, defaults::system::telemetry_rate,
                          atom::telemetry_v);
     },
     [=](atom::status, status_verbosity v) {
-      VAST_TRACE(self, "sends out a status report");
+      VAST_LOG_SPD_TRACE("{} sends out a status report",
+                         detail::id_or_name(self));
       return self->state.status(v);
     },
     [=](caf::stream<table_slice> in) -> caf::inbound_stream_slot<table_slice> {
-      VAST_TRACE(self, "attaches to", VAST_ARG("stream", in));
+      VAST_LOG_SPD_TRACE("{} attaches to {}", detail::id_or_name(self),
+                         VAST_ARG("stream", in));
       auto result = caf::attach_stream_sink(
         self, in,
         [=](caf::unit_t&) {
@@ -186,24 +189,27 @@ type_registry(type_registry_actor::stateful_pointer<type_registry_state> self,
       return result.inbound_slot();
     },
     [=](atom::put, vast::type x) {
-      VAST_TRACE(self, "tries to add", VAST_ARG("type", x.name()));
+      VAST_LOG_SPD_TRACE("{} tries to add {}", detail::id_or_name(self),
+                         VAST_ARG("type", x.name()));
       self->state.insert(std::move(x));
     },
     [=](atom::put, vast::schema x) {
-      VAST_TRACE(self, "tries to add", VAST_ARG("schema", x));
+      VAST_LOG_SPD_TRACE("{} tries to add {}", detail::id_or_name(self),
+                         VAST_ARG("schema", x));
       for (auto& type : x)
         self->state.insert(std::move(type));
     },
     [=](atom::get) {
-      VAST_TRACE(self, "retrieves a list of all known types");
+      VAST_LOG_SPD_TRACE("{} retrieves a list of all known types",
+                         detail::id_or_name(self));
       return self->state.types();
     },
     [=](atom::put, taxonomies t) {
-      VAST_TRACE("");
+      VAST_LOG_SPD_TRACE("{}", detail::id_or_name(""));
       self->state.taxonomies = std::move(t);
     },
     [=](atom::get, atom::taxonomies) {
-      VAST_TRACE("");
+      VAST_LOG_SPD_TRACE("{}", detail::id_or_name(""));
       return self->state.taxonomies;
     },
     [=](atom::load) -> caf::result<atom::ok> {
@@ -229,7 +235,8 @@ type_registry(type_registry_actor::stateful_pointer<type_registry_state> self,
                                detail::id_or_name(self), name,
                                definition.fields.size());
             for (auto& field : definition.fields)
-              VAST_TRACE(self, "uses concept mapping", name, "->", field);
+              VAST_LOG_SPD_TRACE("{} uses concept mapping {} -> {}",
+                                 detail::id_or_name(self), name, field);
           }
           if (auto err = extract_models(yaml, models))
             return caf::make_error(ec::parse_error,
@@ -239,8 +246,9 @@ type_registry(type_registry_actor::stateful_pointer<type_registry_state> self,
             VAST_LOG_SPD_DEBUG("{} extracted model {} with {} fields",
                                detail::id_or_name(self), name,
                                definition.definition.size());
-            VAST_TRACE(self, "uses model mapping", name, "->",
-                       definition.definition);
+            VAST_LOG_SPD_TRACE("{} uses model mapping {} -> {}",
+                               detail::id_or_name(self), name,
+                               definition.definition);
           }
         }
       }

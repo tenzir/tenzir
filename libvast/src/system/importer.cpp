@@ -53,7 +53,7 @@ public:
 
   void process(caf::downstream<table_slice>& out,
                std::vector<table_slice>& slices) override {
-    VAST_TRACE(VAST_ARG(slices));
+    VAST_LOG_SPD_TRACE("{}", detail::id_or_name(VAST_ARG(slices)));
     uint64_t events = 0;
     auto t = timer::start(state.measurement_);
     for (auto&& slice : std::exchange(slices, {})) {
@@ -238,7 +238,7 @@ importer_actor::behavior_type
 importer(importer_actor::stateful_pointer<importer_state> self, path dir,
          const archive_actor& archive, index_actor index,
          const type_registry_actor& type_registry) {
-  VAST_TRACE(VAST_ARG(dir));
+  VAST_LOG_SPD_TRACE("{}", detail::id_or_name(VAST_ARG(dir)));
   self->state.dir = std::move(dir);
   auto err = self->state.read_state();
   if (err) {

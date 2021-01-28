@@ -26,7 +26,7 @@
 namespace vast::system {
 
 caf::message stop_command(const invocation& inv, caf::actor_system& sys) {
-  VAST_TRACE(inv);
+  VAST_LOG_SPD_TRACE("{}", detail::id_or_name(inv));
   // Bail out early for bogus invocations.
   if (caf::get_or(inv.options, "vast.node", false))
     return caf::make_message(caf::make_error(

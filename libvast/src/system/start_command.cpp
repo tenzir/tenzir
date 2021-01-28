@@ -43,7 +43,7 @@ using namespace std::chrono_literals;
 
 caf::message start_command_impl(start_command_extra_steps extra_steps,
                                 const invocation& inv, caf::actor_system& sys) {
-  VAST_TRACE(inv);
+  VAST_LOG_SPD_TRACE("{}", detail::id_or_name(inv));
   // Bail out early for bogus invocations.
   if (caf::get_or(inv.options, "vast.node", false))
     return caf::make_message(caf::make_error(ec::parse_error, "cannot start a "
@@ -132,8 +132,9 @@ caf::message start_command_impl(start_command_extra_steps extra_steps,
 }
 
 caf::message start_command(const invocation& inv, caf::actor_system& sys) {
-  VAST_TRACE(VAST_ARG(inv.options),
-             VAST_ARG("args", inv.arguments.begin(), inv.arguments.end()));
+  VAST_LOG_SPD_TRACE("{}  {}", detail::id_or_name(VAST_ARG(inv.options)),
+                     VAST_ARG("args", inv.arguments.begin(),
+                              inv.arguments.end()));
   return start_command_impl(nullptr, inv, sys);
 }
 

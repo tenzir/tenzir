@@ -38,7 +38,7 @@ namespace vast::system {
 void archive_state::next_session() {
   // No requester means no work to do.
   if (requesters.empty()) {
-    VAST_TRACE(self, "has no requesters");
+    VAST_LOG_SPD_TRACE("{} has no requesters", detail::id_or_name(self));
     session = nullptr;
     return;
   }
@@ -48,14 +48,17 @@ void archive_state::next_session() {
   // There is no ids queue for our current requester. Let's dismiss the
   // requester and try again.
   if (it == unhandled_ids.end()) {
-    VAST_TRACE(self, "could not find an ids queue for the current requester");
+    VAST_LOG_SPD_TRACE("{} could not find an ids queue for the current "
+                       "requester",
+                       detail::id_or_name(self));
     requesters.pop();
     return next_session();
   }
   // There is a work queue for our current requester, but it is empty. Let's
   // clean house, dismiss the requester and try again.
   if (it->second.empty()) {
-    VAST_TRACE(self, "found an empty ids queue for the current requester");
+    VAST_LOG_SPD_TRACE("{} found an empty ids queue for the current requester",
+                       detail::id_or_name(self));
     unhandled_ids.erase(it);
     requesters.pop();
     return next_session();
@@ -187,7 +190,8 @@ archive(archive_actor::stateful_pointer<archive_state> self, path dir,
             // nop
           },
           [=](caf::unit_t&, std::vector<table_slice>& batch) {
-            VAST_TRACE(self, "got", batch.size(), "table slices");
+            VAST_LOG_SPD_TRACE("{} got {} table slices",
+                               detail::id_or_name(self), batch.size());
             auto t = timer::start(self->state.measurement);
             uint64_t events = 0;
             for (auto& slice : batch) {

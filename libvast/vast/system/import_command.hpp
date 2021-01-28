@@ -36,7 +36,8 @@ namespace vast::system {
 
 template <class Reader, class Defaults>
 caf::message import_command(const invocation& inv, caf::actor_system& sys) {
-  VAST_TRACE(inv.full_name, VAST_ARG("options", inv.options), VAST_ARG(sys));
+  VAST_LOG_SPD_TRACE("{}  {}  {}", detail::id_or_name(inv.full_name),
+                     VAST_ARG("options", inv.options), VAST_ARG(sys));
   auto self = caf::scoped_actor{sys};
   // Get VAST node.
   auto node_opt

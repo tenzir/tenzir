@@ -33,7 +33,7 @@ namespace vast::system {
 
 maybe_actor
 spawn_counter(system::node_actor* self, system::spawn_arguments& args) {
-  VAST_TRACE(VAST_ARG(args));
+  VAST_LOG_SPD_TRACE("{}", detail::id_or_name(VAST_ARG(args)));
   // Parse given expression.
   auto expr = get_expression(args);
   if (!expr)

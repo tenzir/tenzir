@@ -43,7 +43,8 @@ example_actor::behavior_type
 example(example_actor::stateful_pointer<example_actor_state> self) {
   return {
     [=](atom::config, record config) {
-      VAST_TRACE(self, "sets configuration", config);
+      VAST_LOG_SPD_TRACE("{} sets configuration {}", detail::id_or_name(self),
+                         config);
       for (auto& [key, value] : config) {
         if (key == "max-events") {
           if (auto max_events = caf::get_if<integer>(&value)) {
@@ -55,7 +56,8 @@ example(example_actor::stateful_pointer<example_actor_state> self) {
       }
     },
     [=](caf::stream<table_slice> in) {
-      VAST_TRACE(self, "hooks into stream", in);
+      VAST_LOG_SPD_TRACE("{} hooks into stream {}", detail::id_or_name(self),
+                         in);
       caf::attach_stream_sink(
         self, in,
         // Initialization hook for CAF stream.
@@ -82,7 +84,8 @@ example(example_actor::stateful_pointer<example_actor_state> self) {
         // Teardown hook for CAF stram.
         [=](uint64_t&, const caf::error& err) {
           if (err && err != caf::exit_reason::user_shutdown) {
-            VAST_ERROR(self, "finished stream with error:", render(err));
+            VAST_LOG_SPD_ERROR("{} finished stream with error: {}",
+                               detail::id_or_name(self), render(err));
             return;
           }
         });

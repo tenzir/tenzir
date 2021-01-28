@@ -43,7 +43,7 @@ using namespace std::chrono_literals;
 namespace vast::system {
 
 caf::message pivot_command(const invocation& inv, caf::actor_system& sys) {
-  VAST_TRACE(inv);
+  VAST_LOG_SPD_TRACE("{}", detail::id_or_name(inv));
   using namespace std::string_literals;
   // Read options and arguments.
   auto output_format = caf::get_or(inv.options, "vast.pivot.format", "json"s);

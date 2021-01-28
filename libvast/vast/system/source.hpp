@@ -233,7 +233,7 @@ source(caf::stateful_actor<source_state<Reader>>* self, Reader reader,
        size_t table_slice_size, caf::optional<size_t> max_events,
        type_registry_actor type_registry, vast::schema local_schema,
        std::string type_filter, accountant_actor accountant) {
-  VAST_TRACE(VAST_ARG(self));
+  VAST_LOG_SPD_TRACE("{}", detail::id_or_name(VAST_ARG(self)));
   // Initialize state.
   auto& st = self->state;
   st.init(self, std::move(reader), std::move(max_events),
