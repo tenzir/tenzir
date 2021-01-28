@@ -242,18 +242,21 @@ caf::error segment_store::erase(const ids& xs) {
     }
     for (auto& slice : new_slices) {
       if (auto err = builder->add(slice)) {
-        VAST_ERROR(this, "failed to add slice to builder:", err);
+        VAST_LOG_SPD_ERROR("{} failed to add slice to builder: {}",
+                           detail::id_or_name(this), err);
       } else if (!segments_.inject(slice.offset(),
                                    slice.offset() + slice.rows(),
                                    builder->id()))
-        VAST_ERROR(this, "failed to update range_map");
+        VAST_LOG_SPD_ERROR("{} failed to update range_map",
+                           detail::id_or_name(this));
     }
     // Flush the new segment and remove the previous segment.
     if constexpr (std::is_same_v<decltype(seg), segment&>) {
       auto new_segment = builder->finish();
       auto filename = segment_path() / to_string(new_segment.id());
       if (auto err = write(filename, new_segment.chunk()))
-        VAST_ERROR(this, "failed to persist the new segment");
+        VAST_LOG_SPD_ERROR("{} failed to persist the new segment",
+                           detail::id_or_name(this));
       auto stale_filename = segment_path() / to_string(segment_id);
       // Schedule deletion of the segment file when releasing the chunk.
       seg.chunk()->add_deletion_step([=]() noexcept { rm(stale_filename); });
@@ -417,8 +420,9 @@ caf::expected<segment> segment_store::load_segment(uuid id) const {
   if (auto segment = segment::make(std::move(chk))) {
     return segment;
   } else {
-    VAST_ERROR(this, "failed to load segment at", filename,
-               "with error:", render(segment.error()));
+    VAST_LOG_SPD_ERROR("{} failed to load segment at {} with error: {}",
+                       detail::id_or_name(this), filename,
+                       render(segment.error()));
     return std::move(segment.error());
   }
 }

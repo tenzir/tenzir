@@ -123,7 +123,9 @@ explorer(caf::stateful_actor<explorer_state>* self, caf::actor node,
       // TODO: Add some cleaner way to distinguish the different input streams,
       // maybe some 'tagged' stream in caf?
       if (!st.initial_exporter) {
-        VAST_ERROR(self, "received table slices before an initial exporter");
+        VAST_LOG_SPD_ERROR("{} received table slices before an initial "
+                           "exporter",
+                           detail::id_or_name(self));
         return;
       }
       if (self->current_sender() != st.initial_exporter) {
@@ -221,7 +223,8 @@ explorer(caf::stateful_actor<explorer_state>* self, caf::actor node,
               self->send(exporter, atom::run_v);
             },
             [=](caf::error error) {
-              VAST_ERROR(self, "failed to spawn exporter:", render(error));
+              VAST_LOG_SPD_ERROR("{} failed to spawn exporter: {}",
+                                 detail::id_or_name(self), render(error));
               --self->state.running_exporters;
             });
       }

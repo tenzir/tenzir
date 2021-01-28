@@ -24,7 +24,7 @@ template <class Policy>
 void merge_settings_impl(const caf::settings& src, caf::settings& dst,
                          Policy policy, size_t depth = 0) {
   if (depth > 100) {
-    VAST_ERROR_ANON("Exceeded maximum nesting depth in settings.");
+    VAST_LOG_SPD_ERROR("Exceeded maximum nesting depth in settings.");
     return;
   }
   for (auto& [key, value] : src) {

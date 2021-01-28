@@ -95,7 +95,7 @@ bool enable_echo() {
 
 bool get(char& c, int timeout) {
   if (auto err = poll(::fileno(stdin), timeout)) {
-    VAST_ERROR(__func__, render(err));
+    VAST_LOG_SPD_ERROR("{}  {}", detail::id_or_name(__func__), render(err));
     return false;
   }
   auto i = ::fgetc(stdin);

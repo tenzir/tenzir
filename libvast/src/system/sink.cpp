@@ -92,7 +92,7 @@ caf::behavior sink(caf::stateful_actor<sink_state>* self,
       // Handle events.
       auto t = timer::start(st.measurement);
       if (auto err = st.writer->write(slice)) {
-        VAST_ERROR(self, render(err));
+        VAST_LOG_SPD_ERROR("{}  {}", detail::id_or_name(self), render(err));
         self->quit(std::move(err));
         return;
       }

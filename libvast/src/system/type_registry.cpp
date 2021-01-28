@@ -149,8 +149,8 @@ type_registry(type_registry_actor::stateful_pointer<type_registry_state> self,
     if (auto telemetry = self->state.telemetry(); !telemetry.empty())
       self->send(self->state.accountant, std::move(telemetry));
     if (auto err = self->state.save_to_disk())
-      VAST_ERROR(
-        self, "failed to persist state to disk:", self->system().render(err));
+      VAST_LOG_SPD_ERROR("{} failed to persist state to disk: {}",
+                         detail::id_or_name(self), self->system().render(err));
     self->quit(msg.reason);
   });
   // Load existing state from disk if possible.

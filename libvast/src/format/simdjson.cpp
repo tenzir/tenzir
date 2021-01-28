@@ -99,7 +99,8 @@ caf::expected<data> type_biased_convert_impl(JsonType j, const type& t) {
     return x;
   } else {
     // No conversion available.
-    VAST_ERROR_ANON("json-reader cannot convert field  to a propper type", t);
+    VAST_LOG_SPD_ERROR("json-reader cannot convert field  to a propper type {}",
+                       t);
     return caf::make_error(ec::syntax_error, "conversion not implemented");
   }
 }

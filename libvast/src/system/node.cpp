@@ -557,7 +557,8 @@ caf::behavior node(node_actor* self, std::string name, path dir,
     if (is_singleton(*type)) {
       auto label = self->state.registry.find_label_for(component);
       VAST_ASSERT(label != nullptr); // Per the above assertion.
-      VAST_ERROR(self, "got DOWN from", *label, "; initiating shutdown");
+      VAST_LOG_SPD_ERROR("{} got DOWN from {} ; initiating shutdown",
+                         detail::id_or_name(self), *label);
       self->send_exit(self, caf::exit_reason::user_shutdown);
     }
     self->state.registry.remove(component);

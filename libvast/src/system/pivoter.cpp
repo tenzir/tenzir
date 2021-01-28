@@ -154,7 +154,8 @@ caf::behavior pivoter(caf::stateful_actor<pivoter_state>* self, caf::actor node,
             self->send(exporter, atom::run_v);
           },
           [=](caf::error error) {
-            VAST_ERROR(self, "failed to spawn exporter:", render(error));
+            VAST_LOG_SPD_ERROR("{} failed to spawn exporter: {}",
+                               detail::id_or_name(self), render(error));
             --self->state.running_exporters;
           });
       ;

@@ -86,8 +86,9 @@ query_supervisor_actor::behavior_type query_supervisor(
             [=](const caf::error& e) {
               // TODO: Add a proper error handling path to escalate the error to
               // the client.
-              VAST_ERROR(self, self->state.log_identifier,
-                         "encountered error while supervising query", e);
+              VAST_LOG_SPD_ERROR(
+                "{}  {} encountered error while supervising query {}",
+                detail::id_or_name(self), self->state.log_identifier, e);
               if (--self->state.open_requests == 0) {
                 self->send(client, atom::done_v);
                 self->send(master, atom::worker_v, self);

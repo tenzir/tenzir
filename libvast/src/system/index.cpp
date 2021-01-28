@@ -147,7 +147,8 @@ caf::error index_state::load_from_disk() {
                          fname);
     auto buffer = io::read(fname);
     if (!buffer) {
-      VAST_ERROR(self, "failed to read index file:", render(buffer.error()));
+      VAST_LOG_SPD_ERROR("{} failed to read index file: {}",
+                         detail::id_or_name(self), render(buffer.error()));
       return buffer.error();
     }
     // TODO: Create a `index_ondisk_state` struct and move this part of the
@@ -289,8 +290,8 @@ void index_state::decomission_active_partition() {
         persisted_partitions.insert(id);
       },
       [=](const caf::error& err) {
-        VAST_ERROR(self, "failed to persist partition", id,
-                   "with error:", render(err));
+        VAST_LOG_SPD_ERROR("{} failed to persist partition {} with error: {}",
+                           detail::id_or_name(self), id, render(err));
         self->quit(err);
       });
 }
@@ -416,8 +417,9 @@ index_state::collect_query_actors(query_state& lookup,
              it != persisted_partitions.end())
       part = inmem_partitions.get_or_load(partition_id);
     if (!part)
-      VAST_ERROR(self, "could not load partition", partition_id,
-                 "that was part of a query");
+      VAST_LOG_SPD_ERROR("{} could not load partition {} that was part of a "
+                         "query",
+                         detail::id_or_name(self), partition_id);
     return part;
   };
   // Loop over the candidate set until we either successfully scheduled
@@ -533,7 +535,8 @@ index(index_actor::stateful_pointer<index_state> self,
   self->state.meta_index_fp_rate = meta_index_fp_rate;
   // Read persistent state.
   if (auto err = self->state.load_from_disk()) {
-    VAST_ERROR(self, "failed to load index state from disk:", render(err));
+    VAST_LOG_SPD_ERROR("{} failed to load index state from disk: {}",
+                       detail::id_or_name(self), render(err));
     self->quit(err);
     return index_actor::behavior_type::make_empty_behavior();
   }
@@ -575,7 +578,8 @@ index(index_actor::stateful_pointer<index_state> self,
       // anymore.
       if (err && err != caf::exit_reason::unreachable) {
         if (err != caf::exit_reason::user_shutdown)
-          VAST_ERROR(self, "got a stream error:", render(err));
+          VAST_LOG_SPD_ERROR("{} got a stream error: {}",
+                             detail::id_or_name(self), render(err));
         else
           VAST_LOG_SPD_DEBUG("{} got a user shutdown error: {}",
                              detail::id_or_name(self), render(err));
@@ -699,7 +703,8 @@ index(index_actor::stateful_pointer<index_state> self,
       auto client = caf::actor_cast<index_client_actor>(sender);
       // Sanity checks.
       if (!sender) {
-        VAST_ERROR(self, "ignores an anonymous query");
+        VAST_LOG_SPD_ERROR("{} ignores an anonymous query",
+                           detail::id_or_name(self));
         return {};
       }
       // A zero as second argument means the client drops further results.

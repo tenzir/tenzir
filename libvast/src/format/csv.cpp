@@ -267,8 +267,9 @@ struct container_parser_builder {
       };
       // clang-format on
     } else {
-      VAST_ERROR_ANON("csv parser builder failed to fetch a parser for type",
-                      caf::detail::pretty_type_name(typeid(T)));
+      VAST_LOG_SPD_ERROR("csv parser builder failed to fetch a parser for type "
+                         "{}",
+                         caf::detail::pretty_type_name(typeid(T)));
       return {};
     }
   }
@@ -353,8 +354,9 @@ struct csv_parser_factory {
       using value_type = type_to_data<T>;
       return (-make_parser<value_type>{}).with(add_t<value_type>{bptr_});
     } else {
-      VAST_ERROR_ANON("csv parser builder failed to fetch a parser for type",
-                      caf::detail::pretty_type_name(typeid(T)));
+      VAST_LOG_SPD_ERROR("csv parser builder failed to fetch a parser for type "
+                         "{}",
+                         caf::detail::pretty_type_name(typeid(T)));
       return {};
     }
   }

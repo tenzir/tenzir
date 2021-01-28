@@ -62,7 +62,7 @@ uuid segment::id() const {
   auto segment_v0 = segment->segment_as_v0();
   uuid result;
   if (auto error = unpack(*segment_v0->uuid(), result))
-    VAST_ERROR_ANON("couldnt get uuid from segment:", error);
+    VAST_LOG_SPD_ERROR("couldnt get uuid from segment: {}", error);
   return result;
 }
 

@@ -244,7 +244,8 @@ std::vector<uuid> meta_index::lookup(const expression& expr) const {
       return caf::visit(extract_expr, x.lhs, x.rhs);
     },
     [&](caf::none_t) -> result_type {
-      VAST_ERROR(this, "received an empty expression");
+      VAST_LOG_SPD_ERROR("{} received an empty expression",
+                         detail::id_or_name(this));
       VAST_ASSERT(!"invalid expression");
       return all_partitions();
     },

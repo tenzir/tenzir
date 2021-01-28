@@ -44,11 +44,13 @@ void eraser_state::init(caf::timespan interval, std::string query,
       promise_ = self_->make_response_promise();
     auto expr = to<expression>(query_);
     if (!expr) {
-      VAST_ERROR(self_, "failed to parse query", query_);
+      VAST_LOG_SPD_ERROR("{} failed to parse query {}",
+                         detail::id_or_name(self_), query_);
       return;
     }
     if (expr = normalize_and_validate(*expr); !expr) {
-      VAST_ERROR(self_, "failed to normalize and validate", query_);
+      VAST_LOG_SPD_ERROR("{} failed to normalize and validate {}",
+                         detail::id_or_name(self_), query_);
       return;
     }
     self_->send(index_, std::move(*expr));

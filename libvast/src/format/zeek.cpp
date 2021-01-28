@@ -556,7 +556,8 @@ public:
       }
       return true;
     } else if constexpr (std::is_same_v<T, view<map>>) {
-      VAST_LOG_SPD_ERROR( "{} cannot print maps in Zeek TSV format" , detail::id_or_name(this) ) ;
+      VAST_LOG_SPD_ERROR("{} cannot print maps in Zeek TSV format",
+                         detail::id_or_name(this));
       return false;
     } else {
       make_printer<T> p;
