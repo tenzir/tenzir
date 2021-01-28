@@ -53,8 +53,8 @@ spawn_node(caf::scoped_actor& self, const caf::settings& opts) {
   if (auto err = initialize_db_version(abs_dir))
     return err;
   if (auto version = read_db_version(abs_dir); version != db_version::latest) {
-    VAST_INFO_ANON("Cannot start VAST, breaking changes detected in the "
-                   "database directory");
+    VAST_LOG_SPD_INFO("Cannot start VAST,  breaking changes detected in the "
+                      "database directory");
     auto reasons = describe_breaking_changes_since(version);
     return caf::make_error(
       ec::breaking_change,

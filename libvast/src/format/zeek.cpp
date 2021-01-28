@@ -316,9 +316,10 @@ caf::error reader::read_impl(size_t max_events, size_t max_slice_size,
     } else {
       auto fields = detail::split(lines_->get(), separator_);
       if (fields.size() != parsers_.size()) {
-        VAST_WARNING(this, "ignores invalid record at line",
-                     lines_->line_number(), ':', "got", fields.size(),
-                     "fields but need", parsers_.size());
+        VAST_LOG_SPD_WARN("{} ignores invalid record at line {}  {} got {}"
+                          "fields but need {}",
+                          detail::id_or_name(this), lines_->line_number(), ':',
+                          fields.size(), parsers_.size());
         continue;
       }
       // Construct the record.
@@ -461,9 +462,9 @@ caf::error reader::parse_header() {
                             [&](auto& hf) { return hf.name == f.name; });
       if (i != layout_.fields.end()) {
         if (!congruent(i->type, f.type))
-          VAST_WARNING(
-            this, "encountered a type mismatch between the schema definition (",
-            f, ") and the input data (", *i, ")");
+          VAST_LOG_SPD_WARN("{} encountered a type mismatch between the schema "
+                            "definition ({}) and the input data ({})",
+                            detail::id_or_name(this), f, *i);
         else if (!f.type.attributes().empty()) {
           i->type.attributes(f.type.attributes());
         }
@@ -489,8 +490,8 @@ caf::error reader::parse_header() {
   // Add #index=hash attribute for fields where it makes sense.
   add_hash_index_attribute(layout_);
   for (auto i = 0u; i < layout_.fields.size(); ++i)
-    VAST_DEBUG(this, "     ", i, ')', layout_.fields[i].name, ':',
-               layout_.fields[i].type);
+    VAST_LOG_SPD_DEBUG("{}       {} ) {} : {}", detail::id_or_name(this), i,
+                       layout_.fields[i].name, layout_.fields[i].type);
   // After having modified layout attributes, we no longer make changes to the
   // type and can now safely copy it.
   type_ = layout_;
@@ -546,7 +547,7 @@ public:
       }
       return true;
     } else if constexpr (std::is_same_v<T, view<map>>) {
-      VAST_ERROR(this, "cannot print maps in Zeek TSV format");
+      VAST_LOG_SPD_ERROR( "{} cannot print maps in Zeek TSV format" , detail::id_or_name(this) ) ;
       return false;
     } else {
       make_printer<T> p;

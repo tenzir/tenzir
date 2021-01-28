@@ -93,9 +93,10 @@ archive(archive_actor::stateful_pointer<archive_state> self, path dir,
   // probably makes sense to pass a unique_ptr<stor> directory to the spawn
   // arguments of the actor. This way, users can provide their own store
   // implementation conveniently.
-  VAST_VERBOSE(self, "initializes archive in", dir,
-               "with a maximum segment size of", max_segment_size, "MB, and",
-               capacity, "segments in memory");
+  VAST_LOG_SPD_VERBOSE("{} initializes archive in {} with a maximum segment "
+                       "size of {} and {} segments in memory",
+                       detail::id_or_name(self), dir, max_segment_size,
+                       capacity);
   self->state.self = self;
   self->state.store = segment_store::make(dir, max_segment_size, capacity);
   VAST_ASSERT(self->state.store != nullptr);
@@ -114,8 +115,9 @@ archive(archive_actor::stateful_pointer<archive_state> self, path dir,
   return {
     [=](const ids& xs) {
       VAST_ASSERT(rank(xs) > 0);
-      VAST_DEBUG(self, "got query for", rank(xs), "events in range [",
-                 select(xs, 1), ',', (select(xs, -1) + 1), ')');
+      VAST_LOG_SPD_DEBUG("{} got query for {} events in range [{},  {})",
+                         detail::id_or_name(self), rank(xs), select(xs, 1),
+                         select(xs, -1) + 1);
       if (auto requester
           = caf::actor_cast<archive_client_actor>(self->current_sender()))
         self->send(self, xs, requester);

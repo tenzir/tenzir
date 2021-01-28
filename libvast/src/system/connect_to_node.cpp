@@ -91,10 +91,10 @@ connect_to_node(scoped_actor& self, const caf::settings& opts) {
       .receive(
         [&](std::string node_version) {
           if (node_version != VAST_VERSION)
-            VAST_WARNING(self,
-                         "Version mismatch between client and node detected; "
-                         "client: " VAST_VERSION,
-                         "node:", node_version);
+            VAST_LOG_SPD_WARN(
+              "{} Version mismatch between client and node detected; "
+              "client: {}, node: {}",
+              detail::id_or_name(self), VAST_VERSION, node_version);
         },
         [&](caf::error error) { result = std::move(error); });
   }
