@@ -655,7 +655,7 @@ caf::error replace_if_congruent(std::initializer_list<type*> xs,
   for (auto x : xs)
     if (auto t = with.find(x->name()); t != nullptr) {
       if (!congruent(*x, *t))
-        return make_error(ec::type_clash, "incongruent type:", x->name());
+        return caf::make_error(ec::type_clash, "incongruent type:", x->name());
       *x = *t;
     }
   return caf::none;

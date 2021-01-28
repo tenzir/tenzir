@@ -20,6 +20,7 @@
 #include "vast/io/read.hpp"
 #include "vast/io/write.hpp"
 #include "vast/system/posix_filesystem.hpp"
+#include "vast/system/status_verbosity.hpp"
 
 #include <fstream>
 

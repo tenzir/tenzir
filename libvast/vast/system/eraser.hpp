@@ -16,7 +16,7 @@
 #include "vast/fwd.hpp"
 
 #include "vast/ids.hpp"
-#include "vast/system/archive_actor.hpp"
+#include "vast/system/actors.hpp"
 #include "vast/system/query_processor.hpp"
 
 #include <string>

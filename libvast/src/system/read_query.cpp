@@ -52,15 +52,16 @@ read_query(const invocation& inv, std::string_view file_option,
   if (auto fname = caf::get_if<std::string>(&inv.options, file_option)) {
     // Sanity check.
     if (!inv.arguments.empty())
-      return make_error(ec::parse_error, "got a query on the command line "
-                                         "but --read option is defined");
+      return caf::make_error(ec::parse_error, "got a query on the command line "
+                                              "but --read option is defined");
     // Read query from STDIN if file name is '-'.
     if (*fname == "-")
       assign_query(std::cin);
     else {
       std::ifstream f{*fname};
       if (!f)
-        return make_error(ec::no_such_file, "unable to read from " + *fname);
+        return caf::make_error(ec::no_such_file,
+                               "unable to read from " + *fname);
       assign_query(f);
     }
   } else if (inv.arguments.empty()) {
@@ -82,7 +83,7 @@ read_query(const invocation& inv, std::string_view file_option,
                           inv.arguments.end(), " ");
   }
   if (result.empty())
-    return make_error(ec::invalid_query);
+    return caf::make_error(ec::invalid_query);
   return result;
 }
 

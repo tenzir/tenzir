@@ -13,9 +13,11 @@
 
 #include "vast/system/terminator.hpp"
 
+#include "vast/fwd.hpp"
+
+#include "vast/atoms.hpp"
 #include "vast/detail/assert.hpp"
 #include "vast/error.hpp"
-#include "vast/fwd.hpp"
 #include "vast/logger.hpp"
 
 #include <caf/behavior.hpp>
@@ -146,7 +148,7 @@ caf::behavior terminator(caf::stateful_actor<terminator_state>* self,
       auto n = self->state.remaining_actors.size();
       VAST_ERROR(self, "failed to kill", n, "actors");
       self->state.promise.deliver(
-        make_error(ec::timeout, "failed to kill remaining actors", n));
+        caf::make_error(ec::timeout, "failed to kill remaining actors", n));
       self->quit(caf::exit_reason::user_shutdown);
     }};
 }

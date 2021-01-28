@@ -13,17 +13,15 @@
 
 #pragma once
 
+#include "vast/fwd.hpp"
+
 #include "vast/aliases.hpp"
 #include "vast/data.hpp"
 #include "vast/path.hpp"
-#include "vast/system/accountant_actor.hpp"
-#include "vast/system/archive_actor.hpp"
-#include "vast/system/index_actor.hpp"
+#include "vast/system/actors.hpp"
 #include "vast/system/instrumentation.hpp"
-#include "vast/system/type_registry_actor.hpp"
 
-#include <caf/event_based_actor.hpp>
-#include <caf/stateful_actor.hpp>
+#include <caf/typed_event_based_actor.hpp>
 
 #include <chrono>
 #include <vector>
@@ -54,7 +52,7 @@ struct importer_state {
     id end;
   };
 
-  importer_state(caf::event_based_actor* self_ptr);
+  explicit importer_state(importer_actor::pointer self);
 
   ~importer_state();
 
@@ -91,7 +89,7 @@ struct importer_state {
     stage;
 
   /// Pointer to the owning actor.
-  caf::event_based_actor* self;
+  importer_actor::pointer self;
 
   std::string inbound_description = "anonymous";
 
@@ -109,8 +107,6 @@ struct importer_state {
   static inline const char* name = "importer";
 };
 
-using importer_actor = caf::stateful_actor<importer_state>;
-
 /// Spawns an IMPORTER.
 /// @param self The actor handle.
 /// @param dir The directory for persistent state.
@@ -119,7 +115,9 @@ using importer_actor = caf::stateful_actor<importer_state>;
 /// @param index A handle to the INDEX.
 /// @param batch_size The initial number of IDs to request when replenishing.
 /// @param type_registry A handle to the type-registry module.
-caf::behavior importer(importer_actor* self, path dir, archive_actor archive,
-                       index_actor index, type_registry_actor type_registry);
+importer_actor::behavior_type
+importer(importer_actor::stateful_pointer<importer_state> self, path dir,
+         const archive_actor& archive, index_actor index,
+         const type_registry_actor& type_registry);
 
 } // namespace vast::system

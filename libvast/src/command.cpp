@@ -310,8 +310,8 @@ caf::error parse_impl(invocation& result, const command& cmd,
   bool has_subcommand;
   switch (state) {
     default:
-      return make_error(ec::unrecognized_option, cmd.full_name(), *position,
-                        state);
+      return caf::make_error(ec::unrecognized_option, cmd.full_name(),
+                             *position, state);
     case caf::pec::success:
       has_subcommand = false;
       break;
@@ -320,7 +320,7 @@ caf::error parse_impl(invocation& result, const command& cmd,
       break;
   }
   if (position != last && detail::starts_with(*position, "-"))
-    return make_error(ec::unrecognized_option, cmd.full_name(), *position);
+    return caf::make_error(ec::unrecognized_option, cmd.full_name(), *position);
   // Check for help option.
   if (has_subcommand && *position == "help") {
     put(result.options, "help", true);
@@ -352,7 +352,7 @@ caf::error parse_impl(invocation& result, const command& cmd,
   auto i = std::find_if(cmd.children.begin(), cmd.children.end(),
                         [p = position](auto& x) { return x->name == *p; });
   if (i == cmd.children.end())
-    return make_error(ec::invalid_subcommand, cmd.full_name(), *position);
+    return caf::make_error(ec::invalid_subcommand, cmd.full_name(), *position);
   return parse_impl(result, **i, position + 1, last, target);
 }
 
@@ -395,7 +395,7 @@ caf::expected<caf::message> run(const invocation& inv, caf::actor_system& sys,
     return std::invoke(search_result->second, merged_invocation, sys);
   }
   // No callback was registered for this command
-  return make_error(ec::missing_subcommand, inv.full_name, "");
+  return caf::make_error(ec::missing_subcommand, inv.full_name, "");
 }
 
 const command& root(const command& cmd) {

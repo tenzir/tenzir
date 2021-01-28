@@ -28,7 +28,7 @@ auto to(Iterator& f, const Iterator& l)
   -> std::enable_if_t<is_parseable_v<Iterator, To>, caf::expected<To>> {
   caf::expected<To> t{To{}};
   if (!parse(f, l, *t))
-    return make_error(ec::parse_error);
+    return caf::make_error(ec::parse_error);
   return t;
 }
 
@@ -42,7 +42,7 @@ auto to(Range&& rng)
   auto l = end(rng);
   auto res = to<To>(f, l);
   if (res && f != l)
-    return make_error(ec::parse_error);
+    return caf::make_error(ec::parse_error);
   return res;
 }
 

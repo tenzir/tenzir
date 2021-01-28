@@ -33,21 +33,23 @@ maybe_actor spawn_source(node_actor* self, spawn_arguments& args) {
   auto& options = args.inv.options;
   // Bail out early for bogus invocations.
   if (caf::get_or(options, "vast.node", false))
-    return make_error(ec::invalid_configuration,
-                      "unable to spawn a remote source when spawning a node "
-                      "locally instead of connecting to one; please unset "
-                      "the option vast.node");
+    return caf::make_error(ec::invalid_configuration,
+                           "unable to spawn a remote source when spawning a "
+                           "node "
+                           "locally instead of connecting to one; please unset "
+                           "the option vast.node");
   auto [accountant, importer, type_registry]
     = self->state.registry.find_by_label("accountant", "importer",
                                          "type-registry");
   if (!importer)
-    return make_error(ec::missing_component, "importer");
+    return caf::make_error(ec::missing_component, "importer");
   if (!type_registry)
-    return make_error(ec::missing_component, "type-registry");
+    return caf::make_error(ec::missing_component, "type-registry");
   auto src_result = make_source<Reader, Defaults, caf::detached>(
     self, self->system(), args.inv,
     caf::actor_cast<accountant_actor>(accountant),
-    caf::actor_cast<type_registry_actor>(type_registry), importer);
+    caf::actor_cast<type_registry_actor>(type_registry),
+    caf::actor_cast<importer_actor>(importer));
   if (!src_result)
     return src_result.error();
   auto src = std::move(src_result->src);

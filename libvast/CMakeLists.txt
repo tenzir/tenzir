@@ -208,12 +208,13 @@ if (NOT CAF_FOUND)
   else ()
     set(VAST_ENABLE_BUNDLED_CAF ON)
     set(CAF_LOG_LEVEL ${VAST_CAF_LOG_LEVEL})
-    set(CAF_NO_AUTO_LIBCPP TRUE)
-    set(CAF_NO_OPENCL TRUE)
-    set(CAF_NO_EXAMPLES TRUE)
-    set(CAF_NO_UNIT_TESTS TRUE)
-    set(CAF_NO_PYTHON TRUE)
-    set(CAF_NO_TOOLS TRUE)
+    set(CAF_NO_AUTO_LIBCPP ON)
+    set(CAF_NO_OPENCL ON)
+    set(CAF_NO_EXAMPLES ON)
+    set(CAF_NO_UNIT_TESTS ON)
+    set(CAF_NO_PYTHON ON)
+    set(CAF_NO_TOOLS ON)
+    set(CAF_NO_SUMMARY ON)
     if (NOT VAST_ENABLE_OPENSSL)
       set(CAF_NO_OPENSSL TRUE)
     endif ()
@@ -221,8 +222,8 @@ if (NOT CAF_FOUND)
       set(_linkage_suffix shared)
     else ()
       set(_linkage_suffix static)
-      set(CAF_BUILD_STATIC TRUE)
-      set(CAF_BUILD_STATIC_ONLY TRUE)
+      set(CAF_BUILD_STATIC ON)
+      set(CAF_BUILD_STATIC_ONLY ON)
     endif ()
     add_subdirectory(aux/caf)
     set_target_properties(
@@ -231,7 +232,7 @@ if (NOT CAF_FOUND)
                  CXX_STANDARD 17
                  CXX_STANDARD_REQUIRED ON
                  CXX_EXTENSIONS OFF)
-      add_library(CAF::core ALIAS libcaf_core_${_linkage_suffix})
+    add_library(CAF::core ALIAS libcaf_core_${_linkage_suffix})
     target_compile_features(libcaf_core_${_linkage_suffix} INTERFACE cxx_std_17)
     set_target_properties(libcaf_io_${_linkage_suffix} PROPERTIES EXPORT_NAME
                                                                   io)
@@ -381,7 +382,16 @@ endif()
 
 # Link against simdjson.
 option(SIMDJSON_ROOT "Install root of simdjson" "")
-find_package(simdjson REQUIRED HINTS ${SIMDJSON_ROOT})
+find_package(
+  simdjson
+  REQUIRED
+  HINTS
+  "${SIMDJSON_ROOT}"
+  # simdjson 0.8.0 exports it package configuration file under the wrong name,
+  # so we look for "simdjson-targets.cmake" as well.
+  CONFIGS
+  "simdjson-config.cmake"
+  "simdjson-targets.cmake")
 target_link_libraries(libvast PUBLIC simdjson::simdjson)
 dependency_summary("simdjson" simdjson::simdjson)
 

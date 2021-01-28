@@ -18,7 +18,6 @@
 #include "vast/defaults.hpp"
 #include "vast/logger.hpp"
 #include "vast/query_options.hpp"
-#include "vast/system/archive_actor.hpp"
 #include "vast/system/exporter.hpp"
 #include "vast/system/node.hpp"
 #include "vast/system/spawn_arguments.hpp"
@@ -54,7 +53,8 @@ maybe_actor spawn_exporter(node_actor* self, spawn_arguments& args) {
   if (accountant)
     self->send(handle, caf::actor_cast<accountant_actor>(accountant));
   if (importer && has_continuous_option(query_opts))
-    self->send(handle, atom::importer_v, std::vector{importer});
+    self->send(caf::actor_cast<importer_actor>(importer),
+               static_cast<stream_sink_actor<table_slice>>(handle));
   if (archive) {
     VAST_DEBUG(self, "connects archive to new exporter");
     self->send(handle, caf::actor_cast<archive_actor>(archive));

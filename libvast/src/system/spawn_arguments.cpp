@@ -34,7 +34,7 @@ caf::expected<expression>
 normalized_and_validated(std::vector<std::string>::const_iterator begin,
                          std::vector<std::string>::const_iterator end) {
   if (begin == end)
-    return make_error(ec::syntax_error, "no query expression given");
+    return caf::make_error(ec::syntax_error, "no query expression given");
   if (auto e = to<expression>(caf::join(begin, end, " ")))
     return normalize_and_validate(*e);
   else
@@ -75,9 +75,9 @@ caf::expected<caf::optional<schema>> read_schema(const spawn_arguments& args) {
 }
 
 caf::error unexpected_arguments(const spawn_arguments& args) {
-  return make_error(ec::syntax_error, "unexpected argument(s)",
-                    caf::join(args.inv.arguments.begin(),
-                              args.inv.arguments.end(), " "));
+  return caf::make_error(ec::syntax_error, "unexpected argument(s)",
+                         caf::join(args.inv.arguments.begin(),
+                                   args.inv.arguments.end(), " "));
 }
 
 } // namespace vast::system

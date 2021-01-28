@@ -46,13 +46,14 @@ caf::expected<segment> segment::make(chunk_ptr chunk) {
   // 'soffset_t' in FLATBUFFERS_MAX_BUFFER_SIZE.
   using ::flatbuffers::soffset_t;
   if (chunk->size() >= FLATBUFFERS_MAX_BUFFER_SIZE)
-    return make_error(ec::format_error, "cannot read segment because its size",
-                      chunk->size(), "exceeds the maximum allowed size of",
-                      FLATBUFFERS_MAX_BUFFER_SIZE);
+    return caf::make_error(ec::format_error,
+                           "cannot read segment because its size",
+                           chunk->size(), "exceeds the maximum allowed size of",
+                           FLATBUFFERS_MAX_BUFFER_SIZE);
   auto s = fbs::GetSegment(chunk->data());
   VAST_ASSERT(s); // `GetSegment` is just a cast, so this cant become null.
   if (s->segment_type() != fbs::segment::Segment::v0)
-    return make_error(ec::format_error, "unsupported segment version");
+    return caf::make_error(ec::format_error, "unsupported segment version");
   return segment{std::move(chunk)};
 }
 
@@ -91,7 +92,7 @@ segment::lookup(const vast::ids& xs) const {
   std::vector<table_slice> result;
   auto segment = fbs::GetSegment(chunk_->data())->segment_as_v0();
   if (!segment)
-    return make_error(ec::format_error, "invalid segment version");
+    return caf::make_error(ec::format_error, "invalid segment version");
   VAST_ASSERT(segment->ids()->size() == segment->slices()->size());
   auto f = [&](const auto& zip) noexcept {
     auto&& interval = std::get<0>(zip);

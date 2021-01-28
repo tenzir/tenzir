@@ -65,7 +65,7 @@ caf::expected<ids>
 string_index::lookup_impl(relational_operator op, data_view x) const {
   auto f = detail::overload{
     [&](auto x) -> caf::expected<ids> {
-      return make_error(ec::type_clash, materialize(x));
+      return caf::make_error(ec::type_clash, materialize(x));
     },
     [&](view<std::string> str) -> caf::expected<ids> {
       auto str_size = str.size();
@@ -73,7 +73,7 @@ string_index::lookup_impl(relational_operator op, data_view x) const {
         str_size = max_length_;
       switch (op) {
         default:
-          return make_error(ec::unsupported_operator, op);
+          return caf::make_error(ec::unsupported_operator, op);
         case equal:
         case not_equal: {
           if (str_size == 0) {
@@ -128,6 +128,13 @@ string_index::lookup_impl(relational_operator op, data_view x) const {
     [&](view<list> xs) { return detail::container_lookup(*this, op, xs); },
   };
   return caf::visit(f, x);
+}
+
+size_t string_index::memusage_impl() const {
+  size_t acc = length_.memusage();
+  for (const auto& char_index : chars_)
+    acc += char_index.memusage();
+  return acc;
 }
 
 } // namespace vast

@@ -4,12 +4,13 @@
 #include "vast/defaults.hpp"
 #include "vast/logger.hpp"
 #include "vast/path.hpp"
-#include "vast/system/archive_actor.hpp"
 #include "vast/system/disk_monitor.hpp"
-#include "vast/system/index_actor.hpp"
 #include "vast/system/node.hpp"
 #include "vast/system/node_control.hpp"
 #include "vast/system/spawn_arguments.hpp"
+#include "vast/uuid.hpp"
+
+#include <caf/settings.hpp>
 
 namespace vast::system {
 
@@ -19,9 +20,9 @@ spawn_disk_monitor(system::node_actor* self, spawn_arguments& args) {
   auto [index, archive]
     = self->state.registry.find_by_label("index", "archive");
   if (!index)
-    return make_error(ec::missing_component, "index");
+    return caf::make_error(ec::missing_component, "index");
   if (!archive)
-    return make_error(ec::missing_component, "archive");
+    return caf::make_error(ec::missing_component, "archive");
   auto opts = args.inv.options;
   caf::put_missing(opts, "vast.start.disk-budget-high", "0KiB");
   caf::put_missing(opts, "vast.start.disk-budget-low", "0KiB");
@@ -29,11 +30,13 @@ spawn_disk_monitor(system::node_actor* self, spawn_arguments& args) {
   // `caf::get_or` below will silently take the default value of "0KiB" if the
   // key is not a string. (e.g. `disk-budget-high: 6T`)
   if (!caf::holds_alternative<std::string>(opts, "vast.start.disk-budget-high"))
-    return make_error(ec::invalid_argument, "could not parse disk-budget-high "
-                                            "as byte size");
+    return caf::make_error(ec::invalid_argument,
+                           "could not parse disk-budget-high "
+                           "as byte size");
   if (!caf::holds_alternative<std::string>(opts, "vast.start.disk-budget-low"))
-    return make_error(ec::invalid_argument, "could not parse disk-budget-low "
-                                            "as byte size");
+    return caf::make_error(ec::invalid_argument,
+                           "could not parse disk-budget-low "
+                           "as byte size");
   auto hiwater_str = caf::get<std::string>(opts, "vast.start.disk-budget-high");
   auto lowater_str = caf::get<std::string>(opts, "vast.start.disk-budget-low");
   auto default_seconds
@@ -42,11 +45,11 @@ spawn_disk_monitor(system::node_actor* self, spawn_arguments& args) {
                               default_seconds);
   uint64_t hiwater, lowater;
   if (!parsers::bytesize(hiwater_str, hiwater))
-    return make_error(ec::parse_error,
-                      "could not parse disk budget: " + hiwater_str);
+    return caf::make_error(ec::parse_error,
+                           "could not parse disk budget: " + hiwater_str);
   if (!parsers::bytesize(lowater_str, lowater))
-    return make_error(ec::parse_error,
-                      "could not parse disk budget: " + lowater_str);
+    return caf::make_error(ec::parse_error,
+                           "could not parse disk budget: " + lowater_str);
   if (!hiwater) {
     VAST_VERBOSE(self, "not spawning disk_monitor because no limit configured");
     return ec::no_error;
@@ -58,8 +61,8 @@ spawn_disk_monitor(system::node_actor* self, spawn_arguments& args) {
     = caf::get_or(opts, "vast.db-directory", defaults::system::db_directory);
   auto abs_dir = path{db_dir}.complete();
   if (!exists(abs_dir))
-    return make_error(ec::filesystem_error, "could not find database "
-                                            "directory");
+    return caf::make_error(ec::filesystem_error, "could not find database "
+                                                 "directory");
   auto handle = self->spawn(disk_monitor, hiwater, lowater,
                             std::chrono::seconds{interval}, abs_dir,
                             caf::actor_cast<archive_actor>(archive),

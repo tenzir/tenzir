@@ -27,7 +27,6 @@
 #include "vast/path.hpp"
 #include "vast/system/accountant.hpp"
 #include "vast/system/instrumentation.hpp"
-#include "vast/system/partition_actor.hpp"
 #include "vast/system/report.hpp"
 #include "vast/table_slice.hpp"
 #include "vast/table_slice_column.hpp"
@@ -63,7 +62,8 @@ active_indexer(active_indexer_actor::stateful_pointer<indexer_state> self,
   self->state.idx = factory<value_index>::make(index_type, index_opts);
   if (!self->state.idx) {
     VAST_ERROR(self, "failed to construct value index");
-    self->quit(make_error(ec::unspecified, "failed to construct value index"));
+    self->quit(caf::make_error(ec::unspecified, "failed to construct value "
+                                                "index"));
     return active_indexer_actor::behavior_type::make_empty_behavior();
   }
   return {
@@ -88,7 +88,7 @@ active_indexer(active_indexer_actor::stateful_pointer<indexer_state> self,
             for (size_t i = 0; i < column.size(); ++i)
               self->state.idx->append(column[i], column.slice().offset() + i);
         },
-        [=](caf::unit_t&, const error& err) {
+        [=](caf::unit_t&, const caf::error& err) {
           if (err) {
             // Exit reason `unreachable` means that the actor has exited,
             // so we can't safely use `self` anymore.
@@ -126,6 +126,11 @@ active_indexer(active_indexer_actor::stateful_pointer<indexer_state> self,
     [=](atom::shutdown) {
       self->quit(caf::exit_reason::user_shutdown); // clang-format fix
     },
+    [=](atom::status, status_verbosity) {
+      caf::settings result;
+      put(result, "memory-usage", self->state.idx->memusage());
+      return result;
+    },
   };
 }
 
@@ -134,7 +139,8 @@ passive_indexer(indexer_actor::stateful_pointer<indexer_state> self,
                 uuid partition_id, value_index_ptr idx) {
   if (!idx) {
     VAST_ERROR(self, "got invalid value index pointer");
-    self->quit(make_error(ec::end_of_input, "invalid value index pointer"));
+    self->quit(caf::make_error(ec::end_of_input, "invalid value index "
+                                                 "pointer"));
     return indexer_actor::behavior_type::make_empty_behavior();
   }
   self->state.name = "indexer-" + to_string(idx->type());

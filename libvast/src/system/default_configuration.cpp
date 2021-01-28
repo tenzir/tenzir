@@ -13,9 +13,9 @@
 
 #include "vast/system/default_configuration.hpp"
 
+#include "vast/atoms.hpp"
 #include "vast/defaults.hpp"
 
-#include <caf/atom.hpp>
 #include <caf/config_value.hpp>
 
 namespace vast::system {

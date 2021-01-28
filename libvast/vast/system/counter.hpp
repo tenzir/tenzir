@@ -17,8 +17,7 @@
 
 #include "vast/expression.hpp"
 #include "vast/ids.hpp"
-#include "vast/system/archive_actor.hpp"
-#include "vast/system/index_actor.hpp"
+#include "vast/system/actors.hpp"
 #include "vast/system/query_processor.hpp"
 
 #include <unordered_map>

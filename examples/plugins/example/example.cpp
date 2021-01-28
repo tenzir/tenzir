@@ -19,19 +19,18 @@
 
 #include <caf/actor_cast.hpp>
 #include <caf/attach_stream_sink.hpp>
-#include <caf/typed_actor.hpp>
 #include <caf/typed_event_based_actor.hpp>
 
 #include <iostream>
 
-using namespace vast;
+namespace vast::plugins {
 
-// clang-format off
+/// The EXAMPLE actor interface.
 using example_actor = caf::typed_actor<
-  caf::reacts_to<caf::stream<table_slice>>,
-  caf::reacts_to<atom::config, record>
->;
-// clang-format on
+  // Update the configuration of the EXAMPLE actor.
+  caf::reacts_to<atom::config, record>>
+  // Conform to the protocol of the PLUGIN ANALYZER actor.
+  ::extend_with<analyzer_plugin::analyzer_actor>;
 
 struct example_actor_state {
   uint64_t max_events = std::numeric_limits<uint64_t>::max();
@@ -41,8 +40,19 @@ struct example_actor_state {
 };
 
 example_actor::behavior_type
-spawn_example_actor(example_actor::stateful_pointer<example_actor_state> self) {
+example(example_actor::stateful_pointer<example_actor_state> self) {
   return {
+    [=](atom::config, record config) {
+      VAST_TRACE(self, "sets configuration", config);
+      for (auto& [key, value] : config) {
+        if (key == "max-events") {
+          if (auto max_events = caf::get_if<integer>(&value)) {
+            VAST_VERBOSE(self, "sets max-events to", *max_events);
+            self->state.max_events = *max_events;
+          }
+        }
+      }
+    },
     [=](caf::stream<table_slice> in) {
       VAST_TRACE(self, "hooks into stream", in);
       caf::attach_stream_sink(
@@ -74,31 +84,20 @@ spawn_example_actor(example_actor::stateful_pointer<example_actor_state> self) {
           }
         });
     },
-    [=](atom::config, record config) {
-      VAST_TRACE(self, "sets configuration", config);
-      for (auto& [key, value] : config) {
-        if (key == "max-events") {
-          if (auto max_events = caf::get_if<integer>(&value)) {
-            VAST_VERBOSE(self, "sets max-events to", *max_events);
-            self->state.max_events = *max_events;
-          }
-        }
-      }
-    },
   };
 }
 
 /// An example plugin.
-class example final : public virtual analyzer_plugin,
-                      public virtual command_plugin {
+class example_plugin final : public virtual analyzer_plugin,
+                             public virtual command_plugin {
 public:
   /// Loading logic.
-  example() {
+  example_plugin() {
     // nop
   }
 
   /// Teardown logic.
-  ~example() override {
+  ~example_plugin() override {
     // nop
   }
 
@@ -120,15 +119,14 @@ public:
   /// @param sys The actor system context to spawn the actor in.
   analyzer_actor make_analyzer(caf::actor_system& sys) const override {
     // Spawn the actor.
-    auto actor = sys.spawn(spawn_example_actor);
+    auto actor = sys.spawn(example);
     // Send the configuration to the actor.
-    if (!config_.empty())
-      caf::anon_send(actor, atom::config_v, config_);
+    caf::anon_send(actor, atom::config_v, config_);
     return actor;
   };
 
   /// Creates additional commands.
-  virtual std::pair<std::unique_ptr<command>, command::factory>
+  std::pair<std::unique_ptr<command>, command::factory>
   make_command() const override {
     auto example = std::make_unique<command>(
       "example", "help for the example plugin command",
@@ -148,4 +146,6 @@ private:
   record config_ = {};
 };
 
-VAST_REGISTER_PLUGIN(example, 0, 1, 0, 0)
+} // namespace vast::plugins
+
+VAST_REGISTER_PLUGIN(vast::plugins::example_plugin, 0, 1, 0, 0)

@@ -233,12 +233,12 @@ namespace {
 [[nodiscard]] caf::error make_nonblocking(int fd, bool flag) {
   auto flags = ::fcntl(fd, F_GETFL, 0);
   if (flags == -1)
-    return make_error(ec::filesystem_error,
-                      "failed in fcntl(2):", std::strerror(errno));
+    return caf::make_error(ec::filesystem_error,
+                           "failed in fcntl(2):", std::strerror(errno));
   flags = flag ? flags | O_NONBLOCK : flags & ~O_NONBLOCK;
   if (::fcntl(fd, F_SETFL, flags) == -1)
-    return make_error(ec::filesystem_error,
-                      "failed in fcntl(2):", std::strerror(errno));
+    return caf::make_error(ec::filesystem_error,
+                           "failed in fcntl(2):", std::strerror(errno));
   return caf::none;
 }
 
@@ -264,13 +264,13 @@ caf::error poll(int fd, int usec) {
         vast::die("unhandled select(2) error");
       case EINTR:
       case ENOMEM:
-        return make_error(ec::filesystem_error,
-                          "failed in select(2):", std::strerror(errno));
+        return caf::make_error(ec::filesystem_error,
+                               "failed in select(2):", std::strerror(errno));
     }
   }
   if (!FD_ISSET(fd, &rdset))
-    return make_error(ec::filesystem_error,
-                      "failed in fd_isset(3):", std::strerror(errno));
+    return caf::make_error(ec::filesystem_error,
+                           "failed in fd_isset(3):", std::strerror(errno));
   return caf::none;
 }
 
@@ -280,8 +280,8 @@ caf::error close(int fd) {
     result = ::close(fd);
   } while (result < 0 && errno == EINTR);
   if (result != 0)
-    return make_error(ec::filesystem_error,
-                      "failed in close(2):", std::strerror(errno));
+    return caf::make_error(ec::filesystem_error,
+                           "failed in close(2):", std::strerror(errno));
   return caf::none;
 }
 
@@ -301,8 +301,8 @@ caf::expected<size_t> read(int fd, void* buffer, size_t bytes) {
       taken = ::read(fd, buf + total, request_size);
     } while (taken < 0 && errno == EINTR);
     if (taken < 0) // error
-      return make_error(ec::filesystem_error,
-                        "failed in read(2):", std::strerror(errno));
+      return caf::make_error(ec::filesystem_error,
+                             "failed in read(2):", std::strerror(errno));
     if (taken == 0) // EOF
       break;
     total += static_cast<size_t>(taken);
@@ -326,12 +326,12 @@ caf::expected<size_t> write(int fd, const void* buffer, size_t bytes) {
       written = ::write(fd, buf + total, request_size);
     } while (written < 0 && errno == EINTR);
     if (written < 0)
-      return make_error(ec::filesystem_error,
-                        "failed in write(2):", std::strerror(errno));
+      return caf::make_error(ec::filesystem_error,
+                             "failed in write(2):", std::strerror(errno));
     // write should not return 0 if it wasn't asked to write that amount. We
     // want to cover this case anyway in case it ever happens.
     if (written == 0)
-      return make_error(ec::filesystem_error, "write(2) returned 0");
+      return caf::make_error(ec::filesystem_error, "write(2) returned 0");
     total += static_cast<size_t>(written);
   }
   return total;
@@ -339,8 +339,8 @@ caf::expected<size_t> write(int fd, const void* buffer, size_t bytes) {
 
 caf::error seek(int fd, size_t bytes) {
   if (::lseek(fd, bytes, SEEK_CUR) == -1)
-    return make_error(ec::filesystem_error,
-                      "failed in seek(2):", std::strerror(errno));
+    return caf::make_error(ec::filesystem_error,
+                           "failed in seek(2):", std::strerror(errno));
   return caf::none;
 }
 

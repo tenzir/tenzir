@@ -32,15 +32,15 @@ struct port_printer : vast::printer<port_printer> {
     switch (p.type()) {
       default:
         return chr<'?'>(out);
-      case port::icmp:
+      case port_type::icmp:
         return str(out, "icmp");
-      case port::tcp:
+      case port_type::tcp:
         return str(out, "tcp");
-      case port::udp:
+      case port_type::udp:
         return str(out, "udp");
-      case port::icmp6:
+      case port_type::icmp6:
         return str(out, "icmp6");
-      case port::sctp:
+      case port_type::sctp:
         return str(out, "sctp");
     }
   }

@@ -13,8 +13,7 @@
 
 #pragma once
 
-#include <caf/atom.hpp>
-
+#include "vast/atoms.hpp"
 #include "vast/factory.hpp"
 #include "vast/table_slice_builder.hpp"
 #include "vast/type.hpp"

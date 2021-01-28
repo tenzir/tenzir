@@ -25,7 +25,7 @@
 #include "vast/ids.hpp"
 #include "vast/logger.hpp"
 #include "vast/scope_linked.hpp"
-#include "vast/system/archive_actor.hpp"
+#include "vast/system/actors.hpp"
 #include "vast/system/node_control.hpp"
 #include "vast/system/spawn_or_connect_to_node.hpp"
 #include "vast/table_slice.hpp"
@@ -60,7 +60,7 @@ run(caf::scoped_actor& self, archive_actor archive, const invocation& inv) {
   for (auto& c : inv.arguments) {
     auto i = to<count>(c);
     if (!i)
-      return make_error(ec::parse_error, c, "is not a positive integer");
+      return caf::make_error(ec::parse_error, c, "is not a positive integer");
     self->send(archive, to_ids(*i));
     bool waiting = true;
     self->receive_while(waiting)

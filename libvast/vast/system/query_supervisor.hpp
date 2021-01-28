@@ -16,11 +16,13 @@
 #include "vast/fwd.hpp"
 
 #include "vast/ids.hpp"
-#include "vast/system/query_supervisor_actor.hpp"
-#include "vast/system/query_supervisor_master_actor.hpp"
+#include "vast/system/actors.hpp"
 #include "vast/uuid.hpp"
 
 #include <caf/detail/unordered_flat_map.hpp>
+#include <caf/event_based_actor.hpp>
+#include <caf/scheduled_actor.hpp>
+#include <caf/typed_event_based_actor.hpp>
 
 #include <cstdint>
 #include <string>
@@ -36,7 +38,9 @@ struct query_supervisor_state {
   size_t open_requests;
 
   // Gives the query_supervisor a unique, human-readable name in log output.
-  std::string name;
+  std::string log_identifier;
+
+  static inline const char* name = "query-supervisor";
 };
 
 /// Returns the behavior of a QUERY SUPERVISOR actor.

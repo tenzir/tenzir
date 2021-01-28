@@ -13,6 +13,8 @@
 
 #pragma once
 
+#include "vast/fwd.hpp"
+
 #include "vast/detail/vector_map.hpp"
 
 namespace vast::detail {
@@ -34,10 +36,6 @@ struct stable_map_policy {
   }
 };
 
-/// A map abstraction over an unsorted `std::vector`.
-template <class Key, class T,
-          class Allocator = std::allocator<std::pair<Key, T>>>
-using stable_map = vector_map<Key, T, Allocator, stable_map_policy>;
+// Note: The alias definition for stable_map is in `vast/fwd.hpp`.
 
 } // namespace vast::detail
-

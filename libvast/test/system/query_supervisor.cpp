@@ -24,7 +24,9 @@
 #include "vast/concept/parseable/vast/expression.hpp"
 #include "vast/expression.hpp"
 #include "vast/ids.hpp"
-#include "vast/system/evaluator_actor.hpp"
+#include "vast/uuid.hpp"
+
+#include <caf/typed_event_based_actor.hpp>
 
 using namespace vast;
 
@@ -37,6 +39,7 @@ dummy_partition(system::partition_actor::pointer self, ids x) {
       self->send(client, x);
       return atom::done_v;
     },
+    [=](atom::status, system::status_verbosity) { return caf::settings{}; },
   };
 }
 

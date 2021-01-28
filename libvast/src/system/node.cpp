@@ -73,8 +73,6 @@
 #include <fstream>
 #include <sstream>
 
-using namespace caf;
-
 namespace vast::system {
 
 namespace {
@@ -86,7 +84,7 @@ thread_local node_actor* this_node;
 
 // Convenience function for wrapping an error into a CAF message.
 auto make_error_msg(ec code, std::string msg) {
-  return caf::make_message(make_error(code, std::move(msg)));
+  return caf::make_message(caf::make_error(code, std::move(msg)));
 }
 
 /// Helper function to determine whether a component can be spawned at most
@@ -160,8 +158,8 @@ void collect_component_status(node_actor* self,
     if (component.type == "source" || component.type == "sink")
       continue;
     self
-      ->request<message_priority::high>(component.actor, timeout,
-                                        atom::status_v, v)
+      ->request<caf::message_priority::high>(component.actor, timeout,
+                                             atom::status_v, v)
       .then(
         [=, lab = label](caf::config_value::dictionary& xs) mutable {
           detail::merge_settings(xs, req_state->content, policy::merge_lists);
@@ -189,8 +187,8 @@ caf::message dump_command(const invocation& inv, caf::actor_system&) {
   auto type_registry = caf::actor_cast<type_registry_actor>(
     self->state.registry.find_by_label("type-registry"));
   if (!type_registry)
-    return caf::make_message(make_error(ec::missing_component, //
-                                        "type-registry"));
+    return caf::make_message(caf::make_error(ec::missing_component, //
+                                             "type-registry"));
   caf::error request_error = caf::none;
   auto rp = self->make_response_promise();
   // The overload for 'request(...)' taking a 'std::chrono::duration' does not
@@ -198,8 +196,8 @@ caf::message dump_command(const invocation& inv, caf::actor_system&) {
   // by hand.
   const auto timeout = caf::duration{defaults::system::initial_request_timeout};
   self
-    ->request<message_priority::high>(type_registry, timeout, atom::get_v,
-                                      atom::taxonomies_v)
+    ->request<caf::message_priority::high>(type_registry, timeout, atom::get_v,
+                                           atom::taxonomies_v)
     .then(
       [=](struct taxonomies taxonomies) mutable {
         auto result = list{};
@@ -286,7 +284,7 @@ spawn_component(node_actor* self, const invocation& inv,
   using caf::atom_uint;
   auto i = node_state::component_factory.find(inv.full_name);
   if (i == node_state::component_factory.end())
-    return make_error(ec::unspecified, "invalid spawn component");
+    return caf::make_error(ec::unspecified, "invalid spawn component");
   return i->second(self, args);
 }
 
@@ -301,7 +299,7 @@ caf::message kill_command(const invocation& inv, caf::actor_system&) {
   auto& label = *first;
   auto component = self->state.registry.find_by_label(label);
   if (!component) {
-    rp.deliver(make_error(ec::unspecified, "no such component: " + label));
+    rp.deliver(caf::make_error(ec::unspecified, "no such component: " + label));
   } else {
     self->demonitor(component);
     terminate<policy::parallel>(self, component)
@@ -320,7 +318,7 @@ caf::message kill_command(const invocation& inv, caf::actor_system&) {
 
 /// Lifts a factory function that accepts `local_actor*` as first argument
 /// to a function accpeting `node_actor*` instead.
-template <maybe_actor (*Fun)(local_actor*, spawn_arguments&)>
+template <maybe_actor (*Fun)(caf::local_actor*, spawn_arguments&)>
 node_state::component_factory_fun lift_component_factory() {
   return [](node_actor* self, spawn_arguments& args) {
     // Delegate to lifted function.
@@ -539,10 +537,11 @@ caf::behavior node(node_actor* self, std::string name, path dir,
     node_state::command_factory = std::move(extra);
   }
   // Initialize the file system with the node directory as root.
-  auto fs = self->spawn<linked + detached>(posix_filesystem, self->state.dir);
+  auto fs = self->spawn<caf::linked + caf::detached>(posix_filesystem,
+                                                     self->state.dir);
   self->state.registry.add(caf::actor_cast<caf::actor>(fs), "filesystem");
   // Remove monitored components.
-  self->set_down_handler([=](const down_msg& msg) {
+  self->set_down_handler([=](const caf::down_msg& msg) {
     VAST_DEBUG(self, "got DOWN from", msg.source);
     auto component = caf::actor_cast<caf::actor>(msg.source);
     auto type = self->state.registry.find_type_for(component);
@@ -557,7 +556,7 @@ caf::behavior node(node_actor* self, std::string name, path dir,
     self->state.registry.remove(component);
   });
   // Terminate deterministically on shutdown.
-  self->set_exit_handler([=](const exit_msg& msg) {
+  self->set_exit_handler([=](const caf::exit_msg& msg) {
     VAST_DEBUG(self, "got EXIT from", msg.source);
     auto& registry = self->state.registry;
     std::vector<caf::actor> actors;
@@ -613,35 +612,45 @@ caf::behavior node(node_actor* self, std::string name, path dir,
       this_node = self;
       return run(inv, self->system(), node_state::command_factory);
     },
-    [=](atom::put, const actor& component,
-        const std::string& type) -> result<atom::ok> {
+    [=](atom::put, const caf::actor& component,
+        const std::string& type) -> caf::result<atom::ok> {
       VAST_DEBUG(self, "got new", type);
       // Check if the new component is a singleton.
       auto& registry = self->state.registry;
       if (is_singleton(type) && registry.find_by_label(type))
-        return make_error(ec::unspecified, "component already exists");
+        return caf::make_error(ec::unspecified, "component already exists");
       // Generate label
       auto label = generate_label(self, type);
       VAST_DEBUG(self, "generated new component label", label);
       if (!registry.add(component, type, label))
-        return make_error(ec::unspecified, "failed to add component");
+        return caf::make_error(ec::unspecified, "failed to add component");
       self->monitor(component);
       return atom::ok_v;
     },
     [=](atom::get, atom::type, const std::string& type) {
-      return self->state.registry.find_by_type(type);
-    },
-    [=](atom::get, atom::label, const std::string& label) {
-      return self->state.registry.find_by_label(label);
-    },
-    [=](atom::get, atom::label, const std::vector<std::string>& labels) {
-      std::vector<caf::actor> result;
-      result.reserve(labels.size());
-      for (auto& label : labels)
-        result.push_back(self->state.registry.find_by_label(label));
+      VAST_DEBUG(self, "got a request for a component of type", type);
+      auto result = self->state.registry.find_by_type(type);
+      VAST_DEBUG(self, "responds to the request for", type, "with", result);
       return result;
     },
-    [=](atom::get, atom::version) { return VAST_VERSION; },
+    [=](atom::get, atom::label, const std::string& label) {
+      VAST_DEBUG(self, "got a request for the component", label);
+      auto result = self->state.registry.find_by_label(label);
+      VAST_DEBUG(self, "responds to the request for", label, "with", result);
+      return result;
+    },
+    [=](atom::get, atom::label, const std::vector<std::string>& labels) {
+      VAST_DEBUG(self, "got a request for the components", labels);
+      std::vector<caf::actor> result;
+      result.reserve(labels.size());
+      for (const auto& label : labels)
+        result.push_back(self->state.registry.find_by_label(label));
+      VAST_DEBUG(self, "responds to the request for", labels, "with", result);
+      return result;
+    },
+    [=](atom::get, atom::version) { //
+      return VAST_VERSION;
+    },
     [=](atom::signal, int signal) {
       VAST_IGNORE_UNUSED(signal);
       VAST_WARNING(self, "got signal", ::strsignal(signal));

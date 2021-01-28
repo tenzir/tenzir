@@ -13,15 +13,15 @@
 
 #pragma once
 
-#include <chrono>
-#include <cstdint>
+#include "vast/fwd.hpp"
 
 #include <caf/timespan.hpp>
 #include <caf/timestamp.hpp>
 
-namespace vast {
+#include <chrono>
+#include <cstdint>
 
-class json;
+namespace vast {
 
 using days = std::chrono::duration<
   int, std::ratio_multiply<std::ratio<24>, std::chrono::hours::period>>;
@@ -42,13 +42,6 @@ using sys_time = std::chrono::time_point<std::chrono::system_clock, Duration>;
 
 using sys_days = sys_time<days>;
 using sys_seconds = sys_time<std::chrono::seconds>;
-
-/// A duration in time with nanosecond resolution.
-using duration = caf::timespan;
-
-/// An absolute point in time with nanosecond resolution. It is capable to
-/// represent +/- 292 years around the UNIX epoch.
-using time = caf::timestamp;
 
 /// A helper type to represent fractional time stamps in type `double`.
 using double_seconds = std::chrono::duration<double, std::ratio<1>>;

@@ -11,6 +11,7 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
+#include "vast/atoms.hpp"
 #include "vast/concept/convertible/to.hpp"
 #include "vast/concept/printable/to_string.hpp"
 #include "vast/concept/printable/vast/data.hpp"
@@ -31,7 +32,6 @@
 #include "vast/system/default_configuration.hpp"
 
 #include <caf/actor_system.hpp>
-#include <caf/atom.hpp>
 #include <caf/io/middleman.hpp>
 #include <caf/settings.hpp>
 #include <caf/timestamp.hpp>

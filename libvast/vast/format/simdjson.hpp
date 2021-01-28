@@ -153,7 +153,7 @@ caf::error reader<Selector>::read_impl(size_t max_events, size_t max_slice_size,
   table_slice_builder_ptr bptr = nullptr;
   while (produced < max_events) {
     if (lines_->done())
-      return finish(cons, make_error(ec::end_of_input, "input exhausted"));
+      return finish(cons, caf::make_error(ec::end_of_input, "input exhausted"));
     if (batch_events_ > 0 && batch_timeout_ > reader_clock::duration::zero()
         && last_batch_sent_ + batch_timeout_ < reader_clock::now()) {
       VAST_DEBUG(this, "reached batch timeout");
@@ -171,18 +171,18 @@ caf::error reader<Selector>::read_impl(size_t max_events, size_t max_slice_size,
       VAST_DEBUG(this, "ignores empty line at", lines_->line_number());
       continue;
     }
-    const auto [j, parse_error] = json_parser_.parse(line);
-    if (parse_error != ::simdjson::SUCCESS) {
+    auto parse_result = json_parser_.parse(line);
+    if (parse_result.error() != ::simdjson::error_code::SUCCESS) {
       if (num_invalid_lines_ == 0)
         VAST_WARNING(this, "failed to parse line", lines_->line_number(), ":",
                      line);
       ++num_invalid_lines_;
       continue;
     }
-    const auto [xs, get_object_error] = j.get_object();
-    if (get_object_error != ::simdjson::SUCCESS)
-      return make_error(ec::type_clash, "not a json object");
-    auto&& layout = selector_(xs);
+    auto get_object_result = parse_result.get_object();
+    if (get_object_result.error() != ::simdjson::error_code::SUCCESS)
+      return caf::make_error(ec::type_clash, "not a json object");
+    auto&& layout = selector_(get_object_result.value());
     if (!layout) {
       if (num_unknown_layouts_ == 0)
         VAST_WARNING(this, "failed to find a matching type at line",
@@ -192,8 +192,8 @@ caf::error reader<Selector>::read_impl(size_t max_events, size_t max_slice_size,
     }
     bptr = builder(*layout);
     if (bptr == nullptr)
-      return make_error(ec::parse_error, "unable to get a builder");
-    if (auto err = add(*bptr, xs, *layout)) {
+      return caf::make_error(ec::parse_error, "unable to get a builder");
+    if (auto err = add(*bptr, get_object_result.value(), *layout)) {
       err.context() += caf::make_message("line", lines_->line_number());
       return finish(cons, err);
     }

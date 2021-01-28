@@ -93,8 +93,9 @@ public:
 
   caf::error schema(vast::schema sch) {
     if (sch.empty())
-      return make_error(ec::invalid_configuration, "no schema provided or type "
-                                                   "too restricted");
+      return caf::make_error(ec::invalid_configuration,
+                             "no schema provided or type "
+                             "too restricted");
     for (auto& entry : sch) {
       if (!caf::holds_alternative<record_type>(entry))
         continue;

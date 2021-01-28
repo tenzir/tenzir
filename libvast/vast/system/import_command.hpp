@@ -20,13 +20,11 @@
 #include "vast/error.hpp"
 #include "vast/logger.hpp"
 #include "vast/scope_linked.hpp"
-#include "vast/system/accountant_actor.hpp"
-#include "vast/system/flush_listener_actor.hpp"
+#include "vast/system/actors.hpp"
 #include "vast/system/make_source.hpp"
 #include "vast/system/node_control.hpp"
 #include "vast/system/signal_monitor.hpp"
 #include "vast/system/spawn_or_connect_to_node.hpp"
-#include "vast/system/type_registry.hpp"
 
 #include <caf/make_message.hpp>
 
@@ -50,24 +48,24 @@ caf::message import_command(const invocation& inv, caf::actor_system& sys) {
                  : caf::get<scope_linked_actor>(node_opt).get();
   VAST_DEBUG(inv.full_name, "got node");
   // Get node components.
-  auto components = get_node_components(self, node, "accountant",
-                                        "type-registry", "importer");
+  auto components = get_typed_node_components< //
+    accountant_actor, type_registry_actor, importer_actor>(self, node);
   if (!components)
     return caf::make_message(std::move(components.error()));
   auto& [accountant, type_registry, importer] = *components;
   if (!type_registry)
-    return caf::make_message(make_error(ec::missing_component, "type-"
-                                                               "registry"));
+    return caf::make_message(caf::make_error( //
+      ec::missing_component, "type-registry"));
   if (!importer)
-    return caf::make_message(make_error(ec::missing_component, "importer"));
+    return caf::make_message(caf::make_error( //
+      ec::missing_component, "importer"));
   // Start signal monitor.
   std::thread sig_mon_thread;
   auto guard = system::signal_monitor::run_guarded(
     sig_mon_thread, sys, defaults::system::signal_monitoring_interval, self);
   // Start the source.
-  auto src_result = make_source<Reader, Defaults>(
-    self, sys, inv, caf::actor_cast<accountant_actor>(accountant),
-    caf::actor_cast<type_registry_actor>(type_registry), importer);
+  auto src_result = make_source<Reader, Defaults>(self, sys, inv, accountant,
+                                                  type_registry, importer);
   if (!src_result)
     return caf::make_message(std::move(src_result.error()));
   auto src = std::move(src_result->src);
@@ -96,8 +94,7 @@ caf::message import_command(const invocation& inv, caf::actor_system& sys) {
           VAST_DEBUG(name, "received DOWN from source");
           if (caf::get_or(inv.options, "vast.import.blocking", false))
             self->send(importer, atom::subscribe_v, atom::flush::value,
-                       wrapped_flush_listener{
-                         caf::actor_cast<flush_listener_actor>(self)});
+                       caf::actor_cast<flush_listener_actor>(self));
           else
             stop = true;
         } else {

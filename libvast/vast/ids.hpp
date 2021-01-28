@@ -13,9 +13,10 @@
 
 #pragma once
 
+#include "vast/fwd.hpp"
+
 #include "vast/aliases.hpp"
 #include "vast/bitmap.hpp"
-#include "vast/fwd.hpp"
 
 namespace vast {
 

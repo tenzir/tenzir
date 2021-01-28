@@ -16,11 +16,12 @@
 #include "vast/defaults.hpp"
 #include "vast/detail/assert.hpp"
 #include "vast/logger.hpp"
-#include "vast/system/archive_actor.hpp"
 #include "vast/system/importer.hpp"
-#include "vast/system/index_actor.hpp"
 #include "vast/system/node.hpp"
 #include "vast/system/spawn_arguments.hpp"
+#include "vast/uuid.hpp"
+
+#include <caf/settings.hpp>
 
 namespace vast::system {
 
@@ -31,11 +32,11 @@ maybe_actor spawn_importer(node_actor* self, spawn_arguments& args) {
   auto [archive, index, type_registry]
     = self->state.registry.find_by_label("archive", "index", "type-registry");
   if (!archive)
-    return make_error(ec::missing_component, "archive");
+    return caf::make_error(ec::missing_component, "archive");
   if (!index)
-    return make_error(ec::missing_component, "index");
+    return caf::make_error(ec::missing_component, "index");
   if (!type_registry)
-    return make_error(ec::missing_component, "type-registry");
+    return caf::make_error(ec::missing_component, "type-registry");
   auto handle
     = self->spawn(importer, args.dir / args.label,
                   caf::actor_cast<archive_actor>(archive),
@@ -51,11 +52,11 @@ maybe_actor spawn_importer(node_actor* self, spawn_arguments& args) {
     // TODO: Implement live-reloading of the importer configuration.
     self->send(handle, atom::telemetry_v);
   }
-  for (auto& a : self->state.registry.find_by_type("source")) {
+  for (auto& source : self->state.registry.find_by_type("source")) {
     VAST_DEBUG(self, "connects source to new importer");
-    self->send(a, atom::sink_v, handle);
+    self->send(source, atom::sink_v, caf::actor_cast<caf::actor>(handle));
   }
-  return handle;
+  return caf::actor_cast<caf::actor>(handle);
 }
 
 } // namespace vast::system

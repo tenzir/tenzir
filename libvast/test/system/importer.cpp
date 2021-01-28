@@ -25,35 +25,39 @@
 #include "vast/detail/spawn_container_source.hpp"
 #include "vast/format/zeek.hpp"
 #include "vast/system/archive.hpp"
-#include "vast/system/index_actor.hpp"
 #include "vast/system/source.hpp"
 #include "vast/system/type_registry.hpp"
 #include "vast/table_slice.hpp"
+#include "vast/uuid.hpp"
 
-using namespace caf;
 using namespace vast;
 
 // -- scaffold for both test setups --------------------------------------------
 
 namespace {
 
-behavior dummy_sink(event_based_actor* self, size_t num_events, actor overseer) {
-  return {[=](stream<table_slice> in) {
-    self->unbecome();
-    self->send(overseer, atom::ok_v);
-    self->make_sink(
-      in,
-      [=](std::vector<table_slice>&) {
-        // nop
-      },
-      [=](std::vector<table_slice>& xs, table_slice x) {
-        xs.emplace_back(std::move(x));
-        if (rows(xs) == num_events)
-          self->send(overseer, xs);
-        else if (rows(xs) > num_events)
-          FAIL("dummy sink received too many events");
-      });
-  }};
+system::stream_sink_actor<table_slice>::behavior_type
+dummy_sink(system::stream_sink_actor<table_slice>::pointer self,
+           size_t num_events, caf::actor overseer) {
+  return {
+    [=](caf::stream<table_slice> in) {
+      self->unbecome();
+      anon_send(overseer, atom::ok_v);
+      auto sink = self->make_sink(
+        in,
+        [=](std::vector<table_slice>&) {
+          // nop
+        },
+        [=](std::vector<table_slice>& xs, table_slice x) {
+          xs.emplace_back(std::move(x));
+          if (rows(xs) == num_events)
+            anon_send(overseer, xs);
+          else if (rows(xs) > num_events)
+            FAIL("dummy sink received too many events");
+        });
+      return caf::inbound_stream_slot<table_slice>{sink.inbound_slot()};
+    },
+  };
 }
 
 template <class Base>
@@ -67,13 +71,13 @@ struct importer_fixture : Base {
   }
 
   ~importer_fixture() {
-    anon_send_exit(importer, exit_reason::user_shutdown);
+    this->self->send_exit(importer, caf::exit_reason::user_shutdown);
   }
 
   auto add_sink() {
     auto snk
       = this->self->spawn(dummy_sink, rows(this->zeek_conn_log), this->self);
-    anon_send(importer, atom::add_v, snk);
+    this->self->send(importer, snk);
     fetch_ok();
     return snk;
   }
@@ -105,10 +109,10 @@ struct importer_fixture : Base {
   }
 
   size_t slice_size;
-  actor importer;
+  system::importer_actor importer;
 };
 
-} // namespace <anonymous>
+} // namespace
 
 // -- deterministic testing ----------------------------------------------------
 
@@ -138,7 +142,7 @@ struct deterministic_fixture : deterministic_fixture_base {
   }
 };
 
-} // namespace <anonymous>
+} // namespace
 
 FIXTURE_SCOPE(deterministic_import_tests, deterministic_fixture)
 
@@ -177,7 +181,9 @@ TEST(deterministic importer with one sink and zeek source) {
   MESSAGE("spawn zeek source");
   auto src = make_zeek_source();
   consume_message();
-  self->send(src, atom::sink_v, importer);
+  self->send(
+    src,
+    static_cast<system::stream_sink_actor<table_slice, std::string>>(importer));
   MESSAGE("loop until importer becomes idle");
   run();
   MESSAGE("verify results");
@@ -191,7 +197,9 @@ TEST(deterministic importer with two sinks and zeek source) {
   MESSAGE("spawn zeek source");
   auto src = make_zeek_source();
   consume_message();
-  self->send(src, atom::sink_v, importer);
+  self->send(
+    src,
+    static_cast<system::stream_sink_actor<table_slice, std::string>>(importer));
   MESSAGE("loop until importer becomes idle");
   run();
   MESSAGE("verify results");
@@ -207,31 +215,31 @@ TEST(deterministic importer with one sink and failing zeek source) {
   MESSAGE("spawn zeek source");
   auto src = make_zeek_source();
   consume_message();
-  self->send(src, atom::sink_v, importer);
+  self->send(
+    src,
+    static_cast<system::stream_sink_actor<table_slice, std::string>>(importer));
   MESSAGE("loop until first ack_batch");
-  if (!allow((upstream_msg::ack_batch), from(importer).to(src)))
+  if (!allow((caf::upstream_msg::ack_batch), from(importer).to(src)))
     sched.run_once();
   MESSAGE("kill the source");
-  self->send_exit(src, exit_reason::kill);
-  expect((exit_msg), from(self).to(src));
+  self->send_exit(src, caf::exit_reason::kill);
+  expect((caf::exit_msg), from(self).to(src));
   MESSAGE("loop until we see the forced_close");
-  if (!allow((downstream_msg::forced_close), from(src).to(importer)))
+  if (!allow((caf::downstream_msg::forced_close), from(src).to(importer)))
     sched.run_once();
   MESSAGE("make sure importer and sink remain unaffected");
   self->monitor(snk);
   self->monitor(importer);
   do {
-    disallow((downstream_msg::forced_close), from(importer).to(snk));
+    disallow((caf::downstream_msg::forced_close), from(importer).to(snk));
   } while (sched.try_run_once());
   using namespace std::chrono_literals;
   self->receive(
-    [](const down_msg& x) {
-      FAIL("unexpected down message: " << x);
-    },
-    after(0s) >> [] {
-      // nop
-    }
-  );
+    [](const caf::down_msg& x) { FAIL("unexpected down message: " << x); },
+    caf::after(0s) >>
+      [] {
+        // nop
+      });
 }
 
 FIXTURE_SCOPE_END()
@@ -263,7 +271,7 @@ struct nondeterministic_fixture : nondeterministic_fixture_base {
   }
 };
 
-} // namespace <anonymous>
+} // namespace
 
 FIXTURE_SCOPE(nondeterministic_import_tests, nondeterministic_fixture)
 
@@ -296,7 +304,9 @@ TEST(nondeterministic importer with one sink and zeek source) {
   add_sink();
   MESSAGE("spawn zeek source");
   auto src = make_zeek_source();
-  self->send(src, atom::sink_v, importer);
+  self->send(
+    src,
+    static_cast<system::stream_sink_actor<table_slice, std::string>>(importer));
   MESSAGE("verify results");
   verify(fetch_result(), zeek_conn_log);
 }
@@ -307,7 +317,9 @@ TEST(nondeterministic importer with two sinks and zeek source) {
   add_sink();
   MESSAGE("spawn zeek source");
   auto src = make_zeek_source();
-  self->send(src, atom::sink_v, importer);
+  self->send(
+    src,
+    static_cast<system::stream_sink_actor<table_slice, std::string>>(importer));
   MESSAGE("verify results");
   auto result = fetch_result();
   MESSAGE("got first result");

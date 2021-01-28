@@ -15,14 +15,17 @@
 
 #include "vast/system/source.hpp"
 
+#include "vast/fwd.hpp"
+
 #include "vast/test/data.hpp"
 #include "vast/test/fixtures/actor_system_and_events.hpp"
 #include "vast/test/test.hpp"
 
 #include "vast/detail/make_io_stream.hpp"
 #include "vast/format/zeek.hpp"
-#include "vast/fwd.hpp"
 #include "vast/table_slice.hpp"
+
+#include <caf/typed_event_based_actor.hpp>
 
 using namespace vast;
 using namespace vast::system;
@@ -34,21 +37,30 @@ struct test_sink_state {
   inline static constexpr const char* name = "test-sink";
 };
 
-using test_sink_type = caf::stateful_actor<test_sink_state>;
-
-caf::behavior test_sink(test_sink_type* self, caf::actor src) {
-  self->send(src, atom::sink_v, self);
-  return {[=](caf::stream<table_slice> in, const std::string&) {
-    return self->make_sink(
-      in,
-      [](caf::unit_t&) {
-        // nop
-      },
-      [=](caf::unit_t&, table_slice slice) {
-        self->state.slices.emplace_back(std::move(slice));
-      },
-      [=](caf::unit_t&, const error&) { MESSAGE(self->name() << " is done"); });
-  }};
+stream_sink_actor<table_slice, std::string>::behavior_type test_sink(
+  stream_sink_actor<table_slice, std::string>::stateful_pointer<test_sink_state>
+    self,
+  caf::actor src) {
+  self->anon_send(
+    src, static_cast<stream_sink_actor<table_slice, std::string>>(self));
+  return {
+    [=](caf::stream<table_slice> in,
+        const std::string&) -> caf::inbound_stream_slot<table_slice> {
+      return self
+        ->make_sink(
+          in,
+          [](caf::unit_t&) {
+            // nop
+          },
+          [=](caf::unit_t&, table_slice slice) {
+            self->state.slices.emplace_back(std::move(slice));
+          },
+          [=](caf::unit_t&, const caf::error&) {
+            MESSAGE(self->name() << " is done");
+          })
+        .inbound_slot();
+    },
+  };
 }
 
 } // namespace <anonymous>
@@ -70,7 +82,10 @@ TEST(zeek source) {
   auto snk = self->spawn(test_sink, src);
   run();
   MESSAGE("get slices");
-  const auto& slices = deref<test_sink_type>(snk).state.slices;
+  const auto& slices
+    = deref<stream_sink_actor<table_slice,
+                              std::string>::stateful_base<test_sink_state>>(snk)
+        .state.slices;
   MESSAGE("compare slices to auto-generates ones");
   REQUIRE_EQUAL(slices.size(), zeek_conn_log.size());
   for (size_t i = 0; i < slices.size(); ++i)

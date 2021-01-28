@@ -91,8 +91,8 @@ struct validator {
 
   template <class T, class U>
   caf::expected<void> operator()(const T& lhs, const U& rhs) {
-    return make_error(ec::syntax_error, "incompatible predicate operands", lhs,
-                      rhs);
+    return caf::make_error(ec::syntax_error, "incompatible predicate operands",
+                           lhs, rhs);
   }
 
   relational_operator op_;

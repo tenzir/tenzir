@@ -158,7 +158,7 @@ caf::error reader<Selector>::read_impl(size_t max_events, size_t max_slice_size,
   table_slice_builder_ptr bptr = nullptr;
   while (produced < max_events) {
     if (lines_->done())
-      return finish(cons, make_error(ec::end_of_input, "input exhausted"));
+      return finish(cons, caf::make_error(ec::end_of_input, "input exhausted"));
     if (batch_events_ > 0 && batch_timeout_ > reader_clock::duration::zero()
         && last_batch_sent_ + batch_timeout_ < reader_clock::now()) {
       VAST_DEBUG(this, "reached batch timeout");
@@ -186,7 +186,7 @@ caf::error reader<Selector>::read_impl(size_t max_events, size_t max_slice_size,
     }
     auto xs = caf::get_if<vast::json::object>(&j);
     if (!xs)
-      return make_error(ec::type_clash, "not a json object");
+      return caf::make_error(ec::type_clash, "not a json object");
     auto&& layout = selector_(*xs);
     if (!layout) {
       if (num_unknown_layouts_ == 0)
@@ -197,7 +197,7 @@ caf::error reader<Selector>::read_impl(size_t max_events, size_t max_slice_size,
     }
     bptr = builder(*layout);
     if (bptr == nullptr)
-      return make_error(ec::parse_error, "unable to get a builder");
+      return caf::make_error(ec::parse_error, "unable to get a builder");
     if (auto err = add(*bptr, *xs, *layout)) {
       if (err == ec::convert_error) {
         if (num_invalid_lines_ == 0)

@@ -74,7 +74,7 @@ public:
 
   // -- implementation of store ------------------------------------------------
 
-  error put(table_slice xs) override;
+  caf::error put(table_slice xs) override;
 
   std::unique_ptr<store::lookup> extract(const ids& xs) const override;
 

@@ -56,11 +56,11 @@ subnet_index::lookup_impl(relational_operator op, data_view d) const {
   return caf::visit(
     detail::overload{
       [&](auto x) -> caf::expected<ids> {
-        return make_error(ec::type_clash, materialize(x));
+        return caf::make_error(ec::type_clash, materialize(x));
       },
       [&](view<address> x) -> caf::expected<ids> {
         if (!(op == ni || op == not_ni))
-          return make_error(ec::unsupported_operator, op);
+          return caf::make_error(ec::unsupported_operator, op);
         auto result = ids{offset(), false};
         uint8_t bits = x.is_v4() ? 32 : 128;
         for (uint8_t i = 0; i <= bits; ++i) { // not an off-by-one
@@ -80,7 +80,7 @@ subnet_index::lookup_impl(relational_operator op, data_view d) const {
       [&](view<subnet> x) -> caf::expected<ids> {
         switch (op) {
           default:
-            return make_error(ec::unsupported_operator, op);
+            return caf::make_error(ec::unsupported_operator, op);
           case equal:
           case not_equal: {
             auto result = network_.lookup(equal, x.network());
@@ -127,6 +127,10 @@ subnet_index::lookup_impl(relational_operator op, data_view d) const {
       [&](view<list> xs) { return detail::container_lookup(*this, op, xs); },
     },
     d);
+}
+
+size_t subnet_index::memusage_impl() const {
+  return network_.memusage() + length_.memusage();
 }
 
 } // namespace vast

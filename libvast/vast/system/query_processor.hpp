@@ -15,10 +15,11 @@
 
 #include "vast/fwd.hpp"
 
-#include "vast/system/index_actor.hpp"
+#include "vast/system/actors.hpp"
 #include "vast/uuid.hpp"
 
 #include <caf/behavior.hpp>
+#include <caf/typed_event_based_actor.hpp>
 
 #include <array>
 #include <cstddef>

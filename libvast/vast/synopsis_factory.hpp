@@ -13,11 +13,11 @@
 
 #pragma once
 
+#include "vast/atoms.hpp"
 #include "vast/factory.hpp"
 #include "vast/synopsis.hpp"
 #include "vast/type.hpp"
 
-#include <caf/atom.hpp>
 #include <caf/settings.hpp>
 
 #include <typeindex>

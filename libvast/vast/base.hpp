@@ -103,6 +103,8 @@ public:
 
   size_t size() const;
 
+  size_t memusage() const;
+
   value_type& operator[](size_t i);
   value_type operator[](size_t i) const;
 

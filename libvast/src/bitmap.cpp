@@ -30,6 +30,10 @@ bitmap::size_type bitmap::size() const {
   return caf::visit([](auto& bm) { return bm.size(); }, bitmap_);
 }
 
+size_t bitmap::memusage() const {
+  return caf::visit([](auto& bm) { return bm.memusage(); }, bitmap_);
+}
+
 void bitmap::append_bit(bool bit) {
   caf::visit([=](auto& bm) { bm.append_bit(bit); }, bitmap_);
 }

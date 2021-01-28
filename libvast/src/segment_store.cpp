@@ -25,6 +25,7 @@
 #include "vast/fbs/utils.hpp"
 #include "vast/ids.hpp"
 #include "vast/logger.hpp"
+#include "vast/system/status_verbosity.hpp"
 #include "vast/table_slice.hpp"
 
 #include <caf/config_value.hpp>
@@ -64,7 +65,7 @@ segment_store::~segment_store() {
 caf::error segment_store::put(table_slice xs) {
   VAST_TRACE(VAST_ARG(xs));
   if (!segments_.inject(xs.offset(), xs.offset() + xs.rows(), builder_.id()))
-    return make_error(ec::unspecified, "failed to update range_map");
+    return caf::make_error(ec::unspecified, "failed to update range_map");
   num_events_ += xs.rows();
   if (auto error = builder_.add(std::move(xs)))
     return error;
@@ -359,7 +360,8 @@ caf::error segment_store::register_segments() {
 caf::error segment_store::register_segment(const path& filename) {
   auto chk = chunk::mmap(filename);
   if (!chk)
-    return make_error(ec::filesystem_error, "failed to mmap chunk", filename);
+    return caf::make_error(ec::filesystem_error, "failed to mmap chunk",
+                           filename);
   // We don't verify the segment here, since doing that would access
   // most of the pages of the mapping and effectively cause us to
   // read of the whole archive contents from disk. When the database
@@ -369,10 +371,10 @@ caf::error segment_store::register_segment(const path& filename) {
   // subset of the fields of a flatbuffer table.
   auto s = fbs::GetSegment(chk->data());
   if (s == nullptr)
-    return make_error(ec::format_error, "segment integrity check failed");
+    return caf::make_error(ec::format_error, "segment integrity check failed");
   auto s0 = s->segment_as_v0();
   if (!s0)
-    return make_error(ec::format_error, "unknown segment version");
+    return caf::make_error(ec::format_error, "unknown segment version");
   num_events_ += s0->events();
   uuid segment_uuid;
   if (auto error = unpack(*s0->uuid(), segment_uuid))
@@ -380,7 +382,7 @@ caf::error segment_store::register_segment(const path& filename) {
   VAST_DEBUG(this, "found segment", segment_uuid);
   for (auto interval : *s0->ids())
     if (!segments_.inject(interval->begin(), interval->end(), segment_uuid))
-      return make_error(ec::unspecified, "failed to update range_map");
+      return caf::make_error(ec::unspecified, "failed to update range_map");
   return caf::none;
 }
 
@@ -389,7 +391,8 @@ caf::expected<segment> segment_store::load_segment(uuid id) const {
   VAST_DEBUG(this, "mmaps segment from", filename);
   auto chk = chunk::mmap(filename);
   if (!chk)
-    return make_error(ec::filesystem_error, "failed to mmap chunk", filename);
+    return caf::make_error(ec::filesystem_error, "failed to mmap chunk",
+                           filename);
   if (auto segment = segment::make(std::move(chk))) {
     return segment;
   } else {

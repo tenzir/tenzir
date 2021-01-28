@@ -26,8 +26,6 @@
 #include "vast/msgpack_table_slice_builder.hpp"
 #include "vast/span.hpp"
 #include "vast/system/index.hpp"
-#include "vast/system/index_actor.hpp"
-#include "vast/system/index_client_actor.hpp"
 #include "vast/system/partition.hpp"
 #include "vast/system/posix_filesystem.hpp"
 #include "vast/table_slice.hpp"
@@ -201,12 +199,14 @@ TEST(full partition roundtrip) {
   // Persist the partition to disk;
   vast::path persist_path = "test-partition"; // will be interpreted relative to
                                               // the fs actor's root dir
-  auto persist_promise
-    = self->request(partition, caf::infinite, vast::atom::persist_v,
-                    persist_path, vast::system::index_actor{});
+  auto persist_promise = self->request(partition, caf::infinite,
+                                       vast::atom::persist_v, persist_path);
   run();
-  persist_promise.receive([](vast::atom::ok) { CHECK("persisting done"); },
-                          [](caf::error err) { FAIL(err); });
+  persist_promise.receive(
+    [](std::shared_ptr<vast::partition_synopsis>&) {
+      CHECK("persisting done");
+    },
+    [](caf::error err) { FAIL(err); });
   self->send_exit(partition, caf::exit_reason::user_shutdown);
   // Spawn a read-only partition from this chunk and try to query the data we
   // added. We make two queries, one "#type"-query and one "normal" query

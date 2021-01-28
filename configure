@@ -46,6 +46,7 @@ Usage: $0 [OPTION]... [VAR=VALUE]...
     --with-lsvast           build with lsvast
     --with-dscat            build with dscat
     --with-example-plugin   build with example plugin
+    --with-plugin=DIR       build with plugin in given directory
 
   Debugging:
     --log-level=LEVEL       maximum compile-time log level
@@ -174,21 +175,27 @@ while [ $# -ne 0 ]; do
       ;;
     --with-example-plugin)
       if [ -z "${plugins}" ]; then
-        plugins="$PWD/examples/plugins/example"
+        plugins="${sourcedir}/examples/plugins/example"
       else
-        plugins="${plugins};$PWD/examples/plugins/example"
+        plugins="${plugins};${sourcedir}/examples/plugins/example"
       fi
       ;;
     --with-plugin=*)
-      optarg="$(cd "$(dirname "$optarg")"; pwd)/$(basename "$optarg")"
-      if [ -z "${plugins}" ]; then
-        plugins="${optarg}"
-      else
-        plugins="${plugins};${optarg}"
+      plugin_parent_dir="$(dirname "$optarg")"
+      if ! [ -d "$plugin_parent_dir" ]; then
+        >&2 echo "not a directory: $plugin_parent_dir"
+        exit 1
       fi
-      ;;
-    --with-type-id-checks)
-      append_cache_entry CAF_ENABLE_TYPE_ID_CHECKS BOOL yes
+      plugin_dir="$(cd "$plugin_parent_dir"; pwd)/$(basename "$optarg")"
+      if ! [ -d "$plugin_dir" ]; then
+        >&2 echo "not a directory: $plugin_dir"
+        exit 1
+      fi
+      if [ -z "${plugins}" ]; then
+        plugins="${plugin_dir}"
+      else
+        plugins="${plugins};${plugin_dir}"
+      fi
       ;;
 # -- Debugging -----------------------------------------------------------------
     --log-level=*)

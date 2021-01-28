@@ -16,8 +16,10 @@
 #include "vast/fwd.hpp"
 
 #include "vast/path.hpp"
-#include "vast/system/filesystem_actor.hpp"
+#include "vast/system/actors.hpp"
 #include "vast/system/filesystem_statistics.hpp"
+
+#include <caf/typed_event_based_actor.hpp>
 
 namespace vast::system {
 

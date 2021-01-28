@@ -59,11 +59,11 @@ address_index::lookup_impl(relational_operator op, data_view d) const {
   return caf::visit(
     detail::overload{
       [&](auto x) -> caf::expected<ids> {
-        return make_error(ec::type_clash, materialize(x));
+        return caf::make_error(ec::type_clash, materialize(x));
       },
       [&](view<address> x) -> caf::expected<ids> {
         if (!(op == equal || op == not_equal))
-          return make_error(ec::unsupported_operator, op);
+          return caf::make_error(ec::unsupported_operator, op);
         auto result = x.is_v4() ? v4_.coder().storage() : ids{offset(), true};
         for (auto i = x.is_v4() ? 12u : 0u; i < 16; ++i) {
           auto bm = bytes_[i].lookup(equal, x.data()[i]);
@@ -77,11 +77,11 @@ address_index::lookup_impl(relational_operator op, data_view d) const {
       },
       [&](view<subnet> x) -> caf::expected<ids> {
         if (!(op == in || op == not_in))
-          return make_error(ec::unsupported_operator, op);
+          return caf::make_error(ec::unsupported_operator, op);
         auto topk = x.length();
         if (topk == 0)
-          return make_error(ec::unspecified,
-                            "invalid IP subnet length: ", topk);
+          return caf::make_error(ec::unspecified,
+                                 "invalid IP subnet length: ", topk);
         auto is_v4 = x.network().is_v4();
         if ((is_v4 ? topk + 96 : topk) == 128)
           // Asking for /32 or /128 membership is equivalent to an equality
@@ -104,6 +104,13 @@ address_index::lookup_impl(relational_operator op, data_view d) const {
       [&](view<list> xs) { return detail::container_lookup(*this, op, xs); },
     },
     d);
+}
+
+size_t address_index::memusage_impl() const {
+  auto acc = v4_.memusage();
+  for (const auto& byte_index : bytes_)
+    acc += byte_index.memusage();
+  return acc;
 }
 
 } // namespace vast

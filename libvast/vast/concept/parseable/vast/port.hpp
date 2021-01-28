@@ -20,7 +20,7 @@
 namespace vast {
 
 struct port_type_parser : parser<port_type_parser> {
-  using attribute = port::port_type;
+  using attribute = port_type;
 
   template <class Iterator>
   bool parse(Iterator& f, const Iterator& l, unused_type) const {
@@ -40,17 +40,17 @@ struct port_type_parser : parser<port_type_parser> {
   }
 
   template <class Iterator>
-  bool parse(Iterator& f, const Iterator& l, port::port_type& x) const {
+  bool parse(Iterator& f, const Iterator& l, port_type& x) const {
     using namespace parsers;
     using namespace parser_literals;
     // clang-format off
     auto p
-      = ( "?"_p ->* [] { return port::unknown; }
-        | "icmp6"_p ->* [] { return port::icmp6; }
-        | "icmp"_p ->* [] { return port::icmp; }
-        | "tcp"_p ->* [] { return port::tcp; }
-        | "udp"_p ->* [] { return port::udp; }
-        | "sctp"_p ->* [] { return port::sctp; }
+      = ( "?"_p ->* [] { return port_type::unknown; }
+        | "icmp6"_p ->* [] { return port_type::icmp6; }
+        | "icmp"_p ->* [] { return port_type::icmp; }
+        | "tcp"_p ->* [] { return port_type::tcp; }
+        | "udp"_p ->* [] { return port_type::udp; }
+        | "sctp"_p ->* [] { return port_type::sctp; }
         );
     // clang-format on
     return p(f, l, x);
@@ -58,7 +58,7 @@ struct port_type_parser : parser<port_type_parser> {
 };
 
 template <>
-struct parser_registry<port::port_type> {
+struct parser_registry<port_type> {
   using type = port_type_parser;
 };
 
@@ -80,7 +80,7 @@ struct port_parser : parser<port_parser> {
       return p(f, l, unused);
     } else {
       port::number_type n;
-      port::port_type t;
+      auto t = port_type::unknown;
       if (!p(f, l, n, t))
         return false;
       x = port{n, t};

@@ -13,6 +13,7 @@
 
 #include "vast/logger.hpp"
 
+#include "vast/atoms.hpp"
 #include "vast/config.hpp"
 #include "vast/defaults.hpp"
 #include "vast/detail/assert.hpp"

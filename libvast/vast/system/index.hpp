@@ -21,19 +21,17 @@
 #include "vast/fbs/index.hpp"
 #include "vast/meta_index.hpp"
 #include "vast/system/accountant.hpp"
-#include "vast/system/filesystem_actor.hpp"
-#include "vast/system/flush_listener_actor.hpp"
-#include "vast/system/index_actor.hpp"
+#include "vast/system/actors.hpp"
 #include "vast/system/partition.hpp"
-#include "vast/system/query_supervisor.hpp"
 #include "vast/uuid.hpp"
 
 #include <caf/actor.hpp>
 #include <caf/behavior.hpp>
-#include <caf/fwd.hpp>
+#include <caf/event_based_actor.hpp>
 #include <caf/meta/omittable_if_empty.hpp>
 #include <caf/meta/type_name.hpp>
 #include <caf/response_promise.hpp>
+#include <caf/typed_event_based_actor.hpp>
 
 #include <unordered_map>
 #include <vector>
@@ -133,7 +131,7 @@ struct index_state {
   caf::error load_from_disk();
 
   /// @returns various status metrics.
-  caf::dictionary<caf::config_value> status(status_verbosity v) const;
+  caf::typed_response_promise<caf::settings> status(status_verbosity v) const;
 
   void flush_to_disk();
 
@@ -153,7 +151,7 @@ struct index_state {
   std::vector<std::pair<uuid, partition_actor>>
   collect_query_actors(query_state& lookup, uint32_t num_partitions);
 
-  // -- flush handling ---------------------------------------------------
+  // -- flush handling ---------------------------------------------------------
 
   /// Adds a new flush listener.
   void add_flush_listener(flush_listener_actor listener);
@@ -161,7 +159,15 @@ struct index_state {
   /// Sends a notification to all listeners and clears the listeners list.
   void notify_flush_listeners();
 
-  // -- data members ----------------------------------------------------------
+  // -- partition handling -----------------------------------------------------
+
+  /// Creates a new active partition.
+  void create_active_partition();
+
+  /// Decommissions the active partition.
+  void decomission_active_partition();
+
+  // -- data members -----------------------------------------------------------
 
   /// Pointer to the parent actor.
   index_actor::pointer self;
@@ -213,7 +219,7 @@ struct index_state {
   /// Statistics about processed data.
   index_statistics stats;
 
-  // Handle of the accountant.
+  /// Handle of the accountant.
   accountant_actor accountant;
 
   /// List of actors that wait for the next flush event.
@@ -221,6 +227,9 @@ struct index_state {
 
   /// Actor handle of the filesystem actor.
   filesystem_actor filesystem;
+
+  // The false positive rate for the meta index.
+  double meta_index_fp_rate;
 
   static inline const char* name = "index";
 };

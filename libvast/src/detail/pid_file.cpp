@@ -41,15 +41,15 @@ caf::error acquire_pid_file(const path& filename) {
       return contents.error();
     auto other_pid = to<int32_t>(*contents);
     if (!other_pid)
-      return make_error(ec::parse_error,
-                        "unable to parse pid_file:", *contents);
+      return caf::make_error(ec::parse_error,
+                             "unable to parse pid_file:", *contents);
     // Safeguard in case the pid_file already belongs to this process.
     if (*other_pid == pid)
       return caf::none;
     if (::getpgid(*other_pid) >= 0)
-      return make_error(ec::filesystem_error,
-                        "PID file found: ", filename.str(), "terminate process",
-                        *contents);
+      return caf::make_error(ec::filesystem_error,
+                             "PID file found: ", filename.str(),
+                             "terminate process", *contents);
     // The previous owner is deceased, print a warning an assume ownership.
     VAST_WARNING_ANON("node detected an irregular shutdown of the previous "
                       "process on the database directory");
@@ -57,21 +57,21 @@ caf::error acquire_pid_file(const path& filename) {
   // Open the file.
   auto fd = ::open(filename.str().c_str(), O_WRONLY | O_CREAT, 0600);
   if (fd < 0)
-    return make_error(ec::filesystem_error,
-                      "failed in open(2):", strerror(errno));
+    return caf::make_error(ec::filesystem_error,
+                           "failed in open(2):", strerror(errno));
   // Lock the file handle.
   if (::flock(fd, LOCK_EX | LOCK_NB) < 0) {
     ::close(fd);
-    return make_error(ec::filesystem_error,
-                      "failed in flock(2):", strerror(errno));
+    return caf::make_error(ec::filesystem_error,
+                           "failed in flock(2):", strerror(errno));
   }
   // Write the PID in human readable form into the file.
   auto pid_string = to_string(pid);
   VAST_ASSERT(!pid_string.empty());
   if (::write(fd, pid_string.data(), pid_string.size()) < 0) {
     ::close(fd);
-    return make_error(ec::filesystem_error,
-                      "failed in write(2):", strerror(errno));
+    return caf::make_error(ec::filesystem_error,
+                           "failed in write(2):", strerror(errno));
   }
   // Relinquish the lock implicitly by closing the descriptor.
   ::close(fd);

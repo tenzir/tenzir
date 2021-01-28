@@ -24,6 +24,7 @@
 #include "vast/concept/printable/vast/table_slice.hpp"
 #include "vast/concept/printable/vast/uuid.hpp"
 #include "vast/detail/assert.hpp"
+#include "vast/detail/settings.hpp"
 #include "vast/expression.hpp"
 #include "vast/expression_visitors.hpp"
 #include "vast/fbs/partition.hpp"
@@ -31,13 +32,11 @@
 #include "vast/fbs/uuid.hpp"
 #include "vast/ids.hpp"
 #include "vast/logger.hpp"
-#include "vast/meta_index.hpp"
 #include "vast/qualified_record_field.hpp"
 #include "vast/synopsis.hpp"
-#include "vast/system/filesystem_actor.hpp"
-#include "vast/system/index_actor.hpp"
 #include "vast/system/indexer.hpp"
 #include "vast/system/shutdown.hpp"
+#include "vast/system/status_verbosity.hpp"
 #include "vast/system/terminate.hpp"
 #include "vast/table_slice.hpp"
 #include "vast/table_slice_column.hpp"
@@ -240,17 +239,17 @@ pack(flatbuffers::FlatBufferBuilder& builder, const active_partition_state& x) {
     auto actor_id = actor.id();
     auto chunk_it = x.chunks.find(actor_id);
     if (chunk_it == x.chunks.end())
-      return make_error(ec::logic_error,
-                        "no chunk for for actor id " + to_string(actor_id));
+      return caf::make_error(ec::logic_error, "no chunk for for actor id "
+                                                + to_string(actor_id));
     auto& chunk = chunk_it->second;
     auto data = builder.CreateVector(
       reinterpret_cast<const uint8_t*>(chunk->data()), chunk->size());
-    auto fqf = builder.CreateString(qf.field_name);
+    auto fieldname = builder.CreateString(qf.field_name);
     fbs::value_index::v0Builder vbuilder(builder);
     vbuilder.add_data(data);
     auto vindex = vbuilder.Finish();
     fbs::qualified_value_index::v0Builder qbuilder(builder);
-    qbuilder.add_qualified_field_name(fqf);
+    qbuilder.add_field_name(fieldname);
     qbuilder.add_index(vindex);
     auto qindex = qbuilder.Finish();
     indices.push_back(qindex);
@@ -297,26 +296,31 @@ caf::error
 unpack(const fbs::partition::v0& partition, passive_partition_state& state) {
   // Check that all fields exist.
   if (!partition.uuid())
-    return make_error(ec::format_error, "missing 'uuid' field in partition "
-                                        "flatbuffer");
+    return caf::make_error(ec::format_error,
+                           "missing 'uuid' field in partition "
+                           "flatbuffer");
   auto combined_layout = partition.combined_layout();
   if (!combined_layout)
-    return make_error(ec::format_error, "missing 'layouts' field in partition "
-                                        "flatbuffer");
+    return caf::make_error(ec::format_error,
+                           "missing 'layouts' field in partition "
+                           "flatbuffer");
   auto indexes = partition.indexes();
   if (!indexes)
-    return make_error(ec::format_error, "missing 'indexes' field in partition "
-                                        "flatbuffer");
+    return caf::make_error(ec::format_error,
+                           "missing 'indexes' field in partition "
+                           "flatbuffer");
   for (auto qualified_index : *indexes) {
-    if (!qualified_index->qualified_field_name())
-      return make_error(ec::format_error, "missing field name in qualified "
-                                          "index");
+    if (!qualified_index->field_name())
+      return caf::make_error(ec::format_error,
+                             "missing field name in qualified "
+                             "index");
     auto index = qualified_index->index();
     if (!index)
-      return make_error(ec::format_error, "missing index name in qualified "
-                                          "index");
+      return caf::make_error(ec::format_error,
+                             "missing index name in qualified "
+                             "index");
     if (!index->data())
-      return make_error(ec::format_error, "missing data in index");
+      return caf::make_error(ec::format_error, "missing data in index");
   }
   if (auto error = unpack(*partition.uuid(), state.id))
     return error;
@@ -333,7 +337,7 @@ unpack(const fbs::partition::v0& partition, passive_partition_state& state) {
                "found incoherent number of indexers in deserialized state;",
                state.combined_layout.fields.size(), "fields for",
                indexes->size(), "indexes");
-    return make_error(ec::format_error, "incoherent number of indexers");
+    return caf::make_error(ec::format_error, "incoherent number of indexers");
   }
   // We only create dummy entries here, since the positions of the `indexers`
   // vector must be the same as in `combined_layout`. The actual indexers are
@@ -357,9 +361,9 @@ unpack(const fbs::partition::v0& partition, passive_partition_state& state) {
 
 caf::error unpack(const fbs::partition::v0& x, partition_synopsis& ps) {
   if (!x.partition_synopsis())
-    return make_error(ec::format_error, "missing partition synopsis");
+    return caf::make_error(ec::format_error, "missing partition synopsis");
   if (!x.type_ids())
-    return make_error(ec::format_error, "missing type_ids");
+    return caf::make_error(ec::format_error, "missing type_ids");
   return unpack(*x.partition_synopsis(), ps);
 }
 
@@ -373,7 +377,6 @@ active_partition_actor::behavior_type active_partition(
   self->state.offset = invalid_id;
   self->state.events = 0;
   self->state.filesystem = std::move(filesystem);
-  self->state.index = nullptr;
   self->state.streaming_initiated = false;
   self->state.synopsis = std::make_shared<partition_synopsis>();
   self->state.synopsis_opts = std::move(synopsis_opts);
@@ -425,7 +428,9 @@ active_partition_actor::behavior_type active_partition(
       // anymore.
       if (err && err != caf::exit_reason::unreachable) {
         VAST_ERROR(self, "aborts with error:", render(err));
-        self->send_exit(self, err);
+        // We don't exit here, since there might be outstanding evaluators who
+        // still need our indexers.
+        return;
       }
       VAST_DEBUG_ANON("partition", id, "finalized streaming");
     },
@@ -483,15 +488,15 @@ active_partition_actor::behavior_type active_partition(
       self->state.streaming_initiated = true;
       return self->state.stage->add_inbound_path(in);
     },
-    [=](atom::persist, const path& part_dir, index_actor index) {
+    [=](atom::persist, const path& part_dir) {
       // Ensure that the response promise has not already been initialized.
       VAST_ASSERT(
         !static_cast<caf::response_promise&>(self->state.persistence_promise)
            .source());
-      self->state.index = index;
       self->state.persist_path = part_dir;
       self->state.persisted_indexers = 0;
-      self->state.persistence_promise = self->make_response_promise<atom::ok>();
+      self->state.persistence_promise
+        = self->make_response_promise<std::shared_ptr<partition_synopsis>>();
       // We use a high message priority here because we want to start persisting
       // as soon as possible in order to avoid shutdown delay.
       self->send<caf::message_priority::high>(self, atom::persist_v,
@@ -512,7 +517,7 @@ active_partition_actor::behavior_type active_partition(
       self->state.stage->out().close();
       if (self->state.indexers.empty()) {
         self->state.persistence_promise.deliver(
-          make_error(ec::logic_error, "partition has no indexers"));
+          caf::make_error(ec::logic_error, "partition has no indexers"));
         return;
       }
       VAST_DEBUG(self, "sends 'snapshot' to", self->state.indexers.size(),
@@ -558,15 +563,21 @@ active_partition_actor::behavior_type active_partition(
               auto fbchunk = fbs::release(builder);
               VAST_DEBUG(self, "persists partition with a total size of",
                          fbchunk->size(), "bytes");
-              // Relinquish ownership and send the shrinked synopsis to the index.
-              if (self->state.index) {
-                self->send(self->state.index, atom::replace_v, self->state.id,
-                           self->state.synopsis);
-                self->state.synopsis.reset();
-              }
-              self->state.persistence_promise.delegate(
-                self->state.filesystem, atom::write_v,
-                *self->state.persist_path, fbchunk);
+              // TODO: Add a proper timeout.
+              self
+                ->request(self->state.filesystem, caf::infinite, atom::write_v,
+                          *self->state.persist_path, fbchunk)
+                .then(
+                  [=](atom::ok) {
+                    // Relinquish ownership and send the shrunken synopsis to
+                    // the index.
+                    self->state.persistence_promise.deliver(
+                      self->state.synopsis);
+                    self->state.synopsis.reset();
+                  },
+                  [=](caf::error e) {
+                    self->state.persistence_promise.deliver(std::move(e));
+                  });
               return;
             },
             [=](caf::error err) {
@@ -580,11 +591,63 @@ active_partition_actor::behavior_type active_partition(
     },
     [=](const expression& expr,
         partition_client_actor client) -> caf::result<atom::done> {
+      // TODO: We should do a candidate check using `self->state.synopsis` and
+      // return early if that doesn't yield any results.
       auto triples = evaluate(self->state, expr);
       if (triples.empty())
         return atom::done_v;
-      auto eval = self->spawn(evaluator, expr, triples);
+      auto eval = self->spawn(evaluator, expr, self, triples);
       return self->delegate(eval, client);
+    },
+    [=](atom::status,
+        status_verbosity v) -> caf::typed_response_promise<caf::settings> {
+      struct req_state_t {
+        // Promise to the original client request.
+        caf::typed_response_promise<caf::settings> rp;
+        // Maps nodes to a map associating components with status information.
+        caf::settings content;
+        size_t memory_usage = 0;
+      };
+      auto req_state = std::make_shared<req_state_t>();
+      req_state->rp = self->make_response_promise<caf::settings>();
+      auto deliver = [](auto&& req_state) {
+        put(req_state.content, "memory-usage", req_state.memory_usage);
+        req_state.rp.deliver(req_state.content);
+      };
+      bool deferred = false;
+      auto& indexer_states = put_list(req_state->content, "indexers");
+      for (auto& i : self->state.indexers) {
+        deferred = true;
+        self
+          ->request<caf::message_priority::high>(i.second, caf::infinite,
+                                                 atom::status_v, v)
+          .then(
+            [=, &indexer_states](const caf::settings& indexer_status) {
+              auto& ps = indexer_states.emplace_back().as_dictionary();
+              put(ps, "field", i.first.fqn());
+              if (auto s = caf::get_if<caf::config_value::integer>(
+                    &indexer_status, "memory-usage"))
+                req_state->memory_usage += *s;
+              if (v >= status_verbosity::debug)
+                detail::merge_settings(indexer_status, ps);
+              // Both handlers have a copy of req_state.
+              if (req_state.use_count() == 2)
+                deliver(std::move(*req_state));
+            },
+            [=, &indexer_states](const caf::error& err) {
+              VAST_WARNING(self, "failed to retrieve status from",
+                           i.first.fqn(), ":", render(err));
+              auto& ps = indexer_states.emplace_back().as_dictionary();
+              put(ps, "id", to_string(id));
+              put(ps, "error", render(err));
+              // Both handlers have a copy of req_state.
+              if (req_state.use_count() == 2)
+                deliver(std::move(*req_state));
+            });
+      }
+      if (!deferred)
+        deliver(std::move(*req_state));
+      return req_state->rp;
     },
   };
 }
@@ -701,8 +764,31 @@ partition_actor::behavior_type passive_partition(
       auto triples = evaluate(self->state, expr);
       if (triples.empty())
         return atom::done_v;
-      auto eval = self->spawn(evaluator, expr, triples);
+      auto eval = self->spawn(evaluator, expr, self, triples);
       return self->delegate(eval, client);
+    },
+    [=](atom::status, status_verbosity /*v*/) -> caf::config_value::dictionary {
+      const auto& st = self->state;
+      caf::settings result;
+      caf::put(result, "size", st.partition_chunk->size());
+      size_t mem_indexers = 0;
+      for (size_t i = 0; i < st.indexers.size(); ++i) {
+        if (st.indexers[i])
+          mem_indexers
+            += sizeof(indexer_state)
+               + st.flatbuffer->indexes()->Get(i)->index()->data()->size();
+      }
+      caf::put(result, "memory-usage-indexers", mem_indexers);
+      auto x = st.partition_chunk->incore();
+      if (!x) {
+        caf::put(result, "memory-usage-incore", render(x.error()));
+        caf::put(result, "memory-usage",
+                 st.partition_chunk->size() + mem_indexers + sizeof(st));
+      } else {
+        caf::put(result, "memory-usage-incore", *x);
+        caf::put(result, "memory-usage", *x + mem_indexers + sizeof(st));
+      }
+      return result;
     },
   };
 }

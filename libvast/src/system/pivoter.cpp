@@ -21,10 +21,10 @@
 #include "vast/detail/string.hpp"
 #include "vast/expression.hpp"
 #include "vast/logger.hpp"
-#include "vast/system/exporter_actor.hpp"
 #include "vast/system/query_status.hpp"
 #include "vast/table_slice.hpp"
 #include "vast/table_slice_column.hpp"
+#include "vast/uuid.hpp"
 
 #include <caf/event_based_actor.hpp>
 #include <caf/settings.hpp>

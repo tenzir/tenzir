@@ -36,7 +36,7 @@ void bool_synopsis::add(data_view x) {
     false_ = true;
 }
 
-size_t bool_synopsis::size_bytes() const {
+size_t bool_synopsis::memusage() const {
   return sizeof(bool_synopsis);
 }
 

@@ -71,7 +71,8 @@ caf::message count_command(const invocation& inv, caf::actor_system& sys) {
       [&](caf::actor& a) {
         cnt = std::move(a);
         if (!cnt)
-          err = make_error(ec::invalid_result, "remote spawn returned nullptr");
+          err = caf::make_error(ec::invalid_result, "remote spawn returned "
+                                                    "nullptr");
       },
       [&](caf::error& e) { err = std::move(e); });
   if (err)

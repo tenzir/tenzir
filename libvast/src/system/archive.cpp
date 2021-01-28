@@ -23,6 +23,7 @@
 #include "vast/segment_store.hpp"
 #include "vast/store.hpp"
 #include "vast/system/report.hpp"
+#include "vast/system/status_verbosity.hpp"
 #include "vast/table_slice.hpp"
 
 #include <caf/config_value.hpp>
@@ -31,8 +32,6 @@
 #include <caf/stream_sink.hpp>
 
 #include <algorithm>
-
-using namespace caf;
 
 namespace vast::system {
 
@@ -100,7 +99,7 @@ archive(archive_actor::stateful_pointer<archive_state> self, path dir,
   self->state.self = self;
   self->state.store = segment_store::make(dir, max_segment_size, capacity);
   VAST_ASSERT(self->state.store != nullptr);
-  self->set_exit_handler([=](const exit_msg& msg) {
+  self->set_exit_handler([=](const caf::exit_msg& msg) {
     VAST_DEBUG(self, "got EXIT from", msg.source);
     self->state.send_report();
     if (auto err = self->state.store->flush())
@@ -108,7 +107,7 @@ archive(archive_actor::stateful_pointer<archive_state> self, path dir,
     self->state.store.reset();
     self->quit(msg.reason);
   });
-  self->set_down_handler([=](const down_msg& msg) {
+  self->set_down_handler([=](const caf::down_msg& msg) {
     VAST_DEBUG(self, "received DOWN from", msg.source);
     self->state.active_exporters.erase(msg.source);
   });
@@ -145,15 +144,15 @@ archive(archive_actor::stateful_pointer<archive_state> self, path dir,
       if (!st.session || st.session_id != session_id) {
         VAST_DEBUG(self, "considers extraction finished for invalidated "
                          "session");
-        self->send(requester, atom::done_v, make_error(ec::no_error));
+        self->send(requester, atom::done_v, caf::make_error(ec::no_error));
         st.next_session();
         return;
       }
       // Extract the next slice.
       auto slice = st.session->next();
       if (!slice) {
-        auto err
-          = slice.error() ? std::move(slice.error()) : make_error(ec::no_error);
+        auto err = slice.error() ? std::move(slice.error())
+                                 : caf::make_error(ec::no_error);
         VAST_DEBUG(self, "finished extraction from the current session:", err);
         self->send(requester, atom::done_v, std::move(err));
         st.next_session();
@@ -170,23 +169,23 @@ archive(archive_actor::stateful_pointer<archive_state> self, path dir,
       return self
         ->make_sink(
           in,
-          [](unit_t&) {
+          [](caf::unit_t&) {
             // nop
           },
-          [=](unit_t&, std::vector<table_slice>& batch) {
+          [=](caf::unit_t&, std::vector<table_slice>& batch) {
             VAST_TRACE(self, "got", batch.size(), "table slices");
             auto t = timer::start(self->state.measurement);
             uint64_t events = 0;
             for (auto& slice : batch) {
               if (auto error = self->state.store->put(slice))
                 VAST_ERROR(self, "failed to add table slice to store",
-                           self->system().render(error));
+                           render(error));
               else
                 events += slice.rows();
             }
             t.stop(events);
           },
-          [=](unit_t&, const error& err) {
+          [=](caf::unit_t&, const caf::error& err) {
             // We get an 'unreachable' error when the stream becomes unreachable
             // because the actor was destroyed; in this case we can't use `self`
             // anymore.
@@ -209,7 +208,7 @@ archive(archive_actor::stateful_pointer<archive_state> self, path dir,
       self->send(self->state.accountant, atom::announce_v, self->name());
       self->delayed_send(self, defs::telemetry_rate, atom::telemetry_v);
     },
-    [=](atom::exporter, const actor& exporter) {
+    [=](atom::exporter, const caf::actor& exporter) {
       auto sender_addr = self->current_sender()->address();
       self->state.active_exporters.insert(sender_addr);
       self->monitor<caf::message_priority::high>(exporter);
@@ -229,7 +228,7 @@ archive(archive_actor::stateful_pointer<archive_state> self, path dir,
     },
     [=](atom::erase, const ids& xs) {
       if (auto err = self->state.store->erase(xs))
-        VAST_ERROR(self, "failed to erase events:", self->system().render(err));
+        VAST_ERROR(self, "failed to erase events:", render(err));
       return atom::done_v;
     },
   };

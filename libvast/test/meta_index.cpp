@@ -44,6 +44,13 @@ vast::time get_timestamp(caf::optional<data_view> element) {
   return materialize(caf::get<view<vast::time>>(*element));
 }
 
+partition_synopsis make_partition_synopsis(const vast::table_slice& ts) {
+  auto result = partition_synopsis{};
+  auto synopsis_opts = caf::settings{};
+  result.add(ts, synopsis_opts);
+  return result;
+}
+
 // Builds a chain of events that are 1s apart, where consecutive chunks of
 // num_events_per_type events have the same type.
 struct generator {
@@ -114,7 +121,8 @@ struct fixture {
     for (size_t i = 0; i < num_partitions; ++i) {
       auto name = i % 2 == 0 ? "foo"s : "foobar"s;
       auto& part = mock_partitions.emplace_back(std::move(name), ids[i], i);
-      meta_idx.add(part.id, part.slice);
+      auto ps = make_partition_synopsis(part.slice);
+      meta_idx.merge(part.id, std::move(ps));
     }
     MESSAGE("verify generated timestamps");
     {
@@ -223,18 +231,21 @@ TEST(meta index with bool synopsis) {
   CHECK(builder->add(make_data_view(true)));
   auto slice = builder->finish();
   REQUIRE(slice.encoding() != table_slice_encoding::none);
+  auto ps1 = make_partition_synopsis(slice);
   auto id1 = uuid::random();
-  meta_idx.add(id1, slice);
+  meta_idx.merge(id1, std::move(ps1));
   CHECK(builder->add(make_data_view(false)));
   slice = builder->finish();
   REQUIRE(slice.encoding() != table_slice_encoding::none);
+  auto ps2 = make_partition_synopsis(slice);
   auto id2 = uuid::random();
-  meta_idx.add(id2, slice);
+  meta_idx.merge(id2, std::move(ps2));
   CHECK(builder->add(make_data_view(caf::none)));
   slice = builder->finish();
   REQUIRE(slice.encoding() != table_slice_encoding::none);
+  auto ps3 = make_partition_synopsis(slice);
   auto id3 = uuid::random();
-  meta_idx.add(id3, slice);
+  meta_idx.merge(id3, std::move(ps3));
   MESSAGE("test custom synopsis");
   auto lookup = [&](std::string_view expr) {
     return meta_idx.lookup(unbox(to<expression>(expr)));
@@ -257,14 +268,6 @@ TEST(meta index with bool synopsis) {
   CHECK_EQUAL(lookup("y != F"), none);
   CHECK_EQUAL(lookup("y == F"), none);
   CHECK_EQUAL(lookup("y != T"), none);
-}
-
-TEST(option setting and retrieval) {
-  meta_index meta_idx;
-  auto& opts = meta_idx.factory_options();
-  put(opts, "foo", 42);
-  auto x = caf::get_if<caf::config_value::integer>(&opts["foo"]);
-  CHECK_EQUAL(unbox(x), 42);
 }
 
 FIXTURE_SCOPE_END()

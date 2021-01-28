@@ -57,7 +57,7 @@ public:
                                      data_view rhs) const = 0;
 
   /// @returns A best-effort estimate of the size (in bytes) of this synopsis.
-  virtual size_t size_bytes() const = 0;
+  virtual size_t memusage() const = 0;
 
   /// Returns a new synopsis with the same data but consuming less memory,
   /// or `nullptr` if that is not possible.

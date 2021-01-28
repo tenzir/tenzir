@@ -85,7 +85,7 @@ bool list_index::append_impl(data_view x, id pos) {
 caf::expected<ids>
 list_index::lookup_impl(relational_operator op, data_view x) const {
   if (!(op == ni || op == not_ni))
-    return make_error(ec::unsupported_operator, op);
+    return caf::make_error(ec::unsupported_operator, op);
   if (elements_.empty())
     return ids{};
   auto result = elements_[0]->lookup(equal, x);
@@ -101,6 +101,14 @@ list_index::lookup_impl(relational_operator op, data_view x) const {
   if (op == not_ni)
     result->flip();
   return result;
+}
+
+size_t list_index::memusage_impl() const {
+  size_t acc = 0;
+  for (const auto& element : elements_)
+    acc += element->memusage();
+  acc += size_.memusage();
+  return acc;
 }
 
 } // namespace vast

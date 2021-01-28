@@ -127,8 +127,9 @@ caf::error configuration::parse(int argc, char** argv) {
       if (auto config = path{arg.substr(9)}; exists(config))
         config_files.push_back(std::move(config));
       else
-        return make_error(ec::invalid_configuration,
-                          "cannot find configuration file: " + config.str());
+        return caf::make_error(ec::invalid_configuration, "cannot find "
+                                                          "configuration file: "
+                                                            + config.str());
     }
   }
   // Parse and merge all configuration files.

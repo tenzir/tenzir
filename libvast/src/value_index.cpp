@@ -37,7 +37,7 @@ caf::expected<void> value_index::append(data_view x, id pos) {
   auto off = offset();
   if (pos < off)
     // Can only append at the end
-    return make_error(ec::unspecified, pos, '<', off);
+    return caf::make_error(ec::unspecified, pos, '<', off);
   if (caf::holds_alternative<caf::none_t>(x)) {
     none_.append_bits(false, pos - none_.size());
     none_.append_bit(true);
@@ -45,7 +45,7 @@ caf::expected<void> value_index::append(data_view x, id pos) {
   }
   // TODO: let append_impl return caf::error
   if (!append_impl(x, pos))
-    return make_error(ec::unspecified, "append_impl");
+    return caf::make_error(ec::unspecified, "append_impl");
   mask_.append_bits(false, pos - mask_.size());
   mask_.append_bit(true);
   return caf::no_error;
@@ -56,7 +56,7 @@ value_index::lookup(relational_operator op, data_view x) const {
   // When x is nil, we can answer the query right here.
   if (caf::holds_alternative<caf::none_t>(x)) {
     if (!(op == equal || op == not_equal))
-      return make_error(ec::unsupported_operator, op);
+      return caf::make_error(ec::unsupported_operator, op);
     auto is_equal = op == equal;
     auto result = is_equal ? none_ : ~none_;
     if (result.size() < mask_.size())
@@ -82,6 +82,10 @@ value_index::lookup(relational_operator op, data_view x) const {
   if (result->size() < offset())
     result->append_bits(is_negation, offset() - result->size());
   return std::move(*result);
+}
+
+size_t value_index::memusage() const {
+  return mask_.memusage() + none_.memusage() + memusage_impl();
 }
 
 value_index::size_type value_index::offset() const {
@@ -141,7 +145,7 @@ caf::error inspect(caf::deserializer& source, value_index_ptr& x) {
     return err;
   x = factory<value_index>::make(std::move(t), std::move(opts));
   if (x == nullptr)
-    return make_error(ec::unspecified, "failed to construct value index");
+    return caf::make_error(ec::unspecified, "failed to construct value index");
   return x->deserialize(source);
 }
 
