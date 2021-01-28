@@ -57,7 +57,7 @@ public:
     bloom_filter_parameters params;
     params.p = p_;
     params.n = next_power_of_two;
-    VAST_LOG_SPD_DEBUG("shrinks buffered synopsis to {} elements", , params.n);
+    VAST_LOG_SPD_DEBUG("shrinks buffered synopsis to {} elements", params.n);
     auto type = annotate_parameters(this->type(), params);
     // TODO: If we can get rid completely of the `address_synopsis` and
     // `string_synopsis` types, we could also call the correct constructor here.

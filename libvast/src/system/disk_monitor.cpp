@@ -61,7 +61,8 @@ disk_monitor(disk_monitor_actor::stateful_pointer<disk_monitor_state> self,
       // Nonetheless, if this becomes relevant we should switch to using
       // `inotify()` or similar to do real-time tracking of the db size.
       auto size = recursive_size(self->state.dbdir);
-      VAST_VERBOSE(self, "checks db-directory of size", size, "bytes");
+      VAST_LOG_SPD_VERBOSE("{} checks db-directory of size {} bytes",
+                           detail::id_or_name(self), size);
       if (size > self->state.high_water_mark && !self->state.purging) {
         self->state.purging = true;
         self->send(self, atom::erase_v);
@@ -81,7 +82,8 @@ disk_monitor(disk_monitor_actor::stateful_pointer<disk_monitor_state> self,
           continue;
         uuid id;
         if (!parsers::uuid(partition, id)) {
-          VAST_VERBOSE(self, "failed to find partition", partition);
+          VAST_LOG_SPD_VERBOSE("{} failed to find partition {}",
+                               detail::id_or_name(self), partition);
           continue;
         }
         // TODO: Wrap a more generic `stat()` using `vast::path`.
@@ -91,7 +93,8 @@ disk_monitor(disk_monitor_actor::stateful_pointer<disk_monitor_state> self,
         partitions.push_back({id, statbuf.st_size, statbuf.st_mtime});
       }
       if (partitions.empty()) {
-        VAST_VERBOSE(self, "failed to find any partitions to delete");
+        VAST_LOG_SPD_VERBOSE("{} failed to find any partitions to delete",
+                             detail::id_or_name(self));
         return;
       }
       VAST_LOG_SPD_DEBUG("{} found {} partitions on disk",
@@ -101,21 +104,24 @@ disk_monitor(disk_monitor_actor::stateful_pointer<disk_monitor_state> self,
                   return lhs.mtime < rhs.mtime;
                 });
       auto oldest = partitions.front();
-      VAST_VERBOSE(self, "erases partition", oldest.id, "from index");
+      VAST_LOG_SPD_VERBOSE("{} erases partition {} from index",
+                           detail::id_or_name(self), oldest.id);
       self->request(index, caf::infinite, atom::erase_v, oldest.id)
         .then(
           [=, sg = shared_guard](ids erased_ids) {
             // TODO: It would be more natural if we could chain these futures,
             // instead of nesting them.
-            VAST_VERBOSE(self, "erases removed ids from archive");
+            VAST_LOG_SPD_VERBOSE("{} erases removed ids from archive",
+                                 detail::id_or_name(self));
             self
               ->request(self->state.archive, caf::infinite, atom::erase_v,
                         erased_ids)
               .then(
                 [=, sg = shared_guard](atom::done) {
                   auto sz = recursive_size(self->state.dbdir);
-                  VAST_VERBOSE(self, "erased ids from index;", sz,
-                               "bytes left on disk");
+                  VAST_LOG_SPD_VERBOSE("{} erased ids from index; {} bytes "
+                                       "left on disk",
+                                       detail::id_or_name(self), sz);
                   if (sz > self->state.low_water_mark) {
                     // Repeat until we're below the low water mark
                     self->send(self, atom::erase_v);

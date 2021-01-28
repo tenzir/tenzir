@@ -292,7 +292,8 @@ exporter(exporter_actor::stateful_pointer<exporter_state> self, expression expr,
       self->monitor(self->state.sink);
     },
     [=](atom::run) {
-      VAST_VERBOSE(self, "executes query:", to_string(self->state.expr));
+      VAST_LOG_SPD_VERBOSE("{} executes query: {}", detail::id_or_name(self),
+                           to_string(self->state.expr));
       self->state.start = std::chrono::system_clock::now();
       if (!has_historical_option(self->state.options))
         return;

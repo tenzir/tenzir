@@ -143,7 +143,8 @@ caf::error index_state::load_from_disk() {
     return caf::none;
   }
   if (auto fname = index_filename(); exists(fname)) {
-    VAST_VERBOSE(self, "loads state from", fname);
+    VAST_LOG_SPD_VERBOSE("{} loads state from {}", detail::id_or_name(self),
+                         fname);
     auto buffer = io::read(fname);
     if (!buffer) {
       VAST_ERROR(self, "failed to read index file:", render(buffer.error()));
@@ -211,8 +212,10 @@ bool index_state::worker_available() {
 
 std::optional<query_supervisor_actor> index_state::next_worker() {
   if (!worker_available()) {
-    VAST_VERBOSE(self, "waits for query supervisors to become available to "
-                       "delegate work; consider increasing 'vast.max-queries'");
+    VAST_LOG_SPD_VERBOSE(
+      "{} waits for query supervisors to become available to "
+      "delegate work; consider increasing 'vast.max-queries'",
+      detail::id_or_name(self));
     return std::nullopt;
   }
   auto result = std::move(idle_workers.back());
@@ -510,9 +513,10 @@ index(index_actor::stateful_pointer<index_state> self,
   VAST_TRACE(VAST_ARG(filesystem), VAST_ARG(dir), VAST_ARG(partition_capacity),
              VAST_ARG(max_inmem_partitions), VAST_ARG(taste_partitions),
              VAST_ARG(num_workers), VAST_ARG(meta_index_fp_rate));
-  VAST_VERBOSE(self, "initializes index in", dir,
-               "with a maximum partition size of", partition_capacity,
-               "events and", max_inmem_partitions, "resident partitions");
+  VAST_LOG_SPD_VERBOSE("{} initializes index in {} with a maximum partition "
+                       "size of {} events and {} resident partitions",
+                       detail::id_or_name(self), dir, partition_capacity,
+                       max_inmem_partitions);
   // Set members.
   self->state.self = self;
   self->state.filesystem = std::move(filesystem);
@@ -724,7 +728,8 @@ index(index_actor::stateful_pointer<index_state> self,
       return {};
     },
     [=](atom::erase, uuid partition_id) -> caf::result<ids> {
-      VAST_VERBOSE(self, "erases partition", partition_id);
+      VAST_LOG_SPD_VERBOSE("{} erases partition {}", detail::id_or_name(self),
+                           partition_id);
       auto rp = self->make_response_promise<ids>();
       auto path = self->state.partition_path(partition_id);
       bool adjust_stats = true;

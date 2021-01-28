@@ -76,8 +76,8 @@ read_query(const invocation& inv, std::string_view file_option,
       VAST_WARNING_ANON("spreading a query over multiple arguments is "
                         "deprecated; please pass it as a single string "
                         "instead.");
-      VAST_VERBOSE_ANON("(hint: use a heredoc if you run into quoting "
-                        "issues.)");
+      VAST_LOG_SPD_VERBOSE("(hint: use a heredoc if you run into quoting "
+                           "issues.)");
     }
     result = detail::join(inv.arguments.begin() + argument_offset,
                           inv.arguments.end(), " ");

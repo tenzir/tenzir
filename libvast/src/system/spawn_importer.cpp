@@ -42,7 +42,7 @@ maybe_actor spawn_importer(node_actor* self, spawn_arguments& args) {
                   caf::actor_cast<archive_actor>(archive),
                   caf::actor_cast<index_actor>(index),
                   caf::actor_cast<type_registry_actor>(type_registry));
-  VAST_VERBOSE(self, "spawned the importer");
+  VAST_LOG_SPD_VERBOSE("{} spawned the importer", detail::id_or_name(self));
   if (auto accountant = self->state.registry.find_by_label("accountant")) {
     self->send(handle, atom::telemetry_v);
     self->send(handle, caf::actor_cast<accountant_actor>(accountant));

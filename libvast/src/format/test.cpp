@@ -243,7 +243,8 @@ reader::reader(const caf::settings& options, std::unique_ptr<std::istream>)
   if (num_events_ == 0)
     num_events_ = std::numeric_limits<size_t>::max();
   if (caf::holds_alternative<std::string>(options, "vast.import.read-timeout"))
-    VAST_VERBOSE(this, "ingnores the unsupported read timeout option");
+    VAST_LOG_SPD_VERBOSE("{} ingnores the unsupported read timeout option",
+                         detail::id_or_name(this));
 }
 
 void reader::reset(std::unique_ptr<std::istream>) {

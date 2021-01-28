@@ -433,7 +433,7 @@ active_partition_actor::behavior_type active_partition(
         // still need our indexers.
         return;
       }
-      VAST_LOG_SPD_DEBUG("partition {} finalized streaming", , id);
+      VAST_LOG_SPD_DEBUG("partition {} finalized streaming", id);
     },
     // Every "outbound path" has a path_state, which consists of a "Filter"
     // and a vector of "T", the output buffer. In the case of a partition,
@@ -474,7 +474,8 @@ active_partition_actor::behavior_type active_partition(
       caf::delayed_anon_send(caf::actor_cast<caf::actor>(self), 100ms, msg);
       return;
     }
-    VAST_VERBOSE(self, "shuts down after persisting partition state");
+    VAST_LOG_SPD_VERBOSE("{} shuts down after persisting partition state",
+                         detail::id_or_name(self));
     // TODO: We must actor_cast to caf::actor here because 'shutdown' operates
     // on 'std::vector<caf::actor>' only. That should probably be generalized
     // in the future.

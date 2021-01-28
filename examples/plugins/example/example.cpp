@@ -47,7 +47,8 @@ example(example_actor::stateful_pointer<example_actor_state> self) {
       for (auto& [key, value] : config) {
         if (key == "max-events") {
           if (auto max_events = caf::get_if<integer>(&value)) {
-            VAST_VERBOSE(self, "sets max-events to", *max_events);
+            VAST_LOG_SPD_VERBOSE("{} sets max-events to {}",
+                                 detail::id_or_name(self), *max_events);
             self->state.max_events = *max_events;
           }
         }
@@ -59,7 +60,8 @@ example(example_actor::stateful_pointer<example_actor_state> self) {
         self, in,
         // Initialization hook for CAF stream.
         [=](uint64_t& counter) { // reset state
-          VAST_VERBOSE(self, "initialized stream");
+          VAST_LOG_SPD_VERBOSE("{} initialized stream",
+                               detail::id_or_name(self));
           counter = 0;
         },
         // Process one stream element at a time.

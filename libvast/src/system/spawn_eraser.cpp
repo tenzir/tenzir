@@ -34,7 +34,8 @@ spawn_eraser(system::node_actor* self, system::spawn_arguments& args) {
   // Parse options.
   auto eraser_query = caf::get_or(args.inv.options, "vast.aging-query", ""s);
   if (eraser_query.empty()) {
-    VAST_VERBOSE(self, "has no aging-query and skips starting the eraser");
+    VAST_LOG_SPD_VERBOSE("{} has no aging-query and skips starting the eraser",
+                         detail::id_or_name(self));
     return ec::no_error;
   }
   if (auto expr = to<expression>(eraser_query); !expr) {
@@ -60,7 +61,8 @@ spawn_eraser(system::node_actor* self, system::spawn_arguments& args) {
   auto handle = self->spawn(eraser, aging_frequency, eraser_query,
                             caf::actor_cast<index_actor>(index),
                             caf::actor_cast<archive_actor>(archive));
-  VAST_VERBOSE(self, "spawned an eraser for", eraser_query);
+  VAST_LOG_SPD_VERBOSE("{} spawned an eraser for {}", detail::id_or_name(self),
+                       eraser_query);
   return handle;
 }
 

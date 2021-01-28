@@ -161,10 +161,11 @@ make_source(const Actor& self, caf::actor_system& sys, const invocation& inv,
   if (!reader)
     return caf::make_error(ec::invalid_result, "failed to spawn reader");
   if (slice_size == std::numeric_limits<decltype(slice_size)>::max())
-    VAST_VERBOSE_ANON(reader->name(), "produces", encoding, "table slices");
+    VAST_LOG_SPD_VERBOSE("{} produces {} table slices", reader->name(),
+                         encoding);
   else
-    VAST_VERBOSE_ANON(reader->name(), "produces", encoding,
-                      "table slices of at most", slice_size, "events");
+    VAST_LOG_SPD_VERBOSE("{} produces {} table slices of at most {} events",
+                         reader->name(), encoding, slice_size);
   // Spawn the source, falling back to the default spawn function.
   auto local_schema = schema ? std::move(*schema) : vast::schema{};
   auto type_filter = type ? std::move(*type) : std::string{};
