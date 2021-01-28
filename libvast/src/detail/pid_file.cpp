@@ -50,7 +50,7 @@ caf::error acquire_pid_file(const path& filename) {
                              "PID file found: ", filename.str(),
                              "terminate process", *contents);
     // The previous owner is deceased, print a warning an assume ownership.
-    VAST_WARNING_ANON("node detected an irregular shutdown of the previous "
+    VAST_LOG_SPD_WARN("node detected an irregular shutdown of the previous "
                       "process on the database directory");
   }
   // Open the file.

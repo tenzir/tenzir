@@ -108,7 +108,8 @@ void request_more_hits(exporter_actor::stateful_pointer<exporter_state> self) {
   auto& st = self->state;
   // Sanity check.
   if (!has_historical_option(st.options)) {
-    VAST_WARNING(self, "requested more hits for continuous query");
+    VAST_LOG_SPD_WARN("{} requested more hits for continuous query",
+                      detail::id_or_name(self));
     return;
   }
   // Do nothing if we already shipped everything the client asked for.
@@ -244,7 +245,8 @@ exporter(exporter_actor::stateful_pointer<exporter_state> self, expression expr,
       auto& qs = self->state.query;
       // Sanity checks.
       if (requested_results == 0) {
-        VAST_WARNING(self, "ignores extract request for 0 results");
+        VAST_LOG_SPD_WARN("{} ignores extract request for 0 results",
+                          detail::id_or_name(self));
         return {};
       }
       if (qs.requested == max_events) {
@@ -400,7 +402,7 @@ exporter(exporter_actor::stateful_pointer<exporter_state> self, expression expr,
         self->send(st.accountant, r);
       }
       if (count == 0) {
-        VAST_WARNING(self, "got empty hits");
+        VAST_LOG_SPD_WARN("{} got empty hits", detail::id_or_name(self));
       } else {
         VAST_ASSERT(rank(st.hits & hits) == 0);
         VAST_LOG_SPD_DEBUG("{} got {} index hits in [{}, {})",

@@ -131,8 +131,9 @@ caf::message pivot_command(const invocation& inv, caf::actor_system& sys) {
           VAST_ASSERT(!"received DOWN from inexplicable actor");
         }
         if (msg.reason) {
-          VAST_WARNING(inv.full_name, "received error message:",
-                       self->system().render(msg.reason));
+          VAST_LOG_SPD_WARN("{} received error message: {}",
+                            detail::id_or_name(inv.full_name),
+                            self->system().render(msg.reason));
           err = std::move(msg.reason);
         }
         stop = true;

@@ -39,7 +39,8 @@ spawn_eraser(system::node_actor* self, system::spawn_arguments& args) {
     return ec::no_error;
   }
   if (auto expr = to<expression>(eraser_query); !expr) {
-    VAST_WARNING(self, "got an invalid aging-query", eraser_query);
+    VAST_LOG_SPD_WARN("{} got an invalid aging-query {}",
+                      detail::id_or_name(self), eraser_query);
     return expr.error();
   }
   auto aging_frequency = defaults::system::aging_frequency;

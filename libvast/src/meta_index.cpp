@@ -196,7 +196,7 @@ std::vector<uuid> meta_index::lookup(const expression& expr) const {
             result_type result;
             auto s = caf::get_if<std::string>(&d);
             if (!s) {
-              VAST_WARNING_ANON("#field meta queries only support string "
+              VAST_LOG_SPD_WARN("#field meta queries only support string "
                                 "comparisons");
             } else {
               for (const auto& synopsis : synopses_) {
@@ -221,7 +221,8 @@ std::vector<uuid> meta_index::lookup(const expression& expr) const {
             std::sort(result.begin(), result.end());
             return result;
           }
-          VAST_WARNING(this, "cannot process attribute extractor:", lhs.attr);
+          VAST_LOG_SPD_WARN("{} cannot process attribute extractor: {}",
+                            detail::id_or_name(this), lhs.attr);
           return all_partitions();
         },
         [&](const field_extractor& lhs, const data&) -> result_type {
@@ -235,7 +236,8 @@ std::vector<uuid> meta_index::lookup(const expression& expr) const {
           return search(pred);
         },
         [&](const auto&, const auto&) -> result_type {
-          VAST_WARNING(this, "cannot process predicate:", x);
+          VAST_LOG_SPD_WARN("{} cannot process predicate: {}",
+                            detail::id_or_name(this), x);
           return all_partitions();
         },
       };

@@ -114,8 +114,8 @@ void type_registry_state::insert(vast::type layout) {
     // the new layout is a superset of it.
     if (old_layouts.begin() != hint) {
       if (!is_subset(*old_layouts.begin(), *hint))
-        VAST_WARNING(self, "detected an incompatible layout change for",
-                     hint->name());
+        VAST_LOG_SPD_WARN("{} detected an incompatible layout change for {}",
+                          detail::id_or_name(self), hint->name());
       else
         VAST_LOG_SPD_INFO("{} detected a layout change for {}",
                           detail::id_or_name(self), hint->name());

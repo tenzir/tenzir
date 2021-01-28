@@ -136,7 +136,8 @@ std::unique_ptr<store::lookup> segment_store::extract(const ids& xs) const {
   // probing each ID interval.
   std::vector<uuid> candidates;
   if (auto err = select_segments(xs, candidates)) {
-    VAST_WARNING(this, "failed to get candidates for ids", xs);
+    VAST_LOG_SPD_WARN("{} failed to get candidates for ids {}",
+                      detail::id_or_name(this), xs);
     return nullptr;
   }
   VAST_LOG_SPD_DEBUG("{} processes {} candidates", detail::id_or_name(this),
@@ -180,14 +181,16 @@ caf::error segment_store::erase(const ids& xs) {
     if (auto maybe_slices = seg.lookup(segment_ids)) {
       slices = std::move(*maybe_slices);
       if (slices.empty()) {
-        VAST_WARNING(this, "got no slices after lookup for segment", segment_id,
-                     "=> erases entire segment!");
+        VAST_LOG_SPD_WARN("{} got no slices after lookup for segment {} => "
+                          "erases entire segment!",
+                          detail::id_or_name(this), segment_id);
         erased_events += drop(seg);
         return;
       }
     } else {
-      VAST_WARNING(this, "was unable to get table slice for segment",
-                   segment_id, "=> erases entire segment!");
+      VAST_LOG_SPD_WARN("{} was unable to get table slice for segment {} => "
+                        "erases entire segment!",
+                        detail::id_or_name(this), segment_id);
       erased_events += drop(seg);
       return;
     }
@@ -210,8 +213,9 @@ caf::error segment_store::erase(const ids& xs) {
       erased_events += slice.rows() - remaining_rows;
     }
     if (new_slices.empty()) {
-      VAST_WARNING(this, "was unable to generate any new slice for segment",
-                   segment_id, "=> erases entire segment!");
+      VAST_LOG_SPD_WARN("{} was unable to generate any new slice for segment "
+                        "{} => erases entire segment!",
+                        detail::id_or_name(this), segment_id);
       erased_events += drop(seg);
       return;
     }

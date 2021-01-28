@@ -73,7 +73,7 @@ read_query(const invocation& inv, std::string_view file_option,
   } else {
     // Assemble expression from all remaining arguments.
     if (inv.arguments.size() > 1) {
-      VAST_WARNING_ANON("spreading a query over multiple arguments is "
+      VAST_LOG_SPD_WARN("spreading a query over multiple arguments is "
                         "deprecated; please pass it as a single string "
                         "instead.");
       VAST_LOG_SPD_VERBOSE("(hint: use a heredoc if you run into quoting "

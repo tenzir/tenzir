@@ -234,8 +234,8 @@ struct container_parser_builder {
       auto to_enumeration = [t](std::string s) -> caf::optional<Attribute> {
         auto i = std::find(t.fields.begin(), t.fields.end(), s);
         if (i == t.fields.end()) {
-          VAST_WARNING_ANON("csv reader failed to parse unexpected enum value",
-                            s);
+          VAST_LOG_SPD_WARN(
+            "csv reader failed to parse unexpected enum value {}", s);
           return caf::none;
         }
         return detail::narrow_cast<enumeration>(
@@ -335,8 +335,8 @@ struct csv_parser_factory {
       auto to_enumeration = [t](std::string s) -> caf::optional<enumeration> {
         auto i = std::find(t.fields.begin(), t.fields.end(), s);
         if (i == t.fields.end()) {
-          VAST_WARNING_ANON("csv reader failed to parse unexpected enum value",
-                            s);
+          VAST_LOG_SPD_WARN(
+            "csv reader failed to parse unexpected enum value {}", s);
           return caf::none;
         }
         return detail::narrow_cast<enumeration>(
@@ -385,8 +385,8 @@ vast::system::report reader::status() const {
   uint64_t num_lines = num_lines_;
   uint64_t invalid_lines = num_invalid_lines_;
   if (num_invalid_lines_ > 0)
-    VAST_WARNING(this, "failed to parse", num_invalid_lines_, "of", num_lines_,
-                 "recent lines");
+    VAST_LOG_SPD_WARN("{} failed to parse {} of {} recent lines",
+                      detail::id_or_name(this), num_invalid_lines_, num_lines_);
   num_lines_ = 0;
   num_invalid_lines_ = 0;
   return {
@@ -462,8 +462,9 @@ caf::error reader::read_impl(size_t max_events, size_t max_slice_size,
     ++num_lines_;
     if (!p(line)) {
       if (num_invalid_lines_ == 0)
-        VAST_WARNING(this, "failed to parse line", lines_->line_number(), ":",
-                     line);
+        VAST_LOG_SPD_WARN("{} failed to parse line {} : {}",
+                          detail::id_or_name(this), lines_->line_number(),
+                          line);
       ++num_invalid_lines_;
       continue;
     }

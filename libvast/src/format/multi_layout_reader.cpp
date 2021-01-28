@@ -41,10 +41,9 @@ caf::error multi_layout_reader::finish(consumer& f,
       // This is a defensive mechanism to prevent wrap-around. If we run into
       // this case we probably have a logic bug somewhere, but it is not an
       // error, so there is no reason to treat it as one.
-      VAST_WARNING_ANON(*this,
-                        "detected a mismatch in the batch tracking "
-                        "logic",
-                        VAST_ARG(batch_events_), VAST_ARG(rows));
+      VAST_LOG_SPD_WARN(" {} detected a mismatch in the batch tracking "
+                        "logic {}  {}",
+                        *this, VAST_ARG(batch_events_), VAST_ARG(rows));
       batch_events_ = 0;
     }
     auto slice = builder_ptr->finish();

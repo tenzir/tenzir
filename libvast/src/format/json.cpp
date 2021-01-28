@@ -143,7 +143,7 @@ struct convert {
     if (integer x; parsers::json_int(str, x))
       return x;
     if (real x; parsers::json_number(str, x)) {
-      VAST_WARNING_ANON("json-reader narrowed", str, "to type int");
+      VAST_LOG_SPD_WARN("json-reader narrowed {} to type int", str);
       return detail::narrow_cast<integer>(x);
     }
     return caf::make_error(ec::convert_error, "cannot convert from", str,
@@ -155,7 +155,7 @@ struct convert {
     if (count x; parsers::json_count(str, x))
       return x;
     if (real x; parsers::json_number(str, x)) {
-      VAST_WARNING_ANON("json-reader narrowed", str, "to type count");
+      VAST_LOG_SPD_WARN("json-reader narrowed {} to type count", str);
       return detail::narrow_cast<count>(x);
     }
     return caf::make_error(ec::convert_error, "cannot convert from", str,

@@ -112,8 +112,9 @@ void evaluator_state::handle_result(const offset& position, const ids& result) {
 void evaluator_state::handle_missing_result(const offset& position,
                                             const caf::error& err) {
   VAST_IGNORE_UNUSED(err);
-  VAST_WARNING(self, "received", render(err),
-               "instead of a result for predicate at position", position);
+  VAST_LOG_SPD_WARN("{} received {} instead of a result for predicate at "
+                    "position {}",
+                    detail::id_or_name(self), render(err), position);
   auto ptr = hits_for(position);
   VAST_ASSERT(ptr != nullptr);
   if (--ptr->first == 0) {

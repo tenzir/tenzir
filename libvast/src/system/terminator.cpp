@@ -117,10 +117,12 @@ caf::behavior terminator(caf::stateful_actor<terminator_state>* self,
     },
     [=](atom::shutdown) {
       VAST_ASSERT(!self->state.remaining_actors.empty());
-      VAST_WARNING(self, "failed to terminate actors within grace period of",
-                   grace_period);
-      VAST_WARNING(self, "initiates hard kill of",
-                   self->state.remaining_actors.size(), "remaining actors");
+      VAST_LOG_SPD_WARN("{} failed to terminate actors within grace period of "
+                        "{}",
+                        detail::id_or_name(self), grace_period);
+      VAST_LOG_SPD_WARN("{} initiates hard kill of {} remaining actors",
+                        detail::id_or_name(self),
+                        self->state.remaining_actors.size());
       // Kill remaining actors.
       for (auto& actor : self->state.remaining_actors) {
         VAST_LOG_SPD_DEBUG("{} sends KILL to actor {}",

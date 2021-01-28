@@ -114,8 +114,9 @@ caf::behavior sink(caf::stateful_actor<sink_state>* self,
       if (self->state.processed < max)
         self->state.max_events = max;
       else
-        VAST_WARNING(self, "ignores new limit of", max,
-                     "(already processed", self->state.processed, " events)");
+        VAST_LOG_SPD_WARN("{} ignores new limit of {} (already processed",
+                          self->state.processed, " events)",
+                          detail::id_or_name(self), max);
     },
     [=](accountant_actor accountant) {
       VAST_LOG_SPD_DEBUG("{} sets accountant to {}", detail::id_or_name(self),

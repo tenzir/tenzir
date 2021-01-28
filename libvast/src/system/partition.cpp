@@ -107,8 +107,8 @@ fetch_indexer(const PartitionState& state, const data_extractor& dx,
     return {};
   if (auto index = state.combined_layout.flat_index_at(dx.offset))
     return state.indexer_at(*index);
-  VAST_WARNING(state.self, "got invalid offset for the combined layout",
-               state.combined_layout);
+  VAST_LOG_SPD_WARN("{} got invalid offset for the combined layout {}",
+                    detail::id_or_name(state.self), state.combined_layout);
   return {};
 }
 
@@ -134,8 +134,9 @@ fetch_indexer(const PartitionState& state, const attribute_extractor& ex,
   } else if (ex.attr == atom::field_v) {
     auto s = caf::get_if<std::string>(&x);
     if (!s) {
-      VAST_WARNING(state.self, "#field meta queries only support string "
-                               "comparisons");
+      VAST_LOG_SPD_WARN("{} #field meta queries only support string "
+                        "comparisons",
+                        detail::id_or_name(state.self));
       return {};
     }
     auto neg = is_negated(op);
@@ -159,7 +160,8 @@ fetch_indexer(const PartitionState& state, const attribute_extractor& ex,
       row_ids = partition_ids ^ row_ids;
     }
   } else {
-    VAST_WARNING(state.self, "got unsupported attribute:", ex.attr);
+    VAST_LOG_SPD_WARN("{} got unsupported attribute: {}",
+                      detail::id_or_name(state.self), ex.attr);
     return {};
   }
   // TODO: Spawning a one-shot actor is quite expensive. Maybe the
@@ -532,8 +534,9 @@ active_partition_actor::behavior_type active_partition(
             [=](chunk_ptr chunk) {
               ++self->state.persisted_indexers;
               if (!self->state.persistence_promise.pending()) {
-                VAST_WARNING(self, "ignores persisted indexer because the "
-                                   "persistence promise is already fulfilled");
+                VAST_LOG_SPD_WARN("{} ignores persisted indexer because the "
+                                  "persistence promise is already fulfilled",
+                                  detail::id_or_name(self));
                 return;
               }
               auto sender = self->current_sender()->id();
@@ -642,8 +645,9 @@ active_partition_actor::behavior_type active_partition(
                 deliver(std::move(*req_state));
             },
             [=, &indexer_states](const caf::error& err) {
-              VAST_WARNING(self, "failed to retrieve status from",
-                           i.first.fqn(), ":", render(err));
+              VAST_LOG_SPD_WARN("{} failed to retrieve status from {} : {}",
+                                detail::id_or_name(self), i.first.fqn(),
+                                render(err));
               auto& ps = indexer_states.emplace_back().as_dictionary();
               put(ps, "id", to_string(id));
               put(ps, "error", render(err));
@@ -702,7 +706,8 @@ partition_actor::behavior_type passive_partition(
       [=](chunk_ptr chunk) {
         VAST_TRACE(self, VAST_ARG(chunk));
         if (self->state.partition_chunk) {
-          VAST_WARNING(self, "ignores duplicate chunk");
+          VAST_LOG_SPD_WARN("{} ignores duplicate chunk",
+                            detail::id_or_name(self));
           return;
         }
         if (!chunk) {

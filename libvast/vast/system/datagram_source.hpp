@@ -184,7 +184,8 @@ datagram_source(datagram_source_actor<Reader>* self,
     [=]([[maybe_unused]] expression& expr) {
       // FIXME: Allow for filtering import data.
       // self->state.filter = std::move(expr);
-      VAST_WARNING(self, "does not currently implement filter expressions");
+      VAST_LOG_SPD_WARN("{} does not currently implement filter expressions",
+                        detail::id_or_name(self));
     },
     [=](atom::status, status_verbosity v) {
       auto& st = self->state;
@@ -203,8 +204,9 @@ datagram_source(datagram_source_actor<Reader>* self,
       auto& st = self->state;
       st.send_report();
       if (st.dropped_packets > 0) {
-        VAST_WARNING(self, "has no capacity left in stream and dropped",
-                     st.dropped_packets, "packets");
+        VAST_LOG_SPD_WARN("{} has no capacity left in stream and dropped {} "
+                          "packets",
+                          detail::id_or_name(self), st.dropped_packets);
         st.dropped_packets = 0;
       }
       if (!st.done)

@@ -132,8 +132,9 @@ caf::error importer_state::read_state() {
                              "unable to read importer state file", file.str());
     state_file >> current.next;
     if (!state_file) {
-      VAST_WARNING(self, "did not find next ID position in state file; "
-                         "irregular shutdown detected");
+      VAST_LOG_SPD_WARN("{} did not find next ID position in state file; "
+                        "irregular shutdown detected",
+                        detail::id_or_name(self));
       current.next = current.end;
     }
   } else {
