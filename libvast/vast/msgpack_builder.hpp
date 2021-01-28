@@ -83,8 +83,9 @@ public:
       if (result > 0)
         bump_size(result);
       else
-        VAST_WARNING_ANON("vast.msgpack_builder.proxy.add failed to add",
-                          VAST_ARG(nested_proxy), "of format", NestedFormat);
+        VAST_LOG_SPD_WARN("vast.msgpack_builder.proxy.add failed to add {} of "
+                          "format {}",
+                          VAST_ARG(nested_proxy), NestedFormat);
       return result;
     }
 
@@ -104,8 +105,9 @@ public:
       if (result > 0)
         bump_size(result);
       else
-        VAST_WARNING_ANON("vast.msgpack_builder.proxy.add failed to add",
-                          VAST_ARG(x), VAST_ARG(y), "of format", Format);
+        VAST_LOG_SPD_WARN("vast.msgpack_builder.proxy.add failed to add {}  {} "
+                          "of format {}",
+                          VAST_ARG(x), VAST_ARG(y), Format);
       return result;
     }
 
@@ -226,8 +228,9 @@ public:
   add(proxy<NestedFormat>&& nested_proxy, FinishArgs&&... finish_args) {
     auto result = nested_proxy.finish(std::forward<FinishArgs>(finish_args)...);
     if (result == 0)
-      VAST_WARNING_ANON("vast.msgpack_builder.add failed to add",
-                        VAST_ARG(nested_proxy), "of format", NestedFormat);
+      VAST_LOG_SPD_WARN("vast.msgpack_builder.add failed to add {} of format "
+                        "{}",
+                        VAST_ARG(nested_proxy), NestedFormat);
     return result;
   }
 

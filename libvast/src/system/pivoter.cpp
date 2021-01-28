@@ -69,7 +69,8 @@ common_field(const pivoter_state& st, const record_type& indicator) {
   }
 #endif
   st.cache.insert({indicator, caf::none});
-  VAST_WARNING(st.self, "got slice without shared column:", indicator.name());
+  VAST_LOG_SPD_WARN("{} got slice without shared column: {}",
+                    detail::id_or_name(st.self), indicator.name());
   return caf::none;
 }
 

@@ -124,7 +124,7 @@ type_biased_convert_impl<std::string_view, integer>(std::string_view s,
   if (integer x; parsers::json_int(s, x))
     return x;
   if (real x; parsers::json_number(s, x)) {
-    VAST_WARNING_ANON("json-reader narrowed", std::string{s}, "to type int");
+    VAST_LOG_SPD_WARN("json-reader narrowed {} to type int", std::string{s});
     return detail::narrow_cast<integer>(x);
   }
   return caf::make_error(ec::convert_error, "cannot convert from",
@@ -144,7 +144,7 @@ type_biased_convert_impl<std::string_view, count>(std::string_view s,
   if (count x; parsers::json_count(s, x))
     return x;
   if (real x; parsers::json_number(s, x)) {
-    VAST_WARNING_ANON("json-reader narrowed", std::string{s}, "to type count");
+    VAST_LOG_SPD_WARN("json-reader narrowed {} to type count", std::string{s});
     return detail::narrow_cast<count>(x);
   }
   return caf::make_error(ec::convert_error, "cannot convert from",

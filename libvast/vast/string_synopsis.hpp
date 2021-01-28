@@ -93,7 +93,7 @@ make_string_synopsis(vast::type type, bloom_filter_parameters params,
   VAST_ASSERT(caf::holds_alternative<string_type>(type));
   auto x = make_bloom_filter<HashFunction>(std::move(params), std::move(seeds));
   if (!x) {
-    VAST_WARNING_ANON(__func__, "failed to construct Bloom filter");
+    VAST_LOG_SPD_WARN(" {} failed to construct Bloom filter", __func__);
     return nullptr;
   }
   using synopsis_type = string_synopsis<HashFunction>;

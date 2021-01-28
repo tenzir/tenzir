@@ -59,7 +59,8 @@ maybe_actor spawn_source(node_actor* self, spawn_arguments& args) {
     if (!reason || reason == caf::exit_reason::user_shutdown)
       VAST_LOG_SPD_INFO("{} source shut down", detail::id_or_name(name));
     else
-      VAST_WARNING(name, "source shut down with error:", reason);
+      VAST_LOG_SPD_WARN("{} source shut down with error: {}",
+                        detail::id_or_name(name), reason);
   });
   return src;
 }

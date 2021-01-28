@@ -75,7 +75,7 @@ static caf::settings get_status_proc() {
       break;
     auto line = lines.get();
     if (!p(line))
-      VAST_WARNING_ANON("failed to parse /proc/self/status:", line);
+      VAST_LOG_SPD_WARN("failed to parse /proc/self/status: {}", line);
   }
   return result;
 }
@@ -110,8 +110,8 @@ static caf::settings get_status_rusage() {
   caf::settings result;
   struct rusage ru;
   if (getrusage(RUSAGE_SELF, &ru) != 0) {
-    VAST_WARNING_ANON(__func__,
-                      "failed to obtain rusage:", std::strerror(errno));
+    VAST_LOG_SPD_WARN(" {} failed to obtain rusage: {}", __func__,
+                      std::strerror(errno));
     return result;
   }
   result["peak-memory-usage"] = ru.ru_maxrss;

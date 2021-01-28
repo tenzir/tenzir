@@ -137,10 +137,11 @@ vast::system::report reader::status() const {
   last_stats_ = std::move(stats);
   discard_count_ = 0;
   if (drop_rate >= drop_rate_threshold_)
-    VAST_WARNING(this, "has dropped", drop + ifdrop, "of", recv,
-                 "recent packets");
+    VAST_LOG_SPD_WARN("{} has dropped {} of {} recent packets",
+                      detail::id_or_name(this), drop + ifdrop, recv);
   if (discard > 0)
-    VAST_WARNING(this, "has discarded", discard, "of", recv, "recent packets");
+    VAST_LOG_SPD_WARN("{} has discarded {} of {} recent packets",
+                      detail::id_or_name(this), discard, recv);
   return {
     {name() + ".recv"s, recv},       {name() + ".drop"s, drop},
     {name() + ".ifdrop"s, ifdrop},   {name() + ".drop-rate"s, drop_rate},
@@ -226,7 +227,8 @@ caf::error reader::read_impl(size_t max_events, size_t max_slice_size,
       }
       if (pseudo_realtime_ > 0) {
         pseudo_realtime_ = 0;
-        VAST_WARNING(this, "ignores pseudo-realtime in live mode");
+        VAST_LOG_SPD_WARN("{} ignores pseudo-realtime in live mode",
+                          detail::id_or_name(this));
       }
       VAST_LOG_SPD_INFO("{} listens on interface {}", detail::id_or_name(this),
                         *interface_);
@@ -406,9 +408,10 @@ caf::error reader::read_impl(size_t max_events, size_t max_slice_size,
     ++batch_events_;
     if (pseudo_realtime_ > 0) {
       if (ts < last_timestamp_) {
-        VAST_WARNING(this, "encountered non-monotonic packet timestamps:",
-                     ts.time_since_epoch().count(), '<',
-                     last_timestamp_.time_since_epoch().count());
+        VAST_LOG_SPD_WARN(
+          "{} encountered non-monotonic packet timestamps: {}  {}  {}",
+          detail::id_or_name(this), ts.time_since_epoch().count(), '<',
+          last_timestamp_.time_since_epoch().count());
       }
       if (last_timestamp_ != time::min()) {
         auto delta = ts - last_timestamp_;

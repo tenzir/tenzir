@@ -68,7 +68,7 @@ run(caf::scoped_actor& self, archive_actor archive, const invocation& inv) {
       ([&](table_slice slice) { (*writer)->write(slice); },
        [&](atom::done, const caf::error& err) {
          if (err)
-           VAST_WARNING_ANON("failed to get table slice:", render(err));
+           VAST_LOG_SPD_WARN("failed to get table slice: {}", render(err));
          waiting = false;
        });
   }

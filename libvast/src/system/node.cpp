@@ -168,8 +168,8 @@ void collect_component_status(node_actor* self,
             deliver(std::move(req_state));
         },
         [=, lab = label](caf::error& err) mutable {
-          VAST_WARNING(self, "failed to retrieve", lab,
-                       "status:", to_string(err));
+          VAST_LOG_SPD_WARN("{} failed to retrieve {} status: {}",
+                            detail::id_or_name(self), lab, to_string(err));
           auto& dict = req_state->content[self->state.name].as_dictionary();
           dict.emplace(std::move(lab), to_string(err));
           // Both handlers have a copy of req_state.
@@ -474,8 +474,9 @@ node_state::spawn_command(const invocation& inv,
     auto component = spawn_component(self, args.inv, args);
     if (!component) {
       if (component.error())
-        VAST_WARNING(__func__,
-                     "failed to spawn component:", render(component.error()));
+        VAST_LOG_SPD_WARN("{} failed to spawn component: {}",
+                          detail::id_or_name(__func__),
+                          render(component.error()));
       rp.deliver(component.error());
       return caf::make_message(std::move(component.error()));
     }
@@ -668,7 +669,8 @@ caf::behavior node(node_actor* self, std::string name, path dir,
     },
     [=](atom::signal, int signal) {
       VAST_IGNORE_UNUSED(signal);
-      VAST_WARNING(self, "got signal", ::strsignal(signal));
+      VAST_LOG_SPD_WARN("{} got signal {}", detail::id_or_name(self),
+                        ::strsignal(signal));
     },
   };
 }

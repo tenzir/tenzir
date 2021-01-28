@@ -128,12 +128,13 @@ disk_monitor(disk_monitor_actor::stateful_pointer<disk_monitor_state> self,
                   }
                 },
                 [=, sg = shared_guard](caf::error e) {
-                  VAST_WARNING(self,
-                               "failed to erase from archive:", render(e));
+                  VAST_LOG_SPD_WARN("{} failed to erase from archive: {}",
+                                    detail::id_or_name(self), render(e));
                 });
           },
           [=, sg = shared_guard](caf::error e) {
-            VAST_WARNING(self, "failed to erase from index:", render(e));
+            VAST_LOG_SPD_WARN("{} failed to erase from index: {}",
+                              detail::id_or_name(self), render(e));
           });
     },
     [=](atom::status, status_verbosity) {

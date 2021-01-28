@@ -180,8 +180,9 @@ struct source_state {
     } else {
       // We usually expect to have the type registry at the ready, but if we
       // don't we fall back to only using the schemas from disk.
-      VAST_WARNING(self, "failed to retrieve registered types and only "
-                         "considers types local to the import command");
+      VAST_LOG_SPD_WARN("{} failed to retrieve registered types and only "
+                        "considers types local to the import command",
+                        detail::id_or_name(self));
       if (auto err = reader.schema(std::move(local_schema));
           err && err != caf::no_error)
         VAST_ERROR(self, "failed to set schema", err);
@@ -333,7 +334,8 @@ source(caf::stateful_actor<source_state<Reader>>* self, Reader reader,
     [=]([[maybe_unused]] expression& expr) {
       // FIXME: Allow for filtering import data.
       // self->state.filter = std::move(expr);
-      VAST_WARNING(self, "does not currently implement filter expressions");
+      VAST_LOG_SPD_WARN("{} does not currently implement filter expressions",
+                        detail::id_or_name(self));
     },
     [=](stream_sink_actor<table_slice, std::string> sink) {
       VAST_ASSERT(sink);

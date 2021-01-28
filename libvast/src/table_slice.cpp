@@ -476,7 +476,7 @@ void select(std::vector<table_slice>& result, const table_slice& slice,
       return;
     auto new_slice = builder->finish(serialized_layout);
     if (new_slice.encoding() == table_slice_encoding::none) {
-      VAST_WARNING(__func__, "got an empty slice");
+      VAST_LOG_SPD_WARN("{} got an empty slice", detail::id_or_name(__func__));
       return;
     }
     new_slice.offset(last_offset);
@@ -610,7 +610,7 @@ struct row_evaluator {
     if (e.attr == atom::field_v) {
       auto s = caf::get_if<std::string>(&d);
       if (!s) {
-        VAST_WARNING_ANON("#field can only compare with string");
+        VAST_LOG_SPD_WARN("#field can only compare with string");
         return false;
       }
       auto result = false;
@@ -630,7 +630,7 @@ struct row_evaluator {
         auto& field = layout.fields[col];
         if (has_attribute(field.type, "timestamp")) {
           if (!caf::holds_alternative<time_type>(field.type)) {
-            VAST_WARNING_ANON("got timestamp attribute for non-time type");
+            VAST_LOG_SPD_WARN("got timestamp attribute for non-time type");
             return false;
           }
         }

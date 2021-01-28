@@ -134,11 +134,12 @@ vast::system::report reader<Selector>::status() const {
   uint64_t invalid_line = num_invalid_lines_;
   uint64_t unknown_layout = num_unknown_layouts_;
   if (num_invalid_lines_ > 0)
-    VAST_WARNING(this, "failed to parse", num_invalid_lines_, "of", num_lines_,
-                 "recent lines");
+    VAST_LOG_SPD_WARN("{} failed to parse {} of {} recent lines",
+                      detail::id_or_name(this), num_invalid_lines_, num_lines_);
   if (num_unknown_layouts_ > 0)
-    VAST_WARNING(this, "failed to find a matching type for",
-                 num_unknown_layouts_, "of", num_lines_, "recent lines");
+    VAST_LOG_SPD_WARN(
+      "{} failed to find a matching type for {} of {} recent lines",
+      detail::id_or_name(this), num_unknown_layouts_, num_lines_);
   num_invalid_lines_ = 0;
   num_unknown_layouts_ = 0;
   num_lines_ = 0;
@@ -181,8 +182,9 @@ caf::error reader<Selector>::read_impl(size_t max_events, size_t max_slice_size,
     vast::json j;
     if (!parsers::json(line, j)) {
       if (num_invalid_lines_ == 0)
-        VAST_WARNING(this, "failed to parse line", lines_->line_number(), ":",
-                     line);
+        VAST_LOG_SPD_WARN("{} failed to parse line {} : {}",
+                          detail::id_or_name(this), lines_->line_number(),
+                          line);
       ++num_invalid_lines_;
       continue;
     }
@@ -192,8 +194,9 @@ caf::error reader<Selector>::read_impl(size_t max_events, size_t max_slice_size,
     auto&& layout = selector_(*xs);
     if (!layout) {
       if (num_unknown_layouts_ == 0)
-        VAST_WARNING(this, "failed to find a matching type at line",
-                     lines_->line_number(), ":", line);
+        VAST_LOG_SPD_WARN("{} failed to find a matching type at line {} : {}",
+                          detail::id_or_name(this), lines_->line_number(),
+                          line);
       ++num_unknown_layouts_;
       continue;
     }
@@ -203,8 +206,9 @@ caf::error reader<Selector>::read_impl(size_t max_events, size_t max_slice_size,
     if (auto err = add(*bptr, *xs, *layout)) {
       if (err == ec::convert_error) {
         if (num_invalid_lines_ == 0)
-          VAST_WARNING(this, "failed to convert value(s) in line",
-                       lines_->line_number(), ":", render(err));
+          VAST_LOG_SPD_WARN("{} failed to convert value(s) in line {} : {}",
+                            detail::id_or_name(this), lines_->line_number(),
+                            render(err));
         ++num_invalid_lines_;
       } else {
         err.context() += caf::make_message("line", lines_->line_number());

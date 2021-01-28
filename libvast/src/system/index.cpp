@@ -168,13 +168,14 @@ caf::error index_state::load_from_disk() {
         // Use blocking operations here since this is part of the startup.
         auto chunk = chunk::mmap(partition_path);
         if (!chunk) {
-          VAST_WARNING(self, "could not mmap partition at", partition_path);
+          VAST_LOG_SPD_WARN("{} could not mmap partition at {}",
+                            detail::id_or_name(self), partition_path);
           continue;
         }
         auto partition = fbs::GetPartition(chunk->data());
         if (partition->partition_type() != fbs::partition::Partition::v0) {
-          VAST_WARNING(self, "found unsupported version for partition",
-                       partition_uuid);
+          VAST_LOG_SPD_WARN("{} found unsupported version for partition {}",
+                            detail::id_or_name(self), partition_uuid);
           continue;
         }
         auto partition_v0 = partition->partition_as_v0();
@@ -185,9 +186,10 @@ caf::error index_state::load_from_disk() {
                            detail::id_or_name(self), partition_uuid);
         meta_idx.merge(partition_uuid, std::move(ps));
       } else {
-        VAST_WARNING(self, "found partition", partition_uuid,
-                     "in the index state but not on disk; this may have been "
-                     "caused by an unclean shutdown");
+        VAST_LOG_SPD_WARN("{} found partition {} in the index state but not on "
+                          "disk; this may have been "
+                          "caused by an unclean shutdown",
+                          detail::id_or_name(self), partition_uuid);
       }
     }
     auto stats = index_v0->stats();
@@ -199,7 +201,8 @@ caf::error index_state::load_from_disk() {
         = layout_statistics{stat->count()};
     }
   } else {
-    VAST_LOG_SPD_WARN("{} found existing database dir {} without index statefile, "
+    VAST_LOG_SPD_WARN("{} found existing database dir {} without index "
+                      "statefile, "
                       "will start with fresh state",
                       detail::id_or_name(self), dir);
   }
@@ -352,8 +355,8 @@ index_state::status(status_verbosity v) const {
               deliver(std::move(*req_state));
           },
           [=, &xs](const caf::error& err) {
-            VAST_WARNING(self, "failed to retrieve status from", id, ":",
-                         render(err));
+            VAST_LOG_SPD_WARN("{} failed to retrieve status from {} : {}",
+                              detail::id_or_name(self), id, render(err));
             auto& ps = xs.emplace_back().as_dictionary();
             put(ps, "id", to_string(id));
             put(ps, "error", render(err));
@@ -488,7 +491,8 @@ void index_state::flush_to_disk() {
   auto builder = flatbuffers::FlatBufferBuilder{};
   auto index = pack(builder, *this);
   if (!index) {
-    VAST_WARNING(self, "failed to pack index:", render(index.error()));
+    VAST_LOG_SPD_WARN("{} failed to pack index: {}", detail::id_or_name(self),
+                      render(index.error()));
     return;
   }
   auto chunk = fbs::release(builder);
@@ -501,7 +505,8 @@ void index_state::flush_to_disk() {
                            detail::id_or_name(self));
       },
       [=](const caf::error& err) {
-        VAST_WARNING(self, "failed to persist index state:", render(err));
+        VAST_LOG_SPD_WARN("{} failed to persist index state: {}",
+                          detail::id_or_name(self), render(err));
       });
 }
 
@@ -554,9 +559,10 @@ index(index_actor::stateful_pointer<index_state> self,
       out.push(x);
       if (active.capacity == self->state.partition_capacity
           && x.rows() > active.capacity) {
-        VAST_WARNING(self, "got table slice with", x.rows(),
-                     "rows that exceeds the default partition capacity of",
-                     self->state.partition_capacity, "rows");
+        VAST_LOG_SPD_WARN("{} got table slice with {} rows that exceeds the "
+                          "default partition capacity of {} rows",
+                          detail::id_or_name(self), x.rows(),
+                          self->state.partition_capacity);
         active.capacity = 0;
       } else {
         VAST_ASSERT(active.capacity >= x.rows());
@@ -655,7 +661,8 @@ index(index_actor::stateful_pointer<index_state> self,
       };
       // Sanity check.
       if (!sender) {
-        VAST_WARNING(self, "ignores an anonymous query");
+        VAST_LOG_SPD_WARN("{} ignores an anonymous query",
+                          detail::id_or_name(self));
         respond(caf::sec::invalid_argument);
         return {};
       }
@@ -704,7 +711,8 @@ index(index_actor::stateful_pointer<index_state> self,
       }
       auto iter = self->state.pending.find(query_id);
       if (iter == self->state.pending.end()) {
-        VAST_WARNING(self, "drops query for unknown query id", query_id);
+        VAST_LOG_SPD_WARN("{} drops query for unknown query id {}",
+                          detail::id_or_name(self), query_id);
         self->send(client, atom::done_v);
         return {};
       }
@@ -777,7 +785,8 @@ index(index_actor::stateful_pointer<index_state> self,
             // unlinking should not affect indexers that are currently loaded
             // and answering a query.
             if (!rm(path))
-              VAST_WARNING(self, "could not unlink partition at", path);
+              VAST_LOG_SPD_WARN("{} could not unlink partition at {}",
+                                detail::id_or_name(self), path);
             rp.deliver(std::move(all_ids));
           },
           [=](caf::error e) mutable { rp.deliver(e); });

@@ -67,7 +67,8 @@ void counter_state::init(expression expr, index_actor index,
     },
     [this](atom::done, const caf::error&) {
       if (self_->current_sender() != archive_) {
-        VAST_WARNING(self_, "received ('done', error) from unexpected actor");
+        VAST_LOG_SPD_WARN("{} received ('done', error) from unexpected actor",
+                          detail::id_or_name(self_));
         return;
       }
       if (--pending_archive_requests_ == 0)

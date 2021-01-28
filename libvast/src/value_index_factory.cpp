@@ -80,7 +80,7 @@ value_index_ptr make(type x, caf::settings opts) {
           return std::make_unique<hash_index<8>>(std::move(x));
         }
         if (!detail::ispow2(*cardinality))
-          VAST_WARNING_ANON(__func__, "cardinality not a power of 2");
+          VAST_LOG_SPD_WARN(" {} cardinality not a power of 2", __func__);
         // For 2^n unique values, we expect collisions after sqrt(2^n).
         // Thus, we use 2n bits as digest size.
         size_t digest_bits = detail::ispow2(*cardinality)

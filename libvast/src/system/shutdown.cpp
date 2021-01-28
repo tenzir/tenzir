@@ -31,7 +31,8 @@ void shutdown(caf::event_based_actor* self, std::vector<caf::actor> xs,
   // Ignore duplicate EXIT messages except for hard kills.
   self->set_exit_handler([=](const caf::exit_msg& msg) {
     if (msg.reason == caf::exit_reason::kill) {
-      VAST_WARNING(self, "received hard kill and terminates immediately");
+      VAST_LOG_SPD_WARN("{} received hard kill and terminates immediately",
+                        detail::id_or_name(self));
       self->quit(msg.reason);
     } else {
       VAST_LOG_SPD_DEBUG("{} ignores duplicate EXIT message from {}",
