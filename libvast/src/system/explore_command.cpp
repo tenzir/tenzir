@@ -42,7 +42,7 @@ namespace vast::system {
 
 caf::message explore_command(const invocation& inv, caf::actor_system& sys) {
   using namespace std::string_literals;
-  VAST_LOG_SPD_DEBUG("{}", inv);
+  VAST_DEBUG("{}", inv);
   const auto& options = inv.options;
   if (auto error = explorer_validate_args(inv.options))
     return make_message(error);
@@ -62,7 +62,7 @@ caf::message explore_command(const invocation& inv, caf::actor_system& sys) {
     return make_message(s.error());
   auto sink = *s;
   auto sink_guard = caf::detail::make_scope_guard([&] {
-    VAST_LOG_SPD_DEBUG("{} sending exit to sink", detail::id_or_name(self));
+    VAST_DEBUG("{} sending exit to sink", detail::id_or_name(self));
     self->send_exit(sink, caf::exit_reason::user_shutdown);
   });
   self->monitor(sink);
@@ -84,26 +84,26 @@ caf::message explore_command(const invocation& inv, caf::actor_system& sys) {
   if (max_events_search)
     caf::put(spawn_exporter.options, "vast.export.max-events",
              max_events_search);
-  VAST_LOG_SPD_DEBUG("{} spawns exporter with parameters: {}",
-                     detail::id_or_name(&inv), spawn_exporter);
+  VAST_DEBUG("{} spawns exporter with parameters: {}", detail::id_or_name(&inv),
+             spawn_exporter);
   auto maybe_exporter = spawn_at_node(self, node, spawn_exporter);
   if (!maybe_exporter)
     return caf::make_message(std::move(maybe_exporter.error()));
   auto exporter = caf::actor_cast<exporter_actor>(std::move(*maybe_exporter));
   auto exporter_guard = caf::detail::make_scope_guard([&] {
-    VAST_LOG_SPD_DEBUG("{} sending exit to exporter", detail::id_or_name(self));
+    VAST_DEBUG("{} sending exit to exporter", detail::id_or_name(self));
     self->send_exit(exporter, caf::exit_reason::user_shutdown);
   });
   // Spawn explorer at the node.
   auto explorer_options = inv.options;
   auto spawn_explorer = invocation{explorer_options, "spawn explorer", {}};
-  VAST_LOG_SPD_DEBUG("{} spawns explorer with parameters: {}",
-                     detail::id_or_name(&inv), spawn_explorer);
+  VAST_DEBUG("{} spawns explorer with parameters: {}", detail::id_or_name(&inv),
+             spawn_explorer);
   auto explorer = spawn_at_node(self, node, spawn_explorer);
   if (!explorer)
     return caf::make_message(std::move(explorer.error()));
   auto explorer_guard = caf::detail::make_scope_guard([&] {
-    VAST_LOG_SPD_DEBUG("{} sending exit to explorer", detail::id_or_name(self));
+    VAST_DEBUG("{} sending exit to explorer", detail::id_or_name(self));
     self->send_exit(*explorer, caf::exit_reason::user_shutdown);
   });
   self->monitor(*explorer);
@@ -124,30 +124,30 @@ caf::message explore_command(const invocation& inv, caf::actor_system& sys) {
     ->do_receive(
       [&](caf::down_msg& msg) {
         if (msg.source == node) {
-          VAST_LOG_SPD_DEBUG("{} received DOWN from node",
-                             detail::id_or_name(inv.full_name));
+          VAST_DEBUG("{} received DOWN from node",
+                     detail::id_or_name(inv.full_name));
         } else if (msg.source == *explorer) {
-          VAST_LOG_SPD_DEBUG("{} received DOWN from explorer",
-                             detail::id_or_name(inv.full_name));
+          VAST_DEBUG("{} received DOWN from explorer",
+                     detail::id_or_name(inv.full_name));
           explorer_guard.disable();
         } else if (msg.source == sink) {
-          VAST_LOG_SPD_DEBUG("{} received DOWN from sink",
-                             detail::id_or_name(inv.full_name));
+          VAST_DEBUG("{} received DOWN from sink",
+                     detail::id_or_name(inv.full_name));
           sink_guard.disable();
         } else {
           VAST_ASSERT(!"received DOWN from inexplicable actor");
         }
         if (msg.reason) {
-          VAST_LOG_SPD_DEBUG("{} received error message: {}",
-                             detail::id_or_name(inv.full_name),
-                             self->system().render(msg.reason));
+          VAST_DEBUG("{} received error message: {}",
+                     detail::id_or_name(inv.full_name),
+                     self->system().render(msg.reason));
           err = std::move(msg.reason);
         }
         stop = true;
       },
       [&](atom::signal, int signal) {
-        VAST_LOG_SPD_DEBUG("{} got  {}", detail::id_or_name(inv.full_name),
-                           ::strsignal(signal));
+        VAST_DEBUG("{} got  {}", detail::id_or_name(inv.full_name),
+                   ::strsignal(signal));
         if (signal == SIGINT || signal == SIGTERM) {
           stop = true;
         }

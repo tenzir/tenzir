@@ -43,7 +43,7 @@ using namespace std::chrono_literals;
 
 caf::message start_command_impl(start_command_extra_steps extra_steps,
                                 const invocation& inv, caf::actor_system& sys) {
-  VAST_LOG_SPD_TRACE("{}", detail::id_or_name(inv));
+  VAST_TRACE("{}", detail::id_or_name(inv));
   // Bail out early for bogus invocations.
   if (caf::get_or(inv.options, "vast.node", false))
     return caf::make_message(caf::make_error(ec::parse_error, "cannot start a "
@@ -90,7 +90,7 @@ caf::message start_command_impl(start_command_extra_steps extra_steps,
   if (!bound_port)
     return caf::make_message(std::move(bound_port.error()));
   auto listen_addr = std::string{host} + ':' + std::to_string(*bound_port);
-  VAST_LOG_SPD_INFO("VAST node is listening on {}", listen_addr);
+  VAST_INFO("VAST node is listening on {}", listen_addr);
   // Run user-defined extra code.
   if (extra_steps != nullptr)
     if (auto err = extra_steps(self, inv.options, node))
@@ -113,15 +113,13 @@ caf::message start_command_impl(start_command_extra_steps extra_steps,
     ->do_receive(
       [&](caf::down_msg& msg) {
         VAST_ASSERT(msg.source == node);
-        VAST_LOG_SPD_DEBUG("{} received DOWN from node",
-                           detail::id_or_name(self));
+        VAST_DEBUG("{} received DOWN from node", detail::id_or_name(self));
         stop = true;
         if (msg.reason != caf::exit_reason::user_shutdown)
           err = std::move(msg.reason);
       },
       [&](atom::signal, int signal) {
-        VAST_LOG_SPD_DEBUG("{} got {}", detail::id_or_name(self),
-                           ::strsignal(signal));
+        VAST_DEBUG("{} got {}", detail::id_or_name(self), ::strsignal(signal));
         if (signal == SIGINT || signal == SIGTERM)
           self->send_exit(node, caf::exit_reason::user_shutdown);
         else
@@ -132,9 +130,8 @@ caf::message start_command_impl(start_command_extra_steps extra_steps,
 }
 
 caf::message start_command(const invocation& inv, caf::actor_system& sys) {
-  VAST_LOG_SPD_TRACE("{}  {}", detail::id_or_name(VAST_ARG(inv.options)),
-                     VAST_ARG("args", inv.arguments.begin(),
-                              inv.arguments.end()));
+  VAST_TRACE("{}  {}", detail::id_or_name(VAST_ARG(inv.options)),
+             VAST_ARG("args", inv.arguments.begin(), inv.arguments.end()));
   return start_command_impl(nullptr, inv, sys);
 }
 

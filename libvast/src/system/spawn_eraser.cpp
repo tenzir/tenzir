@@ -30,18 +30,17 @@ namespace vast::system {
 maybe_actor
 spawn_eraser(system::node_actor* self, system::spawn_arguments& args) {
   using namespace std::string_literals;
-  VAST_LOG_SPD_TRACE("{}  {}", detail::id_or_name(VAST_ARG(self)),
-                     VAST_ARG(args));
+  VAST_TRACE("{}  {}", detail::id_or_name(VAST_ARG(self)), VAST_ARG(args));
   // Parse options.
   auto eraser_query = caf::get_or(args.inv.options, "vast.aging-query", ""s);
   if (eraser_query.empty()) {
-    VAST_LOG_SPD_VERBOSE("{} has no aging-query and skips starting the eraser",
-                         detail::id_or_name(self));
+    VAST_VERBOSE("{} has no aging-query and skips starting the eraser",
+                 detail::id_or_name(self));
     return ec::no_error;
   }
   if (auto expr = to<expression>(eraser_query); !expr) {
-    VAST_LOG_SPD_WARN("{} got an invalid aging-query {}",
-                      detail::id_or_name(self), eraser_query);
+    VAST_WARN("{} got an invalid aging-query {}", detail::id_or_name(self),
+              eraser_query);
     return expr.error();
   }
   auto aging_frequency = defaults::system::aging_frequency;
@@ -63,8 +62,8 @@ spawn_eraser(system::node_actor* self, system::spawn_arguments& args) {
   auto handle = self->spawn(eraser, aging_frequency, eraser_query,
                             caf::actor_cast<index_actor>(index),
                             caf::actor_cast<archive_actor>(archive));
-  VAST_LOG_SPD_VERBOSE("{} spawned an eraser for {}", detail::id_or_name(self),
-                       eraser_query);
+  VAST_VERBOSE("{} spawned an eraser for {}", detail::id_or_name(self),
+               eraser_query);
   return handle;
 }
 

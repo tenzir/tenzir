@@ -38,8 +38,8 @@ disk_monitor(disk_monitor_actor::stateful_pointer<disk_monitor_state> self,
              size_t hiwater, size_t lowater,
              std::chrono::seconds disk_scan_interval, const path& dbdir,
              archive_actor archive, index_actor index) {
-  VAST_LOG_SPD_TRACE("{}  {}  {}", detail::id_or_name(VAST_ARG(hiwater)),
-                     VAST_ARG(lowater), VAST_ARG(dbdir));
+  VAST_TRACE("{}  {}  {}", detail::id_or_name(VAST_ARG(hiwater)),
+             VAST_ARG(lowater), VAST_ARG(dbdir));
   using namespace std::string_literals;
   self->state.high_water_mark = hiwater;
   self->state.low_water_mark = lowater;
@@ -51,9 +51,9 @@ disk_monitor(disk_monitor_actor::stateful_pointer<disk_monitor_state> self,
     [=](atom::ping) {
       self->delayed_send(self, disk_scan_interval, atom::ping_v);
       if (self->state.purging) {
-        VAST_LOG_SPD_DEBUG("{} ignores ping because a deletion is still in "
-                           "progress",
-                           detail::id_or_name(self));
+        VAST_DEBUG("{} ignores ping because a deletion is still in "
+                   "progress",
+                   detail::id_or_name(self));
         return;
       }
       // TODO: This is going to do one syscall per file in the database
@@ -62,8 +62,8 @@ disk_monitor(disk_monitor_actor::stateful_pointer<disk_monitor_state> self,
       // Nonetheless, if this becomes relevant we should switch to using
       // `inotify()` or similar to do real-time tracking of the db size.
       auto size = recursive_size(self->state.dbdir);
-      VAST_LOG_SPD_VERBOSE("{} checks db-directory of size {} bytes",
-                           detail::id_or_name(self), size);
+      VAST_VERBOSE("{} checks db-directory of size {} bytes",
+                   detail::id_or_name(self), size);
       if (size > self->state.high_water_mark && !self->state.purging) {
         self->state.purging = true;
         self->send(self, atom::erase_v);
@@ -83,8 +83,8 @@ disk_monitor(disk_monitor_actor::stateful_pointer<disk_monitor_state> self,
           continue;
         uuid id;
         if (!parsers::uuid(partition, id)) {
-          VAST_LOG_SPD_VERBOSE("{} failed to find partition {}",
-                               detail::id_or_name(self), partition);
+          VAST_VERBOSE("{} failed to find partition {}",
+                       detail::id_or_name(self), partition);
           continue;
         }
         // TODO: Wrap a more generic `stat()` using `vast::path`.
@@ -94,48 +94,48 @@ disk_monitor(disk_monitor_actor::stateful_pointer<disk_monitor_state> self,
         partitions.push_back({id, statbuf.st_size, statbuf.st_mtime});
       }
       if (partitions.empty()) {
-        VAST_LOG_SPD_VERBOSE("{} failed to find any partitions to delete",
-                             detail::id_or_name(self));
+        VAST_VERBOSE("{} failed to find any partitions to delete",
+                     detail::id_or_name(self));
         return;
       }
-      VAST_LOG_SPD_DEBUG("{} found {} partitions on disk",
-                         detail::id_or_name(self), partitions.size());
+      VAST_DEBUG("{} found {} partitions on disk", detail::id_or_name(self),
+                 partitions.size());
       std::sort(partitions.begin(), partitions.end(),
                 [](const auto& lhs, const auto& rhs) {
                   return lhs.mtime < rhs.mtime;
                 });
       auto oldest = partitions.front();
-      VAST_LOG_SPD_VERBOSE("{} erases partition {} from index",
-                           detail::id_or_name(self), oldest.id);
+      VAST_VERBOSE("{} erases partition {} from index",
+                   detail::id_or_name(self), oldest.id);
       self->request(index, caf::infinite, atom::erase_v, oldest.id)
         .then(
           [=, sg = shared_guard](ids erased_ids) {
             // TODO: It would be more natural if we could chain these futures,
             // instead of nesting them.
-            VAST_LOG_SPD_VERBOSE("{} erases removed ids from archive",
-                                 detail::id_or_name(self));
+            VAST_VERBOSE("{} erases removed ids from archive",
+                         detail::id_or_name(self));
             self
               ->request(self->state.archive, caf::infinite, atom::erase_v,
                         erased_ids)
               .then(
                 [=, sg = shared_guard](atom::done) {
                   auto sz = recursive_size(self->state.dbdir);
-                  VAST_LOG_SPD_VERBOSE("{} erased ids from index; {} bytes "
-                                       "left on disk",
-                                       detail::id_or_name(self), sz);
+                  VAST_VERBOSE("{} erased ids from index; {} bytes "
+                               "left on disk",
+                               detail::id_or_name(self), sz);
                   if (sz > self->state.low_water_mark) {
                     // Repeat until we're below the low water mark
                     self->send(self, atom::erase_v);
                   }
                 },
                 [=, sg = shared_guard](caf::error e) {
-                  VAST_LOG_SPD_WARN("{} failed to erase from archive: {}",
-                                    detail::id_or_name(self), render(e));
+                  VAST_WARN("{} failed to erase from archive: {}",
+                            detail::id_or_name(self), render(e));
                 });
           },
           [=, sg = shared_guard](caf::error e) {
-            VAST_LOG_SPD_WARN("{} failed to erase from index: {}",
-                              detail::id_or_name(self), render(e));
+            VAST_WARN("{} failed to erase from index: {}",
+                      detail::id_or_name(self), render(e));
           });
     },
     [=](atom::status, status_verbosity) {

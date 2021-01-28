@@ -175,19 +175,18 @@ struct source_state {
           // Third, try to set the new schema.
           if (auto err = reader.schema(std::move(merged_schema));
               err && err != caf::no_error)
-            VAST_LOG_SPD_ERROR("{} failed to set schema {}",
-                               detail::id_or_name(self), err);
+            VAST_ERROR("{} failed to set schema {}", detail::id_or_name(self),
+                       err);
         });
     } else {
       // We usually expect to have the type registry at the ready, but if we
       // don't we fall back to only using the schemas from disk.
-      VAST_LOG_SPD_WARN("{} failed to retrieve registered types and only "
-                        "considers types local to the import command",
-                        detail::id_or_name(self));
+      VAST_WARN("{} failed to retrieve registered types and only "
+                "considers types local to the import command",
+                detail::id_or_name(self));
       if (auto err = reader.schema(std::move(local_schema));
           err && err != caf::no_error)
-        VAST_LOG_SPD_ERROR("{} failed to set schema {}",
-                           detail::id_or_name(self), err);
+        VAST_ERROR("{} failed to set schema {}", detail::id_or_name(self), err);
     }
   }
 
@@ -201,14 +200,13 @@ struct source_state {
 #if VAST_LOG_LEVEL >= VAST_LOG_LEVEL_INFO
       for (const auto& [key, m] : r) {
         if (auto rate = m.rate_per_sec(); std::isfinite(rate))
-          VAST_LOG_SPD_INFO("{} produced {} events at a rate of {} events/sec "
-                            "in {}",
-                            detail::id_or_name(self), m.events,
-                            static_cast<uint64_t>(rate), to_string(m.duration));
+          VAST_INFO("{} produced {} events at a rate of {} events/sec "
+                    "in {}",
+                    detail::id_or_name(self), m.events,
+                    static_cast<uint64_t>(rate), to_string(m.duration));
         else
-          VAST_LOG_SPD_INFO("{} produced {} events in {}",
-                            detail::id_or_name(self), m.events,
-                            to_string(m.duration));
+          VAST_INFO("{} produced {} events in {}", detail::id_or_name(self),
+                    m.events, to_string(m.duration));
       }
 #endif
       metrics = measurement{};
@@ -233,15 +231,15 @@ source(caf::stateful_actor<source_state<Reader>>* self, Reader reader,
        size_t table_slice_size, caf::optional<size_t> max_events,
        type_registry_actor type_registry, vast::schema local_schema,
        std::string type_filter, accountant_actor accountant) {
-  VAST_LOG_SPD_TRACE("{}", detail::id_or_name(VAST_ARG(self)));
+  VAST_TRACE("{}", detail::id_or_name(VAST_ARG(self)));
   // Initialize state.
   auto& st = self->state;
   st.init(self, std::move(reader), std::move(max_events),
           std::move(type_registry), std::move(local_schema),
           std::move(type_filter), std::move(accountant));
   self->set_exit_handler([=](const caf::exit_msg& msg) {
-    VAST_LOG_SPD_VERBOSE("{} received EXIT from {}", detail::id_or_name(self),
-                         msg.source);
+    VAST_VERBOSE("{} received EXIT from {}", detail::id_or_name(self),
+                 msg.source);
     self->state.done = true;
     self->quit(msg.reason);
   });
@@ -254,8 +252,8 @@ source(caf::stateful_actor<source_state<Reader>>* self, Reader reader,
     },
     // get next element
     [=](caf::unit_t&, caf::downstream<table_slice>& out, size_t num) {
-      VAST_LOG_SPD_DEBUG("{} tries to generate {} messages",
-                         detail::id_or_name(self), num);
+      VAST_DEBUG("{} tries to generate {} messages", detail::id_or_name(self),
+                 num);
       auto& st = self->state;
       // Extract events until the source has exhausted its input or until
       // we have completed a batch.
@@ -267,8 +265,7 @@ source(caf::stateful_actor<source_state<Reader>>* self, Reader reader,
       auto t = timer::start(st.metrics);
       auto [err, produced]
         = st.reader.read(events, table_slice_size, push_slice);
-      VAST_LOG_SPD_DEBUG("{} read {} events", detail::id_or_name(self),
-                         produced);
+      VAST_DEBUG("{} read {} events", detail::id_or_name(self), produced);
       t.stop(produced);
       st.count += produced;
       auto finish = [&] {
@@ -277,8 +274,8 @@ source(caf::stateful_actor<source_state<Reader>>* self, Reader reader,
         self->quit();
       };
       if (st.requested && st.count >= *st.requested) {
-        VAST_LOG_SPD_DEBUG("{} finished with {} events",
-                           detail::id_or_name(self), st.count);
+        VAST_DEBUG("{} finished with {} events", detail::id_or_name(self),
+                   st.count);
         return finish();
       }
       if (err == ec::stalled) {
@@ -287,8 +284,8 @@ source(caf::stateful_actor<source_state<Reader>>* self, Reader reader,
           // message. Sending another one would create a parallel wakeup cycle.
           st.waiting_for_input = true;
           self->delayed_send(self, st.wakeup_delay, atom::wakeup_v);
-          VAST_LOG_SPD_DEBUG("{} scheduled itself to resume after {}",
-                             detail::id_or_name(self), st.wakeup_delay);
+          VAST_DEBUG("{} scheduled itself to resume after {}",
+                     detail::id_or_name(self), st.wakeup_delay);
           // Exponential backoff for the wakeup calls.
           // For each consecutive invocation of this generate handler that does
           // not emit any events, we double the wakeup delay.
@@ -298,35 +295,34 @@ source(caf::stateful_actor<source_state<Reader>>* self, Reader reader,
           else if (st.wakeup_delay < st.reader.batch_timeout_ / 2)
             st.wakeup_delay *= 2;
         } else {
-          VAST_LOG_SPD_DEBUG("{} timed out but is already scheduled for wakeup",
-                             detail::id_or_name(self));
+          VAST_DEBUG("{} timed out but is already scheduled for wakeup",
+                     detail::id_or_name(self));
         }
         return;
       }
       st.wakeup_delay = std::chrono::milliseconds::zero();
       if (err == ec::timeout) {
-        VAST_LOG_SPD_DEBUG("{} reached batch timeout and flushes its buffers",
-                           detail::id_or_name(self));
+        VAST_DEBUG("{} reached batch timeout and flushes its buffers",
+                   detail::id_or_name(self));
         st.mgr->out().force_emit_batches();
       } else if (err != caf::none) {
         if (err != vast::ec::end_of_input)
-          VAST_LOG_SPD_INFO("{} completed with message: {}",
-                            detail::id_or_name(self), render(err));
+          VAST_INFO("{} completed with message: {}", detail::id_or_name(self),
+                    render(err));
         else
-          VAST_LOG_SPD_DEBUG("{} completed at end of input",
-                             detail::id_or_name(self));
+          VAST_DEBUG("{} completed at end of input", detail::id_or_name(self));
         return finish();
       }
-      VAST_LOG_SPD_DEBUG("{} ended a generation round regularly",
-                         detail::id_or_name(self));
+      VAST_DEBUG("{} ended a generation round regularly",
+                 detail::id_or_name(self));
     },
     // done?
     [=](const caf::unit_t&) { return self->state.done; });
   return {
     [=](atom::get, atom::schema) { return self->state.reader.schema(); },
     [=](atom::put, schema sch) -> caf::result<void> {
-      VAST_LOG_SPD_DEBUG("{} received {}", detail::id_or_name(self),
-                         VAST_ARG("schema", sch));
+      VAST_DEBUG("{} received {}", detail::id_or_name(self),
+                 VAST_ARG("schema", sch));
       auto& st = self->state;
       if (auto err = st.reader.schema(std::move(sch));
           err && err != caf::no_error)
@@ -336,13 +332,12 @@ source(caf::stateful_actor<source_state<Reader>>* self, Reader reader,
     [=]([[maybe_unused]] expression& expr) {
       // FIXME: Allow for filtering import data.
       // self->state.filter = std::move(expr);
-      VAST_LOG_SPD_WARN("{} does not currently implement filter expressions",
-                        detail::id_or_name(self));
+      VAST_WARN("{} does not currently implement filter expressions",
+                detail::id_or_name(self));
     },
     [=](stream_sink_actor<table_slice, std::string> sink) {
       VAST_ASSERT(sink);
-      VAST_LOG_SPD_DEBUG("{} registers {}", detail::id_or_name(self),
-                         VAST_ARG(sink));
+      VAST_DEBUG("{} registers {}", detail::id_or_name(self), VAST_ARG(sink));
       // TODO: Currently, we use a broadcast downstream manager. We need to
       //       implement an anycast downstream manager and use it for the
       //       source, because we mustn't duplicate data.
@@ -375,8 +370,8 @@ source(caf::stateful_actor<source_state<Reader>>* self, Reader reader,
       return result;
     },
     [=](atom::wakeup) {
-      VAST_LOG_SPD_VERBOSE("{} wakes up to check for new input",
-                           detail::id_or_name(self));
+      VAST_VERBOSE("{} wakes up to check for new input",
+                   detail::id_or_name(self));
       auto& st = self->state;
       st.waiting_for_input = false;
       // If we are here, the reader returned with ec::stalled the last time it
@@ -385,7 +380,7 @@ source(caf::stateful_actor<source_state<Reader>>* self, Reader reader,
         st.mgr->push();
     },
     [=](atom::telemetry) {
-      VAST_LOG_SPD_DEBUG("{} got a telemetry atom", detail::id_or_name(self));
+      VAST_DEBUG("{} got a telemetry atom", detail::id_or_name(self));
       auto& st = self->state;
       st.send_report();
       if (!st.mgr->done())

@@ -101,20 +101,20 @@ reader::read_impl(size_t max_events, size_t max_slice_size, consumer& f) {
       return finish(f, caf::make_error(ec::end_of_input, "input exhausted"));
     if (batch_events_ > 0 && batch_timeout_ > reader_clock::duration::zero()
         && last_batch_sent_ + batch_timeout_ < reader_clock::now()) {
-      VAST_LOG_SPD_DEBUG("{} reached batch timeout", detail::id_or_name(this));
+      VAST_DEBUG("{} reached batch timeout", detail::id_or_name(this));
       return finish(f, ec::timeout);
     }
     auto timed_out = lines_->next_timeout(read_timeout_);
     if (timed_out) {
-      VAST_LOG_SPD_DEBUG("{} stalled at line {}", detail::id_or_name(this),
-                         lines_->line_number());
+      VAST_DEBUG("{} stalled at line {}", detail::id_or_name(this),
+                 lines_->line_number());
       return ec::stalled;
     }
     auto& line = lines_->get();
     if (line.empty()) {
       // Ignore empty lines.
-      VAST_LOG_SPD_DEBUG("{} ignores empty line at {}",
-                         detail::id_or_name(this), lines_->line_number());
+      VAST_DEBUG("{} ignores empty line at {}", detail::id_or_name(this),
+                 lines_->line_number());
       continue;
     }
     message sys_msg;

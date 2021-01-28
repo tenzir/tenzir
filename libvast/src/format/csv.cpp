@@ -180,7 +180,7 @@ const char* reader::name() const {
 
 caf::optional<record_type>
 reader::make_layout(const std::vector<std::string>& names) {
-  VAST_LOG_SPD_TRACE("{}", detail::id_or_name(VAST_ARG(names)));
+  VAST_TRACE("{}", detail::id_or_name(VAST_ARG(names)));
   for (auto& t : schema_) {
     if (auto r = caf::get_if<record_type>(&t)) {
       auto select_fields = [&]() -> caf::optional<record_type> {
@@ -234,8 +234,7 @@ struct container_parser_builder {
       auto to_enumeration = [t](std::string s) -> caf::optional<Attribute> {
         auto i = std::find(t.fields.begin(), t.fields.end(), s);
         if (i == t.fields.end()) {
-          VAST_LOG_SPD_WARN(
-            "csv reader failed to parse unexpected enum value {}", s);
+          VAST_WARN("csv reader failed to parse unexpected enum value {}", s);
           return caf::none;
         }
         return detail::narrow_cast<enumeration>(
@@ -267,9 +266,9 @@ struct container_parser_builder {
       };
       // clang-format on
     } else {
-      VAST_LOG_SPD_ERROR("csv parser builder failed to fetch a parser for type "
-                         "{}",
-                         caf::detail::pretty_type_name(typeid(T)));
+      VAST_ERROR("csv parser builder failed to fetch a parser for type "
+                 "{}",
+                 caf::detail::pretty_type_name(typeid(T)));
       return {};
     }
   }
@@ -336,8 +335,7 @@ struct csv_parser_factory {
       auto to_enumeration = [t](std::string s) -> caf::optional<enumeration> {
         auto i = std::find(t.fields.begin(), t.fields.end(), s);
         if (i == t.fields.end()) {
-          VAST_LOG_SPD_WARN(
-            "csv reader failed to parse unexpected enum value {}", s);
+          VAST_WARN("csv reader failed to parse unexpected enum value {}", s);
           return caf::none;
         }
         return detail::narrow_cast<enumeration>(
@@ -354,9 +352,9 @@ struct csv_parser_factory {
       using value_type = type_to_data<T>;
       return (-make_parser<value_type>{}).with(add_t<value_type>{bptr_});
     } else {
-      VAST_LOG_SPD_ERROR("csv parser builder failed to fetch a parser for type "
-                         "{}",
-                         caf::detail::pretty_type_name(typeid(T)));
+      VAST_ERROR("csv parser builder failed to fetch a parser for type "
+                 "{}",
+                 caf::detail::pretty_type_name(typeid(T)));
       return {};
     }
   }
@@ -387,8 +385,8 @@ vast::system::report reader::status() const {
   uint64_t num_lines = num_lines_;
   uint64_t invalid_lines = num_invalid_lines_;
   if (num_invalid_lines_ > 0)
-    VAST_LOG_SPD_WARN("{} failed to parse {} of {} recent lines",
-                      detail::id_or_name(this), num_invalid_lines_, num_lines_);
+    VAST_WARN("{} failed to parse {} of {} recent lines",
+              detail::id_or_name(this), num_invalid_lines_, num_lines_);
   num_lines_ = 0;
   num_invalid_lines_ = 0;
   return {
@@ -409,7 +407,7 @@ caf::expected<reader::parser_type> reader::read_header(std::string_view line) {
   auto&& layout = make_layout(columns);
   if (!layout)
     return caf::make_error(ec::parse_error, "unable to derive a layout");
-  VAST_LOG_SPD_DEBUG("csv_reader derived layout {}", to_string(*layout));
+  VAST_DEBUG("csv_reader derived layout {}", to_string(*layout));
   if (!reset_builder(*layout))
     return caf::make_error(ec::parse_error, "unable to create a builder for "
                                             "layout");
@@ -426,8 +424,8 @@ caf::error reader::read_impl(size_t max_events, size_t max_slice_size,
   auto next_line = [&] {
     auto timed_out = lines_->next_timeout(read_timeout_);
     if (timed_out)
-      VAST_LOG_SPD_DEBUG("{} reached input timeout at line {}",
-                         detail::id_or_name(this), lines_->line_number());
+      VAST_DEBUG("{} reached input timeout at line {}",
+                 detail::id_or_name(this), lines_->line_number());
     return timed_out;
   };
   if (!parser_) {
@@ -448,7 +446,7 @@ caf::error reader::read_impl(size_t max_events, size_t max_slice_size,
                                                                 "exhausted"));
     if (batch_events_ > 0 && batch_timeout_ > reader_clock::duration::zero()
         && last_batch_sent_ + batch_timeout_ < reader_clock::now()) {
-      VAST_LOG_SPD_DEBUG("{} reached batch timeout", detail::id_or_name(this));
+      VAST_DEBUG("{} reached batch timeout", detail::id_or_name(this));
       return finish(callback, ec::timeout);
     }
     bool timed_out = next_line();
@@ -457,16 +455,15 @@ caf::error reader::read_impl(size_t max_events, size_t max_slice_size,
     auto& line = lines_->get();
     if (line.empty()) {
       // Ignore empty lines.
-      VAST_LOG_SPD_DEBUG("{} ignores empty line at {}",
-                         detail::id_or_name(this), lines_->line_number());
+      VAST_DEBUG("{} ignores empty line at {}", detail::id_or_name(this),
+                 lines_->line_number());
       continue;
     }
     ++num_lines_;
     if (!p(line)) {
       if (num_invalid_lines_ == 0)
-        VAST_LOG_SPD_WARN("{} failed to parse line {} : {}",
-                          detail::id_or_name(this), lines_->line_number(),
-                          line);
+        VAST_WARN("{} failed to parse line {} : {}", detail::id_or_name(this),
+                  lines_->line_number(), line);
       ++num_invalid_lines_;
       continue;
     }

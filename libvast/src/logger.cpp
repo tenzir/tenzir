@@ -115,7 +115,7 @@ namespace detail {
 bool setup_spdlog(const vast::invocation& cmd_invocation,
                   const caf::settings& cfg_file) {
   if (vast::detail::logger()->name() != "/dev/null") {
-    VAST_LOG_SPD_ERROR("Log already up");
+    VAST_ERROR("Log already up");
     return false;
   }
   bool is_server = cmd_invocation.name() == "start"
@@ -233,7 +233,7 @@ bool setup_spdlog(const vast::invocation& cmd_invocation,
 }
 
 void shutdown_spdlog() {
-  VAST_LOG_SPD_DEBUG("shut down logging");
+  VAST_DEBUG("shut down logging");
   spdlog::shutdown();
 }
 

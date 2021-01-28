@@ -55,9 +55,9 @@ void counter_state::init(expression expr, index_actor index,
           std::tie(it, std::ignore) = checkers_.emplace(
             vast::record_type{slice.layout()}, std::move(*x));
         } else {
-          VAST_LOG_SPD_ERROR("{} failed to tailor expression: {}",
-                             detail::id_or_name(self_),
-                             self_->system().render(x.error()));
+          VAST_ERROR("{} failed to tailor expression: {}",
+                     detail::id_or_name(self_),
+                     self_->system().render(x.error()));
           return;
         }
       }
@@ -68,8 +68,8 @@ void counter_state::init(expression expr, index_actor index,
     },
     [this](atom::done, const caf::error&) {
       if (self_->current_sender() != archive_) {
-        VAST_LOG_SPD_WARN("{} received ('done', error) from unexpected actor",
-                          detail::id_or_name(self_));
+        VAST_WARN("{} received ('done', error) from unexpected actor",
+                  detail::id_or_name(self_));
         return;
       }
       if (--pending_archive_requests_ == 0)

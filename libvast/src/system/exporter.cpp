@@ -40,10 +40,9 @@ namespace vast::system {
 namespace {
 
 void ship_results(exporter_actor::stateful_pointer<exporter_state> self) {
-  VAST_LOG_SPD_TRACE("{}", detail::id_or_name(""));
+  VAST_TRACE("{}", detail::id_or_name(""));
   auto& st = self->state;
-  VAST_LOG_SPD_DEBUG("{} relays {} events", detail::id_or_name(self),
-                     st.query.cached);
+  VAST_DEBUG("{} relays {} events", detail::id_or_name(self), st.query.cached);
   while (st.query.requested > 0 && st.query.cached > 0) {
     VAST_ASSERT(!st.results.empty());
     // Fetch the next table slice. Either we grab the entire first slice in
@@ -92,15 +91,15 @@ void report_statistics(exporter_actor::stateful_pointer<exporter_state> self) {
 
 void shutdown(exporter_actor::stateful_pointer<exporter_state> self,
               caf::error err) {
-  VAST_LOG_SPD_DEBUG("{} initiates shutdown with error {}",
-                     detail::id_or_name(self), render(err));
+  VAST_DEBUG("{} initiates shutdown with error {}", detail::id_or_name(self),
+             render(err));
   self->send_exit(self, std::move(err));
 }
 
 void shutdown(exporter_actor::stateful_pointer<exporter_state> self) {
   if (has_continuous_option(self->state.options))
     return;
-  VAST_LOG_SPD_DEBUG("{} initiates shutdown", detail::id_or_name(self));
+  VAST_DEBUG("{} initiates shutdown", detail::id_or_name(self));
   self->send_exit(self, caf::exit_reason::normal);
 }
 
@@ -108,23 +107,23 @@ void request_more_hits(exporter_actor::stateful_pointer<exporter_state> self) {
   auto& st = self->state;
   // Sanity check.
   if (!has_historical_option(st.options)) {
-    VAST_LOG_SPD_WARN("{} requested more hits for continuous query",
-                      detail::id_or_name(self));
+    VAST_WARN("{} requested more hits for continuous query",
+              detail::id_or_name(self));
     return;
   }
   // Do nothing if we already shipped everything the client asked for.
   if (st.query.requested == 0) {
-    VAST_LOG_SPD_DEBUG("{} shipped {} results and waits for client to request "
-                       "more",
-                       detail::id_or_name(self), self->state.query.shipped);
+    VAST_DEBUG("{} shipped {} results and waits for client to request "
+               "more",
+               detail::id_or_name(self), self->state.query.shipped);
     return;
   }
   // Do nothing if we are still waiting for results from the ARCHIVE.
   if (st.query.lookups_issued > st.query.lookups_complete) {
-    VAST_LOG_SPD_DEBUG("{} currently awaits {} more lookup results from the "
-                       "archive",
-                       detail::id_or_name(self),
-                       st.query.lookups_issued - st.query.lookups_complete);
+    VAST_DEBUG("{} currently awaits {} more lookup results from the "
+               "archive",
+               detail::id_or_name(self),
+               st.query.lookups_issued - st.query.lookups_complete);
     return;
   }
   // If the if-statement above isn't true then the two values must be equal.
@@ -132,8 +131,8 @@ void request_more_hits(exporter_actor::stateful_pointer<exporter_state> self) {
   VAST_ASSERT(st.query.lookups_issued == st.query.lookups_complete);
   // Do nothing if we received everything.
   if (st.query.received == st.query.expected) {
-    VAST_LOG_SPD_DEBUG("{} received hits for all {} partitions",
-                       detail::id_or_name(self), st.query.expected);
+    VAST_DEBUG("{} received hits for all {} partitions",
+               detail::id_or_name(self), st.query.expected);
     return;
   }
   // If the if-statement above isn't true then `received < expected` must hold.
@@ -148,30 +147,30 @@ void request_more_hits(exporter_actor::stateful_pointer<exporter_state> self) {
   // 'done', we add this number to `received`.
   st.query.scheduled = n;
   // Request more hits from the INDEX.
-  VAST_LOG_SPD_DEBUG("{} asks index to process {} more partitions",
-                     detail::id_or_name(self), n);
+  VAST_DEBUG("{} asks index to process {} more partitions",
+             detail::id_or_name(self), n);
   self->send(st.index, st.id, detail::narrow<uint32_t>(n));
 }
 
 void handle_batch(exporter_actor::stateful_pointer<exporter_state> self,
                   table_slice slice) {
   VAST_ASSERT(slice.encoding() != table_slice_encoding::none);
-  VAST_LOG_SPD_DEBUG("{} got batch of {} events", detail::id_or_name(self),
-                     slice.rows());
+  VAST_DEBUG("{} got batch of {} events", detail::id_or_name(self),
+             slice.rows());
   // Construct a candidate checker if we don't have one for this type.
   type t = slice.layout();
   auto it = self->state.checkers.find(t);
   if (it == self->state.checkers.end()) {
     auto x = tailor(self->state.expr, t);
     if (!x) {
-      VAST_LOG_SPD_ERROR("{} failed to tailor expression: {}",
-                         detail::id_or_name(self), render(x.error()));
+      VAST_ERROR("{} failed to tailor expression: {}", detail::id_or_name(self),
+                 render(x.error()));
       ship_results(self);
       shutdown(self);
       return;
     }
-    VAST_LOG_SPD_DEBUG("{} tailored AST to {}  {}  {}",
-                       detail::id_or_name(self), t, ':', x);
+    VAST_DEBUG("{} tailored AST to {}  {}  {}", detail::id_or_name(self), t,
+               ':', x);
     std::tie(it, std::ignore)
       = self->state.checkers.emplace(type{slice.layout()}, std::move(*x));
   }
@@ -198,11 +197,10 @@ exporter(exporter_actor::stateful_pointer<exporter_state> self, expression expr,
   self->state.options = options;
   self->state.expr = std::move(expr);
   if (has_continuous_option(options))
-    VAST_LOG_SPD_DEBUG("{} has continuous query option",
-                       detail::id_or_name(self));
+    VAST_DEBUG("{} has continuous query option", detail::id_or_name(self));
   self->set_exit_handler([=](const caf::exit_msg& msg) {
-    VAST_LOG_SPD_DEBUG("{} received exit from {} with reason: {}",
-                       detail::id_or_name(self), msg.source, msg.reason);
+    VAST_DEBUG("{} received exit from {} with reason: {}",
+               detail::id_or_name(self), msg.source, msg.reason);
     auto& st = self->state;
     if (msg.reason != caf::exit_reason::kill)
       report_statistics(self);
@@ -212,8 +210,8 @@ exporter(exporter_actor::stateful_pointer<exporter_state> self, expression expr,
     self->quit(msg.reason);
   });
   self->set_down_handler([=](const caf::down_msg& msg) {
-    VAST_LOG_SPD_DEBUG("{} received DOWN from {}", detail::id_or_name(self),
-                       msg.source);
+    VAST_DEBUG("{} received DOWN from {}", detail::id_or_name(self),
+               msg.source);
     if (has_continuous_option(self->state.options)
         && (msg.source == self->state.archive
             || msg.source == self->state.index))
@@ -229,11 +227,11 @@ exporter(exporter_actor::stateful_pointer<exporter_state> self, expression expr,
     [=](atom::extract) -> caf::result<void> {
       auto& qs = self->state.query;
       // Sanity check.
-      VAST_LOG_SPD_DEBUG("{} got request to extract all events",
-                         detail::id_or_name(self));
+      VAST_DEBUG("{} got request to extract all events",
+                 detail::id_or_name(self));
       if (qs.requested == max_events) {
-        VAST_LOG_SPD_WARN("{} ignores extract request, already getting all",
-                          detail::id_or_name(self));
+        VAST_WARN("{} ignores extract request, already getting all",
+                  detail::id_or_name(self));
         return {};
       }
       // Configure state to get all remaining partition results.
@@ -246,21 +244,21 @@ exporter(exporter_actor::stateful_pointer<exporter_state> self, expression expr,
       auto& qs = self->state.query;
       // Sanity checks.
       if (requested_results == 0) {
-        VAST_LOG_SPD_WARN("{} ignores extract request for 0 results",
-                          detail::id_or_name(self));
+        VAST_WARN("{} ignores extract request for 0 results",
+                  detail::id_or_name(self));
         return {};
       }
       if (qs.requested == max_events) {
-        VAST_LOG_SPD_WARN("{} ignores extract request, already getting all",
-                          detail::id_or_name(self));
+        VAST_WARN("{} ignores extract request, already getting all",
+                  detail::id_or_name(self));
         return {};
       }
       VAST_ASSERT(qs.requested < max_events);
       // Configure state to get up to `requested_results` more events.
       auto n = std::min(max_events - requested_results, requested_results);
-      VAST_LOG_SPD_DEBUG("{} got a request to extract {} more results in "
-                         "addition to {} pending results",
-                         detail::id_or_name(self), n, qs.requested);
+      VAST_DEBUG("{} got a request to extract {} more results in "
+                 "addition to {} pending results",
+                 detail::id_or_name(self), n, qs.requested);
       qs.requested += n;
       ship_results(self);
       request_more_hits(self);
@@ -271,8 +269,7 @@ exporter(exporter_actor::stateful_pointer<exporter_state> self, expression expr,
       self->send(self->state.accountant, atom::announce_v, self->name());
     },
     [=](archive_actor archive) {
-      VAST_LOG_SPD_DEBUG("{} registers archive {}", detail::id_or_name(self),
-                         archive);
+      VAST_DEBUG("{} registers archive {}", detail::id_or_name(self), archive);
       self->state.archive = std::move(archive);
       if (has_continuous_option(self->state.options))
         self->monitor(self->state.archive);
@@ -282,21 +279,19 @@ exporter(exporter_actor::stateful_pointer<exporter_state> self, expression expr,
                    caf::actor_cast<caf::actor>(self));
     },
     [=](index_actor index) {
-      VAST_LOG_SPD_DEBUG("{} registers index {}", detail::id_or_name(self),
-                         index);
+      VAST_DEBUG("{} registers index {}", detail::id_or_name(self), index);
       self->state.index = std::move(index);
       if (has_continuous_option(self->state.options))
         self->monitor(self->state.index);
     },
     [=](atom::sink, const caf::actor& sink) {
-      VAST_LOG_SPD_DEBUG("{} registers sink {}", detail::id_or_name(self),
-                         sink);
+      VAST_DEBUG("{} registers sink {}", detail::id_or_name(self), sink);
       self->state.sink = sink;
       self->monitor(self->state.sink);
     },
     [=](atom::run) {
-      VAST_LOG_SPD_VERBOSE("{} executes query: {}", detail::id_or_name(self),
-                           to_string(self->state.expr));
+      VAST_VERBOSE("{} executes query: {}", detail::id_or_name(self),
+                   to_string(self->state.expr));
       self->state.start = std::chrono::system_clock::now();
       if (!has_historical_option(self->state.options))
         return;
@@ -310,9 +305,9 @@ exporter(exporter_actor::stateful_pointer<exporter_state> self, expression expr,
                   self->state.expr)
         .then(
           [=](const uuid& lookup, uint32_t partitions, uint32_t scheduled) {
-            VAST_LOG_SPD_VERBOSE(
-              "{} got lookup handle {}, scheduled {}/{} partitions",
-              detail::id_or_name(self), lookup, scheduled, partitions);
+            VAST_VERBOSE("{} got lookup handle {}, scheduled {}/{} partitions",
+                         detail::id_or_name(self), lookup, scheduled,
+                         partitions);
             self->state.id = lookup;
             if (partitions > 0) {
               self->state.query.expected = partitions;
@@ -324,8 +319,8 @@ exporter(exporter_actor::stateful_pointer<exporter_state> self, expression expr,
           [=](const caf::error& e) { shutdown(self, e); });
     },
     [=](atom::statistics, const caf::actor& statistics_subscriber) {
-      VAST_LOG_SPD_DEBUG("{} registers statistics subscriber {}",
-                         detail::id_or_name(self), statistics_subscriber);
+      VAST_DEBUG("{} registers statistics subscriber {}",
+                 detail::id_or_name(self), statistics_subscriber);
       self->state.statistics_subscriber = statistics_subscriber;
     },
     [=](caf::stream<table_slice> in) -> caf::inbound_stream_slot<table_slice> {
@@ -340,8 +335,8 @@ exporter(exporter_actor::stateful_pointer<exporter_state> self, expression expr,
           },
           [=](caf::unit_t&, const caf::error& err) {
             if (err)
-              VAST_LOG_SPD_ERROR("{} got error during streaming: {}",
-                                 detail::id_or_name(self), err);
+              VAST_ERROR("{} got error during streaming: {}",
+                         detail::id_or_name(self), err);
           })
         .inbound_slot();
     },
@@ -375,9 +370,9 @@ exporter(exporter_actor::stateful_pointer<exporter_state> self, expression expr,
       VAST_ASSERT(self->current_sender() == self->state.archive);
       auto& qs = self->state.query;
       ++qs.lookups_complete;
-      VAST_LOG_SPD_DEBUG("{} received done from archive: {}  {}",
-                         detail::id_or_name(self), VAST_ARG(err),
-                         VAST_ARG("query", qs));
+      VAST_DEBUG("{} received done from archive: {}  {}",
+                 detail::id_or_name(self), VAST_ARG(err),
+                 VAST_ARG("query", qs));
       // We skip 'done' messages of the query supervisors until we process all
       // hits first. Hence, we can never be finished here.
       VAST_ASSERT(!finished(qs));
@@ -404,15 +399,13 @@ exporter(exporter_actor::stateful_pointer<exporter_state> self, expression expr,
         self->send(st.accountant, r);
       }
       if (count == 0) {
-        VAST_LOG_SPD_WARN("{} got empty hits", detail::id_or_name(self));
+        VAST_WARN("{} got empty hits", detail::id_or_name(self));
       } else {
         VAST_ASSERT(rank(st.hits & hits) == 0);
-        VAST_LOG_SPD_DEBUG("{} got {} index hits in [{}, {})",
-                           detail::id_or_name(self), count, select(hits, 1),
-                           (select(hits, -1) + 1));
+        VAST_DEBUG("{} got {} index hits in [{}, {})", detail::id_or_name(self),
+                   count, select(hits, 1), (select(hits, -1) + 1));
         st.hits |= hits;
-        VAST_LOG_SPD_DEBUG("{} forwards hits to archive",
-                           detail::id_or_name(self));
+        VAST_DEBUG("{} forwards hits to archive", detail::id_or_name(self));
         // FIXME: restrict according to configured limit.
         ++st.query.lookups_issued;
         self->send(st.archive, std::move(hits));
@@ -432,14 +425,13 @@ exporter(exporter_actor::stateful_pointer<exporter_state> self, expression expr,
       qs.runtime = runtime;
       qs.received += qs.scheduled;
       if (qs.received < qs.expected) {
-        VAST_LOG_SPD_DEBUG("{} received hits from {}  {}  {} partitions",
-                           detail::id_or_name(self), qs.received, '/',
-                           qs.expected);
+        VAST_DEBUG("{} received hits from {}  {}  {} partitions",
+                   detail::id_or_name(self), qs.received, '/', qs.expected);
         request_more_hits(self);
       } else {
-        VAST_LOG_SPD_DEBUG("{} received all hits from {} partition(s) in {}",
-                           detail::id_or_name(self), qs.expected,
-                           vast::to_string(runtime));
+        VAST_DEBUG("{} received all hits from {} partition(s) in {}",
+                   detail::id_or_name(self), qs.expected,
+                   vast::to_string(runtime));
         if (self->state.accountant)
           self->send(self->state.accountant, "exporter.hits.runtime", runtime);
         if (finished(qs))

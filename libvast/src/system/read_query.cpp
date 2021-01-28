@@ -43,7 +43,7 @@ namespace vast::system {
 caf::expected<std::string>
 read_query(const invocation& inv, std::string_view file_option,
            size_t argument_offset) {
-  VAST_LOG_SPD_TRACE("{}  {}", detail::id_or_name(inv), file_option);
+  VAST_TRACE("{}  {}", detail::id_or_name(inv), file_option);
   std::string result;
   auto assign_query = [&](std::istream& in) {
     result.assign(std::istreambuf_iterator<char>{in},
@@ -73,11 +73,11 @@ read_query(const invocation& inv, std::string_view file_option,
   } else {
     // Assemble expression from all remaining arguments.
     if (inv.arguments.size() > 1) {
-      VAST_LOG_SPD_WARN("spreading a query over multiple arguments is "
-                        "deprecated; please pass it as a single string "
-                        "instead.");
-      VAST_LOG_SPD_VERBOSE("(hint: use a heredoc if you run into quoting "
-                           "issues.)");
+      VAST_WARN("spreading a query over multiple arguments is "
+                "deprecated; please pass it as a single string "
+                "instead.");
+      VAST_VERBOSE("(hint: use a heredoc if you run into quoting "
+                   "issues.)");
     }
     result = detail::join(inv.arguments.begin() + argument_offset,
                           inv.arguments.end(), " ");

@@ -191,7 +191,7 @@ public:
   ~zeek_writer() override {
     if (show_progress_ && num_results_ > 0)
       std::cerr << std::endl;
-    VAST_LOG_SPD_INFO("query {} had {} result(s)", , query_id_, num_results_);
+    VAST_INFO("query {} had {} result(s)", , query_id_, num_results_);
   }
 
   using vast::format::writer::write;
@@ -293,12 +293,12 @@ int main(int argc, char** argv) {
                                                + std::to_string(vast_port)}}});
   caf::actor node;
   if (auto conn = vast::system::connect_to_node(self, opts); !conn) {
-    VAST_LOG_SPD_ERROR("failed to connect to VAST: {}", conn.error());
+    VAST_ERROR("failed to connect to VAST: {}", conn.error());
     return 1;
   } else {
     node = std::move(*conn);
   }
-  VAST_LOG_SPD_INFO("connected to VAST successfully");
+  VAST_INFO("connected to VAST successfully");
   // Block until Zeek peers with us.
   auto receive_statuses = true;
   auto status_subscriber = endpoint.make_status_subscriber(receive_statuses);
@@ -314,18 +314,18 @@ int main(int argc, char** argv) {
                    // timeout
                  },
                  [&]([[maybe_unused]] broker::error error) {
-                   VAST_LOG_SPD_ERROR("{}", vast::render(error));
+                   VAST_ERROR("{}", vast::render(error));
                  },
                  [&](broker::status status) {
                    if (status == broker::sc::peer_added)
                      peered = true;
                    else
-                     VAST_LOG_SPD_ERROR("{}", to_string(status));
+                     VAST_ERROR("{}", to_string(status));
                  },
                },
                *msg);
   };
-  VAST_LOG_SPD_INFO( "peered with Zeek successfull {}",  waiting for commands" ) ;
+  VAST_INFO( "peered with Zeek successfull {}",  waiting for commands" ) ;
   // Process queries from Zeek.
   auto done = false;
   while (!done) {
@@ -338,12 +338,12 @@ int main(int argc, char** argv) {
     // Parse the Zeek query event.
     auto result = parse_query_event(data);
     if (!result) {
-      VAST_LOG_SPD_ERROR("{}", vast::render(result.error()));
+      VAST_ERROR("{}", vast::render(result.error()));
       continue;
     }
     auto& [query_id, expression] = *result;
     // Relay the query expression to VAST.
-    VAST_LOG_SPD_INFO("dispatching query {}  {}", query_id, expression);
+    VAST_INFO("dispatching query {}  {}", query_id, expression);
     auto inv = vast::invocation{std::move(opts), "", {expression}};
     auto writer = std::make_unique<zeek_writer>(endpoint, query_id);
     auto sink = self->spawn(vast::system::sink, std::move(writer),
@@ -351,8 +351,8 @@ int main(int argc, char** argv) {
     vast::scope_linked<caf::actor> guard{sink};
     auto res = vast::system::sink_command(std::move(inv), sys, sink);
     if (res.match_elements<caf::error>()) {
-      VAST_LOG_SPD_ERROR("failed to dispatch query to VAST: {}",
-                         res.get_as<caf::error>(0));
+      VAST_ERROR("failed to dispatch query to VAST: {}",
+                 res.get_as<caf::error>(0));
       continue;
     }
     // Our Zeek command contains a sink, which terminates automatically when the

@@ -62,7 +62,7 @@ uuid segment::id() const {
   auto segment_v0 = segment->segment_as_v0();
   uuid result;
   if (auto error = unpack(*segment_v0->uuid(), result))
-    VAST_LOG_SPD_ERROR("couldnt get uuid from segment: {}", error);
+    VAST_ERROR("couldnt get uuid from segment: {}", error);
   return result;
 }
 
@@ -104,8 +104,8 @@ segment::lookup(const vast::ids& xs) const {
     slice.offset(interval->begin());
     VAST_ASSERT(slice.offset() == interval->begin());
     VAST_ASSERT(slice.offset() + slice.rows() == interval->end());
-    VAST_LOG_SPD_DEBUG("{} returns slice from lookup: {}",
-                       detail::id_or_name(this), to_string(slice));
+    VAST_DEBUG("{} returns slice from lookup: {}", detail::id_or_name(this),
+               to_string(slice));
     result.push_back(std::move(slice));
     return caf::none;
   };

@@ -43,7 +43,7 @@ using namespace std::chrono_literals;
 namespace vast::system {
 
 caf::message pivot_command(const invocation& inv, caf::actor_system& sys) {
-  VAST_LOG_SPD_TRACE("{}", detail::id_or_name(inv));
+  VAST_TRACE("{}", detail::id_or_name(inv));
   using namespace std::string_literals;
   // Read options and arguments.
   auto output_format = caf::get_or(inv.options, "vast.pivot.format", "json"s);
@@ -75,8 +75,8 @@ caf::message pivot_command(const invocation& inv, caf::actor_system& sys) {
     sig_mon_thread, sys, defaults::system::signal_monitoring_interval, self);
   // Spawn exporter at the node.
   auto spawn_exporter = invocation{inv.options, "spawn exporter", {*query}};
-  VAST_LOG_SPD_DEBUG("{} spawns exporter with parameters: {}",
-                     detail::id_or_name(&inv), spawn_exporter);
+  VAST_DEBUG("{} spawns exporter with parameters: {}", detail::id_or_name(&inv),
+             spawn_exporter);
   auto maybe_exporter = spawn_at_node(self, node, spawn_exporter);
   if (!maybe_exporter)
     return caf::make_message(std::move(maybe_exporter.error()));
@@ -86,8 +86,8 @@ caf::message pivot_command(const invocation& inv, caf::actor_system& sys) {
   // Spawn pivoter at the node.
   auto spawn_pivoter
     = invocation{inv.options, "spawn pivoter", {inv.arguments[0], *query}};
-  VAST_LOG_SPD_DEBUG("{} spawns pivoter with parameters: {}",
-                     detail::id_or_name(&inv), spawn_pivoter);
+  VAST_DEBUG("{} spawns pivoter with parameters: {}", detail::id_or_name(&inv),
+             spawn_pivoter);
   auto piv = spawn_at_node(self, node, spawn_pivoter);
   if (!piv)
     return caf::make_message(std::move(piv.error()));
@@ -99,8 +99,8 @@ caf::message pivot_command(const invocation& inv, caf::actor_system& sys) {
     return caf::make_message(std::move(components.error()));
   auto& [accountant] = *components;
   if (accountant) {
-    VAST_LOG_SPD_DEBUG("{} assigns accountant to sink",
-                       detail::id_or_name(inv.full_name));
+    VAST_DEBUG("{} assigns accountant to sink",
+               detail::id_or_name(inv.full_name));
     self->send(sink, caf::actor_cast<accountant_actor>(accountant));
   }
   caf::error err;
@@ -117,30 +117,30 @@ caf::message pivot_command(const invocation& inv, caf::actor_system& sys) {
     ->do_receive(
       [&](caf::down_msg& msg) {
         if (msg.source == node) {
-          VAST_LOG_SPD_DEBUG("{} received DOWN from node",
-                             detail::id_or_name(inv.full_name));
+          VAST_DEBUG("{} received DOWN from node",
+                     detail::id_or_name(inv.full_name));
         } else if (msg.source == *piv) {
-          VAST_LOG_SPD_DEBUG("{} received DOWN from pivoter",
-                             detail::id_or_name(inv.full_name));
+          VAST_DEBUG("{} received DOWN from pivoter",
+                     detail::id_or_name(inv.full_name));
           piv_guard.disable();
         } else if (msg.source == sink) {
-          VAST_LOG_SPD_DEBUG("{} received DOWN from sink",
-                             detail::id_or_name(inv.full_name));
+          VAST_DEBUG("{} received DOWN from sink",
+                     detail::id_or_name(inv.full_name));
           sink_guard.disable();
         } else {
           VAST_ASSERT(!"received DOWN from inexplicable actor");
         }
         if (msg.reason) {
-          VAST_LOG_SPD_WARN("{} received error message: {}",
-                            detail::id_or_name(inv.full_name),
-                            self->system().render(msg.reason));
+          VAST_WARN("{} received error message: {}",
+                    detail::id_or_name(inv.full_name),
+                    self->system().render(msg.reason));
           err = std::move(msg.reason);
         }
         stop = true;
       },
       [&](atom::signal, int signal) {
-        VAST_LOG_SPD_DEBUG("{} got {}", detail::id_or_name(inv.full_name),
-                           ::strsignal(signal));
+        VAST_DEBUG("{} got {}", detail::id_or_name(inv.full_name),
+                   ::strsignal(signal));
         if (signal == SIGINT || signal == SIGTERM) {
           stop = true;
         }

@@ -44,19 +44,14 @@
 #include "vast/detail/logger.hpp"
 #include "vast/detail/logger_formatters.hpp"
 
-#define VAST_LOG_SPD_TRACE(...)                                                \
-  SPDLOG_LOGGER_TRACE(vast::detail::logger(), __VA_ARGS__)
-#define VAST_LOG_SPD_DEBUG(...)                                                \
+#define VAST_TRACE(...) SPDLOG_LOGGER_TRACE(vast::detail::logger(), __VA_ARGS__)
+#define VAST_DEBUG(...) SPDLOG_LOGGER_DEBUG(vast::detail::logger(), __VA_ARGS__)
+#define VAST_VERBOSE(...)                                                      \
   SPDLOG_LOGGER_DEBUG(vast::detail::logger(), __VA_ARGS__)
-#define VAST_LOG_SPD_VERBOSE(...)                                              \
-  SPDLOG_LOGGER_DEBUG(vast::detail::logger(), __VA_ARGS__)
-#define VAST_LOG_SPD_INFO(...)                                                 \
-  SPDLOG_LOGGER_INFO(vast::detail::logger(), __VA_ARGS__)
-#define VAST_LOG_SPD_WARN(...)                                                 \
-  SPDLOG_LOGGER_WARN(vast::detail::logger(), __VA_ARGS__)
-#define VAST_LOG_SPD_ERROR(...)                                                \
-  SPDLOG_LOGGER_ERROR(vast::detail::logger(), __VA_ARGS__)
-#define VAST_LOG_SPD_CRITICAL(...)                                             \
+#define VAST_INFO(...) SPDLOG_LOGGER_INFO(vast::detail::logger(), __VA_ARGS__)
+#define VAST_WARN(...) SPDLOG_LOGGER_WARN(vast::detail::logger(), __VA_ARGS__)
+#define VAST_ERROR(...) SPDLOG_LOGGER_ERROR(vast::detail::logger(), __VA_ARGS__)
+#define VAST_CRITICAL(...)                                                     \
   SPDLOG_LOGGER_CRITICAL(vast::detail::logger(), __VA_ARGS__)
 
 // -------

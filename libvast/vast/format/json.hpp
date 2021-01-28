@@ -134,12 +134,11 @@ vast::system::report reader<Selector>::status() const {
   uint64_t invalid_line = num_invalid_lines_;
   uint64_t unknown_layout = num_unknown_layouts_;
   if (num_invalid_lines_ > 0)
-    VAST_LOG_SPD_WARN("{} failed to parse {} of {} recent lines",
-                      detail::id_or_name(this), num_invalid_lines_, num_lines_);
+    VAST_WARN("{} failed to parse {} of {} recent lines",
+              detail::id_or_name(this), num_invalid_lines_, num_lines_);
   if (num_unknown_layouts_ > 0)
-    VAST_LOG_SPD_WARN(
-      "{} failed to find a matching type for {} of {} recent lines",
-      detail::id_or_name(this), num_unknown_layouts_, num_lines_);
+    VAST_WARN("{} failed to find a matching type for {} of {} recent lines",
+              detail::id_or_name(this), num_unknown_layouts_, num_lines_);
   num_invalid_lines_ = 0;
   num_unknown_layouts_ = 0;
   num_lines_ = 0;
@@ -152,8 +151,8 @@ vast::system::report reader<Selector>::status() const {
 template <class Selector>
 caf::error reader<Selector>::read_impl(size_t max_events, size_t max_slice_size,
                                        consumer& cons) {
-  VAST_LOG_SPD_TRACE("{}  {}", detail::id_or_name(VAST_ARG(max_events)),
-                     VAST_ARG(max_slice_size));
+  VAST_TRACE("{}  {}", detail::id_or_name(VAST_ARG(max_events)),
+             VAST_ARG(max_slice_size));
   VAST_ASSERT(max_events > 0);
   VAST_ASSERT(max_slice_size > 0);
   size_t produced = 0;
@@ -163,29 +162,28 @@ caf::error reader<Selector>::read_impl(size_t max_events, size_t max_slice_size,
       return finish(cons, caf::make_error(ec::end_of_input, "input exhausted"));
     if (batch_events_ > 0 && batch_timeout_ > reader_clock::duration::zero()
         && last_batch_sent_ + batch_timeout_ < reader_clock::now()) {
-      VAST_LOG_SPD_DEBUG("{} reached batch timeout", detail::id_or_name(this));
+      VAST_DEBUG("{} reached batch timeout", detail::id_or_name(this));
       return finish(cons, ec::timeout);
     }
     bool timed_out = lines_->next_timeout(read_timeout_);
     if (timed_out) {
-      VAST_LOG_SPD_DEBUG("{} stalled at line {}", detail::id_or_name(this),
-                         lines_->line_number());
+      VAST_DEBUG("{} stalled at line {}", detail::id_or_name(this),
+                 lines_->line_number());
       return ec::stalled;
     }
     auto& line = lines_->get();
     ++num_lines_;
     if (line.empty()) {
       // Ignore empty lines.
-      VAST_LOG_SPD_DEBUG("{} ignores empty line at {}",
-                         detail::id_or_name(this), lines_->line_number());
+      VAST_DEBUG("{} ignores empty line at {}", detail::id_or_name(this),
+                 lines_->line_number());
       continue;
     }
     vast::json j;
     if (!parsers::json(line, j)) {
       if (num_invalid_lines_ == 0)
-        VAST_LOG_SPD_WARN("{} failed to parse line {} : {}",
-                          detail::id_or_name(this), lines_->line_number(),
-                          line);
+        VAST_WARN("{} failed to parse line {} : {}", detail::id_or_name(this),
+                  lines_->line_number(), line);
       ++num_invalid_lines_;
       continue;
     }
@@ -195,9 +193,8 @@ caf::error reader<Selector>::read_impl(size_t max_events, size_t max_slice_size,
     auto&& layout = selector_(*xs);
     if (!layout) {
       if (num_unknown_layouts_ == 0)
-        VAST_LOG_SPD_WARN("{} failed to find a matching type at line {} : {}",
-                          detail::id_or_name(this), lines_->line_number(),
-                          line);
+        VAST_WARN("{} failed to find a matching type at line {} : {}",
+                  detail::id_or_name(this), lines_->line_number(), line);
       ++num_unknown_layouts_;
       continue;
     }
@@ -207,9 +204,9 @@ caf::error reader<Selector>::read_impl(size_t max_events, size_t max_slice_size,
     if (auto err = add(*bptr, *xs, *layout)) {
       if (err == ec::convert_error) {
         if (num_invalid_lines_ == 0)
-          VAST_LOG_SPD_WARN("{} failed to convert value(s) in line {} : {}",
-                            detail::id_or_name(this), lines_->line_number(),
-                            render(err));
+          VAST_WARN("{} failed to convert value(s) in line {} : {}",
+                    detail::id_or_name(this), lines_->line_number(),
+                    render(err));
         ++num_invalid_lines_;
       } else {
         err.context() += caf::make_message("line", lines_->line_number());

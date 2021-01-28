@@ -41,7 +41,7 @@ maybe_actor spawn_archive(node_actor* self, spawn_arguments& args) {
       * get_or(args.inv.options, "vast.max-segment-size", sd::max_segment_size);
   auto handle
     = self->spawn(archive, args.dir / args.label, segments, max_segment_size);
-  VAST_LOG_SPD_VERBOSE("{} spawned the archive", detail::id_or_name(self));
+  VAST_VERBOSE("{} spawned the archive", detail::id_or_name(self));
   if (auto accountant = self->state.registry.find_by_label("accountant"))
     self->send(handle, caf::actor_cast<accountant_actor>(accountant));
   return caf::actor_cast<caf::actor>(handle);
