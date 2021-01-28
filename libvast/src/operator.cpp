@@ -11,10 +11,31 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#include "vast/die.hpp"
 #include "vast/operator.hpp"
 
+#include "vast/concept/printable/to_string.hpp"
+#include "vast/concept/printable/vast/operator.hpp"
+#include "vast/die.hpp"
+
 namespace vast {
+
+std::string to_string(arithmetic_operator op) noexcept {
+  std::string str;
+  print(std::back_inserter(str), op);
+  return str;
+}
+
+std::string to_string(relational_operator op) noexcept {
+  std::string str;
+  print(std::back_inserter(str), op);
+  return str;
+}
+
+std::string to_string(bool_operator op) noexcept {
+  std::string str;
+  print(std::back_inserter(str), op);
+  return str;
+}
 
 bool is_negated(relational_operator op) {
   switch (op) {

@@ -13,10 +13,11 @@
 
 #pragma once
 
-#include "vast/die.hpp"
-#include "vast/error.hpp"
 #include "vast/concept/printable/core/printer.hpp"
 #include "vast/concept/printable/string/any.hpp"
+#include "vast/concept/printable/string/string.hpp"
+#include "vast/die.hpp"
+#include "vast/error.hpp"
 
 namespace vast {
 
