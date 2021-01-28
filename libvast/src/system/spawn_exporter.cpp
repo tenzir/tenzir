@@ -30,7 +30,7 @@
 namespace vast::system {
 
 maybe_actor spawn_exporter(node_actor* self, spawn_arguments& args) {
-  VAST_LOG_SPD_TRACE("{}", detail::id_or_name(VAST_ARG(args)));
+  VAST_TRACE("{}", detail::id_or_name(VAST_ARG(args)));
   // Parse given expression.
   auto expr = get_expression(args);
   if (!expr)
@@ -45,8 +45,8 @@ maybe_actor spawn_exporter(node_actor* self, spawn_arguments& args) {
   if (query_opts == no_query_options)
     query_opts = historical;
   auto handle = self->spawn(exporter, *expr, query_opts);
-  VAST_LOG_SPD_VERBOSE("{} spawned an exporter for {}",
-                       detail::id_or_name(self), to_string(*expr));
+  VAST_VERBOSE("{} spawned an exporter for {}", detail::id_or_name(self),
+               to_string(*expr));
   // Wire the exporter to all components.
   auto [accountant, importer, archive, index]
     = self->state.registry.find_by_label("accountant", "importer", "archive",
@@ -57,13 +57,11 @@ maybe_actor spawn_exporter(node_actor* self, spawn_arguments& args) {
     self->send(caf::actor_cast<importer_actor>(importer),
                static_cast<stream_sink_actor<table_slice>>(handle));
   if (archive) {
-    VAST_LOG_SPD_DEBUG("{} connects archive to new exporter",
-                       detail::id_or_name(self));
+    VAST_DEBUG("{} connects archive to new exporter", detail::id_or_name(self));
     self->send(handle, caf::actor_cast<archive_actor>(archive));
   }
   if (index) {
-    VAST_LOG_SPD_DEBUG("{} connects index to new exporter",
-                       detail::id_or_name(self));
+    VAST_DEBUG("{} connects index to new exporter", detail::id_or_name(self));
     self->send(handle, caf::actor_cast<index_actor>(index));
   }
   // Setting max-events to 0 means infinite.

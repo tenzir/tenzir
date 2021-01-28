@@ -68,7 +68,7 @@ run(caf::scoped_actor& self, archive_actor archive, const invocation& inv) {
       ([&](table_slice slice) { (*writer)->write(slice); },
        [&](atom::done, const caf::error& err) {
          if (err)
-           VAST_LOG_SPD_WARN("failed to get table slice: {}", render(err));
+           VAST_WARN("failed to get table slice: {}", render(err));
          waiting = false;
        });
   }
@@ -79,7 +79,7 @@ run(caf::scoped_actor& self, archive_actor archive, const invocation& inv) {
 
 caf::message
 get_command(const invocation& inv, caf::actor_system& sys) {
-  VAST_LOG_SPD_TRACE("{}", detail::id_or_name(inv));
+  VAST_TRACE("{}", detail::id_or_name(inv));
   caf::scoped_actor self{sys};
   // Get VAST node.
   auto node_opt

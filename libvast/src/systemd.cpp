@@ -26,7 +26,7 @@ caf::error notify_ready() {
   auto notify_socket_env = ::getenv("NOTIFY_SOCKET");
   if (!notify_socket_env)
     return caf::none;
-  VAST_LOG_SPD_VERBOSE("notifying systemd at {}", notify_socket_env);
+  VAST_VERBOSE("notifying systemd at {}", notify_socket_env);
   int socket = ::socket(AF_UNIX, SOCK_DGRAM | SOCK_CLOEXEC, 0);
   if (socket < 0)
     return caf::make_error(ec::system_error, "failed to create unix socket");

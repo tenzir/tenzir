@@ -50,9 +50,9 @@ query_supervisor_actor::behavior_type query_supervisor(
     [=](const expression& expr,
         const std::vector<std::pair<uuid, partition_actor>>& qm,
         const index_client_actor& client) {
-      VAST_LOG_SPD_DEBUG("{}  {} got a new query for {} partitions: {}",
-                         detail::id_or_name(self), self->state.log_identifier,
-                         qm.size(), get_ids(qm));
+      VAST_DEBUG("{}  {} got a new query for {} partitions: {}",
+                 detail::id_or_name(self), self->state.log_identifier,
+                 qm.size(), get_ids(qm));
       // TODO: We can save one message here if we handle this case in the
       // partition immediately.
       if (qm.empty()) {
@@ -70,10 +70,10 @@ query_supervisor_actor::behavior_type query_supervisor(
           .then(
             [=](atom::done) {
               if (--self->state.open_requests == 0) {
-                VAST_LOG_SPD_DEBUG(
-                  "{}  {} collected all results for the current batch "
-                  "of partitions",
-                  detail::id_or_name(self), self->state.log_identifier);
+                VAST_DEBUG("{}  {} collected all results for the current batch "
+                           "of partitions",
+                           detail::id_or_name(self),
+                           self->state.log_identifier);
                 // Ask master for more work after receiving the last sub
                 // result.
                 // TODO: We should schedule a new partition as soon as the
@@ -86,9 +86,9 @@ query_supervisor_actor::behavior_type query_supervisor(
             [=](const caf::error& e) {
               // TODO: Add a proper error handling path to escalate the error to
               // the client.
-              VAST_LOG_SPD_ERROR(
-                "{}  {} encountered error while supervising query {}",
-                detail::id_or_name(self), self->state.log_identifier, e);
+              VAST_ERROR("{}  {} encountered error while supervising query {}",
+                         detail::id_or_name(self), self->state.log_identifier,
+                         e);
               if (--self->state.open_requests == 0) {
                 self->send(client, atom::done_v);
                 self->send(master, atom::worker_v, self);

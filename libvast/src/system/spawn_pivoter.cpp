@@ -22,7 +22,7 @@
 namespace vast::system {
 
 maybe_actor spawn_pivoter(node_actor* self, spawn_arguments& args) {
-  VAST_LOG_SPD_DEBUG("{}", VAST_ARG(args));
+  VAST_DEBUG("{}", VAST_ARG(args));
   auto& arguments = args.inv.arguments;
   if (arguments.size() < 2)
     return unexpected_arguments(args);
@@ -39,8 +39,8 @@ maybe_actor spawn_pivoter(node_actor* self, spawn_arguments& args) {
     expr = *expr_;
   }
   auto handle = self->spawn(pivoter, self, target_name, expr);
-  VAST_LOG_SPD_VERBOSE("{} spawned a pivoter for {}", detail::id_or_name(self),
-                       to_string(expr));
+  VAST_VERBOSE("{} spawned a pivoter for {}", detail::id_or_name(self),
+               to_string(expr));
   return handle;
 }
 

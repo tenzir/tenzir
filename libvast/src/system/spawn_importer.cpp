@@ -42,7 +42,7 @@ maybe_actor spawn_importer(node_actor* self, spawn_arguments& args) {
                   caf::actor_cast<archive_actor>(archive),
                   caf::actor_cast<index_actor>(index),
                   caf::actor_cast<type_registry_actor>(type_registry));
-  VAST_LOG_SPD_VERBOSE("{} spawned the importer", detail::id_or_name(self));
+  VAST_VERBOSE("{} spawned the importer", detail::id_or_name(self));
   if (auto accountant = self->state.registry.find_by_label("accountant")) {
     self->send(handle, atom::telemetry_v);
     self->send(handle, caf::actor_cast<accountant_actor>(accountant));
@@ -53,8 +53,7 @@ maybe_actor spawn_importer(node_actor* self, spawn_arguments& args) {
     self->send(handle, atom::telemetry_v);
   }
   for (auto& source : self->state.registry.find_by_type("source")) {
-    VAST_LOG_SPD_DEBUG("{} connects source to new importer",
-                       detail::id_or_name(self));
+    VAST_DEBUG("{} connects source to new importer", detail::id_or_name(self));
     self->send(source, atom::sink_v, caf::actor_cast<caf::actor>(handle));
   }
   return caf::actor_cast<caf::actor>(handle);

@@ -53,8 +53,8 @@ spawn_node(caf::scoped_actor& self, const caf::settings& opts) {
   if (auto err = initialize_db_version(abs_dir))
     return err;
   if (auto version = read_db_version(abs_dir); version != db_version::latest) {
-    VAST_LOG_SPD_INFO("Cannot start VAST,  breaking changes detected in the "
-                      "database directory");
+    VAST_INFO("Cannot start VAST,  breaking changes detected in the "
+              "database directory");
     auto reasons = describe_breaking_changes_since(version);
     return caf::make_error(
       ec::breaking_change,
@@ -65,11 +65,11 @@ spawn_node(caf::scoped_actor& self, const caf::settings& opts) {
                            "unable to write to db-directory:", abs_dir.str());
   // Acquire PID lock.
   auto pid_file = abs_dir / "pid.lock";
-  VAST_LOG_SPD_DEBUG("{} acquires PID lock {}", __func__, pid_file.str());
+  VAST_DEBUG("{} acquires PID lock {}", __func__, pid_file.str());
   if (auto err = detail::acquire_pid_file(pid_file))
     return err;
   // Spawn the node.
-  VAST_LOG_SPD_DEBUG("{} spawns local node: {}", __func__, id);
+  VAST_DEBUG("{} spawns local node: {}", __func__, id);
   auto shutdown_grace_period = defaults::system::shutdown_grace_period;
   if (auto str = caf::get_if<std::string>(&opts, "vast.shutdown-grace-"
                                                  "period")) {
@@ -81,7 +81,7 @@ spawn_node(caf::scoped_actor& self, const caf::settings& opts) {
   // Pointer to the root command to system::node.
   auto actor = self->spawn(system::node, id, abs_dir, shutdown_grace_period);
   actor->attach_functor([pid_file = std::move(pid_file)](const caf::error&) {
-    VAST_LOG_SPD_DEBUG("{} removes PID lock: {}", __func__, pid_file.str());
+    VAST_DEBUG("{} removes PID lock: {}", __func__, pid_file.str());
     rm(pid_file);
   });
   scope_linked_actor node{std::move(actor)};
@@ -99,8 +99,8 @@ spawn_node(caf::scoped_actor& self, const caf::settings& opts) {
     components.push_front("accountant");
   for (auto& c : components) {
     if (auto err = spawn_component(c)) {
-      VAST_LOG_SPD_ERROR("{}  {}", detail::id_or_name(self),
-                         self->system().render(err));
+      VAST_ERROR("{}  {}", detail::id_or_name(self),
+                 self->system().render(err));
       return err;
     }
   }

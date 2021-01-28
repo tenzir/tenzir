@@ -99,8 +99,7 @@ caf::expected<data> type_biased_convert_impl(JsonType j, const type& t) {
     return x;
   } else {
     // No conversion available.
-    VAST_LOG_SPD_ERROR("json-reader cannot convert field  to a propper type {}",
-                       t);
+    VAST_ERROR("json-reader cannot convert field  to a propper type {}", t);
     return caf::make_error(ec::syntax_error, "conversion not implemented");
   }
 }
@@ -125,7 +124,7 @@ type_biased_convert_impl<std::string_view, integer>(std::string_view s,
   if (integer x; parsers::json_int(s, x))
     return x;
   if (real x; parsers::json_number(s, x)) {
-    VAST_LOG_SPD_WARN("json-reader narrowed {} to type int", std::string{s});
+    VAST_WARN("json-reader narrowed {} to type int", std::string{s});
     return detail::narrow_cast<integer>(x);
   }
   return caf::make_error(ec::convert_error, "cannot convert from",
@@ -145,7 +144,7 @@ type_biased_convert_impl<std::string_view, count>(std::string_view s,
   if (count x; parsers::json_count(s, x))
     return x;
   if (real x; parsers::json_number(s, x)) {
-    VAST_LOG_SPD_WARN("json-reader narrowed {} to type count", std::string{s});
+    VAST_WARN("json-reader narrowed {} to type count", std::string{s});
     return detail::narrow_cast<count>(x);
   }
   return caf::make_error(ec::convert_error, "cannot convert from",

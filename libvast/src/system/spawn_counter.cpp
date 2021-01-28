@@ -33,7 +33,7 @@ namespace vast::system {
 
 maybe_actor
 spawn_counter(system::node_actor* self, system::spawn_arguments& args) {
-  VAST_LOG_SPD_TRACE("{}", detail::id_or_name(VAST_ARG(args)));
+  VAST_TRACE("{}", detail::id_or_name(VAST_ARG(args)));
   // Parse given expression.
   auto expr = get_expression(args);
   if (!expr)
@@ -47,8 +47,8 @@ spawn_counter(system::node_actor* self, system::spawn_arguments& args) {
   auto estimate = caf::get_or(args.inv.options, "vast.count.estimate", false);
   auto handle = self->spawn(counter, *expr, caf::actor_cast<index_actor>(index),
                             caf::actor_cast<archive_actor>(archive), estimate);
-  VAST_LOG_SPD_VERBOSE("{} spawned a counter for {}", detail::id_or_name(self),
-                       to_string(*expr));
+  VAST_VERBOSE("{} spawned a counter for {}", detail::id_or_name(self),
+               to_string(*expr));
   return handle;
 }
 

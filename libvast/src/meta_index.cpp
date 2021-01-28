@@ -131,8 +131,8 @@ std::vector<uuid> meta_index::lookup(const expression& expr) const {
               if (syn) {
                 auto opt = syn->lookup(x.op, make_view(rhs));
                 if (!opt || *opt) {
-                  VAST_LOG_SPD_DEBUG("{} selects {} at predicate {}",
-                                     detail::id_or_name(this), part_id, x);
+                  VAST_DEBUG("{} selects {} at predicate {}",
+                             detail::id_or_name(this), part_id, x);
                   result.push_back(part_id);
                   break;
                 }
@@ -142,8 +142,8 @@ std::vector<uuid> meta_index::lookup(const expression& expr) const {
                          it != part_syn.type_synopses_.end() && it->second) {
                 auto opt = it->second->lookup(x.op, make_view(rhs));
                 if (!opt || *opt) {
-                  VAST_LOG_SPD_DEBUG("{} selects {} at predicate {}",
-                                     detail::id_or_name(this), part_id, x);
+                  VAST_DEBUG("{} selects {} at predicate {}",
+                             detail::id_or_name(this), part_id, x);
                   result.push_back(part_id);
                   break;
                 }
@@ -156,7 +156,7 @@ std::vector<uuid> meta_index::lookup(const expression& expr) const {
             }
           }
         }
-        VAST_LOG_SPD_DEBUG(
+        VAST_DEBUG(
           "{} checked {} partitions for predicate {} and got {} results",
           detail::id_or_name(this), synopses_.size(), x, result.size());
         // Some calling paths require the result to be sorted.
@@ -196,8 +196,8 @@ std::vector<uuid> meta_index::lookup(const expression& expr) const {
             result_type result;
             auto s = caf::get_if<std::string>(&d);
             if (!s) {
-              VAST_LOG_SPD_WARN("#field meta queries only support string "
-                                "comparisons");
+              VAST_WARN("#field meta queries only support string "
+                        "comparisons");
             } else {
               for (const auto& synopsis : synopses_) {
                 // Compare the desired field name with each field in the
@@ -221,8 +221,8 @@ std::vector<uuid> meta_index::lookup(const expression& expr) const {
             std::sort(result.begin(), result.end());
             return result;
           }
-          VAST_LOG_SPD_WARN("{} cannot process attribute extractor: {}",
-                            detail::id_or_name(this), lhs.attr);
+          VAST_WARN("{} cannot process attribute extractor: {}",
+                    detail::id_or_name(this), lhs.attr);
           return all_partitions();
         },
         [&](const field_extractor& lhs, const data&) -> result_type {
@@ -236,16 +236,15 @@ std::vector<uuid> meta_index::lookup(const expression& expr) const {
           return search(pred);
         },
         [&](const auto&, const auto&) -> result_type {
-          VAST_LOG_SPD_WARN("{} cannot process predicate: {}",
-                            detail::id_or_name(this), x);
+          VAST_WARN("{} cannot process predicate: {}", detail::id_or_name(this),
+                    x);
           return all_partitions();
         },
       };
       return caf::visit(extract_expr, x.lhs, x.rhs);
     },
     [&](caf::none_t) -> result_type {
-      VAST_LOG_SPD_ERROR("{} received an empty expression",
-                         detail::id_or_name(this));
+      VAST_ERROR("{} received an empty expression", detail::id_or_name(this));
       VAST_ASSERT(!"invalid expression");
       return all_partitions();
     },
@@ -253,8 +252,8 @@ std::vector<uuid> meta_index::lookup(const expression& expr) const {
   auto result = caf::visit(f, expr);
   auto delta = std::chrono::duration_cast<std::chrono::microseconds>(
     system::stopwatch::now() - start);
-  VAST_LOG_SPD_DEBUG("meta index lookup found {} candidates in {} microseconds",
-                     result.size(), delta.count());
+  VAST_DEBUG("meta index lookup found {} candidates in {} microseconds",
+             result.size(), delta.count());
   VAST_TRACEPOINT(meta_index_lookup, delta.count(), result.size());
   return result;
 }

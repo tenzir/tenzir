@@ -93,7 +93,7 @@ make_string_synopsis(vast::type type, bloom_filter_parameters params,
   VAST_ASSERT(caf::holds_alternative<string_type>(type));
   auto x = make_bloom_filter<HashFunction>(std::move(params), std::move(seeds));
   if (!x) {
-    VAST_LOG_SPD_WARN("{} failed to construct Bloom filter", __func__);
+    VAST_WARN("{} failed to construct Bloom filter", __func__);
     return nullptr;
   }
   using synopsis_type = string_synopsis<HashFunction>;
@@ -136,8 +136,7 @@ synopsis_ptr make_string_synopsis(vast::type type, const caf::settings& opts) {
   using int_type = caf::config_value::integer;
   auto max_part_size = caf::get_if<int_type>(&opts, "max-partition-size");
   if (!max_part_size) {
-    VAST_LOG_SPD_ERROR("{} could not determine Bloom filter parameters",
-                       __func__);
+    VAST_ERROR("{} could not determine Bloom filter parameters", __func__);
     return nullptr;
   }
   bloom_filter_parameters params;
@@ -153,8 +152,8 @@ synopsis_ptr make_string_synopsis(vast::type type, const caf::settings& opts) {
         ? make_buffered_string_synopsis<HashFunction>(std::move(type), params)
         : make_string_synopsis<HashFunction>(std::move(annotated_type), params);
   if (!result)
-    VAST_LOG_SPD_ERROR("{} failed to evaluate Bloom filter parameters: {}  {}",
-                       __func__, params.n, params.p);
+    VAST_ERROR("{} failed to evaluate Bloom filter parameters: {}  {}",
+               __func__, params.n, params.p);
   return result;
 }
 

@@ -29,8 +29,8 @@ namespace vast::system {
 /// @returns a handle to the spawned actor on success, an error otherwise
 template <class Reader, class Defaults = typename Reader::defaults>
 maybe_actor spawn_source(node_actor* self, spawn_arguments& args) {
-  VAST_LOG_SPD_TRACE("{}  {}", detail::id_or_name(VAST_ARG("node", self)),
-                     VAST_ARG(args));
+  VAST_TRACE("{}  {}", detail::id_or_name(VAST_ARG("node", self)),
+             VAST_ARG(args));
   auto& options = args.inv.options;
   // Bail out early for bogus invocations.
   if (caf::get_or(options, "vast.node", false))
@@ -55,13 +55,13 @@ maybe_actor spawn_source(node_actor* self, spawn_arguments& args) {
     return src_result.error();
   auto src = std::move(src_result->src);
   auto name = std::move(src_result->name);
-  VAST_LOG_SPD_INFO("{} spawned a {} source", detail::id_or_name(self), name);
+  VAST_INFO("{} spawned a {} source", detail::id_or_name(self), name);
   src->attach_functor([=](const caf::error& reason) {
     if (!reason || reason == caf::exit_reason::user_shutdown)
-      VAST_LOG_SPD_INFO("{} source shut down", detail::id_or_name(name));
+      VAST_INFO("{} source shut down", detail::id_or_name(name));
     else
-      VAST_LOG_SPD_WARN("{} source shut down with error: {}",
-                        detail::id_or_name(name), reason);
+      VAST_WARN("{} source shut down with error: {}", detail::id_or_name(name),
+                reason);
   });
   return src;
 }

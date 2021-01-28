@@ -138,8 +138,8 @@ make_source(const Actor& self, caf::actor_system& sys, const invocation& inv,
       }
     }
     reader = std::make_unique<Reader>(options);
-    VAST_LOG_SPD_INFO("{} listens for data on {}", reader->name(),
-                      ep.host + ":" + to_string(*ep.port));
+    VAST_INFO("{} listens for data on {}", reader->name(),
+              ep.host + ":" + to_string(*ep.port));
     switch (ep.port->type()) {
       default:
         return caf::make_error(vast::ec::unimplemented,
@@ -154,18 +154,17 @@ make_source(const Actor& self, caf::actor_system& sys, const invocation& inv,
       return in.error();
     reader = std::make_unique<Reader>(options, std::move(*in));
     if (*file == "-")
-      VAST_LOG_SPD_INFO("{} reads data from STDIN", reader->name());
+      VAST_INFO("{} reads data from STDIN", reader->name());
     else
-      VAST_LOG_SPD_INFO("{} reads data from {}", reader->name(), *file);
+      VAST_INFO("{} reads data from {}", reader->name(), *file);
   }
   if (!reader)
     return caf::make_error(ec::invalid_result, "failed to spawn reader");
   if (slice_size == std::numeric_limits<decltype(slice_size)>::max())
-    VAST_LOG_SPD_VERBOSE("{} produces {} table slices", reader->name(),
-                         encoding);
+    VAST_VERBOSE("{} produces {} table slices", reader->name(), encoding);
   else
-    VAST_LOG_SPD_VERBOSE("{} produces {} table slices of at most {} events",
-                         reader->name(), encoding, slice_size);
+    VAST_VERBOSE("{} produces {} table slices of at most {} events",
+                 reader->name(), encoding, slice_size);
   // Spawn the source, falling back to the default spawn function.
   auto local_schema = schema ? std::move(*schema) : vast::schema{};
   auto type_filter = type ? std::move(*type) : std::string{};
@@ -189,8 +188,8 @@ make_source(const Actor& self, caf::actor_system& sys, const invocation& inv,
     self->send(src, std::move(*expr));
   }
   // Connect source to importer.
-  VAST_LOG_SPD_DEBUG("{} connects to {}", detail::id_or_name(inv.full_name),
-                     VAST_ARG(importer));
+  VAST_DEBUG("{} connects to {}", detail::id_or_name(inv.full_name),
+             VAST_ARG(importer));
   self->send(
     src, static_cast<stream_sink_actor<table_slice, std::string>>(importer));
   return make_source_result{src, reader->name()};

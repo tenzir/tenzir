@@ -37,8 +37,8 @@ namespace vast {
 // TODO: return expected<segment_store_ptr> for better error propagation.
 segment_store_ptr segment_store::make(path dir, size_t max_segment_size,
                                       size_t in_memory_segments) {
-  VAST_LOG_SPD_TRACE("{}  {}  {}", detail::id_or_name(VAST_ARG(dir)),
-                     VAST_ARG(max_segment_size), VAST_ARG(in_memory_segments));
+  VAST_TRACE("{}  {}  {}", detail::id_or_name(VAST_ARG(dir)),
+             VAST_ARG(max_segment_size), VAST_ARG(in_memory_segments));
   VAST_ASSERT(max_segment_size > 0);
   auto result = segment_store_ptr{
     new segment_store{std::move(dir), max_segment_size, in_memory_segments}};
@@ -63,7 +63,7 @@ segment_store::~segment_store() {
 }
 
 caf::error segment_store::put(table_slice xs) {
-  VAST_LOG_SPD_TRACE("{}", detail::id_or_name(VAST_ARG(xs)));
+  VAST_TRACE("{}", detail::id_or_name(VAST_ARG(xs)));
   if (!segments_.inject(xs.offset(), xs.offset() + xs.rows(), builder_.id()))
     return caf::make_error(ec::unspecified, "failed to update range_map");
   num_events_ += xs.rows();
@@ -104,18 +104,18 @@ std::unique_ptr<store::lookup> segment_store::extract(const ids& xs) const {
         return caf::no_error;
       auto& cand = *first_++;
       if (cand == store_.builder_.id()) {
-        VAST_LOG_SPD_DEBUG("{} looks into the active segment {}",
-                           detail::id_or_name(this), cand);
+        VAST_DEBUG("{} looks into the active segment {}",
+                   detail::id_or_name(this), cand);
         return store_.builder_.lookup(xs_);
       }
       auto i = store_.cache_.find(cand);
       if (i != store_.cache_.end()) {
-        VAST_LOG_SPD_DEBUG("{} got cache hit for segment {}",
-                           detail::id_or_name(this), cand);
+        VAST_DEBUG("{} got cache hit for segment {}", detail::id_or_name(this),
+                   cand);
         return i->second.lookup(xs_);
       }
-      VAST_LOG_SPD_DEBUG("{} got cache miss for segment {}",
-                         detail::id_or_name(this), cand);
+      VAST_DEBUG("{} got cache miss for segment {}", detail::id_or_name(this),
+                 cand);
       auto s = store_.load_segment(cand);
       if (!s)
         return s.error();
@@ -131,17 +131,17 @@ std::unique_ptr<store::lookup> segment_store::extract(const ids& xs) const {
     std::vector<table_slice>::iterator it_;
   };
 
-  VAST_LOG_SPD_TRACE("{}", detail::id_or_name(VAST_ARG(xs)));
+  VAST_TRACE("{}", detail::id_or_name(VAST_ARG(xs)));
   // Collect candidate segments by seeking through the ID set and
   // probing each ID interval.
   std::vector<uuid> candidates;
   if (auto err = select_segments(xs, candidates)) {
-    VAST_LOG_SPD_WARN("{} failed to get candidates for ids {}",
-                      detail::id_or_name(this), xs);
+    VAST_WARN("{} failed to get candidates for ids {}",
+              detail::id_or_name(this), xs);
     return nullptr;
   }
-  VAST_LOG_SPD_DEBUG("{} processes {} candidates", detail::id_or_name(this),
-                     candidates.size());
+  VAST_DEBUG("{} processes {} candidates", detail::id_or_name(this),
+             candidates.size());
   std::partition(candidates.begin(), candidates.end(), [&](const auto& id) {
     return id == builder_.id() || cache_.find(id) != cache_.end();
   });
@@ -149,8 +149,8 @@ std::unique_ptr<store::lookup> segment_store::extract(const ids& xs) const {
 }
 
 caf::error segment_store::erase(const ids& xs) {
-  VAST_LOG_SPD_TRACE("{}", detail::id_or_name(VAST_ARG(xs)));
-  VAST_LOG_SPD_VERBOSE("erasing {} ids from store", rank(xs));
+  VAST_TRACE("{}", detail::id_or_name(VAST_ARG(xs)));
+  VAST_VERBOSE("erasing {} ids from store", rank(xs));
   // Get affected segments.
   std::vector<uuid> candidates;
   if (auto err = select_segments(xs, candidates))
@@ -181,16 +181,16 @@ caf::error segment_store::erase(const ids& xs) {
     if (auto maybe_slices = seg.lookup(segment_ids)) {
       slices = std::move(*maybe_slices);
       if (slices.empty()) {
-        VAST_LOG_SPD_WARN("{} got no slices after lookup for segment {} => "
-                          "erases entire segment!",
-                          detail::id_or_name(this), segment_id);
+        VAST_WARN("{} got no slices after lookup for segment {} => "
+                  "erases entire segment!",
+                  detail::id_or_name(this), segment_id);
         erased_events += drop(seg);
         return;
       }
     } else {
-      VAST_LOG_SPD_WARN("{} was unable to get table slice for segment {} => "
-                        "erases entire segment!",
-                        detail::id_or_name(this), segment_id);
+      VAST_WARN("{} was unable to get table slice for segment {} => "
+                "erases entire segment!",
+                detail::id_or_name(this), segment_id);
       erased_events += drop(seg);
       return;
     }
@@ -213,15 +213,15 @@ caf::error segment_store::erase(const ids& xs) {
       erased_events += slice.rows() - remaining_rows;
     }
     if (new_slices.empty()) {
-      VAST_LOG_SPD_WARN("{} was unable to generate any new slice for segment "
-                        "{} => erases entire segment!",
-                        detail::id_or_name(this), segment_id);
+      VAST_WARN("{} was unable to generate any new slice for segment "
+                "{} => erases entire segment!",
+                detail::id_or_name(this), segment_id);
       erased_events += drop(seg);
       return;
     }
-    VAST_LOG_SPD_VERBOSE("{} shrinks segment {} from {} to {} slices",
-                         detail::id_or_name(this), segment_id, slices.size(),
-                         new_slices.size());
+    VAST_VERBOSE("{} shrinks segment {} from {} to {} slices",
+                 detail::id_or_name(this), segment_id, slices.size(),
+                 new_slices.size());
     // Remove stale state.
     segments_.erase_value(segment_id);
     // Estimate the size of the new segment.
@@ -242,21 +242,20 @@ caf::error segment_store::erase(const ids& xs) {
     }
     for (auto& slice : new_slices) {
       if (auto err = builder->add(slice)) {
-        VAST_LOG_SPD_ERROR("{} failed to add slice to builder: {}",
-                           detail::id_or_name(this), err);
+        VAST_ERROR("{} failed to add slice to builder: {}",
+                   detail::id_or_name(this), err);
       } else if (!segments_.inject(slice.offset(),
                                    slice.offset() + slice.rows(),
                                    builder->id()))
-        VAST_LOG_SPD_ERROR("{} failed to update range_map",
-                           detail::id_or_name(this));
+        VAST_ERROR("{} failed to update range_map", detail::id_or_name(this));
     }
     // Flush the new segment and remove the previous segment.
     if constexpr (std::is_same_v<decltype(seg), segment&>) {
       auto new_segment = builder->finish();
       auto filename = segment_path() / to_string(new_segment.id());
       if (auto err = write(filename, new_segment.chunk()))
-        VAST_LOG_SPD_ERROR("{} failed to persist the new segment",
-                           detail::id_or_name(this));
+        VAST_ERROR("{} failed to persist the new segment",
+                   detail::id_or_name(this));
       auto stale_filename = segment_path() / to_string(segment_id);
       // Schedule deletion of the segment file when releasing the chunk.
       seg.chunk()->add_deletion_step([=]() noexcept { rm(stale_filename); });
@@ -267,31 +266,30 @@ caf::error segment_store::erase(const ids& xs) {
   for (auto& candidate : candidates) {
     auto j = cache_.find(candidate);
     if (j != cache_.end()) {
-      VAST_LOG_SPD_DEBUG("{} erases from the cached segment {}",
-                         detail::id_or_name(this), candidate);
+      VAST_DEBUG("{} erases from the cached segment {}",
+                 detail::id_or_name(this), candidate);
       impl(j->second);
       cache_.erase(j);
     } else if (candidate == builder_.id()) {
-      VAST_LOG_SPD_DEBUG("{} erases from the active segment {}",
-                         detail::id_or_name(this), candidate);
+      VAST_DEBUG("{} erases from the active segment {}",
+                 detail::id_or_name(this), candidate);
       impl(builder_);
     } else if (auto s = load_segment(candidate)) {
-      VAST_LOG_SPD_DEBUG("{} erases from the segment {}",
-                         detail::id_or_name(this), candidate);
+      VAST_DEBUG("{} erases from the segment {}", detail::id_or_name(this),
+                 candidate);
       impl(*s);
     }
   }
   if (erased_events > 0) {
     VAST_ASSERT(erased_events <= num_events_);
     num_events_ -= erased_events;
-    VAST_LOG_SPD_INFO("{} erased {} events", detail::id_or_name(this),
-                      erased_events);
+    VAST_INFO("{} erased {} events", detail::id_or_name(this), erased_events);
   }
   return caf::none;
 }
 
 caf::expected<std::vector<table_slice>> segment_store::get(const ids& xs) {
-  VAST_LOG_SPD_TRACE("{}", detail::id_or_name(VAST_ARG(xs)));
+  VAST_TRACE("{}", detail::id_or_name(VAST_ARG(xs)));
   // Collect candidate segments by seeking through the ID set and
   // probing each ID interval.
   std::vector<uuid> candidates;
@@ -299,8 +297,8 @@ caf::expected<std::vector<table_slice>> segment_store::get(const ids& xs) {
     return err;
   // Process candidates in reverse order for maximum LRU cache hits.
   std::vector<table_slice> result;
-  VAST_LOG_SPD_DEBUG("{} processes {} candidates", detail::id_or_name(this),
-                     candidates.size());
+  VAST_DEBUG("{} processes {} candidates", detail::id_or_name(this),
+             candidates.size());
   std::partition(candidates.begin(), candidates.end(), [&](const auto& id) {
     return id == builder_.id() || cache_.find(id) != cache_.end();
   });
@@ -308,24 +306,23 @@ caf::expected<std::vector<table_slice>> segment_store::get(const ids& xs) {
     auto& id = *cand;
     caf::expected<std::vector<table_slice>> slices{caf::no_error};
     if (id == builder_.id()) {
-      VAST_LOG_SPD_DEBUG("{} looks into the active segment {}",
-                         detail::id_or_name(this), id);
+      VAST_DEBUG("{} looks into the active segment {}",
+                 detail::id_or_name(this), id);
       slices = builder_.lookup(xs);
     } else {
       auto i = cache_.find(id);
       if (i == cache_.end()) {
-        VAST_LOG_SPD_DEBUG("{} got cache miss for segment {}",
-                           detail::id_or_name(this), id);
+        VAST_DEBUG("{} got cache miss for segment {}", detail::id_or_name(this),
+                   id);
         auto x = load_segment(id);
         if (!x)
           return x.error();
         i = cache_.emplace(id, std::move(*x)).first;
       } else {
-        VAST_LOG_SPD_DEBUG("{} got cache hit for segment {}",
-                           detail::id_or_name(this), id);
+        VAST_DEBUG("{} got cache hit for segment {}", detail::id_or_name(this),
+                   id);
       }
-      VAST_LOG_SPD_DEBUG("{} looks into segment {}", detail::id_or_name(this),
-                         id);
+      VAST_DEBUG("{} looks into segment {}", detail::id_or_name(this), id);
       slices = i->second.lookup(xs);
     }
     if (!slices)
@@ -339,15 +336,15 @@ caf::expected<std::vector<table_slice>> segment_store::get(const ids& xs) {
 caf::error segment_store::flush() {
   if (!dirty())
     return caf::none;
-  VAST_LOG_SPD_DEBUG("{} finishes current builder", detail::id_or_name(this));
+  VAST_DEBUG("{} finishes current builder", detail::id_or_name(this));
   auto seg = builder_.finish();
   auto filename = segment_path() / to_string(seg.id());
   if (auto err = write(filename, seg.chunk()))
     return err;
   // Keep new segment in the cache.
   cache_.emplace(seg.id(), seg);
-  VAST_LOG_SPD_DEBUG("{} wrote new segment to {}", detail::id_or_name(this),
-                     filename.trim(-3));
+  VAST_DEBUG("{} wrote new segment to {}", detail::id_or_name(this),
+             filename.trim(-3));
   return caf::none;
 }
 
@@ -401,8 +398,7 @@ caf::error segment_store::register_segment(const path& filename) {
   uuid segment_uuid;
   if (auto error = unpack(*s0->uuid(), segment_uuid))
     return error;
-  VAST_LOG_SPD_DEBUG("{} found segment {}", detail::id_or_name(this),
-                     segment_uuid);
+  VAST_DEBUG("{} found segment {}", detail::id_or_name(this), segment_uuid);
   for (auto interval : *s0->ids())
     if (!segments_.inject(interval->begin(), interval->end(), segment_uuid))
       return caf::make_error(ec::unspecified, "failed to update range_map");
@@ -411,8 +407,7 @@ caf::error segment_store::register_segment(const path& filename) {
 
 caf::expected<segment> segment_store::load_segment(uuid id) const {
   auto filename = segment_path() / to_string(id);
-  VAST_LOG_SPD_DEBUG("{} mmaps segment from {}", detail::id_or_name(this),
-                     filename);
+  VAST_DEBUG("{} mmaps segment from {}", detail::id_or_name(this), filename);
   auto chk = chunk::mmap(filename);
   if (!chk)
     return caf::make_error(ec::filesystem_error, "failed to mmap chunk",
@@ -420,17 +415,16 @@ caf::expected<segment> segment_store::load_segment(uuid id) const {
   if (auto segment = segment::make(std::move(chk))) {
     return segment;
   } else {
-    VAST_LOG_SPD_ERROR("{} failed to load segment at {} with error: {}",
-                       detail::id_or_name(this), filename,
-                       render(segment.error()));
+    VAST_ERROR("{} failed to load segment at {} with error: {}",
+               detail::id_or_name(this), filename, render(segment.error()));
     return std::move(segment.error());
   }
 }
 
 caf::error segment_store::select_segments(const ids& selection,
                                           std::vector<uuid>& candidates) const {
-  VAST_LOG_SPD_DEBUG("{} retrieves table slices with requested ids",
-                     detail::id_or_name(this));
+  VAST_DEBUG("{} retrieves table slices with requested ids",
+             detail::id_or_name(this));
   auto f = [](auto x) { return std::pair{x.left, x.right}; };
   auto g = [&](auto x) {
     auto id = x.value;
@@ -456,8 +450,8 @@ uint64_t segment_store::drop(segment& x) {
     auto slice = table_slice{*flat_slice, x.chunk(), table_slice::verify::no};
     erased_events += slice.rows();
   }
-  VAST_LOG_SPD_INFO("{} erases entire segment {}", detail::id_or_name(this),
-                    segment_id);
+  VAST_INFO("{} erases entire segment {}", detail::id_or_name(this),
+            segment_id);
   // Schedule deletion of the segment file when releasing the chunk.
   auto filename = segment_path() / to_string(segment_id);
   x.chunk()->add_deletion_step([=]() noexcept { rm(filename); });
@@ -470,8 +464,8 @@ uint64_t segment_store::drop(segment_builder& x) {
   auto segment_id = x.id();
   for (auto& slice : x.table_slices())
     erased_events += slice.rows();
-  VAST_LOG_SPD_INFO("{} erases segment under construction {}",
-                    detail::id_or_name(this), segment_id);
+  VAST_INFO("{} erases segment under construction {}", detail::id_or_name(this),
+            segment_id);
   x.reset();
   segments_.erase_value(segment_id);
   return erased_events;

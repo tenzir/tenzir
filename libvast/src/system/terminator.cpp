@@ -32,8 +32,8 @@ caf::behavior terminator(caf::stateful_actor<terminator_state>* self,
                          std::chrono::milliseconds kill_timeout) {
   self->set_down_handler([=](const caf::down_msg& msg) {
     // Remove actor from list of remaining actors.
-    VAST_LOG_SPD_DEBUG("{} received DOWN from actor {}",
-                       detail::id_or_name(self), msg.source);
+    VAST_DEBUG("{} received DOWN from actor {}", detail::id_or_name(self),
+               msg.source);
     auto& remaining = self->state.remaining_actors;
     auto pred = [=](auto& actor) { return actor == msg.source; };
     auto i = std::find_if(remaining.begin(), remaining.end(), pred);
@@ -43,48 +43,48 @@ caf::behavior terminator(caf::stateful_actor<terminator_state>* self,
     if constexpr (std::is_same_v<Policy, policy::sequential>) {
       if (!remaining.empty()) {
         auto& next = remaining.back();
-        VAST_LOG_SPD_DEBUG("{} terminates next actor {}",
-                           detail::id_or_name(self), next);
+        VAST_DEBUG("{} terminates next actor {}", detail::id_or_name(self),
+                   next);
         self->monitor(next);
         self->send_exit(next, caf::exit_reason::user_shutdown);
         return;
       }
     } else if constexpr (std::is_same_v<Policy, policy::parallel>) {
       // nothing to do, all EXIT messages are in flight.
-      VAST_LOG_SPD_DEBUG("{} has {} actors remaining", detail::id_or_name(self),
-                         remaining.size());
+      VAST_DEBUG("{} has {} actors remaining", detail::id_or_name(self),
+                 remaining.size());
     } else {
       static_assert(detail::always_false_v<Policy>, "unsupported policy");
     }
     if (remaining.empty()) {
-      VAST_LOG_SPD_DEBUG("{} terminated all actors", detail::id_or_name(self));
+      VAST_DEBUG("{} terminated all actors", detail::id_or_name(self));
       self->state.promise.deliver(atom::done_v);
       self->quit(caf::exit_reason::user_shutdown);
     }
   });
   return {
     [=](const std::vector<caf::actor>& xs) {
-      VAST_LOG_SPD_DEBUG("{} got request to terminate {} actors",
-                         detail::id_or_name(self), xs.size());
+      VAST_DEBUG("{} got request to terminate {} actors",
+                 detail::id_or_name(self), xs.size());
       VAST_ASSERT(!self->state.promise.pending());
       self->state.promise = self->make_response_promise();
       auto& remaining = self->state.remaining_actors;
       remaining.reserve(xs.size());
       for (auto i = xs.rbegin(); i != xs.rend(); ++i)
         if (!*i)
-          VAST_LOG_SPD_DEBUG(
+          VAST_DEBUG(
             "{} skips termination of already exited actor at position {}",
             detail::id_or_name(self), std::distance(xs.begin(), i.base()));
         else
           remaining.push_back(*i);
       if (remaining.size() < xs.size())
-        VAST_LOG_SPD_DEBUG("{} only needs to terminate {} actors",
-                           detail::id_or_name(self), remaining.size());
+        VAST_DEBUG("{} only needs to terminate {} actors",
+                   detail::id_or_name(self), remaining.size());
       // Terminate early if there's nothing to do.
       if (remaining.empty()) {
-        VAST_LOG_SPD_DEBUG("{} quits prematurely because all actors have "
-                           "exited",
-                           detail::id_or_name(self));
+        VAST_DEBUG("{} quits prematurely because all actors have "
+                   "exited",
+                   detail::id_or_name(self));
         self->state.promise.deliver(atom::done_v);
         self->quit(caf::exit_reason::user_shutdown);
         return;
@@ -117,36 +117,35 @@ caf::behavior terminator(caf::stateful_actor<terminator_state>* self,
     },
     [=](atom::shutdown) {
       VAST_ASSERT(!self->state.remaining_actors.empty());
-      VAST_LOG_SPD_WARN("{} failed to terminate actors within grace period of "
-                        "{}",
-                        detail::id_or_name(self), grace_period);
-      VAST_LOG_SPD_WARN("{} initiates hard kill of {} remaining actors",
-                        detail::id_or_name(self),
-                        self->state.remaining_actors.size());
+      VAST_WARN("{} failed to terminate actors within grace period of "
+                "{}",
+                detail::id_or_name(self), grace_period);
+      VAST_WARN("{} initiates hard kill of {} remaining actors",
+                detail::id_or_name(self), self->state.remaining_actors.size());
       // Kill remaining actors.
       for (auto& actor : self->state.remaining_actors) {
-        VAST_LOG_SPD_DEBUG("{} sends KILL to actor {}",
-                           detail::id_or_name(self), actor->id());
+        VAST_DEBUG("{} sends KILL to actor {}", detail::id_or_name(self),
+                   actor->id());
         if constexpr (std::is_same_v<Policy, policy::sequential>)
           self->monitor(actor);
         self->send_exit(actor, caf::exit_reason::kill);
       }
       // Handle them now differently.
       self->set_down_handler([=](const caf::down_msg& msg) {
-        VAST_LOG_SPD_DEBUG("{} killed actor {}", detail::id_or_name(self),
-                           msg.source.id());
+        VAST_DEBUG("{} killed actor {}", detail::id_or_name(self),
+                   msg.source.id());
         auto pred = [=](auto& actor) { return actor == msg.source; };
         auto& remaining = self->state.remaining_actors;
         auto i = std::find_if(remaining.begin(), remaining.end(), pred);
         if (i == remaining.end()) {
-          VAST_LOG_SPD_DEBUG("{} ignores duplicate DOWN message",
-                             detail::id_or_name(self));
+          VAST_DEBUG("{} ignores duplicate DOWN message",
+                     detail::id_or_name(self));
           return;
         }
         remaining.erase(i);
         if (remaining.empty()) {
-          VAST_LOG_SPD_DEBUG("{} killed all remaining actors",
-                             detail::id_or_name(self));
+          VAST_DEBUG("{} killed all remaining actors",
+                     detail::id_or_name(self));
           self->state.promise.deliver(atom::done_v);
           self->quit(caf::exit_reason::user_shutdown);
         }
@@ -159,8 +158,7 @@ caf::behavior terminator(caf::stateful_actor<terminator_state>* self,
     },
     [=](atom::stop) {
       auto n = self->state.remaining_actors.size();
-      VAST_LOG_SPD_ERROR("{} failed to kill {} actors",
-                         detail::id_or_name(self), n);
+      VAST_ERROR("{} failed to kill {} actors", detail::id_or_name(self), n);
       self->state.promise.deliver(
         caf::make_error(ec::timeout, "failed to kill remaining actors", n));
       self->quit(caf::exit_reason::user_shutdown);

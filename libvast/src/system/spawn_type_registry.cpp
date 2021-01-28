@@ -28,12 +28,11 @@ maybe_actor spawn_type_registry(node_actor* self, spawn_arguments& args) {
   self->request(handle, defaults::system::initial_request_timeout, atom::load_v)
     .await([](atom::ok) {},
            [](caf::error& err) {
-             VAST_LOG_SPD_WARN("type-registry failed to load taxonomy "
-                               "definitions: {}",
-                               render(std::move(err)));
+             VAST_WARN("type-registry failed to load taxonomy "
+                       "definitions: {}",
+                       render(std::move(err)));
            });
-  VAST_LOG_SPD_VERBOSE("{} spawned the type-registry",
-                       detail::id_or_name(self));
+  VAST_VERBOSE("{} spawned the type-registry", detail::id_or_name(self));
   if (auto accountant = self->state.registry.find_by_label("accountant"))
     self->send(handle, caf::actor_cast<accountant_actor>(accountant));
   return caf::actor_cast<caf::actor>(handle);

@@ -46,8 +46,8 @@ caf::error single_layout_reader::finish(consumer& f, caf::error result) {
 }
 
 bool single_layout_reader::reset_builder(record_type layout) {
-  VAST_LOG_SPD_TRACE("{}  {}", detail::id_or_name(VAST_ARG(table_slice_type_)),
-                     VAST_ARG(layout));
+  VAST_TRACE("{}  {}", detail::id_or_name(VAST_ARG(table_slice_type_)),
+             VAST_ARG(layout));
   builder_ = factory<table_slice_builder>::make(table_slice_type_,
                                                 std::move(layout));
   last_batch_sent_ = reader_clock::now();
