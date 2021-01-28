@@ -12,7 +12,6 @@
  ******************************************************************************/
 
 #include "vast/atoms.hpp"
-#include "vast/uuid.hpp"
 #include "vast/concept/convertible/to.hpp"
 #include "vast/concept/printable/to_string.hpp"
 #include "vast/concept/printable/vast/data.hpp"
@@ -33,12 +32,13 @@
 #include "vast/logger.hpp"
 #include "vast/path.hpp"
 #include "vast/plugin.hpp"
-#include "vast/table_slice.hpp"
 #include "vast/schema.hpp"
 #include "vast/system/application.hpp"
-#include "vast/system/importer.hpp"
 #include "vast/system/default_configuration.hpp"
 #include "vast/system/import_command.hpp"
+#include "vast/system/importer.hpp"
+#include "vast/table_slice.hpp"
+#include "vast/uuid.hpp"
 
 #include <caf/actor_system.hpp>
 #include <caf/io/middleman.hpp>
@@ -136,7 +136,6 @@ struct perfect_sink_state {
   inline static constexpr const char* name = "perfect-sink";
 };
 
-
 system::stream_sink_actor<table_slice>::behavior_type
 perfect_sink(system::stream_sink_actor<table_slice>::pointer self) {
   return {
@@ -147,18 +146,15 @@ perfect_sink(system::stream_sink_actor<table_slice>::pointer self) {
         [=](std::vector<table_slice>&) {
           // nop
         },
-        [=](std::vector<table_slice>& , table_slice ) {
+        [=](std::vector<table_slice>&, table_slice) {
           // nop
-        }
-      );
+        });
       return caf::inbound_stream_slot<table_slice>{sink.inbound_slot()};
     },
   };
-
 }
 
 system::importer_actor importer;
-
 
 template <class Reader, class Defaults>
 caf::message
@@ -187,11 +183,9 @@ local_import_command(const invocation& inv, caf::actor_system& sys) {
   self->send(importer, snk);
 
   // Start the source.
-  auto src_result = make_source<Reader, Defaults>(
-    self, sys, inv, system::accountant_actor{}, system::type_registry_actor{}, importer);
-
-
-
+  auto src_result
+    = make_source<Reader, Defaults>(self, sys, inv, system::accountant_actor{},
+                                    system::type_registry_actor{}, importer);
 
   if (!src_result)
     return caf::make_message(std::move(src_result.error()));
@@ -213,17 +207,18 @@ local_import_command(const invocation& inv, caf::actor_system& sys) {
       // C++20: remove explicit 'importer' parameter passing.
       [&, importer = importer](const caf::down_msg& msg) {
         if (msg.source == importer) {
-          VAST_DEBUG(name, "received DOWN from node importer");
+          //   VAST_DEBUG(name, "received DOWN from node importer");
           self->send_exit(src, caf::exit_reason::user_shutdown);
           err = ec::remote_node_down;
           stop = true;
         } else if (msg.source == src) {
-          VAST_DEBUG(name, "received DOWN from source");
           if (caf::get_or(inv.options, "vast.import.blocking", false))
             self->send(importer, atom::subscribe_v, atom::flush::value,
                        caf::actor_cast<flush_listener_actor>(self));
-          else
+          else {
+            self->send_exit(importer, caf::exit_reason::user_shutdown);
             stop = true;
+          }
         } else {
           VAST_DEBUG(name, "received unexpected DOWN from", msg.source);
           VAST_ASSERT(!"unexpected DOWN message");
@@ -325,8 +320,8 @@ stable_set<path> get_plugin_dirs(const caf::actor_system_config& cfg) {
     VAST_ERROR_ANON(__func__, "failed to get program path");
   if (const char* home = std::getenv("HOME"))
     result.insert(path{home} / ".local" / "lib" / "vast" / "plugins");
-  if (auto dirs = caf::get_if<std::vector<std::string>>(
-        &cfg, "vast.plugin-dirs"))
+  if (auto dirs = caf::get_if<std::vector<std::string>>(&cfg, "vast.plugin-"
+                                                              "dirs"))
     result.insert(dirs->begin(), dirs->end());
   return result;
 }

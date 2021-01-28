@@ -13,9 +13,10 @@
 
 #pragma once
 
+#include "vast/fwd.hpp"
+
 #include "vast/detail/string.hpp"
 #include "vast/documentation.hpp"
-#include "vast/fwd.hpp"
 
 #include <caf/config_option_set.hpp>
 #include <caf/error.hpp>
@@ -233,9 +234,9 @@ const command& root(const command& cmd);
 /// @returns A pointer to the corresponding command on success, or nullptr
 ///          on error.
 /// @relates command
-const command* resolve(const command& cmd,
-                       std::vector<std::string_view>::iterator position,
-                       std::vector<std::string_view>::iterator end);
+const command*
+resolve(const command& cmd, std::vector<std::string_view>::iterator position,
+        std::vector<std::string_view>::iterator end);
 
 /// Gets a subcommand from its full name.
 /// @param cmd The parent to search for *position.
