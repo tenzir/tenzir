@@ -106,8 +106,10 @@ TEST(updated params after shrinking) {
   REQUIRE(recovered);
   auto recovered_params = unbox(parse_parameters(type));
   CHECK_EQUAL(*recovered_params.n, 8u);
-  auto r1 = unbox(recovered->lookup(equal, to_addr_view("192.168.0.1")));
-  auto r2 = unbox(recovered->lookup(equal, to_addr_view("255.255.255.255")));
+  auto r1 = unbox(
+    recovered->lookup(relational_operator::equal, to_addr_view("192.168.0.1")));
+  auto r2 = unbox(recovered->lookup(relational_operator::equal,
+                                    to_addr_view("255.255.255.255")));
   CHECK(r1);
   CHECK(!r2);
 }

@@ -54,7 +54,7 @@ public:
     auto membership = [&]() -> caf::optional<bool> {
       if (auto xs = caf::get_if<view<list>>(&rhs)) {
         for (auto x : **xs) {
-          auto result = do_lookup(equal, x);
+          auto result = do_lookup(relational_operator::equal, x);
           if (result && *result)
             return true;
         }
@@ -63,19 +63,19 @@ public:
       return caf::none;
     };
     switch (op) {
-      case in:
+      case relational_operator::in:
         return membership();
-      case not_in:
+      case relational_operator::not_in:
         if (auto result = membership())
           return !*result;
         else
           return result;
-      case equal:
-      case not_equal:
-      case less:
-      case less_equal:
-      case greater:
-      case greater_equal:
+      case relational_operator::equal:
+      case relational_operator::not_equal:
+      case relational_operator::less:
+      case relational_operator::less_equal:
+      case relational_operator::greater:
+      case relational_operator::greater_equal:
         return do_lookup(op, rhs);
       default:
         return caf::none;
@@ -128,17 +128,17 @@ private:
       default:
         VAST_ASSERT(!"unsupported operator");
         return false;
-      case equal:
+      case relational_operator::equal:
         return min_ <= x && x <= max_;
-      case not_equal:
+      case relational_operator::not_equal:
         return !(min_ <= x && x <= max_);
-      case less:
+      case relational_operator::less:
         return min_ < x;
-      case less_equal:
+      case relational_operator::less_equal:
         return min_ <= x;
-      case greater:
+      case relational_operator::greater:
         return max_ > x;
-      case greater_equal:
+      case relational_operator::greater_equal:
         return max_ >= x;
     }
   }

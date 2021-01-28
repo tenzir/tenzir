@@ -184,35 +184,35 @@ TEST(evaluation) {
   MESSAGE("in");
   data lhs{"foo"};
   data rhs{"foobar"};
-  CHECK(evaluate(lhs, in, rhs));
-  CHECK(evaluate(rhs, not_in, lhs));
-  CHECK(evaluate(rhs, ni, lhs));
-  CHECK(evaluate(rhs, not_in, lhs));
+  CHECK(evaluate(lhs, relational_operator::in, rhs));
+  CHECK(evaluate(rhs, relational_operator::not_in, lhs));
+  CHECK(evaluate(rhs, relational_operator::ni, lhs));
+  CHECK(evaluate(rhs, relational_operator::not_in, lhs));
   MESSAGE("equality");
   lhs = count{42};
   rhs = count{1337};
-  CHECK(evaluate(lhs, less_equal, rhs));
-  CHECK(evaluate(lhs, less, rhs));
-  CHECK(evaluate(lhs, not_equal, rhs));
-  CHECK(!evaluate(lhs, equal, rhs));
+  CHECK(evaluate(lhs, relational_operator::less_equal, rhs));
+  CHECK(evaluate(lhs, relational_operator::less, rhs));
+  CHECK(evaluate(lhs, relational_operator::not_equal, rhs));
+  CHECK(!evaluate(lhs, relational_operator::equal, rhs));
   MESSAGE("network types");
   lhs = *to<address>("10.0.0.1");
   rhs = *to<subnet>("10.0.0.0/8");
-  CHECK(evaluate(lhs, in, rhs));
+  CHECK(evaluate(lhs, relational_operator::in, rhs));
   lhs = *to<subnet>("10.0.42.0/16");
-  CHECK(evaluate(lhs, in, rhs));
+  CHECK(evaluate(lhs, relational_operator::in, rhs));
   rhs = *to<subnet>("10.0.42.0/17");
-  CHECK(!evaluate(lhs, in, rhs));
+  CHECK(!evaluate(lhs, relational_operator::in, rhs));
   MESSAGE("mixed types");
   rhs = real{4.2};
-  CHECK(!evaluate(lhs, equal, rhs));
-  CHECK(evaluate(lhs, not_equal, rhs));
+  CHECK(!evaluate(lhs, relational_operator::equal, rhs));
+  CHECK(evaluate(lhs, relational_operator::not_equal, rhs));
 }
 
 TEST(evaluation - pattern matching) {
-  CHECK(evaluate(pattern{"f.*o"}, equal, "foo"));
-  CHECK(evaluate("foo", equal, pattern{"f.*o"}));
-  CHECK(evaluate("foo", match, pattern{"f.*o"}));
+  CHECK(evaluate(pattern{"f.*o"}, relational_operator::equal, "foo"));
+  CHECK(evaluate("foo", relational_operator::equal, pattern{"f.*o"}));
+  CHECK(evaluate("foo", relational_operator::match, pattern{"f.*o"}));
 }
 
 TEST(serialization) {

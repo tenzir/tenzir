@@ -50,14 +50,15 @@ TEST(address) {
   REQUIRE(idx.append(make_data_view(x)));
   MESSAGE("address equality");
   x = *to<address>("192.168.0.1");
-  auto bm = idx.lookup(equal, make_data_view(x));
+  auto bm = idx.lookup(relational_operator::equal, make_data_view(x));
   CHECK(to_string(unbox(bm)) == "100110");
-  bm = idx.lookup(not_equal, make_data_view(x));
+  bm = idx.lookup(relational_operator::not_equal, make_data_view(x));
   CHECK(to_string(unbox(bm)) == "011001");
   x = *to<address>("192.168.0.5");
-  CHECK(to_string(*idx.lookup(equal, make_data_view(x))) == "000000");
+  CHECK(to_string(*idx.lookup(relational_operator::equal, make_data_view(x)))
+        == "000000");
   MESSAGE("invalid operator");
-  CHECK(!idx.lookup(match, make_data_view(x)));
+  CHECK(!idx.lookup(relational_operator::match, make_data_view(x)));
   MESSAGE("prefix membership");
   x = *to<address>("192.168.0.128");
   CHECK(idx.append(make_data_view(x)));
@@ -70,34 +71,38 @@ TEST(address) {
   x = *to<address>("192.168.0.33");
   CHECK(idx.append(make_data_view(x)));
   auto y = subnet{*to<address>("192.168.0.128"), 25};
-  bm = idx.lookup(in, make_data_view(y));
+  bm = idx.lookup(relational_operator::in, make_data_view(y));
   CHECK(to_string(unbox(bm)) == "00000011100");
-  bm = idx.lookup(not_in, make_data_view(y));
+  bm = idx.lookup(relational_operator::not_in, make_data_view(y));
   CHECK(to_string(unbox(bm)) == "11111100011");
   y = {*to<address>("192.168.0.0"), 24};
-  bm = idx.lookup(in, make_data_view(y));
+  bm = idx.lookup(relational_operator::in, make_data_view(y));
   CHECK(to_string(unbox(bm)) == "11111111111");
   y = {*to<address>("192.168.0.0"), 20};
-  bm = idx.lookup(in, make_data_view(y));
+  bm = idx.lookup(relational_operator::in, make_data_view(y));
   CHECK(to_string(unbox(bm)) == "11111111111");
   y = {*to<address>("192.168.0.64"), 26};
-  bm = idx.lookup(not_in, make_data_view(y));
+  bm = idx.lookup(relational_operator::not_in, make_data_view(y));
   CHECK(to_string(unbox(bm)) == "11111111101");
   auto xs = list{*to<address>("192.168.0.1"), *to<address>("192.168.0.2")};
-  auto multi = unbox(idx.lookup(in, make_data_view(xs)));
+  auto multi = unbox(idx.lookup(relational_operator::in, make_data_view(xs)));
   CHECK_EQUAL(to_string(multi), "11011100000");
   MESSAGE("gaps");
   x = *to<address>("192.168.0.2");
   CHECK(idx.append(make_data_view(x), 42));
   x = *to<address>("192.168.0.2");
   auto str = "01000100000"s + std::string(42 - 11, '0') + '1';
-  CHECK_EQUAL(to_string(unbox(idx.lookup(equal, make_data_view(x)))), str);
+  CHECK_EQUAL(
+    to_string(unbox(idx.lookup(relational_operator::equal, make_data_view(x)))),
+    str);
   MESSAGE("serialization");
   std::vector<char> buf;
   CHECK_EQUAL(detail::serialize(buf, idx), caf::none);
   address_index idx2{address_type{}};
   CHECK_EQUAL(detail::deserialize(buf, idx2), caf::none);
-  CHECK_EQUAL(to_string(unbox(idx2.lookup(equal, make_data_view(x)))), str);
+  CHECK_EQUAL(to_string(unbox(
+                idx2.lookup(relational_operator::equal, make_data_view(x)))),
+              str);
 }
 
 FIXTURE_SCOPE(value_index_tests, fixtures::events)
@@ -118,7 +123,8 @@ TEST(regression - build an address index from zeek events) {
       if (++row_id == 6464) {
         // The last ID should be 720 at this point.
         auto addr = unbox(to<data>("169.254.225.22"));
-        auto before = unbox(idx.lookup(equal, make_data_view(addr)));
+        auto before
+          = unbox(idx.lookup(relational_operator::equal, make_data_view(addr)));
         CHECK_EQUAL(rank(before), 4u);
         CHECK_EQUAL(select(before, -1), id{720});
       }
@@ -126,7 +132,8 @@ TEST(regression - build an address index from zeek events) {
   }
   // Checking again after ingesting all events must not change the outcome.
   auto addr = unbox(to<data>("169.254.225.22"));
-  auto before = unbox(idx.lookup(equal, make_data_view(addr)));
+  auto before
+    = unbox(idx.lookup(relational_operator::equal, make_data_view(addr)));
   CHECK_EQUAL(rank(before), 4u);
   CHECK_EQUAL(select(before, -1), id{720});
 }
@@ -185,7 +192,7 @@ TEST(regression - manual address bitmap index from 4 byte indexes) {
         REQUIRE_EQUAL(result.size(), 6464u);
         for (auto i = 0u; i < 4; ++i) {
           auto byte = x.data()[i + 12];
-          result &= idx[i].lookup(equal, byte);
+          result &= idx[i].lookup(relational_operator::equal, byte);
         }
         CHECK_EQUAL(rank(result), 4u);
         CHECK_EQUAL(select(result, -1), id{720});

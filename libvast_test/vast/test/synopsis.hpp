@@ -33,18 +33,18 @@ struct verifier {
   synopsis* syn;
   inline
   void operator()(data_view rhs, std::array<caf::optional<bool>, 12> ref) {
-    CHECK_EQUAL(syn->lookup(vast::match, rhs), ref[0]);
-    CHECK_EQUAL(syn->lookup(vast::not_match, rhs), ref[1]);
-    CHECK_EQUAL(syn->lookup(vast::in, rhs), ref[2]);
-    CHECK_EQUAL(syn->lookup(vast::not_in, rhs), ref[3]);
-    CHECK_EQUAL(syn->lookup(vast::ni, rhs), ref[4]);
-    CHECK_EQUAL(syn->lookup(vast::not_ni, rhs), ref[5]);
-    CHECK_EQUAL(syn->lookup(vast::equal, rhs), ref[6]);
-    CHECK_EQUAL(syn->lookup(vast::not_equal, rhs), ref[7]);
-    CHECK_EQUAL(syn->lookup(vast::less, rhs), ref[8]);
-    CHECK_EQUAL(syn->lookup(vast::less_equal, rhs), ref[9]);
-    CHECK_EQUAL(syn->lookup(vast::greater, rhs), ref[10]);
-    CHECK_EQUAL(syn->lookup(vast::greater_equal, rhs), ref[11]);
+    CHECK_EQUAL(syn->lookup(relational_operator::match, rhs), ref[0]);
+    CHECK_EQUAL(syn->lookup(relational_operator::not_match, rhs), ref[1]);
+    CHECK_EQUAL(syn->lookup(relational_operator::in, rhs), ref[2]);
+    CHECK_EQUAL(syn->lookup(relational_operator::not_in, rhs), ref[3]);
+    CHECK_EQUAL(syn->lookup(relational_operator::ni, rhs), ref[4]);
+    CHECK_EQUAL(syn->lookup(relational_operator::not_ni, rhs), ref[5]);
+    CHECK_EQUAL(syn->lookup(relational_operator::equal, rhs), ref[6]);
+    CHECK_EQUAL(syn->lookup(relational_operator::not_equal, rhs), ref[7]);
+    CHECK_EQUAL(syn->lookup(relational_operator::less, rhs), ref[8]);
+    CHECK_EQUAL(syn->lookup(relational_operator::less_equal, rhs), ref[9]);
+    CHECK_EQUAL(syn->lookup(relational_operator::greater, rhs), ref[10]);
+    CHECK_EQUAL(syn->lookup(relational_operator::greater_equal, rhs), ref[11]);
   }
 };
 

@@ -61,7 +61,7 @@ static predicate to_data_predicate(data x) {
   };
   auto lhs = type_extractor{caf::visit(infer_type, x)};
   auto rhs = predicate::operand{std::move(x)};
-  return {std::move(lhs), equal, std::move(rhs)};
+  return {std::move(lhs), relational_operator::equal, std::move(rhs)};
 }
 
 static auto make_predicate_parser() {
@@ -82,22 +82,22 @@ static auto make_predicate_parser() {
     | field ->* to_field_extractor
     ;
   auto operation
-    = "~"_p   ->* [] { return match; }
-    | "!~"_p  ->* [] { return not_match; }
-    | "=="_p  ->* [] { return equal; }
-    | "!="_p  ->* [] { return not_equal; }
-    | "<="_p  ->* [] { return less_equal; }
-    | "<"_p   ->* [] { return less; }
-    | ">="_p  ->* [] { return greater_equal; }
-    | ">"_p   ->* [] { return greater; }
-    | "in"_p  ->* [] { return in; }
-    | "!in"_p ->* [] { return not_in; }
-    | "ni"_p  ->* [] { return ni; }
-    | "!ni"_p ->* [] { return not_ni; }
-    | "[+"_p  ->* [] { return in; }
-    | "[-"_p  ->* [] { return not_in; }
-    | "+]"_p  ->* [] { return ni; }
-    | "-]"_p  ->* [] { return not_ni; }
+    = "~"_p   ->* [] { return relational_operator::match; }
+    | "!~"_p  ->* [] { return relational_operator::not_match; }
+    | "=="_p  ->* [] { return relational_operator::equal; }
+    | "!="_p  ->* [] { return relational_operator::not_equal; }
+    | "<="_p  ->* [] { return relational_operator::less_equal; }
+    | "<"_p   ->* [] { return relational_operator::less; }
+    | ">="_p  ->* [] { return relational_operator::greater_equal; }
+    | ">"_p   ->* [] { return relational_operator::greater; }
+    | "in"_p  ->* [] { return relational_operator::in; }
+    | "!in"_p ->* [] { return relational_operator::not_in; }
+    | "ni"_p  ->* [] { return relational_operator::ni; }
+    | "!ni"_p ->* [] { return relational_operator::not_ni; }
+    | "[+"_p  ->* [] { return relational_operator::in; }
+    | "[-"_p  ->* [] { return relational_operator::not_in; }
+    | "+]"_p  ->* [] { return relational_operator::ni; }
+    | "-]"_p  ->* [] { return relational_operator::not_ni; }
     ;
   auto ws = ignore(*parsers::space);
   auto pred
@@ -162,9 +162,9 @@ static auto make_expression_parser() {
     disjunction dis;
     auto con = conjunction{x};
     for (auto& [op, expr] : xs)
-      if (op == logical_and) {
+      if (op == bool_operator::logical_and) {
         con.emplace_back(std::move(expr));
-      } else if (op == logical_or) {
+      } else if (op == bool_operator::logical_or) {
         VAST_ASSERT(!con.empty());
         if (con.size() == 1)
           dis.emplace_back(std::move(con[0]));
@@ -193,8 +193,8 @@ static auto make_expression_parser() {
     | parsers::predicate
     ;
   auto and_or
-    = "||"_p  ->* [] { return logical_or; }
-    | "&&"_p  ->* [] { return logical_and; }
+    = "||"_p  ->* [] { return bool_operator::logical_or; }
+    | "&&"_p  ->* [] { return bool_operator::logical_and; }
     ;
   expr
     // One embedding of the group rule is intentionally not wrapped in a

@@ -129,9 +129,11 @@ caf::behavior pivoter(caf::stateful_actor<pivoter_state>* self, caf::actor node,
                    pivot_field->name);
         return;
       }
-      auto expr = conjunction{
-        predicate{attribute_extractor{atom::type_v}, equal, data{st.target}},
-        predicate{field_extractor{pivot_field->name}, in, data{xs}}};
+      auto expr
+        = conjunction{predicate{attribute_extractor{atom::type_v},
+                                relational_operator::equal, data{st.target}},
+                      predicate{field_extractor{pivot_field->name},
+                                relational_operator::in, data{xs}}};
       // TODO(ch9411): Drop the conversion to a string when node actors can
       //               be spawned without going through an invocation.
       auto query = to_string(expr);

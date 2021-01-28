@@ -93,9 +93,9 @@ public:
     // of the value range between 1.0 and 2.0. False positives are filtered
     // out in the candidate check at a later stage.
     if constexpr (!std::is_same_v<binner_type, identity_binner>) {
-      if (op == greater)
+      if (op == relational_operator::greater)
         --binned;
-      if (op == less)
+      if (op == relational_operator::less)
         ++binned;
     }
     return coder_.decode(op, transform(binned));

@@ -304,29 +304,29 @@ bool evaluate_view(const data_view& lhs, relational_operator op,
     default:
       VAST_ASSERT(!"missing case");
       return false;
-    case match:
+    case relational_operator::match:
       return check_match(lhs, rhs);
-    case not_match:
+    case relational_operator::not_match:
       return !check_match(lhs, rhs);
-    case in:
+    case relational_operator::in:
       return check_in(lhs, rhs);
-    case not_in:
+    case relational_operator::not_in:
       return !check_in(lhs, rhs);
-    case ni:
+    case relational_operator::ni:
       return check_in(rhs, lhs);
-    case not_ni:
+    case relational_operator::not_ni:
       return !check_in(rhs, lhs);
-    case equal:
+    case relational_operator::equal:
       return lhs == rhs;
-    case not_equal:
+    case relational_operator::not_equal:
       return lhs != rhs;
-    case less:
+    case relational_operator::less:
       return lhs < rhs;
-    case less_equal:
+    case relational_operator::less_equal:
       return lhs <= rhs;
-    case greater:
+    case relational_operator::greater:
       return lhs > rhs;
-    case greater_equal:
+    case relational_operator::greater_equal:
       return lhs >= rhs;
   }
 }

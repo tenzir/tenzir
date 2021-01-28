@@ -33,10 +33,10 @@ caf::expected<ids>
 container_lookup_impl(const Index& idx, relational_operator op,
                       const Sequence& xs) {
   ids result;
-  if (op == in) {
+  if (op == relational_operator::in) {
     result = ids{idx.offset(), false};
     for (auto x : xs) {
-      auto r = idx.lookup(equal, x);
+      auto r = idx.lookup(relational_operator::equal, x);
       if (r)
         result |= *r;
       else
@@ -44,10 +44,10 @@ container_lookup_impl(const Index& idx, relational_operator op,
       if (all<1>(result)) // short-circuit
         return result;
     }
-  } else if (op == not_in) {
+  } else if (op == relational_operator::not_in) {
     result = ids{idx.offset(), true};
     for (auto x : xs) {
-      auto r = idx.lookup(equal, x);
+      auto r = idx.lookup(relational_operator::equal, x);
       if (r)
         result -= *r;
       else

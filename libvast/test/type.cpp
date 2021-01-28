@@ -145,10 +145,10 @@ TEST(introspection) {
 }
 
 TEST(type/data compatibility) {
-  CHECK(compatible(address_type{}, in, subnet_type{}));
-  CHECK(compatible(address_type{}, in, subnet{}));
-  CHECK(compatible(subnet_type{}, in, subnet_type{}));
-  CHECK(compatible(subnet_type{}, in, subnet{}));
+  CHECK(compatible(address_type{}, relational_operator::in, subnet_type{}));
+  CHECK(compatible(address_type{}, relational_operator::in, subnet{}));
+  CHECK(compatible(subnet_type{}, relational_operator::in, subnet_type{}));
+  CHECK(compatible(subnet_type{}, relational_operator::in, subnet{}));
 }
 
 TEST(serialization) {

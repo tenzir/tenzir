@@ -55,9 +55,10 @@ caf::expected<ids>
 value_index::lookup(relational_operator op, data_view x) const {
   // When x is nil, we can answer the query right here.
   if (caf::holds_alternative<caf::none_t>(x)) {
-    if (!(op == equal || op == not_equal))
+    if (!(op == relational_operator::equal
+          || op == relational_operator::not_equal))
       return caf::make_error(ec::unsupported_operator, op);
-    auto is_equal = op == equal;
+    auto is_equal = op == relational_operator::equal;
     auto result = is_equal ? none_ : ~none_;
     if (result.size() < mask_.size())
       result.append_bits(!is_equal, mask_.size() - result.size());
@@ -73,7 +74,7 @@ value_index::lookup(relational_operator op, data_view x) const {
   // to be handled here. If we have a predicate with a non-nil RHS and `!=` as
   // operator, then we need to add the nils to the result, because the
   // expression `nil != RHS` is true when RHS is not nil.
-  auto is_negation = op == not_equal;
+  auto is_negation = op == relational_operator::not_equal;
   if (is_negation)
     *result |= none_;
   // Finally, the concrete result may be too short, e.g., when the last values

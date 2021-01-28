@@ -43,9 +43,9 @@ TEST(string) {
   REQUIRE(idx.append(make_data_view("foo"), 9));
   REQUIRE(idx.append(make_data_view(caf::none)));
   MESSAGE("lookup");
-  auto result = idx.lookup(equal, make_data_view("foo"));
+  auto result = idx.lookup(relational_operator::equal, make_data_view("foo"));
   CHECK_EQUAL(to_string(unbox(result)), "10010000010");
-  result = idx.lookup(not_equal, make_data_view("foo"));
+  result = idx.lookup(relational_operator::not_equal, make_data_view("foo"));
   REQUIRE(result);
   CHECK_EQUAL(to_string(unbox(result)), "01101000101");
 }
@@ -59,7 +59,7 @@ TEST(serialization) {
   REQUIRE(detail::serialize(buf, x) == caf::none);
   hash_index<1> y{string_type{}};
   REQUIRE(detail::deserialize(buf, y) == caf::none);
-  auto result = y.lookup(not_equal, make_data_view("bar"));
+  auto result = y.lookup(relational_operator::not_equal, make_data_view("bar"));
   CHECK_EQUAL(to_string(unbox(result)), "101");
   // Cannot append after deserialization.
   CHECK(!y.append(make_data_view("foo")));
@@ -99,7 +99,7 @@ TEST(hash index for integer) {
   CHECK(idx->append(make_data_view(42)));
   CHECK(idx->append(make_data_view(43)));
   CHECK(idx->append(make_data_view(44)));
-  auto result = idx->lookup(not_equal, make_data_view(42));
+  auto result = idx->lookup(relational_operator::not_equal, make_data_view(42));
   CHECK_EQUAL(to_string(unbox(result)), "011");
 }
 
@@ -114,9 +114,9 @@ TEST(hash index for list) {
   CHECK(idx->append(make_data_view(xs)));
   CHECK(idx->append(make_data_view(xs)));
   CHECK(idx->append(make_data_view(zs)));
-  auto result = idx->lookup(equal, make_data_view(zs));
+  auto result = idx->lookup(relational_operator::equal, make_data_view(zs));
   CHECK_EQUAL(to_string(unbox(result)), "001");
-  result = idx->lookup(ni, make_data_view(1));
+  result = idx->lookup(relational_operator::ni, make_data_view(1));
   REQUIRE(!result);
   CHECK(result.error() == ec::unsupported_operator);
 }

@@ -59,21 +59,22 @@ subnet_index::lookup_impl(relational_operator op, data_view d) const {
         return caf::make_error(ec::type_clash, materialize(x));
       },
       [&](view<address> x) -> caf::expected<ids> {
-        if (!(op == ni || op == not_ni))
+        if (!(op == relational_operator::ni
+              || op == relational_operator::not_ni))
           return caf::make_error(ec::unsupported_operator, op);
         auto result = ids{offset(), false};
         uint8_t bits = x.is_v4() ? 32 : 128;
         for (uint8_t i = 0; i <= bits; ++i) { // not an off-by-one
           auto masked = x;
           masked.mask(128 - bits + i);
-          ids len = length_.lookup(equal, i);
-          auto net = network_.lookup(equal, masked);
+          ids len = length_.lookup(relational_operator::equal, i);
+          auto net = network_.lookup(relational_operator::equal, masked);
           if (!net)
             return net;
           len &= *net;
           result |= len;
         }
-        if (op == not_ni)
+        if (op == relational_operator::not_ni)
           result.flip();
         return result;
       },
@@ -81,44 +82,47 @@ subnet_index::lookup_impl(relational_operator op, data_view d) const {
         switch (op) {
           default:
             return caf::make_error(ec::unsupported_operator, op);
-          case equal:
-          case not_equal: {
-            auto result = network_.lookup(equal, x.network());
+          case relational_operator::equal:
+          case relational_operator::not_equal: {
+            auto result
+              = network_.lookup(relational_operator::equal, x.network());
             if (!result)
               return result;
-            auto n = length_.lookup(equal, x.length());
+            auto n = length_.lookup(relational_operator::equal, x.length());
             *result &= n;
-            if (op == not_equal)
+            if (op == relational_operator::not_equal)
               result->flip();
             return result;
           }
-          case in:
-          case not_in: {
+          case relational_operator::in:
+          case relational_operator::not_in: {
             // For a subnet index U and subnet x, the in operator signifies a
             // subset relationship such that `U in x` translates to U ⊆ x, i.e.,
             // the lookup returns all subnets in U that are a subset of x.
-            auto result = network_.lookup(in, x);
+            auto result = network_.lookup(relational_operator::in, x);
             if (!result)
               return result;
-            *result &= length_.lookup(greater_equal, x.length());
-            if (op == not_in)
+            *result
+              &= length_.lookup(relational_operator::greater_equal, x.length());
+            if (op == relational_operator::not_in)
               result->flip();
             return result;
           }
-          case ni:
-          case not_ni: {
+          case relational_operator::ni:
+          case relational_operator::not_ni: {
             // For a subnet index U and subnet x, the ni operator signifies a
             // subset relationship such that `U ni x` translates to U ⊇ x, i.e.,
             // the lookup returns all subnets in U that include x.
             ids result;
             for (auto i = uint8_t{1}; i <= x.length(); ++i) {
-              auto xs = network_.lookup(in, subnet{x.network(), i});
+              auto xs = network_.lookup(relational_operator::in,
+                                        subnet{x.network(), i});
               if (!xs)
                 return xs;
-              *xs &= length_.lookup(equal, i);
+              *xs &= length_.lookup(relational_operator::equal, i);
               result |= *xs;
             }
-            if (op == not_ni)
+            if (op == relational_operator::not_ni)
               result.flip();
             return result;
           }

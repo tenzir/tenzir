@@ -117,9 +117,11 @@ public:
   }
 
   Bitmap decode(relational_operator op, value_type x) const {
-    VAST_ASSERT(op == equal || op == not_equal);
+    VAST_ASSERT(op == relational_operator::equal
+                || op == relational_operator::not_equal);
     auto result = bitmap_;
-    if ((x && op == equal) || (!x && op == not_equal))
+    if ((x && op == relational_operator::equal)
+        || (!x && op == relational_operator::not_equal))
       return result;
     result.flip();
     return result;
@@ -249,13 +251,17 @@ public:
   }
 
   Bitmap decode(relational_operator op, value_type x) const {
-    VAST_ASSERT(op == less || op == less_equal || op == equal || op == not_equal
-                || op == greater_equal || op == greater);
+    VAST_ASSERT(op == relational_operator::less
+                || op == relational_operator::less_equal
+                || op == relational_operator::equal
+                || op == relational_operator::not_equal
+                || op == relational_operator::greater_equal
+                || op == relational_operator::greater);
     VAST_ASSERT(x < this->bitmaps_.size());
     switch (op) {
       default:
         return Bitmap{this->size_, false};
-      case less: {
+      case relational_operator::less: {
         if (x == 0)
           return Bitmap{this->size_, false};
         auto f = this->bitmaps_.begin();
@@ -263,25 +269,25 @@ public:
         result.append_bits(false, this->size_ - result.size());
         return result;
       }
-      case less_equal: {
+      case relational_operator::less_equal: {
         auto f = this->bitmaps_.begin();
         auto result = nary_or(f, f + x + 1);
         result.append_bits(false, this->size_ - result.size());
         return result;
       }
-      case equal:
-      case not_equal: {
+      case relational_operator::equal:
+      case relational_operator::not_equal: {
         auto result = bitmap_at(x);
-        if (op == not_equal)
+        if (op == relational_operator::not_equal)
           result.flip();
         return result;
       }
-      case greater_equal: {
+      case relational_operator::greater_equal: {
         auto result = nary_or(this->bitmaps_.begin() + x, this->bitmaps_.end());
         result.append_bits(false, this->size_ - result.size());
         return result;
       }
-      case greater: {
+      case relational_operator::greater: {
         if (x >= this->bitmaps_.size() - 1)
           return Bitmap{this->size_, false};
         auto f = this->bitmaps_.begin();
@@ -341,36 +347,40 @@ public:
   }
 
   Bitmap decode(relational_operator op, value_type x) const {
-    VAST_ASSERT(op == less || op == less_equal || op == equal || op == not_equal
-                || op == greater_equal || op == greater);
+    VAST_ASSERT(op == relational_operator::less
+                || op == relational_operator::less_equal
+                || op == relational_operator::equal
+                || op == relational_operator::not_equal
+                || op == relational_operator::greater_equal
+                || op == relational_operator::greater);
     VAST_ASSERT(x < this->bitmaps_.size() + 1);
     switch (op) {
       default:
         return Bitmap{this->size_, false};
-      case less: {
+      case relational_operator::less: {
         if (x == 0)
           return Bitmap{this->size_, false};
         return bitmap_at(x - 1);
       }
-      case less_equal: {
+      case relational_operator::less_equal: {
         return bitmap_at(x);
       }
-      case equal: {
+      case relational_operator::equal: {
         auto result = bitmap_at(x);
         if (x > 0)
           result &= ~bitmap_at(x - 1);
         return result;
       }
-      case not_equal: {
+      case relational_operator::not_equal: {
         auto result = ~bitmap_at(x);
         if (x > 0)
           result |= bitmap_at(x - 1);
         return result;
       }
-      case greater: {
+      case relational_operator::greater: {
         return ~bitmap_at(x);
       }
-      case greater_equal: {
+      case relational_operator::greater_equal: {
         if (x == 0)
           return Bitmap{this->size_, true};
         return ~bitmap_at(x - 1);
@@ -427,16 +437,17 @@ public:
     switch (op) {
       default:
         break;
-      case less:
-      case less_equal:
-      case greater:
-      case greater_equal: {
+      case relational_operator::less:
+      case relational_operator::less_equal:
+      case relational_operator::greater:
+      case relational_operator::greater_equal: {
         if (x == std::numeric_limits<value_type>::min()) {
-          if (op == less)
+          if (op == relational_operator::less)
             return Bitmap{this->size_, false};
-          else if (op == greater_equal)
+          else if (op == relational_operator::greater_equal)
             return Bitmap{this->size_, true};
-        } else if (op == less || op == greater_equal) {
+        } else if (op == relational_operator::less
+                   || op == relational_operator::greater_equal) {
           --x;
         }
         auto result = x & 1 ? Bitmap{this->size_, true} : this->bitmaps_[0];
@@ -445,23 +456,25 @@ public:
             result |= this->bitmaps_[i];
           else
             result &= this->bitmaps_[i];
-        if (op == greater || op == greater_equal || op == not_equal)
+        if (op == relational_operator::greater
+            || op == relational_operator::greater_equal
+            || op == relational_operator::not_equal)
           result.flip();
         return result;
       }
-      case equal:
-      case not_equal: {
+      case relational_operator::equal:
+      case relational_operator::not_equal: {
         auto result = Bitmap{this->size_, true};
         for (auto i = 0u; i < this->bitmaps_.size(); ++i) {
           auto& bm = this->bitmaps_[i];
           result &= (((x >> i) & 1) ? ~bm : bm);
         }
-        if (op == not_equal)
+        if (op == relational_operator::not_equal)
           result.flip();
         return result;
       }
-      case in:
-      case not_in: {
+      case relational_operator::in:
+      case relational_operator::not_in: {
         if (x == 0)
           break;
         x = ~x;
@@ -469,7 +482,7 @@ public:
         for (auto i = 0u; i < this->bitmaps_.size(); ++i)
           if (((x >> i) & 1) == 0)
             result |= this->bitmaps_[i];
-        if (op == in)
+        if (op == relational_operator::in)
           result.flip();
         return result;
       }
@@ -616,17 +629,19 @@ private:
   // Range-Eval-Opt
   auto decode(const std::vector<range_coder<bitmap_type>>& coders,
               relational_operator op, value_type x) const {
-    VAST_ASSERT(!(op == in || op == not_in));
+    VAST_ASSERT(
+      !(op == relational_operator::in || op == relational_operator::not_in));
     // All coders must have the same number of elements.
     auto pred = [n=size()](auto c) { return c.size() == n; };
     VAST_ASSERT(std::all_of(coders.begin(), coders.end(), pred));
     // Check boundaries first.
     if (x == 0) {
-      if (op == less) // A < min => false
+      if (op == relational_operator::less) // A < min => false
         return bitmap_type{size(), false};
-      else if (op == greater_equal) // A >= min => true
+      else if (op == relational_operator::greater_equal) // A >= min => true
         return bitmap_type{size(), true};
-    } else if (op == less || op == greater_equal) {
+    } else if (op == relational_operator::less
+               || op == relational_operator::greater_equal) {
       --x;
     }
     base_.decompose(x, xs_);
@@ -637,10 +652,10 @@ private:
     switch (op) {
       default:
         return bitmap_type{size(), false};
-      case less:
-      case less_equal:
-      case greater:
-      case greater_equal: {
+      case relational_operator::less:
+      case relational_operator::less_equal:
+      case relational_operator::greater:
+      case relational_operator::greater_equal: {
         if (xs_[0] < base_[0] - 1) // && bitmap != all_ones
           result = get_bitmap(0, xs_[0]);
         for (auto i = 1u; i < base_.size(); ++i) {
@@ -650,8 +665,8 @@ private:
             result |= get_bitmap(i, xs_[i] - 1);
         }
       } break;
-      case equal:
-      case not_equal: {
+      case relational_operator::equal:
+      case relational_operator::not_equal: {
         for (auto i = 0u; i < base_.size(); ++i) {
           if (xs_[i] == 0) // && bitmap != all_ones
             result &= get_bitmap(i, 0);
@@ -662,7 +677,9 @@ private:
         }
       } break;
     }
-    if (op == greater || op == greater_equal || op == not_equal)
+    if (op == relational_operator::greater
+        || op == relational_operator::greater_equal
+        || op == relational_operator::not_equal)
       result.flip();
     return result;
   }
@@ -675,12 +692,14 @@ private:
     -> std::enable_if_t<
       std::disjunction_v<is_equality_coder<C>, is_bitslice_coder<C>>,
       bitmap_type> {
-    VAST_ASSERT(op == equal || op == not_equal);
+    VAST_ASSERT(op == relational_operator::equal
+                || op == relational_operator::not_equal);
     base_.decompose(x, xs_);
-    auto result = coders[0].decode(equal, xs_[0]);
+    auto result = coders[0].decode(relational_operator::equal, xs_[0]);
     for (auto i = 1u; i < base_.size(); ++i)
-      result &= coders[i].decode(equal, xs_[i]);
-    if (op == not_equal || op == not_in)
+      result &= coders[i].decode(relational_operator::equal, xs_[i]);
+    if (op == relational_operator::not_equal
+        || op == relational_operator::not_in)
       result.flip();
     return result;
   }

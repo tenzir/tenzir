@@ -43,9 +43,9 @@ size_t bool_synopsis::memusage() const {
 caf::optional<bool> bool_synopsis::lookup(relational_operator op,
                                           data_view rhs) const {
   if (auto b = caf::get_if<view<bool>>(&rhs)) {
-    if (op == equal)
+    if (op == relational_operator::equal)
       return *b ? true_ : false_;
-    if (op == not_equal)
+    if (op == relational_operator::not_equal)
       return *b ? false_ : true_;
   }
   return caf::none;

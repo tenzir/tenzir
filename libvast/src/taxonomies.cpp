@@ -326,8 +326,9 @@ resolve_impl(const taxonomies& ts, const expression& e,
                                  vast::data{item}};
               };
             };
-        unrestricted.emplace_back(resolve_concepts(
-          *levels.top().first, equal, caf::none, make_meta_field_predicate));
+        unrestricted.emplace_back(
+          resolve_concepts(*levels.top().first, relational_operator::equal,
+                           caf::none, make_meta_field_predicate));
       };
       auto named = !r->begin()->first.empty();
       if (named) {

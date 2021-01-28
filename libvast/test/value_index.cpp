@@ -60,19 +60,19 @@ TEST(bool) {
   REQUIRE(idx->append(make_data_view(false)));
   REQUIRE(idx->append(make_data_view(true)));
   MESSAGE("lookup");
-  auto f = idx->lookup(equal, make_data_view(false));
+  auto f = idx->lookup(relational_operator::equal, make_data_view(false));
   CHECK_EQUAL(to_string(unbox(f)), "00101110");
-  auto t = idx->lookup(not_equal, make_data_view(false));
+  auto t = idx->lookup(relational_operator::not_equal, make_data_view(false));
   CHECK_EQUAL(to_string(unbox(t)), "11010001");
   auto xs = list{true, false};
-  auto multi = unbox(idx->lookup(in, make_data_view(xs)));
+  auto multi = unbox(idx->lookup(relational_operator::in, make_data_view(xs)));
   CHECK_EQUAL(to_string(multi), "11111111");
   MESSAGE("serialization");
   std::vector<char> buf;
   CHECK_EQUAL(detail::serialize(buf, idx), caf::none);
   value_index_ptr idx2;
   REQUIRE_EQUAL(detail::deserialize(buf, idx2), caf::none);
-  t = idx2->lookup(equal, make_data_view(true));
+  t = idx2->lookup(relational_operator::equal, make_data_view(true));
   CHECK_EQUAL(to_string(unbox(t)), "11010001");
 }
 
@@ -90,21 +90,24 @@ TEST(integer) {
   REQUIRE(idx->append(make_data_view(42)));
   REQUIRE(idx->append(make_data_view(42)));
   MESSAGE("lookup");
-  auto leet = idx->lookup(equal, make_data_view(31337));
+  auto leet = idx->lookup(relational_operator::equal, make_data_view(31337));
   CHECK(to_string(unbox(leet)) == "0000100");
-  auto less_than_leet = idx->lookup(less, make_data_view(31337));
+  auto less_than_leet
+    = idx->lookup(relational_operator::less, make_data_view(31337));
   CHECK(to_string(unbox(less_than_leet)) == "1111011");
-  auto greater_zero = idx->lookup(greater, make_data_view(0));
+  auto greater_zero
+    = idx->lookup(relational_operator::greater, make_data_view(0));
   CHECK(to_string(unbox(greater_zero)) == "0111111");
   auto xs = list{42, 10, 4711};
-  auto multi = unbox(idx->lookup(in, make_data_view(xs)));
+  auto multi = unbox(idx->lookup(relational_operator::in, make_data_view(xs)));
   CHECK_EQUAL(to_string(multi), "0101011");
   MESSAGE("serialization");
   std::vector<char> buf;
   CHECK_EQUAL(detail::serialize(buf, idx), caf::none);
   value_index_ptr idx2;
   REQUIRE_EQUAL(detail::deserialize(buf, idx2), caf::none);
-  less_than_leet = idx2->lookup(less, make_data_view(31337));
+  less_than_leet
+    = idx2->lookup(relational_operator::less, make_data_view(31337));
   CHECK(to_string(unbox(less_than_leet)) == "1111011");
 }
 

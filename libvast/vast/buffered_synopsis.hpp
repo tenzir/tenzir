@@ -87,10 +87,10 @@ public:
     switch (op) {
       default:
         return caf::none;
-      case equal:
+      case relational_operator::equal:
         // TODO: Switch to tsl::robin_set here for heterogenous lookup.
         return data_.count(materialize(caf::get<view_type>(rhs)));
-      case in: {
+      case relational_operator::in: {
         if (auto xs = caf::get_if<view<list>>(&rhs)) {
           for (auto x : **xs)
             if (data_.count(materialize(caf::get<view_type>(x))))

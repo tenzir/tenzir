@@ -55,7 +55,7 @@ enumeration_index::lookup_impl(relational_operator op, data_view d) const {
       return caf::make_error(ec::type_clash, materialize(x));
     },
     [&](view<enumeration> x) -> caf::expected<ids> {
-      if (op == in || op == not_in)
+      if (op == relational_operator::in || op == relational_operator::not_in)
         return caf::make_error(ec::unsupported_operator, op);
       return index_.lookup(op, x);
     },

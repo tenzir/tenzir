@@ -38,7 +38,7 @@ TEST(parseable/printable - predicate) {
   CHECK(caf::holds_alternative<field_extractor>(pred.lhs));
   CHECK(caf::holds_alternative<data>(pred.rhs));
   CHECK(caf::get<field_extractor>(pred.lhs) == field_extractor{"x.y.z"});
-  CHECK(pred.op == equal);
+  CHECK(pred.op == relational_operator::equal);
   CHECK(caf::get<data>(pred.rhs) == data{42u});
   CHECK_EQUAL(to_string(pred), str);
   // LHS: data, RHS: schema
@@ -49,7 +49,7 @@ TEST(parseable/printable - predicate) {
   CHECK(caf::holds_alternative<field_extractor>(pred.rhs));
   CHECK(caf::get<field_extractor>(pred.lhs) == field_extractor{"T.x"});
   CHECK(caf::get<field_extractor>(pred.rhs) == field_extractor{"Foo"});
-  CHECK(pred.op == equal);
+  CHECK(pred.op == relational_operator::equal);
   CHECK_EQUAL(to_string(pred), str);
   // LHS: data, RHS: data
   MESSAGE("42 in [21, 42, 84]");
@@ -58,7 +58,7 @@ TEST(parseable/printable - predicate) {
   CHECK(caf::holds_alternative<data>(pred.lhs));
   CHECK(caf::holds_alternative<data>(pred.rhs));
   CHECK(caf::get<data>(pred.lhs) == data{42u});
-  CHECK(pred.op == in);
+  CHECK(pred.op == relational_operator::in);
   CHECK(caf::get<data>(pred.rhs) == data{list{21u, 42u, 84u}});
   CHECK_EQUAL(to_string(pred), str);
   // LHS: type, RHS: data
@@ -69,7 +69,7 @@ TEST(parseable/printable - predicate) {
   CHECK(caf::holds_alternative<data>(pred.rhs));
   CHECK(caf::get<attribute_extractor>(pred.lhs)
         == attribute_extractor{atom::type_v});
-  CHECK(pred.op == not_equal);
+  CHECK(pred.op == relational_operator::not_equal);
   CHECK(caf::get<data>(pred.rhs) == data{"foo"});
   CHECK_EQUAL(to_string(pred), str);
   // LHS: data, RHS: type
@@ -79,7 +79,7 @@ TEST(parseable/printable - predicate) {
   CHECK(caf::holds_alternative<data>(pred.lhs));
   CHECK(caf::holds_alternative<type_extractor>(pred.rhs));
   CHECK(caf::get<data>(pred.lhs) == data{*to<subnet>("10.0.0.0/8")});
-  CHECK(pred.op == ni);
+  CHECK(pred.op == relational_operator::ni);
   CHECK(caf::get<type_extractor>(pred.rhs) == type_extractor{address_type{}});
   CHECK_EQUAL(to_string(pred), str);
   // LHS: type, RHS: data
@@ -89,7 +89,7 @@ TEST(parseable/printable - predicate) {
   CHECK(caf::holds_alternative<type_extractor>(pred.lhs));
   CHECK(caf::holds_alternative<data>(pred.rhs));
   CHECK(caf::get<type_extractor>(pred.lhs) == type_extractor{real_type{}});
-  CHECK(pred.op == greater_equal);
+  CHECK(pred.op == relational_operator::greater_equal);
   CHECK(caf::get<data>(pred.rhs) == data{-4.8});
   CHECK_EQUAL(to_string(pred), str);
   // LHS: data, RHS: time
@@ -98,7 +98,7 @@ TEST(parseable/printable - predicate) {
   CHECK(parsers::predicate(str, pred));
   CHECK(caf::holds_alternative<data>(pred.lhs));
   CHECK(caf::holds_alternative<attribute_extractor>(pred.rhs));
-  CHECK(pred.op == greater);
+  CHECK(pred.op == relational_operator::greater);
   CHECK(caf::get<attribute_extractor>(pred.rhs)
         == attribute_extractor{atom::timestamp_v});
   // LHS: schema, RHS: schema
@@ -108,7 +108,7 @@ TEST(parseable/printable - predicate) {
   CHECK(caf::holds_alternative<field_extractor>(pred.lhs));
   CHECK(caf::holds_alternative<field_extractor>(pred.rhs));
   CHECK(caf::get<field_extractor>(pred.lhs) == field_extractor{"x.a_b"});
-  CHECK(pred.op == equal);
+  CHECK(pred.op == relational_operator::equal);
   CHECK(caf::get<field_extractor>(pred.rhs) == field_extractor{"y.c_d"});
   CHECK_EQUAL(to_string(pred), str);
   // Invalid type name.
@@ -118,9 +118,11 @@ TEST(parseable/printable - predicate) {
 
 TEST(parseable - expression) {
   expression expr;
-  predicate p1{field_extractor{"x"}, equal, data{42u}};
-  predicate p2{type_extractor{real_type{}}, equal, data{real{5.3}}};
-  predicate p3{field_extractor{"a"}, greater, field_extractor{"b"}};
+  predicate p1{field_extractor{"x"}, relational_operator::equal, data{42u}};
+  predicate p2{type_extractor{real_type{}}, relational_operator::equal,
+               data{real{5.3}}};
+  predicate p3{field_extractor{"a"}, relational_operator::greater,
+               field_extractor{"b"}};
   MESSAGE("conjunction");
   CHECK(parsers::expr("x == 42 && :real == 5.3"s, expr));
   CHECK_EQUAL(expr, expression(conjunction{p1, p2}));
@@ -174,6 +176,6 @@ TEST(parseable - data expression) {
   REQUIRE(extractor != nullptr);
   CHECK(caf::holds_alternative<count_type>(extractor->type));
   CHECK(caf::holds_alternative<data>(pred->rhs));
-  CHECK_EQUAL(pred->op, equal);
+  CHECK_EQUAL(pred->op, relational_operator::equal);
   CHECK(caf::get<data>(pred->rhs) == data{42u});
 }

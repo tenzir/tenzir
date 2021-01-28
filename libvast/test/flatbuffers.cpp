@@ -164,7 +164,8 @@ TEST(empty partition roundtrip) {
   recovered_meta_idx.merge(state.id, std::move(ps));
   // Check that lookups still work as expected.
   auto candidates = recovered_meta_idx.lookup(vast::expression{
-    vast::predicate{vast::field_extractor{".x"}, vast::equal, vast::data{0u}},
+    vast::predicate{vast::field_extractor{".x"},
+                    vast::relational_operator::equal, vast::data{0u}},
   });
   REQUIRE_EQUAL(candidates.size(), 1u);
   CHECK_EQUAL(candidates[0], state.id);
@@ -240,15 +241,17 @@ TEST(full partition roundtrip) {
         return true;
       };
   auto x_equals_zero = vast::expression{
-    vast::predicate{vast::field_extractor{".x"}, vast::equal, vast::data{0u}}};
+    vast::predicate{vast::field_extractor{".x"},
+                    vast::relational_operator::equal, vast::data{0u}}};
   auto x_equals_one = vast::expression{
-    vast::predicate{vast::field_extractor{".x"}, vast::equal, vast::data{1u}}};
+    vast::predicate{vast::field_extractor{".x"},
+                    vast::relational_operator::equal, vast::data{1u}}};
   auto type_equals_y = vast::expression{
-    vast::predicate{vast::attribute_extractor{vast::atom::type_v}, vast::equal,
-                    vast::data{"y"}}};
+    vast::predicate{vast::attribute_extractor{vast::atom::type_v},
+                    vast::relational_operator::equal, vast::data{"y"}}};
   auto type_equals_foo = vast::expression{
-    vast::predicate{vast::attribute_extractor{vast::atom::type_v}, vast::equal,
-                    vast::data{"foo"}}};
+    vast::predicate{vast::attribute_extractor{vast::atom::type_v},
+                    vast::relational_operator::equal, vast::data{"foo"}}};
   // For the query `x == 0`, we expect one result.
   test_expression(x_equals_zero, 1);
   // For the query `x == 1`, we expect zero results.

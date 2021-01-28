@@ -59,53 +59,53 @@ TEST(string) {
   REQUIRE(idx.append(make_data_view("corge")));
   REQUIRE(idx.append(make_data_view("bazz")));
   MESSAGE("lookup");
-  auto result = idx.lookup(equal, make_data_view("foo"));
+  auto result = idx.lookup(relational_operator::equal, make_data_view("foo"));
   CHECK_EQUAL(to_string(unbox(result)), "1001100000");
-  result = idx.lookup(equal, make_data_view("bar"));
+  result = idx.lookup(relational_operator::equal, make_data_view("bar"));
   CHECK_EQUAL(to_string(unbox(result)), "0100010000");
-  result = idx.lookup(equal, make_data_view("baz"));
+  result = idx.lookup(relational_operator::equal, make_data_view("baz"));
   CHECK_EQUAL(to_string(unbox(result)), "0010000000");
-  result = idx.lookup(equal, make_data_view(""));
+  result = idx.lookup(relational_operator::equal, make_data_view(""));
   CHECK_EQUAL(to_string(unbox(result)), "0000001000");
-  result = idx.lookup(equal, make_data_view("qux"));
+  result = idx.lookup(relational_operator::equal, make_data_view("qux"));
   CHECK_EQUAL(to_string(unbox(result)), "0000000100");
-  result = idx.lookup(equal, make_data_view("corge"));
+  result = idx.lookup(relational_operator::equal, make_data_view("corge"));
   CHECK_EQUAL(to_string(unbox(result)), "0000000010");
-  result = idx.lookup(equal, make_data_view("bazz"));
+  result = idx.lookup(relational_operator::equal, make_data_view("bazz"));
   CHECK_EQUAL(to_string(unbox(result)), "0000000001");
-  result = idx.lookup(not_equal, make_data_view(""));
+  result = idx.lookup(relational_operator::not_equal, make_data_view(""));
   CHECK_EQUAL(to_string(unbox(result)), "1111110111");
-  result = idx.lookup(not_equal, make_data_view("foo"));
+  result = idx.lookup(relational_operator::not_equal, make_data_view("foo"));
   CHECK_EQUAL(to_string(unbox(result)), "0110011111");
-  result = idx.lookup(not_ni, make_data_view(""));
+  result = idx.lookup(relational_operator::not_ni, make_data_view(""));
   CHECK_EQUAL(to_string(unbox(result)), "0000000000");
-  result = idx.lookup(ni, make_data_view(""));
+  result = idx.lookup(relational_operator::ni, make_data_view(""));
   CHECK_EQUAL(to_string(unbox(result)), "1111111111");
-  result = idx.lookup(ni, make_data_view("o"));
+  result = idx.lookup(relational_operator::ni, make_data_view("o"));
   CHECK_EQUAL(to_string(unbox(result)), "1001100010");
-  result = idx.lookup(ni, make_data_view("oo"));
+  result = idx.lookup(relational_operator::ni, make_data_view("oo"));
   CHECK_EQUAL(to_string(unbox(result)), "1001100000");
-  result = idx.lookup(ni, make_data_view("z"));
+  result = idx.lookup(relational_operator::ni, make_data_view("z"));
   CHECK_EQUAL(to_string(unbox(result)), "0010000001");
-  result = idx.lookup(ni, make_data_view("zz"));
+  result = idx.lookup(relational_operator::ni, make_data_view("zz"));
   CHECK_EQUAL(to_string(unbox(result)), "0000000001");
-  result = idx.lookup(ni, make_data_view("ar"));
+  result = idx.lookup(relational_operator::ni, make_data_view("ar"));
   CHECK_EQUAL(to_string(unbox(result)), "0100010000");
-  result = idx.lookup(ni, make_data_view("rge"));
+  result = idx.lookup(relational_operator::ni, make_data_view("rge"));
   CHECK_EQUAL(to_string(unbox(result)), "0000000010");
-  result = idx.lookup(match, make_data_view("foo"));
+  result = idx.lookup(relational_operator::match, make_data_view("foo"));
   CHECK(!result);
   auto xs = list{"foo", "bar", "baz"};
-  result = idx.lookup(in, make_data_view(xs));
+  result = idx.lookup(relational_operator::in, make_data_view(xs));
   CHECK_EQUAL(to_string(unbox(result)), "1111110000");
   MESSAGE("serialization");
   std::vector<char> buf;
   CHECK_EQUAL(detail::serialize(buf, idx), caf::none);
   auto idx2 = string_index{string_type{}};
   CHECK_EQUAL(detail::deserialize(buf, idx2), caf::none);
-  result = idx2.lookup(equal, make_data_view("foo"));
+  result = idx2.lookup(relational_operator::equal, make_data_view("foo"));
   CHECK_EQUAL(to_string(unbox(result)), "1001100000");
-  result = idx2.lookup(equal, make_data_view("bar"));
+  result = idx2.lookup(relational_operator::equal, make_data_view("bar"));
   CHECK_EQUAL(to_string(unbox(result)), "0100010000");
 }
 
@@ -135,13 +135,13 @@ TEST(none values - string) {
   REQUIRE(idx->append(make_data_view("foo")));
   REQUIRE(idx->append(make_data_view(caf::none)));
   REQUIRE(idx->append(make_data_view(caf::none)));
-  auto bm = idx->lookup(equal, make_data_view("foo"));
+  auto bm = idx->lookup(relational_operator::equal, make_data_view("foo"));
   CHECK_EQUAL(to_string(unbox(bm)), "01100010000001110001100");
-  bm = idx->lookup(not_equal, make_data_view("foo"));
+  bm = idx->lookup(relational_operator::not_equal, make_data_view("foo"));
   CHECK_EQUAL(to_string(unbox(bm)), "10011101111110001110011");
-  bm = idx->lookup(equal, make_data_view(caf::none));
+  bm = idx->lookup(relational_operator::equal, make_data_view(caf::none));
   CHECK_EQUAL(to_string(unbox(bm)), "10011100011110000000011");
-  bm = idx->lookup(not_equal, make_data_view(caf::none));
+  bm = idx->lookup(relational_operator::not_equal, make_data_view(caf::none));
   CHECK_EQUAL(to_string(unbox(bm)), "01100011100001111111100");
 }
 
@@ -184,7 +184,8 @@ TEST(regression - zeek conn log service http) {
   for (size_t i = 0; i < slice_stats.size(); ++i) {
     MESSAGE("verifying batch [" << (i * 100) << ',' << (i * 100) + 100 << ')');
     auto& [idx, expected] = slice_stats[i];
-    auto result = unbox(idx->lookup(equal, make_data_view("http")));
+    auto result
+      = unbox(idx->lookup(relational_operator::equal, make_data_view("http")));
     CHECK_EQUAL(rank(result), http_per_100_events[i]);
   }
 }
@@ -232,9 +233,10 @@ TEST(regression - manual value index for zeek conn log service http) {
   REQUIRE_EQUAL(rank(mask), 100u);
   // Perform a manual index lookup for "http".
   auto http = "http"s;
-  auto data = length.lookup(less_equal, http.size());
+  auto data = length.lookup(relational_operator::less_equal, http.size());
   for (auto i = 0u; i < http.size(); ++i)
-    data &= chars[i].lookup(equal, static_cast<uint8_t>(http[i]));
+    data &= chars[i].lookup(relational_operator::equal,
+                            static_cast<uint8_t>(http[i]));
   // Generated via:
   // zeek-cut service < test/logs/zeek/conn.log
   //  | awk 'NR > 8000 && NR <= 8100 && $1 == "http" { print NR-1  }'

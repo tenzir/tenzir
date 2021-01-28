@@ -45,9 +45,9 @@ public:
     switch (op) {
       default:
         return caf::none;
-      case equal:
+      case relational_operator::equal:
         return bloom_filter_.lookup(caf::get<view<T>>(rhs));
-      case in: {
+      case relational_operator::in: {
         if (auto xs = caf::get_if<view<list>>(&rhs)) {
           for (auto x : **xs)
             if (bloom_filter_.lookup(caf::get<view<T>>(x)))

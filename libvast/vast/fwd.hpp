@@ -133,13 +133,12 @@ struct time_type;
 struct type_extractor;
 struct type_set;
 
-enum arithmetic_operator : uint8_t;
-enum bool_operator : uint8_t;
-enum relational_operator : uint8_t;
-
+enum class arithmetic_operator : uint8_t;
+enum class bool_operator : uint8_t;
 enum class ec : uint8_t;
 enum class port_type : uint8_t;
 enum class query_options : uint32_t;
+enum class relational_operator : uint8_t;
 enum class table_slice_encoding : uint8_t;
 
 template <class>

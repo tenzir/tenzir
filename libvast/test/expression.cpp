@@ -52,13 +52,15 @@ expression to_expr(T&& x) {
 struct fixture {
   fixture() {
     // expr0 := !(x.y.z <= 42 && #foo == T)
-    auto p0 = predicate{field_extractor{"x.y.z"}, less_equal, data{42}};
+    auto p0 = predicate{field_extractor{"x.y.z"},
+                        relational_operator::less_equal, data{42}};
     auto p1 = predicate{attribute_extractor{caf::atom("foo")},
-                        equal, data{true}};
+                        relational_operator::equal, data{true}};
     auto conj = conjunction{p0, p1};
     expr0 = negation{conj};
     // expr0 || :real > 4.2
-    auto p2 = predicate{type_extractor{real_type{}}, greater_equal, data{4.2}};
+    auto p2 = predicate{type_extractor{real_type{}},
+                        relational_operator::greater_equal, data{4.2}};
     expr1 = disjunction{expr0, p2};
   }
 
@@ -79,13 +81,13 @@ TEST(construction) {
   auto p0 = caf::get_if<predicate>(&c->at(0));
   REQUIRE(p0);
   CHECK_EQUAL(get<field_extractor>(p0->lhs).field, "x.y.z");
-  CHECK_EQUAL(p0->op, less_equal);
+  CHECK_EQUAL(p0->op, relational_operator::less_equal);
   CHECK(get<data>(p0->rhs) == data{42});
   auto p1 = caf::get_if<predicate>(&c->at(1));
   REQUIRE(p1);
   CHECK(attribute{caf::to_string(get<attribute_extractor>(p1->lhs).attr)}
         == attribute{"foo"});
-  CHECK_EQUAL(p1->op, equal);
+  CHECK_EQUAL(p1->op, relational_operator::equal);
   CHECK(get<data>(p1->rhs) == data{true});
 }
 
@@ -104,7 +106,7 @@ TEST(serialization) {
   REQUIRE_EQUAL(c->size(), 2u);
   auto p = caf::get_if<predicate>(&c->at(1));
   REQUIRE(p);
-  CHECK_EQUAL(p->op, equal);
+  CHECK_EQUAL(p->op, relational_operator::equal);
 }
 
 TEST(normalization) {
@@ -173,10 +175,10 @@ TEST(extractors) {
   auto r = flatten(record_type{{"orig", s}, {"resp", s}});
   auto sn = unbox(to<subnet>("192.168.0.0/24"));
   {
-    auto pred0
-      = predicate{data_extractor{address_type{}, offset{2}}, in, data{sn}};
-    auto pred1
-      = predicate{data_extractor{address_type{}, offset{5}}, in, data{sn}};
+    auto pred0 = predicate{data_extractor{address_type{}, offset{2}},
+                           relational_operator::in, data{sn}};
+    auto pred1 = predicate{data_extractor{address_type{}, offset{5}},
+                           relational_operator::in, data{sn}};
     auto normalized = disjunction{pred0, pred1};
     MESSAGE("type extractor - distribution");
     auto expr = unbox(to<expression>(":addr in 192.168.0.0/24"));
@@ -188,10 +190,10 @@ TEST(extractors) {
     CHECK_EQUAL(resolved, normalized);
   }
   {
-    auto pred0
-      = predicate{data_extractor{address_type{}, offset{2}}, not_in, data{sn}};
-    auto pred1
-      = predicate{data_extractor{address_type{}, offset{5}}, not_in, data{sn}};
+    auto pred0 = predicate{data_extractor{address_type{}, offset{2}},
+                           relational_operator::not_in, data{sn}};
+    auto pred1 = predicate{data_extractor{address_type{}, offset{5}},
+                           relational_operator::not_in, data{sn}};
     auto normalized = conjunction{pred0, pred1};
     MESSAGE("type extractor - distribution with negation");
     auto expr = unbox(to<expression>(":addr !in 192.168.0.0/24"));
