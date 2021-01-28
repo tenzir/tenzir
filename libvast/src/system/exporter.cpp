@@ -219,7 +219,8 @@ exporter(exporter_actor::stateful_pointer<exporter_state> self, expression expr,
       // Sanity check.
       VAST_DEBUG(self, "got request to extract all events");
       if (qs.requested == max_events) {
-        VAST_WARNING(self, "ignores extract request, already getting all");
+        VAST_LOG_SPD_WARN("{} ignores extract request, already getting all",
+                          detail::id_or_name(self));
         return {};
       }
       // Configure state to get all remaining partition results.
@@ -236,7 +237,8 @@ exporter(exporter_actor::stateful_pointer<exporter_state> self, expression expr,
         return {};
       }
       if (qs.requested == max_events) {
-        VAST_WARNING(self, "ignores extract request, already getting all");
+        VAST_LOG_SPD_WARN("{} ignores extract request, already getting all",
+                          detail::id_or_name(self));
         return {};
       }
       VAST_ASSERT(qs.requested < max_events);
@@ -290,8 +292,9 @@ exporter(exporter_actor::stateful_pointer<exporter_state> self, expression expr,
                   self->state.expr)
         .then(
           [=](const uuid& lookup, uint32_t partitions, uint32_t scheduled) {
-            VAST_VERBOSE(self, "got lookup handle", lookup, ", scheduled",
-                         scheduled, '/', partitions, "partitions");
+            VAST_LOG_SPD_VERBOSE(
+              "{} got lookup handle {}, scheduled {}/{} partitions",
+              detail::id_or_name(self), lookup, scheduled, partitions);
             self->state.id = lookup;
             if (partitions > 0) {
               self->state.query.expected = partitions;
@@ -384,8 +387,9 @@ exporter(exporter_actor::stateful_pointer<exporter_state> self, expression expr,
         VAST_WARNING(self, "got empty hits");
       } else {
         VAST_ASSERT(rank(st.hits & hits) == 0);
-        VAST_DEBUG(self, "got", count, "index hits in [", (select(hits, 1)),
-                   ',', (select(hits, -1) + 1), ')');
+        VAST_LOG_SPD_DEBUG("{} got {} index hits in [{}, {})",
+                           detail::id_or_name(self), count, select(hits, 1),
+                           (select(hits, -1) + 1));
         st.hits |= hits;
         VAST_DEBUG(self, "forwards hits to archive");
         // FIXME: restrict according to configured limit.

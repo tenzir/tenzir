@@ -728,8 +728,9 @@ partition_actor::behavior_type passive_partition(
           return;
         }
         if (id != self->state.id)
-          VAST_WARNING(self, "encountered partition id mismatch: restored",
-                       self->state.id, "from disk, expected", id);
+          VAST_LOG_SPD_WARN("{} encountered partition id mismatch: restored {} "
+                            "from disk, expected {}",
+                            detail::id_or_name(self), self->state.id, id);
         // Delegate all deferred evaluations now that we have the partition chunk.
         VAST_DEBUG(self, "delegates", self->state.deferred_evaluations.size(),
                    "deferred evaluations");

@@ -74,8 +74,9 @@ value_index_ptr make(type x, caf::settings opts) {
         // cardinality is a size_t, so we may get negative values if someone
         // provides an uint64_t value, e.g., numeric_limits<size_t>::max().
         if (*cardinality < 0) {
-          VAST_WARNING_ANON(__func__, "got an explicit cardinality of 2^64"
-                                      ", using max digest size of 8 bytes");
+          VAST_LOG_SPD_WARN(" {} got an explicit cardinality of 2^64, using "
+                            "max digest size of 8 bytes",
+                            __func__);
           return std::make_unique<hash_index<8>>(std::move(x));
         }
         if (!detail::ispow2(*cardinality))
@@ -91,9 +92,9 @@ value_index_ptr make(type x, caf::settings opts) {
         VAST_DEBUG_ANON(__func__, "creating hash index with a digest of",
                         digest_bytes, "bytes");
         if (digest_bytes > 8) {
-          VAST_WARNING_ANON(__func__,
-                            "expected cardinality exceeds "
-                            "maximum digest size, capping at 8 bytes");
+          VAST_LOG_SPD_WARN(" {} expected cardinality exceeds "
+                            "maximum digest size {}, capping at 8 bytes",
+                            __func__);
           digest_bytes = 8;
         }
         switch (digest_bytes) {

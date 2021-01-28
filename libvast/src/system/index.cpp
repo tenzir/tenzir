@@ -137,7 +137,8 @@ caf::error index_state::load_from_disk() {
   // We dont use the filesystem actor here because this function is only
   // called once during startup, when no other actors exist yet.
   if (!exists(dir)) {
-    VAST_VERBOSE(self, "found no prior state, starting with a clean slate");
+    VAST_LOG_SPD_VERBOSE("{} found no prior state, starting with a clean slate",
+                         detail::id_or_name(self));
     return caf::none;
   }
   if (auto fname = index_filename(); exists(fname)) {
@@ -195,8 +196,9 @@ caf::error index_state::load_from_disk() {
         = layout_statistics{stat->count()};
     }
   } else {
-    VAST_WARNING(self, "found existing database dir", dir,
-                 "without index statefile, will start with fresh state");
+    VAST_LOG_SPD_WARN("{} found existing database dir {} without index statefile, "
+                      "will start with fresh state",
+                      detail::id_or_name(self), dir);
   }
   return caf::none;
 }
@@ -527,8 +529,9 @@ index(index_actor::stateful_pointer<index_state> self,
       if (!active.actor) {
         self->state.create_active_partition();
       } else if (x.rows() > active.capacity) {
-        VAST_DEBUG(self, "exceeds active capacity by",
-                   (x.rows() - active.capacity), "rows");
+        VAST_LOG_SPD_DEBUG("{} exceeds active capacity by {} rows",
+                           detail::id_or_name(self),
+                           x.rows() - active.capacity);
         self->state.decomission_active_partition();
         self->state.flush_to_disk();
         self->state.create_active_partition();

@@ -140,8 +140,9 @@ datagram_source(datagram_source_actor<Reader>* self,
       if (st.requested && st.count >= *st.requested)
         st.done = true;
       if (err != caf::none && err != ec::end_of_input)
-        VAST_WARNING(self,
-                     "has not enough capacity left in stream, dropping input!");
+        VAST_LOG_SPD_WARN("{} has not enough capacity left in stream, dropping "
+                          "input!",
+                          detail::id_or_name(self));
       if (produced > 0)
         st.mgr->push();
       if (st.done)
