@@ -67,7 +67,8 @@ public:
   }
 
   void finalize(const caf::error& err) override {
-    VAST_DEBUG(state.self, "stopped with message:", render(err));
+    VAST_LOG_SPD_DEBUG("{} stopped with message: {}",
+                       detail::id_or_name(state.self), render(err));
   }
 
   importer_state& state;
@@ -257,13 +258,15 @@ importer(importer_actor::stateful_pointer<importer_state> self, path dir,
   return {
     // Register the ACCOUNTANT actor.
     [=](accountant_actor accountant) {
-      VAST_DEBUG(self, "registers accountant", accountant);
+      VAST_LOG_SPD_DEBUG("{} registers accountant {}", detail::id_or_name(self),
+                         accountant);
       self->state.accountant = std::move(accountant);
       self->send(self->state.accountant, atom::announce_v, self->name());
     },
     // Add a new sink.
     [=](stream_sink_actor<table_slice> sink) {
-      VAST_DEBUG(self, "adds a new sink:", sink);
+      VAST_LOG_SPD_DEBUG("{} adds a new sink: {}", detail::id_or_name(self),
+                         sink);
       return self->state.stage->add_outbound_path(std::move(sink));
     },
     // Register a FLUSH LISTENER actor.
@@ -279,13 +282,16 @@ importer(importer_actor::stateful_pointer<importer_state> self, path dir,
     },
     // -- stream_sink_actor<table_slice> ---------------------------------------
     [=](caf::stream<table_slice> in) {
-      VAST_DEBUG(self, "adds a new source:", self->current_sender());
+      VAST_LOG_SPD_DEBUG("{} adds a new source: {}", detail::id_or_name(self),
+                         self->current_sender());
       return self->state.stage->add_inbound_path(in);
     },
     // -- stream_sink_actor<table_slice, std::string> --------------------------
     [=](caf::stream<table_slice> in, std::string desc) {
       self->state.inbound_description = std::move(desc);
-      VAST_DEBUG(self, "adds a new", desc, "source:", self->current_sender());
+      VAST_LOG_SPD_DEBUG("{} adds a new {} source: {}",
+                         detail::id_or_name(self), desc,
+                         self->current_sender());
       return self->state.stage->add_inbound_path(in);
     },
     // -- status_client_actor --------------------------------------------------

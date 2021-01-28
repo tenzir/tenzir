@@ -248,7 +248,8 @@ source(caf::stateful_actor<source_state<Reader>>* self, Reader reader,
     },
     // get next element
     [=](caf::unit_t&, caf::downstream<table_slice>& out, size_t num) {
-      VAST_DEBUG(self, "tries to generate", num, "messages");
+      VAST_LOG_SPD_DEBUG("{} tries to generate {} messages",
+                         detail::id_or_name(self), num);
       auto& st = self->state;
       // Extract events until the source has exhausted its input or until
       // we have completed a batch.
@@ -260,7 +261,8 @@ source(caf::stateful_actor<source_state<Reader>>* self, Reader reader,
       auto t = timer::start(st.metrics);
       auto [err, produced]
         = st.reader.read(events, table_slice_size, push_slice);
-      VAST_DEBUG(self, "read", produced, "events");
+      VAST_LOG_SPD_DEBUG("{} read {} events", detail::id_or_name(self),
+                         produced);
       t.stop(produced);
       st.count += produced;
       auto finish = [&] {
@@ -269,7 +271,8 @@ source(caf::stateful_actor<source_state<Reader>>* self, Reader reader,
         self->quit();
       };
       if (st.requested && st.count >= *st.requested) {
-        VAST_DEBUG(self, "finished with", st.count, "events");
+        VAST_LOG_SPD_DEBUG("{} finished with {} events",
+                           detail::id_or_name(self), st.count);
         return finish();
       }
       if (err == ec::stalled) {
@@ -278,7 +281,8 @@ source(caf::stateful_actor<source_state<Reader>>* self, Reader reader,
           // message. Sending another one would create a parallel wakeup cycle.
           st.waiting_for_input = true;
           self->delayed_send(self, st.wakeup_delay, atom::wakeup_v);
-          VAST_DEBUG(self, "scheduled itself to resume after", st.wakeup_delay);
+          VAST_LOG_SPD_DEBUG("{} scheduled itself to resume after {}",
+                             detail::id_or_name(self), st.wakeup_delay);
           // Exponential backoff for the wakeup calls.
           // For each consecutive invocation of this generate handler that does
           // not emit any events, we double the wakeup delay.
@@ -288,29 +292,34 @@ source(caf::stateful_actor<source_state<Reader>>* self, Reader reader,
           else if (st.wakeup_delay < st.reader.batch_timeout_ / 2)
             st.wakeup_delay *= 2;
         } else {
-          VAST_DEBUG(self, "timed out but is already scheduled for wakeup");
+          VAST_LOG_SPD_DEBUG("{} timed out but is already scheduled for wakeup",
+                             detail::id_or_name(self));
         }
         return;
       }
       st.wakeup_delay = std::chrono::milliseconds::zero();
       if (err == ec::timeout) {
-        VAST_DEBUG(self, "reached batch timeout and flushes its buffers");
+        VAST_LOG_SPD_DEBUG("{} reached batch timeout and flushes its buffers",
+                           detail::id_or_name(self));
         st.mgr->out().force_emit_batches();
       } else if (err != caf::none) {
         if (err != vast::ec::end_of_input)
           VAST_INFO(self, "completed with message:", render(err));
         else
-          VAST_DEBUG(self, "completed at end of input");
+          VAST_LOG_SPD_DEBUG("{} completed at end of input",
+                             detail::id_or_name(self));
         return finish();
       }
-      VAST_DEBUG(self, "ended a generation round regularly");
+      VAST_LOG_SPD_DEBUG("{} ended a generation round regularly",
+                         detail::id_or_name(self));
     },
     // done?
     [=](const caf::unit_t&) { return self->state.done; });
   return {
     [=](atom::get, atom::schema) { return self->state.reader.schema(); },
     [=](atom::put, schema sch) -> caf::result<void> {
-      VAST_DEBUG(self, "received", VAST_ARG("schema", sch));
+      VAST_LOG_SPD_DEBUG("{} received {}", detail::id_or_name(self),
+                         VAST_ARG("schema", sch));
       auto& st = self->state;
       if (auto err = st.reader.schema(std::move(sch));
           err && err != caf::no_error)
@@ -324,7 +333,8 @@ source(caf::stateful_actor<source_state<Reader>>* self, Reader reader,
     },
     [=](stream_sink_actor<table_slice, std::string> sink) {
       VAST_ASSERT(sink);
-      VAST_DEBUG(self, "registers", VAST_ARG(sink));
+      VAST_LOG_SPD_DEBUG("{} registers {}", detail::id_or_name(self),
+                         VAST_ARG(sink));
       // TODO: Currently, we use a broadcast downstream manager. We need to
       //       implement an anycast downstream manager and use it for the
       //       source, because we mustn't duplicate data.
@@ -366,7 +376,7 @@ source(caf::stateful_actor<source_state<Reader>>* self, Reader reader,
         st.mgr->push();
     },
     [=](atom::telemetry) {
-      VAST_DEBUG(self, "got a telemetry atom");
+      VAST_LOG_SPD_DEBUG("{} got a telemetry atom", detail::id_or_name(self));
       auto& st = self->state;
       st.send_report();
       if (!st.mgr->done())

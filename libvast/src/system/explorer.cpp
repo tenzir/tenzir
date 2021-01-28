@@ -112,8 +112,9 @@ explorer(caf::stateful_actor<explorer_state>* self, caf::actor node,
     // Only the spawned EXPORTERs are expected to send down messages.
     auto& st = self->state;
     --st.running_exporters;
-    VAST_DEBUG(self, "received DOWN from", msg.source,
-               "outstanding requests:", st.running_exporters);
+    VAST_LOG_SPD_DEBUG("{} received DOWN from {} outstanding requests: {}",
+                       detail::id_or_name(self), msg.source,
+                       st.running_exporters);
     quit_if_done();
   });
   return {
@@ -138,7 +139,8 @@ explorer(caf::stateful_actor<explorer_state>* self, caf::actor node,
                                return has_attribute(field.type, "timestamp");
                              });
       if (it == layout.fields.end()) {
-        VAST_DEBUG(self, "could not find timestamp field in", layout);
+        VAST_LOG_SPD_DEBUG("{} could not find timestamp field in {}",
+                           detail::id_or_name(self), layout);
         return;
       }
       std::optional<table_slice_column> by_column;
@@ -153,7 +155,8 @@ explorer(caf::stateful_actor<explorer_state>* self, caf::actor node,
           return;
         }
       }
-      VAST_DEBUG(self, "uses", it->name, "to construct timebox");
+      VAST_LOG_SPD_DEBUG("{} uses {} to construct timebox",
+                         detail::id_or_name(self), it->name);
       auto column = table_slice_column::make(slice, it->name);
       VAST_ASSERT(column);
       for (size_t i = 0; i < column->size(); ++i) {
@@ -211,7 +214,8 @@ explorer(caf::stateful_actor<explorer_state>* self, caf::actor node,
           .then(
             [=](caf::actor handle) {
               auto exporter = caf::actor_cast<exporter_actor>(handle);
-              VAST_DEBUG(self, "registers exporter", exporter);
+              VAST_LOG_SPD_DEBUG("{} registers exporter {}",
+                                 detail::id_or_name(self), exporter);
               self->monitor(exporter);
               self->send(exporter, atom::sink_v, self);
               self->send(exporter, atom::run_v);
@@ -226,12 +230,14 @@ explorer(caf::stateful_actor<explorer_state>* self, caf::actor node,
       self->state.initial_exporter = exporter.address();
     },
     [=]([[maybe_unused]] std::string name, query_status) {
-      VAST_DEBUG(self, "received final status from", name);
+      VAST_LOG_SPD_DEBUG("{} received final status from {}",
+                         detail::id_or_name(self), name);
       self->state.initial_query_completed = true;
       quit_if_done();
     },
     [=](atom::sink, const caf::actor& sink) {
-      VAST_DEBUG(self, "registers sink", sink);
+      VAST_LOG_SPD_DEBUG("{} registers sink {}", detail::id_or_name(self),
+                         sink);
       auto& st = self->state;
       st.sink = sink;
     }};

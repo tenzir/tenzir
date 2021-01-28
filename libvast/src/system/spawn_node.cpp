@@ -65,11 +65,11 @@ spawn_node(caf::scoped_actor& self, const caf::settings& opts) {
                            "unable to write to db-directory:", abs_dir.str());
   // Acquire PID lock.
   auto pid_file = abs_dir / "pid.lock";
-  VAST_DEBUG_ANON(__func__, "acquires PID lock", pid_file.str());
+  VAST_LOG_SPD_DEBUG("{} acquires PID lock {}", __func__, pid_file.str());
   if (auto err = detail::acquire_pid_file(pid_file))
     return err;
   // Spawn the node.
-  VAST_DEBUG_ANON(__func__, "spawns local node:", id);
+  VAST_LOG_SPD_DEBUG("{} spawns local node: {}", __func__, id);
   auto shutdown_grace_period = defaults::system::shutdown_grace_period;
   if (auto str = caf::get_if<std::string>(&opts, "vast.shutdown-grace-"
                                                  "period")) {
@@ -81,7 +81,7 @@ spawn_node(caf::scoped_actor& self, const caf::settings& opts) {
   // Pointer to the root command to system::node.
   auto actor = self->spawn(system::node, id, abs_dir, shutdown_grace_period);
   actor->attach_functor([pid_file = std::move(pid_file)](const caf::error&) {
-    VAST_DEBUG_ANON(__func__, "removes PID lock:", pid_file.str());
+    VAST_LOG_SPD_DEBUG("{} removes PID lock: {}", __func__, pid_file.str());
     rm(pid_file);
   });
   scope_linked_actor node{std::move(actor)};

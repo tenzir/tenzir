@@ -89,8 +89,8 @@ value_index_ptr make(type x, caf::settings opts) {
         auto digest_bytes = digest_bits / 8;
         if (digest_bits % 8 > 0)
           ++digest_bytes;
-        VAST_DEBUG_ANON(__func__, "creating hash index with a digest of",
-                        digest_bytes, "bytes");
+        VAST_LOG_SPD_DEBUG("{} creating hash index with a digest of {} bytes",
+                           __func__, digest_bytes);
         if (digest_bytes > 8) {
           VAST_LOG_SPD_WARN(" {} expected cardinality exceeds "
                             "maximum digest size {}, capping at 8 bytes",

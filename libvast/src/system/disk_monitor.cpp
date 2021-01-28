@@ -50,8 +50,9 @@ disk_monitor(disk_monitor_actor::stateful_pointer<disk_monitor_state> self,
     [=](atom::ping) {
       self->delayed_send(self, disk_scan_interval, atom::ping_v);
       if (self->state.purging) {
-        VAST_DEBUG(self, "ignores ping because a deletion is still in "
-                         "progress");
+        VAST_LOG_SPD_DEBUG("{} ignores ping because a deletion is still in "
+                           "progress",
+                           detail::id_or_name(self));
         return;
       }
       // TODO: This is going to do one syscall per file in the database
@@ -93,7 +94,8 @@ disk_monitor(disk_monitor_actor::stateful_pointer<disk_monitor_state> self,
         VAST_VERBOSE(self, "failed to find any partitions to delete");
         return;
       }
-      VAST_DEBUG(self, "found", partitions.size(), "partitions on disk");
+      VAST_LOG_SPD_DEBUG("{} found {} partitions on disk",
+                         detail::id_or_name(self), partitions.size());
       std::sort(partitions.begin(), partitions.end(),
                 [](const auto& lhs, const auto& rhs) {
                   return lhs.mtime < rhs.mtime;

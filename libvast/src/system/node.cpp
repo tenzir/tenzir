@@ -305,11 +305,13 @@ caf::message kill_command(const invocation& inv, caf::actor_system&) {
     terminate<policy::parallel>(self, component)
       .then(
         [=](atom::done) mutable {
-          VAST_DEBUG(self, "terminated component", label);
+          VAST_LOG_SPD_DEBUG("{} terminated component {}",
+                             detail::id_or_name(self), label);
           rp.deliver(atom::ok_v);
         },
         [=](const caf::error& err) mutable {
-          VAST_DEBUG(self, "terminated component", label);
+          VAST_LOG_SPD_DEBUG("{} terminated component {}",
+                             detail::id_or_name(self), label);
           rp.deliver(err);
         });
   }
@@ -450,10 +452,12 @@ node_state::spawn_command(const invocation& inv,
     label = comp_type;
     if (!is_singleton(comp_type)) {
       label = generate_label(self, comp_type);
-      VAST_DEBUG(self, "auto-generated new label:", label);
+      VAST_LOG_SPD_DEBUG("{} auto-generated new label: {}",
+                         detail::id_or_name(self), label);
     }
   }
-  VAST_DEBUG(self, "spawns a", comp_type, "with the label", label);
+  VAST_LOG_SPD_DEBUG("{} spawns a {} with the label {}",
+                     detail::id_or_name(self), comp_type, label);
   auto spawn_inv = inv;
   if (comp_type == "source") {
     auto spawn_opt
@@ -483,7 +487,8 @@ node_state::spawn_command(const invocation& inv,
     return caf::make_message(*component);
   };
   auto handle_taxonomies = [=](expression e) mutable {
-    VAST_DEBUG(self, "received the substituted expression", to_string(e));
+    VAST_LOG_SPD_DEBUG("{} received the substituted expression {}",
+                       detail::id_or_name(self), to_string(e));
     spawn_arguments args{spawn_inv, self->state.dir, label, std::move(e)};
     spawn_actually(args);
   };
@@ -542,7 +547,8 @@ caf::behavior node(node_actor* self, std::string name, path dir,
   self->state.registry.add(caf::actor_cast<caf::actor>(fs), "filesystem");
   // Remove monitored components.
   self->set_down_handler([=](const caf::down_msg& msg) {
-    VAST_DEBUG(self, "got DOWN from", msg.source);
+    VAST_LOG_SPD_DEBUG("{} got DOWN from {}", detail::id_or_name(self),
+                       msg.source);
     auto component = caf::actor_cast<caf::actor>(msg.source);
     auto type = self->state.registry.find_type_for(component);
     // All monitored components are in the registry.
@@ -557,7 +563,8 @@ caf::behavior node(node_actor* self, std::string name, path dir,
   });
   // Terminate deterministically on shutdown.
   self->set_exit_handler([=](const caf::exit_msg& msg) {
-    VAST_DEBUG(self, "got EXIT from", msg.source);
+    VAST_LOG_SPD_DEBUG("{} got EXIT from {}", detail::id_or_name(self),
+                       msg.source);
     auto& registry = self->state.registry;
     std::vector<caf::actor> actors;
     auto schedule_teardown = [&](caf::actor actor) {
@@ -606,46 +613,54 @@ caf::behavior node(node_actor* self, std::string name, path dir,
   // Define the node behavior.
   return {
     [=](const invocation& inv) {
-      VAST_DEBUG(self, "got command", inv.full_name, "with options",
-                 inv.options, "and arguments", inv.arguments);
+      VAST_LOG_SPD_DEBUG("{} got command {} with options {} and arguments {}",
+                         detail::id_or_name(self), inv.full_name, inv.options,
+                         inv.arguments);
       // Run the command.
       this_node = self;
       return run(inv, self->system(), node_state::command_factory);
     },
     [=](atom::put, const caf::actor& component,
         const std::string& type) -> caf::result<atom::ok> {
-      VAST_DEBUG(self, "got new", type);
+      VAST_LOG_SPD_DEBUG("{} got new {}", detail::id_or_name(self), type);
       // Check if the new component is a singleton.
       auto& registry = self->state.registry;
       if (is_singleton(type) && registry.find_by_label(type))
         return caf::make_error(ec::unspecified, "component already exists");
       // Generate label
       auto label = generate_label(self, type);
-      VAST_DEBUG(self, "generated new component label", label);
+      VAST_LOG_SPD_DEBUG("{} generated new component label {}",
+                         detail::id_or_name(self), label);
       if (!registry.add(component, type, label))
         return caf::make_error(ec::unspecified, "failed to add component");
       self->monitor(component);
       return atom::ok_v;
     },
     [=](atom::get, atom::type, const std::string& type) {
-      VAST_DEBUG(self, "got a request for a component of type", type);
+      VAST_LOG_SPD_DEBUG("{} got a request for a component of type {}",
+                         detail::id_or_name(self), type);
       auto result = self->state.registry.find_by_type(type);
-      VAST_DEBUG(self, "responds to the request for", type, "with", result);
+      VAST_LOG_SPD_DEBUG("{} responds to the request for {} with {}",
+                         detail::id_or_name(self), type, result);
       return result;
     },
     [=](atom::get, atom::label, const std::string& label) {
-      VAST_DEBUG(self, "got a request for the component", label);
+      VAST_LOG_SPD_DEBUG("{} got a request for the component {}",
+                         detail::id_or_name(self), label);
       auto result = self->state.registry.find_by_label(label);
-      VAST_DEBUG(self, "responds to the request for", label, "with", result);
+      VAST_LOG_SPD_DEBUG("{} responds to the request for {} with {}",
+                         detail::id_or_name(self), label, result);
       return result;
     },
     [=](atom::get, atom::label, const std::vector<std::string>& labels) {
-      VAST_DEBUG(self, "got a request for the components", labels);
+      VAST_LOG_SPD_DEBUG("{} got a request for the components {}",
+                         detail::id_or_name(self), labels);
       std::vector<caf::actor> result;
       result.reserve(labels.size());
       for (const auto& label : labels)
         result.push_back(self->state.registry.find_by_label(label));
-      VAST_DEBUG(self, "responds to the request for", labels, "with", result);
+      VAST_LOG_SPD_DEBUG("{} responds to the request for {} with {}",
+                         detail::id_or_name(self), labels, result);
       return result;
     },
     [=](atom::get, atom::version) { //

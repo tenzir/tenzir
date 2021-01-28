@@ -407,7 +407,7 @@ caf::expected<reader::parser_type> reader::read_header(std::string_view line) {
   auto&& layout = make_layout(columns);
   if (!layout)
     return caf::make_error(ec::parse_error, "unable to derive a layout");
-  VAST_DEBUG_ANON("csv_reader derived layout", to_string(*layout));
+  VAST_LOG_SPD_DEBUG("csv_reader derived layout {}", to_string(*layout));
   if (!reset_builder(*layout))
     return caf::make_error(ec::parse_error, "unable to create a builder for "
                                             "layout");
@@ -424,7 +424,8 @@ caf::error reader::read_impl(size_t max_events, size_t max_slice_size,
   auto next_line = [&] {
     auto timed_out = lines_->next_timeout(read_timeout_);
     if (timed_out)
-      VAST_DEBUG(this, "reached input timeout at line", lines_->line_number());
+      VAST_LOG_SPD_DEBUG("{} reached input timeout at line {}",
+                         detail::id_or_name(this), lines_->line_number());
     return timed_out;
   };
   if (!parser_) {
@@ -445,7 +446,7 @@ caf::error reader::read_impl(size_t max_events, size_t max_slice_size,
                                                                 "exhausted"));
     if (batch_events_ > 0 && batch_timeout_ > reader_clock::duration::zero()
         && last_batch_sent_ + batch_timeout_ < reader_clock::now()) {
-      VAST_DEBUG(this, "reached batch timeout");
+      VAST_LOG_SPD_DEBUG("{} reached batch timeout", detail::id_or_name(this));
       return finish(callback, ec::timeout);
     }
     bool timed_out = next_line();
@@ -454,7 +455,8 @@ caf::error reader::read_impl(size_t max_events, size_t max_slice_size,
     auto& line = lines_->get();
     if (line.empty()) {
       // Ignore empty lines.
-      VAST_DEBUG(this, "ignores empty line at", lines_->line_number());
+      VAST_LOG_SPD_DEBUG("{} ignores empty line at {}",
+                         detail::id_or_name(this), lines_->line_number());
       continue;
     }
     ++num_lines_;

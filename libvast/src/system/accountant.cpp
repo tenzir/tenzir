@@ -96,7 +96,8 @@ struct accountant_state_impl {
     if (!builder || builder->rows() == 0)
       return;
     auto slice = builder->finish();
-    VAST_DEBUG(self, "generated slice with", slice.rows(), "rows");
+    VAST_LOG_SPD_DEBUG("{} generated slice with {} rows",
+                       detail::id_or_name(self), slice.rows());
 
     slice_buffer.push(std::move(slice));
     mgr->advance();
@@ -107,7 +108,8 @@ struct accountant_state_impl {
     // handle NaN, and a bug that we were unable to reproduce reliably caused
     // the accountant to forward NaN to the index here.
     if (!std::isfinite(x)) {
-      VAST_DEBUG(self, "cannot record a non-finite metric");
+      VAST_LOG_SPD_DEBUG("{} cannot record a non-finite metric",
+                         detail::id_or_name(self));
       return;
     }
     auto actor_id = self->current_sender()->id();
@@ -120,7 +122,8 @@ struct accountant_state_impl {
     }.name("vast.metrics");
       builder
         = factory<table_slice_builder>::make(cfg.self_sink.slice_type, layout);
-      VAST_DEBUG(self, "obtained a table slice builder");
+      VAST_LOG_SPD_DEBUG("{} obtained a table slice builder",
+                         detail::id_or_name(self));
     }
     VAST_ASSERT(builder->add(ts, actor_map[actor_id], key, x));
     if (builder->rows() == static_cast<size_t>(cfg.self_sink.slice_size))
@@ -173,8 +176,9 @@ struct accountant_state_impl {
 #if VAST_LOG_LEVEL >= VAST_LOG_LEVEL_DEBUG
     if (accumulator.events > 0)
       if (auto rate = accumulator.rate_per_sec(); std::isfinite(rate))
-        VAST_DEBUG(self, "received", accumulator.events, "events at a rate of",
-                   static_cast<uint64_t>(rate), "events/sec");
+        VAST_LOG_SPD_DEBUG("{} received {} events at a rate of {} events/sec",
+                           detail::id_or_name(self), accumulator.events,
+                           static_cast<uint64_t>(rate));
 #endif
     accumulator = {};
   }
@@ -225,7 +229,8 @@ accountant(accountant_actor::stateful_pointer<accountant_state> self,
            accountant_config cfg) {
   self->state.reset(new accountant_state_impl{self, std::move(cfg)});
   self->set_exit_handler([=](const caf::exit_msg& msg) {
-    VAST_DEBUG(self, "got EXIT from", msg.source);
+    VAST_LOG_SPD_DEBUG("{} got EXIT from {}", detail::id_or_name(self),
+                       msg.source);
     self->state->finish_slice();
     self->quit(msg.reason);
   });
@@ -233,9 +238,11 @@ accountant(accountant_actor::stateful_pointer<accountant_state> self,
     auto& st = *self->state;
     auto i = st.actor_map.find(msg.source.id());
     if (i != st.actor_map.end())
-      VAST_DEBUG(self, "received DOWN from", i->second, "aka", msg.source);
+      VAST_LOG_SPD_DEBUG("{} received DOWN from {} aka {}",
+                         detail::id_or_name(self), i->second, msg.source);
     else
-      VAST_DEBUG(self, "received DOWN from", msg.source);
+      VAST_LOG_SPD_DEBUG("{} received DOWN from {}", detail::id_or_name(self),
+                         msg.source);
     st.actor_map.erase(msg.source.id());
   });
   self->state->mgr = self->make_continuous_source(
@@ -256,7 +263,7 @@ accountant(accountant_actor::stateful_pointer<accountant_state> self,
     },
     // done?
     [](const bool&) { return false; });
-  VAST_DEBUG(self, "animates heartbeat loop");
+  VAST_LOG_SPD_DEBUG("{} animates heartbeat loop", detail::id_or_name(self));
   self->delayed_send(self, overview_delay, atom::telemetry_v);
   return {
     [=](atom::announce, const std::string& name) {

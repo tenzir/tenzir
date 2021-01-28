@@ -212,7 +212,7 @@ void add_hash_index_attribute(record_type& layout) {
   auto& fields = layout.fields;
   auto find = [&](auto i) { return std::find_if(i, fields.end(), pred); };
   for (auto i = find(fields.begin()); i != fields.end(); i = find(i + 1)) {
-    VAST_DEBUG_ANON("using hash index for field", i->name);
+    VAST_LOG_SPD_DEBUG("using hash index for field {}", i->name);
     insert_attribute(i->type, {"index", "hash"}, false);
   }
 }
@@ -254,7 +254,8 @@ caf::error reader::read_impl(size_t max_events, size_t max_slice_size,
   auto next_line = [&] {
     auto timed_out = lines_->next_timeout(read_timeout_);
     if (timed_out)
-      VAST_DEBUG(this, "reached input timeout at line", lines_->line_number());
+      VAST_LOG_SPD_DEBUG("{} reached input timeout at line {}",
+                         detail::id_or_name(this), lines_->line_number());
     return timed_out;
   };
   // EOF check.
@@ -286,7 +287,7 @@ caf::error reader::read_impl(size_t max_events, size_t max_slice_size,
       return finish(f, caf::make_error(ec::end_of_input, "input exhausted"));
     if (batch_events_ > 0 && batch_timeout_ > reader_clock::duration::zero()
         && last_batch_sent_ + batch_timeout_ < reader_clock::now()) {
-      VAST_DEBUG(this, "reached batch timeout");
+      VAST_LOG_SPD_DEBUG("{} reached batch timeout", detail::id_or_name(this));
       return finish(f, ec::timeout);
     }
     auto timed_out = next_line();
@@ -296,13 +297,14 @@ caf::error reader::read_impl(size_t max_events, size_t max_slice_size,
     auto& line = lines_->get();
     if (line.empty()) {
       // Ignore empty lines.
-      VAST_DEBUG(this, "ignores empty line at", lines_->line_number());
+      VAST_LOG_SPD_DEBUG("{} ignores empty line at {}",
+                         detail::id_or_name(this), lines_->line_number());
       continue;
     } else if (detail::starts_with(line, "#separator")) {
       // We encountered a new log file.
       if (auto err = finish(f))
         return err;
-      VAST_DEBUG(this, "restarts with new log");
+      VAST_LOG_SPD_DEBUG("{} restarts with new log", detail::id_or_name(this));
       separator_.clear();
       if (auto err = parse_header())
         return err;
@@ -312,7 +314,8 @@ caf::error reader::read_impl(size_t max_events, size_t max_slice_size,
           lines_->line_number());
     } else if (detail::starts_with(line, "#")) {
       // Ignore comments.
-      VAST_DEBUG(this, "ignores comment at line", lines_->line_number());
+      VAST_LOG_SPD_DEBUG("{} ignores comment at line {}",
+                         detail::id_or_name(this), lines_->line_number());
     } else {
       auto fields = detail::split(lines_->get(), separator_);
       if (fields.size() != parsers_.size()) {
@@ -441,13 +444,17 @@ caf::error reader::parse_header() {
   // Construct type.
   layout_ = std::move(record_fields);
   layout_.name(std::string{type_name_prefix} + path);
-  VAST_DEBUG(this, "parsed zeek header:");
-  VAST_DEBUG(this, "    #separator", separator_);
-  VAST_DEBUG(this, "    #set_separator", set_separator_);
-  VAST_DEBUG(this, "    #empty_field", empty_field_);
-  VAST_DEBUG(this, "    #unset_field", unset_field_);
-  VAST_DEBUG(this, "    #path", path);
-  VAST_DEBUG(this, "    #fields:");
+  VAST_LOG_SPD_DEBUG("{} parsed zeek header:", detail::id_or_name(this));
+  VAST_LOG_SPD_DEBUG("{}     #separator {}", detail::id_or_name(this),
+                     separator_);
+  VAST_LOG_SPD_DEBUG("{}     #set_separator {}", detail::id_or_name(this),
+                     set_separator_);
+  VAST_LOG_SPD_DEBUG("{}     #empty_field {}", detail::id_or_name(this),
+                     empty_field_);
+  VAST_LOG_SPD_DEBUG("{}     #unset_field {}", detail::id_or_name(this),
+                     unset_field_);
+  VAST_LOG_SPD_DEBUG("{}     #path {}", detail::id_or_name(this), path);
+  VAST_LOG_SPD_DEBUG("{}     #fields:", detail::id_or_name(this));
   // If a congruent type exists in the schema, we give the schema type
   // precedence.
   if (auto t = schema_.find(layout_.name())) {
@@ -476,15 +483,17 @@ caf::error reader::parse_header() {
     if (field.name != "ts")
       return false;
     if (!caf::holds_alternative<time_type>(field.type)) {
-      VAST_WARNING(this, "encountered ts fields not of type timestamp");
+      VAST_LOG_SPD_WARN("{} encountered ts fields not of type timestamp",
+                        detail::id_or_name(this));
       return false;
     }
     return true;
   };
   auto i = std::find_if(layout_.fields.begin(), layout_.fields.end(), ts_pred);
   if (i != layout_.fields.end()) {
-    VAST_DEBUG(this, "auto-detected field",
-               std::distance(layout_.fields.begin(), i), "as event timestamp");
+    VAST_LOG_SPD_DEBUG("{} auto-detected field {} as event timestamp",
+                       detail::id_or_name(this),
+                       std::distance(layout_.fields.begin(), i));
     insert_attribute(i->type, {"timestamp"});
   }
   // Add #index=hash attribute for fields where it makes sense.
@@ -628,7 +637,8 @@ caf::error writer::write(const table_slice& slice) {
   auto&& layout = slice.layout();
   if (dir_.empty()) {
     if (writers_.empty()) {
-      VAST_DEBUG(this, "creates a new stream for STDOUT");
+      VAST_LOG_SPD_DEBUG("{} creates a new stream for STDOUT",
+                         detail::id_or_name(this));
       auto out = std::make_unique<detail::fdostream>(1);
       writers_.emplace(layout.name(), std::make_unique<writer_child>(
                                         std::move(out), show_timestamp_tags_));
@@ -643,7 +653,8 @@ caf::error writer::write(const table_slice& slice) {
     if (i != writers_.end()) {
       child = i->second.get();
     } else {
-      VAST_DEBUG(this, "creates new stream for layout", layout.name());
+      VAST_LOG_SPD_DEBUG("{} creates new stream for layout {}",
+                         detail::id_or_name(this), layout.name());
       if (!exists(dir_)) {
         if (auto err = mkdir(dir_))
           return err;

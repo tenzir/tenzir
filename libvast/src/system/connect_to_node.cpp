@@ -54,7 +54,8 @@ connect_to_node(scoped_actor& self, const caf::settings& opts) {
   if (node_endpoint.port->type() != port_type::tcp)
     return caf::make_error(ec::invalid_configuration, "invalid protocol",
                            *node_endpoint.port);
-  VAST_DEBUG(self, "connects to remote node:", id);
+  VAST_LOG_SPD_DEBUG("{} connects to remote node: {}", detail::id_or_name(self),
+                     id);
   auto& sys_cfg = self->system().config();
   auto use_encryption = !sys_cfg.openssl_certificate.empty()
                         || !sys_cfg.openssl_key.empty()

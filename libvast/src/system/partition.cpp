@@ -168,7 +168,7 @@ fetch_indexer(const PartitionState& state, const attribute_extractor& ex,
     return {
       [=](const curried_predicate&) { return row_ids; },
       [](atom::shutdown) {
-        VAST_DEBUG_ANON("one-shot indexer received shutdown request");
+        VAST_LOG_SPD_DEBUG("one-shot indexer received shutdown request");
       },
     };
   });
@@ -343,8 +343,8 @@ unpack(const fbs::partition::v0& partition, passive_partition_state& state) {
   // vector must be the same as in `combined_layout`. The actual indexers are
   // deserialized and spawned lazily on demand.
   state.indexers.resize(indexes->size());
-  VAST_DEBUG(state.self, "found", indexes->size(), "indexers for partition",
-             state.id);
+  VAST_LOG_SPD_DEBUG("{} found {} indexers for partition {}",
+                     detail::id_or_name(state.self), indexes->size(), state.id);
   auto type_ids = partition.type_ids();
   for (size_t i = 0; i < type_ids->size(); ++i) {
     auto type_ids_tuple = type_ids->Get(i);
@@ -354,8 +354,9 @@ unpack(const fbs::partition::v0& partition, passive_partition_state& state) {
     if (auto error = fbs::deserialize_bytes(ids_data, ids))
       return error;
   }
-  VAST_DEBUG(state.self, "restored", state.type_ids.size(),
-             "type-to-ids mapping for partition", state.id);
+  VAST_LOG_SPD_DEBUG("{} restored {} type-to-ids mapping for partition {}",
+                     detail::id_or_name(state.self), state.type_ids.size(),
+                     state.id);
   return caf::none;
 }
 
@@ -416,8 +417,8 @@ active_partition_actor::behavior_type active_partition(
           idx = self->spawn(active_indexer, field.type, index_opts);
           auto slot = self->state.stage->add_outbound_path(idx);
           self->state.stage->out().set_filter(slot, qf);
-          VAST_DEBUG(self, "spawned new indexer for field", field.name,
-                     "at slot", slot);
+          VAST_LOG_SPD_DEBUG("{} spawned new indexer for field {} at slot {}",
+                             detail::id_or_name(self), field.name, slot);
         }
         out.push(table_slice_column{x, col++});
       }
@@ -432,7 +433,7 @@ active_partition_actor::behavior_type active_partition(
         // still need our indexers.
         return;
       }
-      VAST_DEBUG_ANON("partition", id, "finalized streaming");
+      VAST_LOG_SPD_DEBUG("partition {} finalized streaming", , id);
     },
     // Every "outbound path" has a path_state, which consists of a "Filter"
     // and a vector of "T", the output buffer. In the case of a partition,
@@ -449,8 +450,8 @@ active_partition_actor::behavior_type active_partition(
     caf::policy::arg<broadcast_downstream_manager<
       table_slice_column, vast::qualified_record_field, partition_selector>>{});
   self->set_exit_handler([=](const caf::exit_msg& msg) {
-    VAST_DEBUG(self, "received EXIT from", msg.source,
-               "with reason:", msg.reason);
+    VAST_LOG_SPD_DEBUG("{} received EXIT from {} with reason: {}",
+                       detail::id_or_name(self), msg.source, msg.reason);
     if (self->state.stage->idle()) {
       self->state.stage->out().fan_out_flush();
       self->state.stage->out().force_emit_batches();
@@ -459,8 +460,9 @@ active_partition_actor::behavior_type active_partition(
     // Delay shutdown if we're currently in the process of persisting.
     if (self->state.persistence_promise.pending()) {
       std::call_once(self->state.shutdown_once, [=] {
-        VAST_DEBUG(self, "delays partition shutdown because it is still "
-                         "writing to disk");
+        VAST_LOG_SPD_DEBUG("{} delays partition shutdown because it is still "
+                           "writing to disk",
+                           detail::id_or_name(self));
       });
       using namespace std::chrono_literals;
       // Ideally, we would use a self->delayed_delegate(self, ...) here, but CAF
@@ -508,7 +510,8 @@ active_partition_actor::behavior_type active_partition(
       if (!self->state.streaming_initiated
           || !self->state.stage->inbound_paths().empty()
           || !self->state.stage->idle()) {
-        VAST_DEBUG(self, "waits for stream before persisting");
+        VAST_LOG_SPD_DEBUG("{} waits for stream before persisting",
+                           detail::id_or_name(self));
         self->delayed_send(self, 50ms, atom::persist_v, atom::resume_v);
         return;
       }
@@ -520,8 +523,8 @@ active_partition_actor::behavior_type active_partition(
           caf::make_error(ec::logic_error, "partition has no indexers"));
         return;
       }
-      VAST_DEBUG(self, "sends 'snapshot' to", self->state.indexers.size(),
-                 "indexers");
+      VAST_LOG_SPD_DEBUG("{} sends 'snapshot' to {} indexers",
+                         detail::id_or_name(self), self->state.indexers.size());
       for (auto& kv : self->state.indexers) {
         self->request(kv.second, caf::infinite, atom::snapshot_v)
           .then(
@@ -539,13 +542,15 @@ active_partition_actor::behavior_type active_partition(
                   ec::unspecified, "failed to persist indexer", sender));
                 return;
               }
-              VAST_DEBUG(self, "got chunk from", sender);
+              VAST_LOG_SPD_DEBUG("{} got chunk from {}",
+                                 detail::id_or_name(self), sender);
               self->state.chunks.emplace(sender, chunk);
               if (self->state.persisted_indexers
                   < self->state.indexers.size()) {
-                VAST_DEBUG(self, "waits for more chunks after receiving",
-                           self->state.persisted_indexers, "out of",
-                           self->state.indexers.size());
+                VAST_LOG_SPD_DEBUG(
+                  "{} waits for more chunks after receiving {} out of {}",
+                  detail::id_or_name(self), self->state.persisted_indexers,
+                  self->state.indexers.size());
                 return;
               }
               // Shrink synopses for addr fields to optimal size.
@@ -561,8 +566,9 @@ active_partition_actor::behavior_type active_partition(
               }
               VAST_ASSERT(self->state.persist_path);
               auto fbchunk = fbs::release(builder);
-              VAST_DEBUG(self, "persists partition with a total size of",
-                         fbchunk->size(), "bytes");
+              VAST_LOG_SPD_DEBUG("{} persists partition with a total size of "
+                                 "{} bytes",
+                                 detail::id_or_name(self), fbchunk->size());
               // TODO: Add a proper timeout.
               self
                 ->request(self->state.filesystem, caf::infinite, atom::write_v,
@@ -657,8 +663,8 @@ partition_actor::behavior_type passive_partition(
   filesystem_actor filesystem, class path path) {
   self->state.self = self;
   self->set_exit_handler([=](const caf::exit_msg& msg) {
-    VAST_DEBUG(self, "received EXIT from", msg.source,
-               "with reason:", msg.reason);
+    VAST_LOG_SPD_DEBUG("{} received EXIT from {} with reason: {}",
+                       detail::id_or_name(self), msg.source, msg.reason);
     // Receiving an EXIT message does not need to coincide with the state
     // being destructed, so we explicitly clear the vector to release the
     // references.
@@ -678,7 +684,8 @@ partition_actor::behavior_type passive_partition(
     terminate<policy::parallel>(self, std::move(indexers))
       .then(
         [=](atom::done) {
-          VAST_DEBUG(self, "shut down all indexers successfully");
+          VAST_LOG_SPD_DEBUG("{} shut down all indexers successfully",
+                             detail::id_or_name(self));
           self->quit();
         },
         [=](const caf::error& err) {
@@ -732,8 +739,9 @@ partition_actor::behavior_type passive_partition(
                             "from disk, expected {}",
                             detail::id_or_name(self), self->state.id, id);
         // Delegate all deferred evaluations now that we have the partition chunk.
-        VAST_DEBUG(self, "delegates", self->state.deferred_evaluations.size(),
-                   "deferred evaluations");
+        VAST_LOG_SPD_DEBUG("{} delegates {} deferred evaluations",
+                           detail::id_or_name(self),
+                           self->state.deferred_evaluations.size());
         for (auto&& [expr, client, rp] :
              std::exchange(self->state.deferred_evaluations, {}))
           rp.delegate(static_cast<partition_actor>(self), std::move(expr),

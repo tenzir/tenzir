@@ -95,8 +95,9 @@ caf::behavior pivoter(caf::stateful_actor<pivoter_state>* self, caf::actor node,
     // Only the spawned EXPORTERs are expected to send down messages.
     auto& st = self->state;
     st.running_exporters--;
-    VAST_DEBUG(self, "received DOWN from", msg.source,
-               "outstanding requests:", st.running_exporters);
+    VAST_LOG_SPD_DEBUG("{} received DOWN from {} outstanding requests: {}",
+                       detail::id_or_name(self), msg.source,
+                       st.running_exporters);
     quit_if_done();
   });
   return {
@@ -105,7 +106,8 @@ caf::behavior pivoter(caf::stateful_actor<pivoter_state>* self, caf::actor node,
       auto pivot_field = common_field(st, slice.layout());
       if (!pivot_field)
         return;
-      VAST_DEBUG(self, "uses", *pivot_field, "to extract", st.target, "events");
+      VAST_LOG_SPD_DEBUG("{} uses {} to extract {} events",
+                         detail::id_or_name(self), *pivot_field, st.target);
       auto column = table_slice_column::make(slice, pivot_field->name);
       VAST_ASSERT(column);
       auto xs = list{};
@@ -122,7 +124,8 @@ caf::behavior pivoter(caf::stateful_actor<pivoter_state>* self, caf::actor node,
         st.requested_ids.insert(*x);
       }
       if (xs.empty()) {
-        VAST_DEBUG(self, "already queried for all", pivot_field->name);
+        VAST_LOG_SPD_DEBUG("{} already queried for all {}",
+                           detail::id_or_name(self), pivot_field->name);
         return;
       }
       auto expr = conjunction{
@@ -131,7 +134,8 @@ caf::behavior pivoter(caf::stateful_actor<pivoter_state>* self, caf::actor node,
       // TODO(ch9411): Drop the conversion to a string when node actors can
       //               be spawned without going through an invocation.
       auto query = to_string(expr);
-      VAST_DEBUG(self, "queries for", xs.size(), pivot_field->name);
+      VAST_LOG_SPD_DEBUG("{} queries for {}  {}", detail::id_or_name(self),
+                         xs.size(), pivot_field->name);
       VAST_TRACE(self, "spawns new exporter with query", query);
       auto exporter_options = caf::settings{};
       caf::put(exporter_options, "vast.export.disable-taxonomies", true);
@@ -142,7 +146,8 @@ caf::behavior pivoter(caf::stateful_actor<pivoter_state>* self, caf::actor node,
         .then(
           [=](caf::actor handle) {
             auto exporter = caf::actor_cast<exporter_actor>(std::move(handle));
-            VAST_DEBUG(self, "registers exporter", exporter);
+            VAST_LOG_SPD_DEBUG("{} registers exporter {}",
+                               detail::id_or_name(self), exporter);
             self->monitor(exporter);
             self->send(exporter, atom::sink_v, self->state.sink);
             self->send(exporter, atom::run_v);
@@ -154,12 +159,14 @@ caf::behavior pivoter(caf::stateful_actor<pivoter_state>* self, caf::actor node,
       ;
     },
     [=](std::string name, query_status) {
-      VAST_DEBUG(self, "received final status from", name);
+      VAST_LOG_SPD_DEBUG("{} received final status from {}",
+                         detail::id_or_name(self), name);
       self->state.initial_query_completed = true;
       quit_if_done();
     },
     [=](atom::sink, const caf::actor& sink) {
-      VAST_DEBUG(self, "registers sink", sink);
+      VAST_LOG_SPD_DEBUG("{} registers sink {}", detail::id_or_name(self),
+                         sink);
       auto& st = self->state;
       st.sink = sink;
     },
