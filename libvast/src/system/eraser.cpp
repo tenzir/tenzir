@@ -61,7 +61,7 @@ void eraser_state::init(caf::timespan interval, std::string query,
 void eraser_state::transition_to(query_processor::state_name x) {
   VAST_TRACE(VAST_ARG("state_name", x));
   if (state_ == idle && x != idle)
-    VAST_INFO(self_, "triggers new aging cycle");
+    VAST_LOG_SPD_INFO("{} triggers new aging cycle", detail::id_or_name(self_));
   super::transition_to(x);
   if (x == idle) {
     if (promise_.pending())

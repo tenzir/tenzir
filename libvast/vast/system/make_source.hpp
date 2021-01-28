@@ -138,8 +138,8 @@ make_source(const Actor& self, caf::actor_system& sys, const invocation& inv,
       }
     }
     reader = std::make_unique<Reader>(options);
-    VAST_INFO_ANON(reader->name(), "listens for data on",
-                   ep.host + ":" + to_string(*ep.port));
+    VAST_LOG_SPD_INFO(" {} listens for data on {}", reader->name(),
+                      ep.host + ":" + to_string(*ep.port));
     switch (ep.port->type()) {
       default:
         return caf::make_error(vast::ec::unimplemented,
@@ -154,9 +154,9 @@ make_source(const Actor& self, caf::actor_system& sys, const invocation& inv,
       return in.error();
     reader = std::make_unique<Reader>(options, std::move(*in));
     if (*file == "-")
-      VAST_INFO_ANON(reader->name(), "reads data from STDIN");
+      VAST_LOG_SPD_INFO(" {} reads data from STDIN", reader->name());
     else
-      VAST_INFO_ANON(reader->name(), "reads data from", *file);
+      VAST_LOG_SPD_INFO(" {} reads data from {}", reader->name(), *file);
   }
   if (!reader)
     return caf::make_error(ec::invalid_result, "failed to spawn reader");

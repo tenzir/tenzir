@@ -189,35 +189,41 @@ struct accountant_state_impl {
     bool start_file_sink = cfg.file_sink.enable && !old.file_sink.enable;
     bool stop_file_sink = !cfg.file_sink.enable && old.file_sink.enable;
     if (stop_file_sink) {
-      VAST_INFO(self, "closing metrics output file", old.file_sink.path);
+      VAST_LOG_SPD_INFO("{} closing metrics output file {}",
+                        detail::id_or_name(self), old.file_sink.path);
       file_sink.reset(nullptr);
     }
     if (start_file_sink) {
       auto s
         = detail::make_output_stream(cfg.file_sink.path, path::regular_file);
       if (s) {
-        VAST_INFO(self, "writing metrics to", cfg.file_sink.path);
+        VAST_LOG_SPD_INFO("{} writing metrics to {}", detail::id_or_name(self),
+                          cfg.file_sink.path);
         file_sink = std::move(*s);
       } else {
-        VAST_INFO(self, "could not open", cfg.file_sink.path,
-                  "for metrics:", s.error());
+        VAST_LOG_SPD_INFO("{} could not open {} for metrics: {}",
+                          detail::id_or_name(self), cfg.file_sink.path,
+                          s.error());
       }
     }
     // Act on uds sink config.
     bool start_uds_sink = cfg.uds_sink.enable && !old.uds_sink.enable;
     bool stop_uds_sink = !cfg.uds_sink.enable && old.uds_sink.enable;
     if (stop_uds_sink) {
-      VAST_INFO(self, "closing metrics output socket", old.uds_sink.path);
+      VAST_LOG_SPD_INFO("{} closing metrics output socket {}",
+                        detail::id_or_name(self), old.uds_sink.path);
       uds_sink.reset(nullptr);
     }
     if (start_uds_sink) {
       auto s = detail::make_output_stream(cfg.uds_sink.path, cfg.uds_sink.type);
       if (s) {
-        VAST_INFO(self, "writing metrics to", cfg.uds_sink.path);
+        VAST_LOG_SPD_INFO("{} writing metrics to {}", detail::id_or_name(self),
+                          cfg.uds_sink.path);
         uds_sink = std::move(*s);
       } else {
-        VAST_INFO(self, "could not open", cfg.uds_sink.path,
-                  "for metrics:", s.error());
+        VAST_LOG_SPD_INFO("{} could not open {} for metrics: {}",
+                          detail::id_or_name(self), cfg.uds_sink.path,
+                          s.error());
       }
     }
     this->cfg = std::move(cfg);

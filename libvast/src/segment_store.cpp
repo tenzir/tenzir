@@ -277,7 +277,8 @@ caf::error segment_store::erase(const ids& xs) {
   if (erased_events > 0) {
     VAST_ASSERT(erased_events <= num_events_);
     num_events_ -= erased_events;
-    VAST_INFO(this, "erased", erased_events, "events");
+    VAST_LOG_SPD_INFO("{} erased {} events", detail::id_or_name(this),
+                      erased_events);
   }
   return caf::none;
 }
@@ -447,7 +448,8 @@ uint64_t segment_store::drop(segment& x) {
     auto slice = table_slice{*flat_slice, x.chunk(), table_slice::verify::no};
     erased_events += slice.rows();
   }
-  VAST_INFO(this, "erases entire segment", segment_id);
+  VAST_LOG_SPD_INFO("{} erases entire segment {}", detail::id_or_name(this),
+                    segment_id);
   // Schedule deletion of the segment file when releasing the chunk.
   auto filename = segment_path() / to_string(segment_id);
   x.chunk()->add_deletion_step([=]() noexcept { rm(filename); });
@@ -460,7 +462,8 @@ uint64_t segment_store::drop(segment_builder& x) {
   auto segment_id = x.id();
   for (auto& slice : x.table_slices())
     erased_events += slice.rows();
-  VAST_INFO(this, "erases segment under construction", segment_id);
+  VAST_LOG_SPD_INFO("{} erases segment under construction {}",
+                    detail::id_or_name(this), segment_id);
   x.reset();
   segments_.erase_value(segment_id);
   return erased_events;

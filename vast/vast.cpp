@@ -178,7 +178,7 @@ int main(int argc, char** argv) {
   if (!cfg.config_file_path.empty())
     cfg.config_files.emplace_back(std::move(cfg.config_file_path));
   for (auto& file : cfg.config_files)
-    VAST_INFO_ANON("loaded configuration file:", file);
+    VAST_LOG_SPD_INFO("loaded configuration file: {}", file);
   // Print the plugins that were loaded, and errors that occured during loading.
   for (const auto& file : loaded_plugin_paths)
     VAST_LOG_SPD_VERBOSE("loaded plugin: {}", file);

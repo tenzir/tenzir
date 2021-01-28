@@ -228,7 +228,8 @@ caf::error reader::read_impl(size_t max_events, size_t max_slice_size,
         pseudo_realtime_ = 0;
         VAST_WARNING(this, "ignores pseudo-realtime in live mode");
       }
-      VAST_INFO(this, "listens on interface", *interface_);
+      VAST_LOG_SPD_INFO("{} listens on interface {}", detail::id_or_name(this),
+                        *interface_);
     } else if (input_ != "-" && !exists(input_)) {
       return caf::make_error(ec::format_error, "no such file: ", input_);
     } else {
@@ -245,7 +246,8 @@ caf::error reader::read_impl(size_t max_events, size_t max_slice_size,
         return caf::make_error(ec::format_error, "failed to open pcap file ",
                                input_, ": ", std::string{buf});
       }
-      VAST_INFO(this, "reads trace from", input_);
+      VAST_LOG_SPD_INFO("{} reads trace from {}", detail::id_or_name(this),
+                        input_);
       if (pseudo_realtime_ > 0)
         VAST_LOG_SPD_VERBOSE("{} uses pseudo-realtime factor 1 / {}",
                              detail::id_or_name(this), pseudo_realtime_);

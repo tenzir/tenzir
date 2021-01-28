@@ -149,11 +149,13 @@ sink_command(const invocation& inv, caf::actor_system& sys, caf::actor snk) {
         // Log a set of named measurements.
         for (const auto& [name, measurement] : report) {
           if (auto rate = measurement.rate_per_sec(); std::isfinite(rate))
-            VAST_INFO(name, "processed", measurement.events,
-                      "events at a rate of", static_cast<uint64_t>(rate),
-                      "events/sec in", to_string(measurement.duration));
+            VAST_LOG_SPD_INFO(
+              "{} processed {} events at a rate of {} events/sec in {}",
+              detail::id_or_name(name), measurement.events,
+              static_cast<uint64_t>(rate), to_string(measurement.duration));
           else
-            VAST_INFO(name, "processed", measurement.events, "events");
+            VAST_LOG_SPD_INFO("{} processed {} events",
+                              detail::id_or_name(name), measurement.events);
         }
 #endif
       },
@@ -163,14 +165,16 @@ sink_command(const invocation& inv, caf::actor_system& sys, caf::actor snk) {
         if (auto rate
             = measurement{query.runtime, query.processed}.rate_per_sec();
             std::isfinite(rate))
-          VAST_INFO(name, "processed", query.processed,
-                    "candidates at a rate of", static_cast<uint64_t>(rate),
-                    "candidates/sec and shipped", query.shipped, "results in",
-                    to_string(query.runtime));
+          VAST_LOG_SPD_INFO("{} processed {} candidates at a rate of {} "
+                            "candidates/sec and shipped {} results in {}",
+                            detail::id_or_name(name), query.processed,
+                            static_cast<uint64_t>(rate), query.shipped,
+                            to_string(query.runtime));
         else
-          VAST_INFO(name, "processed", query.processed, "candidates",
-                    "and shipped", query.shipped, "results in",
-                    to_string(query.runtime));
+          VAST_LOG_SPD_INFO("{} processed {} candidatesand shipped {} results "
+                            "in {}",
+                            detail::id_or_name(name), query.processed,
+                            query.shipped, to_string(query.runtime));
 #endif
         if (waiting_for_final_report)
           stop = true;

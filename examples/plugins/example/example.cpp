@@ -73,7 +73,8 @@ example(example_actor::stateful_pointer<example_actor_state> self) {
           // Accumulate the rows in our table slices.
           counter += slice.rows();
           if (counter >= self->state.max_events) {
-            VAST_INFO(self, "terminates stream after", counter, "events");
+            VAST_LOG_SPD_INFO("{} terminates stream after {} events",
+                              detail::id_or_name(self), counter);
             self->state.done = true;
             self->quit();
           }

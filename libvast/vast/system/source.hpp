@@ -198,12 +198,14 @@ struct source_state {
 #if VAST_LOG_LEVEL >= VAST_LOG_LEVEL_INFO
       for (const auto& [key, m] : r) {
         if (auto rate = m.rate_per_sec(); std::isfinite(rate))
-          VAST_INFO(self, "produced", m.events, "events at a rate of",
-                    static_cast<uint64_t>(rate), "events/sec in",
-                    to_string(m.duration));
+          VAST_LOG_SPD_INFO("{} produced {} events at a rate of {} events/sec "
+                            "in {}",
+                            detail::id_or_name(self), m.events,
+                            static_cast<uint64_t>(rate), to_string(m.duration));
         else
-          VAST_INFO(self, "produced", m.events, "events in",
-                    to_string(m.duration));
+          VAST_LOG_SPD_INFO("{} produced {} events in {}",
+                            detail::id_or_name(self), m.events,
+                            to_string(m.duration));
       }
 #endif
       metrics = measurement{};
@@ -305,7 +307,8 @@ source(caf::stateful_actor<source_state<Reader>>* self, Reader reader,
         st.mgr->out().force_emit_batches();
       } else if (err != caf::none) {
         if (err != vast::ec::end_of_input)
-          VAST_INFO(self, "completed with message:", render(err));
+          VAST_LOG_SPD_INFO("{} completed with message: {}",
+                            detail::id_or_name(self), render(err));
         else
           VAST_LOG_SPD_DEBUG("{} completed at end of input",
                              detail::id_or_name(self));

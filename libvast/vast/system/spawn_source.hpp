@@ -54,10 +54,10 @@ maybe_actor spawn_source(node_actor* self, spawn_arguments& args) {
     return src_result.error();
   auto src = std::move(src_result->src);
   auto name = std::move(src_result->name);
-  VAST_INFO(self, "spawned a", name, "source");
+  VAST_LOG_SPD_INFO("{} spawned a {} source", detail::id_or_name(self), name);
   src->attach_functor([=](const caf::error& reason) {
     if (!reason || reason == caf::exit_reason::user_shutdown)
-      VAST_INFO(name, "source shut down");
+      VAST_LOG_SPD_INFO("{} source shut down", detail::id_or_name(name));
     else
       VAST_WARNING(name, "source shut down with error:", reason);
   });
