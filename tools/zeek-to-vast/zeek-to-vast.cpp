@@ -191,7 +191,7 @@ public:
   ~zeek_writer() override {
     if (show_progress_ && num_results_ > 0)
       std::cerr << std::endl;
-    VAST_INFO("query {} had {} result(s)", , query_id_, num_results_);
+    VAST_INFO("query {} had {} result(s)", query_id_, num_results_);
   }
 
   using vast::format::writer::write;
@@ -325,7 +325,7 @@ int main(int argc, char** argv) {
                },
                *msg);
   };
-  VAST_INFO( "peered with Zeek successfull {}",  waiting for commands" ) ;
+  VAST_INFO("peered with Zeek successfully,  waiting for commands");
   // Process queries from Zeek.
   auto done = false;
   while (!done) {
