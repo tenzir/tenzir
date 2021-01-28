@@ -161,11 +161,13 @@ infer_command(const invocation& inv, [[maybe_unused]] caf::actor_system& sys) {
   auto schema = infer<format::zeek::reader>(buffer, options);
   if (schema)
     return show(*schema);
-  VAST_INFO(inv.full_name, "failed to infer Zeek TSV:", render(schema.error()));
+  VAST_LOG_SPD_INFO("{} failed to infer Zeek TSV: {}",
+                    detail::id_or_name(inv.full_name), render(schema.error()));
   schema = infer_json(buffer);
   if (schema)
     return show(*schema);
-  VAST_INFO(inv.full_name, "failed to infer JSON:", render(schema.error()));
+  VAST_LOG_SPD_INFO("{} failed to infer JSON: {}",
+                    detail::id_or_name(inv.full_name), render(schema.error()));
   // Failing to infer the input is not an error.
   return caf::none;
 }

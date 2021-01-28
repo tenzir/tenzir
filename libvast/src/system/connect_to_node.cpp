@@ -65,7 +65,7 @@ connect_to_node(scoped_actor& self, const caf::settings& opts) {
   auto host = node_endpoint.host;
   if (node_endpoint.host.empty())
     node_endpoint.host = "localhost";
-  VAST_INFO_ANON("connecting to VAST node", endpoint_str);
+  VAST_LOG_SPD_INFO("connecting to VAST node {}", endpoint_str);
   auto result = [&]() -> caf::expected<caf::actor> {
     if (use_encryption) {
 #if VAST_ENABLE_OPENSSL

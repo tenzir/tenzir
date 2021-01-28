@@ -191,7 +191,7 @@ public:
   ~zeek_writer() override {
     if (show_progress_ && num_results_ > 0)
       std::cerr << std::endl;
-    VAST_INFO_ANON("query", query_id_, "had", num_results_, "result(s)");
+    VAST_LOG_SPD_INFO("query {} had {} result(s)", , query_id_, num_results_);
   }
 
   using vast::format::writer::write;
@@ -298,7 +298,7 @@ int main(int argc, char** argv) {
   } else {
     node = std::move(*conn);
   }
-  VAST_INFO_ANON("connected to VAST successfully");
+  VAST_LOG_SPD_INFO("connected to VAST successfully");
   // Block until Zeek peers with us.
   auto receive_statuses = true;
   auto status_subscriber = endpoint.make_status_subscriber(receive_statuses);
@@ -325,7 +325,7 @@ int main(int argc, char** argv) {
                },
                *msg);
   };
-  VAST_INFO_ANON("peered with Zeek successfully, waiting for commands");
+  VAST_LOG_SPD_INFO( "peered with Zeek successfull {}",  waiting for commands" ) ;
   // Process queries from Zeek.
   auto done = false;
   while (!done) {
@@ -343,7 +343,7 @@ int main(int argc, char** argv) {
     }
     auto& [query_id, expression] = *result;
     // Relay the query expression to VAST.
-    VAST_INFO_ANON("dispatching query", query_id, expression);
+    VAST_LOG_SPD_INFO("dispatching query {}  {}", query_id, expression);
     auto inv = vast::invocation{std::move(opts), "", {expression}};
     auto writer = std::make_unique<zeek_writer>(endpoint, query_id);
     auto sink = self->spawn(vast::system::sink, std::move(writer),

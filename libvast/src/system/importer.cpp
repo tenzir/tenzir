@@ -88,14 +88,16 @@ public:
   void register_input_path(caf::inbound_path* ptr) override {
     driver_.state.inbound_descriptions[ptr]
       = std::exchange(driver_.state.inbound_description, "anonymous");
-    VAST_INFO(driver_.state.self, "adds",
-              driver_.state.inbound_descriptions[ptr], "source");
+    VAST_LOG_SPD_INFO("{} adds {} source",
+                      detail::id_or_name(driver_.state.self),
+                      driver_.state.inbound_descriptions[ptr]);
     super::register_input_path(ptr);
   }
 
   void deregister_input_path(caf::inbound_path* ptr) noexcept override {
-    VAST_INFO(driver_.state.self, "removes",
-              driver_.state.inbound_descriptions[ptr], "source");
+    VAST_LOG_SPD_INFO("{} removes {} source",
+                      detail::id_or_name(driver_.state.self),
+                      driver_.state.inbound_descriptions[ptr]);
     driver_.state.inbound_descriptions.erase(ptr);
     super::deregister_input_path(ptr);
   }

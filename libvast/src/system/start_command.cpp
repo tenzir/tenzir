@@ -90,7 +90,7 @@ caf::message start_command_impl(start_command_extra_steps extra_steps,
   if (!bound_port)
     return caf::make_message(std::move(bound_port.error()));
   auto listen_addr = std::string{host} + ':' + std::to_string(*bound_port);
-  VAST_INFO_ANON("VAST node is listening on", listen_addr);
+  VAST_LOG_SPD_INFO("VAST node is listening on {}", listen_addr);
   // Run user-defined extra code.
   if (extra_steps != nullptr)
     if (auto err = extra_steps(self, inv.options, node))

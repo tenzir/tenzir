@@ -117,7 +117,8 @@ void type_registry_state::insert(vast::type layout) {
         VAST_WARNING(self, "detected an incompatible layout change for",
                      hint->name());
       else
-        VAST_INFO(self, "detected a layout change for", hint->name());
+        VAST_LOG_SPD_INFO("{} detected a layout change for {}",
+                          detail::id_or_name(self), hint->name());
     }
     VAST_LOG_SPD_DEBUG("{} registered {}", detail::id_or_name(self),
                        hint->name());
