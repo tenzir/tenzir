@@ -89,7 +89,8 @@ datagram_source(datagram_source_actor<Reader>* self,
   // Try to open requested UDP port.
   auto udp_res = self->add_udp_datagram_servant(udp_listening_port);
   if (!udp_res) {
-    VAST_ERROR(self, "could not open port", udp_listening_port);
+    VAST_LOG_SPD_ERROR("{} could not open port {}", detail::id_or_name(self),
+                       udp_listening_port);
     self->quit(std::move(udp_res.error()));
     return {};
   }
@@ -204,7 +205,7 @@ datagram_source(datagram_source_actor<Reader>* self,
       auto& st = self->state;
       st.send_report();
       if (st.dropped_packets > 0) {
-        VAST_LOG_SPD_WARN("{} has no capacity left in stream and dropped {} "
+        VAST_LOG_SPD_WARN("{} has no capacity left in stream and dropped {}"
                           "packets",
                           detail::id_or_name(self), st.dropped_packets);
         st.dropped_packets = 0;

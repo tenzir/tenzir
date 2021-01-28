@@ -107,7 +107,8 @@ archive(archive_actor::stateful_pointer<archive_state> self, path dir,
                        msg.source);
     self->state.send_report();
     if (auto err = self->state.store->flush())
-      VAST_ERROR(self, "failed to flush archive", to_string(err));
+      VAST_LOG_SPD_ERROR("{} failed to flush archive {}",
+                         detail::id_or_name(self), to_string(err));
     self->state.store.reset();
     self->quit(msg.reason);
   });
@@ -126,7 +127,8 @@ archive(archive_actor::stateful_pointer<archive_state> self, path dir,
           = caf::actor_cast<archive_client_actor>(self->current_sender()))
         self->send(self, xs, requester);
       else
-        VAST_ERROR(self, "dismisses query for unconforming sender");
+        VAST_LOG_SPD_ERROR("{} dismisses query for unconforming sender",
+                           detail::id_or_name(self));
     },
     [=](const ids& xs, archive_client_actor requester) {
       auto& st = self->state;
@@ -190,8 +192,8 @@ archive(archive_actor::stateful_pointer<archive_state> self, path dir,
             uint64_t events = 0;
             for (auto& slice : batch) {
               if (auto error = self->state.store->put(slice))
-                VAST_ERROR(self, "failed to add table slice to store",
-                           render(error));
+                VAST_LOG_SPD_ERROR("{} failed to add table slice to store {}",
+                                   detail::id_or_name(self), render(error));
               else
                 events += slice.rows();
             }
@@ -203,7 +205,8 @@ archive(archive_actor::stateful_pointer<archive_state> self, path dir,
             // anymore.
             if (err && err != caf::exit_reason::unreachable) {
               if (err != caf::exit_reason::user_shutdown)
-                VAST_ERROR(self, "got a stream error:", render(err));
+                VAST_LOG_SPD_ERROR("{} got a stream error: {}",
+                                   detail::id_or_name(self), render(err));
               else
                 VAST_LOG_SPD_DEBUG("{} got a user shutdown error: {}",
                                    detail::id_or_name(self), render(err));
@@ -241,7 +244,8 @@ archive(archive_actor::stateful_pointer<archive_state> self, path dir,
     },
     [=](atom::erase, const ids& xs) {
       if (auto err = self->state.store->erase(xs))
-        VAST_ERROR(self, "failed to erase events:", render(err));
+        VAST_LOG_SPD_ERROR("{} failed to erase events: {}",
+                           detail::id_or_name(self), render(err));
       return atom::done_v;
     },
   };

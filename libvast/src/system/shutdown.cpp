@@ -48,7 +48,8 @@ void shutdown(caf::event_based_actor* self, std::vector<caf::actor> xs,
         self->quit(caf::exit_reason::user_shutdown);
       },
       [=](const caf::error& err) {
-        VAST_ERROR(self, "failed to cleanly terminate dependent actors", err);
+        VAST_LOG_SPD_ERROR("{} failed to cleanly terminate dependent actors {}",
+                           detail::id_or_name(self), err);
         die("failed to terminate dependent actors in given time window");
       });
 }
@@ -74,7 +75,7 @@ void shutdown(caf::scoped_actor& self, std::vector<caf::actor> xs,
                            detail::id_or_name(self));
       },
       [&](const caf::error& err) {
-        VAST_ERROR_ANON("failed to terminated all dependent actors", err);
+        VAST_LOG_SPD_ERROR("failed to terminated all dependent actors {}", err);
         die("failed to terminate dependent actors in given time window");
       });
 }

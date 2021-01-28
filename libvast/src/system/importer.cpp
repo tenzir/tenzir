@@ -242,7 +242,8 @@ importer(importer_actor::stateful_pointer<importer_state> self, path dir,
   self->state.dir = std::move(dir);
   auto err = self->state.read_state();
   if (err) {
-    VAST_ERROR(self, "failed to load state:", render(err));
+    VAST_LOG_SPD_ERROR("{} failed to load state: {}", detail::id_or_name(self),
+                       render(err));
     self->quit(std::move(err));
     return importer_actor::behavior_type::make_empty_behavior();
   }

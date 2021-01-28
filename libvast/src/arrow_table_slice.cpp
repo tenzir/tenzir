@@ -563,15 +563,15 @@ public:
     if (auto status
         = decoder_.Consume(flat_schema->data(), flat_schema->size());
         !status.ok()) {
-      VAST_ERROR_ANON(__func__,
-                      "failed to decode Arrow Schema:", status.ToString());
+      VAST_LOG_SPD_ERROR("{} failed to decode Arrow Schema: {}", __func__,
+                         status.ToString());
       return {};
     }
     if (auto status = decoder_.Consume(flat_record_batch->data(),
                                        flat_record_batch->size());
         !status.ok()) {
-      VAST_ERROR_ANON(
-        __func__, "failed to decode Arrow Record Batch:", status.ToString());
+      VAST_LOG_SPD_ERROR("{} failed to decode Arrow Record Batch: {}", __func__,
+                         status.ToString());
       return {};
     }
     VAST_ASSERT(record_batch_);

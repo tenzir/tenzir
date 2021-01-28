@@ -55,8 +55,9 @@ void counter_state::init(expression expr, index_actor index,
           std::tie(it, std::ignore) = checkers_.emplace(
             vast::record_type{slice.layout()}, std::move(*x));
         } else {
-          VAST_ERROR(self_, "failed to tailor expression:",
-                     self_->system().render(x.error()));
+          VAST_LOG_SPD_ERROR("{} failed to tailor expression: {}",
+                             detail::id_or_name(self_),
+                             self_->system().render(x.error()));
           return;
         }
       }

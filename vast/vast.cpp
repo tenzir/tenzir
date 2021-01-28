@@ -63,7 +63,7 @@ stable_set<path> get_plugin_dirs(const caf::actor_system_config& cfg) {
   if (auto binary = objectpath(nullptr))
     result.insert(binary->parent().parent() / "lib" / "vast" / "plugins");
   else
-    VAST_ERROR_ANON(__func__, "failed to get program path");
+    VAST_LOG_SPD_ERROR("{} failed to get program path", __func__);
   if (const char* home = std::getenv("HOME"))
     result.insert(path{home} / ".local" / "lib" / "vast" / "plugins");
   if (auto dirs = caf::get_if<std::vector<std::string>>( //
@@ -183,7 +183,7 @@ int main(int argc, char** argv) {
   for (const auto& file : loaded_plugin_paths)
     VAST_LOG_SPD_VERBOSE("loaded plugin: {}", file);
   for (const auto& err : plugin_load_errors)
-    VAST_ERROR_ANON("failed to load plugin:", render(err));
+    VAST_LOG_SPD_ERROR("failed to load plugin: {}", render(err));
   // Initialize successfully loaded plugins.
   for (auto& plugin : plugins) {
     auto key = "plugins."s + plugin->name();
@@ -192,8 +192,8 @@ int main(int argc, char** argv) {
         VAST_LOG_SPD_DEBUG("initializing plugin with options: {}", *config);
         plugin->initialize(std::move(*config));
       } else {
-        VAST_ERROR_ANON("invalid plugin configuration for plugin",
-                        plugin->name());
+        VAST_LOG_SPD_ERROR("invalid plugin configuration for plugin {}",
+                           plugin->name());
         plugin->initialize(data{});
       }
     } else {
@@ -206,7 +206,8 @@ int main(int argc, char** argv) {
   if (auto schema = load_schema(cfg)) {
     event_types::init(*std::move(schema));
   } else {
-    VAST_ERROR_ANON("failed to read schema dirs:", render(schema.error()));
+    VAST_LOG_SPD_ERROR("failed to read schema dirs: {}",
+                       render(schema.error()));
     return EXIT_FAILURE;
   }
   // Dispatch to root command.

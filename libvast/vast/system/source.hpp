@@ -175,7 +175,8 @@ struct source_state {
           // Third, try to set the new schema.
           if (auto err = reader.schema(std::move(merged_schema));
               err && err != caf::no_error)
-            VAST_ERROR(self, "failed to set schema", err);
+            VAST_LOG_SPD_ERROR("{} failed to set schema {}",
+                               detail::id_or_name(self), err);
         });
     } else {
       // We usually expect to have the type registry at the ready, but if we
@@ -185,7 +186,8 @@ struct source_state {
                         detail::id_or_name(self));
       if (auto err = reader.schema(std::move(local_schema));
           err && err != caf::no_error)
-        VAST_ERROR(self, "failed to set schema", err);
+        VAST_LOG_SPD_ERROR("{} failed to set schema {}",
+                           detail::id_or_name(self), err);
     }
   }
 

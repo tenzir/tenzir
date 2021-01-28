@@ -164,7 +164,8 @@ void handle_batch(exporter_actor::stateful_pointer<exporter_state> self,
   if (it == self->state.checkers.end()) {
     auto x = tailor(self->state.expr, t);
     if (!x) {
-      VAST_ERROR(self, "failed to tailor expression:", render(x.error()));
+      VAST_LOG_SPD_ERROR("{} failed to tailor expression: {}",
+                         detail::id_or_name(self), render(x.error()));
       ship_results(self);
       shutdown(self);
       return;
@@ -339,7 +340,8 @@ exporter(exporter_actor::stateful_pointer<exporter_state> self, expression expr,
           },
           [=](caf::unit_t&, const caf::error& err) {
             if (err)
-              VAST_ERROR(self, "got error during streaming:", err);
+              VAST_LOG_SPD_ERROR("{} got error during streaming: {}",
+                                 detail::id_or_name(self), err);
           })
         .inbound_slot();
     },

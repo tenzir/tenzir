@@ -61,7 +61,8 @@ active_indexer(active_indexer_actor::stateful_pointer<indexer_state> self,
   self->state.has_skip_attribute = vast::has_skip_attribute(index_type);
   self->state.idx = factory<value_index>::make(index_type, index_opts);
   if (!self->state.idx) {
-    VAST_ERROR(self, "failed to construct value index");
+    VAST_LOG_SPD_ERROR("{} failed to construct value index",
+                       detail::id_or_name(self));
     self->quit(caf::make_error(ec::unspecified, "failed to construct value "
                                                 "index"));
     return active_indexer_actor::behavior_type::make_empty_behavior();
@@ -94,7 +95,7 @@ active_indexer(active_indexer_actor::stateful_pointer<indexer_state> self,
             // so we can't safely use `self` anymore.
             // TODO: We also need to deliver the promise here *if* self
             // still exists and the promise is already pending.
-            VAST_ERROR_ANON("indexer got a stream error:", render(err));
+            VAST_LOG_SPD_ERROR("indexer got a stream error: {}", render(err));
             return;
           }
           if (self->state.promise.pending())
@@ -139,7 +140,8 @@ indexer_actor::behavior_type
 passive_indexer(indexer_actor::stateful_pointer<indexer_state> self,
                 uuid partition_id, value_index_ptr idx) {
   if (!idx) {
-    VAST_ERROR(self, "got invalid value index pointer");
+    VAST_LOG_SPD_ERROR("{} got invalid value index pointer",
+                       detail::id_or_name(self));
     self->quit(caf::make_error(ec::end_of_input, "invalid value index "
                                                  "pointer"));
     return indexer_actor::behavior_type::make_empty_behavior();

@@ -110,7 +110,7 @@ static caf::settings get_status_rusage() {
   caf::settings result;
   struct rusage ru;
   if (getrusage(RUSAGE_SELF, &ru) != 0) {
-    VAST_LOG_SPD_WARN(" {} failed to obtain rusage: {}", __func__,
+    VAST_LOG_SPD_WARN("{} failed to obtain rusage: {}", __func__,
                       std::strerror(errno));
     return result;
   }

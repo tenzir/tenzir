@@ -312,7 +312,8 @@ caf::error reader::read_impl(size_t max_events, size_t max_slice_size,
     for (size_t i = 0; i < rows; ++i) {
       visit(default_randomizer{bp.distributions, generator_}, t, bp.data);
       if (!ptr->recursive_add(bp.data, t)) {
-        VAST_ERROR(this, "failed to add blueprint data to slice builder");
+        VAST_LOG_SPD_ERROR("{} failed to add blueprint data to slice builder",
+                           detail::id_or_name(this));
         return caf::make_error(ec::format_error, "failed to add blueprint data "
                                                  "to slice builder");
       }

@@ -234,7 +234,7 @@ get_schema_dirs(const caf::actor_system_config& cfg,
       if (auto binary = detail::objectpath(addr))
         result.insert(binary->parent().parent() / "share" / "vast" / "schema");
       else
-        VAST_ERROR_ANON(__func__, "failed to get program path");
+        VAST_LOG_SPD_ERROR("{} failed to get program path", __func__);
     }
     if (const char* xdg_data_home = std::getenv("XDG_DATA_HOME"))
       result.insert(path{xdg_data_home} / "vast" / "schema");
@@ -246,7 +246,7 @@ get_schema_dirs(const caf::actor_system_config& cfg,
     result.insert(dirs->begin(), dirs->end());
   if (auto dirs = caf::get_if<std::vector<std::string>>( //
         &cfg, "vast.schema-paths")) {
-    VAST_LOG_SPD_WARN(" {} encountered deprecated vast.schema-paths "
+    VAST_LOG_SPD_WARN("{} encountered deprecated vast.schema-paths "
                       "option; use vast.schema-dirs instead.",
                       __func__);
     result.insert(dirs->begin(), dirs->end());
@@ -282,7 +282,7 @@ load_schema(const detail::stable_set<path>& schema_dirs, size_t max_recursion) {
       VAST_LOG_SPD_DEBUG("loading schema {}", f);
       auto schema = load_schema(f);
       if (!schema) {
-        VAST_ERROR_ANON(__func__, render(schema.error()), f);
+        VAST_LOG_SPD_ERROR("{}  {}  {}", __func__, render(schema.error()), f);
         continue;
       }
       if (auto merged = schema::merge(directory_schema, *schema))

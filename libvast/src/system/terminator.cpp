@@ -159,7 +159,8 @@ caf::behavior terminator(caf::stateful_actor<terminator_state>* self,
     },
     [=](atom::stop) {
       auto n = self->state.remaining_actors.size();
-      VAST_ERROR(self, "failed to kill", n, "actors");
+      VAST_LOG_SPD_ERROR("{} failed to kill {} actors",
+                         detail::id_or_name(self), n);
       self->state.promise.deliver(
         caf::make_error(ec::timeout, "failed to kill remaining actors", n));
       self->quit(caf::exit_reason::user_shutdown);

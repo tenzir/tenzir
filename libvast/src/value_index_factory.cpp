@@ -45,7 +45,7 @@ value_index_ptr make(type x, caf::settings opts) {
   // The cardinality must be an integer.
   if (auto i = opts.find("cardinality"); i != opts.end()) {
     if (!caf::holds_alternative<int_type>(i->second)) {
-      VAST_ERROR_ANON(__func__, "invalid cardinality type");
+      VAST_LOG_SPD_ERROR("{} invalid cardinality type", __func__);
       return nullptr;
     }
   }
@@ -53,11 +53,11 @@ value_index_ptr make(type x, caf::settings opts) {
   if (auto i = opts.find("base"); i != opts.end()) {
     auto str = caf::get_if<caf::config_value::string>(&i->second);
     if (!str) {
-      VAST_ERROR_ANON(__func__, "invalid base type (string type needed)");
+      VAST_LOG_SPD_ERROR("{} invalid base type (string type needed)", __func__);
       return nullptr;
     }
     if (!parsers::base(*str)) {
-      VAST_ERROR_ANON(__func__, "invalid base specification");
+      VAST_LOG_SPD_ERROR("{} invalid base specification", __func__);
       return nullptr;
     }
   }
@@ -74,13 +74,13 @@ value_index_ptr make(type x, caf::settings opts) {
         // cardinality is a size_t, so we may get negative values if someone
         // provides an uint64_t value, e.g., numeric_limits<size_t>::max().
         if (*cardinality < 0) {
-          VAST_LOG_SPD_WARN(" {} got an explicit cardinality of 2^64, using "
+          VAST_LOG_SPD_WARN("{} got an explicit cardinality of 2^64, using "
                             "max digest size of 8 bytes",
                             __func__);
           return std::make_unique<hash_index<8>>(std::move(x));
         }
         if (!detail::ispow2(*cardinality))
-          VAST_LOG_SPD_WARN(" {} cardinality not a power of 2", __func__);
+          VAST_LOG_SPD_WARN("{} cardinality not a power of 2", __func__);
         // For 2^n unique values, we expect collisions after sqrt(2^n).
         // Thus, we use 2n bits as digest size.
         size_t digest_bits = detail::ispow2(*cardinality)
@@ -92,14 +92,15 @@ value_index_ptr make(type x, caf::settings opts) {
         VAST_LOG_SPD_DEBUG("{} creating hash index with a digest of {} bytes",
                            __func__, digest_bytes);
         if (digest_bytes > 8) {
-          VAST_LOG_SPD_WARN(" {} expected cardinality exceeds "
+          VAST_LOG_SPD_WARN("{} expected cardinality exceeds "
                             "maximum digest size {}, capping at 8 bytes",
                             __func__);
           digest_bytes = 8;
         }
         switch (digest_bytes) {
           default:
-            VAST_ERROR_ANON(__func__, "invalid digest size", *cardinality);
+            VAST_LOG_SPD_ERROR("{} invalid digest size {}", __func__,
+                               *cardinality);
             return nullptr;
           case 1:
             return std::make_unique<hash_index<1>>(std::move(x),
