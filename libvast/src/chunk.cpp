@@ -68,6 +68,10 @@ chunk_ptr chunk::mmap(const path& filename, size_type size, size_type offset) {
   auto fd = ::open(filename.str().c_str(), O_RDONLY, 0644);
   if (fd == -1)
     return {};
+  // FIXME: make a proper API for this
+  int fadvise_flags = POSIX_FADV_RANDOM;
+  if (fadvise_flags)
+    ::posix_fadvise(fd, 0, size, fadvise_flags);
   auto map = ::mmap(nullptr, size, PROT_READ, MAP_SHARED, fd, offset);
   ::close(fd);
   if (map == MAP_FAILED)

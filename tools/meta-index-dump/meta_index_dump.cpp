@@ -48,6 +48,8 @@
 #include <sstream>
 #include <string>
 
+#include <sys/mman.h>
+
 using namespace vast;
 
 static caf::settings get_status_proc() {
@@ -132,6 +134,9 @@ int main(int argc, char** argv) {
                   << std::endl;
         continue;
       }
+
+      ::madvise(const_cast<byte*>(chunk->data()), chunk->size(), MADV_RANDOM);
+
       auto partition = fbs::GetPartition(chunk->data());
       if (partition->partition_type() != fbs::partition::Partition::v0) {
         std::cerr << "found unsupported version for partition"
