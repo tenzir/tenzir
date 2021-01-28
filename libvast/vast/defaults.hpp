@@ -323,13 +323,32 @@ constexpr size_t max_container_elements = 256;
 // -- constants for the logger -------------------------------------------------
 namespace logger {
 
+/// Log filename.
 constexpr const char* log_file = "server.log";
 
-constexpr const char* log_format = "%^%Y-%m-%dT%T.%e%z %v%$";
+/// Log format for file output. (spdlog default format)
+constexpr const char* file_format = "%+";
 
+/// Log format for console output.
+constexpr const char* console_format = "%^%Y-%m-%dT%T.%e%z %v%$";
+
+/// Verbosity for writing to console.
 constexpr const caf::atom_value console_verbosity = caf::atom("info");
 
+/// Verbosity for writing to file.
 constexpr const caf::atom_value file_verbosity = caf::atom("debug");
+
+/// Maximum number of log messages in the logger queue.
+constexpr const size_t queue_size = 8'192;
+
+/// Number of logger threads.
+constexpr const size_t logger_threads = 1;
+
+/// File size threshold for the `rotating_file_sink`.
+constexpr const size_t rotate_threshold = 10 * 1'024 * 1'024; // 10_Mi;
+
+/// Maximum number of rotated log files that are kept.
+constexpr const size_t rotate_files = 3;
 
 } // namespace logger
 

@@ -42,6 +42,27 @@ create_log_context(const vast::invocation& cmd_invocation,
     std::addressof(vast::detail::shutdown_spdlog))};
 }
 
+int loglevel_to_int(caf::atom_value x, int default_value) {
+  switch (caf::atom_uint(to_lowercase(x))) {
+    case caf::atom_uint("quiet"):
+      return VAST_LOG_LEVEL_QUIET;
+    case caf::atom_uint("error"):
+      return VAST_LOG_LEVEL_ERROR;
+    case caf::atom_uint("warning"):
+      return VAST_LOG_LEVEL_WARNING;
+    case caf::atom_uint("info"):
+      return VAST_LOG_LEVEL_INFO;
+    case caf::atom_uint("verbose"):
+      return VAST_LOG_LEVEL_VERBOSE;
+    case caf::atom_uint("debug"):
+      return VAST_LOG_LEVEL_DEBUG;
+    case caf::atom_uint("trace"):
+      return VAST_LOG_LEVEL_TRACE;
+    default:
+      return default_value;
+  }
+}
+
 namespace {
 
 constexpr bool is_vast_loglevel(const int value) {
@@ -86,27 +107,20 @@ spdlog::level::level_enum vast_loglevel_to_spd(const int value) {
   }
   return level;
 }
+
 } // namespace
+
 namespace detail {
 
 bool setup_spdlog(const vast::invocation& cmd_invocation,
                   const caf::settings& cfg_file) {
-  // already running .....
   if (vast::detail::logger()->name() != "/dev/null") {
     VAST_ERROR_ANON("Log already up");
     return false;
   }
   bool is_server = cmd_invocation.name() == "start"
                    || caf::get_or(cmd_invocation.options, "vast.node", false);
-
   const auto& cfg_cmd = cmd_invocation.options;
-  // The log level setup, just top down.
-  // Note, since log values are in vast they can not be read as atom ...?
-  // auto file_verbosity_atom = caf::get_if<caf::atom_value>(
-  //   &cfg_file, "vast.file-verbosity"
-  // ) ;
-  // assert(file_verbosity_atom)
-
   auto console_verbosity = vast::defaults::logger::console_verbosity;
   auto cfg_console_verbosity
     = caf::get_if<std::string>(&cfg_file, "vast.console-verbosity");
@@ -120,6 +134,8 @@ bool setup_spdlog(const vast::invocation& cmd_invocation,
       console_verbosity = atom_cv;
     }
   }
+  // Allow `vast.verbosity` from the command-line to overwrite
+  // the `vast.console-verbosity` setting from the config file.
   auto verbosity = caf::get_if<caf::atom_value>(&cfg_cmd, "vast.verbosity");
   if (verbosity) {
     if (loglevel_to_int(*verbosity, -1) < 0) {
@@ -154,14 +170,11 @@ bool setup_spdlog(const vast::invocation& cmd_invocation,
 
     return spdlog::color_mode::never;
   }();
-
   auto log_file = caf::get_or(cfg_file, "vast.log-file",
                               std::string{defaults::logger::log_file});
-
   auto cmdline_log_file = caf::get_if<std::string>(&cfg_cmd, "vast.log-file");
-  if (cmdline_log_file) {
+  if (cmdline_log_file)
     log_file = *cmdline_log_file;
-  }
   if (is_server) {
     if (log_file == defaults::logger::log_file
         && vast_file_verbosity != VAST_LOG_LEVEL_QUIET) {
@@ -178,7 +191,6 @@ bool setup_spdlog(const vast::invocation& cmd_invocation,
     }
   } else {
     // Please note, client file does not go to db_directory!
-    // First command line, then config file
     auto client_log_file
       = caf::get_if<std::string>(&cfg_cmd, "vast.client-log-file");
     if (!client_log_file)
@@ -189,34 +201,34 @@ bool setup_spdlog(const vast::invocation& cmd_invocation,
     else // If there is no client log file, turn off file logging
       vast_file_verbosity = VAST_LOG_LEVEL_QUIET;
   }
-  spdlog::init_thread_pool(8192, 1);
+  spdlog::init_thread_pool(defaults::logger::queue_size,
+                           defaults::logger::logger_threads);
   std::vector<spdlog::sink_ptr> sinks;
   auto stderr_sink
     = std::make_shared<spdlog::sinks::ansicolor_stderr_sink_mt>(log_color);
   stderr_sink->set_level(vast_loglevel_to_spd(vast_console_verbosity));
-  auto console_format = caf::get_or(cfg_file, "vast.console-format",
-                                    std::string{defaults::logger::log_format});
+  auto console_format
+    = caf::get_or(cfg_file, "vast.console-format",
+                  std::string{defaults::logger::console_format});
   stderr_sink->set_pattern(console_format);
   sinks.push_back(stderr_sink);
   if (vast_file_verbosity != VAST_LOG_LEVEL_QUIET) {
-    // When the max file size is reached, close the file, rename it, and create
-    // a new file. Please adopt as needed
-    using namespace vast::si_literals;
-    // Arguments are,  max file size and the max number of files.
+    // Arguments are max file size and the max number of files.
     auto file_sink = std::make_shared<spdlog::sinks::rotating_file_sink_mt>(
-      log_file, 10_Mi, 3);
+      log_file, defaults::logger::rotate_threshold,
+      defaults::logger::rotate_files);
     file_sink->set_level(vast_loglevel_to_spd(vast_file_verbosity));
     auto file_format = caf::get_or(cfg_file, "vast.file-format",
-                                   std::string{defaults::logger::log_format});
+                                   std::string{defaults::logger::file_format});
     file_sink->set_pattern(file_format);
     sinks.push_back(file_sink);
   }
-
-  vast::detail::logger() = std::make_shared<spdlog::async_logger>(
+  // Replace the /dev/null logger that was created during init.
+  logger() = std::make_shared<spdlog::async_logger>(
     "vast", sinks.begin(), sinks.end(), spdlog::thread_pool(),
     spdlog::async_overflow_policy::block);
-  vast::detail::logger()->set_level(vast_loglevel_to_spd(vast_verbosity));
-  spdlog::register_logger(vast::detail::logger());
+  logger()->set_level(vast_loglevel_to_spd(vast_verbosity));
+  spdlog::register_logger(logger());
   return true;
 }
 
@@ -231,58 +243,6 @@ std::shared_ptr<spdlog::logger>& logger() {
       "/dev/null");
   return vast_logger;
 }
+
 } // namespace detail
-} // namespace vast
-
-namespace vast {
-namespace {
-// A trick that uses explicit template instantiation of a static member
-// as explained here: https://gist.github.com/dabrahams/1528856
-template <class Tag>
-struct stowed {
-  static typename Tag::type value;
-};
-template <class Tag>
-typename Tag::type stowed<Tag>::value;
-
-template <class Tag, typename Tag::type x>
-struct stow_private {
-  stow_private() {
-    stowed<Tag>::value = x;
-  }
-  static stow_private instance;
-};
-template <class Tag, typename Tag::type x>
-stow_private<Tag, x> stow_private<Tag, x>::instance;
-
-// A tag type for caf::logger::cfg.
-struct logger_cfg {
-  using type = caf::logger::config(caf::logger::*);
-};
-
-template struct stow_private<logger_cfg, &caf::logger::cfg_>;
-
-} // namespace
-
-int loglevel_to_int(caf::atom_value x, int default_value) {
-  switch (caf::atom_uint(to_lowercase(x))) {
-    case caf::atom_uint("quiet"):
-      return VAST_LOG_LEVEL_QUIET;
-    case caf::atom_uint("error"):
-      return VAST_LOG_LEVEL_ERROR;
-    case caf::atom_uint("warning"):
-      return VAST_LOG_LEVEL_WARNING;
-    case caf::atom_uint("info"):
-      return VAST_LOG_LEVEL_INFO;
-    case caf::atom_uint("verbose"):
-      return VAST_LOG_LEVEL_VERBOSE;
-    case caf::atom_uint("debug"):
-      return VAST_LOG_LEVEL_DEBUG;
-    case caf::atom_uint("trace"):
-      return VAST_LOG_LEVEL_TRACE;
-    default:
-      return default_value;
-  }
-}
-
 } // namespace vast

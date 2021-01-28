@@ -22,7 +22,6 @@
 #include "vast/format/multi_layout_reader.hpp"
 #include "vast/path.hpp"
 #include "vast/schema.hpp"
-#include "vast/system/accountant_actor.hpp"
 #include "vast/type.hpp"
 #include "vast/uuid.hpp"
 #include "vast/view.hpp"
