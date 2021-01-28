@@ -13,10 +13,10 @@
 
 #pragma once
 
-#include <string>
-
 #include "vast/detail/operators.hpp"
 #include "vast/optional.hpp"
+
+#include <string>
 
 namespace vast {
 
@@ -25,20 +25,17 @@ struct attribute : detail::totally_ordered<attribute> {
   attribute(std::string key = {});
   attribute(std::string key, optional<std::string> value);
 
+  friend bool operator==(const attribute& x, const attribute& y);
+
+  friend bool operator<(const attribute& x, const attribute& y);
+
+  template <class Inspector>
+  friend auto inspect(Inspector& f, attribute& a) {
+    return f(a.key, a.value);
+  }
+
   std::string key;
   optional<std::string> value;
 };
-
-/// @relates attribute
-bool operator==(const attribute& x, const attribute& y);
-
-/// @relates attribute
-bool operator<(const attribute& x, const attribute& y);
-
-/// @relates attribute
-template <class Inspector>
-auto inspect(Inspector& f, attribute& a) {
-  return f(a.key, a.value);
-}
 
 } // namespace vast
