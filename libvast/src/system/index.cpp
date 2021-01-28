@@ -390,7 +390,8 @@ index_state::status(status_verbosity v) const {
 std::vector<std::pair<uuid, partition_actor>>
 index_state::collect_query_actors(query_state& lookup,
                                   uint32_t num_partitions) {
-  VAST_TRACE(VAST_ARG(lookup), VAST_ARG(num_partitions));
+  VAST_LOG_SPD_TRACE("{}  {}", detail::id_or_name(VAST_ARG(lookup)),
+                     VAST_ARG(num_partitions));
   std::vector<std::pair<uuid, partition_actor>> result;
   if (num_partitions == 0 || lookup.partitions.empty())
     return result;
@@ -517,9 +518,11 @@ index(index_actor::stateful_pointer<index_state> self,
       filesystem_actor filesystem, path dir, size_t partition_capacity,
       size_t max_inmem_partitions, size_t taste_partitions, size_t num_workers,
       double meta_index_fp_rate) {
-  VAST_TRACE(VAST_ARG(filesystem), VAST_ARG(dir), VAST_ARG(partition_capacity),
-             VAST_ARG(max_inmem_partitions), VAST_ARG(taste_partitions),
-             VAST_ARG(num_workers), VAST_ARG(meta_index_fp_rate));
+  VAST_LOG_SPD_TRACE("{}  {}  {}  {}  {}  {}  {}",
+                     detail::id_or_name(VAST_ARG(filesystem)), VAST_ARG(dir),
+                     VAST_ARG(partition_capacity),
+                     VAST_ARG(max_inmem_partitions), VAST_ARG(taste_partitions),
+                     VAST_ARG(num_workers), VAST_ARG(meta_index_fp_rate));
   VAST_LOG_SPD_VERBOSE("{} initializes index in {} with a maximum partition "
                        "size of {} events and {} resident partitions",
                        detail::id_or_name(self), dir, partition_capacity,

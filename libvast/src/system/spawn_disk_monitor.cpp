@@ -16,7 +16,7 @@ namespace vast::system {
 
 maybe_actor
 spawn_disk_monitor(system::node_actor* self, spawn_arguments& args) {
-  VAST_TRACE(VAST_ARG(args));
+  VAST_LOG_SPD_TRACE("{}", detail::id_or_name(VAST_ARG(args)));
   auto [index, archive]
     = self->state.registry.find_by_label("index", "archive");
   if (!index)

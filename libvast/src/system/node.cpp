@@ -280,7 +280,8 @@ maybe_actor spawn_accountant(node_actor* self, spawn_arguments& args) {
 caf::expected<caf::actor>
 spawn_component(node_actor* self, const invocation& inv,
                 spawn_arguments& args) {
-  VAST_TRACE(VAST_ARG(inv), VAST_ARG(args));
+  VAST_LOG_SPD_TRACE("{}  {}", detail::id_or_name(VAST_ARG(inv)),
+                     VAST_ARG(args));
   using caf::atom_uint;
   auto i = node_state::component_factory.find(inv.full_name);
   if (i == node_state::component_factory.end())
@@ -429,7 +430,7 @@ std::string generate_label(node_actor* self, std::string_view component) {
 caf::message
 node_state::spawn_command(const invocation& inv,
                           [[maybe_unused]] caf::actor_system& sys) {
-  VAST_TRACE(inv);
+  VAST_LOG_SPD_TRACE("{}", detail::id_or_name(inv));
   using std::begin;
   using std::end;
   auto self = this_node;

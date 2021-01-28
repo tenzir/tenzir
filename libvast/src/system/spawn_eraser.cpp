@@ -30,7 +30,8 @@ namespace vast::system {
 maybe_actor
 spawn_eraser(system::node_actor* self, system::spawn_arguments& args) {
   using namespace std::string_literals;
-  VAST_TRACE(VAST_ARG(self), VAST_ARG(args));
+  VAST_LOG_SPD_TRACE("{}  {}", detail::id_or_name(VAST_ARG(self)),
+                     VAST_ARG(args));
   // Parse options.
   auto eraser_query = caf::get_or(args.inv.options, "vast.aging-query", ""s);
   if (eraser_query.empty()) {

@@ -55,7 +55,8 @@ common_field(const pivoter_state& st, const record_type& indicator) {
   // This is a heuristic to find the field for pivoting until a runtime
   // updated type registry is available to feed the algorithm above.
   std::string edge;
-  VAST_TRACE(st.self, VAST_ARG(st.target), VAST_ARG(indicator.name()));
+  VAST_LOG_SPD_TRACE("{}  {}  {}", detail::id_or_name(st.self),
+                     VAST_ARG(st.target), VAST_ARG(indicator.name()));
   if (detail::starts_with(st.target, "zeek")
       && detail::starts_with(indicator.name(), "zeek"))
     edge = "uid";
@@ -137,7 +138,8 @@ caf::behavior pivoter(caf::stateful_actor<pivoter_state>* self, caf::actor node,
       auto query = to_string(expr);
       VAST_LOG_SPD_DEBUG("{} queries for {}  {}", detail::id_or_name(self),
                          xs.size(), pivot_field->name);
-      VAST_TRACE(self, "spawns new exporter with query", query);
+      VAST_LOG_SPD_TRACE("{} spawns new exporter with query {}",
+                         detail::id_or_name(self), query);
       auto exporter_options = caf::settings{};
       caf::put(exporter_options, "vast.export.disable-taxonomies", true);
       auto exporter_invocation
