@@ -60,7 +60,9 @@ private:
   symbol_table<type> symbols_;
 };
 
-/// Parses a type with the help of a symbol table.
+/// Parses a type into an intermediate representation.
+/// References to user defined types are mapped to `none_type` and
+/// need to be resolved later.
 struct type_parser : parser<type_parser> {
   using attribute = type;
 
@@ -68,20 +70,20 @@ struct type_parser : parser<type_parser> {
   // clang-format off
   static constexpr auto comment
     = ignore(parsers::lit{"//"} >> *(parsers::any - '\n'));
+
+  /// The parser for an identifier.
+  static constexpr auto id
+    = +( parsers::alnum
+       | parsers::ch<'_'>
+       | parsers::ch<'.'>
+       );
   // clang-format on
 
   // Skips all irrelevant tokens.
   static constexpr auto skp = ignore(*(parsers::space | comment));
 
-  explicit type_parser(const type_table* symbols = nullptr)
-    : symbol_type{symbols} {
-    // nop
-  }
-
   template <class Iterator, class Attribute>
   bool parse(Iterator& f, const Iterator& l, Attribute& a) const;
-
-  const type_table* symbol_type;
 };
 
 template <>

@@ -111,9 +111,9 @@ TEST(parseable/printable - predicate) {
   CHECK(pred.op == relational_operator::equal);
   CHECK(caf::get<field_extractor>(pred.rhs) == field_extractor{"y.c_d"});
   CHECK_EQUAL(to_string(pred), str);
-  // Invalid type name.
+  // User defined type name:
   MESSAGE(":foo == -42");
-  CHECK(!parsers::predicate(":foo == -42"));
+  CHECK(parsers::predicate(":foo == -42"));
 }
 
 TEST(parseable - expression) {

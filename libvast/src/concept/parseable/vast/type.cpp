@@ -117,23 +117,23 @@ bool type_parser::parse(Iterator& f, const Iterator& l, Attribute& a) const {
     >> ((skp >> field >> skp) % ',') >> ~(',' >> skp)
     >> '}' >> attr_list) ->* to_record;
     ;
+  using none_tuple = std::tuple<std::string, std::vector<vast::attribute>>;
+  static auto to_named_none_type = [](none_tuple xs) {
+    auto& [n, a] = xs;
+    return none_type{}.name(std::move(n)).attributes(std::move(a));
+  };
+  static auto placeholder_parser
+    = (id >> attr_list) ->* to_named_none_type
+    ;
   // Complete type
-  if (symbol_type)
-    type_type
-      = basic_type_parser
-      | enum_type_parser
-      | list_type_parser
-      | map_type_parser
-      | record_type_parser
-      | *symbol_type; // The *symbol_type parser must MUST be last as it
-                      // greedily checks for prefixes in the symbol table.
-  else // As above, just without the symbol table.
-    type_type
-      = basic_type_parser
-      | enum_type_parser
-      | list_type_parser
-      | map_type_parser
-      | record_type_parser;
+  type_type
+    = basic_type_parser
+    | enum_type_parser
+    | list_type_parser
+    | map_type_parser
+    | record_type_parser
+    | placeholder_parser
+    ;
   return type_type(f, l, a);
   // clang-format on
 }

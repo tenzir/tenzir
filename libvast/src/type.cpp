@@ -79,6 +79,36 @@ type&& type::attributes(std::vector<attribute> xs) && {
   return std::move(*this);
 }
 
+type& type::update_attributes(std::vector<attribute> xs) & {
+  if (ptr_) {
+    auto& attrs = ptr_.unshared().attributes_;
+    for (auto& x : xs) {
+      auto i = std::find_if(attrs.begin(), attrs.end(),
+                            [&](auto& attr) { return attr.key == x.key; });
+      if (i == attrs.end())
+        attrs.push_back(std::move(x));
+      else
+        i->value = std::move(x).value;
+    }
+  }
+  return *this;
+}
+
+type&& type::update_attributes(std::vector<attribute> xs) && {
+  if (ptr_) {
+    auto& attrs = ptr_.unshared().attributes_;
+    for (auto& x : xs) {
+      auto i = std::find_if(attrs.begin(), attrs.end(),
+                            [&](auto& attr) { return attr.key == x.key; });
+      if (i == attrs.end())
+        attrs.push_back(std::move(x));
+      else
+        i->value = std::move(x).value;
+    }
+  }
+  return std::move(*this);
+}
+
 type::operator bool() const {
   return ptr_ != nullptr;
 }

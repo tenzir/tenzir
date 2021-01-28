@@ -119,7 +119,8 @@ public:
   type& operator=(type&&) noexcept = default;
 
   /// Assigns a type from another instance
-  template <class T>
+  template <class T, class = std::enable_if_t<
+                       caf::detail::tl_contains<concrete_types, T>::value>>
   type& operator=(T x) {
     ptr_ = caf::make_counted<T>(std::move(x));
     return *this;
@@ -142,6 +143,16 @@ public:
   /// Specifies a list of attributes.
   /// @param xs The list of attributes.
   type&& attributes(std::vector<attribute> xs) &&;
+
+  /// Inserts a list of attributes, updating already existing keys with new
+  /// values.
+  /// @param xs The list of attributes.
+  type& update_attributes(std::vector<attribute> xs) &;
+
+  /// Inserts a list of attributes, updating already existing keys with new
+  /// values.
+  /// @param xs The list of attributes.
+  type&& update_attributes(std::vector<attribute> xs) &&;
 
   // -- inspectors ------------------------------------------------------------
 
@@ -266,8 +277,8 @@ public:
 
   /// Sets the type name.
   /// @param x The new name of the type.
-  Derived& name(const std::string& x) & {
-    this->name_ = x;
+  Derived& name(std::string x) & {
+    this->name_ = std::move(x);
     return derived();
   }
 
@@ -416,7 +427,7 @@ struct nested_type : recursive_type<Derived> {
     // nop
   }
 
-  type value_type; ///< The type of the list elements.
+  type value_type; ///< The type of the enclosed element(s).
 
   template <class Inspector>
   friend auto inspect(Inspector& f, Derived& x) {
