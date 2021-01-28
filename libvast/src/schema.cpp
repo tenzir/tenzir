@@ -270,7 +270,7 @@ load_schema(const detail::stable_set<path>& schema_dirs, size_t max_recursion) {
   for (const auto& dir : schema_dirs) {
     VAST_VERBOSE_ANON("loading schemas from", dir);
     if (!exists(dir)) {
-      VAST_DEBUG_ANON(__func__, "skips non-existing directory:", dir);
+      VAST_LOG_SPD_DEBUG("{} skips non-existing directory: {}", __func__, dir);
       continue;
     }
     vast::schema directory_schema;
@@ -278,7 +278,7 @@ load_schema(const detail::stable_set<path>& schema_dirs, size_t max_recursion) {
       = [](const path& f) { return detail::ends_with(f.str(), ".schema"); };
     auto schema_files = filter_dir(dir, std::move(filter), max_recursion);
     for (auto f : schema_files) {
-      VAST_DEBUG_ANON("loading schema", f);
+      VAST_LOG_SPD_DEBUG("loading schema {}", f);
       auto schema = load_schema(f);
       if (!schema) {
         VAST_ERROR_ANON(__func__, render(schema.error()), f);

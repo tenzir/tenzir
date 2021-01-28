@@ -173,7 +173,7 @@ caf::settings get_status() {
 #elif VAST_POSIX
   return get_status_rusage();
 #else
-  VAST_DEBUG_ANON("getting process information not supported");
+  VAST_LOG_SPD_DEBUG("getting process information not supported");
   // Not implemented.
   return caf::settings{};
 #endif

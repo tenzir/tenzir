@@ -188,7 +188,8 @@ make_source(const Actor& self, caf::actor_system& sys, const invocation& inv,
     self->send(src, std::move(*expr));
   }
   // Connect source to importer.
-  VAST_DEBUG(inv.full_name, "connects to", VAST_ARG(importer));
+  VAST_LOG_SPD_DEBUG("{} connects to {}", detail::id_or_name(inv.full_name),
+                     VAST_ARG(importer));
   self->send(
     src, static_cast<stream_sink_actor<table_slice, std::string>>(importer));
   return make_source_result{src, reader->name()};

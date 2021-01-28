@@ -50,8 +50,9 @@ query_supervisor_actor::behavior_type query_supervisor(
     [=](const expression& expr,
         const std::vector<std::pair<uuid, partition_actor>>& qm,
         const index_client_actor& client) {
-      VAST_DEBUG(self, self->state.log_identifier, "got a new query for",
-                 qm.size(), "partitions:", get_ids(qm));
+      VAST_LOG_SPD_DEBUG("{}  {} got a new query for {} partitions: {}",
+                         detail::id_or_name(self), self->state.log_identifier,
+                         qm.size(), get_ids(qm));
       // TODO: We can save one message here if we handle this case in the
       // partition immediately.
       if (qm.empty()) {
@@ -69,9 +70,10 @@ query_supervisor_actor::behavior_type query_supervisor(
           .then(
             [=](atom::done) {
               if (--self->state.open_requests == 0) {
-                VAST_DEBUG(self, self->state.log_identifier,
-                           "collected all results for the current batch "
-                           "of partitions");
+                VAST_LOG_SPD_DEBUG(
+                  "{}  {} collected all results for the current batch "
+                  "of partitions",
+                  detail::id_or_name(self), self->state.log_identifier);
                 // Ask master for more work after receiving the last sub
                 // result.
                 // TODO: We should schedule a new partition as soon as the

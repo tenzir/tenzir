@@ -56,11 +56,13 @@ maybe_actor spawn_exporter(node_actor* self, spawn_arguments& args) {
     self->send(caf::actor_cast<importer_actor>(importer),
                static_cast<stream_sink_actor<table_slice>>(handle));
   if (archive) {
-    VAST_DEBUG(self, "connects archive to new exporter");
+    VAST_LOG_SPD_DEBUG("{} connects archive to new exporter",
+                       detail::id_or_name(self));
     self->send(handle, caf::actor_cast<archive_actor>(archive));
   }
   if (index) {
-    VAST_DEBUG(self, "connects index to new exporter");
+    VAST_LOG_SPD_DEBUG("{} connects index to new exporter",
+                       detail::id_or_name(self));
     self->send(handle, caf::actor_cast<index_actor>(index));
   }
   // Setting max-events to 0 means infinite.

@@ -40,7 +40,7 @@ using namespace std::chrono_literals;
 namespace vast::system {
 
 caf::message count_command(const invocation& inv, caf::actor_system& sys) {
-  VAST_DEBUG_ANON(inv);
+  VAST_LOG_SPD_DEBUG("{}", inv);
   const auto& options = inv.options;
   // Read query from input file, STDIN or CLI arguments.
   auto query = read_query(inv, "vast.count.read");
@@ -64,7 +64,8 @@ caf::message count_command(const invocation& inv, caf::actor_system& sys) {
   // Spawn COUNTER at the node.
   caf::actor cnt;
   auto args = invocation{options, "spawn counter", {*query}};
-  VAST_DEBUG(inv.full_name, "spawns counter with parameters:", query);
+  VAST_LOG_SPD_DEBUG("{} spawns counter with parameters: {}",
+                     detail::id_or_name(inv.full_name), query);
   caf::error err;
   self->request(node, caf::infinite, std::move(args))
     .receive(

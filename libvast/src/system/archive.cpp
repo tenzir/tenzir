@@ -73,12 +73,14 @@ void archive_state::send_report() {
 #if VAST_LOG_LEVEL >= VAST_LOG_LEVEL_DEBUG
     for (const auto& [key, m] : r) {
       if (auto rate = m.rate_per_sec(); std::isfinite(rate))
-        VAST_DEBUG(self, "handled", m.events, "events at a rate of",
-                   static_cast<uint64_t>(rate), "events/sec in",
-                   to_string(m.duration));
+        VAST_LOG_SPD_DEBUG("{} handled {} events at a rate of {} events/sec in "
+                           "{}",
+                           detail::id_or_name(self), m.events,
+                           static_cast<uint64_t>(rate), to_string(m.duration));
       else
-        VAST_DEBUG(self, "handled", m.events, "events in",
-                   to_string(m.duration));
+        VAST_LOG_SPD_DEBUG("{} handled {} events in {}",
+                           detail::id_or_name(self), m.events,
+                           to_string(m.duration));
     }
 #endif
     measurement = vast::system::measurement{};
@@ -101,7 +103,8 @@ archive(archive_actor::stateful_pointer<archive_state> self, path dir,
   self->state.store = segment_store::make(dir, max_segment_size, capacity);
   VAST_ASSERT(self->state.store != nullptr);
   self->set_exit_handler([=](const caf::exit_msg& msg) {
-    VAST_DEBUG(self, "got EXIT from", msg.source);
+    VAST_LOG_SPD_DEBUG("{} got EXIT from {}", detail::id_or_name(self),
+                       msg.source);
     self->state.send_report();
     if (auto err = self->state.store->flush())
       VAST_ERROR(self, "failed to flush archive", to_string(err));
@@ -109,7 +112,8 @@ archive(archive_actor::stateful_pointer<archive_state> self, path dir,
     self->quit(msg.reason);
   });
   self->set_down_handler([=](const caf::down_msg& msg) {
-    VAST_DEBUG(self, "received DOWN from", msg.source);
+    VAST_LOG_SPD_DEBUG("{} received DOWN from {}", detail::id_or_name(self),
+                       msg.source);
     self->state.active_exporters.erase(msg.source);
   });
   return {
@@ -127,7 +131,8 @@ archive(archive_actor::stateful_pointer<archive_state> self, path dir,
     [=](const ids& xs, archive_client_actor requester) {
       auto& st = self->state;
       if (st.active_exporters.count(requester->address()) == 0) {
-        VAST_DEBUG(self, "dismisses query for inactive sender");
+        VAST_LOG_SPD_DEBUG("{} dismisses query for inactive sender",
+                           detail::id_or_name(self));
         return;
       }
       st.requesters.push(requester);
@@ -139,13 +144,15 @@ archive(archive_actor::stateful_pointer<archive_state> self, path dir,
       auto& st = self->state;
       // If the export has since shut down, we need to invalidate the session.
       if (st.active_exporters.count(requester->address()) == 0) {
-        VAST_DEBUG(self, "invalidates running query session for", requester);
+        VAST_LOG_SPD_DEBUG("{} invalidates running query session for {}",
+                           detail::id_or_name(self), requester);
         st.next_session();
         return;
       }
       if (!st.session || st.session_id != session_id) {
-        VAST_DEBUG(self, "considers extraction finished for invalidated "
-                         "session");
+        VAST_LOG_SPD_DEBUG("{} considers extraction finished for invalidated "
+                           "session",
+                           detail::id_or_name(self));
         self->send(requester, atom::done_v, caf::make_error(ec::no_error));
         st.next_session();
         return;
@@ -155,7 +162,9 @@ archive(archive_actor::stateful_pointer<archive_state> self, path dir,
       if (!slice) {
         auto err = slice.error() ? std::move(slice.error())
                                  : caf::make_error(ec::no_error);
-        VAST_DEBUG(self, "finished extraction from the current session:", err);
+        VAST_LOG_SPD_DEBUG("{} finished extraction from the current session: "
+                           "{}",
+                           detail::id_or_name(self), err);
         self->send(requester, atom::done_v, std::move(err));
         st.next_session();
         return;
@@ -167,7 +176,8 @@ archive(archive_actor::stateful_pointer<archive_state> self, path dir,
       self->send(self, xs, requester, session_id);
     },
     [=](caf::stream<table_slice> in) -> caf::inbound_stream_slot<table_slice> {
-      VAST_DEBUG(self, "got a new stream source");
+      VAST_LOG_SPD_DEBUG("{} got a new stream source",
+                         detail::id_or_name(self));
       return self
         ->make_sink(
           in,
@@ -195,12 +205,13 @@ archive(archive_actor::stateful_pointer<archive_state> self, path dir,
               if (err != caf::exit_reason::user_shutdown)
                 VAST_ERROR(self, "got a stream error:", render(err));
               else
-                VAST_DEBUG(self, "got a user shutdown error:", render(err));
+                VAST_LOG_SPD_DEBUG("{} got a user shutdown error: {}",
+                                   detail::id_or_name(self), render(err));
               // We can shutdown now because we only get a single stream from
               // the importer.
               self->send_exit(self, err);
             }
-            VAST_DEBUG_ANON("archive finalizes streaming");
+            VAST_LOG_SPD_DEBUG("archive finalizes streaming");
           })
         .inbound_slot();
     },

@@ -104,15 +104,18 @@ std::unique_ptr<store::lookup> segment_store::extract(const ids& xs) const {
         return caf::no_error;
       auto& cand = *first_++;
       if (cand == store_.builder_.id()) {
-        VAST_DEBUG(this, "looks into the active segment", cand);
+        VAST_LOG_SPD_DEBUG("{} looks into the active segment {}",
+                           detail::id_or_name(this), cand);
         return store_.builder_.lookup(xs_);
       }
       auto i = store_.cache_.find(cand);
       if (i != store_.cache_.end()) {
-        VAST_DEBUG(this, "got cache hit for segment", cand);
+        VAST_LOG_SPD_DEBUG("{} got cache hit for segment {}",
+                           detail::id_or_name(this), cand);
         return i->second.lookup(xs_);
       }
-      VAST_DEBUG(this, "got cache miss for segment", cand);
+      VAST_LOG_SPD_DEBUG("{} got cache miss for segment {}",
+                         detail::id_or_name(this), cand);
       auto s = store_.load_segment(cand);
       if (!s)
         return s.error();
@@ -136,7 +139,8 @@ std::unique_ptr<store::lookup> segment_store::extract(const ids& xs) const {
     VAST_WARNING(this, "failed to get candidates for ids", xs);
     return nullptr;
   }
-  VAST_DEBUG(this, "processes", candidates.size(), "candidates");
+  VAST_LOG_SPD_DEBUG("{} processes {} candidates", detail::id_or_name(this),
+                     candidates.size());
   std::partition(candidates.begin(), candidates.end(), [&](const auto& id) {
     return id == builder_.id() || cache_.find(id) != cache_.end();
   });
@@ -255,14 +259,17 @@ caf::error segment_store::erase(const ids& xs) {
   for (auto& candidate : candidates) {
     auto j = cache_.find(candidate);
     if (j != cache_.end()) {
-      VAST_DEBUG(this, "erases from the cached segment", candidate);
+      VAST_LOG_SPD_DEBUG("{} erases from the cached segment {}",
+                         detail::id_or_name(this), candidate);
       impl(j->second);
       cache_.erase(j);
     } else if (candidate == builder_.id()) {
-      VAST_DEBUG(this, "erases from the active segment", candidate);
+      VAST_LOG_SPD_DEBUG("{} erases from the active segment {}",
+                         detail::id_or_name(this), candidate);
       impl(builder_);
     } else if (auto s = load_segment(candidate)) {
-      VAST_DEBUG(this, "erases from the segment", candidate);
+      VAST_LOG_SPD_DEBUG("{} erases from the segment {}",
+                         detail::id_or_name(this), candidate);
       impl(*s);
     }
   }
@@ -283,7 +290,8 @@ caf::expected<std::vector<table_slice>> segment_store::get(const ids& xs) {
     return err;
   // Process candidates in reverse order for maximum LRU cache hits.
   std::vector<table_slice> result;
-  VAST_DEBUG(this, "processes", candidates.size(), "candidates");
+  VAST_LOG_SPD_DEBUG("{} processes {} candidates", detail::id_or_name(this),
+                     candidates.size());
   std::partition(candidates.begin(), candidates.end(), [&](const auto& id) {
     return id == builder_.id() || cache_.find(id) != cache_.end();
   });
@@ -291,20 +299,24 @@ caf::expected<std::vector<table_slice>> segment_store::get(const ids& xs) {
     auto& id = *cand;
     caf::expected<std::vector<table_slice>> slices{caf::no_error};
     if (id == builder_.id()) {
-      VAST_DEBUG(this, "looks into the active segment", id);
+      VAST_LOG_SPD_DEBUG("{} looks into the active segment {}",
+                         detail::id_or_name(this), id);
       slices = builder_.lookup(xs);
     } else {
       auto i = cache_.find(id);
       if (i == cache_.end()) {
-        VAST_DEBUG(this, "got cache miss for segment", id);
+        VAST_LOG_SPD_DEBUG("{} got cache miss for segment {}",
+                           detail::id_or_name(this), id);
         auto x = load_segment(id);
         if (!x)
           return x.error();
         i = cache_.emplace(id, std::move(*x)).first;
       } else {
-        VAST_DEBUG(this, "got cache hit for segment", id);
+        VAST_LOG_SPD_DEBUG("{} got cache hit for segment {}",
+                           detail::id_or_name(this), id);
       }
-      VAST_DEBUG(this, "looks into segment", id);
+      VAST_LOG_SPD_DEBUG("{} looks into segment {}", detail::id_or_name(this),
+                         id);
       slices = i->second.lookup(xs);
     }
     if (!slices)
@@ -318,14 +330,15 @@ caf::expected<std::vector<table_slice>> segment_store::get(const ids& xs) {
 caf::error segment_store::flush() {
   if (!dirty())
     return caf::none;
-  VAST_DEBUG(this, "finishes current builder");
+  VAST_LOG_SPD_DEBUG("{} finishes current builder", detail::id_or_name(this));
   auto seg = builder_.finish();
   auto filename = segment_path() / to_string(seg.id());
   if (auto err = write(filename, seg.chunk()))
     return err;
   // Keep new segment in the cache.
   cache_.emplace(seg.id(), seg);
-  VAST_DEBUG(this, "wrote new segment to", filename.trim(-3));
+  VAST_LOG_SPD_DEBUG("{} wrote new segment to {}", detail::id_or_name(this),
+                     filename.trim(-3));
   return caf::none;
 }
 
@@ -379,7 +392,8 @@ caf::error segment_store::register_segment(const path& filename) {
   uuid segment_uuid;
   if (auto error = unpack(*s0->uuid(), segment_uuid))
     return error;
-  VAST_DEBUG(this, "found segment", segment_uuid);
+  VAST_LOG_SPD_DEBUG("{} found segment {}", detail::id_or_name(this),
+                     segment_uuid);
   for (auto interval : *s0->ids())
     if (!segments_.inject(interval->begin(), interval->end(), segment_uuid))
       return caf::make_error(ec::unspecified, "failed to update range_map");
@@ -388,7 +402,8 @@ caf::error segment_store::register_segment(const path& filename) {
 
 caf::expected<segment> segment_store::load_segment(uuid id) const {
   auto filename = segment_path() / to_string(id);
-  VAST_DEBUG(this, "mmaps segment from", filename);
+  VAST_LOG_SPD_DEBUG("{} mmaps segment from {}", detail::id_or_name(this),
+                     filename);
   auto chk = chunk::mmap(filename);
   if (!chk)
     return caf::make_error(ec::filesystem_error, "failed to mmap chunk",
@@ -404,7 +419,8 @@ caf::expected<segment> segment_store::load_segment(uuid id) const {
 
 caf::error segment_store::select_segments(const ids& selection,
                                           std::vector<uuid>& candidates) const {
-  VAST_DEBUG(this, "retrieves table slices with requested ids");
+  VAST_LOG_SPD_DEBUG("{} retrieves table slices with requested ids",
+                     detail::id_or_name(this));
   auto f = [](auto x) { return std::pair{x.left, x.right}; };
   auto g = [&](auto x) {
     auto id = x.value;

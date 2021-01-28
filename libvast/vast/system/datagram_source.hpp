@@ -93,7 +93,8 @@ datagram_source(datagram_source_actor<Reader>* self,
     self->quit(std::move(udp_res.error()));
     return {};
   }
-  VAST_DEBUG(self, "starts listening at port", udp_res->second);
+  VAST_LOG_SPD_DEBUG("{} starts listening at port {}", detail::id_or_name(self),
+                     udp_res->second);
   // Initialize state.
   auto& st = self->state;
   st.init(self, std::move(reader), std::move(max_events),
@@ -114,7 +115,8 @@ datagram_source(datagram_source_actor<Reader>* self,
   return {
     [=](caf::io::new_datagram_msg& msg) {
       // Check whether we can buffer more slices in the stream.
-      VAST_DEBUG(self, "got a new datagram of size", msg.buf.size());
+      VAST_LOG_SPD_DEBUG("{} got a new datagram of size {}",
+                         detail::id_or_name(self), msg.buf.size());
       auto& st = self->state;
       auto t = timer::start(st.metrics);
       auto capacity = st.mgr->out().capacity();
@@ -127,7 +129,8 @@ datagram_source(datagram_source_actor<Reader>* self,
       caf::arraybuf<> buf{msg.buf.data(), msg.buf.size()};
       st.reader.reset(std::make_unique<std::istream>(&buf));
       auto push_slice = [&](table_slice slice) {
-        VAST_DEBUG(self, "produced a slice with", slice.rows(), "rows");
+        VAST_LOG_SPD_DEBUG("{} produced a slice with {} rows",
+                           detail::id_or_name(self), slice.rows());
         st.mgr->out().push(std::move(slice));
       };
       auto events = capacity * table_slice_size;
@@ -149,7 +152,8 @@ datagram_source(datagram_source_actor<Reader>* self,
         st.send_report();
     },
     [=](accountant_actor accountant) {
-      VAST_DEBUG(self, "sets accountant to", accountant);
+      VAST_LOG_SPD_DEBUG("{} sets accountant to {}", detail::id_or_name(self),
+                         accountant);
       auto& st = self->state;
       st.accountant = std::move(accountant);
       self->send(st.accountant, "source.start", st.start_time);
@@ -163,7 +167,8 @@ datagram_source(datagram_source_actor<Reader>* self,
       //       implement an anycast downstream manager and use it for the
       //       source, because we mustn't duplicate data.
       VAST_ASSERT(sink != nullptr);
-      VAST_DEBUG(self, "registers sink", sink);
+      VAST_LOG_SPD_DEBUG("{} registers sink {}", detail::id_or_name(self),
+                         sink);
       auto& st = self->state;
       // Start streaming.
       st.mgr->add_outbound_path(sink);

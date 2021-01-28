@@ -131,7 +131,8 @@ std::vector<uuid> meta_index::lookup(const expression& expr) const {
               if (syn) {
                 auto opt = syn->lookup(x.op, make_view(rhs));
                 if (!opt || *opt) {
-                  VAST_DEBUG(this, "selects", part_id, "at predicate", x);
+                  VAST_LOG_SPD_DEBUG("{} selects {} at predicate {}",
+                                     detail::id_or_name(this), part_id, x);
                   result.push_back(part_id);
                   break;
                 }
@@ -141,7 +142,8 @@ std::vector<uuid> meta_index::lookup(const expression& expr) const {
                          it != part_syn.type_synopses_.end() && it->second) {
                 auto opt = it->second->lookup(x.op, make_view(rhs));
                 if (!opt || *opt) {
-                  VAST_DEBUG(this, "selects", part_id, "at predicate", x);
+                  VAST_LOG_SPD_DEBUG("{} selects {} at predicate {}",
+                                     detail::id_or_name(this), part_id, x);
                   result.push_back(part_id);
                   break;
                 }
@@ -154,9 +156,9 @@ std::vector<uuid> meta_index::lookup(const expression& expr) const {
             }
           }
         }
-        VAST_DEBUG(this, "checked", synopses_.size(),
-                   "partitions for predicate", x, "and got", result.size(),
-                   "results");
+        VAST_LOG_SPD_DEBUG(
+          "{} checked {} partitions for predicate {} and got {} results",
+          detail::id_or_name(this), synopses_.size(), x, result.size());
         // Some calling paths require the result to be sorted.
         std::sort(result.begin(), result.end());
         return result;
@@ -248,8 +250,8 @@ std::vector<uuid> meta_index::lookup(const expression& expr) const {
   auto result = caf::visit(f, expr);
   auto delta = std::chrono::duration_cast<std::chrono::microseconds>(
     system::stopwatch::now() - start);
-  VAST_DEBUG_ANON("meta index lookup found", result.size(), "candidates in",
-                  delta.count(), "microseconds");
+  VAST_LOG_SPD_DEBUG("meta index lookup found {} candidates in {} microseconds",
+                     result.size(), delta.count());
   VAST_TRACEPOINT(meta_index_lookup, delta.count(), result.size());
   return result;
 }

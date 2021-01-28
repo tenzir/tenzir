@@ -69,7 +69,7 @@ active_indexer(active_indexer_actor::stateful_pointer<indexer_state> self,
   return {
     [=](caf::stream<table_slice_column> in)
       -> caf::inbound_stream_slot<table_slice_column> {
-      VAST_DEBUG(self, "got a new stream");
+      VAST_LOG_SPD_DEBUG("{} got a new stream", detail::id_or_name(self));
       self->state.stream_initiated = true;
       auto result = caf::attach_stream_sink(
         self, in,
@@ -103,7 +103,8 @@ active_indexer(active_indexer_actor::stateful_pointer<indexer_state> self,
       return result.inbound_slot();
     },
     [=](const curried_predicate& pred) {
-      VAST_DEBUG(self, "got predicate:", pred);
+      VAST_LOG_SPD_DEBUG("{} got predicate: {}", detail::id_or_name(self),
+                         pred);
       VAST_ASSERT(self->state.idx);
       auto& idx = *self->state.idx;
       auto rep = to_internal(idx.type(), make_view(pred.rhs));
@@ -148,7 +149,8 @@ passive_indexer(indexer_actor::stateful_pointer<indexer_state> self,
   self->state.idx = std::move(idx);
   return {
     [=](const curried_predicate& pred) {
-      VAST_DEBUG(self, "got predicate:", pred);
+      VAST_LOG_SPD_DEBUG("{} got predicate: {}", detail::id_or_name(self),
+                         pred);
       VAST_ASSERT(self->state.idx);
       auto& idx = *self->state.idx;
       auto rep = to_internal(idx.type(), make_view(pred.rhs));

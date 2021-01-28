@@ -22,7 +22,7 @@
 namespace vast::system {
 
 maybe_actor spawn_pivoter(node_actor* self, spawn_arguments& args) {
-  VAST_DEBUG_ANON(VAST_ARG(args));
+  VAST_LOG_SPD_DEBUG("{}", VAST_ARG(args));
   auto& arguments = args.inv.arguments;
   if (arguments.size() < 2)
     return unexpected_arguments(args);

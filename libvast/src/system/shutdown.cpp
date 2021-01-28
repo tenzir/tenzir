@@ -34,14 +34,16 @@ void shutdown(caf::event_based_actor* self, std::vector<caf::actor> xs,
       VAST_WARNING(self, "received hard kill and terminates immediately");
       self->quit(msg.reason);
     } else {
-      VAST_DEBUG(self, "ignores duplicate EXIT message from", msg.source);
+      VAST_LOG_SPD_DEBUG("{} ignores duplicate EXIT message from {}",
+                         detail::id_or_name(self), msg.source);
     }
   });
   // Terminate actors as requested.
   terminate<Policy>(self, std::move(xs), grace_period, kill_timeout)
     .then(
       [=](atom::done) {
-        VAST_DEBUG(self, "terminates after shutting down all dependents");
+        VAST_LOG_SPD_DEBUG("{} terminates after shutting down all dependents",
+                           detail::id_or_name(self));
         self->quit(caf::exit_reason::user_shutdown);
       },
       [=](const caf::error& err) {
@@ -67,7 +69,8 @@ void shutdown(caf::scoped_actor& self, std::vector<caf::actor> xs,
   terminate<Policy>(self, std::move(xs), grace_period, kill_timeout)
     .receive(
       [&](atom::done) {
-        VAST_DEBUG(self, "terminates after shutting down all dependents");
+        VAST_LOG_SPD_DEBUG("{} terminates after shutting down all dependents",
+                           detail::id_or_name(self));
       },
       [&](const caf::error& err) {
         VAST_ERROR_ANON("failed to terminated all dependent actors", err);

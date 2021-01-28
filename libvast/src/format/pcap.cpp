@@ -259,7 +259,7 @@ caf::error reader::read_impl(size_t max_events, size_t max_slice_size,
   while (produced < max_events) {
     if (batch_events_ > 0 && batch_timeout_ > reader_clock::duration::zero()
         && last_batch_sent_ + batch_timeout_ < reader_clock::now()) {
-      VAST_DEBUG(this, "reached batch timeout");
+      VAST_LOG_SPD_DEBUG("{} reached batch timeout", detail::id_or_name(this));
       return finish(f, ec::timeout);
     }
     // Attempt to fetch next packet.
@@ -294,7 +294,7 @@ caf::error reader::read_impl(size_t max_events, size_t max_slice_size,
     switch (as_ether_type(frame.subspan<12, 2>())) {
       default: {
         ++discard_count_;
-        VAST_DEBUG(this, "skips non-IP packet");
+        VAST_LOG_SPD_DEBUG("{} skips non-IP packet", detail::id_or_name(this));
         continue;
       }
       case ether_type::ipv4: {
@@ -370,7 +370,7 @@ caf::error reader::read_impl(size_t max_events, size_t max_slice_size,
       last_expire_ = packet_time;
     if (!update_flow(conn, packet_time, payload_size)) {
       ++discard_count_;
-      VAST_DEBUG(this, "skips cut off packet");
+      VAST_LOG_SPD_DEBUG("{} skips cut off packet", detail::id_or_name(this));
       continue;
     }
     evict_inactive(packet_time);
@@ -532,7 +532,8 @@ caf::error writer::write(const table_slice& slice) {
 caf::expected<void> writer::flush() {
   if (!dumper_)
     return caf::make_error(ec::format_error, "pcap dumper not open");
-  VAST_DEBUG(this, "flushes at packet", total_packets_);
+  VAST_LOG_SPD_DEBUG("{} flushes at packet {}", detail::id_or_name(this),
+                     total_packets_);
   if (::pcap_dump_flush(dumper_) == -1)
     return caf::make_error(ec::format_error, "failed to flush");
   return caf::no_error;

@@ -53,7 +53,8 @@ maybe_actor spawn_importer(node_actor* self, spawn_arguments& args) {
     self->send(handle, atom::telemetry_v);
   }
   for (auto& source : self->state.registry.find_by_type("source")) {
-    VAST_DEBUG(self, "connects source to new importer");
+    VAST_LOG_SPD_DEBUG("{} connects source to new importer",
+                       detail::id_or_name(self));
     self->send(source, atom::sink_v, caf::actor_cast<caf::actor>(handle));
   }
   return caf::actor_cast<caf::actor>(handle);

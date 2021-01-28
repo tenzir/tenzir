@@ -53,7 +53,8 @@ caf::behavior sink(caf::stateful_actor<sink_state>* self,
   st.name = st.writer->name();
   st.last_flush = steady_clock::now();
   if (max_events > 0) {
-    VAST_DEBUG(self, "caps event export at", max_events, "events");
+    VAST_LOG_SPD_DEBUG("{} caps event export at {} events",
+                       detail::id_or_name(self), max_events);
     st.max_events = max_events;
   } else {
     // Interpret 0 as infinite.
@@ -65,8 +66,8 @@ caf::behavior sink(caf::stateful_actor<sink_state>* self,
   });
   return {
     [=](table_slice slice) {
-      VAST_DEBUG(self, "got:", slice.rows(), "events from",
-                 self->current_sender());
+      VAST_LOG_SPD_DEBUG("{} got: {} events from {}", detail::id_or_name(self),
+                         slice.rows(), self->current_sender());
       auto& st = self->state;
       auto now = steady_clock::now();
       auto time_since_flush = now - st.last_flush;
@@ -106,7 +107,8 @@ caf::behavior sink(caf::stateful_actor<sink_state>* self,
       }
     },
     [=](atom::limit, uint64_t max) {
-      VAST_DEBUG(self, "caps event export at", max, "events");
+      VAST_LOG_SPD_DEBUG("{} caps event export at {} events",
+                         detail::id_or_name(self), max);
       if (self->state.processed < max)
         self->state.max_events = max;
       else
@@ -114,13 +116,15 @@ caf::behavior sink(caf::stateful_actor<sink_state>* self,
                      "(already processed", self->state.processed, " events)");
     },
     [=](accountant_actor accountant) {
-      VAST_DEBUG(self, "sets accountant to", accountant);
+      VAST_LOG_SPD_DEBUG("{} sets accountant to {}", detail::id_or_name(self),
+                         accountant);
       auto& st = self->state;
       st.accountant = std::move(accountant);
       self->send(st.accountant, atom::announce_v, st.name);
     },
     [=](atom::statistics, const caf::actor& statistics_subscriber) {
-      VAST_DEBUG(self, "sets statistics subscriber to", statistics_subscriber);
+      VAST_LOG_SPD_DEBUG("{} sets statistics subscriber to {}",
+                         detail::id_or_name(self), statistics_subscriber);
       self->state.statistics_subscriber = statistics_subscriber;
     },
     [=](atom::status, status_verbosity v) {
