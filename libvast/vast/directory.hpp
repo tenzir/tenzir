@@ -36,7 +36,7 @@ class directory {
 public:
   using const_iterator = class iterator
     : public detail::iterator_facade<iterator, std::input_iterator_tag,
-                                     const path&, const path&> {
+                                     const vast::path&, const vast::path&> {
   public:
     iterator(const directory* dir = nullptr);
 
