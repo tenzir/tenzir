@@ -25,7 +25,7 @@ RUN echo "deb http://www.deb-multimedia.org buster main" | tee -a /etc/apt/sourc
   apt-get -qq update
 RUN apt-get -qqy install libflatbuffers-dev flatbuffers-compiler-dev
 
-# spdlog
+# Need to specify backports, since spdlog also has a regular buster package.
 RUN apt-get -qqy -t buster-backports install libspdlog-dev
 
 # Apache Arrow (c.f. https://arrow.apache.org/install/)

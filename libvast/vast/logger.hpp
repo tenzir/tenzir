@@ -44,7 +44,6 @@
 #include "vast/detail/logger.hpp"
 #include "vast/detail/logger_formatters.hpp"
 
-#define VAST_TRACE(...) SPDLOG_LOGGER_TRACE(vast::detail::logger(), __VA_ARGS__)
 #define VAST_DEBUG(...) SPDLOG_LOGGER_DEBUG(vast::detail::logger(), __VA_ARGS__)
 #define VAST_VERBOSE(...)                                                      \
   SPDLOG_LOGGER_DEBUG(vast::detail::logger(), __VA_ARGS__)
@@ -53,6 +52,20 @@
 #define VAST_ERROR(...) SPDLOG_LOGGER_ERROR(vast::detail::logger(), __VA_ARGS__)
 #define VAST_CRITICAL(...)                                                     \
   SPDLOG_LOGGER_CRITICAL(vast::detail::logger(), __VA_ARGS__)
+
+#if VAST_LOG_LEVEL >= VAST_LOG_LEVEL_TRACE
+
+#  define VAST_TRACE(...)                                                      \
+    VAST_DEBUG(vast::detail::spd_msg_from_args(1, 2, __VA_ARGS__).str(),       \
+               "ENTER", __func__, __VA_ARGS__);                                \
+    auto CAF_UNIFYN(vast_log_trace_guard_) = ::caf::detail::make_scope_guard(  \
+      [=, func_name_ = __func__] { VAST_DEBUG("EXIT {}", func_name_); })
+
+#else // VAST_LOG_LEVEL > VAST_LOG_LEVEL_TRACE
+
+#  define VAST_TRACE(...) VAST_DISCARD_ARGS(__VA_ARGS__)
+
+#endif // VAST_LOG_LEVEL > VAST_LOG_LEVEL_TRACE
 
 // -------
 

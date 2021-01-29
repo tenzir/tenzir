@@ -19,7 +19,8 @@ vast:
   #client-log-file: "client.log"
 
   # Format for printing individual log entries to the log-file.
-  # For a list of valid format specifiers, see spdlog format specification.
+  # For a list of valid format specifiers, see spdlog format specification
+  # at https://github.com/gabime/spdlog/wiki/3.-Custom-formatting
   # file-format:
 
   # Configures the minimum severity of messages written to the log file.
@@ -29,12 +30,14 @@ vast:
   # release builds.
   # file-verbosity: debug
 
-  # Mode for console log output generation.
+  # Mode for console log output generation. Automatic renders color only when
+  # writing to a tty.
   # Possible values: always, automatic, never. (default automatic)
   # console: automatic
 
   # Format for printing individual log entries to the console.
-  # For a list of valid format specifiers, see spdlog format specification.
+  # For a list of valid format specifiers, see spdlog format specification
+  # at https://github.com/gabime/spdlog/wiki/3.-Custom-formatting
   # console-format:
 
   # Configures the minimum severity of messages written to the console.
@@ -401,44 +404,6 @@ plugins:
 # be in conflict with VAST options, and are only listed here for completeness.
 
 caf:
-  logger:
-    # Format for rendering individual log file entries.
-    # Valid format specifiers are:
-    #  %c: logging category
-    #  %C: class name
-    #  %d: date
-    #  %F: source file of the log statement
-    #  %L: source line of the log statement
-    #  %m: log message
-    #  %M: source function of the log statement
-    #  %n: newline
-    #  %p: priority / severity of the message
-    #  %r: time since application start
-    #  %t: thread id
-    #  %a: actor id
-    #  %%: '%'
-    file-format: "%r %c %p %a %F:%L %m%n"
-    # Configures the minimum severity of messages written to the log file.
-    # Possible values: quiet, error, warning, info, verbose, debug, trace.
-    # File logging is only available for commands that start a node (e.g.,
-    # vast start). The levels above 'verbose' are usually not available in
-    # release builds.
-    file-verbosity: debug
-    # Mode for console log output generation.
-    # Possible values: none, colored, uncolored.
-    console: colored
-    # Format for printing individual log entries to the console.
-    # For a list of valid format specifiers, see file-format.
-    console-format: "%d %m"
-    # Configures the minimum severity of messages written to the console.
-    # For a list of valid log levels, see file-verbosity.
-    console-verbosity: info
-    # Excludes listed components from logging.
-    component-blacklist:
-      - caf
-      - caf_flow
-      - caf_stream
-
   scheduler:
     # Accepted alternative: "sharing".
     policy: stealing

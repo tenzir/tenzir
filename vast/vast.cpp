@@ -165,15 +165,12 @@ int main(int argc, char** argv) {
     // success when printing the help/documentation texts.
     return EXIT_SUCCESS;
   }
-
-  // since the logger is not dependend on caf, this could be moved up
+  // Create log context as soon as we know the correct configuration.
   auto log_context = vast::create_log_context(*invocation, cfg.content);
   if (!log_context)
     return EXIT_FAILURE;
-
   vast::detail::merge_settings((*invocation).options, cfg.content);
   caf::actor_system sys{cfg};
-
   // Print the configuration file(s) that were loaded.
   if (!cfg.config_file_path.empty())
     cfg.config_files.emplace_back(std::move(cfg.config_file_path));

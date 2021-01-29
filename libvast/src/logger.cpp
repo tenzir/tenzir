@@ -99,7 +99,7 @@ spdlog::level::level_enum vast_loglevel_to_spd(const int value) {
       level = spdlog::level::debug;
       break;
     case VAST_LOG_LEVEL_DEBUG:
-      level = spdlog::level::debug;
+      level = spdlog::level::trace;
       break;
     case VAST_LOG_LEVEL_TRACE:
       level = spdlog::level::trace;

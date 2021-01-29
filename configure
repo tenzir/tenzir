@@ -247,7 +247,7 @@ while [ $# -ne 0 ]; do
       append_cache_entry SIMDJSON_ROOT PATH "$optarg"
       ;;
     --with-spdlog=*)
-      append_cache_entry spdlog_ROOT PATH "$optarg"
+      append_cache_entry SPDLOG_ROOT PATH "$optarg"
       ;;
 # -- Optional packages ---------------------------------------------------------
     --with-broker=*)
