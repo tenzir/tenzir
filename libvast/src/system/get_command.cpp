@@ -90,10 +90,10 @@ get_command(const invocation& inv, caf::actor_system& sys) {
                  ? caf::get<caf::actor>(node_opt)
                  : caf::get<scope_linked_actor>(node_opt).get();
   VAST_ASSERT(node != nullptr);
-  auto components = get_node_components(self, node, "archive");
+  auto components = get_node_components<archive_actor>(self, node);
   if (!components)
     return caf::make_message(std::move(components.error()));
-  auto archive = caf::actor_cast<archive_actor>((*components)[0]);
+  auto&& [archive] = *components;
   VAST_ASSERT(archive);
   self->send(archive, atom::exporter_v, self);
   auto err = run(self, archive, inv);

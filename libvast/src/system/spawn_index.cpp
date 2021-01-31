@@ -28,8 +28,8 @@ maybe_actor spawn_index(node_actor* self, spawn_arguments& args) {
   auto opt = [&](caf::string_view key, auto default_value) {
     return get_or(args.inv.options, key, default_value);
   };
-  auto filesystem = caf::actor_cast<filesystem_actor>(
-    self->state.registry.find_by_label("filesystem"));
+  auto [filesystem, accountant]
+    = self->state.registry.find<filesystem_actor, accountant_actor>();
   if (!filesystem)
     return caf::make_error(ec::lookup_error, "failed to find filesystem actor");
   namespace sd = vast::defaults::system;
@@ -42,7 +42,7 @@ maybe_actor spawn_index(node_actor* self, spawn_arguments& args) {
     opt("vast.max-queries", sd::num_query_supervisors),
     opt("vast.meta-index-fp-rate", sd::string_synopsis_fp_rate));
   VAST_VERBOSE("{} spawned the index", detail::id_or_name(self));
-  if (auto accountant = self->state.registry.find_by_label("accountant"))
+  if (accountant)
     self->send(handle, caf::actor_cast<accountant_actor>(accountant));
   return caf::actor_cast<caf::actor>(handle);
 }

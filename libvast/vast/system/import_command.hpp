@@ -49,7 +49,7 @@ caf::message import_command(const invocation& inv, caf::actor_system& sys) {
                  : caf::get<scope_linked_actor>(node_opt).get();
   VAST_DEBUG("{} got node", detail::id_or_name(inv.full_name));
   // Get node components.
-  auto components = get_typed_node_components< //
+  auto components = get_node_components< //
     accountant_actor, type_registry_actor, importer_actor>(self, node);
   if (!components)
     return caf::make_message(std::move(components.error()));

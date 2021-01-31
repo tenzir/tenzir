@@ -15,6 +15,9 @@
 
 #include "vast/fwd.hpp"
 
+#include "vast/detail/actor_cast_wrapper.hpp"
+#include "vast/detail/tuple_map.hpp"
+
 #include <caf/actor.hpp>
 #include <caf/actor_cast.hpp>
 #include <caf/meta/type_name.hpp>
@@ -77,6 +80,37 @@ public:
   std::array<caf::actor, sizeof...(Ts) + 2>
   find_by_label(std::string_view l0, std::string_view l1, Ts&&... ls) {
     return {find_by_label(l0), find_by_label(l1), find_by_label(ls)...};
+  }
+
+  /// Locates typed components by handle.
+  /// @tparam Handles... The typed actor handles to lookup.
+  /// @returns The respective component actors if found.
+  template <class... Handles>
+  std::tuple<Handles...> find() const {
+    auto normalize = [](std::string in) {
+      // Remove the uninteresting parts of the name:
+      //   vast::system::type_registry_actor -> type_registry
+      in.erase(0, sizeof("vast::system::") - 1);
+      in.erase(in.size() - (sizeof("_actor") - 1));
+      // Replace '_' with '-': type_registry -> type-registry
+      std::replace(in.begin(), in.end(), '_', '-');
+      return in;
+    };
+    auto labels = std::array<std::string, sizeof...(Handles)>{
+      normalize(caf::type_name_by_id<caf::type_id<Handles>::value>::value)...};
+    auto components = std::apply(
+      [=](auto&&... labels) -> std::array<caf::actor, sizeof...(Handles)> {
+        auto find_component = [=](auto&& label) -> caf::actor {
+          if (auto i = components_.find(std::forward<decltype(label)>(label));
+              i != components_.end())
+            return i->second.actor;
+          return {};
+        };
+        return {find_component(std::forward<decltype(labels)>(labels))...};
+      },
+      std::move(labels));
+    return detail::tuple_map<std::tuple<Handles...>>(
+      std::move(components), detail::actor_cast_wrapper{});
   }
 
   /// Finds all components for a given type.

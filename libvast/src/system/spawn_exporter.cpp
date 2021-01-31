@@ -49,20 +49,19 @@ maybe_actor spawn_exporter(node_actor* self, spawn_arguments& args) {
                to_string(*expr));
   // Wire the exporter to all components.
   auto [accountant, importer, archive, index]
-    = self->state.registry.find_by_label("accountant", "importer", "archive",
-                                         "index");
+    = self->state.registry
+        .find<accountant_actor, importer_actor, archive_actor, index_actor>();
   if (accountant)
-    self->send(handle, caf::actor_cast<accountant_actor>(accountant));
+    self->send(handle, accountant);
   if (importer && has_continuous_option(query_opts))
-    self->send(caf::actor_cast<importer_actor>(importer),
-               static_cast<stream_sink_actor<table_slice>>(handle));
+    self->send(importer, static_cast<stream_sink_actor<table_slice>>(handle));
   if (archive) {
     VAST_DEBUG("{} connects archive to new exporter", detail::id_or_name(self));
-    self->send(handle, caf::actor_cast<archive_actor>(archive));
+    self->send(handle, archive);
   }
   if (index) {
     VAST_DEBUG("{} connects index to new exporter", detail::id_or_name(self));
-    self->send(handle, caf::actor_cast<index_actor>(index));
+    self->send(handle, index);
   }
   // Setting max-events to 0 means infinite.
   auto max_events = get_or(args.inv.options, "vast.export.max-events",
