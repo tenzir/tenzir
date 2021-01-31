@@ -11,7 +11,7 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#include "vast/format/simdjson.hpp"
+#include "vast/format/json.hpp"
 
 #include "vast/format/json/suricata_selector.hpp"
 
@@ -60,7 +60,7 @@ std::string_view eve_log
 
 FIXTURE_SCOPE(zeek_reader_tests, fixtures::deterministic_actor_system)
 
-TEST(simdjson to data) {
+TEST(json to data) {
   auto layout = record_type{{"b", bool_type{}},
                             {"c", count_type{}},
                             {"r", real_type{}},
@@ -105,7 +105,7 @@ TEST(simdjson to data) {
   CHECK(el.error() == ::simdjson::error_code::SUCCESS);
   auto obj = el.value().get_object();
   CHECK(obj.error() == ::simdjson::error_code::SUCCESS);
-  format::simdjson::add(*builder, obj.value(), flat);
+  format::json::add(*builder, obj.value(), flat);
   auto slice = builder->finish();
   REQUIRE_NOT_EQUAL(slice.encoding(), table_slice_encoding::none);
   CHECK(slice.at(0, 0) == data{true});
@@ -136,8 +136,8 @@ TEST(simdjson to data) {
   CHECK_EQUAL(materialize(slice.at(0, 16)), data{reference});
 }
 
-TEST_DISABLED(simdjson suricata) {
-  using reader_type = format::simdjson::reader<format::json::suricata_selector>;
+TEST_DISABLED(json suricata) {
+  using reader_type = format::json::reader<format::json::suricata_selector>;
   auto input = std::make_unique<std::istringstream>(std::string{eve_log});
   reader_type reader{caf::settings{}, std::move(input)};
   std::vector<table_slice> slices;
@@ -151,19 +151,19 @@ TEST_DISABLED(simdjson suricata) {
   CHECK(slices[0].at(0, 19) == data{count{4520}});
 }
 
-// TEST(json hex number parser) {
-//   using namespace parsers;
-//   double x;
-//   CHECK(json_number("123.0", x));
-//   CHECK_EQUAL(x, 123.0);
-//   CHECK(json_number("-123.0", x));
-//   CHECK_EQUAL(x, -123.0);
-//   CHECK(json_number("123", x));
-//   CHECK_EQUAL(x, 123.0);
-//   CHECK(json_number("+123", x));
-//   CHECK_EQUAL(x, 123.0);
-//   CHECK(json_number("0xFF", x));
-//   CHECK_EQUAL(x, 255.0);
-// }
+TEST(json hex number parser) {
+  using namespace parsers;
+  double x;
+  CHECK(json_number("123.0", x));
+  CHECK_EQUAL(x, 123.0);
+  CHECK(json_number("-123.0", x));
+  CHECK_EQUAL(x, -123.0);
+  CHECK(json_number("123", x));
+  CHECK_EQUAL(x, 123.0);
+  CHECK(json_number("+123", x));
+  CHECK_EQUAL(x, 123.0);
+  CHECK(json_number("0xFF", x));
+  CHECK_EQUAL(x, 255.0);
+}
 
 FIXTURE_SCOPE_END()
