@@ -35,7 +35,23 @@
 #include <chrono>
 #include <simdjson.h>
 
-namespace vast::format::simdjson {
+namespace vast::format::json {
+
+class writer : public ostream_writer {
+public:
+  using defaults = vast::defaults::export_::json;
+
+  using super = ostream_writer;
+
+  writer(ostream_ptr out, const caf::settings& options);
+
+  caf::error write(const table_slice& x) override;
+
+  const char* name() const override;
+
+private:
+  bool flatten_ = false;
+};
 
 /// Adds a JSON object to a table slice builder according to a given layout.
 /// @param builder The builder to add the JSON object to.
@@ -208,4 +224,4 @@ caf::error reader<Selector>::read_impl(size_t max_events, size_t max_slice_size,
   return finish(cons);
 }
 
-} // namespace vast::format::simdjson
+} // namespace vast::format::json
