@@ -41,7 +41,7 @@ namespace vast::system {
 
 caf::message
 pcap_writer_command(const invocation& inv, caf::actor_system& sys) {
-  VAST_TRACE(inv);
+  VAST_TRACE("{}", detail::id_or_name(inv));
   auto& options = inv.options;
   auto limit = caf::get_or(options, "vast.export.max-events",
                            defaults::export_::max_events);

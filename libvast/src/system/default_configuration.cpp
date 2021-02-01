@@ -26,11 +26,6 @@ default_configuration::default_configuration() {
   set("logger.component-blacklist",
       caf::make_config_value_list(atom("caf"), atom("caf_flow"),
                                   atom("caf_stream")));
-  set("logger.console", atom("COLORED"));
-  set("logger.console-format", defaults::logger::console_format);
-  set("logger.console-verbosity", defaults::logger::console_verbosity);
-  set("logger.file-verbosity", defaults::logger::file_verbosity);
-  set("logger.file-format", defaults::logger::file_format);
 }
 
 } // namespace vast::system

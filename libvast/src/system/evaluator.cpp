@@ -95,14 +95,15 @@ evaluator_state::evaluator_state(
 }
 
 void evaluator_state::handle_result(const offset& position, const ids& result) {
-  VAST_DEBUG(self, "got", rank(result), "new hits for predicate at position",
-             position);
+  VAST_DEBUG("{} got {} new hits for predicate at position {}",
+             detail::id_or_name(self), rank(result), position);
   auto ptr = hits_for(position);
   VAST_ASSERT(ptr != nullptr);
   auto& [missing, accumulated_hits] = *ptr;
   accumulated_hits |= result;
   if (--missing == 0) {
-    VAST_DEBUG(self, "collected all results at position", position);
+    VAST_DEBUG("{} collected all results at position {}",
+               detail::id_or_name(self), position);
     evaluate();
   }
   decrement_pending();
@@ -111,12 +112,14 @@ void evaluator_state::handle_result(const offset& position, const ids& result) {
 void evaluator_state::handle_missing_result(const offset& position,
                                             const caf::error& err) {
   VAST_IGNORE_UNUSED(err);
-  VAST_WARNING(self, "received", render(err),
-               "instead of a result for predicate at position", position);
+  VAST_WARN("{} received {} instead of a result for predicate at "
+            "position {}",
+            detail::id_or_name(self), render(err), position);
   auto ptr = hits_for(position);
   VAST_ASSERT(ptr != nullptr);
   if (--ptr->first == 0) {
-    VAST_DEBUG(self, "collected all results at position", position);
+    VAST_DEBUG("{} collected all results at position {}",
+               detail::id_or_name(self), position);
     evaluate();
   }
   decrement_pending();
@@ -124,8 +127,8 @@ void evaluator_state::handle_missing_result(const offset& position,
 
 void evaluator_state::evaluate() {
   auto expr_hits = caf::visit(ids_evaluator{predicate_hits}, expr);
-  VAST_DEBUG(self, "got predicate_hits:", predicate_hits,
-             "expr_hits:", expr_hits);
+  VAST_DEBUG("{} got predicate_hits: {} expr_hits: {}",
+             detail::id_or_name(self), predicate_hits, expr_hits);
   auto delta = expr_hits - hits;
   if (any<1>(delta)) {
     hits |= delta;
@@ -136,7 +139,7 @@ void evaluator_state::evaluate() {
 void evaluator_state::decrement_pending() {
   // We're done evaluating if all INDEXER actors have reported their hits.
   if (--pending_responses == 0) {
-    VAST_DEBUG(self, "completed expression evaluation");
+    VAST_DEBUG("{} completed expression evaluation", detail::id_or_name(self));
     promise.deliver(atom::done_v);
   }
 }
@@ -151,7 +154,7 @@ evaluator_actor::behavior_type
 evaluator(evaluator_actor::stateful_pointer<evaluator_state> self,
           expression expr, partition_actor partition,
           std::vector<evaluation_triple> eval) {
-  VAST_TRACE(VAST_ARG(expr), VAST_ARG(eval));
+  VAST_TRACE("{}  {}", detail::id_or_name(VAST_ARG(expr)), VAST_ARG(eval));
   VAST_ASSERT(!eval.empty());
   self->state.partition = partition;
   return {
@@ -176,7 +179,8 @@ evaluator(evaluator_actor::stateful_pointer<evaluator_state> self,
                 });
       }
       if (st.pending_responses == 0) {
-        VAST_DEBUG(self, "has nothing to evaluate for expression");
+        VAST_DEBUG("{} has nothing to evaluate for expression",
+                   detail::id_or_name(self));
         st.promise.deliver(atom::done_v);
       }
       // We can only deal with exactly one expression/client at the moment.

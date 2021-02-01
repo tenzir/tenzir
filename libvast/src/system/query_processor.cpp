@@ -75,8 +75,9 @@ void query_processor::start(expression expr, index_actor index) {
 }
 
 void query_processor::request_more_hits(uint32_t n) {
-  VAST_DEBUG(self_, "asks the INDEX for more hits by scheduling", n,
-             "additional partitions");
+  VAST_DEBUG("{} asks the INDEX for more hits by scheduling {}"
+             "additional partitions",
+             detail::id_or_name(self_), n);
   VAST_ASSERT(n > 0);
   VAST_ASSERT(partitions_.received + n <= partitions_.total);
   partitions_.scheduled = n;
@@ -86,7 +87,8 @@ void query_processor::request_more_hits(uint32_t n) {
 // -- state management ---------------------------------------------------------
 
 void query_processor::transition_to(state_name x) {
-  VAST_DEBUG(self_, "transitions from state", state_, "to state", x);
+  VAST_DEBUG("{} transitions from state {} to state {}",
+             detail::id_or_name(self_), state_, x);
   self_->become(behaviors_[x]);
   state_ = x;
 }

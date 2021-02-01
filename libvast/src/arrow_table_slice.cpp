@@ -104,24 +104,28 @@ private:
 template <class F>
 void decode(const type& t, const arrow::BooleanArray& arr, F& f) {
   DECODE_TRY_DISPATCH(bool);
-  VAST_WARNING(__func__, "expected to decode a boolean but got a", kind(t));
+  VAST_WARN("{} expected to decode a boolean but got a {}",
+            detail::id_or_name(__func__), kind(t));
 }
 
 template <class T, class F>
 void decode(const type& t, const arrow::NumericArray<T>& arr, F& f) {
   if constexpr (arrow::is_floating_type<T>::value) {
     DECODE_TRY_DISPATCH(real);
-    VAST_WARNING(__func__, "expected to decode a real but got a", kind(t));
+    VAST_WARN("{} expected to decode a real but got a {}",
+              detail::id_or_name(__func__), kind(t));
   } else if constexpr (std::is_signed_v<typename T::c_type>) {
     DECODE_TRY_DISPATCH(integer);
     DECODE_TRY_DISPATCH(duration);
-    VAST_WARNING(
-      __func__, "expected to decode an integer or timespan but got a", kind(t));
+    VAST_WARN("{} expected to decode an integer or timespan but got a "
+              "{}",
+              detail::id_or_name(__func__), kind(t));
   } else {
     DECODE_TRY_DISPATCH(count);
     DECODE_TRY_DISPATCH(enumeration);
-    VAST_WARNING(
-      __func__, "expected to decode a count or enumeration but got a", kind(t));
+    VAST_WARN("{} expected to decode a count or enumeration but got a "
+              "{}",
+              detail::id_or_name(__func__), kind(t));
   }
 }
 
@@ -129,36 +133,39 @@ template <class F>
 void decode(const type& t, const arrow::FixedSizeBinaryArray& arr, F& f) {
   DECODE_TRY_DISPATCH(address);
   DECODE_TRY_DISPATCH(subnet);
-  VAST_WARNING(__func__, "expected to decode an address or subnet but got a",
-               kind(t));
+  VAST_WARN("{} expected to decode an address or subnet but got a {}",
+            detail::id_or_name(__func__), kind(t));
 }
 
 template <class F>
 void decode(const type& t, const arrow::StringArray& arr, F& f) {
   DECODE_TRY_DISPATCH(string);
   DECODE_TRY_DISPATCH(pattern);
-  VAST_WARNING(__func__, "expected to decode a string or pattern but got a",
-               kind(t));
+  VAST_WARN("{} expected to decode a string or pattern but got a {}",
+            detail::id_or_name(__func__), kind(t));
 }
 
 template <class F>
 void decode(const type& t, const arrow::TimestampArray& arr, F& f) {
   DECODE_TRY_DISPATCH(time);
-  VAST_WARNING(__func__, "expected to decode a timestamp but got a", kind(t));
+  VAST_WARN("{} expected to decode a timestamp but got a {}",
+            detail::id_or_name(__func__), kind(t));
 }
 
 template <class F>
 void decode(const type& t, const arrow::ListArray& arr, F& f) {
   DECODE_TRY_DISPATCH(list);
   DECODE_TRY_DISPATCH(map);
-  VAST_WARNING(__func__, "expected to decode a list or map but got a", kind(t));
+  VAST_WARN("{} expected to decode a list or map but got a {}",
+            detail::id_or_name(__func__), kind(t));
 }
 
 template <class F>
 void decode(const type& t, const arrow::Array& arr, F& f) {
   switch (arr.type_id()) {
     default: {
-      VAST_WARNING(__func__, "got an unrecognized Arrow type ID");
+      VAST_WARN("{} got an unrecognized Arrow type ID",
+                detail::id_or_name(__func__));
       break;
     }
     // -- handle basic types ---------------------------------------------------
@@ -556,15 +563,15 @@ public:
     if (auto status
         = decoder_.Consume(flat_schema->data(), flat_schema->size());
         !status.ok()) {
-      VAST_ERROR_ANON(__func__,
-                      "failed to decode Arrow Schema:", status.ToString());
+      VAST_ERROR("{} failed to decode Arrow Schema: {}", __func__,
+                 status.ToString());
       return {};
     }
     if (auto status = decoder_.Consume(flat_record_batch->data(),
                                        flat_record_batch->size());
         !status.ok()) {
-      VAST_ERROR_ANON(
-        __func__, "failed to decode Arrow Record Batch:", status.ToString());
+      VAST_ERROR("{} failed to decode Arrow Record Batch: {}", __func__,
+                 status.ToString());
       return {};
     }
     VAST_ASSERT(record_batch_);

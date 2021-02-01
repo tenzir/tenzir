@@ -26,7 +26,7 @@
 namespace vast::system {
 
 caf::message stop_command(const invocation& inv, caf::actor_system& sys) {
-  VAST_TRACE(inv);
+  VAST_TRACE("{}", detail::id_or_name(inv));
   // Bail out early for bogus invocations.
   if (caf::get_or(inv.options, "vast.node", false))
     return caf::make_message(caf::make_error(
@@ -37,12 +37,12 @@ caf::message stop_command(const invocation& inv, caf::actor_system& sys) {
   if (!node)
     return caf::make_message(std::move(node.error()));
   self->monitor(*node);
-  VAST_INFO_ANON("requesting remote shutdown");
+  VAST_INFO("requesting remote shutdown");
   caf::error err;
   self->send_exit(*node, caf::exit_reason::user_shutdown);
   self->receive(
     [&](const caf::down_msg&) {
-      VAST_INFO_ANON("remote node terminated successfully");
+      VAST_INFO("remote node terminated successfully");
     },
     [&](caf::error& e) { err = std::move(e); });
   if (err)

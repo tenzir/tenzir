@@ -53,7 +53,8 @@ caf::behavior sink(caf::stateful_actor<sink_state>* self,
   st.name = st.writer->name();
   st.last_flush = steady_clock::now();
   if (max_events > 0) {
-    VAST_DEBUG(self, "caps event export at", max_events, "events");
+    VAST_DEBUG("{} caps event export at {} events", detail::id_or_name(self),
+               max_events);
     st.max_events = max_events;
   } else {
     // Interpret 0 as infinite.
@@ -65,17 +66,18 @@ caf::behavior sink(caf::stateful_actor<sink_state>* self,
   });
   return {
     [=](table_slice slice) {
-      VAST_DEBUG(self, "got:", slice.rows(), "events from",
-                 self->current_sender());
+      VAST_DEBUG("{} got: {} events from {}", detail::id_or_name(self),
+                 slice.rows(), self->current_sender());
       auto& st = self->state;
       auto now = steady_clock::now();
       auto time_since_flush = now - st.last_flush;
       if (st.processed == 0) {
-        VAST_INFO(st.name, "received first result with a latency of",
-                  to_string(time_since_flush));
+        VAST_INFO("{} received first result with a latency of {}",
+                  detail::id_or_name(st.name), to_string(time_since_flush));
       }
       auto reached_max_events = [&] {
-        VAST_INFO(self, "reached limit of", st.max_events, "events");
+        VAST_INFO("{} reached limit of {} events", detail::id_or_name(self),
+                  st.max_events);
         st.writer->flush();
         st.send_report();
         self->quit();
@@ -89,7 +91,7 @@ caf::behavior sink(caf::stateful_actor<sink_state>* self,
       // Handle events.
       auto t = timer::start(st.measurement);
       if (auto err = st.writer->write(slice)) {
-        VAST_ERROR(self, render(err));
+        VAST_ERROR("{}  {}", detail::id_or_name(self), render(err));
         self->quit(std::move(err));
         return;
       }
@@ -106,21 +108,25 @@ caf::behavior sink(caf::stateful_actor<sink_state>* self,
       }
     },
     [=](atom::limit, uint64_t max) {
-      VAST_DEBUG(self, "caps event export at", max, "events");
+      VAST_DEBUG("{} caps event export at {} events", detail::id_or_name(self),
+                 max);
       if (self->state.processed < max)
         self->state.max_events = max;
       else
-        VAST_WARNING(self, "ignores new limit of", max,
-                     "(already processed", self->state.processed, " events)");
+        VAST_WARN("{} ignores new limit of {} (already processed",
+                  self->state.processed, " events)", detail::id_or_name(self),
+                  max);
     },
     [=](accountant_actor accountant) {
-      VAST_DEBUG(self, "sets accountant to", accountant);
+      VAST_DEBUG("{} sets accountant to {}", detail::id_or_name(self),
+                 accountant);
       auto& st = self->state;
       st.accountant = std::move(accountant);
       self->send(st.accountant, atom::announce_v, st.name);
     },
     [=](atom::statistics, const caf::actor& statistics_subscriber) {
-      VAST_DEBUG(self, "sets statistics subscriber to", statistics_subscriber);
+      VAST_DEBUG("{} sets statistics subscriber to {}",
+                 detail::id_or_name(self), statistics_subscriber);
       self->state.statistics_subscriber = statistics_subscriber;
     },
     [=](atom::status, status_verbosity v) {

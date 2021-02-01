@@ -137,10 +137,11 @@ vast::system::report reader::status() const {
   last_stats_ = std::move(stats);
   discard_count_ = 0;
   if (drop_rate >= drop_rate_threshold_)
-    VAST_WARNING(this, "has dropped", drop + ifdrop, "of", recv,
-                 "recent packets");
+    VAST_WARN("{} has dropped {} of {} recent packets",
+              detail::id_or_name(this), drop + ifdrop, recv);
   if (discard > 0)
-    VAST_WARNING(this, "has discarded", discard, "of", recv, "recent packets");
+    VAST_WARN("{} has discarded {} of {} recent packets",
+              detail::id_or_name(this), discard, recv);
   return {
     {name() + ".recv"s, recv},       {name() + ".drop"s, drop},
     {name() + ".ifdrop"s, ifdrop},   {name() + ".drop-rate"s, drop_rate},
@@ -226,9 +227,11 @@ caf::error reader::read_impl(size_t max_events, size_t max_slice_size,
       }
       if (pseudo_realtime_ > 0) {
         pseudo_realtime_ = 0;
-        VAST_WARNING(this, "ignores pseudo-realtime in live mode");
+        VAST_WARN("{} ignores pseudo-realtime in live mode",
+                  detail::id_or_name(this));
       }
-      VAST_INFO(this, "listens on interface", *interface_);
+      VAST_INFO("{} listens on interface {}", detail::id_or_name(this),
+                *interface_);
     } else if (input_ != "-" && !exists(input_)) {
       return caf::make_error(ec::format_error, "no such file: ", input_);
     } else {
@@ -245,21 +248,25 @@ caf::error reader::read_impl(size_t max_events, size_t max_slice_size,
         return caf::make_error(ec::format_error, "failed to open pcap file ",
                                input_, ": ", std::string{buf});
       }
-      VAST_INFO(this, "reads trace from", input_);
+      VAST_INFO("{} reads trace from {}", detail::id_or_name(this), input_);
       if (pseudo_realtime_ > 0)
-        VAST_VERBOSE(this, "uses pseudo-realtime factor 1 /", pseudo_realtime_);
+        VAST_VERBOSE("{} uses pseudo-realtime factor 1 / {}",
+                     detail::id_or_name(this), pseudo_realtime_);
     }
-    VAST_VERBOSE(this, "cuts off flows after", cutoff_,
-                 "bytes in each direction");
-    VAST_VERBOSE(this, "keeps at most", max_flows_, "concurrent flows");
-    VAST_VERBOSE(this, "evicts flows after", max_age_, "s of inactivity");
-    VAST_VERBOSE(this, "expires flow table every", expire_interval_, "s");
+    VAST_VERBOSE("{} cuts off flows after {} bytes in each direction",
+                 detail::id_or_name(this), cutoff_);
+    VAST_VERBOSE("{} keeps at most {} concurrent flows",
+                 detail::id_or_name(this), max_flows_);
+    VAST_VERBOSE("{} evicts flows after {} s of inactivity",
+                 detail::id_or_name(this), max_age_);
+    VAST_VERBOSE("{} expires flow table every {} s", detail::id_or_name(this),
+                 expire_interval_);
   }
   auto produced = size_t{0};
   while (produced < max_events) {
     if (batch_events_ > 0 && batch_timeout_ > reader_clock::duration::zero()
         && last_batch_sent_ + batch_timeout_ < reader_clock::now()) {
-      VAST_DEBUG(this, "reached batch timeout");
+      VAST_DEBUG("{} reached batch timeout", detail::id_or_name(this));
       return finish(f, ec::timeout);
     }
     // Attempt to fetch next packet.
@@ -294,7 +301,7 @@ caf::error reader::read_impl(size_t max_events, size_t max_slice_size,
     switch (as_ether_type(frame.subspan<12, 2>())) {
       default: {
         ++discard_count_;
-        VAST_DEBUG(this, "skips non-IP packet");
+        VAST_DEBUG("{} skips non-IP packet", detail::id_or_name(this));
         continue;
       }
       case ether_type::ipv4: {
@@ -370,7 +377,7 @@ caf::error reader::read_impl(size_t max_events, size_t max_slice_size,
       last_expire_ = packet_time;
     if (!update_flow(conn, packet_time, payload_size)) {
       ++discard_count_;
-      VAST_DEBUG(this, "skips cut off packet");
+      VAST_DEBUG("{} skips cut off packet", detail::id_or_name(this));
       continue;
     }
     evict_inactive(packet_time);
@@ -400,9 +407,9 @@ caf::error reader::read_impl(size_t max_events, size_t max_slice_size,
     ++batch_events_;
     if (pseudo_realtime_ > 0) {
       if (ts < last_timestamp_) {
-        VAST_WARNING(this, "encountered non-monotonic packet timestamps:",
-                     ts.time_since_epoch().count(), '<',
-                     last_timestamp_.time_since_epoch().count());
+        VAST_WARN("{} encountered non-monotonic packet timestamps: {}  {}  {}",
+                  detail::id_or_name(this), ts.time_since_epoch().count(), '<',
+                  last_timestamp_.time_since_epoch().count());
       }
       if (last_timestamp_ != time::min()) {
         auto delta = ts - last_timestamp_;
@@ -532,7 +539,8 @@ caf::error writer::write(const table_slice& slice) {
 caf::expected<void> writer::flush() {
   if (!dumper_)
     return caf::make_error(ec::format_error, "pcap dumper not open");
-  VAST_DEBUG(this, "flushes at packet", total_packets_);
+  VAST_DEBUG("{} flushes at packet {}", detail::id_or_name(this),
+             total_packets_);
   if (::pcap_dump_flush(dumper_) == -1)
     return caf::make_error(ec::format_error, "failed to flush");
   return caf::no_error;

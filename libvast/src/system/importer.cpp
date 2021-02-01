@@ -53,7 +53,7 @@ public:
 
   void process(caf::downstream<table_slice>& out,
                std::vector<table_slice>& slices) override {
-    VAST_TRACE(VAST_ARG(slices));
+    VAST_TRACE("{}", detail::id_or_name(VAST_ARG(slices)));
     uint64_t events = 0;
     auto t = timer::start(state.measurement_);
     for (auto&& slice : std::exchange(slices, {})) {
@@ -67,7 +67,8 @@ public:
   }
 
   void finalize(const caf::error& err) override {
-    VAST_DEBUG(state.self, "stopped with message:", render(err));
+    VAST_DEBUG("{} stopped with message: {}", detail::id_or_name(state.self),
+               render(err));
   }
 
   importer_state& state;
@@ -87,14 +88,14 @@ public:
   void register_input_path(caf::inbound_path* ptr) override {
     driver_.state.inbound_descriptions[ptr]
       = std::exchange(driver_.state.inbound_description, "anonymous");
-    VAST_INFO(driver_.state.self, "adds",
-              driver_.state.inbound_descriptions[ptr], "source");
+    VAST_INFO("{} adds {} source", detail::id_or_name(driver_.state.self),
+              driver_.state.inbound_descriptions[ptr]);
     super::register_input_path(ptr);
   }
 
   void deregister_input_path(caf::inbound_path* ptr) noexcept override {
-    VAST_INFO(driver_.state.self, "removes",
-              driver_.state.inbound_descriptions[ptr], "source");
+    VAST_INFO("{} removes {} source", detail::id_or_name(driver_.state.self),
+              driver_.state.inbound_descriptions[ptr]);
     driver_.state.inbound_descriptions.erase(ptr);
     super::deregister_input_path(ptr);
   }
@@ -120,7 +121,8 @@ importer_state::~importer_state() {
 caf::error importer_state::read_state() {
   auto file = dir / "current_id_block";
   if (exists(file)) {
-    VAST_VERBOSE(self, "reads persistent state from", file);
+    VAST_VERBOSE("{} reads persistent state from {}", detail::id_or_name(self),
+                 file);
     std::ifstream state_file{to_string(file)};
     state_file >> current.end;
     if (!state_file)
@@ -128,12 +130,14 @@ caf::error importer_state::read_state() {
                              "unable to read importer state file", file.str());
     state_file >> current.next;
     if (!state_file) {
-      VAST_WARNING(self, "did not find next ID position in state file; "
-                         "irregular shutdown detected");
+      VAST_WARN("{} did not find next ID position in state file; "
+                "irregular shutdown detected",
+                detail::id_or_name(self));
       current.next = current.end;
     }
   } else {
-    VAST_VERBOSE(self, "did not find a state file at", file);
+    VAST_VERBOSE("{} did not find a state file at {}", detail::id_or_name(self),
+                 file);
     current.end = 0;
     current.next = 0;
   }
@@ -149,9 +153,11 @@ caf::error importer_state::write_state(write_mode mode) {
   state_file << current.end;
   if (mode == write_mode::with_next) {
     state_file << " " << current.next;
-    VAST_VERBOSE(self, "persisted next available ID at", current.next);
+    VAST_VERBOSE("{} persisted next available ID at {}",
+                 detail::id_or_name(self), current.next);
   } else {
-    VAST_VERBOSE(self, "persisted ID block boundary at", current.end);
+    VAST_VERBOSE("{} persisted ID block boundary at {}",
+                 detail::id_or_name(self), current.end);
   }
   return caf::none;
 }
@@ -209,12 +215,13 @@ void importer_state::send_report() {
 #if VAST_LOG_LEVEL >= VAST_LOG_LEVEL_VERBOSE
     auto beat = [&](const auto& sample) {
       if (auto rate = sample.value.rate_per_sec(); std::isfinite(rate))
-        VAST_VERBOSE(self, "handled", sample.value.events,
-                     "events at a rate of", static_cast<uint64_t>(rate),
-                     "events/sec in", to_string(sample.value.duration));
-      else
-        VAST_VERBOSE(self, "handled", sample.value.events, "events in",
+        VAST_VERBOSE("{} handled {} events at a rate of {} events/sec in {}",
+                     detail::id_or_name(self), sample.value.events,
+                     static_cast<uint64_t>(rate),
                      to_string(sample.value.duration));
+      else
+        VAST_VERBOSE("{} handled {} events in {}", detail::id_or_name(self),
+                     sample.value.events, to_string(sample.value.duration));
     };
     beat(r[1]);
 #endif
@@ -228,11 +235,12 @@ importer_actor::behavior_type
 importer(importer_actor::stateful_pointer<importer_state> self, path dir,
          const archive_actor& archive, index_actor index,
          const type_registry_actor& type_registry) {
-  VAST_TRACE(VAST_ARG(dir));
+  VAST_TRACE("{}", detail::id_or_name(VAST_ARG(dir)));
   self->state.dir = std::move(dir);
   auto err = self->state.read_state();
   if (err) {
-    VAST_ERROR(self, "failed to load state:", render(err));
+    VAST_ERROR("{} failed to load state: {}", detail::id_or_name(self),
+               render(err));
     self->quit(std::move(err));
     return importer_actor::behavior_type::make_empty_behavior();
   }
@@ -257,13 +265,14 @@ importer(importer_actor::stateful_pointer<importer_state> self, path dir,
   return {
     // Register the ACCOUNTANT actor.
     [=](accountant_actor accountant) {
-      VAST_DEBUG(self, "registers accountant", accountant);
+      VAST_DEBUG("{} registers accountant {}", detail::id_or_name(self),
+                 accountant);
       self->state.accountant = std::move(accountant);
       self->send(self->state.accountant, atom::announce_v, self->name());
     },
     // Add a new sink.
     [=](stream_sink_actor<table_slice> sink) {
-      VAST_DEBUG(self, "adds a new sink:", sink);
+      VAST_DEBUG("{} adds a new sink: {}", detail::id_or_name(self), sink);
       return self->state.stage->add_outbound_path(std::move(sink));
     },
     // Register a FLUSH LISTENER actor.
@@ -279,13 +288,15 @@ importer(importer_actor::stateful_pointer<importer_state> self, path dir,
     },
     // -- stream_sink_actor<table_slice> ---------------------------------------
     [=](caf::stream<table_slice> in) {
-      VAST_DEBUG(self, "adds a new source:", self->current_sender());
+      VAST_DEBUG("{} adds a new source: {}", detail::id_or_name(self),
+                 self->current_sender());
       return self->state.stage->add_inbound_path(in);
     },
     // -- stream_sink_actor<table_slice, std::string> --------------------------
     [=](caf::stream<table_slice> in, std::string desc) {
       self->state.inbound_description = std::move(desc);
-      VAST_DEBUG(self, "adds a new", desc, "source:", self->current_sender());
+      VAST_DEBUG("{} adds a new {} source: {}", detail::id_or_name(self), desc,
+                 self->current_sender());
       return self->state.stage->add_inbound_path(in);
     },
     // -- status_client_actor --------------------------------------------------

@@ -69,9 +69,10 @@ auto visit(Visitor&& visitor, const fbs::TableSlice* x) noexcept(
 #else
       static std::once_flag flag;
       std::call_once(flag, [] {
-        VAST_ERROR_ANON("database contains Arrow-encoded table slices, but "
-                        "this version of VAST does not support Apache Arrow; "
-                        "data may be missing from exports");
+        VAST_ERROR("database contains Arrow-encoded table slice but "
+                   "this version of VAST does not support Apache "
+                   "Arrow; "
+                   "data may be missing from exports");
       });
       return std::invoke(std::forward<Visitor>(visitor));
 #endif
@@ -465,8 +466,8 @@ void select(std::vector<table_slice>& result, const table_slice& slice,
   auto builder
     = factory<table_slice_builder>::make(implementation_id, slice.layout());
   if (builder == nullptr) {
-    VAST_ERROR(__func__, "failed to get a table slice builder for",
-               implementation_id);
+    VAST_ERROR("{} failed to get a table slice builder for {}",
+               detail::id_or_name(__func__), implementation_id);
     return;
   }
   id last_offset = slice.offset();
@@ -475,7 +476,7 @@ void select(std::vector<table_slice>& result, const table_slice& slice,
       return;
     auto new_slice = builder->finish(serialized_layout);
     if (new_slice.encoding() == table_slice_encoding::none) {
-      VAST_WARNING(__func__, "got an empty slice");
+      VAST_WARN("{} got an empty slice", detail::id_or_name(__func__));
       return;
     }
     new_slice.offset(last_offset);
@@ -498,8 +499,9 @@ void select(std::vector<table_slice>& result, const table_slice& slice,
     for (size_t column = 0; column < flat_layout.fields.size(); ++column) {
       auto cell_value = slice.at(row, column, flat_layout.fields[column].type);
       if (!builder->add(cell_value)) {
-        VAST_ERROR(__func__, "failed to add data at column", column, "in row",
-                   row, "to the builder:", cell_value);
+        VAST_ERROR("{} failed to add data at column {} in row {} to the "
+                   "builder: {}",
+                   detail::id_or_name(__func__), column, row, cell_value);
         return;
       }
     }
@@ -608,7 +610,7 @@ struct row_evaluator {
     if (e.attr == atom::field_v) {
       auto s = caf::get_if<std::string>(&d);
       if (!s) {
-        VAST_WARNING_ANON("#field can only compare with string");
+        VAST_WARN("#field can only compare with string");
         return false;
       }
       auto result = false;
@@ -628,7 +630,7 @@ struct row_evaluator {
         auto& field = layout.fields[col];
         if (has_attribute(field.type, "timestamp")) {
           if (!caf::holds_alternative<time_type>(field.type)) {
-            VAST_WARNING_ANON("got timestamp attribute for non-time type");
+            VAST_WARN("got timestamp attribute for non-time type");
             return false;
           }
         }

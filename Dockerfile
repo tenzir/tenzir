@@ -25,6 +25,9 @@ RUN echo "deb http://www.deb-multimedia.org buster main" | tee -a /etc/apt/sourc
   apt-get -qq update
 RUN apt-get -qqy install libflatbuffers-dev flatbuffers-compiler-dev
 
+# Need to specify backports, since spdlog also has a regular buster package.
+RUN apt-get -qqy -t buster-backports install libspdlog-dev
+
 # Apache Arrow (c.f. https://arrow.apache.org/install/)
 # TODO: Arrow CMake is broken for 2.0 on Debian/Ubuntu. Switch to 3.0 once available
 RUN wget https://apache.bintray.com/arrow/debian/pool/buster/main/a/apache-arrow-archive-keyring/apache-arrow-archive-keyring_1.0.1-1_all.deb && \
@@ -76,13 +79,15 @@ COPY --from=build_type $PREFIX/ $PREFIX/
 RUN apt-get -qq update && apt-get -qq install -y libc++1 libc++abi1 libpcap0.8 \
   openssl libsimdjson4 libyaml-cpp0.6 libasan5 libflatbuffers1 wget gnupg2
 
+# Need to specify backports, since spdlog also has a regular buster package.
+RUN apt-get -qqy -t buster-backports install libspdlog1
+
 # Apache Arrow (c.f. https://arrow.apache.org/install/)
 # TODO: Arrow CMake is broken for 2.0 on Debian/Ubuntu. Switch to 3.0 once available
 RUN wget https://apache.bintray.com/arrow/debian/pool/buster/main/a/apache-arrow-archive-keyring/apache-arrow-archive-keyring_1.0.1-1_all.deb && \
   apt-get -qqy install ./apache-arrow-archive-keyring_1.0.1-1_all.deb && \
   apt-get -qq update && \
   apt-get -qqy install libarrow-dev=1.0.1-1
-
 
 EXPOSE 42000/tcp
 

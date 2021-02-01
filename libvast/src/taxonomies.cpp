@@ -54,8 +54,8 @@ caf::error convert(const data& d, concepts_map& out) {
         return caf::make_error(ec::convert_error, "field in", *name,
                                "is not a string:", f);
       if (std::count(dest.fields.begin(), dest.fields.end(), *field) > 0)
-        VAST_WARNING_ANON("ignoring duplicate field for",
-                          *name + ": \"" + *field + "\"");
+        VAST_WARN("ignoring duplicate field for {}",
+                  *name + ": \"" + *field + "\"");
       else
         dest.fields.push_back(*field);
     }
@@ -72,8 +72,8 @@ caf::error convert(const data& d, concepts_map& out) {
         return caf::make_error(ec::convert_error, "concept in", *name,
                                "is not a string:", c);
       if (std::count(dest.fields.begin(), dest.fields.end(), *concept_) > 0)
-        VAST_WARNING_ANON("ignoring duplicate concept for",
-                          *name + ": \"" + *concept_ + "\"");
+        VAST_WARN("ignoring duplicate concept for {}",
+                  *name + ": \"" + *concept_ + "\"");
       else
         dest.concepts.push_back(*concept_);
     }
@@ -84,9 +84,9 @@ caf::error convert(const data& d, concepts_map& out) {
       if (dest.description.empty())
         dest.description = *description;
       else if (dest.description != *description)
-        VAST_WARNING_ANON("encountered conflicting descriptions for",
-                          *name + ": \"" + dest.description + "\" and \""
-                            + *description + "\"");
+        VAST_WARN("encountered conflicting descriptions for {}",
+                  *name + ": \"" + dest.description + "\" and \"" + *description
+                    + "\"");
     }
   }
   return caf::none;
@@ -153,9 +153,9 @@ caf::error convert(const data& d, models_map& out) {
       if (dest.description.empty())
         dest.description = *description;
       else if (dest.description != *description)
-        VAST_WARNING_ANON("encountered conflicting descriptions for",
-                          *name + ": \"" + dest.description + "\" and \""
-                            + *description + "\"");
+        VAST_WARN("encountered conflicting descriptions for {}",
+                  *name + ": \"" + dest.description + "\" and \"" + *description
+                    + "\"");
     }
   }
   return caf::none;

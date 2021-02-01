@@ -31,8 +31,8 @@ eraser_state::eraser_state(caf::event_based_actor* self) : super{self} {
 
 void eraser_state::init(caf::timespan interval, std::string query,
                         index_actor index, archive_actor archive) {
-  VAST_TRACE(VAST_ARG(interval), VAST_ARG(query), VAST_ARG(index),
-             VAST_ARG(archive));
+  VAST_TRACE("{}  {}  {}  {}", detail::id_or_name(VAST_ARG(interval)),
+             VAST_ARG(query), VAST_ARG(index), VAST_ARG(archive));
   // Set member variables.
   interval_ = std::move(interval);
   query_ = std::move(query);
@@ -44,11 +44,13 @@ void eraser_state::init(caf::timespan interval, std::string query,
       promise_ = self_->make_response_promise();
     auto expr = to<expression>(query_);
     if (!expr) {
-      VAST_ERROR(self_, "failed to parse query", query_);
+      VAST_ERROR("{} failed to parse query {}", detail::id_or_name(self_),
+                 query_);
       return;
     }
     if (expr = normalize_and_validate(*expr); !expr) {
-      VAST_ERROR(self_, "failed to normalize and validate", query_);
+      VAST_ERROR("{} failed to normalize and validate {}",
+                 detail::id_or_name(self_), query_);
       return;
     }
     self_->send(index_, std::move(*expr));
@@ -59,9 +61,9 @@ void eraser_state::init(caf::timespan interval, std::string query,
 }
 
 void eraser_state::transition_to(query_processor::state_name x) {
-  VAST_TRACE(VAST_ARG("state_name", x));
+  VAST_TRACE("{}", detail::id_or_name(VAST_ARG("state_name", x)));
   if (state_ == idle && x != idle)
-    VAST_INFO(self_, "triggers new aging cycle");
+    VAST_INFO("{} triggers new aging cycle", detail::id_or_name(self_));
   super::transition_to(x);
   if (x == idle) {
     if (promise_.pending())
@@ -72,12 +74,12 @@ void eraser_state::transition_to(query_processor::state_name x) {
 }
 
 void eraser_state::process_hits(const ids& hits) {
-  VAST_TRACE(VAST_ARG(hits));
+  VAST_TRACE("{}", detail::id_or_name(VAST_ARG(hits)));
   hits_ |= hits;
 }
 
 void eraser_state::process_end_of_hits() {
-  VAST_TRACE("");
+  VAST_TRACE("{}", detail::id_or_name(""));
   // Fetch more hits if the INDEX has more partitions to go through.
   if (partitions_.received < partitions_.total) {
     auto n = std::min(partitions_.total - partitions_.received,
@@ -96,8 +98,9 @@ void eraser_state::process_end_of_hits() {
 caf::behavior
 eraser(caf::stateful_actor<eraser_state>* self, caf::timespan interval,
        std::string query, index_actor index, archive_actor archive) {
-  VAST_TRACE(VAST_ARG(self), VAST_ARG(interval), VAST_ARG(query),
-             VAST_ARG(index), VAST_ARG(archive));
+  VAST_TRACE("{}  {}  {}  {}  {}", detail::id_or_name(VAST_ARG(self)),
+             VAST_ARG(interval), VAST_ARG(query), VAST_ARG(index),
+             VAST_ARG(archive));
   auto& st = self->state;
   st.init(interval, std::move(query), std::move(index), std::move(archive));
   return st.behavior();

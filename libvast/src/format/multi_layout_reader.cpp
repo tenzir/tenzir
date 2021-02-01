@@ -41,10 +41,9 @@ caf::error multi_layout_reader::finish(consumer& f,
       // This is a defensive mechanism to prevent wrap-around. If we run into
       // this case we probably have a logic bug somewhere, but it is not an
       // error, so there is no reason to treat it as one.
-      VAST_WARNING_ANON(*this,
-                        "detected a mismatch in the batch tracking "
-                        "logic",
-                        VAST_ARG(batch_events_), VAST_ARG(rows));
+      VAST_WARN("{} detected a mismatch in the batch tracking "
+                "logic {}  {}",
+                *this, VAST_ARG(batch_events_), VAST_ARG(rows));
       batch_events_ = 0;
     }
     auto slice = builder_ptr->finish();
@@ -69,8 +68,8 @@ table_slice_builder_ptr multi_layout_reader::builder(const type& t) {
   if (i != builders_.end())
     return i->second;
   if (!caf::holds_alternative<record_type>(t)) {
-    VAST_ERROR(this,
-               "cannot create slice builder for non-record type:", VAST_ARG(t));
+    VAST_ERROR("{} cannot create slice builder for non-record type: {}",
+               detail::id_or_name(this), VAST_ARG(t));
     // Insert a nullptr into the map and return it to make sure the error gets
     // printed only once.
     return builders_[t];

@@ -43,23 +43,24 @@ example_actor::behavior_type
 example(example_actor::stateful_pointer<example_actor_state> self) {
   return {
     [=](atom::config, record config) {
-      VAST_TRACE(self, "sets configuration", config);
+      VAST_TRACE("{} sets configuration {}", detail::id_or_name(self), config);
       for (auto& [key, value] : config) {
         if (key == "max-events") {
           if (auto max_events = caf::get_if<integer>(&value)) {
-            VAST_VERBOSE(self, "sets max-events to", *max_events);
+            VAST_VERBOSE("{} sets max-events to {}", detail::id_or_name(self),
+                         *max_events);
             self->state.max_events = *max_events;
           }
         }
       }
     },
     [=](caf::stream<table_slice> in) {
-      VAST_TRACE(self, "hooks into stream", in);
+      VAST_TRACE("{} hooks into stream {}", detail::id_or_name(self), in);
       caf::attach_stream_sink(
         self, in,
         // Initialization hook for CAF stream.
         [=](uint64_t& counter) { // reset state
-          VAST_VERBOSE(self, "initialized stream");
+          VAST_VERBOSE("{} initialized stream", detail::id_or_name(self));
           counter = 0;
         },
         // Process one stream element at a time.
@@ -71,7 +72,8 @@ example(example_actor::stateful_pointer<example_actor_state> self) {
           // Accumulate the rows in our table slices.
           counter += slice.rows();
           if (counter >= self->state.max_events) {
-            VAST_INFO(self, "terminates stream after", counter, "events");
+            VAST_INFO("{} terminates stream after {} events",
+                      detail::id_or_name(self), counter);
             self->state.done = true;
             self->quit();
           }
@@ -79,7 +81,8 @@ example(example_actor::stateful_pointer<example_actor_state> self) {
         // Teardown hook for CAF stram.
         [=](uint64_t&, const caf::error& err) {
           if (err && err != caf::exit_reason::user_shutdown) {
-            VAST_ERROR(self, "finished stream with error:", render(err));
+            VAST_ERROR("{} finished stream with error: {}",
+                       detail::id_or_name(self), render(err));
             return;
           }
         });

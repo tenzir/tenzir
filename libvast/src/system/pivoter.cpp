@@ -55,7 +55,8 @@ common_field(const pivoter_state& st, const record_type& indicator) {
   // This is a heuristic to find the field for pivoting until a runtime
   // updated type registry is available to feed the algorithm above.
   std::string edge;
-  VAST_TRACE(st.self, VAST_ARG(st.target), VAST_ARG(indicator.name()));
+  VAST_TRACE("{}  {}  {}", detail::id_or_name(st.self), VAST_ARG(st.target),
+             VAST_ARG(indicator.name()));
   if (detail::starts_with(st.target, "zeek")
       && detail::starts_with(indicator.name(), "zeek"))
     edge = "uid";
@@ -69,7 +70,8 @@ common_field(const pivoter_state& st, const record_type& indicator) {
   }
 #endif
   st.cache.insert({indicator, caf::none});
-  VAST_WARNING(st.self, "got slice without shared column:", indicator.name());
+  VAST_WARN("{} got slice without shared column: {}",
+            detail::id_or_name(st.self), indicator.name());
   return caf::none;
 }
 
@@ -95,8 +97,8 @@ caf::behavior pivoter(caf::stateful_actor<pivoter_state>* self, caf::actor node,
     // Only the spawned EXPORTERs are expected to send down messages.
     auto& st = self->state;
     st.running_exporters--;
-    VAST_DEBUG(self, "received DOWN from", msg.source,
-               "outstanding requests:", st.running_exporters);
+    VAST_DEBUG("{} received DOWN from {} outstanding requests: {}",
+               detail::id_or_name(self), msg.source, st.running_exporters);
     quit_if_done();
   });
   return {
@@ -105,7 +107,8 @@ caf::behavior pivoter(caf::stateful_actor<pivoter_state>* self, caf::actor node,
       auto pivot_field = common_field(st, slice.layout());
       if (!pivot_field)
         return;
-      VAST_DEBUG(self, "uses", *pivot_field, "to extract", st.target, "events");
+      VAST_DEBUG("{} uses {} to extract {} events", detail::id_or_name(self),
+                 *pivot_field, st.target);
       auto column = table_slice_column::make(slice, pivot_field->name);
       VAST_ASSERT(column);
       auto xs = list{};
@@ -122,7 +125,8 @@ caf::behavior pivoter(caf::stateful_actor<pivoter_state>* self, caf::actor node,
         st.requested_ids.insert(*x);
       }
       if (xs.empty()) {
-        VAST_DEBUG(self, "already queried for all", pivot_field->name);
+        VAST_DEBUG("{} already queried for all {}", detail::id_or_name(self),
+                   pivot_field->name);
         return;
       }
       auto expr = conjunction{
@@ -131,8 +135,10 @@ caf::behavior pivoter(caf::stateful_actor<pivoter_state>* self, caf::actor node,
       // TODO(ch9411): Drop the conversion to a string when node actors can
       //               be spawned without going through an invocation.
       auto query = to_string(expr);
-      VAST_DEBUG(self, "queries for", xs.size(), pivot_field->name);
-      VAST_TRACE(self, "spawns new exporter with query", query);
+      VAST_DEBUG("{} queries for {}  {}", detail::id_or_name(self), xs.size(),
+                 pivot_field->name);
+      VAST_TRACE("{} spawns new exporter with query {}",
+                 detail::id_or_name(self), query);
       auto exporter_options = caf::settings{};
       caf::put(exporter_options, "vast.export.disable-taxonomies", true);
       auto exporter_invocation
@@ -142,24 +148,27 @@ caf::behavior pivoter(caf::stateful_actor<pivoter_state>* self, caf::actor node,
         .then(
           [=](caf::actor handle) {
             auto exporter = caf::actor_cast<exporter_actor>(std::move(handle));
-            VAST_DEBUG(self, "registers exporter", exporter);
+            VAST_DEBUG("{} registers exporter {}", detail::id_or_name(self),
+                       exporter);
             self->monitor(exporter);
             self->send(exporter, atom::sink_v, self->state.sink);
             self->send(exporter, atom::run_v);
           },
           [=](caf::error error) {
-            VAST_ERROR(self, "failed to spawn exporter:", render(error));
+            VAST_ERROR("{} failed to spawn exporter: {}",
+                       detail::id_or_name(self), render(error));
             --self->state.running_exporters;
           });
       ;
     },
     [=](std::string name, query_status) {
-      VAST_DEBUG(self, "received final status from", name);
+      VAST_DEBUG("{} received final status from {}", detail::id_or_name(self),
+                 name);
       self->state.initial_query_completed = true;
       quit_if_done();
     },
     [=](atom::sink, const caf::actor& sink) {
-      VAST_DEBUG(self, "registers sink", sink);
+      VAST_DEBUG("{} registers sink {}", detail::id_or_name(self), sink);
       auto& st = self->state;
       st.sink = sink;
     },

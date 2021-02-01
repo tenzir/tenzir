@@ -41,7 +41,7 @@ maybe_actor spawn_index(node_actor* self, spawn_arguments& args) {
     opt("vast.max-taste-partitions", sd::taste_partitions),
     opt("vast.max-queries", sd::num_query_supervisors),
     opt("vast.meta-index-fp-rate", sd::string_synopsis_fp_rate));
-  VAST_VERBOSE(self, "spawned the index");
+  VAST_VERBOSE("{} spawned the index", detail::id_or_name(self));
   if (auto accountant = self->state.registry.find_by_label("accountant"))
     self->send(handle, caf::actor_cast<accountant_actor>(accountant));
   return caf::actor_cast<caf::actor>(handle);

@@ -89,7 +89,8 @@ int uds_connect(const std::string& path, socket_type type) {
       std::strncpy(clt.sun_path, client_path.data(), sizeof(clt.sun_path) - 1);
       ::unlink(client_path.c_str()); // Always remove previous socket file.
       if (::bind(fd, reinterpret_cast<sockaddr*>(&clt), sizeof(clt)) < 0) {
-        VAST_WARNING(__func__, "failed in bind:", ::strerror(errno));
+        VAST_WARN("{} failed in bind: {}", detail::id_or_name(__func__),
+                  ::strerror(errno));
         return -1;
       }
       break;
@@ -100,7 +101,8 @@ int uds_connect(const std::string& path, socket_type type) {
   std::strncpy(srv.sun_path, path.data(), sizeof(srv.sun_path) - 1);
   if (::connect(fd, reinterpret_cast<sockaddr*>(&srv), sizeof(srv)) < 0) {
     if (!(type == socket_type::datagram && errno == ENOENT)) {
-      VAST_WARNING(__func__, "failed in connect:", ::strerror(errno));
+      VAST_WARN("{} failed in connect: {}", detail::id_or_name(__func__),
+                ::strerror(errno));
       return -1;
     }
   }

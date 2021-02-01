@@ -80,8 +80,9 @@ indexer_actor passive_partition_state::indexer_at(size_t position) const {
     auto data = index->data();
     value_index_ptr state_ptr;
     if (auto error = fbs::deserialize_bytes(data, state_ptr)) {
-      VAST_ERROR(self, "failed to deserialize indexer at", position,
-                 "with error:", render(error));
+      VAST_ERROR("{} failed to deserialize indexer at {} with error: "
+                 "{}",
+                 detail::id_or_name(self), position, render(error));
       return {};
     }
     indexer = self->spawn(passive_indexer, id, std::move(state_ptr));
@@ -101,14 +102,15 @@ template <typename PartitionState>
 indexer_actor
 fetch_indexer(const PartitionState& state, const data_extractor& dx,
               relational_operator op, const data& x) {
-  VAST_TRACE(VAST_ARG(dx), VAST_ARG(op), VAST_ARG(x));
+  VAST_TRACE("{}  {}  {}", detail::id_or_name(VAST_ARG(dx)), VAST_ARG(op),
+             VAST_ARG(x));
   // Sanity check.
   if (dx.offset.empty())
     return {};
   if (auto index = state.combined_layout.flat_index_at(dx.offset))
     return state.indexer_at(*index);
-  VAST_WARNING(state.self, "got invalid offset for the combined layout",
-               state.combined_layout);
+  VAST_WARN("{} got invalid offset for the combined layout {}",
+            detail::id_or_name(state.self), state.combined_layout);
   return {};
 }
 
@@ -122,7 +124,8 @@ template <typename PartitionState>
 indexer_actor
 fetch_indexer(const PartitionState& state, const attribute_extractor& ex,
               relational_operator op, const data& x) {
-  VAST_TRACE(VAST_ARG(ex), VAST_ARG(op), VAST_ARG(x));
+  VAST_TRACE("{}  {}  {}", detail::id_or_name(VAST_ARG(ex)), VAST_ARG(op),
+             VAST_ARG(x));
   ids row_ids;
   if (ex.attr == atom::type_v) {
     // We know the answer immediately: all IDs that are part of the table.
@@ -134,8 +137,9 @@ fetch_indexer(const PartitionState& state, const attribute_extractor& ex,
   } else if (ex.attr == atom::field_v) {
     auto s = caf::get_if<std::string>(&x);
     if (!s) {
-      VAST_WARNING(state.self, "#field meta queries only support string "
-                               "comparisons");
+      VAST_WARN("{} #field meta queries only support string "
+                "comparisons",
+                detail::id_or_name(state.self));
       return {};
     }
     auto neg = is_negated(op);
@@ -159,7 +163,8 @@ fetch_indexer(const PartitionState& state, const attribute_extractor& ex,
       row_ids = partition_ids ^ row_ids;
     }
   } else {
-    VAST_WARNING(state.self, "got unsupported attribute:", ex.attr);
+    VAST_WARN("{} got unsupported attribute: {}",
+              detail::id_or_name(state.self), ex.attr);
     return {};
   }
   // TODO: Spawning a one-shot actor is quite expensive. Maybe the
@@ -168,7 +173,7 @@ fetch_indexer(const PartitionState& state, const attribute_extractor& ex,
     return {
       [=](const curried_predicate&) { return row_ids; },
       [](atom::shutdown) {
-        VAST_DEBUG_ANON("one-shot indexer received shutdown request");
+        VAST_DEBUG("one-shot indexer received shutdown request");
       },
     };
   });
@@ -333,18 +338,18 @@ unpack(const fbs::partition::v0& partition, passive_partition_state& state) {
   // This condition should be '!=', but then we cant deserialize in unit tests
   // anymore without creating a bunch of index actors first. :/
   if (state.combined_layout.fields.size() < indexes->size()) {
-    VAST_ERROR(state.self,
-               "found incoherent number of indexers in deserialized state;",
-               state.combined_layout.fields.size(), "fields for",
-               indexes->size(), "indexes");
+    VAST_ERROR("{} found incoherent number of indexers in deserialized "
+               "state; {} fields for {} indexes",
+               detail::id_or_name(state.self),
+               state.combined_layout.fields.size(), indexes->size());
     return caf::make_error(ec::format_error, "incoherent number of indexers");
   }
   // We only create dummy entries here, since the positions of the `indexers`
   // vector must be the same as in `combined_layout`. The actual indexers are
   // deserialized and spawned lazily on demand.
   state.indexers.resize(indexes->size());
-  VAST_DEBUG(state.self, "found", indexes->size(), "indexers for partition",
-             state.id);
+  VAST_DEBUG("{} found {} indexers for partition {}",
+             detail::id_or_name(state.self), indexes->size(), state.id);
   auto type_ids = partition.type_ids();
   for (size_t i = 0; i < type_ids->size(); ++i) {
     auto type_ids_tuple = type_ids->Get(i);
@@ -354,8 +359,8 @@ unpack(const fbs::partition::v0& partition, passive_partition_state& state) {
     if (auto error = fbs::deserialize_bytes(ids_data, ids))
       return error;
   }
-  VAST_DEBUG(state.self, "restored", state.type_ids.size(),
-             "type-to-ids mapping for partition", state.id);
+  VAST_DEBUG("{} restored {} type-to-ids mapping for partition {}",
+             detail::id_or_name(state.self), state.type_ids.size(), state.id);
   return caf::none;
 }
 
@@ -390,7 +395,7 @@ active_partition_actor::behavior_type active_partition(
       // nop
     },
     [=](caf::unit_t&, caf::downstream<table_slice_column>& out, table_slice x) {
-      VAST_TRACE(VAST_ARG(out), VAST_ARG(x));
+      VAST_TRACE("{}  {}", detail::id_or_name(VAST_ARG(out)), VAST_ARG(x));
       // We rely on `invalid_id` actually being the highest possible id
       // when using `min()` below.
       static_assert(invalid_id == std::numeric_limits<vast::id>::max());
@@ -416,8 +421,8 @@ active_partition_actor::behavior_type active_partition(
           idx = self->spawn(active_indexer, field.type, index_opts);
           auto slot = self->state.stage->add_outbound_path(idx);
           self->state.stage->out().set_filter(slot, qf);
-          VAST_DEBUG(self, "spawned new indexer for field", field.name,
-                     "at slot", slot);
+          VAST_DEBUG("{} spawned new indexer for field {} at slot {}",
+                     detail::id_or_name(self), field.name, slot);
         }
         out.push(table_slice_column{x, col++});
       }
@@ -427,12 +432,13 @@ active_partition_actor::behavior_type active_partition(
       // because the actor was destroyed; in this case we can't use `self`
       // anymore.
       if (err && err != caf::exit_reason::unreachable) {
-        VAST_ERROR(self, "aborts with error:", render(err));
+        VAST_ERROR("{} aborts with error: {}", detail::id_or_name(self),
+                   render(err));
         // We don't exit here, since there might be outstanding evaluators who
         // still need our indexers.
         return;
       }
-      VAST_DEBUG_ANON("partition", id, "finalized streaming");
+      VAST_DEBUG("partition {} finalized streaming", id);
     },
     // Every "outbound path" has a path_state, which consists of a "Filter"
     // and a vector of "T", the output buffer. In the case of a partition,
@@ -449,8 +455,8 @@ active_partition_actor::behavior_type active_partition(
     caf::policy::arg<broadcast_downstream_manager<
       table_slice_column, vast::qualified_record_field, partition_selector>>{});
   self->set_exit_handler([=](const caf::exit_msg& msg) {
-    VAST_DEBUG(self, "received EXIT from", msg.source,
-               "with reason:", msg.reason);
+    VAST_DEBUG("{} received EXIT from {} with reason: {}",
+               detail::id_or_name(self), msg.source, msg.reason);
     if (self->state.stage->idle()) {
       self->state.stage->out().fan_out_flush();
       self->state.stage->out().force_emit_batches();
@@ -459,8 +465,9 @@ active_partition_actor::behavior_type active_partition(
     // Delay shutdown if we're currently in the process of persisting.
     if (self->state.persistence_promise.pending()) {
       std::call_once(self->state.shutdown_once, [=] {
-        VAST_DEBUG(self, "delays partition shutdown because it is still "
-                         "writing to disk");
+        VAST_DEBUG("{} delays partition shutdown because it is still "
+                   "writing to disk",
+                   detail::id_or_name(self));
       });
       using namespace std::chrono_literals;
       // Ideally, we would use a self->delayed_delegate(self, ...) here, but CAF
@@ -472,7 +479,8 @@ active_partition_actor::behavior_type active_partition(
       caf::delayed_anon_send(caf::actor_cast<caf::actor>(self), 100ms, msg);
       return;
     }
-    VAST_VERBOSE(self, "shuts down after persisting partition state");
+    VAST_VERBOSE("{} shuts down after persisting partition state",
+                 detail::id_or_name(self));
     // TODO: We must actor_cast to caf::actor here because 'shutdown' operates
     // on 'std::vector<caf::actor>' only. That should probably be generalized
     // in the future.
@@ -508,7 +516,8 @@ active_partition_actor::behavior_type active_partition(
       if (!self->state.streaming_initiated
           || !self->state.stage->inbound_paths().empty()
           || !self->state.stage->idle()) {
-        VAST_DEBUG(self, "waits for stream before persisting");
+        VAST_DEBUG("{} waits for stream before persisting",
+                   detail::id_or_name(self));
         self->delayed_send(self, 50ms, atom::persist_v, atom::resume_v);
         return;
       }
@@ -520,32 +529,36 @@ active_partition_actor::behavior_type active_partition(
           caf::make_error(ec::logic_error, "partition has no indexers"));
         return;
       }
-      VAST_DEBUG(self, "sends 'snapshot' to", self->state.indexers.size(),
-                 "indexers");
+      VAST_DEBUG("{} sends 'snapshot' to {} indexers", detail::id_or_name(self),
+                 self->state.indexers.size());
       for (auto& kv : self->state.indexers) {
         self->request(kv.second, caf::infinite, atom::snapshot_v)
           .then(
             [=](chunk_ptr chunk) {
               ++self->state.persisted_indexers;
               if (!self->state.persistence_promise.pending()) {
-                VAST_WARNING(self, "ignores persisted indexer because the "
-                                   "persistence promise is already fulfilled");
+                VAST_WARN("{} ignores persisted indexer because the "
+                          "persistence promise is already fulfilled",
+                          detail::id_or_name(self));
                 return;
               }
               auto sender = self->current_sender()->id();
               if (!chunk) {
-                VAST_ERROR(self, "failed to persist indexer", sender);
+                VAST_ERROR("{} failed to persist indexer {}",
+                           detail::id_or_name(self), sender);
                 self->state.persistence_promise.deliver(caf::make_error(
                   ec::unspecified, "failed to persist indexer", sender));
                 return;
               }
-              VAST_DEBUG(self, "got chunk from", sender);
+              VAST_DEBUG("{} got chunk from {}", detail::id_or_name(self),
+                         sender);
               self->state.chunks.emplace(sender, chunk);
               if (self->state.persisted_indexers
                   < self->state.indexers.size()) {
-                VAST_DEBUG(self, "waits for more chunks after receiving",
-                           self->state.persisted_indexers, "out of",
-                           self->state.indexers.size());
+                VAST_DEBUG(
+                  "{} waits for more chunks after receiving {} out of {}",
+                  detail::id_or_name(self), self->state.persisted_indexers,
+                  self->state.indexers.size());
                 return;
               }
               // Shrink synopses for addr fields to optimal size.
@@ -554,15 +567,17 @@ active_partition_actor::behavior_type active_partition(
               flatbuffers::FlatBufferBuilder builder;
               auto partition = pack(builder, self->state);
               if (!partition) {
-                VAST_ERROR(self, "failed to serialize", self->state.name,
-                           "with error:", render(partition.error()));
+                VAST_ERROR("{} failed to serialize {} with error: {}",
+                           detail::id_or_name(self), self->state.name,
+                           render(partition.error()));
                 self->state.persistence_promise.deliver(partition.error());
                 return;
               }
               VAST_ASSERT(self->state.persist_path);
               auto fbchunk = fbs::release(builder);
-              VAST_DEBUG(self, "persists partition with a total size of",
-                         fbchunk->size(), "bytes");
+              VAST_DEBUG("{} persists partition with a total size of "
+                         "{} bytes",
+                         detail::id_or_name(self), fbchunk->size());
               // TODO: Add a proper timeout.
               self
                 ->request(self->state.filesystem, caf::infinite, atom::write_v,
@@ -581,8 +596,8 @@ active_partition_actor::behavior_type active_partition(
               return;
             },
             [=](caf::error err) {
-              VAST_ERROR(self, "failed to persist indexer for", kv.first.fqn(),
-                         "with error:", render(err));
+              VAST_ERROR("{} failed to persist indexer for {} with error: {}",
+                         detail::id_or_name(self), kv.first.fqn(), render(err));
               ++self->state.persisted_indexers;
               if (!self->state.persistence_promise.pending())
                 self->state.persistence_promise.deliver(std::move(err));
@@ -635,8 +650,8 @@ active_partition_actor::behavior_type active_partition(
                 deliver(std::move(*req_state));
             },
             [=, &indexer_states](const caf::error& err) {
-              VAST_WARNING(self, "failed to retrieve status from",
-                           i.first.fqn(), ":", render(err));
+              VAST_WARN("{} failed to retrieve status from {} : {}",
+                        detail::id_or_name(self), i.first.fqn(), render(err));
               auto& ps = indexer_states.emplace_back().as_dictionary();
               put(ps, "id", to_string(id));
               put(ps, "error", render(err));
@@ -657,8 +672,8 @@ partition_actor::behavior_type passive_partition(
   filesystem_actor filesystem, class path path) {
   self->state.self = self;
   self->set_exit_handler([=](const caf::exit_msg& msg) {
-    VAST_DEBUG(self, "received EXIT from", msg.source,
-               "with reason:", msg.reason);
+    VAST_DEBUG("{} received EXIT from {} with reason: {}",
+               detail::id_or_name(self), msg.source, msg.reason);
     // Receiving an EXIT message does not need to coincide with the state
     // being destructed, so we explicitly clear the vector to release the
     // references.
@@ -678,11 +693,13 @@ partition_actor::behavior_type passive_partition(
     terminate<policy::parallel>(self, std::move(indexers))
       .then(
         [=](atom::done) {
-          VAST_DEBUG(self, "shut down all indexers successfully");
+          VAST_DEBUG("{} shut down all indexers successfully",
+                     detail::id_or_name(self));
           self->quit();
         },
         [=](const caf::error& err) {
-          VAST_ERROR(self, "failed to shut down all indexers:", render(err));
+          VAST_ERROR("{} failed to shut down all indexers: {}",
+                     detail::id_or_name(self), render(err));
           self->quit(err);
         });
   });
@@ -692,13 +709,13 @@ partition_actor::behavior_type passive_partition(
   self->request(filesystem, caf::infinite, atom::mmap_v, path)
     .then(
       [=](chunk_ptr chunk) {
-        VAST_TRACE(self, VAST_ARG(chunk));
+        VAST_TRACE("{}  {}", detail::id_or_name(self), VAST_ARG(chunk));
         if (self->state.partition_chunk) {
-          VAST_WARNING(self, "ignores duplicate chunk");
+          VAST_WARN("{} ignores duplicate chunk", detail::id_or_name(self));
           return;
         }
         if (!chunk) {
-          VAST_ERROR(self, "got invalid chunk");
+          VAST_ERROR("{} got invalid chunk", detail::id_or_name(self));
           self->quit();
           return;
         }
@@ -706,15 +723,17 @@ partition_actor::behavior_type passive_partition(
         // over 'soffset_t' in FLATBUFFERS_MAX_BUFFER_SIZE.
         using ::flatbuffers::soffset_t;
         if (chunk->size() >= FLATBUFFERS_MAX_BUFFER_SIZE) {
-          VAST_ERROR("failed to load partition at", path, "because its size of",
-                     chunk->size(), "exceeds the maximum allowed size of",
-                     FLATBUFFERS_MAX_BUFFER_SIZE);
+          VAST_ERROR("{}  {} because its size of {} exceeds the "
+                     "maximum allowed size of {}",
+                     detail::id_or_name("failed to load partition at"), path,
+                     chunk->size(), FLATBUFFERS_MAX_BUFFER_SIZE);
           return self->quit();
         }
         // Deserialize chunk from the filesystem actor
         auto partition = fbs::GetPartition(chunk->data());
         if (partition->partition_type() != fbs::partition::Partition::v0) {
-          VAST_ERROR(self, "found partition with invalid version of type:",
+          VAST_ERROR("{} found partition with invalid version of type: {}",
+                     detail::id_or_name(self),
                      partition->GetFullyQualifiedName());
           self->quit();
           return;
@@ -723,23 +742,27 @@ partition_actor::behavior_type passive_partition(
         self->state.partition_chunk = chunk;
         self->state.flatbuffer = partition_v0;
         if (auto error = unpack(*self->state.flatbuffer, self->state)) {
-          VAST_ERROR(self, "failed to unpack partition:", render(error));
+          VAST_ERROR("{} failed to unpack partition: {}",
+                     detail::id_or_name(self), render(error));
           self->quit(std::move(error));
           return;
         }
         if (id != self->state.id)
-          VAST_WARNING(self, "encountered partition id mismatch: restored",
-                       self->state.id, "from disk, expected", id);
+          VAST_WARN("{} encountered partition id mismatch: restored {}"
+                    "from disk, expected {}",
+                    detail::id_or_name(self), self->state.id, id);
         // Delegate all deferred evaluations now that we have the partition chunk.
-        VAST_DEBUG(self, "delegates", self->state.deferred_evaluations.size(),
-                   "deferred evaluations");
+        VAST_DEBUG("{} delegates {} deferred evaluations",
+                   detail::id_or_name(self),
+                   self->state.deferred_evaluations.size());
         for (auto&& [expr, client, rp] :
              std::exchange(self->state.deferred_evaluations, {}))
           rp.delegate(static_cast<partition_actor>(self), std::move(expr),
                       client);
       },
       [=](caf::error err) {
-        VAST_ERROR(self, "failed to load partition:", render(err));
+        VAST_ERROR("{} failed to load partition: {}", detail::id_or_name(self),
+                   render(err));
         // Deliver the error for all deferred evaluations.
         for (auto&& [expr, client, rp] :
              std::exchange(self->state.deferred_evaluations, {})) {
@@ -754,7 +777,7 @@ partition_actor::behavior_type passive_partition(
   return {
     [=](const expression& expr,
         partition_client_actor client) -> caf::result<atom::done> {
-      VAST_TRACE(self, VAST_ARG(expr));
+      VAST_TRACE("{}  {}", detail::id_or_name(self), VAST_ARG(expr));
       if (!self->state.partition_chunk)
         return get<2>(self->state.deferred_evaluations.emplace_back(
           expr, client, self->make_response_promise<atom::done>()));
