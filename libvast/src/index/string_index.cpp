@@ -74,42 +74,45 @@ string_index::lookup_impl(relational_operator op, data_view x) const {
       switch (op) {
         default:
           return caf::make_error(ec::unsupported_operator, op);
-        case equal:
-        case not_equal: {
+        case relational_operator::equal:
+        case relational_operator::not_equal: {
           if (str_size == 0) {
-            auto result = length_.lookup(equal, 0);
-            if (op == not_equal)
+            auto result = length_.lookup(relational_operator::equal, 0);
+            if (op == relational_operator::not_equal)
               result.flip();
             return result;
           }
           if (str_size > chars_.size())
-            return ids{offset(), op == not_equal};
-          auto result = length_.lookup(less_equal, str_size);
+            return ids{offset(), op == relational_operator::not_equal};
+          auto result
+            = length_.lookup(relational_operator::less_equal, str_size);
           if (all<0>(result))
-            return ids{offset(), op == not_equal};
+            return ids{offset(), op == relational_operator::not_equal};
           for (auto i = 0u; i < str_size; ++i) {
-            auto b = chars_[i].lookup(equal, static_cast<uint8_t>(str[i]));
+            auto b = chars_[i].lookup(relational_operator::equal,
+                                      static_cast<uint8_t>(str[i]));
             result &= b;
             if (all<0>(result))
-              return ids{offset(), op == not_equal};
+              return ids{offset(), op == relational_operator::not_equal};
           }
-          if (op == not_equal)
+          if (op == relational_operator::not_equal)
             result.flip();
           return result;
         }
-        case ni:
-        case not_ni: {
+        case relational_operator::ni:
+        case relational_operator::not_ni: {
           if (str_size == 0)
-            return ids{offset(), op == ni};
+            return ids{offset(), op == relational_operator::ni};
           if (str_size > chars_.size())
-            return ids{offset(), op == not_ni};
+            return ids{offset(), op == relational_operator::not_ni};
           // TODO: Be more clever than iterating over all k-grams (#45).
           ids result{offset(), false};
           for (auto i = 0u; i < chars_.size() - str_size + 1; ++i) {
             ids substr{offset(), true};
             auto skip = false;
             for (auto j = 0u; j < str_size; ++j) {
-              auto bm = chars_[i + j].lookup(equal, str[j]);
+              auto bm
+                = chars_[i + j].lookup(relational_operator::equal, str[j]);
               if (all<0>(bm)) {
                 skip = true;
                 break;
@@ -119,7 +122,7 @@ string_index::lookup_impl(relational_operator op, data_view x) const {
             if (!skip)
               result |= substr;
           }
-          if (op == not_ni)
+          if (op == relational_operator::not_ni)
             result.flip();
           return result;
         }

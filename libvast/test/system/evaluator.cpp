@@ -47,17 +47,17 @@ ids select(const counts& xs, curried_predicate pred) {
   switch (pred.op) {
     default:
       FAIL("unsupported relational operator");
-    case equal:
+    case relational_operator::equal:
       return select(xs, y, std::equal_to<>{});
-    case not_equal:
+    case relational_operator::not_equal:
       return select(xs, y, std::not_equal_to<>{});
-    case less:
+    case relational_operator::less:
       return select(xs, y, std::less<>{});
-    case less_equal:
+    case relational_operator::less_equal:
       return select(xs, y, std::less_equal<>{});
-    case greater:
+    case relational_operator::greater:
       return select(xs, y, std::greater<>{});
-    case greater_equal:
+    case relational_operator::greater_equal:
       return select(xs, y, std::greater_equal<>{});
   }
 }

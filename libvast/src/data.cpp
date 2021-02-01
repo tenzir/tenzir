@@ -90,33 +90,33 @@ bool evaluate(const data& lhs, relational_operator op, const data& rhs) {
     default:
       VAST_ASSERT(!"missing case");
       return false;
-    case match:
+    case relational_operator::match:
       return eval_match(lhs, rhs);
-    case not_match:
+    case relational_operator::not_match:
       return !eval_match(lhs, rhs);
-    case in:
+    case relational_operator::in:
       return eval_in(lhs, rhs);
-    case not_in:
+    case relational_operator::not_in:
       return !eval_in(lhs, rhs);
-    case ni:
+    case relational_operator::ni:
       return eval_in(rhs, lhs);
-    case not_ni:
+    case relational_operator::not_ni:
       return !eval_in(rhs, lhs);
-    case equal:
+    case relational_operator::equal:
       if (auto x = eval_string_and_pattern(lhs, rhs))
         return *x;
       return lhs == rhs;
-    case not_equal:
+    case relational_operator::not_equal:
       if (auto x = eval_string_and_pattern(lhs, rhs))
         return !*x;
       return lhs != rhs;
-    case less:
+    case relational_operator::less:
       return lhs < rhs;
-    case less_equal:
+    case relational_operator::less_equal:
       return lhs <= rhs;
-    case greater:
+    case relational_operator::greater:
       return lhs > rhs;
-    case greater_equal:
+    case relational_operator::greater_equal:
       return lhs >= rhs;
   }
 }

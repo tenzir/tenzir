@@ -671,20 +671,20 @@ bool compatible(const type& lhs, relational_operator op, const type& rhs) {
   switch (op) {
     default:
       return false;
-    case match:
-    case not_match:
+    case relational_operator::match:
+    case relational_operator::not_match:
       return string_and_pattern(lhs, rhs);
-    case equal:
-    case not_equal:
+    case relational_operator::equal:
+    case relational_operator::not_equal:
       return !lhs || !rhs || string_and_pattern(lhs, rhs)
              || congruent(lhs, rhs);
-    case less:
-    case less_equal:
-    case greater:
-    case greater_equal:
+    case relational_operator::less:
+    case relational_operator::less_equal:
+    case relational_operator::greater:
+    case relational_operator::greater_equal:
       return congruent(lhs, rhs);
-    case in:
-    case not_in:
+    case relational_operator::in:
+    case relational_operator::not_in:
       if (holds_alternative<string_type>(lhs))
         return holds_alternative<string_type>(rhs) || is_container(rhs);
       else if (holds_alternative<address_type>(lhs)
@@ -692,10 +692,10 @@ bool compatible(const type& lhs, relational_operator op, const type& rhs) {
         return holds_alternative<subnet_type>(rhs) || is_container(rhs);
       else
         return is_container(rhs);
-    case ni:
-      return compatible(rhs, in, lhs);
-    case not_ni:
-      return compatible(rhs, not_in, lhs);
+    case relational_operator::ni:
+      return compatible(rhs, relational_operator::in, lhs);
+    case relational_operator::not_ni:
+      return compatible(rhs, relational_operator::not_in, lhs);
   }
 }
 
@@ -708,20 +708,20 @@ bool compatible(const type& lhs, relational_operator op, const data& rhs) {
   switch (op) {
     default:
       return false;
-    case match:
-    case not_match:
+    case relational_operator::match:
+    case relational_operator::not_match:
       return string_and_pattern(lhs, rhs);
-    case equal:
-    case not_equal:
+    case relational_operator::equal:
+    case relational_operator::not_equal:
       return !lhs || holds_alternative<caf::none_t>(rhs)
              || string_and_pattern(lhs, rhs) || congruent(lhs, rhs);
-    case less:
-    case less_equal:
-    case greater:
-    case greater_equal:
+    case relational_operator::less:
+    case relational_operator::less_equal:
+    case relational_operator::greater:
+    case relational_operator::greater_equal:
       return congruent(lhs, rhs);
-    case in:
-    case not_in:
+    case relational_operator::in:
+    case relational_operator::not_in:
       if (holds_alternative<string_type>(lhs))
         return holds_alternative<std::string>(rhs) || is_container(rhs);
       else if (holds_alternative<address_type>(lhs)
@@ -729,8 +729,8 @@ bool compatible(const type& lhs, relational_operator op, const data& rhs) {
         return holds_alternative<subnet>(rhs) || is_container(rhs);
       else
         return is_container(rhs);
-    case ni:
-    case not_ni:
+    case relational_operator::ni:
+    case relational_operator::not_ni:
       if (holds_alternative<std::string>(rhs))
         return holds_alternative<string_type>(lhs) || is_container(lhs);
       else if (holds_alternative<address>(rhs)

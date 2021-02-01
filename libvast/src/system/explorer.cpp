@@ -169,12 +169,14 @@ explorer(caf::stateful_actor<explorer_state>* self, caf::actor node,
         std::optional<vast::expression> before_expr;
         if (st.before)
           before_expr = predicate{attribute_extractor{atom::timestamp_v},
-                                  greater_equal, data{*x - *st.before}};
+                                  relational_operator::greater_equal,
+                                  data{*x - *st.before}};
 
         std::optional<vast::expression> after_expr;
         if (st.after)
-          after_expr = predicate{attribute_extractor{atom::timestamp_v},
-                                 less_equal, data{*x + *st.after}};
+          after_expr
+            = predicate{attribute_extractor{atom::timestamp_v},
+                        relational_operator::less_equal, data{*x + *st.after}};
         std::optional<vast::expression> by_expr;
         if (st.by) {
           VAST_ASSERT(by_column); // Should have been checked above.
@@ -183,7 +185,8 @@ explorer(caf::stateful_actor<explorer_state>* self, caf::actor node,
             continue;
           // TODO: Make `predicate` accept a data_view as well to save
           // the call to `materialize()`.
-          by_expr = predicate{field_extractor{*st.by}, equal, materialize(ci)};
+          by_expr = predicate{field_extractor{*st.by},
+                              relational_operator::equal, materialize(ci)};
         }
         auto build_conjunction
           = [](std::optional<expression>&& lhs,

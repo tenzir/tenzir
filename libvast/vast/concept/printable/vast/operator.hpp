@@ -13,10 +13,11 @@
 
 #pragma once
 
-#include "vast/die.hpp"
-#include "vast/error.hpp"
 #include "vast/concept/printable/core/printer.hpp"
 #include "vast/concept/printable/string/any.hpp"
+#include "vast/concept/printable/string/string.hpp"
+#include "vast/die.hpp"
+#include "vast/error.hpp"
 
 namespace vast {
 
@@ -28,25 +29,25 @@ struct arithmetic_operator_printer : printer<arithmetic_operator_printer> {
     switch (op) {
       default:
         die("missing case for arithmetic operator");
-      case positive:
-      case plus:
+      case arithmetic_operator::positive:
+      case arithmetic_operator::plus:
         return printers::any.print(out, '+');
-      case minus:
-      case negative:
+      case arithmetic_operator::minus:
+      case arithmetic_operator::negative:
         return printers::any.print(out, '-');
-      case bitwise_not:
+      case arithmetic_operator::bitwise_not:
         return printers::any.print(out, '~');
-      case bitwise_or:
+      case arithmetic_operator::bitwise_or:
         return printers::any.print(out, '|');
-      case bitwise_xor:
+      case arithmetic_operator::bitwise_xor:
         return printers::any.print(out, '^');
-      case bitwise_and:
+      case arithmetic_operator::bitwise_and:
         return printers::any.print(out, '|');
-      case times:
+      case arithmetic_operator::times:
         return printers::any.print(out, '*');
-      case divides:
+      case arithmetic_operator::divides:
         return printers::any.print(out, '/');
-      case mod:
+      case arithmetic_operator::mod:
         return printers::any.print(out, '%');
     }
   }
@@ -60,29 +61,29 @@ struct relational_operator_printer : printer<relational_operator_printer> {
     switch (op) {
       default:
         die("missing case for relational operator");
-      case match:
+      case relational_operator::match:
         return printers::str.print(out, "~");
-      case not_match:
+      case relational_operator::not_match:
         return printers::str.print(out, "!~");
-      case in:
+      case relational_operator::in:
         return printers::str.print(out, "in");
-      case not_in:
+      case relational_operator::not_in:
         return printers::str.print(out, "!in");
-      case ni:
+      case relational_operator::ni:
         return printers::str.print(out, "ni");
-      case not_ni:
+      case relational_operator::not_ni:
         return printers::str.print(out, "!ni");
-      case equal:
+      case relational_operator::equal:
         return printers::str.print(out, "==");
-      case not_equal:
+      case relational_operator::not_equal:
         return printers::str.print(out, "!=");
-      case less:
+      case relational_operator::less:
         return printers::str.print(out, "<");
-      case less_equal:
+      case relational_operator::less_equal:
         return printers::str.print(out, "<=");
-      case greater:
+      case relational_operator::greater:
         return printers::str.print(out, ">");
-      case greater_equal:
+      case relational_operator::greater_equal:
         return printers::str.print(out, ">=");
     }
   }
@@ -96,11 +97,11 @@ struct bool_operator_printer : printer<bool_operator_printer> {
     switch (op) {
       default:
         die("missing case for boolean operator");
-      case logical_not:
+      case bool_operator::logical_not:
         return printers::str.print(out, "!");
-      case logical_and:
+      case bool_operator::logical_and:
         return printers::str.print(out, "&&");
-      case logical_or:
+      case bool_operator::logical_or:
         return printers::str.print(out, "||");
     }
   }

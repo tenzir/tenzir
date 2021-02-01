@@ -11,26 +11,47 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#include "vast/die.hpp"
 #include "vast/operator.hpp"
+
+#include "vast/concept/printable/to_string.hpp"
+#include "vast/concept/printable/vast/operator.hpp"
+#include "vast/die.hpp"
 
 namespace vast {
 
+std::string to_string(arithmetic_operator op) noexcept {
+  std::string str;
+  print(std::back_inserter(str), op);
+  return str;
+}
+
+std::string to_string(relational_operator op) noexcept {
+  std::string str;
+  print(std::back_inserter(str), op);
+  return str;
+}
+
+std::string to_string(bool_operator op) noexcept {
+  std::string str;
+  print(std::back_inserter(str), op);
+  return str;
+}
+
 bool is_negated(relational_operator op) {
   switch (op) {
-    case equal:
-    case match:
-    case less:
-    case less_equal:
-    case greater:
-    case greater_equal:
-    case in:
-    case ni:
+    case relational_operator::equal:
+    case relational_operator::match:
+    case relational_operator::less:
+    case relational_operator::less_equal:
+    case relational_operator::greater:
+    case relational_operator::greater_equal:
+    case relational_operator::in:
+    case relational_operator::ni:
       return false;
-    case not_ni:
-    case not_in:
-    case not_equal:
-    case not_match:
+    case relational_operator::not_ni:
+    case relational_operator::not_in:
+    case relational_operator::not_equal:
+    case relational_operator::not_match:
       return true;
   }
   die("missing case for relational operator");
@@ -38,57 +59,57 @@ bool is_negated(relational_operator op) {
 
 relational_operator negate(relational_operator op) {
   switch (op) {
-    case match:
-      return not_match;
-    case not_match:
-      return match;
-    case equal:
-      return not_equal;
-    case not_equal:
-      return equal;
-    case less:
-      return greater_equal;
-    case less_equal:
-      return greater;
-    case greater:
-      return less_equal;
-    case greater_equal:
-      return less;
-    case in:
-      return not_in;
-    case not_in:
-      return in;
-    case ni:
-      return not_ni;
-    case not_ni:
-      return ni;
+    case relational_operator::match:
+      return relational_operator::not_match;
+    case relational_operator::not_match:
+      return relational_operator::match;
+    case relational_operator::equal:
+      return relational_operator::not_equal;
+    case relational_operator::not_equal:
+      return relational_operator::equal;
+    case relational_operator::less:
+      return relational_operator::greater_equal;
+    case relational_operator::less_equal:
+      return relational_operator::greater;
+    case relational_operator::greater:
+      return relational_operator::less_equal;
+    case relational_operator::greater_equal:
+      return relational_operator::less;
+    case relational_operator::in:
+      return relational_operator::not_in;
+    case relational_operator::not_in:
+      return relational_operator::in;
+    case relational_operator::ni:
+      return relational_operator::not_ni;
+    case relational_operator::not_ni:
+      return relational_operator::ni;
   }
   die("missing case for relational operator");
 }
 
 relational_operator flip(relational_operator op) {
   switch (op) {
-    case match:
-    case not_match:
-    case equal:
-    case not_equal:
+    case relational_operator::match:
+    case relational_operator::not_match:
+    case relational_operator::equal:
+    case relational_operator::not_equal:
       return op;
-    case less:
-      return greater;
-    case less_equal:
-      return greater_equal;
-    case greater:
-      return less;
-    case greater_equal:
-      return less_equal;
-    case in:
-      return ni;
-    case not_in:
-      return not_ni;
-    case ni:
-      return in;
-    case not_ni:
-      return not_in;
+    case relational_operator::less:
+      return relational_operator::greater;
+    case relational_operator::less_equal:
+      return relational_operator::greater_equal;
+    case relational_operator::greater:
+      return relational_operator::less;
+    case relational_operator::greater_equal:
+      return relational_operator::less_equal;
+    case relational_operator::in:
+      return relational_operator::ni;
+    case relational_operator::not_in:
+      return relational_operator::not_ni;
+    case relational_operator::ni:
+      return relational_operator::in;
+    case relational_operator::not_ni:
+      return relational_operator::not_in;
   }
   die("missing case for relational operator");
 }

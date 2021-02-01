@@ -60,20 +60,20 @@ TEST(real with custom binner) {
   REQUIRE(idx.append(make_data_view(42.12258)));
   REQUIRE(idx.append(make_data_view(42.125799)));
   MESSAGE("lookup");
-  auto result = idx.lookup(less, make_data_view(100.0));
+  auto result = idx.lookup(relational_operator::less, make_data_view(100.0));
   CHECK_EQUAL(to_string(unbox(result)), "1100011");
-  result = idx.lookup(less, make_data_view(43.0));
+  result = idx.lookup(relational_operator::less, make_data_view(43.0));
   CHECK_EQUAL(to_string(unbox(result)), "1100011");
-  result = idx.lookup(greater_equal, make_data_view(42.0));
+  result = idx.lookup(relational_operator::greater_equal, make_data_view(42.0));
   CHECK_EQUAL(to_string(unbox(result)), "0111111");
-  result = idx.lookup(not_equal, make_data_view(4711.14));
+  result = idx.lookup(relational_operator::not_equal, make_data_view(4711.14));
   CHECK_EQUAL(to_string(unbox(result)), "1110111");
   MESSAGE("serialization");
   std::vector<char> buf;
   CHECK_EQUAL(detail::serialize(buf, idx), caf::none);
   auto idx2 = index_type{real_type{}, opts};
   REQUIRE_EQUAL(detail::deserialize(buf, idx2), caf::none);
-  result = idx2.lookup(not_equal, make_data_view(4711.14));
+  result = idx2.lookup(relational_operator::not_equal, make_data_view(4711.14));
   CHECK_EQUAL(to_string(unbox(result)), "1110111");
 }
 
@@ -99,12 +99,12 @@ TEST(duration) {
   auto hun = make_data_view(milliseconds(1034));
   auto twelve = make_data_view(milliseconds(1200));
   auto twokay = make_data_view(milliseconds(2000));
-  CHECK_EQUAL(lookup(equal, hun), "10001100");
-  CHECK_EQUAL(lookup(less_equal, twokay), "11011111");
-  CHECK_EQUAL(lookup(greater, twelve), "11101111");
-  CHECK_EQUAL(lookup(greater_equal, twelve), "11101111");
-  CHECK_EQUAL(lookup(less, twelve), "10011100");
-  CHECK_EQUAL(lookup(less_equal, twelve), "10011100");
+  CHECK_EQUAL(lookup(relational_operator::equal, hun), "10001100");
+  CHECK_EQUAL(lookup(relational_operator::less_equal, twokay), "11011111");
+  CHECK_EQUAL(lookup(relational_operator::greater, twelve), "11101111");
+  CHECK_EQUAL(lookup(relational_operator::greater_equal, twelve), "11101111");
+  CHECK_EQUAL(lookup(relational_operator::less, twelve), "10011100");
+  CHECK_EQUAL(lookup(relational_operator::less_equal, twelve), "10011100");
 }
 
 TEST(time) {
@@ -126,20 +126,24 @@ TEST(time) {
   REQUIRE(idx.append(make_data_view(unbox(ts))));
   MESSAGE("lookup");
   ts = to<vast::time>("2014-01-16+05:30:15");
-  auto fifteen = idx.lookup(equal, make_data_view(unbox(ts)));
+  auto fifteen
+    = idx.lookup(relational_operator::equal, make_data_view(unbox(ts)));
   CHECK(to_string(unbox(fifteen)) == "101010");
   ts = to<vast::time>("2014-01-16+05:30:20");
-  auto twenty = idx.lookup(less, make_data_view(unbox(ts)));
+  auto twenty
+    = idx.lookup(relational_operator::less, make_data_view(unbox(ts)));
   CHECK(to_string(unbox(twenty)) == "111111");
   ts = to<vast::time>("2014-01-16+05:30:18");
-  auto eighteen = idx.lookup(greater_equal, make_data_view(unbox(ts)));
+  auto eighteen
+    = idx.lookup(relational_operator::greater_equal, make_data_view(unbox(ts)));
   CHECK(to_string(unbox(eighteen)) == "000101");
   MESSAGE("serialization");
   std::vector<char> buf;
   CHECK_EQUAL(detail::serialize(buf, idx), caf::none);
   arithmetic_index<vast::time> idx2{time_type{}, opts};
   CHECK_EQUAL(detail::deserialize(buf, idx2), caf::none);
-  eighteen = idx2.lookup(greater_equal, make_data_view(unbox(ts)));
+  eighteen = idx2.lookup(relational_operator::greater_equal,
+                         make_data_view(unbox(ts)));
   CHECK(to_string(*eighteen) == "000101");
 }
 
@@ -151,9 +155,9 @@ TEST(none values - arithmetic) {
   REQUIRE(idx->append(make_data_view(43)));
   REQUIRE(idx->append(make_data_view(caf::none)));
   REQUIRE(idx->append(make_data_view(caf::none)));
-  auto bm = idx->lookup(less, make_data_view(50));
+  auto bm = idx->lookup(relational_operator::less, make_data_view(50));
   CHECK_EQUAL(to_string(unbox(bm)), "01100");
-  bm = idx->lookup(greater, make_data_view(42));
+  bm = idx->lookup(relational_operator::greater, make_data_view(42));
   CHECK_EQUAL(to_string(unbox(bm)), "00100");
 }
 

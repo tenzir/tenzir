@@ -19,7 +19,7 @@
 namespace vast {
 
 /// An arithmetic operator.
-enum arithmetic_operator : uint8_t {
+enum class arithmetic_operator : uint8_t {
   // Unary
   positive,
   negative,
@@ -35,8 +35,11 @@ enum arithmetic_operator : uint8_t {
   mod
 };
 
+/// @relates arithmetic_operator
+std::string to_string(arithmetic_operator op) noexcept;
+
 /// A (binary) relational operator.
-enum relational_operator : uint8_t {
+enum class relational_operator : uint8_t {
   match,
   not_match,
   in,
@@ -51,12 +54,18 @@ enum relational_operator : uint8_t {
   greater_equal
 };
 
+/// @relates relational_operator
+std::string to_string(relational_operator op) noexcept;
+
 /// A boolean operator taking on the values AND, OR, and NOT.
-enum bool_operator : uint8_t {
+enum class bool_operator : uint8_t {
   logical_not,
   logical_and,
   logical_or,
 };
+
+/// @relates bool_operator
+std::string to_string(bool_operator op) noexcept;
 
 /// Tests wheter a relational operator is is_negated.
 /// For example, `!=` is is_negated, but `==` is not.

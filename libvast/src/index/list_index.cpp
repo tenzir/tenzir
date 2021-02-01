@@ -84,21 +84,21 @@ bool list_index::append_impl(data_view x, id pos) {
 
 caf::expected<ids>
 list_index::lookup_impl(relational_operator op, data_view x) const {
-  if (!(op == ni || op == not_ni))
+  if (!(op == relational_operator::ni || op == relational_operator::not_ni))
     return caf::make_error(ec::unsupported_operator, op);
   if (elements_.empty())
     return ids{};
-  auto result = elements_[0]->lookup(equal, x);
+  auto result = elements_[0]->lookup(relational_operator::equal, x);
   if (!result)
     return result;
   for (auto i = 1u; i < elements_.size(); ++i) {
-    auto mbm = elements_[i]->lookup(equal, x);
+    auto mbm = elements_[i]->lookup(relational_operator::equal, x);
     if (mbm)
       *result |= *mbm;
     else
       return mbm;
   }
-  if (op == not_ni)
+  if (op == relational_operator::not_ni)
     result->flip();
   return result;
 }

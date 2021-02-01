@@ -207,13 +207,14 @@ private:
       }
       return result;
     };
-    if (op == equal || op == not_equal) {
+    if (op == relational_operator::equal
+        || op == relational_operator::not_equal) {
       auto k = find_digest(x);
       auto eq = [=](const digest_type& digest) { return k == digest; };
       auto ne = [=](const digest_type& digest) { return k != digest; };
-      return op == equal ? scan(eq) : scan(ne);
+      return op == relational_operator::equal ? scan(eq) : scan(ne);
     }
-    if (op == in || op == not_in) {
+    if (op == relational_operator::in || op == relational_operator::not_in) {
       // Ensure that the RHS is a list of strings.
       auto keys = caf::visit(
         detail::overload{
@@ -243,7 +244,7 @@ private:
         auto cmp = [=](auto& k) { return k == digest; };
         return std::none_of(keys->begin(), keys->end(), cmp);
       };
-      return op == in ? scan(in_pred) : scan(not_in_pred);
+      return op == relational_operator::in ? scan(in_pred) : scan(not_in_pred);
     }
     return caf::make_error(ec::unsupported_operator, op);
   }

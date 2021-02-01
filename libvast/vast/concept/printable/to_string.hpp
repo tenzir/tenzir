@@ -34,4 +34,3 @@ auto to_string(From&& from, Opts&&... opts)
 }
 
 } // namespace vast
-
