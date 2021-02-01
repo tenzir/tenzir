@@ -90,6 +90,14 @@ auto make_error_msg(ec code, std::string msg) {
 /// Helper function to determine whether a component can be spawned at most
 /// once.
 bool is_singleton(std::string_view type) {
+  // TODO: All of these actor interfaces are strongly typed. The value of `type`
+  // is received via the actor interface of the NODE sometimes, which means that
+  // we cannot just pass arbitrary actors to it. Atoms aren't really an option
+  // either, because `caf::atom_value` was removed with CAF 0.18. We can,
+  // however, abuse the fact that every typed actor has a type ID assigned, and
+  // change the node to work with type IDs over actor names everywhere. This
+  // refactoring will be much easier once the NODE itself is a typed actor, so
+  // let's hold off until then.
   const char* singletons[]
     = {"accountant", "archive", "eraser",       "filesystem",
        "importer",   "index",   "type-registry"};
