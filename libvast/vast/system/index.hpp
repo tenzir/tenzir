@@ -140,6 +140,9 @@ struct index_state {
   // Maps partitions to their expected location on the file system.
   vast::path partition_path(const uuid& id) const;
 
+  // Maps partition synopses to their expected location on the file system.
+  vast::path partition_synopsis_path(const uuid& id) const;
+
   // -- query handling ---------------------------------------------------------
 
   bool worker_available();
@@ -215,6 +218,9 @@ struct index_state {
 
   /// The directory for persistent state.
   path dir;
+
+  /// The directory for partition synopses.
+  path synopsisdir;
 
   /// Statistics about processed data.
   index_statistics stats;

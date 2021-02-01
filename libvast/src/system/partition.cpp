@@ -486,12 +486,13 @@ active_partition_actor::behavior_type active_partition(
       self->state.streaming_initiated = true;
       return self->state.stage->add_inbound_path(in);
     },
-    [self](atom::persist, const path& part_dir) {
+    [self](atom::persist, const path& part_dir, const path& synopsis_dir) {
       // Ensure that the response promise has not already been initialized.
       VAST_ASSERT(
         !static_cast<caf::response_promise&>(self->state.persistence_promise)
            .source());
       self->state.persist_path = part_dir;
+      self->state.synopsis_path = synopsis_dir;
       self->state.persisted_indexers = 0;
       self->state.persistence_promise
         = self->make_response_promise<std::shared_ptr<partition_synopsis>>();
@@ -559,6 +560,37 @@ active_partition_actor::behavior_type active_partition(
                 return;
               }
               VAST_ASSERT(self->state.persist_path);
+              VAST_ASSERT(self->state.synopsis_path);
+              // Note that this is a performance optimization: We used to store
+              // the partition synopsis inside the `Partition` flatbuffer, and
+              // then on startup the index would mmap all partitions and read
+              // the relevant part of the flatbuffer. However, due to the way
+              // the flatbuffer file format is structured this still needs three
+              // random file accesses: At the beginning to read vtable offset
+              // and file identifier, at the end to read the actual vtable, and
+              // finally at the actual data. On systems with aggressive
+              // readahead (ie., btrfs defaults to 4MiB), this can increase the
+              // i/o at startup and thus the time to boot by more than 10x.
+              //
+              // Since the synopsis should be small compared to the actual data,
+              // we store a redundant copy in the partition itself so we can
+              // regenerate the synopses as needed. This also means we don't
+              // need to handle errors here, since VAST can still start
+              // correctly (if a bit slower) when the write fails.
+              flatbuffers::FlatBufferBuilder synopsis_builder;
+              if (auto ps = pack(synopsis_builder, *self->state.synopsis)) {
+                fbs::PartitionSynopsisBuilder ps_builder(synopsis_builder);
+                ps_builder.add_partition_synopsis_type(
+                  fbs::partition_synopsis::PartitionSynopsis::v0);
+                ps_builder.add_partition_synopsis(ps->Union());
+                auto ps_offset = ps_builder.Finish();
+                fbs::FinishPartitionSynopsisBuffer(synopsis_builder, ps_offset);
+                auto ps_chunk = fbs::release(synopsis_builder);
+                self
+                  ->request(self->state.filesystem, caf::infinite,
+                            atom::write_v, *self->state.synopsis_path, ps_chunk)
+                  .then([=](atom::ok) {}, [=](caf::error) {});
+              }
               auto fbchunk = fbs::release(builder);
               VAST_DEBUG("{} persists partition with a total size of "
                          "{} bytes",
