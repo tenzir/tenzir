@@ -42,6 +42,7 @@
 #include "vast/json.hpp"
 #include "vast/logger.hpp"
 #include "vast/meta_index.hpp"
+#include "vast/partition_synopsis.hpp"
 #include "vast/system/evaluator.hpp"
 #include "vast/system/partition.hpp"
 #include "vast/system/query_supervisor.hpp"
@@ -107,8 +108,41 @@ using namespace std::chrono;
 
 namespace vast::system {
 
+caf::error index_state::extract_partition_synopsis(
+  const vast::path& partition_path, const vast::path& partition_synopsis_path) {
+  // Use blocking operations here since this is part of the startup.
+  auto chunk = chunk::mmap(partition_path);
+  if (!chunk)
+    return caf::make_error(ec::system_error, "could not mmap partition at "
+                                               + partition_path.str());
+  auto partition = fbs::GetPartition(chunk->data());
+  if (partition->partition_type() != fbs::partition::Partition::v0)
+    return caf::make_error(ec::format_error, "found unsupported version for "
+                                             "partition "
+                                               + partition_path.str());
+  auto partition_v0 = partition->partition_as_v0();
+  VAST_ASSERT(partition_v0);
+  partition_synopsis ps;
+  unpack(*partition_v0, ps);
+  flatbuffers::FlatBufferBuilder builder;
+  auto ps_offset = *pack(builder, ps);
+  fbs::PartitionSynopsisBuilder ps_builder(builder);
+  ps_builder.add_partition_synopsis_type(
+    fbs::partition_synopsis::PartitionSynopsis::v0);
+  ps_builder.add_partition_synopsis(ps_offset.Union());
+  auto flatbuffer = ps_builder.Finish();
+  fbs::FinishPartitionSynopsisBuffer(builder, flatbuffer);
+  auto chunk_out = fbs::release(builder);
+  return io::save(partition_synopsis_path,
+                  span{chunk_out->data(), chunk_out->size()});
+}
+
 vast::path index_state::partition_path(const uuid& id) const {
   return dir / to_string(id);
+}
+
+vast::path index_state::partition_synopsis_path(const uuid& id) const {
+  return synopsisdir / (to_string(id) + ".mdx");
 }
 
 partition_actor partition_factory::operator()(const uuid& id) const {
@@ -160,31 +194,35 @@ caf::error index_state::load_from_disk() {
       vast::uuid partition_uuid;
       unpack(*uuid_fb, partition_uuid);
       auto partition_path = dir / to_string(partition_uuid);
-      if (exists(partition_path)) {
-        persisted_partitions.insert(partition_uuid);
-        // Use blocking operations here since this is part of the startup.
-        auto chunk = chunk::mmap(partition_path);
-        if (!chunk) {
-          VAST_WARNING(self, "could not mmap partition at", partition_path);
-          continue;
-        }
-        auto partition = fbs::GetPartition(chunk->data());
-        if (partition->partition_type() != fbs::partition::Partition::v0) {
-          VAST_WARNING(self, "found unsupported version for partition",
-                       partition_uuid);
-          continue;
-        }
-        auto partition_v0 = partition->partition_as_v0();
-        VAST_ASSERT(partition_v0);
-        partition_synopsis ps;
-        unpack(*partition_v0, ps);
-        VAST_DEBUG(self, "merging partition synopsis from", partition_uuid);
-        meta_idx.merge(partition_uuid, std::move(ps));
-      } else {
+      auto partition_synopsis_path = dir / (to_string(partition_uuid) + ".mdx");
+      if (!exists(partition_path)) {
         VAST_WARNING(self, "found partition", partition_uuid,
                      "in the index state but not on disk; this may have been "
                      "caused by an unclean shutdown");
+        continue;
       }
+      // Generate external partition synopsis file if it doesn't exist.
+      // (FIXME: create separate function)
+      if (!exists(partition_synopsis_path)) {
+        if (auto error = extract_partition_synopsis(partition_path,
+                                                    partition_synopsis_path))
+          return error;
+      }
+      auto chunk = chunk::mmap(partition_synopsis_path);
+      if (!chunk) {
+        VAST_WARNING(self, "could not mmap partition at", partition_path);
+        continue;
+      }
+      auto ps_flatbuffer = fbs::GetPartitionSynopsis(chunk->data());
+      partition_synopsis ps;
+      if (ps_flatbuffer->partition_synopsis_type()
+          != fbs::partition_synopsis::PartitionSynopsis::v0)
+        return caf::make_error(ec::format_error, "invalid partition synopsis "
+                                                 "version");
+      if (auto error = unpack(*ps_flatbuffer->partition_synopsis_as_v0(), ps))
+        return error;
+      meta_idx.merge(partition_uuid, std::move(ps));
+      persisted_partitions.insert(partition_uuid);
     }
     auto stats = index_v0->stats();
     if (!stats)
@@ -261,8 +299,9 @@ void index_state::decomission_active_partition() {
   stage->out().close(active_partition.stream_slot);
   // Persist active partition asynchronously.
   auto part_dir = dir / to_string(id);
+  auto synopsis_dir = synopsisdir / (to_string(id) + ".mdx");
   VAST_DEBUG(self, "persists active partition to", part_dir);
-  self->request(actor, caf::infinite, atom::persist_v, part_dir)
+  self->request(actor, caf::infinite, atom::persist_v, part_dir, synopsisdir)
     .then(
       [=](std::shared_ptr<partition_synopsis>& ps) {
         VAST_DEBUG(self, "successfully persisted partition", id);
@@ -504,6 +543,7 @@ index(index_actor::stateful_pointer<index_state> self,
   self->state.self = self;
   self->state.filesystem = std::move(filesystem);
   self->state.dir = dir;
+  self->state.synopsisdir = dir;
   self->state.partition_capacity = partition_capacity;
   self->state.taste_partitions = taste_partitions;
   self->state.inmem_partitions.factory().filesystem() = self->state.filesystem;
@@ -706,6 +746,7 @@ index(index_actor::stateful_pointer<index_state> self,
       VAST_VERBOSE(self, "erases partition", partition_id);
       auto rp = self->make_response_promise<ids>();
       auto path = self->state.partition_path(partition_id);
+      auto synopsis_path = self->state.partition_synopsis_path(partition_id);
       bool adjust_stats = true;
       if (!self->state.persisted_partitions.count(partition_id)) {
         if (!exists(path)) {
@@ -752,6 +793,9 @@ index(index_actor::stateful_pointer<index_state> self,
             // and answering a query.
             if (!rm(path))
               VAST_WARNING(self, "could not unlink partition at", path);
+            if (!rm(synopsis_path))
+              VAST_WARNING(self, "could not unlink partition synopsis at",
+                           path);
             rp.deliver(std::move(all_ids));
           },
           [=](caf::error e) mutable { rp.deliver(e); });

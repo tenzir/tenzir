@@ -267,7 +267,7 @@ using filesystem_actor = typed_actor_fwd<
 /// The interface of an ACTIVE PARTITION actor.
 using active_partition_actor = typed_actor_fwd<
   // Persists the active partition at the specified path.
-  caf::replies_to<atom::persist, path>::with< //
+  caf::replies_to<atom::persist, path, path>::with< //
     std::shared_ptr<partition_synopsis>>,
   // A repeatedly called continuation of the persist request.
   caf::reacts_to<atom::persist, atom::resume>>

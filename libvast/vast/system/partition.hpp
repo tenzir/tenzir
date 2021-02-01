@@ -116,6 +116,9 @@ struct active_partition_state {
   /// Path where the index state is written.
   std::optional<path> persist_path;
 
+  /// Path where the partition synopsis is written.
+  std::optional<path> synopsis_path;
+
   /// Counts how many indexers have already responded to the `snapshot` atom
   /// with a serialized chunk.
   size_t persisted_indexers;
