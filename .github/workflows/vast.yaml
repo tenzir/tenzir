@@ -69,8 +69,8 @@ jobs:
           apt-get -qqy -t buster-backports install libspdlog-dev
 
           # clang 9 (c.f. https://apt.llvm.org/)
+          curl -fsSL https://apt.llvm.org/llvm-snapshot.gpg.key | apt-key add -
           echo "deb http://apt.llvm.org/buster/ llvm-toolchain-buster-9 main" | tee -a /etc/apt/sources.list
-          apt-key adv --keyserver hkp://pool.sks-keyservers.net:80 --recv-keys 15CF4D18AF4F7421
           apt-get -qq update
           apt-get -qqy install clang-9
 
