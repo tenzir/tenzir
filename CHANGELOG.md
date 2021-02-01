@@ -11,6 +11,17 @@ This changelog documents all notable user-facing changes of VAST.
 ### 🐞 Bug Fixes
 -->
 
+## [Unreleased]
+
+ - ⚠️  The meta index now stores partition synopses in separate files. This will increase
+  restart times on systems with large databases, slow disks and aggressive readahead
+  settings.
+  [#1330](https://github.com/tenzir/vast/pull/1330) 
+
+ - 🎁 A new config setting `vast.meta-index-path` allows storing the meta
+  index information in a separate directory.
+  [#1330](https://github.com/tenzir/vast/pull/1330) 
+
 ## [2021.01.28]
 
 ### ⚡️ Breaking Changes
