@@ -373,6 +373,11 @@ dependency_summary("yaml-cpp" yaml-cpp)
 option(SPDLOG_ROOT "Install root of spdlog" "")
 option(SPDLOG_FMT_EXTERNAL "Use spdlog with external libfmt" OFF)
 find_package(spdlog 1.5.0 REQUIRED)
+target_compile_definitions(libvast_internal INTERFACE
+  # Forbid unsafe duration_cast usage.
+  FMT_SAFE_DURATION_CAST
+  # Make fmt::internal an alias for fmt::detail. Remove when requiring fmt >= 7.
+  FMT_USE_INTERNAL)
 target_link_libraries(libvast PUBLIC spdlog::spdlog)
 if (SPDLOG_FMT_EXTERNAL)
   find_package(fmt 5.2.1 REQUIRED)

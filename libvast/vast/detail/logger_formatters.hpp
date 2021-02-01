@@ -35,7 +35,6 @@
 #include <type_traits>
 
 #include <spdlog/spdlog.h>
-#define FMT_SAFE_DURATION_CAST 1
 #ifndef SPDLOG_FMT_EXTERNAL
 #  include <spdlog/fmt/bundled/chrono.h>
 #  include <spdlog/fmt/bundled/ostream.h>
@@ -49,7 +48,7 @@
 // A fallback formatter using the `caf::detail::stringification_inspector`
 // concept, which uses ADL-available `to_string` overloads if available.
 template <typename T>
-struct fmt::detail::fallback_formatter<
+struct fmt::internal::fallback_formatter<
   T, fmt::format_context::char_type,
   std::enable_if_t<std::conjunction_v<
     std::negation<fmt::has_formatter<T, fmt::format_context>>,
@@ -72,7 +71,7 @@ struct fmt::detail::fallback_formatter<
 
 // A fallback formatter using VAST's printable concept.
 template <typename T>
-struct fmt::detail::fallback_formatter<
+struct fmt::internal::fallback_formatter<
   T, fmt::format_context::char_type,
   std::enable_if_t<std::conjunction_v<
     std::negation<fmt::has_formatter<T, fmt::format_context>>,
