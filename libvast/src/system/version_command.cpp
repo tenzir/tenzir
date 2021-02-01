@@ -81,7 +81,7 @@ void print_version(const json::object& extra_content) {
 
 caf::message
 version_command([[maybe_unused]] const invocation& inv, caf::actor_system&) {
-  VAST_TRACE("{}", detail::id_or_name(inv));
+  VAST_TRACE("{}", inv);
   print_version();
   return caf::none;
 }

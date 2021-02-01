@@ -11,6 +11,8 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
+#pragma once
+
 #include "vast/fwd.hpp"
 
 #include "vast/detail/type_traits.hpp"
@@ -43,43 +45,20 @@ void shutdown_spdlog();
 std::shared_ptr<spdlog::logger>& logger();
 
 template <class T>
-auto id_or_name(T&& x) {
-  static_assert(!std::is_same_v<const char*, std::remove_reference<T>>,
-                "const char* is not allowed for the first argument in a "
-                "logging statement. Supply a component or use "
-                "VAST_[ERROR|WARNING|INFO|VERBOSE|DEBUG]_ANON instead.");
-  if constexpr (std::is_pointer_v<T>) {
-    using value_type = std::remove_pointer_t<T>;
-    if constexpr (has_ostream_operator<value_type>)
-      return *x;
-    else if constexpr (has_to_string<value_type>)
-      return to_string(*x);
-    else
-      return caf::detail::pretty_type_name(typeid(value_type));
-  } else {
-    if constexpr (has_ostream_operator<T>)
-      return std::forward<T>(x);
-    else if constexpr (has_to_string<T>)
-      return to_string(std::forward<T>(x));
-    else
-      return caf::detail::pretty_type_name(typeid(T));
-  }
+auto pretty_type_name(const T&) {
+  if constexpr (std::is_pointer_v<T>)
+    return caf::detail::pretty_type_name(typeid(std::remove_pointer_t<T>));
+  else
+    return caf::detail::pretty_type_name(typeid(T));
 }
 
 template <class T>
 struct single_arg_wrapper {
   const char* name;
   const T& value;
+
   single_arg_wrapper(const char* x, const T& y) : name(x), value(y) {
     // nop
-  }
-  template <typename OStream>
-  friend OStream& operator<<(OStream& os, const single_arg_wrapper& self) {
-    std::string result = self.name;
-    result += " = ";
-    result += caf::deep_to_string(self.value);
-    ;
-    return os << result;
   }
 };
 
@@ -93,16 +72,10 @@ struct range_arg_wrapper {
   const char* name;
   Iterator first;
   Iterator last;
+
   range_arg_wrapper(const char* x, Iterator begin, Iterator end)
     : name(x), first(begin), last(end) {
     // nop
-  }
-  template <typename OStream>
-  friend OStream& operator<<(OStream& os, const range_arg_wrapper& self) {
-    std::string result = self.name;
-    result += " = ";
-    result += caf::deep_to_string(self);
-    return os << result;
   }
 };
 
@@ -117,7 +90,6 @@ struct carrier {
   char name[S] = {0};
   constexpr const char* str() const {
     return &name[0];
-    ;
   }
 };
 

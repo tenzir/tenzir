@@ -43,7 +43,7 @@ namespace vast::system {
 caf::expected<std::string>
 read_query(const invocation& inv, std::string_view file_option,
            size_t argument_offset) {
-  VAST_TRACE("{}  {}", detail::id_or_name(inv), file_option);
+  VAST_TRACE("{} {}", inv, file_option);
   std::string result;
   auto assign_query = [&](std::istream& in) {
     result.assign(std::istreambuf_iterator<char>{in},

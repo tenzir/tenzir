@@ -70,6 +70,7 @@ public:
   template <format Format>
   class proxy {
     friend builder;
+
   public:
     /// Finalizes the addition of values to a nested container.
     /// @returns The number of total bytes the proxy has written or 0 on
@@ -105,9 +106,9 @@ public:
       if (result > 0)
         bump_size(result);
       else
-        VAST_WARN("vast.msgpack_builder.proxy.add failed to add {}  {}"
-                  "of format {}",
-                  VAST_ARG(x), VAST_ARG(y), Format);
+        VAST_WARN("vast.msgpack_builder.proxy.add failed to add {} of format "
+                  "{}",
+                  VAST_ARG(x), Format);
       return result;
     }
 
@@ -202,7 +203,7 @@ public:
 
     builder& builder_;
     const size_t offset_; // where we started in the builder buffer
-    size_t size_;   // number of elements or size in bytes
+    size_t size_;         // number of elements or size in bytes
   };
 
   /// Constructs a builder from a byte span.
@@ -244,9 +245,9 @@ public:
                        std::negation<std::is_same<T, proxy<Format>>>>,
     size_t> {
     if (!validate<Format>(x, y)) {
-      VAST_ERROR("vast.msgpack_builder failed to validate {}  {} of "
+      VAST_ERROR("vast.msgpack_builder failed to validate {} of "
                  "format {}",
-                 VAST_ARG(x), VAST_ARG(y), Format);
+                 VAST_ARG(x), Format);
       return 0;
     }
     if constexpr (Format == nil || Format == false_ || Format == true_)

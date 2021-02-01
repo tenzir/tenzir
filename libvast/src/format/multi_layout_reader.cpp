@@ -30,9 +30,9 @@ multi_layout_reader::~multi_layout_reader() {
   // nop
 }
 
-caf::error multi_layout_reader::finish(consumer& f,
-                                       table_slice_builder_ptr& builder_ptr,
-                                       caf::error result) {
+caf::error
+multi_layout_reader::finish(consumer& f, table_slice_builder_ptr& builder_ptr,
+                            caf::error result) {
   auto rows = builder_ptr->rows();
   if (builder_ptr != nullptr && rows > 0) {
     if (batch_events_ >= rows) {
@@ -43,7 +43,8 @@ caf::error multi_layout_reader::finish(consumer& f,
       // error, so there is no reason to treat it as one.
       VAST_WARN("{} detected a mismatch in the batch tracking "
                 "logic {}  {}",
-                *this, VAST_ARG(batch_events_), VAST_ARG(rows));
+                detail::pretty_type_name(this), VAST_ARG(batch_events_),
+                VAST_ARG(rows));
       batch_events_ = 0;
     }
     auto slice = builder_ptr->finish();
@@ -69,7 +70,7 @@ table_slice_builder_ptr multi_layout_reader::builder(const type& t) {
     return i->second;
   if (!caf::holds_alternative<record_type>(t)) {
     VAST_ERROR("{} cannot create slice builder for non-record type: {}",
-               detail::id_or_name(this), VAST_ARG(t));
+               detail::pretty_type_name(this), VAST_ARG(t));
     // Insert a nullptr into the map and return it to make sure the error gets
     // printed only once.
     return builders_[t];
@@ -79,6 +80,5 @@ table_slice_builder_ptr multi_layout_reader::builder(const type& t) {
   builders_.emplace(t, ptr);
   return ptr;
 }
-
 
 } // namespace vast::format

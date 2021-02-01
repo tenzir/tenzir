@@ -39,8 +39,7 @@ maybe_actor spawn_pivoter(node_actor* self, spawn_arguments& args) {
     expr = *expr_;
   }
   auto handle = self->spawn(pivoter, self, target_name, expr);
-  VAST_VERBOSE("{} spawned a pivoter for {}", detail::id_or_name(self),
-               to_string(expr));
+  VAST_VERBOSE("{} spawned a pivoter for {}", self, to_string(expr));
   return handle;
 }
 

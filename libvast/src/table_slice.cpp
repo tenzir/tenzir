@@ -466,8 +466,8 @@ void select(std::vector<table_slice>& result, const table_slice& slice,
   auto builder
     = factory<table_slice_builder>::make(implementation_id, slice.layout());
   if (builder == nullptr) {
-    VAST_ERROR("{} failed to get a table slice builder for {}",
-               detail::id_or_name(__func__), implementation_id);
+    VAST_ERROR("{} failed to get a table slice builder for {}", __func__,
+               implementation_id);
     return;
   }
   id last_offset = slice.offset();
@@ -476,7 +476,7 @@ void select(std::vector<table_slice>& result, const table_slice& slice,
       return;
     auto new_slice = builder->finish(serialized_layout);
     if (new_slice.encoding() == table_slice_encoding::none) {
-      VAST_WARN("{} got an empty slice", detail::id_or_name(__func__));
+      VAST_WARN("{} got an empty slice", __func__);
       return;
     }
     new_slice.offset(last_offset);
@@ -501,7 +501,7 @@ void select(std::vector<table_slice>& result, const table_slice& slice,
       if (!builder->add(cell_value)) {
         VAST_ERROR("{} failed to add data at column {} in row {} to the "
                    "builder: {}",
-                   detail::id_or_name(__func__), column, row, cell_value);
+                   __func__, column, row, cell_value);
         return;
       }
     }

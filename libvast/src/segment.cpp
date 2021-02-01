@@ -104,8 +104,8 @@ segment::lookup(const vast::ids& xs) const {
     slice.offset(interval->begin());
     VAST_ASSERT(slice.offset() == interval->begin());
     VAST_ASSERT(slice.offset() + slice.rows() == interval->end());
-    VAST_DEBUG("{} returns slice from lookup: {}", detail::id_or_name(this),
-               to_string(slice));
+    VAST_DEBUG("{} returns slice from lookup: {}",
+               detail::pretty_type_name(this), to_string(slice));
     result.push_back(std::move(slice));
     return caf::none;
   };

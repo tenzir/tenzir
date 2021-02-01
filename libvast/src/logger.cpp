@@ -14,6 +14,7 @@
 #include "vast/logger.hpp"
 
 #include "vast/atoms.hpp"
+#include "vast/command.hpp"
 #include "vast/config.hpp"
 #include "vast/defaults.hpp"
 #include "vast/detail/assert.hpp"

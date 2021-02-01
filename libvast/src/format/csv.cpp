@@ -180,7 +180,7 @@ const char* reader::name() const {
 
 caf::optional<record_type>
 reader::make_layout(const std::vector<std::string>& names) {
-  VAST_TRACE("{}", detail::id_or_name(VAST_ARG(names)));
+  VAST_TRACE("{}", VAST_ARG(names));
   for (auto& t : schema_) {
     if (auto r = caf::get_if<record_type>(&t)) {
       auto select_fields = [&]() -> caf::optional<record_type> {
@@ -386,7 +386,7 @@ vast::system::report reader::status() const {
   uint64_t invalid_lines = num_invalid_lines_;
   if (num_invalid_lines_ > 0)
     VAST_WARN("{} failed to parse {} of {} recent lines",
-              detail::id_or_name(this), num_invalid_lines_, num_lines_);
+              detail::pretty_type_name(this), num_invalid_lines_, num_lines_);
   num_lines_ = 0;
   num_invalid_lines_ = 0;
   return {
@@ -425,7 +425,7 @@ caf::error reader::read_impl(size_t max_events, size_t max_slice_size,
     auto timed_out = lines_->next_timeout(read_timeout_);
     if (timed_out)
       VAST_DEBUG("{} reached input timeout at line {}",
-                 detail::id_or_name(this), lines_->line_number());
+                 detail::pretty_type_name(this), lines_->line_number());
     return timed_out;
   };
   if (!parser_) {
@@ -446,7 +446,7 @@ caf::error reader::read_impl(size_t max_events, size_t max_slice_size,
                                                                 "exhausted"));
     if (batch_events_ > 0 && batch_timeout_ > reader_clock::duration::zero()
         && last_batch_sent_ + batch_timeout_ < reader_clock::now()) {
-      VAST_DEBUG("{} reached batch timeout", detail::id_or_name(this));
+      VAST_DEBUG("{} reached batch timeout", detail::pretty_type_name(this));
       return finish(callback, ec::timeout);
     }
     bool timed_out = next_line();
@@ -455,15 +455,15 @@ caf::error reader::read_impl(size_t max_events, size_t max_slice_size,
     auto& line = lines_->get();
     if (line.empty()) {
       // Ignore empty lines.
-      VAST_DEBUG("{} ignores empty line at {}", detail::id_or_name(this),
+      VAST_DEBUG("{} ignores empty line at {}", detail::pretty_type_name(this),
                  lines_->line_number());
       continue;
     }
     ++num_lines_;
     if (!p(line)) {
       if (num_invalid_lines_ == 0)
-        VAST_WARN("{} failed to parse line {} : {}", detail::id_or_name(this),
-                  lines_->line_number(), line);
+        VAST_WARN("{} failed to parse line {} : {}",
+                  detail::pretty_type_name(this), lines_->line_number(), line);
       ++num_invalid_lines_;
       continue;
     }

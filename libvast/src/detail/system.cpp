@@ -26,11 +26,9 @@ std::string hostname() {
   if (::gethostname(buf, sizeof(buf)) == 0)
     return buf;
   // if (errno == EFAULT)
-  //  VAST_ERROR( "{}" , detail::id_or_name("failed to get hostname:
-  //  invalid address") ) ;
+  //  VAST_ERROR("failed to get hostname: invalid address");
   // else if (errno == ENAMETOOLONG)
-  //  VAST_ERROR( "{}" , detail::id_or_name("failed to get hostname:
-  //  longer than 256 characters") ) ;
+  //  VAST_ERROR("failed to get hostname: longer than 256 characters");
   return {};
 }
 

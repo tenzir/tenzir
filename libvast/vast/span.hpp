@@ -23,6 +23,12 @@
 
 #pragma once
 
+#include "vast/fwd.hpp"
+
+#include "vast/byte.hpp"
+#include "vast/detail/assert.hpp"
+#include "vast/detail/narrow.hpp"
+
 #include <algorithm>
 #include <array>
 #include <cstddef>
@@ -32,16 +38,9 @@
 #include <type_traits>
 #include <utility>
 
-#include "vast/byte.hpp"
-#include "vast/detail/assert.hpp"
-#include "vast/detail/narrow.hpp"
-
 namespace vast {
 
-// [views.constants], constants
-inline constexpr size_t dynamic_extent = std::numeric_limits<size_t>::max();
-
-template <class ElementType, size_t Extent = dynamic_extent>
+template <class ElementType, size_t Extent /* = dynamic_extent (see fwd.hpp) */>
 class span;
 
 namespace detail {

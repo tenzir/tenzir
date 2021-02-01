@@ -67,8 +67,6 @@
 
 #endif // VAST_LOG_LEVEL > VAST_LOG_LEVEL_TRACE
 
-// -------
-
 namespace vast {
 
 /// Converts a verbosity atom to its integer counterpart. For unknown atoms,

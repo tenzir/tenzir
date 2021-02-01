@@ -244,7 +244,7 @@ reader::reader(const caf::settings& options, std::unique_ptr<std::istream>)
     num_events_ = std::numeric_limits<size_t>::max();
   if (caf::holds_alternative<std::string>(options, "vast.import.read-timeout"))
     VAST_VERBOSE("{} ingnores the unsupported read timeout option",
-                 detail::id_or_name(this));
+                 detail::pretty_type_name(this));
 }
 
 void reader::reset(std::unique_ptr<std::istream>) {
@@ -289,8 +289,8 @@ const char* reader::name() const {
 
 caf::error reader::read_impl(size_t max_events, size_t max_slice_size,
                              consumer& f) {
-  VAST_TRACE("{}  {}  {}", detail::id_or_name(VAST_ARG(max_events)),
-             VAST_ARG(max_slice_size), VAST_ARG(num_events_));
+  VAST_TRACE("{}  {}  {}", VAST_ARG(max_events), VAST_ARG(max_slice_size),
+             VAST_ARG(num_events_));
   // Sanity checks.
   if (schema_.empty())
     if (auto err = schema(default_schema()))
@@ -313,7 +313,7 @@ caf::error reader::read_impl(size_t max_events, size_t max_slice_size,
       visit(default_randomizer{bp.distributions, generator_}, t, bp.data);
       if (!ptr->recursive_add(bp.data, t)) {
         VAST_ERROR("{} failed to add blueprint data to slice builder",
-                   detail::id_or_name(this));
+                   detail::pretty_type_name(this));
         return caf::make_error(ec::format_error, "failed to add blueprint data "
                                                  "to slice builder");
       }

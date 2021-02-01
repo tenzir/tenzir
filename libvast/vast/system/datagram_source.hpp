@@ -89,13 +89,11 @@ datagram_source(datagram_source_actor<Reader>* self,
   // Try to open requested UDP port.
   auto udp_res = self->add_udp_datagram_servant(udp_listening_port);
   if (!udp_res) {
-    VAST_ERROR("{} could not open port {}", detail::id_or_name(self),
-               udp_listening_port);
+    VAST_ERROR("{} could not open port {}", self, udp_listening_port);
     self->quit(std::move(udp_res.error()));
     return {};
   }
-  VAST_DEBUG("{} starts listening at port {}", detail::id_or_name(self),
-             udp_res->second);
+  VAST_DEBUG("{} starts listening at port {}", self, udp_res->second);
   // Initialize state.
   auto& st = self->state;
   st.init(self, std::move(reader), std::move(max_events),
@@ -116,8 +114,7 @@ datagram_source(datagram_source_actor<Reader>* self,
   return {
     [=](caf::io::new_datagram_msg& msg) {
       // Check whether we can buffer more slices in the stream.
-      VAST_DEBUG("{} got a new datagram of size {}", detail::id_or_name(self),
-                 msg.buf.size());
+      VAST_DEBUG("{} got a new datagram of size {}", self, msg.buf.size());
       auto& st = self->state;
       auto t = timer::start(st.metrics);
       auto capacity = st.mgr->out().capacity();
@@ -130,8 +127,7 @@ datagram_source(datagram_source_actor<Reader>* self,
       caf::arraybuf<> buf{msg.buf.data(), msg.buf.size()};
       st.reader.reset(std::make_unique<std::istream>(&buf));
       auto push_slice = [&](table_slice slice) {
-        VAST_DEBUG("{} produced a slice with {} rows", detail::id_or_name(self),
-                   slice.rows());
+        VAST_DEBUG("{} produced a slice with {} rows", self, slice.rows());
         st.mgr->out().push(std::move(slice));
       };
       auto events = capacity * table_slice_size;
@@ -146,15 +142,14 @@ datagram_source(datagram_source_actor<Reader>* self,
       if (err != caf::none && err != ec::end_of_input)
         VAST_WARN("{} has not enough capacity left in stream, dropping "
                   "input!",
-                  detail::id_or_name(self));
+                  self);
       if (produced > 0)
         st.mgr->push();
       if (st.done)
         st.send_report();
     },
     [=](accountant_actor accountant) {
-      VAST_DEBUG("{} sets accountant to {}", detail::id_or_name(self),
-                 accountant);
+      VAST_DEBUG("{} sets accountant to {}", self, accountant);
       auto& st = self->state;
       st.accountant = std::move(accountant);
       self->send(st.accountant, "source.start", st.start_time);
@@ -168,7 +163,7 @@ datagram_source(datagram_source_actor<Reader>* self,
       //       implement an anycast downstream manager and use it for the
       //       source, because we mustn't duplicate data.
       VAST_ASSERT(sink != nullptr);
-      VAST_DEBUG("{} registers sink {}", detail::id_or_name(self), sink);
+      VAST_DEBUG("{} registers sink {}", self, sink);
       auto& st = self->state;
       // Start streaming.
       st.mgr->add_outbound_path(sink);
@@ -184,8 +179,7 @@ datagram_source(datagram_source_actor<Reader>* self,
     [=]([[maybe_unused]] expression& expr) {
       // FIXME: Allow for filtering import data.
       // self->state.filter = std::move(expr);
-      VAST_WARN("{} does not currently implement filter expressions",
-                detail::id_or_name(self));
+      VAST_WARN("{} does not currently implement filter expressions", self);
     },
     [=](atom::status, status_verbosity v) {
       auto& st = self->state;
@@ -206,7 +200,7 @@ datagram_source(datagram_source_actor<Reader>* self,
       if (st.dropped_packets > 0) {
         VAST_WARN("{} has no capacity left in stream and dropped {}"
                   "packets",
-                  detail::id_or_name(self), st.dropped_packets);
+                  self, st.dropped_packets);
         st.dropped_packets = 0;
       }
       if (!st.done)

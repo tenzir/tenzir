@@ -36,8 +36,7 @@ namespace vast::system {
 
 template <class Reader, class Defaults>
 caf::message import_command(const invocation& inv, caf::actor_system& sys) {
-  VAST_TRACE("{}  {}  {}", detail::id_or_name(inv.full_name),
-             VAST_ARG("options", inv.options), VAST_ARG(sys));
+  VAST_TRACE("{}", inv);
   auto self = caf::scoped_actor{sys};
   // Get VAST node.
   auto node_opt
@@ -47,7 +46,7 @@ caf::message import_command(const invocation& inv, caf::actor_system& sys) {
   auto& node = caf::holds_alternative<caf::actor>(node_opt)
                  ? caf::get<caf::actor>(node_opt)
                  : caf::get<scope_linked_actor>(node_opt).get();
-  VAST_DEBUG("{} got node", detail::id_or_name(inv.full_name));
+  VAST_DEBUG("{} got node", detail::pretty_type_name(inv.full_name));
   // Get node components.
   auto components = get_node_components< //
     accountant_actor, type_registry_actor, importer_actor>(self, node);
@@ -76,7 +75,8 @@ caf::message import_command(const invocation& inv, caf::actor_system& sys) {
   self->request(node, caf::infinite, atom::put_v, src, "source")
     .receive(
       [&](atom::ok) {
-        VAST_DEBUG("{} registered source at node", detail::id_or_name(name));
+        VAST_DEBUG("{} registered source at node",
+                   detail::pretty_type_name(name));
       },
       [&](caf::error error) { err = std::move(error); });
   if (err) {
@@ -91,12 +91,13 @@ caf::message import_command(const invocation& inv, caf::actor_system& sys) {
       [&, importer = importer](const caf::down_msg& msg) {
         if (msg.source == importer) {
           VAST_DEBUG("{} received DOWN from node importer",
-                     detail::id_or_name(name));
+                     detail::pretty_type_name(name));
           self->send_exit(src, caf::exit_reason::user_shutdown);
           err = ec::remote_node_down;
           stop = true;
         } else if (msg.source == src) {
-          VAST_DEBUG("{} received DOWN from source", detail::id_or_name(name));
+          VAST_DEBUG("{} received DOWN from source",
+                     detail::pretty_type_name(name));
           if (caf::get_or(inv.options, "vast.import.blocking", false))
             self->send(importer, atom::subscribe_v, atom::flush::value,
                        caf::actor_cast<flush_listener_actor>(self));
@@ -104,16 +105,17 @@ caf::message import_command(const invocation& inv, caf::actor_system& sys) {
             stop = true;
         } else {
           VAST_DEBUG("{} received unexpected DOWN from {}",
-                     detail::id_or_name(name), msg.source);
+                     detail::pretty_type_name(name), msg.source);
           VAST_ASSERT(!"unexpected DOWN message");
         }
       },
       [&](atom::flush) {
-        VAST_DEBUG("{} received flush from IMPORTER", detail::id_or_name(name));
+        VAST_DEBUG("{} received flush from IMPORTER",
+                   detail::pretty_type_name(name));
         stop = true;
       },
       [&](atom::signal, int signal) {
-        VAST_DEBUG("{} received signal {}", detail::id_or_name(name),
+        VAST_DEBUG("{} received signal {}", detail::pretty_type_name(name),
                    ::strsignal(signal));
         if (signal == SIGINT || signal == SIGTERM)
           self->send_exit(src, caf::exit_reason::user_shutdown);

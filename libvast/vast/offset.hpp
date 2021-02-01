@@ -13,9 +13,11 @@
 
 #pragma once
 
-#include <cstddef>
-
 #include "vast/detail/stack_vector.hpp"
+
+#include <caf/meta/type_name.hpp>
+
+#include <cstddef>
 
 namespace vast {
 
@@ -23,7 +25,12 @@ namespace vast {
 struct offset : detail::stack_vector<size_t, 64> {
   using super = detail::stack_vector<size_t, 64>;
   using super::super;
+
+  template <class Inspector>
+  friend auto inspect(Inspector& f, offset& x) ->
+    typename Inspector::result_type {
+    return f(caf::meta::type_name("vast.offset"), static_cast<super&>(x));
+  }
 };
 
 } // namespace vast
-

@@ -112,8 +112,8 @@ explorer(caf::stateful_actor<explorer_state>* self, caf::actor node,
     // Only the spawned EXPORTERs are expected to send down messages.
     auto& st = self->state;
     --st.running_exporters;
-    VAST_DEBUG("{} received DOWN from {} outstanding requests: {}",
-               detail::id_or_name(self), msg.source, st.running_exporters);
+    VAST_DEBUG("{} received DOWN from {} outstanding requests: {}", self,
+               msg.source, st.running_exporters);
     quit_if_done();
   });
   return {
@@ -124,7 +124,7 @@ explorer(caf::stateful_actor<explorer_state>* self, caf::actor node,
       if (!st.initial_exporter) {
         VAST_ERROR("{} received table slices before an initial "
                    "exporter",
-                   detail::id_or_name(self));
+                   self);
         return;
       }
       if (self->current_sender() != st.initial_exporter) {
@@ -140,8 +140,7 @@ explorer(caf::stateful_actor<explorer_state>* self, caf::actor node,
                                return has_attribute(field.type, "timestamp");
                              });
       if (it == layout.fields.end()) {
-        VAST_DEBUG("{} could not find timestamp field in {}",
-                   detail::id_or_name(self), layout);
+        VAST_DEBUG("{} could not find timestamp field in {}", self, layout);
         return;
       }
       std::optional<table_slice_column> by_column;
@@ -151,13 +150,12 @@ explorer(caf::stateful_actor<explorer_state>* self, caf::actor node,
         if (auto col = table_slice_column::make(slice, *st.by))
           by_column.emplace(std::move(*col));
         if (!by_column) {
-          VAST_TRACE("{}  {} because it has no column {}",
-                     detail::id_or_name("skipping slice with"), layout, *st.by);
+          VAST_TRACE("skipping slice with {} because it has no column {}",
+                     layout, *st.by);
           return;
         }
       }
-      VAST_DEBUG("{} uses {} to construct timebox", detail::id_or_name(self),
-                 it->name);
+      VAST_DEBUG("{} uses {} to construct timebox", self, it->name);
       auto column = table_slice_column::make(slice, it->name);
       VAST_ASSERT(column);
       for (size_t i = 0; i < column->size(); ++i) {
@@ -208,8 +206,7 @@ explorer(caf::stateful_actor<explorer_state>* self, caf::actor node,
         // least one constraint.
         VAST_ASSERT(expr);
         auto query = to_string(*expr);
-        VAST_TRACE("{} spawns new exporter with query {}",
-                   detail::id_or_name(self), query);
+        VAST_TRACE("{} spawns new exporter with query {}", self, query);
         auto exporter_invocation = invocation{{}, "spawn exporter", {query}};
         if (st.limits.per_result)
           caf::put(exporter_invocation.options, "vast.export.max-events",
@@ -219,15 +216,14 @@ explorer(caf::stateful_actor<explorer_state>* self, caf::actor node,
           .then(
             [=](caf::actor handle) {
               auto exporter = caf::actor_cast<exporter_actor>(handle);
-              VAST_DEBUG("{} registers exporter {}", detail::id_or_name(self),
-                         exporter);
+              VAST_DEBUG("{} registers exporter {}", self, exporter);
               self->monitor(exporter);
               self->send(exporter, atom::sink_v, self);
               self->send(exporter, atom::run_v);
             },
             [=](caf::error error) {
-              VAST_ERROR("{} failed to spawn exporter: {}",
-                         detail::id_or_name(self), render(error));
+              VAST_ERROR("{} failed to spawn exporter: {}", self,
+                         render(error));
               --self->state.running_exporters;
             });
       }
@@ -236,13 +232,12 @@ explorer(caf::stateful_actor<explorer_state>* self, caf::actor node,
       self->state.initial_exporter = exporter.address();
     },
     [=]([[maybe_unused]] std::string name, query_status) {
-      VAST_DEBUG("{} received final status from {}", detail::id_or_name(self),
-                 name);
+      VAST_DEBUG("{} received final status from {}", self, name);
       self->state.initial_query_completed = true;
       quit_if_done();
     },
     [=](atom::sink, const caf::actor& sink) {
-      VAST_DEBUG("{} registers sink {}", detail::id_or_name(self), sink);
+      VAST_DEBUG("{} registers sink {}", self, sink);
       auto& st = self->state;
       st.sink = sink;
     }};
