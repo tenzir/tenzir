@@ -85,27 +85,4 @@ make_arg_wrapper(const char* name, Iterator first, Iterator last) {
   return {name, first, last};
 }
 
-template <size_t S>
-struct carrier {
-  char name[S] = {0};
-  constexpr const char* str() const {
-    return &name[0];
-  }
-};
-
-template <typename... T>
-constexpr auto spd_msg_from_args(T&&...) {
-  constexpr auto cnt = sizeof...(T);
-  static_assert(cnt > 0);
-  constexpr auto len = cnt * 3;
-  carrier<len> cr{};
-  for (size_t i = 0; i < cnt; ++i) {
-    cr.name[i * 3] = '{';
-    cr.name[i * 3 + 1] = '}';
-    cr.name[i * 3 + 2] = ' ';
-  }
-  cr.name[len - 1] = 0;
-  return cr;
-}
-
 } // namespace vast::detail
