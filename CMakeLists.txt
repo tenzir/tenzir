@@ -195,7 +195,6 @@ target_compile_options(
             -pedantic
             -Werror=switch
             -Wundef
-            -Wno-gnu-zero-variadic-macro-arguments
             $<$<CONFIG:CI>:-Werror
             -Wno-error=deprecated
             -Wno-error=deprecated-declarations>

@@ -231,7 +231,7 @@ if (NOT CAF_FOUND)
       PROPERTIES EXPORT_NAME core
                  CXX_STANDARD 17
                  CXX_STANDARD_REQUIRED ON
-                 CXX_EXTENSIONS ON)
+                 CXX_EXTENSIONS OFF)
     add_library(CAF::core ALIAS libcaf_core_${_linkage_suffix})
     target_compile_features(libcaf_core_${_linkage_suffix} INTERFACE cxx_std_17)
     set_target_properties(libcaf_io_${_linkage_suffix} PROPERTIES EXPORT_NAME
