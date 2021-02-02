@@ -60,7 +60,8 @@ struct fixture : fixture_base {
 
   void spawn_index() {
     auto fs = self->spawn(system::posix_filesystem, directory);
-    index = self->spawn(system::index, fs, directory / "index", 10000, 5, 5, 1,
+    auto indexdir = directory / "index";
+    index = self->spawn(system::index, fs, indexdir, 10000, 5, 5, 1, indexdir,
                         0.01);
   }
 

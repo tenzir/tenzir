@@ -265,6 +265,6 @@ index_actor::behavior_type
 index(index_actor::stateful_pointer<index_state> self,
       filesystem_actor filesystem, path dir, size_t partition_capacity,
       size_t in_mem_partitions, size_t taste_partitions, size_t num_workers,
-      double meta_index_fp_rate);
+      vast::path meta_index_dir, double meta_index_fp_rate);
 
 } // namespace vast::system

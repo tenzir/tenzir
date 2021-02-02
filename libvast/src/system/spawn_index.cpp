@@ -16,6 +16,7 @@
 #include "vast/defaults.hpp"
 #include "vast/error.hpp"
 #include "vast/logger.hpp"
+#include "vast/path.hpp"
 #include "vast/system/index.hpp"
 #include "vast/system/node.hpp"
 #include "vast/system/spawn_arguments.hpp"
@@ -32,14 +33,16 @@ maybe_actor spawn_index(node_actor* self, spawn_arguments& args) {
     self->state.registry.find_by_label("filesystem"));
   if (!filesystem)
     return caf::make_error(ec::lookup_error, "failed to find filesystem actor");
+  auto indexdir = args.dir / args.label;
   namespace sd = vast::defaults::system;
   auto handle = self->spawn(
-    index, filesystem, args.dir / args.label,
+    index, filesystem, indexdir,
     // TODO: Pass these options as a vast::data object instead.
     opt("vast.max-partition-size", sd::max_partition_size),
     opt("vast.max-resident-partitions", sd::max_in_mem_partitions),
     opt("vast.max-taste-partitions", sd::taste_partitions),
     opt("vast.max-queries", sd::num_query_supervisors),
+    vast::path{opt("vast.meta-index-path", indexdir.str())},
     opt("vast.meta-index-fp-rate", sd::string_synopsis_fp_rate));
   VAST_VERBOSE(self, "spawned the index");
   if (auto accountant = self->state.registry.find_by_label("accountant"))
