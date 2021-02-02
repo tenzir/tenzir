@@ -274,9 +274,21 @@ jobs:
         run: |
           gsutil -m cp "$BUILD_DIR/$PACKAGE_NAME.tar.gz" "gs://${{ secrets.GCS_BUCKET }}"
 
+      # This step ensures that assets from previous runs are cleaned up to avoid
+      # failure of the next step (asset upload)
+      - name: Delete existing Release Assets
+        if: github.event.action == 'published'
+        uses: mknejp/delete-release-assets@v1
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          tag: ${{ github.ref }}
+          fail-if-no-assets: false # don't fail if no previous assets exist
+          fail-if-no-release: true # only delete assets when `tag` refers to a release
+          assets: "${{ steps.configure_env.outputs.publish_name }}.tar.gz"
+
       - name: Publish to GitHub Release
         if: github.event.action == 'published'
-        uses: actions/upload-release-asset@v1.0.1
+        uses: actions/upload-release-asset@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
@@ -487,9 +499,21 @@ jobs:
           name: "${{ steps.configure_env.outputs.package_name }}.tar.gz"
           path: "${{ steps.configure_env.outputs.build_dir }}/${{ steps.configure_env.outputs.package_name }}.tar.gz"
 
+      # This step ensures that assets from previous runs are cleaned up to avoid
+      # failure of the next step (asset upload)
+      - name: Delete existing Release Assets
+        if: github.event.action == 'published'
+        uses: mknejp/delete-release-assets@v1
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          tag: ${{ github.ref }}
+          fail-if-no-assets: false # don't fail if no previous assets exist
+          fail-if-no-release: true # only delete assets when `tag` refers to a release
+          assets: "${{ steps.configure_env.outputs.publish_name }}.tar.gz"
+
       - name: Publish to GitHub Release
         if: github.event.action == 'published'
-        uses: actions/upload-release-asset@v1.0.1
+        uses: actions/upload-release-asset@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:

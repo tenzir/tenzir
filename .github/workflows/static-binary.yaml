@@ -99,9 +99,21 @@ jobs:
         RELEASE_MONTH=$(echo "${{ steps.create_paths.outputs.artifact_name }}" | cut -d"-" -f2)
         gsutil cp "gs://${{ env.PUBLIC_GCS_BUCKET }}/${{ env.STATIC_BINARY_FOLDER }}/${{ steps.create_paths.outputs.artifact_name }}" "gs://${{ env.PUBLIC_GCS_BUCKET }}/${{ env.STATIC_BINARY_FOLDER }}/${{ matrix.args }}-${RELEASE_MONTH}-static-latest.tar.gz"
 
+    # This step ensures that assets from previous runs are cleaned up to avoid
+    # failure of the next step (asset upload)
+    - name: Delete existing Release Assets
+      if: github.event.action == 'published'
+      uses: mknejp/delete-release-assets@v1
+      with:
+        token: ${{ secrets.GITHUB_TOKEN }}
+        tag: "$GITHUB_REF"
+        fail-if-no-assets: false # don't fail if no previous assets exist
+        fail-if-no-release: true # only delete assets when `tag` refers to a release
+        assets: "${{ matrix.args }}-linux-static.tar.gz"
+
     - name: Publish to GitHub Release
       if: github.event_name == 'release' && github.event.action == 'published'
-      uses: actions/upload-release-asset@v1.0.1
+      uses: actions/upload-release-asset@v1
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       with:
