@@ -17,6 +17,9 @@
 #include "vast/detail/discard.hpp"
 #include "vast/error.hpp"
 
+#include <string>
+#include <utility>
+
 // VAST_INFO -> spdlog::info
 // VAST_VERBOSE -> spdlog::debug
 // VAST_DEBUG -> spdlog::trace
@@ -59,9 +62,8 @@
 
 #  define VAST_TRACE(...)                                                      \
     auto CAF_UNIFYN(vast_log_trace_guard_)                                     \
-      = [func_name_ = __func__](auto&& format, auto&&... args) {               \
-          VAST_DEBUG(::fmt::format("ENTER {} {}", func_name_,                  \
-                                   std::forward<decltype(format)>(format)),    \
+      = [func_name_ = __func__](const std::string& format, auto&&... args) {   \
+          VAST_DEBUG("ENTER {} " + format, __func__,                           \
                      std::forward<decltype(args)>(args)...);                   \
           return ::caf::detail::make_scope_guard(                              \
             [func_name_] { VAST_DEBUG("EXIT {}", func_name_); });              \
