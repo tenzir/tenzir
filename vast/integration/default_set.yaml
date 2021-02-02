@@ -153,7 +153,7 @@ tests:
     tags: [node, import-export, zeek, json]
     steps:
       - command: -N import -b zeek-json
-        input: data/zeek/zeek.json
+        input: data/zeek-json/zeek.json
       - command: '-N export json "\"zeek\" in #type"'
         transformation: jq -ec '.'
   Export json:
@@ -322,9 +322,9 @@ tests:
     fixture: ServerTester
     steps:
       - command: import -b zeek
-        input: data/pcap/zeek/conn.log.gz
+        input: data/zeek/example.pcap/conn.log.gz
       - command: import -b suricata
-        input: data/pcap/suricata/eve.json.gz
+        input: data/suricata/example.pcap/eve.json.gz
       - command: count "net.src.ip == 192.168.168.100"
       - command: count "net.connection == <192.168.168.100, _, 72.247.178.18, _, _>"
       # We omit the whitespace after the colon on purpose, otherwise pyyaml
@@ -346,17 +346,17 @@ tests:
     tags: [pivot]
     steps:
       - command: -N import suricata
-        input: data/pcap/suricata/eve.json.gz
+        input: data/suricata/example.pcap/eve.json.gz
       - command: -N import zeek
-        input: data/pcap/zeek/conn.log.gz
+        input: data/zeek/example.pcap/conn.log.gz
       - command: -N import zeek
-        input: data/pcap/zeek/files.log.gz
+        input: data/zeek/example.pcap/files.log.gz
       - command: -N import zeek
-        input: data/pcap/zeek/http.log.gz
+        input: data/zeek/example.pcap/http.log.gz
       - command: -N import zeek
-        input: data/pcap/zeek/packet_filter.log.gz
+        input: data/zeek/example.pcap/packet_filter.log.gz
       - command: -N import zeek
-        input: data/pcap/zeek/ssh.log.gz
+        input: data/zeek/example.pcap/ssh.log.gz
       - command: -N pivot --format=zeek zeek.conn '#type ~ /suricata.*/ && dest_ip == 72.247.178.18'
         transformation: awk '!/^#(open|close)/'
       - command: -N pivot zeek.conn '#type ~ /zeek.http/ && method == "GET"'
