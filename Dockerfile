@@ -19,7 +19,7 @@ RUN apt-get -qq update && apt-get -qqy install \
 RUN pip3 install --upgrade pip && pip install --upgrade cmake && \
   cmake --version
 
-# Need to specify backports explicitly, since spdlog and fmt also have a regular
+# Need to specify backports explicitly, since spdlog and fmt also have regular
 # buster packages.
 RUN apt-get -qqy -t buster-backports install libspdlog-dev libfmt-dev
 
@@ -74,7 +74,7 @@ COPY --from=build_type $PREFIX/ $PREFIX/
 RUN apt-get -qq update && apt-get -qq install -y libc++1 libc++abi1 libpcap0.8 \
   openssl libsimdjson4 libyaml-cpp0.6 libasan5 libflatbuffers1 wget gnupg2
 
-# Need to specify backports explicitly, since spdlog and fmt also have a regular
+# Need to specify backports explicitly, since spdlog and fmt also have regular
 # buster packages. For fmt we install the dev package, because libfmt is only
 # packaged for bullseye:
 # https://packages.debian.org/search?keywords=libfmt&searchon=names&suite=all&section=all
