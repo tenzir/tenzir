@@ -30,7 +30,7 @@ using namespace std::chrono_literals;
 namespace vast::system {
 
 caf::message remote_command(const invocation& inv, caf::actor_system& sys) {
-  VAST_TRACE("{}", detail::id_or_name(inv));
+  VAST_TRACE("{}", inv);
   // Get a convenient and blocking way to interact with actors.
   caf::scoped_actor self{sys};
   // Get VAST node.

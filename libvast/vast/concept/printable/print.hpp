@@ -70,8 +70,10 @@ struct is_printable {
 } // namespace detail
 
 template <class I, class T>
-constexpr bool is_printable_v
-  = decltype(detail::is_printable::test<I, T>(0, 0))::value;
+struct is_printable : decltype(detail::is_printable::test<I, T>(0, 0)) {};
+
+template <class I, class T>
+constexpr bool is_printable_v = is_printable<I, T>::value;
 
 } // namespace vast
 

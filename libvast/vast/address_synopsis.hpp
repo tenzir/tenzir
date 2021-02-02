@@ -153,8 +153,8 @@ synopsis_ptr make_address_synopsis(vast::type type, const caf::settings& opts) {
         : make_address_synopsis<HashFunction>(std::move(annotated_type),
                                               params);
   if (!result)
-    VAST_ERROR("{} failed to evaluate Bloom filter parameters: {}  {}",
-               __func__, params.n, params.p);
+    VAST_ERROR("{} failed to evaluate Bloom filter parameters: {} {}", __func__,
+               params.n, params.p);
   return result;
 }
 

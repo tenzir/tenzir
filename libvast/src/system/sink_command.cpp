@@ -60,7 +60,7 @@ sink_command(const invocation& inv, caf::actor_system& sys, caf::actor snk) {
   // Transform expression if needed, e.g., for PCAP sink.
   if (inv.name() == "pcap") {
     VAST_DEBUG("{} restricts expression to PCAP packets",
-               detail::id_or_name(inv.full_name));
+               detail::pretty_type_name(inv.full_name));
     // We parse the query expression first, work on the AST, and then render
     // the expression again to avoid performing brittle string manipulations.
     auto expr = to<expression>(*query);
@@ -70,8 +70,7 @@ sink_command(const invocation& inv, caf::actor_system& sys, caf::actor snk) {
                           relational_operator::equal, data{"pcap.packet"}};
     auto ast = conjunction{std::move(pred), std::move(*expr)};
     *query = to_string(ast);
-    VAST_DEBUG("{} transformed expression to {}", detail::id_or_name(&inv),
-               *query);
+    VAST_DEBUG("{} transformed expression to {}", inv, *query);
   }
   // Get VAST node.
   auto node_opt
@@ -87,8 +86,7 @@ sink_command(const invocation& inv, caf::actor_system& sys, caf::actor snk) {
   auto signal_guard = system::signal_monitor::run_guarded(
     sig_mon_thread, sys, defaults::system::signal_monitoring_interval, self);
   auto spawn_exporter = invocation{inv.options, "spawn exporter", {*query}};
-  VAST_DEBUG("{} spawns exporter with parameters: {}", detail::id_or_name(&inv),
-             spawn_exporter);
+  VAST_DEBUG("{} spawns exporter with parameters: {}", inv, spawn_exporter);
   auto maybe_exporter = spawn_at_node(self, node, spawn_exporter);
   if (!maybe_exporter)
     return caf::make_message(std::move(maybe_exporter.error()));
@@ -100,7 +98,7 @@ sink_command(const invocation& inv, caf::actor_system& sys, caf::actor snk) {
   auto [accountant] = std::move(*components);
   if (accountant) {
     VAST_DEBUG("{} assigns accountant to new sink",
-               detail::id_or_name(inv.full_name));
+               detail::pretty_type_name(inv.full_name));
     self->send(snk, caf::actor_cast<accountant_actor>(accountant));
   }
   // Register sink at the node.
@@ -123,15 +121,15 @@ sink_command(const invocation& inv, caf::actor_system& sys, caf::actor snk) {
         stop = true;
         if (msg.source == node) {
           VAST_DEBUG("{} received DOWN from node",
-                     detail::id_or_name(inv.full_name));
+                     detail::pretty_type_name(inv.full_name));
           self->send_exit(snk, caf::exit_reason::user_shutdown);
         } else if (msg.source == exporter) {
           VAST_DEBUG("{} received DOWN from exporter",
-                     detail::id_or_name(inv.full_name));
+                     detail::pretty_type_name(inv.full_name));
           self->send_exit(snk, caf::exit_reason::user_shutdown);
         } else if (msg.source == snk) {
           VAST_DEBUG("{} received DOWN from sink",
-                     detail::id_or_name(inv.full_name));
+                     detail::pretty_type_name(inv.full_name));
           self->send_exit(exporter, caf::exit_reason::user_shutdown);
           stop = false;
           waiting_for_final_report = true;
@@ -140,7 +138,7 @@ sink_command(const invocation& inv, caf::actor_system& sys, caf::actor snk) {
         }
         if (msg.reason && msg.reason != caf::exit_reason::user_shutdown) {
           VAST_WARN("{} received error message: {}",
-                    detail::id_or_name(inv.full_name),
+                    detail::pretty_type_name(inv.full_name),
                     self->system().render(msg.reason));
           err = std::move(msg.reason);
         }
@@ -151,11 +149,11 @@ sink_command(const invocation& inv, caf::actor_system& sys, caf::actor snk) {
         for (const auto& [name, measurement] : report) {
           if (auto rate = measurement.rate_per_sec(); std::isfinite(rate))
             VAST_INFO("{} processed {} events at a rate of {} events/sec in {}",
-                      detail::id_or_name(name), measurement.events,
+                      detail::pretty_type_name(name), measurement.events,
                       static_cast<uint64_t>(rate),
                       to_string(measurement.duration));
           else
-            VAST_INFO("{} processed {} events", detail::id_or_name(name),
+            VAST_INFO("{} processed {} events", detail::pretty_type_name(name),
                       measurement.events);
         }
 #endif
@@ -168,20 +166,20 @@ sink_command(const invocation& inv, caf::actor_system& sys, caf::actor snk) {
             std::isfinite(rate))
           VAST_INFO("{} processed {} candidates at a rate of {}"
                     "candidates/sec and shipped {} results in {}",
-                    detail::id_or_name(name), query.processed,
+                    detail::pretty_type_name(name), query.processed,
                     static_cast<uint64_t>(rate), query.shipped,
                     to_string(query.runtime));
         else
           VAST_INFO("{} processed {} candidatesand shipped {} results "
                     "in {}",
-                    detail::id_or_name(name), query.processed, query.shipped,
-                    to_string(query.runtime));
+                    detail::pretty_type_name(name), query.processed,
+                    query.shipped, to_string(query.runtime));
 #endif
         if (waiting_for_final_report)
           stop = true;
       },
       [&](atom::signal, int signal) {
-        VAST_DEBUG("{} got {}", detail::id_or_name(inv.full_name),
+        VAST_DEBUG("{} got {}", detail::pretty_type_name(inv.full_name),
                    ::strsignal(signal));
         if (signal == SIGINT || signal == SIGTERM) {
           self->send_exit(exporter, caf::exit_reason::user_shutdown);

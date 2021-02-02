@@ -23,13 +23,15 @@
 
 #pragma once
 
+#include "vast/fwd.hpp"
+
 #include <type_traits>
 
 namespace vast {
 
-// This is a simple definition for now that allows
-// use of byte within span<> to be standards-compliant
-enum class __attribute__((__may_alias__)) byte : unsigned char {};
+// This is a simple definition for now that allows use of byte within span<> to
+// be standards-compliant. The actual definition is in fwd.hpp.
+// enum class __attribute__((__may_alias__)) byte : unsigned char {};
 
 template <class IntegerType,
           class = std::enable_if_t<std::is_integral_v<IntegerType>>>
@@ -94,11 +96,10 @@ constexpr IntegerType to_integer(byte b) noexcept {
 
 template <bool E, typename T>
 constexpr byte to_byte_impl(T t) noexcept {
-  static_assert(E,
-                "to_byte(t) must be provided an unsigned char, otherwise "
-                "data loss may occur. "
-                "If you are calling to_byte with an integer contant use: "
-                "to_byte<t>() version.");
+  static_assert(E, "to_byte(t) must be provided an unsigned char, otherwise "
+                   "data loss may occur. "
+                   "If you are calling to_byte with an integer contant use: "
+                   "to_byte<t>() version.");
   return static_cast<byte>(t);
 }
 
@@ -114,9 +115,8 @@ constexpr byte to_byte(T t) noexcept {
 
 template <int I>
 constexpr byte to_byte() noexcept {
-  static_assert(
-    I >= 0 && I <= 255,
-    "byte only has 8 bits of storage, values must be in range 0-255");
+  static_assert(I >= 0 && I <= 255, "byte only has 8 bits of storage, values "
+                                    "must be in range 0-255");
   return static_cast<byte>(I);
 }
 

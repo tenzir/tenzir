@@ -116,7 +116,7 @@ size_t recursive_size(const vast::directory& dir) {
     for (auto file : dir) {
       if (file.is_regular_file()) {
         if (auto sz = vast::file_size(file)) {
-          VAST_TRACE("{} += {}", detail::id_or_name(file), *sz);
+          VAST_TRACE("{} += {}", file, *sz);
           size += *sz;
         }
       } else if (file.is_directory()) {

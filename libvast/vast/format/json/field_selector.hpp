@@ -37,15 +37,15 @@ struct field_selector {
     auto field = caf::get_if<vast::json::string>(&i->second);
     if (!field) {
       VAST_WARN("{} got a {} field with a non-string value",
-                detail::id_or_name(this), Specification::field);
+                detail::pretty_type_name(this), Specification::field);
       return caf::none;
     }
     auto it = types.find(*field);
     if (it == types.end()) {
       // Keep a list of failed keys to avoid spamming the user with warnings.
       if (unknown_types.insert(*field).second)
-        VAST_WARN("{} does not have a layout for {}  {}",
-                  detail::id_or_name(this), Specification::field, *field);
+        VAST_WARN("{} does not have a layout for {} {}",
+                  detail::pretty_type_name(this), Specification::field, *field);
       return caf::none;
     }
     auto type = it->second;
@@ -60,7 +60,7 @@ struct field_selector {
     auto event_type = el.value().get_string();
     if (event_type.error()) {
       VAST_WARN("{} got a {} field with a non-string value",
-                detail::id_or_name(this), Specification::field);
+                detail::pretty_type_name(this), Specification::field);
       return caf::none;
     }
     auto field = std::string{event_type.value()};
@@ -68,8 +68,8 @@ struct field_selector {
     if (it == types.end()) {
       // Keep a list of failed keys to avoid spamming the user with warnings.
       if (unknown_types.insert(field).second)
-        VAST_WARN("{} does not have a layout for {}  {}",
-                  detail::id_or_name(this), Specification::field, field);
+        VAST_WARN("{} does not have a layout for {} {}",
+                  detail::pretty_type_name(this), Specification::field, field);
       return caf::none;
     }
     return it->second;

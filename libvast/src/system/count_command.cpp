@@ -65,7 +65,7 @@ caf::message count_command(const invocation& inv, caf::actor_system& sys) {
   caf::actor cnt;
   auto args = invocation{options, "spawn counter", {*query}};
   VAST_DEBUG("{} spawns counter with parameters: {}",
-             detail::id_or_name(inv.full_name), query);
+             detail::pretty_type_name(inv.full_name), query);
   caf::error err;
   self->request(node, caf::infinite, std::move(args))
     .receive(

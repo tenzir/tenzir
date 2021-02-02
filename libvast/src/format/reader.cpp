@@ -33,7 +33,7 @@ reader::reader(const caf::settings& options) {
     else
       VAST_WARN("{} cannot set vast.import.batch-encoding to {} as it "
                 "is not a valid encoding",
-                detail::id_or_name(this), *batch_encoding_arg);
+                detail::pretty_type_name(this), *batch_encoding_arg);
   }
   if (auto batch_timeout_arg
       = caf::get_if<std::string>(&options, "vast.import.batch-timeout")) {
@@ -42,7 +42,7 @@ reader::reader(const caf::settings& options) {
     else
       VAST_WARN("{} cannot set vast.import.batch-timeout to {} as it "
                 "is not a valid duration",
-                detail::id_or_name(this), *batch_timeout_arg);
+                detail::pretty_type_name(this), *batch_timeout_arg);
   }
   if (auto read_timeout_arg
       = caf::get_if<std::string>(&options, "vast.import.read-timeout")) {
@@ -51,7 +51,7 @@ reader::reader(const caf::settings& options) {
     else
       VAST_WARN("{} cannot set vast.import.read-timeout to {} as it is "
                 "not a valid duration",
-                detail::id_or_name(this), *read_timeout_arg);
+                detail::pretty_type_name(this), *read_timeout_arg);
   }
   last_batch_sent_ = reader_clock::now();
 }

@@ -40,7 +40,7 @@ maybe_actor spawn_importer(node_actor* self, spawn_arguments& args) {
     return caf::make_error(ec::missing_component, "type-registry");
   auto handle = self->spawn(importer, args.dir / args.label, archive, index,
                             type_registry);
-  VAST_VERBOSE("{} spawned the importer", detail::id_or_name(self));
+  VAST_VERBOSE("{} spawned the importer", self);
   if (accountant) {
     self->send(handle, atom::telemetry_v);
     self->send(handle, accountant);
@@ -51,7 +51,7 @@ maybe_actor spawn_importer(node_actor* self, spawn_arguments& args) {
     self->send(handle, atom::telemetry_v);
   }
   for (auto& source : self->state.registry.find_by_type("source")) {
-    VAST_DEBUG("{} connects source to new importer", detail::id_or_name(self));
+    VAST_DEBUG("{} connects source to new importer", self);
     self->send(source, atom::sink_v, caf::actor_cast<caf::actor>(handle));
   }
   return caf::actor_cast<caf::actor>(handle);

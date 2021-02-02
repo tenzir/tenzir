@@ -57,11 +57,9 @@ std::atomic<bool> signal_monitor::stop;
 void signal_monitor::run(std::chrono::milliseconds monitoring_interval,
                          actor receiver) {
   [[maybe_unused]] static constexpr auto class_name = "signal_monitor";
-  VAST_DEBUG("{} sends signals to {}", detail::id_or_name(class_name),
-             receiver);
+  VAST_DEBUG("{} sends signals to {}", class_name, receiver);
   for (auto s : {SIGHUP, SIGINT, SIGQUIT, SIGTERM, SIGUSR1, SIGUSR2}) {
-    VAST_DEBUG("{} registers signal handler for {}",
-               detail::id_or_name(class_name), strsignal(s));
+    VAST_DEBUG("{} registers signal handler for {}", class_name, strsignal(s));
     std::signal(s, &signal_handler);
   }
   while (!stop) {
@@ -74,8 +72,7 @@ void signal_monitor::run(std::chrono::milliseconds monitoring_interval,
       signals[0] = false;
       for (int i = 1; i < 32; ++i) {
         if (signals[i]) {
-          VAST_DEBUG("{} caught signal {}", detail::id_or_name(class_name),
-                     strsignal(i));
+          VAST_DEBUG("{} caught signal {}", class_name, strsignal(i));
           signals[i] = false;
           caf::anon_send(receiver, atom::signal_v, i);
         }

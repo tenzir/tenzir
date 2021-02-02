@@ -343,7 +343,7 @@ int main(int argc, char** argv) {
     }
     auto& [query_id, expression] = *result;
     // Relay the query expression to VAST.
-    VAST_INFO("dispatching query {}  {}", query_id, expression);
+    VAST_INFO("dispatching query {} {}", query_id, expression);
     auto inv = vast::invocation{std::move(opts), "", {expression}};
     auto writer = std::make_unique<zeek_writer>(endpoint, query_id);
     auto sink = self->spawn(vast::system::sink, std::move(writer),

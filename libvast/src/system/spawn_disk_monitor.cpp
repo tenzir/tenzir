@@ -16,7 +16,7 @@ namespace vast::system {
 
 maybe_actor
 spawn_disk_monitor(system::node_actor* self, spawn_arguments& args) {
-  VAST_TRACE("{}", detail::id_or_name(VAST_ARG(args)));
+  VAST_TRACE("{}", VAST_ARG(args));
   auto [index, archive]
     = self->state.registry.find<index_actor, archive_actor>();
   if (!index)
@@ -53,7 +53,7 @@ spawn_disk_monitor(system::node_actor* self, spawn_arguments& args) {
   if (!hiwater) {
     VAST_VERBOSE("{} not spawning disk_monitor because no limit "
                  "configured",
-                 detail::id_or_name(self));
+                 self);
     return ec::no_error;
   }
   // Set low == high as the default value.
@@ -68,7 +68,7 @@ spawn_disk_monitor(system::node_actor* self, spawn_arguments& args) {
   auto handle
     = self->spawn(disk_monitor, hiwater, lowater,
                   std::chrono::seconds{interval}, abs_dir, archive, index);
-  VAST_VERBOSE("{} spawned a disk monitor", detail::id_or_name(self));
+  VAST_VERBOSE("{} spawned a disk monitor", self);
   return caf::actor_cast<caf::actor>(handle);
 }
 

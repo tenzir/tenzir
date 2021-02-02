@@ -282,7 +282,7 @@ load_schema(const detail::stable_set<path>& schema_dirs, size_t max_recursion) {
       VAST_DEBUG("loading schema {}", f);
       auto schema = load_schema(f);
       if (!schema) {
-        VAST_ERROR("{}  {}  {}", __func__, render(schema.error()), f);
+        VAST_ERROR("{} {} {}", __func__, render(schema.error()), f);
         continue;
       }
       if (auto merged = schema::merge(directory_schema, *schema))

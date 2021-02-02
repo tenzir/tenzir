@@ -13,10 +13,11 @@
 
 #pragma once
 
+#include "vast/fwd.hpp"
+
 #include "vast/aliases.hpp"
 #include "vast/command.hpp"
 #include "vast/expression.hpp"
-#include "vast/fwd.hpp"
 
 #include <caf/fwd.hpp>
 #include <caf/meta/type_name.hpp>
@@ -42,6 +43,13 @@ struct spawn_arguments {
   /// Returns whether CLI arguments are empty.
   bool empty() const noexcept {
     return inv.arguments.empty();
+  }
+
+  template <class Inspector>
+  friend auto inspect(Inspector& f, spawn_arguments& x) ->
+    typename Inspector::result_type {
+    return f(caf::meta::type_name("vast.system.spawn_arguments"), x.inv, x.dir,
+             x.label, x.expr);
   }
 };
 

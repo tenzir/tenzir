@@ -132,7 +132,7 @@ std::vector<uuid> meta_index::lookup(const expression& expr) const {
                 auto opt = syn->lookup(x.op, make_view(rhs));
                 if (!opt || *opt) {
                   VAST_DEBUG("{} selects {} at predicate {}",
-                             detail::id_or_name(this), part_id, x);
+                             detail::pretty_type_name(this), part_id, x);
                   result.push_back(part_id);
                   break;
                 }
@@ -143,7 +143,7 @@ std::vector<uuid> meta_index::lookup(const expression& expr) const {
                 auto opt = it->second->lookup(x.op, make_view(rhs));
                 if (!opt || *opt) {
                   VAST_DEBUG("{} selects {} at predicate {}",
-                             detail::id_or_name(this), part_id, x);
+                             detail::pretty_type_name(this), part_id, x);
                   result.push_back(part_id);
                   break;
                 }
@@ -158,7 +158,7 @@ std::vector<uuid> meta_index::lookup(const expression& expr) const {
         }
         VAST_DEBUG(
           "{} checked {} partitions for predicate {} and got {} results",
-          detail::id_or_name(this), synopses_.size(), x, result.size());
+          detail::pretty_type_name(this), synopses_.size(), x, result.size());
         // Some calling paths require the result to be sorted.
         std::sort(result.begin(), result.end());
         return result;
@@ -222,7 +222,7 @@ std::vector<uuid> meta_index::lookup(const expression& expr) const {
             return result;
           }
           VAST_WARN("{} cannot process attribute extractor: {}",
-                    detail::id_or_name(this), lhs.attr);
+                    detail::pretty_type_name(this), lhs.attr);
           return all_partitions();
         },
         [&](const field_extractor& lhs, const data&) -> result_type {
@@ -236,15 +236,16 @@ std::vector<uuid> meta_index::lookup(const expression& expr) const {
           return search(pred);
         },
         [&](const auto&, const auto&) -> result_type {
-          VAST_WARN("{} cannot process predicate: {}", detail::id_or_name(this),
-                    x);
+          VAST_WARN("{} cannot process predicate: {}",
+                    detail::pretty_type_name(this), x);
           return all_partitions();
         },
       };
       return caf::visit(extract_expr, x.lhs, x.rhs);
     },
     [&](caf::none_t) -> result_type {
-      VAST_ERROR("{} received an empty expression", detail::id_or_name(this));
+      VAST_ERROR("{} received an empty expression",
+                 detail::pretty_type_name(this));
       VAST_ASSERT(!"invalid expression");
       return all_partitions();
     },
