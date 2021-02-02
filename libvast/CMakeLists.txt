@@ -366,24 +366,25 @@ dependency_summary("FlatBuffers" ${flatbuffers_target})
 
 # Link against yaml-cpp.
 option(YAML_CPP_ROOT "Install root of yaml-cpp" "")
-find_package(yaml-cpp 0.6.2 REQUIRED HINTS ${YAML_CPP_ROOT})
+find_package(yaml-cpp 0.6.2 REQUIRED HINTS "${YAML_CPP_ROOT}")
 target_link_libraries(libvast PRIVATE yaml-cpp)
 dependency_summary("yaml-cpp" yaml-cpp)
 
-option(SPDLOG_ROOT "Install root of spdlog" "")
-option(SPDLOG_FMT_EXTERNAL "Use spdlog with external libfmt" OFF)
-find_package(spdlog 1.5.0 REQUIRED)
-target_compile_definitions(libvast_internal INTERFACE
+option(FMT_ROOT "Install root of fmt" "")
+target_compile_definitions(libvast PUBLIC
   # Forbid unsafe duration_cast usage.
   FMT_SAFE_DURATION_CAST
   # Make fmt::internal an alias for fmt::detail. Remove when requiring fmt >= 7.
   FMT_USE_INTERNAL)
+find_package(fmt 5.2.1 REQUIRED HINTS "${FMT_ROOT}")
+target_link_libraries(libvast PUBLIC fmt::fmt)
+dependency_summary("fmt" fmt::fmt)
+
+option(SPDLOG_ROOT "Install root of spdlog" "")
+target_compile_definitions(libvast PUBLIC SPDLOG_FMT_EXTERNAL)
+find_package(spdlog 1.5.0 REQUIRED HINTS "${SPDLOG_ROOT}")
 target_link_libraries(libvast PUBLIC spdlog::spdlog)
-if (SPDLOG_FMT_EXTERNAL)
-  find_package(fmt 5.2.1 REQUIRED)
-  target_link_libraries(libvast PUBLIC fmt::fmt)
-  target_compile_definitions(libvast PUBLIC SPDLOG_FMT_EXTERNAL)
-endif()
+dependency_summary("spdlog" spdlog::spdlog)
 
 # Link against simdjson.
 option(SIMDJSON_ROOT "Install root of simdjson" "")

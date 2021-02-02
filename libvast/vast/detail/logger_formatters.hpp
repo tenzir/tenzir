@@ -31,19 +31,14 @@
 #include <caf/scoped_actor.hpp>
 #include <caf/stateful_actor.hpp>
 
+#include <spdlog/spdlog.h>
+
+#include <fmt/chrono.h>
+#include <fmt/ostream.h>
+#include <fmt/ranges.h>
+
 #include <string>
 #include <type_traits>
-
-#include <spdlog/spdlog.h>
-#ifndef SPDLOG_FMT_EXTERNAL
-#  include <spdlog/fmt/bundled/chrono.h>
-#  include <spdlog/fmt/bundled/ostream.h>
-#  include <spdlog/fmt/bundled/ranges.h>
-#else
-#  include <fmt/chrono.h>
-#  include <fmt/ostream.h>
-#  include <fmt/ranges.h>
-#endif
 
 // A fallback formatter using the `caf::detail::stringification_inspector`
 // concept, which uses ADL-available `to_string` overloads if available.

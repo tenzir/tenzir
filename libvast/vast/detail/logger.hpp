@@ -22,10 +22,10 @@
 #include <caf/detail/scope_guard.hpp>
 #include <caf/string_view.hpp>
 
+#include <spdlog/spdlog.h>
+
 #include <string>
 #include <type_traits>
-
-#include <spdlog/spdlog.h>
 
 namespace vast::detail {
 
