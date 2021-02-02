@@ -15,7 +15,7 @@
 
 #include "vast/concept/printable/to_string.hpp"
 #include "vast/concept/printable/vast/subnet.hpp"
-#include "vast/json.hpp"
+#include "vast/data.hpp"
 #include "vast/subnet.hpp"
 
 namespace vast {
@@ -67,8 +67,8 @@ bool operator<(const subnet& x, const subnet& y) {
   return std::tie(x.network_, x.length_) < std::tie(y.network_, y.length_);
 }
 
-bool convert(const subnet& sn, json& j) {
-  j = to_string(sn);
+bool convert(const subnet& sn, data& d) {
+  d = to_string(sn);
   return true;
 }
 

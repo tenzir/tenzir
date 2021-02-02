@@ -71,7 +71,7 @@ make_random_table_slices(size_t num_slices, size_t slice_size,
 /// @note This function exists primarily for unit testing because it performs
 /// excessive memory allocations.
 std::vector<std::vector<data>>
-to_data(const table_slice& slice, size_t first_row, size_t num_rows) {
+make_data(const table_slice& slice, size_t first_row, size_t num_rows) {
   VAST_ASSERT(first_row < slice.rows());
   VAST_ASSERT(num_rows <= slice.rows() - first_row);
   if (num_rows == 0)
@@ -90,11 +90,11 @@ to_data(const table_slice& slice, size_t first_row, size_t num_rows) {
   return result;
 }
 
-std::vector<std::vector<data>> to_data(const std::vector<table_slice>& slices) {
+std::vector<std::vector<data>> make_data(const std::vector<table_slice>& slices) {
   std::vector<std::vector<data>> result;
   result.reserve(rows(slices));
   for (auto& slice : slices)
-    detail::append(result, to_data(slice));
+    detail::append(result, make_data(slice));
   return result;
 }
 

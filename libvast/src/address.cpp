@@ -23,7 +23,7 @@
 #include "vast/concept/printable/to_string.hpp"
 #include "vast/concept/printable/vast/address.hpp"
 #include "vast/detail/byte_swap.hpp"
-#include "vast/json.hpp"
+#include "vast/data.hpp"
 #include "vast/word.hpp"
 
 std::array<uint8_t, 12> const vast::address::v4_mapped_prefix = {
@@ -157,8 +157,8 @@ bool operator<(const address& x, const address& y) {
   return x.bytes_ < y.bytes_;
 }
 
-bool convert(const address& a, json& j) {
-  j = to_string(a);
+bool convert(const address& a, data& d) {
+  d = to_string(a);
   return true;
 }
 

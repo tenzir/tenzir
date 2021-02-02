@@ -11,7 +11,7 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#include "vast/json.hpp"
+#include "vast/data.hpp"
 #include "vast/time.hpp"
 
 namespace vast {
@@ -23,11 +23,11 @@ bool convert(duration dur, double& d) {
   return true;
 }
 
-bool convert(duration dur, json& j) {
+bool convert(duration dur, data& d) {
   double time_since_epoch;
   if (!convert(dur, time_since_epoch))
     return false;
-  j = json::number{time_since_epoch};
+  d = time_since_epoch;
   return true;
 }
 
@@ -35,8 +35,8 @@ bool convert(time ts, double& d) {
   return convert(ts.time_since_epoch(), d);
 }
 
-bool convert(time ts, json& j) {
-  return convert(ts.time_since_epoch(), j);
+bool convert(time ts, data& d) {
+  return convert(ts.time_since_epoch(), d);
 }
 
 } // namespace vast

@@ -21,7 +21,6 @@
 #include "vast/detail/flat_map.hpp"
 #include "vast/detail/string.hpp"
 #include "vast/error.hpp"
-#include "vast/json.hpp"
 #include "vast/logger.hpp"
 #include "vast/schema.hpp"
 
@@ -58,25 +57,6 @@ private:
   }
 
 public:
-  caf::optional<record_type> operator()(const vast::json::object& obj) const {
-    if (type_cache.empty())
-      return caf::none;
-    // Iff there is only one type in the type cache, allow the JSON reader to
-    // use it despite not being an exact match.
-    if (type_cache.size() == 1)
-      return type_cache.begin()->second;
-    std::vector<std::string> cache_entry;
-    auto build_cache_entry = [&cache_entry](auto& prefix, const vast::json&) {
-      cache_entry.emplace_back(detail::join(prefix.begin(), prefix.end(), "."));
-    };
-    each_field(vast::json{obj}, build_cache_entry);
-    std::sort(cache_entry.begin(), cache_entry.end());
-    if (auto search_result = type_cache.find(cache_entry);
-        search_result != type_cache.end())
-      return search_result->second;
-    return caf::none;
-  }
-
   caf::optional<record_type>
   operator()(const ::simdjson::dom::object& obj) const {
     if (type_cache.empty())

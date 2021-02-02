@@ -104,8 +104,8 @@ struct importer_fixture : Base {
 
   void verify(const std::vector<table_slice>& result,
               const std::vector<table_slice>& reference) {
-    auto xs = to_data(result);
-    auto ys = to_data(reference);
+    auto xs = make_data(result);
+    auto ys = make_data(reference);
     CHECK_EQUAL(xs, ys);
   }
 

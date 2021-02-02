@@ -41,7 +41,7 @@
 namespace vast {
 
 class data;
-class json;
+// class json;
 
 namespace detail {
 
@@ -107,8 +107,7 @@ using to_data_type = detail::to_data_type<std::decay_t<T>>;
 /// - Core Working Group (CWG) issue #2137 has not been fixed in clang yet.
 ///   c.f. https://wg21.cmeerw.net/cwg/issue2137, causing brace-initialization
 ///   to erroneously behave like other means of construction.
-class data : detail::totally_ordered<data>,
-             detail::addable<data> {
+class data : detail::totally_ordered<data>, detail::addable<data> {
 public:
   // clang-format off
   using types = caf::detail::type_list<
@@ -152,12 +151,8 @@ public:
 
   /// Constructs data.
   /// @param x The instance to construct data from.
-  template <
-    class T,
-    class = detail::disable_if_t<
-      std::is_same_v<to_data_type<T>, std::false_type>
-    >
-  >
+  template <class T, class = detail::disable_if_t<
+                       std::is_same_v<to_data_type<T>, std::false_type>>>
   data(T&& x) : data_{to_data_type<T>(std::forward<T>(x))} {
     // nop
   }
@@ -200,7 +195,7 @@ public:
   }
 
   template <class Inspector>
-  friend auto inspect(Inspector&f, data& x) {
+  friend auto inspect(Inspector& f, data& x) {
     return f(x.data_);
   }
 
@@ -277,7 +272,8 @@ bool is_container(const data& x);
 /// @param rt The record type
 /// @param xs The record fields.
 /// @returns A record according to the fields as defined in *rt*.
-caf::optional<record> make_record(const record_type& rt, std::vector<data>&& xs);
+caf::optional<record>
+make_record(const record_type& rt, std::vector<data>&& xs);
 
 /// Flattens a record recursively.
 record flatten(const record& r);
@@ -318,23 +314,26 @@ bool evaluate(const data& lhs, relational_operator op, const data& rhs);
 
 // -- convertible -------------------------------------------------------------
 
-bool convert(const list& xs, json& j);
-bool convert(const map& xs, json& j);
-bool convert(const record& xs, json& j);
-bool convert(const data& xs, json& j);
+template <class T, class... Opts>
+data to_data(const T& x, Opts&&... opts) {
+  data d;
+  if (convert(x, d, std::forward<Opts>(opts)...))
+    return d;
+  return {};
+}
 
 /// Converts data with a type to "zipped" JSON, i.e., the JSON object for
 /// records contains the field names from the type corresponding to the given
 /// data.
-bool convert(const data& x, json& j, const type& t);
+// bool convert(const data& x, json& j, const type& t);
 
 caf::error convert(const record& xs, caf::dictionary<caf::config_value>& ys);
 caf::error convert(const record& xs, caf::config_value& cv);
 caf::error convert(const data& x, caf::config_value& cv);
 
-caf::error convert(const caf::dictionary<caf::config_value>& xs, record& ys);
-caf::error convert(const caf::dictionary<caf::config_value>& xs, data& y);
-caf::error convert(const caf::config_value& x, data& y);
+bool convert(const caf::dictionary<caf::config_value>& xs, record& ys);
+bool convert(const caf::dictionary<caf::config_value>& xs, data& y);
+bool convert(const caf::config_value& x, data& y);
 
 // -- YAML -------------------------------------------------------------
 

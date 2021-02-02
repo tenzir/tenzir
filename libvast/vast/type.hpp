@@ -882,7 +882,7 @@ inline bool has_skip_attribute(const type& t) {
 }
 
 /// @relates type
-bool convert(const type& t, json& j);
+bool convert(const type& t, data& d);
 
 } // namespace vast
 

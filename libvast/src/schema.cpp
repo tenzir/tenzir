@@ -24,7 +24,7 @@
 #include "vast/directory.hpp"
 #include "vast/error.hpp"
 #include "vast/event_types.hpp"
-#include "vast/json.hpp"
+#include "vast/data.hpp"
 #include "vast/logger.hpp"
 #include "vast/path.hpp"
 
@@ -187,13 +187,13 @@ void serialize(caf::deserializer& source, schema& sch) {
   parse(i, str.end(), sch);
 }
 
-bool convert(const schema& s, json& j) {
-  json::object o;
-  json::array a;
+bool convert(const schema& s, data& d) {
+  record o;
+  list a;
   std::transform(s.begin(), s.end(), std::back_inserter(a),
-                 [](auto& t) { return to_json(t); });
+                 [](auto& t) { return to_data(t); });
   o["types"] = std::move(a);
-  j = std::move(o);
+  d = std::move(o);
   return true;
 }
 
