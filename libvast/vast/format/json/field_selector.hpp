@@ -44,7 +44,7 @@ struct field_selector {
     if (it == types.end()) {
       // Keep a list of failed keys to avoid spamming the user with warnings.
       if (unknown_types.insert(*field).second)
-        VAST_WARN("{} does not have a layout for {}  {}",
+        VAST_WARN("{} does not have a layout for {} {}",
                   detail::pretty_type_name(this), Specification::field, *field);
       return caf::none;
     }
@@ -68,7 +68,7 @@ struct field_selector {
     if (it == types.end()) {
       // Keep a list of failed keys to avoid spamming the user with warnings.
       if (unknown_types.insert(field).second)
-        VAST_WARN("{} does not have a layout for {}  {}",
+        VAST_WARN("{} does not have a layout for {} {}",
                   detail::pretty_type_name(this), Specification::field, field);
       return caf::none;
     }

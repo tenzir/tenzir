@@ -319,9 +319,9 @@ caf::error reader::read_impl(size_t max_events, size_t max_slice_size,
     } else {
       auto fields = detail::split(lines_->get(), separator_);
       if (fields.size() != parsers_.size()) {
-        VAST_WARN("{} ignores invalid record at line {}  {} got {}"
+        VAST_WARN("{} ignores invalid record at line {}: got {}"
                   "fields but need {}",
-                  detail::pretty_type_name(this), lines_->line_number(), ':',
+                  detail::pretty_type_name(this), lines_->line_number(),
                   fields.size(), parsers_.size());
         continue;
       }

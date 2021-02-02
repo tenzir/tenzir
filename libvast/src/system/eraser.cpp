@@ -31,7 +31,7 @@ eraser_state::eraser_state(caf::event_based_actor* self) : super{self} {
 
 void eraser_state::init(caf::timespan interval, std::string query,
                         index_actor index, archive_actor archive) {
-  VAST_TRACE("{}  {}  {}  {}", VAST_ARG(interval), VAST_ARG(query),
+  VAST_TRACE("{} {} {} {}", VAST_ARG(interval), VAST_ARG(query),
              VAST_ARG(index), VAST_ARG(archive));
   // Set member variables.
   interval_ = std::move(interval);

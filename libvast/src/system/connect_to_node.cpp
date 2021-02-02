@@ -83,8 +83,8 @@ connect_to_node(scoped_actor& self, const caf::settings& opts) {
 #if VAST_LOG_LEVEL >= VAST_LOG_LEVEL_WARNING
   if (caf::logger::current_logger()->accepts(VAST_LOG_LEVEL_WARNING,
                                              caf::atom("vast"))) {
-    VAST_VERBOSE("{} successfully connected to {}  {}  {}", self,
-                 node_endpoint.host, ':', to_string(*node_endpoint.port));
+    VAST_VERBOSE("{} successfully connected to {}:{}", self, node_endpoint.host,
+                 to_string(*node_endpoint.port));
     self
       ->request(*result, defaults::system::initial_request_timeout, atom::get_v,
                 atom::version_v)

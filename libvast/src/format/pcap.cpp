@@ -408,7 +408,7 @@ caf::error reader::read_impl(size_t max_events, size_t max_slice_size,
     ++batch_events_;
     if (pseudo_realtime_ > 0) {
       if (ts < last_timestamp_) {
-        VAST_WARN("{} encountered non-monotonic packet timestamps: {}  {}  {}",
+        VAST_WARN("{} encountered non-monotonic packet timestamps: {} {} {}",
                   detail::pretty_type_name(this), ts.time_since_epoch().count(),
                   '<', last_timestamp_.time_since_epoch().count());
       }

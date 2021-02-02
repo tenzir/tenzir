@@ -163,7 +163,7 @@ void handle_batch(exporter_actor::stateful_pointer<exporter_state> self,
       shutdown(self);
       return;
     }
-    VAST_DEBUG("{} tailored AST to {}  {}  {}", self, t, ':', x);
+    VAST_DEBUG("{} tailored AST to {}: {}", self, t, x);
     std::tie(it, std::ignore)
       = self->state.checkers.emplace(type{slice.layout()}, std::move(*x));
   }
@@ -355,7 +355,7 @@ exporter(exporter_actor::stateful_pointer<exporter_state> self, expression expr,
       VAST_ASSERT(self->current_sender() == self->state.archive);
       auto& qs = self->state.query;
       ++qs.lookups_complete;
-      VAST_DEBUG("{} received done from archive: {}  {}", self, VAST_ARG(err),
+      VAST_DEBUG("{} received done from archive: {} {}", self, VAST_ARG(err),
                  VAST_ARG("query", qs));
       // We skip 'done' messages of the query supervisors until we process all
       // hits first. Hence, we can never be finished here.
@@ -409,8 +409,8 @@ exporter(exporter_actor::stateful_pointer<exporter_state> self, expression expr,
       qs.runtime = runtime;
       qs.received += qs.scheduled;
       if (qs.received < qs.expected) {
-        VAST_DEBUG("{} received hits from {}  {}  {} partitions", self,
-                   qs.received, '/', qs.expected);
+        VAST_DEBUG("{} received hits from {}/{} partitions", self, qs.received,
+                   qs.expected);
         request_more_hits(self);
       } else {
         VAST_DEBUG("{} received all hits from {} partition(s) in {}", self,

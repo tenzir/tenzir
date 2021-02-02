@@ -289,7 +289,7 @@ const char* reader::name() const {
 
 caf::error reader::read_impl(size_t max_events, size_t max_slice_size,
                              consumer& f) {
-  VAST_TRACE("{}  {}  {}", VAST_ARG(max_events), VAST_ARG(max_slice_size),
+  VAST_TRACE("{} {} {}", VAST_ARG(max_events), VAST_ARG(max_slice_size),
              VAST_ARG(num_events_));
   // Sanity checks.
   if (schema_.empty())

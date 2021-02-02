@@ -136,7 +136,7 @@ caf::behavior pivoter(caf::stateful_actor<pivoter_state>* self, caf::actor node,
       // TODO(ch9411): Drop the conversion to a string when node actors can
       //               be spawned without going through an invocation.
       auto query = to_string(expr);
-      VAST_DEBUG("{} queries for {}  {}", self, xs.size(), pivot_field->name);
+      VAST_DEBUG("{} queries for {} {}", self, xs.size(), pivot_field->name);
       VAST_TRACE("{} spawns new exporter with query {}", self, query);
       auto exporter_options = caf::settings{};
       caf::put(exporter_options, "vast.export.disable-taxonomies", true);

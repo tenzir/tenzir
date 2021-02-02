@@ -698,7 +698,7 @@ partition_actor::behavior_type passive_partition(
   self->request(filesystem, caf::infinite, atom::mmap_v, path)
     .then(
       [=](chunk_ptr chunk) {
-        VAST_TRACE("{}  {}", self, VAST_ARG(chunk));
+        VAST_TRACE("{} {}", self, VAST_ARG(chunk));
         if (self->state.partition_chunk) {
           VAST_WARN("{} ignores duplicate chunk", self);
           return;
@@ -762,7 +762,7 @@ partition_actor::behavior_type passive_partition(
   return {
     [=](const expression& expr,
         partition_client_actor client) -> caf::result<atom::done> {
-      VAST_TRACE("{}  {}", self, VAST_ARG(expr));
+      VAST_TRACE("{} {}", self, VAST_ARG(expr));
       if (!self->state.partition_chunk)
         return get<2>(self->state.deferred_evaluations.emplace_back(
           expr, client, self->make_response_promise<atom::done>()));

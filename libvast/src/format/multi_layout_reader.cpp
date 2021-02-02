@@ -42,7 +42,7 @@ multi_layout_reader::finish(consumer& f, table_slice_builder_ptr& builder_ptr,
       // this case we probably have a logic bug somewhere, but it is not an
       // error, so there is no reason to treat it as one.
       VAST_WARN("{} detected a mismatch in the batch tracking "
-                "logic {}  {}",
+                "logic {} {}",
                 detail::pretty_type_name(this), VAST_ARG(batch_events_),
                 VAST_ARG(rows));
       batch_events_ = 0;

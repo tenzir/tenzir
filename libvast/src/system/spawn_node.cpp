@@ -99,7 +99,7 @@ spawn_node(caf::scoped_actor& self, const caf::settings& opts) {
     components.push_front("accountant");
   for (auto& c : components) {
     if (auto err = spawn_component(c)) {
-      VAST_ERROR("{}  {}", self, self->system().render(err));
+      VAST_ERROR("{} {}", self, err);
       return err;
     }
   }
