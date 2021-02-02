@@ -13,14 +13,14 @@
 
 #pragma once
 
-#include <string>
-
 #include "vast/detail/operators.hpp"
+
+#include <string>
 
 namespace vast {
 
 struct access;
-class json;
+class data;
 
 /// A regular expression.
 class pattern : detail::totally_ordered<pattern>,
@@ -60,7 +60,6 @@ public:
 
   const std::string& string() const;
 
-
   // -- concepts // ------------------------------------------------------------
 
   pattern& operator+=(const pattern& other);
@@ -92,7 +91,7 @@ public:
     return f(p.str_);
   }
 
-  friend bool convert(const pattern& p, json& j);
+  friend bool convert(const pattern& p, data& d);
 
 private:
   std::string str_;

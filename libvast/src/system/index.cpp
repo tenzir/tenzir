@@ -39,7 +39,7 @@
 #include "vast/ids.hpp"
 #include "vast/io/read.hpp"
 #include "vast/io/save.hpp"
-#include "vast/json.hpp"
+#include "vast/data.hpp"
 #include "vast/logger.hpp"
 #include "vast/meta_index.hpp"
 #include "vast/system/evaluator.hpp"

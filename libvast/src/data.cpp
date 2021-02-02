@@ -23,7 +23,6 @@
 #include "vast/detail/type_traits.hpp"
 #include "vast/directory.hpp"
 #include "vast/error.hpp"
-#include "vast/json.hpp"
 #include "vast/path.hpp"
 
 #include <caf/config_value.hpp>
@@ -174,7 +173,8 @@ make_record(const record_type& rt, Iterator& begin, Sentinel end) {
 
 } // namespace
 
-caf::optional<record> make_record(const record_type& rt, std::vector<data>&& xs) {
+caf::optional<record>
+make_record(const record_type& rt, std::vector<data>&& xs) {
   auto begin = xs.begin();
   auto end = xs.end();
   return make_record(rt, begin, end);
@@ -307,68 +307,68 @@ void merge(const record& src, record& dst) {
 
 namespace {
 
-json jsonize(const data& x) {
-  return caf::visit(
-    detail::overload{
-      [&](const auto& y) { return to_json(y); },
-      [&](caf::none_t) { return json{}; },
-      [&](const std::string& str) { return json{str}; },
-    },
-    x);
-}
+// json jsonize(const data& x) {
+//   return caf::visit(
+//     detail::overload{
+//       [&](const auto& y) { return to_json(y); },
+//       [&](caf::none_t) { return json{}; },
+//       [&](const std::string& str) { return json{str}; },
+//     },
+//     x);
+// }
 
-} // namespace <anonymous>
+} // namespace
 
-bool convert(const list& xs, json& j) {
-  json::array a(xs.size());
-  for (size_t i = 0; i < xs.size(); ++i)
-    a[i] = jsonize(xs[i]);
-  j = std::move(a);
-  return true;
-}
+// bool convert(const list& xs, json& j) {
+//   json::array a(xs.size());
+//   for (size_t i = 0; i < xs.size(); ++i)
+//     a[i] = jsonize(xs[i]);
+//   j = std::move(a);
+//   return true;
+// }
 
-bool convert(const map& t, json& j) {
-  json::array values;
-  for (auto& p : t) {
-    json::array a;
-    a.emplace_back(jsonize(p.first));
-    a.emplace_back(jsonize(p.second));
-    values.emplace_back(std::move(a));
-  };
-  j = std::move(values);
-  return true;
-}
+// bool convert(const map& t, json& j) {
+//   json::array values;
+//   for (auto& p : t) {
+//     json::array a;
+//     a.emplace_back(jsonize(p.first));
+//     a.emplace_back(jsonize(p.second));
+//     values.emplace_back(std::move(a));
+//   };
+//   j = std::move(values);
+//   return true;
+// }
 
-bool convert(const record& xs, json& j) {
-  json::object o;
-  for (auto& [k, v] : xs)
-    o[k] = jsonize(v);
-  j = std::move(o);
-  return true;
-}
+// bool convert(const record& xs, json& j) {
+//   json::object o;
+//   for (auto& [k, v] : xs)
+//     o[k] = jsonize(v);
+//   j = std::move(o);
+//   return true;
+// }
 
-bool convert(const data& d, json& j) {
-  j = jsonize(d);
-  return true;
-}
+// bool convert(const data& d, json& j) {
+//   j = jsonize(d);
+//   return true;
+// }
 
-bool convert(const data& d, json& j, const type& t) {
-  auto xs = caf::get_if<list>(&d);
-  auto rt = caf::get_if<record_type>(&t);
-  if (xs && rt) {
-    if (xs->size() != rt->fields.size())
-      return false;
-    json::object o;
-    for (size_t i = 0; i < xs->size(); ++i) {
-      auto& f = rt->fields[i];
-      if (!convert((*xs)[i], o[f.name], f.type))
-        return false;
-    }
-    j = std::move(o);
-    return true;
-  }
-  return convert(d, j);
-}
+// bool convert(const data& d, json& j, const type& t) {
+//   auto xs = caf::get_if<list>(&d);
+//   auto rt = caf::get_if<record_type>(&t);
+//   if (xs && rt) {
+//     if (xs->size() != rt->fields.size())
+//       return false;
+//     json::object o;
+//     for (size_t i = 0; i < xs->size(); ++i) {
+//       auto& f = rt->fields[i];
+//       if (!convert((*xs)[i], o[f.name], f.type))
+//         return false;
+//     }
+//     j = std::move(o);
+//     return true;
+//   }
+//   return convert(d, j);
+// }
 
 caf::error convert(const map& xs, caf::dictionary<caf::config_value>& ys) {
   for (auto& [k, v] : xs) {
@@ -450,56 +450,57 @@ caf::error convert(const data& d, caf::config_value& cv) {
   return caf::visit(f, d);
 }
 
-caf::error convert(const caf::dictionary<caf::config_value>& xs, record& ys) {
+bool convert(const caf::dictionary<caf::config_value>& xs, record& ys) {
   for (auto& [k, v] : xs) {
     data y;
-    if (auto err = convert(v, y))
-      return err;
+    if (!convert(v, y))
+      return false;
     ys.emplace(k, std::move(y));
   }
-  return caf::none;
+  return true;
 }
 
-caf::error convert(const caf::dictionary<caf::config_value>& xs, data& y) {
+bool convert(const caf::dictionary<caf::config_value>& xs, data& y) {
   record result;
-  if (auto err = convert(xs, result))
-    return err;
+  if (!convert(xs, result))
+    return false;
   y = std::move(result);
-  return caf::none;
+  return true;
 }
 
-caf::error convert(const caf::config_value& x, data& y) {
+bool convert(const caf::config_value& x, data& y) {
   auto f = detail::overload{
-    [&](const auto& value) -> caf::error {
+    [&](const auto& value) -> bool {
       y = value;
-      return caf::none;
+      return true;
     },
-    [&](caf::config_value::atom value) -> caf::error {
+    [&](caf::config_value::atom value) -> bool {
       y = to_string(value);
-      return caf::none;
+      return true;
     },
-    [&](caf::uri value) -> caf::error {
+    [&](caf::uri value) -> bool {
       y = to_string(value);
-      return caf::none;
+      return true;
     },
-    [&](const caf::config_value::list& xs) -> caf::error {
+    [&](const caf::config_value::list& xs) -> bool {
       list result;
       result.reserve(xs.size());
       for (auto x : xs) {
         data element;
-        if (auto err = convert(x, element))
-          return err;
+        if (!convert(x, element)) {
+          return false;
+        }
         result.push_back(std::move(element));
       }
       y = std::move(result);
-      return caf::none;
+      return true;
     },
-    [&](const caf::config_value::dictionary& xs) -> caf::error {
+    [&](const caf::config_value::dictionary& xs) -> bool {
       record result;
-      if (auto err = convert(xs, result))
-        return err;
+      if (!convert(xs, result))
+        return false;
       y = std::move(result);
-      return caf::none;
+      return true;
     },
   };
   return caf::visit(f, x);

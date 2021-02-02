@@ -15,7 +15,7 @@
 
 #include "vast/concept/printable/to_string.hpp"
 #include "vast/concept/printable/vast/pattern.hpp"
-#include "vast/json.hpp"
+#include "vast/data.hpp"
 #include "vast/pattern.hpp"
 
 namespace vast {
@@ -132,8 +132,8 @@ bool operator!=(std::string_view lhs, const pattern& rhs) {
   return !(lhs == rhs);
 }
 
-bool convert(const pattern& p, json& j) {
-  j = to_string(p);
+bool convert(const pattern& p, data& d) {
+  d = to_string(p);
   return true;
 }
 
