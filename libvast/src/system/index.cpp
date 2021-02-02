@@ -545,19 +545,21 @@ index_actor::behavior_type
 index(index_actor::stateful_pointer<index_state> self,
       filesystem_actor filesystem, path dir, size_t partition_capacity,
       size_t max_inmem_partitions, size_t taste_partitions, size_t num_workers,
-      double meta_index_fp_rate) {
+      path meta_index_dir, double meta_index_fp_rate) {
   VAST_TRACE_SCOPE("{} {} {} {} {} {} {}", VAST_ARG(filesystem), VAST_ARG(dir),
                    VAST_ARG(partition_capacity), VAST_ARG(max_inmem_partitions),
                    VAST_ARG(taste_partitions), VAST_ARG(num_workers),
-                   VAST_ARG(meta_index_fp_rate));
+                   VAST_ARG(meta_index_dir), VAST_ARG(meta_index_fp_rate));
   VAST_VERBOSE("{} initializes index in {} with a maximum partition "
                "size of {} events and {} resident partitions",
                self, dir, partition_capacity, max_inmem_partitions);
+  if (dir != meta_index_dir)
+    VAST_VERBOSE("{} uses {} for meta index data", self, meta_index_dir);
   // Set members.
   self->state.self = self;
   self->state.filesystem = std::move(filesystem);
   self->state.dir = dir;
-  self->state.synopsisdir = dir;
+  self->state.synopsisdir = meta_index_dir;
   self->state.partition_capacity = partition_capacity;
   self->state.taste_partitions = taste_partitions;
   self->state.inmem_partitions.factory().filesystem() = self->state.filesystem;

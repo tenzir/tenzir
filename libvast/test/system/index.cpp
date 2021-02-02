@@ -49,8 +49,9 @@ struct fixture : fixtures::deterministic_actor_system_and_events {
   fixture() {
     directory /= "index";
     auto fs = self->spawn(system::posix_filesystem, directory);
-    index = self->spawn(system::index, fs, directory / "index", slice_size,
-                        in_mem_partitions, taste_count, num_query_supervisors,
+    auto dir = directory / "index";
+    index = self->spawn(system::index, fs, dir, slice_size, in_mem_partitions,
+                        taste_count, num_query_supervisors, dir,
                         meta_index_fp_rate);
   }
 
