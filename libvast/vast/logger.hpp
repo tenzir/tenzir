@@ -58,13 +58,14 @@
 #if VAST_LOG_LEVEL >= VAST_LOG_LEVEL_TRACE
 
 #  define VAST_TRACE(...)                                                      \
-    [func_name_ = __func__](auto&& format, auto&&... args) {                   \
-      VAST_DEBUG(::fmt::format("ENTER {} {}", func_name_,                      \
-                               std::forward<decltype(format)>(format)),        \
-                 std::forward<decltype(args)>(args)...);                       \
-    }(__VA_ARGS__);                                                            \
-    auto CAF_UNIFYN(vast_log_trace_guard_) = ::caf::detail::make_scope_guard(  \
-      [=, func_name_ = __func__] { VAST_DEBUG("EXIT {}", func_name_); })
+    auto CAF_UNIFYN(vast_log_trace_guard_)                                     \
+      = [func_name_ = __func__](auto&& format, auto&&... args) {               \
+          VAST_DEBUG(::fmt::format("ENTER {} {}", func_name_,                  \
+                                   std::forward<decltype(format)>(format)),    \
+                     std::forward<decltype(args)>(args)...);                   \
+          return ::caf::detail::make_scope_guard(                              \
+            [func_name_] { VAST_DEBUG("EXIT {}", func_name_); });              \
+        }(__VA_ARGS__);
 
 #else // VAST_LOG_LEVEL > VAST_LOG_LEVEL_TRACE
 
