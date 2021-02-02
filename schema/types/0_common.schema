@@ -1,0 +1,6 @@
+// This file must be the first in lexicographical order. Therefore the filename
+// is prefixed with "0_".
+
+// Alias for transport-layer ports.
+type port = count
+
