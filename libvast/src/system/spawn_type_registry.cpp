@@ -33,7 +33,8 @@ maybe_actor spawn_type_registry(node_actor* self, spawn_arguments& args) {
                        render(std::move(err)));
            });
   VAST_VERBOSE("{} spawned the type-registry", detail::id_or_name(self));
-  if (auto accountant = self->state.registry.find_by_label("accountant"))
+  if (auto [accountant] = self->state.registry.find<accountant_actor>();
+      accountant)
     self->send(handle, caf::actor_cast<accountant_actor>(accountant));
   return caf::actor_cast<caf::actor>(handle);
 }

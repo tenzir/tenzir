@@ -40,17 +40,14 @@ maybe_actor spawn_source(node_actor* self, spawn_arguments& args) {
                            "locally instead of connecting to one; please unset "
                            "the option vast.node");
   auto [accountant, importer, type_registry]
-    = self->state.registry.find_by_label("accountant", "importer",
-                                         "type-registry");
+    = self->state.registry
+        .find<accountant_actor, importer_actor, type_registry_actor>();
   if (!importer)
     return caf::make_error(ec::missing_component, "importer");
   if (!type_registry)
     return caf::make_error(ec::missing_component, "type-registry");
   auto src_result = make_source<Reader, Defaults, caf::detached>(
-    self, self->system(), args.inv,
-    caf::actor_cast<accountant_actor>(accountant),
-    caf::actor_cast<type_registry_actor>(type_registry),
-    caf::actor_cast<importer_actor>(importer));
+    self, self->system(), args.inv, accountant, type_registry, importer);
   if (!src_result)
     return src_result.error();
   auto src = std::move(src_result->src);

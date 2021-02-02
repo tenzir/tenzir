@@ -29,23 +29,21 @@ maybe_actor spawn_importer(node_actor* self, spawn_arguments& args) {
   if (!args.empty())
     return unexpected_arguments(args);
   // FIXME: Notify exporters with a continuous query.
-  auto [archive, index, type_registry]
-    = self->state.registry.find_by_label("archive", "index", "type-registry");
+  auto [archive, index, type_registry, accountant]
+    = self->state.registry.find<archive_actor, index_actor, type_registry_actor,
+                                accountant_actor>();
   if (!archive)
     return caf::make_error(ec::missing_component, "archive");
   if (!index)
     return caf::make_error(ec::missing_component, "index");
   if (!type_registry)
     return caf::make_error(ec::missing_component, "type-registry");
-  auto handle
-    = self->spawn(importer, args.dir / args.label,
-                  caf::actor_cast<archive_actor>(archive),
-                  caf::actor_cast<index_actor>(index),
-                  caf::actor_cast<type_registry_actor>(type_registry));
+  auto handle = self->spawn(importer, args.dir / args.label, archive, index,
+                            type_registry);
   VAST_VERBOSE("{} spawned the importer", detail::id_or_name(self));
-  if (auto accountant = self->state.registry.find_by_label("accountant")) {
+  if (accountant) {
     self->send(handle, atom::telemetry_v);
-    self->send(handle, caf::actor_cast<accountant_actor>(accountant));
+    self->send(handle, accountant);
   } else if (auto logger = caf::logger::current_logger();
              logger && logger->console_verbosity() >= VAST_LOG_LEVEL_VERBOSE) {
     // Initiate periodic rate logging.

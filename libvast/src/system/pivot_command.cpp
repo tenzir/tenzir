@@ -94,10 +94,10 @@ caf::message pivot_command(const invocation& inv, caf::actor_system& sys) {
   auto piv_guard = caf::detail::make_scope_guard(
     [&] { self->send_exit(*piv, caf::exit_reason::user_shutdown); });
   // Register the accountant at the Sink.
-  auto components = get_node_components(self, node, "accountant");
+  auto components = get_node_components<accountant_actor>(self, node);
   if (!components)
     return caf::make_message(std::move(components.error()));
-  auto& [accountant] = *components;
+  auto [accountant] = std::move(*components);
   if (accountant) {
     VAST_DEBUG("{} assigns accountant to sink",
                detail::id_or_name(inv.full_name));

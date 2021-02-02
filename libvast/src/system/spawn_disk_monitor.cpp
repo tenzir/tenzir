@@ -18,7 +18,7 @@ maybe_actor
 spawn_disk_monitor(system::node_actor* self, spawn_arguments& args) {
   VAST_TRACE("{}", detail::id_or_name(VAST_ARG(args)));
   auto [index, archive]
-    = self->state.registry.find_by_label("index", "archive");
+    = self->state.registry.find<index_actor, archive_actor>();
   if (!index)
     return caf::make_error(ec::missing_component, "index");
   if (!archive)
@@ -65,10 +65,9 @@ spawn_disk_monitor(system::node_actor* self, spawn_arguments& args) {
   if (!exists(abs_dir))
     return caf::make_error(ec::filesystem_error, "could not find database "
                                                  "directory");
-  auto handle = self->spawn(disk_monitor, hiwater, lowater,
-                            std::chrono::seconds{interval}, abs_dir,
-                            caf::actor_cast<archive_actor>(archive),
-                            caf::actor_cast<index_actor>(index));
+  auto handle
+    = self->spawn(disk_monitor, hiwater, lowater,
+                  std::chrono::seconds{interval}, abs_dir, archive, index);
   VAST_VERBOSE("{} spawned a disk monitor", detail::id_or_name(self));
   return caf::actor_cast<caf::actor>(handle);
 }

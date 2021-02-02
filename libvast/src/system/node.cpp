@@ -90,6 +90,14 @@ auto make_error_msg(ec code, std::string msg) {
 /// Helper function to determine whether a component can be spawned at most
 /// once.
 bool is_singleton(std::string_view type) {
+  // TODO: All of these actor interfaces are strongly typed. The value of `type`
+  // is received via the actor interface of the NODE sometimes, which means that
+  // we cannot just pass arbitrary actors to it. Atoms aren't really an option
+  // either, because `caf::atom_value` was removed with CAF 0.18. We can,
+  // however, abuse the fact that every typed actor has a type ID assigned, and
+  // change the node to work with type IDs over actor names everywhere. This
+  // refactoring will be much easier once the NODE itself is a typed actor, so
+  // let's hold off until then.
   const char* singletons[]
     = {"accountant", "archive", "eraser",       "filesystem",
        "importer",   "index",   "type-registry"};
@@ -184,8 +192,7 @@ void collect_component_status(node_actor* self,
 caf::message dump_command(const invocation& inv, caf::actor_system&) {
   auto as_yaml = caf::get_or(inv.options, "vast.dump.yaml", false);
   auto self = this_node;
-  auto type_registry = caf::actor_cast<type_registry_actor>(
-    self->state.registry.find_by_label("type-registry"));
+  auto [type_registry] = self->state.registry.find<type_registry_actor>();
   if (!type_registry)
     return caf::make_message(caf::make_error(ec::missing_component, //
                                              "type-registry"));
@@ -498,16 +505,16 @@ node_state::spawn_command(const invocation& inv,
   if (query_handlers.count(comp_type) > 0u
       && !caf::get_or(spawn_inv.options,
                       "vast." + comp_type + ".disable-taxonomies", false)) {
-    if (auto tr = self->state.registry.find_by_label("type-registry")) {
+    if (auto [type_registry] = self->state.registry.find<type_registry_actor>();
+        type_registry) {
       auto expr = normalized_and_validated(spawn_inv.arguments);
       if (!expr) {
         rp.deliver(expr.error());
         return make_message(expr.error());
       }
       self
-        ->request(caf::actor_cast<type_registry_actor>(tr),
-                  defaults::system::initial_request_timeout, atom::resolve_v,
-                  std::move(*expr))
+        ->request(type_registry, defaults::system::initial_request_timeout,
+                  atom::resolve_v, std::move(*expr))
         .then(handle_taxonomies, [=](caf::error err) mutable {
           rp.deliver(err);
           return make_message(err);
@@ -573,13 +580,13 @@ caf::behavior node(node_actor* self, std::string name, path dir,
     };
     // Terminate the accountant first because it acts like a source and may
     // hold buffered data.
-    if (auto accountant = registry.find_by_label("accountant"))
-      schedule_teardown(std::move(accountant));
+    if (auto [accountant] = registry.find<accountant_actor>(); accountant)
+      schedule_teardown(caf::actor_cast<caf::actor>(std::move(accountant)));
     // Take out the filesystem, which we terminate at the very end.
-    auto filesystem = registry.find_by_label("filesystem");
+    auto [filesystem] = registry.find<filesystem_actor>();
     VAST_ASSERT(filesystem);
     self->unlink_from(filesystem); // avoid receiving an unneeded EXIT
-    registry.remove(filesystem);
+    registry.remove(caf::actor_cast<caf::actor>(filesystem));
     // Tear down the ingestion pipeline from source to sink.
     auto pipeline = {"source", "importer", "index", "archive", "exporter"};
     for (auto component : pipeline)
