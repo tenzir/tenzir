@@ -182,6 +182,12 @@ target_compile_options(
 
 # -- warnings ------------------------------------------------------------------
 
+if (CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+  target_compile_options(libvast_internal INTERFACE -Wno-unknown-warning-option)
+elseif (CMAKE_CXX_COMPILER_ID MATCHES "GNU")
+  target_compile_options(libvast_internal INTERFACE -Wno-unknown-warning)
+endif ()
+
 target_compile_options(
   libvast_internal
   INTERFACE -Wall
@@ -390,8 +396,7 @@ if (VAST_ENABLE_MORE_WARNINGS)
                 -Wno-switch-enum
                 -Wno-abstract-vbase-init
                 -Wno-missing-noreturn
-                -Wno-covered-switch-default
-                -Wno-unknown-warning-option)
+                -Wno-covered-switch-default)
   elseif (CMAKE_CXX_COMPILER_ID MATCHES "GNU")
     target_compile_options(
       libvast_internal
@@ -453,7 +458,6 @@ if (VAST_ENABLE_MORE_WARNINGS)
                 -Wunused
                 -Wvla
                 -Wwrite-strings
-                -Wno-unknown-warning
                 -Wno-redundant-move)
   endif ()
 endif ()
