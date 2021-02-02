@@ -50,6 +50,14 @@ This changelog documents all notable user-facing changes of VAST.
   control this behaviour. [#1223](https://github.com/tenzir/vast/pull/1223)
   [#1362](https://github.com/tenzir/vast/pull/1362)
 
+- 🎁 The schema definition parser has been improved:
+  - it can now accept references to types that are defined later on in the same
+    file.
+  - type definitions from already parsed schema files can be referenced from
+    files that are parsed later. Each directory from the `schema-dirs` option
+    is traversed in lexicographical order.
+  [#1331](https://github.com/tenzir/vast/pull/1331)
+
 - ⚡️ VAST switched to spdlog as logging library. For users, this means: The
   `vast.console-format` and `vast.file-format` now must be specified using the
   spdlog pattern syntax as described
