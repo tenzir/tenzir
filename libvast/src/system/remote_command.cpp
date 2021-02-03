@@ -38,13 +38,13 @@ caf::message remote_command(const invocation& inv, caf::actor_system& sys) {
     = spawn_or_connect_to_node(self, inv.options, content(sys.config()));
   if (auto err = caf::get_if<caf::error>(&node_opt))
     return caf::make_message(std::move(*err));
-  auto& node = caf::holds_alternative<caf::actor>(node_opt)
-                 ? caf::get<caf::actor>(node_opt)
-                 : caf::get<scope_linked_actor>(node_opt).get();
+  auto& node = caf::holds_alternative<node_actor>(node_opt)
+                 ? caf::get<node_actor>(node_opt)
+                 : caf::get<scope_linked<node_actor>>(node_opt).get();
   self->monitor(node);
   // Delegate invocation to node.
-  caf::error err;
-  self->send(node, std::move(inv));
+  caf::error err = caf::none;
+  self->send(node, atom::run_v, std::move(inv));
   self->receive([&](const caf::down_msg&) { err = ec::remote_node_down; },
                 [&](atom::ok) {
                   // Standard reply for success.
@@ -56,7 +56,7 @@ caf::message remote_command(const invocation& inv, caf::actor_system& sys) {
                   // Status messages or query results.
                   std::cout << str << std::endl;
                 },
-                [&](caf::error& e) { err = std::move(e); });
+                [&](caf::error e) { err = std::move(e); });
   if (err)
     return caf::make_message(std::move(err));
   return caf::none;

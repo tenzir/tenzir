@@ -13,8 +13,17 @@
 
 #include "vast/system/connect_to_node.hpp"
 
-#include "vast/config.hpp"
 #include "vast/fwd.hpp"
+
+#include "vast/command.hpp"
+#include "vast/concept/parseable/vast/endpoint.hpp"
+#include "vast/concept/printable/to_string.hpp"
+#include "vast/concept/printable/vast/port.hpp"
+#include "vast/config.hpp"
+#include "vast/defaults.hpp"
+#include "vast/endpoint.hpp"
+#include "vast/error.hpp"
+#include "vast/logger.hpp"
 
 #include <caf/actor_system.hpp>
 #include <caf/actor_system_config.hpp>
@@ -26,19 +35,11 @@
 #  include <caf/openssl/all.hpp>
 #endif
 
-#include "vast/concept/parseable/vast/endpoint.hpp"
-#include "vast/concept/printable/to_string.hpp"
-#include "vast/concept/printable/vast/port.hpp"
-#include "vast/defaults.hpp"
-#include "vast/endpoint.hpp"
-#include "vast/error.hpp"
-#include "vast/logger.hpp"
-
 using namespace caf;
 
 namespace vast::system {
 
-caf::expected<actor>
+caf::expected<node_actor>
 connect_to_node(scoped_actor& self, const caf::settings& opts) {
   // Fetch values from config.
   auto id = get_or(opts, "vast.node-id", defaults::system::node_id);
@@ -56,30 +57,30 @@ connect_to_node(scoped_actor& self, const caf::settings& opts) {
                            *node_endpoint.port);
   VAST_DEBUG("{} connects to remote node: {}", self, id);
   auto& sys_cfg = self->system().config();
-  auto use_encryption = !sys_cfg.openssl_certificate.empty()
-                        || !sys_cfg.openssl_key.empty()
-                        || !sys_cfg.openssl_passphrase.empty()
-                        || !sys_cfg.openssl_capath.empty()
-                        || !sys_cfg.openssl_cafile.empty();
+  auto use_encryption
+    = !sys_cfg.openssl_certificate.empty() || !sys_cfg.openssl_key.empty()
+      || !sys_cfg.openssl_passphrase.empty() || !sys_cfg.openssl_capath.empty()
+      || !sys_cfg.openssl_cafile.empty();
   auto host = node_endpoint.host;
   if (node_endpoint.host.empty())
     node_endpoint.host = "localhost";
   VAST_INFO("connecting to VAST node {}", endpoint_str);
-  auto result = [&]() -> caf::expected<caf::actor> {
+  auto result = [&]() -> caf::expected<node_actor> {
     if (use_encryption) {
 #if VAST_ENABLE_OPENSSL
-      return openssl::remote_actor(self->system(), node_endpoint.host,
-                                   node_endpoint.port->number());
+      return openssl::remote_actor<node_actor>(
+        self->system(), node_endpoint.host, node_endpoint.port->number());
 #else
       return caf::make_error(ec::unspecified, "not compiled with OpenSSL "
                                               "support");
 #endif
     }
     auto& mm = self->system().middleman();
-    return mm.remote_actor(node_endpoint.host, node_endpoint.port->number());
+    return mm.remote_actor<node_actor>(node_endpoint.host,
+                                       node_endpoint.port->number());
   }();
   if (!result)
-    return result;
+    return result.error();
 #if VAST_LOG_LEVEL >= VAST_LOG_LEVEL_WARNING
   if (caf::logger::current_logger()->accepts(VAST_LOG_LEVEL_WARNING,
                                              caf::atom("vast"))) {
@@ -95,7 +96,9 @@ connect_to_node(scoped_actor& self, const caf::settings& opts) {
                       "client: {}, node: {}",
                       self, VAST_VERSION, node_version);
         },
-        [&](caf::error error) { result = std::move(error); });
+        [&](caf::error error) { //
+          result = std::move(error);
+        });
   }
 #endif
   return result;

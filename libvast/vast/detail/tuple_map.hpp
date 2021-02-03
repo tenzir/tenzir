@@ -15,6 +15,8 @@
 
 #include "vast/fwd.hpp"
 
+#include "vast/detail/assert.hpp"
+
 #include <tuple>
 #include <utility>
 

@@ -291,7 +291,7 @@ int main(int argc, char** argv) {
                caf::config_value::dictionary{{
                  "endpoint", caf::config_value{vast_address + ':'
                                                + std::to_string(vast_port)}}});
-  caf::actor node;
+  vast::system::node_actor node;
   if (auto conn = vast::system::connect_to_node(self, opts); !conn) {
     VAST_ERROR("failed to connect to VAST: {}", conn.error());
     return 1;

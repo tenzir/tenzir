@@ -13,8 +13,9 @@
 
 #pragma once
 
-#include "vast/expression.hpp"
 #include "vast/fwd.hpp"
+
+#include "vast/expression.hpp"
 #include "vast/system/node.hpp"
 #include "vast/type.hpp"
 
@@ -71,7 +72,7 @@ struct pivoter_state {
   caf::stateful_actor<pivoter_state>* self;
 
   /// A handle to the parent node for spawning new EXPORTERs.
-  caf::actor node;
+  node_actor node;
 
   /// A handle to the sink for the resulting table silces.
   caf::actor sink;
@@ -83,7 +84,7 @@ struct pivoter_state {
 /// @param node The node actor to spawn exporters in.
 /// @param target The type filter for the subsequent queries.
 /// @param expression The query of the original command.
-caf::behavior pivoter(caf::stateful_actor<pivoter_state>* self, caf::actor node,
+caf::behavior pivoter(caf::stateful_actor<pivoter_state>* self, node_actor node,
                       std::string target, expression expr);
 
 } // namespace vast::system

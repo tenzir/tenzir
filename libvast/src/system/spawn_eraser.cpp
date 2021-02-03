@@ -27,8 +27,9 @@
 
 namespace vast::system {
 
-maybe_actor
-spawn_eraser(system::node_actor* self, system::spawn_arguments& args) {
+caf::expected<caf::actor>
+spawn_eraser(node_actor::stateful_pointer<node_state> self,
+             spawn_arguments& args) {
   using namespace std::string_literals;
   VAST_TRACE("{} {}", VAST_ARG(self), VAST_ARG(args));
   // Parse options.

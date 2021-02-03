@@ -20,9 +20,13 @@
 #include "vast/system/node.hpp"
 #include "vast/system/spawn_arguments.hpp"
 
+#include <caf/typed_event_based_actor.hpp>
+
 namespace vast::system {
 
-maybe_actor spawn_index(node_actor* self, spawn_arguments& args) {
+caf::expected<caf::actor>
+spawn_index(node_actor::stateful_pointer<node_state> self,
+            spawn_arguments& args) {
   if (!args.empty())
     return unexpected_arguments(args);
   auto opt = [&](caf::string_view key, auto default_value) {

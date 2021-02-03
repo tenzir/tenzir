@@ -32,7 +32,7 @@
 
 namespace vast::system {
 
-caf::expected<scope_linked_actor>
+caf::expected<scope_linked<node_actor>>
 spawn_node(caf::scoped_actor& self, const caf::settings& opts) {
   using namespace std::string_literals;
   // Fetch values from config.
@@ -53,8 +53,8 @@ spawn_node(caf::scoped_actor& self, const caf::settings& opts) {
   if (auto err = initialize_db_version(abs_dir))
     return err;
   if (auto version = read_db_version(abs_dir); version != db_version::latest) {
-    VAST_INFO("Cannot start VAST,  breaking changes detected in the "
-              "database directory");
+    VAST_INFO("Cannot start VAST, breaking changes detected in the database "
+              "directory");
     auto reasons = describe_breaking_changes_since(version);
     return caf::make_error(
       ec::breaking_change,
@@ -65,7 +65,7 @@ spawn_node(caf::scoped_actor& self, const caf::settings& opts) {
                            "unable to write to db-directory:", abs_dir.str());
   // Acquire PID lock.
   auto pid_file = abs_dir / "pid.lock";
-  VAST_DEBUG("{} acquires PID lock {}", __func__, pid_file.str());
+  VAST_DEBUG("{} acquires PID lock {}", node, pid_file.str());
   if (auto err = detail::acquire_pid_file(pid_file))
     return err;
   // Spawn the node.
@@ -80,17 +80,22 @@ spawn_node(caf::scoped_actor& self, const caf::settings& opts) {
   }
   // Pointer to the root command to system::node.
   auto actor = self->spawn(system::node, id, abs_dir, shutdown_grace_period);
-  actor->attach_functor([pid_file = std::move(pid_file)](const caf::error&) {
-    VAST_DEBUG("{} removes PID lock: {}", __func__, pid_file.str());
+  actor->attach_functor([=, pid_file = std::move(pid_file)](const caf::error&) {
+    VAST_DEBUG("node removes PID lock: {}", pid_file.str());
     rm(pid_file);
   });
-  scope_linked_actor node{std::move(actor)};
+  scope_linked<node_actor> node{std::move(actor)};
   auto spawn_component = [&](std::string name) {
-    caf::error result;
+    caf::error result = caf::none;
     auto inv = invocation{opts, "spawn "s + std::move(name), {}};
-    self->request(node.get(), caf::infinite, std::move(inv))
-      .receive([](const caf::actor&) { /* nop */ },
-               [&](caf::error& e) { result = std::move(e); });
+    self->request(node.get(), caf::infinite, atom::spawn_v, std::move(inv))
+      .receive(
+        [&](caf::actor) {
+          // nop
+        },
+        [&](caf::error err) { //
+          result = std::move(err);
+        });
     return result;
   };
   std::list components = {"type-registry", "archive", "index",
@@ -99,7 +104,7 @@ spawn_node(caf::scoped_actor& self, const caf::settings& opts) {
     components.push_front("accountant");
   for (auto& c : components) {
     if (auto err = spawn_component(c)) {
-      VAST_ERROR("{} {}", self, err);
+      VAST_ERROR("node failed to spawn {}: {}", c, err);
       return err;
     }
   }

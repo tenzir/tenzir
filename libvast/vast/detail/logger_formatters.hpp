@@ -19,6 +19,7 @@
 #include "vast/detail/logger.hpp"
 #include "vast/detail/type_traits.hpp"
 #include "vast/error.hpp"
+#include "vast/scope_linked.hpp"
 
 #include <caf/deep_to_string.hpp>
 #include <caf/detail/pretty_type_name.hpp>
@@ -110,6 +111,19 @@ struct fmt::formatter<vast::detail::range_arg_wrapper<T>> {
   format(const vast::detail::range_arg_wrapper<T>& item, FormatContext& ctx) {
     return format_to(ctx.out(), "{} = <{}>", item.name,
                      fmt::join(item.first, item.last, ", "));
+  }
+};
+
+template <class T>
+struct fmt::formatter<vast::scope_linked<T>> {
+  template <typename ParseContext>
+  constexpr auto parse(ParseContext& ctx) {
+    return ctx.begin();
+  }
+
+  template <typename FormatContext>
+  auto format(const vast::scope_linked<T>& item, FormatContext& ctx) {
+    return format_to(ctx.out(), "{}", item.get());
   }
 };
 

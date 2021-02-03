@@ -28,6 +28,7 @@
 #include <caf/expected.hpp>
 #include <caf/local_actor.hpp>
 #include <caf/settings.hpp>
+#include <caf/typed_event_based_actor.hpp>
 
 #include <optional>
 
@@ -70,7 +71,9 @@ caf::error explorer_validate_args(const caf::settings& args) {
   return caf::none;
 }
 
-maybe_actor spawn_explorer(node_actor* self, spawn_arguments& args) {
+caf::expected<caf::actor>
+spawn_explorer(node_actor::stateful_pointer<node_state> self,
+               spawn_arguments& args) {
   if (!args.empty())
     return unexpected_arguments(args);
   if (auto error = explorer_validate_args(args.inv.options))

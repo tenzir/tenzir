@@ -19,9 +19,13 @@
 #include "vast/system/spawn_arguments.hpp"
 #include "vast/system/type_registry.hpp"
 
+#include <caf/typed_event_based_actor.hpp>
+
 namespace vast::system {
 
-maybe_actor spawn_type_registry(node_actor* self, spawn_arguments& args) {
+caf::expected<caf::actor>
+spawn_type_registry(node_actor::stateful_pointer<node_state> self,
+                    spawn_arguments& args) {
   if (!args.empty())
     return unexpected_arguments(args);
   auto handle = self->spawn(type_registry, args.dir / args.label);

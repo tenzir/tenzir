@@ -40,7 +40,7 @@ struct node : deterministic_actor_system_and_events {
     inv.full_name = "spawn "s + component;
     inv.options = {};
     inv.arguments = {std::forward<Ts>(args)...};
-    auto rh = self->request(test_node, infinite, std::move(inv));
+    auto rh = self->request(test_node, infinite, atom::spawn_v, std::move(inv));
     run();
     rh.receive([&](const actor& a) { result = a; },
                [&](const error& e) {
@@ -55,7 +55,7 @@ struct node : deterministic_actor_system_and_events {
   // Performs a historical query and returns the resulting events.
   std::vector<table_slice> query(std::string expr);
 
-  caf::actor test_node;
+  system::node_actor test_node;
 };
 
 } // namespace fixtures

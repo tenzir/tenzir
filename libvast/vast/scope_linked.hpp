@@ -59,6 +59,8 @@ private:
   Handle hdl_;
 };
 
-using scope_linked_actor = scope_linked<caf::actor>;
+/// Explicit deduction guide for overload (not needed as of C++20).
+template <class Handle>
+scope_linked(Handle)->scope_linked<Handle>;
 
 } // namespace vast

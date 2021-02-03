@@ -12,14 +12,18 @@
  ******************************************************************************/
 
 #include "vast/atoms.hpp"
+#include "vast/command.hpp"
 #include "vast/detail/actor_cast_wrapper.hpp"
 #include "vast/detail/assert.hpp"
 #include "vast/detail/tuple_map.hpp"
 #include "vast/error.hpp"
+#include "vast/logger.hpp"
+#include "vast/system/actors.hpp"
 
 #include <caf/actor.hpp>
 #include <caf/expected.hpp>
 #include <caf/scoped_actor.hpp>
+#include <caf/typed_actor.hpp>
 
 #include <array>
 #include <string>
@@ -27,21 +31,14 @@
 
 namespace vast::system {
 
-template <typename... Arguments>
 caf::expected<caf::actor>
-spawn_at_node(caf::scoped_actor& self, caf::actor node, Arguments&&... xs) {
-  caf::expected<caf::actor> result = caf::no_error;
-  self->request(node, caf::infinite, std::forward<Arguments>(xs)...)
-    .receive([&](caf::actor& a) { result = std::move(a); },
-             [&](caf::error& e) { result = std::move(e); });
-  return result;
-}
+spawn_at_node(caf::scoped_actor& self, node_actor node, invocation inv);
 
 /// Look up components by their typed actor interfaces. Returns the first actor
 /// of each type passed as template parameter.
 template <class... Actors>
 caf::expected<std::tuple<Actors...>>
-get_node_components(caf::scoped_actor& self, const caf::actor& node) {
+get_node_components(caf::scoped_actor& self, const node_actor& node) {
   using result_t = std::tuple<Actors...>;
   auto result = caf::expected{result_t{}};
   auto normalize = [](std::string in) {
@@ -63,7 +60,7 @@ get_node_components(caf::scoped_actor& self, const caf::actor& node) {
         result = detail::tuple_map<result_t>(std::move(components),
                                              detail::actor_cast_wrapper{});
       },
-      [&](caf::error& e) { //
+      [&](caf::error e) { //
         result = std::move(e);
       });
   return result;

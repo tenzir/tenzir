@@ -13,17 +13,14 @@
 
 #pragma once
 
-#include <caf/config_value.hpp>
-#include <caf/expected.hpp>
-#include <caf/fwd.hpp>
+#include "vast/fwd.hpp"
 
-#include "vast/scope_linked.hpp"
+#include "vast/system/actors.hpp"
 
 namespace vast::system {
 
 /// Connects to a remote VAST server.
-caf::expected<caf::actor> connect_to_node(caf::scoped_actor& self,
-                                          const caf::settings& opts);
+caf::expected<node_actor>
+connect_to_node(caf::scoped_actor& self, const caf::settings& opts);
 
-} // namespace vast
-
+} // namespace vast::system

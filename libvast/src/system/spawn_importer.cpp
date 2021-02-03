@@ -22,10 +22,13 @@
 #include "vast/uuid.hpp"
 
 #include <caf/settings.hpp>
+#include <caf/typed_event_based_actor.hpp>
 
 namespace vast::system {
 
-maybe_actor spawn_importer(node_actor* self, spawn_arguments& args) {
+caf::expected<caf::actor>
+spawn_importer(node_actor::stateful_pointer<node_state> self,
+               spawn_arguments& args) {
   if (!args.empty())
     return unexpected_arguments(args);
   // FIXME: Notify exporters with a continuous query.
@@ -52,7 +55,7 @@ maybe_actor spawn_importer(node_actor* self, spawn_arguments& args) {
   }
   for (auto& source : self->state.registry.find_by_type("source")) {
     VAST_DEBUG("{} connects source to new importer", self);
-    self->send(source, atom::sink_v, caf::actor_cast<caf::actor>(handle));
+    self->anon_send(source, atom::sink_v, caf::actor_cast<caf::actor>(handle));
   }
   return caf::actor_cast<caf::actor>(handle);
 }

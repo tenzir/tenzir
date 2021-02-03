@@ -262,7 +262,6 @@ struct spawn_arguments;
 
 enum class status_verbosity;
 
-using node_actor = caf::stateful_actor<node_state>;
 using performance_report = std::vector<performance_sample>;
 using report = std::vector<data_point>;
 

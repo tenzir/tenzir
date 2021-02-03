@@ -31,8 +31,9 @@
 
 namespace vast::system {
 
-maybe_actor
-spawn_counter(system::node_actor* self, system::spawn_arguments& args) {
+caf::expected<caf::actor>
+spawn_counter(node_actor::stateful_pointer<node_state> self,
+              spawn_arguments& args) {
   VAST_TRACE("{}", VAST_ARG(args));
   // Parse given expression.
   auto expr = get_expression(args);

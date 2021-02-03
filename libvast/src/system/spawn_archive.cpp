@@ -17,6 +17,7 @@
 #include "vast/error.hpp"
 #include "vast/logger.hpp"
 #include "vast/si_literals.hpp"
+#include "vast/system/archive.hpp"
 #include "vast/system/node.hpp"
 #include "vast/system/spawn_arguments.hpp"
 
@@ -26,12 +27,15 @@
 #include <caf/expected.hpp>
 #include <caf/local_actor.hpp>
 #include <caf/settings.hpp>
+#include <caf/typed_event_based_actor.hpp>
 
 using namespace vast::binary_byte_literals;
 
 namespace vast::system {
 
-maybe_actor spawn_archive(node_actor* self, spawn_arguments& args) {
+caf::expected<caf::actor>
+spawn_archive(node_actor::stateful_pointer<node_state> self,
+              spawn_arguments& args) {
   namespace sd = vast::defaults::system;
   if (!args.empty())
     return unexpected_arguments(args);
