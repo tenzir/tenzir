@@ -13,11 +13,12 @@
 
 #include "vast/system/count_command.hpp"
 
+#include "vast/fwd.hpp"
+
 #include "vast/concept/parseable/to.hpp"
 #include "vast/concept/parseable/vast/expression.hpp"
 #include "vast/defaults.hpp"
 #include "vast/error.hpp"
-#include "vast/fwd.hpp"
 #include "vast/logger.hpp"
 #include "vast/scope_linked.hpp"
 #include "vast/system/read_query.hpp"
@@ -53,9 +54,9 @@ caf::message count_command(const invocation& inv, caf::actor_system& sys) {
     = system::spawn_or_connect_to_node(self, options, content(sys.config()));
   if (auto err = caf::get_if<caf::error>(&node_opt))
     return caf::make_message(std::move(*err));
-  auto& node = caf::holds_alternative<caf::actor>(node_opt)
-                 ? caf::get<caf::actor>(node_opt)
-                 : caf::get<scope_linked_actor>(node_opt).get();
+  auto& node = caf::holds_alternative<node_actor>(node_opt)
+                 ? caf::get<node_actor>(node_opt)
+                 : caf::get<scope_linked<node_actor>>(node_opt).get();
   VAST_ASSERT(node != nullptr);
   // Start signal monitor.
   std::thread sig_mon_thread;
@@ -67,15 +68,17 @@ caf::message count_command(const invocation& inv, caf::actor_system& sys) {
   VAST_DEBUG("{} spawns counter with parameters: {}",
              detail::pretty_type_name(inv.full_name), query);
   caf::error err;
-  self->request(node, caf::infinite, std::move(args))
+  self->request(node, caf::infinite, atom::spawn_v, std::move(args))
     .receive(
-      [&](caf::actor& a) {
-        cnt = std::move(a);
+      [&](caf::actor actor) {
+        cnt = std::move(actor);
         if (!cnt)
-          err = caf::make_error(ec::invalid_result, "remote spawn returned "
-                                                    "nullptr");
+          err = caf::make_error(ec::invalid_result, //
+                                "remote spawn returned nullptr");
       },
-      [&](caf::error& e) { err = std::move(e); });
+      [&](caf::error e) { //
+        err = std::move(e);
+      });
   if (err)
     return caf::make_message(std::move(err));
   self->send(cnt, atom::run_v, self);

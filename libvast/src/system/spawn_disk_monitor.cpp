@@ -11,11 +11,13 @@
 #include "vast/uuid.hpp"
 
 #include <caf/settings.hpp>
+#include <caf/typed_event_based_actor.hpp>
 
 namespace vast::system {
 
-maybe_actor
-spawn_disk_monitor(system::node_actor* self, spawn_arguments& args) {
+caf::expected<caf::actor>
+spawn_disk_monitor(node_actor::stateful_pointer<node_state> self,
+                   spawn_arguments& args) {
   VAST_TRACE("{}", VAST_ARG(args));
   auto [index, archive]
     = self->state.registry.find<index_actor, archive_actor>();

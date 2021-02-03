@@ -77,9 +77,9 @@ sink_command(const invocation& inv, caf::actor_system& sys, caf::actor snk) {
     = spawn_or_connect_to_node(self, inv.options, content(sys.config()));
   if (auto err = caf::get_if<caf::error>(&node_opt))
     return caf::make_message(std::move(*err));
-  auto& node = caf::holds_alternative<caf::actor>(node_opt)
-                 ? caf::get<caf::actor>(node_opt)
-                 : caf::get<scope_linked_actor>(node_opt).get();
+  auto& node = caf::holds_alternative<node_actor>(node_opt)
+                 ? caf::get<node_actor>(node_opt)
+                 : caf::get<scope_linked<node_actor>>(node_opt).get();
   VAST_ASSERT(node != nullptr);
   // Start signal monitor.
   std::thread sig_mon_thread;

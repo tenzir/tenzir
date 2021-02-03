@@ -13,14 +13,15 @@
 
 #pragma once
 
-#include <caf/fwd.hpp>
-
 #include "vast/fwd.hpp"
+
+#include "vast/scope_linked.hpp"
+#include "vast/system/actors.hpp"
 
 namespace vast::system {
 
 /// Spawns a new VAST node.
-caf::expected<scope_linked<caf::actor>> spawn_node(caf::scoped_actor& self,
-                                                   const caf::settings& opts);
+caf::expected<scope_linked<node_actor>>
+spawn_node(caf::scoped_actor& self, const caf::settings& opts);
 
 } // namespace vast::system

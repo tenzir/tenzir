@@ -16,9 +16,12 @@
 #include "vast/fwd.hpp"
 
 #include "vast/logger.hpp"
+#include "vast/system/actors.hpp"
 #include "vast/system/make_source.hpp"
 #include "vast/system/node.hpp"
 #include "vast/system/spawn_arguments.hpp"
+
+#include <caf/typed_event_based_actor.hpp>
 
 namespace vast::system {
 
@@ -28,16 +31,17 @@ namespace vast::system {
 /// @param args Configures the new actor.
 /// @returns a handle to the spawned actor on success, an error otherwise
 template <class Reader, class Defaults = typename Reader::defaults>
-maybe_actor spawn_source(node_actor* self, spawn_arguments& args) {
+caf::expected<caf::actor>
+spawn_source(node_actor::stateful_pointer<node_state> self,
+             spawn_arguments& args) {
   VAST_TRACE("{} {}", VAST_ARG("node", self), VAST_ARG(args));
   auto& options = args.inv.options;
   // Bail out early for bogus invocations.
   if (caf::get_or(options, "vast.node", false))
     return caf::make_error(ec::invalid_configuration,
                            "unable to spawn a remote source when spawning a "
-                           "node "
-                           "locally instead of connecting to one; please unset "
-                           "the option vast.node");
+                           "node locally instead of connecting to one; please "
+                           "unset the option vast.node");
   auto [accountant, importer, type_registry]
     = self->state.registry
         .find<accountant_actor, importer_actor, type_registry_actor>();

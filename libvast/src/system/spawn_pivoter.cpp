@@ -16,12 +16,17 @@
 #include "vast/concept/printable/to_string.hpp"
 #include "vast/concept/printable/vast/expression.hpp"
 #include "vast/logger.hpp"
+#include "vast/system/node.hpp"
 #include "vast/system/pivoter.hpp"
 #include "vast/system/spawn_arguments.hpp"
 
+#include <caf/typed_event_based_actor.hpp>
+
 namespace vast::system {
 
-maybe_actor spawn_pivoter(node_actor* self, spawn_arguments& args) {
+caf::expected<caf::actor>
+spawn_pivoter(node_actor::stateful_pointer<node_state> self,
+              spawn_arguments& args) {
   VAST_DEBUG("{}", VAST_ARG(args));
   auto& arguments = args.inv.arguments;
   if (arguments.size() < 2)

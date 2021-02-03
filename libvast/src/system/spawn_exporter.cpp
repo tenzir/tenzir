@@ -26,10 +26,13 @@
 #include <caf/expected.hpp>
 #include <caf/send.hpp>
 #include <caf/settings.hpp>
+#include <caf/typed_event_based_actor.hpp>
 
 namespace vast::system {
 
-maybe_actor spawn_exporter(node_actor* self, spawn_arguments& args) {
+caf::expected<caf::actor>
+spawn_exporter(node_actor::stateful_pointer<node_state> self,
+               spawn_arguments& args) {
   VAST_TRACE("{}", VAST_ARG(args));
   // Parse given expression.
   auto expr = get_expression(args);
@@ -53,7 +56,17 @@ maybe_actor spawn_exporter(node_actor* self, spawn_arguments& args) {
   if (accountant)
     self->send(handle, accountant);
   if (importer && has_continuous_option(query_opts))
-    self->send(importer, static_cast<stream_sink_actor<table_slice>>(handle));
+    self
+      ->request(importer, caf::infinite,
+                static_cast<stream_sink_actor<table_slice>>(handle))
+      .then(
+        [=](caf::outbound_stream_slot<table_slice>) {
+          // nop
+        },
+        [=, importer = importer](caf::error err) {
+          VAST_ERROR("{} failed to connect to importer {}: {}", self, importer,
+                     err);
+        });
   if (archive) {
     VAST_DEBUG("{} connects archive to new exporter", self);
     self->send(handle, archive);

@@ -13,8 +13,11 @@
 
 #pragma once
 
-#include "vast/aliases.hpp"
 #include "vast/fwd.hpp"
+
+#include "vast/system/actors.hpp"
+
+#include <caf/typed_actor.hpp>
 
 namespace vast::system {
 
@@ -25,6 +28,8 @@ namespace vast::system {
 /// @param self Points to the parent actor.
 /// @param args Configures the new actor.
 /// @returns a handle to the spawned actor on success, an error otherwise
-maybe_actor spawn_disk_monitor(system::node_actor* self, spawn_arguments& args);
+caf::expected<caf::actor>
+spawn_disk_monitor(node_actor::stateful_pointer<node_state> self,
+                   spawn_arguments& args);
 
 } // namespace vast::system

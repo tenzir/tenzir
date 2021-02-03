@@ -81,7 +81,7 @@ pivoter_state::pivoter_state(caf::event_based_actor*) {
   // nop
 }
 
-caf::behavior pivoter(caf::stateful_actor<pivoter_state>* self, caf::actor node,
+caf::behavior pivoter(caf::stateful_actor<pivoter_state>* self, node_actor node,
                       std::string target, expression expr) {
   auto& st = self->state;
   st.self = self;
@@ -143,18 +143,18 @@ caf::behavior pivoter(caf::stateful_actor<pivoter_state>* self, caf::actor node,
       auto exporter_invocation
         = invocation{std::move(exporter_options), "spawn exporter", {query}};
       ++self->state.running_exporters;
-      self->request(st.node, caf::infinite, exporter_invocation)
+      self->request(st.node, caf::infinite, atom::spawn_v, exporter_invocation)
         .then(
           [=](caf::actor handle) {
-            auto exporter = caf::actor_cast<exporter_actor>(std::move(handle));
+            auto exporter = caf::actor_cast<exporter_actor>(handle);
             VAST_DEBUG("{} registers exporter {}", self, exporter);
             self->monitor(exporter);
             self->send(exporter, atom::sink_v, self->state.sink);
             self->send(exporter, atom::run_v);
           },
           [=](caf::error error) {
-            VAST_ERROR("{} failed to spawn exporter: {}", self, render(error));
             --self->state.running_exporters;
+            VAST_ERROR("{} failed to spawn exporter: {}", self, render(error));
           });
       ;
     },

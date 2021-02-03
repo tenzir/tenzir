@@ -185,11 +185,11 @@ make_source(const Actor& self, caf::actor_system& sys, const invocation& inv,
     auto expr = parse_expression(inv.arguments.begin(), inv.arguments.end());
     if (!expr)
       return expr.error();
-    self->send(src, std::move(*expr));
+    self->anon_send(src, std::move(*expr));
   }
   // Connect source to importer.
   VAST_DEBUG("{} connects to {}", inv.full_name, VAST_ARG(importer));
-  self->send(
+  self->anon_send(
     src, static_cast<stream_sink_actor<table_slice, std::string>>(importer));
   return make_source_result{src, reader->name()};
 }

@@ -27,11 +27,12 @@
 #  include <caf/openssl/all.hpp>
 #endif // VAST_ENABLE_OPENSSL
 
+#include "vast/fwd.hpp"
+
 #include "vast/concept/parseable/vast/endpoint.hpp"
 #include "vast/defaults.hpp"
 #include "vast/endpoint.hpp"
 #include "vast/error.hpp"
-#include "vast/fwd.hpp"
 #include "vast/logger.hpp"
 #include "vast/scope_linked.hpp"
 #include "vast/system/signal_monitor.hpp"
@@ -41,9 +42,9 @@ namespace vast::system {
 
 using namespace std::chrono_literals;
 
-caf::message start_command_impl(start_command_extra_steps extra_steps,
-                                const invocation& inv, caf::actor_system& sys) {
-  VAST_TRACE("{}", inv);
+caf::message start_command(const invocation& inv, caf::actor_system& sys) {
+  VAST_TRACE("{} {}", VAST_ARG(inv.options),
+             VAST_ARG("args", inv.arguments.begin(), inv.arguments.end()));
   // Bail out early for bogus invocations.
   if (caf::get_or(inv.options, "vast.node", false))
     return caf::make_message(caf::make_error(ec::parse_error, "cannot start a "
@@ -51,11 +52,10 @@ caf::message start_command_impl(start_command_extra_steps extra_steps,
                                                               "node"));
   // Fetch SSL settings from config.
   auto& sys_cfg = sys.config();
-  auto use_encryption = !sys_cfg.openssl_certificate.empty()
-                        || !sys_cfg.openssl_key.empty()
-                        || !sys_cfg.openssl_passphrase.empty()
-                        || !sys_cfg.openssl_capath.empty()
-                        || !sys_cfg.openssl_cafile.empty();
+  auto use_encryption
+    = !sys_cfg.openssl_certificate.empty() || !sys_cfg.openssl_key.empty()
+      || !sys_cfg.openssl_passphrase.empty() || !sys_cfg.openssl_capath.empty()
+      || !sys_cfg.openssl_cafile.empty();
   // Construct an endpoint.
   endpoint node_endpoint;
   auto str = get_or(inv.options, "vast.endpoint", defaults::system::endpoint);
@@ -73,7 +73,8 @@ caf::message start_command_impl(start_command_extra_steps extra_steps,
     return caf::make_message(std::move(node_opt.error()));
   auto& node = node_opt->get();
   // Publish our node.
-  auto host = node_endpoint.host.empty() ? "localhost" : node_endpoint.host.c_str();
+  auto host
+    = node_endpoint.host.empty() ? "localhost" : node_endpoint.host.c_str();
   auto publish = [&]() -> caf::expected<uint16_t> {
     if (use_encryption)
 #if VAST_ENABLE_OPENSSL
@@ -91,10 +92,6 @@ caf::message start_command_impl(start_command_extra_steps extra_steps,
     return caf::make_message(std::move(bound_port.error()));
   auto listen_addr = std::string{host} + ':' + std::to_string(*bound_port);
   VAST_INFO("VAST node is listening on {}", listen_addr);
-  // Run user-defined extra code.
-  if (extra_steps != nullptr)
-    if (auto err = extra_steps(self, inv.options, node))
-      return caf::make_message(std::move(err));
   // Start signal monitor.
   std::thread sig_mon_thread;
   auto guard = system::signal_monitor::run_guarded(
@@ -127,12 +124,6 @@ caf::message start_command_impl(start_command_extra_steps extra_steps,
       })
     .until([&] { return stop; });
   return caf::make_message(std::move(err));
-}
-
-caf::message start_command(const invocation& inv, caf::actor_system& sys) {
-  VAST_TRACE("{} {}", VAST_ARG(inv.options),
-             VAST_ARG("args", inv.arguments.begin(), inv.arguments.end()));
-  return start_command_impl(nullptr, inv, sys);
 }
 
 } // namespace vast::system

@@ -74,7 +74,7 @@ struct explorer_state {
   caf::stateful_actor<explorer_state>* self;
 
   /// A handle to the parent node for spawning new EXPORTERs.
-  caf::actor node;
+  node_actor node;
 
   /// A handle to the sink for the resulting table silces.
   caf::actor sink;
@@ -88,7 +88,7 @@ struct explorer_state {
 /// @param after Size of the time box after each result.
 /// @param by Field by which to restrict the result set for each element.
 caf::behavior
-explorer(caf::stateful_actor<explorer_state>* self, caf::actor node,
+explorer(caf::stateful_actor<explorer_state>* self, node_actor node,
          explorer_state::event_limits limits,
          std::optional<vast::duration> before,
          std::optional<vast::duration> after, std::optional<std::string> by);

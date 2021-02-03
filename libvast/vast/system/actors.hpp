@@ -321,6 +321,33 @@ using importer_actor = typed_actor_fwd<
   // Conform to the protocol of the STATUS CLIENT actor.
   ::extend_with<status_client_actor>::unwrap;
 
+/// The interface of the NODE actor.
+using node_actor = typed_actor_fwd<
+  // Run an invocation in the node.
+  caf::replies_to<atom::run, invocation>::with< //
+    caf::message>,
+  // Run an invocation in the node that spawns an actor.
+  caf::replies_to<atom::spawn, invocation>::with< //
+    caf::actor>,
+  // Add a component to the component registry.
+  caf::replies_to<atom::put, caf::actor, std::string>::with< //
+    atom::ok>,
+  // Retrieve components by their type from the component registry.
+  caf::replies_to<atom::get, atom::type, std::string>::with< //
+    std::vector<caf::actor>>,
+  // Retrieve a component by its label from the component registry.
+  caf::replies_to<atom::get, atom::label, std::string>::with< //
+    caf::actor>,
+  // Retrieve components by their label from the component registry.
+  caf::replies_to<atom::get, atom::label, std::vector<std::string>>::with< //
+    std::vector<caf::actor>>,
+  // Retrieve the version of the process running the NODE.
+  caf::replies_to<atom::get, atom::version>::with< //
+    std::string>,
+  // Handle a signal.
+  // TODO: Make this a signal_monitor_client_actor
+  caf::reacts_to<atom::signal, int>>::unwrap;
+
 } // namespace vast::system
 
 // -- type announcements -------------------------------------------------------
@@ -341,6 +368,7 @@ CAF_BEGIN_TYPE_ID_BLOCK(vast_actors, caf::id_block::vast_atoms::end)
   VAST_ADD_TYPE_ID((vast::system::index_client_actor))
   VAST_ADD_TYPE_ID((vast::system::indexer_actor))
   VAST_ADD_TYPE_ID((vast::system::importer_actor))
+  VAST_ADD_TYPE_ID((vast::system::node_actor))
   VAST_ADD_TYPE_ID((vast::system::partition_actor))
   VAST_ADD_TYPE_ID((vast::system::partition_client_actor))
   VAST_ADD_TYPE_ID((vast::system::query_map))

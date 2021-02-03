@@ -38,8 +38,9 @@ namespace vast::system {
 
 namespace {
 
-maybe_actor spawn_generic_sink(caf::local_actor* self, spawn_arguments& args,
-                               std::string output_format) {
+caf::expected<caf::actor>
+spawn_generic_sink(caf::local_actor* self, spawn_arguments& args,
+                   std::string output_format) {
   // Bail out early for bogus invocations.
   if (caf::get_or(args.inv.options, "vast.node", false))
     return caf::make_error(ec::parse_error, "cannot start a local node");
@@ -53,8 +54,9 @@ maybe_actor spawn_generic_sink(caf::local_actor* self, spawn_arguments& args,
 
 } // namespace <anonymous>
 
-maybe_actor spawn_pcap_sink([[maybe_unused]] caf::local_actor* self,
-                            [[maybe_unused]] spawn_arguments& args) {
+caf::expected<caf::actor>
+spawn_pcap_sink([[maybe_unused]] caf::local_actor* self,
+                [[maybe_unused]] spawn_arguments& args) {
   using defaults_t = defaults::export_::pcap;
   std::string category = defaults_t::category;
 #if !VAST_ENABLE_PCAP
@@ -70,19 +72,23 @@ maybe_actor spawn_pcap_sink([[maybe_unused]] caf::local_actor* self,
 #endif // VAST_ENABLE_PCAP
 }
 
-maybe_actor spawn_ascii_sink(caf::local_actor* self, spawn_arguments& args) {
+caf::expected<caf::actor>
+spawn_ascii_sink(caf::local_actor* self, spawn_arguments& args) {
   return spawn_generic_sink(self, args, "ascii"s);
 }
 
-maybe_actor spawn_csv_sink(caf::local_actor* self, spawn_arguments& args) {
+caf::expected<caf::actor>
+spawn_csv_sink(caf::local_actor* self, spawn_arguments& args) {
   return spawn_generic_sink(self, args, "csv"s);
 }
 
-maybe_actor spawn_json_sink(caf::local_actor* self, spawn_arguments& args) {
+caf::expected<caf::actor>
+spawn_json_sink(caf::local_actor* self, spawn_arguments& args) {
   return spawn_generic_sink(self, args, "json"s);
 }
 
-maybe_actor spawn_zeek_sink(caf::local_actor* self, spawn_arguments& args) {
+caf::expected<caf::actor>
+spawn_zeek_sink(caf::local_actor* self, spawn_arguments& args) {
   return spawn_generic_sink(self, args, "zeek"s);
 }
 

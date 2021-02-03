@@ -11,22 +11,23 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#pragma once
+#include "vast/system/node_control.hpp"
 
-#include "vast/fwd.hpp"
+#include "vast/detail/overload.hpp"
 
-#include "vast/system/actors.hpp"
-
-#include <caf/typed_actor.hpp>
+#include <caf/scoped_actor.hpp>
+#include <caf/typed_event_based_actor.hpp>
+#include <caf/variant.hpp>
 
 namespace vast::system {
 
-/// Tries to spawn a new INDEX.
-/// @param self Points to the parent actor.
-/// @param args Configures the new actor.
-/// @returns a handle to the spawned actor on success, an error otherwise
 caf::expected<caf::actor>
-spawn_index(node_actor::stateful_pointer<node_state> self,
-            spawn_arguments& args);
+spawn_at_node(caf::scoped_actor& self, node_actor node, invocation inv) {
+  caf::expected<caf::actor> result = caf::no_error;
+  self->request(node, caf::infinite, atom::spawn_v, std::move(inv))
+    .receive([&](caf::actor actor) { result = std::move(actor); },
+             [&](caf::error err) { result = std::move(err); });
+  return result;
+}
 
 } // namespace vast::system

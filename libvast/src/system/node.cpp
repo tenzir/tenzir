@@ -80,7 +80,7 @@ namespace {
 // This is a side-channel to communicate the self pointer into the spawn- and
 // send-command functions, whose interfaces are constrained by the command
 // factory.
-thread_local node_actor* this_node;
+thread_local node_actor::stateful_pointer<node_state> this_node = nullptr;
 
 // Convenience function for wrapping an error into a CAF message.
 auto make_error_msg(ec code, std::string msg) {
@@ -126,7 +126,7 @@ caf::message send_command(const invocation& inv, caf::actor_system&) {
     return caf::make_message(std::move(res.error()));
 }
 
-void collect_component_status(node_actor* self,
+void collect_component_status(node_actor::stateful_pointer<node_state> self,
                               caf::response_promise status_promise,
                               status_verbosity v) {
   // Shared state between our response handlers.
@@ -275,7 +275,9 @@ caf::message status_command(const invocation& inv, caf::actor_system&) {
   return caf::none;
 }
 
-maybe_actor spawn_accountant(node_actor* self, spawn_arguments& args) {
+caf::expected<caf::actor>
+spawn_accountant(node_actor::stateful_pointer<node_state> self,
+                 spawn_arguments& args) {
   auto& options = args.inv.options;
   auto metrics_opts = caf::get_or(options, "vast.metrics", caf::settings{});
   auto cfg = to_accountant_config(metrics_opts);
@@ -285,8 +287,8 @@ maybe_actor spawn_accountant(node_actor* self, spawn_arguments& args) {
 }
 
 caf::expected<caf::actor>
-spawn_component(node_actor* self, const invocation& inv,
-                spawn_arguments& args) {
+spawn_component(node_actor::stateful_pointer<node_state> self,
+                const invocation& inv, spawn_arguments& args) {
   VAST_TRACE("{} {}", VAST_ARG(inv), VAST_ARG(args));
   using caf::atom_uint;
   auto i = node_state::component_factory.find(inv.full_name);
@@ -324,16 +326,18 @@ caf::message kill_command(const invocation& inv, caf::actor_system&) {
 }
 
 /// Lifts a factory function that accepts `local_actor*` as first argument
-/// to a function accpeting `node_actor*` instead.
-template <maybe_actor (*Fun)(caf::local_actor*, spawn_arguments&)>
+/// to a function accpeting `node_actor::stateful_pointer<node_state>` instead.
+template <caf::expected<caf::actor> (*Fun)(caf::local_actor*, spawn_arguments&)>
 node_state::component_factory_fun lift_component_factory() {
-  return [](node_actor* self, spawn_arguments& args) {
-    // Delegate to lifted function.
-    return Fun(self, args);
-  };
+  return
+    [](node_actor::stateful_pointer<node_state> self, spawn_arguments& args) {
+      // Delegate to lifted function.
+      return Fun(self, args);
+    };
 }
 
-template <maybe_actor (*Fun)(node_actor*, spawn_arguments&)>
+template <caf::expected<caf::actor> (*Fun)(
+  node_actor::stateful_pointer<node_state>, spawn_arguments&)>
 node_state::component_factory_fun lift_component_factory() {
   return Fun;
 }
@@ -425,7 +429,8 @@ auto make_command_factory() {
   };
 }
 
-std::string generate_label(node_actor* self, std::string_view component) {
+std::string generate_label(node_actor::stateful_pointer<node_state> self,
+                           std::string_view component) {
   // C++20: remove the indirection through std::string.
   auto n = self->state.label_counters[std::string{component}]++;
   return std::string{component} + '-' + std::to_string(n);
@@ -522,8 +527,9 @@ node_state::spawn_command(const invocation& inv,
   return spawn_actually(args);
 }
 
-caf::behavior node(node_actor* self, std::string name, path dir,
-                   std::chrono::milliseconds shutdown_grace_period) {
+node_actor::behavior_type
+node(node_actor::stateful_pointer<node_state> self, std::string name, path dir,
+     std::chrono::milliseconds shutdown_grace_period) {
   self->state.name = std::move(name);
   self->state.dir = std::move(dir);
   // Initialize component and command factories.
@@ -598,12 +604,28 @@ caf::behavior node(node_actor* self, std::string name, path dir,
   });
   // Define the node behavior.
   return {
-    [=](const invocation& inv) {
+    [=](atom::run, const invocation& inv) -> caf::result<caf::message> {
       VAST_DEBUG("{} got command {} with options {} and arguments {}", self,
                  inv.full_name, inv.options, inv.arguments);
       // Run the command.
       this_node = self;
       return run(inv, self->system(), node_state::command_factory);
+    },
+    [=](atom::spawn, const invocation& inv) -> caf::result<caf::actor> {
+      VAST_DEBUG("{} got spawn command {} with options {} and arguments {}",
+                 self, inv.full_name, inv.options, inv.arguments);
+      // Run the command.
+      this_node = self;
+      auto msg = run(inv, self->system(), node_state::command_factory);
+      if (!msg)
+        return msg.error();
+      if (msg->match_elements<caf::error>())
+        return msg->get_as<caf::error>(0);
+      if (msg->match_elements<caf::actor>())
+        return msg->get_as<caf::actor>(0);
+      VAST_ERROR("{} encountered invalid invocation response: {}", self,
+                 deep_to_string(*msg));
+      return ec::invalid_result;
     },
     [=](atom::put, const caf::actor& component,
         const std::string& type) -> caf::result<atom::ok> {
@@ -644,7 +666,7 @@ caf::behavior node(node_actor* self, std::string name, path dir,
                  result);
       return result;
     },
-    [=](atom::get, atom::version) { //
+    [=](atom::get, atom::version) -> std::string { //
       return VAST_VERSION;
     },
     [=](atom::signal, int signal) {

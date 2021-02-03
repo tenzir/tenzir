@@ -78,12 +78,12 @@ struct mock_node_state {
   static inline constexpr const char* name = "mock-node";
 };
 
-using mock_node_actor = caf::stateful_actor<mock_node_state>;
-
-caf::behavior mock_node(mock_node_actor* self) {
-  return {[=](invocation invocation) {
-    self->state.invocs.push_back(std::move(invocation));
-  }};
+caf::behavior mock_node(caf::stateful_actor<mock_node_state>* self) {
+  return {
+    [=](atom::spawn, invocation invocation) {
+      self->state.invocs.push_back(std::move(invocation));
+    },
+  };
 }
 
 struct fixture : fixtures::deterministic_actor_system {
@@ -98,8 +98,8 @@ struct fixture : fixtures::deterministic_actor_system {
   }
 
   void spawn_aut(expression expr, std::string target_type) {
-    aut = sys.spawn(system::pivoter, node, std::move(target_type),
-                    std::move(expr));
+    aut = sys.spawn(system::pivoter, caf::actor_cast<system::node_actor>(node),
+                    std::move(target_type), std::move(expr));
     run();
   }
 
@@ -123,7 +123,7 @@ TEST(count IP point query without candidate check) {
   self->send(aut, slices[0]);
   // The pivoter maps the slice to an expression and passes it on.
   run();
-  auto& node_state = deref<mock_node_actor>(node).state;
+  auto& node_state = deref<caf::stateful_actor<mock_node_state>>(node).state;
   REQUIRE_EQUAL(node_state.invocs.size(), 1u);
   CHECK_EQUAL(
     node_state.invocs[0].arguments[0],

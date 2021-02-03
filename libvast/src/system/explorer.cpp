@@ -15,12 +15,14 @@
 
 #include "vast/fwd.hpp"
 
+#include "vast/bitmap.hpp"
 #include "vast/command.hpp"
 #include "vast/concept/printable/to_string.hpp"
 #include "vast/concept/printable/vast/expression.hpp"
 #include "vast/defaults.hpp"
 #include "vast/detail/string.hpp"
 #include "vast/expression.hpp"
+#include "vast/ids.hpp"
 #include "vast/logger.hpp"
 #include "vast/system/query_status.hpp"
 #include "vast/table_slice.hpp"
@@ -84,7 +86,7 @@ void explorer_state::forward_results(vast::table_slice slice) {
 }
 
 caf::behavior
-explorer(caf::stateful_actor<explorer_state>* self, caf::actor node,
+explorer(caf::stateful_actor<explorer_state>* self, node_actor node,
          explorer_state::event_limits limits,
          std::optional<vast::duration> before,
          std::optional<vast::duration> after, std::optional<std::string> by) {
@@ -212,7 +214,8 @@ explorer(caf::stateful_actor<explorer_state>* self, caf::actor node,
           caf::put(exporter_invocation.options, "vast.export.max-events",
                    st.limits.per_result);
         ++self->state.running_exporters;
-        self->request(st.node, caf::infinite, exporter_invocation)
+        self
+          ->request(st.node, caf::infinite, atom::spawn_v, exporter_invocation)
           .then(
             [=](caf::actor handle) {
               auto exporter = caf::actor_cast<exporter_actor>(handle);
@@ -222,9 +225,8 @@ explorer(caf::stateful_actor<explorer_state>* self, caf::actor node,
               self->send(exporter, atom::run_v);
             },
             [=](caf::error error) {
-              VAST_ERROR("{} failed to spawn exporter: {}", self,
-                         render(error));
               --self->state.running_exporters;
+              VAST_ERROR("{} failed to spawn exporter: {}", self, error);
             });
       }
     },

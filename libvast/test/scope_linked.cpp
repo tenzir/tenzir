@@ -39,7 +39,7 @@ TEST(exit message on exit) {
   // gets killed when sla goes out of scope.
   caf::actor hdl;
   { // "lifetime scope" for our dummy
-    scope_linked_actor sla{sys.spawn(dummy)};
+    scope_linked<caf::actor> sla{sys.spawn(dummy)};
     // Store the actor handle in the outer scope, otherwise we can't check for
     // a message to the dummy.
     hdl = sla.get();
