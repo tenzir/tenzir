@@ -17,6 +17,9 @@
 #include "vast/detail/discard.hpp"
 #include "vast/error.hpp"
 
+#include <string>
+#include <utility>
+
 // VAST_INFO -> spdlog::info
 // VAST_VERBOSE -> spdlog::debug
 // VAST_DEBUG -> spdlog::trace
@@ -44,22 +47,27 @@
 #include "vast/detail/logger.hpp"
 #include "vast/detail/logger_formatters.hpp"
 
-#define VAST_DEBUG(...) SPDLOG_LOGGER_TRACE(vast::detail::logger(), __VA_ARGS__)
+#define VAST_DEBUG(...)                                                        \
+  SPDLOG_LOGGER_TRACE(::vast::detail::logger(), __VA_ARGS__)
 #define VAST_VERBOSE(...)                                                      \
-  SPDLOG_LOGGER_DEBUG(vast::detail::logger(), __VA_ARGS__)
-#define VAST_INFO(...) SPDLOG_LOGGER_INFO(vast::detail::logger(), __VA_ARGS__)
-#define VAST_WARN(...) SPDLOG_LOGGER_WARN(vast::detail::logger(), __VA_ARGS__)
-#define VAST_ERROR(...) SPDLOG_LOGGER_ERROR(vast::detail::logger(), __VA_ARGS__)
+  SPDLOG_LOGGER_DEBUG(::vast::detail::logger(), __VA_ARGS__)
+#define VAST_INFO(...) SPDLOG_LOGGER_INFO(::vast::detail::logger(), __VA_ARGS__)
+#define VAST_WARN(...) SPDLOG_LOGGER_WARN(::vast::detail::logger(), __VA_ARGS__)
+#define VAST_ERROR(...)                                                        \
+  SPDLOG_LOGGER_ERROR(::vast::detail::logger(), __VA_ARGS__)
 #define VAST_CRITICAL(...)                                                     \
-  SPDLOG_LOGGER_CRITICAL(vast::detail::logger(), __VA_ARGS__)
+  SPDLOG_LOGGER_CRITICAL(::vast::detail::logger(), __VA_ARGS__)
 
 #if VAST_LOG_LEVEL >= VAST_LOG_LEVEL_TRACE
 
 #  define VAST_TRACE(...)                                                      \
-    VAST_DEBUG(vast::detail::spd_msg_from_args(1, 2, __VA_ARGS__).str(),       \
-               "ENTER", __func__, __VA_ARGS__);                                \
-    auto CAF_UNIFYN(vast_log_trace_guard_) = ::caf::detail::make_scope_guard(  \
-      [=, func_name_ = __func__] { VAST_DEBUG("EXIT {}", func_name_); })
+    auto CAF_UNIFYN(vast_log_trace_guard_)                                     \
+      = [func_name_ = __func__](const std::string& format, auto&&... args) {   \
+          VAST_DEBUG("ENTER {} " + format, __func__,                           \
+                     std::forward<decltype(args)>(args)...);                   \
+          return ::caf::detail::make_scope_guard(                              \
+            [func_name_] { VAST_DEBUG("EXIT {}", func_name_); });              \
+        }(__VA_ARGS__);
 
 #else // VAST_LOG_LEVEL > VAST_LOG_LEVEL_TRACE
 
@@ -83,12 +91,12 @@ create_log_context(const vast::invocation& cmd_invocation,
 
 // -- VAST_ARG utility for formatting log output -------------------------------
 
-#define VAST_ARG_1(x) vast::detail::make_arg_wrapper(#x, x)
+#define VAST_ARG_1(x) ::vast::detail::make_arg_wrapper(#x, x)
 
-#define VAST_ARG_2(x_name, x) vast::detail::make_arg_wrapper(x_name, x)
+#define VAST_ARG_2(x_name, x) ::vast::detail::make_arg_wrapper(x_name, x)
 
 #define VAST_ARG_3(x_name, first, last)                                        \
-  vast::detail::make_arg_wrapper(x_name, first, last)
+  ::vast::detail::make_arg_wrapper(x_name, first, last)
 
 /// Nicely formats a variable or argument. For example, `VAST_ARG(foo)`
 /// generates `foo = ...` in log output, where `...` is the content of the

@@ -19,8 +19,9 @@ RUN apt-get -qq update && apt-get -qqy install \
 RUN pip3 install --upgrade pip && pip install --upgrade cmake && \
   cmake --version
 
-# Need to specify backports, since spdlog also has a regular buster package.
-RUN apt-get -qqy -t buster-backports install libspdlog-dev
+# Need to specify backports explicitly, since spdlog and fmt also have regular
+# buster packages.
+RUN apt-get -qqy -t buster-backports install libspdlog-dev libfmt-dev
 
 # Apache Arrow (c.f. https://arrow.apache.org/install/)
 # TODO: Arrow CMake is broken for 2.0 on Debian/Ubuntu. Switch to 3.0 once available
@@ -73,8 +74,11 @@ COPY --from=build_type $PREFIX/ $PREFIX/
 RUN apt-get -qq update && apt-get -qq install -y libc++1 libc++abi1 libpcap0.8 \
   openssl libsimdjson4 libyaml-cpp0.6 libasan5 libflatbuffers1 wget gnupg2
 
-# Need to specify backports, since spdlog also has a regular buster package.
-RUN apt-get -qqy -t buster-backports install libspdlog1
+# Need to specify backports explicitly, since spdlog and fmt also have regular
+# buster packages. For fmt we install the dev package, because libfmt is only
+# packaged for bullseye:
+# https://packages.debian.org/search?keywords=libfmt&searchon=names&suite=all&section=all
+RUN apt-get -qqy -t buster-backports install libspdlog1 libfmt-dev
 
 # Apache Arrow (c.f. https://arrow.apache.org/install/)
 # TODO: Arrow CMake is broken for 2.0 on Debian/Ubuntu. Switch to 3.0 once available

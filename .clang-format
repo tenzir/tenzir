@@ -39,8 +39,12 @@ IncludeCategories:
     Priority:        5
   - Regex:           '^<flatbuffers/'
     Priority:        6
-  - Regex:           '<[[:alnum:]_.]+>'
+  - Regex:           '^<spdlog/'
     Priority:        7
+  - Regex:           '^<fmt/'
+    Priority:        8
+  - Regex:           '<[[:alnum:]_.]+>'
+    Priority:        9
 IndentCaseLabels: true
 IndentPPDirectives: AfterHash
 IndentWidth: 2

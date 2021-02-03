@@ -13,6 +13,9 @@ This changelog documents all notable user-facing changes of VAST.
 
 ## Unreleased
 
+- ⚡️ VAST now requires [{fmt} >= 5.2.1](https://fmt.dev) to be installed.
+  [#1330](https://github.com/tenzir/vast/pull/1330)
+
 - 🎁 VAST rotates server logs by default.
   [#1223](https://github.com/tenzir/vast/pull/1223)
 

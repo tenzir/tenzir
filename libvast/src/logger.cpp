@@ -23,14 +23,14 @@
 
 #include <caf/local_actor.hpp>
 
-#include <cassert>
-#include <memory>
-
 #include <spdlog/async.h>
 #include <spdlog/common.h>
 #include <spdlog/sinks/ansicolor_sink.h>
 #include <spdlog/sinks/null_sink.h>
 #include <spdlog/sinks/rotating_file_sink.h>
+
+#include <cassert>
+#include <memory>
 
 namespace vast {
 
