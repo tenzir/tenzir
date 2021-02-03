@@ -45,18 +45,19 @@ query_supervisor_actor::behavior_type query_supervisor(
   query_supervisor_actor::stateful_pointer<query_supervisor_state> self,
   query_supervisor_master_actor master) {
   // Ask master for initial work.
-  self->send(master, atom::worker_v, self);
+  self->state.master = std::move(master);
+  self->send(self->state.master, atom::worker_v, self);
   return {
-    [=](const expression& expr,
-        const std::vector<std::pair<uuid, partition_actor>>& qm,
-        const index_client_actor& client) {
+    [self](const expression& expr,
+           const std::vector<std::pair<uuid, partition_actor>>& qm,
+           const index_client_actor& client) {
       VAST_DEBUG("{} {} got a new query for {} partitions: {}", self,
                  self->state.log_identifier, qm.size(), get_ids(qm));
       // TODO: We can save one message here if we handle this case in the
       // partition immediately.
       if (qm.empty()) {
         self->send(client, atom::done_v);
-        self->send(master, atom::worker_v, self);
+        self->send(self->state.master, atom::worker_v, self);
         return;
       }
       VAST_ASSERT(self->state.open_requests == 0);
@@ -78,7 +79,7 @@ query_supervisor_actor::behavior_type query_supervisor(
                 // prvious one has finished, otherwise each batch will be as
                 // slow as the worst case of the batch.
                 self->send(client, atom::done_v);
-                self->send(master, atom::worker_v, self);
+                self->send(self->state.master, atom::worker_v, self);
               }
             },
             [=](const caf::error& e) {
@@ -88,7 +89,7 @@ query_supervisor_actor::behavior_type query_supervisor(
                          self, self->state.log_identifier, e);
               if (--self->state.open_requests == 0) {
                 self->send(client, atom::done_v);
-                self->send(master, atom::worker_v, self);
+                self->send(self->state.master, atom::worker_v, self);
               }
             });
       }

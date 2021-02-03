@@ -257,41 +257,41 @@ importer(importer_actor::stateful_pointer<importer_state> self, path dir,
         self->state.stage->add_outbound_path(analyzer);
   return {
     // Register the ACCOUNTANT actor.
-    [=](accountant_actor accountant) {
+    [self](accountant_actor accountant) {
       VAST_DEBUG("{} registers accountant {}", self, accountant);
       self->state.accountant = std::move(accountant);
       self->send(self->state.accountant, atom::announce_v, self->name());
     },
     // Add a new sink.
-    [=](stream_sink_actor<table_slice> sink) {
+    [self](stream_sink_actor<table_slice> sink) {
       VAST_DEBUG("{} adds a new sink: {}", self, sink);
       return self->state.stage->add_outbound_path(std::move(sink));
     },
     // Register a FLUSH LISTENER actor.
-    [=](atom::subscribe, atom::flush, flush_listener_actor listener) {
+    [self](atom::subscribe, atom::flush, flush_listener_actor listener) {
       VAST_ASSERT(self->state.stage != nullptr);
       self->send(self->state.index, atom::subscribe_v, atom::flush_v,
                  std::move(listener));
     },
     // The internal telemetry loop of the IMPORTER.
-    [=](atom::telemetry) {
+    [self](atom::telemetry) {
       self->state.send_report();
       self->delayed_send(self, defs::telemetry_rate, atom::telemetry_v);
     },
     // -- stream_sink_actor<table_slice> ---------------------------------------
-    [=](caf::stream<table_slice> in) {
+    [self](caf::stream<table_slice> in) {
       VAST_DEBUG("{} adds a new source: {}", self, self->current_sender());
       return self->state.stage->add_inbound_path(in);
     },
     // -- stream_sink_actor<table_slice, std::string> --------------------------
-    [=](caf::stream<table_slice> in, std::string desc) {
+    [self](caf::stream<table_slice> in, std::string desc) {
       self->state.inbound_description = std::move(desc);
       VAST_DEBUG("{} adds a new {} source: {}", self, desc,
                  self->current_sender());
       return self->state.stage->add_inbound_path(in);
     },
     // -- status_client_actor --------------------------------------------------
-    [=](atom::status, status_verbosity v) { //
+    [self](atom::status, status_verbosity v) { //
       return self->state.status(v);
     },
   };

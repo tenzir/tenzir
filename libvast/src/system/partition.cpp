@@ -487,11 +487,11 @@ active_partition_actor::behavior_type active_partition(
     shutdown<policy::parallel>(self, std::move(indexers));
   });
   return {
-    [=](caf::stream<table_slice> in) {
+    [self](caf::stream<table_slice> in) {
       self->state.streaming_initiated = true;
       return self->state.stage->add_inbound_path(in);
     },
-    [=](atom::persist, const path& part_dir) {
+    [self](atom::persist, const path& part_dir) {
       // Ensure that the response promise has not already been initialized.
       VAST_ASSERT(
         !static_cast<caf::response_promise&>(self->state.persistence_promise)
@@ -506,7 +506,7 @@ active_partition_actor::behavior_type active_partition(
                                               atom::resume_v);
       return self->state.persistence_promise;
     },
-    [=](atom::persist, atom::resume) {
+    [self](atom::persist, atom::resume) {
       // Wait for outstanding data to avoid data loss.
       if (!self->state.streaming_initiated
           || !self->state.stage->inbound_paths().empty()
@@ -594,8 +594,8 @@ active_partition_actor::behavior_type active_partition(
             });
       }
     },
-    [=](const expression& expr,
-        partition_client_actor client) -> caf::result<atom::done> {
+    [self](const expression& expr,
+           partition_client_actor client) -> caf::result<atom::done> {
       // TODO: We should do a candidate check using `self->state.synopsis` and
       // return early if that doesn't yield any results.
       auto triples = evaluate(self->state, expr);
@@ -604,8 +604,8 @@ active_partition_actor::behavior_type active_partition(
       auto eval = self->spawn(evaluator, expr, self, triples);
       return self->delegate(eval, client);
     },
-    [=](atom::status,
-        status_verbosity v) -> caf::typed_response_promise<caf::settings> {
+    [self](atom::status,
+           status_verbosity v) -> caf::typed_response_promise<caf::settings> {
       struct req_state_t {
         // Promise to the original client request.
         caf::typed_response_promise<caf::settings> rp;
@@ -643,7 +643,7 @@ active_partition_actor::behavior_type active_partition(
               VAST_WARN("{} failed to retrieve status from {} : {}", self,
                         i.first.fqn(), render(err));
               auto& ps = indexer_states.emplace_back().as_dictionary();
-              put(ps, "id", to_string(id));
+              put(ps, "id", to_string(self->state.id));
               put(ps, "error", render(err));
               // Both handlers have a copy of req_state.
               if (req_state.use_count() == 2)
@@ -760,8 +760,8 @@ partition_actor::behavior_type passive_partition(
         self->quit(std::move(err));
       });
   return {
-    [=](const expression& expr,
-        partition_client_actor client) -> caf::result<atom::done> {
+    [self](const expression& expr,
+           partition_client_actor client) -> caf::result<atom::done> {
       VAST_TRACE("{} {}", self, VAST_ARG(expr));
       if (!self->state.partition_chunk)
         return get<2>(self->state.deferred_evaluations.emplace_back(
@@ -775,26 +775,31 @@ partition_actor::behavior_type passive_partition(
       auto eval = self->spawn(evaluator, expr, self, triples);
       return self->delegate(eval, client);
     },
-    [=](atom::status, status_verbosity /*v*/) -> caf::config_value::dictionary {
-      const auto& st = self->state;
+    [self](atom::status,
+           status_verbosity /*v*/) -> caf::config_value::dictionary {
       caf::settings result;
-      caf::put(result, "size", st.partition_chunk->size());
+      caf::put(result, "size", self->state.partition_chunk->size());
       size_t mem_indexers = 0;
-      for (size_t i = 0; i < st.indexers.size(); ++i) {
-        if (st.indexers[i])
-          mem_indexers
-            += sizeof(indexer_state)
-               + st.flatbuffer->indexes()->Get(i)->index()->data()->size();
+      for (size_t i = 0; i < self->state.indexers.size(); ++i) {
+        if (self->state.indexers[i])
+          mem_indexers += sizeof(indexer_state)
+                          + self->state.flatbuffer->indexes()
+                              ->Get(i)
+                              ->index()
+                              ->data()
+                              ->size();
       }
       caf::put(result, "memory-usage-indexers", mem_indexers);
-      auto x = st.partition_chunk->incore();
+      auto x = self->state.partition_chunk->incore();
       if (!x) {
         caf::put(result, "memory-usage-incore", render(x.error()));
         caf::put(result, "memory-usage",
-                 st.partition_chunk->size() + mem_indexers + sizeof(st));
+                 self->state.partition_chunk->size() + mem_indexers
+                   + sizeof(self->state));
       } else {
         caf::put(result, "memory-usage-incore", *x);
-        caf::put(result, "memory-usage", *x + mem_indexers + sizeof(st));
+        caf::put(result, "memory-usage",
+                 *x + mem_indexers + sizeof(self->state));
       }
       return result;
     },

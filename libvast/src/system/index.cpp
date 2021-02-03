@@ -530,8 +530,11 @@ index(index_actor::stateful_pointer<index_state> self,
   // Setup stream manager.
   self->state.stage = detail::attach_notifying_stream_stage(
     self,
-    /* continuous = */ true, [=](caf::unit_t&) {},
-    [=](caf::unit_t&, caf::downstream<table_slice>& out, table_slice x) {
+    /* continuous = */ true,
+    [](caf::unit_t&) {
+      // nop
+    },
+    [self](caf::unit_t&, caf::downstream<table_slice>& out, table_slice x) {
       VAST_ASSERT(x.encoding() != table_slice_encoding::none);
       auto&& layout = x.layout();
       self->state.stats.layouts[layout.name()].count += x.rows();
@@ -557,7 +560,7 @@ index(index_actor::stateful_pointer<index_state> self,
         active.capacity -= x.rows();
       }
     },
-    [=](caf::unit_t&, const caf::error& err) {
+    [self](caf::unit_t&, const caf::error& err) {
       // We get an 'unreachable' error when the stream becomes unreachable
       // because the actor was destroyed; in this case we can't use `self`
       // anymore.
@@ -572,7 +575,7 @@ index(index_actor::stateful_pointer<index_state> self,
       }
       VAST_DEBUG("index finalized streaming");
     });
-  self->set_exit_handler([=](const caf::exit_msg& msg) {
+  self->set_exit_handler([self](const caf::exit_msg& msg) {
     VAST_DEBUG("{} received EXIT from {} with reason: {}", self, msg.source,
                msg.reason);
     // Flush buffered batches and end stream.
@@ -607,20 +610,21 @@ index(index_actor::stateful_pointer<index_state> self,
     self->spawn(query_supervisor,
                 caf::actor_cast<query_supervisor_master_actor>(self));
   return {
-    [=](atom::done, uuid partition_id) {
+    [self](atom::done, uuid partition_id) {
       VAST_DEBUG("{} queried partition {} successfully", self, partition_id);
     },
-    [=](caf::stream<table_slice> in) -> caf::inbound_stream_slot<table_slice> {
+    [self](
+      caf::stream<table_slice> in) -> caf::inbound_stream_slot<table_slice> {
       VAST_DEBUG("{} got a new stream source", self);
       return self->state.stage->add_inbound_path(in);
     },
-    [=](accountant_actor accountant) {
+    [self](accountant_actor accountant) {
       self->state.accountant = std::move(accountant);
     },
-    [=](atom::subscribe, atom::flush, flush_listener_actor listener) {
+    [self](atom::subscribe, atom::flush, flush_listener_actor listener) {
       self->state.add_flush_listener(std::move(listener));
     },
-    [=](vast::expression expr) -> caf::result<void> {
+    [self](vast::expression expr) -> caf::result<void> {
       // TODO: This check is not required technically, but we use the query
       // supervisor availability to rate-limit meta-index lookups. Do we really
       // need this?
@@ -676,7 +680,7 @@ index(index_actor::stateful_pointer<index_state> self,
       self->delegate(caf::actor_cast<caf::actor>(self), query_id, scheduled);
       return {};
     },
-    [=](const uuid& query_id, uint32_t num_partitions) -> caf::result<void> {
+    [self](const uuid& query_id, uint32_t num_partitions) -> caf::result<void> {
       auto sender = self->current_sender();
       auto client = caf::actor_cast<index_client_actor>(sender);
       // Sanity checks.
@@ -715,7 +719,7 @@ index(index_actor::stateful_pointer<index_state> self,
         self->state.pending.erase(iter);
       return {};
     },
-    [=](atom::erase, uuid partition_id) -> caf::result<ids> {
+    [self](atom::erase, uuid partition_id) -> caf::result<ids> {
       VAST_VERBOSE("{} erases partition {}", self, partition_id);
       auto rp = self->make_response_promise<ids>();
       auto path = self->state.partition_path(partition_id);
@@ -771,13 +775,13 @@ index(index_actor::stateful_pointer<index_state> self,
       return rp;
     },
     // -- query_supervisor_master_actor ----------------------------------------
-    [=](atom::worker, query_supervisor_actor worker) {
+    [self](atom::worker, query_supervisor_actor worker) {
       if (!self->state.worker_available())
         VAST_DEBUG("{} delegates work to query supervisors", self);
       self->state.idle_workers.emplace_back(std::move(worker));
     },
     // -- status_client_actor --------------------------------------------------
-    [=](atom::status, status_verbosity v) { //
+    [self](atom::status, status_verbosity v) { //
       return self->state.status(v);
     },
   };

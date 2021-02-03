@@ -102,7 +102,7 @@ archive(archive_actor::stateful_pointer<archive_state> self, path dir,
   self->state.self = self;
   self->state.store = segment_store::make(dir, max_segment_size, capacity);
   VAST_ASSERT(self->state.store != nullptr);
-  self->set_exit_handler([=](const caf::exit_msg& msg) {
+  self->set_exit_handler([self](const caf::exit_msg& msg) {
     VAST_DEBUG("{} got EXIT from {}", self, msg.source);
     self->state.send_report();
     if (auto err = self->state.store->flush())
@@ -110,12 +110,12 @@ archive(archive_actor::stateful_pointer<archive_state> self, path dir,
     self->state.store.reset();
     self->quit(msg.reason);
   });
-  self->set_down_handler([=](const caf::down_msg& msg) {
+  self->set_down_handler([self](const caf::down_msg& msg) {
     VAST_DEBUG("{} received DOWN from {}", self, msg.source);
     self->state.active_exporters.erase(msg.source);
   });
   return {
-    [=](const ids& xs) {
+    [self](const ids& xs) {
       VAST_ASSERT(rank(xs) > 0);
       VAST_DEBUG("{} got query for {} events in range [{},  {})", self,
                  rank(xs), select(xs, 1), select(xs, -1) + 1);
@@ -125,36 +125,34 @@ archive(archive_actor::stateful_pointer<archive_state> self, path dir,
       else
         VAST_ERROR("{} dismisses query for unconforming sender", self);
     },
-    [=](const ids& xs, archive_client_actor requester) {
-      auto& st = self->state;
-      if (st.active_exporters.count(requester->address()) == 0) {
+    [self](const ids& xs, archive_client_actor requester) {
+      if (self->state.active_exporters.count(requester->address()) == 0) {
         VAST_DEBUG("{} dismisses query for inactive sender", self);
         return;
       }
-      st.requesters.push(requester);
-      st.unhandled_ids[requester->address()].push(xs);
-      if (!st.session)
-        st.next_session();
+      self->state.requesters.push(requester);
+      self->state.unhandled_ids[requester->address()].push(xs);
+      if (!self->state.session)
+        self->state.next_session();
     },
-    [=](const ids& xs, archive_client_actor requester, uint64_t session_id) {
-      auto& st = self->state;
+    [self](const ids& xs, archive_client_actor requester, uint64_t session_id) {
       // If the export has since shut down, we need to invalidate the session.
-      if (st.active_exporters.count(requester->address()) == 0) {
+      if (self->state.active_exporters.count(requester->address()) == 0) {
         VAST_DEBUG("{} invalidates running query session for {}", self,
                    requester);
-        st.next_session();
+        self->state.next_session();
         return;
       }
-      if (!st.session || st.session_id != session_id) {
+      if (!self->state.session || self->state.session_id != session_id) {
         VAST_DEBUG("{} considers extraction finished for invalidated "
                    "session",
                    self);
         self->send(requester, atom::done_v, caf::make_error(ec::no_error));
-        st.next_session();
+        self->state.next_session();
         return;
       }
       // Extract the next slice.
-      auto slice = st.session->next();
+      auto slice = self->state.session->next();
       if (!slice) {
         auto err = slice.error() ? std::move(slice.error())
                                  : caf::make_error(ec::no_error);
@@ -162,7 +160,7 @@ archive(archive_actor::stateful_pointer<archive_state> self, path dir,
                    "{}",
                    self, err);
         self->send(requester, atom::done_v, std::move(err));
-        st.next_session();
+        self->state.next_session();
         return;
       }
       // The slice may contain entries that are not selected by xs.
@@ -171,7 +169,8 @@ archive(archive_actor::stateful_pointer<archive_state> self, path dir,
       // Continue working on the current session.
       self->send(self, xs, requester, session_id);
     },
-    [=](caf::stream<table_slice> in) -> caf::inbound_stream_slot<table_slice> {
+    [self](
+      caf::stream<table_slice> in) -> caf::inbound_stream_slot<table_slice> {
       VAST_DEBUG("{} got a new stream source", self);
       return self
         ->make_sink(
@@ -210,18 +209,18 @@ archive(archive_actor::stateful_pointer<archive_state> self, path dir,
           })
         .inbound_slot();
     },
-    [=](accountant_actor accountant) {
+    [self](accountant_actor accountant) {
       namespace defs = defaults::system;
       self->state.accountant = std::move(accountant);
       self->send(self->state.accountant, atom::announce_v, self->name());
       self->delayed_send(self, defs::telemetry_rate, atom::telemetry_v);
     },
-    [=](atom::exporter, const caf::actor& exporter) {
+    [self](atom::exporter, const caf::actor& exporter) {
       auto sender_addr = self->current_sender()->address();
       self->state.active_exporters.insert(sender_addr);
       self->monitor<caf::message_priority::high>(exporter);
     },
-    [=](atom::status, status_verbosity v) {
+    [self](atom::status, status_verbosity v) {
       auto result = caf::settings{};
       auto& archive_status = put_dictionary(result, "archive");
       if (v >= status_verbosity::debug)
@@ -229,12 +228,12 @@ archive(archive_actor::stateful_pointer<archive_state> self, path dir,
       self->state.store->inspect_status(archive_status, v);
       return result;
     },
-    [=](atom::telemetry) {
+    [self](atom::telemetry) {
       self->state.send_report();
       namespace defs = defaults::system;
       self->delayed_send(self, defs::telemetry_rate, atom::telemetry_v);
     },
-    [=](atom::erase, const ids& xs) {
+    [self](atom::erase, const ids& xs) {
       if (auto err = self->state.store->erase(xs))
         VAST_ERROR("{} failed to erase events: {}", self, render(err));
       return atom::done_v;

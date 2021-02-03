@@ -241,9 +241,9 @@ accountant(accountant_actor::stateful_pointer<accountant_state> self,
   });
   self->state->mgr = self->make_continuous_source(
     // init
-    [=](bool&) {},
+    [](bool&) {},
     // get next element
-    [=](bool&, caf::downstream<table_slice>& out, size_t num) {
+    [self](bool&, caf::downstream<table_slice>& out, size_t num) {
       auto& st = *self->state;
       size_t produced = 0;
       while (num-- > 0 && !st.slice_buffer.empty()) {
@@ -261,34 +261,34 @@ accountant(accountant_actor::stateful_pointer<accountant_state> self,
   VAST_DEBUG("{} animates heartbeat loop", self);
   self->delayed_send(self, overview_delay, atom::telemetry_v);
   return {
-    [=](atom::announce, const std::string& name) {
+    [self](atom::announce, const std::string& name) {
       auto& st = *self->state;
       st.actor_map[self->current_sender()->id()] = name;
       self->monitor(self->current_sender());
       if (name == "importer")
         st.mgr->add_outbound_path(self->current_sender());
     },
-    [=](const std::string& key, duration value) {
+    [self](const std::string& key, duration value) {
       VAST_TRACE("{} received {} from {}", self, key, self->current_sender());
       self->state->record(key, value);
     },
-    [=](const std::string& key, time value) {
+    [self](const std::string& key, time value) {
       VAST_TRACE("{} received {} from {}", self, key, self->current_sender());
       self->state->record(key, value);
     },
-    [=](const std::string& key, integer value) {
+    [self](const std::string& key, integer value) {
       VAST_TRACE("{} received {} from {}", self, key, self->current_sender());
       self->state->record(key, value);
     },
-    [=](const std::string& key, count value) {
+    [self](const std::string& key, count value) {
       VAST_TRACE("{} received {} from {}", self, key, self->current_sender());
       self->state->record(key, value);
     },
-    [=](const std::string& key, real value) {
+    [self](const std::string& key, real value) {
       VAST_TRACE("{} received {} from {}", self, key, self->current_sender());
       self->state->record(key, value);
     },
-    [=](const report& r) {
+    [self](const report& r) {
       VAST_TRACE("{} received a report from {}", self, self->current_sender());
       time ts = std::chrono::system_clock::now();
       for (const auto& [key, value] : r) {
@@ -297,7 +297,7 @@ accountant(accountant_actor::stateful_pointer<accountant_state> self,
         caf::visit(f, value);
       }
     },
-    [=](const performance_report& r) {
+    [self](const performance_report& r) {
       VAST_TRACE("{} received a performance report from {}", self,
                  self->current_sender());
       time ts = std::chrono::system_clock::now();
@@ -318,7 +318,7 @@ accountant(accountant_actor::stateful_pointer<accountant_state> self,
 #endif
       }
     },
-    [=](atom::status, status_verbosity v) {
+    [self](atom::status, status_verbosity v) {
       using caf::put_dictionary;
       auto result = caf::settings{};
       auto& accountant_status = put_dictionary(result, "accountant");
@@ -331,11 +331,11 @@ accountant(accountant_actor::stateful_pointer<accountant_state> self,
         detail::fill_status_map(accountant_status, self);
       return result;
     },
-    [=](atom::telemetry) {
+    [self](atom::telemetry) {
       self->state->command_line_heartbeat();
       self->delayed_send(self, overview_delay, atom::telemetry_v);
     },
-    [=](atom::config, accountant_config cfg) {
+    [self](atom::config, accountant_config cfg) {
       self->state->apply_config(std::move(cfg));
       return atom::ok_v;
     },

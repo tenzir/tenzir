@@ -140,7 +140,7 @@ type_registry(type_registry_actor::stateful_pointer<type_registry_state> self,
   self->state.self = self;
   self->state.dir = dir;
   // Register the exit handler.
-  self->set_exit_handler([=](const caf::exit_msg& msg) {
+  self->set_exit_handler([self](const caf::exit_msg& msg) {
     VAST_DEBUG("{} got EXIT from {}", self, msg.source);
     if (auto telemetry = self->state.telemetry(); !telemetry.empty())
       self->send(self->state.accountant, std::move(telemetry));
@@ -158,7 +158,7 @@ type_registry(type_registry_actor::stateful_pointer<type_registry_state> self,
     self->state.configuration_schema = *schema;
   // The behavior of the type-registry.
   return {
-    [=](atom::telemetry) {
+    [self](atom::telemetry) {
       if (auto telemetry = self->state.telemetry(); !telemetry.empty()) {
         VAST_TRACE("{} sends out a telemetry report to the {}", self,
                    VAST_ARG("accountant", self->state.accountant));
@@ -167,11 +167,12 @@ type_registry(type_registry_actor::stateful_pointer<type_registry_state> self,
       self->delayed_send(self, defaults::system::telemetry_rate,
                          atom::telemetry_v);
     },
-    [=](atom::status, status_verbosity v) {
+    [self](atom::status, status_verbosity v) {
       VAST_TRACE("{} sends out a status report", self);
       return self->state.status(v);
     },
-    [=](caf::stream<table_slice> in) -> caf::inbound_stream_slot<table_slice> {
+    [self](
+      caf::stream<table_slice> in) -> caf::inbound_stream_slot<table_slice> {
       VAST_TRACE("{} attaches to {}", self, VAST_ARG("stream", in));
       auto result = caf::attach_stream_sink(
         self, in,
@@ -181,28 +182,28 @@ type_registry(type_registry_actor::stateful_pointer<type_registry_state> self,
         [=](caf::unit_t&, table_slice x) { self->state.insert(x.layout()); });
       return result.inbound_slot();
     },
-    [=](atom::put, vast::type x) {
+    [self](atom::put, vast::type x) {
       VAST_TRACE("{} tries to add {}", self, VAST_ARG("type", x.name()));
       self->state.insert(std::move(x));
     },
-    [=](atom::put, vast::schema x) {
+    [self](atom::put, vast::schema x) {
       VAST_TRACE("{} tries to add {}", self, VAST_ARG("schema", x));
       for (auto& type : x)
         self->state.insert(std::move(type));
     },
-    [=](atom::get) {
+    [self](atom::get) {
       VAST_TRACE("{} retrieves a list of all known types", self);
       return self->state.types();
     },
-    [=](atom::put, taxonomies t) {
+    [self](atom::put, taxonomies t) {
       VAST_TRACE("");
       self->state.taxonomies = std::move(t);
     },
-    [=](atom::get, atom::taxonomies) {
+    [self](atom::get, atom::taxonomies) {
       VAST_TRACE("");
       return self->state.taxonomies;
     },
-    [=](atom::load) -> caf::result<atom::ok> {
+    [self](atom::load) -> caf::result<atom::ok> {
       VAST_DEBUG("{} loads taxonomies", self);
       auto dirs = get_schema_dirs(self->system().config());
       concepts_map concepts;
@@ -241,10 +242,10 @@ type_registry(type_registry_actor::stateful_pointer<type_registry_state> self,
         = taxonomies{std::move(concepts), std::move(models)};
       return atom::ok_v;
     },
-    [=](atom::resolve, const expression& e) {
+    [self](atom::resolve, const expression& e) {
       return resolve(self->state.taxonomies, e, self->state.data);
     },
-    [=](accountant_actor accountant) {
+    [self](accountant_actor accountant) {
       VAST_ASSERT(accountant);
       VAST_DEBUG("{} connects to {}", self, VAST_ARG(accountant));
       self->state.accountant = accountant;
