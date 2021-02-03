@@ -528,21 +528,7 @@ caf::behavior node(node_actor* self, std::string name, path dir,
   self->state.dir = std::move(dir);
   // Initialize component and command factories.
   node_state::component_factory = make_component_factory();
-  if (node_state::extra_component_factory != nullptr) {
-    auto extra = node_state::extra_component_factory();
-    // FIXME replace with std::map::merge once CI is updated to a newer libc++
-    extra.insert(node_state::component_factory.begin(),
-                 node_state::component_factory.end());
-    node_state::component_factory = std::move(extra);
-  }
   node_state::command_factory = make_command_factory();
-  if (node_state::extra_command_factory != nullptr) {
-    auto extra = node_state::extra_command_factory();
-    // FIXME replace with std::map::merge once CI is updated to a newer libc++
-    extra.insert(node_state::command_factory.begin(),
-                 node_state::command_factory.end());
-    node_state::command_factory = std::move(extra);
-  }
   // Initialize the file system with the node directory as root.
   auto fs = self->spawn<caf::linked + caf::detached>(posix_filesystem,
                                                      self->state.dir);

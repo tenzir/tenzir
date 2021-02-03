@@ -49,14 +49,8 @@ struct node_state {
   /// Maps command names (including parent command) to spawn functions.
   inline static named_component_factory component_factory = {};
 
-  /// Optionally creates extra component mappings.
-  inline static named_component_factory (*extra_component_factory)() = nullptr;
-
   /// Maps command names to functions.
   inline static command::factory command_factory = {};
-
-  /// Optionally creates extra component mappings.
-  inline static command::factory (*extra_command_factory)() = nullptr;
 
   /// Stores the base directory for persistent state.
   path dir;
