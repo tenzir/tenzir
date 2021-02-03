@@ -87,6 +87,30 @@ TEST(iterator) {
   CHECK_EQUAL(str, rts);
 }
 
+TEST(iterator - mmapped) {
+  std::vector<size_t> blocks{0b11100110};
+  vast::span<const size_t> buf{blocks.data(), blocks.size()};
+  const bitvector<size_t, vast::detail::mms::memory_view> x(8, buf);
+  // Ensure that we do N iterations for bitvector of size N.
+  auto f = x.cbegin();
+  auto l = x.cend();
+  auto n = std::distance(f, l);
+  auto ones = std::count(f, l, 1);
+  auto zeros = std::count(f, l, 0);
+  CHECK_EQUAL(n, 8u);
+  CHECK_EQUAL(x.size(), 8u);
+  CHECK_EQUAL(ones, 5u);
+  CHECK_EQUAL(zeros, 3u);
+  CHECK_EQUAL(x[0], 0);
+  CHECK_EQUAL(x[1], 1);
+  CHECK_EQUAL(x[2], 1);
+  CHECK_EQUAL(x[3], 0);
+  CHECK_EQUAL(x.at(4), 0);
+  CHECK_EQUAL(x.at(5), 1);
+  CHECK_EQUAL(x.at(6), 1);
+  CHECK_EQUAL(x.at(7), 1);
+}
+
 TEST(modifiers) {
   bitvector<uint8_t> x;
   CHECK(x.empty());

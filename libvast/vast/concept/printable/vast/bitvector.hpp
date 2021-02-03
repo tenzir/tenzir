@@ -49,9 +49,10 @@ struct bitvector_printer : printer<bitvector_printer<Bitvector, Order>> {
   }
 };
 
-template <class Block, class Allocator>
-struct printer_registry<bitvector<Block, Allocator>> {
-  using type = bitvector_printer<bitvector<Block, Allocator>, policy::lsb_to_msb>;
+/* FIXME: also print mms::mmapped */
+template <class Block, enum detail::mms Storage>
+struct printer_registry<bitvector<Block, Storage>> {
+  using type = bitvector_printer<bitvector<Block, Storage>, policy::lsb_to_msb>;
 };
 
 } // namespace vast

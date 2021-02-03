@@ -215,3 +215,8 @@ TEST(bloom filter - simple hasher and partitioning) {
   REQUIRE_EQUAL(err, caf::none);
   CHECK(x == y);
 }
+
+// TEST(bloom filter - mmapped) {
+//   vast::bloom_filter<xxhash64, double_hasher, policy::no_partitioning,
+//   detail::mms::memory_view> bf;
+// }

@@ -15,7 +15,9 @@
 
 #include "vast/bitvector.hpp"
 #include "vast/bloom_filter_parameters.hpp"
+#include "vast/detail/mms.hpp"
 #include "vast/detail/operators.hpp"
+#include "vast/fbs/synopsis.hpp"
 #include "vast/hasher.hpp"
 #include "vast/logger.hpp"
 #include "vast/type.hpp"
@@ -51,10 +53,13 @@ namespace vast {
 /// @tparam HashFunction The hash function to use in the hasher.
 /// @tparam Hasher The hasher type to generate digests.
 /// @tparam PartitioningPolicy The partitioning policy.
+// FIXME: move storage into first arg?
 template <class HashFunction, template <class> class Hasher = double_hasher,
-          class PartitioningPolicy = policy::no_partitioning>
-class bloom_filter : detail::equality_comparable<
-                       bloom_filter<HashFunction, Hasher, PartitioningPolicy>> {
+          class PartitioningPolicy = policy::no_partitioning,
+          enum detail::mms Storage = detail::mms::standalone>
+class bloom_filter
+  : detail::equality_comparable<
+      bloom_filter<HashFunction, Hasher, PartitioningPolicy, Storage>> {
 public:
   using hash_function = HashFunction;
   using hasher_type = Hasher<hash_function>;
@@ -66,6 +71,12 @@ public:
   explicit bloom_filter(size_t size = 0, hasher_type hasher = hasher_type{})
     : hasher_{std::move(hasher)}, bits_(size) {
     // nop
+  }
+
+  // Construct filter
+  bloom_filter(size_t size,
+               span<const uint64_t> data, hasher_type hasher = hasher_type{} /*, std::enable_if_t<Storage == detail::mms::memory_view, int>* = nullptr*/)
+    : hasher_(std::move(hasher)), bits_(size, data) {
   }
 
   /// Adds an element to the Bloom filter.
@@ -111,6 +122,8 @@ public:
     return x.hasher_ == y.hasher_ && x.bits_ == y.bits_;
   }
 
+  // Don't use this for serializing/deserializing!
+  // FIXME: Explain reason
   template <class Inspector>
   friend auto inspect(Inspector& f, bloom_filter& x) {
     auto load_callback = caf::meta::load_callback([&]() -> caf::error {
@@ -124,7 +137,22 @@ public:
              std::move(load_callback));
   }
 
+  using standalone_type = bloom_filter<HashFunction, Hasher, PartitioningPolicy,
+                                       detail::mms::standalone>;
+  using mview_type = bloom_filter<HashFunction, Hasher, PartitioningPolicy,
+                                  detail::mms::memory_view>;
+  friend mview_type;
+
+  // Can currently only be called if `Storage == mms::memory_view`.
+  standalone_type make_standalone() const {
+    return standalone_type{hasher_, bits_.make_standalone()};
+  }
+
 private:
+  bloom_filter(hasher_type hasher, bitvector<uint64_t, Storage>&& bits)
+    : hasher_(std::move(hasher)), bits_(std::move(bits)) {
+  }
+
   template <class Digest>
   size_t position([[maybe_unused]] size_t i, Digest x) const {
     if constexpr (std::is_same_v<partitioning_policy, policy::no_partitioning>)
@@ -136,7 +164,7 @@ private:
   }
 
   hasher_type hasher_;
-  bitvector<uint64_t> bits_;
+  bitvector<uint64_t, Storage> bits_;
 };
 
 /// Constructs a Bloom filter for a given set of parameters.

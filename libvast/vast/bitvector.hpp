@@ -13,19 +13,20 @@
 
 #pragma once
 
-#include <cstdint>
-#include <limits>
-#include <string>
-#include <vector>
-#include <type_traits>
-
 #include "vast/bits.hpp"
 #include "vast/detail/assert.hpp"
 #include "vast/detail/iterator.hpp"
+#include "vast/detail/mms.hpp"
 #include "vast/detail/operators.hpp"
 #include "vast/detail/raise_error.hpp"
 #include "vast/detail/range.hpp"
 #include "vast/word.hpp"
+
+#include <cstdint>
+#include <limits>
+#include <string>
+#include <type_traits>
+#include <vector>
 
 namespace vast {
 namespace detail {
@@ -35,20 +36,20 @@ class bitvector_iterator;
 
 } // namespace detail
 
-/// A vector of bits as in `std::vector<bool>`, except that the underlying
-/// block/word type is configurable. This implementation describes a super set
-/// of the interface defined in §23.3.12.
-template <class Block = size_t, class Allocator = std::allocator<Block>>
-class bitvector : detail::equality_comparable<bitvector<Block, Allocator>> {
-  static_assert(std::is_unsigned_v<Block>,
-                "Block must be unsigned for well-defined bit operations");
-  static_assert(!std::is_same_v<Block, bool>,
-                "Block cannot be bool; you may want std::vector<bool> instead");
+/// A vector of bits using bit-stuffing to save space. The interface is similar
+/// to `std::vector<bool>`, except that the underlying block/word type is
+/// configurable and we don't support custom allocators.
+template <class Block = size_t, enum detail::mms Storage
+                                = detail::mms::standalone>
+class bitvector : detail::equality_comparable<bitvector<Block, Storage>> {
+  static_assert(std::is_unsigned_v<Block>, "Block must be unsigned for "
+                                           "well-defined bit operations");
+  static_assert(!std::is_same_v<Block, bool>, "Block cannot be bool; you may "
+                                              "want std::vector<bool> instead");
 
 public:
   using value_type = bool;
-  using allocator_type = Allocator;
-  using size_type = std::conditional_t<sizeof(Block) == 64, Block, size_t>;
+  using size_type = size_t;
   class reference;
   using const_reference = bool;
   using pointer = reference*;
@@ -61,21 +62,18 @@ public:
   // -- construct/destruct/assign ---------------------------------------------
 
   bitvector();
-  explicit bitvector(const Allocator& alloc);
-  explicit bitvector(size_type n, const Allocator& alloc = Allocator{});
-  bitvector(size_type n, const bool& value, const Allocator& = Allocator());
+  explicit bitvector(size_type n);
+  bitvector(size_type n, const bool& value);
+
+  bitvector(size_t, span<const Block>);
 
   template <class InputIterator>
-  bitvector(InputIterator first, InputIterator last,
-            const Allocator& = Allocator());
+  bitvector(InputIterator first, InputIterator last);
 
   bitvector(const bitvector& x) = default;
   bitvector(bitvector&& x) = default;
 
-  bitvector(const bitvector&, const Allocator&);
-  bitvector(bitvector&&, const Allocator&);
-
-  bitvector(std::initializer_list<value_type>, const Allocator& = Allocator());
+  bitvector(std::initializer_list<value_type>);
 
   ~bitvector() = default;
 
@@ -87,8 +85,6 @@ public:
   void assign(InputIterator first, InputIterator last);
   void assign(size_type n, const value_type& t);
   void assign(std::initializer_list<value_type>);
-
-  allocator_type get_allocator() const noexcept;
 
   // -- iterators -------------------------------------------------------------
 
@@ -136,17 +132,6 @@ public:
 
   void pop_back();
 
-  // TODO: provide implementation as needed
-  //template <class... Ts>
-  //iterator emplace(const_iterator i, Ts&&... xs);
-  //iterator insert(const_iterator i, const value_type& x);
-  //iterator insert(const_iterator i, size_type n, const value_type& x);
-  //template <class InputIterator>
-  //iterator insert(const_iterator i, InputIterator first, InputIterator last);
-  //iterator insert(const_iterator i, std::initializer_list<value_type> list);
-  //iterator erase(const_iterator i);
-  //iterator erase(const_iterator first, const_iterator last);
-
   void swap(bitvector& other);
 
   void flip() noexcept;
@@ -155,10 +140,10 @@ public:
 
   // -- relational operators --------------------------------------------------
 
-  template <class B, class A>
+  template <class B, enum detail::mms A>
   friend bool operator==(const bitvector<B, A>& x, const bitvector<B, A>& y);
 
-  template <class B, class A>
+  template <class B, enum detail::mms A>
   friend bool operator<(const bitvector<B, A>& x, const bitvector<B, A>& y);
 
   // -------------------------------------------------------------------------
@@ -169,7 +154,7 @@ public:
 
   using block = Block;
   using word_type = word<Block>;
-  using block_vector = std::vector<Block>;
+  using block_vector = detail::mms_vector<Storage, Block>;
   static constexpr auto npos = word_type::npos;
 
   /// Retrieves the underlying sequence of blocks.
@@ -187,12 +172,19 @@ public:
   template <class InputIterator>
   void append_blocks(InputIterator first, InputIterator last);
 
+  bitvector<block, detail::mms::standalone> make_standalone() const {
+    return bitvector<block, detail::mms::standalone>(size_,
+                                                     blocks_.make_standalone());
+  }
+
   // -- concepts --------------------------------------------------------------
 
   template <class Inspector>
   friend auto inspect(Inspector& f, bitvector& b) {
     return f(b.blocks_, b.size_);
   }
+
+  bitvector(size_t, block_vector&&); // FIXME: maybe make this private?
 
 private:
   static size_type bits_to_blocks(size_type n) {
@@ -215,9 +207,9 @@ private:
   size_type size_;
 };
 
-template <class Block, class Allocator>
-class bitvector<Block, Allocator>::reference {
-  friend class bitvector<Block, Allocator>;
+template <class Block, detail::mms Storage>
+class bitvector<Block, Storage>::reference {
+  friend class bitvector<Block, Storage>;
 
 public:
   constexpr operator bool() const noexcept {
@@ -229,14 +221,14 @@ public:
   }
 
   constexpr reference& operator=(bool x) noexcept {
-    x ? *block_ |= mask_ : *block_ &= ~mask_;
+    x ? * block_ |= mask_ : * block_ &= ~mask_;
     return *this;
   }
 
   constexpr reference(const reference& other) noexcept = default;
 
   constexpr reference& operator=(const reference& other) noexcept {
-    other ? *block_ |= mask_ : *block_ &= ~mask_;
+    other ? * block_ |= mask_ : * block_ &= ~mask_;
     return *this;
   }
 
@@ -251,80 +243,58 @@ public:
   }
 
 private:
-  // The standard defines it, but why do we need it?
-  //reference() noexcept;
-
   constexpr reference(block* x, block mask) : block_{x}, mask_{mask} {
   }
 
-  typename bitvector<Block, Allocator>::block* block_;
-  typename bitvector<Block, Allocator>::block const mask_;
+  typename bitvector<Block, Storage>::block* block_;
+  typename bitvector<Block, Storage>::block const mask_;
 };
 
 // -- construct/move/assign --------------------------------------------------
 
-template <class Block, class Allocator>
-bitvector<Block, Allocator>::bitvector() : bitvector{Allocator{}} {
+template <class Block, enum detail::mms Storage>
+bitvector<Block, Storage>::bitvector() : size_{0} {
   // nop
 }
 
-template <class Block, class Allocator>
-bitvector<Block, Allocator>::bitvector(const Allocator& alloc)
-  : blocks_{alloc},
-    size_{0} {
+template <class Block, enum detail::mms Storage>
+bitvector<Block, Storage>::bitvector(size_t size, block_vector&& blocks)
+  : blocks_(std::move(blocks)), size_(size) {
+}
+
+template <class Block, enum detail::mms Storage>
+bitvector<Block, Storage>::bitvector(size_t size, span<const Block> blocks)
+  : blocks_(blocks), size_(size) {
+}
+
+template <class Block, enum detail::mms Storage>
+bitvector<Block, Storage>::bitvector(size_type n)
+  : blocks_(bits_to_blocks(n), 0), size_{n} {
   // nop
 }
 
-template <class Block, class Allocator>
-bitvector<Block, Allocator>::bitvector(size_type n, const Allocator& alloc)
-  : blocks_(bits_to_blocks(n), 0, alloc),
+template <class Block, enum detail::mms Storage>
+bitvector<Block, Storage>::bitvector(size_type n, const value_type& value)
+  : blocks_(bits_to_blocks(n), value ? word_type::all : word_type::none),
     size_{n} {
-  // nop
 }
 
-template <class Block, class Allocator>
-bitvector<Block, Allocator>::bitvector(size_type n, const value_type& value,
-                                       const Allocator& alloc)
-  : blocks_(bits_to_blocks(n), value ? word_type::all : word_type::none, alloc),
-    size_{n} {
-}
-
-template <class Block, class Allocator>
+template <class Block, enum detail::mms Storage>
 template <class InputIterator>
-bitvector<Block, Allocator>::bitvector(InputIterator first, InputIterator last,
-                                       const Allocator& alloc)
-  : bitvector{alloc} {
+bitvector<Block, Storage>::bitvector(InputIterator first, InputIterator last) {
   assign(first, last);
 }
 
-template <class Block, class Allocator>
-bitvector<Block, Allocator>::bitvector(const bitvector& other,
-                                       const Allocator& alloc)
-  : blocks_{other.blocks_, alloc},
-    size_{other.size_} {
-  // nop
-}
-
-template <class Block, class Allocator>
-bitvector<Block, Allocator>::bitvector(bitvector&& other,
-                                       const Allocator& alloc)
-  : blocks_{std::move(other.blocks_), alloc},
-    size_{std::move(other.size_)} {
-  // nop
-}
-
-template <class Block, class Allocator>
-bitvector<Block, Allocator>::bitvector(std::initializer_list<value_type> list,
-                                       const Allocator& alloc)
-  : blocks_{alloc},
-    size_{0} {
+template <class Block, enum detail::mms Storage>
+bitvector<Block, Storage>::bitvector(std::initializer_list<value_type> list)
+  : size_{0} {
   assign(list.begin(), list.end());
 }
 
-template <class Block, class Allocator>
+template <class Block, enum detail::mms Storage>
 template <class InputIterator>
-void bitvector<Block, Allocator>::assign(InputIterator first,
-                                         InputIterator last) {
+void bitvector<Block, Storage>::assign(InputIterator first,
+                                       InputIterator last) {
   blocks_.clear();
   while (first != last)
     push_back(*first++);
@@ -335,17 +305,14 @@ namespace detail {
 template <class Bitvector>
 class bitvector_iterator
   : public iterator_facade<
-      bitvector_iterator<Bitvector>,
-      typename Bitvector::value_type,
+      bitvector_iterator<Bitvector>, typename Bitvector::value_type,
       std::random_access_iterator_tag,
-      std::conditional_t<
-        std::is_const_v<Bitvector>,
-        typename Bitvector::const_reference,
-        typename Bitvector::reference
-      >,
-      typename Bitvector::size_type
-    > {
+      std::conditional_t<std::is_const_v<Bitvector>,
+                         typename Bitvector::const_reference,
+                         typename Bitvector::reference>,
+      typename Bitvector::size_type> {
   friend Bitvector;
+
 public:
   bitvector_iterator() = default;
 
@@ -392,105 +359,105 @@ private:
 
 // -- iterators -------------------------------------------------------------
 
-template <class Block, class Allocator>
-typename bitvector<Block, Allocator>::iterator
-bitvector<Block, Allocator>::begin() noexcept {
+template <class Block, enum detail::mms Storage>
+typename bitvector<Block, Storage>::iterator
+bitvector<Block, Storage>::begin() noexcept {
   return {*this};
 }
 
-template <class Block, class Allocator>
-typename bitvector<Block, Allocator>::const_iterator
-bitvector<Block, Allocator>::begin() const noexcept {
+template <class Block, enum detail::mms Storage>
+typename bitvector<Block, Storage>::const_iterator
+bitvector<Block, Storage>::begin() const noexcept {
   return {*this};
 }
 
-template <class Block, class Allocator>
-typename bitvector<Block, Allocator>::iterator
-bitvector<Block, Allocator>::end() noexcept {
+template <class Block, enum detail::mms Storage>
+typename bitvector<Block, Storage>::iterator
+bitvector<Block, Storage>::end() noexcept {
   return {*this, size()};
 }
 
-template <class Block, class Allocator>
-typename bitvector<Block, Allocator>::const_iterator
-bitvector<Block, Allocator>::end() const noexcept {
+template <class Block, enum detail::mms Storage>
+typename bitvector<Block, Storage>::const_iterator
+bitvector<Block, Storage>::end() const noexcept {
   return {*this, size()};
 }
 
-template <class Block, class Allocator>
-typename bitvector<Block, Allocator>::reverse_iterator
-bitvector<Block, Allocator>::rbegin() noexcept {
-  return typename bitvector<Block, Allocator>::reverse_iterator{end()};
+template <class Block, enum detail::mms Storage>
+typename bitvector<Block, Storage>::reverse_iterator
+bitvector<Block, Storage>::rbegin() noexcept {
+  return typename bitvector<Block, Storage>::reverse_iterator{end()};
 }
 
-template <class Block, class Allocator>
-typename bitvector<Block, Allocator>::const_reverse_iterator
-bitvector<Block, Allocator>::rbegin() const noexcept {
-  return typename bitvector<Block, Allocator>::const_reverse_iterator{end()};
+template <class Block, enum detail::mms Storage>
+typename bitvector<Block, Storage>::const_reverse_iterator
+bitvector<Block, Storage>::rbegin() const noexcept {
+  return typename bitvector<Block, Storage>::const_reverse_iterator{end()};
 }
 
-template <class Block, class Allocator>
-typename bitvector<Block, Allocator>::reverse_iterator
-bitvector<Block, Allocator>::rend() noexcept {
-  return typename bitvector<Block, Allocator>::reverse_iterator{begin()};
+template <class Block, enum detail::mms Storage>
+typename bitvector<Block, Storage>::reverse_iterator
+bitvector<Block, Storage>::rend() noexcept {
+  return typename bitvector<Block, Storage>::reverse_iterator{begin()};
 }
 
-template <class Block, class Allocator>
-typename bitvector<Block, Allocator>::const_reverse_iterator
-bitvector<Block, Allocator>::rend() const noexcept {
-  return typename bitvector<Block, Allocator>::const_reverse_iterator{begin()};
+template <class Block, enum detail::mms Storage>
+typename bitvector<Block, Storage>::const_reverse_iterator
+bitvector<Block, Storage>::rend() const noexcept {
+  return typename bitvector<Block, Storage>::const_reverse_iterator{begin()};
 }
 
-template <class Block, class Allocator>
-typename bitvector<Block, Allocator>::const_iterator
-bitvector<Block, Allocator>::cbegin() const noexcept {
+template <class Block, enum detail::mms Storage>
+typename bitvector<Block, Storage>::const_iterator
+bitvector<Block, Storage>::cbegin() const noexcept {
   return begin();
 }
 
-template <class Block, class Allocator>
-typename bitvector<Block, Allocator>::const_iterator
-bitvector<Block, Allocator>::cend() const noexcept {
+template <class Block, enum detail::mms Storage>
+typename bitvector<Block, Storage>::const_iterator
+bitvector<Block, Storage>::cend() const noexcept {
   return end();
 }
 
-template <class Block, class Allocator>
-typename bitvector<Block, Allocator>::const_reverse_iterator
-bitvector<Block, Allocator>::crbegin() const noexcept {
+template <class Block, enum detail::mms Storage>
+typename bitvector<Block, Storage>::const_reverse_iterator
+bitvector<Block, Storage>::crbegin() const noexcept {
   return rbegin();
 }
 
-template <class Block, class Allocator>
-typename bitvector<Block, Allocator>::const_reverse_iterator
-bitvector<Block, Allocator>::crend() const noexcept {
+template <class Block, enum detail::mms Storage>
+typename bitvector<Block, Storage>::const_reverse_iterator
+bitvector<Block, Storage>::crend() const noexcept {
   return rend();
 }
 
 // -- capacity --------------------------------------------------------------
 
-template <class Block, class Allocator>
-bool bitvector<Block, Allocator>::empty() const noexcept {
+template <class Block, enum detail::mms Storage>
+bool bitvector<Block, Storage>::empty() const noexcept {
   return size_ == 0;
 }
 
-template <class Block, class Allocator>
-typename bitvector<Block, Allocator>::size_type
-bitvector<Block, Allocator>::size() const noexcept {
+template <class Block, enum detail::mms Storage>
+typename bitvector<Block, Storage>::size_type
+bitvector<Block, Storage>::size() const noexcept {
   return size_;
 }
 
-template <class Block, class Allocator>
-typename bitvector<Block, Allocator>::size_type
-bitvector<Block, Allocator>::max_size() const noexcept {
+template <class Block, enum detail::mms Storage>
+typename bitvector<Block, Storage>::size_type
+bitvector<Block, Storage>::max_size() const noexcept {
   return blocks_.max_size() * word_type::width;
 }
 
-template <class Block, class Allocator>
-typename bitvector<Block, Allocator>::size_type
-bitvector<Block, Allocator>::capacity() const noexcept {
+template <class Block, enum detail::mms Storage>
+typename bitvector<Block, Storage>::size_type
+bitvector<Block, Storage>::capacity() const noexcept {
   return blocks_.capacity() * word_type::width;
 }
 
-template <class Block, class Allocator>
-void bitvector<Block, Allocator>::resize(size_type n, value_type value) {
+template <class Block, enum detail::mms Storage>
+void bitvector<Block, Storage>::resize(size_type n, value_type value) {
   if (n <= size_) {
     blocks_.resize(bits_to_blocks(n));
     size_ = n;
@@ -512,88 +479,88 @@ void bitvector<Block, Allocator>::resize(size_type n, value_type value) {
   size_ = n;
 }
 
-template <class Block, class Allocator>
-void bitvector<Block, Allocator>::reserve(size_type n) {
+template <class Block, enum detail::mms Storage>
+void bitvector<Block, Storage>::reserve(size_type n) {
   blocks_.reserve(bits_to_blocks(n));
 }
 
-template <class Block, class Allocator>
-void bitvector<Block, Allocator>::shrink_to_fit() {
+template <class Block, enum detail::mms Storage>
+void bitvector<Block, Storage>::shrink_to_fit() {
   blocks_.shrink_to_fit();
 }
 
 // -- element access ----------------------------------------------------------
 
-template <class Block, class Allocator>
-typename bitvector<Block, Allocator>::reference
-bitvector<Block, Allocator>::operator[](size_type i) {
+template <class Block, enum detail::mms Storage>
+typename bitvector<Block, Storage>::reference
+bitvector<Block, Storage>::operator[](size_type i) {
   VAST_ASSERT(i < size_);
   return {&block_at_bit(i), word_type::mask(i % word_type::width)};
 }
 
-template <class Block, class Allocator>
-typename bitvector<Block, Allocator>::const_reference
-bitvector<Block, Allocator>::operator[](size_type i) const {
+template <class Block, enum detail::mms Storage>
+typename bitvector<Block, Storage>::const_reference
+bitvector<Block, Storage>::operator[](size_type i) const {
   VAST_ASSERT(i < size_);
   return (block_at_bit(i) & word_type::mask(i % word_type::width)) != 0;
 }
 
-template <class Block, class Allocator>
-typename bitvector<Block, Allocator>::reference
-bitvector<Block, Allocator>::at(size_type i) {
+template <class Block, enum detail::mms Storage>
+typename bitvector<Block, Storage>::reference
+bitvector<Block, Storage>::at(size_type i) {
   if (i >= size_)
     VAST_RAISE_ERROR(std::out_of_range, "bitvector out of range");
   return (*this)[i];
 }
 
-template <class Block, class Allocator>
-typename bitvector<Block, Allocator>::const_reference
-bitvector<Block, Allocator>::at(size_type i) const {
+template <class Block, enum detail::mms Storage>
+typename bitvector<Block, Storage>::const_reference
+bitvector<Block, Storage>::at(size_type i) const {
   if (i >= size_)
     VAST_RAISE_ERROR(std::out_of_range, "bitvector out of range");
   return (*this)[i];
 }
 
-template <class Block, class Allocator>
-typename bitvector<Block, Allocator>::reference
-bitvector<Block, Allocator>::front() {
+template <class Block, enum detail::mms Storage>
+typename bitvector<Block, Storage>::reference
+bitvector<Block, Storage>::front() {
   VAST_ASSERT(!empty());
   return (*this)[0];
 }
 
-template <class Block, class Allocator>
-typename bitvector<Block, Allocator>::const_reference
-bitvector<Block, Allocator>::front() const {
+template <class Block, enum detail::mms Storage>
+typename bitvector<Block, Storage>::const_reference
+bitvector<Block, Storage>::front() const {
   VAST_ASSERT(!empty());
   return (*this)[0];
 }
 
-template <class Block, class Allocator>
-typename bitvector<Block, Allocator>::reference
-bitvector<Block, Allocator>::back() {
+template <class Block, enum detail::mms Storage>
+typename bitvector<Block, Storage>::reference
+bitvector<Block, Storage>::back() {
   VAST_ASSERT(!empty());
   return (*this)[size_ - 1];
 }
 
-template <class Block, class Allocator>
-typename bitvector<Block, Allocator>::const_reference
-bitvector<Block, Allocator>::back() const {
+template <class Block, enum detail::mms Storage>
+typename bitvector<Block, Storage>::const_reference
+bitvector<Block, Storage>::back() const {
   VAST_ASSERT(!empty());
   return (*this)[size_ - 1];
 }
 
 // -- modifiers ---------------------------------------------------------------
 
-template <class Block, class Allocator>
+template <class Block, enum detail::mms Storage>
 template <class... Ts>
-void bitvector<Block, Allocator>::emplace_back(Ts&&... xs) {
+void bitvector<Block, Storage>::emplace_back(Ts&&... xs) {
   return push_back(std::forward<Ts>(xs)...);
 }
 
 /// Appends a single bit to the end of the bit vector.
 /// @param bit The value of the bit.
-template <class Block, class Allocator>
-void bitvector<Block, Allocator>::push_back(const value_type& x) {
+template <class Block, enum detail::mms Storage>
+void bitvector<Block, Storage>::push_back(const value_type& x) {
   auto p = partial_bits();
   if (p == 0)
     blocks_.push_back(x ? word_type::all : word_type::none);
@@ -604,36 +571,36 @@ void bitvector<Block, Allocator>::push_back(const value_type& x) {
   ++size_;
 }
 
-template <class Block, class Allocator>
-void bitvector<Block, Allocator>::pop_back() {
+template <class Block, enum detail::mms Storage>
+void bitvector<Block, Storage>::pop_back() {
   VAST_ASSERT(!empty());
   if (partial_bits() == 1)
     blocks_.pop_back();
   --size_;
 }
 
-template <class Block, class Allocator>
-void bitvector<Block, Allocator>::swap(bitvector& other) {
+template <class Block, enum detail::mms Storage>
+void bitvector<Block, Storage>::swap(bitvector& other) {
   using std::swap;
   swap(blocks_, other.blocks_);
   swap(size_, other.size_);
 }
 
-template <class Block, class Allocator>
-void bitvector<Block, Allocator>::flip() noexcept {
+template <class Block, enum detail::mms Storage>
+void bitvector<Block, Storage>::flip() noexcept {
   for (auto& block : blocks_)
     block = ~block;
 }
 
-template <class Block, class Allocator>
-void bitvector<Block, Allocator>::clear() noexcept {
+template <class Block, enum detail::mms Storage>
+void bitvector<Block, Storage>::clear() noexcept {
   blocks_.clear();
   size_ = 0;
 }
 
-template <class Block, class Allocator>
-bool operator==(const bitvector<Block, Allocator>& x,
-                const bitvector<Block, Allocator>& y) {
+template <class Block, enum detail::mms Storage>
+bool operator==(const bitvector<Block, Storage>& x,
+                const bitvector<Block, Storage>& y) {
   if (x.size_ != y.size_)
     return false;
   // Compare all but last block.
@@ -648,20 +615,20 @@ bool operator==(const bitvector<Block, Allocator>& x,
   if (!std::equal(xbegin, xend, ybegin, yend))
     return false;
   // Compare last block.
-  using word_type = typename bitvector<Block, Allocator>::word_type;
+  using word_type = typename bitvector<Block, Storage>::word_type;
   auto xlast = *xend & word_type::lsb_mask(x.partial_bits());
   auto ylast = *yend & word_type::lsb_mask(y.partial_bits());
   return xlast == ylast;
 }
 
-template <class Block, class Allocator>
-const typename bitvector<Block, Allocator>::block_vector&
-bitvector<Block, Allocator>::blocks() const noexcept{
+template <class Block, enum detail::mms Storage>
+const typename bitvector<Block, Storage>::block_vector&
+bitvector<Block, Storage>::blocks() const noexcept {
   return blocks_;
 }
 
-template <class Block, class Allocator>
-void bitvector<Block, Allocator>::append_block(block x, size_type bits) {
+template <class Block, enum detail::mms Storage>
+void bitvector<Block, Storage>::append_block(block x, size_type bits) {
   VAST_ASSERT(bits > 0);
   VAST_ASSERT(bits <= word_type::width);
   auto p = partial_bits();
@@ -677,10 +644,10 @@ void bitvector<Block, Allocator>::append_block(block x, size_type bits) {
   size_ += bits;
 }
 
-template <class Block, class Allocator>
+template <class Block, enum detail::mms Storage>
 template <class InputIterator>
-void bitvector<Block, Allocator>::append_blocks(InputIterator first,
-                                                InputIterator last) {
+void bitvector<Block, Storage>::append_blocks(InputIterator first,
+                                              InputIterator last) {
   auto p = partial_bits();
   if (p == 0) {
     blocks_.insert(blocks_.end(), first, last);
@@ -697,18 +664,22 @@ void bitvector<Block, Allocator>::append_blocks(InputIterator first,
   }
 }
 
-template <bool Bit = true, class Block, class Allocator>
-typename bitvector<Block, Allocator>::size_type
-rank(const bitvector<Block, Allocator>& bv) {
-  using word_type = typename bitvector<Block, Allocator>::word_type;
-  using size_type = typename bitvector<Block, Allocator>::size_type;
+} // namespace vast
+
+namespace vast {
+
+/// @param Bit Whether to count the number of `0` or `1` bits.
+template <bool Bit = true, class Block, enum detail::mms Storage>
+typename bitvector<Block, Storage>::size_type
+rank(const bitvector<Block, Storage>& bv) {
+  using word_type = typename bitvector<Block, Storage>::word_type;
+  using size_type = typename bitvector<Block, Storage>::size_type;
   auto result = size_type{0};
   auto n = bv.size();
   auto p = bv.blocks().data();
   for (; n >= word_type::width; ++p, n -= word_type::width)
-    result += Bit
-      ? word_type::popcount(*p)
-      : word_type::width - word_type::popcount(*p);
+    result += Bit ? word_type::popcount(*p)
+                  : word_type::width - word_type::popcount(*p);
   if (n > 0) {
     auto last = word_type::popcount(*p & word_type::lsb_mask(n));
     result += Bit ? last : n - last;
@@ -717,4 +688,3 @@ rank(const bitvector<Block, Allocator>& bv) {
 }
 
 } // namespace vast
-
