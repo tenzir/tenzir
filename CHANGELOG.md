@@ -26,6 +26,8 @@ This changelog documents all notable user-facing changes of VAST.
   All settings under `caf.logger.*` are now ignored by VAST, and only the `vast.*`
   counterparts are used for logger configuration.
   [#1223](https://github.com/tenzir/vast/pull/1223)
+  [#1328](https://github.com/tenzir/vast/pull/1328)
+  [#1334](https://github.com/tenzir/vast/pull/1334)
 
 ## [2021.01.28]
 
