@@ -67,7 +67,7 @@ active_indexer(active_indexer_actor::stateful_pointer<indexer_state> self,
     return active_indexer_actor::behavior_type::make_empty_behavior();
   }
   return {
-    [=](caf::stream<table_slice_column> in)
+    [self](caf::stream<table_slice_column> in)
       -> caf::inbound_stream_slot<table_slice_column> {
       VAST_DEBUG("{} got a new stream", self);
       self->state.stream_initiated = true;
@@ -102,14 +102,14 @@ active_indexer(active_indexer_actor::stateful_pointer<indexer_state> self,
         });
       return result.inbound_slot();
     },
-    [=](const curried_predicate& pred) {
+    [self](const curried_predicate& pred) {
       VAST_DEBUG("{} got predicate: {}", self, pred);
       VAST_ASSERT(self->state.idx);
       auto& idx = *self->state.idx;
       auto rep = to_internal(idx.type(), make_view(pred.rhs));
       return idx.lookup(pred.op, rep);
     },
-    [=](atom::snapshot) {
+    [self](atom::snapshot) {
       // The partition is only allowed to send a single snapshot atom.
       VAST_ASSERT(!self->state.promise.pending());
       self->state.promise = self->make_response_promise<chunk_ptr>();
@@ -123,10 +123,10 @@ active_indexer(active_indexer_actor::stateful_pointer<indexer_state> self,
       }
       return self->state.promise;
     },
-    [=](atom::shutdown) {
+    [self](atom::shutdown) {
       self->quit(caf::exit_reason::user_shutdown); // clang-format fix
     },
-    [=](atom::status, status_verbosity) {
+    [self](atom::status, status_verbosity) {
       caf::settings result;
       put(result, "memory-usage", self->state.idx->memusage());
       return result;
@@ -147,14 +147,14 @@ passive_indexer(indexer_actor::stateful_pointer<indexer_state> self,
   self->state.partition_id = partition_id;
   self->state.idx = std::move(idx);
   return {
-    [=](const curried_predicate& pred) {
+    [self](const curried_predicate& pred) {
       VAST_DEBUG("{} got predicate: {}", self, pred);
       VAST_ASSERT(self->state.idx);
       auto& idx = *self->state.idx;
       auto rep = to_internal(idx.type(), make_view(pred.rhs));
       return idx.lookup(pred.op, rep);
     },
-    [=](atom::shutdown) { self->quit(caf::exit_reason::user_shutdown); },
+    [self](atom::shutdown) { self->quit(caf::exit_reason::user_shutdown); },
   };
 }
 

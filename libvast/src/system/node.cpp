@@ -604,14 +604,14 @@ node(node_actor::stateful_pointer<node_state> self, std::string name, path dir,
   });
   // Define the node behavior.
   return {
-    [=](atom::run, const invocation& inv) -> caf::result<caf::message> {
+    [self](atom::run, const invocation& inv) -> caf::result<caf::message> {
       VAST_DEBUG("{} got command {} with options {} and arguments {}", self,
                  inv.full_name, inv.options, inv.arguments);
       // Run the command.
       this_node = self;
       return run(inv, self->system(), node_state::command_factory);
     },
-    [=](atom::spawn, const invocation& inv) -> caf::result<caf::actor> {
+    [self](atom::spawn, const invocation& inv) -> caf::result<caf::actor> {
       VAST_DEBUG("{} got spawn command {} with options {} and arguments {}",
                  self, inv.full_name, inv.options, inv.arguments);
       // Run the command.
@@ -627,8 +627,8 @@ node(node_actor::stateful_pointer<node_state> self, std::string name, path dir,
                  deep_to_string(*msg));
       return ec::invalid_result;
     },
-    [=](atom::put, const caf::actor& component,
-        const std::string& type) -> caf::result<atom::ok> {
+    [self](atom::put, const caf::actor& component,
+           const std::string& type) -> caf::result<atom::ok> {
       VAST_DEBUG("{} got new {}", self, type);
       // Check if the new component is a singleton.
       auto& registry = self->state.registry;
@@ -642,21 +642,21 @@ node(node_actor::stateful_pointer<node_state> self, std::string name, path dir,
       self->monitor(component);
       return atom::ok_v;
     },
-    [=](atom::get, atom::type, const std::string& type) {
+    [self](atom::get, atom::type, const std::string& type) {
       VAST_DEBUG("{} got a request for a component of type {}", self, type);
       auto result = self->state.registry.find_by_type(type);
       VAST_DEBUG("{} responds to the request for {} with {}", self, type,
                  result);
       return result;
     },
-    [=](atom::get, atom::label, const std::string& label) {
+    [self](atom::get, atom::label, const std::string& label) {
       VAST_DEBUG("{} got a request for the component {}", self, label);
       auto result = self->state.registry.find_by_label(label);
       VAST_DEBUG("{} responds to the request for {} with {}", self, label,
                  result);
       return result;
     },
-    [=](atom::get, atom::label, const std::vector<std::string>& labels) {
+    [self](atom::get, atom::label, const std::vector<std::string>& labels) {
       VAST_DEBUG("{} got a request for the components {}", self, labels);
       std::vector<caf::actor> result;
       result.reserve(labels.size());
@@ -666,11 +666,10 @@ node(node_actor::stateful_pointer<node_state> self, std::string name, path dir,
                  result);
       return result;
     },
-    [=](atom::get, atom::version) -> std::string { //
+    [](atom::get, atom::version) -> std::string { //
       return VAST_VERSION;
     },
-    [=](atom::signal, int signal) {
-      VAST_IGNORE_UNUSED(signal);
+    [self](atom::signal, int signal) {
       VAST_WARN("{} got signal {}", self, ::strsignal(signal));
     },
   };

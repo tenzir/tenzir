@@ -48,64 +48,63 @@ void sink_state::send_report() {
 caf::behavior sink(caf::stateful_actor<sink_state>* self,
                    format::writer_ptr&& writer, uint64_t max_events) {
   using namespace std::chrono;
-  auto& st = self->state;
-  st.writer = std::move(writer);
-  st.name = st.writer->name();
-  st.last_flush = steady_clock::now();
+  self->state.writer = std::move(writer);
+  self->state.name = self->state.writer->name();
+  self->state.last_flush = steady_clock::now();
   if (max_events > 0) {
     VAST_DEBUG("{} caps event export at {} events", self, max_events);
-    st.max_events = max_events;
+    self->state.max_events = max_events;
   } else {
     // Interpret 0 as infinite.
-    st.max_events = std::numeric_limits<uint64_t>::max();
+    self->state.max_events = std::numeric_limits<uint64_t>::max();
   }
   self->set_exit_handler([=](const caf::exit_msg& msg) {
     self->state.send_report();
     self->quit(msg.reason);
   });
   return {
-    [=](table_slice slice) {
+    [self](table_slice slice) {
       VAST_DEBUG("{} got: {} events from {}", self, slice.rows(),
                  self->current_sender());
-      auto& st = self->state;
       auto now = steady_clock::now();
-      auto time_since_flush = now - st.last_flush;
-      if (st.processed == 0) {
-        VAST_INFO("{} received first result with a latency of {}", st.name,
-                  to_string(time_since_flush));
+      auto time_since_flush = now - self->state.last_flush;
+      if (self->state.processed == 0) {
+        VAST_INFO("{} received first result with a latency of {}",
+                  self->state.name, to_string(time_since_flush));
       }
       auto reached_max_events = [&] {
-        VAST_INFO("{} reached limit of {} events", self, st.max_events);
-        st.writer->flush();
-        st.send_report();
+        VAST_INFO("{} reached limit of {} events", self,
+                  self->state.max_events);
+        self->state.writer->flush();
+        self->state.send_report();
         self->quit();
       };
       // Drop excess elements.
-      auto remaining = st.max_events - st.processed;
+      auto remaining = self->state.max_events - self->state.processed;
       if (remaining == 0)
         return reached_max_events();
       if (slice.rows() > remaining)
         slice = truncate(slice, remaining);
       // Handle events.
-      auto t = timer::start(st.measurement);
-      if (auto err = st.writer->write(slice)) {
+      auto t = timer::start(self->state.measurement);
+      if (auto err = self->state.writer->write(slice)) {
         VAST_ERROR("{} {}", self, render(err));
         self->quit(std::move(err));
         return;
       }
       t.stop(slice.rows());
       // Stop when reaching configured limit.
-      st.processed += slice.rows();
-      if (st.processed >= st.max_events)
+      self->state.processed += slice.rows();
+      if (self->state.processed >= self->state.max_events)
         return reached_max_events();
       // Force flush if necessary.
-      if (time_since_flush > st.flush_interval) {
-        st.writer->flush();
-        st.last_flush = now;
-        st.send_report();
+      if (time_since_flush > self->state.flush_interval) {
+        self->state.writer->flush();
+        self->state.last_flush = now;
+        self->state.send_report();
       }
     },
-    [=](atom::limit, uint64_t max) {
+    [self](atom::limit, uint64_t max) {
       VAST_DEBUG("{} caps event export at {} events", self, max);
       if (self->state.processed < max)
         self->state.max_events = max;
@@ -113,25 +112,24 @@ caf::behavior sink(caf::stateful_actor<sink_state>* self,
         VAST_WARN("{} ignores new limit of {} (already processed",
                   self->state.processed, " events)", self, max);
     },
-    [=](accountant_actor accountant) {
+    [self](accountant_actor accountant) {
       VAST_DEBUG("{} sets accountant to {}", self, accountant);
       auto& st = self->state;
       st.accountant = std::move(accountant);
       self->send(st.accountant, atom::announce_v, st.name);
     },
-    [=](atom::statistics, const caf::actor& statistics_subscriber) {
+    [self](atom::statistics, const caf::actor& statistics_subscriber) {
       VAST_DEBUG("{} sets statistics subscriber to {}", self,
                  statistics_subscriber);
       self->state.statistics_subscriber = statistics_subscriber;
     },
-    [=](atom::status, status_verbosity v) {
-      auto& st = self->state;
+    [self](atom::status, status_verbosity v) {
       caf::settings result;
       if (v >= status_verbosity::detailed) {
         caf::settings sink_status;
-        if (st.writer)
-          put(sink_status, "format", st.writer->name());
-        put(sink_status, "processed", st.processed);
+        if (self->state.writer)
+          put(sink_status, "format", self->state.writer->name());
+        put(sink_status, "processed", self->state.processed);
         auto& xs = put_list(result, "sinks");
         xs.emplace_back(std::move(sink_status));
       }

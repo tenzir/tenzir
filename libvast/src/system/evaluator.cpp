@@ -13,8 +13,9 @@
 
 #include "vast/system/evaluator.hpp"
 
-#include "vast/expression_visitors.hpp"
 #include "vast/fwd.hpp"
+
+#include "vast/expression_visitors.hpp"
 #include "vast/logger.hpp"
 
 #include <caf/behavior.hpp>
@@ -154,35 +155,34 @@ evaluator(evaluator_actor::stateful_pointer<evaluator_state> self,
           std::vector<evaluation_triple> eval) {
   VAST_TRACE("{} {}", VAST_ARG(expr), VAST_ARG(eval));
   VAST_ASSERT(!eval.empty());
-  self->state.partition = partition;
+  self->state.partition = std::move(partition);
+  self->state.expr = std::move(expr);
+  self->state.eval = std::move(eval);
   return {
-    [=, expr = std::move(expr),
-     eval = std::move(eval)](partition_client_actor client) {
-      auto& st = self->state;
-      st.client = client;
-      st.expr = std::move(expr);
-      st.promise = self->make_response_promise<atom::done>();
-      st.pending_responses += eval.size();
-      for (auto& triple : eval) {
+    [self](partition_client_actor client) {
+      self->state.client = client;
+      self->state.promise = self->make_response_promise<atom::done>();
+      self->state.pending_responses += self->state.eval.size();
+      for (auto& triple : self->state.eval) {
         // No strucutured bindings available due to subsequent lambda. :-/
         // TODO: C++20
         auto& pos = std::get<0>(triple);
         auto& curried_pred = std::get<1>(triple);
         auto& indexer = std::get<2>(triple);
-        ++st.predicate_hits[pos].first;
+        ++self->state.predicate_hits[pos].first;
         self->request(indexer, caf::infinite, curried_pred)
           .then([=](const ids& hits) { self->state.handle_result(pos, hits); },
                 [=](const caf::error& err) {
                   self->state.handle_missing_result(pos, err);
                 });
       }
-      if (st.pending_responses == 0) {
+      if (self->state.pending_responses == 0) {
         VAST_DEBUG("{} has nothing to evaluate for expression", self);
-        st.promise.deliver(atom::done_v);
+        self->state.promise.deliver(atom::done_v);
       }
       // We can only deal with exactly one expression/client at the moment.
       self->unbecome();
-      return st.promise;
+      return self->state.promise;
     },
   };
 }

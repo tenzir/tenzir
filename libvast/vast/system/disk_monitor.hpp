@@ -40,6 +40,9 @@ struct disk_monitor_state {
   /// Node handle of the INDEX.
   index_actor index;
 
+  /// The timespan between scans.
+  std::chrono::seconds scan_interval;
+
   constexpr static const char* name = "disk_monitor";
 };
 
@@ -48,6 +51,7 @@ struct disk_monitor_state {
 /// @param self The actor handle.
 /// @param high_water Start erasing data if this limit is exceeded.
 /// @param low_water Erase until this limit is no longer exceeded.
+/// @param scan_interval The timespan between scans.
 /// @param db_dir The path to the database directory.
 /// @param archive The actor handle of the ARCHIVE.
 /// @param index The actor handle of the INDEX.

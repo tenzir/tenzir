@@ -72,6 +72,9 @@ struct evaluator_state {
   /// Stores the original query expression.
   expression expr;
 
+  /// Stores the original evaluation triples.
+  std::vector<evaluation_triple> eval;
+
   /// Allows us to respond to the COLLECTOR after finishing a lookup.
   caf::typed_response_promise<atom::done> promise;
 

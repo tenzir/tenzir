@@ -37,8 +37,11 @@ struct query_supervisor_state {
   /// Maps partition IDs to the number of outstanding responses.
   size_t open_requests;
 
-  // Gives the query_supervisor a unique, human-readable name in log output.
+  /// Gives the QUERY SUPERVISOR a unique, human-readable name in log output.
   std::string log_identifier;
+
+  /// The master of the QUERY SUPERVISOR.
+  query_supervisor_master_actor master;
 
   static inline const char* name = "query-supervisor";
 };

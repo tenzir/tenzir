@@ -28,11 +28,13 @@ namespace vast::system {
 
 filesystem_actor::behavior_type posix_filesystem(
   filesystem_actor::stateful_pointer<posix_filesystem_state> self, path root) {
+  self->state.root = root;
   return {
-    [=](atom::write, const path& filename,
-        chunk_ptr chk) -> caf::result<atom::ok> {
+    [self](atom::write, const path& filename,
+           chunk_ptr chk) -> caf::result<atom::ok> {
       VAST_ASSERT(chk != nullptr);
-      auto path = filename.is_absolute() ? filename : root / filename;
+      auto path
+        = filename.is_absolute() ? filename : self->state.root / filename;
       if (auto err = io::save(path, as_bytes(chk))) {
         ++self->state.stats.writes.failed;
         return err;
@@ -42,8 +44,9 @@ filesystem_actor::behavior_type posix_filesystem(
         return atom::ok_v;
       }
     },
-    [=](atom::read, const path& filename) -> caf::result<chunk_ptr> {
-      auto path = filename.is_absolute() ? filename : root / filename;
+    [self](atom::read, const path& filename) -> caf::result<chunk_ptr> {
+      auto path
+        = filename.is_absolute() ? filename : self->state.root / filename;
       if (auto bytes = io::read(path)) {
         ++self->state.stats.reads.successful;
         ++self->state.stats.reads.bytes += bytes->size();
@@ -53,8 +56,9 @@ filesystem_actor::behavior_type posix_filesystem(
         return bytes.error();
       }
     },
-    [=](atom::mmap, const path& filename) -> caf::result<chunk_ptr> {
-      auto path = filename.is_absolute() ? filename : root / filename;
+    [self](atom::mmap, const path& filename) -> caf::result<chunk_ptr> {
+      auto path
+        = filename.is_absolute() ? filename : self->state.root / filename;
       if (auto chk = chunk::mmap(path)) {
         ++self->state.stats.mmaps.successful;
         ++self->state.stats.mmaps.bytes += chk->size();
@@ -64,7 +68,7 @@ filesystem_actor::behavior_type posix_filesystem(
         return nullptr;
       }
     },
-    [=](atom::status, status_verbosity v) {
+    [self](atom::status, status_verbosity v) {
       auto result = caf::settings{};
       if (v >= status_verbosity::info)
         caf::put(result, "filesystem.type", "POSIX");

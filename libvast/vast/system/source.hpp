@@ -122,6 +122,9 @@ struct source_state {
   /// Stores whether `reader` is constructed.
   bool reader_initialized;
 
+  /// The maximum size for a table slice.
+  size_t table_slice_size;
+
   /// Current metrics for the accountant.
   measurement metrics;
 
@@ -140,7 +143,7 @@ struct source_state {
   template <class T>
   void init(T* selfptr, Reader rd, caf::optional<size_t> max_events,
             type_registry_actor type_registry, vast::schema sch,
-            std::string type_filter, accountant_actor acc) {
+            std::string type_filter, accountant_actor acc, size_t tss) {
     // Create the reader.
     self = selfptr;
     new (&reader) Reader(std::move(rd));
@@ -149,6 +152,7 @@ struct source_state {
     requested = std::move(max_events);
     local_schema = std::move(sch);
     accountant = std::move(acc);
+    table_slice_size = tss;
     sink = nullptr;
     done = false;
     // Register with the accountant.
@@ -232,36 +236,36 @@ source(caf::stateful_actor<source_state<Reader>>* self, Reader reader,
        std::string type_filter, accountant_actor accountant) {
   VAST_TRACE("{}", VAST_ARG(self));
   // Initialize state.
-  auto& st = self->state;
-  st.init(self, std::move(reader), std::move(max_events),
-          std::move(type_registry), std::move(local_schema),
-          std::move(type_filter), std::move(accountant));
+  self->state.init(self, std::move(reader), std::move(max_events),
+                   std::move(type_registry), std::move(local_schema),
+                   std::move(type_filter), std::move(accountant),
+                   table_slice_size);
   self->set_exit_handler([=](const caf::exit_msg& msg) {
     VAST_VERBOSE("{} received EXIT from {}", self, msg.source);
     self->state.done = true;
     self->quit(msg.reason);
   });
   // Spin up the stream manager for the source.
-  st.mgr = self->make_continuous_source(
+  self->state.mgr = self->make_continuous_source(
     // init
-    [=](caf::unit_t&) {
+    [self](caf::unit_t&) {
       caf::timestamp now = std::chrono::system_clock::now();
       self->send(self->state.accountant, "source.start", now);
     },
     // get next element
-    [=](caf::unit_t&, caf::downstream<table_slice>& out, size_t num) {
+    [self](caf::unit_t&, caf::downstream<table_slice>& out, size_t num) {
       VAST_DEBUG("{} tries to generate {} messages", self, num);
       auto& st = self->state;
       // Extract events until the source has exhausted its input or until
       // we have completed a batch.
       auto push_slice = [&](table_slice slice) { out.push(std::move(slice)); };
       // We can produce up to num * table_slice_size events per run.
-      auto events = num * table_slice_size;
+      auto events = num * self->state.table_slice_size;
       if (st.requested)
         events = std::min(events, *st.requested - st.count);
       auto t = timer::start(st.metrics);
       auto [err, produced]
-        = st.reader.read(events, table_slice_size, push_slice);
+        = st.reader.read(events, self->state.table_slice_size, push_slice);
       VAST_DEBUG("{} read {} events", self, produced);
       t.stop(produced);
       st.count += produced;
@@ -309,70 +313,68 @@ source(caf::stateful_actor<source_state<Reader>>* self, Reader reader,
       VAST_DEBUG("{} ended a generation round regularly", self);
     },
     // done?
-    [=](const caf::unit_t&) { return self->state.done; });
+    [self](const caf::unit_t&) { return self->state.done; });
   return {
-    [=](atom::get, atom::schema) { return self->state.reader.schema(); },
-    [=](atom::put, schema sch) -> caf::result<void> {
+    [self](atom::get, atom::schema) { //
+      return self->state.reader.schema();
+    },
+    [self](atom::put, schema sch) -> caf::result<void> {
       VAST_DEBUG("{} received {}", self, VAST_ARG("schema", sch));
-      auto& st = self->state;
-      if (auto err = st.reader.schema(std::move(sch));
+      if (auto err = self->state.reader.schema(std::move(sch));
           err && err != caf::no_error)
         return err;
       return caf::unit;
     },
-    [=]([[maybe_unused]] expression& expr) {
+    [self]([[maybe_unused]] expression& expr) {
       // FIXME: Allow for filtering import data.
       // self->state.filter = std::move(expr);
       VAST_WARN("{} does not currently implement filter expressions", self);
     },
-    [=](stream_sink_actor<table_slice, std::string> sink) {
+    [self](stream_sink_actor<table_slice, std::string> sink) {
       VAST_ASSERT(sink);
       VAST_DEBUG("{} registers {}", self, VAST_ARG(sink));
       // TODO: Currently, we use a broadcast downstream manager. We need to
       //       implement an anycast downstream manager and use it for the
       //       source, because we mustn't duplicate data.
-      auto& st = self->state;
-      if (st.sink) {
+      if (self->state.sink) {
         self->quit(caf::make_error(ec::logic_error,
                                    "source does not support "
                                    "multiple sinks; sender =",
                                    self->current_sender()));
         return;
       }
-      st.sink = sink;
+      self->state.sink = sink;
       self->delayed_send(self, defaults::system::telemetry_rate,
                          atom::telemetry_v);
       // Start streaming.
-      auto name = std::string{st.reader.name()};
-      st.mgr->add_outbound_path(st.sink, std::make_tuple(std::move(name)));
+      auto name = std::string{self->state.reader.name()};
+      self->state.mgr->add_outbound_path(self->state.sink,
+                                         std::make_tuple(std::move(name)));
     },
-    [=](atom::status, status_verbosity v) {
-      auto& st = self->state;
+    [self](atom::status, status_verbosity v) {
       caf::settings result;
       if (v >= status_verbosity::detailed) {
         caf::settings src;
-        if (st.reader_initialized)
-          put(src, "format", st.reader.name());
-        put(src, "produced", st.count);
+        if (self->state.reader_initialized)
+          put(src, "format", self->state.reader.name());
+        put(src, "produced", self->state.count);
         auto& xs = put_list(result, "sources");
         xs.emplace_back(std::move(src));
       }
       return result;
     },
-    [=](atom::wakeup) {
+    [self](atom::wakeup) {
       VAST_VERBOSE("{} wakes up to check for new input", self);
-      auto& st = self->state;
-      st.waiting_for_input = false;
+      self->state.waiting_for_input = false;
       // If we are here, the reader returned with ec::stalled the last time it
       // was called. Let's check if we can read something now.
-      if (st.mgr->generate_messages())
-        st.mgr->push();
+      if (self->state.mgr->generate_messages())
+        self->state.mgr->push();
     },
-    [=](atom::telemetry) {
+    [self](atom::telemetry) {
       VAST_DEBUG("{} got a telemetry atom", self);
-      auto& st = self->state;
-      st.send_report();
-      if (!st.mgr->done())
+      self->state.send_report();
+      if (!self->state.mgr->done())
         self->delayed_send(self, defaults::system::telemetry_rate,
                            atom::telemetry_v);
     },

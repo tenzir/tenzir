@@ -29,6 +29,9 @@ struct posix_filesystem_state {
   /// Statistics about filesystem operations.
   filesystem_statistics stats;
 
+  /// The filesystem root.
+  path root;
+
   /// The actor name.
   static inline const char* name = "posix-filesystem";
 };
