@@ -17,6 +17,7 @@
 
 #include "vast/command.hpp"
 #include "vast/config.hpp"
+#include "vast/system/actors.hpp"
 
 #include <caf/error.hpp>
 #include <caf/stream.hpp>
@@ -95,9 +96,10 @@ public:
     = caf::typed_actor<caf::reacts_to<caf::stream<table_slice>>>;
 
   /// Creates an actor that hooks into the input table slice stream.
-  /// @param sys The actor system context to spawn the actor in.
+  /// @param node A pointer to the NODE actor handle.
   /// @returns The actor handle to the analyzer.
-  virtual analyzer_actor make_analyzer(caf::actor_system& sys) const = 0;
+  virtual analyzer_actor
+  make_analyzer(system::node_actor::pointer node) const = 0;
 };
 
 // -- command plugin -----------------------------------------------------------

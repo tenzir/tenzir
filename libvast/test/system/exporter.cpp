@@ -69,8 +69,9 @@ struct fixture : fixture_base {
   }
 
   void spawn_importer() {
-    importer = self->spawn(system::importer, directory / "importer", archive,
-                           index, type_registry);
+    importer = self->spawn(system::importer, directory / "importer",
+                           system::node_actor::pointer{}, archive, index,
+                           type_registry);
   }
 
   void spawn_exporter(query_options opts) {
@@ -139,7 +140,7 @@ struct fixture : fixture_base {
   expression expr;
 };
 
-} // namespace <anonymous>
+} // namespace
 
 FIXTURE_SCOPE(exporter_tests, fixture)
 

@@ -41,8 +41,8 @@ spawn_importer(node_actor::stateful_pointer<node_state> self,
     return caf::make_error(ec::missing_component, "index");
   if (!type_registry)
     return caf::make_error(ec::missing_component, "type-registry");
-  auto handle = self->spawn(importer, args.dir / args.label, archive, index,
-                            type_registry);
+  auto handle = self->spawn(importer, args.dir / args.label, self, archive,
+                            index, type_registry);
   VAST_VERBOSE("{} spawned the importer", self);
   if (accountant) {
     self->send(handle, atom::telemetry_v);
