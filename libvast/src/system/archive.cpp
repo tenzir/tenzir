@@ -115,17 +115,9 @@ archive(archive_actor::stateful_pointer<archive_state> self, path dir,
     self->state.active_exporters.erase(msg.source);
   });
   return {
-    [self](const ids& xs) {
-      VAST_ASSERT(rank(xs) > 0);
+    [self](const ids& xs, archive_client_actor requester) {
       VAST_DEBUG("{} got query for {} events in range [{},  {})", self,
                  rank(xs), select(xs, 1), select(xs, -1) + 1);
-      if (auto requester
-          = caf::actor_cast<archive_client_actor>(self->current_sender()))
-        self->send(self, xs, requester);
-      else
-        VAST_ERROR("{} dismisses query for unconforming sender", self);
-    },
-    [self](const ids& xs, archive_client_actor requester) {
       if (self->state.active_exporters.count(requester->address()) == 0) {
         VAST_DEBUG("{} dismisses query for inactive sender", self);
         return;

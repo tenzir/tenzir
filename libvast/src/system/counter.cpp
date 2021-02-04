@@ -80,7 +80,10 @@ void counter_state::process_hits(const ids& hits) {
     self_->send(client_, static_cast<uint64_t>(rank(hits)));
   } else {
     hits_ |= hits;
-    self_->send(archive_, std::move(hits));
+    // TODO: Change caf::actor_cast to static_cast once the COUNTER is a typed
+    // actor.
+    self_->send(archive_, std::move(hits),
+                caf::actor_cast<archive_client_actor>(self_));
     // Block the FSM from advancing until we got all slices from the ARCHIVE.
     if (++pending_archive_requests_ == 1)
       block_end_of_hits(true);

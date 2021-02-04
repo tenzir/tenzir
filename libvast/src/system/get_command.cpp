@@ -61,7 +61,13 @@ run(caf::scoped_actor& self, archive_actor archive, const invocation& inv) {
     auto i = to<count>(c);
     if (!i)
       return caf::make_error(ec::parse_error, c, "is not a positive integer");
-    self->send(archive, to_ids(*i));
+    // The caf::actor_cast here is necessary because a scoped actor cannot be a
+    // typed actor. The message handlers below reflect those of the
+    // archive_client_actor exactly, but there's no way to verify that at
+    // compile time. We can improve upon this situation when changing the
+    // archive to stream its results.
+    self->send(archive, to_ids(*i),
+               caf::actor_cast<archive_client_actor>(self));
     bool waiting = true;
     self->receive_while(waiting)
       // Message handlers.
@@ -77,8 +83,7 @@ run(caf::scoped_actor& self, archive_actor archive, const invocation& inv) {
 
 } // namespace
 
-caf::message
-get_command(const invocation& inv, caf::actor_system& sys) {
+caf::message get_command(const invocation& inv, caf::actor_system& sys) {
   VAST_TRACE("{}", inv);
   caf::scoped_actor self{sys};
   // Get VAST node.

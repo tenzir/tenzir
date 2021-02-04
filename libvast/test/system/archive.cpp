@@ -43,7 +43,7 @@ struct fixture : fixtures::deterministic_actor_system_and_events {
   std::vector<table_slice> query(const ids& ids) {
     bool done = false;
     std::vector<table_slice> result;
-    self->send(a, ids);
+    self->send(a, ids, caf::actor_cast<system::archive_client_actor>(self));
     run();
     self
       ->do_receive(

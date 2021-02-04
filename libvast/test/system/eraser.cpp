@@ -120,7 +120,6 @@ mock_archive(system::archive_actor::stateful_pointer<mock_archive_state> self) {
       FAIL("no mock implementation available");
     },
     [=](system::accountant_actor) { FAIL("no mock implementation available"); },
-    [=](ids) { FAIL("no mock implementation available"); },
     [=](ids, system::archive_client_actor) {
       FAIL("no mock implementation available");
     },

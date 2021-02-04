@@ -192,10 +192,6 @@ using archive_actor = typed_actor_fwd<
   // Registers the ARCHIVE with the ACCOUNTANT.
   caf::reacts_to<accountant_actor>,
   // Starts handling a query for the given ids.
-  // TODO: This forwards to the second handler; this should probably be
-  // removed, as it is not type safe.
-  caf::reacts_to<ids>,
-  // Starts handling a query for the given ids.
   caf::reacts_to<ids, archive_client_actor>,
   // Handles a query for the given ids, and sends the table slices back to the
   // ARCHIVE CLIENT.

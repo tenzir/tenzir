@@ -391,7 +391,8 @@ exporter(exporter_actor::stateful_pointer<exporter_state> self, expression expr,
         VAST_DEBUG("{} forwards hits to archive", self);
         // FIXME: restrict according to configured limit.
         ++self->state.query.lookups_issued;
-        self->send(self->state.archive, std::move(hits));
+        self->send(self->state.archive, std::move(hits),
+                   static_cast<archive_client_actor>(self));
       }
       return {};
     },
