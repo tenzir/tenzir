@@ -16,9 +16,9 @@
 #include "vast/concept/printable/to_string.hpp"
 #include "vast/concept/printable/vast/data.hpp"
 #include "vast/config.hpp"
+#include "vast/data.hpp"
 #include "vast/logger.hpp"
 #include "vast/plugin.hpp"
-#include "vast/data.hpp"
 
 #if VAST_ENABLE_ARROW
 #  include <arrow/util/config.h>

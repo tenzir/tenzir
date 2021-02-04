@@ -134,7 +134,7 @@ public:
     return f(a.bytes_);
   }
 
-  friend bool convert(const address& a, vast::data& j);
+  friend bool convert(const address& a, vast::data& d);
 
 private:
   std::array<uint8_t, 16> bytes_;

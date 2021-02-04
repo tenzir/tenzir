@@ -11,8 +11,9 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#include "vast/data.hpp"
 #include "vast/time.hpp"
+
+#include "vast/data.hpp"
 
 namespace vast {
 

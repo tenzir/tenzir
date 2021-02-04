@@ -21,7 +21,6 @@
 #include "vast/concept/parseable/string/char_class.hpp"
 #include "vast/concept/parseable/string/quoted_string.hpp"
 #include "vast/detail/narrow.hpp"
-// #include "vast/json.hpp"
 
 namespace vast {
 
@@ -42,50 +41,4 @@ static auto const json_number
 // clang-format on
 
 } // namespace parsers
-
-// struct json_parser : parser<json_parser> {
-//   using attribute = json;
-
-//   template <class Iterator>
-//   bool parse(Iterator& f, const Iterator& l, json& x) const {
-//     using namespace parsers;
-//     using namespace parser_literals;
-//     rule<Iterator, json> j;
-//     auto ws = ignore(*parsers::space);
-//     auto lbracket = ws >> '[' >> ws;
-//     auto rbracket = ws >> ']' >> ws;
-//     auto lbrace = ws >> '{' >> ws;
-//     auto rbrace = ws >> '}' >> ws;
-//     auto delim = ws >> ',' >> ws;
-//     // clang-format off
-//     auto null = "null"_p ->* [] { return json::null{}; };
-//     // clang-format on
-//     auto string = parsers::qqstr;
-//     auto array = as<json::array>(lbracket >> ~(ref(j) % delim) >> rbracket);
-//     auto key_value = string >> ws >> ':' >> ws >> ref(j);
-//     auto object = as<json::object>(lbrace >> ~(key_value % delim) >> rbrace);
-//     // clang-format off
-//     j = ws >> ( null
-//               | json_boolean
-//               | json_number
-//               | string
-//               | array
-//               | object
-//               );
-//     // clang-format on
-//     return j(f, l, x);
-//   }
-// };
-
-// template <>
-// struct parser_registry<json> {
-//   using type = json_parser;
-// };
-
-// namespace parsers {
-
-// static auto const json = make_parser<vast::json>();
-
-// } // namespace parsers
-
 } // namespace vast

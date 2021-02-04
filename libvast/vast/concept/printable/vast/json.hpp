@@ -26,31 +26,6 @@
 
 namespace vast {
 
-// struct json_type_printer : printer<json_type_printer> {
-//  using attribute = json::type;
-
-//  template <class Iterator>
-//  bool print(Iterator& out, const json::type& t) {
-//    using namespace printers;
-//    switch (t) {
-//      default:
-//        return str.print(out, "<invalid>");
-//      case json::type::null:
-//        return str.print(out, "null");
-//      case json::type::boolean:
-//        return str.print(out, "bool");
-//      case json::type::number:
-//        return str.print(out, "number");
-//      case json::type::string:
-//        return str.print(out, "string");
-//      case json::type::array:
-//        return str.print(out, "array");
-//      case json::type::object:
-//        return str.print(out, "object");
-//    }
-//  }
-// };
-
 namespace policy {
 
 struct tree {};
@@ -98,8 +73,6 @@ struct json_printer : printer<json_printer<TreePolicy, Indent, Padding>> {
         }
         return printers::str.print(out_, str);
       } else {
-        // json y;
-        // return convert(x, y) && caf::visit(*this, y);
         data y;
         return convert(x, y) && caf::visit(*this, y);
       }
@@ -277,21 +250,6 @@ struct json_printer : printer<json_printer<TreePolicy, Indent, Padding>> {
 
 template <class TreePolicy, int Indent, int Padding>
 constexpr bool json_printer<TreePolicy, Indent, Padding>::tree;
-
-// template <>
-// struct printer_registry<list> {
-//   using type = json_printer<policy::tree, 2>;
-// };
-
-// template <>
-// struct printer_registry<record> {
-//   using type = json_printer<policy::tree, 2>;
-// };
-
-// template <>
-// struct printer_registry<data> {
-//   using type = json_printer<policy::tree, 2>;
-// };
 
 namespace printers {
 
