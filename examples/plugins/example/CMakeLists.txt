@@ -17,5 +17,9 @@ set_target_properties(
 # Install the plugin library to <libdir>/vast/plugins.
 install(TARGETS example DESTINATION "${CMAKE_INSTALL_LIBDIR}/vast/plugins")
 
+# Install the bundled schema files to <datadir>/vast.
+install(DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/schema"
+        DESTINATION "${CMAKE_INSTALL_DATADIR}/vast")
+
 # Add unit tests for the example plugin.
 add_subdirectory(tests)
