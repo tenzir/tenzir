@@ -100,6 +100,10 @@ private:
   /// A flattened representation of the layout.
   record_type flat_layout_;
 
+  /// The serialized layout can be cached because every builder instance only
+  /// produces slices of a single layout.
+  mutable std::vector<char> serialized_layout_cache_;
+
   /// Offsets from the beginning of the buffer to each row.
   std::vector<uint64_t> offset_table_ = {};
 

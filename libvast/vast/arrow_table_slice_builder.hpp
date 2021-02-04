@@ -14,6 +14,7 @@
 #pragma once
 
 #include "vast/fwd.hpp"
+
 #include "vast/table_slice.hpp"
 #include "vast/table_slice_builder.hpp"
 
@@ -107,6 +108,10 @@ private:
 
   /// Schema of the Record Batch corresponding to the layout.
   record_type flat_layout_;
+
+  /// The serialized layout can be cached because every builder instance only
+  /// produces slices of a single layout.
+  mutable std::vector<char> serialized_layout_cache_;
 
   /// Schema of the Record Batch corresponding to the layout.
   std::shared_ptr<arrow::Schema> schema_ = {};
