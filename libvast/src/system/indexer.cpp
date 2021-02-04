@@ -89,6 +89,7 @@ active_indexer(active_indexer_actor::stateful_pointer<indexer_state> self,
               self->state.idx->append(column[i], column.slice().offset() + i);
         },
         [=](caf::unit_t&, const caf::error& err) {
+          VAST_TRACE("indexer is closing stream");
           if (err) {
             // Exit reason `unreachable` means that the actor has exited,
             // so we can't safely use `self` anymore.

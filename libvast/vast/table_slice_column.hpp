@@ -14,6 +14,8 @@
 #pragma once
 
 #include "vast/fwd.hpp"
+
+#include "vast/qualified_record_field.hpp"
 #include "vast/table_slice.hpp"
 #include "vast/view.hpp"
 
@@ -40,8 +42,10 @@ public:
   /// Construct a view on a column of a table slice.
   /// @param slice The slice to view.
   /// @param column The viewed column's index.
+  /// @param field The viewed column's fully qualified field.
   /// @pre `column < slice.columns()`
-  table_slice_column(table_slice slice, size_t column) noexcept;
+  table_slice_column(table_slice slice, size_t column,
+                     qualified_record_field field) noexcept;
 
   /// Construct a view on a column of a table slice.
   /// @param slice The slice to view.
@@ -62,6 +66,9 @@ public:
   /// @returns the viewed column's index.
   size_t index() const noexcept;
 
+  /// @returns the viewed column's record field.
+  const qualified_record_field& field() const noexcept;
+
   /// Opt-in to CAF's type inspection API.
   template <class Inspector>
   friend auto inspect(Inspector& f, table_slice_column& x) ->
@@ -73,7 +80,7 @@ public:
 private:
   table_slice slice_ = {};
   size_t column_ = 0;
-  type type_ = {};
+  qualified_record_field field_;
 };
 
 } // namespace vast

@@ -57,7 +57,9 @@ TEST(column view) {
   auto flat_layout = flatten(sut.layout());
   CHECK_EQUAL(ts_cview->index(), 0u);
   for (size_t column = 0; column < sut.columns(); ++column) {
-    auto cview = table_slice_column{sut, column};
+    auto cview = table_slice_column{
+      sut, column,
+      qualified_record_field{flat_layout.name(), flat_layout.fields[column]}};
     REQUIRE_NOT_EQUAL(cview.size(), 0u);
     CHECK_EQUAL(cview.index(), column);
     CHECK_EQUAL(cview.size(), sut.rows());

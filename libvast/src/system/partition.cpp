@@ -217,16 +217,7 @@ evaluate(const PartitionState& state, const expression& expr) {
 
 bool partition_selector::operator()(const qualified_record_field& filter,
                                     const table_slice_column& column) const {
-  auto&& layout = flatten(column.slice().layout());
-  // We don't create a temporary qualified_record_field here to avoid copying
-  // a string and a record field on the heap. Instead, we compare each part
-  // manually.
-  if (filter.layout_name != layout.name())
-    return false;
-  auto& field = layout.fields.at(column.index());
-  if (filter.field_name != field.name)
-    return false;
-  return filter.type == field.type;
+  return filter == column.field();
 }
 
 caf::expected<flatbuffers::Offset<fbs::Partition>>
@@ -421,7 +412,7 @@ active_partition_actor::behavior_type active_partition(
           VAST_DEBUG("{} spawned new indexer for field {} at slot {}", self,
                      field.name, slot);
         }
-        out.push(table_slice_column{x, col++});
+        out.push(table_slice_column{x, col++, qf});
       }
     },
     [=](caf::unit_t&, const caf::error& err) {
@@ -453,7 +444,11 @@ active_partition_actor::behavior_type active_partition(
   self->set_exit_handler([=](const caf::exit_msg& msg) {
     VAST_DEBUG("{} received EXIT from {} with reason: {}", self, msg.source,
                msg.reason);
-    if (self->state.stage->idle()) {
+    if (self->state.stage->idle()
+        && !self->state.stage->out().paths().empty()) {
+      VAST_DEBUG("{} closes outbound path to {}/{} indexers", self,
+                 self->state.stage->out().paths().size(),
+                 self->state.stage->out().path_slots().size());
       self->state.stage->out().fan_out_flush();
       self->state.stage->out().force_emit_batches();
       self->state.stage->out().close();
