@@ -276,6 +276,7 @@ using active_partition_actor = typed_actor_fwd<
   // Conform to the protocol of the PARTITION actor.
   ::extend_with<partition_actor>::unwrap;
 
+/// The interface of the EXPORTER actor.
 using exporter_actor = typed_actor_fwd<
   // Request extraction of all events.
   caf::reacts_to<atom::extract>,
@@ -301,6 +302,13 @@ using exporter_actor = typed_actor_fwd<
   ::extend_with<archive_client_actor>
   // Conform to the protocol of the INDEX CLIENT actor.
   ::extend_with<index_client_actor>::unwrap;
+
+/// The interface of an ANALYZER PLUGIN actors.
+using analyzer_plugin_actor = typed_actor_fwd<>
+  // Conform to the protocol of the STREAM SINK actor for table slices.
+  ::extend_with<stream_sink_actor<table_slice>>
+  // Conform to the protocol of the STATUS CLIENT actor.
+  ::extend_with<status_client_actor>::unwrap;
 
 /// The interface of an IMPORTER actor.
 using importer_actor = typed_actor_fwd<
@@ -357,6 +365,7 @@ CAF_BEGIN_TYPE_ID_BLOCK(vast_actors, caf::id_block::vast_atoms::end)
   VAST_ADD_TYPE_ID((vast::system::accountant_actor))
   VAST_ADD_TYPE_ID((vast::system::active_indexer_actor))
   VAST_ADD_TYPE_ID((vast::system::active_partition_actor))
+  VAST_ADD_TYPE_ID((vast::system::analyzer_plugin_actor))
   VAST_ADD_TYPE_ID((vast::system::archive_actor))
   VAST_ADD_TYPE_ID((vast::system::archive_client_actor))
   VAST_ADD_TYPE_ID((vast::system::disk_monitor_actor))
@@ -364,10 +373,10 @@ CAF_BEGIN_TYPE_ID_BLOCK(vast_actors, caf::id_block::vast_atoms::end)
   VAST_ADD_TYPE_ID((vast::system::exporter_actor))
   VAST_ADD_TYPE_ID((vast::system::filesystem_actor))
   VAST_ADD_TYPE_ID((vast::system::flush_listener_actor))
+  VAST_ADD_TYPE_ID((vast::system::importer_actor))
   VAST_ADD_TYPE_ID((vast::system::index_actor))
   VAST_ADD_TYPE_ID((vast::system::index_client_actor))
   VAST_ADD_TYPE_ID((vast::system::indexer_actor))
-  VAST_ADD_TYPE_ID((vast::system::importer_actor))
   VAST_ADD_TYPE_ID((vast::system::node_actor))
   VAST_ADD_TYPE_ID((vast::system::partition_actor))
   VAST_ADD_TYPE_ID((vast::system::partition_client_actor))
@@ -375,10 +384,10 @@ CAF_BEGIN_TYPE_ID_BLOCK(vast_actors, caf::id_block::vast_atoms::end)
   VAST_ADD_TYPE_ID((vast::system::query_supervisor_actor))
   VAST_ADD_TYPE_ID((vast::system::query_supervisor_master_actor))
   VAST_ADD_TYPE_ID((vast::system::status_client_actor))
-  VAST_ADD_TYPE_ID((vast::system::type_registry_actor))
   VAST_ADD_TYPE_ID((vast::system::stream_sink_actor<vast::table_slice>) )
   VAST_ADD_TYPE_ID(
     (vast::system::stream_sink_actor<vast::table_slice, std::string>) )
+  VAST_ADD_TYPE_ID((vast::system::type_registry_actor))
 
 CAF_END_TYPE_ID_BLOCK(vast_actors)
 
