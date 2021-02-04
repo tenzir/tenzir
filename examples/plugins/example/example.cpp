@@ -30,7 +30,7 @@ using example_actor = caf::typed_actor<
   // Update the configuration of the EXAMPLE actor.
   caf::reacts_to<atom::config, record>>
   // Conform to the protocol of the PLUGIN ANALYZER actor.
-  ::extend_with<analyzer_plugin::analyzer_actor>;
+  ::extend_with<system::analyzer_plugin_actor>;
 
 struct example_actor_state {
   uint64_t max_events = std::numeric_limits<uint64_t>::max();
@@ -117,7 +117,7 @@ public:
 
   /// Creates an actor that hooks into the input table slice stream.
   /// @param node A pointer to the NODE actor handle.
-  analyzer_actor
+  system::analyzer_plugin_actor
   make_analyzer(system::node_actor::pointer node) const override {
     // Create a scoped actor for interaction with actors from non-actor
     // contexts.

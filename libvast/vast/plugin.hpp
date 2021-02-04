@@ -91,14 +91,10 @@ public:
 /// @relates plugin
 class analyzer_plugin : public virtual plugin {
 public:
-  /// The minimal actor interface that streaming plugins must implement.
-  using analyzer_actor
-    = caf::typed_actor<caf::reacts_to<caf::stream<table_slice>>>;
-
   /// Creates an actor that hooks into the input table slice stream.
   /// @param node A pointer to the NODE actor handle.
   /// @returns The actor handle to the analyzer.
-  virtual analyzer_actor
+  virtual system::analyzer_plugin_actor
   make_analyzer(system::node_actor::pointer node) const = 0;
 };
 
