@@ -227,8 +227,8 @@ void importer_state::send_report() {
 
 importer_actor::behavior_type
 importer(importer_actor::stateful_pointer<importer_state> self, path dir,
-         const archive_actor& archive, index_actor index,
-         const type_registry_actor& type_registry) {
+         node_actor::pointer node, const archive_actor& archive,
+         index_actor index, const type_registry_actor& type_registry) {
   VAST_TRACE("{}", VAST_ARG(dir));
   self->state.dir = std::move(dir);
   auto err = self->state.read_state();
@@ -253,7 +253,7 @@ importer(importer_actor::stateful_pointer<importer_state> self, path dir,
   }
   for (auto& plugin : plugins::get())
     if (auto p = plugin.as<analyzer_plugin>())
-      if (auto analyzer = p->make_analyzer(self->system()))
+      if (auto analyzer = p->make_analyzer(node))
         self->state.stage->add_outbound_path(analyzer);
   return {
     // Register the ACCOUNTANT actor.

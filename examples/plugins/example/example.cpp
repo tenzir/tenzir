@@ -116,12 +116,16 @@ public:
   }
 
   /// Creates an actor that hooks into the input table slice stream.
-  /// @param sys The actor system context to spawn the actor in.
-  analyzer_actor make_analyzer(caf::actor_system& sys) const override {
+  /// @param node A pointer to the NODE actor handle.
+  analyzer_actor
+  make_analyzer(system::node_actor::pointer node) const override {
+    // Create a scoped actor for interaction with actors from non-actor
+    // contexts.
+    auto self = caf::scoped_actor{node->system()};
     // Spawn the actor.
-    auto actor = sys.spawn(example);
+    auto actor = self->spawn(example);
     // Send the configuration to the actor.
-    caf::anon_send(actor, atom::config_v, config_);
+    self->send(actor, atom::config_v, config_);
     return actor;
   };
 
