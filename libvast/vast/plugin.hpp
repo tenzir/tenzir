@@ -19,6 +19,7 @@
 #include "vast/config.hpp"
 #include "vast/system/actors.hpp"
 
+#include <caf/actor_system_config.hpp>
 #include <caf/error.hpp>
 #include <caf/stream.hpp>
 #include <caf/typed_actor.hpp>
@@ -61,6 +62,22 @@ template <class Inspector>
 auto inspect(Inspector& f, plugin_version& x) ->
   typename Inspector::result_type {
   return f(x.major, x.minor, x.patch, x.tweak);
+}
+
+// -- plugin type ID blocks ----------------------------------------------------
+
+/// The type ID block used by a plugin as [begin, end).
+extern "C" struct plugin_type_id_block {
+  uint16_t begin;
+  uint16_t end;
+};
+
+/// Support CAF type-inspection.
+/// @relates plugin_type_id_block
+template <class Inspector>
+auto inspect(Inspector& f, plugin_type_id_block& x) ->
+  typename Inspector::result_type {
+  return f(x.begin, x.end);
 }
 
 // -- plugin -------------------------------------------------------------------
@@ -120,7 +137,9 @@ class plugin_ptr final {
 public:
   /// Load a plugin from the specified library filename.
   /// @param filename The filename that's passed to 'dlopen'.
-  static caf::expected<plugin_ptr> make(const char* filename) noexcept;
+  /// @param cfg The actor system config to register type IDs with.
+  static caf::expected<plugin_ptr>
+  make(const char* filename, caf::actor_system_config& cfg) noexcept;
 
   /// Unload a plugin and its required resources.
   ~plugin_ptr() noexcept;
@@ -193,4 +212,13 @@ private:
   }                                                                            \
   extern "C" const char* vast_libvast_build_tree_hash() {                      \
     return VAST_BUILD_TREE_HASH;                                               \
+  }
+
+#define VAST_REGISTER_PLUGIN_TYPE_ID_BLOCK(name)                               \
+  extern "C" void vast_plugin_register_type_id_block(                          \
+    ::caf::actor_system_config& cfg) {                                         \
+    cfg.add_message_types<::caf::id_block::name>();                            \
+  }                                                                            \
+  extern "C" ::vast::plugin_type_id_block vast_plugin_type_id_block() {        \
+    return {::caf::id_block::name::begin, ::caf::id_block::name::end};         \
   }

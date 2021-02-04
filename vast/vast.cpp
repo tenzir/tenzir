@@ -105,7 +105,7 @@ int main(int argc, char** argv) {
 #endif
     if (!exists(file))
       return false;
-    if (auto plugin = plugin_ptr::make(file.str().c_str())) {
+    if (auto plugin = plugin_ptr::make(file.str().c_str(), cfg)) {
       VAST_ASSERT(*plugin);
       auto has_same_name = [name = (*plugin)->name()](const auto& other) {
         return !std::strcmp(name, other->name());

@@ -59,7 +59,8 @@ bool has_required_version(const plugin_version& version) noexcept {
 
 // -- plugin_ptr ---------------------------------------------------------------
 
-caf::expected<plugin_ptr> plugin_ptr::make(const char* filename) noexcept {
+caf::expected<plugin_ptr>
+plugin_ptr::make(const char* filename, caf::actor_system_config& cfg) noexcept {
   auto library = dlopen(filename, RTLD_GLOBAL | RTLD_LAZY);
   if (!library)
     return caf::make_error(ec::system_error, "failed to load plugin", filename,
@@ -105,6 +106,30 @@ caf::expected<plugin_ptr> plugin_ptr::make(const char* filename) noexcept {
     return caf::make_error(ec::system_error,
                            "failed to resolve symbol vast_plugin_destroy in",
                            filename, dlerror());
+  auto plugin_type_id_block
+    = reinterpret_cast<::vast::plugin_type_id_block (*)()>(
+      dlsym(library, "vast_plugin_type_id_block"));
+  if (plugin_type_id_block) {
+    auto plugin_register_type_id_block
+      = reinterpret_cast<void (*)(::caf::actor_system_config&)>(
+        dlsym(library, "vast_plugin_register_type_id_block"));
+    if (!plugin_register_type_id_block)
+      return caf::make_error(ec::system_error,
+                             "failed to resolve symbol "
+                             "vast_plugin_register_type_id_block in",
+                             filename, dlerror());
+    // If the plugin requested to add additional type ID blocks, check if the
+    // ranges overlap. Since this is static for the whole process, we just store
+    // the already registed ID blocks from plugins in a static variable.
+    static auto old_blocks = std::vector<::vast::plugin_type_id_block>{};
+    auto new_block = plugin_type_id_block();
+    for (const auto& old_block : old_blocks)
+      if (new_block.begin < old_block.end && old_block.begin < new_block.end)
+        return caf::make_error(ec::system_error,
+                               "encountered type ID block clash in", filename);
+    plugin_register_type_id_block(cfg);
+    old_blocks.push_back(new_block);
+  }
   return plugin_ptr{library, plugin_create(), plugin_destroy};
 }
 
