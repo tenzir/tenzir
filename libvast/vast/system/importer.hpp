@@ -22,6 +22,7 @@
 #include "vast/system/instrumentation.hpp"
 
 #include <caf/typed_event_based_actor.hpp>
+#include <caf/typed_response_promise.hpp>
 
 #include <chrono>
 #include <vector>
@@ -75,13 +76,16 @@ struct importer_state {
   id available_ids() const noexcept;
 
   /// @returns various status metrics.
-  caf::dictionary<caf::config_value> status(status_verbosity v) const;
+  caf::typed_response_promise<caf::settings> status(status_verbosity v) const;
 
   /// The active id block.
   id_block current;
 
   /// State directory.
   path dir;
+
+  /// All available ANALYZER PLUGIN actors and their names.
+  std::vector<std::pair<std::string, analyzer_plugin_actor>> analyzers;
 
   /// The continous stage that moves data from all sources to all subscribers.
   caf::stream_stage_ptr<table_slice,

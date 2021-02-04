@@ -304,9 +304,11 @@ using exporter_actor = typed_actor_fwd<
   ::extend_with<index_client_actor>::unwrap;
 
 /// The interface of an ANALYZER PLUGIN actors.
-using analyzer_plugin_actor = typed_actor_fwd<
-  // Add a stream sink for the IMPORTER table slice stream.
-  caf::reacts_to<caf::stream<table_slice>>>::unwrap;
+using analyzer_plugin_actor = typed_actor_fwd<>
+  // Conform to the protocol of the STREAM SINK actor for table slices.
+  ::extend_with<stream_sink_actor<table_slice>>
+  // Conform to the protocol of the STATUS CLIENT actor.
+  ::extend_with<status_client_actor>::unwrap;
 
 /// The interface of an IMPORTER actor.
 using importer_actor = typed_actor_fwd<

@@ -19,6 +19,7 @@
 
 #include <caf/actor_cast.hpp>
 #include <caf/attach_stream_sink.hpp>
+#include <caf/settings.hpp>
 #include <caf/typed_event_based_actor.hpp>
 
 #include <iostream>
@@ -42,7 +43,7 @@ struct example_actor_state {
 example_actor::behavior_type
 example(example_actor::stateful_pointer<example_actor_state> self) {
   return {
-    [=](atom::config, record config) {
+    [self](atom::config, record config) {
       VAST_TRACE("{} sets configuration {}", self, config);
       for (auto& [key, value] : config) {
         if (key == "max-events") {
@@ -53,36 +54,46 @@ example(example_actor::stateful_pointer<example_actor_state> self) {
         }
       }
     },
-    [=](caf::stream<table_slice> in) {
+    [self](
+      caf::stream<table_slice> in) -> caf::inbound_stream_slot<table_slice> {
       VAST_TRACE("{} hooks into stream {}", self, in);
-      caf::attach_stream_sink(
-        self, in,
-        // Initialization hook for CAF stream.
-        [=](uint64_t& counter) { // reset state
-          VAST_VERBOSE("{} initialized stream", self);
-          counter = 0;
-        },
-        // Process one stream element at a time.
-        [=](uint64_t& counter, table_slice slice) {
-          // If we're already done, discard the remaining table slices in the
-          // stream.
-          if (self->state.done)
-            return;
-          // Accumulate the rows in our table slices.
-          counter += slice.rows();
-          if (counter >= self->state.max_events) {
-            VAST_INFO("{} terminates stream after {} events", self, counter);
-            self->state.done = true;
-            self->quit();
-          }
-        },
-        // Teardown hook for CAF stram.
-        [=](uint64_t&, const caf::error& err) {
-          if (err && err != caf::exit_reason::user_shutdown) {
-            VAST_ERROR("{} finished stream with error: {}", self, render(err));
-            return;
-          }
-        });
+      return caf::attach_stream_sink(
+               self, in,
+               // Initialization hook for CAF stream.
+               [=](uint64_t& counter) { // reset state
+                 VAST_VERBOSE("{} initialized stream", self);
+                 counter = 0;
+               },
+               // Process one stream element at a time.
+               [=](uint64_t& counter, table_slice slice) {
+                 // If we're already done, discard the remaining table slices in
+                 // the stream.
+                 if (self->state.done)
+                   return;
+                 // Accumulate the rows in our table slices.
+                 counter += slice.rows();
+                 if (counter >= self->state.max_events) {
+                   VAST_INFO("{} terminates stream after {} events", self,
+                             counter);
+                   self->state.done = true;
+                   self->quit();
+                 }
+               },
+               // Teardown hook for CAF stream.
+               [=](uint64_t&, const caf::error& err) {
+                 if (err && err != caf::exit_reason::user_shutdown) {
+                   VAST_ERROR("{} finished stream with error: {}", self,
+                              render(err));
+                   return;
+                 }
+               })
+        .inbound_slot();
+    },
+    [](atom::status, system::status_verbosity) -> caf::settings {
+      // Return an arbitrary settings object here for use in the status command.
+      auto result = caf::settings{};
+      caf::put(result, "answer", 42);
+      return result;
     },
   };
 }
