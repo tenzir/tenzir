@@ -13,10 +13,13 @@
 
 #include "vast/synopsis.hpp"
 
+#include "vast/address_synopsis.hpp"
+#include "vast/bloom_filter_synopsis.hpp"
 #include "vast/bool_synopsis.hpp"
 #include "vast/detail/overload.hpp"
 #include "vast/error.hpp"
 #include "vast/fbs/utils.hpp"
+#include "vast/hasher.hpp"
 #include "vast/logger.hpp"
 #include "vast/qualified_record_field.hpp"
 #include "vast/synopsis_factory.hpp"
@@ -116,13 +119,23 @@ pack(flatbuffers::FlatBufferBuilder& builder, const synopsis_ptr& synopsis,
 
 caf::error unpack(const fbs::synopsis::v0& synopsis, synopsis_ptr& ptr) {
   ptr = nullptr;
-  if (auto bs = synopsis.bool_synopsis())
+  if (auto bs = synopsis.bool_synopsis()) {
     ptr = std::make_unique<bool_synopsis>(bs->any_true(), bs->any_false());
-  else if (auto ts = synopsis.time_synopsis())
+  } else if (auto ts = synopsis.time_synopsis()) {
     ptr = std::make_unique<time_synopsis>(
       vast::time{} + vast::duration{ts->start()},
       vast::time{} + vast::duration{ts->end()});
-  else if (auto os = synopsis.opaque_synopsis()) {
+  } else if (auto as = synopsis.address_synopsis()) {
+    switch (as->hasher()) {
+      case fbs::bloom_synopsis::hasher_type::xxhash64:
+        // TODO: Previously the type was serialized and deserialized along with
+        // the synopsis. I think that was done just to store the the bloom
+        // filter parameters as a type attribute so it should be unnecessary
+        // now, but if there was more to it this may be broken now.
+        ptr = std::make_unique<address_synopsis<xxhash64>>(vast::address_type{},
+                                                           as);
+    }
+  } else if (auto os = synopsis.opaque_synopsis()) {
     caf::binary_deserializer sink(
       nullptr, reinterpret_cast<const char*>(os->data()->data()),
       os->data()->size());

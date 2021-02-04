@@ -5,6 +5,45 @@ table v0 {
   data: [ubyte];
 }
 
+// Not sure if its worth it to make extra types for `address_synopsis` and
+// `string_synopsis`, we know the type anyways from the layout and the fields
+// would be exactly the same.
+namespace vast.fbs.bloom_synopsis;
+
+struct bloom_params {
+  m: int64;
+  n: int64;
+  k: int64;
+  p: double;
+}
+
+table v0 {
+  size: uint64;
+  params: bloom_params;
+  data: [uint64]; // guaranteed to be little-endian on all platforms
+}
+
+// A bloom_synopsis currently always uses `double_hasher<HashFunction>` and a
+// `no_partitioning` policy, so the only free parameter is the hash function.
+enum hasher_type : byte {
+  xxhash64,    
+  // [...]
+}
+
+namespace vast.fbs.address_synopsis;
+
+table v0 {
+  hasher: bloom_synopsis.hasher_type;
+  filter: bloom_synopsis.v0;  
+}
+
+namespace vast.fbs.string_synopsis;
+
+table v0 {
+  hasher: bloom_synopsis.hasher_type;
+  filter: bloom_synopsis.v0;  
+}
+
 namespace vast.fbs.time_synopsis;
 
 struct v0 {
@@ -41,6 +80,9 @@ table v0 {
 
   /// Other synopsis type with no native flatbuffer layout.
   opaque_synopsis: opaque_synopsis.v0;
+
+  /// FIXME: make a synopsis.v1 table for this
+  address_synopsis: address_synopsis.v0;
 }
 
 namespace vast.fbs.partition_synopsis;

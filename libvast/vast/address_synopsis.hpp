@@ -18,6 +18,7 @@
 #include "vast/bloom_filter_parameters.hpp"
 #include "vast/bloom_filter_synopsis.hpp"
 #include "vast/buffered_synopsis.hpp"
+#include "vast/fbs/synopsis.hpp"
 
 #include <caf/config_value.hpp>
 #include <caf/settings.hpp>
@@ -45,6 +46,11 @@ public:
   /// filter.
   address_synopsis(type x, typename super::bloom_filter_type bf)
     : super{std::move(x), std::move(bf)} {
+    VAST_ASSERT(caf::holds_alternative<address_type>(this->type()));
+  }
+
+  address_synopsis(type x, const fbs::address_synopsis::v0* fb)
+    : super(std::move(x), fb->filter()) {
     VAST_ASSERT(caf::holds_alternative<address_type>(this->type()));
   }
 

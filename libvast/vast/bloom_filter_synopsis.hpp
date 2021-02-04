@@ -14,13 +14,13 @@
 #pragma once
 
 #include "vast/bloom_filter.hpp"
+#include "vast/fbs/synopsis.hpp"
+#include "vast/synopsis.hpp"
+#include "vast/type.hpp"
 
 #include <caf/deserializer.hpp>
 #include <caf/optional.hpp>
 #include <caf/serializer.hpp>
-
-#include <vast/synopsis.hpp>
-#include <vast/type.hpp>
 
 namespace vast {
 
@@ -34,6 +34,15 @@ public:
   bloom_filter_synopsis(vast::type x, bloom_filter_type bf)
     : synopsis{std::move(x)}, bloom_filter_{std::move(bf)} {
     // nop
+  }
+
+  bloom_filter_synopsis(vast::type x, const vast::fbs::bloom_synopsis::v0* fb)
+    : synopsis(std::move(x)) {
+    span<const uint64_t> sp(fb->data()->data(), fb->data()->size());
+    bloom_filter<HashFunction, double_hasher, policy::no_partitioning,
+                 detail::mms::memory_view>
+      bf(fb->size(), sp);
+    bloom_filter_ = bf.make_standalone();
   }
 
   void add(data_view x) override {
@@ -79,7 +88,15 @@ public:
   }
 
 protected:
-  bloom_filter<HashFunction> bloom_filter_;
+  // This is the current termination point for the `mms` system, i.e. we always
+  // create a standalone version when creating a synopsis. In the future we
+  // probably want to lift this higher, so we can use the whole partition
+  // synopsis straight from disk, without deserialization, but it doesn't make
+  // much sense on the individual synopsis level because it typically only
+  // occupies a small part of the buffer.
+  bloom_filter<HashFunction, double_hasher, policy::no_partitioning,
+               detail::mms::standalone>
+    bloom_filter_;
 };
 
 // Because VAST deserializes a synopsis with empty options and
@@ -97,5 +114,7 @@ type annotate_parameters(type type, const bloom_filter_parameters& params);
 /// @returns The parsed and evaluated Bloom filter parameters.
 /// @relates bloom_filter_synopsis
 caf::optional<bloom_filter_parameters> parse_parameters(const type& x);
+
+// caf::error unpack(const fbs::synopsis::v0&, synopsis_ptr&);
 
 } // namespace vast
