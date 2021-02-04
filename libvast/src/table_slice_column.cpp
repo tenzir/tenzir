@@ -40,7 +40,7 @@ table_slice_column::table_slice_column(table_slice slice,
   auto& layout = slice_.layout();
   auto offset = layout.offset_from_index(column_);
   VAST_ASSERT(offset);
-  type_ = *layout.at(*offset);
+  type_ = layout.at(*offset)->type;
 }
 
 std::optional<table_slice_column>

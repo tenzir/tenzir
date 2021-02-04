@@ -338,21 +338,22 @@ const type* record_type::at(std::string_view key) const {
   auto rx_ = "^" + name() + "." + pattern::glob(key) + "$";
   for (auto& [off, name] : om) {
     if (rx_.match(name))
-      return at(off);
+      if (auto f = at(off))
+        return &f->type;
   }
   return nullptr;
 }
 
-const type* record_type::at(const offset& o) const {
+const record_field* record_type::at(const offset& o) const {
   auto r = this;
   for (size_t i = 0; i < o.size(); ++i) {
     auto& idx = o[i];
     if (idx >= r->fields.size())
       return nullptr;
-    auto t = &r->fields[idx].type;
+    auto f = &r->fields[idx];
     if (i + 1 == o.size())
-      return t;
-    r = get_if<record_type>(t);
+      return f;
+    r = get_if<record_type>(&f->type);
     if (!r)
       return nullptr;
   }

@@ -640,8 +640,8 @@ struct record_type final : recursive_type<record_type> {
 
   /// Retrieves the type at a given offset.
   /// @param o The offset to resolve.
-  /// @returns The type at offset *o* or `nullptr` if *o* doesn't resolve.
-  const type* at(const offset& o) const;
+  /// @returns The field at offset *o* or `nullptr` if *o* doesn't resolve.
+  const record_field* at(const offset& o) const;
 
   /// Converts an offset into an index for the flattened representation.
   /// @param o The offset to resolve.

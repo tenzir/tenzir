@@ -639,7 +639,7 @@ void arrow_table_slice<FlatBuffer>::append_column_to_index(
     auto array = batch->column(detail::narrow_cast<int>(column));
     auto offset = state_.layout.offset_from_index(column);
     VAST_ASSERT(offset);
-    decode(*state_.layout.at(*offset), *array, f);
+    decode(state_.layout.at(*offset)->type, *array, f);
   }
 }
 
@@ -652,14 +652,15 @@ arrow_table_slice<FlatBuffer>::at(table_slice::size_type row,
   auto array = batch->column(detail::narrow_cast<int>(column));
   auto offset = state_.layout.offset_from_index(column);
   VAST_ASSERT(offset);
-  return value_at(*state_.layout.at(*offset), *array, row);
+  return value_at(state_.layout.at(*offset)->type, *array, row);
 }
 
 template <class FlatBuffer>
 data_view arrow_table_slice<FlatBuffer>::at(table_slice::size_type row,
                                             table_slice::size_type column,
                                             const type& t) const {
-  VAST_ASSERT(*state_.layout.at(*state_.layout.offset_from_index(column)) == t);
+  VAST_ASSERT(state_.layout.at(*state_.layout.offset_from_index(column))->type
+              == t);
   auto&& batch = record_batch();
   VAST_ASSERT(batch);
   auto array = batch->column(detail::narrow_cast<int>(column));
