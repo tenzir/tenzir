@@ -13,10 +13,11 @@
 
 #include "vast/system/eraser.hpp"
 
+#include "vast/fwd.hpp"
+
 #include "vast/concept/parseable/to.hpp"
 #include "vast/concept/parseable/vast/expression.hpp"
 #include "vast/expression.hpp"
-#include "vast/fwd.hpp"
 #include "vast/logger.hpp"
 
 #include <caf/event_based_actor.hpp>
