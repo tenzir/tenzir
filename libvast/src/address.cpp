@@ -11,24 +11,24 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#include <netinet/in.h>
-#include <arpa/inet.h>
-#include <sys/socket.h>
+#include "vast/address.hpp"
+
+#include "vast/concept/printable/to_string.hpp"
+#include "vast/concept/printable/vast/address.hpp"
+#include "vast/data.hpp"
+#include "vast/detail/byte_swap.hpp"
+#include "vast/word.hpp"
 
 #include <cstdlib>
 #include <cstring>
 #include <utility>
 
-#include "vast/address.hpp"
-#include "vast/concept/printable/to_string.hpp"
-#include "vast/concept/printable/vast/address.hpp"
-#include "vast/detail/byte_swap.hpp"
-#include "vast/data.hpp"
-#include "vast/word.hpp"
+#include <arpa/inet.h>
+#include <netinet/in.h>
+#include <sys/socket.h>
 
-std::array<uint8_t, 12> const vast::address::v4_mapped_prefix = {
-  {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0xff, 0xff}
-};
+std::array<uint8_t, 12> const vast::address::v4_mapped_prefix
+  = {{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0xff, 0xff}};
 
 namespace vast {
 
@@ -95,7 +95,7 @@ inline uint32_t bitmask32(size_t bottom_bits) {
   return bottom_bits >= 32 ? 0xffffffff : ((uint32_t{1} << bottom_bits) - 1);
 }
 
-} // namespace <anonymous>
+} // namespace
 
 bool address::mask(unsigned top_bits_to_keep) {
   if (top_bits_to_keep > 128)

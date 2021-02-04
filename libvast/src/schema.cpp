@@ -19,12 +19,12 @@
 #include "vast/concept/printable/to_string.hpp"
 #include "vast/concept/printable/vast/schema.hpp"
 #include "vast/concept/printable/vast/type.hpp"
+#include "vast/data.hpp"
 #include "vast/detail/process.hpp"
 #include "vast/detail/string.hpp"
 #include "vast/directory.hpp"
 #include "vast/error.hpp"
 #include "vast/event_types.hpp"
-#include "vast/data.hpp"
 #include "vast/logger.hpp"
 #include "vast/path.hpp"
 
@@ -62,8 +62,7 @@ schema schema::combine(const schema& s1, const schema& s2) {
 }
 
 bool schema::add(const type& t) {
-  if (caf::holds_alternative<none_type>(t)
-      || t.name().empty()
+  if (caf::holds_alternative<none_type>(t) || t.name().empty()
       || find(t.name()))
     return false;
   types_.push_back(std::move(t));

@@ -13,9 +13,9 @@
 
 #pragma once
 
-#include <cstdint>
-
 #include "vast/detail/operators.hpp"
+
+#include <cstdint>
 
 namespace vast {
 

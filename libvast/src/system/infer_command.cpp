@@ -19,6 +19,7 @@
 #include "vast/concept/parseable/vast/time.hpp"
 #include "vast/concept/printable/stream.hpp"
 #include "vast/concept/printable/vast/schema.hpp"
+#include "vast/data.hpp"
 #include "vast/defaults.hpp"
 #include "vast/detail/assert.hpp"
 #include "vast/detail/make_io_stream.hpp"
@@ -27,7 +28,6 @@
 #include "vast/detail/string.hpp"
 #include "vast/error.hpp"
 #include "vast/format/zeek.hpp"
-#include "vast/data.hpp"
 #include "vast/logger.hpp"
 #include "vast/schema.hpp"
 
@@ -38,11 +38,10 @@
 
 #include <cmath>
 #include <iostream>
+#include <simdjson.h>
 #include <sstream>
 #include <string>
 #include <utility>
-
-#include <simdjson.h>
 
 namespace vast::system {
 
@@ -67,10 +66,10 @@ infer(const std::string& input, const caf::settings& options) {
 type deduce(simdjson::dom::element e) {
   switch (e.type()) {
     case ::simdjson::dom::element_type::ARRAY:
-      if (const auto arr = e.get_array();arr.size())
-        return list_type{ deduce(arr.at(0)) };
-      return list_type{ type{} };
-    case ::simdjson::dom::element_type::OBJECT:{
+      if (const auto arr = e.get_array(); arr.size())
+        return list_type{deduce(arr.at(0))};
+      return list_type{type{}};
+    case ::simdjson::dom::element_type::OBJECT: {
       record_type result;
       auto xs = e.get_object();
       for (auto& [k, v] : xs)

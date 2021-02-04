@@ -66,6 +66,7 @@ struct data_printer : printer<data_printer> {
 
   data_printer(print_rendering r = print_rendering::text) noexcept
     : rendering_{r} {
+    static_assert(std::is_trivially_copyable_v<data_printer>);
   }
 
   template <class Iterator>

@@ -254,8 +254,6 @@ caf::message dump_command(const invocation& inv, caf::actor_system&) {
           else
             request_error = std::move(yaml.error());
         } else {
-          // auto json = to_json(data{std::move(result)});
-          // rp.deliver(to_string(std::move(json)));
           rp.deliver(to_string(data{std::move(result)}, print_rendering::json));
         }
       },

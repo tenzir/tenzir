@@ -39,7 +39,7 @@ namespace {
 
 none_type none_type_singleton;
 
-} // namespace <anonymous>
+} // namespace
 
 // -- type ---------------------------------------------------------------------
 
@@ -120,8 +120,8 @@ abstract_type::~abstract_type() {
 }
 
 bool abstract_type::equals(const abstract_type& other) const {
-  return typeid(*this) == typeid(other)
-         && name_ == other.name_ && attributes_ == other.attributes_;
+  return typeid(*this) == typeid(other) && name_ == other.name_
+         && attributes_ == other.attributes_;
 }
 
 bool abstract_type::less_than(const abstract_type& other) const {
@@ -543,8 +543,8 @@ struct type_congruence_checker {
   }
 
   bool operator()(const map_type& x, const map_type& y) const {
-    return visit(*this, x.key_type, y.key_type) &&
-        visit(*this, x.value_type, y.value_type);
+    return visit(*this, x.key_type, y.key_type)
+           && visit(*this, x.value_type, y.value_type);
   }
 
   bool operator()(const record_type& x, const record_type& y) const {
@@ -635,7 +635,7 @@ struct data_congruence_checker {
   }
 };
 
-} // namespace <anonymous>
+} // namespace
 
 bool congruent(const type& x, const type& y) {
   return visit(type_congruence_checker{}, x, y);
@@ -649,8 +649,8 @@ bool congruent(const data& x, const type& y) {
   return visit(data_congruence_checker{}, y, x);
 }
 
-caf::error replace_if_congruent(std::initializer_list<type*> xs,
-                                const schema& with) {
+caf::error
+replace_if_congruent(std::initializer_list<type*> xs, const schema& with) {
   for (auto x : xs)
     if (auto t = with.find(x->name()); t != nullptr) {
       if (!congruent(*x, *t))
@@ -861,14 +861,11 @@ data jsonize(const type& x) {
                  },
                  [&](const list_type& t) {
                    record o;
-                   // o["value_type"] = to_json(t.value_type);
                    o["value_type"] = to_data(t.value_type);
                    return data{std::move(o)};
                  },
                  [&](const map_type& t) {
                    record o;
-                   // o["key_type"] = to_json(t.key_type);
-                   // o["value_type"] = to_json(t.value_type);
                    o["key_type"] = to_data(t.key_type);
                    o["value_type"] = to_data(t.value_type);
                    return data{std::move(o)};
@@ -877,17 +874,15 @@ data jsonize(const type& x) {
                    record o;
                    for (auto& field : t.fields)
                      o[to_string(field.name)] = to_data(field.type);
-                     // o[to_string(field.name)] = to_json(field.type);
                    return data{std::move(o)};
                  },
-                 // [&](const alias_type& t) { return to_json(t.value_type); },
                  [&](const alias_type& t) { return to_data(t.value_type); },
                  [](const abstract_type&) { return data{}; },
                },
                x);
 }
 
-} // namespace <anonymous>
+} // namespace
 
 std::string kind(const type& x) {
   return kind_tbl[x->index()];

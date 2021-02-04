@@ -11,12 +11,13 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#include <regex>
+#include "vast/concept/printable/vast/pattern.hpp"
 
 #include "vast/concept/printable/to_string.hpp"
-#include "vast/concept/printable/vast/pattern.hpp"
 #include "vast/data.hpp"
 #include "vast/pattern.hpp"
+
+#include <regex>
 
 namespace vast {
 

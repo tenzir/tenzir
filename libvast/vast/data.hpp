@@ -41,7 +41,6 @@
 namespace vast {
 
 class data;
-// class json;
 
 namespace detail {
 
