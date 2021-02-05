@@ -619,13 +619,19 @@ node(node_actor::stateful_pointer<node_state> self, std::string name, path dir,
       auto msg = run(inv, self->system(), node_state::command_factory);
       if (!msg)
         return msg.error();
-      if (msg->match_elements<caf::error>())
-        return msg->get_as<caf::error>(0);
-      if (msg->match_elements<caf::actor>())
-        return msg->get_as<caf::actor>(0);
-      VAST_ERROR("{} encountered invalid invocation response: {}", self,
-                 deep_to_string(*msg));
-      return ec::invalid_result;
+      auto rp = self->make_response_promise<caf::actor>();
+      msg->apply({
+        [&](caf::error& x) { rp.deliver(std::move(x)); },
+        [&](caf::actor& x) { rp.deliver(std::move(x)); },
+      });
+      if (rp.pending()) {
+        VAST_ERROR("{} encountered invalid invocation response: {}", self,
+                   deep_to_string(*msg));
+        rp.deliver(caf::make_error(ec::invalid_result,
+                                   "invalid spawn invocation response",
+                                   std::move(*msg)));
+      }
+      return rp;
     },
     [self](atom::put, const caf::actor& component,
            const std::string& type) -> caf::result<atom::ok> {
