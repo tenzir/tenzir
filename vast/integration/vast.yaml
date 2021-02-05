@@ -3,6 +3,7 @@ caf:
     file-verbosity: trace
     component-blacklist: []
 vast:
+  plugins: []
   export:
     zeek:
       disable-timestamp-tags: true
