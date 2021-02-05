@@ -265,7 +265,7 @@ meta_index_actor::behavior_type
 meta_index(meta_index_actor::stateful_pointer<meta_index_state> self) {
   self->state.self = self;
   return {
-    [=](uuid partition,
+    [=](atom::merge, uuid partition,
         std::shared_ptr<partition_synopsis> synopsis) -> atom::ok {
       VAST_TRACE("{} {} {}", self, VAST_ARG(partition), VAST_ARG(synopsis));
       self->state.merge(std::move(partition), std::move(*synopsis));

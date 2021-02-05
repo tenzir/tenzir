@@ -193,7 +193,7 @@ struct fixture : public fixtures::deterministic_actor_system_and_events {
 
   void merge(meta_index_actor& meta_idx, const vast::uuid& id,
              std::shared_ptr<partition_synopsis> ps) {
-    auto rp = self->request(meta_idx, caf::infinite, id, ps);
+    auto rp = self->request(meta_idx, caf::infinite, atom::merge_v, id, ps);
     run();
     rp.receive([=](atom::ok) {}, [=](const caf::error& e) { FAIL(render(e)); });
   }

@@ -201,9 +201,9 @@ caf::error index_state::load_from_disk() {
       VAST_ASSERT(uuid_fb);
       vast::uuid partition_uuid;
       unpack(*uuid_fb, partition_uuid);
-      auto partition_path = dir / to_string(partition_uuid);
-      auto partition_synopsis_path = dir / (to_string(partition_uuid) + ".mdx");
-      if (!exists(partition_path)) {
+      auto part_dir = partition_path(partition_uuid);
+      auto synopsis_dir = partition_synopsis_path(partition_uuid);
+      if (!exists(part_dir)) {
         VAST_WARN("{} found partition {}"
                   "in the index state but not on disk; this may have been "
                   "caused by an unclean shutdown",
@@ -211,14 +211,13 @@ caf::error index_state::load_from_disk() {
         continue;
       }
       // Generate external partition synopsis file if it doesn't exist.
-      if (!exists(partition_synopsis_path)) {
-        if (auto error = extract_partition_synopsis(partition_path,
-                                                    partition_synopsis_path))
+      if (!exists(synopsis_dir)) {
+        if (auto error = extract_partition_synopsis(part_dir, synopsis_dir))
           return error;
       }
-      auto chunk = chunk::mmap(partition_synopsis_path);
+      auto chunk = chunk::mmap(synopsis_dir);
       if (!chunk) {
-        VAST_WARN("{} could not mmap partition at {}", self, partition_path);
+        VAST_WARN("{} could not mmap partition at {}", self, part_dir);
         continue;
       }
       auto ps_flatbuffer = fbs::GetPartitionSynopsis(chunk->data());
@@ -231,13 +230,13 @@ caf::error index_state::load_from_disk() {
         return error;
       self
         ->request<caf::message_priority::high>(
-          meta_index, caf::infinite, partition_uuid,
+          meta_index, caf::infinite, atom::merge_v, partition_uuid,
           std::make_shared<partition_synopsis>(std::move(ps)))
-        .then(
+        .await(
           [=](atom::ok) {
             VAST_DEBUG("{} received ok for request to merge partition "
-                         "synopsis from {}",
-                         self, partition_uuid);
+                       "synopsis from {}",
+                       self, partition_uuid);
           },
           [=](caf::error err) {
             VAST_ERROR("{} received error for request to merge partition "
@@ -323,10 +322,10 @@ void index_state::decomission_active_partition() {
   // Remove active partition from the stream.
   stage->out().close(active_partition.stream_slot);
   // Persist active partition asynchronously.
-  auto part_dir = dir / to_string(id);
-  auto synopsis_dir = synopsisdir / (to_string(id) + ".mdx");
+  auto part_dir = partition_path(id);
+  auto synopsis_dir = partition_synopsis_path(id);
   VAST_DEBUG("{} persists active partition to {}", self, part_dir);
-  self->request(actor, caf::infinite, atom::persist_v, part_dir, synopsisdir)
+  self->request(actor, caf::infinite, atom::persist_v, part_dir, synopsis_dir)
     .then(
       [=](std::shared_ptr<partition_synopsis>& ps) {
         VAST_DEBUG("{} successfully persisted partition {}", self, id);
@@ -335,8 +334,8 @@ void index_state::decomission_active_partition() {
         // CAF message types must be copy-constructible.
         VAST_ASSERT(ps.use_count() == 1);
         self
-          ->request<caf::message_priority::high>(meta_index, caf::infinite, id,
-                                                 std::move(ps))
+          ->request<caf::message_priority::high>(
+            meta_index, caf::infinite, atom::merge_v, id, std::move(ps))
           .then(
             [=](atom::ok) {
               VAST_DEBUG("{} received ok for request to persist partition {}",
@@ -743,6 +742,9 @@ index(index_actor::stateful_pointer<index_state> self,
                        self, candidates, midx_candidates);
             candidates.insert(candidates.end(), midx_candidates.begin(),
                               midx_candidates.end());
+            std::sort(candidates.begin(), candidates.end());
+            candidates.erase(std::unique(candidates.begin(), candidates.end()),
+                             candidates.end());
             if (candidates.empty()) {
               VAST_DEBUG("{} returns without result: no partitions qualify",
                          self);
