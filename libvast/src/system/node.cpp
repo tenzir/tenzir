@@ -289,7 +289,7 @@ spawn_accountant(node_actor::stateful_pointer<node_state> self,
 caf::expected<caf::actor>
 spawn_component(node_actor::stateful_pointer<node_state> self,
                 const invocation& inv, spawn_arguments& args) {
-  VAST_TRACE("{} {}", VAST_ARG(inv), VAST_ARG(args));
+  VAST_TRACE_SCOPE("{} {}", VAST_ARG(inv), VAST_ARG(args));
   using caf::atom_uint;
   auto i = node_state::component_factory.find(inv.full_name);
   if (i == node_state::component_factory.end())
@@ -439,7 +439,7 @@ std::string generate_label(node_actor::stateful_pointer<node_state> self,
 caf::message
 node_state::spawn_command(const invocation& inv,
                           [[maybe_unused]] caf::actor_system& sys) {
-  VAST_TRACE("{}", inv);
+  VAST_TRACE_SCOPE("{}", inv);
   using std::begin;
   using std::end;
   auto self = this_node;

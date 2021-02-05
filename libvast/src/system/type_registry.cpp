@@ -160,20 +160,20 @@ type_registry(type_registry_actor::stateful_pointer<type_registry_state> self,
   return {
     [self](atom::telemetry) {
       if (auto telemetry = self->state.telemetry(); !telemetry.empty()) {
-        VAST_TRACE("{} sends out a telemetry report to the {}", self,
-                   VAST_ARG("accountant", self->state.accountant));
+        VAST_TRACE_SCOPE("{} sends out a telemetry report to the {}", self,
+                         VAST_ARG("accountant", self->state.accountant));
         self->send(self->state.accountant, std::move(telemetry));
       }
       self->delayed_send(self, defaults::system::telemetry_rate,
                          atom::telemetry_v);
     },
     [self](atom::status, status_verbosity v) {
-      VAST_TRACE("{} sends out a status report", self);
+      VAST_TRACE_SCOPE("{} sends out a status report", self);
       return self->state.status(v);
     },
     [self](
       caf::stream<table_slice> in) -> caf::inbound_stream_slot<table_slice> {
-      VAST_TRACE("{} attaches to {}", self, VAST_ARG("stream", in));
+      VAST_TRACE_SCOPE("{} attaches to {}", self, VAST_ARG("stream", in));
       auto result = caf::attach_stream_sink(
         self, in,
         [=](caf::unit_t&) {
@@ -183,24 +183,24 @@ type_registry(type_registry_actor::stateful_pointer<type_registry_state> self,
       return result.inbound_slot();
     },
     [self](atom::put, vast::type x) {
-      VAST_TRACE("{} tries to add {}", self, VAST_ARG("type", x.name()));
+      VAST_TRACE_SCOPE("{} tries to add {}", self, VAST_ARG("type", x.name()));
       self->state.insert(std::move(x));
     },
     [self](atom::put, vast::schema x) {
-      VAST_TRACE("{} tries to add {}", self, VAST_ARG("schema", x));
+      VAST_TRACE_SCOPE("{} tries to add {}", self, VAST_ARG("schema", x));
       for (auto& type : x)
         self->state.insert(std::move(type));
     },
     [self](atom::get) {
-      VAST_TRACE("{} retrieves a list of all known types", self);
+      VAST_TRACE_SCOPE("{} retrieves a list of all known types", self);
       return self->state.types();
     },
     [self](atom::put, taxonomies t) {
-      VAST_TRACE("");
+      VAST_TRACE_SCOPE("");
       self->state.taxonomies = std::move(t);
     },
     [self](atom::get, atom::taxonomies) {
-      VAST_TRACE("");
+      VAST_TRACE_SCOPE("");
       return self->state.taxonomies;
     },
     [self](atom::load) -> caf::result<atom::ok> {

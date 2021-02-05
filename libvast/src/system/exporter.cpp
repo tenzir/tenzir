@@ -44,7 +44,7 @@ bool finished(const query_status& qs) {
 }
 
 void ship_results(exporter_actor::stateful_pointer<exporter_state> self) {
-  VAST_TRACE("");
+  VAST_TRACE_SCOPE("");
   auto& st = self->state;
   VAST_DEBUG("{} relays {} events", self, st.query.cached);
   while (st.query.requested > 0 && st.query.cached > 0) {

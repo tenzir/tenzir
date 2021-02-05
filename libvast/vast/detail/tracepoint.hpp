@@ -47,8 +47,8 @@
 // records some context, and asynchronously forwards these events to tracing
 // programs like `perf` or `bpftrace`.
 //
-// The main entry point for users is the `VAST_TRACEPOINT()` macro defined at
-// the bottom of this file.
+// The main entry point for users is the `VAST_TRACEPOINT()` macro defined
+// at the bottom of this file.
 //
 //
 // # Inner Workings

@@ -296,8 +296,8 @@ caf::error parse_impl(invocation& result, const command& cmd,
                       command::argument_iterator first,
                       command::argument_iterator last, const command** target) {
   using caf::get_or;
-  VAST_TRACE("{} {}", VAST_ARG(std::string(cmd.name)),
-             VAST_ARG("args", first, last));
+  VAST_TRACE_SCOPE("{} {}", VAST_ARG(std::string(cmd.name)),
+                   VAST_ARG("args", first, last));
   // Parse arguments for this command.
   *target = &cmd;
   auto [state, position] = cmd.options.parse(result.options, first, last);

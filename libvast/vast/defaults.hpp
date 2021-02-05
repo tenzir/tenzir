@@ -326,11 +326,11 @@ namespace logger {
 /// Log filename.
 constexpr const char* log_file = "server.log";
 
-/// Log format for file output. (spdlog default format)
-constexpr const char* file_format = "%+";
+/// Log format for file output.
+constexpr const char* file_format = "[%Y-%m-%dT%T.%e%z] [%n] [%l] [%s:%#] %v";
 
 /// Log format for console output.
-constexpr const char* console_format = "%^%Y-%m-%dT%T.%e%z %v%$";
+constexpr const char* console_format = "%^[%T.%e] %v%$";
 
 /// Verbosity for writing to console.
 constexpr const caf::atom_value console_verbosity = caf::atom("info");

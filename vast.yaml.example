@@ -21,7 +21,7 @@ vast:
   # Format for printing individual log entries to the log-file.
   # For a list of valid format specifiers, see spdlog format specification
   # at https://github.com/gabime/spdlog/wiki/3.-Custom-formatting
-  # file-format:
+  # file-format: "[%Y-%m-%dT%T.%e%z] [%n] [%l] [%s:%#] %v"
 
   # Configures the minimum severity of messages written to the log file.
   # Possible values: quiet, error, warning, info, verbose, debug, trace.
@@ -38,7 +38,7 @@ vast:
   # Format for printing individual log entries to the console.
   # For a list of valid format specifiers, see spdlog format specification
   # at https://github.com/gabime/spdlog/wiki/3.-Custom-formatting
-  # console-format:
+  # console-format: "%^[%T.%e] %v%$"
 
   # Configures the minimum severity of messages written to the console.
   # For a list of valid log levels, see file-verbosity.

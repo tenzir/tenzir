@@ -152,8 +152,8 @@ explorer(caf::stateful_actor<explorer_state>* self, node_actor node,
         if (auto col = table_slice_column::make(slice, *st.by))
           by_column.emplace(std::move(*col));
         if (!by_column) {
-          VAST_TRACE("skipping slice with {} because it has no column {}",
-                     layout, *st.by);
+          VAST_TRACE_SCOPE("skipping slice with {} because it has no column {}",
+                           layout, *st.by);
           return;
         }
       }
@@ -208,7 +208,7 @@ explorer(caf::stateful_actor<explorer_state>* self, node_actor node,
         // least one constraint.
         VAST_ASSERT(expr);
         auto query = to_string(*expr);
-        VAST_TRACE("{} spawns new exporter with query {}", self, query);
+        VAST_TRACE_SCOPE("{} spawns new exporter with query {}", self, query);
         auto exporter_invocation = invocation{{}, "spawn exporter", {query}};
         if (st.limits.per_result)
           caf::put(exporter_invocation.options, "vast.export.max-events",

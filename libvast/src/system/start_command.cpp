@@ -43,8 +43,9 @@ namespace vast::system {
 using namespace std::chrono_literals;
 
 caf::message start_command(const invocation& inv, caf::actor_system& sys) {
-  VAST_TRACE("{} {}", VAST_ARG(inv.options),
-             VAST_ARG("args", inv.arguments.begin(), inv.arguments.end()));
+  VAST_TRACE_SCOPE("{} {}", VAST_ARG(inv.options),
+                   VAST_ARG("args", inv.arguments.begin(),
+                            inv.arguments.end()));
   // Bail out early for bogus invocations.
   if (caf::get_or(inv.options, "vast.node", false))
     return caf::make_message(caf::make_error(ec::parse_error, "cannot start a "

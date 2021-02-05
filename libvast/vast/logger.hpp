@@ -23,7 +23,7 @@
 // VAST_INFO -> spdlog::info
 // VAST_VERBOSE -> spdlog::debug
 // VAST_DEBUG -> spdlog::trace
-// VAST_TRACE -> spdlog::trace
+// VAST_TRACE_SCOPE -> spdlog::trace
 
 #if VAST_LOG_LEVEL == VAST_LOG_LEVEL_TRACE
 #  define SPDLOG_ACTIVE_LEVEL SPDLOG_LEVEL_TRACE
@@ -47,6 +47,8 @@
 #include "vast/detail/logger.hpp"
 #include "vast/detail/logger_formatters.hpp"
 
+#define VAST_TRACE(...)                                                        \
+  SPDLOG_LOGGER_TRACE(::vast::detail::logger(), __VA_ARGS__)
 #define VAST_DEBUG(...)                                                        \
   SPDLOG_LOGGER_TRACE(::vast::detail::logger(), __VA_ARGS__)
 #define VAST_VERBOSE(...)                                                      \
@@ -60,7 +62,9 @@
 
 #if VAST_LOG_LEVEL >= VAST_LOG_LEVEL_TRACE
 
-#  define VAST_TRACE(...)                                                      \
+// A debugging macro that emits an additional log statement when leaving the
+// current scope.
+#  define VAST_TRACE_SCOPE(...)                                                \
     auto CAF_UNIFYN(vast_log_trace_guard_)                                     \
       = [func_name_ = __func__](const std::string& format, auto&&... args) {   \
           VAST_DEBUG("ENTER {} " + format, __func__,                           \
@@ -71,7 +75,7 @@
 
 #else // VAST_LOG_LEVEL > VAST_LOG_LEVEL_TRACE
 
-#  define VAST_TRACE(...) VAST_DISCARD_ARGS(__VA_ARGS__)
+#  define VAST_TRACE_SCOPE(...) VAST_DISCARD_ARGS(__VA_ARGS__)
 
 #endif // VAST_LOG_LEVEL > VAST_LOG_LEVEL_TRACE
 

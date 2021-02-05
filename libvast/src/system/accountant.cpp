@@ -252,9 +252,9 @@ accountant(accountant_actor::stateful_pointer<accountant_state> self,
         out.push(std::move(slice));
         st.slice_buffer.pop();
       }
-      VAST_TRACE("{} was asked for {} slices and produced {} ; {} are "
-                 "remaining in buffer",
-                 self, num, produced, st.slice_buffer.size());
+      VAST_TRACE_SCOPE("{} was asked for {} slices and produced {} ; {} are "
+                       "remaining in buffer",
+                       self, num, produced, st.slice_buffer.size());
     },
     // done?
     [](const bool&) { return false; });
@@ -269,27 +269,33 @@ accountant(accountant_actor::stateful_pointer<accountant_state> self,
         st.mgr->add_outbound_path(self->current_sender());
     },
     [self](const std::string& key, duration value) {
-      VAST_TRACE("{} received {} from {}", self, key, self->current_sender());
+      VAST_TRACE_SCOPE("{} received {} from {}", self, key,
+                       self->current_sender());
       self->state->record(key, value);
     },
     [self](const std::string& key, time value) {
-      VAST_TRACE("{} received {} from {}", self, key, self->current_sender());
+      VAST_TRACE_SCOPE("{} received {} from {}", self, key,
+                       self->current_sender());
       self->state->record(key, value);
     },
     [self](const std::string& key, integer value) {
-      VAST_TRACE("{} received {} from {}", self, key, self->current_sender());
+      VAST_TRACE_SCOPE("{} received {} from {}", self, key,
+                       self->current_sender());
       self->state->record(key, value);
     },
     [self](const std::string& key, count value) {
-      VAST_TRACE("{} received {} from {}", self, key, self->current_sender());
+      VAST_TRACE_SCOPE("{} received {} from {}", self, key,
+                       self->current_sender());
       self->state->record(key, value);
     },
     [self](const std::string& key, real value) {
-      VAST_TRACE("{} received {} from {}", self, key, self->current_sender());
+      VAST_TRACE_SCOPE("{} received {} from {}", self, key,
+                       self->current_sender());
       self->state->record(key, value);
     },
     [self](const report& r) {
-      VAST_TRACE("{} received a report from {}", self, self->current_sender());
+      VAST_TRACE_SCOPE("{} received a report from {}", self,
+                       self->current_sender());
       time ts = std::chrono::system_clock::now();
       for (const auto& [key, value] : r) {
         auto f
@@ -298,8 +304,8 @@ accountant(accountant_actor::stateful_pointer<accountant_state> self,
       }
     },
     [self](const performance_report& r) {
-      VAST_TRACE("{} received a performance report from {}", self,
-                 self->current_sender());
+      VAST_TRACE_SCOPE("{} received a performance report from {}", self,
+                       self->current_sender());
       time ts = std::chrono::system_clock::now();
       for (const auto& [key, value] : r) {
         self->state->record(key + ".events", value.events, ts);

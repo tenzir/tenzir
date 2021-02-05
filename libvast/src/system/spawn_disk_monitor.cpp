@@ -18,7 +18,7 @@ namespace vast::system {
 caf::expected<caf::actor>
 spawn_disk_monitor(node_actor::stateful_pointer<node_state> self,
                    spawn_arguments& args) {
-  VAST_TRACE("{}", VAST_ARG(args));
+  VAST_TRACE_SCOPE("{}", VAST_ARG(args));
   auto [index, archive]
     = self->state.registry.find<index_actor, archive_actor>();
   if (!index)
