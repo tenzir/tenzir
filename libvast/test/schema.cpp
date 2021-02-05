@@ -109,7 +109,7 @@ TEST(serialization) {
                        {"c", count_type{}.attributes({{"skip"}})},
                        {"i", integer_type{}},
                        {"s2", string_type{}},
-                       {"d2", real_type{}}};
+                       {"d2", real_type{}},};
   t = t.name("foo");
   sch.add(t);
   // Save & load
