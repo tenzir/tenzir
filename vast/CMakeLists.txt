@@ -67,8 +67,7 @@ add_custom_target(
 
 add_custom_target(
   link-integration-directory ALL
-  COMMAND
-    ${CMAKE_COMMAND} -E make_directory "${CMAKE_BINARY_DIR}/share/vast"
+  COMMAND ${CMAKE_COMMAND} -E make_directory "${CMAKE_BINARY_DIR}/share/vast"
   COMMAND
     ${CMAKE_COMMAND} -E create_symlink "${CMAKE_CURRENT_SOURCE_DIR}/integration"
     "${CMAKE_BINARY_DIR}/share/vast/integration"
@@ -110,6 +109,32 @@ if (VAST_PLUGINS)
         --set \"${plugin_source_dir}/integration/tests.yaml\" \
         --directory \"vast-integration-test-${plugin_binary_dir}\" \
         \"\$@\"\n")
+    endif ()
+    # Install custom schemas
+    if (TARGET vast-schema AND EXISTS "${plugin_source_dir}/schema")
+      file(
+        GLOB_RECURSE
+        plugin_schema_files
+        CONFIGURE_DEPENDS
+        "${plugin_source_dir}/schema/*.schema"
+        "${plugin_source_dir}/schema/*.yml"
+        "${plugin_source_dir}/schema/*.yaml")
+      foreach (plugin_schema_file IN LISTS plugin_schema_files)
+        string(REGEX REPLACE "^${plugin_source_dir}/schema/" ""
+                             relative_plugin_schema_file ${plugin_schema_file})
+        string(MD5 plugin_schema_file_hash "${plugin_schema_file}")
+        add_custom_target(
+          vast-schema-${plugin_path_hash}-${plugin_schema_file_hash} ALL
+          BYPRODUCTS
+            "${CMAKE_BINARY_DIR}/share/vast/schema/${relative_plugin_schema_file}"
+          DEPENDS vast-schema
+          COMMAND
+            ${CMAKE_COMMAND} -E copy "${plugin_schema_file}"
+            "${CMAKE_BINARY_DIR}/share/vast/schema/${relative_plugin_schema_file}"
+          COMMENT
+            "Copying schema file ${relative_plugin_schema_file} for plugin ${plugin_name}"
+        )
+      endforeach ()
     endif ()
   endforeach ()
 endif ()
