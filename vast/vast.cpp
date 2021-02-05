@@ -140,7 +140,14 @@ int main(int argc, char** argv) {
       }
     }
     if (!plugin_found) {
-      std::cerr << "failed to find plugin: " << plugin_file << std::endl;
+      std::cerr << "failed to load plugin: " << plugin_file;
+      if (plugin_load_errors.empty()) {
+        std::cerr << '\n';
+      } else {
+        std::cerr << "; the following errors occured:\n";
+        for (const auto& err : plugin_load_errors)
+          std::cerr << " - " << render(err) << '\n';
+      }
       return EXIT_FAILURE;
     }
   }
