@@ -99,6 +99,7 @@ tests:
       - command: -N count -e ":addr == 192.168.1.104"
       - command: -N count "resp_p == 80"
       - command: -N count "resp_p != 80"
+      - command: -N count 861237
   Node Zeek conn log:
     tags: [node, import-export, zeek]
     steps:
