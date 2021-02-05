@@ -166,7 +166,7 @@ using query_supervisor_master_actor = typed_actor_fwd<
 /// The META INDEX actor interface.
 using meta_index_actor = typed_actor_fwd<
   // TODO: docs
-  caf::replies_to<uuid, std::shared_ptr<partition_synopsis>>::with< //
+  caf::replies_to<atom::merge, uuid, std::shared_ptr<partition_synopsis>>::with< //
     atom::ok>,
   // TODO: docs
   caf::replies_to<expression>::with< //
