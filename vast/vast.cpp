@@ -126,7 +126,7 @@ load_plugin(std::vector<plugin_ptr>& plugins, path file,
   // We found the file, but encounterd errors trying to load it.
   return caf::make_error(ec::invalid_configuration,
                          fmt::format("failed to load plugin; these partial "
-                                     "errors occured: - {}",
+                                     "errors occured:\n - {}",
                                      fmt::join(load_errors, "\n - ")));
 };
 
