@@ -34,7 +34,7 @@ template <class Reader, class Defaults = typename Reader::defaults>
 caf::expected<caf::actor>
 spawn_source(node_actor::stateful_pointer<node_state> self,
              spawn_arguments& args) {
-  VAST_TRACE("{} {}", VAST_ARG("node", self), VAST_ARG(args));
+  VAST_TRACE_SCOPE("{} {}", VAST_ARG("node", self), VAST_ARG(args));
   auto& options = args.inv.options;
   // Bail out early for bogus invocations.
   if (caf::get_or(options, "vast.node", false))

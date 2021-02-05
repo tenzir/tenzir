@@ -142,7 +142,7 @@ auto show(const schema& schema) {
 
 caf::message
 infer_command(const invocation& inv, [[maybe_unused]] caf::actor_system& sys) {
-  VAST_TRACE("{}", inv);
+  VAST_TRACE_SCOPE("{}", inv);
   const auto& options = inv.options;
   auto input = detail::make_input_stream<defaults::infer>(options);
   if (!input)

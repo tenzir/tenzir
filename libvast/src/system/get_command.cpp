@@ -84,7 +84,7 @@ run(caf::scoped_actor& self, archive_actor archive, const invocation& inv) {
 } // namespace
 
 caf::message get_command(const invocation& inv, caf::actor_system& sys) {
-  VAST_TRACE("{}", inv);
+  VAST_TRACE_SCOPE("{}", inv);
   caf::scoped_actor self{sys};
   // Get VAST node.
   auto node_opt

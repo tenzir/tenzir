@@ -31,7 +31,7 @@ caf::expected<caf::actor>
 spawn_eraser(node_actor::stateful_pointer<node_state> self,
              spawn_arguments& args) {
   using namespace std::string_literals;
-  VAST_TRACE("{} {}", VAST_ARG(self), VAST_ARG(args));
+  VAST_TRACE_SCOPE("{} {}", VAST_ARG(self), VAST_ARG(args));
   // Parse options.
   auto eraser_query = caf::get_or(args.inv.options, "vast.aging-query", ""s);
   if (eraser_query.empty()) {

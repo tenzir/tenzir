@@ -44,7 +44,7 @@ example_actor::behavior_type
 example(example_actor::stateful_pointer<example_actor_state> self) {
   return {
     [self](atom::config, record config) {
-      VAST_TRACE("{} sets configuration {}", self, config);
+      VAST_TRACE_SCOPE("{} sets configuration {}", self, config);
       for (auto& [key, value] : config) {
         if (key == "max-events") {
           if (auto max_events = caf::get_if<integer>(&value)) {
@@ -56,7 +56,7 @@ example(example_actor::stateful_pointer<example_actor_state> self) {
     },
     [self](
       caf::stream<table_slice> in) -> caf::inbound_stream_slot<table_slice> {
-      VAST_TRACE("{} hooks into stream {}", self, in);
+      VAST_TRACE_SCOPE("{} hooks into stream {}", self, in);
       return caf::attach_stream_sink(
                self, in,
                // Initialization hook for CAF stream.

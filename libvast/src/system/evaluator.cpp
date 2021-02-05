@@ -153,7 +153,7 @@ evaluator_actor::behavior_type
 evaluator(evaluator_actor::stateful_pointer<evaluator_state> self,
           expression expr, partition_actor partition,
           std::vector<evaluation_triple> eval) {
-  VAST_TRACE("{} {}", VAST_ARG(expr), VAST_ARG(eval));
+  VAST_TRACE_SCOPE("{} {}", VAST_ARG(expr), VAST_ARG(eval));
   VAST_ASSERT(!eval.empty());
   self->state.partition = std::move(partition);
   self->state.expr = std::move(expr);

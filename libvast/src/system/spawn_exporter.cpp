@@ -33,7 +33,7 @@ namespace vast::system {
 caf::expected<caf::actor>
 spawn_exporter(node_actor::stateful_pointer<node_state> self,
                spawn_arguments& args) {
-  VAST_TRACE("{}", VAST_ARG(args));
+  VAST_TRACE_SCOPE("{}", VAST_ARG(args));
   // Parse given expression.
   auto expr = get_expression(args);
   if (!expr)

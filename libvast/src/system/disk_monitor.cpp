@@ -38,7 +38,8 @@ disk_monitor_actor::behavior_type
 disk_monitor(disk_monitor_actor::stateful_pointer<disk_monitor_state> self,
              size_t hiwater, size_t lowater, std::chrono::seconds scan_interval,
              const path& dbdir, archive_actor archive, index_actor index) {
-  VAST_TRACE("{} {} {}", VAST_ARG(hiwater), VAST_ARG(lowater), VAST_ARG(dbdir));
+  VAST_TRACE_SCOPE("{} {} {}", VAST_ARG(hiwater), VAST_ARG(lowater),
+                   VAST_ARG(dbdir));
   using namespace std::string_literals;
   self->state.high_water_mark = hiwater;
   self->state.low_water_mark = lowater;
