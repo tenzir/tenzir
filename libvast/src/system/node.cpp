@@ -611,27 +611,31 @@ node(node_actor::stateful_pointer<node_state> self, std::string name, path dir,
       this_node = self;
       return run(inv, self->system(), node_state::command_factory);
     },
-    [self](atom::spawn, const invocation& inv) -> caf::result<caf::actor> {
+    [self](atom::spawn, const invocation& inv) {
       VAST_DEBUG("{} got spawn command {} with options {} and arguments {}",
                  self, inv.full_name, inv.options, inv.arguments);
       // Run the command.
       this_node = self;
       auto msg = run(inv, self->system(), node_state::command_factory);
-      if (!msg)
-        return msg.error();
-      auto rp = self->make_response_promise<caf::actor>();
-      msg->apply({
-        [&](caf::error& x) { rp.deliver(std::move(x)); },
-        [&](caf::actor& x) { rp.deliver(std::move(x)); },
-      });
-      if (rp.pending()) {
-        VAST_ERROR("{} encountered invalid invocation response: {}", self,
-                   deep_to_string(*msg));
-        rp.deliver(caf::make_error(ec::invalid_result,
-                                   "invalid spawn invocation response",
-                                   std::move(*msg)));
+      auto result = caf::expected<caf::actor>{caf::no_error};
+      if (!msg) {
+        result = std::move(msg.error());
+      } else if (msg->empty()) {
+        VAST_VERBOSE("{} encountered empty invocation response", self);
+      } else {
+        msg->apply({
+          [&](caf::error& x) { result = std::move(x); },
+          [&](caf::actor& x) { result = std::move(x); },
+          [&](caf::message& x) {
+            VAST_ERROR("{} encountered invalid invocation response: {}", self,
+                       deep_to_string(x));
+            result = caf::make_error(ec::invalid_result,
+                                     "invalid spawn invocation response",
+                                     std::move(x));
+          },
+        });
       }
-      return rp;
+      return result;
     },
     [self](atom::put, const caf::actor& component,
            const std::string& type) -> caf::result<atom::ok> {
