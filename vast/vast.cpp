@@ -128,7 +128,7 @@ load_plugin(std::vector<plugin_ptr>& plugins, path file,
                          fmt::format("failed to load plugin; these partial "
                                      "errors occured:\n - {}",
                                      fmt::join(load_errors, "\n - ")));
-};
+}
 
 } // namespace vast::detail
 
