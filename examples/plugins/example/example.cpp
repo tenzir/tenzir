@@ -18,6 +18,7 @@
 #include "vast/table_slice.hpp"
 
 #include <caf/actor_cast.hpp>
+#include <caf/actor_system_config.hpp>
 #include <caf/attach_stream_sink.hpp>
 #include <caf/settings.hpp>
 #include <caf/typed_event_based_actor.hpp>
@@ -33,11 +34,40 @@ using example_actor = caf::typed_actor<
   // Conform to the protocol of the PLUGIN ANALYZER actor.
   ::extend_with<system::analyzer_plugin_actor>;
 
+/// The state of the EXAMPLE actor.
+struct example_actor_state;
+
+} // namespace vast::plugins
+
+// Assign type IDs to types that we intend to use with CAF's messaging system.
+// Every type that is either implicitly or explicitly wrapped in a caf::message,
+// e.g., because it is part of an actor's messaging interface, must have a
+// unique type ID assigned. Only the declaration of types must be available when
+// defining the type ID block. Their definition must only be available in the
+// translation unit that contains VAST_REGISTER_PLUGIN_TYPE_ID_BLOCK.
+// NOTE: For plugins to be used at the same time, their type ID ranges must not
+// have overlap. The selected value of 1000 is just one possible starting value.
+// Please use a unique range for your plugins.
+CAF_BEGIN_TYPE_ID_BLOCK(vast_example_plugin, 1000)
+  CAF_ADD_TYPE_ID(vast_example_plugin, (vast::plugins::example_actor))
+  CAF_ADD_TYPE_ID(vast_example_plugin, (vast::plugins::example_actor_state))
+CAF_END_TYPE_ID_BLOCK(vast_example_plugin)
+
+namespace vast::plugins {
+
 struct example_actor_state {
   uint64_t max_events = std::numeric_limits<uint64_t>::max();
   bool done = false;
 
+  /// The name of the EXAMPLE actor in logs.
   constexpr static inline auto name = "example";
+
+  /// Support CAF type-inspection.
+  template <class Inspector>
+  friend typename Inspector::result_type
+  inspect(Inspector& f, example_actor_state& x) {
+    return f(x.max_events, x.done);
+  }
 };
 
 example_actor::behavior_type
@@ -163,4 +193,9 @@ private:
 
 } // namespace vast::plugins
 
+// Register the example_plugin with version 0.1.0-0.
 VAST_REGISTER_PLUGIN(vast::plugins::example_plugin, 0, 1, 0, 0)
+
+// Register the type IDs in our type ID block with VAST. This can be omitted
+// when not adding additional type IDs.
+VAST_REGISTER_PLUGIN_TYPE_ID_BLOCK(vast_example_plugin)
