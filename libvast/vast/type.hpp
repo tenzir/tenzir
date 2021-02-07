@@ -638,10 +638,15 @@ struct record_type final : recursive_type<record_type> {
   /// @returns The type at key *key* or `nullptr` if *key* doesn't resolve.
   const type* at(std::string_view key) const;
 
-  /// Retrieves the type at a given offset.
+  /// Retrieves the field at a given offset.
   /// @param o The offset to resolve.
   /// @returns The field at offset *o* or `nullptr` if *o* doesn't resolve.
   const record_field* at(const offset& o) const;
+
+  /// Returns the field at the given offset with the full name starting from the
+  /// root node.
+  /// @param o The offset to resolve.
+  caf::optional<record_field> flat_field_at(offset o) const;
 
   /// Converts an offset into an index for the flattened representation.
   /// @param o The offset to resolve.

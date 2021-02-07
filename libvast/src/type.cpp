@@ -368,6 +368,24 @@ bool record_type::less_than(const abstract_type& other) const {
   return super::less_than(other) || fields < downcast(other).fields;
 }
 
+caf::optional<record_field> record_type::flat_field_at(offset o) const {
+  record_field result;
+  auto r = this;
+  size_t x = 0;
+  for (; x < o.size() - 1; ++x) {
+    auto next = r->fields[o[x]];
+    result.name += next.name + '.';
+    if (auto next_record = get_if<record_type>(&next.type))
+      r = next_record;
+    else
+      return caf::none;
+  }
+  auto next = r->fields[o[x]];
+  result.name += next.name + '.';
+  result.type = next.type;
+  return result;
+}
+
 caf::optional<size_t> record_type::flat_index_at(offset o) const {
   // Empty offsets are invalid.
   if (o.empty())
