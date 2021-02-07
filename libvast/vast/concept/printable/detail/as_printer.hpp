@@ -57,8 +57,7 @@ constexpr bool is_convertible_to_unary_printer_v =
 
 template <class T, class U>
 using is_convertible_to_binary_printer =
-  std::integral_constant<
-    bool,
+  std::bool_constant<
     (is_printer_v<T> && is_printer_v<U>)
     || (is_printer_v<T> && is_convertible_to_unary_printer_v<U>)
     || (is_convertible_to_unary_printer_v<T> && is_printer_v<U>)

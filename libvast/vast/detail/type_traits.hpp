@@ -24,11 +24,6 @@
 
 namespace vast::detail {
 
-// -- C++17 ------------------------------------------------------------------
-
-template <bool B>
-using bool_constant = std::integral_constant<bool, B>;
-
 // -- Library Fundamentals v2 ------------------------------------------------
 
 struct nonesuch {

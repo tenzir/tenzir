@@ -280,8 +280,8 @@ template <bool RequiresNoexcept, typename T, typename Args>
 struct is_noexcept_correct : std::true_type {};
 template <typename T, typename... Args>
 struct is_noexcept_correct<true, T, identity<Args...>>
-  : std::integral_constant<bool, noexcept(invoke(std::declval<T>(),
-                                                 std::declval<Args>()...))> {};
+  : std::bool_constant<noexcept(
+      invoke(std::declval<T>(), std::declval<Args>()...))> {};
 } // end namespace invocation
 
 /// Declares the namespace which provides the functionality to work with a
@@ -382,7 +382,7 @@ struct box_factory<box<IsCopyable, T, Allocator>> {
 
 /// Creates a box containing the given value and allocator
 template <bool IsCopyable, typename T, typename Allocator>
-auto make_box(std::integral_constant<bool, IsCopyable>, T&& value,
+auto make_box(std::bool_constant<IsCopyable>, T&& value,
               Allocator&& allocator) {
   return box<IsCopyable, std::decay_t<T>, std::decay_t<Allocator>>(
     std::forward<T>(value), std::forward<Allocator>(allocator));
@@ -507,8 +507,8 @@ using std::bad_function_call;
 
 /// If the function is qualified as noexcept, the call will never throw
 template <bool IsNoexcept>
-[[noreturn]] void throw_or_abortnoexcept(
-  std::integral_constant<bool, IsNoexcept> /*is_throwing*/) noexcept {
+[[noreturn]] void
+throw_or_abortnoexcept(std::bool_constant<IsNoexcept> /*is_throwing*/) noexcept {
   std::abort();
 }
 /// Calls std::abort on empty function calls
@@ -540,8 +540,8 @@ using is_noexcept_noexcept = std::true_type;
     struct internal_invoker {                                                  \
       static Ret invoke(data_accessor CONST VOLATILE* data,                    \
                         std::size_t capacity, Args... args) NOEXCEPT {         \
-        auto obj = retrieve<T>(std::integral_constant<bool, IsInplace>{},      \
-                               data, capacity);                                \
+        auto obj                                                               \
+          = retrieve<T>(std::bool_constant<IsInplace>{}, data, capacity);      \
         auto box = static_cast<T CONST VOLATILE*>(obj);                        \
         return invocation::invoke(                                             \
           static_cast<std::decay_t<decltype(box->value_)> CONST VOLATILE REF>( \
@@ -571,7 +571,7 @@ using is_noexcept_noexcept = std::true_type;
     struct empty_invoker {                                                     \
       static Ret invoke(data_accessor CONST VOLATILE* /*data*/,                \
                         std::size_t /*capacity*/, Args... /*args*/) NOEXCEPT { \
-        throw_or_abort##NOEXCEPT(std::integral_constant<bool, Throws>{});      \
+        throw_or_abort##NOEXCEPT(std::bool_constant<Throws>{});                \
       }                                                                        \
     };                                                                         \
   };
@@ -802,8 +802,8 @@ class vtable<property<IsThrowing, HasStrongExceptGuarantee, FormalArgs...>> {
       switch (op) {
         case opcode::op_move: {
           /// Retrieve the pointer to the object
-          auto box = static_cast<T*>(retrieve<T>(
-            std::integral_constant<bool, IsInplace>{}, from, from_capacity));
+          auto box = static_cast<T*>(
+            retrieve<T>(std::bool_constant<IsInplace>{}, from, from_capacity));
           VAST_ASSERT(box && "The object must not be over aligned or null!");
 
           if (!IsInplace) {
@@ -829,8 +829,8 @@ class vtable<property<IsThrowing, HasStrongExceptGuarantee, FormalArgs...>> {
           return;
         }
         case opcode::op_copy: {
-          auto box = static_cast<T const*>(retrieve<T>(
-            std::integral_constant<bool, IsInplace>{}, from, from_capacity));
+          auto box = static_cast<T const*>(
+            retrieve<T>(std::bool_constant<IsInplace>{}, from, from_capacity));
           VAST_ASSERT(box && "The object must not be over aligned or null!");
 
           VAST_ASSERT(std::is_copy_constructible<T>::value
@@ -844,8 +844,8 @@ class vtable<property<IsThrowing, HasStrongExceptGuarantee, FormalArgs...>> {
         case opcode::op_destroy:
         case opcode::op_weak_destroy: {
           VAST_ASSERT(!to && !to_capacity && "Arg overflow!");
-          auto box = static_cast<T*>(retrieve<T>(
-            std::integral_constant<bool, IsInplace>{}, from, from_capacity));
+          auto box = static_cast<T*>(
+            retrieve<T>(std::bool_constant<IsInplace>{}, from, from_capacity));
 
           if (IsInplace) {
             box->~T();
@@ -1099,12 +1099,12 @@ public:
   FU2_DETAIL_CXX14_CONSTEXPR
   erasure(std::false_type /*use_bool_op*/, T&& callable,
           Allocator&& allocator = Allocator{}) {
-    vtable_t::init(vtable_,
-                   type_erasure::make_box(
-                     std::integral_constant<bool, Config::is_copyable>{},
-                     std::forward<T>(callable),
-                     std::forward<Allocator>(allocator)),
-                   this->opaque_ptr(), capacity());
+    vtable_t::init(
+      vtable_,
+      type_erasure::make_box(std::bool_constant<Config::is_copyable>{},
+                             std::forward<T>(callable),
+                             std::forward<Allocator>(allocator)),
+      this->opaque_ptr(), capacity());
   }
 
   VAST_DIAGNOSTIC_PUSH
@@ -1116,12 +1116,12 @@ public:
   erasure(std::true_type /*use_bool_op*/, T&& callable,
           Allocator&& allocator = Allocator{}) {
     if (bool(callable)) {
-      vtable_t::init(vtable_,
-                     type_erasure::make_box(
-                       std::integral_constant<bool, Config::is_copyable>{},
-                       std::forward<T>(callable),
-                       std::forward<Allocator>(allocator)),
-                     this->opaque_ptr(), capacity());
+      vtable_t::init(
+        vtable_,
+        type_erasure::make_box(std::bool_constant<Config::is_copyable>{},
+                               std::forward<T>(callable),
+                               std::forward<Allocator>(allocator)),
+        this->opaque_ptr(), capacity());
     } else {
       vtable_.set_empty();
     }
@@ -1168,12 +1168,12 @@ public:
   void assign(std::false_type /*use_bool_op*/, T&& callable,
               Allocator&& allocator = {}) {
     vtable_.weak_destroy(this->opaque_ptr(), capacity());
-    vtable_t::init(vtable_,
-                   type_erasure::make_box(
-                     std::integral_constant<bool, Config::is_copyable>{},
-                     std::forward<T>(callable),
-                     std::forward<Allocator>(allocator)),
-                   this->opaque_ptr(), capacity());
+    vtable_t::init(
+      vtable_,
+      type_erasure::make_box(std::bool_constant<Config::is_copyable>{},
+                             std::forward<T>(callable),
+                             std::forward<Allocator>(allocator)),
+      this->opaque_ptr(), capacity());
   }
 
   template <typename T, typename Allocator = std::allocator<std::decay_t<T>>>
@@ -1326,12 +1326,12 @@ template <typename T, typename Signature,
           typename Trait
           = type_erasure::invocation_table::function_trait<Signature>>
 struct accepts_one
-  : std::integral_constant<
-      bool, invocation::can_invoke<typename Trait::template callable<T>,
-                                   typename Trait::arguments>::value
-              && invocation::is_noexcept_correct<
-                Trait::is_noexcept::value, typename Trait::template callable<T>,
-                typename Trait::arguments>::value> {};
+  : std::bool_constant<
+      invocation::can_invoke<typename Trait::template callable<T>,
+                             typename Trait::arguments>::value
+      && invocation::is_noexcept_correct<Trait::is_noexcept::value,
+                                         typename Trait::template callable<T>,
+                                         typename Trait::arguments>::value> {};
 
 /// Deduces to a true_type if the type T provides all signatures
 template <typename T, typename Signatures, typename = void>
@@ -1408,8 +1408,7 @@ using enable_if_copyable_correct_t
 
 template <typename LeftConfig, typename RightConfig>
 using is_owning_correct
-  = std::integral_constant<bool,
-                           (LeftConfig::is_owning == RightConfig::is_owning)>;
+  = std::bool_constant<(LeftConfig::is_owning == RightConfig::is_owning)>;
 
 /// SFINAES out if the given function2 is not owning correct to this one
 template <typename LeftConfig, typename RightConfig>
