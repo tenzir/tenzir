@@ -72,7 +72,7 @@ type deduce(simdjson::dom::element e) {
     case ::simdjson::dom::element_type::OBJECT: {
       record_type result;
       auto xs = e.get_object();
-      for (auto& [k, v] : xs)
+      for (auto [k, v] : xs)
         result.fields.emplace_back(std::string{k}, deduce(v));
       if (result.fields.empty())
         return {};

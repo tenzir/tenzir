@@ -143,7 +143,7 @@ TEST(introspection) {
   CHECK(!is_container(alias_type{}));
 }
 
-TEST(type/data compatibility) {
+TEST(type / data compatibility) {
   CHECK(compatible(address_type{}, relational_operator::in, subnet_type{}));
   CHECK(compatible(address_type{}, relational_operator::in, subnet{}));
   CHECK(compatible(subnet_type{}, relational_operator::in, subnet_type{}));
@@ -737,7 +737,7 @@ TEST(json) {
   },
   "attributes": {}
 })__";
-  CHECK_EQUAL(to_string(to_data(type{r}), print_rendering::json), expected);
+  CHECK_EQUAL(to_json(to_data(type{r})), expected);
 }
 
 FIXTURE_SCOPE_END()

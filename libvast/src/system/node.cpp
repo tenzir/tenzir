@@ -152,8 +152,9 @@ void collect_component_status(node_actor::stateful_pointer<node_state> self,
   }
   auto deliver = [](auto&& req_state) {
     detail::strip_settings(req_state->content);
-    req_state->rp.deliver(
-      to_string(to_data(req_state->content), print_rendering::json));
+
+    if (auto json = to_json(to_data(req_state->content)))
+      req_state->rp.deliver(to_string(std::move(*json)));
   };
   // The overload for 'request(...)' taking a 'std::chrono::duration' does not
   // respect the specified message priority, so we convert to 'caf::duration' by
@@ -254,7 +255,10 @@ caf::message dump_command(const invocation& inv, caf::actor_system&) {
           else
             request_error = std::move(yaml.error());
         } else {
-          rp.deliver(to_string(data{std::move(result)}, print_rendering::json));
+          if (auto json = to_json(data{std::move(result)}))
+            rp.deliver(to_string(std::move(*json)));
+          else
+            request_error = std::move(json.error());
         }
       },
       [=](caf::error& err) mutable { request_error = std::move(err); });
