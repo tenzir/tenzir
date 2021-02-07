@@ -321,11 +321,6 @@ data to_data(const T& x, Opts&&... opts) {
   return {};
 }
 
-/// Converts data with a type to "zipped" JSON, i.e., the JSON object for
-/// records contains the field names from the type corresponding to the given
-/// data.
-// bool convert(const data& x, json& j, const type& t);
-
 caf::error convert(const record& xs, caf::dictionary<caf::config_value>& ys);
 caf::error convert(const record& xs, caf::config_value& cv);
 caf::error convert(const data& x, caf::config_value& cv);
@@ -333,6 +328,13 @@ caf::error convert(const data& x, caf::config_value& cv);
 bool convert(const caf::dictionary<caf::config_value>& xs, record& ys);
 bool convert(const caf::dictionary<caf::config_value>& xs, data& y);
 bool convert(const caf::config_value& x, data& y);
+
+// -- JSON -------------------------------------------------------------
+
+/// Prints data as JSON.
+/// @param x The data instance.
+/// @returns The JSON representation of *x*, or an error.
+caf::expected<std::string> to_json(const data& x);
 
 // -- YAML -------------------------------------------------------------
 

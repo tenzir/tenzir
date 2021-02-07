@@ -319,5 +319,5 @@ TEST(json) {
     }
   ]
 })__";
-  CHECK_EQUAL(to_string(to_data(s), print_rendering::json), expected);
+  CHECK_EQUAL(to_json(to_data(s)), expected);
 }

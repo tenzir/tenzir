@@ -16,6 +16,7 @@
 #include "vast/concept/parseable/vast/data.hpp"
 #include "vast/concept/printable/to_string.hpp"
 #include "vast/concept/printable/vast/data.hpp"
+#include "vast/concept/printable/vast/json.hpp"
 #include "vast/detail/assert.hpp"
 #include "vast/detail/narrow.hpp"
 #include "vast/detail/overload.hpp"
@@ -439,6 +440,17 @@ bool convert(const caf::config_value& x, data& y) {
     },
   };
   return caf::visit(f, x);
+}
+
+caf::expected<std::string> to_json(const data& x) {
+  try {
+    std::string str;
+    auto out = std::back_inserter(str);
+    if (json_printer<policy::tree, 2>{}.print(out, x))
+      return str;
+  } catch (const std::exception&) {
+  }
+  return caf::make_error(ec::parse_error, "cannot convert to json");
 }
 
 namespace {
