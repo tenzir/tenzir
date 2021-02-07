@@ -30,7 +30,7 @@ namespace vast::system {
 /// @param self Points to the parent actor.
 /// @param args Configures the new actor.
 /// @returns a handle to the spawned actor on success, an error otherwise
-template <class Reader, class Defaults = typename Reader::defaults>
+template <class Reader>
 caf::expected<caf::actor>
 spawn_source(node_actor::stateful_pointer<node_state> self,
              spawn_arguments& args) {
@@ -49,7 +49,7 @@ spawn_source(node_actor::stateful_pointer<node_state> self,
     return caf::make_error(ec::missing_component, "importer");
   if (!type_registry)
     return caf::make_error(ec::missing_component, "type-registry");
-  auto src_result = make_source<Reader, Defaults, caf::detached>(
+  auto src_result = make_source<Reader, caf::detached>(
     self, self->system(), args.inv, accountant, type_registry, importer);
   if (!src_result)
     return src_result.error();

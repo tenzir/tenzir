@@ -196,14 +196,13 @@ bool convert(const schema& s, data& d) {
   return true;
 }
 
-caf::expected<schema>
-get_schema(const caf::settings& options, const std::string& category) {
+caf::expected<schema> get_schema(const caf::settings& options) {
   // Get the default schema from the registry.
   auto schema_reg_ptr = event_types::get();
   auto schema = schema_reg_ptr ? *schema_reg_ptr : vast::schema{};
   // Update with an alternate schema, if requested.
-  auto sc = caf::get_if<std::string>(&options, category + ".schema");
-  auto sf = caf::get_if<std::string>(&options, category + ".schema-file");
+  auto sc = caf::get_if<std::string>(&options, "vast.import.schema");
+  auto sf = caf::get_if<std::string>(&options, "vast.import.schema-file");
   if (sc && sf)
     caf::make_error(ec::invalid_configuration,
                     "had both schema and schema-file "

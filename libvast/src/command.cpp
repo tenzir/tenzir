@@ -357,6 +357,29 @@ caf::error parse_impl(invocation& result, const command& cmd,
   return parse_impl(result, **i, position + 1, last, target);
 }
 
+void fixup_options(invocation& inv) {
+  using namespace std::string_literals;
+  for (const auto& cmd : {"import", "spawn.source"}) {
+    for (const auto& format :
+         {"csv", "json", "suricata", "syslog", "zeek", "zeek-json"}) {
+      for (const auto& opt :
+           {"listen", "read", "schema", "schema-file", "type", "uds"}) {
+        auto path = "vast."s + cmd + '.' + format + '.' + opt;
+        if (auto x = caf::get_if<std::string>(&inv.options, path)) {
+          // The logger isn't initialized yet.
+#if VAST_LOG_LEVEL >= VAST_LOG_LEVEL_WARNING
+          fmt::print(stderr,
+                     "The option '{}' is deprected for the '{}' subcommand and "
+                     "should be specified at the {} subcommand instead\n",
+                     opt, format, cmd);
+#endif
+          put(inv.options, "vast."s + cmd + '.' + opt, *x);
+        }
+      }
+    }
+  }
+}
+
 caf::expected<invocation>
 parse(const command& root, command::argument_iterator first,
       command::argument_iterator last) {
@@ -380,6 +403,7 @@ parse(const command& root, command::argument_iterator first,
     manfooter(std::cout);
     return caf::no_error;
   }
+  fixup_options(result);
   return result;
 }
 

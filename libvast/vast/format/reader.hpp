@@ -41,7 +41,7 @@ public:
   /// Default input method for the reader
   struct defaults {
     constexpr static inputs input = inputs::file;
-    constexpr static auto path = vast::defaults::import::shared::read;
+    constexpr static auto path = vast::defaults::import::read;
   };
 
   /// A function object for consuming parsed table slices.

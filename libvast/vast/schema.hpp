@@ -86,11 +86,8 @@ bool convert(const schema& s, data& d);
 /// Loads the complete schema for an invocation by combining the configured
 /// schemas with the ones passed directly as command line options.
 /// @param options The set of command line options.
-/// @param category The position in the subcommand tree at which the option
-///                 is expected.
 /// @returns The parsed schema.
-caf::expected<schema>
-get_schema(const caf::settings& options, const std::string& category);
+caf::expected<schema> get_schema(const caf::settings& options);
 
 /// Gathers the list of paths to traverse for loading schema or taxonomies data.
 /// @param cfg The application config.

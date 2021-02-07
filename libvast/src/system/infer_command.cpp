@@ -138,7 +138,7 @@ caf::message
 infer_command(const invocation& inv, [[maybe_unused]] caf::actor_system& sys) {
   VAST_TRACE_SCOPE("{}", inv);
   const auto& options = inv.options;
-  auto input = detail::make_input_stream<defaults::infer>(options);
+  auto input = detail::make_input_stream(options);
   if (!input)
     return make_message(input.error());
   // Setup buffer for input data.

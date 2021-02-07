@@ -35,15 +35,6 @@ constexpr size_t max_recursion = 100;
 
 // -- constants for the import command and its subcommands ---------------------
 
-/// Contains constants that are shared by two or more import subcommands.
-namespace import::shared {
-
-/// Path for reading input events or `-` for reading from STDIN.
-constexpr std::string_view read = "-";
-
-} // namespace import::shared
-
-/// Contains constants for the import command.
 namespace import {
 
 /// Maximum size for sources that generate table slices.
@@ -72,32 +63,11 @@ constexpr std::chrono::milliseconds batch_timeout = std::chrono::seconds{10};
 constexpr std::chrono::milliseconds read_timeout
   = std::chrono::milliseconds{20};
 
-/// Contains settings for the zeek subcommand.
-struct zeek {
-  /// Nested category in config files for this subcommand.
-  static constexpr const char* category = "vast.import.zeek";
-
-  /// Path for reading input events.
-  static constexpr auto read = shared::read;
-};
-
-/// Contains settings for the zeek-json subcommand.
-struct zeek_json {
-  /// Nested category in config files for this subcommand.
-  static constexpr const char* category = "vast.import.zeek-json";
-
-  /// Path for reading input events.
-  static constexpr auto read = shared::read;
-};
+/// Path for reading input events or `-` for reading from STDIN.
+constexpr std::string_view read = "-";
 
 /// Contains settings for the csv subcommand.
 struct csv {
-  /// Nested category in config files for this subcommand.
-  static constexpr const char* category = "vast.import.csv";
-
-  /// Path for reading input events.
-  static constexpr auto read = shared::read;
-
   static constexpr char separator = ',';
 
   // TODO: agree on reasonable values
@@ -106,41 +76,8 @@ struct csv {
   static constexpr std::string_view kvp_separator = "=";
 };
 
-/// Contains settings for the json subcommand.
-struct json {
-  /// Nested category in config files for this subcommand.
-  static constexpr const char* category = "vast.import.json";
-
-  /// Path for reading input events.
-  static constexpr auto read = shared::read;
-};
-
-/// Contains settings for the suricata subcommand.
-struct suricata {
-  /// Nested category in config files for this subcommand.
-  static constexpr const char* category = "vast.import.suricata";
-
-  /// Path for reading input events.
-  static constexpr auto read = shared::read;
-};
-
-/// Contains settings for the syslog subcommand.
-struct syslog {
-  /// Nested category in config files for this subcommand.
-  static constexpr const char* category = "vast.import.syslog";
-
-  /// Path for reading input events.
-  static constexpr auto read = shared::read;
-};
-
 /// Contains settings for the test subcommand.
 struct test {
-  /// Nested category in config files for this subcommand.
-  static constexpr const char* category = "vast.import.test";
-
-  /// Path for reading input events.
-  static constexpr auto read = shared::read;
-
   /// @returns a user-defined seed if available, a randomly generated seed
   /// otherwise.
   static size_t seed(const caf::settings& options);
@@ -148,12 +85,6 @@ struct test {
 
 /// Contains settings for the pcap subcommand.
 struct pcap {
-  /// Nested category in config files for this subcommand.
-  static constexpr const char* category = "vast.import.pcap";
-
-  /// Path for reading input events.
-  static constexpr auto read = shared::read;
-
   /// Number of bytes to keep per event.
   static constexpr size_t cutoff = std::numeric_limits<size_t>::max();
 
@@ -220,6 +151,9 @@ constexpr std::string_view read = "-";
 
 /// Maximum number of results.
 constexpr size_t max_events = 0;
+
+/// Path for writing query results or `-` for writing to STDOUT.
+constexpr std::string_view write = "-";
 
 /// Contains settings for the zeek subcommand.
 struct zeek {
@@ -300,7 +234,7 @@ struct infer {
   static constexpr const char* category = "vast.infer";
 
   /// Path for reading input events.
-  static constexpr auto read = defaults::import::shared::read;
+  static constexpr auto read = defaults::import::read;
 
   /// Number of bytes to buffer from input.
   static constexpr size_t buffer_size = 8'192;
