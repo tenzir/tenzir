@@ -17,9 +17,8 @@
 #include "vast/concept/printable/vast/data.hpp"
 #include "vast/config.hpp"
 #include "vast/data.hpp"
-#include "vast/detail/process.hpp"
+#include "vast/detail/load_plugin.hpp"
 #include "vast/detail/settings.hpp"
-#include "vast/detail/stable_set.hpp"
 #include "vast/detail/system.hpp"
 #include "vast/directory.hpp"
 #include "vast/error.hpp"
@@ -32,105 +31,14 @@
 #include "vast/system/default_configuration.hpp"
 
 #include <caf/actor_system.hpp>
-#include <caf/io/middleman.hpp>
-#include <caf/settings.hpp>
-#include <caf/timestamp.hpp>
 
 #include <cstdlib>
 #include <iostream>
 #include <string>
 #include <vector>
 
-#if VAST_ENABLE_OPENSSL
-#  include <caf/openssl/manager.hpp>
-#endif
-
-using namespace std::string_literals;
 using namespace vast;
 using namespace vast::system;
-
-namespace vast::detail {
-
-// TODO: find a better location for this function.
-stable_set<path> get_plugin_dirs(const caf::actor_system_config& cfg) {
-  stable_set<path> result;
-#if !VAST_ENABLE_RELOCATABLE_INSTALLATIONS
-  result.insert(path{VAST_LIBDIR} / "vast" / "plugins");
-#endif
-  // FIXME: we technically should not use "lib" relative to the parent, because
-  // it may be lib64 or something else. CMAKE_INSTALL_LIBDIR is probably the
-  // best choice.
-  if (auto binary = objectpath(nullptr))
-    result.insert(binary->parent().parent() / "lib" / "vast" / "plugins");
-  else
-    VAST_ERROR("{} failed to get program path", __func__);
-  if (const char* home = std::getenv("HOME"))
-    result.insert(path{home} / ".local" / "lib" / "vast" / "plugins");
-  if (auto dirs = caf::get_if<std::vector<std::string>>( //
-        &cfg, "vast.plugin-dirs"))
-    result.insert(dirs->begin(), dirs->end());
-  return result;
-}
-
-// TODO: find a better location for this function.
-caf::expected<std::pair<path, plugin_ptr>>
-load_plugin(std::vector<plugin_ptr>& plugins, path file,
-            caf::actor_system_config& cfg) {
-  auto try_load_plugin = [&](path file) -> caf::expected<plugin_ptr> {
-#if VAST_MACOS
-    if (file.extension() == "")
-      file = file.str() + ".dylib";
-#else
-    if (file.extension() == "")
-      file = file.str() + ".so";
-#endif
-    if (!exists(file))
-      return caf::no_error;
-    if (auto plugin = plugin_ptr::make(file.str().c_str(), cfg)) {
-      VAST_ASSERT(*plugin);
-      auto has_same_name = [name = (*plugin)->name()](const auto& other) {
-        return !std::strcmp(name, other->name());
-      };
-      if (std::none_of(plugins.begin(), plugins.end(), has_same_name)) {
-        return plugin;
-      } else {
-        return caf::make_error(ec::invalid_configuration,
-                               fmt::format("failed to load plugin {} because "
-                                           "another plugin already uses the "
-                                           "name {}",
-                                           file, (*plugin)->name()));
-      }
-    } else {
-      return std::move(plugin.error());
-    }
-    return ec::logic_error;
-  };
-  auto load_errors = std::vector<caf::error>{};
-  // First, check if the plugin file is specified as an absolute path.
-  if (auto plugin = try_load_plugin(file))
-    return std::pair{file, std::move(*plugin)};
-  else if (plugin.error() != caf::no_error)
-    load_errors.push_back(std::move(plugin.error()));
-  // Second, check if the plugin file is specified relative to the specified
-  // plugin directories.
-  for (const auto& dir : get_plugin_dirs(cfg))
-    if (auto plugin = try_load_plugin(dir / file))
-      return std::pair{dir / file, std::move(*plugin)};
-    else if (plugin.error() != caf::no_error)
-      load_errors.push_back(std::move(plugin.error()));
-  // We didn't find the plugin, and did not encounter any errors, so the file
-  // just does not exist.
-  if (load_errors.empty())
-    return caf::make_error(ec::invalid_configuration,
-                           fmt::format("failed to find plugin {}", file));
-  // We found the file, but encounterd errors trying to load it.
-  return caf::make_error(ec::invalid_configuration,
-                         fmt::format("failed to load plugin; these partial "
-                                     "errors occured:\n - {}",
-                                     fmt::join(load_errors, "\n - ")));
-}
-
-} // namespace vast::detail
 
 int main(int argc, char** argv) {
   // Set up our configuration, e.g., load of YAML config file(s).
@@ -140,20 +48,13 @@ int main(int argc, char** argv) {
               << std::endl;
     return EXIT_FAILURE;
   }
-  // Application setup.
-  auto [root, root_factory] = make_application(argv[0]);
-  if (!root)
-    return EXIT_FAILURE;
   // Load plugins.
-  auto plugin_dirs = detail::get_plugin_dirs(cfg);
-  // We need the below variable because we cannot log here, they are used for
-  // deferred log statements essentially.
   auto loaded_plugin_paths = std::vector<path>{};
   auto plugin_files
     = caf::get_or(cfg, "vast.plugins", std::vector<std::string>{});
   auto& plugins = plugins::get();
   for (const auto& plugin_file : plugin_files) {
-    if (auto loaded_plugin = detail::load_plugin(plugins, plugin_file, cfg)) {
+    if (auto loaded_plugin = detail::load_plugin(plugin_file, cfg)) {
       auto&& [path, plugin] = std::move(*loaded_plugin);
       loaded_plugin_paths.push_back(std::move(path));
       plugins.push_back(std::move(plugin));
@@ -163,16 +64,11 @@ int main(int argc, char** argv) {
       return EXIT_FAILURE;
     }
   }
-  // Add additional commands from plugins.
-  for (auto& plugin : plugins) {
-    if (auto cp = plugin.as<command_plugin>()) {
-      auto&& [cmd, cmd_factory] = cp->make_command();
-      root->add_subcommand(std::move(cmd));
-      root_factory.insert(std::make_move_iterator(cmd_factory.begin()),
-                          std::make_move_iterator(cmd_factory.end()));
-    }
-  }
-  // Parse CLI.
+  // Application setup.
+  auto [root, root_factory] = make_application(argv[0]);
+  if (!root)
+    return EXIT_FAILURE;
+  // Parse the CLI.
   auto invocation
     = parse(*root, cfg.command_line.begin(), cfg.command_line.end());
   if (!invocation) {
@@ -180,16 +76,17 @@ int main(int argc, char** argv) {
       render_error(*root, invocation.error(), std::cerr);
       return EXIT_FAILURE;
     }
-    // Printing help/documentation returns a no_error, and we want to indicate
-    // success when printing the help/documentation texts.
+    // Printing help/documentation texts returns caf::no_error, and we want to
+    // indicate success when printing the help/documentation texts.
     return EXIT_SUCCESS;
   }
+  // Merge the options from the CLI into the options from the configuration.
+  // From here on, options from the command line can be used.
+  vast::detail::merge_settings(invocation->options, cfg.content);
   // Create log context as soon as we know the correct configuration.
-  vast::detail::merge_settings((*invocation).options, cfg.content);
   auto log_context = vast::create_log_context(*invocation, cfg.content);
   if (!log_context)
     return EXIT_FAILURE;
-  caf::actor_system sys{cfg};
   // Print the configuration file(s) that were loaded.
   if (!cfg.config_file_path.empty())
     cfg.config_files.emplace_back(std::move(cfg.config_file_path));
@@ -215,25 +112,24 @@ int main(int argc, char** argv) {
       plugin->initialize(data{});
     }
   }
-  // Load event types.
+  // Set up the event types singleton.
   if (auto schema = load_schema(cfg)) {
     event_types::init(*std::move(schema));
   } else {
-    VAST_ERROR("failed to read schema dirs: {}", render(schema.error()));
+    VAST_ERROR("failed to read schema dirs: {}", schema.error());
     return EXIT_FAILURE;
   }
-  // Dispatch to root command.
-  auto result = run(*invocation, sys, root_factory);
-  if (!result) {
-    render_error(*root, result.error(), std::cerr);
+  // Lastly, initialize the actor system context, and execute the given command.
+  // From this point onwards, do not execute code that is not thread-safe.
+  auto sys = caf::actor_system{cfg};
+  auto run_error = caf::error{};
+  if (auto result = run(*invocation, sys, root_factory); !result)
+    run_error = std::move(result.error());
+  else
+    result->apply({[&](caf::error& err) { run_error = std::move(err); }});
+  if (run_error) {
+    render_error(*root, run_error, std::cerr);
     return EXIT_FAILURE;
-  }
-  if (result->match_elements<caf::error>()) {
-    auto& err = result->get_as<caf::error>(0);
-    if (err) {
-      vast::system::render_error(*root, err, std::cerr);
-      return EXIT_FAILURE;
-    }
   }
   return EXIT_SUCCESS;
 }
