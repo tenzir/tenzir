@@ -151,15 +151,6 @@ class function;
 template <typename...>
 struct identity {};
 
-// Equivalent to C++17's std::void_t which targets a bug in GCC,
-// that prevents correct SFINAE behavior.
-// See http://stackoverflow.com/questions/35753920 for details.
-template <typename...>
-struct deduce_to_void : std::common_type<void> {};
-
-template <typename... T>
-using void_t = typename deduce_to_void<T...>::type;
-
 template <typename T>
 using unrefcv_t = std::remove_cv_t<std::remove_reference_t<T>>;
 
@@ -1347,7 +1338,7 @@ template <typename T, typename Signatures, typename = void>
 struct accepts_all : std::false_type {};
 template <typename T, typename... Signatures>
 struct accepts_all<T, identity<Signatures...>,
-                   void_t<std::enable_if_t<accepts_one<T, Signatures>::value>...>>
+                   std::void_t<std::enable_if_t<accepts_one<T, Signatures>::value>...>>
   : std::true_type {};
 
 /// Deduces to a true_type if the type T is implementing operator bool()
@@ -1361,7 +1352,7 @@ struct use_bool_op : std::false_type {};
 template <typename T, typename = void>
 struct has_bool_op : std::false_type {};
 template <typename T>
-struct has_bool_op<T, void_t<decltype(bool(std::declval<T>()))>>
+struct has_bool_op<T, std::void_t<decltype(bool(std::declval<T>()))>>
   : std::true_type {
 #  ifndef NDEBUG
   static_assert(!std::is_pointer<T>::value, "Missing deduction for function "
@@ -1450,7 +1441,7 @@ class function<Config, property<IsThrowing, HasStrongExceptGuarantee, Args...>>
   template <typename RightConfig>
   struct is_convertible_to_this<
     function<RightConfig, property_t>,
-    void_t<enable_if_copyable_correct_t<Config, RightConfig>,
+    std::void_t<enable_if_copyable_correct_t<Config, RightConfig>,
            enable_if_owning_correct_t<Config, RightConfig>>> : std::true_type {
   };
 
