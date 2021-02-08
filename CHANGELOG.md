@@ -13,6 +13,20 @@ This changelog documents all notable user-facing changes of VAST.
 
 ## Unreleased
 
+### ⚡️ Breaking Changes
+
+- ⚠️ The `infer` command has an improved heuristic for the number types `int`,
+  `count`, and `real`. [#1343](https://github.com/tenzir/vast/pull/1343)
+  [#1356](https://github.com/tenzir/vast/pull/1356)
+  [@ngrodzitski](https://github.com/ngrodzitski)
+
+- 🎁 The JSON import now always relies upon [simdjson](https://simdjson.org).
+  The previously experimental `--simdjson` option to the `vast import
+  json|suricata|zeek-json` commands no longer exists as the feature is
+  considered stable. [#1343](https://github.com/tenzir/vast/pull/1343)
+  [#1356](https://github.com/tenzir/vast/pull/1356)
+  [@ngrodzitski](https://github.com/ngrodzitski)
+
 - ⚡️ VAST now requires [{fmt} >= 5.2.1](https://fmt.dev) to be installed.
   [#1330](https://github.com/tenzir/vast/pull/1330)
 
