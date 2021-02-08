@@ -22,7 +22,7 @@ using namespace vast;
 
 FIXTURE_SCOPE(query_tests, fixtures::node)
 
-TEST(node queries) {
+TEST_DISABLED(node queries) {
   ingest("zeek");
   CHECK_EQUAL(rows(query("proto == \"udp\"")), 20u);
   CHECK_EQUAL(rows(query("proto == \"tcp\"")), 0u);
