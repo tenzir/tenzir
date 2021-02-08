@@ -279,7 +279,7 @@ caf::optional<std::string> record_type::resolve(const offset& o) const {
   return result;
 }
 
-const record_field* record_type::find(std::string_view field_name) const {
+const record_field* record_type::find(std::string_view field_name) const& {
   auto pred = [&](auto field) { return field.name == field_name; };
   auto i = std::find_if(fields.begin(), fields.end(), pred);
   return i == fields.end() ? nullptr : &*i;
@@ -333,7 +333,7 @@ std::vector<offset> record_type::find_suffix(std::string_view key) const {
   return result;
 }
 
-const record_field* record_type::at(std::string_view key) const {
+const record_field* record_type::at(std::string_view key) const& {
   auto om = offset_map(*this);
   auto rx_ = "^" + name() + "." + pattern::glob(key) + "$";
   for (auto& [off, name] : om) {
@@ -344,7 +344,7 @@ const record_field* record_type::at(std::string_view key) const {
   return nullptr;
 }
 
-const record_field* record_type::at(const offset& o) const {
+const record_field* record_type::at(const offset& o) const& {
   auto r = this;
   for (size_t i = 0; i < o.size(); ++i) {
     auto& idx = o[i];

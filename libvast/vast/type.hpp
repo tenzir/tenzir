@@ -626,7 +626,8 @@ struct record_type final : recursive_type<record_type> {
   /// @returns A pointer to the found field or `nullptr` otherwise.
   /// @warning The returned pointer becomes invalid when adding or removing
   ///          additional fields.
-  const record_field* find(std::string_view field_name) const;
+  const record_field* find(std::string_view field_name) const&;
+  const record_field* find(std::string_view field_name) && = delete;
 
   /// Finds all offsets for a *suffix* key in this and nested records.
   /// @param key The key to resolve.
@@ -636,12 +637,14 @@ struct record_type final : recursive_type<record_type> {
   /// Retrieves the field at a given key.
   /// @param key The key to resolve.
   /// @returns The field at key *key* or `nullptr` if *key* doesn't resolve.
-  const record_field* at(std::string_view key) const;
+  const record_field* at(std::string_view key) const&;
+  const record_field* at(std::string_view key) && = delete;
 
   /// Retrieves the field at a given offset.
   /// @param o The offset to resolve.
   /// @returns The field at offset *o* or `nullptr` if *o* doesn't resolve.
-  const record_field* at(const offset& o) const;
+  const record_field* at(const offset& o) const&;
+  const record_field* at(const offset& o) && = delete;
 
   /// Returns the field at the given offset with the full name as if the record
   /// was flattened.
