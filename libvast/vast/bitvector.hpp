@@ -172,9 +172,9 @@ public:
   template <class InputIterator>
   void append_blocks(InputIterator first, InputIterator last);
 
-  bitvector<block, detail::mms::standalone> make_standalone() const {
+  bitvector<block, detail::mms::standalone> to_standalone() const {
     return bitvector<block, detail::mms::standalone>(size_,
-                                                     blocks_.make_standalone());
+                                                     blocks_.to_standalone());
   }
 
   // -- concepts --------------------------------------------------------------

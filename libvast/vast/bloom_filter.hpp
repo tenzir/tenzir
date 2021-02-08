@@ -75,7 +75,7 @@ public:
 
   // Construct filter
   bloom_filter(size_t size,
-               span<const uint64_t> data, hasher_type hasher = hasher_type{} /*, std::enable_if_t<Storage == detail::mms::memory_view, int>* = nullptr*/)
+               span<const uint64_t> data, hasher_type hasher = hasher_type{} /*, std::enable_if_t<Storage == detail::mms::view, int>* = nullptr*/)
     : hasher_(std::move(hasher)), bits_(size, data) {
   }
 
@@ -139,13 +139,13 @@ public:
 
   using standalone_type = bloom_filter<HashFunction, Hasher, PartitioningPolicy,
                                        detail::mms::standalone>;
-  using mview_type = bloom_filter<HashFunction, Hasher, PartitioningPolicy,
-                                  detail::mms::memory_view>;
-  friend mview_type;
+  using mms_view_type
+    = bloom_filter<HashFunction, Hasher, PartitioningPolicy, detail::mms::view>;
+  friend mms_view_type;
 
-  // Can currently only be called if `Storage == mms::memory_view`.
-  standalone_type make_standalone() const {
-    return standalone_type{hasher_, bits_.make_standalone()};
+  // Can currently only be called if `Storage == mms::view`.
+  standalone_type to_standalone() const {
+    return standalone_type{hasher_, bits_.to_standalone()};
   }
 
 private:

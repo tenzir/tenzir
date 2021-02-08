@@ -40,9 +40,9 @@ public:
     : synopsis(std::move(x)) {
     span<const uint64_t> sp(fb->data()->data(), fb->data()->size());
     bloom_filter<HashFunction, double_hasher, policy::no_partitioning,
-                 detail::mms::memory_view>
+                 detail::mms::view>
       bf(fb->size(), sp);
-    bloom_filter_ = bf.make_standalone();
+    bloom_filter_ = bf.to_standalone();
   }
 
   void add(data_view x) override {
