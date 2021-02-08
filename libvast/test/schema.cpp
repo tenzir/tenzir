@@ -310,7 +310,7 @@ TEST(parseable - out of order definitions) {
   CHECK(parsers::schema(str, sch));
   auto baz = unbox(sch.find("baz"));
   // clang-format off
-  auto ref = type{
+  auto expected = type{
     list_type{
       record_type{
         {"x", integer_type{}.name("foo")}
@@ -331,7 +331,7 @@ TEST(parseable - with context) {
     CHECK(p("type foo = count", unused));
   }
   {
-    MESSAGE("Use defintion from context");
+    MESSAGE("Use definition from global symbol table");
     auto str = R"__(
       type bar = record{
         x: record{
@@ -354,7 +354,7 @@ TEST(parseable - with context) {
     CHECK_EQUAL(bar, ref);
   }
   {
-    MESSAGE("Override defintion from context - before use");
+    MESSAGE("Override definition in global symbol table - before use");
     auto str = R"__(
       type foo = int
       type bar = record{
@@ -378,7 +378,7 @@ TEST(parseable - with context) {
     CHECK_EQUAL(bar, ref);
   }
   {
-    MESSAGE("Override defintion from context - after use");
+    MESSAGE("Override definition in global symbol table - after use");
     auto str = R"__(
       type bar = record{
         x: record{

@@ -27,11 +27,11 @@
 namespace vast {
 
 struct shared_schema_parser : parser<shared_schema_parser> {
-  using symbol_buffer = std::unordered_map<std::string, type>;
+  using symbol_table = std::unordered_map<std::string, type>;
   using attribute = schema;
 
-  shared_schema_parser(const symbol_buffer& gs, symbol_buffer& ls)
-    : global_symbols{gs}, local_symbols{ls} {
+  shared_schema_parser(const symbol_buffer& global, symbol_buffer& local)
+    : global_symbols{global}, local_symbols{local} {
     // nop
   }
 
@@ -129,11 +129,10 @@ struct shared_schema_parser : parser<shared_schema_parser> {
       return iter->second;
     }
 
-    caf::expected<schema> run() {
-      while (!sb.empty()) {
+    caf::expected<schema> resolve() {
+      while (!sb.empty())
         if (auto x = resolve(sb.begin()); !x)
           return x.error();
-      }
       return sch;
     }
 
@@ -146,7 +145,7 @@ struct shared_schema_parser : parser<shared_schema_parser> {
   bool parse(Iterator& f, const Iterator& l, Attribute& sch) const {
     static_assert(detail::is_any_v<Attribute, attribute, unused_type>);
     symbol_buffer sb;
-    bool table_failed = false;
+    bool duplicate_symbol = false;
     auto to_type = [&](std::tuple<std::string, type> t) -> type {
       auto [name, ty] = std::move(t);
       // If the type has already a name, we're dealing with a symbol and have
@@ -154,11 +153,9 @@ struct shared_schema_parser : parser<shared_schema_parser> {
       if (!ty.name().empty())
         ty = alias_type{ty}; // TODO: attributes
       ty.name(name);
-      auto emplace_result = sb.emplace(name, ty);
-      if (!emplace_result.second) {
+      duplicate_symbol = !sb.emplace(name, ty).second;
+      if (duplicate_symbol)
         VAST_ERROR("multiple definitions of {} detected", name);
-        table_failed = true;
-      }
       return ty;
     };
     // We can't use & because the operand is a parser, and our DSL overloads &.
@@ -169,7 +166,7 @@ struct shared_schema_parser : parser<shared_schema_parser> {
     auto declarations = +(skp >> decl) >> skp;
     if (!declarations(f, l, unused))
       return false;
-    if (table_failed)
+    if (duplicate_symbol)
       return false;
     auto r = resolver{*this, std::move(sb)};
     auto res = r.run();
@@ -190,9 +187,9 @@ struct schema_parser : parser<schema_parser> {
 
   template <class Iterator, class Attribute>
   bool parse(Iterator& f, const Iterator& l, Attribute& sch) const {
-    shared_schema_parser::symbol_buffer gs;
-    shared_schema_parser::symbol_buffer ls;
-    auto p = shared_schema_parser{gs, ls};
+    shared_schema_parser::symbol_buffer global;
+    shared_schema_parser::symbol_buffer local;
+    auto p = shared_schema_parser{global, local};
     return p(f, l, sch);
   }
 };

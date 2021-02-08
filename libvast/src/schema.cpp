@@ -253,7 +253,7 @@ get_schema_dirs(const caf::actor_system_config& cfg,
   return result;
 }
 
-using symbol_buffer = shared_schema_parser::symbol_buffer;
+using symbol_table = shared_schema_parser::symbol_buffer;
 
 caf::expected<schema> load_schema(const path& schema_file) {
   if (schema_file.empty())

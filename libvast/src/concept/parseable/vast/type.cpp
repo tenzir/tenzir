@@ -23,9 +23,9 @@
 namespace vast {
 
 template <class T>
-static type to_basic_type(std::vector<vast::attribute> a) {
-  T b;
-  return b.attributes(std::move(a));
+static type to_basic_type(std::vector<attribute> xs) {
+  T result;
+  return result.attributes(std::move(xs));
 }
 
 template <class Iterator, class Attribute>
