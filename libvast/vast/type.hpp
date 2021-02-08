@@ -643,9 +643,13 @@ struct record_type final : recursive_type<record_type> {
   /// @returns The field at offset *o* or `nullptr` if *o* doesn't resolve.
   const record_field* at(const offset& o) const;
 
-  /// Returns the field at the given offset with the full name starting from the
-  /// root node.
+  /// Returns the field at the given offset with the full name as if the record
+  /// was flattened.
   /// @param o The offset to resolve.
+  /// @code{.cpp}
+  ///   auto r = record_type{{"x", record_type{"y", count_type{}}}};
+  ///   ASSERT_EQ(r.flat_field_at({0,0}), record_field{"x.y", count_type{}});
+  /// @endcode
   caf::optional<record_field> flat_field_at(offset o) const;
 
   /// Converts an offset into an index for the flattened representation.
