@@ -59,8 +59,7 @@ int main(int argc, char** argv) {
       loaded_plugin_paths.push_back(std::move(path));
       plugins.push_back(std::move(plugin));
     } else {
-      std::cerr << fmt::format("failed to load plugin {}: {}\n", plugin_file,
-                               loaded_plugin.error());
+      std::cerr << fmt::format("{}\n", loaded_plugin.error());
       return EXIT_FAILURE;
     }
   }

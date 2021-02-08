@@ -101,8 +101,7 @@ load_plugin(path file, caf::actor_system_config& cfg) {
                            fmt::format("failed to find plugin {}", file));
   // We found the file, but encounterd errors trying to load it.
   return caf::make_error(ec::invalid_configuration,
-                         fmt::format("failed to load plugin; these partial "
-                                     "errors occured:\n - {}",
+                         fmt::format("failed to load plugin {}:\n - {}", file,
                                      fmt::join(load_errors, "\n - ")));
 }
 
