@@ -95,7 +95,7 @@ public:
   // -- construction & assignment ---------------------------------------------
 
   /// Constructs an invalid type.
-  type() = default;
+  type() noexcept = default;
 
   /// Constructs a type from a concrete instance.
   /// @tparam T a type that derives from @ref abstract_type.
@@ -113,10 +113,10 @@ public:
   type& operator=(const type& x) = default;
 
   /// Move-constructs a type.
-  type(type&&) = default;
+  type(type&&) noexcept = default;
 
   /// Move-assigns a type.
-  type& operator=(type&&) = default;
+  type& operator=(type&&) noexcept = default;
 
   /// Assigns a type from another instance
   template <class T>
