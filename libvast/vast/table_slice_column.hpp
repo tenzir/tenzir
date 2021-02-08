@@ -74,7 +74,7 @@ public:
   friend auto inspect(Inspector& f, table_slice_column& x) ->
     typename Inspector::result_type {
     return f(caf::meta::type_name("vast.table_slice_column"), x.slice_,
-             x.column_);
+             x.column_, x.field_);
   }
 
 private:
