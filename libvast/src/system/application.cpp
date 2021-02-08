@@ -29,6 +29,7 @@
 #include "vast/format/syslog.hpp"
 #include "vast/format/test.hpp"
 #include "vast/format/zeek.hpp"
+#include "vast/plugin.hpp"
 #include "vast/system/configuration.hpp"
 #include "vast/system/count_command.hpp"
 #include "vast/system/explore_command.hpp"
@@ -75,54 +76,6 @@ command::opts_builder add_archive_opts(command::opts_builder ob) {
   return std::move(ob)
     .add<size_t>("segments,s", "number of cached segments")
     .add<size_t>("max-segment-size,m", "maximum segment size in MB");
-}
-
-auto make_root_command(std::string_view path) {
-  // We're only interested in the application name, not in its path. For
-  // example, argv[0] might contain "./build/release/bin/vast" and we are only
-  // interested in "vast".
-  path.remove_prefix(std::min(path.find_last_of('/') + 1, path.size()));
-  // For documentation, we use the complete man-page formatted as Markdown
-  auto binary = detail::objectpath();
-  auto schema_desc
-    = "list of directories to look for schema files ([/etc/vast/schema"s;
-  if (binary) {
-    auto relative_schema_dir
-      = binary->parent().parent() / "share" / "vast" / "schema";
-    schema_desc += ", " + relative_schema_dir.str();
-  }
-  schema_desc += "])";
-  auto ob
-    = opts("?vast")
-        .add<std::string>("config", "path to a configuration file")
-        .add<caf::atom_value>("verbosity", "output verbosity level on the "
-                                           "console")
-        .add<std::vector<std::string>>("schema-dirs", schema_desc.c_str())
-        .add<std::vector<std::string>>("schema-paths", "deprecated; use "
-                                                       "schema-dirs instead")
-        .add<std::string>("db-directory,d", "directory for persistent state")
-        .add<std::string>("log-file", "log filename")
-        .add<std::string>("client-log-file", "client log file (default: "
-                                             "disabled)")
-        .add<std::string>("endpoint,e", "node endpoint")
-        .add<std::string>("node-id,i", "the unique ID of this node")
-        .add<bool>("node,N", "spawn a node instead of connecting to one")
-        .add<bool>("enable-metrics", "keep track of performance metrics")
-        .add<bool>("no-default-schema", "don't load the default schema "
-                                        "definitions")
-        .add<std::vector<std::string>>("plugin-dirs", "additional directories "
-                                                      "to load plugins from")
-        .add<std::vector<std::string>>("plugins", "plugins to load at startup")
-        .add<std::string>("aging-frequency", "interval between two aging "
-                                             "cycles")
-        .add<std::string>("aging-query", "query for aging out obsolete data")
-        .add<std::string>("shutdown-grace-period",
-                          "time to wait until component shutdown "
-                          "finishes cleanly before inducing a hard kill");
-  ob = add_index_opts(std::move(ob));
-  ob = add_archive_opts(std::move(ob));
-  return std::make_unique<command>(path, "", documentation::vast,
-                                   std::move(ob));
 }
 
 auto make_count_command() {
@@ -528,11 +481,52 @@ auto make_command_factory() {
   // clang-format on
 }
 
-} // namespace
-
-std::pair<std::unique_ptr<command>, command::factory>
-make_application(std::string_view path) {
-  auto root = make_root_command(path);
+auto make_root_command(std::string_view path) {
+  // We're only interested in the application name, not in its path. For
+  // example, argv[0] might contain "./build/release/bin/vast" and we are only
+  // interested in "vast".
+  path.remove_prefix(std::min(path.find_last_of('/') + 1, path.size()));
+  // For documentation, we use the complete man-page formatted as Markdown
+  auto binary = detail::objectpath();
+  auto schema_desc
+    = "list of directories to look for schema files ([/etc/vast/schema"s;
+  if (binary) {
+    auto relative_schema_dir
+      = binary->parent().parent() / "share" / "vast" / "schema";
+    schema_desc += ", " + relative_schema_dir.str();
+  }
+  schema_desc += "])";
+  auto ob
+    = opts("?vast")
+        .add<std::string>("config", "path to a configuration file")
+        .add<caf::atom_value>("verbosity", "output verbosity level on the "
+                                           "console")
+        .add<std::vector<std::string>>("schema-dirs", schema_desc.c_str())
+        .add<std::vector<std::string>>("schema-paths", "deprecated; use "
+                                                       "schema-dirs instead")
+        .add<std::string>("db-directory,d", "directory for persistent state")
+        .add<std::string>("log-file", "log filename")
+        .add<std::string>("client-log-file", "client log file (default: "
+                                             "disabled)")
+        .add<std::string>("endpoint,e", "node endpoint")
+        .add<std::string>("node-id,i", "the unique ID of this node")
+        .add<bool>("node,N", "spawn a node instead of connecting to one")
+        .add<bool>("enable-metrics", "keep track of performance metrics")
+        .add<bool>("no-default-schema", "don't load the default schema "
+                                        "definitions")
+        .add<std::vector<std::string>>("plugin-dirs", "additional directories "
+                                                      "to load plugins from")
+        .add<std::vector<std::string>>("plugins", "plugins to load at startup")
+        .add<std::string>("aging-frequency", "interval between two aging "
+                                             "cycles")
+        .add<std::string>("aging-query", "query for aging out obsolete data")
+        .add<std::string>("shutdown-grace-period",
+                          "time to wait until component shutdown "
+                          "finishes cleanly before inducing a hard kill");
+  ob = add_index_opts(std::move(ob));
+  ob = add_archive_opts(std::move(ob));
+  auto root
+    = std::make_unique<command>(path, "", documentation::vast, std::move(ob));
   root->add_subcommand(make_count_command());
   root->add_subcommand(make_dump_command());
   root->add_subcommand(make_export_command());
@@ -549,7 +543,25 @@ make_application(std::string_view path) {
   root->add_subcommand(make_status_command());
   root->add_subcommand(make_stop_command());
   root->add_subcommand(make_version_command());
-  return {std::move(root), make_command_factory()};
+  return root;
+}
+
+} // namespace
+
+std::pair<std::unique_ptr<command>, command::factory>
+make_application(std::string_view path) {
+  auto root = make_root_command(path);
+  auto root_factory = make_command_factory();
+  // Add additional commands from plugins.
+  for (auto& plugin : plugins::get()) {
+    if (auto cp = plugin.as<command_plugin>()) {
+      auto&& [cmd, cmd_factory] = cp->make_command();
+      root->add_subcommand(std::move(cmd));
+      root_factory.insert(std::make_move_iterator(cmd_factory.begin()),
+                          std::make_move_iterator(cmd_factory.end()));
+    }
+  }
+  return {std::move(root), std::move(root_factory)};
 }
 
 void render_error(const command& root, const caf::error& err,
