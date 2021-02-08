@@ -13,13 +13,13 @@
 
 #pragma once
 
-#include <cstdint>
-
 #include "vast/detail/operators.hpp"
+
+#include <cstdint>
 
 namespace vast {
 
-class json;
+class data;
 
 /// The transport layer type.
 enum class port_type : uint8_t {
@@ -72,6 +72,6 @@ private:
   uint32_t data_ = 0;
 };
 
-bool convert(const port& p, json& j);
+bool convert(const port& p, data& d);
 
 } // namespace vast

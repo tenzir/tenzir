@@ -23,11 +23,10 @@
 #include "vast/concept/parseable/vast/type.hpp"
 #include "vast/concept/printable/stream.hpp"
 #include "vast/concept/printable/to_string.hpp"
-#include "vast/concept/printable/vast/json.hpp"
+#include "vast/concept/printable/vast/data.hpp"
 #include "vast/concept/printable/vast/offset.hpp"
 #include "vast/concept/printable/vast/type.hpp"
 #include "vast/data.hpp"
-#include "vast/json.hpp"
 
 #include <string_view>
 
@@ -114,7 +113,7 @@ TEST(equality comparison) {
   CHECK(real_type{}.attributes(attrs) == real_type{}.attributes(attrs));
 }
 
-TEST(less-than comparison) {
+TEST(less - than comparison) {
   CHECK(!(type{} < type{}));
   CHECK(!(real_type{} < real_type{}));
   CHECK(string_type{}.name("a") < string_type{}.name("b"));
@@ -144,7 +143,7 @@ TEST(introspection) {
   CHECK(!is_container(alias_type{}));
 }
 
-TEST(type/data compatibility) {
+TEST(type / data compatibility) {
   CHECK(compatible(address_type{}, relational_operator::in, subnet_type{}));
   CHECK(compatible(address_type{}, relational_operator::in, subnet{}));
   CHECK(compatible(subnet_type{}, relational_operator::in, subnet_type{}));
@@ -240,15 +239,11 @@ TEST(record range) {
 }
 
 TEST(record resolving) {
-  auto r = record_type{
-    {"a", integer_type{}},
-    {"b", count_type{}},
-    {"c", record_type{
-      {"x", integer_type{}},
-      {"y", address_type{}},
-      {"z", real_type{}}
-    }}
-  };
+  auto r = record_type{{"a", integer_type{}},
+                       {"b", count_type{}},
+                       {"c", record_type{{"x", integer_type{}},
+                                         {"y", address_type{}},
+                                         {"z", real_type{}}}}};
   MESSAGE("top-level offset resolve");
   auto o = r.resolve("c");
   REQUIRE(o);
@@ -272,7 +267,7 @@ TEST(record resolving) {
   CHECK_EQUAL(*k, "c.x");
 }
 
-TEST(record flattening/unflattening) {
+TEST(record flattening / unflattening) {
   // clang-format off
   auto x = record_type{
     {"x", record_type{
@@ -342,19 +337,14 @@ TEST(record flat index computation) {
 }
 
 record_type make_record() {
-  auto r = record_type{
-    {"a", integer_type{}},
-    {"b", record_type{
-      {"a", integer_type{}},
-      {"b", count_type{}},
-      {"c", record_type{
-        {"x", integer_type{}},
-        {"y", address_type{}},
-        {"z", real_type{}}
-      }}
-    }},
-    {"c", count_type{}}
-  };
+  auto r
+    = record_type{{"a", integer_type{}},
+                  {"b", record_type{{"a", integer_type{}},
+                                    {"b", count_type{}},
+                                    {"c", record_type{{"x", integer_type{}},
+                                                      {"y", address_type{}},
+                                                      {"z", real_type{}}}}}},
+                  {"c", count_type{}}};
   r = r.name("foo");
   return r;
 }
@@ -438,12 +428,10 @@ TEST(congruence) {
   CHECK(congruent(l0, l1));
   CHECK(!congruent(l1, l2));
   MESSAGE("records");
-  auto r0 = record_type{{"a", address_type{}},
-                        {"b", bool_type{}},
-                        {"c", count_type{}}};
-  auto r1 = record_type{{"x", address_type{}},
-                        {"y", bool_type{}},
-                        {"z", count_type{}}};
+  auto r0 = record_type{
+    {"a", address_type{}}, {"b", bool_type{}}, {"c", count_type{}}};
+  auto r1 = record_type{
+    {"x", address_type{}}, {"y", bool_type{}}, {"z", count_type{}}};
   CHECK(r0 != r1);
   CHECK(congruent(r0, r1));
   MESSAGE("aliases");
@@ -572,11 +560,8 @@ TEST(printable) {
   CHECK_EQUAL(to_string(list_type{real_type{}}), "list<real>");
   auto b = bool_type{};
   CHECK_EQUAL(to_string(map_type{count_type{}, b}), "map<count, bool>");
-  auto r = record_type{{
-        {"foo", b},
-        {"bar", integer_type{}},
-        {"baz", real_type{}}
-      }};
+  auto r
+    = record_type{{{"foo", b}, {"bar", integer_type{}}, {"baz", real_type{}}}};
   CHECK_EQUAL(to_string(r), "record{foo: bool, bar: int, baz: real}");
   MESSAGE("alias");
   auto a = alias_type{real_type{}};
@@ -662,11 +647,7 @@ TEST(parseable) {
   CHECK(t == type{map_type{foo, foo}});
   MESSAGE("record");
   CHECK(p("record{x: int, y: string, z: foo}", t));
-  r = record_type{
-    {"x", integer_type{}},
-    {"y", string_type{}},
-    {"z", foo}
-  };
+  r = record_type{{"x", integer_type{}}, {"y", string_type{}}, {"z", foo}};
   CHECK(t == type{r});
   MESSAGE("attributes");
   // Single attribute.
@@ -756,7 +737,7 @@ TEST(json) {
   },
   "attributes": {}
 })__";
-  CHECK_EQUAL(to_string(to_json(type{r})), expected);
+  CHECK_EQUAL(to_json(to_data(type{r})), expected);
 }
 
 FIXTURE_SCOPE_END()

@@ -21,12 +21,11 @@
 #include "vast/concept/parseable/vast/schema.hpp"
 #include "vast/concept/printable/stream.hpp"
 #include "vast/concept/printable/to_string.hpp"
+#include "vast/concept/printable/vast/data.hpp"
 #include "vast/concept/printable/vast/error.hpp"
-#include "vast/concept/printable/vast/json.hpp"
 #include "vast/concept/printable/vast/schema.hpp"
 #include "vast/detail/deserialize.hpp"
 #include "vast/detail/serialize.hpp"
-#include "vast/json.hpp"
 
 #include <caf/test/dsl.hpp>
 
@@ -111,7 +110,7 @@ TEST(serialization) {
     {"c", count_type{}.attributes({{"skip"}})},
     {"i", integer_type{}},
     {"s2", string_type{}},
-    {"d2", real_type{}}
+    {"d2", real_type{}},
   };
   t = t.name("foo");
   sch.add(t);
@@ -160,7 +159,7 @@ TEST(parseable - inline comments) {
   CHECK(sch.find("bar"));
 }
 
-TEST(schema: zeek-style) {
+TEST(schema : zeek - style) {
   std::string str = R"__(
     type port = count
     type zeek.ssl = record{
@@ -191,7 +190,7 @@ TEST(schema: zeek-style) {
   CHECK(holds_alternative<record_type>(*id));
 }
 
-TEST(schema: aliases) {
+TEST(schema : aliases) {
   auto str = R"__(
                type foo = addr
                type bar = foo
@@ -322,5 +321,5 @@ TEST(json) {
     }
   ]
 })__";
-  CHECK_EQUAL(to_string(to_json(s)), expected);
+  CHECK_EQUAL(to_json(to_data(s)), expected);
 }

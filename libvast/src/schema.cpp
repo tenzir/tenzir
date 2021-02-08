@@ -19,12 +19,12 @@
 #include "vast/concept/printable/to_string.hpp"
 #include "vast/concept/printable/vast/schema.hpp"
 #include "vast/concept/printable/vast/type.hpp"
+#include "vast/data.hpp"
 #include "vast/detail/process.hpp"
 #include "vast/detail/string.hpp"
 #include "vast/directory.hpp"
 #include "vast/error.hpp"
 #include "vast/event_types.hpp"
-#include "vast/json.hpp"
 #include "vast/logger.hpp"
 #include "vast/path.hpp"
 
@@ -62,8 +62,7 @@ schema schema::combine(const schema& s1, const schema& s2) {
 }
 
 bool schema::add(const type& t) {
-  if (caf::holds_alternative<none_type>(t)
-      || t.name().empty()
+  if (caf::holds_alternative<none_type>(t) || t.name().empty()
       || find(t.name()))
     return false;
   types_.push_back(std::move(t));
@@ -187,13 +186,13 @@ void serialize(caf::deserializer& source, schema& sch) {
   parse(i, str.end(), sch);
 }
 
-bool convert(const schema& s, json& j) {
-  json::object o;
-  json::array a;
+bool convert(const schema& s, data& d) {
+  record o;
+  list a;
   std::transform(s.begin(), s.end(), std::back_inserter(a),
-                 [](auto& t) { return to_json(t); });
+                 [](auto& t) { return to_data(t); });
   o["types"] = std::move(a);
-  j = std::move(o);
+  d = std::move(o);
   return true;
 }
 

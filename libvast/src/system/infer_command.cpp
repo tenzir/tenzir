@@ -15,11 +15,11 @@
 
 #include "vast/concept/parseable/to.hpp"
 #include "vast/concept/parseable/vast/address.hpp"
-#include "vast/concept/parseable/vast/json.hpp"
 #include "vast/concept/parseable/vast/subnet.hpp"
 #include "vast/concept/parseable/vast/time.hpp"
 #include "vast/concept/printable/stream.hpp"
 #include "vast/concept/printable/vast/schema.hpp"
+#include "vast/data.hpp"
 #include "vast/defaults.hpp"
 #include "vast/detail/assert.hpp"
 #include "vast/detail/make_io_stream.hpp"
@@ -28,7 +28,6 @@
 #include "vast/detail/string.hpp"
 #include "vast/error.hpp"
 #include "vast/format/zeek.hpp"
-#include "vast/json.hpp"
 #include "vast/logger.hpp"
 #include "vast/schema.hpp"
 
@@ -39,6 +38,7 @@
 
 #include <cmath>
 #include <iostream>
+#include <simdjson.h>
 #include <sstream>
 #include <string>
 #include <utility>
@@ -63,25 +63,29 @@ infer(const std::string& input, const caf::settings& options) {
   return result;
 }
 
-type deduce(const json& j) {
-  using namespace vast;
-  auto f = detail::overload{
-    [](json::null) { return type{}; },
-    [](json::boolean) -> type { return bool_type{}; },
-    [](json::number x) -> type {
-      // TODO: we should include the string representation of the value to make
-      // a good guess because at this point we no longer know whether the input
-      // was "0" or "0.0".
-      json::number i;
-      if (x == 0.0 || std::modf(x, &i) != 0)
-        return real_type{};
-      if (x < 0)
-        return integer_type{};
+type deduce(simdjson::dom::element e) {
+  switch (e.type()) {
+    case ::simdjson::dom::element_type::ARRAY:
+      if (const auto arr = e.get_array(); arr.size())
+        return list_type{deduce(arr.at(0))};
+      return list_type{type{}};
+    case ::simdjson::dom::element_type::OBJECT: {
+      record_type result;
+      auto xs = e.get_object();
+      for (auto [k, v] : xs)
+        result.fields.emplace_back(std::string{k}, deduce(v));
+      if (result.fields.empty())
+        return {};
+      return result;
+    }
+    case ::simdjson::dom::element_type::INT64:
+      return integer_type{};
+    case ::simdjson::dom::element_type::UINT64:
       return count_type{};
-    },
-    [](const json::string& x) -> type {
-      // A string is the catch-all for types that go beyond's JSON
-      // expressiveness. So most of the inference takes place here.
+    case ::simdjson::dom::element_type::DOUBLE:
+      return real_type{};
+    case ::simdjson::dom::element_type::STRING: {
+      const std::string x{e.get_string().value()};
       if (parsers::net(x))
         return subnet_type{};
       if (parsers::addr(x))
@@ -90,26 +94,14 @@ type deduce(const json& j) {
         return time_type{};
       if (parsers::duration(x))
         return duration_type{};
-      // If cannot find a more specific type, we consider a string a string.
       return string_type{};
-    },
-    [](const json::array& xs) -> type {
-      // We need a list one element to determine the type of the array
-      // elements. Ideally, the input contains multiple instances that allow us
-      // to "upgrade" from a previously unknown element type to a concrete
-      // type.
-      return list_type{xs.empty() ? type{} : deduce(xs[0])};
-    },
-    [](const json::object& xs) -> type {
-      record_type result;
-      for (auto& [k, v] : xs)
-        result.fields.emplace_back(k, deduce(v));
-      if (xs.empty())
-        return {};
-      return result;
-    },
-  };
-  return caf::visit(f, j);
+    }
+    case ::simdjson::dom::element_type::BOOL:
+      return bool_type{};
+    case ::simdjson::dom::element_type::NULL_VALUE:
+      return {};
+  }
+  return {};
 }
 
 caf::expected<schema> infer_json(const std::string& input) {
@@ -119,10 +111,12 @@ caf::expected<schema> infer_json(const std::string& input) {
   if (lines.empty())
     return caf::make_error(ec::parse_error, "failed to get first line of "
                                             "input");
-  auto x = to<json>(lines[0]);
-  if (!x)
+  ::simdjson::dom::parser json_parser;
+  auto x = json_parser.parse(lines[0]);
+  if (x.error())
     return caf::make_error(ec::parse_error, "failed to parse JSON value");
-  auto deduced = deduce(*x);
+
+  auto deduced = deduce(x.value());
   auto rec_ptr = caf::get_if<record_type>(&deduced);
   if (!rec_ptr)
     return caf::make_error(ec::parse_error, "could not parse JSON object");

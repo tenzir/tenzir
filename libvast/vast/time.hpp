@@ -26,14 +26,14 @@ namespace vast {
 using days = std::chrono::duration<
   int, std::ratio_multiply<std::ratio<24>, std::chrono::hours::period>>;
 
-using weeks = std::chrono::duration<
-  int, std::ratio_multiply<std::ratio<7>, days::period>>;
+using weeks
+  = std::chrono::duration<int, std::ratio_multiply<std::ratio<7>, days::period>>;
 
 using years = std::chrono::duration<
   int, std::ratio_multiply<std::ratio<146097, 400>, days::period>>;
 
-using months = std::chrono::duration<
-  int, std::ratio_divide<years::period, std::ratio<12>>>;
+using months
+  = std::chrono::duration<int, std::ratio_divide<years::period, std::ratio<12>>>;
 
 // time_point
 
@@ -47,9 +47,9 @@ using sys_seconds = sys_time<std::chrono::seconds>;
 using double_seconds = std::chrono::duration<double, std::ratio<1>>;
 
 bool convert(duration dur, double& d);
-bool convert(duration dur, json& j);
+bool convert(duration dur, data& d);
 
 bool convert(time tp, double& d);
-bool convert(time tp, json& j);
+bool convert(time tp, data& d);
 
 } // namespace vast

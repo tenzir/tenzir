@@ -13,6 +13,8 @@
 
 #pragma once
 
+#include "vast/fwd.hpp"
+
 #include "vast/aliases.hpp"
 #include "vast/attribute.hpp"
 #include "vast/concept/hashable/uhash.hpp"
@@ -21,7 +23,6 @@
 #include "vast/detail/operators.hpp"
 #include "vast/detail/range.hpp"
 #include "vast/detail/stack_vector.hpp"
-#include "vast/fwd.hpp"
 #include "vast/offset.hpp"
 #include "vast/operator.hpp"
 #include "vast/optional.hpp"
@@ -99,10 +100,8 @@ public:
   /// Constructs a type from a concrete instance.
   /// @tparam T a type that derives from @ref abstract_type.
   /// @param x An instance of a type.
-  template <
-    class T,
-    class = std::enable_if_t<caf::detail::tl_contains<concrete_types, T>::value>
-  >
+  template <class T, class = std::enable_if_t<
+                       caf::detail::tl_contains<concrete_types, T>::value>>
   type(T x) : ptr_{caf::make_counted<T>(std::move(x))} {
     // nop
   }
@@ -185,8 +184,8 @@ private:
 /// Describes properties of a type.
 /// @relates type
 enum class type_flags : uint8_t {
-  basic =     0b0000'0001,
-  complex =   0b0000'0010,
+  basic = 0b0000'0001,
+  complex = 0b0000'0010,
   recursive = 0b0000'0100,
   container = 0b0000'1000,
 };
@@ -215,9 +214,8 @@ constexpr bool is(type_flags x) {
 
 /// The abstract base class for all types.
 /// @relates type
-class abstract_type
-  : public caf::ref_counted,
-    detail::totally_ordered<abstract_type> {
+class abstract_type : public caf::ref_counted,
+                      detail::totally_ordered<abstract_type> {
   friend type; // to change name/attributes of a copy.
 
 public:
@@ -258,9 +256,8 @@ protected:
 /// The base class for all concrete types.
 /// @relates type
 template <class Derived>
-class concrete_type
-  : public abstract_type,
-    detail::totally_ordered<Derived, Derived> {
+class concrete_type : public abstract_type,
+                      detail::totally_ordered<Derived, Derived> {
 public:
   /// @returns the name of the type.
   const std::string& name() const {
@@ -529,8 +526,8 @@ struct map_type final : recursive_type<map_type> {
     // nop
   }
 
-  type key_type;    ///< The type of the map keys.
-  type value_type;  ///< The type of the map values.
+  type key_type;   ///< The type of the map keys.
+  type value_type; ///< The type of the map values.
 
   type_flags flags() const noexcept final {
     return super::flags() | type_flags::container;
@@ -543,15 +540,14 @@ struct map_type final : recursive_type<map_type> {
   }
 
   bool equals(const abstract_type& other) const final {
-    return super::equals(other)
-           && key_type == downcast(other).key_type
+    return super::equals(other) && key_type == downcast(other).key_type
            && value_type == downcast(other).value_type;
   }
 
   bool less_than(const abstract_type& other) const final {
     return super::less_than(other)
            && std::tie(key_type, downcast(other).key_type)
-              < std::tie(value_type, downcast(other).value_type);
+                < std::tie(value_type, downcast(other).value_type);
   }
 };
 
@@ -559,8 +555,7 @@ struct map_type final : recursive_type<map_type> {
 /// @relates record_type
 struct record_field : detail::totally_ordered<record_field> {
   record_field(std::string name = {}, vast::type type = {})
-    : name{std::move(name)},
-      type{std::move(type)} {
+    : name{std::move(name)}, type{std::move(type)} {
     // nop
   }
 
@@ -806,8 +801,8 @@ bool congruent(const data& x, const type& y);
 /// @param with Schema containing potentially congruent types.
 /// @returns an error if two types with the same name are not congruent.
 /// @relates type
-caf::error replace_if_congruent(std::initializer_list<type*> xs,
-                                const schema& with);
+caf::error
+replace_if_congruent(std::initializer_list<type*> xs, const schema& with);
 
 /// Checks whether the types of two nodes in a predicate are compatible with
 /// each other, i.e., whether operator evaluation for the given types is
@@ -882,7 +877,7 @@ inline bool has_skip_attribute(const type& t) {
 }
 
 /// @relates type
-bool convert(const type& t, json& j);
+bool convert(const type& t, data& d);
 
 } // namespace vast
 
@@ -931,9 +926,7 @@ struct sum_type_access<vast::type> {
     template <class... Us>
     Result dispatch(const_reference x, caf::detail::type_list<Us...>) {
       using fun = Result (*)(dispatcher*, const_reference);
-      static fun tbl[] = {
-        make_dispatch_fun<Result, dispatcher, Us>()...
-      };
+      static fun tbl[] = {make_dispatch_fun<Result, dispatcher, Us>()...};
       return tbl[x.index()](this, x);
     }
 
@@ -950,8 +943,7 @@ struct sum_type_access<vast::type> {
   template <class Result, class Visitor, class... Ts>
   static Result apply(const vast::type& x, Visitor&& v, Ts&&... xs) {
     dispatcher<Result, decltype(v), decltype(xs)...> d{
-      v, std::forward_as_tuple(xs...)
-    };
+      v, std::forward_as_tuple(xs...)};
     types token;
     return d.dispatch(*x, token);
   }
@@ -988,9 +980,7 @@ auto make_inspect(caf::detail::type_list<Ts...>) {
     } else {
       using reference = type&;
       using fun = result_type (*)(Inspector&, reference);
-      static fun tbl[] = {
-        make_inspect_fun<Inspector, Ts>()...
-      };
+      static fun tbl[] = {make_inspect_fun<Inspector, Ts>()...};
       if (x.type_tag != invalid_type_id)
         return tbl[x.type_tag](f, x.x);
       x.x = type{};

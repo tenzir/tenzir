@@ -18,7 +18,7 @@
 
 namespace vast {
 
-class json;
+class data;
 
 /// Stores IPv4 and IPv6 prefixes, e.g., `192.168.1.1/16` and `FD00::/8`.
 class subnet : detail::totally_ordered<subnet> {
@@ -64,7 +64,7 @@ public:
     return f(sn.network_, sn.length_);
   }
 
-  friend bool convert(const subnet& sn, json& j);
+  friend bool convert(const subnet& sn, data& d);
 
 private:
   bool initialize();
@@ -74,4 +74,3 @@ private:
 };
 
 } // namespace vast
-

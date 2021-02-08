@@ -23,7 +23,7 @@
 namespace vast {
 
 struct access;
-class json;
+class data;
 
 /// An IP address.
 class address : detail::totally_ordered<address>, detail::bitwise<address> {
@@ -134,7 +134,7 @@ public:
     return f(a.bytes_);
   }
 
-  friend bool convert(const address& a, json& j);
+  friend bool convert(const address& a, vast::data& d);
 
 private:
   std::array<uint8_t, 16> bytes_;

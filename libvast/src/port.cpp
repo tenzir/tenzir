@@ -11,12 +11,13 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#include <tuple>
+#include "vast/concept/printable/vast/port.hpp"
 
 #include "vast/concept/printable/to_string.hpp"
-#include "vast/concept/printable/vast/port.hpp"
-#include "vast/json.hpp"
+#include "vast/data.hpp"
 #include "vast/port.hpp"
+
+#include <tuple>
 
 namespace vast {
 
@@ -56,8 +57,8 @@ bool operator<(const port& x, const port& y) {
   return x.data_ < y.data_;
 }
 
-bool convert(const port& p, json& j) {
-  j = to_string(p);
+bool convert(const port& p, data& d) {
+  d = to_string(p);
   return true;
 }
 
