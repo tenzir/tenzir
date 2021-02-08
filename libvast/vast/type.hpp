@@ -633,10 +633,10 @@ struct record_type final : recursive_type<record_type> {
   /// @returns The offsets of fields matching *key*.
   std::vector<offset> find_suffix(std::string_view key) const;
 
-  /// Retrieves the type at a given key.
+  /// Retrieves the field at a given key.
   /// @param key The key to resolve.
-  /// @returns The type at key *key* or `nullptr` if *key* doesn't resolve.
-  const type* at(std::string_view key) const;
+  /// @returns The field at key *key* or `nullptr` if *key* doesn't resolve.
+  const record_field* at(std::string_view key) const;
 
   /// Retrieves the field at a given offset.
   /// @param o The offset to resolve.

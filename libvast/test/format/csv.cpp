@@ -303,24 +303,24 @@ TEST(csv reader - reordered layout) {
                             }
                   .name("l2");
   REQUIRE_EQUAL(slices[0].layout(), l2_sub);
-  CHECK(slices[0].at(0, 0, *l2_sub.at("msa"))
+  CHECK(slices[0].at(0, 0, l2_sub.at("msa")->type)
         == data{map{{data{"foo"}, unbox(to<address>("1.2.3.4"))},
                     {data{"bar"}, unbox(to<address>("2001:db8::"))}}});
-  CHECK(slices[0].at(0, 1, *l2_sub.at("c")) == data{count{424242}});
-  CHECK(slices[0].at(0, 2, *l2_sub.at("r")) == data{real{4.2}});
-  CHECK(slices[0].at(0, 3, *l2_sub.at("i")) == data{integer{-1337}});
-  CHECK(slices[0].at(0, 4, *l2_sub.at("b")) == data{true});
-  CHECK(slices[0].at(0, 5, *l2_sub.at("a"))
+  CHECK(slices[0].at(0, 1, l2_sub.at("c")->type) == data{count{424242}});
+  CHECK(slices[0].at(0, 2, l2_sub.at("r")->type) == data{real{4.2}});
+  CHECK(slices[0].at(0, 3, l2_sub.at("i")->type) == data{integer{-1337}});
+  CHECK(slices[0].at(0, 4, l2_sub.at("b")->type) == data{true});
+  CHECK(slices[0].at(0, 5, l2_sub.at("a")->type)
         == data{unbox(to<address>("147.32.84.165"))});
-  CHECK(slices[0].at(0, 6, *l2_sub.at("sn"))
+  CHECK(slices[0].at(0, 6, l2_sub.at("sn")->type)
         == data{unbox(to<subnet>("192.168.0.1/24"))});
-  CHECK(slices[0].at(0, 7, *l2_sub.at("d"))
+  CHECK(slices[0].at(0, 7, l2_sub.at("d")->type)
         == data{unbox(to<duration>("42s"))});
-  CHECK(slices[0].at(0, 8, *l2_sub.at("e")) == data{enumeration{2}});
-  CHECK(slices[0].at(0, 9, *l2_sub.at("t"))
+  CHECK(slices[0].at(0, 8, l2_sub.at("e")->type) == data{enumeration{2}});
+  CHECK(slices[0].at(0, 9, l2_sub.at("t")->type)
         == data{unbox(to<vast::time>("2011-08-12+14:59:11.994970"))});
-  CHECK(slices[0].at(0, 10, *l2_sub.at("lc")) == data{list{5555u, 0u}});
-  CHECK(slices[0].at(0, 11, *l2_sub.at("lt"))
+  CHECK(slices[0].at(0, 10, l2_sub.at("lc")->type) == data{list{5555u, 0u}});
+  CHECK(slices[0].at(0, 11, l2_sub.at("lt")->type)
         == data{list{unbox(to<vast::time>("2019-04-30T11:46:13Z"))}});
   auto m = map{};
   m[1u] = data{"FOO"};

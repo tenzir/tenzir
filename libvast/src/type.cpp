@@ -333,13 +333,13 @@ std::vector<offset> record_type::find_suffix(std::string_view key) const {
   return result;
 }
 
-const type* record_type::at(std::string_view key) const {
+const record_field* record_type::at(std::string_view key) const {
   auto om = offset_map(*this);
   auto rx_ = "^" + name() + "." + pattern::glob(key) + "$";
   for (auto& [off, name] : om) {
     if (rx_.match(name))
       if (auto f = at(off))
-        return &f->type;
+        return f;
   }
   return nullptr;
 }
