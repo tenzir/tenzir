@@ -279,7 +279,7 @@ caf::optional<std::string> record_type::resolve(const offset& o) const {
   return result;
 }
 
-const record_field* record_type::find(std::string_view field_name) const {
+const record_field* record_type::find(std::string_view field_name) const& {
   auto pred = [&](auto field) { return field.name == field_name; };
   auto i = std::find_if(fields.begin(), fields.end(), pred);
   return i == fields.end() ? nullptr : &*i;
@@ -333,26 +333,27 @@ std::vector<offset> record_type::find_suffix(std::string_view key) const {
   return result;
 }
 
-const type* record_type::at(std::string_view key) const {
+const record_field* record_type::at(std::string_view key) const& {
   auto om = offset_map(*this);
   auto rx_ = "^" + name() + "." + pattern::glob(key) + "$";
   for (auto& [off, name] : om) {
     if (rx_.match(name))
-      return at(off);
+      if (auto f = at(off))
+        return f;
   }
   return nullptr;
 }
 
-const type* record_type::at(const offset& o) const {
+const record_field* record_type::at(const offset& o) const& {
   auto r = this;
   for (size_t i = 0; i < o.size(); ++i) {
     auto& idx = o[i];
     if (idx >= r->fields.size())
       return nullptr;
-    auto t = &r->fields[idx].type;
+    auto f = &r->fields[idx];
     if (i + 1 == o.size())
-      return t;
-    r = get_if<record_type>(t);
+      return f;
+    r = get_if<record_type>(&f->type);
     if (!r)
       return nullptr;
   }
@@ -365,6 +366,24 @@ bool record_type::equals(const abstract_type& other) const {
 
 bool record_type::less_than(const abstract_type& other) const {
   return super::less_than(other) || fields < downcast(other).fields;
+}
+
+caf::optional<record_field> record_type::flat_field_at(offset o) const {
+  record_field result;
+  auto r = this;
+  size_t x = 0;
+  for (; x < o.size() - 1; ++x) {
+    auto next = r->fields[o[x]];
+    result.name += next.name + '.';
+    if (auto next_record = get_if<record_type>(&next.type))
+      r = next_record;
+    else
+      return caf::none;
+  }
+  auto next = r->fields[o[x]];
+  result.name += next.name + '.';
+  result.type = next.type;
+  return result;
 }
 
 caf::optional<size_t> record_type::flat_index_at(offset o) const {

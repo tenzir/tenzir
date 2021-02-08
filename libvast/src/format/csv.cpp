@@ -187,7 +187,7 @@ reader::make_layout(const std::vector<std::string>& names) {
         std::vector<record_field> result_raw;
         for (auto& name : names) {
           if (auto field = r->at(name))
-            result_raw.emplace_back(name, *field);
+            result_raw.emplace_back(name, field->type);
           else
             return caf::none;
         }

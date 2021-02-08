@@ -385,14 +385,14 @@ type_resolver::operator()(const field_extractor& ex, const data& d) {
     // All suffixes must pass the type check, otherwise the RHS of a
     // predicate would be ambiguous.
     for (auto& offset : suffixes) {
-      auto t = r->at(offset);
-      VAST_ASSERT(t);
-      if (!compatible(*t, op_, d))
-        return caf::make_error(ec::type_clash, *t, op_, d);
+      auto f = r->at(offset);
+      VAST_ASSERT(f);
+      if (!compatible(f->type, op_, d))
+        return caf::make_error(ec::type_clash, f->type, op_, d);
     }
     for (auto& offset : suffixes) {
-      auto t = r->at(offset);
-      auto x = data_extractor{std::move(*t), std::move(offset)};
+      auto f = r->at(offset);
+      auto x = data_extractor{f->type, std::move(offset)};
       connective.emplace_back(predicate{std::move(x), op_, d});
     }
     // Second, try to interpret the field as the name of a single type.

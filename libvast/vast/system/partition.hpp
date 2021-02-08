@@ -44,7 +44,7 @@ namespace vast::system {
 /// in the CAF stream stage.
 struct partition_selector {
   bool operator()(const qualified_record_field& filter,
-                  const table_slice_column& x) const;
+                  const table_slice_column& column) const;
 };
 
 /// The state of the ACTIVE PARTITION actor.

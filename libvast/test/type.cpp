@@ -354,26 +354,26 @@ TEST(record symbol finding - exact) {
   const auto f = flatten(r);
   auto first = r.at("a");
   REQUIRE(first);
-  CHECK(holds_alternative<integer_type>(*first));
+  CHECK(holds_alternative<integer_type>(first->type));
   first = f.at("a");
   REQUIRE(first);
-  CHECK(holds_alternative<integer_type>(*first));
+  CHECK(holds_alternative<integer_type>(first->type));
   auto deep = r.at("b.c.y");
   REQUIRE(deep);
-  CHECK(holds_alternative<address_type>(*deep));
+  CHECK(holds_alternative<address_type>(deep->type));
   deep = f.at("b.c.y");
   REQUIRE(deep);
-  CHECK(holds_alternative<address_type>(*deep));
+  CHECK(holds_alternative<address_type>(deep->type));
   auto rec = r.at("b");
   REQUIRE(rec);
-  CHECK(holds_alternative<record_type>(*rec));
+  CHECK(holds_alternative<record_type>(rec->type));
   rec = f.at("b");
   // A flat record has no longer an internal record that can be accessed
   // directly. Hence the access fails.
   CHECK(!rec);
   rec = r.at("b.c");
   REQUIRE(rec);
-  CHECK(holds_alternative<record_type>(*rec));
+  CHECK(holds_alternative<record_type>(rec->type));
   rec = f.at("b.c");
   CHECK(!rec);
 }

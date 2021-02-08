@@ -31,7 +31,7 @@ namespace vast {
 struct qualified_record_field
   : detail::totally_ordered<qualified_record_field> {
   // Required for serialization/deserialization.
-  qualified_record_field() = default;
+  qualified_record_field() noexcept = default;
 
   /// Constructs a qualified record field by prepending the layout name to a
   /// record field.

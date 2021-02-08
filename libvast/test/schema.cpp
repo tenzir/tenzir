@@ -187,7 +187,7 @@ TEST(schema : zeek - style) {
   REQUIRE(r);
   auto id = r->at("id");
   REQUIRE(id);
-  CHECK(holds_alternative<record_type>(*id));
+  CHECK(holds_alternative<record_type>(id->type));
 }
 
 TEST(schema : aliases) {
@@ -242,7 +242,7 @@ TEST(parseable - basic types global) {
   REQUIRE(r);
   auto t8 = r->at("a8");
   REQUIRE(t8);
-  CHECK(holds_alternative<pattern_type>(*t8));
+  CHECK(holds_alternative<pattern_type>(t8->type));
 }
 
 TEST(parseable - basic types local) {
@@ -268,7 +268,7 @@ TEST(parseable - basic types local) {
   REQUIRE(r);
   auto p = r->at("a10");
   REQUIRE(p);
-  CHECK(holds_alternative<subnet_type>(*p));
+  CHECK(holds_alternative<subnet_type>(p->type));
 }
 
 TEST(parseable - complex types global) {
@@ -294,7 +294,7 @@ TEST(parseable - complex types global) {
   REQUIRE(r);
   auto e = r->at("e");
   REQUIRE(e);
-  CHECK(*e == *enum_t);
+  CHECK(e->type == *enum_t);
 }
 
 TEST(json) {

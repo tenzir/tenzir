@@ -95,7 +95,7 @@ public:
   // -- construction & assignment ---------------------------------------------
 
   /// Constructs an invalid type.
-  type() = default;
+  type() noexcept = default;
 
   /// Constructs a type from a concrete instance.
   /// @tparam T a type that derives from @ref abstract_type.
@@ -113,10 +113,10 @@ public:
   type& operator=(const type& x) = default;
 
   /// Move-constructs a type.
-  type(type&&) = default;
+  type(type&&) noexcept = default;
 
   /// Move-assigns a type.
-  type& operator=(type&&) = default;
+  type& operator=(type&&) noexcept = default;
 
   /// Assigns a type from another instance
   template <class T>
@@ -626,22 +626,34 @@ struct record_type final : recursive_type<record_type> {
   /// @returns A pointer to the found field or `nullptr` otherwise.
   /// @warning The returned pointer becomes invalid when adding or removing
   ///          additional fields.
-  const record_field* find(std::string_view field_name) const;
+  const record_field* find(std::string_view field_name) const&;
+  const record_field* find(std::string_view field_name) && = delete;
 
   /// Finds all offsets for a *suffix* key in this and nested records.
   /// @param key The key to resolve.
   /// @returns The offsets of fields matching *key*.
   std::vector<offset> find_suffix(std::string_view key) const;
 
-  /// Retrieves the type at a given key.
+  /// Retrieves the field at a given key.
   /// @param key The key to resolve.
-  /// @returns The type at key *key* or `nullptr` if *key* doesn't resolve.
-  const type* at(std::string_view key) const;
+  /// @returns The field at key *key* or `nullptr` if *key* doesn't resolve.
+  const record_field* at(std::string_view key) const&;
+  const record_field* at(std::string_view key) && = delete;
 
-  /// Retrieves the type at a given offset.
+  /// Retrieves the field at a given offset.
   /// @param o The offset to resolve.
-  /// @returns The type at offset *o* or `nullptr` if *o* doesn't resolve.
-  const type* at(const offset& o) const;
+  /// @returns The field at offset *o* or `nullptr` if *o* doesn't resolve.
+  const record_field* at(const offset& o) const&;
+  const record_field* at(const offset& o) && = delete;
+
+  /// Returns the field at the given offset with the full name as if the record
+  /// was flattened.
+  /// @param o The offset to resolve.
+  /// @code{.cpp}
+  ///   auto r = record_type{{"x", record_type{"y", count_type{}}}};
+  ///   ASSERT_EQ(r.flat_field_at({0,0}), record_field{"x.y", count_type{}});
+  /// @endcode
+  caf::optional<record_field> flat_field_at(offset o) const;
 
   /// Converts an offset into an index for the flattened representation.
   /// @param o The offset to resolve.

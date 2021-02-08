@@ -27,7 +27,7 @@ const vast::type& at(const vast::record_type& rec, Offsets... xs) {
   auto ptr = rec.at(vast::offset{static_cast<size_t>(xs)...});
   if (!ptr)
     FAIL("offset lookup failed at " << std::vector<int>{xs...});
-  return *ptr;
+  return ptr->type;
 }
 
 /// Returns the record type at `offset{xs...}`.
