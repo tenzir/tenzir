@@ -13,5 +13,5 @@ E.g., to import Threat Intelligence data into VAST, the known type
 `intel.indicator` can be used:
 
 ```bash
-vast import csv --type=intel.indicator --read=path/to/indicators.csv
+vast import --type=intel.indicator --read=path/to/indicators.csv csv
 ```
