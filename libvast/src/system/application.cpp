@@ -125,7 +125,9 @@ auto make_export_command() {
       .add<bool>("unified,u", "marks a query as unified")
       .add<bool>("disable-taxonomies", "don't substitute taxonomy identifiers")
       .add<size_t>("max-events,n", "maximum number of results")
-      .add<std::string>("read,r", "path for reading the query"));
+      .add<std::string>("read,r", "path for reading the query")
+      .add<std::string>("write,w", "path to write events to")
+      .add<bool>("uds,d", "treat -w as UNIX domain socket to connect to"));
   export_->add_subcommand("zeek", "exports query results in Zeek format",
                           documentation::vast_export_zeek,
                           sink_opts("?vast.export.zeek"));

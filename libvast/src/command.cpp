@@ -359,25 +359,30 @@ caf::error parse_impl(invocation& result, const command& cmd,
 
 void fixup_options(invocation& inv) {
   using namespace std::string_literals;
-  for (const auto& cmd : {"import", "spawn.source"}) {
-    for (const auto& format :
-         {"csv", "json", "suricata", "syslog", "zeek", "zeek-json"}) {
-      for (const auto& opt :
-           {"listen", "read", "schema", "schema-file", "type", "uds"}) {
-        auto path = "vast."s + cmd + '.' + format + '.' + opt;
-        if (auto x = caf::get_if<std::string>(&inv.options, path)) {
-          // The logger isn't initialized yet.
+  auto move_option_arg = [&](auto cmd, auto format, auto opt) {
+    auto path = "vast."s + cmd + '.' + format + '.' + opt;
+    if (auto x = caf::get_if<std::string>(&inv.options, path)) {
+      // The logger isn't initialized yet.
 #if VAST_LOG_LEVEL >= VAST_LOG_LEVEL_WARNING
-          fmt::print(stderr,
-                     "The option '{}' is deprected for the '{}' subcommand and "
-                     "should be specified at the {} subcommand instead\n",
-                     opt, format, cmd);
+      fmt::print(stderr,
+                 "The option '{}' is deprected for the '{}' subcommand and "
+                 "should be specified at the {} subcommand instead\n",
+                 opt, format, cmd);
 #endif
-          put(inv.options, "vast."s + cmd + '.' + opt, *x);
-        }
-      }
+      put(inv.options, "vast."s + cmd + '.' + opt, *x);
     }
-  }
+  };
+  for (const auto& cmd : {"import", "spawn.source"})
+    for (const auto& format :
+         {"csv", "json", "suricata", "syslog", "zeek", "zeek-json"})
+      for (const auto& opt :
+           {"listen", "read", "schema", "schema-file", "type", "uds"})
+        move_option_arg(cmd, format, opt);
+  for (const auto& cmd : {"export", "spawn.sink"})
+    for (const auto& format :
+         {"arrow", "ascii", "csv", "json", "null", "pcap", "zeek"})
+      for (const auto& opt : {"write", "uds"})
+        move_option_arg(cmd, format, opt);
 }
 
 caf::expected<invocation>
