@@ -515,7 +515,8 @@ caf::error reader::parse_header() {
 }
 
 writer::writer(const caf::settings& options) {
-  auto output = get_or(options, "vast.export.zeek.write", defaults::write);
+  auto output
+    = get_or(options, "vast.export.write", vast::defaults::export_::write);
   if (output != "-")
     dir_ = std::move(output);
   show_timestamp_tags_

@@ -33,10 +33,9 @@ caf::expected<std::unique_ptr<std::ostream>>
 make_output_stream(const std::string& output, path::type pt
                                               = path::regular_file);
 
-template <class Defaults>
-caf::expected<std::unique_ptr<std::ostream>>
+inline caf::expected<std::unique_ptr<std::ostream>>
 make_output_stream(const caf::settings& options) {
-  auto output = get_or(options, "vast.export.write", Defaults::write);
+  auto output = get_or(options, "vast.export.write", defaults::export_::write);
   auto uds = get_or(options, "vast.export.uds", false);
   auto fifo = get_or(options, "vast.export.fifo", false);
   auto pt = uds ? path::socket : (fifo ? path::fifo : path::regular_file);

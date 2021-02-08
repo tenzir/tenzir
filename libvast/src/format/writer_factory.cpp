@@ -36,10 +36,9 @@ template <class Writer>
 caf::expected<std::unique_ptr<format::writer>>
 make_writer(const caf::settings& options) {
   using namespace std::string_literals;
-  using defaults = typename Writer::defaults;
   using ostream_ptr = std::unique_ptr<std::ostream>;
   if constexpr (std::is_constructible_v<Writer, ostream_ptr, caf::settings>) {
-    auto out = detail::make_output_stream<defaults>(options);
+    auto out = detail::make_output_stream(options);
     if (!out)
       return out.error();
     return std::make_unique<Writer>(std::move(*out), options);

@@ -255,8 +255,6 @@ private:
 /// A Zeek writer.
 class writer : public format::writer {
 public:
-  using defaults = vast::defaults::export_::zeek;
-
   writer(writer&&) = default;
 
   writer& operator=(writer&&) = default;

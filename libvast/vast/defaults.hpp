@@ -135,15 +135,6 @@ constexpr size_t max_events_context = 100;
 // Unfortunately, `export` is a reserved keyword. The trailing `_` exists only
 // for disambiguation.
 
-/// Contains constants that are shared by two or more export subcommands.
-namespace export_::shared {
-
-/// Path for writing query results or `-` for writing to STDOUT.
-constexpr std::string_view write = "-";
-
-} // namespace export_::shared
-
-/// Contains constants for the export command.
 namespace export_ {
 
 /// Path for reading reading the query or `-` for reading from STDIN.
@@ -155,71 +146,16 @@ constexpr size_t max_events = 0;
 /// Path for writing query results or `-` for writing to STDOUT.
 constexpr std::string_view write = "-";
 
-/// Contains settings for the zeek subcommand.
-struct zeek {
-  /// Nested category in config files for this subcommand.
-  static constexpr const char* category = "vast.export.zeek";
-
-  /// Path for writing query results.
-  static constexpr auto write = shared::write;
-};
-
 /// Contains settings for the csv subcommand.
 struct csv {
-  /// Nested category in config files for this subcommand.
-  static constexpr const char* category = "vast.export.csv";
-
-  /// Path for writing query results.
-  static constexpr auto write = shared::write;
-
   static constexpr char separator = ',';
 
   // TODO: agree on reasonable values
   static constexpr std::string_view set_separator = " | ";
 };
 
-/// Contains settings for the ascii subcommand.
-struct ascii {
-  /// Nested category in config files for this subcommand.
-  static constexpr const char* category = "vast.export.ascii";
-
-  /// Path for writing query results.
-  static constexpr auto write = shared::write;
-};
-
-/// Contains settings for the json subcommand.
-struct json {
-  /// Nested category in config files for this subcommand.
-  static constexpr const char* category = "vast.export.json";
-
-  /// Path for writing query results.
-  static constexpr auto write = shared::write;
-};
-
-/// Contains settings for the null subcommand.
-struct null {
-  /// Nested category in config files for this subcommand.
-  static constexpr const char* category = "vast.export.null";
-
-  /// Path for writing query results.
-  static constexpr auto write = shared::write;
-};
-
-struct arrow {
-  /// Nested category in config files for this subcommand.
-  static constexpr const char* category = "vast.export.arrow";
-  /// Path for writing query results.
-  static constexpr auto write = vast::defaults::export_::shared::write;
-};
-
 /// Contains settings for the pcap subcommand.
 struct pcap {
-  /// Nested category in config files for this subcommand.
-  static constexpr const char* category = "vast.export.pcap";
-
-  /// Path for writing query results.
-  static constexpr auto write = shared::write;
-
   /// Flush to disk after that many packets.
   static constexpr size_t flush_interval = 10'000;
 };

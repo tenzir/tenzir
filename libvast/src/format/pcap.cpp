@@ -482,7 +482,7 @@ void reader::shrink_to_max_size() {
 writer::writer(const caf::settings& options) {
   flush_interval_ = get_or(options, "vast.export.pcap.flush-interval",
                            defaults::flush_interval);
-  trace_ = get_or(options, "vast.export.pcap.write", defaults::write);
+  trace_ = get_or(options, "vast.export.write", vast::defaults::export_::write);
 }
 
 writer::~writer() {

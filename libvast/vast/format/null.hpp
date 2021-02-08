@@ -20,8 +20,6 @@ namespace vast::format::null {
 
 class writer : public format::ostream_writer {
 public:
-  using defaults = vast::defaults::export_::ascii;
-
   using super = format::ostream_writer;
 
   writer(ostream_ptr out, const caf::settings& options);

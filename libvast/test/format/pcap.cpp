@@ -104,7 +104,7 @@ TEST(PCAP read/write 1) {
     CHECK_VARIANT_EQUAL((*community_id_column)[row], community_ids[row]);
   MESSAGE("write out read packets");
   auto file = "vast-unit-test-nmap-vsn.pcap";
-  caf::put(settings, "vast.export.pcap.write", file);
+  caf::put(settings, "vast.export.write", file);
   format::pcap::writer writer{settings};
   auto deleter = caf::detail::make_scope_guard([&] { rm(file); });
   REQUIRE_EQUAL(writer.write(slice), caf::none);
@@ -139,7 +139,7 @@ TEST(PCAP read/write 2) {
   CHECK_EQUAL(layout.name(), "pcap.packet");
   MESSAGE("write out read packets");
   auto file = "vast-unit-test-workshop-2011-browse.pcap";
-  caf::put(settings, "vast.export.pcap.write", file);
+  caf::put(settings, "vast.export.write", file);
   format::pcap::writer writer{settings};
   auto deleter = caf::detail::make_scope_guard([&] { rm(file); });
   REQUIRE_EQUAL(writer.write(slice), caf::none);

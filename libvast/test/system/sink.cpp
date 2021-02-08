@@ -28,7 +28,7 @@ FIXTURE_SCOPE(sink_tests, fixtures::actor_system_and_events)
 TEST(zeek sink) {
   MESSAGE("constructing a sink");
   caf::settings options;
-  caf::put(options, "vast.export.zeek.write", directory.str());
+  caf::put(options, "vast.export.write", directory.str());
   auto writer = std::make_unique<format::zeek::writer>(options);
   auto snk = self->spawn(sink, std::move(writer), 20u);
   MESSAGE("sending table slices");
