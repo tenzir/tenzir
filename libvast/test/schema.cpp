@@ -318,13 +318,13 @@ TEST(parseable - out of order definitions) {
     }.name("baz")
   };
   // clang-format on
-  CHECK_EQUAL(baz, ref);
+  CHECK_EQUAL(baz, expected);
 }
 
 TEST(parseable - with context) {
   using namespace std::string_view_literals;
   MESSAGE("prepare the context");
-  auto global = shared_schema_parser::symbol_buffer{};
+  auto global = shared_schema_parser::symbol_table{};
   // schema gs;
   {
     auto p = shared_schema_parser{global, global};
@@ -339,19 +339,19 @@ TEST(parseable - with context) {
         }
       }
     )__"sv;
-    auto local = shared_schema_parser::symbol_buffer{};
+    auto local = shared_schema_parser::symbol_table{};
     auto p = shared_schema_parser{global, local};
     schema sch;
     CHECK(p(str, sch));
     auto bar = unbox(sch.find("bar"));
     // clang-format off
-    auto ref = type{
+    auto expected = type{
       record_type{
         {"x", record_type{{"y", count_type{}.name("foo")}}}
       }.name("bar")
     };
     // clang-format on
-    CHECK_EQUAL(bar, ref);
+    CHECK_EQUAL(bar, expected);
   }
   {
     MESSAGE("Override definition in global symbol table - before use");
@@ -363,19 +363,19 @@ TEST(parseable - with context) {
         }
       }
     )__"sv;
-    auto local = shared_schema_parser::symbol_buffer{};
+    auto local = shared_schema_parser::symbol_table{};
     auto p = shared_schema_parser{global, local};
     schema sch;
     CHECK(p(str, sch));
     auto bar = unbox(sch.find("bar"));
     // clang-format off
-    auto ref = type{
+    auto expected = type{
       record_type{
         {"x", record_type{{"y", integer_type{}.name("foo")}}}
       }.name("bar")
     };
     // clang-format on
-    CHECK_EQUAL(bar, ref);
+    CHECK_EQUAL(bar, expected);
   }
   {
     MESSAGE("Override definition in global symbol table - after use");
@@ -387,19 +387,19 @@ TEST(parseable - with context) {
       }
       type foo = int
     )__"sv;
-    auto local = shared_schema_parser::symbol_buffer{};
+    auto local = shared_schema_parser::symbol_table{};
     auto p = shared_schema_parser{global, local};
     schema sch;
     CHECK(p(str, sch));
     auto bar = unbox(sch.find("bar"));
     // clang-format off
-    auto ref = type{
+    auto expected = type{
       record_type{
         {"x", record_type{{"y", integer_type{}.name("foo")}}}
       }.name("bar")
     };
     // clang-format on
-    CHECK_EQUAL(bar, ref);
+    CHECK_EQUAL(bar, expected);
   }
   {
     MESSAGE("Duplicate definition error");
@@ -412,7 +412,7 @@ TEST(parseable - with context) {
       }
       type foo = int
     )__"sv;
-    auto local = shared_schema_parser::symbol_buffer{};
+    auto local = shared_schema_parser::symbol_table{};
     auto p = shared_schema_parser{global, local};
     schema sch;
     CHECK(!p(str, sch));
@@ -425,7 +425,7 @@ TEST(parseable - with context) {
     auto str2 = R"__(
       type foo = int
     )__"sv;
-    auto local = shared_schema_parser::symbol_buffer{};
+    auto local = shared_schema_parser::symbol_table{};
     auto p = shared_schema_parser{global, local};
     schema sch;
     CHECK(p(str1, sch));

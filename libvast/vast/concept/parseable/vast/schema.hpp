@@ -30,7 +30,7 @@ struct shared_schema_parser : parser<shared_schema_parser> {
   using symbol_table = std::unordered_map<std::string, type>;
   using attribute = schema;
 
-  shared_schema_parser(const symbol_buffer& global, symbol_buffer& local)
+  shared_schema_parser(const symbol_table& global, symbol_table& local)
     : global_symbols{global}, local_symbols{local} {
     // nop
   }
@@ -108,7 +108,7 @@ struct shared_schema_parser : parser<shared_schema_parser> {
       return std::move(x);
     }
 
-    caf::expected<type> resolve(symbol_buffer::iterator next) {
+    caf::expected<type> resolve(symbol_table::iterator next) {
       auto value = std::move(*next);
       if (parent.local_symbols.find(value.first) != parent.local_symbols.end())
         return caf::make_error(ec::parse_error, "duplicate definition of",
@@ -137,14 +137,14 @@ struct shared_schema_parser : parser<shared_schema_parser> {
     }
 
     const shared_schema_parser& parent;
-    symbol_buffer sb;
+    symbol_table sb;
     schema sch = {};
   };
 
   template <class Iterator, class Attribute>
   bool parse(Iterator& f, const Iterator& l, Attribute& sch) const {
     static_assert(detail::is_any_v<Attribute, attribute, unused_type>);
-    symbol_buffer sb;
+    symbol_table sb;
     bool duplicate_symbol = false;
     auto to_type = [&](std::tuple<std::string, type> t) -> type {
       auto [name, ty] = std::move(t);
@@ -169,7 +169,7 @@ struct shared_schema_parser : parser<shared_schema_parser> {
     if (duplicate_symbol)
       return false;
     auto r = resolver{*this, std::move(sb)};
-    auto res = r.run();
+    auto res = r.resolve();
     if (!res) {
       VAST_ERROR("schema parser failed: {}", render(res.error()));
       return false;
@@ -178,8 +178,8 @@ struct shared_schema_parser : parser<shared_schema_parser> {
     return true;
   }
 
-  const symbol_buffer& global_symbols;
-  symbol_buffer& local_symbols;
+  const symbol_table& global_symbols;
+  symbol_table& local_symbols;
 };
 
 struct schema_parser : parser<schema_parser> {
@@ -187,8 +187,8 @@ struct schema_parser : parser<schema_parser> {
 
   template <class Iterator, class Attribute>
   bool parse(Iterator& f, const Iterator& l, Attribute& sch) const {
-    shared_schema_parser::symbol_buffer global;
-    shared_schema_parser::symbol_buffer local;
+    shared_schema_parser::symbol_table global;
+    shared_schema_parser::symbol_table local;
     auto p = shared_schema_parser{global, local};
     return p(f, l, sch);
   }
