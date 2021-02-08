@@ -26,6 +26,7 @@
 #include "vast/pattern.hpp"
 #include "vast/plugin.hpp"
 #include "vast/port.hpp"
+#include "vast/qualified_record_field.hpp"
 #include "vast/query_options.hpp"
 #include "vast/schema.hpp"
 #include "vast/subnet.hpp"
