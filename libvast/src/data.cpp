@@ -443,13 +443,10 @@ bool convert(const caf::config_value& x, data& y) {
 }
 
 caf::expected<std::string> to_json(const data& x) {
-  try {
-    std::string str;
-    auto out = std::back_inserter(str);
-    if (json_printer<policy::tree, 2>{}.print(out, x))
-      return str;
-  } catch (const std::exception&) {
-  }
+  std::string str;
+  auto out = std::back_inserter(str);
+  if (json_printer<policy::tree, 2>{}.print(out, x))
+    return str;
   return caf::make_error(ec::parse_error, "cannot convert to json");
 }
 

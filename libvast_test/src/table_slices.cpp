@@ -90,7 +90,8 @@ make_data(const table_slice& slice, size_t first_row, size_t num_rows) {
   return result;
 }
 
-std::vector<std::vector<data>> make_data(const std::vector<table_slice>& slices) {
+std::vector<std::vector<data>>
+make_data(const std::vector<table_slice>& slices) {
   std::vector<std::vector<data>> result;
   result.reserve(rows(slices));
   for (auto& slice : slices)

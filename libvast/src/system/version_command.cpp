@@ -83,7 +83,7 @@ record combine(const record& lhs, const record& rhs) {
 
 void print_version(const record& extra_content) {
   auto version = retrieve_versions();
-  std::cout << to_string(combine(extra_content, version)) << std::endl;
+  std::cout << to_json(combine(extra_content, version)) << std::endl;
 }
 
 caf::message
