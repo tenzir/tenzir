@@ -22,11 +22,10 @@ table_slice_column::table_slice_column() noexcept = default;
 
 table_slice_column::~table_slice_column() noexcept = default;
 
-table_slice_column::table_slice_column(
-  const table_slice_column&) noexcept = default;
+table_slice_column::table_slice_column(const table_slice_column&) = default;
 
-table_slice_column&
-table_slice_column::operator=(const table_slice_column&) noexcept = default;
+table_slice_column& table_slice_column::operator=(const table_slice_column&)
+  = default;
 
 table_slice_column::table_slice_column(table_slice_column&&) noexcept = default;
 

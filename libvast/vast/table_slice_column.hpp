@@ -34,8 +34,8 @@ public:
   /// Defaulted constructors, destructors, and assignment operators.
   table_slice_column() noexcept;
   ~table_slice_column() noexcept;
-  table_slice_column(const table_slice_column&) noexcept;
-  table_slice_column& operator=(const table_slice_column&) noexcept;
+  table_slice_column(const table_slice_column&);
+  table_slice_column& operator=(const table_slice_column&);
   table_slice_column(table_slice_column&&) noexcept;
   table_slice_column& operator=(table_slice_column&&) noexcept;
 
