@@ -324,11 +324,12 @@ TEST(parseable - out of order definitions) {
 TEST(parseable - with context) {
   using namespace std::string_view_literals;
   MESSAGE("prepare the context");
-  auto global = shared_schema_parser::symbol_table{};
+  auto global = symbol_table{};
+  auto local = symbol_table{};
   // schema gs;
   {
-    auto p = shared_schema_parser{global, global};
-    CHECK(p("type foo = count", unused));
+    auto p = symbol_table_parser{};
+    CHECK(p("type foo = count", local));
   }
   {
     MESSAGE("Use definition from global symbol table");
@@ -339,10 +340,9 @@ TEST(parseable - with context) {
         }
       }
     )__"sv;
-    auto local = shared_schema_parser::symbol_table{};
-    auto p = shared_schema_parser{global, local};
-    schema sch;
-    CHECK(p(str, sch));
+    auto st = unbox(to<symbol_table>(str));
+    auto r = symbol_resolver{global, local, st};
+    auto sch = unbox(r.resolve());
     auto bar = unbox(sch.find("bar"));
     // clang-format off
     auto expected = type{
@@ -363,10 +363,10 @@ TEST(parseable - with context) {
         }
       }
     )__"sv;
-    auto local = shared_schema_parser::symbol_table{};
-    auto p = shared_schema_parser{global, local};
-    schema sch;
-    CHECK(p(str, sch));
+    auto local = symbol_table{};
+    auto st = unbox(to<symbol_table>(str));
+    auto r = symbol_resolver{global, local, st};
+    auto sch = unbox(r.resolve());
     auto bar = unbox(sch.find("bar"));
     // clang-format off
     auto expected = type{
@@ -387,10 +387,10 @@ TEST(parseable - with context) {
       }
       type foo = int
     )__"sv;
-    auto local = shared_schema_parser::symbol_table{};
-    auto p = shared_schema_parser{global, local};
-    schema sch;
-    CHECK(p(str, sch));
+    auto local = symbol_table{};
+    auto st = unbox(to<symbol_table>(str));
+    auto r = symbol_resolver{global, local, st};
+    auto sch = unbox(r.resolve());
     auto bar = unbox(sch.find("bar"));
     // clang-format off
     auto expected = type{
@@ -412,24 +412,20 @@ TEST(parseable - with context) {
       }
       type foo = int
     )__"sv;
-    auto local = shared_schema_parser::symbol_table{};
-    auto p = shared_schema_parser{global, local};
-    schema sch;
-    CHECK(!p(str, sch));
+    auto local = symbol_table{};
+    auto p = symbol_table_parser{};
+    symbol_table sb;
+    CHECK(!p(str, sb));
   }
   {
     MESSAGE("Duplicate definition error - reusing local context");
-    auto str1 = R"__(
-      type foo = real
-    )__"sv;
-    auto str2 = R"__(
-      type foo = int
-    )__"sv;
-    auto local = shared_schema_parser::symbol_table{};
-    auto p = shared_schema_parser{global, local};
-    schema sch;
-    CHECK(p(str1, sch));
-    CHECK(!p(str2, sch));
+    auto st1 = unbox(to<symbol_table>("type foo = real"));
+    auto st2 = unbox(to<symbol_table>("type foo = int"));
+    auto local = symbol_table{};
+    auto r1 = symbol_resolver{global, local, st1};
+    CHECK(r1.resolve());
+    auto r2 = symbol_resolver{global, local, st2};
+    CHECK(!r2.resolve());
   }
 }
 

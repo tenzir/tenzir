@@ -253,8 +253,6 @@ get_schema_dirs(const caf::actor_system_config& cfg,
   return result;
 }
 
-using symbol_table = shared_schema_parser::symbol_table;
-
 caf::expected<schema> load_schema(const path& schema_file) {
   if (schema_file.empty())
     return caf::make_error(ec::filesystem_error, "empty path");
@@ -264,16 +262,14 @@ caf::expected<schema> load_schema(const path& schema_file) {
   return to<schema>(*str);
 }
 
-caf::expected<schema>
-load_schema(const path& schema_file, const symbol_table& global_symbols,
-            symbol_table& local_symbols) {
+caf::expected<symbol_table> load_symbols(const path& schema_file) {
   if (schema_file.empty())
     return caf::make_error(ec::filesystem_error, "empty path");
   auto str = load_contents(schema_file);
   if (!str)
     return str.error();
-  auto p = shared_schema_parser{global_symbols, local_symbols};
-  schema result;
+  auto p = symbol_table_parser{};
+  symbol_table result;
   if (!p(*str, result))
     return caf::make_error(ec::parse_error, "failed at", schema_file);
   return result;
@@ -296,13 +292,15 @@ load_schema(const detail::stable_set<path>& schema_dirs, size_t max_recursion) {
       = [](const path& f) { return detail::ends_with(f.str(), ".schema"); };
     auto schema_files = filter_dir(dir, std::move(filter), max_recursion);
     symbol_table local_symbols;
-    for (auto f : schema_files) {
+    for (const auto& f : schema_files) {
       VAST_DEBUG("loading schema {}", f);
-      auto schema = load_schema(f, global_symbols, local_symbols);
-      if (!schema) {
-        VAST_ERROR("{} {} {}", __func__, render(schema.error()), f);
+      auto symbols = load_symbols(f);
+      if (!symbols) {
+        VAST_ERROR("{} {} {}", __func__, render(symbols.error()), f);
         continue;
       }
+      auto r = symbol_resolver{global_symbols, local_symbols, *symbols};
+      auto schema = r.resolve();
       if (auto merged = schema::merge(directory_schema, *schema))
         directory_schema = std::move(*merged);
       else
