@@ -71,10 +71,10 @@ reader::reader(const caf::settings& options, std::unique_ptr<std::istream>)
   : super(options) {
   using defaults_t = vast::defaults::import::pcap;
   using caf::get_if;
-  std::string category = defaults_t::category;
+  std::string category = "vast.import.pcap";
   if (auto interface = get_if<std::string>(&options, category + ".interface"))
     interface_ = *interface;
-  input_ = get_or(options, category + ".read", defaults_t::read);
+  input_ = get_or(options, "vast.import.read", vast::defaults::import::read);
   cutoff_ = get_or(options, category + ".cutoff", defaults_t::cutoff);
   max_flows_ = get_or(options, category + ".max-flows", defaults_t::max_flows);
   max_age_
@@ -482,7 +482,7 @@ void reader::shrink_to_max_size() {
 writer::writer(const caf::settings& options) {
   flush_interval_ = get_or(options, "vast.export.pcap.flush-interval",
                            defaults::flush_interval);
-  trace_ = get_or(options, "vast.export.pcap.write", defaults::write);
+  trace_ = get_or(options, "vast.export.write", vast::defaults::export_::write);
 }
 
 writer::~writer() {

@@ -13,6 +13,7 @@
 
 #pragma once
 
+#include "vast/defaults.hpp"
 #include "vast/detail/posix.hpp"
 #include "vast/path.hpp"
 
@@ -32,13 +33,11 @@ caf::expected<std::unique_ptr<std::ostream>>
 make_output_stream(const std::string& output, path::type pt
                                               = path::regular_file);
 
-template <class Defaults>
-caf::expected<std::unique_ptr<std::ostream>>
+inline caf::expected<std::unique_ptr<std::ostream>>
 make_output_stream(const caf::settings& options) {
-  std::string category = Defaults::category;
-  auto output = get_or(options, category + ".write", Defaults::write);
-  auto uds = get_or(options, category + ".uds", false);
-  auto fifo = get_or(options, category + ".fifo", false);
+  auto output = get_or(options, "vast.export.write", defaults::export_::write);
+  auto uds = get_or(options, "vast.export.uds", false);
+  auto fifo = get_or(options, "vast.export.fifo", false);
   auto pt = uds ? path::socket : (fifo ? path::fifo : path::regular_file);
   return make_output_stream(output, pt);
 }
@@ -46,13 +45,11 @@ make_output_stream(const caf::settings& options) {
 caf::expected<std::unique_ptr<std::istream>>
 make_input_stream(const std::string& input, path::type pt = path::regular_file);
 
-template <class Defaults>
-caf::expected<std::unique_ptr<std::istream>>
+inline caf::expected<std::unique_ptr<std::istream>>
 make_input_stream(const caf::settings& options) {
-  std::string category = Defaults::category;
-  auto input = get_or(options, category + ".read", Defaults::read);
-  auto uds = get_or(options, category + ".uds", false);
-  auto fifo = get_or(options, category + ".fifo", false);
+  auto input = get_or(options, "vast.import.read", defaults::import::read);
+  auto uds = get_or(options, "vast.import.uds", false);
+  auto fifo = get_or(options, "vast.import.fifo", false);
   auto pt = uds ? path::socket : (fifo ? path::fifo : path::regular_file);
   return make_input_stream(input, pt);
 }

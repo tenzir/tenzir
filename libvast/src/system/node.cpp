@@ -358,34 +358,26 @@ auto make_component_factory() {
       {"spawn index", lift_component_factory<spawn_index>()},
       {"spawn pivoter", lift_component_factory<spawn_pivoter>()},
       {"spawn source csv",
-       lift_component_factory<
-         spawn_source<format::csv::reader, defaults::import::csv>>()},
+       lift_component_factory<spawn_source<format::csv::reader>>()},
       {"spawn source json",
        lift_component_factory<
-         spawn_source<format::json::reader<format::json::default_selector>,
-                      defaults::import::json>>()},
+         spawn_source<format::json::reader<format::json::default_selector>>>()},
 #if VAST_ENABLE_PCAP
       {"spawn source pcap",
-       lift_component_factory<
-         spawn_source<format::pcap::reader, defaults::import::pcap>>()},
+       lift_component_factory<spawn_source<format::pcap::reader>>()},
 #endif
       {"spawn source suricata",
        lift_component_factory<
-         spawn_source<format::json::reader<format::json::suricata_selector>,
-                      defaults::import::suricata>>()},
+         spawn_source<format::json::reader<format::json::suricata_selector>>>()},
       {"spawn source syslog",
-       lift_component_factory<
-         spawn_source<format::syslog::reader, defaults::import::syslog>>()},
+       lift_component_factory<spawn_source<format::syslog::reader>>()},
       {"spawn source test",
-       lift_component_factory<
-         spawn_source<format::test::reader, defaults::import::test>>()},
+       lift_component_factory<spawn_source<format::test::reader>>()},
       {"spawn source zeek",
-       lift_component_factory<
-         spawn_source<format::zeek::reader, defaults::import::zeek>>()},
+       lift_component_factory<spawn_source<format::zeek::reader>>()},
       {"spawn source zeek-json",
        lift_component_factory<
-         spawn_source<format::json::reader<format::json::zeek_selector>,
-                      defaults::import::zeek>>()},
+         spawn_source<format::json::reader<format::json::zeek_selector>>>()},
       {"spawn sink pcap", lift_component_factory<spawn_pcap_sink>()},
       {"spawn sink zeek", lift_component_factory<spawn_zeek_sink>()},
       {"spawn sink csv", lift_component_factory<spawn_csv_sink>()},

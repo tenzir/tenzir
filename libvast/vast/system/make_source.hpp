@@ -63,7 +63,6 @@ struct make_source_result {
 
 /// Tries to spawn a new SOURCE for the specified format.
 /// @tparam Reader the format-specific reader.
-/// @tparam Defaults defaults for the format-specific reader.
 /// @tparam SpawnOptions caf::spawn_options to pass to sys.spawn().
 /// @param self Points to the parent actor.
 /// @param sys The actor system to spawn the source in.
@@ -73,7 +72,7 @@ struct make_source_result {
 /// @param importer A handle to the importer component.
 /// @returns a handle to the spawned actor and the name of the reader on
 ///          success, an error otherwise.
-template <class Reader, class Defaults,
+template <class Reader,
           caf::spawn_options SpawnOptions = caf::spawn_options::no_flags,
           class Actor>
 caf::expected<make_source_result>
@@ -87,11 +86,10 @@ make_source(const Actor& self, caf::actor_system& sys, const invocation& inv,
   auto reader = std::unique_ptr<Reader>{nullptr};
   // Parse options.
   auto& options = inv.options;
-  std::string category = Defaults::category;
   auto max_events = caf::get_if<size_t>(&options, "vast.import.max-events");
-  auto uri = caf::get_if<std::string>(&options, category + ".listen");
-  auto file = caf::get_if<std::string>(&options, category + ".read");
-  auto type = caf::get_if<std::string>(&options, category + ".type");
+  auto uri = caf::get_if<std::string>(&options, "vast.import.listen");
+  auto file = caf::get_if<std::string>(&options, "vast.import.read");
+  auto type = caf::get_if<std::string>(&options, "vast.import.type");
   auto encoding = defaults::import::table_slice_type;
   if (!extract_settings(encoding, options, "vast.import.batch-encoding"))
     return caf::make_error(ec::invalid_configuration, "failed to extract "
@@ -102,7 +100,7 @@ make_source(const Actor& self, caf::actor_system& sys, const invocation& inv,
   if (slice_size == 0)
     slice_size = std::numeric_limits<decltype(slice_size)>::max();
   // Parse schema local to the import command.
-  auto schema = get_schema(options, category);
+  auto schema = get_schema(options);
   if (!schema)
     return schema.error();
   // Discern the input source (file, stream, or socket).
@@ -149,7 +147,7 @@ make_source(const Actor& self, caf::actor_system& sys, const invocation& inv,
         break;
     }
   } else {
-    auto in = detail::make_input_stream<Defaults>(options);
+    auto in = detail::make_input_stream(options);
     if (!in)
       return in.error();
     reader = std::make_unique<Reader>(options, std::move(*in));

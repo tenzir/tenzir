@@ -13,8 +13,6 @@ This changelog documents all notable user-facing changes of VAST.
 
 ## Unreleased
 
-### ⚡️ Breaking Changes
-
 - ⚠️ The `infer` command has an improved heuristic for the number types `int`,
   `count`, and `real`. [#1343](https://github.com/tenzir/vast/pull/1343)
   [#1356](https://github.com/tenzir/vast/pull/1356)
@@ -26,6 +24,12 @@ This changelog documents all notable user-facing changes of VAST.
   considered stable. [#1343](https://github.com/tenzir/vast/pull/1343)
   [#1356](https://github.com/tenzir/vast/pull/1356)
   [@ngrodzitski](https://github.com/ngrodzitski)
+
+- ⚠️ The options `listen`, `read`, `schema`, `schema-file`, `type`, and `uds` can
+  from now on be supplied to the `import` command directly. Similarly, the
+  options `write` and `uds` can be supplied to the `export` command. All options
+  can still be used after the format subcommand, but that usage is deprecated.
+  [#1354](https://github.com/tenzir/vast/pull/1354)
 
 - ⚡️ VAST now requires [{fmt} >= 5.2.1](https://fmt.dev) to be installed.
   [#1330](https://github.com/tenzir/vast/pull/1330)

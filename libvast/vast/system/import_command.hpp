@@ -34,7 +34,7 @@
 
 namespace vast::system {
 
-template <class Reader, class Defaults>
+template <class Reader>
 caf::message import_command(const invocation& inv, caf::actor_system& sys) {
   VAST_TRACE_SCOPE("{}", inv);
   auto self = caf::scoped_actor{sys};
@@ -64,8 +64,8 @@ caf::message import_command(const invocation& inv, caf::actor_system& sys) {
   auto guard = system::signal_monitor::run_guarded(
     sig_mon_thread, sys, defaults::system::signal_monitoring_interval, self);
   // Start the source.
-  auto src_result = make_source<Reader, Defaults>(self, sys, inv, accountant,
-                                                  type_registry, importer);
+  auto src_result
+    = make_source<Reader>(self, sys, inv, accountant, type_registry, importer);
   if (!src_result)
     return caf::make_message(std::move(src_result.error()));
   auto src = std::move(src_result->src);

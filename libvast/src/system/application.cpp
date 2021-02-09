@@ -125,7 +125,11 @@ auto make_export_command() {
       .add<bool>("unified,u", "marks a query as unified")
       .add<bool>("disable-taxonomies", "don't substitute taxonomy identifiers")
       .add<size_t>("max-events,n", "maximum number of results")
-      .add<std::string>("read,r", "path for reading the query"));
+      .add<std::string>("read,r", "path for reading the query")
+      .add<std::string>("write,w", "path to write events to")
+      .add<bool>("uds,d", "treat -w as UNIX domain socket to connect to"));
+  // NOTICE: The `sink_opts` are relocated in `command.cpp:fixup_options()`,
+  // That function must be kept in sync with the commands added here.
   export_->add_subcommand("zeek", "exports query results in Zeek format",
                           documentation::vast_export_zeek,
                           sink_opts("?vast.export.zeek"));
@@ -184,9 +188,18 @@ auto make_import_command() {
       .add<size_t>("batch-size", "upper bound for the size of a table slice")
       .add<std::string>("batch-timeout", "timeout after which batched "
                                          "table slices are forwarded")
-      .add<std::string>("read-timeout", "timeout for waiting for incoming data")
       .add<bool>("blocking,b", "block until the IMPORTER forwarded all data")
-      .add<size_t>("max-events,n", "the maximum number of events to import"));
+      .add<std::string>("listen,l", "the endpoint to listen on "
+                                    "([host]:port/type)")
+      .add<size_t>("max-events,n", "the maximum number of events to import")
+      .add<std::string>("read,r", "path to input where to read events from")
+      .add<std::string>("read-timeout", "timeout for waiting for incoming data")
+      .add<std::string>("schema,S", "alternate schema as string")
+      .add<std::string>("schema-file,s", "path to alternate schema")
+      .add<std::string>("type,t", "filter event type based on prefix matching")
+      .add<bool>("uds,d", "treat -r as listening UNIX domain socket"));
+  // NOTICE: The `source_opts` are relocated in `command.cpp:fixup_options()`,
+  // That function must be kept in sync with the commands added here.
   import_->add_subcommand("zeek", "imports Zeek TSV logs from STDIN or file",
                           documentation::vast_import_zeek,
                           source_opts("?vast.import.zeek"));
@@ -268,8 +281,15 @@ auto make_spawn_source_command() {
       .add<size_t>("batch-size", "upper bound for the size of a table slice")
       .add<std::string>("batch-timeout", "timeout after which batched "
                                          "table slices are forwarded")
+      .add<std::string>("listen,l", "the endpoint to listen on "
+                                    "([host]:port/type)")
+      .add<size_t>("max-events,n", "the maximum number of events to import")
+      .add<std::string>("read,r", "path to input where to read events from")
       .add<std::string>("read-timeout", "timeout for waiting for incoming data")
-      .add<size_t>("max-events,n", "the maximum number of events to import"));
+      .add<std::string>("schema,S", "alternate schema as string")
+      .add<std::string>("schema-file,s", "path to alternate schema")
+      .add<std::string>("type,t", "filter event type based on prefix matching")
+      .add<bool>("uds,d", "treat -r as listening UNIX domain socket"));
   spawn_source->add_subcommand("csv",
                                "creates a new CSV source inside the node",
                                documentation::vast_spawn_source_csv,
@@ -424,26 +444,19 @@ auto make_command_factory() {
     {"export zeek", make_writer_command("zeek")},
     {"get", get_command},
     {"infer", infer_command},
-    {"import csv", import_command<format::csv::reader, defaults::import::csv>},
+    {"import csv", import_command<format::csv::reader>},
     {"import json", import_command<
-      format::json::reader<format::json::default_selector>,
-      defaults::import::json>},
+      format::json::reader<format::json::default_selector>>},
 #if VAST_ENABLE_PCAP
-    {"import pcap", import_command<format::pcap::reader,
-      defaults::import::pcap>},
+    {"import pcap", import_command<format::pcap::reader>},
 #endif
     {"import suricata", import_command<
-      format::json::reader<format::json::suricata_selector>,
-      defaults::import::suricata>},
-    {"import syslog", import_command<format::syslog::reader,
-      defaults::import::syslog>},
-    {"import test", import_command<format::test::reader,
-      defaults::import::test>},
-    {"import zeek", import_command<format::zeek::reader,
-      defaults::import::zeek>},
+      format::json::reader<format::json::suricata_selector>>},
+    {"import syslog", import_command<format::syslog::reader>},
+    {"import test", import_command<format::test::reader>},
+    {"import zeek", import_command<format::zeek::reader>},
     {"import zeek-json", import_command<
-      format::json::reader<format::json::zeek_selector>,
-      defaults::import::zeek_json>},
+      format::json::reader<format::json::zeek_selector>>},
     {"kill", remote_command},
     {"peer", remote_command},
     {"pivot", pivot_command},
@@ -475,7 +488,7 @@ auto make_command_factory() {
     {"version", version_command},
   };
   // clang-format on
-}
+} // namespace
 
 auto make_root_command(std::string_view path) {
   // We're only interested in the application name, not in its path. For
@@ -589,20 +602,31 @@ void render_error(const command& root, const caf::error& err,
 }
 
 command::opts_builder source_opts(std::string_view category) {
+  // The deprecated options are still accepted but get copied over to their
+  // new location in `command.cpp:fixup_options()`.
   return command::opts(category)
-    .add<std::string>("listen,l", "the endpoint to listen on "
-                                  "([host]:port/type)")
-    .add<std::string>("read,r", "path to input where to read events from")
-    .add<std::string>("schema-file,s", "path to alternate schema")
-    .add<std::string>("schema,S", "alternate schema as string")
-    .add<std::string>("type,t", "filter event type based on prefix matching")
-    .add<bool>("uds,d", "treat -r as listening UNIX domain socket");
+    .add<std::string>("listen,l", "deprecated - this option now applies to the "
+                                  "import command")
+    .add<std::string>("read,r", "deprecated - this option now applies to the "
+                                "import command")
+    .add<std::string>("schema-file,s", "deprecated - this option now applies "
+                                       "to the import command")
+    .add<std::string>("schema,S", "deprecated - this option now applies to the "
+                                  "import command")
+    .add<std::string>("type,t", "deprecated - this option now applies to the "
+                                "import command")
+    .add<bool>("uds,d", "deprecated - this option now applies to the import "
+                        "command");
 }
 
 command::opts_builder sink_opts(std::string_view category) {
+  // The deprecated options are still accepted but get copied over to their
+  // new location in `command.cpp:fixup_options()`.
   return command::opts(category)
-    .add<std::string>("write,w", "path to write events to")
-    .add<bool>("uds,d", "treat -w as UNIX domain socket to connect to");
+    .add<std::string>("write,w", "deprecated - this option now applies to the "
+                                 "import command")
+    .add<bool>("uds,d", "deprecated - this option now applies to the import "
+                        "command");
 }
 
 command::opts_builder opts(std::string_view category) {

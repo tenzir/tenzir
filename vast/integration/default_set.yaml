@@ -245,14 +245,14 @@ tests:
   Node json zeek conn:
     tags: [node, import-export, zeek, json]
     steps:
-      - command: -N import json -s @./misc/schema/zeek-conn.schema -t zeek.conn.custom
+      - command: -N import -s @./misc/schema/zeek-conn.schema -t zeek.conn.custom json
         input: data/json/conn.log.json.gz
       - command: -N export ascii 'duration > 6s'
       - command: -N export ascii '#timestamp >= 2011-08-15T03:48'
   Node suricata alert:
     tags: [node, import-export, suricata, eve]
     steps:
-      - command: -N import suricata -r @./data/suricata/eve.json
+      - command: -N import -r @./data/suricata/eve.json suricata
       - command: -N export ascii 'src_ip == 147.32.84.165'
       - command: -N export csv '#type ~ /suricata.*/'
       - command: -N export zeek '#type ~ /suricata.alert/'
@@ -260,7 +260,7 @@ tests:
   Node argus csv:
     tags: [node, import-export, argus, csv]
     steps:
-      - command: -N import csv -t argus.record
+      - command: -N import -t argus.record csv
         input: data/csv/argus-M57-10k-pkts.csv.gz
       - command: -N export ascii 'State != "CON" && Dur > 4900ms'
       - command: -N export ascii 'Cause == "Status" && Dur > 1s'
@@ -442,7 +442,7 @@ tests:
     tags: [import, spawn-source, zeek]
     fixture: ServerTester
     steps:
-      - command: spawn source suricata -r @./data/suricata/eve.json
+      - command: spawn source -r @./data/suricata/eve.json suricata
       - command: import -b zeek
         input: data/zeek/conn.log.gz
       - command: count '#type ~ /suricata.*/'

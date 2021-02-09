@@ -39,8 +39,6 @@ namespace vast::format::json {
 
 class writer : public ostream_writer {
 public:
-  using defaults = vast::defaults::export_::json;
-
   using super = ostream_writer;
 
   writer(ostream_ptr out, const caf::settings& options);

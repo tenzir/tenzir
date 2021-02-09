@@ -73,7 +73,7 @@ TEST(PCAP read/write 1) {
   // Initialize a PCAP source with no cutoff (-1), and at most 5 flow table
   // entries.
   caf::settings settings;
-  caf::put(settings, "vast.import.pcap.read", artifacts::traces::nmap_vsn);
+  caf::put(settings, "vast.import.read", artifacts::traces::nmap_vsn);
   caf::put(settings, "vast.import.pcap.cutoff", static_cast<uint64_t>(-1));
   caf::put(settings, "vast.import.pcap.max-flows", static_cast<size_t>(5));
   // A non-positive value disables the timeout. We need to do this because the
@@ -104,7 +104,7 @@ TEST(PCAP read/write 1) {
     CHECK_VARIANT_EQUAL((*community_id_column)[row], community_ids[row]);
   MESSAGE("write out read packets");
   auto file = "vast-unit-test-nmap-vsn.pcap";
-  caf::put(settings, "vast.export.pcap.write", file);
+  caf::put(settings, "vast.export.write", file);
   format::pcap::writer writer{settings};
   auto deleter = caf::detail::make_scope_guard([&] { rm(file); });
   REQUIRE_EQUAL(writer.write(slice), caf::none);
@@ -114,7 +114,7 @@ TEST(PCAP read/write 2) {
   // Spawn a PCAP source with a 64-byte cutoff, at most 100 flow table entries,
   // with flows inactive for more than 5 seconds to be evicted every 2 seconds.
   caf::settings settings;
-  caf::put(settings, "vast.import.pcap.read", artifacts::traces::nmap_vsn);
+  caf::put(settings, "vast.import.read", artifacts::traces::nmap_vsn);
   caf::put(settings, "vast.import.pcap.cutoff", static_cast<uint64_t>(64));
   caf::put(settings, "vast.import.pcap.max-flows", static_cast<size_t>(100));
   caf::put(settings, "vast.import.pcap.max-flow-age", static_cast<size_t>(5));
@@ -139,7 +139,7 @@ TEST(PCAP read/write 2) {
   CHECK_EQUAL(layout.name(), "pcap.packet");
   MESSAGE("write out read packets");
   auto file = "vast-unit-test-workshop-2011-browse.pcap";
-  caf::put(settings, "vast.export.pcap.write", file);
+  caf::put(settings, "vast.export.write", file);
   format::pcap::writer writer{settings};
   auto deleter = caf::detail::make_scope_guard([&] { rm(file); });
   REQUIRE_EQUAL(writer.write(slice), caf::none);
