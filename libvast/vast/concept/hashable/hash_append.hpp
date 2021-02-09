@@ -75,7 +75,7 @@ template <class... T>
 struct is_uniquely_represented<std::tuple<T...>>
   : std::bool_constant<
       std::conjunction_v<is_uniquely_represented<
-        T>...> && detail::sum<sizeof(T)...>{} == sizeof(std::tuple<T...>)> {};
+        T>...> && detail::sum<sizeof(T)...> == sizeof(std::tuple<T...>)> {};
 
 template <class T, size_t N>
 struct is_uniquely_represented<T[N]> : is_uniquely_represented<T> {};

@@ -268,14 +268,7 @@ template <typename T>
 inline constexpr bool has_name_member = is_detected_v<name_member_t, T>;
 
 // -- compile time computation of sum -----------------------------------------
-template <size_t ...>
-struct sum;
-
-template <size_t S0, size_t ...SN>
-struct sum<S0, SN...>
-  : std::integral_constant<size_t, S0 + sum<SN...>{}> {};
-
-template <>
-struct sum<> : std::integral_constant<size_t, 0> {};
+template <auto... Values>
+constexpr auto sum = (0 + ... + Values);
 
 } // namespace vast::detail
