@@ -359,7 +359,8 @@ caf::error parse_impl(invocation& result, const command& cmd,
 
 void fixup_options(invocation& inv) {
   using namespace std::string_literals;
-  auto move_option_arg = [&](auto cmd, auto format, auto opt) {
+  auto move_option_arg = [&](const char* cmd, const char* format,
+                             const char* opt) {
     auto path = "vast."s + cmd + '.' + format + '.' + opt;
     if (auto x = caf::get_if<std::string>(&inv.options, path)) {
       // The logger isn't initialized yet.
@@ -374,7 +375,7 @@ void fixup_options(invocation& inv) {
   };
   for (const auto& cmd : {"import", "spawn.source"})
     for (const auto& format :
-         {"csv", "json", "suricata", "syslog", "zeek", "zeek-json"})
+         {"csv", "json", "suricata", "syslog", "test", "zeek", "zeek-json"})
       for (const auto& opt :
            {"listen", "read", "schema", "schema-file", "type", "uds"})
         move_option_arg(cmd, format, opt);

@@ -128,6 +128,8 @@ auto make_export_command() {
       .add<std::string>("read,r", "path for reading the query")
       .add<std::string>("write,w", "path to write events to")
       .add<bool>("uds,d", "treat -w as UNIX domain socket to connect to"));
+  // NOTICE: The `sink_opts` are relocated in `command.cpp:fixup_options()`,
+  // That function must be kept in sync with the commands added here.
   export_->add_subcommand("zeek", "exports query results in Zeek format",
                           documentation::vast_export_zeek,
                           sink_opts("?vast.export.zeek"));
@@ -196,6 +198,8 @@ auto make_import_command() {
       .add<std::string>("schema-file,s", "path to alternate schema")
       .add<std::string>("type,t", "filter event type based on prefix matching")
       .add<bool>("uds,d", "treat -r as listening UNIX domain socket"));
+  // NOTICE: The `source_opts` are relocated in `command.cpp:fixup_options()`,
+  // That function must be kept in sync with the commands added here.
   import_->add_subcommand("zeek", "imports Zeek TSV logs from STDIN or file",
                           documentation::vast_import_zeek,
                           source_opts("?vast.import.zeek"));
@@ -598,6 +602,8 @@ void render_error(const command& root, const caf::error& err,
 }
 
 command::opts_builder source_opts(std::string_view category) {
+  // The deprecated options are still accepted but get copied over to their
+  // new location in `command.cpp:fixup_options()`.
   return command::opts(category)
     .add<std::string>("listen,l", "deprecated - this option now applies to the "
                                   "import command")
@@ -614,9 +620,13 @@ command::opts_builder source_opts(std::string_view category) {
 }
 
 command::opts_builder sink_opts(std::string_view category) {
+  // The deprecated options are still accepted but get copied over to their
+  // new location in `command.cpp:fixup_options()`.
   return command::opts(category)
-    .add<std::string>("write,w", "path to write events to")
-    .add<bool>("uds,d", "treat -w as UNIX domain socket to connect to");
+    .add<std::string>("write,w", "deprecated - this option now applies to the "
+                                 "import command")
+    .add<bool>("uds,d", "deprecated - this option now applies to the import "
+                        "command");
 }
 
 command::opts_builder opts(std::string_view category) {
