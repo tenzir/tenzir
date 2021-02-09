@@ -223,8 +223,17 @@ option(VAST_ENABLE_TIME_REPORT
        "Print information where time was spent during compilation" OFF)
 add_feature_info("VAST_ENABLE_TIME_REPORT" VAST_ENABLE_TIME_REPORT
                  "print information where time was spent during compilation.")
-if (SHOW_TIME_REPORT)
-  target_compile_options(libvast_internal INTERFACE "-ftine-report")
+if (VAST_ENABLE_TIME_REPORT)
+  target_compile_options(libvast_internal INTERFACE "-ftime-report")
+endif ()
+
+cmake_dependent_option(
+  VAST_ENABLE_TIME_TRACE "Generate tracing JSON for compilation time profiling"
+  OFF "CMAKE_CXX_COMPILER_ID MATCHES Clang" OFF)
+add_feature_info("VAST_ENABLE_TIME_TRACE" VAST_ENABLE_TIME_TRACE
+                 "generate tracing JSON for compilation time profiling.")
+if (VAST_ENABLE_TIME_TRACE)
+  target_compile_options(libvast_internal INTERFACE "-ftime-trace")
 endif ()
 
 # -- assertions ----------------------------------------------------------------

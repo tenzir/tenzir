@@ -39,7 +39,8 @@ Usage: $0 [OPTION]... [VAR=VALUE]...
     --build-dir=DIR         directory where to perform build [build]
     --build-type=DIR        CMake build type [RelWithDebInfo]
     --extra-flags=STRING    additional compiler flags
-    --show-time-report      show where the compiler spends its time
+    --show-time-report      print information where time was spent during compilation
+    --show-time-trace       generate tracing JSON for compilation time profiling
     --more-warnings         enables most warnings on GCC and Clang
     --without-tests         build without unit tests
     --with-zeek-to-vast     build with zeek-to-vast
@@ -158,6 +159,9 @@ while [ $# -ne 0 ]; do
       ;;
     --show-time-report)
       append_cache_entry VAST_ENABLE_TIME_REPORT BOOL yes
+      ;;
+    --show-time-trace)
+      append_cache_entry VAST_ENABLE_TIME_TRACE BOOL yes
       ;;
     --more-warnings)
       append_cache_entry VAST_ENABLE_MORE_WARNINGS BOOL yes
