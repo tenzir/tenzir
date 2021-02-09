@@ -13,29 +13,11 @@
 
 #pragma once
 
-#include <functional>
+#include "vast/fwd.hpp"
 
-#include "vast/command.hpp"
+#include "vast/aliases.hpp"
 
 namespace vast::system {
-
-/// Callback for adding additional application logic to `start_command_impl`.
-/// @relates start_command_impl
-using start_command_extra_steps = std::function<caf::error(
-  caf::scoped_actor& self, const caf::settings& options, const caf::actor&)>;
-
-/// Extensible base implementation for the *start* command that allows
-/// users to add additional application logic.
-/// @param extra_steps Function that adds additional application logic after
-///                    the node is connected and before the command enters its
-///                    loop to wait for CTRL+C or system shutdown.
-/// @param invocation Invocation object that dispatches to this function.
-/// @param sys The hosting CAF actor system.
-/// @returns An non-default error on if the extra steps fail and
-///          `start_command_impl` needs to stop running, `caf::none` otherwise.
-/// @relates start_command
-caf::message start_command_impl(start_command_extra_steps extra_steps,
-                                const invocation& inv, caf::actor_system& sys);
 
 /// Default implementation for the *start* command.
 /// @param invocation Invocation object that dispatches to this function.

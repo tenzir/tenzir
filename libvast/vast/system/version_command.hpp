@@ -13,10 +13,9 @@
 
 #pragma once
 
-#include "vast/command.hpp"
-#include "vast/data.hpp"
+#include "vast/fwd.hpp"
 
-#include <caf/fwd.hpp>
+#include "vast/aliases.hpp"
 
 namespace vast::system {
 

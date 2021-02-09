@@ -15,14 +15,14 @@
 
 #if VAST_ENABLE_PCAP
 
-#  include "vast/system/pcap_writer_command.hpp"
-
+#  include "vast/command.hpp"
 #  include "vast/defaults.hpp"
 #  include "vast/detail/assert.hpp"
 #  include "vast/error.hpp"
 #  include "vast/format/pcap.hpp"
 #  include "vast/logger.hpp"
 #  include "vast/scope_linked.hpp"
+#  include "vast/system/pcap_writer_command.hpp"
 #  include "vast/system/signal_monitor.hpp"
 #  include "vast/system/sink.hpp"
 #  include "vast/system/sink_command.hpp"

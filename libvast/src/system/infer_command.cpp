@@ -13,6 +13,7 @@
 
 #include "vast/system/infer_command.hpp"
 
+#include "vast/command.hpp"
 #include "vast/concept/parseable/to.hpp"
 #include "vast/concept/parseable/vast/address.hpp"
 #include "vast/concept/parseable/vast/subnet.hpp"
