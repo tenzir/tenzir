@@ -112,6 +112,7 @@ tests:
       - command: '-N export ascii "#type != \"zeek.conn\" && #type != \"vast.metrics\""'
       - command: -N export ascii '#type != "foobar" && resp_h == 192.168.1.104'
       - command: -N get --format=json 1 42 7777 9999999999 122
+        transformation: jq -ec '.'
       - command: -N get --format=csv 99 99 99
   Node Zeek multiple imports:
     tags: [node, import-export, zeek]
@@ -150,12 +151,14 @@ tests:
       - command: -N import -b zeek-json
         input: data/zeek/zeek.json
       - command: '-N export json "\"zeek\" in #type"'
+        transformation: jq -ec '.'
   Export json:
     tags: [json, zeek]
     steps:
       - command: -N import zeek
         input: data/zeek/conn.log.gz
       - command: -N export json 'resp_h == 192.168.1.104'
+        transformation: jq -ec '.'
   Malformed Query:
     tags: [export]
     fixture: ServerTester
@@ -427,7 +430,9 @@ tests:
       - command: -N import suricata
         input: data/suricata/eve.json
       - command: -N export json '"®" in :string'
+        transformation: jq -ec '.'
       - command: -N export json '#type ni "suricata"'
+        transformation: jq -ec '.'
 
   Zeek conn log aging:
     tags: [import-export, aging, zeek]
