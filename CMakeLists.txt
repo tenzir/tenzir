@@ -223,8 +223,8 @@ option(VAST_ENABLE_TIME_REPORT
        "Print information where time was spent during compilation" OFF)
 add_feature_info("VAST_ENABLE_TIME_REPORT" VAST_ENABLE_TIME_REPORT
                  "print information where time was spent during compilation.")
-if (SHOW_TIME_REPORT)
-  target_compile_options(libvast_internal INTERFACE "-ftine-report")
+if (VAST_ENABLE_TIME_REPORT)
+  target_compile_options(libvast_internal INTERFACE "-ftime-report")
 endif ()
 
 # -- assertions ----------------------------------------------------------------
