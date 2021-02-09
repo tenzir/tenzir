@@ -18,19 +18,23 @@
 #include "vast/concept/support/unused_type.hpp"
 #include "vast/detail/type_traits.hpp"
 
+#include <experimental/type_traits>
+
 namespace vast::detail {
 
 template <typename T>
 using has_lhs_type_t = typename T::lhs_type;
 
 template <typename T>
-inline constexpr bool has_lhs_type_v = is_detected_v<has_lhs_type_t, T>;
+inline constexpr bool has_lhs_type_v
+  = std::experimental::is_detected_v<has_lhs_type_t, T>;
 
 template <typename T>
 using has_rhs_type_t = typename T::rhs_type;
 
 template <typename T>
-inline constexpr bool has_rhs_type_v = is_detected_v<has_rhs_type_t, T>;
+inline constexpr bool has_rhs_type_v
+  = std::experimental::is_detected_v<has_rhs_type_t, T>;
 
 template <typename T>
 inline constexpr bool is_sequencer_v = has_lhs_type_v<T> && has_rhs_type_v<T>;
