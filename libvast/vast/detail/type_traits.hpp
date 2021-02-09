@@ -218,22 +218,6 @@ inline constexpr bool always_false_v = always_false<T>::value;
 template <class T>
 using tuple_wrap = std::conditional_t<is_tuple_v<T>, T, std::tuple<T>>;
 
-// Checks whether a tuple contains a given type.
-template <class T, class Tuple>
-struct contains;
-
-template <class T>
-struct contains<T, std::tuple<>> : std::false_type {};
-
-template <class T, class U, class... Ts>
-struct contains<T, std::tuple<U, Ts...>> : contains<T, std::tuple<Ts...>> {};
-
-template <class T, class... Ts>
-struct contains<T, std::tuple<T, Ts...>> : std::true_type {};
-
-template <class T, class TS>
-inline constexpr bool contains_v = contains<T, TS>::value;
-
 // -- optional ---------------------------------------------------------------
 
 template <class T>
