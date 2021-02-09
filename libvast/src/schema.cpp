@@ -262,17 +262,16 @@ caf::expected<schema> load_schema(const path& schema_file) {
   return to<schema>(*str);
 }
 
-caf::expected<symbol_table> load_symbols(const path& schema_file) {
+caf::error load_symbols(const path& schema_file, symbol_table& local) {
   if (schema_file.empty())
     return caf::make_error(ec::filesystem_error, "empty path");
   auto str = load_contents(schema_file);
   if (!str)
     return str.error();
   auto p = symbol_table_parser{};
-  symbol_table result;
-  if (!p(*str, result))
+  if (!p(*str, local))
     return caf::make_error(ec::parse_error, "failed at", schema_file);
-  return result;
+  return caf::none;
 }
 
 caf::expected<schema>
@@ -287,29 +286,25 @@ load_schema(const detail::stable_set<path>& schema_dirs, size_t max_recursion) {
       VAST_DEBUG("{} skips non-existing directory: {}", __func__, dir);
       continue;
     }
-    vast::schema directory_schema;
     auto filter
       = [](const path& f) { return detail::ends_with(f.str(), ".schema"); };
     auto schema_files = filter_dir(dir, std::move(filter), max_recursion);
     symbol_table local_symbols;
     for (const auto& f : schema_files) {
       VAST_DEBUG("loading schema {}", f);
-      auto symbols = load_symbols(f);
-      if (!symbols) {
-        VAST_ERROR("{} {} {}", __func__, render(symbols.error()), f);
+      if (auto err = load_symbols(f, local_symbols)) {
+        VAST_ERROR("schema loader failed to load {}: {}", render(err), f);
         continue;
       }
-      auto r = symbol_resolver{global_symbols, local_symbols, *symbols};
-      auto schema = r.resolve();
-      if (auto merged = schema::merge(directory_schema, *schema))
-        directory_schema = std::move(*merged);
-      else
-        return caf::make_error(ec::format_error, merged.error().context(),
-                               "in schema file", f);
     }
+    auto r = symbol_resolver{global_symbols, local_symbols};
+    auto directory_schema = r.resolve();
+    if (!directory_schema)
+      return caf::make_error(ec::format_error, "failed to resolve types in",
+                             dir);
     local_symbols.merge(std::move(global_symbols));
     global_symbols = std::move(local_symbols);
-    types = schema::combine(types, directory_schema);
+    types = schema::combine(types, *directory_schema);
   }
   return types;
 }

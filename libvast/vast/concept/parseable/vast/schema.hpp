@@ -126,8 +126,8 @@ struct symbol_resolver {
   }
 
   const symbol_table& global;
-  symbol_table& local;
   symbol_table working;
+  symbol_table local = {};
   schema sch = {};
 };
 
@@ -140,7 +140,6 @@ struct symbol_table_parser : parser<symbol_table_parser> {
   template <class Iterator, class Attribute>
   bool parse(Iterator& f, const Iterator& l, Attribute& out) const {
     static_assert(detail::is_any_v<Attribute, attribute, unused_type>);
-    symbol_table sb;
     bool duplicate_symbol = false;
     auto to_type = [&](std::tuple<std::string, type> t) -> type {
       auto [name, ty] = std::move(t);
@@ -149,7 +148,7 @@ struct symbol_table_parser : parser<symbol_table_parser> {
       if (!ty.name().empty())
         ty = alias_type{ty}; // TODO: attributes
       ty.name(name);
-      duplicate_symbol = !sb.emplace(name, ty).second;
+      duplicate_symbol = !out.emplace(name, ty).second;
       if (duplicate_symbol)
         VAST_ERROR("multiple definitions of {} detected", name);
       return ty;
@@ -164,7 +163,6 @@ struct symbol_table_parser : parser<symbol_table_parser> {
       return false;
     if (duplicate_symbol)
       return false;
-    out = std::move(sb);
     return true;
   }
 };
@@ -186,12 +184,11 @@ struct schema_parser : parser<schema_parser> {
   template <class Iterator, class Attribute>
   bool parse(Iterator& f, const Iterator& l, Attribute& out) const {
     symbol_table global;
-    symbol_table local;
     symbol_table working;
     auto p = symbol_table_parser{};
     if (!p(f, l, working))
       return false;
-    auto r = symbol_resolver{global, local, working};
+    auto r = symbol_resolver{global, std::move(working)};
     auto sch = r.resolve();
     if (!sch) {
       VAST_WARN("failed to resolve symbol table: {}", sch.error());
