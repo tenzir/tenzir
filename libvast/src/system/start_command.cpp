@@ -13,6 +13,7 @@
 
 #include "vast/system/start_command.hpp"
 
+#include "vast/command.hpp"
 #include "vast/config.hpp"
 #include "vast/systemd.hpp"
 

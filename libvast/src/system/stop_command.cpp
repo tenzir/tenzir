@@ -13,6 +13,7 @@
 
 #include "vast/system/stop_command.hpp"
 
+#include "vast/command.hpp"
 #include "vast/detail/narrow.hpp"
 #include "vast/error.hpp"
 #include "vast/logger.hpp"

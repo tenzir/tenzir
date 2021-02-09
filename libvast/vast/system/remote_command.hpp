@@ -13,7 +13,9 @@
 
 #pragma once
 
-#include "vast/command.hpp"
+#include "vast/fwd.hpp"
+
+#include "vast/aliases.hpp"
 
 namespace vast::system {
 
@@ -22,4 +24,3 @@ namespace vast::system {
 caf::message remote_command(const invocation& inv, caf::actor_system& sys);
 
 } // namespace vast::system
-
