@@ -26,6 +26,7 @@
 #include <spdlog/async.h>
 #include <spdlog/common.h>
 #include <spdlog/sinks/ansicolor_sink.h>
+#include <spdlog/sinks/basic_file_sink.h>
 #include <spdlog/sinks/null_sink.h>
 #include <spdlog/sinks/rotating_file_sink.h>
 
@@ -205,6 +206,7 @@ bool setup_spdlog(const vast::invocation& cmd_invocation,
   spdlog::init_thread_pool(defaults::logger::queue_size,
                            defaults::logger::logger_threads);
   std::vector<spdlog::sink_ptr> sinks;
+  // Add console sink.
   auto stderr_sink
     = std::make_shared<spdlog::sinks::ansicolor_stderr_sink_mt>(log_color);
   stderr_sink->set_level(vast_loglevel_to_spd(vast_console_verbosity));
@@ -213,11 +215,18 @@ bool setup_spdlog(const vast::invocation& cmd_invocation,
                   std::string{defaults::logger::console_format});
   stderr_sink->set_pattern(console_format);
   sinks.push_back(stderr_sink);
+  // Add file sink.
   if (vast_file_verbosity != VAST_LOG_LEVEL_QUIET) {
-    // Arguments are max file size and the max number of files.
-    auto file_sink = std::make_shared<spdlog::sinks::rotating_file_sink_mt>(
-      log_file, defaults::logger::rotate_threshold,
-      defaults::logger::rotate_files);
+    bool rotating
+      = caf::get_or(cfg_file, "vast.log-rotation", defaults::log_rotation);
+    spdlog::sink_ptr file_sink = nullptr;
+    if (rotating) {
+      file_sink = std::make_shared<spdlog::sinks::rotating_file_sink_mt>(
+        log_file, defaults::logger::rotate_threshold,
+        defaults::logger::rotate_files);
+    } else {
+      file_sink = std::make_shared<spdlog::sinks::basic_file_sink_mt>(log_file);
+    }
     file_sink->set_level(vast_loglevel_to_spd(vast_file_verbosity));
     auto file_format = caf::get_or(cfg_file, "vast.file-format",
                                    std::string{defaults::logger::file_format});

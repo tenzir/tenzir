@@ -30,6 +30,10 @@ vast:
   # release builds.
   # file-verbosity: debug
 
+  # Whether to enable automatic log rotation. If set to true, a new log file
+  # will be created when the size of the current log file exceeds 10 MiB.
+  #log-rotation: true
+
   # Mode for console log output generation. Automatic renders color only when
   # writing to a tty.
   # Possible values: always, automatic, never. (default automatic)
