@@ -200,8 +200,10 @@ TEST(full partition roundtrip) {
   // Persist the partition to disk;
   vast::path persist_path = "test-partition"; // will be interpreted relative to
                                               // the fs actor's root dir
-  auto persist_promise = self->request(partition, caf::infinite,
-                                       vast::atom::persist_v, persist_path);
+  vast::path synopsis_path = "test-partition-synopsis";
+  auto persist_promise
+    = self->request(partition, caf::infinite, vast::atom::persist_v,
+                    persist_path, synopsis_path);
   run();
   persist_promise.receive(
     [](std::shared_ptr<vast::partition_synopsis>&) {

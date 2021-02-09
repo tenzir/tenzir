@@ -51,3 +51,19 @@ table v0 {
   // and type synopses.
   synopses: [synopsis.v0];
 }
+
+namespace vast.fbs.partition_synopsis;
+
+union PartitionSynopsis {
+  v0,
+}
+
+namespace vast.fbs;
+
+table PartitionSynopsis {
+  partition_synopsis: partition_synopsis.PartitionSynopsis;
+}
+
+root_type PartitionSynopsis;
+
+file_identifier "vPSN";
