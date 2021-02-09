@@ -365,7 +365,7 @@ void fixup_options(invocation& inv) {
       // The logger isn't initialized yet.
 #if VAST_LOG_LEVEL >= VAST_LOG_LEVEL_WARNING
       fmt::print(stderr,
-                 "The option '{}' is deprected for the '{}' subcommand and "
+                 "The option '{}' is deprecated for the '{}' subcommand and "
                  "should be specified at the {} subcommand instead\n",
                  opt, format, cmd);
 #endif
