@@ -159,6 +159,9 @@ while [ $# -ne 0 ]; do
     --show-time-report)
       append_cache_entry VAST_ENABLE_TIME_REPORT BOOL yes
       ;;
+    --show-time-trace)
+      append_cache_entry VAST_ENABLE_TIME_TRACE BOOL yes
+      ;;
     --more-warnings)
       append_cache_entry VAST_ENABLE_MORE_WARNINGS BOOL yes
       ;;
