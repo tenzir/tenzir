@@ -3,6 +3,7 @@ caf:
     file-verbosity: trace
     component-blacklist: []
 vast:
+  endpoint: '127.0.0.1:42000'
   plugins: []
   export:
     zeek:
