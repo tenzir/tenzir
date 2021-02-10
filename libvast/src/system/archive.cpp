@@ -66,7 +66,7 @@ void archive_state::next_session() {
   // Start working on the next ids for the next requester.
   auto& next_ids = it->second.front();
   session = store->extract(next_ids);
-  self->send(self, next_ids, current_requester, ++session_id);
+  self->send(self, atom::internal_v, next_ids, current_requester, ++session_id);
   it->second.pop();
 }
 
@@ -128,7 +128,8 @@ archive(archive_actor::stateful_pointer<archive_state> self, path dir,
       if (!self->state.session)
         self->state.next_session();
     },
-    [self](const ids& xs, archive_client_actor requester, uint64_t session_id) {
+    [self](atom::internal, const ids& xs, archive_client_actor requester,
+           uint64_t session_id) {
       // If the export has since shut down, we need to invalidate the session.
       if (self->state.active_exporters.count(requester->address()) == 0) {
         VAST_DEBUG("{} invalidates running query session for {}", self,
@@ -160,7 +161,7 @@ archive(archive_actor::stateful_pointer<archive_state> self, path dir,
       for (auto& sub_slice : select(*slice, xs))
         self->send(requester, sub_slice);
       // Continue working on the current session.
-      self->send(self, xs, requester, session_id);
+      self->send(self, atom::internal_v, xs, requester, session_id);
     },
     [self](
       caf::stream<table_slice> in) -> caf::inbound_stream_slot<table_slice> {
