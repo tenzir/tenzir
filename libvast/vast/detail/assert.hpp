@@ -16,16 +16,7 @@
 #include "vast/config.hpp"
 
 #if VAST_ENABLE_ASSERTIONS
-#  if VAST_WINDOWS
-#    include <cstdio>
-#    include <cstdlib>
-#    define VAST_ASSERT(expr)                                                  \
-      if (static_cast<bool>(expr) == false) {                                  \
-        ::printf("%s:%u: assertion failed '%s'\n", __FILE__, __LINE__, #expr); \
-        ::abort();                                                             \
-      }                                                                        \
-      static_cast<void>(0)
-#  else // VAST_LINUX || VAST_MACOS || VAST_BSD
+#  if __has_include(<execinfo.h>)
 #    include <cstdio>
 #    include <cstdlib>
 #    include <execinfo.h>
@@ -35,6 +26,15 @@
         void* vast_array[10];                                                  \
         auto vast_bt_size = ::backtrace(vast_array, 10);                       \
         ::backtrace_symbols_fd(vast_array, vast_bt_size, 2);                   \
+        ::abort();                                                             \
+      }                                                                        \
+      static_cast<void>(0)
+#  else
+#    include <cstdio>
+#    include <cstdlib>
+#    define VAST_ASSERT(expr)                                                  \
+      if (static_cast<bool>(expr) == false) {                                  \
+        ::printf("%s:%u: assertion failed '%s'\n", __FILE__, __LINE__, #expr); \
         ::abort();                                                             \
       }                                                                        \
       static_cast<void>(0)

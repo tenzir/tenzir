@@ -249,14 +249,20 @@ option(VAST_ENABLE_ASSERTIONS "Enable assertions"
 add_feature_info("VAST_ENABLE_ASSERTIONS" VAST_ENABLE_ASSERTIONS
                  "enable assertions.")
 
-if (VAST_ENABLE_ASSERTIONS)
+unset(_VAST_ENABLE_ASSERTIONS_DEFAULT)
+
+# -- backtrace -----------------------------------------------------------------
+
+option(VAST_ENABLE_BACKTRACE "Print a backtrace on unexpected termination" ON)
+if (VAST_ENABLE_BACKTRACE)
   find_package(Backtrace REQUIRED)
   target_include_directories(libvast_internal
                              INTERFACE ${Backtrace_INCLUDE_DIRECTORIES})
   target_link_libraries(libvast_internal INTERFACE ${Backtrace_LIBRARIES})
+  dependency_summary("backtrace" ${Backtrace_INCLUDE_DIR})
 endif ()
-
-unset(_VAST_ENABLE_ASSERTIONS_DEFAULT)
+add_feature_info("VAST_ENABLE_BACKTRACE" VAST_ENABLE_BACKTRACE
+                 "enable stack unwinding.")
 
 # -- sanitizers ----------------------------------------------------------------
 

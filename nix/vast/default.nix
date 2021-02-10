@@ -71,19 +71,20 @@ stdenv.mkDerivation rec {
   propagatedNativeBuildInputs = [ pkgconfig pandoc ];
   buildInputs = [ libpcap jemalloc broker libyamlcpp simdjson spdlog ]
     # Required for backtrace on musl libc.
-    ++ lib.optional (isStatic && buildType == "CI") libexecinfo;
+    ++ lib.optional (stdenv.hostPlatform.isMusl) libexecinfo;
   propagatedBuildInputs = [ arrow-cpp caf flatbuffers ];
 
   cmakeFlags = [
     "-DCMAKE_BUILD_TYPE:STRING=${buildType}"
     "-DCMAKE_INSTALL_SYSCONFDIR:PATH=/etc"
     "-DCMAKE_FIND_PACKAGE_PREFER_CONFIG=ON"
-    "-DCAF_ROOT_DIR=${caf}"
-    "-DVAST_ENABLE_RELOCATABLE_INSTALLATIONS=${if isStatic then "ON" else "OFF"}"
     "-DVAST_VERSION_TAG=${version}"
+    "-DVAST_ENABLE_RELOCATABLE_INSTALLATIONS=${if isStatic then "ON" else "OFF"}"
+    "-DVAST_ENABLE_BACKTRACE=ON"
     "-DVAST_ENABLE_JEMALLOC=ON"
     "-DVAST_ENABLE_ZEEK_TO_VAST=ON"
     "-DVAST_ENABLE_LSVAST=ON"
+    "-DCAF_ROOT_DIR=${caf}"
     "-DBROKER_ROOT_DIR=${broker}"
   ] ++ lib.optionals (buildType == "CI") [
     "-DVAST_ENABLE_ASSERTIONS=ON"
