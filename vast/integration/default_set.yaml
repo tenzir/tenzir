@@ -4,15 +4,15 @@ fixtures:
   BiTopologyTester:
     enter: | # python
       node0 = Server(self.cmd,
-                     ['-e', f':{VAST_PORT}', '-i', 'node0', 'start'],
+                     ['-e', f'127.0.0.1:{VAST_PORT}', '-i', 'node0', 'start'],
                      work_dir, name='node0', port=VAST_PORT,
                      config_file=self.config_file')
       node1 = Server(self.cmd,
-                     ['-e', ':42124',
+                     ['-e', '127.0.0.1:42124',
                       '-i', 'node1', 'start'],
                      work_dir, name='node1', port=42124,
                      config_file=self.config_file)
-      cmd += ['-e', f':{VAST_PORT}']
+      cmd += ['-e', f'127.0.0.1:{VAST_PORT}']
 
     exit: | # python
       node0.stop()
@@ -21,10 +21,10 @@ fixtures:
   ExampleConfigFileTester:
     enter: | # python
       node = Server(self.cmd,
-                    ['-e', f':{VAST_PORT}', '-i', 'node', 'start'],
+                    ['-e', f'127.0.0.1:{VAST_PORT}', '-i', 'node', 'start'],
                     work_dir, name='node', port=VAST_PORT,
                     config_file='vast.yaml.example')
-      cmd += ['-e', f':{VAST_PORT}']
+      cmd += ['-e', f'127.0.0.1:{VAST_PORT}']
 
     exit: | # python
       node.stop()
@@ -32,10 +32,10 @@ fixtures:
   ServerTester:
     enter: | # python
       node = Server(self.cmd,
-                    ['-e', f':{VAST_PORT}', '-i', 'node', 'start'],
+                    ['-e', f'127.0.0.1:{VAST_PORT}', '-i', 'node', 'start'],
                     work_dir, name='node', port=VAST_PORT,
                     config_file=self.config_file)
-      cmd += ['-e', f':{VAST_PORT}']
+      cmd += ['-e', f'127.0.0.1:{VAST_PORT}']
 
     exit: | # python
       node.stop()
@@ -43,14 +43,14 @@ fixtures:
   AgingTester:
     enter: | # python
       node = Server(self.cmd,
-                    ['-e', f':{VAST_PORT}',
+                    ['-e', f'127.0.0.1:{VAST_PORT}',
                      '-i', 'node',
                      '--aging-frequency=2000min',
                      '--aging-query=:addr == 192.168.1.104',
                      'start'],
                     work_dir, name='node', port=VAST_PORT,
                     config_file=self.config_file)
-      cmd += ['-e', f':{VAST_PORT}']
+      cmd += ['-e', f'127.0.0.1:{VAST_PORT}']
 
     exit: | # python
       node.stop()
@@ -61,7 +61,7 @@ fixtures:
     # of segment data.
     enter: | # python
       node = Server(self.cmd,
-                    ['-e', f':{VAST_PORT}',
+                    ['-e', f'127.0.0.1:{VAST_PORT}',
                      '-i', 'node',
                      '--max-partition-size=8000',
                      '--max-segment-size=1',
@@ -71,7 +71,7 @@ fixtures:
                      '--disk-budget-low=2MiB'],
                     work_dir, name='node', port=VAST_PORT,
                     config_file=self.config_file)
-      cmd += ['-e', f':{VAST_PORT}']
+      cmd += ['-e', f'127.0.0.1:{VAST_PORT}']
 
     exit: | # python
       node.stop()
