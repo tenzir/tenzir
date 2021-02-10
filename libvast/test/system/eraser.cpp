@@ -123,7 +123,7 @@ mock_archive(system::archive_actor::stateful_pointer<mock_archive_state> self) {
     [=](ids, system::archive_client_actor) {
       FAIL("no mock implementation available");
     },
-    [=](ids, system::archive_client_actor, uint64_t) {
+    [=](atom::internal, ids, system::archive_client_actor, uint64_t) {
       FAIL("no mock implementation available");
     },
     [=](atom::status,

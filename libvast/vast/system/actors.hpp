@@ -193,9 +193,9 @@ using archive_actor = typed_actor_fwd<
   caf::reacts_to<accountant_actor>,
   // Starts handling a query for the given ids.
   caf::reacts_to<ids, archive_client_actor>,
-  // Handles a query for the given ids, and sends the table slices back to the
-  // ARCHIVE CLIENT.
-  caf::reacts_to<ids, archive_client_actor, uint64_t>,
+  // INTERNAL: Handles a query for the given ids, and sends the table slices
+  // back to the ARCHIVE CLIENT.
+  caf::reacts_to<atom::internal, ids, archive_client_actor, uint64_t>,
   // The internal telemetry loop of the ARCHIVE.
   caf::reacts_to<atom::telemetry>,
   // Erase the events with the given ids.
@@ -265,8 +265,8 @@ using active_partition_actor = typed_actor_fwd<
   // Persists the active partition at the specified path.
   caf::replies_to<atom::persist, path, path>::with< //
     std::shared_ptr<partition_synopsis>>,
-  // A repeatedly called continuation of the persist request.
-  caf::reacts_to<atom::persist, atom::resume>>
+  // INTERNAL: A repeatedly called continuation of the persist request.
+  caf::reacts_to<atom::internal, atom::persist, atom::resume>>
   // Conform to the protocol of the STREAM SINK actor for table slices.
   ::extend_with<stream_sink_actor<table_slice>>
   // Conform to the protocol of the PARTITION actor.

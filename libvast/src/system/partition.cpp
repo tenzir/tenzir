@@ -498,17 +498,18 @@ active_partition_actor::behavior_type active_partition(
         = self->make_response_promise<std::shared_ptr<partition_synopsis>>();
       // We use a high message priority here because we want to start persisting
       // as soon as possible in order to avoid shutdown delay.
-      self->send<caf::message_priority::high>(self, atom::persist_v,
-                                              atom::resume_v);
+      self->send<caf::message_priority::high>(self, atom::internal_v,
+                                              atom::persist_v, atom::resume_v);
       return self->state.persistence_promise;
     },
-    [self](atom::persist, atom::resume) {
+    [self](atom::internal, atom::persist, atom::resume) {
       // Wait for outstanding data to avoid data loss.
       if (!self->state.streaming_initiated
           || !self->state.stage->inbound_paths().empty()
           || !self->state.stage->idle()) {
         VAST_DEBUG("{} waits for stream before persisting", self);
-        self->delayed_send(self, 50ms, atom::persist_v, atom::resume_v);
+        self->delayed_send(self, 50ms, atom::internal_v, atom::persist_v,
+                           atom::resume_v);
         return;
       }
       self->state.stage->out().fan_out_flush();
