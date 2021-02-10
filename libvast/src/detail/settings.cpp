@@ -13,6 +13,7 @@
 
 #include "vast/detail/settings.hpp"
 
+#include "vast/concept/parseable/vast/si.hpp"
 #include "vast/detail/type_traits.hpp"
 #include "vast/logger.hpp"
 
@@ -79,6 +80,28 @@ bool strip_settings(caf::settings& xs) {
       ++it;
   }
   return m.empty();
+}
+
+caf::expected<uint64_t>
+get_bytesize(caf::settings opts, std::string_view key, uint64_t defval) {
+  // Note that there's no `caf::has_key()` and e.g. `caf::get_or<std::string>`
+  // would silently take the default value if the key exists but is not a
+  // string, so we have to make a copy of `opts` and use `caf::put_missing()`
+  // as a workaround.
+  size_t result = 0;
+  caf::put_missing(opts, key, defval);
+  if (caf::holds_alternative<size_t>(opts, key)) {
+    result = caf::get<size_t>(opts, key);
+  } else if (caf::holds_alternative<std::string>(opts, key)) {
+    auto result_str = caf::get<std::string>(opts, key);
+    if (!parsers::bytesize(result_str, result))
+      return caf::make_error(ec::parse_error, "could not parse '" + result_str
+                                                + "' as valid byte size");
+  } else {
+    return caf::make_error(ec::invalid_argument,
+                           "invalid value for key '" + std::string{key} + "'");
+  }
+  return result;
 }
 
 } // namespace vast::detail
