@@ -215,7 +215,7 @@ constexpr const size_t queue_size = 8'192;
 constexpr const size_t logger_threads = 1;
 
 /// Rotate log file if the file size exceeds threshold.
-constexpr const bool log_rotation = true;
+constexpr const bool disable_log_rotation = false;
 
 /// File size threshold for the `rotating_file_sink`.
 constexpr const size_t rotate_threshold = 10 * 1'024 * 1'024; // 10_Mi;

@@ -18,6 +18,7 @@
 #include "vast/config.hpp"
 #include "vast/defaults.hpp"
 #include "vast/detail/assert.hpp"
+#include "vast/detail/settings.hpp"
 #include "vast/si_literals.hpp"
 #include "vast/system/configuration.hpp"
 
@@ -217,10 +218,14 @@ bool setup_spdlog(const vast::invocation& cmd_invocation,
   sinks.push_back(stderr_sink);
   // Add file sink.
   if (vast_file_verbosity != VAST_LOG_LEVEL_QUIET) {
-    bool rotating
-      = caf::get_or(cfg_file, "vast.log-rotation", defaults::log_rotation);
+    bool disable_rotation = caf::get_or(cfg_file, "vast.disable-log-rotation",
+                                        defaults::logger::disable_log_rotation);
     spdlog::sink_ptr file_sink = nullptr;
-    if (rotating) {
+    if (!disable_rotation) {
+      auto threshold_str
+        = detail::get_bytesize(cfg_file, "vast.log-rotation-threshold",
+                               defaults::logger::rotate_threshold);
+
       file_sink = std::make_shared<spdlog::sinks::rotating_file_sink_mt>(
         log_file, defaults::logger::rotate_threshold,
         defaults::logger::rotate_files);
