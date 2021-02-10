@@ -225,7 +225,6 @@ bool setup_spdlog(const vast::invocation& cmd_invocation,
       auto threshold_str
         = detail::get_bytesize(cfg_file, "vast.log-rotation-threshold",
                                defaults::logger::rotate_threshold);
-
       file_sink = std::make_shared<spdlog::sinks::rotating_file_sink_mt>(
         log_file, defaults::logger::rotate_threshold,
         defaults::logger::rotate_files);

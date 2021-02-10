@@ -45,11 +45,11 @@ void merge_settings(const caf::settings& src, caf::settings& dst,
 ///   { a = 13 }
 bool strip_settings(caf::settings& xs);
 
-// Returns the amount of bytes specified by a config option.
-// * If the key has a string or integer key giving a size, use that.
-// * If the key doesn't exist, use the provided default value.
-// * If the key exists with a different type, return an error.
-// * If the key exists but cant be parsed as a byte size, return an error.
+/// Returns the amount of bytes specified by a config option.
+/// * If the key has a string or integer key giving a size, use that.
+/// * If the key doesn't exist, use the provided default value.
+/// * If the key exists with a different type, return an error.
+/// * If the key exists but cant be parsed as a byte size, return an error.
 caf::expected<uint64_t>
 get_bytesize(caf::settings opts, std::string_view key, uint64_t defval);
 
