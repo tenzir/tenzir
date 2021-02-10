@@ -2,6 +2,7 @@ name: "VAST Static"
 on:
   repository_dispatch:
     types: static-binary
+  workflow_dispatch:
   push:
     branches:
       - master
@@ -28,13 +29,16 @@ jobs:
     steps:
     - name: Checkout
       if: github.event_name == 'repository_dispatch'
-      uses: actions/checkout@v1
+      uses: actions/checkout@v2
       with:
+        fetch-depth: 0
         ref: ${{ github.event.client_payload.ref == '' && 'master' || github.event.client_payload.ref }}
 
     - name: Checkout
       if: github.event_name != 'repository_dispatch'
-      uses: actions/checkout@v1
+      uses: actions/checkout@v2
+      with:
+        fetch-depth: 0
 
     - name: Install Nix
       uses: cachix/install-nix-action@v12
@@ -47,9 +51,11 @@ jobs:
         name: vast
         signingKey: '${{ secrets.CACHIX_VAST_SIGNING_KEY }}'
 
-    - name: Build a Static Binary
+    - name: Build Static Binary
+      env:
+        STATIC_BINARY_TARGET: ${{ matrix.args }}
       run: |
-        STATIC_BINARY_TARGET=${{ matrix.args }} nix/static-binary.sh --use-head
+        nix/static-binary.sh --use-head
 
     - name: Create Paths
       id: create_paths
@@ -69,6 +75,7 @@ jobs:
         python-version: '3.7'
 
     - name: Configure GCloud Credentials
+      if: github.event_name != 'pull_request'
       uses: google-github-actions/setup-gcloud@master
       with:
         service_account_key: ${{ secrets.GCP_SA_KEY }}
@@ -83,7 +90,7 @@ jobs:
         gsutil cp "${{ env.BUILD_DIR }}/${{ steps.create_paths.outputs.artifact_name }}" "gs://${{ env.PUBLIC_GCS_BUCKET }}/${{ env.STATIC_BINARY_FOLDER }}/${{ steps.create_paths.outputs.artifact_name }}"
 
     - name: Update 'vast-latest' symlink on GCS
-      if: github.event_name != 'pull_request' && github.event_name != 'repository_dispatch'
+      if: github.event_name == 'push'
       env:
         PUBLIC_GCS_BUCKET: tenzir-public-data
         STATIC_BINARY_FOLDER: vast-static-builds
@@ -101,8 +108,8 @@ jobs:
 
     # This step ensures that assets from previous runs are cleaned up to avoid
     # failure of the next step (asset upload)
-    - name: Delete existing Release Assets
-      if: github.event.action == 'published'
+    - name: Delete Release Assets
+      if: github.event_name == 'release' && github.event.action == 'published'
       uses: mknejp/delete-release-assets@v1
       with:
         token: ${{ secrets.GITHUB_TOKEN }}
@@ -111,7 +118,7 @@ jobs:
         fail-if-no-release: true # only delete assets when `tag` refers to a release
         assets: "${{ matrix.args }}-linux-static.tar.gz"
 
-    - name: Publish to GitHub Release
+    - name: Upload Release Assets
       if: github.event_name == 'release' && github.event.action == 'published'
       uses: actions/upload-release-asset@v1
       env:
