@@ -266,7 +266,8 @@ accountant(accountant_actor::stateful_pointer<accountant_state> self,
       st.actor_map[self->current_sender()->id()] = name;
       self->monitor(self->current_sender());
       if (name == "importer")
-        st.mgr->add_outbound_path(self->current_sender());
+        st.mgr->add_outbound_path(self->current_sender(),
+                                  std::make_tuple(std::string{"accountant"}));
     },
     [self](const std::string& key, duration value) {
       VAST_TRACE_SCOPE("{} received {} from {}", self, key,
