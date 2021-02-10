@@ -17,7 +17,7 @@
 , simdjson
 , broker
 , jemalloc
-, libexecinfo
+, libunwind
 , python3
 , jq
 , tcpdump
@@ -71,7 +71,7 @@ stdenv.mkDerivation rec {
   propagatedNativeBuildInputs = [ pkgconfig pandoc ];
   buildInputs = [ libpcap jemalloc broker libyamlcpp simdjson spdlog ]
     # Required for backtrace on musl libc.
-    ++ lib.optional (stdenv.hostPlatform.isMusl) libexecinfo;
+    ++ lib.optional (stdenv.hostPlatform.isMusl) libunwind;
   propagatedBuildInputs = [ arrow-cpp caf flatbuffers ];
 
   cmakeFlags = [
