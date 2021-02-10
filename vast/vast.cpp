@@ -19,6 +19,7 @@
 #include "vast/data.hpp"
 #include "vast/detail/load_plugin.hpp"
 #include "vast/detail/settings.hpp"
+#include "vast/detail/signal_handler.hpp"
 #include "vast/detail/system.hpp"
 #include "vast/directory.hpp"
 #include "vast/error.hpp"
@@ -32,6 +33,7 @@
 
 #include <caf/actor_system.hpp>
 
+#include <csignal>
 #include <cstdlib>
 #include <iostream>
 #include <string>
@@ -41,6 +43,7 @@ using namespace vast;
 using namespace vast::system;
 
 int main(int argc, char** argv) {
+  std::signal(SIGSEGV, signal_handler);
   // Set up our configuration, e.g., load of YAML config file(s).
   default_configuration cfg;
   if (auto err = cfg.parse(argc, argv)) {
