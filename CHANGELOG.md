@@ -50,12 +50,12 @@ This changelog documents all notable user-facing changes of VAST.
   control this behaviour. [#1223](https://github.com/tenzir/vast/pull/1223)
   [#1362](https://github.com/tenzir/vast/pull/1362)
 
-- 🎁 The schema definition parser has been improved:
-  - it can now accept references to types that are defined later on in the same
-    file.
-  - type definitions from already parsed schema files can be referenced from
-    files that are parsed later. Each directory from the `schema-dirs` option
-    is traversed in lexicographical order.
+- ⚠️ Schema parsing now uses a 2-pass loading phase so that type aliases can
+  reference other types that are later defined in the same directory.
+  Additionally, type definitions from already parsed schema dirs can be
+  referenced from schema types that are parsed later. Types can also be
+  redefined in later directories, but a type can not be defined twice in the
+  same dir.
   [#1331](https://github.com/tenzir/vast/pull/1331)
 
 - ⚡️ VAST switched to spdlog as logging library. For users, this means: The
