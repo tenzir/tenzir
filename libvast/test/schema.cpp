@@ -411,17 +411,15 @@ TEST(parseable - with context) {
       type foo = int
     )__"sv;
     auto p = symbol_table_parser{};
-    symbol_table sb;
-    CHECK(!p(str, sb));
+    symbol_table st;
+    CHECK(!p(str, st));
   }
   {
-    MESSAGE("Duplicate definition error - reusing local context");
-    auto st1 = unbox(to<symbol_table>("type foo = real"));
-    auto st2 = unbox(to<symbol_table>("type foo = int"));
-    auto r1 = symbol_resolver{global, st1};
-    CHECK(r1.resolve());
-    auto r2 = symbol_resolver{global, st2};
-    CHECK(!r2.resolve());
+    MESSAGE("Duplicate definition error - re-entry");
+    auto p = symbol_table_parser{};
+    symbol_table st;
+    CHECK(p("type foo = real", st));
+    CHECK(!p("type foo = int", st));
   }
 }
 
