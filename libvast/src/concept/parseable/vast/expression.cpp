@@ -55,7 +55,7 @@ static predicate::operand to_data_operand(data x) {
   return x;
 }
 
-static predicate to_data_predicate(data x) {
+static predicate to_value_predicate(data x) {
   auto infer_type = [](auto& d) -> type {
     return data_to_type<std::decay_t<decltype(d)>>{};
   };
@@ -102,7 +102,7 @@ static auto make_predicate_parser() {
   auto ws = ignore(*parsers::space);
   auto pred
     = (operand >> ws >> operation >> ws >> operand)->*to_predicate
-    | parsers::data->*to_data_predicate
+    | parsers::data->*to_value_predicate
     ;
   return pred;
   // clang-format on
