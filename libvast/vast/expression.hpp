@@ -76,7 +76,6 @@ struct type_extractor : detail::totally_ordered<type_extractor> {
   type_extractor(vast::type t = {});
 
   vast::type type;
-
 };
 
 /// @relates type_extractor
