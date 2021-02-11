@@ -13,11 +13,19 @@ This changelog documents all notable user-facing changes of VAST.
 
 ## Unreleased
 
+- ⚡️ All options in `vast.metrics.*` had underscores in their names replaced
+  with dashes to align with other options. For example, `vast.metrics.file_sink`
+  is now `vast.metrics.file-sink`. The old options no longer work.
+  [#1368](https://github.com/tenzir/vast/pull/1368)
+
+- 🎁 The option `vast.metrics.real-time` enables real-time metrics reporting.
+  [#1368](https://github.com/tenzir/vast/pull/1368)
+
 - ⚠️ The query normalizer interprets value predicates of type `subnet` more
   broadly: given a subnet `S`, the parser expands this to the expression
   `:subnet == S || :addr in S`. This change makes it easier to search for IP
   addresses belonging to a specific subnet.
-  [#1373](https://github.com/tenzir/vast/pull/1373) 
+  [#1373](https://github.com/tenzir/vast/pull/1373)
 
 - ⚠️ The previously deprecated options `vast.spawn.importer.ids` and
   `vast.schema-paths` no longer work. Furthermore, queries spread over multiple
