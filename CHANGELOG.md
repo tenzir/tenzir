@@ -40,17 +40,17 @@ This changelog documents all notable user-facing changes of VAST.
 - ⚡️ VAST now requires [{fmt} >= 5.2.1](https://fmt.dev) to be installed.
   [#1330](https://github.com/tenzir/vast/pull/1330)
 
-- 🎁 VAST rotates server logs by default. The new config options `vast.disable-log-rotation`
-  and `vast.log-rotation-threshold` can be used to control this behaviour.
-  [#1223](https://github.com/tenzir/vast/pull/1223)
+- 🎁 VAST rotates server logs by default. The new config options
+  `vast.disable-log-rotation` and `vast.log-rotation-threshold` can be used to
+  control this behaviour. [#1223](https://github.com/tenzir/vast/pull/1223)
   [#1362](https://github.com/tenzir/vast/pull/1362)
 
-- ⚡️ VAST switched to spdlog as logging library. For users, this means:
-  The `vast.console-format` and `vast.file-format` now must be specified using the
+- ⚡️ VAST switched to spdlog as logging library. For users, this means: The
+  `vast.console-format` and `vast.file-format` now must be specified using the
   spdlog pattern syntax as described
-  `[here](https://github.com/gabime/spdlog/wiki/3.-Custom-formatting#pattern-flags).
-  All settings under `caf.logger.*` are now ignored by VAST, and only the `vast.*`
-  counterparts are used for logger configuration.
+  [here](https://github.com/gabime/spdlog/wiki/3.-Custom-formatting#pattern-flags).
+  All settings under `caf.logger.*` are now ignored by VAST, and only the
+  `vast.*` counterparts are used for logger configuration.
   [#1223](https://github.com/tenzir/vast/pull/1223)
   [#1328](https://github.com/tenzir/vast/pull/1328)
   [#1334](https://github.com/tenzir/vast/pull/1334)
