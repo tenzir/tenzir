@@ -35,6 +35,52 @@
 
 namespace vast {
 
+expression expander::operator()(caf::none_t) const {
+  return expression{};
+}
+
+expression expander::operator()(const conjunction& c) const {
+  conjunction result;
+  for (auto& op : c)
+    result.push_back(caf::visit(*this, op));
+  return result;
+}
+
+expression expander::operator()(const disjunction& d) const {
+  disjunction result;
+  for (auto& op : d)
+    result.push_back(caf::visit(*this, op));
+  return result;
+}
+expression expander::operator()(const negation& n) const {
+  return {negation{caf::visit(*this, n.expr())}};
+}
+
+expression expander::operator()(const predicate& p) const {
+  auto make_addr_pred
+    = [](auto& lhs, auto op, auto& rhs) -> caf::optional<expression> {
+    if (auto t = caf::get_if<type_extractor>(&lhs))
+      if (auto d = caf::get_if<data>(&rhs))
+        if (op == relational_operator::equal)
+          if (caf::holds_alternative<subnet_type>(t->type))
+            if (auto sn = caf::get_if<subnet>(d))
+              return predicate{type_extractor{address_type{}},
+                               relational_operator::in, *d};
+    return caf::none;
+  };
+  auto make_disjunction = [](auto x, auto y) {
+    disjunction result;
+    result.push_back(std::move(x));
+    result.push_back(std::move(y));
+    return result;
+  };
+  if (auto addr_pred = make_addr_pred(p.lhs, p.op, p.rhs))
+    return make_disjunction(p, std::move(*addr_pred));
+  if (auto addr_pred = make_addr_pred(p.rhs, p.op, p.lhs))
+    return make_disjunction(p, std::move(*addr_pred));
+  return {p};
+}
+
 expression hoister::operator()(caf::none_t) const {
   return expression{};
 }

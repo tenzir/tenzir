@@ -342,6 +342,7 @@ auto for_each_predicate(const expression& e, F&& f) {
 
 /// Normalizes an expression such that:
 ///
+/// 0. All predicates are maximally expanded.
 /// 1. Single-element conjunctions/disjunctions don't exist.
 /// 2. Extractors end up always on the LHS of a predicate.
 /// 3. Negations are pushed down to the predicate level.

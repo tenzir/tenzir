@@ -185,6 +185,7 @@ bool operator<(const expression& x, const expression& y) {
 expression normalize(const expression& expr) {
   expression r;
   r = caf::visit(hoister{}, expr);
+  r = caf::visit(expander{}, r);
   r = caf::visit(aligner{}, r);
   r = caf::visit(denegator{}, r);
   r = caf::visit(deduplicator{}, r);
