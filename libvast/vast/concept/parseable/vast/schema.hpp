@@ -148,9 +148,10 @@ struct symbol_table_parser : parser<symbol_table_parser> {
       if (!ty.name().empty())
         ty = alias_type{ty}; // TODO: attributes
       ty.name(name);
-      duplicate_symbol = !out.emplace(name, ty).second;
-      if (duplicate_symbol)
+      if (!out.emplace(name, ty).second) {
         VAST_ERROR("multiple definitions of {} detected", name);
+        duplicate_symbol = true;
+      }
       return ty;
     };
     // We can't use & because the operand is a parser, and our DSL overloads &.

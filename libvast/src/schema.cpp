@@ -270,7 +270,8 @@ caf::error load_symbols(const path& schema_file, symbol_table& local) {
     return str.error();
   auto p = symbol_table_parser{};
   if (!p(*str, local))
-    return caf::make_error(ec::parse_error, "failed at", schema_file);
+    return caf::make_error(ec::parse_error, "failed to load symbols from",
+                           schema_file);
   return caf::none;
 }
 
@@ -292,10 +293,8 @@ load_schema(const detail::stable_set<path>& schema_dirs, size_t max_recursion) {
     symbol_table local_symbols;
     for (const auto& f : schema_files) {
       VAST_DEBUG("loading schema {}", f);
-      if (auto err = load_symbols(f, local_symbols)) {
-        VAST_ERROR("schema loader failed to load {}: {}", render(err), f);
-        continue;
-      }
+      if (auto err = load_symbols(f, local_symbols))
+        return err;
     }
     auto r = symbol_resolver{global_symbols, local_symbols};
     auto directory_schema = r.resolve();
