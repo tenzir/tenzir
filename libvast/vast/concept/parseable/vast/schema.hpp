@@ -28,6 +28,8 @@ namespace vast {
 
 using symbol_table = std::unordered_map<std::string, type>;
 
+/// Converts a symbol_table into a schema. Can use an additional symbol table
+/// as context.
 struct symbol_resolver {
   caf::expected<type> lookup(const std::string& key) {
     // First we check if the key is already locally resolved.
@@ -118,6 +120,16 @@ struct symbol_resolver {
     return iter->second;
   }
 
+  // Main entry point. The algorithm starts by popping of an entry from the set
+  // of parsed symbols. It walks over its definition and checks all
+  // "placeholder" symbols (all those that are not builtin types). Once a
+  // placeholder is found it is going to be replaced by its defintion, which
+  // can either be part of the same working set or provided in the global table.
+  // If the symbol is from the local working set but hasn't been resolved
+  // itself, the resolution of the current type is suspended and the required
+  // symbol is prioritized.
+  // That means that a single iteration of this loop can remove between 1 and
+  // all remaining elements from the working set.
   caf::expected<schema> resolve() {
     while (!working.empty())
       if (auto x = resolve(working.begin()); !x)
@@ -134,7 +146,6 @@ struct symbol_resolver {
 struct symbol_table_parser : parser<symbol_table_parser> {
   using attribute = symbol_table;
 
-  static constexpr auto id = type_parser::id;
   static constexpr auto skp = type_parser::skp;
 
   template <class Iterator, class Attribute>
@@ -157,7 +168,9 @@ struct symbol_table_parser : parser<symbol_table_parser> {
     // We can't use & because the operand is a parser, and our DSL overloads &.
     auto tp = parsers::type;
     // clang-format off
-    auto decl = ("type" >> skp >> id >> skp >> '=' >> skp >> tp) ->* to_type;
+    auto decl
+      = ("type" >> skp >> parsers::identifier >> skp >> '=' >> skp >> tp)
+          ->* to_type;
     // clang-format on
     auto declarations = +(skp >> decl) >> skp;
     if (!declarations(f, l, unused))

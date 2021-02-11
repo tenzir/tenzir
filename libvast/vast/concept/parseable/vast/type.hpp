@@ -29,17 +29,8 @@ struct type_parser : parser<type_parser> {
   using attribute = type;
 
   // Comments until the end of line.
-  // clang-format off
   static constexpr auto comment
     = ignore(parsers::lit{"//"} >> *(parsers::any - '\n'));
-
-  /// The parser for an identifier.
-  static constexpr auto id
-    = +( parsers::alnum
-       | parsers::ch<'_'>
-       | parsers::ch<'.'>
-       );
-  // clang-format on
 
   // Skips all irrelevant tokens.
   static constexpr auto skp = ignore(*(parsers::space | comment));

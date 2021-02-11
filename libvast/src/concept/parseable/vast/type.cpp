@@ -123,7 +123,7 @@ bool type_parser::parse(Iterator& f, const Iterator& l, Attribute& a) const {
     return none_type{}.name(std::move(n)).attributes(std::move(a));
   };
   static auto placeholder_parser
-    = (id >> attr_list) ->* to_named_none_type
+    = (parsers::identifier >> attr_list) ->* to_named_none_type
     ;
   // Complete type
   type_type
