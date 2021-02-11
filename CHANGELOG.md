@@ -13,6 +13,11 @@ This changelog documents all notable user-facing changes of VAST.
 
 ## Unreleased
 
+- ⚡️ User-supplied schema files are now picked up from
+  `<SYSCONFDIR>/vast/schema` and `<XDG_CONFIG_HOME>/vast/schema` instead of
+  `<XDG_DATA_HOME>/vast/schema`.
+  [#1372](https://github.com/tenzir/vast/pull/1372)
+
 - ⚠️  / 🎁 The meta index now stores partition synopses in separate files. This will
   decrease restart times for systems with large databases, slow disks and aggressive
   readahead settings. A new config setting `vast.meta-index-path` allows storing the
