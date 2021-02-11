@@ -234,7 +234,7 @@ get_schema_dirs(const caf::actor_system_config& cfg,
       else
         VAST_ERROR("{} failed to get program path", __func__);
     }
-    result.insert(VAST_SYSCONFDIR / path{"vast"} / "schema");
+    result.insert(path{VAST_SYSCONFDIR} / "vast" / "schema");
     if (const char* xdg_config_home = std::getenv("XDG_CONFIG_HOME"))
       result.insert(path{xdg_config_home} / "vast" / "schema");
     else if (const char* home = std::getenv("HOME"))
