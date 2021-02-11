@@ -18,7 +18,9 @@ This changelog documents all notable user-facing changes of VAST.
   is now `vast.metrics.file-sink`. The old options no longer work.
   [#1368](https://github.com/tenzir/vast/pull/1368)
 
-- 🎁 The option `vast.metrics.real-time` enables real-time metrics reporting.
+- 🎁 The new options `vast.metrics.file-sink.real-time` and
+  `vast.metrics.uds-sink.real-time` enable real-time metrics reporting for the
+  file sink and UDS sink respectively.
   [#1368](https://github.com/tenzir/vast/pull/1368)
 
 - ⚠️ The query normalizer interprets value predicates of type `subnet` more

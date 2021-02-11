@@ -107,14 +107,14 @@ vast:
     # Configures if and where metrics should be written to a file.
     file-sink:
       enable: false
+      real-time: false
       path: "/tmp/vast-metrics.log"
     # Configures if and where metrics should be written to a socket.
     uds-sink:
       enable: false
+      real-time: false
       path: "/tmp/vast-metrics.sock"
       type: "datagram"
-    # Configures if metrics should be buffered, or flushed with every event.
-    real-time: false
 
   # The period to wait until a shutdown sequence finishes cleanly. After the
   # period elapses, the shutdown procedure escalates into a "hard kill".

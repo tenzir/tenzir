@@ -127,8 +127,8 @@ struct accountant_state_impl {
       finish_slice();
   }
 
-  std::ostream&
-  record_to_output(const std::string& key, real x, time ts, std::ostream& os) {
+  std::ostream& record_to_output(const std::string& key, real x, time ts,
+                                 std::ostream& os, bool real_time) {
     using namespace std::string_view_literals;
     auto actor_id = self->current_sender()->id();
     json_printer<policy::oneline> printer;
@@ -146,7 +146,7 @@ struct accountant_state_impl {
     *iter++ = '}';
     *iter++ = '\n';
     os.write(buf.data(), buf.size());
-    if (cfg.real_time)
+    if (real_time)
       os << std::flush;
     return os;
   }
@@ -156,9 +156,9 @@ struct accountant_state_impl {
     if (cfg.self_sink.enable)
       record_internally(key, x, ts);
     if (file_sink)
-      record_to_output(key, x, ts, *file_sink);
+      record_to_output(key, x, ts, *file_sink, cfg.file_sink.real_time);
     if (uds_sink)
-      record_to_output(key, x, ts, *uds_sink);
+      record_to_output(key, x, ts, *uds_sink, cfg.uds_sink.real_time);
   }
 
   void record(const std::string& key, duration x,

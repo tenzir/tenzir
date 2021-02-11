@@ -28,10 +28,11 @@ to_accountant_config(const caf::settings& opts) {
   extract_settings(result.self_sink.slice_type, opts, "self-sink.slize-type");
   extract_settings(result.file_sink.enable, opts, "file-sink.enable");
   extract_settings(result.file_sink.path, opts, "file-sink.path");
+  extract_settings(result.file_sink.real_time, opts, "file_sink.real-time");
   extract_settings(result.uds_sink.enable, opts, "uds-sink.enable");
   extract_settings(result.uds_sink.path, opts, "uds-sink.path");
+  extract_settings(result.uds_sink.real_time, opts, "uds-sink.real-time");
   extract_settings(result.uds_sink.type, opts, "uds-sink.type");
-  extract_settings(result.real_time, opts, "real-time");
   return result;
 }
 

@@ -32,11 +32,13 @@ struct accountant_config {
 
   struct file_sink {
     bool enable = false;
+    bool real_time = false;
     std::string path;
   };
 
   struct uds_sink {
     bool enable = false;
+    bool real_time = false;
     std::string path;
     detail::socket_type type;
   };
@@ -44,7 +46,6 @@ struct accountant_config {
   self_sink self_sink;
   file_sink file_sink;
   uds_sink uds_sink;
-  bool real_time = false;
 };
 
 caf::expected<accountant_config>
