@@ -197,5 +197,6 @@ private:
 VAST_REGISTER_PLUGIN(vast::plugins::example_plugin, 0, 1, 0, 0)
 
 // Register the type IDs in our type ID block with VAST. This can be omitted
-// when not adding additional type IDs.
+// when not adding additional type IDs. The macro supports up to two type ID
+// blocks.
 VAST_REGISTER_PLUGIN_TYPE_ID_BLOCK(vast_example_plugin)

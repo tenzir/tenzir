@@ -214,11 +214,30 @@ private:
     return VAST_BUILD_TREE_HASH;                                               \
   }
 
-#define VAST_REGISTER_PLUGIN_TYPE_ID_BLOCK(name)                               \
+#define VAST_REGISTER_PLUGIN_TYPE_ID_BLOCK(...)                                \
+  VAST_PP_OVERLOAD(VAST_REGISTER_PLUGIN_TYPE_ID_BLOCK_, __VA_ARGS__)           \
+  (__VA_ARGS__)
+
+#define VAST_REGISTER_PLUGIN_TYPE_ID_BLOCK_1(name)                             \
   extern "C" void vast_plugin_register_type_id_block(                          \
     ::caf::actor_system_config& cfg) {                                         \
     cfg.add_message_types<::caf::id_block::name>();                            \
   }                                                                            \
   extern "C" ::vast::plugin_type_id_block vast_plugin_type_id_block() {        \
     return {::caf::id_block::name::begin, ::caf::id_block::name::end};         \
+  }
+
+#define VAST_REGISTER_PLUGIN_TYPE_ID_BLOCK_2(name1, name2)                     \
+  extern "C" void vast_plugin_register_type_id_block(                          \
+    ::caf::actor_system_config& cfg) {                                         \
+    cfg.add_message_types<::caf::id_block::name1>();                           \
+    cfg.add_message_types<::caf::id_block::name2>();                           \
+  }                                                                            \
+  extern "C" ::vast::plugin_type_id_block vast_plugin_type_id_block() {        \
+    return {::caf::id_block::name1::begin < ::caf::id_block::name2::begin      \
+              ? ::caf::id_block::name1::begin                                  \
+              : ::caf::id_block::name2::begin,                                 \
+            ::caf::id_block::name1::end > ::caf::id_block::name2::end          \
+              ? ::caf::id_block::name1::end                                    \
+              : ::caf::id_block::name2::end};                                  \
   }
