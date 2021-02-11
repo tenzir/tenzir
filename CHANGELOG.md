@@ -13,6 +13,13 @@ This changelog documents all notable user-facing changes of VAST.
 
 ## Unreleased
 
+- ⚠️ The query normalizer interprets value predicates of type `subnet` more
+  broadly: given a subnet `S`, the parser expands this to `:subnet == S` and the
+  normalization now further rewrites the expression to `:subnet == S || :addr in S`.
+  This change makes it easier to search for IP addresses belonging to a
+  specific subnet.
+  [#1373](https://github.com/tenzir/vast/pull/1373) 
+
 - ⚠️ The previously deprecated options `vast.spawn.importer.ids` and
   `vast.schema-paths` no longer work. Furthermore, queries spread over multiple
   arguuments are now disallowed instead of triggering a deprecation warning.
