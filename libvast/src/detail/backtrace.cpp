@@ -31,6 +31,17 @@ void backtrace() {
 }
 
 } // namespace vast::detail
+#  elif __has_include(<backtrace.h>)
+#    include <backtrace.h>
+
+namespace vast::detail {
+
+void backtrace() {
+  auto state = backtrace_create_state(nullptr, false, nullptr, nullptr);
+  backtrace_print(state, 1, stderr);
+}
+
+} // namespace vast::detail
 #  elif __has_include(<libunwind.h>)
 #    define UNW_LOCAL_ONLY
 #    include <cstdio>
@@ -76,6 +87,7 @@ void backtrace() {
 
 } // namespace vast::detail
 #  else
-#    error "backtrace enabled but neither execinfo nor unwind are available"
+#    error                                                                     \
+      "backtrace enabled but neither of execino, libbacktrace, or libunwind are available"
 #  endif
 #endif
