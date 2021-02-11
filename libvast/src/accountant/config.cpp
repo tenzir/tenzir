@@ -22,15 +22,16 @@ namespace vast::system {
 caf::expected<accountant_config>
 to_accountant_config(const caf::settings& opts) {
   accountant_config result;
-  extract_settings(result.enable, opts, "enable");
-  extract_settings(result.self_sink.enable, opts, "self_sink.enable");
-  extract_settings(result.self_sink.slice_size, opts, "self_sink.slize_size");
-  extract_settings(result.self_sink.slice_type, opts, "self_sink.slize_type");
-  extract_settings(result.file_sink.enable, opts, "file_sink.enable");
-  extract_settings(result.file_sink.path, opts, "file_sink.path");
-  extract_settings(result.uds_sink.enable, opts, "uds_sink.enable");
-  extract_settings(result.uds_sink.path, opts, "uds_sink.path");
-  extract_settings(result.uds_sink.type, opts, "uds_sink.type");
+  extract_settings(result.self_sink.enable, opts, "self-sink.enable");
+  extract_settings(result.self_sink.enable, opts, "self-sink.enable");
+  extract_settings(result.self_sink.slice_size, opts, "self-sink.slize-size");
+  extract_settings(result.self_sink.slice_type, opts, "self-sink.slize-type");
+  extract_settings(result.file_sink.enable, opts, "file-sink.enable");
+  extract_settings(result.file_sink.path, opts, "file-sink.path");
+  extract_settings(result.uds_sink.enable, opts, "uds-sink.enable");
+  extract_settings(result.uds_sink.path, opts, "uds-sink.path");
+  extract_settings(result.uds_sink.type, opts, "uds-sink.type");
+  extract_settings(result.real_time, opts, "real-time");
   return result;
 }
 

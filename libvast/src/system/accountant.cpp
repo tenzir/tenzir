@@ -145,7 +145,10 @@ struct accountant_state_impl {
     printer.print(iter, std::pair{"value"sv, make_data_view(x)});
     *iter++ = '}';
     *iter++ = '\n';
-    return os.write(buf.data(), buf.size());
+    os.write(buf.data(), buf.size());
+    if (cfg.real_time)
+      os << std::flush;
+    return os;
   }
 
   void record(const std::string& key, real x,

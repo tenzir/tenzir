@@ -41,11 +41,10 @@ struct accountant_config {
     detail::socket_type type;
   };
 
-  bool enable = true;
-
   self_sink self_sink;
   file_sink file_sink;
   uds_sink uds_sink;
+  bool real_time = false;
 };
 
 caf::expected<accountant_config>
