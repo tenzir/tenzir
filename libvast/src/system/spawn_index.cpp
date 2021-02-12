@@ -46,7 +46,7 @@ spawn_index(node_actor::stateful_pointer<node_state> self,
     opt("vast.max-resident-partitions", sd::max_in_mem_partitions),
     opt("vast.max-taste-partitions", sd::taste_partitions),
     opt("vast.max-queries", sd::num_query_supervisors),
-    vast::path{opt("vast.meta-index-path", indexdir.str())},
+    vast::path{opt("vast.meta-index-dir", indexdir.str())},
     opt("vast.meta-index-fp-rate", sd::string_synopsis_fp_rate));
   VAST_VERBOSE("{} spawned the index", self);
   if (accountant)

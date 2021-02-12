@@ -25,9 +25,10 @@ This changelog documents all notable user-facing changes of VAST.
 
 - ⚠️  / 🎁 The meta index now stores partition synopses in separate files. This
   will decrease restart times for systems with large databases, slow disks and
-  aggressive readahead settings. A new config setting `vast.meta-index-path`
+  aggressive readahead settings. A new config setting `vast.meta-index-dir`
   allows storing the meta index information in a separate directory.
   [#1330](https://github.com/tenzir/vast/pull/1330)
+  [#1376](https://github.com/tenzir/vast/pull/1376)
 
 - ⚠️ The `infer` command has an improved heuristic for the number types `int`,
   `count`, and `real`. [#1343](https://github.com/tenzir/vast/pull/1343)
