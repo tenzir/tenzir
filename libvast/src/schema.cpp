@@ -243,13 +243,6 @@ get_schema_dirs(const caf::actor_system_config& cfg,
   if (auto dirs = caf::get_if<std::vector<std::string>>( //
         &cfg, "vast.schema-dirs"))
     result.insert(dirs->begin(), dirs->end());
-  if (auto dirs = caf::get_if<std::vector<std::string>>( //
-        &cfg, "vast.schema-paths")) {
-    VAST_WARN("{} encountered deprecated vast.schema-paths "
-              "option; use vast.schema-dirs instead.",
-              __func__);
-    result.insert(dirs->begin(), dirs->end());
-  }
   return result;
 }
 

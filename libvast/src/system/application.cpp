@@ -379,10 +379,7 @@ auto make_spawn_command() {
       .add<uint64_t>("events,e", "maximum number of results"),
     false);
   spawn->add_subcommand("importer", "creates a new importer", "",
-                        opts("?vast.spawn.importer")
-                          .add<size_t>("ids,n", "number of initial IDs to "
-                                                "request (deprecated)"),
-                        false);
+                        opts("?vast.spawn.importer"), false);
   spawn->add_subcommand("index", "creates a new index", "",
                         add_index_opts(opts("?vast.spawn.index")), false);
   spawn->add_subcommand(make_spawn_source_command());
@@ -511,8 +508,6 @@ auto make_root_command(std::string_view path) {
         .add<caf::atom_value>("verbosity", "output verbosity level on the "
                                            "console")
         .add<std::vector<std::string>>("schema-dirs", schema_desc.c_str())
-        .add<std::vector<std::string>>("schema-paths", "deprecated; use "
-                                                       "schema-dirs instead")
         .add<std::string>("db-directory,d", "directory for persistent state")
         .add<std::string>("log-file", "log filename")
         .add<std::string>("client-log-file", "client log file (default: "

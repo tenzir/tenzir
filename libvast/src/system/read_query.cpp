@@ -13,11 +13,12 @@
 
 #include "vast/system/read_query.hpp"
 
+#include "vast/fwd.hpp"
+
 #include "vast/concept/parseable/to.hpp"
 #include "vast/concept/parseable/vast/expression.hpp"
 #include "vast/defaults.hpp"
 #include "vast/error.hpp"
-#include "vast/fwd.hpp"
 #include "vast/logger.hpp"
 #include "vast/scope_linked.hpp"
 #include "vast/system/signal_monitor.hpp"
@@ -70,17 +71,12 @@ read_query(const invocation& inv, std::string_view file_option,
       std::cerr << "please enter a query and confirm with CTRL-D: "
                 << std::flush;
     assign_query(std::cin);
+  } else if (inv.arguments.size() == argument_offset + 1) {
+    result = inv.arguments[argument_offset];
   } else {
-    // Assemble expression from all remaining arguments.
-    if (inv.arguments.size() > 1) {
-      VAST_WARN("spreading a query over multiple arguments is "
-                "deprecated; please pass it as a single string "
-                "instead.");
-      VAST_VERBOSE("(hint: use a heredoc if you run into quoting "
-                   "issues.)");
-    }
-    result = detail::join(inv.arguments.begin() + argument_offset,
-                          inv.arguments.end(), " ");
+    VAST_ERROR("spreading a query over multiple arguments is "
+               "not allowed; please pass it as a single string "
+               "instead.");
   }
   if (result.empty())
     return caf::make_error(ec::invalid_query);
