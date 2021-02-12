@@ -109,6 +109,23 @@ TEST(serialization) {
   CHECK_EQUAL(p->op, relational_operator::equal);
 }
 
+TEST(predicate expansion) {
+  auto expr = to<expression>("10.0.0.0/8");
+  auto normalized
+    = to<expression>(":subnet == 10.0.0.0/8 || :addr in 10.0.0.0/8");
+  REQUIRE(expr);
+  REQUIRE(normalized);
+  CHECK_EQUAL(normalize(*expr), *normalized);
+}
+
+TEST(avoid overzealous predicate expansion) {
+  auto expr = to<expression>(":subnet == 10.0.0.0/8");
+  auto normalized = to<expression>(":subnet == 10.0.0.0/8");
+  REQUIRE(expr);
+  REQUIRE(normalized);
+  CHECK_EQUAL(normalize(*expr), *normalized);
+}
+
 TEST(normalization) {
   MESSAGE("extractor on LHS");
   auto expr = to<expression>("\"foo\" in bar");

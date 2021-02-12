@@ -76,7 +76,6 @@ struct type_extractor : detail::totally_ordered<type_extractor> {
   type_extractor(vast::type t = {});
 
   vast::type type;
-
 };
 
 /// @relates type_extractor
@@ -117,11 +116,11 @@ auto inspect(Inspector& f, data_extractor& x) {
 
 /// A predicate with two operands evaluated under a relational operator.
 struct predicate : detail::totally_ordered<predicate> {
-  predicate() = default;
-
   /// The operand of a predicate, which can be either LHS or RHS.
   using operand = caf::variant<attribute_extractor, field_extractor,
                                type_extractor, data_extractor, data>;
+
+  predicate() = default;
 
   predicate(operand l, relational_operator o, operand r);
 
