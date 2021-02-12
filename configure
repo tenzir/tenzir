@@ -23,68 +23,70 @@ usage="\
 Usage: $0 [OPTION]... [VAR=VALUE]...
 
   Installation options:
-    --prefix=PREFIX         installation directory [/usr/local]
-    --without-relocatable   disable relocatable installations
-    --package-name          sets the name of the produced package
+    --prefix=PREFIX       installation directory [/usr/local]
+    --without-relocatable disable relocatable installations
+    --package-name        sets the name of the produced package
 
   Convenience options:
-    --debug                 sets --build-type=Debug, --log-level=trace,
-                            and --with-asan
-    --release               sets --build-type=Release
-    --ci-build              sets --build-type=CI, --log-level=trace,
-                            --with-assertions and --with-asan
+    --debug    sets --build-type=Debug, --log-level=trace, and --with-asan
+    --release  sets --build-type=Release
+    --ci-build sets --build-type=CI, --log-level=trace, --with-assertions and
+               --with-asan
 
   Build options:
-    --generator=GENERATOR   CMake generator to use (see cmake --help)
-    --build-dir=DIR         directory where to perform build [build]
-    --build-type=DIR        CMake build type [RelWithDebInfo]
-    --extra-flags=STRING    additional compiler flags
-    --show-time-report      print information where time was spent during compilation
-    --show-time-trace       generate tracing JSON for compilation time profiling
-    --more-warnings         enables most warnings on GCC and Clang
-    --without-tests         build without unit tests
-    --with-zeek-to-vast     build with zeek-to-vast
-    --with-lsvast           build with lsvast
-    --with-dscat            build with dscat
-    --with-example-plugin   build with example plugin
-    --with-plugin=DIR       build with plugin in given directory
+    --generator=GENERATOR     CMake generator to use (see cmake --help)
+    --build-dir=DIR           directory where to perform build [build]
+    --build-type=DIR          CMake build type [RelWithDebInfo]
+    --extra-flags=STRING      additional compiler flags
+    --show-time-report        print information where time was spent during
+                              compilation
+    --show-time-trace         generate tracing JSON for compilation time
+                              profiling
+    --more-warnings           enables most warnings on GCC and Clang
+    --without-tests           build without unit tests
+    --with-zeek-to-vast       build with zeek-to-vast
+    --with-lsvast             build with lsvast
+    --with-dscat              build with dscat
+    --with-example-plugin     build with example plugin
+    --with-plugin=DIR         build with plugin in given directory
+    --with-plugin-autoloading always enable all bundled plugins
 
   Debugging:
-    --log-level=LEVEL       maximum compile-time log level
-                            (quiet,error,warning,info,verbose,debug,trace)
-    --caf-log-level=LEVEL   maximum compile-time log level for CAF
-                            (quiet,error,warning,info,debug,trace)
-    --without-assertions    disable assertions
-    --without-exceptions    disable C++ exceptions
-    --without-dtrace        disable USDT tracepoints
-    --with-asan             enable AddressSanitizer
-    --with-ubsan            enable Undefined Behavior Sanitizer
+    --log-level=LEVEL     maximum compile-time log level
+                          (quiet,error,warning,info,verbose,debug,trace)
+    --caf-log-level=LEVEL maximum compile-time log level for CAF
+                          (quiet,error,warning,info,debug,trace)
+    --without-assertions  disable assertions
+    --without-exceptions  disable C++ exceptions
+    --without-dtrace      disable USDT tracepoints
+    --with-asan           enable AddressSanitizer
+    --with-ubsan          enable Undefined Behavior Sanitizer
 
   Required packages:
     --with-arrow=PATH       path to Apache Arrow install root
     --without-arrow         explicitly disable Apache Arrow integration
     --with-caf=PATH         path to CAF install root or build directory
     --with-bundled-caf      build CAF from the submodule
-    --with-flatbuffers=PATH path to flatbuffers install root
+    --with-flatbuffers=PATH path to FlatBuffers install root
     --with-yaml-cpp=PATH    path to yaml-cpp install root
     --with-simdjson=PATH    path to simdjson install root
-    --with-fmt=PATH         path to fmt install root
+    --with-fmt=PATH         path to {fmt} install root
     --with-spdlog=PATH      path to spdlog install root
 
   Optional packages:
-    --with-broker=PATH      path to Broker install root (required for
-                            zeek-to-vast)
-    --with-bundled-broker   build Broker from the submodule
-    --with-doxygen=PATH     path to Doxygen install root
-    --with-jemalloc=PATH    link against jemalloc
-    --with-openssl=PATH     path to OpenSSL install root
-    --with-pcap=PATH        path to libpcap install root
+    --with-broker=PATH    path to Broker install root (required for
+                          zeek-to-vast)
+    --with-bundled-broker build Broker from the submodule
+    --with-doxygen=PATH   path to Doxygen install root
+    --with-jemalloc=PATH  link against jemalloc
+    --with-openssl=PATH   path to OpenSSL install root
+    --with-pcap=PATH      path to libpcap install root
 
   Influential Environment Variables (only on first invocation):
-    CXX                     C++ compiler command
-    CXXFLAGS                C++ compiler flags (overrides defaults)
-    LDFLAGS                 Additional linker flags
-    CMAKE_GENERATOR         Selects a custom generator
+    CXX             C++ compiler command
+    CXXFLAGS        C++ compiler flags (overrides defaults)
+    LDFLAGS         Additional linker flags
+    CMAKE_GENERATOR Selects a custom generator
 "
 
 # Function to append a CMake cache entry definition to the
@@ -201,6 +203,9 @@ while [ $# -ne 0 ]; do
       else
         plugins="${plugins};${plugin_dir}"
       fi
+      ;;
+    --with-plugin-autoloading)
+      append_cache_entry VAST_ENABLE_PLUGIN_AUTOLOADING BOOL yes
       ;;
 # -- Debugging -----------------------------------------------------------------
     --log-level=*)
