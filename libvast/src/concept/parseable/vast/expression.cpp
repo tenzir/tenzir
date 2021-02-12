@@ -55,9 +55,9 @@ static predicate::operand to_data_operand(data x) {
   return x;
 }
 
-// Expands a predicate with a type extractor, an equality operator, and a
-// corresponding data instance according to the rules of the expression
-// language.
+/// Expands a predicate with a type extractor, an equality operator, and a
+/// corresponding data instance according to the rules of the expression
+/// language.
 struct expander {
   expression operator()(caf::none_t) const {
     return expression{};
@@ -109,9 +109,9 @@ struct expander {
   }
 };
 
-// Expands a data instance in two steps:
-// 1. Convert the data instance x to T(x) == x
-// 2. Apply type-specific expansion that results in a compound expression
+/// Expands a data instance in two steps:
+/// 1. Convert the data instance x to T(x) == x
+/// 2. Apply type-specific expansion that results in a compound expression
 static expression expand(data x) {
   auto infer_type = [](auto& d) -> type {
     return data_to_type<std::decay_t<decltype(d)>>{};
