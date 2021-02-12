@@ -99,6 +99,8 @@ if (VAST_PLUGINS)
     string(MD5 plugin_path_hash "${plugin_source_dir}")
     string(SUBSTRING "${plugin_path_hash}" 0 8 plugin_path_hash)
     get_filename_component(plugin_name "${plugin_source_dir}" NAME)
+    string(TOLOWER "${plugin_name}" plugin_name)
+    list(APPEND bundled_plugins "${plugin_name}")
     set(plugin_binary_dir "plugin-${plugin_name}-${plugin_path_hash}")
     add_subdirectory("${plugin_source_dir}" "${plugin_binary_dir}")
     if (EXISTS "${plugin_source_dir}/integration/tests.yaml")
@@ -137,6 +139,20 @@ if (VAST_PLUGINS)
       endforeach ()
     endif ()
   endforeach ()
+endif ()
+
+option(VAST_ENABLE_PLUGIN_AUTOLOADING "Always load all bundled plugins" OFF)
+add_feature_info(
+  "VAST_ENABLE_PLUGIN_AUTOLOADING" VAST_ENABLE_PLUGIN_AUTOLOADING
+  "always load all bundled plugins.")
+if (VAST_ENABLE_PLUGIN_AUTOLOADING AND bundled_plugins)
+  list(TRANSFORM bundled_plugins PREPEND "\"lib")
+  list(TRANSFORM bundled_plugins APPEND "\"")
+  list(JOIN bundled_plugins ", " joined_bundled_plugins)
+  message(WARNING "bundled plugins: ${bundled_plugins}")
+  message(WARNING "joined bundled plugins: ${joined_bundled_plugins}")
+  target_compile_definitions(
+    vast PRIVATE "VAST_ENABLED_PLUGINS=${joined_bundled_plugins}")
 endif ()
 
 # -- man page ------------------------------------------------------------------

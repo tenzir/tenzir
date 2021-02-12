@@ -52,6 +52,14 @@ int main(int argc, char** argv) {
   auto loaded_plugin_paths = std::vector<path>{};
   auto plugin_files
     = caf::get_or(cfg, "vast.plugins", std::vector<std::string>{});
+#ifdef VAST_ENABLED_PLUGINS
+  // If plugins are enabled at compile time to always be loaded, add them here
+  // if they were not already configured as part of vast.plugins.
+  for (auto&& plugin_file : std::vector<std::string>{VAST_ENABLED_PLUGINS})
+    if (std::none_of(plugin_files.begin(), plugin_files.end(),
+                     [&](auto&& x) { return x == plugin_file; }))
+      plugin_files.push_back(std::move(plugin_file));
+#endif
   auto& plugins = plugins::get();
   for (const auto& plugin_file : plugin_files) {
     if (auto loaded_plugin = detail::load_plugin(plugin_file, cfg)) {
