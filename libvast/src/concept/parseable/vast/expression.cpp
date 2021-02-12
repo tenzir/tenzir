@@ -20,7 +20,6 @@
 #include "vast/detail/assert.hpp"
 #include "vast/detail/string.hpp"
 #include "vast/expression.hpp"
-#include "vast/expression_visitors.hpp"
 #include "vast/type.hpp"
 
 namespace vast {
