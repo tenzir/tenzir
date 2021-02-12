@@ -116,11 +116,11 @@ auto inspect(Inspector& f, data_extractor& x) {
 
 /// A predicate with two operands evaluated under a relational operator.
 struct predicate : detail::totally_ordered<predicate> {
-  predicate() = default;
-
   /// The operand of a predicate, which can be either LHS or RHS.
   using operand = caf::variant<attribute_extractor, field_extractor,
                                type_extractor, data_extractor, data>;
+
+  predicate() = default;
 
   predicate(operand l, relational_operator o, operand r);
 
@@ -342,7 +342,6 @@ auto for_each_predicate(const expression& e, F&& f) {
 
 /// Normalizes an expression such that:
 ///
-/// 0. All predicates are maximally expanded.
 /// 1. Single-element conjunctions/disjunctions don't exist.
 /// 2. Extractors end up always on the LHS of a predicate.
 /// 3. Negations are pushed down to the predicate level.

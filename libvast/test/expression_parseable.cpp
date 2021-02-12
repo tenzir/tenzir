@@ -167,7 +167,7 @@ TEST(parseable - expression) {
     expr));
 }
 
-TEST(parseable - data expression) {
+TEST(parseable - value predicate) {
   expression expr;
   CHECK(parsers::expr("42"s, expr));
   auto pred = caf::get_if<predicate>(&expr);

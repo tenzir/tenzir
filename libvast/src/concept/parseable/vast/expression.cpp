@@ -20,6 +20,7 @@
 #include "vast/detail/assert.hpp"
 #include "vast/detail/string.hpp"
 #include "vast/expression.hpp"
+#include "vast/expression_visitors.hpp"
 #include "vast/type.hpp"
 
 namespace vast {
@@ -55,7 +56,7 @@ static predicate::operand to_data_operand(data x) {
   return x;
 }
 
-static predicate to_data_predicate(data x) {
+static predicate to_value_predicate(data x) {
   auto infer_type = [](auto& d) -> type {
     return data_to_type<std::decay_t<decltype(d)>>{};
   };
@@ -101,8 +102,7 @@ static auto make_predicate_parser() {
     ;
   auto ws = ignore(*parsers::space);
   auto pred
-    = (operand >> ws >> operation >> ws >> operand)->*to_predicate
-    | parsers::data->*to_data_predicate
+    = (operand >> ws >> operation >> ws >> operand) ->* to_predicate
     ;
   return pred;
   // clang-format on
@@ -181,16 +181,23 @@ static auto make_expression_parser() {
     return dis.size() == 1 ? std::move(dis[0]) : expression{dis};
   };
   auto ws = ignore(*parsers::space);
-  auto negate_pred = [](predicate p) { return negation{expression{p}}; };
-  auto negate_expr = [](expression expr) { return negation{expr}; };
+  auto negate_expr = [](expression expr) { return negation{std::move(expr)}; };
   rule<Iterator, expression> expr;
   rule<Iterator, expression> group;
   // clang-format off
+  auto expand = [](data x) {
+    auto pred = to_value_predicate(std::move(x));
+    return caf::visit(expander{}, expression{std::move(pred)});
+  };
+  auto pred_expr
+    = parsers::predicate ->* [](predicate p) { return expression{std::move(p)}; }
+    | parsers::data ->* expand;
+    ;
   group
     = '(' >> ws >> ref(expr) >> ws >> ')'
-    | '!' >> ws >> parsers::predicate ->* negate_pred
+    | '!' >> ws >> pred_expr ->* negate_expr
     | '!' >> ws >> '(' >> ws >> (ref(expr) ->* negate_expr) >> ws >> ')'
-    | parsers::predicate
+    | pred_expr
     ;
   auto and_or
     = "||"_p  ->* [] { return bool_operator::logical_or; }
