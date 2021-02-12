@@ -28,16 +28,6 @@ namespace vast {
 
 class event;
 
-/// Completes an expression by expanding value predicates to full sub
-/// expressions.
-struct expander {
-  expression operator()(caf::none_t) const;
-  expression operator()(const conjunction& c) const;
-  expression operator()(const disjunction& d) const;
-  expression operator()(const negation& n) const;
-  expression operator()(const predicate& p) const;
-};
-
 /// Hoists the contained expression of a single-element conjunction or
 /// disjunction one level in the tree.
 struct hoister {

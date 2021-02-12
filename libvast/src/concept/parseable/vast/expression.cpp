@@ -56,13 +56,72 @@ static predicate::operand to_data_operand(data x) {
   return x;
 }
 
-static predicate to_value_predicate(data x) {
+// Expands a predicate with a type extractor, an equality operator, and a
+// corresponding data instance according to the rules of the expression
+// language.
+struct expander {
+  expression operator()(caf::none_t) const {
+    return expression{};
+  }
+
+  expression operator()(const conjunction& c) const {
+    conjunction result;
+    for (auto& op : c)
+      result.push_back(caf::visit(*this, op));
+    return result;
+  }
+
+  expression operator()(const disjunction& d) const {
+    disjunction result;
+    for (auto& op : d)
+      result.push_back(caf::visit(*this, op));
+    return result;
+  }
+
+  expression operator()(const negation& n) const {
+    return {negation{caf::visit(*this, n.expr())}};
+  }
+
+  expression operator()(const predicate& p) const {
+    // Builds an additional predicate for subnet type extractor predicates. The
+    // additional :addr in S predicate gets appended as disjunction afterwards.
+    auto build_addr_pred
+      = [](auto& lhs, auto op, auto& rhs) -> caf::optional<expression> {
+      if (auto t = caf::get_if<type_extractor>(&lhs))
+        if (auto d = caf::get_if<data>(&rhs))
+          if (op == relational_operator::equal)
+            if (caf::holds_alternative<subnet_type>(t->type))
+              if (auto sn = caf::get_if<subnet>(d))
+                return predicate{type_extractor{address_type{}},
+                                 relational_operator::in, *d};
+      return caf::none;
+    };
+    auto make_disjunction = [](auto x, auto y) {
+      disjunction result;
+      result.push_back(std::move(x));
+      result.push_back(std::move(y));
+      return result;
+    };
+    if (auto addr_pred = build_addr_pred(p.lhs, p.op, p.rhs))
+      return make_disjunction(p, std::move(*addr_pred));
+    if (auto addr_pred = build_addr_pred(p.rhs, p.op, p.lhs))
+      return make_disjunction(p, std::move(*addr_pred));
+    return {p};
+  }
+};
+
+// Expands a data instance in two steps:
+// 1. Convert the data instance x to T(x) == x
+// 2. Apply type-specific expansion that results in a compound expression
+static expression expand(data x) {
   auto infer_type = [](auto& d) -> type {
     return data_to_type<std::decay_t<decltype(d)>>{};
   };
   auto lhs = type_extractor{caf::visit(infer_type, x)};
   auto rhs = predicate::operand{std::move(x)};
-  return {std::move(lhs), relational_operator::equal, std::move(rhs)};
+  auto pred
+    = predicate{std::move(lhs), relational_operator::equal, std::move(rhs)};
+  return caf::visit(expander{}, expression{std::move(pred)});
 }
 
 static auto make_predicate_parser() {
@@ -185,10 +244,6 @@ static auto make_expression_parser() {
   rule<Iterator, expression> expr;
   rule<Iterator, expression> group;
   // clang-format off
-  auto expand = [](data x) {
-    auto pred = to_value_predicate(std::move(x));
-    return caf::visit(expander{}, expression{std::move(pred)});
-  };
   auto pred_expr
     = parsers::predicate ->* [](predicate p) { return expression{std::move(p)}; }
     | parsers::data ->* expand;
