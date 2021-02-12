@@ -13,16 +13,21 @@ This changelog documents all notable user-facing changes of VAST.
 
 ## Unreleased
 
+- ⚠️ The previously deprecated options `vast.spawn.importer.ids` and
+  `vast.schema-paths` no longer work. Furthermore, queries spread over multiple
+  arguuments are now disallowed instead of triggering a deprecation warning.
+  [#1374](https://github.com/tenzir/vast/pull/1374)
+
 - ⚡️ User-supplied schema files are now picked up from
   `<SYSCONFDIR>/vast/schema` and `<XDG_CONFIG_HOME>/vast/schema` instead of
   `<XDG_DATA_HOME>/vast/schema`.
   [#1372](https://github.com/tenzir/vast/pull/1372)
 
-- ⚠️  / 🎁 The meta index now stores partition synopses in separate files. This will
-  decrease restart times for systems with large databases, slow disks and aggressive
-  readahead settings. A new config setting `vast.meta-index-path` allows storing the
-  meta index information in a separate directory.
-  [#1330](https://github.com/tenzir/vast/pull/1330) 
+- ⚠️  / 🎁 The meta index now stores partition synopses in separate files. This
+  will decrease restart times for systems with large databases, slow disks and
+  aggressive readahead settings. A new config setting `vast.meta-index-path`
+  allows storing the meta index information in a separate directory.
+  [#1330](https://github.com/tenzir/vast/pull/1330)
 
 - ⚠️ The `infer` command has an improved heuristic for the number types `int`,
   `count`, and `real`. [#1343](https://github.com/tenzir/vast/pull/1343)
