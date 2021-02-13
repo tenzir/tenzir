@@ -22,51 +22,9 @@
 
 #include <caf/detail/type_traits.hpp>
 
+#include <experimental/type_traits>
+
 namespace vast::detail {
-
-// -- Library Fundamentals v2 ------------------------------------------------
-
-struct nonesuch {
-  nonesuch() = delete;
-  ~nonesuch() = delete;
-  nonesuch(const nonesuch&) = delete;
-  void operator=(const nonesuch&) = delete;
-};
-
-namespace {
-
-template <
-  class Default,
-  class AlwaysVoid,
-  template <class...> class Op,
-  class... Args
->
-struct detector {
-  using value_t = std::false_type;
-  using type = Default;
-};
-
-template <class Default, template<class...> class Op, class... Args>
-struct detector<Default, std::void_t<Op<Args...>>, Op, Args...> {
-  using value_t = std::true_type;
-  using type = Op<Args...>;
-};
-
-} // namespace <anonymous>
-
-template <template <class...> class Op, class... Args>
-constexpr bool is_detected_v
-  = detector<nonesuch, void, Op, Args...>::value_t::value;
-
-template <template <class...> class Op, class... Args>
-using detected_t
-  = typename detector<nonesuch, void, Op, Args...>::type;
-
-template <class Default, template<class...> class Op, class... Args>
-using detected_or = detector<Default, void, Op, Args...>;
-
-template <class Default, template<class...> class Op, class... Args>
-using detected_or_t = typename detected_or<Default, Op, Args...>::type;
 
 // -- is_* --------------------------------------------------------------------
 
@@ -112,7 +70,7 @@ template <class T>
 using deref_t_helper = decltype(*std::declval<T>());
 
 template <class T>
-using deref_t = detected_t<deref_t_helper, T>;
+using deref_t = std::experimental::detected_t<deref_t_helper, T>;
 
 // Types that work with std::data and std::size (= containers)
 
@@ -127,8 +85,9 @@ struct is_container : std::false_type {};
 
 template <class T>
 struct is_container<
-  T,
-  std::enable_if_t<is_detected_v<std_data_t, T> && is_detected_v<std_size_t, T>>>
+  T, std::enable_if_t<
+       std::experimental::is_detected_v<
+         std_data_t, T> && std::experimental::is_detected_v<std_size_t, T>>>
   : std::true_type {};
 
 template <class T>
@@ -143,9 +102,9 @@ template <class T>
 struct is_byte_container<
   T,
   std::enable_if_t<
-    is_detected_v<
+    std::experimental::is_detected_v<
       std_data_t,
-      T> && is_detected_v<std_size_t, T> && sizeof(deref_t<std_data_t<T>>) == 1>>
+      T> && std::experimental::is_detected_v<std_size_t, T> && sizeof(deref_t<std_data_t<T>>) == 1>>
   : std::true_type {};
 
 template <class T>
@@ -241,7 +200,7 @@ using ostream_operator_t
 
 template <typename T>
 inline constexpr bool has_ostream_operator
-  = is_detected_v<ostream_operator_t, T>;
+  = std::experimental::is_detected_v<ostream_operator_t, T>;
 
 // -- checks for stringification functions -----------------------------------
 
@@ -249,7 +208,8 @@ template <typename T>
 using to_string_t = decltype(to_string(std::declval<T>()));
 
 template <typename T>
-inline constexpr bool has_to_string = is_detected_v<to_string_t, T>;
+inline constexpr bool has_to_string
+  = std::experimental::is_detected_v<to_string_t, T>;
 
 template <typename T>
 using name_getter_t =
@@ -257,7 +217,8 @@ using name_getter_t =
                                std::string_view>::type;
 
 template <typename T>
-inline constexpr bool has_name_getter = is_detected_v<name_getter_t, T>;
+inline constexpr bool has_name_getter
+  = std::experimental::is_detected_v<name_getter_t, T>;
 
 template <typename T>
 using name_member_t =
@@ -265,7 +226,8 @@ using name_member_t =
                                std::string_view>::type;
 
 template <typename T>
-inline constexpr bool has_name_member = is_detected_v<name_member_t, T>;
+inline constexpr bool has_name_member
+  = std::experimental::is_detected_v<name_member_t, T>;
 
 // -- compile time computation of sum -----------------------------------------
 template <auto... Values>

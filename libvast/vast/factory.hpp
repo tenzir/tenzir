@@ -20,6 +20,8 @@
 #include "vast/detail/assert.hpp"
 #include "vast/detail/type_traits.hpp"
 
+#include <experimental/type_traits>
+
 namespace vast {
 
 /// Traits to be specialized by classes that want to be constructed through a
@@ -180,7 +182,7 @@ private:
 
   template <class T>
   static decltype(auto) make_key(T&& x) {
-    if constexpr (detail::is_detected_v<has_key_function, traits, T>)
+    if constexpr (std::experimental::is_detected_v<has_key_function, traits, T>)
       return traits::key(std::forward<T>(x)); // always try to normalize keys
     else
       return std::forward<T>(x);
