@@ -164,23 +164,20 @@ sink_command(const invocation& inv, caf::actor_system& sys, caf::actor snk) {
         if (auto rate
             = measurement{query.runtime, query.processed}.rate_per_sec();
             std::isfinite(rate))
-          VAST_INFO("{} processed {} candidates at a rate of {}"
-                    "candidates/sec and shipped {} results in {}",
-                    detail::pretty_type_name(name), query.processed,
-                    static_cast<uint64_t>(rate), query.shipped,
-                    to_string(query.runtime));
-        else
-          VAST_INFO("{} processed {} candidatesand shipped {} results "
-                    "in {}",
-                    detail::pretty_type_name(name), query.processed,
+          VAST_INFO("{} processed {} candidates at a rate of {} candidates/sec "
+                    "and shipped {} results in {}",
+                    name, query.processed, static_cast<uint64_t>(rate),
                     query.shipped, to_string(query.runtime));
+        else
+          VAST_INFO("{} processed {} candidates and shipped {} results in {}",
+                    name, query.processed, query.shipped,
+                    to_string(query.runtime));
 #endif
         if (waiting_for_final_report)
           stop = true;
       },
       [&](atom::signal, int signal) {
-        VAST_DEBUG("{} got {}", detail::pretty_type_name(inv.full_name),
-                   ::strsignal(signal));
+        VAST_DEBUG("{} got {}", inv.full_name, ::strsignal(signal));
         if (signal == SIGINT || signal == SIGTERM) {
           self->send_exit(exporter, caf::exit_reason::user_shutdown);
           self->send_exit(snk, caf::exit_reason::user_shutdown);
