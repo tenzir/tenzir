@@ -194,7 +194,7 @@ caf::expected<expression> parse(const data& rule) {
   detection_parser p{exprs};
   if (!p(*condition, result))
     return caf::make_error(ec::parse_error, "invalid condition syntax");
-  return normalize(result);
+  return result;
 }
 
 } // namespace vast::detail::sigma

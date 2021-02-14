@@ -106,5 +106,5 @@ TEST(parse) {
   expected.emplace_back(unbox(to<expression>(selection3)));
   expected.emplace_back(unbox(to<expression>(selection4)));
   expected.emplace_back(tail);
-  CHECK_EQUAL(expr, normalize(expected));
+  CHECK_EQUAL(normalize(expr), normalize(expected));
 }
