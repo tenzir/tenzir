@@ -36,7 +36,7 @@ namespace {
 // is used to tell whether a signal has been raised or not.
 std::atomic<bool> signals[32];
 
-extern "C" void signal_handler(int sig) {
+extern "C" void signal_monitor_handler(int sig) {
   // Catch termination signals only once to allow forced termination by the OS
   // upon sending the signal a second time.
   if (sig == SIGINT || sig == SIGTERM) {
@@ -60,7 +60,7 @@ void signal_monitor::run(std::chrono::milliseconds monitoring_interval,
   VAST_DEBUG("{} sends signals to {}", class_name, receiver);
   for (auto s : {SIGHUP, SIGINT, SIGQUIT, SIGTERM, SIGUSR1, SIGUSR2}) {
     VAST_DEBUG("{} registers signal handler for {}", class_name, strsignal(s));
-    std::signal(s, &signal_handler);
+    std::signal(s, &signal_monitor_handler);
   }
   while (!stop) {
     std::this_thread::sleep_for(monitoring_interval);

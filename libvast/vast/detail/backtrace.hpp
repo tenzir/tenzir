@@ -13,20 +13,13 @@
 
 #pragma once
 
-#include "vast/config.hpp"
-#include "vast/detail/backtrace.hpp"
+namespace vast::detail {
 
-#if VAST_ENABLE_ASSERTIONS
-#  include <cstdio>
-#  include <cstdlib>
-#  define VAST_ASSERT(expr)                                                    \
-    do {                                                                       \
-      if (static_cast<bool>(expr) == false) {                                  \
-        ::printf("%s:%u: assertion failed '%s'\n", __FILE__, __LINE__, #expr); \
-        ::vast::detail::backtrace();                                           \
-        ::abort();                                                             \
-      }                                                                        \
-    } while (false)
-#else
-#  define VAST_ASSERT(expr) static_cast<void>(expr)
-#endif
+/// Prints a stack backtrace on stderr.
+// Tries to use the following mechanisms in order:
+// 1. execinfo.h (via glibc or libexecinfo)
+// 2. libunwind
+// 3. libbacktrace
+void backtrace();
+
+} // namespace vast::detail

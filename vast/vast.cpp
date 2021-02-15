@@ -19,6 +19,7 @@
 #include "vast/data.hpp"
 #include "vast/detail/load_plugin.hpp"
 #include "vast/detail/settings.hpp"
+#include "vast/detail/signal_handlers.hpp"
 #include "vast/detail/system.hpp"
 #include "vast/directory.hpp"
 #include "vast/error.hpp"
@@ -32,6 +33,7 @@
 
 #include <caf/actor_system.hpp>
 
+#include <csignal>
 #include <cstdlib>
 #include <iostream>
 #include <string>
@@ -41,6 +43,10 @@ using namespace vast;
 using namespace vast::system;
 
 int main(int argc, char** argv) {
+  // Set a signal handler for fatal conditions. Prints a backtrace if support
+  // for that is enabled.
+  std::signal(SIGSEGV, fatal_handler);
+  std::signal(SIGABRT, fatal_handler);
   // Set up our configuration, e.g., load of YAML config file(s).
   default_configuration cfg;
   if (auto err = cfg.parse(argc, argv)) {

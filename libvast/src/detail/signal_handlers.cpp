@@ -11,22 +11,22 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#pragma once
+#include "vast/detail/signal_handlers.hpp"
 
 #include "vast/config.hpp"
 #include "vast/detail/backtrace.hpp"
 
-#if VAST_ENABLE_ASSERTIONS
-#  include <cstdio>
-#  include <cstdlib>
-#  define VAST_ASSERT(expr)                                                    \
-    do {                                                                       \
-      if (static_cast<bool>(expr) == false) {                                  \
-        ::printf("%s:%u: assertion failed '%s'\n", __FILE__, __LINE__, #expr); \
-        ::vast::detail::backtrace();                                           \
-        ::abort();                                                             \
-      }                                                                        \
-    } while (false)
-#else
-#  define VAST_ASSERT(expr) static_cast<void>(expr)
-#endif
+#include <csignal>
+#include <cstdio>
+#include <cstdlib>
+#include <cstring>
+#include <unistd.h>
+
+extern "C" void fatal_handler(int sig) {
+  ::fprintf(stderr, "vast-" VAST_VERSION ": Error: signal %d (%s)\n", sig,
+            ::strsignal(sig));
+  vast::detail::backtrace();
+  // Reinstall the default handler and call that too.
+  signal(sig, SIG_DFL);
+  kill(getpid(), sig);
+}

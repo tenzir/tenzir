@@ -249,14 +249,26 @@ option(VAST_ENABLE_ASSERTIONS "Enable assertions"
 add_feature_info("VAST_ENABLE_ASSERTIONS" VAST_ENABLE_ASSERTIONS
                  "enable assertions.")
 
-if (VAST_ENABLE_ASSERTIONS)
-  find_package(Backtrace REQUIRED)
-  target_include_directories(libvast_internal
-                             INTERFACE ${Backtrace_INCLUDE_DIRECTORIES})
-  target_link_libraries(libvast_internal INTERFACE ${Backtrace_LIBRARIES})
-endif ()
-
 unset(_VAST_ENABLE_ASSERTIONS_DEFAULT)
+
+# -- backtrace -----------------------------------------------------------------
+
+option(VAST_ENABLE_BACKTRACE "Print a backtrace on unexpected termination" ON)
+add_feature_info("VAST_ENABLE_BACKTRACE" VAST_ENABLE_BACKTRACE
+                 "print a backtrace on unexpected termination.")
+if (VAST_ENABLE_BACKTRACE)
+  find_package(Backtrace)
+  if (Backtrace_FOUND)
+    target_include_directories(libvast_internal
+                               INTERFACE ${Backtrace_INCLUDE_DIRECTORIES})
+    target_link_libraries(libvast_internal INTERFACE ${Backtrace_LIBRARIES})
+    dependency_summary("backtrace" ${Backtrace_INCLUDE_DIR})
+  else ()
+    find_package(libunwind REQUIRED)
+    target_link_libraries(libvast_internal INTERFACE unwind::unwind)
+    dependency_summary("libunwind" unwind::unwind)
+  endif ()
+endif ()
 
 # -- sanitizers ----------------------------------------------------------------
 
