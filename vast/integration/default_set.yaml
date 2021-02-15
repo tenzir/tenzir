@@ -488,3 +488,11 @@ tests:
   #       input: data/zeek/snmp.log.gz
   #       transformation: sleep 4
   #     - command: count '#type == /zeek.*/'
+  Sigma:
+    tags: [server, import-export, sigma, zeek]
+    fixture: ServerTester
+    steps:
+      - command: import -b zeek
+        input: data/zeek/conn.log.gz
+      - command: export json
+        input: data/sigma/zeek-conn.yaml
