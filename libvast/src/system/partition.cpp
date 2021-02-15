@@ -629,7 +629,7 @@ active_partition_actor::behavior_type active_partition(
       auto triples = evaluate(self->state, expr);
       if (triples.empty())
         return atom::done_v;
-      auto eval = self->spawn(evaluator, expr, self, triples);
+      auto eval = self->spawn(evaluator, expr, triples);
       return self->delegate(eval, client);
     },
     [self](atom::status,
@@ -800,7 +800,7 @@ partition_actor::behavior_type passive_partition(
       auto triples = evaluate(self->state, expr);
       if (triples.empty())
         return atom::done_v;
-      auto eval = self->spawn(evaluator, expr, self, triples);
+      auto eval = self->spawn(evaluator, expr, triples);
       return self->delegate(eval, client);
     },
     [self](atom::status,
