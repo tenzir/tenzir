@@ -23,7 +23,6 @@ caf::expected<accountant_config>
 to_accountant_config(const caf::settings& opts) {
   accountant_config result;
   extract_settings(result.self_sink.enable, opts, "self-sink.enable");
-  extract_settings(result.self_sink.enable, opts, "self-sink.enable");
   extract_settings(result.self_sink.slice_size, opts, "self-sink.slize-size");
   extract_settings(result.self_sink.slice_type, opts, "self-sink.slize-type");
   extract_settings(result.file_sink.enable, opts, "file-sink.enable");
