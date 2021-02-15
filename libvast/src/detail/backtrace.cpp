@@ -31,17 +31,6 @@ void backtrace() {
 }
 
 } // namespace vast::detail
-#  elif __has_include(<backtrace.h>)
-#    include <backtrace.h>
-
-namespace vast::detail {
-
-void backtrace() {
-  auto state = backtrace_create_state(nullptr, false, nullptr, nullptr);
-  backtrace_print(state, 1, stderr);
-}
-
-} // namespace vast::detail
 #  elif __has_include(<libunwind.h>)
 #    define UNW_LOCAL_ONLY
 #    include <cstdio>
@@ -51,6 +40,10 @@ void backtrace() {
 
 namespace vast::detail {
 
+// The following code has been adapted from
+// https://eli.thegreenplace.net/2015/programmatic-access-to-the-call-stack-in-c
+// According to https://eli.thegreenplace.net/pages/about, it is generously
+// offered under the unlicense by Eli Bendersky.
 void backtrace() {
   unw_cursor_t cursor;
   unw_context_t context;
@@ -63,19 +56,16 @@ void backtrace() {
   while (unw_step(&cursor) > 0) {
     unw_word_t offset, pc;
     unw_get_reg(&cursor, UNW_REG_IP, &pc);
-    if (pc == 0) {
+    if (pc == 0)
       break;
-    }
     std::fprintf(stderr, "0x%lx:", pc);
-
     char sym[256];
     if (unw_get_proc_name(&cursor, sym, sizeof(sym), &offset) == 0) {
       char* nameptr = sym;
       int status;
       char* demangled = abi::__cxa_demangle(sym, nullptr, nullptr, &status);
-      if (status == 0) {
+      if (status == 0)
         nameptr = demangled;
-      }
       std::fprintf(stderr, " (%s+0x%lx)\n", nameptr, offset);
       std::free(demangled);
     } else {
@@ -86,8 +76,19 @@ void backtrace() {
 }
 
 } // namespace vast::detail
+#  elif __has_include(<backtrace.h>)
+#    include <backtrace.h>
+
+namespace vast::detail {
+
+void backtrace() {
+  auto state = backtrace_create_state(nullptr, false, nullptr, nullptr);
+  backtrace_print(state, 1, stderr);
+}
+
+} // namespace vast::detail
 #  else
 #    error                                                                     \
-      "backtrace enabled but neither of execino, libbacktrace, or libunwind are available"
+      "backtrace enabled but neither execino, libbacktrace, or libunwind are available"
 #  endif
 #endif

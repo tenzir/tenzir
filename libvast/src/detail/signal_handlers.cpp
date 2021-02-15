@@ -11,18 +11,22 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#include "vast/detail/signal_handler.hpp"
+#include "vast/detail/signal_handlers.hpp"
 
 #include "vast/config.hpp"
 #include "vast/detail/backtrace.hpp"
 
+#include <csignal>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <unistd.h>
 
-extern "C" void signal_handler(int sig) {
+extern "C" void fatal_handler(int sig) {
   ::fprintf(stderr, "vast-" VAST_VERSION ": Error: signal %d (%s)\n", sig,
             ::strsignal(sig));
   vast::detail::backtrace();
-  std::quick_exit(1);
+  // Reinstall the default handler and call that too.
+  signal(sig, SIG_DFL);
+  kill(getpid(), sig);
 }

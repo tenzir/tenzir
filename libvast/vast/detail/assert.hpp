@@ -20,12 +20,13 @@
 #  include <cstdio>
 #  include <cstdlib>
 #  define VAST_ASSERT(expr)                                                    \
-    if (static_cast<bool>(expr) == false) {                                    \
-      ::printf("%s:%u: assertion failed '%s'\n", __FILE__, __LINE__, #expr);   \
-      vast::detail::backtrace();                                               \
-      ::abort();                                                               \
-    }                                                                          \
-    static_cast<void>(0)
+    do {                                                                       \
+      if (static_cast<bool>(expr) == false) {                                  \
+        ::printf("%s:%u: assertion failed '%s'\n", __FILE__, __LINE__, #expr); \
+        ::vast::detail::backtrace();                                           \
+        ::abort();                                                             \
+      }                                                                        \
+    } while (false)
 #else
 #  define VAST_ASSERT(expr) static_cast<void>(expr)
 #endif

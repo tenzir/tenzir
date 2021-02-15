@@ -254,6 +254,8 @@ unset(_VAST_ENABLE_ASSERTIONS_DEFAULT)
 # -- backtrace -----------------------------------------------------------------
 
 option(VAST_ENABLE_BACKTRACE "Print a backtrace on unexpected termination" ON)
+add_feature_info("VAST_ENABLE_BACKTRACE" VAST_ENABLE_BACKTRACE
+                 "enable stack unwinding.")
 if (VAST_ENABLE_BACKTRACE)
   find_package(Backtrace)
   if (Backtrace_FOUND)
@@ -267,8 +269,6 @@ if (VAST_ENABLE_BACKTRACE)
     dependency_summary("libunwind" unwind::unwind)
   endif ()
 endif ()
-add_feature_info("VAST_ENABLE_BACKTRACE" VAST_ENABLE_BACKTRACE
-                 "enable stack unwinding.")
 
 # -- sanitizers ----------------------------------------------------------------
 
