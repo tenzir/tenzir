@@ -32,16 +32,16 @@ struct accountant_config {
 
   struct file_sink {
     bool enable = false;
+    bool real_time = false;
     std::string path;
   };
 
   struct uds_sink {
     bool enable = false;
+    bool real_time = false;
     std::string path;
     detail::socket_type type;
   };
-
-  bool enable = true;
 
   self_sink self_sink;
   file_sink file_sink;

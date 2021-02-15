@@ -100,17 +100,19 @@ vast:
   # The configuration of the metrics reporting component.
   metrics:
     # Configures if and how metrics should be ingested back into VAST.
-    self_sink:
+    self-sink:
       enable: true
-      slice_size: 100
-      # slice_type: arrow
+      slice-size: 100
+      #slice-type: arrow
     # Configures if and where metrics should be written to a file.
-    file_sink:
+    file-sink:
       enable: false
+      real-time: false
       path: "/tmp/vast-metrics.log"
     # Configures if and where metrics should be written to a socket.
-    uds_sink:
+    uds-sink:
       enable: false
+      real-time: false
       path: "/tmp/vast-metrics.sock"
       type: "datagram"
 
