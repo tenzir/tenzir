@@ -297,6 +297,132 @@ TEST(parseable - complex types global) {
   CHECK(e->type == *enum_t);
 }
 
+TEST(parseable - out of order definitions) {
+  using namespace std::string_view_literals;
+  auto str = R"__(
+    type baz = list<bar>
+    type bar = record{
+      x: foo
+    }
+    type foo = int
+  )__"sv;
+  schema sch;
+  CHECK(parsers::schema(str, sch));
+  auto baz = unbox(sch.find("baz"));
+  // clang-format off
+  auto expected = type{
+    list_type{
+      record_type{
+        {"x", integer_type{}.name("foo")}
+      }.name("bar")
+    }.name("baz")
+  };
+  // clang-format on
+  CHECK_EQUAL(baz, expected);
+}
+
+TEST(parseable - with context) {
+  using namespace std::string_view_literals;
+  MESSAGE("prepare the context");
+  auto global = symbol_table{};
+  {
+    auto local = symbol_table{};
+    auto p = symbol_table_parser{};
+    CHECK(p("type foo = count", local));
+    global = std::move(local);
+  }
+  {
+    MESSAGE("Use definition from global symbol table");
+    auto str = R"__(
+      type bar = record{
+        x: record{
+          y: foo
+        }
+      }
+    )__"sv;
+    auto st = unbox(to<symbol_table>(str));
+    auto r = symbol_resolver{global, st};
+    auto sch = unbox(r.resolve());
+    auto bar = unbox(sch.find("bar"));
+    // clang-format off
+    auto expected = type{
+      record_type{
+        {"x", record_type{{"y", count_type{}.name("foo")}}}
+      }.name("bar")
+    };
+    // clang-format on
+    CHECK_EQUAL(bar, expected);
+  }
+  {
+    MESSAGE("Override definition in global symbol table - before use");
+    auto str = R"__(
+      type foo = int
+      type bar = record{
+        x: record{
+          y: foo
+        }
+      }
+    )__"sv;
+    auto st = unbox(to<symbol_table>(str));
+    auto r = symbol_resolver{global, st};
+    auto sch = unbox(r.resolve());
+    auto bar = unbox(sch.find("bar"));
+    // clang-format off
+    auto expected = type{
+      record_type{
+        {"x", record_type{{"y", integer_type{}.name("foo")}}}
+      }.name("bar")
+    };
+    // clang-format on
+    CHECK_EQUAL(bar, expected);
+  }
+  {
+    MESSAGE("Override definition in global symbol table - after use");
+    auto str = R"__(
+      type bar = record{
+        x: record{
+          y: foo
+        }
+      }
+      type foo = int
+    )__"sv;
+    auto st = unbox(to<symbol_table>(str));
+    auto r = symbol_resolver{global, st};
+    auto sch = unbox(r.resolve());
+    auto bar = unbox(sch.find("bar"));
+    // clang-format off
+    auto expected = type{
+      record_type{
+        {"x", record_type{{"y", integer_type{}.name("foo")}}}
+      }.name("bar")
+    };
+    // clang-format on
+    CHECK_EQUAL(bar, expected);
+  }
+  {
+    MESSAGE("Duplicate definition error");
+    auto str = R"__(
+      type foo = real
+      type bar = record{
+        x: record{
+          y: foo
+        }
+      }
+      type foo = int
+    )__"sv;
+    auto p = symbol_table_parser{};
+    symbol_table st;
+    CHECK(!p(str, st));
+  }
+  {
+    MESSAGE("Duplicate definition error - re-entry");
+    auto p = symbol_table_parser{};
+    symbol_table st;
+    CHECK(p("type foo = real", st));
+    CHECK(!p("type foo = int", st));
+  }
+}
+
 TEST(json) {
   schema s;
   auto t0 = count_type{};

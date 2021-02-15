@@ -634,44 +634,6 @@ TEST(parseable) {
   };
   // clang-format on
   CHECK_EQUAL(t, r);
-  MESSAGE("symbol table");
-  auto foo = bool_type{};
-  foo = foo.name("foo");
-  auto symbols = type_table{{"foo", foo}};
-  auto p = type_parser{std::addressof(symbols)}; // overloaded operator&
-  CHECK(p("foo", t));
-  CHECK(t == foo);
-  CHECK(p("list<foo>", t));
-  CHECK(t == type{list_type{foo}});
-  CHECK(p("map<foo, foo>", t));
-  CHECK(t == type{map_type{foo, foo}});
-  MESSAGE("record");
-  CHECK(p("record{x: int, y: string, z: foo}", t));
-  r = record_type{{"x", integer_type{}}, {"y", string_type{}}, {"z", foo}};
-  CHECK(t == type{r});
-  MESSAGE("attributes");
-  // Single attribute.
-  CHECK(p("string #skip", t));
-  type u = string_type{}.attributes({{"skip"}});
-  CHECK_EQUAL(t, u);
-  // Two attributes, even though these ones don't make sense together.
-  CHECK(p("real #skip #default=\"x \\\" x\"", t));
-  u = real_type{}.attributes({{"skip"}, {"default", "x \" x"}});
-  CHECK_EQUAL(t, u);
-  // Key-value Attributes with and without double-quotes.
-  CHECK(p("string #foo=x #bar=\"y\"", t));
-  u = string_type{}.attributes({{"foo", "x"}, {"bar", "y"}});
-  CHECK_EQUAL(t, u);
-  // Attributes in types of record fields.
-  CHECK(p("record{x: int #skip, y: string #foo=\",>}\" #bar=&%!, z: foo}", t));
-  // clang-format off
-  r = record_type{
-    {"x", integer_type{}.attributes({{"skip"}})},
-    {"y", string_type{}.attributes({{"foo", ",>}"}, {"bar", "&%!"}})},
-    {"z", foo}
-  };
-  // clang-format on
-  CHECK_EQUAL(t, r);
 }
 
 TEST(hashable) {
