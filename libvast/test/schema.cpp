@@ -324,9 +324,9 @@ TEST(parseable - out of order definitions) {
 TEST(parseable - with context) {
   using namespace std::string_view_literals;
   MESSAGE("prepare the context");
-  auto global = symbol_table{};
+  auto global = symbol_map{};
   {
-    auto local = symbol_table{};
+    auto local = symbol_map{};
     auto p = symbol_table_parser{};
     CHECK(p("type foo = count", local));
     global = std::move(local);
@@ -340,8 +340,8 @@ TEST(parseable - with context) {
         }
       }
     )__"sv;
-    auto st = unbox(to<symbol_table>(str));
-    auto r = symbol_resolver{global, st};
+    auto sm = unbox(to<symbol_map>(str));
+    auto r = symbol_resolver{global, sm};
     auto sch = unbox(r.resolve());
     auto bar = unbox(sch.find("bar"));
     // clang-format off
@@ -363,8 +363,8 @@ TEST(parseable - with context) {
         }
       }
     )__"sv;
-    auto st = unbox(to<symbol_table>(str));
-    auto r = symbol_resolver{global, st};
+    auto sm = unbox(to<symbol_map>(str));
+    auto r = symbol_resolver{global, sm};
     auto sch = unbox(r.resolve());
     auto bar = unbox(sch.find("bar"));
     // clang-format off
@@ -386,8 +386,8 @@ TEST(parseable - with context) {
       }
       type foo = int
     )__"sv;
-    auto st = unbox(to<symbol_table>(str));
-    auto r = symbol_resolver{global, st};
+    auto sm = unbox(to<symbol_map>(str));
+    auto r = symbol_resolver{global, sm};
     auto sch = unbox(r.resolve());
     auto bar = unbox(sch.find("bar"));
     // clang-format off
@@ -411,15 +411,15 @@ TEST(parseable - with context) {
       type foo = int
     )__"sv;
     auto p = symbol_table_parser{};
-    symbol_table st;
-    CHECK(!p(str, st));
+    symbol_map sm;
+    CHECK(!p(str, sm));
   }
   {
     MESSAGE("Duplicate definition error - re-entry");
     auto p = symbol_table_parser{};
-    symbol_table st;
-    CHECK(p("type foo = real", st));
-    CHECK(!p("type foo = int", st));
+    symbol_map sm;
+    CHECK(p("type foo = real", sm));
+    CHECK(!p("type foo = int", sm));
   }
 }
 

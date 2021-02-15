@@ -20,4 +20,4 @@
 #include "vast/concept/parseable/string/literal.hpp"
 #include "vast/concept/parseable/string/quoted_string.hpp"
 #include "vast/concept/parseable/string/string.hpp"
-
+#include "vast/concept/parseable/string/symbol_table.hpp"
