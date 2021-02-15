@@ -255,7 +255,7 @@ unset(_VAST_ENABLE_ASSERTIONS_DEFAULT)
 
 option(VAST_ENABLE_BACKTRACE "Print a backtrace on unexpected termination" ON)
 add_feature_info("VAST_ENABLE_BACKTRACE" VAST_ENABLE_BACKTRACE
-                 "enable stack unwinding.")
+                 "print a backtrace on unexpected termination.")
 if (VAST_ENABLE_BACKTRACE)
   find_package(Backtrace)
   if (Backtrace_FOUND)
