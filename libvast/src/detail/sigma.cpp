@@ -20,6 +20,8 @@
 #include "vast/error.hpp"
 #include "vast/expression_visitors.hpp"
 
+#include <caf/optional.hpp>
+
 #include <map>
 #include <regex>
 #include <string>
@@ -181,6 +183,62 @@ struct detection_parser : parser<detection_parser> {
   search_id_symbol_table search_id;
 };
 
+// The following invariants apply according to the Sigma spec:
+// - All values are treated as case-insensitive strings
+// - You can use wildcard characters '*' and '?' in strings
+// - Wildcards can be escaped with \, e.g. \*. If some wildcard after a
+//   backslash should be searched, the backslash has to be escaped: \\*.
+// - Regular expressions are case-sensitive by default
+// - You don't have to escape characters except the string quotation
+//   marks '
+caf::optional<pattern> make_pattern(std::string_view str) {
+  auto f = str.begin();
+  auto l = str.end();
+  std::string rx;
+  // FIXME: this is a pretty hand-wavy approach to transforming a glob string
+  // to a valid regex. We need to revisit this once we have actual pattern
+  // support in the query language.
+  while (f != l) {
+    auto c = *f++;
+    if (c == '\\') {
+      if (f == l) {
+        rx += '\\'; // A single backslash at the end is a literal backslash.
+        break;
+      }
+      auto w = *f++;
+      if (w == '*') {
+        // Escaped wildcard
+        rx += '*';
+      } else if (w == '?') {
+        // Escaped wildcard
+        rx += '?';
+      } else if (w == '\\') {
+        // Double backslash (\\). We include at least one backslash.
+        rx += '\\';
+        // If no wildcard follows \\, we have a literal double backslash. If a
+        // wildcard follows, e.g., \\* or \\?, then we have a single
+        // backslash plus wildcard.
+        if (f == l)
+          rx += '\\';
+      } else {
+        // Do nothing by default;
+        rx += '\\';
+        rx += w;
+      }
+    } else if (c == '*') {
+      rx += ".*";
+    } else if (c == '?') {
+      rx += ".";
+    } else {
+      rx += c;
+    }
+  };
+  // It's only a pattern if it differs from a regular string.
+  if (str == rx)
+    return caf::none;
+  return pattern{std::move(rx)};
+}
+
 } // namespace
 
 caf::expected<expression> parse_search_id(const data& yaml) {
@@ -194,21 +252,22 @@ caf::expected<expression> parse_search_id(const data& yaml) {
       auto re = false;
       // Value factory that takes into account whether the `re` modifier is
       // present.
-      auto make = [&](const data& value) {
-        // The following invariants apply according to the Sigma spec:
-        // - All values are treated as case-insensitive strings
-        // - You can use wildcard characters '*' and '?' in strings
-        // - Wildcards can be escaped with \, e.g. \*. If some wildcard after a
-        //   backslash should be searched, the backslash has to be escaped: \\*.
-        // - Regular expressions are case-sensitive by default
-        // - You don't have to escape characters except the string quotation
-        //   marks '
+      auto make_predicate = [&](const data& value) {
+        // If the 're' modifier is present, we interpret the raw string
+        // directly as pattern.
         if (re)
           if (auto str = caf::get_if<std::string>(&value))
-            return data{pattern{*str}};
-        // TODO: figure out a solution for case-insensitve search
-        // TODO: apply the wildcard behavior above.
-        return value;
+            return predicate{extractor, relational_operator::match,
+                             data{pattern{*str}}};
+        // Otherwise, we may have a pattern in case of a string and must try to
+        // parse it as such.
+        if (auto str = caf::get_if<std::string>(&value))
+          if (!str->empty())
+            if (auto pat = make_pattern(*str))
+              return predicate{extractor, relational_operator::match,
+                               data{std::move(*pat)}};
+        // By default, we take the operator based on the provided modifiers.
+        return predicate{extractor, op, value};
       };
       // Parse modifiers.
       for (auto i = keys.begin() + 1; i != keys.end(); ++i) {
@@ -246,13 +305,13 @@ caf::expected<expression> parse_search_id(const data& yaml) {
             return caf::make_error(ec::type_clash, "nested lists disallowed");
           if (caf::holds_alternative<record>(value))
             return caf::make_error(ec::type_clash, "nested records disallowed");
-          connective.emplace_back(predicate{extractor, op, make(value)});
+          connective.emplace_back(make_predicate(value));
         }
         auto expr = all ? expression{conjunction(std::move(connective))}
                         : expression{disjunction(std::move(connective))};
         result.emplace_back(hoist(expr));
       } else {
-        result.emplace_back(predicate{std::move(extractor), op, make(rhs)});
+        result.emplace_back(make_predicate(rhs));
       }
     }
     return result.size() == 1 ? result[0] : result;

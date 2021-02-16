@@ -46,28 +46,35 @@ expression to_expr(std::string_view expr) {
 
 } // namespace
 
+TEST(wildcard unescaping) {
+  CHECK_EQUAL(to_search_id("x: '*'"), to_expr("x ~ /.*/"));
+  CHECK_EQUAL(to_search_id("x: '?'"), to_expr("x ~ /./"));
+  CHECK_EQUAL(to_search_id("x: 'f*'"), to_expr("x ~ /f.*/"));
+  CHECK_EQUAL(to_search_id("x: 'f?'"), to_expr("x ~ /f./"));
+  CHECK_EQUAL(to_search_id("x: 'f*bar'"), to_expr("x ~ /f.*bar/"));
+  CHECK_EQUAL(to_search_id("x: 'f?bar'"), to_expr("x ~ /f.bar/"));
+  CHECK_EQUAL(to_search_id("x: 'f\\*bar'"), to_expr("x ~ /f*bar/"));
+  CHECK_EQUAL(to_search_id("x: 'f\\?bar'"), to_expr("x ~ /f?bar/"));
+  CHECK_EQUAL(to_search_id("x: 'f\\\\*bar'"), to_expr("x ~ /f\\.*bar/"));
+  CHECK_EQUAL(to_search_id("x: 'f\\\\?bar'"), to_expr("x ~ /f\\.bar/"));
+}
+
 TEST(maps - single value) {
-  auto yaml = R"__(
-    foo: 42
-  )__";
+  auto yaml = "foo: 42";
   auto search_id = to_search_id(yaml);
   auto expected = to_expr("foo == 42");
   CHECK_EQUAL(search_id, expected);
 }
 
 TEST(maps - empty value) {
-  auto yaml = R"__(
-    foo: ''
-  )__";
+  auto yaml = "foo: ''";
   auto search_id = to_search_id(yaml);
   auto expected = to_expr("foo == \"\"");
   CHECK_EQUAL(search_id, expected);
 }
 
 TEST(maps - null value) {
-  auto yaml = R"__(
-    foo: null
-  )__";
+  auto yaml = "foo: null";
   auto search_id = to_search_id(yaml);
   auto expected = to_expr("foo == nil");
   CHECK_EQUAL(search_id, expected);
