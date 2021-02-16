@@ -923,10 +923,6 @@ struct sum_type_access<vast::type> {
 
   static constexpr bool specialized = true;
 
-  static bool is(const vast::type& x, sum_type_token<vast::none_type, 0>) {
-    return !static_cast<bool>(x);
-  }
-
   template <class T, int Pos>
   static bool is(const vast::type& x, sum_type_token<T, Pos>) {
     return x->index() == Pos;
