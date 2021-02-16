@@ -132,7 +132,7 @@ type suricata.dhcp = record {
     client_ip: addr,
     dhcp_type: string,
     client_id: string #index=hash,
-    hostname: string,
+    hostname: string #ioc,
     params: list<string>
   }
 }
@@ -217,13 +217,13 @@ type suricata.http = record {
   in_iface: string,
   src_ip: addr,
   src_port: port,
-  dest_ip: addr,
+  dest_ip: addr #ioc,
   dest_port: port,
   proto: string,
   event_type: string,
   community_id: string #index=hash,
   http: record {
-    hostname: string,
+    hostname: string #ioc,
     url: string,
     http_port: port,
     http_user_agent: string,
@@ -265,7 +265,7 @@ type suricata.fileinfo = record {
     tx_id: count #index=hash
   },
   http: record {
-    hostname: string,
+    hostname: string #ioc,
     url: string,
     http_port: port,
     http_user_agent: string,
