@@ -81,6 +81,13 @@ install(
 install(FILES "${PROJECT_SOURCE_DIR}/vast.yaml.example"
         DESTINATION "${CMAKE_INSTALL_DATADIR}/vast/integration")
 
+# -- other tests ---------------------------------------------------------------
+
+add_custom_target(
+  stress
+  COMMAND ${CMAKE_COMMAND} -E env "VAST=$<TARGET_FILE:vast>" "${CMAKE_CURRENT_SOURCE_DIR}/test/stress.sh"
+  USES_TERMINAL)
+
 # -- add plugins ---------------------------------------------------------------
 
 option(VAST_PLUGINS "Specify a list of plugins to build with VAST" "")
