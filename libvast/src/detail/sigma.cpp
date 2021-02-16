@@ -46,76 +46,66 @@ struct search_id_symbol_table : parser<search_id_symbol_table> {
 
   enum class quantifier { all, any };
 
+  /// Constructs a search ID symbol table from an expression map.
   explicit search_id_symbol_table(const expression_map& exprs) {
     id.symbols.reserve(exprs.size());
     for (auto& [key, value] : exprs)
       id.symbols.emplace(key, value);
   }
 
+  /// Joins a set of sub-expressions into a conjunction or disjunction.
   template <class Connective>
   static expression join(std::vector<expression> xs) {
     Connective result;
     result.reserve(xs.size());
     std::move(xs.begin(), xs.end(), std::back_insert_iterator(result));
-    return expression{std::move(result)};
+    return hoist(expression{std::move(result)});
   }
 
   // Forces a conjunction or disjunction on a given expression.
-  template <quantifier Quantifier>
+  template <class Connective>
   static expression force(expression x) {
-    if constexpr (Quantifier == quantifier::all) {
-      if (auto xs = caf::get_if<disjunction>(&x)) {
-        conjunction result;
-        result.reserve(xs->size());
-        std::move(xs->begin(), xs->end(), std::back_insert_iterator(result));
-        return expression{std::move(result)};
-      }
-    } else {
-      if (auto xs = caf::get_if<conjunction>(&x)) {
-        disjunction result;
-        result.reserve(xs->size());
-        std::move(xs->begin(), xs->end(), std::back_insert_iterator(result));
-        return expression{std::move(result)};
-      }
-    }
+    auto transform = [](auto&& connective) {
+      auto xs = static_cast<std::vector<expression>&>(connective);
+      return expression{Connective{std::move(xs)}};
+    };
+    if constexpr (std::is_same_v<Connective, conjunction>)
+      if (auto xs = caf::get_if<disjunction>(&x))
+        return transform(std::move(*xs));
+    if constexpr (std::is_same_v<Connective, disjunction>)
+      if (auto xs = caf::get_if<conjunction>(&x))
+        return transform(std::move(*xs));
     return x;
+  }
+
+  /// Performs *-wildcard search on all search identifiers.
+  std::vector<expression> search(std::string str) const {
+    auto rx_str = std::regex_replace(str, std::regex("\\*"), ".*");
+    auto rx = std::regex{rx_str};
+    std::vector<expression> result;
+    for (auto& [sym, expr] : id.symbols)
+      if (std::regex_search(sym.begin(), sym.end(), rx))
+        result.push_back(expr);
+    return result;
   }
 
   template <class Iterator, class Attribute>
   bool parse(Iterator& f, const Iterator& l, Attribute& result) const {
     using namespace parser_literals;
-    auto select_all = [this] {
-      std::vector<expression> result;
-      result.reserve(id.symbols.size());
-      for (auto& x : id.symbols)
-        result.push_back(x.second);
-      return result;
-    };
-    // Performs *-wildcard search on all search identifiers.
-    auto search = [this](std::string str) {
-      str = std::regex_replace(str, std::regex("\\*"), ".*");
-      auto rx = std::regex{str};
-      disjunction result;
-      for (auto& [sym, expr] : id.symbols)
-        if (std::regex_search(sym.begin(), sym.end(), rx))
-          result.push_back(expr);
-      return expression{std::move(result)};
-    };
     // clang-format off
     auto ws = ignore(*parsers::space);
-    auto them
-      = "them"_p ->* select_all
-      ;
-    auto pattern
-      = (+parsers::any - parsers::space) ->* search
+    auto pattern = +(parsers::any - parsers::space);
+    auto selection
+      = "them"_p ->* [this] { return search("*"); }
+      | pattern ->* [this](std::string str) { return search(str); }
       ;
     auto expr
-      = "all of"_p >> ws >> them ->* join<conjunction>
-      | "1 of"_p >> ws >> them ->* join<disjunction>
-      | "all of"_p >> ws >> id ->* force<quantifier::all>
-      | "any of"_p >> ws >> id ->* force<quantifier::any>
+      = "all of"_p >> ws >> id ->* force<conjunction>
+      | "1 of"_p >> ws >> id ->* force<disjunction>
+      | "all of"_p >> ws >> selection ->* join<conjunction>
+      | "1 of"_p >> ws >> selection ->* join<disjunction>
       | id
-      | pattern
+      | selection ->* join<conjunction>
       ;
     // clang-format on
     return expr(f, l, result);
@@ -172,8 +162,8 @@ struct detection_parser : parser<detection_parser> {
     // clang-format off
     group
       = '(' >> ws >> ref(expr) >> ws >> ')'
-      | "not"_p >> ws >> search_id ->* negate
       | "not"_p >> ws >> '(' >> ws >> (ref(expr) ->* negate) >> ws >> ')'
+      | "not"_p >> ws >> search_id ->* negate
       | search_id
       ;
     auto and_or
@@ -260,12 +250,12 @@ caf::expected<expression> parse_search_id(const data& yaml) {
         }
         auto expr = all ? expression{conjunction(std::move(connective))}
                         : expression{disjunction(std::move(connective))};
-        result.emplace_back(std::move(expr));
+        result.emplace_back(hoist(expr));
       } else {
         result.emplace_back(predicate{std::move(extractor), op, make(rhs)});
       }
     }
-    return result;
+    return result.size() == 1 ? result[0] : result;
   } else if (auto xs = caf::get_if<list>(&yaml)) {
     disjunction result;
     for (auto& search_id : *xs)
@@ -273,7 +263,7 @@ caf::expected<expression> parse_search_id(const data& yaml) {
         result.push_back(std::move(*expr));
       else
         return expr.error();
-    return result;
+    return result.size() == 1 ? result[0] : result;
   } else {
     return caf::make_error(ec::type_clash, "search id not a list or record");
   }

@@ -340,6 +340,13 @@ auto for_each_predicate(const expression& e, F&& f) {
   return caf::visit(v, e);
 }
 
+/// Transforms an expression by pulling out nested connectives with a single
+/// operand into the top-level connective. For example, (x == 1 || (x == 2))
+/// becomes (x == 1 || x == 2).
+/// @param expr The expression to hoist.
+/// @returns The hoisted expression.
+expression hoist(const expression& expr);
+
 /// Normalizes an expression such that:
 ///
 /// 1. Single-element conjunctions/disjunctions don't exist.
