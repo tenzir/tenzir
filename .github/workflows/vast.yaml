@@ -230,6 +230,11 @@ jobs:
           name: "${{ steps.configure_env.outputs.package_name }}.tar.gz"
           path: "${{ steps.configure_env.outputs.package_name }}.tar.gz"
 
+      - name: Run the stress test
+        if: matrix.build.compiler == 'GCC' && matrix.configure.tag == 'Release'
+        run: |
+          cmake --build "$BUILD_DIR" --target stress
+
       - name: Install
         run: |
           cmake --build "$BUILD_DIR" --target install
