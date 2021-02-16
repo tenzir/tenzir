@@ -22,7 +22,14 @@
 /// Utilities to work with [Sigma](https://github.com/Neo23x0/sigma).
 namespace vast::detail::sigma {
 
-/// Parses as Sigma rule as VAST expression.
-caf::expected<expression> parse(const data& rule);
+/// Parses a *rule* as VAST expression.
+/// @param yaml The rule contents.
+/// @returns The VAST expression corresponding to *yaml*.
+caf::expected<expression> parse_rule(const data& yaml);
+
+/// Parses a *search identifier* as VAST expression.
+/// @param yaml The contents converted from YAML.
+/// @returns The VAST expression corresponding to *yaml*.
+caf::expected<expression> parse_search_id(const data& yaml);
 
 } // namespace vast::detail::sigma

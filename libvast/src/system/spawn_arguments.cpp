@@ -43,7 +43,7 @@ normalized_and_validated(std::vector<std::string>::const_iterator begin,
   // query expression as Sigma rule. If it fails, we only print a debug log
   // entry and move on to parsing the input as VAST expression.
   if (auto yaml = from_yaml(str)) {
-    if (auto e = detail::sigma::parse(*yaml))
+    if (auto e = detail::sigma::parse_rule(*yaml))
       return normalize_and_validate(*e);
     else
       VAST_DEBUG("failed to parse query as Sigma rule: {}", e.error());

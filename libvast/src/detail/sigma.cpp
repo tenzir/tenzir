@@ -191,8 +191,10 @@ struct detection_parser : parser<detection_parser> {
   search_id_symbol_table search_id;
 };
 
-caf::expected<expression> parse_search_id(const data& x) {
-  if (auto xs = caf::get_if<record>(&x)) {
+} // namespace
+
+caf::expected<expression> parse_search_id(const data& yaml) {
+  if (auto xs = caf::get_if<record>(&yaml)) {
     conjunction result;
     for (auto& [key, rhs] : *xs) {
       auto keys = split(key, "|");
@@ -264,7 +266,7 @@ caf::expected<expression> parse_search_id(const data& x) {
       }
     }
     return result;
-  } else if (auto xs = caf::get_if<list>(&x)) {
+  } else if (auto xs = caf::get_if<list>(&yaml)) {
     disjunction result;
     for (auto& search_id : *xs)
       if (auto expr = parse_search_id(search_id))
@@ -277,10 +279,8 @@ caf::expected<expression> parse_search_id(const data& x) {
   }
 }
 
-} // namespace
-
-caf::expected<expression> parse(const data& rule) {
-  auto xs = caf::get_if<record>(&rule);
+caf::expected<expression> parse_rule(const data& yaml) {
+  auto xs = caf::get_if<record>(&yaml);
   if (!xs)
     return caf::make_error(ec::type_clash, "rule must be a record");
   // Extract detection attribute.

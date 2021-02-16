@@ -84,7 +84,7 @@ level: critical
 
 TEST(parse) {
   auto yaml = unbox(from_yaml(rule));
-  auto expr = unbox(sigma::parse(yaml));
+  auto expr = unbox(sigma::parse_rule(yaml));
   // clang-format off
   auto selection1 = R"__(CommandLine ni "7z.exe a -v500m -mx9 -r0 -p")__"s;
   auto selection2a = R"__(ParentCommandLine ni "wscript.exe" && ParentCommandLine ni ".vbs")__"s;
