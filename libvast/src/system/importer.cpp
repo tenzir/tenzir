@@ -313,6 +313,7 @@ importer(importer_actor::stateful_pointer<importer_state> self, path dir,
     },
     // Register a FLUSH LISTENER actor.
     [self](atom::subscribe, atom::flush, flush_listener_actor listener) {
+      VAST_DEBUG("{} adds new subscriber {}", self, listener);
       VAST_ASSERT(self->state.stage != nullptr);
       self->send(self->state.index, atom::subscribe_v, atom::flush_v,
                  std::move(listener));

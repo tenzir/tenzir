@@ -321,11 +321,10 @@ void index_state::decomission_active_partition() {
   auto id = active_partition.id;
   auto actor = std::exchange(active_partition.actor, {});
   unpersisted[id] = actor;
-  // Send buffered batches.
+  // Send buffered batches and remove active partition from the stream.
   stage->out().fan_out_flush();
-  stage->out().force_emit_batches();
-  // Remove active partition from the stream.
   stage->out().close(active_partition.stream_slot);
+  stage->out().force_emit_batches();
   // Persist active partition asynchronously.
   auto part_dir = partition_path(id);
   auto synopsis_dir = partition_synopsis_path(id);
@@ -337,12 +336,10 @@ void index_state::decomission_active_partition() {
         // Semantically ps is a unique_ptr, and the partition releases its
         // copy before sending. We use shared_ptr for the transport because
         // CAF message types must be copy-constructible.
-        VAST_ASSERT(ps.use_count() == 1);
         // TODO: We should skip this continuation if we're currently shutting
         // down.
         self
-          ->request<caf::message_priority::high>(
-            meta_index, caf::infinite, atom::merge_v, id, std::move(ps))
+          ->request(meta_index, caf::infinite, atom::merge_v, id, std::move(ps))
           .then(
             [=](atom::ok) {
               VAST_DEBUG("{} received ok for request to persist partition {}",
@@ -642,9 +639,12 @@ index(index_actor::stateful_pointer<index_state> self,
       }
     },
     [self](caf::unit_t&, const caf::error& err) {
+      // During "normal" shutdown, the node will send an exit message to
+      // the importer
       // We get an 'unreachable' error when the stream becomes unreachable
       // because the actor was destroyed; in this case we can't use `self`
       // anymore.
+      VAST_DEBUG("index finalized streaming with error {}", render(err));
       if (err && err != caf::exit_reason::unreachable) {
         if (err != caf::exit_reason::user_shutdown)
           VAST_ERROR("{} got a stream error: {}", self, render(err));
@@ -654,16 +654,15 @@ index(index_actor::stateful_pointer<index_state> self,
         // importer.
         self->send_exit(self, err);
       }
-      VAST_DEBUG("index finalized streaming");
     });
   self->set_exit_handler([self](const caf::exit_msg& msg) {
     VAST_DEBUG("{} received EXIT from {} with reason: {}", self, msg.source,
                msg.reason);
     // Flush buffered batches and end stream.
+    self->state.stage->shutdown(); // closes inbound paths
     self->state.stage->out().fan_out_flush();
+    self->state.stage->out().close(); // closes outbound paths
     self->state.stage->out().force_emit_batches();
-    self->state.stage->out().close();
-    self->state.stage->shutdown();
     // Bring down active partition.
     if (self->state.active_partition.actor)
       self->state.decomission_active_partition();
@@ -682,6 +681,9 @@ index(index_actor::stateful_pointer<index_state> self,
     // destructed, so we explicitly clear the tables to release the references.
     self->state.unpersisted.clear();
     self->state.inmem_partitions.clear();
+    VAST_ERROR("index got exit, mailbox stats {} {} {}",
+               self->mailbox().blocked(), self->mailbox().closed(),
+               self->mailbox().size());
     // Terminate partition actors.
     VAST_DEBUG("{} brings down {} partitions", self, partitions.size());
     shutdown<policy::parallel>(self, std::move(partitions));
@@ -703,12 +705,13 @@ index(index_actor::stateful_pointer<index_state> self,
       self->state.accountant = std::move(accountant);
     },
     [self](atom::subscribe, atom::flush, flush_listener_actor listener) {
+      VAST_WARN("{} adds flush listener", self);
       self->state.add_flush_listener(std::move(listener));
     },
     [self](vast::expression expr) -> caf::result<void> {
       // TODO: This check is not required technically, but we use the query
-      // supervisor availability to rate-limit meta-index lookups. Do we really
-      // need this?
+      // supervisor availability to rate-limit meta-index lookups. Do we
+      // really need this?
       if (!self->state.worker_available())
         return caf::skip;
       // Query handling
@@ -756,8 +759,8 @@ index(index_actor::stateful_pointer<index_state> self,
               VAST_DEBUG("{} returns without result: no partitions qualify",
                          self);
               no_result();
-              // TODO: When updating to CAF 0.18, remove the use of the untyped
-              // response promise and call deliver without arguments.
+              // TODO: When updating to CAF 0.18, remove the use of the
+              // untyped response promise and call deliver without arguments.
               auto& untyped_rp = static_cast<caf::response_promise&>(rp);
               untyped_rp.deliver(caf::unit);
               return;
@@ -850,7 +853,8 @@ index(index_actor::stateful_pointer<index_state> self,
             // partition.
             auto partition = fbs::GetPartition(chunk->data());
             if (partition->partition_type() != fbs::partition::Partition::v0) {
-              rp.deliver(caf::make_error(ec::format_error, "unexpected format "
+              rp.deliver(caf::make_error(ec::format_error, "unexpected "
+                                                           "format "
                                                            "version"));
               return;
             }
@@ -871,9 +875,9 @@ index(index_actor::stateful_pointer<index_state> self,
               if (adjust_stats)
                 self->state.stats.layouts[name->str()].count -= rank(ids);
             }
-            // Note that mmap's will increase the reference count of a file, so
-            // unlinking should not affect indexers that are currently loaded
-            // and answering a query.
+            // Note that mmap's will increase the reference count of a file,
+            // so unlinking should not affect indexers that are currently
+            // loaded and answering a query.
             if (!rm(path))
               VAST_WARN("{} could not unlink partition at {}", self, path);
             if (!rm(synopsis_path))

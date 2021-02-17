@@ -74,10 +74,12 @@ active_indexer(active_indexer_actor::stateful_pointer<indexer_state> self,
       auto result = caf::attach_stream_sink(
         self, in,
         [=](caf::unit_t&) {
+          VAST_DEBUG("{} initializes stream", self);
           // nop
         },
         [=](caf::unit_t&, const std::vector<table_slice_column>& columns) {
           VAST_ASSERT(self->state.idx != nullptr);
+          VAST_WARN("{} received table slice column", self);
           // NOTE: It seems like having the `#skip` attribute should lead to
           // no index being created at all (as opposed to creating it and
           // never adding data), but that was the behaviour of the previous
