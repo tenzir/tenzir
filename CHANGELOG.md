@@ -19,6 +19,12 @@ This changelog documents all notable user-facing changes of VAST.
   Sigma rule, pass it on standard input, e.g., `vast export json < rule.yaml`.
   [#1379](https://github.com/tenzir/vast/pull/1379) 
 
+- 🎁 The type extractor in the expression language now works with user defined
+  types. For example the type `port` is defined as `type port = count` in the
+  base schema. This type can now be queried with an expression like
+  `:port == 80`.
+  [#1382](https://github.com/tenzir/vast/pull/1382)
+
 - 🐞 A bug in the new simdjson based JSON reader introduced in
   [#1356](https://github.com/tenzir/vast/pull/1356) could trigger an assertion
   in the `vast import` process if an input field could not be converted to the
