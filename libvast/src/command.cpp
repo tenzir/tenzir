@@ -396,11 +396,11 @@ parse(const command& root, command::argument_iterator first,
     return ec::silent;
   }
   if (get_or(result.options, "help", false)) {
-    helptext(*target, std::cerr);
+    helptext(*target, std::cout);
     return caf::no_error;
   }
   if (get_or(result.options, "documentation", false)) {
-    doctext(*target, std::cerr);
+    doctext(*target, std::cout);
     return caf::no_error;
   }
   if (get_or(result.options, "manual", false)) {
