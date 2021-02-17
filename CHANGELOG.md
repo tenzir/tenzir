@@ -13,9 +13,10 @@ This changelog documents all notable user-facing changes of VAST.
 
 ## Unreleased
 
-- 🐞 The new simdjson based JSON reader introduced in
-  [#1356](https://github.com/tenzir/vast/pull/1356) is now more robust when
-  dealing with malformed inputs.
+- 🐞 A Bug in the new simdjson based JSON reader introduced in
+  [#1356](https://github.com/tenzir/vast/pull/1356) could trigger an assertion
+  in the `vast import` process if an input field could not be converted to the
+  field type in the target layout. This is no longer the case.
   [#1386](https://github.com/tenzir/vast/pull/1386)
 
 - ⚠️ The output of `vast help` and `vast documentation` now goes to *stdout*
