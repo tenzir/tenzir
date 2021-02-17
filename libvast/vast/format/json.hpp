@@ -190,7 +190,7 @@ caf::error reader<Selector>::read_impl(size_t max_events, size_t max_slice_size,
     auto parse_result = json_parser_.parse(line);
     if (parse_result.error() != ::simdjson::error_code::SUCCESS) {
       if (num_invalid_lines_ == 0)
-        VAST_WARN("{} failed to parse line {} : {}",
+        VAST_WARN("{} failed to parse line {}: {}",
                   detail::pretty_type_name(this), lines_->line_number(), line);
       ++num_invalid_lines_;
       continue;
@@ -201,7 +201,7 @@ caf::error reader<Selector>::read_impl(size_t max_events, size_t max_slice_size,
     auto&& layout = selector_(get_object_result.value());
     if (!layout) {
       if (num_unknown_layouts_ == 0)
-        VAST_WARN("{} failed to find a matching type at line {} : {}",
+        VAST_WARN("{} failed to find a matching type at line {}: {}",
                   detail::pretty_type_name(this), lines_->line_number(), line);
       ++num_unknown_layouts_;
       continue;
@@ -212,7 +212,7 @@ caf::error reader<Selector>::read_impl(size_t max_events, size_t max_slice_size,
     if (auto err = add(*bptr, get_object_result.value(), *layout)) {
       if (err == ec::convert_error) {
         if (num_invalid_lines_ == 0)
-          VAST_WARN("{} failed to convert value(s) in line {} : {}",
+          VAST_WARN("{} failed to convert value(s) in line {}: {}",
                     detail::pretty_type_name(this), lines_->line_number(),
                     render(err));
         ++num_invalid_lines_;
