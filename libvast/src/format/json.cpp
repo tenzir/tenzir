@@ -394,6 +394,7 @@ const char* writer::name() const {
 
 caf::error add(table_slice_builder& builder, const ::simdjson::dom::object& xs,
                const record_type& layout) {
+  caf::error err = caf::none;
   for (auto& field : record_type::each(layout)) {
     auto lookup_result = lookup(field.key(), xs);
     // Non-existing fields are treated as empty (unset).
@@ -405,13 +406,17 @@ caf::error add(table_slice_builder& builder, const ::simdjson::dom::object& xs,
       continue;
     }
     auto x = convert(lookup_result.value(), field.type());
-    if (!x)
-      return caf::make_error(ec::convert_error, x.error().context(),
-                             "could not convert", field.key());
+    if (!x) {
+      if (!err)
+        err = caf::make_error(ec::convert_error);
+      err.context() += x.error().context();
+      err.context() += caf::make_message("could not convert", field.key());
+      x = caf::none;
+    }
     if (!builder.add(make_data_view(*x)))
       return caf::make_error(ec::type_clash, "unexpected type", field.key());
   }
-  return caf::none;
+  return err;
 }
 
 } // namespace vast::format::json
