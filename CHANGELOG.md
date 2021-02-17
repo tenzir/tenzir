@@ -14,7 +14,9 @@ This changelog documents all notable user-facing changes of VAST.
 ## Unreleased
 
 - ⚠️ The output of `vast help` and `vast documentation` now goes to *stdout*
-  instead of to stderr.
+  instead of to stderr. Erroneous invocations of `vast` also print the
+  helptext, but in this case the output still goes to stderr to avoid
+  interference with downstream tooling.
   [#1385](https://github.com/tenzir/vast/pull/1385)
 
 - 🐞 An ordering issue introduced in [#1295](https://github.com/tenzir/vast/pull/1295)
