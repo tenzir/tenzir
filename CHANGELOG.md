@@ -13,6 +13,10 @@ This changelog documents all notable user-facing changes of VAST.
 
 ## Unreleased
 
+- ⚠️ The output of `vast help` and `vast documentation` now goes to *stdout*
+  instead of to stderr.
+  [#1385](https://github.com/tenzir/vast/pull/1385)
+
 - 🐞 An ordering issue introduced in [#1295](https://github.com/tenzir/vast/pull/1295)
   that could lead to a segfault with long-running queries was reverted.
   [#1381](https://github.com/tenzir/vast/pull/1281)
