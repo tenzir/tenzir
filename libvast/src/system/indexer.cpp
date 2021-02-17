@@ -74,6 +74,7 @@ active_indexer(active_indexer_actor::stateful_pointer<indexer_state> self,
       auto result = caf::attach_stream_sink(
         self, in,
         [=](caf::unit_t&) {
+          VAST_DEBUG("{} initializes stream", self);
           // nop
         },
         [=](caf::unit_t&, const std::vector<table_slice_column>& columns) {
