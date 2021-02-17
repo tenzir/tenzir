@@ -165,10 +165,13 @@ using query_supervisor_master_actor = typed_actor_fwd<
 
 /// The META INDEX actor interface.
 using meta_index_actor = typed_actor_fwd<
-  // TODO: docs
+  // Bulk import a set of partition synopses.
+  caf::replies_to<atom::merge, std::shared_ptr<std::map<
+                                 uuid, partition_synopsis>>>::with<atom::ok>,
+  // Merge a single partition synopsis.
   caf::replies_to<atom::merge, uuid, std::shared_ptr<partition_synopsis>>::with< //
     atom::ok>,
-  // TODO: docs
+  // Evaluate the expression.
   caf::replies_to<expression>::with< //
     std::vector<uuid>>>
   // Conform to the protocol of the STATUS CLIENT actor.
@@ -398,6 +401,8 @@ CAF_BEGIN_TYPE_ID_BLOCK(vast_actors, caf::id_block::vast_atoms::end)
 
 CAF_END_TYPE_ID_BLOCK(vast_actors)
 
+using vast_uuid_synopsis_map = std::map<vast::uuid, vast::partition_synopsis>;
+CAF_ALLOW_UNSAFE_MESSAGE_TYPE(std::shared_ptr<vast_uuid_synopsis_map>)
 CAF_ALLOW_UNSAFE_MESSAGE_TYPE(std::shared_ptr<vast::partition_synopsis>)
 
 #undef VAST_ADD_TYPE_ID

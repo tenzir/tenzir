@@ -197,6 +197,7 @@ caf::error index_state::load_from_disk() {
     auto index_v0 = index->index_as_v0();
     auto partition_uuids = index_v0->partitions();
     VAST_ASSERT(partition_uuids);
+    auto synopses = std::make_shared<std::map<uuid, partition_synopsis>>();
     for (auto uuid_fb : *partition_uuids) {
       VAST_ASSERT(uuid_fb);
       vast::uuid partition_uuid;
@@ -228,23 +229,27 @@ caf::error index_state::load_from_disk() {
                                                  "version");
       if (auto error = unpack(*ps_flatbuffer->partition_synopsis_as_v0(), ps))
         return error;
-      self
-        ->request<caf::message_priority::high>(
-          meta_index, caf::infinite, atom::merge_v, partition_uuid,
-          std::make_shared<partition_synopsis>(std::move(ps)))
-        .await(
-          [=](atom::ok) {
-            VAST_DEBUG("{} received ok for request to merge partition "
-                       "synopsis from {}",
-                       self, partition_uuid);
-          },
-          [=](caf::error err) {
-            VAST_ERROR("{} received error for request to merge partition "
-                       "synopsis from {}",
-                       self, partition_uuid, render(err));
-          });
       persisted_partitions.insert(partition_uuid);
+      synopses->emplace(std::move(partition_uuid), std::move(ps));
     }
+    // We collect all synopses to send them in bulk, since the `await` interface
+    // doesn't lend itself to a huge number of awaited messages: Only the tip of
+    // the current awaited list is considered, leading to an O(n**2) worst-case
+    // behavior if the responses arrive in the same order to how they were sent.
+    VAST_INFO("{} requesting merge for bulk of {} partitions", self,
+              synopses->size());
+    self
+      ->request<caf::message_priority::high>(
+        meta_index, caf::infinite, atom::merge_v, std::exchange(synopses, {}))
+      .await(
+        [=](atom::ok) {
+          VAST_DEBUG("{} received ok for request to merge synopses", self);
+        },
+        [=](caf::error err) {
+          VAST_ERROR("{} received error {} for request to merge partition "
+                     "synopses",
+                     self, render(err));
+        });
     auto stats = index_v0->stats();
     if (!stats)
       return caf::make_error(ec::format_error, "no stats in persisted index "
@@ -333,6 +338,8 @@ void index_state::decomission_active_partition() {
         // copy before sending. We use shared_ptr for the transport because
         // CAF message types must be copy-constructible.
         VAST_ASSERT(ps.use_count() == 1);
+        // TODO: We should skip this continuation if we're currently shutting
+        // down.
         self
           ->request<caf::message_priority::high>(
             meta_index, caf::infinite, atom::merge_v, id, std::move(ps))
