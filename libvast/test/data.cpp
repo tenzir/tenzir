@@ -26,6 +26,7 @@
 #include "vast/concept/printable/vast/json.hpp"
 #include "vast/detail/deserialize.hpp"
 #include "vast/detail/serialize.hpp"
+#include "vast/json.hpp"
 
 #include <caf/test/dsl.hpp>
 
@@ -300,6 +301,56 @@ TEST(parseable) {
   CHECK(f == l);
   CHECK(d == map{{true, 1u}, {false, 0u}});
 }
+
+// clang-format off
+TEST(json) {
+  MESSAGE("plain");
+  data x = record{
+    {"x", "foo"},
+    {"r", record{
+      {"i", -42},
+      {"r", record{
+        {"u", 1001u}
+      }},
+    }},
+    {"str", "x"}
+  };
+  auto expected = json{json::object{
+    {"x", json{"foo"}},
+    {"r", json{json::object{
+      {"i", json{-42}},
+      {"r", json{json::object{
+        {"u", json{1001}}
+      }}},
+    }}},
+    {"str", json{"x"}}
+  }};
+  CHECK_EQUAL(to_json(x), expected);
+  MESSAGE("zipped");
+  type t = record_type{
+    {"x", string_type{}},
+    {"r", record_type{
+      {"i", integer_type{}},
+      {"r", record_type{
+        {"u", count_type{}}
+      }},
+    }},
+    {"str", string_type{}}
+  };
+  CHECK(type_check(t, x));
+  expected = R"__({
+  "x": "foo",
+  "r": {
+    "i": -42,
+    "r": {
+      "u": 1001
+    }
+  },
+  "str": "x"
+})__";
+  CHECK_EQUAL(to_string(to_json(x, t)), expected);
+}
+// clang-format on
 
 TEST(convert - caf::config_value) {
   // clang-format off

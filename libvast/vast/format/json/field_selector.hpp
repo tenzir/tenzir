@@ -15,6 +15,7 @@
 
 #include "vast/concept/printable/vast/json.hpp"
 #include "vast/detail/string.hpp"
+#include "vast/json.hpp"
 #include "vast/logger.hpp"
 #include "vast/schema.hpp"
 
@@ -27,6 +28,28 @@ template <class Specification>
 struct field_selector {
   field_selector() {
     // nop
+  }
+
+  caf::optional<vast::record_type> operator()(const vast::json::object& j) {
+    auto i = j.find(Specification::field);
+    if (i == j.end())
+      return caf::none;
+    auto field = caf::get_if<vast::json::string>(&i->second);
+    if (!field) {
+      VAST_WARN("{} got a {} field with a non-string value",
+                detail::pretty_type_name(this), Specification::field);
+      return caf::none;
+    }
+    auto it = types.find(*field);
+    if (it == types.end()) {
+      // Keep a list of failed keys to avoid spamming the user with warnings.
+      if (unknown_types.insert(*field).second)
+        VAST_WARN("{} does not have a layout for {} {}",
+                  detail::pretty_type_name(this), Specification::field, *field);
+      return caf::none;
+    }
+    auto type = it->second;
+    return type;
   }
 
   caf::optional<vast::record_type>

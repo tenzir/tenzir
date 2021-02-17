@@ -23,10 +23,11 @@
 #include "vast/concept/parseable/vast/type.hpp"
 #include "vast/concept/printable/stream.hpp"
 #include "vast/concept/printable/to_string.hpp"
-#include "vast/concept/printable/vast/data.hpp"
+#include "vast/concept/printable/vast/json.hpp"
 #include "vast/concept/printable/vast/offset.hpp"
 #include "vast/concept/printable/vast/type.hpp"
 #include "vast/data.hpp"
+#include "vast/json.hpp"
 
 #include <string_view>
 
@@ -699,7 +700,7 @@ TEST(json) {
   },
   "attributes": {}
 })__";
-  CHECK_EQUAL(to_json(to_data(type{r})), expected);
+  CHECK_EQUAL(to_string(to_json(type{r})), expected);
 }
 
 FIXTURE_SCOPE_END()

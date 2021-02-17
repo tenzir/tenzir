@@ -19,7 +19,7 @@
 
 namespace vast {
 
-class data;
+class json;
 
 /// The transport layer type.
 enum class port_type : uint8_t {
@@ -72,6 +72,6 @@ private:
   uint32_t data_ = 0;
 };
 
-bool convert(const port& p, data& d);
+bool convert(const port& p, json& j);
 
 } // namespace vast

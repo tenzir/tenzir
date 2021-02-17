@@ -35,6 +35,7 @@
 #include "vast/format/syslog.hpp"
 #include "vast/format/test.hpp"
 #include "vast/format/zeek.hpp"
+#include "vast/json.hpp"
 #include "vast/logger.hpp"
 #include "vast/system/accountant.hpp"
 #include "vast/system/node.hpp"
@@ -152,8 +153,7 @@ void collect_component_status(node_actor::stateful_pointer<node_state> self,
   }
   auto deliver = [](auto&& req_state) {
     detail::strip_settings(req_state->content);
-    if (auto json = to_json(to_data(req_state->content)))
-      req_state->rp.deliver(to_string(std::move(*json)));
+    req_state->rp.deliver(to_string(to_json(req_state->content)));
   };
   // The overload for 'request(...)' taking a 'std::chrono::duration' does not
   // respect the specified message priority, so we convert to 'caf::duration' by
@@ -254,10 +254,8 @@ caf::message dump_command(const invocation& inv, caf::actor_system&) {
           else
             request_error = std::move(yaml.error());
         } else {
-          if (auto json = to_json(data{std::move(result)}))
-            rp.deliver(std::move(*json));
-          else
-            request_error = std::move(json.error());
+          auto json = to_json(data{std::move(result)});
+          rp.deliver(to_string(std::move(json)));
         }
       },
       [=](caf::error& err) mutable { request_error = std::move(err); });

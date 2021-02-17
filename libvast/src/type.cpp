@@ -20,6 +20,7 @@
 #include "vast/detail/overload.hpp"
 #include "vast/detail/string.hpp"
 #include "vast/error.hpp"
+#include "vast/json.hpp"
 #include "vast/logger.hpp"
 #include "vast/pattern.hpp"
 #include "vast/schema.hpp"
@@ -899,34 +900,34 @@ using caf::detail::tl_size;
 
 static_assert(std::size(kind_tbl) == tl_size<concrete_types>::value);
 
-data jsonize(const type& x) {
+json jsonize(const type& x) {
   return visit(detail::overload{
                  [](const enumeration_type& t) {
-                   list a;
+                   json::array a;
                    std::transform(t.fields.begin(), t.fields.end(),
                                   std::back_inserter(a),
-                                  [](auto& x) { return data{x}; });
-                   return data{std::move(a)};
+                                  [](auto& x) { return json{x}; });
+                   return json{std::move(a)};
                  },
                  [&](const list_type& t) {
-                   record o;
-                   o["value_type"] = to_data(t.value_type);
-                   return data{std::move(o)};
+                   json::object o;
+                   o["value_type"] = to_json(t.value_type);
+                   return json{std::move(o)};
                  },
                  [&](const map_type& t) {
-                   record o;
-                   o["key_type"] = to_data(t.key_type);
-                   o["value_type"] = to_data(t.value_type);
-                   return data{std::move(o)};
+                   json::object o;
+                   o["key_type"] = to_json(t.key_type);
+                   o["value_type"] = to_json(t.value_type);
+                   return json{std::move(o)};
                  },
                  [&](const record_type& t) {
-                   record o;
+                   json::object o;
                    for (auto& field : t.fields)
-                     o[to_string(field.name)] = to_data(field.type);
-                   return data{std::move(o)};
+                     o[to_string(field.name)] = to_json(field.type);
+                   return json{std::move(o)};
                  },
-                 [&](const alias_type& t) { return to_data(t.value_type); },
-                 [](const abstract_type&) { return data{}; },
+                 [&](const alias_type& t) { return to_json(t.value_type); },
+                 [](const abstract_type&) { return json{}; },
                },
                x);
 }
@@ -937,16 +938,16 @@ std::string kind(const type& x) {
   return kind_tbl[x->index()];
 }
 
-bool convert(const type& t, data& d) {
-  record o;
+bool convert(const type& t, json& j) {
+  json::object o;
   o["name"] = t.name();
   o["kind"] = kind(t);
   o["structure"] = jsonize(t);
-  record attrs;
+  json::object attrs;
   for (auto& a : t.attributes())
-    attrs.emplace(a.key, a.value ? data{*a.value} : data{});
+    attrs.emplace(a.key, a.value ? json{*a.value} : json{});
   o["attributes"] = std::move(attrs);
-  d = std::move(o);
+  j = std::move(o);
   return true;
 }
 

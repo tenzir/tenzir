@@ -19,12 +19,12 @@
 #include "vast/concept/printable/to_string.hpp"
 #include "vast/concept/printable/vast/schema.hpp"
 #include "vast/concept/printable/vast/type.hpp"
-#include "vast/data.hpp"
 #include "vast/detail/process.hpp"
 #include "vast/detail/string.hpp"
 #include "vast/directory.hpp"
 #include "vast/error.hpp"
 #include "vast/event_types.hpp"
+#include "vast/json.hpp"
 #include "vast/logger.hpp"
 #include "vast/path.hpp"
 
@@ -186,13 +186,13 @@ void serialize(caf::deserializer& source, schema& sch) {
   parse(i, str.end(), sch);
 }
 
-bool convert(const schema& s, data& d) {
-  record o;
-  list a;
+bool convert(const schema& s, json& j) {
+  json::object o;
+  json::array a;
   std::transform(s.begin(), s.end(), std::back_inserter(a),
-                 [](auto& t) { return to_data(t); });
+                 [](auto& t) { return to_json(t); });
   o["types"] = std::move(a);
-  d = std::move(o);
+  j = std::move(o);
   return true;
 }
 

@@ -16,7 +16,6 @@
 #include "vast/concept/parseable/vast/data.hpp"
 #include "vast/concept/printable/to_string.hpp"
 #include "vast/concept/printable/vast/data.hpp"
-#include "vast/concept/printable/vast/json.hpp"
 #include "vast/detail/assert.hpp"
 #include "vast/detail/narrow.hpp"
 #include "vast/detail/overload.hpp"
@@ -24,6 +23,7 @@
 #include "vast/detail/type_traits.hpp"
 #include "vast/directory.hpp"
 #include "vast/error.hpp"
+#include "vast/json.hpp"
 #include "vast/path.hpp"
 
 #include <caf/config_value.hpp>
@@ -306,6 +306,70 @@ void merge(const record& src, record& dst) {
   }
 }
 
+namespace {
+
+json jsonize(const data& x) {
+  return caf::visit(detail::overload{
+                      [&](const auto& y) { return to_json(y); },
+                      [&](caf::none_t) { return json{}; },
+                      [&](const std::string& str) { return json{str}; },
+                    },
+                    x);
+}
+
+} // namespace
+
+bool convert(const list& xs, json& j) {
+  json::array a(xs.size());
+  for (size_t i = 0; i < xs.size(); ++i)
+    a[i] = jsonize(xs[i]);
+  j = std::move(a);
+  return true;
+}
+
+bool convert(const map& t, json& j) {
+  json::array values;
+  for (auto& p : t) {
+    json::array a;
+    a.emplace_back(jsonize(p.first));
+    a.emplace_back(jsonize(p.second));
+    values.emplace_back(std::move(a));
+  };
+  j = std::move(values);
+  return true;
+}
+
+bool convert(const record& xs, json& j) {
+  json::object o;
+  for (auto& [k, v] : xs)
+    o[k] = jsonize(v);
+  j = std::move(o);
+  return true;
+}
+
+bool convert(const data& d, json& j) {
+  j = jsonize(d);
+  return true;
+}
+
+bool convert(const data& d, json& j, const type& t) {
+  auto xs = caf::get_if<list>(&d);
+  auto rt = caf::get_if<record_type>(&t);
+  if (xs && rt) {
+    if (xs->size() != rt->fields.size())
+      return false;
+    json::object o;
+    for (size_t i = 0; i < xs->size(); ++i) {
+      auto& f = rt->fields[i];
+      if (!convert((*xs)[i], o[f.name], f.type))
+        return false;
+    }
+    j = std::move(o);
+    return true;
+  }
+  return convert(d, j);
+}
+
 caf::error convert(const map& xs, caf::dictionary<caf::config_value>& ys) {
   for (auto& [k, v] : xs) {
     caf::config_value x;
@@ -386,68 +450,59 @@ caf::error convert(const data& d, caf::config_value& cv) {
   return caf::visit(f, d);
 }
 
-bool convert(const caf::dictionary<caf::config_value>& xs, record& ys) {
+caf::error convert(const caf::dictionary<caf::config_value>& xs, record& ys) {
   for (auto& [k, v] : xs) {
     data y;
-    if (!convert(v, y))
-      return false;
+    if (auto err = convert(v, y))
+      return err;
     ys.emplace(k, std::move(y));
   }
-  return true;
+  return caf::none;
 }
 
-bool convert(const caf::dictionary<caf::config_value>& xs, data& y) {
+caf::error convert(const caf::dictionary<caf::config_value>& xs, data& y) {
   record result;
-  if (!convert(xs, result))
-    return false;
+  if (auto err = convert(xs, result))
+    return err;
   y = std::move(result);
-  return true;
+  return caf::none;
 }
 
-bool convert(const caf::config_value& x, data& y) {
+caf::error convert(const caf::config_value& x, data& y) {
   auto f = detail::overload{
-    [&](const auto& value) -> bool {
+    [&](const auto& value) -> caf::error {
       y = value;
-      return true;
+      return caf::none;
     },
-    [&](caf::config_value::atom value) -> bool {
+    [&](caf::config_value::atom value) -> caf::error {
       y = to_string(value);
-      return true;
+      return caf::none;
     },
-    [&](caf::uri value) -> bool {
+    [&](caf::uri value) -> caf::error {
       y = to_string(value);
-      return true;
+      return caf::none;
     },
-    [&](const caf::config_value::list& xs) -> bool {
+    [&](const caf::config_value::list& xs) -> caf::error {
       list result;
       result.reserve(xs.size());
       for (auto x : xs) {
         data element;
-        if (!convert(x, element)) {
-          return false;
-        }
+        if (auto err = convert(x, element))
+          return err;
         result.push_back(std::move(element));
       }
       y = std::move(result);
-      return true;
+      return caf::none;
     },
-    [&](const caf::config_value::dictionary& xs) -> bool {
+    [&](const caf::config_value::dictionary& xs) -> caf::error {
       record result;
-      if (!convert(xs, result))
-        return false;
+      if (auto err = convert(xs, result))
+        return err;
       y = std::move(result);
-      return true;
+      return caf::none;
     },
   };
   return caf::visit(f, x);
-}
-
-caf::expected<std::string> to_json(const data& x) {
-  std::string str;
-  auto out = std::back_inserter(str);
-  if (json_printer<policy::tree, 2>{}.print(out, x))
-    return str;
-  return caf::make_error(ec::parse_error, "cannot convert to json");
 }
 
 namespace {

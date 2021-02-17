@@ -126,4 +126,14 @@ caf::message import_command(const invocation& inv, caf::actor_system& sys) {
   return caf::none;
 }
 
+template <class Reader, class SimdjsonReader>
+caf::message
+import_command_json(const invocation& inv, caf::actor_system& sys) {
+  auto use_simdjson
+    = caf::get_or(inv.options, "vast.import.json.simdjson", false);
+  if (use_simdjson)
+    return import_command<SimdjsonReader>(inv, sys);
+  return import_command<Reader>(inv, sys);
+}
+
 } // namespace vast::system

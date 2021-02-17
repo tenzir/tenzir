@@ -21,11 +21,12 @@
 #include "vast/concept/parseable/vast/schema.hpp"
 #include "vast/concept/printable/stream.hpp"
 #include "vast/concept/printable/to_string.hpp"
-#include "vast/concept/printable/vast/data.hpp"
 #include "vast/concept/printable/vast/error.hpp"
+#include "vast/concept/printable/vast/json.hpp"
 #include "vast/concept/printable/vast/schema.hpp"
 #include "vast/detail/deserialize.hpp"
 #include "vast/detail/serialize.hpp"
+#include "vast/json.hpp"
 
 #include <caf/test/dsl.hpp>
 
@@ -104,14 +105,12 @@ TEST(merging) {
 
 TEST(serialization) {
   schema sch;
-  auto t = record_type{
-    {"s1", string_type{}},
-    {"d1", real_type{}},
-    {"c", count_type{}.attributes({{"skip"}})},
-    {"i", integer_type{}},
-    {"s2", string_type{}},
-    {"d2", real_type{}},
-  };
+  auto t = record_type{{"s1", string_type{}},
+                       {"d1", real_type{}},
+                       {"c", count_type{}.attributes({{"skip"}})},
+                       {"i", integer_type{}},
+                       {"s2", string_type{}},
+                       {"d2", real_type{}}};
   t = t.name("foo");
   sch.add(t);
   // Save & load
@@ -447,5 +446,5 @@ TEST(json) {
     }
   ]
 })__";
-  CHECK_EQUAL(to_json(to_data(s)), expected);
+  CHECK_EQUAL(to_string(to_json(s)), expected);
 }

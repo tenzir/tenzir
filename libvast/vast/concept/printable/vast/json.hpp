@@ -19,12 +19,37 @@
 #include "vast/concept/printable/print.hpp"
 #include "vast/concept/printable/std/chrono.hpp"
 #include "vast/concept/printable/string.hpp"
-#include "vast/data.hpp"
 #include "vast/detail/escapers.hpp"
+#include "vast/json.hpp"
 #include "vast/time.hpp"
 #include "vast/view.hpp"
 
 namespace vast {
+
+// struct json_type_printer : printer<json_type_printer> {
+//  using attribute = json::type;
+//
+//  template <class Iterator>
+//  bool print(Iterator& out, const json::type& t) {
+//    using namespace printers;
+//    switch (t) {
+//      default:
+//        return str.print(out, "<invalid>");
+//      case json::type::null:
+//        return str.print(out, "null");
+//      case json::type::boolean:
+//        return str.print(out, "bool");
+//      case json::type::number:
+//        return str.print(out, "number");
+//      case json::type::string:
+//        return str.print(out, "string");
+//      case json::type::array:
+//        return str.print(out, "array");
+//      case json::type::object:
+//        return str.print(out, "object");
+//    }
+//  }
+//};
 
 namespace policy {
 
@@ -46,12 +71,8 @@ struct json_printer : printer<json_printer<TreePolicy, Indent, Padding>> {
     print_visitor(Iterator& out) : out_{out} {
     }
 
-    bool operator()(const caf::none_t&) {
+    bool operator()(const json::null&) {
       return printers::str.print(out_, "null");
-    }
-
-    bool operator()(const data& x) {
-      return caf::visit(*this, x);
     }
 
     bool operator()(const view<data>& x) {
@@ -62,7 +83,7 @@ struct json_printer : printer<json_printer<TreePolicy, Indent, Padding>> {
     bool operator()(const T& x) {
       if constexpr (std::is_arithmetic_v<T>) {
         auto str = std::to_string(x);
-        real i;
+        json::number i;
         if constexpr (std::is_floating_point_v<T>) {
           if (std::modf(x, &i) == 0.0)
             // Do not show 0 as 0.0.
@@ -73,12 +94,12 @@ struct json_printer : printer<json_printer<TreePolicy, Indent, Padding>> {
         }
         return printers::str.print(out_, str);
       } else {
-        data y;
+        json y;
         return convert(x, y) && caf::visit(*this, y);
       }
     }
 
-    bool operator()(const bool& b) {
+    bool operator()(const json::boolean& b) {
       return printers::str.print(out_, b ? "true" : "false");
     }
 
@@ -145,7 +166,7 @@ struct json_printer : printer<json_printer<TreePolicy, Indent, Padding>> {
       return printers::any.print(out_, ']');
     }
 
-    bool operator()(const list& xs) {
+    bool operator()(const json::array& xs) {
       return print_array(xs.begin(), xs.end());
     }
 
@@ -191,18 +212,7 @@ struct json_printer : printer<json_printer<TreePolicy, Indent, Padding>> {
       return printers::any.print(out_, '}');
     }
 
-    bool operator()(const record& xs) {
-      return print_object(xs.begin(), xs.end());
-    }
-
-    bool operator()(const view<record>& xs) {
-      return print_object(xs.begin(), xs.end());
-    }
-
-    bool operator()(const map& xs) {
-      // FIXME: maps are currently treated the same as records. This feels
-      // wrong. We should reconsider rendering of VAST maps, e.g., as list of
-      // key-value pairs: [[a, b], [c, d]].
+    bool operator()(const json::object& xs) {
       return print_object(xs.begin(), xs.end());
     }
 
@@ -210,6 +220,10 @@ struct json_printer : printer<json_printer<TreePolicy, Indent, Padding>> {
       // FIXME: maps are currently treated the same as records. This feels
       // wrong. We should reconsider rendering of VAST maps, e.g., as list of
       // key-value pairs: [[a, b], [c, d]].
+      return print_object(xs.begin(), xs.end());
+    }
+
+    bool operator()(const view<record>& xs) {
       return print_object(xs.begin(), xs.end());
     }
 
@@ -243,13 +257,28 @@ struct json_printer : printer<json_printer<TreePolicy, Indent, Padding>> {
   }
 
   template <class Iterator>
-  bool print(Iterator& out, const data& d) const {
-    return caf::visit(print_visitor<Iterator>{out}, d);
+  bool print(Iterator& out, const json& j) const {
+    return caf::visit(print_visitor<Iterator>{out}, j);
   }
 };
 
 template <class TreePolicy, int Indent, int Padding>
 constexpr bool json_printer<TreePolicy, Indent, Padding>::tree;
+
+template <>
+struct printer_registry<json::array> {
+  using type = json_printer<policy::tree, 2>;
+};
+
+template <>
+struct printer_registry<json::object> {
+  using type = json_printer<policy::tree, 2>;
+};
+
+template <>
+struct printer_registry<json> {
+  using type = json_printer<policy::tree, 2>;
+};
 
 namespace printers {
 

@@ -30,7 +30,7 @@ class deserializer;
 
 namespace vast {
 
-class data;
+class json;
 
 /// A sequence of types.
 class schema : detail::equality_comparable<schema> {
@@ -81,7 +81,7 @@ private:
   std::vector<type> types_;
 };
 
-bool convert(const schema& s, data& d);
+bool convert(const schema& s, json& j);
 
 /// Loads the complete schema for an invocation by combining the configured
 /// schemas with the ones passed directly as command line options.

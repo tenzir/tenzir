@@ -41,6 +41,7 @@
 namespace vast {
 
 class data;
+class json;
 
 namespace detail {
 
@@ -313,28 +314,23 @@ bool evaluate(const data& lhs, relational_operator op, const data& rhs);
 
 // -- convertible -------------------------------------------------------------
 
-template <class T, class... Opts>
-data to_data(const T& x, Opts&&... opts) {
-  data d;
-  if (convert(x, d, std::forward<Opts>(opts)...))
-    return d;
-  return {};
-}
+bool convert(const list& xs, json& j);
+bool convert(const map& xs, json& j);
+bool convert(const record& xs, json& j);
+bool convert(const data& xs, json& j);
+
+/// Converts data with a type to "zipped" JSON, i.e., the JSON object for
+/// records contains the field names from the type corresponding to the given
+/// data.
+bool convert(const data& x, json& j, const type& t);
 
 caf::error convert(const record& xs, caf::dictionary<caf::config_value>& ys);
 caf::error convert(const record& xs, caf::config_value& cv);
 caf::error convert(const data& x, caf::config_value& cv);
 
-bool convert(const caf::dictionary<caf::config_value>& xs, record& ys);
-bool convert(const caf::dictionary<caf::config_value>& xs, data& y);
-bool convert(const caf::config_value& x, data& y);
-
-// -- JSON -------------------------------------------------------------
-
-/// Prints data as JSON.
-/// @param x The data instance.
-/// @returns The JSON representation of *x*, or an error.
-caf::expected<std::string> to_json(const data& x);
+caf::error convert(const caf::dictionary<caf::config_value>& xs, record& ys);
+caf::error convert(const caf::dictionary<caf::config_value>& xs, data& y);
+caf::error convert(const caf::config_value& x, data& y);
 
 // -- YAML -------------------------------------------------------------
 

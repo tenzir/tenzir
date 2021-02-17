@@ -20,7 +20,7 @@
 namespace vast {
 
 struct access;
-class data;
+class json;
 
 /// A regular expression.
 class pattern : detail::totally_ordered<pattern>,
@@ -91,7 +91,7 @@ public:
     return f(p.str_);
   }
 
-  friend bool convert(const pattern& p, data& d);
+  friend bool convert(const pattern& p, json& j);
 
 private:
   std::string str_;

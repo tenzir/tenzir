@@ -47,9 +47,9 @@ using sys_seconds = sys_time<std::chrono::seconds>;
 using double_seconds = std::chrono::duration<double, std::ratio<1>>;
 
 bool convert(duration dur, double& d);
-bool convert(duration dur, data& d);
+bool convert(duration dur, json& j);
 
 bool convert(time tp, double& d);
-bool convert(time tp, data& d);
+bool convert(time tp, json& j);
 
 } // namespace vast

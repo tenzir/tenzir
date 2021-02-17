@@ -126,7 +126,7 @@ struct fixture : fixture_base {
   }
 
   void verify(const std::vector<table_slice>& results) {
-    auto xs = make_data(results);
+    auto xs = to_data(results);
     REQUIRE_EQUAL(xs.size(), 5u);
     std::sort(xs.begin(), xs.end());
     CHECK_EQUAL(xs[0][1], "xvWLhxgUmj5");

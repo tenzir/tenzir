@@ -13,7 +13,7 @@
 
 #include "vast/time.hpp"
 
-#include "vast/data.hpp"
+#include "vast/json.hpp"
 
 namespace vast {
 
@@ -24,11 +24,11 @@ bool convert(duration dur, double& d) {
   return true;
 }
 
-bool convert(duration dur, data& d) {
+bool convert(duration dur, json& j) {
   double time_since_epoch;
   if (!convert(dur, time_since_epoch))
     return false;
-  d = time_since_epoch;
+  j = json::number{time_since_epoch};
   return true;
 }
 
@@ -36,8 +36,8 @@ bool convert(time ts, double& d) {
   return convert(ts.time_since_epoch(), d);
 }
 
-bool convert(time ts, data& d) {
-  return convert(ts.time_since_epoch(), d);
+bool convert(time ts, json& j) {
+  return convert(ts.time_since_epoch(), j);
 }
 
 } // namespace vast
