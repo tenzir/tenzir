@@ -20,7 +20,7 @@ _vast_completions()
   fi
   SAVEIFS=$IFS
   IFS=$'\n'
-  commands=($(${completion_words[@]} help 2>&1 |  awk '/subcommands:/{x = 1} !/subcommands:/{if (x > 0) print $1} match($0, /--[^\]]*]/) { print substr($0, RSTART, RLENGTH-1) }'))
+  commands=($(${completion_words[@]} help |  awk '/subcommands:/{x = 1} !/subcommands:/{if (x > 0) print $1} match($0, /--[^\]]*]/) { print substr($0, RSTART, RLENGTH-1) }'))
   IFS=$SAVEIFS
   COMPREPLY=($(compgen -W "$(echo ${commands[@]})" -- ${COMP_WORDS[$COMP_CWORD]}))
 }
