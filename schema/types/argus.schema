@@ -8,7 +8,7 @@ type argus.cause = enum{
 
 type argus.record = record{
   // Standard fields that are always present.
-  StartTime: time #timestamp,     // stime
+  StartTime: timestamp,           // stime
   Flgs: string,                   // flgs
   Proto: string #index=hash,      // proto
   SrcAddr: string,                // saddr (MAC or IP)

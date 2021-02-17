@@ -1,5 +1,5 @@
 type suricata.component.common = record {
-  timestamp: time #timestamp,
+  timestamp: timestamp,
   flow_id: count #index=hash,
   pcap_cnt: count,
   vlan: list<count>,
@@ -31,7 +31,7 @@ type suricata.component.app_proto = record {
 }
 
 type suricata.alert = record {
-  timestamp: time #timestamp,
+  timestamp: timestamp,
   flow_id: count #index=hash,
   pcap_cnt: count,
   vlan: list<count>,
@@ -81,7 +81,7 @@ type suricata.dcerpc_interface = record {
 }
 
 type suricata.dcerpc = record {
-  timestamp: time #timestamp,
+  timestamp: timestamp,
   flow_id: count #index=hash,
   pcap_cnt: count,
   vlan: list<count>,
@@ -112,7 +112,7 @@ type suricata.dcerpc = record {
 }
 
 type suricata.dhcp = record {
-  timestamp: time #timestamp,
+  timestamp: timestamp,
   flow_id: count #index=hash,
   pcap_cnt: count,
   vlan: list<count>,
@@ -138,7 +138,7 @@ type suricata.dhcp = record {
 }
 
 type suricata.dns = record {
-  timestamp: time #timestamp,
+  timestamp: timestamp,
   flow_id: count #index=hash,
   pcap_cnt: count,
   vlan: list<count>,
@@ -167,7 +167,7 @@ type suricata.dns = record {
 }
 
 type suricata.ftp = record{
-  timestamp: time #timestamp,
+  timestamp: timestamp,
   flow_id: count #index=hash,
   pcap_cnt: count,
   vlan: list<count>,
@@ -191,7 +191,7 @@ type suricata.ftp = record{
 }
 
 type suricata.ftp_data = record{
-  timestamp: time #timestamp,
+  timestamp: timestamp,
   flow_id: count #index=hash,
   pcap_cnt: count,
   vlan: list<count>,
@@ -210,7 +210,7 @@ type suricata.ftp_data = record{
 }
 
 type suricata.http = record {
-  timestamp: time #timestamp,
+  timestamp: timestamp,
   flow_id: count #index=hash,
   pcap_cnt: count,
   vlan: list<count>,
@@ -239,7 +239,7 @@ type suricata.http = record {
 }
 
 type suricata.fileinfo = record {
-  timestamp: time #timestamp,
+  timestamp: timestamp,
   flow_id: count #index=hash,
   pcap_cnt: count,
   vlan: list<count>,
@@ -281,7 +281,7 @@ type suricata.fileinfo = record {
 }
 
 type suricata.flow = record {
-  timestamp: time #timestamp,
+  timestamp: timestamp,
   flow_id: count #index=hash,
   pcap_cnt: count,
   vlan: list<count>,
@@ -298,7 +298,7 @@ type suricata.flow = record {
 }
 
 type suricata.ikev2 = record {
-  timestamp: time #timestamp,
+  timestamp: timestamp,
   flow_id: count #index=hash,
   pcap_cnt: count,
   vlan: list<count>,
@@ -326,7 +326,7 @@ type suricata.ikev2 = record {
 }
 
 type suricata.krb5 = record {
-  timestamp: time #timestamp,
+  timestamp: timestamp,
   flow_id: count #index=hash,
   pcap_cnt: count,
   vlan: list<count>,
@@ -352,7 +352,7 @@ type suricata.krb5 = record {
 }
 
 type suricata.netflow = record {
-  timestamp: time #timestamp,
+  timestamp: timestamp,
   flow_id: count #index=hash,
   pcap_cnt: count,
   vlan: list<count>,
@@ -375,7 +375,7 @@ type suricata.netflow = record {
 }
 
 type suricata.nfs = record {
-  timestamp: time #timestamp,
+  timestamp: timestamp,
   flow_id: count #index=hash,
   pcap_cnt: count,
   vlan: list<count>,
@@ -427,7 +427,7 @@ type suricata.nfs = record {
 }
 
 type suricata.rdp = record {
-  timestamp: time #timestamp,
+  timestamp: timestamp,
   flow_id: count #index=hash,
   pcap_cnt: count,
   vlan: list<count>,
@@ -476,7 +476,7 @@ type suricata.rdp = record {
 }
 
 type suricata.sip = record {
-  timestamp: time #timestamp,
+  timestamp: timestamp,
   flow_id: count #index=hash,
   pcap_cnt: count,
   vlan: list<count>,
@@ -500,7 +500,7 @@ type suricata.sip = record {
 }
 
 type suricata.smb = record {
-  timestamp: time #timestamp,
+  timestamp: timestamp,
   flow_id: count #index=hash,
   pcap_cnt: count,
   vlan: list<count>,
@@ -570,7 +570,7 @@ type suricata.smb = record {
 }
 
 type suricata.ssh = record {
-  timestamp: time #timestamp,
+  timestamp: timestamp,
   flow_id: count #index=hash,
   pcap_cnt: count,
   vlan: list<count>,
@@ -596,7 +596,7 @@ type suricata.ssh = record {
 }
 
 type suricata.smtp = record {
-  timestamp: time #timestamp,
+  timestamp: timestamp,
   flow_id: count #index=hash,
   pcap_cnt: count,
   vlan: list<count>,
@@ -624,7 +624,7 @@ type suricata.smtp = record {
 }
 
 type suricata.snmp = record {
-  timestamp: time #timestamp,
+  timestamp: timestamp,
   flow_id: count #index=hash,
   pcap_cnt: count,
   vlan: list<count>,
@@ -646,7 +646,7 @@ type suricata.snmp = record {
 }
 
 type suricata.tftp = record {
-  timestamp: time #timestamp,
+  timestamp: timestamp,
   flow_id: count #index=hash,
   pcap_cnt: count,
   vlan: list<count>,
@@ -667,7 +667,7 @@ type suricata.tftp = record {
 }
 
 type suricata.tls = record {
-  timestamp: time #timestamp,
+  timestamp: timestamp,
   flow_id: count #index=hash,
   pcap_cnt: count,
   vlan: list<count>,
@@ -700,5 +700,5 @@ type suricata.tls = record {
 }
 
 type suricata.stats = record {
-  timestamp: time #timestamp
+  timestamp: timestamp
 }
