@@ -1,1 +1,29 @@
 vast:
+  max-partition-size: 2048
+  max-resident-partitions: 2
+  max-taste-partitions: 5
+  max-queries: 2
+  meta-index-fp-rate: 0.001
+
+  segments: 1
+  max-segment-size: 2
+
+  aging-frequency: 10s
+  aging-query:
+
+  enable-metrics: false
+  metrics:
+    self-sink:
+      enable: true
+      slice-size: 100
+    file-sink:
+      enable: false
+      real-time: false
+      path: "/tmp/vast-metrics.log"
+    uds-sink:
+      enable: false
+      real-time: false
+      path: "/tmp/vast-metrics.sock"
+      type: "datagram"
+
+  shutdown-grace-period: "3m"
