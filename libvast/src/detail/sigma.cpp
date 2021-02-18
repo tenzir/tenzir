@@ -234,6 +234,7 @@ caf::optional<pattern> make_pattern(std::string_view str) {
     }
   };
   // It's only a pattern if it differs from a regular string.
+  // TODO: check whether we need ^ and $ anchors.
   if (str == rx)
     return caf::none;
   return pattern{std::move(rx)};
