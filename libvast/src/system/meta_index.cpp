@@ -274,12 +274,13 @@ meta_index(meta_index_actor::stateful_pointer<meta_index_state> self) {
     },
     [=](atom::merge, uuid partition,
         std::shared_ptr<partition_synopsis>& synopsis) -> atom::ok {
-      VAST_TRACE("{} {} {}", self, VAST_ARG(partition), VAST_ARG(synopsis));
+      VAST_TRACE_SCOPE("{} {} {}", self, VAST_ARG(partition),
+                       VAST_ARG(synopsis));
       self->state.merge(std::move(partition), std::move(*synopsis));
       return atom::ok_v;
     },
     [=](expression expr) -> std::vector<uuid> {
-      VAST_TRACE("{} {}", self, VAST_ARG(expr));
+      VAST_TRACE_SCOPE("{} {}", self, VAST_ARG(expr));
       return self->state.lookup(expr);
     },
     [=](atom::status, status_verbosity) -> caf::settings {

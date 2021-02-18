@@ -236,19 +236,24 @@ caf::error index_state::load_from_disk() {
     // doesn't lend itself to a huge number of awaited messages: Only the tip of
     // the current awaited list is considered, leading to an O(n**2) worst-case
     // behavior if the responses arrive in the same order to how they were sent.
-    VAST_INFO("{} requesting merge for bulk of {} partitions", self,
-              synopses->size());
+    VAST_DEBUG("{} requesting bulk merge of {} partitions", self,
+               synopses->size());
+    this->accept_queries = false;
     self
-      ->request<caf::message_priority::high>(
-        meta_index, caf::infinite, atom::merge_v, std::exchange(synopses, {}))
-      .await(
+      ->request(meta_index, caf::infinite, atom::merge_v,
+                std::exchange(synopses, {}))
+      .then(
         [=](atom::ok) {
-          VAST_DEBUG("{} received ok for request to merge synopses", self);
+          VAST_VERBOSE("{} successfully loaded meta index from disk and will "
+                       "start processing queries",
+                       self);
+          this->accept_queries = true;
         },
         [=](caf::error err) {
-          VAST_ERROR("{} received error {} for request to merge partition "
-                     "synopses",
+          VAST_ERROR("{} could not load meta index state from disk, shutting "
+                     "down with error {}",
                      self, render(err));
+          self->send_exit(self, err);
         });
     auto stats = index_v0->stats();
     if (!stats)
@@ -589,6 +594,7 @@ index(index_actor::stateful_pointer<index_state> self,
     VAST_VERBOSE("{} uses {} for meta index data", self, meta_index_dir);
   // Set members.
   self->state.self = self;
+  self->state.accept_queries = true;
   self->state.filesystem = std::move(filesystem);
   self->state.meta_index = self->spawn<caf::lazy_init>(meta_index);
   self->state.dir = dir;
@@ -681,9 +687,6 @@ index(index_actor::stateful_pointer<index_state> self,
     // destructed, so we explicitly clear the tables to release the references.
     self->state.unpersisted.clear();
     self->state.inmem_partitions.clear();
-    VAST_ERROR("index got exit, mailbox stats {} {} {}",
-               self->mailbox().blocked(), self->mailbox().closed(),
-               self->mailbox().size());
     // Terminate partition actors.
     VAST_DEBUG("{} brings down {} partitions", self, partitions.size());
     shutdown<policy::parallel>(self, std::move(partitions));
@@ -709,6 +712,11 @@ index(index_actor::stateful_pointer<index_state> self,
       self->state.add_flush_listener(std::move(listener));
     },
     [self](vast::expression expr) -> caf::result<void> {
+      if (!self->state.accept_queries) {
+        VAST_VERBOSE("{} delays query {} because it is still starting up", self,
+                     expr);
+        return caf::skip;
+      }
       // TODO: This check is not required technically, but we use the query
       // supervisor availability to rate-limit meta-index lookups. Do we
       // really need this?
