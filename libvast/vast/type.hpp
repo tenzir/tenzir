@@ -134,7 +134,7 @@ public:
 
   /// Sets the type name.
   /// @param x The new name of the type.
-  type&& name(const std::string& x) &&;
+  type name(const std::string& x) &&;
 
   /// Specifies a list of attributes.
   /// @param xs The list of attributes.
@@ -142,7 +142,7 @@ public:
 
   /// Specifies a list of attributes.
   /// @param xs The list of attributes.
-  type&& attributes(std::vector<attribute> xs) &&;
+  type attributes(std::vector<attribute> xs) &&;
 
   /// Inserts a list of attributes, updating already existing keys with new
   /// values.
@@ -152,7 +152,7 @@ public:
   /// Inserts a list of attributes, updating already existing keys with new
   /// values.
   /// @param xs The list of attributes.
-  type&& update_attributes(std::vector<attribute> xs) &&;
+  type update_attributes(std::vector<attribute> xs) &&;
 
   // -- inspectors ------------------------------------------------------------
 
@@ -284,7 +284,7 @@ public:
 
   /// Sets the type name.
   /// @param x The new name of the type.
-  Derived&& name(const std::string& x) && {
+  Derived name(const std::string& x) && {
     this->name_ = x;
     return std::move(derived());
   }
@@ -299,7 +299,7 @@ public:
     return derived();
   }
 
-  Derived&& attributes(std::vector<attribute> xs) && {
+  Derived attributes(std::vector<attribute> xs) && {
     this->attributes_ = std::move(xs);
     return std::move(derived());
   }
