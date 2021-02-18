@@ -51,7 +51,7 @@ inline record_type make_packet_type(RecordFields&&... record_fields) {
   // See also:
   // - src/format/zeek.cpp
   auto port_type = count_type{}.name("port");
-  return record_type{{"time", time_type{}.attributes({{"timestamp"}})},
+  return record_type{{"time", time_type{}.name("timestamp")},
                      {"src", address_type{}},
                      {"dst", address_type{}},
                      {"sport", port_type},

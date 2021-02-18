@@ -113,7 +113,7 @@ struct accountant_state_impl {
     auto actor_id = self->current_sender()->id();
     if (!builder) {
       auto layout = record_type{
-      {"ts", time_type{}.attributes({{"timestamp"}})},
+      {"ts", time_type{}.name("timestamp")},
       {"actor", string_type{}},
       {"key", string_type{}},
       {"value", real_type{}},
