@@ -25,6 +25,8 @@
 
 #include "vast/fwd.hpp"
 
+#include "vast/detail/type_traits.hpp"
+
 #include <type_traits>
 
 namespace vast {
@@ -94,23 +96,17 @@ constexpr IntegerType to_integer(byte b) noexcept {
   return static_cast<IntegerType>(b);
 }
 
-template <bool E, typename T>
-constexpr byte to_byte_impl(T t) noexcept {
-  static_assert(E, "to_byte(t) must be provided an unsigned char, otherwise "
-                   "data loss may occur. "
-                   "If you are calling to_byte with an integer contant use: "
-                   "to_byte<t>() version.");
-  return static_cast<byte>(t);
-}
-
-template <>
-constexpr byte to_byte_impl<true, unsigned char>(unsigned char t) noexcept {
-  return byte(t);
-}
-
 template <typename T>
 constexpr byte to_byte(T t) noexcept {
-  return to_byte_impl<std::is_same_v<T, unsigned char>, T>(t);
+  if constexpr (std::is_same_v<T, unsigned char>) {
+    return byte(t);
+  } else {
+    static_assert(detail::always_false_v<T>,
+                  "to_byte(t) must be provided an unsigned char, otherwise "
+                  "data loss may occur. "
+                  "If you are calling to_byte with an integer contant use: "
+                  "to_byte<t>() version.");
+  }
 }
 
 template <int I>
