@@ -607,6 +607,9 @@ TEST(parseable) {
   CHECK(t == string_type{});
   CHECK(parsers::type("addr", t));
   CHECK(t == address_type{});
+  MESSAGE("alias");
+  CHECK(parsers::type("timestamp", t));
+  CHECK_EQUAL(t, none_type{}.name("timestamp"));
   MESSAGE("enum");
   CHECK(parsers::type("enum{foo, bar, baz}", t));
   CHECK(t == enumeration_type{{"foo", "bar", "baz"}});

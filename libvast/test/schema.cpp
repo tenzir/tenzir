@@ -77,11 +77,12 @@ TEST(combining) {
     type d = pattern
   )__"));
   auto z = schema::combine(x, y);
-  CHECK(unbox(z.find("a")) == integer_type{}.name("a"));
-  CHECK(unbox(z.find("b")) == real_type{}.name("b"));
-  CHECK(unbox(z.find("c")) == address_type{}.name("c"));
-  CHECK(unbox(z.find("d")) == pattern_type{}.name("d"));
-  CHECK(unbox(z.find("int_custom")) == integer_type{}.name("int_custom"));
+  CHECK_EQUAL(unbox(z.find("a")),
+              alias_type{integer_type{}.name("int_custom")}.name("a"));
+  CHECK_EQUAL(unbox(z.find("b")), real_type{}.name("b"));
+  CHECK_EQUAL(unbox(z.find("c")), address_type{}.name("c"));
+  CHECK_EQUAL(unbox(z.find("d")), pattern_type{}.name("d"));
+  CHECK_EQUAL(unbox(z.find("int_custom")), integer_type{}.name("int_custom"));
 }
 
 TEST(merging) {

@@ -22,10 +22,29 @@
 
 namespace vast {
 
-template <class T>
-static type to_basic_type(std::vector<attribute> xs) {
-  T result;
-  return result.attributes(std::move(xs));
+static type to_basic_type(std::tuple<std::string, std::vector<attribute>> x) {
+  auto& [id, attrs] = x;
+  if (id == "bool")
+    return bool_type{}.attributes(std::move(attrs));
+  if (id == "int")
+    return integer_type{}.attributes(std::move(attrs));
+  if (id == "count")
+    return count_type{}.attributes(std::move(attrs));
+  if (id == "real")
+    return real_type{}.attributes(std::move(attrs));
+  if (id == "duration")
+    return duration_type{}.attributes(std::move(attrs));
+  if (id == "time")
+    return time_type{}.attributes(std::move(attrs));
+  if (id == "string")
+    return string_type{}.attributes(std::move(attrs));
+  if (id == "pattern")
+    return pattern_type{}.attributes(std::move(attrs));
+  if (id == "addr")
+    return address_type{}.attributes(std::move(attrs));
+  if (id == "subnet")
+    return subnet_type{}.attributes(std::move(attrs));
+  return none_type{}.attributes(std::move(attrs)).name(id);
 }
 
 template <class Iterator, class Attribute>
@@ -45,17 +64,7 @@ bool type_parser::parse(Iterator& f, const Iterator& l, Attribute& a) const {
   static auto attr_list = *(skp >> attr);
   // Basic types
   static auto basic_type_parser
-    = "bool" >> attr_list      ->* to_basic_type<bool_type>
-    | "int" >> attr_list       ->* to_basic_type<integer_type>
-    | "count" >> attr_list     ->* to_basic_type<count_type>
-    | "real" >> attr_list      ->* to_basic_type<real_type>
-    | "duration" >> attr_list  ->* to_basic_type<duration_type>
-    | "time" >> attr_list      ->* to_basic_type<time_type>
-    | "string" >> attr_list    ->* to_basic_type<string_type>
-    | "pattern" >> attr_list   ->* to_basic_type<pattern_type>
-    | "addr" >> attr_list      ->* to_basic_type<address_type>
-    | "subnet" >> attr_list    ->* to_basic_type<subnet_type>
-    ;
+    = (parsers::identifier >> attr_list) ->* to_basic_type;
   // Enumeration
   using enum_tuple = std::tuple<
     std::vector<std::string>,
@@ -117,22 +126,13 @@ bool type_parser::parse(Iterator& f, const Iterator& l, Attribute& a) const {
     >> ((skp >> field >> skp) % ',') >> ~(',' >> skp)
     >> '}' >> attr_list) ->* to_record;
     ;
-  using none_tuple = std::tuple<std::string, std::vector<vast::attribute>>;
-  static auto to_named_none_type = [](none_tuple xs) {
-    auto& [n, a] = xs;
-    return none_type{}.name(std::move(n)).attributes(std::move(a));
-  };
-  static auto placeholder_parser
-    = (parsers::identifier >> attr_list) ->* to_named_none_type
-    ;
   // Complete type
   type_type
-    = basic_type_parser
-    | enum_type_parser
+    = enum_type_parser
     | list_type_parser
     | map_type_parser
     | record_type_parser
-    | placeholder_parser
+    | basic_type_parser
     ;
   return type_type(f, l, a);
   // clang-format on
