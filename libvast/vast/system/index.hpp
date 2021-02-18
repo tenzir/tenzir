@@ -197,6 +197,10 @@ struct index_state {
   /// The set of partitions that exist on disk.
   std::unordered_set<uuid> persisted_partitions;
 
+  /// This set to true after the index finished reading the meta index state
+  /// from disk.
+  bool accept_queries;
+
   /// The maximum number of events that a partition can hold.
   size_t partition_capacity;
 
