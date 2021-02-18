@@ -19,6 +19,12 @@ This changelog documents all notable user-facing changes of VAST.
   Sigma rule, pass it on standard input, e.g., `vast export json < rule.yaml`.
   [#1379](https://github.com/tenzir/vast/pull/1379) 
 
+- ⚠️ The special meaning of the `#timestamp` attribute has been removed from
+  the schema language. Timestamps can from now on be marked as such by using
+  the `timestamp` type instead. Queries of the form `#timestamp <op> value`
+  remain operational but are deprecated in favor of `:timestamp`.
+  [#1388](https://github.com/tenzir/vast/pull/1388)
+
 - 🎁 The type extractor in the expression language now works with user defined
   types. For example the type `port` is defined as `type port = count` in the
   base schema. This type can now be queried with an expression like
