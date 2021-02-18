@@ -135,7 +135,8 @@ bool type_parser::parse(Iterator& f, const Iterator& l, Attribute& a) const {
     | basic_type_parser
     ;
   return type_type(f, l, a);
-  // clang-format on
+  // Bogus indentation from clang-format ¯\_(ツ)_/¯
+    // clang-format on
 }
 
 template bool
