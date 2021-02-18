@@ -430,7 +430,7 @@ caf:
     # Forces a fixed number of threads if set.
     #max-threads: <number of cores>
     # Maximum number of messages actors can consume in one run.
-    #max-throughput: <infinite>
+    max-throughput: 500
 
   # When using "stealing" as scheduler policy.
   work-stealing:
@@ -453,6 +453,6 @@ caf:
     # Processing time per batch.
     desired-batch-complexity: 50us
     # Maximum delay for partial batches.
-    max-batch-delay: 5ms
+    max-batch-delay: 15ms
     # Time between emitting credit.
     credit-round-interval: 10ms
