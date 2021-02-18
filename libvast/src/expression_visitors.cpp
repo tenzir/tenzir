@@ -264,13 +264,15 @@ operator()(const attribute_extractor& ex, const data& d) {
            || caf::holds_alternative<pattern>(d)))
     return caf::make_error(ec::syntax_error,
                            "type attribute extractor requires string or "
-                           "pattern "
-                           "operand",
+                           "pattern operand",
                            ex.attr, op_, d);
-  else if (ex.attr == atom::timestamp_v && !caf::holds_alternative<time>(d))
-    return caf::make_error(
-      ec::syntax_error, "time attribute extractor requires timestamp operand",
-      ex.attr, op_, d);
+  if (ex.attr == atom::field_v
+      && !(caf::holds_alternative<std::string>(d)
+           || caf::holds_alternative<pattern>(d)))
+    return caf::make_error(ec::syntax_error,
+                           "field attribute extractor requires string or "
+                           "pattern operand",
+                           ex.attr, op_, d);
   return caf::no_error;
 }
 
@@ -352,21 +354,9 @@ caf::expected<expression> type_resolver::operator()(const predicate& p) {
 
 caf::expected<expression>
 type_resolver::operator()(const attribute_extractor& ex, const data& d) {
-  if (ex.attr == atom::timestamp_v) {
-    // Perform a basic type check. We could make it a pre-condition that this
-    // should have been tested earlier.
-    if (!caf::holds_alternative<time>(d))
-      return caf::make_error(ec::type_clash, ex.attr, op_, d);
-  } else {
-    // We're leaving all other attributes alone, because they may operate at a
-    // different granularity (e.g., #type).
-    return predicate{ex, op_, d};
-  }
-  // Perform the attribute extraction for timestamps.
-  // TODO: Generalize to all type attributes.
-  auto has_timestamp_attribute
-    = [&](const type& t) { return has_attribute(t, "timestamp"); };
-  return resolve_extractor(has_timestamp_attribute, d);
+  // We're leaving all attributes alone, because both #type and #field operate
+  // at a different granularity.
+  return predicate{ex, op_, d};
 }
 
 caf::expected<expression>
@@ -466,8 +456,6 @@ bool matcher::operator()(const attribute_extractor& e, const data& d) {
   if (e.attr == atom::type_v) {
     VAST_ASSERT(caf::holds_alternative<std::string>(d));
     return evaluate(d, op_, type_.name());
-  } else if (e.attr == atom::timestamp_v) {
-    return true; // Every event has a timestamp.
   }
   return false;
 }

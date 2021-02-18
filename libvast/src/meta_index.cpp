@@ -165,12 +165,7 @@ std::vector<uuid> meta_index::lookup(const expression& expr) const {
       };
       auto extract_expr = detail::overload{
         [&](const attribute_extractor& lhs, const data& d) -> result_type {
-          if (lhs.attr == atom::timestamp_v) {
-            auto pred = [](auto& field) {
-              return has_attribute(field.type, "timestamp");
-            };
-            return search(pred);
-          } else if (lhs.attr == atom::type_v) {
+          if (lhs.attr == atom::type_v) {
             // We don't have to look into the synopses for type queries, just
             // at the layout names.
             result_type result;
