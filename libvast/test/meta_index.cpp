@@ -58,7 +58,7 @@ struct generator {
 
   explicit generator(std::string name, size_t first_event_id)
     : offset(first_event_id) {
-    layout = record_type{{"timestamp", time_type{}.attributes({{"timestamp"}})},
+    layout = record_type{{"timestamp", time_type{}.name("timestamp")},
                          {"content", string_type{}}}
                .name(std::move(name));
   }
@@ -90,10 +90,9 @@ struct mock_partition {
   mock_partition(std::string name, uuid uid, size_t num) : id(std::move(uid)) {
     generator g{std::move(name), num_events_per_parttion * num};
     slice = g(num_events_per_parttion);
-    range.from
-      = get_timestamp(slice.at(0, 0, time_type{}.attributes({{"timestamp"}})));
+    range.from = get_timestamp(slice.at(0, 0, time_type{}.name("timestamp")));
     range.to = get_timestamp(
-      slice.at(slice.rows() - 1, 0, time_type{}.attributes({{"timestamp"}})));
+      slice.at(slice.rows() - 1, 0, time_type{}.name("timestamp")));
   }
 
   uuid id;

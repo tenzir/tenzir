@@ -137,10 +137,19 @@ explorer(caf::stateful_actor<explorer_state>* self, node_actor node,
       if (st.num_sent >= st.limits.total)
         return;
       auto&& layout = slice.layout();
+      auto is_timestamp = [](const record_field& field) {
+        const type* t = &field.type;
+        if (t->name() == "timestamp")
+          return true;
+        while (auto x = caf::get_if<alias_type>(t)) {
+          t = &x->value_type;
+          if (t->name() == "timestamp")
+            return true;
+        }
+        return false;
+      };
       auto it = std::find_if(layout.fields.begin(), layout.fields.end(),
-                             [](const record_field& field) {
-                               return has_attribute(field.type, "timestamp");
-                             });
+                             is_timestamp);
       if (it == layout.fields.end()) {
         VAST_DEBUG("{} could not find timestamp field in {}", self, layout);
         return;
@@ -168,14 +177,14 @@ explorer(caf::stateful_actor<explorer_state>* self, node_actor node,
           continue;
         std::optional<vast::expression> before_expr;
         if (st.before)
-          before_expr = predicate{attribute_extractor{atom::timestamp_v},
+          before_expr = predicate{type_extractor{none_type{}.name("timestamp")},
                                   relational_operator::greater_equal,
                                   data{*x - *st.before}};
 
         std::optional<vast::expression> after_expr;
         if (st.after)
           after_expr
-            = predicate{attribute_extractor{atom::timestamp_v},
+            = predicate{type_extractor{none_type{}.name("timestamp")},
                         relational_operator::less_equal, data{*x + *st.after}};
         std::optional<vast::expression> by_expr;
         if (st.by) {

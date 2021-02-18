@@ -494,7 +494,7 @@ caf::error reader::parse_header() {
     VAST_DEBUG("{} auto-detected field {} as event timestamp",
                detail::pretty_type_name(this),
                std::distance(layout_.fields.begin(), i));
-    insert_attribute(i->type, {"timestamp"});
+    i->type.name("timestamp");
   }
   // Add #index=hash attribute for fields where it makes sense.
   add_hash_index_attribute(layout_);

@@ -97,10 +97,10 @@ TEST(parseable/printable - predicate) {
   str = "now > #timestamp";
   CHECK(parsers::predicate(str, pred));
   CHECK(caf::holds_alternative<data>(pred.lhs));
-  CHECK(caf::holds_alternative<attribute_extractor>(pred.rhs));
+  CHECK(caf::holds_alternative<type_extractor>(pred.rhs));
   CHECK(pred.op == relational_operator::greater);
-  CHECK(caf::get<attribute_extractor>(pred.rhs)
-        == attribute_extractor{atom::timestamp_v});
+  CHECK(caf::get<type_extractor>(pred.rhs)
+        == type_extractor{none_type{}.name("timestamp")});
   // LHS: schema, RHS: schema
   MESSAGE("x.a_b == y.c_d");
   str = "x.a_b == y.c_d";
@@ -139,8 +139,8 @@ TEST(parseable - expression) {
   REQUIRE_EQUAL(x->size(), 2u);
   auto x0 = caf::get_if<predicate>(&x->at(0));
   auto x1 = caf::get_if<predicate>(&x->at(1));
-  CHECK(caf::holds_alternative<attribute_extractor>(x0->lhs));
-  CHECK(caf::holds_alternative<attribute_extractor>(x1->lhs));
+  CHECK(caf::holds_alternative<type_extractor>(x0->lhs));
+  CHECK(caf::holds_alternative<type_extractor>(x1->lhs));
   MESSAGE("disjunction");
   CHECK(parsers::expr("x == 42 || :real == 5.3 || x == 42"s, expr));
   CHECK_EQUAL(expr, expression(disjunction{p1, p2, p1}));

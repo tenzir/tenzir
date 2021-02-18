@@ -20,6 +20,7 @@
 #include "vast/detail/assert.hpp"
 #include "vast/detail/string.hpp"
 #include "vast/expression.hpp"
+#include "vast/logger.hpp"
 #include "vast/type.hpp"
 
 namespace vast {
@@ -44,6 +45,11 @@ static predicate::operand to_field_extractor(std::vector<std::string> xs) {
 }
 
 static predicate::operand to_attr_extractor(std::string x) {
+  if (x == "timestamp") {
+    VAST_WARN("#timestamp queries are deprecated and should be replaced with "
+              ":timestamp");
+    return type_extractor{none_type{}.name("timestamp")};
+  }
   return attribute_extractor{caf::atom_from_string(x)};
 }
 
