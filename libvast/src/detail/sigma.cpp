@@ -283,14 +283,24 @@ caf::expected<expression> parse_search_id(const data& yaml) {
           op = relational_operator::ni;
         } else if (*i == "base64") {
           // TODO
+          return caf::make_error(ec::unimplemented, "base64 modifier not yet "
+                                                    "implemented");
         } else if (*i == "base64offset") {
           // TODO
+          return caf::make_error(ec::unimplemented, "base64offset modifier not "
+                                                    "yet implemented");
         } else if (*i == "utf16le" || *i == "wide") {
           // TODO
+          return caf::make_error(ec::unimplemented, "utf16le/wide modifier not "
+                                                    "yet implemented");
         } else if (*i == "utf16be") {
           // TODO
+          return caf::make_error(ec::unimplemented, "utf16be modifier not yet "
+                                                    "implemented");
         } else if (*i == "utf16") {
           // TODO
+          return caf::make_error(ec::unimplemented, "utf16 modifier not yet "
+                                                    "implemented");
         } else if (*i == "re") {
           re = true;
           op = relational_operator::match;
