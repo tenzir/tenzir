@@ -13,6 +13,8 @@
 
 #include "vast/expression_visitors.hpp"
 
+#include "vast/fwd.hpp"
+
 #include "vast/concept/parseable/to.hpp"
 #include "vast/concept/parseable/vast/data.hpp"
 #include "vast/concept/parseable/vast/type.hpp"
@@ -23,7 +25,6 @@
 #include "vast/data.hpp"
 #include "vast/detail/assert.hpp"
 #include "vast/die.hpp"
-#include "vast/fwd.hpp"
 #include "vast/ids.hpp"
 #include "vast/logger.hpp"
 #include "vast/table_slice.hpp"
@@ -69,7 +70,6 @@ expression hoister::operator()(const predicate& p) const {
   return {p};
 }
 
-
 expression aligner::operator()(caf::none_t) const {
   return caf::none;
 }
@@ -93,15 +93,13 @@ expression aligner::operator()(const negation& n) const {
 }
 
 expression aligner::operator()(const predicate& p) const {
-  auto is_extractor = [](auto& operand) {
-    return !caf::holds_alternative<data>(operand);
-  };
+  auto is_extractor
+    = [](auto& operand) { return !caf::holds_alternative<data>(operand); };
   // Already aligned if LHS is an extractor or no extractor present.
   if (is_extractor(p.lhs) || !is_extractor(p.rhs))
     return p;
   return predicate{p.rhs, flip(p.op), p.lhs};
 }
-
 
 denegator::denegator(bool negate) : negate_{negate} {
 }
@@ -140,7 +138,6 @@ expression denegator::operator()(const predicate& p) const {
   return predicate{p.lhs, negate_ ? negate(p.op) : p.op, p.rhs};
 }
 
-
 expression deduplicator::operator()(caf::none_t) const {
   return caf::none;
 }
@@ -173,7 +170,6 @@ expression deduplicator::operator()(const predicate& p) const {
   return p;
 }
 
-
 namespace {
 
 template <class Ts, class Us>
@@ -184,7 +180,7 @@ auto inplace_union(Ts& xs, const Us& ys) {
   xs.erase(std::unique(xs.begin(), xs.end()), xs.end());
 }
 
-} // namespace <anonymous>
+} // namespace
 
 std::vector<predicate> predicatizer::operator()(caf::none_t) const {
   return {};
@@ -257,8 +253,8 @@ caf::expected<void> validator::operator()(const predicate& p) {
   return caf::visit(*this, p.lhs, p.rhs);
 }
 
-caf::expected<void> validator::
-operator()(const attribute_extractor& ex, const data& d) {
+caf::expected<void>
+validator::operator()(const attribute_extractor& ex, const data& d) {
   if (ex.attr == atom::type_v
       && !(caf::holds_alternative<std::string>(d)
            || caf::holds_alternative<pattern>(d)))
@@ -276,8 +272,8 @@ operator()(const attribute_extractor& ex, const data& d) {
   return caf::no_error;
 }
 
-caf::expected<void> validator::
-operator()(const type_extractor& ex, const data& d) {
+caf::expected<void>
+validator::operator()(const type_extractor& ex, const data& d) {
   // References to aliases can't be checked here because the expression parser
   // can't possible know about them. We defer the check to the type resolver.
   if (caf::holds_alternative<none_type>(ex.type))
@@ -365,6 +361,16 @@ type_resolver::operator()(const type_extractor& ex, const data& d) {
     auto matches = [&](const type& t) {
       return t.name() == ex.type.name() && compatible(t, op_, d);
     };
+    // DEPRECATED: Remove before release 2021.04
+    if (ex.type.name() == "timestamp") {
+      if (!caf::holds_alternative<time>(d))
+        return caf::make_error(ec::type_clash, ":timestamp", op_, d);
+      auto has_timestamp_attribute
+        = [&](const type& t) { return has_attribute(t, "timestamp"); };
+      return disjunction{resolve_extractor(matches, d),
+                         resolve_extractor(has_timestamp_attribute, d)};
+    }
+    // END DEPRECATED
     return resolve_extractor(matches, d);
   }
   auto is_congruent
@@ -372,8 +378,8 @@ type_resolver::operator()(const type_extractor& ex, const data& d) {
   return resolve_extractor(is_congruent, d);
 }
 
-caf::expected<expression> type_resolver::
-operator()(const data& d, const type_extractor& ex) {
+caf::expected<expression>
+type_resolver::operator()(const data& d, const type_extractor& ex) {
   return (*this)(ex, d);
 }
 

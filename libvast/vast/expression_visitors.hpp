@@ -127,7 +127,7 @@ struct type_resolver {
   // Attempts to resolve all extractors that fulfil a given property.
   // provided property is a function that returns an error
   template <class Function>
-  caf::expected<expression> resolve_extractor(Function f, const data& x) const {
+  expression resolve_extractor(Function f, const data& x) const {
     std::vector<expression> connective;
     auto make_predicate = [&](type t, offset off) {
       return predicate{data_extractor{std::move(t), off}, op_, x};
