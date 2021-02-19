@@ -111,6 +111,7 @@ This changelog documents all notable user-facing changes of VAST.
   [#1223](https://github.com/tenzir/vast/pull/1223)
   [#1328](https://github.com/tenzir/vast/pull/1328)
   [#1334](https://github.com/tenzir/vast/pull/1334)
+  [#1390](https://github.com/tenzir/vast/pull/1390) 
 
 ## [2021.01.28]
 
