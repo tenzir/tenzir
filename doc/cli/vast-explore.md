@@ -7,7 +7,7 @@ command. Only some of the options shown below are currently implemented.
 
 First, VAST evaluates the provided query expression. The results serve as input
 to generate further queries. Specifying temporal constraints (`--after`,
-`--before`, or `--context`) apply relative to the #timestamp field of the
+`--before`, or `--context`) apply relative to the timestamp field of the
 results.  Specifying spatial constraints can include a join field (`--by`) or a
 join expression (`--where`) that references fields from the result set.
 Restricting the exploration to specific sets of types (`--for`) works in both

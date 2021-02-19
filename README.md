@@ -111,7 +111,7 @@ zcat *.log.gz | vast import zeek
 **Run a query over the last hour, rendered as JSON**:
 
 ```sh
-vast export json '#timestamp > 1 hour ago && (6.6.6.6 || 5353/udp)'
+vast export json ':timestamp > 1 hour ago && (6.6.6.6 || 5353/udp)'
 ```
 
 **Ingest a [PCAP](https://en.wikipedia.org/wiki/Pcap) trace with a 1024-byte
