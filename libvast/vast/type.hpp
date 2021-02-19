@@ -571,6 +571,7 @@ struct record_field : detail::totally_ordered<record_field> {
   explicit record_field(std::string name) noexcept : name{std::move(name)} {
     // nop
   }
+
   record_field(std::string name, vast::type type) noexcept
     : name{std::move(name)}, type{std::move(type)} {
     // nop

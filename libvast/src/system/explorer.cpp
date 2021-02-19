@@ -177,14 +177,14 @@ explorer(caf::stateful_actor<explorer_state>* self, node_actor node,
           continue;
         std::optional<vast::expression> before_expr;
         if (st.before)
-          before_expr = predicate{type_extractor{none_type{}.name("timestamp")},
+          before_expr = predicate{type_extractor{time_type{}.name("timestamp")},
                                   relational_operator::greater_equal,
                                   data{*x - *st.before}};
 
         std::optional<vast::expression> after_expr;
         if (st.after)
           after_expr
-            = predicate{type_extractor{none_type{}.name("timestamp")},
+            = predicate{type_extractor{time_type{}.name("timestamp")},
                         relational_operator::less_equal, data{*x + *st.after}};
         std::optional<vast::expression> by_expr;
         if (st.by) {
