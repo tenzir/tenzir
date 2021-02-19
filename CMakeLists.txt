@@ -51,6 +51,9 @@ file(
 list(FILTER hash_files EXCLUDE REGEX
      "^${CMAKE_CURRENT_SOURCE_DIR}/libvast/aux/")
 
+list(FILTER hash_files EXCLUDE REGEX
+     "^${CMAKE_CURRENT_SOURCE_DIR}/libvast/test/")
+
 list(
   SORT hash_files
   COMPARE FILE_BASENAME
