@@ -13,11 +13,23 @@
 
 #pragma once
 
-#include "vast/concept/parseable/string/any.hpp"
-#include "vast/concept/parseable/string/char.hpp"
-#include "vast/concept/parseable/string/char_class.hpp"
-#include "vast/concept/parseable/string/char_range.hpp"
-#include "vast/concept/parseable/string/literal.hpp"
-#include "vast/concept/parseable/string/quoted_string.hpp"
-#include "vast/concept/parseable/string/string.hpp"
-#include "vast/concept/parseable/string/symbol_table.hpp"
+#include "vast/fwd.hpp"
+
+#include "vast/expression.hpp"
+
+#include <caf/expected.hpp>
+
+/// Utilities to work with [Sigma](https://github.com/Neo23x0/sigma).
+namespace vast::detail::sigma {
+
+/// Parses a *rule* as VAST expression.
+/// @param yaml The rule contents.
+/// @returns The VAST expression corresponding to *yaml*.
+caf::expected<expression> parse_rule(const data& yaml);
+
+/// Parses a *search identifier* as VAST expression.
+/// @param yaml The contents converted from YAML.
+/// @returns The VAST expression corresponding to *yaml*.
+caf::expected<expression> parse_search_id(const data& yaml);
+
+} // namespace vast::detail::sigma

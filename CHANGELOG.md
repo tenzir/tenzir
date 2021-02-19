@@ -13,6 +13,12 @@ This changelog documents all notable user-facing changes of VAST.
 
 ## Unreleased
 
+- 🧬 [Sigma](https://github.com/Neo23x0/sigma) rules are now a valid format to
+  represent query expression. VAST parses the `detection` attribute of a rule
+  and translates it into a native query expression. To run a query using a
+  Sigma rule, pass it on standard input, e.g., `vast export json < rule.yaml`.
+  [#1379](https://github.com/tenzir/vast/pull/1379) 
+
 - 🐞 A bug in the new simdjson based JSON reader introduced in
   [#1356](https://github.com/tenzir/vast/pull/1356) could trigger an assertion
   in the `vast import` process if an input field could not be converted to the

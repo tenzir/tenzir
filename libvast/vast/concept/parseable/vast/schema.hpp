@@ -26,16 +26,16 @@
 
 namespace vast {
 
-using symbol_table = std::unordered_map<std::string, type>;
+using symbol_map = std::unordered_map<std::string, type>;
 
-/// Converts a symbol_table into a schema. Can use an additional symbol table
+/// Converts a symbol_map into a schema. Can use an additional symbol table
 /// as context.
 struct symbol_resolver {
   caf::expected<type> lookup(const std::string& key) {
     // First we check if the key is already locally resolved.
-    auto lsym = local.find(key);
-    if (lsym != local.end())
-      return lsym->second;
+    auto local_symbol = local.find(key);
+    if (local_symbol != local.end())
+      return local_symbol->second;
     // Then we check if it is an unresolved local type.
     auto next = working.find(key);
     if (next != working.end())
@@ -43,9 +43,9 @@ struct symbol_resolver {
     // Finally, we look into the global types, This is in last place because
     // they have lower precedence, i.e. local definitions are allowed to
     // shadow global ones.
-    auto gsym = global.find(key);
-    if (gsym != global.end())
-      return gsym->second;
+    auto global_symbol = global.find(key);
+    if (global_symbol != global.end())
+      return global_symbol->second;
     return caf::make_error(ec::parse_error, "undefined symbol:", key);
   }
 
@@ -100,7 +100,7 @@ struct symbol_resolver {
     return std::move(x);
   }
 
-  caf::expected<type> resolve(symbol_table::iterator next) {
+  caf::expected<type> resolve(symbol_map::iterator next) {
     auto value = std::move(*next);
     if (local.find(value.first) != local.end())
       return caf::make_error(ec::parse_error, "duplicate definition of",
@@ -137,14 +137,14 @@ struct symbol_resolver {
     return sch;
   }
 
-  const symbol_table& global;
-  symbol_table working;
-  symbol_table local = {};
+  const symbol_map& global;
+  symbol_map working;
+  symbol_map local = {};
   schema sch = {};
 };
 
-struct symbol_table_parser : parser<symbol_table_parser> {
-  using attribute = symbol_table;
+struct symbol_map_parser : parser<symbol_map_parser> {
+  using attribute = symbol_map;
 
   static constexpr auto skp = type_parser::skp;
 
@@ -182,13 +182,13 @@ struct symbol_table_parser : parser<symbol_table_parser> {
 };
 
 template <>
-struct parser_registry<symbol_table> {
-  using type = symbol_table_parser;
+struct parser_registry<symbol_map> {
+  using type = symbol_map_parser;
 };
 
 namespace parsers {
 
-constexpr auto symbol_table = symbol_table_parser{};
+constexpr auto symbol_map = symbol_map_parser{};
 
 } // namespace parsers
 
@@ -197,9 +197,9 @@ struct schema_parser : parser<schema_parser> {
 
   template <class Iterator, class Attribute>
   bool parse(Iterator& f, const Iterator& l, Attribute& out) const {
-    symbol_table global;
-    symbol_table working;
-    auto p = symbol_table_parser{};
+    symbol_map global;
+    symbol_map working;
+    auto p = symbol_map_parser{};
     if (!p(f, l, working))
       return false;
     auto r = symbol_resolver{global, std::move(working)};

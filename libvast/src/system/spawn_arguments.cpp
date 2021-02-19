@@ -16,8 +16,11 @@
 #include "vast/concept/parseable/to.hpp"
 #include "vast/concept/parseable/vast/expression.hpp"
 #include "vast/concept/parseable/vast/schema.hpp"
+#include "vast/detail/sigma.hpp"
+#include "vast/detail/string.hpp"
 #include "vast/error.hpp"
 #include "vast/expression.hpp"
+#include "vast/logger.hpp"
 #include "vast/path.hpp"
 #include "vast/schema.hpp"
 
@@ -35,10 +38,24 @@ normalized_and_validated(std::vector<std::string>::const_iterator begin,
                          std::vector<std::string>::const_iterator end) {
   if (begin == end)
     return caf::make_error(ec::syntax_error, "no query expression given");
-  if (auto e = to<expression>(caf::join(begin, end, " ")))
+  auto str = detail::join(begin, end, " ");
+  // TODO: improve error handling. Right now, we silently try to parse the
+  // query expression as Sigma rule. If it fails, we only print a debug log
+  // entry and move on to parsing the input as VAST expression.
+  if (auto yaml = from_yaml(str)) {
+    if (auto e = detail::sigma::parse_rule(*yaml))
+      return normalize_and_validate(*e);
+    else
+      VAST_DEBUG("failed to parse query as Sigma rule: {}", e.error());
+  } else {
+    VAST_DEBUG("failed to parse input as YAML: {}", yaml.error());
+  }
+  if (auto e = to<expression>(str)) {
     return normalize_and_validate(*e);
-  else
+  } else {
+    VAST_DEBUG("failed to parse query as VAST expression: {}", e.error());
     return std::move(e.error());
+  }
 }
 
 caf::expected<expression>

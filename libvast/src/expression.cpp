@@ -182,6 +182,10 @@ bool operator<(const expression& x, const expression& y) {
 
 // -- free functions -----------------------------------------------------------
 
+expression hoist(const expression& expr) {
+  return caf::visit(hoister{}, expr);
+}
+
 expression normalize(const expression& expr) {
   expression r;
   r = caf::visit(hoister{}, expr);
