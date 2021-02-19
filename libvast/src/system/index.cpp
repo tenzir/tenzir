@@ -294,11 +294,23 @@ void index_state::add_flush_listener(flush_listener_actor listener) {
   detail::notify_listeners_if_clean(*this, *stage);
 }
 
+// The whole purpose of the `-b` flag is to somehow block until all imported
+// data is available for querying, so we have to layer hack upon hack here to
+// achieve this most of the time.
+// TODO(ch19583): Rip out the whole 'notifying_stream_manager' and replace it
+// with some kind of ping/pong protocol.
 void index_state::notify_flush_listeners() {
+  if (!unpersisted.empty())
+    return;
   VAST_DEBUG("{} sends 'flush' messages to {} listeners", self,
              flush_listeners.size());
-  for (auto& listener : flush_listeners)
-    self->send(listener, atom::flush_v);
+  for (auto& listener : flush_listeners) {
+    if (active_partition.actor)
+      self->send(active_partition.actor, atom::subscribe_v, atom::flush_v,
+                 listener);
+    else
+      self->send(listener, atom::flush_v);
+  }
   flush_listeners.clear();
 }
 

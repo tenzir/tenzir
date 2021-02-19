@@ -31,9 +31,10 @@ void notify_listeners_if_clean(State& st, const caf::stream_manager& mgr) {
 }
 
 // A custom stream manager that is able to notify when all data has been
-// processed. It relies on the presence of a function
-// `Self->state.notify_flush_listeners()`, which means that it is currently only
-// usable in combination with the `index` actor.
+// processed. It relies on `Self->state` being a struct containing a function
+// `notify_flush_listeners()` and a vector `flush_listeners`, which means that
+// it is currently only usable in combination with the `index` or the
+// `active_partition` actor.
 template <class Self, class Driver>
 class notifying_stream_manager : public caf::detail::stream_stage_impl<Driver> {
 public:
@@ -62,7 +63,8 @@ public:
 
   void finalize(const caf::error& reason) override {
     super::finalize(reason);
-    state().notify_flush_listeners();
+    if (reason != caf::exit_reason::unreachable)
+      state().notify_flush_listeners();
   }
 
 private:

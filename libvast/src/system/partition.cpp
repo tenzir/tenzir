@@ -24,6 +24,7 @@
 #include "vast/concept/printable/vast/table_slice.hpp"
 #include "vast/concept/printable/vast/uuid.hpp"
 #include "vast/detail/assert.hpp"
+#include "vast/detail/notifying_stream_manager.hpp"
 #include "vast/detail/settings.hpp"
 #include "vast/expression.hpp"
 #include "vast/expression_visitors.hpp"
@@ -61,6 +62,20 @@ namespace vast::system {
 active_indexer_actor active_partition_state::indexer_at(size_t position) const {
   VAST_ASSERT(position < indexers.size());
   return as_vector(indexers)[position].second;
+}
+
+void active_partition_state::add_flush_listener(flush_listener_actor listener) {
+  VAST_DEBUG("{} adds a new 'flush' subscriber: {}", self, listener);
+  flush_listeners.emplace_back(std::move(listener));
+  detail::notify_listeners_if_clean(*this, *stage);
+}
+
+void active_partition_state::notify_flush_listeners() {
+  VAST_DEBUG("{} sends 'flush' messages to {} listeners", self,
+             flush_listeners.size());
+  for (auto& listener : flush_listeners)
+    self->send(listener, atom::flush_v);
+  flush_listeners.clear();
 }
 
 /// Gets the INDEXER at a certain position.
@@ -372,8 +387,8 @@ active_partition_actor::behavior_type active_partition(
   // The active partition stage is a caf stream stage that takes
   // a stream of `table_slice` as input and produces several
   // streams of `table_slice_column` as output.
-  self->state.stage = caf::attach_continuous_stream_stage(
-    self,
+  self->state.stage = detail::attach_notifying_stream_stage(
+    self, true,
     [=](caf::unit_t&) {
       // nop
     },
@@ -477,6 +492,9 @@ active_partition_actor::behavior_type active_partition(
     [self](caf::stream<table_slice> in) {
       self->state.streaming_initiated = true;
       return self->state.stage->add_inbound_path(in);
+    },
+    [self](atom::subscribe, atom::flush, const flush_listener_actor& listener) {
+      self->state.add_flush_listener(listener);
     },
     [self](atom::persist, const path& part_dir, const path& synopsis_dir) {
       VAST_DEBUG("{} got persist atom", self);
