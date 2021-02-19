@@ -209,7 +209,7 @@ constexpr const caf::atom_value console_verbosity = caf::atom("info");
 constexpr const caf::atom_value file_verbosity = caf::atom("debug");
 
 /// Maximum number of log messages in the logger queue.
-constexpr const size_t queue_size = 8'192;
+constexpr const size_t queue_size = 32'768;
 
 /// Number of logger threads.
 constexpr const size_t logger_threads = 1;
