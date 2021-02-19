@@ -327,7 +327,7 @@ TEST(parseable - with context) {
   auto global = symbol_map{};
   {
     auto local = symbol_map{};
-    auto p = symbol_table_parser{};
+    auto p = symbol_map_parser{};
     CHECK(p("type foo = count", local));
     global = std::move(local);
   }
@@ -410,13 +410,13 @@ TEST(parseable - with context) {
       }
       type foo = int
     )__"sv;
-    auto p = symbol_table_parser{};
+    auto p = symbol_map_parser{};
     symbol_map sm;
     CHECK(!p(str, sm));
   }
   {
     MESSAGE("Duplicate definition error - re-entry");
-    auto p = symbol_table_parser{};
+    auto p = symbol_map_parser{};
     symbol_map sm;
     CHECK(p("type foo = real", sm));
     CHECK(!p("type foo = int", sm));

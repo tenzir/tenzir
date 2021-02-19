@@ -143,7 +143,7 @@ struct symbol_resolver {
   schema sch = {};
 };
 
-struct symbol_table_parser : parser<symbol_table_parser> {
+struct symbol_map_parser : parser<symbol_map_parser> {
   using attribute = symbol_map;
 
   static constexpr auto skp = type_parser::skp;
@@ -183,12 +183,12 @@ struct symbol_table_parser : parser<symbol_table_parser> {
 
 template <>
 struct parser_registry<symbol_map> {
-  using type = symbol_table_parser;
+  using type = symbol_map_parser;
 };
 
 namespace parsers {
 
-constexpr auto symbol_map = symbol_table_parser{};
+constexpr auto symbol_map = symbol_map_parser{};
 
 } // namespace parsers
 
@@ -199,7 +199,7 @@ struct schema_parser : parser<schema_parser> {
   bool parse(Iterator& f, const Iterator& l, Attribute& out) const {
     symbol_map global;
     symbol_map working;
-    auto p = symbol_table_parser{};
+    auto p = symbol_map_parser{};
     if (!p(f, l, working))
       return false;
     auto r = symbol_resolver{global, std::move(working)};

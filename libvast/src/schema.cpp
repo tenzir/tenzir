@@ -261,7 +261,7 @@ caf::error load_symbols(const path& schema_file, symbol_map& local) {
   auto str = load_contents(schema_file);
   if (!str)
     return str.error();
-  auto p = symbol_table_parser{};
+  auto p = symbol_map_parser{};
   if (!p(*str, local))
     return caf::make_error(ec::parse_error, "failed to load symbols from",
                            schema_file);
