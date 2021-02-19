@@ -38,7 +38,7 @@ vast:
   log-rotation-threshold: 10MiB
 
   # Maximum number of log messages in the logger queue.
-  log-queue-size: 32768
+  log-queue-size: 1000000
 
   # Mode for console log output generation. Automatic renders color only when
   # writing to a tty.
