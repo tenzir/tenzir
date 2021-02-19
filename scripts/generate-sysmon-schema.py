@@ -91,7 +91,7 @@ def map_type(name, field_name):
             return "port"
         return "count"
     elif name == "date":
-        return "time #timestamp"
+        return "timestamp"
     elif name == "boolean" or name == "bool":
         return "bool"
     elif name == "ip":

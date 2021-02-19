@@ -29,13 +29,13 @@ class TestCallStackCreation(unittest.TestCase):
 
     def test_call_chaining(self):
         self.assertEqual(self.vast.call_stack, [])
-        query = "#timestamp < 1 hour ago"
+        query = ":timestamp < 1 hour ago"
         self.vast.export().arrow(query)
         self.assertEqual(self.vast.call_stack, ["export", "arrow", query])
 
     def test_boolean_flag_handling(self):
         self.assertEqual(self.vast.call_stack, [])
-        query = ":addr == 192.168.1.104 && #timestamp < 1 hour ago"
+        query = ":addr == 192.168.1.104 && :timestamp < 1 hour ago"
         self.vast.export(continuous=True).json(query)
         self.assertEqual(
             self.vast.call_stack, ["export", "--continuous", "json", query]

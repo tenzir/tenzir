@@ -1,5 +1,6 @@
+type timestamp = time
 type argus.argus = record{
-  StartTime: time #timestamp,
+  StartTime: timestamp,
   Flgs: string,
   Proto: string,
   SrcAddr: addr,
