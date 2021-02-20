@@ -109,6 +109,22 @@ using status_client_actor = typed_actor_fwd<
   caf::replies_to<atom::status, status_verbosity>::with< //
     caf::dictionary<caf::config_value>>>::unwrap;
 
+using store_actor = typed_actor_fwd<
+  // Register an exporter actor.
+  // TODO: This is only for compatibility with the legacy archive and
+  // can be removed with that.
+  caf::reacts_to<atom::exporter, caf::actor>,
+  // Starts handling a query for the given ids.
+  caf::reacts_to<ids, archive_client_actor>,
+  // Erase the events with the given ids.
+  caf::replies_to<atom::erase, ids>::with<atom::done>>::unwrap;
+
+using store_builder_actor = typed_actor_fwd<>::extend_with<store_actor>
+  // Conform to the protocol of the STREAM SINK actor for table slices.
+  ::extend_with<stream_sink_actor<table_slice>>
+  // Conform to the protocol of the STATUS CLIENT actor.
+  ::extend_with<status_client_actor>::unwrap;
+
 /// The PARTITION actor interface.
 using partition_actor = typed_actor_fwd<
   // Evaluate the given expression, returning the relevant evaluation triples.
@@ -221,21 +237,15 @@ using index_actor = typed_actor_fwd<
 
 /// The ARCHIVE actor interface.
 using archive_actor = typed_actor_fwd<
-  // Register an exporter actor.
-  // TODO: This should probably take an archive_client_actor.
-  caf::reacts_to<atom::exporter, caf::actor>,
   // Registers the ARCHIVE with the ACCOUNTANT.
   caf::reacts_to<accountant_actor>,
-  // Starts handling a query for the given ids.
-  caf::reacts_to<ids, archive_client_actor>,
   // INTERNAL: Handles a query for the given ids, and sends the table slices
   // back to the ARCHIVE CLIENT.
   caf::reacts_to<atom::internal, ids, archive_client_actor, uint64_t>,
   // The internal telemetry loop of the ARCHIVE.
-  caf::reacts_to<atom::telemetry>,
-  // Erase the events with the given ids.
-  caf::replies_to<atom::erase, ids>::with< //
-    atom::done>>
+  caf::reacts_to<atom::telemetry>>
+  // Conform to the protocol of the STORE actor.
+  ::extend_with<store_actor>
   // Conform to the protocol of the STREAM SINK actor for table slices.
   ::extend_with<stream_sink_actor<table_slice>>
   // Conform to the procotol of the STATUS CLIENT actor.
