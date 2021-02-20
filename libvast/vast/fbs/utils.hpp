@@ -13,7 +13,6 @@
 
 #pragma once
 
-#include "vast/byte.hpp"
 #include "vast/detail/type_traits.hpp"
 #include "vast/error.hpp"
 #include "vast/fwd.hpp"
@@ -26,6 +25,7 @@
 
 #include <flatbuffers/flatbuffers.h>
 
+#include <cstddef>
 #include <cstdint>
 
 namespace vast::fbs {
@@ -40,7 +40,7 @@ chunk_ptr release(flatbuffers::FlatBufferBuilder& builder);
 /// Creates a verifier for a byte buffer.
 /// @xs The buffer to create a verifier for.
 /// @param A verifier that is ready to use.
-flatbuffers::Verifier make_verifier(span<const byte> xs);
+flatbuffers::Verifier make_verifier(span<const std::byte> xs);
 
 // -- generic (un)packing ----------------------------------------------------
 
@@ -94,7 +94,7 @@ caf::error deserialize_bytes(const flatbuffers::Vector<Byte>* v, T& x) {
 /// @returns A pointer to the unpacked flatbuffer of type `Flatbuffer` or
 ///          `nullptr` if verification failed.
 template <class Flatbuffer, size_t Extent = dynamic_extent>
-const Flatbuffer* as_flatbuffer(span<const byte, Extent> xs) {
+const Flatbuffer* as_flatbuffer(span<const std::byte, Extent> xs) {
   // Verify the buffer.
   auto data = reinterpret_cast<const uint8_t*>(xs.data());
   auto size = xs.size();
@@ -134,7 +134,7 @@ wrap(T const& x, const char* file_identifier = nullptr) {
 /// @param x The object to unpack *xs* into.
 /// @returns An error iff the operation failed.
 template <class Flatbuffer, size_t Extent = dynamic_extent, class T>
-caf::error unwrap(span<const byte, Extent> xs, T& x) {
+caf::error unwrap(span<const std::byte, Extent> xs, T& x) {
   if (auto flatbuf = as_flatbuffer<Flatbuffer>(xs))
     return unpack(*flatbuf, x);
   return caf::make_error(ec::unspecified, "flatbuffer verification failed");
@@ -144,7 +144,7 @@ caf::error unwrap(span<const byte, Extent> xs, T& x) {
 /// corresponding two-argument overload, but returns the unwrapped object
 /// instead of taking it as argument.
 template <class Flatbuffer, size_t Extent = dynamic_extent, class T>
-caf::expected<T> unwrap(span<const byte, Extent> xs) {
+caf::expected<T> unwrap(span<const std::byte, Extent> xs) {
   T result;
   if (auto err = unwrap(xs, result))
     return err;

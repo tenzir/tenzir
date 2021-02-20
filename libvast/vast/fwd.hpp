@@ -134,7 +134,6 @@ struct type_extractor;
 struct type_set;
 
 enum class arithmetic_operator : uint8_t;
-enum class __attribute__((__may_alias__)) byte : unsigned char {};
 enum class bool_operator : uint8_t;
 enum class ec : uint8_t;
 enum class port_type : uint8_t;

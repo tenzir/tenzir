@@ -19,6 +19,8 @@
 #include "vast/detail/coding.hpp"
 #include "vast/uuid.hpp"
 
+#include <cstddef>
+
 namespace vast {
 
 struct uuid_printer : vast::printer<uuid_printer> {
@@ -29,8 +31,8 @@ struct uuid_printer : vast::printer<uuid_printer> {
   template <class Iterator>
   bool print(Iterator& out, const uuid& x) const {
     for (size_t i = 0; i < 16; ++i) {
-      auto hi = detail::byte_to_char((x[i] >> 4) & byte{0x0f});
-      auto lo = detail::byte_to_char(x[i] & byte{0x0f});
+      auto hi = detail::byte_to_char((x[i] >> 4) & std::byte{0x0f});
+      auto lo = detail::byte_to_char(x[i] & std::byte{0x0f});
       if (!hexbyte(out, hi, lo))
         return false;
       if (i == 3 || i == 5 || i == 7 || i == 9)

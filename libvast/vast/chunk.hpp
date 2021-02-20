@@ -14,7 +14,6 @@
 #pragma once
 
 #include "vast/as_bytes.hpp"
-#include "vast/byte.hpp"
 #include "vast/detail/assert.hpp"
 #include "vast/detail/function.hpp"
 #include "vast/fwd.hpp"
@@ -23,6 +22,7 @@
 #include <caf/intrusive_ptr.hpp>
 #include <caf/ref_counted.hpp>
 
+#include <cstddef>
 #include <cstring>
 #include <utility>
 
@@ -34,7 +34,7 @@ class chunk final : public caf::ref_counted {
 public:
   // -- member types -----------------------------------------------------------
 
-  using value_type = byte;
+  using value_type = std::byte;
   using view_type = span<const value_type>;
   using pointer = typename view_type::pointer;
   using size_type = typename view_type::size_type;
@@ -169,7 +169,7 @@ public:
 
   // -- concepts --------------------------------------------------------------
 
-  friend span<const byte> as_bytes(const chunk_ptr& x) noexcept;
+  friend span<const std::byte> as_bytes(const chunk_ptr& x) noexcept;
   friend caf::error write(const path& filename, const chunk_ptr& x);
   friend caf::error read(const path& filename, chunk_ptr& x);
   friend caf::error inspect(caf::serializer& sink, const chunk_ptr& x);

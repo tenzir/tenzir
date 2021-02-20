@@ -17,9 +17,11 @@
 #include "vast/file.hpp"
 #include "vast/path.hpp"
 
+#include <cstddef>
+
 namespace vast::io {
 
-caf::error write(const path& filename, span<const byte> xs) {
+caf::error write(const path& filename, span<const std::byte> xs) {
   file f{filename};
   if (!f.open(file::write_only))
     return caf::make_error(ec::filesystem_error, "failed open file");

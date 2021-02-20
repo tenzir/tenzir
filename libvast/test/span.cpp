@@ -12,10 +12,10 @@
  ******************************************************************************/
 
 #include <array>
+#include <cstddef>
 #include <string>
 #include <vector>
 
-#include "vast/byte.hpp"
 #include "vast/detail/narrow.hpp"
 #include "vast/span.hpp"
 
@@ -32,13 +32,13 @@ TEST(string) {
 }
 
 TEST(byte) {
-  auto b = byte{0b0000'1100};
-  auto x = span<byte>{&b, 1};
+  auto b = std::byte{0b0000'1100};
+  auto x = span<std::byte>{&b, 1};
   CHECK_EQUAL(x.size(), 1u);
   auto foo = "foo"s;
-  x = span<byte>(reinterpret_cast<byte*>(foo.data()), foo.size());
+  x = span<std::byte>(reinterpret_cast<std::byte*>(foo.data()), foo.size());
   CHECK_EQUAL(x.size(), 3u);
-  CHECK_EQUAL(x[0], byte{'f'});
+  CHECK_EQUAL(x[0], std::byte{'f'});
 }
 
 TEST(subspan) {
@@ -59,8 +59,8 @@ TEST(construct from empty array) {
 TEST(byte span utility) {
   std::array<int8_t, 42> xs;
   auto ys = as_writeable_bytes(span{xs.data(), xs.size()});
-  ys[0] = byte{0xff};
-  CHECK_EQUAL(ys[0], byte{0xff});
+  ys[0] = std::byte{0xff};
+  CHECK_EQUAL(ys[0], std::byte{0xff});
   auto zs = as_bytes(span{xs.data(), xs.size()});
-  CHECK_EQUAL(zs[0], byte{0xff});
+  CHECK_EQUAL(zs[0], std::byte{0xff});
 }

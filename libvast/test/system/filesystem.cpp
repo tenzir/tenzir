@@ -22,6 +22,7 @@
 #include "vast/system/posix_filesystem.hpp"
 #include "vast/system/status_verbosity.hpp"
 
+#include <cstddef>
 #include <fstream>
 
 using namespace vast;
@@ -73,7 +74,7 @@ TEST(write) {
       [&](const caf::error& err) { FAIL(err); });
   MESSAGE("verify file contents");
   auto bytes = unbox(io::read(filename));
-  CHECK_EQUAL(span<const byte>{bytes}, as_bytes(chk));
+  CHECK_EQUAL(span<const std::byte>{bytes}, as_bytes(chk));
 }
 
 TEST(mmap) {

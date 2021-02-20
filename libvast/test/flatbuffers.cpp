@@ -39,7 +39,8 @@
 #include "vast/test/fixtures/actor_system_and_events.hpp"
 #include "vast/test/test.hpp"
 
-using vast::byte;
+#include <cstddef>
+
 using vast::span;
 
 TEST(uuid roundtrip) {
@@ -49,7 +50,7 @@ TEST(uuid roundtrip) {
   auto fb = *expected_fb;
   vast::uuid uuid2 = vast::uuid::random();
   CHECK_NOT_EQUAL(uuid, uuid2);
-  span<const byte> span{reinterpret_cast<const byte*>(fb->data()), fb->size()};
+  span<const std::byte> span{reinterpret_cast<const std::byte*>(fb->data()), fb->size()};
   vast::fbs::unwrap<vast::fbs::uuid::v0>(span, uuid2);
   CHECK_EQUAL(uuid, uuid2);
 }

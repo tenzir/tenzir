@@ -17,7 +17,6 @@
 
 #include "vast/test/test.hpp"
 
-#include "vast/byte.hpp"
 #include "vast/concept/parseable/to.hpp"
 #include "vast/concept/parseable/vast/uuid.hpp"
 #include "vast/concept/printable/to_string.hpp"

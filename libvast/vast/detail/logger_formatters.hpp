@@ -38,6 +38,7 @@
 #include <fmt/ostream.h>
 #include <fmt/ranges.h>
 
+#include <cstddef>
 #include <string>
 #include <type_traits>
 
@@ -255,7 +256,7 @@ struct fmt::formatter<caf::error> {
 
 template <typename T>
 struct fmt::formatter<vast::span<T>, fmt::format_context::char_type,
-                      std::enable_if_t<!std::is_same_v<T, vast::byte>>> {
+                      std::enable_if_t<!std::is_same_v<T, std::byte>>> {
   template <typename ParseContext>
   constexpr auto parse(ParseContext& ctx) {
     return ctx.begin();
@@ -269,14 +270,14 @@ struct fmt::formatter<vast::span<T>, fmt::format_context::char_type,
 };
 
 template <>
-struct fmt::formatter<vast::span<vast::byte>> {
+struct fmt::formatter<vast::span<std::byte>> {
   template <typename ParseContext>
   constexpr auto parse(ParseContext& ctx) {
     return ctx.begin();
   }
 
   template <typename FormatContext>
-  auto format(const vast::span<vast::byte>&, FormatContext& ctx) {
+  auto format(const vast::span<std::byte>&, FormatContext& ctx) {
     // Inentioanlly unprintable.
     return format_to(ctx.out(), "vast.span(<bytes>)");
   }

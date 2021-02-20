@@ -13,13 +13,13 @@
 
 #pragma once
 
-#include "vast/byte.hpp"
 #include "vast/msgpack_builder.hpp"
 #include "vast/table_slice.hpp"
 #include "vast/table_slice_builder.hpp"
 
 #include <flatbuffers/flatbuffers.h>
 
+#include <cstddef>
 #include <vector>
 
 namespace vast {
@@ -56,7 +56,7 @@ public:
   /// be FlatBuffers-based.
   /// @returns A table slice from the accumulated calls to add.
   [[nodiscard]] table_slice
-  finish(span<const byte> serialized_layout = {}) override;
+  finish(span<const std::byte> serialized_layout = {}) override;
 
   /// @returns The number of columns in the table slice.
   size_t columns() const noexcept;
@@ -104,7 +104,7 @@ private:
   std::vector<uint64_t> offset_table_ = {};
 
   /// Elements encoded in MessagePack format.
-  std::vector<byte> data_ = {};
+  std::vector<std::byte> data_ = {};
 
   /// The underlying MessagePack builder.
   msgpack::builder<input_validation> msgpack_builder_;

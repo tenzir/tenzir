@@ -24,6 +24,7 @@
 #include <caf/test/dsl.hpp>
 
 #include <array>
+#include <cstddef>
 #include <string>
 #include <vector>
 
@@ -31,7 +32,6 @@ using namespace vast;
 using namespace vast::msgpack;
 using namespace std::string_literals;
 using namespace std::string_view_literals;
-using vast::byte;
 
 namespace {
 
@@ -45,7 +45,7 @@ struct fixture {
     return as_bytes(span{buf.data() + at, buf.size() - at});
   }
 
-  std::vector<byte> buf;
+  std::vector<std::byte> buf;
   msgpack::builder<> builder;
 };
 
@@ -77,29 +77,29 @@ FIXTURE_SCOPE(msgpack_tests, fixture)
 
 TEST(nil) {
   CHECK_EQUAL(builder.add<nil>(), 1u);
-  CHECK_EQUAL(buf[0], static_cast<byte>(nil));
+  CHECK_EQUAL(buf[0], static_cast<std::byte>(nil));
   check_value(object{data()}, caf::none);
 }
 
 TEST(invalid format) {
   using vast::msgpack::format;
   auto never_used = static_cast<format>(0xc1);
-  buf.push_back(byte{never_used});
+  buf.push_back(std::byte{never_used});
   check_value(object{buf}, never_used);
 }
 
 TEST(boolean) {
   CHECK_EQUAL(builder.add<true_>(), 1u);
   CHECK_EQUAL(builder.add<false_>(), 1u);
-  CHECK_EQUAL(buf[0], static_cast<byte>(true_));
-  CHECK_EQUAL(buf[1], static_cast<byte>(false_));
+  CHECK_EQUAL(buf[0], static_cast<std::byte>(true_));
+  CHECK_EQUAL(buf[1], static_cast<std::byte>(false_));
 }
 
 TEST(positive fixint) {
   CHECK_EQUAL(builder.add<positive_fixint>(-1), 0u);
   CHECK_EQUAL(builder.add<positive_fixint>(0), 1u);
   CHECK_EQUAL(builder.add<positive_fixint>(42), 1u);
-  CHECK_EQUAL(buf[1], static_cast<byte>(42 & positive_fixint));
+  CHECK_EQUAL(buf[1], static_cast<std::byte>(42 & positive_fixint));
   CHECK_EQUAL(builder.add<positive_fixint>(128), 0u);
   auto x0 = object{data()};
   CHECK_EQUAL(x0.format(), 0u);
@@ -111,7 +111,7 @@ TEST(positive fixint) {
 TEST(negative fixint) {
   CHECK_EQUAL(builder.add<negative_fixint>(-33), 0u);
   CHECK_EQUAL(builder.add<negative_fixint>(-30), 1u);
-  CHECK_EQUAL(buf[0], static_cast<byte>(-30 & negative_fixint));
+  CHECK_EQUAL(buf[0], static_cast<std::byte>(-30 & negative_fixint));
   CHECK_EQUAL(builder.add<negative_fixint>(0), 0u);
   CHECK_EQUAL(builder.add<negative_fixint>(42), 0u);
   check_value(object{data()}, int8_t{-30});
@@ -288,7 +288,7 @@ TEST(ext8 via proxy) {
   CHECK_EQUAL(result, size);
   auto inner = as_bytes(
     span{buf.data() + header_size<ext8>(), buf.size() - header_size<ext8>()});
-  auto view = unbox(get<ext_view>(object{span<const byte>{buf}}));
+  auto view = unbox(get<ext_view>(object{span<const std::byte>{buf}}));
   auto expected = ext_view{ext8, 42, inner};
   CHECK_EQUAL(view, expected);
   MESSAGE("verify inner data");

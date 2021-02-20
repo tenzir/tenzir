@@ -17,11 +17,12 @@
 #include "vast/io/write.hpp"
 #include "vast/path.hpp"
 
+#include <cstddef>
 #include <cstdio>
 
 namespace vast::io {
 
-caf::error save(const path& filename, span<const byte> xs) {
+caf::error save(const path& filename, span<const std::byte> xs) {
   auto tmp = filename + ".tmp";
   if (auto err = write(tmp, xs)) {
     rm(tmp);

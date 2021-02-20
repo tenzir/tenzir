@@ -11,7 +11,6 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#include "vast/byte.hpp"
 #include "vast/detail/system.hpp"
 #include "vast/directory.hpp"
 #include "vast/file.hpp"
@@ -21,6 +20,8 @@
 #define SUITE filesystem
 #include "vast/test/fixtures/filesystem.hpp"
 #include "vast/test/test.hpp"
+
+#include <cstddef>
 
 #if VAST_POSIX
 #  include <unistd.h>
@@ -213,7 +214,7 @@ TEST_DISABLED(large_file_io) {
     MESSAGE("load into memory");
     file f{filename};
     REQUIRE(f.open(file::read_only));
-    std::vector<byte> buffer(size);
+    std::vector<std::byte> buffer(size);
     auto ptr = reinterpret_cast<char*>(buffer.data());
     if (auto err = f.read(ptr, size))
       FAIL(err);

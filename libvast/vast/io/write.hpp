@@ -11,11 +11,12 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#include "vast/byte.hpp"
 #include "vast/fwd.hpp"
 #include "vast/span.hpp"
 
 #include "caf/fwd.hpp"
+
+#include <cstddef>
 
 namespace vast::io {
 
@@ -23,6 +24,6 @@ namespace vast::io {
 /// @param filename The file to write to.
 /// @param xs The buffer to read from.
 /// @returns An error if the operation failed.
-caf::error write(const path& filename, span<const byte> xs);
+caf::error write(const path& filename, span<const std::byte> xs);
 
 } // namespace vast::io

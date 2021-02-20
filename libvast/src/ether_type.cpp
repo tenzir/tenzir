@@ -15,11 +15,12 @@
 
 #include "vast/detail/byte_swap.hpp"
 
+#include <cstddef>
 #include <utility>
 
 namespace vast {
 
-ether_type as_ether_type(span<const byte, 2> octets) {
+ether_type as_ether_type(span<const std::byte, 2> octets) {
   auto ptr = reinterpret_cast<const uint16_t*>(std::launder(octets.data()));
   return static_cast<ether_type>(detail::to_host_order(*ptr));
 }

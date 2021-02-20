@@ -13,7 +13,6 @@
 
 #pragma once
 
-#include "vast/byte.hpp"
 #include "vast/concept/hashable/uhash.hpp"
 #include "vast/concept/hashable/xxhash.hpp"
 #include "vast/data.hpp"
@@ -32,6 +31,7 @@
 
 #include <algorithm>
 #include <array>
+#include <cstddef>
 #include <cstring>
 #include <string>
 #include <type_traits>
@@ -69,7 +69,7 @@ class hash_index : public value_index {
 
 public:
   using hasher_type = xxhash64;
-  using digest_type = std::array<byte, Bytes>;
+  using digest_type = std::array<std::byte, Bytes>;
 
   static_assert(sizeof(hasher_type::result_type) >= Bytes,
                 "number of chosen bytes exceeds underlying digest size");

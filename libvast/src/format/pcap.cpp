@@ -17,7 +17,6 @@
 
 #  include "vast/format/pcap.hpp"
 
-#  include "vast/byte.hpp"
 #  include "vast/community_id.hpp"
 #  include "vast/defaults.hpp"
 #  include "vast/detail/assert.hpp"
@@ -33,6 +32,7 @@
 #  include <caf/config_value.hpp>
 #  include <caf/settings.hpp>
 
+#  include <cstddef>
 #  include <string>
 #  include <thread>
 #  include <utility>
@@ -180,7 +180,7 @@ enum class frame_type : char {
 
 // Strips all data from a frame until the IP layer is reached. The frame type
 // distinguisher exists for future recursive stripping.
-span<const byte> decapsulate(span<const byte> frame, frame_type type) {
+span<const std::byte> decapsulate(span<const std::byte> frame, frame_type type) {
   switch (type) {
     default:
       return {};
@@ -289,13 +289,13 @@ caf::error reader::read_impl(size_t max_events, size_t max_slice_size,
                                        "failed to get next packet: ", err));
     }
     // Parse frame.
-    span<const byte> frame{reinterpret_cast<const byte*>(data), header->len};
+    span<const std::byte> frame{reinterpret_cast<const std::byte*>(data), header->len};
     frame = decapsulate(frame, frame_type::ethernet);
     if (frame.empty())
       return caf::make_error(ec::format_error, "failed to decapsulate frame");
     constexpr size_t ethernet_header_size = 14;
     auto layer3 = frame.subspan<ethernet_header_size>();
-    span<const byte> layer4;
+    span<const std::byte> layer4;
     uint8_t layer4_proto = 0;
     flow conn;
     // Parse layer 3.
@@ -309,7 +309,7 @@ caf::error reader::read_impl(size_t max_events, size_t max_slice_size,
         constexpr size_t ipv4_header_size = 20;
         if (header->len < ethernet_header_size + ipv4_header_size)
           return caf::make_error(ec::format_error, "IPv4 header too short");
-        size_t header_size = (to_integer<uint8_t>(layer3[0]) & 0x0f) * 4;
+        size_t header_size = (std::to_integer<uint8_t>(layer3[0]) & 0x0f) * 4;
         if (header_size < ipv4_header_size)
           return caf::make_error(
             ec::format_error, "IPv4 header too short: ", header_size, " bytes");
@@ -319,7 +319,7 @@ caf::error reader::read_impl(size_t max_events, size_t max_slice_size,
           = reinterpret_cast<const uint32_t*>(std::launder(layer3.data() + 16));
         conn.src_addr = {orig_h, address::ipv4, address::network};
         conn.dst_addr = {resp_h, address::ipv4, address::network};
-        layer4_proto = to_integer<uint8_t>(layer3[9]);
+        layer4_proto = std::to_integer<uint8_t>(layer3[9]);
         layer4 = layer3.subspan(header_size);
         break;
       }
@@ -332,7 +332,7 @@ caf::error reader::read_impl(size_t max_events, size_t max_slice_size,
           = reinterpret_cast<const uint32_t*>(std::launder(layer3.data() + 24));
         conn.src_addr = {orig_h, address::ipv4, address::network};
         conn.dst_addr = {resp_h, address::ipv4, address::network};
-        layer4_proto = to_integer<uint8_t>(layer3[6]);
+        layer4_proto = std::to_integer<uint8_t>(layer3[6]);
         layer4 = layer3.subspan(40);
         break;
       }
@@ -366,8 +366,8 @@ caf::error reader::read_impl(size_t max_events, size_t max_slice_size,
       payload_size -= 8;
     } else if (layer4_proto == IPPROTO_ICMP) {
       VAST_ASSERT(!layer4.empty());
-      auto message_type = to_integer<uint8_t>(layer4[0]);
-      auto message_code = to_integer<uint8_t>(layer4[1]);
+      auto message_type = std::to_integer<uint8_t>(layer4[0]);
+      auto message_code = std::to_integer<uint8_t>(layer4[1]);
       conn.src_port = {message_type, port_type::icmp};
       conn.dst_port = {message_code, port_type::icmp};
       payload_size -= 8; // TODO: account for variable-size data.

@@ -23,6 +23,7 @@
 #include <caf/meta/load_callback.hpp>
 #include <caf/meta/type_name.hpp>
 
+#include <cstddef>
 #include <vector>
 
 namespace vast {
@@ -168,7 +169,7 @@ public:
   /// Returns an immutable view on the underlying binary representation of a
   /// table slice.
   /// @param slice The table slice to view.
-  friend span<const byte> as_bytes(const table_slice& slice) noexcept;
+  friend span<const std::byte> as_bytes(const table_slice& slice) noexcept;
 
   /// Opt-in to CAF's type inspection API.
   template <class Inspector>
