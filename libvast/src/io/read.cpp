@@ -17,9 +17,11 @@
 #include "vast/file.hpp"
 #include "vast/path.hpp"
 
+#include <cstddef>
+
 namespace vast::io {
 
-caf::error read(const path& filename, span<byte> xs) {
+caf::error read(const path& filename, span<std::byte> xs) {
   file f{filename};
   if (!f.open(file::read_only))
     return caf::make_error(ec::filesystem_error, "failed open file");
@@ -32,12 +34,12 @@ caf::error read(const path& filename, span<byte> xs) {
   return caf::none;
 }
 
-caf::expected<std::vector<byte>> read(const path& filename) {
+caf::expected<std::vector<std::byte>> read(const path& filename) {
   auto size = file_size(filename);
   if (!size)
     return size.error();
-  std::vector<byte> buffer(*size);
-  if (auto err = read(filename, span<byte>{buffer}))
+  std::vector<std::byte> buffer(*size);
+  if (auto err = read(filename, span<std::byte>{buffer}))
     return err;
   return buffer;
 }

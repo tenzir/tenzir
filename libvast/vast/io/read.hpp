@@ -11,10 +11,10 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#include "vast/byte.hpp"
 #include "vast/fwd.hpp"
 #include "vast/span.hpp"
 
+#include <cstddef>
 #include <vector>
 
 #include "caf/fwd.hpp"
@@ -25,11 +25,11 @@ namespace vast::io {
 /// @param filename The file to read from.
 /// @param xs The buffer to write into.
 /// @returns An error if the operation failed.
-caf::error read(const path& filename, span<byte> xs);
+caf::error read(const path& filename, span<std::byte> xs);
 
 /// Reads bytes from a file into a buffer in one shot.
 /// @param filename The file to read from.
 /// @returns The raw bytes of the buffer.
-caf::expected<std::vector<byte>> read(const path& filename);
+caf::expected<std::vector<std::byte>> read(const path& filename);
 
 } // namespace vast::io

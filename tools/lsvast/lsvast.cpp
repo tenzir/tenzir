@@ -152,14 +152,14 @@ struct flatbuffer_deleter {
   flatbuffer_deleter(const flatbuffer_deleter&) = delete;
   flatbuffer_deleter(flatbuffer_deleter&&) = default;
 
-  flatbuffer_deleter(std::vector<vast::byte>&& c) : chunk_(std::move(c)) {
+  flatbuffer_deleter(std::vector<std::byte>&& c) : chunk_(std::move(c)) {
   }
 
   void operator()(const T*) {
     // nop (the destructor of `chunk_` already releases the memory)
   }
 
-  std::vector<vast::byte> chunk_;
+  std::vector<std::byte> chunk_;
 };
 
 // Get contents of the specified file as versioned flatbuffer, or nullptr in

@@ -29,6 +29,8 @@
 #include "vast/table_slice_builder_factory.hpp"
 #include "vast/value_index.hpp"
 
+#include <cstddef>
+
 #if VAST_ENABLE_ARROW
 #  include "vast/arrow_table_slice.hpp"
 #endif // VAST_ENABLE_ARROW
@@ -185,7 +187,7 @@ table_slice::table_slice(const fbs::FlatTableSlice& flat_slice,
                          const chunk_ptr& parent_chunk,
                          enum verify verify) noexcept {
   const auto flat_slice_begin
-    = reinterpret_cast<const byte*>(flat_slice.data()->data());
+    = reinterpret_cast<const std::byte*>(flat_slice.data()->data());
   const auto flat_slice_size = flat_slice.data()->size();
   VAST_ASSERT(flat_slice_begin >= parent_chunk->data());
   VAST_ASSERT(flat_slice_begin + flat_slice_size
@@ -397,7 +399,7 @@ std::shared_ptr<arrow::RecordBatch> as_record_batch(const table_slice& slice) {
 
 // -- concepts -----------------------------------------------------------------
 
-span<const byte> as_bytes(const table_slice& slice) noexcept {
+span<const std::byte> as_bytes(const table_slice& slice) noexcept {
   return as_bytes(slice.chunk_);
 }
 
@@ -448,18 +450,18 @@ void select(std::vector<table_slice>& result, const table_slice& slice,
   }
   // Get the desired encoding, and the already serialized layout.
   auto f = detail::overload{
-    []() noexcept -> std::pair<table_slice_encoding, span<const byte>> {
+    []() noexcept -> std::pair<table_slice_encoding, span<const std::byte>> {
       die("cannot select from an invalid table slice");
     },
     [&](const auto& encoded) noexcept {
       return std::pair{
         builder_id(state(encoded, slice.state_)->encoding),
-        span{reinterpret_cast<const byte*>(encoded.layout()->data()),
+        span{reinterpret_cast<const std::byte*>(encoded.layout()->data()),
              encoded.layout()->size()}};
     },
   };
   table_slice_encoding implementation_id;
-  span<const byte> serialized_layout = {};
+  span<const std::byte> serialized_layout = {};
   std::tie(implementation_id, serialized_layout)
     = visit(f, as_flatbuffer(slice.chunk_));
   // Start slicing and dicing.

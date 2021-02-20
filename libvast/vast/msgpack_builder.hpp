@@ -13,7 +13,6 @@
 
 #pragma once
 
-#include "vast/byte.hpp"
 #include "vast/detail/byte_swap.hpp"
 #include "vast/detail/narrow.hpp"
 #include "vast/detail/type_traits.hpp"
@@ -61,7 +60,7 @@ class builder {
   };
 
 public:
-  using value_type = vast::byte;
+  using value_type = std::byte;
 
   /// A helper class to build formats incrementally. Zero or more calls of
   /// `add` must always follow a final call to `finish` to finalize the
@@ -426,7 +425,7 @@ private:
   }
 
   template <format Format>
-  [[nodiscard]] size_t add_binary(vast::span<const vast::byte> xs) {
+  [[nodiscard]] size_t add_binary(vast::span<const std::byte> xs) {
     using namespace vast::detail;
     auto n = make_size<Format>(xs.size());
     return write_byte(Format) + write_count(n) + write_data(xs);
@@ -434,14 +433,14 @@ private:
 
   template <format Format>
   [[nodiscard]] size_t
-  add_fix_ext(extension_type type, vast::span<const vast::byte> xs) {
+  add_fix_ext(extension_type type, vast::span<const std::byte> xs) {
     return write_byte(Format) + write_byte(type)
            + write_data(xs.data(), xs.size());
   }
 
   template <format Format>
   [[nodiscard]] size_t
-  add_ext(extension_type type, vast::span<const vast::byte> xs) {
+  add_ext(extension_type type, vast::span<const std::byte> xs) {
     auto n = make_size<Format>(xs.size());
     return write_byte(Format) + write_count(n) + write_byte(type)
            + write_data(xs.data(), xs.size());
@@ -560,7 +559,7 @@ size_t put(Builder& builder, std::string_view x) {
 // -- bin ---------------------------------------------------------------------
 
 template <class Builder>
-size_t put(Builder& builder, vast::span<const vast::byte> xs) {
+size_t put(Builder& builder, vast::span<const std::byte> xs) {
   auto size = static_cast<size_t>(xs.size());
   if (size <= capacity<bin8>())
     return builder.template add<bin8>(xs);

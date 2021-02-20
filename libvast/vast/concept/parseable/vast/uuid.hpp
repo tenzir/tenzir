@@ -14,6 +14,7 @@
 #pragma once
 
 #include <algorithm>
+#include <cstddef>
 
 #include "vast/uuid.hpp"
 #include "vast/concept/parseable/core/parser.hpp"
@@ -72,13 +73,13 @@ struct uuid_parser : parser<uuid_parser> {
     return true;
   }
 
-  static byte lookup(char c) {
+  static std::byte lookup(char c) {
     static constexpr auto digits = "0123456789abcdefABCDEF";
     static constexpr uint8_t values[]
       = {0,  1,  2,  3,  4,  5,  6,  7,  8,  9,  10,  11,
          12, 13, 14, 15, 10, 11, 12, 13, 14, 15, 0xff};
     // TODO: use a static table as opposed to searching in the vector.
-    return byte{values[std::find(digits, digits + 22, c) - digits]};
+    return std::byte{values[std::find(digits, digits + 22, c) - digits]};
   }
 };
 

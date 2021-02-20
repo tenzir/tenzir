@@ -14,7 +14,6 @@
 #pragma once
 
 #include "vast/as_bytes.hpp"
-#include "vast/byte.hpp"
 #include "vast/detail/type_traits.hpp"
 #include "vast/span.hpp"
 

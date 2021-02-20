@@ -22,6 +22,8 @@
 #include "vast/detail/serialize.hpp"
 #include "vast/span.hpp"
 
+#include <cstddef>
+
 using namespace vast;
 
 TEST(deleter) {
@@ -42,7 +44,7 @@ TEST(access) {
   REQUIRE_NOT_EQUAL(chk, nullptr);
   auto& x = *chk;
   CHECK_EQUAL(x.size(), 3u);
-  CHECK_EQUAL(*x.begin(), static_cast<byte>('f'));
+  CHECK_EQUAL(*x.begin(), static_cast<std::byte>('f'));
 }
 
 TEST(slicing) {
@@ -68,7 +70,7 @@ TEST(serialization) {
 TEST(as_bytes) {
   std::string str = "foobarbaz";
   auto bytes
-    = span{reinterpret_cast<const vast::byte*>(str.data()), str.size()};
+    = span{reinterpret_cast<const std::byte*>(str.data()), str.size()};
   auto x = chunk::make(std::move(str));
   CHECK_EQUAL(bytes, as_bytes(x));
 }

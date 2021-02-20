@@ -13,13 +13,15 @@
 
 #include "vast/msgpack.hpp"
 
+#include <cstddef>
+
 namespace vast::msgpack {
 
 overlay array_view::data() const {
   return overlay{data_};
 }
 
-overlay::overlay(span<const byte> buffer) : buffer_{buffer}, position_{0} {
+overlay::overlay(span<const std::byte> buffer) : buffer_{buffer}, position_{0} {
   // nop
 }
 

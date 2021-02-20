@@ -19,6 +19,7 @@
 #include "vast/logger.hpp"
 #include "vast/msgpack_table_slice.hpp"
 
+#include <cstddef>
 #include <memory>
 
 namespace vast {
@@ -112,7 +113,7 @@ size_t msgpack_table_slice_builder::columns() const noexcept {
 }
 
 table_slice
-msgpack_table_slice_builder::finish(span<const byte> serialized_layout) {
+msgpack_table_slice_builder::finish(span<const std::byte> serialized_layout) {
   // Sanity check: If this triggers, the calls to add() did not match the number
   // of fields in the layout.
   VAST_ASSERT(column_ == 0);

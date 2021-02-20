@@ -13,7 +13,6 @@
 
 #pragma once
 
-#include "vast/byte.hpp"
 #include "vast/detail/operators.hpp"
 #include "vast/fbs/uuid.hpp"
 #include "vast/span.hpp"
@@ -23,6 +22,7 @@
 #include <caf/meta/hex_formatted.hpp>
 
 #include <array>
+#include <cstddef>
 
 namespace vast {
 
@@ -32,7 +32,7 @@ public:
   /// The number of bytes in a UUID;
   static constexpr size_t num_bytes = 16;
 
-  using value_type = byte;
+  using value_type = std::byte;
   using reference = value_type&;
   using const_reference = const value_type&;
   using iterator = value_type*;
@@ -47,7 +47,7 @@ public:
 
   /// Constructs a UUID from 16 bytes.
   /// @param bytes The data to interpret as UUID.
-  explicit uuid(span<const byte, num_bytes> bytes);
+  explicit uuid(span<const std::byte, num_bytes> bytes);
 
   /// Accesses a specific byte.
   reference operator[](size_t i);
@@ -64,8 +64,8 @@ public:
   friend bool operator<(const uuid& x, const uuid& y);
 
   /// @returns the binary data.
-  friend span<const byte, num_bytes> as_bytes(const uuid& x) {
-    return span<const byte, num_bytes>{x.id_};
+  friend span<const std::byte, num_bytes> as_bytes(const uuid& x) {
+    return span<const std::byte, num_bytes>{x.id_};
   }
 
   template <class Inspector>

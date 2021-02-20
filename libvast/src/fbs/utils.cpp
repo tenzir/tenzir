@@ -16,6 +16,7 @@
 #include "vast/chunk.hpp"
 #include "vast/error.hpp"
 
+#include <cstddef>
 #include <optional>
 #include <string_view>
 
@@ -31,7 +32,7 @@ chunk_ptr release(flatbuffers::FlatBufferBuilder& builder) {
   return chunk::make(builder.Release());
 }
 
-flatbuffers::Verifier make_verifier(span<const byte> xs) {
+flatbuffers::Verifier make_verifier(span<const std::byte> xs) {
   auto data = reinterpret_cast<const uint8_t*>(xs.data());
   return flatbuffers::Verifier{data, xs.size()};
 }

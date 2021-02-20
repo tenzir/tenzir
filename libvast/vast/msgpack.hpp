@@ -13,7 +13,6 @@
 
 #pragma once
 
-#include "vast/byte.hpp"
 #include "vast/detail/assert.hpp"
 #include "vast/detail/byte_swap.hpp"
 #include "vast/detail/operators.hpp"
@@ -310,7 +309,7 @@ constexpr size_t capacity() {
 /// @param ptr A pointer to the beginning of the numeric value.
 /// @returns The converted value starting at *ptr*.
 template <class To>
-To to_num(const vast::byte* ptr) {
+To to_num(const std::byte* ptr) {
   if constexpr (std::is_unsigned_v<To>) {
     return vast::detail::to_host_order(*reinterpret_cast<const To*>(ptr));
   } else {
@@ -323,7 +322,7 @@ To to_num(const vast::byte* ptr) {
 /// A variant structure to access encoded data.
 class object {
 public:
-  explicit object(vast::span<const vast::byte> data)
+  explicit object(vast::span<const std::byte> data)
     : format_{data.empty() ? nil : static_cast<msgpack::format>(data[0])},
       data_{data} {
     // nop
@@ -344,7 +343,7 @@ public:
 
 private:
   msgpack::format format_;
-  vast::span<const vast::byte> data_;
+  vast::span<const std::byte> data_;
 };
 
 class overlay; // forward declaration
@@ -354,7 +353,7 @@ class overlay; // forward declaration
 class array_view {
 public:
   array_view(msgpack::format fmt, size_t size,
-             vast::span<const vast::byte> data)
+             vast::span<const std::byte> data)
     : format_{fmt}, size_{size}, data_{data} {
     VAST_ASSERT(is_fixarray(fmt) || fmt == array16 || fmt == array32
                 || is_fixmap(fixmap) || fmt == map16 || fmt == map32);
@@ -382,14 +381,14 @@ public:
 private:
   msgpack::format format_;
   size_t size_;
-  vast::span<const vast::byte> data_;
+  vast::span<const std::byte> data_;
 };
 
 /// A view over values of the *ext* family.
 /// @relates object
 class ext_view : vast::detail::equality_comparable<ext_view> {
 public:
-  ext_view(msgpack::format fmt, int8_t type, vast::span<const vast::byte> data)
+  ext_view(msgpack::format fmt, int8_t type, vast::span<const std::byte> data)
     : format_{fmt}, type_{type}, data_{data} {
     VAST_ASSERT(fmt == fixext1 || fmt == fixext2 || fmt == fixext4
                 || fmt == fixext8 || fmt == fixext16 || fmt == ext8
@@ -417,7 +416,7 @@ public:
 private:
   msgpack::format format_;
   int8_t type_;
-  vast::span<const vast::byte> data_;
+  vast::span<const std::byte> data_;
 };
 
 /// @relates ext_view
@@ -429,7 +428,7 @@ inline bool operator==(const ext_view& x, const ext_view y) {
 /// @relates object
 template <class Visitor>
 decltype(auto) visit(Visitor&& f, const object& x) {
-  using const_byte_span = vast::span<const vast::byte>;
+  using const_byte_span = vast::span<const std::byte>;
   using namespace vast::detail;
   auto fmt = x.format();
   auto data = x.data();
@@ -617,7 +616,7 @@ class overlay {
 public:
   /// Constructs an overlay from a byte sequence.
   /// @param buffer The sequence of bytes.
-  explicit overlay(vast::span<const vast::byte> buffer);
+  explicit overlay(vast::span<const std::byte> buffer);
 
   /// Access the object at the current position.
   /// @pre The underlying buffer must represent a sequence of at least one
@@ -643,12 +642,12 @@ public:
   }
 
 private:
-  const vast::byte* at(size_t i) const {
+  const std::byte* at(size_t i) const {
     return buffer_.data() + position_ + i;
   }
 
-  vast::span<const vast::byte> buffer_;
-  vast::span<const vast::byte>::index_type position_;
+  vast::span<const std::byte> buffer_;
+  vast::span<const std::byte>::index_type position_;
 };
 
 } // namespace vast::msgpack

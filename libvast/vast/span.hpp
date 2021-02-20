@@ -25,7 +25,6 @@
 
 #include "vast/fwd.hpp"
 
-#include "vast/byte.hpp"
 #include "vast/detail/assert.hpp"
 #include "vast/detail/narrow.hpp"
 
@@ -564,16 +563,16 @@ constexpr size_t calculate_byte_size() {
 
 // [span.objectrep], views of object representation
 template <class ElementType, size_t Extent>
-span<const byte, calculate_byte_size<ElementType, Extent>()>
+span<const std::byte, calculate_byte_size<ElementType, Extent>()>
 as_bytes(span<ElementType, Extent> s) noexcept {
-  return {reinterpret_cast<const byte*>(std::launder(s.data())), s.memusage()};
+  return {reinterpret_cast<const std::byte*>(std::launder(s.data())), s.memusage()};
 }
 
 template <class ElementType, size_t Extent,
           class = std::enable_if_t<!std::is_const_v<ElementType>>>
-span<byte, calculate_byte_size<ElementType, Extent>()>
+span<std::byte, calculate_byte_size<ElementType, Extent>()>
 as_writeable_bytes(span<ElementType, Extent> s) noexcept {
-  return {reinterpret_cast<byte*>(std::launder(s.data())), s.memusage()};
+  return {reinterpret_cast<std::byte*>(std::launder(s.data())), s.memusage()};
 }
 
 } // namespace vast

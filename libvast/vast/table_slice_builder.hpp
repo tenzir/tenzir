@@ -13,7 +13,6 @@
 
 #pragma once
 
-#include "vast/byte.hpp"
 #include "vast/fwd.hpp"
 #include "vast/span.hpp"
 #include "vast/view.hpp"
@@ -86,7 +85,7 @@ public:
   /// @returns A table slice from the accumulated calls to add.
   /// @note Returns an invalid table slice on failure.
   [[nodiscard]] virtual table_slice
-  finish(span<const byte> serialized_layout = {})
+  finish(span<const std::byte> serialized_layout = {})
     = 0;
 
   /// @returns The current number of rows in the table slice.

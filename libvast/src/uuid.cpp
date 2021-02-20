@@ -17,6 +17,7 @@
 #include "vast/error.hpp"
 #include "vast/fbs/uuid.hpp"
 
+#include <cstddef>
 #include <cstring>
 #include <random>
 
@@ -42,15 +43,15 @@ public:
         r = unif_(rd_);
         i = 0;
       }
-      x = detail::narrow_cast<byte>((r >> (i * 8)) & 0xff);
+      x = detail::narrow_cast<std::byte>((r >> (i * 8)) & 0xff);
       ++i;
     }
     // Set variant to 0b10xxxxxx.
-    result[8] &= byte{0xbf};
-    result[8] |= byte{0x80};
+    result[8] &= std::byte{0xbf};
+    result[8] |= std::byte{0x80};
     // Set version to 0b0100xxxx.
-    result[6] &= byte{0x4f}; // 0b01001111
-    result[6] |= byte{0x40}; // 0b01000000
+    result[6] &= std::byte{0x4f}; // 0b01001111
+    result[6] |= std::byte{0x40}; // 0b01000000
     return result;
   }
 
@@ -67,11 +68,11 @@ uuid uuid::random() {
 
 uuid uuid::nil() {
   uuid u;
-  u.id_.fill(byte{0});
+  u.id_.fill(std::byte{0});
   return u;
 }
 
-uuid::uuid(span<const byte, num_bytes> bytes) {
+uuid::uuid(span<const std::byte, num_bytes> bytes) {
   std::memcpy(id_.data(), bytes.data(), bytes.size());
 }
 
@@ -123,8 +124,8 @@ pack(flatbuffers::FlatBufferBuilder& builder, const uuid& x) {
 caf::error unpack(const fbs::uuid::v0& x, uuid& y) {
   if (x.data()->size() != uuid::num_bytes)
     return caf::make_error(ec::format_error, "wrong uuid format");
-  span<const byte, uuid::num_bytes> bytes{
-    reinterpret_cast<const byte*>(x.data()->data()), x.data()->size()};
+  span<const std::byte, uuid::num_bytes> bytes{
+    reinterpret_cast<const std::byte*>(x.data()->data()), x.data()->size()};
   y = uuid{bytes};
   return caf::none;
 }

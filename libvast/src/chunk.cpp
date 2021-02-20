@@ -24,6 +24,7 @@
 #include <caf/make_counted.hpp>
 #include <caf/serializer.hpp>
 
+#include <cstddef>
 #include <cstring>
 #include <fcntl.h>
 #include <memory>
@@ -129,7 +130,7 @@ chunk_ptr chunk::slice(size_type start, size_type length) const {
 
 // -- concepts -----------------------------------------------------------------
 
-span<const byte> as_bytes(const chunk_ptr& x) noexcept {
+span<const std::byte> as_bytes(const chunk_ptr& x) noexcept {
   if (!x)
     return {};
   return as_bytes(*x);
@@ -163,7 +164,7 @@ caf::error inspect(caf::serializer& sink, const chunk_ptr& x) {
     return sink(uint32_t{0});
   return caf::error::eval(
     [&] { return sink(narrow<uint32_t>(x->size())); },
-    [&] { return sink.apply_raw(x->size(), const_cast<byte*>(x->data())); });
+    [&] { return sink.apply_raw(x->size(), const_cast<std::byte*>(x->data())); });
 }
 
 caf::error inspect(caf::deserializer& source, chunk_ptr& x) {
