@@ -12,12 +12,12 @@
  ******************************************************************************/
 
 #include "vast/expression.hpp"
+
 #include "vast/concept/printable/to_string.hpp"
 #include "vast/concept/printable/vast/expression.hpp"
-#include "vast/expression_visitors.hpp"
-
 #include "vast/detail/assert.hpp"
 #include "vast/detail/overload.hpp"
+#include "vast/expression_visitors.hpp"
 #include "vast/logger.hpp"
 
 namespace vast {
@@ -87,8 +87,7 @@ bool operator==(const predicate& x, const predicate& y) {
 }
 
 bool operator<(const predicate& x, const predicate& y) {
-  return std::tie(x.lhs, x.op, x.rhs)
-         < std::tie(y.lhs, y.op, y.rhs);
+  return std::tie(x.lhs, x.op, x.rhs) < std::tie(y.lhs, y.op, y.rhs);
 }
 
 // -- curried_predicate --------------------------------------------------------
@@ -120,8 +119,7 @@ disjunction::disjunction(super&& other) noexcept : super{std::move(other)} {
 
 // -- negation -----------------------------------------------------------------
 
-negation::negation()
-  : expr_{std::make_unique<expression>()} {
+negation::negation() : expr_{std::make_unique<expression>()} {
 }
 
 negation::negation(expression expr)
@@ -132,8 +130,7 @@ negation::negation(const negation& other)
   : expr_{std::make_unique<expression>(*other.expr_)} {
 }
 
-negation::negation(negation&& other) noexcept
-  : expr_{std::move(other.expr_)} {
+negation::negation(negation&& other) noexcept : expr_{std::move(other.expr_)} {
 }
 
 negation& negation::operator=(const negation& other) {
@@ -182,32 +179,30 @@ bool operator<(const expression& x, const expression& y) {
 
 // -- free functions -----------------------------------------------------------
 
-expression hoist(const expression& expr) {
-  return caf::visit(hoister{}, expr);
+expression hoist(expression expr) {
+  return caf::visit(hoister{}, std::move(expr));
 }
 
-expression normalize(const expression& expr) {
-  expression r;
-  r = caf::visit(hoister{}, expr);
-  r = caf::visit(aligner{}, r);
-  r = caf::visit(denegator{}, r);
-  r = caf::visit(deduplicator{}, r);
-  r = caf::visit(hoister{}, r);
-  return r;
+expression normalize(expression expr) {
+  expr = caf::visit(hoister{}, std::move(expr));
+  expr = caf::visit(aligner{}, std::move(expr));
+  expr = caf::visit(denegator{}, std::move(expr));
+  expr = caf::visit(deduplicator{}, std::move(expr));
+  expr = caf::visit(hoister{}, std::move(expr));
+  return expr;
 }
 
-caf::expected<expression> normalize_and_validate(const expression& expr) {
-  auto normalized = normalize(expr);
-  auto result = caf::visit(validator{}, normalized);
-  if (!result)
+caf::expected<expression> normalize_and_validate(expression expr) {
+  expr = normalize(std::move(expr));
+  if (auto result = caf::visit(validator{}, std::move(expr)); !result)
     return result.error();
-  return normalized;
+  return expr;
 }
 
-caf::expected<expression> tailor(const expression& expr, const type& t) {
+caf::expected<expression> tailor(expression expr, const type& t) {
   if (caf::holds_alternative<caf::none_t>(expr))
     return caf::make_error(ec::unspecified, "invalid expression");
-  return caf::visit(type_resolver{t}, expr);
+  return caf::visit(type_resolver{t}, std::move(expr));
 }
 
 namespace {
@@ -215,22 +210,22 @@ namespace {
 // Helper function to lookup an expression at a particular offset
 const expression* at(const expression* expr, offset::value_type i) {
   VAST_ASSERT(expr != nullptr);
-  return caf::visit(detail::overload{
-                      [&](const conjunction& xs) -> const expression* {
-                        return i < xs.size() ? &xs[i] : nullptr;
-                      },
-                      [&](const disjunction& xs) -> const expression* {
-                        return i < xs.size() ? &xs[i] : nullptr;
-                      },
-                      [&](const negation& x) -> const expression* {
-                        return i == 0 ? &x.expr() : nullptr;
-                      },
-                      [&](const auto&) -> const expression* { return nullptr; },
-                    },
-                    *expr);
+  auto f = detail::overload{
+    [&](const conjunction& xs) -> const expression* {
+      return i < xs.size() ? &xs[i] : nullptr;
+    },
+    [&](const disjunction& xs) -> const expression* {
+      return i < xs.size() ? &xs[i] : nullptr;
+    },
+    [&](const negation& x) -> const expression* {
+      return i == 0 ? &x.expr() : nullptr;
+    },
+    [&](const auto&) -> const expression* { return nullptr; },
+  };
+  return caf::visit(f, *expr);
 }
 
-} // namespace <anonymous>
+} // namespace
 
 const expression* at(const expression& expr, const offset& o) {
   if (o.empty())
@@ -290,10 +285,10 @@ bool resolve_impl(std::vector<std::pair<offset, predicate>>& result,
   return caf::visit(v, expr);
 }
 
-} // namespace <anonymous>
+} // namespace
 
-std::vector<std::pair<offset, predicate>> resolve(const expression& expr,
-                                                  const type& t) {
+std::vector<std::pair<offset, predicate>>
+resolve(const expression& expr, const type& t) {
   std::vector<std::pair<offset, predicate>> result;
   offset o{0};
   if (resolve_impl(result, expr, t, o))

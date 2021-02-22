@@ -44,14 +44,14 @@ normalized_and_validated(std::vector<std::string>::const_iterator begin,
   // entry and move on to parsing the input as VAST expression.
   if (auto yaml = from_yaml(str)) {
     if (auto e = detail::sigma::parse_rule(*yaml))
-      return normalize_and_validate(*e);
+      return normalize_and_validate(std::move(*e));
     else
       VAST_DEBUG("failed to parse query as Sigma rule: {}", e.error());
   } else {
     VAST_DEBUG("failed to parse input as YAML: {}", yaml.error());
   }
   if (auto e = to<expression>(str)) {
-    return normalize_and_validate(*e);
+    return normalize_and_validate(std::move(*e));
   } else {
     VAST_DEBUG("failed to parse query as VAST expression: {}", e.error());
     return std::move(e.error());

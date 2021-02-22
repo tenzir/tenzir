@@ -320,7 +320,7 @@ caf::expected<expression> parse_search_id(const data& yaml) {
         }
         auto expr = all ? expression{conjunction(std::move(connective))}
                         : expression{disjunction(std::move(connective))};
-        result.emplace_back(hoist(expr));
+        result.emplace_back(hoist(std::move(expr)));
       } else {
         result.emplace_back(make_predicate(rhs));
       }

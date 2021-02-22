@@ -50,7 +50,7 @@ caf::expected<expression> parse_expression(command::argument_iterator begin,
   auto str = detail::join(begin, end, " ");
   auto expr = to<expression>(str);
   if (expr)
-    expr = normalize_and_validate(*expr);
+    expr = normalize_and_validate(std::move(*expr));
   return expr;
 }
 
