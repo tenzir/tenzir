@@ -134,7 +134,7 @@ public:
 
   /// Sets the type name.
   /// @param x The new name of the type.
-  type&& name(const std::string& x) &&;
+  type name(const std::string& x) &&;
 
   /// Specifies a list of attributes.
   /// @param xs The list of attributes.
@@ -142,7 +142,7 @@ public:
 
   /// Specifies a list of attributes.
   /// @param xs The list of attributes.
-  type&& attributes(std::vector<attribute> xs) &&;
+  type attributes(std::vector<attribute> xs) &&;
 
   /// Inserts a list of attributes, updating already existing keys with new
   /// values.
@@ -152,7 +152,7 @@ public:
   /// Inserts a list of attributes, updating already existing keys with new
   /// values.
   /// @param xs The list of attributes.
-  type&& update_attributes(std::vector<attribute> xs) &&;
+  type update_attributes(std::vector<attribute> xs) &&;
 
   // -- inspectors ------------------------------------------------------------
 
@@ -284,7 +284,7 @@ public:
 
   /// Sets the type name.
   /// @param x The new name of the type.
-  Derived&& name(const std::string& x) && {
+  Derived name(const std::string& x) && {
     this->name_ = x;
     return std::move(derived());
   }
@@ -299,7 +299,7 @@ public:
     return derived();
   }
 
-  Derived&& attributes(std::vector<attribute> xs) && {
+  Derived attributes(std::vector<attribute> xs) && {
     this->attributes_ = std::move(xs);
     return std::move(derived());
   }
@@ -423,7 +423,7 @@ struct nested_type : recursive_type<Derived> {
   friend class concrete_type<Derived>; // equals/less_than
   using super = recursive_type<Derived>;
 
-  nested_type(type t = {}) : value_type{std::move(t)} {
+  explicit nested_type(type t = {}) : value_type{std::move(t)} {
     // nop
   }
 
@@ -495,7 +495,8 @@ struct subnet_type final : basic_type<subnet_type> {};
 struct enumeration_type final : complex_type<enumeration_type> {
   using super = complex_type<enumeration_type>;
 
-  enumeration_type(std::vector<std::string> xs = {}) : fields{std::move(xs)} {
+  explicit enumeration_type(std::vector<std::string> xs = {})
+    : fields{std::move(xs)} {
     // nop
   }
 
@@ -532,7 +533,7 @@ struct list_type final : nested_type<list_type> {
 struct map_type final : recursive_type<map_type> {
   using super = recursive_type<map_type>;
 
-  map_type(type key = {}, type value = {})
+  explicit map_type(type key = {}, type value = {})
     : key_type{std::move(key)}, value_type{std::move(value)} {
     // nop
   }
@@ -565,7 +566,13 @@ struct map_type final : recursive_type<map_type> {
 /// A field of a record.
 /// @relates record_type
 struct record_field : detail::totally_ordered<record_field> {
-  record_field(std::string name = {}, vast::type type = {})
+  record_field() noexcept = default;
+
+  explicit record_field(std::string name) noexcept : name{std::move(name)} {
+    // nop
+  }
+
+  record_field(std::string name, vast::type type) noexcept
     : name{std::move(name)}, type{std::move(type)} {
     // nop
   }
@@ -611,11 +618,13 @@ struct record_type final : recursive_type<record_type> {
     detail::stack_vector<const record_type*, 64> records_;
   };
 
-  /// Constructs a record type from a list of fields.
-  record_type(std::vector<record_field> xs = {});
+  record_type() = default;
 
   /// Constructs a record type from a list of fields.
-  record_type(std::initializer_list<record_field> xs);
+  explicit record_type(std::vector<record_field> xs) noexcept;
+
+  /// Constructs a record type from a list of fields.
+  record_type(std::initializer_list<record_field> xs) noexcept;
 
   /// Calculates the number of basic types that can be found when traversing the
   /// tree. An faster version of `flatten(*this).fields.size()` or

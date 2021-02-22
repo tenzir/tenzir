@@ -123,7 +123,7 @@ tests:
         input: data/zeek/dns.log.gz
       - command: -N export ascii 'resp_h == 192.168.1.104'
       - command: -N export ascii 'zeek.conn.id.resp_h == 192.168.1.104'
-      - command: '-N count "#timestamp >= 1970-01-01 && #type != \"vast.metrics\""'
+      - command: '-N count ":timestamp >= 1970-01-01 && #type != \"vast.metrics\""'
       - command: -N count '#type == "zeek.conn"'
   Node Zeek dns log:
     tags: [node, import-export, zeek]
@@ -199,7 +199,7 @@ tests:
         input: data/zeek/dns.log.gz
       - command: export ascii 'resp_h == 192.168.1.104'
       - command: export ascii 'zeek.conn.id.resp_h == 192.168.1.104'
-      - command: 'count "#timestamp >= 1970-01-01 && #type != \"vast.metrics\""'
+      - command: 'count ":timestamp >= 1970-01-01 && #type != \"vast.metrics\""'
       - command: count '#type == "zeek.conn"'
   Table Slice Types:
     tags: [server, import-export, batch-encoding, zeek]
@@ -255,7 +255,7 @@ tests:
       - command: -N import -s @./misc/schema/zeek-conn.schema -t zeek.conn.custom json
         input: data/json/conn.log.json.gz
       - command: -N export ascii 'duration > 6s'
-      - command: -N export ascii '#timestamp >= 2011-08-15T03:48'
+      - command: -N export ascii ':timestamp >= 2011-08-15T03:48'
   Node suricata alert:
     tags: [node, import-export, suricata, eve]
     steps:

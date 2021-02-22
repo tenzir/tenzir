@@ -279,8 +279,9 @@ TEST(zeek reader - conn log) {
 TEST(zeek reader - custom schema) {
   std::string custom_schema = R"__(
     type port = count
+    type timestamp = time
     type zeek.conn = record{
-      ts: time #test,
+      ts: timestamp #test,
       uid: string #index=string, // clashing user attribute
       id: record {orig_h: addr, orig_p: port, resp_h: addr, resp_p: port},
       proto: string #foo=bar, // user attribute
@@ -301,8 +302,9 @@ TEST(zeek reader - custom schema) {
   CHECK_EQUAL(slices[0].rows(), 20u);
   std::string ref_schema = R"__(
     type port = count
+    type timestamp = time
     type zeek.conn = record{
-      ts: time #test #timestamp,
+      ts: timestamp #test,
       uid: string #index=string,
       id: record {orig_h: addr, orig_p: port, resp_h: addr, resp_p: port},
       proto: string #foo=bar,

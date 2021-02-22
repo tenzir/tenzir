@@ -442,7 +442,7 @@ caf::error reader::parse_header() {
       proto_field_ = i;
   }
   // Construct type.
-  layout_ = std::move(record_fields);
+  layout_ = record_type{std::move(record_fields)};
   layout_.name(std::string{type_name_prefix} + path);
   VAST_DEBUG("{} parsed zeek header:", detail::pretty_type_name(this));
   VAST_DEBUG("{}     #separator {}", detail::pretty_type_name(this),
@@ -494,7 +494,7 @@ caf::error reader::parse_header() {
     VAST_DEBUG("{} auto-detected field {} as event timestamp",
                detail::pretty_type_name(this),
                std::distance(layout_.fields.begin(), i));
-    insert_attribute(i->type, {"timestamp"});
+    i->type.name("timestamp");
   }
   // Add #index=hash attribute for fields where it makes sense.
   add_hash_index_attribute(layout_);

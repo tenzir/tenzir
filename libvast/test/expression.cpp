@@ -249,19 +249,6 @@ TEST(validation - attribute extractor) {
   expr = to<expression>("#type == zeek.conn");
   REQUIRE(expr);
   CHECK(!caf::visit(validator{}, *expr));
-  // The "timestamp" attribute extractor requires a timestamp operand.
-  expr = to<expression>("#timestamp < now");
-  REQUIRE(expr);
-  CHECK(caf::visit(validator{}, *expr));
-  expr = to<expression>("#timestamp < 2017-06-16");
-  REQUIRE(expr);
-  CHECK(caf::visit(validator{}, *expr));
-  expr = to<expression>("#timestamp > -42");
-  REQUIRE(expr);
-  CHECK(!caf::visit(validator{}, *expr));
-  expr = to<expression>("#timestamp > -42 secs");
-  REQUIRE(expr);
-  CHECK(!caf::visit(validator{}, *expr));
 }
 
 TEST(validation - type extractor) {
@@ -274,6 +261,12 @@ TEST(validation - type extractor) {
   expr = to<expression>(":bool > -42");
   REQUIRE(expr);
   CHECK(!caf::visit(validator{}, *expr));
+  expr = to<expression>(":timestamp < now");
+  REQUIRE(expr);
+  CHECK(caf::visit(validator{}, *expr));
+  expr = to<expression>(":timestamp < 2017-06-16");
+  REQUIRE(expr);
+  CHECK(caf::visit(validator{}, *expr));
 }
 
 TEST(matcher) {

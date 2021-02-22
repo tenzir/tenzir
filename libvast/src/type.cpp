@@ -61,7 +61,7 @@ type& type::name(const std::string& x) & {
   return *this;
 }
 
-type&& type::name(const std::string& x) && {
+type type::name(const std::string& x) && {
   if (ptr_)
     ptr_.unshared().name_ = x;
   return std::move(*this);
@@ -73,7 +73,7 @@ type& type::attributes(std::vector<attribute> xs) & {
   return *this;
 }
 
-type&& type::attributes(std::vector<attribute> xs) && {
+type type::attributes(std::vector<attribute> xs) && {
   if (ptr_)
     ptr_.unshared().attributes_ = std::move(xs);
   return std::move(*this);
@@ -94,7 +94,7 @@ type& type::update_attributes(std::vector<attribute> xs) & {
   return *this;
 }
 
-type&& type::update_attributes(std::vector<attribute> xs) && {
+type type::update_attributes(std::vector<attribute> xs) && {
   if (ptr_) {
     auto& attrs = ptr_.unshared().attributes_;
     for (auto& x : xs) {
@@ -182,12 +182,13 @@ bool operator<(const record_field& x, const record_field& y) {
   return std::tie(x.name, x.type) < std::tie(y.name, y.type);
 }
 
-record_type::record_type(std::vector<record_field> xs) : fields{std::move(xs)} {
+record_type::record_type(std::vector<record_field> xs) noexcept
+  : fields{std::move(xs)} {
   // nop
 }
 
-record_type::record_type(std::initializer_list<record_field> xs)
-  : fields{std::move(xs)} {
+record_type::record_type(std::initializer_list<record_field> xs) noexcept
+  : fields{xs} {
   // nop
 }
 

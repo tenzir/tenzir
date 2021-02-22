@@ -510,7 +510,7 @@ TEST(type_check) {
   TYPE_CHECK(list_type{}, list{});
   TYPE_CHECK(list_type{string_type{}}, list{});
   auto xs = map{{1, true}, {2, false}};
-  TYPE_CHECK(map_type({integer_type{}, bool_type{}}), xs);
+  TYPE_CHECK((map_type{integer_type{}, bool_type{}}), xs);
   TYPE_CHECK(map_type{}, xs);
   TYPE_CHECK(map_type{}, map{});
 }
@@ -607,6 +607,9 @@ TEST(parseable) {
   CHECK(t == string_type{});
   CHECK(parsers::type("addr", t));
   CHECK(t == address_type{});
+  MESSAGE("alias");
+  CHECK(parsers::type("timestamp", t));
+  CHECK_EQUAL(t, none_type{}.name("timestamp"));
   MESSAGE("enum");
   CHECK(parsers::type("enum{foo, bar, baz}", t));
   CHECK(t == enumeration_type{{"foo", "bar", "baz"}});

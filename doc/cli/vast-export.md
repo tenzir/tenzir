@@ -8,7 +8,7 @@ vast export [options] <format> [options] <expr>
 This is easiest explained on an example:
 
 ```bash
-vast export --max-events=100 --continuous json '#timestamp < 1 hour ago'
+vast export --max-events=100 --continuous json ':timestamp < 1 hour ago'
 ```
 
 The above command outputs line-delimited JSON like this, showing one event per
@@ -20,9 +20,9 @@ line:
 
 The above command signals the running server to export 100 events to the
 `export` command, and to do so continuously (i.e., not matching data that was
-previously imported). Only events that have a field annotated with the
-`#timestamp` attribute will be exported, and only if the timestamp in that field
-is older than 1 hour ago from the current time at the node.
+previously imported). Only events that have a field of type `timestamp` will be
+exported, and only if the timestamp in that field is older than 1 hour ago from
+the current time at the node.
 
 The default mode of operation for the `export` command is historical queries,
 which exports data that was already archived and indexed by the node. The

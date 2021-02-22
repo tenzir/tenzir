@@ -55,7 +55,7 @@ struct fixture : fixtures::events {
 FIXTURE_SCOPE(evaluation_tests, fixture)
 
 TEST(evaluation - attribute extractor - #timestamp) {
-  auto expr = make_expr("#timestamp <= 2009-11-18T08:09");
+  auto expr = make_conn_expr("#timestamp <= 2009-11-18T08:09");
   auto ids = evaluate(expr, zeek_conn_log_slice);
   CHECK_EQUAL(ids, make_ids({{0, 5}}, zeek_conn_log_slice.rows()));
 }

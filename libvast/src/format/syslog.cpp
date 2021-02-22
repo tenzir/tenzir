@@ -32,7 +32,7 @@ type make_rfc5424_type() {
     {"facility", count_type{}},
     {"severity", count_type{}},
     {"version", count_type{}},
-    {"ts", time_type{}.attributes({{"timestamp"}})},
+    {"ts", time_type{}.name("timestamp")},
     {"hostname", string_type{}},
     {"app_name", string_type{}},
     {"process_id", string_type{}},

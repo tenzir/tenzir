@@ -627,22 +627,6 @@ struct row_evaluator {
       }
       return neg ? !result : result;
     }
-    if (e.attr == atom::timestamp_v) {
-      for (size_t col = 0; col < layout.fields.size(); ++col) {
-        auto& field = layout.fields[col];
-        if (has_attribute(field.type, "timestamp")) {
-          if (!caf::holds_alternative<time_type>(field.type)) {
-            VAST_WARN("got timestamp attribute for non-time type");
-            return false;
-          }
-        }
-        auto lhs = to_canonical(
-          field.type,
-          slice_.at(row_, col, time_type{}.attributes({{"timestamp"}})));
-        auto rhs = make_view(d);
-        return evaluate_view(lhs, op_, rhs);
-      }
-    }
     return false;
   }
 

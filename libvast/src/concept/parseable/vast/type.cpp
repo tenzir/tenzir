@@ -23,9 +23,8 @@
 namespace vast {
 
 template <class T>
-static type to_basic_type(std::vector<attribute> xs) {
-  T result;
-  return result.attributes(std::move(xs));
+static type type_factory() {
+  return T{};
 }
 
 template <class Iterator, class Attribute>
@@ -44,68 +43,58 @@ bool type_parser::parse(Iterator& f, const Iterator& l, Attribute& a) const {
     = ('#' >> parsers::identifier >> -('=' >> attr_value)) ->* to_attr;
   static auto attr_list = *(skp >> attr);
   // Basic types
+  using namespace parser_literals;
   static auto basic_type_parser
-    = "bool" >> attr_list      ->* to_basic_type<bool_type>
-    | "int" >> attr_list       ->* to_basic_type<integer_type>
-    | "count" >> attr_list     ->* to_basic_type<count_type>
-    | "real" >> attr_list      ->* to_basic_type<real_type>
-    | "duration" >> attr_list  ->* to_basic_type<duration_type>
-    | "time" >> attr_list      ->* to_basic_type<time_type>
-    | "string" >> attr_list    ->* to_basic_type<string_type>
-    | "pattern" >> attr_list   ->* to_basic_type<pattern_type>
-    | "addr" >> attr_list      ->* to_basic_type<address_type>
-    | "subnet" >> attr_list    ->* to_basic_type<subnet_type>
+    =
+    ( "bool"_p      ->* type_factory<bool_type>
+    | "int"_p       ->* type_factory<integer_type>
+    | "count"_p     ->* type_factory<count_type>
+    | "real"_p      ->* type_factory<real_type>
+    | "duration"_p  ->* type_factory<duration_type>
+    | "time"_p      ->* type_factory<time_type>
+    | "string"_p    ->* type_factory<string_type>
+    | "pattern"_p   ->* type_factory<pattern_type>
+    | "addr"_p      ->* type_factory<address_type>
+    | "subnet"_p    ->* type_factory<subnet_type>
+    ) >> &(!parsers::identifier_char)
     ;
   // Enumeration
-  using enum_tuple = std::tuple<
-    std::vector<std::string>,
-    std::vector<vast::attribute>
-  >;
-  static auto to_enum = [](enum_tuple xs) -> type {
-    auto& [fields, attrs] = xs;
-    return enumeration_type{std::move(fields)}.attributes(std::move(attrs));
+  static auto to_enum = [](std::vector<std::string> fields) -> type {
+    return enumeration_type{std::move(fields)};
   };
   static auto enum_type_parser
     = ("enum" >> skp >> '{'
     >> ((skp >> parsers::identifier >> skp) % ',') >> ~(',' >> skp)
-    >> '}' >> attr_list) ->* to_enum
+    >> '}') ->* to_enum
     ;
   // Compound types
   rule<Iterator, type> type_type;
   // List
-  using sequence_tuple = std::tuple<type, std::vector<vast::attribute>>;
-  static auto to_list = [](sequence_tuple xs) -> type {
-    auto& [value_type, attrs] = xs;
-    return list_type{std::move(value_type)}.attributes(std::move(attrs));
+  static auto to_list = [](type xs) -> type {
+    return list_type{std::move(xs)};
   };
   auto list_type_parser
     = ("list" >> skp >> '<' >> skp >> ref(type_type) >> skp >> '>')
       ->* to_list
     ;
   // Map
-  using map_tuple = std::tuple<type, type, std::vector<vast::attribute>>;
+  using map_tuple = std::tuple<type, type>;
   static auto to_map = [](map_tuple xs) -> type {
-    auto& [key_type, value_type, attrs] = xs;
-    auto m = map_type{std::move(key_type), std::move(value_type)};
-    return m.attributes(std::move(attrs));
+    auto& [key_type, value_type] = xs;
+    return map_type{std::move(key_type), std::move(value_type)};
   };
   auto map_type_parser
     = ("map" >> skp >> '<' >> skp
     >> vast::ref(type_type) >> skp >> ',' >> skp >> ref(type_type) >> skp
-    >> '>' >> attr_list) ->* to_map;
+    >> '>') ->* to_map;
     ;
   // Record
-  using record_tuple = std::tuple<
-    std::vector<record_field>,
-    std::vector<vast::attribute>
-  >;
   static auto to_field = [](std::tuple<std::string, type> xs) {
     auto& [field_name, field_type] = xs;
     return record_field{std::move(field_name), std::move(field_type)};
   };
-  static auto to_record = [](record_tuple xs) -> type {
-    auto& [fields, attrs] = xs;
-    return record_type{std::move(fields)}.attributes(std::move(attrs));
+  static auto to_record = [](std::vector<record_field> fields) -> type {
+    return record_type{std::move(fields)};
   };
   auto field
     = ((parsers::identifier | parsers::qqstr) >> skp >> ':' >> skp
@@ -115,24 +104,31 @@ bool type_parser::parse(Iterator& f, const Iterator& l, Attribute& a) const {
   auto record_type_parser
     = ("record" >> skp >> '{'
     >> ((skp >> field >> skp) % ',') >> ~(',' >> skp)
-    >> '}' >> attr_list) ->* to_record;
+    >> '}') ->* to_record;
     ;
-  using none_tuple = std::tuple<std::string, std::vector<vast::attribute>>;
-  static auto to_named_none_type = [](none_tuple xs) {
-    auto& [n, a] = xs;
-    return none_type{}.name(std::move(n)).attributes(std::move(a));
+  static auto to_named_none_type = [](std::string name) -> type {
+    return none_type{}.name(std::move(name));
   };
   static auto placeholder_parser
-    = (parsers::identifier >> attr_list) ->* to_named_none_type
+    = (parsers::identifier) ->* to_named_none_type
     ;
   // Complete type
-  type_type
-    = basic_type_parser
+  using type_tuple = std::tuple<
+    vast::type,
+    std::vector<vast::attribute>
+  >;
+  static auto insert_attributes = [](type_tuple xs) {
+    auto& [t, attrs] = xs;
+    return t.attributes(std::move(attrs));
+  };
+  type_type = (
+    ( basic_type_parser
     | enum_type_parser
     | list_type_parser
     | map_type_parser
     | record_type_parser
     | placeholder_parser
+    ) >> attr_list) ->* insert_attributes
     ;
   return type_type(f, l, a);
   // clang-format on
