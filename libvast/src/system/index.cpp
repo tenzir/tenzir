@@ -658,10 +658,11 @@ index(index_actor::stateful_pointer<index_state> self,
     },
     [self](caf::unit_t&, const caf::error& err) {
       // During "normal" shutdown, the node will send an exit message to
-      // the importer
+      // the importer which then cuts the stream to the index, and the
+      // index exits afterwards.
       // We get an 'unreachable' error when the stream becomes unreachable
-      // because the actor was destroyed; in this case we can't use `self`
-      // anymore.
+      // during actor destruction; in this case we can't use `self->state`
+      // anymore since it will already be destroyed.
       VAST_DEBUG("index finalized streaming with error {}", render(err));
       if (err && err != caf::exit_reason::unreachable) {
         if (err != caf::exit_reason::user_shutdown)

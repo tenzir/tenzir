@@ -129,7 +129,7 @@ std::vector<uuid> meta_index_state::lookup(const expression& expr) const {
               if (syn) {
                 auto opt = syn->lookup(x.op, make_view(rhs));
                 if (!opt || *opt) {
-                  VAST_DEBUG("{} selects {} at predicate {}",
+                  VAST_TRACE("{} selects {} at predicate {}",
                              detail::pretty_type_name(this), part_id, x);
                   result.push_back(part_id);
                   break;
@@ -140,7 +140,7 @@ std::vector<uuid> meta_index_state::lookup(const expression& expr) const {
                          it != part_syn.type_synopses_.end() && it->second) {
                 auto opt = it->second->lookup(x.op, make_view(rhs));
                 if (!opt || *opt) {
-                  VAST_DEBUG("{} selects {} at predicate {}",
+                  VAST_TRACE("{} selects {} at predicate {}",
                              detail::pretty_type_name(this), part_id, x);
                   result.push_back(part_id);
                   break;
@@ -154,9 +154,9 @@ std::vector<uuid> meta_index_state::lookup(const expression& expr) const {
             }
           }
         }
-        VAST_DEBUG("{} checked {} partitions for predicate {} and got results",
-                   detail::pretty_type_name(this), synopses.size(), x,
-                   result.size());
+        VAST_DEBUG(
+          "{} checked {} partitions for predicate {} and got {} results",
+          detail::pretty_type_name(this), synopses.size(), x, result.size());
         // Some calling paths require the result to be sorted.
         std::sort(result.begin(), result.end());
         return result;
