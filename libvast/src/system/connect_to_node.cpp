@@ -55,7 +55,7 @@ connect_to_node(scoped_actor& self, const caf::settings& opts) {
   if (node_endpoint.port->type() != port_type::tcp)
     return caf::make_error(ec::invalid_configuration, "invalid protocol",
                            *node_endpoint.port);
-  VAST_DEBUG("{} connects to remote node: {}", self, id);
+  VAST_DEBUG("client connects to remote node with id {}", id);
   auto& sys_cfg = self->system().config();
   auto use_encryption
     = !sys_cfg.openssl_certificate.empty() || !sys_cfg.openssl_key.empty()
@@ -64,7 +64,7 @@ connect_to_node(scoped_actor& self, const caf::settings& opts) {
   auto host = node_endpoint.host;
   if (node_endpoint.host.empty())
     node_endpoint.host = "localhost";
-  VAST_INFO("connecting to VAST node {}", endpoint_str);
+  VAST_INFO("client connects to VAST node at {}", endpoint_str);
   auto result = [&]() -> caf::expected<node_actor> {
     if (use_encryption) {
 #if VAST_ENABLE_OPENSSL
@@ -84,17 +84,17 @@ connect_to_node(scoped_actor& self, const caf::settings& opts) {
 #if VAST_LOG_LEVEL >= VAST_LOG_LEVEL_WARNING
   if (caf::logger::current_logger()->accepts(VAST_LOG_LEVEL_WARNING,
                                              caf::atom("vast"))) {
-    VAST_VERBOSE("{} successfully connected to {}:{}", self, node_endpoint.host,
-                 to_string(*node_endpoint.port));
+    VAST_VERBOSE("client connected to VAST node at {}:{} successfully",
+                 node_endpoint.host, to_string(*node_endpoint.port));
     self
       ->request(*result, defaults::system::initial_request_timeout, atom::get_v,
                 atom::version_v)
       .receive(
         [&](std::string node_version) {
           if (node_version != VAST_VERSION)
-            VAST_WARN("{} Version mismatch between client and node detected; "
-                      "client: {}, node: {}",
-                      self, VAST_VERSION, node_version);
+            VAST_WARN("client version {} does not match VAST node version {}; "
+                      "this may caused unexpected behavior",
+                      VAST_VERSION, node_version);
         },
         [&](caf::error error) { //
           result = std::move(error);
