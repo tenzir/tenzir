@@ -239,7 +239,7 @@ vast:
     # Upper bound for the size of a table slice. A value of 0 causes the
     # batch-size to be unbounded, leaving control of batching to the
     # vast.import.read-timeout option only.
-    batch-size: 1000
+    batch-size: 1024
     # Encoding type of table slices (arrow or msgpack).
     # batch-encoding: arrow
     # Block until the importer forwarded all data.
