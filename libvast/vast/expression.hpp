@@ -345,7 +345,7 @@ auto for_each_predicate(const expression& e, F&& f) {
 /// becomes (x == 1 || x == 2).
 /// @param expr The expression to hoist.
 /// @returns The hoisted expression.
-expression hoist(const expression& expr);
+expression hoist(expression expr);
 
 /// Normalizes an expression such that:
 ///
@@ -355,19 +355,19 @@ expression hoist(const expression& expr);
 ///
 /// @param expr The expression to normalize.
 /// @returns The normalized expression.
-expression normalize(const expression& expr);
+expression normalize(expression expr);
 
 /// [Normalizes](@ref normalize) and [validates](@ref validator) an expression.
 /// @param expr The expression to normalize and validate.
 /// @returns The normalized and validated expression on success.
-caf::expected<expression> normalize_and_validate(const expression& expr);
+caf::expected<expression> normalize_and_validate(expression expr);
 
 /// Tailors an expression to a specific type.
 /// @param expr The expression to tailor to *t*.
 /// @param t The type to tailor *expr* to.
 /// @returns An optimized version of *expr* specifically for evaluating events
 ///          of type *t*.
-caf::expected<expression> tailor(const expression& expr, const type& t);
+caf::expected<expression> tailor(expression expr, const type& t);
 
 /// Retrieves an expression node at a given [offset](@ref offset).
 /// @param expr The expression to lookup.

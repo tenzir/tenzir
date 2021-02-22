@@ -48,7 +48,7 @@ void eraser_state::init(caf::timespan interval, std::string query,
       VAST_ERROR("{} failed to parse query {}", self_, query_);
       return;
     }
-    if (expr = normalize_and_validate(*expr); !expr) {
+    if (expr = normalize_and_validate(std::move(*expr)); !expr) {
       VAST_ERROR("{} failed to normalize and validate {}", self_, query_);
       return;
     }
