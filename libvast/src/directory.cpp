@@ -128,7 +128,7 @@ size_t recursive_size(const vast::directory& dir) {
 }
 
 std::vector<path>
-filter_dir(const path& dir, detail::function<bool(const path&)> filter,
+filter_dir(const path& dir, std::function<bool(const path&)> filter,
            size_t max_recursion) {
   std::vector<path> result;
   if (max_recursion == 0)
