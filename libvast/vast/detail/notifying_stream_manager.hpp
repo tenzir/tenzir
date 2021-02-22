@@ -63,6 +63,9 @@ public:
 
   void finalize(const caf::error& reason) override {
     super::finalize(reason);
+    // During shutdown of a stateful actor, CAF first destroys the state
+    // in `local_actor::on_exit()` and then proceeds to stop the stream
+    // managers with an `unreachable` error, so we can't touch it here.
     if (reason != caf::exit_reason::unreachable)
       state().notify_flush_listeners();
   }

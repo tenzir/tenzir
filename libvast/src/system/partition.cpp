@@ -427,13 +427,12 @@ active_partition_actor::behavior_type active_partition(
       }
     },
     [=](caf::unit_t&, const caf::error& err) {
+      VAST_DEBUG("active partition {} finalized streaming {}", id, render(err));
       // We get an 'unreachable' error when the stream becomes unreachable
-      // because the actor was destroyed; in this case we can't use `self`
-      // anymore.
-      VAST_DEBUG("partition {} finalized streaming {}", id, render(err));
+      // because the actor was destroyed; in this case the state was already
+      // destroyed during `local_actor::on_exit()`.
       if (err && err != caf::exit_reason::unreachable) {
         VAST_ERROR("{} aborts with error: {}", self, render(err));
-        // self->send_exit(self, err);
         return;
       }
     },
