@@ -38,7 +38,7 @@ constexpr size_t max_recursion = 100;
 namespace import {
 
 /// Maximum size for sources that generate table slices.
-constexpr size_t table_slice_size = 1000;
+constexpr size_t table_slice_size = 1024;
 
 #if VAST_ENABLE_ARROW
 
