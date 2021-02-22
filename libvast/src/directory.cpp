@@ -23,8 +23,10 @@
 
 #include <caf/streambuf.hpp>
 
+#include <filesystem>
 #include <fstream>
 #include <iterator>
+#include <system_error>
 
 #if VAST_POSIX
 #  include <sys/types.h>
@@ -107,24 +109,24 @@ const path& directory::path() const {
   return path_;
 }
 
-size_t recursive_size(const vast::directory& dir) {
-  size_t size = 0;
-  std::vector<vast::directory> stack{dir};
-  while (!stack.empty()) {
-    auto dir = std::move(stack.back());
-    stack.pop_back();
-    for (auto file : dir) {
-      if (file.is_regular_file()) {
-        if (auto sz = vast::file_size(file)) {
-          VAST_TRACE_SCOPE("{} += {}", file, *sz);
-          size += *sz;
-        }
-      } else if (file.is_directory()) {
-        stack.push_back(vast::directory{file});
-      }
+caf::expected<size_t> recursive_size(const vast::directory& dir) {
+  size_t total_size = 0;
+
+  const auto p = std::filesystem::path{dir.path().str()};
+  std::error_code ec{};
+  auto dir_itr = std::filesystem::recursive_directory_iterator(p, ec);
+  if (ec)
+    return caf::make_error(ec::filesystem_error, ec.message());
+
+  for (const auto& f : dir_itr) {
+    if (f.is_regular_file()) {
+      const auto size = f.file_size();
+      VAST_TRACE("{} += {}", f.path().string(), size);
+      total_size += size;
     }
   }
-  return size;
+
+  return total_size;
 }
 
 std::vector<path>
