@@ -22,21 +22,21 @@
 
 namespace vast {
 
-// -- attribute_extractor ------------------------------------------------------
+// -- meta_extractor -----------------------------------------------------------
 
-attribute_extractor::attribute_extractor(caf::atom_value str) : attr{str} {
+meta_extractor::meta_extractor(caf::atom_value str) : attr{str} {
   // nop
 }
 
-bool operator==(const attribute_extractor& x, const attribute_extractor& y) {
+bool operator==(const meta_extractor& x, const meta_extractor& y) {
   return x.attr == y.attr;
 }
 
-bool operator<(const attribute_extractor& x, const attribute_extractor& y) {
+bool operator<(const meta_extractor& x, const meta_extractor& y) {
   return x.attr < y.attr;
 }
 
-// -- field_extractor ------------------------------------------------------------
+// -- field_extractor ----------------------------------------------------------
 
 field_extractor::field_extractor(std::string f) : field{std::move(f)} {
 }

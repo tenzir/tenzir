@@ -50,7 +50,7 @@ static predicate::operand to_attr_extractor(std::string x) {
               ":timestamp");
     return type_extractor{none_type{}.name("timestamp")};
   }
-  return attribute_extractor{caf::atom_from_string(x)};
+  return meta_extractor{caf::atom_from_string(x)};
 }
 
 static predicate::operand to_type_extractor(type x) {

@@ -37,19 +37,19 @@ namespace vast {
 
 class expression;
 
-/// Extracts a specific attributes from an event.
-struct attribute_extractor : detail::totally_ordered<attribute_extractor> {
-  attribute_extractor(caf::atom_value str = caf::atom(""));
+/// Extracts a meta data from an event.
+struct meta_extractor : detail::totally_ordered<meta_extractor> {
+  meta_extractor(caf::atom_value str = caf::atom(""));
 
   caf::atom_value attr;
 };
 
-bool operator==(const attribute_extractor& x, const attribute_extractor& y);
-bool operator<(const attribute_extractor& x, const attribute_extractor& y);
+bool operator==(const meta_extractor& x, const meta_extractor& y);
+bool operator<(const meta_extractor& x, const meta_extractor& y);
 
 template <class Inspector>
-auto inspect(Inspector& f, attribute_extractor& x) {
-  return f(caf::meta::type_name("attribute_extractor"), x.attr);
+auto inspect(Inspector& f, meta_extractor& x) {
+  return f(caf::meta::type_name("meta_extractor"), x.attr);
 }
 
 /// Extracts one or more values according to a given field.
@@ -117,8 +117,8 @@ auto inspect(Inspector& f, data_extractor& x) {
 /// A predicate with two operands evaluated under a relational operator.
 struct predicate : detail::totally_ordered<predicate> {
   /// The operand of a predicate, which can be either LHS or RHS.
-  using operand = caf::variant<attribute_extractor, field_extractor,
-                               type_extractor, data_extractor, data>;
+  using operand = caf::variant<meta_extractor, field_extractor, type_extractor,
+                               data_extractor, data>;
 
   predicate() = default;
 
@@ -401,9 +401,9 @@ struct sum_type_access<vast::expression>
 
 namespace std {
 
-template<>
-struct hash<vast::attribute_extractor> {
-  size_t operator()(const vast::attribute_extractor& x) const {
+template <>
+struct hash<vast::meta_extractor> {
+  size_t operator()(const vast::meta_extractor& x) const {
     return vast::uhash<vast::xxhash>{}(x);
   }
 };

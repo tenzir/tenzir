@@ -54,7 +54,7 @@ struct fixture {
     // expr0 := !(x.y.z <= 42 && #foo == T)
     auto p0 = predicate{field_extractor{"x.y.z"},
                         relational_operator::less_equal, data{42}};
-    auto p1 = predicate{attribute_extractor{caf::atom("foo")},
+    auto p1 = predicate{meta_extractor{caf::atom("foo")},
                         relational_operator::equal, data{true}};
     auto conj = conjunction{p0, p1};
     expr0 = negation{conj};
@@ -85,7 +85,7 @@ TEST(construction) {
   CHECK(get<data>(p0->rhs) == data{42});
   auto p1 = caf::get_if<predicate>(&c->at(1));
   REQUIRE(p1);
-  CHECK(attribute{caf::to_string(get<attribute_extractor>(p1->lhs).attr)}
+  CHECK(attribute{caf::to_string(get<meta_extractor>(p1->lhs).attr)}
         == attribute{"foo"});
   CHECK_EQUAL(p1->op, relational_operator::equal);
   CHECK(get<data>(p1->rhs) == data{true});

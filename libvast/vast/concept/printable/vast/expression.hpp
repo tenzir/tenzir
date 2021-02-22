@@ -63,7 +63,7 @@ struct expression_printer : printer<expression_printer> {
              && caf::visit(*this, p.rhs);
     }
 
-    bool operator()(const attribute_extractor& e) const {
+    bool operator()(const meta_extractor& e) const {
       return ('#' << printers::str)(out_, to_string(e.attr));
     }
 
@@ -89,7 +89,7 @@ struct expression_printer : printer<expression_printer> {
 
   template <class Iterator, class T>
   auto print(Iterator& out, const T& x) const -> std::enable_if_t<
-    std::disjunction_v<std::is_same<T, attribute_extractor>,
+    std::disjunction_v<std::is_same<T, meta_extractor>,
                        std::is_same<T, field_extractor>,
                        std::is_same<T, data_extractor>,
                        std::is_same<T, predicate>, std::is_same<T, conjunction>,
@@ -107,7 +107,7 @@ struct expression_printer : printer<expression_printer> {
 template <class T>
 struct printer_registry<
   T, std::enable_if_t<std::disjunction_v<
-       std::is_same<T, attribute_extractor>, std::is_same<T, field_extractor>,
+       std::is_same<T, meta_extractor>, std::is_same<T, field_extractor>,
        std::is_same<T, data_extractor>, std::is_same<T, predicate>,
        std::is_same<T, conjunction>, std::is_same<T, disjunction>,
        std::is_same<T, negation>, std::is_same<T, expression>>>> {

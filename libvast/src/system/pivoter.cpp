@@ -129,7 +129,7 @@ caf::behavior pivoter(caf::stateful_actor<pivoter_state>* self, node_actor node,
         return;
       }
       auto expr
-        = conjunction{predicate{attribute_extractor{atom::type_v},
+        = conjunction{predicate{meta_extractor{atom::type_v},
                                 relational_operator::equal, data{st.target}},
                       predicate{field_extractor{pivot_field->name},
                                 relational_operator::in, data{xs}}};

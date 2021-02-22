@@ -254,7 +254,7 @@ caf::expected<void> validator::operator()(const predicate& p) {
 }
 
 caf::expected<void>
-validator::operator()(const attribute_extractor& ex, const data& d) {
+validator::operator()(const meta_extractor& ex, const data& d) {
   if (ex.attr == atom::type_v
       && !(caf::holds_alternative<std::string>(d)
            || caf::holds_alternative<pattern>(d)))
@@ -349,7 +349,7 @@ caf::expected<expression> type_resolver::operator()(const predicate& p) {
 }
 
 caf::expected<expression>
-type_resolver::operator()(const attribute_extractor& ex, const data& d) {
+type_resolver::operator()(const meta_extractor& ex, const data& d) {
   // We're leaving all attributes alone, because both #type and #field operate
   // at a different granularity.
   return predicate{ex, op_, d};
@@ -458,7 +458,7 @@ bool matcher::operator()(const predicate& p) {
   return caf::visit(*this, p.lhs, p.rhs);
 }
 
-bool matcher::operator()(const attribute_extractor& e, const data& d) {
+bool matcher::operator()(const meta_extractor& e, const data& d) {
   if (e.attr == atom::type_v) {
     VAST_ASSERT(caf::holds_alternative<std::string>(d));
     return evaluate(d, op_, type_.name());

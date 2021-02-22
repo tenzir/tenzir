@@ -600,7 +600,7 @@ struct row_evaluator {
     return caf::visit(*this, p.lhs, p.rhs);
   }
 
-  bool operator()(const attribute_extractor& e, const data& d) {
+  bool operator()(const meta_extractor& e, const data& d) {
     // TODO: Transform this AST node into a constant-time lookup node (e.g.,
     // data_extractor). It's not necessary to iterate over the schema for
     // every row; this should happen upfront.

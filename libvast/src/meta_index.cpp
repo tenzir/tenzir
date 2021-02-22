@@ -164,7 +164,7 @@ std::vector<uuid> meta_index::lookup(const expression& expr) const {
         return result;
       };
       auto extract_expr = detail::overload{
-        [&](const attribute_extractor& lhs, const data& d) -> result_type {
+        [&](const meta_extractor& lhs, const data& d) -> result_type {
           if (lhs.attr == atom::type_v) {
             // We don't have to look into the synopses for type queries, just
             // at the layout names.

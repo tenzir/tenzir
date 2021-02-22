@@ -121,7 +121,7 @@ fetch_indexer(const PartitionState& state, const data_extractor& dx,
 /// @relates passive_partition_state
 template <typename PartitionState>
 indexer_actor
-fetch_indexer(const PartitionState& state, const attribute_extractor& ex,
+fetch_indexer(const PartitionState& state, const meta_extractor& ex,
               relational_operator op, const data& x) {
   VAST_TRACE_SCOPE("{} {} {}", VAST_ARG(ex), VAST_ARG(op), VAST_ARG(x));
   ids row_ids;
@@ -194,7 +194,7 @@ evaluate(const PartitionState& state, const expression& expr) {
       return fetch_indexer(state, ext, pred.op, x);
     };
     auto v = detail::overload{
-      [&](const attribute_extractor& ex, const data& x) {
+      [&](const meta_extractor& ex, const data& x) {
         return get_indexer_handle(ex, x);
       },
       [&](const data_extractor& dx, const data& x) {

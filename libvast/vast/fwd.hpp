@@ -98,7 +98,7 @@ class value_index;
 
 struct address_type;
 struct alias_type;
-struct attribute_extractor;
+struct meta_extractor;
 struct bool_type;
 struct concept_;
 struct conjunction;
@@ -273,7 +273,7 @@ using report = std::vector<data_point>;
 CAF_BEGIN_TYPE_ID_BLOCK(vast_types, caf::first_custom_type_id)
 
   VAST_ADD_TYPE_ID((vast::address))
-  VAST_ADD_TYPE_ID((vast::attribute_extractor))
+  VAST_ADD_TYPE_ID((vast::meta_extractor))
   VAST_ADD_TYPE_ID((vast::bitmap))
   VAST_ADD_TYPE_ID((vast::chunk_ptr))
   VAST_ADD_TYPE_ID((vast::conjunction))
