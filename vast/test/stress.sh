@@ -5,6 +5,19 @@
 
 set -euo pipefail
 
+darwin_requires() {
+  if [[ "${OSTYPE}" == "darwin"* ]]; then
+    if ! brew --prefix "${1}" >/dev/null 2>&1; then
+      >&2 echo "stress.sh requires ${1} to be installed on macOS"
+      >&2 echo "  brew install ${1}"
+      exit 1
+    fi
+    PATH="$(brew --prefix "${1}")/libexec/gnubin:${PATH}"
+  fi
+}
+
+darwin_requires coreutils
+
 log() { printf "%s\n" "$*" >&2; }
 
 declare -a on_exit=()
@@ -28,7 +41,7 @@ trap '{
 
 
 : "${VAST:="vast"}"
-: "${DB_DIR:="$(mktemp -p "${PWD}" -d vast-stress.XXXXXXXX)"}"
+: "${DB_DIR:="$(TMPDIR="${PWD}" mktemp -d vast-stress.XXXXXXXX)"}"
 
 dir="$(dirname "$(readlink -f "$0")")"
 pushd "${dir}"
@@ -72,18 +85,20 @@ while read -rd $'\0' path; do
   IFS=/ read -r _ _ _ format _ <<< "${path}"
   echo ingesting "${path}"
   # import -b deadlocks the script
-  zcat "${path}" | client import "${format}" &
-done < <(find ../integration/data -name '*.gz' -print0)
+  gunzip -c "${path}" | client import "${format}" &
+done < <(find "$(realpath --relative-to="${dir}" \
+  "$(readlink -m "${dir}/../integration/data")")" -name '*.gz' -print0)
+
+client export null '#timestamp < 10 days ago' &
+client export null '#timestamp < 10 days ago' &
+client export null '#timestamp < 10 days ago' &
+client export null '#timestamp < 10 days ago' &
+client export null '#timestamp < 10 days ago' &
+client export null '#timestamp < 10 days ago' &
+client export null '#timestamp < 10 days ago' &
+client export null '#timestamp < 10 days ago' &
 client export null '#timestamp < 10 days ago' &
 client status --detailed
-client export null '#timestamp < 10 days ago' &
-client export null '#timestamp < 10 days ago' &
-client export null '#timestamp < 10 days ago' &
-client export null '#timestamp < 10 days ago' &
-client export null '#timestamp < 10 days ago' &
-client export null '#timestamp < 10 days ago' &
-client export null '#timestamp < 10 days ago' &
-client export null '#timestamp < 10 days ago' &
 
 wait
 )
