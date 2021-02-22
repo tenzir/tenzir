@@ -232,7 +232,16 @@ std::vector<uuid> meta_index::lookup(const expression& expr) const {
           return search(pred);
         },
         [&](const type_extractor& lhs, const data&) -> result_type {
-          auto pred = [&](auto& field) { return field.type == lhs.type; };
+          if (caf::holds_alternative<none_type>(lhs.type)) {
+            VAST_ASSERT(!lhs.type.name().empty());
+            auto pred = [&](auto& field) {
+              return field.type.name() == lhs.type.name();
+            };
+            return search(pred);
+          }
+          auto pred = [&](auto& field) {
+            return field.type == lhs.type && field.type.name().empty();
+          };
           return search(pred);
         },
         [&](const auto&, const auto&) -> result_type {

@@ -187,14 +187,16 @@ TEST(normalization) {
 }
 
 TEST(extractors) {
-  auto s = record_type{
-    {"real", real_type{}}, {"bool", bool_type{}}, {"host", address_type{}}};
+  auto s = record_type{{"real", real_type{}},
+                       {"bool", bool_type{}},
+                       {"host", address_type{}},
+                       {"port", alias_type{count_type{}}.name("port")}};
   auto r = flatten(record_type{{"orig", s}, {"resp", s}});
   auto sn = unbox(to<subnet>("192.168.0.0/24"));
   {
     auto pred0 = predicate{data_extractor{address_type{}, offset{2}},
                            relational_operator::in, data{sn}};
-    auto pred1 = predicate{data_extractor{address_type{}, offset{5}},
+    auto pred1 = predicate{data_extractor{address_type{}, offset{6}},
                            relational_operator::in, data{sn}};
     auto normalized = disjunction{pred0, pred1};
     MESSAGE("type extractor - distribution");
@@ -209,7 +211,7 @@ TEST(extractors) {
   {
     auto pred0 = predicate{data_extractor{address_type{}, offset{2}},
                            relational_operator::not_in, data{sn}};
-    auto pred1 = predicate{data_extractor{address_type{}, offset{5}},
+    auto pred1 = predicate{data_extractor{address_type{}, offset{6}},
                            relational_operator::not_in, data{sn}};
     auto normalized = conjunction{pred0, pred1};
     MESSAGE("type extractor - distribution with negation");
@@ -219,6 +221,19 @@ TEST(extractors) {
     MESSAGE("field extractor - distribution with negation");
     expr = unbox(to<expression>("host !in 192.168.0.0/24"));
     resolved = unbox(caf::visit(type_resolver(r), expr));
+    CHECK_EQUAL(resolved, normalized);
+  }
+  {
+    auto pred0 = predicate{data_extractor{alias_type{count_type{}}.name("port"),
+                                          offset{3}},
+                           relational_operator::equal, data{80u}};
+    auto pred1 = predicate{data_extractor{alias_type{count_type{}}.name("port"),
+                                          offset{7}},
+                           relational_operator::equal, data{80u}};
+    auto normalized = disjunction{pred0, pred1};
+    MESSAGE("type extractor - used defined types");
+    auto expr = unbox(to<expression>(":port == 80"));
+    auto resolved = caf::visit(type_resolver(r), expr);
     CHECK_EQUAL(resolved, normalized);
   }
 }

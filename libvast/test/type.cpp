@@ -65,6 +65,9 @@ TEST(assignment) {
   t = {};
   CHECK(!t);
   CHECK(!holds_alternative<real_type>(t));
+  auto u = type{none_type{}};
+  CHECK(u);
+  CHECK(holds_alternative<none_type>(u));
 }
 
 TEST(copying) {

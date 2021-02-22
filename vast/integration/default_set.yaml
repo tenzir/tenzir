@@ -107,7 +107,7 @@ tests:
         input: data/zeek/conn.log.gz
       - command: -N export ascii 'resp_h == 192.168.1.104'
       - command: -N export ascii 'orig_bytes > 1k && orig_bytes < 1Ki'
-      - command: -N export ascii ':string == "OrfTtuI5G4e" || :count == 67' # TODO: make this :port == 67 once we support built-in type aliases
+      - command: -N export ascii ':string == "OrfTtuI5G4e" || :port == 67 || :count == 67'
       - command: -N export ascii '#type == "zeek.conn" && resp_h == 192.168.1.104'
       - command: '-N export ascii "#type != \"zeek.conn\" && #type != \"vast.metrics\""'
       - command: -N export ascii '#type != "foobar" && resp_h == 192.168.1.104'
@@ -133,6 +133,10 @@ tests:
       - command: -N export ascii 'resp_h == 192.168.1.104'
       - command: -N export zeek 'resp_h == 192.168.1.104'
         transformation: awk '!/^#(open|close)/'
+      - command: -N count ':port == 53'
+        # Expected to return 0, this check exists to make sure :count doesn't
+        # match on values of type port.
+      - command: '-N count ":count == 53 && #type == \"zeek.dns\""'
   Node Zeek http log:
     tags: [node, import-export, zeek]
     steps:
