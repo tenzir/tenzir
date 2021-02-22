@@ -13,8 +13,26 @@ This changelog documents all notable user-facing changes of VAST.
 
 ## Unreleased
 
+- ⚠️ The default size of table slices (event batches) that is created from
+  `vast import` processes has been changed from 1000 to 1024.
+  [#1396](https://github.com/tenzir/vast/pull/1396)
+
 - 🐞 The disk monitor now correctly erases partition synopses from the meta index.
   [#1450](https://github.com/tenzir/vast/pull/1450)
+
+- ⚡️ A new `VASTRegisterPlugin` CMake function enables easy setup of the build
+  scaffolding required for plugins. Plugins can now be linked statically against
+  VAST. Configure with `--with-static-plugins` or build a static binary to link
+  all plugins built alongside VAST statically. All plugin build scaffoldings
+  must be adapted, older plugins do no longer work.
+  [#1445](https://github.com/tenzir/vast/pull/1445)
+  [#1452](https://github.com/tenzir/vast/pull/1452)
+
+- ⚠️ The type extractor in the expression language now includes aliased types.
+  For example, given the type definition for port from the base schema
+  `type port = count`, a search for `:count` will consider fields of type
+  `port`.
+  [#1446](https://github.com/tenzir/vast/pull/1446)
 
 - ⚠️ The time to first response of queries that compare a concept to a string
   has been reduced noticably. In the particular case of large databases
