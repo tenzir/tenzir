@@ -116,7 +116,7 @@ This changelog documents all notable user-facing changes of VAST.
 
 - 🎁 The JSON import now always relies upon [simdjson](https://simdjson.org).
   The previously experimental `--simdjson` option to the `vast import
-  json|suricata|zeek-json` commands no longer exists as the feature is
+  json|suricata|zeek-json` commands no longer exist as the feature is
   considered stable. [#1343](https://github.com/tenzir/vast/pull/1343)
   [#1356](https://github.com/tenzir/vast/pull/1356)
   [@ngrodzitski](https://github.com/ngrodzitski)
