@@ -67,7 +67,8 @@ TEST(parseable/printable - predicate) {
   CHECK(parsers::predicate(str, pred));
   CHECK(caf::holds_alternative<meta_extractor>(pred.lhs));
   CHECK(caf::holds_alternative<data>(pred.rhs));
-  CHECK(caf::get<meta_extractor>(pred.lhs) == meta_extractor{atom::type_v});
+  CHECK(caf::get<meta_extractor>(pred.lhs)
+        == meta_extractor{meta_extractor::type});
   CHECK(pred.op == relational_operator::not_equal);
   CHECK(caf::get<data>(pred.rhs) == data{"foo"});
   CHECK_EQUAL(to_string(pred), str);

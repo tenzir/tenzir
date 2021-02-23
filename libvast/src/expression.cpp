@@ -24,16 +24,12 @@ namespace vast {
 
 // -- meta_extractor -----------------------------------------------------------
 
-meta_extractor::meta_extractor(caf::atom_value str) : attr{str} {
-  // nop
-}
-
 bool operator==(const meta_extractor& x, const meta_extractor& y) {
-  return x.attr == y.attr;
+  return x.kind == y.kind;
 }
 
 bool operator<(const meta_extractor& x, const meta_extractor& y) {
-  return x.attr < y.attr;
+  return x.kind < y.kind;
 }
 
 // -- field_extractor ----------------------------------------------------------

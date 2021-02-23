@@ -13,18 +13,18 @@
 
 #pragma once
 
-#include <caf/none.hpp>
-
-#include "vast/data.hpp"
-#include "vast/expression.hpp"
+#include "vast/concept/printable/core.hpp"
 #include "vast/concept/printable/numeric.hpp"
 #include "vast/concept/printable/string.hpp"
-#include "vast/concept/printable/core.hpp"
 #include "vast/concept/printable/vast/data.hpp"
 #include "vast/concept/printable/vast/none.hpp"
 #include "vast/concept/printable/vast/offset.hpp"
 #include "vast/concept/printable/vast/operator.hpp"
 #include "vast/concept/printable/vast/type.hpp"
+#include "vast/data.hpp"
+#include "vast/expression.hpp"
+
+#include <caf/none.hpp>
 
 namespace vast {
 
@@ -58,17 +58,17 @@ struct expression_printer : printer<expression_printer> {
 
     bool operator()(const predicate& p) const {
       auto op = ' ' << make_printer<relational_operator>{} << ' ';
-      return caf::visit(*this, p.lhs)
-             && op(out_, p.op)
+      return caf::visit(*this, p.lhs) && op(out_, p.op)
              && caf::visit(*this, p.rhs);
     }
 
     bool operator()(const meta_extractor& e) const {
-      return ('#' << printers::str)(out_, to_string(e.attr));
+      return printers::str(out_,
+                           e.kind == meta_extractor::type ? "#type" : "#field");
     }
 
     bool operator()(const type_extractor& e) const {
-      return (':' << printers::type<policy::name_only>)(out_, e.type);
+      return (':' << printers::type<policy::name_only>) (out_, e.type);
     }
 
     bool operator()(const field_extractor& e) const {

@@ -322,7 +322,7 @@ resolve_impl(const taxonomies& ts, const expression& e,
         auto make_meta_field_predicate
           = [&](relational_operator op, const vast::data&) {
               return [&, op](std::string item) {
-                return predicate{meta_extractor{atom::field_v}, op,
+                return predicate{meta_extractor{meta_extractor::field}, op,
                                  vast::data{item}};
               };
             };

@@ -255,20 +255,20 @@ caf::expected<void> validator::operator()(const predicate& p) {
 
 caf::expected<void>
 validator::operator()(const meta_extractor& ex, const data& d) {
-  if (ex.attr == atom::type_v
+  if (ex.kind == meta_extractor::type
       && !(caf::holds_alternative<std::string>(d)
            || caf::holds_alternative<pattern>(d)))
     return caf::make_error(ec::syntax_error,
-                           "type attribute extractor requires string or "
-                           "pattern operand",
-                           ex.attr, op_, d);
-  if (ex.attr == atom::field_v
+                           "type meta extractor requires string or pattern "
+                           "operand",
+                           "#type", op_, d);
+  if (ex.kind == meta_extractor::field
       && !(caf::holds_alternative<std::string>(d)
            || caf::holds_alternative<pattern>(d)))
     return caf::make_error(ec::syntax_error,
                            "field attribute extractor requires string or "
                            "pattern operand",
-                           ex.attr, op_, d);
+                           "#field", op_, d);
   return caf::no_error;
 }
 
@@ -459,7 +459,7 @@ bool matcher::operator()(const predicate& p) {
 }
 
 bool matcher::operator()(const meta_extractor& e, const data& d) {
-  if (e.attr == atom::type_v) {
+  if (e.kind == meta_extractor::type) {
     VAST_ASSERT(caf::holds_alternative<std::string>(d));
     return evaluate(d, op_, type_.name());
   }

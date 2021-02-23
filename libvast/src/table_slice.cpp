@@ -607,9 +607,9 @@ struct row_evaluator {
     auto&& layout = slice_.layout();
     // TODO: type and field queries don't produce false positives in the
     // partition. Is there actually any reason to do the check here?
-    if (e.attr == atom::type_v)
+    if (e.kind == meta_extractor::type)
       return evaluate(layout.name(), op_, d);
-    if (e.attr == atom::field_v) {
+    if (e.kind == meta_extractor::field) {
       auto s = caf::get_if<std::string>(&d);
       if (!s) {
         VAST_WARN("#field can only compare with string");
