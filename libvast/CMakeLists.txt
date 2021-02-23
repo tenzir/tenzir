@@ -444,6 +444,7 @@ install(
   PATTERN "*.hpp")
 
 add_subdirectory(test)
+add_subdirectory(fuzz)
 
 set(VAST_FIND_DEPENDENCY_LIST
     "${VAST_FIND_DEPENDENCY_LIST}"
