@@ -7,7 +7,7 @@ list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
 
 # Helper utility for retrieving the project version from 'git-describe', that is
 # bundled with VAST.
-set(VAST_VERSION_FALLBACK "2021.01.28-0-")
+set(VAST_VERSION_FALLBACK "2021.02.24-0-")
 include(VASTGitVersion)
 
 # Create the VAST project.
