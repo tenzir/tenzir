@@ -54,20 +54,14 @@ struct fixture : fixtures::events {
 
 FIXTURE_SCOPE(evaluation_tests, fixture)
 
-TEST(evaluation - attribute extractor - #timestamp) {
-  auto expr = make_conn_expr("#timestamp <= 2009-11-18T08:09");
-  auto ids = evaluate(expr, zeek_conn_log_slice);
-  CHECK_EQUAL(ids, make_ids({{0, 5}}, zeek_conn_log_slice.rows()));
-}
-
-TEST(evaluation - attribute extractor - #type) {
+TEST(evaluation - meta extractor - #type) {
   auto expr = make_expr("#type == \"zeek.conn\"");
   auto ids = evaluate(expr, zeek_conn_log_slice);
   CHECK_EQUAL(ids, make_ids({{0, zeek_conn_log_slice.rows()}}));
 }
 
-TEST(evaluation - attribute extractor - #foo) {
-  auto expr = make_expr("#foo == 42");
+TEST(evaluation - meta extractor - #field) {
+  auto expr = make_expr("#field == \"a.b.c\"");
   auto ids = evaluate(expr, zeek_conn_log_slice);
   CHECK_EQUAL(ids.size(), zeek_conn_log_slice.rows());
   CHECK(all<0>(ids));

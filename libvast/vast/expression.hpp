@@ -55,9 +55,7 @@ bool operator<(const meta_extractor& x, const meta_extractor& y);
 
 template <class Inspector>
 auto inspect(Inspector& f, meta_extractor& x) {
-  return f(
-    caf::meta::type_name("meta_extractor"),
-    static_cast<std::underlying_type_t<enum meta_extractor::kind>>(x.kind));
+  return f(caf::meta::type_name("meta_extractor"), x.kind);
 }
 
 /// Extracts one or more values according to a given field.

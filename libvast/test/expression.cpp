@@ -134,7 +134,7 @@ TEST(normalization) {
   CHECK_EQUAL(normalize(*expr), *normalized);
   // The normalizer must not touch predicates with two extractors, regardless
   // of whether that's actually a valid construct.
-  expr = to<expression>("#foo == #bar");
+  expr = to<expression>(":foo == :bar");
   REQUIRE(expr);
   CHECK_EQUAL(normalize(*expr), *expr);
   MESSAGE("pushing down negations to predicate level");
