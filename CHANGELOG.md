@@ -17,6 +17,11 @@ This changelog documents all notable user-facing changes of VAST.
 
 ### ⚡️ Breaking Changes
 
+- ⚡️ The previously deprecated options `vast.spawn.importer.ids` and
+  `vast.schema-paths` no longer work. Furthermore, queries spread over multiple
+  arguuments are now disallowed instead of triggering a deprecation warning.
+  [#1374](https://github.com/tenzir/vast/pull/1374)
+
 - ⚡️ The special meaning of the `#timestamp` attribute has been removed from
   the schema language. Timestamps can from now on be marked as such by using
   the `timestamp` type instead. Queries of the form `#timestamp <op> value`
@@ -61,11 +66,6 @@ This changelog documents all notable user-facing changes of VAST.
   `:subnet == S || :addr in S`. This change makes it easier to search for IP
   addresses belonging to a specific subnet.
   [#1373](https://github.com/tenzir/vast/pull/1373)
-
-- ⚠️ The previously deprecated options `vast.spawn.importer.ids` and
-  `vast.schema-paths` no longer work. Furthermore, queries spread over multiple
-  arguuments are now disallowed instead of triggering a deprecation warning.
-  [#1374](https://github.com/tenzir/vast/pull/1374)
 
 - ⚠️ The `infer` command has an improved heuristic for the number types `int`,
   `count`, and `real`. [#1343](https://github.com/tenzir/vast/pull/1343)
