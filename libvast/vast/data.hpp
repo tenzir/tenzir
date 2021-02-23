@@ -265,6 +265,9 @@ bool is_recursive(const data& x);
 /// @relates data
 bool is_container(const data& x);
 
+/// @returns The maximum nesting depth any field in the record `r`.
+size_t depth(const record& r);
+
 /// Creates a record instance for a given record type. The number of data
 /// instances must correspond to the number of fields in the flattened version
 /// of the record.

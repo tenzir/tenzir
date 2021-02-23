@@ -360,3 +360,19 @@ TEST(convert - caf::config_value - null) {
   y = to<dictionary<config_value>>(flat);
   REQUIRE(y.engaged());
 }
+
+// We can't really test that a given call doesn't produce a stack overflow, so
+// instead we test here that the fields that are nested deeper than
+// `max_recursion_depth` are cut off during `flatten()`.
+TEST(nesting depth) {
+  auto x = record{{"leaf", 1}};
+  for (size_t i = 0; i < defaults::max_recursion; ++i) {
+    auto tmp = record{{"nested", std::exchange(x, {})}};
+    x = tmp;
+  }
+  auto final = record{{"branch1", x}, {"branch2", 4}};
+  CHECK_EQUAL(depth(final), defaults::max_recursion + 2);
+  auto flattened = flatten(final);
+  auto unflattened = unflatten(flattened);
+  CHECK_EQUAL(depth(flattened), 1ull);
+}
