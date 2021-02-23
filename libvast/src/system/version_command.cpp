@@ -41,8 +41,8 @@ namespace {
 
 record retrieve_versions() {
   record result;
-  result["VAST"] = VAST_VERSION;
-  result["VAST Build Tree Hash"] = VAST_BUILD_TREE_HASH;
+  result["VAST"] = version::version;
+  result["VAST Build Tree Hash"] = version::build_tree_hash;
   std::ostringstream caf_version;
   caf_version << CAF_MAJOR_VERSION << '.' << CAF_MINOR_VERSION << '.'
               << CAF_PATCH_VERSION;
