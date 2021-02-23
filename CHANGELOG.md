@@ -19,7 +19,7 @@ This changelog documents all notable user-facing changes of VAST.
 
 - ⚡️ The previously deprecated options `vast.spawn.importer.ids` and
   `vast.schema-paths` no longer work. Furthermore, queries spread over multiple
-  arguuments are now disallowed instead of triggering a deprecation warning.
+  arguments are now disallowed instead of triggering a deprecation warning.
   [#1374](https://github.com/tenzir/vast/pull/1374)
 
 - ⚡️ The special meaning of the `#timestamp` attribute has been removed from
@@ -109,7 +109,7 @@ This changelog documents all notable user-facing changes of VAST.
 
 - 🎁 The meta index now stores partition synopses in separate files. This will
   decrease restart times for systems with large databases, slow disks and
-  aggressive readahead settings. A new config setting `vast.meta-index-dir`
+  aggressive `readahead` settings. A new config setting `vast.meta-index-dir`
   allows storing the meta index information in a separate directory.
   [#1330](https://github.com/tenzir/vast/pull/1330)
   [#1376](https://github.com/tenzir/vast/pull/1376)
