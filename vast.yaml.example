@@ -102,7 +102,7 @@ vast:
     # Configures if and how metrics should be ingested back into VAST.
     self-sink:
       enable: true
-      slice-size: 100
+      slice-size: 128
       #slice-type: arrow
     # Configures if and where metrics should be written to a file.
     file-sink:
