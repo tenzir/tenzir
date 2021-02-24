@@ -154,14 +154,6 @@ struct index_state {
   std::vector<std::pair<uuid, partition_actor>>
   collect_query_actors(query_state& lookup, uint32_t num_partitions);
 
-  // -- flush handling ---------------------------------------------------------
-
-  /// Adds a new flush listener.
-  void add_flush_listener(flush_listener_actor listener);
-
-  /// Sends a notification to all listeners and clears the listeners list.
-  void notify_flush_listeners();
-
   // -- partition handling -----------------------------------------------------
 
   /// Creates a new active partition.
@@ -232,8 +224,12 @@ struct index_state {
   /// Handle of the accountant.
   accountant_actor accountant;
 
-  /// List of actors that wait for the next flush event.
-  std::vector<flush_listener_actor> flush_listeners;
+  /// A list of stream flush promises.
+  std::shared_ptr<std::vector<caf::typed_response_promise<atom::flush>>>
+    flush_promises;
+
+  /// A list of stream flush promises forwarded to active partitions.
+  std::vector<caf::typed_response_promise<atom::flush>> forwarded_flush_promises;
 
   /// Actor handle of the filesystem actor.
   filesystem_actor filesystem;

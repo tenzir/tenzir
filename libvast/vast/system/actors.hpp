@@ -54,11 +54,6 @@ using stream_sink_actor = typename typed_actor_fwd<
   typename caf::replies_to<caf::stream<Unit>, Args...>::template with< //
     caf::inbound_stream_slot<Unit>>>::unwrap;
 
-/// The FLUSH LISTENER actor interface.
-using flush_listener_actor = typed_actor_fwd<
-  // Reacts to the requested flush message.
-  caf::reacts_to<atom::flush>>::unwrap;
-
 /// The ARCHIVE CLIENT actor interface.
 using archive_client_actor = typed_actor_fwd<
   // An ARCHIVE CLIENT receives table slices from the ARCHIVE for partial
@@ -183,8 +178,8 @@ using index_actor = typed_actor_fwd<
   caf::reacts_to<atom::done, uuid>,
   // Registers the ARCHIVE with the ACCOUNTANT.
   caf::reacts_to<accountant_actor>,
-  // Subscribes a FLUSH LISTENER to the INDEX.
-  caf::reacts_to<atom::subscribe, atom::flush, flush_listener_actor>,
+  // Subscribes to flushes from the INDEX stream.
+  caf::replies_to<atom::subscribe, atom::flush>::with<atom::flush>,
   // Evaluatates an expression.
   caf::reacts_to<expression>,
   // Queries PARTITION actors for a given query id.
@@ -276,7 +271,8 @@ using filesystem_actor = typed_actor_fwd<
 
 /// The interface of an ACTIVE PARTITION actor.
 using active_partition_actor = typed_actor_fwd<
-  caf::reacts_to<atom::subscribe, atom::flush, flush_listener_actor>,
+  // Subscribes to flushes from the ACTIVE PARTITION stream.
+  caf::replies_to<atom::subscribe, atom::flush>::with<atom::flush>,
   // Persists the active partition at the specified path.
   caf::replies_to<atom::persist, path, path>::with< //
     std::shared_ptr<partition_synopsis>>,
@@ -328,8 +324,8 @@ using importer_actor = typed_actor_fwd<
   // Add a new sink.
   caf::replies_to<stream_sink_actor<table_slice>>::with< //
     caf::outbound_stream_slot<table_slice>>,
-  // Register a FLUSH LISTENER actor.
-  caf::reacts_to<atom::subscribe, atom::flush, flush_listener_actor>,
+  // Subscribes to flushes from the IMPORTER stream.
+  caf::replies_to<atom::subscribe, atom::flush>::with<atom::flush>,
   // The internal telemetry loop of the IMPORTER.
   caf::reacts_to<atom::telemetry>>
   // Conform to the protocol of the STREAM SINK actor for table slices.
@@ -383,7 +379,6 @@ CAF_BEGIN_TYPE_ID_BLOCK(vast_actors, caf::id_block::vast_atoms::end)
   VAST_ADD_TYPE_ID((vast::system::evaluator_actor))
   VAST_ADD_TYPE_ID((vast::system::exporter_actor))
   VAST_ADD_TYPE_ID((vast::system::filesystem_actor))
-  VAST_ADD_TYPE_ID((vast::system::flush_listener_actor))
   VAST_ADD_TYPE_ID((vast::system::importer_actor))
   VAST_ADD_TYPE_ID((vast::system::index_actor))
   VAST_ADD_TYPE_ID((vast::system::index_client_actor))

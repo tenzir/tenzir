@@ -45,7 +45,6 @@
 #include "vast/type.hpp"
 #include "vast/value_index.hpp"
 
-#include <caf/attach_continuous_stream_stage.hpp>
 #include <caf/broadcast_downstream_manager.hpp>
 #include <caf/deserializer.hpp>
 #include <caf/error.hpp>
@@ -62,20 +61,6 @@ namespace vast::system {
 active_indexer_actor active_partition_state::indexer_at(size_t position) const {
   VAST_ASSERT(position < indexers.size());
   return as_vector(indexers)[position].second;
-}
-
-void active_partition_state::add_flush_listener(flush_listener_actor listener) {
-  VAST_DEBUG("{} adds a new 'flush' subscriber: {}", self, listener);
-  flush_listeners.emplace_back(std::move(listener));
-  detail::notify_listeners_if_clean(*this, *stage);
-}
-
-void active_partition_state::notify_flush_listeners() {
-  VAST_DEBUG("{} sends 'flush' messages to {} listeners", self,
-             flush_listeners.size());
-  for (auto& listener : flush_listeners)
-    self->send(listener, atom::flush_v);
-  flush_listeners.clear();
 }
 
 /// Gets the INDEXER at a certain position.
@@ -383,6 +368,8 @@ active_partition_actor::behavior_type active_partition(
   self->state.streaming_initiated = false;
   self->state.synopsis = std::make_shared<partition_synopsis>();
   self->state.synopsis_opts = std::move(synopsis_opts);
+  self->state.flush_promises
+    = std::make_shared<std::vector<caf::typed_response_promise<atom::flush>>>();
   put(self->state.synopsis_opts, "buffer-input-data", true);
   // The active partition stage is a caf stream stage that takes
   // a stream of `table_slice` as input and produces several
@@ -427,12 +414,12 @@ active_partition_actor::behavior_type active_partition(
       }
     },
     [=](caf::unit_t&, const caf::error& err) {
-      VAST_DEBUG("active partition {} finalized streaming {}", id, render(err));
+      VAST_DEBUG("active-partition {} finalized streaming {}", id, err);
       // We get an 'unreachable' error when the stream becomes unreachable
       // because the actor was destroyed; in this case the state was already
       // destroyed during `local_actor::on_exit()`.
       if (err && err != caf::exit_reason::unreachable) {
-        VAST_ERROR("{} aborts with error: {}", self, render(err));
+        VAST_ERROR("{} aborts with error: {}", self, err);
         return;
       }
     },
@@ -492,8 +479,11 @@ active_partition_actor::behavior_type active_partition(
       self->state.streaming_initiated = true;
       return self->state.stage->add_inbound_path(in);
     },
-    [self](atom::subscribe, atom::flush, const flush_listener_actor& listener) {
-      self->state.add_flush_listener(listener);
+    [self](atom::subscribe, atom::flush) -> caf::result<atom::flush> {
+      VAST_VERBOSE("{} adds flush listener {}", self, self->current_sender());
+      VAST_ASSERT(self->state.flush_promises);
+      return self->state.flush_promises->emplace_back(
+        self->make_response_promise<atom::flush>());
     },
     [self](atom::persist, const path& part_dir, const path& synopsis_dir) {
       VAST_DEBUG("{} got persist atom", self);

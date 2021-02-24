@@ -13,28 +13,37 @@
 
 #pragma once
 
+#include "vast/atoms.hpp"
 #include "vast/query_options.hpp"
 
 #include <caf/default_downstream_manager.hpp>
 #include <caf/detail/stream_stage_driver_impl.hpp>
 #include <caf/detail/stream_stage_impl.hpp>
 #include <caf/policy/arg.hpp>
+#include <caf/typed_response_promise.hpp>
+
+#include <utility>
 
 namespace vast::detail {
 
-template <class State>
-void notify_listeners_if_clean(State& st, const caf::stream_manager& mgr) {
-  if (!st.flush_listeners.empty() && mgr.inbound_paths_idle()
-      && mgr.out().clean()) {
-    st.notify_flush_listeners();
-  }
+inline bool should_notify_flush_listeners(
+  const std::vector<caf::typed_response_promise<atom::flush>>& flush_promises,
+  const caf::stream_manager& manager) {
+  return !flush_promises.empty() && manager.inbound_paths_idle()
+         && manager.out().clean();
+}
+
+inline void notify_flush_listeners(
+  std::vector<caf::typed_response_promise<atom::flush>>& flush_promises) {
+  for (auto&& flush_promise : std::exchange(flush_promises, {}))
+    flush_promise.deliver(atom::flush_v);
 }
 
 // A custom stream manager that is able to notify when all data has been
-// processed. It relies on `Self->state` being a struct containing a function
-// `notify_flush_listeners()` and a vector `flush_listeners`, which means that
-// it is currently only usable in combination with the `index` or the
-// `active_partition` actor.
+// processed. It relies on `Self->state.flush_promises` containing a
+// `std::shared_ptr<std::vector<caf::typed_response_promise<atom::flush>>>`,
+// which means it is currently only usable in combination with the INDEX or the
+// ACTIVE PARTITION.
 template <class Self, class Driver>
 class notifying_stream_manager : public caf::detail::stream_stage_impl<Driver> {
 public:
@@ -44,21 +53,23 @@ public:
   notifying_stream_manager(Self* self, Ts&&... xs)
     : caf::stream_manager(self),
       super(self, std::forward<Ts>(xs)...),
-      self_(self) {
+      flush_promises(self->state.flush_promises) {
     // nop
   }
 
   using super::handle;
 
-  void handle(caf::stream_slots slots,
-              caf::upstream_msg::ack_batch& x) override {
+  void
+  handle(caf::stream_slots slots, caf::upstream_msg::ack_batch& x) override {
     super::handle(slots, x);
-    notify_listeners_if_clean(state(), *this);
+    if (should_notify_flush_listeners(*flush_promises, *this))
+      notify_flush_listeners(*flush_promises);
   }
 
   void input_closed(caf::error reason) override {
     super::input_closed(std::move(reason));
-    notify_listeners_if_clean(state(), *this);
+    if (should_notify_flush_listeners(*flush_promises, *this))
+      notify_flush_listeners(*flush_promises);
   }
 
   void finalize(const caf::error& reason) override {
@@ -67,19 +78,11 @@ public:
     // in `local_actor::on_exit()` and then proceeds to stop the stream
     // managers with an `unreachable` error, so we can't touch it here.
     if (reason != caf::exit_reason::unreachable)
-      state().notify_flush_listeners();
+      notify_flush_listeners(*flush_promises);
   }
 
-private:
-  Self* self_;
-
-  auto self() {
-    return self_;
-  }
-
-  auto& state() {
-    return self()->state;
-  }
+  std::shared_ptr<std::vector<caf::typed_response_promise<atom::flush>>>
+    flush_promises = {};
 };
 
 /// Create a `notifying_stream_stage` and attaches it to the given actor.

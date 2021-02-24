@@ -288,32 +288,6 @@ std::optional<query_supervisor_actor> index_state::next_worker() {
   return result;
 }
 
-void index_state::add_flush_listener(flush_listener_actor listener) {
-  VAST_DEBUG("{} adds a new 'flush' subscriber: {}", self, listener);
-  flush_listeners.emplace_back(std::move(listener));
-  detail::notify_listeners_if_clean(*this, *stage);
-}
-
-// The whole purpose of the `-b` flag is to somehow block until all imported
-// data is available for querying, so we have to layer hack upon hack here to
-// achieve this most of the time.
-// TODO(ch19583): Rip out the whole 'notifying_stream_manager' and replace it
-// with some kind of ping/pong protocol.
-void index_state::notify_flush_listeners() {
-  if (!unpersisted.empty())
-    return;
-  VAST_DEBUG("{} sends 'flush' messages to {} listeners", self,
-             flush_listeners.size());
-  for (auto& listener : flush_listeners) {
-    if (active_partition.actor)
-      self->send(active_partition.actor, atom::subscribe_v, atom::flush_v,
-                 listener);
-    else
-      self->send(listener, atom::flush_v);
-  }
-  flush_listeners.clear();
-}
-
 void index_state::create_active_partition() {
   auto id = uuid::random();
   caf::settings index_opts;
@@ -332,6 +306,34 @@ void index_state::create_active_partition() {
   active_partition.capacity = partition_capacity;
   active_partition.id = id;
   VAST_DEBUG("{} created new partition {}", self, id);
+  // Move responsibility for fulfilling the flush promise to the active
+  // partitions.
+  if (flush_promises)
+    for (auto&& flush_promise : std::exchange(*flush_promises, {}))
+      forwarded_flush_promises.emplace_back(std::move(flush_promise));
+  // Remove all forwarded flush promises that are no longer pending.
+  forwarded_flush_promises.erase(
+    std::remove_if(forwarded_flush_promises.begin(),
+                   forwarded_flush_promises.end(),
+                   [](const auto& rp) { return !rp.pending(); }),
+    forwarded_flush_promises.end());
+  // Forward flush promise to the new active active partition.
+  for (auto& flush_promise : forwarded_flush_promises) {
+    self
+      ->request(active_partition.actor, caf::infinite, atom::subscribe_v,
+                atom::flush_v)
+      .then(
+        [=, sender = active_partition.actor](atom::flush) mutable {
+          VAST_ASSERT(sender);
+          if (!active_partition.actor || active_partition.actor == sender)
+            flush_promise.deliver(atom::flush_v);
+        },
+        [=, sender = active_partition.actor](caf::error& err) mutable {
+          VAST_ASSERT(sender);
+          if (!active_partition.actor || active_partition.actor == sender)
+            flush_promise.deliver(std::move(err));
+        });
+  }
 }
 
 void index_state::decomission_active_partition() {
@@ -616,6 +618,8 @@ index(index_actor::stateful_pointer<index_state> self,
   self->state.inmem_partitions.factory().filesystem() = self->state.filesystem;
   self->state.inmem_partitions.resize(max_inmem_partitions);
   self->state.meta_index_fp_rate = meta_index_fp_rate;
+  self->state.flush_promises
+    = std::make_shared<std::vector<caf::typed_response_promise<atom::flush>>>();
   // Read persistent state.
   if (auto err = self->state.load_from_disk()) {
     VAST_ERROR("{} failed to load index state from disk: {}", self,
@@ -625,9 +629,8 @@ index(index_actor::stateful_pointer<index_state> self,
   }
   // Setup stream manager.
   self->state.stage = detail::attach_notifying_stream_stage(
-    self,
-    /* continuous = */ true,
-    [](caf::unit_t&) {
+    self, true,
+    [=](caf::unit_t&) {
       // nop
     },
     [self](caf::unit_t&, caf::downstream<table_slice>& out, table_slice x) {
@@ -657,18 +660,12 @@ index(index_actor::stateful_pointer<index_state> self,
       }
     },
     [self](caf::unit_t&, const caf::error& err) {
-      // During "normal" shutdown, the node will send an exit message to
-      // the importer which then cuts the stream to the index, and the
-      // index exits afterwards.
+      VAST_DEBUG("index finalized streaming {}", err);
       // We get an 'unreachable' error when the stream becomes unreachable
-      // during actor destruction; in this case we can't use `self->state`
-      // anymore since it will already be destroyed.
-      VAST_DEBUG("index finalized streaming with error {}", render(err));
+      // because the actor was destroyed; in this case the state was already
+      // destroyed during `local_actor::on_exit()`.
       if (err && err != caf::exit_reason::unreachable) {
-        if (err != caf::exit_reason::user_shutdown)
-          VAST_ERROR("{} got a stream error: {}", self, render(err));
-        else
-          VAST_DEBUG("{} got a user shutdown error: {}", self, render(err));
+        VAST_ERROR("{} aborts with error: {}", self, err);
         // We can shutdown now because we only get a single stream from the
         // importer.
         self->send_exit(self, err);
@@ -720,9 +717,11 @@ index(index_actor::stateful_pointer<index_state> self,
     [self](accountant_actor accountant) {
       self->state.accountant = std::move(accountant);
     },
-    [self](atom::subscribe, atom::flush, flush_listener_actor listener) {
-      VAST_WARN("{} adds flush listener", self);
-      self->state.add_flush_listener(std::move(listener));
+    [self](atom::subscribe, atom::flush) -> caf::result<atom::flush> {
+      VAST_VERBOSE("{} adds flush listener {}", self, self->current_sender());
+      VAST_ASSERT(self->state.flush_promises);
+      return self->state.flush_promises->emplace_back(
+        self->make_response_promise<atom::flush>());
     },
     [self](vast::expression expr) -> caf::result<void> {
       if (!self->state.accept_queries) {

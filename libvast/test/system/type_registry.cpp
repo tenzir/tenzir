@@ -21,7 +21,6 @@
 #include "vast/concept/parseable/to.hpp"
 #include "vast/concept/parseable/vast/expression.hpp"
 #include "vast/defaults.hpp"
-#include "vast/detail/notifying_stream_manager.hpp"
 #include "vast/detail/spawn_container_source.hpp"
 #include "vast/system/importer.hpp"
 #include "vast/table_slice.hpp"

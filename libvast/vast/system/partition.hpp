@@ -60,10 +60,6 @@ struct active_partition_state {
 
   active_indexer_actor indexer_at(size_t position) const;
 
-  void add_flush_listener(flush_listener_actor listener);
-
-  void notify_flush_listeners();
-
   // -- data members -----------------------------------------------------------
 
   /// Pointer to the parent actor.
@@ -134,8 +130,9 @@ struct active_partition_state {
   /// A once_flag for things that need to be done only once at shutdown.
   std::once_flag shutdown_once;
 
-  // Vector of flush listeners.
-  std::vector<flush_listener_actor> flush_listeners;
+  // A list of stream flush promises.
+  std::shared_ptr<std::vector<caf::typed_response_promise<atom::flush>>>
+    flush_promises;
 };
 
 // TODO: Split this into a `static data` part that can be mmaped

@@ -99,8 +99,20 @@ caf::message import_command(const invocation& inv, caf::actor_system& sys) {
           VAST_DEBUG("{} received DOWN from source",
                      detail::pretty_type_name(name));
           if (caf::get_or(inv.options, "vast.import.blocking", false))
-            self->send(importer, atom::subscribe_v, atom::flush::value,
-                       caf::actor_cast<flush_listener_actor>(self));
+            self
+              ->request(importer, caf::infinite, atom::subscribe_v,
+                        atom::flush::value)
+              .receive(
+                [&](atom::flush) {
+                  VAST_DEBUG("{} received flush from importer",
+                             detail::pretty_type_name(name));
+                  stop = true;
+                },
+                [&](const caf::error& err) {
+                  VAST_DEBUG("{} received a flush error from the importer: {}",
+                             detail::pretty_type_name(name), err);
+                  stop = true;
+                });
           else
             stop = true;
         } else {
@@ -108,11 +120,6 @@ caf::message import_command(const invocation& inv, caf::actor_system& sys) {
                      detail::pretty_type_name(name), msg.source);
           VAST_ASSERT(!"unexpected DOWN message");
         }
-      },
-      [&](atom::flush) {
-        VAST_DEBUG("{} received flush from IMPORTER",
-                   detail::pretty_type_name(name));
-        stop = true;
       },
       [&](atom::signal, int signal) {
         VAST_DEBUG("{} received signal {}", detail::pretty_type_name(name),

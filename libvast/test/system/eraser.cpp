@@ -76,7 +76,7 @@ mock_index(system::index_actor::stateful_pointer<mock_index_state> self) {
         system::status_verbosity) -> caf::config_value::dictionary {
       FAIL("no mock implementation available");
     },
-    [=](atom::subscribe, atom::flush, system::flush_listener_actor) {
+    [=](atom::subscribe, atom::flush) -> atom::flush {
       FAIL("no mock implementation available");
     },
     [=](expression&) {

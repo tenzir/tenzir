@@ -312,11 +312,11 @@ importer(importer_actor::stateful_pointer<importer_state> self, path dir,
       return self->state.stage->add_outbound_path(std::move(sink));
     },
     // Register a FLUSH LISTENER actor.
-    [self](atom::subscribe, atom::flush, flush_listener_actor listener) {
-      VAST_DEBUG("{} adds new subscriber {}", self, listener);
+    [self](atom::subscribe, atom::flush) -> caf::result<atom::flush> {
+      VAST_DEBUG("{} adds new subscriber {}", self, self->current_sender());
       VAST_ASSERT(self->state.stage != nullptr);
-      self->send(self->state.index, atom::subscribe_v, atom::flush_v,
-                 std::move(listener));
+      return self->delegate(self->state.index, atom::subscribe_v,
+                            atom::flush_v);
     },
     // The internal telemetry loop of the IMPORTER.
     [self](atom::telemetry) {
