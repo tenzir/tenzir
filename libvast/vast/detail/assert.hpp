@@ -22,7 +22,8 @@
 #  define VAST_ASSERT(expr)                                                    \
     do {                                                                       \
       if (static_cast<bool>(expr) == false) {                                  \
-        ::printf("%s:%u: assertion failed '%s'\n", __FILE__, __LINE__, #expr); \
+        ::fprintf(stderr, "%s:%u: assertion failed '%s'\n", __FILE__,          \
+                  __LINE__, #expr);                                            \
         ::vast::detail::backtrace();                                           \
         ::abort();                                                             \
       }                                                                        \
