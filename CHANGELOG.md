@@ -11,7 +11,11 @@ This changelog documents all notable user-facing changes of VAST.
 ### 🐞 Bug Fixes
 -->
 
-<!-- ## Unreleased -->
+## Unreleased
+
+- ⚡️ The previously deprecated `#timestamp` extractor has been removed from
+  the query language entirely.
+  [#1399](https://github.com/tenzir/vast/pull/1399)
 
 ## [2021.02.24]
 
