@@ -113,7 +113,7 @@ jobs:
       uses: mknejp/delete-release-assets@v1
       with:
         token: ${{ secrets.GITHUB_TOKEN }}
-        tag: "$GITHUB_REF"
+        tag: ${{ github.ref }}
         fail-if-no-assets: false # don't fail if no previous assets exist
         fail-if-no-release: true # only delete assets when `tag` refers to a release
         assets: "${{ matrix.args }}-linux-static.tar.gz"
