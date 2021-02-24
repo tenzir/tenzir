@@ -11,13 +11,16 @@ This changelog documents all notable user-facing changes of VAST.
 ### 🐞 Bug Fixes
 -->
 
-## Unreleased
+<!-- ## Unreleased -->
 
-- 🧬 [Sigma](https://github.com/Neo23x0/sigma) rules are now a valid format to
-  represent query expression. VAST parses the `detection` attribute of a rule
-  and translates it into a native query expression. To run a query using a
-  Sigma rule, pass it on standard input, e.g., `vast export json < rule.yaml`.
-  [#1379](https://github.com/tenzir/vast/pull/1379) 
+## [2021.02.24]
+
+### ⚡️ Breaking Changes
+
+- ⚡️ The previously deprecated options `vast.spawn.importer.ids` and
+  `vast.schema-paths` no longer work. Furthermore, queries spread over multiple
+  arguments are now disallowed instead of triggering a deprecation warning.
+  [#1374](https://github.com/tenzir/vast/pull/1374)
 
 - ⚡️ The special meaning of the `#timestamp` attribute has been removed from
   the schema language. Timestamps can from now on be marked as such by using
@@ -27,37 +30,38 @@ This changelog documents all notable user-facing changes of VAST.
   `#timestamp` queries any longer.
   [#1388](https://github.com/tenzir/vast/pull/1388)
 
-- 🎁 The type extractor in the expression language now works with user defined
-  types. For example the type `port` is defined as `type port = count` in the
-  base schema. This type can now be queried with an expression like
-  `:port == 80`.
-  [#1382](https://github.com/tenzir/vast/pull/1382)
-
-- 🐞 A bug in the new simdjson based JSON reader introduced in
-  [#1356](https://github.com/tenzir/vast/pull/1356) could trigger an assertion
-  in the `vast import` process if an input field could not be converted to the
-  field type in the target layout. This is no longer the case.
-  [#1386](https://github.com/tenzir/vast/pull/1386)
-
-- ⚠️ The output of `vast help` and `vast documentation` now goes to *stdout*
-  instead of to stderr. Erroneous invocations of `vast` also print the
-  helptext, but in this case the output still goes to stderr to avoid
-  interference with downstream tooling.
-  [#1385](https://github.com/tenzir/vast/pull/1385)
-
-- 🐞 An ordering issue introduced in [#1295](https://github.com/tenzir/vast/pull/1295)
-  that could lead to a segfault with long-running queries was reverted.
-  [#1381](https://github.com/tenzir/vast/pull/1381)
-
 - ⚡️ All options in `vast.metrics.*` had underscores in their names replaced
   with dashes to align with other options. For example, `vast.metrics.file_sink`
   is now `vast.metrics.file-sink`. The old options no longer work.
   [#1368](https://github.com/tenzir/vast/pull/1368)
 
-- 🎁 The new options `vast.metrics.file-sink.real-time` and
-  `vast.metrics.uds-sink.real-time` enable real-time metrics reporting for the
-  file sink and UDS sink respectively.
-  [#1368](https://github.com/tenzir/vast/pull/1368)
+- ⚡️ User-supplied schema files are now picked up from
+  `<SYSCONFDIR>/vast/schema` and `<XDG_CONFIG_HOME>/vast/schema` instead of
+  `<XDG_DATA_HOME>/vast/schema`.
+  [#1372](https://github.com/tenzir/vast/pull/1372)
+
+- ⚡️ VAST now requires [{fmt} >= 5.2.1](https://fmt.dev) to be installed.
+  [#1330](https://github.com/tenzir/vast/pull/1330)
+
+- ⚡️ VAST switched to [spdlog >= 1.5.0](https://github.com/gabime/spdlog) for
+  logging. For users, this means: The `vast.console-format` and
+  `vast.file-format` now must be specified using the spdlog pattern syntax as
+  described
+  [here](https://github.com/gabime/spdlog/wiki/3.-Custom-formatting#pattern-flags).
+  All settings under `caf.logger.*` are now ignored by VAST, and only the
+  `vast.*` counterparts are used for logger configuration.
+  [#1223](https://github.com/tenzir/vast/pull/1223)
+  [#1328](https://github.com/tenzir/vast/pull/1328)
+  [#1334](https://github.com/tenzir/vast/pull/1334)
+  [#1390](https://github.com/tenzir/vast/pull/1390)
+  [@a4z](https://github.com/a4z)
+
+### ⚠️ Changes
+
+- ⚠️ The output of `vast help` and `vast documentation` now goes to *stdout*
+  instead of to stderr. Erroneous invocations of `vast` also print the helptext,
+  but in this case the output still goes to stderr to avoid interference with
+  downstream tooling. [#1385](https://github.com/tenzir/vast/pull/1385)
 
 - ⚠️ The query normalizer interprets value predicates of type `subnet` more
   broadly: given a subnet `S`, the parser expands this to the expression
@@ -65,32 +69,8 @@ This changelog documents all notable user-facing changes of VAST.
   addresses belonging to a specific subnet.
   [#1373](https://github.com/tenzir/vast/pull/1373)
 
-- ⚠️ The previously deprecated options `vast.spawn.importer.ids` and
-  `vast.schema-paths` no longer work. Furthermore, queries spread over multiple
-  arguuments are now disallowed instead of triggering a deprecation warning.
-  [#1374](https://github.com/tenzir/vast/pull/1374)
-
-- ⚡️ User-supplied schema files are now picked up from
-  `<SYSCONFDIR>/vast/schema` and `<XDG_CONFIG_HOME>/vast/schema` instead of
-  `<XDG_DATA_HOME>/vast/schema`.
-  [#1372](https://github.com/tenzir/vast/pull/1372)
-
-- ⚠️  / 🎁 The meta index now stores partition synopses in separate files. This
-  will decrease restart times for systems with large databases, slow disks and
-  aggressive readahead settings. A new config setting `vast.meta-index-dir`
-  allows storing the meta index information in a separate directory.
-  [#1330](https://github.com/tenzir/vast/pull/1330)
-  [#1376](https://github.com/tenzir/vast/pull/1376)
-
 - ⚠️ The `infer` command has an improved heuristic for the number types `int`,
   `count`, and `real`. [#1343](https://github.com/tenzir/vast/pull/1343)
-  [#1356](https://github.com/tenzir/vast/pull/1356)
-  [@ngrodzitski](https://github.com/ngrodzitski)
-
-- 🎁 The JSON import now always relies upon [simdjson](https://simdjson.org).
-  The previously experimental `--simdjson` option to the `vast import
-  json|suricata|zeek-json` commands no longer exists as the feature is
-  considered stable. [#1343](https://github.com/tenzir/vast/pull/1343)
   [#1356](https://github.com/tenzir/vast/pull/1356)
   [@ngrodzitski](https://github.com/ngrodzitski)
 
@@ -100,32 +80,64 @@ This changelog documents all notable user-facing changes of VAST.
   can still be used after the format subcommand, but that usage is deprecated.
   [#1354](https://github.com/tenzir/vast/pull/1354)
 
-- ⚡️ VAST now requires [{fmt} >= 5.2.1](https://fmt.dev) to be installed.
+- ⚠️ Schema parsing now uses a 2-pass loading phase so that type aliases can
+  reference other types that are later defined in the same directory.
+  Additionally, type definitions from already parsed schema dirs can be
+  referenced from schema types that are parsed later. Types can also be
+  redefined in later directories, but a type can not be defined twice in the
+  same directory. [#1331](https://github.com/tenzir/vast/pull/1331)
+
+### 🧬 Experimental Features
+
+- 🧬 [Sigma](https://github.com/Neo23x0/sigma) rules are now a valid format to
+  represent query expression. VAST parses the `detection` attribute of a rule
+  and translates it into a native query expression. To run a query using a Sigma
+  rule, pass it on standard input, e.g., `vast export json < rule.yaml`.
+  [#1379](https://github.com/tenzir/vast/pull/1379)
+
+### 🎁 Features
+
+- 🎁 The type extractor in the expression language now works with user defined
+  types. For example the type `port` is defined as `type port = count` in the
+  base schema. This type can now be queried with an expression like `:port ==
+  80`. [#1382](https://github.com/tenzir/vast/pull/1382)
+
+- 🎁 The new options `vast.metrics.file-sink.real-time` and
+  `vast.metrics.uds-sink.real-time` enable real-time metrics reporting for the
+  file sink and UDS sink respectively.
+  [#1368](https://github.com/tenzir/vast/pull/1368)
+
+- 🎁 The meta index now stores partition synopses in separate files. This will
+  decrease restart times for systems with large databases, slow disks and
+  aggressive `readahead` settings. A new config setting `vast.meta-index-dir`
+  allows storing the meta index information in a separate directory.
   [#1330](https://github.com/tenzir/vast/pull/1330)
+  [#1376](https://github.com/tenzir/vast/pull/1376)
+
+- 🎁 The JSON import now always relies upon [simdjson](https://simdjson.org).
+  The previously experimental `--simdjson` option to the `vast import
+  json|suricata|zeek-json` commands no longer exist as the feature is
+  considered stable. [#1343](https://github.com/tenzir/vast/pull/1343)
+  [#1356](https://github.com/tenzir/vast/pull/1356)
+  [@ngrodzitski](https://github.com/ngrodzitski)
 
 - 🎁 VAST rotates server logs by default. The new config options
   `vast.disable-log-rotation` and `vast.log-rotation-threshold` can be used to
   control this behaviour. [#1223](https://github.com/tenzir/vast/pull/1223)
   [#1362](https://github.com/tenzir/vast/pull/1362)
 
-- ⚠️ Schema parsing now uses a 2-pass loading phase so that type aliases can
-  reference other types that are later defined in the same directory.
-  Additionally, type definitions from already parsed schema dirs can be
-  referenced from schema types that are parsed later. Types can also be
-  redefined in later directories, but a type can not be defined twice in the
-  same dir.
-  [#1331](https://github.com/tenzir/vast/pull/1331)
+### 🐞 Bug Fixes
 
-- ⚡️ VAST switched to spdlog as logging library. For users, this means: The
-  `vast.console-format` and `vast.file-format` now must be specified using the
-  spdlog pattern syntax as described
-  [here](https://github.com/gabime/spdlog/wiki/3.-Custom-formatting#pattern-flags).
-  All settings under `caf.logger.*` are now ignored by VAST, and only the
-  `vast.*` counterparts are used for logger configuration.
-  [#1223](https://github.com/tenzir/vast/pull/1223)
-  [#1328](https://github.com/tenzir/vast/pull/1328)
-  [#1334](https://github.com/tenzir/vast/pull/1334)
-  [#1390](https://github.com/tenzir/vast/pull/1390) 
+- 🐞 A bug in the new simdjson based JSON reader introduced in
+  [#1356](https://github.com/tenzir/vast/pull/1356) could trigger an assertion
+  in the `vast import` process if an input field could not be converted to the
+  field type in the target layout. This is no longer the case.
+  [#1386](https://github.com/tenzir/vast/pull/1386)
+
+- 🐞 An ordering issue introduced in
+  [#1295](https://github.com/tenzir/vast/pull/1295) that could lead to a
+  segfault with long-running queries was reverted.
+  [#1381](https://github.com/tenzir/vast/pull/1381)
 
 ## [2021.01.28]
 
@@ -1358,3 +1370,4 @@ This is the first official release.
 [2020.10.29]: https://github.com/tenzir/vast/releases/tag/2020.10.29
 [2020.12.16]: https://github.com/tenzir/vast/releases/tag/2020.12.16
 [2021.01.28]: https://github.com/tenzir/vast/releases/tag/2021.01.28
+[2021.02.24]: https://github.com/tenzir/vast/releases/tag/2021.02.24
