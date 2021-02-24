@@ -26,7 +26,7 @@ struct accountant_config {
   struct self_sink {
     bool enable = true;
     // TODO: Switch to unsigned when moving to vast::record for transmitting.
-    int64_t slice_size = 100;
+    int64_t slice_size = 128;
     table_slice_encoding slice_type = defaults::import::table_slice_type;
   };
 
