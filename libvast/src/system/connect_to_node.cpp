@@ -91,10 +91,10 @@ connect_to_node(scoped_actor& self, const caf::settings& opts) {
                 atom::version_v)
       .receive(
         [&](std::string node_version) {
-          if (node_version != VAST_VERSION)
+          if (node_version != version::version)
             VAST_WARN("client version {} does not match VAST node version {}; "
                       "this may caused unexpected behavior",
-                      VAST_VERSION, node_version);
+                      version::version, node_version);
         },
         [&](caf::error error) { //
           result = std::move(error);

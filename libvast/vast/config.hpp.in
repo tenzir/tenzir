@@ -18,8 +18,16 @@
 #cmakedefine01 VAST_ENABLE_UBSAN
 #cmakedefine01 VAST_ENABLE_UNIT_TESTS
 
-#define VAST_VERSION "@VAST_VERSION_TAG@"
-#define VAST_BUILD_TREE_HASH "@VAST_BUILD_TREE_HASH@"
+namespace vast::version {
+
+/// Contains the full version string.
+extern const char* version;
+
+/// Contains a hash of VAST's build tree.
+extern const char* build_tree_hash;
+
+} // namespace vast::version
+
 #define VAST_SYSCONFDIR "@VAST_SYSCONFDIR@"
 #define VAST_DATADIR "@VAST_DATADIR@"
 #define VAST_LIBDIR "@VAST_LIBDIR@"

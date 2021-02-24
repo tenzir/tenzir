@@ -208,10 +208,10 @@ private:
     return {major, minor, tweak, patch};                                       \
   }                                                                            \
   extern "C" const char* vast_libvast_version() {                              \
-    return VAST_VERSION;                                                       \
+    return ::vast::version::version;                                           \
   }                                                                            \
   extern "C" const char* vast_libvast_build_tree_hash() {                      \
-    return VAST_BUILD_TREE_HASH;                                               \
+    return ::vast::version::build_tree_hash;                                   \
   }
 
 #define VAST_REGISTER_PLUGIN_TYPE_ID_BLOCK(...)                                \

@@ -313,12 +313,17 @@ endif ()
 
 # -- source files --------------------------------------------------------------
 
-configure_file("${CMAKE_CURRENT_SOURCE_DIR}/vast/config.hpp.in"
-               "${CMAKE_CURRENT_BINARY_DIR}/vast/config.hpp")
-
 file(GLOB_RECURSE libvast_sources CONFIGURE_DEPENDS
      "${CMAKE_CURRENT_SOURCE_DIR}/src/*.cpp"
      "${CMAKE_CURRENT_SOURCE_DIR}/vast/*.hpp")
+
+configure_file("${CMAKE_CURRENT_SOURCE_DIR}/vast/config.hpp.in"
+               "${CMAKE_CURRENT_BINARY_DIR}/vast/config.hpp")
+configure_file("${CMAKE_CURRENT_SOURCE_DIR}/src/config.cpp.in"
+               "${CMAKE_CURRENT_BINARY_DIR}/src/config.cpp")
+
+list(APPEND libvast_sources "${CMAKE_CURRENT_BINARY_DIR}/vast/config.hpp"
+     "${CMAKE_CURRENT_BINARY_DIR}/src/config.cpp")
 
 # -- libvast -------------------------------------------------------------------
 
@@ -371,11 +376,13 @@ target_link_libraries(libvast PRIVATE yaml-cpp)
 dependency_summary("yaml-cpp" yaml-cpp)
 
 option(FMT_ROOT "Install root of fmt" "")
-target_compile_definitions(libvast PUBLIC
-  # Forbid unsafe duration_cast usage.
-  FMT_SAFE_DURATION_CAST
-  # Make fmt::internal an alias for fmt::detail. Remove when requiring fmt >= 7.
-  FMT_USE_INTERNAL)
+target_compile_definitions(
+  libvast
+  PUBLIC
+    # Forbid unsafe duration_cast usage.
+    FMT_SAFE_DURATION_CAST
+    # Make fmt::internal an alias for fmt::detail. Remove when requiring fmt >= 7.
+    FMT_USE_INTERNAL)
 find_package(fmt 5.2.1 REQUIRED HINTS "${FMT_ROOT}")
 target_link_libraries(libvast PUBLIC fmt::fmt)
 dependency_summary("fmt" fmt::fmt)

@@ -671,7 +671,7 @@ node(node_actor::stateful_pointer<node_state> self, std::string name, path dir,
       return result;
     },
     [](atom::get, atom::version) -> std::string { //
-      return VAST_VERSION;
+      return version::version;
     },
     [self](atom::signal, int signal) {
       VAST_WARN("{} got signal {}", self, ::strsignal(signal));

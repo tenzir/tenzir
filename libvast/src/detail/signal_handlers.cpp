@@ -23,8 +23,8 @@
 #include <unistd.h>
 
 extern "C" void fatal_handler(int sig) {
-  ::fprintf(stderr, "vast-" VAST_VERSION ": Error: signal %d (%s)\n", sig,
-            ::strsignal(sig));
+  ::fprintf(stderr, "vast-%s: Error: signal %d (%s)\n", vast::version::version,
+            sig, ::strsignal(sig));
   vast::detail::backtrace();
   // Reinstall the default handler and call that too.
   signal(sig, SIG_DFL);
