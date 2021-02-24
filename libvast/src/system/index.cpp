@@ -229,6 +229,7 @@ caf::error index_state::load_from_disk() {
                                                  "version");
       if (auto error = unpack(*ps_flatbuffer->partition_synopsis_as_v0(), ps))
         return error;
+      meta_index_bytes += ps.memusage();
       persisted_partitions.insert(partition_uuid);
       synopses->emplace(std::move(partition_uuid), std::move(ps));
     }
@@ -353,6 +354,7 @@ void index_state::decomission_active_partition() {
         // Semantically ps is a unique_ptr, and the partition releases its
         // copy before sending. We use shared_ptr for the transport because
         // CAF message types must be copy-constructible.
+        meta_index_bytes += ps->memusage();
         // TODO: We should skip this continuation if we're currently shutting
         // down.
         self
@@ -411,8 +413,7 @@ index_state::status(status_verbosity v) const {
       // Hence the fallback to low-level primitives.
       layout_object.insert_or_assign(name, std::move(xs));
     }
-    // FIXME: forward status request to META INDEX here and merge the result.
-    // put(index_status, "meta-index-bytes", meta_idx.memusage());
+    put(index_status, "meta-index-bytes", meta_index_bytes);
     put(index_status, "num-active-partitions",
         active_partition.actor == nullptr ? 0 : 1);
     put(index_status, "num-cached-partitions", inmem_partitions.size());
@@ -616,6 +617,7 @@ index(index_actor::stateful_pointer<index_state> self,
   self->state.inmem_partitions.factory().filesystem() = self->state.filesystem;
   self->state.inmem_partitions.resize(max_inmem_partitions);
   self->state.meta_index_fp_rate = meta_index_fp_rate;
+  self->state.meta_index_bytes = 0;
   // Read persistent state.
   if (auto err = self->state.load_from_disk()) {
     VAST_ERROR("{} failed to load index state from disk: {}", self,

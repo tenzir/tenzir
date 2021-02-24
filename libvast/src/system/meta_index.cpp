@@ -283,10 +283,6 @@ meta_index(meta_index_actor::stateful_pointer<meta_index_state> self) {
       VAST_TRACE_SCOPE("{} {}", self, VAST_ARG(expr));
       return self->state.lookup(expr);
     },
-    [=](atom::status, status_verbosity) -> caf::settings {
-      // TODO: implement
-      return {};
-    },
   };
 }
 

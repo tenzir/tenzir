@@ -220,6 +220,9 @@ struct index_state {
   /// The META INDEX actor.
   meta_index_actor meta_index;
 
+  /// A running count of the size of the meta index.
+  size_t meta_index_bytes;
+
   /// The directory for persistent state.
   path dir;
 

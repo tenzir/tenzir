@@ -173,9 +173,7 @@ using meta_index_actor = typed_actor_fwd<
     atom::ok>,
   // Evaluate the expression.
   caf::replies_to<expression>::with< //
-    std::vector<uuid>>>
-  // Conform to the protocol of the STATUS CLIENT actor.
-  ::extend_with<status_client_actor>::unwrap;
+    std::vector<uuid>>>::unwrap;
 
 /// The INDEX actor interface.
 using index_actor = typed_actor_fwd<
