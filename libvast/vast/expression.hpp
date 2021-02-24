@@ -37,19 +37,25 @@ namespace vast {
 
 class expression;
 
-/// Extracts a specific attributes from an event.
-struct attribute_extractor : detail::totally_ordered<attribute_extractor> {
-  attribute_extractor(caf::atom_value str = caf::atom(""));
+/// Extracts meta data from an event.
+struct meta_extractor : detail::totally_ordered<meta_extractor> {
+  enum kind { type, field };
 
-  caf::atom_value attr;
+  meta_extractor() = default;
+
+  meta_extractor(kind k) : kind{k} {
+    // nop
+  }
+
+  kind kind;
 };
 
-bool operator==(const attribute_extractor& x, const attribute_extractor& y);
-bool operator<(const attribute_extractor& x, const attribute_extractor& y);
+bool operator==(const meta_extractor& x, const meta_extractor& y);
+bool operator<(const meta_extractor& x, const meta_extractor& y);
 
 template <class Inspector>
-auto inspect(Inspector& f, attribute_extractor& x) {
-  return f(caf::meta::type_name("attribute_extractor"), x.attr);
+auto inspect(Inspector& f, meta_extractor& x) {
+  return f(caf::meta::type_name("meta_extractor"), x.kind);
 }
 
 /// Extracts one or more values according to a given field.
@@ -117,8 +123,8 @@ auto inspect(Inspector& f, data_extractor& x) {
 /// A predicate with two operands evaluated under a relational operator.
 struct predicate : detail::totally_ordered<predicate> {
   /// The operand of a predicate, which can be either LHS or RHS.
-  using operand = caf::variant<attribute_extractor, field_extractor,
-                               type_extractor, data_extractor, data>;
+  using operand = caf::variant<meta_extractor, field_extractor, type_extractor,
+                               data_extractor, data>;
 
   predicate() = default;
 
@@ -128,7 +134,6 @@ struct predicate : detail::totally_ordered<predicate> {
   relational_operator op;
   operand rhs;
 };
-
 
 /// @relates predicate
 bool operator==(const predicate& x, const predicate& y);
@@ -226,13 +231,8 @@ auto inspect(Inspector& f, negation& x) {
 /// A query expression.
 class expression : detail::totally_ordered<expression> {
 public:
-  using types = caf::detail::type_list<
-    caf::none_t,
-    conjunction,
-    disjunction,
-    negation,
-    predicate
-  >;
+  using types = caf::detail::type_list<caf::none_t, conjunction, disjunction,
+                                       negation, predicate>;
 
   using node = caf::detail::tl_apply_t<types, caf::variant>;
 
@@ -241,12 +241,8 @@ public:
 
   /// Constructs an expression.
   /// @param x The node to construct an expression from.
-  template <
-    class T,
-    class = std::enable_if_t<
-      caf::detail::tl_contains<types, std::decay_t<T>>::value
-    >
-  >
+  template <class T, class = std::enable_if_t<
+                       caf::detail::tl_contains<types, std::decay_t<T>>::value>>
   expression(T&& x) : node_(std::forward<T>(x)) {
     // nop
   }
@@ -270,7 +266,7 @@ bool operator<(const expression& x, const expression& y);
 
 /// @relates expression
 template <class Inspector>
-auto inspect(Inspector&f, expression& x) {
+auto inspect(Inspector& f, expression& x) {
   return f(caf::meta::type_name("expression"), x.get_data());
 }
 
@@ -401,9 +397,9 @@ struct sum_type_access<vast::expression>
 
 namespace std {
 
-template<>
-struct hash<vast::attribute_extractor> {
-  size_t operator()(const vast::attribute_extractor& x) const {
+template <>
+struct hash<vast::meta_extractor> {
+  size_t operator()(const vast::meta_extractor& x) const {
     return vast::uhash<vast::xxhash>{}(x);
   }
 };
@@ -415,28 +411,28 @@ struct hash<vast::field_extractor> {
   }
 };
 
-template<>
+template <>
 struct hash<vast::type_extractor> {
   size_t operator()(const vast::type_extractor& x) const {
     return vast::uhash<vast::xxhash>{}(x);
   }
 };
 
-template<>
+template <>
 struct hash<vast::data_extractor> {
   size_t operator()(const vast::data_extractor& x) const {
     return vast::uhash<vast::xxhash>{}(x);
   }
 };
 
-template<>
+template <>
 struct hash<vast::predicate> {
   size_t operator()(const vast::predicate& x) const {
     return vast::uhash<vast::xxhash>{}(x);
   }
 };
 
-template<>
+template <>
 struct hash<vast::expression> {
   size_t operator()(const vast::expression& x) const {
     return vast::uhash<vast::xxhash>{}(x);

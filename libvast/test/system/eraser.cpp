@@ -150,7 +150,7 @@ struct fixture : fixtures::deterministic_actor_system_and_events {
   }
 
   // @pre index != nullptr
-  void spawn_aut(std::string query = "#time < 1 week ago") {
+  void spawn_aut(std::string query = ":timestamp < 1 week ago") {
     if (index == nullptr)
       FAIL("cannot start AUT without INDEX");
     aut = sys.spawn(vast::system::eraser, 6h, std::move(query), index, archive);

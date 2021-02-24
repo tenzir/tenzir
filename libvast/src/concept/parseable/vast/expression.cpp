@@ -44,15 +44,6 @@ static predicate::operand to_field_extractor(std::vector<std::string> xs) {
   return field_extractor{std::move(field)};
 }
 
-static predicate::operand to_attr_extractor(std::string x) {
-  if (x == "timestamp") {
-    VAST_WARN("#timestamp queries are deprecated and should be replaced with "
-              ":timestamp");
-    return type_extractor{none_type{}.name("timestamp")};
-  }
-  return attribute_extractor{caf::atom_from_string(x)};
-}
-
 static predicate::operand to_type_extractor(type x) {
   return type_extractor{std::move(x)};
 }
@@ -134,7 +125,7 @@ static auto make_predicate_parser() {
   using parsers::chr;
   using namespace parser_literals;
   // clang-format off
-  auto id = +(alnum | chr{'_'} | chr{'-'});
+  // TODO: Align this with identifier_char.
   auto field_char = alnum | chr{'_'} | chr{'-'} | chr{':'};
   // A field cannot start with:
   //  - '-' to leave room for potential arithmetic expressions in operands
@@ -142,7 +133,8 @@ static auto make_predicate_parser() {
   auto field = !(':'_p | '-') >> (+field_char % '.');
   auto operand
     = (parsers::data >> !(field_char | '.')) ->* to_data_operand
-    | '#' >> id ->* to_attr_extractor
+    | "#type"_p  ->* [] { return meta_extractor{meta_extractor::type}; }
+    | "#field"_p ->* [] { return meta_extractor{meta_extractor::field}; }
     | ':' >> parsers::type ->* to_type_extractor
     | field ->* to_field_extractor
     ;

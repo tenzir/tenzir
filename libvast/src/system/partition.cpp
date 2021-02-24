@@ -121,18 +121,18 @@ fetch_indexer(const PartitionState& state, const data_extractor& dx,
 /// @relates passive_partition_state
 template <typename PartitionState>
 indexer_actor
-fetch_indexer(const PartitionState& state, const attribute_extractor& ex,
+fetch_indexer(const PartitionState& state, const meta_extractor& ex,
               relational_operator op, const data& x) {
   VAST_TRACE_SCOPE("{} {} {}", VAST_ARG(ex), VAST_ARG(op), VAST_ARG(x));
   ids row_ids;
-  if (ex.attr == atom::type_v) {
+  if (ex.kind == meta_extractor::type) {
     // We know the answer immediately: all IDs that are part of the table.
     // However, we still have to "lift" this result into an actor for the
     // EVALUATOR.
     for (auto& [name, ids] : state.type_ids)
       if (evaluate(name, op, x))
         row_ids |= ids;
-  } else if (ex.attr == atom::field_v) {
+  } else if (ex.kind == meta_extractor::field) {
     auto s = caf::get_if<std::string>(&x);
     if (!s) {
       VAST_WARN("{} #field meta queries only support string "
@@ -161,7 +161,7 @@ fetch_indexer(const PartitionState& state, const attribute_extractor& ex,
       row_ids = partition_ids ^ row_ids;
     }
   } else {
-    VAST_WARN("{} got unsupported attribute: {}", state.self, ex.attr);
+    VAST_WARN("{} got unsupported attribute: {}", state.self, ex.kind);
     return {};
   }
   // TODO: Spawning a one-shot actor is quite expensive. Maybe the
@@ -194,7 +194,7 @@ evaluate(const PartitionState& state, const expression& expr) {
       return fetch_indexer(state, ext, pred.op, x);
     };
     auto v = detail::overload{
-      [&](const attribute_extractor& ex, const data& x) {
+      [&](const meta_extractor& ex, const data& x) {
         return get_indexer_handle(ex, x);
       },
       [&](const data_extractor& dx, const data& x) {

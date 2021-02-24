@@ -164,8 +164,8 @@ std::vector<uuid> meta_index::lookup(const expression& expr) const {
         return result;
       };
       auto extract_expr = detail::overload{
-        [&](const attribute_extractor& lhs, const data& d) -> result_type {
-          if (lhs.attr == atom::type_v) {
+        [&](const meta_extractor& lhs, const data& d) -> result_type {
+          if (lhs.kind == meta_extractor::type) {
             // We don't have to look into the synopses for type queries, just
             // at the layout names.
             result_type result;
@@ -185,7 +185,7 @@ std::vector<uuid> meta_index::lookup(const expression& expr) const {
             // Re-establish potentially violated invariant.
             std::sort(result.begin(), result.end());
             return result;
-          } else if (lhs.attr == atom::field_v) {
+          } else if (lhs.kind == meta_extractor::field) {
             // We don't have to look into the synopses for type queries, just
             // at the layout names.
             result_type result;
@@ -217,7 +217,7 @@ std::vector<uuid> meta_index::lookup(const expression& expr) const {
             return result;
           }
           VAST_WARN("{} cannot process attribute extractor: {}",
-                    detail::pretty_type_name(this), lhs.attr);
+                    detail::pretty_type_name(this), lhs.kind);
           return all_partitions();
         },
         [&](const field_extractor& lhs, const data&) -> result_type {

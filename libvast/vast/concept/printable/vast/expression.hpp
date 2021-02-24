@@ -13,18 +13,18 @@
 
 #pragma once
 
-#include <caf/none.hpp>
-
-#include "vast/data.hpp"
-#include "vast/expression.hpp"
+#include "vast/concept/printable/core.hpp"
 #include "vast/concept/printable/numeric.hpp"
 #include "vast/concept/printable/string.hpp"
-#include "vast/concept/printable/core.hpp"
 #include "vast/concept/printable/vast/data.hpp"
 #include "vast/concept/printable/vast/none.hpp"
 #include "vast/concept/printable/vast/offset.hpp"
 #include "vast/concept/printable/vast/operator.hpp"
 #include "vast/concept/printable/vast/type.hpp"
+#include "vast/data.hpp"
+#include "vast/expression.hpp"
+
+#include <caf/none.hpp>
 
 namespace vast {
 
@@ -58,17 +58,17 @@ struct expression_printer : printer<expression_printer> {
 
     bool operator()(const predicate& p) const {
       auto op = ' ' << make_printer<relational_operator>{} << ' ';
-      return caf::visit(*this, p.lhs)
-             && op(out_, p.op)
+      return caf::visit(*this, p.lhs) && op(out_, p.op)
              && caf::visit(*this, p.rhs);
     }
 
-    bool operator()(const attribute_extractor& e) const {
-      return ('#' << printers::str)(out_, to_string(e.attr));
+    bool operator()(const meta_extractor& e) const {
+      return printers::str(out_,
+                           e.kind == meta_extractor::type ? "#type" : "#field");
     }
 
     bool operator()(const type_extractor& e) const {
-      return (':' << printers::type<policy::name_only>)(out_, e.type);
+      return (':' << printers::type<policy::name_only>) (out_, e.type);
     }
 
     bool operator()(const field_extractor& e) const {
@@ -89,7 +89,7 @@ struct expression_printer : printer<expression_printer> {
 
   template <class Iterator, class T>
   auto print(Iterator& out, const T& x) const -> std::enable_if_t<
-    std::disjunction_v<std::is_same<T, attribute_extractor>,
+    std::disjunction_v<std::is_same<T, meta_extractor>,
                        std::is_same<T, field_extractor>,
                        std::is_same<T, data_extractor>,
                        std::is_same<T, predicate>, std::is_same<T, conjunction>,
@@ -107,7 +107,7 @@ struct expression_printer : printer<expression_printer> {
 template <class T>
 struct printer_registry<
   T, std::enable_if_t<std::disjunction_v<
-       std::is_same<T, attribute_extractor>, std::is_same<T, field_extractor>,
+       std::is_same<T, meta_extractor>, std::is_same<T, field_extractor>,
        std::is_same<T, data_extractor>, std::is_same<T, predicate>,
        std::is_same<T, conjunction>, std::is_same<T, disjunction>,
        std::is_same<T, negation>, std::is_same<T, expression>>>> {

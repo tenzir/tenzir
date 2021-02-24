@@ -14,6 +14,8 @@
 #include "vast/expression.hpp"
 #define SUITE expression
 
+#include "vast/fwd.hpp"
+
 #include "vast/test/test.hpp"
 
 #include "vast/concept/parseable/to.hpp"
@@ -22,14 +24,13 @@
 #include "vast/concept/printable/stream.hpp"
 #include "vast/concept/printable/to_string.hpp"
 #include "vast/concept/printable/vast/expression.hpp"
-#include "vast/fwd.hpp"
 
 #include <caf/sum_type.hpp>
 
 using namespace vast;
 using namespace std::string_literals;
 
-TEST(parseable/printable - predicate) {
+TEST(parseable / printable - predicate) {
   predicate pred;
   // LHS: schema, RHS: data
   MESSAGE("x.y.z == 42");
@@ -65,10 +66,10 @@ TEST(parseable/printable - predicate) {
   MESSAGE("#type != \"foo\"");
   str = "#type != \"foo\"";
   CHECK(parsers::predicate(str, pred));
-  CHECK(caf::holds_alternative<attribute_extractor>(pred.lhs));
+  CHECK(caf::holds_alternative<meta_extractor>(pred.lhs));
   CHECK(caf::holds_alternative<data>(pred.rhs));
-  CHECK(caf::get<attribute_extractor>(pred.lhs)
-        == attribute_extractor{atom::type_v});
+  CHECK(caf::get<meta_extractor>(pred.lhs)
+        == meta_extractor{meta_extractor::type});
   CHECK(pred.op == relational_operator::not_equal);
   CHECK(caf::get<data>(pred.rhs) == data{"foo"});
   CHECK_EQUAL(to_string(pred), str);
@@ -92,15 +93,15 @@ TEST(parseable/printable - predicate) {
   CHECK(pred.op == relational_operator::greater_equal);
   CHECK(caf::get<data>(pred.rhs) == data{-4.8});
   CHECK_EQUAL(to_string(pred), str);
-  // LHS: data, RHS: time
-  MESSAGE("now > #timestamp");
-  str = "now > #timestamp";
+  // LHS: data, RHS: typename
+  MESSAGE("\"zeek.\" in #type");
+  str = "\"zeek.\" in #type";
   CHECK(parsers::predicate(str, pred));
   CHECK(caf::holds_alternative<data>(pred.lhs));
-  CHECK(caf::holds_alternative<type_extractor>(pred.rhs));
-  CHECK(pred.op == relational_operator::greater);
-  CHECK(caf::get<type_extractor>(pred.rhs)
-        == type_extractor{none_type{}.name("timestamp")});
+  CHECK(caf::holds_alternative<meta_extractor>(pred.rhs));
+  CHECK(pred.op == relational_operator::in);
+  CHECK(caf::get<meta_extractor>(pred.rhs)
+        == meta_extractor{meta_extractor::type});
   // LHS: schema, RHS: schema
   MESSAGE("x.a_b == y.c_d");
   str = "x.a_b == y.c_d";
@@ -132,7 +133,7 @@ TEST(parseable - expression) {
   CHECK_EQUAL(expr, expression(conjunction{p1, negation{p2}, p1}));
   CHECK(parsers::expr("x > 0 && x < 42 && a.b == x.y"s, expr));
   CHECK(parsers::expr(
-    "#timestamp > 2018-07-04+12:00:00.0 && #timestamp < 2018-07-04+23:55:04.0"s,
+    ":timestamp > 2018-07-04+12:00:00.0 && :timestamp < 2018-07-04+23:55:04.0"s,
     expr));
   auto x = caf::get_if<conjunction>(&expr);
   REQUIRE(x);

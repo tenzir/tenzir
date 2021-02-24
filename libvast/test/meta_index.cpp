@@ -154,8 +154,8 @@ struct fixture {
     return slice(index, index + 1);
   }
 
-  auto attr_time_query(std::string_view hhmmss) {
-    std::string q = "#timestamp == 1970-01-01+";
+  auto timestamp_type_query(std::string_view hhmmss) {
+    std::string q = ":timestamp == 1970-01-01+";
     q += hhmmss;
     q += ".0";
     return meta_idx.lookup(unbox(to<expression>(q)));
@@ -171,11 +171,12 @@ struct fixture {
     return result;
   }
 
-  auto attr_time_query(std::string_view hhmmss_from, std::string_view hhmmss_to) {
-    std::string q = "#timestamp >= 1970-01-01+";
+  auto timestamp_type_query(std::string_view hhmmss_from,
+                            std::string_view hhmmss_to) {
+    std::string q = ":timestamp >= 1970-01-01+";
     q += hhmmss_from;
     q += ".0";
-    q += " && #timestamp <= 1970-01-01+";
+    q += " && :timestamp <= 1970-01-01+";
     q += hhmmss_to;
     q += ".0";
     return lookup(q);
@@ -194,18 +195,18 @@ FIXTURE_SCOPE(meta_index_tests, fixture)
 
 TEST(attribute extractor - time) {
   MESSAGE("check whether point queries return correct slices");
-  CHECK_EQUAL(attr_time_query("00:00:00"), slice(0));
-  CHECK_EQUAL(attr_time_query("00:00:24"), slice(0));
-  CHECK_EQUAL(attr_time_query("00:00:25"), slice(1));
-  CHECK_EQUAL(attr_time_query("00:00:49"), slice(1));
-  CHECK_EQUAL(attr_time_query("00:00:50"), slice(2));
-  CHECK_EQUAL(attr_time_query("00:01:14"), slice(2));
-  CHECK_EQUAL(attr_time_query("00:01:15"), slice(3));
-  CHECK_EQUAL(attr_time_query("00:01:39"), slice(3));
-  CHECK_EQUAL(attr_time_query("00:01:40"), empty());
+  CHECK_EQUAL(timestamp_type_query("00:00:00"), slice(0));
+  CHECK_EQUAL(timestamp_type_query("00:00:24"), slice(0));
+  CHECK_EQUAL(timestamp_type_query("00:00:25"), slice(1));
+  CHECK_EQUAL(timestamp_type_query("00:00:49"), slice(1));
+  CHECK_EQUAL(timestamp_type_query("00:00:50"), slice(2));
+  CHECK_EQUAL(timestamp_type_query("00:01:14"), slice(2));
+  CHECK_EQUAL(timestamp_type_query("00:01:15"), slice(3));
+  CHECK_EQUAL(timestamp_type_query("00:01:39"), slice(3));
+  CHECK_EQUAL(timestamp_type_query("00:01:40"), empty());
   MESSAGE("check whether time-range queries return correct slices");
-  CHECK_EQUAL(attr_time_query("00:00:01", "00:00:10"), slice(0));
-  CHECK_EQUAL(attr_time_query("00:00:10", "00:00:30"), slice(0, 2));
+  CHECK_EQUAL(timestamp_type_query("00:00:01", "00:00:10"), slice(0));
+  CHECK_EQUAL(timestamp_type_query("00:00:10", "00:00:30"), slice(0, 2));
 }
 
 TEST(attribute extractor - type) {
