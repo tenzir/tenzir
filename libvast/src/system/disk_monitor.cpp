@@ -17,16 +17,14 @@
 #include <filesystem>
 #include <system_error>
 
-#include <sys/stat.h>
-
 namespace vast::system {
 
 namespace {
 
 struct partition_diskstate {
   uuid id;
-  off_t filesize;
-  time_t mtime;
+  std::uintmax_t filesize;
+  std::filesystem::file_time_type mtime;
 };
 
 template <typename Fun>
@@ -101,8 +99,8 @@ disk_monitor(disk_monitor_actor::stateful_pointer<disk_monitor_state> self,
                                            self->state.dbdir, err));
       // TODO(ch20006): Add some check on the overall structure on the db dir.
       std::vector<partition_diskstate> partitions;
-      for (const auto& file : index_dir) {
-        auto partition = file.path().stem().string();
+      for (const auto& entry : index_dir) {
+        auto partition = entry.path().stem().string();
         if (partition == "index.bin")
           continue;
         uuid id;
@@ -110,11 +108,17 @@ disk_monitor(disk_monitor_actor::stateful_pointer<disk_monitor_state> self,
           VAST_VERBOSE("{} failed to find partition {}", self, partition);
           continue;
         }
-        // TODO: Wrap a more generic `stat()` using `vast::path`.
-        struct stat statbuf;
-        if (::stat(file.path().c_str(), &statbuf) < 0)
-          continue;
-        partitions.push_back({id, statbuf.st_size, statbuf.st_mtime});
+        if (entry.is_regular_file()) {
+          std::error_code err{};
+          const auto file_size = entry.file_size(err);
+          const auto mtime = entry.last_write_time(err);
+          if (!err && file_size != static_cast<std::uintmax_t>(-1))
+            partitions.push_back({id, file_size, mtime});
+          else
+            VAST_WARN("{} failed to get file size and last write time for "
+                      "partition {}",
+                      self, partition);
+        }
       }
       if (partitions.empty()) {
         VAST_VERBOSE("{} failed to find any partitions to delete", self);
