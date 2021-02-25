@@ -86,7 +86,7 @@ bool type_parser::parse(Iterator& f, const Iterator& l, Attribute& a) const {
   auto map_type_parser
     = ("map" >> skp >> '<' >> skp
     >> vast::ref(type_type) >> skp >> ',' >> skp >> ref(type_type) >> skp
-    >> '>') ->* to_map;
+    >> '>') ->* to_map
     ;
   // Record
   static auto to_field = [](std::tuple<std::string, type> xs) {
@@ -104,7 +104,7 @@ bool type_parser::parse(Iterator& f, const Iterator& l, Attribute& a) const {
   auto record_type_parser
     = ("record" >> skp >> '{'
     >> ((skp >> field >> skp) % ',') >> ~(',' >> skp)
-    >> '}') ->* to_record;
+    >> '}') ->* to_record
     ;
   static auto to_named_none_type = [](std::string name) -> type {
     return none_type{}.name(std::move(name));
