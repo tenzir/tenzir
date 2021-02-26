@@ -75,7 +75,6 @@ class data;
 class ewah_bitstream;
 class expression;
 class json;
-class meta_index;
 class msgpack_table_slice_builder;
 class path;
 class pattern;
@@ -235,6 +234,7 @@ class application;
 class configuration;
 class default_application;
 class export_command;
+class meta_index;
 class node_command;
 class pcap_writer_command;
 class remote_command;
@@ -317,6 +317,7 @@ CAF_BEGIN_TYPE_ID_BLOCK(vast_types, caf::first_custom_type_id)
   VAST_ADD_TYPE_ID((std::vector<std::string>) )
   VAST_ADD_TYPE_ID((std::vector<vast::table_slice>) )
   VAST_ADD_TYPE_ID((std::vector<vast::table_slice_column>) )
+  VAST_ADD_TYPE_ID((std::vector<vast::uuid>) )
 
   VAST_ADD_TYPE_ID((caf::stream<vast::table_slice>) )
   VAST_ADD_TYPE_ID((caf::stream<vast::table_slice_column>) )

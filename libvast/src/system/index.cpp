@@ -41,9 +41,9 @@
 #include "vast/io/read.hpp"
 #include "vast/io/save.hpp"
 #include "vast/logger.hpp"
-#include "vast/meta_index.hpp"
 #include "vast/partition_synopsis.hpp"
 #include "vast/system/evaluator.hpp"
+#include "vast/system/meta_index.hpp"
 #include "vast/system/partition.hpp"
 #include "vast/system/query_supervisor.hpp"
 #include "vast/system/shutdown.hpp"
@@ -53,7 +53,9 @@
 #include "vast/value_index.hpp"
 
 #include <caf/error.hpp>
+#include <caf/response_promise.hpp>
 #include <caf/typed_event_based_actor.hpp>
+#include <caf/typed_response_promise.hpp>
 
 #include <flatbuffers/flatbuffers.h>
 
@@ -195,13 +197,14 @@ caf::error index_state::load_from_disk() {
     auto index_v0 = index->index_as_v0();
     auto partition_uuids = index_v0->partitions();
     VAST_ASSERT(partition_uuids);
+    auto synopses = std::make_shared<std::map<uuid, partition_synopsis>>();
     for (auto uuid_fb : *partition_uuids) {
       VAST_ASSERT(uuid_fb);
       vast::uuid partition_uuid;
       unpack(*uuid_fb, partition_uuid);
-      auto partition_path = dir / to_string(partition_uuid);
-      auto partition_synopsis_path = dir / (to_string(partition_uuid) + ".mdx");
-      if (!exists(partition_path)) {
+      auto part_dir = partition_path(partition_uuid);
+      auto synopsis_dir = partition_synopsis_path(partition_uuid);
+      if (!exists(part_dir)) {
         VAST_WARN("{} found partition {}"
                   "in the index state but not on disk; this may have been "
                   "caused by an unclean shutdown",
@@ -209,14 +212,13 @@ caf::error index_state::load_from_disk() {
         continue;
       }
       // Generate external partition synopsis file if it doesn't exist.
-      if (!exists(partition_synopsis_path)) {
-        if (auto error = extract_partition_synopsis(partition_path,
-                                                    partition_synopsis_path))
+      if (!exists(synopsis_dir)) {
+        if (auto error = extract_partition_synopsis(part_dir, synopsis_dir))
           return error;
       }
-      auto chunk = chunk::mmap(partition_synopsis_path);
+      auto chunk = chunk::mmap(synopsis_dir);
       if (!chunk) {
-        VAST_WARN("{} could not mmap partition at {}", self, partition_path);
+        VAST_WARN("{} could not mmap partition at {}", self, part_dir);
         continue;
       }
       auto ps_flatbuffer = fbs::GetPartitionSynopsis(chunk->data());
@@ -227,9 +229,33 @@ caf::error index_state::load_from_disk() {
                                                  "version");
       if (auto error = unpack(*ps_flatbuffer->partition_synopsis_as_v0(), ps))
         return error;
-      meta_idx.merge(partition_uuid, std::move(ps));
+      meta_index_bytes += ps.memusage();
       persisted_partitions.insert(partition_uuid);
+      synopses->emplace(std::move(partition_uuid), std::move(ps));
     }
+    // We collect all synopses to send them in bulk, since the `await` interface
+    // doesn't lend itself to a huge number of awaited messages: Only the tip of
+    // the current awaited list is considered, leading to an O(n**2) worst-case
+    // behavior if the responses arrive in the same order to how they were sent.
+    VAST_DEBUG("{} requesting bulk merge of {} partitions", self,
+               synopses->size());
+    this->accept_queries = false;
+    self
+      ->request(meta_index, caf::infinite, atom::merge_v,
+                std::exchange(synopses, {}))
+      .then(
+        [=](atom::ok) {
+          VAST_VERBOSE("{} successfully loaded meta index from disk and will "
+                       "start processing queries",
+                       self);
+          this->accept_queries = true;
+        },
+        [=](caf::error err) {
+          VAST_ERROR("{} could not load meta index state from disk, shutting "
+                     "down with error {}",
+                     self, render(err));
+          self->send_exit(self, err);
+        });
     auto stats = index_v0->stats();
     if (!stats)
       return caf::make_error(ec::format_error, "no stats in persisted index "
@@ -239,7 +265,7 @@ caf::error index_state::load_from_disk() {
         = layout_statistics{stat->count()};
     }
   } else {
-    VAST_WARN("{} found existing database dir {} without index "
+    VAST_INFO("{} found existing database dir {} without index "
               "statefile, "
               "will start with fresh state",
               self, dir);
@@ -269,11 +295,23 @@ void index_state::add_flush_listener(flush_listener_actor listener) {
   detail::notify_listeners_if_clean(*this, *stage);
 }
 
+// The whole purpose of the `-b` flag is to somehow block until all imported
+// data is available for querying, so we have to layer hack upon hack here to
+// achieve this most of the time.
+// TODO(ch19583): Rip out the whole 'notifying_stream_manager' and replace it
+// with some kind of ping/pong protocol.
 void index_state::notify_flush_listeners() {
+  if (!unpersisted.empty())
+    return;
   VAST_DEBUG("{} sends 'flush' messages to {} listeners", self,
              flush_listeners.size());
-  for (auto& listener : flush_listeners)
-    self->send(listener, atom::flush_v);
+  for (auto& listener : flush_listeners) {
+    if (active_partition.actor)
+      self->send(active_partition.actor, atom::subscribe_v, atom::flush_v,
+                 listener);
+    else
+      self->send(listener, atom::flush_v);
+  }
   flush_listeners.clear();
 }
 
@@ -301,26 +339,38 @@ void index_state::decomission_active_partition() {
   auto id = active_partition.id;
   auto actor = std::exchange(active_partition.actor, {});
   unpersisted[id] = actor;
-  // Send buffered batches.
+  // Send buffered batches and remove active partition from the stream.
   stage->out().fan_out_flush();
-  stage->out().force_emit_batches();
-  // Remove active partition from the stream.
   stage->out().close(active_partition.stream_slot);
+  stage->out().force_emit_batches();
   // Persist active partition asynchronously.
-  auto part_dir = dir / to_string(id);
-  auto synopsis_dir = synopsisdir / (to_string(id) + ".mdx");
+  auto part_dir = partition_path(id);
+  auto synopsis_dir = partition_synopsis_path(id);
   VAST_DEBUG("{} persists active partition to {}", self, part_dir);
-  self->request(actor, caf::infinite, atom::persist_v, part_dir, synopsisdir)
+  self->request(actor, caf::infinite, atom::persist_v, part_dir, synopsis_dir)
     .then(
       [=](std::shared_ptr<partition_synopsis>& ps) {
         VAST_DEBUG("{} successfully persisted partition {}", self, id);
         // Semantically ps is a unique_ptr, and the partition releases its
         // copy before sending. We use shared_ptr for the transport because
         // CAF message types must be copy-constructible.
-        VAST_ASSERT(ps.use_count() == 1);
-        meta_idx.merge(id, std::move(*ps));
-        unpersisted.erase(id);
-        persisted_partitions.insert(id);
+        meta_index_bytes += ps->memusage();
+        // TODO: We should skip this continuation if we're currently shutting
+        // down.
+        self
+          ->request(meta_index, caf::infinite, atom::merge_v, id, std::move(ps))
+          .then(
+            [=](atom::ok) {
+              VAST_DEBUG("{} received ok for request to persist partition {}",
+                         self, id);
+              unpersisted.erase(id);
+              persisted_partitions.insert(id);
+            },
+            [=](caf::error err) {
+              VAST_DEBUG("{} received error for request to persist partition "
+                         "{}: {}",
+                         self, id, render(err));
+            });
       },
       [=](const caf::error& err) {
         VAST_ERROR("{} failed to persist partition {} with error: {}", self, id,
@@ -363,7 +413,7 @@ index_state::status(status_verbosity v) const {
       // Hence the fallback to low-level primitives.
       layout_object.insert_or_assign(name, std::move(xs));
     }
-    put(index_status, "meta-index-bytes", meta_idx.memusage());
+    put(index_status, "meta-index-bytes", meta_index_bytes);
     put(index_status, "num-active-partitions",
         active_partition.actor == nullptr ? 0 : 1);
     put(index_status, "num-cached-partitions", inmem_partitions.size());
@@ -557,7 +607,9 @@ index(index_actor::stateful_pointer<index_state> self,
     VAST_VERBOSE("{} uses {} for meta index data", self, meta_index_dir);
   // Set members.
   self->state.self = self;
+  self->state.accept_queries = true;
   self->state.filesystem = std::move(filesystem);
+  self->state.meta_index = self->spawn<caf::lazy_init>(meta_index);
   self->state.dir = dir;
   self->state.synopsisdir = meta_index_dir;
   self->state.partition_capacity = partition_capacity;
@@ -565,6 +617,7 @@ index(index_actor::stateful_pointer<index_state> self,
   self->state.inmem_partitions.factory().filesystem() = self->state.filesystem;
   self->state.inmem_partitions.resize(max_inmem_partitions);
   self->state.meta_index_fp_rate = meta_index_fp_rate;
+  self->state.meta_index_bytes = 0;
   // Read persistent state.
   if (auto err = self->state.load_from_disk()) {
     VAST_ERROR("{} failed to load index state from disk: {}", self,
@@ -606,9 +659,13 @@ index(index_actor::stateful_pointer<index_state> self,
       }
     },
     [self](caf::unit_t&, const caf::error& err) {
+      // During "normal" shutdown, the node will send an exit message to
+      // the importer which then cuts the stream to the index, and the
+      // index exits afterwards.
       // We get an 'unreachable' error when the stream becomes unreachable
-      // because the actor was destroyed; in this case we can't use `self`
-      // anymore.
+      // during actor destruction; in this case we can't use `self->state`
+      // anymore since it will already be destroyed.
+      VAST_DEBUG("index finalized streaming with error {}", render(err));
       if (err && err != caf::exit_reason::unreachable) {
         if (err != caf::exit_reason::user_shutdown)
           VAST_ERROR("{} got a stream error: {}", self, render(err));
@@ -618,16 +675,15 @@ index(index_actor::stateful_pointer<index_state> self,
         // importer.
         self->send_exit(self, err);
       }
-      VAST_DEBUG("index finalized streaming");
     });
   self->set_exit_handler([self](const caf::exit_msg& msg) {
     VAST_DEBUG("{} received EXIT from {} with reason: {}", self, msg.source,
                msg.reason);
     // Flush buffered batches and end stream.
+    self->state.stage->shutdown(); // closes inbound paths
     self->state.stage->out().fan_out_flush();
+    self->state.stage->out().close(); // closes outbound paths
     self->state.stage->out().force_emit_batches();
-    self->state.stage->out().close();
-    self->state.stage->shutdown();
     // Bring down active partition.
     if (self->state.active_partition.actor)
       self->state.decomission_active_partition();
@@ -667,12 +723,18 @@ index(index_actor::stateful_pointer<index_state> self,
       self->state.accountant = std::move(accountant);
     },
     [self](atom::subscribe, atom::flush, flush_listener_actor listener) {
+      VAST_WARN("{} adds flush listener", self);
       self->state.add_flush_listener(std::move(listener));
     },
     [self](vast::expression expr) -> caf::result<void> {
+      if (!self->state.accept_queries) {
+        VAST_VERBOSE("{} delays query {} because it is still starting up", self,
+                     expr);
+        return caf::skip;
+      }
       // TODO: This check is not required technically, but we use the query
-      // supervisor availability to rate-limit meta-index lookups. Do we really
-      // need this?
+      // supervisor availability to rate-limit meta-index lookups. Do we
+      // really need this?
       if (!self->state.worker_available())
         return caf::skip;
       // Query handling
@@ -698,32 +760,57 @@ index(index_actor::stateful_pointer<index_state> self,
         respond(caf::sec::invalid_argument);
         return {};
       }
-      // Get all potentially matching partitions.
-      auto candidates = self->state.meta_idx.lookup(expr);
+      std::vector<uuid> candidates;
       if (self->state.active_partition.actor)
         candidates.push_back(self->state.active_partition.id);
       for (const auto& [id, _] : self->state.unpersisted)
         candidates.push_back(id);
-      if (candidates.empty()) {
-        VAST_DEBUG("{} returns without result: no partitions qualify", self);
-        no_result();
-        return {};
-      }
-      // Allows the client to query further results after initial taste.
-      auto query_id = uuid::random();
-      // Ensure the query id is unique.
-      while (self->state.pending.find(query_id) != self->state.pending.end()
-             || query_id == uuid::nil())
-        query_id = uuid::random();
-      auto total = candidates.size();
-      auto scheduled = detail::narrow<uint32_t>(
-        std::min(candidates.size(), self->state.taste_partitions));
-      auto lookup = query_state{query_id, expr, std::move(candidates)};
-      auto result = self->state.pending.emplace(query_id, std::move(lookup));
-      VAST_ASSERT(result.second);
-      respond(query_id, detail::narrow<uint32_t>(total), scheduled);
-      self->delegate(caf::actor_cast<caf::actor>(self), query_id, scheduled);
-      return {};
+      auto rp = self->make_response_promise<void>();
+      // Get all potentially matching partitions.
+      self->request(self->state.meta_index, caf::infinite, expr)
+        .then(
+          [=, candidates = std::move(candidates)](
+            std::vector<uuid> midx_candidates) mutable {
+            VAST_DEBUG("{} got initial candidates {} and from meta-index {}",
+                       self, candidates, midx_candidates);
+            candidates.insert(candidates.end(), midx_candidates.begin(),
+                              midx_candidates.end());
+            std::sort(candidates.begin(), candidates.end());
+            candidates.erase(std::unique(candidates.begin(), candidates.end()),
+                             candidates.end());
+            if (candidates.empty()) {
+              VAST_DEBUG("{} returns without result: no partitions qualify",
+                         self);
+              no_result();
+              // TODO: When updating to CAF 0.18, remove the use of the
+              // untyped response promise and call deliver without arguments.
+              auto& untyped_rp = static_cast<caf::response_promise&>(rp);
+              untyped_rp.deliver(caf::unit);
+              return;
+            }
+            // Allows the client to query further results after initial taste.
+            auto query_id = uuid::random();
+            // Ensure the query id is unique.
+            while (self->state.pending.find(query_id)
+                     != self->state.pending.end()
+                   || query_id == uuid::nil())
+              query_id = uuid::random();
+            auto total = candidates.size();
+            auto scheduled = detail::narrow<uint32_t>(
+              std::min(candidates.size(), self->state.taste_partitions));
+            auto lookup = query_state{query_id, expr, std::move(candidates)};
+            auto result
+              = self->state.pending.emplace(query_id, std::move(lookup));
+            VAST_ASSERT(result.second);
+            respond(query_id, detail::narrow<uint32_t>(total), scheduled);
+            rp.delegate(caf::actor_cast<caf::actor>(self), query_id, scheduled);
+          },
+          [=](caf::error err) mutable {
+            VAST_ERROR("{} failed to receive candidates from meta-index: {}",
+                       self, render(err));
+            rp.deliver(std::move(err));
+          });
+      return rp;
     },
     [self](const uuid& query_id, uint32_t num_partitions) -> caf::result<void> {
       auto sender = self->current_sender();
@@ -789,7 +876,8 @@ index(index_actor::stateful_pointer<index_state> self,
             // partition.
             auto partition = fbs::GetPartition(chunk->data());
             if (partition->partition_type() != fbs::partition::Partition::v0) {
-              rp.deliver(caf::make_error(ec::format_error, "unexpected format "
+              rp.deliver(caf::make_error(ec::format_error, "unexpected "
+                                                           "format "
                                                            "version"));
               return;
             }
@@ -810,9 +898,9 @@ index(index_actor::stateful_pointer<index_state> self,
               if (adjust_stats)
                 self->state.stats.layouts[name->str()].count -= rank(ids);
             }
-            // Note that mmap's will increase the reference count of a file, so
-            // unlinking should not affect indexers that are currently loaded
-            // and answering a query.
+            // Note that mmap's will increase the reference count of a file,
+            // so unlinking should not affect indexers that are currently
+            // loaded and answering a query.
             if (!rm(path))
               VAST_WARN("{} could not unlink partition at {}", self, path);
             if (!rm(synopsis_path))

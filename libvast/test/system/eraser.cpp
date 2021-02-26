@@ -199,6 +199,10 @@ TEST(eraser on actual INDEX with Zeek conn logs) {
   auto indexdir = directory / "index";
   index = self->spawn(system::index, fs, indexdir, slice_size, 100, taste_count,
                       1, indexdir, 0.01);
+  auto& index_state
+    = caf::actor_cast<system::index_actor::stateful_pointer<system::index_state>>(
+        index)
+        ->state;
   detail::spawn_container_source(sys, std::move(slices), index);
   run();
   // Predicate for running all actors *except* aut.
@@ -208,6 +212,8 @@ TEST(eraser on actual INDEX with Zeek conn logs) {
   sched.trigger_timeouts();
   expect((atom::run), from(aut).to(aut));
   expect((expression), from(aut).to(index));
+  expect((expression), from(index).to(index_state.meta_index));
+  expect((std::vector<uuid>), from(index_state.meta_index).to(index));
   expect((uuid, uint32_t, uint32_t), from(index).to(aut).with(_, 4u, 3u));
   sched.run_jobs_filtered(not_aut);
   while (allow((ids), from(_).to(aut)))

@@ -163,6 +163,18 @@ using query_supervisor_master_actor = typed_actor_fwd<
   // Enlist the QUERY SUPERVISOR as an available worker.
   caf::reacts_to<atom::worker, query_supervisor_actor>>::unwrap;
 
+/// The META INDEX actor interface.
+using meta_index_actor = typed_actor_fwd<
+  // Bulk import a set of partition synopses.
+  caf::replies_to<atom::merge, std::shared_ptr<std::map<
+                                 uuid, partition_synopsis>>>::with<atom::ok>,
+  // Merge a single partition synopsis.
+  caf::replies_to<atom::merge, uuid, std::shared_ptr<partition_synopsis>>::with< //
+    atom::ok>,
+  // Evaluate the expression.
+  caf::replies_to<expression>::with< //
+    std::vector<uuid>>>::unwrap;
+
 /// The INDEX actor interface.
 using index_actor = typed_actor_fwd<
   // Triggered when the INDEX finished querying a PARTITION.
@@ -262,6 +274,7 @@ using filesystem_actor = typed_actor_fwd<
 
 /// The interface of an ACTIVE PARTITION actor.
 using active_partition_actor = typed_actor_fwd<
+  caf::reacts_to<atom::subscribe, atom::flush, flush_listener_actor>,
   // Persists the active partition at the specified path.
   caf::replies_to<atom::persist, path, path>::with< //
     std::shared_ptr<partition_synopsis>>,
@@ -386,5 +399,14 @@ CAF_BEGIN_TYPE_ID_BLOCK(vast_actors, caf::id_block::vast_atoms::end)
   VAST_ADD_TYPE_ID((vast::system::type_registry_actor))
 
 CAF_END_TYPE_ID_BLOCK(vast_actors)
+
+// Used in the interface of the meta_index actor.
+// We can't provide a meaningful implementation of `inspect()` for a shared_ptr,
+// so so we add these as `UNSAFE_MESSAGE_TYPE` to assure caf that they will
+// never be sent over the network.
+#define vast_uuid_synopsis_map std::map<vast::uuid, vast::partition_synopsis>
+CAF_ALLOW_UNSAFE_MESSAGE_TYPE(std::shared_ptr<vast_uuid_synopsis_map>)
+CAF_ALLOW_UNSAFE_MESSAGE_TYPE(std::shared_ptr<vast::partition_synopsis>)
+#undef vast_uuid_synopsis_map
 
 #undef VAST_ADD_TYPE_ID

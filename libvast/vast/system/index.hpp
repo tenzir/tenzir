@@ -19,9 +19,9 @@
 #include "vast/detail/stable_map.hpp"
 #include "vast/expression.hpp"
 #include "vast/fbs/index.hpp"
-#include "vast/meta_index.hpp"
 #include "vast/system/accountant.hpp"
 #include "vast/system/actors.hpp"
+#include "vast/system/meta_index.hpp"
 #include "vast/system/partition.hpp"
 #include "vast/uuid.hpp"
 
@@ -197,6 +197,10 @@ struct index_state {
   /// The set of partitions that exist on disk.
   std::unordered_set<uuid> persisted_partitions;
 
+  /// This set to true after the index finished reading the meta index state
+  /// from disk.
+  bool accept_queries;
+
   /// The maximum number of events that a partition can hold.
   size_t partition_capacity;
 
@@ -213,8 +217,11 @@ struct index_state {
   /// Caches idle workers.
   std::vector<query_supervisor_actor> idle_workers;
 
-  /// The meta index.
-  meta_index meta_idx;
+  /// The META INDEX actor.
+  meta_index_actor meta_index;
+
+  /// A running count of the size of the meta index.
+  size_t meta_index_bytes;
 
   /// The directory for persistent state.
   path dir;

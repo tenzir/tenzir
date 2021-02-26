@@ -13,9 +13,10 @@
 
 #define SUITE meta_index
 
-#include "vast/meta_index.hpp"
+#include "vast/system/meta_index.hpp"
 
 #include "vast/test/fixtures/actor_system.hpp"
+#include "vast/test/fixtures/actor_system_and_events.hpp"
 #include "vast/test/test.hpp"
 
 #include "vast/concept/parseable/to.hpp"
@@ -30,6 +31,7 @@
 #include "vast/view.hpp"
 
 using namespace vast;
+using namespace vast::system;
 
 using std::literals::operator""s;
 
@@ -100,12 +102,13 @@ struct mock_partition {
   interval range;
 };
 
-struct fixture {
+struct fixture : public fixtures::deterministic_actor_system_and_events {
   fixture() {
     MESSAGE("register synopsis factory");
     factory<synopsis>::initialize();
     MESSAGE("register table_slice_builder factory");
     factory<table_slice_builder>::initialize();
+    meta_idx = self->spawn(meta_index);
     MESSAGE("generate " << num_partitions << " UUIDs for the partitions");
     for (size_t i = 0; i < num_partitions; ++i)
       ids.emplace_back(uuid::random());
@@ -120,8 +123,9 @@ struct fixture {
     for (size_t i = 0; i < num_partitions; ++i) {
       auto name = i % 2 == 0 ? "foo"s : "foobar"s;
       auto& part = mock_partitions.emplace_back(std::move(name), ids[i], i);
-      auto ps = make_partition_synopsis(part.slice);
-      meta_idx.merge(part.id, std::move(ps));
+      auto ps = std::make_shared<partition_synopsis>(
+        make_partition_synopsis(part.slice));
+      merge(meta_idx, part.id, ps);
     }
     MESSAGE("verify generated timestamps");
     {
@@ -158,17 +162,40 @@ struct fixture {
     std::string q = ":timestamp == 1970-01-01+";
     q += hhmmss;
     q += ".0";
-    return meta_idx.lookup(unbox(to<expression>(q)));
+    std::vector<uuid> result;
+    auto rp = self->request(meta_idx, caf::infinite, unbox(to<expression>(q)));
+    run();
+    rp.receive(
+      [&](std::vector<uuid> candidates) { result = std::move(candidates); },
+      [=](caf::error e) { FAIL(render(e)); });
+    return result;
   }
 
   auto empty() const {
     return slice(ids.size());
   }
 
-  auto lookup(std::string_view expr) {
-    auto result = meta_idx.lookup(unbox(to<expression>(expr)));
+  auto lookup(meta_index_actor& meta_idx, std::string_view expr) {
+    std::vector<uuid> result;
+    auto rp
+      = self->request(meta_idx, caf::infinite, unbox(to<expression>(expr)));
+    run();
+    rp.receive(
+      [&](std::vector<uuid> candidates) { result = std::move(candidates); },
+      [=](caf::error e) { FAIL(render(e)); });
     std::sort(result.begin(), result.end());
     return result;
+  }
+
+  auto lookup(std::string_view expr) {
+    return lookup(meta_idx, expr);
+  }
+
+  void merge(meta_index_actor& meta_idx, const vast::uuid& id,
+             std::shared_ptr<partition_synopsis> ps) {
+    auto rp = self->request(meta_idx, caf::infinite, atom::merge_v, id, ps);
+    run();
+    rp.receive([=](atom::ok) {}, [=](const caf::error& e) { FAIL(render(e)); });
   }
 
   auto timestamp_type_query(std::string_view hhmmss_from,
@@ -179,17 +206,17 @@ struct fixture {
     q += " && :timestamp <= 1970-01-01+";
     q += hhmmss_to;
     q += ".0";
-    return lookup(q);
+    return lookup(meta_idx, q);
   }
 
   // Our unit-under-test.
-  meta_index meta_idx;
+  meta_index_actor meta_idx;
 
   // Partition IDs.
   std::vector<uuid> ids;
 };
 
-} // namespace <anonymous>
+} // namespace
 
 FIXTURE_SCOPE(meta_index_tests, fixture)
 
@@ -223,7 +250,9 @@ TEST(attribute extractor - type) {
 
 TEST(meta index with bool synopsis) {
   MESSAGE("generate slice data and add it to the meta index");
-  meta_index meta_idx;
+  // FIXME: do we have to replace the meta index from the fixture with a new
+  // one for this test?
+  auto meta_idx = self->spawn(meta_index);
   auto layout = record_type{{"x", bool_type{}}}.name("test");
   auto builder = factory<table_slice_builder>::make(
     defaults::import::table_slice_type, layout);
@@ -233,41 +262,39 @@ TEST(meta index with bool synopsis) {
   REQUIRE(slice.encoding() != table_slice_encoding::none);
   auto ps1 = make_partition_synopsis(slice);
   auto id1 = uuid::random();
-  meta_idx.merge(id1, std::move(ps1));
+  merge(meta_idx, id1, std::make_shared<partition_synopsis>(std::move(ps1)));
   CHECK(builder->add(make_data_view(false)));
   slice = builder->finish();
   REQUIRE(slice.encoding() != table_slice_encoding::none);
   auto ps2 = make_partition_synopsis(slice);
   auto id2 = uuid::random();
-  meta_idx.merge(id2, std::move(ps2));
+  merge(meta_idx, id2, std::make_shared<partition_synopsis>(std::move(ps2)));
   CHECK(builder->add(make_data_view(caf::none)));
   slice = builder->finish();
   REQUIRE(slice.encoding() != table_slice_encoding::none);
   auto ps3 = make_partition_synopsis(slice);
   auto id3 = uuid::random();
-  meta_idx.merge(id3, std::move(ps3));
+  merge(meta_idx, id3, std::make_shared<partition_synopsis>(std::move(ps3)));
   MESSAGE("test custom synopsis");
-  auto lookup = [&](std::string_view expr) {
-    return meta_idx.lookup(unbox(to<expression>(expr)));
-  };
+  auto lookup_ = [&](std::string_view expr) { return lookup(meta_idx, expr); };
   auto expected1 = std::vector<uuid>{id1};
   auto expected2 = std::vector<uuid>{id2};
   // Check by field name field.
-  CHECK_EQUAL(lookup("x == T"), expected1);
-  CHECK_EQUAL(lookup("x != F"), expected1);
-  CHECK_EQUAL(lookup("x == F"), expected2);
-  CHECK_EQUAL(lookup("x != T"), expected2);
+  CHECK_EQUAL(lookup_("x == T"), expected1);
+  CHECK_EQUAL(lookup_("x != F"), expected1);
+  CHECK_EQUAL(lookup_("x == F"), expected2);
+  CHECK_EQUAL(lookup_("x != T"), expected2);
   // Same as above, different extractor.
-  CHECK_EQUAL(lookup(":bool == T"), expected1);
-  CHECK_EQUAL(lookup(":bool != F"), expected1);
-  CHECK_EQUAL(lookup(":bool == F"), expected2);
-  CHECK_EQUAL(lookup(":bool != T"), expected2);
+  CHECK_EQUAL(lookup_(":bool == T"), expected1);
+  CHECK_EQUAL(lookup_(":bool != F"), expected1);
+  CHECK_EQUAL(lookup_(":bool == F"), expected2);
+  CHECK_EQUAL(lookup_(":bool != T"), expected2);
   // Invalid schema: y does not a valid field
   auto none = std::vector<uuid>{};
-  CHECK_EQUAL(lookup("y == T"), none);
-  CHECK_EQUAL(lookup("y != F"), none);
-  CHECK_EQUAL(lookup("y == F"), none);
-  CHECK_EQUAL(lookup("y != T"), none);
+  CHECK_EQUAL(lookup_("y == T"), none);
+  CHECK_EQUAL(lookup_("y != F"), none);
+  CHECK_EQUAL(lookup_("y == F"), none);
+  CHECK_EQUAL(lookup_("y != T"), none);
 }
 
 FIXTURE_SCOPE_END()

@@ -38,13 +38,14 @@ struct partition_synopsis {
 
   /// Synopsis data structures for individual columns.
   std::unordered_map<qualified_record_field, synopsis_ptr> field_synopses_;
+
+  // -- flatbuffer -------------------------------------------------------------
+
+  friend caf::expected<flatbuffers::Offset<fbs::partition_synopsis::v0>>
+  pack(flatbuffers::FlatBufferBuilder& builder, const partition_synopsis&);
+
+  friend caf::error
+  unpack(const fbs::partition_synopsis::v0&, partition_synopsis&);
 };
-
-// -- flatbuffer ---------------------------------------------------------------
-
-caf::expected<flatbuffers::Offset<fbs::partition_synopsis::v0>>
-pack(flatbuffers::FlatBufferBuilder& builder, const partition_synopsis&);
-
-caf::error unpack(const fbs::partition_synopsis::v0&, partition_synopsis&);
 
 } // namespace vast

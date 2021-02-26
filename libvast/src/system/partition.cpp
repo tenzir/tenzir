@@ -24,6 +24,7 @@
 #include "vast/concept/printable/vast/table_slice.hpp"
 #include "vast/concept/printable/vast/uuid.hpp"
 #include "vast/detail/assert.hpp"
+#include "vast/detail/notifying_stream_manager.hpp"
 #include "vast/detail/settings.hpp"
 #include "vast/expression.hpp"
 #include "vast/expression_visitors.hpp"
@@ -55,17 +56,26 @@
 
 #include <memory>
 
-using namespace std::chrono;
-using namespace caf;
-
-CAF_ALLOW_UNSAFE_MESSAGE_TYPE(std::shared_ptr<vast::partition_synopsis>)
-
 namespace vast::system {
 
 /// Gets the ACTIVE INDEXER at a certain position.
 active_indexer_actor active_partition_state::indexer_at(size_t position) const {
   VAST_ASSERT(position < indexers.size());
   return as_vector(indexers)[position].second;
+}
+
+void active_partition_state::add_flush_listener(flush_listener_actor listener) {
+  VAST_DEBUG("{} adds a new 'flush' subscriber: {}", self, listener);
+  flush_listeners.emplace_back(std::move(listener));
+  detail::notify_listeners_if_clean(*this, *stage);
+}
+
+void active_partition_state::notify_flush_listeners() {
+  VAST_DEBUG("{} sends 'flush' messages to {} listeners", self,
+             flush_listeners.size());
+  for (auto& listener : flush_listeners)
+    self->send(listener, atom::flush_v);
+  flush_listeners.clear();
 }
 
 /// Gets the INDEXER at a certain position.
@@ -377,13 +387,14 @@ active_partition_actor::behavior_type active_partition(
   // The active partition stage is a caf stream stage that takes
   // a stream of `table_slice` as input and produces several
   // streams of `table_slice_column` as output.
-  self->state.stage = caf::attach_continuous_stream_stage(
-    self,
+  self->state.stage = detail::attach_notifying_stream_stage(
+    self, true,
     [=](caf::unit_t&) {
       // nop
     },
     [=](caf::unit_t&, caf::downstream<table_slice_column>& out, table_slice x) {
-      VAST_TRACE_SCOPE("{} {}", VAST_ARG(out), VAST_ARG(x));
+      VAST_TRACE_SCOPE("partition {} got table slice {} {}", self->state.id,
+                       VAST_ARG(out), VAST_ARG(x));
       // We rely on `invalid_id` actually being the highest possible id
       // when using `min()` below.
       static_assert(invalid_id == std::numeric_limits<vast::id>::max());
@@ -416,16 +427,14 @@ active_partition_actor::behavior_type active_partition(
       }
     },
     [=](caf::unit_t&, const caf::error& err) {
+      VAST_DEBUG("active partition {} finalized streaming {}", id, render(err));
       // We get an 'unreachable' error when the stream becomes unreachable
-      // because the actor was destroyed; in this case we can't use `self`
-      // anymore.
+      // because the actor was destroyed; in this case the state was already
+      // destroyed during `local_actor::on_exit()`.
       if (err && err != caf::exit_reason::unreachable) {
         VAST_ERROR("{} aborts with error: {}", self, render(err));
-        // We don't exit here, since there might be outstanding evaluators who
-        // still need our indexers.
         return;
       }
-      VAST_DEBUG("partition {} finalized streaming", id);
     },
     // Every "outbound path" has a path_state, which consists of a "Filter"
     // and a vector of "T", the output buffer. In the case of a partition,
@@ -439,19 +448,16 @@ active_partition_actor::behavior_type active_partition(
     // indexers, and compute the qualified record field name for each. A
     // specialized downstream manager could optimize this by using e.g. a map
     // from qualified record fields to downstream indexers.
-    caf::policy::arg<broadcast_downstream_manager<
+    caf::policy::arg<caf::broadcast_downstream_manager<
       table_slice_column, vast::qualified_record_field, partition_selector>>{});
   self->set_exit_handler([=](const caf::exit_msg& msg) {
     VAST_DEBUG("{} received EXIT from {} with reason: {}", self, msg.source,
                msg.reason);
-    if (self->state.stage->idle()
-        && !self->state.stage->out().paths().empty()) {
-      VAST_DEBUG("{} closes outbound path to {}/{} indexers", self,
-                 self->state.stage->out().paths().size(),
-                 self->state.stage->out().path_slots().size());
+    if (self->state.streaming_initiated
+        && self->state.stage->inbound_paths().empty()) {
       self->state.stage->out().fan_out_flush();
-      self->state.stage->out().force_emit_batches();
       self->state.stage->out().close();
+      self->state.stage->out().force_emit_batches();
     }
     // Delay shutdown if we're currently in the process of persisting.
     if (self->state.persistence_promise.pending()) {
@@ -486,7 +492,11 @@ active_partition_actor::behavior_type active_partition(
       self->state.streaming_initiated = true;
       return self->state.stage->add_inbound_path(in);
     },
+    [self](atom::subscribe, atom::flush, const flush_listener_actor& listener) {
+      self->state.add_flush_listener(listener);
+    },
     [self](atom::persist, const path& part_dir, const path& synopsis_dir) {
+      VAST_DEBUG("{} got persist atom", self);
       // Ensure that the response promise has not already been initialized.
       VAST_ASSERT(
         !static_cast<caf::response_promise&>(self->state.persistence_promise)
@@ -496,25 +506,23 @@ active_partition_actor::behavior_type active_partition(
       self->state.persisted_indexers = 0;
       self->state.persistence_promise
         = self->make_response_promise<std::shared_ptr<partition_synopsis>>();
-      // We use a high message priority here because we want to start persisting
-      // as soon as possible in order to avoid shutdown delay.
-      self->send<caf::message_priority::high>(self, atom::internal_v,
-                                              atom::persist_v, atom::resume_v);
+      self->send(self, atom::internal_v, atom::persist_v, atom::resume_v);
       return self->state.persistence_promise;
     },
     [self](atom::internal, atom::persist, atom::resume) {
-      // Wait for outstanding data to avoid data loss.
-      if (!self->state.streaming_initiated
-          || !self->state.stage->inbound_paths().empty()
-          || !self->state.stage->idle()) {
-        VAST_DEBUG("{} waits for stream before persisting", self);
+      VAST_DEBUG("{} resumes persist atom {}", self,
+                 self->state.indexers.size());
+      if (self->state.streaming_initiated
+          && self->state.stage->inbound_paths().empty()) {
+        self->state.stage->out().fan_out_flush();
+        self->state.stage->out().close();
+        self->state.stage->out().force_emit_batches();
+      } else {
+        using namespace std::chrono_literals;
         self->delayed_send(self, 50ms, atom::internal_v, atom::persist_v,
                            atom::resume_v);
         return;
       }
-      self->state.stage->out().fan_out_flush();
-      self->state.stage->out().force_emit_batches();
-      self->state.stage->out().close();
       if (self->state.indexers.empty()) {
         self->state.persistence_promise.deliver(
           caf::make_error(ec::logic_error, "partition has no indexers"));
@@ -792,7 +800,7 @@ partition_actor::behavior_type passive_partition(
            partition_client_actor client) -> caf::result<atom::done> {
       VAST_TRACE_SCOPE("{} {}", self, VAST_ARG(expr));
       if (!self->state.partition_chunk)
-        return get<2>(self->state.deferred_evaluations.emplace_back(
+        return std::get<2>(self->state.deferred_evaluations.emplace_back(
           expr, client, self->make_response_promise<atom::done>()));
       // We can safely assert that if we have the partition chunk already, all
       // deferred evaluations were taken care of.
