@@ -513,6 +513,10 @@ bool convert(const caf::config_value& x, data& y) {
   return caf::visit(f, x);
 }
 
+std::string to_string(const data& d) {
+  return fmt::format("{:a}", d);
+}
+
 caf::expected<std::string> to_json(const data& x) {
   std::string str;
   auto out = std::back_inserter(str);

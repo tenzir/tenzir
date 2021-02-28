@@ -13,7 +13,9 @@
 #include "vast/concept/hashable/uhash.hpp"
 #include "vast/concept/hashable/xxhash.hpp"
 #include "vast/defaults.hpp"
+#include "vast/detail/fmt_integration.hpp"
 #include "vast/detail/operators.hpp"
+#include "vast/detail/overload.hpp"
 #include "vast/offset.hpp"
 #include "vast/pattern.hpp"
 #include "vast/subnet.hpp"
@@ -27,6 +29,8 @@
 #include <caf/none.hpp>
 #include <caf/optional.hpp>
 #include <caf/variant.hpp>
+
+#include <fmt/format.h>
 
 #include <chrono>
 #include <filesystem>
@@ -205,6 +209,8 @@ public:
 private:
   variant data_;
 };
+
+std::string to_string(const data& d);
 
 // -- helpers -----------------------------------------------------------------
 
@@ -392,3 +398,106 @@ struct hash<vast::data> {
 };
 
 } // namespace std
+
+namespace fmt {
+
+template <>
+struct formatter<vast::map::value_type>
+  : public vast::detail::vast_formatter_base {
+  template <typename FormatContext>
+  auto format(const vast::map::value_type& v, FormatContext& ctx) {
+    if (presentation == 'a')
+      return fmt::format_to(ctx.out(), "{:a} -> {:a}", v.first, v.second);
+    else
+      return fmt::format_to(ctx.out(), "{:j}: {:j}", v.first, v.second);
+  }
+};
+
+template <>
+struct formatter<vast::record::value_type>
+  : public vast::detail::vast_formatter_base {
+  template <typename FormatContext>
+  auto format(const vast::record::value_type& v, FormatContext& ctx) {
+    if (presentation == 'a')
+      return fmt::format_to(ctx.out(), "{}: {:a}", v.first, v.second);
+    else
+      return fmt::format_to(ctx.out(), "{}: {:j}", v.first, v.second);
+  }
+};
+
+/// Definition of fmt-formatting rules for vast::data.
+template <>
+struct formatter<vast::data> : public vast::detail::vast_formatter_base {
+  template <typename FormatContext>
+  struct ascii_visitor {
+    FormatContext& ctx_;
+
+    ascii_visitor(FormatContext& ctx) : ctx_{ctx} {
+    }
+
+    auto operator()(caf::none_t) {
+      return format_to(ctx_.out(), "nil");
+    }
+    auto operator()(bool b) {
+      return format_to(ctx_.out(), b ? "T" : "F");
+    }
+    // template <class Number, typename
+    //   std::enable_if_t<
+    //     std::is_same_v<Number, integer>,
+    //     std::is_same_v<Number, count>,
+    //     std::is_same_v<Number, real>,
+    //     void* > = nullptr >
+    // auto operator(const Number& n){
+    //   return format_to(ctx_.out(), "{}", n);
+    // }
+
+    // Types already introduced to {fmt}.
+    // template <class T,
+    //           typename
+    //           std::enable_if_t<std::is_trivially_copyable_v<std::decay_t<T>>,
+    //                                     void*> = nullptr>
+    // auto operator() (T x){
+    //   return format_to(ctx_.out(), "{}", x);
+    // }
+
+    template <class T>
+    auto operator()(const T& x) {
+      return format_to(ctx_.out(), "{}", x);
+    }
+
+    auto operator()(vast::duration d) {
+      return format_to(ctx_.out(), "{}",
+                       vast::detail::fmt_wrapped<vast::duration>{d});
+    }
+    auto operator()([[maybe_unused]] const vast::time& t) {
+      return format_to(ctx_.out(), "{}",
+                       vast::detail::fmt_wrapped<vast::time>{t});
+    }
+    auto operator()(const std::string& s) {
+      using escape_string
+        = vast::detail::escaped_string_view<vast::detail::print_escaper_functor>;
+      return (*this)(escape_string{s});
+    }
+    auto operator()(const vast::list& xs) {
+      return format_to(ctx_.out(), "[{:a}]", join(xs, ", "));
+    }
+    auto operator()(const vast::map& xs) {
+      return format_to(ctx_.out(), "{{{:a}}}", join(xs, ", "));
+    }
+    auto operator()(const vast::record& xs) {
+      return format_to(ctx_.out(), "<{:a}>", join(xs, ", "));
+    }
+  };
+
+  template <typename FormatContext>
+  auto format(const vast::data& x, FormatContext& ctx) {
+    // if( presentation == 'a' ) {
+    ascii_visitor f{ctx};
+    return caf::visit(f, x);
+    // } else if( presentation == 'a' ) {
+
+    // }
+  }
+};
+
+} // namespace fmt

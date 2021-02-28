@@ -11,6 +11,8 @@
 #include "vast/address.hpp"
 #include "vast/detail/operators.hpp"
 
+#include <fmt/format.h>
+
 namespace vast {
 
 class data;
@@ -69,3 +71,20 @@ private:
 };
 
 } // namespace vast
+
+namespace fmt {
+
+template <>
+struct formatter<vast::subnet> {
+  template <typename ParseContext>
+  constexpr auto parse(ParseContext& ctx) {
+    return std::end(ctx);
+  }
+
+  template <typename FormatContext>
+  auto format(const vast::subnet& sn, FormatContext& ctx) {
+    return format_to(ctx.out(), "{}/{}", sn.network(), sn.length());
+  }
+};
+
+} // namespace fmt

@@ -12,8 +12,14 @@
 #include "vast/concept/hashable/xxhash.hpp"
 #include "vast/detail/operators.hpp"
 
+#include <fmt/format.h>
+
 #include <array>
 #include <string>
+
+#include <arpa/inet.h>
+#include <netinet/in.h>
+#include <sys/socket.h>
 
 namespace vast {
 
@@ -157,3 +163,29 @@ struct hash<vast::address> {
 };
 
 } // namespace std
+
+namespace fmt {
+
+template <>
+struct formatter<vast::address> {
+  template <typename ParseContext>
+  constexpr auto parse(ParseContext& ctx) {
+    return std::end(ctx);
+  }
+
+  template <typename FormatContext>
+  auto format(const vast::address& a, FormatContext& ctx) {
+    char buf[INET6_ADDRSTRLEN];
+    std::memset(buf, 0, sizeof(buf));
+    auto result = a.is_v4()
+                    ? inet_ntop(AF_INET, &a.data()[12], buf, INET_ADDRSTRLEN)
+                    : inet_ntop(AF_INET6, &a.data(), buf, INET6_ADDRSTRLEN);
+
+    auto out = ctx.out();
+    if (result != nullptr)
+      format_to(out, "{}", result);
+    return out;
+  }
+};
+
+} // namespace fmt

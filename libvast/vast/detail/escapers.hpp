@@ -8,11 +8,13 @@
 
 #pragma once
 
+#include "vast/detail/coding.hpp"
+
+#include <fmt/format.h>
+
 #include <array>
 #include <cctype>
 #include <string>
-
-#include "vast/detail/coding.hpp"
 
 namespace vast::detail {
 
@@ -151,7 +153,7 @@ inline auto json_unescaper = [](auto& f, auto l, auto out) {
       // sequence other than \u00XX as is.
       if (l - f < 4)
         return false;
-      std::array<char, 4> bytes{{0,0,0,0}};
+      std::array<char, 4> bytes{{0, 0, 0, 0}};
       bytes[0] = *++f;
       bytes[1] = *++f;
       bytes[2] = *++f;
