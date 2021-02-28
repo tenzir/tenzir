@@ -1,0 +1,246 @@
+/******************************************************************************
+ *                    _   _____   __________                                  *
+ *                   | | / / _ | / __/_  __/     Visibility                   *
+ *                   | |/ / __ |_\ \  / /          Across                     *
+ *                   |___/_/ |_/___/ /_/       Space and Time                 *
+ *                                                                            *
+ * This file is part of VAST. It is subject to the license terms in the       *
+ * LICENSE file found in the top-level directory of this distribution and at  *
+ * http://vast.io/license. No part of VAST, including this file, may be       *
+ * copied, modified, propagated, or distributed except according to the terms *
+ * contained in the LICENSE file.                                             *
+ ******************************************************************************/
+
+#pragma once
+
+#include "vast/fwd.hpp"
+
+#include "vast/aliases.hpp"
+#include "vast/detail/escapers.hpp"
+#include "vast/time.hpp"
+
+#include <chrono>
+#include <string_view>
+#include <type_traits>
+
+namespace vast::detail {
+
+/// A base class for providing parsing vast types formatting options.
+struct vast_formatter_base {
+  char presentation = 'a';
+   presentation = 'a';
+
+  template <typename ParseContext>
+  constexpr auto parse(ParseContext& ctx) {
+    for (auto it = std::begin(ctx); it != std::end(ctx); ++it) {
+      switch (*it) {
+        case 'a':
+        case 'j':
+          presentation = *it;
+          break;
+        case '}':
+          return it;
+        default:
+          throw fmt::format_error("invalid format");
+      }
+    }
+    return std::end(ctx);
+  }
+};
+
+struct empty_formatter_base {
+  template <typename ParseContext>
+  constexpr auto parse(ParseContext& ctx) {
+    return std::end(ctx);
+  }
+};
+
+/// An escaper functor for ascii formatting type.
+struct print_escaper_functor {
+  template <class F, class O>
+  auto operator()(F& f, O out) const {
+    print_escaper(f, out);
+  }
+};
+
+/// An escaper functor for json formatting type.
+struct json_escaper_functor {
+  template <class F, class O>
+  auto operator()(F& f, O out) const {
+    json_escaper(f, out);
+  }
+};
+
+// A separate type-introducing wrapper class for strings.
+// A proper formatting is defined by escaper.
+template <class Escaper>
+struct escaped_string_view {
+  std::string_view str;
+
+  template <typename FormatContext>
+  auto format(FormatContext& ctx) const {
+    Escaper e{};
+    auto out = ctx.out();
+    *out++ = '"';
+    auto f = str.begin();
+    auto l = str.end();
+    while (f != l) {
+      e(f, out);
+    }
+    *out++ = '"';
+    return out;
+  }
+};
+
+/// A wrapper class for vast types which are not exclusively owned by vast
+/// (e.g. duration which is eventually `std::chrono::duration`).
+/// It is essential not to introduce a global custom formatting for such types
+/// as it might lead to ambiguity compiler errors or in reverse inderectly
+/// make a non vast owned code to work by providing fmt integrations,
+/// which wouldn't be result of a conscious decision.
+template <class T>
+struct fmt_wrapped {
+  T value;
+};
+
+template <class T>
+struct fmt_wrapped_formatter {};
+
+template <>
+struct fmt_wrapped_formatter<duration> : public empty_formatter_base {
+  template <class To, class R, class P>
+  static auto is_at_least(std::chrono::duration<R, P> d) {
+    return std::chrono::duration_cast<To>(std::chrono::abs(d)) >= To{1};
+  }
+
+  template <class To, class R, class P>
+  static auto count(std::chrono::duration<R, P> d) {
+    using fractional = std::chrono::duration<double, typename To::period>;
+    return std::llround(100 * std::chrono::duration_cast<fractional>(d).count())
+           / double{100.0};
+  }
+
+  template <typename FormatContext>
+  auto format(duration d, FormatContext& ctx) const {
+    using namespace std::chrono;
+    if (is_at_least<days>(d))
+      return fmt::format_to(ctx.out(), "{}d", count<days>(d));
+    if (is_at_least<hours>(d))
+      return fmt::format_to(ctx.out(), "{}h", count<hours>(d));
+    if (is_at_least<minutes>(d))
+      return fmt::format_to(ctx.out(), "{}m", count<minutes>(d));
+    if (is_at_least<seconds>(d))
+      return fmt::format_to(ctx.out(), "{}s", count<seconds>(d));
+    if (is_at_least<milliseconds>(d))
+      return fmt::format_to(ctx.out(), "{}ms", count<milliseconds>(d));
+    if (is_at_least<microseconds>(d))
+      return fmt::format_to(ctx.out(), "{}us", count<microseconds>(d));
+    return fmt::format_to(ctx.out(), "{}ns", count<nanoseconds>(d));
+  }
+};
+
+template <class Clock, class Duration>
+struct fmt_wrapped_formatter<std::chrono::time_point<Clock, Duration>>
+  : public empty_formatter_base {
+  using time_point = std::chrono::time_point<Clock, Duration>;
+
+  struct year_month_day {
+    unsigned short year;
+    unsigned char month;
+    unsigned char day;
+  };
+
+  // Logic extracted from
+  // https://github.com/HowardHinnant/date/blob/master/include/date/date.h
+  // An explanation for this algorithm can be found here:
+  // http://howardhinnant.github.io/date_algorithms.html#civil_from_days
+  static constexpr year_month_day from_days(days dp) noexcept {
+    static_assert(std::numeric_limits<unsigned>::digits >= 18,
+                  "This algorithm has not been ported to a 16 bit unsigned "
+                  "integer");
+    static_assert(std::numeric_limits<int>::digits >= 20,
+                  "This algorithm has not been ported to a 16 bit signed "
+                  "integer");
+    auto const z = dp.count() + 719468;
+    auto const era = (z >= 0 ? z : z - 146096) / 146097;
+    auto const doe = static_cast<unsigned>(z - era * 146097);
+    auto const yoe = (doe - doe / 1460 + doe / 36524 - doe / 146096) / 365;
+    auto const y = static_cast<days::rep>(yoe) + era * 400;
+    auto const doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
+    auto const mp = (5 * doy + 2) / 153;
+    auto const d = static_cast<unsigned char>(doy - (153 * mp + 2) / 5 + 1);
+    auto const m = static_cast<unsigned char>(mp < 10 ? mp + 3 : mp - 9);
+    return year_month_day{static_cast<unsigned short>(y + (m <= 2)), m, d};
+  }
+
+  template <typename FormatContext>
+  auto format(time_point tp, FormatContext& ctx) const {
+    using namespace std::chrono;
+
+    auto sd = floor<days>(tp);
+    auto [Y, M, D] = from_days(duration_cast<days>(sd - time{}));
+    auto t = tp - sd;
+    auto h = duration_cast<hours>(t);
+    auto m = duration_cast<minutes>(t - h);
+    auto s = duration_cast<seconds>(t - h - m);
+    auto sub_secs = duration_cast<nanoseconds>(t - h - m - s).count();
+
+    auto out
+      = fmt::format_to(ctx.out(), "{:02}-{:02}-{:02}T{:02}:{:02}:{:02}",
+                       static_cast<int>(Y), static_cast<unsigned>(M),
+                       static_cast<unsigned>(D), static_cast<int>(h.count()),
+                       static_cast<int>(m.count()),
+                       static_cast<int>(s.count()));
+    if (sub_secs != 0) {
+      *out++ = '.';
+      if (sub_secs % 1000000 == 0)
+        return fmt::format_to(out, "{:03}", sub_secs / 1000000);
+      if (sub_secs % 1000 == 0)
+        return fmt::format_to(out, "{:06}", sub_secs / 1000);
+      return fmt::format_to(out, "{:09}", sub_secs);
+    }
+    return out;
+  }
+};
+
+/// A proxy formatter, that is capable of receiving wrapper type and
+/// pass an unwrapped type to bse implementation.
+template <class T>
+struct fmt_proxy : public fmt_wrapped_formatter<T> {
+  using base_type = fmt_wrapped_formatter<T>;
+  using wrapped_type = fmt_wrapped<T>;
+  using parameter_type
+    = std::conditional_t<std::is_trivially_copyable_v<wrapped_type>,
+                         wrapped_type, const wrapped_type&>;
+
+  template <typename FormatContext>
+  auto format(parameter_type v, FormatContext& ctx) const {
+    return base_type::format(v.value, ctx);
+  }
+};
+
+} // namespace vast::detail
+
+namespace fmt {
+
+template <class Escaper>
+struct formatter<vast::detail::escaped_string_view<Escaper>> {
+  template <typename ParseContext>
+  constexpr auto parse(ParseContext& ctx) const {
+    return std::end(ctx);
+  }
+
+  template <typename FormatContext>
+  auto format(vast::detail::escaped_string_view<Escaper> s,
+              FormatContext& ctx) const {
+    return s.format(ctx);
+  }
+};
+
+/// A definition in `fmt` namespace that makes T formatting recognizable by the
+/// fmtlib.
+template <class T>
+struct formatter<vast::detail::fmt_wrapped<T>>
+  : public vast::detail::fmt_proxy<T> {};
+
+} // namespace fmt

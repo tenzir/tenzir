@@ -76,7 +76,9 @@ struct expression_printer : printer<expression_printer> {
     }
 
     bool operator()(const data& d) const {
-      return printers::data(out_, d);
+      // return printers::data(out_, d);
+      out_ = fmt::format_to(out_, "{:a}", d);
+      return true;
     }
 
     Iterator& out_;

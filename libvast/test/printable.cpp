@@ -10,10 +10,6 @@
 
 #include "vast/test/test.hpp"
 
-#include <sstream>
-
-#include <caf/optional.hpp>
-
 #include "vast/concept/printable/core.hpp"
 #include "vast/concept/printable/numeric.hpp"
 #include "vast/concept/printable/print.hpp"
@@ -25,6 +21,10 @@
 #include "vast/concept/printable/vast/data.hpp"
 #include "vast/concept/printable/vast/view.hpp"
 #include "vast/detail/escapers.hpp"
+
+#include <caf/optional.hpp>
+
+#include <sstream>
 
 using namespace std::string_literals;
 using namespace vast;
@@ -40,6 +40,7 @@ using namespace vast::printer_literals;
     data data_expr{x};                                                         \
     CHECK_EQUAL(to_string(data_expr), str);                                    \
     CHECK_EQUAL(to_string(make_view(data_expr)), str);                         \
+    fmt::print("{:a}\n", data_expr);                                           \
   }
 
 // -- numeric -----------------------------------------------------------------
@@ -249,23 +250,23 @@ TEST(optional) {
 TEST(action) {
   auto flag = false;
   // no args, void result type
-  auto p0 = printers::integral<int> ->* [&] { flag = true; };
+  auto p0 = printers::integral<int>->*[&] { flag = true; };
   std::string str;
   CHECK(p0(str, 42));
   CHECK(flag);
   CHECK_EQUAL(str, "42");
   // one arg, void result type
-  auto p1 = printers::integral<int> ->* [&](int i) { flag = i % 2 == 0; };
+  auto p1 = printers::integral<int>->*[&](int i) { flag = i % 2 == 0; };
   str.clear();
   CHECK(p1(str, 8));
   CHECK_EQUAL(str, "8");
   // no args, non-void result type
-  auto p2 = printers::integral<int> ->* [] { return 42; };
+  auto p2 = printers::integral<int>->*[] { return 42; };
   str.clear();
   CHECK(p2(str, 7));
   CHECK_EQUAL(str, "42");
   // one arg, non-void result type
-  auto p3 = printers::integral<int> ->* [](int i) { return ++i; };
+  auto p3 = printers::integral<int>->*[](int i) { return ++i; };
   str.clear();
   CHECK(p3(str, 41));
   CHECK_EQUAL(str, "42");
@@ -316,34 +317,41 @@ TEST(not) {
 TEST(data) {
   data r{real{12.21}};
   CHECK_TO_STRING(r, "12.21");
+  fmt::print("r = {:a}\n", r);
   data b{true};
   CHECK_TO_STRING(b, "T");
+  fmt::print("b = {:a}\n", b);
   data c{count{23}};
   CHECK_TO_STRING(c, "23");
+  fmt::print("c = {:a}\n", c);
   data i{integer{42}};
   CHECK_TO_STRING(i, "+42");
+  fmt::print("i = {:a}\n", i);
   data s{std::string{"foobar"}};
   CHECK_TO_STRING(s, "\"foobar\"");
+  fmt::print("s = {:a}\n", s);
   data d{duration{512}};
   CHECK_TO_STRING(d, "512.0ns");
+  fmt::print("d = {:a}\n", d);
   data v{list{r, b, c, i, s, d}};
   CHECK_TO_STRING(v, "[12.21, T, 23, +42, \"foobar\", 512.0ns]");
+  fmt::print("v = {:a}\n", v);
 }
 
 // -- std::chrono types -------------------------------------------------------
 
 TEST(duration) {
   using namespace std::chrono_literals;
-  CHECK_TO_STRING(15ns, "15.0ns");
-  CHECK_TO_STRING(15'450ns, "15.45us");
-  CHECK_TO_STRING(42us, "42.0us");
-  CHECK_TO_STRING(42'123us, "42.12ms");
-  CHECK_TO_STRING(-7ms, "-7.0ms");
-  CHECK_TO_STRING(59s, "59.0s");
-  CHECK_TO_STRING(60s, "1.0m");
-  CHECK_TO_STRING(-90s, "-1.5m");
-  CHECK_TO_STRING(390s, "6.5m");
-  CHECK_TO_STRING(-2400h, "-100.0d");
+  CHECK_TO_STRING(data{15ns}, "15.0ns");
+  CHECK_TO_STRING(data{15'450ns}, "15.45us");
+  CHECK_TO_STRING(data{42us}, "42.0us");
+  CHECK_TO_STRING(data{42'123us}, "42.12ms");
+  CHECK_TO_STRING(data{-7ms}, "-7.0ms");
+  CHECK_TO_STRING(data{59s}, "59.0s");
+  CHECK_TO_STRING(data{60s}, "1.0m");
+  CHECK_TO_STRING(data{-90s}, "-1.5m");
+  CHECK_TO_STRING(data{390s}, "6.5m");
+  CHECK_TO_STRING(data{-2400h}, "-100.0d");
 }
 
 TEST(time) {
@@ -351,6 +359,7 @@ TEST(time) {
   CHECK_TO_STRING(vast::time{0s}, "1970-01-01T00:00:00");
   CHECK_TO_STRING(vast::time{1ms}, "1970-01-01T00:00:00.001");
   CHECK_TO_STRING(vast::time{1us}, "1970-01-01T00:00:00.000001");
+  CHECK_TO_STRING(vast::time{1ns}, "1970-01-01T00:00:00.000000001");
   CHECK_TO_STRING(vast::time{1502658642123456us}, "2017-08-13T21:10:42.123456");
 }
 
