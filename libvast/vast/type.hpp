@@ -30,14 +30,13 @@
 
 #include <caf/detail/type_list.hpp>
 #include <caf/error.hpp>
-#include <caf/expected.hpp>
 #include <caf/fwd.hpp>
 #include <caf/intrusive_cow_ptr.hpp>
 #include <caf/make_counted.hpp>
 #include <caf/meta/omittable.hpp>
 #include <caf/none.hpp>
 #include <caf/ref_counted.hpp>
-#include <caf/variant.hpp>
+#include <caf/sum_type.hpp>
 
 #include <functional>
 #include <string>
@@ -718,8 +717,27 @@ record_type concat(const Rs&... rs) {
   (result.fields.insert(result.fields.end(), rs.fields.begin(),
                         rs.fields.end()),
    ...);
+  // TODO: This function is missing an integrity check that makes sure the
+  // result does not contain multiple fields with the same name.
+  // We should also add a differently named version that deduplicates completely
+  // identical fields and recurses into nested records under the same field
+  // name.
   return result;
 }
+
+/// Creates a new unnamed record_type containing the fields and attribues of lhs
+/// and rhs. Errors if a field of the same name but different types is present
+/// in both inputs. Errors is the inputs disagree over the value of an attribute
+/// with a certain name.
+/// @returns The combined record_type.
+/// @relates record_type
+caf::expected<record_type>
+merge(const record_type& lhs, const record_type& rhs);
+
+enum class merge_policy { prefer_left, prefer_right };
+
+record_type
+priority_merge(const record_type& lhs, const record_type& rhs, merge_policy p);
 
 /// Recursively flattens the arguments of a record type.
 /// @param rec The record to flatten.

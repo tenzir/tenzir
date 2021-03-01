@@ -462,6 +462,47 @@ caf::optional<offset> record_type::offset_from_index(size_t i) const {
   return it->offset;
 }
 
+caf::expected<record_type>
+merge(const record_type& lhs, const record_type& rhs) {
+  record_type result = lhs;
+  std::map<std::string, type> all_fields;
+  for (auto& f : result.fields)
+    all_fields.emplace(f.name, f.type);
+  for (const auto& rfield : rhs.fields) {
+    auto [it, inserted] = all_fields.emplace(rfield.name, rfield.type);
+    if (inserted)
+      result.fields.push_back(rfield);
+    else if (it->second != rfield.type)
+      caf::make_error(ec::convert_error, "failed to merge", type{lhs}, "and",
+                      type{rhs}, "because of duplicate field", it->first);
+    // else identical types aren't treated as errors.
+  }
+  return result.name("");
+}
+
+record_type
+priority_merge(const record_type& lhs, const record_type& rhs, merge_policy p) {
+  record_type result = lhs;
+  std::map<std::string, type> all_fields;
+  for (auto& f : result.fields)
+    all_fields.emplace(f.name, f.type);
+  for (const auto& rfield : rhs.fields) {
+    auto [it, inserted] = all_fields.emplace(rfield.name, rfield.type);
+    if (inserted)
+      result.fields.push_back(rfield);
+    else if (p == merge_policy::prefer_right) {
+      auto overwrite
+        = std::find_if(result.fields.begin(),
+                       result.fields.begin() + lhs.fields.size(),
+                       [&](auto& f) { return f.name == rfield.name; });
+      VAST_ASSERT(overwrite < (result.fields.begin() + lhs.fields.size()));
+      overwrite->type = rfield.type;
+    }
+    // else the field from lhs is left as is.
+  }
+  return result;
+}
+
 record_type flatten(const record_type& rec) {
   /// Make a copy of the original to keep name and attributes.
   record_type result = rec;
