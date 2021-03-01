@@ -296,7 +296,7 @@ load_schema(const detail::stable_set<path>& schema_dirs, size_t max_recursion) {
     auto directory_schema = r.resolve();
     if (!directory_schema)
       return caf::make_error(ec::format_error, "failed to resolve types in",
-                             dir);
+                             dir, directory_schema.error().context());
     local_symbols.merge(std::move(global_symbols));
     global_symbols = std::move(local_symbols);
     types = schema::combine(types, *directory_schema);
