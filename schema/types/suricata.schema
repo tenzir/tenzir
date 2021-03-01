@@ -148,18 +148,6 @@ type suricata.ftp_data = suricata.component.common + record{
 }
 
 type suricata.http = suricata.component.common + record {
-  timestamp: timestamp,
-  flow_id: count #index=hash,
-  pcap_cnt: count,
-  vlan: list<count>,
-  in_iface: string,
-  src_ip: addr,
-  src_port: port,
-  dest_ip: addr #ioc,
-  dest_port: port,
-  proto: string,
-  event_type: string,
-  community_id: string #index=hash,
   http: record {
     hostname: string #ioc,
     url: string,
