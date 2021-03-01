@@ -141,10 +141,12 @@ bool type_parser::parse(Iterator& f, const Iterator& l, Attribute& a) const {
     ;
   type_expr_parser = (algebra_operand_parser >> skp >> (+(skp >> algebra_parser)))
     ->* [](std::tuple<type, std::vector<record_field>> xs) -> type {
-      auto& [lhs, rhss] = xs;
+      auto& [lhs, op_operands] = xs;
       record_type result;
       result.fields = {record_field{"", std::move(lhs)}};
-      result.fields.insert(result.fields.end(), rhss.begin(), rhss.end());
+      result.fields.insert(
+        result.fields.end(),
+        op_operands.begin(), op_operands.end());
       return result.attributes({{"$algebra"}});
     };
   // Complete type
