@@ -646,7 +646,7 @@ TEST(parseable) {
   r = record_type{
     {"", none_type{}.name("foo")},
     {"+", none_type{}.name("bar")}
-  }.attributes({{"vast-algebra"}});
+  }.attributes({{"$algebra"}});
   // clang-format on
   CHECK_EQUAL(unbox(to<type>("foo+bar")), r);
   CHECK_EQUAL(unbox(to<type>("foo + bar")), r);
@@ -658,7 +658,7 @@ TEST(parseable) {
   r = record_type{
     {"", record_type{{"a", real_type{}}}},
     {"+", none_type{}.name("bar")}
-  }.attributes({{"vast-algebra"}});
+  }.attributes({{"$algebra"}});
   // clang-format on
   CHECK_EQUAL(unbox(to<type>(str)), r);
 }

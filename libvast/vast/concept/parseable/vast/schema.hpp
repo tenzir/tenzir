@@ -97,7 +97,7 @@ struct symbol_resolver {
         return y.error();
       field_type = *y;
     }
-    if (has_attribute(x, "vast-algebra")) {
+    if (has_attribute(x, "$algebra")) {
       if (x.fields.size() < 2)
         return caf::make_error(ec::parse_error, "algebraic operations require "
                                                 "at least 2 operands");

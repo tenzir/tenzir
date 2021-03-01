@@ -145,7 +145,7 @@ bool type_parser::parse(Iterator& f, const Iterator& l, Attribute& a) const {
       record_type result;
       result.fields = {record_field{"", std::move(lhs)}};
       result.fields.insert(result.fields.end(), rhss.begin(), rhss.end());
-      return result.attributes({{"vast-algebra"}});
+      return result.attributes({{"$algebra"}});
     };
   // Complete type
   using type_tuple = std::tuple<
