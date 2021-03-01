@@ -422,6 +422,70 @@ TEST(parseable - with context) {
     CHECK(p("type foo = real", sm));
     CHECK(!p("type foo = int", sm));
   }
+  {
+    MESSAGE("Arithmetic - basic addition");
+    auto str = R"__(
+      type foo = record{
+        x: int
+      }
+      type bar = record{
+        y: int
+      }
+      type gob = foo + bar + tar
+      type tar = record{
+        z: int
+      }
+    )__"sv;
+    auto sm = unbox(to<symbol_map>(str));
+    auto r = symbol_resolver{global, sm};
+    auto sch = unbox(r.resolve());
+    auto gob = unbox(sch.find("gob"));
+    // clang-format off
+    auto expected = type{
+      record_type{
+        {"x", integer_type{}},
+        {"y", integer_type{}},
+        {"z", integer_type{}},
+      }.name("gob")
+    };
+    // clang-format on
+    CHECK_EQUAL(gob, expected);
+  }
+  {
+    MESSAGE("Arithmetic - realistic usage");
+    auto str = R"__(
+      type base = record{
+        a: int,
+        b: int,
+        c: int,
+      }
+      type derived1 = base - c +> record{
+        b: real,
+        d: time,
+      }
+      type derived2 = base +> record{
+        b: real,
+        d: time,
+      } - c
+    )__"sv;
+    auto sm = unbox(to<symbol_map>(str));
+    auto r = symbol_resolver{global, sm};
+    auto sch = unbox(r.resolve());
+    auto derived1 = unbox(sch.find("derived1"));
+    auto derived2 = unbox(sch.find("derived2"));
+    // clang-format off
+    auto expected = type{
+      record_type{
+        {"a", integer_type{}},
+        {"b", real_type{}},
+        {"d", time_type{}},
+      }.name("derived1")
+    };
+    // clang-format on
+    CHECK_EQUAL(derived1, expected);
+    expected.name("derived2");
+    CHECK_EQUAL(derived2, expected);
+  }
 }
 
 TEST(json) {

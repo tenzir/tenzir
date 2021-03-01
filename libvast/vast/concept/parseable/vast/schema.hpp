@@ -97,6 +97,45 @@ struct symbol_resolver {
         return y.error();
       field_type = *y;
     }
+    if (has_attribute(x, "vast-algebra")) {
+      if (x.fields.size() < 2)
+        return caf::make_error(ec::parse_error, "algebraic operations require "
+                                                "at least 2 operands");
+      auto base = caf::get_if<record_type>(&x.fields[0].type);
+      if (!base)
+        return caf::make_error(ec::parse_error, "algebraic can only be used "
+                                                "on record types");
+      auto acc = *base;
+      auto it = ++x.fields.begin();
+      for (; it < x.fields.end(); ++it) {
+        auto rhs = caf::get_if<record_type>(&it->type);
+        if (!rhs)
+          return caf::make_error(ec::parse_error, "algebraic can only be used "
+                                                  "on record types");
+        if (it->name == "+") {
+          auto result = merge(acc, *rhs);
+          if (!result)
+            return result.error();
+          acc = *result;
+        } else if (it->name == "<+") {
+          acc = priority_merge(acc, *rhs, merge_policy::prefer_left);
+        } else if (it->name == "+>") {
+          acc = priority_merge(acc, *rhs, merge_policy::prefer_right);
+        } else if (it->name == "-") {
+          auto name = rhs->fields[0].name;
+          auto del = std::find_if(acc.fields.begin(), acc.fields.end(),
+                                  [&](auto& f) { return f.name == name; });
+          if (del == acc.fields.end())
+            return caf::make_error(ec::parse_error,
+                                   "trying to delete non-existing field",
+                                   rhs->name(), "from type", to_string(acc));
+          acc.fields.erase(del);
+        } else
+          return caf::make_error(
+            ec::parse_error, "algebraic operation not recognized:", it->name);
+      }
+      return acc.name(x.name());
+    }
     return std::move(x);
   }
 
