@@ -20,6 +20,7 @@
 
 #include "vast/concept/hashable/uhash.hpp"
 #include "vast/concept/hashable/xxhash.hpp"
+#include "vast/concept/parseable/to.hpp"
 #include "vast/concept/parseable/vast/type.hpp"
 #include "vast/concept/printable/stream.hpp"
 #include "vast/concept/printable/to_string.hpp"
@@ -640,6 +641,26 @@ TEST(parseable) {
   };
   // clang-format on
   CHECK_EQUAL(t, r);
+  MESSAGE("record algebra");
+  // clang-format off
+  r = record_type{
+    {"", none_type{}.name("foo")},
+    {"+", none_type{}.name("bar")}
+  }.attributes({{"vast-algebra"}});
+  // clang-format on
+  CHECK_EQUAL(unbox(to<type>("foo+bar")), r);
+  CHECK_EQUAL(unbox(to<type>("foo + bar")), r);
+  r.fields[1] = record_field{"-", record_type{{"bar", bool_type{}}}};
+  CHECK_EQUAL(unbox(to<type>("foo-bar")), r);
+  CHECK_EQUAL(unbox(to<type>("foo - bar")), r);
+  str = "record{a: real} + bar"sv;
+  // clang-format off
+  r = record_type{
+    {"", record_type{{"a", real_type{}}}},
+    {"+", none_type{}.name("bar")}
+  }.attributes({{"vast-algebra"}});
+  // clang-format on
+  CHECK_EQUAL(unbox(to<type>(str)), r);
 }
 
 TEST(hashable) {

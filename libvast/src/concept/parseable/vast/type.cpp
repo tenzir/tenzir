@@ -112,6 +112,44 @@ bool type_parser::parse(Iterator& f, const Iterator& l, Attribute& a) const {
   static auto placeholder_parser
     = (parsers::identifier) ->* to_named_none_type
     ;
+  rule<Iterator, type> type_expr_parser;
+  auto algebra_leaf_parser
+    = record_type_parser
+    | placeholder_parser
+    ;
+  auto algebra_operand_parser
+    = algebra_leaf_parser
+    | ref(type_expr_parser)
+    ;
+  auto rplus_parser = "+>" >> skp >> algebra_operand_parser ->* [](type t) {
+    return record_field{"+>", std::move(t)};
+  };
+  auto plus_parser = '+' >> skp >> algebra_operand_parser ->* [](type t) {
+    return record_field{"+", std::move(t)};
+  };
+  auto lplus_parser = "<+" >> skp >> algebra_operand_parser ->* [](type t) {
+    return record_field{"<+", std::move(t)};
+  };
+  auto minus_parser = '-' >> skp >> (parsers::identifier | parsers::qqstr) ->*
+    [](std::string field) {
+      record_type result;
+      result.fields.emplace_back(std::move(field), bool_type{});
+    return record_field{"-", std::move(result)};
+  };
+  auto algebra_parser
+    = rplus_parser
+    | plus_parser
+    | lplus_parser
+    | minus_parser
+    ;
+  type_expr_parser = (algebra_operand_parser >> skp >> (+(skp >> algebra_parser)))
+    ->* [](std::tuple<type, std::vector<record_field>> xs) -> type {
+      auto& [lhs, rhss] = xs;
+      record_type result;
+      result.fields = {record_field{"", std::move(lhs)}};
+      result.fields.insert(result.fields.end(), rhss.begin(), rhss.end());
+      return result.attributes({{"vast-algebra"}});
+    };
   // Complete type
   using type_tuple = std::tuple<
     vast::type,
@@ -119,10 +157,11 @@ bool type_parser::parse(Iterator& f, const Iterator& l, Attribute& a) const {
   >;
   static auto insert_attributes = [](type_tuple xs) {
     auto& [t, attrs] = xs;
-    return t.attributes(std::move(attrs));
+    return t.update_attributes(std::move(attrs));
   };
   type_type = (
-    ( basic_type_parser
+    ( type_expr_parser
+    | basic_type_parser
     | enum_type_parser
     | list_type_parser
     | map_type_parser
