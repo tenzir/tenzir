@@ -127,8 +127,9 @@ struct symbol_resolver {
                                   [&](auto& f) { return f.name == name; });
           if (del == acc.fields.end())
             return caf::make_error(ec::parse_error,
-                                   "trying to delete non-existing field",
-                                   rhs->name(), "from type", to_string(acc));
+                                   fmt::format("trying to delete non-existing "
+                                               "field {} from type {}",
+                                               rhs->name(), to_string(acc)));
           acc.fields.erase(del);
         } else
           return caf::make_error(
