@@ -452,18 +452,82 @@ TEST(parseable - with context) {
     CHECK_EQUAL(gob, expected);
   }
   {
+    MESSAGE("Arithmetic - field clash");
+    auto str = R"__(
+      type foo = record{
+        a: int,
+        b: int
+      }
+      type bar = record{
+        a: real,
+        c: real
+      }
+      type lplus = foo + bar
+    )__"sv;
+    auto sm = unbox(to<symbol_map>(str));
+    auto r = symbol_resolver{global, sm};
+    CHECK(!r.resolve());
+  }
+  {
+    MESSAGE("Arithmetic - priorities");
+    auto str = R"__(
+      type foo = record{
+        a: int,
+        b: int
+      } #attr_one #attr_two=val
+      type bar = record{
+        a: real,
+        c: real
+      } #attr_one=val #attr_two
+      type lplus = foo <+ bar
+      type rplus = foo +> bar
+    )__"sv;
+    auto sm = unbox(to<symbol_map>(str));
+    auto r = symbol_resolver{global, sm};
+    auto sch = unbox(r.resolve());
+    // clang-format off
+    auto expected_lplus = type{
+      record_type{
+        {"a", integer_type{}},
+        {"b", integer_type{}},
+        {"c", real_type{}},
+      }.name("lplus").attributes({{"attr_one"}, {"attr_two", "val"}})
+    };
+    auto expected_rplus = type{
+      record_type{
+        {"a", real_type{}},
+        {"b", integer_type{}},
+        {"c", real_type{}},
+      }.name("rplus").attributes({{"attr_one", "val"}, {"attr_two"}})
+    };
+    // clang-format on
+    auto lplus = unbox(sch.find("lplus"));
+    CHECK_EQUAL(lplus, expected_lplus);
+    auto rplus = unbox(sch.find("rplus"));
+    CHECK_EQUAL(rplus, expected_rplus);
+  }
+  {
     MESSAGE("Arithmetic - realistic usage");
     auto str = R"__(
       type base = record{
-        a: int,
+        a: record{
+             x: count,
+             y: string
+           },
         b: int,
         c: int,
       }
       type derived1 = base - c +> record{
+        a: record {
+             y: addr
+           },
         b: real,
         d: time,
       }
       type derived2 = base +> record{
+        a: record {
+             y: addr
+           },
         b: real,
         d: time,
       } - c
@@ -476,7 +540,10 @@ TEST(parseable - with context) {
     // clang-format off
     auto expected = type{
       record_type{
-        {"a", integer_type{}},
+        {"a", record_type{
+          {"x", count_type{}},
+          {"y", address_type{}}
+        }},
         {"b", real_type{}},
         {"d", time_type{}},
       }.name("derived1")
