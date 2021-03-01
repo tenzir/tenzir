@@ -74,6 +74,28 @@ type suricata.alert = record {
   }
 }
 
+type suricata.anomaly = record {
+  timestamp: timestamp,
+  flow_id: count #index=hash,
+  pcap_cnt: count,
+  vlan: list<count>,
+  in_iface: string,
+  src_ip: addr,
+  src_port: port,
+  dest_ip: addr,
+  dest_port: port,
+  proto: string,
+  event_type: string,
+  community_id: string #index=hash,
+  tx_id: count #index=hash,
+  anomaly: record {
+    type: string,
+    event: string,
+    code: count,
+    layer: string
+  }
+}
+
 type suricata.dcerpc_interface = record {
   uuid: string #index=hash,
   version: string,

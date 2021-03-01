@@ -6,6 +6,7 @@
       "fields": [
         "pcap.packet.src",
         "suricata.alert.src_ip",
+        "suricata.anomaly.src_ip",
         "suricata.dhcp.src_ip",
         "suricata.dns.src_ip",
         "suricata.ftp.src_ip",
@@ -54,6 +55,7 @@
       "fields": [
         "pcap.packet.dst",
         "suricata.alert.dest_ip",
+        "suricata.anomaly.dest_ip",
         "suricata.dhcp.dest_ip",
         "suricata.dns.dest_ip",
         "suricata.ftp.dest_ip",
@@ -112,6 +114,7 @@
       "fields": [
         "pcap.packet.dport",
         "suricata.alert.dest_port",
+        "suricata.anomaly.dest_port",
         "suricata.dhcp.dest_port",
         "suricata.dns.dest_port",
         "suricata.ftp.dest_port",
@@ -160,6 +163,7 @@
       "fields": [
         "pcap.packet.community_id",
         "suricata.alert.community_id",
+        "suricata.anomaly.community_id",
         "suricata.dhcp.community_id",
         "suricata.dns.community_id",
         "suricata.ftp.community_id",
@@ -184,6 +188,7 @@
       "description": "The transport-layer port of the connection originator",
       "fields": [
         "suricata.alert.src_port",
+        "suricata.anomaly.src_port",
         "suricata.dhcp.src_port",
         "suricata.dns.src_port",
         "suricata.ftp.src_port",
@@ -257,6 +262,7 @@
       "description": "The transport-layer protocol of a connection",
       "fields": [
         "suricata.alert.proto",
+        "suricata.anomaly.proto",
         "suricata.dhcp.proto",
         "suricata.dns.proto",
         "suricata.ftp.proto",
