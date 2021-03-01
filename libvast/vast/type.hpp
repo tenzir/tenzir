@@ -303,6 +303,32 @@ public:
     return std::move(derived());
   }
 
+  Derived& update_attributes(std::vector<attribute> xs) & {
+    auto& attrs = this->attributes_;
+    for (auto& x : xs) {
+      auto i = std::find_if(attrs.begin(), attrs.end(),
+                            [&](auto& attr) { return attr.key == x.key; });
+      if (i == attrs.end())
+        attrs.push_back(std::move(x));
+      else
+        i->value = std::move(x).value;
+    }
+    return derived();
+  }
+
+  Derived update_attributes(std::vector<attribute> xs) && {
+    auto& attrs = this->attributes_;
+    for (auto& x : xs) {
+      auto i = std::find_if(attrs.begin(), attrs.end(),
+                            [&](auto& attr) { return attr.key == x.key; });
+      if (i == attrs.end())
+        attrs.push_back(std::move(x));
+      else
+        i->value = std::move(x).value;
+    }
+    return std::move(derived());
+  }
+
   friend bool operator==(const Derived& x, const Derived& y) {
     return x.equals(y);
   }
@@ -734,8 +760,14 @@ record_type concat(const Rs&... rs) {
 caf::expected<record_type>
 merge(const record_type& lhs, const record_type& rhs);
 
+/// @relates priority_merge
 enum class merge_policy { prefer_left, prefer_right };
 
+/// Creates a new unnamed record_type containing the fields and attribues of lhs
+/// and rhs. Uses a merge_policy to decide wheter to use a field from lhs or rhs
+/// in case of a conflict.
+/// @returns The combined record_type.
+/// @relates record_type merge_policy
 record_type
 priority_merge(const record_type& lhs, const record_type& rhs, merge_policy p);
 

@@ -465,17 +465,30 @@ caf::optional<offset> record_type::offset_from_index(size_t i) const {
 caf::expected<record_type>
 merge(const record_type& lhs, const record_type& rhs) {
   record_type result = lhs;
-  std::map<std::string, type> all_fields;
-  for (auto& f : result.fields)
-    all_fields.emplace(f.name, f.type);
+  auto in_lhs = [&](std::string_view name) {
+    return std::find_if(result.fields.begin(),
+                        result.fields.begin() + lhs.fields.size(),
+                        [&](const auto& field) { return field.name == name; });
+  };
   for (const auto& rfield : rhs.fields) {
-    auto [it, inserted] = all_fields.emplace(rfield.name, rfield.type);
-    if (inserted)
+    if (auto it = in_lhs(rfield.name);
+        it != result.fields.begin() + lhs.fields.size()) {
+      if (it->type == rfield.type)
+        continue;
+      const auto* lrec = caf::get_if<record_type>(&it->type);
+      const auto* rrec = caf::get_if<record_type>(&rfield.type);
+      if (!(rrec && lrec))
+        return caf::make_error(ec::convert_error, //
+                               fmt::format("failed to merge {} and {} because "
+                                           "of duplicate field {}",
+                                           lhs, rhs, rfield.name));
+      auto x = merge(*lrec, *rrec);
+      if (!x)
+        return x.error();
+      it->type = type{std::move(*x)};
+    } else {
       result.fields.push_back(rfield);
-    else if (it->second != rfield.type)
-      caf::make_error(ec::convert_error, "failed to merge", type{lhs}, "and",
-                      type{rhs}, "because of duplicate field", it->first);
-    // else identical types aren't treated as errors.
+    }
   }
   return result.name("");
 }
@@ -483,24 +496,34 @@ merge(const record_type& lhs, const record_type& rhs) {
 record_type
 priority_merge(const record_type& lhs, const record_type& rhs, merge_policy p) {
   record_type result = lhs;
-  std::map<std::string, type> all_fields;
-  for (auto& f : result.fields)
-    all_fields.emplace(f.name, f.type);
+  auto in_lhs = [&](std::string_view name) {
+    return std::find_if(result.fields.begin(),
+                        result.fields.begin() + lhs.fields.size(),
+                        [&](const auto& field) { return field.name == name; });
+  };
   for (const auto& rfield : rhs.fields) {
-    auto [it, inserted] = all_fields.emplace(rfield.name, rfield.type);
-    if (inserted)
+    if (auto it = in_lhs(rfield.name);
+        it != result.fields.begin() + lhs.fields.size()) {
+      if (it->type == rfield.type)
+        continue;
+      const auto* lrec = caf::get_if<record_type>(&it->type);
+      const auto* rrec = caf::get_if<record_type>(&rfield.type);
+      if (rrec && lrec)
+        it->type = priority_merge(*lrec, *rrec, p);
+      else if (p == merge_policy::prefer_right)
+        it->type = rfield.type;
+      // else policy_left: continue
+    } else {
       result.fields.push_back(rfield);
-    else if (p == merge_policy::prefer_right) {
-      auto overwrite
-        = std::find_if(result.fields.begin(),
-                       result.fields.begin() + lhs.fields.size(),
-                       [&](auto& f) { return f.name == rfield.name; });
-      VAST_ASSERT(overwrite < (result.fields.begin() + lhs.fields.size()));
-      overwrite->type = rfield.type;
     }
-    // else the field from lhs is left as is.
   }
-  return result;
+  if (p == merge_policy::prefer_left) {
+    result.attributes(rhs.attributes());
+    result.update_attributes(lhs.attributes());
+  } else {
+    result.update_attributes(rhs.attributes());
+  }
+  return result.name("");
 }
 
 record_type flatten(const record_type& rec) {
