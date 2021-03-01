@@ -96,11 +96,8 @@ bool type_parser::parse(Iterator& f, const Iterator& l, Attribute& a) const {
   static auto to_record = [](std::vector<record_field> fields) -> type {
     return record_type{std::move(fields)};
   };
-  auto field
-    = ((parsers::identifier | parsers::qqstr) >> skp >> ':' >> skp
-    >> ref(type_type))
-    ->* to_field
-    ;
+  auto field_name = parsers::identifier | parsers::qqstr;
+  auto field = (field_name >> skp >> ':' >> skp >> ref(type_type)) ->* to_field;
   auto record_type_parser
     = ("record" >> skp >> '{'
     >> ((skp >> field >> skp) % ',') >> ~(',' >> skp)
@@ -130,7 +127,7 @@ bool type_parser::parse(Iterator& f, const Iterator& l, Attribute& a) const {
   auto lplus_parser = "<+" >> skp >> algebra_operand_parser ->* [](type t) {
     return record_field{"<+", std::move(t)};
   };
-  auto minus_parser = '-' >> skp >> (parsers::identifier | parsers::qqstr) ->*
+  auto minus_parser = '-' >> skp >> field_name ->*
     [](std::string field) {
       record_type result;
       result.fields.emplace_back(std::move(field), bool_type{});
