@@ -57,7 +57,6 @@ vast:
   # List of directories to look for schema files in ascending order of priority.
   # Note: Automatically prepended with
   #  ["<binary_directory>/../share/vast/schema", "/etc/vast/schema"].
-  # Use the no-default-schema option to turn off this mechanism.
 
   #schema-dirs: []
   # Additional directories to load plugins specified using `vast.plugins` from.
@@ -66,8 +65,6 @@ vast:
   # files in the specified `vast.plugin-dirs`.
   # Note: Add libexample or libexample here to load the example plugin.
   plugins: []
-  # Don't load the default schema definitions.
-  no-default-schema: false
   # The unique ID of this node.
   node-id: "node"
   # Spawn a node instead of connecting to one.
