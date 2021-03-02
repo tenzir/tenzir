@@ -2,6 +2,7 @@
     name: net.src.ip
     fields:
       - suricata.alert.src_ip
+      - suricata.anomaly.src_ip
       - suricata.dhcp.src_ip
       - suricata.dns.src_ip
       - suricata.ftp.src_ip
@@ -10,6 +11,7 @@
       - suricata.fileinfo.src_ip
       - suricata.flow.src_ip
       - suricata.krb5.src_ip
+      - suricata.mqtt.src_ip
       - suricata.netflow.src_ip
       - suricata.smb.src_ip
       - suricata.ssh.src_ip
@@ -19,6 +21,7 @@
     name: net.src.port
     fields:
       - suricata.alert.src_port
+      - suricata.anomaly.src_port
       - suricata.dhcp.src_port
       - suricata.dns.src_port
       - suricata.ftp.src_port
@@ -27,6 +30,7 @@
       - suricata.fileinfo.src_port
       - suricata.flow.src_port
       - suricata.krb5.src_port
+      - suricata.mqtt.src_port
       - suricata.netflow.src_port
       - suricata.smb.src_port
       - suricata.ssh.src_port
@@ -36,6 +40,7 @@
     name: net.dst.ip
     fields:
       - suricata.alert.dest_ip
+      - suricata.anomaly.dest_ip
       - suricata.dhcp.dest_ip
       - suricata.dns.dest_ip
       - suricata.ftp.dest_ip
@@ -44,6 +49,7 @@
       - suricata.fileinfo.dest_ip
       - suricata.flow.dest_ip
       - suricata.krb5.dest_ip
+      - suricata.mqtt.dest_ip
       - suricata.netflow.dest_ip
       - suricata.smb.dest_ip
       - suricata.ssh.dest_ip
@@ -53,6 +59,7 @@
     name: net.dst.port
     fields:
       - suricata.alert.dest_port
+      - suricata.anomaly.dest_port
       - suricata.dhcp.dest_port
       - suricata.dns.dest_port
       - suricata.ftp.dest_port
@@ -61,6 +68,7 @@
       - suricata.fileinfo.dest_port
       - suricata.flow.dest_port
       - suricata.krb5.dest_port
+      - suricata.mqtt.dest_port
       - suricata.netflow.dest_port
       - suricata.smb.dest_port
       - suricata.ssh.dest_port
@@ -78,6 +86,7 @@
       - suricata.fileinfo.app_proto
       - suricata.flow.app_proto
       - suricata.krb5.event_type
+      - suricata.mqtt.event_type
       - suricata.netflow.app_proto
       - suricata.smb.event_type
       - suricata.ssh.event_type
@@ -87,6 +96,7 @@
     name: net.proto
     fields:
       - suricata.alert.proto
+      - suricata.anomaly.proto
       - suricata.dhcp.proto
       - suricata.dns.proto
       - suricata.ftp.proto
@@ -95,6 +105,7 @@
       - suricata.fileinfo.proto
       - suricata.flow.proto
       - suricata.krb5.proto
+      - suricata.mqtt.proto
       - suricata.netflow.proto
       - suricata.smb.proto
       - suricata.ssh.proto
@@ -104,6 +115,7 @@
     name: net.community_id
     fields:
       - suricata.alert.community_id
+      - suricata.anomaly.community_id
       - suricata.dhcp.community_id
       - suricata.dns.community_id
       - suricata.ftp.community_id
@@ -112,6 +124,7 @@
       - suricata.fileinfo.community_id
       - suricata.flow.community_id
       - suricata.krb5.community_id
+      - suricata.mqtt.community_id
       - suricata.netflow.community_id
       - suricata.smb.community_id
       - suricata.ssh.community_id

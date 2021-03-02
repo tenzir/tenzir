@@ -13,6 +13,11 @@ This changelog documents all notable user-facing changes of VAST.
 
 ## Unreleased
 
+- ⚠️ VAST now ships with schema record types for Suricata's `mqtt` and `anomaly`
+  event types.
+  [#1408](https://github.com/tenzir/vast/pull/1408)
+  [@satta](https://github.com/satta)
+
 - ⚡️ The previously deprecated `#timestamp` extractor has been removed from
   the query language entirely.
   [#1399](https://github.com/tenzir/vast/pull/1399)
