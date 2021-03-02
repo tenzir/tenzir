@@ -16,12 +16,10 @@ RUN apt-get -qq update && apt-get -qqy install \
   build-essential gcc-8 g++-8 ninja-build libbenchmark-dev libpcap-dev tcpdump \
   libssl-dev python3-dev python3-pip python3-venv git-core jq gnupg2 wget \
   libyaml-cpp-dev libsimdjson-dev libflatbuffers-dev flatbuffers-compiler-dev
-RUN pip3 install --upgrade pip && pip install --upgrade cmake && \
-  cmake --version
 
 # Need to specify backports explicitly, since spdlog and fmt also have regular
-# buster packages.
-RUN apt-get -qqy -t buster-backports install libspdlog-dev libfmt-dev
+# buster packages. Also, this comes with a newer version of CMake.
+RUN apt-get -qqy -t buster-backports install cmake libspdlog-dev libfmt-dev
 
 # Apache Arrow (c.f. https://arrow.apache.org/install/)
 # TODO: Arrow CMake is broken for 2.0 on Debian/Ubuntu. Switch to 3.0 once available
