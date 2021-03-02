@@ -771,6 +771,15 @@ enum class merge_policy { prefer_left, prefer_right };
 record_type
 priority_merge(const record_type& lhs, const record_type& rhs, merge_policy p);
 
+/// Removes a field from a record_type by name.
+/// @param r The record to mutate.
+/// @param path The sequence of keys pointing to the target field.
+/// @returns A bool indicating whether a field of the name field_name was
+///          present before this function was called.
+/// @pre `!path.empty()`
+/// @relates record_type
+bool remove_field(record_type& r, std::vector<std::string_view> path);
+
 /// Recursively flattens the arguments of a record type.
 /// @param rec The record to flatten.
 /// @returns The flattened record type.
@@ -990,6 +999,14 @@ struct sum_type_access<vast::type> {
   template <class T, int Pos>
   static const T& get(const vast::type& x, sum_type_token<T, Pos>) {
     return static_cast<const T&>(*x);
+  }
+
+  template <class T, int Pos>
+  static T* get_if(vast::type* x, sum_type_token<T, Pos>) {
+    x->ptr().unshare();
+    auto ptr = x->raw_ptr();
+    return ptr->index() == Pos ? const_cast<T*>(static_cast<const T*>(ptr))
+                               : nullptr;
   }
 
   template <class T, int Pos>
