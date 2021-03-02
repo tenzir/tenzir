@@ -13,6 +13,10 @@ This changelog documents all notable user-facing changes of VAST.
 
 ## Unreleased
 
+- ⚠️ The option `vast.no-default-schema` is deprecated, as it is no longer needed
+  to override types from bundled schemas.
+  [#1409](https://github.com/tenzir/vast/pull/1409)
+
 - ⚠️ VAST now ships with schema record types for Suricata's `mqtt` and `anomaly`
   event types.
   [#1408](https://github.com/tenzir/vast/pull/1408)

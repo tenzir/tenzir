@@ -223,7 +223,10 @@ detail::stable_set<vast::path>
 get_schema_dirs(const caf::actor_system_config& cfg,
                 std::vector<const void*> objpath_addresses) {
   detail::stable_set<vast::path> result;
-  if (!caf::get_or(cfg, "vast.no-default-schema", false)) {
+  if (caf::get_or(cfg, "vast.no-default-schema", false)) {
+    VAST_WARN("the option 'vast.no-default-schema' is deprecated and will be "
+              "removed in a future release");
+  } else {
 #if !VAST_ENABLE_RELOCATABLE_INSTALLATIONS
     result.insert(VAST_DATADIR "/vast/schema");
 #endif
