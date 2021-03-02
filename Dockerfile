@@ -15,20 +15,18 @@ ENV BUILD_DIR /tmp/src
 RUN apt-get -qq update && apt-get -qqy install \
   build-essential gcc-8 g++-8 ninja-build libbenchmark-dev libpcap-dev tcpdump \
   libssl-dev python3-dev python3-pip python3-venv git-core jq gnupg2 wget \
-  libyaml-cpp-dev libsimdjson-dev libflatbuffers-dev flatbuffers-compiler-dev
-RUN pip3 install --upgrade pip && pip install --upgrade cmake && \
-  cmake --version
+  libyaml-cpp-dev libsimdjson-dev libflatbuffers-dev flatbuffers-compiler-dev \
+  lsb-release ca-certificates
 
 # Need to specify backports explicitly, since spdlog and fmt also have regular
-# buster packages.
-RUN apt-get -qqy -t buster-backports install libspdlog-dev libfmt-dev
+# buster packages. Also, this comes with a newer version of CMake.
+RUN apt-get -qqy -t buster-backports install cmake libspdlog-dev libfmt-dev
 
 # Apache Arrow (c.f. https://arrow.apache.org/install/)
-# TODO: Arrow CMake is broken for 2.0 on Debian/Ubuntu. Switch to 3.0 once available
-RUN wget https://apache.bintray.com/arrow/debian/pool/buster/main/a/apache-arrow-archive-keyring/apache-arrow-archive-keyring_1.0.1-1_all.deb && \
-  apt-get -qqy install ./apache-arrow-archive-keyring_1.0.1-1_all.deb && \
+RUN wget https://apache.bintray.com/arrow/$(lsb_release --id --short | tr 'A-Z' 'a-z')/apache-arrow-archive-keyring-latest-$(lsb_release --codename --short).deb && \
+  apt-get -qqy install ./apache-arrow-archive-keyring-latest-$(lsb_release --codename --short).deb && \
   apt-get -qq update && \
-  apt-get -qqy install libarrow-dev=1.0.1-1
+  apt-get -qqy install libarrow-dev
 
 # VAST
 WORKDIR $BUILD_DIR/vast
@@ -72,7 +70,8 @@ ENV PREFIX /usr/local
 
 COPY --from=build_type $PREFIX/ $PREFIX/
 RUN apt-get -qq update && apt-get -qq install -y libc++1 libc++abi1 libpcap0.8 \
-  openssl libsimdjson4 libyaml-cpp0.6 libasan5 libflatbuffers1 wget gnupg2
+  openssl libsimdjson4 libyaml-cpp0.6 libasan5 libflatbuffers1 wget gnupg2 \
+  lsb-release ca-certificates
 
 # Need to specify backports explicitly, since spdlog and fmt also have regular
 # buster packages. For fmt we install the dev package, because libfmt is only
@@ -81,11 +80,10 @@ RUN apt-get -qq update && apt-get -qq install -y libc++1 libc++abi1 libpcap0.8 \
 RUN apt-get -qqy -t buster-backports install libspdlog1 libfmt-dev
 
 # Apache Arrow (c.f. https://arrow.apache.org/install/)
-# TODO: Arrow CMake is broken for 2.0 on Debian/Ubuntu. Switch to 3.0 once available
-RUN wget https://apache.bintray.com/arrow/debian/pool/buster/main/a/apache-arrow-archive-keyring/apache-arrow-archive-keyring_1.0.1-1_all.deb && \
-  apt-get -qqy install ./apache-arrow-archive-keyring_1.0.1-1_all.deb && \
+RUN wget https://apache.bintray.com/arrow/$(lsb_release --id --short | tr 'A-Z' 'a-z')/apache-arrow-archive-keyring-latest-$(lsb_release --codename --short).deb && \
+  apt-get -qqy install ./apache-arrow-archive-keyring-latest-$(lsb_release --codename --short).deb && \
   apt-get -qq update && \
-  apt-get -qqy install libarrow-dev=1.0.1-1
+  apt-get -qqy install libarrow-dev
 
 EXPOSE 42000/tcp
 
