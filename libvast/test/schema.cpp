@@ -507,6 +507,44 @@ TEST(parseable - with context) {
     CHECK_EQUAL(rplus, expected_rplus);
   }
   {
+    MESSAGE("Arithmetic - removing multiple fields");
+    auto str = R"__(
+      type foo = record{
+        a: record{
+          x: count,
+          y: record {
+            z: list<string>
+          }
+        },
+        "b.c": record {
+          d: count,
+          e: count
+        },
+        f: record {
+          g: count
+        }
+      }
+      type bar = foo - a.y - "b.c".d - f.g
+    )__"sv;
+    auto sm = unbox(to<symbol_map>(str));
+    auto r = symbol_resolver{global, sm};
+    auto sch = unbox(r.resolve());
+    auto bar = unbox(sch.find("bar"));
+    // clang-format off
+    auto expected = type{
+      record_type{
+        {"a", record_type{
+          {"x", count_type{}}
+        }},
+        {"b.c", record_type{
+          {"e", count_type{}}
+        }}
+      }.name("bar")
+    };
+    // clang-format on
+    CHECK_EQUAL(bar, expected);
+  }
+  {
     MESSAGE("Arithmetic - realistic usage");
     auto str = R"__(
       type base = record{

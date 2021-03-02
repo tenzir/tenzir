@@ -19,6 +19,7 @@
 #include "vast/concept/parseable/vast/identifier.hpp"
 #include "vast/concept/parseable/vast/type.hpp"
 #include "vast/detail/overload.hpp"
+#include "vast/detail/string.hpp"
 #include "vast/error.hpp"
 #include "vast/logger.hpp"
 #include "vast/schema.hpp"
@@ -122,19 +123,26 @@ struct symbol_resolver {
         } else if (it->name == "+>") {
           acc = priority_merge(acc, *rhs, merge_policy::prefer_right);
         } else if (it->name == "-") {
-          auto name = rhs->fields[0].name;
-          auto del = std::find_if(acc.fields.begin(), acc.fields.end(),
-                                  [&](auto& f) { return f.name == name; });
-          if (del == acc.fields.end())
+          std::vector<std::string_view> path;
+          for (auto& f : rhs->fields)
+            path.emplace_back(f.name);
+          if (!remove_field(acc, path)) {
+            auto fname = detail::join(path, ".");
             return caf::make_error(ec::parse_error,
                                    fmt::format("trying to delete non-existing "
                                                "field {} from type {}",
-                                               rhs->name(), to_string(acc)));
-          acc.fields.erase(del);
+                                               fname, to_string(acc)));
+          }
         } else
           return caf::make_error(
             ec::parse_error, "algebraic operation not recognized:", it->name);
       }
+      // TODO: Consider lifiting the following restriction.
+      if (acc.fields.empty())
+        return caf::make_error(
+          ec::parse_error, fmt::format("type modifications produced an empty "
+                                       "record named {}. This is not allowed.",
+                                       x.name()));
       return acc.name(x.name());
     }
     return std::move(x);

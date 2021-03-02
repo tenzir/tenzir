@@ -127,12 +127,16 @@ bool type_parser::parse(Iterator& f, const Iterator& l, Attribute& a) const {
   auto lplus_parser = "<+" >> skp >> algebra_operand_parser ->* [](type t) {
     return record_field{"<+", std::move(t)};
   };
-  auto minus_parser = '-' >> skp >> field_name ->*
-    [](std::string field) {
-      record_type result;
-      result.fields.emplace_back(std::move(field), bool_type{});
+  auto to_minus_record = [](std::vector<std::string> path) {
+    record_type result;
+    for (auto& key : path)
+      result.fields.emplace_back(std::move(key), bool_type{});
     return record_field{"-", std::move(result)};
   };
+  // Keep in sync with parsers::identifier.
+  auto qualified_field_name
+    = ((+(parsers::alnum | parsers::ch<'_'>) | parsers::qqstr) % '.');
+  auto minus_parser = '-' >> skp >> qualified_field_name ->* to_minus_record;
   auto algebra_parser
     = rplus_parser
     | plus_parser
