@@ -331,6 +331,11 @@ add_library(libvast ${libvast_sources})
 add_library(vast::libvast ALIAS libvast)
 target_link_libraries(libvast PRIVATE libvast_internal)
 
+# GNU prior to 9.1 requires linking with stdc++fs when using std::filesystem library
+if (CMAKE_CXX_COMPILER_ID MATCHES "GNU" AND CMAKE_CXX_COMPILER_VERSION VERSION_LESS 9.1.0)
+  target_link_libraries(libvast PUBLIC stdc++fs)
+endif()
+
 set_target_properties(
   libvast
   PROPERTIES INTERPROCEDURAL_OPTIMIZATION_RELEASE ON

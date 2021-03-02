@@ -62,11 +62,15 @@ disk_monitor(disk_monitor_actor::stateful_pointer<disk_monitor_state> self,
       // see noticeable overhead even on large-ish databases.
       // Nonetheless, if this becomes relevant we should switch to using
       // `inotify()` or similar to do real-time tracking of the db size.
-      auto size = recursive_size(self->state.dbdir);
-      VAST_VERBOSE("{} checks db-directory of size {} bytes", self, size);
-      if (size > self->state.high_water_mark && !self->state.purging) {
-        self->state.purging = true;
-        self->send(self, atom::erase_v);
+      if (const auto size = recursive_size(self->state.dbdir); !size) {
+        VAST_WARN("{} failed to calculate recursive size of {}: {}", self,
+                  self->state.dbdir, size.error());
+      } else {
+        VAST_VERBOSE("{} checks db-directory of size {} bytes", self, *size);
+        if (*size > self->state.high_water_mark && !self->state.purging) {
+          self->state.purging = true;
+          self->send(self, atom::erase_v);
+        }
       }
     },
     [self](atom::erase) {
@@ -114,18 +118,22 @@ disk_monitor(disk_monitor_actor::stateful_pointer<disk_monitor_state> self,
                         erased_ids)
               .then(
                 [=, sg = shared_guard](atom::done) {
-                  auto sz = recursive_size(self->state.dbdir);
-                  VAST_VERBOSE("{} erased ids from index; {} bytes "
-                               "left on disk",
-                               self, sz);
-                  if (sz > self->state.low_water_mark) {
-                    // Repeat until we're below the low water mark
-                    self->send(self, atom::erase_v);
+                  if (const auto size = recursive_size(self->state.dbdir);
+                      !size) {
+                    VAST_WARN("{} failed to calculate recursive size of {}: {}",
+                              self, self->state.dbdir, size.error());
+                  } else {
+                    VAST_VERBOSE("{} erased ids from index; {} bytes "
+                                 "left on disk",
+                                 self, *size);
+                    if (*size > self->state.low_water_mark) {
+                      // Repeat until we're below the low water mark
+                      self->send(self, atom::erase_v);
+                    }
                   }
                 },
-                [=, sg = shared_guard](caf::error e) {
-                  VAST_WARN("{} failed to erase from archive: {}", self,
-                            render(e));
+                [=, sg = shared_guard](caf::error err) {
+                  VAST_WARN("{} failed to erase from archive: {}", self, err);
                 });
           },
           [=, sg = shared_guard](caf::error e) {

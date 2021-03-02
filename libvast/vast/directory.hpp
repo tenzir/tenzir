@@ -13,6 +13,8 @@
 
 #pragma once
 
+#include "vast/fwd.hpp"
+
 #include "vast/config.hpp"
 #include "vast/defaults.hpp"
 #include "vast/detail/iterator.hpp"
@@ -76,7 +78,7 @@ private:
 /// Calculates the sum of the sizes of all regular files in the directory.
 /// @param dir The directory to traverse.
 /// @returns The size of all regular files in *dir*.
-size_t recursive_size(const vast::directory& dir);
+caf::expected<size_t> recursive_size(const vast::directory& dir);
 
 /// Recursively traverses a directory and lists all file names that match a
 /// given filter expresssion.
