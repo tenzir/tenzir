@@ -22,6 +22,15 @@ This changelog documents all notable user-facing changes of VAST.
   [#1408](https://github.com/tenzir/vast/pull/1408)
   [@satta](https://github.com/satta)
 
+- 🎁 The schema language now supports algebraic operations on record types:
+     - `record + record`: Combine the fields of 2 records into a new record
+     - `record <+ record`: Like `+`, but prefer the left operand in case of a
+       field name clash
+     - `record +> record`: Like `+`, but prefer the right operand in case of a
+       field name clash
+     - `record - field_name`: Remove the field named `field_name` from a record
+  [#1407](https://github.com/tenzir/vast/pull/1407)
+
 - ⚡️ The previously deprecated `#timestamp` extractor has been removed from
   the query language entirely.
   [#1399](https://github.com/tenzir/vast/pull/1399)
