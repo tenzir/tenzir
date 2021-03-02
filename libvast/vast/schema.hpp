@@ -20,6 +20,7 @@
 
 #include <caf/expected.hpp>
 
+#include <filesystem>
 #include <string>
 #include <vector>
 
@@ -94,7 +95,7 @@ caf::expected<schema> get_schema(const caf::settings& options);
 /// @param objpath_addresses Addresses to locate the objectpath of for relative
 /// schema directories.
 /// @returns The list of schema directories.
-detail::stable_set<vast::path>
+detail::stable_set<std::filesystem::path>
 get_schema_dirs(const caf::actor_system_config& cfg,
                 std::vector<const void*> objpath_addresses = {nullptr});
 
@@ -112,7 +113,7 @@ caf::expected<schema> load_schema(const path& schema_file);
 /// earlier ones, but the same mechanism makes no sense inside of a single
 /// directory unless we specify a specific order of traversal.
 caf::expected<vast::schema>
-load_schema(const detail::stable_set<path>& schema_dirs,
+load_schema(const detail::stable_set<std::filesystem::path>& schema_dirs,
             size_t max_recursion = defaults::max_recursion);
 
 /// Loads schemas according to the configuration. This is a convenience wrapper

@@ -215,11 +215,11 @@ type_registry(type_registry_actor::stateful_pointer<type_registry_state> self,
         if (!yamls)
           return yamls.error();
         for (auto& [file, yaml] : *yamls) {
-          VAST_DEBUG("{} extracts taxonomies from {}", self, file);
+          VAST_DEBUG("{} extracts taxonomies from {}", self, file.string());
           if (auto err = extract_concepts(yaml, concepts))
             return caf::make_error(ec::parse_error,
-                                   "failed to extract concepts from file", file,
-                                   err.context());
+                                   "failed to extract concepts from file",
+                                   file.string(), err.context());
           for (auto& [name, definition] : concepts) {
             VAST_DEBUG("{} extracted concept {} with {} fields", self, name,
                        definition.fields.size());
@@ -228,8 +228,8 @@ type_registry(type_registry_actor::stateful_pointer<type_registry_state> self,
           }
           if (auto err = extract_models(yaml, models))
             return caf::make_error(ec::parse_error,
-                                   "failed to extract models from file", file,
-                                   err.context());
+                                   "failed to extract models from file",
+                                   file.string(), err.context());
           for (auto& [name, definition] : models) {
             VAST_DEBUG("{} extracted model {} with {} fields", self, name,
                        definition.definition.size());
