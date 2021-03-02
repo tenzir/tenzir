@@ -76,11 +76,10 @@ jobs:
           apt-get -qqy install clang-10
 
           # Apache Arrow (c.f. https://arrow.apache.org/install/)
-          # TODO: Arrow CMake is broken for 2.0 on Debian/Ubuntu. Switch to 3.0 once available
-          wget https://apache.bintray.com/arrow/debian/pool/buster/main/a/apache-arrow-archive-keyring/apache-arrow-archive-keyring_1.0.1-1_all.deb
-          apt-get -qqy install ./apache-arrow-archive-keyring_1.0.1-1_all.deb
+          wget https://apache.bintray.com/arrow/$(lsb_release --id --short | tr 'A-Z' 'a-z')/apache-arrow-archive-keyring-latest-$(lsb_release --codename --short).deb
+          apt-get -qqy install ./apache-arrow-archive-keyring-latest-$(lsb_release --codename --short).deb
           apt-get -qq update
-          apt-get -qqy install libarrow-dev=1.0.1-1
+          apt-get -qqy install libarrow-dev
 
           cmake --version
 
