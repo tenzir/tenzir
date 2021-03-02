@@ -593,6 +593,41 @@ TEST(parseable - with context) {
   }
 }
 
+TEST(parseable - overwriting with self reference) {
+  using namespace std::string_view_literals;
+  auto global = symbol_map{};
+  {
+    auto local = symbol_map{};
+    auto p = symbol_map_parser{};
+    CHECK(p("type foo = record{\"x\": count}", local));
+    global = std::move(local);
+  }
+  {
+    auto str = R"__(
+      type bar = foo
+      type foo = foo + record {
+        y: string
+      }
+    )__"sv;
+    auto sm = unbox(to<symbol_map>(str));
+    auto r = symbol_resolver{global, sm};
+    auto sch = unbox(r.resolve());
+    auto foo = unbox(sch.find("foo"));
+    // clang-format off
+    auto expected = type{
+      record_type{
+        {"x", count_type{}},
+        {"y", string_type{}}
+      }.name("foo")
+    };
+    // clang-format on
+    CHECK_EQUAL(foo, expected);
+    auto bar = unbox(sch.find("bar"));
+    expected = alias_type{expected}.name("bar");
+    CHECK_EQUAL(bar, expected);
+  }
+}
+
 TEST(json) {
   schema s;
   auto t0 = count_type{};
