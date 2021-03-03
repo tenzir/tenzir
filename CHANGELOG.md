@@ -13,6 +13,13 @@ This changelog documents all notable user-facing changes of VAST.
 
 ## Unreleased
 
+- 🎁 The schema language now supports 4 operations on record types:
+  `+` combines the fields of 2 records into a new record. `<+` and `+>` are
+  variations of `+` that give precedence to the left and right operand
+  respectively. `-` creates a record with the field specified as its right
+  operand removed.
+  [#1407](https://github.com/tenzir/vast/pull/1407)
+
 - ⚠️ The option `vast.no-default-schema` is deprecated, as it is no longer needed
   to override types from bundled schemas.
   [#1409](https://github.com/tenzir/vast/pull/1409)
@@ -21,15 +28,6 @@ This changelog documents all notable user-facing changes of VAST.
   event types.
   [#1408](https://github.com/tenzir/vast/pull/1408)
   [@satta](https://github.com/satta)
-
-- 🎁 The schema language now supports algebraic operations on record types:
-     - `record + record`: Combine the fields of 2 records into a new record
-     - `record <+ record`: Like `+`, but prefer the left operand in case of a
-       field name clash
-     - `record +> record`: Like `+`, but prefer the right operand in case of a
-       field name clash
-     - `record - field_name`: Remove the field named `field_name` from a record
-  [#1407](https://github.com/tenzir/vast/pull/1407)
 
 - ⚡️ The previously deprecated `#timestamp` extractor has been removed from
   the query language entirely.

@@ -19,7 +19,6 @@
 #include "vast/concept/parseable/vast/identifier.hpp"
 #include "vast/concept/parseable/vast/type.hpp"
 #include "vast/detail/overload.hpp"
-#include "vast/detail/string.hpp"
 #include "vast/error.hpp"
 #include "vast/logger.hpp"
 #include "vast/schema.hpp"
@@ -99,20 +98,14 @@ struct symbol_resolver {
       field_type = *y;
     }
     if (has_attribute(x, "$algebra")) {
-      if (x.fields.size() < 2)
-        return caf::make_error(ec::parse_error, "algebraic operations require "
-                                                "at least 2 operands");
+      VAST_ASSERT(x.fields.size() >= 2);
       auto base = caf::get_if<record_type>(&x.fields[0].type);
-      if (!base)
-        return caf::make_error(ec::parse_error, "algebraic can only be used "
-                                                "on record types");
+      VAST_ASSERT(base);
       auto acc = *base;
       auto it = ++x.fields.begin();
       for (; it < x.fields.end(); ++it) {
         auto rhs = caf::get_if<record_type>(&it->type);
-        if (!rhs)
-          return caf::make_error(ec::parse_error, "algebraic can only be used "
-                                                  "on record types");
+        VAST_ASSERT(rhs);
         if (it->name == "+") {
           auto result = merge(acc, *rhs);
           if (!result)
@@ -126,22 +119,21 @@ struct symbol_resolver {
           std::vector<std::string_view> path;
           for (auto& f : rhs->fields)
             path.emplace_back(f.name);
-          if (!remove_field(acc, path)) {
-            auto fname = detail::join(path, ".");
-            return caf::make_error(ec::parse_error,
-                                   fmt::format("trying to delete non-existing "
-                                               "field {} from type {}",
-                                               fname, to_string(acc)));
-          }
+          if (!remove_field(acc, path))
+            return caf::make_error( //
+              ec::parse_error,
+              fmt::format("cannot delete non-existing field {} from type {}",
+                          fmt::join(path, "."), to_string(acc)));
         } else
-          return caf::make_error(
-            ec::parse_error, "algebraic operation not recognized:", it->name);
+          // Invalid operation.
+          VAST_ASSERT(true);
       }
       // TODO: Consider lifiting the following restriction.
       if (acc.fields.empty())
         return caf::make_error(
           ec::parse_error, fmt::format("type modifications produced an empty "
-                                       "record named {}. This is not allowed.",
+                                       "record named {}; this is not "
+                                       "supported.",
                                        x.name()));
       return acc.name(x.name());
     }
