@@ -95,23 +95,17 @@ struct fmt::formatter<vast::uuid> {
   }
 
   template <typename FormatContext>
-  auto format(const vast::uuid& id, FormatContext& ctx) {
+  auto format(const vast::uuid& x, FormatContext& ctx) {
     // e.g. 96107185-1838-48fb-906c-d1a9941ff407
     static_assert(sizeof(vast::uuid) == 16, "id format changed, please update "
                                             "formatter");
-    return format_to(
-      ctx.out(),
-      "{:x}{:x}{:x}{:x}-{:x}{:x}-{:x}{:x}-{:x}{:x}-{:x}{:x}{:x}{:x}{:x}", id[0],
-      id[1], id[2], id[3], id[4], id[5], id[6], id[7], id[8], id[9], id[10],
-      id[11], id[12], id[12], id[14], id[15]);
-    // TODO: This would be a smarter way to print, but it seems to end up in
-    // a recursive loop.
-    // return format_to(ctx.out(), "{:x}-{:x}-{:x}-{:x}-{:x}",
-    //   fmt::join(&id[0], &id[4], ""),
-    //   fmt::join(&id[4], &id[6], ""),
-    //   fmt::join(&id[6], &id[8], ""),
-    //   fmt::join(&id[8], &id[10], ""),
-    //   fmt::join(&id[10], &id[16], ""));
+    const auto* data = reinterpret_cast<const unsigned char*>(x.begin());
+    return format_to(ctx.out(), "{:02X}-{:02X}-{:02X}-{:02X}-{:02X}",
+                     fmt::join(data + 0, data + 4, ""),
+                     fmt::join(data + 4, data + 6, ""),
+                     fmt::join(data + 6, data + 8, ""),
+                     fmt::join(data + 8, data + 10, ""),
+                     fmt::join(data + 10, data + 16, ""));
   }
 };
 
