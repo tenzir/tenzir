@@ -7,7 +7,7 @@ if (NOT VAST_VERSION_TAG)
     find_package(Git)
     if (Git_FOUND)
       execute_process(
-        COMMAND "${GIT_EXECUTABLE}" describe --tags --long --dirty
+        COMMAND "${GIT_EXECUTABLE}" describe --tags --long --dirty --abbrev=10
         WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
         OUTPUT_VARIABLE VAST_VERSION_TAG
         OUTPUT_STRIP_TRAILING_WHITESPACE
