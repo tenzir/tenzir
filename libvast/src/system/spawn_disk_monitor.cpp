@@ -45,15 +45,20 @@ spawn_disk_monitor(node_actor::stateful_pointer<node_state> self,
     = std::chrono::seconds{defaults::system::disk_scan_interval}.count();
   auto interval = caf::get_or(opts, "vast.start.disk-budget-check-interval",
                               default_seconds);
-  auto db_dir
+  const auto db_dir
     = caf::get_or(opts, "vast.db-directory", defaults::system::db_directory);
-  auto abs_dir = path{db_dir}.complete();
-  if (!exists(abs_dir))
+  const auto db_dir_path = std::filesystem::path{db_dir};
+  std::error_code ec{};
+  const auto db_dir_abs = std::filesystem::absolute(db_dir_path, ec);
+  if (ec)
+    return caf::make_error(ec::filesystem_error, "could not make absolute path "
+                                                 "to database directory");
+  if (!std::filesystem::exists(db_dir_abs))
     return caf::make_error(ec::filesystem_error, "could not find database "
                                                  "directory");
   auto handle
     = self->spawn(disk_monitor, *hiwater, *lowater,
-                  std::chrono::seconds{interval}, abs_dir, archive, index);
+                  std::chrono::seconds{interval}, db_dir_abs, archive, index);
   VAST_VERBOSE("{} spawned a disk monitor", self);
   return caf::actor_cast<caf::actor>(handle);
 }

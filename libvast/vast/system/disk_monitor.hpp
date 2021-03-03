@@ -20,11 +20,13 @@
 
 #include <caf/typed_event_based_actor.hpp>
 
+#include <filesystem>
+
 namespace vast::system {
 
 struct disk_monitor_state {
   /// The path to the database directory.
-  path dbdir;
+  std::filesystem::path dbdir;
 
   /// When current disk space is above the high water mark, stuff
   /// is deleted until we get below the low water mark.
@@ -58,7 +60,8 @@ struct disk_monitor_state {
 disk_monitor_actor::behavior_type
 disk_monitor(disk_monitor_actor::stateful_pointer<disk_monitor_state> self,
              size_t high_water, size_t low_water,
-             std::chrono::seconds scan_interval, const path& db_dir,
-             archive_actor archive, index_actor index);
+             std::chrono::seconds scan_interval,
+             const std::filesystem::path& db_dir, archive_actor archive,
+             index_actor index);
 
 } // namespace vast::system
