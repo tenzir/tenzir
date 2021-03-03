@@ -109,16 +109,15 @@ const path& directory::path() const {
   return path_;
 }
 
-caf::expected<size_t> recursive_size(const vast::directory& dir) {
+caf::expected<size_t> recursive_size(const std::filesystem::path& root_dir) {
   size_t total_size = 0;
 
-  const auto p = std::filesystem::path{dir.path().str()};
   std::error_code ec{};
-  auto dir_itr = std::filesystem::recursive_directory_iterator(p, ec);
+  auto dir = std::filesystem::recursive_directory_iterator(root_dir, ec);
   if (ec)
     return caf::make_error(ec::filesystem_error, ec.message());
 
-  for (const auto& f : dir_itr) {
+  for (const auto& f : dir) {
     if (f.is_regular_file()) {
       const auto size = f.file_size();
       VAST_TRACE("{} += {}", f.path().string(), size);

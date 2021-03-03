@@ -7,13 +7,15 @@
 #include "vast/directory.hpp"
 #include "vast/error.hpp"
 #include "vast/logger.hpp"
-#include "vast/path.hpp"
 #include "vast/system/archive.hpp"
 #include "vast/uuid.hpp"
 
 #include <caf/detail/scope_guard.hpp>
 #include <caf/settings.hpp>
 #include <caf/typed_event_based_actor.hpp>
+
+#include <filesystem>
+#include <system_error>
 
 #include <sys/stat.h>
 
@@ -37,7 +39,8 @@ std::shared_ptr<caf::detail::scope_guard<Fun>> make_shared_guard(Fun f) {
 disk_monitor_actor::behavior_type
 disk_monitor(disk_monitor_actor::stateful_pointer<disk_monitor_state> self,
              size_t hiwater, size_t lowater, std::chrono::seconds scan_interval,
-             const path& dbdir, archive_actor archive, index_actor index) {
+             const std::filesystem::path& dbdir, archive_actor archive,
+             index_actor index) {
   VAST_TRACE_SCOPE("{} {} {}", VAST_ARG(hiwater), VAST_ARG(lowater),
                    VAST_ARG(dbdir));
   using namespace std::string_literals;
@@ -73,16 +76,21 @@ disk_monitor(disk_monitor_actor::stateful_pointer<disk_monitor_state> self,
         }
       }
     },
-    [self](atom::erase) {
+    [self](atom::erase) -> caf::result<void> {
       // Make sure the `purging` state will be reset once all continuations
       // have finished or we encountered an error.
       auto shared_guard
         = make_shared_guard([=] { self->state.purging = false; });
-      directory index_dir = self->state.dbdir / "index";
+      std::error_code ec{};
+      const auto index_dir
+        = std::filesystem::directory_iterator(self->state.dbdir / "index", ec);
+      if (ec)
+        return caf::make_error(ec::filesystem_error, "db-directory does not "
+                                                     "exist");
       // TODO(ch20006): Add some check on the overall structure on the db dir.
       std::vector<partition_diskstate> partitions;
-      for (auto file : index_dir) {
-        auto partition = file.basename().str();
+      for (const auto& file : index_dir) {
+        auto partition = file.path().stem().string();
         if (partition == "index.bin")
           continue;
         uuid id;
@@ -92,13 +100,13 @@ disk_monitor(disk_monitor_actor::stateful_pointer<disk_monitor_state> self,
         }
         // TODO: Wrap a more generic `stat()` using `vast::path`.
         struct stat statbuf;
-        if (::stat(file.complete().str().c_str(), &statbuf) < 0)
+        if (::stat(file.path().c_str(), &statbuf) < 0)
           continue;
         partitions.push_back({id, statbuf.st_size, statbuf.st_mtime});
       }
       if (partitions.empty()) {
         VAST_VERBOSE("{} failed to find any partitions to delete", self);
-        return;
+        return {};
       }
       VAST_DEBUG("{} found {} partitions on disk", self, partitions.size());
       std::sort(partitions.begin(), partitions.end(),
@@ -139,6 +147,7 @@ disk_monitor(disk_monitor_actor::stateful_pointer<disk_monitor_state> self,
           [=, sg = shared_guard](caf::error e) {
             VAST_WARN("{} failed to erase from index: {}", self, render(e));
           });
+      return {};
     },
     [](atom::status, status_verbosity) {
       // TODO: Return some useful information here.
