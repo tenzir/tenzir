@@ -72,7 +72,17 @@ disk_monitor(disk_monitor_actor::stateful_pointer<disk_monitor_state> self,
         VAST_VERBOSE("{} checks db-directory of size {} bytes", self, *size);
         if (*size > self->state.high_water_mark && !self->state.purging) {
           self->state.purging = true;
-          self->send(self, atom::erase_v);
+          // TODO: Remove the static_cast when switching to CAF 0.18.
+          self
+            ->request(static_cast<disk_monitor_actor>(self), caf::infinite,
+                      atom::erase_v)
+            .then(
+              [] {
+                // nop
+              },
+              [=](const caf::error& err) {
+                VAST_ERROR("{} failed to purge db-directory: {}", self, err);
+              });
         }
       }
     },
@@ -85,8 +95,10 @@ disk_monitor(disk_monitor_actor::stateful_pointer<disk_monitor_state> self,
       const auto index_dir
         = std::filesystem::directory_iterator(self->state.dbdir / "index", ec);
       if (ec)
-        return caf::make_error(ec::filesystem_error, "db-directory does not "
-                                                     "exist");
+        return caf::make_error(ec::filesystem_error, //
+                               fmt::format("failed to find index in "
+                                           "db-directory at {}: {}",
+                                           self->state.dbdir, ec));
       // TODO(ch20006): Add some check on the overall structure on the db dir.
       std::vector<partition_diskstate> partitions;
       for (const auto& file : index_dir) {
