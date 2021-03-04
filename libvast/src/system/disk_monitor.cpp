@@ -91,14 +91,14 @@ disk_monitor(disk_monitor_actor::stateful_pointer<disk_monitor_state> self,
       // have finished or we encountered an error.
       auto shared_guard
         = make_shared_guard([=] { self->state.purging = false; });
-      std::error_code ec{};
+      auto err = std::error_code{};
       const auto index_dir
-        = std::filesystem::directory_iterator(self->state.dbdir / "index", ec);
-      if (ec)
+        = std::filesystem::directory_iterator(self->state.dbdir / "index", err);
+      if (err)
         return caf::make_error(ec::filesystem_error, //
                                fmt::format("failed to find index in "
                                            "db-directory at {}: {}",
-                                           self->state.dbdir, ec));
+                                           self->state.dbdir, err));
       // TODO(ch20006): Add some check on the overall structure on the db dir.
       std::vector<partition_diskstate> partitions;
       for (const auto& file : index_dir) {
