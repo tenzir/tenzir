@@ -1,0 +1,10 @@
+---
+Checks:                '*,-clang-analyzer-alpha*,-llvmlibc-*,-google-*,-fuchsia-*,-hicpp-*,-bugprone-lambda-function-name,-modernize-use-trailing-return-type,-readability-braces-around-statements,-readability-named-parameter,-readability-uppercase-literal-suffix'
+WarningsAsErrors:      ''
+HeaderFilterRegex:     '/vast/'
+AnalyzeTemporaryDtors: false
+CheckOptions:
+  - key:             readability-implicit-bool-conversion.AllowPointerConditions
+    value:           true
+...
+
