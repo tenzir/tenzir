@@ -13,14 +13,14 @@
 
 #pragma once
 
+#include <caf/detail/type_traits.hpp>
+
 #include <iterator>
 #include <streambuf>
 #include <string>
 #include <tuple>
 #include <type_traits>
 #include <vector>
-
-#include <caf/detail/type_traits.hpp>
 
 #include <experimental/type_traits>
 
@@ -43,12 +43,9 @@ template <class T, class U = void>
 struct is_streambuf : std::false_type {};
 
 template <class T>
-struct is_streambuf<
-  T,
-  std::enable_if_t<
-    std::is_base_of_v<std::basic_streambuf<typename T::char_type>, T>
-  >
-> : std::true_type {};
+struct is_streambuf<T, std::enable_if_t<std::is_base_of_v<
+                         std::basic_streambuf<typename T::char_type>, T>>>
+  : std::true_type {};
 
 template <class T>
 constexpr bool is_streambuf_v = is_streambuf<T>::value;
@@ -199,7 +196,14 @@ using ostream_operator_t
   = decltype(std::declval<std::ostream&>() << std::declval<T>());
 
 template <typename T>
-inline constexpr bool has_ostream_operator
+struct has_ostream_operator
+  : std::experimental::is_detected<ostream_operator_t, T> {};
+
+template <typename T>
+using has_ostream_operator_t = typename has_ostream_operator<T>::type;
+
+template <typename T>
+inline constexpr bool has_ostream_operator_v
   = std::experimental::is_detected_v<ostream_operator_t, T>;
 
 // -- checks for stringification functions -----------------------------------

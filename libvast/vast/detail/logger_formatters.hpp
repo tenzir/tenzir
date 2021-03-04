@@ -43,13 +43,49 @@
 #include <string>
 #include <type_traits>
 
+namespace vast::detail {
+
+#if FMT_VERSION >= 70000 // {fmt} 7+
+
+template <typename T>
+struct is_formattable
+  : std::bool_constant<!std::is_same<
+      decltype(fmt::internal::arg_mapper<fmt::buffer_context<char>>().map(
+        std::declval<T>())),
+      fmt::internal::unformattable>::value> {};
+
+#elif FMT_VERSION >= 60000 // {fmt} 6.x
+
+template <typename T, typename = void>
+struct is_formattable : std::false_type {};
+
+template <typename T>
+struct is_formattable<
+  T, std::enable_if_t<fmt::has_formatter<T, fmt::buffer_context<char>>::value>>
+  : std::true_type {};
+
+#else // {fmt} 5.x
+
+template <typename T, typename = void>
+struct is_formattable : std::false_type {};
+
+template <typename T>
+struct is_formattable<
+  T, std::enable_if_t<fmt::has_formatter<T, fmt::buffer_context<char>>::value>>
+  : std::true_type {};
+
+#endif
+
+} // namespace vast::detail
+
 // A fallback formatter using the `caf::detail::stringification_inspector`
 // concept, which uses ADL-available `to_string` overloads if available.
 template <typename T>
 struct fmt::internal::fallback_formatter<
   T, fmt::format_context::char_type,
   std::enable_if_t<std::conjunction_v<
-    std::negation<fmt::has_formatter<T, fmt::format_context>>,
+    std::negation<vast::detail::is_formattable<T>>,
+    std::negation<vast::detail::has_ostream_operator<T>>,
     std::negation<vast::is_printable<std::back_insert_iterator<std::string>,
                                      std::decay_t<T>>>,
     caf::detail::is_inspectable<caf::detail::stringification_inspector, T>>>> {
@@ -72,7 +108,8 @@ template <typename T>
 struct fmt::internal::fallback_formatter<
   T, fmt::format_context::char_type,
   std::enable_if_t<std::conjunction_v<
-    std::negation<fmt::has_formatter<T, fmt::format_context>>,
+    std::negation<vast::detail::is_formattable<T>>,
+    std::negation<vast::detail::has_ostream_operator<T>>,
     vast::is_printable<std::back_insert_iterator<std::string>, std::decay_t<T>>>>> {
   template <typename ParseContext>
   constexpr auto parse(ParseContext& ctx) {
