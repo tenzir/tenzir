@@ -86,7 +86,7 @@ bool type_parser::parse(Iterator& f, const Iterator& l, Attribute& a) const {
   auto map_type_parser
     = ("map" >> skp >> '<' >> skp
     >> vast::ref(type_type) >> skp >> ',' >> skp >> ref(type_type) >> skp
-    >> '>') ->* to_map;
+    >> '>') ->* to_map
     ;
   // Record
   static auto to_field = [](std::tuple<std::string, type> xs) {
@@ -96,15 +96,12 @@ bool type_parser::parse(Iterator& f, const Iterator& l, Attribute& a) const {
   static auto to_record = [](std::vector<record_field> fields) -> type {
     return record_type{std::move(fields)};
   };
-  auto field
-    = ((parsers::identifier | parsers::qqstr) >> skp >> ':' >> skp
-    >> ref(type_type))
-    ->* to_field
-    ;
+  auto field_name = parsers::identifier | parsers::qqstr;
+  auto field = (field_name >> skp >> ':' >> skp >> ref(type_type)) ->* to_field;
   auto record_type_parser
     = ("record" >> skp >> '{'
     >> ((skp >> field >> skp) % ',') >> ~(',' >> skp)
-    >> '}') ->* to_record;
+    >> '}') ->* to_record
     ;
   static auto to_named_none_type = [](std::string name) -> type {
     return none_type{}.name(std::move(name));
@@ -112,6 +109,50 @@ bool type_parser::parse(Iterator& f, const Iterator& l, Attribute& a) const {
   static auto placeholder_parser
     = (parsers::identifier) ->* to_named_none_type
     ;
+  rule<Iterator, type> type_expr_parser;
+  auto algebra_leaf_parser
+    = record_type_parser
+    | placeholder_parser
+    ;
+  auto algebra_operand_parser
+    = algebra_leaf_parser
+    | ref(type_expr_parser)
+    ;
+  auto rplus_parser = "+>" >> skp >> algebra_operand_parser ->* [](type t) {
+    return record_field{"+>", std::move(t)};
+  };
+  auto plus_parser = '+' >> skp >> algebra_operand_parser ->* [](type t) {
+    return record_field{"+", std::move(t)};
+  };
+  auto lplus_parser = "<+" >> skp >> algebra_operand_parser ->* [](type t) {
+    return record_field{"<+", std::move(t)};
+  };
+  auto to_minus_record = [](std::vector<std::string> path) {
+    record_type result;
+    for (auto& key : path)
+      result.fields.emplace_back(std::move(key), bool_type{});
+    return record_field{"-", std::move(result)};
+  };
+  // Keep in sync with parsers::identifier.
+  auto qualified_field_name
+    = ((+(parsers::alnum | parsers::ch<'_'>) | parsers::qqstr) % '.');
+  auto minus_parser = '-' >> skp >> qualified_field_name ->* to_minus_record;
+  auto algebra_parser
+    = rplus_parser
+    | plus_parser
+    | lplus_parser
+    | minus_parser
+    ;
+  type_expr_parser = (algebra_operand_parser >> skp >> (+(skp >> algebra_parser)))
+    ->* [](std::tuple<type, std::vector<record_field>> xs) -> type {
+      auto& [lhs, op_operands] = xs;
+      record_type result;
+      result.fields = {record_field{"", std::move(lhs)}};
+      result.fields.insert(
+        result.fields.end(),
+        op_operands.begin(), op_operands.end());
+      return result.attributes({{"$algebra"}});
+    };
   // Complete type
   using type_tuple = std::tuple<
     vast::type,
@@ -119,10 +160,11 @@ bool type_parser::parse(Iterator& f, const Iterator& l, Attribute& a) const {
   >;
   static auto insert_attributes = [](type_tuple xs) {
     auto& [t, attrs] = xs;
-    return t.attributes(std::move(attrs));
+    return t.update_attributes(std::move(attrs));
   };
   type_type = (
-    ( basic_type_parser
+    ( type_expr_parser
+    | basic_type_parser
     | enum_type_parser
     | list_type_parser
     | map_type_parser

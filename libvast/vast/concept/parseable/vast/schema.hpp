@@ -97,6 +97,46 @@ struct symbol_resolver {
         return y.error();
       field_type = *y;
     }
+    if (has_attribute(x, "$algebra")) {
+      VAST_ASSERT(x.fields.size() >= 2);
+      auto base = caf::get_if<record_type>(&x.fields[0].type);
+      VAST_ASSERT(base);
+      auto acc = *base;
+      auto it = ++x.fields.begin();
+      for (; it < x.fields.end(); ++it) {
+        auto rhs = caf::get_if<record_type>(&it->type);
+        VAST_ASSERT(rhs);
+        if (it->name == "+") {
+          auto result = merge(acc, *rhs);
+          if (!result)
+            return result.error();
+          acc = *result;
+        } else if (it->name == "<+") {
+          acc = priority_merge(acc, *rhs, merge_policy::prefer_left);
+        } else if (it->name == "+>") {
+          acc = priority_merge(acc, *rhs, merge_policy::prefer_right);
+        } else if (it->name == "-") {
+          std::vector<std::string_view> path;
+          for (auto& f : rhs->fields)
+            path.emplace_back(f.name);
+          if (!remove_field(acc, path))
+            return caf::make_error( //
+              ec::parse_error,
+              fmt::format("cannot delete non-existing field {} from type {}",
+                          fmt::join(path, "."), to_string(acc)));
+        } else
+          // Invalid operation.
+          VAST_ASSERT(true);
+      }
+      // TODO: Consider lifiting the following restriction.
+      if (acc.fields.empty())
+        return caf::make_error(
+          ec::parse_error, fmt::format("type modifications produced an empty "
+                                       "record named {}; this is not "
+                                       "supported.",
+                                       x.name()));
+      return acc.name(x.name());
+    }
     return std::move(x);
   }
 

@@ -13,6 +13,13 @@ This changelog documents all notable user-facing changes of VAST.
 
 ## Unreleased
 
+- 🎁 The schema language now supports 4 operations on record types:
+  `+` combines the fields of 2 records into a new record. `<+` and `+>` are
+  variations of `+` that give precedence to the left and right operand
+  respectively. `-` creates a record with the field specified as its right
+  operand removed.
+  [#1407](https://github.com/tenzir/vast/pull/1407)
+
 - ⚠️ The option `vast.no-default-schema` is deprecated, as it is no longer needed
   to override types from bundled schemas.
   [#1409](https://github.com/tenzir/vast/pull/1409)

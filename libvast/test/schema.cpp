@@ -422,6 +422,210 @@ TEST(parseable - with context) {
     CHECK(p("type foo = real", sm));
     CHECK(!p("type foo = int", sm));
   }
+  {
+    MESSAGE("Arithmetic - basic addition");
+    auto str = R"__(
+      type foo = record{
+        x: int
+      }
+      type bar = record{
+        y: int
+      }
+      type gob = foo + bar + tar
+      type tar = record{
+        z: int
+      }
+    )__"sv;
+    auto sm = unbox(to<symbol_map>(str));
+    auto r = symbol_resolver{global, sm};
+    auto sch = unbox(r.resolve());
+    auto gob = unbox(sch.find("gob"));
+    // clang-format off
+    auto expected = type{
+      record_type{
+        {"x", integer_type{}},
+        {"y", integer_type{}},
+        {"z", integer_type{}},
+      }.name("gob")
+    };
+    // clang-format on
+    CHECK_EQUAL(gob, expected);
+  }
+  {
+    MESSAGE("Arithmetic - field clash");
+    auto str = R"__(
+      type foo = record{
+        a: int,
+        b: int
+      }
+      type bar = record{
+        a: real,
+        c: real
+      }
+      type lplus = foo + bar
+    )__"sv;
+    auto sm = unbox(to<symbol_map>(str));
+    auto r = symbol_resolver{global, sm};
+    CHECK(!r.resolve());
+  }
+  {
+    MESSAGE("Arithmetic - priorities");
+    auto str = R"__(
+      type foo = record{
+        a: int,
+        b: int
+      } #attr_one #attr_two=val
+      type bar = record{
+        a: real,
+        c: real
+      } #attr_one=val #attr_two
+      type lplus = foo <+ bar
+      type rplus = foo +> bar
+    )__"sv;
+    auto sm = unbox(to<symbol_map>(str));
+    auto r = symbol_resolver{global, sm};
+    auto sch = unbox(r.resolve());
+    // clang-format off
+    auto expected_lplus = type{
+      record_type{
+        {"a", integer_type{}},
+        {"b", integer_type{}},
+        {"c", real_type{}},
+      }.name("lplus").attributes({{"attr_one"}, {"attr_two", "val"}})
+    };
+    auto expected_rplus = type{
+      record_type{
+        {"a", real_type{}},
+        {"b", integer_type{}},
+        {"c", real_type{}},
+      }.name("rplus").attributes({{"attr_one", "val"}, {"attr_two"}})
+    };
+    // clang-format on
+    auto lplus = unbox(sch.find("lplus"));
+    CHECK_EQUAL(lplus, expected_lplus);
+    auto rplus = unbox(sch.find("rplus"));
+    CHECK_EQUAL(rplus, expected_rplus);
+  }
+  {
+    MESSAGE("Arithmetic - removing multiple fields");
+    auto str = R"__(
+      type foo = record{
+        a: record{
+          x: count,
+          y: record {
+            z: list<string>
+          }
+        },
+        "b.c": record {
+          d: count,
+          e: count
+        },
+        f: record {
+          g: count
+        }
+      }
+      type bar = foo - a.y - "b.c".d - f.g
+    )__"sv;
+    auto sm = unbox(to<symbol_map>(str));
+    auto r = symbol_resolver{global, sm};
+    auto sch = unbox(r.resolve());
+    auto bar = unbox(sch.find("bar"));
+    // clang-format off
+    auto expected = type{
+      record_type{
+        {"a", record_type{
+          {"x", count_type{}}
+        }},
+        {"b.c", record_type{
+          {"e", count_type{}}
+        }}
+      }.name("bar")
+    };
+    // clang-format on
+    CHECK_EQUAL(bar, expected);
+  }
+  {
+    MESSAGE("Arithmetic - realistic usage");
+    auto str = R"__(
+      type base = record{
+        a: record{
+             x: count,
+             y: string
+           },
+        b: int,
+        c: int,
+      }
+      type derived1 = base - c +> record{
+        a: record {
+             y: addr
+           },
+        b: real,
+        d: time,
+      }
+      type derived2 = base +> record{
+        a: record {
+             y: addr
+           },
+        b: real,
+        d: time,
+      } - c
+    )__"sv;
+    auto sm = unbox(to<symbol_map>(str));
+    auto r = symbol_resolver{global, sm};
+    auto sch = unbox(r.resolve());
+    auto derived1 = unbox(sch.find("derived1"));
+    auto derived2 = unbox(sch.find("derived2"));
+    // clang-format off
+    auto expected = type{
+      record_type{
+        {"a", record_type{
+          {"x", count_type{}},
+          {"y", address_type{}}
+        }},
+        {"b", real_type{}},
+        {"d", time_type{}},
+      }.name("derived1")
+    };
+    // clang-format on
+    CHECK_EQUAL(derived1, expected);
+    expected.name("derived2");
+    CHECK_EQUAL(derived2, expected);
+  }
+}
+
+TEST(parseable - overwriting with self reference) {
+  using namespace std::string_view_literals;
+  auto global = symbol_map{};
+  {
+    auto local = symbol_map{};
+    auto p = symbol_map_parser{};
+    CHECK(p("type foo = record{\"x\": count}", local));
+    global = std::move(local);
+  }
+  {
+    auto str = R"__(
+      type bar = foo
+      type foo = foo + record {
+        y: string
+      }
+    )__"sv;
+    auto sm = unbox(to<symbol_map>(str));
+    auto r = symbol_resolver{global, sm};
+    auto sch = unbox(r.resolve());
+    auto foo = unbox(sch.find("foo"));
+    // clang-format off
+    auto expected = type{
+      record_type{
+        {"x", count_type{}},
+        {"y", string_type{}}
+      }.name("foo")
+    };
+    // clang-format on
+    CHECK_EQUAL(foo, expected);
+    auto bar = unbox(sch.find("bar"));
+    expected = alias_type{expected}.name("bar");
+    CHECK_EQUAL(bar, expected);
+  }
 }
 
 TEST(json) {

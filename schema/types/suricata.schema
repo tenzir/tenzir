@@ -30,19 +30,7 @@ type suricata.component.app_proto = record {
   app_proto: string
 }
 
-type suricata.alert = record {
-  timestamp: timestamp,
-  flow_id: count #index=hash,
-  pcap_cnt: count,
-  vlan: list<count>,
-  in_iface: string,
-  src_ip: addr,
-  src_port: port,
-  dest_ip: addr,
-  dest_port: port,
-  proto: string,
-  event_type: string,
-  community_id: string #index=hash,
+type suricata.alert = suricata.component.common + record {
   alert: record {
     app_proto: string,
     action: enum {
@@ -74,19 +62,7 @@ type suricata.alert = record {
   }
 }
 
-type suricata.anomaly = record {
-  timestamp: timestamp,
-  flow_id: count #index=hash,
-  pcap_cnt: count,
-  vlan: list<count>,
-  in_iface: string,
-  src_ip: addr,
-  src_port: port,
-  dest_ip: addr,
-  dest_port: port,
-  proto: string,
-  event_type: string,
-  community_id: string #index=hash,
+type suricata.anomaly = suricata.component.common + record {
   tx_id: count #index=hash,
   anomaly: record {
     type: string,
@@ -102,19 +78,7 @@ type suricata.dcerpc_interface = record {
   ack_result: count
 }
 
-type suricata.dcerpc = record {
-  timestamp: timestamp,
-  flow_id: count #index=hash,
-  pcap_cnt: count,
-  vlan: list<count>,
-  in_iface: string,
-  src_ip: addr,
-  src_port: port,
-  dest_ip: addr,
-  dest_port: port,
-  proto: string,
-  event_type: string,
-  community_id: string #index=hash,
+type suricata.dcerpc = suricata.component.common + record {
   dcerpc: record {
     request: string,
     response: string,
@@ -133,19 +97,7 @@ type suricata.dcerpc = record {
   }
 }
 
-type suricata.dhcp = record {
-  timestamp: timestamp,
-  flow_id: count #index=hash,
-  pcap_cnt: count,
-  vlan: list<count>,
-  in_iface: string,
-  src_ip: addr,
-  src_port: port,
-  dest_ip: addr,
-  dest_port: port,
-  proto: string,
-  event_type: string,
-  community_id: string #index=hash,
+type suricata.dhcp = suricata.component.common + record {
   dhcp: record {
     type: string,
     id: count #index=hash,
@@ -159,19 +111,7 @@ type suricata.dhcp = record {
   }
 }
 
-type suricata.dns = record {
-  timestamp: timestamp,
-  flow_id: count #index=hash,
-  pcap_cnt: count,
-  vlan: list<count>,
-  in_iface: string,
-  src_ip: addr,
-  src_port: port,
-  dest_ip: addr,
-  dest_port: port,
-  proto: string,
-  event_type: string,
-  community_id: string #index=hash,
+type suricata.dns = suricata.component.common + record {
   dns: record {
     type: enum {
       answer,
@@ -188,19 +128,7 @@ type suricata.dns = record {
   }
 }
 
-type suricata.ftp = record{
-  timestamp: timestamp,
-  flow_id: count #index=hash,
-  pcap_cnt: count,
-  vlan: list<count>,
-  in_iface: string,
-  src_ip: addr,
-  src_port: port,
-  dest_ip: addr,
-  dest_port: port,
-  proto: string,
-  event_type: string,
-  community_id: string #index=hash,
+type suricata.ftp = suricata.component.common + record{
   ftp: record{
     command: string #index=hash,
     command_data: string  #index=hash,
@@ -212,38 +140,14 @@ type suricata.ftp = record{
   }
 }
 
-type suricata.ftp_data = record{
-  timestamp: timestamp,
-  flow_id: count #index=hash,
-  pcap_cnt: count,
-  vlan: list<count>,
-  in_iface: string,
-  src_ip: addr,
-  src_port: port,
-  dest_ip: addr,
-  dest_port: port,
-  proto: string,
-  event_type: string,
-  community_id: string #index=hash,
+type suricata.ftp_data = suricata.component.common + record{
   ftp_data: record{
     filename: string #index=hash,
     command: string  #index=hash
   }
 }
 
-type suricata.http = record {
-  timestamp: timestamp,
-  flow_id: count #index=hash,
-  pcap_cnt: count,
-  vlan: list<count>,
-  in_iface: string,
-  src_ip: addr,
-  src_port: port,
-  dest_ip: addr #ioc,
-  dest_port: port,
-  proto: string,
-  event_type: string,
-  community_id: string #index=hash,
+type suricata.http = suricata.component.common + record {
   http: record {
     hostname: string #ioc,
     url: string,
@@ -260,19 +164,7 @@ type suricata.http = record {
   tx_id: count #index=hash
 }
 
-type suricata.fileinfo = record {
-  timestamp: timestamp,
-  flow_id: count #index=hash,
-  pcap_cnt: count,
-  vlan: list<count>,
-  in_iface: string,
-  src_ip: addr,
-  src_port: port,
-  dest_ip: addr,
-  dest_port: port,
-  proto: string,
-  event_type: string,
-  community_id: string #index=hash,
+type suricata.fileinfo = suricata.component.common + record {
   fileinfo: record {
     filename: string,
     magic: string,
@@ -302,36 +194,12 @@ type suricata.fileinfo = record {
   app_proto: string
 }
 
-type suricata.flow = record {
-  timestamp: timestamp,
-  flow_id: count #index=hash,
-  pcap_cnt: count,
-  vlan: list<count>,
-  in_iface: string,
-  src_ip: addr,
-  src_port: port,
-  dest_ip: addr,
-  dest_port: port,
-  proto: string,
-  event_type: string,
-  community_id: string #index=hash,
+type suricata.flow = suricata.component.common + record {
   flow: suricata.component.flow,
   app_proto: string
 }
 
-type suricata.ikev2 = record {
-  timestamp: timestamp,
-  flow_id: count #index=hash,
-  pcap_cnt: count,
-  vlan: list<count>,
-  in_iface: string,
-  src_ip: addr,
-  src_port: port,
-  dest_ip: addr,
-  dest_port: port,
-  proto: string,
-  event_type: string,
-  community_id: string #index=hash,
+type suricata.ikev2 = suricata.component.common + record {
   tx_id: count #index=hash,
   ikev2: record {
     version_major: count,
@@ -347,19 +215,7 @@ type suricata.ikev2 = record {
   }
 }
 
-type suricata.krb5 = record {
-  timestamp: timestamp,
-  flow_id: count #index=hash,
-  pcap_cnt: count,
-  vlan: list<count>,
-  in_iface: string,
-  src_ip: addr,
-  src_port: port,
-  dest_ip: addr,
-  dest_port: port,
-  proto: string,
-  event_type: string,
-  community_id: string #index=hash,
+type suricata.krb5 = suricata.component.common + record {
   krb5: record {
     encryption: string,
     error_code: string,
@@ -378,19 +234,7 @@ type suricata.topicitem = record {
   qos: count
 }
 
-type suricata.mqtt = record {
-  timestamp: timestamp,
-  flow_id: count #index=hash,
-  pcap_cnt: count,
-  vlan: list<count>,
-  in_iface: string,
-  src_ip: addr,
-  src_port: port,
-  dest_ip: addr,
-  dest_port: port,
-  proto: string,
-  event_type: string,
-  community_id: string #index=hash,
+type suricata.mqtt = suricata.component.common + record {
   mqtt: record {
     publish: record {
       qos: count,
@@ -527,19 +371,7 @@ type suricata.mqtt = record {
   }
 }
 
-type suricata.netflow = record {
-  timestamp: timestamp,
-  flow_id: count #index=hash,
-  pcap_cnt: count,
-  vlan: list<count>,
-  in_iface: string,
-  src_ip: addr,
-  src_port: port,
-  dest_ip: addr,
-  dest_port: port,
-  proto: string,
-  event_type: string,
-  community_id: string #index=hash,
+type suricata.netflow = suricata.component.common + record {
   netflow: record {
     pkts: count,
     bytes: count,
@@ -550,19 +382,7 @@ type suricata.netflow = record {
   app_proto: string
 }
 
-type suricata.nfs = record {
-  timestamp: timestamp,
-  flow_id: count #index=hash,
-  pcap_cnt: count,
-  vlan: list<count>,
-  in_iface: string,
-  src_ip: addr,
-  src_port: port,
-  dest_ip: addr,
-  dest_port: port,
-  proto: string,
-  event_type: string,
-  community_id: string #index=hash,
+type suricata.nfs = suricata.component.common + record {
   tx_id: count #index=hash,
   rpc: record {
     xid: count,
@@ -602,19 +422,7 @@ type suricata.nfs = record {
   }
 }
 
-type suricata.rdp = record {
-  timestamp: timestamp,
-  flow_id: count #index=hash,
-  pcap_cnt: count,
-  vlan: list<count>,
-  in_iface: string,
-  src_ip: addr,
-  src_port: port,
-  dest_ip: addr,
-  dest_port: port,
-  proto: string,
-  event_type: string,
-  community_id: string #index=hash,
+type suricata.rdp = suricata.component.common + record {
   rdp: record {
     tx_id: count,
     event_type: string,
@@ -651,19 +459,7 @@ type suricata.rdp = record {
   }
 }
 
-type suricata.sip = record {
-  timestamp: timestamp,
-  flow_id: count #index=hash,
-  pcap_cnt: count,
-  vlan: list<count>,
-  in_iface: string,
-  src_ip: addr,
-  src_port: port,
-  dest_ip: addr,
-  dest_port: port,
-  proto: string,
-  event_type: string,
-  community_id: string #index=hash,
+type suricata.sip = suricata.component.common + record {
   sip: record {
     method: string,
     uri: string,
@@ -675,19 +471,7 @@ type suricata.sip = record {
   }
 }
 
-type suricata.smb = record {
-  timestamp: timestamp,
-  flow_id: count #index=hash,
-  pcap_cnt: count,
-  vlan: list<count>,
-  in_iface: string,
-  src_ip: addr,
-  src_port: port,
-  dest_ip: addr,
-  dest_port: port,
-  proto: string,
-  event_type: string,
-  community_id: string #index=hash,
+type suricata.smb = suricata.component.common + record {
   smb: record {
     id: count,
     dialect: string,
@@ -745,19 +529,7 @@ type suricata.smb = record {
   host: string
 }
 
-type suricata.ssh = record {
-  timestamp: timestamp,
-  flow_id: count #index=hash,
-  pcap_cnt: count,
-  vlan: list<count>,
-  in_iface: string,
-  src_ip: addr,
-  src_port: port,
-  dest_ip: addr,
-  dest_port: port,
-  proto: string,
-  event_type: string,
-  community_id: string #index=hash,
+type suricata.ssh = suricata.component.common + record {
   ssh: record {
     client: record {
       software_version: string,
@@ -771,19 +543,7 @@ type suricata.ssh = record {
   host: string
 }
 
-type suricata.smtp = record {
-  timestamp: timestamp,
-  flow_id: count #index=hash,
-  pcap_cnt: count,
-  vlan: list<count>,
-  in_iface: string,
-  src_ip: addr,
-  src_port: port,
-  dest_ip: addr,
-  dest_port: port,
-  proto: string,
-  event_type: string,
-  community_id: string #index=hash,
+type suricata.smtp = suricata.component.common + record {
   tx_id: count #index=hash,
   smtp: record {
     helo: string,
@@ -799,19 +559,7 @@ type suricata.smtp = record {
   }
 }
 
-type suricata.snmp = record {
-  timestamp: timestamp,
-  flow_id: count #index=hash,
-  pcap_cnt: count,
-  vlan: list<count>,
-  in_iface: string,
-  src_ip: addr,
-  src_port: port,
-  dest_ip: addr,
-  dest_port: port,
-  proto: string,
-  event_type: string,
-  community_id: string #index=hash,
+type suricata.snmp = suricata.component.common + record {
   tx_id: count #index=hash,
   snmp: record {
     version: count,
@@ -821,19 +569,7 @@ type suricata.snmp = record {
   }
 }
 
-type suricata.tftp = record {
-  timestamp: timestamp,
-  flow_id: count #index=hash,
-  pcap_cnt: count,
-  vlan: list<count>,
-  in_iface: string,
-  src_ip: addr,
-  src_port: port,
-  dest_ip: addr,
-  dest_port: port,
-  proto: string,
-  event_type: string,
-  community_id: string #index=hash,
+type suricata.tftp = suricata.component.common + record {
   tx_id: count #index=hash,
   tftp: record {
     packet: string,
@@ -842,19 +578,7 @@ type suricata.tftp = record {
   }
 }
 
-type suricata.tls = record {
-  timestamp: timestamp,
-  flow_id: count #index=hash,
-  pcap_cnt: count,
-  vlan: list<count>,
-  in_iface: string,
-  src_ip: addr,
-  src_port: port,
-  dest_ip: addr,
-  dest_port: port,
-  proto: string,
-  event_type: string,
-  community_id: string #index=hash,
+type suricata.tls = suricata.component.common + record {
   tls: record {
     sni: string,
     session_resumed: bool,
