@@ -11,11 +11,15 @@ Checks: >
   -readability-braces-around-statements,
   -readability-named-parameter,
   -readability-uppercase-literal-suffix,
-  -cppcoreguidelines-pro-type-reinterpret-cast
+  -readability-magic-numbers,
+  -cppcoreguidelines-pro-type-reinterpret-cast,
+  -cppcoreguidelines-avoid-magic-numbers
 WarningsAsErrors:      ''
 HeaderFilterRegex:     '/vast/'
 AnalyzeTemporaryDtors: false
 CheckOptions:
   - key:             readability-implicit-bool-conversion.AllowPointerConditions
+    value:           true
+  - key:             misc-non-private-member-variables-in-classes.IgnoreClassesWithAllMemberVariablesBeingPublic
     value:           true
 ...
