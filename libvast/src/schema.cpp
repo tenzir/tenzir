@@ -30,6 +30,8 @@
 
 #include <caf/actor_system_config.hpp>
 
+#include <filesystem>
+
 namespace vast {
 
 caf::expected<schema> schema::merge(const schema& s1, const schema& s2) {
@@ -219,10 +221,10 @@ caf::expected<schema> get_schema(const caf::settings& options) {
   return schema::combine(schema, *update);
 }
 
-detail::stable_set<vast::path>
+detail::stable_set<std::filesystem::path>
 get_schema_dirs(const caf::actor_system_config& cfg,
                 std::vector<const void*> objpath_addresses) {
-  detail::stable_set<vast::path> result;
+  detail::stable_set<std::filesystem::path> result;
   if (caf::get_or(cfg, "vast.no-default-schema", false)) {
     VAST_WARN("the option 'vast.no-default-schema' is deprecated and will be "
               "removed in a future release");
@@ -233,15 +235,17 @@ get_schema_dirs(const caf::actor_system_config& cfg,
     // Get filesystem path to the executable.
     for (const void* addr : objpath_addresses) {
       if (auto binary = detail::objectpath(addr))
-        result.insert(binary->parent().parent() / "share" / "vast" / "schema");
+        result.insert(std::filesystem::path{binary->parent().parent().str()}
+                      / "share" / "vast" / "schema");
       else
         VAST_ERROR("{} failed to get program path", __func__);
     }
-    result.insert(path{VAST_SYSCONFDIR} / "vast" / "schema");
+    result.insert(std::filesystem::path{VAST_SYSCONFDIR} / "vast" / "schema");
     if (const char* xdg_config_home = std::getenv("XDG_CONFIG_HOME"))
-      result.insert(path{xdg_config_home} / "vast" / "schema");
+      result.insert(std::filesystem::path{xdg_config_home} / "vast" / "schema");
     else if (const char* home = std::getenv("HOME"))
-      result.insert(path{home} / ".config" / "vast" / "schema");
+      result.insert(std::filesystem::path{home} / ".config" / "vast"
+                    / "schema");
   }
   if (auto dirs = caf::get_if<std::vector<std::string>>( //
         &cfg, "vast.schema-dirs"))
@@ -272,31 +276,40 @@ caf::error load_symbols(const path& schema_file, symbol_map& local) {
 }
 
 caf::expected<schema>
-load_schema(const detail::stable_set<path>& schema_dirs, size_t max_recursion) {
+load_schema(const detail::stable_set<std::filesystem::path>& schema_dirs,
+            size_t max_recursion) {
   if (max_recursion == 0)
     return ec::recursion_limit_reached;
   vast::schema types;
   symbol_map global_symbols;
   for (const auto& dir : schema_dirs) {
     VAST_VERBOSE("loading schemas from {}", dir);
-    if (!exists(dir)) {
+    std::error_code err{};
+    const auto file_exists = std::filesystem::exists(dir, err);
+    if (!file_exists || err) {
       VAST_DEBUG("{} skips non-existing directory: {}", __func__, dir);
       continue;
     }
-    auto filter
-      = [](const path& f) { return detail::ends_with(f.str(), ".schema"); };
+    auto filter = [](const std::filesystem::path& f) {
+      return detail::ends_with(f.string(), ".schema");
+    };
     auto schema_files = filter_dir(dir, std::move(filter), max_recursion);
+    if (!schema_files)
+      return caf::make_error(ec::filesystem_error,
+                             fmt::format("failed to filter schema dir at {}: "
+                                         "{}",
+                                         dir, schema_files.error()));
     symbol_map local_symbols;
-    for (const auto& f : schema_files) {
+    for (const auto& f : *schema_files) {
       VAST_DEBUG("loading schema {}", f);
-      if (auto err = load_symbols(f, local_symbols))
+      if (auto err = load_symbols(path{f.string()}, local_symbols))
         return err;
     }
     auto r = symbol_resolver{global_symbols, local_symbols};
     auto directory_schema = r.resolve();
     if (!directory_schema)
       return caf::make_error(ec::format_error, "failed to resolve types in",
-                             dir, directory_schema.error().context());
+                             dir.string(), directory_schema.error().context());
     local_symbols.merge(std::move(global_symbols));
     global_symbols = std::move(local_symbols);
     types = schema::combine(types, *directory_schema);

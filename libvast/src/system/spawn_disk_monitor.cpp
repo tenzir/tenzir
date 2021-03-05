@@ -48,9 +48,9 @@ spawn_disk_monitor(node_actor::stateful_pointer<node_state> self,
   const auto db_dir
     = caf::get_or(opts, "vast.db-directory", defaults::system::db_directory);
   const auto db_dir_path = std::filesystem::path{db_dir};
-  std::error_code ec{};
-  const auto db_dir_abs = std::filesystem::absolute(db_dir_path, ec);
-  if (ec)
+  std::error_code err{};
+  const auto db_dir_abs = std::filesystem::absolute(db_dir_path, err);
+  if (err)
     return caf::make_error(ec::filesystem_error, "could not make absolute path "
                                                  "to database directory");
   if (!std::filesystem::exists(db_dir_abs))

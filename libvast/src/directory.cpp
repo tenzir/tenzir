@@ -23,6 +23,9 @@
 
 #include <caf/streambuf.hpp>
 
+#include <fmt/format.h>
+
+#include <algorithm>
 #include <filesystem>
 #include <fstream>
 #include <iterator>
@@ -112,10 +115,10 @@ const path& directory::path() const {
 caf::expected<size_t> recursive_size(const std::filesystem::path& root_dir) {
   size_t total_size = 0;
 
-  std::error_code ec{};
-  auto dir = std::filesystem::recursive_directory_iterator(root_dir, ec);
-  if (ec)
-    return caf::make_error(ec::filesystem_error, ec.message());
+  std::error_code err{};
+  auto dir = std::filesystem::recursive_directory_iterator(root_dir, err);
+  if (err)
+    return caf::make_error(ec::filesystem_error, err.message());
 
   for (const auto& f : dir) {
     if (f.is_regular_file()) {
@@ -128,32 +131,30 @@ caf::expected<size_t> recursive_size(const std::filesystem::path& root_dir) {
   return total_size;
 }
 
-std::vector<path>
-filter_dir(const path& dir, std::function<bool(const path&)> filter,
+caf::expected<std::vector<std::filesystem::path>>
+filter_dir(const std::filesystem::path& root_dir,
+           std::function<bool(const std::filesystem::path&)> filter,
            size_t max_recursion) {
-  std::vector<path> result;
-  if (max_recursion == 0)
-    return result;
-  for (auto& f : directory(dir)) {
-    switch (f.kind()) {
-      default: {
-        if (!filter || filter(f))
-          result.push_back(f);
-        break;
-      }
-      case path::directory: {
-        // Recurse directories depth-first.
-        auto paths = filter_dir(f, filter, --max_recursion);
-        if (!paths.empty()) {
-          auto begin = std::make_move_iterator(paths.begin());
-          auto end = std::make_move_iterator(paths.end());
-          result.insert(result.end(), begin, end);
-          std::sort(result.begin(), result.end());
-        }
-        break;
-      }
-    }
+  std::vector<std::filesystem::path> result;
+  std::error_code err{};
+  auto dir = std::filesystem::recursive_directory_iterator(root_dir, err);
+  if (err)
+    return caf::make_error(ec::filesystem_error, err.message());
+  auto begin = std::filesystem::begin(dir);
+  const auto end = std::filesystem::end(dir);
+  while (begin != end) {
+    const auto current_path = begin->path();
+    const auto current_depth = static_cast<size_t>(begin.depth());
+    if (current_depth >= max_recursion)
+      return caf::make_error(ec::recursion_limit_reached,
+                             fmt::format("reached recursion limit when "
+                                         "filtering directory {}",
+                                         root_dir));
+    if (!filter || filter(current_path))
+      result.push_back(current_path);
+    ++begin;
   }
+  std::sort(result.begin(), result.end());
   return result;
 }
 

@@ -91,8 +91,9 @@ caf::expected<size_t> recursive_size(const std::filesystem::path& root_dir);
 /// file in *dir*, which allows for filtering specific files.
 /// @param max_recursion The maximum number of nested directories to traverse.
 /// @returns A list of file that match *filter*.
-std::vector<path>
-filter_dir(const path& dir, std::function<bool(const path&)> filter = {},
+caf::expected<std::vector<std::filesystem::path>>
+filter_dir(const std::filesystem::path& dir,
+           std::function<bool(const std::filesystem::path&)> filter = {},
            size_t max_recursion = defaults::max_recursion);
 
 } // namespace vast

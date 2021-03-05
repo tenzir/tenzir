@@ -29,6 +29,8 @@
 
 #include <caf/config_value.hpp>
 
+#include <fmt/format.h>
+
 #include <iterator>
 #include <stdexcept>
 
@@ -578,28 +580,32 @@ caf::expected<data> from_yaml(std::string_view str) {
   }
 }
 
-caf::expected<data> load_yaml(const path& file) {
-  auto contents = load_contents(file);
+caf::expected<data> load_yaml(const std::filesystem::path& file) {
+  auto contents = load_contents(vast::path{file.string()});
   if (!contents)
     return contents.error();
   if (auto yaml = from_yaml(*contents))
     return yaml;
   else
-    return caf::make_error(ec::parse_error, "failed to load YAML file", file,
-                           yaml.error().context());
+    return caf::make_error(ec::parse_error, "failed to load YAML file",
+                           file.string(), yaml.error().context());
 }
 
-caf::expected<std::vector<std::pair<path, data>>>
-load_yaml_dir(const path& dir, size_t max_recursion) {
+caf::expected<std::vector<std::pair<std::filesystem::path, data>>>
+load_yaml_dir(const std::filesystem::path& dir, size_t max_recursion) {
   if (max_recursion == 0)
     return ec::recursion_limit_reached;
-  std::vector<std::pair<path, data>> result;
-  auto filter = [](const path& f) {
-    return detail::ends_with(f.str(), ".yaml")
-           || detail::ends_with(f.str(), ".yml");
+  std::vector<std::pair<std::filesystem::path, data>> result;
+  auto filter = [](const std::filesystem::path& f) {
+    return detail::ends_with(f.string(), ".yaml")
+           || detail::ends_with(f.string(), ".yml");
   };
   auto yaml_files = filter_dir(dir, std::move(filter), max_recursion);
-  for (auto& file : yaml_files)
+  if (!yaml_files)
+    return caf::make_error(ec::filesystem_error,
+                           fmt::format("failed to filter YAML dir at {}: {}",
+                                       dir, yaml_files.error()));
+  for (auto& file : *yaml_files)
     if (auto yaml = load_yaml(file))
       result.emplace_back(std::move(file), std::move(*yaml));
     else

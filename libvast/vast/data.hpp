@@ -34,6 +34,7 @@
 #include <caf/variant.hpp>
 
 #include <chrono>
+#include <filesystem>
 #include <string>
 #include <tuple>
 #include <type_traits>
@@ -349,15 +350,16 @@ caf::expected<data> from_yaml(std::string_view str);
 /// Loads YAML from a file.
 /// @param file The file to load.
 /// @returns The parsed YAML or an error.
-caf::expected<data> load_yaml(const path& file);
+caf::expected<data> load_yaml(const std::filesystem::path& file);
 
 /// Loads all *.yml and *.yaml files in a given directory.
 /// @param dir The directory to traverse recursively.
 /// @param max_recursion The maximum number of nested directories to traverse
 /// before aborting.
 /// @returns The parsed YAML, one `data` instance per file, or an error.
-caf::expected<std::vector<std::pair<path, data>>>
-load_yaml_dir(const path& dir, size_t max_recursion = defaults::max_recursion);
+caf::expected<std::vector<std::pair<std::filesystem::path, data>>>
+load_yaml_dir(const std::filesystem::path& dir, size_t max_recursion
+                                                = defaults::max_recursion);
 
 /// Prints data as YAML.
 /// @param x The data instance.
