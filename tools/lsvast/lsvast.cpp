@@ -15,7 +15,7 @@
 #include "vast/concept/printable/to_string.hpp"
 #include "vast/concept/printable/vast/type.hpp"
 #include "vast/concept/printable/vast/uuid.hpp"
-#include "vast/directory.hpp"
+#include "vast/error.hpp"
 #include "vast/fbs/index.hpp"
 #include "vast/fbs/partition.hpp"
 #include "vast/fbs/segment.hpp"
@@ -29,14 +29,17 @@
 #include "vast/uuid.hpp"
 
 #include <caf/binary_deserializer.hpp>
+#include <caf/error.hpp>
 
 #include <flatbuffers/flatbuffers.h>
 
 #include <cstddef>
+#include <filesystem>
 #include <iomanip>
 #include <iostream>
 #include <sstream>
 #include <string>
+#include <system_error>
 
 // clang-format off
 // TODO: Implement different output formats for human-readable and
@@ -113,13 +116,19 @@ struct formatting_options {
 
 struct indentation;
 
-typedef void (*printer)(vast::path, indentation&, const formatting_options&);
+typedef void (*printer)(const std::filesystem::path&, indentation&,
+                        const formatting_options&);
 
-void print_unknown(vast::path, indentation&, const formatting_options&);
-void print_vast_db(vast::path, indentation&, const formatting_options&);
-void print_partition(vast::path, indentation&, const formatting_options&);
-void print_index(vast::path, indentation&, const formatting_options&);
-void print_segment(vast::path, indentation&, const formatting_options&);
+void print_unknown(const std::filesystem::path&, indentation&,
+                   const formatting_options&);
+void print_vast_db(const std::filesystem::path&, indentation&,
+                   const formatting_options&);
+void print_partition(const std::filesystem::path&, indentation&,
+                     const formatting_options&);
+void print_index(const std::filesystem::path&, indentation&,
+                 const formatting_options&);
+void print_segment(const std::filesystem::path&, indentation&,
+                   const formatting_options&);
 
 static const std::map<Kind, printer> printers = {
   {Kind::Unknown, print_unknown}, {Kind::DatabaseDir, print_vast_db},
@@ -127,12 +136,25 @@ static const std::map<Kind, printer> printers = {
   {Kind::Segment, print_segment},
 };
 
-Kind classify(vast::path path) {
-  if (path.is_directory() && path.basename() == "vast.db")
+caf::expected<Kind> classify(const std::filesystem::path& path) {
+  std::error_code err{};
+  const auto is_directory = std::filesystem::is_directory(path, err);
+  if (err)
+    return caf::make_error(vast::ec::filesystem_error,
+                           "Invalid path: ", err.message());
+
+  if (is_directory && path.stem() == "vast.db")
     return Kind::DatabaseDir;
-  if (!path.is_regular_file())
+
+  err = {};
+  const auto is_regular_file = std::filesystem::is_regular_file(path, err);
+  if (err)
+    return caf::make_error(vast::ec::filesystem_error,
+                           "Not a file: ", err.message());
+
+  if (!is_regular_file)
     return Kind::Unknown;
-  auto bytes = vast::io::read(path);
+  auto bytes = vast::io::read(vast::path{path.string()});
   if (!bytes)
     return Kind::Unknown;
   auto buf = bytes->data();
@@ -169,11 +191,11 @@ struct flatbuffer_deleter {
 // automatically upon destruction.
 template <typename T>
 std::unique_ptr<const T, flatbuffer_deleter<T>>
-read_flatbuffer_file(vast::path path) {
+read_flatbuffer_file(const std::filesystem::path& path) {
   using result_t = std::unique_ptr<const T, flatbuffer_deleter<T>>;
   auto result
     = result_t(static_cast<const T*>(nullptr), flatbuffer_deleter<T>{});
-  auto maybe_bytes = vast::io::read(path);
+  auto maybe_bytes = vast::io::read(vast::path{path.string()});
   if (!maybe_bytes)
     return result;
   auto bytes = std::move(*maybe_bytes);
@@ -229,9 +251,9 @@ std::ostream& operator<<(std::ostream& out, const vast::fbs::uuid::v0* uuid) {
   return out;
 }
 
-void print_unknown(vast::path path, indentation& indent,
+void print_unknown(const std::filesystem::path& path, indentation& indent,
                    const formatting_options&) {
-  std::cout << indent << "(unknown " << path.str() << ")\n";
+  std::cout << indent << "(unknown " << path.string() << ")\n";
 }
 
 std::string print_bytesize(size_t bytes, const formatting_options& formatting) {
@@ -258,32 +280,47 @@ std::string print_bytesize(size_t bytes, const formatting_options& formatting) {
   return std::move(ss).str();
 }
 
-void print_vast_db(vast::path vast_db, indentation& indent,
+void print_vast_db(const std::filesystem::path& vast_db, indentation& indent,
                    const formatting_options& formatting) {
   // TODO: We should have some versioning for the layout
   // of the vast.db directory itself, so we can still read
   // older versions.
   auto index_dir = vast_db / "index";
-  std::cout << indent << index_dir.str() << "/\n";
+  std::cout << indent << index_dir.string() << "/\n";
   {
     indented_scope _(indent);
     std::cout << indent << "index.bin - ";
     print_index(index_dir / "index.bin", indent, formatting);
-    for (auto file : vast::directory{index_dir}) {
-      auto stem = file.basename(true).str();
-      if (stem == "index")
-        continue;
-      std::cout << indent << stem << " - ";
-      print_partition(file, indent, formatting);
+    std::error_code err{};
+    auto dir = std::filesystem::directory_iterator{index_dir, err};
+    if (err) {
+      std::cerr << "Failed to find vast db index directory: " + err.message()
+                << std::endl;
+    } else {
+      for (const auto& entry : dir) {
+        const auto stem = entry.path().stem();
+        if (stem == "index")
+          continue;
+        std::cout << indent << stem << " - ";
+        print_partition(entry.path(), indent, formatting);
+      }
     }
   }
-  auto segments_dir = vast_db / "archive" / "segments";
-  std::cout << indent << segments_dir.str() << "/\n";
+  const auto segments_dir = vast_db / "archive" / "segments";
+  std::cout << indent << segments_dir.string() << "/\n";
   {
     indented_scope _(indent);
-    for (auto file : vast::directory{segments_dir}) {
-      std::cout << indent << file.basename(true).str() << " - ";
-      print_segment(file, indent, formatting);
+    std::error_code err{};
+    auto dir = std::filesystem::directory_iterator{segments_dir, err};
+    if (err) {
+      std::cerr << "Failed to find vast db segments directory: " + err.message()
+                << std::endl;
+    } else {
+      for (const auto& entry : dir) {
+        const auto stem = entry.path().stem();
+        std::cout << indent << stem << " - ";
+        print_segment(entry.path(), indent, formatting);
+      }
     }
   }
 }
@@ -375,11 +412,11 @@ void print_partition_v0(const vast::fbs::partition::v0* partition,
   }
 }
 
-void print_partition(vast::path path, indentation& indent,
+void print_partition(const std::filesystem::path& path, indentation& indent,
                      const formatting_options& formatting) {
   auto partition = read_flatbuffer_file<vast::fbs::Partition>(path);
   if (!partition) {
-    std::cout << "(error reading partition file " << path.str() << ")\n";
+    std::cout << "(error reading partition file " << path.string() << ")\n";
   }
   switch (partition->partition_type()) {
     case vast::fbs::partition::Partition::v0:
@@ -421,11 +458,12 @@ void print_index_v0(const vast::fbs::index::v0* index, indentation& indent,
   std::cout << "\n";
 }
 
-void print_index(vast::path path, indentation& indent,
+void print_index(const std::filesystem::path& path, indentation& indent,
                  const formatting_options& formatting) {
   auto index = read_flatbuffer_file<vast::fbs::Index>(path);
   if (!index) {
-    std::cout << indent << "(error reading index file " << path.str() << ")\n";
+    std::cout << indent << "(error reading index file " << path.string()
+              << ")\n";
   }
   switch (index->index_type()) {
     case vast::fbs::index::Index::v0:
@@ -475,11 +513,11 @@ void print_segment_v0(const vast::fbs::segment::v0* segment,
   }
 }
 
-void print_segment(vast::path path, indentation& indent,
+void print_segment(const std::filesystem::path& path, indentation& indent,
                    const formatting_options& formatting) {
   auto segment = read_flatbuffer_file<vast::fbs::Segment>(path);
   if (!segment) {
-    std::cout << "(error reading segment file " << path.str() << ")\n";
+    std::cout << "(error reading segment file " << path.string() << ")\n";
   }
   switch (segment->segment_type()) {
     case vast::fbs::segment::Segment::v0:
@@ -518,14 +556,18 @@ int main(int argc, char** argv) {
   }
   if (raw_path.back() == '/')
     raw_path.resize(raw_path.size() - 1);
-  auto path = vast::path{raw_path};
-  auto kind = classify(path);
+  const auto path = std::filesystem::path{raw_path};
+  const auto kind = classify(path);
+  if (!kind) {
+    std::cerr << "Filesystem error with error code: " << kind.error().code()
+              << std::endl;
+  }
   if (kind == Kind::Unknown) {
     std::cerr << "Could not determine type of " << argv[1] << std::endl;
     return 1;
   }
   struct indentation indent;
-  auto printer = printers.at(kind);
+  auto printer = printers.at(*kind);
   printer(path, indent, format);
   return 0;
 }
