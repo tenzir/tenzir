@@ -4,7 +4,7 @@
 
 #include "vast/concept/parseable/from_string.hpp"
 #include "vast/concept/parseable/vast/uuid.hpp"
-#include "vast/directory.hpp"
+#include "vast/detail/recursive_size.hpp"
 #include "vast/error.hpp"
 #include "vast/logger.hpp"
 #include "vast/system/archive.hpp"
@@ -63,7 +63,7 @@ disk_monitor(disk_monitor_actor::stateful_pointer<disk_monitor_state> self,
       // see noticeable overhead even on large-ish databases.
       // Nonetheless, if this becomes relevant we should switch to using
       // `inotify()` or similar to do real-time tracking of the db size.
-      if (const auto size = recursive_size(self->state.dbdir); !size) {
+      if (const auto size = detail::recursive_size(self->state.dbdir); !size) {
         VAST_WARN("{} failed to calculate recursive size of {}: {}", self,
                   self->state.dbdir, size.error());
       } else {
@@ -142,7 +142,8 @@ disk_monitor(disk_monitor_actor::stateful_pointer<disk_monitor_state> self,
                         erased_ids)
               .then(
                 [=, sg = shared_guard](atom::done) {
-                  if (const auto size = recursive_size(self->state.dbdir);
+                  if (const auto size
+                      = detail::recursive_size(self->state.dbdir);
                       !size) {
                     VAST_WARN("{} failed to calculate recursive size of {}: {}",
                               self, self->state.dbdir, size.error());

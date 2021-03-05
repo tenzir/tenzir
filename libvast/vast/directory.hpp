@@ -15,10 +15,6 @@
 
 #include "vast/fwd.hpp"
 
-// clang-format off
-#include <filesystem>
-// clang-format on
-
 #include "vast/config.hpp"
 #include "vast/defaults.hpp"
 #include "vast/detail/iterator.hpp"
@@ -76,10 +72,5 @@ private:
   vast::path path_;
   DIR* dir_ = nullptr;
 };
-
-/// Calculates the sum of the sizes of all regular files in the directory.
-/// @param root_dir The directory to traverse.
-/// @returns The size of all regular files in *dir*.
-caf::expected<size_t> recursive_size(const std::filesystem::path& root_dir);
 
 } // namespace vast

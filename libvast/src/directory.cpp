@@ -23,10 +23,8 @@
 
 #include <caf/streambuf.hpp>
 
-#include <filesystem>
 #include <fstream>
 #include <iterator>
-#include <system_error>
 
 #if VAST_POSIX
 #  include <sys/types.h>
@@ -107,25 +105,6 @@ directory::iterator directory::end() const {
 
 const path& directory::path() const {
   return path_;
-}
-
-caf::expected<size_t> recursive_size(const std::filesystem::path& root_dir) {
-  size_t total_size = 0;
-
-  std::error_code err{};
-  auto dir = std::filesystem::recursive_directory_iterator(root_dir, err);
-  if (err)
-    return caf::make_error(ec::filesystem_error, err.message());
-
-  for (const auto& f : dir) {
-    if (f.is_regular_file()) {
-      const auto size = f.file_size();
-      VAST_TRACE("{} += {}", f.path().string(), size);
-      total_size += size;
-    }
-  }
-
-  return total_size;
 }
 
 } // namespace vast
