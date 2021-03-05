@@ -23,9 +23,6 @@
 
 #include <caf/streambuf.hpp>
 
-#include <fmt/format.h>
-
-#include <algorithm>
 #include <filesystem>
 #include <fstream>
 #include <iterator>
@@ -129,33 +126,6 @@ caf::expected<size_t> recursive_size(const std::filesystem::path& root_dir) {
   }
 
   return total_size;
-}
-
-caf::expected<std::vector<std::filesystem::path>>
-filter_dir(const std::filesystem::path& root_dir,
-           std::function<bool(const std::filesystem::path&)> filter,
-           size_t max_recursion) {
-  std::vector<std::filesystem::path> result;
-  std::error_code err{};
-  auto dir = std::filesystem::recursive_directory_iterator(root_dir, err);
-  if (err)
-    return caf::make_error(ec::filesystem_error, err.message());
-  auto begin = std::filesystem::begin(dir);
-  const auto end = std::filesystem::end(dir);
-  while (begin != end) {
-    const auto current_path = begin->path();
-    const auto current_depth = static_cast<size_t>(begin.depth());
-    if (current_depth >= max_recursion)
-      return caf::make_error(ec::recursion_limit_reached,
-                             fmt::format("reached recursion limit when "
-                                         "filtering directory {}",
-                                         root_dir));
-    if (!filter || filter(current_path))
-      result.push_back(current_path);
-    ++begin;
-  }
-  std::sort(result.begin(), result.end());
-  return result;
 }
 
 } // namespace vast

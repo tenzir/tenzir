@@ -20,9 +20,9 @@
 #include "vast/concept/printable/vast/schema.hpp"
 #include "vast/concept/printable/vast/type.hpp"
 #include "vast/data.hpp"
+#include "vast/detail/filter_dir.hpp"
 #include "vast/detail/process.hpp"
 #include "vast/detail/string.hpp"
-#include "vast/directory.hpp"
 #include "vast/error.hpp"
 #include "vast/event_types.hpp"
 #include "vast/logger.hpp"
@@ -293,7 +293,8 @@ load_schema(const detail::stable_set<std::filesystem::path>& schema_dirs,
     auto filter = [](const std::filesystem::path& f) {
       return detail::ends_with(f.string(), ".schema");
     };
-    auto schema_files = filter_dir(dir, std::move(filter), max_recursion);
+    auto schema_files
+      = detail::filter_dir(dir, std::move(filter), max_recursion);
     if (!schema_files)
       return caf::make_error(ec::filesystem_error,
                              fmt::format("failed to filter schema dir at {}: "

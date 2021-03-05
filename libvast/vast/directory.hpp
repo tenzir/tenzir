@@ -28,8 +28,6 @@
 #  include <dirent.h>
 #else
 
-#include <functional>
-
 namespace vast {
 struct DIR;
 } // namespace vast
@@ -83,17 +81,5 @@ private:
 /// @param root_dir The directory to traverse.
 /// @returns The size of all regular files in *dir*.
 caf::expected<size_t> recursive_size(const std::filesystem::path& root_dir);
-
-/// Recursively traverses a directory and lists all file names that match a
-/// given filter expresssion.
-/// @param dir The directory to enumerate.
-/// @param filter An optional filter function to apply on the filename of every
-/// file in *dir*, which allows for filtering specific files.
-/// @param max_recursion The maximum number of nested directories to traverse.
-/// @returns A list of file that match *filter*.
-caf::expected<std::vector<std::filesystem::path>>
-filter_dir(const std::filesystem::path& dir,
-           std::function<bool(const std::filesystem::path&)> filter = {},
-           size_t max_recursion = defaults::max_recursion);
 
 } // namespace vast
