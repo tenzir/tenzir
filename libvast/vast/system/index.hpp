@@ -131,27 +131,28 @@ struct index_state {
   caf::error load_from_disk();
 
   /// @returns various status metrics.
-  caf::typed_response_promise<caf::settings> status(status_verbosity v) const;
+  [[nodiscard]] caf::typed_response_promise<caf::settings>
+  status(status_verbosity v) const;
 
   void flush_to_disk();
 
-  path index_filename(path basename = {}) const;
+  [[nodiscard]] path index_filename(const path& basename = {}) const;
 
   // Maps partitions to their expected location on the file system.
-  vast::path partition_path(const uuid& id) const;
+  [[nodiscard]] vast::path partition_path(const uuid& id) const;
 
   // Maps partition synopses to their expected location on the file system.
-  vast::path partition_synopsis_path(const uuid& id) const;
+  [[nodiscard]] vast::path partition_synopsis_path(const uuid& id) const;
 
   // -- query handling ---------------------------------------------------------
 
-  bool worker_available();
+  [[nodiscard]] bool worker_available() const;
 
-  std::optional<query_supervisor_actor> next_worker();
+  [[nodiscard]] std::optional<query_supervisor_actor> next_worker();
 
   /// Get the actor handles for up to `num_partitions` PARTITION actors,
   /// spawning them if needed.
-  std::vector<std::pair<uuid, partition_actor>>
+  [[nodiscard]] std::vector<std::pair<uuid, partition_actor>>
   collect_query_actors(query_state& lookup, uint32_t num_partitions);
 
   // -- flush handling ---------------------------------------------------------
@@ -187,7 +188,7 @@ struct index_state {
   // Then (assuming the query interface for both types of partition stays
   // identical) we could just use the same cache for unpersisted partitions and
   // unpin them after they're safely on disk.
-  std::unordered_map<uuid, partition_actor> unpersisted;
+  std::unordered_map<uuid, partition_actor> unpersisted = {};
 
   /// The set of passive (read-only) partitions currently loaded into memory.
   /// Uses the `partition_factory` to load new partitions as needed, and evicts
@@ -195,56 +196,56 @@ struct index_state {
   detail::lru_cache<uuid, partition_actor, partition_factory> inmem_partitions;
 
   /// The set of partitions that exist on disk.
-  std::unordered_set<uuid> persisted_partitions;
+  std::unordered_set<uuid> persisted_partitions = {};
 
   /// This set to true after the index finished reading the meta index state
   /// from disk.
-  bool accept_queries;
+  bool accept_queries = {};
 
   /// The maximum number of events that a partition can hold.
-  size_t partition_capacity;
+  size_t partition_capacity = {};
 
   // The maximum size of the partition LRU cache (or the maximum number of
   // read-only partition loaded to memory).
-  size_t max_inmem_partitions;
+  size_t max_inmem_partitions = {};
 
   // The number of partitions initially returned for a query.
-  size_t taste_partitions;
+  size_t taste_partitions = {};
 
   /// Maps query IDs to pending lookup state.
-  std::unordered_map<uuid, query_state> pending;
+  std::unordered_map<uuid, query_state> pending = {};
 
   /// Caches idle workers.
-  std::vector<query_supervisor_actor> idle_workers;
+  std::vector<query_supervisor_actor> idle_workers = {};
 
   /// The META INDEX actor.
-  meta_index_actor meta_index;
+  meta_index_actor meta_index = {};
 
   /// A running count of the size of the meta index.
-  size_t meta_index_bytes;
+  size_t meta_index_bytes = {};
 
   /// The directory for persistent state.
-  path dir;
+  path dir = {};
 
   /// The directory for partition synopses.
-  path synopsisdir;
+  path synopsisdir = {};
 
   /// Statistics about processed data.
-  index_statistics stats;
+  index_statistics stats = {};
 
   /// Handle of the accountant.
-  accountant_actor accountant;
+  accountant_actor accountant = {};
 
   /// List of actors that wait for the next flush event.
-  std::vector<flush_listener_actor> flush_listeners;
+  std::vector<flush_listener_actor> flush_listeners = {};
 
   /// Actor handle of the filesystem actor.
-  filesystem_actor filesystem;
+  filesystem_actor filesystem = {};
 
   // The false positive rate for the meta index.
-  double meta_index_fp_rate;
+  double meta_index_fp_rate = {};
 
-  static inline const char* name = "index";
+  constexpr static inline auto name = "index";
 };
 
 /// Flatbuffer integration. Note that this is only one-way, restoring
@@ -252,7 +253,7 @@ struct index_state {
 // TODO: Pull out the persisted part of the state into a separate struct
 // that can be packed and unpacked.
 caf::expected<flatbuffers::Offset<fbs::Index>>
-pack(flatbuffers::FlatBufferBuilder& builder, const index_state& x);
+pack(flatbuffers::FlatBufferBuilder& builder, const index_state& state);
 
 /// Indexes events in horizontal partitions.
 /// @param filesystem The filesystem actor. Not used by the index itself but
@@ -266,7 +267,7 @@ pack(flatbuffers::FlatBufferBuilder& builder, const index_state& x);
 index_actor::behavior_type
 index(index_actor::stateful_pointer<index_state> self,
       filesystem_actor filesystem, path dir, size_t partition_capacity,
-      size_t in_mem_partitions, size_t taste_partitions, size_t num_workers,
+      size_t max_inmem_partitions, size_t taste_partitions, size_t num_workers,
       path meta_index_dir, double meta_index_fp_rate);
 
 } // namespace vast::system
