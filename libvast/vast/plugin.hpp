@@ -197,9 +197,10 @@ private:
 
 // -- helper macros ------------------------------------------------------------
 
+// NOLINTNEXTLINE
 #define VAST_REGISTER_PLUGIN(name, major, minor, tweak, patch)                 \
   extern "C" ::vast::plugin* vast_plugin_create() {                            \
-    return new name;                                                           \
+    return new (name);                                                         \
   }                                                                            \
   extern "C" void vast_plugin_destroy(class ::vast::plugin* plugin) {          \
     delete plugin;                                                             \
@@ -214,10 +215,12 @@ private:
     return ::vast::version::build_tree_hash;                                   \
   }
 
+// NOLINTNEXTLINE
 #define VAST_REGISTER_PLUGIN_TYPE_ID_BLOCK(...)                                \
   VAST_PP_OVERLOAD(VAST_REGISTER_PLUGIN_TYPE_ID_BLOCK_, __VA_ARGS__)           \
   (__VA_ARGS__)
 
+// NOLINTNEXTLINE
 #define VAST_REGISTER_PLUGIN_TYPE_ID_BLOCK_1(name)                             \
   extern "C" void vast_plugin_register_type_id_block(                          \
     ::caf::actor_system_config& cfg) {                                         \
@@ -227,6 +230,7 @@ private:
     return {::caf::id_block::name::begin, ::caf::id_block::name::end};         \
   }
 
+// NOLINTNEXTLINE
 #define VAST_REGISTER_PLUGIN_TYPE_ID_BLOCK_2(name1, name2)                     \
   extern "C" void vast_plugin_register_type_id_block(                          \
     ::caf::actor_system_config& cfg) {                                         \

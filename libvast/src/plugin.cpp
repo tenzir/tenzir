@@ -71,7 +71,7 @@ plugin_ptr::make(const char* filename, caf::actor_system_config& cfg) noexcept {
     return caf::make_error(ec::system_error,
                            "failed to resolve symbol vast_libvast_version in",
                            filename, dlerror());
-  if (strcmp(libvast_version(), version::version))
+  if (strcmp(libvast_version(), version::version) != 0)
     return caf::make_error(ec::version_error, "libvast version mismatch in",
                            filename, libvast_version(), version::version);
   auto libvast_build_tree_hash = reinterpret_cast<const char* (*) ()>(
@@ -81,7 +81,7 @@ plugin_ptr::make(const char* filename, caf::actor_system_config& cfg) noexcept {
                            "failed to resolve symbol "
                            "vast_libvast_build_tree_hash in",
                            filename, dlerror());
-  if (strcmp(libvast_build_tree_hash(), version::build_tree_hash))
+  if (strcmp(libvast_build_tree_hash(), version::build_tree_hash) != 0)
     return caf::make_error(ec::version_error,
                            "libvast build tree hash mismatch in", filename,
                            libvast_build_tree_hash(), version::build_tree_hash);
