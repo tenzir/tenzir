@@ -22,10 +22,13 @@
 #include "vast/concept/printable/to_string.hpp"
 #include "vast/concept/printable/vast/uuid.hpp"
 #include "vast/detail/narrow.hpp"
-#include "vast/directory.hpp"
 #include "vast/ids.hpp"
 #include "vast/si_literals.hpp"
 #include "vast/table_slice.hpp"
+
+#include <algorithm>
+#include <filesystem>
+#include <system_error>
 
 using namespace vast;
 using namespace binary_byte_literals;
@@ -37,7 +40,7 @@ struct fixture : fixtures::deterministic_actor_system_and_events {
     store = segment_store::make(directory / "segments", 512_KiB, 2);
     if (store == nullptr)
       FAIL("segment_store::make failed to allocate a segment store");
-    segment_path = store->segment_path();
+    segment_path = std::filesystem::path{store->segment_path().str()};
     // Approximates an ID range for [0, max_id) with 100, because
     // `make_ids({{0, max_id}})` unfortunately leads to performance
     // degradations.
@@ -52,11 +55,14 @@ struct fixture : fixtures::deterministic_actor_system_and_events {
 
   /// @returns all segment files of the segment stores.
   auto segment_files() {
-    std::vector<path> result;
-    vast::directory dir{segment_path};
-    for (auto file : dir)
-      if (file.is_regular_file())
-        result.emplace_back(std::move(file));
+    std::vector<std::filesystem::path> result;
+    std::error_code err{};
+    auto dir = std::filesystem::directory_iterator{segment_path, err};
+    if (!err) {
+      std::copy_if(std::filesystem::begin(dir), std::filesystem::end(dir),
+                   std::back_inserter(result),
+                   [&](const auto& entry) { return entry.is_regular_file(); });
+    }
     return result;
   }
 
@@ -114,7 +120,7 @@ struct fixture : fixtures::deterministic_actor_system_and_events {
 
   ids everything;
 
-  path segment_path;
+  std::filesystem::path segment_path;
 };
 
 template <class Container>
@@ -151,8 +157,8 @@ TEST(flushing filled store) {
   auto err = store->flush();
   CHECK_EQUAL(err, caf::none);
   CHECK_EQUAL(store->dirty(), false);
-  std::vector expected_files{path{"vast-unit-test"} / "segments" / "segments"
-                             / to_string(active)};
+  std::vector expected_files{std::filesystem::path{"vast-unit-test"}
+                             / "segments" / "segments" / to_string(active)};
   CHECK_EQUAL(segment_files(), expected_files);
 }
 
