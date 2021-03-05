@@ -65,8 +65,10 @@
 // A debugging macro that emits an additional log statement when leaving the
 // current scope.
 #  define VAST_TRACE_SCOPE(...)                                                \
+    /* NOLINTNEXTLINE */                                                       \
     auto CAF_UNIFYN(vast_log_trace_guard_)                                     \
-      = [func_name_ = __func__](const std::string& format, auto&&... args) {   \
+      = [func_name_ = static_cast<const char*>(__func__)](                     \
+          const std::string& format, auto&&... args) {                         \
           VAST_DEBUG("ENTER {} " + format, __func__,                           \
                      std::forward<decltype(args)>(args)...);                   \
           return ::caf::detail::make_scope_guard(                              \
@@ -95,10 +97,13 @@ create_log_context(const vast::invocation& cmd_invocation,
 
 // -- VAST_ARG utility for formatting log output -------------------------------
 
+// NOLINTNEXTLINE
 #define VAST_ARG_1(x) ::vast::detail::make_arg_wrapper(#x, x)
 
+// NOLINTNEXTLINE
 #define VAST_ARG_2(x_name, x) ::vast::detail::make_arg_wrapper(x_name, x)
 
+// NOLINTNEXTLINE
 #define VAST_ARG_3(x_name, first, last)                                        \
   ::vast::detail::make_arg_wrapper(x_name, first, last)
 
@@ -106,4 +111,5 @@ create_log_context(const vast::invocation& cmd_invocation,
 /// generates `foo = ...` in log output, where `...` is the content of the
 /// variable. `VAST_ARG("size", xs.size())` generates the output
 /// `size = xs.size()`.
+// NOLINTNEXTLINE
 #define VAST_ARG(...) VAST_PP_OVERLOAD(VAST_ARG_, __VA_ARGS__)(__VA_ARGS__)

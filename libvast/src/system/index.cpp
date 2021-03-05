@@ -120,12 +120,12 @@ extract_partition_synopsis(const vast::path& partition_path,
   if (!chunk)
     return caf::make_error(ec::system_error, "could not mmap partition at "
                                                + partition_path.str());
-  auto partition = fbs::GetPartition(chunk->data());
+  const auto* partition = fbs::GetPartition(chunk->data());
   if (partition->partition_type() != fbs::partition::Partition::v0)
     return caf::make_error(ec::format_error, "found unsupported version for "
                                              "partition "
                                                + partition_path.str());
-  auto partition_v0 = partition->partition_as_v0();
+  const auto* partition_v0 = partition->partition_as_v0();
   VAST_ASSERT(partition_v0);
   partition_synopsis ps;
   unpack(*partition_v0, ps);
@@ -191,16 +191,16 @@ caf::error index_state::load_from_disk() {
     }
     // TODO: Create a `index_ondisk_state` struct and move this part of the
     // code into an `unpack()` function.
-    auto index = fbs::GetIndex(buffer->data());
+    const auto* index = fbs::GetIndex(buffer->data());
     if (index->index_type() != fbs::index::Index::v0)
       return caf::make_error(ec::format_error, "invalid index version");
-    auto index_v0 = index->index_as_v0();
-    auto partition_uuids = index_v0->partitions();
+    const auto* index_v0 = index->index_as_v0();
+    const auto* partition_uuids = index_v0->partitions();
     VAST_ASSERT(partition_uuids);
     auto synopses = std::make_shared<std::map<uuid, partition_synopsis>>();
-    for (auto uuid_fb : *partition_uuids) {
+    for (const auto* uuid_fb : *partition_uuids) {
       VAST_ASSERT(uuid_fb);
-      vast::uuid partition_uuid;
+      vast::uuid partition_uuid{};
       unpack(*uuid_fb, partition_uuid);
       auto part_dir = partition_path(partition_uuid);
       auto synopsis_dir = partition_synopsis_path(partition_uuid);
@@ -221,7 +221,7 @@ caf::error index_state::load_from_disk() {
         VAST_WARN("{} could not mmap partition at {}", self, part_dir);
         continue;
       }
-      auto ps_flatbuffer = fbs::GetPartitionSynopsis(chunk->data());
+      const auto* ps_flatbuffer = fbs::GetPartitionSynopsis(chunk->data());
       partition_synopsis ps;
       if (ps_flatbuffer->partition_synopsis_type()
           != fbs::partition_synopsis::PartitionSynopsis::v0)
@@ -231,7 +231,7 @@ caf::error index_state::load_from_disk() {
         return error;
       meta_index_bytes += ps.memusage();
       persisted_partitions.insert(partition_uuid);
-      synopses->emplace(std::move(partition_uuid), std::move(ps));
+      synopses->emplace(partition_uuid, std::move(ps));
     }
     // We collect all synopses to send them in bulk, since the `await` interface
     // doesn't lend itself to a huge number of awaited messages: Only the tip of
@@ -250,17 +250,17 @@ caf::error index_state::load_from_disk() {
                        self);
           this->accept_queries = true;
         },
-        [=](caf::error err) {
+        [=](caf::error& err) {
           VAST_ERROR("{} could not load meta index state from disk, shutting "
                      "down with error {}",
-                     self, render(err));
-          self->send_exit(self, err);
+                     self, err);
+          self->send_exit(self, std::move(err));
         });
-    auto stats = index_v0->stats();
+    const auto* stats = index_v0->stats();
     if (!stats)
       return caf::make_error(ec::format_error, "no stats in persisted index "
                                                "state");
-    for (const auto stat : *stats) {
+    for (const auto* const stat : *stats) {
       this->stats.layouts[stat->name()->str()]
         = layout_statistics{stat->count()};
     }
@@ -273,7 +273,7 @@ caf::error index_state::load_from_disk() {
   return caf::none;
 }
 
-bool index_state::worker_available() {
+bool index_state::worker_available() const {
   return !idle_workers.empty();
 }
 
@@ -366,16 +366,16 @@ void index_state::decomission_active_partition() {
               unpersisted.erase(id);
               persisted_partitions.insert(id);
             },
-            [=](caf::error err) {
+            [=](const caf::error& err) {
               VAST_DEBUG("{} received error for request to persist partition "
                          "{}: {}",
-                         self, id, render(err));
+                         self, id, err);
             });
       },
-      [=](const caf::error& err) {
+      [=](caf::error& err) {
         VAST_ERROR("{} failed to persist partition {} with error: {}", self, id,
-                   render(err));
-        self->quit(err);
+                   err);
+        self->quit(std::move(err));
       });
 }
 
@@ -405,7 +405,7 @@ index_state::status(status_verbosity v) const {
   if (v >= status_verbosity::detailed) {
     auto& stats_object = put_dictionary(index_status, "statistics");
     auto& layout_object = put_dictionary(stats_object, "layouts");
-    for (auto& [name, layout_stats] : stats.layouts) {
+    for (const auto& [name, layout_stats] : stats.layouts) {
       auto xs = caf::dictionary<caf::config_value>{};
       xs.emplace("count", layout_stats.count);
       // We cannot use put_dictionary(layout_object, name) here, because this
@@ -456,11 +456,11 @@ index_state::status(status_verbosity v) const {
       partition_status(active_partition.id, active_partition.actor, active);
     auto& cached = put_list(partitions, "cached");
     cached.reserve(inmem_partitions.size());
-    for (auto& [id, actor] : inmem_partitions)
+    for (const auto& [id, actor] : inmem_partitions)
       partition_status(id, actor, cached);
     auto& unpersisted = put_list(partitions, "unpersisted");
     unpersisted.reserve(this->unpersisted.size());
-    for (auto& [id, actor] : this->unpersisted)
+    for (const auto& [id, actor] : this->unpersisted)
       partition_status(id, actor, unpersisted);
     // General state such as open streams.
     detail::fill_status_map(index_status, self);
@@ -481,7 +481,7 @@ index_state::collect_query_actors(query_state& lookup,
   auto partition_is_loaded = [&](const uuid& candidate) {
     return (active_partition.actor != nullptr
             && active_partition.id == candidate)
-           || unpersisted.count(candidate)
+           || (unpersisted.count(candidate) != 0u)
            || inmem_partitions.contains(candidate);
   };
   std::partition(lookup.partitions.begin(), lookup.partitions.end(),
@@ -512,7 +512,7 @@ index_state::collect_query_actors(query_state& lookup,
   while (it != last && result.size() < num_partitions) {
     auto partition_id = *it++;
     if (auto partition_actor = spin_up(partition_id))
-      result.push_back(std::make_pair(partition_id, partition_actor));
+      result.emplace_back(partition_id, partition_actor);
   }
   lookup.partitions.erase(lookup.partitions.begin(), it);
   VAST_DEBUG("{} launched {} partition actors to evaluate query", self,
@@ -520,7 +520,7 @@ index_state::collect_query_actors(query_state& lookup,
   return result;
 }
 
-path index_state::index_filename(path basename) const {
+path index_state::index_filename(const path& basename) const {
   return basename / dir / "index.bin";
 }
 
@@ -541,7 +541,7 @@ pack(flatbuffers::FlatBufferBuilder& builder, const index_state& state) {
   // of the system is shut down (in case of a hard/dirty shutdown), so we just
   // store everything and throw out the missing partitions when loading the
   // index.
-  for (auto& kv : state.unpersisted) {
+  for (const auto& kv : state.unpersisted) {
     if (auto uuid_fb = pack(builder, kv.first))
       partition_offsets.push_back(*uuid_fb);
     else
@@ -549,7 +549,7 @@ pack(flatbuffers::FlatBufferBuilder& builder, const index_state& state) {
   }
   auto partitions = builder.CreateVector(partition_offsets);
   std::vector<flatbuffers::Offset<fbs::layout_statistics::v0>> stats_offsets;
-  for (auto& [name, layout_stats] : state.stats.layouts) {
+  for (const auto& [name, layout_stats] : state.stats.layouts) {
     auto name_fb = builder.CreateString(name);
     fbs::layout_statistics::v0Builder stats_builder(builder);
     stats_builder.add_name(name_fb);
@@ -575,7 +575,7 @@ void index_state::flush_to_disk() {
   auto builder = flatbuffers::FlatBufferBuilder{};
   auto index = pack(builder, *this);
   if (!index) {
-    VAST_WARN("{} failed to pack index: {}", self, render(index.error()));
+    VAST_WARN("{} failed to pack index: {}", self, index.error());
     return;
   }
   auto chunk = fbs::release(builder);
@@ -857,7 +857,7 @@ index(index_actor::stateful_pointer<index_state> self,
       auto path = self->state.partition_path(partition_id);
       auto synopsis_path = self->state.partition_synopsis_path(partition_id);
       bool adjust_stats = true;
-      if (!self->state.persisted_partitions.count(partition_id)) {
+      if (self->state.persisted_partitions.count(partition_id) == 0u) {
         if (!exists(path)) {
           rp.deliver(caf::make_error(ec::logic_error, "unknown partition"));
           return rp;
@@ -871,10 +871,10 @@ index(index_actor::stateful_pointer<index_state> self,
       self->state.persisted_partitions.erase(partition_id);
       self->request(self->state.filesystem, caf::infinite, atom::mmap_v, path)
         .then(
-          [=](chunk_ptr chunk) mutable {
+          [=](const chunk_ptr& chunk) mutable {
             // Adjust layout stats by subtracting the events of the removed
             // partition.
-            auto partition = fbs::GetPartition(chunk->data());
+            const auto* partition = fbs::GetPartition(chunk->data());
             if (partition->partition_type() != fbs::partition::Partition::v0) {
               rp.deliver(caf::make_error(ec::format_error, "unexpected "
                                                            "format "
@@ -882,9 +882,9 @@ index(index_actor::stateful_pointer<index_state> self,
               return;
             }
             vast::ids all_ids;
-            auto partition_v0 = partition->partition_as_v0();
-            for (auto partition_stats : *partition_v0->type_ids()) {
-              auto name = partition_stats->name();
+            const auto* partition_v0 = partition->partition_as_v0();
+            for (const auto* partition_stats : *partition_v0->type_ids()) {
+              const auto* name = partition_stats->name();
               vast::ids ids;
               if (auto error
                   = fbs::deserialize_bytes(partition_stats->ids(), ids)) {
@@ -908,7 +908,7 @@ index(index_actor::stateful_pointer<index_state> self,
                         path);
             rp.deliver(std::move(all_ids));
           },
-          [=](caf::error e) mutable { rp.deliver(e); });
+          [=](caf::error& err) mutable { rp.deliver(std::move(err)); });
       return rp;
     },
     // -- query_supervisor_master_actor ----------------------------------------

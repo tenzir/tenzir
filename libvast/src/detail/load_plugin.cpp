@@ -62,30 +62,28 @@ load_plugin(path file, caf::actor_system_config& cfg) {
 #endif
     if (!exists(file))
       return caf::no_error;
-    if (auto plugin = plugin_ptr::make(file.str().c_str(), cfg)) {
+    auto plugin = plugin_ptr::make(file.str().c_str(), cfg);
+    if (plugin) {
       VAST_ASSERT(*plugin);
       auto has_same_name = [name = (*plugin)->name()](const auto& other) {
         return !std::strcmp(name, other->name());
       };
-      if (std::none_of(plugins.begin(), plugins.end(), has_same_name)) {
+      if (std::none_of(plugins.begin(), plugins.end(), has_same_name))
         return plugin;
-      } else {
-        return caf::make_error(ec::invalid_configuration,
-                               fmt::format("failed to load plugin {} because "
-                                           "another plugin already uses the "
-                                           "name {}",
-                                           file, (*plugin)->name()));
-      }
-    } else {
-      return std::move(plugin.error());
+      return caf::make_error(ec::invalid_configuration,
+                             fmt::format("failed to load plugin {} because "
+                                         "another plugin already uses the "
+                                         "name {}",
+                                         file, (*plugin)->name()));
     }
-    return ec::logic_error;
+    return std::move(plugin.error());
   };
   auto load_errors = std::vector<caf::error>{};
   // First, check if the plugin file is specified as an absolute path.
-  if (auto plugin = try_load_plugin(file))
+  auto plugin = try_load_plugin(file);
+  if (plugin)
     return std::pair{file, std::move(*plugin)};
-  else if (plugin.error() != caf::no_error)
+  if (plugin.error() != caf::no_error)
     load_errors.push_back(std::move(plugin.error()));
   // Second, check if the plugin file is specified relative to the specified
   // plugin directories.

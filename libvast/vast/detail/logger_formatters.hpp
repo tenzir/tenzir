@@ -136,13 +136,14 @@ struct fmt::formatter<vast::uuid> {
     // e.g. 96107185-1838-48fb-906c-d1a9941ff407
     static_assert(sizeof(vast::uuid) == 16, "id format changed, please update "
                                             "formatter");
-    const auto* data = reinterpret_cast<const unsigned char*>(x.begin());
+    const auto args
+      = vast::span{reinterpret_cast<const unsigned char*>(x.begin()), x.size()};
     return format_to(ctx.out(), "{:02X}-{:02X}-{:02X}-{:02X}-{:02X}",
-                     fmt::join(data + 0, data + 4, ""),
-                     fmt::join(data + 4, data + 6, ""),
-                     fmt::join(data + 6, data + 8, ""),
-                     fmt::join(data + 8, data + 10, ""),
-                     fmt::join(data + 10, data + 16, ""));
+                     fmt::join(args.subspan(0, 4), ""),
+                     fmt::join(args.subspan(4, 2), ""),
+                     fmt::join(args.subspan(6, 2), ""),
+                     fmt::join(args.subspan(8, 2), ""),
+                     fmt::join(args.subspan(10, 6), ""));
   }
 };
 
