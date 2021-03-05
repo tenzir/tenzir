@@ -12,11 +12,11 @@
  ******************************************************************************/
 
 #include "vast/fwd.hpp"
+
 #include "vast/span.hpp"
 
-#include "caf/fwd.hpp"
-
 #include <cstddef>
+#include <filesystem>
 
 namespace vast::io {
 
@@ -25,5 +25,8 @@ namespace vast::io {
 /// @param xs The buffer to read from.
 /// @returns An error if the operation failed.
 caf::error write(const path& filename, span<const std::byte> xs);
+
+caf::error
+write(const std::filesystem::path& filename, span<const std::byte> xs);
 
 } // namespace vast::io

@@ -17,11 +17,12 @@
 
 #include "vast/detail/cache.hpp"
 #include "vast/detail/range_map.hpp"
-#include "vast/path.hpp"
 #include "vast/segment.hpp"
 #include "vast/segment_builder.hpp"
 #include "vast/store.hpp"
 #include "vast/uuid.hpp"
+
+#include <filesystem>
 
 namespace vast {
 
@@ -38,15 +39,16 @@ public:
   /// @param max_segment_size The maximum segment size in bytes.
   /// @param in_memory_segments The number of semgents to cache in memory.
   /// @pre `max_segment_size > 0`
-  static segment_store_ptr make(path dir, size_t max_segment_size,
-                                size_t in_memory_segments);
+  static segment_store_ptr
+  make(std::filesystem::path dir, size_t max_segment_size,
+       size_t in_memory_segments);
 
   ~segment_store();
 
   // -- properties -------------------------------------------------------------
 
   /// @returns the path for storing the segments.
-  path segment_path() const {
+  std::filesystem::path segment_path() const {
     return dir_ / "segments";
   }
 
@@ -87,13 +89,14 @@ public:
   void inspect_status(caf::settings& xs, system::status_verbosity v) override;
 
 private:
-  segment_store(path dir, uint64_t max_segment_size, size_t in_memory_segments);
+  segment_store(std::filesystem::path dir, uint64_t max_segment_size,
+                size_t in_memory_segments);
 
   // -- utility functions ------------------------------------------------------
 
   caf::error register_segments();
 
-  caf::error register_segment(const path& filename);
+  caf::error register_segment(const std::filesystem::path& filename);
 
   caf::expected<segment> load_segment(uuid id) const;
 
@@ -115,7 +118,7 @@ private:
   // -- member variables -------------------------------------------------------
 
   /// Identifies the base directory for segments.
-  path dir_;
+  std::filesystem::path dir_;
 
   /// Configures the limit each segment until we seal and flush it.
   uint64_t max_segment_size_;

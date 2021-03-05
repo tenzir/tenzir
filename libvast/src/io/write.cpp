@@ -28,4 +28,9 @@ caf::error write(const path& filename, span<const std::byte> xs) {
   return f.write(xs.data(), xs.size());
 }
 
+caf::error
+write(const std::filesystem::path& filename, span<const std::byte> xs) {
+  return write(vast::path{filename.string()}, xs);
+}
+
 } // namespace vast::io

@@ -21,31 +21,34 @@
 #include <cstddef>
 #include <cstdio>
 #include <filesystem>
+#include <string>
 #include <system_error>
 
 namespace vast::io {
 
-caf::error save(const path& filename, span<const std::byte> xs) {
-  auto tmp = filename + ".tmp";
+caf::error
+save(const std::filesystem::path& filename, span<const std::byte> xs) {
+  auto tmp = filename;
+  tmp += ".tmp";
   if (auto err = write(tmp, xs)) {
     std::error_code ec{};
-    if (const auto removed
-        = std::filesystem::remove(std::filesystem::path{tmp.str()}, ec);
-        !removed)
+    if (const auto removed = std::filesystem::remove(tmp, ec); !removed || ec)
       VAST_WARN("failed to remove file {} : {}", tmp, ec.message());
     return err;
   }
-  if (std::rename(tmp.str().c_str(), filename.str().c_str()) != 0) {
-    std::error_code err{};
-    if (const auto removed_files
-        = std::filesystem::remove_all(std::filesystem::path{tmp.str()}, err);
-        removed_files == 0)
-      VAST_WARN("failed to remove any files from directory {} : {}", tmp,
-                err.message());
+  std::error_code err{};
+  std::filesystem::rename(tmp, filename, err);
+  if (err) {
+    std::filesystem::remove(tmp, err);
     return caf::make_error(ec::filesystem_error,
-                           "failed in rename(2):", std::strerror(errno));
+                           fmt::format("failed to rename {} : {}", filename,
+                                       err.message()));
   }
   return caf::none;
+}
+
+caf::error save(const path& filename, span<const std::byte> xs) {
+  return save(std::filesystem::path{filename.str()}, xs);
 }
 
 } // namespace vast::io
