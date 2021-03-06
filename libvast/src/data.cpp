@@ -18,11 +18,11 @@
 #include "vast/concept/printable/vast/data.hpp"
 #include "vast/concept/printable/vast/json.hpp"
 #include "vast/detail/assert.hpp"
+#include "vast/detail/filter_dir.hpp"
 #include "vast/detail/narrow.hpp"
 #include "vast/detail/overload.hpp"
 #include "vast/detail/string.hpp"
 #include "vast/detail/type_traits.hpp"
-#include "vast/directory.hpp"
 #include "vast/error.hpp"
 #include "vast/logger.hpp"
 #include "vast/path.hpp"
@@ -600,7 +600,7 @@ load_yaml_dir(const std::filesystem::path& dir, size_t max_recursion) {
     return detail::ends_with(f.string(), ".yaml")
            || detail::ends_with(f.string(), ".yml");
   };
-  auto yaml_files = filter_dir(dir, std::move(filter), max_recursion);
+  auto yaml_files = detail::filter_dir(dir, std::move(filter), max_recursion);
   if (!yaml_files)
     return caf::make_error(ec::filesystem_error,
                            fmt::format("failed to filter YAML dir at {}: {}",
