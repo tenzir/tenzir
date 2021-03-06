@@ -32,6 +32,9 @@
 #include <caf/dictionary.hpp>
 #include <caf/settings.hpp>
 
+#include <filesystem>
+#include <system_error>
+
 namespace vast {
 
 // TODO: return expected<segment_store_ptr> for better error propagation.
@@ -259,7 +262,10 @@ caf::error segment_store::erase(const ids& xs) {
                    detail::pretty_type_name(this));
       auto stale_filename = segment_path() / to_string(segment_id);
       // Schedule deletion of the segment file when releasing the chunk.
-      seg.chunk()->add_deletion_step([=]() noexcept { rm(stale_filename); });
+      seg.chunk()->add_deletion_step([=]() noexcept {
+        std::error_code err{};
+        std::filesystem::remove_all(stale_filename.str(), err);
+      });
     }
     // else: nothing to do, since we can continue filling the active segment.
   };
@@ -460,7 +466,10 @@ uint64_t segment_store::drop(segment& x) {
             segment_id);
   // Schedule deletion of the segment file when releasing the chunk.
   auto filename = segment_path() / to_string(segment_id);
-  x.chunk()->add_deletion_step([=]() noexcept { rm(filename); });
+  x.chunk()->add_deletion_step([=]() noexcept {
+    std::error_code err{};
+    std::filesystem::remove_all(filename.str(), err);
+  });
   segments_.erase_value(segment_id);
   return erased_events;
 }

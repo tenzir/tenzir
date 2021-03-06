@@ -18,12 +18,14 @@
 #include "vast/error.hpp"
 #include "vast/path.hpp"
 
+#include <filesystem>
+
 namespace fixtures {
 
 struct filesystem {
   filesystem() {
     // Fresh afresh.
-    rm(directory);
+    std::filesystem::remove_all(std::filesystem::path{directory.str()});
     if (auto err = mkdir(directory))
       // error is non-recoverable, so we just abort
       FAIL(vast::render(err));

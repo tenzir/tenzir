@@ -15,21 +15,33 @@
 
 #include "vast/error.hpp"
 #include "vast/io/write.hpp"
+#include "vast/logger.hpp"
 #include "vast/path.hpp"
 
 #include <cstddef>
 #include <cstdio>
+#include <filesystem>
+#include <system_error>
 
 namespace vast::io {
 
 caf::error save(const path& filename, span<const std::byte> xs) {
   auto tmp = filename + ".tmp";
   if (auto err = write(tmp, xs)) {
-    rm(tmp);
+    std::error_code ec{};
+    if (const auto removed
+        = std::filesystem::remove(std::filesystem::path{tmp.str()}, ec);
+        !removed)
+      VAST_WARN("failed to remove file {} : {}", tmp, ec.message());
     return err;
   }
   if (std::rename(tmp.str().c_str(), filename.str().c_str()) != 0) {
-    rm(tmp);
+    std::error_code err{};
+    if (const auto removed_files
+        = std::filesystem::remove_all(std::filesystem::path{tmp.str()}, err);
+        removed_files == 0)
+      VAST_WARN("failed to remove any files from directory {} : {}", tmp,
+                err.message());
     return caf::make_error(ec::filesystem_error,
                            "failed in rename(2):", std::strerror(errno));
   }

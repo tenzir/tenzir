@@ -12,7 +12,6 @@
  ******************************************************************************/
 
 #include "vast/detail/system.hpp"
-#include "vast/directory.hpp"
 #include "vast/file.hpp"
 #include "vast/path.hpp"
 #include "vast/si_literals.hpp"
@@ -22,6 +21,7 @@
 #include "vast/test/test.hpp"
 
 #include <cstddef>
+#include <filesystem>
 
 #if VAST_POSIX
 #  include <unistd.h>
@@ -183,10 +183,10 @@ TEST(file_and_directory_manipulation) {
   CHECK(!mkdir(p));
   CHECK(exists(p));
   CHECK(p.is_directory());
-  CHECK(rm(p));
+  CHECK(std::filesystem::remove_all(std::filesystem::path{p.str()}));
   CHECK(!p.is_directory());
   CHECK(p.parent().is_directory());
-  CHECK(rm(p.parent()));
+  CHECK(std::filesystem::remove_all(std::filesystem::path{p.parent().str()}));
   CHECK(!p.parent().is_directory());
 }
 
@@ -219,7 +219,7 @@ TEST_DISABLED(large_file_io) {
     if (auto err = f.read(ptr, size))
       FAIL(err);
     REQUIRE(f.close());
-    CHECK(rm(filename));
+    CHECK(std::filesystem::remove_all(std::filesystem::path{filename.str()}));
     MESSAGE("write back to disk");
     auto filename_copy = filename + ".copy";
     auto f2 = file{filename_copy};
@@ -227,7 +227,8 @@ TEST_DISABLED(large_file_io) {
     if (auto err = f2.write(ptr, size))
       FAIL(err);
     REQUIRE(f2.close());
-    CHECK(rm(filename_copy));
+    CHECK(
+      std::filesystem::remove_all(std::filesystem::path{filename_copy.str()}));
   }
 }
 

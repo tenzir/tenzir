@@ -18,7 +18,6 @@
 #include "vast/detail/assert.hpp"
 #include "vast/detail/posix.hpp"
 #include "vast/detail/string.hpp"
-#include "vast/directory.hpp"
 #include "vast/logger.hpp"
 
 #include <caf/streambuf.hpp>
@@ -275,21 +274,6 @@ caf::error create_symlink(const path& target, const path& link) {
     return caf::make_error(ec::filesystem_error,
                            "failed in symlink(2):", std::strerror(errno));
   return caf::none;
-}
-
-bool rm(const path& p) {
-  // Because a file system only offers primitives to delete empty directories,
-  // we have to recursively delete all files in a directory before deleting it.
-  auto t = p.kind();
-  if (t == path::type::directory) {
-    for (auto& entry : directory{p})
-      if (!rm(entry))
-        return false;
-    return VAST_DELETE_DIRECTORY(p.str().data());
-  }
-  if (t == path::type::regular_file || t == path::type::symlink)
-    return VAST_DELETE_FILE(p.str().data());
-  return false;
 }
 
 caf::error mkdir(const path& p) {

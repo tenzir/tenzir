@@ -901,11 +901,19 @@ index(index_actor::stateful_pointer<index_state> self,
             // Note that mmap's will increase the reference count of a file,
             // so unlinking should not affect indexers that are currently
             // loaded and answering a query.
-            if (!rm(path))
+            auto try_remove_all = [](const auto& p, const auto& error_fn) {
+              std::error_code err{};
+              std::filesystem::remove_all(p.str(), err);
+              if (err)
+                error_fn();
+            };
+            try_remove_all(path, [&] {
               VAST_WARN("{} could not unlink partition at {}", self, path);
-            if (!rm(synopsis_path))
+            });
+            try_remove_all(synopsis_path, [&] {
               VAST_WARN("{} could not unlink partition synopsis at", self,
-                        path);
+                        synopsis_path);
+            });
             rp.deliver(std::move(all_ids));
           },
           [=](caf::error& err) mutable { rp.deliver(std::move(err)); });

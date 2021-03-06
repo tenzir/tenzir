@@ -26,7 +26,9 @@
 #include <caf/scoped_actor.hpp>
 #include <caf/settings.hpp>
 
+#include <filesystem>
 #include <string>
+#include <system_error>
 #include <unistd.h>
 #include <vector>
 
@@ -80,9 +82,16 @@ spawn_node(caf::scoped_actor& self, const caf::settings& opts) {
   }
   // Pointer to the root command to system::node.
   auto actor = self->spawn(system::node, id, abs_dir, shutdown_grace_period);
-  actor->attach_functor([=, pid_file = std::move(pid_file)](const caf::error&) {
+  actor->attach_functor([=, pid_file = std::move(pid_file)](
+                          const caf::error&) -> caf::result<void> {
     VAST_DEBUG("node removes PID lock: {}", pid_file.str());
-    rm(pid_file);
+    std::error_code err{};
+    std::filesystem::remove_all(std::filesystem::path{pid_file.str()}, err);
+    if (err)
+      return caf::make_error(ec::filesystem_error,
+                             fmt::format("unable to remove pid file {} : {}",
+                                         pid_file, err.message()));
+    return {};
   });
   scope_linked<node_actor> node{std::move(actor)};
   auto spawn_component = [&](std::string name) {

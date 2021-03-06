@@ -17,8 +17,6 @@
 
 #if VAST_ENABLE_PCAP
 
-#  include "vast/format/pcap.hpp"
-
 #  include "vast/test/data.hpp"
 #  include "vast/test/fixtures/actor_system.hpp"
 #  include "vast/test/test.hpp"
@@ -27,8 +25,11 @@
 #  include "vast/concept/parseable/vast/address.hpp"
 #  include "vast/defaults.hpp"
 #  include "vast/error.hpp"
+#  include "vast/format/pcap.hpp"
 #  include "vast/table_slice.hpp"
 #  include "vast/table_slice_column.hpp"
+
+#  include <filesystem>
 
 using namespace vast;
 
@@ -106,7 +107,8 @@ TEST(PCAP read/write 1) {
   auto file = "vast-unit-test-nmap-vsn.pcap";
   caf::put(settings, "vast.export.write", file);
   format::pcap::writer writer{settings};
-  auto deleter = caf::detail::make_scope_guard([&] { rm(file); });
+  auto deleter = caf::detail::make_scope_guard(
+    [&] { std::filesystem::remove_all(std::filesystem::path{file}); });
   REQUIRE_EQUAL(writer.write(slice), caf::none);
 }
 
@@ -141,7 +143,8 @@ TEST(PCAP read/write 2) {
   auto file = "vast-unit-test-workshop-2011-browse.pcap";
   caf::put(settings, "vast.export.write", file);
   format::pcap::writer writer{settings};
-  auto deleter = caf::detail::make_scope_guard([&] { rm(file); });
+  auto deleter = caf::detail::make_scope_guard(
+    [&] { std::filesystem::remove_all(std::filesystem::path{file}); });
   REQUIRE_EQUAL(writer.write(slice), caf::none);
 }
 
