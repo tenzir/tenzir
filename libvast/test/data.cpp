@@ -21,6 +21,7 @@
 #include "vast/concept/printable/vast/json.hpp"
 #include "vast/detail/deserialize.hpp"
 #include "vast/detail/serialize.hpp"
+#include "vast/fmt_integration.hpp"
 
 #include <caf/test/dsl.hpp>
 

@@ -163,6 +163,9 @@ struct view_trait<data> {
   using type = data_view;
 };
 
+caf::expected<std::string> to_string(const view<data>& d);
+caf::expected<std::string> to_string_test(const view<data>& d);
+
 // -- operators ----------------------------------------------------------------
 
 // We cannot use operator== and operator!= here because data has a non-explicit

@@ -22,6 +22,8 @@
 #include "vast/concept/printable/vast/view.hpp"
 #include "vast/detail/escapers.hpp"
 
+#include "vast/fmt_integration.hpp"
+
 #include <caf/optional.hpp>
 
 #include <sstream>
@@ -40,7 +42,6 @@ using namespace vast::printer_literals;
     data data_expr{x};                                                         \
     CHECK_EQUAL(to_string(data_expr), str);                                    \
     CHECK_EQUAL(to_string(make_view(data_expr)), str);                         \
-    fmt::print("{:a}\n", data_expr);                                           \
   }
 
 // -- numeric -----------------------------------------------------------------
@@ -329,18 +330,6 @@ TEST(data) {
   CHECK_TO_STRING(d, "512.0ns");
   data v{list{r, b, c, i, s, d}};
   CHECK_TO_STRING(v, "[12.21, T, 23, 42, \"foobar\", 512.0ns]");
-
-  data rec = vast::record{ {"test-field", data{v} }, {"test-field2", data{vast::record{}} } };
-  data rec2 = vast::record{ {"abcd", data{rec} }, {"QWE", data{ list{rec, v}} } };
-  fmt::print("{:jn}\n\n", rec);
-  fmt::print("{:jnr}\n\n", rec);
-  fmt::print("{:ji2}\n\n", rec);
-  fmt::print("{:ji8}\n\n", rec);
-
-  fmt::print("{:jn}\n\n", rec2);
-  fmt::print("{:jnr}\n\n", rec2);
-  fmt::print("{:ji2}\n\n", rec2);
-  fmt::print("{:ji8}\n\n", rec2);
 }
 
 // -- std::chrono types -------------------------------------------------------

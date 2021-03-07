@@ -95,20 +95,3 @@ private:
 };
 
 } // namespace vast
-
-namespace fmt {
-
-template <>
-struct formatter<vast::pattern> {
-  template <typename ParseContext>
-  constexpr auto parse(ParseContext& ctx) {
-    return std::end(ctx);
-  }
-
-  template <typename FormatContext>
-  auto format(const vast::pattern& p, FormatContext& ctx) {
-    return format_to(ctx.out(), "/{}/", p.string());
-  }
-};
-
-} // namespace fmt
