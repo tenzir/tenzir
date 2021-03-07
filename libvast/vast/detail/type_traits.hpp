@@ -119,31 +119,6 @@ using is_same_or_derived_t = typename is_same_or_derived<A, B>::type;
 template <class A, class B>
 inline constexpr bool is_same_or_derived_v = is_same_or_derived<A, B>::value;
 
-template <bool B, class T = void>
-using disable_if = std::enable_if<!B, T>;
-
-template <bool B, class T = void>
-using disable_if_t = typename disable_if<B, T>::type;
-
-template <class A, class B>
-using disable_if_same_or_derived = disable_if<is_same_or_derived_v<A, B>>;
-
-template <class A, class B>
-using disable_if_same_or_derived_t =
-  typename disable_if_same_or_derived<A, B>::type;
-
-template <class T, class U, class R = T>
-using enable_if_same = std::enable_if_t<std::is_same_v<T, U>, R>;
-
-template <class T, class U, class R = T>
-using enable_if_same_t = typename enable_if_same<T, U, R>::type;
-
-template <class T, class U, class R = T>
-using disable_if_same = disable_if_t<std::is_same_v<T, U>, R>;
-
-template <class T, class U, class R = T>
-using disable_if_same_t = typename disable_if_same<T, U, R>::type;
-
 // -- traits -----------------------------------------------------------------
 
 template <class T, class... Ts>

@@ -23,6 +23,7 @@
 #include "vast/detail/overload.hpp"
 #include "vast/detail/string.hpp"
 #include "vast/detail/type_traits.hpp"
+#include "vast/die.hpp"
 #include "vast/error.hpp"
 #include "vast/logger.hpp"
 #include "vast/path.hpp"
@@ -185,10 +186,10 @@ caf::optional<record> make_record(const record_type& rt, Iterator& begin,
     return caf::none;
   }
   record result;
-  for (auto& field : rt.fields) {
+  for (const auto& field : rt.fields) {
     if (begin == end)
       return caf::none;
-    if (auto nested = caf::get_if<record_type>(&field.type)) {
+    if (const auto* nested = caf::get_if<record_type>(&field.type)) {
       if (auto r = make_record(*nested, begin, end, --max_recursion))
         result.emplace(field.name, std::move(*r));
       else
@@ -219,10 +220,10 @@ record flatten(const record& r, size_t max_recursion) {
               defaults::max_recursion);
     return result;
   }
-  for (auto& [k, v] : r) {
-    if (auto nested = caf::get_if<record>(&v))
+  for (const auto& [k, v] : r) {
+    if (const auto* nested = caf::get_if<record>(&v))
       for (auto& [nk, nv] : flatten(*nested, --max_recursion))
-        result.emplace(k + '.' + nk, std::move(nv));
+        result.emplace(fmt::format("{}.{}", k, nk), std::move(nv));
     else
       result.emplace(k, v);
   }
@@ -237,13 +238,13 @@ flatten(const record& r, const record_type& rt, size_t max_recursion) {
               defaults::max_recursion);
     return result;
   }
-  for (auto& [k, v] : r) {
-    if (auto ir = caf::get_if<record>(&v)) {
+  for (const auto& [k, v] : r) {
+    if (const auto* ir = caf::get_if<record>(&v)) {
       // Look for a matching field of type record.
-      auto field = rt.find(k);
+      const auto* field = rt.find(k);
       if (field == nullptr)
         return caf::none;
-      auto irt = caf::get_if<record_type>(&field->type);
+      const auto* irt = caf::get_if<record_type>(&field->type);
       if (!irt)
         return caf::none;
       // Recurse.
@@ -252,7 +253,7 @@ flatten(const record& r, const record_type& rt, size_t max_recursion) {
         return caf::none;
       // Hoist nested record into parent scope by prefixing field names.
       for (auto& [nk, nv] : *nested)
-        result.emplace(k + '.' + nk, std::move(nv));
+        result.emplace(fmt::format("{}.{}", k, nk), std::move(nv));
     } else {
       result.emplace(k, v);
     }
@@ -267,8 +268,8 @@ flatten(const data& x, const type& t, size_t max_recursion) {
               defaults::max_recursion);
     return caf::none;
   }
-  auto xs = caf::get_if<record>(&x);
-  auto rt = caf::get_if<record_type>(&t);
+  const auto* xs = caf::get_if<record>(&x);
+  const auto* rt = caf::get_if<record_type>(&t);
   if (xs && rt)
     return flatten(*xs, *rt, --max_recursion);
   return caf::none;
@@ -292,9 +293,9 @@ namespace {
 
 caf::optional<record> unflatten(const record& r, const record_type* rt) {
   record result;
-  for (auto& [k, v] : r) {
-    auto nested = &result;
-    auto nested_type = rt;
+  for (const auto& [k, v] : r) {
+    auto* nested = &result;
+    const auto* nested_type = rt;
     // Split field name by '.' to obtain intermediate records.
     auto split = detail::split(k, ".");
     if (split.size() == 1) {
@@ -306,7 +307,7 @@ caf::optional<record> unflatten(const record& r, const record_type* rt) {
         auto& field_name = split[i];
         if (rt) {
           // Does the record type contain a corresponding field?
-          auto field = nested_type->find(field_name);
+          const auto* field = nested_type->find(field_name);
           if (field == nullptr)
             return caf::none;
           // Is the field a record type?
@@ -323,7 +324,7 @@ caf::optional<record> unflatten(const record& r, const record_type* rt) {
     }
     // Insert leaf value into deepest record.
     if (rt) {
-      auto field = nested_type->find(split.back());
+      const auto* field = nested_type->find(split.back());
       if (!(field && type_check(field->type, v)))
         return caf::none;
     }
@@ -345,8 +346,8 @@ caf::optional<record> unflatten(const record& r, const record_type& rt) {
 }
 
 caf::optional<data> unflatten(const data& x, const type& t) {
-  auto r = caf::get_if<record>(&x);
-  auto rt = caf::get_if<record_type>(&t);
+  const auto* r = caf::get_if<record>(&x);
+  const auto* rt = caf::get_if<record_type>(&t);
   if (r && rt)
     return unflatten(*r, *rt);
   return caf::none;
@@ -360,9 +361,9 @@ void merge(const record& src, record& dst, size_t max_recursion) {
               defaults::max_recursion);
     return;
   }
-  for (auto& [k, v] : src) {
-    if (auto src_rec = caf::get_if<record>(&v)) {
-      auto dst_rec = caf::get_if<record>(&dst[k]);
+  for (const auto& [k, v] : src) {
+    if (const auto* src_rec = caf::get_if<record>(&v)) {
+      auto* dst_rec = caf::get_if<record>(&dst[k]);
       if (!dst_rec) {
         // Overwrite key with empty record on type mismatch.
         dst[k] = record{};
@@ -382,7 +383,7 @@ void merge(const record& src, record& dst) {
 }
 
 caf::error convert(const map& xs, caf::dictionary<caf::config_value>& ys) {
-  for (auto& [k, v] : xs) {
+  for (const auto& [k, v] : xs) {
     caf::config_value x;
     if (auto err = convert(v, x))
       return err;
@@ -392,7 +393,7 @@ caf::error convert(const map& xs, caf::dictionary<caf::config_value>& ys) {
 }
 
 caf::error convert(const record& xs, caf::dictionary<caf::config_value>& ys) {
-  for (auto& [k, v] : xs) {
+  for (const auto& [k, v] : xs) {
     caf::config_value x;
     if (auto err = convert(v, x))
       return err;
@@ -433,7 +434,7 @@ caf::error convert(const data& d, caf::config_value& cv) {
     [&](const list& xs) -> caf::error {
       caf::config_value::list result;
       result.reserve(xs.size());
-      for (auto x : xs) {
+      for (const auto& x : xs) {
         caf::config_value y;
         if (auto err = convert(x, y))
           return err;
@@ -462,7 +463,7 @@ caf::error convert(const data& d, caf::config_value& cv) {
 }
 
 bool convert(const caf::dictionary<caf::config_value>& xs, record& ys) {
-  for (auto& [k, v] : xs) {
+  for (const auto& [k, v] : xs) {
     data y;
     if (!convert(v, y))
       return false;
@@ -489,14 +490,14 @@ bool convert(const caf::config_value& x, data& y) {
       y = to_string(value);
       return true;
     },
-    [&](caf::uri value) -> bool {
+    [&](const caf::uri& value) -> bool {
       y = to_string(value);
       return true;
     },
     [&](const caf::config_value::list& xs) -> bool {
       list result;
       result.reserve(xs.size());
-      for (auto x : xs) {
+      for (const auto& x : xs) {
         data element;
         if (!convert(x, element)) {
           return false;
@@ -547,20 +548,19 @@ data parse(const YAML::Node& node) {
     case YAML::NodeType::Sequence: {
       list xs;
       xs.reserve(node.size());
-      for (size_t i = 0; i < node.size(); ++i)
-        xs.push_back(parse(node[i]));
+      for (const auto& element : node)
+        xs.push_back(parse(element));
       return xs;
     }
     case YAML::NodeType::Map: {
       record xs;
       xs.reserve(node.size());
-      for (auto& pair : node)
+      for (const auto& pair : node)
         xs.emplace(pair.first.as<std::string>(), parse(pair.second));
       return xs;
     }
   }
-  VAST_ASSERT(!"unhandled YAML node type in switch statement");
-  throw std::logic_error{"unhandled YAML node type in switch statement"};
+  die("unhandled YAML node type in switch statement");
 }
 
 } // namespace
@@ -631,14 +631,14 @@ void print(YAML::Emitter& out, const data& x) {
     [&out](const enumeration& x) { out << to_string(x); },
     [&out](const list& xs) {
       out << YAML::BeginSeq;
-      for (auto& x : xs)
+      for (const auto& x : xs)
         print(out, x);
       out << YAML::EndSeq;
     },
     // We treat maps like records.
     [&out](const map& xs) {
       out << YAML::BeginMap;
-      for (auto& [k, v] : xs) {
+      for (const auto& [k, v] : xs) {
         out << YAML::Key;
         print(out, k);
         out << YAML::Value;
@@ -648,7 +648,7 @@ void print(YAML::Emitter& out, const data& x) {
     },
     [&out](const record& xs) {
       out << YAML::BeginMap;
-      for (auto& [k, v] : xs) {
+      for (const auto& [k, v] : xs) {
         out << YAML::Key << k << YAML::Value;
         print(out, v);
       }
