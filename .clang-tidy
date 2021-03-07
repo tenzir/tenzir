@@ -22,4 +22,6 @@ CheckOptions:
     value:           true
   - key:             misc-non-private-member-variables-in-classes.IgnoreClassesWithAllMemberVariablesBeingPublic
     value:           true
+  - key:             readability-else-after-return.WarnOnConditionVariables
+    value:           false
 ...

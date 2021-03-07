@@ -135,6 +135,12 @@ public:
   /// Default-constructs empty data.
   data() = default;
 
+  data(const data&) = default;
+  data& operator=(const data&) = default;
+  data(data&&) noexcept = default;
+  data& operator=(data&&) noexcept = default;
+  ~data() noexcept = default;
+
   /// Constructs data from optional data.
   /// @param x The optional data instance.
   template <class T>
@@ -151,8 +157,8 @@ public:
 
   /// Constructs data.
   /// @param x The instance to construct data from.
-  template <class T, class = detail::disable_if_t<
-                       std::is_same_v<to_data_type<T>, std::false_type>>>
+  template <class T, class = std::enable_if_t<std::negation_v<
+                       std::is_same<to_data_type<T>, std::false_type>>>>
   data(T&& x) : data_{to_data_type<T>(std::forward<T>(x))} {
     // nop
   }
@@ -186,11 +192,11 @@ public:
 
   /// @cond PRIVATE
 
-  variant& get_data() {
+  [[nodiscard]] variant& get_data() {
     return data_;
   }
 
-  const variant& get_data() const {
+  [[nodiscard]] const variant& get_data() const {
     return data_;
   }
 
@@ -214,6 +220,7 @@ struct data_traits {
   using type = std::false_type;
 };
 
+// NOLINTNEXTLINE
 #define VAST_DATA_TRAIT(name)                                                  \
   template <>                                                                  \
   struct data_traits<name> {                                                   \
@@ -327,7 +334,7 @@ data to_data(const T& x, Opts&&... opts) {
 
 caf::error convert(const record& xs, caf::dictionary<caf::config_value>& ys);
 caf::error convert(const record& xs, caf::config_value& cv);
-caf::error convert(const data& x, caf::config_value& cv);
+caf::error convert(const data& d, caf::config_value& cv);
 
 bool convert(const caf::dictionary<caf::config_value>& xs, record& ys);
 bool convert(const caf::dictionary<caf::config_value>& xs, data& y);
