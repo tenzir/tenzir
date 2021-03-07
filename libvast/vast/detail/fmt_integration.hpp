@@ -28,23 +28,51 @@ namespace vast::detail {
 /// A base class for providing parsing vast types formatting options.
 struct vast_formatter_base {
   char presentation = 'a';
-   presentation = 'a';
+  bool ndjson = false;
+  bool remove_spaces = false;
+  int indent = 2;
 
   template <typename ParseContext>
   constexpr auto parse(ParseContext& ctx) {
-    for (auto it = std::begin(ctx); it != std::end(ctx); ++it) {
-      switch (*it) {
-        case 'a':
-        case 'j':
-          presentation = *it;
-          break;
-        case '}':
-          return it;
-        default:
-          throw fmt::format_error("invalid format");
+    auto it = std::begin(ctx);
+    auto end = std::end(ctx);
+    if (it != end) {
+      if (*it == 'a') {
+        ++it;
+      } else if (*it == 'j') {
+        presentation = 'j';
+        if (++it != end && *it != '}') {
+          // JSON format is the following:
+          // 1. "{:j[n[r]]}" this stands for NDJSON and optionl `r`
+          //    stands for removing spaces.
+          // 2. "{:j[i][NN]}" Indented multiline JSON, the size of indent
+          //    by default is 2, and can be set explicitly with 2 digit integer,
+          //    indentation greater than 100 make no sense.
+          if (*it == 'n') {
+            ndjson = true;
+            if (++it != end) {
+              if ((remove_spaces = *it == 'r'))
+                ++it;
+            }
+          } else if (*it == 'i' || std::isdigit(*it)) {
+            if (*it == 'i')
+              ++it;
+            if (it != end && std::isdigit(*it)) {
+              indent = *it - '0';
+              if (++it != end && std::isdigit(*it)) {
+                indent = indent * 10 + (*it - '0');
+                ++it;
+              }
+            }
+          }
+        }
       }
+
+      // Check for garbage in format-string.
+      if (*it != '}')
+        throw fmt::format_error("invalid vast::data format-string");
     }
-    return std::end(ctx);
+    return it;
   }
 };
 

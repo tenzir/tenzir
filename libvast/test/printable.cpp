@@ -317,25 +317,30 @@ TEST(not) {
 TEST(data) {
   data r{real{12.21}};
   CHECK_TO_STRING(r, "12.21");
-  fmt::print("r = {:a}\n", r);
   data b{true};
   CHECK_TO_STRING(b, "T");
-  fmt::print("b = {:a}\n", b);
   data c{count{23}};
   CHECK_TO_STRING(c, "23");
-  fmt::print("c = {:a}\n", c);
   data i{integer{42}};
-  CHECK_TO_STRING(i, "+42");
-  fmt::print("i = {:a}\n", i);
+  CHECK_TO_STRING(i, "42");
   data s{std::string{"foobar"}};
   CHECK_TO_STRING(s, "\"foobar\"");
-  fmt::print("s = {:a}\n", s);
   data d{duration{512}};
   CHECK_TO_STRING(d, "512.0ns");
-  fmt::print("d = {:a}\n", d);
   data v{list{r, b, c, i, s, d}};
-  CHECK_TO_STRING(v, "[12.21, T, 23, +42, \"foobar\", 512.0ns]");
-  fmt::print("v = {:a}\n", v);
+  CHECK_TO_STRING(v, "[12.21, T, 23, 42, \"foobar\", 512.0ns]");
+
+  data rec = vast::record{ {"test-field", data{v} }, {"test-field2", data{vast::record{}} } };
+  data rec2 = vast::record{ {"abcd", data{rec} }, {"QWE", data{ list{rec, v}} } };
+  fmt::print("{:jn}\n\n", rec);
+  fmt::print("{:jnr}\n\n", rec);
+  fmt::print("{:ji2}\n\n", rec);
+  fmt::print("{:ji8}\n\n", rec);
+
+  fmt::print("{:jn}\n\n", rec2);
+  fmt::print("{:jnr}\n\n", rec2);
+  fmt::print("{:ji2}\n\n", rec2);
+  fmt::print("{:ji8}\n\n", rec2);
 }
 
 // -- std::chrono types -------------------------------------------------------
