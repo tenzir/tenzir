@@ -19,7 +19,6 @@
 #include "vast/concept/printable/vast/filesystem.hpp"
 #include "vast/concept/printable/vast/uuid.hpp"
 #include "vast/detail/overload.hpp"
-#include "vast/directory.hpp"
 #include "vast/error.hpp"
 #include "vast/fbs/segment.hpp"
 #include "vast/fbs/utils.hpp"
@@ -379,9 +378,19 @@ void segment_store::inspect_status(caf::settings& xs,
 }
 
 caf::error segment_store::register_segments() {
-  for (auto filename : directory{segment_path()})
-    if (auto err = register_segment(filename))
-      return err;
+  auto p = std::filesystem::path{segment_path().str()};
+  if (!std::filesystem::exists(p))
+    return caf::none;
+  std::error_code err{};
+  std::filesystem::directory_iterator dir{p, err};
+  if (err)
+    return caf::make_error(ec::filesystem_error,
+                           fmt::format("failed to find segment path {} : {}",
+                                       segment_path(), err.message()));
+  for (const auto& entry : dir)
+    if (entry.exists())
+      if (auto err = register_segment(vast::path{entry.path().string()}))
+        return err;
   return caf::none;
 }
 
