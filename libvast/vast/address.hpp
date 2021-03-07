@@ -168,12 +168,12 @@ namespace fmt {
 
 template <>
 struct formatter<vast::address> {
-  template <typename ParseContext>
+  template <class ParseContext>
   constexpr auto parse(ParseContext& ctx) {
     return std::end(ctx);
   }
 
-  template <typename FormatContext>
+  template <class FormatContext>
   auto format(const vast::address& a, FormatContext& ctx) {
     char buf[INET6_ADDRSTRLEN];
     std::memset(buf, 0, sizeof(buf));

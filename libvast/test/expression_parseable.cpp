@@ -19,6 +19,7 @@
 #include "vast/concept/printable/stream.hpp"
 #include "vast/concept/printable/to_string.hpp"
 #include "vast/concept/printable/vast/expression.hpp"
+#include "vast/fmt_integration.hpp"
 
 #include <caf/sum_type.hpp>
 

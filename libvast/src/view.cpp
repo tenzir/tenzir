@@ -11,6 +11,7 @@
 #include "vast/detail/narrow.hpp"
 #include "vast/detail/overload.hpp"
 #include "vast/type.hpp"
+#include "vast/fmt_integration.hpp"
 
 #include <algorithm>
 #include <regex>
@@ -47,6 +48,15 @@ bool operator==(pattern_view x, pattern_view y) noexcept {
 
 bool operator<(pattern_view x, pattern_view y) noexcept {
   return x.string() < y.string();
+}
+
+caf::expected<std::string> to_string(const view<data>& d)
+{
+  return fmt::format( "{}", d );
+}
+caf::expected<std::string> to_string_test(const view<data>& d)
+{
+  return fmt::format( "{}", d );
 }
 
 bool is_equal(const data& x, const data_view& y) {

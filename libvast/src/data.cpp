@@ -20,6 +20,7 @@
 #include "vast/detail/string.hpp"
 #include "vast/detail/type_traits.hpp"
 #include "vast/die.hpp"
+#include "vast/fmt_integration.hpp"
 #include "vast/error.hpp"
 #include "vast/logger.hpp"
 
