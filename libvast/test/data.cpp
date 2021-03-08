@@ -373,20 +373,24 @@ TEST(nesting depth) {
   CHECK_EQUAL(depth(flattened), 1ull);
 }
 
-TEST(fmt rendering alpha) {
-  // Ensure that we don't produce trailing zeros for floating point data.
-  auto x = data{-4.2};
-  auto x2 = data{
-    list{data{-4.2}, data{"xxx\r\nyyy"},
-         record{{"f1", data{2.71828}},
-                {"f2", data{3.1458}},
-                {"fieldddd", data{"Thestring!!!"}}},
-         map{{data{"f1"}, data{2.71828}},
-             {data{list{data{222}, data{"XXXX"}}}, data{pattern{"pattern"}}}},
-         record{}, map{}, list{}}};
+TEST(fmt rendering numbers) {
+  auto x = data{-3.14};
+  CHECK_EQUAL(fmt::format("{}", data{x}), "-3.14");
+  CHECK_EQUAL(fmt::format("{:a}", data{x}), "-3.14");
+  CHECK_EQUAL(fmt::format("{:j}", data{x}), "-3.14");
 
-  CHECK_EQUAL(fmt::format("{}", x), "-4.2");
-  fmt::print("ascii: {:a}", x2);
-  // CHECK_EQUAL(fmt::format("{}", x2), std::string{"-4.2"});
-  CHECK_EQUAL(fmt::format("{:j}", x), "-4.2");
+  x = data{2.71828};
+  CHECK_EQUAL(fmt::format("{}", data{x}), "2.71828");
+  CHECK_EQUAL(fmt::format("{:a}", data{x}), "2.71828");
+  CHECK_EQUAL(fmt::format("{:j}", data{x}), "2.71828");
+
+  x = data{-42};
+  CHECK_EQUAL(fmt::format("{}", data{x}), "-42");
+  CHECK_EQUAL(fmt::format("{:a}", data{x}), "-42");
+  CHECK_EQUAL(fmt::format("{:j}", data{x}), "-42");
+
+  x = data{42};
+  CHECK_EQUAL(fmt::format("{}", data{x}), "42");
+  CHECK_EQUAL(fmt::format("{:a}", data{x}), "42");
+  CHECK_EQUAL(fmt::format("{:j}", data{x}), "42");
 }

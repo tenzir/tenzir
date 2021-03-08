@@ -357,22 +357,22 @@ struct formatter<vast::data> : public vast::detail::vast_formatter_base {
       return (*this)(ascii_escape_string{s});
     }
     auto operator()(const vast::list& xs) {
-      return format_to(out_, "[{}]", join(xs, ", "));
+      return format_to(out_, "[{}]", ::fmt::join(xs, ", "));
     }
     auto operator()(const vast::view<vast::list>& xs) {
-      return format_to(out_, "[{}]", join(xs, ", "));
+      return format_to(out_, "[{}]", ::fmt::join(xs, ", "));
     }
     auto operator()(const vast::map& xs) {
-      return format_to(out_, "{{{}}}", join(xs, ", "));
+      return format_to(out_, "{{{}}}", ::fmt::join(xs, ", "));
     }
     auto operator()(const vast::view<vast::map>& xs) {
-      return format_to(out_, "{{{}}}", join(xs, ", "));
+      return format_to(out_, "{{{}}}", ::fmt::join(xs, ", "));
     }
     auto operator()(const vast::record& xs) {
-      return format_to(out_, "<{}>", join(xs, ", "));
+      return format_to(out_, "<{}>", ::fmt::join(xs, ", "));
     }
     auto operator()(const vast::view<vast::record>& xs) {
-      return format_to(out_, "<{}>", join(xs, ", "));
+      return format_to(out_, "<{}>", ::fmt::join(xs, ", "));
     }
 
     template <class T>

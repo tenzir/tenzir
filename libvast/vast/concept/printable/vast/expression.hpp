@@ -16,6 +16,7 @@
 #include "vast/concept/printable/vast/offset.hpp"
 #include "vast/concept/printable/vast/operator.hpp"
 #include "vast/concept/printable/vast/type.hpp"
+#include "vast/fmt_integration.hpp"
 #include "vast/data.hpp"
 #include "vast/expression.hpp"
 
