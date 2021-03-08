@@ -8,13 +8,14 @@
 
 #pragma once
 
+#include "vast/fwd.hpp"
+
 #include "vast/aliases.hpp"
 #include "vast/data.hpp"
 #include "vast/detail/assert.hpp"
 #include "vast/detail/iterator.hpp"
 #include "vast/detail/operators.hpp"
 #include "vast/detail/type_traits.hpp"
-#include "vast/fwd.hpp"
 #include "vast/time.hpp"
 
 #include <caf/intrusive_ptr.hpp>
@@ -205,7 +206,7 @@ public:
     return static_cast<bool>(ptr_);
   }
 
-  auto operator->() const {
+  auto operator-> () const {
     return ptr_.get();
   }
 
@@ -265,12 +266,8 @@ namespace detail {
 /// @relates view_trait
 template <class T>
 class container_view_iterator
-  : public detail::iterator_facade<
-      container_view_iterator<T>,
-      T,
-      std::random_access_iterator_tag,
-      T
-    > {
+  : public detail::iterator_facade<container_view_iterator<T>, T,
+                                   std::random_access_iterator_tag, T> {
   friend iterator_access;
 
 public:
@@ -315,9 +312,8 @@ private:
 /// Base class for container views.
 /// @relates view_trait
 template <class T>
-struct container_view
-  : caf::ref_counted,
-    detail::totally_ordered<container_view<T>> {
+struct container_view : caf::ref_counted,
+                        detail::totally_ordered<container_view<T>> {
   using value_type = T;
   using size_type = size_t;
   using iterator = detail::container_view_iterator<T>;
@@ -391,9 +387,8 @@ struct map_view_ptr : container_view_ptr<std::pair<data_view, data_view>> {};
 
 /// A view over a @ref map.
 /// @relates view_trait
-class default_map_view
-  : public container_view<std::pair<data_view, data_view>>,
-    detail::totally_ordered<default_map_view> {
+class default_map_view : public container_view<std::pair<data_view, data_view>>,
+                         detail::totally_ordered<default_map_view> {
 public:
   explicit default_map_view(const map& xs);
 

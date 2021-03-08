@@ -16,8 +16,8 @@
 #include "vast/fwd.hpp"
 
 #include "vast/aliases.hpp"
-#include "vast/detail/escapers.hpp"
 #include "vast/data.hpp"
+#include "vast/detail/escapers.hpp"
 #include "vast/view.hpp"
 
 #include <chrono>
@@ -302,12 +302,13 @@ struct formatter<vast::map::value_type> : vast::detail::empty_formatter_base {
 };
 
 template <>
-struct formatter<std::pair<vast::view<vast::data>,vast::view<vast::data>>> :
-  formatter<vast::map::value_type> {};
+struct formatter<std::pair<vast::view<vast::data>, vast::view<vast::data>>>
+  : formatter<vast::map::value_type> {};
 
 // Specialization which implements formatting of `<string,data>` pair.
 template <>
-struct formatter<vast::record::value_type> : vast::detail::empty_formatter_base {
+struct formatter<vast::record::value_type>
+  : vast::detail::empty_formatter_base {
   template <class ValueType, class FormatContext>
   auto format(const ValueType& v, FormatContext& ctx) {
     return fmt::format_to(ctx.out(), "{}: {}", v.first, v.second);
@@ -315,8 +316,8 @@ struct formatter<vast::record::value_type> : vast::detail::empty_formatter_base 
 };
 
 template <>
-struct formatter<std::pair<std::string_view,vast::view<vast::data>>> :
-  formatter<vast::record::value_type> {};
+struct formatter<std::pair<std::string_view, vast::view<vast::data>>>
+  : formatter<vast::record::value_type> {};
 
 /// Definition of fmt-formatting rules for vast::data.
 template <>
@@ -347,8 +348,7 @@ struct formatter<vast::data> : public vast::detail::vast_formatter_base {
                        vast::detail::fmt_wrapped<vast::duration>{d});
     }
     auto operator()(const vast::time& t) {
-      return format_to(out_, "{}",
-                       vast::detail::fmt_wrapped<vast::time>{t});
+      return format_to(out_, "{}", vast::detail::fmt_wrapped<vast::time>{t});
     }
     auto operator()(const std::string& s) {
       return (*this)(ascii_escape_string{s});
@@ -384,7 +384,8 @@ struct formatter<vast::data> : public vast::detail::vast_formatter_base {
   template <typename Output>
   struct json_visitor_base {
     Output out_;
-    json_visitor_base(Output out) : out_{std::move(out)} {}
+    json_visitor_base(Output out) : out_{std::move(out)} {
+    }
 
     auto operator()(caf::none_t) {
       return format_to(out_, "null");
@@ -429,7 +430,7 @@ struct formatter<vast::data> : public vast::detail::vast_formatter_base {
       if (!xs.empty()) {
         print_traits_.inc_indent();
         bool is_first = true;
-        for(const auto & x: xs) {
+        for (const auto& x : xs) {
           if (is_first) {
             is_first = false;
             print_traits_.format_indent_before_first_item(this->out_);
@@ -458,7 +459,7 @@ struct formatter<vast::data> : public vast::detail::vast_formatter_base {
       if (!xs.empty()) {
         print_traits_.inc_indent();
         bool is_first = true;
-        for(const auto & x: xs) {
+        for (const auto& x : xs) {
           if (is_first) {
             is_first = false;
             print_traits_.format_indent_before_first_item(this->out_);
@@ -500,7 +501,7 @@ struct formatter<vast::data> : public vast::detail::vast_formatter_base {
       if (!xs.empty()) {
         print_traits_.inc_indent();
         bool is_first = true;
-        for(const auto & x: xs) {
+        for (const auto& x : xs) {
           if (is_first) {
             is_first = false;
             print_traits_.format_indent_before_first_item(this->out_);
@@ -546,7 +547,8 @@ struct formatter<vast::data> : public vast::detail::vast_formatter_base {
     }
     template <class Output>
     void format_field_start(Output& out, std::string_view name) {
-      out = format_to(out, RemoveSpaces? "{}:" : "{}: ", json_escape_string{name});
+      out = format_to(out,
+                      RemoveSpaces ? "{}:" : "{}: ", json_escape_string{name});
     }
   };
 
@@ -572,7 +574,7 @@ struct formatter<vast::data> : public vast::detail::vast_formatter_base {
     }
     template <class Output>
     constexpr void format_indent(Output& out) const {
-      out = format_to(out, "\n{:<{}}", "", current_indent*indent_size);
+      out = format_to(out, "\n{:<{}}", "", current_indent * indent_size);
     }
     template <class Output>
     void format_field_start(Output& out, std::string_view name) {
@@ -582,19 +584,20 @@ struct formatter<vast::data> : public vast::detail::vast_formatter_base {
 
   template <class Data, class FormatContext>
   auto format(const Data& x, FormatContext& ctx) const {
-    auto do_format = [&x](auto f){ return caf::visit(f, x); };
+    auto do_format = [&x](auto f) { return caf::visit(f, x); };
     if (presentation == 'a') {
       return do_format(ascii_visitor{ctx.out()});
     } else if (presentation == 'j') {
       if (ndjson) {
         if (remove_spaces)
-          return do_format(json_visitor{ctx.out(), ndjson_print_traits<true>{}});
+          return do_format(
+            json_visitor{ctx.out(), ndjson_print_traits<true>{}});
         else
-          return do_format(json_visitor{ctx.out(), ndjson_print_traits<false>{}});
+          return do_format(
+            json_visitor{ctx.out(), ndjson_print_traits<false>{}});
       } else
         return do_format(json_visitor{ctx.out(), json_print_traits{indent}});
     } else if (presentation == 'y') {
-
     }
     return ctx.out();
   }
