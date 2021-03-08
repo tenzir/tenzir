@@ -22,6 +22,8 @@
 , tcpdump
 , utillinux
 , versionOverride ? null
+, withPlugins ? []
+, extraCmakeFlags ? []
 , disableTests ? true
 , buildType ? "Release"
 }:
@@ -54,6 +56,7 @@ let
   src = vast-source;
 
   version = if (versionOverride != null) then versionOverride else stdenv.lib.fileContents (nix-gitDescribe src);
+
 in
 
 stdenv.mkDerivation rec {
@@ -90,7 +93,11 @@ stdenv.mkDerivation rec {
     "-DCMAKE_INTERPROCEDURAL_OPTIMIZATION:BOOL=ON"
     # Workaround for false positives in LTO mode.
     "-DCMAKE_CXX_FLAGS:STRING=-Wno-error=maybe-uninitialized"
-  ] ++ lib.optional disableTests "-DVAST_ENABLE_UNIT_TESTS=OFF";
+  ] ++ lib.optional disableTests "-DVAST_ENABLE_UNIT_TESTS=OFF"
+    # Plugin Section
+    ++ lib.optional (withPlugins != [])
+       "-DVAST_PLUGINS=${lib.concatStringsSep ";" withPlugins}"
+    ++ extraCmakeFlags;
 
   hardeningDisable = lib.optional isStatic "pic";
 

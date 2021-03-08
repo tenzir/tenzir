@@ -1,5 +1,5 @@
 #!/usr/bin/env nix-shell
-#!nix-shell -I nixpkgs=https://github.com/NixOS/nixpkgs/archive/d4776f5826366c59eec5377f36bb4d74b54276bd.tar.gz -i bash -p git nix coreutils nix-prefetch-github
+#!nix-shell -I nixpkgs=https://github.com/NixOS/nixpkgs/archive/449b698a0b554996ac099b4e3534514528019269.tar.gz -i bash -p git nix coreutils nix-prefetch-github
 
 dir="$(dirname "$(readlink -f "$0")")"
 toplevel="$(git -C ${dir} rev-parse --show-toplevel)"
@@ -8,7 +8,40 @@ vast_rev="$(git -C "${toplevel}" rev-parse HEAD)"
 
 target="${STATIC_BINARY_TARGET:-vast}"
 
-if [ "$1" == "--use-head" ]; then
+USE_HEAD="off"
+cmakeFlags=""
+plugins=()
+
+while [ $# -ne 0 ]; do
+  case "$1" in
+    -D*)
+      cmakeFlags="$cmakeFlags \"$1\""
+      shift
+      continue;
+      ;;
+    -*=*)
+      optarg="$(echo "$1" | sed 's/[-_a-zA-Z0-9]*=//')"
+      ;;
+    *)
+      optarg=
+      ;;
+  esac
+  case "$1" in
+    --help|-h)
+      echo "${usage}" 1>&2
+      exit 1
+      ;;
+    --use-head)
+      USE_HEAD="on"
+      ;;
+    --with-plugin=*)
+      plugins+=("${optarg}")
+      ;;
+  esac
+  shift
+done
+
+if [ "${USE_HEAD}" == "on" ]; then
   source_json="$(nix-prefetch-github --rev=${vast_rev} tenzir vast)"
   desc="$(git -C ${dir} describe --tags --long --abbrev=10 HEAD)"
   read -r -d '' exp <<EOF
@@ -16,6 +49,8 @@ if [ "$1" == "--use-head" ]; then
   pkgsStatic."${target}".override {
     vast-source = fetchFromGitHub (builtins.fromJSON ''${source_json}'');
     versionOverride = "${desc}";
+    withPlugins = [ ${plugins[@]} ];
+    extraCmakeFlags = [ ${cmakeFlags} ];
   }
 EOF
 else
@@ -23,6 +58,8 @@ else
   with import ${dir} {};
   pkgsStatic."${target}".override {
     versionOverride = "${desc}";
+    withPlugins = [ ${plugins[@]} ];
+    extraCmakeFlags = [ ${cmakeFlags} ];
   }
 EOF
 fi
