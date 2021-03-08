@@ -10,8 +10,8 @@
 
 #include "vast/detail/narrow.hpp"
 #include "vast/detail/overload.hpp"
-#include "vast/type.hpp"
 #include "vast/fmt_integration.hpp"
+#include "vast/type.hpp"
 
 #include <algorithm>
 #include <regex>
@@ -50,13 +50,11 @@ bool operator<(pattern_view x, pattern_view y) noexcept {
   return x.string() < y.string();
 }
 
-caf::expected<std::string> to_string(const view<data>& d)
-{
-  return fmt::format( "{}", d );
+caf::expected<std::string> to_string(const view<data>& d) {
+  return fmt::format("{}", d);
 }
-caf::expected<std::string> to_string_test(const view<data>& d)
-{
-  return fmt::format( "{}", d );
+caf::expected<std::string> to_string_test(const view<data>& d) {
+  return fmt::format("{}", d);
 }
 
 bool is_equal(const data& x, const data_view& y) {
@@ -177,7 +175,7 @@ Result materialize_container(const T& xs) {
   return result;
 }
 
-} // namespace <anonymous>
+} // namespace
 
 list materialize(list_view_handle xs) {
   return materialize_container<list>(xs);
@@ -270,13 +268,13 @@ struct contains_predicate {
     }
   }
 
-  bool operator()(const view<std::string>& lhs,
-                  const view<std::string>& rhs) const {
+  bool
+  operator()(const view<std::string>& lhs, const view<std::string>& rhs) const {
     return rhs.find(lhs) != std::string::npos;
   }
 
-  bool operator()(const view<std::string>& lhs,
-                  const view<pattern>& rhs) const {
+  bool
+  operator()(const view<std::string>& lhs, const view<pattern>& rhs) const {
     return rhs.search(lhs);
   }
 
