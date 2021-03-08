@@ -177,11 +177,6 @@ bool exists(const path& p);
 /// @returns `no_error` on success or `filesystem_error` on failure.
 caf::error create_symlink(const path& target, const path& link);
 
-/// Deletes the path on the filesystem.
-/// @param p The path to a directory to delete.
-/// @returns `true` if *p* has been successfully deleted.
-bool rm(const path& p);
-
 /// If the path does not exist, create it as directory.
 /// @param p The path to a directory to create.
 /// @returns `caf::none` on success or if *p* exists already.

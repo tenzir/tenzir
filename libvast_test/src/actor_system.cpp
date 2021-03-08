@@ -13,10 +13,13 @@
 
 #include "fixtures/actor_system.hpp"
 
-#include "vast/detail/assert.hpp"
 #include "vast/fwd.hpp"
 
+#include "vast/detail/assert.hpp"
+
 #include <caf/io/middleman.hpp>
+
+#include <filesystem>
 
 namespace fixtures {
 
@@ -27,7 +30,7 @@ test_configuration::test_configuration() {
   set("logger.file-name", log_file);
   // Always begin with an empy log file.
   if (vast::exists(log_file))
-    vast::rm(log_file);
+    std::filesystem::remove_all(std::filesystem::path{log_file});
 }
 
 caf::error test_configuration::parse(int argc, char** argv) {
@@ -42,7 +45,7 @@ caf::error test_configuration::parse(int argc, char** argv) {
 actor_system::actor_system() : sys(config), self(sys, true) {
   // Clean up state from previous executions.
   if (vast::exists(directory))
-    vast::rm(directory);
+    std::filesystem::remove_all(std::filesystem::path{directory.str()});
 }
 
 actor_system::~actor_system() {
@@ -52,7 +55,7 @@ actor_system::~actor_system() {
 deterministic_actor_system::deterministic_actor_system() {
   // Clean up state from previous executions.
   if (vast::exists(directory))
-    vast::rm(directory);
+    std::filesystem::remove_all(std::filesystem::path{directory.str()});
 }
 
 } // namespace fixtures
