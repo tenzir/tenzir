@@ -438,6 +438,15 @@ tests:
       - command: -N export json '#type ni "suricata"'
         transformation: jq -ec '.'
 
+  # Nesting Records in Lists is not currently fully supported, but its presence
+  # should also not crash the JSON reader.
+  Nested Records:
+    tags: [import, json]
+    steps:
+      - command: '-N import --schema="type custom = record { a: list<record { b: string, c: count, }>, }" --type=custom json'
+        input: data/json/record-in-list.json
+      - command: -N export ascii '#type == "custom"'
+
   Zeek conn log aging:
     tags: [import-export, aging, zeek]
     fixture: AgingTester
