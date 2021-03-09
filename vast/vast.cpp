@@ -21,7 +21,6 @@
 #include "vast/detail/settings.hpp"
 #include "vast/detail/signal_handlers.hpp"
 #include "vast/detail/system.hpp"
-#include "vast/directory.hpp"
 #include "vast/error.hpp"
 #include "vast/event_types.hpp"
 #include "vast/logger.hpp"

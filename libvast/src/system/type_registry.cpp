@@ -16,7 +16,6 @@
 #include "vast/as_bytes.hpp"
 #include "vast/defaults.hpp"
 #include "vast/detail/fill_status_map.hpp"
-#include "vast/directory.hpp"
 #include "vast/error.hpp"
 #include "vast/event_types.hpp"
 #include "vast/io/read.hpp"
