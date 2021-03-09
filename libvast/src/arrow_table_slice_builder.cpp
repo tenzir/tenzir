@@ -389,10 +389,6 @@ private:
 
 class record_column_builder : public arrow_table_slice_builder::column_builder {
 public:
-  // There is no RecordBuilder in Arrow. A record is simply a list of structs
-  // (key-value pairs).
-  using arrow_builder_type = arrow::ListBuilder;
-
   using data_type = view<record>;
 
   record_column_builder(
@@ -439,7 +435,7 @@ public:
 
 private:
   std::shared_ptr<arrow::StructBuilder> struct_builder_;
-  std::shared_ptr<arrow_builder_type> list_builder_;
+  std::shared_ptr<arrow::ListBuilder> list_builder_;
 
   std::vector<std::unique_ptr<column_builder>> field_builders_;
 };
