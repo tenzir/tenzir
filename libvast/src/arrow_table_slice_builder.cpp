@@ -15,9 +15,8 @@
 
 #if VAST_ENABLE_ARROW
 
-#  include "vast/arrow_table_slice_builder.hpp"
-
 #  include "vast/arrow_table_slice.hpp"
+#  include "vast/arrow_table_slice_builder.hpp"
 #  include "vast/detail/byte_swap.hpp"
 #  include "vast/detail/narrow.hpp"
 #  include "vast/detail/overload.hpp"
@@ -61,17 +60,17 @@ struct primitive_column_builder_trait_base
 template <class T>
 struct column_builder_trait;
 
-#define PRIMITIVE_COLUMN_BUILDER_TRAIT(VastType, ArrowType)                    \
-  template <>                                                                  \
-  struct column_builder_trait<VastType>                                        \
-    : primitive_column_builder_trait_base<VastType, ArrowType> {}
+#  define PRIMITIVE_COLUMN_BUILDER_TRAIT(VastType, ArrowType)                  \
+    template <>                                                                \
+    struct column_builder_trait<VastType>                                      \
+      : primitive_column_builder_trait_base<VastType, ArrowType> {}
 
 PRIMITIVE_COLUMN_BUILDER_TRAIT(bool_type, arrow::BooleanType);
 PRIMITIVE_COLUMN_BUILDER_TRAIT(integer_type, arrow::Int64Type);
 PRIMITIVE_COLUMN_BUILDER_TRAIT(count_type, arrow::UInt64Type);
 PRIMITIVE_COLUMN_BUILDER_TRAIT(real_type, arrow::DoubleType);
 
-#undef PRIMITIVE_COLUMN_BUILDER_TRAIT
+#  undef PRIMITIVE_COLUMN_BUILDER_TRAIT
 
 template <>
 struct column_builder_trait<time_type>
@@ -388,6 +387,63 @@ private:
   std::unique_ptr<column_builder> val_builder_;
 };
 
+class record_column_builder : public arrow_table_slice_builder::column_builder {
+public:
+  // There is no RecordBuilder in Arrow. A record is simply a list of structs
+  // (key-value pairs).
+  using arrow_builder_type = arrow::ListBuilder;
+
+  using data_type = view<record>;
+
+  record_column_builder(
+    arrow::MemoryPool* pool, std::shared_ptr<arrow::DataType> struct_type,
+    std::vector<std::unique_ptr<column_builder>>&& field_builders)
+    : field_builders_{std::move(field_builders)} {
+    auto fields = std::vector<std::shared_ptr<arrow::ArrayBuilder>>{};
+    fields.reserve(field_builders_.size());
+    for (auto& field_builder : field_builders_)
+      fields.push_back(field_builder->arrow_builder());
+    struct_builder_ = std::make_shared<arrow::StructBuilder>(struct_type, pool,
+                                                             std::move(fields));
+    list_builder_ = std::make_shared<arrow::ListBuilder>(pool, struct_builder_);
+  }
+
+  bool add(data_view x) override {
+    if (caf::holds_alternative<view<caf::none_t>>(x))
+      return list_builder_->AppendNull().ok();
+    if (!list_builder_->Append().ok())
+      return false;
+    if (auto* xptr = caf::get_if<data_type>(&x)) {
+      for (auto field : **xptr) {
+        if (!struct_builder_->Append().ok())
+          return false;
+        for (auto& field_builder : field_builders_)
+          if (!field_builder->add(field.second))
+            return false;
+      }
+      return true;
+    }
+    return false;
+  }
+
+  std::shared_ptr<arrow::Array> finish() override {
+    std::shared_ptr<arrow::Array> result;
+    if (!list_builder_->Finish(&result).ok())
+      die("failed to finish Arrow column builder");
+    return result;
+  }
+
+  std::shared_ptr<arrow::ArrayBuilder> arrow_builder() const override {
+    return list_builder_;
+  }
+
+private:
+  std::shared_ptr<arrow::StructBuilder> struct_builder_;
+  std::shared_ptr<arrow_builder_type> list_builder_;
+
+  std::vector<std::unique_ptr<column_builder>> field_builders_;
+};
+
 } // namespace
 
 // -- member types -------------------------------------------------------------
@@ -419,8 +475,12 @@ arrow_table_slice_builder::column_builder::make(const type& t,
                                                   std::move(key_builder),
                                                   std::move(value_builder));
     },
-    [=](const record_type&) -> std::unique_ptr<column_builder> {
-      die("expected flat layout!");
+    [=](const record_type& x) -> std::unique_ptr<column_builder> {
+      auto field_builders = std::vector<std::unique_ptr<column_builder>>{};
+      for (const auto& field : x.fields)
+        field_builders.push_back(column_builder::make(field.type, pool));
+      return std::make_unique<record_column_builder>(pool, make_arrow_type(x),
+                                                     std::move(field_builders));
     },
     [=](const alias_type& x) -> std::unique_ptr<column_builder> {
       return column_builder::make(x.value_type, pool);
@@ -462,12 +522,12 @@ table_slice arrow_table_slice_builder::finish(
           reinterpret_cast<const unsigned char*>(serialized_layout.data()),
           serialized_layout.size());
   // Pack schema.
-#if ARROW_VERSION_MAJOR >= 2
+#  if ARROW_VERSION_MAJOR >= 2
   auto flat_schema = arrow::ipc::SerializeSchema(*schema_).ValueOrDie();
-#else
+#  else
   auto flat_schema
     = arrow::ipc::SerializeSchema(*schema_, nullptr).ValueOrDie();
-#endif
+#  endif
   auto schema_buffer
     = builder_.CreateVector(flat_schema->data(), flat_schema->size());
   // Pack record batch.
