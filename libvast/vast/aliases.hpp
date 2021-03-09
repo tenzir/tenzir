@@ -33,9 +33,6 @@ using map = detail::stable_map<data, data>;
 /// Maps field names to data elements.
 using record = detail::stable_map<std::string, data>;
 
-/// Default bitstream implementation.
-using default_bitstream = ewah_bitstream;
-
 /// Uniquely identifies a VAST event.
 using id = uint64_t;
 
@@ -47,8 +44,5 @@ constexpr id max_id = invalid_id - 1;
 
 /// The largest number of representable events.
 constexpr id max_events = max_id + 1;
-
-/// Iterates over CLI arguments.
-using cli_argument_iterator = std::vector<std::string>::const_iterator;
 
 } // namespace vast
