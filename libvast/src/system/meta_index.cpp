@@ -16,6 +16,7 @@
 #include "vast/data.hpp"
 #include "vast/detail/overload.hpp"
 #include "vast/detail/set_operations.hpp"
+#include "vast/detail/stable_set.hpp"
 #include "vast/detail/string.hpp"
 #include "vast/detail/tracepoint.hpp"
 #include "vast/expression.hpp"
@@ -52,9 +53,69 @@ partition_synopsis& meta_index_state::at(const uuid& partition) {
   return synopses.at(partition);
 }
 
+struct pruner {
+  expression operator()(caf::none_t) const {
+    return expression{};
+  }
+  expression operator()(const conjunction& c) const {
+    return conjunction{run(c)};
+  }
+  expression operator()(const disjunction& d) const {
+    return disjunction{run(d)};
+  }
+  expression operator()(const negation& n) const {
+    return negation{caf::visit(*this, n.expr())};
+  }
+  expression operator()(const predicate& p) const {
+    return p;
+  }
+
+  [[nodiscard]] std::vector<expression>
+  run(const std::vector<expression>& connective) const {
+    std::vector<expression> result;
+    detail::stable_set<std::string> memo;
+    for (const auto& operand : connective) {
+      const std::string* str = nullptr;
+      if (const auto* pred = caf::get_if<predicate>(&operand)) {
+        if (const auto* d = caf::get_if<data>(&pred->rhs)) {
+          if ((str = caf::get_if<std::string>(d))) {
+            if (memo.find(*str) != memo.end())
+              continue;
+            memo.insert(*str);
+            result.emplace_back(*pred);
+          }
+        }
+      }
+      if (!str)
+        result.push_back(caf::visit(*this, operand));
+    }
+    return result;
+  }
+};
+
+expression prune_all(expression e) {
+  expression result = caf::visit(pruner{}, e);
+  while (result != e) {
+    std::swap(result, e);
+    result = hoist(caf::visit(pruner{}, e));
+  }
+  return result;
+}
+
 std::vector<uuid> meta_index_state::lookup(const expression& expr) const {
-  VAST_ASSERT(!caf::holds_alternative<caf::none_t>(expr));
   auto start = system::stopwatch::now();
+  auto pruned = prune_all(expr);
+  auto result = lookup_impl(pruned);
+  auto delta = std::chrono::duration_cast<std::chrono::microseconds>(
+    system::stopwatch::now() - start);
+  VAST_DEBUG("meta index lookup found {} candidates in {} microseconds",
+             result.size(), delta.count());
+  VAST_TRACEPOINT(meta_index_lookup, delta.count(), result.size());
+  return result;
+}
+
+std::vector<uuid> meta_index_state::lookup_impl(const expression& expr) const {
+  VAST_ASSERT(!caf::holds_alternative<caf::none_t>(expr));
   // TODO: we could consider a flat_set<uuid> here, which would then have
   // overloads for inplace intersection/union and simplify the implementation
   // of this function a bit. This would also simplify the maintainance of a
@@ -80,10 +141,13 @@ std::vector<uuid> meta_index_state::lookup(const expression& expr) const {
     [&](const conjunction& x) -> result_type {
       VAST_ASSERT(!x.empty());
       auto i = x.begin();
-      auto result = lookup(*i);
+      auto result = lookup_impl(*i);
       if (!result.empty())
         for (++i; i != x.end(); ++i) {
-          auto xs = lookup(*i);
+          // TODO: A conjunction means that we can restrict the lookup to the
+          // remaining candidates. This could be achived by passing the `result`
+          // set to `lookup` along with the child expression.
+          auto xs = lookup_impl(*i);
           if (xs.empty())
             return xs; // short-circuit
           detail::inplace_intersect(result, xs);
@@ -93,8 +157,11 @@ std::vector<uuid> meta_index_state::lookup(const expression& expr) const {
     },
     [&](const disjunction& x) -> result_type {
       result_type result;
-      for (auto& op : x) {
-        auto xs = lookup(op);
+      auto string_synopsis_memo = detail::stable_set<std::string>{};
+      for (const auto& op : x) {
+        // TODO: A disjunction means that we can restrict the lookup to the
+        // set of partitions that are outside of the current result set.
+        auto xs = lookup_impl(op);
         VAST_ASSERT(std::is_sorted(xs.begin(), xs.end()));
         if (xs.size() == synopses.size())
           return xs; // short-circuit
@@ -263,13 +330,7 @@ std::vector<uuid> meta_index_state::lookup(const expression& expr) const {
       return all_partitions();
     },
   };
-  auto result = caf::visit(f, expr);
-  auto delta = std::chrono::duration_cast<std::chrono::microseconds>(
-    system::stopwatch::now() - start);
-  VAST_DEBUG("meta index lookup found {} candidates in {} microseconds",
-             result.size(), delta.count());
-  VAST_TRACEPOINT(meta_index_lookup, delta.count(), result.size());
-  return result;
+  return caf::visit(f, expr);
 }
 
 meta_index_actor::behavior_type
