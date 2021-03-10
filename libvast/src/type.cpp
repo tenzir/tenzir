@@ -1035,6 +1035,10 @@ std::string kind(const type& x) {
   return kind_tbl[x->index()];
 }
 
+bool has_skip_attribute(const type& t) {
+  return has_attribute(t, "skip");
+}
+
 bool convert(const type& t, data& d) {
   record o;
   o["name"] = t.name();

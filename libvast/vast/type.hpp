@@ -963,9 +963,7 @@ bool has_attribute(const Type& t, std::string_view key) {
 
 /// Tests whether a type has a "skip" attribute.
 /// @relates has_attribute type
-inline bool has_skip_attribute(const type& t) {
-  return has_attribute(t, "skip");
-}
+bool has_skip_attribute(const type& t);
 
 /// @relates type
 bool convert(const type& t, data& d);
