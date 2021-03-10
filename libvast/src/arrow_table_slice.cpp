@@ -32,6 +32,7 @@
 #  include <arrow/ipc/api.h>
 
 #  include <type_traits>
+#  include <utility>
 
 namespace vast {
 
@@ -91,6 +92,33 @@ private:
   int32_t offset_;
   int32_t length_;
   std::shared_ptr<arrow::Array> arr_;
+};
+
+class arrow_record_view
+  : public container_view<std::pair<std::string_view, data_view>> {
+public:
+  explicit arrow_record_view(record_type type, const arrow::StructArray& arr,
+                             int64_t row)
+    : type_{std::move(type)}, arr_{arr}, row_{row} {
+    // nop
+  }
+
+  value_type at(size_type i) const override {
+    const auto& field = type_.fields[i];
+    auto col = arr_.field(i);
+    VAST_ASSERT(col);
+    VAST_ASSERT(col->Equals(arr_.GetFieldByName(field.name)));
+    return {field.name, value_at(field.type, *col, row_)};
+  }
+
+  size_type size() const noexcept override {
+    return arr_.num_fields();
+  }
+
+private:
+  const record_type type_;
+  const arrow::StructArray& arr_;
+  const int64_t row_;
 };
 
 // -- decoding of Arrow column arrays ------------------------------------------
@@ -172,71 +200,71 @@ void decode(const type& t, const arrow::Array& arr, F& f) {
     }
     // -- handle basic types ---------------------------------------------------
     case arrow::Type::BOOL: {
-      return decode(t, static_cast<const arrow::BooleanArray&>(arr), f);
+      return decode(t, dynamic_cast<const arrow::BooleanArray&>(arr), f);
     }
     case arrow::Type::STRING: {
-      return decode(t, static_cast<const arrow::StringArray&>(arr), f);
+      return decode(t, dynamic_cast<const arrow::StringArray&>(arr), f);
     }
     case arrow::Type::TIMESTAMP: {
-      return decode(t, static_cast<const arrow::TimestampArray&>(arr), f);
+      return decode(t, dynamic_cast<const arrow::TimestampArray&>(arr), f);
     }
     case arrow::Type::FIXED_SIZE_BINARY: {
       using array_type = arrow::FixedSizeBinaryArray;
-      return decode(t, static_cast<const array_type&>(arr), f);
+      return decode(t, dynamic_cast<const array_type&>(arr), f);
     }
     // -- handle container types -----------------------------------------------
     case arrow::Type::LIST: {
-      return decode(t, static_cast<const arrow::ListArray&>(arr), f);
+      return decode(t, dynamic_cast<const arrow::ListArray&>(arr), f);
     }
     case arrow::Type::STRUCT: {
-      return decode(t, static_cast<const arrow::StructArray&>(arr), f);
+      return decode(t, dynamic_cast<const arrow::StructArray&>(arr), f);
     }
     // -- lift floating point values to real -----------------------------
     case arrow::Type::HALF_FLOAT: {
       using array_type = arrow::NumericArray<arrow::HalfFloatType>;
-      return decode(t, static_cast<const array_type&>(arr), f);
+      return decode(t, dynamic_cast<const array_type&>(arr), f);
     }
     case arrow::Type::FLOAT: {
       using array_type = arrow::NumericArray<arrow::FloatType>;
-      return decode(t, static_cast<const array_type&>(arr), f);
+      return decode(t, dynamic_cast<const array_type&>(arr), f);
     }
     case arrow::Type::DOUBLE: {
       using array_type = arrow::NumericArray<arrow::DoubleType>;
-      return decode(t, static_cast<const array_type&>(arr), f);
+      return decode(t, dynamic_cast<const array_type&>(arr), f);
     }
     // -- lift singed values to integer ----------------------------------
     case arrow::Type::INT8: {
       using array_type = arrow::NumericArray<arrow::Int8Type>;
-      return decode(t, static_cast<const array_type&>(arr), f);
+      return decode(t, dynamic_cast<const array_type&>(arr), f);
     }
     case arrow::Type::INT16: {
       using array_type = arrow::NumericArray<arrow::Int16Type>;
-      return decode(t, static_cast<const array_type&>(arr), f);
+      return decode(t, dynamic_cast<const array_type&>(arr), f);
     }
     case arrow::Type::INT32: {
       using array_type = arrow::NumericArray<arrow::Int32Type>;
-      return decode(t, static_cast<const array_type&>(arr), f);
+      return decode(t, dynamic_cast<const array_type&>(arr), f);
     }
     case arrow::Type::INT64: {
       using array_type = arrow::NumericArray<arrow::Int64Type>;
-      return decode(t, static_cast<const array_type&>(arr), f);
+      return decode(t, dynamic_cast<const array_type&>(arr), f);
     }
     // -- lift unsinged values to count ----------------------------------
     case arrow::Type::UINT8: {
       using array_type = arrow::NumericArray<arrow::UInt8Type>;
-      return decode(t, static_cast<const array_type&>(arr), f);
+      return decode(t, dynamic_cast<const array_type&>(arr), f);
     }
     case arrow::Type::UINT16: {
       using array_type = arrow::NumericArray<arrow::UInt16Type>;
-      return decode(t, static_cast<const array_type&>(arr), f);
+      return decode(t, dynamic_cast<const array_type&>(arr), f);
     }
     case arrow::Type::UINT32: {
       using array_type = arrow::NumericArray<arrow::UInt32Type>;
-      return decode(t, static_cast<const array_type&>(arr), f);
+      return decode(t, dynamic_cast<const array_type&>(arr), f);
     }
     case arrow::Type::UINT64: {
       using array_type = arrow::NumericArray<arrow::UInt64Type>;
-      return decode(t, static_cast<const array_type&>(arr), f);
+      return decode(t, dynamic_cast<const array_type&>(arr), f);
     }
   }
 }
@@ -345,6 +373,12 @@ auto map_at(type key_type, type value_type, const arrow::ListArray& arr,
   return map_view_handle{map_view_ptr{std::move(ptr)}};
 }
 
+auto record_at(const record_type& type, const arrow::StructArray& arr,
+               int64_t row) {
+  auto ptr = caf::make_counted<arrow_record_view>(type, arr, row);
+  return record_view_handle{record_view_ptr{std::move(ptr)}};
+}
+
 class row_picker {
 public:
   row_picker(size_t row) : row_(detail::narrow_cast<int64_t>(row)) {
@@ -427,9 +461,7 @@ public:
   void operator()(const arrow::StructArray& arr, const record_type& t) {
     if (arr.IsNull(row_))
       return;
-    VAST_WARN("decoding nested records in Arrow-encoded table slices is not "
-              "yet supported; the data of type {} will be represented as null.",
-              t);
+    result_ = record_at(t, arr, row_);
   }
 
 private:
@@ -525,10 +557,9 @@ public:
     }
   }
 
-  void operator()(const arrow::StructArray&, const record_type& t) {
-    VAST_WARN("indexing nested records in Arrow-encoded table slices is not "
-              "yet supported; the data of type {} will not be indexed.",
-              t);
+  void operator()(const arrow::StructArray& arr, const record_type& t) {
+    apply(arr,
+          [&](const auto& arr, int64_t row) { return record_at(t, arr, row); });
   }
 
 private:

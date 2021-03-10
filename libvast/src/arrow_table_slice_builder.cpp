@@ -275,16 +275,15 @@ private:
   std::shared_ptr<arrow_builder_type> arrow_builder_;
 };
 
-template <class SequenceType>
-class sequence_column_builder
-  : public arrow_table_slice_builder::column_builder {
+template <class ListType>
+class list_column_builder : public arrow_table_slice_builder::column_builder {
 public:
   using arrow_builder_type = arrow::ListBuilder;
 
-  using data_type = typename type_traits<SequenceType>::data_type;
+  using data_type = typename type_traits<ListType>::data_type;
 
-  sequence_column_builder(arrow::MemoryPool* pool,
-                          std::unique_ptr<column_builder> nested)
+  list_column_builder(arrow::MemoryPool* pool,
+                      std::unique_ptr<column_builder> nested)
     : nested_(std::move(nested)) {
     reset(pool, nested_->arrow_builder());
   }
@@ -397,47 +396,46 @@ public:
     : field_builders_{std::move(field_builders)} {
     auto fields = std::vector<std::shared_ptr<arrow::ArrayBuilder>>{};
     fields.reserve(field_builders_.size());
-    for (auto& field_builder : field_builders_)
-      fields.push_back(field_builder->arrow_builder());
+    for (auto& field_builder : field_builders_) {
+      auto underlying_builder = field_builder->arrow_builder();
+      VAST_ASSERT(underlying_builder);
+      fields.push_back(std::move(underlying_builder));
+    }
     struct_builder_ = std::make_shared<arrow::StructBuilder>(struct_type, pool,
                                                              std::move(fields));
-    list_builder_ = std::make_shared<arrow::ListBuilder>(pool, struct_builder_);
   }
 
   bool add(data_view x) override {
     if (caf::holds_alternative<view<caf::none_t>>(x)) {
-      auto status = list_builder_->AppendNull();
+      auto status = struct_builder_->AppendNull();
       return status.ok();
     }
-    if (auto status = list_builder_->Append(); !status.ok())
+    // Verify that we're actually holding a record.
+    auto* xptr = caf::get_if<data_type>(&x);
+    if (!xptr)
       return false;
-    if (auto* xptr = caf::get_if<data_type>(&x)) {
-      const auto& r = **xptr;
-      for (size_t i = 0; i < r.size(); ++i) {
-        if (auto status = struct_builder_->Append(); !status.ok())
-          return false;
-        if (!field_builders_[i]->add(r.at(i).second))
-          return false;
-      }
-      return true;
-    }
-    return false;
+    if (auto status = struct_builder_->Append(); !status.ok())
+      return false;
+    const auto& r = **xptr;
+    for (size_t i = 0; i < r.size(); ++i)
+      if (!field_builders_[i]->add(r.at(i).second))
+        return false;
+    return true;
   }
 
   std::shared_ptr<arrow::Array> finish() override {
     std::shared_ptr<arrow::Array> result;
-    if (!list_builder_->Finish(&result).ok())
+    if (!struct_builder_->Finish(&result).ok())
       die("failed to finish Arrow column builder");
     return result;
   }
 
   std::shared_ptr<arrow::ArrayBuilder> arrow_builder() const override {
-    return list_builder_;
+    return struct_builder_;
   }
 
 private:
   std::shared_ptr<arrow::StructBuilder> struct_builder_;
-  std::shared_ptr<arrow::ListBuilder> list_builder_;
 
   std::vector<std::unique_ptr<column_builder>> field_builders_;
 };
@@ -455,15 +453,13 @@ arrow_table_slice_builder::column_builder::make(const type& t,
                                                 arrow::MemoryPool* pool) {
   auto f = detail::overload{
     [=](const auto& x) -> std::unique_ptr<column_builder> {
-      using type = std::decay_t<decltype(x)>;
-      if constexpr (std::is_same_v<type, list_type>) {
-        auto nested = column_builder::make(x.value_type, pool);
-        return std::make_unique<sequence_column_builder<type>>(
-          pool, std::move(nested));
-      } else {
-        return std::make_unique<column_builder_impl_t<std::decay_t<decltype(x)>>>(
-          pool);
-      }
+      return std::make_unique<column_builder_impl_t<std::decay_t<decltype(x)>>>(
+        pool);
+    },
+    [=](const list_type& x) -> std::unique_ptr<column_builder> {
+      auto nested = column_builder::make(x.value_type, pool);
+      return std::make_unique<list_column_builder<std::decay_t<decltype(x)>>>(
+        pool, std::move(nested));
     },
     [=](const map_type& x) -> std::unique_ptr<column_builder> {
       auto key_builder = column_builder::make(x.key_type, pool);
@@ -472,9 +468,12 @@ arrow_table_slice_builder::column_builder::make(const type& t,
       return std::make_unique<map_column_builder>(pool, make_arrow_type(fields),
                                                   std::move(key_builder),
                                                   std::move(value_builder));
+      // record_type fields{{"key", x.key_type}, {"value", x.value_type}};
+      // return column_builder::make(fields, pool);
     },
     [=](const record_type& x) -> std::unique_ptr<column_builder> {
       auto field_builders = std::vector<std::unique_ptr<column_builder>>{};
+      field_builders.reserve(x.fields.size());
       for (const auto& field : x.fields)
         field_builders.push_back(column_builder::make(field.type, pool));
       return std::make_unique<record_column_builder>(pool, make_arrow_type(x),

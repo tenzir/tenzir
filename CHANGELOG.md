@@ -17,8 +17,7 @@ This changelog documents all notable user-facing changes of VAST.
   import, e.g., data of type `list<record<name: string, age: count>`. While
   nested record fields are not yet queryable, ingesting such data will no longer
   cause VAST to crash. MessagePack table slices don't support records in lists
-  yet.
-  [#1429](https://github.com/tenzir/vast/pull/1429)
+  yet. [#1429](https://github.com/tenzir/vast/pull/1429)
 
 - 🐞 Some non-null pointers were incorrectly rendered as `*nullptr` in log
   messages.

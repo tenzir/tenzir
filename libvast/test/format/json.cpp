@@ -79,9 +79,8 @@ TEST(json to data) {
                             {"msa", map_type{string_type{}, address_type{}}},
                             {"mcs", map_type{count_type{}, string_type{}}}}
                   .name("layout");
-  auto flat = flatten(layout);
   auto builder = factory<table_slice_builder>::make(
-    defaults::import::table_slice_type, flat);
+    defaults::import::table_slice_type, layout);
   std::string_view str = R"json({
     "b": true,
     "c": 424242,
@@ -105,7 +104,7 @@ TEST(json to data) {
   CHECK(el.error() == ::simdjson::error_code::SUCCESS);
   auto obj = el.value().get_object();
   CHECK(obj.error() == ::simdjson::error_code::SUCCESS);
-  format::json::add(*builder, obj.value(), flat);
+  format::json::add(*builder, obj.value(), layout);
   auto slice = builder->finish();
   REQUIRE_NOT_EQUAL(slice.encoding(), table_slice_encoding::none);
   CHECK(slice.at(0, 0) == data{true});
