@@ -212,8 +212,8 @@ struct fmt::formatter<caf::intrusive_ptr<T>> {
   template <typename FormatContext>
   auto format(const caf::intrusive_ptr<T>& item, FormatContext& ctx) {
     if (!item)
-      return format_to(ctx.out(), "*{}", fmt::ptr(item.get()));
-    return format_to(ctx.out(), "*{}", "nullptr");
+      return format_to(ctx.out(), "*{}", "nullptr");
+    return format_to(ctx.out(), "*{}", fmt::ptr(item.get()));
   }
 };
 
@@ -227,8 +227,8 @@ struct fmt::formatter<caf::intrusive_cow_ptr<T>> {
   template <typename FormatContext>
   auto format(const caf::intrusive_cow_ptr<T>& item, FormatContext& ctx) {
     if (!item)
-      return format_to(ctx.out(), "*{}", fmt::ptr(item.get()));
-    return format_to(ctx.out(), "*{}", "nullptr");
+      return format_to(ctx.out(), "*{}", "nullptr");
+    return format_to(ctx.out(), "*{}", fmt::ptr(item.get()));
   }
 };
 

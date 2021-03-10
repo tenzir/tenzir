@@ -13,6 +13,10 @@ This changelog documents all notable user-facing changes of VAST.
 
 ## Unreleased
 
+- 🐞 Some non-null pointers were incorrectly rendered as `*nullptr` in log
+  messages.
+  [#1430](https://github.com/tenzir/vast/pull/1430)
+
 - 🎁 The schema language now supports 4 operations on record types:
   `+` combines the fields of 2 records into a new record. `<+` and `+>` are
   variations of `+` that give precedence to the left and right operand
