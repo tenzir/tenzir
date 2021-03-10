@@ -16,7 +16,6 @@
 #if VAST_ENABLE_ARROW
 
 #  include "vast/arrow_table_slice.hpp"
-
 #  include "vast/arrow_table_slice_builder.hpp"
 #  include "vast/detail/byte_swap.hpp"
 #  include "vast/detail/narrow.hpp"
@@ -159,6 +158,12 @@ void decode(const type& t, const arrow::ListArray& arr, F& f) {
 }
 
 template <class F>
+void decode(const type& t, const arrow::StructArray& arr, F& f) {
+  DECODE_TRY_DISPATCH(record);
+  VAST_WARN("{} expected to decode a record but got a {}", __func__, kind(t));
+}
+
+template <class F>
 void decode(const type& t, const arrow::Array& arr, F& f) {
   switch (arr.type_id()) {
     default: {
@@ -182,6 +187,9 @@ void decode(const type& t, const arrow::Array& arr, F& f) {
     // -- handle container types -----------------------------------------------
     case arrow::Type::LIST: {
       return decode(t, static_cast<const arrow::ListArray&>(arr), f);
+    }
+    case arrow::Type::STRUCT: {
+      return decode(t, static_cast<const arrow::StructArray&>(arr), f);
     }
     // -- lift floating point values to real -----------------------------
     case arrow::Type::HALF_FLOAT: {
@@ -416,6 +424,14 @@ public:
     }
   }
 
+  void operator()(const arrow::StructArray& arr, const record_type& t) {
+    if (arr.IsNull(row_))
+      return;
+    VAST_WARN("decoding nested records in Arrow-encoded table slices is not "
+              "yet supported; the data of type {} will be represented as null.",
+              t);
+  }
+
 private:
   data_view result_;
   int64_t row_;
@@ -507,6 +523,12 @@ public:
       };
       apply(arr, f);
     }
+  }
+
+  void operator()(const arrow::StructArray&, const record_type& t) {
+    VAST_WARN("indexing nested records in Arrow-encoded table slices is not "
+              "yet supported; the data of type {} will not be indexed.",
+              t);
   }
 
 private:
