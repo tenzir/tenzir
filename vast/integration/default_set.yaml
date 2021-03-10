@@ -443,7 +443,7 @@ tests:
   Nested Records:
     tags: [import, json]
     steps:
-      - command: '-N import --schema="type custom = record { a: list<record { b: string, c: count, }>, }" --type=custom json'
+      - command: '-N import --schema="type custom = record { a: list<record { b: string, c: count, }>, d: count, }" --type=custom json'
         input: data/json/record-in-list.json
       - command: -N export ascii '#type == "custom"'
 
