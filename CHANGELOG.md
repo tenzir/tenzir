@@ -13,10 +13,11 @@ This changelog documents all notable user-facing changes of VAST.
 
 ## Unreleased
 
-- 🐞 VAST now supports nested records in both Arrow- and MessagePack table
-  slices, e.g., data of type `list<record<name: string, age: count>`. While not
-  yet queryable and supported in all formats, ingesting such data will no longer
-  cause VAST to crash. [#1429](https://github.com/tenzir/vast/pull/1429)
+- 🐞 VAST now supports nested records in Arrow table slices and in the JSON
+  import, e.g., data of type `list<record<name: string, age: count>`. While
+  nested record fields are not yet queryable, ingesting such data will no longer
+  cause VAST to crash. This is not yet supported in MessagePack table slices
+  [#1429](https://github.com/tenzir/vast/pull/1429)
 
 - 🐞 Some non-null pointers were incorrectly rendered as `*nullptr` in log
   messages.
