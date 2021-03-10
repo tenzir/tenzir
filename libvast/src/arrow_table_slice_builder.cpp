@@ -405,17 +405,19 @@ public:
   }
 
   bool add(data_view x) override {
-    if (caf::holds_alternative<view<caf::none_t>>(x))
-      return list_builder_->AppendNull().ok();
-    if (!list_builder_->Append().ok())
+    if (caf::holds_alternative<view<caf::none_t>>(x)) {
+      auto status = list_builder_->AppendNull();
+      return status.ok();
+    }
+    if (auto status = list_builder_->Append(); !status.ok())
       return false;
     if (auto* xptr = caf::get_if<data_type>(&x)) {
-      for (auto field : **xptr) {
-        if (!struct_builder_->Append().ok())
+      const auto& r = **xptr;
+      for (size_t i = 0; i < r.size(); ++i) {
+        if (auto status = struct_builder_->Append(); !status.ok())
           return false;
-        for (auto& field_builder : field_builders_)
-          if (!field_builder->add(field.second))
-            return false;
+        if (!field_builders_[i]->add(r.at(i).second))
+          return false;
       }
       return true;
     }
