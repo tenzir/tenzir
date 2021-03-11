@@ -217,6 +217,29 @@ caf::expected<data> type_biased_convert_impl<real, time>(real s, const type&) {
 
 template <>
 caf::expected<data>
+type_biased_convert_impl<bool, std::string>(bool s, const type&) {
+  return to_string(s);
+}
+
+template <>
+caf::expected<data>
+type_biased_convert_impl<count, std::string>(count s, const type&) {
+  return to_string(s);
+}
+
+template <>
+caf::expected<data>
+type_biased_convert_impl<integer, std::string>(integer s, const type&) {
+  return to_string(s);
+}
+template <>
+caf::expected<data>
+type_biased_convert_impl<real, std::string>(real s, const type&) {
+  return to_string(s);
+}
+
+template <>
+caf::expected<data>
 type_biased_convert_impl<std::string_view, std::string>(std::string_view s,
                                                         const type&) {
   return std::string{s};
