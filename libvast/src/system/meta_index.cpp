@@ -80,12 +80,14 @@ struct pruner {
     for (const auto& operand : connective) {
       const std::string* str = nullptr;
       if (const auto* pred = caf::get_if<predicate>(&operand)) {
-        if (const auto* d = caf::get_if<data>(&pred->rhs)) {
-          if ((str = caf::get_if<std::string>(d))) {
-            if (memo.find(*str) != memo.end())
-              continue;
-            memo.insert(*str);
-            result.emplace_back(*pred);
+        if (!caf::holds_alternative<meta_extractor>(pred->lhs)) {
+          if (const auto* d = caf::get_if<data>(&pred->rhs)) {
+            if ((str = caf::get_if<std::string>(d))) {
+              if (memo.find(*str) != memo.end())
+                continue;
+              memo.insert(*str);
+              result.emplace_back(*pred);
+            }
           }
         }
       }
