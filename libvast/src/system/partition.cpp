@@ -805,6 +805,12 @@ partition_actor::behavior_type passive_partition(
       // We can safely assert that if we have the partition chunk already, all
       // deferred evaluations were taken care of.
       VAST_ASSERT(self->state.deferred_evaluations.empty());
+      // Don't handle queries after we already received an exit message, while
+      // the terminator is running. Since we require every partition to have at
+      // least one indexer, we can use this to check.
+      if (self->state.indexers.empty())
+        return caf::make_error(ec::system_error, "can not handle query because "
+                                                 "shutdown was requested");
       auto triples = evaluate(self->state, expr);
       if (triples.empty())
         return atom::done_v;
