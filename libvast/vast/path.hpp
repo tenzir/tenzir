@@ -102,14 +102,6 @@ public:
   /// @returns An absolute path.
   path complete() const;
 
-  /// Retrieves a sub-path from beginning or end.
-  ///
-  /// @param n If positive, the function returns the first *n*
-  /// components of the path. If negative, it returns last *n* components.
-  ///
-  /// @returns The path trimmed according to *n*.
-  path trim(int n) const;
-
   /// Chops away path components from beginning or end.
   ///
   /// @param n If positive, the function chops away the first *n*
