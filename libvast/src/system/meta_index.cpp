@@ -225,17 +225,28 @@ std::vector<uuid> meta_index_state::lookup(const expression& expr) const {
           return search(pred);
         },
         [&](const type_extractor& lhs, const data&) -> result_type {
-          if (caf::holds_alternative<none_type>(lhs.type)) {
-            VAST_ASSERT(!lhs.type.name().empty());
+          auto result = [&] {
+            if (caf::holds_alternative<none_type>(lhs.type)) {
+              VAST_ASSERT(!lhs.type.name().empty());
+              auto pred = [&](auto& field) {
+                return field.type.name() == lhs.type.name();
+              };
+              return search(pred);
+            }
             auto pred = [&](auto& field) {
-              return field.type.name() == lhs.type.name();
+              return field.type == lhs.type && field.type.name().empty();
             };
             return search(pred);
+          }();
+          // Preserve compatibility with databases that were created beore
+          // the #timestamp attribute was removed.
+          if (lhs.type.name() == "timestamp") {
+            auto pred = [](auto& field) {
+              return has_attribute(field.type, "timestamp");
+            };
+            detail::inplace_unify(result, search(pred));
           }
-          auto pred = [&](auto& field) {
-            return field.type == lhs.type && field.type.name().empty();
-          };
-          return search(pred);
+          return result;
         },
         [&](const auto&, const auto&) -> result_type {
           VAST_WARN("{} cannot process predicate: {}",
