@@ -1,6 +1,3 @@
 [submodule "aux/caf"]
 	path = libvast/aux/caf
 	url = https://github.com/tenzir/actor-framework
-[submodule "aux/broker/broker"]
-	path = tools/zeek-to-vast/aux/broker/broker
-	url = https://github.com/zeek/broker

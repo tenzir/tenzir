@@ -54,7 +54,6 @@ in {
     EXTRA_CFLAGS = (old.EXTRA_CFLAGS or "") + " -fno-omit-frame-pointer";
     configureFlags = old.configureFlags ++ [ "--enable-prof" "--enable-stats" ];
   });
-  broker = final.callPackage ./broker {inherit stdenv; python = final.python3;};
   simdjson = prev.simdjson.overrideAttrs (old: {
     cmakeFlags = old.cmakeFlags ++ lib.optionals isStatic [
       "-DSIMDJSON_BUILD_STATIC=ON"
