@@ -43,7 +43,6 @@ Usage: $0 [OPTION]... [VAR=VALUE]...
                               profiling
     --more-warnings           enables most warnings on GCC and Clang
     --without-tests           build without unit tests
-    --with-zeek-to-vast       build with zeek-to-vast
     --with-lsvast             build with lsvast
     --with-dscat              build with dscat
     --with-example-plugin     build with example plugin
@@ -73,9 +72,6 @@ Usage: $0 [OPTION]... [VAR=VALUE]...
     --with-spdlog=PATH      path to spdlog install root
 
   Optional packages:
-    --with-broker=PATH    path to Broker install root (required for
-                          zeek-to-vast)
-    --with-bundled-broker build Broker from the submodule
     --with-doxygen=PATH   path to Doxygen install root
     --with-jemalloc=PATH  link against jemalloc
     --with-openssl=PATH   path to OpenSSL install root
@@ -169,9 +165,6 @@ while [ $# -ne 0 ]; do
     --without-tests)
       append_cache_entry VAST_ENABLE_UNIT_TESTS BOOL no
       ;;
-    --with-zeek-to-vast)
-      append_cache_entry VAST_ENABLE_ZEEK_TO_VAST BOOL yes
-      ;;
     --with-dscat)
       append_cache_entry VAST_ENABLE_DSCAT BOOL yes
       ;;
@@ -261,12 +254,6 @@ while [ $# -ne 0 ]; do
       append_cache_entry SPDLOG_ROOT PATH "$optarg"
       ;;
 # -- Optional packages ---------------------------------------------------------
-    --with-broker=*)
-      append_cache_entry BROKER_ROOT_DIR PATH "$optarg"
-      ;;
-    --with-bundled-broker)
-      append_cache_entry VAST_ENABLE_BUNDLED_BROKER BOOL yes
-      ;;
     --with-doxygen=*)
       append_cache_entry Doxygen_ROOT_DIR PATH "$optarg"
       ;;

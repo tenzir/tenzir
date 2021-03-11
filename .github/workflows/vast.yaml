@@ -192,9 +192,7 @@ jobs:
             --with-example-plugin \
             --with-lsvast \
             --with-dscat \
-            --with-zeek-to-vast \
             --with-bundled-caf \
-            --with-bundled-broker \
             ${{ matrix.build.extra-flags }} \
             ${{ github.event.action == 'published' && matrix.configure.flags || matrix.configure.ci-flags }}
 
@@ -438,9 +436,7 @@ jobs:
             --with-example-plugin \
             --with-lsvast \
             --with-dscat \
-            --with-zeek-to-vast \
             --with-bundled-caf \
-            --with-bundled-broker \
             ${{ matrix.build.extra-flags }} \
             ${{ github.event.action == 'published' && matrix.configure.flags || matrix.configure.ci-flags }}
 

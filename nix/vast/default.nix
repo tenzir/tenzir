@@ -15,7 +15,6 @@
 , spdlog
 , libyamlcpp
 , simdjson
-, broker
 , jemalloc
 , libunwind
 , python3
@@ -69,7 +68,7 @@ stdenv.mkDerivation rec {
 
   nativeBuildInputs = [ cmake cmake-format ];
   propagatedNativeBuildInputs = [ pkgconfig pandoc ];
-  buildInputs = [ libpcap jemalloc broker libyamlcpp simdjson spdlog ]
+  buildInputs = [ libpcap jemalloc libyamlcpp simdjson spdlog ]
     # Required for backtrace on musl libc.
     ++ lib.optional (stdenv.hostPlatform.isMusl) libunwind;
   propagatedBuildInputs = [ arrow-cpp caf flatbuffers ];
@@ -82,10 +81,8 @@ stdenv.mkDerivation rec {
     "-DVAST_ENABLE_RELOCATABLE_INSTALLATIONS=${if isStatic then "ON" else "OFF"}"
     "-DVAST_ENABLE_BACKTRACE=ON"
     "-DVAST_ENABLE_JEMALLOC=ON"
-    "-DVAST_ENABLE_ZEEK_TO_VAST=ON"
     "-DVAST_ENABLE_LSVAST=ON"
     "-DCAF_ROOT_DIR=${caf}"
-    "-DBROKER_ROOT_DIR=${broker}"
   ] ++ lib.optionals (buildType == "CI") [
     "-DVAST_ENABLE_ASSERTIONS=ON"
   ] ++ lib.optionals isStatic [

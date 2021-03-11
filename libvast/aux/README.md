@@ -9,7 +9,6 @@ Repositories
 
 ### submodules
 - [CAF](https://github.com/actor-framework/actor-framework) https://github.com/actor-framework/actor-framework
-- [broker](https://github.com/zeek/broker) https://github.com/zeek/broker
 
 ### subtrees
 - [robin-map](https://github.com/Tessil/robin-map/): git@github.com:Tessil/robin-map.git

@@ -13,6 +13,11 @@ This changelog documents all notable user-facing changes of VAST.
 
 ## Unreleased
 
+- ⚠️ The zeek-to-vast relay utility was moved to the
+  [tenzir/zeek-vast](https://github.com/tenzir/zeek-vast) repository. All
+  options related to zeek-to-vast and the bundled Broker submodule were removed.
+  [#1435](https://github.com/tenzir/vast/1435)
+
 - 🎁 VAST now supports nested records in Arrow table slices and in the JSON
   import, e.g., data of type `list<record<name: string, age: count>`. While
   nested record fields are not yet queryable, ingesting such data will no longer
