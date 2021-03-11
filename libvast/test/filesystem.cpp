@@ -140,24 +140,6 @@ TEST(path_operations) {
   CHECK(pieces[4] == "foo");
 }
 
-TEST(path_trimming) {
-  path p = "/usr/local/bin/foo";
-
-  CHECK(p.trim(0) == "");
-  CHECK(p.trim(1) == "/");
-  CHECK(p.trim(2) == "/usr");
-  CHECK(p.trim(3) == "/usr/local");
-  CHECK(p.trim(4) == "/usr/local/bin");
-  CHECK(p.trim(5) == p);
-  CHECK(p.trim(6) == p);
-  CHECK(p.trim(-1) == "foo");
-  CHECK(p.trim(-2) == "bin/foo");
-  CHECK(p.trim(-3) == "local/bin/foo");
-  CHECK(p.trim(-4) == "usr/local/bin/foo");
-  CHECK(p.trim(-5) == p);
-  CHECK(p.trim(-6) == p);
-}
-
 TEST(path_chopping) {
   path p = "/usr/local/bin/foo";
 
