@@ -53,6 +53,9 @@ partition_synopsis& meta_index_state::at(const uuid& partition) {
   return synopses.at(partition);
 }
 
+// A custom expression visitor that optimizes a given expression specifically
+// for the meta index lookup. Currently this does only a single optimization:
+// It deduplicates string lookups for the type level string synopsis.
 struct pruner {
   expression operator()(caf::none_t) const {
     return expression{};
@@ -93,6 +96,7 @@ struct pruner {
   }
 };
 
+// Runs the `pruner` and `hoister` until the input is unchanged.
 expression prune_all(expression e) {
   expression result = caf::visit(pruner{}, e);
   while (result != e) {

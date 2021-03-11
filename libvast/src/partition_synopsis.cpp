@@ -69,6 +69,9 @@ void partition_synopsis::add(const table_slice& slice,
       if (auto& syn = it->second)
         add_column(syn);
     } else { // type == string
+      // All strings share a partition-wide synopsis.
+      // NOTE: if this is made configurable or removed, the pruning step from
+      // the meta index lookup must be adjusted acordingly.
       field_synopses_[key] = nullptr;
       auto cleaned_type = vast::type{field_it->type()}.attributes({});
       auto tt = type_synopses_.find(cleaned_type);
