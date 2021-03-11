@@ -234,9 +234,9 @@ get_schema_dirs(const caf::actor_system_config& cfg,
 #endif
     // Get filesystem path to the executable.
     for (const void* addr : objpath_addresses) {
-      if (auto binary = detail::objectpath(addr))
-        result.insert(std::filesystem::path{binary->parent().parent().str()}
-                      / "share" / "vast" / "schema");
+      if (const auto& binary = detail::objectpath(addr); binary)
+        result.insert(binary->parent_path().parent_path() / "share" / "vast"
+                      / "schema");
       else
         VAST_ERROR("{} failed to get program path", __func__);
     }

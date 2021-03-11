@@ -124,7 +124,7 @@ namespace vast::detail {
 
 namespace {
 
-caf::expected<path> objectpath_dynamic(const void* addr) {
+caf::expected<std::filesystem::path> objectpath_dynamic(const void* addr) {
   Dl_info info;
   if (!dladdr(addr, &info))
     return caf::make_error(ec::unspecified, "failed to execute dladdr()");
@@ -136,7 +136,7 @@ caf::expected<path> objectpath_dynamic(const void* addr) {
   return info.dli_fname;
 }
 
-caf::expected<path> objectpath_static() {
+caf::expected<std::filesystem::path> objectpath_static() {
 #if VAST_LINUX
   struct stat sb;
   auto self = "/proc/self/exe";
@@ -146,7 +146,7 @@ caf::expected<path> objectpath_static() {
   std::vector<char> buf(size);
   if (readlink(self, buf.data(), size) == -1)
     return caf::make_error(ec::unspecified, "readlink() returned with error");
-  return path{buf.data()};
+  return std::filesystem::path{buf.data()};
 #else
   return caf::make_error(ec::unimplemented);
 #endif
@@ -154,7 +154,7 @@ caf::expected<path> objectpath_static() {
 
 } // namespace
 
-caf::expected<path> objectpath(const void* addr) {
+caf::expected<std::filesystem::path> objectpath(const void* addr) {
   if (addr == nullptr)
     addr = reinterpret_cast<const void*>(objectpath_dynamic);
   if (auto result = objectpath_dynamic(addr))

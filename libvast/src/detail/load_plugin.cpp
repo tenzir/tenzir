@@ -18,29 +18,33 @@
 #include "vast/detail/process.hpp"
 #include "vast/detail/stable_set.hpp"
 #include "vast/logger.hpp"
-#include "vast/path.hpp"
 #include "vast/plugin.hpp"
 
 #include <caf/actor_system_config.hpp>
+
+#include <filesystem>
 
 namespace vast::detail {
 
 namespace {
 
-stable_set<path> get_plugin_dirs(const caf::actor_system_config& cfg) {
-  stable_set<path> result;
+stable_set<std::filesystem::path>
+get_plugin_dirs(const caf::actor_system_config& cfg) {
+  stable_set<std::filesystem::path> result;
 #if !VAST_ENABLE_RELOCATABLE_INSTALLATIONS
-  result.insert(path{VAST_LIBDIR} / "vast" / "plugins");
+  result.insert(std::filesystem::path{VAST_LIBDIR} / "vast" / "plugins");
 #endif
   // FIXME: we technically should not use "lib" relative to the parent, because
   // it may be lib64 or something else. CMAKE_INSTALL_LIBDIR is probably the
   // best choice.
   if (auto binary = objectpath(nullptr))
-    result.insert(binary->parent().parent() / "lib" / "vast" / "plugins");
+    result.insert(binary->parent_path().parent_path() / "lib" / "vast"
+                  / "plugins");
   else
     VAST_ERROR("{} failed to get program path", __func__);
   if (const char* home = std::getenv("HOME"))
-    result.insert(path{home} / ".local" / "lib" / "vast" / "plugins");
+    result.insert(std::filesystem::path{home} / ".local" / "lib" / "vast"
+                  / "plugins");
   if (auto dirs = caf::get_if<std::vector<std::string>>( //
         &cfg, "vast.plugin-dirs"))
     result.insert(dirs->begin(), dirs->end());
@@ -49,20 +53,21 @@ stable_set<path> get_plugin_dirs(const caf::actor_system_config& cfg) {
 
 } // namespace
 
-caf::expected<std::pair<path, plugin_ptr>>
-load_plugin(path file, caf::actor_system_config& cfg) {
+caf::expected<std::pair<std::filesystem::path, plugin_ptr>>
+load_plugin(std::filesystem::path file, caf::actor_system_config& cfg) {
   auto& plugins = plugins::get();
-  auto try_load_plugin = [&](path file) -> caf::expected<plugin_ptr> {
+  auto try_load_plugin
+    = [&](std::filesystem::path file) -> caf::expected<plugin_ptr> {
 #if VAST_MACOS
     if (file.extension() == "")
-      file = file.str() + ".dylib";
+      file += ".dylib";
 #else
     if (file.extension() == "")
-      file = file.str() + ".so";
+      file += ".so";
 #endif
     if (!exists(file))
       return caf::no_error;
-    auto plugin = plugin_ptr::make(file.str().c_str(), cfg);
+    auto plugin = plugin_ptr::make(file.c_str(), cfg);
     if (plugin) {
       VAST_ASSERT(*plugin);
       auto has_same_name = [name = (*plugin)->name()](const auto& other) {
