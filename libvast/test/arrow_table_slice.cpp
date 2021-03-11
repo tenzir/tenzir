@@ -245,6 +245,17 @@ TEST(single column - list of integers) {
   CHECK_ROUNDTRIP(slice);
 }
 
+TEST(single column - list of record) {
+  auto t = list_type{record_type{record_field{"a", string_type{}}}};
+  record_type layout{record_field{"values", t}};
+  list list1{record{{"a", "123"}}, caf::none};
+  auto slice = make_slice(layout, list1, caf::none);
+  REQUIRE_EQUAL(slice.rows(), 2u);
+  CHECK_VARIANT_EQUAL(slice.at(0, 0, t), make_view(list1));
+  CHECK_VARIANT_EQUAL(slice.at(1, 0, t), caf::none);
+  CHECK_ROUNDTRIP(slice);
+}
+
 TEST(single column - list of strings) {
   auto t = list_type{string_type{}};
   record_type layout{record_field{"values", t}};

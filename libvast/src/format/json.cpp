@@ -50,7 +50,7 @@ namespace {
 ///
 /// For a given J-set type `from_json_x_converter<J>` provides an array of
 /// converter callbacks. Each index in this array corresponds to some type in
-/// the list defined by `vast::data::type`. Each callback is a function
+/// the list defined by `vast::data::types`. Each callback is a function
 /// `type_biased_convert_impl<J,D>` There is a default implementation that (1)
 /// handles identity mapping if J, D types match, (2) parses values of type D
 /// from J, if J is a string type and if parsing is available for D, or (3)
@@ -268,6 +268,26 @@ caf::expected<data> type_biased_convert_impl<::simdjson::dom::object, map>(
   return xs;
 }
 
+template <>
+caf::expected<data> type_biased_convert_impl<::simdjson::dom::object, record>(
+  ::simdjson::dom::object o, const type& t) {
+  const auto& r = dynamic_cast<const record_type&>(*t);
+  record xs;
+  xs.reserve(o.size());
+  for (auto [k, v] : o) {
+    if (const auto* rf = r.find(k); !rf) {
+      return caf::make_error(ec::type_clash,
+                             fmt::format("unexpected field: {}", k));
+    } else {
+      auto val = convert(v, rf->type);
+      if (!val)
+        return val.error();
+      xs.emplace(rf->name, *val);
+    }
+  }
+  return xs;
+}
+
 /// A converter from a given JSON type to `vast::data`.
 /// Relies on a specialization of `type_biased_convert_impl` template function.
 /// If no specialization from a given JSON type to data is provided the default
@@ -396,7 +416,7 @@ const char* writer::name() const {
 caf::error add(table_slice_builder& builder, const ::simdjson::dom::object& xs,
                const record_type& layout) {
   caf::error err = caf::none;
-  for (auto& field : record_type::each(layout)) {
+  for (const auto& field : record_type::each(layout)) {
     auto lookup_result = lookup(field.key(), xs);
     // Non-existing fields are treated as empty (unset).
     if (lookup_result.error() != ::simdjson::error_code::SUCCESS) {
@@ -414,8 +434,11 @@ caf::error add(table_slice_builder& builder, const ::simdjson::dom::object& xs,
       err.context() += caf::make_message("could not convert", field.key());
       x = caf::none;
     }
-    if (!builder.add(make_data_view(*x)))
-      return caf::make_error(ec::type_clash, "unexpected type", field.key());
+    if (!builder.add(*x))
+      return caf::make_error(ec::type_clash,
+                             fmt::format("unexpected type for field {} with "
+                                         "type {} for data {}",
+                                         field.key(), field.type(), *x));
   }
   return err;
 }

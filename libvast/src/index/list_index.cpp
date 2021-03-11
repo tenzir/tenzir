@@ -17,6 +17,7 @@
 #include "vast/defaults.hpp"
 #include "vast/detail/overload.hpp"
 #include "vast/index/container_lookup.hpp"
+#include "vast/logger.hpp"
 #include "vast/type.hpp"
 #include "vast/value_index_factory.hpp"
 
@@ -67,12 +68,17 @@ bool list_index::append_impl(data_view x, id pos) {
         elements_.resize(seq_size);
         for (auto i = old; i < elements_.size(); ++i) {
           elements_[i] = factory<value_index>::make(value_type_, options());
-          VAST_ASSERT(elements_[i]);
+          // TODO: Support the #skip attribute here.
+          if (!elements_[i])
+            VAST_WARN("{} failed to create value index for type {}; values "
+                      "can be exported, but will not be directly queryable",
+                      detail::pretty_type_name(this), value_type_);
         }
       }
       auto x = v->begin();
       for (auto i = 0u; i < seq_size; ++i)
-        elements_[i]->append(*x++, pos);
+        if (elements_[i])
+          elements_[i]->append(*x++, pos);
       size_.skip(pos - size_.size());
       size_.append(seq_size);
       return true;
@@ -86,20 +92,20 @@ caf::expected<ids>
 list_index::lookup_impl(relational_operator op, data_view x) const {
   if (!(op == relational_operator::ni || op == relational_operator::not_ni))
     return caf::make_error(ec::unsupported_operator, op);
+  auto result = ids{};
   if (elements_.empty())
     return ids{};
-  auto result = elements_[0]->lookup(relational_operator::equal, x);
-  if (!result)
-    return result;
-  for (auto i = 1u; i < elements_.size(); ++i) {
-    auto mbm = elements_[i]->lookup(relational_operator::equal, x);
-    if (mbm)
-      *result |= *mbm;
-    else
-      return mbm;
+  for (auto i = 0u; i < elements_.size(); ++i) {
+    if (elements_[i]) {
+      auto mbm = elements_[i]->lookup(relational_operator::equal, x);
+      if (mbm)
+        result |= *mbm;
+      else
+        return mbm;
+    }
   }
   if (op == relational_operator::not_ni)
-    result->flip();
+    result.flip();
   return result;
 }
 

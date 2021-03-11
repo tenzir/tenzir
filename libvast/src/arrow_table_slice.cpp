@@ -16,7 +16,6 @@
 #if VAST_ENABLE_ARROW
 
 #  include "vast/arrow_table_slice.hpp"
-
 #  include "vast/arrow_table_slice_builder.hpp"
 #  include "vast/detail/byte_swap.hpp"
 #  include "vast/detail/narrow.hpp"
@@ -33,6 +32,7 @@
 #  include <arrow/ipc/api.h>
 
 #  include <type_traits>
+#  include <utility>
 
 namespace vast {
 
@@ -92,6 +92,33 @@ private:
   int32_t offset_;
   int32_t length_;
   std::shared_ptr<arrow::Array> arr_;
+};
+
+class arrow_record_view
+  : public container_view<std::pair<std::string_view, data_view>> {
+public:
+  explicit arrow_record_view(record_type type, const arrow::StructArray& arr,
+                             int64_t row)
+    : type_{std::move(type)}, arr_{arr}, row_{row} {
+    // nop
+  }
+
+  value_type at(size_type i) const override {
+    const auto& field = type_.fields[i];
+    auto col = arr_.field(i);
+    VAST_ASSERT(col);
+    VAST_ASSERT(col->Equals(arr_.GetFieldByName(field.name)));
+    return {field.name, value_at(field.type, *col, row_)};
+  }
+
+  size_type size() const noexcept override {
+    return arr_.num_fields();
+  }
+
+private:
+  const record_type type_;
+  const arrow::StructArray& arr_;
+  const int64_t row_;
 };
 
 // -- decoding of Arrow column arrays ------------------------------------------
@@ -159,6 +186,12 @@ void decode(const type& t, const arrow::ListArray& arr, F& f) {
 }
 
 template <class F>
+void decode(const type& t, const arrow::StructArray& arr, F& f) {
+  DECODE_TRY_DISPATCH(record);
+  VAST_WARN("{} expected to decode a record but got a {}", __func__, kind(t));
+}
+
+template <class F>
 void decode(const type& t, const arrow::Array& arr, F& f) {
   switch (arr.type_id()) {
     default: {
@@ -182,6 +215,9 @@ void decode(const type& t, const arrow::Array& arr, F& f) {
     // -- handle container types -----------------------------------------------
     case arrow::Type::LIST: {
       return decode(t, static_cast<const arrow::ListArray&>(arr), f);
+    }
+    case arrow::Type::STRUCT: {
+      return decode(t, static_cast<const arrow::StructArray&>(arr), f);
     }
     // -- lift floating point values to real -----------------------------
     case arrow::Type::HALF_FLOAT: {
@@ -337,6 +373,12 @@ auto map_at(type key_type, type value_type, const arrow::ListArray& arr,
   return map_view_handle{map_view_ptr{std::move(ptr)}};
 }
 
+auto record_at(const record_type& type, const arrow::StructArray& arr,
+               int64_t row) {
+  auto ptr = caf::make_counted<arrow_record_view>(type, arr, row);
+  return record_view_handle{record_view_ptr{std::move(ptr)}};
+}
+
 class row_picker {
 public:
   row_picker(size_t row) : row_(detail::narrow_cast<int64_t>(row)) {
@@ -414,6 +456,12 @@ public:
       static_assert(std::is_same_v<T, map_type>);
       result_ = map_at(t.key_type, t.value_type, arr, row_);
     }
+  }
+
+  void operator()(const arrow::StructArray& arr, const record_type& t) {
+    if (arr.IsNull(row_))
+      return;
+    result_ = record_at(t, arr, row_);
   }
 
 private:
@@ -507,6 +555,11 @@ public:
       };
       apply(arr, f);
     }
+  }
+
+  void operator()(const arrow::StructArray& arr, const record_type& t) {
+    apply(arr,
+          [&](const auto& arr, int64_t row) { return record_at(t, arr, row); });
   }
 
 private:
