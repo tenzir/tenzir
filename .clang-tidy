@@ -9,6 +9,7 @@ Checks: >
   -bugprone-lambda-function-name,
   -cppcoreguidelines-avoid-magic-numbers,
   -cppcoreguidelines-pro-type-reinterpret-cast,
+  -cppcoreguidelines-pro-type-static-cast-downcast,
   -modernize-use-trailing-return-type,
   -readability-braces-around-statements,
   -readability-magic-numbers,

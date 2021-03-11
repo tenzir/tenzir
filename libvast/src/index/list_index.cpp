@@ -76,10 +76,9 @@ bool list_index::append_impl(data_view x, id pos) {
         }
       }
       auto x = v->begin();
-      for (auto i = 0u; i < seq_size; ++i) {
+      for (auto i = 0u; i < seq_size; ++i)
         if (elements_[i])
           elements_[i]->append(*x++, pos);
-      }
       size_.skip(pos - size_.size());
       size_.append(seq_size);
       return true;

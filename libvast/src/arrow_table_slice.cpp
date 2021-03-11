@@ -200,71 +200,71 @@ void decode(const type& t, const arrow::Array& arr, F& f) {
     }
     // -- handle basic types ---------------------------------------------------
     case arrow::Type::BOOL: {
-      return decode(t, dynamic_cast<const arrow::BooleanArray&>(arr), f);
+      return decode(t, static_cast<const arrow::BooleanArray&>(arr), f);
     }
     case arrow::Type::STRING: {
-      return decode(t, dynamic_cast<const arrow::StringArray&>(arr), f);
+      return decode(t, static_cast<const arrow::StringArray&>(arr), f);
     }
     case arrow::Type::TIMESTAMP: {
-      return decode(t, dynamic_cast<const arrow::TimestampArray&>(arr), f);
+      return decode(t, static_cast<const arrow::TimestampArray&>(arr), f);
     }
     case arrow::Type::FIXED_SIZE_BINARY: {
       using array_type = arrow::FixedSizeBinaryArray;
-      return decode(t, dynamic_cast<const array_type&>(arr), f);
+      return decode(t, static_cast<const array_type&>(arr), f);
     }
     // -- handle container types -----------------------------------------------
     case arrow::Type::LIST: {
-      return decode(t, dynamic_cast<const arrow::ListArray&>(arr), f);
+      return decode(t, static_cast<const arrow::ListArray&>(arr), f);
     }
     case arrow::Type::STRUCT: {
-      return decode(t, dynamic_cast<const arrow::StructArray&>(arr), f);
+      return decode(t, static_cast<const arrow::StructArray&>(arr), f);
     }
     // -- lift floating point values to real -----------------------------
     case arrow::Type::HALF_FLOAT: {
       using array_type = arrow::NumericArray<arrow::HalfFloatType>;
-      return decode(t, dynamic_cast<const array_type&>(arr), f);
+      return decode(t, static_cast<const array_type&>(arr), f);
     }
     case arrow::Type::FLOAT: {
       using array_type = arrow::NumericArray<arrow::FloatType>;
-      return decode(t, dynamic_cast<const array_type&>(arr), f);
+      return decode(t, static_cast<const array_type&>(arr), f);
     }
     case arrow::Type::DOUBLE: {
       using array_type = arrow::NumericArray<arrow::DoubleType>;
-      return decode(t, dynamic_cast<const array_type&>(arr), f);
+      return decode(t, static_cast<const array_type&>(arr), f);
     }
     // -- lift singed values to integer ----------------------------------
     case arrow::Type::INT8: {
       using array_type = arrow::NumericArray<arrow::Int8Type>;
-      return decode(t, dynamic_cast<const array_type&>(arr), f);
+      return decode(t, static_cast<const array_type&>(arr), f);
     }
     case arrow::Type::INT16: {
       using array_type = arrow::NumericArray<arrow::Int16Type>;
-      return decode(t, dynamic_cast<const array_type&>(arr), f);
+      return decode(t, static_cast<const array_type&>(arr), f);
     }
     case arrow::Type::INT32: {
       using array_type = arrow::NumericArray<arrow::Int32Type>;
-      return decode(t, dynamic_cast<const array_type&>(arr), f);
+      return decode(t, static_cast<const array_type&>(arr), f);
     }
     case arrow::Type::INT64: {
       using array_type = arrow::NumericArray<arrow::Int64Type>;
-      return decode(t, dynamic_cast<const array_type&>(arr), f);
+      return decode(t, static_cast<const array_type&>(arr), f);
     }
     // -- lift unsinged values to count ----------------------------------
     case arrow::Type::UINT8: {
       using array_type = arrow::NumericArray<arrow::UInt8Type>;
-      return decode(t, dynamic_cast<const array_type&>(arr), f);
+      return decode(t, static_cast<const array_type&>(arr), f);
     }
     case arrow::Type::UINT16: {
       using array_type = arrow::NumericArray<arrow::UInt16Type>;
-      return decode(t, dynamic_cast<const array_type&>(arr), f);
+      return decode(t, static_cast<const array_type&>(arr), f);
     }
     case arrow::Type::UINT32: {
       using array_type = arrow::NumericArray<arrow::UInt32Type>;
-      return decode(t, dynamic_cast<const array_type&>(arr), f);
+      return decode(t, static_cast<const array_type&>(arr), f);
     }
     case arrow::Type::UINT64: {
       using array_type = arrow::NumericArray<arrow::UInt64Type>;
-      return decode(t, dynamic_cast<const array_type&>(arr), f);
+      return decode(t, static_cast<const array_type&>(arr), f);
     }
   }
 }

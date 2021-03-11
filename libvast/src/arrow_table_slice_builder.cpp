@@ -275,12 +275,11 @@ private:
   std::shared_ptr<arrow_builder_type> arrow_builder_;
 };
 
-template <class ListType>
 class list_column_builder : public arrow_table_slice_builder::column_builder {
 public:
   using arrow_builder_type = arrow::ListBuilder;
 
-  using data_type = typename type_traits<ListType>::data_type;
+  using data_type = typename type_traits<list_type>::data_type;
 
   list_column_builder(arrow::MemoryPool* pool,
                       std::unique_ptr<column_builder> nested)
@@ -458,8 +457,7 @@ arrow_table_slice_builder::column_builder::make(const type& t,
     },
     [=](const list_type& x) -> std::unique_ptr<column_builder> {
       auto nested = column_builder::make(x.value_type, pool);
-      return std::make_unique<list_column_builder<std::decay_t<decltype(x)>>>(
-        pool, std::move(nested));
+      return std::make_unique<list_column_builder>(pool, std::move(nested));
     },
     [=](const map_type& x) -> std::unique_ptr<column_builder> {
       auto key_builder = column_builder::make(x.key_type, pool);
@@ -468,8 +466,6 @@ arrow_table_slice_builder::column_builder::make(const type& t,
       return std::make_unique<map_column_builder>(pool, make_arrow_type(fields),
                                                   std::move(key_builder),
                                                   std::move(value_builder));
-      // record_type fields{{"key", x.key_type}, {"value", x.value_type}};
-      // return column_builder::make(fields, pool);
     },
     [=](const record_type& x) -> std::unique_ptr<column_builder> {
       auto field_builders = std::vector<std::unique_ptr<column_builder>>{};

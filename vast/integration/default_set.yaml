@@ -443,7 +443,8 @@ tests:
   Nested Records:
     tags: [import, json]
     steps:
-      - command: '-N import --schema="type custom = record { a: list<record { b: string, c: count, }>, d: count, }" --type=custom json'
+      - guard: version | jq -e '."Apache Arrow"'
+      - command: '-N import --schema="type custom = record { a: list<record { b: string, c: count, }>, d: count, }" --type=custom --batch-encoding=arrow json'
         input: data/json/record-in-list.json
       - command: -N export ascii '#type == "custom"'
 
