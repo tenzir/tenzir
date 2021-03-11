@@ -205,6 +205,10 @@ read_flatbuffer_file(const std::filesystem::path& path) {
   if (!maybe_bytes)
     return result;
   auto bytes = std::move(*maybe_bytes);
+  flatbuffers::Verifier verifier{reinterpret_cast<const uint8_t*>(bytes.data()),
+                                 bytes.size()};
+  if (!verifier.template VerifyBuffer<T>())
+    return result;
   const auto* ptr = flatbuffers::GetRoot<T>(bytes.data());
   return result_t(ptr, flatbuffer_deleter<T>(std::move(bytes)));
 }
@@ -306,6 +310,10 @@ void print_vast_db(const std::filesystem::path& vast_db, indentation& indent,
       for (const auto& entry : dir) {
         const auto stem = entry.path().stem();
         if (stem == "index")
+          continue;
+        const auto extension = entry.path().extension();
+        // TODO: Print partition synopses.
+        if (extension == ".mdx")
           continue;
         std::cout << indent << stem << " - ";
         print_partition(entry.path(), indent, formatting);
@@ -423,6 +431,7 @@ void print_partition(const std::filesystem::path& path, indentation& indent,
   auto partition = read_flatbuffer_file<vast::fbs::Partition>(path);
   if (!partition) {
     std::cout << "(error reading partition file " << path.string() << ")\n";
+    return;
   }
   switch (partition->partition_type()) {
     case vast::fbs::partition::Partition::v0:
