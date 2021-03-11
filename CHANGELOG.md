@@ -13,6 +13,11 @@ This changelog documents all notable user-facing changes of VAST.
 
 ## Unreleased
 
+- 🐞 Data that was ingested before the deprecation of the `#timestamp`
+  attribute wasn't exported correctly with newer versions. This is now
+  corrected.
+  [#1432](https://github.com/tenzir/vast/pull/1432)
+
 - ⚠️ The zeek-to-vast relay utility was moved to the
   [tenzir/zeek-vast](https://github.com/tenzir/zeek-vast) repository. All
   options related to zeek-to-vast and the bundled Broker submodule were removed.

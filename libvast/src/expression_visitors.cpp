@@ -361,7 +361,8 @@ type_resolver::operator()(const type_extractor& ex, const data& d) {
     auto matches = [&](const type& t) {
       return t.name() == ex.type.name() && compatible(t, op_, d);
     };
-    // DEPRECATED: Remove before release 2021.04
+    // Preserve compatibility with databases that were created beore
+    // the #timestamp attribute was removed.
     if (ex.type.name() == "timestamp") {
       if (!caf::holds_alternative<time>(d))
         return caf::make_error(ec::type_clash, ":timestamp", op_, d);
