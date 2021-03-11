@@ -20,6 +20,7 @@
 #include "vast/detail/assert.hpp"
 #include "vast/detail/fill_status_map.hpp"
 #include "vast/logger.hpp"
+#include "vast/path.hpp"
 #include "vast/segment_store.hpp"
 #include "vast/store.hpp"
 #include "vast/system/report.hpp"
@@ -101,7 +102,9 @@ archive(archive_actor::stateful_pointer<archive_state> self, path dir,
                "size of {} and {} segments in memory",
                self, dir, max_segment_size, capacity);
   self->state.self = self;
-  self->state.store = segment_store::make(dir, max_segment_size, capacity);
+  auto segment_dir = std::filesystem::path{dir.str()};
+  self->state.store
+    = segment_store::make(segment_dir, max_segment_size, capacity);
   VAST_ASSERT(self->state.store != nullptr);
   self->set_exit_handler([self](const caf::exit_msg& msg) {
     VAST_DEBUG("{} got EXIT from {}", self, msg.source);

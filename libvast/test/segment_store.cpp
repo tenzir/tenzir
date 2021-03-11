@@ -37,10 +37,11 @@ namespace {
 
 struct fixture : fixtures::deterministic_actor_system_and_events {
   fixture() {
-    store = segment_store::make(directory / "segments", 512_KiB, 2);
+    auto segments_dir = std::filesystem::path{directory.str()} / "segments";
+    store = segment_store::make(segments_dir, 512_KiB, 2);
     if (store == nullptr)
       FAIL("segment_store::make failed to allocate a segment store");
-    segment_path = std::filesystem::path{store->segment_path().str()};
+    segment_path = store->segment_path();
     // Approximates an ID range for [0, max_id) with 100, because
     // `make_ids({{0, max_id}})` unfortunately leads to performance
     // degradations.

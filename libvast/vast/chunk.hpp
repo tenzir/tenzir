@@ -13,10 +13,11 @@
 
 #pragma once
 
+#include "vast/fwd.hpp"
+
 #include "vast/as_bytes.hpp"
 #include "vast/detail/assert.hpp"
 #include "vast/detail/function.hpp"
-#include "vast/fwd.hpp"
 #include "vast/span.hpp"
 
 #include <caf/intrusive_ptr.hpp>
@@ -24,6 +25,7 @@
 
 #include <cstddef>
 #include <cstring>
+#include <filesystem>
 #include <utility>
 
 namespace vast {
@@ -170,7 +172,8 @@ public:
   // -- concepts --------------------------------------------------------------
 
   friend span<const std::byte> as_bytes(const chunk_ptr& x) noexcept;
-  friend caf::error write(const path& filename, const chunk_ptr& x);
+  friend caf::error
+  write(const std::filesystem::path& filename, const chunk_ptr& x);
   friend caf::error read(const path& filename, chunk_ptr& x);
   friend caf::error inspect(caf::serializer& sink, const chunk_ptr& x);
   friend caf::error inspect(caf::deserializer& source, chunk_ptr& x);

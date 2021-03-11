@@ -37,8 +37,9 @@
 namespace vast {
 
 // TODO: return expected<segment_store_ptr> for better error propagation.
-segment_store_ptr segment_store::make(path dir, size_t max_segment_size,
-                                      size_t in_memory_segments) {
+segment_store_ptr
+segment_store::make(std::filesystem::path dir, size_t max_segment_size,
+                    size_t in_memory_segments) {
   VAST_TRACE_SCOPE("{} {} {}", VAST_ARG(dir), VAST_ARG(max_segment_size),
                    VAST_ARG(in_memory_segments));
   VAST_ASSERT(max_segment_size > 0);
@@ -49,7 +50,8 @@ segment_store_ptr segment_store::make(path dir, size_t max_segment_size,
   return result;
 }
 
-segment_store::segment_store(path dir, uint64_t max_segment_size,
+segment_store::segment_store(std::filesystem::path dir,
+                             uint64_t max_segment_size,
                              size_t in_memory_segments)
   : dir_{std::move(dir)},
     max_segment_size_{max_segment_size},
@@ -263,7 +265,7 @@ caf::error segment_store::erase(const ids& xs) {
       // Schedule deletion of the segment file when releasing the chunk.
       seg.chunk()->add_deletion_step([=]() noexcept {
         std::error_code err{};
-        std::filesystem::remove_all(stale_filename.str(), err);
+        std::filesystem::remove(stale_filename, err);
       });
     }
     // else: nothing to do, since we can continue filling the active segment.
@@ -352,7 +354,7 @@ caf::error segment_store::flush() {
   // Keep new segment in the cache.
   cache_.emplace(seg.id(), seg);
   VAST_DEBUG("{} wrote new segment to {}", detail::pretty_type_name(this),
-             filename.trim(-3));
+             filename.parent_path());
   return caf::none;
 }
 
@@ -378,27 +380,27 @@ void segment_store::inspect_status(caf::settings& xs,
 }
 
 caf::error segment_store::register_segments() {
-  auto p = std::filesystem::path{segment_path().str()};
-  if (!std::filesystem::exists(p))
+  if (!std::filesystem::exists(segment_path()))
     return caf::none;
   std::error_code err{};
-  std::filesystem::directory_iterator dir{p, err};
+  std::filesystem::directory_iterator dir{segment_path(), err};
   if (err)
     return caf::make_error(ec::filesystem_error,
                            fmt::format("failed to find segment path {} : {}",
-                                       segment_path(), err.message()));
+                                       dir->path(), err.message()));
   for (const auto& entry : dir)
     if (entry.exists())
-      if (auto err = register_segment(vast::path{entry.path().string()}))
+      if (auto err = register_segment(entry.path()))
         return err;
   return caf::none;
 }
 
-caf::error segment_store::register_segment(const path& filename) {
-  auto chk = chunk::mmap(filename);
+caf::error
+segment_store::register_segment(const std::filesystem::path& filename) {
+  auto chk = chunk::mmap(vast::path{filename.string()});
   if (!chk)
     return caf::make_error(ec::filesystem_error, "failed to mmap chunk",
-                           filename);
+                           filename.string());
   // We don't verify the segment here, since doing that would access
   // most of the pages of the mapping and effectively cause us to
   // read of the whole archive contents from disk. When the database
@@ -428,10 +430,10 @@ caf::expected<segment> segment_store::load_segment(uuid id) const {
   auto filename = segment_path() / to_string(id);
   VAST_DEBUG("{} mmaps segment from {}", detail::pretty_type_name(this),
              filename);
-  auto chk = chunk::mmap(filename);
+  auto chk = chunk::mmap(vast::path{filename.string()});
   if (!chk)
     return caf::make_error(ec::filesystem_error, "failed to mmap chunk",
-                           filename);
+                           filename.string());
   if (auto segment = segment::make(std::move(chk))) {
     return segment;
   } else {
@@ -477,7 +479,7 @@ uint64_t segment_store::drop(segment& x) {
   auto filename = segment_path() / to_string(segment_id);
   x.chunk()->add_deletion_step([=]() noexcept {
     std::error_code err{};
-    std::filesystem::remove_all(filename.str(), err);
+    std::filesystem::remove(filename, err);
   });
   segments_.erase_value(segment_id);
   return erased_events;

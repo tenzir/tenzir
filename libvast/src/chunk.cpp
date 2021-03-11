@@ -27,6 +27,7 @@
 #include <cstddef>
 #include <cstring>
 #include <fcntl.h>
+#include <filesystem>
 #include <memory>
 #include <tuple>
 #include <unistd.h>
@@ -136,7 +137,7 @@ span<const std::byte> as_bytes(const chunk_ptr& x) noexcept {
   return as_bytes(*x);
 }
 
-caf::error write(const path& filename, const chunk_ptr& x) {
+caf::error write(const std::filesystem::path& filename, const chunk_ptr& x) {
   return io::save(filename, as_bytes(x));
 }
 
