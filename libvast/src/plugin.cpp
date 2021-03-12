@@ -56,13 +56,6 @@ std::string to_string(plugin_version x) {
   return result;
 }
 
-bool has_required_version(const plugin_version& version) noexcept {
-  return plugin::version.major == version.major
-         && std::tie(plugin::version.minor, plugin::version.patch,
-                     plugin::version.tweak)
-              <= std::tie(version.minor, version.patch, version.tweak);
-}
-
 // -- plugin_ptr ---------------------------------------------------------------
 
 caf::expected<plugin_ptr>
@@ -97,9 +90,6 @@ plugin_ptr::make(const char* filename, caf::actor_system_config& cfg) noexcept {
     return caf::make_error(ec::system_error,
                            "failed to resolve symbol vast_plugin_version in",
                            filename, dlerror());
-  if (!has_required_version(plugin_version()))
-    return caf::make_error(ec::version_error, "plugin version mismatch",
-                           filename, plugin_version(), plugin::version);
   auto plugin_create = reinterpret_cast<::vast::plugin* (*) ()>(
     dlsym(library, "vast_plugin_create"));
   if (!plugin_create)

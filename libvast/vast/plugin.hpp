@@ -56,10 +56,6 @@ extern "C" struct plugin_version {
 /// @relates plugin_version
 std::string to_string(plugin_version x);
 
-/// Checks if a version meets the plugin version requirements.
-/// @param version The version to compare against the requirements.
-bool has_required_version(const plugin_version& version) noexcept;
-
 /// Support CAF type-inspection.
 /// @relates plugin_version
 template <class Inspector>
@@ -89,10 +85,6 @@ auto inspect(Inspector& f, plugin_type_id_block& x) ->
 /// The plugin base class.
 class plugin {
 public:
-  /// The current version of the plugin API. When registering a plugin, set the
-  /// corresponding plugin version in the `VAST_REGISTER_PLUGIN` macro.
-  constexpr static auto version = plugin_version{0, 1, 0, 0};
-
   /// Destroys any runtime state that the plugin created. For example,
   /// de-register from existing components, deallocate memory.
   virtual ~plugin() noexcept = default;
