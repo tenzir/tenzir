@@ -196,6 +196,8 @@ evaluate(const PartitionState& state, const expression& expr) {
   // Pretend the partition is a table, and return fitted predicates for the
   // partitions layout.
   auto resolved = resolve(expr, state.combined_layout);
+  VAST_INFO("resolved {} entries from expr {} and layout {}", resolved.size(),
+            expr, state.combined_layout);
   for (auto& kvp : resolved) {
     // For each fitted predicate, look up the corresponding INDEXER
     // according to the specified type of extractor.
