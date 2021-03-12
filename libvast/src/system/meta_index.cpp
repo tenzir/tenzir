@@ -297,18 +297,25 @@ std::vector<uuid> meta_index_state::lookup_impl(const expression& expr) const {
           };
           return search(pred);
         },
-        [&](const type_extractor& lhs, const data&) -> result_type {
+        [&](const type_extractor& lhs, const data& d) -> result_type {
           auto result = [&] {
             if (caf::holds_alternative<none_type>(lhs.type)) {
               VAST_ASSERT(!lhs.type.name().empty());
               auto pred = [&](auto& field) {
-                return field.type.name() == lhs.type.name();
+                const auto* p = &field.type;
+                while (const auto* a = caf::get_if<alias_type>(p)) {
+                  if (a->name() == lhs.type.name())
+                    return compatible(*a, x.op, d);
+                  p = &a->value_type;
+                }
+                if (p->name() == lhs.type.name())
+                  return compatible(*p, x.op, d);
+                return false;
               };
               return search(pred);
             }
-            auto pred = [&](auto& field) {
-              return field.type == lhs.type && field.type.name().empty();
-            };
+            auto pred
+              = [&](auto& field) { return congruent(field.type, lhs.type); };
             return search(pred);
           }();
           // Preserve compatibility with databases that were created beore

@@ -359,7 +359,15 @@ caf::expected<expression>
 type_resolver::operator()(const type_extractor& ex, const data& d) {
   if (caf::holds_alternative<none_type>(ex.type)) {
     auto matches = [&](const type& t) {
-      return t.name() == ex.type.name() && compatible(t, op_, d);
+      const auto* p = &t;
+      while (const auto* a = caf::get_if<alias_type>(p)) {
+        if (a->name() == ex.type.name())
+          return compatible(*a, op_, d);
+        p = &a->value_type;
+      }
+      if (p->name() == ex.type.name())
+        return compatible(*p, op_, d);
+      return false;
     };
     // Preserve compatibility with databases that were created beore
     // the #timestamp attribute was removed.
@@ -371,11 +379,9 @@ type_resolver::operator()(const type_extractor& ex, const data& d) {
       return disjunction{resolve_extractor(matches, d),
                          resolve_extractor(has_timestamp_attribute, d)};
     }
-    // END DEPRECATED
     return resolve_extractor(matches, d);
   }
-  auto is_congruent
-    = [&](const type& t) { return t.name().empty() && congruent(t, ex.type); };
+  auto is_congruent = [&](const type& t) { return congruent(t, ex.type); };
   return resolve_extractor(is_congruent, d);
 }
 
