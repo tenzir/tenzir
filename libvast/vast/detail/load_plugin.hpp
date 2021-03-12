@@ -16,7 +16,8 @@
 #include "vast/fwd.hpp"
 
 #include "vast/detail/stable_set.hpp"
-#include "vast/path.hpp"
+
+#include <filesystem>
 
 namespace vast::detail {
 
@@ -28,7 +29,7 @@ namespace vast::detail {
 /// type ID blocks.
 /// @returns A pair consisting of the absolute path of the loaded plugin and a
 /// pointer to the loaded plugin, or an error detailing what went wrong.
-caf::expected<std::pair<path, plugin_ptr>>
-load_plugin(path file, caf::actor_system_config& cfg);
+caf::expected<std::pair<std::filesystem::path, plugin_ptr>>
+load_plugin(std::filesystem::path file, caf::actor_system_config& cfg);
 
 } // namespace vast::detail

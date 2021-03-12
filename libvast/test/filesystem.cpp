@@ -32,92 +32,74 @@ using namespace vast;
 TEST(path_operations) {
   path p(".");
   CHECK(p.basename() == ".");
-  CHECK(p.extension() == ".");
   CHECK(p.parent() == "");
 
   p = "..";
   CHECK(p.basename() == "..");
-  CHECK(p.extension() == ".");
   CHECK(p.parent() == "");
 
   p = "/";
   CHECK(p.basename() == "/");
-  CHECK(p.extension() == "");
   CHECK(p.parent() == "");
 
   p = "foo";
   CHECK(p.basename() == "foo");
-  CHECK(p.extension() == "");
   CHECK(p.parent() == "");
 
   p = "/foo";
   CHECK(p.basename() == "foo");
-  CHECK(p.extension() == "");
   CHECK(p.parent() == "/");
 
   p = "foo/";
   CHECK(p.basename() == ".");
-  CHECK(p.extension() == "");
   CHECK(p.parent() == "foo");
 
   p = "/foo/";
   CHECK(p.basename() == ".");
-  CHECK(p.extension() == "");
   CHECK(p.parent() == "/foo");
 
   p = "foo/bar";
   CHECK(p.basename() == "bar");
-  CHECK(p.extension() == "");
   CHECK(p.parent() == "foo");
 
   p = "/foo/bar";
   CHECK(p.basename() == "bar");
-  CHECK(p.extension() == "");
   CHECK(p.parent() == "/foo");
 
   p = "/.";
   CHECK(p.basename() == ".");
-  CHECK(p.extension() == ".");
   CHECK(p.parent() == "/");
 
   p = "./";
   CHECK(p.basename() == ".");
-  CHECK(p.extension() == "");
   CHECK(p.parent() == ".");
 
   p = "/..";
   CHECK(p.basename() == "..");
-  CHECK(p.extension() == ".");
   CHECK(p.parent() == "/");
 
   p = "../";
   CHECK(p.basename() == ".");
-  CHECK(p.extension() == "");
   CHECK(p.parent() == "..");
 
   p = "foo/.";
   CHECK(p.basename() == ".");
-  CHECK(p.extension() == ".");
   CHECK(p.parent() == "foo");
 
   p = "foo/..";
   CHECK(p.basename() == "..");
-  CHECK(p.extension() == ".");
   CHECK(p.parent() == "foo");
 
   p = "foo/./";
   CHECK(p.basename() == ".");
-  CHECK(p.extension() == "");
   CHECK(p.parent() == "foo/.");
 
   p = "foo/../";
   CHECK(p.basename() == ".");
-  CHECK(p.extension() == "");
   CHECK(p.parent() == "foo/..");
 
   p = "foo/./bar";
   CHECK(p.basename() == "bar");
-  CHECK(p.extension() == "");
   CHECK(p.parent() == "foo/.");
 
   p = "/usr/local/bin/foo";

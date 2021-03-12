@@ -13,10 +13,10 @@
 
 #pragma once
 
-#include "vast/path.hpp"
-
 #include <caf/expected.hpp>
 #include <caf/settings.hpp>
+
+#include <filesystem>
 
 namespace vast::detail {
 
@@ -25,7 +25,7 @@ namespace vast::detail {
 ///             mmaped region in order to succeed.
 /// @returns the filesystem path to the library or executable mapped at address
 ///          addr, or error if the resolution fails.
-caf::expected<path> objectpath(const void* addr = nullptr);
+caf::expected<std::filesystem::path> objectpath(const void* addr = nullptr);
 
 /// Retrieves runtime information about the current process.
 /// @returns a settings object containing information about system resource

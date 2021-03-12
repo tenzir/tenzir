@@ -94,10 +94,6 @@ public:
   /// @returns The basename of this path.
   path basename(bool strip_extension = false) const;
 
-  /// Retrieves the extension of this path.
-  /// @param The extension including ".".
-  path extension() const;
-
   /// Completes the path to an absolute path.
   /// @returns An absolute path.
   path complete() const;

@@ -139,16 +139,6 @@ path path::basename(bool strip_extension) const {
   return base.substr(0, ext);
 }
 
-path path::extension() const {
-  if (str_.back() == '.')
-    return ".";
-  auto base = basename();
-  auto ext = base.str_.rfind(".");
-  if (base == "." || ext == std::string::npos)
-    return {};
-  return base.str_.substr(ext);
-}
-
 path path::complete() const {
   return root().empty() ? current() / *this : *this;
 }

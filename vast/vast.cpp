@@ -24,7 +24,6 @@
 #include "vast/error.hpp"
 #include "vast/event_types.hpp"
 #include "vast/logger.hpp"
-#include "vast/path.hpp"
 #include "vast/plugin.hpp"
 #include "vast/schema.hpp"
 #include "vast/system/application.hpp"
@@ -34,6 +33,7 @@
 
 #include <csignal>
 #include <cstdlib>
+#include <filesystem>
 #include <iostream>
 #include <string>
 #include <vector>
@@ -54,7 +54,7 @@ int main(int argc, char** argv) {
     return EXIT_FAILURE;
   }
   // Load plugins.
-  auto loaded_plugin_paths = std::vector<path>{};
+  auto loaded_plugin_paths = std::vector<std::filesystem::path>{};
   auto plugin_files
     = caf::get_or(cfg, "vast.plugins", std::vector<std::string>{});
 #ifdef VAST_ENABLED_PLUGINS

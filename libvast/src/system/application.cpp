@@ -493,13 +493,13 @@ auto make_root_command(std::string_view path) {
   // interested in "vast".
   path.remove_prefix(std::min(path.find_last_of('/') + 1, path.size()));
   // For documentation, we use the complete man-page formatted as Markdown
-  auto binary = detail::objectpath();
+  const auto binary = detail::objectpath();
   auto schema_desc
     = "list of directories to look for schema files ([/etc/vast/schema"s;
   if (binary) {
-    auto relative_schema_dir
-      = binary->parent().parent() / "share" / "vast" / "schema";
-    schema_desc += ", " + relative_schema_dir.str();
+    const auto relative_schema_dir
+      = binary->parent_path().parent_path() / "share" / "vast" / "schema";
+    schema_desc += ", " + relative_schema_dir.string();
   }
   schema_desc += "])";
   auto ob
