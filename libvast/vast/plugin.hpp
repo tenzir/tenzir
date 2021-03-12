@@ -222,17 +222,17 @@ private:
 #  define VAST_REGISTER_PLUGIN(name, major, minor, tweak, patch)               \
     template <class Plugin>                                                    \
     struct auto_register_plugin {                                              \
+      auto_register_plugin() {                                                 \
+        static_cast<void>(flag);                                               \
+      }                                                                        \
       static bool init() {                                                     \
         ::vast::plugins::get().push_back(::vast::plugin_ptr::make(             \
           new Plugin, +[](::vast::plugin* plugin) noexcept { delete plugin; }, \
           ::vast::plugin_version{major, minor, tweak, patch}));                \
         return true;                                                           \
       }                                                                        \
-      static bool flag;                                                        \
+      inline static auto flag = init();                                        \
     };                                                                         \
-    template <class Plugin>                                                    \
-    bool auto_register_plugin<Plugin>::flag                                    \
-      = auto_register_plugin<Plugin>::init();                                  \
     template struct auto_register_plugin<name>;
 
 // NOLINTNEXTLINE
@@ -243,6 +243,9 @@ private:
 // NOLINTNEXTLINE
 #  define VAST_REGISTER_PLUGIN_TYPE_ID_BLOCK_1(name)                           \
     struct auto_register_type_id_##name {                                      \
+      auto_register_type_id_##name() {                                         \
+        static_cast<void>(flag);                                               \
+      }                                                                        \
       static bool init() {                                                     \
         ::vast::plugins::get_type_id_assigners().push_back(                    \
           +[](::caf::actor_system_config& cfg) noexcept {                      \
@@ -260,6 +263,9 @@ private:
         static_cast<void>(flag);                                               \
       }                                                                        \
       static bool init() {                                                     \
+        auto_register_type_id_##name1##name2() {                               \
+          static_cast<void>(flag);                                             \
+        }                                                                      \
         ::vast::plugins::get_type_id_assigners().push_back(                    \
           +[](::caf::actor_system_config& cfg) noexcept {                      \
             cfg.add_message_types<::caf::id_block::name1>();                   \
@@ -267,10 +273,8 @@ private:
           });                                                                  \
         return true;                                                           \
       }                                                                        \
-      static bool flag;                                                        \
-    };                                                                         \
-    bool auto_register_type_id_##name1##name2::flag                            \
-      = auto_register_type_id_##name1##name2::init();
+      inline static auto flag = init();                                        \
+    };
 
 #else // if !defined(VAST_ENABLE_STATIC_PLUGINS_INTERNAL)
 

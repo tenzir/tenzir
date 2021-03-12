@@ -1,8 +1,7 @@
-set(sources example.cpp)
+set(entrypoint example.cpp)
+set(sources ${entrypoint})
 
 if (VAST_ENABLE_STATIC_PLUGINS)
-
-  message(WARNING "static example plugin")
 
   # Building a plugin as a static library cannot work with the dynamic loading
   # mechanism by design. The best we can do is to build the sources directly
@@ -13,6 +12,13 @@ if (VAST_ENABLE_STATIC_PLUGINS)
   # - Unit tests do not function as there exists no library to test separately.
   # - Type ID range clashes are not detected at load time.
   target_sources(vast PRIVATE ${sources})
+
+  if (VAST_ENABLE_STATIC_EXECUTABLE)
+    # Prevent elision of self-registration code in statically linked binaries,
+    # c.f., https://www.bfilipek.com/2018/02/static-vars-static-lib.html
+    set_source_files_properties(${entrypoint} PROPERTIES COMPILE_FLAGS
+      -Wl,--whole-archive)
+  endif ()
 
 else ()
 
