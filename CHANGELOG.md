@@ -13,6 +13,12 @@ This changelog documents all notable user-facing changes of VAST.
 
 ## Unreleased
 
+- ⚠️ The time to first response of queries that compare a concept to a string
+  has been reduced noticably. In the particular case of large databases
+  containing many different event types and queries with a high selectivity we
+  were able to measure speedups of up to 5x.
+  [#1433](https://github.com/tenzir/vast/pull/1433)
+
 - 🐞 The JSON parser now accepts data with numerical or boolean values in
   fields that expect strings according the schema.
   [#1439](https://github.com/tenzir/vast/pull/1439)
