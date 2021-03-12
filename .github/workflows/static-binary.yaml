@@ -3,6 +3,11 @@ on:
   repository_dispatch:
     types: static-binary
   workflow_dispatch:
+    inputs:
+      arguments:
+        description: 'Additional arguments to pass, e.g., `--with-plugin=<path/to/plugin>` or `-D<CMake Option>`'
+        required: false
+        default: ''
   push:
     branches:
       - master
@@ -55,7 +60,7 @@ jobs:
       env:
         STATIC_BINARY_TARGET: ${{ matrix.args }}
       run: |
-        nix/static-binary.sh --use-head
+        nix/static-binary.sh --use-head ${{ github.event.inputs.arguments }}
 
     - name: Create Paths
       id: create_paths
