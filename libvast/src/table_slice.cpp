@@ -103,7 +103,7 @@ const fbs::TableSlice* as_flatbuffer(const chunk_ptr& chunk) noexcept {
 chunk_ptr
 verified_or_none(chunk_ptr&& chunk, enum table_slice::verify verify) noexcept {
   if (verify == table_slice::verify::yes && chunk) {
-    const auto data = reinterpret_cast<const uint8_t*>(chunk->data());
+    const auto* const data = reinterpret_cast<const uint8_t*>(chunk->data());
     auto verifier = flatbuffers::Verifier{data, chunk->size()};
     if (!verifier.template VerifyBuffer<fbs::TableSlice>())
       chunk = {};
@@ -140,9 +140,7 @@ state([[maybe_unused]] Slice&& encoded, State&& state) noexcept {
 
 // -- constructors, destructors, and assignment operators ----------------------
 
-table_slice::table_slice() noexcept {
-  // nop
-}
+table_slice::table_slice() noexcept = default;
 
 table_slice::table_slice(chunk_ptr&& chunk, enum verify verify) noexcept
   : chunk_{verified_or_none(std::move(chunk), verify)} {
@@ -186,24 +184,23 @@ table_slice::table_slice(chunk_ptr&& chunk, enum verify verify,
 table_slice::table_slice(const fbs::FlatTableSlice& flat_slice,
                          const chunk_ptr& parent_chunk,
                          enum verify verify) noexcept {
-  const auto flat_slice_begin
+  const auto* const flat_slice_begin
     = reinterpret_cast<const std::byte*>(flat_slice.data()->data());
   const auto flat_slice_size = flat_slice.data()->size();
   VAST_ASSERT(flat_slice_begin >= parent_chunk->data());
-  VAST_ASSERT(flat_slice_begin + flat_slice_size
-              <= parent_chunk->data() + parent_chunk->size());
+  VAST_ASSERT(std::next(flat_slice_begin, flat_slice_size)
+              <= std::next(parent_chunk->data(), parent_chunk->size()));
   auto chunk = parent_chunk->slice(flat_slice_begin - parent_chunk->data(),
                                    flat_slice_size);
   // Delegate the sliced chunk to the constructor.
   *this = table_slice{std::move(chunk), verify};
 }
 
-table_slice::table_slice(const table_slice& other) noexcept
-  : chunk_{other.chunk_}, offset_{other.offset_}, state_{other.state_} {
-  // nop
-}
+table_slice::table_slice(const table_slice& other) noexcept = default;
 
 table_slice& table_slice::operator=(const table_slice& rhs) noexcept {
+  if (this == &rhs)
+    return *this;
   chunk_ = rhs.chunk_;
   offset_ = rhs.offset_;
   state_ = rhs.state_;
@@ -224,9 +221,7 @@ table_slice& table_slice::operator=(table_slice&& rhs) noexcept {
   return *this;
 }
 
-table_slice::~table_slice() noexcept {
-  // nop
-}
+table_slice::~table_slice() noexcept = default;
 
 // -- operators ----------------------------------------------------------------
 
@@ -411,24 +406,22 @@ rebuild(table_slice slice, enum table_slice_encoding encoding) noexcept {
     [&]() noexcept -> table_slice { return {}; },
     [&](const auto& encoded) noexcept -> table_slice {
       if (encoding == state(encoded, slice.state_)->encoding
-          && state(encoded, slice.state_)->is_latest_version) {
+          && state(encoded, slice.state_)->is_latest_version)
         return std::move(slice);
-      } else {
-        auto builder = factory<table_slice_builder>::make(builder_id(encoding),
-                                                          slice.layout());
-        if (!builder)
-          return table_slice{};
-        auto flat_layout = flatten(slice.layout());
-        for (table_slice::size_type row = 0; row < slice.rows(); ++row)
-          for (table_slice::size_type column = 0;
-               column < flat_layout.fields.size(); ++column)
-            if (!builder->add(
-                  slice.at(row, column, flat_layout.fields[column].type)))
-              return {};
-        auto result = builder->finish();
-        result.offset(slice.offset());
-        return result;
-      }
+      auto builder = factory<table_slice_builder>::make(builder_id(encoding),
+                                                        slice.layout());
+      if (!builder)
+        return table_slice{};
+      auto flat_layout = flatten(slice.layout());
+      for (table_slice::size_type row = 0; row < slice.rows(); ++row)
+        for (table_slice::size_type column = 0;
+             column < flat_layout.fields.size(); ++column)
+          if (!builder->add(
+                slice.at(row, column, flat_layout.fields[column].type)))
+            return {};
+      auto result = builder->finish();
+      result.offset(slice.offset());
+      return result;
     },
   };
   return visit(f, as_flatbuffer(slice.chunk_));
@@ -550,7 +543,7 @@ split(const table_slice& slice, size_t partition_point) {
 
 uint64_t rows(const std::vector<table_slice>& slices) {
   auto result = uint64_t{0};
-  for (auto& slice : slices)
+  for (const auto& slice : slices)
     result += slice.rows();
   return result;
 }
@@ -578,17 +571,13 @@ struct row_evaluator {
   }
 
   bool operator()(const conjunction& c) {
-    for (auto& op : c)
-      if (!caf::visit(*this, op))
-        return false;
-    return true;
+    return std::all_of(c.begin(), c.end(),
+                       [&](const auto& op) { return caf::visit(*this, op); });
   }
 
   bool operator()(const disjunction& d) {
-    for (auto& op : d)
-      if (caf::visit(*this, op))
-        return true;
-    return false;
+    return std::any_of(d.begin(), d.end(),
+                       [&](const auto& op) { return caf::visit(*this, op); });
   }
 
   bool operator()(const negation& n) {
@@ -610,7 +599,7 @@ struct row_evaluator {
     if (e.kind == meta_extractor::type)
       return evaluate(layout.name(), op_, d);
     if (e.kind == meta_extractor::field) {
-      auto s = caf::get_if<std::string>(&d);
+      const auto* s = caf::get_if<std::string>(&d);
       if (!s) {
         VAST_WARN("#field can only compare with string");
         return false;
@@ -618,7 +607,7 @@ struct row_evaluator {
       auto result = false;
       auto neg = is_negated(op_);
       // auto abs_op = neg ? negate(op_) : op_;
-      for (auto& field : record_type::each{layout}) {
+      for (const auto& field : record_type::each{layout}) {
         auto fqn = layout.name() + "." + field.key();
         if (detail::ends_with(fqn, *s)) {
           result = true;
@@ -648,7 +637,7 @@ struct row_evaluator {
 
   const table_slice& slice_;
   size_t row_;
-  relational_operator op_;
+  relational_operator op_ = {};
 };
 
 } // namespace
