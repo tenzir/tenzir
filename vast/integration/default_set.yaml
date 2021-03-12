@@ -134,8 +134,6 @@ tests:
       - command: -N export zeek 'resp_h == 192.168.1.104'
         transformation: awk '!/^#(open|close)/'
       - command: -N count ':port == 53'
-        # Expected to return 0, this check exists to make sure :count doesn't
-        # match on values of type port.
       - command: '-N count ":count == 53 && #type == \"zeek.dns\""'
   Node Zeek http log:
     tags: [node, import-export, zeek]
@@ -256,6 +254,7 @@ tests:
         input: data/json/conn.log.json.gz
       - command: -N export ascii 'duration > 6s'
       - command: -N export ascii ':timestamp >= 2011-08-15T03:48'
+      - command: -N export ascii ':time >= 2011-08-15T03:48'
   Node suricata alert:
     tags: [node, import-export, suricata, eve]
     steps:

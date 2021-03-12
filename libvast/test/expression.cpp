@@ -68,7 +68,7 @@ struct fixture {
   expression expr1;
 };
 
-} // namespace <anonymous>
+} // namespace
 
 FIXTURE_SCOPE(expr_tests, fixture)
 
@@ -186,16 +186,19 @@ TEST(normalization) {
 }
 
 TEST(extractors) {
+  auto port = alias_type{count_type{}}.name("port");
+  auto subport = alias_type{type{port}}.name("subport");
   auto s = record_type{{"real", real_type{}},
                        {"bool", bool_type{}},
                        {"host", address_type{}},
-                       {"port", alias_type{count_type{}}.name("port")}};
+                       {"port", port},
+                       {"subport", subport}};
   auto r = flatten(record_type{{"orig", s}, {"resp", s}});
   auto sn = unbox(to<subnet>("192.168.0.0/24"));
   {
     auto pred0 = predicate{data_extractor{address_type{}, offset{2}},
                            relational_operator::in, data{sn}};
-    auto pred1 = predicate{data_extractor{address_type{}, offset{6}},
+    auto pred1 = predicate{data_extractor{address_type{}, offset{7}},
                            relational_operator::in, data{sn}};
     auto normalized = disjunction{pred0, pred1};
     MESSAGE("type extractor - distribution");
@@ -210,7 +213,7 @@ TEST(extractors) {
   {
     auto pred0 = predicate{data_extractor{address_type{}, offset{2}},
                            relational_operator::not_in, data{sn}};
-    auto pred1 = predicate{data_extractor{address_type{}, offset{6}},
+    auto pred1 = predicate{data_extractor{address_type{}, offset{7}},
                            relational_operator::not_in, data{sn}};
     auto normalized = conjunction{pred0, pred1};
     MESSAGE("type extractor - distribution with negation");
@@ -223,21 +226,26 @@ TEST(extractors) {
     CHECK_EQUAL(resolved, normalized);
   }
   {
-    auto pred0 = predicate{data_extractor{alias_type{count_type{}}.name("port"),
-                                          offset{3}},
+    auto pred0 = predicate{data_extractor{port, offset{3}},
                            relational_operator::equal, data{80u}};
-    auto pred1 = predicate{data_extractor{alias_type{count_type{}}.name("port"),
-                                          offset{7}},
+    auto pred1 = predicate{data_extractor{subport, offset{4}},
                            relational_operator::equal, data{80u}};
-    auto normalized = disjunction{pred0, pred1};
+    auto pred2 = predicate{data_extractor{port, offset{8}},
+                           relational_operator::equal, data{80u}};
+    auto pred3 = predicate{data_extractor{subport, offset{9}},
+                           relational_operator::equal, data{80u}};
+    auto normalized = disjunction{pred0, pred1, pred2, pred3};
     MESSAGE("type extractor - used defined types");
     auto expr = unbox(to<expression>(":port == 80"));
     auto resolved = caf::visit(type_resolver(r), expr);
     CHECK_EQUAL(resolved, normalized);
+    expr = unbox(to<expression>(":count == 80"));
+    resolved = caf::visit(type_resolver(r), expr);
+    CHECK_EQUAL(resolved, normalized);
   }
 }
 
-TEST(validation - attribute extractor) {
+TEST(validation - meta extractor) {
   // The "type" attribute extractor requires a string operand.
   auto expr = to<expression>("#type == \"foo\"");
   REQUIRE(expr);
@@ -303,10 +311,7 @@ TEST(labeler) {
   // Create a visitor that records all offsets in order.
   detail::stable_map<expression, offset> offset_map;
   auto visitor = labeler{
-    [&](const auto& x, const offset& o) {
-      offset_map.emplace(x, o);
-    }
-  };
+    [&](const auto& x, const offset& o) { offset_map.emplace(x, o); }};
   caf::visit(visitor, expr);
   decltype(offset_map) expected_offset_map{
     {to_expr(str), {0}},
@@ -327,8 +332,8 @@ TEST(at) {
   auto str
     = "(x == 5 && :bool == T) || (foo ~ /foo/ && !(x == 5 || #type ~ /bar/))"s;
   auto expr = to_expr(str);
-  CHECK_EQUAL(at(expr, {}), nullptr); // invalid offset
-  CHECK_EQUAL(at(expr, {0}), &expr); // root node
+  CHECK_EQUAL(at(expr, {}), nullptr);  // invalid offset
+  CHECK_EQUAL(at(expr, {0}), &expr);   // root node
   CHECK_EQUAL(at(expr, {1}), nullptr); // invalid root offset
   CHECK_EQUAL(*at(expr, {0, 0}), to_expr("x == 5 && :bool == T"));
   CHECK_EQUAL(*at(expr, {0, 1, 0}), to_expr("foo ~ /foo/"));
@@ -356,10 +361,10 @@ TEST(resolve) {
     xs.insert(xs.end(), begin, end);
   };
   // TODO: How should we handle duplicates? Weed them out? --MV
-  concat(expected, resolve_pred("x == 5", {0,0,0}, t));
-  concat(expected, resolve_pred("y == T", {0,0,1}, t));
-  concat(expected, resolve_pred("x == 5", {0,1,0}, t));
-  concat(expected, resolve_pred("y == F", {0,1,1}, t));
+  concat(expected, resolve_pred("x == 5", {0, 0, 0}, t));
+  concat(expected, resolve_pred("y == T", {0, 0, 1}, t));
+  concat(expected, resolve_pred("x == 5", {0, 1, 0}, t));
+  concat(expected, resolve_pred("y == F", {0, 1, 1}, t));
   CHECK_EQUAL(xs, expected);
 }
 
