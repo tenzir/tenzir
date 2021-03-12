@@ -1,0 +1,11 @@
+tests:
+  InvalidDbdir:
+    tags: [tooling]
+    steps:
+      - command: nonexistent_dbdir
+        expected_result: error
+  BasicCommand:
+    tags: [tooling]
+    steps:
+      - command: ../vast.db
+        transformation: wc -l
