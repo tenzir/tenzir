@@ -55,6 +55,8 @@ void add_message_types(caf::actor_system_config& cfg) {
   cfg.add_message_types<caf::id_block::vast_types>();
   cfg.add_message_types<caf::id_block::vast_atoms>();
   cfg.add_message_types<caf::id_block::vast_actors>();
+  for (const auto& assigner : plugins::get_type_id_assigners())
+    assigner(cfg);
 }
 
 } // namespace vast::detail

@@ -33,6 +33,12 @@ std::vector<plugin_ptr>& get() noexcept {
   return plugins;
 }
 
+std::vector<void (*)(caf::actor_system_config& cfg)>&
+get_type_id_assigners() noexcept {
+  static auto result = std::vector<void (*)(caf::actor_system_config & cfg)>{};
+  return result;
+}
+
 } // namespace plugins
 
 // -- plugin version -----------------------------------------------------------
@@ -61,7 +67,7 @@ bool has_required_version(const plugin_version& version) noexcept {
 
 caf::expected<plugin_ptr>
 plugin_ptr::make(const char* filename, caf::actor_system_config& cfg) noexcept {
-  auto library = dlopen(filename, RTLD_GLOBAL | RTLD_LAZY);
+  auto* library = dlopen(filename, RTLD_GLOBAL | RTLD_LAZY);
   if (!library)
     return caf::make_error(ec::system_error, "failed to load plugin", filename,
                            dlerror());
@@ -130,12 +136,16 @@ plugin_ptr::make(const char* filename, caf::actor_system_config& cfg) noexcept {
     plugin_register_type_id_block(cfg);
     old_blocks.push_back(new_block);
   }
-  return plugin_ptr{library, plugin_create(), plugin_destroy};
+  return plugin_ptr{library, plugin_create(), plugin_destroy, plugin_version()};
+}
+
+plugin_ptr plugin_ptr::make(plugin* instance, void (*deleter)(plugin*),
+                            plugin_version version) noexcept {
+  return plugin_ptr{nullptr, instance, deleter, version};
 }
 
 plugin_ptr::~plugin_ptr() noexcept {
   if (instance_) {
-    VAST_ASSERT(library_);
     VAST_ASSERT(deleter_);
     deleter_(instance_);
     instance_ = {};
@@ -145,12 +155,14 @@ plugin_ptr::~plugin_ptr() noexcept {
     dlclose(library_);
     library_ = {};
   }
+  version_ = {};
 }
 
 plugin_ptr::plugin_ptr(plugin_ptr&& other) noexcept
   : library_{std::exchange(other.library_, {})},
     instance_{std::exchange(other.instance_, {})},
-    deleter_{std::exchange(other.deleter_, {})} {
+    deleter_{std::exchange(other.deleter_, {})},
+    version_{std::exchange(other.version_, {})} {
   // nop
 }
 
@@ -158,6 +170,7 @@ plugin_ptr& plugin_ptr::operator=(plugin_ptr&& rhs) noexcept {
   library_ = std::exchange(rhs.library_, {});
   instance_ = std::exchange(rhs.instance_, {});
   deleter_ = std::exchange(rhs.deleter_, {});
+  version_ = std::exchange(rhs.version_, {});
   return *this;
 }
 
@@ -182,16 +195,14 @@ plugin& plugin_ptr::operator&() noexcept {
 }
 
 plugin_ptr::plugin_ptr(void* library, plugin* instance,
-                       void (*deleter)(plugin*)) noexcept
-  : library_{library}, instance_{instance}, deleter_{deleter} {
+                       void (*deleter)(plugin*),
+                       plugin_version version) noexcept
+  : library_{library}, instance_{instance}, deleter_{deleter}, version_{version} {
   // nop
 }
 
-plugin_version plugin_ptr::version() const {
-  auto plugin_version = reinterpret_cast<::vast::plugin_version (*)()>(
-    dlsym(library_, "vast_plugin_version"));
-  VAST_ASSERT(plugin_version);
-  return plugin_version();
+const plugin_version& plugin_ptr::version() const {
+  return version_;
 }
 
 } // namespace vast
