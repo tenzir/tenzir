@@ -140,22 +140,6 @@ TEST(path_operations) {
   CHECK(pieces[4] == "foo");
 }
 
-TEST(path_chopping) {
-  path p = "/usr/local/bin/foo";
-
-  CHECK(p.chop(0) == p);
-  CHECK(p.chop(-1) == "/usr/local/bin");
-  CHECK(p.chop(-2) == "/usr/local");
-  CHECK(p.chop(-3) == "/usr");
-  CHECK(p.chop(-4) == "/");
-  CHECK(p.chop(-5) == "");
-  CHECK(p.chop(1) == "usr/local/bin/foo");
-  CHECK(p.chop(2) == "local/bin/foo");
-  CHECK(p.chop(3) == "bin/foo");
-  CHECK(p.chop(4) == "foo");
-  CHECK(p.chop(5) == "");
-}
-
 TEST(file_and_directory_manipulation) {
   path base = "vast-unit-test-file-system-test";
   path p("/tmp");
