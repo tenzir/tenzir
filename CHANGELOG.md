@@ -13,6 +13,10 @@ This changelog documents all notable user-facing changes of VAST.
 
 ## Unreleased
 
+- 🐞 The JSON parser now accepts data with numerical or boolean values in
+  fields that expect strings according the schema.
+  [#1439](https://github.com/tenzir/vast/pull/1439)
+
 - 🐞 Data that was ingested before the deprecation of the `#timestamp`
   attribute wasn't exported correctly with newer versions. This is now
   corrected.
