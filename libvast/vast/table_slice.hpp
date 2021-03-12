@@ -110,19 +110,19 @@ public:
   // -- properties -------------------------------------------------------------
 
   /// @returns The encoding of the slice.
-  enum table_slice_encoding encoding() const noexcept;
+  [[nodiscard]] enum table_slice_encoding encoding() const noexcept;
 
   /// @returns The table layout.
-  const record_type& layout() const noexcept;
+  [[nodiscard]] const record_type& layout() const noexcept;
 
   /// @returns The number of rows in the slice.
-  size_type rows() const noexcept;
+  [[nodiscard]] size_type rows() const noexcept;
 
   /// @returns The number of columns in the slice.
-  size_type columns() const noexcept;
+  [[nodiscard]] size_type columns() const noexcept;
 
   /// @returns The offset in the ID space.
-  id offset() const noexcept;
+  [[nodiscard]] id offset() const noexcept;
 
   /// Sets the offset in the ID space.
   void offset(id offset) noexcept;
@@ -142,7 +142,7 @@ public:
   /// @param row The row offset.
   /// @param column The column offset.
   /// @pre `row < rows() && column < columns()`
-  data_view at(size_type row, size_type column) const;
+  [[nodiscard]] data_view at(size_type row, size_type column) const;
 
   /// Retrieves data by specifying 2D-coordinates via row and column. This
   /// overload provides an optimized access path in case the type of the
@@ -152,15 +152,16 @@ public:
   /// @param t The type of the value to be retrieved.
   /// @pre `row < rows() && column < columns()`
   /// @pre `t == *layout().at(*layout:).offset_from_index(column)) == t`
-  data_view at(size_type row, size_type column, const type& t) const;
+  [[nodiscard]] data_view
+  at(size_type row, size_type column, const type& t) const;
 
 #if VAST_ENABLE_ARROW
 
   /// Converts a table slice to an Apache Arrow Record Batch.
   /// @returns The pointer to the Record Batch.
-  /// @param x The table slice to convert.
+  /// @param slice The table slice to convert.
   friend std::shared_ptr<arrow::RecordBatch>
-  as_record_batch(const table_slice& x);
+  as_record_batch(const table_slice& slice);
 
 #endif // VAST_ENABLE_ARROW
 
