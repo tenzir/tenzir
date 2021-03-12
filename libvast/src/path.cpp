@@ -234,13 +234,6 @@ bool exists(const path& p) {
 #endif // VAST_POSIX
 }
 
-caf::error create_symlink(const path& target, const path& link) {
-  if (::symlink(target.str().c_str(), link.str().c_str()))
-    return caf::make_error(ec::filesystem_error,
-                           "failed in symlink(2):", std::strerror(errno));
-  return caf::none;
-}
-
 caf::error mkdir(const path& p) {
   auto components = split(p);
   if (components.empty())

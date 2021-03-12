@@ -155,12 +155,6 @@ std::vector<path> split(const path& p);
 /// @returns `true` if *p* exists.
 bool exists(const path& p);
 
-/// Creates a symlink (aka. "soft link").
-/// @param target The existing file that should be linked.
-/// @param link The symlink that points to *target*.
-/// @returns `no_error` on success or `filesystem_error` on failure.
-caf::error create_symlink(const path& target, const path& link);
-
 /// If the path does not exist, create it as directory.
 /// @param p The path to a directory to create.
 /// @returns `caf::none` on success or if *p* exists already.
