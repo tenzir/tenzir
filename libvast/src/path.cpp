@@ -153,22 +153,6 @@ path path::complete() const {
   return root().empty() ? current() / *this : *this;
 }
 
-path path::chop(int n) const {
-  if (empty() || n == 0)
-    return *this;
-  auto pieces = split(*this);
-  size_t first = 0;
-  size_t last = pieces.size();
-  if (n < 0)
-    last -= std::min(size_t(-n), pieces.size());
-  else
-    first += std::min(size_t(n), pieces.size());
-  path r;
-  for (size_t i = first; i < last; ++i)
-    r /= pieces[i];
-  return r;
-}
-
 const std::string& path::str() const {
   return str_;
 }

@@ -102,14 +102,6 @@ public:
   /// @returns An absolute path.
   path complete() const;
 
-  /// Chops away path components from beginning or end.
-  ///
-  /// @param n If positive, the function chops away the first *n*
-  /// components of the path. If negative, it removes the last *n* components.
-  ///
-  /// @returns The path trimmed according to *n*.
-  path chop(int n) const;
-
   /// Retrieves the underlying string representation.
   /// @returns The string representation of the path.
   const std::string& str() const;
