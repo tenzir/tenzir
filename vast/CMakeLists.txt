@@ -184,9 +184,8 @@ if (PANDOC_FOUND)
     execute_process(
       COMMAND pandoc -s -f markdown -t man ${man_generated}.md
       OUTPUT_FILE ${man_generated})")
-  add_custom_command(
-    TARGET vast
-    POST_BUILD
+  add_custom_target(vast-man ALL
+    DEPENDS vast
     BYPRODUCTS ${man_generated}
     COMMAND ${CMAKE_COMMAND} -P make_man_${man_page}.cmake
     COMMENT "Generating man page ${man_page}"

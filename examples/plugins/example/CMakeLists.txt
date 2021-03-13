@@ -43,6 +43,11 @@ else ()
   # Add unit tests for the example plugin.
   add_subdirectory(tests)
 
+  # Ensure the man-page target is generated after all plugins.
+  if (TARGET vast-man)
+    add_dependencies(vast-man example)
+  endif ()
+
 endif ()
 
 # Install the bundled schema files to <datadir>/vast.
