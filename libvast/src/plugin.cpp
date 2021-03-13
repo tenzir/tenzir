@@ -24,23 +24,6 @@
 
 namespace vast {
 
-// -- plugin singleton ---------------------------------------------------------
-
-namespace plugins {
-
-std::vector<plugin_ptr>& get() noexcept {
-  static auto plugins = std::vector<plugin_ptr>{};
-  return plugins;
-}
-
-std::vector<void (*)(caf::actor_system_config& cfg)>&
-get_type_id_assigners() noexcept {
-  static auto result = std::vector<void (*)(caf::actor_system_config & cfg)>{};
-  return result;
-}
-
-} // namespace plugins
-
 // -- plugin version -----------------------------------------------------------
 
 std::string to_string(plugin_version x) {
@@ -55,6 +38,24 @@ std::string to_string(plugin_version x) {
   result += to_string(x.tweak);
   return result;
 }
+
+// -- plugin singleton ---------------------------------------------------------
+
+namespace plugins {
+
+std::vector<plugin_ptr>& get() noexcept {
+  static auto plugins = std::vector<plugin_ptr>{};
+  return plugins;
+}
+
+std::vector<std::pair<plugin_type_id_block, void (*)(caf::actor_system_config&)>>&
+get_type_id_blocks() noexcept {
+  static auto result = std::vector<
+    std::pair<plugin_type_id_block, void (*)(caf::actor_system_config&)>>{};
+  return result;
+}
+
+} // namespace plugins
 
 // -- plugin_ptr ---------------------------------------------------------------
 
@@ -118,6 +119,15 @@ plugin_ptr::make(const char* filename, caf::actor_system_config& cfg) noexcept {
     // ranges overlap. Since this is static for the whole process, we just store
     // the already registed ID blocks from plugins in a static variable.
     static auto old_blocks = std::vector<::vast::plugin_type_id_block>{};
+    // Static plugins are built as part of the vast binary rather then libvast,
+    // so there will be runtime errors when there is a type ID clash between
+    // static and dynamic plugins. We register the ID blocks of all static
+    // plugins exactly once to always prefer them over dynamic plugins.
+    static auto flag = std::once_flag{};
+    std::call_once(flag, [&] {
+      for (const auto& [block, _] : plugins::get_type_id_blocks())
+        old_blocks.push_back(block);
+    });
     auto new_block = plugin_type_id_block();
     for (const auto& old_block : old_blocks)
       if (new_block.begin < old_block.end && old_block.begin < new_block.end)

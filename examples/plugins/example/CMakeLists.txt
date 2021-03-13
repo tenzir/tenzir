@@ -10,7 +10,6 @@ if (VAST_ENABLE_STATIC_PLUGINS)
   # - Plugins must allocate memory before we enter main, which means we must
   #   rely on the the plugin constructor not to throw.
   # - Unit tests do not function as there exists no library to test separately.
-  # - Type ID range clashes are not detected at load time.
   target_sources(vast PRIVATE ${sources})
 
   if (VAST_ENABLE_STATIC_EXECUTABLE)
