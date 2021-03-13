@@ -16,6 +16,7 @@
 #include "vast/detail/assert.hpp"
 #include "vast/error.hpp"
 #include "vast/expression.hpp"
+#include "vast/logger.hpp"
 #include "vast/offset.hpp"
 #include "vast/operator.hpp"
 #include "vast/time.hpp"
@@ -139,6 +140,7 @@ struct type_resolver {
     } else if (f(type_)) {
       connective.emplace_back(make_predicate(type_, offset{}));
     }
+    VAST_INFO("go connective {}", connective);
     if (connective.empty())
       return expression{}; // did not resolve
     if (connective.size() == 1)

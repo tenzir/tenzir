@@ -265,6 +265,7 @@ bool resolve_impl(std::vector<std::pair<offset, predicate>>& result,
     },
     [&](const predicate& x) {
       auto resolved = type_resolver{t}(x);
+      VAST_INFO("resolved {} to {}", x, resolved);
       // Abort on first type error and return a
       // default-constructed vector.
       if (!resolved)
