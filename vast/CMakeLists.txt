@@ -151,7 +151,8 @@ if (VAST_PLUGINS)
   endforeach ()
 endif ()
 
-option(VAST_ENABLE_PLUGIN_AUTOLOADING "Always load all bundled plugins" OFF)
+cmake_dependent_option(VAST_ENABLE_PLUGIN_AUTOLOADING
+  "Always load all bundled plugins" OFF "NOT VAST_ENABLE_STATIC_PLUGINS" OFF)
 add_feature_info(
   "VAST_ENABLE_PLUGIN_AUTOLOADING" VAST_ENABLE_PLUGIN_AUTOLOADING
   "always load all bundled plugins.")
