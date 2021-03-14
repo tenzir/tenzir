@@ -530,3 +530,62 @@ data_view to_canonical(const type& t, const data_view& x);
 data_view to_internal(const type& t, const data_view& x);
 
 } // namespace vast
+
+namespace fmt {
+
+template <>
+struct formatter<vast::view<vast::pattern>> : formatter<vast::pattern> {};
+
+template <>
+struct formatter<std::pair<vast::view<vast::data>, vast::view<vast::data>>>
+  : formatter<vast::map::value_type> {};
+
+template <>
+struct formatter<std::pair<std::string_view, vast::view<vast::data>>>
+  : formatter<vast::record::value_type> {};
+
+template <>
+struct formatter<vast::view<vast::data>> : formatter<vast::data> {
+  using super = formatter<vast::data>;
+  using this_type = formatter<vast::data>;
+
+  template <typename Output>
+  struct ascii_visitor : super::ascii_visitor<Output> {
+    using super::ascii_visitor<Output>::operator();
+
+    auto operator()(const vast::view<vast::list>& xs) {
+      return format_to(this->out_, "[{}]", ::fmt::join(xs, ", "));
+    }
+    auto operator()(const vast::view<vast::map>& xs) {
+      return format_to(this->out_, "{{{}}}", ::fmt::join(xs, ", "));
+    }
+    auto operator()(const vast::view<vast::record>& xs) {
+      return format_to(this->out_, "<{}>", ::fmt::join(xs, ", "));
+    }
+  };
+
+  template <typename Output, class PrintTraits>
+  struct json_visitor : super::json_visitor<Output, PrintTraits> {
+    using json_visitor_base = super::json_visitor<Output, PrintTraits>;
+    using json_visitor_base::json_visitor_base;
+
+    using super::json_visitor<Output, PrintTraits>::operator();
+
+    auto operator()(const vast::view<vast::list>& xs) {
+      return json_visitor_base::template format_list(*this, xs);
+    }
+    auto operator()(const vast::view<vast::map>& xs) {
+      return json_visitor_base::template format_map(*this, xs);
+    }
+    auto operator()(const vast::view<vast::record>& xs) {
+      return json_visitor_base::template format_record(*this, xs);
+    }
+  };
+
+  template <class FormatContext>
+  auto format(const vast::view<vast::data>& x, FormatContext& ctx) const {
+    return super::format_impl(*this, x, ctx);
+  }
+};
+
+} // namespace fmt
