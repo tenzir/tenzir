@@ -15,6 +15,7 @@
 #include "vast/defaults.hpp"
 #include "vast/detail/operators.hpp"
 #include "vast/detail/overload.hpp"
+#include "vast/fmt_integration.hpp"
 #include "vast/offset.hpp"
 #include "vast/pattern.hpp"
 #include "vast/subnet.hpp"
@@ -395,3 +396,298 @@ struct hash<vast::data> {
 };
 
 } // namespace std
+
+namespace fmt {
+
+// Specialization which implements formatting of `<data,data>` pair.
+template <>
+struct formatter<vast::map::value_type> : vast::detail::empty_formatter_base {
+  template <class ValueType, class FormatContext>
+  auto format(const ValueType& v, FormatContext& ctx) {
+    return fmt::format_to(ctx.out(), "{} -> {}", v.first, v.second);
+  }
+};
+
+// Specialization which implements formatting of `<string,data>` pair.
+template <>
+struct formatter<vast::record::value_type>
+  : vast::detail::empty_formatter_base {
+  template <class ValueType, class FormatContext>
+  auto format(const ValueType& v, FormatContext& ctx) {
+    return fmt::format_to(ctx.out(), "{}: {}", v.first, v.second);
+  }
+};
+
+/// Definition of fmt-formatting rules for vast::data.
+///
+/// @note This class is also reused by formatter class for
+///       `vast::view<vast::data>`. And a part that is
+///       sensetive to changes if @c format_impl function.
+template <>
+struct formatter<vast::data> : public vast::detail::vast_formatter_base {
+  using ascii_escape_string
+    = vast::detail::escaped_string_view<vast::detail::print_escaper_functor>;
+  using json_escape_string
+    = vast::detail::escaped_string_view<vast::detail::json_escaper_functor>;
+  using this_type = formatter<vast::data>;
+
+  template <typename Output>
+  struct ascii_visitor {
+    Output out_;
+
+    ascii_visitor(Output out) : out_{std::move(out)} {
+    }
+
+    auto operator()(caf::none_t) {
+      return format_to(out_, "nil");
+    }
+    auto operator()(bool b) {
+      return format_to(out_, b ? "T" : "F");
+    }
+    auto operator()(vast::duration d) {
+      return format_to(out_, "{}",
+                       vast::detail::fmt_wrapped<vast::duration>{d});
+    }
+    auto operator()(const vast::time& t) {
+      return format_to(out_, "{}", vast::detail::fmt_wrapped<vast::time>{t});
+    }
+    auto operator()(const std::string& s) {
+      return (*this)(ascii_escape_string{s});
+    }
+    auto operator()(const std::string_view& s) {
+      return (*this)(ascii_escape_string{s});
+    }
+    auto operator()(const vast::list& xs) {
+      return format_to(out_, "[{}]", ::fmt::join(xs, ", "));
+    }
+    auto operator()(const vast::map& xs) {
+      return format_to(out_, "{{{}}}", ::fmt::join(xs, ", "));
+    }
+    auto operator()(const vast::record& xs) {
+      return format_to(out_, "<{}>", ::fmt::join(xs, ", "));
+    }
+    template <class T>
+    auto operator()(const T& x) {
+      return format_to(out_, "{}", x);
+    }
+  };
+
+  template <typename Output, class PrintTraits>
+  struct json_visitor {
+    Output out_;
+    PrintTraits print_traits_;
+
+    json_visitor(Output out, PrintTraits print_traits)
+      : out_{out}, print_traits_{std::move(print_traits)} {
+    }
+
+    auto operator()(caf::none_t) {
+      return format_to(out_, "null");
+    }
+    auto operator()(bool b) {
+      return format_to(out_, b ? "true" : "false");
+    }
+    auto operator()(vast::duration d) {
+      return format_to(out_, "\"{}\"",
+                       vast::detail::fmt_wrapped<vast::duration>{d});
+    }
+    auto operator()(const vast::time& t) {
+      return format_to(out_, "\"{}\"",
+                       vast::detail::fmt_wrapped<vast::time>{t});
+    }
+    auto operator()(const std::string& s) {
+      return (*this)(json_escape_string{s});
+    }
+
+    template <class T>
+    auto operator()(const T& x) {
+      return format_to(out_, "{}", x);
+    }
+
+    template <class This, class L>
+    static auto format_list(This& self, const L& xs) {
+      *self.out_++ = '[';
+      if (!xs.empty()) {
+        self.print_traits_.inc_indent();
+        bool is_first = true;
+        for (const auto& x : xs) {
+          if (is_first) {
+            is_first = false;
+            self.print_traits_.format_indent_before_first_item(self.out_);
+          } else {
+            *self.out_++ = ',';
+            self.print_traits_.format_indent(self.out_);
+          }
+          self.out_ = caf::visit(self, x);
+        }
+        self.print_traits_.dec_indent();
+        self.print_traits_.format_indent_after_last_item(self.out_);
+      }
+      *self.out_ = ']';
+      return self.out_;
+    }
+    auto operator()(const vast::list& xs) {
+      return format_list(*this, xs);
+    }
+
+    template <class This, class M>
+    static auto format_map(This& self, const M& xs) {
+      *self.out_++ = '[';
+      if (!xs.empty()) {
+        self.print_traits_.inc_indent();
+        bool is_first = true;
+        for (const auto& x : xs) {
+          if (is_first) {
+            is_first = false;
+            self.print_traits_.format_indent_before_first_item(self.out_);
+          } else {
+            *self.out_++ = ',';
+            self.print_traits_.format_indent(self.out_);
+          }
+          *self.out_++ = '{';
+          self.print_traits_.inc_indent();
+          self.print_traits_.format_indent_before_first_item(self.out_);
+
+          self.print_traits_.format_field_start(self.out_, "key");
+          self.out_ = caf::visit(self, x.first);
+          *self.out_++ = ',';
+          self.print_traits_.format_indent(self.out_);
+          self.print_traits_.format_field_start(self.out_, "value");
+          self.out_ = caf::visit(self, x.second);
+
+          self.print_traits_.dec_indent();
+          self.print_traits_.format_indent_after_last_item(self.out_);
+          *self.out_++ = '}';
+        }
+        self.print_traits_.dec_indent();
+        self.print_traits_.format_indent_after_last_item(self.out_);
+      }
+      *self.out_ = ']';
+      return self.out_;
+    }
+    auto operator()(const vast::map& xs) {
+      return format_map(*this, xs);
+    }
+
+    template <class This, class R>
+    static auto format_record(This& self, const R& xs) {
+      *self.out_++ = '{';
+      if (!xs.empty()) {
+        self.print_traits_.inc_indent();
+        bool is_first = true;
+        for (const auto& x : xs) {
+          if (is_first) {
+            is_first = false;
+            self.print_traits_.format_indent_before_first_item(self.out_);
+          } else {
+            *self.out_++ = ',';
+            self.print_traits_.format_indent(self.out_);
+          }
+          self.print_traits_.format_field_start(self.out_, x.first);
+          self.out_ = caf::visit(self, x.second);
+        }
+        self.print_traits_.dec_indent();
+        self.print_traits_.format_indent_after_last_item(self.out_);
+      }
+      *self.out_ = '}';
+      return self.out_;
+    }
+    auto operator()(const vast::record& xs) {
+      return format_record(*this, xs);
+    }
+  };
+
+  template <bool RemoveSpaces>
+  struct ndjson_print_traits {
+    template <class... Ts>
+    constexpr void dec_indent(Ts&&...) const noexcept {
+    }
+    template <class... Ts>
+    constexpr void inc_indent(Ts&&...) const noexcept {
+    }
+    template <class Output>
+    constexpr void format_indent_before_first_item(Output&) const noexcept {
+    }
+    template <class Output>
+    constexpr void format_indent_after_last_item(Output&) const noexcept {
+    }
+    template <class Output>
+    constexpr void format_indent(Output& out) const {
+      if constexpr (!RemoveSpaces)
+        *out++ = ' ';
+    }
+    template <class Output>
+    void format_field_start(Output& out, std::string_view name) {
+      out = format_to(out,
+                      RemoveSpaces ? "{}:" : "{}: ", json_escape_string{name});
+    }
+  };
+
+  struct json_print_traits {
+    int indent_size;
+    int current_indent{0};
+
+    template <class... Ts>
+    constexpr void dec_indent(Ts&&...) noexcept {
+      --current_indent;
+    }
+    template <class... Ts>
+    constexpr void inc_indent(Ts&&...) noexcept {
+      ++current_indent;
+    }
+    template <class Output>
+    constexpr void format_indent_before_first_item(Output& out) const {
+      format_indent(out);
+    }
+    template <class Output>
+    constexpr void format_indent_after_last_item(Output& out) const {
+      format_indent(out);
+    }
+    template <class Output>
+    constexpr void format_indent(Output& out) const {
+      out = format_to(out, "\n{:<{}}", "", current_indent * indent_size);
+    }
+    template <class Output>
+    void format_field_start(Output& out, std::string_view name) {
+      out = format_to(out, "{}: ", json_escape_string{name});
+    }
+  };
+
+  template <class Output>
+  static auto make_ascii_visitor(Output out) {
+    return ascii_visitor{out};
+  }
+
+  template <class This, class Data, class FormatContext>
+  static auto format_impl(This& self, const Data& x, FormatContext& ctx) {
+    using output_type = std::decay_t<decltype(ctx.out())>;
+    auto do_format = [&x](auto f) { return caf::visit(f, x); };
+    if (self.presentation == 'a') {
+      return do_format(
+        typename This::template ascii_visitor<output_type>{ctx.out()});
+    } else if (self.presentation == 'j') {
+      if (self.ndjson) {
+        if (self.remove_spaces)
+          return do_format(
+            typename This::template json_visitor<
+              output_type, ndjson_print_traits<true>>{ctx.out(), {}});
+        else
+          return do_format(
+            typename This::template json_visitor<
+              output_type, ndjson_print_traits<false>>{ctx.out(), {}});
+      } else
+        return do_format(
+          typename This::template json_visitor<output_type, json_print_traits>{
+            ctx.out(), {self.indent}});
+    } else if (self.presentation == 'y') {
+    }
+    return ctx.out();
+  }
+
+  template <class FormatContext>
+  auto format(const vast::data& x, FormatContext& ctx) const {
+    return format_impl(*this, x, ctx);
+  }
+};
+
+} // namespace fmt
