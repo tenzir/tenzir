@@ -869,6 +869,8 @@ index(index_actor::stateful_pointer<index_state> self,
       }
       self->state.inmem_partitions.drop(partition_id);
       self->state.persisted_partitions.erase(partition_id);
+      self->request(self->state.meta_index, caf::infinite, atom::erase_v,
+                    partition_id);
       self->request(self->state.filesystem, caf::infinite, atom::mmap_v, path)
         .then(
           [=](const chunk_ptr& chunk) mutable {
