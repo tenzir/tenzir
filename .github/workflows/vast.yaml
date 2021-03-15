@@ -146,7 +146,7 @@ jobs:
         if: github.event_name == 'pull_request'
         uses: actions/cache@v2
         with:
-          path: .ccache
+          path: ${{ env.CCACHE_DIR }}
           key: ccache-${{ github.workflow }}-Debian-${{ matrix.build.compiler }}-${{ matrix.configure.tag }}-${{ env.CACHE_HEAD_REF_SLUG }}-${{ github.sha }}
           restore-keys: |
             ccache-${{ github.workflow }}-Debian-${{ matrix.build.compiler }}-${{ matrix.configure.tag }}-${{ env.CACHE_HEAD_REF_SLUG }}
@@ -158,7 +158,7 @@ jobs:
         if: github.event_name == 'push'
         uses: actions/cache@v2
         with:
-          path: .ccache
+          path: ${{ env.CCACHE_DIR }}
           key: ccache-${{ github.workflow }}-Debian-${{ matrix.build.compiler }}-${{ matrix.configure.tag }}-${{ env.CACHE_REF_SLUG }}-${{ github.sha }}
           restore-keys: |
             ccache-${{ github.workflow }}-Debian-${{ matrix.build.compiler }}-${{ matrix.configure.tag }}-${{ env.CACHE_REF_SLUG }}
@@ -169,7 +169,7 @@ jobs:
         if: github.event_name == 'release'
         uses: actions/cache@v2
         with:
-          path: .ccache
+          path: ${{ env.CCACHE_DIR }}
           key: ccache-${{ github.workflow }}-Debian-${{ matrix.build.compiler }}-${{ matrix.configure.tag }}-master-${{ github.sha }}
           restore-keys: |
             ccache-${{ github.workflow }}-Debian-${{ matrix.build.compiler }}-${{ matrix.configure.tag }}-master
@@ -390,7 +390,7 @@ jobs:
         if: github.event_name == 'pull_request'
         uses: actions/cache@v2
         with:
-          path: .ccache
+          path: ${{ env.CCACHE_DIR }}
           key: ccache-${{ github.workflow }}-macOS-${{ matrix.build.compiler }}-${{ matrix.configure.tag }}-${{ env.CACHE_HEAD_REF_SLUG }}-${{ github.sha }}
           restore-keys: |
             ccache-${{ github.workflow }}-macOS-${{ matrix.build.compiler }}-${{ matrix.configure.tag }}-${{ env.CACHE_HEAD_REF_SLUG }}
@@ -402,7 +402,7 @@ jobs:
         if: github.event_name == 'push'
         uses: actions/cache@v2
         with:
-          path: .ccache
+          path: ${{ env.CCACHE_DIR }}
           key: ccache-${{ github.workflow }}-macOS-${{ matrix.build.compiler }}-${{ matrix.configure.tag }}-${{ env.CACHE_REF_SLUG }}-${{ github.sha }}
           restore-keys: |
             ccache-${{ github.workflow }}-macOS-${{ matrix.build.compiler }}-${{ matrix.configure.tag }}-${{ env.CACHE_REF_SLUG }}
@@ -413,7 +413,7 @@ jobs:
         if: github.event_name == 'release'
         uses: actions/cache@v2
         with:
-          path: .ccache
+          path: ${{ env.CCACHE_DIR }}
           key: ccache-${{ github.workflow }}-macOS-${{ matrix.build.compiler }}-${{ matrix.configure.tag }}-master-${{ github.sha }}
           restore-keys: |
             ccache-${{ github.workflow }}-macOS-${{ matrix.build.compiler }}-${{ matrix.configure.tag }}-master
