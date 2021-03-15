@@ -27,17 +27,16 @@ spawn_disk_monitor(node_actor::stateful_pointer<node_state> self,
   if (!archive)
     return caf::make_error(ec::missing_component, "archive");
   auto opts = args.inv.options;
+  std::optional<std::string> command;
+  if (auto cmd = caf::get_if<std::string>(&opts, "vast.start.disk-budget-check-"
+                                                 "binary"))
+    command = *cmd;
   auto hiwater = detail::get_bytesize(opts, "vast.start.disk-budget-high", 0);
   auto lowater = detail::get_bytesize(opts, "vast.start.disk-budget-low", 0);
   if (!hiwater)
     return hiwater.error();
   if (!lowater)
     return lowater.error();
-  if (!*hiwater) {
-    VAST_VERBOSE("{} not spawning disk_monitor because no limit configured",
-                 self);
-    return ec::no_error;
-  }
   // Set low == high as the default value.
   if (!*lowater)
     *lowater = *hiwater;
@@ -45,6 +44,19 @@ spawn_disk_monitor(node_actor::stateful_pointer<node_state> self,
     = std::chrono::seconds{defaults::system::disk_scan_interval}.count();
   auto interval = caf::get_or(opts, "vast.start.disk-budget-check-interval",
                               default_seconds);
+  struct disk_monitor_config config
+    = {*hiwater, *lowater, command, std::chrono::seconds{interval}};
+  if (auto valid = validate(config); !valid)
+    return valid.error();
+  if (!*hiwater) {
+    if (command)
+      VAST_WARN("disk check binary specified but no high-water mark, disk "
+                "monitor will not be spawned");
+    else
+      VAST_VERBOSE("{} not spawning disk_monitor because no limit configured",
+                   self);
+    return ec::no_error;
+  }
   const auto db_dir
     = caf::get_or(opts, "vast.db-directory", defaults::system::db_directory);
   const auto db_dir_path = std::filesystem::path{db_dir};
@@ -56,9 +68,7 @@ spawn_disk_monitor(node_actor::stateful_pointer<node_state> self,
   if (!std::filesystem::exists(db_dir_abs))
     return caf::make_error(ec::filesystem_error, "could not find database "
                                                  "directory");
-  auto handle
-    = self->spawn(disk_monitor, *hiwater, *lowater,
-                  std::chrono::seconds{interval}, db_dir_abs, archive, index);
+  auto handle = self->spawn(disk_monitor, config, db_dir_abs, archive, index);
   VAST_VERBOSE("{} spawned a disk monitor", self);
   return caf::actor_cast<caf::actor>(handle);
 }

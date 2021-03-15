@@ -11,12 +11,16 @@
  * contained in the LICENSE file.                                             *
  ******************************************************************************/
 
-#include <unistd.h> // gethostname, sysconf, getpid
-
-#include <cerrno>
+#include "vast/detail/system.hpp"
 
 #include "vast/detail/assert.hpp"
-#include "vast/detail/system.hpp"
+#include "vast/error.hpp"
+
+#include <caf/expected.hpp>
+
+#include <cerrno>
+#include <cstdio>
+#include <unistd.h> // gethostname, sysconf, getpid
 
 namespace vast {
 namespace detail {

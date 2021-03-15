@@ -32,4 +32,11 @@ caf::expected<std::filesystem::path> objectpath(const void* addr = nullptr);
 ///          usage.
 caf::settings get_status();
 
+/// Forks a process to execute the given comand and returns its output
+/// as a string.
+/// NOTE: This function assumes that `command` has been properly sanitized
+/// and performs no further checks on its contents.
+/// @returns the output of the command.
+caf::expected<std::string> execute_blocking(const std::string& command);
+
 } // namespace vast::detail

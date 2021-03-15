@@ -403,6 +403,8 @@ auto make_start_command() {
       .add<bool>("print-endpoint", "print the client endpoint on stdout")
       .add<size_t>("disk-budget-check-interval", "time between two disk size "
                                                  "scans")
+      .add<std::string>("disk-budget-check-binary",
+                        "binary to run to determine current disk usage")
       .add<std::string>("disk-budget-high", "high-water mark for disk budget")
       .add<std::string>("disk-budget-low", "low-water mark for disk budget"));
 }

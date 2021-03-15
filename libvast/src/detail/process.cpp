@@ -178,4 +178,26 @@ caf::settings get_status() {
 #endif
 }
 
+caf::expected<std::string> execute_blocking(const std::string& command) {
+  using namespace std::string_literals;
+  std::string result;
+  std::array<char, 256> buffer;
+  auto* out = ::popen(command.c_str(), "re");
+  if (!out)
+    return caf::make_error(ec::system_error,
+                           "popen() failed: "s + ::strerror(errno));
+  size_t nread = 0;
+  do {
+    nread = ::fread(buffer.data(), 1, buffer.size(), out);
+    result += std::string_view{buffer.data(), nread};
+  } while (nread == buffer.size());
+  auto error = ::ferror(out);
+  if (::pclose(out) < 0)
+    return caf::make_error(ec::system_error,
+                           "pclose() failed: "s + ::strerror(errno));
+  if (error)
+    return caf::make_error(ec::system_error, "fread() failed");
+  return result;
+}
+
 } // namespace vast::detail
