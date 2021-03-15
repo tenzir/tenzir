@@ -118,7 +118,8 @@ plugin_ptr::make(const char* filename, caf::actor_system_config& cfg) noexcept {
     // If the plugin requested to add additional type ID blocks, check if the
     // ranges overlap. Since this is static for the whole process, we just store
     // the already registed ID blocks from plugins in a static variable.
-    static auto old_blocks = std::vector<::vast::plugin_type_id_block>{};
+    static auto old_blocks = std::vector<::vast::plugin_type_id_block>{
+      {caf::id_block::vast_types::begin, caf::id_block::vast_actors::end}};
     // Static plugins are built as part of the vast binary rather then libvast,
     // so there will be runtime errors when there is a type ID clash between
     // static and dynamic plugins. We register the ID blocks of all static
