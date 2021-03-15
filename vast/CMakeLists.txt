@@ -16,6 +16,7 @@ install(TARGETS vast DESTINATION "${CMAKE_INSTALL_BINDIR}")
 # vast::vast target, or to write built-in plugins that are always loaded with
 # VAST.
 target_compile_definitions(vast PRIVATE VAST_ENABLE_STATIC_PLUGINS_INTERNAL)
+
 # -- init system integration ---------------------------------------------------
 
 # TODO: This should be behind an option, and work for macOS and Linux as well.

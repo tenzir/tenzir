@@ -5,6 +5,9 @@ function (VASTRegisterPlugin)
 
   cmake_parse_arguments(PLUGIN "" "TARGET" "SOURCES;TEST_SOURCES" ${ARGN})
 
+  # A replacement for target_link_libraries that links static libraries using
+  # the platform-specific whole-archive options. Please test any changes to this
+  # macro on all supported platforms and compilers.
   macro (target_link_whole_archive target visibility library)
     get_target_property(target_type ${library} TYPE)
     if (target_type STREQUAL "STATIC_LIBRARY")

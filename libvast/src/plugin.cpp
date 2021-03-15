@@ -49,7 +49,7 @@ std::vector<plugin_ptr>& get() noexcept {
 }
 
 std::vector<std::pair<plugin_type_id_block, void (*)(caf::actor_system_config&)>>&
-get_type_id_blocks() noexcept {
+get_static_type_id_blocks() noexcept {
   static auto result = std::vector<
     std::pair<plugin_type_id_block, void (*)(caf::actor_system_config&)>>{};
   return result;
@@ -125,7 +125,7 @@ plugin_ptr::make(const char* filename, caf::actor_system_config& cfg) noexcept {
     // plugins exactly once to always prefer them over dynamic plugins.
     static auto flag = std::once_flag{};
     std::call_once(flag, [&] {
-      for (const auto& [block, _] : plugins::get_type_id_blocks())
+      for (const auto& [block, _] : plugins::get_static_type_id_blocks())
         old_blocks.push_back(block);
     });
     auto new_block = plugin_type_id_block();

@@ -76,7 +76,7 @@ std::vector<plugin_ptr>& get() noexcept;
 
 /// Retrieves the type-ID blocks and assigners singleton for static plugins.
 std::vector<std::pair<plugin_type_id_block, void (*)(caf::actor_system_config&)>>&
-get_type_id_blocks() noexcept;
+get_static_type_id_blocks() noexcept;
 
 } // namespace plugins
 
@@ -239,7 +239,7 @@ private:
         static_cast<void>(flag);                                               \
       }                                                                        \
       static bool init() {                                                     \
-        ::vast::plugins::get_type_id_blocks().emplace_back(                    \
+        ::vast::plugins::get_static_type_id_blocks().emplace_back(             \
           ::vast::plugin_type_id_block{::caf::id_block::name::begin,           \
                                        ::caf::id_block::name::end},            \
           +[](::caf::actor_system_config& cfg) noexcept {                      \
@@ -260,13 +260,13 @@ private:
         auto_register_type_id_##name1##name2() {                               \
           static_cast<void>(flag);                                             \
         }                                                                      \
-        ::vast::plugins::get_type_id_blocks().emplace_back(                    \
+        ::vast::plugins::get_static_type_id_blocks().emplace_back(             \
           ::vast::plugin_type_id_block{::caf::id_block::name1::begin,          \
                                        ::caf::id_block::name1::end},           \
           +[](::caf::actor_system_config& cfg) noexcept {                      \
             cfg.add_message_types<::caf::id_block::name1>();                   \
           });                                                                  \
-        ::vast::plugins::get_type_id_blocks().emplace_back(                    \
+        ::vast::plugins::get_static_type_id_blocks().emplace_back(             \
           ::vast::plugin_type_id_block{::caf::id_block::name2::begin,          \
                                        ::caf::id_block::name2::end},           \
           +[](::caf::actor_system_config& cfg) noexcept {                      \
