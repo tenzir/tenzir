@@ -322,10 +322,11 @@ struct offset_map_builder {
   using result_type = std::vector<std::pair<offset, std::string>>;
 
   offset_map_builder(const record_type& r, result_type& result)
-    : r_{r}, result_{result} {
+    : r_{r}, result_{result}, trace_{r.name()} {
     run(r_);
   }
 
+private:
   void run(const record_type& r) {
     off_.push_back(0);
     auto prev_trace_size = trace_.size();
@@ -342,7 +343,7 @@ struct offset_map_builder {
 
   const record_type& r_;
   result_type& result_;
-  std::string trace_ = r_.name();
+  std::string trace_;
   offset off_;
 };
 
@@ -357,9 +358,9 @@ std::vector<std::pair<offset, std::string>> offset_map(const record_type& r) {
 std::vector<offset> record_type::find_suffix(std::string_view key) const {
   std::vector<offset> result;
   auto om = offset_map(*this);
-  auto rx_ = ".*" + pattern::glob(key) + "$";
+  auto rx_ = ".*\\." + pattern::glob(key) + "$";
   for (auto& [off, name] : om)
-    if (rx_.match(name))
+    if (key == name || rx_.match(name))
       result.emplace_back(off);
   return result;
 }

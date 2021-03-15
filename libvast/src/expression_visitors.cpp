@@ -396,16 +396,10 @@ type_resolver::operator()(const field_extractor& ex, const data& d) {
   // First, interpret the field as a suffix of a record field name.
   if (auto r = caf::get_if<record_type>(&type_)) {
     auto suffixes = r->find_suffix(ex.field);
-    // All suffixes must pass the type check, otherwise the RHS of a
-    // predicate would be ambiguous.
     for (auto& offset : suffixes) {
       auto f = r->at(offset);
-      VAST_ASSERT(f);
       if (!compatible(f->type, op_, d))
-        return caf::make_error(ec::type_clash, f->type, op_, d);
-    }
-    for (auto& offset : suffixes) {
-      auto f = r->at(offset);
+        continue;
       auto x = data_extractor{f->type, std::move(offset)};
       connective.emplace_back(predicate{std::move(x), op_, d});
     }
