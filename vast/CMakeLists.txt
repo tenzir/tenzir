@@ -11,6 +11,12 @@ add_executable(vast vast.cpp)
 target_link_libraries(vast PRIVATE vast::internal vast::libvast)
 install(TARGETS vast DESTINATION "${CMAKE_INSTALL_BINDIR}")
 
+# Use static versions of VAST_REGISTER_PLUGIN family of macros when inside the
+# vast binary. This makes it possible to statically link a plugin against the
+# vast::vast target, or to write built-in plugins that are always loaded with
+# VAST.
+target_compile_definitions(vast PRIVATE VAST_ENABLE_STATIC_PLUGINS_INTERNAL)
+
 # -- init system integration ---------------------------------------------------
 
 # TODO: This should be behind an option, and work for macOS and Linux as well.
@@ -84,6 +90,11 @@ install(FILES "${PROJECT_SOURCE_DIR}/vast.yaml.example"
 # -- add plugins ---------------------------------------------------------------
 
 option(VAST_PLUGINS "Specify a list of plugins to build with VAST" "")
+cmake_dependent_option(VAST_ENABLE_STATIC_PLUGINS
+  "Force plugins to be linked statically" OFF
+  "NOT VAST_ENABLE_STATIC_EXECUTABLE" ON)
+add_feature_info("VAST_ENABLE_STATIC_PLUGINS" VAST_ENABLE_STATIC_PLUGINS
+      "Force plugins to be linked statically.")
 file(WRITE "${CMAKE_CURRENT_BINARY_DIR}/plugin_integration.sh" "")
 if (VAST_PLUGINS)
   foreach (plugin_source_dir IN LISTS VAST_PLUGINS)
@@ -141,7 +152,8 @@ if (VAST_PLUGINS)
   endforeach ()
 endif ()
 
-option(VAST_ENABLE_PLUGIN_AUTOLOADING "Always load all bundled plugins" OFF)
+cmake_dependent_option(VAST_ENABLE_PLUGIN_AUTOLOADING
+  "Always load all bundled plugins" OFF "NOT VAST_ENABLE_STATIC_PLUGINS" OFF)
 add_feature_info(
   "VAST_ENABLE_PLUGIN_AUTOLOADING" VAST_ENABLE_PLUGIN_AUTOLOADING
   "always load all bundled plugins.")
@@ -174,9 +186,8 @@ if (PANDOC_FOUND)
     execute_process(
       COMMAND pandoc -s -f markdown -t man ${man_generated}.md
       OUTPUT_FILE ${man_generated})")
-  add_custom_command(
-    TARGET vast
-    POST_BUILD
+  add_custom_target(vast-man ALL
+    DEPENDS vast
     BYPRODUCTS ${man_generated}
     COMMAND ${CMAKE_COMMAND} -P make_man_${man_page}.cmake
     COMMENT "Generating man page ${man_page}"

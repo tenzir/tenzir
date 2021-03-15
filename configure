@@ -48,6 +48,7 @@ Usage: $0 [OPTION]... [VAR=VALUE]...
     --with-example-plugin     build with example plugin
     --with-plugin=DIR         build with plugin in given directory
     --with-plugin-autoloading always enable all bundled plugins
+    --with-static-plugins     force plugins to be linked statically
 
   Debugging:
     --log-level=LEVEL     maximum compile-time log level
@@ -197,6 +198,9 @@ while [ $# -ne 0 ]; do
       ;;
     --with-plugin-autoloading)
       append_cache_entry VAST_ENABLE_PLUGIN_AUTOLOADING BOOL yes
+      ;;
+    --with-static-plugins)
+      append_cache_entry VAST_ENABLE_STATIC_PLUGINS BOOL yes
       ;;
 # -- Debugging -----------------------------------------------------------------
     --log-level=*)
