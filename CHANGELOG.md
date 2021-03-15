@@ -13,6 +13,12 @@ This changelog documents all notable user-facing changes of VAST.
 
 ## Unreleased
 
+- ⚠️ The type extractor in the expression language now includes aliased types.
+  For example, given the type definition for port from the base schema
+  `type port = count`, a search for `:count` will consider fields of type
+  `port`.
+  [#1446](https://github.com/tenzir/vast/pull/1446)
+
 - ⚠️ The time to first response of queries that compare a concept to a string
   has been reduced noticably. In the particular case of large databases
   containing many different event types and queries with a high selectivity we
