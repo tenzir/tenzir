@@ -35,14 +35,12 @@ sink_state::sink_state(caf::event_based_actor* self_ptr) : self(self_ptr) {
 }
 
 void sink_state::send_report() {
-  if (measurement.events > 0) {
-    auto r = performance_report{{{std::string{name}, measurement}}};
-    measurement = {};
-    if (statistics_subscriber)
-      self->send(statistics_subscriber, r);
-    if (accountant)
-      self->send(accountant, r);
-  }
+  auto r = performance_report{{{std::string{name}, measurement}}};
+  measurement = {};
+  if (statistics_subscriber)
+    self->send(statistics_subscriber, r);
+  if (accountant)
+    self->send(accountant, r);
 }
 
 caf::behavior sink(caf::stateful_actor<sink_state>* self,

@@ -13,6 +13,11 @@ This changelog documents all notable user-facing changes of VAST.
 
 ## Unreleased
 
+- 🐞 The archive, index, source, and sink components now report metrics while
+  idle instead of omitting them entirely. This allows for distinguishing between
+  idle and not running components from the metrics.
+  [#1451](https://github.com/tenzir/vast/pull/1451)
+
 - ⚡️ A new `VASTRegisterPlugin` CMake function enables easy setup of the build
   scaffolding required for plugins. Plugins can now be linked statically against
   VAST. Configure with `--with-static-plugins` or build a static binary to link
