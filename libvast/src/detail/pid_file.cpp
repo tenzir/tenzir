@@ -22,20 +22,27 @@
 #include "vast/detail/system.hpp"
 #include "vast/error.hpp"
 #include "vast/logger.hpp"
+#include "vast/path.hpp"
 
 #include <fcntl.h>
+#include <system_error>
 #include <unistd.h>
 
 #include <sys/file.h>
 
 namespace vast::detail {
 
-caf::error acquire_pid_file(const path& filename) {
+caf::error acquire_pid_file(const std::filesystem::path& filename) {
   auto pid = process_id();
+  std::error_code err{};
   // Check if the db directory is owned by an existing VAST process.
-  if (exists(filename)) {
+  const auto exists = std::filesystem::exists(filename, err);
+  if (err)
+    VAST_WARN("failed to check if the db directory {} exists: {}", filename,
+              err.message());
+  if (exists) {
     // Attempt to read file to display an actionable error message.
-    auto contents = load_contents(filename);
+    auto contents = load_contents(vast::path{filename.string()});
     if (!contents)
       return contents.error();
     auto other_pid = to<int32_t>(*contents);
@@ -47,17 +54,20 @@ caf::error acquire_pid_file(const path& filename) {
       return caf::none;
     if (::getpgid(*other_pid) >= 0)
       return caf::make_error(ec::filesystem_error,
-                             "PID file found: ", filename.str(),
-                             "terminate process", *contents);
+                             fmt::format("PID file found: {}, terminate "
+                                         "process {}",
+                                         filename, *contents));
     // The previous owner is deceased, print a warning an assume ownership.
     VAST_WARN("node detected an irregular shutdown of the previous "
               "process on the database directory");
   }
   // Open the file.
-  auto fd = ::open(filename.str().c_str(), O_WRONLY | O_CREAT, 0600);
+  auto fd = ::open(filename.c_str(), O_WRONLY | O_CREAT, 0600);
   if (fd < 0)
     return caf::make_error(ec::filesystem_error,
-                           "failed in open(2):", strerror(errno));
+                           fmt::format("failed in open(2) with filename {} : "
+                                       "{}",
+                                       filename, strerror(errno)));
   // Lock the file handle.
   if (::flock(fd, LOCK_EX | LOCK_NB) < 0) {
     ::close(fd);

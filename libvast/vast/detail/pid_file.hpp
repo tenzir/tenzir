@@ -13,9 +13,9 @@
 
 #pragma once
 
-#include "vast/path.hpp"
-
 #include <caf/error.hpp>
+
+#include <filesystem>
 
 namespace vast::detail {
 
@@ -23,6 +23,6 @@ namespace vast::detail {
 /// @param filename The path to the PID file.
 /// @returns `none` if acquiring succeeded and an error on failure.
 /// @relates release_pid_file
-caf::error acquire_pid_file(const path& filename);
+caf::error acquire_pid_file(const std::filesystem::path& filename);
 
 } // namespace vast::detail
