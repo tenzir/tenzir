@@ -16,7 +16,18 @@ on:
   release:
     types: published
 env:
-  DEBIAN_FRONTEND: noninteractive
+  CMAKE_GENERATOR: Ninja
+  CMAKE_MAKE_PROGRAM: ninja
+  CMAKE_C_COMPILER_LAUNCHER: ccache
+  CMAKE_CXX_COMPILER_LAUNCHER: ccache
+  CCACHE_HASH_DIR: true
+  CCACHE_UNIFY: true
+  CCACHE_SLOPPINESS: 'file_macro,time_macros'
+  CCACHE_DIR: '${{ github.workspace }}/.ccache'
+  CCACHE_COMPRESS: true
+  CCACHE_COMPRESSLEVEL: 9
+  CCACHE_ABSSTDERR: true
+  BUILD_DIR: build
 jobs:
   build-debian:
     name: Debian - ${{ matrix.build.compiler }} ${{ matrix.configure.tag }}
@@ -44,21 +55,10 @@ jobs:
           flags: --release
           ci-flags: --ci-build
     env:
+      DEBIAN_FRONTEND: noninteractive
       DOCKER_BUILDKIT: 1
       CC: ${{ matrix.build.cc }}
       CXX: ${{ matrix.build.cxx }}
-      CMAKE_GENERATOR: Ninja
-      CMAKE_MAKE_PROGRAM: ninja
-      CMAKE_C_COMPILER_LAUNCHER: ccache
-      CMAKE_CXX_COMPILER_LAUNCHER: ccache
-      CCACHE_HASH_DIR: true
-      CCACHE_UNIFY: true
-      CCACHE_SLOPPINESS: 'file_macro,time_macros'
-      CCACHE_DIR: '${{ github.workspace }}/.ccache'
-      CCACHE_COMPRESS: true
-      CCACHE_COMPRESSLEVEL: 9
-      CCACHE_ABSSTDERR: true
-      BUILD_DIR: build
     steps:
       - name: Install Dependencies
         run: |
@@ -316,18 +316,6 @@ jobs:
     env:
       CC: ${{ matrix.build.cc }}
       CXX: ${{ matrix.build.cxx }}
-      CMAKE_GENERATOR: Ninja
-      CMAKE_MAKE_PROGRAM: ninja
-      CMAKE_C_COMPILER_LAUNCHER: ccache
-      CMAKE_CXX_COMPILER_LAUNCHER: ccache
-      CCACHE_HASH_DIR: true
-      CCACHE_UNIFY: true
-      CCACHE_SLOPPINESS: 'file_macro,time_macros'
-      CCACHE_DIR: '${{ github.workspace }}/.ccache'
-      CCACHE_COMPRESS: true
-      CCACHE_COMPRESSLEVEL: 9
-      CCACHE_ABSSTDERR: true
-      BUILD_DIR: build
     steps:
       - uses: actions/checkout@v2
         with:
