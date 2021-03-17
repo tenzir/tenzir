@@ -18,6 +18,11 @@ This changelog documents all notable user-facing changes of VAST.
   idle and not running components from the metrics.
   [#1451](https://github.com/tenzir/vast/pull/1451)
 
+- 🐞 VAST no longer crashes when the disk monitor tries to calculate the size of
+  the database while files are being deleted. Instead, it will retry after the
+  configured scan interval.
+  [#1458](https://github.com/tenzir/vast/1458)
+
 - ⚡️ A new `VASTRegisterPlugin` CMake function enables easy setup of the build
   scaffolding required for plugins. Plugins can now be linked statically against
   VAST. Configure with `--with-static-plugins` or build a static binary to link

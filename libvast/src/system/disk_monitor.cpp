@@ -142,6 +142,9 @@ disk_monitor(disk_monitor_actor::stateful_pointer<disk_monitor_state> self,
                         erased_ids)
               .then(
                 [=, sg = shared_guard](atom::done) {
+                  // TODO: There's a race condition here: We calculate the size
+                  // of the database directory while we might be deleting files
+                  // from it.
                   if (const auto size
                       = detail::recursive_size(self->state.dbdir);
                       !size) {

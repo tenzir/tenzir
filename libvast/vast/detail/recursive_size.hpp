@@ -36,7 +36,12 @@ recursive_size(const std::filesystem::path& root_dir) {
     return caf::make_error(ec::filesystem_error, err.message());
   for (const auto& f : dir) {
     if (f.is_regular_file()) {
-      const auto size = f.file_size();
+      const auto size = f.file_size(err);
+      if (err) {
+        if (err == std::errc::no_such_file_or_directory)
+          continue;
+        return caf::make_error(ec::filesystem_error, err.message());
+      }
       VAST_TRACE("{} += {}", f.path().string(), size);
       total_size += size;
     }
