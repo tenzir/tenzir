@@ -13,6 +13,12 @@ This changelog documents all notable user-facing changes of VAST.
 
 ## Unreleased
 
+- 🎁 The disk monitor gained a new `vast.start.disk-budget-check-binary` option
+  that can be used to specify an external binary to determine the size of the
+  database directory. This can be useful in cases where `stat()` does not give
+  the correct answer, e.g. on compressed filesystems.
+  [#1453](https://github.com/tenzir/vast/pull/1433)
+
 - ⚠️ VAST now ships with a schema record type for Suricata's `rfb` event type.
   [#1499](https://github.com/tenzir/vast/pull/1499)
   [@satta](https://github.com/satta)
