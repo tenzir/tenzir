@@ -13,6 +13,10 @@ This changelog documents all notable user-facing changes of VAST.
 
 ## Unreleased
 
+- ⚠️ The default size of table slices (event batches) that is created from
+  `vast import` processes has been changed from 1000 to 1024.
+  [#1396](https://github.com/tenzir/vast/pull/1396)
+
 - 🐞 The disk monitor now correctly erases partition synopses from the meta index.
   [#1450](https://github.com/tenzir/vast/pull/1450)
 
