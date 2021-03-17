@@ -198,7 +198,7 @@ jobs:
 
       - name: Compile All Targets
         run: |
-          cmake --build "$BUILD_DIR" --target all --parallel
+          cmake --build "$BUILD_DIR" --target all --parallel --verbose
 
       - name: Show ccache Statistics
         run: |
@@ -442,7 +442,7 @@ jobs:
 
       - name: Compile All Targets
         run: |
-          cmake --build "$BUILD_DIR" --target all --parallel
+          cmake --build "$BUILD_DIR" --target all --parallel --verbose
 
       - name: Show ccache Statistics
         run: |
