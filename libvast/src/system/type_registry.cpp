@@ -99,7 +99,7 @@ caf::error type_registry_state::load_from_disk() {
                            fmt::format("failed to find file {}: {}", fname,
                                        err.message()));
   if (exists) {
-    auto buffer = io::read(vast::path{fname.string()});
+    auto buffer = io::read(fname);
     if (!buffer)
       return buffer.error();
     caf::binary_deserializer source{self->system(), *buffer};

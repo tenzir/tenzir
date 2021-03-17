@@ -183,7 +183,7 @@ caf::error index_state::load_from_disk() {
   }
   if (auto fname = index_filename(); exists(fname)) {
     VAST_VERBOSE("{} loads state from {}", self, fname);
-    auto buffer = io::read(fname);
+    auto buffer = io::read(std::filesystem::path{fname.str()});
     if (!buffer) {
       VAST_ERROR("{} failed to read index file: {}", self,
                  render(buffer.error()));

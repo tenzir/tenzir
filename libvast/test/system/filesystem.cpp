@@ -64,7 +64,7 @@ TEST(write) {
   auto copy = foo;
   auto chk = chunk::make(std::move(copy));
   REQUIRE(chk);
-  auto filename = directory / foo;
+  auto filename = std::filesystem::path{directory.str()} / foo;
   MESSAGE("write file via actor");
   self->request(filesystem, caf::infinite, atom::write_v, path{foo}, chk)
     .receive(

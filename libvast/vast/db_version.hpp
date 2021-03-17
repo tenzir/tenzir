@@ -15,6 +15,8 @@
 
 #include "vast/path.hpp"
 
+#include <filesystem>
+
 namespace vast {
 
 /// This version number defines compatibility of persistent state with with
@@ -35,7 +37,7 @@ std::ostream& operator<<(std::ostream& str, const db_version& version);
 
 /// Reads the DB version from a database directory.
 /// @relates db_version
-db_version read_db_version(const vast::path& db_dir);
+db_version read_db_version(const std::filesystem::path& db_dir);
 
 /// Writes the current DB version if `db_dir/VERSION` does not
 /// exist yet.

@@ -18,6 +18,7 @@
 #include "vast/error.hpp"
 #include "vast/io/read.hpp"
 #include "vast/io/save.hpp"
+#include "vast/logger.hpp"
 #include "vast/path.hpp"
 
 #include <caf/deserializer.hpp>
@@ -141,14 +142,18 @@ caf::error write(const std::filesystem::path& filename, const chunk_ptr& x) {
   return io::save(filename, as_bytes(x));
 }
 
-caf::error read(const path& filename, chunk_ptr& x) {
-  auto size = file_size(filename);
-  if (!size) {
+caf::error read(const std::filesystem::path& filename, chunk_ptr& x) {
+  std::error_code err{};
+  const auto size = std::filesystem::file_size(filename, err);
+  if (size == static_cast<std::uintmax_t>(-1)) {
     x = nullptr;
-    return size.error();
+    return caf::make_error(ec::filesystem_error,
+                           fmt::format("failed to get file size for filename "
+                                       "{}: {}",
+                                       filename, err.message()));
   }
-  auto buffer = std::make_unique<chunk::value_type[]>(*size);
-  auto view = span{buffer.get(), *size};
+  auto buffer = std::make_unique<chunk::value_type[]>(size);
+  auto view = span{buffer.get(), size};
   if (auto err = io::read(filename, view)) {
     x = nullptr;
     return err;
