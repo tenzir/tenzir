@@ -16,7 +16,18 @@ on:
   release:
     types: published
 env:
-  DEBIAN_FRONTEND: noninteractive
+  CMAKE_GENERATOR: Ninja
+  CMAKE_MAKE_PROGRAM: ninja
+  CMAKE_C_COMPILER_LAUNCHER: ccache
+  CMAKE_CXX_COMPILER_LAUNCHER: ccache
+  CCACHE_HASH_DIR: true
+  CCACHE_UNIFY: true
+  CCACHE_SLOPPINESS: 'file_macro,time_macros'
+  CCACHE_DIR: '${{ github.workspace }}/.ccache'
+  CCACHE_COMPRESS: true
+  CCACHE_COMPRESSLEVEL: 9
+  CCACHE_ABSSTDERR: true
+  BUILD_DIR: build
 jobs:
   build-debian:
     name: Debian - ${{ matrix.build.compiler }} ${{ matrix.configure.tag }}
@@ -44,21 +55,10 @@ jobs:
           flags: --release
           ci-flags: --ci-build
     env:
+      DEBIAN_FRONTEND: noninteractive
       DOCKER_BUILDKIT: 1
       CC: ${{ matrix.build.cc }}
       CXX: ${{ matrix.build.cxx }}
-      CMAKE_GENERATOR: Ninja
-      CMAKE_MAKE_PROGRAM: ninja
-      CMAKE_C_COMPILER_LAUNCHER: ccache
-      CMAKE_CXX_COMPILER_LAUNCHER: ccache
-      CCACHE_HASH_DIR: true
-      CCACHE_UNIFY: true
-      CCACHE_SLOPPINESS: 'file_macro,time_macros'
-      CCACHE_DIR: '${{ github.workspace }}/.ccache'
-      CCACHE_COMPRESS: true
-      CCACHE_COMPRESSLEVEL: 9
-      CCACHE_ABSSTDERR: true
-      BUILD_DIR: build
     steps:
       - name: Install Dependencies
         run: |
@@ -66,8 +66,8 @@ jobs:
           apt-get -y install git libsnappy-dev libbrotli-dev zlib1g-dev wget liblz4-dev libzstd-dev ninja-build libpcap-dev libssl-dev libbenchmark-dev tcpdump lsb-release libflatbuffers-dev flatbuffers-compiler-dev libyaml-cpp-dev libsimdjson-dev gnupg2 gcc-8 g++-8 python3 python3-pip python3-venv jq apt-transport-https ca-certificates curl gnupg-agent software-properties-common
 
           # Need to specify backports explicitly, since spdlog and fmt also have
-          # buster packages. Also, this comes with a newer version of CMake.
-          apt-get -y -t buster-backports install cmake libspdlog-dev libfmt-dev
+          # buster packages.
+          apt-get -y -t buster-backports install libspdlog-dev libfmt-dev
 
           # clang-10 (c.f. https://apt.llvm.org/)
           curl -fsSL https://apt.llvm.org/llvm-snapshot.gpg.key | apt-key add -
@@ -81,8 +81,6 @@ jobs:
           apt-get update
           apt-get -y install libarrow-dev
 
-          cmake --version
-
           # Docker
           curl -fsSL https://download.docker.com/linux/debian/gpg | apt-key add -
           add-apt-repository "deb [arch=amd64] https://download.docker.com/linux/debian buster stable"
@@ -93,6 +91,12 @@ jobs:
           echo 'deb http://deb.debian.org/debian testing main' >> /etc/apt/sources.list
           apt-get update
           apt-get -y install gcc-9 g++-9 ccache
+
+          # install CMake from pip -- we need at least 3.17 in CI for CCache
+          python3 -m pip install --upgrade pip
+          python3 -m pip install --upgrade cmake
+
+          cmake --version
 
       - uses: actions/checkout@v2
         with:
@@ -146,7 +150,7 @@ jobs:
         if: github.event_name == 'pull_request'
         uses: actions/cache@v2
         with:
-          path: .ccache
+          path: ${{ env.CCACHE_DIR }}
           key: ccache-${{ github.workflow }}-Debian-${{ matrix.build.compiler }}-${{ matrix.configure.tag }}-${{ env.CACHE_HEAD_REF_SLUG }}-${{ github.sha }}
           restore-keys: |
             ccache-${{ github.workflow }}-Debian-${{ matrix.build.compiler }}-${{ matrix.configure.tag }}-${{ env.CACHE_HEAD_REF_SLUG }}
@@ -158,7 +162,7 @@ jobs:
         if: github.event_name == 'push'
         uses: actions/cache@v2
         with:
-          path: .ccache
+          path: ${{ env.CCACHE_DIR }}
           key: ccache-${{ github.workflow }}-Debian-${{ matrix.build.compiler }}-${{ matrix.configure.tag }}-${{ env.CACHE_REF_SLUG }}-${{ github.sha }}
           restore-keys: |
             ccache-${{ github.workflow }}-Debian-${{ matrix.build.compiler }}-${{ matrix.configure.tag }}-${{ env.CACHE_REF_SLUG }}
@@ -169,7 +173,7 @@ jobs:
         if: github.event_name == 'release'
         uses: actions/cache@v2
         with:
-          path: .ccache
+          path: ${{ env.CCACHE_DIR }}
           key: ccache-${{ github.workflow }}-Debian-${{ matrix.build.compiler }}-${{ matrix.configure.tag }}-master-${{ github.sha }}
           restore-keys: |
             ccache-${{ github.workflow }}-Debian-${{ matrix.build.compiler }}-${{ matrix.configure.tag }}-master
@@ -198,7 +202,7 @@ jobs:
 
       - name: Compile All Targets
         run: |
-          cmake --build "$BUILD_DIR" --target all --parallel
+          cmake --build "$BUILD_DIR" --target all --parallel --verbose
 
       - name: Show ccache Statistics
         run: |
@@ -316,18 +320,6 @@ jobs:
     env:
       CC: ${{ matrix.build.cc }}
       CXX: ${{ matrix.build.cxx }}
-      CMAKE_GENERATOR: Ninja
-      CMAKE_MAKE_PROGRAM: ninja
-      CMAKE_C_COMPILER_LAUNCHER: ccache
-      CMAKE_CXX_COMPILER_LAUNCHER: ccache
-      CCACHE_HASH_DIR: true
-      CCACHE_UNIFY: true
-      CCACHE_SLOPPINESS: 'file_macro,time_macros'
-      CCACHE_DIR: '${{ github.workspace }}/.ccache'
-      CCACHE_COMPRESS: true
-      CCACHE_COMPRESSLEVEL: 9
-      CCACHE_ABSSTDERR: true
-      BUILD_DIR: build
     steps:
       - uses: actions/checkout@v2
         with:
@@ -390,7 +382,7 @@ jobs:
         if: github.event_name == 'pull_request'
         uses: actions/cache@v2
         with:
-          path: .ccache
+          path: ${{ env.CCACHE_DIR }}
           key: ccache-${{ github.workflow }}-macOS-${{ matrix.build.compiler }}-${{ matrix.configure.tag }}-${{ env.CACHE_HEAD_REF_SLUG }}-${{ github.sha }}
           restore-keys: |
             ccache-${{ github.workflow }}-macOS-${{ matrix.build.compiler }}-${{ matrix.configure.tag }}-${{ env.CACHE_HEAD_REF_SLUG }}
@@ -402,7 +394,7 @@ jobs:
         if: github.event_name == 'push'
         uses: actions/cache@v2
         with:
-          path: .ccache
+          path: ${{ env.CCACHE_DIR }}
           key: ccache-${{ github.workflow }}-macOS-${{ matrix.build.compiler }}-${{ matrix.configure.tag }}-${{ env.CACHE_REF_SLUG }}-${{ github.sha }}
           restore-keys: |
             ccache-${{ github.workflow }}-macOS-${{ matrix.build.compiler }}-${{ matrix.configure.tag }}-${{ env.CACHE_REF_SLUG }}
@@ -413,7 +405,7 @@ jobs:
         if: github.event_name == 'release'
         uses: actions/cache@v2
         with:
-          path: .ccache
+          path: ${{ env.CCACHE_DIR }}
           key: ccache-${{ github.workflow }}-macOS-${{ matrix.build.compiler }}-${{ matrix.configure.tag }}-master-${{ github.sha }}
           restore-keys: |
             ccache-${{ github.workflow }}-macOS-${{ matrix.build.compiler }}-${{ matrix.configure.tag }}-master
@@ -442,7 +434,7 @@ jobs:
 
       - name: Compile All Targets
         run: |
-          cmake --build "$BUILD_DIR" --target all --parallel
+          cmake --build "$BUILD_DIR" --target all --parallel --verbose
 
       - name: Show ccache Statistics
         run: |
