@@ -13,6 +13,9 @@ This changelog documents all notable user-facing changes of VAST.
 
 ## Unreleased
 
+- 🐞 The disk monitor now correctly erases partition synopses from the meta index.
+  [#1450](https://github.com/tenzir/vast/pull/1450)
+
 - 🐞 The archive, index, source, and sink components now report metrics while
   idle instead of omitting them entirely. This allows for distinguishing between
   idle and not running components from the metrics.

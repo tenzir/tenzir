@@ -364,6 +364,10 @@ meta_index(meta_index_actor::stateful_pointer<meta_index_state> self) {
       self->state.merge(std::move(partition), std::move(*synopsis));
       return atom::ok_v;
     },
+    [=](atom::erase, uuid partition) {
+      self->state.erase(partition);
+      return atom::ok_v;
+    },
     [=](expression expr) -> std::vector<uuid> {
       VAST_TRACE_SCOPE("{} {}", self, VAST_ARG(expr));
       return self->state.lookup(expr);
