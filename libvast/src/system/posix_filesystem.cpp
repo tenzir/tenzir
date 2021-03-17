@@ -34,7 +34,9 @@ filesystem_actor::behavior_type posix_filesystem(
            chunk_ptr chk) -> caf::result<atom::ok> {
       VAST_ASSERT(chk != nullptr);
       auto path
-        = filename.is_absolute() ? filename : self->state.root / filename;
+        = filename.is_absolute()
+            ? std::filesystem::path{filename.str()}
+            : std::filesystem::path{self->state.root.str()} / filename.str();
       if (auto err = io::save(path, as_bytes(chk))) {
         ++self->state.stats.writes.failed;
         return err;

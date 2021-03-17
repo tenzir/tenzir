@@ -31,6 +31,7 @@
 #include <caf/stateful_actor.hpp>
 #include <caf/test/dsl.hpp>
 
+#include <filesystem>
 #include <stddef.h>
 
 using namespace vast;
@@ -86,7 +87,8 @@ struct fixture : fixtures::deterministic_actor_system_and_events {
     = system::type_registry_actor::stateful_pointer<system::type_registry_state>;
 
   system::type_registry_actor spawn_aut() {
-    auto handle = sys.spawn(system::type_registry, directory);
+    auto handle = sys.spawn(system::type_registry,
+                            std::filesystem::path{directory.str()});
     sched.run();
     return handle;
   }

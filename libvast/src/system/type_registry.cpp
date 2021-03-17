@@ -73,7 +73,7 @@ type_registry_state::status(status_verbosity v) const {
   return result;
 }
 
-vast::path type_registry_state::filename() const {
+std::filesystem::path type_registry_state::filename() const {
   return dir / name;
 }
 
@@ -91,8 +91,15 @@ caf::error type_registry_state::load_from_disk() {
     VAST_DEBUG("{} found no directory to load from", self);
     return caf::none;
   }
-  if (auto fname = filename(); exists(fname)) {
-    auto buffer = io::read(fname);
+  std::error_code err{};
+  const auto fname = filename();
+  const auto exists = std::filesystem::exists(fname, err);
+  if (err)
+    return caf::make_error(ec::filesystem_error,
+                           fmt::format("failed to find file {}: {}", fname,
+                                       err.message()));
+  if (exists) {
+    auto buffer = io::read(vast::path{fname.string()});
     if (!buffer)
       return buffer.error();
     caf::binary_deserializer source{self->system(), *buffer};
@@ -135,7 +142,7 @@ type_set type_registry_state::types() const {
 
 type_registry_actor::behavior_type
 type_registry(type_registry_actor::stateful_pointer<type_registry_state> self,
-              const path& dir) {
+              const std::filesystem::path& dir) {
   self->state.self = self;
   self->state.dir = dir;
   // Register the exit handler.
