@@ -13,6 +13,12 @@ This changelog documents all notable user-facing changes of VAST.
 
 ## Unreleased
 
+- 🎁 The disk monitor gained a new `vast.start.disk-budget-check-binary` option
+  that can be used to specify an external binary to determine the size of the
+  database directory. This can be useful in cases where `stat()` does not give
+  the correct answer, e.g. on compressed filesystems.
+  [#1453](https://github.com/tenzir/vast/pull/1433)
+
 - ⚠️ The default size of table slices (event batches) that is created from
   `vast import` processes has been changed from 1000 to 1024.
   [#1396](https://github.com/tenzir/vast/pull/1396)
