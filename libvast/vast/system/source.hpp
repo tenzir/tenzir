@@ -198,23 +198,21 @@ struct source_state {
     if (auto status = reader.status(); !status.empty())
       self->send(accountant, std::move(status));
     // Send the source-specific performance metrics to the accountant.
-    if (metrics.events > 0) {
-      auto r = performance_report{{{std::string{name}, metrics}}};
+    auto r = performance_report{{{std::string{name}, metrics}}};
 #if VAST_LOG_LEVEL >= VAST_LOG_LEVEL_INFO
-      for (const auto& [key, m] : r) {
-        if (auto rate = m.rate_per_sec(); std::isfinite(rate))
-          VAST_INFO("{} produced {} events at a rate of {} events/sec "
-                    "in {}",
-                    self, m.events, static_cast<uint64_t>(rate),
-                    to_string(m.duration));
-        else
-          VAST_INFO("{} produced {} events in {}", self, m.events,
-                    to_string(m.duration));
-      }
-#endif
-      metrics = measurement{};
-      self->send(accountant, std::move(r));
+    for (const auto& [key, m] : r) {
+      if (auto rate = m.rate_per_sec(); std::isfinite(rate))
+        VAST_INFO("{} produced {} events at a rate of {} events/sec "
+                  "in {}",
+                  self, m.events, static_cast<uint64_t>(rate),
+                  to_string(m.duration));
+      else
+        VAST_INFO("{} produced {} events in {}", self, m.events,
+                  to_string(m.duration));
     }
+#endif
+    metrics = measurement{};
+    self->send(accountant, std::move(r));
   }
 };
 

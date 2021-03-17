@@ -72,23 +72,21 @@ void archive_state::next_session() {
 }
 
 void archive_state::send_report() {
-  if (measurement.events > 0) {
-    auto r = performance_report{{{std::string{name}, measurement}}};
+  auto r = performance_report{{{std::string{name}, measurement}}};
 #if VAST_LOG_LEVEL >= VAST_LOG_LEVEL_DEBUG
-    for (const auto& [key, m] : r) {
-      if (auto rate = m.rate_per_sec(); std::isfinite(rate))
-        VAST_DEBUG("{} handled {} events at a rate of {} events/sec in "
-                   "{}",
-                   self, m.events, static_cast<uint64_t>(rate),
-                   to_string(m.duration));
-      else
-        VAST_DEBUG("{} handled {} events in {}", self, m.events,
-                   to_string(m.duration));
-    }
-#endif
-    measurement = vast::system::measurement{};
-    self->send(accountant, std::move(r));
+  for (const auto& [key, m] : r) {
+    if (auto rate = m.rate_per_sec(); std::isfinite(rate))
+      VAST_DEBUG("{} handled {} events at a rate of {} events/sec in "
+                 "{}",
+                 self, m.events, static_cast<uint64_t>(rate),
+                 to_string(m.duration));
+    else
+      VAST_DEBUG("{} handled {} events in {}", self, m.events,
+                 to_string(m.duration));
   }
+#endif
+  measurement = vast::system::measurement{};
+  self->send(accountant, std::move(r));
 }
 
 archive_actor::behavior_type

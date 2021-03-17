@@ -241,14 +241,14 @@ importer_state::status(status_verbosity v) const {
 
 void importer_state::send_report() {
   auto now = stopwatch::now();
-  if (measurement_.events > 0) {
-    using namespace std::string_literals;
-    auto elapsed = std::chrono::duration_cast<duration>(now - last_report);
-    auto node_throughput = measurement{elapsed, measurement_.events};
-    auto r = performance_report{
-      {{"importer"s, measurement_}, {"node_throughput"s, node_throughput}}};
+  using namespace std::string_literals;
+  auto elapsed = std::chrono::duration_cast<duration>(now - last_report);
+  auto node_throughput = measurement{elapsed, measurement_.events};
+  auto r = performance_report{
+    {{"importer"s, measurement_}, {"node_throughput"s, node_throughput}}};
 #if VAST_LOG_LEVEL >= VAST_LOG_LEVEL_VERBOSE
-    auto beat = [&](const auto& sample) {
+  auto beat = [&](const auto& sample) {
+    if (sample.value.events > 0) {
       if (auto rate = sample.value.rate_per_sec(); std::isfinite(rate))
         VAST_VERBOSE("{} handled {} events at a rate of {} events/sec in {}",
                      self, sample.value.events, static_cast<uint64_t>(rate),
@@ -256,12 +256,12 @@ void importer_state::send_report() {
       else
         VAST_VERBOSE("{} handled {} events in {}", self, sample.value.events,
                      to_string(sample.value.duration));
-    };
-    beat(r[1]);
+    }
+  };
+  beat(r[1]);
 #endif
-    measurement_ = measurement{};
-    self->send(accountant, std::move(r));
-  }
+  measurement_ = measurement{};
+  self->send(accountant, std::move(r));
   last_report = now;
 }
 

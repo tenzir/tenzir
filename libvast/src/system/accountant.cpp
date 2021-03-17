@@ -314,12 +314,16 @@ accountant(accountant_actor::stateful_pointer<accountant_state> self,
       for (const auto& [key, value] : r) {
         self->state->record(key + ".events", value.events, ts);
         self->state->record(key + ".duration", value.duration, ts);
-        auto rate = value.rate_per_sec();
-        if (std::isfinite(rate))
-          self->state->record(key + ".rate", rate, ts);
-        else
-          self->state->record(key + ".rate",
-                              std::numeric_limits<decltype(rate)>::max(), ts);
+        if (value.events == 0) {
+          self->state->record(key + ".rate", 0.0, ts);
+        } else {
+          auto rate = value.rate_per_sec();
+          if (std::isfinite(rate))
+            self->state->record(key + ".rate", rate, ts);
+          else
+            self->state->record(key + ".rate",
+                                std::numeric_limits<decltype(rate)>::max(), ts);
+        }
 #if VAST_LOG_LEVEL >= VAST_LOG_LEVEL_INFO
         auto logger = caf::logger::current_logger();
         if (logger && logger->verbosity() >= VAST_LOG_LEVEL_INFO)
