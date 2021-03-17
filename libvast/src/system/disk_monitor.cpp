@@ -36,7 +36,7 @@ std::shared_ptr<caf::detail::scope_guard<Fun>> make_shared_guard(Fun f) {
 
 } // namespace
 
-caf::expected<void> validate(const disk_monitor_config& config) {
+caf::error validate(const disk_monitor_config& config) {
   if (config.low_water_mark > config.high_water_mark)
     return caf::make_error(ec::invalid_configuration, "low-water mark bigger "
                                                       "than high-water mark");
@@ -65,8 +65,8 @@ disk_monitor(disk_monitor_actor::stateful_pointer<disk_monitor_state> self,
   VAST_TRACE_SCOPE("{} {} {}", VAST_ARG(config.high_water_mark),
                    VAST_ARG(config.low_water_mark), VAST_ARG(dbdir));
   using namespace std::string_literals;
-  if (auto valid = validate(config); !valid) {
-    self->quit(valid.error());
+  if (auto error = validate(config)) {
+    self->quit(error);
     return disk_monitor_actor::behavior_type::make_empty_behavior();
   }
   self->state.high_water_mark = config.high_water_mark;
