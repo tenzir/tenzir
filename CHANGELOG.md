@@ -13,6 +13,9 @@ This changelog documents all notable user-facing changes of VAST.
 
 ## Unreleased
 
+- 🐞 The disk monitor now correctly erases partition synopses from the meta index.
+  [#1450](https://github.com/tenzir/vast/pull/1450)
+
 - ⚠️ The time to first response of queries that compare a concept to a string
   has been reduced noticably. In the particular case of large databases
   containing many different event types and queries with a high selectivity we
