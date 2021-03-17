@@ -19,6 +19,7 @@ This changelog documents all notable user-facing changes of VAST.
   all plugins built alongside VAST statically. All plugin build scaffoldings
   must be adapted, older plugins do no longer work.
   [#1445](https://github.com/tenzir/vast/pull/1445)
+  [#1452](https://github.com/tenzir/vast/pull/1452)
 
 - ⚠️ The type extractor in the expression language now includes aliased types.
   For example, given the type definition for port from the base schema

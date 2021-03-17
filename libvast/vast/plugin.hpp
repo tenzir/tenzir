@@ -257,9 +257,6 @@ private:
         static_cast<void>(flag);                                               \
       }                                                                        \
       static bool init() {                                                     \
-        auto_register_type_id_##name1##name2() {                               \
-          static_cast<void>(flag);                                             \
-        }                                                                      \
         ::vast::plugins::get_static_type_id_blocks().emplace_back(             \
           ::vast::plugin_type_id_block{::caf::id_block::name1::begin,          \
                                        ::caf::id_block::name1::end},           \
