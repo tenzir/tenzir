@@ -40,18 +40,17 @@ namespace vast {
 
 namespace {
 
-using std::accumulate;
-
 // Returns the field size for printing all names in `xs`.
 auto field_size(const command::children_list& xs) {
-  return accumulate(xs.begin(), xs.end(), size_t{0}, [](size_t x, auto& y) {
-    return std::max(x, y->name.size());
-  });
+  return std::accumulate(xs.begin(), xs.end(), size_t{0},
+                         [](size_t x, auto& y) {
+                           return std::max(x, y->name.size());
+                         });
 }
 
 // Returns the field size for printing all names in `xs`.
 auto field_size(const caf::config_option_set& xs) {
-  return accumulate(xs.begin(), xs.end(), size_t{0}, [](size_t x, auto& y) {
+  return std::accumulate(xs.begin(), xs.end(), size_t{0}, [](size_t x, auto& y) {
     // We print parameters in the form "[-h | -? | --help=] <type>" (but we omit
     // the type for boolean). So, "[=]" adds 3 characters, each short name adds
     // 5 characters with "-X | ", the long name gets the 2 character prefix
