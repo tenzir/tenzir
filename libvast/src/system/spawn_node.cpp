@@ -66,8 +66,8 @@ spawn_node(caf::scoped_actor& self, const caf::settings& opts) {
     return caf::make_error(ec::filesystem_error,
                            "unable to write to db-directory:", abs_dir.str());
   // Acquire PID lock.
-  auto pid_file = abs_dir / "pid.lock";
-  VAST_DEBUG("{} acquires PID lock {}", node, pid_file.str());
+  auto pid_file = std::filesystem::path{abs_dir.str()} / "pid.lock";
+  VAST_DEBUG("{} acquires PID lock {}", node, pid_file.string());
   if (auto err = detail::acquire_pid_file(pid_file))
     return err;
   // Spawn the node.
@@ -84,9 +84,9 @@ spawn_node(caf::scoped_actor& self, const caf::settings& opts) {
   auto actor = self->spawn(system::node, id, abs_dir, shutdown_grace_period);
   actor->attach_functor([=, pid_file = std::move(pid_file)](
                           const caf::error&) -> caf::result<void> {
-    VAST_DEBUG("node removes PID lock: {}", pid_file.str());
+    VAST_DEBUG("node removes PID lock: {}", pid_file);
     std::error_code err{};
-    std::filesystem::remove_all(std::filesystem::path{pid_file.str()}, err);
+    std::filesystem::remove_all(pid_file, err);
     if (err)
       return caf::make_error(ec::filesystem_error,
                              fmt::format("unable to remove pid file {} : {}",
