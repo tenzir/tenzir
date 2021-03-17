@@ -172,7 +172,7 @@ using meta_index_actor = typed_actor_fwd<
   caf::replies_to<atom::merge, uuid, std::shared_ptr<partition_synopsis>>::with< //
     atom::ok>,
   // Erase a single partition synopsis.
-  caf::reacts_to<atom::erase, uuid>,
+  caf::replies_to<atom::erase, uuid>::with<atom::ok>,
   // Evaluate the expression.
   caf::replies_to<expression>::with< //
     std::vector<uuid>>>::unwrap;
