@@ -13,6 +13,10 @@ This changelog documents all notable user-facing changes of VAST.
 
 ## Unreleased
 
+- 🐞 A query for a field or field name suffix that matches multiple fields of
+  different types would erroneously return no results.
+  [#1447](https://github.com/tenzir/vast/pull/1447)
+
 - ⚠️ The default size of table slices (event batches) that is created from
   `vast import` processes has been changed from 1000 to 1024.
   [#1396](https://github.com/tenzir/vast/pull/1396)
