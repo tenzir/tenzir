@@ -174,7 +174,7 @@ public:
   friend span<const std::byte> as_bytes(const chunk_ptr& x) noexcept;
   friend caf::error
   write(const std::filesystem::path& filename, const chunk_ptr& x);
-  friend caf::error read(const path& filename, chunk_ptr& x);
+  friend caf::error read(const std::filesystem::path& filename, chunk_ptr& x);
   friend caf::error inspect(caf::serializer& sink, const chunk_ptr& x);
   friend caf::error inspect(caf::deserializer& source, chunk_ptr& x);
 

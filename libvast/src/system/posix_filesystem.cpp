@@ -24,6 +24,8 @@
 #include <caf/result.hpp>
 #include <caf/settings.hpp>
 
+#include <filesystem>
+
 namespace vast::system {
 
 filesystem_actor::behavior_type posix_filesystem(
@@ -48,7 +50,9 @@ filesystem_actor::behavior_type posix_filesystem(
     },
     [self](atom::read, const path& filename) -> caf::result<chunk_ptr> {
       auto path
-        = filename.is_absolute() ? filename : self->state.root / filename;
+        = filename.is_absolute()
+            ? std::filesystem::path{filename.str()}
+            : std::filesystem::path{self->state.root.str()} / filename.str();
       if (auto bytes = io::read(path)) {
         ++self->state.stats.reads.successful;
         ++self->state.stats.reads.bytes += bytes->size();

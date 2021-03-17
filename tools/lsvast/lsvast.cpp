@@ -160,7 +160,7 @@ caf::expected<Kind> classify(const std::filesystem::path& path) {
 
   if (!is_regular_file)
     return Kind::Unknown;
-  auto bytes = vast::io::read(vast::path{path.string()});
+  auto bytes = vast::io::read(path);
   if (!bytes)
     return Kind::Unknown;
   auto buf = bytes->data();
@@ -201,7 +201,7 @@ read_flatbuffer_file(const std::filesystem::path& path) {
   using result_t = std::unique_ptr<const T, flatbuffer_deleter<T>>;
   auto result
     = result_t(static_cast<const T*>(nullptr), flatbuffer_deleter<T>{});
-  auto maybe_bytes = vast::io::read(vast::path{path.string()});
+  auto maybe_bytes = vast::io::read(path);
   if (!maybe_bytes)
     return result;
   auto bytes = std::move(*maybe_bytes);
