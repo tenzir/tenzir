@@ -28,8 +28,8 @@ spawn_disk_monitor(node_actor::stateful_pointer<node_state> self,
     return caf::make_error(ec::missing_component, "archive");
   auto opts = args.inv.options;
   std::optional<std::string> command;
-  if (auto cmd = caf::get_if<std::string>(&opts, "vast.start.disk-budget-check-"
-                                                 "binary"))
+  if (auto cmd = caf::get_if<std::string>( //
+        &opts, "vast.start.disk-budget-check-binary"))
     command = *cmd;
   auto hiwater = detail::get_bytesize(opts, "vast.start.disk-budget-high", 0);
   auto lowater = detail::get_bytesize(opts, "vast.start.disk-budget-low", 0);
@@ -46,15 +46,16 @@ spawn_disk_monitor(node_actor::stateful_pointer<node_state> self,
                               default_seconds);
   struct disk_monitor_config config
     = {*hiwater, *lowater, command, std::chrono::seconds{interval}};
-  if (auto valid = validate(config); !valid)
-    return valid.error();
+  if (auto error = validate(config))
+    return error;
   if (!*hiwater) {
     if (command)
-      VAST_WARN("disk check binary specified but no high-water mark, disk "
-                "monitor will not be spawned");
+      VAST_WARN("'vast.start.disk-budget-check-binary' is configured but "
+                "'vast.start.disk-budget-high' is unset; disk-monitor will not "
+                "be spawned");
     else
-      VAST_VERBOSE("{} not spawning disk_monitor because no limit configured",
-                   self);
+      VAST_VERBOSE("'vast.start.disk-budget-high' is unset; disk-monitor will "
+                   "not be spawned");
     return ec::no_error;
   }
   const auto db_dir

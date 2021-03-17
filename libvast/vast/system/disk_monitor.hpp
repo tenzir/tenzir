@@ -55,7 +55,9 @@ struct disk_monitor_config {
   std::chrono::seconds scan_interval;
 };
 
-caf::expected<void> validate(const disk_monitor_config&);
+/// Tests if the passed config options represent a valid disk monitor
+/// configuration.
+caf::error validate(const disk_monitor_config&);
 
 /// Periodically scans the size of the database directory and deletes data
 /// once it exceeds some threshold.

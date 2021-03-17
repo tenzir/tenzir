@@ -176,7 +176,7 @@ caf::settings get_status() {
 caf::expected<std::string> execute_blocking(const std::string& command) {
   using namespace std::string_literals;
   std::string result;
-  std::array<char, 256> buffer;
+  std::array<char, 4096> buffer; // Try to read one full page at a time.
   auto* out = ::popen(command.c_str(), "re");
   if (!out)
     return caf::make_error(ec::system_error,
