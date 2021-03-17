@@ -272,8 +272,6 @@ vast:
       #schema-file: <none>
       # An alternate schema as a string.
       #schema: <none>
-      # Use simdjson for parsing.
-      simdjson: false
 
     # The `vast import pcap` command imports PCAP logs.
     pcap:
@@ -317,8 +315,6 @@ vast:
       #schema-file: <none>
       # An alternate schema as a string.
       #schema: <none>
-      # Use simdjson for parsing.
-      simdjson: false
 
     # The `vast import syslog` command imports Syslog entries.
     syslog:
@@ -381,8 +377,6 @@ vast:
       #schema-file: <none>
       # An alternate schema as a string.
       #schema: <none>
-      # Use simdjson for parsing.
-      simdjson: false
 
   # The `vast pivot` command extracts related events of a given type.
   # For additionally available options, see export.pcap.
