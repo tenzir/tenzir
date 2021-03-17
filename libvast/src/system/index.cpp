@@ -138,7 +138,7 @@ extract_partition_synopsis(const vast::path& partition_path,
   auto flatbuffer = ps_builder.Finish();
   fbs::FinishPartitionSynopsisBuffer(builder, flatbuffer);
   auto chunk_out = fbs::release(builder);
-  return io::save(partition_synopsis_path,
+  return io::save(std::filesystem::path{partition_synopsis_path.str()},
                   span{chunk_out->data(), chunk_out->size()});
 }
 

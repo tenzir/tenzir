@@ -55,7 +55,8 @@ struct fixture : fixture_base {
 
   void spawn_type_registry() {
     type_registry
-      = self->spawn(system::type_registry, directory / "type-registry");
+      = self->spawn(system::type_registry,
+                    std::filesystem::path{directory.str()} / "type-registry");
   }
 
   void spawn_index() {

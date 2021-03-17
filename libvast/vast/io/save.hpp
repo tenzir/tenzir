@@ -13,7 +13,6 @@
 
 #include "vast/fwd.hpp"
 
-#include "vast/path.hpp"
 #include "vast/span.hpp"
 
 #include <cstddef>
@@ -28,7 +27,5 @@ namespace vast::io {
 /// @returns An error if the operation failed.
 [[nodiscard]] caf::error
 save(const std::filesystem::path& filename, span<const std::byte> xs);
-
-[[nodiscard]] caf::error save(const path& filename, span<const std::byte> xs);
 
 } // namespace vast::io

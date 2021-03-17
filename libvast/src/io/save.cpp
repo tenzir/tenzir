@@ -16,7 +16,6 @@
 #include "vast/error.hpp"
 #include "vast/io/write.hpp"
 #include "vast/logger.hpp"
-#include "vast/path.hpp"
 
 #include <cstddef>
 #include <cstdio>
@@ -45,10 +44,6 @@ save(const std::filesystem::path& filename, span<const std::byte> xs) {
                                        err.message()));
   }
   return caf::none;
-}
-
-caf::error save(const path& filename, span<const std::byte> xs) {
-  return save(std::filesystem::path{filename.str()}, xs);
 }
 
 } // namespace vast::io

@@ -26,6 +26,7 @@
 #include <caf/expected.hpp>
 #include <caf/typed_event_based_actor.hpp>
 
+#include <filesystem>
 #include <map>
 #include <string>
 #include <unordered_set>
@@ -43,7 +44,7 @@ struct type_registry_state {
   caf::dictionary<caf::config_value> status(status_verbosity v) const;
 
   /// Create the path that the type-registry is persisted at on disk.
-  vast::path filename() const;
+  std::filesystem::path filename() const;
 
   /// Save the type-registry to disk.
   caf::error save_to_disk() const;
@@ -62,11 +63,11 @@ struct type_registry_state {
   std::map<std::string, type_set> data = {};
   vast::schema configuration_schema = {};
   vast::taxonomies taxonomies = {};
-  vast::path dir = {};
+  std::filesystem::path dir = {};
 };
 
 type_registry_actor::behavior_type
 type_registry(type_registry_actor::stateful_pointer<type_registry_state> self,
-              const path& dir);
+              const std::filesystem::path& dir);
 
 } // namespace vast::system
