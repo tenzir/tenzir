@@ -56,19 +56,15 @@ fixtures:
       node.stop()
 
   DiskMonitorTester:
-    # Values are chosen such that one import of `conn.log.gz`
-    # results in one partition ~600KiB and an additional ~700KiB
-    # of segment data.
     enter: | # python
       node = Server(self.cmd,
                     ['-e', f'127.0.0.1:{VAST_PORT}',
                      '-i', 'node',
-                     '--max-partition-size=8000',
-                     '--max-segment-size=1',
                      'start',
                      '--disk-budget-check-interval=1',
-                     '--disk-budget-high=5MiB',
-                     '--disk-budget-low=2MiB'],
+                     '--disk-budget-check-binary=' + os.path.abspath('./misc/scripts/count_partition_segments.sh'),
+                     '--disk-budget-high=1',
+                     '--disk-budget-low=0'],
                     work_dir, name='node', port=VAST_PORT,
                     config_file=self.config_file)
       cmd += ['-e', f'127.0.0.1:{VAST_PORT}']
@@ -472,36 +468,21 @@ tests:
       - command: import -b zeek
         input: data/zeek/conn.log.gz
       - command: export ascii 'net.app !in ["dns", "ftp", "http", "ssl"]'
-  # The idea is import just enough to hit the high-water mark, wait, and then
-  # verify that most of the partitions and segments were deleted by checking
-  # the number of events left in the database. This test is a bit annoying as
-  # the numbers of the fixture must be set up quite precisely to trigger the
-  # disk monitor at the last import, but on the other hand it will also allow
-  # us to catch changes that drastically change the space used by the on-disk
-  # layout of the VAST data structures.
-  # TODO: This is currently too unreliable, re-enable this once dcso/ch1927 is done.
-  # Disk monitor:
-  #   tags: [disk-quota]
-  #   fixture: DiskMonitorTester
-  #   steps:
-  #     # We have to fix the batch-size to make sure the input arrives as a single
-  #     # table slice in archive and index.
-  #     - command: import --batch-size=8462 zeek
-  #       input: data/zeek/conn.log.gz
-  #     - command: import --batch-size=8462 zeek
-  #       input: data/zeek/conn.log.gz
-  #     - command: import --batch-size=8462 zeek
-  #       input: data/zeek/conn.log.gz
-  #     - command: import --batch-size=8462 zeek
-  #       input: data/zeek/conn.log.gz
-  #     # Table slices arent flushed until the next event arrives, so we top off
-  #     # the import with a tiny final table slice and give the disk monitor time
-  #     # to run.
-  #     - command: import zeek
-  #       input: data/zeek/snmp.log.gz
-  #       transformation: sleep 4
-  #     - command: count '#type == /zeek.*/'
-
+  # The `DiskMonitorTester` is set up to run every second and to delete all
+  # partitions on disk. We first import the complete zeek dataset with 8462
+  # events, then some additional suricata events to force the previous slice
+  # to be written on disk and then give the disk monitor enough time to run.
+  # After that, all events from the first import should have been erased.
+  Disk monitor:
+    tags: [disk-quota]
+    fixture: DiskMonitorTester
+    steps:
+      - command: import -b --batch-size=8462 zeek
+        input: data/zeek/conn.log.gz
+      - command: import -b suricata
+        input: data/suricata/eve.json
+        transformation: sleep 4
+      - command: count '#type == /zeek.*/'
   # This test only checks whether it is possible to take a Sigma rule as valid
   # input and perform a simple query. It does not check for subtleties in the
   # expression language itself. See the corresponding unit tests for that.
