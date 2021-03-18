@@ -442,6 +442,11 @@ node_state::spawn_command(const invocation& inv,
   if (auto label_ptr = caf::get_if<std::string>(&inv.options, "vast.spawn."
                                                               "label")) {
     label = *label_ptr;
+    if (label.empty()) {
+      auto err = caf::make_error(ec::unspecified, "empty component label");
+      rp.deliver(err);
+      return caf::make_message(std::move(err));
+    }
     if (self->state.registry.find_by_label(label)) {
       auto err = caf::make_error(ec::unspecified, "duplicate component label");
       rp.deliver(err);
@@ -476,8 +481,7 @@ node_state::spawn_command(const invocation& inv,
       rp.deliver(component.error());
       return caf::make_message(std::move(component.error()));
     }
-    if (self->state.registry.add(*component, std::move(comp_type),
-                                 std::move(label)))
+    if (self->state.registry.add(*component, std::move(comp_type), label))
       self->monitor(*component);
     else
       return caf::make_message(caf::make_error(
@@ -632,6 +636,8 @@ node(node_actor::stateful_pointer<node_state> self, std::string name, path dir,
     [self](atom::put, const caf::actor& component,
            const std::string& type) -> caf::result<atom::ok> {
       VAST_DEBUG("{} got new {}", self, type);
+      if (type.empty())
+        return caf::make_error(ec::unspecified, "empty component type");
       // Check if the new component is a singleton.
       auto& registry = self->state.registry;
       if (is_singleton(type) && registry.find_by_label(type))
