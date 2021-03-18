@@ -29,10 +29,19 @@ string(REGEX REPLACE "^[0-9]+\\.([0-9]+).*" "\\1" VAST_VERSION_MINOR
                      "${VAST_VERSION_TAG}")
 string(REGEX REPLACE "^[0-9]+\\.[0-9]+\\.([0-9]+).*" "\\1" VAST_VERSION_PATCH
                      "${VAST_VERSION_TAG}")
-string(REGEX REPLACE "^[0-9]+\\.[0-9]+\\.[0-9]+\\-([0-9]+).*" "\\1"
-                     VAST_VERSION_TWEAK "${VAST_VERSION_TAG}")
-string(REGEX REPLACE "^[0-9]+\\.[0-9]+\\.[0-9]+\\-[0-9]+\\-(.*)" "\\1"
-                     VAST_VERSION_COMMIT "${VAST_VERSION_TAG}")
+string(
+  REGEX
+  REPLACE "^[0-9]+\\.[0-9]+\\.[0-9]+(\\-[a-zA-Z]+[a-zA-Z0-9]*)?\\-([0-9]+).*"
+          "\\2" VAST_VERSION_TWEAK "${VAST_VERSION_TAG}")
+
+string(
+  REGEX
+  REPLACE "^[0-9]+\\.[0-9]+\\.[0-9]+\\-([a-zA-Z]+[a-zA-Z0-9]*)\\-[0-9]+\\-(.*)"
+          "\\1-\\2" VAST_VERSION_COMMIT "${VAST_VERSION_TAG}")
+if (VAST_VERSION_COMMIT STREQUAL VAST_VERSION_TAG)
+  string(REGEX REPLACE "^[0-9]+\\.[0-9]+\\.[0-9]+\\-[0-9]+\\-(.*)" "\\1"
+                       VAST_VERSION_COMMIT "${VAST_VERSION_TAG}")
+endif ()
 
 # Strip - and -0- suffixes from the version tag.
 string(REGEX REPLACE "^(.*)[-0-|-]\\\$" "\\1" VAST_VERSION_TAG
