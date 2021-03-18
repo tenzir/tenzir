@@ -11,11 +11,11 @@
 
 import argparse
 
-copyright="""// SPDX-FileCopyrightText: (c) 2018 Tenzir GmbH <info@tenzir.com>
+copyright = """// SPDX-FileCopyrightText: (c) 2018 Tenzir GmbH <info@tenzir.com>
 // SPDX-License-Identifier: BSD-3-Clause
 """
 
-header_tpl="""
+header_tpl = """
 #pragma once
 
 namespace %(namespace)s {
@@ -29,7 +29,7 @@ public:
 } // namespace %(namespace)s
 """
 
-source_tpl="""
+source_tpl = """
 #include "%(hpp)s"
 
 namespace %(namespace)s {
@@ -45,7 +45,7 @@ namespace %(namespace)s {
 } // namespace %(namespace)s
 """
 
-test_tpl="""
+test_tpl = """
 #define SUITE %(class)s
 #include "test.hpp"
 
@@ -78,7 +78,7 @@ def parse_set_cmd(f, new_entry):
         path = line.lstrip()
         if i == 0:
             indent = len(line) - len(path)
-        if path.endswith(')'):
+        if path.endswith(")"):
             path = path[:-1]
             stop = True
         if path:
@@ -87,16 +87,17 @@ def parse_set_cmd(f, new_entry):
             file_names.append(path)
         if stop:
             file_names.sort()
-            file_names = [(' ' * indent) + fn for fn in file_names]
-            if line.strip() == ')':
+            file_names = [(" " * indent) + fn for fn in file_names]
+            if line.strip() == ")":
                 file_names.append(line)
             else:
-                file_names[-1] += ')'
+                file_names[-1] += ")"
             return file_names
     raise Exception("format error in CMakeLists.txt: no closing ')' to set(")
 
+
 def extend_cmake(component, new_source, new_test):
-    lines=[]
+    lines = []
     cmake_path = component + "/CMakeLists.txt"
     # Read old content from file.
     with open(cmake_path, "r") as f:
@@ -113,39 +114,44 @@ def extend_cmake(component, new_source, new_test):
     with open(cmake_path, "w") as f:
         for line in lines:
             f.write(line)
-            f.write('\n')
+            f.write("\n")
+
 
 def make_file(component, path, tpl, fields):
-    with open(component + '/' + path, "w") as f:
+    with open(component + "/" + path, "w") as f:
         f.write(copyright)
         f.write(tpl % fields)
 
+
 def main():
-    parser = argparse.ArgumentParser(description='Add a new C++ class.')
-    parser.add_argument('-o', dest='headeronly', action='store_true',
-                        help="header only (don't generate a .cpp file)")
-    parser.add_argument('component', help='name of the project component')
-    parser.add_argument("name", help='fully qualified class name')
+    parser = argparse.ArgumentParser(description="Add a new C++ class.")
+    parser.add_argument(
+        "-o",
+        dest="headeronly",
+        action="store_true",
+        help="header only (don't generate a .cpp file)",
+    )
+    parser.add_argument("component", help="name of the project component")
+    parser.add_argument("name", help="fully qualified class name")
     args = parser.parse_args()
     # Split the fully qualified name into a list
     namev = args.name.split("::")
     if len(namev) < 2:
         raise Exception(args.name + " is not a qualified name")
-    path = '/'.join(namev[1:])
-    extend_cmake(args.component,
-                 "src/" + path + ".cpp",
-                 "test/" + path + ".cpp")
+    path = "/".join(namev[1:])
+    extend_cmake(args.component, "src/" + path + ".cpp", "test/" + path + ".cpp")
     class_name = namev[-1]
-    namespace = '::'.join(namev[:-1])
+    namespace = "::".join(namev[:-1])
     fields = {
-            'class': class_name,
-            'namespace': namespace,
-            'hpp': 'vast/' + path + '.hpp'
-            }
-    make_file(args.component, 'vast/' + path + '.hpp', header_tpl, fields)
+        "class": class_name,
+        "namespace": namespace,
+        "hpp": "vast/" + path + ".hpp",
+    }
+    make_file(args.component, "vast/" + path + ".hpp", header_tpl, fields)
     if not args.headeronly:
-        make_file(args.component, 'src/' + path + '.cpp', source_tpl, fields)
-    make_file(args.component, 'test/' + path + '.cpp', test_tpl, fields)
+        make_file(args.component, "src/" + path + ".cpp", source_tpl, fields)
+    make_file(args.component, "test/" + path + ".cpp", test_tpl, fields)
+
 
 if __name__ == "__main__":
     main()
