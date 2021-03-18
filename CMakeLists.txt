@@ -4,7 +4,7 @@ cmake_minimum_required(VERSION 3.14...3.19 FATAL_ERROR)
 
 # Semicolon-separated list of directories specifying a search path for CMake.
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
-include(VASTGitVersion)
+include(VASTConfigVersion)
 
 # Create the VAST project.
 project(
