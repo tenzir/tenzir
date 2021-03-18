@@ -315,7 +315,8 @@ caf::message kill_command(const invocation& inv, caf::actor_system&) {
           rp.deliver(atom::ok_v);
         },
         [=](const caf::error& err) mutable {
-          VAST_DEBUG("{} terminated component {}", self, label);
+          VAST_DEBUG("{} failed to terminate component {}: {}", self, label,
+                     err);
           rp.deliver(err);
         });
   }
