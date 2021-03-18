@@ -407,7 +407,20 @@ TEST(record symbol finding - suffix) {
   CHECK_EQUAL(f.find_suffix("b"), (offset_keys{{2}}));
   MESSAGE("record name is part of query");
   CHECK_EQUAL(r.find_suffix("foo.a"), (offset_keys{{0}}));
-  CHECK_EQUAL(f.find_suffix("oo.b.c.y"), (offset_keys{{4}}));
+  CHECK_EQUAL(f.find_suffix("oo.b.c.y"), std::vector<offset>{});
+}
+
+TEST(different fields with same suffix) {
+  auto r = record_type{{"zeek.client", string_type{}},
+                       {"suricata.alert.flow.bytes_toclient", count_type{}}};
+  auto suffixes = r.find_suffix("client");
+  CHECK_EQUAL(suffixes.size(), 1ull);
+}
+
+TEST(same fields with different type) {
+  auto r = record_type{{"client", string_type{}}, {"client", count_type{}}};
+  auto suffixes = r.find_suffix("client");
+  CHECK_EQUAL(suffixes.size(), 2ull);
 }
 
 TEST(congruence) {

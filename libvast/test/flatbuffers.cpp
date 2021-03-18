@@ -252,10 +252,10 @@ TEST(full partition roundtrip) {
         return true;
       };
   auto x_equals_zero = vast::expression{
-    vast::predicate{vast::field_extractor{".x"},
+    vast::predicate{vast::field_extractor{"x"},
                     vast::relational_operator::equal, vast::data{0u}}};
   auto x_equals_one = vast::expression{
-    vast::predicate{vast::field_extractor{".x"},
+    vast::predicate{vast::field_extractor{"x"},
                     vast::relational_operator::equal, vast::data{1u}}};
   auto type_equals_y = vast::expression{
     vast::predicate{vast::meta_extractor{vast::meta_extractor::type},
