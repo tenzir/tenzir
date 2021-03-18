@@ -89,11 +89,6 @@ void reader::reset(std::unique_ptr<std::istream>) {
   // reader abstraction.
 }
 
-reader::~reader() {
-  if (pcap_)
-    ::pcap_close(pcap_);
-}
-
 caf::error reader::schema(vast::schema sch) {
   return replace_if_congruent({&packet_type_}, sch);
 }
@@ -113,7 +108,7 @@ vast::system::report reader::status() const {
   if (!pcap_)
     return {};
   auto stats = pcap_stat{};
-  if (auto res = pcap_stats(pcap_, &stats); res != 0)
+  if (auto res = pcap_stats(pcap_.get(), &stats); res != 0)
     return {};
   uint64_t recv = stats.ps_recv - last_stats_.ps_recv;
   if (recv == 0)
@@ -210,7 +205,8 @@ caf::error reader::read_impl(size_t max_events, size_t max_slice_size,
   if (!pcap_) {
     // Determine interfaces.
     if (interface_) {
-      pcap_ = ::pcap_open_live(interface_->c_str(), snaplen_, 1, 1000, buf);
+      pcap_.reset(
+        ::pcap_open_live(interface_->c_str(), snaplen_, 1, 1000, buf));
       if (!pcap_) {
         return caf::make_error(ec::format_error, "failed to open interface",
                                *interface_, ":", buf);
@@ -226,10 +222,8 @@ caf::error reader::read_impl(size_t max_events, size_t max_slice_size,
       return caf::make_error(ec::format_error, "no such file: ", input_);
     } else {
 #ifdef PCAP_TSTAMP_PRECISION_NANO
-      pcap_ = ::
-        pcap_open_offline_with_tstamp_precision(input_.c_str(),
-                                                PCAP_TSTAMP_PRECISION_NANO,
-                                                buf);
+      pcap_.reset(::pcap_open_offline_with_tstamp_precision(
+        input_.c_str(), PCAP_TSTAMP_PRECISION_NANO, buf));
 #else
       pcap_ = ::pcap_open_offline(input_.c_str(), buf);
 #endif
@@ -263,7 +257,7 @@ caf::error reader::read_impl(size_t max_events, size_t max_slice_size,
     // Attempt to fetch next packet.
     const u_char* data;
     pcap_pkthdr* header;
-    auto r = ::pcap_next_ex(pcap_, &header, &data);
+    auto r = ::pcap_next_ex(pcap_.get(), &header, &data);
     if (r == 0 && produced == 0)
       continue; // timed out, no events produced yet
     if (r == 0)
@@ -272,8 +266,7 @@ caf::error reader::read_impl(size_t max_events, size_t max_slice_size,
       return finish(f, caf::make_error(ec::end_of_input, "reached end of "
                                                          "trace"));
     if (r == -1) {
-      auto err = std::string{::pcap_geterr(pcap_)};
-      ::pcap_close(pcap_);
+      auto err = std::string{::pcap_geterr(pcap_.get())};
       pcap_ = nullptr;
       return finish(f, caf::make_error(ec::format_error,
                                        "failed to get next packet: ", err));
