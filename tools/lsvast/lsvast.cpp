@@ -22,7 +22,6 @@
 #include "vast/fbs/utils.hpp"
 #include "vast/ids.hpp"
 #include "vast/io/read.hpp"
-#include "vast/path.hpp"
 #include "vast/qualified_record_field.hpp"
 #include "vast/table_slice.hpp"
 #include "vast/type.hpp"
