@@ -476,10 +476,13 @@ node_state::spawn_command(const invocation& inv,
       rp.deliver(component.error());
       return caf::make_message(std::move(component.error()));
     }
-    self->monitor(*component);
-    auto okay = self->state.registry.add(*component, std::move(comp_type),
-                                         std::move(label));
-    VAST_ASSERT(okay);
+    if (self->state.registry.add(*component, std::move(comp_type),
+                                 std::move(label)))
+      self->monitor(*component);
+    else
+      return caf::make_message(caf::make_error(
+        ec::unspecified,
+        fmt::format("{} failed to add component {} to registry", self, label)));
     rp.deliver(*component);
     return caf::make_message(*component);
   };
