@@ -307,7 +307,6 @@ caf::message kill_command(const invocation& inv, caf::actor_system&) {
   if (!component) {
     rp.deliver(caf::make_error(ec::unspecified, "no such component: " + label));
   } else {
-    self->demonitor(component);
     terminate<policy::parallel>(self, component)
       .then(
         [=](atom::done) mutable {
