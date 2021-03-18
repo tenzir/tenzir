@@ -77,18 +77,23 @@ caf::error type_registry_state::save_to_disk() const {
 
 caf::error type_registry_state::load_from_disk() {
   // Nothing to load is not an error.
-  if (!exists(dir)) {
+  std::error_code err{};
+  const auto dir_exists = std::filesystem::exists(dir, err);
+  if (err)
+    return caf::make_error(ec::filesystem_error,
+                           fmt::format("failed to find directory {}: {}", dir,
+                                       err.message()));
+  if (!dir_exists) {
     VAST_DEBUG("{} found no directory to load from", self);
     return caf::none;
   }
-  std::error_code err{};
   const auto fname = filename();
-  const auto exists = std::filesystem::exists(fname, err);
+  const auto file_exists = std::filesystem::exists(fname, err);
   if (err)
     return caf::make_error(ec::filesystem_error,
                            fmt::format("failed to find file {}: {}", fname,
                                        err.message()));
-  if (exists) {
+  if (file_exists) {
     auto buffer = io::read(fname);
     if (!buffer)
       return buffer.error();
@@ -201,11 +206,16 @@ type_registry(type_registry_actor::stateful_pointer<type_registry_state> self,
     },
     [self](atom::load) -> caf::result<atom::ok> {
       VAST_DEBUG("{} loads taxonomies", self);
+      std::error_code err{};
       auto dirs = get_schema_dirs(self->system().config());
       concepts_map concepts;
       models_map models;
       for (const auto& dir : dirs) {
-        if (!exists(dir))
+        const auto dir_exists = std::filesystem::exists(dir, err);
+        if (err)
+          VAST_WARN("{} failed to open directory {}: {}", self, dir,
+                    err.message());
+        if (!dir_exists)
           continue;
         auto yamls = load_yaml_dir(dir);
         if (!yamls)
