@@ -311,24 +311,37 @@ if (VAST_ENABLE_RELOCATABLE_INSTALLATIONS
           DESTINATION "${CMAKE_INSTALL_LIBDIR}")
 endif ()
 
-# -- source files --------------------------------------------------------------
+# -- libvast -------------------------------------------------------------------
 
 file(GLOB_RECURSE libvast_sources CONFIGURE_DEPENDS
      "${CMAKE_CURRENT_SOURCE_DIR}/src/*.cpp"
      "${CMAKE_CURRENT_SOURCE_DIR}/vast/*.hpp")
 
+list(APPEND libvast_sources
+  "${CMAKE_CURRENT_BINARY_DIR}/vast/config.hpp"
+  "${CMAKE_CURRENT_BINARY_DIR}/src/config.cpp")
+
 configure_file("${CMAKE_CURRENT_SOURCE_DIR}/vast/config.hpp.in"
                "${CMAKE_CURRENT_BINARY_DIR}/vast/config.hpp")
-configure_file("${CMAKE_CURRENT_SOURCE_DIR}/src/config.cpp.in"
-               "${CMAKE_CURRENT_BINARY_DIR}/src/config.cpp")
-
-list(APPEND libvast_sources "${CMAKE_CURRENT_BINARY_DIR}/vast/config.hpp"
-     "${CMAKE_CURRENT_BINARY_DIR}/src/config.cpp")
-
-# -- libvast -------------------------------------------------------------------
 
 add_library(libvast ${libvast_sources})
 add_library(vast::libvast ALIAS libvast)
+
+file(WRITE "${CMAKE_CURRENT_BINARY_DIR}/update-config.cmake" "\
+  get_filename_component(CMAKE_MODULE_PATH
+    \"${CMAKE_CURRENT_SOURCE_DIR}/../cmake\" ABSOLUTE)
+  include(VASTConfigVersion)
+  configure_file(\"${CMAKE_CURRENT_SOURCE_DIR}/src/config.cpp.in\"
+                 \"${CMAKE_CURRENT_BINARY_DIR}/src/config.cpp\")")
+
+# We generate config.cpp as a byproduct of a custom target so we can re-generate
+# the version string and build tree hash on every build. Note that this must not
+# be added to the ALL target. The dependency is inferred from the byproduct
+# automatically.
+add_custom_target(libvast_update_config
+  BYPRODUCTS "${CMAKE_CURRENT_BINARY_DIR}/src/config.cpp"
+  COMMAND ${CMAKE_COMMAND} -P "${CMAKE_CURRENT_BINARY_DIR}/update-config.cmake")
+
 target_link_libraries(libvast PRIVATE libvast_internal)
 
 # Use static versions of VAST_REGISTER_PLUGIN family of macros when inside the
