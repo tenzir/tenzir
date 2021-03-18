@@ -13,6 +13,8 @@
 
 #pragma once
 
+#include "vast/fwd.hpp"
+
 #include "vast/address.hpp"
 #include "vast/concept/hashable/hash_append.hpp"
 #include "vast/concept/hashable/xxhash.hpp"
@@ -22,7 +24,6 @@
 #include "vast/format/reader.hpp"
 #include "vast/format/single_layout_reader.hpp"
 #include "vast/format/writer.hpp"
-#include "vast/fwd.hpp"
 #include "vast/port.hpp"
 #include "vast/schema.hpp"
 #include "vast/time.hpp"
@@ -31,6 +32,7 @@
 #include <caf/optional.hpp>
 
 #include <chrono>
+#include <memory>
 #include <pcap.h>
 #include <random>
 #include <unordered_map>
@@ -38,6 +40,18 @@
 namespace vast {
 namespace format {
 namespace pcap {
+
+struct pcap_close_wrapper {
+  inline void operator()(pcap_t* handle) const noexcept {
+    ::pcap_close(handle);
+  }
+};
+
+struct pcap_dump_close_wrapper {
+  inline void operator()(pcap_dumper_t* handle) const noexcept {
+    ::pcap_dump_close(handle);
+  }
+};
 
 /// A PCAP reader.
 class reader : public single_layout_reader {
@@ -116,7 +130,7 @@ public:
   /// @param options The configuration options for the writer.
   explicit writer(const caf::settings& options);
 
-  ~writer();
+  ~writer() override = default;
 
   using format::writer::write;
 
@@ -131,8 +145,10 @@ private:
   size_t flush_interval_ = 0;
   size_t snaplen_ = 65535;
   size_t total_packets_ = 0;
-  pcap_t* pcap_ = nullptr;
-  pcap_dumper_t* dumper_ = nullptr;
+  std::unique_ptr<pcap_t, pcap_close_wrapper> pcap_{nullptr,
+                                                    pcap_close_wrapper{}};
+  std::unique_ptr<pcap_dumper_t, pcap_dump_close_wrapper> dumper_{
+    nullptr, pcap_dump_close_wrapper{}};
   std::string trace_;
 };
 

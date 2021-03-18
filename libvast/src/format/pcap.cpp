@@ -485,24 +485,17 @@ writer::writer(const caf::settings& options) {
   trace_ = get_or(options, "vast.export.write", vast::defaults::export_::write);
 }
 
-writer::~writer() {
-  if (dumper_)
-    ::pcap_dump_close(dumper_);
-  if (pcap_)
-    ::pcap_close(pcap_);
-}
-
 caf::error writer::write(const table_slice& slice) {
   if (!pcap_) {
 #ifdef PCAP_TSTAMP_PRECISION_NANO
-    pcap_ = ::pcap_open_dead_with_tstamp_precision(DLT_RAW, snaplen_,
-                                                   PCAP_TSTAMP_PRECISION_NANO);
+    pcap_.reset(::pcap_open_dead_with_tstamp_precision(
+      DLT_RAW, snaplen_, PCAP_TSTAMP_PRECISION_NANO));
 #else
-    pcap_ = ::pcap_open_dead(DLT_RAW, snaplen_);
+    pcap_.reset(::pcap_open_dead(DLT_RAW, snaplen_);
 #endif
     if (!pcap_)
       return caf::make_error(ec::format_error, "failed to open pcap handle");
-    dumper_ = ::pcap_dump_open(pcap_, trace_.c_str());
+    dumper_.reset(::pcap_dump_open(pcap_.get(), trace_.c_str()));
     if (!dumper_)
       return caf::make_error(ec::format_error, "failed to open pcap dumper");
   }
@@ -528,7 +521,7 @@ caf::error writer::write(const table_slice& slice) {
     header.caplen = payload.size();
     header.len = payload.size();
     // Dump packet.
-    ::pcap_dump(reinterpret_cast<uint8_t*>(dumper_), &header,
+    ::pcap_dump(reinterpret_cast<uint8_t*>(dumper_.get()), &header,
                 reinterpret_cast<const uint8_t*>(std::launder(payload.data())));
   }
   if (++total_packets_ % flush_interval_ == 0)
@@ -542,7 +535,7 @@ caf::expected<void> writer::flush() {
     return caf::make_error(ec::format_error, "pcap dumper not open");
   VAST_DEBUG("{} flushes at packet {}", detail::pretty_type_name(this),
              total_packets_);
-  if (::pcap_dump_flush(dumper_) == -1)
+  if (::pcap_dump_flush(dumper_.get()) == -1)
     return caf::make_error(ec::format_error, "failed to flush");
   return caf::no_error;
 }
