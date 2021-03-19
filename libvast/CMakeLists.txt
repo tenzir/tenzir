@@ -330,6 +330,7 @@ add_library(vast::libvast ALIAS libvast)
 file(WRITE "${CMAKE_CURRENT_BINARY_DIR}/update-config.cmake" "\
   get_filename_component(CMAKE_MODULE_PATH
     \"${CMAKE_CURRENT_SOURCE_DIR}/../cmake\" ABSOLUTE)
+  set(VAST_VERSION_TAG \"${VAST_VERSION_TAG_BACKUP}\")
   include(VASTConfigVersion)
   configure_file(\"${CMAKE_CURRENT_SOURCE_DIR}/src/config.cpp.in\"
                  \"${CMAKE_CURRENT_BINARY_DIR}/src/config.cpp\")")
