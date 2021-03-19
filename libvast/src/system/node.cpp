@@ -607,16 +607,7 @@ node(node_actor::stateful_pointer<node_state> self, std::string name, path dir,
     for (const auto& label : remaining)
       schedule_teardown(label);
     // Finally, bring down the filesystem.
-    // FIXME: there's a super-annoying bug that makes it impossible to receive a
-    // DOWN message from the filesystem during shutdown, but *only* when the
-    // filesystem is detached! This might be related to a bug we experienced
-    // earlier: https://github.com/actor-framework/actor-framework/issues/1110.
-    // Until it gets fixed, we cannot add the filesystem to the set of
-    // sequentially terminated actors but instead let it implicitly terminate
-    // after the node exits when the filesystem ref count goes to 0. (A
-    // shutdown after the node won't be an issue because the filesystem is
-    // currently stateless, but this needs to be reconsidered when it changes.)
-    // components.push_back(std::move(*filesystem));
+    components.push_back(std::move(*filesystem));
     auto shutdown_kill_timeout = shutdown_grace_period / 5;
     shutdown<policy::sequential>(self, std::move(components),
                                  shutdown_grace_period, shutdown_kill_timeout);
