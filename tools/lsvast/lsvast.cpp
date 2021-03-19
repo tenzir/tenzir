@@ -141,7 +141,6 @@ caf::expected<Kind> classify(const std::filesystem::path& path) {
     if (is_regular_file)
       return Kind::DatabaseDir;
   }
-  err = {};
   const auto is_regular_file = std::filesystem::is_regular_file(path, err);
   if (err)
     return caf::make_error(vast::ec::filesystem_error,
