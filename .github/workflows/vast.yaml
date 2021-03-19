@@ -25,7 +25,9 @@ env:
   CCACHE_SLOPPINESS: 'file_macro,time_macros'
   CCACHE_DIR: '${{ github.workspace }}/.ccache'
   CCACHE_COMPRESS: true
-  CCACHE_COMPRESSLEVEL: 9
+  # Zstd compression level; up to 19 is supported by all versions.
+  # https://ccache.dev/manual/latest.html#config_compression_level
+  CCACHE_COMPRESSLEVEL: 19
   CCACHE_ABSSTDERR: true
   BUILD_DIR: build
 jobs:
