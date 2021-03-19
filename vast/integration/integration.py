@@ -115,10 +115,10 @@ def try_wait(process, timeout, expected_result):
             return Result.ERROR
         return Result.SUCCESS
     except subprocess.TimeoutExpired:
-        log = LOGGER.error
-        if expected_result != Result.TIMEOUT:
-            log = LOGGER.debug
-        log(f"timeout reached, terminating process")
+        if expected_result == Result.TIMEOUT:
+            LOGGER.debug(f"expected timeout reached, terminating process")
+        else:
+            LOGGER.error(f"timeout reached, terminating process")
         process.terminate()
         return Result.TIMEOUT
 
