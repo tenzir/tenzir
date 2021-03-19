@@ -54,9 +54,14 @@ public:
   reader(const caf::settings& options, std::unique_ptr<std::istream> in
                                        = nullptr);
 
+  reader(const reader&) = delete;
+  reader& operator=(const reader&) = delete;
+  reader(reader&&) noexcept = default;
+  reader& operator=(reader&&) noexcept = default;
+
   void reset(std::unique_ptr<std::istream> in);
 
-  ~reader();
+  ~reader() override = default;
 
   caf::error schema(vast::schema sch) override;
 
@@ -91,7 +96,8 @@ private:
   /// Evicts random flows when exceeding the maximum configured flow count.
   void shrink_to_max_size();
 
-  pcap_t* pcap_ = nullptr;
+  std::unique_ptr<pcap_t, pcap_close_wrapper> pcap_{nullptr,
+                                                    pcap_close_wrapper{}};
   std::unordered_map<flow, flow_state> flows_;
   std::string input_;
   caf::optional<std::string> interface_;
