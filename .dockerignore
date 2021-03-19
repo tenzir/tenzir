@@ -1,6 +1,7 @@
 */*/.git*
 *.md
 !*README.md
+!*CHANGELOG.md
 nix/
 pyvast/
 .clangd/
