@@ -3,9 +3,10 @@
 
 #pragma once
 
-#include "vast/path.hpp"
+#include <caf/fwd.hpp>
 
 #include <filesystem>
+#include <string>
 
 namespace vast {
 
@@ -32,7 +33,7 @@ db_version read_db_version(const std::filesystem::path& db_dir);
 /// Writes the current DB version if `db_dir/VERSION` does not
 /// exist yet.
 /// @relates db_version
-caf::error initialize_db_version(const vast::path& db_dir);
+caf::error initialize_db_version(const std::filesystem::path& db_dir);
 
 /// Returns a human-readable decription of all breaking changes that have been
 /// introduced to VAST since the passed version.
