@@ -15,6 +15,7 @@
 
 #include <caf/actor.hpp>
 #include <caf/actor_cast.hpp>
+#include <caf/expected.hpp>
 #include <caf/meta/type_name.hpp>
 #include <caf/optional.hpp>
 
@@ -48,15 +49,15 @@ public:
 
   /// Removes a component from the registry.
   /// @param label The label of the component.
-  /// @returns The deleted component or a default-constructed component if
-  /// *label* does not identify an existing component.
-  [[nodiscard]] component remove(const std::string& label);
+  /// @returns The deleted component or an error if *label* does not identify
+  /// an existing component.
+  [[nodiscard]] caf::expected<component> remove(const std::string& label);
 
   /// Removes a component from the registry.
   /// @param comp The component to erase.
-  /// @returns The deleted component or a default-constructed component if
-  /// *comp* is not an existing component actor.
-  [[nodiscard]] component remove(const caf::actor& comp);
+  /// @returns The deleted component or an error if *comp* is not an existing
+  /// actor.
+  [[nodiscard]] caf::expected<component> remove(const caf::actor& comp);
 
   /// Finds the label of a given component actor.
   /// @param comp The component actor.

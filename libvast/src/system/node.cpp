@@ -202,14 +202,14 @@ caf::expected<caf::actor>
 deregister_component(node_actor::stateful_pointer<node_state> self,
                      const std::string& label) {
   auto component = self->state.registry.remove(label);
-  if (!component.actor) {
+  if (!component) {
     auto msg // separate variable for clang-format only
       = fmt::format("{} failed to deregister non-existant component: {}", self,
                     label);
     return caf::make_error(ec::unspecified, std::move(msg));
   }
-  self->demonitor(component.actor);
-  return component.actor;
+  self->demonitor(component->actor);
+  return component->actor;
 }
 
 } // namespace
@@ -570,9 +570,10 @@ node(node_actor::stateful_pointer<node_state> self, std::string name, path dir,
     VAST_DEBUG("{} got DOWN from {}", self, msg.source);
     auto actor = caf::actor_cast<caf::actor>(msg.source);
     auto component = self->state.registry.remove(actor);
+    VAST_ASSERT(component); // All components are in the registry.
     // Terminate if a singleton dies.
-    if (is_singleton(component.type)) {
-      VAST_ERROR("{} terminates after DOWN from {}", self, component.type);
+    if (is_singleton(component->type)) {
+      VAST_ERROR("{} terminates after DOWN from {}", self, component->type);
       self->send_exit(self, caf::exit_reason::user_shutdown);
     }
   });
@@ -582,10 +583,10 @@ node(node_actor::stateful_pointer<node_state> self, std::string name, path dir,
     std::vector<caf::actor> components;
     auto schedule_teardown = [&](const std::string& label) {
       auto component = self->state.registry.remove(label);
-      if (component.actor) {
+      if (component) {
         VAST_DEBUG("{} schedules {} for shutdown", self, label);
-        self->demonitor(component.actor);
-        components.push_back(std::move(component.actor));
+        self->demonitor(component->actor);
+        components.push_back(std::move(component->actor));
       }
     };
     // Terminate the accountant first because it acts like a source and may

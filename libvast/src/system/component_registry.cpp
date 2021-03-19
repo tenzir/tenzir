@@ -29,18 +29,18 @@ bool component_registry::add(caf::actor comp, std::string type,
     .second;
 }
 
-component_registry::component
+caf::expected<component_registry::component>
 component_registry::remove(const std::string& label) {
   auto result = component{};
   auto i = components_.find(label);
   if (i == components_.end())
-    return result;
+    return caf::no_error;
   result = std::move(i->second);
   components_.erase(i);
   return result;
 }
 
-component_registry::component
+caf::expected<component_registry::component>
 component_registry::remove(const caf::actor& comp) {
   auto result = component{};
   for (auto i = components_.begin(); i != components_.end(); ++i) {
@@ -50,7 +50,7 @@ component_registry::remove(const caf::actor& comp) {
       return result;
     }
   }
-  return result;
+  return caf::no_error;
 }
 
 const std::string*
