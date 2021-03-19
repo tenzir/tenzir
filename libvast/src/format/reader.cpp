@@ -11,15 +11,22 @@
 #include "vast/concept/parseable/to.hpp"
 #include "vast/concept/parseable/vast/table_slice_encoding.hpp"
 #include "vast/concept/parseable/vast/time.hpp"
+#include "vast/format/reader_factory.hpp"
 #include "vast/logger.hpp"
 
 #include <caf/settings.hpp>
 
 namespace vast::format {
 
+caf::expected<std::unique_ptr<format::reader>>
+reader::make(std::string input_format, const caf::settings& options) {
+  return factory<format::reader>::make(input_format, options);
+}
+
 reader::consumer::~consumer() {
   // nop
 }
+
 reader::reader(const caf::settings& options) {
   if (auto batch_encoding_arg
       = caf::get_if<std::string>(&options, "vast.import.batch-encoding")) {

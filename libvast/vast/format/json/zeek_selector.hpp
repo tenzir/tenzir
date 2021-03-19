@@ -13,6 +13,8 @@
 namespace vast::format::json {
 
 struct zeek_selector_specification {
+  // static constexpr auto category = defaults::import::zeek_json::category;
+  static constexpr auto name = "zeek-reader";
   static constexpr auto field = "_path";
   static constexpr auto prefix = "zeek";
 };

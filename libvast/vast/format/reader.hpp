@@ -8,9 +8,10 @@
 
 #pragma once
 
+#include "vast/fwd.hpp"
+
 #include "vast/defaults.hpp"
 #include "vast/detail/assert.hpp"
-#include "vast/fwd.hpp"
 #include "vast/system/report.hpp"
 #include "vast/table_slice.hpp"
 
@@ -24,20 +25,20 @@
 
 namespace vast::format {
 
+/// @relates reader
+using reader_ptr = std::unique_ptr<reader>;
+
 /// The base class for readers.
 class reader {
 public:
   // -- member types -----------------------------------------------------------
 
-  using reader_clock = std::chrono::steady_clock;
-
-  enum class inputs { file, inet };
-
-  /// Default input method for the reader
   struct defaults {
-    constexpr static inputs input = inputs::file;
-    constexpr static auto path = vast::defaults::import::read;
+    const char* category;
+    const char* input = "-";
   };
+
+  using reader_clock = std::chrono::steady_clock;
 
   /// A function object for consuming parsed table slices.
   class consumer {
@@ -49,8 +50,17 @@ public:
 
   // -- constructors, destructors, and assignment operators --------------------
 
+  /// Produces a reader for the specified format.
+  /// @param input_format The output format.
+  /// @param options Config options for the concrete reader.
+  /// @returns An owning pointer to the reader or an error.
+  static caf::expected<std::unique_ptr<format::reader>>
+  make(std::string input_format, const caf::settings& options);
+
   /// @param id Implementation ID for the table slice builder.
   reader(const caf::settings& options);
+
+  virtual void reset(std::unique_ptr<std::istream> in) = 0;
 
   virtual ~reader();
 
@@ -64,8 +74,8 @@ public:
   /// @pre max_events > 0
   /// @pre max_slice_size > 0
   template <class F>
-  std::pair<caf::error, size_t> read(size_t max_events, size_t max_slice_size,
-                                     F f) {
+  std::pair<caf::error, size_t>
+  read(size_t max_events, size_t max_slice_size, F f) {
     VAST_ASSERT(max_events > 0);
     VAST_ASSERT(max_slice_size > 0);
     struct consumer_impl : consumer {
@@ -103,8 +113,9 @@ public:
   virtual vast::system::report status() const;
 
 protected:
-  virtual caf::error read_impl(size_t max_events, size_t max_slice_size,
-                               consumer& f) = 0;
+  virtual caf::error
+  read_impl(size_t max_events, size_t max_slice_size, consumer& f)
+    = 0;
 
 public:
   table_slice_encoding table_slice_type_

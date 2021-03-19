@@ -33,6 +33,7 @@
 #include <ios>
 #include <limits>
 #include <queue>
+#include <string>
 
 namespace vast::system {
 

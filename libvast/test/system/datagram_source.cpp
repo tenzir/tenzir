@@ -60,15 +60,15 @@ FIXTURE_SCOPE(source_tests, fixtures::deterministic_actor_system_and_events)
 
 TEST(zeek conn source) {
   MESSAGE("start source for producing table slices of size 100");
-  namespace bf = format::zeek;
-  bf::reader reader{caf::settings{}};
+  auto stream = std::make_unique<std::istringstream>("wrong input");
+  auto reader = std::make_unique<format::zeek::reader>(caf::settings{},
+                                                       std::move(stream));
   auto hdl = caf::io::datagram_handle::from_int(1);
   auto& mm = sys.middleman();
   mpx.provide_datagram_servant(8080, hdl);
-  auto src
-    = mm.spawn_broker(datagram_source<bf::reader>, uint16_t{8080},
-                      std::move(reader), 100u, caf::none, type_registry_actor{},
-                      vast::schema{}, std::string{}, accountant_actor{});
+  auto src = mm.spawn_broker(datagram_source, uint16_t{8080}, std::move(reader),
+                             100u, caf::none, type_registry_actor{},
+                             vast::schema{}, std::string{}, accountant_actor{});
   run();
   MESSAGE("start sink and initialize stream");
   auto snk = self->spawn(test_sink, src);
@@ -83,13 +83,13 @@ TEST(zeek conn source) {
   iter last{};
   for (; first != last; ++first)
     msg.buf.push_back(*first);
-  anon_send(src, std::move(msg));
+  caf::anon_send(src, std::move(msg));
   MESSAGE("advance streams and verify results");
   run();
   auto& st = deref<test_sink_type>(snk).state;
   REQUIRE_EQUAL(st.slices.size(), 1u);
   CHECK_EQUAL(st.slices.front().rows(), 20u);
-  anon_send_exit(src, caf::exit_reason::user_shutdown);
+  caf::anon_send_exit(src, caf::exit_reason::user_shutdown);
   run();
 }
 

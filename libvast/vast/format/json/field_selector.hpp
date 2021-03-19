@@ -70,6 +70,10 @@ struct field_selector {
     return result;
   }
 
+  static const char* name() {
+    return Specification::name;
+  }
+
   /// A map of all seen types.
   std::unordered_map<std::string, record_type> types;
 

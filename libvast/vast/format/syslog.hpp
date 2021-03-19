@@ -263,9 +263,9 @@ public:
   reader& operator=(const reader& other) = delete;
   reader& operator=(reader&& other) = default;
 
-  void reset(std::unique_ptr<std::istream> in);
+  void reset(std::unique_ptr<std::istream> in) override;
 
-  ~reader() = default;
+  ~reader() override = default;
 
   caf::error schema(vast::schema sch) override;
 

@@ -66,9 +66,9 @@ public:
   reader(reader&&) noexcept = default;
   reader& operator=(reader&&) noexcept = default;
 
-  void reset(std::unique_ptr<std::istream> in);
+  void reset(std::unique_ptr<std::istream> in) override;
 
-  ~reader() override = default;
+  ~reader() override;
 
   caf::error schema(vast::schema sch) override;
 

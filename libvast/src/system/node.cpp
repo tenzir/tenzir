@@ -15,6 +15,7 @@
 #include "vast/concept/parseable/vast/endpoint.hpp"
 #include "vast/concept/printable/stream.hpp"
 #include "vast/concept/printable/to_string.hpp"
+#include "vast/concept/printable/vast/expression.hpp"
 #include "vast/concept/printable/vast/json.hpp"
 #include "vast/config.hpp"
 #include "vast/data.hpp"
@@ -50,6 +51,7 @@
 #include "vast/system/spawn_sink.hpp"
 #include "vast/system/spawn_source.hpp"
 #include "vast/system/spawn_type_registry.hpp"
+#include "vast/system/status_verbosity.hpp"
 #include "vast/system/terminate.hpp"
 #include "vast/table_slice.hpp"
 #include "vast/taxonomies.hpp"
@@ -383,27 +385,17 @@ auto make_component_factory() {
       {"spawn type-registry", lift_component_factory<spawn_type_registry>()},
       {"spawn index", lift_component_factory<spawn_index>()},
       {"spawn pivoter", lift_component_factory<spawn_pivoter>()},
-      {"spawn source csv",
-       lift_component_factory<spawn_source<format::csv::reader>>()},
-      {"spawn source json",
-       lift_component_factory<
-         spawn_source<format::json::reader<format::json::default_selector>>>()},
+      {"spawn source", lift_component_factory<spawn_source>()},
+      {"spawn source csv", lift_component_factory<spawn_source>()},
+      {"spawn source json", lift_component_factory<spawn_source>()},
 #if VAST_ENABLE_PCAP
-      {"spawn source pcap",
-       lift_component_factory<spawn_source<format::pcap::reader>>()},
+      {"spawn source pcap", lift_component_factory<spawn_source>()},
 #endif
-      {"spawn source suricata",
-       lift_component_factory<
-         spawn_source<format::json::reader<format::json::suricata_selector>>>()},
-      {"spawn source syslog",
-       lift_component_factory<spawn_source<format::syslog::reader>>()},
-      {"spawn source test",
-       lift_component_factory<spawn_source<format::test::reader>>()},
-      {"spawn source zeek",
-       lift_component_factory<spawn_source<format::zeek::reader>>()},
-      {"spawn source zeek-json",
-       lift_component_factory<
-         spawn_source<format::json::reader<format::json::zeek_selector>>>()},
+      {"spawn source suricata", lift_component_factory<spawn_source>()},
+      {"spawn source syslog", lift_component_factory<spawn_source>()},
+      {"spawn source test", lift_component_factory<spawn_source>()},
+      {"spawn source zeek", lift_component_factory<spawn_source>()},
+      {"spawn source zeek-json", lift_component_factory<spawn_source>()},
       {"spawn sink pcap", lift_component_factory<spawn_pcap_sink>()},
       {"spawn sink zeek", lift_component_factory<spawn_zeek_sink>()},
       {"spawn sink csv", lift_component_factory<spawn_csv_sink>()},

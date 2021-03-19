@@ -91,6 +91,10 @@ public:
     return result;
   }
 
+  static const char* category() {
+    return "json";
+  }
+
   static const char* name() {
     return "json-reader";
   }

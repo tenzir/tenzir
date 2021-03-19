@@ -63,7 +63,7 @@ public:
   explicit reader(const caf::settings& options, std::unique_ptr<std::istream> in
                                                 = nullptr);
 
-  void reset(std::unique_ptr<std::istream> in);
+  void reset(std::unique_ptr<std::istream> in) override;
 
   caf::error schema(vast::schema sch) override;
 

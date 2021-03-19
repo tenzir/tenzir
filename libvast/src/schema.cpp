@@ -58,7 +58,7 @@ schema schema::combine(const schema& s1, const schema& s2) {
   return result;
 }
 
-bool schema::add(const type& t) {
+bool schema::add(type t) {
   if (caf::holds_alternative<none_type>(t) || t.name().empty()
       || find(t.name()))
     return false;

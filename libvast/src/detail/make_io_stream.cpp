@@ -81,6 +81,16 @@ make_input_stream(const std::string& input,
   }
 }
 
+caf::expected<std::unique_ptr<std::istream>>
+make_input_stream(const std::string& format, const caf::settings& options) {
+  std::string category = "vast." + format;
+  auto input = get_or(options, category + ".read", defaults::import::read);
+  auto uds = get_or(options, category + ".uds", false);
+  auto fifo = get_or(options, category + ".fifo", false);
+  auto pt = uds ? path::socket : (fifo ? path::fifo : path::regular_file);
+  return make_input_stream(input, pt);
+}
+
 caf::expected<std::unique_ptr<std::ostream>>
 make_output_stream(const std::string& output, socket_type st) {
   if (output == "-")

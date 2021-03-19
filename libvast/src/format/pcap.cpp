@@ -101,6 +101,8 @@ reader::reader(const caf::settings& options, std::unique_ptr<std::istream>)
   discard_count_ = 0;
 }
 
+reader::~reader() = default;
+
 void reader::reset(std::unique_ptr<std::istream>) {
   // This function intentionally does nothing, as libpcap expects a filename
   // instead of an input stream. It only exists for compatibility with our

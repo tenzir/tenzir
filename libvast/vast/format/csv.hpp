@@ -55,13 +55,15 @@ public:
   using iterator_type = std::string::const_iterator;
   using parser_type = type_erased_parser<iterator_type>;
 
+  constexpr static const defaults csv = {"vast.import.csv"};
+
   /// Constructs a CSV reader.
   /// @param options Additional options.
   /// @param in The stream of CSV lines.
   reader(const caf::settings& options, std::unique_ptr<std::istream> in
                                        = nullptr);
 
-  void reset(std::unique_ptr<std::istream> in);
+  void reset(std::unique_ptr<std::istream> in) override;
 
   caf::error schema(vast::schema sch) override;
 
@@ -72,8 +74,8 @@ public:
   const char* name() const override;
 
 protected:
-  caf::error read_impl(size_t max_events, size_t max_slice_size,
-                       consumer& f) override;
+  caf::error
+  read_impl(size_t max_events, size_t max_slice_size, consumer& f) override;
 
 private:
   struct rec_table {

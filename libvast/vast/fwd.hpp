@@ -219,8 +219,10 @@ using stable_map = vector_map<Key, T, Allocator, stable_map_policy>;
 
 namespace format {
 
+class reader;
 class writer;
 
+using reader_ptr = std::unique_ptr<reader>;
 using writer_ptr = std::unique_ptr<writer>;
 
 } // namespace format

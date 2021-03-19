@@ -136,7 +136,7 @@ infer_command(const invocation& inv, [[maybe_unused]] caf::actor_system& sys) {
   const auto& options = inv.options;
   auto input = detail::make_input_stream(options);
   if (!input)
-    return make_message(input.error());
+    return caf::make_message(input.error());
   // Setup buffer for input data.
   auto buffer_size = caf::get_or(options, "vast.infer.buffer-size",
                                  defaults::infer::buffer_size);
