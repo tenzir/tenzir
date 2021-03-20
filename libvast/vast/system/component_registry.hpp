@@ -15,6 +15,7 @@
 
 #include <caf/actor.hpp>
 #include <caf/actor_cast.hpp>
+#include <caf/expected.hpp>
 #include <caf/meta/type_name.hpp>
 #include <caf/optional.hpp>
 
@@ -42,12 +43,21 @@ public:
   /// @param label The unique label of *comp*
   /// @returns `true` if *comp* was added successfully and `false` if
   ///          an actor for *label* exists already.
-  bool add(caf::actor comp, std::string type, std::string label = {});
+  /// @pre `comp && !type.empty()`
+  [[nodiscard]] bool
+  add(caf::actor comp, std::string type, std::string label = {});
 
   /// Removes a component from the registry.
-  /// @param comp The component to remove
-  /// @returns `true` iff the component was deleted successfully.
-  bool remove(const caf::actor& comp);
+  /// @param label The label of the component.
+  /// @returns The deleted component or an error if *label* does not identify
+  /// an existing component.
+  [[nodiscard]] caf::expected<component> remove(const std::string& label);
+
+  /// Removes a component from the registry.
+  /// @param comp The component to erase.
+  /// @returns The deleted component or an error if *comp* is not an existing
+  /// actor.
+  [[nodiscard]] caf::expected<component> remove(const caf::actor& comp);
 
   /// Finds the label of a given component actor.
   /// @param comp The component actor.

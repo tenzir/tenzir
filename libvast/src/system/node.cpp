@@ -182,6 +182,36 @@ void collect_component_status(node_actor::stateful_pointer<node_state> self,
   }
 }
 
+/// Registers (and monitors) a component through the node.
+caf::error
+register_component(node_actor::stateful_pointer<node_state> self,
+                   const caf::actor& component, const std::string& type,
+                   const std::string& label = {}) {
+  if (!self->state.registry.add(component, type, label)) {
+    auto msg // separate variable for clang-format only
+      = fmt::format("{} failed to add component to registry: {}", self,
+                    label.empty() ? type : label);
+    return caf::make_error(ec::unspecified, std::move(msg));
+  }
+  self->monitor(component);
+  return caf::none;
+}
+
+/// Deregisters (and demonitors) a component through the node.
+caf::expected<caf::actor>
+deregister_component(node_actor::stateful_pointer<node_state> self,
+                     const std::string& label) {
+  auto component = self->state.registry.remove(label);
+  if (!component) {
+    auto msg // separate variable for clang-format only
+      = fmt::format("{} failed to deregister non-existant component: {}", self,
+                    label);
+    return caf::make_error(ec::unspecified, std::move(msg));
+  }
+  self->demonitor(component->actor);
+  return component->actor;
+}
+
 } // namespace
 
 caf::message dump_command(const invocation& inv, caf::actor_system&) {
@@ -303,19 +333,20 @@ caf::message kill_command(const invocation& inv, caf::actor_system&) {
                                             "argument");
   auto rp = self->make_response_promise();
   auto& label = *first;
-  auto component = self->state.registry.find_by_label(label);
+  auto component = deregister_component(self, label);
   if (!component) {
-    rp.deliver(caf::make_error(ec::unspecified, "no such component: " + label));
+    rp.deliver(caf::make_error(ec::unspecified,
+                               fmt::format("no such component: {}", label)));
   } else {
-    self->demonitor(component);
-    terminate<policy::parallel>(self, component)
+    terminate<policy::parallel>(self, std::move(*component))
       .then(
         [=](atom::done) mutable {
           VAST_DEBUG("{} terminated component {}", self, label);
           rp.deliver(atom::ok_v);
         },
         [=](const caf::error& err) mutable {
-          VAST_DEBUG("{} terminated component {}", self, label);
+          VAST_WARN("{} failed to terminate component {}: {}", self, label,
+                    err);
           rp.deliver(err);
         });
   }
@@ -442,6 +473,11 @@ node_state::spawn_command(const invocation& inv,
   if (auto label_ptr = caf::get_if<std::string>(&inv.options, "vast.spawn."
                                                               "label")) {
     label = *label_ptr;
+    if (label.empty()) {
+      auto err = caf::make_error(ec::unspecified, "empty component label");
+      rp.deliver(err);
+      return caf::make_message(std::move(err));
+    }
     if (self->state.registry.find_by_label(label)) {
       auto err = caf::make_error(ec::unspecified, "duplicate component label");
       rp.deliver(err);
@@ -476,10 +512,10 @@ node_state::spawn_command(const invocation& inv,
       rp.deliver(component.error());
       return caf::make_message(std::move(component.error()));
     }
-    self->monitor(*component);
-    auto okay = self->state.registry.add(*component, std::move(comp_type),
-                                         std::move(label));
-    VAST_ASSERT(okay);
+    if (auto err = register_component(self, *component, comp_type, label)) {
+      rp.deliver(err);
+      return caf::make_message(std::move(err));
+    }
     rp.deliver(*component);
     return caf::make_message(*component);
   };
@@ -525,71 +561,56 @@ node(node_actor::stateful_pointer<node_state> self, std::string name, path dir,
   node_state::component_factory = make_component_factory();
   node_state::command_factory = make_command_factory();
   // Initialize the file system with the node directory as root.
-  auto fs = self->spawn<caf::linked + caf::detached>(posix_filesystem,
-                                                     self->state.dir);
-  self->state.registry.add(caf::actor_cast<caf::actor>(fs), "filesystem");
+  auto fs = self->spawn<caf::detached>(posix_filesystem, self->state.dir);
+  auto err
+    = register_component(self, caf::actor_cast<caf::actor>(fs), "filesystem");
+  VAST_ASSERT(err == caf::none); // Registration cannot fail; empty registry.
   // Remove monitored components.
   self->set_down_handler([=](const caf::down_msg& msg) {
     VAST_DEBUG("{} got DOWN from {}", self, msg.source);
-    auto component = caf::actor_cast<caf::actor>(msg.source);
-    auto type = self->state.registry.find_type_for(component);
-    // All monitored components are in the registry.
-    VAST_ASSERT(type != nullptr);
-    if (is_singleton(*type)) {
-      auto label = self->state.registry.find_label_for(component);
-      VAST_ASSERT(label != nullptr); // Per the above assertion.
-      VAST_ERROR("{} got DOWN from {} ; initiating shutdown", self, *label);
+    auto actor = caf::actor_cast<caf::actor>(msg.source);
+    auto component = self->state.registry.remove(actor);
+    VAST_ASSERT(component); // All components are in the registry.
+    // Terminate if a singleton dies.
+    if (is_singleton(component->type)) {
+      VAST_ERROR("{} terminates after DOWN from {}", self, component->type);
       self->send_exit(self, caf::exit_reason::user_shutdown);
     }
-    self->state.registry.remove(component);
   });
   // Terminate deterministically on shutdown.
   self->set_exit_handler([=](const caf::exit_msg& msg) {
     VAST_DEBUG("{} got EXIT from {}", self, msg.source);
-    auto& registry = self->state.registry;
-    std::vector<caf::actor> actors;
-    auto schedule_teardown = [&](caf::actor actor) {
-      self->demonitor(actor);
-      registry.remove(actor);
-      actors.push_back(std::move(actor));
+    std::vector<caf::actor> components;
+    auto schedule_teardown = [&](const std::string& label) {
+      auto component = self->state.registry.remove(label);
+      if (component) {
+        VAST_DEBUG("{} schedules {} for shutdown", self, label);
+        self->demonitor(component->actor);
+        components.push_back(std::move(component->actor));
+      }
     };
     // Terminate the accountant first because it acts like a source and may
     // hold buffered data.
-    if (auto [accountant] = registry.find<accountant_actor>(); accountant)
-      schedule_teardown(caf::actor_cast<caf::actor>(std::move(accountant)));
+    schedule_teardown("accountant");
     // Take out the filesystem, which we terminate at the very end.
-    auto [filesystem] = registry.find<filesystem_actor>();
-    VAST_ASSERT(filesystem);
-    self->unlink_from(filesystem); // avoid receiving an unneeded EXIT
-    registry.remove(caf::actor_cast<caf::actor>(filesystem));
+    auto filesystem = deregister_component(self, "filesystem");
     // Tear down the ingestion pipeline from source to sink.
     auto pipeline = {"source", "importer", "index", "archive", "exporter"};
     for (auto component : pipeline)
-      for (auto actor : registry.find_by_type(component)) {
-        schedule_teardown(std::move(actor));
-      }
-    // Now terminate everything else.
-    std::vector<caf::actor> remaining;
-    for ([[maybe_unused]] auto& [label, comp] : registry.components()) {
-      remaining.push_back(comp.actor);
-    }
-    for (auto& actor : remaining)
-      schedule_teardown(actor);
+      schedule_teardown(component);
+    // Now schedule all remaining components for termination.
+    auto& registry = self->state.registry;
+    std::vector<std::string> remaining;
+    remaining.reserve(registry.components().size());
+    for ([[maybe_unused]] auto& [label, comp] : registry.components())
+      remaining.push_back(label);
+    for (const auto& label : remaining)
+      schedule_teardown(label);
     // Finally, bring down the filesystem.
-    // FIXME: there's a super-annoying bug that makes it impossible to receive a
-    // DOWN message from the filesystem during shutdown, but *only* when the
-    // filesystem is detached! This might be related to a bug we experienced
-    // earlier: https://github.com/actor-framework/actor-framework/issues/1110.
-    // Until it gets fixed, we cannot add the filesystem to the set of
-    // sequentially terminated actors but instead let it implicitly terminate
-    // after the node exits when the filesystem ref count goes to 0. (A
-    // shutdown after the node won't be an issue because the filesystem is
-    // currently stateless, but this needs to be reconsidered when it changes.)
-    // // TODO: uncomment when we get a DOWN from detached actors.
-    // actors.push_back(std::move(filesystem));
+    components.push_back(std::move(*filesystem));
     auto shutdown_kill_timeout = shutdown_grace_period / 5;
-    shutdown<policy::sequential>(self, std::move(actors), shutdown_grace_period,
-                                 shutdown_kill_timeout);
+    shutdown<policy::sequential>(self, std::move(components),
+                                 shutdown_grace_period, shutdown_kill_timeout);
   });
   // Define the node behavior.
   return {
@@ -629,6 +650,8 @@ node(node_actor::stateful_pointer<node_state> self, std::string name, path dir,
     [self](atom::put, const caf::actor& component,
            const std::string& type) -> caf::result<atom::ok> {
       VAST_DEBUG("{} got new {}", self, type);
+      if (type.empty())
+        return caf::make_error(ec::unspecified, "empty component type");
       // Check if the new component is a singleton.
       auto& registry = self->state.registry;
       if (is_singleton(type) && registry.find_by_label(type))
@@ -636,9 +659,8 @@ node(node_actor::stateful_pointer<node_state> self, std::string name, path dir,
       // Generate label
       auto label = generate_label(self, type);
       VAST_DEBUG("{} generated new component label {}", self, label);
-      if (!registry.add(component, type, label))
-        return caf::make_error(ec::unspecified, "failed to add component");
-      self->monitor(component);
+      if (auto err = register_component(self, component, type, label))
+        return err;
       return atom::ok_v;
     },
     [self](atom::get, atom::type, const std::string& type) {

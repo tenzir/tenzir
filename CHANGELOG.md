@@ -13,6 +13,11 @@ This changelog documents all notable user-facing changes of VAST.
 
 ## Unreleased
 
+- 🐞 A race condition during server shutdown could lead to an invariant
+  violation, resulting in a firing assertion. Streamlining the shutdown
+  logic resolved the issue.
+  [#1473](https://github.com/tenzir/vast/pull/1473)
+
 - 🐞 Insufficient permissions for one of the paths in the `schema-dirs` option
   would lead to a crash in `vast start`.
   [#1472](https://github.com/tenzir/vast/pull/1472)
