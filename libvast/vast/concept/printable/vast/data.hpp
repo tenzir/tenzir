@@ -25,28 +25,28 @@
 
 namespace vast {
 
-struct data_printer : printer<data_printer> {
-  using attribute = data;
+// struct data_printer : printer<data_printer> {
+//   using attribute = data;
 
-  template <class Iterator>
-  bool print(Iterator& out, const data& d) const {
-    return caf::visit(
-      detail::overload{
-        [&](const auto& x) {
-          return make_printer<std::decay_t<decltype(x)>>{}(out, x);
-        },
-        [&](integer x) {
-          return printers::integral<integer, policy::force_sign>(out, x);
-        },
-        [&](const std::string& x) {
-          static auto escaper = detail::make_extra_print_escaper("\"");
-          static auto p = '"' << printers::escape(escaper) << '"';
-          return p(out, x);
-        },
-      },
-      d);
-  }
-};
+//   template <class Iterator>
+//   bool print(Iterator& out, const data& d) const {
+//     return caf::visit(
+//       detail::overload{
+//         [&](const auto& x) {
+//           return make_printer<std::decay_t<decltype(x)>>{}(out, x);
+//         },
+//         [&](integer x) {
+//           return printers::integral<integer, policy::force_sign>(out, x);
+//         },
+//         [&](const std::string& x) {
+//           static auto escaper = detail::make_extra_print_escaper("\"");
+//           static auto p = '"' << printers::escape(escaper) << '"';
+//           return p(out, x);
+//         },
+//       },
+//       d);
+//   }
+// };
 
 // template <>
 // struct printer_registry<data> {
