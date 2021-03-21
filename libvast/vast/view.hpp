@@ -582,6 +582,24 @@ struct formatter<vast::view<vast::data>> : formatter<vast::data> {
     }
   };
 
+  struct yaml_visitor : super::yaml_visitor {
+    using super::yaml_visitor::operator();
+
+    auto operator()(const vast::view<vast::pattern>& x) {
+      out_ << to_string(x);
+    }
+
+    auto operator()(const vast::view<vast::list>& xs) {
+      super::yaml_visitor::format_list(*this, xs);
+    }
+    auto operator()(const vast::view<vast::map>& xs) {
+      super::yaml_visitor::format_map(*this, xs);
+    }
+    auto operator()(const vast::view<vast::record>& xs) {
+      super::yaml_visitor::format_record(*this, xs);
+    }
+  };
+
   template <class FormatContext>
   auto format(const vast::view<vast::data>& x, FormatContext& ctx) const {
     return super::format_impl(*this, x, ctx);
