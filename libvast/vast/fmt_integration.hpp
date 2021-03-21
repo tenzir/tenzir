@@ -39,7 +39,7 @@ struct vast_formatter_base {
     auto it = std::begin(ctx);
     auto end = std::end(ctx);
     if (it != end) {
-      auto parse_indent = [&]{
+      auto parse_indent = [&] {
         if (it != end && std::isdigit(*it)) {
           indent = *it - '0';
           if (++it != end && std::isdigit(*it)) {
