@@ -39,12 +39,25 @@ struct vast_formatter_base {
     auto it = std::begin(ctx);
     auto end = std::end(ctx);
     if (it != end) {
-      if (*it == 'a' || *it == 'y') {
-        presentation = *it;
-        ++it;
+      auto parse_indent = [&]{
+        if (it != end && std::isdigit(*it)) {
+          indent = *it - '0';
+          if (++it != end && std::isdigit(*it)) {
+            indent = indent * 10 + (*it - '0');
+            ++it;
+          }
+        }
+      };
+      if (*it == 'a') {
+        presentation = *it++;
+      } else if (*it == 'y') {
+        presentation = *it++;
+        if (it != end && *it != '}') {
+          parse_indent();
+        }
       } else if (*it == 'j') {
-        presentation = 'j';
-        if (++it != end && *it != '}') {
+        presentation = *it++;
+        if (it != end && *it != '}') {
           // JSON format is the following:
           // 1. "{:j[n[r]]}" this stands for NDJSON and optionl `r`
           //    stands for removing spaces.
@@ -60,13 +73,14 @@ struct vast_formatter_base {
           } else if (*it == 'i' || std::isdigit(*it)) {
             if (*it == 'i')
               ++it;
-            if (it != end && std::isdigit(*it)) {
-              indent = *it - '0';
-              if (++it != end && std::isdigit(*it)) {
-                indent = indent * 10 + (*it - '0');
-                ++it;
-              }
-            }
+            parse_indent();
+            // if (it != end && std::isdigit(*it)) {
+            //   indent = *it - '0';
+            //   if (++it != end && std::isdigit(*it)) {
+            //     indent = indent * 10 + (*it - '0');
+            //     ++it;
+            //   }
+            // }
           }
         }
       }
