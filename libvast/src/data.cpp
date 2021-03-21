@@ -519,10 +519,10 @@ std::string to_string(const data& d) {
 }
 
 caf::expected<std::string> to_json(const data& x) {
-  std::string str;
-  auto out = std::back_inserter(str);
-  if (json_printer<policy::tree, 2>{}.print(out, x))
-    return str;
+  try {
+    return fmt::format("{:ji2}", x);
+  } catch (const std::exception&) {
+  }
   return caf::make_error(ec::parse_error, "cannot convert to json");
 }
 
@@ -613,61 +613,12 @@ load_yaml_dir(const std::filesystem::path& dir, size_t max_recursion) {
   return result;
 }
 
-namespace {
-
-void print(YAML::Emitter& out, const data& x) {
-  auto f = detail::overload{
-    [&out](caf::none_t) { out << YAML::Null; },
-    [&out](bool x) { out << (x ? "true" : "false"); },
-    [&out](integer x) { out << x; },
-    [&out](count x) { out << x; },
-    [&out](real x) { out << to_string(x); },
-    [&out](duration x) { out << to_string(x); },
-    [&out](time x) { out << to_string(x); },
-    [&out](const std::string& x) { out << x; },
-    [&out](const pattern& x) { out << to_string(x); },
-    [&out](const address& x) { out << to_string(x); },
-    [&out](const subnet& x) { out << to_string(x); },
-    [&out](const enumeration& x) { out << to_string(x); },
-    [&out](const list& xs) {
-      out << YAML::BeginSeq;
-      for (const auto& x : xs)
-        print(out, x);
-      out << YAML::EndSeq;
-    },
-    // We treat maps like records.
-    [&out](const map& xs) {
-      out << YAML::BeginMap;
-      for (const auto& [k, v] : xs) {
-        out << YAML::Key;
-        print(out, k);
-        out << YAML::Value;
-        print(out, v);
-      }
-      out << YAML::EndMap;
-    },
-    [&out](const record& xs) {
-      out << YAML::BeginMap;
-      for (const auto& [k, v] : xs) {
-        out << YAML::Key << k << YAML::Value;
-        print(out, v);
-      }
-      out << YAML::EndMap;
-    },
-  };
-  caf::visit(f, x);
-}
-
-} // namespace
-
 caf::expected<std::string> to_yaml(const data& x) {
-  YAML::Emitter out;
-  out.SetOutputCharset(YAML::EscapeNonAscii); // restrict to ASCII output
-  out.SetIndent(2);
-  print(out, x);
-  if (out.good())
-    return std::string{out.c_str(), out.size()};
-  return caf::make_error(ec::parse_error, out.GetLastError());
+  try {
+    return fmt::format("{:y}", x);
+  } catch (const std::exception&) {
+    return caf::make_error(ec::parse_error, "cannot convert to yaml:");
+  }
 }
 
 } // namespace vast

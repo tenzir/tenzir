@@ -400,7 +400,7 @@ dependency_summary("FlatBuffers" ${flatbuffers_target} "Dependencies")
 # Link against yaml-cpp.
 option(YAML_CPP_ROOT "Install root of yaml-cpp" "")
 find_package(yaml-cpp 0.6.2 REQUIRED HINTS "${YAML_CPP_ROOT}")
-target_link_libraries(libvast PRIVATE yaml-cpp)
+target_link_libraries(libvast PUBLIC yaml-cpp)
 dependency_summary("yaml-cpp" yaml-cpp "Dependencies")
 
 option(FMT_ROOT "Install root of fmt" "")

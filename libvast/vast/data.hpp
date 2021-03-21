@@ -36,6 +36,8 @@
 #include <tuple>
 #include <type_traits>
 
+#include <yaml-cpp/yaml.h>
+
 namespace vast {
 
 class data;
@@ -653,10 +655,88 @@ struct formatter<vast::data> : public vast::detail::vast_formatter_base {
     }
   };
 
-  template <class Output>
-  static auto make_ascii_visitor(Output out) {
-    return ascii_visitor{out};
-  }
+  struct yaml_visitor {
+    YAML::Emitter& out_;
+    auto operator()(caf::none_t) {
+      out_ << YAML::Null;
+    }
+    auto operator()(bool x) {
+      out_ << (x ? "true" : "false");
+    }
+    auto operator()(vast::integer x) {
+      out_ << x;
+    }
+    auto operator()(vast::count x) {
+      out_ << x;
+    }
+    auto operator()(vast::real x) {
+      out_ << to_string(x);
+    }
+    auto operator()(vast::duration x) {
+      out_ << to_string(vast::detail::fmt_wrapped<vast::duration>{x});
+    }
+    auto operator()(vast::time x) {
+      out_ << to_string(vast::detail::fmt_wrapped<vast::time>{x});
+    }
+    auto operator()(const std::string& x) {
+      out_ << x;
+    }
+    auto operator()(std::string_view x) {
+      out_ << to_string(x);
+    }
+    auto operator()(const vast::pattern& x) {
+      out_ << to_string(x);
+    }
+    auto operator()(const vast::address& x) {
+      out_ << to_string(x);
+    }
+    auto operator()(const vast::subnet& x) {
+      out_ << to_string(x);
+    }
+    auto operator()(const vast::enumeration& x) {
+      out_ << to_string(x);
+    }
+
+    template <class This, class L>
+    static auto format_list(This& self, const L& xs) {
+      self.out_ << YAML::BeginSeq;
+      for (const auto& x : xs)
+        caf::visit(self, x);
+      self.out_ << YAML::EndSeq;
+    }
+    auto operator()(const vast::list& xs) {
+      format_list(*this, xs);
+    }
+
+    template <class This, class M>
+    static auto format_map(This& self, const M& xs) {
+      self.out_ << YAML::BeginMap;
+      for (const auto& [k, v] : xs) {
+        self.out_ << YAML::Key;
+        caf::visit(self, k);
+        self.out_ << YAML::Value;
+        caf::visit(self, v);
+      }
+      self.out_ << YAML::EndMap;
+    }
+    auto operator()(const vast::map& xs) {
+      format_map(*this, xs);
+    };
+
+    template <class This, class R>
+    static auto format_record(This& self, const R& xs) {
+      self.out_ << YAML::BeginMap;
+      for (const auto& [k, v] : xs) {
+        self.out_ << YAML::Key << to_string(k) << YAML::Value;
+        caf::visit(self, v);
+      }
+      self.out_ << YAML::EndMap;
+    }
+
+    auto operator()(const vast::record& xs) {
+      format_record(*this, xs);
+    }
+  };
 
   template <class This, class Data, class FormatContext>
   static auto format_impl(This& self, const Data& x, FormatContext& ctx) {
@@ -680,6 +760,18 @@ struct formatter<vast::data> : public vast::detail::vast_formatter_base {
           typename This::template json_visitor<output_type, json_print_traits>{
             ctx.out(), {self.indent}});
     } else if (self.presentation == 'y') {
+      // YAML visitor cannot stream data to fmt output directly
+      // that is why we first collect the output in visitor
+      // and then copy it to fmt output.
+      YAML::Emitter out;
+      out.SetOutputCharset(YAML::EscapeNonAscii);
+      out.SetIndent(self.indent);
+      typename This::yaml_visitor f{out};
+      caf::visit(f, x);
+      if (out.good())
+        return format_to(ctx.out(), "{}",
+                         std::string_view{out.c_str(), out.size()});
+      throw fmt::format_error("yaml format failed");
     }
     return ctx.out();
   }

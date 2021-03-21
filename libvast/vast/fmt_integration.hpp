@@ -19,6 +19,9 @@
 #include "vast/detail/escapers.hpp"
 #include "vast/time.hpp"
 
+#include <fmt/format.h>
+#include <fmt/ostream.h>
+
 #include <chrono>
 #include <type_traits>
 

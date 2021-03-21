@@ -378,19 +378,23 @@ TEST(fmt rendering numbers) {
   CHECK_EQUAL(fmt::format("{}", data{x}), "-3.14");
   CHECK_EQUAL(fmt::format("{:a}", data{x}), "-3.14");
   CHECK_EQUAL(fmt::format("{:j}", data{x}), "-3.14");
+  CHECK_EQUAL(fmt::format("{:y}", data{x}), "-3.14");
 
   x = data{2.71828};
   CHECK_EQUAL(fmt::format("{}", data{x}), "2.71828");
   CHECK_EQUAL(fmt::format("{:a}", data{x}), "2.71828");
   CHECK_EQUAL(fmt::format("{:j}", data{x}), "2.71828");
+  CHECK_EQUAL(fmt::format("{:y}", data{x}), "2.71828");
 
   x = data{-42};
   CHECK_EQUAL(fmt::format("{}", data{x}), "-42");
   CHECK_EQUAL(fmt::format("{:a}", data{x}), "-42");
   CHECK_EQUAL(fmt::format("{:j}", data{x}), "-42");
+  CHECK_EQUAL(fmt::format("{:y}", data{x}), "-42");
 
   x = data{42};
   CHECK_EQUAL(fmt::format("{}", data{x}), "42");
   CHECK_EQUAL(fmt::format("{:a}", data{x}), "42");
   CHECK_EQUAL(fmt::format("{:j}", data{x}), "42");
+  CHECK_EQUAL(fmt::format("{:y}", data{x}), "42");
 }
