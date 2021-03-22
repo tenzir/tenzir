@@ -14,11 +14,12 @@ jobs:
 
     - uses: actions/setup-python@v1
       with:
-        python-version: '3.7'
+        python-version: '3.9'
 
     - name: Clang Format
       run: |
-        pip install --upgrade pip clang-format
+        sudo apt-get -qq update
+        sudo apt-get -qqy install clang-format
         git diff -U0 --no-color $(git merge-base origin/master HEAD) |
           scripts/clang-format-diff.py -p1
 
