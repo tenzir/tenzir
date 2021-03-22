@@ -28,24 +28,26 @@
 
 #include <chrono>
 #include <memory>
-#include <pcap.h>
 #include <random>
 #include <unordered_map>
 
-namespace vast {
-namespace format {
-namespace pcap {
+// Forward declarations from libpcap.
+struct pcap;
+struct pcap_dumper;
+struct pcap_stat;
+
+namespace vast::format::pcap {
 
 struct pcap_close_wrapper {
-  inline void operator()(pcap_t* handle) const noexcept {
-    ::pcap_close(handle);
-  }
+  void operator()(struct pcap* handle) const noexcept;
 };
 
 struct pcap_dump_close_wrapper {
-  inline void operator()(pcap_dumper_t* handle) const noexcept {
-    ::pcap_dump_close(handle);
-  }
+  void operator()(struct pcap_dumper* handle) const noexcept;
+};
+
+struct pcap_stat_delete_wrapper {
+  void operator()(struct pcap_stat* handle) const noexcept;
 };
 
 /// A PCAP reader.
@@ -77,8 +79,8 @@ public:
   vast::system::report status() const override;
 
 protected:
-  caf::error read_impl(size_t max_events, size_t max_slice_size,
-                       consumer& f) override;
+  caf::error
+  read_impl(size_t max_events, size_t max_slice_size, consumer& f) override;
 
 private:
   struct flow_state {
@@ -101,8 +103,8 @@ private:
   /// Evicts random flows when exceeding the maximum configured flow count.
   void shrink_to_max_size();
 
-  std::unique_ptr<pcap_t, pcap_close_wrapper> pcap_{nullptr,
-                                                    pcap_close_wrapper{}};
+  std::unique_ptr<struct pcap, pcap_close_wrapper> pcap_ = nullptr;
+
   std::unordered_map<flow, flow_state> flows_;
   std::string input_;
   caf::optional<std::string> interface_;
@@ -118,7 +120,8 @@ private:
   bool community_id_;
   type packet_type_;
   double drop_rate_threshold_;
-  mutable pcap_stat last_stats_;
+  std::unique_ptr<struct pcap_stat, pcap_stat_delete_wrapper> last_stats_
+    = nullptr;
   mutable size_t discard_count_;
 };
 
@@ -146,13 +149,10 @@ private:
   size_t flush_interval_ = 0;
   size_t snaplen_ = 65535;
   size_t total_packets_ = 0;
-  std::unique_ptr<pcap_t, pcap_close_wrapper> pcap_{nullptr,
-                                                    pcap_close_wrapper{}};
-  std::unique_ptr<pcap_dumper_t, pcap_dump_close_wrapper> dumper_{
-    nullptr, pcap_dump_close_wrapper{}};
+  std::unique_ptr<struct pcap, pcap_close_wrapper> pcap_ = nullptr;
+  std::unique_ptr<struct pcap_dumper, pcap_dump_close_wrapper> dumper_
+    = nullptr;
   std::string trace_;
 };
 
-} // namespace pcap
-} // namespace format
-} // namespace vast
+} // namespace vast::format::pcap
