@@ -28,12 +28,12 @@ using symbol_map = std::unordered_map<std::string, type>;
 struct symbol_resolver {
   caf::expected<type> lookup(const std::string& key) {
     // First we check if the key is already locally resolved.
-    auto local_symbol = local.find(key);
-    if (local_symbol != local.end())
-      return local_symbol->second;
+    auto resolved_symbol = resolved.find(key);
+    if (resolved_symbol != resolved.end())
+      return resolved_symbol->second;
     // Then we check if it is an unresolved local type.
-    auto next = working.find(key);
-    if (next != working.end())
+    auto next = local.find(key);
+    if (next != local.end())
       return resolve(next);
     // Finally, we look into the global types, This is in last place because
     // they have lower precedence, i.e. local definitions are allowed to
@@ -130,6 +130,8 @@ struct symbol_resolver {
                                        "record named {}; this is not "
                                        "supported.",
                                        x.name()));
+      for (const auto& field : acc.fields)
+        VAST_ASSERT(!field.name.empty());
       return acc.name(x.name());
     }
     return std::move(x);
@@ -137,16 +139,16 @@ struct symbol_resolver {
 
   caf::expected<type> resolve(symbol_map::iterator next) {
     auto value = std::move(*next);
-    if (local.find(value.first) != local.end())
+    if (resolved.find(value.first) != resolved.end())
       return caf::make_error(ec::parse_error, "duplicate definition of",
                              value.first);
-    working.erase(next);
+    local.erase(next);
     auto x = caf::visit(*this, value.second);
     if (!x)
       return x.error();
-    auto [iter, inserted] = local.emplace(value.first, std::move(*x));
+    auto [iter, inserted] = resolved.emplace(value.first, std::move(*x));
     if (!inserted)
-      return caf::make_error(ec::parse_error, "failed to extend local "
+      return caf::make_error(ec::parse_error, "failed to extend resolved "
                                               "symbols");
     auto added = sch.add(iter->second);
     if (!added)
@@ -159,22 +161,27 @@ struct symbol_resolver {
   // of parsed symbols. It walks over its definition and checks all
   // "placeholder" symbols (all those that are not builtin types). Once a
   // placeholder is found it is going to be replaced by its defintion, which
-  // can either be part of the same working set or provided in the global table.
+  // can either be part of the same local set or provided in the global table.
   // If the symbol is from the local working set but hasn't been resolved
   // itself, the resolution of the current type is suspended and the required
   // symbol is prioritized.
   // That means that a single iteration of this loop can remove between 1 and
-  // all remaining elements from the working set.
+  // all remaining elements from the local set.
   caf::expected<schema> resolve() {
-    while (!working.empty())
-      if (auto x = resolve(working.begin()); !x)
+    while (!local.empty())
+      if (auto x = resolve(local.begin()); !x)
         return x.error();
+    // Finally we replace the now empty local set with the set of resolved
+    // symbols for further use by the caller.
+    local = std::move(resolved);
     return sch;
   }
 
   const symbol_map& global;
-  symbol_map working;
-  symbol_map local = {};
+  // This is an in-out parameter so the use site of the symbol_resolver can
+  // use the resolved symbol_map to resolve symbols that are parsed later.
+  symbol_map& local;
+  symbol_map resolved = {};
   schema sch = {};
 };
 
@@ -233,11 +240,11 @@ struct schema_parser : parser<schema_parser> {
   template <class Iterator, class Attribute>
   bool parse(Iterator& f, const Iterator& l, Attribute& out) const {
     symbol_map global;
-    symbol_map working;
+    symbol_map local;
     auto p = symbol_map_parser{};
-    if (!p(f, l, working))
+    if (!p(f, l, local))
       return false;
-    auto r = symbol_resolver{global, std::move(working)};
+    auto r = symbol_resolver{global, local};
     auto sch = r.resolve();
     if (!sch) {
       VAST_WARN("failed to resolve symbol table: {}", sch.error());
