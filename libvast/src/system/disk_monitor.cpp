@@ -100,8 +100,10 @@ disk_monitor(disk_monitor_actor::stateful_pointer<disk_monitor_state> self,
       // TODO(ch20006): Add some check on the overall structure on the db dir.
       std::vector<partition_diskstate> partitions;
       for (const auto& entry : index_dir) {
-        auto partition = entry.path().stem().string();
+        auto partition = entry.path().filename().string();
         if (partition == "index.bin")
+          continue;
+        if (entry.path().extension() == ".mdx")
           continue;
         uuid id;
         if (!parsers::uuid(partition, id)) {
