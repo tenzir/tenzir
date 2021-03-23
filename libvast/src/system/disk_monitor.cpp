@@ -38,16 +38,18 @@ std::shared_ptr<caf::detail::scope_guard<Fun>> make_shared_guard(Fun f) {
 
 caf::error validate(const disk_monitor_config& config) {
   if (config.low_water_mark > config.high_water_mark)
-    return caf::make_error(ec::invalid_configuration, "low-water mark bigger "
+    return caf::make_error(ec::invalid_configuration, "low-water mark greater "
                                                       "than high-water mark");
   if (config.scan_binary) {
     if (config.scan_binary->empty()) {
-      return caf::make_error(ec::invalid_configuration, "scan binary cannot be "
-                                                        "empty");
+      return caf::make_error(ec::invalid_configuration,
+                             "scan binary path cannot be "
+                             "empty");
     }
     if (config.scan_binary->at(0) != '/') {
-      return caf::make_error(ec::invalid_configuration, "scan binary must be "
-                                                        "an absolute path");
+      return caf::make_error(ec::invalid_configuration,
+                             "scan binary path must be "
+                             "an absolute");
     }
     if (!std::filesystem::exists(*config.scan_binary)) {
       return caf::make_error(ec::invalid_configuration, "scan binary doesn't "
@@ -55,6 +57,28 @@ caf::error validate(const disk_monitor_config& config) {
     }
   }
   return {};
+}
+
+caf::expected<size_t> disk_monitor_state::compute_dbdir_size() const {
+  caf::expected<size_t> result = 0;
+  if (!scan_command) {
+    return detail::recursive_size(dbdir);
+  }
+  const auto& command = *scan_command;
+  VAST_VERBOSE("{} executing command '{}' to determine size of dbdir", name,
+               command);
+  auto cmd_output = detail::execute_blocking(command);
+  if (!cmd_output)
+    return cmd_output.error();
+  if (cmd_output->back() == '\n')
+    cmd_output->pop_back();
+  if (!parsers::integer(*cmd_output, result.value())) {
+    result = caf::make_error(ec::parse_error,
+                             fmt::format("{} failed to interpret output "
+                                         "'{}' of command '{}'",
+                                         name, *cmd_output, command));
+  }
+  return result;
 }
 
 disk_monitor_actor::behavior_type
@@ -87,27 +111,7 @@ disk_monitor(disk_monitor_actor::stateful_pointer<disk_monitor_state> self,
                    self);
         return;
       }
-      caf::expected<size_t> size = 0;
-      if (!self->state.scan_command) {
-        size = detail::recursive_size(self->state.dbdir);
-      } else {
-        const auto& command = *self->state.scan_command;
-        VAST_VERBOSE("{} executing command '{}' to determine size of dbdir",
-                     self, command);
-        auto result = detail::execute_blocking(command);
-        if (!result)
-          size = result.error();
-        else {
-          if (result->back() == '\n')
-            result->pop_back();
-          if (!parsers::integer(*result, size.value())) {
-            size = caf::make_error(ec::parse_error,
-                                   fmt::format("{} failed to interpret result "
-                                               "'{}' of command '{}'",
-                                               self, *result, command));
-          }
-        }
-      }
+      auto size = self->state.compute_dbdir_size();
       // TODO: This is going to do one syscall per file in the database
       // directory. This feels a bit wasteful, but in practice we didn't
       // see noticeable overhead even on large-ish databases.
@@ -197,11 +201,10 @@ disk_monitor(disk_monitor_actor::stateful_pointer<disk_monitor_state> self,
                   // TODO: There's a race condition here: We calculate the size
                   // of the database directory while we might be deleting files
                   // from it.
-                  if (const auto size
-                      = detail::recursive_size(self->state.dbdir);
+                  if (const auto size = self->state.compute_dbdir_size();
                       !size) {
-                    VAST_WARN("{} failed to calculate recursive size of {}: {}",
-                              self, self->state.dbdir, size.error());
+                    VAST_WARN("{} failed to calculate size of {}: {}", self,
+                              self->state.dbdir, size.error());
                   } else {
                     VAST_VERBOSE("{} erased ids from index; {} bytes "
                                  "left on disk",

@@ -43,6 +43,11 @@ struct disk_monitor_state {
   /// Node handle of the INDEX.
   index_actor index;
 
+  /// Computes the size of the database directory.
+  /// Note that this function may spawn an external process to perform the
+  /// computation.
+  caf::expected<size_t> compute_dbdir_size() const;
+
   constexpr static const char* name = "disk-monitor";
 };
 
