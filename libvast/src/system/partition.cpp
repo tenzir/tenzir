@@ -505,7 +505,7 @@ active_partition_actor::behavior_type active_partition(
       return self->state.persistence_promise;
     },
     [self](atom::internal, atom::persist, atom::resume) {
-      VAST_DEBUG("{} resumes persist atom {}", self,
+      VAST_TRACE("{} resumes persist atom {}", self,
                  self->state.indexers.size());
       if (self->state.streaming_initiated
           && self->state.stage->inbound_paths().empty()) {
