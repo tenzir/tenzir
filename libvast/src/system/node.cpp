@@ -580,13 +580,31 @@ node(node_actor::stateful_pointer<node_state> self, std::string name, path dir,
   // Terminate deterministically on shutdown.
   self->set_exit_handler([=](const caf::exit_msg& msg) {
     VAST_DEBUG("{} got EXIT from {}", self, msg.source);
-    std::vector<caf::actor> components;
-    auto schedule_teardown = [&](const std::string& label) {
-      auto component = self->state.registry.remove(label);
-      if (component) {
-        VAST_DEBUG("{} schedules {} for shutdown", self, label);
-        self->demonitor(component->actor);
-        components.push_back(std::move(component->actor));
+    std::vector<caf::actor> scheduled_for_teardown;
+    // TODO: A recent refactoring introduced a bug that caused this function to
+    // only remove by label instead of by type or label. This was not caught in
+    // our integration test suite because we do not currently test continuous
+    // imports/exports in them. We should evaluate how we can test for shutdown
+    // bugs.
+    auto schedule_teardown = [&](const std::string& type_or_label) {
+      if (is_singleton(type_or_label)) {
+        auto component = self->state.registry.remove(type_or_label);
+        if (component) {
+          VAST_VERBOSE("{} schedules {} for shutdown", self, type_or_label);
+          self->demonitor(component->actor);
+          scheduled_for_teardown.push_back(std::move(component->actor));
+        }
+      } else if (auto components
+                 = self->state.registry.find_by_type(type_or_label);
+                 !components.empty()) {
+        VAST_VERBOSE("{} schedules {} {}(s) for shutdown", self,
+                     components.size(), type_or_label);
+        for (auto& component : components) {
+          if (auto removed = self->state.registry.remove(component)) {
+            self->demonitor(removed->actor);
+            scheduled_for_teardown.push_back(std::move(removed->actor));
+          }
+        }
       }
     };
     // Terminate the accountant first because it acts like a source and may
@@ -595,7 +613,8 @@ node(node_actor::stateful_pointer<node_state> self, std::string name, path dir,
     // Take out the filesystem, which we terminate at the very end.
     auto filesystem = deregister_component(self, "filesystem");
     // Tear down the ingestion pipeline from source to sink.
-    auto pipeline = {"source", "importer", "index", "archive", "exporter"};
+    auto pipeline
+      = {"source", "importer", "index", "archive", "exporter", "sink"};
     for (auto component : pipeline)
       schedule_teardown(component);
     // Now schedule all remaining components for termination.
@@ -607,9 +626,9 @@ node(node_actor::stateful_pointer<node_state> self, std::string name, path dir,
     for (const auto& label : remaining)
       schedule_teardown(label);
     // Finally, bring down the filesystem.
-    components.push_back(std::move(*filesystem));
+    scheduled_for_teardown.push_back(std::move(*filesystem));
     auto shutdown_kill_timeout = shutdown_grace_period / 5;
-    shutdown<policy::sequential>(self, std::move(components),
+    shutdown<policy::sequential>(self, std::move(scheduled_for_teardown),
                                  shutdown_grace_period, shutdown_kill_timeout);
   });
   // Define the node behavior.
