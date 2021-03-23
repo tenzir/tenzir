@@ -588,8 +588,7 @@ node(node_actor::stateful_pointer<node_state> self, std::string name, path dir,
     // bugs.
     auto schedule_teardown = [&](const std::string& type_or_label) {
       if (is_singleton(type_or_label)) {
-        auto component = self->state.registry.remove(type_or_label);
-        if (component) {
+        if (auto component = self->state.registry.remove(type_or_label)) {
           VAST_VERBOSE("{} schedules {} for shutdown", self, type_or_label);
           self->demonitor(component->actor);
           scheduled_for_teardown.push_back(std::move(component->actor));
@@ -612,7 +611,8 @@ node(node_actor::stateful_pointer<node_state> self, std::string name, path dir,
     schedule_teardown("accountant");
     // Take out the filesystem, which we terminate at the very end.
     auto filesystem = deregister_component(self, "filesystem");
-    // Tear down the ingestion pipeline from source to sink.
+    // Tear down the pipeline from source to sink. Note that the order is
+    // important here; the source must be shut down before the importer.
     auto pipeline
       = {"source", "importer", "index", "archive", "exporter", "sink"};
     for (auto component : pipeline)
