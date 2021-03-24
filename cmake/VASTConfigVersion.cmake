@@ -1,5 +1,3 @@
-cmake_minimum_required(VERSION 3.14...3.19 FATAL_ERROR)
-
 set(VAST_VERSION_FALLBACK "2021.03.25-rc3-0-")
 
 if (NOT VAST_VERSION_TAG)
