@@ -18,7 +18,9 @@ on:
       - '**.cmake'
       - '**CMakeLists.txt'
   release:
-    types: published
+    types:
+      - released
+      - prereleased
 
 jobs:
   static_binary:
@@ -114,7 +116,7 @@ jobs:
     # This step ensures that assets from previous runs are cleaned up to avoid
     # failure of the next step (asset upload)
     - name: Delete Release Assets
-      if: github.event_name == 'release' && github.event.action == 'published'
+      if: github.event_name == 'release'
       uses: mknejp/delete-release-assets@v1
       with:
         token: ${{ secrets.GITHUB_TOKEN }}
@@ -124,7 +126,7 @@ jobs:
         assets: "${{ matrix.args }}-linux-static.tar.gz"
 
     - name: Upload Release Assets
-      if: github.event_name == 'release' && github.event.action == 'published'
+      if: github.event_name == 'release'
       uses: actions/upload-release-asset@v1
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
