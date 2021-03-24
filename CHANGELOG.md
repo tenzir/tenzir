@@ -11,44 +11,11 @@ This changelog documents all notable user-facing changes of VAST.
 ### 🐞 Bug Fixes
 -->
 
-## Unreleased
+## [2021.03.25]
 
-- 🐞 Enabling the disk budget feature no longer prevents the server process
-  from exiting after it was stopped.
-  [#1495](https://github.com/tenzir/vast/pull/1495)
+### ⚡️ Breaking Changes
 
-- 🐞 A race condition during server shutdown could lead to an invariant
-  violation, resulting in a firing assertion. Streamlining the shutdown
-  logic resolved the issue.
-  [#1473](https://github.com/tenzir/vast/pull/1473)
-  [#1485](https://github.com/tenzir/vast/pull/1485)
-
-- 🐞 Insufficient permissions for one of the paths in the `schema-dirs` option
-  would lead to a crash in `vast start`.
-  [#1472](https://github.com/tenzir/vast/pull/1472)
-
-- 🐞 A query for a field or field name suffix that matches multiple fields of
-  different types would erroneously return no results.
-  [#1447](https://github.com/tenzir/vast/pull/1447)
-
-- ⚠️ The default size of table slices (event batches) that is created from
-  `vast import` processes has been changed from 1000 to 1024.
-  [#1396](https://github.com/tenzir/vast/pull/1396)
-
-- 🐞 The disk monitor now correctly erases partition synopses from the meta index.
-  [#1450](https://github.com/tenzir/vast/pull/1450)
-
-- 🐞 The archive, index, source, and sink components now report metrics while
-  idle instead of omitting them entirely. This allows for distinguishing between
-  idle and not running components from the metrics.
-  [#1451](https://github.com/tenzir/vast/pull/1451)
-
-- 🐞 VAST no longer crashes when the disk monitor tries to calculate the size of
-  the database while files are being deleted. Instead, it will retry after the
-  configured scan interval.
-  [#1458](https://github.com/tenzir/vast/1458)
-
-- ⚡️ A new `VASTRegisterPlugin` CMake function enables easy setup of the build
+- A new `VASTRegisterPlugin` CMake function enables easy setup of the build
   scaffolding required for plugins. Plugins can now be linked statically against
   VAST. Configure with `--with-static-plugins` or build a static binary to link
   all plugins built alongside VAST statically. All plugin build scaffoldings
@@ -56,63 +23,97 @@ This changelog documents all notable user-facing changes of VAST.
   [#1445](https://github.com/tenzir/vast/pull/1445)
   [#1452](https://github.com/tenzir/vast/pull/1452)
 
-- ⚠️ The type extractor in the expression language now includes aliased types.
-  For example, given the type definition for port from the base schema
-  `type port = count`, a search for `:count` will consider fields of type
-  `port`.
+- The previously deprecated `#timestamp` extractor has been removed from the
+  query language entirely. [#1399](https://github.com/tenzir/vast/pull/1399)
+
+### ⚠️ Changes
+
+- The default size of table slices (event batches) that is created from `vast
+  import` processes has been changed from 1000 to 1024.
+  [#1396](https://github.com/tenzir/vast/pull/1396)
+
+- The type extractor in the expression language now includes aliased types.  For
+  example, given the type definition for port from the base schema `type port =
+  count`, a search for `:count` will consider fields of type `port`.
   [#1446](https://github.com/tenzir/vast/pull/1446)
 
-- ⚠️ The time to first response of queries that compare a concept to a string
-  has been reduced noticably. In the particular case of large databases
-  containing many different event types and queries with a high selectivity we
-  were able to measure speedups of up to 5x.
+- The time to first response of queries that compare a concept to a string has
+  been reduced noticably. In the particular case of large databases containing
+  many different event types and queries with a high selectivity we were able to
+  measure speedups of up to 5x.
   [#1433](https://github.com/tenzir/vast/pull/1433)
 
-- 🐞 The JSON parser now accepts data with numerical or boolean values in
-  fields that expect strings according the schema.
-  [#1439](https://github.com/tenzir/vast/pull/1439)
-
-- 🐞 Data that was ingested before the deprecation of the `#timestamp`
-  attribute wasn't exported correctly with newer versions. This is now
-  corrected.
-  [#1432](https://github.com/tenzir/vast/pull/1432)
-
-- ⚠️ The zeek-to-vast relay utility was moved to the
+- The zeek-to-vast relay utility was moved to the
   [tenzir/zeek-vast](https://github.com/tenzir/zeek-vast) repository. All
   options related to zeek-to-vast and the bundled Broker submodule were removed.
   [#1435](https://github.com/tenzir/vast/1435)
 
-- 🎁 VAST now supports nested records in Arrow table slices and in the JSON
-  import, e.g., data of type `list<record<name: string, age: count>`. While
-  nested record fields are not yet queryable, ingesting such data will no longer
-  cause VAST to crash. MessagePack table slices don't support records in lists
-  yet. [#1429](https://github.com/tenzir/vast/pull/1429)
+- The option `vast.no-default-schema` is deprecated, as it is no longer needed
+  to override types from bundled schemas.
+  [#1409](https://github.com/tenzir/vast/pull/1409)
 
-- 🐞 Some non-null pointers were incorrectly rendered as `*nullptr` in log
-  messages.
-  [#1430](https://github.com/tenzir/vast/pull/1430)
+- VAST now ships with schema record types for Suricata's `mqtt` and `anomaly`
+  event types. [#1408](https://github.com/tenzir/vast/pull/1408)
+  [@satta](https://github.com/satta)
 
-- 🎁 The schema language now supports 4 operations on record types:
-  `+` combines the fields of 2 records into a new record. `<+` and `+>` are
-  variations of `+` that give precedence to the left and right operand
-  respectively. `-` creates a record with the field specified as its right
-  operand removed.
+### 🎁 Features
+
+- VAST now supports nested records in Arrow table slices and in the JSON import,
+  e.g., data of type `list<record<name: string, age: count>`. While nested
+  record fields are not yet queryable, ingesting such data will no longer cause
+  VAST to crash. MessagePack table slices don't support records in lists yet.
+  [#1429](https://github.com/tenzir/vast/pull/1429)
+
+- The schema language now supports 4 operations on record types: `+` combines
+  the fields of 2 records into a new record. `<+` and `+>` are variations of `+`
+  that give precedence to the left and right operand respectively. `-` creates a
+  record with the field specified as its right operand removed.
   [#1407](https://github.com/tenzir/vast/pull/1407)
   [#1487](https://github.com/tenzir/vast/pull/1487)
   [#1490](https://github.com/tenzir/vast/pull/1490)
 
-- ⚠️ The option `vast.no-default-schema` is deprecated, as it is no longer needed
-  to override types from bundled schemas.
-  [#1409](https://github.com/tenzir/vast/pull/1409)
 
-- ⚠️ VAST now ships with schema record types for Suricata's `mqtt` and `anomaly`
-  event types.
-  [#1408](https://github.com/tenzir/vast/pull/1408)
-  [@satta](https://github.com/satta)
+### 🐞 Bug Fixes
 
-- ⚡️ The previously deprecated `#timestamp` extractor has been removed from
-  the query language entirely.
-  [#1399](https://github.com/tenzir/vast/pull/1399)
+- Enabling the disk budget feature no longer prevents the server process from
+  exiting after it was stopped.
+  [#1495](https://github.com/tenzir/vast/pull/1495)
+
+- A race condition during server shutdown could lead to an invariant violation,
+  resulting in a firing assertion. Streamlining the shutdown logic resolved the
+  issue. [#1473](https://github.com/tenzir/vast/pull/1473)
+  [#1485](https://github.com/tenzir/vast/pull/1485)
+
+- Insufficient permissions for one of the paths in the `schema-dirs` option
+  would lead to a crash in `vast start`.
+  [#1472](https://github.com/tenzir/vast/pull/1472)
+
+- A query for a field or field name suffix that matches multiple fields of
+  different types would erroneously return no results.
+  [#1447](https://github.com/tenzir/vast/pull/1447)
+
+- The disk monitor now correctly erases partition synopses from the meta index.
+  [#1450](https://github.com/tenzir/vast/pull/1450)
+
+- The archive, index, source, and sink components now report metrics while idle
+  instead of omitting them entirely. This allows for distinguishing between idle
+  and not running components from the metrics.
+  [#1451](https://github.com/tenzir/vast/pull/1451)
+
+- VAST no longer crashes when the disk monitor tries to calculate the size of
+  the database while files are being deleted. Instead, it will retry after the
+  configured scan interval. [#1458](https://github.com/tenzir/vast/1458)
+
+- The JSON parser now accepts data with numerical or boolean values in fields
+  that expect strings according the schema.
+  [#1439](https://github.com/tenzir/vast/pull/1439)
+
+- Data that was ingested before the deprecation of the `#timestamp` attribute
+  wasn't exported correctly with newer versions. This is now corrected.
+  [#1432](https://github.com/tenzir/vast/pull/1432)
+
+- Some non-null pointers were incorrectly rendered as `*nullptr` in log
+  messages. [#1430](https://github.com/tenzir/vast/pull/1430)
 
 ## [2021.02.24]
 
@@ -1472,3 +1473,4 @@ This is the first official release.
 [2020.12.16]: https://github.com/tenzir/vast/releases/tag/2020.12.16
 [2021.01.28]: https://github.com/tenzir/vast/releases/tag/2021.01.28
 [2021.02.24]: https://github.com/tenzir/vast/releases/tag/2021.02.24
+[2021.03.25]: https://github.com/tenzir/vast/releases/tag/2021.03.25
