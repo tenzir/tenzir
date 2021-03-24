@@ -41,7 +41,7 @@ type_registry_state::status(status_verbosity v) const {
     // The list of defined concepts
     if (v >= status_verbosity::debug) {
       auto& concepts_status = put_list(tr_status, "concepts");
-      for (auto& [name, definition] : taxonomies.concepts) {
+      for (const auto& [name, definition] : taxonomies.concepts) {
         auto& concept_status = concepts_status.emplace_back().as_dictionary();
         concept_status["name"] = name;
         concept_status["description"] = definition.description;
@@ -49,7 +49,7 @@ type_registry_state::status(status_verbosity v) const {
         concept_status["concepts"] = definition.concepts;
       }
       auto& models_status = put_list(tr_status, "models");
-      for (auto& [name, definition] : taxonomies.models) {
+      for (const auto& [name, definition] : taxonomies.models) {
         auto& model_status = models_status.emplace_back().as_dictionary();
         model_status["name"] = name;
         model_status["description"] = definition.description;
@@ -132,10 +132,10 @@ void type_registry_state::insert(vast::type layout) {
 
 type_set type_registry_state::types() const {
   auto result = type_set{};
-  for ([[maybe_unused]] auto& [k, v] : data)
-    for (auto& x : v)
+  for (const auto& [_, v] : data)
+    for (const auto& x : v)
       result.insert(x);
-  for (auto& x : configuration_schema)
+  for (const auto& x : configuration_schema)
     result.insert(x);
   return result;
 }
@@ -156,11 +156,13 @@ type_registry(type_registry_actor::stateful_pointer<type_registry_state> self,
     self->quit(msg.reason);
   });
   // Load existing state from disk if possible.
-  if (auto err = self->state.load_from_disk())
+  if (auto err = self->state.load_from_disk()) {
     self->quit(std::move(err));
+    return type_registry_actor::behavior_type::make_empty_behavior();
+  }
   // Load loaded schema types from the singleton.
   // TODO: Move to the load handler and re-parse the files.
-  if (auto schema = vast::event_types::get())
+  if (const auto* schema = vast::event_types::get())
     self->state.configuration_schema = *schema;
   // The behavior of the type-registry.
   return {

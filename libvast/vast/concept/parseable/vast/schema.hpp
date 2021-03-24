@@ -94,12 +94,12 @@ struct symbol_resolver {
     }
     if (has_attribute(x, "$algebra")) {
       VAST_ASSERT(x.fields.size() >= 2);
-      auto base = caf::get_if<record_type>(&x.fields[0].type);
+      const auto* base = caf::get_if<record_type>(&x.fields[0].type);
       VAST_ASSERT(base);
       auto acc = *base;
       auto it = ++x.fields.begin();
       for (; it < x.fields.end(); ++it) {
-        auto rhs = caf::get_if<record_type>(&it->type);
+        const auto* rhs = caf::get_if<record_type>(&it->type);
         VAST_ASSERT(rhs);
         if (it->name == "+") {
           auto result = merge(acc, *rhs);
@@ -112,13 +112,15 @@ struct symbol_resolver {
           acc = priority_merge(acc, *rhs, merge_policy::prefer_right);
         } else if (it->name == "-") {
           std::vector<std::string_view> path;
-          for (auto& f : rhs->fields)
+          for (const auto& f : rhs->fields)
             path.emplace_back(f.name);
-          if (!remove_field(acc, path))
+          auto acc_removed = remove_field(acc, path);
+          if (!acc_removed)
             return caf::make_error( //
               ec::parse_error,
               fmt::format("cannot delete non-existing field {} from type {}",
                           fmt::join(path, "."), to_string(acc)));
+          acc = *std::move(acc_removed);
         } else
           // Invalid operation.
           VAST_ASSERT(true);

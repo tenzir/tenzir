@@ -95,6 +95,7 @@ This changelog documents all notable user-facing changes of VAST.
   operand removed.
   [#1407](https://github.com/tenzir/vast/pull/1407)
   [#1487](https://github.com/tenzir/vast/pull/1487)
+  [#1490](https://github.com/tenzir/vast/pull/1490)
 
 - ⚠️ The option `vast.no-default-schema` is deprecated, as it is no longer needed
   to override types from bundled schemas.
