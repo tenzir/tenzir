@@ -107,7 +107,7 @@ This changelog documents all notable user-facing changes of VAST.
   configured scan interval. [#1458](https://github.com/tenzir/vast/1458)
 
 - The JSON parser now accepts data with numerical or boolean values in fields
-  that expect strings according the schema. VAST converts these values into
+  that expect strings according to the schema. VAST converts these values into
   string representations.
   [#1439](https://github.com/tenzir/vast/pull/1439)
 
