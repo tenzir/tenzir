@@ -522,37 +522,30 @@ priority_merge(const record_type& lhs, const record_type& rhs, merge_policy p) {
   return result.name("");
 }
 
-bool remove_field(record_type& r, std::vector<std::string_view> path) {
+std::optional<record_type>
+remove_field(const record_type& r, std::vector<std::string_view> path) {
   VAST_ASSERT(!path.empty());
-  auto* p = &r;
-  auto select_field = [&](std::string_view key) {
-    return std::find_if(p->fields.begin(), p->fields.end(),
-                        [&](const auto& f) { return f.name == key; });
-  };
-  // Move the last part of the field key out of the path.
-  auto leaf = *path.rbegin();
-  // Descend into nested records.
-  path.pop_back();
-  for (auto f : path) {
-    auto field = select_field(f);
-    if (field == p->fields.end())
-      return false;
-    auto rec = caf::get_if<record_type>(&field->type);
-    if (!rec)
-      return false;
-    p = rec;
+  auto result = record_type{}.name(r.name()).attributes(r.attributes());
+  for (const auto& f : r.fields) {
+    if (f.name == path.front()) {
+      if (path.size() > 1) {
+        path.erase(path.begin());
+        const auto* field_rec = caf::get_if<record_type>(&f.type);
+        if (!field_rec)
+          return std::nullopt;
+        auto new_rec = remove_field(*field_rec, path);
+        if (!new_rec)
+          return std::nullopt;
+        // TODO: Remove this condition if empty records get allowed.
+        if (!new_rec->fields.empty())
+          result.fields.emplace_back(f.name, *new_rec);
+      }
+      // else skips this field. It is the leaf to remove!
+    } else {
+      result.fields.push_back(f);
+    }
   }
-  // If a field of that name is present ...
-  auto field = select_field(leaf);
-  if (field == p->fields.end())
-    return false;
-  // ... remove it.
-  p->fields.erase(field);
-  // If the enclosing record is now empty, remove it.
-  // TODO: Remove this if empty records get allowed.
-  if (!path.empty() && p->fields.empty())
-    return remove_field(r, path);
-  return true;
+  return result;
 }
 
 record_type flatten(const record_type& rec) {

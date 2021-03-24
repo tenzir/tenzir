@@ -769,11 +769,11 @@ priority_merge(const record_type& lhs, const record_type& rhs, merge_policy p);
 /// Removes a field from a record_type by name.
 /// @param r The record to mutate.
 /// @param path The sequence of keys pointing to the target field.
-/// @returns A bool indicating whether a field of the name field_name was
-///          present before this function was called.
+/// @returns A new type without the target field if it exists in `r`.
 /// @pre `!path.empty()`
 /// @relates record_type
-bool remove_field(record_type& r, std::vector<std::string_view> path);
+std::optional<record_type>
+remove_field(const record_type& r, std::vector<std::string_view> path);
 
 /// Recursively flattens the arguments of a record type.
 /// @param rec The record to flatten.
@@ -994,13 +994,18 @@ struct sum_type_access<vast::type> {
     return static_cast<const T&>(*x);
   }
 
-  template <class T, int Pos>
-  static T* get_if(vast::type* x, sum_type_token<T, Pos>) {
-    x->ptr().unshare();
-    auto ptr = x->raw_ptr();
-    return ptr->index() == Pos ? const_cast<T*>(static_cast<const T*>(ptr))
-                               : nullptr;
-  }
+  // NOTE: This overload for get_if breaks the shared abstract type semantics.
+  // This was noticed when the content of the type registry was mutated without
+  // it's knowledge when type operations on layouts are in play. The exact bug
+  // is not clear yet, so we'll refrain from using mutations on type value and
+  // construct new ones instead.
+  // template <class T, int Pos>
+  // static T* get_if(vast::type* x, sum_type_token<T, Pos>) {
+  //  x->ptr().unshare();
+  //  auto ptr = x->raw_ptr();
+  //  return ptr->index() == Pos ? const_cast<T*>(static_cast<const T*>(ptr))
+  //                             : nullptr;
+  //}
 
   template <class T, int Pos>
   static const T* get_if(const vast::type* x, sum_type_token<T, Pos>) {
