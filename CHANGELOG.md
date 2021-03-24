@@ -15,35 +15,36 @@ This changelog documents all notable user-facing changes of VAST.
 
 ### ⚡️ Breaking Changes
 
-- A new `VASTRegisterPlugin` CMake function enables easy setup of the build
-  scaffolding required for plugins. Plugins can now be linked statically against
-  VAST. Configure with `--with-static-plugins` or build a static binary to link
-  all plugins built alongside VAST statically. All plugin build scaffoldings
-  must be adapted, older plugins do no longer work.
+- Plugins can now be linked statically against VAST. A new `VASTRegisterPlugin`
+  CMake function enables easy setup of the build scaffolding required for
+  plugins. Configure with `--with-static-plugins` or build a static binary to
+  link all plugins built alongside VAST statically. All plugin build
+  scaffoldings must be adapted, older plugins do no longer work.
   [#1445](https://github.com/tenzir/vast/pull/1445)
   [#1452](https://github.com/tenzir/vast/pull/1452)
 
 - The previously deprecated `#timestamp` extractor has been removed from the
-  query language entirely. [#1399](https://github.com/tenzir/vast/pull/1399)
+  query language entirely. Use `:timestamp` instead.
+  [#1399](https://github.com/tenzir/vast/pull/1399)
 
 ### ⚠️ Changes
 
-- The default size of table slices (event batches) that is created from `vast
-  import` processes has been changed from 1000 to 1024.
+- The default size of table slices (event batches) that is created from
+  `vast import` processes has been changed from 1,000 to 1,024.
   [#1396](https://github.com/tenzir/vast/pull/1396)
 
-- The type extractor in the expression language now includes aliased types.  For
-  example, given the type definition for port from the base schema `type port =
-  count`, a search for `:count` will consider fields of type `port`.
+- The type extractor in the expression language now works with type aliases.
+  For example, given the type definition for port from the base schema
+  `type port = count`, a search for `:count` will also consider fields of type
+  `port`.
   [#1446](https://github.com/tenzir/vast/pull/1446)
 
-- The time to first response of queries that compare a concept to a string has
-  been reduced noticably. In the particular case of large databases containing
-  many different event types and queries with a high selectivity we were able to
-  measure speedups of up to 5x.
+- Query latency for expressions that contain concept names has improved
+  substantially. For DB sizes in the TB region, and with a large variety of
+  event types, queries with a high selectivity experience speedups of up to 5x.
   [#1433](https://github.com/tenzir/vast/pull/1433)
 
-- The zeek-to-vast relay utility was moved to the
+- The zeek-to-vast utility was moved to the
   [tenzir/zeek-vast](https://github.com/tenzir/zeek-vast) repository. All
   options related to zeek-to-vast and the bundled Broker submodule were removed.
   [#1435](https://github.com/tenzir/vast/1435)
@@ -81,7 +82,8 @@ This changelog documents all notable user-facing changes of VAST.
 
 - A race condition during server shutdown could lead to an invariant violation,
   resulting in a firing assertion. Streamlining the shutdown logic resolved the
-  issue. [#1473](https://github.com/tenzir/vast/pull/1473)
+  issue.
+  [#1473](https://github.com/tenzir/vast/pull/1473)
   [#1485](https://github.com/tenzir/vast/pull/1485)
 
 - Insufficient permissions for one of the paths in the `schema-dirs` option
@@ -95,7 +97,7 @@ This changelog documents all notable user-facing changes of VAST.
 - The disk monitor now correctly erases partition synopses from the meta index.
   [#1450](https://github.com/tenzir/vast/pull/1450)
 
-- The archive, index, source, and sink components now report metrics while idle
+- The archive, index, source, and sink components now report metrics when idle
   instead of omitting them entirely. This allows for distinguishing between idle
   and not running components from the metrics.
   [#1451](https://github.com/tenzir/vast/pull/1451)
@@ -105,7 +107,8 @@ This changelog documents all notable user-facing changes of VAST.
   configured scan interval. [#1458](https://github.com/tenzir/vast/1458)
 
 - The JSON parser now accepts data with numerical or boolean values in fields
-  that expect strings according the schema.
+  that expect strings according the schema. VAST converts these values into
+  string representations.
   [#1439](https://github.com/tenzir/vast/pull/1439)
 
 - Data that was ingested before the deprecation of the `#timestamp` attribute
