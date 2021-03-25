@@ -516,7 +516,7 @@ node_state::spawn_command(const invocation& inv,
       rp.deliver(err);
       return caf::make_message(std::move(err));
     }
-    VAST_VERBOSE("{} registered {} as {}", self, comp_type, label);
+    VAST_DEBUG("{} registered {} as {}", self, comp_type, label);
     rp.deliver(*component);
     return caf::make_message(*component);
   };
