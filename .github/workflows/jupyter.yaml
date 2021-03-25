@@ -5,7 +5,8 @@ on:
     - 'examples/jupyter'
     - '.github/workflows/jupyter.yaml'
   release:
-    types: published
+    types:
+    - released
 env:
   DEBIAN_FRONTEND: noninteractive
 jobs:

@@ -14,7 +14,9 @@ on:
     - .github/workflows/jupyter.yaml
     - .github/workflows/pyvast.yaml
   release:
-    types: published
+    types:
+    - released
+    - prereleased
 env:
   CMAKE_GENERATOR: Ninja
   CMAKE_MAKE_PROGRAM: ninja
@@ -198,7 +200,7 @@ jobs:
             --with-dscat \
             --with-bundled-caf \
             ${{ matrix.build.extra-flags }} \
-            ${{ github.event.action == 'published' && matrix.configure.flags || matrix.configure.ci-flags }}
+            ${{ github.event_name == 'release' && matrix.configure.flags || matrix.configure.ci-flags }}
 
       - name: Compile All Targets
         run: |
@@ -278,7 +280,7 @@ jobs:
       # This step ensures that assets from previous runs are cleaned up to avoid
       # failure of the next step (asset upload)
       - name: Delete existing Release Assets
-        if: github.event.action == 'published'
+        if: github.event_name == 'release'
         uses: mknejp/delete-release-assets@v1
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
@@ -288,7 +290,7 @@ jobs:
           assets: "${{ steps.configure_env.outputs.publish_name }}.tar.gz"
 
       - name: Publish to GitHub Release
-        if: github.event.action == 'published'
+        if: github.event_name == 'release'
         uses: actions/upload-release-asset@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -430,7 +432,7 @@ jobs:
             --with-dscat \
             --with-bundled-caf \
             ${{ matrix.build.extra-flags }} \
-            ${{ github.event.action == 'published' && matrix.configure.flags || matrix.configure.ci-flags }}
+            ${{ github.event_name == 'release' && matrix.configure.flags || matrix.configure.ci-flags }}
 
       - name: Compile All Targets
         run: |
@@ -489,7 +491,7 @@ jobs:
       # This step ensures that assets from previous runs are cleaned up to avoid
       # failure of the next step (asset upload)
       - name: Delete existing Release Assets
-        if: github.event.action == 'published'
+        if: github.event_name == 'release'
         uses: mknejp/delete-release-assets@v1
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
@@ -499,7 +501,7 @@ jobs:
           assets: "${{ steps.configure_env.outputs.publish_name }}.tar.gz"
 
       - name: Publish to GitHub Release
-        if: github.event.action == 'published'
+        if: github.event_name == 'release'
         uses: actions/upload-release-asset@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

@@ -6,7 +6,8 @@ on:
     - '.github/workflows/pyvast.yml'
     - '.github/workflows/style.yml'
   release:
-    types: published
+    types:
+    - released
 env:
   DEBIAN_FRONTEND: noninteractive
 jobs:
@@ -46,7 +47,7 @@ jobs:
 
   egg-release:
     name: Egg Release
-    if: github.event.action == 'published'
+    if: github.event_name == 'release'
     needs: egg-install
     runs-on: ubuntu-20.04
     env:
