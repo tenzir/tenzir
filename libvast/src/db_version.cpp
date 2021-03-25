@@ -76,19 +76,32 @@ db_version read_db_version(const std::filesystem::path& db_dir) {
   return static_cast<db_version>(std::distance(begin, it));
 }
 
-caf::error initialize_db_version(const vast::path& db_dir) {
-  if (!exists(db_dir))
+caf::error initialize_db_version(const std::filesystem::path& db_dir) {
+  std::error_code err{};
+  const auto dir_exists = std::filesystem::exists(db_dir, err);
+  if (err)
     return caf::make_error(ec::filesystem_error,
-                           "db-directory does not exist:", db_dir.str());
-  auto version_path = db_dir / "VERSION";
+                           fmt::format("failed to find db-directory {}: {}",
+                                       db_dir.string(), err.message()));
+  if (!dir_exists)
+    return caf::make_error(ec::filesystem_error,
+                           fmt::format("db-directory {} does not exist: {}",
+                                       db_dir.string(), err.message()));
+  const auto version_path = db_dir / "VERSION";
+  const auto version_exists = std::filesystem::exists(version_path, err);
+  if (err)
+    return caf::make_error(ec::filesystem_error,
+                           "failed to find version file {}: {}",
+                           version_path.string(), err.message());
   // Do nothing if a VERSION file already exists.
-  if (exists(version_path))
+  if (version_exists)
     return ec::no_error;
-  std::ofstream fs(version_path.str());
+  std::ofstream fs(version_path.string());
   fs << to_string(db_version::latest) << std::endl;
   if (!fs)
-    return caf::make_error(ec::filesystem_error, "could not write version "
-                                                 "file");
+    return caf::make_error(ec::filesystem_error,
+                           fmt::format("could not write version file: {}",
+                                       version_path.string()));
   return ec::no_error;
 }
 

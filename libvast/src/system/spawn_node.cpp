@@ -47,9 +47,10 @@ spawn_node(caf::scoped_actor& self, const caf::settings& opts) {
   // Write VERSION file if it doesnt exist yet. Note that an empty db dir
   // often already exists before the node is initialized, e.g., when the log
   // output is written into the same directory.
-  if (auto err = initialize_db_version(abs_dir))
+  const auto abs_dir_path = std::filesystem::path{abs_dir.str()};
+  if (auto err = initialize_db_version(abs_dir_path))
     return err;
-  if (auto version = read_db_version(std::filesystem::path{abs_dir.str()});
+  if (const auto version = read_db_version(abs_dir_path);
       version != db_version::latest) {
     VAST_INFO("Cannot start VAST, breaking changes detected in the database "
               "directory");
