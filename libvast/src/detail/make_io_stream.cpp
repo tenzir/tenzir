@@ -14,18 +14,20 @@
 #include "vast/detail/fdostream.hpp"
 #include "vast/detail/posix.hpp"
 #include "vast/error.hpp"
-#include "vast/path.hpp"
+#include "vast/logger.hpp"
 
 #include <caf/config_value.hpp>
 #include <caf/settings.hpp>
 
+#include <filesystem>
 #include <fstream>
 
 namespace vast {
 namespace detail {
 
 caf::expected<std::unique_ptr<std::istream>>
-make_input_stream(const std::string& input, path::type pt) {
+make_input_stream(const std::string& input,
+                  std::filesystem::file_type file_type) {
   struct owning_istream : public std::istream {
     owning_istream(std::unique_ptr<std::streambuf>&& ptr)
       : std::istream{ptr.release()} {
@@ -35,11 +37,11 @@ make_input_stream(const std::string& input, path::type pt) {
       delete rdbuf();
     }
   };
-  switch (pt) {
+  switch (file_type) {
     default:
       return caf::make_error(ec::filesystem_error, "unsupported path type",
                              input);
-    case path::socket: {
+    case std::filesystem::file_type::socket: {
       if (input == "-")
         return caf::make_error(ec::filesystem_error, "cannot use STDIN as UNIX "
                                                      "domain socket");
@@ -52,16 +54,24 @@ make_input_stream(const std::string& input, path::type pt) {
       auto sb = std::make_unique<fdinbuf>(remote_fd);
       return std::make_unique<owning_istream>(std::move(sb));
     }
-    case path::fifo: { // TODO
+    case std::filesystem::file_type::fifo: { // TODO
       return caf::make_error(ec::unimplemented, "make_input_stream does not "
                                                 "support fifo yet");
     }
-    case path::regular_file: {
+    case std::filesystem::file_type::regular: {
       if (input == "-") {
         auto sb = std::make_unique<fdinbuf>(0); // stdin
         return std::make_unique<owning_istream>(std::move(sb));
       }
-      if (!exists(input))
+      std::error_code err{};
+      const auto input_exists
+        = std::filesystem::exists(std::filesystem::path{input}, err);
+      if (err)
+        return caf::make_error(ec::filesystem_error,
+                               fmt::format("failed to check if path {} "
+                                           "exists: {}",
+                                           input, err.message()));
+      if (!input_exists)
         return caf::make_error(ec::filesystem_error, "file does not exist at",
                                input);
       auto fb = std::make_unique<std::filebuf>();
@@ -91,17 +101,18 @@ make_output_stream(const std::string& output, socket_type st) {
 }
 
 caf::expected<std::unique_ptr<std::ostream>>
-make_output_stream(const std::string& output, path::type pt) {
-  switch (pt) {
+make_output_stream(const std::string& output,
+                   std::filesystem::file_type file_type) {
+  switch (file_type) {
     default:
       return caf::make_error(ec::filesystem_error, "unsupported path type",
                              output);
-    case path::socket:
+    case std::filesystem::file_type::socket:
       return caf::make_error(ec::filesystem_error, "wrong overload for socket");
-    case path::fifo: // TODO
+    case std::filesystem::file_type::fifo: // TODO
       return caf::make_error(ec::unimplemented, "make_output_stream does not "
                                                 "support fifo yet");
-    case path::regular_file: {
+    case std::filesystem::file_type::regular: {
       if (output == "-")
         return std::make_unique<fdostream>(1); // stdout
       return std::make_unique<std::ofstream>(output);
