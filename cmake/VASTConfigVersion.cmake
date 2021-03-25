@@ -1,5 +1,3 @@
-cmake_minimum_required(VERSION 3.14...3.19 FATAL_ERROR)
-
 set(VAST_VERSION_FALLBACK "2021.03.25-rc3-0-")
 
 if (NOT VAST_VERSION_TAG)
@@ -47,6 +45,13 @@ endif ()
 string(REGEX REPLACE "^(.*)[-0-|-]\\\$" "\\1" VAST_VERSION_TAG
                      "${VAST_VERSION_TAG}")
 
+cmake_policy(PUSH)
+if (POLICY CMP0009)
+  # Do not follow symlinks in FILE GLOB_RECURSE by default.
+  # https://cmake.org/cmake/help/latest/policy/CMP0009.html
+  cmake_policy(SET CMP0009 NEW)
+endif ()
+
 file(
   GLOB_RECURSE
   hash_files
@@ -55,6 +60,8 @@ file(
   "${CMAKE_CURRENT_LIST_DIR}/../libvast/*.cpp"
   "${CMAKE_CURRENT_LIST_DIR}/../cmake/*"
   "${CMAKE_CURRENT_LIST_DIR}/../CMakeLists.txt")
+
+cmake_policy(POP)
 
 list(FILTER hash_files EXCLUDE REGEX
      "^${CMAKE_CURRENT_SOURCE_DIR}/libvast/aux/")
