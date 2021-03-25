@@ -22,6 +22,7 @@
 #include <fmt/format.h>
 #include <fmt/ostream.h>
 
+#include <cassert>
 #include <chrono>
 #include <type_traits>
 
@@ -47,6 +48,7 @@ struct vast_formatter_base {
             ++it;
           }
         }
+        assert(indent >= 0 && indent <= 99);
       };
       if (*it == 'a') {
         presentation = *it++;
@@ -74,13 +76,6 @@ struct vast_formatter_base {
             if (*it == 'i')
               ++it;
             parse_indent();
-            // if (it != end && std::isdigit(*it)) {
-            //   indent = *it - '0';
-            //   if (++it != end && std::isdigit(*it)) {
-            //     indent = indent * 10 + (*it - '0');
-            //     ++it;
-            //   }
-            // }
           }
         }
       }
