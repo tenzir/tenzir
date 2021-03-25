@@ -10,14 +10,13 @@
 
 #if VAST_ENABLE_PCAP
 
-#  include "vast/format/pcap.hpp"
-
 #  include "vast/community_id.hpp"
 #  include "vast/defaults.hpp"
 #  include "vast/detail/assert.hpp"
 #  include "vast/detail/byte_swap.hpp"
 #  include "vast/error.hpp"
 #  include "vast/ether_type.hpp"
+#  include "vast/format/pcap.hpp"
 #  include "vast/logger.hpp"
 #  include "vast/path.hpp"
 #  include "vast/span.hpp"
@@ -28,15 +27,15 @@
 #  include <caf/settings.hpp>
 
 #  include <cstddef>
+#  include <pcap.h>
 #  include <string>
 #  include <thread>
 #  include <utility>
 
 #  include <netinet/in.h>
 
-namespace vast {
-namespace format {
-namespace pcap {
+namespace vast::format::pcap {
+
 namespace {
 
 template <class... RecordFields>
@@ -60,7 +59,21 @@ inline const auto pcap_packet_type = make_packet_type();
 inline const auto pcap_packet_type_community_id = make_packet_type(
   record_field{"community_id", string_type{}.attributes({{"index", "hash"}})});
 
-} // namespace <anonymous>
+} // namespace
+
+void pcap_close_wrapper::operator()(struct pcap* handle) const noexcept {
+  ::pcap_close(handle);
+}
+
+void pcap_dump_close_wrapper::operator()(
+  struct pcap_dumper* handle) const noexcept {
+  ::pcap_dump_close(handle);
+}
+
+void pcap_stat_delete_wrapper::operator()(
+  struct pcap_stat* handle) const noexcept {
+  delete handle;
+}
 
 reader::reader(const caf::settings& options, std::unique_ptr<std::istream>)
   : super(options) {
@@ -84,7 +97,7 @@ reader::reader(const caf::settings& options, std::unique_ptr<std::istream>)
   community_id_ = !get_or(options, category + ".disable-community-id", false);
   packet_type_
     = community_id_ ? pcap_packet_type_community_id : pcap_packet_type;
-  last_stats_ = {};
+  last_stats_.reset(new ::pcap_stat{});
   discard_count_ = 0;
 }
 
@@ -109,22 +122,23 @@ const char* reader::name() const {
 }
 
 vast::system::report reader::status() const {
+  VAST_ASSERT(last_stats_);
   using namespace std::string_literals;
   if (!pcap_)
     return {};
   auto stats = pcap_stat{};
   if (auto res = pcap_stats(pcap_.get(), &stats); res != 0)
     return {};
-  uint64_t recv = stats.ps_recv - last_stats_.ps_recv;
+  uint64_t recv = stats.ps_recv - last_stats_->ps_recv;
   if (recv == 0)
     return {};
-  uint64_t drop = stats.ps_drop - last_stats_.ps_drop;
-  uint64_t ifdrop = stats.ps_ifdrop - last_stats_.ps_ifdrop;
+  uint64_t drop = stats.ps_drop - last_stats_->ps_drop;
+  uint64_t ifdrop = stats.ps_ifdrop - last_stats_->ps_ifdrop;
   double drop_rate = static_cast<double>(drop + ifdrop) / recv;
   uint64_t discard = discard_count_;
   double discard_rate = static_cast<double>(discard) / recv;
   // Clean up for next delta.
-  last_stats_ = std::move(stats);
+  *last_stats_ = stats;
   discard_count_ = 0;
   if (drop_rate >= drop_rate_threshold_)
     VAST_WARN("{} has dropped {} of {} recent packets",
@@ -170,7 +184,8 @@ enum class frame_type : char {
 
 // Strips all data from a frame until the IP layer is reached. The frame type
 // distinguisher exists for future recursive stripping.
-span<const std::byte> decapsulate(span<const std::byte> frame, frame_type type) {
+span<const std::byte>
+decapsulate(span<const std::byte> frame, frame_type type) {
   switch (type) {
     default:
       return {};
@@ -192,8 +207,8 @@ span<const std::byte> decapsulate(span<const std::byte> frame, frame_type type) 
 
 } // namespace
 
-caf::error reader::read_impl(size_t max_events, size_t max_slice_size,
-                             consumer& f) {
+caf::error
+reader::read_impl(size_t max_events, size_t max_slice_size, consumer& f) {
   // Sanity checks.
   VAST_ASSERT(max_events > 0);
   VAST_ASSERT(max_slice_size > 0);
@@ -226,12 +241,12 @@ caf::error reader::read_impl(size_t max_events, size_t max_slice_size,
     } else if (input_ != "-" && !exists(input_)) {
       return caf::make_error(ec::format_error, "no such file: ", input_);
     } else {
-#ifdef PCAP_TSTAMP_PRECISION_NANO
+#  ifdef PCAP_TSTAMP_PRECISION_NANO
       pcap_.reset(::pcap_open_offline_with_tstamp_precision(
         input_.c_str(), PCAP_TSTAMP_PRECISION_NANO, buf));
-#else
+#  else
       pcap_ = ::pcap_open_offline(input_.c_str(), buf);
-#endif
+#  endif
       if (!pcap_) {
         flows_.clear();
         return caf::make_error(ec::format_error, "failed to open pcap file ",
@@ -277,7 +292,8 @@ caf::error reader::read_impl(size_t max_events, size_t max_slice_size,
                                        "failed to get next packet: ", err));
     }
     // Parse frame.
-    span<const std::byte> frame{reinterpret_cast<const std::byte*>(data), header->len};
+    span<const std::byte> frame{reinterpret_cast<const std::byte*>(data),
+                                header->len};
     frame = decapsulate(frame, frame_type::ethernet);
     if (frame.empty())
       return caf::make_error(ec::format_error, "failed to decapsulate frame");
@@ -375,11 +391,11 @@ caf::error reader::read_impl(size_t max_events, size_t max_slice_size,
     using namespace std::chrono;
     auto secs = seconds(header->ts.tv_sec);
     auto ts = time{duration_cast<duration>(secs)};
-#ifdef PCAP_TSTAMP_PRECISION_NANO
+#  ifdef PCAP_TSTAMP_PRECISION_NANO
     ts += nanoseconds(header->ts.tv_usec);
-#else
+#  else
     ts += microseconds(header->ts.tv_usec);
-#endif
+#  endif
     // Assemble packet.
     auto layer3_ptr = reinterpret_cast<const char*>(layer3.data());
     auto packet = std::string_view{std::launder(layer3_ptr), layer3.size()};
@@ -475,12 +491,12 @@ writer::writer(const caf::settings& options) {
 
 caf::error writer::write(const table_slice& slice) {
   if (!pcap_) {
-#ifdef PCAP_TSTAMP_PRECISION_NANO
+#  ifdef PCAP_TSTAMP_PRECISION_NANO
     pcap_.reset(::pcap_open_dead_with_tstamp_precision(
       DLT_RAW, snaplen_, PCAP_TSTAMP_PRECISION_NANO));
-#else
+#  else
     pcap_.reset(::pcap_open_dead(DLT_RAW, snaplen_);
-#endif
+#  endif
     if (!pcap_)
       return caf::make_error(ec::format_error, "failed to open pcap handle");
     dumper_.reset(::pcap_dump_open(pcap_.get(), trace_.c_str()));
@@ -500,12 +516,12 @@ caf::error writer::write(const table_slice& slice) {
     auto ns_field = slice.at(row, 0, pcap_packet_type.at("time")->type);
     auto ns = caf::get<view<time>>(ns_field).time_since_epoch().count();
     header.ts.tv_sec = ns / 1000000000;
-#ifdef PCAP_TSTAMP_PRECISION_NANO
+#  ifdef PCAP_TSTAMP_PRECISION_NANO
     header.ts.tv_usec = ns % 1000000000;
-#else
+#  else
     ns /= 1000;
     header.ts.tv_usec = ns % 1000000;
-#endif
+#  endif
     header.caplen = payload.size();
     header.len = payload.size();
     // Dump packet.
@@ -532,8 +548,6 @@ const char* writer::name() const {
   return "pcap-writer";
 }
 
-} // namespace pcap
-} // namespace format
-} // namespace vast
+} // namespace vast::format::pcap
 
 #endif // VAST_ENABLE_PCAP
