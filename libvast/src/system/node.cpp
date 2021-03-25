@@ -93,8 +93,8 @@ bool is_singleton(std::string_view type) {
   // refactoring will be much easier once the NODE itself is a typed actor, so
   // let's hold off until then.
   const char* singletons[]
-    = {"accountant", "archive", "eraser",       "filesystem",
-       "importer",   "index",   "type-registry"};
+    = {"accountant", "archive",  "disk-monitor", "eraser",
+       "filesystem", "importer", "index",        "type-registry"};
   auto pred = [&](const char* x) { return x == type; };
   return std::any_of(std::begin(singletons), std::end(singletons), pred);
 }
@@ -375,7 +375,7 @@ auto make_component_factory() {
     {"spawn accountant", lift_component_factory<spawn_accountant>()},
       {"spawn archive", lift_component_factory<spawn_archive>()},
       {"spawn counter", lift_component_factory<spawn_counter>()},
-      {"spawn disk_monitor", lift_component_factory<spawn_disk_monitor>()},
+      {"spawn disk-monitor", lift_component_factory<spawn_disk_monitor>()},
       {"spawn eraser", lift_component_factory<spawn_eraser>()},
       {"spawn exporter", lift_component_factory<spawn_exporter>()},
       {"spawn explorer", lift_component_factory<spawn_explorer>()},
@@ -424,7 +424,7 @@ auto make_command_factory() {
     {"spawn accountant", node_state::spawn_command},
     {"spawn archive", node_state::spawn_command},
     {"spawn counter", node_state::spawn_command},
-    {"spawn disk_monitor", node_state::spawn_command},
+    {"spawn disk-monitor", node_state::spawn_command},
     {"spawn eraser", node_state::spawn_command},
     {"spawn explorer", node_state::spawn_command},
     {"spawn exporter", node_state::spawn_command},
@@ -516,6 +516,7 @@ node_state::spawn_command(const invocation& inv,
       rp.deliver(err);
       return caf::make_message(std::move(err));
     }
+    VAST_DEBUG("{} registered {} as {}", self, comp_type, label);
     rp.deliver(*component);
     return caf::make_message(*component);
   };
@@ -613,15 +614,15 @@ node(node_actor::stateful_pointer<node_state> self, std::string name, path dir,
     auto filesystem = deregister_component(self, "filesystem");
     // Tear down the pipeline from source to sink. Note that the order is
     // important here; the source must be shut down before the importer.
-    auto pipeline
-      = {"source", "importer", "index", "archive", "exporter", "sink"};
-    for (auto component : pipeline)
+    auto pipeline = {"source",  "importer", "disk-monitor", "index",
+                     "archive", "exporter", "sink"};
+    for (const auto* component : pipeline)
       schedule_teardown(component);
     // Now schedule all remaining components for termination.
     auto& registry = self->state.registry;
     std::vector<std::string> remaining;
     remaining.reserve(registry.components().size());
-    for ([[maybe_unused]] auto& [label, comp] : registry.components())
+    for (const auto& [label, _] : registry.components())
       remaining.push_back(label);
     for (const auto& label : remaining)
       schedule_teardown(label);

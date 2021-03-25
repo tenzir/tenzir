@@ -13,6 +13,10 @@ This changelog documents all notable user-facing changes of VAST.
 
 ## Unreleased
 
+- 🐞 Enabling the disk budget feature no longer prevents the server process
+  from exiting after it was stopped.
+  [#1495](https://github.com/tenzir/vast/pull/1495)
+
 - 🐞 A race condition during server shutdown could lead to an invariant
   violation, resulting in a firing assertion. Streamlining the shutdown
   logic resolved the issue.
