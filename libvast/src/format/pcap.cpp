@@ -18,7 +18,6 @@
 #  include "vast/ether_type.hpp"
 #  include "vast/format/pcap.hpp"
 #  include "vast/logger.hpp"
-#  include "vast/path.hpp"
 #  include "vast/span.hpp"
 #  include "vast/table_slice.hpp"
 #  include "vast/table_slice_builder.hpp"
@@ -27,6 +26,7 @@
 #  include <caf/settings.hpp>
 
 #  include <cstddef>
+#  include <filesystem>
 #  include <pcap.h>
 #  include <string>
 #  include <thread>
@@ -223,6 +223,13 @@ reader::read_impl(size_t max_events, size_t max_slice_size, consumer& f) {
   char buf[PCAP_ERRBUF_SIZE];
   // Initialize PCAP if needed.
   if (!pcap_) {
+    std::error_code err{};
+    const auto file_exists
+      = std::filesystem::exists(std::filesystem::path{input_}, err);
+    if (err)
+      return caf::make_error(ec::filesystem_error,
+                             fmt::format("failed to find file {}: {}", input_,
+                                         err.message()));
     // Determine interfaces.
     if (interface_) {
       pcap_.reset(
@@ -238,7 +245,7 @@ reader::read_impl(size_t max_events, size_t max_slice_size, consumer& f) {
       }
       VAST_INFO("{} listens on interface {}", detail::pretty_type_name(this),
                 *interface_);
-    } else if (input_ != "-" && !exists(input_)) {
+    } else if (input_ != "-" && !file_exists) {
       return caf::make_error(ec::format_error, "no such file: ", input_);
     } else {
 #  ifdef PCAP_TSTAMP_PRECISION_NANO
