@@ -113,12 +113,21 @@ msgpack_table_slice_builder::finish(span<const std::byte> serialized_layout) {
   // of fields in the layout.
   VAST_ASSERT(column_ == 0);
   // Pack layout.
-  auto layout_buffer
-    = serialized_layout.empty()
-        ? *fbs::serialize_bytes(builder_, layout())
-        : builder_.CreateVector(
-          reinterpret_cast<const unsigned char*>(serialized_layout.data()),
-          serialized_layout.size());
+  auto use_layout = [&](const auto& buf) {
+    return builder_.CreateVector(
+      reinterpret_cast<const unsigned char*>(buf.data()), buf.size());
+  };
+  auto gen_layout = [&]() {
+    caf::binary_serializer source(nullptr, serialized_layout_cache_);
+    auto error = source(layout());
+    VAST_ASSERT(error == caf::no_error);
+    return use_layout(serialized_layout_cache_);
+  };
+  auto layout_buffer = !serialized_layout.empty()
+                         ? use_layout(serialized_layout)
+                         : (!serialized_layout_cache_.empty()
+                              ? use_layout(serialized_layout_cache_)
+                              : gen_layout());
   // Pack offset table.
   auto offset_table_buffer = builder_.CreateVector(offset_table_);
   // Pack data.
