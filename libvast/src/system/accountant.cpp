@@ -30,6 +30,7 @@
 
 #include <chrono>
 #include <cmath>
+#include <filesystem>
 #include <ios>
 #include <limits>
 #include <queue>
@@ -187,8 +188,8 @@ struct accountant_state_impl {
       file_sink.reset(nullptr);
     }
     if (start_file_sink) {
-      auto s
-        = detail::make_output_stream(cfg.file_sink.path, path::regular_file);
+      auto s = detail::make_output_stream(cfg.file_sink.path,
+                                          std::filesystem::file_type::regular);
       if (s) {
         VAST_INFO("{} writing metrics to {}", self, cfg.file_sink.path);
         file_sink = std::move(*s);
