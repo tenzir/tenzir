@@ -40,7 +40,7 @@ struct disk_monitor_state {
   /// The timespan between scans.
   std::chrono::seconds scan_interval;
 
-  constexpr static const char* name = "disk_monitor";
+  constexpr static const char* name = "disk-monitor";
 };
 
 /// Periodically scans the size of the database directory and deletes data
