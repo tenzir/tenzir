@@ -459,6 +459,9 @@ type suricata.rdp = suricata.component.common + record {
   }
 }
 
+// versions are strings because they are in the RFB spec and the EVE-JSON:
+// - https://tools.ietf.org/html/rfc6143#section-7.1.1
+// - https://suricata.readthedocs.io/en/suricata-6.0.1/output/eve/eve-json-format.html#event-type-rfb
 type suricata.rfb = suricata.component.common + record {
   rfb: record {
     client_protocol_version: record {
