@@ -8,4 +8,4 @@ tests:
     tags: [tooling]
     steps:
       - command: ../vast.db
-        transformation: wc -l
+        transformation: wc -l | tr -d ' '
