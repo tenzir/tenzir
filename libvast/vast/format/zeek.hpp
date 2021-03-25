@@ -8,6 +8,8 @@
 
 #pragma once
 
+#include "vast/fwd.hpp"
+
 #include "vast/concept/parseable/core.hpp"
 #include "vast/concept/parseable/numeric.hpp"
 #include "vast/concept/parseable/string/any.hpp"
@@ -21,8 +23,6 @@
 #include "vast/format/reader.hpp"
 #include "vast/format/single_layout_reader.hpp"
 #include "vast/format/writer.hpp"
-#include "vast/fwd.hpp"
-#include "vast/path.hpp"
 #include "vast/schema.hpp"
 #include "vast/table_slice_builder.hpp"
 
@@ -30,6 +30,7 @@
 #include <caf/fwd.hpp>
 
 #include <chrono>
+#include <filesystem>
 #include <iostream>
 #include <memory>
 #include <string>
@@ -254,7 +255,7 @@ public:
 
   writer& operator=(writer&&) = default;
 
-  ~writer() override;
+  ~writer() override = default;
 
   /// Constructs a Zeek writer.
   /// @param options The configuration options for the writer.
@@ -267,7 +268,7 @@ public:
   const char* name() const override;
 
 private:
-  path dir_;
+  std::filesystem::path dir_;
   type previous_layout_;
   bool show_timestamp_tags_;
 

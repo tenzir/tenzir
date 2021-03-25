@@ -513,13 +513,9 @@ writer::writer(const caf::settings& options) {
   auto output
     = get_or(options, "vast.export.write", vast::defaults::export_::write);
   if (output != "-")
-    dir_ = std::move(output);
+    dir_ = std::filesystem::path{std::move(output)};
   show_timestamp_tags_
     = !caf::get_or(options, "vast.export.zeek.disable-timestamp-tags", false);
-}
-
-writer::~writer() {
-  // nop
 }
 
 namespace {
@@ -632,7 +628,7 @@ public:
 caf::error writer::write(const table_slice& slice) {
   ostream_writer* child = nullptr;
   auto&& layout = slice.layout();
-  if (dir_.empty()) {
+  if (dir_.string().empty()) {
     if (writers_.empty()) {
       VAST_DEBUG("{} creates a new stream for STDOUT",
                  detail::pretty_type_name(this));
@@ -652,15 +648,26 @@ caf::error writer::write(const table_slice& slice) {
     } else {
       VAST_DEBUG("{} creates new stream for layout {}",
                  detail::pretty_type_name(this), layout.name());
-      if (!exists(dir_)) {
-        if (auto err = mkdir(dir_))
-          return err;
-      } else if (!dir_.is_directory()) {
-        return caf::make_error(ec::format_error,
-                               "got existing non-directory path", dir_);
+      std::error_code err{};
+      const auto exists = std::filesystem::exists(dir_, err);
+      if (err)
+        return caf::make_error(ec::filesystem_error,
+                               fmt::format("failed to check if file {} exists: "
+                                           "{}",
+                                           dir_.string(), err.message()));
+      if (!exists) {
+        std::filesystem::create_directory(dir_, err);
+        if (err)
+          return caf::make_error(ec::filesystem_error,
+                                 fmt::format("failed to create directory {}: "
+                                             "{}",
+                                             dir_.string(), err.message()));
+      } else if (!std::filesystem::is_directory(dir_, err)) {
+        return caf::make_error(
+          ec::format_error, "got existing non-directory path", dir_.string());
       }
       auto filename = dir_ / (layout.name() + ".log");
-      auto fos = std::make_unique<std::ofstream>(filename.str());
+      auto fos = std::make_unique<std::ofstream>(filename.string());
       print_header(layout, *fos, show_timestamp_tags_);
       auto i = writers_.emplace(
         layout.name(),
